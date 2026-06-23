@@ -64,11 +64,11 @@ internal sealed class FeedbackInsightsService(IFeedbackInsightsStore store, Time
             cut--;
         }
 
-        return string.Concat(comment.AsSpan(0, cut), "…");
+        return string.Concat(comment.AsSpan(start: 0, cut), "…");
     }
 
     private static double DownRate(int down, int total)
     {
-        return total == 0 ? 0d : Math.Round(down / (double)total, 4);
+        return total == 0 ? 0d : Math.Round(down / (double)total, digits: 4);
     }
 }

@@ -25,7 +25,7 @@ public sealed class GetToolCapableModelsEndpointTests
         var models = await ReadJsonAsync<ToolCapableModelsResponse>(response).ConfigureAwait(false);
 
         AssertEx.Equal(HttpStatusCode.OK, response.StatusCode);
-        AssertEx.Equal(1, models.Models.Count);
+        AssertEx.Equal(expected: 1, models.Models.Count);
         AssertEx.Equal("qwen3:8b", models.Models[0]);
     }
 
@@ -40,7 +40,7 @@ public sealed class GetToolCapableModelsEndpointTests
         var models = await ReadJsonAsync<ToolCapableModelsResponse>(response).ConfigureAwait(false);
 
         AssertEx.Equal(HttpStatusCode.OK, response.StatusCode);
-        AssertEx.Equal(2, models.Models.Count);
+        AssertEx.Equal(expected: 2, models.Models.Count);
         AssertEx.Contains(models.Models, "qwen3:8b");
         AssertEx.Contains(models.Models, "llama3:8b");
     }

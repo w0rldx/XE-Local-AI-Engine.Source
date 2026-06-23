@@ -19,7 +19,7 @@ public sealed class ModelFitStoreTests : IDisposable
     {
         if (Directory.Exists(_rootPath))
         {
-            Directory.Delete(_rootPath, true);
+            Directory.Delete(_rootPath, recursive: true);
         }
     }
 
@@ -50,7 +50,7 @@ public sealed class ModelFitStoreTests : IDisposable
         AssertEx.Equal(UtilityImagePurpose.ModelRecommendation | UtilityImagePurpose.ModelBenchmark, byId.Purpose);
 
         var all = await store.ListAsync();
-        AssertEx.Equal(1, all.Count);
+        AssertEx.Equal(expected: 1, all.Count);
     }
 
     [Test]
@@ -84,7 +84,7 @@ public sealed class ModelFitStoreTests : IDisposable
         var store = new ApprovedUtilityImageStore(context, TimeProvider.System);
         _ = await store.UpsertSeedAsync(CreateImageRecord(false));
 
-        var enabled = AssertEx.NotNull(await store.SetEnabledAsync(ImageId, true));
+        var enabled = AssertEx.NotNull(await store.SetEnabledAsync(ImageId, enabled: true));
         AssertEx.True(enabled.Enabled, "SetEnabled(true) should enable the descriptor.");
 
         var reread = AssertEx.NotNull(await store.GetByIdAsync(ImageId));
@@ -103,7 +103,7 @@ public sealed class ModelFitStoreTests : IDisposable
 
         var store = new ApprovedUtilityImageStore(context, TimeProvider.System);
 
-        AssertEx.Null(await store.SetEnabledAsync("does-not-exist", true));
+        AssertEx.Null(await store.SetEnabledAsync("does-not-exist", enabled: true));
     }
 
     [Test]
@@ -120,7 +120,7 @@ public sealed class ModelFitStoreTests : IDisposable
 
         // Seed disabled, then the operator enables it.
         _ = await store.UpsertSeedAsync(CreateImageRecord(false));
-        _ = await store.SetEnabledAsync(ImageId, true);
+        _ = await store.SetEnabledAsync(ImageId, enabled: true);
 
         // Re-seed (as on the next startup) with code-owned changes and Enabled=false in the descriptor.
         var reseeded = await store.UpsertSeedAsync(CreateImageRecord(false) with
@@ -145,10 +145,10 @@ public sealed class ModelFitStoreTests : IDisposable
         var store = new ApprovedUtilityImageStore(context, TimeProvider.System);
         _ = await store.UpsertSeedAsync(CreateImageRecord(true));
 
-        var touched = AssertEx.NotNull(await store.TouchUsedAsync(ImageId, 5_000, 5_500));
+        var touched = AssertEx.NotNull(await store.TouchUsedAsync(ImageId, lastUsedAtUtc: 5_000, lastSuccessfulRunAtUtc: 5_500));
 
-        AssertEx.Equal(5_000L, touched.LastUsedAtUtc);
-        AssertEx.Equal(5_500L, touched.LastSuccessfulRunAtUtc);
+        AssertEx.Equal(expected: 5_000L, touched.LastUsedAtUtc);
+        AssertEx.Equal(expected: 5_500L, touched.LastSuccessfulRunAtUtc);
     }
 
     // -------------------------------------------------------------------------
@@ -171,13 +171,13 @@ public sealed class ModelFitStoreTests : IDisposable
         AssertEx.Equal(ModelFitRunStatus.Queued, created.Status);
         AssertEx.False(created.IsLatestSuccessful, "A queued run is not latest-successful.");
 
-        var succeeded = AssertEx.NotNull(await store.MarkTerminalAsync(created.Id, ModelFitRunStatus.Succeeded, 0, 1_234,
-            """{"models":[]}""", null, null, 9_000));
+        var succeeded = AssertEx.NotNull(await store.MarkTerminalAsync(created.Id, ModelFitRunStatus.Succeeded, exitCode: 0, durationMs: 1_234,
+            rawJson: """{"models":[]}""", stderrExcerpt: null, diagnosticsJson: null, completedAtUtc: 9_000));
 
         AssertEx.Equal(ModelFitRunStatus.Succeeded, succeeded.Status);
         AssertEx.True(succeeded.IsLatestSuccessful, "A succeeded run becomes latest-successful for its key.");
 
-        var latest = AssertEx.NotNull(await store.GetLatestSuccessfulSummaryAsync(ModelFitOperation.Recommend, "coding", "ollama", null));
+        var latest = AssertEx.NotNull(await store.GetLatestSuccessfulSummaryAsync(ModelFitOperation.Recommend, "coding", "ollama", modelName: null));
         AssertEx.Equal(succeeded.Id, latest.Id);
     }
 
@@ -194,21 +194,21 @@ public sealed class ModelFitStoreTests : IDisposable
         var store = new ModelFitSnapshotStore(context, TimeProvider.System);
 
         var first = await store.CreateRunningAsync(CreateRecommendInput("coding"));
-        _ = await store.MarkTerminalAsync(first.Id, ModelFitRunStatus.Succeeded, 0, 100, null, null, null, 1_000);
+        _ = await store.MarkTerminalAsync(first.Id, ModelFitRunStatus.Succeeded, exitCode: 0, durationMs: 100, rawJson: null, stderrExcerpt: null, diagnosticsJson: null, completedAtUtc: 1_000);
 
         var second = await store.CreateRunningAsync(CreateRecommendInput("coding"));
-        _ = await store.MarkTerminalAsync(second.Id, ModelFitRunStatus.Succeeded, 0, 100, null, null, null, 2_000);
+        _ = await store.MarkTerminalAsync(second.Id, ModelFitRunStatus.Succeeded, exitCode: 0, durationMs: 100, rawJson: null, stderrExcerpt: null, diagnosticsJson: null, completedAtUtc: 2_000);
 
         // The new success demotes the prior one for the same key.
         var firstReread = await store.GetRawByIdAsync(first.Id);
         AssertEx.NotNull(firstReread);
 
-        var latest = AssertEx.NotNull(await store.GetLatestSuccessfulSummaryAsync(ModelFitOperation.Recommend, "coding", "ollama", null));
+        var latest = AssertEx.NotNull(await store.GetLatestSuccessfulSummaryAsync(ModelFitOperation.Recommend, "coding", "ollama", modelName: null));
         AssertEx.Equal(second.Id, latest.Id);
 
         // Exactly one row is latest for the key.
-        var rawLatestCount = await CountLatestSuccessfulAsync(databasePath, ModelFitOperation.Recommend, "coding", "ollama", null);
-        AssertEx.Equal(1, rawLatestCount);
+        var rawLatestCount = await CountLatestSuccessfulAsync(databasePath, ModelFitOperation.Recommend, "coding", "ollama", modelName: null);
+        AssertEx.Equal(expected: 1, rawLatestCount);
     }
 
     [Test]
@@ -224,14 +224,14 @@ public sealed class ModelFitStoreTests : IDisposable
         var store = new ModelFitSnapshotStore(context, TimeProvider.System);
 
         var coding = await store.CreateRunningAsync(CreateRecommendInput("coding"));
-        _ = await store.MarkTerminalAsync(coding.Id, ModelFitRunStatus.Succeeded, 0, 100, null, null, null, 1_000);
+        _ = await store.MarkTerminalAsync(coding.Id, ModelFitRunStatus.Succeeded, exitCode: 0, durationMs: 100, rawJson: null, stderrExcerpt: null, diagnosticsJson: null, completedAtUtc: 1_000);
 
         var reasoning = await store.CreateRunningAsync(CreateRecommendInput("reasoning"));
-        _ = await store.MarkTerminalAsync(reasoning.Id, ModelFitRunStatus.Succeeded, 0, 100, null, null, null, 2_000);
+        _ = await store.MarkTerminalAsync(reasoning.Id, ModelFitRunStatus.Succeeded, exitCode: 0, durationMs: 100, rawJson: null, stderrExcerpt: null, diagnosticsJson: null, completedAtUtc: 2_000);
 
         // Each key keeps its own latest.
-        var latestCoding = AssertEx.NotNull(await store.GetLatestSuccessfulSummaryAsync(ModelFitOperation.Recommend, "coding", "ollama", null));
-        var latestReasoning = AssertEx.NotNull(await store.GetLatestSuccessfulSummaryAsync(ModelFitOperation.Recommend, "reasoning", "ollama", null));
+        var latestCoding = AssertEx.NotNull(await store.GetLatestSuccessfulSummaryAsync(ModelFitOperation.Recommend, "coding", "ollama", modelName: null));
+        var latestReasoning = AssertEx.NotNull(await store.GetLatestSuccessfulSummaryAsync(ModelFitOperation.Recommend, "reasoning", "ollama", modelName: null));
 
         AssertEx.Equal(coding.Id, latestCoding.Id);
         AssertEx.Equal(reasoning.Id, latestReasoning.Id);
@@ -252,11 +252,11 @@ public sealed class ModelFitStoreTests : IDisposable
         var a = await store.CreateRunningAsync(CreateRecommendInput("chat"));
         var b = await store.CreateRunningAsync(CreateRecommendInput("chat"));
 
-        _ = await store.MarkTerminalAsync(a.Id, ModelFitRunStatus.Succeeded, 0, 100, null, null, null, 1_000);
-        _ = await store.MarkTerminalAsync(b.Id, ModelFitRunStatus.Succeeded, 0, 100, null, null, null, 2_000);
+        _ = await store.MarkTerminalAsync(a.Id, ModelFitRunStatus.Succeeded, exitCode: 0, durationMs: 100, rawJson: null, stderrExcerpt: null, diagnosticsJson: null, completedAtUtc: 1_000);
+        _ = await store.MarkTerminalAsync(b.Id, ModelFitRunStatus.Succeeded, exitCode: 0, durationMs: 100, rawJson: null, stderrExcerpt: null, diagnosticsJson: null, completedAtUtc: 2_000);
 
-        var latestCount = await CountLatestSuccessfulAsync(databasePath, ModelFitOperation.Recommend, "chat", "ollama", null);
-        AssertEx.Equal(1, latestCount);
+        var latestCount = await CountLatestSuccessfulAsync(databasePath, ModelFitOperation.Recommend, "chat", "ollama", modelName: null);
+        AssertEx.Equal(expected: 1, latestCount);
     }
 
     [Test]
@@ -272,12 +272,12 @@ public sealed class ModelFitStoreTests : IDisposable
         var store = new ModelFitSnapshotStore(context, TimeProvider.System);
         var created = await store.CreateRunningAsync(CreateRecommendInput("coding"));
 
-        var failed = AssertEx.NotNull(await store.MarkTerminalAsync(created.Id, ModelFitRunStatus.Failed, 1, 10,
-            null, "Error: boom", null, 1_000));
+        var failed = AssertEx.NotNull(await store.MarkTerminalAsync(created.Id, ModelFitRunStatus.Failed, exitCode: 1, durationMs: 10,
+            rawJson: null, "Error: boom", diagnosticsJson: null, completedAtUtc: 1_000));
 
         AssertEx.Equal(ModelFitRunStatus.Failed, failed.Status);
         AssertEx.False(failed.IsLatestSuccessful, "A failed run is never latest-successful.");
-        AssertEx.Null(await store.GetLatestSuccessfulSummaryAsync(ModelFitOperation.Recommend, "coding", "ollama", null));
+        AssertEx.Null(await store.GetLatestSuccessfulSummaryAsync(ModelFitOperation.Recommend, "coding", "ollama", modelName: null));
     }
 
     [Test]
@@ -292,8 +292,10 @@ public sealed class ModelFitStoreTests : IDisposable
 
         var store = new ModelFitSnapshotStore(context, TimeProvider.System);
 
-        AssertEx.Null(await store.MarkTerminalAsync(Guid.NewGuid(), ModelFitRunStatus.Failed, 1, 1, null, null, null, 1));
-        AssertEx.Null(await store.MarkTerminalAsync(Guid.NewGuid(), ModelFitRunStatus.Succeeded, 0, 1, null, null, null, 1));
+        AssertEx.Null(await store.MarkTerminalAsync(Guid.NewGuid(), ModelFitRunStatus.Failed, exitCode: 1, durationMs: 1, rawJson: null, stderrExcerpt: null, diagnosticsJson: null,
+            completedAtUtc: 1));
+        AssertEx.Null(await store.MarkTerminalAsync(Guid.NewGuid(), ModelFitRunStatus.Succeeded, exitCode: 0, durationMs: 1, rawJson: null, stderrExcerpt: null, diagnosticsJson: null,
+            completedAtUtc: 1));
     }
 
     [Test]
@@ -315,7 +317,7 @@ public sealed class ModelFitStoreTests : IDisposable
 
         var recent = await store.ListRecentSummariesAsync(ModelFitOperation.Recommend, "ollama");
 
-        AssertEx.Equal(2, recent.Count);
+        AssertEx.Equal(expected: 2, recent.Count);
         AssertEx.Equal(second.Id, recent[0].Id);
         AssertEx.Equal(first.Id, recent[1].Id);
         // The summary record has no raw/stderr/diagnostics members at all — the sanitized boundary is in the type shape.
@@ -342,7 +344,7 @@ public sealed class ModelFitStoreTests : IDisposable
 
             var store = new ModelFitSnapshotStore(writeContext, TimeProvider.System);
             var created = await store.CreateRunningAsync(CreateRecommendInput("coding"));
-            _ = await store.MarkTerminalAsync(created.Id, ModelFitRunStatus.Succeeded, 0, 100, rawJson, stderr, diagnostics, 1_000);
+            _ = await store.MarkTerminalAsync(created.Id, ModelFitRunStatus.Succeeded, exitCode: 0, durationMs: 100, rawJson, stderr, diagnostics, completedAtUtc: 1_000);
             snapshotId = created.Id;
         }
 
@@ -369,7 +371,7 @@ public sealed class ModelFitStoreTests : IDisposable
 
             var store = new ModelFitSnapshotStore(context, TimeProvider.System);
             var created = await store.CreateRunningAsync(CreateRecommendInput("coding"));
-            _ = await store.MarkTerminalAsync(created.Id, ModelFitRunStatus.Succeeded, 0, 100, rawJson, null, null, 1_000);
+            _ = await store.MarkTerminalAsync(created.Id, ModelFitRunStatus.Succeeded, exitCode: 0, durationMs: 100, rawJson, stderrExcerpt: null, diagnosticsJson: null, completedAtUtc: 1_000);
         }
 
         var rawBytes = await ReadRawSnapshotRawJsonAsync(databasePath);
@@ -401,17 +403,17 @@ public sealed class ModelFitStoreTests : IDisposable
 
         var inserted = await recommendationStore.ReplaceForSnapshotAsync(snapshot.Id,
         [
-            CreateRecommendation(2, "model-b", 80.0),
-            CreateRecommendation(1, "model-a", 95.0)
+            CreateRecommendation(rank: 2, "model-b", score: 80.0),
+            CreateRecommendation(rank: 1, "model-a", score: 95.0)
         ]);
 
-        AssertEx.Equal(2, inserted);
+        AssertEx.Equal(expected: 2, inserted);
 
         var rows = await recommendationStore.ListForSnapshotAsync(snapshot.Id);
-        AssertEx.Equal(2, rows.Count);
+        AssertEx.Equal(expected: 2, rows.Count);
         AssertEx.Equal("model-a", rows[0].ModelName);
-        AssertEx.Equal(95.0, rows[0].Score);
-        AssertEx.Equal(1, rows[0].Rank);
+        AssertEx.Equal(expected: 95.0, rows[0].Score);
+        AssertEx.Equal(expected: 1, rows[0].Rank);
         AssertEx.Equal("model-b", rows[1].ModelName);
     }
 
@@ -432,16 +434,16 @@ public sealed class ModelFitStoreTests : IDisposable
 
         _ = await recommendationStore.ReplaceForSnapshotAsync(snapshot.Id,
         [
-            CreateRecommendation(1, "old-model", 50.0)
+            CreateRecommendation(rank: 1, "old-model", score: 50.0)
         ]);
 
         _ = await recommendationStore.ReplaceForSnapshotAsync(snapshot.Id,
         [
-            CreateRecommendation(1, "new-model", 90.0)
+            CreateRecommendation(rank: 1, "new-model", score: 90.0)
         ]);
 
         var rows = await recommendationStore.ListForSnapshotAsync(snapshot.Id);
-        AssertEx.Equal(1, rows.Count);
+        AssertEx.Equal(expected: 1, rows.Count);
         AssertEx.Equal("new-model", rows[0].ModelName);
     }
 
@@ -470,22 +472,22 @@ public sealed class ModelFitStoreTests : IDisposable
 
             var inserted = await benchmarkStore.ReplaceForSnapshotAsync(snapshot.Id,
             [
-                new ModelFitBenchmarkInput("qwen", "ollama", 42.0, 12.0, 200.0,
-                    3, rawJson, """{"note":"ok"}""")
+                new ModelFitBenchmarkInput("qwen", "ollama", TokensPerSecond: 42.0, TtftMs: 12.0, TotalLatencyMs: 200.0,
+                    Runs: 3, rawJson, DiagnosticsJson: """{"note":"ok"}""")
             ]);
 
-            AssertEx.Equal(1, inserted);
+            AssertEx.Equal(expected: 1, inserted);
         }
 
         await using var readContext = CreateContext(databasePath, keyHolder);
         var readStore = new ModelFitBenchmarkStore(readContext);
 
         var rows = await readStore.ListForSnapshotAsync(snapshotId);
-        AssertEx.Equal(1, rows.Count);
+        AssertEx.Equal(expected: 1, rows.Count);
         AssertEx.Equal("qwen", rows[0].ModelName);
-        AssertEx.Equal(42.0, rows[0].TokensPerSecond);
+        AssertEx.Equal(expected: 42.0, rows[0].TokensPerSecond);
         AssertEx.Equal(rawJson, rows[0].RawJson);
-        AssertEx.Equal("""{"note":"ok"}""", rows[0].DiagnosticsJson);
+        AssertEx.Equal(expected: """{"note":"ok"}""", rows[0].DiagnosticsJson);
     }
 
     [Test]
@@ -506,7 +508,7 @@ public sealed class ModelFitStoreTests : IDisposable
             var snapshot = await snapshotStore.CreateRunningAsync(CreateBenchmarkInput("qwen"));
             _ = await benchmarkStore.ReplaceForSnapshotAsync(snapshot.Id,
             [
-                new ModelFitBenchmarkInput("qwen", "ollama", 1.0, 1.0, 1.0, 1, rawJson, null)
+                new ModelFitBenchmarkInput("qwen", "ollama", TokensPerSecond: 1.0, TtftMs: 1.0, TotalLatencyMs: 1.0, Runs: 1, rawJson, DiagnosticsJson: null)
             ]);
         }
 
@@ -526,19 +528,19 @@ public sealed class ModelFitStoreTests : IDisposable
     {
         return new ApprovedUtilityImageRecord(ImageId,
             "llmfit recommender 0.9.30",
-            null,
+            Description: null,
             UtilityImagePurpose.ModelRecommendation | UtilityImagePurpose.ModelBenchmark,
             ImageReference,
-            null,
+            SourceUrl: null,
             "0.9.30",
             enabled,
-            null,
-            null,
-            0,
-            0,
-            null,
-            null,
-            """{"license":"MIT"}""");
+            DeprecatedAtUtc: null,
+            ReplacementApprovedImageId: null,
+            CreatedAtUtc: 0,
+            UpdatedAtUtc: 0,
+            LastUsedAtUtc: null,
+            LastSuccessfulRunAtUtc: null,
+            DiagnosticsJson: """{"license":"MIT"}""");
     }
 
     private static ModelFitSnapshotInput CreateRecommendInput(string useCase)
@@ -547,20 +549,20 @@ public sealed class ModelFitStoreTests : IDisposable
             ModelFitOperation.Recommend,
             useCase,
             "ollama",
-            null,
+            ModelName: null,
             ModelFitRunStatus.Queued,
-            null);
+            StartedAtUtc: null);
     }
 
     private static ModelFitSnapshotInput CreateBenchmarkInput(string modelName)
     {
         return new ModelFitSnapshotInput(ImageId,
             ModelFitOperation.Benchmark,
-            null,
+            UseCase: null,
             "ollama",
             modelName,
             ModelFitRunStatus.Queued,
-            null);
+            StartedAtUtc: null);
     }
 
     private static ModelFitRecommendationInput CreateRecommendation(int rank, string modelName, double score)
@@ -572,13 +574,13 @@ public sealed class ModelFitStoreTests : IDisposable
             "Good",
             "CPU",
             "Q5_K_M",
-            20.0,
-            4_096.0,
-            null,
-            8_192,
-            false,
+            EstimatedTokensPerSecond: 20.0,
+            RequiredRamMb: 4_096.0,
+            RequiredVramMb: null,
+            ContextTokens: 8_192,
+            IsInstalled: false,
             modelName,
-            null);
+            DiagnosticsJson: null);
     }
 
     private static async Task<int> CountLatestSuccessfulAsync(string databasePath,
@@ -635,7 +637,7 @@ public sealed class ModelFitStoreTests : IDisposable
 
     private static INodeSqliteKeyHolder CreateKeyHolder()
     {
-        var key = Enumerable.Range(0, 32).Select(static v => (byte)(v + 1)).ToArray();
+        var key = Enumerable.Range(start: 0, count: 32).Select(static v => (byte)(v + 1)).ToArray();
         return new FixedNodeSqliteKeyHolder(key);
     }
 

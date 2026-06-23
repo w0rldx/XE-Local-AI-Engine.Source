@@ -82,7 +82,7 @@ public sealed class GoldenHarvestSourceStore(NodeChatDbContext dbContext) : IGol
         while (await reader.ReadAsync(cancellationToken).ConfigureAwait(false))
         {
             var conversationId = Guid.Parse(reader.GetString(1));
-            var titleBytes = await reader.IsDBNullAsync(2, cancellationToken).ConfigureAwait(false)
+            var titleBytes = await reader.IsDBNullAsync(ordinal: 2, cancellationToken).ConfigureAwait(false)
                 ? null
                 : (byte[])reader.GetValue(2);
             var titleText = _dbContext.DecryptConversationTitle(titleBytes, conversationId);

@@ -25,7 +25,7 @@ public sealed class RunningModelSnapshotMappingTests
         }, CancellationToken.None).ConfigureAwait(false);
         server.State.RunningModels =
         [
-            new FakeOllamaState.FakeOllamaRunningModel("llama3:8b", DateTimeOffset.UtcNow.AddMinutes(5), 5_000_000_000, 4_000_000_000)
+            new FakeOllamaState.FakeOllamaRunningModel("llama3:8b", DateTimeOffset.UtcNow.AddMinutes(5), SizeBytes: 5_000_000_000, SizeVramBytes: 4_000_000_000)
         ];
         using var ollamaClient = new OllamaApiClient(server.BaseAddress);
         var capabilityClient = new OllamaModelCapabilityClient(ollamaClient);
@@ -33,8 +33,8 @@ public sealed class RunningModelSnapshotMappingTests
         var running = await capabilityClient.ListRunningModelsAsync(CancellationToken.None).ConfigureAwait(false);
 
         var snapshot = AssertEx.NotNull(running.SingleOrDefault());
-        AssertEx.Equal(5_000_000_000L, snapshot.SizeBytes);
-        AssertEx.Equal(4_000_000_000L, snapshot.SizeVramBytes);
+        AssertEx.Equal(expected: 5_000_000_000L, snapshot.SizeBytes);
+        AssertEx.Equal(expected: 4_000_000_000L, snapshot.SizeVramBytes);
         AssertEx.True(snapshot.ExpiresAt.HasValue);
     }
 
@@ -47,7 +47,7 @@ public sealed class RunningModelSnapshotMappingTests
         }, CancellationToken.None).ConfigureAwait(false);
         server.State.RunningModels =
         [
-            new FakeOllamaState.FakeOllamaRunningModel("llama3:8b", DateTimeOffset.UtcNow.AddMinutes(5), 7_000_000_000, 6_000_000_000)
+            new FakeOllamaState.FakeOllamaRunningModel("llama3:8b", DateTimeOffset.UtcNow.AddMinutes(5), SizeBytes: 7_000_000_000, SizeVramBytes: 6_000_000_000)
         ];
         using var ollamaClient = new OllamaApiClient(server.BaseAddress);
         using var modelService = new OllamaModelService(ollamaClient);
@@ -56,8 +56,8 @@ public sealed class RunningModelSnapshotMappingTests
 
         var snapshot = AssertEx.NotNull(running.SingleOrDefault());
         AssertEx.Equal("llama3:8b", snapshot.Name);
-        AssertEx.Equal(7_000_000_000L, snapshot.SizeBytes);
-        AssertEx.Equal(6_000_000_000L, snapshot.SizeVramBytes);
+        AssertEx.Equal(expected: 7_000_000_000L, snapshot.SizeBytes);
+        AssertEx.Equal(expected: 6_000_000_000L, snapshot.SizeVramBytes);
     }
 
     [Test]
@@ -89,7 +89,7 @@ public sealed class RunningModelSnapshotMappingTests
         // A snapshot with no expiry/footprint maps to a row with null memory + null countdown rather than zeroed values, so
         // the UI can omit those columns.
         var response = LocalModelsMapper.ToRunningResponse([
-            new RunningModelSnapshot("llama3:8b", null, null)
+            new RunningModelSnapshot("llama3:8b", ModelName: null, ExpiresAt: null)
         ]);
 
         AssertEx.True(response.IsAvailable);
@@ -105,8 +105,8 @@ public sealed class RunningModelSnapshotMappingTests
     {
         // The runtime may report the canonical id under "model"; nameless rows (neither field set) are dropped.
         var response = LocalModelsMapper.ToRunningResponse([
-            new RunningModelSnapshot("raw", "llama3:8b", null),
-            new RunningModelSnapshot(null, null, null)
+            new RunningModelSnapshot("raw", "llama3:8b", ExpiresAt: null),
+            new RunningModelSnapshot(Name: null, ModelName: null, ExpiresAt: null)
         ]);
 
         var model = AssertEx.NotNull(response.Items.SingleOrDefault());

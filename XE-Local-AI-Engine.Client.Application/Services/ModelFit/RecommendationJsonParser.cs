@@ -196,11 +196,11 @@ public sealed record RecommendationParseResult
     public static RecommendationParseResult Success(IReadOnlyList<ModelFitRecommendationInput> recommendations,
         string? systemDiagnosticsJson)
     {
-        return new RecommendationParseResult(true, recommendations, systemDiagnosticsJson);
+        return new RecommendationParseResult(isSuccess: true, recommendations, systemDiagnosticsJson);
     }
 
     public static RecommendationParseResult Failure()
     {
-        return new RecommendationParseResult(false, [], null);
+        return new RecommendationParseResult(isSuccess: false, [], systemDiagnosticsJson: null);
     }
 }

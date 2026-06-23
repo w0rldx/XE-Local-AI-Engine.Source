@@ -204,7 +204,7 @@ internal sealed partial class NodePatchApplyService : INodePatchApplyService
         // git apply --numstat lines: "<added>\t<removed>\t<path>" where <path> is the in-patch b-side path that
         // -p2 has already stripped of the a/ + alias prefix, leaving a folder-relative path. Binary file entries
         // emit "-" for both counts. Pure renames with no content changes emit "0\t0\t<path>".
-        foreach (var line in output.Split('\n', StringSplitOptions.RemoveEmptyEntries))
+        foreach (var line in output.Split(separator: '\n', StringSplitOptions.RemoveEmptyEntries))
         {
             var parts = line.Split('\t');
             if (parts.Length < 3)
@@ -495,11 +495,11 @@ internal sealed partial class NodePatchApplyService : INodePatchApplyService
         }
     }
 
-    [GeneratedRegex("^[A-Za-z0-9][A-Za-z0-9_-]*$", RegexOptions.None, 2000)]
+    [GeneratedRegex("^[A-Za-z0-9][A-Za-z0-9_-]*$", RegexOptions.None, matchTimeoutMilliseconds: 2000)]
     private static partial Regex RunIdRegex();
 
     // Matches only the residual filename after the temporary-directory prefix has already been replaced.
-    [GeneratedRegex(@"agenthome-apply-[0-9a-fA-F]{32}\.patch", RegexOptions.None, 2000)]
+    [GeneratedRegex(@"agenthome-apply-[0-9a-fA-F]{32}\.patch", RegexOptions.None, matchTimeoutMilliseconds: 2000)]
     private static partial Regex TempPatchFilenameRegex();
 
     private sealed record AliasPlan(string Alias, string ResolvedRoot, string SubPatch, IReadOnlyList<PatchApplyFileEntry> Files);

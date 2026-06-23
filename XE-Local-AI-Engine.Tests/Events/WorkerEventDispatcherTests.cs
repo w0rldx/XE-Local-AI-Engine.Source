@@ -293,9 +293,9 @@ public sealed class WorkerEventDispatcherTests
 
         var current = AssertEx.NotNull(dispatcher.CurrentInvocation);
         AssertEx.Equal("Let me think... more thought", current.StreamedThinkingContent);
-        AssertEx.Equal(2, current.StreamedThinkingChunkCount);
+        AssertEx.Equal(expected: 2, current.StreamedThinkingChunkCount);
         AssertEx.Equal("Hello world", current.StreamedContent);
-        AssertEx.Equal(2, current.StreamedChunkCount);
+        AssertEx.Equal(expected: 2, current.StreamedChunkCount);
     }
 
     [Test]
@@ -311,16 +311,16 @@ public sealed class WorkerEventDispatcherTests
         InvocationState? lastEventState = null;
         dispatcher.InvocationStateChanged += (_, args) => lastEventState = args.State;
 
-        await dispatcher.ReportInvocationCompletedAsync(package.InvocationId, 10, 3, 13, 1, 1234);
+        await dispatcher.ReportInvocationCompletedAsync(package.InvocationId, inputTokens: 10, outputTokens: 3, totalTokens: 13, reasoningTokens: 1, generationDurationMs: 1234);
 
         // The getter returns Clone(CurrentInvocation): the duration must survive that copy.
         var current = AssertEx.NotNull(dispatcher.CurrentInvocation);
-        AssertEx.Equal(1234L, current.GenerationDurationMs);
-        AssertEx.Equal(3, current.OutputTokens);
+        AssertEx.Equal(expected: 1234L, current.GenerationDurationMs);
+        AssertEx.Equal(expected: 3, current.OutputTokens);
 
         // The event payload is also a Clone of the state; the pump consumes this snapshot.
         var eventState = AssertEx.NotNull(lastEventState);
-        AssertEx.Equal(1234L, eventState.GenerationDurationMs);
+        AssertEx.Equal(expected: 1234L, eventState.GenerationDurationMs);
     }
 
     [Test]
@@ -340,9 +340,9 @@ public sealed class WorkerEventDispatcherTests
 
         var current = AssertEx.NotNull(dispatcher.CurrentInvocation);
         AssertEx.Equal("Hello world", current.StreamedContent);
-        AssertEx.Equal(3, current.StreamedChunkCount);
+        AssertEx.Equal(expected: 3, current.StreamedChunkCount);
         AssertEx.Equal("Think\nagain", current.StreamedThinkingContent);
-        AssertEx.Equal(3, current.StreamedThinkingChunkCount);
+        AssertEx.Equal(expected: 3, current.StreamedThinkingChunkCount);
     }
 
     [Test]
@@ -392,7 +392,7 @@ public sealed class WorkerEventDispatcherTests
     {
         var runner = Substitute.For<IInvocationRunner>();
         var dispatcher = CreateDispatcher(runner);
-        var evt = new ApprovalResolvedEvent("req-1", true);
+        var evt = new ApprovalResolvedEvent("req-1", Approved: true);
 
         await dispatcher.DispatchApprovalResolvedAsync(evt);
 
@@ -546,7 +546,7 @@ public sealed class WorkerEventDispatcherTests
         // drain runs without NPEs while these tests focus on the agent-run wiring.
         var pump = Substitute.For<INodeChatInvocationPump>();
         pump.FlushDeltaAsync(Arg.Any<NodeChatMessageCorrelation>(), Arg.Any<InvocationState>(), Arg.Any<NodeChatPumpCursor>(), Arg.Any<CancellationToken>())
-            .Returns(callInfo => new NodeChatPumpFlushResult(callInfo.ArgAt<NodeChatPumpCursor>(2), null, null, null));
+            .Returns(callInfo => new NodeChatPumpFlushResult(callInfo.ArgAt<NodeChatPumpCursor>(2), Persisted: null, ContentDelta: null, ReasoningDelta: null));
 
         var coordinator = Substitute.For<INodeChatRemotePersistenceCoordinator>();
         coordinator.BeginAsync(Arg.Any<RuntimePackage>(), Arg.Any<CancellationToken>())
@@ -633,10 +633,10 @@ public sealed class WorkerEventDispatcherTests
         var nodeKeyRegistry = new FakeNodeKeyRegistry();
 #pragma warning restore CA2000
         var sender = new MockHubMessageSender();
-        var historyEntryOne = CreateHistoryEntry(MessageRole.System, 10);
-        var historyEntryTwo = CreateHistoryEntry(MessageRole.Assistant, 20);
+        var historyEntryOne = CreateHistoryEntry(MessageRole.System, sortOrder: 10);
+        var historyEntryTwo = CreateHistoryEntry(MessageRole.Assistant, sortOrder: 20);
         var encryptedPackage = CreateMixedEnvelopePackage([historyEntryOne, historyEntryTwo]);
-        var expectedEpochKey = Enumerable.Range(1, 32).Select(static value => (byte)value).ToArray();
+        var expectedEpochKey = Enumerable.Range(start: 1, count: 32).Select(static value => (byte)value).ToArray();
         var envelopeCryptoService = Substitute.For<IEnvelopeCryptoService>();
         envelopeCryptoService.DecryptConversationMessage(encryptedPackage.ConversationId, historyEntryOne, Arg.Any<Key>())
                              .Returns(_ => new EnvelopeDecryptionResult("system guidance"u8.ToArray(), new byte[32]));
@@ -666,23 +666,23 @@ public sealed class WorkerEventDispatcherTests
         AssertEx.Equal(encryptedPackage.Timeouts.InvocationTimeoutSeconds, context.Package.Timeouts.InvocationTimeoutSeconds);
         AssertEx.Equal(encryptedPackage.Timeouts.ToolCallTimeoutSeconds, context.Package.Timeouts.ToolCallTimeoutSeconds);
         AssertEx.Equal(encryptedPackage.Timeouts.StreamIdleTimeoutSeconds, context.Package.Timeouts.StreamIdleTimeoutSeconds);
-        AssertEx.Equal(1, context.Package.AllowedTools.Count);
+        AssertEx.Equal(expected: 1, context.Package.AllowedTools.Count);
         AssertEx.Equal("open_url", context.Package.AllowedTools[0].Name);
         AssertEx.Equal(ToolLocation.ApiSide, context.Package.AllowedTools[0].Location);
         AssertEx.Equal("{\"type\":\"object\"}", context.Package.AllowedTools[0].ParameterSchema);
-        AssertEx.Equal(3, context.Package.ConversationContext.Count);
+        AssertEx.Equal(expected: 3, context.Package.ConversationContext.Count);
         AssertEx.Equal(historyEntryOne.Id, context.Package.ConversationContext[0].Id);
         AssertEx.Equal(MessageRole.System, context.Package.ConversationContext[0].Role);
         AssertEx.Equal("system guidance", context.Package.ConversationContext[0].Content);
-        AssertEx.Equal(10, context.Package.ConversationContext[0].SortOrder);
+        AssertEx.Equal(expected: 10, context.Package.ConversationContext[0].SortOrder);
         AssertEx.Equal(historyEntryTwo.Id, context.Package.ConversationContext[1].Id);
         AssertEx.Equal(MessageRole.Assistant, context.Package.ConversationContext[1].Role);
         AssertEx.Equal("assistant reply", context.Package.ConversationContext[1].Content);
-        AssertEx.Equal(20, context.Package.ConversationContext[1].SortOrder);
+        AssertEx.Equal(expected: 20, context.Package.ConversationContext[1].SortOrder);
         AssertEx.Equal(encryptedPackage.MessageId, context.Package.ConversationContext[2].Id);
         AssertEx.Equal(MessageRole.User, context.Package.ConversationContext[2].Role);
         AssertEx.Equal("latest user message", context.Package.ConversationContext[2].Content);
-        AssertEx.Equal(21, context.Package.ConversationContext[2].SortOrder);
+        AssertEx.Equal(expected: 21, context.Package.ConversationContext[2].SortOrder);
         AssertEx.Equal(encryptedPackage.MessageId, context.MessageId);
         AssertEx.Equal(encryptedPackage.EpochVersion, context.EpochVersion);
         AssertEx.True((capturedEpochKey ?? []).SequenceEqual(expectedEpochKey));

@@ -15,7 +15,7 @@ public sealed class SupervisorEvictionTests
         var launcher = new FakeProcessLauncher();
         var time = new AdvanceableTimeProvider();
         await using var supervisor = SupervisorFactory.Create(launcher,
-            options: CapOf(2, TimeSpan.FromHours(1)),
+            options: CapOf(cap: 2, TimeSpan.FromHours(1)),
             timeProvider: time);
 
         // Fill the cap with two fresh (non-idle) chat processes.
@@ -26,7 +26,7 @@ public sealed class SupervisorEvictionTests
         var ex = await AssertEx.ThrowsAsync<LlamaRuntimeException>(() => supervisor.EnsureRunningAsync("model-c", ModelRole.Chat, CancellationToken.None));
 
         AssertEx.Contains(ex.Message, "maximum number of local models", StringComparison.OrdinalIgnoreCase);
-        AssertEx.Equal(2, launcher.LaunchCount); // model-c never launched.
+        AssertEx.Equal(expected: 2, launcher.LaunchCount); // model-c never launched.
     }
 
     [Test]
@@ -43,7 +43,7 @@ public sealed class SupervisorEvictionTests
             probe,
             options: CapOf(cap, TimeSpan.FromHours(1)));
 
-        var calls = Enumerable.Range(0, distinctModels)
+        var calls = Enumerable.Range(start: 0, distinctModels)
                               .Select(i => Task.Run(async () =>
                               {
                                   try
@@ -86,7 +86,7 @@ public sealed class SupervisorEvictionTests
         var time = new AdvanceableTimeProvider();
         var ttl = TimeSpan.FromMinutes(15);
         await using var supervisor = SupervisorFactory.Create(launcher,
-            options: CapOf(2, ttl),
+            options: CapOf(cap: 2, ttl),
             timeProvider: time);
 
         await supervisor.EnsureRunningAsync("model-a", ModelRole.Chat, CancellationToken.None); // becomes LRU
@@ -98,7 +98,7 @@ public sealed class SupervisorEvictionTests
 
         await supervisor.EnsureRunningAsync("model-c", ModelRole.Chat, CancellationToken.None);
 
-        AssertEx.Equal(3, launcher.LaunchCount); // model-c spawned after evicting an idle victim.
+        AssertEx.Equal(expected: 3, launcher.LaunchCount); // model-c spawned after evicting an idle victim.
 
         // The evicted least-recently-used process (model-a's, the first launched) was tree-killed.
         var firstHandle = launcher.Handles.OrderBy(h => h.ProcessId).First();
@@ -114,7 +114,7 @@ public sealed class SupervisorEvictionTests
         var first = await supervisor.EnsureRunningAsync("model-a", ModelRole.Chat, CancellationToken.None);
         var second = await supervisor.EnsureRunningAsync("model-a", ModelRole.Chat, CancellationToken.None);
 
-        AssertEx.Equal(1, launcher.LaunchCount);
+        AssertEx.Equal(expected: 1, launcher.LaunchCount);
         AssertEx.Equal(first.BaseAddress.AbsoluteUri, second.BaseAddress.AbsoluteUri);
     }
 

@@ -22,7 +22,7 @@ public sealed class ConversationMemoryExcludedTests : IDisposable
     {
         if (Directory.Exists(_rootPath))
         {
-            Directory.Delete(_rootPath, true);
+            Directory.Delete(_rootPath, recursive: true);
         }
     }
 
@@ -33,7 +33,7 @@ public sealed class ConversationMemoryExcludedTests : IDisposable
         var agentId = await SeedAgentAsync(provider, defaultTemporaryChat: true).ConfigureAwait(false);
         var service = CreateService(provider);
 
-        var created = await service.CreateConversationAsync(new NodeChatCreateConversationRequest("Temp chat", "node", 10, AgentDefinitionId: agentId)).ConfigureAwait(false);
+        var created = await service.CreateConversationAsync(new NodeChatCreateConversationRequest("Temp chat", "node", CreatedAtUtc: 10, AgentDefinitionId: agentId)).ConfigureAwait(false);
 
         AssertEx.True(created.MemoryExcluded, "A new conversation bound to a default-temporary agent should inherit MemoryExcluded=true.");
 
@@ -48,7 +48,7 @@ public sealed class ConversationMemoryExcludedTests : IDisposable
         var agentId = await SeedAgentAsync(provider, defaultTemporaryChat: false).ConfigureAwait(false);
         var service = CreateService(provider);
 
-        var created = await service.CreateConversationAsync(new NodeChatCreateConversationRequest("Normal chat", "node", 10, AgentDefinitionId: agentId)).ConfigureAwait(false);
+        var created = await service.CreateConversationAsync(new NodeChatCreateConversationRequest("Normal chat", "node", CreatedAtUtc: 10, AgentDefinitionId: agentId)).ConfigureAwait(false);
 
         AssertEx.False(created.MemoryExcluded, "A new conversation bound to a non-temporary agent should default to MemoryExcluded=false.");
     }
@@ -59,7 +59,7 @@ public sealed class ConversationMemoryExcludedTests : IDisposable
         await using var provider = await BuildProviderAsync("unbound-default.sqlite").ConfigureAwait(false);
         var service = CreateService(provider);
 
-        var created = await service.CreateConversationAsync(new NodeChatCreateConversationRequest("Unbound chat", "node", 10)).ConfigureAwait(false);
+        var created = await service.CreateConversationAsync(new NodeChatCreateConversationRequest("Unbound chat", "node", CreatedAtUtc: 10)).ConfigureAwait(false);
 
         AssertEx.False(created.MemoryExcluded, "An unbound conversation defaults to MemoryExcluded=false.");
     }
@@ -70,7 +70,7 @@ public sealed class ConversationMemoryExcludedTests : IDisposable
         await using var provider = await BuildProviderAsync("toggle-roundtrip.sqlite").ConfigureAwait(false);
         var service = CreateService(provider);
 
-        var created = await service.CreateConversationAsync(new NodeChatCreateConversationRequest("Toggle chat", "node", 10)).ConfigureAwait(false);
+        var created = await service.CreateConversationAsync(new NodeChatCreateConversationRequest("Toggle chat", "node", CreatedAtUtc: 10)).ConfigureAwait(false);
         AssertEx.False(created.MemoryExcluded, "A fresh unbound conversation starts non-temporary.");
 
         // The per-conversation override PATCH endpoint lands in Phase 4; here the column write is simulated directly so
@@ -89,16 +89,16 @@ public sealed class ConversationMemoryExcludedTests : IDisposable
         // owns the typed write, including the new DefaultTemporaryChat flag.
         var store = new AgentDefinitionStore(dbContext, TimeProvider.System);
         var agent = await store.AddAsync(new AgentDefinitionInput("Builder",
-                                       null,
-                                       "You are a careful engineering agent.",
-                                       null,
-                                       null,
-                                       AgentDefinitionKind.Single,
-                                       [],
-                                       new Dictionary<string, bool>(),
-                                       null,
-                                       DefaultTemporaryChat: defaultTemporaryChat))
-                                   .ConfigureAwait(false);
+                                   Description: null,
+                                   "You are a careful engineering agent.",
+                                   ModelProfile: null,
+                                   ReasoningEffort: null,
+                                   AgentDefinitionKind.Single,
+                                   [],
+                                   new Dictionary<string, bool>(),
+                                   OrchestrationTopologyJson: null,
+                                   DefaultTemporaryChat: defaultTemporaryChat))
+                               .ConfigureAwait(false);
         return agent.Id;
     }
 

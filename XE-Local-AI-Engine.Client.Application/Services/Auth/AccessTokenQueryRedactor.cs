@@ -27,7 +27,7 @@ public static class AccessTokenQueryRedactor
         for (var i = 0; i < segments.Length; i++)
         {
             var segment = segments[i];
-            var separatorIndex = segment.IndexOf('=', StringComparison.Ordinal);
+            var separatorIndex = segment.IndexOf(value: '=', StringComparison.Ordinal);
             var key = separatorIndex >= 0 ? segment[..separatorIndex] : segment;
 
             if (!string.Equals(key, AccessTokenParameter, StringComparison.OrdinalIgnoreCase))
@@ -44,7 +44,7 @@ public static class AccessTokenQueryRedactor
             return queryString;
         }
 
-        var redactedQuery = string.Join('&', segments);
+        var redactedQuery = string.Join(separator: '&', segments);
         return hasQuestionPrefix ? $"?{redactedQuery}" : redactedQuery;
     }
 }

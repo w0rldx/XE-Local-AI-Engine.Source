@@ -23,7 +23,7 @@ public sealed class WorkerTokenRefreshServiceTests
         var outcome = await service.TryRefreshAsync();
 
         AssertEx.Equal(WorkerTokenRefreshOutcome.CredentialsRevoked, outcome);
-        AssertEx.Equal(1, tokenStore.ClearTokensAsyncCallCount);
+        AssertEx.Equal(expected: 1, tokenStore.ClearTokensAsyncCallCount);
     }
 
     [Test]
@@ -35,7 +35,7 @@ public sealed class WorkerTokenRefreshServiceTests
         var outcome = await service.TryRefreshAsync();
 
         AssertEx.Equal(WorkerTokenRefreshOutcome.CredentialsRevoked, outcome);
-        AssertEx.Equal(1, tokenStore.ClearTokensAsyncCallCount);
+        AssertEx.Equal(expected: 1, tokenStore.ClearTokensAsyncCallCount);
     }
 
     [Test]
@@ -47,7 +47,7 @@ public sealed class WorkerTokenRefreshServiceTests
         var outcome = await service.TryRefreshAsync();
 
         AssertEx.Equal(WorkerTokenRefreshOutcome.CredentialsRevoked, outcome);
-        AssertEx.Equal(1, tokenStore.ClearTokensAsyncCallCount);
+        AssertEx.Equal(expected: 1, tokenStore.ClearTokensAsyncCallCount);
     }
 
     [Test]
@@ -70,7 +70,7 @@ public sealed class WorkerTokenRefreshServiceTests
         var outcome = await service.TryRefreshAsync();
 
         AssertEx.Equal(WorkerTokenRefreshOutcome.TransientFailure, outcome);
-        AssertEx.Equal(0, tokenStore.ClearTokensAsyncCallCount);
+        AssertEx.Equal(expected: 0, tokenStore.ClearTokensAsyncCallCount);
     }
 
     [Test]
@@ -82,7 +82,7 @@ public sealed class WorkerTokenRefreshServiceTests
         var outcome = await service.TryRefreshAsync();
 
         AssertEx.Equal(WorkerTokenRefreshOutcome.TransientFailure, outcome);
-        AssertEx.Equal(0, tokenStore.ClearTokensAsyncCallCount);
+        AssertEx.Equal(expected: 0, tokenStore.ClearTokensAsyncCallCount);
     }
 
     [Test]
@@ -118,7 +118,7 @@ public sealed class WorkerTokenRefreshServiceTests
         var outcome = await service.TryRefreshAsync();
 
         AssertEx.Equal(WorkerTokenRefreshOutcome.Success, outcome);
-        AssertEx.Equal(1, tokenStore.StoreTokensAsyncCallCount);
+        AssertEx.Equal(expected: 1, tokenStore.StoreTokensAsyncCallCount);
         AssertEx.Equal("new-access-token", await tokenStore.GetAccessTokenAsync());
     }
 

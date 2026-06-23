@@ -13,7 +13,7 @@ public sealed class LocalAgentToolRegistryTests
 
         var tools = registry.GetLocalChatTools();
 
-        AssertEx.Equal(2, tools.Count);
+        AssertEx.Equal(expected: 2, tools.Count);
         AssertEx.Contains(tools.OfType<AIFunction>().Select(static tool => tool.Name), "GetCurrentTime");
         AssertEx.Contains(tools.OfType<AIFunction>().Select(static tool => tool.Name), "Calculate");
     }
@@ -25,7 +25,7 @@ public sealed class LocalAgentToolRegistryTests
 
         var descriptors = registry.GetLocalChatToolDescriptors();
 
-        AssertEx.Equal(2, descriptors.Count);
+        AssertEx.Equal(expected: 2, descriptors.Count);
         foreach (var descriptor in descriptors)
         {
             AssertEx.NotNullOrEmpty(descriptor.Name);

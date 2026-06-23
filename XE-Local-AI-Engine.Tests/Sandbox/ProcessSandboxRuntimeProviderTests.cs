@@ -26,7 +26,7 @@ public sealed class ProcessSandboxRuntimeProviderTests : IDisposable
             {
                 if (Directory.Exists(path))
                 {
-                    Directory.Delete(path, true);
+                    Directory.Delete(path, recursive: true);
                 }
                 else if (File.Exists(path))
                 {
@@ -88,7 +88,7 @@ public sealed class ProcessSandboxRuntimeProviderTests : IDisposable
         });
 
         AssertEx.False(result.Completed, "a timed-out command must not be Completed");
-        AssertEx.Equal(-1, result.ExitCode);
+        AssertEx.Equal(expected: -1, result.ExitCode);
         AssertEx.Equal("timeout-1", result.ExecutionId);
     }
 
@@ -279,7 +279,7 @@ public sealed class ProcessSandboxRuntimeProviderTests : IDisposable
         });
 
         var readBack = await provider.ReadFileAsync(handle, "workspace/exact.bin");
-        AssertEx.Equal(8, readBack.Length);
+        AssertEx.Equal(expected: 8, readBack.Length);
     }
 
     [Test]
@@ -505,7 +505,7 @@ public sealed class ProcessSandboxRuntimeProviderTests : IDisposable
         });
 
         AssertEx.True(result.Completed, $"the in-jail setup command must complete: {result.StandardError}");
-        AssertEx.Equal(0, result.ExitCode, $"the in-jail setup command must succeed: {result.StandardError}");
+        AssertEx.Equal(expected: 0, result.ExitCode, $"the in-jail setup command must succeed: {result.StandardError}");
     }
 
     // Single-quote a path for /bin/sh, escaping embedded single quotes. Test paths are GUID temp dirs so this is simple.
@@ -530,7 +530,7 @@ public sealed class ProcessSandboxRuntimeProviderTests : IDisposable
             {
                 if (Directory.Exists(Path))
                 {
-                    Directory.Delete(Path, true);
+                    Directory.Delete(Path, recursive: true);
                 }
             }
             catch (IOException)

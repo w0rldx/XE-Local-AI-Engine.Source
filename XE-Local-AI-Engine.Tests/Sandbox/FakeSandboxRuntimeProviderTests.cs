@@ -6,7 +6,7 @@ using XE_Local_AI_Engine.Tests.Testing;
 
 public sealed class FakeSandboxRuntimeProviderTests
 {
-    private static readonly DateTimeOffset FixedNow = new(2026, 5, 29, 12, 0, 0, TimeSpan.Zero);
+    private static readonly DateTimeOffset FixedNow = new(year: 2026, month: 5, day: 29, hour: 12, minute: 0, second: 0, TimeSpan.Zero);
 
     [Test]
     public async Task CreateOrAttachAsync_PopulatesHandleFromAttachKeyAndClock()
@@ -19,7 +19,7 @@ public sealed class FakeSandboxRuntimeProviderTests
         AssertEx.NotNullOrEmpty(handle.SandboxId);
         AssertEx.Equal(Key(manifest: 3), handle.AttachKey);
         AssertEx.Equal(FixedNow, handle.CreatedAt);
-        AssertEx.Equal(3, handle.ManifestVersion);
+        AssertEx.Equal(expected: 3, handle.ManifestVersion);
     }
 
     [Test]
@@ -57,7 +57,7 @@ public sealed class FakeSandboxRuntimeProviderTests
     public async Task ExecuteAsync_ReturnsScriptedResultDeterministically()
     {
         var provider = new FakeSandboxRuntimeProvider(new FixedTimeProvider(FixedNow));
-        provider.RegisterCommand("dotnet --info", 0, "runtime: 10.0.0");
+        provider.RegisterCommand("dotnet --info", exitCode: 0, "runtime: 10.0.0");
         var handle = await provider.CreateOrAttachAsync(CreateRequest(Key()));
 
         var result = await provider.ExecuteAsync(handle, new SandboxCommandRequest
@@ -68,7 +68,7 @@ public sealed class FakeSandboxRuntimeProviderTests
         });
 
         AssertEx.Equal("exec-1", result.ExecutionId);
-        AssertEx.Equal(0, result.ExitCode);
+        AssertEx.Equal(expected: 0, result.ExitCode);
         AssertEx.Equal("runtime: 10.0.0", result.StandardOutput);
         AssertEx.True(result.Completed);
     }
@@ -141,7 +141,7 @@ public sealed class FakeSandboxRuntimeProviderTests
 
         var paths = provider.SnapshotSandboxPaths(handle);
 
-        AssertEx.Equal(2, paths.Count);
+        AssertEx.Equal(expected: 2, paths.Count);
         AssertEx.Equal("/agent-home/a", paths[0]);
         AssertEx.Equal("/agent-home/b", paths[1]);
     }
@@ -167,7 +167,7 @@ public sealed class FakeSandboxRuntimeProviderTests
 
         var commands = provider.ExecutedCommands;
 
-        AssertEx.Equal(2, commands.Count);
+        AssertEx.Equal(expected: 2, commands.Count);
         AssertEx.Equal("git", commands[0].Executable);
         AssertEx.Contains(commands[0].Arguments, "init");
         AssertEx.Equal("c2", commands[1].ExecutionId);

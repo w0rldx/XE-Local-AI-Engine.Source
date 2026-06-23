@@ -31,8 +31,8 @@ public sealed class MemoryExtractionServiceTests
 
         AssertEx.False(outcome.MemoryExcluded);
         AssertEx.True(outcome.ModelConfigured);
-        AssertEx.Equal(1, outcome.ProposedCount);
-        AssertEx.Equal(1, outcome.CreatedCandidates.Count);
+        AssertEx.Equal(expected: 1, outcome.ProposedCount);
+        AssertEx.Equal(expected: 1, outcome.CreatedCandidates.Count);
         var created = outcome.CreatedCandidates[0];
         AssertEx.Equal(PlaybookActionState.Suggested, created.State);
         AssertEx.Equal(PlaybookActionSource.Extracted, created.Source);
@@ -50,8 +50,8 @@ public sealed class MemoryExtractionServiceTests
 
         var outcome = await service.ExtractAsync(SuccessfulRun(agentId)).ConfigureAwait(false);
 
-        AssertEx.Equal(0, outcome.ProposedCount);
-        AssertEx.Equal(0, outcome.CreatedCandidates.Count);
+        AssertEx.Equal(expected: 0, outcome.ProposedCount);
+        AssertEx.Equal(expected: 0, outcome.CreatedCandidates.Count);
         await store.DidNotReceive().AddAsync(Arg.Any<PlaybookActionInput>(), Arg.Any<CancellationToken>()).ConfigureAwait(false);
     }
 
@@ -68,7 +68,7 @@ public sealed class MemoryExtractionServiceTests
 
         var outcome = await service.ExtractAsync(FailedRun(agentId)).ConfigureAwait(false);
 
-        AssertEx.Equal(1, outcome.CreatedCandidates.Count);
+        AssertEx.Equal(expected: 1, outcome.CreatedCandidates.Count);
         AssertEx.Equal(MemoryScope.Failure, outcome.CreatedCandidates[0].MemoryScope);
     }
 
@@ -86,9 +86,9 @@ public sealed class MemoryExtractionServiceTests
 
         var outcome = await service.ExtractAsync(SuccessfulRun(agentId)).ConfigureAwait(false);
 
-        AssertEx.Equal(1, outcome.ProposedCount);
-        AssertEx.Equal(0, outcome.CreatedCandidates.Count);
-        AssertEx.Equal(1, outcome.DuplicateCount, "A near-duplicate of an existing live action must be skipped.");
+        AssertEx.Equal(expected: 1, outcome.ProposedCount);
+        AssertEx.Equal(expected: 0, outcome.CreatedCandidates.Count);
+        AssertEx.Equal(expected: 1, outcome.DuplicateCount, "A near-duplicate of an existing live action must be skipped.");
         await store.DidNotReceive().AddAsync(Arg.Any<PlaybookActionInput>(), Arg.Any<CancellationToken>()).ConfigureAwait(false);
     }
 
@@ -105,9 +105,9 @@ public sealed class MemoryExtractionServiceTests
         }).ConfigureAwait(false);
 
         AssertEx.True(outcome.MemoryExcluded, "A temp conversation must short-circuit as suppressed.");
-        AssertEx.Equal(0, outcome.ProposedCount);
-        AssertEx.Equal(0, outcome.CreatedCandidates.Count);
-        AssertEx.Equal(0, agent.InvocationCount, "The temp gate must run BEFORE any model call.");
+        AssertEx.Equal(expected: 0, outcome.ProposedCount);
+        AssertEx.Equal(expected: 0, outcome.CreatedCandidates.Count);
+        AssertEx.Equal(expected: 0, agent.InvocationCount, "The temp gate must run BEFORE any model call.");
         await store.DidNotReceive().AddAsync(Arg.Any<PlaybookActionInput>(), Arg.Any<CancellationToken>()).ConfigureAwait(false);
         await store.DidNotReceive().ListByAgentAsync(Arg.Any<Guid>(), Arg.Any<CancellationToken>()).ConfigureAwait(false);
     }
@@ -118,12 +118,15 @@ public sealed class MemoryExtractionServiceTests
         var agentId = Guid.NewGuid();
         var agent = new FakeExtractionAgent(_ => [Candidate("Never reached.", MemoryScope.Procedural)]);
         // Empty ExtractionModelName = the CI-safe disabled gate (mirrors the embedding ranker).
-        var service = CreateService(out var store, agent, new MemoryExtractionOptions { ExtractionModelName = string.Empty });
+        var service = CreateService(out var store, agent, new MemoryExtractionOptions
+        {
+            ExtractionModelName = string.Empty
+        });
 
         var outcome = await service.ExtractAsync(SuccessfulRun(agentId)).ConfigureAwait(false);
 
         AssertEx.False(outcome.ModelConfigured, "No model configured must report ModelConfigured == false.");
-        AssertEx.Equal(0, agent.InvocationCount, "No model => no model call.");
+        AssertEx.Equal(expected: 0, agent.InvocationCount, "No model => no model call.");
         await store.DidNotReceive().AddAsync(Arg.Any<PlaybookActionInput>(), Arg.Any<CancellationToken>()).ConfigureAwait(false);
     }
 
@@ -134,7 +137,10 @@ public sealed class MemoryExtractionServiceTests
         store = Substitute.For<IPlaybookActionStore>();
         return new MemoryExtractionService(agent,
             store,
-            Options.Create(options ?? new MemoryExtractionOptions { ExtractionModelName = "qwen3:8b" }),
+            Options.Create(options ?? new MemoryExtractionOptions
+            {
+                ExtractionModelName = "qwen3:8b"
+            }),
             NullLogger<MemoryExtractionService>.Instance);
     }
 
@@ -153,9 +159,9 @@ public sealed class MemoryExtractionServiceTests
                      input.Behavior,
                      input.Scope,
                      input.Priority,
-                     1,
-                     10,
-                     10,
+                     Version: 1,
+                     CreatedAtUtc: 10,
+                     UpdatedAtUtc: 10,
                      input.SourceFeedbackIds,
                      input.Confidence,
                      input.EvalResult,
@@ -187,7 +193,7 @@ public sealed class MemoryExtractionServiceTests
 
     private static ProposedMemory Candidate(string behavior, MemoryScope scope)
     {
-        return new ProposedMemory(behavior, scope, null, 0.8d);
+        return new ProposedMemory(behavior, scope, TriggerCondition: null, Confidence: 0.8d);
     }
 
     private static PlaybookActionRecord EnabledAction(Guid agentId, string behavior, MemoryScope scope)
@@ -196,17 +202,17 @@ public sealed class MemoryExtractionServiceTests
             agentId,
             PlaybookActionState.Enabled,
             PlaybookActionSource.Manual,
-            null,
+            TriggerCondition: null,
             behavior,
             scope.ToString(),
-            10,
-            1,
-            10,
-            10,
-            null,
-            null,
-            null,
-            10,
+            Priority: 10,
+            Version: 1,
+            CreatedAtUtc: 10,
+            UpdatedAtUtc: 10,
+            SourceFeedbackIds: null,
+            Confidence: null,
+            EvalResult: null,
+            EnabledAtUtc: 10,
             scope);
     }
 

@@ -35,10 +35,10 @@ public sealed class InvocationResumeRegistryTests
         var registry = CreateRegistry(dispatcher);
         var invocationId = Guid.NewGuid();
 
-        RaiseState(dispatcher, NewState(invocationId, Guid.NewGuid(), InvocationStatus.Running, "hi", 1234));
+        RaiseState(dispatcher, NewState(invocationId, Guid.NewGuid(), InvocationStatus.Running, "hi", generationDurationMs: 1234));
 
         var live = AssertEx.NotNull(registry.TryGetLiveInvocation(invocationId));
-        AssertEx.Equal(1234L, live.GenerationDurationMs);
+        AssertEx.Equal(expected: 1234L, live.GenerationDurationMs);
     }
 
     [Test]

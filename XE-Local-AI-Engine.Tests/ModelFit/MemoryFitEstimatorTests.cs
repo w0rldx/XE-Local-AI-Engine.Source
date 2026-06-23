@@ -30,14 +30,14 @@ public sealed class MemoryFitEstimatorTests
 
         var estimate = estimator.Estimate("Q4_K_M",
             ParamCount,
-            0,
+            fileSizeBytes: 0,
             BlockCount,
             KvHeads,
             EmbeddingLength,
             HeadCount,
             CtxTarget,
             profile,
-            false);
+            kvCacheQuantized: false);
 
         // weights = params · 4.5/8 bytes-per-weight.
         var weights = (long)(ParamCount * MemoryFitEstimator.BytesPerWeight("Q4_K_M"));
@@ -60,8 +60,10 @@ public sealed class MemoryFitEstimatorTests
         var roomyProfile = GpuProfile(64 * Gb);
         var estimator = new MemoryFitEstimator();
 
-        var tooBig = estimator.Estimate("Q4_K_M", 70_000_000_000L, 0, 80, 8, 8192, 64, CtxTarget, tightProfile, false);
-        var fits = estimator.Estimate("Q4_K_M", 70_000_000_000L, 0, 80, 8, 8192, 64, CtxTarget, roomyProfile, false);
+        var tooBig = estimator.Estimate("Q4_K_M", paramCount: 70_000_000_000L, fileSizeBytes: 0, blockCount: 80, attentionHeadCountKV: 8, embeddingLength: 8192, attentionHeadCount: 64, CtxTarget,
+            tightProfile, kvCacheQuantized: false);
+        var fits = estimator.Estimate("Q4_K_M", paramCount: 70_000_000_000L, fileSizeBytes: 0, blockCount: 80, attentionHeadCountKV: 8, embeddingLength: 8192, attentionHeadCount: 64, CtxTarget,
+            roomyProfile, kvCacheQuantized: false);
 
         AssertEx.False(tooBig.Fits, "a 70B model must not fit a 4 GB VRAM budget.");
         AssertEx.True(tooBig.HeadroomBytes < 0, "headroom must be negative when the model exceeds the budget.");
@@ -74,8 +76,8 @@ public sealed class MemoryFitEstimatorTests
         var profile = GpuProfile(64 * Gb);
         var estimator = new MemoryFitEstimator();
 
-        var fp16 = estimator.Estimate("Q4_K_M", ParamCount, 0, BlockCount, KvHeads, EmbeddingLength, HeadCount, CtxTarget, profile, false);
-        var quantized = estimator.Estimate("Q4_K_M", ParamCount, 0, BlockCount, KvHeads, EmbeddingLength, HeadCount, CtxTarget, profile, true);
+        var fp16 = estimator.Estimate("Q4_K_M", ParamCount, fileSizeBytes: 0, BlockCount, KvHeads, EmbeddingLength, HeadCount, CtxTarget, profile, kvCacheQuantized: false);
+        var quantized = estimator.Estimate("Q4_K_M", ParamCount, fileSizeBytes: 0, BlockCount, KvHeads, EmbeddingLength, HeadCount, CtxTarget, profile, kvCacheQuantized: true);
 
         AssertEx.True(quantized.EstimatedBytes < fp16.EstimatedBytes,
             "an 8-bit KV cache must lower the total below the fp16 estimate.");
@@ -98,7 +100,7 @@ public sealed class MemoryFitEstimatorTests
         };
         var estimator = new MemoryFitEstimator();
 
-        var estimate = estimator.Estimate("Q4_K_M", ParamCount, 0, BlockCount, KvHeads, EmbeddingLength, HeadCount, CtxTarget, cpuProfile, false);
+        var estimate = estimator.Estimate("Q4_K_M", ParamCount, fileSizeBytes: 0, BlockCount, KvHeads, EmbeddingLength, HeadCount, CtxTarget, cpuProfile, kvCacheQuantized: false);
 
         AssertEx.Equal(FitMode.Cpu, estimate.Mode);
         AssertEx.True(estimate.Fits, "the small model fits the 24 GB available-RAM budget.");
@@ -112,7 +114,7 @@ public sealed class MemoryFitEstimatorTests
         var estimator = new MemoryFitEstimator();
 
         var estimate = estimator.Estimate("Q4_K_M",
-            null,
+            paramCount: null,
             2 * Gb,
             BlockCount,
             KvHeads,
@@ -120,7 +122,7 @@ public sealed class MemoryFitEstimatorTests
             HeadCount,
             CtxTarget,
             profile,
-            false);
+            kvCacheQuantized: false);
 
         AssertEx.True(estimate.EstimatedBytes > 2 * Gb, "the weights fallback must use the on-disk file size.");
         AssertEx.True(estimate.Fits);

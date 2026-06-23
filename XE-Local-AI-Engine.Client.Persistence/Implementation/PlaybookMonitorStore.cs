@@ -80,14 +80,14 @@ public sealed class PlaybookMonitorStore(NodeChatDbContext dbContext) : IPlayboo
         await using var reader = await command.ExecuteReaderAsync(cancellationToken).ConfigureAwait(false);
         if (!await reader.ReadAsync(cancellationToken).ConfigureAwait(false))
         {
-            return new CohortComparison(0, 0, 0, 0);
+            return new CohortComparison(BeforeTotal: 0, BeforeDown: 0, AfterTotal: 0, AfterDown: 0);
         }
 
         // SUM over no rows yields SQL NULL; the aggregate-row read coalesces each column to 0.
-        return new CohortComparison(ReadCount(reader, 0),
-            ReadCount(reader, 1),
-            ReadCount(reader, 2),
-            ReadCount(reader, 3));
+        return new CohortComparison(ReadCount(reader, ordinal: 0),
+            ReadCount(reader, ordinal: 1),
+            ReadCount(reader, ordinal: 2),
+            ReadCount(reader, ordinal: 3));
     }
 
     private static int ReadCount(DbDataReader reader, int ordinal)

@@ -57,12 +57,12 @@ public sealed record MemoryExtractionOutcome(
     /// <summary>The short-circuit result for a temporary (memory-excluded) conversation: nothing proposed, nothing kept.</summary>
     public static MemoryExtractionOutcome SuppressedByTempChat()
     {
-        return new MemoryExtractionOutcome(true, false, [], 0, 0);
+        return new MemoryExtractionOutcome(MemoryExcluded: true, ModelConfigured: false, [], ProposedCount: 0, DuplicateCount: 0);
     }
 
     /// <summary>The short-circuit result when no node-local extraction model is configured (the CI-safe disabled gate).</summary>
     public static MemoryExtractionOutcome NoModelConfigured()
     {
-        return new MemoryExtractionOutcome(false, false, [], 0, 0);
+        return new MemoryExtractionOutcome(MemoryExcluded: false, ModelConfigured: false, [], ProposedCount: 0, DuplicateCount: 0);
     }
 }

@@ -20,7 +20,7 @@ public sealed class NodeMessageLifecycleMigrationTests : IDisposable
     {
         if (Directory.Exists(_rootPath))
         {
-            Directory.Delete(_rootPath, true);
+            Directory.Delete(_rootPath, recursive: true);
         }
 
         _keyHolder.Dispose();
@@ -38,7 +38,7 @@ public sealed class NodeMessageLifecycleMigrationTests : IDisposable
             await context.Database.GetService<IMigrator>().MigrateAsync(InitialMigrationId).ConfigureAwait(false);
         }
 
-        await InsertHistoricalMessageAsync(databasePath, conversationId, messageId, 1234).ConfigureAwait(false);
+        await InsertHistoricalMessageAsync(databasePath, conversationId, messageId, createdAtUtc: 1234).ConfigureAwait(false);
 
         await using (var context = CreateContext(databasePath))
         {
@@ -57,7 +57,7 @@ public sealed class NodeMessageLifecycleMigrationTests : IDisposable
         var migrated = await ReadMigratedMessageAsync(connection, messageId).ConfigureAwait(false);
 
         AssertEx.Equal(NodeMessageStatus.Completed, migrated.Status, "Existing messages should default to completed.");
-        AssertEx.Equal(1234L, migrated.UpdatedAtUtc, "Existing messages should derive updated_at_utc from created_at_utc.");
+        AssertEx.Equal(expected: 1234L, migrated.UpdatedAtUtc, "Existing messages should derive updated_at_utc from created_at_utc.");
         AssertEx.Null(migrated.RequestId, "Existing messages should not receive a synthetic request_id.");
         AssertEx.Null(migrated.Error, "Existing messages should not receive a synthetic error.");
     }
@@ -124,7 +124,7 @@ public sealed class NodeMessageLifecycleMigrationTests : IDisposable
             var message = await context.Messages.SingleAsync(entity => entity.MessageId == messageId).ConfigureAwait(false);
 
             AssertEx.Equal(NodeMessageStatus.Streaming, message.Status);
-            AssertEx.Equal(12L, message.UpdatedAtUtc);
+            AssertEx.Equal(expected: 12L, message.UpdatedAtUtc);
             AssertEx.Equal(requestId, message.RequestId);
             AssertEx.Equal("provider timeout", message.Error);
         }
@@ -156,7 +156,7 @@ public sealed class NodeMessageLifecycleMigrationTests : IDisposable
             command.Parameters.AddWithValue("$user_id", "node");
             command.Parameters.AddWithValue("$created_at_utc", createdAtUtc);
             command.Parameters.AddWithValue("$last_seen_utc", createdAtUtc);
-            command.Parameters.AddWithValue("$purged", false);
+            command.Parameters.AddWithValue("$purged", value: false);
 
             await command.ExecuteNonQueryAsync().ConfigureAwait(false);
         }
@@ -169,7 +169,7 @@ public sealed class NodeMessageLifecycleMigrationTests : IDisposable
                                   """;
             command.Parameters.AddWithValue("$message_id", messageId.ToString());
             command.Parameters.AddWithValue("$conversation_id", conversationId.ToString());
-            command.Parameters.AddWithValue("$sequence", 1);
+            command.Parameters.AddWithValue("$sequence", value: 1);
             command.Parameters.AddWithValue("$role", "assistant");
             command.Parameters.AddWithValue("$content", Encoding.UTF8.GetBytes("historical content"));
             command.Parameters.AddWithValue("$metadata_json", DBNull.Value);
@@ -192,7 +192,7 @@ public sealed class NodeMessageLifecycleMigrationTests : IDisposable
         command.CommandText = "SELECT * FROM messages LIMIT 0;";
 
         await using var reader = await command.ExecuteReaderAsync().ConfigureAwait(false);
-        var names = Enumerable.Range(0, reader.FieldCount)
+        var names = Enumerable.Range(start: 0, reader.FieldCount)
                               .Select(reader.GetName)
                               .ToHashSet(StringComparer.Ordinal);
 

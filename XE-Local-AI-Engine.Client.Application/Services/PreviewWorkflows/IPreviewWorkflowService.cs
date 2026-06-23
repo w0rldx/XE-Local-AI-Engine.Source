@@ -59,26 +59,26 @@ public sealed record PreviewWorkflowMutationResult(
 {
     public static PreviewWorkflowMutationResult Created(PreviewWorkflowDetail detail)
     {
-        return new PreviewWorkflowMutationResult(PreviewWorkflowMutationOutcome.Created, detail, null);
+        return new PreviewWorkflowMutationResult(PreviewWorkflowMutationOutcome.Created, detail, Validation: null);
     }
 
     public static PreviewWorkflowMutationResult Updated(PreviewWorkflowDetail detail)
     {
-        return new PreviewWorkflowMutationResult(PreviewWorkflowMutationOutcome.Updated, detail, null);
+        return new PreviewWorkflowMutationResult(PreviewWorkflowMutationOutcome.Updated, detail, Validation: null);
     }
 
     public static PreviewWorkflowMutationResult NotFound()
     {
-        return new PreviewWorkflowMutationResult(PreviewWorkflowMutationOutcome.NotFound, null, null);
+        return new PreviewWorkflowMutationResult(PreviewWorkflowMutationOutcome.NotFound, Detail: null, Validation: null);
     }
 
     public static PreviewWorkflowMutationResult Conflict()
     {
-        return new PreviewWorkflowMutationResult(PreviewWorkflowMutationOutcome.Conflict, null, null);
+        return new PreviewWorkflowMutationResult(PreviewWorkflowMutationOutcome.Conflict, Detail: null, Validation: null);
     }
 
     public static PreviewWorkflowMutationResult Invalid(PreviewWorkflowValidationResult validation)
     {
-        return new PreviewWorkflowMutationResult(PreviewWorkflowMutationOutcome.Invalid, null, validation);
+        return new PreviewWorkflowMutationResult(PreviewWorkflowMutationOutcome.Invalid, Detail: null, validation);
     }
 }

@@ -206,7 +206,7 @@ public sealed class LlamaCppBinaryManager : ILlamaCppBinaryManager
             Directory.CreateDirectory(Path.GetDirectoryName(variantDir.TrimEnd(Path.DirectorySeparatorChar))!);
             if (Directory.Exists(variantDir))
             {
-                Directory.Delete(variantDir, true);
+                Directory.Delete(variantDir, recursive: true);
             }
 
             Directory.Move(stagingDir, variantDir);
@@ -215,7 +215,7 @@ public sealed class LlamaCppBinaryManager : ILlamaCppBinaryManager
         {
             if (Directory.Exists(stagingDir))
             {
-                Directory.Delete(stagingDir, true);
+                Directory.Delete(stagingDir, recursive: true);
             }
         }
     }
@@ -224,7 +224,7 @@ public sealed class LlamaCppBinaryManager : ILlamaCppBinaryManager
     {
         using var fileStream = new FileStream(archivePath, FileMode.Open, FileAccess.Read, FileShare.Read);
         using var gzip = new GZipStream(fileStream, CompressionMode.Decompress);
-        TarFile.ExtractToDirectory(gzip, destination, true);
+        TarFile.ExtractToDirectory(gzip, destination, overwriteFiles: true);
     }
 
     private static void TryDeleteFile(string path)

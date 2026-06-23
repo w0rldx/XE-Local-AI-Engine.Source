@@ -68,7 +68,7 @@ public sealed class AgentTemplateImportServiceTests
 
         var definitions = await store.ListAsync().ConfigureAwait(false);
         var matches = definitions.Count(definition => definition.SeedSlug == slug);
-        AssertEx.Equal(1, matches);
+        AssertEx.Equal(expected: 1, matches);
     }
 
     [Test]
@@ -104,10 +104,10 @@ public sealed class AgentTemplateImportServiceTests
 
         var result = await importService.ImportAsync([slug, slug]).ConfigureAwait(false);
 
-        AssertEx.Equal(1, result.Imported.Count);
+        AssertEx.Equal(expected: 1, result.Imported.Count);
         AssertEx.Contains(result.Imported, slug);
 
         var definitions = await store.ListAsync().ConfigureAwait(false);
-        AssertEx.Equal(1, definitions.Count(definition => definition.SeedSlug == slug));
+        AssertEx.Equal(expected: 1, definitions.Count(definition => definition.SeedSlug == slug));
     }
 }

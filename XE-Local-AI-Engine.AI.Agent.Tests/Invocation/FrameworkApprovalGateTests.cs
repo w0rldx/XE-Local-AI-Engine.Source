@@ -38,18 +38,18 @@ public sealed class FrameworkApprovalGateTests
         var seed = BuildSeed();
 
         // run#1 — must PAUSE: surface a ToolApprovalRequestContent, tool NOT executed.
-        var first = await agent.RunAsync(seed, null, null, CancellationToken.None);
+        var first = await agent.RunAsync(seed, session: null, options: null, CancellationToken.None);
         var requests = first.Messages.SelectMany(m => m.Contents).OfType<ToolApprovalRequestContent>().ToList();
-        AssertEx.Equal(1, requests.Count, "run#1 must surface exactly one ToolApprovalRequestContent");
-        AssertEx.Equal(0, executed, "tool must NOT execute before approval");
+        AssertEx.Equal(expected: 1, requests.Count, "run#1 must surface exactly one ToolApprovalRequestContent");
+        AssertEx.Equal(expected: 0, executed, "tool must NOT execute before approval");
 
         // run#2 — THREADLESS resume: replay full history + the approval response, no AgentSession.
         var resume = new List<ChatMessage>(seed);
         resume.AddRange(first.Messages);
         resume.Add(new ChatMessage(ChatRole.User, requests.Select(r => (AIContent)r.CreateResponse(true)).ToList()));
-        _ = await agent.RunAsync(resume, null, null, CancellationToken.None);
+        _ = await agent.RunAsync(resume, session: null, options: null, CancellationToken.None);
 
-        AssertEx.Equal(1, executed, "approved tool must execute exactly once after the threadless resume");
+        AssertEx.Equal(expected: 1, executed, "approved tool must execute exactly once after the threadless resume");
         AssertEx.Equal("ci-regression", reasonSeen, "approved tool must run with the scripted arguments");
     }
 
@@ -65,16 +65,16 @@ public sealed class FrameworkApprovalGateTests
         var agent = BuildAgent(chatClient, tool, sp);
         var seed = BuildSeed();
 
-        var first = await agent.RunAsync(seed, null, null, CancellationToken.None);
+        var first = await agent.RunAsync(seed, session: null, options: null, CancellationToken.None);
         var requests = first.Messages.SelectMany(m => m.Contents).OfType<ToolApprovalRequestContent>().ToList();
-        AssertEx.Equal(1, requests.Count, "run#1 must surface exactly one ToolApprovalRequestContent");
+        AssertEx.Equal(expected: 1, requests.Count, "run#1 must surface exactly one ToolApprovalRequestContent");
 
         var resume = new List<ChatMessage>(seed);
         resume.AddRange(first.Messages);
         resume.Add(new ChatMessage(ChatRole.User, requests.Select(r => (AIContent)r.CreateResponse(false)).ToList()));
-        _ = await agent.RunAsync(resume, null, null, CancellationToken.None);
+        _ = await agent.RunAsync(resume, session: null, options: null, CancellationToken.None);
 
-        AssertEx.Equal(0, executed, "rejected tool must never execute");
+        AssertEx.Equal(expected: 0, executed, "rejected tool must never execute");
     }
 
     private static ApprovalRequiredAIFunction BuildApprovalTool(Action<string> onExecute)

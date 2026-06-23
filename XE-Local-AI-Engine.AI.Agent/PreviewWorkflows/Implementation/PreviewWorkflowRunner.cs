@@ -53,7 +53,7 @@ internal sealed class PreviewWorkflowRunner : IPreviewWorkflowRunner
             switch (node.Kind)
             {
                 case PreviewNodeKind.Start:
-                    plans.Add(new NodePlan(node.Kind, node.Id, StartExecutorId, null));
+                    plans.Add(new NodePlan(node.Kind, node.Id, StartExecutorId, Binding: null));
                     break;
 
                 case PreviewNodeKind.Agent:

@@ -14,7 +14,7 @@ public sealed class OrchestrationConfigHashTests
         // The cross-repo round-trip guard: a null orchestration spec MUST yield the exact legacy canonical JSON and
         // digest the server MixedEnvelopeConfigHashService reproduces. If this drifts, every encrypted invocation
         // fails runtime-package-config-hash-mismatch.
-        var canonicalJson = RuntimePackageConfigHash.SerializeCanonicalJson(7,
+        var canonicalJson = RuntimePackageConfigHash.SerializeCanonicalJson(agentDefinitionVersion: 7,
             "You are a helpful local AI assistant.",
             [
                 new MixedEnvelopeAllowedToolDto
@@ -24,7 +24,7 @@ public sealed class OrchestrationConfigHashTests
                     Schema = "{\"type\":\"object\",\"properties\":{\"url\":{\"type\":\"string\"}},\"required\":[\"url\"]}"
                 }
             ],
-            null,
+            modelProfile: null,
             new TimeoutSettings
             {
                 InvocationTimeoutSeconds = 300,
@@ -33,7 +33,7 @@ public sealed class OrchestrationConfigHashTests
             },
             orchestrationSpec: null);
 
-        var digest = RuntimePackageConfigHash.Compute(7,
+        var digest = RuntimePackageConfigHash.Compute(agentDefinitionVersion: 7,
             "You are a helpful local AI assistant.",
             [
                 new MixedEnvelopeAllowedToolDto
@@ -43,7 +43,7 @@ public sealed class OrchestrationConfigHashTests
                     Schema = "{\"type\":\"object\",\"properties\":{\"url\":{\"type\":\"string\"}},\"required\":[\"url\"]}"
                 }
             ],
-            null,
+            modelProfile: null,
             new TimeoutSettings
             {
                 InvocationTimeoutSeconds = 300,
@@ -195,12 +195,12 @@ public sealed class OrchestrationConfigHashTests
 
     private static string ComputeWith(OrchestrationSpec? spec)
     {
-        return RuntimePackageConfigHash.Compute(1,
+        return RuntimePackageConfigHash.Compute(agentDefinitionVersion: 1,
             "You are a helpful local AI assistant.",
             [],
             "qwen3:8b",
             new TimeoutSettings(),
-            null,
+            reasoningEffort: null,
             spec);
     }
 

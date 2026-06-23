@@ -23,20 +23,20 @@ public sealed class RuntimeChatClientTests
         // Signed out → routes local.
         selector.CloudActive = false;
         await runtime.GetResponseAsync([new ChatMessage(ChatRole.User, "hi")]);
-        AssertEx.Equal(1, localClient.CallCount);
-        AssertEx.Equal(0, cloudClient.CallCount);
+        AssertEx.Equal(expected: 1, localClient.CallCount);
+        AssertEx.Equal(expected: 0, cloudClient.CallCount);
 
         // Sign in at runtime → next send routes cloud, same wrapper instance (no restart).
         selector.CloudActive = true;
         await runtime.GetResponseAsync([new ChatMessage(ChatRole.User, "hi")]);
-        AssertEx.Equal(1, cloudClient.CallCount);
-        AssertEx.Equal(1, localClient.CallCount);
+        AssertEx.Equal(expected: 1, cloudClient.CallCount);
+        AssertEx.Equal(expected: 1, localClient.CallCount);
 
         // Sign out again → next send routes local again.
         selector.CloudActive = false;
         await runtime.GetResponseAsync([new ChatMessage(ChatRole.User, "hi")]);
-        AssertEx.Equal(2, localClient.CallCount);
-        AssertEx.Equal(1, cloudClient.CallCount);
+        AssertEx.Equal(expected: 2, localClient.CallCount);
+        AssertEx.Equal(expected: 1, cloudClient.CallCount);
     }
 
     [Test]
@@ -49,7 +49,7 @@ public sealed class RuntimeChatClientTests
         await AssertEx.ThrowsAsync<InvalidOperationException>(() => runtime.GetResponseAsync([new ChatMessage(ChatRole.User, "hi")]));
 
         // The local client must NOT have been used — a selected-but-unusable cloud provider does not silently fall back.
-        AssertEx.Equal(0, localClient.CallCount);
+        AssertEx.Equal(expected: 0, localClient.CallCount);
     }
 
     /// <summary>A selector whose cloud-vs-local decision the test flips between sends.</summary>

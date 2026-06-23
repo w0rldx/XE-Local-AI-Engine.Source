@@ -21,7 +21,7 @@ public sealed class PersistenceEncryptionTests : IDisposable
     {
         if (Directory.Exists(_rootPath))
         {
-            Directory.Delete(_rootPath, true);
+            Directory.Delete(_rootPath, recursive: true);
         }
     }
 
@@ -231,7 +231,7 @@ public sealed class PersistenceEncryptionTests : IDisposable
     [Test]
     public void NodeSqliteKeyHolder_WhenConfigured_DerivesExpectedHkdfKey()
     {
-        var operatorSecret = Enumerable.Range(1, 32).Select(static value => (byte)value).ToArray();
+        var operatorSecret = Enumerable.Range(start: 1, count: 32).Select(static value => (byte)value).ToArray();
         const string nodeName = "worker-node-alpha";
         var configuration = new ConfigurationBuilder()
                             .AddInMemoryCollection(new Dictionary<string, string?>
@@ -250,7 +250,7 @@ public sealed class PersistenceEncryptionTests : IDisposable
         var expected = HkdfSha256(operatorSecret,
             [],
             Encoding.UTF8.GetBytes($"c0re-node-sqlite|v1|{nodeName}"),
-            32);
+            outputLength: 32);
 
         AssertBytesEqual(expected, actual, "Derived key should match the HKDF-SHA256 reference implementation.");
     }
@@ -258,7 +258,7 @@ public sealed class PersistenceEncryptionTests : IDisposable
     [Test]
     public void NodeSqliteKeyHolder_WhenDisposed_ThrowsOnSubsequentAccess()
     {
-        var operatorSecret = Enumerable.Range(100, 32).Select(static value => (byte)value).ToArray();
+        var operatorSecret = Enumerable.Range(start: 100, count: 32).Select(static value => (byte)value).ToArray();
         var configuration = new ConfigurationBuilder()
                             .AddInMemoryCollection(new Dictionary<string, string?>
                             {
@@ -300,7 +300,7 @@ public sealed class PersistenceEncryptionTests : IDisposable
     [Test]
     public void NodeJwtKeyProvider_WhenConfigured_DerivesSeparateExpectedHkdfKey()
     {
-        var operatorSecret = Enumerable.Range(1, 32).Select(static value => (byte)value).ToArray();
+        var operatorSecret = Enumerable.Range(start: 1, count: 32).Select(static value => (byte)value).ToArray();
         const string nodeName = "worker-node-alpha";
         var configuration = new ConfigurationBuilder()
                             .AddInMemoryCollection(new Dictionary<string, string?>
@@ -324,7 +324,7 @@ public sealed class PersistenceEncryptionTests : IDisposable
         var expected = HkdfSha256(operatorSecret,
             [],
             Encoding.UTF8.GetBytes($"c0re-node-jwt|v1|{nodeName}"),
-            32);
+            outputLength: 32);
 
         AssertBytesEqual(expected, actual, "JWT signing key should match the HKDF-SHA256 reference implementation.");
         AssertEx.False(sqliteKeyHolder.Key.Span.SequenceEqual(jwtKeyProvider.SigningKey.Span), "JWT and SQLite keys must use separate HKDF info strings.");
@@ -417,7 +417,7 @@ public sealed class PersistenceEncryptionTests : IDisposable
 
     private static byte[] CreateKeyMaterial()
     {
-        return Enumerable.Range(0, 32).Select(static value => (byte)(value + 1)).ToArray();
+        return Enumerable.Range(start: 0, count: 32).Select(static value => (byte)(value + 1)).ToArray();
     }
 
     private static void AssertBytesEqual(byte[] expected, byte[] actual, string message)
@@ -468,12 +468,12 @@ public sealed class PersistenceEncryptionTests : IDisposable
         while (output.Length < outputLength)
         {
             var input = new byte[previousBlock.Length + info.Length + 1];
-            Buffer.BlockCopy(previousBlock, 0, input, 0, previousBlock.Length);
-            Buffer.BlockCopy(info, 0, input, previousBlock.Length, info.Length);
+            Buffer.BlockCopy(previousBlock, srcOffset: 0, input, dstOffset: 0, previousBlock.Length);
+            Buffer.BlockCopy(info, srcOffset: 0, input, previousBlock.Length, info.Length);
             input[^1] = counter;
 
             previousBlock = expandHmac.ComputeHash(input);
-            output.Write(previousBlock, 0, previousBlock.Length);
+            output.Write(previousBlock, offset: 0, previousBlock.Length);
             counter++;
         }
 

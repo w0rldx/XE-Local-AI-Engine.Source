@@ -214,7 +214,7 @@ public sealed class LocalModelEndpointTests
 
         AssertEx.Equal(HttpStatusCode.OK, response.StatusCode);
         AssertEx.Equal("llama3:8b", details.ModelName);
-        AssertEx.Equal(8192, details.MaxContextTokens);
+        AssertEx.Equal(expected: 8192, details.MaxContextTokens);
         AssertEx.Equal("{{ .Prompt }}", details.Template);
         AssertEx.False(body.Contains("apiKey", StringComparison.OrdinalIgnoreCase));
         AssertEx.Contains(context.Server.RecordedRequests, recorded => recorded.Path == "/api/show" && recorded.ModelName == "llama3:8b");
@@ -259,7 +259,7 @@ public sealed class LocalModelEndpointTests
         AssertEx.Equal(HttpStatusCode.OK, response.StatusCode);
         AssertEx.Equal("llama3:8b", selection.SelectedModelName);
         AssertEx.Equal("llama3:8b", settingsStore.Settings.DefaultModelName);
-        AssertEx.Equal(120, settingsStore.Settings.MaxMessageRequestTimeoutSeconds);
+        AssertEx.Equal(expected: 120, settingsStore.Settings.MaxMessageRequestTimeoutSeconds);
         await modelService.DidNotReceiveWithAnyArgs().ListLocalModelsAsync(Arg.Any<CancellationToken>());
     }
 
@@ -371,7 +371,7 @@ public sealed class LocalModelEndpointTests
         // Ollama branch (default-stubbed resolver): the decoded canonical name is the one probed via /api/show.
         var modelService = Substitute.For<IOllamaModelService>();
         modelService.ShowModelDetailsAsync(Arg.Any<string>(), Arg.Any<CancellationToken>())
-                    .Returns(new OllamaModelDetails(new ShowModelResponse(), 4096, []));
+                    .Returns(new OllamaModelDetails(new ShowModelResponse(), MaxContextTokens: 4096, []));
         await using var context = CreateContext(modelService, new StubNodeSettingsStore(new StoredNodeSettings()));
         using var client = context.Factory.CreateClient();
 
@@ -417,7 +417,7 @@ public sealed class LocalModelEndpointTests
 
         AssertEx.Equal(HttpStatusCode.OK, response.StatusCode);
         AssertEx.Equal("Qwen2.5-0.5B-Instruct-GGUF:Q4_K_M", details.ModelName);
-        AssertEx.Equal(32768, details.MaxContextTokens);
+        AssertEx.Equal(expected: 32768, details.MaxContextTokens);
         await modelService.DidNotReceiveWithAnyArgs().ShowModelDetailsAsync(Arg.Any<string>(), Arg.Any<CancellationToken>());
     }
 
@@ -471,7 +471,7 @@ public sealed class LocalModelEndpointTests
 
         AssertEx.Equal(HttpStatusCode.OK, response.StatusCode);
         AssertEx.Equal("hf.co/unsloth/gemma-4-12b-it-GGUF:UD-Q4_K_XL", details.ModelName);
-        AssertEx.Equal(8192, details.MaxContextTokens);
+        AssertEx.Equal(expected: 8192, details.MaxContextTokens);
         await modelService.DidNotReceiveWithAnyArgs().ShowModelDetailsAsync(Arg.Any<string>(), Arg.Any<CancellationToken>());
     }
 
@@ -484,7 +484,7 @@ public sealed class LocalModelEndpointTests
                                  ModelKind.Chat,
                                  ModelKind.Unknown,
                                  [],
-                                 true));
+                                 IsOverridden: true));
         await using var context = CreateContextWithClassification(classificationService);
         using var client = context.Factory.CreateClient();
 
@@ -511,7 +511,7 @@ public sealed class LocalModelEndpointTests
                                  ModelKind.Unknown,
                                  ModelKind.Unknown,
                                  [],
-                                 false));
+                                 IsOverridden: false));
         await using var context = CreateContextWithClassification(classificationService);
         using var client = context.Factory.CreateClient();
 

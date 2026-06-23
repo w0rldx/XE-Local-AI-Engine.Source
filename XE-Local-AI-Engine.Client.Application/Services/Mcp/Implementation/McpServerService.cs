@@ -20,7 +20,7 @@ internal sealed class McpServerService(
         ArgumentNullException.ThrowIfNull(input);
 
         Validate(input);
-        await EnsureNameAvailableAsync(input.Name, null, cancellationToken).ConfigureAwait(false);
+        await EnsureNameAvailableAsync(input.Name, excludeId: null, cancellationToken).ConfigureAwait(false);
 
         try
         {

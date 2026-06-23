@@ -20,7 +20,7 @@ using XE_Local_AI_Engine.Tests.Testing;
 /// </summary>
 public sealed class AgentHomePatchServiceTests : IDisposable
 {
-    private static readonly DateTimeOffset FixedNow = new(2026, 5, 29, 12, 0, 0, TimeSpan.Zero);
+    private static readonly DateTimeOffset FixedNow = new(year: 2026, month: 5, day: 29, hour: 12, minute: 0, second: 0, TimeSpan.Zero);
     private static readonly JsonSerializerOptions JsonOptions = new(JsonSerializerDefaults.Web);
 
     private readonly List<string> _tempDirs = [];
@@ -33,7 +33,7 @@ public sealed class AgentHomePatchServiceTests : IDisposable
             {
                 if (Directory.Exists(dir))
                 {
-                    Directory.Delete(dir, true);
+                    Directory.Delete(dir, recursive: true);
                 }
             }
             catch (IOException)
@@ -52,8 +52,8 @@ public sealed class AgentHomePatchServiceTests : IDisposable
     {
         var provider = new FakeSandboxRuntimeProvider(new FixedClock(FixedNow));
         var handle = await provider.CreateOrAttachAsync(CreateRequest());
-        provider.RegisterCommand(GitDiffCommandKeys.NameStatus, 0, "M\trepo-01/src/App.cs\n");
-        provider.RegisterCommand(GitDiffCommandKeys.PatchDiff, 0, "patch-body\n");
+        provider.RegisterCommand(GitDiffCommandKeys.NameStatus, exitCode: 0, "M\trepo-01/src/App.cs\n");
+        provider.RegisterCommand(GitDiffCommandKeys.PatchDiff, exitCode: 0, "patch-body\n");
         var service = CreateService(provider);
 
         await service.ExportPatchAsync(handle, Request("run-x", NewTempDir(), Folder("repo-01")));
@@ -75,14 +75,14 @@ public sealed class AgentHomePatchServiceTests : IDisposable
         var provider = new FakeSandboxRuntimeProvider(new FixedClock(FixedNow));
         var handle = await provider.CreateOrAttachAsync(CreateRequest());
 
-        var nameStatus = string.Join('\n',
+        var nameStatus = string.Join(separator: '\n',
             "M\trepo-01/src/Program.cs",
             "A\trepo-01/src/New.cs",
             "D\trepo-01/old/Gone.cs",
             "R100\trepo-01/a.txt\trepo-01/b.txt",
             "M\trepo-02/lib/X.cs");
-        provider.RegisterCommand(GitDiffCommandKeys.NameStatus, 0, nameStatus);
-        provider.RegisterCommand(GitDiffCommandKeys.PatchDiff, 0, "diff --git a/repo-01/src/Program.cs b/repo-01/src/Program.cs\n");
+        provider.RegisterCommand(GitDiffCommandKeys.NameStatus, exitCode: 0, nameStatus);
+        provider.RegisterCommand(GitDiffCommandKeys.PatchDiff, exitCode: 0, "diff --git a/repo-01/src/Program.cs b/repo-01/src/Program.cs\n");
         var service = CreateService(provider);
 
         var repo01 = Folder("repo-01");
@@ -91,7 +91,7 @@ public sealed class AgentHomePatchServiceTests : IDisposable
 
         var export = await service.ExportPatchAsync(handle, Request("run-1", runDir, repo01, repo02));
 
-        AssertEx.Equal(5, export.ChangedFileCount);
+        AssertEx.Equal(expected: 5, export.ChangedFileCount);
         AssertEx.False(export.Blocked);
         AssertEx.Equal("runs/run-1/patches/changes.patch", export.PatchRelativePath);
         AssertEx.Equal("runs/run-1/patches/changed-files.json", export.ChangedFilesRelativePath);
@@ -99,7 +99,7 @@ public sealed class AgentHomePatchServiceTests : IDisposable
         var json = await File.ReadAllTextAsync(Path.Combine(runDir, "patches", "changed-files.json"));
         var entries = JsonSerializer.Deserialize<ChangedFileEntry[]>(json, JsonOptions)!;
 
-        AssertEx.Equal(5, entries.Length);
+        AssertEx.Equal(expected: 5, entries.Length);
         AssertEntry(entries, repo01.Id.ToString(), "repo-01", "src/Program.cs", "modified");
         AssertEntry(entries, repo01.Id.ToString(), "repo-01", "src/New.cs", "added");
         AssertEntry(entries, repo01.Id.ToString(), "repo-01", "old/Gone.cs", "deleted");
@@ -119,15 +119,15 @@ public sealed class AgentHomePatchServiceTests : IDisposable
     {
         var provider = new FakeSandboxRuntimeProvider(new FixedClock(FixedNow));
         var handle = await provider.CreateOrAttachAsync(CreateRequest());
-        provider.RegisterCommand(GitDiffCommandKeys.NameStatus, 0, "M\trepo-01/src/App.cs\n");
-        provider.RegisterCommand(GitDiffCommandKeys.PatchDiff, 0, new string('x', 4096));
-        var service = CreateService(provider, 16);
+        provider.RegisterCommand(GitDiffCommandKeys.NameStatus, exitCode: 0, "M\trepo-01/src/App.cs\n");
+        provider.RegisterCommand(GitDiffCommandKeys.PatchDiff, exitCode: 0, new string(c: 'x', count: 4096));
+        var service = CreateService(provider, maxPatchBytes: 16);
 
         var runDir = NewTempDir();
         var export = await service.ExportPatchAsync(handle, Request("run-2", runDir, Folder("repo-01")));
 
         AssertEx.True(export.Blocked, "a patch over MaxPatchBytes is blocked");
-        AssertEx.Equal(1, export.ChangedFileCount);
+        AssertEx.Equal(expected: 1, export.ChangedFileCount);
         AssertEx.True(export.PatchRelativePath is null, "a blocked patch is not written, so its path is null");
         AssertEx.Equal("runs/run-2/patches/changed-files.json", export.ChangedFilesRelativePath);
 
@@ -140,14 +140,14 @@ public sealed class AgentHomePatchServiceTests : IDisposable
     {
         var provider = new FakeSandboxRuntimeProvider(new FixedClock(FixedNow));
         var handle = await provider.CreateOrAttachAsync(CreateRequest());
-        provider.RegisterCommand(GitDiffCommandKeys.NameStatus, 0, string.Empty);
-        provider.RegisterCommand(GitDiffCommandKeys.PatchDiff, 0, string.Empty);
+        provider.RegisterCommand(GitDiffCommandKeys.NameStatus, exitCode: 0, string.Empty);
+        provider.RegisterCommand(GitDiffCommandKeys.PatchDiff, exitCode: 0, string.Empty);
         var service = CreateService(provider);
 
         var runDir = NewTempDir();
         var export = await service.ExportPatchAsync(handle, Request("run-3", runDir, Folder("repo-01")));
 
-        AssertEx.Equal(0, export.ChangedFileCount);
+        AssertEx.Equal(expected: 0, export.ChangedFileCount);
         AssertEx.True(export.PatchRelativePath is null, "no changes means no patch path");
         AssertEx.True(export.ChangedFilesRelativePath is null, "no changes means no metadata path");
         AssertEx.False(Directory.Exists(Path.Combine(runDir, "patches")), "no patches directory is created when nothing changed");
@@ -158,15 +158,15 @@ public sealed class AgentHomePatchServiceTests : IDisposable
     {
         var provider = new FakeSandboxRuntimeProvider(new FixedClock(FixedNow));
         var handle = await provider.CreateOrAttachAsync(CreateRequest());
-        provider.RegisterCommand(GitDiffCommandKeys.PatchDiff, 128, string.Empty, "fatal: bad revision 'HEAD'");
-        provider.RegisterCommand(GitDiffCommandKeys.NameStatus, 128, string.Empty, "fatal: bad revision 'HEAD'");
+        provider.RegisterCommand(GitDiffCommandKeys.PatchDiff, exitCode: 128, string.Empty, "fatal: bad revision 'HEAD'");
+        provider.RegisterCommand(GitDiffCommandKeys.NameStatus, exitCode: 128, string.Empty, "fatal: bad revision 'HEAD'");
         var service = CreateService(provider);
 
         var runDir = NewTempDir();
         var export = await service.ExportPatchAsync(handle, Request("run-5", runDir, Folder("repo-01")));
 
         AssertEx.True(export.Failed, "a non-zero git diff exit must be reported as a failure, not a clean zero-change run");
-        AssertEx.Equal(0, export.ChangedFileCount);
+        AssertEx.Equal(expected: 0, export.ChangedFileCount);
         AssertEx.True(export.PatchRelativePath is null, "a failed export writes no patch");
         AssertEx.True(export.ChangedFilesRelativePath is null, "a failed export writes no metadata");
         AssertEx.False(Directory.Exists(Path.Combine(runDir, "patches")), "no artifacts are written on failure");
@@ -178,21 +178,21 @@ public sealed class AgentHomePatchServiceTests : IDisposable
         var provider = new FakeSandboxRuntimeProvider(new FixedClock(FixedNow));
         var handle = await provider.CreateOrAttachAsync(CreateRequest());
 
-        var nameStatus = string.Join('\n',
+        var nameStatus = string.Join(separator: '\n',
             "M\trepo-01/keep.cs", // mapped
             "M\tunknown-alias/skip.cs", // alias not in the prepared workspace → skipped
             "M\trootfile.txt"); // no alias segment → skipped
-        provider.RegisterCommand(GitDiffCommandKeys.NameStatus, 0, nameStatus);
-        provider.RegisterCommand(GitDiffCommandKeys.PatchDiff, 0, "diff --git a/repo-01/keep.cs b/repo-01/keep.cs\n");
+        provider.RegisterCommand(GitDiffCommandKeys.NameStatus, exitCode: 0, nameStatus);
+        provider.RegisterCommand(GitDiffCommandKeys.PatchDiff, exitCode: 0, "diff --git a/repo-01/keep.cs b/repo-01/keep.cs\n");
         var service = CreateService(provider);
 
         var runDir = NewTempDir();
         var export = await service.ExportPatchAsync(handle, Request("run-4", runDir, Folder("repo-01")));
 
-        AssertEx.Equal(1, export.ChangedFileCount);
+        AssertEx.Equal(expected: 1, export.ChangedFileCount);
         var entries = JsonSerializer.Deserialize<ChangedFileEntry[]>(await File.ReadAllTextAsync(Path.Combine(runDir, "patches", "changed-files.json")),
             JsonOptions)!;
-        AssertEx.Equal(1, entries.Length);
+        AssertEx.Equal(expected: 1, entries.Length);
         AssertEx.Equal("keep.cs", entries[0].RelativePath);
     }
 

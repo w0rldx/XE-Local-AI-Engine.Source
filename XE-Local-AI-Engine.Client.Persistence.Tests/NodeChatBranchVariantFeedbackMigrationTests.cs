@@ -19,7 +19,7 @@ public sealed class NodeChatBranchVariantFeedbackMigrationTests : IDisposable
     {
         if (Directory.Exists(_rootPath))
         {
-            Directory.Delete(_rootPath, true);
+            Directory.Delete(_rootPath, recursive: true);
         }
 
         _keyHolder.Dispose();
@@ -172,7 +172,7 @@ public sealed class NodeChatBranchVariantFeedbackMigrationTests : IDisposable
         command.CommandText = commandText;
 
         await using var reader = await command.ExecuteReaderAsync().ConfigureAwait(false);
-        return Enumerable.Range(0, reader.FieldCount)
+        return Enumerable.Range(start: 0, reader.FieldCount)
                          .Select(reader.GetName)
                          .ToHashSet(StringComparer.Ordinal);
     }

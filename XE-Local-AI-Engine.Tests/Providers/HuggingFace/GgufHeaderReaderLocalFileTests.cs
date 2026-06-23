@@ -19,7 +19,7 @@ public sealed class GgufHeaderReaderLocalFileTests
         // Qwen2.5-0.5B-Instruct advertises qwen2.context_length = 32768 (a u32 keyed by general.architecture=qwen2).
         var header = new GgufHeaderBytesBuilder()
                      .WithString("general.architecture", "qwen2")
-                     .WithUint32("qwen2.context_length", 32768)
+                     .WithUint32("qwen2.context_length", value: 32768)
                      .Build();
         await File.WriteAllBytesAsync(path, header);
         var reader = NewReader();
@@ -27,7 +27,7 @@ public sealed class GgufHeaderReaderLocalFileTests
         var metadata = await reader.ReadHeaderFromFileAsync(path, CancellationToken.None);
 
         AssertEx.Equal("qwen2", metadata.Architecture!);
-        AssertEx.Equal(32768L, metadata.ContextLength!.Value);
+        AssertEx.Equal(expected: 32768L, metadata.ContextLength!.Value);
     }
 
     [Test]
@@ -40,7 +40,7 @@ public sealed class GgufHeaderReaderLocalFileTests
         const string template = "{% for tool in tools %}{{ tool }}{% endfor %}<|im_start|>";
         var header = new GgufHeaderBytesBuilder()
                      .WithString("general.architecture", "qwen2")
-                     .WithUint32("qwen2.context_length", 32768)
+                     .WithUint32("qwen2.context_length", value: 32768)
                      .WithStringArray("tokenizer.ggml.tokens", BuildVocab(2048))
                      .WithString("tokenizer.chat_template", template)
                      .Build();

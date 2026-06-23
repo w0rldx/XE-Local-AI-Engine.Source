@@ -17,7 +17,7 @@ using Microsoft.Extensions.Logging;
 /// </summary>
 internal sealed class OrchestrationRunSession : IOrchestrationRunSession
 {
-    private readonly System.Threading.Lock _idleClockGate = new();
+    private readonly Lock _idleClockGate = new();
     private readonly TimeSpan _idleTimeout;
     private readonly ILogger _logger;
     private readonly IReadOnlyDictionary<string, OrchestrationParticipant> _participantsByAgentId;
@@ -155,7 +155,7 @@ internal sealed class OrchestrationRunSession : IOrchestrationRunSession
             case ExecutorFailedEvent failed:
                 var message = failed.Data?.Message ?? "Orchestration executor failed.";
                 _logger.LogWarning("Orchestration executor '{ExecutorId}' failed: {Message}", failed.ExecutorId, message);
-                return OrchestrationUpdate.Failed(message, null, null);
+                return OrchestrationUpdate.Failed(message, participantKey: null, participantName: null);
 
             default:
                 return null;
@@ -191,7 +191,7 @@ internal sealed class OrchestrationRunSession : IOrchestrationRunSession
         _pendingApprovals[request.RequestId] = request;
 
         var toolName = ResolveApprovalToolName(request);
-        return OrchestrationUpdate.Approval(request.RequestId, toolName, null, null);
+        return OrchestrationUpdate.Approval(request.RequestId, toolName, participantKey: null, participantName: null);
     }
 
     private static string ResolveApprovalToolName(ExternalRequest request)

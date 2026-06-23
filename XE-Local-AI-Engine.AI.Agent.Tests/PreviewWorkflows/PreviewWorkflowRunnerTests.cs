@@ -55,7 +55,7 @@ public sealed class PreviewWorkflowRunnerTests
         // NEGATIVE ASSERTION (downstream-isolation guard): Beta's FIRST inbound is EXACTLY one user message carrying
         // only the transform output — no Start seed text, no instructions message, no prior assistant turn.
         var betaFirstInvocation = client.FirstInvocationMessagesFor("beta");
-        AssertEx.Equal(1, betaFirstInvocation.Count);
+        AssertEx.Equal(expected: 1, betaFirstInvocation.Count);
         AssertEx.Equal(ChatRole.User, betaFirstInvocation[0].Role);
         AssertEx.Equal("ALPHA_OUTPUT", betaFirstInvocation[0].Text);
 
@@ -81,7 +81,7 @@ public sealed class PreviewWorkflowRunnerTests
 
         // The debug side-event is emitted exactly once, carrying the upstream agent's output.
         var debugEvents = updates.Where(update => update.Kind == PreviewWorkflowUpdateKind.NodeDebug).ToList();
-        AssertEx.Equal(1, debugEvents.Count);
+        AssertEx.Equal(expected: 1, debugEvents.Count);
         AssertEx.Equal("debug1", debugEvents[0].NodeId);
         AssertEx.Equal("ALPHA_OUTPUT", debugEvents[0].Output);
 

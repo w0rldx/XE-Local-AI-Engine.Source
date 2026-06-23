@@ -23,7 +23,7 @@ public sealed class AddGoldenConversationHarvestProvenanceMigrationTests : IDisp
     {
         if (Directory.Exists(_rootPath))
         {
-            Directory.Delete(_rootPath, true);
+            Directory.Delete(_rootPath, recursive: true);
         }
 
         _keyHolder.Dispose();
@@ -55,7 +55,7 @@ public sealed class AddGoldenConversationHarvestProvenanceMigrationTests : IDisp
         AssertEx.True(goldenColumns.Contains("source_message_id"), "Migration should add golden_conversations.source_message_id.");
         AssertEx.True(goldenColumns.Contains("source_conversation_id"), "Migration should add golden_conversations.source_conversation_id.");
 
-        AssertEx.Equal(0L, await ReadSourceAsync(connection, goldenId).ConfigureAwait(false), "Existing golden rows should default to source 0 (Manual).");
+        AssertEx.Equal(expected: 0L, await ReadSourceAsync(connection, goldenId).ConfigureAwait(false), "Existing golden rows should default to source 0 (Manual).");
         AssertEx.True(await IsSourceMessageIdNullAsync(connection, goldenId).ConfigureAwait(false), "Existing rows should have a null source_message_id.");
         AssertEx.True(await IsSourceConversationIdNullAsync(connection, goldenId).ConfigureAwait(false), "Existing rows should have a null source_conversation_id.");
     }
@@ -106,12 +106,12 @@ public sealed class AddGoldenConversationHarvestProvenanceMigrationTests : IDisp
                 2,
                 3
             });
-            command.Parameters.AddWithValue("$kind", 0);
+            command.Parameters.AddWithValue("$kind", value: 0);
             command.Parameters.AddWithValue("$allowed", "[]");
             command.Parameters.AddWithValue("$approvals", "{}");
-            command.Parameters.AddWithValue("$version", 1);
-            command.Parameters.AddWithValue("$created", 1234L);
-            command.Parameters.AddWithValue("$updated", 1234L);
+            command.Parameters.AddWithValue("$version", value: 1);
+            command.Parameters.AddWithValue("$created", value: 1234L);
+            command.Parameters.AddWithValue("$updated", value: 1234L);
             await command.ExecuteNonQueryAsync().ConfigureAwait(false);
         }
 
@@ -132,9 +132,9 @@ public sealed class AddGoldenConversationHarvestProvenanceMigrationTests : IDisp
                 8,
                 7
             });
-            command.Parameters.AddWithValue("$enabled", 1);
-            command.Parameters.AddWithValue("$created", 1234L);
-            command.Parameters.AddWithValue("$updated", 1234L);
+            command.Parameters.AddWithValue("$enabled", value: 1);
+            command.Parameters.AddWithValue("$created", value: 1234L);
+            command.Parameters.AddWithValue("$updated", value: 1234L);
             await command.ExecuteNonQueryAsync().ConfigureAwait(false);
         }
     }
@@ -151,7 +151,7 @@ public sealed class AddGoldenConversationHarvestProvenanceMigrationTests : IDisp
         await using var command = connection.CreateCommand();
         command.CommandText = "SELECT * FROM golden_conversations LIMIT 0;";
         await using var reader = await command.ExecuteReaderAsync().ConfigureAwait(false);
-        return Enumerable.Range(0, reader.FieldCount)
+        return Enumerable.Range(start: 0, reader.FieldCount)
                          .Select(reader.GetName)
                          .ToHashSet(StringComparer.Ordinal);
     }

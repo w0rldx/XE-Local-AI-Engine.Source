@@ -19,7 +19,7 @@ public sealed class TokenStore : ITokenStore, IDisposable
     private static readonly TimeSpan ExpiringSoonThreshold = TimeSpan.FromHours(24);
     private static readonly JsonSerializerOptions SerializerOptions = new(JsonSerializerDefaults.Web);
     private readonly string _credentialsPath;
-    private readonly SemaphoreSlim _lock = new(1, 1);
+    private readonly SemaphoreSlim _lock = new(initialCount: 1, maxCount: 1);
     private readonly ILogger<TokenStore> _logger;
 
     private readonly IDataProtector _protector;
@@ -282,7 +282,7 @@ public sealed class TokenStore : ITokenStore, IDisposable
     private void ApplyWindowsFileSecurity()
     {
         var fileSecurity = new FileSecurity();
-        fileSecurity.SetAccessRuleProtection(true, false);
+        fileSecurity.SetAccessRuleProtection(isProtected: true, preserveInheritance: false);
 
         var currentIdentity = WindowsIdentity.GetCurrent();
         if (currentIdentity.User is not null)
@@ -348,12 +348,12 @@ public sealed class TokenStore : ITokenStore, IDisposable
 
     private static byte[] DecodeBase64Url(string value)
     {
-        var normalized = value.Replace('-', '+').Replace('_', '/');
+        var normalized = value.Replace(oldChar: '-', newChar: '+').Replace(oldChar: '_', newChar: '/');
         var padding = normalized.Length % 4;
 
         if (padding > 0)
         {
-            normalized = normalized.PadRight(normalized.Length + (4 - padding), '=');
+            normalized = normalized.PadRight(normalized.Length + (4 - padding), paddingChar: '=');
         }
 
         return Convert.FromBase64String(normalized);

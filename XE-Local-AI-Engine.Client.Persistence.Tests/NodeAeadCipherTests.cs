@@ -59,7 +59,7 @@ public sealed class NodeAeadCipherTests
 
     private static byte[] CreateKey()
     {
-        return Enumerable.Range(0, 32).Select(static value => (byte)value).ToArray();
+        return Enumerable.Range(start: 0, count: 32).Select(static value => (byte)value).ToArray();
     }
 
     private static byte[] CreateNonce(INodeAeadCipher cipher)

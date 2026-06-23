@@ -255,8 +255,8 @@ internal sealed class PreviewWorkflowExecutionService : IPreviewWorkflowExecutio
             // run's drain may be blocked in a model call that observes the cancelled token only slowly (or never), so
             // relying on the drain to publish leaves the UI stuck "running". This is the single authoritative publish
             // for both the Running and Paused paths.
-            await PublishRunAsync(PreviewWorkflowHubEvents.RunCancelled, handle.RunId, null, null,
-                null, null, CancellationToken.None).ConfigureAwait(false);
+            await PublishRunAsync(PreviewWorkflowHubEvents.RunCancelled, handle.RunId, nodeId: null, output: null,
+                error: null, requestId: null, CancellationToken.None).ConfigureAwait(false);
 
             if (wasPaused)
             {
@@ -335,7 +335,7 @@ internal sealed class PreviewWorkflowExecutionService : IPreviewWorkflowExecutio
             // a terminal update). Treat a clean end as completion only if still Running.
             if (handle.GetState() == PreviewRunState.Running)
             {
-                await CompleteRunAsync(handle, null, cancellationToken).ConfigureAwait(false);
+                await CompleteRunAsync(handle, output: null, cancellationToken).ConfigureAwait(false);
             }
         }
         catch (OperationCanceledException) when (handle.GetState() == PreviewRunState.Cancelled)
@@ -346,7 +346,7 @@ internal sealed class PreviewWorkflowExecutionService : IPreviewWorkflowExecutio
         catch (Exception exception)
         {
             _logger.LogWarning(exception, "Preview run {RunId} failed during drain.", runId);
-            await FailRunAsync(handle, "The preview run failed.", null).ConfigureAwait(false);
+            await FailRunAsync(handle, "The preview run failed.", nodeId: null).ConfigureAwait(false);
         }
     }
 
@@ -359,16 +359,16 @@ internal sealed class PreviewWorkflowExecutionService : IPreviewWorkflowExecutio
         switch (update.Kind)
         {
             case PreviewWorkflowUpdateKind.NodeStarted:
-                await PublishNodeAsync(PreviewWorkflowHubEvents.NodeStarted, runId, update.NodeId!, null, null, cancellationToken).ConfigureAwait(false);
+                await PublishNodeAsync(PreviewWorkflowHubEvents.NodeStarted, runId, update.NodeId!, output: null, error: null, cancellationToken).ConfigureAwait(false);
                 return DrainStep.Continue;
 
             case PreviewWorkflowUpdateKind.NodeOutput:
-                await PublishNodeAsync(PreviewWorkflowHubEvents.NodeOutput, runId, update.NodeId!, update.Output, null, cancellationToken).ConfigureAwait(false);
-                await PublishNodeAsync(PreviewWorkflowHubEvents.NodeCompleted, runId, update.NodeId!, null, null, cancellationToken).ConfigureAwait(false);
+                await PublishNodeAsync(PreviewWorkflowHubEvents.NodeOutput, runId, update.NodeId!, update.Output, error: null, cancellationToken).ConfigureAwait(false);
+                await PublishNodeAsync(PreviewWorkflowHubEvents.NodeCompleted, runId, update.NodeId!, output: null, error: null, cancellationToken).ConfigureAwait(false);
                 return DrainStep.Continue;
 
             case PreviewWorkflowUpdateKind.NodeDebug:
-                await PublishNodeAsync(PreviewWorkflowHubEvents.NodeDebug, runId, update.NodeId!, update.Output, null, cancellationToken).ConfigureAwait(false);
+                await PublishNodeAsync(PreviewWorkflowHubEvents.NodeDebug, runId, update.NodeId!, update.Output, error: null, cancellationToken).ConfigureAwait(false);
                 return DrainStep.Continue;
 
             case PreviewWorkflowUpdateKind.NodeFailed:
@@ -384,7 +384,7 @@ internal sealed class PreviewWorkflowExecutionService : IPreviewWorkflowExecutio
                 return DrainStep.Terminal;
 
             case PreviewWorkflowUpdateKind.RunFailed:
-                await FailRunAsync(handle, update.Error ?? "The preview run failed.", null).ConfigureAwait(false);
+                await FailRunAsync(handle, update.Error ?? "The preview run failed.", nodeId: null).ConfigureAwait(false);
                 return DrainStep.Terminal;
 
             default:
@@ -414,8 +414,8 @@ internal sealed class PreviewWorkflowExecutionService : IPreviewWorkflowExecutio
         handle.SetState(PreviewRunState.Faulted);
         await CancelTokenSourceAsync(handle).ConfigureAwait(false);
 
-        await PublishRunAsync(PreviewWorkflowHubEvents.RunFailed, handle.RunId, null, null,
-            "Output limit exceeded.", null, cancellationToken).ConfigureAwait(false);
+        await PublishRunAsync(PreviewWorkflowHubEvents.RunFailed, handle.RunId, nodeId: null, output: null,
+            "Output limit exceeded.", requestId: null, cancellationToken).ConfigureAwait(false);
 
         await RemoveAndDisposeAsync(handle).ConfigureAwait(false);
         return true;
@@ -429,14 +429,14 @@ internal sealed class PreviewWorkflowExecutionService : IPreviewWorkflowExecutio
         handle.SuspendIdleClock();
 
         await PublishRunAsync(PreviewWorkflowHubEvents.RunPaused, handle.RunId, update.NodeId, update.Output,
-            null, update.RequestId, cancellationToken).ConfigureAwait(false);
+            error: null, update.RequestId, cancellationToken).ConfigureAwait(false);
     }
 
     private async Task CompleteRunAsync(PreviewWorkflowRunHandle handle, string? output, CancellationToken cancellationToken)
     {
         handle.SetState(PreviewRunState.Completed);
-        await PublishRunAsync(PreviewWorkflowHubEvents.RunCompleted, handle.RunId, null, output, null,
-            null, cancellationToken).ConfigureAwait(false);
+        await PublishRunAsync(PreviewWorkflowHubEvents.RunCompleted, handle.RunId, nodeId: null, output, error: null,
+            requestId: null, cancellationToken).ConfigureAwait(false);
         await RemoveAndDisposeAsync(handle).ConfigureAwait(false);
     }
 
@@ -444,13 +444,13 @@ internal sealed class PreviewWorkflowExecutionService : IPreviewWorkflowExecutio
     {
         if (nodeId is not null)
         {
-            await PublishNodeAsync(PreviewWorkflowHubEvents.NodeFailed, handle.RunId, nodeId, null, error,
+            await PublishNodeAsync(PreviewWorkflowHubEvents.NodeFailed, handle.RunId, nodeId, output: null, error,
                 CancellationToken.None).ConfigureAwait(false);
         }
 
         handle.SetState(PreviewRunState.Faulted);
-        await PublishRunAsync(PreviewWorkflowHubEvents.RunFailed, handle.RunId, null, null, error,
-            null, CancellationToken.None).ConfigureAwait(false);
+        await PublishRunAsync(PreviewWorkflowHubEvents.RunFailed, handle.RunId, nodeId: null, output: null, error,
+            requestId: null, CancellationToken.None).ConfigureAwait(false);
         await RemoveAndDisposeAsync(handle).ConfigureAwait(false);
     }
 
@@ -518,7 +518,7 @@ internal sealed class PreviewWorkflowExecutionService : IPreviewWorkflowExecutio
 
     private Task PublishRunAsync(string eventType, Guid runId, CancellationToken cancellationToken)
     {
-        return PublishRunAsync(eventType, runId, null, null, null, null, cancellationToken);
+        return PublishRunAsync(eventType, runId, nodeId: null, output: null, error: null, requestId: null, cancellationToken);
     }
 
     private Task PublishRunAsync(string eventType,

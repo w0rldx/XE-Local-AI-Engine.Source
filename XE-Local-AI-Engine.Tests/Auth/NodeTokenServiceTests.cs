@@ -19,8 +19,8 @@ public sealed class NodeTokenServiceTests
     {
         await Task.CompletedTask;
 
-        var key = Enumerable.Range(1, 32).Select(static value => (byte)value).ToArray();
-        var issuedAt = new DateTimeOffset(2026, 5, 25, 8, 0, 0, TimeSpan.Zero);
+        var key = Enumerable.Range(start: 1, count: 32).Select(static value => (byte)value).ToArray();
+        var issuedAt = new DateTimeOffset(year: 2026, month: 5, day: 25, hour: 8, minute: 0, second: 0, TimeSpan.Zero);
         using var keyProvider = new FixedNodeJwtKeyProvider(key);
         var service = new NodeTokenService(keyProvider,
             Options.Create(new NodeAuthOptions
@@ -68,7 +68,7 @@ public sealed class NodeTokenServiceTests
         var decoded = Convert.FromBase64String(raw);
         var expectedHash = Convert.ToBase64String(SHA256.HashData(Encoding.UTF8.GetBytes(raw)));
 
-        AssertEx.Equal(64, decoded.Length);
+        AssertEx.Equal(expected: 64, decoded.Length);
         AssertEx.NotEqual(raw, rawAgain);
         AssertEx.Equal(expectedHash, service.HashRefreshToken(raw));
         AssertEx.Equal(expectedHash, service.HashRefreshToken(raw));
@@ -79,7 +79,7 @@ public sealed class NodeTokenServiceTests
     {
         await Task.CompletedTask;
 
-        var operatorSecret = Enumerable.Range(1, 32).Select(static value => (byte)value).ToArray();
+        var operatorSecret = Enumerable.Range(start: 1, count: 32).Select(static value => (byte)value).ToArray();
         const string nodeName = "worker-node-alpha";
         var configuration = new ConfigurationBuilder()
                             .AddInMemoryCollection(new Dictionary<string, string?>
@@ -113,7 +113,7 @@ public sealed class NodeTokenServiceTests
     {
         await Task.CompletedTask;
 
-        var operatorSecret = Enumerable.Range(1, 32).Select(static value => (byte)value).ToArray();
+        var operatorSecret = Enumerable.Range(start: 1, count: 32).Select(static value => (byte)value).ToArray();
         var configuration = new ConfigurationBuilder()
                             .AddInMemoryCollection(new Dictionary<string, string?>
                             {

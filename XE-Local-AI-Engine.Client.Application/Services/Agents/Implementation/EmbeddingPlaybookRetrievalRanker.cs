@@ -146,14 +146,14 @@ public sealed class EmbeddingPlaybookRetrievalRanker : IPlaybookRetrievalRanker
             ProviderName = _options.EmbeddingProviderName
         });
 
-        var generated = await generator.GenerateAsync(batchTexts, null, cancellationToken).ConfigureAwait(false);
+        var generated = await generator.GenerateAsync(batchTexts, options: null, cancellationToken).ConfigureAwait(false);
 
         // A well-behaved generator returns exactly one embedding per input, in order. A short/partial response would
         // make the positional indexing below throw ArgumentOutOfRangeException (outside the narrow catch); degrade to
         // lexical instead so the send never breaks. No playbook/query text is logged.
         if (generated.Count != batchTexts.Count)
         {
-            return await FallBackToLexicalAsync(query, candidates, k, null, cancellationToken).ConfigureAwait(false);
+            return await FallBackToLexicalAsync(query, candidates, k, exception: null, cancellationToken).ConfigureAwait(false);
         }
 
         var queryVector = generated[queryBatchIndex].Vector;

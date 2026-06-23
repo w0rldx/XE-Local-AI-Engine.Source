@@ -22,15 +22,22 @@
        isolated by its own Directory.Build.props, so it is not matched here.) -->
   <PropertyGroup>
     <IsTestOrToolingProject>false</IsTestOrToolingProject>
-    <IsTestOrToolingProject Condition="$(MSBuildProjectName.EndsWith('.Tests')) Or $(MSBuildProjectName.Contains('.Tests.')) Or $(MSBuildProjectName.Contains('.Testing')) Or $(MSBuildProjectName.EndsWith('.AppHost'))">true</IsTestOrToolingProject>
+    <IsTestOrToolingProject
+      Condition="$(MSBuildProjectName.EndsWith('.Tests')) Or $(MSBuildProjectName.Contains('.Tests.')) Or $(MSBuildProjectName.Contains('.Testing')) Or $(MSBuildProjectName.EndsWith('.AppHost'))">
+      true
+    </IsTestOrToolingProject>
   </PropertyGroup>
 
   <ItemGroup>
     <PackageReference Include="SonarAnalyzer.CSharp" PrivateAssets="all" Condition="$(MSBuildProjectExtension) == '.csproj'" />
   </ItemGroup>
 
-  <!-- Extra static-analysis guardrails — production projects only. -->
-  <ItemGroup Condition="$(MSBuildProjectExtension) == '.csproj' And '$(IsTestOrToolingProject)' != 'true'">
+  <!-- Extra static-analysis guardrails — production projects only.
+       NOTE: .Trim() is deliberate. XML reformatters (e.g. `jb cleanupcode`) pretty-print the
+       IsTestOrToolingProject element value onto its own line, and MSBuild preserves that surrounding
+       whitespace — so a bare '$(IsTestOrToolingProject)' != 'true' would be true even for test projects.
+       Trimming keeps the production-only scoping correct regardless of how the property is formatted. -->
+  <ItemGroup Condition="$(MSBuildProjectExtension) == '.csproj' And '$(IsTestOrToolingProject.Trim())' != 'true'">
     <PackageReference Include="Meziantou.Analyzer" PrivateAssets="all" />
     <PackageReference Include="Microsoft.CodeAnalysis.BannedApiAnalyzers" PrivateAssets="all" />
     <AdditionalFiles Include="$(MSBuildThisFileDirectory)BannedSymbols.txt" Visible="false" />

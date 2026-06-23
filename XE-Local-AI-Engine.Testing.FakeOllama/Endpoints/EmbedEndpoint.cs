@@ -22,7 +22,7 @@ internal static class EmbedEndpoint
         var firstInput = inputs.Length > 0 ? inputs[0] : string.Empty;
         var dimensions = ReadDimensions(root) ?? state.EmbeddingDimensions;
 
-        FakeOllamaEndpointMapper.Record(context, state, model, 0, firstInput);
+        FakeOllamaEndpointMapper.Record(context, state, model, messageCount: 0, firstInput);
 
         if (await FakeOllamaEndpointMapper.TryApplyFailureAsync(context, state, model).ConfigureAwait(false))
         {

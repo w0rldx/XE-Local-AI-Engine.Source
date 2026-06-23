@@ -20,8 +20,8 @@ public sealed class NodeChatRemotePersistenceCoordinatorTests
         // WithUserMessage clears the builder's seed message, so the context is exactly these three (ordered).
         var package = RuntimePackageBuilder.Valid()
                                            .WithUserMessage("first question")
-                                           .WithConversationMessage(MessageRole.Assistant, "first answer", 1)
-                                           .WithConversationMessage(MessageRole.User, "latest question", 2)
+                                           .WithConversationMessage(MessageRole.Assistant, "first answer", sortOrder: 1)
+                                           .WithConversationMessage(MessageRole.User, "latest question", sortOrder: 2)
                                            .Build();
 
         await coordinator.BeginAsync(package);
@@ -57,7 +57,7 @@ public sealed class NodeChatRemotePersistenceCoordinatorTests
         StubPersistence(persistence);
         var pump = Substitute.For<INodeChatInvocationPump>();
         pump.FlushDeltaAsync(Arg.Any<NodeChatMessageCorrelation>(), Arg.Any<InvocationState>(), Arg.Any<NodeChatPumpCursor>(), Arg.Any<CancellationToken>())
-            .Returns(callInfo => new NodeChatPumpFlushResult(callInfo.ArgAt<NodeChatPumpCursor>(2), null, null, null));
+            .Returns(callInfo => new NodeChatPumpFlushResult(callInfo.ArgAt<NodeChatPumpCursor>(2), Persisted: null, ContentDelta: null, ReasoningDelta: null));
         var coordinator = new NodeChatRemotePersistenceCoordinator(persistence, pump, TimeProvider.System);
         var package = RuntimePackageBuilder.Valid().WithUserMessage("q").Build();
 
@@ -91,25 +91,25 @@ public sealed class NodeChatRemotePersistenceCoordinatorTests
         var session = await coordinator.BeginAsync(package);
         await session.TerminalizeInterruptedAsync(false);
 
-        await pump.Received(1).TerminalizeInterruptedAsync(Arg.Any<NodeChatMessageCorrelation>(), Arg.Any<NodeChatPumpCursor>(), false);
+        await pump.Received(1).TerminalizeInterruptedAsync(Arg.Any<NodeChatMessageCorrelation>(), Arg.Any<NodeChatPumpCursor>(), wasCancelled: false);
     }
 
     private static void StubPersistence(INodeChatPersistenceService persistence)
     {
-        var conversation = new NodeChatConversationDto(Guid.NewGuid(), "t", null, 1, 1, false, []);
+        var conversation = new NodeChatConversationDto(Guid.NewGuid(), "t", UserId: null, CreatedAtUtc: 1, LastSeenUtc: 1, Purged: false, []);
         var message = new NodeChatPersistedMessageDto(Guid.NewGuid(),
             Guid.NewGuid(),
-            null,
-            1,
+            RequestId: null,
+            Sequence: 1,
             "assistant",
             string.Empty,
-            null,
+            Reasoning: null,
             NodeChatMessageStatusValues.Pending,
-            1,
-            1,
-            null,
-            null,
-            null);
+            CreatedAtUtc: 1,
+            UpdatedAtUtc: 1,
+            Model: null,
+            Error: null,
+            MetadataJson: null);
 
         persistence.EnsureConversationAsync(Arg.Any<NodeChatEnsureConversationRequest>(), Arg.Any<CancellationToken>()).Returns(conversation);
         persistence.PersistUserMessageAsync(Arg.Any<NodeChatPersistUserMessageRequest>(), Arg.Any<CancellationToken>()).Returns(message);

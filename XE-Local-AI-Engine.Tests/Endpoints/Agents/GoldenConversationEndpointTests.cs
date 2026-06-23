@@ -117,7 +117,7 @@ public sealed class GoldenConversationEndpointTests
         AssertEx.True(root.GetProperty("enabled").GetBoolean(), "Enabled defaults to true.");
 
         var turns = root.GetProperty("inputTurns");
-        AssertEx.Equal(1, turns.GetArrayLength());
+        AssertEx.Equal(expected: 1, turns.GetArrayLength());
         AssertEx.Equal("user", turns[0].GetProperty("role").GetString());
         AssertEx.Equal("What is the capital of France?", turns[0].GetProperty("text").GetString());
 
@@ -186,7 +186,7 @@ public sealed class GoldenConversationEndpointTests
         using var document = JsonDocument.Parse(payload);
         var items = document.RootElement.GetProperty("items");
 
-        AssertEx.Equal(1, items.GetArrayLength());
+        AssertEx.Equal(expected: 1, items.GetArrayLength());
         AssertEx.Equal("Cites a source", items[0].GetProperty("title").GetString());
     }
 
@@ -244,14 +244,14 @@ public sealed class GoldenConversationEndpointTests
         using var scope = factory.Services.CreateScope();
         var store = scope.ServiceProvider.GetRequiredService<IAgentDefinitionStore>();
         var agent = await store.AddAsync(new AgentDefinitionInput(name,
-            null,
+            Description: null,
             "You are a careful engineering agent.",
-            null,
-            null,
+            ModelProfile: null,
+            ReasoningEffort: null,
             AgentDefinitionKind.Single,
             [],
             new Dictionary<string, bool>(),
-            null)).ConfigureAwait(false);
+            OrchestrationTopologyJson: null)).ConfigureAwait(false);
         return agent.Id;
     }
 }

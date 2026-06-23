@@ -37,7 +37,7 @@ public sealed class ModelRecommendationCheckHandlerTests
         AssertEx.Equal(SchedulerMisfirePolicy.SkipMissed, handler.Descriptor.DefaultMisfirePolicy);
         AssertEx.False(handler.Descriptor.AllowAgentCreation, "agent-created model-check schedules are out of scope.");
         AssertEx.True(handler.Descriptor.AllowManualTrigger, "operators may trigger the refresh manually.");
-        AssertEx.Equal(600, handler.Descriptor.DefaultMaxRuntimeSeconds ?? 0);
+        AssertEx.Equal(expected: 600, handler.Descriptor.DefaultMaxRuntimeSeconds ?? 0);
         AssertEx.Equal(HistoryDetailLevel.Detailed, handler.Descriptor.HistoryDetailLevel);
         AssertEx.NotNull(handler.Descriptor.DefaultParameters);
         AssertEx.NotNull(handler.Descriptor.ParameterSchema);
@@ -57,7 +57,7 @@ public sealed class ModelRecommendationCheckHandlerTests
 
         await AssertEx.ThrowsAsync<ScheduledJobValidationException>(() => handler.ExecuteAsync(Context(parametersJson), CancellationToken.None));
 
-        AssertEx.Equal(0, refresh.CallCount);
+        AssertEx.Equal(expected: 0, refresh.CallCount);
     }
 
     [Test]
@@ -82,53 +82,53 @@ public sealed class ModelRecommendationCheckHandlerTests
     public async Task ExecuteAsync_WhenOverridesSupplied_PassesQuantAndCtxToRefresh()
     {
         var (handler, refresh) = CreateHandler();
-        refresh.Result = new ModelFitRefreshResult(Guid.NewGuid(), ModelFitRunStatus.Succeeded, 1, null);
+        refresh.Result = new ModelFitRefreshResult(Guid.NewGuid(), ModelFitRunStatus.Succeeded, RecommendationCount: 1, SanitizedError: null);
 
         await handler.ExecuteAsync(Context(ValidParametersWithOverrides), CancellationToken.None);
 
         AssertEx.NotNull(refresh.LastRequest);
         AssertEx.Equal("Q5_K_M", refresh.LastRequest!.QuantOverride!);
-        AssertEx.Equal(16384, refresh.LastRequest.CtxTarget ?? 0);
+        AssertEx.Equal(expected: 16384, refresh.LastRequest.CtxTarget ?? 0);
     }
 
     [Test]
     public async Task ExecuteAsync_WhenRefreshSucceeds_InvokesRefreshExactlyOnce()
     {
         var (handler, refresh) = CreateHandler();
-        refresh.Result = new ModelFitRefreshResult(Guid.NewGuid(), ModelFitRunStatus.Succeeded, 3, null);
+        refresh.Result = new ModelFitRefreshResult(Guid.NewGuid(), ModelFitRunStatus.Succeeded, RecommendationCount: 3, SanitizedError: null);
 
         await handler.ExecuteAsync(Context(ValidParameters), CancellationToken.None);
 
-        AssertEx.Equal(1, refresh.CallCount);
+        AssertEx.Equal(expected: 1, refresh.CallCount);
         AssertEx.NotNull(refresh.LastRequest);
         AssertEx.Equal(ModelFitOperation.Recommend, refresh.LastRequest!.Operation);
         AssertEx.Equal("coding", refresh.LastRequest.UseCase!);
-        AssertEx.Equal(5, refresh.LastRequest.Limit);
+        AssertEx.Equal(expected: 5, refresh.LastRequest.Limit);
     }
 
     [Test]
     public async Task ExecuteAsync_WhenRefreshFailed_ThrowsScheduledJobExecutionExceptionWithSanitizedError()
     {
         var (handler, refresh) = CreateHandler();
-        refresh.Result = new ModelFitRefreshResult(Guid.NewGuid(), ModelFitRunStatus.Failed, 0, "The approved image is disabled.");
+        refresh.Result = new ModelFitRefreshResult(Guid.NewGuid(), ModelFitRunStatus.Failed, RecommendationCount: 0, "The approved image is disabled.");
 
         var exception = await AssertEx.ThrowsAsync<ScheduledJobExecutionException>(() => handler.ExecuteAsync(Context(ValidParameters), CancellationToken.None));
 
         // The operator-safe SanitizedError is surfaced verbatim so the run row / toast is actionable.
         AssertEx.Equal("The approved image is disabled.", exception.Message);
-        AssertEx.Equal(1, refresh.CallCount);
+        AssertEx.Equal(expected: 1, refresh.CallCount);
     }
 
     [Test]
     public async Task ExecuteAsync_WhenRefreshFailedWithNullSanitizedError_ThrowsStaticFallbackMessage()
     {
         var (handler, refresh) = CreateHandler();
-        refresh.Result = new ModelFitRefreshResult(Guid.NewGuid(), ModelFitRunStatus.Failed, 0, null);
+        refresh.Result = new ModelFitRefreshResult(Guid.NewGuid(), ModelFitRunStatus.Failed, RecommendationCount: 0, SanitizedError: null);
 
         var exception = await AssertEx.ThrowsAsync<ScheduledJobExecutionException>(() => handler.ExecuteAsync(Context(ValidParameters), CancellationToken.None));
 
         AssertEx.Equal("The model recommendation refresh did not succeed.", exception.Message);
-        AssertEx.Equal(1, refresh.CallCount);
+        AssertEx.Equal(expected: 1, refresh.CallCount);
     }
 
     [Test]
@@ -139,7 +139,7 @@ public sealed class ModelRecommendationCheckHandlerTests
 
         await AssertEx.ThrowsAsync<OperationCanceledException>(() => handler.ExecuteAsync(Context(ValidParameters), CancellationToken.None));
 
-        AssertEx.Equal(1, refresh.CallCount);
+        AssertEx.Equal(expected: 1, refresh.CallCount);
     }
 
     private static ScheduledJobExecutionContext Context(string? parametersJson)
@@ -181,7 +181,7 @@ public sealed class ModelRecommendationCheckHandlerTests
     {
         public int CallCount { get; private set; }
         public ModelFitRefreshRequest? LastRequest { get; private set; }
-        public ModelFitRefreshResult Result { get; set; } = new(Guid.NewGuid(), ModelFitRunStatus.Succeeded, 0, null);
+        public ModelFitRefreshResult Result { get; set; } = new(Guid.NewGuid(), ModelFitRunStatus.Succeeded, RecommendationCount: 0, SanitizedError: null);
         public bool ThrowCancellation { get; set; }
 
         public Task<ModelFitRefreshResult> RefreshAsync(ModelFitRefreshRequest request,

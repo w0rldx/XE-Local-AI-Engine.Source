@@ -12,7 +12,7 @@ using XE_Local_AI_Engine.Client.Configuration;
 public sealed class CertPinStore : ICertPinStore, IDisposable
 {
     private const char Delimiter = '|';
-    private readonly SemaphoreSlim _lock = new(1, 1);
+    private readonly SemaphoreSlim _lock = new(initialCount: 1, maxCount: 1);
     private readonly ILogger<CertPinStore> _logger;
     private readonly string _pinPath;
 
@@ -123,7 +123,7 @@ public sealed class CertPinStore : ICertPinStore, IDisposable
     private static CertificatePin CreatePin(X509Certificate2 certificate)
     {
         var thumbprint = Convert.ToHexString(SHA256.HashData(certificate.RawData));
-        var subjectCommonName = certificate.GetNameInfo(X509NameType.SimpleName, false);
+        var subjectCommonName = certificate.GetNameInfo(X509NameType.SimpleName, forIssuer: false);
 
         return new CertificatePin(thumbprint,
             DateTimeOffset.UtcNow,

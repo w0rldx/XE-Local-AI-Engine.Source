@@ -21,7 +21,7 @@ public sealed class AgentDefinitionSeededStoreTests : IDisposable
     {
         if (Directory.Exists(_rootPath))
         {
-            Directory.Delete(_rootPath, true);
+            Directory.Delete(_rootPath, recursive: true);
         }
     }
 
@@ -134,14 +134,14 @@ public sealed class AgentDefinitionSeededStoreTests : IDisposable
     private static AgentDefinitionInput CreateInput()
     {
         return new AgentDefinitionInput("Backend Architect",
-            null,
+            Description: null,
             Instructions,
-            null,
-            null,
+            ModelProfile: null,
+            ReasoningEffort: null,
             AgentDefinitionKind.Single,
             [],
             new Dictionary<string, bool>(),
-            null);
+            OrchestrationTopologyJson: null);
     }
 
     private static NodeChatDbContext CreateContext(string databasePath, INodeSqliteKeyHolder keyHolder)
@@ -157,7 +157,7 @@ public sealed class AgentDefinitionSeededStoreTests : IDisposable
 
     private static byte[] CreateKeyMaterial()
     {
-        return Enumerable.Range(0, 32).Select(static value => (byte)(value + 1)).ToArray();
+        return Enumerable.Range(start: 0, count: 32).Select(static value => (byte)(value + 1)).ToArray();
     }
 
     private static bool ContainsSubsequence(byte[] source, byte[] needle)

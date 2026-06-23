@@ -26,7 +26,7 @@ internal sealed class McpServerConnectionManager : IMcpServerConnectionManager, 
     private readonly Dictionary<Guid, ConnectedServer> _connections = [];
     private readonly ILogger<McpServerConnectionManager> _logger;
     private readonly McpOptions _options;
-    private readonly SemaphoreSlim _refreshGate = new(1, 1);
+    private readonly SemaphoreSlim _refreshGate = new(initialCount: 1, maxCount: 1);
     private readonly IMcpToolRegistry _registry;
 
     // The store is DbContext-backed and therefore Scoped, so a singleton manager must resolve it per refresh through a
@@ -35,7 +35,7 @@ internal sealed class McpServerConnectionManager : IMcpServerConnectionManager, 
     private readonly IServiceScopeFactory _scopeFactory;
 
     // Guards _connections and _statuses (mutated only under the refresh gate, but GetStatuses reads concurrently).
-    private readonly System.Threading.Lock _stateLock = new();
+    private readonly Lock _stateLock = new();
 
     private bool _disposed;
     private ImmutableArray<McpServerConnectionStatus> _statuses = [];
@@ -185,7 +185,7 @@ internal sealed class McpServerConnectionManager : IMcpServerConnectionManager, 
             var discovered = await client.ListToolsAsync(cancellationToken: timeoutCts.Token).ConfigureAwait(false);
 
             var tools = BuildRegisteredTools(discovered, slug);
-            return new ConnectResult(new ConnectedServer(client, record.Version, slug, tools), null);
+            return new ConnectResult(new ConnectedServer(client, record.Version, slug, tools), Error: null);
         }
         catch (Exception ex) when (ex is McpException
                                        or HttpRequestException
@@ -206,14 +206,14 @@ internal sealed class McpServerConnectionManager : IMcpServerConnectionManager, 
             // propagates out of the refresh.
             _logger.LogWarning(ex, "MCP server {ServerId} failed to connect or list tools; it will contribute no tools.", record.Id);
             await DisposePartialClientAsync(client, record.Version, slug).ConfigureAwait(false);
-            return new ConnectResult(null, Redact(ex.Message));
+            return new ConnectResult(Server: null, Redact(ex.Message));
         }
         catch (OperationCanceledException) when (timeoutCts.IsCancellationRequested && !cancellationToken.IsCancellationRequested)
         {
             // The per-server timeout fired (not a caller cancel). Treat it like any other isolated failure.
             _logger.LogWarning("MCP server {ServerId} timed out after {TimeoutSeconds}s; it will contribute no tools.", record.Id, _options.ConnectTimeoutSeconds);
             await DisposePartialClientAsync(client, record.Version, slug).ConfigureAwait(false);
-            return new ConnectResult(null, "Timed out connecting to the MCP server.");
+            return new ConnectResult(Server: null, "Timed out connecting to the MCP server.");
         }
     }
 

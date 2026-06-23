@@ -38,7 +38,7 @@ public sealed class ModelRecommendationCheckSchedulerPathTests
 
     private static readonly Guid JobId = Guid.Parse("44444444-4444-4444-4444-444444444444");
     private static readonly Guid RunId = Guid.Parse("55555555-5555-5555-5555-555555555555");
-    private static readonly DateTimeOffset Now = new(2026, 6, 2, 12, 0, 0, TimeSpan.Zero);
+    private static readonly DateTimeOffset Now = new(year: 2026, month: 6, day: 2, hour: 12, minute: 0, second: 0, TimeSpan.Zero);
 
     [Test]
     public async Task DispatchAsync_ThroughSchedulerPath_RecordsSucceededRunAndCreatesSnapshot()
@@ -63,7 +63,7 @@ public sealed class ModelRecommendationCheckSchedulerPathTests
             Arg.Any<CancellationToken>());
 
         // Snapshot row created by the advisor and marked Succeeded with normalized rows.
-        AssertEx.Equal(1, snapshotStore.Snapshots.Count);
+        AssertEx.Equal(expected: 1, snapshotStore.Snapshots.Count);
         var snapshot = snapshotStore.Snapshots.Values.Single();
         AssertEx.Equal(ModelFitRunStatus.Succeeded, snapshot.Status);
         AssertEx.True(snapshot.IsLatestSuccessful, "the scheduler-path run must produce a latest-successful snapshot.");
@@ -137,13 +137,13 @@ public sealed class ModelRecommendationCheckSchedulerPathTests
         var discovery = Substitute.For<IHuggingFaceGgufDiscovery>();
         discovery.SearchAsync(Arg.Any<GgufSearchQuery>(), Arg.Any<CancellationToken>())
                  .Returns(Task.FromResult<IReadOnlyList<GgufRepoSummary>>([
-                     new GgufRepoSummary("org/qwen-GGUF", false, 1000, 10, DateTimeOffset.UnixEpoch, "apache-2.0", true)
+                     new GgufRepoSummary("org/qwen-GGUF", IsGated: false, Downloads: 1000, Likes: 10, DateTimeOffset.UnixEpoch, "apache-2.0", HasUsableGguf: true)
                  ]));
         discovery.InspectRepoAsync("org/qwen-GGUF", Arg.Any<CancellationToken>())
-                 .Returns(Task.FromResult(new GgufRepoDetail("org/qwen-GGUF", false, "apache-2.0",
+                 .Returns(Task.FromResult(new GgufRepoDetail("org/qwen-GGUF", IsGated: false, "apache-2.0",
                  [
-                     new GgufRepoFile("qwen.Q4_K_M.gguf", "Q4_K_M", 4 * Gb, null, "main",
-                         "qwen2", "Q4_K_M", 7_000_000_000L, 28, 28, 4, 3584, 32768)
+                     new GgufRepoFile("qwen.Q4_K_M.gguf", "Q4_K_M", 4 * Gb, Sha256: null, "main",
+                         "qwen2", "Q4_K_M", ParamCount: 7_000_000_000L, BlockCount: 28, AttentionHeadCount: 28, AttentionHeadCountKV: 4, EmbeddingLength: 3584, ContextLength: 32768)
                  ])));
 
         var registry = Substitute.For<IGgufModelRegistry>();
@@ -173,24 +173,24 @@ public sealed class ModelRecommendationCheckSchedulerPathTests
         return new ScheduledJobDefinitionRecord(JobId,
             ModelRecommendationCheckHandler.TemplateIdValue,
             "Model recommendation check",
-            null,
-            true,
+            Description: null,
+            Enabled: true,
             ScheduleKind.Cron,
             "0 0 * * * ?",
-            null,
-            null,
-            null,
-            null,
+            IntervalSeconds: null,
+            RepeatCount: null,
+            StartAtUtc: null,
+            EndAtUtc: null,
             "UTC",
             SchedulerMisfirePolicy.SkipMissed,
-            false,
-            600,
+            PreventOverlap: false,
+            MaxRuntimeSeconds: 600,
             ParametersJson,
             ScheduledJobCreator.User,
-            0L,
-            0L,
-            null,
-            null);
+            CreatedAtUtc: 0L,
+            UpdatedAtUtc: 0L,
+            DisabledAtUtc: null,
+            DeletedAtUtc: null);
     }
 
     private static ScheduledJobRunRecord RunRecord(ScheduledRunStatus status)
@@ -201,20 +201,20 @@ public sealed class ModelRecommendationCheckSchedulerPathTests
             "fire-modelfit",
             ScheduledRunTrigger.Schedule,
             status,
-            null,
+            ScheduledFireTimeUtc: null,
             Now.ToUnixTimeMilliseconds(),
-            null,
-            null,
-            null,
-            null,
-            null,
-            null,
-            null,
-            1L);
+            CompletedAtUtc: null,
+            DurationMs: null,
+            Summary: null,
+            DetailsJson: null,
+            ErrorMessage: null,
+            ErrorDetails: null,
+            CancellationRequestedAtUtc: null,
+            CreatedAtUtc: 1L);
     }
 
     private static ScheduledJobRunEventRecord EventRecord(ScheduledJobRunEventInput input)
     {
-        return new ScheduledJobRunEventRecord(Guid.NewGuid(), input.RunId, input.Sequence, input.Level, input.Message, input.DataJson, 1L);
+        return new ScheduledJobRunEventRecord(Guid.NewGuid(), input.RunId, input.Sequence, input.Level, input.Message, input.DataJson, OccurredAtUtc: 1L);
     }
 }

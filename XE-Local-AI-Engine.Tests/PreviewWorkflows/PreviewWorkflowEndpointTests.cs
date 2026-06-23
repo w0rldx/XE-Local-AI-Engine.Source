@@ -92,7 +92,7 @@ public sealed class PreviewWorkflowEndpointTests
         AssertEx.Equal(HttpStatusCode.OK, listResponse.StatusCode);
         var list = await listResponse.Content.ReadFromJsonAsync<JsonElement>(JsonOptions).ConfigureAwait(false);
         var items = list.GetProperty("items");
-        AssertEx.Equal(0, items.GetArrayLength());
+        AssertEx.Equal(expected: 0, items.GetArrayLength());
     }
 
     [Test]

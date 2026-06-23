@@ -137,12 +137,12 @@ public sealed class UpdateSuggestedPlaybookActionEndpointTests
         AssertEx.Equal("Always link the failing test before reporting done.", root.GetProperty("behavior").GetString());
         AssertEx.Equal("On task completion.", root.GetProperty("triggerCondition").GetString());
         AssertEx.Equal("testing", root.GetProperty("scope").GetString());
-        AssertEx.Equal(42, root.GetProperty("priority").GetInt32());
+        AssertEx.Equal(expected: 42, root.GetProperty("priority").GetInt32());
         AssertEx.Equal("Suggested", root.GetProperty("state").GetString());
         AssertEx.Equal("Analysis", root.GetProperty("source").GetString());
 
         var feedbackIds = root.GetProperty("sourceFeedbackIds");
-        AssertEx.Equal(1, feedbackIds.GetArrayLength());
+        AssertEx.Equal(expected: 1, feedbackIds.GetArrayLength());
         AssertEx.Equal(seeded.SourceFeedbackIds![0], feedbackIds[0].GetGuid());
         AssertEx.True(root.GetProperty("confidence").GetDouble() > 0d, "Confidence must survive the edit.");
         AssertEx.Equal(seeded.Confidence!.Value, root.GetProperty("confidence").GetDouble());
@@ -153,14 +153,14 @@ public sealed class UpdateSuggestedPlaybookActionEndpointTests
         using var scope = factory.Services.CreateScope();
         var store = scope.ServiceProvider.GetRequiredService<IAgentDefinitionStore>();
         var agent = await store.AddAsync(new AgentDefinitionInput(name,
-            null,
+            Description: null,
             "You are a careful engineering agent.",
-            null,
-            null,
+            ModelProfile: null,
+            ReasoningEffort: null,
             AgentDefinitionKind.Single,
             [],
             new Dictionary<string, bool>(),
-            null)).ConfigureAwait(false);
+            OrchestrationTopologyJson: null)).ConfigureAwait(false);
         return agent.Id;
     }
 
@@ -171,10 +171,10 @@ public sealed class UpdateSuggestedPlaybookActionEndpointTests
         var service = scope.ServiceProvider.GetRequiredService<IPlaybookActionService>();
         return await service.CreateAnalysisSuggestionAsync(new PlaybookAnalysisSuggestionInput(agentDefinitionId,
             "Cite sources before answering.",
-            null,
+            TriggerCondition: null,
             "search",
-            100,
+            Priority: 100,
             [Guid.NewGuid()],
-            0.8d)).ConfigureAwait(false);
+            Confidence: 0.8d)).ConfigureAwait(false);
     }
 }

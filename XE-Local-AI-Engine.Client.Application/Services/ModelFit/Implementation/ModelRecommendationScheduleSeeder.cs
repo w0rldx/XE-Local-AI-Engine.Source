@@ -59,7 +59,7 @@ public sealed class ModelRecommendationScheduleSeeder : IHostedService
             await using var scope = _scopeFactory.CreateAsyncScope();
             var managementService = scope.ServiceProvider.GetRequiredService<IScheduledJobManagementService>();
 
-            var jobs = await managementService.ListJobsAsync(false, cancellationToken).ConfigureAwait(false);
+            var jobs = await managementService.ListJobsAsync(includeDeleted: false, cancellationToken).ConfigureAwait(false);
             if (jobs.Any(job => job.TemplateId == ModelRecommendationCheckHandler.TemplateIdValue))
             {
                 // A definition for this template already exists — nothing to seed (idempotent).
@@ -70,14 +70,14 @@ public sealed class ModelRecommendationScheduleSeeder : IHostedService
                 SeedDisplayName,
                 SeedDescription,
                 ScheduleKind.Manual,
-                null,
-                null,
-                null,
-                null,
-                null,
+                CronExpression: null,
+                IntervalSeconds: null,
+                RepeatCount: null,
+                StartAtUtc: null,
+                EndAtUtc: null,
                 SeedTimeZoneId,
                 SchedulerMisfirePolicy.SkipMissed,
-                true,
+                PreventOverlap: true,
                 SeedMaxRuntimeSeconds,
                 SeedParametersJson);
 

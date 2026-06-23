@@ -1,5 +1,6 @@
 namespace XE_Local_AI_Engine.Client.Services.Chat.Implementation;
 
+using System.Globalization;
 using Microsoft.EntityFrameworkCore;
 using XE_Local_AI_Engine.Client.Persistence;
 using static NodeChatMetadataSerializer;
@@ -45,7 +46,8 @@ internal sealed class NodeChatConversationCommands(NodeChatPersistenceWriter wri
                 await OpenIfNeededAsync(command.Connection, token).ConfigureAwait(false);
                 await command.ExecuteNonQueryAsync(token).ConfigureAwait(false);
 
-                return new NodeChatConversationDto(conversationId, request.Title, request.UserId, createdAtUtc, createdAtUtc, false, [], request.Origin, AgentDefinitionId: request.AgentDefinitionId,
+                return new NodeChatConversationDto(conversationId, request.Title, request.UserId, createdAtUtc, createdAtUtc, Purged: false, [], request.Origin,
+                    AgentDefinitionId: request.AgentDefinitionId,
                     MemoryExcluded: memoryExcluded);
             },
             cancellationToken).ConfigureAwait(false);
@@ -70,7 +72,7 @@ internal sealed class NodeChatConversationCommands(NodeChatPersistenceWriter wri
         await OpenIfNeededAsync(command.Connection, cancellationToken).ConfigureAwait(false);
         var result = await command.ExecuteScalarAsync(cancellationToken).ConfigureAwait(false);
         // SQLite stores the bool as 0/1; a missing row returns null → non-temporary.
-        return result is not null and not DBNull && Convert.ToInt64(result, System.Globalization.CultureInfo.InvariantCulture) != 0L;
+        return result is not null and not DBNull && Convert.ToInt64(result, CultureInfo.InvariantCulture) != 0L;
     }
 
     public async Task<NodeChatConversationDto> EnsureConversationAsync(NodeChatEnsureConversationRequest request, CancellationToken cancellationToken = default)
@@ -187,12 +189,12 @@ internal sealed class NodeChatConversationCommands(NodeChatPersistenceWriter wri
             {
                 await using var transaction = await dbContext.Database.BeginTransactionAsync(token).ConfigureAwait(false);
 
-                var cancelCount = await dbContext.Database.ExecuteSqlRawAsync("""
-                                                                              UPDATE messages
-                                                                              SET status = {0}, updated_at_utc = {1}
-                                                                              WHERE conversation_id = {2}
-                                                                                AND status IN ({3}, {4}, {5});
-                                                                              """,
+                var cancelCount = await dbContext.Database.ExecuteSqlRawAsync(sql: """
+                                                                                   UPDATE messages
+                                                                                   SET status = {0}, updated_at_utc = {1}
+                                                                                   WHERE conversation_id = {2}
+                                                                                     AND status IN ({3}, {4}, {5});
+                                                                                   """,
                     [
                         NodeChatMessageStatusValues.Cancelled, request.DeletedAtUtc, request.ConversationId, NodeChatMessageStatusValues.Pending, NodeChatMessageStatusValues.Queued,
                         NodeChatMessageStatusValues.Streaming

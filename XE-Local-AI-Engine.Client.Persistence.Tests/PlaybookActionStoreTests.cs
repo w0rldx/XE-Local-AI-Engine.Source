@@ -17,7 +17,7 @@ public sealed class PlaybookActionStoreTests : IDisposable
     {
         if (Directory.Exists(_rootPath))
         {
-            Directory.Delete(_rootPath, true);
+            Directory.Delete(_rootPath, recursive: true);
         }
     }
 
@@ -43,8 +43,8 @@ public sealed class PlaybookActionStoreTests : IDisposable
             AssertEx.Equal(TriggerCondition, added.TriggerCondition);
             AssertEx.Equal(PlaybookActionState.Enabled, added.State);
             AssertEx.Equal(PlaybookActionSource.Manual, added.Source);
-            AssertEx.Equal(10, added.Priority);
-            AssertEx.Equal(1, added.Version);
+            AssertEx.Equal(expected: 10, added.Priority);
+            AssertEx.Equal(expected: 1, added.Version);
             AssertEx.True(added.Id != Guid.Empty, "Add should assign an action id.");
             AssertEx.True(added.CreatedAtUtc > 0, "Add should stamp a creation time.");
             AssertEx.Equal(added.CreatedAtUtc, added.UpdatedAtUtc);
@@ -59,7 +59,7 @@ public sealed class PlaybookActionStoreTests : IDisposable
         AssertEx.Equal(TriggerCondition, byId.TriggerCondition);
 
         var list = await readStore.ListByAgentAsync(agentId);
-        AssertEx.Equal(1, list.Count);
+        AssertEx.Equal(expected: 1, list.Count);
 
         var unknown = await readStore.GetByIdAsync(Guid.NewGuid());
         AssertEx.Null(unknown, "Unknown id should return null.");
@@ -145,7 +145,7 @@ public sealed class PlaybookActionStoreTests : IDisposable
 
         var enabled = await store.ListEnabledByAgentAsync(agentId);
 
-        AssertEx.Equal(3, enabled.Count);
+        AssertEx.Equal(expected: 3, enabled.Count);
         AssertEx.Equal("first", enabled[0].Behavior);
         AssertEx.Equal("second", enabled[1].Behavior);
         AssertEx.Equal("tie-later", enabled[2].Behavior);
@@ -168,7 +168,7 @@ public sealed class PlaybookActionStoreTests : IDisposable
         var store = new PlaybookActionStore(context, clock);
 
         var added = await store.AddAsync(CreateInput(agentId));
-        AssertEx.Equal(1, added.Version);
+        AssertEx.Equal(expected: 1, added.Version);
 
         clock.Advance(10);
         var behaviorChanged = AssertEx.NotNull(await store.UpdateAsync(added.Id, CreateInput(agentId) with
@@ -176,7 +176,7 @@ public sealed class PlaybookActionStoreTests : IDisposable
                 Behavior = "A different behavior."
             }),
             "Update should find the action.");
-        AssertEx.Equal(2, behaviorChanged.Version);
+        AssertEx.Equal(expected: 2, behaviorChanged.Version);
         AssertEx.True(behaviorChanged.UpdatedAtUtc > added.UpdatedAtUtc, "A config change should advance UpdatedAtUtc.");
 
         clock.Advance(10);
@@ -186,7 +186,7 @@ public sealed class PlaybookActionStoreTests : IDisposable
                 Priority = 99
             }),
             "Update should find the action.");
-        AssertEx.Equal(3, priorityChanged.Version);
+        AssertEx.Equal(expected: 3, priorityChanged.Version);
 
         clock.Advance(10);
         var stateChanged = AssertEx.NotNull(await store.UpdateAsync(added.Id, CreateInput(agentId) with
@@ -196,7 +196,7 @@ public sealed class PlaybookActionStoreTests : IDisposable
                 State = PlaybookActionState.Disabled
             }),
             "Update should find the action.");
-        AssertEx.Equal(4, stateChanged.Version);
+        AssertEx.Equal(expected: 4, stateChanged.Version);
     }
 
     [Test]
@@ -239,7 +239,7 @@ public sealed class PlaybookActionStoreTests : IDisposable
         var store = new PlaybookActionStore(context, clock);
 
         var added = await store.AddAsync(CreateInput(agentId));
-        AssertEx.Equal(1, added.Version);
+        AssertEx.Equal(expected: 1, added.Version);
 
         clock.Advance(25);
         var updated = AssertEx.NotNull(await store.UpdateAsync(added.Id, CreateInput(agentId) with
@@ -251,7 +251,7 @@ public sealed class PlaybookActionStoreTests : IDisposable
 
         AssertEx.Equal("new-scope", updated.Scope);
         AssertEx.Equal("A different trigger.", updated.TriggerCondition);
-        AssertEx.Equal(1, updated.Version);
+        AssertEx.Equal(expected: 1, updated.Version);
         AssertEx.True(updated.UpdatedAtUtc > added.UpdatedAtUtc, "A scope/trigger edit should still advance UpdatedAtUtc.");
     }
 
@@ -374,7 +374,7 @@ public sealed class PlaybookActionStoreTests : IDisposable
             actionId = added.Id;
 
             AssertEx.NotNull(added.SourceFeedbackIds, "AddAsync should return the persisted provenance ids.");
-            AssertEx.Equal(2, added.SourceFeedbackIds!.Count);
+            AssertEx.Equal(expected: 2, added.SourceFeedbackIds!.Count);
             AssertEx.Equal(Confidence, added.Confidence);
         }
 
@@ -383,7 +383,7 @@ public sealed class PlaybookActionStoreTests : IDisposable
 
         var byId = AssertEx.NotNull(await readStore.GetByIdAsync(actionId), "Action should be found by id.");
         AssertEx.NotNull(byId.SourceFeedbackIds, "Provenance ids should round-trip through JSON.");
-        AssertEx.Equal(2, byId.SourceFeedbackIds!.Count);
+        AssertEx.Equal(expected: 2, byId.SourceFeedbackIds!.Count);
         AssertEx.Equal(feedbackIds[0], byId.SourceFeedbackIds[0]);
         AssertEx.Equal(feedbackIds[1], byId.SourceFeedbackIds[1]);
         AssertEx.Equal(Confidence, byId.Confidence);
@@ -391,9 +391,9 @@ public sealed class PlaybookActionStoreTests : IDisposable
         AssertEx.Equal(PlaybookActionSource.Analysis, byId.Source);
 
         var list = await readStore.ListByAgentAsync(agentId);
-        AssertEx.Equal(1, list.Count);
+        AssertEx.Equal(expected: 1, list.Count);
         AssertEx.NotNull(list[0].SourceFeedbackIds, "ListByAgentAsync should also surface the provenance ids.");
-        AssertEx.Equal(2, list[0].SourceFeedbackIds!.Count);
+        AssertEx.Equal(expected: 2, list[0].SourceFeedbackIds!.Count);
         AssertEx.Equal(Confidence, list[0].Confidence);
     }
 
@@ -473,7 +473,7 @@ public sealed class PlaybookActionStoreTests : IDisposable
         var store = new PlaybookActionStore(context, clock);
 
         var added = await store.AddAsync(CreateInput(agentId));
-        AssertEx.Equal(1, added.Version);
+        AssertEx.Equal(expected: 1, added.Version);
         AssertEx.Null(added.EvalResult, "A new action carries no eval result.");
 
         // Recording an eval is not a config-affecting edit (EvalResult is not injected into the prompt), so it must not
@@ -485,8 +485,8 @@ public sealed class PlaybookActionStoreTests : IDisposable
             }),
             "Update should find the action.");
 
-        AssertEx.Equal("""{"passed":true}""", withEval.EvalResult);
-        AssertEx.Equal(1, withEval.Version);
+        AssertEx.Equal(expected: """{"passed":true}""", withEval.EvalResult);
+        AssertEx.Equal(expected: 1, withEval.Version);
         AssertEx.True(withEval.UpdatedAtUtc > added.UpdatedAtUtc, "Recording an eval should still advance UpdatedAtUtc.");
     }
 
@@ -521,7 +521,7 @@ public sealed class PlaybookActionStoreTests : IDisposable
 
         var enabled = await store.ListEnabledByAgentAsync(agentId);
 
-        AssertEx.Equal(1, enabled.Count);
+        AssertEx.Equal(expected: 1, enabled.Count);
         AssertEx.Equal("enabled", enabled[0].Behavior);
         AssertEx.Equal(enabledAction.Id, enabled[0].Id);
     }
@@ -542,7 +542,7 @@ public sealed class PlaybookActionStoreTests : IDisposable
         // CreateInput defaults to State == Enabled, so the create-as-Enabled path stamps the cohort clock to now.
         var added = await store.AddAsync(CreateInput(agentId));
 
-        AssertEx.Equal(5_000L, added.EnabledAtUtc, "Create-as-Enabled should stamp EnabledAtUtc to now.");
+        AssertEx.Equal(expected: 5_000L, added.EnabledAtUtc, "Create-as-Enabled should stamp EnabledAtUtc to now.");
     }
 
     [Test]
@@ -610,7 +610,7 @@ public sealed class PlaybookActionStoreTests : IDisposable
             }),
             "Update should find the action.");
 
-        AssertEx.Equal(6_020L, promoted.EnabledAtUtc, "Promoting into Enabled should stamp EnabledAtUtc.");
+        AssertEx.Equal(expected: 6_020L, promoted.EnabledAtUtc, "Promoting into Enabled should stamp EnabledAtUtc.");
     }
 
     [Test]
@@ -640,7 +640,7 @@ public sealed class PlaybookActionStoreTests : IDisposable
             }),
             "Update should find the action.");
 
-        AssertEx.Equal(7_030L, enabled.EnabledAtUtc, "A manual Disabled -> Enabled toggle should stamp EnabledAtUtc.");
+        AssertEx.Equal(expected: 7_030L, enabled.EnabledAtUtc, "A manual Disabled -> Enabled toggle should stamp EnabledAtUtc.");
     }
 
     [Test]
@@ -689,7 +689,7 @@ public sealed class PlaybookActionStoreTests : IDisposable
         var added = await store.AddAsync(CreateInput(agentId));
         AssertEx.True(added.EnabledAtUtc.HasValue, "Create-as-Enabled stamps the clock.");
         var enabledAt = added.EnabledAtUtc;
-        AssertEx.Equal(1, added.Version);
+        AssertEx.Equal(expected: 1, added.Version);
 
         // Recording an eval on an already-Enabled action is not a transition into Enabled, so the clock is carried
         // through (not re-stamped) and — being a pure-timestamp/non-injected field — must not bump Version.
@@ -702,7 +702,7 @@ public sealed class PlaybookActionStoreTests : IDisposable
             "Update should find the action.");
 
         AssertEx.Equal(enabledAt, withEval.EnabledAtUtc, "Recording an eval should carry the existing EnabledAtUtc through unchanged.");
-        AssertEx.Equal(1, withEval.Version);
+        AssertEx.Equal(expected: 1, withEval.Version);
     }
 
     [Test]
@@ -752,14 +752,14 @@ public sealed class PlaybookActionStoreTests : IDisposable
     {
         var store = new AgentDefinitionStore(context, TimeProvider.System);
         var agent = await store.AddAsync(new AgentDefinitionInput("Builder",
-            null,
+            Description: null,
             Instructions,
-            null,
-            null,
+            ModelProfile: null,
+            ReasoningEffort: null,
             AgentDefinitionKind.Single,
             [],
             new Dictionary<string, bool>(),
-            null));
+            OrchestrationTopologyJson: null));
         return agent.Id;
     }
 
@@ -771,7 +771,7 @@ public sealed class PlaybookActionStoreTests : IDisposable
             TriggerCondition,
             Behavior,
             "testing",
-            10);
+            Priority: 10);
     }
 
     private static async Task TamperBehaviorAsync(string databasePath)
@@ -809,7 +809,7 @@ public sealed class PlaybookActionStoreTests : IDisposable
 
     private static byte[] CreateKeyMaterial()
     {
-        return Enumerable.Range(0, 32).Select(static value => (byte)(value + 1)).ToArray();
+        return Enumerable.Range(start: 0, count: 32).Select(static value => (byte)(value + 1)).ToArray();
     }
 
     private static bool ContainsSubsequence(byte[] source, byte[] needle)

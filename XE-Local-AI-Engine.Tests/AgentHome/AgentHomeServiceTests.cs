@@ -19,7 +19,7 @@ using XE_Local_AI_Engine.Tests.Testing;
 /// </summary>
 public sealed class AgentHomeServiceTests : IDisposable
 {
-    private static readonly DateTimeOffset FixedNow = new(2026, 5, 29, 12, 0, 0, TimeSpan.Zero);
+    private static readonly DateTimeOffset FixedNow = new(year: 2026, month: 5, day: 29, hour: 12, minute: 0, second: 0, TimeSpan.Zero);
 
     private readonly List<string> _tempRoots = [];
 
@@ -31,7 +31,7 @@ public sealed class AgentHomeServiceTests : IDisposable
             {
                 if (Directory.Exists(root))
                 {
-                    Directory.Delete(root, true);
+                    Directory.Delete(root, recursive: true);
                 }
             }
             catch (IOException)
@@ -59,7 +59,7 @@ public sealed class AgentHomeServiceTests : IDisposable
 
         AssertEx.Equal(AgentHomeStatus.Ready, prepared.Layout.Manifest.Status);
         AssertEx.Equal("fake", prepared.Handle.ProviderName);
-        AssertEx.Equal(1, prepared.ResolvedFolders.Count);
+        AssertEx.Equal(expected: 1, prepared.ResolvedFolders.Count);
 
         var run = await harness.Service.RunAsync(new AgentHomeRunRequest
         {
@@ -70,7 +70,7 @@ public sealed class AgentHomeServiceTests : IDisposable
 
         AssertEx.NotNullOrEmpty(run.RunId);
         AssertEx.True(run.Completed, "the scripted no-op probe completes on the fake provider");
-        AssertEx.Equal(0, run.ExitCode);
+        AssertEx.Equal(expected: 0, run.ExitCode);
         AssertEx.True(Directory.Exists(run.LogPath), "the run-scoped log directory must exist");
         AssertEx.Contains(run.LogPath, Path.Combine("runs", run.RunId, "logs"));
     }
@@ -99,10 +99,10 @@ public sealed class AgentHomeServiceTests : IDisposable
             SelectedFolderIds = [folderId.ToString()]
         });
 
-        AssertEx.Equal(1, prepared.FolderSnapshots.Count);
+        AssertEx.Equal(expected: 1, prepared.FolderSnapshots.Count);
         var snapshot = prepared.FolderSnapshots[0];
         AssertEx.Equal(SelectedFolderCopyStatus.Copied, snapshot.Status);
-        AssertEx.Equal(1, snapshot.CopiedFileCount);
+        AssertEx.Equal(expected: 1, snapshot.CopiedFileCount);
         AssertEx.Equal("workspace/selected/selected-project", snapshot.WorkspacePath);
 
         var copied = provider.SnapshotSandboxPaths(prepared.Handle);
@@ -121,8 +121,8 @@ public sealed class AgentHomeServiceTests : IDisposable
         resolver.Add(folderId, "selected-project", CreateSourceFolder());
 
         // The fake has no real git, so script the two diff commands: one changed file and a small patch body.
-        provider.RegisterCommand(GitDiffCommandKeys.NameStatus, 0, "M\tselected-project/README.md\n");
-        provider.RegisterCommand(GitDiffCommandKeys.PatchDiff, 0, "diff --git a/selected-project/README.md b/selected-project/README.md\n");
+        provider.RegisterCommand(GitDiffCommandKeys.NameStatus, exitCode: 0, "M\tselected-project/README.md\n");
+        provider.RegisterCommand(GitDiffCommandKeys.PatchDiff, exitCode: 0, "diff --git a/selected-project/README.md b/selected-project/README.md\n");
 
         using var harness = CreateHarness(clock, provider, resolver);
 
@@ -139,7 +139,7 @@ public sealed class AgentHomeServiceTests : IDisposable
             AllowedActions = ["read_workspace", "export_patch"]
         });
 
-        AssertEx.Equal(1, run.Patch.ChangedFileCount);
+        AssertEx.Equal(expected: 1, run.Patch.ChangedFileCount);
         AssertEx.False(run.Patch.Blocked, "the small scripted patch is under budget");
         AssertEx.Equal($"runs/{run.RunId}/patches/changes.patch", run.Patch.PatchRelativePath);
 
@@ -175,7 +175,7 @@ public sealed class AgentHomeServiceTests : IDisposable
             AllowedActions = ["read_workspace"]
         });
 
-        AssertEx.Equal(0, run.Patch.ChangedFileCount);
+        AssertEx.Equal(expected: 0, run.Patch.ChangedFileCount);
         AssertEx.True(run.Patch.PatchRelativePath is null, "no baseline means no patch path");
         AssertEx.True(run.Patch.ChangedFilesRelativePath is null, "no baseline means no changed-files path");
         AssertEx.True(provider.ExecutedCommands.All(command => !(command.Executable == "git" && command.Arguments.Contains("diff"))),
@@ -309,7 +309,7 @@ public sealed class AgentHomeServiceTests : IDisposable
         await firstCancellation.CancelAsync();
         await AssertEx.ThrowsAsync<OperationCanceledException>(() => first);
 
-        provider.RegisterCommand("dotnet --version", 0);
+        provider.RegisterCommand("dotnet --version", exitCode: 0);
         var third = await harness.Service.RunLifecycleAsync(NewLifecycle(folderId));
         AssertEx.True(third.Completed, "the guard must be released so a later run for the same owner-node succeeds");
     }
@@ -338,7 +338,7 @@ public sealed class AgentHomeServiceTests : IDisposable
         identity.NodeId = "node-2";
         using var secondCancellation = new CancellationTokenSource();
         var second = harness.Service.RunLifecycleAsync(NewLifecycle(folderId), secondCancellation.Token);
-        await WaitForInFlightCommandCountAsync(provider, 2);
+        await WaitForInFlightCommandCountAsync(provider, count: 2);
 
         // The real assertion: the second run got PAST the guard (two in-flight commands exist) instead of being
         // rejected with AgentHomeBusy. Both runs are still blocking, so neither has faulted.
@@ -370,7 +370,7 @@ public sealed class AgentHomeServiceTests : IDisposable
 
         AssertEx.False(run.Completed, "a timed-out run did not complete");
         AssertEx.True(run.TimedOut, "the command timeout must surface as TimedOut, not an exception");
-        AssertEx.Equal(-1, run.ExitCode);
+        AssertEx.Equal(expected: -1, run.ExitCode);
     }
 
     [Test]
@@ -453,8 +453,8 @@ public sealed class AgentHomeServiceTests : IDisposable
 
         // Script the diff commands so a patch WOULD export if the gate let it; AllowedActions omits export_patch, so it
         // must be skipped despite a real baseline.
-        provider.RegisterCommand(GitDiffCommandKeys.NameStatus, 0, "M\tselected-project/README.md\n");
-        provider.RegisterCommand(GitDiffCommandKeys.PatchDiff, 0, "diff --git a/selected-project/README.md b/selected-project/README.md\n");
+        provider.RegisterCommand(GitDiffCommandKeys.NameStatus, exitCode: 0, "M\tselected-project/README.md\n");
+        provider.RegisterCommand(GitDiffCommandKeys.PatchDiff, exitCode: 0, "diff --git a/selected-project/README.md b/selected-project/README.md\n");
 
         using var harness = CreateHarness(clock, provider, resolver);
 
@@ -469,7 +469,7 @@ public sealed class AgentHomeServiceTests : IDisposable
             AllowedActions = ["read_workspace"]
         });
 
-        AssertEx.Equal(0, run.Patch.ChangedFileCount);
+        AssertEx.Equal(expected: 0, run.Patch.ChangedFileCount);
         AssertEx.True(run.Patch.PatchRelativePath is null, "export_patch was not granted, so no patch path is produced");
     }
 
@@ -566,7 +566,7 @@ public sealed class AgentHomeServiceTests : IDisposable
 
     private static async Task WaitForInFlightCommandAsync(FakeSandboxRuntimeProvider provider)
     {
-        await WaitForInFlightCommandCountAsync(provider, 1);
+        await WaitForInFlightCommandCountAsync(provider, count: 1);
     }
 
     private static async Task SwallowAsync(Task task)

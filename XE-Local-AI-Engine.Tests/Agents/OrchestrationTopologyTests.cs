@@ -126,15 +126,15 @@ public sealed class OrchestrationTopologyTests
         var topology = OrchestrationTopologyJson.TryParse(json);
 
         AssertEx.NotNull(topology);
-        AssertEx.Equal(1, topology!.Version);
+        AssertEx.Equal(expected: 1, topology!.Version);
         AssertEx.Equal(triage, topology.TriageAgentDefinitionId);
-        AssertEx.Equal(2, topology.ParticipantAgentDefinitionIds.Count);
+        AssertEx.Equal(expected: 2, topology.ParticipantAgentDefinitionIds.Count);
         AssertEx.Contains(topology.ParticipantAgentDefinitionIds, id => id == specialist);
-        AssertEx.Equal(1, topology.Handoffs.Count);
+        AssertEx.Equal(expected: 1, topology.Handoffs.Count);
         AssertEx.Equal(triage, topology.Handoffs[0].FromAgentDefinitionId);
         AssertEx.Equal(specialist, topology.Handoffs[0].ToAgentDefinitionId);
         AssertEx.Equal("route here", topology.Handoffs[0].Reason);
-        AssertEx.Equal(5, topology.MaxTurnsPerAgent);
+        AssertEx.Equal(expected: 5, topology.MaxTurnsPerAgent);
         AssertEx.True(topology.ReturnToPrevious, "returnToPrevious must round-trip.");
     }
 
@@ -168,7 +168,7 @@ public sealed class OrchestrationTopologyTests
         AssertEx.Equal(topology.ParticipantAgentDefinitionIds.Count, roundTripped.ParticipantAgentDefinitionIds.Count);
         AssertEx.Equal(topology.Handoffs.Count, roundTripped.Handoffs.Count);
         AssertEx.Equal("specialist work", roundTripped.Handoffs[0].Reason);
-        AssertEx.Equal(8, roundTripped.MaxTurnsPerAgent);
+        AssertEx.Equal(expected: 8, roundTripped.MaxTurnsPerAgent);
     }
 
     [Test]

@@ -33,8 +33,8 @@ internal static class FakeOllamaEndpointMapper
         app.MapDelete("/api/delete", (Delegate)((HttpContext context) => DeleteEndpoint.HandleAsync(context, state)));
         app.MapPost("/api/chat", (Delegate)((HttpContext context) => ChatEndpoint.HandleAsync(context, state)));
         app.MapPost("/api/generate", (Delegate)((HttpContext context) => GenerateEndpoint.HandleAsync(context, state)));
-        app.MapPost("/api/embed", (Delegate)((HttpContext context) => EmbedEndpoint.HandleAsync(context, state, false)));
-        app.MapPost("/api/embeddings", (Delegate)((HttpContext context) => EmbedEndpoint.HandleAsync(context, state, true)));
+        app.MapPost("/api/embed", (Delegate)((HttpContext context) => EmbedEndpoint.HandleAsync(context, state, legacy: false)));
+        app.MapPost("/api/embeddings", (Delegate)((HttpContext context) => EmbedEndpoint.HandleAsync(context, state, legacy: true)));
         app.MapPost("/test/failures", (Delegate)((HttpContext context) => TestControlEndpoints.EnqueueFailureAsync(context, state)));
         app.MapDelete("/test/failures", (HttpContext context) => TestControlEndpoints.ClearFailures(context, state));
         app.MapGet("/test/requests", (HttpContext context) => TestControlEndpoints.GetRequests(context, state));

@@ -30,7 +30,7 @@ public sealed class McpServerEndpointTests
     public async Task CreateServer_WhenAuthorized_ReturnsCreatedWithRecord()
     {
         var service = Substitute.For<IMcpServerService>();
-        var record = CreateRecord("Filesystem", false);
+        var record = CreateRecord("Filesystem", enabled: false);
         service.CreateAsync(Arg.Any<McpServerInput>(), Arg.Any<CancellationToken>()).Returns(record);
         await using var factory = CreateFactory(service);
         using var client = factory.CreateClient();
@@ -83,7 +83,7 @@ public sealed class McpServerEndpointTests
     public async Task ListServers_WhenAuthorized_ReturnsItems()
     {
         var service = Substitute.For<IMcpServerService>();
-        service.ListAsync(Arg.Any<CancellationToken>()).Returns([CreateRecord("Filesystem", true), CreateRecord("Remote", false)]);
+        service.ListAsync(Arg.Any<CancellationToken>()).Returns([CreateRecord("Filesystem", enabled: true), CreateRecord("Remote", enabled: false)]);
         await using var factory = CreateFactory(service);
         using var client = factory.CreateClient();
 
@@ -92,7 +92,7 @@ public sealed class McpServerEndpointTests
         var body = await ReadJsonAsync<ListMcpServersResponse>(response).ConfigureAwait(false);
 
         AssertEx.Equal(HttpStatusCode.OK, response.StatusCode);
-        AssertEx.Equal(2, body.Items.Count);
+        AssertEx.Equal(expected: 2, body.Items.Count);
     }
 
     [Test]
@@ -130,7 +130,7 @@ public sealed class McpServerEndpointTests
     {
         var service = Substitute.For<IMcpServerService>();
         var id = Guid.NewGuid();
-        service.SetEnabledAsync(id, true, Arg.Any<CancellationToken>()).Returns(CreateRecord("Filesystem", true) with
+        service.SetEnabledAsync(id, enabled: true, Arg.Any<CancellationToken>()).Returns(CreateRecord("Filesystem", enabled: true) with
         {
             Id = id
         });
@@ -147,7 +147,7 @@ public sealed class McpServerEndpointTests
 
         AssertEx.Equal(HttpStatusCode.OK, response.StatusCode);
         AssertEx.True(body.Enabled, "Enabling returns the toggled record.");
-        await service.Received(1).SetEnabledAsync(id, true, Arg.Any<CancellationToken>()).ConfigureAwait(false);
+        await service.Received(1).SetEnabledAsync(id, enabled: true, Arg.Any<CancellationToken>()).ConfigureAwait(false);
     }
 
     [Test]
@@ -188,7 +188,7 @@ public sealed class McpServerEndpointTests
     {
         var service = Substitute.For<IMcpServerService>();
         var id = Guid.NewGuid();
-        service.GetByIdAsync(id, Arg.Any<CancellationToken>()).Returns(CreateRecord("Filesystem", false) with
+        service.GetByIdAsync(id, Arg.Any<CancellationToken>()).Returns(CreateRecord("Filesystem", enabled: false) with
         {
             Id = id
         });
@@ -209,7 +209,7 @@ public sealed class McpServerEndpointTests
     {
         var service = Substitute.For<IMcpServerService>();
         var id = Guid.NewGuid();
-        service.GetByIdAsync(id, Arg.Any<CancellationToken>()).Returns(CreateRecord("Filesystem", true) with
+        service.GetByIdAsync(id, Arg.Any<CancellationToken>()).Returns(CreateRecord("Filesystem", enabled: true) with
         {
             Id = id
         });
@@ -248,7 +248,7 @@ public sealed class McpServerEndpointTests
         AssertEx.Equal(HttpStatusCode.OK, response.StatusCode);
         AssertEx.Equal("connected", body.Status);
         AssertEx.Null(body.Error);
-        AssertEx.Equal(2, body.Tools.Count);
+        AssertEx.Equal(expected: 2, body.Tools.Count);
         AssertEx.ContainsSingle(body.Tools, tool => tool.Name == "mcp__filesystem__read_file" && tool.RequiresApproval);
     }
 
@@ -257,7 +257,7 @@ public sealed class McpServerEndpointTests
     {
         var service = Substitute.For<IMcpServerService>();
         var id = Guid.NewGuid();
-        service.GetByIdAsync(id, Arg.Any<CancellationToken>()).Returns(CreateRecord("Filesystem", true) with
+        service.GetByIdAsync(id, Arg.Any<CancellationToken>()).Returns(CreateRecord("Filesystem", enabled: true) with
         {
             Id = id
         });
@@ -291,7 +291,7 @@ public sealed class McpServerEndpointTests
         // still in flight). That is a healthy not-yet-connected state, not a hard failure, so it reports "connecting".
         var service = Substitute.For<IMcpServerService>();
         var id = Guid.NewGuid();
-        service.GetByIdAsync(id, Arg.Any<CancellationToken>()).Returns(CreateRecord("Filesystem", true) with
+        service.GetByIdAsync(id, Arg.Any<CancellationToken>()).Returns(CreateRecord("Filesystem", enabled: true) with
         {
             Id = id
         });
@@ -316,7 +316,7 @@ public sealed class McpServerEndpointTests
         // "error". "error" is reserved for an actually recorded failure (a non-empty LastError).
         var service = Substitute.For<IMcpServerService>();
         var id = Guid.NewGuid();
-        service.GetByIdAsync(id, Arg.Any<CancellationToken>()).Returns(CreateRecord("Filesystem", true) with
+        service.GetByIdAsync(id, Arg.Any<CancellationToken>()).Returns(CreateRecord("Filesystem", enabled: true) with
         {
             Id = id
         });
@@ -405,13 +405,13 @@ public sealed class McpServerEndpointTests
             McpTransportKind.Stdio,
             "npx",
             ["-y", "server"],
-            null,
+            WorkingDirectory: null,
             new Dictionary<string, string>(StringComparer.Ordinal),
-            null,
+            Url: null,
             enabled,
-            1,
-            10,
-            10);
+            Version: 1,
+            CreatedAtUtc: 10,
+            UpdatedAtUtc: 10);
     }
 
     private static async Task<T> ReadJsonAsync<T>(HttpResponseMessage response)

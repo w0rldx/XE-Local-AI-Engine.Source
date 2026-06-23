@@ -31,7 +31,7 @@ internal static class HostPathSafety
             return null;
         }
 
-        var segments = hostPath.Replace('\\', '/').Split('/');
+        var segments = hostPath.Replace(oldChar: '\\', newChar: '/').Split('/');
         if (segments.Any(segment => segment is "." or ".."))
         {
             return null;

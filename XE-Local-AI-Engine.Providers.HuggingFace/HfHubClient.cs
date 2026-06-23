@@ -180,7 +180,7 @@ internal sealed class HfHubClient
             _ => "downloads"
         };
 
-        var limit = Math.Clamp(query.Limit, 1, 100);
+        var limit = Math.Clamp(query.Limit, min: 1, max: 100);
         var builder = new StringBuilder();
         builder.Append(TrimBase(_options.HubBaseUrl));
         // filter=gguf (tag-based) NOT library=gguf — community repos (bartowski/unsloth) report library_name "None"

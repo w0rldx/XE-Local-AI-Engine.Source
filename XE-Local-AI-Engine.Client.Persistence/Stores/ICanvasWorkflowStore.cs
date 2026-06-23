@@ -68,11 +68,11 @@ public sealed record CanvasWorkflowUpdateResult(CanvasWorkflowUpdateOutcome Outc
 
     public static CanvasWorkflowUpdateResult NotFound()
     {
-        return new CanvasWorkflowUpdateResult(CanvasWorkflowUpdateOutcome.NotFound, null);
+        return new CanvasWorkflowUpdateResult(CanvasWorkflowUpdateOutcome.NotFound, Record: null);
     }
 
     public static CanvasWorkflowUpdateResult Conflict()
     {
-        return new CanvasWorkflowUpdateResult(CanvasWorkflowUpdateOutcome.Conflict, null);
+        return new CanvasWorkflowUpdateResult(CanvasWorkflowUpdateOutcome.Conflict, Record: null);
     }
 }

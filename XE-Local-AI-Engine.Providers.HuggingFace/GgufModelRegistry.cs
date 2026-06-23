@@ -21,7 +21,7 @@ internal sealed class GgufModelRegistry : IGgufModelRegistry, IDisposable
         DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull
     };
 
-    private readonly SemaphoreSlim _lock = new(1, 1);
+    private readonly SemaphoreSlim _lock = new(initialCount: 1, maxCount: 1);
     private readonly ILogger<GgufModelRegistry> _logger;
     private readonly string _manifestPath;
 
@@ -215,7 +215,7 @@ internal sealed class GgufModelRegistry : IGgufModelRegistry, IDisposable
         }
 
         // Atomic replace so a crash mid-write never leaves a half-written manifest.
-        File.Move(tempPath, _manifestPath, true);
+        File.Move(tempPath, _manifestPath, overwrite: true);
     }
 
     private sealed class ManifestDocument

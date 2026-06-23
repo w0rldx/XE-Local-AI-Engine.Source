@@ -44,13 +44,13 @@ internal sealed class NodeChatReadModel(NodeChatPersistenceWriter writer)
 
                 // Title is stored as an encrypted BLOB; read raw bytes and decrypt via the db-context gateway
                 // (mirrors ReadConversationSummariesAsync in NodeChatPersistenceSql).
-                var titleBytes = await conversationReader.IsDBNullAsync(1, token).ConfigureAwait(false)
+                var titleBytes = await conversationReader.IsDBNullAsync(ordinal: 1, token).ConfigureAwait(false)
                     ? null
-                    : await conversationReader.GetFieldValueAsync<byte[]>(1, token).ConfigureAwait(false);
+                    : await conversationReader.GetFieldValueAsync<byte[]>(ordinal: 1, token).ConfigureAwait(false);
 
                 var dto = new NodeChatConversationDto(Guid.Parse(conversationReader.GetString(0)),
                     DecryptTitle(titleBytes, dbContext, conversationId),
-                    await conversationReader.IsDBNullAsync(2, token).ConfigureAwait(false) ? null : conversationReader.GetString(2),
+                    await conversationReader.IsDBNullAsync(ordinal: 2, token).ConfigureAwait(false) ? null : conversationReader.GetString(2),
                     conversationReader.GetInt64(3),
                     conversationReader.GetInt64(4),
                     conversationReader.GetBoolean(5),
@@ -58,9 +58,9 @@ internal sealed class NodeChatReadModel(NodeChatPersistenceWriter writer)
                     conversationReader.GetString(6),
                     conversationReader.GetBoolean(7),
                     conversationReader.GetBoolean(8),
-                    await conversationReader.IsDBNullAsync(9, token).ConfigureAwait(false) ? null : Guid.Parse(conversationReader.GetString(9)),
-                    DeserializeSelectedPath(await conversationReader.IsDBNullAsync(10, token).ConfigureAwait(false) ? null : conversationReader.GetString(10)),
-                    await conversationReader.IsDBNullAsync(11, token).ConfigureAwait(false) ? null : Guid.Parse(conversationReader.GetString(11)),
+                    await conversationReader.IsDBNullAsync(ordinal: 9, token).ConfigureAwait(false) ? null : Guid.Parse(conversationReader.GetString(9)),
+                    DeserializeSelectedPath(await conversationReader.IsDBNullAsync(ordinal: 10, token).ConfigureAwait(false) ? null : conversationReader.GetString(10)),
+                    await conversationReader.IsDBNullAsync(ordinal: 11, token).ConfigureAwait(false) ? null : Guid.Parse(conversationReader.GetString(11)),
                     conversationReader.GetBoolean(12));
 
                 return dto;

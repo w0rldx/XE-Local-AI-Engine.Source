@@ -248,7 +248,7 @@ internal static class LocalModelsMapper
 
     private static ModelClassificationResult UnknownClassification(string modelName)
     {
-        return new ModelClassificationResult(modelName, ModelKind.Unknown, ModelKind.Unknown, [], false);
+        return new ModelClassificationResult(modelName, ModelKind.Unknown, ModelKind.Unknown, [], IsOverridden: false);
     }
 
     public static LocalModelDetailsResponse ToResponse(this OllamaModelDetails modelDetails, string modelName)

@@ -23,7 +23,7 @@ public sealed class NodeDataDirectoryTests : IDisposable
     {
         if (Directory.Exists(_root))
         {
-            Directory.Delete(_root, true);
+            Directory.Delete(_root, recursive: true);
         }
     }
 
@@ -43,7 +43,7 @@ public sealed class NodeDataDirectoryTests : IDisposable
         var contentRoot = Path.Combine(_root, "content");
         Directory.CreateDirectory(contentRoot);
 
-        var sut = CreateSut(null, contentRoot);
+        var sut = CreateSut(configuredRoot: null, contentRoot);
 
         AssertEx.Equal(contentRoot, sut.Root);
     }
@@ -93,7 +93,7 @@ public sealed class NodeDataDirectoryTests : IDisposable
         Directory.CreateDirectory(contentRoot);
         File.WriteAllText(Path.Combine(contentRoot, "node-settings.json"), "{}");
 
-        var sut = CreateSut(null, contentRoot);
+        var sut = CreateSut(configuredRoot: null, contentRoot);
 
         AssertEx.Equal(contentRoot, sut.Root);
         AssertEx.True(File.Exists(Path.Combine(contentRoot, "node-settings.json")), "the headless file must stay in place.");
@@ -116,7 +116,7 @@ public sealed class NodeDataDirectoryTests : IDisposable
 
         var loaded = await store.LoadAsync();
         AssertEx.Equal("my-model", loaded.DefaultModelName);
-        AssertEx.Equal(120, loaded.MaxMessageRequestTimeoutSeconds);
+        AssertEx.Equal(expected: 120, loaded.MaxMessageRequestTimeoutSeconds);
     }
 
     [Test]

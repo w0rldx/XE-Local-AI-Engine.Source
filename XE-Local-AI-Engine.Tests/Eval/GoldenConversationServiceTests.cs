@@ -20,9 +20,9 @@ public sealed class GoldenConversationServiceTests
     {
         var service = CreateService(out _);
         var input = new GoldenConversationCreateInput(AgentId,
-            new string('t', 201),
-            """[{"role":"user","text":"hi"}]""",
-            null,
+            new string(c: 't', count: 201),
+            InputTurns: """[{"role":"user","text":"hi"}]""",
+            Assertion: null,
             "The answer must be helpful.");
 
         await AssertEx.ThrowsAsync<PlaybookActionValidationException>(async () => await service.CreateAsync(input).ConfigureAwait(false)).ConfigureAwait(false);
@@ -34,8 +34,8 @@ public sealed class GoldenConversationServiceTests
         var service = CreateService(out _);
         var input = new GoldenConversationCreateInput(AgentId,
             "Long turns",
-            new string('x', 50_001),
-            null,
+            new string(c: 'x', count: 50_001),
+            Assertion: null,
             "The answer must be helpful.");
 
         await AssertEx.ThrowsAsync<PlaybookActionValidationException>(async () => await service.CreateAsync(input).ConfigureAwait(false)).ConfigureAwait(false);
@@ -47,8 +47,8 @@ public sealed class GoldenConversationServiceTests
         var service = CreateService(out var store);
         var input = new GoldenConversationCreateInput(AgentId,
             "Valid case",
-            """[{"role":"user","text":"hi"}]""",
-            null,
+            InputTurns: """[{"role":"user","text":"hi"}]""",
+            Assertion: null,
             "The answer must be helpful.");
 
         _ = await service.CreateAsync(input).ConfigureAwait(false);
@@ -78,24 +78,24 @@ public sealed class GoldenConversationServiceTests
             input.Assertion,
             input.Rubric,
             input.Enabled,
-            10,
-            10);
+            CreatedAtUtc: 10,
+            UpdatedAtUtc: 10);
     }
 
     private static AgentDefinitionRecord CreateAgent()
     {
         return new AgentDefinitionRecord(AgentId,
             "Builder",
-            null,
+            Description: null,
             "Base instructions.",
-            null,
-            null,
+            ModelProfile: null,
+            ReasoningEffort: null,
             AgentDefinitionKind.Single,
             [],
             new Dictionary<string, bool>(),
-            null,
-            1,
-            10,
-            10);
+            OrchestrationTopologyJson: null,
+            Version: 1,
+            CreatedAtUtc: 10,
+            UpdatedAtUtc: 10);
     }
 }

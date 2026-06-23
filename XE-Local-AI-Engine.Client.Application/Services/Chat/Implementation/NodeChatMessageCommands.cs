@@ -27,15 +27,15 @@ internal sealed class NodeChatMessageCommands(NodeChatPersistenceWriter writer)
 
         return InsertMessageAsync(request.ConversationId,
             request.MessageId,
-            null,
+            requestId: null,
             UserRole,
             request.Content.Trim(),
-            null,
+            reasoning: null,
             NodeChatMessageStatusValues.Completed,
             request.CreatedAtUtc,
             request.CreatedAtUtc,
-            null,
-            null,
+            model: null,
+            error: null,
             request.MetadataJson,
             request.Origin,
             cancellationToken);
@@ -54,12 +54,12 @@ internal sealed class NodeChatMessageCommands(NodeChatPersistenceWriter writer)
             request.RequestId,
             AssistantRole,
             string.Empty,
-            null,
+            reasoning: null,
             NodeChatMessageStatusValues.Pending,
             request.CreatedAtUtc,
             request.CreatedAtUtc,
             request.Model,
-            null,
+            error: null,
             request.MetadataJson,
             request.Origin,
             cancellationToken,
@@ -73,15 +73,15 @@ internal sealed class NodeChatMessageCommands(NodeChatPersistenceWriter writer)
         return UpdateCorrelatedMessageAsync(correlation,
             updatedAtUtc,
             NodeChatMessageStatusValues.Queued,
-            null,
-            null,
-            null,
-            null,
-            null,
-            null,
-            null,
-            null,
-            true,
+            content: null,
+            reasoning: null,
+            error: null,
+            model: null,
+            inputTokens: null,
+            outputTokens: null,
+            totalTokens: null,
+            reasoningTokens: null,
+            replaceContent: true,
             cancellationToken);
     }
 
@@ -90,15 +90,15 @@ internal sealed class NodeChatMessageCommands(NodeChatPersistenceWriter writer)
         return UpdateCorrelatedMessageAsync(correlation,
             updatedAtUtc,
             NodeChatMessageStatusValues.Streaming,
-            null,
-            null,
-            null,
-            null,
-            null,
-            null,
-            null,
-            null,
-            true,
+            content: null,
+            reasoning: null,
+            error: null,
+            model: null,
+            inputTokens: null,
+            outputTokens: null,
+            totalTokens: null,
+            reasoningTokens: null,
+            replaceContent: true,
             cancellationToken);
     }
 
@@ -108,15 +108,15 @@ internal sealed class NodeChatMessageCommands(NodeChatPersistenceWriter writer)
 
         return UpdateCorrelatedMessageAsync(request.Correlation,
             request.UpdatedAtUtc,
-            null,
+            status: null,
             request.Content,
             request.Reasoning,
-            null,
-            null,
-            null,
-            null,
-            null,
-            null,
+            error: null,
+            model: null,
+            inputTokens: null,
+            outputTokens: null,
+            totalTokens: null,
+            reasoningTokens: null,
             request.ReplaceContent,
             cancellationToken);
     }
@@ -140,7 +140,7 @@ internal sealed class NodeChatMessageCommands(NodeChatPersistenceWriter writer)
             request.OutputCount,
             request.TotalCount,
             request.ReasoningCount,
-            true,
+            replaceContent: true,
             cancellationToken,
             request.Parts,
             request.GenerationDurationMs);
@@ -153,18 +153,18 @@ internal sealed class NodeChatMessageCommands(NodeChatPersistenceWriter writer)
         var message = await UpdateCorrelatedMessageAsync(request.Correlation,
             request.CancelledAtUtc,
             NodeChatMessageStatusValues.Cancelled,
-            null,
-            null,
-            null,
-            null,
-            null,
-            null,
-            null,
-            null,
-            true,
+            content: null,
+            reasoning: null,
+            error: null,
+            model: null,
+            inputTokens: null,
+            outputTokens: null,
+            totalTokens: null,
+            reasoningTokens: null,
+            replaceContent: true,
             cancellationToken).ConfigureAwait(false);
 
-        return new NodeChatCancelResultDto(request.Correlation, message.Status, true);
+        return new NodeChatCancelResultDto(request.Correlation, message.Status, Cancelled: true);
     }
 
     private async Task<NodeChatPersistedMessageDto> InsertMessageAsync(Guid conversationId,
@@ -191,7 +191,8 @@ internal sealed class NodeChatMessageCommands(NodeChatPersistenceWriter writer)
             async (dbContext, token) =>
             {
                 var sequence = await NextSequenceAsync(dbContext, conversationId, token).ConfigureAwait(false);
-                var metadata = SerializeMetadata(metadataJson, reasoning, model, null, null, null, null, null, agentDefinitionId, agentName, reasoningEffort);
+                var metadata = SerializeMetadata(metadataJson, reasoning, model, inputTokens: null, outputTokens: null, totalTokens: null, reasoningTokens: null, parts: null, agentDefinitionId,
+                    agentName, reasoningEffort);
 
                 await using var command = dbContext.Database.GetDbConnection().CreateCommand();
                 command.CommandText = """

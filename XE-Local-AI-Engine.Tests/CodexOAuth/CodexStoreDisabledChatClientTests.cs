@@ -84,7 +84,7 @@ public sealed class CodexStoreDisabledChatClientTests
         var responseOptions = raw as CreateResponseOptions
                               ?? throw new AssertionException($"Expected CreateResponseOptions, got {raw?.GetType().Name ?? "<null>"}.");
 
-        AssertEx.Equal(false, responseOptions.StoredOutputEnabled);
+        AssertEx.Equal(expected: false, responseOptions.StoredOutputEnabled);
 #pragma warning restore OPENAI001
     }
 }

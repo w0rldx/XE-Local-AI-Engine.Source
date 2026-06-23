@@ -23,7 +23,7 @@ internal sealed class CapabilityReporter : ICapabilityReporter, IDisposable
     private readonly ILogger<CapabilityReporter> _logger;
     private readonly INodeSettingsStore _nodeSettingsStore;
     private readonly ModelCapabilityProber _prober;
-    private readonly SemaphoreSlim _reportSync = new(1, 1);
+    private readonly SemaphoreSlim _reportSync = new(initialCount: 1, maxCount: 1);
     private readonly TimeProvider _timeProvider;
     private readonly ITokenStore _tokenStore;
     private DateTimeOffset? _lastReportStartedAt;
@@ -89,7 +89,7 @@ internal sealed class CapabilityReporter : ICapabilityReporter, IDisposable
             return;
         }
 
-        if (!await _reportSync.WaitAsync(0, cancellationToken).ConfigureAwait(false))
+        if (!await _reportSync.WaitAsync(millisecondsTimeout: 0, cancellationToken).ConfigureAwait(false))
         {
             _logger.LogDebug("Skipping capability report because another report is already in progress.");
             return;

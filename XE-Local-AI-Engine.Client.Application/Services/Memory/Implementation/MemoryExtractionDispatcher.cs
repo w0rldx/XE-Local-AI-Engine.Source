@@ -57,8 +57,7 @@ internal sealed class MemoryExtractionDispatcher(
             // Log the exception TYPE NAME only — never the exception object, whose Message/stack could carry conversation
             // text or model output from the extraction round-trip (same text-free discipline as the exec-log ErrorClass
             // field and the embedding ranker's fallback logging).
-            _logger.LogWarning(
-                "Background memory extraction failed ({ErrorClass}) for agent {AgentId}; the chat run is unaffected.",
+            _logger.LogWarning("Background memory extraction failed ({ErrorClass}) for agent {AgentId}; the chat run is unaffected.",
                 exception.GetType().Name,
                 telemetry.AgentDefinitionId);
         }

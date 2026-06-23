@@ -3,7 +3,7 @@ using Projects;
 
 var builder = DistributedApplication.CreateBuilder(args);
 
-var nodeSqliteKey = builder.AddParameter("node-sqlite-key", true);
+var nodeSqliteKey = builder.AddParameter("node-sqlite-key", secret: true);
 var nodeSqlitePath = Path.Combine(builder.AppHostDirectory, ".data", "node-sqlite");
 
 var nodeSqlite = builder.AddSqlite("node-sqlite", nodeSqlitePath, "node-chat.db");

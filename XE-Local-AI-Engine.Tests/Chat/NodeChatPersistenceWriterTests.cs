@@ -45,7 +45,7 @@ public sealed class NodeChatPersistenceWriterTests
         releaseFirst.SetResult();
         await Task.WhenAll(first, second).ConfigureAwait(false);
 
-        AssertEx.Equal(1, maxActiveSections, "Same-key persistence sections should not overlap.");
+        AssertEx.Equal(expected: 1, maxActiveSections, "Same-key persistence sections should not overlap.");
         AssertEx.True(secondEntered.Task.IsCompleted, "The queued same-key write should eventually run.");
     }
 

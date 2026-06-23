@@ -46,7 +46,7 @@ internal sealed class GoldenHarvestService(
         var agent = await _agentDefinitionStore.GetByIdAsync(agentId, cancellationToken).ConfigureAwait(false);
         if (agent is null)
         {
-            return new GoldenHarvestOutcome(false, 0, 0, 0, 0);
+            return new GoldenHarvestOutcome(AgentExists: false, ThumbsUpScanned: 0, CreatedCount: 0, DuplicateCount: 0, SkippedCount: 0);
         }
 
         var sources = await _sourceStore.ListThumbsUpSourcesAsync(agentId, _options.MaxThumbsUpScan, cancellationToken).ConfigureAwait(false);
@@ -95,7 +95,7 @@ internal sealed class GoldenHarvestService(
             }
         }
 
-        return new GoldenHarvestOutcome(true,
+        return new GoldenHarvestOutcome(AgentExists: true,
             sources.Count,
             created,
             duplicate,
@@ -107,9 +107,9 @@ internal sealed class GoldenHarvestService(
         return new GoldenConversationCreateInput(agentId,
             BuildTitle(source, firstUserTurnText),
             SerializeTurns(source.PriorTurns),
-            null,
+            Assertion: null,
             Truncate(RubricSeed + source.ApprovedAnswerText, MaxRubricLength),
-            false,
+            Enabled: false,
             GoldenConversationSource.Harvested,
             source.MessageId,
             source.ConversationId);

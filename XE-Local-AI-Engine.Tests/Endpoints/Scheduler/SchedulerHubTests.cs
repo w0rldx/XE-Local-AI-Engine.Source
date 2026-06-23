@@ -54,7 +54,7 @@ public sealed class SchedulerHubTests
 
         // Publish through the host's hub-backed publisher (supersedes the no-op default in the Client host).
         var publisher = factory.Services.GetRequiredService<ISchedulerEventPublisher>();
-        await publisher.PublishDefinitionAsync(new SchedulerDefinitionHubEvent(SchedulerHubEvents.JobDefinitionChanged, scheduledJobId, "created", 123L))
+        await publisher.PublishDefinitionAsync(new SchedulerDefinitionHubEvent(SchedulerHubEvents.JobDefinitionChanged, scheduledJobId, "created", OccurredAtUtc: 123L))
                        .ConfigureAwait(false);
 
         var evt = await received.Task.WaitAsync(TimeSpan.FromSeconds(10)).ConfigureAwait(false);

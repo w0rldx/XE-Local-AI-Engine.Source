@@ -24,7 +24,7 @@ using XE_Local_AI_Engine.Tests.Testing;
 /// </summary>
 public sealed class AgentHomeProcessWriteBackLoopTests : IDisposable
 {
-    private static readonly DateTimeOffset FixedNow = new(2026, 6, 17, 12, 0, 0, TimeSpan.Zero);
+    private static readonly DateTimeOffset FixedNow = new(year: 2026, month: 6, day: 17, hour: 12, minute: 0, second: 0, TimeSpan.Zero);
 
     private readonly List<string> _tempRoots = [];
 
@@ -36,7 +36,7 @@ public sealed class AgentHomeProcessWriteBackLoopTests : IDisposable
             {
                 if (Directory.Exists(root))
                 {
-                    Directory.Delete(root, true);
+                    Directory.Delete(root, recursive: true);
                 }
             }
             catch (IOException)
@@ -73,7 +73,7 @@ public sealed class AgentHomeProcessWriteBackLoopTests : IDisposable
         });
         AssertEx.Equal(AgentHomeStatus.Ready, prepared.Layout.Manifest.Status);
         AssertEx.Equal(ProcessSandboxRuntimeProvider.Name, prepared.Handle.ProviderName);
-        AssertEx.Equal(1, prepared.FolderSnapshots.Count);
+        AssertEx.Equal(expected: 1, prepared.FolderSnapshots.Count);
         AssertEx.Equal(SelectedFolderCopyStatus.Copied, prepared.FolderSnapshots[0].Status);
 
         // 2) RUN — change the copied file in the jail (an "agent edit") then run the probe; the command runs with the
@@ -95,7 +95,7 @@ public sealed class AgentHomeProcessWriteBackLoopTests : IDisposable
         });
 
         AssertEx.True(run.Completed, $"the real probe completes on the process provider (exit {run.ExitCode})");
-        AssertEx.Equal(1, run.Patch.ChangedFileCount);
+        AssertEx.Equal(expected: 1, run.Patch.ChangedFileCount);
         AssertEx.False(run.Patch.Blocked, "the one-line change is under budget");
         var patchFile = Path.Combine(prepared.Layout.RootPath, "runs", run.RunId, "patches", "changes.patch");
         AssertEx.True(File.Exists(patchFile), "the exported changes.patch must be written host-side");
@@ -109,7 +109,7 @@ public sealed class AgentHomeProcessWriteBackLoopTests : IDisposable
             RunId = run.RunId
         });
 
-        AssertEx.True(applied.Applied, $"the exported patch applies to the host. rejections: {string.Join(';', applied.Rejections)}");
+        AssertEx.True(applied.Applied, $"the exported patch applies to the host. rejections: {string.Join(separator: ';', applied.Rejections)}");
         var hostReadme = await File.ReadAllTextAsync(Path.Combine(hostFolder, "README.md"));
         AssertEx.Contains(hostReadme, "bravo");
     }

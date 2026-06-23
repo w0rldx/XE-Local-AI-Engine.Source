@@ -84,11 +84,11 @@ public sealed class OllamaPlaybookEvalJudgeTests
             Guid.NewGuid(),
             "Invalid case",
             "[]",
-            null,
-            null,
-            true,
-            10,
-            10);
+            Assertion: null,
+            Rubric: null,
+            Enabled: true,
+            CreatedAtUtc: 10,
+            UpdatedAtUtc: 10);
 
         var score = await judge.ScoreAsync(goldenCase, "anything", Substitute.For<IChatClient>()).ConfigureAwait(false);
 
@@ -105,11 +105,11 @@ public sealed class OllamaPlaybookEvalJudgeTests
         return new GoldenConversationRecord(Guid.NewGuid(),
             Guid.NewGuid(),
             "Assertion case",
-            """[{"role":"user","text":"hello"}]""",
+            InputTurns: """[{"role":"user","text":"hello"}]""",
             assertion,
-            null,
-            true,
-            10,
-            10);
+            Rubric: null,
+            Enabled: true,
+            CreatedAtUtc: 10,
+            UpdatedAtUtc: 10);
     }
 }

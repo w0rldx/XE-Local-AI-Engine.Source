@@ -51,7 +51,7 @@ public sealed class GgufCapabilityDetectorTests
         AssertEx.False(result.IsToolCapable, "a plain template offers no tools");
         AssertEx.False(result.IsReasoningCapable, "a plain template exposes no thinking channel");
         // Completion is always present (a chat model has a completion head), but no tool/thinking token leaks in.
-        AssertEx.Equal(1, result.Capabilities.Count);
+        AssertEx.Equal(expected: 1, result.Capabilities.Count);
         AssertEx.Contains(result.Capabilities, static c => c == "completion");
     }
 
@@ -63,7 +63,7 @@ public sealed class GgufCapabilityDetectorTests
 
         AssertEx.False(fromNull.IsToolCapable);
         AssertEx.False(fromNull.IsReasoningCapable);
-        AssertEx.Equal(1, fromNull.Capabilities.Count);
+        AssertEx.Equal(expected: 1, fromNull.Capabilities.Count);
         AssertEx.Contains(fromNull.Capabilities, static c => c == "completion");
         AssertEx.False(fromBlank.IsToolCapable);
         AssertEx.False(fromBlank.IsReasoningCapable);

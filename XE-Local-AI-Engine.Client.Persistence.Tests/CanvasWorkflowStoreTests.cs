@@ -19,7 +19,7 @@ public sealed class CanvasWorkflowStoreTests : IDisposable
     {
         if (Directory.Exists(_rootPath))
         {
-            Directory.Delete(_rootPath, true);
+            Directory.Delete(_rootPath, recursive: true);
         }
     }
 
@@ -40,7 +40,7 @@ public sealed class CanvasWorkflowStoreTests : IDisposable
 
             AssertEx.Equal("Workflow", added.Name);
             AssertEx.Equal(GraphJson, added.GraphJson);
-            AssertEx.Equal(1, added.Version);
+            AssertEx.Equal(expected: 1, added.Version);
             AssertEx.True(added.Id != Guid.Empty, "Add should assign a workflow id.");
             AssertEx.True(added.CreatedAtUtc > 0, "Add should stamp a creation time.");
             AssertEx.Equal(added.CreatedAtUtc, added.UpdatedAtUtc);
@@ -56,7 +56,7 @@ public sealed class CanvasWorkflowStoreTests : IDisposable
 
         // ListAsync returns summaries only: name plaintext, but the graph blob is never loaded.
         var list = await readStore.ListAsync();
-        AssertEx.Equal(1, list.Count);
+        AssertEx.Equal(expected: 1, list.Count);
         AssertEx.Equal("Workflow", list[0].Name);
         AssertEx.Null(list[0].GraphJson, "A list summary should omit the graph blob.");
 
@@ -110,24 +110,24 @@ public sealed class CanvasWorkflowStoreTests : IDisposable
         var store = new CanvasWorkflowStore(context, clock);
 
         var added = await store.AddAsync(CreateInput());
-        AssertEx.Equal(1, added.Version);
+        AssertEx.Equal(expected: 1, added.Version);
 
         // A correct expected version updates the row and bumps the version to 2.
         clock.Advance(10);
-        var firstUpdate = await store.UpdateAsync(added.Id, 1, CreateInput() with
+        var firstUpdate = await store.UpdateAsync(added.Id, expectedVersion: 1, CreateInput() with
         {
             Name = "Renamed",
             GraphJson = "{\"nodes\":[],\"edges\":[]}"
         });
         AssertEx.Equal(CanvasWorkflowUpdateOutcome.Updated, firstUpdate.Outcome);
         var updatedRecord = AssertEx.NotNull(firstUpdate.Record, "A successful update should return the record.");
-        AssertEx.Equal(2, updatedRecord.Version);
+        AssertEx.Equal(expected: 2, updatedRecord.Version);
         AssertEx.Equal("Renamed", updatedRecord.Name);
         AssertEx.True(updatedRecord.UpdatedAtUtc > added.UpdatedAtUtc, "A graph change should advance UpdatedAtUtc.");
 
         // Re-applying the now-stale expected version (1) must be rejected as a conflict without mutating the row.
         clock.Advance(10);
-        var stale = await store.UpdateAsync(added.Id, 1, CreateInput() with
+        var stale = await store.UpdateAsync(added.Id, expectedVersion: 1, CreateInput() with
         {
             Name = "Should not apply"
         });
@@ -135,11 +135,11 @@ public sealed class CanvasWorkflowStoreTests : IDisposable
         AssertEx.Null(stale.Record, "A conflict should not return a record.");
 
         var current = AssertEx.NotNull(await store.GetByIdAsync(added.Id), "Workflow should still exist.");
-        AssertEx.Equal(2, current.Version);
+        AssertEx.Equal(expected: 2, current.Version);
         AssertEx.Equal("Renamed", current.Name);
 
         // Updating an unknown id returns NotFound (distinct from Conflict).
-        var missing = await store.UpdateAsync(Guid.NewGuid(), 1, CreateInput());
+        var missing = await store.UpdateAsync(Guid.NewGuid(), expectedVersion: 1, CreateInput());
         AssertEx.Equal(CanvasWorkflowUpdateOutcome.NotFound, missing.Outcome);
     }
 
@@ -180,7 +180,7 @@ public sealed class CanvasWorkflowStoreTests : IDisposable
     {
         try
         {
-            return new UTF8Encoding(false, true).GetString(bytes);
+            return new UTF8Encoding(encoderShouldEmitUTF8Identifier: false, throwOnInvalidBytes: true).GetString(bytes);
         }
         catch (DecoderFallbackException)
         {
@@ -201,7 +201,7 @@ public sealed class CanvasWorkflowStoreTests : IDisposable
 
     private static byte[] CreateKeyMaterial()
     {
-        return Enumerable.Range(0, 32).Select(static value => (byte)(value + 1)).ToArray();
+        return Enumerable.Range(start: 0, count: 32).Select(static value => (byte)(value + 1)).ToArray();
     }
 
     private static bool ContainsSubsequence(byte[] source, byte[] needle)

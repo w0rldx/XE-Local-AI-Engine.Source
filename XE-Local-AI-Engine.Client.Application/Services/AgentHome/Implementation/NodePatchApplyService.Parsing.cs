@@ -223,7 +223,7 @@ internal sealed partial class NodePatchApplyService
         }
 
         var rest = afterPrefix[2..];
-        var slashIndex = rest.IndexOf('/', StringComparison.Ordinal);
+        var slashIndex = rest.IndexOf(value: '/', StringComparison.Ordinal);
         return slashIndex > 0 ? rest[..slashIndex] : null;
     }
 
@@ -288,8 +288,8 @@ internal sealed partial class NodePatchApplyService
     private static (string Alias, string Relative)? SplitAlias(string path)
     {
         // Path arrives with the a/ or b/ diff prefix already stripped. Split on the first '/' into alias + relative.
-        var normalized = path.Replace('\\', '/');
-        var separatorIndex = normalized.IndexOf('/', StringComparison.Ordinal);
+        var normalized = path.Replace(oldChar: '\\', newChar: '/');
+        var separatorIndex = normalized.IndexOf(value: '/', StringComparison.Ordinal);
         if (separatorIndex <= 0 || separatorIndex == normalized.Length - 1)
         {
             return null;
@@ -302,7 +302,7 @@ internal sealed partial class NodePatchApplyService
 
     private static bool ContainsTraversal(string relativePath)
     {
-        var segments = relativePath.Replace('\\', '/').Split('/');
+        var segments = relativePath.Replace(oldChar: '\\', newChar: '/').Split('/');
         return segments.Any(segment => segment is "..");
     }
 

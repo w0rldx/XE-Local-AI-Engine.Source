@@ -24,7 +24,7 @@ internal sealed class PlaybookAnalysisService(
         var insights = await _insightsService.GetAgentFeedbackInsightsAsync(agentDefinitionId, cancellationToken).ConfigureAwait(false);
         if (insights is null)
         {
-            return new PlaybookAnalysisOutcome(false, false, [], 0, 0, 0);
+            return new PlaybookAnalysisOutcome(AgentExists: false, MeetsThreshold: false, [], ProposedCount: 0, RejectedCount: 0, DuplicateCount: 0);
         }
 
         // Never act on a single signal: if the aggregate is below the occurrence threshold, don't even invoke the
@@ -32,7 +32,7 @@ internal sealed class PlaybookAnalysisService(
         if (!insights.Overall.MeetsThreshold)
         {
             _logger.LogInformation("Skipping playbook analysis for agent {AgentId}: feedback below the occurrence threshold.", agentDefinitionId);
-            return new PlaybookAnalysisOutcome(true, false, [], 0, 0, 0);
+            return new PlaybookAnalysisOutcome(AgentExists: true, MeetsThreshold: false, [], ProposedCount: 0, RejectedCount: 0, DuplicateCount: 0);
         }
 
         var proposals = await _analysisAgent.ProposeAsync(insights, cancellationToken).ConfigureAwait(false);
@@ -86,7 +86,7 @@ internal sealed class PlaybookAnalysisService(
         _logger.LogInformation("Playbook analysis for agent {AgentId}: proposed {Proposed}, kept {Kept}, rejected {Rejected}, duplicates {Duplicates}.",
             agentDefinitionId, proposals.Count, created.Count, rejected, duplicates);
 
-        return new PlaybookAnalysisOutcome(true, true, created, proposals.Count, rejected, duplicates);
+        return new PlaybookAnalysisOutcome(AgentExists: true, MeetsThreshold: true, created, proposals.Count, rejected, duplicates);
     }
 
     private static bool IsValidProposal(ProposedPlaybookAction proposal, HashSet<Guid> evidenceIds)
@@ -145,6 +145,6 @@ internal sealed class PlaybookAnalysisService(
         }
 
         // Uppercase-normalize (CA1308) and collapse all whitespace so trivially-different phrasings dedupe.
-        return string.Join(' ', value.ToUpperInvariant().Split((char[]?)null, StringSplitOptions.RemoveEmptyEntries));
+        return string.Join(separator: ' ', value.ToUpperInvariant().Split((char[]?)null, StringSplitOptions.RemoveEmptyEntries));
     }
 }

@@ -6,10 +6,10 @@ public sealed class SecurityOptions
 {
     public const string SectionName = "Security";
 
-    [Range(1, 1024)]
+    [Range(minimum: 1, maximum: 1024)]
     public int MaxSystemPromptSizeKb { get; set; } = 100;
 
-    [Range(1, 1024)]
+    [Range(minimum: 1, maximum: 1024)]
     public int MaxMessageSizeKb { get; set; } = 50;
 
     // Accepts either a plain Ollama tag OR an org/repo GGUF reference. The repo branch is exactly org/repo with an

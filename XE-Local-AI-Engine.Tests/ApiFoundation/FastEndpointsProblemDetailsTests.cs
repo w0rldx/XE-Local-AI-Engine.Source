@@ -34,7 +34,7 @@ public sealed class FastEndpointsProblemDetailsTests
         using var document = await JsonDocument.ParseAsync(responseStream).ConfigureAwait(false);
         var root = document.RootElement;
 
-        AssertEx.Equal(400, root.GetProperty("status").GetInt32());
+        AssertEx.Equal(expected: 400, root.GetProperty("status").GetInt32());
         AssertEx.NotEmpty(root.GetProperty("title").GetString());
         AssertEx.True(root.TryGetProperty("errors", out var errors), "Expected problem details to contain validation errors.");
         AssertEx.Contains(errors.GetRawText(), "Name", StringComparison.OrdinalIgnoreCase);

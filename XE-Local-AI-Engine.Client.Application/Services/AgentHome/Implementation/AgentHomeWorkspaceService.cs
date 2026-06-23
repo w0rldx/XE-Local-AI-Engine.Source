@@ -197,7 +197,7 @@ internal sealed class AgentHomeWorkspaceService : IAgentHomeWorkspaceService
                     continue;
                 }
 
-                var relative = Path.GetRelativePath(root, file.FullName).Replace('\\', '/');
+                var relative = Path.GetRelativePath(root, file.FullName).Replace(oldChar: '\\', newChar: '/');
                 files.Add(new CopyFile(file.FullName, relative, file.Length));
                 totalBytes += file.Length;
             }

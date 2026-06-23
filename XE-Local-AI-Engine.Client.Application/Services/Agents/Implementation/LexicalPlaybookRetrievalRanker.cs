@@ -61,7 +61,7 @@ public sealed class LexicalPlaybookRetrievalRanker : IPlaybookRetrievalRanker
                                     .ToArray());
 
         return normalized
-               .Split(' ', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
+               .Split(separator: ' ', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
                .ToHashSet(StringComparer.Ordinal);
     }
 

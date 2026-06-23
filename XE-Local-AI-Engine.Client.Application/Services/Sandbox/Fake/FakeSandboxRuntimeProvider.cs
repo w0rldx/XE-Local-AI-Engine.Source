@@ -18,7 +18,7 @@ public sealed class FakeSandboxRuntimeProvider : ISandboxRuntimeProvider
     private readonly Dictionary<string, string> _hostFiles = new(StringComparer.Ordinal);
     private readonly Dictionary<string, SandboxState> _sandboxes = new(StringComparer.Ordinal);
     private readonly Dictionary<string, ScriptedCommand> _scripts = new(StringComparer.Ordinal);
-    private readonly System.Threading.Lock _sync = new();
+    private readonly Lock _sync = new();
     private readonly TimeProvider _timeProvider;
     private int _sandboxCounter;
 
@@ -124,7 +124,7 @@ public sealed class FakeSandboxRuntimeProvider : ISandboxRuntimeProvider
 
         if (inFlight is null)
         {
-            return BuildResult(request, scripted, true, startedAt);
+            return BuildResult(request, scripted, completed: true, startedAt);
         }
 
         using var registration = cancellationToken.Register(static state => ((InFlightExecution)state!).Completion.TrySetCanceled(),
@@ -265,7 +265,7 @@ public sealed class FakeSandboxRuntimeProvider : ISandboxRuntimeProvider
 
         lock (_sync)
         {
-            _scripts[commandLine] = new ScriptedCommand(false, exitCode, standardOutput, standardError);
+            _scripts[commandLine] = new ScriptedCommand(Blocks: false, exitCode, standardOutput, standardError);
         }
     }
 
@@ -276,7 +276,7 @@ public sealed class FakeSandboxRuntimeProvider : ISandboxRuntimeProvider
 
         lock (_sync)
         {
-            _scripts[commandLine] = new ScriptedCommand(true, 0, string.Empty, string.Empty);
+            _scripts[commandLine] = new ScriptedCommand(Blocks: true, ExitCode: 0, string.Empty, string.Empty);
         }
     }
 
@@ -359,7 +359,7 @@ public sealed class FakeSandboxRuntimeProvider : ISandboxRuntimeProvider
         var key = BuildCommandKey(request);
         return _scripts.TryGetValue(key, out var scripted)
             ? scripted
-            : new ScriptedCommand(false, 0, string.Empty, string.Empty);
+            : new ScriptedCommand(Blocks: false, ExitCode: 0, string.Empty, string.Empty);
     }
 
     private static string BuildCommandKey(SandboxCommandRequest request)

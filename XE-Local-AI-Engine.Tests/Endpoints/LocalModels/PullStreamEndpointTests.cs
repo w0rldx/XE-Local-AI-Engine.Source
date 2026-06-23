@@ -48,25 +48,25 @@ public sealed class PullStreamEndpointTests
 
         // Parse NDJSON lines
         var body = await response.Content.ReadAsStringAsync().ConfigureAwait(false);
-        var lines = body.Split('\n', StringSplitOptions.RemoveEmptyEntries);
+        var lines = body.Split(separator: '\n', StringSplitOptions.RemoveEmptyEntries);
 
-        AssertEx.Equal(3, lines.Length);
+        AssertEx.Equal(expected: 3, lines.Length);
 
         var first = ParseEvent(lines[0]);
         AssertEx.Equal("pulling manifest", first.Status);
         // Ollama sends 0 for non-byte-progress lines; the endpoint forwards the value as-is.
-        AssertEx.Equal(0L, first.CompletedBytes);
-        AssertEx.Equal(0L, first.TotalBytes);
+        AssertEx.Equal(expected: 0L, first.CompletedBytes);
+        AssertEx.Equal(expected: 0L, first.TotalBytes);
 
         var second = ParseEvent(lines[1]);
         AssertEx.Equal("pulling layers", second.Status);
-        AssertEx.Equal(50L, second.CompletedBytes);
-        AssertEx.Equal(100L, second.TotalBytes);
+        AssertEx.Equal(expected: 50L, second.CompletedBytes);
+        AssertEx.Equal(expected: 100L, second.TotalBytes);
 
         var third = ParseEvent(lines[2]);
         AssertEx.Equal("success", third.Status);
-        AssertEx.Equal(0L, third.CompletedBytes);
-        AssertEx.Equal(0L, third.TotalBytes);
+        AssertEx.Equal(expected: 0L, third.CompletedBytes);
+        AssertEx.Equal(expected: 0L, third.TotalBytes);
 
         // No extra fields leak (digest, model name, etc.) — round-trip through the typed DTO is the gate.
         foreach (var line in lines)
@@ -138,10 +138,10 @@ public sealed class PullStreamEndpointTests
         AssertEx.Equal(HttpStatusCode.OK, response.StatusCode);
 
         var body = await response.Content.ReadAsStringAsync().ConfigureAwait(false);
-        var lines = body.Split('\n', StringSplitOptions.RemoveEmptyEntries);
+        var lines = body.Split(separator: '\n', StringSplitOptions.RemoveEmptyEntries);
 
         // First the committed "pulling manifest" line, then the terminal error line.
-        AssertEx.Equal(2, lines.Length);
+        AssertEx.Equal(expected: 2, lines.Length);
         AssertEx.Equal("pulling manifest", ParseEvent(lines[0]).Status);
 
         var terminal = ParseEvent(lines[^1]);

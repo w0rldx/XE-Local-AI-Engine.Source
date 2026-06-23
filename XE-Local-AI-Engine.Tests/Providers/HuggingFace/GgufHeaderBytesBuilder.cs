@@ -45,8 +45,8 @@ internal sealed class GgufHeaderBytesBuilder
     {
         using var stream = new MemoryStream();
         WriteUint32(stream, GgufMagic);
-        WriteUint32(stream, 3); // version
-        WriteUint64(stream, 0); // tensor_count
+        WriteUint32(stream, value: 3); // version
+        WriteUint64(stream, value: 0); // tensor_count
         WriteUint64(stream, (ulong)_kv.Count);
 
         foreach (var (key, type, value) in _kv)

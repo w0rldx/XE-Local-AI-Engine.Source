@@ -26,7 +26,7 @@ using XE_Local_AI_Engine.Tests.Testing.Mocks;
 
 public class TestingWebAppFactory : WebApplicationFactory<Program>, IAsyncInitializer, IAsyncDisposable
 {
-    private static readonly SemaphoreSlim HostStartupLock = new(1, 1);
+    private static readonly SemaphoreSlim HostStartupLock = new(initialCount: 1, maxCount: 1);
 
     private readonly FakeOllamaServer? _fakeOllamaServer;
 
@@ -106,7 +106,7 @@ public class TestingWebAppFactory : WebApplicationFactory<Program>, IAsyncInitia
             configurationBuilder.AddInMemoryCollection(new Dictionary<string, string?>
             {
                 ["ConnectionStrings:node-sqlite"] = $"Data Source={Path.Combine(Path.GetTempPath(), $"xe-local-ai-engine-tests-{Guid.NewGuid():N}.sqlite")}",
-                ["XE_NODE_SQLITE_KEY"] = Convert.ToBase64String(Enumerable.Range(1, 32).Select(static value => (byte)value).ToArray()),
+                ["XE_NODE_SQLITE_KEY"] = Convert.ToBase64String(Enumerable.Range(start: 1, count: 32).Select(static value => (byte)value).ToArray()),
                 ["XE_USE_LOCAL_MODEL_PROVIDER"] = "true",
                 ["Ollama:ChatModel"] = "qwen3.5:0.8b"
             });

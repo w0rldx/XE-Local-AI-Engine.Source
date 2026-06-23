@@ -18,7 +18,7 @@ public sealed class PlaybookMonitorStoreTests : IDisposable
     {
         if (Directory.Exists(_rootPath))
         {
-            Directory.Delete(_rootPath, true);
+            Directory.Delete(_rootPath, recursive: true);
         }
     }
 
@@ -39,34 +39,34 @@ public sealed class PlaybookMonitorStoreTests : IDisposable
         var cA = Guid.NewGuid();
         var cAArchived = Guid.NewGuid();
         var cAPurged = Guid.NewGuid();
-        await InsertConversationAsync(connection, cA, agentA, false, false);
-        await InsertConversationAsync(connection, cAArchived, agentA, false, true);
-        await InsertConversationAsync(connection, cAPurged, agentA, true, false);
+        await InsertConversationAsync(connection, cA, agentA, purged: false, archived: false);
+        await InsertConversationAsync(connection, cAArchived, agentA, purged: false, archived: true);
+        await InsertConversationAsync(connection, cAPurged, agentA, purged: true, archived: false);
         var cB = Guid.NewGuid();
-        await InsertConversationAsync(connection, cB, agentB, false, false);
+        await InsertConversationAsync(connection, cB, agentB, purged: false, archived: false);
 
         // Before window (< 100): 1 up + 2 down = 3 total, 2 down.
-        await InsertFeedbackAsync(connection, Guid.NewGuid(), cA, Up, 10);
-        await InsertFeedbackAsync(connection, Guid.NewGuid(), cA, Down, 20);
-        await InsertFeedbackAsync(connection, Guid.NewGuid(), cAArchived, Down, 30);
+        await InsertFeedbackAsync(connection, Guid.NewGuid(), cA, Up, createdAtUtc: 10);
+        await InsertFeedbackAsync(connection, Guid.NewGuid(), cA, Down, createdAtUtc: 20);
+        await InsertFeedbackAsync(connection, Guid.NewGuid(), cAArchived, Down, createdAtUtc: 30);
         // After window (>= 100): the boundary row at exactly 100 is "after"; 3 up + 1 down = 4 total, 1 down.
-        await InsertFeedbackAsync(connection, Guid.NewGuid(), cA, Up, 100);
-        await InsertFeedbackAsync(connection, Guid.NewGuid(), cA, Up, 150);
-        await InsertFeedbackAsync(connection, Guid.NewGuid(), cAArchived, Up, 200);
-        await InsertFeedbackAsync(connection, Guid.NewGuid(), cA, Down, 250);
+        await InsertFeedbackAsync(connection, Guid.NewGuid(), cA, Up, createdAtUtc: 100);
+        await InsertFeedbackAsync(connection, Guid.NewGuid(), cA, Up, createdAtUtc: 150);
+        await InsertFeedbackAsync(connection, Guid.NewGuid(), cAArchived, Up, createdAtUtc: 200);
+        await InsertFeedbackAsync(connection, Guid.NewGuid(), cA, Down, createdAtUtc: 250);
         // Excluded: purged conversation + the other agent's feedback must not leak into the primary agent's windows.
-        await InsertFeedbackAsync(connection, Guid.NewGuid(), cAPurged, Down, 40);
-        await InsertFeedbackAsync(connection, Guid.NewGuid(), cAPurged, Down, 160);
-        await InsertFeedbackAsync(connection, Guid.NewGuid(), cB, Down, 50);
-        await InsertFeedbackAsync(connection, Guid.NewGuid(), cB, Down, 170);
+        await InsertFeedbackAsync(connection, Guid.NewGuid(), cAPurged, Down, createdAtUtc: 40);
+        await InsertFeedbackAsync(connection, Guid.NewGuid(), cAPurged, Down, createdAtUtc: 160);
+        await InsertFeedbackAsync(connection, Guid.NewGuid(), cB, Down, createdAtUtc: 50);
+        await InsertFeedbackAsync(connection, Guid.NewGuid(), cB, Down, createdAtUtc: 170);
 
         var store = new PlaybookMonitorStore(context);
-        var comparison = await store.GetCohortComparisonAsync(agentA, EnabledAt, null);
+        var comparison = await store.GetCohortComparisonAsync(agentA, EnabledAt, toolScope: null);
 
-        AssertEx.Equal(3, comparison.BeforeTotal);
-        AssertEx.Equal(2, comparison.BeforeDown);
-        AssertEx.Equal(4, comparison.AfterTotal);
-        AssertEx.Equal(1, comparison.AfterDown);
+        AssertEx.Equal(expected: 3, comparison.BeforeTotal);
+        AssertEx.Equal(expected: 2, comparison.BeforeDown);
+        AssertEx.Equal(expected: 4, comparison.AfterTotal);
+        AssertEx.Equal(expected: 1, comparison.AfterDown);
     }
 
     [Test]
@@ -82,12 +82,12 @@ public sealed class PlaybookMonitorStoreTests : IDisposable
         var agent = await SeedAgentAsync(context, "Empty");
         var store = new PlaybookMonitorStore(context);
 
-        var comparison = await store.GetCohortComparisonAsync(agent, EnabledAt, null);
+        var comparison = await store.GetCohortComparisonAsync(agent, EnabledAt, toolScope: null);
 
-        AssertEx.Equal(0, comparison.BeforeTotal);
-        AssertEx.Equal(0, comparison.BeforeDown);
-        AssertEx.Equal(0, comparison.AfterTotal);
-        AssertEx.Equal(0, comparison.AfterDown);
+        AssertEx.Equal(expected: 0, comparison.BeforeTotal);
+        AssertEx.Equal(expected: 0, comparison.BeforeDown);
+        AssertEx.Equal(expected: 0, comparison.AfterTotal);
+        AssertEx.Equal(expected: 0, comparison.AfterDown);
     }
 
     [Test]
@@ -105,17 +105,17 @@ public sealed class PlaybookMonitorStoreTests : IDisposable
 
         var cSearch = Guid.NewGuid();
         var cCalc = Guid.NewGuid();
-        await InsertConversationAsync(connection, cSearch, agent, false, false);
-        await InsertConversationAsync(connection, cCalc, agent, false, false);
+        await InsertConversationAsync(connection, cSearch, agent, purged: false, archived: false);
+        await InsertConversationAsync(connection, cCalc, agent, purged: false, archived: false);
 
         // The search conversation: before window 1 up + 1 down; after window 2 down (rated messages). The calc
         // conversation's feedback must NOT count toward the "search" facet.
-        await InsertFeedbackAsync(connection, Guid.NewGuid(), cSearch, Up, 10);
-        await InsertFeedbackAsync(connection, Guid.NewGuid(), cSearch, Down, 20);
-        await InsertFeedbackAsync(connection, Guid.NewGuid(), cSearch, Down, 120);
-        await InsertFeedbackAsync(connection, Guid.NewGuid(), cSearch, Down, 130);
-        await InsertFeedbackAsync(connection, Guid.NewGuid(), cCalc, Down, 25);
-        await InsertFeedbackAsync(connection, Guid.NewGuid(), cCalc, Down, 140);
+        await InsertFeedbackAsync(connection, Guid.NewGuid(), cSearch, Up, createdAtUtc: 10);
+        await InsertFeedbackAsync(connection, Guid.NewGuid(), cSearch, Down, createdAtUtc: 20);
+        await InsertFeedbackAsync(connection, Guid.NewGuid(), cSearch, Down, createdAtUtc: 120);
+        await InsertFeedbackAsync(connection, Guid.NewGuid(), cSearch, Down, createdAtUtc: 130);
+        await InsertFeedbackAsync(connection, Guid.NewGuid(), cCalc, Down, createdAtUtc: 25);
+        await InsertFeedbackAsync(connection, Guid.NewGuid(), cCalc, Down, createdAtUtc: 140);
 
         // "search" fires three times in cSearch: COUNT(DISTINCT message_id) must keep the rated messages from
         // inflating via the conversation x tool cartesian, so the facet counts stay at the per-message totals.
@@ -127,24 +127,24 @@ public sealed class PlaybookMonitorStoreTests : IDisposable
         var store = new PlaybookMonitorStore(context);
         var comparison = await store.GetCohortComparisonAsync(agent, EnabledAt, "search");
 
-        AssertEx.Equal(2, comparison.BeforeTotal);
-        AssertEx.Equal(1, comparison.BeforeDown);
-        AssertEx.Equal(2, comparison.AfterTotal);
-        AssertEx.Equal(2, comparison.AfterDown);
+        AssertEx.Equal(expected: 2, comparison.BeforeTotal);
+        AssertEx.Equal(expected: 1, comparison.BeforeDown);
+        AssertEx.Equal(expected: 2, comparison.AfterTotal);
+        AssertEx.Equal(expected: 2, comparison.AfterDown);
     }
 
     private static async Task<Guid> SeedAgentAsync(NodeChatDbContext context, string name)
     {
         var store = new AgentDefinitionStore(context, TimeProvider.System);
         var agent = await store.AddAsync(new AgentDefinitionInput(name,
-            null,
+            Description: null,
             "You are a careful engineering agent.",
-            null,
-            null,
+            ModelProfile: null,
+            ReasoningEffort: null,
             AgentDefinitionKind.Single,
             [],
             new Dictionary<string, bool>(),
-            null));
+            OrchestrationTopologyJson: null));
         return agent.Id;
     }
 
@@ -238,7 +238,7 @@ public sealed class PlaybookMonitorStoreTests : IDisposable
 
     private static byte[] CreateKeyMaterial()
     {
-        return Enumerable.Range(0, 32).Select(static value => (byte)(value + 1)).ToArray();
+        return Enumerable.Range(start: 0, count: 32).Select(static value => (byte)(value + 1)).ToArray();
     }
 
     private sealed class FixedNodeSqliteKeyHolder(byte[] key) : INodeSqliteKeyHolder

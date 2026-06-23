@@ -15,7 +15,7 @@ public sealed class McpServerServiceTests
     {
         var service = CreateService(out var store, out var manager);
         var input = CreateStdioInput();
-        var stored = CreateRecord(input, false);
+        var stored = CreateRecord(input, enabled: false);
         store.ListAsync(Arg.Any<CancellationToken>()).Returns([]);
         store.AddAsync(input, Arg.Any<CancellationToken>()).Returns(stored);
 
@@ -34,7 +34,7 @@ public sealed class McpServerServiceTests
         var service = CreateService(out var store, out _);
         var input = CreateHttpInput("http://127.0.0.1:8931/sse");
         store.ListAsync(Arg.Any<CancellationToken>()).Returns([]);
-        store.AddAsync(input, Arg.Any<CancellationToken>()).Returns(CreateRecord(input, false));
+        store.AddAsync(input, Arg.Any<CancellationToken>()).Returns(CreateRecord(input, enabled: false));
 
         var result = await service.CreateAsync(input).ConfigureAwait(false);
 
@@ -50,7 +50,7 @@ public sealed class McpServerServiceTests
         var service = CreateService(out var store, out _);
         var input = CreateHttpInput("http://[::1]:8931/sse");
         store.ListAsync(Arg.Any<CancellationToken>()).Returns([]);
-        store.AddAsync(input, Arg.Any<CancellationToken>()).Returns(CreateRecord(input, false));
+        store.AddAsync(input, Arg.Any<CancellationToken>()).Returns(CreateRecord(input, enabled: false));
 
         var result = await service.CreateAsync(input).ConfigureAwait(false);
 
@@ -104,7 +104,7 @@ public sealed class McpServerServiceTests
         var service = CreateService(out var store, out _);
         var input = CreateStdioInput();
         // A registration with the same name (case-insensitive) already exists.
-        store.ListAsync(Arg.Any<CancellationToken>()).Returns([CreateRecord(CreateStdioInput("filesystem"), false)]);
+        store.ListAsync(Arg.Any<CancellationToken>()).Returns([CreateRecord(CreateStdioInput("filesystem"), enabled: false)]);
 
         await AssertEx.ThrowsAsync<McpServerValidationException>(() => service.CreateAsync(input)).ConfigureAwait(false);
         await store.DidNotReceive().AddAsync(Arg.Any<McpServerInput>(), Arg.Any<CancellationToken>()).ConfigureAwait(false);
@@ -115,23 +115,23 @@ public sealed class McpServerServiceTests
     {
         var service = CreateService(out var store, out var manager);
         var id = Guid.NewGuid();
-        var existing = CreateRecord(CreateStdioInput(), false) with
+        var existing = CreateRecord(CreateStdioInput(), enabled: false) with
         {
             Id = id
         };
         store.GetByIdAsync(id, Arg.Any<CancellationToken>()).Returns(existing);
-        store.SetEnabledAsync(id, true, Arg.Any<CancellationToken>())
+        store.SetEnabledAsync(id, enabled: true, Arg.Any<CancellationToken>())
              .Returns(existing with
              {
                  Enabled = true,
                  Version = existing.Version + 1
              });
 
-        var result = await service.SetEnabledAsync(id, true).ConfigureAwait(false);
+        var result = await service.SetEnabledAsync(id, enabled: true).ConfigureAwait(false);
 
         AssertEx.True(result!.Enabled, "Enabling must flip the persisted flag.");
         // The toggle goes through the dedicated store method, not a full UpdateAsync rebuild (no secret-column re-encrypt).
-        await store.Received(1).SetEnabledAsync(id, true, Arg.Any<CancellationToken>()).ConfigureAwait(false);
+        await store.Received(1).SetEnabledAsync(id, enabled: true, Arg.Any<CancellationToken>()).ConfigureAwait(false);
         await store.DidNotReceive().UpdateAsync(Arg.Any<Guid>(), Arg.Any<McpServerInput>(), Arg.Any<CancellationToken>()).ConfigureAwait(false);
         await manager.Received(1).RefreshAsync(Arg.Any<CancellationToken>()).ConfigureAwait(false);
     }
@@ -141,13 +141,13 @@ public sealed class McpServerServiceTests
     {
         var service = CreateService(out var store, out var manager);
         var id = Guid.NewGuid();
-        var existing = CreateRecord(CreateStdioInput(), true) with
+        var existing = CreateRecord(CreateStdioInput(), enabled: true) with
         {
             Id = id
         };
         store.GetByIdAsync(id, Arg.Any<CancellationToken>()).Returns(existing);
 
-        var result = await service.SetEnabledAsync(id, true).ConfigureAwait(false);
+        var result = await service.SetEnabledAsync(id, enabled: true).ConfigureAwait(false);
 
         AssertEx.True(result!.Enabled);
         await store.DidNotReceive().SetEnabledAsync(Arg.Any<Guid>(), Arg.Any<bool>(), Arg.Any<CancellationToken>()).ConfigureAwait(false);
@@ -162,7 +162,7 @@ public sealed class McpServerServiceTests
         var id = Guid.NewGuid();
         store.GetByIdAsync(id, Arg.Any<CancellationToken>()).Returns((McpServerRecord?)null);
 
-        var result = await service.SetEnabledAsync(id, true).ConfigureAwait(false);
+        var result = await service.SetEnabledAsync(id, enabled: true).ConfigureAwait(false);
 
         AssertEx.Null(result);
         await manager.DidNotReceive().RefreshAsync(Arg.Any<CancellationToken>()).ConfigureAwait(false);
@@ -173,7 +173,7 @@ public sealed class McpServerServiceTests
     {
         var service = CreateService(out var store, out var manager);
         var id = Guid.NewGuid();
-        var existing = CreateRecord(CreateStdioInput(), true) with
+        var existing = CreateRecord(CreateStdioInput(), enabled: true) with
         {
             Id = id
         };
@@ -204,7 +204,7 @@ public sealed class McpServerServiceTests
     {
         var service = CreateService(out var store, out var manager);
         var id = Guid.NewGuid();
-        var existing = CreateRecord(CreateStdioInput(), false) with
+        var existing = CreateRecord(CreateStdioInput(), enabled: false) with
         {
             Id = id
         };
@@ -243,18 +243,18 @@ public sealed class McpServerServiceTests
         // logs, so the caller still sees its successful toggle.
         var service = CreateService(out var store, out var manager);
         var id = Guid.NewGuid();
-        var existing = CreateRecord(CreateStdioInput(), false) with
+        var existing = CreateRecord(CreateStdioInput(), enabled: false) with
         {
             Id = id
         };
         store.GetByIdAsync(id, Arg.Any<CancellationToken>()).Returns(existing);
-        store.SetEnabledAsync(id, true, Arg.Any<CancellationToken>()).Returns(existing with
+        store.SetEnabledAsync(id, enabled: true, Arg.Any<CancellationToken>()).Returns(existing with
         {
             Enabled = true
         });
         manager.RefreshAsync(Arg.Any<CancellationToken>()).Returns(_ => throw new InvalidOperationException("connect failed"));
 
-        var result = await service.SetEnabledAsync(id, true).ConfigureAwait(false);
+        var result = await service.SetEnabledAsync(id, enabled: true).ConfigureAwait(false);
 
         AssertEx.True(result!.Enabled, "The toggle is committed even though the post-change refresh faulted.");
         await manager.Received(1).RefreshAsync(Arg.Any<CancellationToken>()).ConfigureAwait(false);
@@ -266,18 +266,18 @@ public sealed class McpServerServiceTests
         // OperationCanceledException is rethrown (not swallowed) so a caller-cancelled mutation surfaces the cancellation.
         var service = CreateService(out var store, out var manager);
         var id = Guid.NewGuid();
-        var existing = CreateRecord(CreateStdioInput(), false) with
+        var existing = CreateRecord(CreateStdioInput(), enabled: false) with
         {
             Id = id
         };
         store.GetByIdAsync(id, Arg.Any<CancellationToken>()).Returns(existing);
-        store.SetEnabledAsync(id, true, Arg.Any<CancellationToken>()).Returns(existing with
+        store.SetEnabledAsync(id, enabled: true, Arg.Any<CancellationToken>()).Returns(existing with
         {
             Enabled = true
         });
         manager.RefreshAsync(Arg.Any<CancellationToken>()).Returns(_ => throw new OperationCanceledException());
 
-        await AssertEx.ThrowsAsync<OperationCanceledException>(() => service.SetEnabledAsync(id, true)).ConfigureAwait(false);
+        await AssertEx.ThrowsAsync<OperationCanceledException>(() => service.SetEnabledAsync(id, enabled: true)).ConfigureAwait(false);
     }
 
     [Test]
@@ -285,7 +285,7 @@ public sealed class McpServerServiceTests
     {
         var service = CreateService(out var store, out var manager);
         var id = Guid.NewGuid();
-        store.GetByIdAsync(id, Arg.Any<CancellationToken>()).Returns(CreateRecord(CreateStdioInput(), true) with
+        store.GetByIdAsync(id, Arg.Any<CancellationToken>()).Returns(CreateRecord(CreateStdioInput(), enabled: true) with
         {
             Id = id
         });
@@ -302,7 +302,7 @@ public sealed class McpServerServiceTests
     {
         var service = CreateService(out var store, out var manager);
         var id = Guid.NewGuid();
-        store.GetByIdAsync(id, Arg.Any<CancellationToken>()).Returns(CreateRecord(CreateStdioInput(), false) with
+        store.GetByIdAsync(id, Arg.Any<CancellationToken>()).Returns(CreateRecord(CreateStdioInput(), enabled: false) with
         {
             Id = id
         });
@@ -365,20 +365,20 @@ public sealed class McpServerServiceTests
             McpTransportKind.Stdio,
             command,
             ["-y", "@modelcontextprotocol/server-filesystem"],
-            null,
+            WorkingDirectory: null,
             new Dictionary<string, string>(StringComparer.Ordinal),
-            null,
+            Url: null,
             enabled);
     }
 
     private static McpServerInput CreateHttpInput(string? url, string name = "RemoteTools", bool enabled = false)
     {
         return new McpServerInput(name,
-            null,
+            Description: null,
             McpTransportKind.Http,
-            null,
+            Command: null,
             [],
-            null,
+            WorkingDirectory: null,
             new Dictionary<string, string>(StringComparer.Ordinal),
             url,
             enabled);
@@ -396,8 +396,8 @@ public sealed class McpServerServiceTests
             input.Environment,
             input.Url,
             enabled,
-            1,
-            10,
-            10);
+            Version: 1,
+            CreatedAtUtc: 10,
+            UpdatedAtUtc: 10);
     }
 }

@@ -46,11 +46,11 @@ public sealed class AgentSkillServiceTests
         var service = new AgentSkillService(store);
 
         await AssertEx.ThrowsAsync<AgentSkillValidationException>(() =>
-            service.CreateAsync(new AgentSkillInput(new string('a', 65), "desc", "body"))).ConfigureAwait(false);
+            service.CreateAsync(new AgentSkillInput(new string(c: 'a', count: 65), "desc", "body"))).ConfigureAwait(false);
         await AssertEx.ThrowsAsync<AgentSkillValidationException>(() =>
-            service.CreateAsync(new AgentSkillInput("good-name", new string('a', 1025), "body"))).ConfigureAwait(false);
+            service.CreateAsync(new AgentSkillInput("good-name", new string(c: 'a', count: 1025), "body"))).ConfigureAwait(false);
         await AssertEx.ThrowsAsync<AgentSkillValidationException>(() =>
-            service.CreateAsync(new AgentSkillInput("good-name", "desc", new string('a', 20001)))).ConfigureAwait(false);
+            service.CreateAsync(new AgentSkillInput("good-name", "desc", new string(c: 'a', count: 20001)))).ConfigureAwait(false);
 
         await store.DidNotReceive().CreateAsync(Arg.Any<AgentSkillInput>(), Arg.Any<CancellationToken>()).ConfigureAwait(false);
     }
@@ -60,7 +60,9 @@ public sealed class AgentSkillServiceTests
     {
         var store = Substitute.For<IAgentSkillStore>();
         store.ListAsync(Arg.Any<CancellationToken>())
-             .Returns(Task.FromResult<IReadOnlyList<AgentSkillRecord>>([new AgentSkillRecord(Guid.NewGuid(), "kubernetes-debug", "d", "b", true, 1, 10, 10)]));
+             .Returns(Task.FromResult<IReadOnlyList<AgentSkillRecord>>([
+                 new AgentSkillRecord(Guid.NewGuid(), "kubernetes-debug", "d", "b", Enabled: true, Version: 1, CreatedAtUtc: 10, UpdatedAtUtc: 10)
+             ]));
         var service = new AgentSkillService(store);
 
         // Same name, different casing — NOCASE uniqueness must reject it.
@@ -75,7 +77,7 @@ public sealed class AgentSkillServiceTests
     {
         var store = CreateEmptyStore();
         var input = new AgentSkillInput("kubernetes-debug", "Debug k8s", "## Body");
-        var stored = new AgentSkillRecord(Guid.NewGuid(), input.Name, input.Description, input.Body, true, 1, 10, 10);
+        var stored = new AgentSkillRecord(Guid.NewGuid(), input.Name, input.Description, input.Body, Enabled: true, Version: 1, CreatedAtUtc: 10, UpdatedAtUtc: 10);
         store.CreateAsync(input, Arg.Any<CancellationToken>()).Returns(Task.FromResult(stored));
         var service = new AgentSkillService(store);
 
@@ -91,10 +93,10 @@ public sealed class AgentSkillServiceTests
         var id = Guid.NewGuid();
         var store = Substitute.For<IAgentSkillStore>();
         store.ListAsync(Arg.Any<CancellationToken>())
-             .Returns(Task.FromResult<IReadOnlyList<AgentSkillRecord>>([new AgentSkillRecord(id, "kubernetes-debug", "d", "b", true, 1, 10, 10)]));
+             .Returns(Task.FromResult<IReadOnlyList<AgentSkillRecord>>([new AgentSkillRecord(id, "kubernetes-debug", "d", "b", Enabled: true, Version: 1, CreatedAtUtc: 10, UpdatedAtUtc: 10)]));
         var input = new AgentSkillInput("kubernetes-debug", "Updated description", "## Updated body");
         store.UpdateAsync(id, input, Arg.Any<CancellationToken>())
-             .Returns(Task.FromResult<AgentSkillRecord?>(new AgentSkillRecord(id, input.Name, input.Description, input.Body, true, 2, 10, 20)));
+             .Returns(Task.FromResult<AgentSkillRecord?>(new AgentSkillRecord(id, input.Name, input.Description, input.Body, Enabled: true, Version: 2, CreatedAtUtc: 10, UpdatedAtUtc: 20)));
         var service = new AgentSkillService(store);
 
         // Re-saving the same skill with its own (unchanged) name must NOT trip the NOCASE-uniqueness guard.

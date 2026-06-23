@@ -164,6 +164,6 @@ internal sealed class LocalToolOfferProvider : ILocalToolOfferProvider
     private static Guid DeriveDeterministicId(string name)
     {
         var hash = SHA256.HashData(Encoding.UTF8.GetBytes($"local-tool:{name}"));
-        return new Guid(hash.AsSpan(0, 16));
+        return new Guid(hash.AsSpan(start: 0, length: 16));
     }
 }

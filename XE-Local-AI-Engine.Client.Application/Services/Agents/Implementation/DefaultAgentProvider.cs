@@ -11,7 +11,7 @@ using XE_Local_AI_Engine.Client.Persistence;
 /// </summary>
 internal sealed class DefaultAgentProvider : IDefaultAgentProvider, IDisposable
 {
-    private readonly SemaphoreSlim _gate = new(1, 1);
+    private readonly SemaphoreSlim _gate = new(initialCount: 1, maxCount: 1);
 
     private readonly IServiceScopeFactory _scopeFactory;
 

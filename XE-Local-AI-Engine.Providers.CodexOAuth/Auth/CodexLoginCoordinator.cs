@@ -26,7 +26,7 @@ public enum CodexLoginState
 public sealed record CodexLoginStatus(CodexLoginState State, Uri? AuthorizeUrl)
 {
     /// <summary>Idle status used before any login has been attempted.</summary>
-    public static CodexLoginStatus None { get; } = new(CodexLoginState.None, null);
+    public static CodexLoginStatus None { get; } = new(CodexLoginState.None, AuthorizeUrl: null);
 }
 
 /// <summary>
@@ -138,7 +138,7 @@ public sealed class CodexLoginCoordinator : ICodexLoginCoordinator, IDisposable
         try
         {
             await handle.Completion.ConfigureAwait(false);
-            if (UpdateStatusIfCurrent(cts, new CodexLoginStatus(CodexLoginState.Succeeded, null)))
+            if (UpdateStatusIfCurrent(cts, new CodexLoginStatus(CodexLoginState.Succeeded, AuthorizeUrl: null)))
             {
                 // Session persisted: notify the host so the active-cloud selector re-reads and routes the next
                 // send to Codex immediately (not after the snapshot TTL). Best-effort; never break login on it.
@@ -156,13 +156,13 @@ public sealed class CodexLoginCoordinator : ICodexLoginCoordinator, IDisposable
         {
             // Timed out or superseded — a superseding Start (if any) already set its own pending status,
             // and UpdateStatusIfCurrent ensures we do not clobber it.
-            UpdateStatusIfCurrent(cts, new CodexLoginStatus(CodexLoginState.Failed, null));
+            UpdateStatusIfCurrent(cts, new CodexLoginStatus(CodexLoginState.Failed, AuthorizeUrl: null));
         }
         catch (Exception exception)
         {
             // Never log token material; CodexAuthException messages are already redacted.
             _logger.LogWarning(exception, "Codex login did not complete successfully.");
-            UpdateStatusIfCurrent(cts, new CodexLoginStatus(CodexLoginState.Failed, null));
+            UpdateStatusIfCurrent(cts, new CodexLoginStatus(CodexLoginState.Failed, AuthorizeUrl: null));
         }
         finally
         {

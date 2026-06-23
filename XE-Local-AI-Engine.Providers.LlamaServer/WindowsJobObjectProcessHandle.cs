@@ -52,7 +52,7 @@ internal sealed partial class WindowsJobObjectProcessHandle : ILlamaServerProces
 
     public void Dispose()
     {
-        if (Interlocked.Exchange(ref _disposed, 1) != 0)
+        if (Interlocked.Exchange(ref _disposed, value: 1) != 0)
         {
             return;
         }
@@ -78,7 +78,7 @@ internal sealed partial class WindowsJobObjectProcessHandle : ILlamaServerProces
         SafeJobHandle? job = null;
         try
         {
-            job = CreateJobObjectW(IntPtr.Zero, null);
+            job = CreateJobObjectW(IntPtr.Zero, lpName: null);
             if (job.IsInvalid)
             {
                 throw new Win32Exception(Marshal.GetLastPInvokeError());
@@ -111,7 +111,7 @@ internal sealed partial class WindowsJobObjectProcessHandle : ILlamaServerProces
         var buffer = Marshal.AllocHGlobal(length);
         try
         {
-            Marshal.StructureToPtr(info, buffer, false);
+            Marshal.StructureToPtr(info, buffer, fDeleteOld: false);
             if (!SetInformationJobObject(job, JobObjectExtendedLimitInformation, buffer, (uint)length))
             {
                 throw new Win32Exception(Marshal.GetLastPInvokeError());

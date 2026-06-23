@@ -113,9 +113,9 @@ public sealed class AgentDefinitionServiceTests
         store.GetByIdAsync(id, Arg.Any<CancellationToken>()).Returns(record);
         store.ListAsync(Arg.Any<CancellationToken>()).Returns([record]);
 
-        AssertEx.Equal(true, await service.DeleteAsync(id).ConfigureAwait(false));
+        AssertEx.Equal(expected: true, await service.DeleteAsync(id).ConfigureAwait(false));
         AssertEx.Equal(record.Id, (await service.GetByIdAsync(id).ConfigureAwait(false))!.Id);
-        AssertEx.Equal(1, (await service.ListAsync().ConfigureAwait(false)).Count);
+        AssertEx.Equal(expected: 1, (await service.ListAsync().ConfigureAwait(false)).Count);
     }
 
     [Test]
@@ -350,17 +350,17 @@ public sealed class AgentDefinitionServiceTests
     {
         return new AgentDefinitionRecord(id,
             "Stored",
-            null,
+            Description: null,
             "Be helpful.",
             "qwen3:8b",
-            null,
+            ReasoningEffort: null,
             AgentDefinitionKind.Single,
             [],
             new Dictionary<string, bool>(),
-            null,
-            1,
-            10,
-            10);
+            OrchestrationTopologyJson: null,
+            Version: 1,
+            CreatedAtUtc: 10,
+            UpdatedAtUtc: 10);
     }
 
     private static AgentDefinitionRecord CreateRecord(AgentDefinitionInput input)
@@ -375,8 +375,8 @@ public sealed class AgentDefinitionServiceTests
             input.AllowedToolNames,
             input.ToolApprovals,
             input.OrchestrationTopologyJson,
-            1,
-            10,
-            10);
+            Version: 1,
+            CreatedAtUtc: 10,
+            UpdatedAtUtc: 10);
     }
 }

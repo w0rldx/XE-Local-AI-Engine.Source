@@ -59,7 +59,7 @@ internal sealed class GoldenConversationService(
             input.InputTurns,
             input.Assertion,
             input.Rubric,
-            false,
+            Enabled: false,
             GoldenConversationSource.Harvested,
             input.SourceMessageId,
             input.SourceConversationId);
@@ -86,7 +86,7 @@ internal sealed class GoldenConversationService(
             return null;
         }
 
-        return await _store.SetEnabledAsync(id, true, cancellationToken).ConfigureAwait(false);
+        return await _store.SetEnabledAsync(id, enabled: true, cancellationToken).ConfigureAwait(false);
     }
 
     public async Task<bool> DeleteAsync(Guid agentDefinitionId, Guid id, CancellationToken cancellationToken = default)

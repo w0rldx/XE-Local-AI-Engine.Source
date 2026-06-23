@@ -49,8 +49,8 @@ public sealed class ModelRecommendationScheduleSeederTests
         management.ListJobsAsync(Arg.Any<bool>(), Arg.Any<CancellationToken>())
                   .Returns(Task.FromResult<IReadOnlyList<ScheduledJobDefinitionRecord>>([
                       Definition(new ScheduledJobManagementInput(ModelRecommendationCheckHandler.TemplateIdValue,
-                          "existing", null, ScheduleKind.Manual, null, null, null, null, null, "UTC",
-                          SchedulerMisfirePolicy.SkipMissed, true, 600, """{"operation":"Recommend"}"""))
+                          "existing", Description: null, ScheduleKind.Manual, CronExpression: null, IntervalSeconds: null, RepeatCount: null, StartAtUtc: null, EndAtUtc: null, "UTC",
+                          SchedulerMisfirePolicy.SkipMissed, PreventOverlap: true, MaxRuntimeSeconds: 600, Parameters: """{"operation":"Recommend"}"""))
                   ]));
 
         var seeder = BuildSeeder(management);
@@ -75,7 +75,7 @@ public sealed class ModelRecommendationScheduleSeederTests
             input.TemplateId,
             input.DisplayName,
             input.Description,
-            true,
+            Enabled: true,
             input.ScheduleKind,
             input.CronExpression,
             input.IntervalSeconds,
@@ -88,9 +88,9 @@ public sealed class ModelRecommendationScheduleSeederTests
             input.MaxRuntimeSeconds,
             input.Parameters,
             ScheduledJobCreator.System,
-            0L,
-            0L,
-            null,
-            null);
+            CreatedAtUtc: 0L,
+            UpdatedAtUtc: 0L,
+            DisabledAtUtc: null,
+            DeletedAtUtc: null);
     }
 }

@@ -115,11 +115,11 @@ public sealed class InvocationRunnerTests
         var contentChunks = sender.SentEncryptedChunks.Where(chunk => chunk.Kind == EncryptedChunkEnvelopeV1.ContentKind).ToList();
         var reasoningChunks = sender.SentEncryptedChunks.Where(chunk => chunk.Kind == EncryptedChunkEnvelopeV1.ReasoningKind).ToList();
 
-        AssertEx.Equal(2, contentChunks.Count);
-        AssertEx.Equal(2, reasoningChunks.Count);
-        AssertEx.Equal(1, reasoningChunks[0].Sequence);
-        AssertEx.Equal(2, reasoningChunks[1].Sequence);
-        AssertEx.Equal(1, sender.SentEncryptedCompletions.Count);
+        AssertEx.Equal(expected: 2, contentChunks.Count);
+        AssertEx.Equal(expected: 2, reasoningChunks.Count);
+        AssertEx.Equal(expected: 1, reasoningChunks[0].Sequence);
+        AssertEx.Equal(expected: 2, reasoningChunks[1].Sequence);
+        AssertEx.Equal(expected: 1, sender.SentEncryptedCompletions.Count);
         AssertEx.True(sender.SentEncryptedCompletions[0].ReasoningFinalIv.HasValue);
         AssertEx.True(sender.SentEncryptedCompletions[0].ReasoningFinalCiphertext.HasValue);
         AssertEx.False(sender.SentEncryptedCompletions[0].TokenCounts.ContainsKey("outputTokens"));
@@ -166,7 +166,7 @@ public sealed class InvocationRunnerTests
         AssertEx.True(contentChunks.All(chunk => chunk.InvocationId == package.InvocationId));
         AssertEx.True(sender.SentChunks.Any(chunk => chunk.IsComplete));
 
-        AssertEx.Equal(1, sender.SentCompletions.Count);
+        AssertEx.Equal(expected: 1, sender.SentCompletions.Count);
         AssertEx.Equal(package.InvocationId, sender.SentCompletions[0].InvocationId);
         AssertEx.Equal("Hello world", sender.SentCompletions[0].FinalContent);
     }
@@ -185,11 +185,11 @@ public sealed class InvocationRunnerTests
 
         AssertEx.Empty(sender.SentEncryptedChunks);
         var reasoningChunks = sender.SentReasoningChunks.Where(chunk => !chunk.IsComplete).ToList();
-        AssertEx.Equal(2, reasoningChunks.Count);
+        AssertEx.Equal(expected: 2, reasoningChunks.Count);
         AssertEx.Equal("Let me think...", reasoningChunks[0].Token);
         AssertEx.Equal(" more thought", reasoningChunks[1].Token);
         AssertEx.True(sender.SentReasoningChunks.Any(chunk => chunk.IsComplete));
-        AssertEx.Equal(1, sender.SentCompletions.Count);
+        AssertEx.Equal(expected: 1, sender.SentCompletions.Count);
         AssertEx.Equal("Let me think... more thought", sender.SentCompletions[0].FinalReasoning);
         AssertEx.Null(sender.SentCompletions[0].ReasoningTokens);
         await dispatcher.Received().ReportInvocationThinkingChunkAsync(package.InvocationId, Arg.Any<string>());
@@ -211,10 +211,10 @@ public sealed class InvocationRunnerTests
 
         await RunPlainAsync(runner, package);
 
-        AssertEx.Equal(1, sender.SentCompletions.Count);
-        AssertEx.Equal(10, sender.SentCompletions[0].InputTokens);
-        AssertEx.Equal(2, sender.SentCompletions[0].OutputTokens);
-        AssertEx.Equal(12, sender.SentCompletions[0].TokensUsed);
+        AssertEx.Equal(expected: 1, sender.SentCompletions.Count);
+        AssertEx.Equal(expected: 10, sender.SentCompletions[0].InputTokens);
+        AssertEx.Equal(expected: 2, sender.SentCompletions[0].OutputTokens);
+        AssertEx.Equal(expected: 12, sender.SentCompletions[0].TokensUsed);
         // The authoritative token counts are asserted exactly; the new wall-clock duration arg is matched with Arg.Any
         // because the elapsed value is non-deterministic.
         await dispatcher.Received(1)
@@ -231,7 +231,7 @@ public sealed class InvocationRunnerTests
         await RunPlainAsync(runner, package);
 
         AssertEx.Empty(sender.SentEncryptedFailures);
-        AssertEx.Equal(1, sender.SentFailures.Count);
+        AssertEx.Equal(expected: 1, sender.SentFailures.Count);
         AssertEx.Equal(package.InvocationId, sender.SentFailures[0].InvocationId);
         AssertEx.Null(sender.SentFailures[0].MessageId);
     }
@@ -245,9 +245,9 @@ public sealed class InvocationRunnerTests
 
         await RunAsync(runner, package);
 
-        AssertEx.Equal(1, sender.SentEncryptedCompletions.Count);
+        AssertEx.Equal(expected: 1, sender.SentEncryptedCompletions.Count);
         AssertEx.Equal(package.ConversationId, sender.SentEncryptedCompletions[0].ConversationId);
-        AssertEx.Equal(1, sender.SentEncryptedCompletions[0].EpochVersion);
+        AssertEx.Equal(expected: 1, sender.SentEncryptedCompletions[0].EpochVersion);
     }
 
     [Test]
@@ -255,7 +255,7 @@ public sealed class InvocationRunnerTests
     {
         var sender = new MockHubMessageSender();
         var validator = Substitute.For<IRuntimePackageValidator>();
-        validator.Validate(Arg.Any<RuntimePackage>()).Returns(new RuntimePackageValidationResult(false, ["bad package"]));
+        validator.Validate(Arg.Any<RuntimePackage>()).Returns(new RuntimePackageValidationResult(isValid: false, ["bad package"]));
 
         var runner = CreateRunner(sender, validator: validator);
         var package = RuntimePackageBuilder.Valid().Build();
@@ -339,8 +339,8 @@ public sealed class InvocationRunnerTests
 
         var package = RuntimePackageBuilder.Valid()
                                            .WithUserMessage("late")
-                                           .WithConversationMessage(MessageRole.Assistant, "middle", 1)
-                                           .WithConversationMessage(MessageRole.User, "early", -1)
+                                           .WithConversationMessage(MessageRole.Assistant, "middle", sortOrder: 1)
+                                           .WithConversationMessage(MessageRole.User, "early", sortOrder: -1)
                                            .Build();
 
         var runner = CreateRunner(sender, factory);
@@ -381,7 +381,7 @@ public sealed class InvocationRunnerTests
         await runner.RunAsync(package);
 
         var definition = AssertEx.NotNull(capturedDefinition);
-        AssertEx.Equal(1, definition.Tools.Count);
+        AssertEx.Equal(expected: 1, definition.Tools.Count);
     }
 
     [Test]
@@ -393,7 +393,7 @@ public sealed class InvocationRunnerTests
             NodeName = "worker",
             MaxResponseSizeMb = 1,
             MaxPendingToolCallAgeMinutes = 5
-        }, agentUpdates: CreateUpdates(new string('x', (1024 * 1024) + 1)));
+        }, agentUpdates: CreateUpdates(new string(c: 'x', (1024 * 1024) + 1)));
         var package = RuntimePackageBuilder.Valid().Build();
 
         await RunAsync(runner, package);
@@ -411,7 +411,7 @@ public sealed class InvocationRunnerTests
             NodeName = "worker",
             MaxResponseSizeMb = 1,
             MaxPendingToolCallAgeMinutes = 5
-        }, agentUpdates: CreateMixedUpdates((Text: null, Thinking: new string('x', (1024 * 1024) + 1))));
+        }, agentUpdates: CreateMixedUpdates((Text: null, Thinking: new string(c: 'x', (1024 * 1024) + 1))));
         var package = RuntimePackageBuilder.Valid().Build();
 
         await RunAsync(runner, package);
@@ -467,7 +467,7 @@ public sealed class InvocationRunnerTests
 
         var runTask = RunAsync(runner, package);
         await started.Task;
-        AssertEx.Equal(1, runner.ActiveInvocationCount);
+        AssertEx.Equal(expected: 1, runner.ActiveInvocationCount);
 
         var drainTask = runner.DrainActiveInvocationsAsync(TimeSpan.FromSeconds(2));
         AssertEx.False(drainTask.IsCompleted);
@@ -476,7 +476,7 @@ public sealed class InvocationRunnerTests
 
         AssertEx.True(await drainTask);
         await runTask;
-        AssertEx.Equal(0, runner.ActiveInvocationCount);
+        AssertEx.Equal(expected: 0, runner.ActiveInvocationCount);
     }
 
     [Test]
@@ -495,12 +495,12 @@ public sealed class InvocationRunnerTests
 
         AssertEx.False(drained);
         AssertEx.False(runTask.IsCompleted);
-        AssertEx.Equal(1, runner.ActiveInvocationCount);
+        AssertEx.Equal(expected: 1, runner.ActiveInvocationCount);
 
         gate.SetResult();
         await runTask.WaitAsync(TimeSpan.FromSeconds(2));
 
-        AssertEx.Equal(0, runner.ActiveInvocationCount);
+        AssertEx.Equal(expected: 0, runner.ActiveInvocationCount);
         AssertEx.Empty(sender.SentEncryptedFailures);
     }
 
@@ -549,7 +549,7 @@ public sealed class InvocationRunnerTests
         var sender = new MockHubMessageSender();
         var factory = Substitute.For<IInvocationAgentFactory>();
         factory.CreateAsync(Arg.Any<InvocationAgentDefinition>(), Arg.Any<CancellationToken>())
-               .Returns(_ => Task.FromException<InvocationAgentContext>(new HttpRequestException("not found", null, HttpStatusCode.NotFound)));
+               .Returns(_ => Task.FromException<InvocationAgentContext>(new HttpRequestException("not found", inner: null, HttpStatusCode.NotFound)));
 
         var runner = CreateRunner(sender, factory);
 
@@ -567,7 +567,7 @@ public sealed class InvocationRunnerTests
         var sender = new MockHubMessageSender();
         var factory = Substitute.For<IInvocationAgentFactory>();
         factory.CreateAsync(Arg.Any<InvocationAgentDefinition>(), Arg.Any<CancellationToken>())
-               .Returns(_ => Task.FromException<InvocationAgentContext>(new HttpRequestException(providerMessage, null, HttpStatusCode.BadRequest)));
+               .Returns(_ => Task.FromException<InvocationAgentContext>(new HttpRequestException(providerMessage, inner: null, HttpStatusCode.BadRequest)));
 
         var runner = CreateRunner(sender, factory);
 
@@ -584,7 +584,7 @@ public sealed class InvocationRunnerTests
         var factory = Substitute.For<IInvocationAgentFactory>();
         // The blob path in the message must never reach the surfaced error; the status code alone drives the mapping.
         factory.CreateAsync(Arg.Any<InvocationAgentDefinition>(), Arg.Any<CancellationToken>())
-               .Returns(_ => Task.FromException<InvocationAgentContext>(new HttpRequestException("unable to load model /root/.ollama/models/blobs/sha256-deadbeef", null,
+               .Returns(_ => Task.FromException<InvocationAgentContext>(new HttpRequestException("unable to load model /root/.ollama/models/blobs/sha256-deadbeef", inner: null,
                    HttpStatusCode.InternalServerError)));
 
         var runner = CreateRunner(sender, factory);
@@ -601,7 +601,7 @@ public sealed class InvocationRunnerTests
         var sender = new MockHubMessageSender();
         var factory = Substitute.For<IInvocationAgentFactory>();
         factory.CreateAsync(Arg.Any<InvocationAgentDefinition>(), Arg.Any<CancellationToken>())
-               .Returns(_ => Task.FromException<InvocationAgentContext>(new HttpRequestException("unable to load model /root/.ollama/models/blobs/sha256-deadbeef", null,
+               .Returns(_ => Task.FromException<InvocationAgentContext>(new HttpRequestException("unable to load model /root/.ollama/models/blobs/sha256-deadbeef", inner: null,
                    HttpStatusCode.InternalServerError)));
 
         var runner = CreateRunner(sender, factory);
@@ -680,7 +680,7 @@ public sealed class InvocationRunnerTests
     {
         var sender = new MockHubMessageSender();
         var factory = Substitute.For<IInvocationAgentFactory>();
-        var longMessage = new string('x', 600);
+        var longMessage = new string(c: 'x', count: 600);
         factory.CreateAsync(Arg.Any<InvocationAgentDefinition>(), Arg.Any<CancellationToken>())
                .Returns(_ => Task.FromException<InvocationAgentContext>(new InvalidOperationException(longMessage)));
 
@@ -689,7 +689,7 @@ public sealed class InvocationRunnerTests
         await RunAsync(runner, RuntimePackageBuilder.Valid().Build());
 
         var failure = sender.SentEncryptedFailures.Single();
-        AssertEx.Equal(512, failure.Error.Length);
+        AssertEx.Equal(expected: 512, failure.Error.Length);
     }
 
     [Test]
@@ -710,10 +710,10 @@ public sealed class InvocationRunnerTests
         await AssertEx.EventuallyAsync(() => sender.SentApprovals.Count == 1, TimeSpan.FromSeconds(5));
 
         var requestId = sender.SentApprovals.Single().RequestId;
-        runner.ResolveApprovalResult(new ApprovalResolvedEvent(requestId, true));
+        runner.ResolveApprovalResult(new ApprovalResolvedEvent(requestId, Approved: true));
         await runTask;
 
-        AssertEx.Equal(2, segment, "the runner must re-invoke the agent threadlessly after the approval decision");
+        AssertEx.Equal(expected: 2, segment, "the runner must re-invoke the agent threadlessly after the approval decision");
         await dispatcher.Received(1).ReportApprovalRequestedAsync(Arg.Is<ApprovalRequestPayload>(payload => payload.InvocationId == invocationId));
     }
 
@@ -733,7 +733,7 @@ public sealed class InvocationRunnerTests
         await singleAgentFactory.DidNotReceive().CreateAsync(Arg.Any<InvocationAgentDefinition>(), Arg.Any<CancellationToken>());
         await dispatcher.Received(1).ReportInvocationStreamChunkAsync(package.InvocationId, "Hello");
         await dispatcher.Received(1).ReportInvocationStreamChunkAsync(package.InvocationId, " world");
-        AssertEx.Equal(1, sender.SentCompletions.Count);
+        AssertEx.Equal(expected: 1, sender.SentCompletions.Count);
         AssertEx.Equal("Hello world", sender.SentCompletions[0].FinalContent);
         AssertEx.True(sessionRef.Value!.Disposed, "The orchestration session must be disposed after the run.");
     }
@@ -773,13 +773,13 @@ public sealed class InvocationRunnerTests
         await AssertEx.EventuallyAsync(() => sender.SentApprovals.Count == 1, TimeSpan.FromSeconds(5));
 
         var requestId = sender.SentApprovals.Single().RequestId;
-        runner.ResolveApprovalResult(new ApprovalResolvedEvent(requestId, true));
+        runner.ResolveApprovalResult(new ApprovalResolvedEvent(requestId, Approved: true));
         await runTask.WaitAsync(TimeSpan.FromSeconds(5));
 
         await dispatcher.Received(1).ReportApprovalRequestedAsync(Arg.Is<ApprovalRequestPayload>(payload => payload.InvocationId == invocationId));
         // The approval card must name the tool, not the opaque correlation id (single-agent UX parity).
         AssertEx.Contains(sender.SentApprovals.Single().Description, "run_in_agent_home");
-        AssertEx.Equal(1, sessionRef.Value!.ApprovalResponses.Count);
+        AssertEx.Equal(expected: 1, sessionRef.Value!.ApprovalResponses.Count);
         AssertEx.True(sessionRef.Value.ApprovalResponses[0].Approved, "An approved decision must be forwarded to the session as approved=true.");
         AssertEx.Equal("call-1", sessionRef.Value.ApprovalResponses[0].RequestId);
         // Reaching this asserts the gated post-approval portion streamed — i.e. the resume drove the held session.
@@ -797,8 +797,8 @@ public sealed class InvocationRunnerTests
 
         await RunPlainAsync(runner, package);
 
-        AssertEx.Equal(0, sender.SentCompletions.Count);
-        AssertEx.Equal(1, sender.SentFailures.Count);
+        AssertEx.Equal(expected: 0, sender.SentCompletions.Count);
+        AssertEx.Equal(expected: 1, sender.SentFailures.Count);
         AssertEx.Equal(package.InvocationId, sender.SentFailures[0].InvocationId);
         AssertEx.False(sender.SentFailures[0].Error.Contains("secret", StringComparison.Ordinal),
             "The raw orchestration failure detail must not be forwarded to the client.");
@@ -817,7 +817,7 @@ public sealed class InvocationRunnerTests
         await AssertEx.EventuallyAsync(() => sender.SentApprovals.Count == 1, TimeSpan.FromSeconds(5));
 
         var approvalRequestId = sender.SentApprovals.Single().RequestId;
-        runner.ResolveApprovalResult(new ApprovalResolvedEvent(approvalRequestId, true));
+        runner.ResolveApprovalResult(new ApprovalResolvedEvent(approvalRequestId, Approved: true));
         await AssertEx.EventuallyAsync(() => sender.SentToolCalls.Count == 1, TimeSpan.FromSeconds(5));
 
         var requestId = sender.SentToolCalls.Single().RequestId;
@@ -849,7 +849,7 @@ public sealed class InvocationRunnerTests
         await AssertEx.EventuallyAsync(() => sender.SentApprovals.Count == 1, TimeSpan.FromSeconds(5));
 
         var approvalRequestId = sender.SentApprovals.Single().RequestId;
-        runner.ResolveApprovalResult(new ApprovalResolvedEvent(approvalRequestId, true));
+        runner.ResolveApprovalResult(new ApprovalResolvedEvent(approvalRequestId, Approved: true));
         await AssertEx.EventuallyAsync(() => sender.SentToolCalls.Count == 1, TimeSpan.FromSeconds(5));
 
         var requestId = sender.SentToolCalls.Single().RequestId;
@@ -948,7 +948,7 @@ public sealed class InvocationRunnerTests
         // requiresApproval: false guarantees the Requested lifecycle fires before the result-wait timeout, so the
         // timeout path must emit a matching Completed (IsError=true) to clear the UI card.
         await AssertEx.ThrowsAsync<InvocationRunner.WorkerToolCallException>(() =>
-            runner.ExecuteApiToolCallAsync(invocationId, "test-tool", "{}", false));
+            runner.ExecuteApiToolCallAsync(invocationId, "test-tool", "{}", requiresApproval: false));
 
         await dispatcher.Received(1).ReportToolCallLifecycleAsync(Arg.Is<ToolCallLifecyclePayload>(payload =>
             payload.InvocationId == invocationId
@@ -970,10 +970,10 @@ public sealed class InvocationRunnerTests
         var runner = CreateRunner(sender, eventDispatcher: dispatcher);
         var invocationId = Guid.NewGuid();
 
-        var task = runner.ExecuteApiToolCallAsync(invocationId, "test-tool", "{}", false);
+        var task = runner.ExecuteApiToolCallAsync(invocationId, "test-tool", "{}", requiresApproval: false);
         await AssertEx.EventuallyAsync(() => sender.SentToolCalls.Count == 1, TimeSpan.FromSeconds(5));
 
-        AssertEx.Equal(0, sender.SentApprovals.Count);
+        AssertEx.Equal(expected: 0, sender.SentApprovals.Count);
 
         var requestId = sender.SentToolCalls.Single().RequestId;
         runner.ResolveToolCallResult(new ToolCallResultEvent
@@ -1002,13 +1002,13 @@ public sealed class InvocationRunnerTests
         var runner = CreateRunner(sender);
         var invocationId = Guid.NewGuid();
 
-        var task = runner.ExecuteApiToolCallAsync(invocationId, "test-tool", "{}", true);
+        var task = runner.ExecuteApiToolCallAsync(invocationId, "test-tool", "{}", requiresApproval: true);
         await AssertEx.EventuallyAsync(() => sender.SentApprovals.Count == 1, TimeSpan.FromSeconds(5));
 
-        AssertEx.Equal(0, sender.SentToolCalls.Count);
+        AssertEx.Equal(expected: 0, sender.SentToolCalls.Count);
 
         var approvalRequestId = sender.SentApprovals.Single().RequestId;
-        runner.ResolveApprovalResult(new ApprovalResolvedEvent(approvalRequestId, true));
+        runner.ResolveApprovalResult(new ApprovalResolvedEvent(approvalRequestId, Approved: true));
         await AssertEx.EventuallyAsync(() => sender.SentToolCalls.Count == 1, TimeSpan.FromSeconds(5));
 
         var requestId = sender.SentToolCalls.Single().RequestId;
@@ -1142,7 +1142,7 @@ public sealed class InvocationRunnerTests
 
     private static async Task RunAsync(InvocationRunner runner, RuntimePackage package, CancellationToken cancellationToken = default)
     {
-        using var context = InvocationExecutionContext.Create(package, Guid.NewGuid(), 1, new byte[32]);
+        using var context = InvocationExecutionContext.Create(package, Guid.NewGuid(), epochVersion: 1, new byte[32]);
         await runner.RunAsync(context, cancellationToken);
     }
 

@@ -9,7 +9,6 @@ using XE_Local_AI_Engine.Providers.Abstractions;
 ///     exclusion is an entry whose PERSISTED effective kind (<c>OverrideKind ?? DetectedKind</c>) is
 ///     <see cref="ModelKind.Embedding" />. A model absent from the classifications table (no row) or whose effective
 ///     kind is Unknown or Chat stays eligible — exactly matching the chat picker's rule.
-///
 ///     <para>
 ///         This resolver reads only from <see cref="IModelClassificationStore" /> (a plain DB read) and NEVER triggers
 ///         the Ollama <c>/api/show</c> detection probe. Passing <c>Digest=null</c> to
@@ -23,6 +22,7 @@ public sealed class LocalDefaultChatModelResolver(
 {
     private readonly IGgufModelStore _ggufModelStore =
         ggufModelStore ?? throw new ArgumentNullException(nameof(ggufModelStore));
+
     private readonly IModelClassificationStore _modelClassificationStore =
         modelClassificationStore ?? throw new ArgumentNullException(nameof(modelClassificationStore));
 
@@ -76,8 +76,7 @@ public sealed class LocalDefaultChatModelResolver(
     ///     Returns <c>true</c> when the PERSISTED effective kind (<c>OverrideKind ?? DetectedKind</c>) is
     ///     <see cref="ModelKind.Embedding" />. An absent row returns <c>false</c> (eligible).
     /// </summary>
-    private static bool IsPersistedEmbedding(
-        IReadOnlyDictionary<string, ModelClassificationRecord> index,
+    private static bool IsPersistedEmbedding(IReadOnlyDictionary<string, ModelClassificationRecord> index,
         string modelName)
     {
         if (!index.TryGetValue(modelName, out var record))

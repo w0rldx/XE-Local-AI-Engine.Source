@@ -27,7 +27,7 @@ public sealed partial class WorkerHubConnection : IWorkerHubConnection
     private readonly INodeKeyRegistry _nodeKeyRegistry;
     private readonly IOptions<CentralPlatformOptions> _platformOptions;
     private readonly TimeProvider _timeProvider;
-    private readonly SemaphoreSlim _tokenRefreshLock = new(1, 1);
+    private readonly SemaphoreSlim _tokenRefreshLock = new(initialCount: 1, maxCount: 1);
     private readonly ITokenStore _tokenStore;
     private readonly IWorkerTokenRefreshService _workerTokenRefreshService;
 
@@ -89,7 +89,7 @@ public sealed partial class WorkerHubConnection : IWorkerHubConnection
 
         // A fresh connect attempt (e.g. after re-pairing) clears any prior revocation latch so the new
         // reconnect policy instance is not pre-poisoned.
-        Volatile.Write(ref _credentialsRevoked, false);
+        Volatile.Write(ref _credentialsRevoked, value: false);
 
         bool tokenIsFresh;
         try

@@ -129,7 +129,7 @@ internal static class DesktopBootstrap
     /// </summary>
     private static string? ResolveFirstRunModelIdentity(IConfiguration configuration)
     {
-        if (!configuration.GetValue(FirstRunModelEnabledKey, true))
+        if (!configuration.GetValue(FirstRunModelEnabledKey, defaultValue: true))
         {
             return null;
         }
@@ -250,7 +250,7 @@ internal static class DesktopBootstrap
         {
             File.WriteAllText(tempPath, base64);
             ProtectKeyFile(tempPath);
-            File.Move(tempPath, keyPath, true);
+            File.Move(tempPath, keyPath, overwrite: true);
         }
         catch (Exception exception) when (exception is IOException or UnauthorizedAccessException)
         {

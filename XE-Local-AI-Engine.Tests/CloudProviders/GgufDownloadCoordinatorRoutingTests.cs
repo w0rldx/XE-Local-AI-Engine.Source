@@ -59,7 +59,7 @@ public sealed class GgufDownloadCoordinatorRoutingTests
 
         await WaitForPhaseAsync(coordinator, ticket.ModelName, GgufDownloadPhase.Failed);
 
-        AssertEx.Equal(0, mapStore.Mappings.Count);
+        AssertEx.Equal(expected: 0, mapStore.Mappings.Count);
     }
 
     private static GgufDownloadCoordinator BuildCoordinator(IGgufModelStore store, IModelProviderMapStore mapStore)
@@ -117,7 +117,7 @@ public sealed class GgufDownloadCoordinatorRoutingTests
 
             var quant = request.Quant ?? Quant;
             var name = GgufModelName.Format(request.RepoId, quant);
-            return Task.FromResult(new GgufModelHandle(name, "/fake/m.gguf", quant, 1, null, "rev", GgufRole.Chat));
+            return Task.FromResult(new GgufModelHandle(name, "/fake/m.gguf", quant, SizeBytes: 1, Sha256: null, "rev", GgufRole.Chat));
         }
 
         public Task DeleteModelAsync(string modelName, CancellationToken ct)
@@ -143,13 +143,13 @@ public sealed class GgufDownloadCoordinatorRoutingTests
 
         public Task<IReadOnlyList<ModelProviderMapRecord>> ListAsync(CancellationToken cancellationToken = default)
         {
-            return Task.FromResult<IReadOnlyList<ModelProviderMapRecord>>(Mappings.Select(pair => new ModelProviderMapRecord(pair.Key, pair.Value, 0)).ToArray());
+            return Task.FromResult<IReadOnlyList<ModelProviderMapRecord>>(Mappings.Select(pair => new ModelProviderMapRecord(pair.Key, pair.Value, UpdatedAtUtc: 0)).ToArray());
         }
 
         public Task<ModelProviderMapRecord> UpsertAsync(string modelName, string providerName, CancellationToken cancellationToken = default)
         {
             Mappings[modelName] = providerName;
-            return Task.FromResult(new ModelProviderMapRecord(modelName, providerName, 0));
+            return Task.FromResult(new ModelProviderMapRecord(modelName, providerName, UpdatedAtUtc: 0));
         }
     }
 }

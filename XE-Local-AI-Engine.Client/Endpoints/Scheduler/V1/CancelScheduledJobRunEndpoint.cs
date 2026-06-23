@@ -42,7 +42,7 @@ public sealed class CancelScheduledJobRunEndpoint(IScheduledJobManagementService
             default:
                 // Requested / RequestedButNotRunning — the request was recorded; report the stamped timestamp.
                 var run = await _scheduledJobManagementService.GetRunAsync(req.RunId, ct).ConfigureAwait(false);
-                await Send.ResultAsync(Results.Accepted(null, new ScheduledJobRunCancelResponse
+                await Send.ResultAsync(Results.Accepted(uri: null, new ScheduledJobRunCancelResponse
                 {
                     Outcome = outcome.ToString(),
                     CancellationRequestedAtUtc = run?.CancellationRequestedAtUtc

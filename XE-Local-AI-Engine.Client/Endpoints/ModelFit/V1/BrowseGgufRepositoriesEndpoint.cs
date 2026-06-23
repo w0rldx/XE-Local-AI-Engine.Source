@@ -35,7 +35,7 @@ public sealed class BrowseGgufRepositoriesEndpoint(
 
     public override async Task HandleAsync(BrowseGgufRepositoriesRequest req, CancellationToken ct)
     {
-        var limit = req.Limit is { } requested ? Math.Clamp(requested, 1, MaxLimit) : DefaultLimit;
+        var limit = req.Limit is { } requested ? Math.Clamp(requested, min: 1, MaxLimit) : DefaultLimit;
 
         var query = new GgufSearchQuery
         {

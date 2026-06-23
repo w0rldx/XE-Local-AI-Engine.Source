@@ -232,7 +232,7 @@ internal sealed class InvocationAgentFactory : IInvocationAgentFactory
         }
 
         // Temperature is accepted in [0, 2] (the UI cap); out-of-range → skip and keep the model default.
-        if (IsValidRangedFloat(sampling.Temperature, 0f, 2f))
+        if (IsValidRangedFloat(sampling.Temperature, min: 0f, max: 2f))
         {
             chatOptions.Temperature = sampling.Temperature;
         }
@@ -248,12 +248,12 @@ internal sealed class InvocationAgentFactory : IInvocationAgentFactory
         }
 
         // Penalties are accepted in [-2, 2] (the UI cap); out-of-range → skip and keep the model default.
-        if (IsValidRangedFloat(sampling.PresencePenalty, -2f, 2f))
+        if (IsValidRangedFloat(sampling.PresencePenalty, min: -2f, max: 2f))
         {
             chatOptions.PresencePenalty = sampling.PresencePenalty;
         }
 
-        if (IsValidRangedFloat(sampling.FrequencyPenalty, -2f, 2f))
+        if (IsValidRangedFloat(sampling.FrequencyPenalty, min: -2f, max: 2f))
         {
             chatOptions.FrequencyPenalty = sampling.FrequencyPenalty;
         }
@@ -310,7 +310,7 @@ internal sealed class InvocationAgentFactory : IInvocationAgentFactory
 
     private static bool IsValidUnitFloat(float? value)
     {
-        return IsValidRangedFloat(value, 0f, 1f);
+        return IsValidRangedFloat(value, min: 0f, max: 1f);
     }
 
     /// <summary>

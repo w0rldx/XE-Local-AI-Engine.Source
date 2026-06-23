@@ -24,7 +24,7 @@ internal sealed class PlaybookActionService(
         // cannot be bypassed via direct CRUD. A create-as-Disabled never touches the cap.
         if (input.State == PlaybookActionState.Enabled)
         {
-            await EnsureBelowEnabledCapAsync(input.AgentDefinitionId, null, cancellationToken).ConfigureAwait(false);
+            await EnsureBelowEnabledCapAsync(input.AgentDefinitionId, excludedActionId: null, cancellationToken).ConfigureAwait(false);
         }
 
         return await _store.AddAsync(input, cancellationToken).ConfigureAwait(false);
@@ -134,13 +134,13 @@ internal sealed class PlaybookActionService(
         var pending = await LoadPendingSuggestionAsync(agentDefinitionId, id, cancellationToken).ConfigureAwait(false);
         if (pending is null)
         {
-            return new PlaybookPromotionResult(PlaybookPromotionStatus.NotFound, null);
+            return new PlaybookPromotionResult(PlaybookPromotionStatus.NotFound, Record: null);
         }
 
         // No eval since authoring/edit → promotion is not yet provable. (UpdateSuggestedAsync clears EvalResult on edit.)
         if (string.IsNullOrWhiteSpace(pending.EvalResult))
         {
-            return new PlaybookPromotionResult(PlaybookPromotionStatus.EvalRequired, null);
+            return new PlaybookPromotionResult(PlaybookPromotionStatus.EvalRequired, Record: null);
         }
 
         PlaybookEvalResult? evalResult;
@@ -151,23 +151,23 @@ internal sealed class PlaybookActionService(
         catch (JsonException)
         {
             // A result we cannot read cannot prove no-regression; require a fresh eval rather than promote blindly.
-            return new PlaybookPromotionResult(PlaybookPromotionStatus.EvalRequired, null);
+            return new PlaybookPromotionResult(PlaybookPromotionStatus.EvalRequired, Record: null);
         }
 
         if (evalResult is null)
         {
-            return new PlaybookPromotionResult(PlaybookPromotionStatus.EvalRequired, null);
+            return new PlaybookPromotionResult(PlaybookPromotionStatus.EvalRequired, Record: null);
         }
 
         // Staleness backstop behind clear-on-edit: the recorded pass must be for the action's current content snapshot.
         if (evalResult.ActionVersionAtEval != pending.Version)
         {
-            return new PlaybookPromotionResult(PlaybookPromotionStatus.EvalStale, null);
+            return new PlaybookPromotionResult(PlaybookPromotionStatus.EvalStale, Record: null);
         }
 
         if (!evalResult.Passed)
         {
-            return new PlaybookPromotionResult(PlaybookPromotionStatus.EvalRegressed, null);
+            return new PlaybookPromotionResult(PlaybookPromotionStatus.EvalRegressed, Record: null);
         }
 
         // Hard cap on enabled actions: the eval may pass, but if the agent is already at MaxEnabledActions the
@@ -176,13 +176,13 @@ internal sealed class PlaybookActionService(
         var enabledCount = await CountEnabledAsync(agentDefinitionId, cancellationToken).ConfigureAwait(false);
         if (enabledCount >= _actionOptions.MaxEnabledActions)
         {
-            return new PlaybookPromotionResult(PlaybookPromotionStatus.CapReached, null);
+            return new PlaybookPromotionResult(PlaybookPromotionStatus.CapReached, Record: null);
         }
 
         // Version bumps because State changes; carry the EvalResult through the transition for audit.
         var promoted = await TransitionSuggestedAsync(agentDefinitionId, id, PlaybookActionState.Enabled, pending.EvalResult, cancellationToken).ConfigureAwait(false);
         return promoted is null
-            ? new PlaybookPromotionResult(PlaybookPromotionStatus.NotFound, null)
+            ? new PlaybookPromotionResult(PlaybookPromotionStatus.NotFound, Record: null)
             : new PlaybookPromotionResult(PlaybookPromotionStatus.Promoted, promoted);
     }
 
@@ -218,7 +218,7 @@ internal sealed class PlaybookActionService(
     {
         // Reject moves the action to Archived (provenance preserved rather than hard-deleted). A recorded eval result
         // is irrelevant once archived, so clear it rather than let a stale pass linger on the rejected record.
-        return TransitionSuggestedAsync(agentDefinitionId, id, PlaybookActionState.Archived, null, cancellationToken);
+        return TransitionSuggestedAsync(agentDefinitionId, id, PlaybookActionState.Archived, evalResult: null, cancellationToken);
     }
 
     public async Task<PlaybookActionRecord?> UpdateSuggestedAsync(SuggestedActionEditInput input, CancellationToken cancellationToken = default)

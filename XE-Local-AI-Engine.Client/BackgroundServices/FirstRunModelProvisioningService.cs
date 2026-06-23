@@ -101,7 +101,7 @@ public sealed class FirstRunModelProvisioningService : BackgroundService
             return;
         }
 
-        if (!_configuration.GetValue("FirstRunModel:Enabled", true))
+        if (!_configuration.GetValue("FirstRunModel:Enabled", defaultValue: true))
         {
             return;
         }

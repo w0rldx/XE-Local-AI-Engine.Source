@@ -201,9 +201,9 @@ public sealed class EnvelopeCryptoService : IEnvelopeCryptoService
     private static byte[] UnwrapKeyWithAesKw(ReadOnlySpan<byte> wrappedEpochKey, ReadOnlySpan<byte> wrapKey)
     {
         IWrapper wrapEngine = new Rfc3394WrapEngine(new AesEngine());
-        wrapEngine.Init(false, new KeyParameter(wrapKey.ToArray()));
+        wrapEngine.Init(forWrapping: false, new KeyParameter(wrapKey.ToArray()));
 
-        var epochKey = wrapEngine.Unwrap(wrappedEpochKey.ToArray(), 0, wrappedEpochKey.Length);
+        var epochKey = wrapEngine.Unwrap(wrappedEpochKey.ToArray(), inOff: 0, wrappedEpochKey.Length);
         if (epochKey.Length != EpochKeyLength)
         {
             CryptographicOperations.ZeroMemory(epochKey);
@@ -223,7 +223,7 @@ public sealed class EnvelopeCryptoService : IEnvelopeCryptoService
         var (ciphertext, tag) = _cipher.Encrypt(epochKey, nonce, plaintext, aad);
 
         var combined = new byte[ciphertext.Length + tag.Length];
-        ciphertext.CopyTo(combined, 0);
+        ciphertext.CopyTo(combined, index: 0);
         tag.CopyTo(combined, ciphertext.Length);
         return (nonce, combined);
     }

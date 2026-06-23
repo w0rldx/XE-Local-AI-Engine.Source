@@ -19,7 +19,7 @@ public sealed class NodeChatOriginMigrationTests : IDisposable
     {
         if (Directory.Exists(_rootPath))
         {
-            Directory.Delete(_rootPath, true);
+            Directory.Delete(_rootPath, recursive: true);
         }
 
         _keyHolder.Dispose();
@@ -149,9 +149,9 @@ public sealed class NodeChatOriginMigrationTests : IDisposable
             command.Parameters.AddWithValue("$conversation_id", conversationId.ToString());
             command.Parameters.AddWithValue("$title", "Historical");
             command.Parameters.AddWithValue("$user_id", "node");
-            command.Parameters.AddWithValue("$created_at_utc", 1234L);
-            command.Parameters.AddWithValue("$last_seen_utc", 1234L);
-            command.Parameters.AddWithValue("$purged", false);
+            command.Parameters.AddWithValue("$created_at_utc", value: 1234L);
+            command.Parameters.AddWithValue("$last_seen_utc", value: 1234L);
+            command.Parameters.AddWithValue("$purged", value: false);
 
             await command.ExecuteNonQueryAsync().ConfigureAwait(false);
         }
@@ -164,12 +164,12 @@ public sealed class NodeChatOriginMigrationTests : IDisposable
                                   """;
             command.Parameters.AddWithValue("$message_id", messageId.ToString());
             command.Parameters.AddWithValue("$conversation_id", conversationId.ToString());
-            command.Parameters.AddWithValue("$sequence", 1);
+            command.Parameters.AddWithValue("$sequence", value: 1);
             command.Parameters.AddWithValue("$role", "assistant");
             command.Parameters.AddWithValue("$content", Encoding.UTF8.GetBytes("historical content"));
             command.Parameters.AddWithValue("$metadata_json", DBNull.Value);
-            command.Parameters.AddWithValue("$created_at_utc", 1234L);
-            command.Parameters.AddWithValue("$updated_at_utc", 1234L);
+            command.Parameters.AddWithValue("$created_at_utc", value: 1234L);
+            command.Parameters.AddWithValue("$updated_at_utc", value: 1234L);
             command.Parameters.AddWithValue("$status", NodeMessageStatus.Completed);
 
             await command.ExecuteNonQueryAsync().ConfigureAwait(false);
@@ -200,7 +200,7 @@ public sealed class NodeChatOriginMigrationTests : IDisposable
     private static async Task<IReadOnlySet<string>> ReadColumnNamesAsync(SqliteCommand command)
     {
         await using var reader = await command.ExecuteReaderAsync().ConfigureAwait(false);
-        return Enumerable.Range(0, reader.FieldCount)
+        return Enumerable.Range(start: 0, reader.FieldCount)
                          .Select(reader.GetName)
                          .ToHashSet(StringComparer.Ordinal);
     }

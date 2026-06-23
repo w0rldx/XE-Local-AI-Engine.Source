@@ -20,13 +20,13 @@ internal sealed class TestEchoScheduledJobHandler : IScheduledJobHandler
     public ScheduledJobTemplateDescriptor Descriptor { get; } = new(Id,
         "Echo (test)",
         "No-op test handler that records invocations.",
-        null,
-        null,
+        ParameterSchema: null,
+        DefaultParameters: null,
         [ScheduleKind.OneShot, ScheduleKind.Cron, ScheduleKind.Manual],
         ScheduleKind.OneShot,
         SchedulerMisfirePolicy.SkipMissed,
-        null,
-        true);
+        DefaultMaxRuntimeSeconds: null,
+        AllowManualTrigger: true);
 
     public Task ExecuteAsync(ScheduledJobExecutionContext context, CancellationToken cancellationToken)
     {

@@ -86,14 +86,14 @@ public sealed class DefaultAgentSeeder : IHostedService
     private AgentDefinitionInput BuildSeedInput()
     {
         return new AgentDefinitionInput(AgentDefaults.DefaultAgentName,
-            null,
+            Description: null,
             LoadEmbeddedInstructions(),
-            null,
-            null,
+            ModelProfile: null,
+            ReasoningEffort: null,
             AgentDefinitionKind.Single,
             [],
             new Dictionary<string, bool>(StringComparer.Ordinal),
-            null);
+            OrchestrationTopologyJson: null);
     }
 
     /// <summary>

@@ -27,7 +27,7 @@ internal sealed class McpClientFactory : IMcpClientFactory
         ArgumentNullException.ThrowIfNull(record);
 
         var transport = BuildTransport(record);
-        return McpClient.CreateAsync(transport, null, _loggerFactory, cancellationToken);
+        return McpClient.CreateAsync(transport, clientOptions: null, _loggerFactory, cancellationToken);
     }
 
     private IClientTransport BuildTransport(McpServerRecord record)

@@ -12,7 +12,7 @@ public sealed class ModelProviderMapStoreTests : IDisposable
     {
         if (Directory.Exists(_rootPath))
         {
-            Directory.Delete(_rootPath, true);
+            Directory.Delete(_rootPath, recursive: true);
         }
 
         _keyHolder.Dispose();
@@ -74,7 +74,7 @@ public sealed class ModelProviderMapStoreTests : IDisposable
         AssertEx.Equal("llamacpp", repointed.ProviderName);
 
         var all = await store.ListAsync();
-        AssertEx.Equal(1, all.Count);
+        AssertEx.Equal(expected: 1, all.Count);
         AssertEx.Equal("llamacpp", all[0].ProviderName);
     }
 
@@ -98,7 +98,7 @@ public sealed class ModelProviderMapStoreTests : IDisposable
         _ = await store.UpsertAsync("PHI-3-MINI", "ollama");
 
         var all = await store.ListAsync();
-        AssertEx.Equal(1, all.Count);
+        AssertEx.Equal(expected: 1, all.Count);
         AssertEx.Equal("ollama", all[0].ProviderName);
     }
 
@@ -118,7 +118,7 @@ public sealed class ModelProviderMapStoreTests : IDisposable
 
         var all = await store.ListAsync();
 
-        AssertEx.Equal(3, all.Count);
+        AssertEx.Equal(expected: 3, all.Count);
         AssertEx.Equal("alpaca", all[0].ModelName);
         AssertEx.Equal("mistral", all[1].ModelName);
         AssertEx.Equal("zephyr", all[2].ModelName);

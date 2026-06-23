@@ -12,7 +12,7 @@ public sealed class SchedulerOptionsValidatorTests
     [Test]
     public void Validate_WhenOptionsAreValid_ReturnsSuccess()
     {
-        var result = _validator.Validate(null, CreateValidOptions());
+        var result = _validator.Validate(name: null, CreateValidOptions());
 
         AssertEx.False(result.Failed);
         AssertEx.True(result.Failures is null || !result.Failures.Any());
@@ -24,11 +24,11 @@ public sealed class SchedulerOptionsValidatorTests
         var options = new SchedulerOptions();
 
         AssertEx.True(options.Enabled, "Enabled should default to true.");
-        AssertEx.Equal(4, options.MaxConcurrency);
-        AssertEx.Equal(30, options.HistoryRetentionDays);
-        AssertEx.Equal(60, options.RetentionSweepIntervalMinutes);
+        AssertEx.Equal(expected: 4, options.MaxConcurrency);
+        AssertEx.Equal(expected: 30, options.HistoryRetentionDays);
+        AssertEx.Equal(expected: 60, options.RetentionSweepIntervalMinutes);
         AssertEx.Equal("UTC", options.DefaultTimeZoneId);
-        AssertEx.Equal(5, options.DefaultMaxRuntimeMinutes);
+        AssertEx.Equal(expected: 5, options.DefaultMaxRuntimeMinutes);
         AssertEx.Equal("QRTZ_", options.QuartzTablePrefix);
     }
 
@@ -43,7 +43,7 @@ public sealed class SchedulerOptionsValidatorTests
             MaxConcurrency = value
         };
 
-        var result = _validator.Validate(null, options);
+        var result = _validator.Validate(name: null, options);
 
         AssertFailureContains(result, "MaxConcurrency");
     }
@@ -58,7 +58,7 @@ public sealed class SchedulerOptionsValidatorTests
             HistoryRetentionDays = value
         };
 
-        var result = _validator.Validate(null, options);
+        var result = _validator.Validate(name: null, options);
 
         AssertFailureContains(result, "HistoryRetentionDays");
     }
@@ -73,7 +73,7 @@ public sealed class SchedulerOptionsValidatorTests
             RetentionSweepIntervalMinutes = value
         };
 
-        var result = _validator.Validate(null, options);
+        var result = _validator.Validate(name: null, options);
 
         AssertFailureContains(result, "RetentionSweepIntervalMinutes");
     }
@@ -88,7 +88,7 @@ public sealed class SchedulerOptionsValidatorTests
             DefaultMaxRuntimeMinutes = value
         };
 
-        var result = _validator.Validate(null, options);
+        var result = _validator.Validate(name: null, options);
 
         AssertFailureContains(result, "DefaultMaxRuntimeMinutes");
     }
@@ -103,7 +103,7 @@ public sealed class SchedulerOptionsValidatorTests
             DefaultTimeZoneId = value
         };
 
-        var result = _validator.Validate(null, options);
+        var result = _validator.Validate(name: null, options);
 
         AssertFailureContains(result, "DefaultTimeZoneId");
     }
@@ -118,7 +118,7 @@ public sealed class SchedulerOptionsValidatorTests
             QuartzTablePrefix = value
         };
 
-        var result = _validator.Validate(null, options);
+        var result = _validator.Validate(name: null, options);
 
         AssertFailureContains(result, "QuartzTablePrefix");
     }
@@ -133,7 +133,7 @@ public sealed class SchedulerOptionsValidatorTests
             DefaultTimeZoneId = ""
         };
 
-        var result = _validator.Validate(null, options);
+        var result = _validator.Validate(name: null, options);
 
         AssertEx.False(result.Succeeded);
         var failures = result.Failures?.ToArray() ?? [];

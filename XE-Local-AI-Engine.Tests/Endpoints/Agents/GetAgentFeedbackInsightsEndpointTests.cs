@@ -57,11 +57,11 @@ public sealed class GetAgentFeedbackInsightsEndpointTests
         var root = document.RootElement;
 
         AssertEx.Equal("Insights Agent", root.GetProperty("agentName").GetString());
-        AssertEx.Equal(3, root.GetProperty("minOccurrenceThreshold").GetInt32());
-        AssertEx.Equal(0, root.GetProperty("overall").GetProperty("total").GetInt32());
+        AssertEx.Equal(expected: 3, root.GetProperty("minOccurrenceThreshold").GetInt32());
+        AssertEx.Equal(expected: 0, root.GetProperty("overall").GetProperty("total").GetInt32());
         AssertEx.False(root.GetProperty("overall").GetProperty("meetsThreshold").GetBoolean(), "An agent with no feedback is not an actionable pattern.");
-        AssertEx.Equal(0, root.GetProperty("byTool").GetArrayLength());
-        AssertEx.Equal(0, root.GetProperty("exemplars").GetArrayLength());
+        AssertEx.Equal(expected: 0, root.GetProperty("byTool").GetArrayLength());
+        AssertEx.Equal(expected: 0, root.GetProperty("exemplars").GetArrayLength());
     }
 
     private static async Task<Guid> SeedAgentAsync(TestingWebAppFactory factory, string name)
@@ -69,14 +69,14 @@ public sealed class GetAgentFeedbackInsightsEndpointTests
         using var scope = factory.Services.CreateScope();
         var store = scope.ServiceProvider.GetRequiredService<IAgentDefinitionStore>();
         var agent = await store.AddAsync(new AgentDefinitionInput(name,
-            null,
+            Description: null,
             "You are a careful engineering agent.",
-            null,
-            null,
+            ModelProfile: null,
+            ReasoningEffort: null,
             AgentDefinitionKind.Single,
             [],
             new Dictionary<string, bool>(),
-            null)).ConfigureAwait(false);
+            OrchestrationTopologyJson: null)).ConfigureAwait(false);
         return agent.Id;
     }
 }

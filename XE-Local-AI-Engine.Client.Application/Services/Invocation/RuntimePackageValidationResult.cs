@@ -12,10 +12,10 @@ public sealed record RuntimePackageValidationResult
 
     public IReadOnlyList<string> Errors { get; }
 
-    public static RuntimePackageValidationResult Success { get; } = new(true, Array.Empty<string>());
+    public static RuntimePackageValidationResult Success { get; } = new(isValid: true, Array.Empty<string>());
 
     public static RuntimePackageValidationResult FromErrors(IReadOnlyList<string> errors)
     {
-        return errors.Count == 0 ? Success : new RuntimePackageValidationResult(false, errors);
+        return errors.Count == 0 ? Success : new RuntimePackageValidationResult(isValid: false, errors);
     }
 }

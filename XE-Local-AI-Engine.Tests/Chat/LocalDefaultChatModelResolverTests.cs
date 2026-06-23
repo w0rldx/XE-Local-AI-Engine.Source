@@ -13,7 +13,6 @@ using XE_Local_AI_Engine.Tests.Testing;
 ///     the pick order: the persisted node default iff it is an installed GGUF chat model, else the
 ///     most-recently-modified installed GGUF chat model (tie-break by name). Returns null when no chat model is
 ///     installed.
-///
 ///     Production behaviour under test:
 ///     - A GGUF with NO persisted row (Unknown/absent) is eligible.
 ///     - A GGUF with DetectedKind=Embedding (and no override) is excluded.
@@ -37,8 +36,7 @@ public sealed class LocalDefaultChatModelResolverTests
     {
         // The persisted node default wins (case-insensitive) when it is an installed GGUF chat model — short-circuiting
         // the most-recently-modified scan even though another model was modified later.
-        var resolver = CreateResolver(
-            Gguf("alpha:Q4_K_M", DateTimeOffset.UnixEpoch),
+        var resolver = CreateResolver(Gguf("alpha:Q4_K_M", DateTimeOffset.UnixEpoch),
             Gguf("BravO:Q8_0", DateTimeOffset.UnixEpoch.AddDays(5)));
 
         var resolved = await resolver.ResolveAsync(persistedDefault: "bravo:Q8_0").ConfigureAwait(false);
@@ -51,8 +49,7 @@ public sealed class LocalDefaultChatModelResolverTests
     {
         // A stale persisted default (not an installed GGUF — e.g. a dead Ollama id) is ignored; the fallback is the
         // most-recently-modified installed GGUF chat model.
-        var resolver = CreateResolver(
-            Gguf("older:Q4_K_M", DateTimeOffset.UnixEpoch.AddDays(1)),
+        var resolver = CreateResolver(Gguf("older:Q4_K_M", DateTimeOffset.UnixEpoch.AddDays(1)),
             Gguf("newer:Q4_K_M", DateTimeOffset.UnixEpoch.AddDays(9)));
 
         var resolved = await resolver.ResolveAsync(persistedDefault: "qwen3.5:0.8b").ConfigureAwait(false);
@@ -64,8 +61,7 @@ public sealed class LocalDefaultChatModelResolverTests
     public async Task ResolveAsync_WhenNoPersistedDefaultAndTie_BreaksByNameAscending()
     {
         // Same ModifiedAt → deterministic tie-break by name (case-insensitive ascending).
-        var resolver = CreateResolver(
-            Gguf("zeta:Q4_K_M", DateTimeOffset.UnixEpoch),
+        var resolver = CreateResolver(Gguf("zeta:Q4_K_M", DateTimeOffset.UnixEpoch),
             Gguf("alpha:Q4_K_M", DateTimeOffset.UnixEpoch));
 
         var resolved = await resolver.ResolveAsync(persistedDefault: null).ConfigureAwait(false);
@@ -93,8 +89,8 @@ public sealed class LocalDefaultChatModelResolverTests
         // An Embedding-classified GGUF (detected, no override) is not a chat model and must be excluded.
         ModelClassificationRecord[] classifications =
         [
-            Classification("embed-model:Q4_K_M", detectedKind: ModelKind.Embedding, overrideKind: null),
-            Classification("chat-model:Q4_K_M", detectedKind: ModelKind.Chat, overrideKind: null)
+            Classification("embed-model:Q4_K_M", ModelKind.Embedding, overrideKind: null),
+            Classification("chat-model:Q4_K_M", ModelKind.Chat, overrideKind: null)
         ];
         LocalModelDescriptor[] installed =
         [
@@ -114,7 +110,7 @@ public sealed class LocalDefaultChatModelResolverTests
         // OverrideKind=Embedding wins over DetectedKind=Chat — the effective kind is Embedding → excluded.
         ModelClassificationRecord[] classifications =
         [
-            Classification("misclassified:Q4_K_M", detectedKind: ModelKind.Chat, overrideKind: ModelKind.Embedding)
+            Classification("misclassified:Q4_K_M", ModelKind.Chat, ModelKind.Embedding)
         ];
         LocalModelDescriptor[] installed = [Gguf("misclassified:Q4_K_M", DateTimeOffset.UnixEpoch)];
         var resolver = CreateResolver(classifications, installed);
@@ -130,7 +126,7 @@ public sealed class LocalDefaultChatModelResolverTests
         // OverrideKind=Chat wins over DetectedKind=Embedding → eligible (operator corrected the classification).
         ModelClassificationRecord[] classifications =
         [
-            Classification("corrected:Q4_K_M", detectedKind: ModelKind.Embedding, overrideKind: ModelKind.Chat)
+            Classification("corrected:Q4_K_M", ModelKind.Embedding, ModelKind.Chat)
         ];
         LocalModelDescriptor[] installed = [Gguf("corrected:Q4_K_M", DateTimeOffset.UnixEpoch)];
         var resolver = CreateResolver(classifications, installed);
@@ -145,7 +141,7 @@ public sealed class LocalDefaultChatModelResolverTests
     {
         ModelClassificationRecord[] classifications =
         [
-            Classification("embed-only:Q4_K_M", detectedKind: ModelKind.Embedding, overrideKind: null)
+            Classification("embed-only:Q4_K_M", ModelKind.Embedding, overrideKind: null)
         ];
         LocalModelDescriptor[] installed = [Gguf("embed-only:Q4_K_M", DateTimeOffset.UnixEpoch)];
         var resolver = CreateResolver(classifications, installed);
@@ -162,8 +158,7 @@ public sealed class LocalDefaultChatModelResolverTests
         return CreateResolver([], installed);
     }
 
-    private static LocalDefaultChatModelResolver CreateResolver(
-        ModelClassificationRecord[] persistedClassifications,
+    private static LocalDefaultChatModelResolver CreateResolver(ModelClassificationRecord[] persistedClassifications,
         LocalModelDescriptor[] installed)
     {
         var ggufStore = Substitute.For<IGgufModelStore>();
@@ -193,12 +188,11 @@ public sealed class LocalDefaultChatModelResolverTests
 
     private static ModelClassificationRecord Classification(string modelName, ModelKind detectedKind, ModelKind? overrideKind)
     {
-        return new ModelClassificationRecord(
-            ModelName: modelName,
+        return new ModelClassificationRecord(modelName,
             Digest: null,
-            DetectedKind: detectedKind,
+            detectedKind,
             DetectedCapabilitiesJson: null,
-            OverrideKind: overrideKind,
+            overrideKind,
             DetectedAtUtc: null,
             UpdatedAtUtc: 0L);
     }

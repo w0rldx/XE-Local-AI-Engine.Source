@@ -70,7 +70,7 @@ public sealed class CodexLoginCoordinatorTests
 
         await AssertEx.EventuallyAsync(() => coordinator.GetStatus().State == CodexLoginState.Failed,
             TimeSpan.FromSeconds(2));
-        AssertEx.Equal(0, Volatile.Read(ref invalidations));
+        AssertEx.Equal(expected: 0, Volatile.Read(ref invalidations));
     }
 
     [Test]

@@ -1,5 +1,7 @@
 namespace XE_Local_AI_Engine.Client.BackgroundServices;
 
+using System.Reflection;
+using Quartz;
 using XE_Local_AI_Engine.Client.Services.Scheduler;
 
 /// <summary>
@@ -40,8 +42,8 @@ public sealed class SchedulerJobDetailReconciliationService : IHostedService
         {
             // Host is shutting down before startup finished; nothing to reconcile.
         }
-        catch (Exception ex) when (ex is InvalidOperationException or IOException or TimeoutException or Quartz.SchedulerException
-                                       or TypeLoadException or System.Reflection.ReflectionTypeLoadException)
+        catch (Exception ex) when (ex is InvalidOperationException or IOException or TimeoutException or SchedulerException
+                                       or TypeLoadException or ReflectionTypeLoadException)
         {
             // Reconciliation is best-effort: a node must start even if the heal fails. Manual triggering re-heals on
             // demand, and the next startup re-attempts once the underlying issue clears.

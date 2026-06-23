@@ -159,7 +159,8 @@ public sealed class SetNodeChatConversationMemoryExcludedEndpoint(
         }
 
         var updatedAtUtc = _timeProvider.GetUtcNow().ToUnixTimeMilliseconds();
-        var updated = await _chatPersistence.SetConversationMemoryExcludedAsync(new NodeChatSetConversationMemoryExcludedRequest(req.ConversationId, req.MemoryExcluded, updatedAtUtc), ct).ConfigureAwait(false);
+        var updated = await _chatPersistence.SetConversationMemoryExcludedAsync(new NodeChatSetConversationMemoryExcludedRequest(req.ConversationId, req.MemoryExcluded, updatedAtUtc), ct)
+                                            .ConfigureAwait(false);
 
         if (updated is null)
         {

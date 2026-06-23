@@ -25,7 +25,7 @@ public sealed class FirstRunModelProvisioningServiceTests
         var binaryManager = new RecordingBinaryManager();
         var coordinator = new FakeDownloadCoordinator(GgufDownloadPhase.Completed);
         var settingsStore = new FakeNodeSettingsStore(new StoredNodeSettings());
-        using var service = BuildService(true,
+        using var service = BuildService(isDesktop: true,
             [],
             binaryManager,
             coordinator,
@@ -34,7 +34,7 @@ public sealed class FirstRunModelProvisioningServiceTests
         await RunAsync(service);
 
         AssertEx.True(binaryManager.EnsureCalled, "the llama.cpp binary must be ensured before download");
-        AssertEx.Equal(1, coordinator.StartCalls.Count);
+        AssertEx.Equal(expected: 1, coordinator.StartCalls.Count);
         AssertEx.Equal("bartowski/Qwen2.5-0.5B-Instruct-GGUF", coordinator.StartCalls[0].RepoId);
         AssertEx.Equal("Q4_K_M", coordinator.StartCalls[0].Quant);
         AssertEx.Equal(GgufRole.Chat, coordinator.StartCalls[0].Role);
@@ -46,7 +46,7 @@ public sealed class FirstRunModelProvisioningServiceTests
     {
         var coordinator = new FakeDownloadCoordinator(GgufDownloadPhase.Completed);
         var settingsStore = new FakeNodeSettingsStore(new StoredNodeSettings());
-        using var service = BuildService(false,
+        using var service = BuildService(isDesktop: false,
             [],
             new RecordingBinaryManager(),
             coordinator,
@@ -54,7 +54,7 @@ public sealed class FirstRunModelProvisioningServiceTests
 
         await RunAsync(service);
 
-        AssertEx.Equal(0, coordinator.StartCalls.Count);
+        AssertEx.Equal(expected: 0, coordinator.StartCalls.Count);
         AssertEx.Null(settingsStore.Saved, "the off-flag path must not select a model");
     }
 
@@ -63,7 +63,7 @@ public sealed class FirstRunModelProvisioningServiceTests
     {
         var coordinator = new FakeDownloadCoordinator(GgufDownloadPhase.Completed);
         var settingsStore = new FakeNodeSettingsStore(new StoredNodeSettings());
-        using var service = BuildService(true,
+        using var service = BuildService(isDesktop: true,
             ["already/installed:Q4_K_M"],
             new RecordingBinaryManager(),
             coordinator,
@@ -71,7 +71,7 @@ public sealed class FirstRunModelProvisioningServiceTests
 
         await RunAsync(service);
 
-        AssertEx.Equal(0, coordinator.StartCalls.Count);
+        AssertEx.Equal(expected: 0, coordinator.StartCalls.Count);
         AssertEx.Null(settingsStore.Saved);
     }
 
@@ -83,7 +83,7 @@ public sealed class FirstRunModelProvisioningServiceTests
         {
             DefaultModelName = "operator/picked:Q8_0"
         });
-        using var service = BuildService(true,
+        using var service = BuildService(isDesktop: true,
             [],
             new RecordingBinaryManager(),
             coordinator,
@@ -91,7 +91,7 @@ public sealed class FirstRunModelProvisioningServiceTests
 
         await RunAsync(service);
 
-        AssertEx.Equal(0, coordinator.StartCalls.Count);
+        AssertEx.Equal(expected: 0, coordinator.StartCalls.Count);
         AssertEx.Null(settingsStore.Saved);
     }
 
@@ -100,7 +100,7 @@ public sealed class FirstRunModelProvisioningServiceTests
     {
         var coordinator = new FakeDownloadCoordinator(GgufDownloadPhase.Failed);
         var settingsStore = new FakeNodeSettingsStore(new StoredNodeSettings());
-        using var service = BuildService(true,
+        using var service = BuildService(isDesktop: true,
             [],
             new RecordingBinaryManager(),
             coordinator,
@@ -109,7 +109,7 @@ public sealed class FirstRunModelProvisioningServiceTests
         // Must not throw — offline-tolerance keeps startup alive with the empty-picker onboarding fallback.
         await RunAsync(service);
 
-        AssertEx.Equal(1, coordinator.StartCalls.Count);
+        AssertEx.Equal(expected: 1, coordinator.StartCalls.Count);
         AssertEx.Null(settingsStore.Saved, "a failed download must not select a model");
     }
 
@@ -118,7 +118,7 @@ public sealed class FirstRunModelProvisioningServiceTests
     {
         var coordinator = new FakeDownloadCoordinator(GgufDownloadPhase.Completed);
         var settingsStore = new FakeNodeSettingsStore(new StoredNodeSettings());
-        using var service = BuildService(true,
+        using var service = BuildService(isDesktop: true,
             [],
             new RecordingBinaryManager
             {
@@ -129,7 +129,7 @@ public sealed class FirstRunModelProvisioningServiceTests
 
         await RunAsync(service);
 
-        AssertEx.Equal(0, coordinator.StartCalls.Count);
+        AssertEx.Equal(expected: 0, coordinator.StartCalls.Count);
         AssertEx.Null(settingsStore.Saved);
     }
 
@@ -142,7 +142,7 @@ public sealed class FirstRunModelProvisioningServiceTests
         // A selector that hangs until cancelled — it observes the provisioning ceiling (linked CTS) and throws
         // OperationCanceledException, exactly as the real cancellation-linked probe does when its child overruns.
         var hangingSelector = new HangingVariantSelector();
-        using var service = BuildService(true,
+        using var service = BuildService(isDesktop: true,
             [],
             binaryManager,
             coordinator,
@@ -155,7 +155,7 @@ public sealed class FirstRunModelProvisioningServiceTests
         // The ceiling fired, detection fell back to CPU, and provisioning still reached the download + selection.
         AssertEx.True(binaryManager.EnsureCalled, "provisioning must continue to the download after the probe ceiling");
         AssertEx.Equal(GpuVariant.Cpu, binaryManager.LastVariant);
-        AssertEx.Equal(1, coordinator.StartCalls.Count);
+        AssertEx.Equal(expected: 1, coordinator.StartCalls.Count);
         AssertEx.Equal(DefaultGguf, settingsStore.Saved?.DefaultModelName);
     }
 
@@ -219,7 +219,7 @@ public sealed class FirstRunModelProvisioningServiceTests
                 throw new LlamaRuntimeException("No prebuilt llama.cpp runtime is available.");
             }
 
-            return Task.FromResult(new LlamaBinary("/fake/llama-server", "b9692", variant, true));
+            return Task.FromResult(new LlamaBinary("/fake/llama-server", "b9692", variant, IsPinnedFallback: true));
         }
     }
 
@@ -297,7 +297,7 @@ public sealed class FirstRunModelProvisioningServiceTests
         {
             StartCalls.Add(request);
             var modelName = string.IsNullOrWhiteSpace(request.Quant) ? request.RepoId : GgufModelName.Format(request.RepoId, request.Quant);
-            return Task.FromResult(new GgufDownloadTicket(modelName, false));
+            return Task.FromResult(new GgufDownloadTicket(modelName, AlreadyInFlight: false));
         }
 
         public bool Cancel(string modelName)
@@ -307,7 +307,7 @@ public sealed class FirstRunModelProvisioningServiceTests
 
         public GgufDownloadStatus? GetStatus(string modelName)
         {
-            return new GgufDownloadStatus(modelName, terminalPhase, null, null, terminalPhase == GgufDownloadPhase.Failed ? "Download failed." : null);
+            return new GgufDownloadStatus(modelName, terminalPhase, CompletedBytes: null, TotalBytes: null, terminalPhase == GgufDownloadPhase.Failed ? "Download failed." : null);
         }
     }
 

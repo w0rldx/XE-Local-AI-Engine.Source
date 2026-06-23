@@ -14,7 +14,7 @@ public sealed class PlaybookActionServiceTests
     [Test]
     public async Task CreateAsync_WithValidInput_PersistsThroughStore()
     {
-        var service = CreateService(out var store, out _, true);
+        var service = CreateService(out var store, out _, agentExists: true);
         var input = CreateInput();
         var stored = CreateRecord(input);
         store.AddAsync(input, Arg.Any<CancellationToken>()).Returns(stored);
@@ -28,7 +28,7 @@ public sealed class PlaybookActionServiceTests
     [Test]
     public async Task CreateAsync_WithBlankBehavior_ThrowsValidation()
     {
-        var service = CreateService(out var store, out _, true);
+        var service = CreateService(out var store, out _, agentExists: true);
         var input = CreateInput(behavior: "   ");
 
         await AssertEx.ThrowsAsync<PlaybookActionValidationException>(() => service.CreateAsync(input)).ConfigureAwait(false);
@@ -38,7 +38,7 @@ public sealed class PlaybookActionServiceTests
     [Test]
     public async Task CreateAsync_WhenAgentDoesNotExist_ThrowsValidation()
     {
-        var service = CreateService(out var store, out _, false);
+        var service = CreateService(out var store, out _, agentExists: false);
         var input = CreateInput();
 
         await AssertEx.ThrowsAsync<PlaybookActionValidationException>(() => service.CreateAsync(input)).ConfigureAwait(false);
@@ -48,7 +48,7 @@ public sealed class PlaybookActionServiceTests
     [Test]
     public async Task CreateAsync_WithSuggestedState_ThrowsValidation()
     {
-        var service = CreateService(out _, out _, true);
+        var service = CreateService(out _, out _, agentExists: true);
         var input = CreateInput(state: PlaybookActionState.Suggested);
 
         await AssertEx.ThrowsAsync<PlaybookActionValidationException>(() => service.CreateAsync(input)).ConfigureAwait(false);
@@ -57,7 +57,7 @@ public sealed class PlaybookActionServiceTests
     [Test]
     public async Task CreateAsync_WithArchivedState_ThrowsValidation()
     {
-        var service = CreateService(out _, out _, true);
+        var service = CreateService(out _, out _, agentExists: true);
         var input = CreateInput(state: PlaybookActionState.Archived);
 
         await AssertEx.ThrowsAsync<PlaybookActionValidationException>(() => service.CreateAsync(input)).ConfigureAwait(false);
@@ -66,7 +66,7 @@ public sealed class PlaybookActionServiceTests
     [Test]
     public async Task CreateAsync_WithAnalysisSource_ThrowsValidation()
     {
-        var service = CreateService(out _, out _, true);
+        var service = CreateService(out _, out _, agentExists: true);
         var input = CreateInput(source: PlaybookActionSource.Analysis);
 
         await AssertEx.ThrowsAsync<PlaybookActionValidationException>(() => service.CreateAsync(input)).ConfigureAwait(false);
@@ -76,7 +76,7 @@ public sealed class PlaybookActionServiceTests
     public async Task UpdateAsync_WhenActionBelongsToRouteAgent_DelegatesToStore()
     {
         var agentId = Guid.NewGuid();
-        var service = CreateService(out var store, out _, true);
+        var service = CreateService(out var store, out _, agentExists: true);
         var actionId = Guid.NewGuid();
         var input = CreateInput(agentId, PlaybookActionState.Disabled);
         // The action already belongs to the same (route) agent, so the ownership guard passes through to the store.
@@ -102,7 +102,7 @@ public sealed class PlaybookActionServiceTests
     {
         var routeAgentId = Guid.NewGuid();
         var otherAgentId = Guid.NewGuid();
-        var service = CreateService(out var store, out _, true);
+        var service = CreateService(out var store, out _, agentExists: true);
         var actionId = Guid.NewGuid();
         var input = CreateInput(routeAgentId);
         // The stored action belongs to a DIFFERENT agent than the route — the IDOR guard must reject it.
@@ -121,7 +121,7 @@ public sealed class PlaybookActionServiceTests
     [Test]
     public async Task UpdateAsync_WhenActionMissing_ReturnsNullAndDoesNotUpdate()
     {
-        var service = CreateService(out var store, out _, true);
+        var service = CreateService(out var store, out _, agentExists: true);
         var actionId = Guid.NewGuid();
         var input = CreateInput();
         store.GetByIdAsync(actionId, Arg.Any<CancellationToken>()).Returns(Task.FromResult<PlaybookActionRecord?>(null));
@@ -136,7 +136,7 @@ public sealed class PlaybookActionServiceTests
     public async Task DeleteAsync_WhenActionBelongsToRouteAgent_DelegatesToStore()
     {
         var agentId = Guid.NewGuid();
-        var service = CreateService(out var store, out _, true);
+        var service = CreateService(out var store, out _, agentExists: true);
         var actionId = Guid.NewGuid();
         store.GetByIdAsync(actionId, Arg.Any<CancellationToken>())
              .Returns(CreateRecord(CreateInput(agentId)) with
@@ -156,7 +156,7 @@ public sealed class PlaybookActionServiceTests
     {
         var routeAgentId = Guid.NewGuid();
         var otherAgentId = Guid.NewGuid();
-        var service = CreateService(out var store, out _, true);
+        var service = CreateService(out var store, out _, agentExists: true);
         var actionId = Guid.NewGuid();
         store.GetByIdAsync(actionId, Arg.Any<CancellationToken>())
              .Returns(CreateRecord(CreateInput(otherAgentId)) with
@@ -174,7 +174,7 @@ public sealed class PlaybookActionServiceTests
     public async Task DeleteAsync_WhenActionMissing_ReturnsFalseAndDoesNotDelete()
     {
         var agentId = Guid.NewGuid();
-        var service = CreateService(out var store, out _, true);
+        var service = CreateService(out var store, out _, agentExists: true);
         var actionId = Guid.NewGuid();
         store.GetByIdAsync(actionId, Arg.Any<CancellationToken>()).Returns(Task.FromResult<PlaybookActionRecord?>(null));
 
@@ -187,27 +187,27 @@ public sealed class PlaybookActionServiceTests
     [Test]
     public async Task ListByAgentAsync_DelegatesToStore()
     {
-        var service = CreateService(out var store, out _, true);
+        var service = CreateService(out var store, out _, agentExists: true);
         var agentId = Guid.NewGuid();
         store.ListByAgentAsync(agentId, Arg.Any<CancellationToken>())
              .Returns(Task.FromResult<IReadOnlyList<PlaybookActionRecord>>([CreateRecord(CreateInput(agentId))]));
 
         var list = await service.ListByAgentAsync(agentId).ConfigureAwait(false);
 
-        AssertEx.Equal(1, list.Count);
+        AssertEx.Equal(expected: 1, list.Count);
     }
 
     [Test]
     public async Task CreateAnalysisSuggestionAsync_WithValidInput_PersistsSuggestedAnalysisActionWithEvidence()
     {
         var agentId = Guid.NewGuid();
-        var service = CreateService(out var store, out _, true);
+        var service = CreateService(out var store, out _, agentExists: true);
         var feedbackIds = new[]
         {
             Guid.NewGuid(),
             Guid.NewGuid()
         };
-        var input = CreateSuggestionInput(agentId, feedbackIds, 0.7d);
+        var input = CreateSuggestionInput(agentId, feedbackIds, confidence: 0.7d);
         var stored = CreateRecord(new PlaybookActionInput(agentId,
             PlaybookActionState.Suggested,
             PlaybookActionSource.Analysis,
@@ -236,8 +236,8 @@ public sealed class PlaybookActionServiceTests
     [Test]
     public async Task CreateAnalysisSuggestionAsync_WithEmptyEvidence_ThrowsValidationAndDoesNotPersist()
     {
-        var service = CreateService(out var store, out _, true);
-        var input = CreateSuggestionInput(Guid.NewGuid(), [], 0.5d);
+        var service = CreateService(out var store, out _, agentExists: true);
+        var input = CreateSuggestionInput(Guid.NewGuid(), [], confidence: 0.5d);
 
         await AssertEx.ThrowsAsync<PlaybookActionValidationException>(() => service.CreateAnalysisSuggestionAsync(input)).ConfigureAwait(false);
         await store.DidNotReceive().AddAsync(Arg.Any<PlaybookActionInput>(), Arg.Any<CancellationToken>()).ConfigureAwait(false);
@@ -249,7 +249,7 @@ public sealed class PlaybookActionServiceTests
     [Arguments(double.NaN)]
     public async Task CreateAnalysisSuggestionAsync_WithConfidenceOutOfRange_ThrowsValidationAndDoesNotPersist(double confidence)
     {
-        var service = CreateService(out var store, out _, true);
+        var service = CreateService(out var store, out _, agentExists: true);
         var input = CreateSuggestionInput(Guid.NewGuid(), new[]
         {
             Guid.NewGuid()
@@ -262,11 +262,11 @@ public sealed class PlaybookActionServiceTests
     [Test]
     public async Task CreateAnalysisSuggestionAsync_WhenAgentDoesNotExist_ThrowsValidationAndDoesNotPersist()
     {
-        var service = CreateService(out var store, out _, false);
+        var service = CreateService(out var store, out _, agentExists: false);
         var input = CreateSuggestionInput(Guid.NewGuid(), new[]
         {
             Guid.NewGuid()
-        }, 0.5d);
+        }, confidence: 0.5d);
 
         await AssertEx.ThrowsAsync<PlaybookActionValidationException>(() => service.CreateAnalysisSuggestionAsync(input)).ConfigureAwait(false);
         await store.DidNotReceive().AddAsync(Arg.Any<PlaybookActionInput>(), Arg.Any<CancellationToken>()).ConfigureAwait(false);
@@ -275,11 +275,11 @@ public sealed class PlaybookActionServiceTests
     [Test]
     public async Task CreateAnalysisSuggestionAsync_WithBlankBehavior_ThrowsValidationAndDoesNotPersist()
     {
-        var service = CreateService(out var store, out _, true);
+        var service = CreateService(out var store, out _, agentExists: true);
         var input = CreateSuggestionInput(Guid.NewGuid(), new[]
             {
                 Guid.NewGuid()
-            }, 0.5d) with
+            }, confidence: 0.5d) with
             {
                 Behavior = "   "
             };
@@ -292,7 +292,7 @@ public sealed class PlaybookActionServiceTests
     public async Task UpdateAsync_WhenExistingActionIsAnalysisSource_ReturnsNullAndDoesNotUpdate()
     {
         var agentId = Guid.NewGuid();
-        var service = CreateService(out var store, out _, true);
+        var service = CreateService(out var store, out _, agentExists: true);
         var actionId = Guid.NewGuid();
         var input = CreateInput(agentId);
         // The manual route may not touch an Analysis-provenance action even when ownership matches.
@@ -312,7 +312,7 @@ public sealed class PlaybookActionServiceTests
     public async Task PromoteSuggestedAsync_WhenOwnedPendingSuggestion_UpdatesToEnabled()
     {
         var agentId = Guid.NewGuid();
-        var service = CreateService(out var store, out _, true);
+        var service = CreateService(out var store, out _, agentExists: true);
         var actionId = Guid.NewGuid();
         // The gate now requires a passing eval matching the action's current Version before promotion is allowed.
         var pending = CreateSuggestedRecord(agentId, actionId) with
@@ -343,7 +343,7 @@ public sealed class PlaybookActionServiceTests
     {
         var agentId = Guid.NewGuid();
         // Cap of 2 with two already-Enabled actions: the eval passes, but the hard cap blocks the promote with no write.
-        var service = CreateService(out var store, out _, true, 2);
+        var service = CreateService(out var store, out _, agentExists: true, maxEnabledActions: 2);
         var actionId = Guid.NewGuid();
         var pending = CreateSuggestedRecord(agentId, actionId) with
         {
@@ -365,7 +365,7 @@ public sealed class PlaybookActionServiceTests
     {
         var agentId = Guid.NewGuid();
         // Cap of 2 with one already-Enabled action: under the cap, the passing eval promotes normally.
-        var service = CreateService(out var store, out _, true, 2);
+        var service = CreateService(out var store, out _, agentExists: true, maxEnabledActions: 2);
         var actionId = Guid.NewGuid();
         var pending = CreateSuggestedRecord(agentId, actionId) with
         {
@@ -390,7 +390,7 @@ public sealed class PlaybookActionServiceTests
     public async Task CreateAsync_WhenEnabledAtCap_ThrowsValidationAndDoesNotAdd()
     {
         var agentId = Guid.NewGuid();
-        var service = CreateService(out var store, out _, true, 1);
+        var service = CreateService(out var store, out _, agentExists: true, maxEnabledActions: 1);
         var input = CreateInput(agentId);
         store.ListEnabledByAgentAsync(agentId, Arg.Any<CancellationToken>())
              .Returns(Task.FromResult<IReadOnlyList<PlaybookActionRecord>>([EnabledRecord(agentId)]));
@@ -404,7 +404,7 @@ public sealed class PlaybookActionServiceTests
     {
         var agentId = Guid.NewGuid();
         // A create-as-Disabled never touches the Enabled cap, even when the agent is already at it.
-        var service = CreateService(out var store, out _, true, 1);
+        var service = CreateService(out var store, out _, agentExists: true, maxEnabledActions: 1);
         var input = CreateInput(agentId, PlaybookActionState.Disabled);
         store.ListEnabledByAgentAsync(agentId, Arg.Any<CancellationToken>())
              .Returns(Task.FromResult<IReadOnlyList<PlaybookActionRecord>>([EnabledRecord(agentId)]));
@@ -420,7 +420,7 @@ public sealed class PlaybookActionServiceTests
     public async Task UpdateAsync_WhenDisabledToEnabledAtCap_ThrowsValidationAndDoesNotUpdate()
     {
         var agentId = Guid.NewGuid();
-        var service = CreateService(out var store, out _, true, 1);
+        var service = CreateService(out var store, out _, agentExists: true, maxEnabledActions: 1);
         var actionId = Guid.NewGuid();
         // The action being updated is currently Disabled; the agent is already at the Enabled cap with a DIFFERENT action.
         var existing = CreateRecord(CreateInput(agentId, PlaybookActionState.Disabled)) with
@@ -440,7 +440,7 @@ public sealed class PlaybookActionServiceTests
     public async Task UpdateAsync_WhenEditingAlreadyEnabledActionAtCap_DelegatesToStore()
     {
         var agentId = Guid.NewGuid();
-        var service = CreateService(out var store, out _, true, 1);
+        var service = CreateService(out var store, out _, agentExists: true, maxEnabledActions: 1);
         var actionId = Guid.NewGuid();
         // The action is ALREADY Enabled and stays Enabled (an edit, not a transition into Enabled). Even at the cap it
         // must not be blocked — the cap guard fires only on a non-Enabled -> Enabled transition.
@@ -467,7 +467,7 @@ public sealed class PlaybookActionServiceTests
     public async Task PromoteSuggestedAsync_WhenMissing_ReturnsNotFoundAndDoesNotUpdate()
     {
         var agentId = Guid.NewGuid();
-        var service = CreateService(out var store, out _, true);
+        var service = CreateService(out var store, out _, agentExists: true);
         var actionId = Guid.NewGuid();
         store.GetByIdAsync(actionId, Arg.Any<CancellationToken>()).Returns(Task.FromResult<PlaybookActionRecord?>(null));
 
@@ -483,7 +483,7 @@ public sealed class PlaybookActionServiceTests
     {
         var routeAgentId = Guid.NewGuid();
         var otherAgentId = Guid.NewGuid();
-        var service = CreateService(out var store, out _, true);
+        var service = CreateService(out var store, out _, agentExists: true);
         var actionId = Guid.NewGuid();
         store.GetByIdAsync(actionId, Arg.Any<CancellationToken>()).Returns(CreateSuggestedRecord(otherAgentId, actionId));
 
@@ -497,7 +497,7 @@ public sealed class PlaybookActionServiceTests
     public async Task PromoteSuggestedAsync_WhenAlreadyEnabled_ReturnsNotFoundAndDoesNotUpdate()
     {
         var agentId = Guid.NewGuid();
-        var service = CreateService(out var store, out _, true);
+        var service = CreateService(out var store, out _, agentExists: true);
         var actionId = Guid.NewGuid();
         store.GetByIdAsync(actionId, Arg.Any<CancellationToken>())
              .Returns(CreateSuggestedRecord(agentId, actionId) with
@@ -515,7 +515,7 @@ public sealed class PlaybookActionServiceTests
     public async Task PromoteSuggestedAsync_WhenManualSource_ReturnsNotFoundAndDoesNotUpdate()
     {
         var agentId = Guid.NewGuid();
-        var service = CreateService(out var store, out _, true);
+        var service = CreateService(out var store, out _, agentExists: true);
         var actionId = Guid.NewGuid();
         // A Suggested state with Manual source is not a generated suggestion, so the provenance guard must reject it.
         store.GetByIdAsync(actionId, Arg.Any<CancellationToken>())
@@ -534,7 +534,7 @@ public sealed class PlaybookActionServiceTests
     public async Task PromoteSuggestedAsync_WhenNoEvalRecorded_ReturnsEvalRequiredAndDoesNotUpdate()
     {
         var agentId = Guid.NewGuid();
-        var service = CreateService(out var store, out _, true);
+        var service = CreateService(out var store, out _, agentExists: true);
         var actionId = Guid.NewGuid();
         // No EvalResult recorded (null) — the gate blocks with EvalRequired.
         store.GetByIdAsync(actionId, Arg.Any<CancellationToken>()).Returns(CreateSuggestedRecord(agentId, actionId));
@@ -550,7 +550,7 @@ public sealed class PlaybookActionServiceTests
     public async Task PromoteSuggestedAsync_WhenEvalFailed_ReturnsEvalRegressedAndDoesNotUpdate()
     {
         var agentId = Guid.NewGuid();
-        var service = CreateService(out var store, out _, true);
+        var service = CreateService(out var store, out _, agentExists: true);
         var actionId = Guid.NewGuid();
         // A recorded eval for the current Version but Passed == false — the gate blocks with EvalRegressed.
         store.GetByIdAsync(actionId, Arg.Any<CancellationToken>())
@@ -569,7 +569,7 @@ public sealed class PlaybookActionServiceTests
     public async Task PromoteSuggestedAsync_WhenEvalForOlderVersion_ReturnsEvalStaleAndDoesNotUpdate()
     {
         var agentId = Guid.NewGuid();
-        var service = CreateService(out var store, out _, true);
+        var service = CreateService(out var store, out _, agentExists: true);
         var actionId = Guid.NewGuid();
         // A passing eval, but recorded for an older content snapshot (Version 1) than the action's current Version (2).
         store.GetByIdAsync(actionId, Arg.Any<CancellationToken>())
@@ -589,7 +589,7 @@ public sealed class PlaybookActionServiceTests
     public async Task RecordEvalResultAsync_WhenOwnedPendingSuggestion_StoresEvalResultAndStaysSuggested()
     {
         var agentId = Guid.NewGuid();
-        var service = CreateService(out var store, out _, true);
+        var service = CreateService(out var store, out _, agentExists: true);
         var actionId = Guid.NewGuid();
         var pending = CreateSuggestedRecord(agentId, actionId);
         var json = PassingEvalResultJson(1);
@@ -618,7 +618,7 @@ public sealed class PlaybookActionServiceTests
     {
         var routeAgentId = Guid.NewGuid();
         var otherAgentId = Guid.NewGuid();
-        var service = CreateService(out var store, out _, true);
+        var service = CreateService(out var store, out _, agentExists: true);
         var actionId = Guid.NewGuid();
         store.GetByIdAsync(actionId, Arg.Any<CancellationToken>()).Returns(CreateSuggestedRecord(otherAgentId, actionId));
 
@@ -632,7 +632,7 @@ public sealed class PlaybookActionServiceTests
     public async Task RejectSuggestedAsync_WhenOwnedPendingSuggestion_UpdatesToArchived()
     {
         var agentId = Guid.NewGuid();
-        var service = CreateService(out var store, out _, true);
+        var service = CreateService(out var store, out _, agentExists: true);
         var actionId = Guid.NewGuid();
         var pending = CreateSuggestedRecord(agentId, actionId);
         store.GetByIdAsync(actionId, Arg.Any<CancellationToken>()).Returns(pending);
@@ -655,7 +655,7 @@ public sealed class PlaybookActionServiceTests
     {
         var routeAgentId = Guid.NewGuid();
         var otherAgentId = Guid.NewGuid();
-        var service = CreateService(out var store, out _, true);
+        var service = CreateService(out var store, out _, agentExists: true);
         var actionId = Guid.NewGuid();
         store.GetByIdAsync(actionId, Arg.Any<CancellationToken>()).Returns(CreateSuggestedRecord(otherAgentId, actionId));
 
@@ -669,7 +669,7 @@ public sealed class PlaybookActionServiceTests
     public async Task UpdateSuggestedAsync_EditsFieldsButKeepsSuggestedAnalysisAndEvidence()
     {
         var agentId = Guid.NewGuid();
-        var service = CreateService(out var store, out _, true);
+        var service = CreateService(out var store, out _, agentExists: true);
         var actionId = Guid.NewGuid();
         var evidence = new[]
         {
@@ -687,7 +687,7 @@ public sealed class PlaybookActionServiceTests
              {
                  Behavior = "Edited behavior."
              });
-        var input = new SuggestedActionEditInput(agentId, actionId, "Edited behavior.", "new trigger", "new-scope", 7);
+        var input = new SuggestedActionEditInput(agentId, actionId, "Edited behavior.", "new trigger", "new-scope", Priority: 7);
 
         var result = await service.UpdateSuggestedAsync(input).ConfigureAwait(false);
 
@@ -712,10 +712,10 @@ public sealed class PlaybookActionServiceTests
     {
         var routeAgentId = Guid.NewGuid();
         var otherAgentId = Guid.NewGuid();
-        var service = CreateService(out var store, out _, true);
+        var service = CreateService(out var store, out _, agentExists: true);
         var actionId = Guid.NewGuid();
         store.GetByIdAsync(actionId, Arg.Any<CancellationToken>()).Returns(CreateSuggestedRecord(otherAgentId, actionId));
-        var input = new SuggestedActionEditInput(routeAgentId, actionId, "Edited behavior.", null, null, 1);
+        var input = new SuggestedActionEditInput(routeAgentId, actionId, "Edited behavior.", TriggerCondition: null, Scope: null, Priority: 1);
 
         var result = await service.UpdateSuggestedAsync(input).ConfigureAwait(false);
 
@@ -727,8 +727,8 @@ public sealed class PlaybookActionServiceTests
     public async Task UpdateSuggestedAsync_WithBlankBehavior_ThrowsValidation()
     {
         var agentId = Guid.NewGuid();
-        var service = CreateService(out var store, out _, true);
-        var input = new SuggestedActionEditInput(agentId, Guid.NewGuid(), "   ", null, null, 1);
+        var service = CreateService(out var store, out _, agentExists: true);
+        var input = new SuggestedActionEditInput(agentId, Guid.NewGuid(), "   ", TriggerCondition: null, Scope: null, Priority: 1);
 
         await AssertEx.ThrowsAsync<PlaybookActionValidationException>(() => service.UpdateSuggestedAsync(input)).ConfigureAwait(false);
         await store.DidNotReceive().UpdateAsync(Arg.Any<Guid>(), Arg.Any<PlaybookActionInput>(), Arg.Any<CancellationToken>()).ConfigureAwait(false);
@@ -740,9 +740,9 @@ public sealed class PlaybookActionServiceTests
     {
         return new PlaybookAnalysisSuggestionInput(agentDefinitionId,
             "Prefer the existing shared helper over a new one-off.",
-            null,
-            null,
-            100,
+            TriggerCondition: null,
+            Scope: null,
+            Priority: 100,
             feedbackIds,
             confidence);
     }
@@ -753,42 +753,42 @@ public sealed class PlaybookActionServiceTests
             agentDefinitionId,
             PlaybookActionState.Suggested,
             PlaybookActionSource.Analysis,
-            null,
+            TriggerCondition: null,
             "A suggested behavior.",
-            null,
-            100,
-            1,
-            10,
-            10,
+            Scope: null,
+            Priority: 100,
+            Version: 1,
+            CreatedAtUtc: 10,
+            UpdatedAtUtc: 10,
             new[]
             {
                 Guid.NewGuid()
             },
-            0.6d);
+            Confidence: 0.6d);
     }
 
     private static string PassingEvalResultJson(int version)
     {
-        return EvalResultJson(true, version);
+        return EvalResultJson(passed: true, version);
     }
 
     private static string FailingEvalResultJson(int version)
     {
-        return EvalResultJson(false, version);
+        return EvalResultJson(passed: false, version);
     }
 
     private static string EvalResultJson(bool passed, int version)
     {
         var result = new PlaybookEvalResult(passed,
-            1_000,
+            EvaluatedAtUtc: 1_000,
             version,
             "test-model",
-            1,
-            1,
-            1,
+            GoldenCaseCount: 1,
+            GoldenCaseTotal: 1,
+            BaselinePassCount: 1,
             passed ? 1 : 0,
             passed ? 0 : 1,
-            0,
+            ImprovedCaseCount: 0,
             []);
         return JsonSerializer.Serialize(result, PlaybookEvalResult.SerializerOptions);
     }
@@ -820,10 +820,10 @@ public sealed class PlaybookActionServiceTests
         return new PlaybookActionInput(agentDefinitionId ?? Guid.NewGuid(),
             state,
             source,
-            null,
+            TriggerCondition: null,
             behavior,
-            null,
-            10);
+            Scope: null,
+            Priority: 10);
     }
 
     private static PlaybookActionRecord CreateRecord(PlaybookActionInput input)
@@ -836,9 +836,9 @@ public sealed class PlaybookActionServiceTests
             input.Behavior,
             input.Scope,
             input.Priority,
-            1,
-            10,
-            10);
+            Version: 1,
+            CreatedAtUtc: 10,
+            UpdatedAtUtc: 10);
     }
 
     private static PlaybookActionRecord EnabledRecord(Guid agentDefinitionId)
@@ -847,29 +847,29 @@ public sealed class PlaybookActionServiceTests
             agentDefinitionId,
             PlaybookActionState.Enabled,
             PlaybookActionSource.Manual,
-            null,
+            TriggerCondition: null,
             "An already-enabled behavior.",
-            null,
-            10,
-            1,
-            10,
-            10);
+            Scope: null,
+            Priority: 10,
+            Version: 1,
+            CreatedAtUtc: 10,
+            UpdatedAtUtc: 10);
     }
 
     private static AgentDefinitionRecord CreateAgent()
     {
         return new AgentDefinitionRecord(Guid.NewGuid(),
             "Builder",
-            null,
+            Description: null,
             "Instructions.",
-            null,
-            null,
+            ModelProfile: null,
+            ReasoningEffort: null,
             AgentDefinitionKind.Single,
             [],
             new Dictionary<string, bool>(),
-            null,
-            1,
-            10,
-            10);
+            OrchestrationTopologyJson: null,
+            Version: 1,
+            CreatedAtUtc: 10,
+            UpdatedAtUtc: 10);
     }
 }

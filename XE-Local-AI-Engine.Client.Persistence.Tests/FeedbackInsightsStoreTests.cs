@@ -17,7 +17,7 @@ public sealed class FeedbackInsightsStoreTests : IDisposable
     {
         if (Directory.Exists(_rootPath))
         {
-            Directory.Delete(_rootPath, true);
+            Directory.Delete(_rootPath, recursive: true);
         }
     }
 
@@ -39,27 +39,27 @@ public sealed class FeedbackInsightsStoreTests : IDisposable
         var cA1 = Guid.NewGuid();
         var cA2 = Guid.NewGuid();
         var cAPurged = Guid.NewGuid();
-        await InsertConversationAsync(connection, cA1, agentA, false, false);
-        await InsertConversationAsync(connection, cA2, agentA, false, true);
-        await InsertConversationAsync(connection, cAPurged, agentA, true, false);
+        await InsertConversationAsync(connection, cA1, agentA, purged: false, archived: false);
+        await InsertConversationAsync(connection, cA2, agentA, purged: false, archived: true);
+        await InsertConversationAsync(connection, cAPurged, agentA, purged: true, archived: false);
         // Other-agent and unbound conversations: their feedback must not leak into the primary agent's aggregate.
         var cB = Guid.NewGuid();
         var cUnbound = Guid.NewGuid();
-        await InsertConversationAsync(connection, cB, agentB, false, false);
-        await InsertConversationAsync(connection, cUnbound, null, false, false);
+        await InsertConversationAsync(connection, cB, agentB, purged: false, archived: false);
+        await InsertConversationAsync(connection, cUnbound, agentDefinitionId: null, purged: false, archived: false);
 
         var m1 = Guid.NewGuid();
         var m2 = Guid.NewGuid();
         var m3 = Guid.NewGuid();
         var m4 = Guid.NewGuid();
-        await InsertFeedbackAsync(connection, m1, cA1, Up, null, 50, agentA);
-        await InsertFeedbackAsync(connection, m2, cA1, Down, "slow", 100, agentA);
-        await InsertFeedbackAsync(connection, m3, cA1, Down, "wrong", 200, agentA);
-        await InsertFeedbackAsync(connection, m4, cA2, Up, "great", 150, agentA);
-        await InsertFeedbackAsync(connection, Guid.NewGuid(), cAPurged, Down, "excluded", 300, agentA);
-        await InsertFeedbackAsync(connection, Guid.NewGuid(), cB, Down, "b-down", 120, agentB);
+        await InsertFeedbackAsync(connection, m1, cA1, Up, comment: null, createdAtUtc: 50, agentA);
+        await InsertFeedbackAsync(connection, m2, cA1, Down, "slow", createdAtUtc: 100, agentA);
+        await InsertFeedbackAsync(connection, m3, cA1, Down, "wrong", createdAtUtc: 200, agentA);
+        await InsertFeedbackAsync(connection, m4, cA2, Up, "great", createdAtUtc: 150, agentA);
+        await InsertFeedbackAsync(connection, Guid.NewGuid(), cAPurged, Down, "excluded", createdAtUtc: 300, agentA);
+        await InsertFeedbackAsync(connection, Guid.NewGuid(), cB, Down, "b-down", createdAtUtc: 120, agentB);
         // Unbound message: no per-message agent → must not leak into any named agent's aggregate.
-        await InsertFeedbackAsync(connection, Guid.NewGuid(), cUnbound, Down, "unbound", 130, null);
+        await InsertFeedbackAsync(connection, Guid.NewGuid(), cUnbound, Down, "unbound", createdAtUtc: 130, agentDefinitionId: null);
 
         // "search" fires three times in cA1: COUNT(DISTINCT message_id) must keep search at 2 up / 2 down (the rated
         // messages), NOT inflate by the conversation x tool cartesian. This makes the DISTINCT load-bearing.
@@ -72,25 +72,25 @@ public sealed class FeedbackInsightsStoreTests : IDisposable
         await InsertToolEventAsync(connection, cB, "search");
 
         var store = new FeedbackInsightsStore(context);
-        var aggregate = AssertEx.NotNull(await store.GetAgentFeedbackAggregateAsync(agentA, 5), "Existing agent should aggregate.");
+        var aggregate = AssertEx.NotNull(await store.GetAgentFeedbackAggregateAsync(agentA, exemplarCap: 5), "Existing agent should aggregate.");
 
         AssertEx.Equal("Agent A", aggregate.AgentName);
         // Only the primary agent's non-purged feedback is counted: cA1 (1 up, 2 down) + cA2 (1 up). Purged/other-agent/unbound excluded.
-        AssertEx.Equal(2, aggregate.UpCount);
-        AssertEx.Equal(2, aggregate.DownCount);
+        AssertEx.Equal(expected: 2, aggregate.UpCount);
+        AssertEx.Equal(expected: 2, aggregate.DownCount);
 
         // Per-tool, conversation-level attribution, ordered by total desc then name. search spans cA1+cA2 (4 rated
         // messages: 2 up, 2 down); calc only cA2 (1 up). cAPurged's search is excluded.
-        AssertEx.Equal(2, aggregate.ByTool.Count);
+        AssertEx.Equal(expected: 2, aggregate.ByTool.Count);
         AssertEx.Equal("search", aggregate.ByTool[0].ToolName);
-        AssertEx.Equal(2, aggregate.ByTool[0].UpCount);
-        AssertEx.Equal(2, aggregate.ByTool[0].DownCount);
+        AssertEx.Equal(expected: 2, aggregate.ByTool[0].UpCount);
+        AssertEx.Equal(expected: 2, aggregate.ByTool[0].DownCount);
         AssertEx.Equal("calc", aggregate.ByTool[1].ToolName);
-        AssertEx.Equal(1, aggregate.ByTool[1].UpCount);
-        AssertEx.Equal(0, aggregate.ByTool[1].DownCount);
+        AssertEx.Equal(expected: 1, aggregate.ByTool[1].UpCount);
+        AssertEx.Equal(expected: 0, aggregate.ByTool[1].DownCount);
 
         // Exemplars: comment-only, down-first then newest-first. m1 (no comment) and the purged comment are excluded.
-        AssertEx.Equal(3, aggregate.Exemplars.Count);
+        AssertEx.Equal(expected: 3, aggregate.Exemplars.Count);
         AssertEx.Equal("wrong", aggregate.Exemplars[0].Comment);
         AssertEx.Equal(Down, aggregate.Exemplars[0].Rating);
         AssertEx.Equal(m3, aggregate.Exemplars[0].MessageId);
@@ -123,23 +123,23 @@ public sealed class FeedbackInsightsStoreTests : IDisposable
         // ignored in favour of the per-message agent.
         var unbound = Guid.NewGuid();
         var boundToB = Guid.NewGuid();
-        await InsertConversationAsync(connection, unbound, null, false, false);
-        await InsertConversationAsync(connection, boundToB, agentB, false, false);
+        await InsertConversationAsync(connection, unbound, agentDefinitionId: null, purged: false, archived: false);
+        await InsertConversationAsync(connection, boundToB, agentB, purged: false, archived: false);
 
-        await InsertFeedbackAsync(connection, Guid.NewGuid(), unbound, Up, "a-up", 10, agentA);
-        await InsertFeedbackAsync(connection, Guid.NewGuid(), unbound, Down, "b-down", 20, agentB);
+        await InsertFeedbackAsync(connection, Guid.NewGuid(), unbound, Up, "a-up", createdAtUtc: 10, agentA);
+        await InsertFeedbackAsync(connection, Guid.NewGuid(), unbound, Down, "b-down", createdAtUtc: 20, agentB);
         // Conversation bound to B, but this message was produced by A: it must count under A, not B.
-        await InsertFeedbackAsync(connection, Guid.NewGuid(), boundToB, Up, "a-in-b-conv", 30, agentA);
+        await InsertFeedbackAsync(connection, Guid.NewGuid(), boundToB, Up, "a-in-b-conv", createdAtUtc: 30, agentA);
 
         var store = new FeedbackInsightsStore(context);
 
-        var aggregateA = AssertEx.NotNull(await store.GetAgentFeedbackAggregateAsync(agentA, 5), "Agent A should aggregate.");
-        AssertEx.Equal(2, aggregateA.UpCount);
-        AssertEx.Equal(0, aggregateA.DownCount);
+        var aggregateA = AssertEx.NotNull(await store.GetAgentFeedbackAggregateAsync(agentA, exemplarCap: 5), "Agent A should aggregate.");
+        AssertEx.Equal(expected: 2, aggregateA.UpCount);
+        AssertEx.Equal(expected: 0, aggregateA.DownCount);
 
-        var aggregateB = AssertEx.NotNull(await store.GetAgentFeedbackAggregateAsync(agentB, 5), "Agent B should aggregate.");
-        AssertEx.Equal(0, aggregateB.UpCount);
-        AssertEx.Equal(1, aggregateB.DownCount);
+        var aggregateB = AssertEx.NotNull(await store.GetAgentFeedbackAggregateAsync(agentB, exemplarCap: 5), "Agent B should aggregate.");
+        AssertEx.Equal(expected: 0, aggregateB.UpCount);
+        AssertEx.Equal(expected: 1, aggregateB.DownCount);
     }
 
     [Test]
@@ -154,7 +154,7 @@ public sealed class FeedbackInsightsStoreTests : IDisposable
 
         var store = new FeedbackInsightsStore(context);
 
-        AssertEx.Null(await store.GetAgentFeedbackAggregateAsync(Guid.NewGuid(), 5), "An unknown agent id should return null.");
+        AssertEx.Null(await store.GetAgentFeedbackAggregateAsync(Guid.NewGuid(), exemplarCap: 5), "An unknown agent id should return null.");
     }
 
     [Test]
@@ -171,15 +171,15 @@ public sealed class FeedbackInsightsStoreTests : IDisposable
         var connection = await OpenConnectionAsync(context);
 
         var conversation = Guid.NewGuid();
-        await InsertConversationAsync(connection, conversation, agent, false, false);
-        await InsertFeedbackAsync(connection, Guid.NewGuid(), conversation, Down, "oldest", 10, agent);
-        await InsertFeedbackAsync(connection, Guid.NewGuid(), conversation, Down, "middle", 20, agent);
-        await InsertFeedbackAsync(connection, Guid.NewGuid(), conversation, Down, "newest", 30, agent);
+        await InsertConversationAsync(connection, conversation, agent, purged: false, archived: false);
+        await InsertFeedbackAsync(connection, Guid.NewGuid(), conversation, Down, "oldest", createdAtUtc: 10, agent);
+        await InsertFeedbackAsync(connection, Guid.NewGuid(), conversation, Down, "middle", createdAtUtc: 20, agent);
+        await InsertFeedbackAsync(connection, Guid.NewGuid(), conversation, Down, "newest", createdAtUtc: 30, agent);
 
         var store = new FeedbackInsightsStore(context);
-        var aggregate = AssertEx.NotNull(await store.GetAgentFeedbackAggregateAsync(agent, 2), "Existing agent should aggregate.");
+        var aggregate = AssertEx.NotNull(await store.GetAgentFeedbackAggregateAsync(agent, exemplarCap: 2), "Existing agent should aggregate.");
 
-        AssertEx.Equal(2, aggregate.Exemplars.Count);
+        AssertEx.Equal(expected: 2, aggregate.Exemplars.Count);
         AssertEx.Equal("newest", aggregate.Exemplars[0].Comment);
         AssertEx.Equal("middle", aggregate.Exemplars[1].Comment);
     }
@@ -188,14 +188,14 @@ public sealed class FeedbackInsightsStoreTests : IDisposable
     {
         var store = new AgentDefinitionStore(context, TimeProvider.System);
         var agent = await store.AddAsync(new AgentDefinitionInput(name,
-            null,
+            Description: null,
             "You are a careful engineering agent.",
-            null,
-            null,
+            ModelProfile: null,
+            ReasoningEffort: null,
             AgentDefinitionKind.Single,
             [],
             new Dictionary<string, bool>(),
-            null));
+            OrchestrationTopologyJson: null));
         return agent.Id;
     }
 
@@ -292,7 +292,7 @@ public sealed class FeedbackInsightsStoreTests : IDisposable
 
     private static byte[] CreateKeyMaterial()
     {
-        return Enumerable.Range(0, 32).Select(static value => (byte)(value + 1)).ToArray();
+        return Enumerable.Range(start: 0, count: 32).Select(static value => (byte)(value + 1)).ToArray();
     }
 
     private sealed class FixedNodeSqliteKeyHolder(byte[] key) : INodeSqliteKeyHolder

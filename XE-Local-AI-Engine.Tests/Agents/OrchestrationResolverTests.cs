@@ -116,7 +116,7 @@ public sealed class OrchestrationResolverTests
 
         AssertEx.NotNull(resolved);
         AssertEx.Equal(triage.Id.ToString("D"), resolved!.Spec.TriageParticipantKey);
-        AssertEx.Equal(2, resolved.Spec.Participants.Count);
+        AssertEx.Equal(expected: 2, resolved.Spec.Participants.Count);
         AssertEx.Contains(resolved.Spec.Participants, participant => participant.Key == specialist.Id.ToString("D"));
         // The orchestrator's own single-agent inputs ride alongside the spec for the degrade-safe fallback.
         AssertEx.Equal(orchestrator.Instructions, resolved.ResolvedSystemPrompt);
@@ -144,9 +144,9 @@ public sealed class OrchestrationResolverTests
         AssertEx.NotNull(resolved);
         var specialistSpec = resolved!.Spec.Participants.Single(participant => participant.Key == specialist.Id.ToString("D"));
         // "NotOffered" is dropped (not in the offer); "GetCurrentTime" survives with the approval override applied.
-        AssertEx.Equal(1, specialistSpec.Tools.Count);
+        AssertEx.Equal(expected: 1, specialistSpec.Tools.Count);
         AssertEx.Equal("GetCurrentTime", specialistSpec.Tools[0].Name);
-        AssertEx.Equal(true, specialistSpec.Tools[0].RequiresApproval);
+        AssertEx.Equal(expected: true, specialistSpec.Tools[0].RequiresApproval);
     }
 
     [Test]
@@ -159,7 +159,7 @@ public sealed class OrchestrationResolverTests
         SeedParticipants(store, triage, specialist);
         playbookStore.ListEnabledByAgentAsync(specialist.Id, Arg.Any<CancellationToken>())
                      .Returns(Task.FromResult<IReadOnlyList<PlaybookActionRecord>>([
-                         EnabledAction(specialist.Id, "Stay terse.", 1)
+                         EnabledAction(specialist.Id, "Stay terse.", priority: 1)
                      ]));
 
         var resolved = await resolver.ResolveAsync(orchestrator, ToolCapableModel).ConfigureAwait(false);
@@ -196,15 +196,15 @@ public sealed class OrchestrationResolverTests
         // Per-participant playbook retrieval: a participant whose enabled set exceeds the threshold and a non-blank
         // retrievalQuery must route through the SAME shared PlaybookRetrievalSelector the single-agent path uses, so only
         // the ranker's top-k (re-ordered by Priority then CreatedAtUtc) is folded into that participant's instructions.
-        var lowPriority = EnabledAction(Guid.Empty, "Prefer small commits.", 5);
-        var highPriority = EnabledAction(Guid.Empty, "Run the tests first.", 1);
-        var ignored = EnabledAction(Guid.Empty, "Write a changelog.", 9);
+        var lowPriority = EnabledAction(Guid.Empty, "Prefer small commits.", priority: 5);
+        var highPriority = EnabledAction(Guid.Empty, "Run the tests first.", priority: 1);
+        var ignored = EnabledAction(Guid.Empty, "Write a changelog.", priority: 9);
 
         var ranker = new RecordingRanker([lowPriority, highPriority]);
         var triage = CreateDefinition("Triage", modelProfile: ToolCapableModel, allowedTools: ["GetCurrentTime"]);
         var specialist = CreateDefinition("Specialist", modelProfile: ToolCapableModel, allowedTools: ["GetCurrentTime"], playbookEnabled: true);
         var orchestrator = CreateOrchestrator(ToolCapableModel, triage, [triage, specialist]);
-        var resolver = BuildResolverWithRanker(out var store, out var playbookStore, ranker, 2, 2, OfferTool("GetCurrentTime"));
+        var resolver = BuildResolverWithRanker(out var store, out var playbookStore, ranker, threshold: 2, topK: 2, OfferTool("GetCurrentTime"));
         SeedParticipants(store, triage, specialist);
         playbookStore.ListEnabledByAgentAsync(specialist.Id, Arg.Any<CancellationToken>())
                      .Returns(Task.FromResult<IReadOnlyList<PlaybookActionRecord>>([highPriority, lowPriority, ignored]));
@@ -212,7 +212,7 @@ public sealed class OrchestrationResolverTests
         var resolved = await resolver.ResolveAsync(orchestrator, ToolCapableModel, "run the tests").ConfigureAwait(false);
 
         AssertEx.NotNull(resolved);
-        AssertEx.Equal(1, ranker.CallCount);
+        AssertEx.Equal(expected: 1, ranker.CallCount);
         var specialistSpec = resolved!.Spec.Participants.Single(participant => participant.Key == specialist.Id.ToString("D"));
         // Top-k of the selector, re-ordered by Priority ascending (1 before 5); the ignored third action is absent.
         AssertEx.Equal("Instructions for Specialist\n\n## Operating Playbook\n- Run the tests first.\n- Prefer small commits.", specialistSpec.Instructions);
@@ -251,7 +251,7 @@ public sealed class OrchestrationResolverTests
         var resolved = await resolver.ResolveAsync(orchestrator, ToolCapableModel).ConfigureAwait(false);
 
         AssertEx.NotNull(resolved);
-        AssertEx.Equal(1, resolved!.Spec.Edges.Count);
+        AssertEx.Equal(expected: 1, resolved!.Spec.Edges.Count);
         AssertEx.Equal(specialist.Id.ToString("D"), resolved.Spec.Edges[0].ToKey);
     }
 
@@ -274,7 +274,7 @@ public sealed class OrchestrationResolverTests
         var resolved = await resolver.ResolveAsync(orchestrator, ToolCapableModel).ConfigureAwait(false);
 
         AssertEx.NotNull(resolved);
-        AssertEx.Equal(8, resolved!.Spec.MaxTurnsPerAgent);
+        AssertEx.Equal(expected: 8, resolved!.Spec.MaxTurnsPerAgent);
     }
 
     private static OrchestrationResolver CreateResolver(out IAgentDefinitionStore store, params AllowedToolDto[] offeredTools)
@@ -392,8 +392,8 @@ public sealed class OrchestrationResolverTests
             toolApprovals ?? new Dictionary<string, bool>(),
             topologyJson,
             version,
-            10,
-            10,
+            CreatedAtUtc: 10,
+            UpdatedAtUtc: 10,
             playbookEnabled);
     }
 
@@ -403,13 +403,13 @@ public sealed class OrchestrationResolverTests
             agentDefinitionId,
             PlaybookActionState.Enabled,
             PlaybookActionSource.Manual,
-            null,
+            TriggerCondition: null,
             behavior,
-            null,
+            Scope: null,
             priority,
-            1,
-            10,
-            10);
+            Version: 1,
+            CreatedAtUtc: 10,
+            UpdatedAtUtc: 10);
     }
 
     private static AllowedToolDto OfferTool(string name, bool requiresApproval = false)

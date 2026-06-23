@@ -16,7 +16,7 @@ public sealed class AgentDefinitionStoreTests : IDisposable
     {
         if (Directory.Exists(_rootPath))
         {
-            Directory.Delete(_rootPath, true);
+            Directory.Delete(_rootPath, recursive: true);
         }
     }
 
@@ -38,7 +38,7 @@ public sealed class AgentDefinitionStoreTests : IDisposable
             AssertEx.Equal("Builder", added.Name);
             AssertEx.Equal(Instructions, added.Instructions);
             AssertEx.Equal(Description, added.Description);
-            AssertEx.Equal(1, added.Version);
+            AssertEx.Equal(expected: 1, added.Version);
             AssertEx.True(added.Id != Guid.Empty, "Add should assign a definition id.");
             AssertEx.True(added.CreatedAtUtc > 0, "Add should stamp a creation time.");
             AssertEx.Equal(added.CreatedAtUtc, added.UpdatedAtUtc);
@@ -53,7 +53,7 @@ public sealed class AgentDefinitionStoreTests : IDisposable
         AssertEx.Equal(Description, byId.Description);
 
         var list = await readStore.ListAsync();
-        AssertEx.Equal(1, list.Count);
+        AssertEx.Equal(expected: 1, list.Count);
 
         var unknown = await readStore.GetByIdAsync(Guid.NewGuid());
         AssertEx.Null(unknown, "Unknown id should return null.");
@@ -127,7 +127,7 @@ public sealed class AgentDefinitionStoreTests : IDisposable
         AssertEx.Equal("high", record.ReasoningEffort);
         AssertEx.Equal("qwen3:8b", record.ModelProfile);
         AssertEx.Equal("{\"nodes\":[]}", record.OrchestrationTopologyJson);
-        AssertEx.Equal(2, record.AllowedToolNames.Count);
+        AssertEx.Equal(expected: 2, record.AllowedToolNames.Count);
         AssertEx.True(record.AllowedToolNames.Contains("run_in_agent_home"), "Tool list should round-trip.");
         AssertEx.True(record.ToolApprovals["run_in_agent_home"], "Approval flag should round-trip as true.");
         AssertEx.False(record.ToolApprovals["export_patch"], "Approval flag should round-trip as false.");
@@ -173,7 +173,7 @@ public sealed class AgentDefinitionStoreTests : IDisposable
         var store = new AgentDefinitionStore(context, clock);
 
         var added = await store.AddAsync(CreateInput());
-        AssertEx.Equal(1, added.Version);
+        AssertEx.Equal(expected: 1, added.Version);
 
         clock.Advance(50);
         var updated = AssertEx.NotNull(await store.UpdateAsync(added.Id, CreateInput() with
@@ -182,7 +182,7 @@ public sealed class AgentDefinitionStoreTests : IDisposable
             }),
             "Update should find the definition.");
 
-        AssertEx.Equal(2, updated.Version);
+        AssertEx.Equal(expected: 2, updated.Version);
         AssertEx.True(updated.UpdatedAtUtc > added.UpdatedAtUtc, "A config change should advance UpdatedAtUtc.");
     }
 
@@ -210,7 +210,7 @@ public sealed class AgentDefinitionStoreTests : IDisposable
 
         AssertEx.Equal("Renamed", updated.Name);
         AssertEx.Equal("New description only.", updated.Description);
-        AssertEx.Equal(1, updated.Version);
+        AssertEx.Equal(expected: 1, updated.Version);
         AssertEx.True(updated.UpdatedAtUtc > added.UpdatedAtUtc, "A name/description edit should still advance UpdatedAtUtc.");
     }
 
@@ -242,7 +242,7 @@ public sealed class AgentDefinitionStoreTests : IDisposable
                 ["charlie"] = true
             }
         });
-        AssertEx.Equal(1, added.Version);
+        AssertEx.Equal(expected: 1, added.Version);
 
         // Same approvals, different key insertion order — must be treated as no config change.
         clock.Advance(10);
@@ -258,7 +258,7 @@ public sealed class AgentDefinitionStoreTests : IDisposable
             }),
             "Update should find the definition.");
 
-        AssertEx.Equal(1, reordered.Version);
+        AssertEx.Equal(expected: 1, reordered.Version);
         AssertEx.True(reordered.UpdatedAtUtc > added.UpdatedAtUtc, "An approvals reorder should still advance UpdatedAtUtc.");
 
         // Flipping an actual approval value is a real config change and must bump the version.
@@ -275,7 +275,7 @@ public sealed class AgentDefinitionStoreTests : IDisposable
             }),
             "Update should find the definition.");
 
-        AssertEx.Equal(2, flipped.Version);
+        AssertEx.Equal(expected: 2, flipped.Version);
     }
 
     [Test]
@@ -398,10 +398,10 @@ public sealed class AgentDefinitionStoreTests : IDisposable
                 secondSkill
             }
         });
-        AssertEx.Equal(2, added.AllowedSkillIds!.Count);
+        AssertEx.Equal(expected: 2, added.AllowedSkillIds!.Count);
         AssertEx.Equal(firstSkill, added.AllowedSkillIds![0]);
         AssertEx.Equal(secondSkill, added.AllowedSkillIds![1]);
-        AssertEx.Equal(1, added.Version);
+        AssertEx.Equal(expected: 1, added.Version);
 
         // Changing the assigned skill set is config-affecting (same class as the tool list) and must bump Version.
         clock.Advance(10);
@@ -413,9 +413,9 @@ public sealed class AgentDefinitionStoreTests : IDisposable
                 }
             }),
             "Update should find the definition.");
-        AssertEx.Equal(1, updated.AllowedSkillIds!.Count);
+        AssertEx.Equal(expected: 1, updated.AllowedSkillIds!.Count);
         AssertEx.Equal(firstSkill, updated.AllowedSkillIds![0]);
-        AssertEx.Equal(2, updated.Version);
+        AssertEx.Equal(expected: 2, updated.Version);
 
         // Re-applying the same skill set is not a config change and must not bump Version again.
         clock.Advance(10);
@@ -427,7 +427,7 @@ public sealed class AgentDefinitionStoreTests : IDisposable
                 }
             }),
             "Update should find the definition.");
-        AssertEx.Equal(2, unchanged.Version);
+        AssertEx.Equal(expected: 2, unchanged.Version);
     }
 
     [Test]
@@ -460,12 +460,12 @@ public sealed class AgentDefinitionStoreTests : IDisposable
         return new AgentDefinitionInput("Builder",
             Description,
             Instructions,
-            null,
-            null,
+            ModelProfile: null,
+            ReasoningEffort: null,
             AgentDefinitionKind.Single,
             [],
             new Dictionary<string, bool>(),
-            null);
+            OrchestrationTopologyJson: null);
     }
 
     private static async Task TamperInstructionsAsync(string databasePath)
@@ -503,7 +503,7 @@ public sealed class AgentDefinitionStoreTests : IDisposable
 
     private static byte[] CreateKeyMaterial()
     {
-        return Enumerable.Range(0, 32).Select(static value => (byte)(value + 1)).ToArray();
+        return Enumerable.Range(start: 0, count: 32).Select(static value => (byte)(value + 1)).ToArray();
     }
 
     private static bool ContainsSubsequence(byte[] source, byte[] needle)

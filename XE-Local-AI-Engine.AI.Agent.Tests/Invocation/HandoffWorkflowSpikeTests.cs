@@ -61,7 +61,7 @@ public sealed class HandoffWorkflowSpikeTests
             "triage",
             TriageInstructions,
             "Triage agent.",
-            null,
+            tools: null,
             NullLoggerFactory.Instance,
             sp);
 
@@ -69,7 +69,7 @@ public sealed class HandoffWorkflowSpikeTests
             "specialist",
             SpecialistInstructions,
             "Specialist agent.",
-            null,
+            tools: null,
             NullLoggerFactory.Instance,
             sp);
 
@@ -103,7 +103,7 @@ public sealed class HandoffWorkflowSpikeTests
         using var timeout = new CancellationTokenSource(TimeSpan.FromSeconds(30));
         await foreach (var evt in run.WatchStreamAsync(timeout.Token))
         {
-            Console.WriteLine($"[P5][A] event={evt.GetType().Name} :: {Truncate(evt.ToString(), 200)}");
+            Console.WriteLine($"[P5][A] event={evt.GetType().Name} :: {Truncate(evt.ToString(), max: 200)}");
             switch (evt)
             {
                 case AgentResponseEvent are:
@@ -131,7 +131,7 @@ public sealed class HandoffWorkflowSpikeTests
         }
 
         var allOutput = outputText.ToString();
-        Console.WriteLine($"[P5][A] aggregated output: {Truncate(allOutput, 400)}");
+        Console.WriteLine($"[P5][A] aggregated output: {Truncate(allOutput, max: 400)}");
         Console.WriteLine($"[P5][A] specialistInvokedAtLeastOnce={fake.SpecialistInvocations} sawUserQuestionAtSpecialist={fake.SpecialistSawUserQuestion}");
 
         AssertEx.True(fake.SpecialistInvocations > 0, "specialist agent must be invoked after the handoff");
@@ -204,7 +204,7 @@ public sealed class HandoffWorkflowSpikeTests
         {
             await foreach (var evt in run.WatchStreamAsync(pauseTimeout.Token))
             {
-                Console.WriteLine($"[P5][B approve={approve}] event={evt.GetType().Name} :: {Truncate(evt.ToString(), 160)}");
+                Console.WriteLine($"[P5][B approve={approve}] event={evt.GetType().Name} :: {Truncate(evt.ToString(), max: 160)}");
                 if (evt is RequestInfoEvent rie)
                 {
                     Console.WriteLine(
@@ -230,7 +230,7 @@ public sealed class HandoffWorkflowSpikeTests
 
         Console.WriteLine(
             $"[P5][B approve={approve}] PAUSE: requestInfoEvent={approvalRequestEvent is not null} agentEventApproval={approvalContentFromAgentEvent is not null} executedBeforeResume={executed}");
-        AssertEx.Equal(0, executed, "tool must NOT execute before approval is granted");
+        AssertEx.Equal(expected: 0, executed, "tool must NOT execute before approval is granted");
         AssertEx.True(approvalRequestEvent is not null, "workflow must pause by surfacing a RequestInfoEvent for the approval");
 
         // RESUME: build the ExternalResponse from the held request and send it back into the same run.
@@ -248,7 +248,7 @@ public sealed class HandoffWorkflowSpikeTests
             {
                 await foreach (var evt in run.WatchStreamAsync(resumeTimeout.Token))
                 {
-                    Console.WriteLine($"[P5][B approve={approve}] (resume) event={evt.GetType().Name} :: {Truncate(evt.ToString(), 160)}");
+                    Console.WriteLine($"[P5][B approve={approve}] (resume) event={evt.GetType().Name} :: {Truncate(evt.ToString(), max: 160)}");
                     if (evt is ExecutorFailedEvent fail)
                     {
                         Console.WriteLine($"[P5][B approve={approve}]   (resume) ExecutorFailedEvent {fail.Data?.GetType().Name}: {fail.Data?.Message}");
@@ -276,11 +276,11 @@ public sealed class HandoffWorkflowSpikeTests
         Console.WriteLine($"[P5][B approve={approve}] AFTER RESUME executed={executed} sawTerminalOutput={sawTerminalOutput}");
         if (approve)
         {
-            AssertEx.Equal(1, executed, "approved tool must execute exactly once after resume");
+            AssertEx.Equal(expected: 1, executed, "approved tool must execute exactly once after resume");
         }
         else
         {
-            AssertEx.Equal(0, executed, "rejected tool must never execute");
+            AssertEx.Equal(expected: 0, executed, "rejected tool must never execute");
         }
     }
 
@@ -341,7 +341,7 @@ public sealed class HandoffWorkflowSpikeTests
             "specialist",
             SpecialistInstructions,
             "Specialist agent.",
-            null,
+            tools: null,
             NullLoggerFactory.Instance,
             sp);
 
@@ -368,7 +368,7 @@ public sealed class HandoffWorkflowSpikeTests
         {
             await foreach (var evt in run.WatchStreamAsync(ph1Cts.Token))
             {
-                Console.WriteLine($"[P5][C approveFirst={approveFirst}] ph1 event={evt.GetType().Name} :: {Truncate(evt.ToString(), 160)}");
+                Console.WriteLine($"[P5][C approveFirst={approveFirst}] ph1 event={evt.GetType().Name} :: {Truncate(evt.ToString(), max: 160)}");
                 if (evt is RequestInfoEvent rie && rie.Request.PortInfo.RequestType.ToString().Contains("ToolApprovalRequestContent", StringComparison.Ordinal))
                 {
                     Console.WriteLine($"[P5][C approveFirst={approveFirst}] ph1 APPROVAL PAUSED RequestId='{rie.Request.RequestId}'");
@@ -384,7 +384,7 @@ public sealed class HandoffWorkflowSpikeTests
         }
 
         Console.WriteLine($"[P5][C approveFirst={approveFirst}] ph1 done: approvalEvent={approvalEvent is not null} lookupExecuted={lookupExecuted}");
-        AssertEx.Equal(0, lookupExecuted, "C: lookup tool must NOT execute before approval");
+        AssertEx.Equal(expected: 0, lookupExecuted, "C: lookup tool must NOT execute before approval");
         AssertEx.True(approvalEvent is not null, "C: workflow must pause with RequestInfoEvent for approval-required own tool");
 
         // --- Step 2: send approval/rejection, drain until handoff completes or tool-not-executed confirmed ---
@@ -400,7 +400,7 @@ public sealed class HandoffWorkflowSpikeTests
             {
                 await foreach (var evt in run.WatchStreamAsync(ph2Cts.Token))
                 {
-                    Console.WriteLine($"[P5][C approveFirst={approveFirst}] ph2 event={evt.GetType().Name} :: {Truncate(evt.ToString(), 180)}");
+                    Console.WriteLine($"[P5][C approveFirst={approveFirst}] ph2 event={evt.GetType().Name} :: {Truncate(evt.ToString(), max: 180)}");
                     if (evt is AgentResponseEvent are)
                     {
                         Console.WriteLine($"[P5][C approveFirst={approveFirst}] ph2 AgentResponseEvent executorId='{are.ExecutorId}' text='{Truncate(are.Response.Text)}'");
@@ -445,12 +445,12 @@ public sealed class HandoffWorkflowSpikeTests
 
         if (approveFirst)
         {
-            AssertEx.Equal(1, lookupExecuted, "C approve: lookup tool must execute exactly once after approval");
+            AssertEx.Equal(expected: 1, lookupExecuted, "C approve: lookup tool must execute exactly once after approval");
             AssertEx.Equal("C-42", lookupReason, "C approve: lookup tool must receive the scripted argument");
         }
         else
         {
-            AssertEx.Equal(0, lookupExecuted, "C reject: lookup tool must never execute when rejected");
+            AssertEx.Equal(expected: 0, lookupExecuted, "C reject: lookup tool must never execute when rejected");
         }
 
         AssertEx.True(fake.SpecialistInvocations > 0, "C: triage must hand off to specialist in both approve and reject paths");
@@ -535,13 +535,13 @@ public sealed class HandoffWorkflowSpikeTests
 
         public Task<ChatResponse> GetResponseAsync(IEnumerable<ChatMessage> messages, ChatOptions? options = null, CancellationToken cancellationToken = default)
         {
-            var (response, _) = Build(messages.ToList(), options, false);
+            var (response, _) = Build(messages.ToList(), options, streaming: false);
             return Task.FromResult(response!);
         }
 
         public IAsyncEnumerable<ChatResponseUpdate> GetStreamingResponseAsync(IEnumerable<ChatMessage> messages, ChatOptions? options = null, CancellationToken cancellationToken = default)
         {
-            var (_, update) = Build(messages.ToList(), options, true);
+            var (_, update) = Build(messages.ToList(), options, streaming: true);
             return Single(update!);
         }
 
@@ -566,7 +566,7 @@ public sealed class HandoffWorkflowSpikeTests
             Console.WriteLine($"[P5][A][fake] invoked streaming={streaming} msgCount={list.Count} roles=[{string.Join("|", list.Select(m => m.Role.Value))}] optionTools=[{toolNames}]");
             foreach (var m in list)
             {
-                Console.WriteLine($"[P5][A][fake]   {m.Role.Value}: {Truncate(m.Text, 90)} contents=[{string.Join(",", m.Contents.Select(c => c.GetType().Name))}]");
+                Console.WriteLine($"[P5][A][fake]   {m.Role.Value}: {Truncate(m.Text, max: 90)} contents=[{string.Join(",", m.Contents.Select(c => c.GetType().Name))}]");
             }
 
             if (handoffTool is null)
@@ -646,7 +646,7 @@ public sealed class HandoffWorkflowSpikeTests
             Console.WriteLine($"[P5][B][fake] call#{CallCount} msgCount={list.Count} roles=[{string.Join("|", list.Select(m => m.Role.Value))}]");
             foreach (var m in list)
             {
-                Console.WriteLine($"[P5][B][fake]   {m.Role.Value}: '{Truncate(m.Text, 70)}' contents=[{string.Join(",", m.Contents.Select(c => c.GetType().Name))}]");
+                Console.WriteLine($"[P5][B][fake]   {m.Role.Value}: '{Truncate(m.Text, max: 70)}' contents=[{string.Join(",", m.Contents.Select(c => c.GetType().Name))}]");
             }
 
             var toolHasRun = list.SelectMany(m => m.Contents).OfType<FunctionResultContent>().Any();
@@ -711,13 +711,13 @@ public sealed class HandoffWorkflowSpikeTests
 
         public Task<ChatResponse> GetResponseAsync(IEnumerable<ChatMessage> messages, ChatOptions? options = null, CancellationToken cancellationToken = default)
         {
-            var (resp, _) = Build(messages.ToList(), options, false);
+            var (resp, _) = Build(messages.ToList(), options, streaming: false);
             return Task.FromResult(resp!);
         }
 
         public IAsyncEnumerable<ChatResponseUpdate> GetStreamingResponseAsync(IEnumerable<ChatMessage> messages, ChatOptions? options = null, CancellationToken cancellationToken = default)
         {
-            var (_, upd) = Build(messages.ToList(), options, true);
+            var (_, upd) = Build(messages.ToList(), options, streaming: true);
             return Single(upd!);
         }
 
@@ -739,7 +739,7 @@ public sealed class HandoffWorkflowSpikeTests
             Console.WriteLine($"[P5][C][fake] invoked streaming={streaming} msgCount={list.Count} roles=[{string.Join("|", list.Select(m => m.Role.Value))}] optionTools=[{toolNames}]");
             foreach (var m in list)
             {
-                Console.WriteLine($"[P5][C][fake]   {m.Role.Value}: '{Truncate(m.Text, 80)}' contents=[{string.Join(",", m.Contents.Select(c => c.GetType().Name))}]");
+                Console.WriteLine($"[P5][C][fake]   {m.Role.Value}: '{Truncate(m.Text, max: 80)}' contents=[{string.Join(",", m.Contents.Select(c => c.GetType().Name))}]");
             }
 
             if (handoffTool is null)

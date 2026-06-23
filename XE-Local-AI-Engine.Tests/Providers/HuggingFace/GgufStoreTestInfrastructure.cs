@@ -122,7 +122,7 @@ internal static class GgufStoreTestInfrastructure
         // both with the same canned detail so either resolution path sees the seeded files.
         Task<GgufRepoDetail> Detail(CallInfo callInfo)
         {
-            return Task.FromResult(new GgufRepoDetail(callInfo.ArgAt<string>(0), false, "apache-2.0", files));
+            return Task.FromResult(new GgufRepoDetail(callInfo.ArgAt<string>(0), IsGated: false, "apache-2.0", files));
         }
 
         discovery.ListRepoFilesAsync(Arg.Any<string>(), Arg.Any<CancellationToken>()).Returns(Detail);
@@ -139,12 +139,12 @@ internal static class GgufStoreTestInfrastructure
             Revision,
             "llama",
             quant,
-            null,
-            null,
-            null,
-            null,
-            null,
-            null);
+            ParamCount: null,
+            BlockCount: null,
+            AttentionHeadCount: null,
+            AttentionHeadCountKV: null,
+            EmbeddingLength: null,
+            ContextLength: null);
     }
 
     public static string Sha256Upper(byte[] data)
@@ -190,7 +190,7 @@ internal static class GgufStoreTestInfrastructure
             {
                 if (Directory.Exists(Path))
                 {
-                    Directory.Delete(Path, true);
+                    Directory.Delete(Path, recursive: true);
                 }
             }
             catch (IOException)

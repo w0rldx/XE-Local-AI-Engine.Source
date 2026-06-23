@@ -20,7 +20,7 @@ public sealed class AdaptiveAgentMemoryStoreTests : IDisposable
     {
         if (Directory.Exists(_rootPath))
         {
-            Directory.Delete(_rootPath, true);
+            Directory.Delete(_rootPath, recursive: true);
         }
     }
 
@@ -93,9 +93,9 @@ public sealed class AdaptiveAgentMemoryStoreTests : IDisposable
     {
         // Pin the existing ints so a future reorder of the enum is caught by this test (the value is persisted as a
         // plain int, so the on-disk contract depends on these never changing).
-        AssertEx.Equal(0, (int)PlaybookActionSource.Manual);
-        AssertEx.Equal(1, (int)PlaybookActionSource.Analysis);
-        AssertEx.Equal(2, (int)PlaybookActionSource.Extracted);
+        AssertEx.Equal(expected: 0, (int)PlaybookActionSource.Manual);
+        AssertEx.Equal(expected: 1, (int)PlaybookActionSource.Analysis);
+        AssertEx.Equal(expected: 2, (int)PlaybookActionSource.Extracted);
 
         var databasePath = GetDatabasePath("source-extracted.sqlite");
         using var keyHolder = new FixedNodeSqliteKeyHolder(CreateKeyMaterial());
@@ -159,7 +159,7 @@ public sealed class AdaptiveAgentMemoryStoreTests : IDisposable
                 }),
                 "Update should find the definition.");
             AssertEx.False(updated.DefaultTemporaryChat, "DefaultTemporaryChat should round-trip false after update.");
-            AssertEx.Equal(1, updated.Version, "Toggling DefaultTemporaryChat alone must not bump Version (non-config-affecting).");
+            AssertEx.Equal(expected: 1, updated.Version, "Toggling DefaultTemporaryChat alone must not bump Version (non-config-affecting).");
         }
     }
 
@@ -233,7 +233,7 @@ public sealed class AdaptiveAgentMemoryStoreTests : IDisposable
                 }),
                 "Update should find the definition.");
             AssertEx.True(updated.MemoryExtractionEnabled, "MemoryExtractionEnabled should round-trip true after update.");
-            AssertEx.Equal(1, updated.Version, "Toggling MemoryExtractionEnabled alone must not bump Version (non-config-affecting).");
+            AssertEx.Equal(expected: 1, updated.Version, "Toggling MemoryExtractionEnabled alone must not bump Version (non-config-affecting).");
         }
     }
 
@@ -259,7 +259,7 @@ public sealed class AdaptiveAgentMemoryStoreTests : IDisposable
                 messageId,
                 "llama",
                 "config-hash-abc",
-                1234L,
+                LatencyMs: 1234L,
                 Success: true,
                 PromptTokens: 100,
                 CompletionTokens: 42));
@@ -267,9 +267,9 @@ public sealed class AdaptiveAgentMemoryStoreTests : IDisposable
 
             AssertEx.True(added.Id != Guid.Empty, "Add should assign a log id.");
             AssertEx.True(added.CreatedAtUtc > 0, "Add should stamp a creation time.");
-            AssertEx.Equal(1234L, added.LatencyMs);
-            AssertEx.Equal(100, added.PromptTokens);
-            AssertEx.Equal(42, added.CompletionTokens);
+            AssertEx.Equal(expected: 1234L, added.LatencyMs);
+            AssertEx.Equal(expected: 100, added.PromptTokens);
+            AssertEx.Equal(expected: 42, added.CompletionTokens);
             AssertEx.True(added.Success);
             AssertEx.Null(added.ErrorClass, "A successful run carries no error class.");
         }
@@ -277,8 +277,8 @@ public sealed class AdaptiveAgentMemoryStoreTests : IDisposable
         await using var readContext = CreateContext(databasePath, keyHolder);
         var readStore = new AgentExecutionLogStore(readContext, TimeProvider.System);
 
-        var page = await readStore.ListByAgentAsync(agentDefinitionId, 10);
-        AssertEx.Equal(1, page.Count);
+        var page = await readStore.ListByAgentAsync(agentDefinitionId, limit: 10);
+        AssertEx.Equal(expected: 1, page.Count);
         AssertEx.Equal(logId, page[0].Id);
         AssertEx.Equal(conversationId, page[0].ConversationId);
         AssertEx.Equal(messageId, page[0].MessageId);
@@ -321,7 +321,7 @@ public sealed class AdaptiveAgentMemoryStoreTests : IDisposable
             MessageId: null,
             "llama",
             "config-hash-xyz",
-            500L,
+            LatencyMs: 500L,
             Success: false,
             ErrorClass: "HttpRequestException"));
 
@@ -350,21 +350,21 @@ public sealed class AdaptiveAgentMemoryStoreTests : IDisposable
         for (var index = 0; index < 3; index++)
         {
             clock.Advance(10);
-            _ = await store.AddAsync(new AgentExecutionLogInput(agentDefinitionId, null, null, "llama", "h", index, Success: true));
+            _ = await store.AddAsync(new AgentExecutionLogInput(agentDefinitionId, ConversationId: null, MessageId: null, "llama", "h", index, Success: true));
         }
 
         // A row for a different agent must not appear in the page.
-        _ = await store.AddAsync(new AgentExecutionLogInput(otherAgentId, null, null, "llama", "h", 99L, Success: true));
+        _ = await store.AddAsync(new AgentExecutionLogInput(otherAgentId, ConversationId: null, MessageId: null, "llama", "h", LatencyMs: 99L, Success: true));
 
-        var firstPage = await store.ListByAgentAsync(agentDefinitionId, 2);
-        AssertEx.Equal(2, firstPage.Count);
+        var firstPage = await store.ListByAgentAsync(agentDefinitionId, limit: 2);
+        AssertEx.Equal(expected: 2, firstPage.Count);
         AssertEx.True(firstPage[0].CreatedAtUtc >= firstPage[1].CreatedAtUtc, "Logs should be newest first.");
 
-        var secondPage = await store.ListByAgentAsync(agentDefinitionId, 2, 2);
-        AssertEx.Equal(1, secondPage.Count);
+        var secondPage = await store.ListByAgentAsync(agentDefinitionId, limit: 2, offset: 2);
+        AssertEx.Equal(expected: 1, secondPage.Count);
 
-        var all = await store.ListByAgentAsync(agentDefinitionId, 100);
-        AssertEx.Equal(3, all.Count);
+        var all = await store.ListByAgentAsync(agentDefinitionId, limit: 100);
+        AssertEx.Equal(expected: 3, all.Count);
         AssertEx.True(all.All(log => log.AgentDefinitionId == agentDefinitionId), "Only the requested agent's logs should be returned.");
     }
 
@@ -382,18 +382,18 @@ public sealed class AdaptiveAgentMemoryStoreTests : IDisposable
         var store = new AgentExecutionLogStore(context, clock);
 
         // Old row — CreatedAtUtc = 1_000.
-        var oldLog = await store.AddAsync(new AgentExecutionLogInput(agentDefinitionId, null, null, "llama", "h", 1L, Success: true));
+        var oldLog = await store.AddAsync(new AgentExecutionLogInput(agentDefinitionId, ConversationId: null, MessageId: null, "llama", "h", LatencyMs: 1L, Success: true));
 
         // New row — CreatedAtUtc = 2_000.
         clock.Advance(1_000);
-        var newLog = await store.AddAsync(new AgentExecutionLogInput(agentDefinitionId, null, null, "llama", "h", 2L, Success: true));
+        var newLog = await store.AddAsync(new AgentExecutionLogInput(agentDefinitionId, ConversationId: null, MessageId: null, "llama", "h", LatencyMs: 2L, Success: true));
 
         // Cut off at 1_500 → old row (1_000) is expired; new row (2_000) survives.
         var deleted = await store.DeleteOlderThanAsync(1_500);
 
-        AssertEx.Equal(1, deleted);
-        var remaining = await store.ListByAgentAsync(agentDefinitionId, 10);
-        AssertEx.Equal(1, remaining.Count);
+        AssertEx.Equal(expected: 1, deleted);
+        var remaining = await store.ListByAgentAsync(agentDefinitionId, limit: 10);
+        AssertEx.Equal(expected: 1, remaining.Count);
         AssertEx.Equal(newLog.Id, remaining[0].Id);
         AssertEx.True(remaining.All(log => log.Id != oldLog.Id), "The expired row should have been swept.");
     }
@@ -411,11 +411,11 @@ public sealed class AdaptiveAgentMemoryStoreTests : IDisposable
         await context.Database.EnsureCreatedAsync();
         var store = new AgentExecutionLogStore(context, clock);
 
-        _ = await store.AddAsync(new AgentExecutionLogInput(agentDefinitionId, null, null, "llama", "h", 1L, Success: true));
+        _ = await store.AddAsync(new AgentExecutionLogInput(agentDefinitionId, ConversationId: null, MessageId: null, "llama", "h", LatencyMs: 1L, Success: true));
 
         var deleted = await store.DeleteOlderThanAsync(1_000);
 
-        AssertEx.Equal(0, deleted);
+        AssertEx.Equal(expected: 0, deleted);
     }
 
     [Test]
@@ -436,25 +436,25 @@ public sealed class AdaptiveAgentMemoryStoreTests : IDisposable
         for (var index = 0; index < 4; index++)
         {
             clock.Advance(10);
-            _ = await store.AddAsync(new AgentExecutionLogInput(agentA, null, null, "llama", "h", index, Success: true));
+            _ = await store.AddAsync(new AgentExecutionLogInput(agentA, ConversationId: null, MessageId: null, "llama", "h", index, Success: true));
         }
 
         clock.Advance(10);
-        _ = await store.AddAsync(new AgentExecutionLogInput(agentB, null, null, "llama", "h", 99L, Success: true));
+        _ = await store.AddAsync(new AgentExecutionLogInput(agentB, ConversationId: null, MessageId: null, "llama", "h", LatencyMs: 99L, Success: true));
 
         // Cap each agent to its 2 newest rows: agent A loses 2, agent B (only 1 row) loses none.
         var deleted = await store.TrimToMaxPerAgentAsync(2);
 
-        AssertEx.Equal(2, deleted);
+        AssertEx.Equal(expected: 2, deleted);
 
-        var agentARows = await store.ListByAgentAsync(agentA, 10);
-        AssertEx.Equal(2, agentARows.Count);
+        var agentARows = await store.ListByAgentAsync(agentA, limit: 10);
+        AssertEx.Equal(expected: 2, agentARows.Count);
         // The two survivors are the newest (1_040, 1_030).
-        AssertEx.Equal(1_040, agentARows[0].CreatedAtUtc);
-        AssertEx.Equal(1_030, agentARows[1].CreatedAtUtc);
+        AssertEx.Equal(expected: 1_040, agentARows[0].CreatedAtUtc);
+        AssertEx.Equal(expected: 1_030, agentARows[1].CreatedAtUtc);
 
-        var agentBRows = await store.ListByAgentAsync(agentB, 10);
-        AssertEx.Equal(1, agentBRows.Count);
+        var agentBRows = await store.ListByAgentAsync(agentB, limit: 10);
+        AssertEx.Equal(expected: 1, agentBRows.Count);
     }
 
     [Test]
@@ -471,11 +471,11 @@ public sealed class AdaptiveAgentMemoryStoreTests : IDisposable
         var store = new AgentExecutionLogStore(context, clock);
 
         clock.Advance(10);
-        _ = await store.AddAsync(new AgentExecutionLogInput(agentDefinitionId, null, null, "llama", "h", 1L, Success: true));
+        _ = await store.AddAsync(new AgentExecutionLogInput(agentDefinitionId, ConversationId: null, MessageId: null, "llama", "h", LatencyMs: 1L, Success: true));
 
-        AssertEx.Equal(0, await store.TrimToMaxPerAgentAsync(0));
-        AssertEx.Equal(0, await store.TrimToMaxPerAgentAsync(-5));
-        AssertEx.Equal(1, (await store.ListByAgentAsync(agentDefinitionId, 10)).Count);
+        AssertEx.Equal(expected: 0, await store.TrimToMaxPerAgentAsync(0));
+        AssertEx.Equal(expected: 0, await store.TrimToMaxPerAgentAsync(-5));
+        AssertEx.Equal(expected: 1, (await store.ListByAgentAsync(agentDefinitionId, limit: 10)).Count);
     }
 
     private static async Task<Guid> SeedAgentAsync(NodeChatDbContext context)
@@ -488,14 +488,14 @@ public sealed class AdaptiveAgentMemoryStoreTests : IDisposable
     private static AgentDefinitionInput CreateAgentInput()
     {
         return new AgentDefinitionInput("Builder",
-            null,
+            Description: null,
             Instructions,
-            null,
-            null,
+            ModelProfile: null,
+            ReasoningEffort: null,
             AgentDefinitionKind.Single,
             [],
             new Dictionary<string, bool>(),
-            null);
+            OrchestrationTopologyJson: null);
     }
 
     private static PlaybookActionInput CreatePlaybookInput(Guid agentDefinitionId)
@@ -506,7 +506,7 @@ public sealed class AdaptiveAgentMemoryStoreTests : IDisposable
             "When the user asks to finish or close out work.",
             Behavior,
             "testing",
-            10);
+            Priority: 10);
     }
 
     private static NodeChatDbContext CreateContext(string databasePath, INodeSqliteKeyHolder keyHolder)
@@ -522,7 +522,7 @@ public sealed class AdaptiveAgentMemoryStoreTests : IDisposable
 
     private static byte[] CreateKeyMaterial()
     {
-        return Enumerable.Range(0, 32).Select(static value => (byte)(value + 1)).ToArray();
+        return Enumerable.Range(start: 0, count: 32).Select(static value => (byte)(value + 1)).ToArray();
     }
 
     private sealed class MutableTimeProvider(long initialMilliseconds) : TimeProvider

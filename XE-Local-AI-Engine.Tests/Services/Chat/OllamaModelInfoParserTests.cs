@@ -36,7 +36,7 @@ public sealed class OllamaModelInfoParserTests
         var result = OllamaModelInfoParser.TryGetContextLength(ReadModelInfo(document), out var contextLength);
 
         AssertEx.True(result);
-        AssertEx.Equal(131072, contextLength);
+        AssertEx.Equal(expected: 131072, contextLength);
     }
 
     [Test]

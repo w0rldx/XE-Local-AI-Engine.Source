@@ -17,7 +17,7 @@ using XE_Local_AI_Engine.Tests.Testing;
 public sealed class SchedulerDispatchExecutorTests
 {
     private static readonly Guid JobId = Guid.Parse("11111111-1111-1111-1111-111111111111");
-    private static readonly DateTimeOffset Now = new(2026, 6, 1, 12, 0, 0, TimeSpan.Zero);
+    private static readonly DateTimeOffset Now = new(year: 2026, month: 6, day: 1, hour: 12, minute: 0, second: 0, TimeSpan.Zero);
 
     // ──────────────────────────────────────────────────────────────────────
     // Guard: definition not found
@@ -35,7 +35,7 @@ public sealed class SchedulerDispatchExecutorTests
 
         await executor.DispatchAsync(JobId, "fire-1", Now, Now, CancellationToken.None);
 
-        AssertEx.Equal(0, handler.InvocationCount, "Handler must not be invoked when definition is missing.");
+        AssertEx.Equal(expected: 0, handler.InvocationCount, "Handler must not be invoked when definition is missing.");
     }
 
     // ──────────────────────────────────────────────────────────────────────
@@ -47,14 +47,14 @@ public sealed class SchedulerDispatchExecutorTests
     {
         var handler = new TestEchoScheduledJobHandler();
         var store = Substitute.For<IScheduledJobDefinitionStore>();
-        store.GetByIdAsync(JobId, Arg.Any<CancellationToken>()).Returns(BuildRecord(false, false));
+        store.GetByIdAsync(JobId, Arg.Any<CancellationToken>()).Returns(BuildRecord(enabled: false, deleted: false));
 
         var registry = new ScheduledJobTemplateRegistry([handler]);
         var executor = CreateExecutor(store, registry);
 
         await executor.DispatchAsync(JobId, "fire-2", Now, Now, CancellationToken.None);
 
-        AssertEx.Equal(0, handler.InvocationCount, "Handler must not be invoked for a disabled definition.");
+        AssertEx.Equal(expected: 0, handler.InvocationCount, "Handler must not be invoked for a disabled definition.");
     }
 
     // ──────────────────────────────────────────────────────────────────────
@@ -70,14 +70,14 @@ public sealed class SchedulerDispatchExecutorTests
         var store = Substitute.For<IScheduledJobDefinitionStore>();
         // enabled=true but deleted — the check is `!Enabled || DeletedAtUtc != null`
         store.GetByIdAsync(JobId, Arg.Any<CancellationToken>())
-             .Returns(BuildRecord(true, true));
+             .Returns(BuildRecord(enabled: true, deleted: true));
 
         var registry = new ScheduledJobTemplateRegistry([handler]);
         var executor = CreateExecutor(store, registry);
 
         await executor.DispatchAsync(JobId, "fire-3", Now, Now, CancellationToken.None);
 
-        AssertEx.Equal(0, handler.InvocationCount, "Handler must not be invoked for a soft-deleted definition.");
+        AssertEx.Equal(expected: 0, handler.InvocationCount, "Handler must not be invoked for a soft-deleted definition.");
     }
 
     // ──────────────────────────────────────────────────────────────────────
@@ -90,7 +90,7 @@ public sealed class SchedulerDispatchExecutorTests
         var store = Substitute.For<IScheduledJobDefinitionStore>();
         // Record references a template that has no handler in the registry.
         store.GetByIdAsync(JobId, Arg.Any<CancellationToken>())
-             .Returns(BuildRecord(true, false, "unknown.template"));
+             .Returns(BuildRecord(enabled: true, deleted: false, "unknown.template"));
 
         // Registry contains only test.echo — "unknown.template" will miss.
         var registry = new ScheduledJobTemplateRegistry([new TestEchoScheduledJobHandler()]);
@@ -116,14 +116,14 @@ public sealed class SchedulerDispatchExecutorTests
         var handler = new TestEchoScheduledJobHandler();
         var store = Substitute.For<IScheduledJobDefinitionStore>();
         store.GetByIdAsync(JobId, Arg.Any<CancellationToken>())
-             .Returns(BuildRecord(true, false, parameterJson: paramJson));
+             .Returns(BuildRecord(enabled: true, deleted: false, parameterJson: paramJson));
 
         var registry = new ScheduledJobTemplateRegistry([handler]);
         var executor = CreateExecutor(store, registry);
 
         await executor.DispatchAsync(JobId, fireInstanceId, scheduled, Now, CancellationToken.None);
 
-        AssertEx.Equal(1, handler.InvocationCount, "Handler must be invoked exactly once.");
+        AssertEx.Equal(expected: 1, handler.InvocationCount, "Handler must be invoked exactly once.");
 
         var ctx = AssertEx.NotNull(handler.LastContext);
         AssertEx.Equal(JobId, ctx.ScheduledJobId, "ScheduledJobId must match the definition id.");
@@ -141,14 +141,14 @@ public sealed class SchedulerDispatchExecutorTests
         var handler = new TestEchoScheduledJobHandler();
         var store = Substitute.For<IScheduledJobDefinitionStore>();
         store.GetByIdAsync(JobId, Arg.Any<CancellationToken>())
-             .Returns(BuildRecord(true, false, parameterJson: null));
+             .Returns(BuildRecord(enabled: true, deleted: false, parameterJson: null));
 
         var registry = new ScheduledJobTemplateRegistry([handler]);
         var executor = CreateExecutor(store, registry);
 
-        await executor.DispatchAsync(JobId, "fire-null-params", null, Now, CancellationToken.None);
+        await executor.DispatchAsync(JobId, "fire-null-params", scheduledFireTimeUtc: null, Now, CancellationToken.None);
 
-        AssertEx.Equal(1, handler.InvocationCount, "Handler must be invoked exactly once.");
+        AssertEx.Equal(expected: 1, handler.InvocationCount, "Handler must be invoked exactly once.");
         AssertEx.Null(handler.LastContext?.Parameters, "Null parameters must propagate.");
     }
 
@@ -166,7 +166,7 @@ public sealed class SchedulerDispatchExecutorTests
         var handler = new TestEchoScheduledJobHandler();
         var store = Substitute.For<IScheduledJobDefinitionStore>();
         store.GetByIdAsync(JobId, Arg.Any<CancellationToken>())
-             .Returns(BuildRecord(true, false, parameterJson: storedJson));
+             .Returns(BuildRecord(enabled: true, deleted: false, parameterJson: storedJson));
 
         var registry = new ScheduledJobTemplateRegistry([handler]);
         var executor = CreateExecutor(store, registry);
@@ -190,7 +190,7 @@ public sealed class SchedulerDispatchExecutorTests
         AssertEx.Equal("general", root.GetProperty("useCase").GetString(), "Only the use-case must be overridden.");
         AssertEx.Equal("llmfit-recommender-0-9-30", root.GetProperty("approvedImageId").GetString(), "approvedImageId must be untouched.");
         AssertEx.Equal("Recommend", root.GetProperty("operation").GetString(), "operation must be untouched.");
-        AssertEx.Equal(5, root.GetProperty("limit").GetInt32(), "limit must be untouched.");
+        AssertEx.Equal(expected: 5, root.GetProperty("limit").GetInt32(), "limit must be untouched.");
         AssertEx.Equal("ollama", root.GetProperty("providerName").GetString(), "providerName must be untouched.");
     }
 
@@ -203,7 +203,7 @@ public sealed class SchedulerDispatchExecutorTests
         var handler = new TestEchoScheduledJobHandler();
         var store = Substitute.For<IScheduledJobDefinitionStore>();
         store.GetByIdAsync(JobId, Arg.Any<CancellationToken>())
-             .Returns(BuildRecord(true, false, parameterJson: storedJson));
+             .Returns(BuildRecord(enabled: true, deleted: false, parameterJson: storedJson));
 
         var registry = new ScheduledJobTemplateRegistry([handler]);
         var executor = CreateExecutor(store, registry);
@@ -220,7 +220,7 @@ public sealed class SchedulerDispatchExecutorTests
         var root = document.RootElement;
 
         AssertEx.Equal(JsonValueKind.Number, root.GetProperty("limit").ValueKind, "limit must be written back as a JSON number, not a string.");
-        AssertEx.Equal(20, root.GetProperty("limit").GetInt32(), "Only the limit must be overridden.");
+        AssertEx.Equal(expected: 20, root.GetProperty("limit").GetInt32(), "Only the limit must be overridden.");
         AssertEx.Equal("coding", root.GetProperty("useCase").GetString(), "useCase must be untouched when only limit is overridden.");
         AssertEx.Equal("ollama", root.GetProperty("providerName").GetString(), "providerName must be untouched.");
     }
@@ -234,7 +234,7 @@ public sealed class SchedulerDispatchExecutorTests
         var handler = new TestEchoScheduledJobHandler();
         var store = Substitute.For<IScheduledJobDefinitionStore>();
         store.GetByIdAsync(JobId, Arg.Any<CancellationToken>())
-             .Returns(BuildRecord(true, false, parameterJson: storedJson));
+             .Returns(BuildRecord(enabled: true, deleted: false, parameterJson: storedJson));
 
         var registry = new ScheduledJobTemplateRegistry([handler]);
         var executor = CreateExecutor(store, registry);
@@ -252,7 +252,7 @@ public sealed class SchedulerDispatchExecutorTests
         var root = document.RootElement;
 
         AssertEx.Equal("general", root.GetProperty("useCase").GetString(), "useCase must be overridden.");
-        AssertEx.Equal(15, root.GetProperty("limit").GetInt32(), "limit must be overridden.");
+        AssertEx.Equal(expected: 15, root.GetProperty("limit").GetInt32(), "limit must be overridden.");
         AssertEx.Equal("llmfit-recommender-0-9-30", root.GetProperty("approvedImageId").GetString(), "approvedImageId must be untouched.");
         AssertEx.Equal("ollama", root.GetProperty("providerName").GetString(), "providerName must be untouched.");
     }
@@ -266,7 +266,7 @@ public sealed class SchedulerDispatchExecutorTests
         var handler = new TestEchoScheduledJobHandler();
         var store = Substitute.For<IScheduledJobDefinitionStore>();
         store.GetByIdAsync(JobId, Arg.Any<CancellationToken>())
-             .Returns(BuildRecord(true, false, parameterJson: storedJson));
+             .Returns(BuildRecord(enabled: true, deleted: false, parameterJson: storedJson));
 
         var registry = new ScheduledJobTemplateRegistry([handler]);
         var executor = CreateExecutor(store, registry);
@@ -294,7 +294,7 @@ public sealed class SchedulerDispatchExecutorTests
         var handler = new TestEchoScheduledJobHandler();
         var store = Substitute.For<IScheduledJobDefinitionStore>();
         store.GetByIdAsync(JobId, Arg.Any<CancellationToken>())
-             .Returns(BuildRecord(true, false, parameterJson: storedJson));
+             .Returns(BuildRecord(enabled: true, deleted: false, parameterJson: storedJson));
 
         var registry = new ScheduledJobTemplateRegistry([handler]);
         var executor = CreateExecutor(store, registry);
@@ -318,13 +318,13 @@ public sealed class SchedulerDispatchExecutorTests
         var handler = new TestEchoScheduledJobHandler();
         var store = Substitute.For<IScheduledJobDefinitionStore>();
         store.GetByIdAsync(JobId, Arg.Any<CancellationToken>())
-             .Returns(BuildRecord(true, false));
+             .Returns(BuildRecord(enabled: true, deleted: false));
 
         var registry = new ScheduledJobTemplateRegistry([handler]);
         var executor = CreateExecutor(store, registry);
 
         // The handler calls ThrowIfCancellationRequested — the exception must propagate.
-        await AssertEx.ThrowsAsync<OperationCanceledException>(() => executor.DispatchAsync(JobId, "fire-cancel", null, Now, cts.Token));
+        await AssertEx.ThrowsAsync<OperationCanceledException>(() => executor.DispatchAsync(JobId, "fire-cancel", scheduledFireTimeUtc: null, Now, cts.Token));
     }
 
     // ──────────────────────────────────────────────────────────────────────
@@ -368,14 +368,14 @@ public sealed class SchedulerDispatchExecutorTests
             ScheduledRunStatus.Running,
             input.ScheduledFireTimeUtc,
             input.ActualFireTimeUtc,
-            null,
-            null,
+            CompletedAtUtc: null,
+            DurationMs: null,
             input.Summary,
             input.DetailsJson,
             input.ErrorMessage,
             input.ErrorDetails,
-            null,
-            1L);
+            CancellationRequestedAtUtc: null,
+            CreatedAtUtc: 1L);
     }
 
     private static ScheduledJobDefinitionRecord BuildRecord(bool enabled,
@@ -386,23 +386,23 @@ public sealed class SchedulerDispatchExecutorTests
         return new ScheduledJobDefinitionRecord(JobId,
             templateId,
             "Test Job",
-            null,
+            Description: null,
             enabled,
             ScheduleKind.OneShot,
-            null,
-            null,
-            null,
-            null,
-            null,
+            CronExpression: null,
+            IntervalSeconds: null,
+            RepeatCount: null,
+            StartAtUtc: null,
+            EndAtUtc: null,
             "UTC",
             SchedulerMisfirePolicy.Smart,
-            false,
-            null,
+            PreventOverlap: false,
+            MaxRuntimeSeconds: null,
             parameterJson,
             ScheduledJobCreator.User,
-            0L,
-            0L,
-            null,
+            CreatedAtUtc: 0L,
+            UpdatedAtUtc: 0L,
+            DisabledAtUtc: null,
             deleted ? 1L : null);
     }
 }

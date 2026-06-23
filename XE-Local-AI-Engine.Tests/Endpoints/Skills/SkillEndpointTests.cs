@@ -122,7 +122,7 @@ public sealed class SkillEndpointTests
         var created = createdDocument.RootElement;
         AssertEx.Equal("code-reviewer", created.GetProperty("name").GetString());
         AssertEx.True(created.GetProperty("enabled").GetBoolean(), "A new skill defaults to enabled.");
-        AssertEx.Equal(1, created.GetProperty("version").GetInt32());
+        AssertEx.Equal(expected: 1, created.GetProperty("version").GetInt32());
 
         // The Location must resolve to GetSkillEndpoint, proving CreatedAtAsync resolved the target through the
         // NameGenerator and that the GET returns the full skill (including body).
@@ -172,7 +172,7 @@ public sealed class SkillEndpointTests
         using var document = JsonDocument.Parse(payload);
         var items = document.RootElement.GetProperty("items");
 
-        AssertEx.Equal(1, items.GetArrayLength());
+        AssertEx.Equal(expected: 1, items.GetArrayLength());
         var item = items[0];
         AssertEx.Equal("code-reviewer", item.GetProperty("name").GetString());
         AssertEx.True(item.GetProperty("enabled").GetBoolean(), "List carries the enabled flag.");
@@ -206,7 +206,7 @@ public sealed class SkillEndpointTests
         using var document = JsonDocument.Parse(payload);
         var root = document.RootElement;
         AssertEx.True(root.GetProperty("body").GetString()!.Contains("v2", StringComparison.Ordinal), "Body update round-trips.");
-        AssertEx.Equal(2, root.GetProperty("version").GetInt32());
+        AssertEx.Equal(expected: 2, root.GetProperty("version").GetInt32());
     }
 
     [Test]

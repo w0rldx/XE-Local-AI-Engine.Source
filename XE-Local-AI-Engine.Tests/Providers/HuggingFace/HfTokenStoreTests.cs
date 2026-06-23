@@ -23,7 +23,7 @@ public sealed class HfTokenStoreTests : IDisposable
     {
         if (Directory.Exists(_contentRootPath))
         {
-            Directory.Delete(_contentRootPath, true);
+            Directory.Delete(_contentRootPath, recursive: true);
         }
     }
 
@@ -105,7 +105,7 @@ public sealed class HfTokenStoreTests : IDisposable
         }
         finally
         {
-            Directory.Delete(contentRoot, true);
+            Directory.Delete(contentRoot, recursive: true);
         }
     }
 

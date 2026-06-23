@@ -19,7 +19,7 @@ public sealed class DisableScheduledJobEndpoint(IScheduledJobManagementService s
 
     public override async Task HandleAsync(ScheduledJobActionRequest req, CancellationToken ct)
     {
-        var record = await _scheduledJobManagementService.SetEnabledAsync(req.ScheduledJobId, false, ct).ConfigureAwait(false);
+        var record = await _scheduledJobManagementService.SetEnabledAsync(req.ScheduledJobId, enabled: false, ct).ConfigureAwait(false);
         if (record is null)
         {
             await Send.NotFoundAsync(ct).ConfigureAwait(false);

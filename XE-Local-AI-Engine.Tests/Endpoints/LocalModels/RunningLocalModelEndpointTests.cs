@@ -29,7 +29,7 @@ public sealed class RunningLocalModelEndpointTests
         await using var context = await CreateContextAsync("llama3:8b").ConfigureAwait(false);
         context.Server!.State.RunningModels =
         [
-            new FakeOllamaState.FakeOllamaRunningModel("llama3:8b", DateTimeOffset.UtcNow.AddMinutes(5), 5_000_000_000, 4_000_000_000)
+            new FakeOllamaState.FakeOllamaRunningModel("llama3:8b", DateTimeOffset.UtcNow.AddMinutes(5), SizeBytes: 5_000_000_000, SizeVramBytes: 4_000_000_000)
         ];
         using var client = context.Factory.CreateClient();
 
@@ -41,8 +41,8 @@ public sealed class RunningLocalModelEndpointTests
         AssertEx.True(running.IsAvailable);
         AssertEx.ContainsSingle(running.Items, item => item.ModelName == "llama3:8b");
         var model = running.Items.Single(item => item.ModelName == "llama3:8b");
-        AssertEx.Equal(5_000_000_000L, model.SizeBytes);
-        AssertEx.Equal(4_000_000_000L, model.SizeVramBytes);
+        AssertEx.Equal(expected: 5_000_000_000L, model.SizeBytes);
+        AssertEx.Equal(expected: 4_000_000_000L, model.SizeVramBytes);
         AssertEx.True(model.ExpiresAtUtc.HasValue);
     }
 

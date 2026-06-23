@@ -41,8 +41,8 @@ public sealed class AgentExecutionLogStore(NodeChatDbContext dbContext, TimeProv
     public async Task<IReadOnlyList<AgentExecutionLogRecord>> ListByAgentAsync(Guid agentDefinitionId, int limit, int offset = 0, CancellationToken cancellationToken = default)
     {
         // Floor the page bounds so a caller passing 0/negative still returns a sane (empty) page rather than throwing.
-        var take = Math.Max(0, limit);
-        var skip = Math.Max(0, offset);
+        var take = Math.Max(val1: 0, limit);
+        var skip = Math.Max(val1: 0, offset);
 
         var entities = await _dbContext.AgentExecutionLogs
                                        .AsNoTracking()
@@ -78,9 +78,9 @@ public sealed class AgentExecutionLogStore(NodeChatDbContext dbContext, TimeProv
         // Guid comparison, which SQLite cannot translate) — at unix-ms granularity retention exactness on a tie is moot.
         return await _dbContext.AgentExecutionLogs
                                .Where(log => _dbContext.AgentExecutionLogs.Count(newer =>
-                                       newer.AgentDefinitionId == log.AgentDefinitionId
-                                       && newer.CreatedAtUtc > log.CreatedAtUtc)
-                                   >= maxPerAgent)
+                                                 newer.AgentDefinitionId == log.AgentDefinitionId
+                                                 && newer.CreatedAtUtc > log.CreatedAtUtc)
+                                             >= maxPerAgent)
                                .ExecuteDeleteAsync(cancellationToken)
                                .ConfigureAwait(false);
     }

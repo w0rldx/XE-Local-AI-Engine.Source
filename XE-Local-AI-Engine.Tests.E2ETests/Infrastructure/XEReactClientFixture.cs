@@ -27,7 +27,7 @@ public sealed class XEReactClientFixture : IAsyncInitializer, IAsyncDisposable
     ///     Process-wide lock that serialises pnpm install + build so concurrent fixture instances
     ///     never race on the shared React client directory.
     /// </summary>
-    private static readonly SemaphoreSlim BuildLock = new(1, 1);
+    private static readonly SemaphoreSlim BuildLock = new(initialCount: 1, maxCount: 1);
 
     /// <summary>Free loopback port chosen before the React build so it can be baked into VITE_API_URL.</summary>
     public int Port { get; private set; }
@@ -45,7 +45,7 @@ public sealed class XEReactClientFixture : IAsyncInitializer, IAsyncDisposable
         {
             try
             {
-                Directory.Delete(TempRoot, true);
+                Directory.Delete(TempRoot, recursive: true);
             }
             catch (IOException)
             {
@@ -78,18 +78,18 @@ public sealed class XEReactClientFixture : IAsyncInitializer, IAsyncDisposable
             // One retry handles transient ENOENT / pnpm store contention.
             try
             {
-                await RunProcessAsync("pnpm", "install --frozen-lockfile", clientDir, 300_000).ConfigureAwait(false);
+                await RunProcessAsync("pnpm", "install --frozen-lockfile", clientDir, timeoutMs: 300_000).ConfigureAwait(false);
             }
             catch (InvalidOperationException)
             {
                 await Task.Delay(2_000).ConfigureAwait(false);
-                await RunProcessAsync("pnpm", "install --frozen-lockfile", clientDir, 300_000).ConfigureAwait(false);
+                await RunProcessAsync("pnpm", "install --frozen-lockfile", clientDir, timeoutMs: 300_000).ConfigureAwait(false);
             }
 
             await RunProcessAsync("pnpm",
                 "run build",
                 clientDir,
-                300_000,
+                timeoutMs: 300_000,
                 new Dictionary<string, string>
                 {
                     ["VITE_API_URL"] = $"http://127.0.0.1:{Port}",
@@ -116,7 +116,7 @@ public sealed class XEReactClientFixture : IAsyncInitializer, IAsyncDisposable
 
     private static int GetFreePort()
     {
-        using var listener = new TcpListener(IPAddress.Loopback, 0);
+        using var listener = new TcpListener(IPAddress.Loopback, port: 0);
         listener.Start();
         var port = ((IPEndPoint)listener.LocalEndpoint).Port;
         listener.Stop();
@@ -157,7 +157,7 @@ public sealed class XEReactClientFixture : IAsyncInitializer, IAsyncDisposable
             var relative = Path.GetRelativePath(sourceDir, file);
             var destination = Path.Combine(destinationDir, relative);
             Directory.CreateDirectory(Path.GetDirectoryName(destination)!);
-            File.Copy(file, destination, true);
+            File.Copy(file, destination, overwrite: true);
         }
     }
 

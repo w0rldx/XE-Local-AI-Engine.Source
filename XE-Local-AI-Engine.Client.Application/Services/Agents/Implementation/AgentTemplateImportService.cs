@@ -52,11 +52,11 @@ internal sealed class AgentTemplateImportService(IAgentTemplateCatalog catalog, 
         return new AgentDefinitionInput(template.Name,
             template.Description,
             template.Instructions,
-            null,
-            null,
+            ModelProfile: null,
+            ReasoningEffort: null,
             AgentDefinitionKind.Single,
             [],
             new Dictionary<string, bool>(StringComparer.Ordinal),
-            null);
+            OrchestrationTopologyJson: null);
     }
 }

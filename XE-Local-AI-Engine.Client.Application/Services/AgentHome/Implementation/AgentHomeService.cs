@@ -92,7 +92,7 @@ internal sealed class AgentHomeService : IAgentHomeService
         // is in flight is rejected, not queued.
         var identity = await _identityProvider.GetAsync(cancellationToken).ConfigureAwait(false);
         var guardKey = string.Create(CultureInfo.InvariantCulture, $"{identity.OwnerUserId} {identity.NodeId}");
-        var guard = _runGuards.GetOrAdd(guardKey, static _ => new SemaphoreSlim(1, 1));
+        var guard = _runGuards.GetOrAdd(guardKey, static _ => new SemaphoreSlim(initialCount: 1, maxCount: 1));
 
         // Non-blocking try-acquire: a zero timeout returns immediately rather than queueing a second concurrent run.
         if (!await guard.WaitAsync(TimeSpan.Zero, CancellationToken.None).ConfigureAwait(false))
@@ -237,13 +237,13 @@ internal sealed class AgentHomeService : IAgentHomeService
             if (cancellationToken.IsCancellationRequested)
             {
                 // The ORIGINAL caller token fired → a user/connection cancel → propagate.
-                await AppendEventSafelyAsync(runLogger, "cancelled", null, CancellationToken.None).ConfigureAwait(false);
+                await AppendEventSafelyAsync(runLogger, "cancelled", detail: null, CancellationToken.None).ConfigureAwait(false);
                 throw;
             }
 
             // Only commandCts fired (CancelAfter) → a TIMEOUT → surface a non-throwing result so the conversation can
             // continue. The patch/memory exports are skipped; the run logger records the timeout.
-            await AppendCommandSafelyAsync(runLogger, runId, descriptor, false, -1, commandStartedAt,
+            await AppendCommandSafelyAsync(runLogger, runId, descriptor, completed: false, exitCode: -1, commandStartedAt,
                 nameof(OperationCanceledException), CancellationToken.None).ConfigureAwait(false);
             await AppendEventSafelyAsync(runLogger, "timed_out",
                 string.Create(CultureInfo.InvariantCulture, $"timeout_seconds={_options.CommandTimeoutSeconds}"),
@@ -266,7 +266,7 @@ internal sealed class AgentHomeService : IAgentHomeService
         }
 
         await AppendCommandSafelyAsync(runLogger, runId, descriptor, result.Completed, result.ExitCode, commandStartedAt,
-            null, cancellationToken).ConfigureAwait(false);
+            errorClass: null, cancellationToken).ConfigureAwait(false);
 
         // Patch export runs after the command so the agent's file edits are diffed against the workspace-copy git
         // baseline — gated on export_patch ∈ AllowedActions (in addition to the baseline-exists gate).

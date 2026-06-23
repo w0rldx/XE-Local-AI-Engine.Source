@@ -168,7 +168,7 @@ public sealed class NodeChatReadOnlyEndpointTests
         await persistence.EnsureConversationAsync(new NodeChatEnsureConversationRequest(conversationId,
                              "Platform conversation",
                              "client-node",
-                             10,
+                             CreatedAtUtc: 10,
                              NodeChatOriginValues.Remote))
                          .ConfigureAwait(false);
         return conversationId;

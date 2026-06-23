@@ -389,7 +389,7 @@ public sealed class NodeChatRegenerationService(
                 correlation,
                 sequence.Next(),
                 cursor,
-                true).ConfigureAwait(false);
+                wasCancelled: true).ConfigureAwait(false);
         }
         finally
         {
@@ -502,7 +502,7 @@ public sealed class NodeChatRegenerationService(
                 modelName,
                 package.ConfigHash,
                 state.GenerationDurationMs ?? 0,
-                Success: !failed,
+                !failed,
                 state.InputTokens,
                 state.OutputTokens,
                 // Exception TYPE NAME only when present — never the sanitized message text.

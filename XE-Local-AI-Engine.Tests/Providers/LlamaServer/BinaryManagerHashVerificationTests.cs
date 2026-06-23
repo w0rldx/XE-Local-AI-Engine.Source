@@ -20,13 +20,13 @@ public sealed class BinaryManagerHashVerificationTests
         {
             Content = new ByteArrayContent("not-the-pinned-archive"u8.ToArray())
         });
-        using var http = new HttpClient(handler, false);
+        using var http = new HttpClient(handler, disposeHandler: false);
         var manager = new LlamaCppBinaryManager(http, cache.Path, LlamaCppReleasePins.PinnedTag, OSPlatform.Linux, Architecture.X64);
 
         var exception = await AssertEx.ThrowsAsync<LlamaRuntimeException>(() => manager.EnsureBinaryAsync(GpuVariant.Cpu, CancellationToken.None));
 
         // Re-download exactly once: two total attempts.
-        AssertEx.Equal(2, handler.CallCount);
+        AssertEx.Equal(expected: 2, handler.CallCount);
         // Sanitized surface — no internal absolute path leaks into the user-facing message.
         AssertEx.False(exception.Message.Contains(cache.Path, StringComparison.Ordinal));
         AssertEx.False(exception.Message.Contains(Path.GetTempPath(), StringComparison.Ordinal));
@@ -44,12 +44,12 @@ public sealed class BinaryManagerHashVerificationTests
 
         using var handler = new CountingHandler(() =>
             throw new InvalidOperationException("Offline reuse must not hit the network."));
-        using var http = new HttpClient(handler, false);
+        using var http = new HttpClient(handler, disposeHandler: false);
         var manager = new LlamaCppBinaryManager(http, cache.Path, LlamaCppReleasePins.PinnedTag, OSPlatform.Linux, Architecture.X64);
 
         var binary = await manager.EnsureBinaryAsync(GpuVariant.Cpu, CancellationToken.None);
 
-        AssertEx.Equal(0, handler.CallCount);
+        AssertEx.Equal(expected: 0, handler.CallCount);
         AssertEx.Equal(serverPath, binary.ServerExecutablePath);
         AssertEx.True(binary.IsPinnedFallback);
     }
@@ -68,12 +68,12 @@ public sealed class BinaryManagerHashVerificationTests
 
         using var handler = new CountingHandler(() =>
             throw new InvalidOperationException("Offline reuse must not hit the network."));
-        using var http = new HttpClient(handler, false);
+        using var http = new HttpClient(handler, disposeHandler: false);
         var manager = new LlamaCppBinaryManager(http, cache.Path, LlamaCppReleasePins.PinnedTag, OSPlatform.Linux, Architecture.X64);
 
         var binary = await manager.EnsureBinaryAsync(GpuVariant.Cpu, CancellationToken.None);
 
-        AssertEx.Equal(0, handler.CallCount);
+        AssertEx.Equal(expected: 0, handler.CallCount);
         AssertEx.Equal(actualServerPath, binary.ServerExecutablePath);
         AssertEx.True(binary.IsPinnedFallback);
     }
@@ -105,7 +105,7 @@ public sealed class BinaryManagerHashVerificationTests
             {
                 if (Directory.Exists(Path))
                 {
-                    Directory.Delete(Path, true);
+                    Directory.Delete(Path, recursive: true);
                 }
             }
             catch (IOException)

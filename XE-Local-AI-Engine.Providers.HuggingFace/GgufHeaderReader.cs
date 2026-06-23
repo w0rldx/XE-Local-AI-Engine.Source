@@ -93,7 +93,7 @@ internal sealed class GgufHeaderReader
                 FileMode.Open,
                 FileAccess.Read,
                 FileShare.Read,
-                1,
+                bufferSize: 1,
                 FileOptions.Asynchronous | FileOptions.SequentialScan);
 
             return await ReadGrowingAsync((requested, token) => ReadPrefixAsync(stream, requested, token), initialProbe, hardCap, ct)
@@ -147,7 +147,7 @@ internal sealed class GgufHeaderReader
 
         var toRead = (int)Math.Min(count, length);
         var buffer = new byte[toRead];
-        stream.Seek(0, SeekOrigin.Begin);
+        stream.Seek(offset: 0, SeekOrigin.Begin);
 
         var read = 0;
         while (read < toRead)
@@ -167,7 +167,7 @@ internal sealed class GgufHeaderReader
     private async Task<byte[]?> FetchRangeAsync(string url, long count, CancellationToken ct)
     {
         using var request = new HttpRequestMessage(HttpMethod.Get, url);
-        request.Headers.Range = new RangeHeaderValue(0, Math.Max(0, count - 1));
+        request.Headers.Range = new RangeHeaderValue(from: 0, Math.Max(val1: 0, count - 1));
 
         using var response = await _httpClient
                                    .SendAsync(request, HttpCompletionOption.ResponseHeadersRead, ct)
@@ -442,7 +442,7 @@ internal sealed class GgufHeaderReader
 
         public bool TryReadByte(out byte value)
         {
-            if (TryTake(1, out var s))
+            if (TryTake(count: 1, out var s))
             {
                 value = s[0];
                 return true;
@@ -454,7 +454,7 @@ internal sealed class GgufHeaderReader
 
         public bool TryReadUInt16(out ushort value)
         {
-            if (TryTake(2, out var s))
+            if (TryTake(count: 2, out var s))
             {
                 value = BinaryPrimitives.ReadUInt16LittleEndian(s);
                 return true;
@@ -466,7 +466,7 @@ internal sealed class GgufHeaderReader
 
         public bool TryReadInt16(out short value)
         {
-            if (TryTake(2, out var s))
+            if (TryTake(count: 2, out var s))
             {
                 value = BinaryPrimitives.ReadInt16LittleEndian(s);
                 return true;
@@ -478,7 +478,7 @@ internal sealed class GgufHeaderReader
 
         public bool TryReadUInt32(out uint value)
         {
-            if (TryTake(4, out var s))
+            if (TryTake(count: 4, out var s))
             {
                 value = BinaryPrimitives.ReadUInt32LittleEndian(s);
                 return true;
@@ -490,7 +490,7 @@ internal sealed class GgufHeaderReader
 
         public bool TryReadInt32(out int value)
         {
-            if (TryTake(4, out var s))
+            if (TryTake(count: 4, out var s))
             {
                 value = BinaryPrimitives.ReadInt32LittleEndian(s);
                 return true;
@@ -502,7 +502,7 @@ internal sealed class GgufHeaderReader
 
         public bool TryReadUInt64(out ulong value)
         {
-            if (TryTake(8, out var s))
+            if (TryTake(count: 8, out var s))
             {
                 value = BinaryPrimitives.ReadUInt64LittleEndian(s);
                 return true;
@@ -514,7 +514,7 @@ internal sealed class GgufHeaderReader
 
         public bool TryReadInt64(out long value)
         {
-            if (TryTake(8, out var s))
+            if (TryTake(count: 8, out var s))
             {
                 value = BinaryPrimitives.ReadInt64LittleEndian(s);
                 return true;
@@ -526,7 +526,7 @@ internal sealed class GgufHeaderReader
 
         public bool TryReadFloat32(out float value)
         {
-            if (TryTake(4, out var s))
+            if (TryTake(count: 4, out var s))
             {
                 value = BinaryPrimitives.ReadSingleLittleEndian(s);
                 return true;
@@ -538,7 +538,7 @@ internal sealed class GgufHeaderReader
 
         public bool TryReadFloat64(out double value)
         {
-            if (TryTake(8, out var s))
+            if (TryTake(count: 8, out var s))
             {
                 value = BinaryPrimitives.ReadDoubleLittleEndian(s);
                 return true;
@@ -582,5 +582,6 @@ internal sealed record GgufHeaderMetadata(
     long? ContextLength,
     string? ChatTemplate)
 {
-    public static GgufHeaderMetadata Empty { get; } = new(null, null, null, null, null, null, null, null, null);
+    public static GgufHeaderMetadata Empty { get; } = new(Architecture: null, QuantType: null, ParamCount: null, BlockCount: null, AttentionHeadCount: null, AttentionHeadCountKV: null,
+        EmbeddingLength: null, ContextLength: null, ChatTemplate: null);
 }

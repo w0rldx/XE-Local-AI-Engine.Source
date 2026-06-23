@@ -11,7 +11,7 @@ using XE_Local_AI_Engine.Client.Persistence.Entities;
 
 public sealed class NodeAuthService : INodeAuthService
 {
-    private static readonly SemaphoreSlim SetupLock = new(1, 1);
+    private static readonly SemaphoreSlim SetupLock = new(initialCount: 1, maxCount: 1);
 
     private readonly NodeIdentityDbContext _dbContext;
     private readonly ILogger<NodeAuthService> _logger;
@@ -60,7 +60,7 @@ public sealed class NodeAuthService : INodeAuthService
         {
             if (await HasCompletedSetupAsync(cancellationToken).ConfigureAwait(false))
             {
-                return new NodeSetupResult(false, true, []);
+                return new NodeSetupResult(Succeeded: false, AlreadyInitialized: true, []);
             }
 
             await using var transaction = await _dbContext.Database
@@ -70,7 +70,7 @@ public sealed class NodeAuthService : INodeAuthService
             if (await HasCompletedSetupAsync(cancellationToken).ConfigureAwait(false))
             {
                 await transaction.RollbackAsync(cancellationToken).ConfigureAwait(false);
-                return new NodeSetupResult(false, true, []);
+                return new NodeSetupResult(Succeeded: false, AlreadyInitialized: true, []);
             }
 
             var normalizedEmail = email.Trim();
@@ -86,19 +86,19 @@ public sealed class NodeAuthService : INodeAuthService
             if (!createResult.Succeeded)
             {
                 await transaction.RollbackAsync(cancellationToken).ConfigureAwait(false);
-                return new NodeSetupResult(false, false, ToErrorList(createResult));
+                return new NodeSetupResult(Succeeded: false, AlreadyInitialized: false, ToErrorList(createResult));
             }
 
             var roleResult = await _userManager.AddToRoleAsync(user, NodeAuthorizationPolicies.AdminRole).ConfigureAwait(false);
             if (!roleResult.Succeeded)
             {
                 await transaction.RollbackAsync(cancellationToken).ConfigureAwait(false);
-                return new NodeSetupResult(false, false, ToErrorList(roleResult));
+                return new NodeSetupResult(Succeeded: false, AlreadyInitialized: false, ToErrorList(roleResult));
             }
 
             await transaction.CommitAsync(cancellationToken).ConfigureAwait(false);
             _logger.LogInformation("Node admin user created during first-run setup.");
-            return new NodeSetupResult(true, false, []);
+            return new NodeSetupResult(Succeeded: true, AlreadyInitialized: false, []);
         }
         finally
         {
@@ -117,7 +117,7 @@ public sealed class NodeAuthService : INodeAuthService
             return FailedTokenResult();
         }
 
-        var signInResult = await _signInManager.CheckPasswordSignInAsync(user, password, true).ConfigureAwait(false);
+        var signInResult = await _signInManager.CheckPasswordSignInAsync(user, password, lockoutOnFailure: true).ConfigureAwait(false);
         if (!signInResult.Succeeded)
         {
             _logger.LogWarning("Node login failed for user {UserId}: {Reason}.", user.Id, GetSignInFailureReason(signInResult));
@@ -186,17 +186,17 @@ public sealed class NodeAuthService : INodeAuthService
         var user = await _userManager.GetUserAsync(principal).ConfigureAwait(false);
         if (user is null)
         {
-            return new NodePasswordChangeResult(false, ["The current session is invalid."]);
+            return new NodePasswordChangeResult(Succeeded: false, ["The current session is invalid."]);
         }
 
         var result = await _userManager.ChangePasswordAsync(user, currentPassword, newPassword).ConfigureAwait(false);
         if (!result.Succeeded)
         {
-            return new NodePasswordChangeResult(false, ToErrorList(result));
+            return new NodePasswordChangeResult(Succeeded: false, ToErrorList(result));
         }
 
         await RevokeActiveTokensAsync(user.Id, cancellationToken).ConfigureAwait(false);
-        return new NodePasswordChangeResult(true, []);
+        return new NodePasswordChangeResult(Succeeded: true, []);
     }
 
     public async Task<NodeCurrentUser?> GetCurrentUserAsync(ClaimsPrincipal principal, CancellationToken cancellationToken)
@@ -229,7 +229,7 @@ public sealed class NodeAuthService : INodeAuthService
         });
         await _dbContext.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
 
-        return new NodeAuthTokenResult(true, accessToken, accessTokenExpiresAtUtc, refreshToken, refreshTokenExpiresAtUtc);
+        return new NodeAuthTokenResult(Succeeded: true, accessToken, accessTokenExpiresAtUtc, refreshToken, refreshTokenExpiresAtUtc);
     }
 
     private async Task RevokeActiveTokensAsync(string userId, CancellationToken cancellationToken)
@@ -270,7 +270,7 @@ public sealed class NodeAuthService : INodeAuthService
 
     private static NodeAuthTokenResult FailedTokenResult()
     {
-        return new NodeAuthTokenResult(false, null, null, null, null);
+        return new NodeAuthTokenResult(Succeeded: false, AccessToken: null, AccessTokenExpiresAtUtc: null, RefreshToken: null, RefreshTokenExpiresAtUtc: null);
     }
 
     private static string GetSignInFailureReason(SignInResult result)

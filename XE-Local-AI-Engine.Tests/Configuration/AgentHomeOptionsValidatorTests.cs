@@ -11,7 +11,7 @@ public sealed class AgentHomeOptionsValidatorTests
     [Test]
     public void Validate_WhenOptionsAreValid_ReturnsSuccess()
     {
-        var result = _validator.Validate(null, new AgentHomeOptions());
+        var result = _validator.Validate(name: null, new AgentHomeOptions());
 
         AssertEx.False(result.Failed);
     }
@@ -24,7 +24,7 @@ public sealed class AgentHomeOptionsValidatorTests
             MaxSelectedFolderBytes = 0
         };
 
-        var result = _validator.Validate(null, options);
+        var result = _validator.Validate(name: null, options);
 
         AssertEx.False(result.Succeeded);
         AssertEx.NotEmpty(result.Failures);
@@ -39,7 +39,7 @@ public sealed class AgentHomeOptionsValidatorTests
             MaxPatchBytes = 0
         };
 
-        var result = _validator.Validate(null, options);
+        var result = _validator.Validate(name: null, options);
 
         AssertEx.False(result.Succeeded);
         AssertEx.NotEmpty(result.Failures);
@@ -54,7 +54,7 @@ public sealed class AgentHomeOptionsValidatorTests
             PatchApplyTimeoutSeconds = 0
         };
 
-        var result = _validator.Validate(null, options);
+        var result = _validator.Validate(name: null, options);
 
         AssertEx.False(result.Succeeded);
         AssertEx.NotEmpty(result.Failures);
@@ -70,7 +70,7 @@ public sealed class AgentHomeOptionsValidatorTests
             ToolCapableModels = []
         };
 
-        var result = _validator.Validate(null, options);
+        var result = _validator.Validate(name: null, options);
 
         AssertEx.False(result.Succeeded);
         AssertEx.Contains(result.Failures, failure => failure.Contains("ToolCapableModels", StringComparison.Ordinal));
@@ -86,7 +86,7 @@ public sealed class AgentHomeOptionsValidatorTests
             ToolCapableModels = []
         };
 
-        var result = _validator.Validate(null, options);
+        var result = _validator.Validate(name: null, options);
 
         AssertEx.False(result.Failed);
     }
@@ -100,7 +100,7 @@ public sealed class AgentHomeOptionsValidatorTests
             ToolCapableModels = ["qwen3:8b"]
         };
 
-        var result = _validator.Validate(null, options);
+        var result = _validator.Validate(name: null, options);
 
         AssertEx.False(result.Failed);
     }

@@ -31,7 +31,7 @@ public sealed class HardwareProfilerTests
         };
 
         var profiler = new HardwareProfiler(probe, environment, new HardwareProfilerOptions());
-        var profile = await profiler.GetProfileAsync(false, CancellationToken.None);
+        var profile = await profiler.GetProfileAsync(forceRefresh: false, CancellationToken.None);
 
         AssertEx.Equal(32830012L * Kb, profile.TotalRamBytes);
         AssertEx.Equal(24000000L * Kb, profile.AvailableRamBytes);
@@ -39,7 +39,7 @@ public sealed class HardwareProfilerTests
         AssertEx.True(profile.VramKnown);
         AssertEx.Equal(24564L * Mib, profile.VramBytes!.Value);
         AssertEx.True(profile.GpuAccelAvailable);
-        AssertEx.Equal(16, profile.CpuCores);
+        AssertEx.Equal(expected: 16, profile.CpuCores);
         AssertEx.Equal(500L * 1024 * 1024 * 1024, profile.FreeDiskBytes);
     }
 
@@ -60,7 +60,7 @@ public sealed class HardwareProfilerTests
         };
 
         var profiler = new HardwareProfiler(probe, environment, new HardwareProfilerOptions());
-        var profile = await profiler.GetProfileAsync(false, CancellationToken.None);
+        var profile = await profiler.GetProfileAsync(forceRefresh: false, CancellationToken.None);
 
         AssertEx.Equal(GpuVendor.Nvidia, profile.GpuVendor);
         AssertEx.True(profile.VramKnown);
@@ -83,7 +83,7 @@ public sealed class HardwareProfilerTests
         };
 
         var profiler = new HardwareProfiler(probe, environment, new HardwareProfilerOptions());
-        var profile = await profiler.GetProfileAsync(false, CancellationToken.None);
+        var profile = await profiler.GetProfileAsync(forceRefresh: false, CancellationToken.None);
 
         AssertEx.Equal(GpuVendor.Amd, profile.GpuVendor);
         AssertEx.False(profile.VramKnown);
@@ -107,9 +107,9 @@ public sealed class HardwareProfilerTests
         };
 
         var profiler = new HardwareProfiler(probe, environment, new HardwareProfilerOptions());
-        var profile = await profiler.GetProfileAsync(false, CancellationToken.None);
+        var profile = await profiler.GetProfileAsync(forceRefresh: false, CancellationToken.None);
 
-        AssertEx.Equal(34_359_738_368L, profile.TotalRamBytes);
+        AssertEx.Equal(expected: 34_359_738_368L, profile.TotalRamBytes);
         AssertEx.Equal(GpuVendor.Nvidia, profile.GpuVendor);
         AssertEx.True(profile.VramKnown);
         AssertEx.Equal(6144L * Mib, profile.VramBytes!.Value);
@@ -131,7 +131,7 @@ public sealed class HardwareProfilerTests
         };
 
         var profiler = new HardwareProfiler(probe, environment, new HardwareProfilerOptions());
-        var profile = await profiler.GetProfileAsync(false, CancellationToken.None);
+        var profile = await profiler.GetProfileAsync(forceRefresh: false, CancellationToken.None);
 
         AssertEx.Equal(GpuVendor.Unknown, profile.GpuVendor);
         AssertEx.False(profile.VramKnown);
@@ -152,7 +152,7 @@ public sealed class HardwareProfilerTests
         };
 
         var profiler = new HardwareProfiler(probe, environment, new HardwareProfilerOptions());
-        var profile = await profiler.GetProfileAsync(false, CancellationToken.None);
+        var profile = await profiler.GetProfileAsync(forceRefresh: false, CancellationToken.None);
 
         AssertEx.Equal(GpuVendor.None, profile.GpuVendor);
         AssertEx.False(profile.VramKnown);
@@ -173,11 +173,11 @@ public sealed class HardwareProfilerTests
         };
         var profiler = new HardwareProfiler(probe, environment, new HardwareProfilerOptions());
 
-        await profiler.GetProfileAsync(false, CancellationToken.None);
-        await profiler.GetProfileAsync(false, CancellationToken.None);
+        await profiler.GetProfileAsync(forceRefresh: false, CancellationToken.None);
+        await profiler.GetProfileAsync(forceRefresh: false, CancellationToken.None);
         var probesAfterCache = probe.CallCount;
 
-        await profiler.GetProfileAsync(true, CancellationToken.None);
+        await profiler.GetProfileAsync(forceRefresh: true, CancellationToken.None);
 
         AssertEx.True(probesAfterCache > 0);
         AssertEx.True(probe.CallCount > probesAfterCache, "forceRefresh:true must re-probe the process seam.");
@@ -205,12 +205,12 @@ public sealed class HardwareProfilerTests
         {
             if (fileName == "nvidia-smi" && arguments.Any(argument => argument.Contains("name", StringComparison.Ordinal)))
             {
-                return Task.FromResult(_nvidiaName is null ? null : new ProcessProbeResult(0, _nvidiaName));
+                return Task.FromResult(_nvidiaName is null ? null : new ProcessProbeResult(ExitCode: 0, _nvidiaName));
             }
 
             if (fileName == "nvidia-smi" && arguments.Any(argument => argument.Contains("memory.total", StringComparison.Ordinal)))
             {
-                return Task.FromResult(_nvidiaMemoryTotal is null ? null : new ProcessProbeResult(0, _nvidiaMemoryTotal));
+                return Task.FromResult(_nvidiaMemoryTotal is null ? null : new ProcessProbeResult(ExitCode: 0, _nvidiaMemoryTotal));
             }
 
             return Task.FromResult<ProcessProbeResult?>(null);

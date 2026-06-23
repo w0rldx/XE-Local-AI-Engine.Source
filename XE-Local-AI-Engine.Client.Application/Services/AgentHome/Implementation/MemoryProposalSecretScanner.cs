@@ -67,7 +67,8 @@ internal static partial class MemoryProposalSecretScanner
     private static partial Regex AwsAccessKeyRegex();
 
     // Azure storage connection strings.
-    [GeneratedRegex(@"DefaultEndpointsProtocol=[^;]+;AccountName=[^;]+;AccountKey=[A-Za-z0-9+/=]{20,}", RegexOptions.IgnoreCase | RegexOptions.Singleline | RegexOptions.ExplicitCapture, RegexTimeoutMilliseconds)]
+    [GeneratedRegex(@"DefaultEndpointsProtocol=[^;]+;AccountName=[^;]+;AccountKey=[A-Za-z0-9+/=]{20,}", RegexOptions.IgnoreCase | RegexOptions.Singleline | RegexOptions.ExplicitCapture,
+        RegexTimeoutMilliseconds)]
     private static partial Regex AzureConnectionStringRegex();
 
     // Azure AccountKey= standalone.

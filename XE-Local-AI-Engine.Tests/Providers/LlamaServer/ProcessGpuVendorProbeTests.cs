@@ -28,7 +28,7 @@ public sealed class ProcessGpuVendorProbeTests
         var vendor = await probe.DetectVendorAsync(CancellationToken.None);
 
         AssertEx.Equal(DetectedGpuVendor.Nvidia, vendor);
-        AssertEx.Equal(0, shellAttempts, "the NVML fast path must not shell out to any tool");
+        AssertEx.Equal(expected: 0, shellAttempts, "the NVML fast path must not shell out to any tool");
     }
 
     [Test]

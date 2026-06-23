@@ -15,7 +15,7 @@ public sealed class ScheduledJobRunStoreTests : IDisposable
     {
         if (Directory.Exists(_rootPath))
         {
-            Directory.Delete(_rootPath, true);
+            Directory.Delete(_rootPath, recursive: true);
         }
     }
 
@@ -105,7 +105,7 @@ public sealed class ScheduledJobRunStoreTests : IDisposable
 
         var runs = await store.ListByJobAsync(jobId);
 
-        AssertEx.Equal(2, runs.Count);
+        AssertEx.Equal(expected: 2, runs.Count);
         // Most recent first.
         AssertEx.Equal(second.Id, runs[0].Id);
         AssertEx.Equal(first.Id, runs[1].Id);
@@ -133,7 +133,7 @@ public sealed class ScheduledJobRunStoreTests : IDisposable
 
         var result = await store.ListAsync(ScheduledRunStatus.Succeeded);
 
-        AssertEx.Equal(1, result.Count);
+        AssertEx.Equal(expected: 1, result.Count);
         AssertEx.Equal(succeeded.Id, result[0].Id);
     }
 
@@ -165,7 +165,7 @@ public sealed class ScheduledJobRunStoreTests : IDisposable
 
         var result = await store.ListAsync(fromUtc: 1_000, toUtc: 2_000);
 
-        AssertEx.Equal(2, result.Count);
+        AssertEx.Equal(expected: 2, result.Count);
         AssertEx.True(result.Any(r => r.Id == early.Id), "Lower bound match should be included.");
         AssertEx.True(result.Any(r => r.Id == mid.Id), "Upper bound match should be included.");
     }
@@ -189,7 +189,7 @@ public sealed class ScheduledJobRunStoreTests : IDisposable
 
         var result = await store.ListAsync(scheduledJobId: jobId);
 
-        AssertEx.Equal(1, result.Count);
+        AssertEx.Equal(expected: 1, result.Count);
         AssertEx.Equal(owned.Id, result[0].Id);
     }
 
@@ -220,7 +220,7 @@ public sealed class ScheduledJobRunStoreTests : IDisposable
         AssertEx.Equal(first.Id, second.Id);
 
         var allRuns = await store.ListByJobAsync(jobId);
-        AssertEx.Equal(1, allRuns.Count);
+        AssertEx.Equal(expected: 1, allRuns.Count);
     }
 
     [Test]
@@ -246,7 +246,7 @@ public sealed class ScheduledJobRunStoreTests : IDisposable
         AssertEx.True(first.Id != second.Id, "Without a fire instance id, two upserts should produce two distinct runs.");
 
         var allRuns = await store.ListByJobAsync(jobId);
-        AssertEx.Equal(2, allRuns.Count);
+        AssertEx.Equal(expected: 2, allRuns.Count);
     }
 
     // -------------------------------------------------------------------------
@@ -297,17 +297,17 @@ public sealed class ScheduledJobRunStoreTests : IDisposable
 
         var updated = AssertEx.NotNull(await store.UpdateLifecycleAsync(added.Id,
                 ScheduledRunStatus.Succeeded,
-                9_999,
-                1_234,
+                completedAtUtc: 9_999,
+                durationMs: 1_234,
                 "all done",
-                """{"output":"ok"}"""),
+                detailsJson: """{"output":"ok"}"""),
             "UpdateLifecycle should return the updated record.");
 
         AssertEx.Equal(ScheduledRunStatus.Succeeded, updated.Status);
-        AssertEx.Equal(9_999L, updated.CompletedAtUtc);
-        AssertEx.Equal(1_234L, updated.DurationMs);
+        AssertEx.Equal(expected: 9_999L, updated.CompletedAtUtc);
+        AssertEx.Equal(expected: 1_234L, updated.DurationMs);
         AssertEx.Equal("all done", updated.Summary);
-        AssertEx.Equal("""{"output":"ok"}""", updated.DetailsJson);
+        AssertEx.Equal(expected: """{"output":"ok"}""", updated.DetailsJson);
     }
 
     [Test]
@@ -346,15 +346,15 @@ public sealed class ScheduledJobRunStoreTests : IDisposable
         var store = new ScheduledJobRunStore(context, clock);
         var added = await store.AddAsync(CreateRunInput(jobId, ScheduledRunStatus.Running));
 
-        var updated = AssertEx.NotNull(await store.RequestCancellationAsync(added.Id, 7_500),
+        var updated = AssertEx.NotNull(await store.RequestCancellationAsync(added.Id, requestedAtUtc: 7_500),
             "RequestCancellation should return the updated record.");
 
-        AssertEx.Equal(7_500L, updated.CancellationRequestedAtUtc);
+        AssertEx.Equal(expected: 7_500L, updated.CancellationRequestedAtUtc);
         AssertEx.Equal(ScheduledRunStatus.Running, updated.Status,
             "Requesting cancellation must not change the run status (the handler moves it terminal).");
 
         var reread = AssertEx.NotNull(await store.GetByIdAsync(added.Id));
-        AssertEx.Equal(7_500L, reread.CancellationRequestedAtUtc);
+        AssertEx.Equal(expected: 7_500L, reread.CancellationRequestedAtUtc);
     }
 
     [Test]
@@ -369,7 +369,7 @@ public sealed class ScheduledJobRunStoreTests : IDisposable
 
         var store = new ScheduledJobRunStore(context, TimeProvider.System);
 
-        var result = await store.RequestCancellationAsync(Guid.NewGuid(), 1_000);
+        var result = await store.RequestCancellationAsync(Guid.NewGuid(), requestedAtUtc: 1_000);
 
         AssertEx.Null(result, "RequestCancellation on unknown id should return null.");
     }
@@ -397,7 +397,7 @@ public sealed class ScheduledJobRunStoreTests : IDisposable
 
         var reconciled = await store.MarkStaleActiveRunsAsync(ScheduledRunStatus.Cancelled, "node restart");
 
-        AssertEx.Equal(2, reconciled);
+        AssertEx.Equal(expected: 2, reconciled);
 
         var queuedAfter = AssertEx.NotNull(await store.GetByIdAsync(queued.Id));
         AssertEx.Equal(ScheduledRunStatus.Cancelled, queuedAfter.Status);
@@ -427,7 +427,7 @@ public sealed class ScheduledJobRunStoreTests : IDisposable
 
         var reconciled = await store.MarkStaleActiveRunsAsync(ScheduledRunStatus.Cancelled, "no stale");
 
-        AssertEx.Equal(0, reconciled);
+        AssertEx.Equal(expected: 0, reconciled);
     }
 
     // -------------------------------------------------------------------------
@@ -451,26 +451,26 @@ public sealed class ScheduledJobRunStoreTests : IDisposable
 
         // Old run — CreatedAtUtc = 1_000.
         var oldRun = await runStore.AddAsync(CreateRunInput(jobId, ScheduledRunStatus.Succeeded));
-        _ = await eventStore.AddAsync(new ScheduledJobRunEventInput(oldRun.Id, 1, ScheduledRunEventLevel.Info, "old-event"));
+        _ = await eventStore.AddAsync(new ScheduledJobRunEventInput(oldRun.Id, Sequence: 1, ScheduledRunEventLevel.Info, "old-event"));
 
         // New run — CreatedAtUtc = 2_000.
         clock.Advance(1_000);
         var newRun = await runStore.AddAsync(CreateRunInput(jobId, ScheduledRunStatus.Succeeded));
-        _ = await eventStore.AddAsync(new ScheduledJobRunEventInput(newRun.Id, 1, ScheduledRunEventLevel.Info, "new-event"));
+        _ = await eventStore.AddAsync(new ScheduledJobRunEventInput(newRun.Id, Sequence: 1, ScheduledRunEventLevel.Info, "new-event"));
 
         // Cut off at 1_500 → old run (1_000) is expired; new run (2_000) survives.
         var deleted = await runStore.SweepOlderThanAsync(1_500);
 
-        AssertEx.Equal(1, deleted);
+        AssertEx.Equal(expected: 1, deleted);
         AssertEx.Null(await runStore.GetByIdAsync(oldRun.Id), "Old run should have been swept.");
         AssertEx.NotNull(await runStore.GetByIdAsync(newRun.Id), "New run should survive the sweep.");
 
         // Cascade: old run's events should also be gone.
         var oldEvents = await eventStore.ListByRunAsync(oldRun.Id);
-        AssertEx.Equal(0, oldEvents.Count);
+        AssertEx.Equal(expected: 0, oldEvents.Count);
 
         var newEvents = await eventStore.ListByRunAsync(newRun.Id);
-        AssertEx.Equal(1, newEvents.Count);
+        AssertEx.Equal(expected: 1, newEvents.Count);
     }
 
     [Test]
@@ -490,7 +490,7 @@ public sealed class ScheduledJobRunStoreTests : IDisposable
 
         var deleted = await store.SweepOlderThanAsync(1_000);
 
-        AssertEx.Equal(0, deleted);
+        AssertEx.Equal(expected: 0, deleted);
     }
 
     // -------------------------------------------------------------------------
@@ -576,14 +576,14 @@ public sealed class ScheduledJobRunStoreTests : IDisposable
         var run = await runStore.AddAsync(CreateRunInput(jobId, ScheduledRunStatus.Running));
         var otherRun = await runStore.AddAsync(CreateRunInput(jobId, ScheduledRunStatus.Running));
 
-        var e1 = await eventStore.AddAsync(new ScheduledJobRunEventInput(run.Id, 2, ScheduledRunEventLevel.Info, "second"));
-        var e2 = await eventStore.AddAsync(new ScheduledJobRunEventInput(run.Id, 1, ScheduledRunEventLevel.Warning, "first"));
+        var e1 = await eventStore.AddAsync(new ScheduledJobRunEventInput(run.Id, Sequence: 2, ScheduledRunEventLevel.Info, "second"));
+        var e2 = await eventStore.AddAsync(new ScheduledJobRunEventInput(run.Id, Sequence: 1, ScheduledRunEventLevel.Warning, "first"));
         // Event on a different run — must be excluded.
-        _ = await eventStore.AddAsync(new ScheduledJobRunEventInput(otherRun.Id, 1, ScheduledRunEventLevel.Info, "other-run"));
+        _ = await eventStore.AddAsync(new ScheduledJobRunEventInput(otherRun.Id, Sequence: 1, ScheduledRunEventLevel.Info, "other-run"));
 
         var events = await eventStore.ListByRunAsync(run.Id);
 
-        AssertEx.Equal(2, events.Count);
+        AssertEx.Equal(expected: 2, events.Count);
         AssertEx.Equal(e2.Id, events[0].Id); // sequence 1 first
         AssertEx.Equal(e1.Id, events[1].Id); // sequence 2 second
         AssertEx.Equal(ScheduledRunEventLevel.Warning, events[0].Level);
@@ -610,7 +610,7 @@ public sealed class ScheduledJobRunStoreTests : IDisposable
             var eventStore = new ScheduledJobRunEventStore(writeContext, TimeProvider.System);
 
             var run = await runStore.AddAsync(CreateRunInput(jobId, ScheduledRunStatus.Running));
-            var added = await eventStore.AddAsync(new ScheduledJobRunEventInput(run.Id, 1, ScheduledRunEventLevel.Progress, "progress", dataJson));
+            var added = await eventStore.AddAsync(new ScheduledJobRunEventInput(run.Id, Sequence: 1, ScheduledRunEventLevel.Progress, "progress", dataJson));
 
             AssertEx.Equal(dataJson, added.DataJson);
             eventId = added.Id;
@@ -647,7 +647,7 @@ public sealed class ScheduledJobRunStoreTests : IDisposable
             var eventStore = new ScheduledJobRunEventStore(context, TimeProvider.System);
 
             var run = await runStore.AddAsync(CreateRunInput(jobId, ScheduledRunStatus.Running));
-            _ = await eventStore.AddAsync(new ScheduledJobRunEventInput(run.Id, 1, ScheduledRunEventLevel.Info, "msg", dataJson));
+            _ = await eventStore.AddAsync(new ScheduledJobRunEventInput(run.Id, Sequence: 1, ScheduledRunEventLevel.Info, "msg", dataJson));
         }
 
         var rawBytes = await ReadRawEventDataJsonAsync(databasePath);
@@ -673,7 +673,7 @@ public sealed class ScheduledJobRunStoreTests : IDisposable
         var eventStore = new ScheduledJobRunEventStore(context, TimeProvider.System);
 
         var run = await runStore.AddAsync(CreateRunInput(jobId, ScheduledRunStatus.Running));
-        var added = await eventStore.AddAsync(new ScheduledJobRunEventInput(run.Id, 1, ScheduledRunEventLevel.Info, "msg"));
+        var added = await eventStore.AddAsync(new ScheduledJobRunEventInput(run.Id, Sequence: 1, ScheduledRunEventLevel.Info, "msg"));
 
         AssertEx.Null(added.DataJson, "Null DataJson should round-trip as null.");
     }
@@ -715,7 +715,7 @@ public sealed class ScheduledJobRunStoreTests : IDisposable
 
     private static INodeSqliteKeyHolder CreateKeyHolder()
     {
-        var key = Enumerable.Range(0, 32).Select(static v => (byte)(v + 1)).ToArray();
+        var key = Enumerable.Range(start: 0, count: 32).Select(static v => (byte)(v + 1)).ToArray();
         return new FixedNodeSqliteKeyHolder(key);
     }
 
@@ -723,11 +723,11 @@ public sealed class ScheduledJobRunStoreTests : IDisposable
     {
         return new ScheduledJobRunInput(scheduledJobId,
             "tpl-test",
-            null,
+            QuartzFireInstanceId: null,
             ScheduledRunTrigger.Schedule,
             status,
-            null,
-            null);
+            ScheduledFireTimeUtc: null,
+            ActualFireTimeUtc: null);
     }
 
     private sealed class MutableTimeProvider(long initialMilliseconds) : TimeProvider

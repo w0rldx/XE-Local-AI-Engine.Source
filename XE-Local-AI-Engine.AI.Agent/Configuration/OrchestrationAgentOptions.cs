@@ -17,6 +17,6 @@ public sealed class OrchestrationAgentOptions
     ///     positive. A value large enough to span a model's slowest single turn; the run is otherwise bounded by the
     ///     caller's cancellation token.
     /// </summary>
-    [Range(1, 3600)]
+    [Range(minimum: 1, maximum: 3600)]
     public int IdleTimeoutSeconds { get; set; } = 120;
 }

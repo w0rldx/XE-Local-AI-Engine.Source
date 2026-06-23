@@ -36,7 +36,7 @@ public sealed class OllamaLocalModelProviderTests
         var descriptor = models.Single(model => model.ModelName == "llama3:8b");
         AssertEx.Equal(OllamaLocalModelProvider.OllamaProviderName, descriptor.ProviderName);
         AssertEx.True(descriptor.IsAvailable);
-        AssertEx.Equal(8192, descriptor.MaxContextTokens);
+        AssertEx.Equal(expected: 8192, descriptor.MaxContextTokens);
         AssertEx.Contains(context.Server.RecordedRequests, request => request.Path == "/api/tags");
         AssertEx.Contains(context.Server.RecordedRequests, request => request.Path == "/api/show" && request.ModelName == "llama3:8b");
     }

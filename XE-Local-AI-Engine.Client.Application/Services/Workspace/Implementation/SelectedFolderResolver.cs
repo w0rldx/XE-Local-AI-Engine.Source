@@ -98,13 +98,13 @@ internal sealed partial class SelectedFolderResolver(INodeSelectedFolderStore st
 
         // Registration-time guard against relative/traversal segments. Deep canonicalization (symlink/reparse-point
         // resolution against the copy root) is workspace copy's responsibility.
-        var segments = hostPath.Replace('\\', '/').Split('/');
+        var segments = hostPath.Replace(oldChar: '\\', newChar: '/').Split('/');
         return !segments.Any(segment => segment is "." or "..");
     }
 
-    [GeneratedRegex("[^a-z0-9]+", RegexOptions.None, 2000)]
+    [GeneratedRegex("[^a-z0-9]+", RegexOptions.None, matchTimeoutMilliseconds: 2000)]
     private static partial Regex NonAliasCharactersRegex();
 
-    [GeneratedRegex("^[a-z0-9]+(-[a-z0-9]+)*$", RegexOptions.ExplicitCapture, 2000)]
+    [GeneratedRegex("^[a-z0-9]+(-[a-z0-9]+)*$", RegexOptions.ExplicitCapture, matchTimeoutMilliseconds: 2000)]
     private static partial Regex AliasShapeRegex();
 }

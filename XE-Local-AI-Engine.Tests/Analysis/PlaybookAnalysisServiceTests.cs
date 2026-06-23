@@ -21,7 +21,7 @@ public sealed class PlaybookAnalysisServiceTests
             Proposal(new[]
             {
                 Guid.NewGuid()
-            }, 0.9d)
+            }, confidence: 0.9d)
         ]);
         var service = CreateService(out var insights, out var actionService, agent);
         insights.GetAgentFeedbackInsightsAsync(agentId, Arg.Any<CancellationToken>())
@@ -31,8 +31,8 @@ public sealed class PlaybookAnalysisServiceTests
 
         AssertEx.False(outcome.AgentExists, "A null aggregate must surface AgentExists == false (the endpoint 404s).");
         AssertEx.False(outcome.MeetsThreshold);
-        AssertEx.Equal(0, outcome.CreatedSuggestions.Count);
-        AssertEx.Equal(0, agent.InvocationCount, "The agent must not be invoked for a missing agent.");
+        AssertEx.Equal(expected: 0, outcome.CreatedSuggestions.Count);
+        AssertEx.Equal(expected: 0, agent.InvocationCount, "The agent must not be invoked for a missing agent.");
         await actionService.DidNotReceive()
                            .CreateAnalysisSuggestionAsync(Arg.Any<PlaybookAnalysisSuggestionInput>(), Arg.Any<CancellationToken>())
                            .ConfigureAwait(false);
@@ -47,18 +47,18 @@ public sealed class PlaybookAnalysisServiceTests
             Proposal(new[]
             {
                 Guid.NewGuid()
-            }, 0.9d)
+            }, confidence: 0.9d)
         ]);
         var service = CreateService(out var insights, out var actionService, agent);
         insights.GetAgentFeedbackInsightsAsync(agentId, Arg.Any<CancellationToken>())
-                .Returns(Task.FromResult<FeedbackInsightsResult?>(BuildInsights(agentId, false, [])));
+                .Returns(Task.FromResult<FeedbackInsightsResult?>(BuildInsights(agentId, meetsThreshold: false, [])));
 
         var outcome = await service.AnalyzeAsync(agentId).ConfigureAwait(false);
 
         AssertEx.True(outcome.AgentExists);
         AssertEx.False(outcome.MeetsThreshold, "Sub-threshold feedback must report MeetsThreshold == false.");
-        AssertEx.Equal(0, outcome.CreatedSuggestions.Count);
-        AssertEx.Equal(0, agent.InvocationCount, "Sub-threshold runs never invoke the model.");
+        AssertEx.Equal(expected: 0, outcome.CreatedSuggestions.Count);
+        AssertEx.Equal(expected: 0, agent.InvocationCount, "Sub-threshold runs never invoke the model.");
         await actionService.DidNotReceive()
                            .CreateAnalysisSuggestionAsync(Arg.Any<PlaybookAnalysisSuggestionInput>(), Arg.Any<CancellationToken>())
                            .ConfigureAwait(false);
@@ -70,19 +70,19 @@ public sealed class PlaybookAnalysisServiceTests
         var agentId = Guid.NewGuid();
         var firstExemplar = Exemplar();
         var secondExemplar = Exemplar();
-        var insightsResult = BuildInsights(agentId, true, [firstExemplar, secondExemplar]);
+        var insightsResult = BuildInsights(agentId, meetsThreshold: true, [firstExemplar, secondExemplar]);
 
         var agent = new FakeAnalysisAgent(_ =>
         [
             Proposal(new[]
             {
                 firstExemplar.MessageId
-            }, 0.8d, "Cite sources before answering.", "search"),
+            }, confidence: 0.8d, "Cite sources before answering.", "search"),
             Proposal(new[]
             {
                 secondExemplar.MessageId,
                 secondExemplar.ConversationId
-            }, 0.6d, "Avoid speculative claims.", "writing")
+            }, confidence: 0.6d, "Avoid speculative claims.", "writing")
         ]);
         var service = CreateService(out var insights, out var actionService, agent);
         insights.GetAgentFeedbackInsightsAsync(agentId, Arg.Any<CancellationToken>())
@@ -95,10 +95,10 @@ public sealed class PlaybookAnalysisServiceTests
 
         AssertEx.True(outcome.AgentExists);
         AssertEx.True(outcome.MeetsThreshold);
-        AssertEx.Equal(2, outcome.ProposedCount);
-        AssertEx.Equal(2, outcome.CreatedSuggestions.Count);
-        AssertEx.Equal(0, outcome.RejectedCount);
-        AssertEx.Equal(0, outcome.DuplicateCount);
+        AssertEx.Equal(expected: 2, outcome.ProposedCount);
+        AssertEx.Equal(expected: 2, outcome.CreatedSuggestions.Count);
+        AssertEx.Equal(expected: 0, outcome.RejectedCount);
+        AssertEx.Equal(expected: 0, outcome.DuplicateCount);
         await actionService.Received(2)
                            .CreateAnalysisSuggestionAsync(Arg.Any<PlaybookAnalysisSuggestionInput>(), Arg.Any<CancellationToken>())
                            .ConfigureAwait(false);
@@ -109,9 +109,9 @@ public sealed class PlaybookAnalysisServiceTests
     {
         var agentId = Guid.NewGuid();
         var exemplar = Exemplar();
-        var insightsResult = BuildInsights(agentId, true, [exemplar]);
+        var insightsResult = BuildInsights(agentId, meetsThreshold: true, [exemplar]);
 
-        var agent = new FakeAnalysisAgent(_ => [Proposal([], 0.7d, "Unsupported claim.")]);
+        var agent = new FakeAnalysisAgent(_ => [Proposal([], confidence: 0.7d, "Unsupported claim.")]);
         var service = CreateService(out var insights, out var actionService, agent);
         insights.GetAgentFeedbackInsightsAsync(agentId, Arg.Any<CancellationToken>())
                 .Returns(Task.FromResult<FeedbackInsightsResult?>(insightsResult));
@@ -121,9 +121,9 @@ public sealed class PlaybookAnalysisServiceTests
 
         var outcome = await service.AnalyzeAsync(agentId).ConfigureAwait(false);
 
-        AssertEx.Equal(1, outcome.ProposedCount);
-        AssertEx.Equal(0, outcome.CreatedSuggestions.Count);
-        AssertEx.Equal(1, outcome.RejectedCount, "A proposal with no evidence must be rejected.");
+        AssertEx.Equal(expected: 1, outcome.ProposedCount);
+        AssertEx.Equal(expected: 0, outcome.CreatedSuggestions.Count);
+        AssertEx.Equal(expected: 1, outcome.RejectedCount, "A proposal with no evidence must be rejected.");
         await actionService.DidNotReceive()
                            .CreateAnalysisSuggestionAsync(Arg.Any<PlaybookAnalysisSuggestionInput>(), Arg.Any<CancellationToken>())
                            .ConfigureAwait(false);
@@ -134,7 +134,7 @@ public sealed class PlaybookAnalysisServiceTests
     {
         var agentId = Guid.NewGuid();
         var exemplar = Exemplar();
-        var insightsResult = BuildInsights(agentId, true, [exemplar]);
+        var insightsResult = BuildInsights(agentId, meetsThreshold: true, [exemplar]);
 
         // The cited id is not present in any exemplar message/conversation id — the model invented evidence.
         var agent = new FakeAnalysisAgent(_ =>
@@ -142,7 +142,7 @@ public sealed class PlaybookAnalysisServiceTests
             Proposal(new[]
             {
                 Guid.NewGuid()
-            }, 0.95d, "Hallucinated root cause.")
+            }, confidence: 0.95d, "Hallucinated root cause.")
         ]);
         var service = CreateService(out var insights, out var actionService, agent);
         insights.GetAgentFeedbackInsightsAsync(agentId, Arg.Any<CancellationToken>())
@@ -153,9 +153,9 @@ public sealed class PlaybookAnalysisServiceTests
 
         var outcome = await service.AnalyzeAsync(agentId).ConfigureAwait(false);
 
-        AssertEx.Equal(1, outcome.ProposedCount);
-        AssertEx.Equal(0, outcome.CreatedSuggestions.Count);
-        AssertEx.Equal(1, outcome.RejectedCount, "A proposal citing evidence not in the aggregate must be rejected.");
+        AssertEx.Equal(expected: 1, outcome.ProposedCount);
+        AssertEx.Equal(expected: 0, outcome.CreatedSuggestions.Count);
+        AssertEx.Equal(expected: 1, outcome.RejectedCount, "A proposal citing evidence not in the aggregate must be rejected.");
         await actionService.DidNotReceive()
                            .CreateAnalysisSuggestionAsync(Arg.Any<PlaybookAnalysisSuggestionInput>(), Arg.Any<CancellationToken>())
                            .ConfigureAwait(false);
@@ -166,27 +166,27 @@ public sealed class PlaybookAnalysisServiceTests
     {
         var agentId = Guid.NewGuid();
         var exemplar = Exemplar();
-        var insightsResult = BuildInsights(agentId, true, [exemplar]);
+        var insightsResult = BuildInsights(agentId, meetsThreshold: true, [exemplar]);
 
         // An existing Enabled action whose (scope, behavior) the proposal normalizes to (case/whitespace-insensitive).
         var existing = new PlaybookActionRecord(Guid.NewGuid(),
             agentId,
             PlaybookActionState.Enabled,
             PlaybookActionSource.Manual,
-            null,
+            TriggerCondition: null,
             "Cite sources before answering.",
             "search",
-            10,
-            1,
-            10,
-            10);
+            Priority: 10,
+            Version: 1,
+            CreatedAtUtc: 10,
+            UpdatedAtUtc: 10);
 
         var agent = new FakeAnalysisAgent(_ =>
         [
             Proposal(new[]
             {
                 exemplar.MessageId
-            }, 0.8d, "  CITE   sources before ANSWERING.  ", "Search")
+            }, confidence: 0.8d, "  CITE   sources before ANSWERING.  ", "Search")
         ]);
         var service = CreateService(out var insights, out var actionService, agent);
         insights.GetAgentFeedbackInsightsAsync(agentId, Arg.Any<CancellationToken>())
@@ -197,10 +197,10 @@ public sealed class PlaybookAnalysisServiceTests
 
         var outcome = await service.AnalyzeAsync(agentId).ConfigureAwait(false);
 
-        AssertEx.Equal(1, outcome.ProposedCount);
-        AssertEx.Equal(0, outcome.CreatedSuggestions.Count);
-        AssertEx.Equal(1, outcome.DuplicateCount, "A near-duplicate of an existing live action must be skipped.");
-        AssertEx.Equal(0, outcome.RejectedCount);
+        AssertEx.Equal(expected: 1, outcome.ProposedCount);
+        AssertEx.Equal(expected: 0, outcome.CreatedSuggestions.Count);
+        AssertEx.Equal(expected: 1, outcome.DuplicateCount, "A near-duplicate of an existing live action must be skipped.");
+        AssertEx.Equal(expected: 0, outcome.RejectedCount);
         await actionService.DidNotReceive()
                            .CreateAnalysisSuggestionAsync(Arg.Any<PlaybookAnalysisSuggestionInput>(), Arg.Any<CancellationToken>())
                            .ConfigureAwait(false);
@@ -234,9 +234,9 @@ public sealed class PlaybookAnalysisServiceTests
                              input.Behavior,
                              input.Scope,
                              input.Priority,
-                             1,
-                             10,
-                             10,
+                             Version: 1,
+                             CreatedAtUtc: 10,
+                             UpdatedAtUtc: 10,
                              input.SourceFeedbackIds,
                              input.Confidence));
                      });
@@ -246,16 +246,16 @@ public sealed class PlaybookAnalysisServiceTests
     {
         return new FeedbackInsightsResult(agentId,
             "Agent",
-            1_000,
-            3,
-            new OverallFeedback(5, 1, 4, 0.8d, meetsThreshold),
+            GeneratedAtUtc: 1_000,
+            MinOccurrenceThreshold: 3,
+            new OverallFeedback(Total: 5, Up: 1, Down: 4, DownRate: 0.8d, meetsThreshold),
             [],
             exemplars);
     }
 
     private static FeedbackExemplarView Exemplar()
     {
-        return new FeedbackExemplarView("down", "needs better citations", Guid.NewGuid(), Guid.NewGuid(), 100, false);
+        return new FeedbackExemplarView("down", "needs better citations", Guid.NewGuid(), Guid.NewGuid(), CreatedAtUtc: 100, Truncated: false);
     }
 
     private static ProposedPlaybookAction Proposal(IReadOnlyList<Guid> sourceFeedbackIds,
@@ -263,7 +263,7 @@ public sealed class PlaybookAnalysisServiceTests
         string behavior = "Prefer the existing shared helper.",
         string? scope = null)
     {
-        return new ProposedPlaybookAction(behavior, null, scope, sourceFeedbackIds, confidence);
+        return new ProposedPlaybookAction(behavior, TriggerCondition: null, scope, sourceFeedbackIds, confidence);
     }
 
     private sealed class FakeAnalysisAgent(Func<FeedbackInsightsResult, IReadOnlyList<ProposedPlaybookAction>> propose) : IPlaybookAnalysisAgent

@@ -12,7 +12,7 @@ internal static class TestControlEndpoints
         }
 
         var request = await context.Request.ReadFromJsonAsync(FakeOllamaJsonContext.Default.FakeOllamaFailureRequest, context.RequestAborted).ConfigureAwait(false);
-        if (request is null || !Enum.TryParse<FakeOllamaFailure>(request.Failure, true, out var failure))
+        if (request is null || !Enum.TryParse<FakeOllamaFailure>(request.Failure, ignoreCase: true, out var failure))
         {
             return Results.BadRequest(new
             {

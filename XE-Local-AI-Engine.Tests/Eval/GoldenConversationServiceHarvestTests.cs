@@ -25,10 +25,10 @@ public sealed class GoldenConversationServiceHarvestTests
         var service = CreateService(out var store);
         var input = new GoldenConversationCreateInput(AgentId,
             "Harvested case",
-            """[{"role":"user","text":"hi"}]""",
-            null,
+            InputTurns: """[{"role":"user","text":"hi"}]""",
+            Assertion: null,
             "Be consistent with the approved answer.",
-            true,
+            Enabled: true,
             GoldenConversationSource.Manual,
             Guid.NewGuid(),
             Guid.NewGuid());
@@ -49,12 +49,12 @@ public sealed class GoldenConversationServiceHarvestTests
         var service = CreateService(out var store);
         var input = new GoldenConversationCreateInput(AgentId,
             "Harvested case",
-            """[{"role":"user","text":"hi"}]""",
-            null,
+            InputTurns: """[{"role":"user","text":"hi"}]""",
+            Assertion: null,
             "Be consistent.",
-            false,
+            Enabled: false,
             GoldenConversationSource.Harvested,
-            null,
+            SourceMessageId: null,
             Guid.NewGuid());
 
         await AssertEx.ThrowsAsync<PlaybookActionValidationException>(async () => await service.CreateHarvestedAsync(input).ConfigureAwait(false)).ConfigureAwait(false);
@@ -67,11 +67,11 @@ public sealed class GoldenConversationServiceHarvestTests
     {
         var service = CreateService(out _);
         var input = new GoldenConversationCreateInput(AgentId,
-            new string('t', 201),
-            """[{"role":"user","text":"hi"}]""",
-            null,
+            new string(c: 't', count: 201),
+            InputTurns: """[{"role":"user","text":"hi"}]""",
+            Assertion: null,
             "Be consistent.",
-            false,
+            Enabled: false,
             GoldenConversationSource.Harvested,
             Guid.NewGuid(),
             Guid.NewGuid());
@@ -91,10 +91,10 @@ public sealed class GoldenConversationServiceHarvestTests
 
         var input = new GoldenConversationCreateInput(AgentId,
             "Harvested case",
-            """[{"role":"user","text":"hi"}]""",
-            null,
+            InputTurns: """[{"role":"user","text":"hi"}]""",
+            Assertion: null,
             "Be consistent.",
-            false,
+            Enabled: false,
             GoldenConversationSource.Harvested,
             Guid.NewGuid(),
             Guid.NewGuid());
@@ -106,14 +106,14 @@ public sealed class GoldenConversationServiceHarvestTests
     public async Task ApproveHarvestedAsync_WhenHarvestedDisabledAndOwned_EnablesAndReturnsRecord()
     {
         var goldenId = Guid.NewGuid();
-        var service = CreateApproveService(out var store, Existing(goldenId, AgentId, GoldenConversationSource.Harvested, false));
-        store.SetEnabledAsync(goldenId, true, Arg.Any<CancellationToken>())
-             .Returns(Task.FromResult<GoldenConversationRecord?>(Existing(goldenId, AgentId, GoldenConversationSource.Harvested, true)));
+        var service = CreateApproveService(out var store, Existing(goldenId, AgentId, GoldenConversationSource.Harvested, enabled: false));
+        store.SetEnabledAsync(goldenId, enabled: true, Arg.Any<CancellationToken>())
+             .Returns(Task.FromResult<GoldenConversationRecord?>(Existing(goldenId, AgentId, GoldenConversationSource.Harvested, enabled: true)));
 
         var result = AssertEx.NotNull(await service.ApproveHarvestedAsync(AgentId, goldenId).ConfigureAwait(false), "Approve should return the updated record.");
 
         AssertEx.True(result.Enabled, "Approve should enable the case.");
-        await store.Received(1).SetEnabledAsync(goldenId, true, Arg.Any<CancellationToken>()).ConfigureAwait(false);
+        await store.Received(1).SetEnabledAsync(goldenId, enabled: true, Arg.Any<CancellationToken>()).ConfigureAwait(false);
     }
 
     [Test]
@@ -121,7 +121,7 @@ public sealed class GoldenConversationServiceHarvestTests
     {
         var goldenId = Guid.NewGuid();
         var otherAgentId = Guid.NewGuid();
-        var service = CreateApproveService(out var store, Existing(goldenId, otherAgentId, GoldenConversationSource.Harvested, false));
+        var service = CreateApproveService(out var store, Existing(goldenId, otherAgentId, GoldenConversationSource.Harvested, enabled: false));
 
         AssertEx.Null(await service.ApproveHarvestedAsync(AgentId, goldenId).ConfigureAwait(false), "A case owned by another agent must not be approved.");
         await store.DidNotReceive().SetEnabledAsync(Arg.Any<Guid>(), Arg.Any<bool>(), Arg.Any<CancellationToken>()).ConfigureAwait(false);
@@ -131,7 +131,7 @@ public sealed class GoldenConversationServiceHarvestTests
     public async Task ApproveHarvestedAsync_WhenManualSource_ReturnsNullWithoutEnabling()
     {
         var goldenId = Guid.NewGuid();
-        var service = CreateApproveService(out var store, Existing(goldenId, AgentId, GoldenConversationSource.Manual, false));
+        var service = CreateApproveService(out var store, Existing(goldenId, AgentId, GoldenConversationSource.Manual, enabled: false));
 
         AssertEx.Null(await service.ApproveHarvestedAsync(AgentId, goldenId).ConfigureAwait(false), "A manual case must not be approved via the harvest path.");
         await store.DidNotReceive().SetEnabledAsync(Arg.Any<Guid>(), Arg.Any<bool>(), Arg.Any<CancellationToken>()).ConfigureAwait(false);
@@ -141,7 +141,7 @@ public sealed class GoldenConversationServiceHarvestTests
     public async Task ApproveHarvestedAsync_WhenAlreadyEnabled_ReturnsNullWithoutEnabling()
     {
         var goldenId = Guid.NewGuid();
-        var service = CreateApproveService(out var store, Existing(goldenId, AgentId, GoldenConversationSource.Harvested, true));
+        var service = CreateApproveService(out var store, Existing(goldenId, AgentId, GoldenConversationSource.Harvested, enabled: true));
 
         AssertEx.Null(await service.ApproveHarvestedAsync(AgentId, goldenId).ConfigureAwait(false), "An already-enabled case must not be re-approved.");
         await store.DidNotReceive().SetEnabledAsync(Arg.Any<Guid>(), Arg.Any<bool>(), Arg.Any<CancellationToken>()).ConfigureAwait(false);
@@ -178,12 +178,12 @@ public sealed class GoldenConversationServiceHarvestTests
         return new GoldenConversationRecord(id,
             agentId,
             "case",
-            """[{"role":"user","text":"hi"}]""",
-            null,
+            InputTurns: """[{"role":"user","text":"hi"}]""",
+            Assertion: null,
             "Be consistent.",
             enabled,
-            10,
-            10,
+            CreatedAtUtc: 10,
+            UpdatedAtUtc: 10,
             source,
             source == GoldenConversationSource.Harvested ? Guid.NewGuid() : null,
             source == GoldenConversationSource.Harvested ? Guid.NewGuid() : null);
@@ -198,8 +198,8 @@ public sealed class GoldenConversationServiceHarvestTests
             input.Assertion,
             input.Rubric,
             input.Enabled,
-            10,
-            10,
+            CreatedAtUtc: 10,
+            UpdatedAtUtc: 10,
             input.Source,
             input.SourceMessageId,
             input.SourceConversationId);
@@ -209,16 +209,16 @@ public sealed class GoldenConversationServiceHarvestTests
     {
         return new AgentDefinitionRecord(AgentId,
             "Builder",
-            null,
+            Description: null,
             "Base instructions.",
-            null,
-            null,
+            ModelProfile: null,
+            ReasoningEffort: null,
             AgentDefinitionKind.Single,
             [],
             new Dictionary<string, bool>(),
-            null,
-            1,
-            10,
-            10);
+            OrchestrationTopologyJson: null,
+            Version: 1,
+            CreatedAtUtc: 10,
+            UpdatedAtUtc: 10);
     }
 }

@@ -15,7 +15,7 @@ public sealed class FileDeadLetterStoreTests : IDisposable
     {
         if (Directory.Exists(_queuePath))
         {
-            Directory.Delete(_queuePath, true);
+            Directory.Delete(_queuePath, recursive: true);
         }
     }
 
@@ -26,7 +26,7 @@ public sealed class FileDeadLetterStoreTests : IDisposable
 
         await store.EnqueueAsync(CreatePayload());
 
-        AssertEx.Equal(1, Directory.GetFiles(_queuePath, "*.json").Length);
+        AssertEx.Equal(expected: 1, Directory.GetFiles(_queuePath, "*.json").Length);
     }
 
     [Test]
@@ -41,7 +41,7 @@ public sealed class FileDeadLetterStoreTests : IDisposable
 
         var pending = await store.GetPendingAsync();
 
-        AssertEx.Equal(2, pending.Count);
+        AssertEx.Equal(expected: 2, pending.Count);
         AssertEx.Contains(pending, payload => payload.InvocationId == first.InvocationId);
         AssertEx.Contains(pending, payload => payload.InvocationId == second.InvocationId);
     }
@@ -55,7 +55,7 @@ public sealed class FileDeadLetterStoreTests : IDisposable
 
         await store.RemoveAsync(payload.InvocationId);
 
-        AssertEx.Equal(0, Directory.GetFiles(_queuePath, "*.json").Length);
+        AssertEx.Equal(expected: 0, Directory.GetFiles(_queuePath, "*.json").Length);
     }
 
     [Test]
@@ -95,10 +95,10 @@ public sealed class FileDeadLetterStoreTests : IDisposable
     {
         using var store = CreateStore();
 
-        await Task.WhenAll(Enumerable.Range(0, 10).Select(_ => store.EnqueueAsync(CreatePayload())));
+        await Task.WhenAll(Enumerable.Range(start: 0, count: 10).Select(_ => store.EnqueueAsync(CreatePayload())));
 
         var pending = await store.GetPendingAsync();
-        AssertEx.Equal(10, pending.Count);
+        AssertEx.Equal(expected: 10, pending.Count);
     }
 
     [Test]
@@ -111,7 +111,7 @@ public sealed class FileDeadLetterStoreTests : IDisposable
 
         var pending = await store.GetPendingAsync();
 
-        AssertEx.Equal(1, pending.Count);
+        AssertEx.Equal(expected: 1, pending.Count);
         AssertEx.Equal(payload.InvocationId, pending[0].InvocationId);
     }
 
@@ -119,7 +119,7 @@ public sealed class FileDeadLetterStoreTests : IDisposable
     public async Task EnqueueAsync_CreatesDirectoryIfNotExists()
     {
         using var store = CreateStore();
-        Directory.Delete(_queuePath, true);
+        Directory.Delete(_queuePath, recursive: true);
 
         await store.EnqueueAsync(CreatePayload());
 

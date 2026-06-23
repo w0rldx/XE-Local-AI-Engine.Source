@@ -86,10 +86,10 @@ public sealed class HarvestGoldenConversationsEndpointTests
         var root = document.RootElement;
 
         // An agent with no thumbs-up feedback harvests nothing, but the four count fields must be present.
-        AssertEx.Equal(0, root.GetProperty("thumbsUpScanned").GetInt32());
-        AssertEx.Equal(0, root.GetProperty("createdCount").GetInt32());
-        AssertEx.Equal(0, root.GetProperty("duplicateCount").GetInt32());
-        AssertEx.Equal(0, root.GetProperty("skippedCount").GetInt32());
+        AssertEx.Equal(expected: 0, root.GetProperty("thumbsUpScanned").GetInt32());
+        AssertEx.Equal(expected: 0, root.GetProperty("createdCount").GetInt32());
+        AssertEx.Equal(expected: 0, root.GetProperty("duplicateCount").GetInt32());
+        AssertEx.Equal(expected: 0, root.GetProperty("skippedCount").GetInt32());
     }
 
     [Test]
@@ -137,7 +137,7 @@ public sealed class HarvestGoldenConversationsEndpointTests
 
         var agentId = await SeedAgentAsync(factory, "Owner").ConfigureAwait(false);
         // A Manual (non-harvested) case must not be promotable via the approve route.
-        var goldenId = await SeedGoldenAsync(factory, agentId, GoldenConversationSource.Manual, false).ConfigureAwait(false);
+        var goldenId = await SeedGoldenAsync(factory, agentId, GoldenConversationSource.Manual, enabled: false).ConfigureAwait(false);
 
         using var request = new HttpRequestMessage(HttpMethod.Post, ApproveRoute(agentId, goldenId))
         {
@@ -159,7 +159,7 @@ public sealed class HarvestGoldenConversationsEndpointTests
 
         var ownerAgentId = await SeedAgentAsync(factory, "Owner").ConfigureAwait(false);
         var otherAgentId = await SeedAgentAsync(factory, "Other").ConfigureAwait(false);
-        var goldenId = await SeedGoldenAsync(factory, ownerAgentId, GoldenConversationSource.Harvested, false).ConfigureAwait(false);
+        var goldenId = await SeedGoldenAsync(factory, ownerAgentId, GoldenConversationSource.Harvested, enabled: false).ConfigureAwait(false);
 
         // Approve the owner's harvested case via the OTHER agent's route — the ownership guard must 404.
         using var request = new HttpRequestMessage(HttpMethod.Post, ApproveRoute(otherAgentId, goldenId))
@@ -181,7 +181,7 @@ public sealed class HarvestGoldenConversationsEndpointTests
         using var client = factory.CreateClient();
 
         var agentId = await SeedAgentAsync(factory, "Owner").ConfigureAwait(false);
-        var goldenId = await SeedGoldenAsync(factory, agentId, GoldenConversationSource.Harvested, false).ConfigureAwait(false);
+        var goldenId = await SeedGoldenAsync(factory, agentId, GoldenConversationSource.Harvested, enabled: false).ConfigureAwait(false);
 
         using var request = new HttpRequestMessage(HttpMethod.Post, ApproveRoute(agentId, goldenId))
         {
@@ -209,8 +209,8 @@ public sealed class HarvestGoldenConversationsEndpointTests
         var store = scope.ServiceProvider.GetRequiredService<IGoldenConversationStore>();
         var added = await store.AddAsync(new GoldenConversationInput(agentId,
             "Seeded case",
-            """[{"role":"user","text":"hi"}]""",
-            null,
+            InputTurns: """[{"role":"user","text":"hi"}]""",
+            Assertion: null,
             "Be consistent with the approved answer.",
             enabled,
             source,
@@ -224,14 +224,14 @@ public sealed class HarvestGoldenConversationsEndpointTests
         using var scope = factory.Services.CreateScope();
         var store = scope.ServiceProvider.GetRequiredService<IAgentDefinitionStore>();
         var agent = await store.AddAsync(new AgentDefinitionInput(name,
-            null,
+            Description: null,
             "You are a careful engineering agent.",
-            null,
-            null,
+            ModelProfile: null,
+            ReasoningEffort: null,
             AgentDefinitionKind.Single,
             [],
             new Dictionary<string, bool>(),
-            null)).ConfigureAwait(false);
+            OrchestrationTopologyJson: null)).ConfigureAwait(false);
         return agent.Id;
     }
 }

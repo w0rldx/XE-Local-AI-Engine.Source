@@ -15,7 +15,7 @@ public sealed class McpToolRegistryTests
 
         registry.ReplaceSnapshot([Tool("mcp__a__one"), Tool("mcp__a__two")]);
 
-        AssertEx.Equal(2, registry.GetDescriptors().Count);
+        AssertEx.Equal(expected: 2, registry.GetDescriptors().Count);
         AssertEx.True(registry.TryResolve("mcp__a__one", out _));
         AssertEx.True(registry.TryResolve("mcp__a__two", out _));
     }
@@ -33,7 +33,7 @@ public sealed class McpToolRegistryTests
         registry.ReplaceSnapshot([first, second]);
 
         var descriptors = registry.GetDescriptors();
-        AssertEx.Equal(1, descriptors.Count);
+        AssertEx.Equal(expected: 1, descriptors.Count);
         AssertEx.Equal("first", descriptors[0].Description);
         AssertEx.True(registry.TryResolve("mcp__a__dup", out var executable));
         AssertEx.Equal(first.Executable, executable);
@@ -54,7 +54,7 @@ public sealed class McpToolRegistryTests
     private static McpRegisteredTool Tool(string name, string description = "desc")
     {
         var executable = AIFunctionFactory.Create((string input) => input, name);
-        var descriptor = new LocalChatToolDescriptor(name, description, """{"type":"object"}""", true);
+        var descriptor = new LocalChatToolDescriptor(name, description, ParameterSchema: """{"type":"object"}""", RequiresApproval: true);
         return new McpRegisteredTool(name, executable, descriptor);
     }
 }

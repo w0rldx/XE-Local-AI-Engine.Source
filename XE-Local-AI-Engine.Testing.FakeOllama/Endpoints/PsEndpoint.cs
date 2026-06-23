@@ -9,8 +9,8 @@ internal static class PsEndpoint
         ArgumentNullException.ThrowIfNull(context);
         ArgumentNullException.ThrowIfNull(state);
 
-        FakeOllamaEndpointMapper.Record(context, state, null, 0, null);
-        if (await FakeOllamaEndpointMapper.TryApplyFailureAsync(context, state, null).ConfigureAwait(false))
+        FakeOllamaEndpointMapper.Record(context, state, model: null, messageCount: 0, prompt: null);
+        if (await FakeOllamaEndpointMapper.TryApplyFailureAsync(context, state, model: null).ConfigureAwait(false))
         {
             return Results.Empty;
         }

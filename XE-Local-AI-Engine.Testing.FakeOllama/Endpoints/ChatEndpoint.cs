@@ -198,7 +198,7 @@ internal static class ChatEndpoint
 
     private static IReadOnlyList<string> SplitTokens(string value)
     {
-        return value.Split(' ', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
+        return value.Split(separator: ' ', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
                     .Select((token, index) => index == 0 ? token : " " + token)
                     .DefaultIfEmpty(string.Empty)
                     .ToArray();

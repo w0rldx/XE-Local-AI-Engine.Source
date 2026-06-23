@@ -65,7 +65,7 @@ public sealed class ClientLocalToolCancellationTests
         };
 
         using var cancellation = new CancellationTokenSource();
-        var runTask = agent.RunAsync(seed, null, null, cancellation.Token);
+        var runTask = agent.RunAsync(seed, session: null, options: null, cancellation.Token);
 
         await toolStarted.Task;
         await cancellation.CancelAsync();

@@ -32,7 +32,7 @@ public sealed class ModelRecommendationScheduleSeederTests : IDisposable
     {
         if (Directory.Exists(_rootPath))
         {
-            Directory.Delete(_rootPath, true);
+            Directory.Delete(_rootPath, recursive: true);
         }
     }
 
@@ -51,9 +51,9 @@ public sealed class ModelRecommendationScheduleSeederTests : IDisposable
         var jobs = await service.ListJobsAsync().ConfigureAwait(false);
         var seeded = jobs.Where(j => j.TemplateId == ModelRecommendationCheckHandler.TemplateIdValue).ToList();
 
-        AssertEx.Equal(1, seeded.Count, "Exactly one model-recommendation-check definition must be seeded.");
+        AssertEx.Equal(expected: 1, seeded.Count, "Exactly one model-recommendation-check definition must be seeded.");
         AssertEx.Equal(ScheduleKind.Manual, seeded[0].ScheduleKind, "The seeded definition must be a Manual job.");
-        AssertEx.Equal(true, seeded[0].Enabled, "The seeded definition must be enabled by default.");
+        AssertEx.Equal(expected: true, seeded[0].Enabled, "The seeded definition must be enabled by default.");
 
         // The durable Manual Quartz job must be registered (so TriggerNowAsync can fire it) with no trigger.
         var schedulerFactory = provider.GetRequiredService<ISchedulerFactory>();
@@ -62,7 +62,7 @@ public sealed class ModelRecommendationScheduleSeederTests : IDisposable
         AssertEx.True(await scheduler.CheckExists(jobKey, CancellationToken.None).ConfigureAwait(false),
             "The seeded Manual job must be registered as a durable Quartz job.");
         var triggers = await scheduler.GetTriggersOfJob(jobKey, CancellationToken.None).ConfigureAwait(false);
-        AssertEx.Equal(0, triggers.Count, "The seeded Manual job must have no trigger.");
+        AssertEx.Equal(expected: 0, triggers.Count, "The seeded Manual job must have no trigger.");
     }
 
     [Test]
@@ -81,7 +81,7 @@ public sealed class ModelRecommendationScheduleSeederTests : IDisposable
         var jobs = await service.ListJobsAsync().ConfigureAwait(false);
         var seeded = jobs.Count(j => j.TemplateId == ModelRecommendationCheckHandler.TemplateIdValue);
 
-        AssertEx.Equal(1, seeded, "Re-running the seeder must not create a duplicate definition.");
+        AssertEx.Equal(expected: 1, seeded, "Re-running the seeder must not create a duplicate definition.");
     }
 
     [Test]

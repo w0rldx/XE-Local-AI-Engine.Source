@@ -49,13 +49,13 @@ public sealed class WorkerShutdownDrainServiceTests
         var drainTask = service.DrainAsync();
 
         await components.InvocationRunner.DrainStarted.Task.WaitAsync(TimeSpan.FromSeconds(2));
-        AssertEx.Equal(0, components.WorkerHubConnection.DisconnectAsyncCallCount);
+        AssertEx.Equal(expected: 0, components.WorkerHubConnection.DisconnectAsyncCallCount);
 
         components.InvocationRunner.CompleteDrain(true);
         var result = await drainTask.WaitAsync(TimeSpan.FromSeconds(2));
 
         AssertEx.True(result.Succeeded);
-        AssertEx.Equal(1, components.WorkerHubConnection.DisconnectAsyncCallCount);
+        AssertEx.Equal(expected: 1, components.WorkerHubConnection.DisconnectAsyncCallCount);
         AssertEx.Equal("stop-accepting|await-active-invocations|active-invocations-drained|disconnect-worker-hub",
             components.Operations.ToDelimitedString());
     }
@@ -71,7 +71,7 @@ public sealed class WorkerShutdownDrainServiceTests
         AssertEx.True(result.Succeeded);
         AssertEx.Empty(components.DeadLetterStore.Enqueued);
         AssertEx.Empty(components.DeadLetterStore.Pending);
-        AssertEx.Equal(1, components.WorkerHubConnection.DisconnectAsyncCallCount);
+        AssertEx.Equal(expected: 1, components.WorkerHubConnection.DisconnectAsyncCallCount);
     }
 
     [Test]
@@ -99,7 +99,7 @@ public sealed class WorkerShutdownDrainServiceTests
         var result = await service.DrainAsync();
 
         AssertEx.True(result.Succeeded);
-        AssertEx.Equal(1, components.WorkerHubConnection.DisconnectAsyncCallCount);
+        AssertEx.Equal(expected: 1, components.WorkerHubConnection.DisconnectAsyncCallCount);
     }
 
     private static void ReplaceShutdownComponents(IServiceCollection services, RecordingShutdownComponents components)
@@ -206,7 +206,7 @@ public sealed class WorkerShutdownDrainServiceTests
         {
             lock (_sync)
             {
-                return string.Join('|', _items);
+                return string.Join(separator: '|', _items);
             }
         }
     }

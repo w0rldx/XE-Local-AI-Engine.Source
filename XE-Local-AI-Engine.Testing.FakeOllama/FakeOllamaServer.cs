@@ -44,7 +44,7 @@ public sealed class FakeOllamaServer : IAsyncDisposable
         var builder = WebApplication.CreateSlimBuilder();
 
         builder.WebHost.UseKestrel().UseUrls(LoopbackDynamicPortUrl);
-        builder.Services.ConfigureHttpJsonOptions(json => json.SerializerOptions.TypeInfoResolverChain.Insert(0, FakeOllamaJsonContext.Default));
+        builder.Services.ConfigureHttpJsonOptions(json => json.SerializerOptions.TypeInfoResolverChain.Insert(index: 0, FakeOllamaJsonContext.Default));
 
         var app = builder.Build();
         app.MapFakeOllamaEndpoints(state);

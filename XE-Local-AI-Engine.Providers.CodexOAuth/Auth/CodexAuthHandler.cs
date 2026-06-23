@@ -33,7 +33,7 @@ public sealed class CodexAuthHandler : DelegatingHandler
     private readonly CodexOptions _options;
 
     // Single-flight refresh gate: concurrent 401s await one in-flight refresh, then re-check expiry.
-    private readonly SemaphoreSlim _refreshGate = new(1, 1);
+    private readonly SemaphoreSlim _refreshGate = new(initialCount: 1, maxCount: 1);
     private readonly TimeProvider _timeProvider;
     private readonly ICodexTokenStore _tokenStore;
     private CodexTokens? _cachedTokens;
@@ -61,7 +61,7 @@ public sealed class CodexAuthHandler : DelegatingHandler
     {
         ArgumentNullException.ThrowIfNull(request);
 
-        var tokens = await GetValidTokensAsync(false, cancellationToken).ConfigureAwait(false);
+        var tokens = await GetValidTokensAsync(forceRefresh: false, cancellationToken).ConfigureAwait(false);
         ApplyHeaders(request, tokens);
 
         var response = await base.SendAsync(request, cancellationToken).ConfigureAwait(false);
@@ -75,7 +75,7 @@ public sealed class CodexAuthHandler : DelegatingHandler
         // HttpRequestMessage cannot be resent (its content stream is consumed / it is marked used), so the retry
         // MUST go on a fresh CLONE of the request, not the original.
         response.Dispose();
-        var refreshed = await GetValidTokensAsync(true, cancellationToken).ConfigureAwait(false);
+        var refreshed = await GetValidTokensAsync(forceRefresh: true, cancellationToken).ConfigureAwait(false);
 
         using var retryRequest = await CloneRequestAsync(request, cancellationToken).ConfigureAwait(false);
         ApplyHeaders(retryRequest, refreshed);

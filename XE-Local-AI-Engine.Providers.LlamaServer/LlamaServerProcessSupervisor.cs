@@ -25,6 +25,10 @@ public sealed class LlamaServerProcessSupervisor : ILlamaServerProcessSupervisor
 {
     private const string NonRetryableMarker = "LlamaServer.NonRetryable";
 
+    // Offload every model layer to the GPU. llama.cpp clamps this to the model's actual layer count, so a value above
+    // any real model's layer count means "all layers on the GPU". Only applied for a GPU runtime variant.
+    private const string OffloadAllGpuLayers = "999";
+
     /// <summary>Cold-start readiness budget for a freshly spawned process before its first request.</summary>
     private static readonly TimeSpan ReadinessTimeout = TimeSpan.FromMinutes(2);
 
@@ -32,7 +36,7 @@ public sealed class LlamaServerProcessSupervisor : ILlamaServerProcessSupervisor
     private static readonly TimeSpan RestartBackoffStep = TimeSpan.FromMilliseconds(250);
 
     // Guards the loaded-cap admission decision + port-set mutation so the cap can never be exceeded by a race.
-    private readonly SemaphoreSlim _admissionGate = new(1, 1);
+    private readonly SemaphoreSlim _admissionGate = new(initialCount: 1, maxCount: 1);
     private readonly HashSet<int> _allocatedPorts = [];
     private readonly ILlamaCppBinaryManager _binaryManager;
 
@@ -81,7 +85,7 @@ public sealed class LlamaServerProcessSupervisor : ILlamaServerProcessSupervisor
     /// <inheritdoc />
     public async ValueTask DisposeAsync()
     {
-        if (Interlocked.Exchange(ref _disposed, 1) != 0)
+        if (Interlocked.Exchange(ref _disposed, value: 1) != 0)
         {
             return;
         }
@@ -133,7 +137,7 @@ public sealed class LlamaServerProcessSupervisor : ILlamaServerProcessSupervisor
         }
 
         // Single-flight: concurrent callers for the same key spawn exactly once.
-        var gate = _ensureGates.GetOrAdd(key, static _ => new SemaphoreSlim(1, 1));
+        var gate = _ensureGates.GetOrAdd(key, static _ => new SemaphoreSlim(initialCount: 1, maxCount: 1));
         await gate.WaitAsync(ct).ConfigureAwait(false);
         try
         {
@@ -186,7 +190,7 @@ public sealed class LlamaServerProcessSupervisor : ILlamaServerProcessSupervisor
         {
             if (running.Handle.HasExited)
             {
-                healths.Add(new LlamaServerProcessHealth(key.ModelName, key.Role, false, "Process has exited."));
+                healths.Add(new LlamaServerProcessHealth(key.ModelName, key.Role, IsResponsive: false, "Process has exited."));
                 continue;
             }
 
@@ -313,10 +317,6 @@ public sealed class LlamaServerProcessSupervisor : ILlamaServerProcessSupervisor
             _admissionGate.Release();
         }
     }
-
-    // Offload every model layer to the GPU. llama.cpp clamps this to the model's actual layer count, so a value above
-    // any real model's layer count means "all layers on the GPU". Only applied for a GPU runtime variant.
-    private const string OffloadAllGpuLayers = "999";
 
     /// <summary>Builds the exact, ordered llama-server argument vector for a <c>(model, role)</c> on a port.</summary>
     internal static LlamaServerLaunchSpec BuildLaunchSpec(ProcessKey key, string executablePath, string modelFilePath, int port, GpuVariant variant)

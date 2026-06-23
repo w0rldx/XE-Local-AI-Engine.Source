@@ -41,7 +41,7 @@ internal static class McpServerMapper
             request.WorkingDirectory,
             request.Env ?? new Dictionary<string, string>(StringComparer.Ordinal),
             request.Url,
-            false);
+            Enabled: false);
     }
 
     public static McpServerInput ToInput(this UpdateMcpServerRequest request)
@@ -58,7 +58,7 @@ internal static class McpServerMapper
             request.WorkingDirectory,
             request.Env ?? new Dictionary<string, string>(StringComparer.Ordinal),
             request.Url,
-            false);
+            Enabled: false);
     }
 
     public static ToolCatalogEntryResponse ToResponse(this LocalToolCatalogEntry entry)

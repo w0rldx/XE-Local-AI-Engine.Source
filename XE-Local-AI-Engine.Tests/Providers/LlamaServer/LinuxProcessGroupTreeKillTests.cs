@@ -60,7 +60,7 @@ public sealed class LinuxProcessGroupTreeKillTests
     {
         // Point the "executable" at /bin/sh with the script. The launcher prepends `setsid` on Linux, so this
         // exercises the real process-group containment + kill(-pgid) teardown.
-        return new LlamaServerLaunchSpec("test-model", ModelRole.Chat, "/bin/sh", ["-c", script], 0, Path.GetTempPath());
+        return new LlamaServerLaunchSpec("test-model", ModelRole.Chat, "/bin/sh", ["-c", script], Port: 0, Path.GetTempPath());
     }
 
     private static bool IsProcessAlive(int pid)

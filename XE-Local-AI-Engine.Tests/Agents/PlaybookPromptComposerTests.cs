@@ -23,8 +23,8 @@ public sealed class PlaybookPromptComposerTests
     {
         IReadOnlyList<PlaybookActionRecord> actions =
         [
-            Action("Run the tests first.", 1),
-            Action("Prefer small commits.", 5)
+            Action("Run the tests first.", priority: 1),
+            Action("Prefer small commits.", priority: 5)
         ];
 
         var composed = PlaybookPromptComposer.Compose(BaseInstructions, actions);
@@ -40,8 +40,8 @@ public sealed class PlaybookPromptComposerTests
         // the Priority values look out of order, so it never second-guesses the store's ordering.
         IReadOnlyList<PlaybookActionRecord> actions =
         [
-            Action("First emitted.", 9),
-            Action("Second emitted.", 2)
+            Action("First emitted.", priority: 9),
+            Action("Second emitted.", priority: 2)
         ];
 
         var composed = PlaybookPromptComposer.Compose(BaseInstructions, actions);
@@ -57,8 +57,8 @@ public sealed class PlaybookPromptComposerTests
         // order; Failure items go to a distinct negative-guidance section emitted AFTER it.
         IReadOnlyList<PlaybookActionRecord> actions =
         [
-            Scoped("Run the tests first.", 1, 10, null),
-            Scoped("Never force-push to main.", 2, 20, MemoryScope.Failure)
+            Scoped("Run the tests first.", priority: 1, createdAtUtc: 10, scope: null),
+            Scoped("Never force-push to main.", priority: 2, createdAtUtc: 20, MemoryScope.Failure)
         ];
 
         var composed = PlaybookPromptComposer.Compose(BaseInstructions, actions);
@@ -76,9 +76,9 @@ public sealed class PlaybookPromptComposerTests
         // so the composed text — and the config hash — is stable per send for a fixed memory set (resume-safety).
         IReadOnlyList<PlaybookActionRecord> actions =
         [
-            Scoped("Higher priority value, emitted later.", priority: 9, createdAtUtc: 5, scope: MemoryScope.Failure),
-            Scoped("Lower priority value, emitted first.", priority: 2, createdAtUtc: 50, scope: MemoryScope.Failure),
-            Scoped("Same priority as previous, older timestamp.", priority: 2, createdAtUtc: 10, scope: MemoryScope.Failure)
+            Scoped("Higher priority value, emitted later.", priority: 9, createdAtUtc: 5, MemoryScope.Failure),
+            Scoped("Lower priority value, emitted first.", priority: 2, createdAtUtc: 50, MemoryScope.Failure),
+            Scoped("Same priority as previous, older timestamp.", priority: 2, createdAtUtc: 10, MemoryScope.Failure)
         ];
 
         var composed = PlaybookPromptComposer.Compose(BaseInstructions, actions);
@@ -96,7 +96,7 @@ public sealed class PlaybookPromptComposerTests
     {
         IReadOnlyList<PlaybookActionRecord> actions =
         [
-            Scoped("Never delete the prod database.", 1, 10, MemoryScope.Failure)
+            Scoped("Never delete the prod database.", priority: 1, createdAtUtc: 10, MemoryScope.Failure)
         ];
 
         var composed = PlaybookPromptComposer.Compose(BaseInstructions, actions);
@@ -108,7 +108,7 @@ public sealed class PlaybookPromptComposerTests
 
     private static PlaybookActionRecord Action(string behavior, int priority)
     {
-        return Scoped(behavior, priority, 10, null);
+        return Scoped(behavior, priority, createdAtUtc: 10, scope: null);
     }
 
     private static PlaybookActionRecord Scoped(string behavior, int priority, long createdAtUtc, MemoryScope? scope)
@@ -117,11 +117,11 @@ public sealed class PlaybookPromptComposerTests
             Guid.NewGuid(),
             PlaybookActionState.Enabled,
             PlaybookActionSource.Manual,
-            null,
+            TriggerCondition: null,
             behavior,
-            null,
+            Scope: null,
             priority,
-            1,
+            Version: 1,
             createdAtUtc,
             createdAtUtc,
             MemoryScope: scope);

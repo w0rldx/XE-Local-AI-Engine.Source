@@ -66,7 +66,7 @@ public sealed class ScheduledJobManagementService(
         var descriptor = Validate(input);
 
         // Operator-created jobs are persisted enabled and scheduled immediately; disabling is the dedicated action.
-        var storeInput = ToStoreInput(input, true, ScheduledJobCreator.User);
+        var storeInput = ToStoreInput(input, enabled: true, ScheduledJobCreator.User);
         var record = await _definitionStore.AddAsync(storeInput, cancellationToken).ConfigureAwait(false);
 
         await ReconcileScheduleAsync(record, descriptor, cancellationToken).ConfigureAwait(false);
@@ -220,7 +220,7 @@ public sealed class ScheduledJobManagementService(
         // surfaces the real, actionable error.
         try
         {
-            await scheduler.AddJob(BuildJobDetail(definition), true, cancellationToken).ConfigureAwait(false);
+            await scheduler.AddJob(BuildJobDetail(definition), replace: true, cancellationToken).ConfigureAwait(false);
         }
         catch (SchedulerException ex)
         {
@@ -263,7 +263,7 @@ public sealed class ScheduledJobManagementService(
         // detail, leaving any existing trigger intact. Definitions whose template is no longer registered are skipped
         // (they cannot be rebuilt) rather than faulting the whole sweep.
         var scheduler = await _schedulerFactory.GetScheduler(cancellationToken).ConfigureAwait(false);
-        var definitions = await _definitionStore.ListAsync(false, cancellationToken).ConfigureAwait(false);
+        var definitions = await _definitionStore.ListAsync(includeDeleted: false, cancellationToken).ConfigureAwait(false);
 
         var healedCount = 0;
         foreach (var definition in definitions)
@@ -289,7 +289,7 @@ public sealed class ScheduledJobManagementService(
                 continue;
             }
 
-            await scheduler.AddJob(BuildJobDetail(definition), true, cancellationToken).ConfigureAwait(false);
+            await scheduler.AddJob(BuildJobDetail(definition), replace: true, cancellationToken).ConfigureAwait(false);
             healedCount++;
         }
 
@@ -513,7 +513,7 @@ public sealed class ScheduledJobManagementService(
             // A Manual job is a durable on-demand job with NO trigger — it never auto-fires, only TriggerNowAsync fires
             // it. AddJob requires the detail to be durable (BuildJobDetail already calls StoreDurably), so it registers
             // a trigger-less job. Do not build a trigger for Manual.
-            await scheduler.AddJob(jobDetail, true, cancellationToken).ConfigureAwait(false);
+            await scheduler.AddJob(jobDetail, replace: true, cancellationToken).ConfigureAwait(false);
             return;
         }
 

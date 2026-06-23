@@ -12,7 +12,7 @@ public sealed class WorkerNodeOptionsValidatorTests
     [Test]
     public void Validate_WhenOptionsAreValid_ReturnsSuccess()
     {
-        var result = _validator.Validate(null, CreateValidOptions());
+        var result = _validator.Validate(name: null, CreateValidOptions());
 
         AssertEx.False(result.Failed);
         AssertEx.True(result.Failures is null || !result.Failures.Any());
@@ -23,7 +23,7 @@ public sealed class WorkerNodeOptionsValidatorTests
     {
         var options = CreateValidOptions();
 
-        AssertEx.Equal(10, options.MaxPendingToolCallAgeMinutes);
+        AssertEx.Equal(expected: 10, options.MaxPendingToolCallAgeMinutes);
     }
 
     [Test]
@@ -32,7 +32,7 @@ public sealed class WorkerNodeOptionsValidatorTests
         var options = CreateValidOptions();
         options.NodeName = string.Empty;
 
-        var result = _validator.Validate(null, options);
+        var result = _validator.Validate(name: null, options);
 
         AssertFailureContains(result, "NodeName");
     }
@@ -43,7 +43,7 @@ public sealed class WorkerNodeOptionsValidatorTests
         var options = CreateValidOptions();
         options.MaxResponseSizeMb = 0;
 
-        var result = _validator.Validate(null, options);
+        var result = _validator.Validate(name: null, options);
 
         AssertFailureContains(result, "MaxResponseSizeMb");
     }
@@ -54,7 +54,7 @@ public sealed class WorkerNodeOptionsValidatorTests
         var options = CreateValidOptions();
         options.MaxPendingToolCallAgeMinutes = 0;
 
-        var result = _validator.Validate(null, options);
+        var result = _validator.Validate(name: null, options);
 
         AssertFailureContains(result, "MaxPendingToolCallAgeMinutes");
     }
@@ -65,7 +65,7 @@ public sealed class WorkerNodeOptionsValidatorTests
         var options = CreateValidOptions();
         options.MaxPendingToolCallAgeMinutes = 61;
 
-        var result = _validator.Validate(null, options);
+        var result = _validator.Validate(name: null, options);
 
         AssertFailureContains(result, "MaxPendingToolCallAgeMinutes");
     }

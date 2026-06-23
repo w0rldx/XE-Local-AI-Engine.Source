@@ -36,7 +36,7 @@ public sealed class LocalModelsCloudMappingTests
         var cloud = LocalModelsMapper.ToCodexCloudModelResponses("gpt-5.4");
 
         var selected = cloud.Where(static m => m.IsSelected).ToList();
-        AssertEx.Equal(1, selected.Count);
+        AssertEx.Equal(expected: 1, selected.Count);
         AssertEx.Equal("gpt-5.4", selected[0].ModelName);
     }
 
@@ -53,7 +53,7 @@ public sealed class LocalModelsCloudMappingTests
         };
         var classifications = new Dictionary<string, ModelClassificationResult>
         {
-            ["qwen3:8b"] = new("qwen3:8b", ModelKind.Chat, ModelKind.Chat, ["tools"], false)
+            ["qwen3:8b"] = new("qwen3:8b", ModelKind.Chat, ModelKind.Chat, ["tools"], IsOverridden: false)
         };
         var cloud = LocalModelsMapper.ToCodexCloudModelResponses(null);
 
@@ -80,12 +80,12 @@ public sealed class LocalModelsCloudMappingTests
         };
         var classifications = new Dictionary<string, ModelClassificationResult>
         {
-            ["qwen3:8b"] = new("qwen3:8b", ModelKind.Chat, ModelKind.Chat, [], false)
+            ["qwen3:8b"] = new("qwen3:8b", ModelKind.Chat, ModelKind.Chat, [], IsOverridden: false)
         };
 
         var response = LocalModelsMapper.ToListResponse(localModels, "qwen3:8b", "qwen3:8b", classifications);
 
-        AssertEx.Equal(1, response.Items.Count);
+        AssertEx.Equal(expected: 1, response.Items.Count);
         AssertEx.True(response.Items.All(static m => m.Provider == LocalModelProviders.Ollama));
     }
 }

@@ -43,7 +43,7 @@ internal sealed class AgentHomeManifestService : IAgentHomeManifestService, IDis
     };
 
     private readonly string _dataDirectoryRoot;
-    private readonly SemaphoreSlim _gate = new(1, 1);
+    private readonly SemaphoreSlim _gate = new(initialCount: 1, maxCount: 1);
     private readonly ILogger<AgentHomeManifestService> _logger;
     private readonly AgentHomeOptions _options;
     private readonly ISandboxRuntimeProvider _sandboxProvider;
@@ -248,7 +248,7 @@ internal sealed class AgentHomeManifestService : IAgentHomeManifestService, IDis
         var temporaryPath = path + ".tmp";
         var json = JsonSerializer.Serialize(manifest, SerializerOptions);
         await File.WriteAllTextAsync(temporaryPath, json, cancellationToken).ConfigureAwait(false);
-        File.Move(temporaryPath, path, true);
+        File.Move(temporaryPath, path, overwrite: true);
     }
 
     private static void EnsureDirectories(string agentHomeRoot)
@@ -355,7 +355,7 @@ internal sealed class AgentHomeManifestService : IAgentHomeManifestService, IDis
             throw new InvalidOperationException($"Refusing to recursively delete '{agentHomeRoot}': no AgentHome manifest is present.");
         }
 
-        Directory.Delete(agentHomeRoot, true);
+        Directory.Delete(agentHomeRoot, recursive: true);
     }
 
     private void WriteLockFile(string agentHomeRoot)

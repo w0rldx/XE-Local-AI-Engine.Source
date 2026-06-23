@@ -67,7 +67,7 @@ public sealed class AnalyzePlaybookEndpointTests
 
         var payload = await response.Content.ReadAsStringAsync().ConfigureAwait(false);
         using var document = JsonDocument.Parse(payload);
-        AssertEx.Equal(0, document.RootElement.GetProperty("items").GetArrayLength());
+        AssertEx.Equal(expected: 0, document.RootElement.GetProperty("items").GetArrayLength());
     }
 
     [Test]
@@ -94,7 +94,7 @@ public sealed class AnalyzePlaybookEndpointTests
         var root = document.RootElement;
 
         // The agent has no feedback (below threshold), so the model is never invoked and no suggestion is created.
-        AssertEx.Equal(0, root.GetProperty("items").GetArrayLength());
+        AssertEx.Equal(expected: 0, root.GetProperty("items").GetArrayLength());
     }
 
     private static async Task<Guid> SeedAgentAsync(TestingWebAppFactory factory, string name)
@@ -102,14 +102,14 @@ public sealed class AnalyzePlaybookEndpointTests
         using var scope = factory.Services.CreateScope();
         var store = scope.ServiceProvider.GetRequiredService<IAgentDefinitionStore>();
         var agent = await store.AddAsync(new AgentDefinitionInput(name,
-            null,
+            Description: null,
             "You are a careful engineering agent.",
-            null,
-            null,
+            ModelProfile: null,
+            ReasoningEffort: null,
             AgentDefinitionKind.Single,
             [],
             new Dictionary<string, bool>(),
-            null)).ConfigureAwait(false);
+            OrchestrationTopologyJson: null)).ConfigureAwait(false);
         return agent.Id;
     }
 }
