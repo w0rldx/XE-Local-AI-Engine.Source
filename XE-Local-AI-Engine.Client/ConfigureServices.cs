@@ -218,6 +218,10 @@ public static class ConfigureServices
         // Seeds the node-local "Default Assistant" agent definition (mode-off persona) so every send resolves through a
         // real, uniformly-selectable definition. Idempotent by slug and self-healing across boots.
         builder.Services.AddHostedService<DefaultAgentSeeder>();
+        // Seeds the node-local "Coder (read-only)" agent definition (read/list/search project access) so the read-only
+        // coder profile is selectable out of the box. Idempotent by slug and self-healing across boots, like the
+        // Default Assistant seeder above.
+        builder.Services.AddHostedService<CoderAgentSeeder>();
         builder.Services.AddHostedService<ToolCallCleanupService>();
         // Re-derives and re-encrypts conversation titles that were NULLed by the EncryptConversationTitle migration
         // (migrations cannot access the node key; this service runs once per startup and is idempotent).
