@@ -6,7 +6,7 @@ import { type AgentExecutionLog, toAgentExecutionLog } from "@/features/agents/m
 
 // How many recent execution-log rows to pull in one read. The endpoint returns metadata-only rows (no total), so
 // the diagnostics table paginates client-side over this bounded window (mirrors the scheduler run-history table).
-export const AGENT_EXECUTION_LOG_WINDOW = 200;
+const AGENT_EXECUTION_LOG_WINDOW = 200;
 
 // Server state for an agent's execution-log diagnostics (adaptive-memory observability, metadata only). The read
 // uses the generated hey-api `*Options()` (which wires the shared axios instance + TanStack Query AbortSignal
