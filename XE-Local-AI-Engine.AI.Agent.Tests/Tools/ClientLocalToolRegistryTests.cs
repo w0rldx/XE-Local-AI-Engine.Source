@@ -42,6 +42,20 @@ public sealed class ClientLocalToolRegistryTests
         AssertEx.True(tool is null);
     }
 
+    [Test]
+    public void TryResolve_NonApprovalHandler_ResolvesPlainMetadataToolFunction_NotApprovalWrapped()
+    {
+        // The coder read tools are RequiresApproval=false (decision 7), so they must resolve to a plain executable
+        // MetadataToolFunction — never an ApprovalRequiredAIFunction. This mirrors how the three coder handlers resolve.
+        var registry = new ClientLocalToolRegistry([new FakeHandler("read_file", "Reads a file.", parameterSchema: """{"type":"object"}""", requiresApproval: false)]);
+
+        var found = registry.TryResolve("read_file", out var tool);
+
+        AssertEx.True(found);
+        AssertEx.False(tool is ApprovalRequiredAIFunction, "a read-only coder tool must not be approval-wrapped");
+        AssertEx.True(tool is MetadataToolFunction, "a non-approval handler resolves to a plain MetadataToolFunction");
+    }
+
     private sealed class FakeHandler(string toolName, string description, string parameterSchema, bool requiresApproval)
         : IClientLocalToolHandler
     {

@@ -12,4 +12,12 @@ public interface ISensitiveFileExclusionService
     ///     must be excluded. When the entry is a directory the caller must not descend into it.
     /// </summary>
     bool IsExcluded(string entryName, bool isDirectory);
+
+    /// <summary>
+    ///     The exact entry-name glob patterns that <see cref="IsExcluded" /> matches (e.g. <c>.git</c>, <c>.env</c>,
+    ///     <c>node_modules</c>, <c>.env.*</c>, <c>*credentials.enc</c>). Exposed so a grep-backed search can pass each as
+    ///     an <c>--exclude-dir</c>/<c>--exclude</c> flag and never let an excluded file's content enter its output in
+    ///     the first place — the authoritative source for that flag set lives here, not duplicated at the call site.
+    /// </summary>
+    IReadOnlyList<string> ExcludedEntryNames { get; }
 }

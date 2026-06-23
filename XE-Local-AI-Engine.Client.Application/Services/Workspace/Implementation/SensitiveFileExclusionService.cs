@@ -30,6 +30,18 @@ internal sealed class SensitiveFileExclusionService : ISensitiveFileExclusionSer
         ".idea"
     }.ToFrozenSet(StringComparer.OrdinalIgnoreCase);
 
+    // The literal names plus the two pattern rules, as grep-compatible globs. Used by the coder search to pass every
+    // entry as an --exclude-dir/--exclude flag so a secret's content never enters the grep output. Kept in lock-step
+    // with ExcludedNames + IsSecretFilePattern below — this is the single authoritative flag set.
+    private static readonly IReadOnlyList<string> ExcludedNamePatterns =
+    [
+        .. ExcludedNames,
+        ".env.*",
+        "*credentials.enc"
+    ];
+
+    public IReadOnlyList<string> ExcludedEntryNames => ExcludedNamePatterns;
+
     public bool IsExcluded(string entryName, bool isDirectory)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(entryName);
