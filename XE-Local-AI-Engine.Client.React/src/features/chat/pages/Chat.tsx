@@ -138,7 +138,12 @@ export function Chat() {
 	const activeStream = useRef<ActiveChatStream | null>(null);
 	// Conversations deleted while a stream was in flight. The streaming loops consult this set so an aborted
 	// turn cannot re-cache or refetch (404 / resurrect) a thread the operator just removed.
-	const deletedConversationIds = useRef<Set<string>>(new Set());
+	// Lazy-init so the Set is built once instead of allocating a throwaway `new Set()` on every render;
+	// the literal `useRef` (not a wrapper) keeps lint treating `.current` as a stable, non-reactive ref.
+	const deletedConversationIds = useRef<Set<string>>(undefined as unknown as Set<string>);
+	if (!deletedConversationIds.current) {
+		deletedConversationIds.current = new Set<string>();
+	}
 	// Composer selections, the last-selected conversation, and the sidebar collapsed state all persist across
 	// reloads via localStorage (NodeChatPreferencesStore), mirroring the platform ToolCallingStore. Persisted
 	// values are validated below: the model against the live model list / effort set, and the last-selected
@@ -174,7 +179,11 @@ export function Chat() {
 	const [activeRevisionByGroup, setActiveRevisionByGroup] = useState<Record<string, string>>({});
 	const [pendingFeedbackMessageId, setPendingFeedbackMessageId] = useState<string | undefined>();
 	// Conversations whose first message has already promoted their title (avoids re-renaming on every send).
-	const titledConversations = useRef<Set<string>>(new Set());
+	// Lazy-init (see deletedConversationIds): build the Set once, not a throwaway per render.
+	const titledConversations = useRef<Set<string>>(undefined as unknown as Set<string>);
+	if (!titledConversations.current) {
+		titledConversations.current = new Set<string>();
+	}
 	// The conversation whose persisted selected-path has already seeded activeRevisionByGroup, so a background
 	// refetch of the same conversation never clobbers an in-session selection the operator just navigated.
 	const seededSelectionConversationId = useRef<string | undefined>(undefined);
@@ -311,7 +320,11 @@ export function Chat() {
 	// list option, if known, is available. Cloud (Codex) ids have no LOCAL details (the endpoint 404s for them) and an
 	// unavailable model just retries a guaranteed failure. GGUF (llamacpp) selections ARE polled — CL-4 serves their
 	// details as a 200 carrying maxContextTokens, which the context meter needs.
-	const selectedModelDetailsEnabled = shouldFetchLocalModelDetails(selectedConcreteModelName, selectedModelOption, selectedModelIsCloud);
+	const selectedModelDetailsEnabled = shouldFetchLocalModelDetails(
+		selectedConcreteModelName,
+		selectedModelOption,
+		selectedModelIsCloud,
+	);
 	const selectedModelDetailsQuery = useQuery({
 		...withResponseValidation(getLocalModelDetailsOptions({ path: { modelName: selectedConcreteModelName } })),
 		enabled: selectedModelDetailsEnabled,

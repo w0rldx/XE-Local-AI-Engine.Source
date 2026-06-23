@@ -14,7 +14,7 @@ import {
 } from "@mantine/core";
 import { IconAlertTriangle, IconDeviceFloppy, IconRefresh, IconTrash } from "@tabler/icons-react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useReducer, useState } from "react";
 import { useTranslation } from "react-i18next";
 
 import { nodeCapabilities } from "@/capabilities/NodeCapabilities";
@@ -38,19 +38,78 @@ function errorMessage(error: unknown): string {
 	return error instanceof Error ? error.message : "Unexpected cloud settings error";
 }
 
+// Save and clear return the same view; both reset the form to the stored (redacted) values. The API key is never
+// echoed back, so it always resets to empty. Module-scoped because it uses no component state.
+function settingsToFormValues(settings: CloudSettings): CloudSettingsFormValues {
+	return {
+		endpoint: settings.endpoint ?? "",
+		apiKey: "",
+		deploymentName: settings.deploymentName ?? "",
+	};
+}
+
+function toastSettingsResult(settings: CloudSettings): void {
+	toast.success(
+		settings.hasStoredApiKey ? "Cloud settings saved. Capability reporting was requested." : "Cloud settings cleared.",
+	);
+}
+
 const emptyFormValues: CloudSettingsFormValues = {
 	endpoint: "",
 	apiKey: "",
 	deploymentName: "",
 };
 
+// The form values, the per-field "touched" map, and the submit flag always reset together when the
+// stored settings load or a save/clear completes. Grouping them under one reducer lets a single
+// dispatch reset all three at once, replacing the cascading set-state calls that previously fired
+// three separate updates from one effect.
+interface FormState {
+	values: CloudSettingsFormValues;
+	touched: Partial<Record<keyof CloudSettingsFormValues, true>>;
+	submitted: boolean;
+}
+
+type FormAction =
+	| { type: "reset"; values: CloudSettingsFormValues }
+	| { type: "setValues"; values: CloudSettingsFormValues }
+	| { type: "setField"; field: keyof CloudSettingsFormValues; value: string }
+	| { type: "touchField"; field: keyof CloudSettingsFormValues }
+	| { type: "submit" };
+
+const initialFormState: FormState = {
+	values: emptyFormValues,
+	touched: {},
+	submitted: false,
+};
+
+function formReducer(state: FormState, action: FormAction): FormState {
+	switch (action.type) {
+		// Loading stored settings and a successful save both replace the values and clear the
+		// touched/submitted interaction flags in one step.
+		case "reset":
+			return { values: action.values, touched: {}, submitted: false };
+		// Clearing credentials replaces only the values, leaving any existing interaction flags intact
+		// (matches the original clear handler, which never reset touched/submitted).
+		case "setValues":
+			return { ...state, values: action.values };
+		case "setField":
+			return { ...state, values: { ...state.values, [action.field]: action.value } };
+		case "touchField":
+			return { ...state, touched: { ...state.touched, [action.field]: true } };
+		case "submit":
+			return { ...state, submitted: true };
+		default:
+			return state;
+	}
+}
+
 export function CloudSettings() {
 	const { t } = useTranslation();
 	const queryClient = useQueryClient();
 	const settingsQuery = useQuery(withResponseValidation(getCloudSettingsOptions()));
-	const [formValues, setFormValues] = useState<CloudSettingsFormValues>(emptyFormValues);
-	const [touchedFields, setTouchedFields] = useState<Partial<Record<keyof CloudSettingsFormValues, true>>>({});
-	const [submitted, setSubmitted] = useState(false);
+	const [formState, dispatch] = useReducer(formReducer, initialFormState);
+	const { values: formValues, touched: touchedFields, submitted } = formState;
 
 	// Tracks whether the Codex OAuth session is active (reported by CodexSignInCard).
 	// When signed in, Codex is the active chat provider — no CloudSettings save needed.
@@ -61,13 +120,14 @@ export function CloudSettings() {
 
 	useEffect(() => {
 		if (settingsQuery.data) {
-			setFormValues({
-				endpoint: settingsQuery.data.endpoint ?? "",
-				apiKey: "",
-				deploymentName: settingsQuery.data.deploymentName ?? "",
+			dispatch({
+				type: "reset",
+				values: {
+					endpoint: settingsQuery.data.endpoint ?? "",
+					apiKey: "",
+					deploymentName: settingsQuery.data.deploymentName ?? "",
+				},
 			});
-			setTouchedFields({});
-			setSubmitted(false);
 		}
 	}, [settingsQuery.data]);
 
@@ -88,9 +148,9 @@ export function CloudSettings() {
 	const saveMutation = useMutation({
 		...withResponseValidation(saveCloudSettingsMutation()),
 		onSuccess: async (settings: SaveCloudSettingsResponse) => {
-			applySettingsResult(settings);
-			setTouchedFields({});
-			setSubmitted(false);
+			// A successful save resets the values and clears the touched/submitted flags together.
+			dispatch({ type: "reset", values: settingsToFormValues(settings) });
+			toastSettingsResult(settings);
 			queryClient.setQueryData(getCloudSettingsQueryKey(), settings);
 			await queryClient.invalidateQueries({ queryKey: getCloudSettingsQueryKey() });
 		},
@@ -100,25 +160,15 @@ export function CloudSettings() {
 	const clearMutation = useMutation({
 		...withResponseValidation(clearCloudSettingsMutation()),
 		onSuccess: async (settings: ClearCloudSettingsResponse) => {
-			applySettingsResult(settings);
+			// Clearing only replaces the values; the touched/submitted flags are left untouched.
+			dispatch({ type: "setValues", values: settingsToFormValues(settings) });
+			toastSettingsResult(settings);
 			queryClient.setQueryData(getCloudSettingsQueryKey(), settings);
 			await queryClient.invalidateQueries({ queryKey: getCloudSettingsQueryKey() });
 		},
 		onError: (error) => toast.error(errorMessage(error)),
 	});
 
-	// Save and clear return the same view; both reset the form to the stored (redacted) values and toast the
-	// matching message. The API key is never echoed back, so it always resets to empty.
-	function applySettingsResult(settings: CloudSettings): void {
-		toast.success(
-			settings.hasStoredApiKey ? "Cloud settings saved. Capability reporting was requested." : "Cloud settings cleared.",
-		);
-		setFormValues({
-			endpoint: settings.endpoint ?? "",
-			apiKey: "",
-			deploymentName: settings.deploymentName ?? "",
-		});
-	}
 	const isActionPending = saveMutation.isPending || clearMutation.isPending;
 	const settings = settingsQuery.data;
 
@@ -206,9 +256,9 @@ export function CloudSettings() {
 							value={formValues.endpoint}
 							onChange={(event) => {
 								const value = event.currentTarget.value;
-								setFormValues((current) => ({ ...current, endpoint: value }));
+								dispatch({ type: "setField", field: "endpoint", value });
 							}}
-							onBlur={() => setTouchedFields((current) => ({ ...current, endpoint: true }))}
+							onBlur={() => dispatch({ type: "touchField", field: "endpoint" })}
 							error={visibleErrors.endpoint}
 						/>
 						<TextInput
@@ -217,9 +267,9 @@ export function CloudSettings() {
 							value={formValues.deploymentName}
 							onChange={(event) => {
 								const value = event.currentTarget.value;
-								setFormValues((current) => ({ ...current, deploymentName: value }));
+								dispatch({ type: "setField", field: "deploymentName", value });
 							}}
-							onBlur={() => setTouchedFields((current) => ({ ...current, deploymentName: true }))}
+							onBlur={() => dispatch({ type: "touchField", field: "deploymentName" })}
 							error={visibleErrors.deploymentName}
 						/>
 						<PasswordInput
@@ -232,16 +282,16 @@ export function CloudSettings() {
 							value={formValues.apiKey}
 							onChange={(event) => {
 								const value = event.currentTarget.value;
-								setFormValues((current) => ({ ...current, apiKey: value }));
+								dispatch({ type: "setField", field: "apiKey", value });
 							}}
-							onBlur={() => setTouchedFields((current) => ({ ...current, apiKey: true }))}
+							onBlur={() => dispatch({ type: "touchField", field: "apiKey" })}
 							error={visibleErrors.apiKey}
 						/>
 						<Group>
 							<Button
 								leftSection={<IconDeviceFloppy size={16} />}
 								onClick={() => {
-									setSubmitted(true);
+									dispatch({ type: "submit" });
 									saveMutation.mutate({
 										body: {
 											providerName: "AzureFoundry",
