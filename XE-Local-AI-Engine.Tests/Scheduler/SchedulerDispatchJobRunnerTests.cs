@@ -14,7 +14,7 @@ using XE_Local_AI_Engine.Client.Services.Scheduler;
 public sealed class SchedulerDispatchJobRunnerTests
 {
     private static readonly Guid JobId = Guid.Parse("22222222-2222-2222-2222-222222222222");
-    private static readonly DateTimeOffset Now = new(2026, 6, 3, 12, 0, 0, TimeSpan.Zero);
+    private static readonly DateTimeOffset Now = new(year: 2026, month: 6, day: 3, hour: 12, minute: 0, second: 0, TimeSpan.Zero);
 
     [Test]
     public async Task RunAsync_WhenFireCarriesUseCaseAndLimit_ForwardsBothWhitelistedOverrides()

@@ -48,7 +48,7 @@ public sealed class ModelNameValidatorTests
     [Test]
     public void IsValid_WhenNameExceedsMaxLength_ReturnsFalse()
     {
-        AssertEx.False(_validator.IsValid(new string('a', 151)));
+        AssertEx.False(_validator.IsValid(new string(c: 'a', count: 151)));
     }
 
     [Test]

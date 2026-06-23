@@ -20,21 +20,21 @@ public sealed class LocalChatRuntimePackageBuilderTests
         var package = builder.Build(new LocalChatRuntimePackageRequest(invocationId,
             conversationId,
             "You are helpful.",
-            [CreateMessage(MessageRole.User, "hello", 0)],
+            [CreateMessage(MessageRole.User, "hello", sortOrder: 0)],
             "qwen3.5:0.8b",
-            1));
+            AgentDefinitionVersion: 1));
 
         AssertEx.Equal(invocationId, package.InvocationId);
         AssertEx.Equal(conversationId, package.ConversationId);
         AssertEx.Equal(Guid.Parse("00000000-0000-0000-0000-000000000001"), package.ClientNodeId);
         AssertEx.Equal("qwen3.5:0.8b", package.ModelProfile);
-        AssertEx.Equal(1, package.AgentDefinitionVersion);
+        AssertEx.Equal(expected: 1, package.AgentDefinitionVersion);
         AssertEx.Empty(package.AllowedTools);
         AssertEx.Null(package.ToolPolicies);
         AssertEx.Null(package.RequestedCapabilities);
-        AssertEx.Equal(300, package.Timeouts.InvocationTimeoutSeconds);
-        AssertEx.Equal(30, package.Timeouts.ToolCallTimeoutSeconds);
-        AssertEx.Equal(60, package.Timeouts.StreamIdleTimeoutSeconds);
+        AssertEx.Equal(expected: 300, package.Timeouts.InvocationTimeoutSeconds);
+        AssertEx.Equal(expected: 30, package.Timeouts.ToolCallTimeoutSeconds);
+        AssertEx.Equal(expected: 60, package.Timeouts.StreamIdleTimeoutSeconds);
         AssertEx.False(string.IsNullOrWhiteSpace(package.ConfigHash));
     }
 
@@ -47,12 +47,12 @@ public sealed class LocalChatRuntimePackageBuilderTests
             Guid.NewGuid(),
             "You are helpful.",
             [
-                CreateMessage(MessageRole.Assistant, "third", 2),
-                CreateMessage(MessageRole.User, "first", 0),
-                CreateMessage(MessageRole.Assistant, "second", 1)
+                CreateMessage(MessageRole.Assistant, "third", sortOrder: 2),
+                CreateMessage(MessageRole.User, "first", sortOrder: 0),
+                CreateMessage(MessageRole.Assistant, "second", sortOrder: 1)
             ],
             "qwen3.5:0.8b",
-            1));
+            AgentDefinitionVersion: 1));
 
         AssertEx.Equal("first", package.ConversationContext[0].Content);
         AssertEx.Equal("second", package.ConversationContext[1].Content);
@@ -73,9 +73,9 @@ public sealed class LocalChatRuntimePackageBuilderTests
         var request = new LocalChatRuntimePackageRequest(Guid.NewGuid(),
             Guid.NewGuid(),
             "You are helpful.",
-            [CreateMessage(MessageRole.User, "hello", 0)],
+            [CreateMessage(MessageRole.User, "hello", sortOrder: 0)],
             "qwen3.5:0.8b",
-            3,
+            AgentDefinitionVersion: 3,
             Guid.NewGuid(),
             [allowedTool],
             new Dictionary<string, object>
@@ -93,11 +93,11 @@ public sealed class LocalChatRuntimePackageBuilderTests
 
         var package = builder.Build(request);
 
-        AssertEx.Equal(1, package.AllowedTools.Count);
+        AssertEx.Equal(expected: 1, package.AllowedTools.Count);
         AssertEx.Equal("open_url", package.AllowedTools[0].Name);
-        AssertEx.Equal(true, package.ToolPolicies!["approvalRequired"]);
+        AssertEx.Equal(expected: true, package.ToolPolicies!["approvalRequired"]);
         AssertEx.Equal("high", package.ReasoningEffort);
-        AssertEx.Equal(2, AssertEx.NotNull(package.RequestedCapabilities).Count);
+        AssertEx.Equal(expected: 2, AssertEx.NotNull(package.RequestedCapabilities).Count);
 
         var expectedHash = RuntimePackageConfigHash.Compute(request.AgentDefinitionVersion,
             request.ResolvedSystemPrompt,
@@ -127,9 +127,9 @@ public sealed class LocalChatRuntimePackageBuilderTests
         var package = builder.Build(new LocalChatRuntimePackageRequest(Guid.NewGuid(),
             Guid.NewGuid(),
             "You are helpful.",
-            [CreateMessage(MessageRole.User, "hello", 0)],
+            [CreateMessage(MessageRole.User, "hello", sortOrder: 0)],
             "qwen3.5:0.8b",
-            1,
+            AgentDefinitionVersion: 1,
             ReasoningEffort: reasoningEffort));
 
         AssertEx.Equal("on", package.ReasoningEffort);
@@ -143,9 +143,9 @@ public sealed class LocalChatRuntimePackageBuilderTests
         var package = builder.Build(new LocalChatRuntimePackageRequest(Guid.NewGuid(),
             Guid.NewGuid(),
             "You are helpful.",
-            [CreateMessage(MessageRole.User, "hello", 0)],
+            [CreateMessage(MessageRole.User, "hello", sortOrder: 0)],
             "qwen3.5:0.8b",
-            1,
+            AgentDefinitionVersion: 1,
             ReasoningEffort: "bogus"));
 
         AssertEx.Null(package.ReasoningEffort);
@@ -167,16 +167,16 @@ public sealed class LocalChatRuntimePackageBuilderTests
         var package = builder.Build(new LocalChatRuntimePackageRequest(Guid.NewGuid(),
             Guid.NewGuid(),
             "You are helpful.",
-            [CreateMessage(MessageRole.User, "hello", 0)],
+            [CreateMessage(MessageRole.User, "hello", sortOrder: 0)],
             "qwen3.5:0.8b",
-            1,
+            AgentDefinitionVersion: 1,
             SamplingOptions: sampling));
 
         var carried = AssertEx.NotNull(package.SamplingOptions);
-        AssertEx.Equal(0.4f, carried.Temperature);
-        AssertEx.Equal(0.9f, carried.TopP);
-        AssertEx.Equal(0.05f, carried.MinP);
-        AssertEx.Equal(8192, carried.NumCtx);
+        AssertEx.Equal(expected: 0.4f, carried.Temperature);
+        AssertEx.Equal(expected: 0.9f, carried.TopP);
+        AssertEx.Equal(expected: 0.05f, carried.MinP);
+        AssertEx.Equal(expected: 8192, carried.NumCtx);
         AssertEx.Equal("END", AssertEx.NotNull(carried.Stop)[0]);
     }
 
@@ -193,17 +193,17 @@ public sealed class LocalChatRuntimePackageBuilderTests
         var withoutSampling = builder.Build(new LocalChatRuntimePackageRequest(invocationId,
             conversationId,
             "You are helpful.",
-            [CreateMessage(MessageRole.User, "hello", 0)],
+            [CreateMessage(MessageRole.User, "hello", sortOrder: 0)],
             "qwen3.5:0.8b",
-            1,
+            AgentDefinitionVersion: 1,
             ReasoningEffort: "high"));
 
         var withSampling = builder.Build(new LocalChatRuntimePackageRequest(invocationId,
             conversationId,
             "You are helpful.",
-            [CreateMessage(MessageRole.User, "hello", 0)],
+            [CreateMessage(MessageRole.User, "hello", sortOrder: 0)],
             "qwen3.5:0.8b",
-            1,
+            AgentDefinitionVersion: 1,
             ReasoningEffort: "high",
             SamplingOptions: new SamplingOptions
             {

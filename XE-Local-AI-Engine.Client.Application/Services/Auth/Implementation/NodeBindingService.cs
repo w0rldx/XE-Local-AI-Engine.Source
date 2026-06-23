@@ -150,7 +150,7 @@ public sealed class NodeBindingService : INodeBindingService
 
     private static TimeSpan NormalizeInterval(int intervalSeconds)
     {
-        return TimeSpan.FromSeconds(Math.Clamp(intervalSeconds, 1, 300));
+        return TimeSpan.FromSeconds(Math.Clamp(intervalSeconds, min: 1, max: 300));
     }
 
     private static NodeBindingStatus ParseStatus(string status)

@@ -9,14 +9,14 @@ public sealed class WorkerNodeOptions
     [Required]
     public required string NodeName { get; set; }
 
-    [Range(1, 100)]
+    [Range(minimum: 1, maximum: 100)]
     public int MaxResponseSizeMb { get; set; } = 10;
 
     public string DeadLetterQueuePath { get; set; } = "dead-letter-queue";
 
-    [Range(1, 60)]
+    [Range(minimum: 1, maximum: 60)]
     public int MaxPendingToolCallAgeMinutes { get; set; } = 10;
 
-    [Range(1, 3600)]
+    [Range(minimum: 1, maximum: 3600)]
     public int CleanupIntervalSeconds { get; set; } = 60;
 }

@@ -41,7 +41,7 @@ internal sealed partial class LinuxProcessGroupHandle(Process process) : ILlamaS
 
     public void Dispose()
     {
-        if (Interlocked.Exchange(ref _disposed, 1) != 0)
+        if (Interlocked.Exchange(ref _disposed, value: 1) != 0)
         {
             return;
         }

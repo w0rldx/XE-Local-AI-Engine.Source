@@ -24,7 +24,7 @@ public sealed class NodeChatTitleEncryptionBackfillQueryTests : IDisposable
     {
         if (Directory.Exists(_rootPath))
         {
-            Directory.Delete(_rootPath, true);
+            Directory.Delete(_rootPath, recursive: true);
         }
     }
 
@@ -34,8 +34,8 @@ public sealed class NodeChatTitleEncryptionBackfillQueryTests : IDisposable
         await using var provider = await BuildProviderAsync("backfill-null-title.sqlite").ConfigureAwait(false);
         var service = CreateService(provider);
 
-        var conversation = await service.CreateConversationAsync(new NodeChatCreateConversationRequest("Local chat", "node", 10)).ConfigureAwait(false);
-        await service.PersistUserMessageAsync(new NodeChatPersistUserMessageRequest(conversation.ConversationId, Guid.NewGuid(), "hello world", 11)).ConfigureAwait(false);
+        var conversation = await service.CreateConversationAsync(new NodeChatCreateConversationRequest("Local chat", "node", CreatedAtUtc: 10)).ConfigureAwait(false);
+        await service.PersistUserMessageAsync(new NodeChatPersistUserMessageRequest(conversation.ConversationId, Guid.NewGuid(), "hello world", CreatedAtUtc: 11)).ConfigureAwait(false);
 
         await using (var scope = provider.CreateAsyncScope())
         {
@@ -62,9 +62,9 @@ public sealed class NodeChatTitleEncryptionBackfillQueryTests : IDisposable
         await using var provider = await BuildProviderAsync("backfill-first-user-message.sqlite").ConfigureAwait(false);
         var service = CreateService(provider);
 
-        var conversation = await service.CreateConversationAsync(new NodeChatCreateConversationRequest("Local chat", "node", 10)).ConfigureAwait(false);
+        var conversation = await service.CreateConversationAsync(new NodeChatCreateConversationRequest("Local chat", "node", CreatedAtUtc: 10)).ConfigureAwait(false);
         var messageId = Guid.NewGuid();
-        await service.PersistUserMessageAsync(new NodeChatPersistUserMessageRequest(conversation.ConversationId, messageId, "hello world", 11)).ConfigureAwait(false);
+        await service.PersistUserMessageAsync(new NodeChatPersistUserMessageRequest(conversation.ConversationId, messageId, "hello world", CreatedAtUtc: 11)).ConfigureAwait(false);
 
         await using (var scope = provider.CreateAsyncScope())
         {
@@ -84,7 +84,7 @@ public sealed class NodeChatTitleEncryptionBackfillQueryTests : IDisposable
             // Guard the content-column alias too (it was equally affected by the snake_case -> PascalCase
             // mismatch): the encrypted blob must materialize as a non-empty byte[], not default/null.
             AssertEx.NotNull(materialized.Content);
-            AssertEx.NotEqual(0, materialized.Content.Length);
+            AssertEx.NotEqual(notExpected: 0, materialized.Content.Length);
         }
     }
 

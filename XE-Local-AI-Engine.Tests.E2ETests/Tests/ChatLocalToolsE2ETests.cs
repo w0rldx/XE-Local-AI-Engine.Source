@@ -151,7 +151,7 @@ public sealed class ChatLocalToolsE2ETests : XEE2ETestBase
         var toolCallEmitted = 0;
         Factory.FakeOllamaState.ToolCallScript = _ =>
         {
-            if (Interlocked.CompareExchange(ref toolCallEmitted, 1, 0) == 0)
+            if (Interlocked.CompareExchange(ref toolCallEmitted, value: 1, comparand: 0) == 0)
             {
                 // First call: emit the Calculate tool call.
                 return new FakeOllamaToolCall

@@ -29,11 +29,11 @@ public sealed class InvocationAgentFactoryTests
         await using var context = await sut.CreateAsync(definition);
 
         AssertEx.NotNull(context.Agent);
-        AssertEx.Equal(2, context.SeedMessages.Count);
+        AssertEx.Equal(expected: 2, context.SeedMessages.Count);
         AssertEx.Equal(ChatRole.System, context.SeedMessages[0].Role);
         AssertEx.Equal("Be helpful.", context.SeedMessages[0].Text);
         AssertEx.Equal("hello", context.SeedMessages[1].Text);
-        AssertEx.Equal(false, context.Items["toolsEnabled"]);
+        AssertEx.Equal(expected: false, context.Items["toolsEnabled"]);
     }
 
     [Test]
@@ -57,7 +57,7 @@ public sealed class InvocationAgentFactoryTests
         AssertEx.Equal("llama3.2:3b", chatOptions.ModelId);
         var additionalProperties = AssertEx.NotNull(chatOptions.AdditionalProperties);
         AssertEx.True(additionalProperties.TryGetValue<bool>("think", out var thinkValue));
-        AssertEx.Equal(true, thinkValue);
+        AssertEx.Equal(expected: true, thinkValue);
     }
 
     [Test]
@@ -67,8 +67,8 @@ public sealed class InvocationAgentFactoryTests
             "Be helpful.",
             [],
             [],
-            null,
-            false);
+            ReasoningEffort: null,
+            SupportsThinking: false);
 
         using var chatClient = new FakeChatClient();
         var sut = CreateSut(chatClient);
@@ -85,7 +85,7 @@ public sealed class InvocationAgentFactoryTests
         // field would let that reasoning through and surface a reasoning block even with reasoning off.
         var additionalProperties = AssertEx.NotNull(chatOptions.AdditionalProperties);
         AssertEx.True(additionalProperties.TryGetValue<bool>("think", out var thinkValue));
-        AssertEx.Equal(false, thinkValue);
+        AssertEx.Equal(expected: false, thinkValue);
     }
 
     [Test]
@@ -96,7 +96,7 @@ public sealed class InvocationAgentFactoryTests
             [],
             [],
             "on",
-            false);
+            SupportsThinking: false);
 
         using var chatClient = new FakeChatClient();
         var sut = CreateSut(chatClient);
@@ -125,7 +125,7 @@ public sealed class InvocationAgentFactoryTests
             [],
             [],
             effort,
-            false);
+            SupportsThinking: false);
 
         using var chatClient = new FakeChatClient();
         var sut = CreateSut(chatClient);
@@ -152,7 +152,7 @@ public sealed class InvocationAgentFactoryTests
             [],
             [],
             "none",
-            false);
+            SupportsThinking: false);
 
         using var chatClient = new FakeChatClient();
         var sut = CreateSut(chatClient);
@@ -167,7 +167,7 @@ public sealed class InvocationAgentFactoryTests
         // Explicit OFF ("none") on a non-thinking model: think:FALSE is sent to suppress the template reasoning.
         var additionalProperties = AssertEx.NotNull(chatOptions.AdditionalProperties);
         AssertEx.True(additionalProperties.TryGetValue<bool>("think", out var thinkValue));
-        AssertEx.Equal(false, thinkValue);
+        AssertEx.Equal(expected: false, thinkValue);
     }
 
     [Test]
@@ -219,7 +219,7 @@ public sealed class InvocationAgentFactoryTests
 
         var additionalProperties = AssertEx.NotNull(ResolveChatOptions(context).AdditionalProperties);
         AssertEx.True(additionalProperties.TryGetValue<bool>("think", out var thinkValue));
-        AssertEx.Equal(true, thinkValue);
+        AssertEx.Equal(expected: true, thinkValue);
         AssertEx.True(additionalProperties.TryGetValue<string>("codex_reasoning_effort", out var codexEffort));
         AssertEx.Equal(effort, codexEffort);
     }
@@ -241,7 +241,7 @@ public sealed class InvocationAgentFactoryTests
         var additionalProperties = AssertEx.NotNull(ResolveChatOptions(context).AdditionalProperties);
         AssertEx.True(additionalProperties.ContainsKey("think"));
         AssertEx.False(additionalProperties.ContainsKey("codex_reasoning_effort"));
-        AssertEx.Equal(1, additionalProperties.Count);
+        AssertEx.Equal(expected: 1, additionalProperties.Count);
     }
 
     [Test]
@@ -259,7 +259,7 @@ public sealed class InvocationAgentFactoryTests
         await using var context = await sut.CreateAsync(definition);
 
         AssertEx.NotNull(context.Agent);
-        AssertEx.Equal(true, context.Items["toolsEnabled"]);
+        AssertEx.Equal(expected: true, context.Items["toolsEnabled"]);
     }
 
     [Test]
@@ -277,7 +277,7 @@ public sealed class InvocationAgentFactoryTests
         await using var context = await sut.CreateAsync(definition);
 
         AssertEx.NotNull(context.Agent);
-        AssertEx.Equal(false, context.Items["toolsEnabled"]);
+        AssertEx.Equal(expected: false, context.Items["toolsEnabled"]);
     }
 
     [Test]
@@ -295,7 +295,7 @@ public sealed class InvocationAgentFactoryTests
         await using var context = await sut.CreateAsync(definition);
 
         AssertEx.NotNull(context.Agent);
-        AssertEx.Equal(true, context.Items["toolsEnabled"]);
+        AssertEx.Equal(expected: true, context.Items["toolsEnabled"]);
     }
 
     [Test]
@@ -305,7 +305,7 @@ public sealed class InvocationAgentFactoryTests
         // resolved against the REAL ClientLocalToolRegistry, which wraps a RequiresApproval=true handler in an
         // ApprovalRequiredAIFunction. Prove the wrapped handler flows through the offer→resolve path without being
         // dropped, so the agent builds with tools enabled.
-        var registry = new ClientLocalToolRegistry([new ApprovalRequiredFakeHandler("run_in_agent_home", "Runs an agent task.", """{"type":"object"}""")]);
+        var registry = new ClientLocalToolRegistry([new ApprovalRequiredFakeHandler("run_in_agent_home", "Runs an agent task.", parameterSchema: """{"type":"object"}""")]);
         var resolved = registry.TryResolve("run_in_agent_home", out var wrapped);
         AssertEx.True(resolved);
         AssertEx.True(wrapped is ApprovalRequiredAIFunction, "the high-risk handler must resolve approval-wrapped");
@@ -321,7 +321,7 @@ public sealed class InvocationAgentFactoryTests
         await using var context = await sut.CreateAsync(definition);
 
         AssertEx.NotNull(context.Agent);
-        AssertEx.Equal(true, context.Items["toolsEnabled"]);
+        AssertEx.Equal(expected: true, context.Items["toolsEnabled"]);
     }
 
     [Test]
@@ -337,7 +337,7 @@ public sealed class InvocationAgentFactoryTests
 
         await using var context = await sut.CreateAsync(definition);
 
-        AssertEx.Equal(false, context.Items["toolsEnabled"]);
+        AssertEx.Equal(expected: false, context.Items["toolsEnabled"]);
     }
 
     [Test]
@@ -357,7 +357,7 @@ public sealed class InvocationAgentFactoryTests
         await using var context = await sut.CreateAsync(definition);
 
         AssertEx.NotNull(context.Agent);
-        AssertEx.Equal(true, context.Items["toolsEnabled"]);
+        AssertEx.Equal(expected: true, context.Items["toolsEnabled"]);
     }
 
     [Test]
@@ -370,7 +370,7 @@ public sealed class InvocationAgentFactoryTests
         {
             new McpRegisteredTool("mcp__files__write_file",
                 wrapped,
-                new LocalChatToolDescriptor("mcp__files__write_file", "Writes a file.", """{"type":"object"}""", true))
+                new LocalChatToolDescriptor("mcp__files__write_file", "Writes a file.", ParameterSchema: """{"type":"object"}""", RequiresApproval: true))
         };
         var mcpRegistry = new FakeMcpToolRegistry();
         mcpRegistry.ReplaceSnapshot(snapshot);
@@ -390,7 +390,7 @@ public sealed class InvocationAgentFactoryTests
         await using var context = await sut.CreateAsync(definition);
 
         AssertEx.NotNull(context.Agent);
-        AssertEx.Equal(true, context.Items["toolsEnabled"]);
+        AssertEx.Equal(expected: true, context.Items["toolsEnabled"]);
     }
 
     [Test]
@@ -438,13 +438,13 @@ public sealed class InvocationAgentFactoryTests
         await using var context = await sut.CreateAsync(definition);
 
         var chatOptions = ResolveChatOptions(context);
-        AssertEx.Equal(0.3f, chatOptions.Temperature);
-        AssertEx.Equal(0.85f, chatOptions.TopP);
-        AssertEx.Equal(40, chatOptions.TopK);
-        AssertEx.Equal(256, chatOptions.MaxOutputTokens);
-        AssertEx.Equal(0.2f, chatOptions.PresencePenalty);
-        AssertEx.Equal(0.1f, chatOptions.FrequencyPenalty);
-        AssertEx.Equal(7L, chatOptions.Seed);
+        AssertEx.Equal(expected: 0.3f, chatOptions.Temperature);
+        AssertEx.Equal(expected: 0.85f, chatOptions.TopP);
+        AssertEx.Equal(expected: 40, chatOptions.TopK);
+        AssertEx.Equal(expected: 256, chatOptions.MaxOutputTokens);
+        AssertEx.Equal(expected: 0.2f, chatOptions.PresencePenalty);
+        AssertEx.Equal(expected: 0.1f, chatOptions.FrequencyPenalty);
+        AssertEx.Equal(expected: 7L, chatOptions.Seed);
         AssertEx.Equal("END", AssertEx.NotNull(chatOptions.StopSequences)[0]);
     }
 
@@ -470,13 +470,13 @@ public sealed class InvocationAgentFactoryTests
 
         var additionalProperties = AssertEx.NotNull(ResolveChatOptions(context).AdditionalProperties);
         AssertEx.True(additionalProperties.TryGetValue<float>("min_p", out var minP));
-        AssertEx.Equal(0.05f, minP);
+        AssertEx.Equal(expected: 0.05f, minP);
         AssertEx.True(additionalProperties.TryGetValue<float>("repeat_penalty", out var repeatPenalty));
-        AssertEx.Equal(1.2f, repeatPenalty);
+        AssertEx.Equal(expected: 1.2f, repeatPenalty);
         AssertEx.True(additionalProperties.TryGetValue<int>("repeat_last_n", out var repeatLastN));
-        AssertEx.Equal(128, repeatLastN);
+        AssertEx.Equal(expected: 128, repeatLastN);
         AssertEx.True(additionalProperties.TryGetValue<int>("num_ctx", out var numCtx));
-        AssertEx.Equal(8192, numCtx);
+        AssertEx.Equal(expected: 8192, numCtx);
     }
 
     [Test]
@@ -507,7 +507,7 @@ public sealed class InvocationAgentFactoryTests
         AssertEx.False(additionalProperties.ContainsKey("num_ctx"));
         AssertEx.True(additionalProperties.ContainsKey("think"));
         // Only the `think` key is present (no sampling keys leaked).
-        AssertEx.Equal(1, additionalProperties.Count);
+        AssertEx.Equal(expected: 1, additionalProperties.Count);
     }
 
     [Test]
@@ -529,7 +529,7 @@ public sealed class InvocationAgentFactoryTests
         await using var context = await sut.CreateAsync(definition);
 
         var chatOptions = ResolveChatOptions(context);
-        AssertEx.Equal(4096, chatOptions.MaxOutputTokens);
+        AssertEx.Equal(expected: 4096, chatOptions.MaxOutputTokens);
     }
 
     [Test]
@@ -590,10 +590,10 @@ public sealed class InvocationAgentFactoryTests
         await using var context = await sut.CreateAsync(definition);
 
         var chatOptions = ResolveChatOptions(context);
-        AssertEx.Equal(2f, chatOptions.Temperature);
-        AssertEx.Equal(2f, chatOptions.PresencePenalty);
-        AssertEx.Equal(-2f, chatOptions.FrequencyPenalty);
-        AssertEx.Equal(-1L, chatOptions.Seed);
+        AssertEx.Equal(expected: 2f, chatOptions.Temperature);
+        AssertEx.Equal(expected: 2f, chatOptions.PresencePenalty);
+        AssertEx.Equal(expected: -2f, chatOptions.FrequencyPenalty);
+        AssertEx.Equal(expected: -1L, chatOptions.Seed);
     }
 
     // MAAI001: AgentSkillsProvider/AgentInlineSkill are [Experimental] in Microsoft.Agents.AI 1.8.0; the factory adopts
@@ -631,7 +631,7 @@ public sealed class InvocationAgentFactoryTests
         var withSkillsAgent = withSkillsContext.Agent as ChatClientAgent
                               ?? throw new AssertionException("Expected a ChatClientAgent.");
         var providers = AssertEx.NotNull(withSkillsAgent.AIContextProviders, "A skills agent must attach a context provider.");
-        AssertEx.Equal(1, providers.Count);
+        AssertEx.Equal(expected: 1, providers.Count);
         AssertEx.True(providers[0] is AgentSkillsProvider, "The attached provider must be an AgentSkillsProvider.");
         AssertEx.Equal("Be helpful.", withSkillsAgent.Instructions);
         AssertEx.Equal("XeInvocation-qwen3.5:0.8b", withSkillsAgent.Name);
@@ -680,7 +680,7 @@ public sealed class InvocationAgentFactoryTests
             return
             [
                 .. _tools.OfType<AIFunction>()
-                         .Select(static function => new LocalChatToolDescriptor(function.Name, function.Description, function.JsonSchema.GetRawText(), false))
+                         .Select(static function => new LocalChatToolDescriptor(function.Name, function.Description, function.JsonSchema.GetRawText(), RequiresApproval: false))
             ];
         }
     }
@@ -725,7 +725,7 @@ public sealed class InvocationAgentFactoryTests
             return
             [
                 .. _tools.Values.OfType<AIFunction>()
-                         .Select(static function => new LocalChatToolDescriptor(function.Name, function.Description, function.JsonSchema.GetRawText(), true))
+                         .Select(static function => new LocalChatToolDescriptor(function.Name, function.Description, function.JsonSchema.GetRawText(), RequiresApproval: true))
             ];
         }
 

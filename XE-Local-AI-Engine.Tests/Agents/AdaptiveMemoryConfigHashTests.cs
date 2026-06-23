@@ -3,7 +3,6 @@ namespace XE_Local_AI_Engine.Tests.Agents;
 using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Options;
 using NSubstitute;
-using XE_Local_AI_Engine.Client.Models;
 using XE_Local_AI_Engine.Client.Persistence;
 using XE_Local_AI_Engine.Client.Services.Agents;
 using XE_Local_AI_Engine.Client.Services.Agents.Implementation;
@@ -155,17 +154,17 @@ public sealed class AdaptiveMemoryConfigHashTests
     {
         return new AgentDefinitionRecord(Guid.NewGuid(),
             "Agent",
-            null,
+            Description: null,
             SystemPrompt,
             "qwen3:8b",
-            null,
+            ReasoningEffort: null,
             AgentDefinitionKind.Single,
             [],
             new Dictionary<string, bool>(),
-            null,
-            1,
-            10,
-            10,
+            OrchestrationTopologyJson: null,
+            Version: 1,
+            CreatedAtUtc: 10,
+            UpdatedAtUtc: 10,
             playbookEnabled);
     }
 }

@@ -8,7 +8,7 @@ public sealed class NodeAuthOptions
 
     public NodeJwtOptions Jwt { get; set; } = new();
 
-    [Range(1, 365)]
+    [Range(minimum: 1, maximum: 365)]
     public int RefreshTokenDays { get; set; } = 14;
 }
 
@@ -20,6 +20,6 @@ public sealed class NodeJwtOptions
     [Required]
     public string Audience { get; set; } = "xe-local-ai-engine";
 
-    [Range(1, 1440)]
+    [Range(minimum: 1, maximum: 1440)]
     public int AccessTokenMinutes { get; set; } = 15;
 }

@@ -34,7 +34,7 @@ public sealed class NodePatchApplyServiceTests : IDisposable
             {
                 if (Directory.Exists(dir))
                 {
-                    Directory.Delete(dir, true);
+                    Directory.Delete(dir, recursive: true);
                 }
             }
             catch (IOException)
@@ -65,7 +65,7 @@ public sealed class NodePatchApplyServiceTests : IDisposable
             RunId = "run-apply"
         });
 
-        AssertEx.True(result.Applied, $"a clean patch applies. rejections: {string.Join(';', result.Rejections)}");
+        AssertEx.True(result.Applied, $"a clean patch applies. rejections: {string.Join(separator: ';', result.Rejections)}");
         AssertEx.Empty(result.Rejections);
         AssertEx.Equal("line1\nline2\nline3\n", await File.ReadAllTextAsync(Path.Combine(hostRoot, "src", "App.cs")));
         AssertEx.False(File.Exists(Path.Combine(hostRoot, "old", "Gone.cs")), "the deleted file is removed on the host");
@@ -88,11 +88,11 @@ public sealed class NodePatchApplyServiceTests : IDisposable
             RunId = "run-preview"
         });
 
-        AssertEx.True(preview.CanApply, $"the patch checks clean. rejections: {string.Join(';', preview.Rejections)}");
+        AssertEx.True(preview.CanApply, $"the patch checks clean. rejections: {string.Join(separator: ';', preview.Rejections)}");
         AssertEx.Equal(before, await File.ReadAllTextAsync(Path.Combine(hostRoot, "src", "App.cs")), "preview must not mutate the host");
         var entry = preview.Files.Single(file => file.RelativePath == "src/App.cs");
-        AssertEx.Equal(1, entry.Added);
-        AssertEx.Equal(0, entry.Removed);
+        AssertEx.Equal(expected: 1, entry.Added);
+        AssertEx.Equal(expected: 0, entry.Removed);
     }
 
     [Test]
@@ -144,7 +144,7 @@ public sealed class NodePatchApplyServiceTests : IDisposable
             RunId = "run-root"
         });
 
-        AssertEx.True(result.Applied, $"rejections: {string.Join(';', result.Rejections)}");
+        AssertEx.True(result.Applied, $"rejections: {string.Join(separator: ';', result.Rejections)}");
         AssertEx.Equal(siblingSnapshot, Directory.GetFileSystemEntries(sibling).Length, "the unrelated sibling dir is untouched");
     }
 
@@ -209,7 +209,7 @@ public sealed class NodePatchApplyServiceTests : IDisposable
             RunId = "run-multi"
         });
 
-        AssertEx.True(result.Applied, $"rejections: {string.Join(';', result.Rejections)}");
+        AssertEx.True(result.Applied, $"rejections: {string.Join(separator: ';', result.Rejections)}");
         AssertEx.Equal("one\nupdated\n", await File.ReadAllTextAsync(Path.Combine(root01, "one.txt")));
         AssertEx.Equal("two\nupdated\n", await File.ReadAllTextAsync(Path.Combine(root02, "two.txt")));
         AssertEx.False(File.Exists(Path.Combine(root01, "two.txt")), "no cross-contamination between alias roots");
@@ -247,7 +247,7 @@ public sealed class NodePatchApplyServiceTests : IDisposable
         {
             RunId = "run-binary"
         });
-        AssertEx.True(allowedResult.Applied, $"a binary patch applies when allowed. rejections: {string.Join(';', allowedResult.Rejections)}");
+        AssertEx.True(allowedResult.Applied, $"a binary patch applies when allowed. rejections: {string.Join(separator: ';', allowedResult.Rejections)}");
     }
 
     [Test]
@@ -353,7 +353,7 @@ public sealed class NodePatchApplyServiceTests : IDisposable
         {
             RunId = "run-log"
         });
-        AssertEx.True(result.Applied, $"rejections: {string.Join(';', result.Rejections)}");
+        AssertEx.True(result.Applied, $"rejections: {string.Join(separator: ';', result.Rejections)}");
 
         var eventsPath = Path.Combine(harness.AgentHomeRoot, "runs", "run-log", "logs", "events.jsonl");
         AssertEx.True(File.Exists(eventsPath), "the run events log exists");
@@ -479,7 +479,7 @@ public sealed class NodePatchApplyServiceTests : IDisposable
 
         var patchesDir = Path.Combine(agentHomeRoot, "runs", "run-big", "patches");
         Directory.CreateDirectory(patchesDir);
-        await File.WriteAllTextAsync(Path.Combine(patchesDir, "changes.patch"), new string('x', tinyBudget + 1));
+        await File.WriteAllTextAsync(Path.Combine(patchesDir, "changes.patch"), new string(c: 'x', tinyBudget + 1));
 
         var preview = await service.PreviewAsync(new NodePatchApplyRequest
         {
@@ -508,7 +508,7 @@ public sealed class NodePatchApplyServiceTests : IDisposable
             RunId = "run-dirb"
         });
 
-        AssertEx.True(result.Applied, $"a file under 'dir b/' must not be falsely rejected. rejections: {string.Join(';', result.Rejections)}");
+        AssertEx.True(result.Applied, $"a file under 'dir b/' must not be falsely rejected. rejections: {string.Join(separator: ';', result.Rejections)}");
         AssertEx.Equal("old\nnew\n", await File.ReadAllTextAsync(Path.Combine(hostRoot, "dir b", "file.cs")));
     }
 
@@ -668,7 +668,7 @@ public sealed class NodePatchApplyServiceTests : IDisposable
     private static async Task<string> DiffAsync(string repoRoot)
     {
         var (exitCode, standardOutput, standardError) = await GitAsync(repoRoot, PatchDiffArgs);
-        AssertEx.Equal(0, exitCode, $"git diff failed: {standardError}");
+        AssertEx.Equal(expected: 0, exitCode, $"git diff failed: {standardError}");
         return standardOutput;
     }
 
@@ -715,7 +715,7 @@ public sealed class NodePatchApplyServiceTests : IDisposable
     private static async Task GitOkAsync(string repoRoot, params string[] args)
     {
         var (exitCode, _, standardError) = await GitAsync(repoRoot, args);
-        AssertEx.Equal(0, exitCode, $"git {string.Join(' ', args)} failed: {standardError}");
+        AssertEx.Equal(expected: 0, exitCode, $"git {string.Join(separator: ' ', args)} failed: {standardError}");
     }
 
     private static async Task<(int ExitCode, string StandardOutput, string StandardError)> GitAsync(string repoRoot, IReadOnlyList<string> args)

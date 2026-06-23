@@ -52,7 +52,7 @@ public sealed class RuntimePackageValidatorTests
     public void Validate_WhenSystemPromptExceedsLimit_ReturnsError()
     {
         var package = RuntimePackageBuilder.Valid()
-                                           .WithSystemPrompt(new string('a', 1025))
+                                           .WithSystemPrompt(new string(c: 'a', count: 1025))
                                            .Build();
 
         var result = _validator.Validate(package);
@@ -111,7 +111,7 @@ public sealed class RuntimePackageValidatorTests
     [Test]
     public void Validate_WhenMessageExceedsLimit_ReturnsError()
     {
-        var result = _validator.Validate(RuntimePackageBuilder.Valid().WithUserMessage(new string('b', 1025)).Build());
+        var result = _validator.Validate(RuntimePackageBuilder.Valid().WithUserMessage(new string(c: 'b', count: 1025)).Build());
 
         AssertErrorContains(result, "conversation message");
     }

@@ -50,13 +50,13 @@ internal sealed class PlaybookEvalService(
         var suggested = await _playbookActionService.LoadPendingSuggestionAsync(agentId, actionId, cancellationToken).ConfigureAwait(false);
         if (suggested is null)
         {
-            return new PlaybookEvalOutcome(false, null);
+            return new PlaybookEvalOutcome(ActionFound: false, Result: null);
         }
 
         var agent = await _agentDefinitionStore.GetByIdAsync(agentId, cancellationToken).ConfigureAwait(false);
         if (agent is null)
         {
-            return new PlaybookEvalOutcome(false, null);
+            return new PlaybookEvalOutcome(ActionFound: false, Result: null);
         }
 
         // Baseline = the agent's current resolved prompt (Instructions + Enabled actions). Candidate = baseline + the
@@ -190,16 +190,16 @@ internal sealed class PlaybookEvalService(
 
     private PlaybookEvalResult BuildEmptyResult(int actionVersion)
     {
-        return new PlaybookEvalResult(false,
+        return new PlaybookEvalResult(Passed: false,
             _timeProvider.GetUtcNow().ToUnixTimeMilliseconds(),
             actionVersion,
             _options.ModelName,
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
+            GoldenCaseCount: 0,
+            GoldenCaseTotal: 0,
+            BaselinePassCount: 0,
+            CandidatePassCount: 0,
+            RegressedCaseCount: 0,
+            ImprovedCaseCount: 0,
             []);
     }
 
@@ -210,7 +210,7 @@ internal sealed class PlaybookEvalService(
         // Recording persists the JSON on the action under the ownership guard and yields the updated record, which we
         // thread out via the outcome so the endpoint maps the response directly with no second, unscoped fetch.
         var updated = await _playbookActionService.RecordEvalResultAsync(agentId, actionId, json, cancellationToken).ConfigureAwait(false);
-        return new PlaybookEvalOutcome(true, result, updated);
+        return new PlaybookEvalOutcome(ActionFound: true, result, updated);
     }
 
     // Positional record: System.Text.Json binds JSON properties to the constructor parameters by name (Web defaults).

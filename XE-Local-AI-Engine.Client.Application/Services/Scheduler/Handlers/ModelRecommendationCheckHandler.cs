@@ -88,9 +88,9 @@ public sealed class ModelRecommendationCheckHandler : IScheduledJobHandler
         // TriggerNowAsync). Cron/OneShot/SimpleInterval stay supported for operators who want a recurring refresh.
         ScheduleKind.Manual,
         SchedulerMisfirePolicy.SkipMissed,
-        600,
-        true,
-        false,
+        DefaultMaxRuntimeSeconds: 600,
+        AllowManualTrigger: true,
+        AllowAgentCreation: false,
         HistoryDetailLevel.Detailed);
 
     public async Task ExecuteAsync(ScheduledJobExecutionContext context, CancellationToken cancellationToken)
@@ -161,7 +161,7 @@ public sealed class ModelRecommendationCheckHandler : IScheduledJobHandler
             parameters.UseCase,
             parameters.Limit,
             AdvisorProviderName,
-            null);
+            modelName: null);
         if (validationError is not null)
         {
             throw new ScheduledJobValidationException(validationError);

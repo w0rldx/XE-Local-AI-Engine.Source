@@ -111,9 +111,10 @@ internal static class NodeChatMetadataSerializer
     {
         if (string.IsNullOrWhiteSpace(metadataJson))
         {
-            return new NodeChatMessageMetadata(null, null, null, null, null, null, null);
+            return new NodeChatMessageMetadata(MetadataJson: null, Reasoning: null, Model: null, InputCount: null, OutputCount: null, TotalCount: null, ReasoningCount: null);
         }
 
-        return JsonSerializer.Deserialize<NodeChatMessageMetadata>(metadataJson, MetadataJsonOptions) ?? new NodeChatMessageMetadata(metadataJson, null, null, null, null, null, null);
+        return JsonSerializer.Deserialize<NodeChatMessageMetadata>(metadataJson, MetadataJsonOptions) ??
+               new NodeChatMessageMetadata(metadataJson, Reasoning: null, Model: null, InputCount: null, OutputCount: null, TotalCount: null, ReasoningCount: null);
     }
 }

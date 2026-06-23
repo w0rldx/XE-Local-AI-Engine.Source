@@ -51,7 +51,7 @@ public sealed class ProcessSandboxRuntimeProvider : ISandboxRuntimeProvider, IDi
 
     private readonly long _maxCopyFileBytes;
     private readonly ConcurrentDictionary<string, JailState> _sandboxes = new(StringComparer.Ordinal);
-    private readonly System.Threading.Lock _sync = new();
+    private readonly Lock _sync = new();
     private readonly TimeProvider _timeProvider;
     private int _disposed;
 
@@ -78,7 +78,7 @@ public sealed class ProcessSandboxRuntimeProvider : ISandboxRuntimeProvider, IDi
 
     public void Dispose()
     {
-        if (Interlocked.Exchange(ref _disposed, 1) != 0)
+        if (Interlocked.Exchange(ref _disposed, value: 1) != 0)
         {
             return;
         }
@@ -97,7 +97,7 @@ public sealed class ProcessSandboxRuntimeProvider : ISandboxRuntimeProvider, IDi
         {
             if (Directory.Exists(_jailRoot))
             {
-                Directory.Delete(_jailRoot, true);
+                Directory.Delete(_jailRoot, recursive: true);
             }
         }
         catch (IOException)
@@ -568,7 +568,7 @@ public sealed class ProcessSandboxRuntimeProvider : ISandboxRuntimeProvider, IDi
             // Probe only existing components. A symlink (file or directory) returns a non-null link target under a
             // no-follow resolve; a real file/dir or a not-yet-created leaf returns null.
             if ((File.Exists(current) || Directory.Exists(current))
-                && File.ResolveLinkTarget(current, false) is not null)
+                && File.ResolveLinkTarget(current, returnFinalTarget: false) is not null)
             {
                 throw new UnauthorizedAccessException($"Sandbox path '{sandboxPath}' traverses or targets a symlink inside the jail and is rejected.");
             }
@@ -609,7 +609,7 @@ public sealed class ProcessSandboxRuntimeProvider : ISandboxRuntimeProvider, IDi
         {
             if (Directory.Exists(state.JailRoot))
             {
-                Directory.Delete(state.JailRoot, true);
+                Directory.Delete(state.JailRoot, recursive: true);
             }
         }
         catch (IOException)
@@ -738,7 +738,7 @@ public sealed class ProcessSandboxRuntimeProvider : ISandboxRuntimeProvider, IDi
                 $"a selected file could not be opened safely for copy (it may have been replaced by a link; errno {error})."));
         }
 
-        return new SafeFileHandle(fileDescriptor, true);
+        return new SafeFileHandle(fileDescriptor, ownsHandle: true);
     }
 
     // A single libc open(). The path is marshalled by the caller into a null-terminated UTF-8 byte array so any
@@ -807,8 +807,8 @@ public sealed class ProcessSandboxRuntimeProvider : ISandboxRuntimeProvider, IDi
                 $"the copy-into destination could not be created safely (it may be a symlink; errno {error})."));
         }
 
-        using var handle = new SafeFileHandle(fileDescriptor, true);
-        await RandomAccess.WriteAsync(handle, content, 0, cancellationToken).ConfigureAwait(false);
+        using var handle = new SafeFileHandle(fileDescriptor, ownsHandle: true);
+        await RandomAccess.WriteAsync(handle, content, fileOffset: 0, cancellationToken).ConfigureAwait(false);
     }
 
     /// <summary>
@@ -822,7 +822,7 @@ public sealed class ProcessSandboxRuntimeProvider : ISandboxRuntimeProvider, IDi
     {
         private readonly StringBuilder _builder = new();
         private readonly int _capBytes;
-        private readonly System.Threading.Lock _sync = new();
+        private readonly Lock _sync = new();
         private int _byteLength;
         private bool _capped;
 

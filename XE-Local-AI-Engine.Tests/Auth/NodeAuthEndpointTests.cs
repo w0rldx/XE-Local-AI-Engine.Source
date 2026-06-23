@@ -81,7 +81,7 @@ public sealed class NodeAuthEndpointTests
         await using var factory = new TestingWebAppFactory();
         using var client = factory.CreateClient();
 
-        using var response = await client.PostAsync("/api/local/v1/auth/refresh", null).ConfigureAwait(false);
+        using var response = await client.PostAsync("/api/local/v1/auth/refresh", content: null).ConfigureAwait(false);
 
         AssertEx.Equal(HttpStatusCode.Unauthorized, response.StatusCode);
         AssertRefreshCookieCleared(response);
@@ -113,8 +113,8 @@ public sealed class NodeAuthEndpointTests
 
         try
         {
-            AssertEx.Equal(1, responses.Count(response => response.StatusCode == HttpStatusCode.NoContent));
-            AssertEx.Equal(1, responses.Count(response => response.StatusCode == HttpStatusCode.Conflict));
+            AssertEx.Equal(expected: 1, responses.Count(response => response.StatusCode == HttpStatusCode.NoContent));
+            AssertEx.Equal(expected: 1, responses.Count(response => response.StatusCode == HttpStatusCode.Conflict));
         }
         finally
         {
@@ -173,7 +173,7 @@ public sealed class NodeAuthEndpointTests
     {
         var setCookieHeaders = GetSetCookieHeaders(response);
         var setCookie = AssertEx.NotNull(setCookieHeaders.FirstOrDefault(header => header.StartsWith($"{NodeAuthCookie.RefreshCookieName}=", StringComparison.Ordinal)));
-        var cookieValue = setCookie.Split(';', 2)[0];
+        var cookieValue = setCookie.Split(separator: ';', count: 2)[0];
         AssertEx.NotEmpty(cookieValue);
         AssertEx.Contains(setCookie, "httponly", StringComparison.OrdinalIgnoreCase);
         AssertEx.Contains(setCookie, "secure", StringComparison.OrdinalIgnoreCase);

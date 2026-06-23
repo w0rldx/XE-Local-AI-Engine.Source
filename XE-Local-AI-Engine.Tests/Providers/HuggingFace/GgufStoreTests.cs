@@ -16,7 +16,7 @@ using Infra = GgufStoreTestInfrastructure;
 /// </summary>
 public sealed class GgufStoreTests
 {
-    private static readonly byte[] ModelBytes = Encoding.UTF8.GetBytes(new string('g', 4096));
+    private static readonly byte[] ModelBytes = Encoding.UTF8.GetBytes(new string(c: 'g', count: 4096));
 
     [Test]
     public async Task GgufStore_DiskGuard_BlocksBeforeAnyBytes_WhenInsufficient()
@@ -36,11 +36,11 @@ public sealed class GgufStoreTests
         await AssertEx.ThrowsAsync<InsufficientDiskSpaceException>(() => store.EnsureModelAsync(new GgufModelRequest
         {
             RepoId = Infra.RepoId
-        }, null, CancellationToken.None));
+        }, progress: null, CancellationToken.None));
 
         // No .part written.
         AssertEx.Empty(Directory.EnumerateFiles(dir.Path, "*.part"));
-        AssertEx.Equal(0, handler.CallCount);
+        AssertEx.Equal(expected: 0, handler.CallCount);
     }
 
     [Test]
@@ -60,10 +60,10 @@ public sealed class GgufStoreTests
         await AssertEx.ThrowsAsync<HuggingFaceDownloadException>(() => store.EnsureModelAsync(new GgufModelRequest
         {
             RepoId = Infra.RepoId
-        }, null, CancellationToken.None));
+        }, progress: null, CancellationToken.None));
 
         // Rejected before any HTTP call; nothing written anywhere under the models directory.
-        AssertEx.Equal(0, handler.CallCount);
+        AssertEx.Equal(expected: 0, handler.CallCount);
         AssertEx.Empty(Directory.EnumerateFiles(dir.Path));
     }
 
@@ -76,14 +76,14 @@ public sealed class GgufStoreTests
         using var http = new HttpClient(handler);
         using var registry = Infra.Registry(options);
         var download = Infra.DownloadClient(http, Infra.NoTokenStore(), Infra.AbundantSpace(), options);
-        var discovery = Infra.DiscoveryWith(Infra.RepoFile("Demo-Model-Q8_0.gguf", "Q8_0", 10),
+        var discovery = Infra.DiscoveryWith(Infra.RepoFile("Demo-Model-Q8_0.gguf", "Q8_0", sizeBytes: 10),
             Infra.RepoFile(Infra.FileName, "Q4_K_M", ModelBytes.Length));
         var store = Infra.Store(download, discovery, registry, options);
 
         var handle = await store.EnsureModelAsync(new GgufModelRequest
         {
             RepoId = Infra.RepoId
-        }, null, CancellationToken.None);
+        }, progress: null, CancellationToken.None);
 
         AssertEx.Equal("Q4_K_M", handle.Quant);
         AssertEx.Equal(Infra.ModelName, handle.ModelName);
@@ -100,7 +100,7 @@ public sealed class GgufStoreTests
         using var http = new HttpClient(handler);
         using var registry = Infra.Registry(options);
         var download = Infra.DownloadClient(http, Infra.NoTokenStore(), Infra.AbundantSpace(), options);
-        var discovery = Infra.DiscoveryWith(Infra.RepoFile(Infra.FileName, "Q4_K_M", 10),
+        var discovery = Infra.DiscoveryWith(Infra.RepoFile(Infra.FileName, "Q4_K_M", sizeBytes: 10),
             Infra.RepoFile("Demo-Model-Q8_0.gguf", "Q8_0", ModelBytes.Length));
         var store = Infra.Store(download, discovery, registry, options);
 
@@ -108,7 +108,7 @@ public sealed class GgufStoreTests
         {
             RepoId = Infra.RepoId,
             Quant = "Q8_0"
-        }, null, CancellationToken.None);
+        }, progress: null, CancellationToken.None);
 
         AssertEx.Equal("Q8_0", handle.Quant);
         AssertEx.Equal("Demo-Model-Q8_0.gguf", Path.GetFileName(handle.LocalPath));
@@ -124,7 +124,7 @@ public sealed class GgufStoreTests
         using var registry = Infra.Registry(options);
         var download = Infra.DownloadClient(http, Infra.NoTokenStore(), Infra.AbundantSpace(), options);
         // A repo offering both a plain and a Dynamic quant; the request pins the Dynamic one.
-        var discovery = Infra.DiscoveryWith(Infra.RepoFile("Demo-Model-Q4_K_M.gguf", "Q4_K_M", 10),
+        var discovery = Infra.DiscoveryWith(Infra.RepoFile("Demo-Model-Q4_K_M.gguf", "Q4_K_M", sizeBytes: 10),
             Infra.RepoFile("Demo-Model-UD-Q4_K_XL.gguf", "UD-Q4_K_XL", ModelBytes.Length));
         var store = Infra.Store(download, discovery, registry, options);
 
@@ -132,7 +132,7 @@ public sealed class GgufStoreTests
         {
             RepoId = Infra.RepoId,
             Quant = "UD-Q4_K_XL"
-        }, null, CancellationToken.None);
+        }, progress: null, CancellationToken.None);
 
         AssertEx.Equal("UD-Q4_K_XL", handle.Quant);
         AssertEx.Equal("Demo-Model-UD-Q4_K_XL.gguf", Path.GetFileName(handle.LocalPath));
@@ -156,7 +156,7 @@ public sealed class GgufStoreTests
         var handle = await store.EnsureModelAsync(new GgufModelRequest
         {
             RepoId = Infra.RepoId
-        }, null, CancellationToken.None);
+        }, progress: null, CancellationToken.None);
 
         AssertEx.Equal("UD-Q4_K_M", handle.Quant);
         AssertEx.Equal("Demo-Model-UD-Q4_K_M.gguf", Path.GetFileName(handle.LocalPath));
@@ -173,14 +173,14 @@ public sealed class GgufStoreTests
         var download = Infra.DownloadClient(http, Infra.NoTokenStore(), Infra.AbundantSpace(), options);
         // Both a plain and a Dynamic Q4_K_M exist; a bare Q4_K_M request must pick the exact (plain) one.
         var discovery = Infra.DiscoveryWith(Infra.RepoFile("Demo-Model-Q4_K_M.gguf", "Q4_K_M", ModelBytes.Length),
-            Infra.RepoFile("Demo-Model-UD-Q4_K_M.gguf", "UD-Q4_K_M", 10));
+            Infra.RepoFile("Demo-Model-UD-Q4_K_M.gguf", "UD-Q4_K_M", sizeBytes: 10));
         var store = Infra.Store(download, discovery, registry, options);
 
         var handle = await store.EnsureModelAsync(new GgufModelRequest
         {
             RepoId = Infra.RepoId,
             Quant = "Q4_K_M"
-        }, null, CancellationToken.None);
+        }, progress: null, CancellationToken.None);
 
         AssertEx.Equal("Q4_K_M", handle.Quant);
         AssertEx.Equal("Demo-Model-Q4_K_M.gguf", Path.GetFileName(handle.LocalPath));
@@ -204,10 +204,10 @@ public sealed class GgufStoreTests
         {
             RepoId = Infra.RepoId,
             Quant = "UD-Q4_K_M"
-        }, null, CancellationToken.None));
+        }, progress: null, CancellationToken.None));
 
         AssertEx.Equal(HuggingFaceDownloadFailure.NotFound, exception.Reason);
-        AssertEx.Equal(0, handler.CallCount);
+        AssertEx.Equal(expected: 0, handler.CallCount);
     }
 
     [Test]
@@ -230,7 +230,7 @@ public sealed class GgufStoreTests
         var handle = await store.EnsureModelAsync(new GgufModelRequest
         {
             RepoId = Infra.RepoId
-        }, null, CancellationToken.None);
+        }, progress: null, CancellationToken.None);
 
         // A Range request was issued from the partial offset and the final file is the full, intact byte stream.
         AssertEx.NotNull(handler.Requests[0].Range);
@@ -263,10 +263,10 @@ public sealed class GgufStoreTests
         var handle = await store.EnsureModelAsync(new GgufModelRequest
         {
             RepoId = Infra.RepoId
-        }, null, CancellationToken.None);
+        }, progress: null, CancellationToken.None);
 
         // Recovered after exactly two requests: the 416 reset, then a clean full download.
-        AssertEx.Equal(2, handler.CallCount);
+        AssertEx.Equal(expected: 2, handler.CallCount);
         // The retry sent no Range (restart from byte 0).
         AssertEx.Null(handler.Requests[1].Range);
         var finalBytes = await File.ReadAllBytesAsync(handle.LocalPath);
@@ -282,7 +282,7 @@ public sealed class GgufStoreTests
         using var handler = new GgufStoreTestInfrastructure.ScriptedHandler((_, _) => new HttpResponseMessage(HttpStatusCode.OK)
         {
             // A stream that throws ENOSPC partway through the copy loop.
-            Content = new StreamContent(new DiskFullStream(ModelBytes, 512))
+            Content = new StreamContent(new DiskFullStream(ModelBytes, throwAfter: 512))
         });
         using var http = new HttpClient(handler);
         using var registry = Infra.Registry(options);
@@ -293,7 +293,7 @@ public sealed class GgufStoreTests
         var exception = await AssertEx.ThrowsAsync<HuggingFaceDownloadException>(() => store.EnsureModelAsync(new GgufModelRequest
         {
             RepoId = Infra.RepoId
-        }, null, CancellationToken.None));
+        }, progress: null, CancellationToken.None));
 
         AssertEx.Equal(HuggingFaceDownloadFailure.DiskFull, exception.Reason);
         // .part retained for resume; final never created.
@@ -318,7 +318,7 @@ public sealed class GgufStoreTests
         var exception = await AssertEx.ThrowsAsync<HuggingFaceDownloadException>(() => store.EnsureModelAsync(new GgufModelRequest
         {
             RepoId = Infra.RepoId
-        }, null, CancellationToken.None));
+        }, progress: null, CancellationToken.None));
 
         AssertEx.Equal(HuggingFaceDownloadFailure.HashMismatch, exception.Reason);
         AssertEx.False(File.Exists(dir.FilePath(Infra.FileName)));
@@ -341,7 +341,7 @@ public sealed class GgufStoreTests
         var handle = await store.EnsureModelAsync(new GgufModelRequest
         {
             RepoId = Infra.RepoId
-        }, null, CancellationToken.None);
+        }, progress: null, CancellationToken.None);
 
         AssertEx.NotNull(handle.Sha256);
         AssertEx.Equal(correctSha, handle.Sha256!);
@@ -357,7 +357,7 @@ public sealed class GgufStoreTests
         using var handler = new GgufStoreTestInfrastructure.ScriptedHandler((_, _) => new HttpResponseMessage(HttpStatusCode.OK)
         {
             // Cancel is tripped after some bytes flow, mid copy loop.
-            Content = new StreamContent(new CancelTriggeringStream(ModelBytes, cts, 512))
+            Content = new StreamContent(new CancelTriggeringStream(ModelBytes, cts, cancelAfter: 512))
         });
         using var http = new HttpClient(handler);
         using var registry = Infra.Registry(options);
@@ -368,7 +368,7 @@ public sealed class GgufStoreTests
         await AssertEx.ThrowsAsync<OperationCanceledException>(() => store.EnsureModelAsync(new GgufModelRequest
         {
             RepoId = Infra.RepoId
-        }, null, cts.Token));
+        }, progress: null, cts.Token));
 
         AssertEx.False(File.Exists(dir.FilePath(Infra.FileName)));
         AssertEx.Empty(await registry.ListAsync(CancellationToken.None));
@@ -416,7 +416,7 @@ public sealed class GgufStoreTests
         await store.EnsureModelAsync(new GgufModelRequest
         {
             RepoId = Infra.RepoId
-        }, null, CancellationToken.None);
+        }, progress: null, CancellationToken.None);
 
         AssertEx.Equal("Bearer", handler.Requests[0].AuthScheme!);
         AssertEx.Equal(token, handler.Requests[0].AuthParameter!);
@@ -437,11 +437,11 @@ public sealed class GgufStoreTests
         var exception = await AssertEx.ThrowsAsync<HuggingFaceDownloadException>(() => store.EnsureModelAsync(new GgufModelRequest
         {
             RepoId = Infra.RepoId
-        }, null, CancellationToken.None));
+        }, progress: null, CancellationToken.None));
 
         AssertEx.Equal(HuggingFaceDownloadFailure.Gated, exception.Reason);
         // No retry on a 401 — exactly one call.
-        AssertEx.Equal(1, handler.CallCount);
+        AssertEx.Equal(expected: 1, handler.CallCount);
         // The surfaced message never carries a token (none configured here, but the contract is asserted).
         AssertEx.False(exception.Message.Contains("hf_", StringComparison.OrdinalIgnoreCase));
     }
@@ -486,7 +486,7 @@ public sealed class GgufStoreTests
         var handle = await store.EnsureModelAsync(new GgufModelRequest
         {
             RepoId = Infra.RepoId
-        }, null, CancellationToken.None);
+        }, progress: null, CancellationToken.None);
 
         // The download succeeds and records the sha from the probe's X-Linked-Etag — the CDN Xet ETag was ignored.
         AssertEx.NotNull(handle.Sha256);
@@ -519,7 +519,7 @@ public sealed class GgufStoreTests
         var exception = await AssertEx.ThrowsAsync<HuggingFaceDownloadException>(() => store.EnsureModelAsync(new GgufModelRequest
         {
             RepoId = Infra.RepoId
-        }, null, CancellationToken.None));
+        }, progress: null, CancellationToken.None));
 
         AssertEx.Equal(HuggingFaceDownloadFailure.HashMismatch, exception.Reason);
         AssertEx.False(File.Exists(dir.FilePath(Infra.FileName)));
@@ -535,7 +535,7 @@ public sealed class GgufStoreTests
         // A real installed GGUF on disk whose header advertises qwen2.context_length = 32768.
         var header = new GgufHeaderBytesBuilder()
                      .WithString("general.architecture", "qwen2")
-                     .WithUint32("qwen2.context_length", 32768)
+                     .WithUint32("qwen2.context_length", value: 32768)
                      .Build();
         var entry = await SeedInstalledModel(dir, registry, "qwen2-Q4_K_M.gguf", header);
 
@@ -548,7 +548,7 @@ public sealed class GgufStoreTests
         var descriptors = await store.ListInstalledModelsAsync(CancellationToken.None);
 
         var descriptor = descriptors.Single(d => d.ModelName == entry.ModelName);
-        AssertEx.Equal(32768, descriptor.MaxContextTokens!.Value);
+        AssertEx.Equal(expected: 32768, descriptor.MaxContextTokens!.Value);
         AssertEx.True(descriptor.IsAvailable);
         AssertEx.Equal(entry.SizeBytes, descriptor.SizeBytes);
     }
@@ -585,7 +585,7 @@ public sealed class GgufStoreTests
 
         var header = new GgufHeaderBytesBuilder()
                      .WithString("general.architecture", "qwen2")
-                     .WithUint32("qwen2.context_length", 32768)
+                     .WithUint32("qwen2.context_length", value: 32768)
                      .Build();
         var entry = await SeedInstalledModel(dir, registry, "cached-Q4_K_M.gguf", header);
 
@@ -596,14 +596,14 @@ public sealed class GgufStoreTests
         var store = Infra.Store(download, Infra.DiscoveryWith(), registry, options);
 
         var first = await store.ListInstalledModelsAsync(CancellationToken.None);
-        AssertEx.Equal(32768, first.Single(d => d.ModelName == entry.ModelName).MaxContextTokens!.Value);
+        AssertEx.Equal(expected: 32768, first.Single(d => d.ModelName == entry.ModelName).MaxContextTokens!.Value);
 
         // Corrupt the on-disk header AFTER the first read; the (size+mtime-keyed) cache must serve the prior result
         // because the registry size/timestamp are unchanged — proving the file was not re-read on the second call.
         await File.WriteAllBytesAsync(entry.LocalPath, "corrupted after first read"u8.ToArray());
 
         var second = await store.ListInstalledModelsAsync(CancellationToken.None);
-        AssertEx.Equal(32768, second.Single(d => d.ModelName == entry.ModelName).MaxContextTokens!.Value);
+        AssertEx.Equal(expected: 32768, second.Single(d => d.ModelName == entry.ModelName).MaxContextTokens!.Value);
     }
 
     // Writes a GGUF file to the temp models dir and registers it so ListInstalledModelsAsync returns it.
@@ -686,7 +686,7 @@ public sealed class GgufStoreTests
             if (_position >= throwAfter)
             {
                 // HResult low word 28 == ENOSPC.
-                throw new IOException("No space left on device.", 28);
+                throw new IOException("No space left on device.", hresult: 28);
             }
 
             var toCopy = Math.Min(count, throwAfter - _position);
@@ -699,7 +699,7 @@ public sealed class GgufStoreTests
         {
             if (_position >= throwAfter)
             {
-                throw new IOException("No space left on device.", 28);
+                throw new IOException("No space left on device.", hresult: 28);
             }
 
             var toCopy = Math.Min(buffer.Length, throwAfter - _position);

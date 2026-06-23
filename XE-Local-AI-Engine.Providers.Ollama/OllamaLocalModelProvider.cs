@@ -20,7 +20,7 @@ public sealed class OllamaLocalModelProvider : ILocalModelProvider, IDisposable
     public const string OllamaProviderName = "ollama";
 
     private readonly IOllamaApiClient _ollamaClient;
-    private readonly SemaphoreSlim _pullSemaphore = new(1, 1);
+    private readonly SemaphoreSlim _pullSemaphore = new(initialCount: 1, maxCount: 1);
 
     /// <summary>Creates a provider wrapper around the configured Ollama API client.</summary>
     public OllamaLocalModelProvider(IOllamaApiClient ollamaClient)

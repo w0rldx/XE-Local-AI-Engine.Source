@@ -132,9 +132,9 @@ public sealed class CodexEndpointTests
         using var client = factory.CreateClient();
 
         // No operator bearer token attached → all codex routes must reject.
-        using var loginResponse = await client.PostAsync("/api/local/v1/cloud/codex/login", null).ConfigureAwait(false);
+        using var loginResponse = await client.PostAsync("/api/local/v1/cloud/codex/login", content: null).ConfigureAwait(false);
         using var statusResponse = await client.GetAsync("/api/local/v1/cloud/codex/status").ConfigureAwait(false);
-        using var logoutResponse = await client.PostAsync("/api/local/v1/cloud/codex/logout", null).ConfigureAwait(false);
+        using var logoutResponse = await client.PostAsync("/api/local/v1/cloud/codex/logout", content: null).ConfigureAwait(false);
 
         AssertEx.True(IsRejected(loginResponse.StatusCode), $"login was {loginResponse.StatusCode}");
         AssertEx.True(IsRejected(statusResponse.StatusCode), $"status was {statusResponse.StatusCode}");

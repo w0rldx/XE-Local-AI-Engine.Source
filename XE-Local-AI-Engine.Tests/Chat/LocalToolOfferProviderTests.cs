@@ -154,7 +154,7 @@ public sealed class LocalToolOfferProviderTests
     private static McpRegisteredTool BuildMcpTool(string qualifiedName)
     {
         var executable = AIFunctionFactory.Create((string input) => input, qualifiedName);
-        var descriptor = new LocalChatToolDescriptor(qualifiedName, "Gets the weather forecast.", """{"type":"object"}""", true);
+        var descriptor = new LocalChatToolDescriptor(qualifiedName, "Gets the weather forecast.", ParameterSchema: """{"type":"object"}""", RequiresApproval: true);
         return new McpRegisteredTool(qualifiedName, executable, descriptor);
     }
 
@@ -166,8 +166,8 @@ public sealed class LocalToolOfferProviderTests
     private static LocalToolOfferProvider CreateProvider(IMcpToolRegistry mcpToolRegistry, params string[] toolCapableModels)
     {
         var registry = new FakeAgentToolRegistry([
-            new LocalChatToolDescriptor(AgentHomeToolDefinition.ToolName, "Runs an agent task.", "{\"type\":\"object\"}", true),
-            new LocalChatToolDescriptor("open_url", "Opens a URL.", "{\"type\":\"object\"}", false)
+            new LocalChatToolDescriptor(AgentHomeToolDefinition.ToolName, "Runs an agent task.", "{\"type\":\"object\"}", RequiresApproval: true),
+            new LocalChatToolDescriptor("open_url", "Opens a URL.", "{\"type\":\"object\"}", RequiresApproval: false)
         ]);
 
         var options = Options.Create(new AgentHomeOptions

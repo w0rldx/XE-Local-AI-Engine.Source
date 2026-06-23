@@ -47,7 +47,7 @@ public sealed class GgufDiscoveryTests
 
         var results = await harness.Discovery.SearchAsync(new GgufSearchQuery(), CancellationToken.None);
 
-        AssertEx.Equal(1, results.Count);
+        AssertEx.Equal(expected: 1, results.Count);
         AssertEx.Equal("owner/Has-Gguf", results[0].RepoId);
         AssertEx.True(results[0].HasUsableGguf);
     }
@@ -77,13 +77,13 @@ public sealed class GgufDiscoveryTests
             },
             CancellationToken.None);
 
-        AssertEx.Equal(1, results.Count);
+        AssertEx.Equal(expected: 1, results.Count);
         var summary = results[0];
-        AssertEx.Equal(1234567L, summary.Downloads);
-        AssertEx.Equal(4321, summary.Likes);
+        AssertEx.Equal(expected: 1234567L, summary.Downloads);
+        AssertEx.Equal(expected: 4321, summary.Likes);
         AssertEx.Equal("apache-2.0", summary.License);
         AssertEx.True(summary.IsGated, "gated:\"manual\" must map to IsGated=true.");
-        AssertEx.Equal(new DateTimeOffset(2026, 5, 10, 12, 34, 56, TimeSpan.Zero), summary.LastModified);
+        AssertEx.Equal(new DateTimeOffset(year: 2026, month: 5, day: 10, hour: 12, minute: 34, second: 56, TimeSpan.Zero), summary.LastModified);
 
         // Popularity sort is requested via the Hub sort=downloads query parameter.
         AssertEx.Contains(harness.Handler.LastListUrl, "sort=downloads");
@@ -119,17 +119,17 @@ public sealed class GgufDiscoveryTests
         AssertEx.Equal(RepoId, result.RepoId);
         AssertEx.Equal("llama3.2", result.License);
         AssertEx.False(result.IsGated);
-        AssertEx.Equal(2, result.Files.Count); // unparseable + non-gguf both excluded.
+        AssertEx.Equal(expected: 2, result.Files.Count); // unparseable + non-gguf both excluded.
 
         var q4 = result.Files.Single(f => f.FileName.Contains("Q4_K_M", StringComparison.Ordinal));
         AssertEx.Equal("Q4_K_M", q4.Quant);
-        AssertEx.Equal(2019377440L, q4.SizeBytes);
+        AssertEx.Equal(expected: 2019377440L, q4.SizeBytes);
         AssertEx.Equal("aaaa", q4.Sha256!);
         AssertEx.Equal(Commit, q4.Revision);
 
         var q8 = result.Files.Single(f => f.FileName.Contains("Q8_0", StringComparison.Ordinal));
         AssertEx.Equal("Q8_0", q8.Quant);
-        AssertEx.Equal(3421899296L, q8.SizeBytes);
+        AssertEx.Equal(expected: 3421899296L, q8.SizeBytes);
     }
 
     [Test]
@@ -155,7 +155,7 @@ public sealed class GgufDiscoveryTests
 
         var result = await harness.Discovery.InspectRepoAsync("unsloth/gemma-3-12b-it-GGUF", CancellationToken.None);
 
-        AssertEx.Equal(2, result.Files.Count);
+        AssertEx.Equal(expected: 2, result.Files.Count);
         AssertEx.Equal("UD-Q4_K_XL", result.Files.Single(f => f.FileName.Contains("UD-Q4_K_XL", StringComparison.Ordinal)).Quant);
         AssertEx.Equal("Q4_K_M", result.Files.Single(f => f.FileName.Contains("it-Q4_K_M", StringComparison.Ordinal)).Quant);
     }
@@ -181,7 +181,7 @@ public sealed class GgufDiscoveryTests
 
         var result = await harness.Discovery.InspectRepoAsync(RepoId, CancellationToken.None);
 
-        AssertEx.Equal(1, result.Files.Count);
+        AssertEx.Equal(expected: 1, result.Files.Count);
         AssertEx.Equal("model-Q4_K_M.gguf", result.Files.Single().FileName);
     }
 
@@ -208,7 +208,7 @@ public sealed class GgufDiscoveryTests
         var file = result.Files.Single();
         AssertEx.Equal("model-Q4_K_M.gguf", file.FileName);
         AssertEx.Equal("Q4_K_M", file.Quant);
-        AssertEx.Equal(2048L, file.SizeBytes);
+        AssertEx.Equal(expected: 2048L, file.SizeBytes);
         AssertEx.Null(file.Architecture);
         AssertEx.Null(file.ContextLength);
     }
@@ -230,13 +230,13 @@ public sealed class GgufDiscoveryTests
         // Full header: architecture=llama plus llama.* keys + general.* keys, incl. file_type (the quant enum).
         var header = new GgufHeaderBytesBuilder()
                      .WithString("general.architecture", "llama")
-                     .WithUint32("general.file_type", 15) // LLAMA_FTYPE_MOSTLY_Q4_K_M.
-                     .WithUint64("general.parameter_count", 3_212_749_888UL)
-                     .WithUint32("llama.block_count", 28)
-                     .WithUint32("llama.attention.head_count", 24)
-                     .WithUint32("llama.attention.head_count_kv", 8)
-                     .WithUint32("llama.embedding_length", 3072)
-                     .WithUint32("llama.context_length", 131072)
+                     .WithUint32("general.file_type", value: 15) // LLAMA_FTYPE_MOSTLY_Q4_K_M.
+                     .WithUint64("general.parameter_count", value: 3_212_749_888UL)
+                     .WithUint32("llama.block_count", value: 28)
+                     .WithUint32("llama.attention.head_count", value: 24)
+                     .WithUint32("llama.attention.head_count_kv", value: 8)
+                     .WithUint32("llama.embedding_length", value: 3072)
+                     .WithUint32("llama.context_length", value: 131072)
                      .Build();
 
         using var harness = BuildHarness(repoDetail: detail, headerBytes: header);
@@ -245,12 +245,12 @@ public sealed class GgufDiscoveryTests
 
         var file = result.Files.Single();
         AssertEx.Equal("llama", file.Architecture!);
-        AssertEx.Equal(3_212_749_888L, file.ParamCount!.Value);
-        AssertEx.Equal(28L, file.BlockCount!.Value);
-        AssertEx.Equal(24L, file.AttentionHeadCount!.Value);
-        AssertEx.Equal(8L, file.AttentionHeadCountKV!.Value);
-        AssertEx.Equal(3072L, file.EmbeddingLength!.Value);
-        AssertEx.Equal(131072L, file.ContextLength!.Value);
+        AssertEx.Equal(expected: 3_212_749_888L, file.ParamCount!.Value);
+        AssertEx.Equal(expected: 28L, file.BlockCount!.Value);
+        AssertEx.Equal(expected: 24L, file.AttentionHeadCount!.Value);
+        AssertEx.Equal(expected: 8L, file.AttentionHeadCountKV!.Value);
+        AssertEx.Equal(expected: 3072L, file.EmbeddingLength!.Value);
+        AssertEx.Equal(expected: 131072L, file.ContextLength!.Value);
         // general.file_type (uint enum) is stringified into QuantType.
         AssertEx.Equal("15", file.QuantType!);
     }
@@ -276,7 +276,7 @@ public sealed class GgufDiscoveryTests
 
         var file = result.Files.Single();
         AssertEx.Null(file.Sha256);
-        AssertEx.Equal(4242L, file.SizeBytes);
+        AssertEx.Equal(expected: 4242L, file.SizeBytes);
         AssertEx.Equal(Commit, file.Revision);
     }
 
@@ -302,8 +302,8 @@ public sealed class GgufDiscoveryTests
         public DiscoveryHarness(string? listing, string? repoDetail, byte[]? headerBytes)
         {
             Handler = new StubHandler(listing, repoDetail, headerBytes);
-            _hubHttp = new HttpClient(Handler, false);
-            _downloadHttp = new HttpClient(Handler, false);
+            _hubHttp = new HttpClient(Handler, disposeHandler: false);
+            _downloadHttp = new HttpClient(Handler, disposeHandler: false);
 
             var options = new HuggingFaceOptions();
             var hubClient = new HfHubClient(_hubHttp, options, NullLogger<HfHubClient>.Instance);
@@ -368,12 +368,12 @@ public sealed class GgufDiscoveryTests
             var range = request.Headers.Range?.Ranges.FirstOrDefault();
             var from = (int)(range?.From ?? 0);
             var to = (int)Math.Min(range?.To ?? full.Length - 1, full.Length - 1);
-            var length = Math.Max(0, Math.Min(to, full.Length - 1) - from + 1);
+            var length = Math.Max(val1: 0, Math.Min(to, full.Length - 1) - from + 1);
 
             var slice = new byte[length];
             if (length > 0)
             {
-                Array.Copy(full, from, slice, 0, length);
+                Array.Copy(full, from, slice, destinationIndex: 0, length);
             }
 
             // 206 Partial Content for an honored range; the reader treats a short body as "whole (small) file".

@@ -47,7 +47,7 @@ public sealed class McpServerConnectionManagerTests
         AssertEx.True(executable is ApprovalRequiredAIFunction, "the executable must be approval-wrapped");
 
         // The per-server status carries the discovered tool list (qualified name + description + approval) for the UI.
-        AssertEx.Equal(1, status.ToolCount);
+        AssertEx.Equal(expected: 1, status.ToolCount);
         AssertEx.Equal(status.ToolCount, status.Tools.Count);
         var tool = status.Tools.Single();
         AssertEx.Equal("mcp__weather__get_forecast", tool.Name);
@@ -64,8 +64,8 @@ public sealed class McpServerConnectionManagerTests
 
         await manager.RefreshAsync();
 
-        AssertEx.Equal(0, registry.GetDescriptors().Count);
-        AssertEx.Equal(0, manager.GetStatuses().Count);
+        AssertEx.Equal(expected: 0, registry.GetDescriptors().Count);
+        AssertEx.Equal(expected: 0, manager.GetStatuses().Count);
     }
 
     [Test]
@@ -90,10 +90,10 @@ public sealed class McpServerConnectionManagerTests
         var healthyStatus = statuses.Single(s => s.ServerId == healthyRecord.Id);
         var brokenStatus = statuses.Single(s => s.ServerId == brokenRecord.Id);
         AssertEx.True(healthyStatus.Connected);
-        AssertEx.Equal(1, healthyStatus.Tools.Count);
+        AssertEx.Equal(expected: 1, healthyStatus.Tools.Count);
         AssertEx.False(brokenStatus.Connected);
         AssertEx.NotNull(brokenStatus.LastError);
-        AssertEx.Equal(0, brokenStatus.Tools.Count);
+        AssertEx.Equal(expected: 0, brokenStatus.Tools.Count);
     }
 
     [Test]
@@ -161,7 +161,7 @@ public sealed class McpServerConnectionManagerTests
         AssertEx.Contains(names, "mcp__server-2__get_forecast"); // the original, re-keyed to the shifted slug
         AssertEx.False(names.Any(n => n == "mcp__server__get_forecast" && names.Count(x => x == n) > 1),
             "no duplicate qualified names");
-        AssertEx.Equal(2, names.Count);
+        AssertEx.Equal(expected: 2, names.Count);
     }
 
     [Test]
@@ -199,14 +199,14 @@ public sealed class McpServerConnectionManagerTests
         await using var manager = CreateManager(registry, factory, store);
 
         await manager.RefreshAsync();
-        AssertEx.Equal(1, registry.GetDescriptors().Count);
+        AssertEx.Equal(expected: 1, registry.GetDescriptors().Count);
 
         // Remove the server from the enabled set; a refresh must drop its tools and dispose its client.
         store.SetEnabled();
         await manager.RefreshAsync();
 
-        AssertEx.Equal(0, registry.GetDescriptors().Count);
-        AssertEx.Equal(0, manager.GetStatuses().Count);
+        AssertEx.Equal(expected: 0, registry.GetDescriptors().Count);
+        AssertEx.Equal(expected: 0, manager.GetStatuses().Count);
     }
 
     [Test]
@@ -219,7 +219,7 @@ public sealed class McpServerConnectionManagerTests
         var manager = CreateManager(registry, new FakeMcpClientFactory((record.Id, server.Client)), record);
 
         await manager.RefreshAsync();
-        AssertEx.Equal(1, registry.GetDescriptors().Count);
+        AssertEx.Equal(expected: 1, registry.GetDescriptors().Count);
 
         // Dispose must complete (it disposes the client the manager connected) and must not hang.
         await manager.DisposeAsync();
@@ -257,17 +257,17 @@ public sealed class McpServerConnectionManagerTests
     {
         return new McpServerRecord(Guid.NewGuid(),
             name,
-            null,
+            Description: null,
             McpTransportKind.Stdio,
             "noop",
             [],
-            null,
+            WorkingDirectory: null,
             new Dictionary<string, string>(),
-            null,
-            true,
-            1,
-            0,
-            0);
+            Url: null,
+            Enabled: true,
+            Version: 1,
+            CreatedAtUtc: 0,
+            UpdatedAtUtc: 0);
     }
 
     private static McpServerConnectionManager CreateManager(McpToolRegistry registry, FakeMcpClientFactory factory, params McpServerRecord[] enabled)

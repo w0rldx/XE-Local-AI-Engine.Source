@@ -23,7 +23,7 @@ public sealed class AddAdaptiveAgentMemoryMigrationTests : IDisposable
     {
         if (Directory.Exists(_rootPath))
         {
-            Directory.Delete(_rootPath, true);
+            Directory.Delete(_rootPath, recursive: true);
         }
 
         _keyHolder.Dispose();
@@ -115,7 +115,7 @@ public sealed class AddAdaptiveAgentMemoryMigrationTests : IDisposable
         AssertEx.True(conversationColumns.ContainsKey("origin"), "Rollback should retain the original conversations schema.");
 
         var execLogColumns = await GetColumnInfoAsync(connection, "agent_execution_logs").ConfigureAwait(false);
-        AssertEx.Equal(0, execLogColumns.Count, "Rollback should drop the agent_execution_logs table entirely.");
+        AssertEx.Equal(expected: 0, execLogColumns.Count, "Rollback should drop the agent_execution_logs table entirely.");
     }
 
     private async Task<IReadOnlyDictionary<string, bool>> MigrateUpThenReadColumnsAsync(string fileName, string tableName)

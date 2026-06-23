@@ -45,12 +45,12 @@ internal static class CodexTestHelpers
 
     internal static string Base64UrlEncode(byte[] bytes)
     {
-        return Convert.ToBase64String(bytes).TrimEnd('=').Replace('+', '-').Replace('/', '_');
+        return Convert.ToBase64String(bytes).TrimEnd('=').Replace(oldChar: '+', newChar: '-').Replace(oldChar: '/', newChar: '_');
     }
 
     internal static byte[] Base64UrlDecode(string value)
     {
-        var padded = value.Replace('-', '+').Replace('_', '/');
+        var padded = value.Replace(oldChar: '-', newChar: '+').Replace(oldChar: '_', newChar: '/');
         padded = (padded.Length % 4) switch
         {
             2 => padded + "==",

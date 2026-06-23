@@ -52,8 +52,8 @@ public sealed class InvocationMonitorEndpointTests
                 FrozenNow.AddMinutes(-4),
                 "Bearer super-secret-token api_key=abc123",
                 FailureCategory.AgentRuntime,
-                3,
-                2)
+                StreamedChunkCount: 3,
+                StreamedThinkingChunkCount: 2)
         ]);
         await using var factory = CreateFactory(dispatcher, history);
         using var client = factory.CreateClient();
@@ -64,7 +64,7 @@ public sealed class InvocationMonitorEndpointTests
         var monitor = Deserialize<InvocationMonitorResponse>(body);
 
         AssertEx.Equal(HttpStatusCode.OK, response.StatusCode);
-        AssertEx.Equal(50, monitor.HistoryCapacity);
+        AssertEx.Equal(expected: 50, monitor.HistoryCapacity);
         var current = AssertEx.NotNull(monitor.Current);
         AssertEx.Equal(currentInvocationId, current.InvocationId);
         AssertEx.Equal(InvocationStatus.Running, current.Status);

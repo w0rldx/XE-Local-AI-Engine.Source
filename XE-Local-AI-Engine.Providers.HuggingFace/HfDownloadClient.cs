@@ -85,7 +85,7 @@ internal sealed class HfDownloadClient
 
         // Hard disk guard FIRST — refuse before opening any stream so no .part is written when space is short.
         var existingPartBytes = GetExistingPartLength(partPath);
-        var remainingBytes = Math.Max(0, expectedSizeBytes - existingPartBytes);
+        var remainingBytes = Math.Max(val1: 0, expectedSizeBytes - existingPartBytes);
         EnsureDiskSpace(directory, remainingBytes);
 
         var requestUri = BuildResolveUri(repoId, revision, fileName);
@@ -131,7 +131,7 @@ internal sealed class HfDownloadClient
         await ApplyAuthorizationAsync(request, ct).ConfigureAwait(false);
         if (existingPartBytes > 0)
         {
-            request.Headers.Range = new RangeHeaderValue(existingPartBytes, null);
+            request.Headers.Range = new RangeHeaderValue(existingPartBytes, to: null);
         }
 
         HttpResponseMessage response;
@@ -181,7 +181,7 @@ internal sealed class HfDownloadClient
             var verifiedSha = await VerifyHashAsync(partPath, expectedSha, ct).ConfigureAwait(false);
 
             // Atomic-on-complete: only now is the file a real model file.
-            File.Move(partPath, destinationPath, true);
+            File.Move(partPath, destinationPath, overwrite: true);
 
             var finalSize = new FileInfo(destinationPath).Length;
             progress?.Report(new PullProgress
@@ -210,7 +210,7 @@ internal sealed class HfDownloadClient
         FileStream partStream;
         try
         {
-            partStream = new FileStream(partPath, mode, FileAccess.Write, FileShare.None, CopyBufferSize, true);
+            partStream = new FileStream(partPath, mode, FileAccess.Write, FileShare.None, CopyBufferSize, useAsync: true);
         }
         catch (IOException exception) when (IsDiskFull(exception))
         {
@@ -228,7 +228,7 @@ internal sealed class HfDownloadClient
                 {
                     while ((read = await source.ReadAsync(buffer, ct).ConfigureAwait(false)) > 0)
                     {
-                        await partStream.WriteAsync(buffer.AsMemory(0, read), ct).ConfigureAwait(false);
+                        await partStream.WriteAsync(buffer.AsMemory(start: 0, read), ct).ConfigureAwait(false);
                         completed += read;
                         progress?.Report(new PullProgress
                         {
@@ -260,7 +260,7 @@ internal sealed class HfDownloadClient
         }
 
         string actualSha;
-        await using (var stream = new FileStream(partPath, FileMode.Open, FileAccess.Read, FileShare.Read, CopyBufferSize, true))
+        await using (var stream = new FileStream(partPath, FileMode.Open, FileAccess.Read, FileShare.Read, CopyBufferSize, useAsync: true))
         {
             var hash = await SHA256.HashDataAsync(stream, ct).ConfigureAwait(false);
             actualSha = Convert.ToHexString(hash);
@@ -305,7 +305,7 @@ internal sealed class HfDownloadClient
     private Uri BuildResolveUri(string repoId, string revision, string fileName)
     {
         var baseUrl = _options.DownloadBaseUrl.TrimEnd('/');
-        var encodedFile = string.Join('/', fileName.Split('/').Select(Uri.EscapeDataString));
+        var encodedFile = string.Join(separator: '/', fileName.Split('/').Select(Uri.EscapeDataString));
         return new Uri($"{baseUrl}/{repoId}/resolve/{Uri.EscapeDataString(revision)}/{encodedFile}");
     }
 
@@ -426,7 +426,7 @@ internal sealed class HfDownloadClient
 
     private static TimeSpan BackoffDelay(int attempt)
     {
-        return TimeSpan.FromMilliseconds(250 * Math.Min(attempt, 8) * attempt);
+        return TimeSpan.FromMilliseconds(250 * Math.Min(attempt, val2: 8) * attempt);
     }
 
     private static void TryDeleteFile(string path)

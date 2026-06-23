@@ -13,7 +13,7 @@ public sealed class FileDeadLetterStore : IDeadLetterStore, IDisposable
     private const long MaxQueueSizeBytes = 100L * 1024 * 1024;
     private static readonly JsonSerializerOptions SerializerOptions = new(JsonSerializerDefaults.Web);
 
-    private readonly SemaphoreSlim _gate = new(1, 1);
+    private readonly SemaphoreSlim _gate = new(initialCount: 1, maxCount: 1);
     private readonly ILogger<FileDeadLetterStore> _logger;
     private readonly string _queueDirectoryPath;
 

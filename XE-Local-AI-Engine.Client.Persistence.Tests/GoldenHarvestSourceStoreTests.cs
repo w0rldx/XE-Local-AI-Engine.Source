@@ -23,7 +23,7 @@ public sealed class GoldenHarvestSourceStoreTests : IDisposable
     {
         if (Directory.Exists(_rootPath))
         {
-            Directory.Delete(_rootPath, true);
+            Directory.Delete(_rootPath, recursive: true);
         }
     }
 
@@ -39,19 +39,19 @@ public sealed class GoldenHarvestSourceStoreTests : IDisposable
 
         var agentId = await SeedAgentAsync(context, "Agent A");
         var conversationId = Guid.NewGuid();
-        await SeedConversationAsync(context, conversationId, agentId, "Conv Title", false);
+        await SeedConversationAsync(context, conversationId, agentId, "Conv Title", purged: false);
 
-        await SeedMessageAsync(context, conversationId, 1, "user", "hi");
-        await SeedMessageAsync(context, conversationId, 2, "assistant", "answer one");
-        await SeedMessageAsync(context, conversationId, 3, "user", "more");
-        var targetMessageId = await SeedMessageAsync(context, conversationId, 4, "assistant", "GOOD ANSWER");
+        await SeedMessageAsync(context, conversationId, sequence: 1, "user", "hi");
+        await SeedMessageAsync(context, conversationId, sequence: 2, "assistant", "answer one");
+        await SeedMessageAsync(context, conversationId, sequence: 3, "user", "more");
+        var targetMessageId = await SeedMessageAsync(context, conversationId, sequence: 4, "assistant", "GOOD ANSWER");
 
         await SeedFeedbackAsync(context, targetMessageId, conversationId, NodeMessageFeedbackRating.Up);
 
         var store = new GoldenHarvestSourceStore(context);
-        var sources = await store.ListThumbsUpSourcesAsync(agentId, 50);
+        var sources = await store.ListThumbsUpSourcesAsync(agentId, maxScan: 50);
 
-        AssertEx.Equal(1, sources.Count);
+        AssertEx.Equal(expected: 1, sources.Count);
         var source = sources[0];
         AssertEx.Equal(targetMessageId, source.MessageId);
         AssertEx.Equal(conversationId, source.ConversationId);
@@ -59,7 +59,7 @@ public sealed class GoldenHarvestSourceStoreTests : IDisposable
         AssertEx.Equal("GOOD ANSWER", source.ApprovedAnswerText);
 
         // PriorTurns = the three completed user/assistant turns with Sequence < 4 (NOT the target itself), decrypted.
-        AssertEx.Equal(3, source.PriorTurns.Count);
+        AssertEx.Equal(expected: 3, source.PriorTurns.Count);
         AssertEx.Equal("user", source.PriorTurns[0].Role);
         AssertEx.Equal("hi", source.PriorTurns[0].Text);
         AssertEx.Equal("assistant", source.PriorTurns[1].Role);
@@ -82,21 +82,21 @@ public sealed class GoldenHarvestSourceStoreTests : IDisposable
         var agentB = await SeedAgentAsync(context, "Agent B");
 
         var convA = Guid.NewGuid();
-        await SeedConversationAsync(context, convA, agentA, "A", false);
-        await SeedMessageAsync(context, convA, 1, "user", "a-question");
-        var targetA = await SeedMessageAsync(context, convA, 2, "assistant", "a-answer");
+        await SeedConversationAsync(context, convA, agentA, "A", purged: false);
+        await SeedMessageAsync(context, convA, sequence: 1, "user", "a-question");
+        var targetA = await SeedMessageAsync(context, convA, sequence: 2, "assistant", "a-answer");
         await SeedFeedbackAsync(context, targetA, convA, NodeMessageFeedbackRating.Up);
 
         var convB = Guid.NewGuid();
-        await SeedConversationAsync(context, convB, agentB, "B", false);
-        await SeedMessageAsync(context, convB, 1, "user", "b-question");
-        var targetB = await SeedMessageAsync(context, convB, 2, "assistant", "b-answer");
+        await SeedConversationAsync(context, convB, agentB, "B", purged: false);
+        await SeedMessageAsync(context, convB, sequence: 1, "user", "b-question");
+        var targetB = await SeedMessageAsync(context, convB, sequence: 2, "assistant", "b-answer");
         await SeedFeedbackAsync(context, targetB, convB, NodeMessageFeedbackRating.Up);
 
         var store = new GoldenHarvestSourceStore(context);
-        var sources = await store.ListThumbsUpSourcesAsync(agentA, 50);
+        var sources = await store.ListThumbsUpSourcesAsync(agentA, maxScan: 50);
 
-        AssertEx.Equal(1, sources.Count);
+        AssertEx.Equal(expected: 1, sources.Count);
         AssertEx.Equal(targetA, sources[0].MessageId);
     }
 
@@ -114,20 +114,20 @@ public sealed class GoldenHarvestSourceStoreTests : IDisposable
 
         // A purged conversation with an up-rated answer → excluded.
         var purgedConv = Guid.NewGuid();
-        await SeedConversationAsync(context, purgedConv, agentId, "Purged", true);
-        await SeedMessageAsync(context, purgedConv, 1, "user", "q");
-        var purgedTarget = await SeedMessageAsync(context, purgedConv, 2, "assistant", "purged-answer");
+        await SeedConversationAsync(context, purgedConv, agentId, "Purged", purged: true);
+        await SeedMessageAsync(context, purgedConv, sequence: 1, "user", "q");
+        var purgedTarget = await SeedMessageAsync(context, purgedConv, sequence: 2, "assistant", "purged-answer");
         await SeedFeedbackAsync(context, purgedTarget, purgedConv, NodeMessageFeedbackRating.Up);
 
         // A live conversation with a DOWN rating → excluded.
         var downConv = Guid.NewGuid();
-        await SeedConversationAsync(context, downConv, agentId, "Down", false);
-        await SeedMessageAsync(context, downConv, 1, "user", "q");
-        var downTarget = await SeedMessageAsync(context, downConv, 2, "assistant", "down-answer");
+        await SeedConversationAsync(context, downConv, agentId, "Down", purged: false);
+        await SeedMessageAsync(context, downConv, sequence: 1, "user", "q");
+        var downTarget = await SeedMessageAsync(context, downConv, sequence: 2, "assistant", "down-answer");
         await SeedFeedbackAsync(context, downTarget, downConv, NodeMessageFeedbackRating.Down);
 
         var store = new GoldenHarvestSourceStore(context);
-        var sources = await store.ListThumbsUpSourcesAsync(agentId, 50);
+        var sources = await store.ListThumbsUpSourcesAsync(agentId, maxScan: 50);
 
         AssertEx.Empty(sources, "A purged conversation and a down rating are both excluded from the thumbs-up scan.");
     }
@@ -144,27 +144,27 @@ public sealed class GoldenHarvestSourceStoreTests : IDisposable
 
         var agentId = await SeedAgentAsync(context, "Agent A");
         var conversationId = Guid.NewGuid();
-        await SeedConversationAsync(context, conversationId, agentId, "Conv", false);
+        await SeedConversationAsync(context, conversationId, agentId, "Conv", purged: false);
 
-        await SeedMessageAsync(context, conversationId, 1, "user", "kept-user");
+        await SeedMessageAsync(context, conversationId, sequence: 1, "user", "kept-user");
         // A non-completed prior message must be excluded from PriorTurns.
-        await SeedMessageAsync(context, conversationId, 2, "assistant", "streaming-assistant", NodeMessageStatus.Streaming);
+        await SeedMessageAsync(context, conversationId, sequence: 2, "assistant", "streaming-assistant", NodeMessageStatus.Streaming);
         // A 'system' and a 'tool' role prior message must be excluded (only user/assistant kept).
-        await SeedMessageAsync(context, conversationId, 3, "system", "system-prompt");
-        await SeedMessageAsync(context, conversationId, 4, "tool", "tool-output");
-        await SeedMessageAsync(context, conversationId, 5, "assistant", "kept-assistant");
-        var targetMessageId = await SeedMessageAsync(context, conversationId, 6, "assistant", "FINAL");
+        await SeedMessageAsync(context, conversationId, sequence: 3, "system", "system-prompt");
+        await SeedMessageAsync(context, conversationId, sequence: 4, "tool", "tool-output");
+        await SeedMessageAsync(context, conversationId, sequence: 5, "assistant", "kept-assistant");
+        var targetMessageId = await SeedMessageAsync(context, conversationId, sequence: 6, "assistant", "FINAL");
         await SeedFeedbackAsync(context, targetMessageId, conversationId, NodeMessageFeedbackRating.Up);
 
         var store = new GoldenHarvestSourceStore(context);
-        var sources = await store.ListThumbsUpSourcesAsync(agentId, 50);
+        var sources = await store.ListThumbsUpSourcesAsync(agentId, maxScan: 50);
 
-        AssertEx.Equal(1, sources.Count);
+        AssertEx.Equal(expected: 1, sources.Count);
         var priorTurns = sources[0].PriorTurns;
 
         // Only the completed user + completed assistant turns survive: the streaming assistant, system, and tool rows
         // are filtered out.
-        AssertEx.Equal(2, priorTurns.Count);
+        AssertEx.Equal(expected: 2, priorTurns.Count);
         AssertEx.Equal("kept-user", priorTurns[0].Text);
         AssertEx.Equal("kept-assistant", priorTurns[1].Text);
     }
@@ -173,14 +173,14 @@ public sealed class GoldenHarvestSourceStoreTests : IDisposable
     {
         var store = new AgentDefinitionStore(context, TimeProvider.System);
         var agent = await store.AddAsync(new AgentDefinitionInput(name,
-            null,
+            Description: null,
             "You are a careful engineering agent.",
-            null,
-            null,
+            ModelProfile: null,
+            ReasoningEffort: null,
             AgentDefinitionKind.Single,
             [],
             new Dictionary<string, bool>(),
-            null));
+            OrchestrationTopologyJson: null));
         return agent.Id;
     }
 
@@ -244,7 +244,7 @@ public sealed class GoldenHarvestSourceStoreTests : IDisposable
         AddParameter(command, "$message_id", messageId);
         AddParameter(command, "$conversation_id", conversationId);
         AddParameter(command, "$rating", rating);
-        AddParameter(command, "$created_at_utc", 100L);
+        AddParameter(command, "$created_at_utc", value: 100L);
         _ = await command.ExecuteNonQueryAsync();
     }
 
@@ -269,7 +269,7 @@ public sealed class GoldenHarvestSourceStoreTests : IDisposable
 
     private static byte[] CreateKeyMaterial()
     {
-        return Enumerable.Range(0, 32).Select(static value => (byte)(value + 1)).ToArray();
+        return Enumerable.Range(start: 0, count: 32).Select(static value => (byte)(value + 1)).ToArray();
     }
 
     private sealed class FixedNodeSqliteKeyHolder(byte[] key) : INodeSqliteKeyHolder

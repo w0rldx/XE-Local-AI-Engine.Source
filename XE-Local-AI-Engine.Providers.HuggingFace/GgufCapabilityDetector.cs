@@ -48,11 +48,14 @@ internal static class GgufCapabilityDetector
     {
         // Every installed GGUF in the chat picker has a completion head by construction, so completion is always present
         // even when the template is absent. Tool/reasoning are added only on a positive template match.
-        var capabilities = new List<string>(3) { CompletionCapability };
+        var capabilities = new List<string>(3)
+        {
+            CompletionCapability
+        };
 
         if (string.IsNullOrWhiteSpace(chatTemplate))
         {
-            return new GgufCapabilities(false, false, capabilities);
+            return new GgufCapabilities(IsToolCapable: false, IsReasoningCapable: false, capabilities);
         }
 
         var isToolCapable = ContainsAny(chatTemplate, ToolTemplateMarkers);

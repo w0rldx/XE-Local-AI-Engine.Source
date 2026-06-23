@@ -13,7 +13,7 @@ using XE_Local_AI_Engine.Tests.Testing;
 
 public sealed class AgentHomeManifestServiceTests : IDisposable
 {
-    private static readonly DateTimeOffset FixedNow = new(2026, 5, 29, 12, 0, 0, TimeSpan.Zero);
+    private static readonly DateTimeOffset FixedNow = new(year: 2026, month: 5, day: 29, hour: 12, minute: 0, second: 0, TimeSpan.Zero);
 
     private static readonly JsonSerializerOptions ManifestSerializerOptions = new(JsonSerializerDefaults.Web)
     {
@@ -33,7 +33,7 @@ public sealed class AgentHomeManifestServiceTests : IDisposable
             {
                 if (Directory.Exists(root))
                 {
-                    Directory.Delete(root, true);
+                    Directory.Delete(root, recursive: true);
                 }
             }
             catch (IOException)
@@ -77,7 +77,7 @@ public sealed class AgentHomeManifestServiceTests : IDisposable
 
         using var document = JsonDocument.Parse(await File.ReadAllTextAsync(Path.Combine(layout.RootPath, "manifest.json")));
         AssertEx.Equal("Ready", document.RootElement.GetProperty("status").GetString());
-        AssertEx.Equal(1, document.RootElement.GetProperty("version").GetInt32());
+        AssertEx.Equal(expected: 1, document.RootElement.GetProperty("version").GetInt32());
         AssertEx.Equal("owner-a", document.RootElement.GetProperty("ownerUserId").GetString());
     }
 
@@ -90,12 +90,12 @@ public sealed class AgentHomeManifestServiceTests : IDisposable
         var layout = await service.InitializeAsync(Key());
 
         using var skills = JsonDocument.Parse(await File.ReadAllTextAsync(Path.Combine(layout.RootPath, "skills", "registry.json")));
-        AssertEx.Equal(1, skills.RootElement.GetProperty("version").GetInt32());
-        AssertEx.Equal(0, skills.RootElement.GetProperty("skills").GetArrayLength());
+        AssertEx.Equal(expected: 1, skills.RootElement.GetProperty("version").GetInt32());
+        AssertEx.Equal(expected: 0, skills.RootElement.GetProperty("skills").GetArrayLength());
 
         using var tools = JsonDocument.Parse(await File.ReadAllTextAsync(Path.Combine(layout.RootPath, "tools", "registry.json")));
-        AssertEx.Equal(1, tools.RootElement.GetProperty("version").GetInt32());
-        AssertEx.Equal(0, tools.RootElement.GetProperty("tools").GetArrayLength());
+        AssertEx.Equal(expected: 1, tools.RootElement.GetProperty("version").GetInt32());
+        AssertEx.Equal(expected: 0, tools.RootElement.GetProperty("tools").GetArrayLength());
     }
 
     [Test]
@@ -127,7 +127,7 @@ public sealed class AgentHomeManifestServiceTests : IDisposable
         await File.WriteAllTextAsync(preservedPath, "SENTINEL");
         File.Delete(Path.Combine(first.RootPath, "tools", "registry.json"));
         File.Delete(Path.Combine(first.RootPath, "README.agent-home.md"));
-        Directory.Delete(Path.Combine(first.RootPath, "skills"), true);
+        Directory.Delete(Path.Combine(first.RootPath, "skills"), recursive: true);
 
         var healed = await service.InitializeAsync(Key());
 
@@ -231,7 +231,7 @@ public sealed class AgentHomeManifestServiceTests : IDisposable
     [Test]
     public void Validate_WhenValid_Succeeds()
     {
-        var result = new AgentHomeOptionsValidator().Validate(null, new AgentHomeOptions());
+        var result = new AgentHomeOptionsValidator().Validate(name: null, new AgentHomeOptions());
 
         AssertEx.True(result.Succeeded);
     }
@@ -239,7 +239,7 @@ public sealed class AgentHomeManifestServiceTests : IDisposable
     [Test]
     public void Validate_WhenStaleSecondsNotPositive_Fails()
     {
-        var result = new AgentHomeOptionsValidator().Validate(null, new AgentHomeOptions
+        var result = new AgentHomeOptionsValidator().Validate(name: null, new AgentHomeOptions
         {
             PrepareStaleAfterSeconds = 0
         });
@@ -250,7 +250,7 @@ public sealed class AgentHomeManifestServiceTests : IDisposable
     [Test]
     public void Validate_WhenRootPathBlank_Fails()
     {
-        var result = new AgentHomeOptionsValidator().Validate(null, new AgentHomeOptions
+        var result = new AgentHomeOptionsValidator().Validate(name: null, new AgentHomeOptions
         {
             RootPath = "  "
         });

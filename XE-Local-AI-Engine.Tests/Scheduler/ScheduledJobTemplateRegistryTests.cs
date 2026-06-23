@@ -24,7 +24,7 @@ public sealed class ScheduledJobTemplateRegistryTests
 
         var descriptors = registry.ListTemplates();
 
-        AssertEx.Equal(2, descriptors.Count, "Should return one descriptor per handler.");
+        AssertEx.Equal(expected: 2, descriptors.Count, "Should return one descriptor per handler.");
         AssertEx.True(descriptors.Any(d => d.TemplateId == "tpl-a"), "tpl-a descriptor must be present.");
         AssertEx.True(descriptors.Any(d => d.TemplateId == "tpl-b"), "tpl-b descriptor must be present.");
     }
@@ -45,7 +45,7 @@ public sealed class ScheduledJobTemplateRegistryTests
 
         var descriptors = registry.ListTemplates();
 
-        AssertEx.Equal(1, descriptors.Count);
+        AssertEx.Equal(expected: 1, descriptors.Count);
         var d = descriptors[0];
         AssertEx.Equal(TestEchoScheduledJobHandler.Id, d.TemplateId);
         AssertEx.True(d.AllowManualTrigger, "test.echo declares AllowManualTrigger=true.");
@@ -142,13 +142,13 @@ public sealed class ScheduledJobTemplateRegistryTests
         public ScheduledJobTemplateDescriptor Descriptor { get; } = new(templateId,
             displayName,
             "Stub handler for registry tests.",
-            null,
-            null,
+            ParameterSchema: null,
+            DefaultParameters: null,
             [ScheduleKind.OneShot],
             ScheduleKind.OneShot,
             SchedulerMisfirePolicy.Smart,
-            null,
-            false);
+            DefaultMaxRuntimeSeconds: null,
+            AllowManualTrigger: false);
 
         public Task ExecuteAsync(ScheduledJobExecutionContext context, CancellationToken cancellationToken)
         {

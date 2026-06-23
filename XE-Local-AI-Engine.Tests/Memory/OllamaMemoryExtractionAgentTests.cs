@@ -38,7 +38,10 @@ public sealed class OllamaMemoryExtractionAgentTests
         resolver.ResolveProviderForModelAsync("qwen3:8b", Arg.Any<CancellationToken>()).Returns(Task.FromResult(provider));
 
         var agent = new OllamaMemoryExtractionAgent(resolver,
-            Options.Create(new MemoryExtractionOptions { ExtractionModelName = "qwen3:8b" }),
+            Options.Create(new MemoryExtractionOptions
+            {
+                ExtractionModelName = "qwen3:8b"
+            }),
             NullLogger<OllamaMemoryExtractionAgent>.Instance);
 
         var proposals = await agent.ProposeAsync(Run()).ConfigureAwait(false);
@@ -49,7 +52,7 @@ public sealed class OllamaMemoryExtractionAgentTests
             selection.ModelName == "qwen3:8b" && selection.ProviderName == "llamacpp"));
         AssertEx.True(nodeLocalClient.WasCalled, "The extraction model must run on the node-local provider's client.");
         AssertEx.True(nodeLocalClient.IsDisposed, "The per-run node-local chat client must be disposed.");
-        AssertEx.Equal(1, proposals.Count);
+        AssertEx.Equal(expected: 1, proposals.Count);
         AssertEx.Equal(MemoryScope.Procedural, proposals[0].Scope);
     }
 
@@ -58,7 +61,10 @@ public sealed class OllamaMemoryExtractionAgentTests
     {
         var resolver = Substitute.For<ILocalModelProviderResolver>();
         var agent = new OllamaMemoryExtractionAgent(resolver,
-            Options.Create(new MemoryExtractionOptions { ExtractionModelName = string.Empty }),
+            Options.Create(new MemoryExtractionOptions
+            {
+                ExtractionModelName = string.Empty
+            }),
             NullLogger<OllamaMemoryExtractionAgent>.Instance);
 
         var proposals = await agent.ProposeAsync(Run()).ConfigureAwait(false);
@@ -77,14 +83,17 @@ public sealed class OllamaMemoryExtractionAgentTests
         // The model mislabels a successful run as a failure lesson — the agent must drop it.
 #pragma warning disable CA2000 // Ownership transfers to the agent, which disposes it via `using`.
         var nodeLocalClient = new EnvelopeChatClient("""
-            { "memories": [ { "behavior": "Avoid X.", "scope": "failure", "confidence": 0.7 } ] }
-            """);
+                                                     { "memories": [ { "behavior": "Avoid X.", "scope": "failure", "confidence": 0.7 } ] }
+                                                     """);
 #pragma warning restore CA2000
         provider.CreateChatClient(Arg.Any<LocalModelSelection>()).Returns(nodeLocalClient);
         resolver.ResolveProviderForModelAsync(Arg.Any<string>(), Arg.Any<CancellationToken>()).Returns(Task.FromResult(provider));
 
         var agent = new OllamaMemoryExtractionAgent(resolver,
-            Options.Create(new MemoryExtractionOptions { ExtractionModelName = "qwen3:8b" }),
+            Options.Create(new MemoryExtractionOptions
+            {
+                ExtractionModelName = "qwen3:8b"
+            }),
             NullLogger<OllamaMemoryExtractionAgent>.Instance);
 
         var proposals = await agent.ProposeAsync(Run(failed: false)).ConfigureAwait(false);
@@ -124,7 +133,8 @@ public sealed class OllamaMemoryExtractionAgentTests
 
         public async IAsyncEnumerable<ChatResponseUpdate> GetStreamingResponseAsync(IEnumerable<ChatMessage> messages,
             ChatOptions? options = null,
-            [EnumeratorCancellation] CancellationToken cancellationToken = default)
+            [EnumeratorCancellation]
+            CancellationToken cancellationToken = default)
         {
             // Not exercised by these tests (the agent uses the non-streaming GetResponseAsync); an empty stream suffices.
             await Task.CompletedTask.ConfigureAwait(false);
@@ -141,6 +151,5 @@ public sealed class OllamaMemoryExtractionAgentTests
         {
             IsDisposed = true;
         }
-
     }
 }

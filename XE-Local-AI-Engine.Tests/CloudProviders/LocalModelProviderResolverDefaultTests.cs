@@ -53,7 +53,7 @@ public sealed class LocalModelProviderResolverDefaultTests
             new StubProvider(OllamaLocalModelProvider.OllamaProviderName)
         ];
 
-        return new LocalModelProviderResolver(providers, scopeFactory, LlamaServerProviderConstants.ProviderName, 3);
+        return new LocalModelProviderResolver(providers, scopeFactory, LlamaServerProviderConstants.ProviderName, maxLoadedProcesses: 3);
     }
 
     private sealed class FakeModelProviderMapStore(IReadOnlyDictionary<string, string> mappings) : IModelProviderMapStore
@@ -67,13 +67,13 @@ public sealed class LocalModelProviderResolverDefaultTests
 
         public Task<IReadOnlyList<ModelProviderMapRecord>> ListAsync(CancellationToken cancellationToken = default)
         {
-            return Task.FromResult<IReadOnlyList<ModelProviderMapRecord>>(_mappings.Select(pair => new ModelProviderMapRecord(pair.Key, pair.Value, 0)).ToArray());
+            return Task.FromResult<IReadOnlyList<ModelProviderMapRecord>>(_mappings.Select(pair => new ModelProviderMapRecord(pair.Key, pair.Value, UpdatedAtUtc: 0)).ToArray());
         }
 
         public Task<ModelProviderMapRecord> UpsertAsync(string modelName, string providerName, CancellationToken cancellationToken = default)
         {
             _mappings[modelName] = providerName;
-            return Task.FromResult(new ModelProviderMapRecord(modelName, providerName, 0));
+            return Task.FromResult(new ModelProviderMapRecord(modelName, providerName, UpdatedAtUtc: 0));
         }
     }
 

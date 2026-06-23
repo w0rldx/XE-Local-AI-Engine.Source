@@ -35,7 +35,7 @@ public sealed class DefaultAgentSeederTests
 
         var definitions = await store.ListAsync().ConfigureAwait(false);
         var defaultRows = definitions.Where(definition => definition.SeedSlug == AgentDefaults.DefaultAgentSeedSlug).ToList();
-        AssertEx.Equal(1, defaultRows.Count);
+        AssertEx.Equal(expected: 1, defaultRows.Count);
 
         var seeded = defaultRows[0];
         AssertEx.Equal(AgentDefinitionSource.Seeded, seeded.Source);

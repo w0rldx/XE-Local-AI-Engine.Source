@@ -20,7 +20,7 @@ public sealed class ListNodeChatConversationsRequestValidator : Validator<ListNo
     public ListNodeChatConversationsRequestValidator()
     {
         RuleFor(static request => request.Limit)
-            .InclusiveBetween(1, 100)
+            .InclusiveBetween(from: 1, to: 100)
             .When(static request => request.Limit.HasValue);
     }
 }

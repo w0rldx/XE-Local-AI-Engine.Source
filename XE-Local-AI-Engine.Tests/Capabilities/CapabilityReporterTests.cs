@@ -25,7 +25,7 @@ public sealed class CapabilityReporterTests
         var result = await context.Reporter.DetectCapabilitiesAsync();
 
         AssertEx.NotNull(result);
-        AssertEx.Equal(2, result.SchemaVersion);
+        AssertEx.Equal(expected: 2, result.SchemaVersion);
         AssertEx.True(result.OllamaReachable == true);
         AssertEx.Equal("0.0.0-fake", result.OllamaVersion);
         AssertEx.Equal("unmanaged", result.ManagementMode);
@@ -133,9 +133,9 @@ public sealed class CapabilityReporterTests
         context.ClearRecordedRequests();
         var secondResult = await context.Reporter.DetectCapabilitiesAsync();
 
-        AssertEx.Equal(131072, firstResult.InstalledModelMetadata.Single(model => model.Name == "gemma3:4b").MaxContextTokens);
-        AssertEx.Equal(131072, secondResult.InstalledModelMetadata.Single(model => model.Name == "gemma3:4b").MaxContextTokens);
-        AssertEx.Equal(0, context.ShowRequestCount);
+        AssertEx.Equal(expected: 131072, firstResult.InstalledModelMetadata.Single(model => model.Name == "gemma3:4b").MaxContextTokens);
+        AssertEx.Equal(expected: 131072, secondResult.InstalledModelMetadata.Single(model => model.Name == "gemma3:4b").MaxContextTokens);
+        AssertEx.Equal(expected: 0, context.ShowRequestCount);
     }
 
     [Test]
@@ -276,7 +276,7 @@ public sealed class CapabilityReporterTests
 
         AssertEx.True(firstResult);
         AssertEx.True(secondResult);
-        AssertEx.Equal(1, context.TagsRequestCount);
+        AssertEx.Equal(expected: 1, context.TagsRequestCount);
     }
 
     [Test]
@@ -291,7 +291,7 @@ public sealed class CapabilityReporterTests
 
         AssertEx.True(firstResult);
         AssertEx.True(secondResult);
-        AssertEx.Equal(2, context.TagsRequestCount);
+        AssertEx.Equal(expected: 2, context.TagsRequestCount);
     }
 
     [Test]
@@ -302,10 +302,10 @@ public sealed class CapabilityReporterTests
 
         await context.Reporter.ReportToApiAsync();
 
-        AssertEx.Equal(1, context.HubConnection.SendCapabilitiesCallCount);
+        AssertEx.Equal(expected: 1, context.HubConnection.SendCapabilitiesCallCount);
         AssertEx.NotNull(context.HubConnection.LastCapabilities);
         AssertEx.Contains(context.HubConnection.LastCapabilities!.InstalledModels, "qwen3.5:0.8b");
-        AssertEx.Equal(300, context.HubConnection.LastCapabilities.MaxMessageRequestTimeoutSeconds);
+        AssertEx.Equal(expected: 300, context.HubConnection.LastCapabilities.MaxMessageRequestTimeoutSeconds);
         AssertEx.True(context.HubConnection.LastCapabilities.LastCapabilityReportAt.HasValue);
     }
 
@@ -319,8 +319,8 @@ public sealed class CapabilityReporterTests
 
         await context.Reporter.ReportToApiAsync();
 
-        AssertEx.Equal(0, context.HubConnection.SendCapabilitiesCallCount);
-        AssertEx.Equal(0, context.TagsRequestCount);
+        AssertEx.Equal(expected: 0, context.HubConnection.SendCapabilitiesCallCount);
+        AssertEx.Equal(expected: 0, context.TagsRequestCount);
     }
 
     [Test]
@@ -332,7 +332,7 @@ public sealed class CapabilityReporterTests
         await context.Reporter.ReportToApiAsync();
         await context.Reporter.ReportToApiAsync();
 
-        AssertEx.Equal(1, context.HubConnection.SendCapabilitiesCallCount);
+        AssertEx.Equal(expected: 1, context.HubConnection.SendCapabilitiesCallCount);
     }
 
     [Test]
@@ -346,7 +346,7 @@ public sealed class CapabilityReporterTests
 
         var result = await context.Reporter.DetectCapabilitiesAsync();
 
-        AssertEx.Equal(120, result.MaxMessageRequestTimeoutSeconds);
+        AssertEx.Equal(expected: 120, result.MaxMessageRequestTimeoutSeconds);
     }
 
     [Test]
@@ -370,7 +370,7 @@ public sealed class CapabilityReporterTests
         AssertEx.True(result.LastCapabilityReportAt.HasValue);
         AssertEx.Contains(result.InstalledModels, "gpt-4o");
         AssertEx.Contains(result.SupportedCapabilities, "cloud");
-        AssertEx.Equal(0, context.TagsRequestCount);
+        AssertEx.Equal(expected: 0, context.TagsRequestCount);
     }
 
     private static async Task<CapabilityReporterTestContext> CreateContextAsync(StoredCloudCredentials? cloudCredentials = null,

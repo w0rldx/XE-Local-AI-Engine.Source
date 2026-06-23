@@ -67,7 +67,7 @@ internal sealed class LlamaServerProcessLauncher : ILlamaServerProcessLauncher
         // Run llama-server under `setsid` so it leads a new process group; tree-kill = kill(-pgid).
         var serverPath = startInfo.FileName;
         startInfo.FileName = "setsid";
-        startInfo.ArgumentList.Insert(0, serverPath);
+        startInfo.ArgumentList.Insert(index: 0, serverPath);
 
 #pragma warning disable CA2000 // The returned handle takes ownership of the process and disposes it on tree-kill; Wrap disposes on a construction failure.
         return LinuxProcessGroupHandle.Wrap(StartProcess(startInfo));

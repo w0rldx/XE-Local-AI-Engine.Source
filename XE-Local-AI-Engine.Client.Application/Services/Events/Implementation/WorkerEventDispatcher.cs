@@ -30,10 +30,10 @@ public sealed partial class WorkerEventDispatcher : IWorkerEventDispatcher
     private readonly IInvocationRunner _invocationRunner;
     private readonly ILogger<WorkerEventDispatcher> _logger;
     private readonly INodeKeyRegistry _nodeKeyRegistry;
-    private readonly SemaphoreSlim _remoteInvocationQueue = new(1, 1);
+    private readonly SemaphoreSlim _remoteInvocationQueue = new(initialCount: 1, maxCount: 1);
     private readonly INodeChatRemotePersistenceCoordinator _remotePersistenceCoordinator;
     private readonly IRuntimePackageEnvelopeAssembler _runtimePackageEnvelopeAssembler;
-    private readonly System.Threading.Lock _syncRoot = new();
+    private readonly Lock _syncRoot = new();
     private bool _isAcceptingRemoteInvocations = true;
 
     public WorkerEventDispatcher(IInvocationRunner invocationRunner,
@@ -461,7 +461,7 @@ public sealed partial class WorkerEventDispatcher : IWorkerEventDispatcher
 
         if (failureCategory != FailureCategory.Cancelled)
         {
-            NodeMetrics.InvocationFailedTotal.Add(1, new KeyValuePair<string, object?>("source", failureCategory.ToString()));
+            NodeMetrics.InvocationFailedTotal.Add(delta: 1, new KeyValuePair<string, object?>("source", failureCategory.ToString()));
         }
 
         UpdateInvocation(invocationId,
@@ -672,7 +672,7 @@ public sealed partial class WorkerEventDispatcher : IWorkerEventDispatcher
     {
         if (failureCategory == FailureCategory.HashMismatch)
         {
-            NodeMetrics.EnvelopeHashMismatchTotal.Add(1, new KeyValuePair<string, object?>("reason", error));
+            NodeMetrics.EnvelopeHashMismatchTotal.Add(delta: 1, new KeyValuePair<string, object?>("reason", error));
         }
 
         await _hubMessageSender.Value.SendEncryptedFailedAsync(new EncryptedFailedEnvelopeV1

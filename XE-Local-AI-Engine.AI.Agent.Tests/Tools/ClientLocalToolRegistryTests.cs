@@ -10,7 +10,7 @@ public sealed class ClientLocalToolRegistryTests
     [Test]
     public void TryResolve_KnownHandler_ReturnsToolWithSchemaAndDescription()
     {
-        var registry = new ClientLocalToolRegistry([new FakeHandler("run_in_agent_home", "Runs.", """{"type":"object"}""", false)]);
+        var registry = new ClientLocalToolRegistry([new FakeHandler("run_in_agent_home", "Runs.", parameterSchema: """{"type":"object"}""", requiresApproval: false)]);
 
         var found = registry.TryResolve("run_in_agent_home", out var tool);
 
@@ -24,7 +24,7 @@ public sealed class ClientLocalToolRegistryTests
     [Test]
     public void TryResolve_HighRiskHandler_WrapsInApprovalRequiredFunction()
     {
-        var registry = new ClientLocalToolRegistry([new FakeHandler("run_in_agent_home", "Runs.", """{"type":"object"}""", true)]);
+        var registry = new ClientLocalToolRegistry([new FakeHandler("run_in_agent_home", "Runs.", parameterSchema: """{"type":"object"}""", requiresApproval: true)]);
 
         _ = registry.TryResolve("run_in_agent_home", out var tool);
 

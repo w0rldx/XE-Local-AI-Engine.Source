@@ -26,11 +26,11 @@ internal sealed class ModelCapabilityProber
     private static readonly string[] ModelConnectionStringNames = ["chat", "embeddings"];
 
     private readonly IReadOnlyList<string> _configuredModelNames;
-    private readonly System.Threading.Lock _installedModelsCacheSync = new();
+    private readonly Lock _installedModelsCacheSync = new();
     private readonly ILogger<ModelCapabilityProber> _logger;
     private readonly IModelCapabilityClient _modelCapabilityClient;
     private readonly Dictionary<ModelContextCacheKey, int?> _modelContextCache = new();
-    private readonly System.Threading.Lock _modelContextCacheSync = new();
+    private readonly Lock _modelContextCacheSync = new();
     private readonly TimeProvider _timeProvider;
     private CachedInstalledModels? _installedModelsCache;
 
@@ -67,7 +67,7 @@ internal sealed class ModelCapabilityProber
         var cachedModels = TryGetCachedInstalledModels();
         if (cachedModels is not null)
         {
-            return new InstalledModelInventoryResult(cachedModels, true, []);
+            return new InstalledModelInventoryResult(cachedModels, OllamaQuerySucceeded: true, []);
         }
 
         try
@@ -80,9 +80,9 @@ internal sealed class ModelCapabilityProber
                                        Digest = NormalizeModelName(model.Digest)
                                    })
                                    .Where(model => !string.IsNullOrWhiteSpace(model.Name))
-                                   .Select(model => new InstalledModelInfo(model.Name!, model.Digest, true))
+                                   .Select(model => new InstalledModelInfo(model.Name!, model.Digest, IsDiscovered: true))
                                    .ToArray();
-            var configuredModels = _configuredModelNames.Select(modelName => new InstalledModelInfo(modelName, null, false));
+            var configuredModels = _configuredModelNames.Select(modelName => new InstalledModelInfo(modelName, Digest: null, IsDiscovered: false));
             var normalizedModels = discoveredModels
                                    .Concat(configuredModels)
                                    .DistinctBy(model => model.Name, StringComparer.OrdinalIgnoreCase)
@@ -97,7 +97,7 @@ internal sealed class ModelCapabilityProber
                 string.Join(", ", normalizedModels.Select(model => model.Name)));
 
             CacheInstalledModels(normalizedModels);
-            return new InstalledModelInventoryResult(normalizedModels, true, []);
+            return new InstalledModelInventoryResult(normalizedModels, OllamaQuerySucceeded: true, []);
         }
         catch (HttpRequestException exception)
         {
@@ -107,8 +107,8 @@ internal sealed class ModelCapabilityProber
             _logger.LogDebug(exception, "Ollama not reachable while querying installed models; reporting {ConfiguredModelCount} configured fallback(s): {ConfiguredModels}.",
                 _configuredModelNames.Count,
                 string.Join(", ", _configuredModelNames));
-            var configuredModels = _configuredModelNames.Select(modelName => new InstalledModelInfo(modelName, null, false)).ToArray();
-            return new InstalledModelInventoryResult(configuredModels, false, [DiagnosticOllamaUnreachable]);
+            var configuredModels = _configuredModelNames.Select(modelName => new InstalledModelInfo(modelName, Digest: null, IsDiscovered: false)).ToArray();
+            return new InstalledModelInventoryResult(configuredModels, OllamaQuerySucceeded: false, [DiagnosticOllamaUnreachable]);
         }
     }
 
@@ -144,17 +144,17 @@ internal sealed class ModelCapabilityProber
             if (!await _modelCapabilityClient.IsRuntimeReachableAsync(cancellationToken).ConfigureAwait(false))
             {
                 diagnostics.Add(DiagnosticOllamaUnreachable);
-                return new OllamaRuntimeStatus(false, null, diagnostics);
+                return new OllamaRuntimeStatus(Reachable: false, Version: null, diagnostics);
             }
 
             var version = await _modelCapabilityClient.GetRuntimeVersionAsync(cancellationToken).ConfigureAwait(false);
-            return new OllamaRuntimeStatus(true, NormalizeModelName(version), diagnostics);
+            return new OllamaRuntimeStatus(Reachable: true, NormalizeModelName(version), diagnostics);
         }
         catch (HttpRequestException exception)
         {
             _logger.LogDebug(exception, "Ollama runtime not reachable (expected in desktop mode without an Ollama daemon).");
             diagnostics.Add(DiagnosticOllamaUnreachable);
-            return new OllamaRuntimeStatus(false, null, diagnostics);
+            return new OllamaRuntimeStatus(Reachable: false, Version: null, diagnostics);
         }
     }
 

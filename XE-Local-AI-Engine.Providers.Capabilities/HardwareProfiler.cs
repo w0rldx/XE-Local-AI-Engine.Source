@@ -254,7 +254,7 @@ internal sealed class HardwareProfiler : IHardwareProfiler
 
             var valuePart = afterKey[1..].Trim();
             // Format: "<number> kB". Take the leading numeric token.
-            var spaceIndex = valuePart.IndexOf(' ', StringComparison.Ordinal);
+            var spaceIndex = valuePart.IndexOf(value: ' ', StringComparison.Ordinal);
             var numberToken = spaceIndex >= 0 ? valuePart[..spaceIndex] : valuePart;
             if (long.TryParse(numberToken, NumberStyles.Integer, CultureInfo.InvariantCulture, out kilobytes))
             {

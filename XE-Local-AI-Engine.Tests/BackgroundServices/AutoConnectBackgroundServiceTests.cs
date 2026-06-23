@@ -35,7 +35,7 @@ public sealed class AutoConnectBackgroundServiceTests : IDisposable
 
             await BackgroundServiceTestHelper.RunExecuteAsync(service, cancellationTokenSource.Token);
 
-            AssertEx.Equal(1, hubConnection.ConnectAsyncCallCount);
+            AssertEx.Equal(expected: 1, hubConnection.ConnectAsyncCallCount);
         }
         finally
         {
@@ -57,7 +57,7 @@ public sealed class AutoConnectBackgroundServiceTests : IDisposable
 
             await BackgroundServiceTestHelper.RunExecuteAsync(service, cancellationTokenSource.Token);
 
-            AssertEx.Equal(0, hubConnection.ConnectAsyncCallCount);
+            AssertEx.Equal(expected: 0, hubConnection.ConnectAsyncCallCount);
         }
         finally
         {
@@ -79,7 +79,7 @@ public sealed class AutoConnectBackgroundServiceTests : IDisposable
 
             await BackgroundServiceTestHelper.RunExecuteAsync(service, cancellationTokenSource.Token);
 
-            AssertEx.Equal(1, hubConnection.ConnectAsyncCallCount);
+            AssertEx.Equal(expected: 1, hubConnection.ConnectAsyncCallCount);
         }
         finally
         {
@@ -101,7 +101,7 @@ public sealed class AutoConnectBackgroundServiceTests : IDisposable
 
             await BackgroundServiceTestHelper.RunExecuteAsync(service, cancellationTokenSource.Token);
 
-            AssertEx.Equal(0, hubConnection.ConnectAsyncCallCount);
+            AssertEx.Equal(expected: 0, hubConnection.ConnectAsyncCallCount);
         }
         finally
         {
@@ -136,7 +136,7 @@ public sealed class AutoConnectBackgroundServiceTests : IDisposable
 
             await BackgroundServiceTestHelper.RunExecuteAsync(service, cancellationTokenSource.Token);
 
-            AssertEx.Equal(4, hubConnection.ConnectAsyncCallCount);
+            AssertEx.Equal(expected: 4, hubConnection.ConnectAsyncCallCount);
         }
         finally
         {
@@ -157,7 +157,7 @@ public sealed class AutoConnectBackgroundServiceTests : IDisposable
             await service.StartAsync(CancellationToken.None);
             await service.StopAsync(CancellationToken.None);
 
-            AssertEx.Equal(0, hubConnection.DisconnectAsyncCallCount);
+            AssertEx.Equal(expected: 0, hubConnection.DisconnectAsyncCallCount);
         }
         finally
         {

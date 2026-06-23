@@ -177,7 +177,7 @@ internal sealed class AgentHomePatchService : IAgentHomePatchService
         var status = fields[0];
         var path = ResolveChangedPath(status, fields);
 
-        var separator = path.IndexOf('/', StringComparison.Ordinal);
+        var separator = path.IndexOf(value: '/', StringComparison.Ordinal);
         if (separator <= 0)
         {
             _logger.LogWarning("Skipping a changed-file entry that has no alias segment.");

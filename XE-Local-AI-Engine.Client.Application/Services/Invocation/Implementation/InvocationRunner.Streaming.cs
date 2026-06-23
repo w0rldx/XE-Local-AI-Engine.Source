@@ -97,7 +97,7 @@ public sealed partial class InvocationRunner
             {
                 await _sender.SendReasoningStreamChunkAsync(_package.InvocationId,
                     thinkingChunk,
-                    false,
+                    isComplete: false,
                     stream.ReasoningSequence,
                     cancellationToken).ConfigureAwait(false);
             }
@@ -131,7 +131,7 @@ public sealed partial class InvocationRunner
             {
                 await _sender.SendTokenStreamChunkAsync(_package.InvocationId,
                     textChunk,
-                    false,
+                    isComplete: false,
                     stream.Sequence,
                     cancellationToken).ConfigureAwait(false);
             }

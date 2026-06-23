@@ -21,7 +21,7 @@ public sealed class McpServerStoreTests : IDisposable
     {
         if (Directory.Exists(_rootPath))
         {
-            Directory.Delete(_rootPath, true);
+            Directory.Delete(_rootPath, recursive: true);
         }
     }
 
@@ -44,14 +44,14 @@ public sealed class McpServerStoreTests : IDisposable
             AssertEx.Equal(Description, added.Description);
             AssertEx.Equal(McpTransportKind.Stdio, added.TransportKind);
             AssertEx.Equal("npx", added.Command);
-            AssertEx.Equal(2, added.Arguments.Count);
+            AssertEx.Equal(expected: 2, added.Arguments.Count);
             AssertEx.Equal("--root", added.Arguments[0]);
             AssertEx.Equal("repo", added.Arguments[1]);
             AssertEx.Equal("work-dir", added.WorkingDirectory);
             AssertEx.True(added.Environment.ContainsKey("API_TOKEN"), "Environment map should round-trip.");
             AssertEx.Equal("s3cr3t", added.Environment["API_TOKEN"]);
             AssertEx.False(added.Enabled, "A new registration must be persisted disabled.");
-            AssertEx.Equal(1, added.Version);
+            AssertEx.Equal(expected: 1, added.Version);
             AssertEx.True(added.Id != Guid.Empty, "Add should assign a server id.");
             AssertEx.True(added.CreatedAtUtc > 0, "Add should stamp a creation time.");
             AssertEx.Equal(added.CreatedAtUtc, added.UpdatedAtUtc);
@@ -67,7 +67,7 @@ public sealed class McpServerStoreTests : IDisposable
         AssertEx.Equal("--root", byId.Arguments[0]);
 
         var list = await readStore.ListAsync();
-        AssertEx.Equal(1, list.Count);
+        AssertEx.Equal(expected: 1, list.Count);
 
         var unknown = await readStore.GetByIdAsync(Guid.NewGuid());
         AssertEx.Null(unknown, "Unknown id should return null.");
@@ -96,8 +96,8 @@ public sealed class McpServerStoreTests : IDisposable
         AssertEx.Equal(McpTransportKind.Http, record.TransportKind);
         AssertEx.Equal(LoopbackSseUrl, record.Url);
         AssertEx.Null(record.Command, "An http registration carries no command.");
-        AssertEx.Equal(0, record.Arguments.Count);
-        AssertEx.Equal(0, record.Environment.Count);
+        AssertEx.Equal(expected: 0, record.Arguments.Count);
+        AssertEx.Equal(expected: 0, record.Environment.Count);
         AssertEx.Null(record.WorkingDirectory, "An http registration carries no working directory.");
     }
 
@@ -177,7 +177,7 @@ public sealed class McpServerStoreTests : IDisposable
         var store = new McpServerStore(context, clock);
 
         var added = await store.AddAsync(CreateStdioInput());
-        AssertEx.Equal(1, added.Version);
+        AssertEx.Equal(expected: 1, added.Version);
 
         clock.Advance(50);
         var updated = AssertEx.NotNull(await store.UpdateAsync(added.Id, CreateStdioInput() with
@@ -186,7 +186,7 @@ public sealed class McpServerStoreTests : IDisposable
             }),
             "Update should find the server.");
 
-        AssertEx.Equal(2, updated.Version);
+        AssertEx.Equal(expected: 2, updated.Version);
         AssertEx.True(updated.UpdatedAtUtc > added.UpdatedAtUtc, "A connection change should advance UpdatedAtUtc.");
     }
 
@@ -214,7 +214,7 @@ public sealed class McpServerStoreTests : IDisposable
 
         AssertEx.Equal("renamed", updated.Name);
         AssertEx.Equal("New description only.", updated.Description);
-        AssertEx.Equal(1, updated.Version);
+        AssertEx.Equal(expected: 1, updated.Version);
         AssertEx.True(updated.UpdatedAtUtc > added.UpdatedAtUtc, "A name/description edit should still advance UpdatedAtUtc.");
     }
 
@@ -239,7 +239,7 @@ public sealed class McpServerStoreTests : IDisposable
                 ["CHARLIE"] = "3"
             }
         });
-        AssertEx.Equal(1, added.Version);
+        AssertEx.Equal(expected: 1, added.Version);
 
         // Same environment entries, different key insertion order — must be treated as no connection change.
         clock.Advance(10);
@@ -254,7 +254,7 @@ public sealed class McpServerStoreTests : IDisposable
             }),
             "Update should find the server.");
 
-        AssertEx.Equal(1, reordered.Version);
+        AssertEx.Equal(expected: 1, reordered.Version);
 
         // Changing an actual environment value is a real connection change and must bump the version.
         clock.Advance(10);
@@ -269,7 +269,7 @@ public sealed class McpServerStoreTests : IDisposable
             }),
             "Update should find the server.");
 
-        AssertEx.Equal(2, changed.Version);
+        AssertEx.Equal(expected: 2, changed.Version);
     }
 
     [Test]
@@ -286,7 +286,7 @@ public sealed class McpServerStoreTests : IDisposable
 
         var added = await store.AddAsync(CreateStdioInput());
         AssertEx.False(added.Enabled, "A new registration is disabled.");
-        AssertEx.Equal(1, added.Version);
+        AssertEx.Equal(expected: 1, added.Version);
 
         clock.Advance(10);
         var enabled = AssertEx.NotNull(await store.UpdateAsync(added.Id, CreateStdioInput() with
@@ -296,7 +296,7 @@ public sealed class McpServerStoreTests : IDisposable
             "Update should find the server.");
 
         AssertEx.True(enabled.Enabled, "Enabling should persist the enabled flag.");
-        AssertEx.Equal(2, enabled.Version);
+        AssertEx.Equal(expected: 2, enabled.Version);
     }
 
     [Test]
@@ -354,7 +354,7 @@ public sealed class McpServerStoreTests : IDisposable
 
         // Both are registered disabled, so the enabled set is empty until one is enabled.
         var beforeEnable = await store.ListEnabledAsync();
-        AssertEx.Equal(0, beforeEnable.Count);
+        AssertEx.Equal(expected: 0, beforeEnable.Count);
 
         _ = await store.UpdateAsync(first.Id, CreateStdioInput() with
         {
@@ -363,7 +363,7 @@ public sealed class McpServerStoreTests : IDisposable
         });
 
         var afterEnable = await store.ListEnabledAsync();
-        AssertEx.Equal(1, afterEnable.Count);
+        AssertEx.Equal(expected: 1, afterEnable.Count);
         AssertEx.Equal("first", afterEnable[0].Name);
         AssertEx.True(afterEnable[0].Enabled, "ListEnabledAsync should only return enabled servers.");
     }
@@ -409,7 +409,7 @@ public sealed class McpServerStoreTests : IDisposable
 
         var added = await store.AddAsync(CreateStdioInput());
         AssertEx.False(added.Enabled, "A new registration is disabled.");
-        AssertEx.Equal(1, added.Version);
+        AssertEx.Equal(expected: 1, added.Version);
 
         // Capture the encrypted arguments/env/description blobs as written on insert.
         var argumentsBefore = await ReadRawBlobAsync(databasePath, "arguments");
@@ -417,11 +417,11 @@ public sealed class McpServerStoreTests : IDisposable
         var descriptionBefore = await ReadRawBlobAsync(databasePath, "description");
 
         clock.Advance(10);
-        var enabled = AssertEx.NotNull(await store.SetEnabledAsync(added.Id, true),
+        var enabled = AssertEx.NotNull(await store.SetEnabledAsync(added.Id, enabled: true),
             "SetEnabled should find the server.");
 
         AssertEx.True(enabled.Enabled, "Enabling should persist the enabled flag.");
-        AssertEx.Equal(2, enabled.Version);
+        AssertEx.Equal(expected: 2, enabled.Version);
         AssertEx.True(enabled.UpdatedAtUtc > added.UpdatedAtUtc, "Enabling should advance UpdatedAtUtc.");
 
         // The toggle must not re-encrypt the secret columns: their ciphertext is byte-identical to insert.
@@ -438,16 +438,16 @@ public sealed class McpServerStoreTests : IDisposable
         // A second SetEnabled to the same value is a no-op for Version (no over-invalidation), and the secrets still
         // decrypt correctly across the whole sequence — proving the untouched ciphertext is still valid.
         clock.Advance(10);
-        var unchanged = AssertEx.NotNull(await store.SetEnabledAsync(added.Id, true),
+        var unchanged = AssertEx.NotNull(await store.SetEnabledAsync(added.Id, enabled: true),
             "SetEnabled should find the server.");
-        AssertEx.Equal(2, unchanged.Version);
+        AssertEx.Equal(expected: 2, unchanged.Version);
 
         // Disabling again is a real change and bumps Version once more (so an enable/disable cycle is +2 total, not +4).
         clock.Advance(10);
-        var disabled = AssertEx.NotNull(await store.SetEnabledAsync(added.Id, false),
+        var disabled = AssertEx.NotNull(await store.SetEnabledAsync(added.Id, enabled: false),
             "SetEnabled should find the server.");
         AssertEx.False(disabled.Enabled, "Disabling should clear the enabled flag.");
-        AssertEx.Equal(3, disabled.Version);
+        AssertEx.Equal(expected: 3, disabled.Version);
 
         await using var readContext = CreateContext(databasePath, keyHolder);
         var readStore = new McpServerStore(readContext, clock);
@@ -468,7 +468,7 @@ public sealed class McpServerStoreTests : IDisposable
         await context.Database.EnsureCreatedAsync();
         var store = new McpServerStore(context, TimeProvider.System);
 
-        var result = await store.SetEnabledAsync(Guid.NewGuid(), true);
+        var result = await store.SetEnabledAsync(Guid.NewGuid(), enabled: true);
         AssertEx.Null(result, "Toggling an unknown id should return null.");
     }
 
@@ -513,21 +513,21 @@ public sealed class McpServerStoreTests : IDisposable
             {
                 ["API_TOKEN"] = "s3cr3t"
             },
-            null,
-            false);
+            Url: null,
+            Enabled: false);
     }
 
     private static McpServerInput CreateHttpInput()
     {
         return new McpServerInput("playwright",
-            null,
+            Description: null,
             McpTransportKind.Http,
-            null,
+            Command: null,
             [],
-            null,
+            WorkingDirectory: null,
             new Dictionary<string, string>(),
             LoopbackSseUrl,
-            false);
+            Enabled: false);
     }
 
     private static async Task TamperArgumentsAsync(string databasePath)
@@ -585,7 +585,7 @@ public sealed class McpServerStoreTests : IDisposable
 
     private static byte[] CreateKeyMaterial()
     {
-        return Enumerable.Range(0, 32).Select(static value => (byte)(value + 1)).ToArray();
+        return Enumerable.Range(start: 0, count: 32).Select(static value => (byte)(value + 1)).ToArray();
     }
 
     private static bool ContainsSubsequence(byte[] source, byte[] needle)

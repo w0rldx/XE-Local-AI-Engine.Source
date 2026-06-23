@@ -31,7 +31,7 @@ public sealed class HostBootSmokeE2ETests
 
     private static int GetFreeLoopbackPort()
     {
-        using var listener = new TcpListener(IPAddress.Loopback, 0);
+        using var listener = new TcpListener(IPAddress.Loopback, port: 0);
         listener.Start();
         var port = ((IPEndPoint)listener.LocalEndpoint).Port;
         listener.Stop();

@@ -15,9 +15,9 @@ using XE_Local_AI_Engine.AI.Agent.PreviewWorkflows;
 /// </summary>
 internal sealed class PreviewWorkflowRunHandle : IAsyncDisposable
 {
-    private readonly SemaphoreSlim _commandGate = new(1, 1);
+    private readonly SemaphoreSlim _commandGate = new(initialCount: 1, maxCount: 1);
     private readonly ILogger _logger;
-    private readonly System.Threading.Lock _stateGate = new();
+    private readonly Lock _stateGate = new();
 
     private long _accumulatedOutputBytes;
     private bool _disposed;

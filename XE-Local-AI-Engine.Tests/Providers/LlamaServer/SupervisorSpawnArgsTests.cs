@@ -68,7 +68,7 @@ public sealed class SupervisorSpawnArgsTests
     public async Task EnsureRunning_CpuVariant_LaunchArgsOmitGpuLayers()
     {
         var launcher = new FakeProcessLauncher();
-        await using var supervisor = SupervisorFactory.Create(launcher, variantSelector: new FakeVariantSelector(GpuVariant.Cpu));
+        await using var supervisor = SupervisorFactory.Create(launcher, variantSelector: new FakeVariantSelector());
 
         await supervisor.EnsureRunningAsync("llama3", ModelRole.Chat, CancellationToken.None);
 

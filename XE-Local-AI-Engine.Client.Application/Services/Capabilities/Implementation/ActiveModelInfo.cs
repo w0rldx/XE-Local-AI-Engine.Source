@@ -6,5 +6,5 @@ namespace XE_Local_AI_Engine.Client.Services.Capabilities.Implementation;
 internal sealed record ActiveModelInfo(string? Name, DateTimeOffset? ExpiresAt)
 {
     /// <summary>Sentinel representing "no active model".</summary>
-    public static ActiveModelInfo None { get; } = new(null, null);
+    public static ActiveModelInfo None { get; } = new(Name: null, ExpiresAt: null);
 }

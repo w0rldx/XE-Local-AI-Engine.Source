@@ -17,7 +17,7 @@ using Microsoft.Extensions.AI;
 /// </remarks>
 internal sealed class DeferredLlamaServerChatClient : IChatClient
 {
-    private readonly SemaphoreSlim _initGate = new(1, 1);
+    private readonly SemaphoreSlim _initGate = new(initialCount: 1, maxCount: 1);
     private readonly string _modelName;
     private readonly ILlamaServerProcessSupervisor _supervisor;
 

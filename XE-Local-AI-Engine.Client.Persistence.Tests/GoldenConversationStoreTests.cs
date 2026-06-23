@@ -19,7 +19,7 @@ public sealed class GoldenConversationStoreTests : IDisposable
     {
         if (Directory.Exists(_rootPath))
         {
-            Directory.Delete(_rootPath, true);
+            Directory.Delete(_rootPath, recursive: true);
         }
     }
 
@@ -61,7 +61,7 @@ public sealed class GoldenConversationStoreTests : IDisposable
         AssertEx.Equal(Rubric, byId.Rubric);
 
         var list = await readStore.ListByAgentAsync(agentId);
-        AssertEx.Equal(1, list.Count);
+        AssertEx.Equal(expected: 1, list.Count);
 
         var unknown = await readStore.GetByIdAsync(Guid.NewGuid());
         AssertEx.Null(unknown, "Unknown id should return null.");
@@ -135,7 +135,7 @@ public sealed class GoldenConversationStoreTests : IDisposable
 
         var enabled = await store.ListEnabledByAgentAsync(agentId);
 
-        AssertEx.Equal(2, enabled.Count);
+        AssertEx.Equal(expected: 2, enabled.Count);
         AssertEx.Equal("first", enabled[0].Title);
         AssertEx.Equal("second", enabled[1].Title);
         AssertEx.Equal(firstEnabled.Id, enabled[0].Id);
@@ -164,7 +164,7 @@ public sealed class GoldenConversationStoreTests : IDisposable
 
         var owned = await store.ListByAgentAsync(agentId);
 
-        AssertEx.Equal(2, owned.Count);
+        AssertEx.Equal(expected: 2, owned.Count);
     }
 
     [Test]
@@ -238,9 +238,9 @@ public sealed class GoldenConversationStoreTests : IDisposable
             var added = await store.AddAsync(new GoldenConversationInput(agentId,
                 "Harvested case",
                 InputTurns,
-                null,
+                Assertion: null,
                 rubric,
-                false,
+                Enabled: false,
                 GoldenConversationSource.Harvested,
                 sourceMessageId,
                 sourceConversationId));
@@ -264,7 +264,7 @@ public sealed class GoldenConversationStoreTests : IDisposable
             AssertEx.Equal(rubric, byId.Rubric);
 
             var list = await readStore.ListByAgentAsync(agentId);
-            AssertEx.Equal(1, list.Count);
+            AssertEx.Equal(expected: 1, list.Count);
             AssertEx.Equal(GoldenConversationSource.Harvested, list[0].Source);
         }
 
@@ -300,13 +300,13 @@ public sealed class GoldenConversationStoreTests : IDisposable
         AssertEx.False(added.Enabled, "The seeded case starts disabled.");
 
         clock.Advance(500);
-        var updated = AssertEx.NotNull(await store.SetEnabledAsync(added.Id, true), "SetEnabled should return the updated record.");
+        var updated = AssertEx.NotNull(await store.SetEnabledAsync(added.Id, enabled: true), "SetEnabled should return the updated record.");
 
         AssertEx.True(updated.Enabled, "SetEnabled(true) should flip the row enabled.");
         AssertEx.Equal(added.CreatedAtUtc + 500, updated.UpdatedAtUtc);
         AssertEx.True(updated.UpdatedAtUtc > added.UpdatedAtUtc, "SetEnabled should bump UpdatedAtUtc.");
 
-        AssertEx.Null(await store.SetEnabledAsync(Guid.NewGuid(), true), "SetEnabled on an unknown id should return null.");
+        AssertEx.Null(await store.SetEnabledAsync(Guid.NewGuid(), enabled: true), "SetEnabled on an unknown id should return null.");
     }
 
     [Test]
@@ -355,7 +355,7 @@ public sealed class GoldenConversationStoreTests : IDisposable
 
         var sourceIds = await store.ListSourceMessageIdsByAgentAsync(agentId);
 
-        AssertEx.Equal(2, sourceIds.Count);
+        AssertEx.Equal(expected: 2, sourceIds.Count);
         AssertEx.True(sourceIds.Contains(firstSource), "The first harvested source id should be returned.");
         AssertEx.True(sourceIds.Contains(secondSource), "The second harvested source id should be returned.");
     }
@@ -388,14 +388,14 @@ public sealed class GoldenConversationStoreTests : IDisposable
     {
         var store = new AgentDefinitionStore(context, TimeProvider.System);
         var agent = await store.AddAsync(new AgentDefinitionInput("Builder",
-            null,
+            Description: null,
             Instructions,
-            null,
-            null,
+            ModelProfile: null,
+            ReasoningEffort: null,
             AgentDefinitionKind.Single,
             [],
             new Dictionary<string, bool>(),
-            null));
+            OrchestrationTopologyJson: null));
         return agent.Id;
     }
 
@@ -406,7 +406,7 @@ public sealed class GoldenConversationStoreTests : IDisposable
             InputTurns,
             Assertion,
             Rubric,
-            true);
+            Enabled: true);
     }
 
     private static NodeChatDbContext CreateContext(string databasePath, INodeSqliteKeyHolder keyHolder)
@@ -422,7 +422,7 @@ public sealed class GoldenConversationStoreTests : IDisposable
 
     private static byte[] CreateKeyMaterial()
     {
-        return Enumerable.Range(0, 32).Select(static value => (byte)(value + 1)).ToArray();
+        return Enumerable.Range(start: 0, count: 32).Select(static value => (byte)(value + 1)).ToArray();
     }
 
     private static bool ContainsSubsequence(byte[] source, byte[] needle)

@@ -15,7 +15,7 @@ public sealed class ScheduledJobDefinitionStoreTests : IDisposable
     {
         if (Directory.Exists(_rootPath))
         {
-            Directory.Delete(_rootPath, true);
+            Directory.Delete(_rootPath, recursive: true);
         }
     }
 
@@ -89,9 +89,9 @@ public sealed class ScheduledJobDefinitionStoreTests : IDisposable
         var defaultList = await store.ListAsync();
         var includeDeleted = await store.ListAsync(true);
 
-        AssertEx.Equal(1, defaultList.Count);
+        AssertEx.Equal(expected: 1, defaultList.Count);
         AssertEx.Equal(active.Id, defaultList[0].Id);
-        AssertEx.Equal(2, includeDeleted.Count);
+        AssertEx.Equal(expected: 2, includeDeleted.Count);
     }
 
     [Test]
@@ -113,7 +113,7 @@ public sealed class ScheduledJobDefinitionStoreTests : IDisposable
 
         var byTemplate = await store.ListByTemplateAsync("tpl-x");
 
-        AssertEx.Equal(1, byTemplate.Count);
+        AssertEx.Equal(expected: 1, byTemplate.Count);
         AssertEx.Equal(a1.Id, byTemplate[0].Id);
     }
 
@@ -139,7 +139,7 @@ public sealed class ScheduledJobDefinitionStoreTests : IDisposable
 
         var result = await store.ListEnabledAsync();
 
-        AssertEx.Equal(1, result.Count);
+        AssertEx.Equal(expected: 1, result.Count);
         AssertEx.Equal(enabled.Id, result[0].Id);
     }
 
@@ -204,7 +204,7 @@ public sealed class ScheduledJobDefinitionStoreTests : IDisposable
         AssertEx.True(added.Enabled, "Starts enabled.");
 
         clock.Advance(300);
-        var disabled = AssertEx.NotNull(await store.SetEnabledAsync(added.Id, false), "SetEnabled should return the updated record.");
+        var disabled = AssertEx.NotNull(await store.SetEnabledAsync(added.Id, enabled: false), "SetEnabled should return the updated record.");
 
         AssertEx.False(disabled.Enabled, "SetEnabled(false) should disable the definition.");
         AssertEx.True(disabled.DisabledAtUtc.HasValue, "DisabledAtUtc should be stamped when disabling.");
@@ -227,9 +227,9 @@ public sealed class ScheduledJobDefinitionStoreTests : IDisposable
         {
             Enabled = false
         });
-        _ = await store.SetEnabledAsync(added.Id, false);
+        _ = await store.SetEnabledAsync(added.Id, enabled: false);
 
-        var reEnabled = AssertEx.NotNull(await store.SetEnabledAsync(added.Id, true), "Re-enable should return the updated record.");
+        var reEnabled = AssertEx.NotNull(await store.SetEnabledAsync(added.Id, enabled: true), "Re-enable should return the updated record.");
 
         AssertEx.True(reEnabled.Enabled, "Re-enabling should set Enabled=true.");
         AssertEx.Null(reEnabled.DisabledAtUtc, "DisabledAtUtc should be cleared on re-enable.");
@@ -247,7 +247,7 @@ public sealed class ScheduledJobDefinitionStoreTests : IDisposable
 
         var store = new ScheduledJobDefinitionStore(context, TimeProvider.System);
 
-        var result = await store.SetEnabledAsync(Guid.NewGuid(), false);
+        var result = await store.SetEnabledAsync(Guid.NewGuid(), enabled: false);
 
         AssertEx.Null(result, "SetEnabled on unknown id should return null.");
     }
@@ -275,7 +275,7 @@ public sealed class ScheduledJobDefinitionStoreTests : IDisposable
         AssertEx.False(byId.Enabled, "SoftDelete should also disable the definition.");
 
         var defaultList = await store.ListAsync();
-        AssertEx.Equal(0, defaultList.Count);
+        AssertEx.Equal(expected: 0, defaultList.Count);
     }
 
     [Test]
@@ -394,7 +394,7 @@ public sealed class ScheduledJobDefinitionStoreTests : IDisposable
 
     private static INodeSqliteKeyHolder CreateKeyHolder()
     {
-        var key = Enumerable.Range(0, 32).Select(static v => (byte)(v + 1)).ToArray();
+        var key = Enumerable.Range(start: 0, count: 32).Select(static v => (byte)(v + 1)).ToArray();
         return new FixedNodeSqliteKeyHolder(key);
     }
 
@@ -403,18 +403,18 @@ public sealed class ScheduledJobDefinitionStoreTests : IDisposable
         return new ScheduledJobDefinitionInput(templateId,
             displayName,
             "Runs every hour",
-            true,
+            Enabled: true,
             ScheduleKind.Cron,
             "0 * * * *",
-            null,
-            null,
-            null,
-            null,
+            IntervalSeconds: null,
+            RepeatCount: null,
+            StartAtUtc: null,
+            EndAtUtc: null,
             "UTC",
             SchedulerMisfirePolicy.Smart,
-            false,
-            null,
-            null,
+            PreventOverlap: false,
+            MaxRuntimeSeconds: null,
+            ParameterJson: null,
             ScheduledJobCreator.User);
     }
 

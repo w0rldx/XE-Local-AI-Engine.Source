@@ -36,7 +36,7 @@ public sealed class ModelClassificationServiceTests
     public async Task ClassifyAsync_WhenCachedWithMatchingDigest_DoesNotProbeAgain()
     {
         var (service, store, ollama) = CreateService();
-        _ = await store.UpsertDetectedAsync("phi3", "sha256:same", ModelKind.Chat, """["completion"]""").ConfigureAwait(false);
+        _ = await store.UpsertDetectedAsync("phi3", "sha256:same", ModelKind.Chat, capabilitiesJson: """["completion"]""").ConfigureAwait(false);
 
         var results = await service.ClassifyAsync([("phi3", "sha256:same")]).ConfigureAwait(false);
 
@@ -49,7 +49,7 @@ public sealed class ModelClassificationServiceTests
     public async Task ClassifyAsync_WhenDigestChanged_ReDetects()
     {
         var (service, store, ollama) = CreateService();
-        _ = await store.UpsertDetectedAsync("gemma", "sha256:old", ModelKind.Chat, """["completion"]""").ConfigureAwait(false);
+        _ = await store.UpsertDetectedAsync("gemma", "sha256:old", ModelKind.Chat, capabilitiesJson: """["completion"]""").ConfigureAwait(false);
         StubDetails(ollama, "gemma", "embedding");
 
         var results = await service.ClassifyAsync([("gemma", "sha256:new")]).ConfigureAwait(false);
@@ -67,7 +67,7 @@ public sealed class ModelClassificationServiceTests
     public async Task ClassifyAsync_WhenOverrideSet_OverrideWinsOverDetected()
     {
         var (service, store, ollama) = CreateService();
-        _ = await store.UpsertDetectedAsync("mistral", "sha256:m", ModelKind.Chat, """["completion"]""").ConfigureAwait(false);
+        _ = await store.UpsertDetectedAsync("mistral", "sha256:m", ModelKind.Chat, capabilitiesJson: """["completion"]""").ConfigureAwait(false);
         _ = await store.SetOverrideAsync("mistral", ModelKind.Embedding).ConfigureAwait(false);
 
         var results = await service.ClassifyAsync([("mistral", "sha256:m")]).ConfigureAwait(false);
@@ -83,7 +83,7 @@ public sealed class ModelClassificationServiceTests
     public async Task ClassifyAsync_WhenDetectionThrows_FallsBackToCachedRecordWithoutThrowing()
     {
         var (service, store, ollama) = CreateService();
-        _ = await store.UpsertDetectedAsync("llava", "sha256:old", ModelKind.Chat, """["completion","vision"]""").ConfigureAwait(false);
+        _ = await store.UpsertDetectedAsync("llava", "sha256:old", ModelKind.Chat, capabilitiesJson: """["completion","vision"]""").ConfigureAwait(false);
         ollama.ShowModelDetailsAsync("llava", Arg.Any<CancellationToken>())
               .Returns<OllamaModelDetails>(_ => throw new HttpRequestException("daemon offline"));
 
@@ -112,7 +112,7 @@ public sealed class ModelClassificationServiceTests
     public async Task SetOverrideAsync_PersistsOverrideAndReturnsEffectiveKind()
     {
         var (service, store, ollama) = CreateService();
-        _ = await store.UpsertDetectedAsync("qwen", "sha256:q", ModelKind.Chat, """["completion"]""").ConfigureAwait(false);
+        _ = await store.UpsertDetectedAsync("qwen", "sha256:q", ModelKind.Chat, capabilitiesJson: """["completion"]""").ConfigureAwait(false);
 
         var result = await service.SetOverrideAsync("qwen", ModelKind.Embedding).ConfigureAwait(false);
 
@@ -128,7 +128,7 @@ public sealed class ModelClassificationServiceTests
     public async Task ResetOverrideAsync_ClearsOverrideAndFallsBackToDetected()
     {
         var (service, store, ollama) = CreateService();
-        _ = await store.UpsertDetectedAsync("codellama", "sha256:c", ModelKind.Chat, """["completion"]""").ConfigureAwait(false);
+        _ = await store.UpsertDetectedAsync("codellama", "sha256:c", ModelKind.Chat, capabilitiesJson: """["completion"]""").ConfigureAwait(false);
         _ = await store.SetOverrideAsync("codellama", ModelKind.Embedding).ConfigureAwait(false);
 
         var result = await service.ResetOverrideAsync("codellama").ConfigureAwait(false);
@@ -173,7 +173,7 @@ public sealed class ModelClassificationServiceTests
     private static void StubDetails(IOllamaModelService ollama, string modelName, params string[] capabilities)
     {
         // The service reads only OllamaModelDetails.Capabilities, so the ShowModelResponse payload can be empty.
-        var details = new OllamaModelDetails(new ShowModelResponse(), null, capabilities);
+        var details = new OllamaModelDetails(new ShowModelResponse(), MaxContextTokens: null, capabilities);
         ollama.ShowModelDetailsAsync(modelName, Arg.Any<CancellationToken>()).Returns(details);
     }
 
@@ -207,8 +207,8 @@ public sealed class ModelClassificationServiceTests
                 detectedKind,
                 capabilitiesJson,
                 existing?.OverrideKind,
-                1,
-                1);
+                DetectedAtUtc: 1,
+                UpdatedAtUtc: 1);
             _rows[modelName] = record;
             return Task.FromResult(record);
         }
@@ -217,7 +217,7 @@ public sealed class ModelClassificationServiceTests
         {
             var existing = _rows.TryGetValue(modelName, out var current) ? current : null;
             var record = existing is null
-                ? new ModelClassificationRecord(modelName, null, ModelKind.Unknown, null, overrideKind, null, 1)
+                ? new ModelClassificationRecord(modelName, Digest: null, ModelKind.Unknown, DetectedCapabilitiesJson: null, overrideKind, DetectedAtUtc: null, UpdatedAtUtc: 1)
                 : existing with
                 {
                     OverrideKind = overrideKind,

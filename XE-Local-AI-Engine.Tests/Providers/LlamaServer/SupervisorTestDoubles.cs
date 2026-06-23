@@ -54,8 +54,8 @@ internal sealed class FakeProcessHandle(int pid) : ILlamaServerProcessHandle
 
     public void TreeKill()
     {
-        Interlocked.Exchange(ref _killed, 1);
-        Interlocked.Exchange(ref _exited, 1);
+        Interlocked.Exchange(ref _killed, value: 1);
+        Interlocked.Exchange(ref _exited, value: 1);
     }
 
     public void Dispose()
@@ -66,7 +66,7 @@ internal sealed class FakeProcessHandle(int pid) : ILlamaServerProcessHandle
     /// <summary>Simulates a process crash/exit so the next ensure-running sees a dead process.</summary>
     public void SimulateExit()
     {
-        Interlocked.Exchange(ref _exited, 1);
+        Interlocked.Exchange(ref _exited, value: 1);
     }
 }
 
@@ -131,7 +131,7 @@ internal sealed class FakeBinaryManager : ILlamaCppBinaryManager
 {
     public Task<LlamaBinary> EnsureBinaryAsync(GpuVariant variant, CancellationToken ct)
     {
-        return Task.FromResult(new LlamaBinary("/fake/bin/llama-server", "b9692", variant, true));
+        return Task.FromResult(new LlamaBinary("/fake/bin/llama-server", "b9692", variant, IsPinnedFallback: true));
     }
 }
 

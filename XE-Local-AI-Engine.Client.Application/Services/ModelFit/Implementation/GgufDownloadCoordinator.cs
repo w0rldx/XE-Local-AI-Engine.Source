@@ -53,16 +53,16 @@ public sealed class GgufDownloadCoordinator : IGgufDownloadCoordinator
         if (!_inFlight.TryAdd(modelName, cts))
         {
             cts.Dispose();
-            return new GgufDownloadTicket(modelName, true);
+            return new GgufDownloadTicket(modelName, AlreadyInFlight: true);
         }
 
-        _status[modelName] = new GgufDownloadStatus(modelName, GgufDownloadPhase.Running, null, null, null);
+        _status[modelName] = new GgufDownloadStatus(modelName, GgufDownloadPhase.Running, CompletedBytes: null, TotalBytes: null, SanitizedError: null);
 
         // The detached task owns the rest of the CTS lifetime: it captures only the token (a struct), and disposes the
         // CTS by re-reading it from the registry in its finally — so no IDisposable instance is passed into an un-awaited
         // task (CA2025), while Cancel can still signal it via the registry until then.
         _ = RunDownloadAsync(modelName, request, cts.Token);
-        return new GgufDownloadTicket(modelName, false);
+        return new GgufDownloadTicket(modelName, AlreadyInFlight: false);
     }
 
     public bool Cancel(string modelName)
@@ -144,7 +144,7 @@ public sealed class GgufDownloadCoordinator : IGgufDownloadCoordinator
             GgufDownloadPhase.Running,
             update.CompletedBytes,
             update.TotalBytes,
-            null));
+            SanitizedError: null));
 
         try
         {
@@ -162,28 +162,28 @@ public sealed class GgufDownloadCoordinator : IGgufDownloadCoordinator
                 GgufDownloadPhase.Completed,
                 last?.CompletedBytes ?? last?.TotalBytes,
                 last?.TotalBytes,
-                null);
+                SanitizedError: null);
         }
         catch (OperationCanceledException)
         {
-            _status[modelName] = new GgufDownloadStatus(modelName, GgufDownloadPhase.Cancelled, null, null, null);
+            _status[modelName] = new GgufDownloadStatus(modelName, GgufDownloadPhase.Cancelled, CompletedBytes: null, TotalBytes: null, SanitizedError: null);
             _logger.LogInformation("Operator cancelled the GGUF download for {ModelName}.", modelName);
         }
         catch (HuggingFaceDownloadException exception)
         {
             // Message is contractually sanitized (no token / Bearer / path) — safe to surface to the operator.
-            _status[modelName] = new GgufDownloadStatus(modelName, GgufDownloadPhase.Failed, null, null, exception.Message);
+            _status[modelName] = new GgufDownloadStatus(modelName, GgufDownloadPhase.Failed, CompletedBytes: null, TotalBytes: null, exception.Message);
             _logger.LogWarning("GGUF download failed for {ModelName} ({Reason}).", modelName, exception.Reason);
         }
         catch (InsufficientDiskSpaceException exception)
         {
-            _status[modelName] = new GgufDownloadStatus(modelName, GgufDownloadPhase.Failed, null, null, exception.Message);
+            _status[modelName] = new GgufDownloadStatus(modelName, GgufDownloadPhase.Failed, CompletedBytes: null, TotalBytes: null, exception.Message);
             _logger.LogWarning("GGUF download failed for {ModelName}: insufficient disk space.", modelName);
         }
         catch (Exception exception) when (exception is HttpRequestException or IOException or TimeoutException or InvalidOperationException)
         {
             // Never surface the raw transport message (it can carry a URL/path): collapse to a generic sanitized reason.
-            _status[modelName] = new GgufDownloadStatus(modelName, GgufDownloadPhase.Failed, null, null, "Download failed.");
+            _status[modelName] = new GgufDownloadStatus(modelName, GgufDownloadPhase.Failed, CompletedBytes: null, TotalBytes: null, "Download failed.");
             _logger.LogWarning(exception, "GGUF download failed for {ModelName}.", modelName);
         }
         finally

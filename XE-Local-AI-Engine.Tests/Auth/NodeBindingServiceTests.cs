@@ -65,8 +65,8 @@ public sealed class NodeBindingServiceTests
         var result = await service.PollUntilTerminalAsync(session);
 
         AssertEx.Equal("approved", result.Status);
-        AssertEx.Equal(1, pollCount);
-        AssertEx.Equal(1, tokenStore.StoreTokensAsyncCallCount);
+        AssertEx.Equal(expected: 1, pollCount);
+        AssertEx.Equal(expected: 1, tokenStore.StoreTokensAsyncCallCount);
         AssertEx.Equal("device-code", tokenStore.BindingMethod);
         AssertEx.False(tokenStore.AutoConnectOnStart);
         AssertEx.Equal("worker-node-test", tokenStore.LastKnownNodeName);
@@ -97,7 +97,7 @@ public sealed class NodeBindingServiceTests
         });
 
         AssertEx.Equal("expired", result.Status);
-        AssertEx.Equal(0, tokenStore.StoreTokensAsyncCallCount);
+        AssertEx.Equal(expected: 0, tokenStore.StoreTokensAsyncCallCount);
     }
 
     [Test]

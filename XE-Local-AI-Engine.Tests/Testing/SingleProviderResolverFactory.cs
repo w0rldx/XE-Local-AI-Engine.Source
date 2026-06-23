@@ -39,7 +39,7 @@ internal static class SingleProviderResolverFactory
 
         public Task<ModelProviderMapRecord> UpsertAsync(string modelName, string providerName, CancellationToken cancellationToken = default)
         {
-            return Task.FromResult(new ModelProviderMapRecord(modelName, providerName, 0));
+            return Task.FromResult(new ModelProviderMapRecord(modelName, providerName, UpdatedAtUtc: 0));
         }
     }
 }

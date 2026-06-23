@@ -88,7 +88,7 @@ public sealed class NodeChatStreamService(
         // resolve has no dependency on the placeholder (it reads conversation, trimmedContent, selectedPath), so the
         // hoist is safe; the emitted SSE order below is unchanged: UserMessagePersisted -> AssistantPending ->
         // AssistantQueued.
-        var resolution = await ResolveTurnAsync(request, conversation, null, trimmedContent, cancellationToken).ConfigureAwait(false);
+        var resolution = await ResolveTurnAsync(request, conversation, activeModelOverride: null, trimmedContent, cancellationToken).ConfigureAwait(false);
 
         var assistantPlaceholder = await persistence.CreateAssistantPlaceholderAsync(new NodeChatCreateAssistantPlaceholderRequest(request.ConversationId,
                 assistantMessageId,
@@ -413,7 +413,7 @@ public sealed class NodeChatStreamService(
                 correlation,
                 sequence.Next(),
                 cursor,
-                true).ConfigureAwait(false);
+                wasCancelled: true).ConfigureAwait(false);
         }
         finally
         {
@@ -463,7 +463,7 @@ public sealed class NodeChatStreamService(
                 modelName,
                 package.ConfigHash,
                 state.GenerationDurationMs ?? 0,
-                Success: !failed,
+                !failed,
                 state.InputTokens,
                 state.OutputTokens,
                 // Exception TYPE NAME only when present — never the sanitized message text. FailureCategory is the only

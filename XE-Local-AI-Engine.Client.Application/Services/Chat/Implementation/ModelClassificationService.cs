@@ -60,7 +60,7 @@ internal sealed class ModelClassificationService(
         // the next list (which knows the real live digest) would see a mismatch and immediately re-probe — a redundant
         // double probe. Detection happens lazily on the next ClassifyAsync with the real digest, mirroring the override
         // (PUT) nuance where the React client invalidates the list rather than trusting the mutation response.
-        var cleared = await _store.SetOverrideAsync(modelName, null, cancellationToken).ConfigureAwait(false);
+        var cleared = await _store.SetOverrideAsync(modelName, overrideKind: null, cancellationToken).ConfigureAwait(false);
         return ToResult(cleared);
     }
 
@@ -165,9 +165,9 @@ internal sealed class ModelClassificationService(
         return new ModelClassificationRecord(modelName,
             digest,
             ModelKind.Unknown,
-            null,
-            null,
-            null,
-            0);
+            DetectedCapabilitiesJson: null,
+            OverrideKind: null,
+            DetectedAtUtc: null,
+            UpdatedAtUtc: 0);
     }
 }

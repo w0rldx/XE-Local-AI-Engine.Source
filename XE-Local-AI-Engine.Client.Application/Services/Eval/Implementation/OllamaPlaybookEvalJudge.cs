@@ -48,7 +48,7 @@ internal sealed class OllamaPlaybookEvalJudge(ILogger<OllamaPlaybookEvalJudge> l
         if (string.IsNullOrWhiteSpace(goldenCase.Rubric))
         {
             _logger.LogWarning("Golden case {GoldenCaseId} has neither assertion nor rubric; scoring as a fail.", goldenCase.Id);
-            return new EvalScore(false, JudgeScoredBy);
+            return new EvalScore(Pass: false, JudgeScoredBy);
         }
 
         return new EvalScore(await ScoreByJudgeAsync(goldenCase, candidateText ?? string.Empty, nodeLocalClient, cancellationToken).ConfigureAwait(false),

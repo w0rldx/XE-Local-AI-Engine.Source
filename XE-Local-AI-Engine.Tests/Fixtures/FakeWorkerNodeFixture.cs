@@ -63,7 +63,7 @@ public sealed class FakeWorkerNodeFixture : IAsyncDisposable
                           {
                               webBuilder.UseKestrel(options =>
                               {
-                                  options.Listen(IPAddress.Loopback, 0, listenOptions =>
+                                  options.Listen(IPAddress.Loopback, port: 0, listenOptions =>
                                   {
                                       listenOptions.UseHttps(ServerCert);
                                       listenOptions.Protocols = HttpProtocols.Http1AndHttp2;
@@ -178,9 +178,9 @@ public sealed class FakeWorkerNodeFixture : IAsyncDisposable
     {
         using var rsa = RSA.Create(2048);
         var request = new CertificateRequest("CN=127.0.0.1", rsa, HashAlgorithmName.SHA256, RSASignaturePadding.Pkcs1);
-        request.CertificateExtensions.Add(new X509BasicConstraintsExtension(false, false, 0, false));
-        request.CertificateExtensions.Add(new X509KeyUsageExtension(X509KeyUsageFlags.DigitalSignature | X509KeyUsageFlags.KeyEncipherment, false));
-        request.CertificateExtensions.Add(new X509SubjectKeyIdentifierExtension(request.PublicKey, false));
+        request.CertificateExtensions.Add(new X509BasicConstraintsExtension(certificateAuthority: false, hasPathLengthConstraint: false, pathLengthConstraint: 0, critical: false));
+        request.CertificateExtensions.Add(new X509KeyUsageExtension(X509KeyUsageFlags.DigitalSignature | X509KeyUsageFlags.KeyEncipherment, critical: false));
+        request.CertificateExtensions.Add(new X509SubjectKeyIdentifierExtension(request.PublicKey, critical: false));
 
         var sanBuilder = new SubjectAlternativeNameBuilder();
         sanBuilder.AddIpAddress(IPAddress.Loopback);

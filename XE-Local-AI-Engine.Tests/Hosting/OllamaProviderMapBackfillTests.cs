@@ -42,7 +42,7 @@ public sealed class OllamaProviderMapBackfillTests
         await Backfill(provider);
 
         AssertEx.Equal("llamacpp", mapStore.Mappings["custom:gguf"]);
-        AssertEx.Equal(0, mapStore.UpsertCount);
+        AssertEx.Equal(expected: 0, mapStore.UpsertCount);
     }
 
     [Test]
@@ -153,14 +153,14 @@ public sealed class OllamaProviderMapBackfillTests
 
         public Task<IReadOnlyList<ModelProviderMapRecord>> ListAsync(CancellationToken cancellationToken = default)
         {
-            return Task.FromResult<IReadOnlyList<ModelProviderMapRecord>>(Mappings.Select(pair => new ModelProviderMapRecord(pair.Key, pair.Value, 0)).ToArray());
+            return Task.FromResult<IReadOnlyList<ModelProviderMapRecord>>(Mappings.Select(pair => new ModelProviderMapRecord(pair.Key, pair.Value, UpdatedAtUtc: 0)).ToArray());
         }
 
         public Task<ModelProviderMapRecord> UpsertAsync(string modelName, string providerName, CancellationToken cancellationToken = default)
         {
             UpsertCount++;
             Mappings[modelName] = providerName;
-            return Task.FromResult(new ModelProviderMapRecord(modelName, providerName, 0));
+            return Task.FromResult(new ModelProviderMapRecord(modelName, providerName, UpdatedAtUtc: 0));
         }
 
         public void ResetUpsertCount()

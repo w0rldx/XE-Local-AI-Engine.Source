@@ -15,7 +15,7 @@ internal sealed class PreviewWorkflowRunSession : IPreviewWorkflowRunSession
     private readonly IReadOnlyDictionary<string, string> _agentExecutorIdToNodeId;
     private readonly IReadOnlyDictionary<string, string> _debugExecutorIdToNodeId;
     private readonly ILogger _logger;
-    private readonly System.Threading.Lock _pendingGate = new();
+    private readonly Lock _pendingGate = new();
 
     // Pending pause requests surfaced via RequestInfoEvent, keyed by the request id we hand back to the caller. Held so
     // ResumeAsync can build the ExternalResponse the held run expects.

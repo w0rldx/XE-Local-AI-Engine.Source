@@ -6,13 +6,13 @@ internal sealed partial class NodePatchApplyService
 {
     private async Task LogAppliedAsync(string runId, IReadOnlyList<PatchApplyFileEntry> files, CancellationToken cancellationToken)
     {
-        var detail = string.Join(';', files.Select(file => string.Create(CultureInfo.InvariantCulture, $"{file.Alias}/{file.RelativePath}")));
+        var detail = string.Join(separator: ';', files.Select(file => string.Create(CultureInfo.InvariantCulture, $"{file.Alias}/{file.RelativePath}")));
         await AppendEventSafelyAsync(runId, "patch_applied", detail, cancellationToken).ConfigureAwait(false);
     }
 
     private async Task LogRejectionAsync(string runId, IReadOnlyList<string> rejections, CancellationToken cancellationToken)
     {
-        await AppendEventSafelyAsync(runId, "patch_apply_rejected", string.Join(';', rejections), cancellationToken).ConfigureAwait(false);
+        await AppendEventSafelyAsync(runId, "patch_apply_rejected", string.Join(separator: ';', rejections), cancellationToken).ConfigureAwait(false);
     }
 
     private async Task AppendEventSafelyAsync(string runId, string eventName, string? detail, CancellationToken cancellationToken)

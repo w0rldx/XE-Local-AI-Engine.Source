@@ -35,7 +35,7 @@ public sealed class CodexTokenStore : ICodexTokenStore, IDisposable
     private const string TokensFileName = "codex-oauth-tokens.enc";
     private const string ProtectorPurpose = "WorkerNode.CodexOAuth.Tokens.v1";
     private static readonly JsonSerializerOptions SerializerOptions = new(JsonSerializerDefaults.Web);
-    private readonly SemaphoreSlim _lock = new(1, 1);
+    private readonly SemaphoreSlim _lock = new(initialCount: 1, maxCount: 1);
     private readonly ILogger<CodexTokenStore> _logger;
     private readonly IDataProtector _protector;
 
@@ -178,7 +178,7 @@ public sealed class CodexTokenStore : ICodexTokenStore, IDisposable
     private void ApplyWindowsFileSecurity()
     {
         var fileSecurity = new FileSecurity();
-        fileSecurity.SetAccessRuleProtection(true, false);
+        fileSecurity.SetAccessRuleProtection(isProtected: true, preserveInheritance: false);
 
         var currentIdentity = WindowsIdentity.GetCurrent();
         if (currentIdentity.User is not null)

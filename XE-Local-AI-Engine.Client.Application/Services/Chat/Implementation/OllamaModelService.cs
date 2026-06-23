@@ -9,7 +9,7 @@ using XE_Local_AI_Engine.Providers.Ollama;
 public sealed class OllamaModelService : IOllamaModelService, IDisposable
 {
     private readonly IOllamaApiClient _ollamaClient;
-    private readonly SemaphoreSlim _pullSemaphore = new(1, 1);
+    private readonly SemaphoreSlim _pullSemaphore = new(initialCount: 1, maxCount: 1);
 
     public OllamaModelService(IOllamaApiClient ollamaClient)
     {

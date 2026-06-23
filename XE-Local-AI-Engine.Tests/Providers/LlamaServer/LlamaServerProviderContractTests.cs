@@ -61,7 +61,7 @@ public sealed class LlamaServerProviderContractTests
 
         var models = await provider.ListModelsAsync(CancellationToken.None);
 
-        AssertEx.Equal(2, models.Count);
+        AssertEx.Equal(expected: 2, models.Count);
         AssertEx.Contains(models, m => m.ModelName == Model && m.ProviderName == Provider);
     }
 
@@ -70,10 +70,10 @@ public sealed class LlamaServerProviderContractTests
     {
         var store = Substitute.For<IGgufModelStore>();
         store.EnsureModelAsync(Arg.Any<GgufModelRequest>(), Arg.Any<IProgress<PullProgress>>(), Arg.Any<CancellationToken>())
-             .Returns(Task.FromResult(new GgufModelHandle(Model, "/fake/m.gguf", "Q4_K_M", 1, null, "rev", GgufRole.Unknown)));
+             .Returns(Task.FromResult(new GgufModelHandle(Model, "/fake/m.gguf", "Q4_K_M", SizeBytes: 1, Sha256: null, "rev", GgufRole.Unknown)));
         var provider = new LlamaServerLocalModelProvider(Substitute.For<ILlamaServerProcessSupervisor>(), store);
 
-        await provider.PullModelAsync($"{Model}:Q4_K_M", null, CancellationToken.None);
+        await provider.PullModelAsync($"{Model}:Q4_K_M", progress: null, CancellationToken.None);
 
         await store.Received(1).EnsureModelAsync(Arg.Is<GgufModelRequest>(r => r.RepoId == Model && r.Quant == "Q4_K_M"),
             Arg.Any<IProgress<PullProgress>>(),
@@ -120,7 +120,7 @@ public sealed class LlamaServerProviderContractTests
     public async Task CheckHealthAsync_AggregatesSupervisorHealth_HealthyWhenOperational()
     {
         var supervisor = Substitute.For<ILlamaServerProcessSupervisor>();
-        supervisor.CheckHealthAsync(Arg.Any<CancellationToken>()).Returns([new LlamaServerProcessHealth(Model, ModelRole.Chat, true, "ok")]);
+        supervisor.CheckHealthAsync(Arg.Any<CancellationToken>()).Returns([new LlamaServerProcessHealth(Model, ModelRole.Chat, IsResponsive: true, "ok")]);
         var provider = CreateProvider(supervisor);
 
         var health = await provider.CheckHealthAsync(CancellationToken.None);
@@ -160,7 +160,7 @@ public sealed class LlamaServerProviderContractTests
         });
 
         await AssertEx.ThrowsAsync<TimeoutException>(() =>
-            client.GetResponseAsync([new ChatMessage(ChatRole.User, "hi")], null, CancellationToken.None));
+            client.GetResponseAsync([new ChatMessage(ChatRole.User, "hi")], options: null, CancellationToken.None));
 
         // Ensure-running was triggered exactly once for the chat role + selected model (not eagerly in the factory).
         await supervisor.Received(1).EnsureRunningAsync(Model, ModelRole.Chat, Arg.Any<CancellationToken>());
@@ -183,7 +183,7 @@ public sealed class LlamaServerProviderContractTests
         // The embedding wrapper re-shapes LlamaRuntimeException to IOException for the lexical fallback; a generic
         // sentinel flows through unwrapped, proving ensure-running runs on first GenerateAsync (not eagerly).
         await AssertEx.ThrowsAsync<TimeoutException>(() =>
-            generator.GenerateAsync(["text"], null, CancellationToken.None));
+            generator.GenerateAsync(["text"], options: null, CancellationToken.None));
 
         await supervisor.Received(1).EnsureRunningAsync(Model, ModelRole.Embedding, Arg.Any<CancellationToken>());
     }
@@ -205,7 +205,7 @@ public sealed class LlamaServerProviderContractTests
         });
 
         await AssertEx.ThrowsAsync<IOException>(() =>
-            generator.GenerateAsync(["text"], null, CancellationToken.None));
+            generator.GenerateAsync(["text"], options: null, CancellationToken.None));
     }
 
     private static LlamaServerLocalModelProvider CreateProvider(ILlamaServerProcessSupervisor supervisor)

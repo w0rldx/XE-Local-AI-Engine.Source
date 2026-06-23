@@ -21,7 +21,7 @@ public sealed class AgentHomeMemoryProposalServiceTests : IDisposable
             {
                 if (Directory.Exists(dir))
                 {
-                    Directory.Delete(dir, true);
+                    Directory.Delete(dir, recursive: true);
                 }
             }
             catch (IOException)
@@ -60,14 +60,14 @@ public sealed class AgentHomeMemoryProposalServiceTests : IDisposable
 
         var result = await CreateService().CollectAsync(Request("run-valid-node", root));
 
-        AssertEx.Equal(1, result.Proposals.Count, "one valid proposal accepted");
+        AssertEx.Equal(expected: 1, result.Proposals.Count, "one valid proposal accepted");
         AssertEx.Empty(result.Rejections);
         var p = result.Proposals[0];
         AssertEx.Equal("node_memory_proposal", p.Type);
         AssertEx.Equal("add", p.Operation);
         AssertEx.Equal("high", p.Confidence);
         AssertEx.Equal("node-memory.proposals.jsonl", p.SourceFileName);
-        AssertEx.Equal(0, p.SourceLineIndex);
+        AssertEx.Equal(expected: 0, p.SourceLineIndex);
     }
 
     [Test]
@@ -81,7 +81,7 @@ public sealed class AgentHomeMemoryProposalServiceTests : IDisposable
 
         var result = await CreateService().CollectAsync(Request("run-valid-project", root));
 
-        AssertEx.Equal(1, result.Proposals.Count);
+        AssertEx.Equal(expected: 1, result.Proposals.Count);
         AssertEx.Equal("project_memory_proposal", result.Proposals[0].Type);
         AssertEx.Equal("update", result.Proposals[0].Operation);
         AssertEx.Equal("medium", result.Proposals[0].Confidence);
@@ -102,7 +102,7 @@ public sealed class AgentHomeMemoryProposalServiceTests : IDisposable
 
         var result = await CreateService().CollectAsync(Request("run-multi", root));
 
-        AssertEx.Equal(2, result.Proposals.Count, "proposals from both files are combined");
+        AssertEx.Equal(expected: 2, result.Proposals.Count, "proposals from both files are combined");
         AssertEx.Empty(result.Rejections);
     }
 
@@ -119,7 +119,7 @@ public sealed class AgentHomeMemoryProposalServiceTests : IDisposable
 
         var result = await CreateService().CollectAsync(Request("run-blanks", root));
 
-        AssertEx.Equal(1, result.Proposals.Count, "only the one valid non-blank line is accepted");
+        AssertEx.Equal(expected: 1, result.Proposals.Count, "only the one valid non-blank line is accepted");
         AssertEx.Empty(result.Rejections);
     }
 
@@ -133,7 +133,7 @@ public sealed class AgentHomeMemoryProposalServiceTests : IDisposable
         var result = await CreateService().CollectAsync(Request("run-invalid-json", root));
 
         AssertEx.Empty(result.Proposals);
-        AssertEx.Equal(1, result.Rejections.Count);
+        AssertEx.Equal(expected: 1, result.Rejections.Count);
         AssertEx.Contains(result.Rejections[0].Reason, "not valid JSON");
     }
 
@@ -149,7 +149,7 @@ public sealed class AgentHomeMemoryProposalServiceTests : IDisposable
         var result = await CreateService().CollectAsync(Request("run-bad-type", root));
 
         AssertEx.Empty(result.Proposals);
-        AssertEx.Equal(1, result.Rejections.Count);
+        AssertEx.Equal(expected: 1, result.Rejections.Count);
         AssertEx.Contains(result.Rejections[0].Reason, "type");
     }
 
@@ -165,7 +165,7 @@ public sealed class AgentHomeMemoryProposalServiceTests : IDisposable
         var result = await CreateService().CollectAsync(Request("run-bad-op", root));
 
         AssertEx.Empty(result.Proposals);
-        AssertEx.Equal(1, result.Rejections.Count);
+        AssertEx.Equal(expected: 1, result.Rejections.Count);
         AssertEx.Contains(result.Rejections[0].Reason, "operation");
     }
 
@@ -181,7 +181,7 @@ public sealed class AgentHomeMemoryProposalServiceTests : IDisposable
         var result = await CreateService().CollectAsync(Request("run-bad-conf", root));
 
         AssertEx.Empty(result.Proposals);
-        AssertEx.Equal(1, result.Rejections.Count);
+        AssertEx.Equal(expected: 1, result.Rejections.Count);
         AssertEx.Contains(result.Rejections[0].Reason, "confidence");
     }
 
@@ -189,7 +189,7 @@ public sealed class AgentHomeMemoryProposalServiceTests : IDisposable
     public async Task CollectAsync_ContentTooLong_Rejected()
     {
         var root = NewTempRunDir("run-long-content");
-        var longContent = new string('x', 4001);
+        var longContent = new string(c: 'x', count: 4001);
         WriteProposalFile(root, "node-memory.proposals.jsonl",
         [
             $$"""{"type":"node_memory_proposal","operation":"add","content":"{{longContent}}","evidence":[],"confidence":"low"}"""
@@ -198,7 +198,7 @@ public sealed class AgentHomeMemoryProposalServiceTests : IDisposable
         var result = await CreateService().CollectAsync(Request("run-long-content", root));
 
         AssertEx.Empty(result.Proposals);
-        AssertEx.Equal(1, result.Rejections.Count);
+        AssertEx.Equal(expected: 1, result.Rejections.Count);
         AssertEx.Contains(result.Rejections[0].Reason, "content");
     }
 
@@ -214,7 +214,7 @@ public sealed class AgentHomeMemoryProposalServiceTests : IDisposable
         var result = await CreateService().CollectAsync(Request("run-empty-content", root));
 
         AssertEx.Empty(result.Proposals);
-        AssertEx.Equal(1, result.Rejections.Count);
+        AssertEx.Equal(expected: 1, result.Rejections.Count);
     }
 
     [Test]
@@ -230,7 +230,7 @@ public sealed class AgentHomeMemoryProposalServiceTests : IDisposable
         var result = await CreateService().CollectAsync(Request("run-missing-field", root));
 
         AssertEx.Empty(result.Proposals);
-        AssertEx.Equal(1, result.Rejections.Count);
+        AssertEx.Equal(expected: 1, result.Rejections.Count);
         AssertEx.Contains(result.Rejections[0].Reason, "confidence");
     }
 
@@ -246,7 +246,7 @@ public sealed class AgentHomeMemoryProposalServiceTests : IDisposable
         var result = await CreateService().CollectAsync(Request("run-traversal", root));
 
         AssertEx.Empty(result.Proposals);
-        AssertEx.Equal(1, result.Rejections.Count);
+        AssertEx.Equal(expected: 1, result.Rejections.Count);
         AssertEx.Contains(result.Rejections[0].Reason, "path-traversal");
     }
 
@@ -263,8 +263,8 @@ public sealed class AgentHomeMemoryProposalServiceTests : IDisposable
 
         var result = await CreateService().CollectAsync(Request("run-mixed", root));
 
-        AssertEx.Equal(2, result.Proposals.Count, "two valid records accepted");
-        AssertEx.Equal(1, result.Rejections.Count, "one bad-json record rejected");
+        AssertEx.Equal(expected: 2, result.Proposals.Count, "two valid records accepted");
+        AssertEx.Equal(expected: 1, result.Rejections.Count, "one bad-json record rejected");
     }
 
 
@@ -281,10 +281,10 @@ public sealed class AgentHomeMemoryProposalServiceTests : IDisposable
 
         var result = await CreateService().CollectAsync(Request("run-line-idx", root));
 
-        AssertEx.Equal(2, result.Proposals.Count);
-        AssertEx.Equal(0, result.Proposals[0].SourceLineIndex);
-        AssertEx.Equal(2, result.Proposals[1].SourceLineIndex);
-        AssertEx.Equal(1, result.Rejections[0].SourceLineIndex);
+        AssertEx.Equal(expected: 2, result.Proposals.Count);
+        AssertEx.Equal(expected: 0, result.Proposals[0].SourceLineIndex);
+        AssertEx.Equal(expected: 2, result.Proposals[1].SourceLineIndex);
+        AssertEx.Equal(expected: 1, result.Rejections[0].SourceLineIndex);
     }
 
 
@@ -300,7 +300,7 @@ public sealed class AgentHomeMemoryProposalServiceTests : IDisposable
         var result = await CreateService().CollectAsync(Request("run-pem", root));
 
         AssertEx.Empty(result.Proposals, "PEM private-key record must be rejected");
-        AssertEx.Equal(1, result.Rejections.Count);
+        AssertEx.Equal(expected: 1, result.Rejections.Count);
         AssertEx.Contains(result.Rejections[0].Reason, "private-key");
     }
 
@@ -316,7 +316,7 @@ public sealed class AgentHomeMemoryProposalServiceTests : IDisposable
         var result = await CreateService().CollectAsync(Request("run-sa", root));
 
         AssertEx.Empty(result.Proposals, "Google service-account JSON must be rejected");
-        AssertEx.Equal(1, result.Rejections.Count);
+        AssertEx.Equal(expected: 1, result.Rejections.Count);
     }
 
     [Test]
@@ -331,7 +331,7 @@ public sealed class AgentHomeMemoryProposalServiceTests : IDisposable
         var result = await CreateService().CollectAsync(Request("run-secret-evidence", root));
 
         AssertEx.Empty(result.Proposals, "secret in evidence path must reject the whole record");
-        AssertEx.Equal(1, result.Rejections.Count);
+        AssertEx.Equal(expected: 1, result.Rejections.Count);
     }
 
 
@@ -347,7 +347,7 @@ public sealed class AgentHomeMemoryProposalServiceTests : IDisposable
 
         var result = await CreateService().CollectAsync(Request("run-gh-token", root));
 
-        AssertEx.Equal(1, result.Proposals.Count, "record with redactable token survives");
+        AssertEx.Equal(expected: 1, result.Proposals.Count, "record with redactable token survives");
         AssertEx.Empty(result.Rejections);
         AssertEx.Contains(result.Proposals[0].Content, "[REDACTED:github-token]", StringComparison.Ordinal,
             "GitHub token replaced by redaction placeholder");
@@ -364,7 +364,7 @@ public sealed class AgentHomeMemoryProposalServiceTests : IDisposable
 
         var result = await CreateService().CollectAsync(Request("run-aws", root));
 
-        AssertEx.Equal(1, result.Proposals.Count, "AWS key redacted; record survives");
+        AssertEx.Equal(expected: 1, result.Proposals.Count, "AWS key redacted; record survives");
         AssertEx.Contains(result.Proposals[0].Content, "[REDACTED:aws-access-key]");
     }
 
@@ -379,7 +379,7 @@ public sealed class AgentHomeMemoryProposalServiceTests : IDisposable
 
         var result = await CreateService().CollectAsync(Request("run-jwt", root));
 
-        AssertEx.Equal(1, result.Proposals.Count);
+        AssertEx.Equal(expected: 1, result.Proposals.Count);
         AssertEx.Contains(result.Proposals[0].Content, "[REDACTED:jwt]");
     }
 
@@ -394,7 +394,7 @@ public sealed class AgentHomeMemoryProposalServiceTests : IDisposable
 
         var result = await CreateService().CollectAsync(Request("run-slack", root));
 
-        AssertEx.Equal(1, result.Proposals.Count);
+        AssertEx.Equal(expected: 1, result.Proposals.Count);
         AssertEx.Contains(result.Proposals[0].Content, "[REDACTED:slack-token]");
     }
 
@@ -416,7 +416,7 @@ public sealed class AgentHomeMemoryProposalServiceTests : IDisposable
         var result = await CreateService().CollectAsync(Request("run-bearer-offset", root));
 
         AssertEx.Empty(result.Rejections, "a redactable token must not throw or reject — the record survives redacted");
-        AssertEx.Equal(1, result.Proposals.Count);
+        AssertEx.Equal(expected: 1, result.Proposals.Count);
         var content = result.Proposals[0].Content;
         AssertEx.Contains(content, "[REDACTED:high-entropy-token]");
         AssertEx.Contains(content, "Bearer ", StringComparison.Ordinal, "the keyword prefix must be preserved");
@@ -439,7 +439,7 @@ public sealed class AgentHomeMemoryProposalServiceTests : IDisposable
 
         var result = await CreateService().CollectAsync(Request("run-bare-entropy", root));
 
-        AssertEx.Equal(1, result.Proposals.Count);
+        AssertEx.Equal(expected: 1, result.Proposals.Count);
         AssertEx.Empty(result.Rejections);
         AssertEx.Contains(result.Proposals[0].Content, "[REDACTED:high-entropy-token]");
         AssertEx.False(result.Proposals[0].Content.Contains(token, StringComparison.Ordinal), "the bare token must be fully redacted");
@@ -457,7 +457,7 @@ public sealed class AgentHomeMemoryProposalServiceTests : IDisposable
 
         var result = await CreateService().CollectAsync(Request("run-long-ident", root));
 
-        AssertEx.Equal(1, result.Proposals.Count);
+        AssertEx.Equal(expected: 1, result.Proposals.Count);
         AssertEx.False(result.Proposals[0].Content.Contains("[REDACTED", StringComparison.Ordinal),
             "an ordinary long identifier (low entropy) must not be redacted");
     }
@@ -475,7 +475,7 @@ public sealed class AgentHomeMemoryProposalServiceTests : IDisposable
         var result = await CreateService().CollectAsync(Request("run-host-evidence", root));
 
         AssertEx.Empty(result.Proposals, "an absolute host path in evidence must reject the record");
-        AssertEx.Equal(1, result.Rejections.Count);
+        AssertEx.Equal(expected: 1, result.Rejections.Count);
         AssertEx.Contains(result.Rejections[0].Reason, "absolute host path");
     }
 
@@ -491,7 +491,7 @@ public sealed class AgentHomeMemoryProposalServiceTests : IDisposable
         var result = await CreateService().CollectAsync(Request("run-win-evidence", root));
 
         AssertEx.Empty(result.Proposals, "a Windows drive-rooted host path in evidence must reject the record");
-        AssertEx.Equal(1, result.Rejections.Count);
+        AssertEx.Equal(expected: 1, result.Rejections.Count);
     }
 
     [Test]
@@ -506,7 +506,7 @@ public sealed class AgentHomeMemoryProposalServiceTests : IDisposable
 
         var result = await CreateService().CollectAsync(Request("run-relative-evidence", root));
 
-        AssertEx.Equal(1, result.Proposals.Count, "a relative evidence path is allowed");
+        AssertEx.Equal(expected: 1, result.Proposals.Count, "a relative evidence path is allowed");
         AssertEx.Empty(result.Rejections);
     }
 
@@ -523,7 +523,7 @@ public sealed class AgentHomeMemoryProposalServiceTests : IDisposable
 
         var result = await CreateService().CollectAsync(Request("run-benign-password", root));
 
-        AssertEx.Equal(1, result.Proposals.Count, "benign word 'password' in prose must not be redacted");
+        AssertEx.Equal(expected: 1, result.Proposals.Count, "benign word 'password' in prose must not be redacted");
         AssertEx.False(result.Proposals[0].Content.Contains("[REDACTED", StringComparison.Ordinal),
             "content must not contain a REDACTED placeholder");
     }
@@ -540,7 +540,7 @@ public sealed class AgentHomeMemoryProposalServiceTests : IDisposable
 
         var result = await CreateService().CollectAsync(Request("run-sklearn", root));
 
-        AssertEx.Equal(1, result.Proposals.Count);
+        AssertEx.Equal(expected: 1, result.Proposals.Count);
         AssertEx.False(result.Proposals[0].Content.Contains("[REDACTED", StringComparison.Ordinal),
             "sk-learn (short, low entropy) must not be redacted");
     }
@@ -556,8 +556,8 @@ public sealed class AgentHomeMemoryProposalServiceTests : IDisposable
 
         var result = await CreateService().CollectAsync(Request("run-evidence-paths", root));
 
-        AssertEx.Equal(1, result.Proposals.Count);
-        AssertEx.Equal(2, result.Proposals[0].Evidence.Count);
+        AssertEx.Equal(expected: 1, result.Proposals.Count);
+        AssertEx.Equal(expected: 2, result.Proposals[0].Evidence.Count);
     }
 
 
@@ -572,7 +572,7 @@ public sealed class AgentHomeMemoryProposalServiceTests : IDisposable
 
         var result = await CreateService().CollectAsync(Request("run-azure", root));
 
-        AssertEx.Equal(1, result.Proposals.Count);
+        AssertEx.Equal(expected: 1, result.Proposals.Count);
         AssertEx.Contains(result.Proposals[0].Content, "[REDACTED:azure-connection-string]");
     }
 
@@ -589,7 +589,7 @@ public sealed class AgentHomeMemoryProposalServiceTests : IDisposable
 
         var result = await CreateService().CollectAsync(Request("run-remove", root));
 
-        AssertEx.Equal(1, result.Proposals.Count);
+        AssertEx.Equal(expected: 1, result.Proposals.Count);
         AssertEx.Equal("remove", result.Proposals[0].Operation);
     }
 

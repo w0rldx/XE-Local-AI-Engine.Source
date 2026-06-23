@@ -19,7 +19,7 @@ public sealed class TokenStoreTests : IDisposable
     {
         if (Directory.Exists(_contentRootPath))
         {
-            Directory.Delete(_contentRootPath, true);
+            Directory.Delete(_contentRootPath, recursive: true);
         }
     }
 
@@ -63,7 +63,7 @@ public sealed class TokenStoreTests : IDisposable
         }
         finally
         {
-            Directory.Delete(contentRoot, true);
+            Directory.Delete(contentRoot, recursive: true);
         }
     }
 
@@ -135,7 +135,7 @@ public sealed class TokenStoreTests : IDisposable
 
         await tokenStore.StoreTokensAsync(PairClientResponseBuilder.Valid().Build());
 
-        AssertEx.Equal(1, eventCount);
+        AssertEx.Equal(expected: 1, eventCount);
     }
 
     [Test]
@@ -261,7 +261,7 @@ public sealed class TokenStoreTests : IDisposable
     {
         return Convert.ToBase64String(Encoding.UTF8.GetBytes(value))
                       .TrimEnd('=')
-                      .Replace('+', '-')
-                      .Replace('/', '_');
+                      .Replace(oldChar: '+', newChar: '-')
+                      .Replace(oldChar: '/', newChar: '_');
     }
 }

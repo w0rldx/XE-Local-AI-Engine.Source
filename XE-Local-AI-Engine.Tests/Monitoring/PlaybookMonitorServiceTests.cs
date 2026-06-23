@@ -16,17 +16,17 @@ public sealed class PlaybookMonitorServiceTests
     {
         var agentId = Guid.NewGuid();
         // Before: 6/10 down (0.6). After: 1/10 down (0.1). Drop > epsilon (0.05) and after sample (10) >= floor (3).
-        var service = CreateService(out _, agentId, new CohortComparison(10, 6, 10, 1), 100);
+        var service = CreateService(out _, agentId, new CohortComparison(BeforeTotal: 10, BeforeDown: 6, AfterTotal: 10, AfterDown: 1), enabledAtUtc: 100);
 
         var views = await service.GetMonitorAsync(agentId).ConfigureAwait(false);
 
-        AssertEx.Equal(1, views.Count);
+        AssertEx.Equal(expected: 1, views.Count);
         var view = views[0];
         AssertEx.Equal(PlaybookMonitorStatus.Improved, view.Status);
         AssertEx.False(view.Flagged, "Improved is never flagged.");
         AssertEx.True(Math.Abs(view.BeforeDownRate - 0.6d) < Tolerance, "Before down-rate should be 0.6.");
         AssertEx.True(Math.Abs(view.AfterDownRate - 0.1d) < Tolerance, "After down-rate should be 0.1.");
-        AssertEx.Equal(10, view.AfterSampleSize);
+        AssertEx.Equal(expected: 10, view.AfterSampleSize);
     }
 
     [Test]
@@ -34,11 +34,11 @@ public sealed class PlaybookMonitorServiceTests
     {
         var agentId = Guid.NewGuid();
         // Before: 1/10 down (0.1). After: 8/10 down (0.8). Rise > epsilon and after sample >= floor → Regressed + flagged.
-        var service = CreateService(out _, agentId, new CohortComparison(10, 1, 10, 8), 100);
+        var service = CreateService(out _, agentId, new CohortComparison(BeforeTotal: 10, BeforeDown: 1, AfterTotal: 10, AfterDown: 8), enabledAtUtc: 100);
 
         var views = await service.GetMonitorAsync(agentId).ConfigureAwait(false);
 
-        AssertEx.Equal(1, views.Count);
+        AssertEx.Equal(expected: 1, views.Count);
         AssertEx.Equal(PlaybookMonitorStatus.Regressed, views[0].Status);
         AssertEx.True(views[0].Flagged, "A meaningfully-sampled regression must be flagged for review.");
     }
@@ -48,7 +48,7 @@ public sealed class PlaybookMonitorServiceTests
     {
         var agentId = Guid.NewGuid();
         // Before: 5/10 (0.5). After: 5/10 (0.5). Within epsilon → Flat; after sample >= floor → flagged (dead action).
-        var service = CreateService(out _, agentId, new CohortComparison(10, 5, 10, 5), 100);
+        var service = CreateService(out _, agentId, new CohortComparison(BeforeTotal: 10, BeforeDown: 5, AfterTotal: 10, AfterDown: 5), enabledAtUtc: 100);
 
         var views = await service.GetMonitorAsync(agentId).ConfigureAwait(false);
 
@@ -61,13 +61,13 @@ public sealed class PlaybookMonitorServiceTests
     {
         var agentId = Guid.NewGuid();
         // After total 2 < the min sample size 3: regardless of the rate delta, the verdict is InsufficientData, unflagged.
-        var service = CreateService(out _, agentId, new CohortComparison(10, 1, 2, 2), 100);
+        var service = CreateService(out _, agentId, new CohortComparison(BeforeTotal: 10, BeforeDown: 1, AfterTotal: 2, AfterDown: 2), enabledAtUtc: 100);
 
         var views = await service.GetMonitorAsync(agentId).ConfigureAwait(false);
 
         AssertEx.Equal(PlaybookMonitorStatus.InsufficientData, views[0].Status);
         AssertEx.False(views[0].Flagged, "InsufficientData is never flagged.");
-        AssertEx.Equal(2, views[0].AfterSampleSize);
+        AssertEx.Equal(expected: 2, views[0].AfterSampleSize);
     }
 
     [Test]
@@ -81,17 +81,17 @@ public sealed class PlaybookMonitorServiceTests
         actionStore.ListEnabledByAgentAsync(agentId, Arg.Any<CancellationToken>())
                    .Returns(Task.FromResult<IReadOnlyList<PlaybookActionRecord>>([scopedAction]));
         monitorStore.GetCohortComparisonAsync(agentId, enabledAtUtc, "run_in_agent_home", Arg.Any<CancellationToken>())
-                    .Returns(new CohortComparison(4, 3, 4, 0));
+                    .Returns(new CohortComparison(BeforeTotal: 4, BeforeDown: 3, AfterTotal: 4, AfterDown: 0));
         var service = new PlaybookMonitorService(monitorStore, actionStore, DefaultOptions());
 
         var views = await service.GetMonitorAsync(agentId).ConfigureAwait(false);
 
-        AssertEx.Equal(1, views.Count);
+        AssertEx.Equal(expected: 1, views.Count);
         AssertEx.Equal("run_in_agent_home", views[0].FacetToolName);
         AssertEx.Equal(PlaybookMonitorStatus.Improved, views[0].Status);
         // The facet (non-null tool scope) was requested from the store, not the overall (null) path.
         await monitorStore.Received(1).GetCohortComparisonAsync(agentId, enabledAtUtc, "run_in_agent_home", Arg.Any<CancellationToken>()).ConfigureAwait(false);
-        await monitorStore.DidNotReceive().GetCohortComparisonAsync(agentId, enabledAtUtc, null, Arg.Any<CancellationToken>()).ConfigureAwait(false);
+        await monitorStore.DidNotReceive().GetCohortComparisonAsync(agentId, enabledAtUtc, toolScope: null, Arg.Any<CancellationToken>()).ConfigureAwait(false);
     }
 
     [Test]
@@ -106,14 +106,14 @@ public sealed class PlaybookMonitorServiceTests
         var action = EnabledAction(agentId, enabledAtUtc, "   ");
         actionStore.ListEnabledByAgentAsync(agentId, Arg.Any<CancellationToken>())
                    .Returns(Task.FromResult<IReadOnlyList<PlaybookActionRecord>>([action]));
-        monitorStore.GetCohortComparisonAsync(agentId, enabledAtUtc, null, Arg.Any<CancellationToken>())
-                    .Returns(new CohortComparison(10, 5, 10, 5));
+        monitorStore.GetCohortComparisonAsync(agentId, enabledAtUtc, toolScope: null, Arg.Any<CancellationToken>())
+                    .Returns(new CohortComparison(BeforeTotal: 10, BeforeDown: 5, AfterTotal: 10, AfterDown: 5));
         var service = new PlaybookMonitorService(monitorStore, actionStore, DefaultOptions());
 
         var views = await service.GetMonitorAsync(agentId).ConfigureAwait(false);
 
         AssertEx.True(views[0].FacetToolName is null, "A blank scope must surface a null facet.");
-        await monitorStore.Received(1).GetCohortComparisonAsync(agentId, enabledAtUtc, null, Arg.Any<CancellationToken>()).ConfigureAwait(false);
+        await monitorStore.Received(1).GetCohortComparisonAsync(agentId, enabledAtUtc, toolScope: null, Arg.Any<CancellationToken>()).ConfigureAwait(false);
     }
 
     [Test]
@@ -122,14 +122,14 @@ public sealed class PlaybookMonitorServiceTests
         var agentId = Guid.NewGuid();
         var monitorStore = Substitute.For<IPlaybookMonitorStore>();
         var actionStore = Substitute.For<IPlaybookActionStore>();
-        var noClock = EnabledAction(agentId, null, null);
+        var noClock = EnabledAction(agentId, enabledAtUtc: null, scope: null);
         actionStore.ListEnabledByAgentAsync(agentId, Arg.Any<CancellationToken>())
                    .Returns(Task.FromResult<IReadOnlyList<PlaybookActionRecord>>([noClock]));
         var service = new PlaybookMonitorService(monitorStore, actionStore, DefaultOptions());
 
         var views = await service.GetMonitorAsync(agentId).ConfigureAwait(false);
 
-        AssertEx.Equal(0, views.Count);
+        AssertEx.Equal(expected: 0, views.Count);
         await monitorStore.DidNotReceive().GetCohortComparisonAsync(Arg.Any<Guid>(), Arg.Any<long>(), Arg.Any<string?>(), Arg.Any<CancellationToken>()).ConfigureAwait(false);
     }
 
@@ -146,7 +146,7 @@ public sealed class PlaybookMonitorServiceTests
         var views = await service.GetMonitorAsync(agentId).ConfigureAwait(false);
 
         AssertEx.True(views is not null, "The result is non-null.");
-        AssertEx.Equal(0, views!.Count);
+        AssertEx.Equal(expected: 0, views!.Count);
     }
 
     private static PlaybookMonitorService CreateService(out IPlaybookMonitorStore monitorStore,
@@ -157,8 +157,8 @@ public sealed class PlaybookMonitorServiceTests
         monitorStore = Substitute.For<IPlaybookMonitorStore>();
         var actionStore = Substitute.For<IPlaybookActionStore>();
         actionStore.ListEnabledByAgentAsync(agentId, Arg.Any<CancellationToken>())
-                   .Returns(Task.FromResult<IReadOnlyList<PlaybookActionRecord>>([EnabledAction(agentId, enabledAtUtc, null)]));
-        monitorStore.GetCohortComparisonAsync(agentId, enabledAtUtc, null, Arg.Any<CancellationToken>()).Returns(comparison);
+                   .Returns(Task.FromResult<IReadOnlyList<PlaybookActionRecord>>([EnabledAction(agentId, enabledAtUtc, scope: null)]));
+        monitorStore.GetCohortComparisonAsync(agentId, enabledAtUtc, toolScope: null, Arg.Any<CancellationToken>()).Returns(comparison);
         return new PlaybookMonitorService(monitorStore, actionStore, DefaultOptions());
     }
 
@@ -177,13 +177,13 @@ public sealed class PlaybookMonitorServiceTests
             agentDefinitionId,
             PlaybookActionState.Enabled,
             PlaybookActionSource.Manual,
-            null,
+            TriggerCondition: null,
             "Prefer small commits.",
             scope,
-            10,
-            1,
-            10,
-            10,
+            Priority: 10,
+            Version: 1,
+            CreatedAtUtc: 10,
+            UpdatedAtUtc: 10,
             EnabledAtUtc: enabledAtUtc);
     }
 }

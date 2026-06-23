@@ -11,10 +11,10 @@ public sealed class SelectedPathResolverTests
         var groupA = Guid.NewGuid();
         var groupB = Guid.NewGuid();
 
-        var a1 = Message(1, groupA, 100);
-        var a2 = Message(1, groupA, 200);
-        var b1 = Message(2, groupB, 300);
-        var b2 = Message(2, groupB, 400);
+        var a1 = Message(seq: 1, groupA, createdAt: 100);
+        var a2 = Message(seq: 1, groupA, createdAt: 200);
+        var b1 = Message(seq: 2, groupB, createdAt: 300);
+        var b2 = Message(seq: 2, groupB, createdAt: 400);
 
         var selection = new Dictionary<Guid, Guid>
         {
@@ -30,7 +30,7 @@ public sealed class SelectedPathResolverTests
             b2
         }, selection);
 
-        AssertEx.Equal(2, path.Count);
+        AssertEx.Equal(expected: 2, path.Count);
         AssertEx.Equal(a1.MessageId, path[0].MessageId);
         AssertEx.Equal(b2.MessageId, path[1].MessageId);
     }
@@ -39,18 +39,18 @@ public sealed class SelectedPathResolverTests
     public void Resolve_WithoutSelection_DefaultsToNewestSibling()
     {
         var group = Guid.NewGuid();
-        var oldest = Message(1, group, 100);
-        var middle = Message(1, group, 200);
-        var newest = Message(1, group, 300);
+        var oldest = Message(seq: 1, group, createdAt: 100);
+        var middle = Message(seq: 1, group, createdAt: 200);
+        var newest = Message(seq: 1, group, createdAt: 300);
 
         var path = SelectedPathResolver.Resolve(new[]
         {
             middle,
             newest,
             oldest
-        }, null);
+        }, selection: null);
 
-        AssertEx.Equal(1, path.Count);
+        AssertEx.Equal(expected: 1, path.Count);
         AssertEx.Equal(newest.MessageId, path[0].MessageId);
     }
 
@@ -58,12 +58,12 @@ public sealed class SelectedPathResolverTests
     public void Resolve_WhenSelectionChangesMidThread_ProducesDifferentDownstreamPath()
     {
         var userGroup = Guid.NewGuid();
-        var prompt = Message(1, null, 50);
+        var prompt = Message(seq: 1, group: null, createdAt: 50);
 
         // Two assistant variants for the same turn, each with its own follow-up downstream.
-        var assistantA = Message(2, userGroup, 100);
-        var assistantB = Message(2, userGroup, 200);
-        var followUp = Message(3, null, 300);
+        var assistantA = Message(seq: 2, userGroup, createdAt: 100);
+        var assistantB = Message(seq: 2, userGroup, createdAt: 200);
+        var followUp = Message(seq: 3, group: null, createdAt: 300);
 
         var messages = new[]
         {
@@ -97,10 +97,10 @@ public sealed class SelectedPathResolverTests
     public void Resolve_AlwaysIncludesMessagesWithoutVariantGroup()
     {
         var group = Guid.NewGuid();
-        var user = Message(1, null, 100);
-        var variant1 = Message(2, group, 200);
-        var variant2 = Message(2, group, 300);
-        var trailing = Message(3, null, 400);
+        var user = Message(seq: 1, group: null, createdAt: 100);
+        var variant1 = Message(seq: 2, group, createdAt: 200);
+        var variant2 = Message(seq: 2, group, createdAt: 300);
+        var trailing = Message(seq: 3, group: null, createdAt: 400);
 
         var path = SelectedPathResolver.Resolve(new[]
             {
@@ -114,7 +114,7 @@ public sealed class SelectedPathResolverTests
                 [group] = variant1.MessageId
             });
 
-        AssertEx.Equal(3, path.Count);
+        AssertEx.Equal(expected: 3, path.Count);
         AssertEx.Contains(path, message => message.MessageId == user.MessageId);
         AssertEx.Contains(path, message => message.MessageId == trailing.MessageId);
         AssertEx.Contains(path, message => message.MessageId == variant1.MessageId);
@@ -123,18 +123,18 @@ public sealed class SelectedPathResolverTests
     [Test]
     public void Resolve_WithNoVariants_PassesThroughOrderedBySequence()
     {
-        var first = Message(1, null, 100);
-        var second = Message(2, null, 200);
-        var third = Message(3, null, 300);
+        var first = Message(seq: 1, group: null, createdAt: 100);
+        var second = Message(seq: 2, group: null, createdAt: 200);
+        var third = Message(seq: 3, group: null, createdAt: 300);
 
         var path = SelectedPathResolver.Resolve(new[]
         {
             third,
             first,
             second
-        }, null);
+        }, selection: null);
 
-        AssertEx.Equal(3, path.Count);
+        AssertEx.Equal(expected: 3, path.Count);
         AssertEx.Equal(first.MessageId, path[0].MessageId);
         AssertEx.Equal(second.MessageId, path[1].MessageId);
         AssertEx.Equal(third.MessageId, path[2].MessageId);
@@ -143,7 +143,7 @@ public sealed class SelectedPathResolverTests
     [Test]
     public void Resolve_WithEmptyConversation_ReturnsEmpty()
     {
-        var path = SelectedPathResolver.Resolve(Array.Empty<TestMessage>(), null);
+        var path = SelectedPathResolver.Resolve(Array.Empty<TestMessage>(), selection: null);
 
         AssertEx.Empty(path);
     }
@@ -152,8 +152,8 @@ public sealed class SelectedPathResolverTests
     public void Resolve_WhenSelectedIdMissing_FallsBackToNewestSibling()
     {
         var group = Guid.NewGuid();
-        var older = Message(1, group, 100);
-        var newer = Message(1, group, 200);
+        var older = Message(seq: 1, group, createdAt: 100);
+        var newer = Message(seq: 1, group, createdAt: 200);
 
         var path = SelectedPathResolver.Resolve(new[]
             {
@@ -165,7 +165,7 @@ public sealed class SelectedPathResolverTests
                 [group] = Guid.NewGuid()
             });
 
-        AssertEx.Equal(1, path.Count);
+        AssertEx.Equal(expected: 1, path.Count);
         AssertEx.Equal(newer.MessageId, path[0].MessageId);
     }
 

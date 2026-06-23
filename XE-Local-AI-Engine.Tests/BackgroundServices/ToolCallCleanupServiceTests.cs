@@ -14,7 +14,7 @@ public sealed class ToolCallCleanupServiceTests
     public async Task ExecuteAsync_CallsCleanupStaleToolCalls_Periodically()
     {
         using var runner = new MockInvocationRunner();
-        using var service = CreateService(runner, 5, 0);
+        using var service = CreateService(runner, maxAgeMinutes: 5, cleanupIntervalSeconds: 0);
 
         await service.StartAsync(CancellationToken.None);
         AssertEx.True(await runner.WaitForCleanupAsync().ConfigureAwait(false));
@@ -27,7 +27,7 @@ public sealed class ToolCallCleanupServiceTests
     public async Task ExecuteAsync_PassesConfiguredMaxAge()
     {
         using var runner = new MockInvocationRunner();
-        using var service = CreateService(runner, 7, 0);
+        using var service = CreateService(runner, maxAgeMinutes: 7, cleanupIntervalSeconds: 0);
 
         await service.StartAsync(CancellationToken.None);
         AssertEx.True(await runner.WaitForCleanupAsync().ConfigureAwait(false));
@@ -43,7 +43,7 @@ public sealed class ToolCallCleanupServiceTests
         {
             CleanupException = new InvalidOperationException("boom")
         };
-        using var service = CreateService(runner, 5, 0);
+        using var service = CreateService(runner, maxAgeMinutes: 5, cleanupIntervalSeconds: 0);
 
         await service.StartAsync(CancellationToken.None);
         AssertEx.True(await runner.WaitForCleanupAsync().ConfigureAwait(false));
@@ -56,7 +56,7 @@ public sealed class ToolCallCleanupServiceTests
     public async Task StopAsync_CancelsLoop_Gracefully()
     {
         using var runner = new MockInvocationRunner();
-        using var service = CreateService(runner, 5, 1);
+        using var service = CreateService(runner, maxAgeMinutes: 5, cleanupIntervalSeconds: 1);
 
         await service.StartAsync(CancellationToken.None);
         await service.StopAsync(CancellationToken.None);

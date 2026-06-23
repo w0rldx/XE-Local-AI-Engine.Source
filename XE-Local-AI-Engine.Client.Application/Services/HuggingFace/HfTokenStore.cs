@@ -18,7 +18,7 @@ using XE_Local_AI_Engine.Providers.Abstractions;
 public sealed class HfTokenStore : IHfTokenStore, IDisposable
 {
     private const string TokenFileName = "hf-token.enc";
-    private readonly SemaphoreSlim _lock = new(1, 1);
+    private readonly SemaphoreSlim _lock = new(initialCount: 1, maxCount: 1);
     private readonly ILogger<HfTokenStore> _logger;
     private readonly IDataProtector _protector;
 
@@ -140,7 +140,7 @@ public sealed class HfTokenStore : IHfTokenStore, IDisposable
     private void ApplyWindowsFileSecurity()
     {
         var fileSecurity = new FileSecurity();
-        fileSecurity.SetAccessRuleProtection(true, false);
+        fileSecurity.SetAccessRuleProtection(isProtected: true, preserveInheritance: false);
 
         var currentIdentity = WindowsIdentity.GetCurrent();
         if (currentIdentity.User is not null)

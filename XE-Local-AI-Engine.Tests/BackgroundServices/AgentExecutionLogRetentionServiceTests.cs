@@ -22,7 +22,7 @@ public sealed class AgentExecutionLogRetentionServiceTests : IDisposable
     {
         if (Directory.Exists(_rootPath))
         {
-            Directory.Delete(_rootPath, true);
+            Directory.Delete(_rootPath, recursive: true);
         }
     }
 
@@ -52,7 +52,7 @@ public sealed class AgentExecutionLogRetentionServiceTests : IDisposable
             {
                 using var scope = provider.CreateScope();
                 var store = scope.ServiceProvider.GetRequiredService<IAgentExecutionLogStore>();
-                return store.ListByAgentAsync(agentId, 10).GetAwaiter().GetResult().Count == 1;
+                return store.ListByAgentAsync(agentId, limit: 10).GetAwaiter().GetResult().Count == 1;
             },
             TimeSpan.FromSeconds(5),
             "The retention sweep should delete the expired row and keep the fresh one.").ConfigureAwait(false);
@@ -60,8 +60,8 @@ public sealed class AgentExecutionLogRetentionServiceTests : IDisposable
 
         using var verifyScope = provider.CreateScope();
         var verifyStore = verifyScope.ServiceProvider.GetRequiredService<IAgentExecutionLogStore>();
-        var remaining = await verifyStore.ListByAgentAsync(agentId, 10).ConfigureAwait(false);
-        AssertEx.Equal(1, remaining.Count);
+        var remaining = await verifyStore.ListByAgentAsync(agentId, limit: 10).ConfigureAwait(false);
+        AssertEx.Equal(expected: 1, remaining.Count);
         AssertEx.Equal(freshLogId, remaining[0].Id);
     }
 
@@ -89,8 +89,8 @@ public sealed class AgentExecutionLogRetentionServiceTests : IDisposable
 
         using var scope = provider.CreateScope();
         var store = scope.ServiceProvider.GetRequiredService<IAgentExecutionLogStore>();
-        var rows = await store.ListByAgentAsync(agentId, 10).ConfigureAwait(false);
-        AssertEx.Equal(1, rows.Count);
+        var rows = await store.ListByAgentAsync(agentId, limit: 10).ConfigureAwait(false);
+        AssertEx.Equal(expected: 1, rows.Count);
     }
 
     private static AgentExecutionLogRetentionService CreateService(IServiceProvider provider, AgentExecutionLogRetentionOptions options)
@@ -107,7 +107,7 @@ public sealed class AgentExecutionLogRetentionServiceTests : IDisposable
         // makes the row's age controllable without touching raw SQL.
         var dbContext = scopeProvider.GetRequiredService<NodeChatDbContext>();
         var store = new AgentExecutionLogStore(dbContext, new FixedTimeProvider(createdAtUtc));
-        var added = await store.AddAsync(new AgentExecutionLogInput(agentId, null, null, "llama", "h", 1L, Success: true))
+        var added = await store.AddAsync(new AgentExecutionLogInput(agentId, ConversationId: null, MessageId: null, "llama", "h", LatencyMs: 1L, Success: true))
                                .ConfigureAwait(false);
         return added.Id;
     }

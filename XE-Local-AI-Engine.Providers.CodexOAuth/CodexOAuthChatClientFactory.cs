@@ -40,7 +40,7 @@ public sealed class CodexOAuthChatClientFactory : ICodexOAuthChatClientFactory, 
         // One shared handler chain for the provider lifetime: SocketsHttpHandler -> CodexAuthHandler.
         _socketsHandler = new SocketsHttpHandler();
         _authHandler.InnerHandler = _socketsHandler;
-        _httpClient = new HttpClient(_authHandler, false);
+        _httpClient = new HttpClient(_authHandler, disposeHandler: false);
     }
 
     /// <inheritdoc />

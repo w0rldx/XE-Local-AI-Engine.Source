@@ -29,7 +29,7 @@ public sealed class SupervisorCrashAndSurfaceTests
 
         var ex = await AssertEx.ThrowsAsync<LlamaRuntimeException>(() => supervisor.EnsureRunningAsync("model-a", ModelRole.Chat, CancellationToken.None));
 
-        AssertEx.Equal(3, attempts); // retried up to the restart cap.
+        AssertEx.Equal(expected: 3, attempts); // retried up to the restart cap.
         // Sanitized surface: no internal path or secret leaks into the user-facing message.
         AssertEx.False(ex.Message.Contains("/secret/path", StringComparison.OrdinalIgnoreCase));
         AssertEx.False(ex.Message.Contains("TOKEN", StringComparison.OrdinalIgnoreCase));
@@ -81,7 +81,7 @@ public sealed class SupervisorCrashAndSurfaceTests
         var endpoint = await supervisor.EnsureRunningAsync("remote-model", ModelRole.Chat, CancellationToken.None);
 
         AssertEx.Equal("http://127.0.0.1:9999/v1", endpoint.BaseAddress.AbsoluteUri);
-        AssertEx.Equal(0, launcher.LaunchCount); // hybrid attach: no local process spawned.
+        AssertEx.Equal(expected: 0, launcher.LaunchCount); // hybrid attach: no local process spawned.
     }
 
     [Test]
@@ -96,7 +96,7 @@ public sealed class SupervisorCrashAndSurfaceTests
 
         var healths = await supervisor.CheckHealthAsync(CancellationToken.None);
 
-        AssertEx.Equal(2, healths.Count);
+        AssertEx.Equal(expected: 2, healths.Count);
         AssertEx.True(healths.All(h => h.IsResponsive));
         AssertEx.Contains(healths, h => h.Role == ModelRole.Chat);
         AssertEx.Contains(healths, h => h.Role == ModelRole.Embedding);

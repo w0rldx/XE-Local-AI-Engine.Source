@@ -28,14 +28,14 @@ public sealed class ModelFitRequestValidatorTests
     [Test]
     public void Validate_ValidRecommend_IsValid()
     {
-        AssertEx.True(_validator.IsValid(ModelFitOperation.Recommend, "coding", 5, "ollama", null));
+        AssertEx.True(_validator.IsValid(ModelFitOperation.Recommend, "coding", limit: 5, "ollama", modelName: null));
     }
 
     [Test]
     public void Validate_RecommendWithoutUseCase_IsValid()
     {
         // use-case is optional for recommend; only a supplied value must be allowlisted.
-        AssertEx.True(_validator.IsValid(ModelFitOperation.Recommend, null, 1, "ollama", null));
+        AssertEx.True(_validator.IsValid(ModelFitOperation.Recommend, useCase: null, limit: 1, "ollama", modelName: null));
     }
 
     [Test]
@@ -44,7 +44,7 @@ public sealed class ModelFitRequestValidatorTests
     [Arguments("rag")]
     public void Validate_RecommendWithUnknownUseCase_IsInvalid(string useCase)
     {
-        AssertEx.False(_validator.IsValid(ModelFitOperation.Recommend, useCase, 5, "ollama", null));
+        AssertEx.False(_validator.IsValid(ModelFitOperation.Recommend, useCase, limit: 5, "ollama", modelName: null));
     }
 
     [Test]
@@ -55,7 +55,7 @@ public sealed class ModelFitRequestValidatorTests
     [Arguments(1000)]
     public void Validate_RecommendWithOutOfRangeLimit_IsInvalid(int limit)
     {
-        AssertEx.False(_validator.IsValid(ModelFitOperation.Recommend, "coding", limit, "ollama", null));
+        AssertEx.False(_validator.IsValid(ModelFitOperation.Recommend, "coding", limit, "ollama", modelName: null));
     }
 
     [Test]
@@ -66,7 +66,7 @@ public sealed class ModelFitRequestValidatorTests
     {
         // The advisor only inspects a small fixed window of repos, so the limit ceiling is 50 (matching the handler's
         // JSON-schema maximum). The full inclusive 1..50 range validates.
-        AssertEx.True(_validator.IsValid(ModelFitOperation.Recommend, "coding", limit, "ollama", null));
+        AssertEx.True(_validator.IsValid(ModelFitOperation.Recommend, "coding", limit, "ollama", modelName: null));
     }
 
     [Test]
@@ -75,26 +75,26 @@ public sealed class ModelFitRequestValidatorTests
     [Arguments("OLLAMA")]
     public void Validate_WithUnsupportedProvider_IsInvalid(string provider)
     {
-        AssertEx.False(_validator.IsValid(ModelFitOperation.Recommend, "coding", 5, provider, null));
+        AssertEx.False(_validator.IsValid(ModelFitOperation.Recommend, "coding", limit: 5, provider, modelName: null));
     }
 
     [Test]
     public void Validate_WithLlamaCppProvider_IsValid()
     {
         // The local model-fit advisor targets llama.cpp in-process; the validator now allowlists it alongside ollama.
-        AssertEx.True(_validator.IsValid(ModelFitOperation.Recommend, "coding", 5, "llama.cpp", null));
+        AssertEx.True(_validator.IsValid(ModelFitOperation.Recommend, "coding", limit: 5, "llama.cpp", modelName: null));
     }
 
     [Test]
     public void Validate_ValidBenchmark_IsValid()
     {
-        AssertEx.True(_validator.IsValid(ModelFitOperation.Benchmark, null, 0, "ollama", "llama3.1:8b"));
+        AssertEx.True(_validator.IsValid(ModelFitOperation.Benchmark, useCase: null, limit: 0, "ollama", "llama3.1:8b"));
     }
 
     [Test]
     public void Validate_BenchmarkWithoutModelName_IsInvalid()
     {
-        AssertEx.False(_validator.IsValid(ModelFitOperation.Benchmark, null, 0, "ollama", null));
+        AssertEx.False(_validator.IsValid(ModelFitOperation.Benchmark, useCase: null, limit: 0, "ollama", modelName: null));
     }
 
     [Test]
@@ -103,6 +103,6 @@ public sealed class ModelFitRequestValidatorTests
     [Arguments("bad name!")]
     public void Validate_BenchmarkWithInvalidModelName_IsInvalid(string modelName)
     {
-        AssertEx.False(_validator.IsValid(ModelFitOperation.Benchmark, null, 0, "ollama", modelName));
+        AssertEx.False(_validator.IsValid(ModelFitOperation.Benchmark, useCase: null, limit: 0, "ollama", modelName));
     }
 }

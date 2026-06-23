@@ -127,7 +127,7 @@ public sealed class AdaptiveMemoryEndpointTests
         using var document = JsonDocument.Parse(payload);
         var items = document.RootElement.GetProperty("items");
 
-        AssertEx.Equal(1, items.GetArrayLength());
+        AssertEx.Equal(expected: 1, items.GetArrayLength());
         var item = items[0];
         AssertEx.Equal(proceduralId.ToString(), item.GetProperty("id").GetString());
         AssertEx.Equal("Procedural", item.GetProperty("memoryScope").GetString());
@@ -152,7 +152,7 @@ public sealed class AdaptiveMemoryEndpointTests
 
         var payload = await response.Content.ReadAsStringAsync().ConfigureAwait(false);
         using var document = JsonDocument.Parse(payload);
-        AssertEx.Equal(2, document.RootElement.GetProperty("items").GetArrayLength());
+        AssertEx.Equal(expected: 2, document.RootElement.GetProperty("items").GetArrayLength());
     }
 
     // ----------------------------------------------------------------------------------------------------------------
@@ -179,7 +179,7 @@ public sealed class AdaptiveMemoryEndpointTests
 
         var agentId = await SeedAgentAsync(factory).ConfigureAwait(false);
         await SeedExecutionLogAsync(factory, agentId, success: true, errorClass: null).ConfigureAwait(false);
-        await SeedExecutionLogAsync(factory, agentId, success: false, errorClass: "InvalidOperationException").ConfigureAwait(false);
+        await SeedExecutionLogAsync(factory, agentId, success: false, "InvalidOperationException").ConfigureAwait(false);
 
         using var request = new HttpRequestMessage(HttpMethod.Get, ExecutionLogsRoute(agentId));
         factory.AddNodeBearerToken(request);
@@ -190,7 +190,7 @@ public sealed class AdaptiveMemoryEndpointTests
         var payload = await response.Content.ReadAsStringAsync().ConfigureAwait(false);
         using var document = JsonDocument.Parse(payload);
         var items = document.RootElement.GetProperty("items");
-        AssertEx.Equal(2, items.GetArrayLength());
+        AssertEx.Equal(expected: 2, items.GetArrayLength());
 
         foreach (var item in items.EnumerateArray())
         {
@@ -300,14 +300,14 @@ public sealed class AdaptiveMemoryEndpointTests
         using var scope = factory.Services.CreateScope();
         var store = scope.ServiceProvider.GetRequiredService<IAgentDefinitionStore>();
         var agent = await store.AddAsync(new AgentDefinitionInput("Owner",
-            null,
+            Description: null,
             "You are a careful engineering agent.",
-            null,
-            null,
+            ModelProfile: null,
+            ReasoningEffort: null,
             AgentDefinitionKind.Single,
             [],
             new Dictionary<string, bool>(),
-            null)).ConfigureAwait(false);
+            OrchestrationTopologyJson: null)).ConfigureAwait(false);
         return agent.Id;
     }
 
@@ -319,11 +319,11 @@ public sealed class AdaptiveMemoryEndpointTests
         var created = await store.AddAsync(new PlaybookActionInput(agentDefinitionId,
             PlaybookActionState.Suggested,
             PlaybookActionSource.Extracted,
-            null,
+            TriggerCondition: null,
             $"Lesson learned for {scope}.",
             scope.ToString(),
-            100,
-            SourceFeedbackIds: [Guid.NewGuid()],
+            Priority: 100,
+            [Guid.NewGuid()],
             Confidence: 0.8d,
             MemoryScope: scope)).ConfigureAwait(false);
         return created.Id;
@@ -334,15 +334,15 @@ public sealed class AdaptiveMemoryEndpointTests
         using var scope = factory.Services.CreateScope();
         var store = scope.ServiceProvider.GetRequiredService<IAgentExecutionLogStore>();
         _ = await store.AddAsync(new AgentExecutionLogInput(agentDefinitionId,
-            ConversationId: Guid.NewGuid(),
-            MessageId: Guid.NewGuid(),
-            ModelName: "test-model",
-            ConfigHash: "deadbeef",
+            Guid.NewGuid(),
+            Guid.NewGuid(),
+            "test-model",
+            "deadbeef",
             LatencyMs: 1_234,
-            Success: success,
+            success,
             PromptTokens: 10,
             CompletionTokens: 20,
-            ErrorClass: errorClass)).ConfigureAwait(false);
+            errorClass)).ConfigureAwait(false);
     }
 
     private static async Task RecordPassingEvalAsync(TestingWebAppFactory factory, Guid agentDefinitionId, Guid actionId)
@@ -351,16 +351,16 @@ public sealed class AdaptiveMemoryEndpointTests
         var service = scope.ServiceProvider.GetRequiredService<IPlaybookActionService>();
         var current = AssertEx.NotNull(await service.GetByIdAsync(actionId).ConfigureAwait(false));
 
-        var eval = new PlaybookEvalResult(true,
-            1_000,
+        var eval = new PlaybookEvalResult(Passed: true,
+            EvaluatedAtUtc: 1_000,
             current.Version,
             "test-model",
-            1,
-            1,
-            1,
-            1,
-            0,
-            0,
+            GoldenCaseCount: 1,
+            GoldenCaseTotal: 1,
+            BaselinePassCount: 1,
+            CandidatePassCount: 1,
+            RegressedCaseCount: 0,
+            ImprovedCaseCount: 0,
             []);
         var json = JsonSerializer.Serialize(eval, PlaybookEvalResult.SerializerOptions);
         _ = AssertEx.NotNull(await service.RecordEvalResultAsync(agentDefinitionId, actionId, json).ConfigureAwait(false));

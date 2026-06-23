@@ -94,8 +94,8 @@ public sealed class OrchestrationAgentFactoryTests
     [Test]
     public async Task CreateAsync_ApprovalAcrossHandoff_ExecutesOnlyWhenApproved()
     {
-        await RunApprovalAcrossHandoff(true, false);
-        await RunApprovalAcrossHandoff(false, false);
+        await RunApprovalAcrossHandoff(approve: true, decorateClient: false);
+        await RunApprovalAcrossHandoff(approve: false, decorateClient: false);
     }
 
     [Test]
@@ -108,8 +108,8 @@ public sealed class OrchestrationAgentFactoryTests
         // as AdditionalTools so the approval surfaces (RequestInfoEvent) and the tool executes once approved, while
         // handoff_to_* flows through. If this regressed, the fallback is to give the factory the base (pre-decoration)
         // client.
-        await RunApprovalAcrossHandoff(true, true);
-        await RunApprovalAcrossHandoff(false, true);
+        await RunApprovalAcrossHandoff(approve: true, decorateClient: true);
+        await RunApprovalAcrossHandoff(approve: false, decorateClient: true);
     }
 
     [Test]
@@ -167,12 +167,12 @@ public sealed class OrchestrationAgentFactoryTests
 
                 // Wait well past the 1s idle timeout before responding; the suspended clock must keep the run alive.
                 await Task.Delay(TimeSpan.FromMilliseconds(2500));
-                await session.RespondToApprovalAsync(update.RequestId!, true, null);
+                await session.RespondToApprovalAsync(update.RequestId!, approved: true, reason: null);
             }
         }
 
         AssertEx.True(sawApproval, "the workflow must surface the approval request");
-        AssertEx.Equal(1, lookupExecuted, "the tool must execute after a delayed approval (the idle clock was suspended while pending)");
+        AssertEx.Equal(expected: 1, lookupExecuted, "the tool must execute after a delayed approval (the idle clock was suspended while pending)");
         AssertEx.True(fake.SpecialistInvocations > 0, "the handoff must complete after the delayed approval resumes the run");
     }
 
@@ -281,9 +281,9 @@ public sealed class OrchestrationAgentFactoryTests
             {
                 sawApproval = true;
                 AssertEx.Equal(ownToolName, update.ToolName, "the approval request must name the approval-required tool");
-                AssertEx.Equal(0, lookupExecuted, "the tool must NOT execute before approval is granted");
+                AssertEx.Equal(expected: 0, lookupExecuted, "the tool must NOT execute before approval is granted");
                 AssertEx.NotNullOrEmpty(update.RequestId);
-                await session.RespondToApprovalAsync(update.RequestId!, approve, null);
+                await session.RespondToApprovalAsync(update.RequestId!, approve, reason: null);
             }
         }
 
@@ -291,12 +291,12 @@ public sealed class OrchestrationAgentFactoryTests
         AssertEx.True(fake.SpecialistInvocations > 0, "triage must hand off to the specialist in both approve and reject paths");
         if (approve)
         {
-            AssertEx.Equal(1, lookupExecuted, "the approved tool must execute exactly once");
+            AssertEx.Equal(expected: 1, lookupExecuted, "the approved tool must execute exactly once");
             AssertEx.Equal("C-42", lookupArgument, "the approved tool must receive the scripted argument");
         }
         else
         {
-            AssertEx.Equal(0, lookupExecuted, "the rejected tool must never execute");
+            AssertEx.Equal(expected: 0, lookupExecuted, "the rejected tool must never execute");
         }
     }
 

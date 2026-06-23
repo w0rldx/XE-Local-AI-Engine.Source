@@ -90,8 +90,7 @@ public sealed class AgentExecutionLogRetentionService : BackgroundService
 
         if (deletedByAge > 0 || deletedByCap > 0)
         {
-            _logger.LogInformation(
-                "Agent execution-log retention sweep deleted {DeletedByAge} log(s) older than {RetentionDays} day(s) and {DeletedByCap} over the per-agent cap.",
+            _logger.LogInformation("Agent execution-log retention sweep deleted {DeletedByAge} log(s) older than {RetentionDays} day(s) and {DeletedByCap} over the per-agent cap.",
                 deletedByAge,
                 _options.RetentionDays,
                 deletedByCap);

@@ -115,7 +115,7 @@ internal static class InvocationMonitorResponseMapper
             ModelUsed = entry.ModelUsed,
             StartedAt = entry.StartedAt,
             CompletedAt = entry.CompletedAt,
-            DurationMs = Math.Max(0, (long)entry.Duration.TotalMilliseconds),
+            DurationMs = Math.Max(val1: 0, (long)entry.Duration.TotalMilliseconds),
             Error = ToOperatorError(entry.Error, entry.Status, entry.FailureCategory),
             FailureCategory = entry.FailureCategory,
             StreamedChunkCount = entry.StreamedChunkCount,

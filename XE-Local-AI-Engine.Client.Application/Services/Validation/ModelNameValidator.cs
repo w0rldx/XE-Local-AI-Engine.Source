@@ -32,7 +32,7 @@ public sealed class ModelNameValidator
         // Path-traversal / scheme guards run BEFORE the regex so "hf.co/../etc" and "file://x" are rejected even though
         // the allow pattern now permits the hf.co/huggingface.co two-slash form. The regex governs all other slash placement.
         if (modelName.Contains("..", StringComparison.Ordinal) ||
-            modelName.Contains('\\', StringComparison.Ordinal) ||
+            modelName.Contains(value: '\\', StringComparison.Ordinal) ||
             modelName.Contains("://", StringComparison.Ordinal))
         {
             return "Invalid model identifier";

@@ -76,7 +76,7 @@ public sealed class NodeChatHubTests
             events.Add(streamEvent);
         }
 
-        AssertEx.Equal(3, events.Count);
+        AssertEx.Equal(expected: 3, events.Count);
         AssertEx.Equal(ChatStreamEventTypes.AssistantStreaming, events[0].Type);
         AssertEx.Equal(ChatStreamEventTypes.AssistantDelta, events[1].Type);
         AssertEx.Equal(ChatStreamEventTypes.AssistantCompleted, events[2].Type);
@@ -109,8 +109,8 @@ public sealed class NodeChatHubTests
                 messageId,
                 requestId,
                 NodeChatMessageStatusValues.Streaming,
-                0,
-                1);
+                Sequence: 0,
+                OccurredAtUtc: 1);
 
             await Task.Yield();
             cancellationToken.ThrowIfCancellationRequested();
@@ -120,8 +120,8 @@ public sealed class NodeChatHubTests
                 messageId,
                 requestId,
                 NodeChatMessageStatusValues.Streaming,
-                1,
-                2,
+                Sequence: 1,
+                OccurredAtUtc: 2,
                 "hi",
                 Content: "hi");
             yield return new ChatStreamEvent(ChatStreamEventTypes.AssistantCompleted,
@@ -129,8 +129,8 @@ public sealed class NodeChatHubTests
                 messageId,
                 requestId,
                 NodeChatMessageStatusValues.Completed,
-                2,
-                3,
+                Sequence: 2,
+                OccurredAtUtc: 3,
                 Content: "hi");
         }
     }

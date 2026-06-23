@@ -30,7 +30,7 @@ internal sealed partial class AgentSkillService : IAgentSkillService
     {
         ArgumentNullException.ThrowIfNull(input);
 
-        await ValidateAsync(input, null, cancellationToken).ConfigureAwait(false);
+        await ValidateAsync(input, existingId: null, cancellationToken).ConfigureAwait(false);
 
         return await _store.CreateAsync(input, cancellationToken).ConfigureAwait(false);
     }
@@ -117,6 +117,6 @@ internal sealed partial class AgentSkillService : IAgentSkillService
         }
     }
 
-    [GeneratedRegex("^[a-z0-9]([a-z0-9-]*[a-z0-9])?$", RegexOptions.CultureInvariant | RegexOptions.ExplicitCapture, 2000)]
+    [GeneratedRegex("^[a-z0-9]([a-z0-9-]*[a-z0-9])?$", RegexOptions.CultureInvariant | RegexOptions.ExplicitCapture, matchTimeoutMilliseconds: 2000)]
     private static partial Regex SkillNameRegex();
 }

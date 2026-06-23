@@ -37,8 +37,10 @@ public sealed class ModelFitQueryServiceTests
         var harness = Harness.Create();
         var snapshotId = harness.SeedLatestRecommendationSnapshot("coding");
         harness.RecommendationStore.Seed(snapshotId,
-            new ModelFitRecommendationInput(1, "qwen2.5-coder:7b", "qwen2.5-coder:7b", 82.5, "Good", "GPU", "Q5_K_M", 48.2, 6144d, null, 16384, true, "qwen2.5-coder:7b", null),
-            new ModelFitRecommendationInput(2, "deepseek-coder:1.3b", "deepseek-coder:1.3b", 61.0, "Marginal", "CPU", "Q4_K_M", 12.0, 1536d, null, 16384, false, "deepseek-coder:1.3b", null));
+            new ModelFitRecommendationInput(Rank: 1, "qwen2.5-coder:7b", "qwen2.5-coder:7b", Score: 82.5, "Good", "GPU", "Q5_K_M", EstimatedTokensPerSecond: 48.2, RequiredRamMb: 6144d,
+                RequiredVramMb: null, ContextTokens: 16384, IsInstalled: true, "qwen2.5-coder:7b", DiagnosticsJson: null),
+            new ModelFitRecommendationInput(Rank: 2, "deepseek-coder:1.3b", "deepseek-coder:1.3b", Score: 61.0, "Marginal", "CPU", "Q4_K_M", EstimatedTokensPerSecond: 12.0, RequiredRamMb: 1536d,
+                RequiredVramMb: null, ContextTokens: 16384, IsInstalled: false, "deepseek-coder:1.3b", DiagnosticsJson: null));
 
         var view = await harness.Service.GetLatestRecommendationsAsync("coding", ProviderName, CancellationToken.None);
 
@@ -48,10 +50,10 @@ public sealed class ModelFitQueryServiceTests
         AssertEx.Equal(ApprovedImageId, view.ApprovedImageId);
         AssertEx.Equal("coding", view.UseCase ?? string.Empty);
         AssertEx.Equal(ProviderName, view.ProviderName);
-        AssertEx.Equal(2, view.Recommendations.Count);
-        AssertEx.Equal(1, view.Recommendations[0].Rank);
+        AssertEx.Equal(expected: 2, view.Recommendations.Count);
+        AssertEx.Equal(expected: 1, view.Recommendations[0].Rank);
         AssertEx.Equal("qwen2.5-coder:7b", view.Recommendations[0].ModelName);
-        AssertEx.Equal(2, view.Recommendations[1].Rank);
+        AssertEx.Equal(expected: 2, view.Recommendations[1].Rank);
     }
 
     [Test]
@@ -60,7 +62,8 @@ public sealed class ModelFitQueryServiceTests
         var harness = Harness.Create();
         var snapshotId = harness.SeedLatestRecommendationSnapshot("coding");
         harness.RecommendationStore.Seed(snapshotId,
-            new ModelFitRecommendationInput(1, "qwen2.5-coder:7b", null, 82.5, null, null, null, null, null, null, null, false, null, null));
+            new ModelFitRecommendationInput(Rank: 1, "qwen2.5-coder:7b", ProviderModelName: null, Score: 82.5, FitLevel: null, RunMode: null, Quantization: null, EstimatedTokensPerSecond: null,
+                RequiredRamMb: null, RequiredVramMb: null, ContextTokens: null, IsInstalled: false, PullModelName: null, DiagnosticsJson: null));
 
         // The latest snapshot is for "coding"; a "reasoning" query is a different key → cache-miss.
         var view = await harness.Service.GetLatestRecommendationsAsync("reasoning", ProviderName, CancellationToken.None);
@@ -76,8 +79,10 @@ public sealed class ModelFitQueryServiceTests
         var harness = Harness.Create(["qwen2.5-coder:7b"]);
         var snapshotId = harness.SeedLatestRecommendationSnapshot("coding");
         harness.RecommendationStore.Seed(snapshotId,
-            new ModelFitRecommendationInput(1, "qwen2.5-coder:7b", "qwen2.5-coder:7b", 82.5, null, null, null, null, null, null, 16384, false, "qwen2.5-coder:7b", null),
-            new ModelFitRecommendationInput(2, "deepseek-coder:1.3b", null, 61.0, null, null, null, null, null, null, 16384, true, "deepseek-coder:1.3b", null));
+            new ModelFitRecommendationInput(Rank: 1, "qwen2.5-coder:7b", "qwen2.5-coder:7b", Score: 82.5, FitLevel: null, RunMode: null, Quantization: null, EstimatedTokensPerSecond: null,
+                RequiredRamMb: null, RequiredVramMb: null, ContextTokens: 16384, IsInstalled: false, "qwen2.5-coder:7b", DiagnosticsJson: null),
+            new ModelFitRecommendationInput(Rank: 2, "deepseek-coder:1.3b", ProviderModelName: null, Score: 61.0, FitLevel: null, RunMode: null, Quantization: null, EstimatedTokensPerSecond: null,
+                RequiredRamMb: null, RequiredVramMb: null, ContextTokens: 16384, IsInstalled: true, "deepseek-coder:1.3b", DiagnosticsJson: null));
 
         var view = await harness.Service.GetLatestRecommendationsAsync("coding", ProviderName, CancellationToken.None);
 
@@ -93,7 +98,8 @@ public sealed class ModelFitQueryServiceTests
         var harness = Harness.Create(["qwen2.5-coder:7b"]);
         var snapshotId = harness.SeedLatestRecommendationSnapshot("coding");
         harness.RecommendationStore.Seed(snapshotId,
-            new ModelFitRecommendationInput(1, "Some/HF-Only-Model", null, 50.0, null, null, null, null, null, null, null, true, null, null));
+            new ModelFitRecommendationInput(Rank: 1, "Some/HF-Only-Model", ProviderModelName: null, Score: 50.0, FitLevel: null, RunMode: null, Quantization: null, EstimatedTokensPerSecond: null,
+                RequiredRamMb: null, RequiredVramMb: null, ContextTokens: null, IsInstalled: true, PullModelName: null, DiagnosticsJson: null));
 
         var view = await harness.Service.GetLatestRecommendationsAsync("coding", ProviderName, CancellationToken.None);
 
@@ -108,7 +114,8 @@ public sealed class ModelFitQueryServiceTests
         var harness = Harness.Create(["Mistral:latest"]);
         var snapshotId = harness.SeedLatestRecommendationSnapshot("general");
         harness.RecommendationStore.Seed(snapshotId,
-            new ModelFitRecommendationInput(1, "mistral", "mistral", 70.0, null, null, null, null, null, null, null, false, "mistral", null));
+            new ModelFitRecommendationInput(Rank: 1, "mistral", "mistral", Score: 70.0, FitLevel: null, RunMode: null, Quantization: null, EstimatedTokensPerSecond: null, RequiredRamMb: null,
+                RequiredVramMb: null, ContextTokens: null, IsInstalled: false, "mistral", DiagnosticsJson: null));
 
         var view = await harness.Service.GetLatestRecommendationsAsync("general", ProviderName, CancellationToken.None);
 
@@ -123,7 +130,8 @@ public sealed class ModelFitQueryServiceTests
         var harness = Harness.Create(throwOnList: true);
         var snapshotId = harness.SeedLatestRecommendationSnapshot("coding");
         harness.RecommendationStore.Seed(snapshotId,
-            new ModelFitRecommendationInput(1, "qwen2.5-coder:7b", "qwen2.5-coder:7b", 82.5, null, null, null, null, null, null, 16384, true, "qwen2.5-coder:7b", null));
+            new ModelFitRecommendationInput(Rank: 1, "qwen2.5-coder:7b", "qwen2.5-coder:7b", Score: 82.5, FitLevel: null, RunMode: null, Quantization: null, EstimatedTokensPerSecond: null,
+                RequiredRamMb: null, RequiredVramMb: null, ContextTokens: 16384, IsInstalled: true, "qwen2.5-coder:7b", DiagnosticsJson: null));
 
         var view = await harness.Service.GetLatestRecommendationsAsync("coding", ProviderName, CancellationToken.None);
 
@@ -159,9 +167,11 @@ public sealed class ModelFitQueryServiceTests
         public Guid SeedLatestRecommendationSnapshot(string? useCase)
         {
             // Open then mark Succeeded so the in-memory store sets is_latest_successful via its real transition path.
-            var summary = SnapshotStore.CreateRunningAsync(new ModelFitSnapshotInput(ApprovedImageId, ModelFitOperation.Recommend, useCase, ProviderName, null, ModelFitRunStatus.Running, 1L))
-                                       .GetAwaiter().GetResult();
-            SnapshotStore.MarkTerminalAsync(summary.Id, ModelFitRunStatus.Succeeded, 0, 100, "{}", null, "{}", 2L)
+            var summary = SnapshotStore
+                          .CreateRunningAsync(new ModelFitSnapshotInput(ApprovedImageId, ModelFitOperation.Recommend, useCase, ProviderName, ModelName: null, ModelFitRunStatus.Running,
+                              StartedAtUtc: 1L))
+                          .GetAwaiter().GetResult();
+            SnapshotStore.MarkTerminalAsync(summary.Id, ModelFitRunStatus.Succeeded, exitCode: 0, durationMs: 100, "{}", stderrExcerpt: null, "{}", completedAtUtc: 2L)
                          .GetAwaiter().GetResult();
             return summary.Id;
         }

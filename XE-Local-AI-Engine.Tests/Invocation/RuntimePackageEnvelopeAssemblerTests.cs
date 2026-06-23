@@ -58,7 +58,7 @@ public sealed class RuntimePackageEnvelopeAssemblerTests
         using var context = assembler.Assemble(CreatePackage(true));
 
         AssertEx.Equal("hello", context.Package.ConversationContext[0].Content);
-        AssertEx.Equal(1, context.Package.ConversationContext.Count);
+        AssertEx.Equal(expected: 1, context.Package.ConversationContext.Count);
         AssertEx.Equal(MessageRole.User, context.Package.ConversationContext[0].Role);
         validator.Received(1).Validate(Arg.Any<RuntimePackage>());
     }
@@ -143,7 +143,7 @@ public sealed class RuntimePackageEnvelopeAssemblerTests
             }
         ]);
 
-        var package = CreatePackage(true, historyEntries: [historyEntry]);
+        var package = CreatePackage(includeValidConfigHash: true, historyEntries: [historyEntry]);
         var envelopeCryptoService = Substitute.For<IEnvelopeCryptoService>();
         envelopeCryptoService.DecryptConversationMessage(package.ConversationId, historyEntry, nodePrivateKey)
                              .Returns(_ => new EnvelopeDecryptionResult("earlier"u8.ToArray(), new byte[32]));
@@ -156,13 +156,13 @@ public sealed class RuntimePackageEnvelopeAssemblerTests
         var assembler = new RuntimePackageEnvelopeAssembler(envelopeCryptoService, nodeKeyRegistry, validator);
         using var context = assembler.Assemble(package);
 
-        AssertEx.Equal(2, context.Package.ConversationContext.Count);
+        AssertEx.Equal(expected: 2, context.Package.ConversationContext.Count);
         AssertEx.Equal(historyEntry.Id, context.Package.ConversationContext[0].Id);
         AssertEx.Equal("earlier", context.Package.ConversationContext[0].Content);
-        AssertEx.Equal(5, context.Package.ConversationContext[0].SortOrder);
+        AssertEx.Equal(expected: 5, context.Package.ConversationContext[0].SortOrder);
         AssertEx.Equal(package.MessageId, context.Package.ConversationContext[1].Id);
         AssertEx.Equal("latest", context.Package.ConversationContext[1].Content);
-        AssertEx.Equal(6, context.Package.ConversationContext[1].SortOrder);
+        AssertEx.Equal(expected: 6, context.Package.ConversationContext[1].SortOrder);
     }
 
     [Test]
@@ -170,7 +170,7 @@ public sealed class RuntimePackageEnvelopeAssemblerTests
     {
         using var nodePrivateKey = Key.Create(KeyAgreementAlgorithm.X25519);
         var laterEntry = CreateHistoryEntry(20);
-        var earlierEntry = CreateHistoryEntry(10, MessageRole.User);
+        var earlierEntry = CreateHistoryEntry(sortOrder: 10, MessageRole.User);
         var nodeKeyRegistry = Substitute.For<INodeKeyRegistry>();
         nodeKeyRegistry.ResolveGraceEligible().Returns([
             new NodeKeyResolution
@@ -183,7 +183,7 @@ public sealed class RuntimePackageEnvelopeAssemblerTests
             }
         ]);
 
-        var package = CreatePackage(true, historyEntries: [laterEntry, earlierEntry]);
+        var package = CreatePackage(includeValidConfigHash: true, historyEntries: [laterEntry, earlierEntry]);
         var envelopeCryptoService = Substitute.For<IEnvelopeCryptoService>();
         envelopeCryptoService.DecryptConversationMessage(package.ConversationId, earlierEntry, nodePrivateKey)
                              .Returns(_ => new EnvelopeDecryptionResult("first user turn"u8.ToArray(), new byte[32]));
@@ -198,26 +198,26 @@ public sealed class RuntimePackageEnvelopeAssemblerTests
         var assembler = new RuntimePackageEnvelopeAssembler(envelopeCryptoService, nodeKeyRegistry, validator);
         using var context = assembler.Assemble(package);
 
-        AssertEx.Equal(3, context.Package.ConversationContext.Count);
+        AssertEx.Equal(expected: 3, context.Package.ConversationContext.Count);
         AssertEx.Equal(earlierEntry.Id, context.Package.ConversationContext[0].Id);
         AssertEx.Equal(MessageRole.User, context.Package.ConversationContext[0].Role);
         AssertEx.Equal("first user turn", context.Package.ConversationContext[0].Content);
-        AssertEx.Equal(10, context.Package.ConversationContext[0].SortOrder);
+        AssertEx.Equal(expected: 10, context.Package.ConversationContext[0].SortOrder);
         AssertEx.Equal(laterEntry.Id, context.Package.ConversationContext[1].Id);
         AssertEx.Equal(MessageRole.Assistant, context.Package.ConversationContext[1].Role);
         AssertEx.Equal("assistant reply", context.Package.ConversationContext[1].Content);
-        AssertEx.Equal(20, context.Package.ConversationContext[1].SortOrder);
+        AssertEx.Equal(expected: 20, context.Package.ConversationContext[1].SortOrder);
         AssertEx.Equal(package.MessageId, context.Package.ConversationContext[2].Id);
         AssertEx.Equal(MessageRole.User, context.Package.ConversationContext[2].Role);
         AssertEx.Equal("latest user turn", context.Package.ConversationContext[2].Content);
-        AssertEx.Equal(21, context.Package.ConversationContext[2].SortOrder);
+        AssertEx.Equal(expected: 21, context.Package.ConversationContext[2].SortOrder);
     }
 
     [Test]
     public void Assemble_WhenHistoryEntryUsesDifferentEpoch_DecryptsCrossEpochHistory()
     {
         using var nodePrivateKey = Key.Create(KeyAgreementAlgorithm.X25519);
-        var historyEntry = CreateHistoryEntry(5, epochVersion: 3);
+        var historyEntry = CreateHistoryEntry(sortOrder: 5, epochVersion: 3);
         var nodeKeyRegistry = Substitute.For<INodeKeyRegistry>();
         nodeKeyRegistry.ResolveGraceEligible().Returns([
             new NodeKeyResolution
@@ -230,7 +230,7 @@ public sealed class RuntimePackageEnvelopeAssemblerTests
             }
         ]);
 
-        var package = CreatePackage(true, historyEntries: [historyEntry]);
+        var package = CreatePackage(includeValidConfigHash: true, historyEntries: [historyEntry]);
         var envelopeCryptoService = Substitute.For<IEnvelopeCryptoService>();
         envelopeCryptoService.DecryptConversationMessage(package.ConversationId, historyEntry, nodePrivateKey)
                              .Returns(_ => new EnvelopeDecryptionResult("from prior epoch"u8.ToArray(), new byte[32]));
@@ -243,7 +243,7 @@ public sealed class RuntimePackageEnvelopeAssemblerTests
         var assembler = new RuntimePackageEnvelopeAssembler(envelopeCryptoService, nodeKeyRegistry, validator);
         using var context = assembler.Assemble(package);
 
-        AssertEx.Equal(2, context.Package.ConversationContext.Count);
+        AssertEx.Equal(expected: 2, context.Package.ConversationContext.Count);
         AssertEx.Equal(historyEntry.Id, context.Package.ConversationContext[0].Id);
         AssertEx.Equal("from prior epoch", context.Package.ConversationContext[0].Content);
         AssertEx.Equal(MessageRole.Assistant, context.Package.ConversationContext[0].Role);
@@ -274,7 +274,7 @@ public sealed class RuntimePackageEnvelopeAssemblerTests
         var validator = Substitute.For<IRuntimePackageValidator>();
         var assembler = new RuntimePackageEnvelopeAssembler(envelopeCryptoService, nodeKeyRegistry, validator);
 
-        var exception = await AssertEx.ThrowsAsync<InvalidOperationException>(() => Task.Run(() => assembler.Assemble(CreatePackage(true, false))));
+        var exception = await AssertEx.ThrowsAsync<InvalidOperationException>(() => Task.Run(() => assembler.Assemble(CreatePackage(includeValidConfigHash: true, includeValidHistoryHash: false))));
 
         AssertEx.Equal("runtime-package-history-hash-mismatch", exception.Message);
         envelopeCryptoService.DidNotReceive().DecryptRuntimePackage(Arg.Any<EncryptedRuntimePackageDto>(), Arg.Any<Key>());
@@ -285,7 +285,7 @@ public sealed class RuntimePackageEnvelopeAssemblerTests
     public async Task Assemble_WhenHistoryHashWasComputedWithPascalCaseRoleNames_ThrowsAndDoesNotDecrypt()
     {
         using var nodePrivateKey = Key.Create(KeyAgreementAlgorithm.X25519);
-        var firstHistoryEntry = CreateHistoryEntry(10, MessageRole.User);
+        var firstHistoryEntry = CreateHistoryEntry(sortOrder: 10, MessageRole.User);
         var secondHistoryEntry = CreateHistoryEntry(20);
         var nodeKeyRegistry = Substitute.For<INodeKeyRegistry>();
         nodeKeyRegistry.ResolveGraceEligible().Returns([
@@ -301,7 +301,7 @@ public sealed class RuntimePackageEnvelopeAssemblerTests
 
         var envelopeCryptoService = Substitute.For<IEnvelopeCryptoService>();
         var validator = Substitute.For<IRuntimePackageValidator>();
-        var package = CreatePackage(true, historyEntries: [firstHistoryEntry, secondHistoryEntry]);
+        var package = CreatePackage(includeValidConfigHash: true, historyEntries: [firstHistoryEntry, secondHistoryEntry]);
         package = package with
         {
             ConversationContextHash = ComputeHistoryHashWithPascalCaseRoleNames(package.ConversationContext)
@@ -333,7 +333,7 @@ public sealed class RuntimePackageEnvelopeAssemblerTests
             }
         ]);
 
-        var package = CreatePackage(true, historyEntries: [historyEntry]);
+        var package = CreatePackage(includeValidConfigHash: true, historyEntries: [historyEntry]);
         var envelopeCryptoService = Substitute.For<IEnvelopeCryptoService>();
         envelopeCryptoService.DecryptConversationMessage(package.ConversationId, historyEntry, nodePrivateKey)
                              .Returns(_ => throw new CryptographicException("bad-history-entry"));

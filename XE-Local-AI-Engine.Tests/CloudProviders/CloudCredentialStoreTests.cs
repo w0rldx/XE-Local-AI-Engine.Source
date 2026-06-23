@@ -18,7 +18,7 @@ public sealed class CloudCredentialStoreTests : IDisposable
     {
         if (Directory.Exists(_contentRootPath))
         {
-            Directory.Delete(_contentRootPath, true);
+            Directory.Delete(_contentRootPath, recursive: true);
         }
     }
 

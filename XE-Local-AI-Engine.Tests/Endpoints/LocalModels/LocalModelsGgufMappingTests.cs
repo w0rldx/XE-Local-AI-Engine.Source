@@ -40,9 +40,9 @@ public sealed class LocalModelsGgufMappingTests
     public void ToLlamaCppModelResponses_TagsLlamaCpp_AndClassifiesChat()
     {
         var gguf = LocalModelsMapper.ToLlamaCppModelResponses([Gguf("bartowski/Qwen2.5-0.5B-Instruct-GGUF:Q4_K_M")],
-            null);
+            selectedModelName: null);
 
-        AssertEx.Equal(1, gguf.Count);
+        AssertEx.Equal(expected: 1, gguf.Count);
         AssertEx.Equal(LocalModelProviders.LlamaCpp, gguf[0].Provider);
         // Chat WITHOUT a capability probe — this is the crux for the React `kind === "Chat"` picker filter.
         AssertEx.Equal(ModelKind.Chat.ToString(), gguf[0].Kind);
@@ -51,7 +51,7 @@ public sealed class LocalModelsGgufMappingTests
         AssertEx.True(gguf[0].Capabilities.Count == 0, "no detected capabilities → empty");
         AssertEx.False(gguf[0].IsReasoningCapable, "no detected template → safe default false");
         AssertEx.False(gguf[0].IsToolCapable, "no detected template → safe default false");
-        AssertEx.Equal(1024, gguf[0].SizeBytes);
+        AssertEx.Equal(expected: 1024, gguf[0].SizeBytes);
     }
 
     [Test]
@@ -59,12 +59,13 @@ public sealed class LocalModelsGgufMappingTests
     {
         // A descriptor whose chat template was classified tool- and reasoning-capable must surface those flags + tokens
         // so the React chat UI enables the tools toggle and the graded reasoning-effort menu for the GGUF model.
-        var gguf = LocalModelsMapper.ToLlamaCppModelResponses(
-            [Gguf("bartowski/Qwen2.5-0.5B-Instruct-GGUF:Q4_K_M",
-                isToolCapable: true,
-                isReasoningCapable: true,
-                capabilities: ["completion", "tools", "thinking"])],
-            null);
+        var gguf = LocalModelsMapper.ToLlamaCppModelResponses([
+                Gguf("bartowski/Qwen2.5-0.5B-Instruct-GGUF:Q4_K_M",
+                    isToolCapable: true,
+                    isReasoningCapable: true,
+                    capabilities: ["completion", "tools", "thinking"])
+            ],
+            selectedModelName: null);
 
         AssertEx.True(gguf[0].IsToolCapable, "detected tool capability must surface");
         AssertEx.True(gguf[0].IsReasoningCapable, "detected reasoning capability must surface");
@@ -95,7 +96,7 @@ public sealed class LocalModelsGgufMappingTests
         };
         var classifications = new Dictionary<string, ModelClassificationResult>
         {
-            ["qwen3:8b"] = new("qwen3:8b", ModelKind.Chat, ModelKind.Chat, ["tools"], false)
+            ["qwen3:8b"] = new("qwen3:8b", ModelKind.Chat, ModelKind.Chat, ["tools"], IsOverridden: false)
         };
         var cloud = LocalModelsMapper.ToCodexCloudModelResponses(null);
 
@@ -128,18 +129,18 @@ public sealed class LocalModelsGgufMappingTests
         };
         var classifications = new Dictionary<string, ModelClassificationResult>
         {
-            ["shared-model"] = new("shared-model", ModelKind.Chat, ModelKind.Chat, [], false)
+            ["shared-model"] = new("shared-model", ModelKind.Chat, ModelKind.Chat, [], IsOverridden: false)
         };
 
         // A name present under BOTH runtimes (case-insensitively) is listed once — the Ollama entry wins.
         var response = LocalModelsMapper.ToListResponse(ollama,
-            null,
-            null,
+            selectedModelName: null,
+            configuredDefaultModelName: null,
             classifications,
-            null,
+            cloudModels: null,
             [Gguf("SHARED-MODEL"), Gguf("unique-gguf:Q4_K_M")]);
 
-        AssertEx.Equal(2, response.Items.Count);
+        AssertEx.Equal(expected: 2, response.Items.Count);
         AssertEx.ContainsSingle(response.Items, static m => m.ModelName == "shared-model" && m.Provider == LocalModelProviders.Ollama);
         AssertEx.Contains(response.Items, static m => m.ModelName == "unique-gguf:Q4_K_M" && m.Provider == LocalModelProviders.LlamaCpp);
     }
@@ -148,25 +149,25 @@ public sealed class LocalModelsGgufMappingTests
     public void ToUnavailableListResponse_IncludesGguf_AndReportsAvailableWhenGgufPresent()
     {
         // Ollama unavailable, but an installed GGUF means a node-local runtime CAN serve a chat → IsAvailable true.
-        var response = LocalModelsMapper.ToUnavailableListResponse(null,
-            null,
+        var response = LocalModelsMapper.ToUnavailableListResponse(selectedModelName: null,
+            configuredDefaultModelName: null,
             "Local model provider is unavailable.",
-            null,
+            cloudModels: null,
             [Gguf("repo-a:Q4_K_M")]);
 
         AssertEx.True(response.IsAvailable, "an installed GGUF makes the node-local runtime available even without Ollama");
-        AssertEx.Equal(1, response.Items.Count);
+        AssertEx.Equal(expected: 1, response.Items.Count);
         AssertEx.Equal(LocalModelProviders.LlamaCpp, response.Items[0].Provider);
     }
 
     [Test]
     public void ToUnavailableListResponse_WithNoGguf_StaysUnavailable()
     {
-        var response = LocalModelsMapper.ToUnavailableListResponse(null,
-            null,
+        var response = LocalModelsMapper.ToUnavailableListResponse(selectedModelName: null,
+            configuredDefaultModelName: null,
             "Local model provider is unavailable.");
 
         AssertEx.False(response.IsAvailable, "no GGUF and no Ollama → the local runtime is unavailable");
-        AssertEx.Equal(0, response.Items.Count);
+        AssertEx.Equal(expected: 0, response.Items.Count);
     }
 }

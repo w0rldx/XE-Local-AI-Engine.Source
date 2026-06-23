@@ -35,7 +35,7 @@ internal sealed class PlainProcessHandle(Process process) : ILlamaServerProcessH
 
     public void Dispose()
     {
-        if (Interlocked.Exchange(ref _disposed, 1) != 0)
+        if (Interlocked.Exchange(ref _disposed, value: 1) != 0)
         {
             return;
         }

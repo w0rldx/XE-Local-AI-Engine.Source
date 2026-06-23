@@ -160,7 +160,7 @@ public sealed class ModelsManagementE2ETests : XEE2ETestBase
         await Assert.That(deleteResponse.Status).IsEqualTo(200);
 
         // The row must be gone after the list refetches.
-        await Expect(modelCell).ToHaveCountAsync(0, new LocatorAssertionsToHaveCountOptions
+        await Expect(modelCell).ToHaveCountAsync(count: 0, new LocatorAssertionsToHaveCountOptions
         {
             Timeout = 5000
         });

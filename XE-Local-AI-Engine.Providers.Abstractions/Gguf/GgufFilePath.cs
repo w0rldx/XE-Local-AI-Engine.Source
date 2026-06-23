@@ -25,7 +25,7 @@ public static class GgufFilePath
         }
 
         // Normalize both separators then reject any traversal ('..') or no-op ('.') segment.
-        var segments = fileName.Replace('\\', '/').Split('/');
+        var segments = fileName.Replace(oldChar: '\\', newChar: '/').Split('/');
         return !segments.Any(static segment => segment is ".." or ".");
     }
 

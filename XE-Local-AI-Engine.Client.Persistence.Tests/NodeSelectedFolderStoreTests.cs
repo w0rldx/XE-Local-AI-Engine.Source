@@ -16,7 +16,7 @@ public sealed class NodeSelectedFolderStoreTests : IDisposable
     {
         if (Directory.Exists(_rootPath))
         {
-            Directory.Delete(_rootPath, true);
+            Directory.Delete(_rootPath, recursive: true);
         }
     }
 
@@ -198,7 +198,7 @@ public sealed class NodeSelectedFolderStoreTests : IDisposable
         command.CommandText = "SELECT * FROM selected_folders LIMIT 0;";
 
         await using var reader = await command.ExecuteReaderAsync();
-        return Enumerable.Range(0, reader.FieldCount)
+        return Enumerable.Range(start: 0, reader.FieldCount)
                          .Select(reader.GetName)
                          .ToHashSet(StringComparer.Ordinal);
     }
@@ -231,7 +231,7 @@ public sealed class NodeSelectedFolderStoreTests : IDisposable
 
     private static byte[] CreateKeyMaterial()
     {
-        return Enumerable.Range(0, 32).Select(static value => (byte)(value + 1)).ToArray();
+        return Enumerable.Range(start: 0, count: 32).Select(static value => (byte)(value + 1)).ToArray();
     }
 
     private static bool ContainsSubsequence(byte[] source, byte[] needle)

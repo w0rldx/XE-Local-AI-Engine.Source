@@ -38,15 +38,15 @@ public sealed class ArithmeticExpressionEvaluatorTests
         var success = ArithmeticExpressionEvaluator.TryEvaluate(expression, out var result);
 
         AssertEx.False(success, $"Expected '{expression}' to be rejected.");
-        AssertEx.Equal(0d, result);
+        AssertEx.Equal(expected: 0d, result);
     }
 
     [Test]
     public void TryEvaluate_NullExpression_ReturnsFalse()
     {
-        var success = ArithmeticExpressionEvaluator.TryEvaluate(null, out var result);
+        var success = ArithmeticExpressionEvaluator.TryEvaluate(expression: null, out var result);
 
         AssertEx.False(success);
-        AssertEx.Equal(0d, result);
+        AssertEx.Equal(expected: 0d, result);
     }
 }

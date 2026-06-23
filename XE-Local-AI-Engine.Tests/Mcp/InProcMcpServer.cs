@@ -126,7 +126,7 @@ internal sealed class InProcMcpServer : IAsyncDisposable
         // StreamClientTransport's first arg (serverInput) is the stream the client WRITES to reach the server, and the
         // second (serverOutput) is the stream the client READS the server's replies from (per the SDK ctor contract).
         var clientTransport = new StreamClientTransport(clientOutput, clientInput, NullLoggerFactory.Instance);
-        var client = await McpClient.CreateAsync(clientTransport, null, NullLoggerFactory.Instance, handshakeCts.Token);
+        var client = await McpClient.CreateAsync(clientTransport, clientOptions: null, NullLoggerFactory.Instance, handshakeCts.Token);
 
         return new InProcMcpServer(server, serverTransport, serverLoop, serverCts, serverInput, serverOutput, clientInput, clientOutput, client);
     }

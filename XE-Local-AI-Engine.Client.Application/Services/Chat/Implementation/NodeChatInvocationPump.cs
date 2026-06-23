@@ -43,7 +43,7 @@ public sealed class NodeChatInvocationPump(
 
         if (!hasContentDelta && !hasReasoningDelta)
         {
-            return new NodeChatPumpFlushResult(cursor, null, null, null);
+            return new NodeChatPumpFlushResult(cursor, Persisted: null, ContentDelta: null, ReasoningDelta: null);
         }
 
         var contentDelta = hasContentDelta ? state.StreamedContent[cursor.Content.Length..] : null;

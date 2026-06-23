@@ -44,7 +44,8 @@ public sealed partial class InvocationRunner : IInvocationRunner
     private const string NoChatModelInstalledMessage = "No chat model installed. Pull a GGUF model to start chatting.";
 
     private static readonly Regex FrameworkExceptionNamePattern =
-        new(@"\b(?:Microsoft|System)(?:\.[A-Za-z_][A-Za-z0-9_]*)*\.[A-Za-z_][A-Za-z0-9_]*Exception\b|\b(?:AgentException|ChatClientAgentException)\b", RegexOptions.CultureInvariant, TimeSpan.FromSeconds(2));
+        new(@"\b(?:Microsoft|System)(?:\.[A-Za-z_][A-Za-z0-9_]*)*\.[A-Za-z_][A-Za-z0-9_]*Exception\b|\b(?:AgentException|ChatClientAgentException)\b", RegexOptions.CultureInvariant,
+            TimeSpan.FromSeconds(2));
 
     private readonly ConcurrentDictionary<Guid, TaskCompletionSource> _activeInvocationCompletions = new();
 
@@ -62,7 +63,7 @@ public sealed partial class InvocationRunner : IInvocationRunner
     private readonly ConcurrentDictionary<string, PendingToolCall> _pendingToolCalls = new(StringComparer.Ordinal);
     private readonly ILocalModelProviderResolver _providerResolver;
     private readonly IRuntimePackageValidator _runtimePackageValidator;
-    private readonly System.Threading.Lock _syncRoot = new();
+    private readonly Lock _syncRoot = new();
 
     private Guid? _currentInvocationId;
 
@@ -185,12 +186,12 @@ public sealed partial class InvocationRunner : IInvocationRunner
 
                 await sender.SendReasoningStreamChunkAsync(package.InvocationId,
                     string.Empty,
-                    true,
+                    isComplete: true,
                     stream.ReasoningSequence + 1,
                     invocationToken).ConfigureAwait(false);
                 await sender.SendTokenStreamChunkAsync(package.InvocationId,
                     string.Empty,
-                    true,
+                    isComplete: true,
                     stream.Sequence + 1,
                     invocationToken).ConfigureAwait(false);
                 await sender.SendInvocationCompletedAsync(new InvocationCompletedPayload
@@ -347,7 +348,7 @@ public sealed partial class InvocationRunner : IInvocationRunner
     {
         // Default to the approval-gated path; the per-tool overload below is what BuildInvocationTools wires in,
         // passing the tool's RequiresApproval flag so non-approval tools auto-execute.
-        return ExecuteApiToolCallAsync(invocationId, toolName, parameters, true, cancellationToken);
+        return ExecuteApiToolCallAsync(invocationId, toolName, parameters, requiresApproval: true, cancellationToken);
     }
 
     // The single-agent path. Drives one ChatClientAgent over an approval-gated do/while loop, accumulating into
@@ -378,7 +379,7 @@ public sealed partial class InvocationRunner : IInvocationRunner
             pendingApproval = null;
             var segmentUpdates = new List<AgentResponseUpdate>();
 
-            await foreach (var update in agentContext.Agent.RunStreamingAsync(currentMessages, null, agentContext.RunOptions, invocationToken).ConfigureAwait(false))
+            await foreach (var update in agentContext.Agent.RunStreamingAsync(currentMessages, session: null, agentContext.RunOptions, invocationToken).ConfigureAwait(false))
             {
                 segmentUpdates.Add(update);
                 var textChunk = update.Text;
@@ -538,7 +539,7 @@ public sealed partial class InvocationRunner : IInvocationRunner
 
     public async Task RunAsync(RuntimePackage package, CancellationToken cancellationToken = default)
     {
-        using var context = InvocationExecutionContext.Create(package, Guid.Empty, 0, ReadOnlyMemory<byte>.Empty);
+        using var context = InvocationExecutionContext.Create(package, Guid.Empty, epochVersion: 0, ReadOnlyMemory<byte>.Empty);
         await RunAsync(context, cancellationToken).ConfigureAwait(false);
     }
 

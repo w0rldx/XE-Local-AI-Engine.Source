@@ -49,9 +49,9 @@ public sealed class ModelRoutingLocalChatClientTests
         });
 
         // Each model id reached the provider the map (or default) names, with the model carried through the selection.
-        AssertEx.Equal(1, llamacpp.CreatedClients.Count);
+        AssertEx.Equal(expected: 1, llamacpp.CreatedClients.Count);
         AssertEx.Equal("gguf-model", llamacpp.CreatedClients[0].ModelName);
-        AssertEx.Equal(1, ollama.CreatedClients.Count);
+        AssertEx.Equal(expected: 1, ollama.CreatedClients.Count);
         AssertEx.Equal("ollama-model", ollama.CreatedClients[0].ModelName);
 
         // The two sends reached two DISTINCT per-model clients (distinct processes) — a model switch mid-session does
@@ -77,8 +77,8 @@ public sealed class ModelRoutingLocalChatClientTests
         });
 
         // One CreateChatClient for two sends of the same model — the (provider, model) cache held.
-        AssertEx.Equal(1, ollama.CreatedClients.Count);
-        AssertEx.Equal(2, ollama.CreatedClients[0].CallCount);
+        AssertEx.Equal(expected: 1, ollama.CreatedClients.Count);
+        AssertEx.Equal(expected: 2, ollama.CreatedClients[0].CallCount);
         AssertEx.False(ollama.CreatedClients[0].IsDisposed, "A cached client must not be disposed between sends.");
     }
 
@@ -91,7 +91,7 @@ public sealed class ModelRoutingLocalChatClientTests
 
         await router.GetResponseAsync(Message);
 
-        AssertEx.Equal(1, ollama.CreatedClients.Count);
+        AssertEx.Equal(expected: 1, ollama.CreatedClients.Count);
         AssertEx.Equal(DefaultModel, ollama.CreatedClients[0].ModelName);
     }
 
@@ -122,7 +122,7 @@ public sealed class ModelRoutingLocalChatClientTests
         services.AddScoped<IModelProviderMapStore>(_ => new FakeModelProviderMapStore(mappings));
         var scopeFactory = services.BuildServiceProvider().GetRequiredService<IServiceScopeFactory>();
 
-        return new LocalModelProviderResolver(providers, scopeFactory, defaultProviderName, 3);
+        return new LocalModelProviderResolver(providers, scopeFactory, defaultProviderName, maxLoadedProcesses: 3);
     }
 
     /// <summary>An in-memory map store seeded with a fixed model→provider dictionary (case-insensitive lookup).</summary>
@@ -137,13 +137,13 @@ public sealed class ModelRoutingLocalChatClientTests
 
         public Task<IReadOnlyList<ModelProviderMapRecord>> ListAsync(CancellationToken cancellationToken = default)
         {
-            return Task.FromResult<IReadOnlyList<ModelProviderMapRecord>>(_mappings.Select(pair => new ModelProviderMapRecord(pair.Key, pair.Value, 0)).ToArray());
+            return Task.FromResult<IReadOnlyList<ModelProviderMapRecord>>(_mappings.Select(pair => new ModelProviderMapRecord(pair.Key, pair.Value, UpdatedAtUtc: 0)).ToArray());
         }
 
         public Task<ModelProviderMapRecord> UpsertAsync(string modelName, string providerName, CancellationToken cancellationToken = default)
         {
             _mappings[modelName] = providerName;
-            return Task.FromResult(new ModelProviderMapRecord(modelName, providerName, 0));
+            return Task.FromResult(new ModelProviderMapRecord(modelName, providerName, UpdatedAtUtc: 0));
         }
     }
 

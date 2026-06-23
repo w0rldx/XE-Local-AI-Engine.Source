@@ -102,7 +102,7 @@ public sealed class ModelFitRefreshService : IModelFitRefreshService
         // Benchmark is deferred — this is the recommend-only path. Reject before any snapshot row is created.
         if (request.Operation != ModelFitOperation.Recommend)
         {
-            return Failed(null, "Benchmark refresh is not yet enabled.");
+            return Failed(snapshotId: null, "Benchmark refresh is not yet enabled.");
         }
 
         // Pre-run config validation: intent params. The advisor targets llama.cpp, so the provider is fixed to the
@@ -111,10 +111,10 @@ public sealed class ModelFitRefreshService : IModelFitRefreshService
             request.UseCase,
             request.Limit,
             AdvisorProviderName,
-            null);
+            modelName: null);
         if (validationError is not null)
         {
-            return Failed(null, validationError);
+            return Failed(snapshotId: null, validationError);
         }
 
         var quant = string.IsNullOrWhiteSpace(request.QuantOverride) ? MemoryFitEstimator.DefaultQuant : request.QuantOverride.Trim();
@@ -126,7 +126,7 @@ public sealed class ModelFitRefreshService : IModelFitRefreshService
                 request.Operation,
                 request.UseCase,
                 AdvisorProviderName,
-                null,
+                ModelName: null,
                 ModelFitRunStatus.Running,
                 startedAtUtc),
             cancellationToken).ConfigureAwait(false);
@@ -135,12 +135,12 @@ public sealed class ModelFitRefreshService : IModelFitRefreshService
 
         if (reportProgress is not null)
         {
-            await reportProgress("Profiling hardware and discovering GGUF models…", null, cancellationToken).ConfigureAwait(false);
+            await reportProgress("Profiling hardware and discovering GGUF models…", arg2: null, cancellationToken).ConfigureAwait(false);
         }
 
         try
         {
-            var profile = await _hardwareProfiler.GetProfileAsync(false, cancellationToken).ConfigureAwait(false);
+            var profile = await _hardwareProfiler.GetProfileAsync(forceRefresh: false, cancellationToken).ConfigureAwait(false);
             var recommendations = await BuildRecommendationsAsync(request, quant, ctxTarget, profile, cancellationToken)
                 .ConfigureAwait(false);
 
@@ -154,10 +154,10 @@ public sealed class ModelFitRefreshService : IModelFitRefreshService
                 // Should not happen (we emit the JSON ourselves) — record Failed and never throw out of the service.
                 await _snapshotStore.MarkTerminalAsync(snapshotId,
                     ModelFitRunStatus.Failed,
-                    null,
+                    exitCode: null,
                     completedAtUtc - startedAtUtc,
                     advisorJson,
-                    null,
+                    stderrExcerpt: null,
                     "advisor recommendation JSON parse failed",
                     completedAtUtc,
                     cancellationToken).ConfigureAwait(false);
@@ -168,10 +168,10 @@ public sealed class ModelFitRefreshService : IModelFitRefreshService
 
             await _snapshotStore.MarkTerminalAsync(snapshotId,
                 ModelFitRunStatus.Succeeded,
-                0,
+                exitCode: 0,
                 completedAtUtc - startedAtUtc,
                 advisorJson,
-                null,
+                stderrExcerpt: null,
                 parse.SystemDiagnosticsJson,
                 completedAtUtc,
                 cancellationToken).ConfigureAwait(false);
@@ -185,7 +185,7 @@ public sealed class ModelFitRefreshService : IModelFitRefreshService
                 inserted,
                 profile is { GpuAccelAvailable: true, VramKnown: true } ? "GPU" : "CPU");
 
-            return new ModelFitRefreshResult(snapshotId, ModelFitRunStatus.Succeeded, inserted, null);
+            return new ModelFitRefreshResult(snapshotId, ModelFitRunStatus.Succeeded, inserted, SanitizedError: null);
         }
         catch (OperationCanceledException)
         {
@@ -195,11 +195,11 @@ public sealed class ModelFitRefreshService : IModelFitRefreshService
             var cancelledAtUtc = _timeProvider.GetUtcNow().ToUnixTimeMilliseconds();
             await _snapshotStore.MarkTerminalAsync(snapshotId,
                 ModelFitRunStatus.Cancelled,
-                null,
+                exitCode: null,
                 cancelledAtUtc - startedAtUtc,
-                null,
-                null,
-                null,
+                rawJson: null,
+                stderrExcerpt: null,
+                diagnosticsJson: null,
                 cancelledAtUtc,
                 CancellationToken.None).ConfigureAwait(false);
 
@@ -213,10 +213,10 @@ public sealed class ModelFitRefreshService : IModelFitRefreshService
             var failedAtUtc = _timeProvider.GetUtcNow().ToUnixTimeMilliseconds();
             await _snapshotStore.MarkTerminalAsync(snapshotId,
                 ModelFitRunStatus.Failed,
-                null,
+                exitCode: null,
                 failedAtUtc - startedAtUtc,
-                null,
-                null,
+                rawJson: null,
+                stderrExcerpt: null,
                 "GGUF discovery failed",
                 failedAtUtc,
                 cancellationToken).ConfigureAwait(false);
@@ -391,7 +391,7 @@ public sealed class ModelFitRefreshService : IModelFitRefreshService
             file.AttentionHeadCount ?? 0,
             ctxTarget,
             profile,
-            false);
+            kvCacheQuantized: false);
 
         // Drop insufficient-metadata files (no weights term computable) and non-fitting files.
         if (estimate.EstimatedBytes <= _estimator.OverheadBytes || !estimate.Fits)
@@ -463,11 +463,11 @@ public sealed class ModelFitRefreshService : IModelFitRefreshService
                 writer.WriteString("fit_level", estimate.Mode == FitMode.Gpu ? "GPU" : "CPU");
                 writer.WriteString("run_mode", estimate.Mode.ToString());
                 // Score = headroom in GB (more headroom ranks higher); the parser stores it verbatim.
-                writer.WriteNumber("score", Math.Round(estimate.HeadroomBytes / (double)(1024 * 1024 * 1024), 3));
-                writer.WriteNumber("memory_required_gb", Math.Round(estimatedGb, 3));
+                writer.WriteNumber("score", Math.Round(estimate.HeadroomBytes / (double)(1024 * 1024 * 1024), digits: 3));
+                writer.WriteNumber("memory_required_gb", Math.Round(estimatedGb, digits: 3));
                 if (estimate.Mode == FitMode.Gpu)
                 {
-                    writer.WriteNumber("vram_required_gb", Math.Round(estimatedGb, 3));
+                    writer.WriteNumber("vram_required_gb", Math.Round(estimatedGb, digits: 3));
                 }
 
                 writer.WriteString("repo_id", recommendation.RepoId);
@@ -492,7 +492,7 @@ public sealed class ModelFitRefreshService : IModelFitRefreshService
 
     private static ModelFitRefreshResult Failed(Guid? snapshotId, string sanitizedError)
     {
-        return new ModelFitRefreshResult(snapshotId, ModelFitRunStatus.Failed, 0, sanitizedError);
+        return new ModelFitRefreshResult(snapshotId, ModelFitRunStatus.Failed, RecommendationCount: 0, sanitizedError);
     }
 
     /// <summary>One ranked advisor candidate: the repo/file/quant identity plus its computed memory-fit estimate.</summary>

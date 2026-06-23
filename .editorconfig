@@ -253,6 +253,10 @@ resharper_wrap_property_pattern = wrap_if_long
 resharper_place_expr_method_on_single_line = false
 resharper_wrap_array_initializer_style = chop_always
 resharper_wrap_list_pattern = chop_always
+resharper_csharp_arguments_skip_single = true
+resharper_csharp_arguments_literal = named
+resharper_csharp_arguments_string_literal = positional
+resharper_arguments_style_literal_highlighting = warning
 
 # Naming rules
 dotnet_naming_rule.types_and_namespaces_should_be_pascalcase.severity = suggestion
@@ -440,6 +444,22 @@ dotnet_naming_style.s_camelcase.word_separator =
 dotnet_naming_style.s_camelcase.capitalization = camel_case
 
 dotnet_style_namespace_match_folder = true:suggestion
+
+# Parameter names in overrides/interfaces should match.
+# Important when callers use named arguments.
+dotnet_diagnostic.CA1725.severity = warning
+
+# Correct ArgumentException / ArgumentNullException parameter names.
+dotnet_diagnostic.CA2208.severity = warning
+
+# Unused parameters.
+dotnet_diagnostic.IDE0060.severity = warning
+
+dotnet_naming_style.camel_case.capitalization = camel_case
+
+dotnet_naming_rule.parameters_should_be_camel_case.symbols = parameters
+dotnet_naming_rule.parameters_should_be_camel_case.style = camel_case
+dotnet_naming_rule.parameters_should_be_camel_case.severity = warning
 
 # SonarLint Rules Override
 dotnet_diagnostic.CA1707.severity = none

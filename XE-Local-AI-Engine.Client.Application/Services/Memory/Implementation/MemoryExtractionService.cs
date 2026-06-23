@@ -52,7 +52,7 @@ internal sealed class MemoryExtractionService(
 
         if (proposals.Count == 0)
         {
-            return new MemoryExtractionOutcome(false, true, [], 0, 0);
+            return new MemoryExtractionOutcome(MemoryExcluded: false, ModelConfigured: true, [], ProposedCount: 0, DuplicateCount: 0);
         }
 
         // Dedup against the agent's existing live memories so repeat runs don't flood the staging list. The lessons text
@@ -88,7 +88,7 @@ internal sealed class MemoryExtractionService(
                     PlaybookActionSource.Extracted,
                     proposal.TriggerCondition,
                     proposal.Behavior,
-                    Scope: proposal.Scope.ToString(),
+                    proposal.Scope.ToString(),
                     _options.CandidatePriority,
                     sourceFeedbackIds,
                     proposal.Confidence,
@@ -101,7 +101,7 @@ internal sealed class MemoryExtractionService(
         _logger.LogInformation("Memory extraction for agent {AgentId}: proposed {Proposed}, kept {Kept}, duplicates {Duplicates}.",
             run.AgentDefinitionId, proposals.Count, created.Count, duplicates);
 
-        return new MemoryExtractionOutcome(false, true, created, proposals.Count, duplicates);
+        return new MemoryExtractionOutcome(MemoryExcluded: false, ModelConfigured: true, created, proposals.Count, duplicates);
     }
 
     private static HashSet<(MemoryScope Scope, string Behavior)> BuildDedupKeys(IReadOnlyList<PlaybookActionRecord> existing)
@@ -129,6 +129,6 @@ internal sealed class MemoryExtractionService(
         }
 
         // Uppercase-normalize (CA1308) and collapse all whitespace so trivially-different phrasings dedupe.
-        return string.Join(' ', value.ToUpperInvariant().Split((char[]?)null, StringSplitOptions.RemoveEmptyEntries));
+        return string.Join(separator: ' ', value.ToUpperInvariant().Split((char[]?)null, StringSplitOptions.RemoveEmptyEntries));
     }
 }

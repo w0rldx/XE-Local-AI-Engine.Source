@@ -127,7 +127,7 @@ public sealed partial class WorkerHubConnection
 
     private void OnReconnectPolicyDetectedRevokedCredentials()
     {
-        Volatile.Write(ref _credentialsRevoked, true);
+        Volatile.Write(ref _credentialsRevoked, value: true);
     }
 
     private static bool ContainsCredentialsRevoked(Exception? exception)

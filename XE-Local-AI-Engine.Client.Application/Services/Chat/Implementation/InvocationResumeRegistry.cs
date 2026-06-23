@@ -240,7 +240,7 @@ public sealed class InvocationResumeRegistry : IInvocationResumeRegistry
     private sealed class LiveInvocation(InvocationState initialState)
     {
         private readonly List<Channel<InvocationState>> _subscribers = [];
-        private readonly System.Threading.Lock _syncRoot = new();
+        private readonly Lock _syncRoot = new();
 
         public InvocationState LatestState { get; private set; } = Clone(initialState);
 

@@ -210,7 +210,7 @@ internal sealed class CapabilityReportComposer
                 continue;
             }
 
-            var parts = line.Split(' ', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+            var parts = line.Split(separator: ' ', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
             if (parts.Length >= 2 && long.TryParse(parts[1], NumberStyles.Integer, CultureInfo.InvariantCulture, out var kib))
             {
                 return kib / 1024;
@@ -247,7 +247,7 @@ internal sealed class CapabilityReportComposer
                 continue;
             }
 
-            var separatorIndex = line.IndexOf(':', StringComparison.Ordinal);
+            var separatorIndex = line.IndexOf(value: ':', StringComparison.Ordinal);
             if (separatorIndex < 0 || separatorIndex == line.Length - 1)
             {
                 continue;
@@ -331,7 +331,7 @@ internal sealed class CapabilityReportComposer
 
     private static GpuInfo? ParseGpuLine(string line)
     {
-        var parts = line.Split(',', 2, StringSplitOptions.TrimEntries);
+        var parts = line.Split(separator: ',', count: 2, StringSplitOptions.TrimEntries);
         if (parts.Length == 0 || string.IsNullOrWhiteSpace(parts[0]))
         {
             return null;
@@ -343,7 +343,7 @@ internal sealed class CapabilityReportComposer
             vramMb = parsedVramMb;
         }
 
-        return new GpuInfo(parts[0], vramMb, false);
+        return new GpuInfo(parts[0], vramMb, CudaAvailable: false);
     }
 
     private static string? CalculateSystemScoreClass(long? ramMb, long? vramMb, bool cudaAvailable)

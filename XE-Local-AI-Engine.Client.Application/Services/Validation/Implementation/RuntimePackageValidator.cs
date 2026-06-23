@@ -122,7 +122,7 @@ public sealed class RuntimePackageValidator : IRuntimePackageValidator
 
     private static bool ContainsNullByte(string value)
     {
-        return value.Contains('\0', StringComparison.Ordinal);
+        return value.Contains(value: '\0', StringComparison.Ordinal);
     }
 
     private static bool ContainsBlockedPayload(string value)

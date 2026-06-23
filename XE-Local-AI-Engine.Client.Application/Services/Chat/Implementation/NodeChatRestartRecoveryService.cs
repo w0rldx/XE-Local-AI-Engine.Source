@@ -21,14 +21,14 @@ public sealed class NodeChatRestartRecoveryService(NodeChatPersistenceWriter wri
                 // Origin=Remote platform mirrors): a restart orphans both the same way. The status list must
                 // cover the full non-terminal set — pending, queued (held before the collision lease is
                 // acquired), and streaming — so a crash mid-queue does not leave a row dangling forever.
-                var recoveredCount = await dbContext.Database.ExecuteSqlRawAsync("""
-                                                                                 UPDATE messages
-                                                                                 SET status = {0},
-                                                                                     updated_at_utc = {1},
-                                                                                     error = {2}
-                                                                                 WHERE role = {3}
-                                                                                   AND status IN ({4}, {5}, {6});
-                                                                                 """,
+                var recoveredCount = await dbContext.Database.ExecuteSqlRawAsync(sql: """
+                                                                                      UPDATE messages
+                                                                                      SET status = {0},
+                                                                                          updated_at_utc = {1},
+                                                                                          error = {2}
+                                                                                      WHERE role = {3}
+                                                                                        AND status IN ({4}, {5}, {6});
+                                                                                      """,
                     [
                         NodeChatMessageStatusValues.Interrupted,
                         recoveredAtUtc,

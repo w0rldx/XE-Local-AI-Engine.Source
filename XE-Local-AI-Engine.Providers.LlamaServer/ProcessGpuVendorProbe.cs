@@ -1,7 +1,6 @@
 namespace XE_Local_AI_Engine.Providers.LlamaServer;
 
 using System.Diagnostics;
-using System.Runtime.InteropServices;
 
 /// <summary>
 ///     Default GPU-vendor probe. Prefers a non-shelling driver-presence signal (the NVML runtime library that ships

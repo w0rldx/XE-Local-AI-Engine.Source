@@ -120,10 +120,10 @@ public sealed class RunPlaybookActionEvalEndpointTests
             var created = await service.CreateAsync(new PlaybookActionInput(agentId,
                 PlaybookActionState.Enabled,
                 PlaybookActionSource.Manual,
-                null,
+                TriggerCondition: null,
                 "Always cite sources.",
-                null,
-                10)).ConfigureAwait(false);
+                Scope: null,
+                Priority: 10)).ConfigureAwait(false);
             enabledActionId = created.Id;
         }
 
@@ -169,8 +169,8 @@ public sealed class RunPlaybookActionEvalEndpointTests
         AssertEx.Equal("Suggested", root.GetProperty("state").GetString());
         var evalResult = root.GetProperty("evalResult");
         AssertEx.False(evalResult.GetProperty("passed").GetBoolean(), "An empty golden set can never prove no-regression.");
-        AssertEx.Equal(0, evalResult.GetProperty("goldenCaseCount").GetInt32());
-        AssertEx.Equal(0, evalResult.GetProperty("cases").GetArrayLength());
+        AssertEx.Equal(expected: 0, evalResult.GetProperty("goldenCaseCount").GetInt32());
+        AssertEx.Equal(expected: 0, evalResult.GetProperty("cases").GetArrayLength());
     }
 
     private static async Task<Guid> SeedAgentAsync(TestingWebAppFactory factory, string name)
@@ -178,14 +178,14 @@ public sealed class RunPlaybookActionEvalEndpointTests
         using var scope = factory.Services.CreateScope();
         var store = scope.ServiceProvider.GetRequiredService<IAgentDefinitionStore>();
         var agent = await store.AddAsync(new AgentDefinitionInput(name,
-            null,
+            Description: null,
             "You are a careful engineering agent.",
-            null,
-            null,
+            ModelProfile: null,
+            ReasoningEffort: null,
             AgentDefinitionKind.Single,
             [],
             new Dictionary<string, bool>(),
-            null)).ConfigureAwait(false);
+            OrchestrationTopologyJson: null)).ConfigureAwait(false);
         return agent.Id;
     }
 
@@ -195,11 +195,11 @@ public sealed class RunPlaybookActionEvalEndpointTests
         var service = scope.ServiceProvider.GetRequiredService<IPlaybookActionService>();
         var created = await service.CreateAnalysisSuggestionAsync(new PlaybookAnalysisSuggestionInput(agentDefinitionId,
             "Cite sources before answering.",
-            null,
+            TriggerCondition: null,
             "search",
-            100,
+            Priority: 100,
             [Guid.NewGuid()],
-            0.8d)).ConfigureAwait(false);
+            Confidence: 0.8d)).ConfigureAwait(false);
         return created.Id;
     }
 }

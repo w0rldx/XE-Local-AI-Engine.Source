@@ -65,12 +65,12 @@ public sealed class NodeChatStreamServiceTests
         }
 
         var completed = events.Single(streamEvent => streamEvent.Type == ChatStreamEventTypes.AssistantCompleted);
-        AssertEx.Equal(10, completed.InputTokens);
-        AssertEx.Equal(3, completed.OutputTokens);
-        AssertEx.Equal(13, completed.TotalTokens);
-        AssertEx.Equal(1, completed.ReasoningTokens);
-        AssertEx.Equal(10, terminalRequest!.InputCount);
-        AssertEx.Equal(13, terminalRequest.TotalCount);
+        AssertEx.Equal(expected: 10, completed.InputTokens);
+        AssertEx.Equal(expected: 3, completed.OutputTokens);
+        AssertEx.Equal(expected: 13, completed.TotalTokens);
+        AssertEx.Equal(expected: 1, completed.ReasoningTokens);
+        AssertEx.Equal(expected: 10, terminalRequest!.InputCount);
+        AssertEx.Equal(expected: 13, terminalRequest.TotalCount);
     }
 
     [Test]
@@ -170,14 +170,14 @@ public sealed class NodeChatStreamServiceTests
         AssertEx.Equal("call-1", requested.ToolCallId);
         AssertEx.Equal("weather", requested.ToolName);
         AssertEx.Equal("{\"city\":\"berlin\"}", requested.Arguments);
-        AssertEx.Equal(false, requested.RequiresApproval);
+        AssertEx.Equal(expected: false, requested.RequiresApproval);
         AssertEx.Equal(NodeChatMessageStatusValues.Streaming, requested.Status);
 
         var completed = events.Single(streamEvent => streamEvent.Type == ChatStreamEventTypes.ToolCallCompleted);
         AssertEx.Equal("call-1", completed.ToolCallId);
         AssertEx.Equal("weather", completed.ToolName);
         AssertEx.Equal("sunny", completed.Result);
-        AssertEx.Equal(false, completed.IsError);
+        AssertEx.Equal(expected: false, completed.IsError);
 
         var requestedIndex = events.FindIndex(streamEvent => streamEvent.Type == ChatStreamEventTypes.ToolCallRequested);
         var completedIndex = events.FindIndex(streamEvent => streamEvent.Type == ChatStreamEventTypes.ToolCallCompleted);
@@ -325,9 +325,9 @@ public sealed class NodeChatStreamServiceTests
 
         AssertEx.True(drained > 0, "Expected the send to stream events.");
         var captured = AssertEx.NotNull(runner.LastSamplingOptions);
-        AssertEx.Equal(0.4f, captured.Temperature);
-        AssertEx.Equal(0.9f, captured.TopP);
-        AssertEx.Equal(8192, captured.NumCtx);
+        AssertEx.Equal(expected: 0.4f, captured.Temperature);
+        AssertEx.Equal(expected: 0.9f, captured.TopP);
+        AssertEx.Equal(expected: 8192, captured.NumCtx);
     }
 
     [Test]
@@ -422,7 +422,7 @@ public sealed class NodeChatStreamServiceTests
         }
 
         AssertEx.True(drained > 0, "Expected the send to stream events.");
-        AssertEx.Equal(2, runner.LastAllowedTools.Count);
+        AssertEx.Equal(expected: 2, runner.LastAllowedTools.Count);
         AssertEx.Contains(runner.LastAllowedTools, tool => tool.Name == "GetCurrentTime");
         AssertEx.Contains(runner.LastAllowedTools, tool => tool.Name == "Calculate");
         foreach (var tool in runner.LastAllowedTools)
@@ -533,7 +533,7 @@ public sealed class NodeChatStreamServiceTests
         }
 
         AssertEx.True(drained > 0, "Expected the send to stream events.");
-        AssertEx.Equal(1, runner.LastAllowedTools.Count);
+        AssertEx.Equal(expected: 1, runner.LastAllowedTools.Count);
         AssertEx.Equal("Calculate", runner.LastAllowedTools[0].Name);
     }
 
@@ -733,7 +733,7 @@ public sealed class NodeChatStreamServiceTests
         var boundTool = CreateLocalToolDto("Calculate", "{\"type\":\"object\"}");
         var resolver = Substitute.For<IAgentDefinitionResolver>();
         resolver.ResolveAsync(agentDefinitionId, Arg.Any<string?>(), Arg.Any<string?>(), Arg.Any<bool>(), Arg.Any<CancellationToken>())
-                .Returns(new ResolvedAgentRuntime("Bound persona prompt.", [boundTool], "qwen3:8b", "high", 9));
+                .Returns(new ResolvedAgentRuntime("Bound persona prompt.", [boundTool], "qwen3:8b", "high", AgentDefinitionVersion: 9));
 
         var service = new NodeChatStreamService(persistence,
             new NodeChatInvocationPump(persistence, TimeProvider.System),
@@ -772,9 +772,9 @@ public sealed class NodeChatStreamServiceTests
 
         AssertEx.True(drained > 0, "Expected the send to stream events.");
         AssertEx.Equal("Bound persona prompt.", runner.LastSystemPrompt);
-        AssertEx.Equal(9, runner.LastAgentDefinitionVersion);
+        AssertEx.Equal(expected: 9, runner.LastAgentDefinitionVersion);
         AssertEx.Equal("high", runner.LastReasoningEffort);
-        AssertEx.Equal(1, runner.LastAllowedTools.Count);
+        AssertEx.Equal(expected: 1, runner.LastAllowedTools.Count);
         AssertEx.Equal("Calculate", runner.LastAllowedTools[0].Name);
         AssertEx.True(runner.LastOrchestrationSpec is null, "A single-agent binding must carry no orchestration spec.");
         // The just-sent user turn ("hello") is threaded to the resolver as the relevance-retrieval query —
@@ -797,7 +797,8 @@ public sealed class NodeChatStreamServiceTests
 
         var resolver = Substitute.For<IAgentDefinitionResolver>();
         resolver.ResolveAsync(agentDefinitionId, Arg.Any<string?>(), Arg.Any<string?>(), Arg.Any<bool>(), Arg.Any<CancellationToken>())
-                .Returns(new ResolvedAgentRuntime("Bound persona prompt.", [], "qwen3:8b", null, 9, agentDefinitionId, "Memory Agent", PlaybookEnabled: true, MemoryExtractionEnabled: true));
+                .Returns(new ResolvedAgentRuntime("Bound persona prompt.", [], "qwen3:8b", ReasoningEffort: null, AgentDefinitionVersion: 9, agentDefinitionId, "Memory Agent", PlaybookEnabled: true,
+                    MemoryExtractionEnabled: true));
         var extractionDispatcher = Substitute.For<IMemoryExtractionDispatcher>();
 
         var service = new NodeChatStreamService(persistence,
@@ -851,7 +852,8 @@ public sealed class NodeChatStreamServiceTests
 
         var resolver = Substitute.For<IAgentDefinitionResolver>();
         resolver.ResolveAsync(agentDefinitionId, Arg.Any<string?>(), Arg.Any<string?>(), Arg.Any<bool>(), Arg.Any<CancellationToken>())
-                .Returns(new ResolvedAgentRuntime("Bound persona prompt.", [], "qwen3:8b", null, 9, agentDefinitionId, "Retrieval Only", PlaybookEnabled: true, MemoryExtractionEnabled: false));
+                .Returns(new ResolvedAgentRuntime("Bound persona prompt.", [], "qwen3:8b", ReasoningEffort: null, AgentDefinitionVersion: 9, agentDefinitionId, "Retrieval Only", PlaybookEnabled: true,
+                    MemoryExtractionEnabled: false));
         var extractionDispatcher = Substitute.For<IMemoryExtractionDispatcher>();
 
         var service = new NodeChatStreamService(persistence,
@@ -911,7 +913,7 @@ public sealed class NodeChatStreamServiceTests
         var orchestrationResolver = Substitute.For<IOrchestrationResolver>();
         var spec = CreateSampleSpec();
         orchestrationResolver.ResolveAsync(Arg.Any<AgentDefinitionRecord>(), Arg.Any<string?>(), Arg.Any<string?>(), Arg.Any<bool>(), Arg.Any<CancellationToken>())
-                             .Returns(new ResolvedOrchestration(spec, "Orchestrator prompt.", "qwen3:8b", null, 4));
+                             .Returns(new ResolvedOrchestration(spec, "Orchestrator prompt.", "qwen3:8b", ReasoningEffort: null, AgentDefinitionVersion: 4));
 
         var service = new NodeChatStreamService(persistence,
             new NodeChatInvocationPump(persistence, TimeProvider.System),
@@ -947,7 +949,7 @@ public sealed class NodeChatStreamServiceTests
         AssertEx.True(drained > 0, "Expected the send to stream events.");
         AssertEx.NotNull(runner.LastOrchestrationSpec);
         AssertEx.Equal(spec.TriageParticipantKey, runner.LastOrchestrationSpec!.TriageParticipantKey);
-        AssertEx.Equal(2, runner.LastOrchestrationSpec.Participants.Count);
+        AssertEx.Equal(expected: 2, runner.LastOrchestrationSpec.Participants.Count);
     }
 
     [Test]
@@ -995,9 +997,9 @@ public sealed class NodeChatStreamServiceTests
         }
 
         AssertEx.True(drained > 0, "Expected the send to stream events.");
-        AssertEx.Equal(1, runner.LastAgentDefinitionVersion);
+        AssertEx.Equal(expected: 1, runner.LastAgentDefinitionVersion);
         AssertEx.NotNullOrEmpty(runner.LastSystemPrompt);
-        await resolver.Received().ResolveAsync(null, Arg.Any<string?>(), Arg.Any<string?>(), Arg.Any<bool>(), Arg.Any<CancellationToken>()).ConfigureAwait(false);
+        await resolver.Received().ResolveAsync(agentDefinitionId: null, Arg.Any<string?>(), Arg.Any<string?>(), Arg.Any<bool>(), Arg.Any<CancellationToken>()).ConfigureAwait(false);
     }
 
     [Test]
@@ -1015,7 +1017,7 @@ public sealed class NodeChatStreamServiceTests
         var runner = new CompletingInvocationRunner(dispatcher);
         var resolver = Substitute.For<IAgentDefinitionResolver>();
         resolver.ResolveAsync(Arg.Any<Guid?>(), Arg.Any<string?>(), Arg.Any<string?>(), Arg.Any<bool>(), Arg.Any<CancellationToken>())
-                .Returns(new ResolvedAgentRuntime("Selected persona.", [], "qwen3:8b", null, 3, requestAgentId, "Selected Agent"));
+                .Returns(new ResolvedAgentRuntime("Selected persona.", [], "qwen3:8b", ReasoningEffort: null, AgentDefinitionVersion: 3, requestAgentId, "Selected Agent"));
 
         var service = new NodeChatStreamService(persistence,
             new NodeChatInvocationPump(persistence, TimeProvider.System),
@@ -1068,7 +1070,7 @@ public sealed class NodeChatStreamServiceTests
         var runner = new CompletingInvocationRunner(dispatcher);
         var resolver = Substitute.For<IAgentDefinitionResolver>();
         resolver.ResolveAsync(Arg.Any<Guid?>(), Arg.Any<string?>(), Arg.Any<string?>(), Arg.Any<bool>(), Arg.Any<CancellationToken>())
-                .Returns(new ResolvedAgentRuntime("Default persona.", [], null, null, 1, defaultAssistantId, "Default Assistant"));
+                .Returns(new ResolvedAgentRuntime("Default persona.", [], ModelProfile: null, ReasoningEffort: null, AgentDefinitionVersion: 1, defaultAssistantId, "Default Assistant"));
 
         var service = new NodeChatStreamService(persistence,
             new NodeChatInvocationPump(persistence, TimeProvider.System),
@@ -1120,7 +1122,7 @@ public sealed class NodeChatStreamServiceTests
         var runner = new CompletingInvocationRunner(dispatcher);
         var resolver = Substitute.For<IAgentDefinitionResolver>();
         resolver.ResolveAsync(Arg.Any<Guid?>(), Arg.Any<string?>(), Arg.Any<string?>(), Arg.Any<bool>(), Arg.Any<CancellationToken>())
-                .Returns(new ResolvedAgentRuntime("Persona.", [], null, null, 1, agentId, "Backend Buddy"));
+                .Returns(new ResolvedAgentRuntime("Persona.", [], ModelProfile: null, ReasoningEffort: null, AgentDefinitionVersion: 1, agentId, "Backend Buddy"));
 
         var service = new NodeChatStreamService(persistence,
             new NodeChatInvocationPump(persistence, TimeProvider.System),
@@ -1175,7 +1177,7 @@ public sealed class NodeChatStreamServiceTests
         var runner = new CompletingInvocationRunner(dispatcher);
         var resolver = Substitute.For<IAgentDefinitionResolver>();
         resolver.ResolveAsync(Arg.Any<Guid?>(), Arg.Any<string?>(), Arg.Any<string?>(), Arg.Any<bool>(), Arg.Any<CancellationToken>())
-                .Returns(new ResolvedAgentRuntime("Persona.", [], null, null, 1, agentId, "Pending Persona"));
+                .Returns(new ResolvedAgentRuntime("Persona.", [], ModelProfile: null, ReasoningEffort: null, AgentDefinitionVersion: 1, agentId, "Pending Persona"));
 
         var service = new NodeChatStreamService(persistence,
             new NodeChatInvocationPump(persistence, TimeProvider.System),
@@ -1237,18 +1239,18 @@ public sealed class NodeChatStreamServiceTests
         var store = Substitute.For<IAgentDefinitionStore>();
         var defaultAssistant = new AgentDefinitionRecord(defaultAssistantId,
             "Default Assistant",
-            null,
+            Description: null,
             embeddedPrompt,
-            null,
-            null,
+            ModelProfile: null,
+            ReasoningEffort: null,
             AgentDefinitionKind.Single,
             [],
             new Dictionary<string, bool>(),
-            null,
-            1,
-            10,
-            10,
-            false,
+            OrchestrationTopologyJson: null,
+            Version: 1,
+            CreatedAtUtc: 10,
+            UpdatedAtUtc: 10,
+            PlaybookEnabled: false,
             AgentDefinitionSource.Seeded,
             "default-assistant");
         store.GetByIdAsync(defaultAssistantId, Arg.Any<CancellationToken>()).Returns(defaultAssistant);
@@ -1301,7 +1303,7 @@ public sealed class NodeChatStreamServiceTests
 
         AssertEx.True(drained > 0, "Expected the send to stream events.");
         AssertEx.Equal(embeddedPrompt, runner.LastSystemPrompt);
-        AssertEx.Equal(1, runner.LastAgentDefinitionVersion);
+        AssertEx.Equal(expected: 1, runner.LastAgentDefinitionVersion);
 
         // Hand-build the legacy null-path package (embedded prompt + full offer + version 1) and compare config hashes.
         var builder = new LocalChatRuntimePackageBuilder();
@@ -1310,7 +1312,7 @@ public sealed class NodeChatStreamServiceTests
             embeddedPrompt,
             [],
             new LocalChatAgentOptions().DefaultModel,
-            1,
+            AgentDefinitionVersion: 1,
             AllowedTools: [offeredTool]));
         var resolvedPackage = builder.Build(new LocalChatRuntimePackageRequest(Guid.NewGuid(),
             conversationId,
@@ -1340,18 +1342,18 @@ public sealed class NodeChatStreamServiceTests
         // An EDITED Default Assistant: a changed prompt and a bumped version (2).
         var editedDefault = new AgentDefinitionRecord(defaultAssistantId,
             "Default Assistant",
-            null,
+            Description: null,
             embeddedPrompt + "\n\nExtra operator guidance.",
-            null,
-            null,
+            ModelProfile: null,
+            ReasoningEffort: null,
             AgentDefinitionKind.Single,
             [],
             new Dictionary<string, bool>(),
-            null,
-            2,
-            10,
-            20,
-            false,
+            OrchestrationTopologyJson: null,
+            Version: 2,
+            CreatedAtUtc: 10,
+            UpdatedAtUtc: 20,
+            PlaybookEnabled: false,
             AgentDefinitionSource.Seeded,
             "default-assistant");
         store.GetByIdAsync(defaultAssistantId, Arg.Any<CancellationToken>()).Returns(editedDefault);
@@ -1409,7 +1411,7 @@ public sealed class NodeChatStreamServiceTests
             embeddedPrompt,
             [],
             new LocalChatAgentOptions().DefaultModel,
-            1,
+            AgentDefinitionVersion: 1,
             AllowedTools: [offeredTool]));
         var resolvedPackage = builder.Build(new LocalChatRuntimePackageRequest(Guid.NewGuid(),
             conversationId,
@@ -1589,7 +1591,7 @@ public sealed class NodeChatStreamServiceTests
             CreateModelClassificationService(),
             CreateLocalModelProviderResolver(),
             CreateGgufModelCapabilityResolver(),
-            CreateLocalDefaultChatModelResolver(resolved: "phi-4:Q4_K_M", echoPersistedDefault: false),
+            CreateLocalDefaultChatModelResolver("phi-4:Q4_K_M", echoPersistedDefault: false),
             CreateMemoryExtractionDispatcher(),
             TimeProvider.System,
             NullLogger<NodeChatStreamService>.Instance);
@@ -1759,7 +1761,7 @@ public sealed class NodeChatStreamServiceTests
                    {
                        if (!string.IsNullOrWhiteSpace(modelName) && !map.ContainsKey(modelName))
                        {
-                           map[modelName] = new ModelClassificationResult(modelName, ModelKind.Chat, ModelKind.Chat, resolved, false);
+                           map[modelName] = new ModelClassificationResult(modelName, ModelKind.Chat, ModelKind.Chat, resolved, IsOverridden: false);
                        }
                    }
 
@@ -1807,17 +1809,17 @@ public sealed class NodeChatStreamServiceTests
     {
         return new AgentDefinitionRecord(id,
             "Orchestrator",
-            null,
+            Description: null,
             "Orchestrator prompt.",
             "qwen3:8b",
-            null,
+            ReasoningEffort: null,
             AgentDefinitionKind.Orchestrator,
             [],
             new Dictionary<string, bool>(),
-            null,
-            4,
-            10,
-            10);
+            OrchestrationTopologyJson: null,
+            Version: 4,
+            CreatedAtUtc: 10,
+            UpdatedAtUtc: 10);
     }
 
     private static OrchestrationSpec CreateSampleSpec()
@@ -1887,7 +1889,7 @@ public sealed class NodeChatStreamServiceTests
             olderVariantId,
             newerVariantId,
             selectedPath,
-            null).ConfigureAwait(false);
+            requestSelection: null).ConfigureAwait(false);
 
         var assistantContents = runner.CapturedContext
                                       .Where(message => message.Role == MessageRole.Assistant)
@@ -1909,8 +1911,8 @@ public sealed class NodeChatStreamServiceTests
             variantGroupId,
             olderVariantId,
             newerVariantId,
-            null,
-            null).ConfigureAwait(false);
+            persistedSelection: null,
+            requestSelection: null).ConfigureAwait(false);
 
         var assistantContents = runner.CapturedContext
                                       .Where(message => message.Role == MessageRole.Assistant)
@@ -1938,7 +1940,7 @@ public sealed class NodeChatStreamServiceTests
             variantGroupId,
             olderVariantId,
             newerVariantId,
-            null,
+            persistedSelection: null,
             requestSelection).ConfigureAwait(false);
 
         var assistantContents = runner.CapturedContext
@@ -2018,68 +2020,68 @@ public sealed class NodeChatStreamServiceTests
 
         var userTurn = new NodeChatPersistedMessageDto(Guid.NewGuid(),
             conversationId,
-            null,
-            0,
+            RequestId: null,
+            Sequence: 0,
             "user",
             "original question",
-            null,
+            Reasoning: null,
             NodeChatMessageStatusValues.Completed,
-            1,
-            1,
-            null,
-            null,
-            null);
+            CreatedAtUtc: 1,
+            UpdatedAtUtc: 1,
+            Model: null,
+            Error: null,
+            MetadataJson: null);
         var olderVariant = new NodeChatPersistedMessageDto(olderVariantId,
             conversationId,
             Guid.NewGuid(),
-            1,
+            Sequence: 1,
             "assistant",
             "older answer",
-            null,
+            Reasoning: null,
             NodeChatMessageStatusValues.Completed,
-            1,
-            1,
-            null,
-            null,
-            null,
+            CreatedAtUtc: 1,
+            UpdatedAtUtc: 1,
+            Model: null,
+            Error: null,
+            MetadataJson: null,
             VariantGroupId: variantGroupId);
         var newerVariant = new NodeChatPersistedMessageDto(newerVariantId,
             conversationId,
             Guid.NewGuid(),
-            2,
+            Sequence: 2,
             "assistant",
             "newer answer",
-            null,
+            Reasoning: null,
             NodeChatMessageStatusValues.Completed,
-            2,
-            2,
-            null,
-            null,
-            null,
+            CreatedAtUtc: 2,
+            UpdatedAtUtc: 2,
+            Model: null,
+            Error: null,
+            MetadataJson: null,
             VariantGroupId: variantGroupId);
 
         var conversation = new NodeChatConversationDto(conversationId,
             "variant chat",
-            null,
-            1,
-            1,
-            false,
+            UserId: null,
+            CreatedAtUtc: 1,
+            LastSeenUtc: 1,
+            Purged: false,
             [userTurn, olderVariant, newerVariant],
             SelectedPath: persistedSelection);
         var newUserMessage = new NodeChatPersistedMessageDto(Guid.NewGuid(),
             conversationId,
-            null,
-            3,
+            RequestId: null,
+            Sequence: 3,
             "user",
             "follow up",
-            null,
+            Reasoning: null,
             NodeChatMessageStatusValues.Completed,
-            3,
-            3,
-            null,
-            null,
-            null);
-        var assistantPending = CreateAssistantMessage(conversationId, assistantMessageId, requestId, NodeChatMessageStatusValues.Pending, string.Empty, null);
+            CreatedAtUtc: 3,
+            UpdatedAtUtc: 3,
+            Model: null,
+            Error: null,
+            MetadataJson: null);
+        var assistantPending = CreateAssistantMessage(conversationId, assistantMessageId, requestId, NodeChatMessageStatusValues.Pending, string.Empty, reasoning: null);
 
         persistence.GetConversationAsync(conversationId, Arg.Any<CancellationToken>()).Returns(conversation);
         persistence.SetSelectedPathAsync(Arg.Any<NodeChatSetSelectedPathRequest>(), Arg.Any<CancellationToken>())
@@ -2098,10 +2100,10 @@ public sealed class NodeChatStreamServiceTests
                    });
         persistence.FlushAssistantPartialAsync(Arg.Any<NodeChatPartialFlushRequest>(), Arg.Any<CancellationToken>())
                    .Returns(callInfo => CreateAssistantMessage(conversationId, assistantMessageId, requestId, NodeChatMessageStatusValues.Streaming,
-                       callInfo.ArgAt<NodeChatPartialFlushRequest>(0).Content, null));
+                       callInfo.ArgAt<NodeChatPartialFlushRequest>(0).Content, reasoning: null));
         persistence.TerminalizeAssistantMessageAsync(Arg.Any<NodeChatTerminalizeMessageRequest>(), Arg.Any<CancellationToken>())
                    .Returns(callInfo => CreateAssistantMessage(conversationId, assistantMessageId, requestId, callInfo.ArgAt<NodeChatTerminalizeMessageRequest>(0).Status,
-                       callInfo.ArgAt<NodeChatTerminalizeMessageRequest>(0).Content ?? string.Empty, null));
+                       callInfo.ArgAt<NodeChatTerminalizeMessageRequest>(0).Content ?? string.Empty, reasoning: null));
 
         return persistence;
     }
@@ -2116,31 +2118,31 @@ public sealed class NodeChatStreamServiceTests
         var persistence = Substitute.For<INodeChatPersistenceService>();
         var conversation = new NodeChatConversationDto(conversationId,
             "test",
-            null,
-            1,
-            1,
-            false,
+            UserId: null,
+            CreatedAtUtc: 1,
+            LastSeenUtc: 1,
+            Purged: false,
             [],
             AgentDefinitionId: agentDefinitionId);
         var userMessage = new NodeChatPersistedMessageDto(Guid.NewGuid(),
             conversationId,
-            null,
-            1,
+            RequestId: null,
+            Sequence: 1,
             "user",
             "hello",
-            null,
+            Reasoning: null,
             NodeChatMessageStatusValues.Completed,
-            1,
-            1,
-            null,
-            null,
-            null);
+            CreatedAtUtc: 1,
+            UpdatedAtUtc: 1,
+            Model: null,
+            Error: null,
+            MetadataJson: null);
         var assistantPending = CreateAssistantMessage(conversationId,
             assistantMessageId,
             requestId,
             NodeChatMessageStatusValues.Pending,
             string.Empty,
-            null);
+            reasoning: null);
         var assistantQueued = assistantPending with
         {
             Status = NodeChatMessageStatusValues.Queued
@@ -2209,16 +2211,16 @@ public sealed class NodeChatStreamServiceTests
         return new NodeChatPersistedMessageDto(assistantMessageId,
             conversationId,
             requestId,
-            2,
+            Sequence: 2,
             "assistant",
             content,
             reasoning,
             status,
-            1,
-            1,
-            null,
+            CreatedAtUtc: 1,
+            UpdatedAtUtc: 1,
+            Model: null,
             error,
-            null);
+            MetadataJson: null);
     }
 
     private sealed class StreamingUntilCancelledInvocationRunner(RecordingWorkerEventDispatcher dispatcher) : IInvocationRunner
@@ -2272,7 +2274,7 @@ public sealed class NodeChatStreamServiceTests
             // terminal. This reproduces a client disconnecting while the shared runner is still working.
             await dispatcher.ReportInvocationStreamChunkAsync(context.Package.InvocationId, "answer").ConfigureAwait(false);
             await release.ConfigureAwait(false);
-            await dispatcher.ReportInvocationCompletedAsync(context.Package.InvocationId, 10, 3, 13, 1).ConfigureAwait(false);
+            await dispatcher.ReportInvocationCompletedAsync(context.Package.InvocationId, inputTokens: 10, outputTokens: 3, totalTokens: 13, reasoningTokens: 1).ConfigureAwait(false);
         }
 
         public Task<bool> DrainActiveInvocationsAsync(TimeSpan timeout, CancellationToken cancellationToken = default)
@@ -2324,7 +2326,7 @@ public sealed class NodeChatStreamServiceTests
             CapturedContext = context.Package.ConversationContext;
             CaptureObserved = true;
             await dispatcher.ReportInvocationStreamChunkAsync(context.Package.InvocationId, "answer").ConfigureAwait(false);
-            await dispatcher.ReportInvocationCompletedAsync(context.Package.InvocationId, 10, 3, 13, 1).ConfigureAwait(false);
+            await dispatcher.ReportInvocationCompletedAsync(context.Package.InvocationId, inputTokens: 10, outputTokens: 3, totalTokens: 13, reasoningTokens: 1).ConfigureAwait(false);
         }
 
         public Task<bool> DrainActiveInvocationsAsync(TimeSpan timeout, CancellationToken cancellationToken = default)
@@ -2366,7 +2368,7 @@ public sealed class NodeChatStreamServiceTests
         {
             await dispatcher.ReportInvocationStreamChunkAsync(context.Package.InvocationId, "answer").ConfigureAwait(false);
             await dispatcher.ReportInvocationThinkingChunkAsync(context.Package.InvocationId, "thinking").ConfigureAwait(false);
-            await dispatcher.ReportInvocationCompletedAsync(context.Package.InvocationId, 10, 3, 13, 1).ConfigureAwait(false);
+            await dispatcher.ReportInvocationCompletedAsync(context.Package.InvocationId, inputTokens: 10, outputTokens: 3, totalTokens: 13, reasoningTokens: 1).ConfigureAwait(false);
         }
 
         public Task<bool> DrainActiveInvocationsAsync(TimeSpan timeout, CancellationToken cancellationToken = default)
@@ -2419,7 +2421,7 @@ public sealed class NodeChatStreamServiceTests
             LastAllowedTools = context.Package.AllowedTools;
             LastOrchestrationSpec = context.Package.OrchestrationSpec;
             await dispatcher.ReportInvocationStreamChunkAsync(context.Package.InvocationId, "answer").ConfigureAwait(false);
-            await dispatcher.ReportInvocationCompletedAsync(context.Package.InvocationId, 10, 3, 13, 1).ConfigureAwait(false);
+            await dispatcher.ReportInvocationCompletedAsync(context.Package.InvocationId, inputTokens: 10, outputTokens: 3, totalTokens: 13, reasoningTokens: 1).ConfigureAwait(false);
         }
 
         public Task<bool> DrainActiveInvocationsAsync(TimeSpan timeout, CancellationToken cancellationToken = default)
@@ -2477,7 +2479,7 @@ public sealed class NodeChatStreamServiceTests
             LastSamplingOptions = context.Package.SamplingOptions;
             CaptureObserved = true;
             await dispatcher.ReportInvocationStreamChunkAsync(context.Package.InvocationId, "answer").ConfigureAwait(false);
-            await dispatcher.ReportInvocationCompletedAsync(context.Package.InvocationId, 10, 3, 13, 1).ConfigureAwait(false);
+            await dispatcher.ReportInvocationCompletedAsync(context.Package.InvocationId, inputTokens: 10, outputTokens: 3, totalTokens: 13, reasoningTokens: 1).ConfigureAwait(false);
         }
 
         public Task<bool> DrainActiveInvocationsAsync(TimeSpan timeout, CancellationToken cancellationToken = default)
@@ -2536,7 +2538,7 @@ public sealed class NodeChatStreamServiceTests
                 IsError = false
             }).ConfigureAwait(false);
             await dispatcher.ReportInvocationStreamChunkAsync(context.Package.InvocationId, "answer").ConfigureAwait(false);
-            await dispatcher.ReportInvocationCompletedAsync(context.Package.InvocationId, 10, 3, 13, 1).ConfigureAwait(false);
+            await dispatcher.ReportInvocationCompletedAsync(context.Package.InvocationId, inputTokens: 10, outputTokens: 3, totalTokens: 13, reasoningTokens: 1).ConfigureAwait(false);
         }
 
         public Task<bool> DrainActiveInvocationsAsync(TimeSpan timeout, CancellationToken cancellationToken = default)

@@ -24,7 +24,7 @@ public sealed class MemoryExtractionDispatcherTests : IDisposable
     {
         if (Directory.Exists(_rootPath))
         {
-            Directory.Delete(_rootPath, true);
+            Directory.Delete(_rootPath, recursive: true);
         }
     }
 
@@ -56,10 +56,10 @@ public sealed class MemoryExtractionDispatcherTests : IDisposable
         AssertEx.Equal(messageId, row.MessageId);
         AssertEx.Equal("qwen3:8b", row.ModelName);
         AssertEx.Equal("config-hash-abc", row.ConfigHash);
-        AssertEx.Equal(1234, row.LatencyMs);
+        AssertEx.Equal(expected: 1234, row.LatencyMs);
         AssertEx.True(row.Success);
-        AssertEx.Equal(10, row.PromptTokens);
-        AssertEx.Equal(3, row.CompletionTokens);
+        AssertEx.Equal(expected: 10, row.PromptTokens);
+        AssertEx.Equal(expected: 3, row.CompletionTokens);
         AssertEx.Null(row.ErrorClass);
     }
 
@@ -81,7 +81,7 @@ public sealed class MemoryExtractionDispatcherTests : IDisposable
             Success: false,
             PromptTokens: null,
             CompletionTokens: null,
-            ErrorClass: "Unexpected");
+            "Unexpected");
 
         dispatcher.Dispatch(telemetry, Run(agentId, telemetry.ConversationId, telemetry.MessageId, failed: true));
 
@@ -180,7 +180,7 @@ public sealed class MemoryExtractionDispatcherTests : IDisposable
             {
                 using var scope = provider.CreateScope();
                 var store = scope.ServiceProvider.GetRequiredService<IAgentExecutionLogStore>();
-                var rows = store.ListByAgentAsync(agentId, 10).GetAwaiter().GetResult();
+                var rows = store.ListByAgentAsync(agentId, limit: 10).GetAwaiter().GetResult();
                 if (rows.Count > 0)
                 {
                     found = rows[0];

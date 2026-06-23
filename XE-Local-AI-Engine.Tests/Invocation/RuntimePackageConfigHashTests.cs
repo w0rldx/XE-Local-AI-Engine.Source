@@ -18,7 +18,7 @@ public sealed class RuntimePackageConfigHashTests
     [Test]
     public void Compute_WhenUsingSharedVector_ReturnsExpectedDigest()
     {
-        var canonicalJson = RuntimePackageConfigHash.SerializeCanonicalJson(7,
+        var canonicalJson = RuntimePackageConfigHash.SerializeCanonicalJson(agentDefinitionVersion: 7,
             "You are a helpful local AI assistant.",
             [
                 new MixedEnvelopeAllowedToolDto
@@ -28,7 +28,7 @@ public sealed class RuntimePackageConfigHashTests
                     Schema = "{\"type\":\"object\",\"properties\":{\"url\":{\"type\":\"string\"}},\"required\":[\"url\"]}"
                 }
             ],
-            null,
+            modelProfile: null,
             new TimeoutSettings
             {
                 InvocationTimeoutSeconds = 300,
@@ -36,7 +36,7 @@ public sealed class RuntimePackageConfigHashTests
                 StreamIdleTimeoutSeconds = 30
             });
 
-        var digest = RuntimePackageConfigHash.Compute(7,
+        var digest = RuntimePackageConfigHash.Compute(agentDefinitionVersion: 7,
             "You are a helpful local AI assistant.",
             [
                 new MixedEnvelopeAllowedToolDto
@@ -46,7 +46,7 @@ public sealed class RuntimePackageConfigHashTests
                     Schema = "{\"type\":\"object\",\"properties\":{\"url\":{\"type\":\"string\"}},\"required\":[\"url\"]}"
                 }
             ],
-            null,
+            modelProfile: null,
             new TimeoutSettings
             {
                 InvocationTimeoutSeconds = 300,
@@ -91,14 +91,14 @@ public sealed class RuntimePackageConfigHashTests
         var secondSkillId = Guid.NewGuid();
 
         var baseline = ComputeSharedVector(null);
-        var withSkill = ComputeSharedVector([new ResolvedSkill(skillId, "kubernetes-debug", "Debug k8s", "## Body v1", 1)]);
-        var bodyEdited = ComputeSharedVector([new ResolvedSkill(skillId, "kubernetes-debug", "Debug k8s", "## Body v2", 1)]);
-        var renamed = ComputeSharedVector([new ResolvedSkill(skillId, "k8s-debug", "Debug k8s", "## Body v1", 1)]);
-        var descriptionEdited = ComputeSharedVector([new ResolvedSkill(skillId, "kubernetes-debug", "Debug Kubernetes clusters", "## Body v1", 1)]);
-        var versionBumped = ComputeSharedVector([new ResolvedSkill(skillId, "kubernetes-debug", "Debug k8s", "## Body v1", 2)]);
+        var withSkill = ComputeSharedVector([new ResolvedSkill(skillId, "kubernetes-debug", "Debug k8s", "## Body v1", Version: 1)]);
+        var bodyEdited = ComputeSharedVector([new ResolvedSkill(skillId, "kubernetes-debug", "Debug k8s", "## Body v2", Version: 1)]);
+        var renamed = ComputeSharedVector([new ResolvedSkill(skillId, "k8s-debug", "Debug k8s", "## Body v1", Version: 1)]);
+        var descriptionEdited = ComputeSharedVector([new ResolvedSkill(skillId, "kubernetes-debug", "Debug Kubernetes clusters", "## Body v1", Version: 1)]);
+        var versionBumped = ComputeSharedVector([new ResolvedSkill(skillId, "kubernetes-debug", "Debug k8s", "## Body v1", Version: 2)]);
         var picklistAdded = ComputeSharedVector([
-            new ResolvedSkill(skillId, "kubernetes-debug", "Debug k8s", "## Body v1", 1),
-            new ResolvedSkill(secondSkillId, "log-triage", "Triage logs", "## Logs", 1)
+            new ResolvedSkill(skillId, "kubernetes-debug", "Debug k8s", "## Body v1", Version: 1),
+            new ResolvedSkill(secondSkillId, "log-triage", "Triage logs", "## Logs", Version: 1)
         ]);
 
         AssertEx.True(withSkill != baseline, "Adding a skill must change the digest off the no-skills baseline.");
@@ -111,7 +111,7 @@ public sealed class RuntimePackageConfigHashTests
 
     private static string SerializeSharedVector(IReadOnlyList<ResolvedSkill>? skills)
     {
-        return RuntimePackageConfigHash.SerializeCanonicalJson(7,
+        return RuntimePackageConfigHash.SerializeCanonicalJson(agentDefinitionVersion: 7,
             "You are a helpful local AI assistant.",
             [
                 new MixedEnvelopeAllowedToolDto
@@ -121,21 +121,21 @@ public sealed class RuntimePackageConfigHashTests
                     Schema = "{\"type\":\"object\",\"properties\":{\"url\":{\"type\":\"string\"}},\"required\":[\"url\"]}"
                 }
             ],
-            null,
+            modelProfile: null,
             new TimeoutSettings
             {
                 InvocationTimeoutSeconds = 300,
                 ToolCallTimeoutSeconds = 60,
                 StreamIdleTimeoutSeconds = 30
             },
-            null,
-            null,
+            reasoningEffort: null,
+            orchestrationSpec: null,
             skills);
     }
 
     private static string ComputeSharedVector(IReadOnlyList<ResolvedSkill>? skills)
     {
-        return RuntimePackageConfigHash.Compute(7,
+        return RuntimePackageConfigHash.Compute(agentDefinitionVersion: 7,
             "You are a helpful local AI assistant.",
             [
                 new MixedEnvelopeAllowedToolDto
@@ -145,15 +145,15 @@ public sealed class RuntimePackageConfigHashTests
                     Schema = "{\"type\":\"object\",\"properties\":{\"url\":{\"type\":\"string\"}},\"required\":[\"url\"]}"
                 }
             ],
-            null,
+            modelProfile: null,
             new TimeoutSettings
             {
                 InvocationTimeoutSeconds = 300,
                 ToolCallTimeoutSeconds = 60,
                 StreamIdleTimeoutSeconds = 30
             },
-            null,
-            null,
+            reasoningEffort: null,
+            orchestrationSpec: null,
             skills);
     }
 
@@ -164,7 +164,7 @@ public sealed class RuntimePackageConfigHashTests
     [Test]
     public void Compute_WhenUsingClientLocalSharedVector_CarriesLocationAndApprovalInDigest()
     {
-        var canonicalJson = RuntimePackageConfigHash.SerializeCanonicalJson(7,
+        var canonicalJson = RuntimePackageConfigHash.SerializeCanonicalJson(agentDefinitionVersion: 7,
             "You are a helpful local AI assistant.",
             [
                 new MixedEnvelopeAllowedToolDto
@@ -176,7 +176,7 @@ public sealed class RuntimePackageConfigHashTests
                     RequiresApproval = true
                 }
             ],
-            null,
+            modelProfile: null,
             new TimeoutSettings
             {
                 InvocationTimeoutSeconds = 300,
@@ -184,7 +184,7 @@ public sealed class RuntimePackageConfigHashTests
                 StreamIdleTimeoutSeconds = 30
             });
 
-        var digest = RuntimePackageConfigHash.Compute(7,
+        var digest = RuntimePackageConfigHash.Compute(agentDefinitionVersion: 7,
             "You are a helpful local AI assistant.",
             [
                 new MixedEnvelopeAllowedToolDto
@@ -196,7 +196,7 @@ public sealed class RuntimePackageConfigHashTests
                     RequiresApproval = true
                 }
             ],
-            null,
+            modelProfile: null,
             new TimeoutSettings
             {
                 InvocationTimeoutSeconds = 300,
@@ -213,7 +213,7 @@ public sealed class RuntimePackageConfigHashTests
     [Test]
     public void Compute_WhenToolLocationChanges_ChangesDigest()
     {
-        var apiSideDigest = RuntimePackageConfigHash.Compute(7,
+        var apiSideDigest = RuntimePackageConfigHash.Compute(agentDefinitionVersion: 7,
             "prompt",
             [
                 new MixedEnvelopeAllowedToolDto
@@ -225,10 +225,10 @@ public sealed class RuntimePackageConfigHashTests
                     RequiresApproval = false
                 }
             ],
-            null,
+            modelProfile: null,
             new TimeoutSettings());
 
-        var clientLocalDigest = RuntimePackageConfigHash.Compute(7,
+        var clientLocalDigest = RuntimePackageConfigHash.Compute(agentDefinitionVersion: 7,
             "prompt",
             [
                 new MixedEnvelopeAllowedToolDto
@@ -240,7 +240,7 @@ public sealed class RuntimePackageConfigHashTests
                     RequiresApproval = false
                 }
             ],
-            null,
+            modelProfile: null,
             new TimeoutSettings());
 
         AssertEx.NotEqual(apiSideDigest, clientLocalDigest);
@@ -249,7 +249,7 @@ public sealed class RuntimePackageConfigHashTests
     [Test]
     public void Compute_WhenRequiresApprovalChanges_ChangesDigest()
     {
-        var withoutApprovalDigest = RuntimePackageConfigHash.Compute(7,
+        var withoutApprovalDigest = RuntimePackageConfigHash.Compute(agentDefinitionVersion: 7,
             "prompt",
             [
                 new MixedEnvelopeAllowedToolDto
@@ -261,10 +261,10 @@ public sealed class RuntimePackageConfigHashTests
                     RequiresApproval = false
                 }
             ],
-            null,
+            modelProfile: null,
             new TimeoutSettings());
 
-        var withApprovalDigest = RuntimePackageConfigHash.Compute(7,
+        var withApprovalDigest = RuntimePackageConfigHash.Compute(agentDefinitionVersion: 7,
             "prompt",
             [
                 new MixedEnvelopeAllowedToolDto
@@ -276,7 +276,7 @@ public sealed class RuntimePackageConfigHashTests
                     RequiresApproval = true
                 }
             ],
-            null,
+            modelProfile: null,
             new TimeoutSettings());
 
         AssertEx.NotEqual(withoutApprovalDigest, withApprovalDigest);
@@ -285,17 +285,17 @@ public sealed class RuntimePackageConfigHashTests
     [Test]
     public void Compute_WhenReasoningEffortChanges_ChangesDigest()
     {
-        var firstDigest = RuntimePackageConfigHash.Compute(7,
+        var firstDigest = RuntimePackageConfigHash.Compute(agentDefinitionVersion: 7,
             "prompt",
             [],
-            null,
+            modelProfile: null,
             new TimeoutSettings(),
             "low");
 
-        var secondDigest = RuntimePackageConfigHash.Compute(7,
+        var secondDigest = RuntimePackageConfigHash.Compute(agentDefinitionVersion: 7,
             "prompt",
             [],
-            null,
+            modelProfile: null,
             new TimeoutSettings(),
             "high");
 
@@ -305,23 +305,23 @@ public sealed class RuntimePackageConfigHashTests
     [Test]
     public void Compute_WhenReasoningEffortIsBinaryOn_DiffersFromNullAndNone()
     {
-        var onDigest = RuntimePackageConfigHash.Compute(7,
+        var onDigest = RuntimePackageConfigHash.Compute(agentDefinitionVersion: 7,
             "prompt",
             [],
-            null,
+            modelProfile: null,
             new TimeoutSettings(),
             "on");
 
-        var nullDigest = RuntimePackageConfigHash.Compute(7,
+        var nullDigest = RuntimePackageConfigHash.Compute(agentDefinitionVersion: 7,
             "prompt",
             [],
-            null,
+            modelProfile: null,
             new TimeoutSettings());
 
-        var noneDigest = RuntimePackageConfigHash.Compute(7,
+        var noneDigest = RuntimePackageConfigHash.Compute(agentDefinitionVersion: 7,
             "prompt",
             [],
-            null,
+            modelProfile: null,
             new TimeoutSettings(),
             "none");
 
@@ -339,10 +339,10 @@ public sealed class RuntimePackageConfigHashTests
     [Arguments("none", "none")]
     public void SerializeCanonicalJson_WhenReasoningEffortIsNamed_IsUnchanged(string reasoningEffort, string expectedNormalized)
     {
-        var canonicalJson = RuntimePackageConfigHash.SerializeCanonicalJson(7,
+        var canonicalJson = RuntimePackageConfigHash.SerializeCanonicalJson(agentDefinitionVersion: 7,
             "prompt",
             [],
-            null,
+            modelProfile: null,
             new TimeoutSettings
             {
                 InvocationTimeoutSeconds = 300,
@@ -360,7 +360,7 @@ public sealed class RuntimePackageConfigHashTests
     [Test]
     public void Compute_WhenAllowedToolOrderChanges_ChangesDigest()
     {
-        var firstDigest = RuntimePackageConfigHash.Compute(7,
+        var firstDigest = RuntimePackageConfigHash.Compute(agentDefinitionVersion: 7,
             "prompt",
             [
                 new MixedEnvelopeAllowedToolDto
@@ -376,10 +376,10 @@ public sealed class RuntimePackageConfigHashTests
                     Schema = "{}"
                 }
             ],
-            null,
+            modelProfile: null,
             new TimeoutSettings());
 
-        var secondDigest = RuntimePackageConfigHash.Compute(7,
+        var secondDigest = RuntimePackageConfigHash.Compute(agentDefinitionVersion: 7,
             "prompt",
             [
                 new MixedEnvelopeAllowedToolDto
@@ -395,7 +395,7 @@ public sealed class RuntimePackageConfigHashTests
                     Schema = "{}"
                 }
             ],
-            null,
+            modelProfile: null,
             new TimeoutSettings());
 
         AssertEx.NotEqual(firstDigest, secondDigest);
@@ -404,16 +404,16 @@ public sealed class RuntimePackageConfigHashTests
     [Test]
     public void Compute_WhenAgentDefinitionVersionChanges_ChangesDigest()
     {
-        var firstDigest = RuntimePackageConfigHash.Compute(7,
+        var firstDigest = RuntimePackageConfigHash.Compute(agentDefinitionVersion: 7,
             "prompt",
             [],
-            null,
+            modelProfile: null,
             new TimeoutSettings());
 
-        var secondDigest = RuntimePackageConfigHash.Compute(8,
+        var secondDigest = RuntimePackageConfigHash.Compute(agentDefinitionVersion: 8,
             "prompt",
             [],
-            null,
+            modelProfile: null,
             new TimeoutSettings());
 
         AssertEx.NotEqual(firstDigest, secondDigest);
@@ -429,8 +429,8 @@ public sealed class RuntimePackageConfigHashTests
         const string basePrompt = "You are the bound persona.";
         var composedEmpty = PlaybookPromptComposer.Compose(basePrompt, []);
 
-        var baseDigest = RuntimePackageConfigHash.Compute(7, basePrompt, [], null, new TimeoutSettings());
-        var composedDigest = RuntimePackageConfigHash.Compute(7, composedEmpty, [], null, new TimeoutSettings());
+        var baseDigest = RuntimePackageConfigHash.Compute(agentDefinitionVersion: 7, basePrompt, [], modelProfile: null, new TimeoutSettings());
+        var composedDigest = RuntimePackageConfigHash.Compute(agentDefinitionVersion: 7, composedEmpty, [], modelProfile: null, new TimeoutSettings());
 
         AssertEx.Equal(baseDigest, composedDigest);
 
@@ -445,10 +445,10 @@ public sealed class RuntimePackageConfigHashTests
     public void Compute_WhenPlaybookActionAppended_ChangesDigest()
     {
         const string basePrompt = "You are the bound persona.";
-        var composed = PlaybookPromptComposer.Compose(basePrompt, [EnabledAction("Run the tests first.", 1)]);
+        var composed = PlaybookPromptComposer.Compose(basePrompt, [EnabledAction("Run the tests first.", priority: 1)]);
 
-        var baseDigest = RuntimePackageConfigHash.Compute(7, basePrompt, [], null, new TimeoutSettings());
-        var composedDigest = RuntimePackageConfigHash.Compute(7, composed, [], null, new TimeoutSettings());
+        var baseDigest = RuntimePackageConfigHash.Compute(agentDefinitionVersion: 7, basePrompt, [], modelProfile: null, new TimeoutSettings());
+        var composedDigest = RuntimePackageConfigHash.Compute(agentDefinitionVersion: 7, composed, [], modelProfile: null, new TimeoutSettings());
 
         AssertEx.NotEqual(baseDigest, composedDigest);
     }
@@ -457,11 +457,11 @@ public sealed class RuntimePackageConfigHashTests
     public void Compute_WhenPlaybookBehaviorEdited_ChangesDigest()
     {
         const string basePrompt = "You are the bound persona.";
-        var first = PlaybookPromptComposer.Compose(basePrompt, [EnabledAction("Run the tests first.", 1)]);
-        var edited = PlaybookPromptComposer.Compose(basePrompt, [EnabledAction("Run the FULL test suite first.", 1)]);
+        var first = PlaybookPromptComposer.Compose(basePrompt, [EnabledAction("Run the tests first.", priority: 1)]);
+        var edited = PlaybookPromptComposer.Compose(basePrompt, [EnabledAction("Run the FULL test suite first.", priority: 1)]);
 
-        var firstDigest = RuntimePackageConfigHash.Compute(7, first, [], null, new TimeoutSettings());
-        var editedDigest = RuntimePackageConfigHash.Compute(7, edited, [], null, new TimeoutSettings());
+        var firstDigest = RuntimePackageConfigHash.Compute(agentDefinitionVersion: 7, first, [], modelProfile: null, new TimeoutSettings());
+        var editedDigest = RuntimePackageConfigHash.Compute(agentDefinitionVersion: 7, edited, [], modelProfile: null, new TimeoutSettings());
 
         AssertEx.NotEqual(firstDigest, editedDigest);
     }
@@ -474,17 +474,17 @@ public sealed class RuntimePackageConfigHashTests
         const string basePrompt = "You are the bound persona.";
         var order1 = PlaybookPromptComposer.Compose(basePrompt,
         [
-            EnabledAction("Run the tests first.", 1),
-            EnabledAction("Prefer small commits.", 5)
+            EnabledAction("Run the tests first.", priority: 1),
+            EnabledAction("Prefer small commits.", priority: 5)
         ]);
         var order2 = PlaybookPromptComposer.Compose(basePrompt,
         [
-            EnabledAction("Prefer small commits.", 1),
-            EnabledAction("Run the tests first.", 5)
+            EnabledAction("Prefer small commits.", priority: 1),
+            EnabledAction("Run the tests first.", priority: 5)
         ]);
 
-        var order1Digest = RuntimePackageConfigHash.Compute(7, order1, [], null, new TimeoutSettings());
-        var order2Digest = RuntimePackageConfigHash.Compute(7, order2, [], null, new TimeoutSettings());
+        var order1Digest = RuntimePackageConfigHash.Compute(agentDefinitionVersion: 7, order1, [], modelProfile: null, new TimeoutSettings());
+        var order2Digest = RuntimePackageConfigHash.Compute(agentDefinitionVersion: 7, order2, [], modelProfile: null, new TimeoutSettings());
 
         AssertEx.NotEqual(order1Digest, order2Digest);
     }
@@ -495,12 +495,12 @@ public sealed class RuntimePackageConfigHashTests
             Guid.NewGuid(),
             PlaybookActionState.Enabled,
             PlaybookActionSource.Manual,
-            null,
+            TriggerCondition: null,
             behavior,
-            null,
+            Scope: null,
             priority,
-            1,
-            10,
-            10);
+            Version: 1,
+            CreatedAtUtc: 10,
+            UpdatedAtUtc: 10);
     }
 }

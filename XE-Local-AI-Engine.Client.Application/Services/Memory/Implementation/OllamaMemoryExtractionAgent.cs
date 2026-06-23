@@ -107,8 +107,8 @@ internal sealed class OllamaMemoryExtractionAgent(
         return new
         {
             UserTurns = run.UserTurns.Select(static turn => turn.Content).ToArray(),
-            AssistantResponse = run.AssistantResponse,
-            Failed = run.Failed,
+            run.AssistantResponse,
+            run.Failed,
             Error = run.Failed ? run.Error : null
         };
     }

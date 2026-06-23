@@ -30,7 +30,7 @@ public sealed class LlamaServerAdapterIntegrationTests
         using var client = LlamaServerOpenAIAdapterFactory.CreateChatClient(baseUrl, model);
 
         var response = await client.GetResponseAsync([new ChatMessage(ChatRole.User, "Reply with the single word: pong.")],
-            null,
+            options: null,
             CancellationToken.None);
 
         AssertEx.NotNullOrEmpty(response.Text);
@@ -46,7 +46,7 @@ public sealed class LlamaServerAdapterIntegrationTests
 
         using var generator = LlamaServerOpenAIAdapterFactory.CreateEmbeddingGenerator(baseUrl, model);
 
-        var embeddings = await generator.GenerateAsync(["llama-server embedding round-trip"], null, CancellationToken.None);
+        var embeddings = await generator.GenerateAsync(["llama-server embedding round-trip"], options: null, CancellationToken.None);
 
         AssertEx.True(embeddings[0].Dimensions > 0, "Expected a non-empty embedding vector.");
     }

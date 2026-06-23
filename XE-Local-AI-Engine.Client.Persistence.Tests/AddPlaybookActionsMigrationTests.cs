@@ -18,7 +18,7 @@ public sealed class AddPlaybookActionsMigrationTests : IDisposable
     {
         if (Directory.Exists(_rootPath))
         {
-            Directory.Delete(_rootPath, true);
+            Directory.Delete(_rootPath, recursive: true);
         }
 
         _keyHolder.Dispose();
@@ -97,11 +97,11 @@ public sealed class AddPlaybookActionsMigrationTests : IDisposable
         await InsertAgentAsync(connection, agentId).ConfigureAwait(false);
         await InsertPlaybookActionAsync(connection, actionId, agentId).ConfigureAwait(false);
 
-        AssertEx.Equal(1L, await CountPlaybookActionsForAgentAsync(connection, agentId).ConfigureAwait(false));
+        AssertEx.Equal(expected: 1L, await CountPlaybookActionsForAgentAsync(connection, agentId).ConfigureAwait(false));
 
         await DeleteAgentAsync(connection, agentId).ConfigureAwait(false);
 
-        AssertEx.Equal(0L, await CountPlaybookActionsForAgentAsync(connection, agentId).ConfigureAwait(false));
+        AssertEx.Equal(expected: 0L, await CountPlaybookActionsForAgentAsync(connection, agentId).ConfigureAwait(false));
     }
 
     [Test]
@@ -151,12 +151,12 @@ public sealed class AddPlaybookActionsMigrationTests : IDisposable
             2,
             3
         });
-        command.Parameters.AddWithValue("$kind", 0);
+        command.Parameters.AddWithValue("$kind", value: 0);
         command.Parameters.AddWithValue("$allowed", "[]");
         command.Parameters.AddWithValue("$approvals", "{}");
-        command.Parameters.AddWithValue("$version", 1);
-        command.Parameters.AddWithValue("$created", 1234L);
-        command.Parameters.AddWithValue("$updated", 1234L);
+        command.Parameters.AddWithValue("$version", value: 1);
+        command.Parameters.AddWithValue("$created", value: 1234L);
+        command.Parameters.AddWithValue("$updated", value: 1234L);
 
         await command.ExecuteNonQueryAsync().ConfigureAwait(false);
     }
@@ -171,18 +171,18 @@ public sealed class AddPlaybookActionsMigrationTests : IDisposable
                               """;
         command.Parameters.AddWithValue("$id", actionId.ToString());
         command.Parameters.AddWithValue("$agent", agentId.ToString());
-        command.Parameters.AddWithValue("$state", 1);
-        command.Parameters.AddWithValue("$source", 0);
+        command.Parameters.AddWithValue("$state", value: 1);
+        command.Parameters.AddWithValue("$source", value: 0);
         command.Parameters.AddWithValue("$behavior", new byte[]
         {
             9,
             8,
             7
         });
-        command.Parameters.AddWithValue("$priority", 0);
-        command.Parameters.AddWithValue("$version", 1);
-        command.Parameters.AddWithValue("$created", 1234L);
-        command.Parameters.AddWithValue("$updated", 1234L);
+        command.Parameters.AddWithValue("$priority", value: 0);
+        command.Parameters.AddWithValue("$version", value: 1);
+        command.Parameters.AddWithValue("$created", value: 1234L);
+        command.Parameters.AddWithValue("$updated", value: 1234L);
 
         await command.ExecuteNonQueryAsync().ConfigureAwait(false);
     }
@@ -242,7 +242,7 @@ public sealed class AddPlaybookActionsMigrationTests : IDisposable
     private static async Task<IReadOnlySet<string>> ReadColumnNamesAsync(SqliteCommand command)
     {
         await using var reader = await command.ExecuteReaderAsync().ConfigureAwait(false);
-        return Enumerable.Range(0, reader.FieldCount)
+        return Enumerable.Range(start: 0, reader.FieldCount)
                          .Select(reader.GetName)
                          .ToHashSet(StringComparer.Ordinal);
     }

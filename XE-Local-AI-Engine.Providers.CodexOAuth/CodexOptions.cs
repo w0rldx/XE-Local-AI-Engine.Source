@@ -136,7 +136,7 @@ public sealed class CodexOptions
         var assembly = typeof(CodexOptions).Assembly;
         var informational = assembly.GetCustomAttribute<AssemblyInformationalVersionAttribute>()?.InformationalVersion;
         var version = informational is { Length: > 0 }
-            ? informational.Split('+', 2)[0]
+            ? informational.Split(separator: '+', count: 2)[0]
             : assembly.GetName().Version?.ToString() ?? "1.0.0";
         return $"XE-Local-AI-Engine/{version}";
     }

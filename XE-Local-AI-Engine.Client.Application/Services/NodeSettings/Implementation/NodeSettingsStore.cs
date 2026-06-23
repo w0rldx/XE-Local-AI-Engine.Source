@@ -15,7 +15,7 @@ public sealed class NodeSettingsStore : INodeSettingsStore, IDisposable
         WriteIndented = true
     };
 
-    private readonly SemaphoreSlim _lock = new(1, 1);
+    private readonly SemaphoreSlim _lock = new(initialCount: 1, maxCount: 1);
     private readonly ILogger<NodeSettingsStore> _logger;
     private readonly string _settingsPath;
 

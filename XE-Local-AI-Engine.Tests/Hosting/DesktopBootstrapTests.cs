@@ -223,7 +223,7 @@ public sealed class DesktopBootstrapTests
             {
                 if (Directory.Exists(_root))
                 {
-                    Directory.Delete(_root, true);
+                    Directory.Delete(_root, recursive: true);
                 }
             }
             catch (Exception exception) when (exception is IOException or UnauthorizedAccessException)

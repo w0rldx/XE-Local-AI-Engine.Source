@@ -62,13 +62,13 @@ internal sealed class HostGitRunner
         {
             if (!process.Start())
             {
-                return new HostGitResult(-1, string.Empty, "git could not be started.");
+                return new HostGitResult(ExitCode: -1, string.Empty, "git could not be started.");
             }
         }
         catch (Win32Exception exception)
         {
             // git is not installed / not on PATH.
-            return new HostGitResult(-1, string.Empty, exception.Message);
+            return new HostGitResult(ExitCode: -1, string.Empty, exception.Message);
         }
 
         var stdoutTask = process.StandardOutput.ReadToEndAsync(timeoutCts.Token);
@@ -82,7 +82,7 @@ internal sealed class HostGitRunner
         {
             // The per-command timeout (not the caller) fired: kill the process and surface a non-zero result.
             TryKill(process);
-            return new HostGitResult(-1, string.Empty, "git timed out.");
+            return new HostGitResult(ExitCode: -1, string.Empty, "git timed out.");
         }
 
         var standardOutput = await stdoutTask.ConfigureAwait(false);

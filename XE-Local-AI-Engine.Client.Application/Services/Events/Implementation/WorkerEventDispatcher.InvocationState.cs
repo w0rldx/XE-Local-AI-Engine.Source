@@ -146,7 +146,7 @@ public sealed partial class WorkerEventDispatcher
 
         public ValueTask DisposeAsync()
         {
-            if (Interlocked.Exchange(ref _disposed, 1) == 0)
+            if (Interlocked.Exchange(ref _disposed, value: 1) == 0)
             {
                 _ = queue.Release();
             }

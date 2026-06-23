@@ -77,8 +77,8 @@ public sealed class CodexAuthServiceTests : IDisposable
         AssertEx.NotNullOrEmpty(query["state"]);
         AssertEx.Equal(options.RedirectUri.ToString(), query["redirect_uri"]);
         // A SHA-256 base64url challenge is 43 chars with no padding.
-        AssertEx.Equal(43, query["code_challenge"].Length);
-        AssertEx.False(query["code_challenge"].Contains('=', StringComparison.Ordinal), "challenge must be base64url (no padding)");
+        AssertEx.Equal(expected: 43, query["code_challenge"].Length);
+        AssertEx.False(query["code_challenge"].Contains(value: '=', StringComparison.Ordinal), "challenge must be base64url (no padding)");
 
         // LIVE-CORRECTNESS (verified against the working opencode reference client):
         // the authorize host is the OAuth issuer auth.openai.com, and the simplified-flow params are present.
@@ -151,7 +151,7 @@ public sealed class CodexAuthServiceTests : IDisposable
     public async Task RefreshAsync_WhenTokenEndpointFails_ThrowsWithoutLoggingTokenMaterial()
     {
         using var handler = new CapturingHttpMessageHandler();
-        handler.EnqueueJson(HttpStatusCode.BadRequest, """{"error":"invalid_grant"}""");
+        handler.EnqueueJson(HttpStatusCode.BadRequest, json: """{"error":"invalid_grant"}""");
         var logger = new CapturingLogger<CodexAuthService>();
         var service = CreateService(handler, Substitute.For<ICodexTokenStore>(), out _, logger: logger);
         var current = new CodexTokens("secret-access-abc", "secret-refresh-def", DateTimeOffset.UtcNow, CodexTestHelpers.AccountId);
@@ -176,7 +176,7 @@ public sealed class CodexAuthServiceTests : IDisposable
         };
 
         // The test owns the handler (via `using`); this client must not dispose it.
-        var httpClient = new HttpClient(handler, false);
+        var httpClient = new HttpClient(handler, disposeHandler: false);
         _disposables.Add(httpClient);
         return new CodexAuthService(Options.Create(options), httpClient, tokenStore, logger ?? NullLogger<CodexAuthService>.Instance);
     }
@@ -184,9 +184,9 @@ public sealed class CodexAuthServiceTests : IDisposable
     private static Dictionary<string, string> ParseQuery(string query)
     {
         var result = new Dictionary<string, string>(StringComparer.Ordinal);
-        foreach (var pair in query.TrimStart('?').Split('&', StringSplitOptions.RemoveEmptyEntries))
+        foreach (var pair in query.TrimStart('?').Split(separator: '&', StringSplitOptions.RemoveEmptyEntries))
         {
-            var index = pair.IndexOf('=', StringComparison.Ordinal);
+            var index = pair.IndexOf(value: '=', StringComparison.Ordinal);
             if (index < 0)
             {
                 result[Uri.UnescapeDataString(pair)] = string.Empty;
@@ -226,7 +226,7 @@ public sealed class CodexAuthServiceTests : IDisposable
 
     private static int GetFreeLoopbackPort()
     {
-        using var listener = new TcpListener(IPAddress.Loopback, 0);
+        using var listener = new TcpListener(IPAddress.Loopback, port: 0);
         listener.Start();
         var port = ((IPEndPoint)listener.LocalEndpoint).Port;
         listener.Stop();

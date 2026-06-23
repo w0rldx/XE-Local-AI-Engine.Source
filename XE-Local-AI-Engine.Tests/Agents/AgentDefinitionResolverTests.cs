@@ -27,7 +27,7 @@ public sealed class AgentDefinitionResolverTests
     {
         var resolver = CreateResolver(out var store, OfferTool("GetCurrentTime"));
 
-        var resolved = await resolver.ResolveAsync(null, "qwen3:8b").ConfigureAwait(false);
+        var resolved = await resolver.ResolveAsync(agentDefinitionId: null, "qwen3:8b").ConfigureAwait(false);
 
         AssertEx.True(resolved is null, "A null binding must resolve to null (default persona).");
         await store.DidNotReceive().GetByIdAsync(Arg.Any<Guid>(), Arg.Any<CancellationToken>()).ConfigureAwait(false);
@@ -58,7 +58,7 @@ public sealed class AgentDefinitionResolverTests
         AssertEx.Equal(SystemPrompt, resolved!.ResolvedSystemPrompt);
         AssertEx.Equal("qwen3:8b", resolved.ModelProfile);
         AssertEx.Equal("high", resolved.ReasoningEffort);
-        AssertEx.Equal(4, resolved.AgentDefinitionVersion);
+        AssertEx.Equal(expected: 4, resolved.AgentDefinitionVersion);
     }
 
     [Test]
@@ -93,7 +93,7 @@ public sealed class AgentDefinitionResolverTests
         var resolved = await resolver.ResolveAsync(defaultAssistant.Id, "qwen3:8b").ConfigureAwait(false);
 
         AssertEx.NotNull(resolved);
-        AssertEx.Equal(2, resolved!.AllowedTools.Count);
+        AssertEx.Equal(expected: 2, resolved!.AllowedTools.Count);
         AssertEx.Contains(resolved.AllowedTools, tool => tool.Name == "GetCurrentTime");
         AssertEx.Contains(resolved.AllowedTools, tool => tool.Name == "Calculate");
     }
@@ -111,19 +111,19 @@ public sealed class AgentDefinitionResolverTests
         var definition = CreateDefinition(allowedSkillIds: [enabledId, disabledId, deletedId]);
         store.GetByIdAsync(definition.Id, Arg.Any<CancellationToken>()).Returns(definition);
         skillStore.ListEnabledByIdsAsync(Arg.Any<IReadOnlyCollection<Guid>>(), Arg.Any<CancellationToken>())
-                  .Returns(Task.FromResult<IReadOnlyList<AgentSkillRecord>>([SkillRecord(enabledId, "kubernetes-debug", "Debug k8s issues", "## Body", 3)]));
+                  .Returns(Task.FromResult<IReadOnlyList<AgentSkillRecord>>([SkillRecord(enabledId, "kubernetes-debug", "Debug k8s issues", "## Body", version: 3)]));
 
         var resolved = await resolver.ResolveAsync(definition.Id, "qwen3:8b").ConfigureAwait(false);
 
         AssertEx.NotNull(resolved);
         AssertEx.NotNull(resolved!.Skills);
-        AssertEx.Equal(1, resolved.Skills!.Count);
+        AssertEx.Equal(expected: 1, resolved.Skills!.Count);
         var skill = resolved.Skills[0];
         AssertEx.Equal(enabledId, skill.Id);
         AssertEx.Equal("kubernetes-debug", skill.Name);
         AssertEx.Equal("Debug k8s issues", skill.Description);
         AssertEx.Equal("## Body", skill.Body);
-        AssertEx.Equal(3, skill.Version);
+        AssertEx.Equal(expected: 3, skill.Version);
     }
 
     [Test]
@@ -139,7 +139,7 @@ public sealed class AgentDefinitionResolverTests
 
         AssertEx.NotNull(resolved);
         AssertEx.NotNull(resolved!.Skills);
-        AssertEx.Equal(0, resolved.Skills!.Count);
+        AssertEx.Equal(expected: 0, resolved.Skills!.Count);
         await skillStore.DidNotReceive().ListEnabledByIdsAsync(Arg.Any<IReadOnlyCollection<Guid>>(), Arg.Any<CancellationToken>()).ConfigureAwait(false);
     }
 
@@ -159,7 +159,7 @@ public sealed class AgentDefinitionResolverTests
         var resolved = await resolver.ResolveAsync(seededPersona.Id, "qwen3:8b").ConfigureAwait(false);
 
         AssertEx.NotNull(resolved);
-        AssertEx.Equal(1, resolved!.AllowedTools.Count);
+        AssertEx.Equal(expected: 1, resolved!.AllowedTools.Count);
         AssertEx.Equal("GetCurrentTime", resolved.AllowedTools[0].Name);
     }
 
@@ -175,7 +175,7 @@ public sealed class AgentDefinitionResolverTests
         var resolved = await resolver.ResolveAsync(definition.Id, "qwen3:8b").ConfigureAwait(false);
 
         AssertEx.NotNull(resolved);
-        AssertEx.Equal(1, resolved!.AllowedTools.Count);
+        AssertEx.Equal(expected: 1, resolved!.AllowedTools.Count);
         AssertEx.Equal("Calculate", resolved.AllowedTools[0].Name);
     }
 
@@ -199,8 +199,8 @@ public sealed class AgentDefinitionResolverTests
         AssertEx.NotNull(resolved);
         var gated = resolved!.AllowedTools.Single(tool => tool.Name == "GetCurrentTime");
         var ungated = resolved.AllowedTools.Single(tool => tool.Name == "Calculate");
-        AssertEx.Equal(true, gated.RequiresApproval);
-        AssertEx.Equal(false, ungated.RequiresApproval);
+        AssertEx.Equal(expected: true, gated.RequiresApproval);
+        AssertEx.Equal(expected: false, ungated.RequiresApproval);
     }
 
     [Test]
@@ -211,7 +211,7 @@ public sealed class AgentDefinitionResolverTests
         // treated like any other offered tool.
         const string mcpTool = "mcp__weather__get_forecast";
         var resolver = CreateResolver(out var store,
-            OfferTool(mcpTool, true),
+            OfferTool(mcpTool, requiresApproval: true),
             OfferTool("GetCurrentTime"));
         var definition = CreateDefinition(allowedTools: [mcpTool, "GetCurrentTime"],
             modelProfile: ToolCapableModel,
@@ -225,7 +225,7 @@ public sealed class AgentDefinitionResolverTests
 
         AssertEx.NotNull(resolved);
         var projected = resolved!.AllowedTools.Single(tool => tool.Name == mcpTool);
-        AssertEx.Equal(false, projected.RequiresApproval);
+        AssertEx.Equal(expected: false, projected.RequiresApproval);
     }
 
     [Test]
@@ -277,10 +277,10 @@ public sealed class AgentDefinitionResolverTests
         var definition = CreateDefinition(allowedTools: [CapabilityGatedToolName, "GetCurrentTime"], modelProfile: ToolCapableModel);
         store.GetByIdAsync(definition.Id, Arg.Any<CancellationToken>()).Returns(definition);
 
-        var resolved = await resolver.ResolveAsync(definition.Id, ToolCapableModel, null, false).ConfigureAwait(false);
+        var resolved = await resolver.ResolveAsync(definition.Id, ToolCapableModel, retrievalQuery: null, supportsTools: false).ConfigureAwait(false);
 
         AssertEx.NotNull(resolved);
-        AssertEx.Equal(0, resolved!.AllowedTools.Count);
+        AssertEx.Equal(expected: 0, resolved!.AllowedTools.Count);
     }
 
     [Test]
@@ -344,7 +344,7 @@ public sealed class AgentDefinitionResolverTests
             SystemPrompt,
             [],
             "qwen3:8b",
-            7,
+            AgentDefinitionVersion: 7,
             AllowedTools: [OfferTool("GetCurrentTime")],
             ReasoningEffort: "low"));
 
@@ -444,8 +444,8 @@ public sealed class AgentDefinitionResolverTests
         // composed prompt preserves this exact order.
         playbookStore.ListEnabledByAgentAsync(definition.Id, Arg.Any<CancellationToken>())
                      .Returns(Task.FromResult<IReadOnlyList<PlaybookActionRecord>>([
-                         EnabledAction(definition.Id, "Run the tests first.", 1),
-                         EnabledAction(definition.Id, "Prefer small commits.", 5)
+                         EnabledAction(definition.Id, "Run the tests first.", priority: 1),
+                         EnabledAction(definition.Id, "Prefer small commits.", priority: 5)
                      ]));
 
         var resolved = await resolver.ResolveAsync(definition.Id, "qwen3:8b").ConfigureAwait(false);
@@ -467,7 +467,7 @@ public sealed class AgentDefinitionResolverTests
         store.GetByIdAsync(definition.Id, Arg.Any<CancellationToken>()).Returns(definition);
         playbookStore.ListEnabledByAgentAsync(definition.Id, Arg.Any<CancellationToken>())
                      .Returns(Task.FromResult<IReadOnlyList<PlaybookActionRecord>>([
-                         EnabledAction(definition.Id, "Always cite the source.", 1)
+                         EnabledAction(definition.Id, "Always cite the source.", priority: 1)
                      ]));
 
         var resolved = await resolver.ResolveAsync(definition.Id, "qwen3:8b").ConfigureAwait(false);
@@ -489,7 +489,7 @@ public sealed class AgentDefinitionResolverTests
         };
         playbookStore.ListEnabledByAgentAsync(enabled.Id, Arg.Any<CancellationToken>())
                      .Returns(Task.FromResult<IReadOnlyList<PlaybookActionRecord>>([
-                         EnabledAction(enabled.Id, "Run the tests first.", 1)
+                         EnabledAction(enabled.Id, "Run the tests first.", priority: 1)
                      ]));
 
         var disabledHash = await ResolveAndHashAsync(resolver, store, builder, disabled).ConfigureAwait(false);
@@ -511,11 +511,11 @@ public sealed class AgentDefinitionResolverTests
         store.GetByIdAsync(definition.Id, Arg.Any<CancellationToken>()).Returns(definition);
 
         playbookStore.ListEnabledByAgentAsync(definition.Id, Arg.Any<CancellationToken>())
-                     .Returns(Task.FromResult<IReadOnlyList<PlaybookActionRecord>>([EnabledAction(definition.Id, "Run the tests first.", 1)]));
+                     .Returns(Task.FromResult<IReadOnlyList<PlaybookActionRecord>>([EnabledAction(definition.Id, "Run the tests first.", priority: 1)]));
         var firstHash = await ResolveAndHashAsync(resolver, store, builder, definition).ConfigureAwait(false);
 
         playbookStore.ListEnabledByAgentAsync(definition.Id, Arg.Any<CancellationToken>())
-                     .Returns(Task.FromResult<IReadOnlyList<PlaybookActionRecord>>([EnabledAction(definition.Id, "Prefer small commits.", 1)]));
+                     .Returns(Task.FromResult<IReadOnlyList<PlaybookActionRecord>>([EnabledAction(definition.Id, "Prefer small commits.", priority: 1)]));
         var secondHash = await ResolveAndHashAsync(resolver, store, builder, definition).ConfigureAwait(false);
 
         AssertEx.True(firstHash != secondHash, "Changing the injected memory text must change the config hash (memory rides the hashed prompt).");
@@ -558,13 +558,13 @@ public sealed class AgentDefinitionResolverTests
         // Two enabled actions, threshold 8: below the threshold the ranker is never consulted and the prompt is the full
         // static prepend — byte-identical to Compose(base, enabled).
         var ranker = new RecordingRanker();
-        var resolver = BuildResolverWithRanker(out var store, out var playbookStore, ranker, 8, 8, OfferTool("GetCurrentTime"));
+        var resolver = BuildResolverWithRanker(out var store, out var playbookStore, ranker, threshold: 8, topK: 8, OfferTool("GetCurrentTime"));
         var definition = CreateDefinition(allowedTools: ["GetCurrentTime"], playbookEnabled: true);
         store.GetByIdAsync(definition.Id, Arg.Any<CancellationToken>()).Returns(definition);
         playbookStore.ListEnabledByAgentAsync(definition.Id, Arg.Any<CancellationToken>())
                      .Returns(Task.FromResult<IReadOnlyList<PlaybookActionRecord>>([
-                         EnabledAction(definition.Id, "Run the tests first.", 1),
-                         EnabledAction(definition.Id, "Prefer small commits.", 5)
+                         EnabledAction(definition.Id, "Run the tests first.", priority: 1),
+                         EnabledAction(definition.Id, "Prefer small commits.", priority: 5)
                      ]));
 
         var resolved = await resolver.ResolveAsync(definition.Id, "qwen3:8b", "anything").ConfigureAwait(false);
@@ -572,7 +572,7 @@ public sealed class AgentDefinitionResolverTests
         AssertEx.NotNull(resolved);
         var expected = SystemPrompt + "\n\n## Operating Playbook\n- Run the tests first.\n- Prefer small commits.";
         AssertEx.Equal(expected, resolved!.ResolvedSystemPrompt);
-        AssertEx.Equal(0, ranker.CallCount);
+        AssertEx.Equal(expected: 0, ranker.CallCount);
     }
 
     [Test]
@@ -581,14 +581,14 @@ public sealed class AgentDefinitionResolverTests
         // Three enabled actions, threshold 2 (above it): but a blank query must NOT engage retrieval — the full static
         // prepend is kept and the ranker is never consulted.
         var ranker = new RecordingRanker();
-        var resolver = BuildResolverWithRanker(out var store, out var playbookStore, ranker, 2, 2, OfferTool("GetCurrentTime"));
+        var resolver = BuildResolverWithRanker(out var store, out var playbookStore, ranker, threshold: 2, topK: 2, OfferTool("GetCurrentTime"));
         var definition = CreateDefinition(allowedTools: ["GetCurrentTime"], playbookEnabled: true);
         store.GetByIdAsync(definition.Id, Arg.Any<CancellationToken>()).Returns(definition);
         playbookStore.ListEnabledByAgentAsync(definition.Id, Arg.Any<CancellationToken>())
                      .Returns(Task.FromResult<IReadOnlyList<PlaybookActionRecord>>([
-                         EnabledAction(definition.Id, "Run the tests first.", 1),
-                         EnabledAction(definition.Id, "Prefer small commits.", 5),
-                         EnabledAction(definition.Id, "Write a changelog.", 9)
+                         EnabledAction(definition.Id, "Run the tests first.", priority: 1),
+                         EnabledAction(definition.Id, "Prefer small commits.", priority: 5),
+                         EnabledAction(definition.Id, "Write a changelog.", priority: 9)
                      ]));
 
         var resolved = await resolver.ResolveAsync(definition.Id, "qwen3:8b", "   ").ConfigureAwait(false);
@@ -596,7 +596,7 @@ public sealed class AgentDefinitionResolverTests
         AssertEx.NotNull(resolved);
         var expected = SystemPrompt + "\n\n## Operating Playbook\n- Run the tests first.\n- Prefer small commits.\n- Write a changelog.";
         AssertEx.Equal(expected, resolved!.ResolvedSystemPrompt);
-        AssertEx.Equal(0, ranker.CallCount);
+        AssertEx.Equal(expected: 0, ranker.CallCount);
     }
 
     [Test]
@@ -604,12 +604,12 @@ public sealed class AgentDefinitionResolverTests
     {
         // Three enabled actions, threshold 2, top-k 2, non-blank query: the ranker is consulted once. The fake returns the
         // two it chooses out-of-priority-order; the resolver must re-impose Priority-then-CreatedAtUtc before composing.
-        var lowPriority = EnabledAction(Guid.Empty, "Prefer small commits.", 5);
-        var highPriority = EnabledAction(Guid.Empty, "Run the tests first.", 1);
-        var ignored = EnabledAction(Guid.Empty, "Write a changelog.", 9);
+        var lowPriority = EnabledAction(Guid.Empty, "Prefer small commits.", priority: 5);
+        var highPriority = EnabledAction(Guid.Empty, "Run the tests first.", priority: 1);
+        var ignored = EnabledAction(Guid.Empty, "Write a changelog.", priority: 9);
 
         var ranker = new RecordingRanker([lowPriority, highPriority]);
-        var resolver = BuildResolverWithRanker(out var store, out var playbookStore, ranker, 2, 2, OfferTool("GetCurrentTime"));
+        var resolver = BuildResolverWithRanker(out var store, out var playbookStore, ranker, threshold: 2, topK: 2, OfferTool("GetCurrentTime"));
         var definition = CreateDefinition(allowedTools: ["GetCurrentTime"], playbookEnabled: true);
         store.GetByIdAsync(definition.Id, Arg.Any<CancellationToken>()).Returns(definition);
         playbookStore.ListEnabledByAgentAsync(definition.Id, Arg.Any<CancellationToken>())
@@ -618,7 +618,7 @@ public sealed class AgentDefinitionResolverTests
         var resolved = await resolver.ResolveAsync(definition.Id, "qwen3:8b", "run the tests").ConfigureAwait(false);
 
         AssertEx.NotNull(resolved);
-        AssertEx.Equal(1, ranker.CallCount);
+        AssertEx.Equal(expected: 1, ranker.CallCount);
         // Re-ordered by Priority ascending: highPriority (1) before lowPriority (5); the ignored third action is absent.
         var expected = SystemPrompt + "\n\n## Operating Playbook\n- Run the tests first.\n- Prefer small commits.";
         AssertEx.Equal(expected, resolved!.ResolvedSystemPrompt);
@@ -629,7 +629,7 @@ public sealed class AgentDefinitionResolverTests
     {
         // The empty-set guard holds even when a query is present: no enabled actions => byte-identical base, ranker untouched.
         var ranker = new RecordingRanker();
-        var resolver = BuildResolverWithRanker(out var store, out var playbookStore, ranker, 0, 8, OfferTool("GetCurrentTime"));
+        var resolver = BuildResolverWithRanker(out var store, out var playbookStore, ranker, threshold: 0, topK: 8, OfferTool("GetCurrentTime"));
         var definition = CreateDefinition(allowedTools: ["GetCurrentTime"], playbookEnabled: true);
         store.GetByIdAsync(definition.Id, Arg.Any<CancellationToken>()).Returns(definition);
         playbookStore.ListEnabledByAgentAsync(definition.Id, Arg.Any<CancellationToken>())
@@ -639,7 +639,7 @@ public sealed class AgentDefinitionResolverTests
 
         AssertEx.NotNull(resolved);
         AssertEx.Equal(SystemPrompt, resolved!.ResolvedSystemPrompt);
-        AssertEx.Equal(0, ranker.CallCount);
+        AssertEx.Equal(expected: 0, ranker.CallCount);
     }
 
     private static async Task<string> ResolveAndHashAsync(IAgentDefinitionResolver resolver,
@@ -676,7 +676,7 @@ public sealed class AgentDefinitionResolverTests
 
     private static AgentDefinitionResolver CreateResolver(out IAgentDefinitionStore store, params AllowedToolDto[] offeredTools)
     {
-        return BuildResolver(out store, out _, null, offeredTools);
+        return BuildResolver(out store, out _, onGetOffered: null, offeredTools);
     }
 
     // Exposes the playbook store so the playbook-injection tests can stub ListEnabledByAgentAsync / assert it is not
@@ -685,7 +685,7 @@ public sealed class AgentDefinitionResolverTests
         out IPlaybookActionStore playbookStore,
         params AllowedToolDto[] offeredTools)
     {
-        return BuildResolver(out store, out playbookStore, null, offeredTools);
+        return BuildResolver(out store, out playbookStore, onGetOffered: null, offeredTools);
     }
 
     // Exposes both the definition store and a real (stubbable) skill store so the skill-resolution tests can configure
@@ -712,7 +712,7 @@ public sealed class AgentDefinitionResolverTests
 
     private static AgentSkillRecord SkillRecord(Guid id, string name, string description, string body, int version = 1)
     {
-        return new AgentSkillRecord(id, name, description, body, true, version, 10, 10);
+        return new AgentSkillRecord(id, name, description, body, Enabled: true, version, CreatedAtUtc: 10, UpdatedAtUtc: 10);
     }
 
     private static AgentDefinitionResolver BuildResolver(out IAgentDefinitionStore store,
@@ -806,10 +806,10 @@ public sealed class AgentDefinitionResolverTests
             AgentDefinitionKind.Single,
             allowedTools ?? [],
             toolApprovals ?? new Dictionary<string, bool>(),
-            null,
+            OrchestrationTopologyJson: null,
             version,
-            10,
-            10,
+            CreatedAtUtc: 10,
+            UpdatedAtUtc: 10,
             playbookEnabled,
             AllowedSkillIds: allowedSkillIds);
     }
@@ -820,13 +820,13 @@ public sealed class AgentDefinitionResolverTests
             agentDefinitionId,
             PlaybookActionState.Enabled,
             PlaybookActionSource.Manual,
-            null,
+            TriggerCondition: null,
             behavior,
-            null,
+            Scope: null,
             priority,
-            1,
-            10,
-            10);
+            Version: 1,
+            CreatedAtUtc: 10,
+            UpdatedAtUtc: 10);
     }
 
     private static AllowedToolDto OfferTool(string name, bool requiresApproval = false)

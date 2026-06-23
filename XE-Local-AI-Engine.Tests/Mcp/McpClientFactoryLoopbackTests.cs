@@ -102,16 +102,16 @@ public sealed class McpClientFactoryLoopbackTests
     {
         return new McpServerRecord(Guid.NewGuid(),
             "Remote",
-            null,
+            Description: null,
             McpTransportKind.Http,
-            null,
+            Command: null,
             [],
-            null,
+            WorkingDirectory: null,
             new Dictionary<string, string>(),
             url,
-            true,
-            1,
-            0,
-            0);
+            Enabled: true,
+            Version: 1,
+            CreatedAtUtc: 0,
+            UpdatedAtUtc: 0);
     }
 }

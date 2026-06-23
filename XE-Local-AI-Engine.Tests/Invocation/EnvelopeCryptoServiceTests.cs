@@ -17,7 +17,7 @@ public sealed class EnvelopeCryptoServiceTests
         var messageId = Guid.NewGuid();
         var epochKey = CreateEpochKey();
 
-        var encrypted = service.EncryptChunk(conversationId, messageId, 3, epochKey, Encoding.UTF8.GetBytes("hello"), 7);
+        var encrypted = service.EncryptChunk(conversationId, messageId, epochVersion: 3, epochKey, Encoding.UTF8.GetBytes("hello"), sequence: 7);
 
         var plaintext = Decrypt(encrypted.ChunkIv.Span,
             encrypted.ChunkCiphertext.Span,
@@ -38,10 +38,10 @@ public sealed class EnvelopeCryptoServiceTests
 
         var encrypted = service.EncryptChunk(conversationId,
             messageId,
-            3,
+            epochVersion: 3,
             epochKey,
             Encoding.UTF8.GetBytes("thinking"),
-            2,
+            sequence: 2,
             EncryptedChunkEnvelopeV1.ReasoningKind);
 
         var plaintext = Decrypt(encrypted.ChunkIv.Span,
@@ -63,10 +63,10 @@ public sealed class EnvelopeCryptoServiceTests
 
         var encrypted = service.EncryptCompleted(conversationId,
             messageId,
-            4,
+            epochVersion: 4,
             epochKey,
             Encoding.UTF8.GetBytes("answer"),
-            1,
+            totalSequence: 1,
             new Dictionary<string, long>
             {
                 ["tokensUsed"] = 2
@@ -88,7 +88,7 @@ public sealed class EnvelopeCryptoServiceTests
 
     private static byte[] CreateEpochKey()
     {
-        return Enumerable.Range(0, 32).Select(value => (byte)value).ToArray();
+        return Enumerable.Range(start: 0, count: 32).Select(value => (byte)value).ToArray();
     }
 
     private static byte[] Decrypt(ReadOnlySpan<byte> nonce, ReadOnlySpan<byte> ciphertextWithTag, ReadOnlySpan<byte> epochKey, string aad)
@@ -98,7 +98,7 @@ public sealed class EnvelopeCryptoServiceTests
         var ciphertext = ciphertextWithTag[..ciphertextLength];
         var tag = ciphertextWithTag[^16..];
 
-        using var aesGcm = new AesGcm(epochKey, 16);
+        using var aesGcm = new AesGcm(epochKey, tagSizeInBytes: 16);
         aesGcm.Decrypt(nonce, ciphertext, tag, plaintext, Encoding.UTF8.GetBytes(aad));
         return plaintext;
     }

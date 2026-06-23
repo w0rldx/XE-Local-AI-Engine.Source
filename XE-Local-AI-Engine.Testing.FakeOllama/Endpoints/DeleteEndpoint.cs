@@ -10,7 +10,7 @@ internal static class DeleteEndpoint
         var root = body?.RootElement;
         var model = root is null ? null : FakeOllamaEndpointMapper.GetString(root.Value, "model");
 
-        FakeOllamaEndpointMapper.Record(context, state, model, 0, model);
+        FakeOllamaEndpointMapper.Record(context, state, model, messageCount: 0, model);
 
         if (await FakeOllamaEndpointMapper.TryApplyFailureAsync(context, state, model).ConfigureAwait(false))
         {

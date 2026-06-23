@@ -39,19 +39,19 @@ public sealed class CodexAuthHandlerTests
 
         using var request = new HttpRequestMessage(HttpMethod.Post, "https://chatgpt.com/backend-api/codex/responses")
         {
-            Content = new StringContent("""{"model":"gpt-5-codex"}""", Encoding.UTF8, "application/json")
+            Content = new StringContent(content: """{"model":"gpt-5-codex"}""", Encoding.UTF8, "application/json")
         };
         using var response = await client.SendAsync(request);
 
         // The retry succeeded (200) — proving the cloned request was re-sendable.
         AssertEx.Equal(HttpStatusCode.OK, response.StatusCode);
-        AssertEx.Equal(2, inner.Requests.Count);
+        AssertEx.Equal(expected: 2, inner.Requests.Count);
 
         // Retry went on a DIFFERENT request instance (a clone), not the already-sent original.
         AssertEx.False(ReferenceEquals(inner.Requests[0], inner.Requests[1]), "retry must use a cloned request");
 
         // The clone preserved the original body and carried the refreshed bearer token.
-        AssertEx.Equal("""{"model":"gpt-5-codex"}""", inner.Bodies[1]);
+        AssertEx.Equal(expected: """{"model":"gpt-5-codex"}""", inner.Bodies[1]);
         AssertEx.Equal("refreshed-access", inner.Requests[1].Headers.Authorization?.Parameter);
 
         await authService.Received(1).RefreshAsync(Arg.Any<CodexTokens>(), Arg.Any<CancellationToken>());
@@ -79,7 +79,7 @@ public sealed class CodexAuthHandlerTests
         using var response = await client.SendAsync(request);
 
         AssertEx.Equal(HttpStatusCode.OK, response.StatusCode);
-        AssertEx.Equal(1, inner.Requests.Count);
+        AssertEx.Equal(expected: 1, inner.Requests.Count);
         await authService.DidNotReceive().RefreshAsync(Arg.Any<CodexTokens>(), Arg.Any<CancellationToken>());
     }
 

@@ -32,14 +32,15 @@ public static class CodexModelCatalog
         "gpt-5.3-codex-spark"
     ];
 
-    private static readonly HashSet<string> ModelIdSet = new(ModelIds, StringComparer.OrdinalIgnoreCase);
-
     /// <summary>
     ///     True when <paramref name="modelId" /> is one of the offered Codex cloud model ids (ordinal, case-insensitive).
     ///     A null/blank id is never a Codex model.
     /// </summary>
     public static bool IsCodexModel(string? modelId)
     {
-        return !string.IsNullOrWhiteSpace(modelId) && ModelIdSet.Contains(modelId);
+        // Linear scan over the tiny (4-item) allow-list with an ordinal, case-insensitive comparer. Avoiding a
+        // cached HashSet means there is no static-field init-order dependency for a member reformatter to break.
+        return !string.IsNullOrWhiteSpace(modelId)
+               && ModelIds.Contains(modelId, StringComparer.OrdinalIgnoreCase);
     }
 }

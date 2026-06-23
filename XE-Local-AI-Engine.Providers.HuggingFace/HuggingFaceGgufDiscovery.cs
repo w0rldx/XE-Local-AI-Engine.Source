@@ -54,7 +54,7 @@ internal sealed class HuggingFaceGgufDiscovery : IHuggingFaceGgufDiscovery
                 model.Likes,
                 model.LastModified,
                 model.License,
-                true));
+                HasUsableGguf: true));
         }
 
         return summaries;
@@ -63,13 +63,13 @@ internal sealed class HuggingFaceGgufDiscovery : IHuggingFaceGgufDiscovery
     /// <inheritdoc />
     public Task<GgufRepoDetail> InspectRepoAsync(string repoId, CancellationToken ct)
     {
-        return InspectCoreAsync(repoId, true, ct);
+        return InspectCoreAsync(repoId, includeHeaderMetadata: true, ct);
     }
 
     /// <inheritdoc />
     public Task<GgufRepoDetail> ListRepoFilesAsync(string repoId, CancellationToken ct)
     {
-        return InspectCoreAsync(repoId, false, ct);
+        return InspectCoreAsync(repoId, includeHeaderMetadata: false, ct);
     }
 
     // Shared enumeration: lists a repo's usable, non-projector .gguf files; reads each file's GGUF header (a per-file
@@ -82,7 +82,7 @@ internal sealed class HuggingFaceGgufDiscovery : IHuggingFaceGgufDiscovery
         var detail = await _hubClient.GetRepoAsync(repoId, ct).ConfigureAwait(false);
         if (detail is null)
         {
-            return new GgufRepoDetail(repoId, false, null, []);
+            return new GgufRepoDetail(repoId, IsGated: false, License: null, []);
         }
 
         var files = new List<GgufRepoFile>();

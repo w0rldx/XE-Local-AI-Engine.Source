@@ -33,7 +33,7 @@ public sealed class NodeChatPersistenceWriter(IServiceScopeFactory scopeFactory)
     {
         ArgumentNullException.ThrowIfNull(persistenceOperation);
 
-        var gate = _locks.GetOrAdd(key, static _ => new SemaphoreSlim(1, 1));
+        var gate = _locks.GetOrAdd(key, static _ => new SemaphoreSlim(initialCount: 1, maxCount: 1));
 
         await gate.WaitAsync(cancellationToken).ConfigureAwait(false);
         try
@@ -54,7 +54,7 @@ public readonly record struct NodeChatPersistenceWriteKey(Guid ConversationId, G
 {
     public static NodeChatPersistenceWriteKey ForConversation(Guid conversationId)
     {
-        return new NodeChatPersistenceWriteKey(conversationId, null);
+        return new NodeChatPersistenceWriteKey(conversationId, MessageId: null);
     }
 
     public static NodeChatPersistenceWriteKey ForMessage(Guid conversationId, Guid messageId)

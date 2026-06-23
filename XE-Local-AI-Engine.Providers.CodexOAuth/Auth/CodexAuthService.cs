@@ -167,7 +167,7 @@ public sealed class CodexAuthService : ICodexAuthService
         using var timeout = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
         timeout.CancelAfter(_options.TokenRequestTimeout);
 
-        return await SendTokenRequestAsync(request, null, timeout.Token).ConfigureAwait(false);
+        return await SendTokenRequestAsync(request, refreshFallback: null, timeout.Token).ConfigureAwait(false);
     }
 
     private async Task<CodexTokens> SendTokenRequestAsync(HttpRequestMessage request,
@@ -268,7 +268,7 @@ public sealed class CodexAuthService : ICodexAuthService
 
         var builder = new UriBuilder(_options.AuthorizeUrl)
         {
-            Query = string.Join('&', query.Select(kvp =>
+            Query = string.Join(separator: '&', query.Select(kvp =>
                 $"{Uri.EscapeDataString(kvp.Key)}={Uri.EscapeDataString(kvp.Value ?? string.Empty)}"))
         };
         return builder.Uri;
@@ -385,12 +385,12 @@ public sealed class CodexAuthService : ICodexAuthService
 
     private static string Base64UrlEncode(byte[] bytes)
     {
-        return Convert.ToBase64String(bytes).TrimEnd('=').Replace('+', '-').Replace('/', '_');
+        return Convert.ToBase64String(bytes).TrimEnd('=').Replace(oldChar: '+', newChar: '-').Replace(oldChar: '/', newChar: '_');
     }
 
     private static byte[] Base64UrlDecode(string value)
     {
-        var padded = value.Replace('-', '+').Replace('_', '/');
+        var padded = value.Replace(oldChar: '-', newChar: '+').Replace(oldChar: '_', newChar: '/');
         padded = (padded.Length % 4) switch
         {
             2 => padded + "==",

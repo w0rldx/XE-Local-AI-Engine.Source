@@ -57,7 +57,7 @@ public sealed class PreviewWorkflowHubTests
         await connection.InvokeAsync("Subscribe", runId).ConfigureAwait(false);
 
         var publisher = factory.Services.GetRequiredService<IPreviewWorkflowEventPublisher>();
-        await publisher.PublishRunAsync(new PreviewWorkflowRunHubEvent(PreviewWorkflowHubEvents.RunStarted, runId, null, null, null, null, 123L))
+        await publisher.PublishRunAsync(new PreviewWorkflowRunHubEvent(PreviewWorkflowHubEvents.RunStarted, runId, NodeId: null, Output: null, Error: null, RequestId: null, OccurredAtUtc: 123L))
                        .ConfigureAwait(false);
 
         var evt = await received.Task.WaitAsync(TimeSpan.FromSeconds(10)).ConfigureAwait(false);

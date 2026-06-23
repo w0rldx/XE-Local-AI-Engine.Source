@@ -29,7 +29,7 @@ public sealed class PairingServiceTests
         var result = await service.PairAsync("pair-token");
 
         AssertEx.Equal(expected.ClientNodeId, result.ClientNodeId);
-        AssertEx.Equal(1, tokenStore.StoreTokensAsyncCallCount);
+        AssertEx.Equal(expected: 1, tokenStore.StoreTokensAsyncCallCount);
     }
 
     [Test]
@@ -113,7 +113,7 @@ public sealed class PairingServiceTests
 
         await service.UnpairAsync();
 
-        AssertEx.Equal(1, tokenStore.ClearTokensAsyncCallCount);
+        AssertEx.Equal(expected: 1, tokenStore.ClearTokensAsyncCallCount);
     }
 
     private static PairingService CreateService(ITokenStore tokenStore,

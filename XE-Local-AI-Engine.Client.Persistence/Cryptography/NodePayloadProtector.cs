@@ -25,7 +25,7 @@ internal static class NodePayloadProtector
         var (ciphertext, tag) = Cipher.Encrypt(key, nonce, plaintext, aad);
 
         var payload = new byte[Cipher.NonceSize + ciphertext.Length + Cipher.TagSize];
-        nonce.CopyTo(payload, 0);
+        nonce.CopyTo(payload, index: 0);
         ciphertext.CopyTo(payload, Cipher.NonceSize);
         tag.CopyTo(payload, Cipher.NonceSize + ciphertext.Length);
         return payload;
@@ -61,7 +61,7 @@ internal static class NodePayloadProtector
         var schemaVersionBytes = Encoding.UTF8.GetBytes(SchemaVersion);
         var aad = new byte[conversationBytes.Length + recordBytes.Length + columnBytes.Length + schemaVersionBytes.Length];
 
-        conversationBytes.CopyTo(aad, 0);
+        conversationBytes.CopyTo(aad, index: 0);
         recordBytes.CopyTo(aad, conversationBytes.Length);
         columnBytes.CopyTo(aad, conversationBytes.Length + recordBytes.Length);
         schemaVersionBytes.CopyTo(aad, conversationBytes.Length + recordBytes.Length + columnBytes.Length);

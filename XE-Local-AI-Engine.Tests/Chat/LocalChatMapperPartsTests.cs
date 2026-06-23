@@ -14,16 +14,16 @@ public sealed class LocalChatMapperPartsTests
     {
         var parts = new List<NodeChatMessagePart>
         {
-            new(NodeChatMessagePartKinds.Reasoning, 0, "before"),
-            new(NodeChatMessagePartKinds.Tool, 1, ToolCallId: "call-1", Name: "GetCurrentTime", State: NodeChatToolPartStates.Received, Args: "{}", Result: "now"),
-            new(NodeChatMessagePartKinds.Reasoning, 2, "after")
+            new(NodeChatMessagePartKinds.Reasoning, Sequence: 0, "before"),
+            new(NodeChatMessagePartKinds.Tool, Sequence: 1, ToolCallId: "call-1", Name: "GetCurrentTime", State: NodeChatToolPartStates.Received, Args: "{}", Result: "now"),
+            new(NodeChatMessagePartKinds.Reasoning, Sequence: 2, "after")
         };
         var message = BuildMessage(parts);
 
         var response = message.ToResponse();
 
         var responseParts = AssertEx.NotNull(response.Parts);
-        AssertEx.Equal(3, responseParts.Count);
+        AssertEx.Equal(expected: 3, responseParts.Count);
         AssertEx.Equal(NodeChatMessagePartKinds.Tool, responseParts[1].Kind);
         AssertEx.Equal("call-1", responseParts[1].ToolCallId);
         AssertEx.Equal("now", responseParts[1].Result);
@@ -46,7 +46,7 @@ public sealed class LocalChatMapperPartsTests
     {
         var parts = new List<NodeChatMessagePart>
         {
-            new(NodeChatMessagePartKinds.Tool, 0, ToolCallId: "call-1", Name: "GetCurrentTime", State: NodeChatToolPartStates.Received, Args: "{}", Result: "now", RequiresApproval: false)
+            new(NodeChatMessagePartKinds.Tool, Sequence: 0, ToolCallId: "call-1", Name: "GetCurrentTime", State: NodeChatToolPartStates.Received, Args: "{}", Result: "now", RequiresApproval: false)
         };
         var response = BuildMessage(parts).ToResponse();
 
@@ -74,7 +74,7 @@ public sealed class LocalChatMapperPartsTests
 
         var response = message.ToResponse();
 
-        AssertEx.Equal(2000L, response.GenerationDurationMs);
+        AssertEx.Equal(expected: 2000L, response.GenerationDurationMs);
 
         // The frontend reads "generationDurationMs" off the camelCase wire response to compute tokens/sec.
         var json = JsonSerializer.Serialize(response, WebOptions);
@@ -94,16 +94,16 @@ public sealed class LocalChatMapperPartsTests
         return new NodeChatPersistedMessageDto(Guid.NewGuid(),
             Guid.NewGuid(),
             Guid.NewGuid(),
-            0,
+            Sequence: 0,
             "assistant",
             "the answer",
             "before\nafter",
             NodeChatMessageStatusValues.Completed,
-            1,
-            2,
+            CreatedAtUtc: 1,
+            UpdatedAtUtc: 2,
             "llama",
-            null,
-            null,
+            Error: null,
+            MetadataJson: null,
             Parts: parts);
     }
 }

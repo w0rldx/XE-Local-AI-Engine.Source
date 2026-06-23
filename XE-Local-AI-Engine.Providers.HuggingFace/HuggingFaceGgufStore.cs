@@ -25,14 +25,14 @@ internal sealed class HuggingFaceGgufStore : IGgufModelStore
     // entries are intentionally never pruned or disposed — the SemaphoreSlims hold no unmanaged handles and the bound
     // is small. Mirrors OllamaLocalModelProvider's per-pull gate.
     private readonly ConcurrentDictionary<string, SemaphoreSlim> _ensureGates = new(StringComparer.Ordinal);
-    private readonly GgufHeaderReader _headerReader;
-    private readonly ILogger<HuggingFaceGgufStore> _logger;
 
     // Caches the per-file header facts (context length + detected capabilities) read from each installed GGUF header so
     // the model-list endpoint (which hits ListInstalledModelsAsync often) never re-reads the file. Keyed by
     // (LocalPath, SizeBytes, DownloadedAtUtc) so a re-download (new size/timestamp) naturally invalidates the entry. A
     // null/empty result is cached too — a model whose header carries no metadata must not be re-read on every list.
     private readonly ConcurrentDictionary<HeaderFactsCacheKey, GgufHeaderFacts> _headerFactsCache = new();
+    private readonly GgufHeaderReader _headerReader;
+    private readonly ILogger<HuggingFaceGgufStore> _logger;
     private readonly HuggingFaceOptions _options;
     private readonly GgufModelRegistry _registry;
 
@@ -113,7 +113,7 @@ internal sealed class HuggingFaceGgufStore : IGgufModelStore
         var (fileName, quant, fileSizeBytes, fileSha, revision) = await ResolveTargetAsync(request, ct).ConfigureAwait(false);
         var modelName = GgufModelName.Format(request.RepoId, quant);
 
-        var gate = _ensureGates.GetOrAdd(modelName, _ => new SemaphoreSlim(1, 1));
+        var gate = _ensureGates.GetOrAdd(modelName, _ => new SemaphoreSlim(initialCount: 1, maxCount: 1));
         await gate.WaitAsync(ct).ConfigureAwait(false);
         try
         {
@@ -338,11 +338,12 @@ internal sealed class HuggingFaceGgufStore : IGgufModelStore
     private readonly record struct HeaderFactsCacheKey(string LocalPath, long SizeBytes, DateTimeOffset DownloadedAtUtc);
 
     // The per-file header facts surfaced onto the descriptor, derived from one tolerant header read.
-    private readonly record struct GgufHeaderFacts(int? MaxContextTokens,
+    private readonly record struct GgufHeaderFacts(
+        int? MaxContextTokens,
         bool IsToolCapable,
         bool IsReasoningCapable,
         IReadOnlyList<string> Capabilities)
     {
-        public static GgufHeaderFacts Empty { get; } = new(null, false, false, []);
+        public static GgufHeaderFacts Empty { get; } = new(MaxContextTokens: null, IsToolCapable: false, IsReasoningCapable: false, []);
     }
 }

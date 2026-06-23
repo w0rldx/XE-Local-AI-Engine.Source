@@ -96,7 +96,7 @@ public sealed class ModelKindDetectorTests
     [Test]
     public void FromCapabilities_WhenNullCapabilitiesAndEmbeddingName_ReturnsEmbedding()
     {
-        var result = ModelKindDetector.FromCapabilities(null, "nomic-embed-text");
+        var result = ModelKindDetector.FromCapabilities(capabilities: null, "nomic-embed-text");
 
         AssertEx.Equal(ModelKind.Embedding, result);
     }
@@ -104,7 +104,7 @@ public sealed class ModelKindDetectorTests
     [Test]
     public void FromCapabilities_WhenNullCapabilitiesAndNonEmbeddingName_ReturnsUnknown()
     {
-        var result = ModelKindDetector.FromCapabilities(null, "llama3");
+        var result = ModelKindDetector.FromCapabilities(capabilities: null, "llama3");
 
         AssertEx.Equal(ModelKind.Unknown, result);
     }
@@ -117,7 +117,7 @@ public sealed class ModelKindDetectorTests
     {
         var result = ModelKindDetector.SupportsThinking(["completion", capability]);
 
-        AssertEx.Equal(true, result);
+        AssertEx.Equal(expected: true, result);
     }
 
     [Test]
@@ -125,7 +125,7 @@ public sealed class ModelKindDetectorTests
     {
         var result = ModelKindDetector.SupportsThinking(["completion", "vision"]);
 
-        AssertEx.Equal(false, result);
+        AssertEx.Equal(expected: false, result);
     }
 
     [Test]
@@ -133,7 +133,7 @@ public sealed class ModelKindDetectorTests
     {
         var result = ModelKindDetector.SupportsThinking([]);
 
-        AssertEx.Equal(false, result);
+        AssertEx.Equal(expected: false, result);
     }
 
     [Test]
@@ -141,7 +141,7 @@ public sealed class ModelKindDetectorTests
     {
         var result = ModelKindDetector.SupportsThinking(null);
 
-        AssertEx.Equal(false, result);
+        AssertEx.Equal(expected: false, result);
     }
 
     [Test]
@@ -152,7 +152,7 @@ public sealed class ModelKindDetectorTests
     {
         var result = ModelKindDetector.SupportsTools(["completion", capability]);
 
-        AssertEx.Equal(true, result);
+        AssertEx.Equal(expected: true, result);
     }
 
     [Test]
@@ -160,7 +160,7 @@ public sealed class ModelKindDetectorTests
     {
         var result = ModelKindDetector.SupportsTools(["completion", "vision"]);
 
-        AssertEx.Equal(false, result);
+        AssertEx.Equal(expected: false, result);
     }
 
     [Test]
@@ -168,7 +168,7 @@ public sealed class ModelKindDetectorTests
     {
         var result = ModelKindDetector.SupportsTools([]);
 
-        AssertEx.Equal(false, result);
+        AssertEx.Equal(expected: false, result);
     }
 
     [Test]
@@ -176,6 +176,6 @@ public sealed class ModelKindDetectorTests
     {
         var result = ModelKindDetector.SupportsTools(null);
 
-        AssertEx.Equal(false, result);
+        AssertEx.Equal(expected: false, result);
     }
 }

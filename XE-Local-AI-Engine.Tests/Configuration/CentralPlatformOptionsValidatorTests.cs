@@ -12,7 +12,7 @@ public sealed class CentralPlatformOptionsValidatorTests
     [Test]
     public void Validate_WhenOptionsAreValid_ReturnsSuccess()
     {
-        var result = _validator.Validate(null, CreateValidOptions());
+        var result = _validator.Validate(name: null, CreateValidOptions());
 
         AssertEx.False(result.Failed);
         AssertEx.True(result.Failures is null || !result.Failures.Any());
@@ -24,7 +24,7 @@ public sealed class CentralPlatformOptionsValidatorTests
         var options = CreateValidOptions();
         options.BaseUrl = string.Empty;
 
-        var result = _validator.Validate(null, options);
+        var result = _validator.Validate(name: null, options);
 
         AssertFailureContains(result, "BaseUrl");
     }
@@ -35,7 +35,7 @@ public sealed class CentralPlatformOptionsValidatorTests
         var options = CreateValidOptions();
         options.HeartbeatIntervalSeconds = 4;
 
-        var result = _validator.Validate(null, options);
+        var result = _validator.Validate(name: null, options);
 
         AssertFailureContains(result, "HeartbeatIntervalSeconds");
     }
@@ -46,7 +46,7 @@ public sealed class CentralPlatformOptionsValidatorTests
         var options = CreateValidOptions();
         options.HeartbeatIntervalSeconds = 301;
 
-        var result = _validator.Validate(null, options);
+        var result = _validator.Validate(name: null, options);
 
         AssertFailureContains(result, "HeartbeatIntervalSeconds");
     }
@@ -58,7 +58,7 @@ public sealed class CentralPlatformOptionsValidatorTests
         options.ReconnectBackoffBaseMs = 2000;
         options.ReconnectBackoffMaxMs = 1000;
 
-        var result = _validator.Validate(null, options);
+        var result = _validator.Validate(name: null, options);
 
         AssertFailureContains(result, "ReconnectBackoffMaxMs");
     }
@@ -69,7 +69,7 @@ public sealed class CentralPlatformOptionsValidatorTests
         var options = CreateValidOptions();
         options.ReconnectBackoffMaxMs = 1800001;
 
-        var result = _validator.Validate(null, options);
+        var result = _validator.Validate(name: null, options);
 
         AssertFailureContains(result, "ReconnectBackoffMaxMs");
     }
@@ -80,7 +80,7 @@ public sealed class CentralPlatformOptionsValidatorTests
         var options = CreateValidOptions();
         options.ReconnectMaxAttempts = 101;
 
-        var result = _validator.Validate(null, options);
+        var result = _validator.Validate(name: null, options);
 
         AssertFailureContains(result, "ReconnectMaxAttempts");
     }
@@ -91,7 +91,7 @@ public sealed class CentralPlatformOptionsValidatorTests
         var options = CreateValidOptions();
         options.MaxSignalRMessageSizeKb = 15;
 
-        var result = _validator.Validate(null, options);
+        var result = _validator.Validate(name: null, options);
 
         AssertFailureContains(result, "MaxSignalRMessageSizeKb");
     }
@@ -102,7 +102,7 @@ public sealed class CentralPlatformOptionsValidatorTests
         var options = CreateValidOptions();
         options.MaxSignalRMessageSizeKb = 1025;
 
-        var result = _validator.Validate(null, options);
+        var result = _validator.Validate(name: null, options);
 
         AssertFailureContains(result, "MaxSignalRMessageSizeKb");
     }

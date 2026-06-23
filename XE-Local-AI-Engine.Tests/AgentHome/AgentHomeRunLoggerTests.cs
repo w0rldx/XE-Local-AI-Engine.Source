@@ -13,7 +13,7 @@ using XE_Local_AI_Engine.Tests.Testing;
 /// </summary>
 public sealed class AgentHomeRunLoggerTests : IDisposable
 {
-    private static readonly DateTimeOffset FixedNow = new(2026, 5, 30, 9, 0, 0, TimeSpan.Zero);
+    private static readonly DateTimeOffset FixedNow = new(year: 2026, month: 5, day: 30, hour: 9, minute: 0, second: 0, TimeSpan.Zero);
 
     private readonly List<string> _tempDirs = [];
 
@@ -25,7 +25,7 @@ public sealed class AgentHomeRunLoggerTests : IDisposable
             {
                 if (Directory.Exists(dir))
                 {
-                    Directory.Delete(dir, true);
+                    Directory.Delete(dir, recursive: true);
                 }
             }
             catch (IOException)
@@ -77,7 +77,7 @@ public sealed class AgentHomeRunLoggerTests : IDisposable
         await logger.AppendEventAsync("run_completed", "exit=0");
 
         var lines = await File.ReadAllLinesAsync(Path.Combine(ctx.HostLogDirectory, "events.jsonl"));
-        AssertEx.Equal(2, lines.Length - CountTrailingEmpty(lines)); // started + run_completed
+        AssertEx.Equal(expected: 2, lines.Length - CountTrailingEmpty(lines)); // started + run_completed
 
         var completedRecord = ParseRecord(lines[1]);
         AssertEx.Equal("run_completed", completedRecord.GetProperty("eventName").GetString());
@@ -96,7 +96,7 @@ public sealed class AgentHomeRunLoggerTests : IDisposable
         await logger.AppendEventAsync("patch_exported");
 
         var lines = NonEmptyLines(await File.ReadAllLinesAsync(Path.Combine(ctx.HostLogDirectory, "events.jsonl")));
-        AssertEx.Equal(4, lines.Count); // started + 3 more
+        AssertEx.Equal(expected: 4, lines.Count); // started + 3 more
     }
 
 
@@ -124,8 +124,8 @@ public sealed class AgentHomeRunLoggerTests : IDisposable
 
         var record = ReadFirstRecord(commandsFile);
         AssertEx.Equal("dotnet", record.GetProperty("executable").GetString());
-        AssertEx.Equal(0, record.GetProperty("exitCode").GetInt32());
-        AssertEx.Equal(42L, record.GetProperty("durationMs").GetInt64());
+        AssertEx.Equal(expected: 0, record.GetProperty("exitCode").GetInt32());
+        AssertEx.Equal(expected: 42L, record.GetProperty("durationMs").GetInt64());
         AssertCorrelation(record, ctx);
     }
 
@@ -335,7 +335,7 @@ public sealed class AgentHomeRunLoggerTests : IDisposable
 
     private static void AssertCorrelation(JsonElement record, AgentHomeRunLogContext ctx)
     {
-        AssertCorrelationFields(record, ctx, null);
+        AssertCorrelationFields(record, ctx, fileName: null);
     }
 
     private static void AssertCorrelationFields(JsonElement record, AgentHomeRunLogContext ctx, string? fileName)

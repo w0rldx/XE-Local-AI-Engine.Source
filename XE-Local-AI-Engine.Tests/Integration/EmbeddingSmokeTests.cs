@@ -122,7 +122,7 @@ public sealed class EmbeddingSmokeTests
         if (!string.IsNullOrWhiteSpace(configuredConnectionString))
         {
             var endpointPrefix = "Endpoint=";
-            var endpoint = configuredConnectionString.Split(';', StringSplitOptions.TrimEntries | StringSplitOptions.RemoveEmptyEntries)
+            var endpoint = configuredConnectionString.Split(separator: ';', StringSplitOptions.TrimEntries | StringSplitOptions.RemoveEmptyEntries)
                                                      .FirstOrDefault(part => part.StartsWith(endpointPrefix, StringComparison.OrdinalIgnoreCase));
 
             if (endpoint is not null)

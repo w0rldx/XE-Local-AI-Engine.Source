@@ -46,8 +46,8 @@ public sealed class DesktopLaunchTests
     {
         const string url = "http://127.0.0.1:5001/";
 
-        var (windowsFile, windowsArgs) = BrowserLauncher.BuildOpenCommand(url, true);
-        var (linuxFile, linuxArgs) = BrowserLauncher.BuildOpenCommand(url, false);
+        var (windowsFile, windowsArgs) = BrowserLauncher.BuildOpenCommand(url, isWindows: true);
+        var (linuxFile, linuxArgs) = BrowserLauncher.BuildOpenCommand(url, isWindows: false);
 
         AssertEx.Equal("explorer", windowsFile);
         AssertEx.Equal(url, windowsArgs);
@@ -58,7 +58,7 @@ public sealed class DesktopLaunchTests
         // through the ProcessStartInfo the launcher constructs; do NOT assert on process exit code (explorer returns 1
         // on success).
         ProcessStartInfo? captured = null;
-        BrowserLauncher.OpenBrowser(url, true, NullLogger.Instance, startInfo => captured = startInfo);
+        BrowserLauncher.OpenBrowser(url, isWindows: true, NullLogger.Instance, startInfo => captured = startInfo);
 
         var startInfo = AssertEx.NotNull(captured);
         AssertEx.False(startInfo.UseShellExecute, "Browser launch must keep UseShellExecute=false.");
@@ -95,7 +95,7 @@ public sealed class DesktopLaunchTests
         // Drive the graceful-stop seam directly — no real SIGHUP / console-ctrl event.
         lifecycle.TriggerGracefulStop();
 
-        AssertEx.Equal(1, lifetime.StopApplicationCallCount);
+        AssertEx.Equal(expected: 1, lifetime.StopApplicationCallCount);
     }
 
     [Test]
@@ -104,7 +104,7 @@ public sealed class DesktopLaunchTests
         const string url = "http://127.0.0.1:5005/";
 
         // The launch action throws (e.g. xdg-open absent); OpenBrowser must swallow it and not propagate.
-        BrowserLauncher.OpenBrowser(url, false, NullLogger.Instance,
+        BrowserLauncher.OpenBrowser(url, isWindows: false, NullLogger.Instance,
             static _ => throw new InvalidOperationException("xdg-open not found"));
 
         // Reaching here without an exception is the assertion: a failed launch does not abort startup.

@@ -43,7 +43,7 @@ public sealed class ConnectionStateTests
         state.TransitionTo(WorkerConnectionState.Connected);
         state.TransitionTo(WorkerConnectionState.Connected, "boom");
 
-        AssertEx.Equal(2, eventCount);
+        AssertEx.Equal(expected: 2, eventCount);
     }
 
     [Test]
@@ -56,7 +56,7 @@ public sealed class ConnectionStateTests
         state.TransitionTo(WorkerConnectionState.Error, "boom");
         state.TransitionTo(WorkerConnectionState.Error, "boom");
 
-        AssertEx.Equal(1, eventCount);
+        AssertEx.Equal(expected: 1, eventCount);
     }
 
     [Test]

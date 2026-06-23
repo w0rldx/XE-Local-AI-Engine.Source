@@ -107,7 +107,7 @@ public sealed class SelectedFolderResolverTests
 
         var references = await resolver.ListReferencesAsync();
 
-        AssertEx.Equal(1, references.Count);
+        AssertEx.Equal(expected: 1, references.Count);
         AssertEx.Equal("repo-one", references[0].Alias);
         AssertEx.True(Guid.TryParse(references[0].Id, out _), "Listed references should carry a GUID id.");
     }
@@ -123,7 +123,7 @@ public sealed class SelectedFolderResolverTests
 
         public Task<SelectedFolderRecord> AddAsync(string folderAlias, string hostPath, SelectedFolderMode mode, CancellationToken cancellationToken = default)
         {
-            var record = new SelectedFolderRecord(Guid.NewGuid(), folderAlias, hostPath, mode, 1);
+            var record = new SelectedFolderRecord(Guid.NewGuid(), folderAlias, hostPath, mode, CreatedAtUtc: 1);
             _records.Add(record);
             return Task.FromResult(record);
         }

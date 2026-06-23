@@ -22,7 +22,7 @@ public sealed class RecommendationJsonParserTests
 
         AssertEx.True(result.IsSuccess);
         AssertEx.NotEmpty(result.Recommendations);
-        AssertEx.Equal(131072, result.Recommendations[0].ContextTokens);
+        AssertEx.Equal(expected: 131072, result.Recommendations[0].ContextTokens);
     }
 
     [Test]
@@ -35,7 +35,7 @@ public sealed class RecommendationJsonParserTests
         var result = RecommendationJsonParser.Parse(json);
 
         AssertEx.True(result.IsSuccess);
-        AssertEx.Equal(4096, result.Recommendations[0].ContextTokens);
+        AssertEx.Equal(expected: 4096, result.Recommendations[0].ContextTokens);
     }
 
     [Test]

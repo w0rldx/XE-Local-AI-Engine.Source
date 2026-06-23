@@ -64,7 +64,7 @@ public sealed class AgentTemplateEndpointsTests
         using var document = JsonDocument.Parse(payload);
         var items = document.RootElement.GetProperty("items");
 
-        AssertEx.Equal(14, items.GetArrayLength());
+        AssertEx.Equal(expected: 14, items.GetArrayLength());
 
         var first = items[0];
         AssertEx.True(!string.IsNullOrWhiteSpace(first.GetProperty("slug").GetString()), "Each item exposes a slug.");
@@ -103,10 +103,10 @@ public sealed class AgentTemplateEndpointsTests
         using var document = JsonDocument.Parse(payload);
         var root = document.RootElement;
 
-        AssertEx.Equal(1, root.GetProperty("imported").GetArrayLength());
+        AssertEx.Equal(expected: 1, root.GetProperty("imported").GetArrayLength());
         AssertEx.Equal(knownSlug, root.GetProperty("imported")[0].GetString());
-        AssertEx.Equal(0, root.GetProperty("skippedExisting").GetArrayLength());
-        AssertEx.Equal(1, root.GetProperty("unknown").GetArrayLength());
+        AssertEx.Equal(expected: 0, root.GetProperty("skippedExisting").GetArrayLength());
+        AssertEx.Equal(expected: 1, root.GetProperty("unknown").GetArrayLength());
         AssertEx.Equal("not-a-real-slug", root.GetProperty("unknown")[0].GetString());
 
         // After import the list endpoint must mark the slug already-imported.

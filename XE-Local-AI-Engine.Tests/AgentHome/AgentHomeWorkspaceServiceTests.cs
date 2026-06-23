@@ -19,7 +19,7 @@ using XE_Local_AI_Engine.Tests.Testing;
 /// </summary>
 public sealed class AgentHomeWorkspaceServiceTests : IDisposable
 {
-    private static readonly DateTimeOffset FixedNow = new(2026, 5, 29, 12, 0, 0, TimeSpan.Zero);
+    private static readonly DateTimeOffset FixedNow = new(year: 2026, month: 5, day: 29, hour: 12, minute: 0, second: 0, TimeSpan.Zero);
 
     private readonly List<string> _tempDirs = [];
 
@@ -31,7 +31,7 @@ public sealed class AgentHomeWorkspaceServiceTests : IDisposable
             {
                 if (Directory.Exists(dir))
                 {
-                    Directory.Delete(dir, true);
+                    Directory.Delete(dir, recursive: true);
                 }
             }
             catch (IOException)
@@ -62,12 +62,12 @@ public sealed class AgentHomeWorkspaceServiceTests : IDisposable
 
         var snapshots = await service.PrepareSelectedFoldersAsync(handle, [Folder("proj", source)]);
 
-        AssertEx.Equal(1, snapshots.Count);
+        AssertEx.Equal(expected: 1, snapshots.Count);
         var snapshot = snapshots[0];
         AssertEx.Equal(SelectedFolderCopyStatus.Copied, snapshot.Status);
-        AssertEx.Equal(2, snapshot.CopiedFileCount);
-        AssertEx.Equal(1, snapshot.ExcludedFileCount);
-        AssertEx.Equal(1, snapshot.ExcludedDirectoryCount);
+        AssertEx.Equal(expected: 2, snapshot.CopiedFileCount);
+        AssertEx.Equal(expected: 1, snapshot.ExcludedFileCount);
+        AssertEx.Equal(expected: 1, snapshot.ExcludedDirectoryCount);
         AssertEx.Equal("workspace/selected/proj", snapshot.WorkspacePath);
 
         var paths = provider.SnapshotSandboxPaths(handle);
@@ -133,16 +133,16 @@ public sealed class AgentHomeWorkspaceServiceTests : IDisposable
     public async Task PrepareSelectedFoldersAsync_WhenOverByteBudget_BlocksBeforeCopy()
     {
         var source = NewTempDir();
-        await File.WriteAllTextAsync(Path.Combine(source, "big.bin"), new string('a', 4096));
+        await File.WriteAllTextAsync(Path.Combine(source, "big.bin"), new string(c: 'a', count: 4096));
 
         var provider = new FakeSandboxRuntimeProvider(new FixedClock(FixedNow));
         var handle = await provider.CreateOrAttachAsync(CreateRequest());
-        var service = CreateService(provider, 100);
+        var service = CreateService(provider, maxBytes: 100);
 
         var snapshots = await service.PrepareSelectedFoldersAsync(handle, [Folder("proj", source)]);
 
         AssertEx.Equal(SelectedFolderCopyStatus.BlockedQuota, snapshots[0].Status);
-        AssertEx.Equal(0, snapshots[0].CopiedFileCount);
+        AssertEx.Equal(expected: 0, snapshots[0].CopiedFileCount);
         AssertEx.Empty(provider.SnapshotSandboxPaths(handle));
     }
 
@@ -190,7 +190,7 @@ public sealed class AgentHomeWorkspaceServiceTests : IDisposable
         var provider = new FakeSandboxRuntimeProvider(new FixedClock(FixedNow));
         var handle = await provider.CreateOrAttachAsync(CreateRequest());
         // git init returns a non-zero exit code; the baseline must fail the prepare rather than continue.
-        provider.RegisterCommand(BaselineCommandKey("init"), 1, string.Empty, "fatal: cannot init");
+        provider.RegisterCommand(BaselineCommandKey("init"), exitCode: 1, string.Empty, "fatal: cannot init");
         var service = CreateService(provider);
 
         await AssertEx.ThrowsAsync<AgentHomeRequestRejectedException>(() =>

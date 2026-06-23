@@ -78,7 +78,7 @@ internal sealed class DesktopLifecycle : IDisposable
         if (OperatingSystem.IsWindows() && _consoleCtrlHandlerDelegate is not null)
         {
             // Best-effort unregister; ignore the result during teardown.
-            _ = SetConsoleCtrlHandler(_consoleCtrlHandlerDelegate, false);
+            _ = SetConsoleCtrlHandler(_consoleCtrlHandlerDelegate, add: false);
             _consoleCtrlHandlerDelegate = null;
         }
     }
@@ -135,7 +135,7 @@ internal sealed class DesktopLifecycle : IDisposable
         // Keep the delegate rooted on this instance; SetConsoleCtrlHandler stores the raw function pointer and the GC
         // must not reclaim the managed callback for the life of the process.
         _consoleCtrlHandlerDelegate = HandleConsoleCtrl;
-        if (!SetConsoleCtrlHandler(_consoleCtrlHandlerDelegate, true))
+        if (!SetConsoleCtrlHandler(_consoleCtrlHandlerDelegate, add: true))
         {
             _logger.LogWarning("SetConsoleCtrlHandler registration failed; console-window close may hard-kill the host.");
         }
@@ -157,7 +157,7 @@ internal sealed class DesktopLifecycle : IDisposable
         {
             TriggerGracefulStop();
 
-            using var stopped = new ManualResetEventSlim(false, 0);
+            using var stopped = new ManualResetEventSlim(initialState: false, spinCount: 0);
             using var registration = _lifetime.ApplicationStopped.Register(stopped.Set);
             stopped.Wait(ConsoleCloseDrainBudget);
         }

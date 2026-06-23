@@ -142,7 +142,7 @@ public sealed class McpServersPageE2ETests : XEE2ETestBase
         await Assert.That(deleteResponse.Status >= 200 && deleteResponse.Status < 300).IsTrue();
 
         // The row must be gone after the list re-renders.
-        await Expect(serverCell).ToHaveCountAsync(0, new LocatorAssertionsToHaveCountOptions
+        await Expect(serverCell).ToHaveCountAsync(count: 0, new LocatorAssertionsToHaveCountOptions
         {
             Timeout = 5000
         });
@@ -213,7 +213,7 @@ public sealed class McpServersPageE2ETests : XEE2ETestBase
                 Name = serverName,
                 Exact = true
             }))
-            .ToHaveCountAsync(0, new LocatorAssertionsToHaveCountOptions
+            .ToHaveCountAsync(count: 0, new LocatorAssertionsToHaveCountOptions
             {
                 Timeout = 5000
             });

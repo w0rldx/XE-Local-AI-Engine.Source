@@ -162,7 +162,7 @@ public sealed class ActiveCloudChatClientFactoryTests
         var harness = new Harness();
         // First resolution: an early expiry. Second: a refreshed session (later expiry) → fingerprint changes.
         harness.CodexTokenStore.LoadAsync(Arg.Any<CancellationToken>()).Returns(SessionExpiringAt(2030),
-            SessionExpiringAt(2030, 1, "acct2"));
+            SessionExpiringAt(year: 2030, hour: 1, "acct2"));
         harness.CodexFactory.Create(Arg.Any<string?>()).Returns(firstClient, secondClient);
         using var factory = harness.Factory;
 
@@ -222,8 +222,8 @@ public sealed class ActiveCloudChatClientFactoryTests
         // flip the selection (refresh) so the factory swaps the cached client WHILE the stream is live. Under the
         // pre-fix dispose-on-swap behaviour this would ObjectDispose the in-flight client; the fix (no dispose on
         // swap) must let the stream complete with no exception.
-        using var swapHappened = new SemaphoreSlim(0, 1);
-        using var resumeStream = new SemaphoreSlim(0, 1);
+        using var swapHappened = new SemaphoreSlim(initialCount: 0, maxCount: 1);
+        using var resumeStream = new SemaphoreSlim(initialCount: 0, maxCount: 1);
 
         // The first resolved Codex client blocks mid-stream until the test has performed the swap; later clients
         // (after the refresh) do not block.
@@ -235,7 +235,7 @@ public sealed class ActiveCloudChatClientFactoryTests
         });
         var harness = new Harness();
         harness.CodexTokenStore.LoadAsync(Arg.Any<CancellationToken>()).Returns(SessionExpiringAt(2030),
-            SessionExpiringAt(2030, 1, "acct2"));
+            SessionExpiringAt(year: 2030, hour: 1, "acct2"));
         harness.CodexFactory.Create(Arg.Any<string?>())
                .Returns(_ => Interlocked.Increment(ref createdCount) == 1 ? firstClient : new StubChatClient());
         using var factory = harness.Factory;
@@ -278,12 +278,12 @@ public sealed class ActiveCloudChatClientFactoryTests
         var harness = new Harness();
         var flip = 0;
         harness.CodexTokenStore.LoadAsync(Arg.Any<CancellationToken>())
-               .Returns(_ => SessionExpiringAt(2030, Interlocked.Increment(ref flip) % 4));
+               .Returns(_ => SessionExpiringAt(year: 2030, Interlocked.Increment(ref flip) % 4));
         harness.CodexFactory.Create(Arg.Any<string?>()).Returns(_ => new StubChatClient());
         using var factory = harness.Factory;
 
         var failures = 0;
-        var tasks = Enumerable.Range(0, 64).Select(_ => Task.Run(async () =>
+        var tasks = Enumerable.Range(start: 0, count: 64).Select(_ => Task.Run(async () =>
         {
             try
             {
@@ -307,7 +307,7 @@ public sealed class ActiveCloudChatClientFactoryTests
 
         await Task.WhenAll(tasks);
 
-        AssertEx.Equal(0, failures);
+        AssertEx.Equal(expected: 0, failures);
     }
 
     private static StoredCloudCredentials CreateAzureCredentials()
@@ -328,7 +328,7 @@ public sealed class ActiveCloudChatClientFactoryTests
 
     private static CodexTokens SessionExpiringAt(int year, int hour = 0, string accountId = "acct")
     {
-        return new CodexTokens("a", "r", new DateTimeOffset(year, 1, 1, hour, 0, 0, TimeSpan.Zero), accountId);
+        return new CodexTokens("a", "r", new DateTimeOffset(year, month: 1, day: 1, hour, minute: 0, second: 0, TimeSpan.Zero), accountId);
     }
 
     private static TException Throws<TException>(Action action) where TException : Exception
@@ -382,7 +382,7 @@ public sealed class ActiveCloudChatClientFactoryTests
     private sealed class AdvanceableTimeProvider : TimeProvider
     {
         private readonly Lock _gate = new();
-        private DateTimeOffset _now = new(2030, 1, 1, 0, 0, 0, TimeSpan.Zero);
+        private DateTimeOffset _now = new(year: 2030, month: 1, day: 1, hour: 0, minute: 0, second: 0, TimeSpan.Zero);
 
         public override DateTimeOffset GetUtcNow()
         {

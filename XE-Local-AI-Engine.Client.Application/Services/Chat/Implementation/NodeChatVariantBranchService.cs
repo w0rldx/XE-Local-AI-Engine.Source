@@ -97,8 +97,8 @@ internal sealed class NodeChatVariantBranchService(NodeChatPersistenceWriter wri
                     AddParameter(messageCommand, "$error", message.Error);
                     AddParameter(messageCommand, "$origin", NodeChatOriginValues.Local);
                     // Branch copies are a fresh linear thread; provenance is on the conversation, not per message.
-                    AddParameter(messageCommand, "$parent_message_id", null);
-                    AddParameter(messageCommand, "$variant_group_id", null);
+                    AddParameter(messageCommand, "$parent_message_id", value: null);
+                    AddParameter(messageCommand, "$variant_group_id", value: null);
                     await OpenIfNeededAsync(messageCommand.Connection, token).ConfigureAwait(false);
                     await messageCommand.ExecuteNonQueryAsync(token).ConfigureAwait(false);
                 }
@@ -142,7 +142,8 @@ internal sealed class NodeChatVariantBranchService(NodeChatPersistenceWriter wri
                 // per-response agent attribution is stamped at mint time so the pending variant already carries the
                 // agent name (symmetric with the send placeholder).
                 var sequence = await NextSequenceAsync(dbContext, request.ConversationId, token).ConfigureAwait(false);
-                var metadata = SerializeMetadata(request.MetadataJson, null, request.Model, null, null, null, null, null, request.AgentDefinitionId, request.AgentName, request.ReasoningEffort);
+                var metadata = SerializeMetadata(request.MetadataJson, reasoning: null, request.Model, inputTokens: null, outputTokens: null, totalTokens: null, reasoningTokens: null, parts: null,
+                    request.AgentDefinitionId, request.AgentName, request.ReasoningEffort);
 
                 await using var insertCommand = dbContext.Database.GetDbConnection().CreateCommand();
                 insertCommand.CommandText = """
@@ -175,12 +176,12 @@ internal sealed class NodeChatVariantBranchService(NodeChatPersistenceWriter wri
                     sequence,
                     AssistantRole,
                     string.Empty,
-                    null,
+                    Reasoning: null,
                     NodeChatMessageStatusValues.Pending,
                     request.CreatedAtUtc,
                     request.CreatedAtUtc,
                     request.Model,
-                    null,
+                    Error: null,
                     request.MetadataJson,
                     Origin: NodeChatOriginValues.Local,
                     ParentMessageId: request.OriginalMessageId,

@@ -32,7 +32,7 @@ public sealed class NodeSettingsEndpointTests
         var settings = await ReadJsonAsync<NodeSettingsResponse>(response).ConfigureAwait(false);
 
         AssertEx.Equal(HttpStatusCode.OK, response.StatusCode);
-        AssertEx.Equal(120, settings.MaxMessageRequestTimeoutSeconds);
+        AssertEx.Equal(expected: 120, settings.MaxMessageRequestTimeoutSeconds);
         AssertEx.Equal(StoredNodeSettings.MinMaxMessageRequestTimeoutSeconds, settings.MinMessageRequestTimeoutSeconds);
         AssertEx.Equal(StoredNodeSettings.MaxMaxMessageRequestTimeoutSeconds, settings.MaxAllowedMessageRequestTimeoutSeconds);
         await nodeSettingsStore.Received(1).LoadAsync(Arg.Any<CancellationToken>());
@@ -56,7 +56,7 @@ public sealed class NodeSettingsEndpointTests
         var settings = await ReadJsonAsync<NodeSettingsResponse>(response).ConfigureAwait(false);
 
         AssertEx.Equal(HttpStatusCode.OK, response.StatusCode);
-        AssertEx.Equal(600, settings.MaxMessageRequestTimeoutSeconds);
+        AssertEx.Equal(expected: 600, settings.MaxMessageRequestTimeoutSeconds);
         await nodeSettingsStore.Received(1).SaveAsync(Arg.Is<StoredNodeSettings>(stored => stored.MaxMessageRequestTimeoutSeconds == 600),
             Arg.Any<CancellationToken>());
         await capabilityReporter.Received(1).ReportToApiAsync(Arg.Any<CancellationToken>());

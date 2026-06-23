@@ -43,7 +43,7 @@ public sealed class NodeChatStreamCancellationRegistry : INodeChatStreamCancella
 
         public void Dispose()
         {
-            if (Interlocked.Exchange(ref _disposed, 1) == 1)
+            if (Interlocked.Exchange(ref _disposed, value: 1) == 1)
             {
                 return;
             }

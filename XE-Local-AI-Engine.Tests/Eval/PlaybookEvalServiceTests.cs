@@ -39,9 +39,9 @@ public sealed class PlaybookEvalServiceTests
         AssertEx.True(outcome.ActionFound);
         AssertEx.NotNull(outcome.Result, "A run with golden cases must produce a result.");
         AssertEx.False(outcome.Result!.Passed, "A candidate that regresses a prior-good case must not pass.");
-        AssertEx.Equal(1, outcome.Result.RegressedCaseCount);
-        AssertEx.Equal(1, outcome.Result.GoldenCaseCount);
-        AssertEx.Equal(1, outcome.Result.ActionVersionAtEval);
+        AssertEx.Equal(expected: 1, outcome.Result.RegressedCaseCount);
+        AssertEx.Equal(expected: 1, outcome.Result.GoldenCaseCount);
+        AssertEx.Equal(expected: 1, outcome.Result.ActionVersionAtEval);
         await actionService.Received(1)
                            .RecordEvalResultAsync(agentId, actionId, Arg.Any<string>(), Arg.Any<CancellationToken>())
                            .ConfigureAwait(false);
@@ -62,8 +62,8 @@ public sealed class PlaybookEvalServiceTests
 
         AssertEx.True(outcome.ActionFound);
         AssertEx.True(outcome.Result!.Passed, "A clean candidate with no regressions must pass.");
-        AssertEx.Equal(0, outcome.Result.RegressedCaseCount);
-        AssertEx.Equal(1, outcome.Result.GoldenCaseCount);
+        AssertEx.Equal(expected: 0, outcome.Result.RegressedCaseCount);
+        AssertEx.Equal(expected: 1, outcome.Result.GoldenCaseCount);
     }
 
     [Test]
@@ -115,7 +115,7 @@ public sealed class PlaybookEvalServiceTests
 
         AssertEx.True(outcome.ActionFound, "An empty golden set still finds the action; it records a failing result.");
         AssertEx.False(outcome.Result!.Passed, "An empty golden set cannot prove no-regression, so it never passes.");
-        AssertEx.Equal(0, outcome.Result.GoldenCaseCount);
+        AssertEx.Equal(expected: 0, outcome.Result.GoldenCaseCount);
         await actionService.Received(1)
                            .RecordEvalResultAsync(agentId, actionId, Arg.Any<string>(), Arg.Any<CancellationToken>())
                            .ConfigureAwait(false);
@@ -134,17 +134,17 @@ public sealed class PlaybookEvalServiceTests
             agentId,
             PlaybookActionState.Enabled,
             PlaybookActionSource.Manual,
-            null,
+            TriggerCondition: null,
             "Enabled behaviour.",
-            null,
-            50,
-            1,
-            5,
-            5);
+            Scope: null,
+            Priority: 50,
+            Version: 1,
+            CreatedAtUtc: 5,
+            UpdatedAtUtc: 5);
 
         var captureRunner = new CapturingEvalAgentRunner();
         var goldenCase = JudgeCase(agentId);
-        var service = CreateServiceWithRunner(agentId, actionId, 10, [enabledAction], [goldenCase], captureRunner);
+        var service = CreateServiceWithRunner(agentId, actionId, suggestedPriority: 10, [enabledAction], [goldenCase], captureRunner);
 
         _ = await service.RunEvalAsync(agentId, actionId).ConfigureAwait(false);
 
@@ -166,13 +166,13 @@ public sealed class PlaybookEvalServiceTests
         var actionId = Guid.NewGuid();
 
         // Seed more golden cases than the per-run cap; the run evaluates the cap but records the full enabled total.
-        var goldenCases = Enumerable.Range(0, 5).Select(_ => JudgeCase(agentId)).ToList();
-        var service = CreateService(agentId, actionId, goldenCases, new FakePlaybookEvalJudge((_, _) => true), out _, out _, 3);
+        var goldenCases = Enumerable.Range(start: 0, count: 5).Select(_ => JudgeCase(agentId)).ToList();
+        var service = CreateService(agentId, actionId, goldenCases, new FakePlaybookEvalJudge((_, _) => true), out _, out _, maxGoldenCases: 3);
 
         var outcome = await service.RunEvalAsync(agentId, actionId).ConfigureAwait(false);
 
-        AssertEx.Equal(3, outcome.Result!.GoldenCaseCount);
-        AssertEx.Equal(5, outcome.Result.GoldenCaseTotal);
+        AssertEx.Equal(expected: 3, outcome.Result!.GoldenCaseCount);
+        AssertEx.Equal(expected: 5, outcome.Result.GoldenCaseTotal);
     }
 
     [Test]
@@ -205,7 +205,7 @@ public sealed class PlaybookEvalServiceTests
         int maxGoldenCases = 25)
     {
         runner = new FakePlaybookEvalAgentRunner();
-        return CreateServiceCore(agentId, actionId, 100, [], goldenCases, runner, judge, maxGoldenCases, out actionService);
+        return CreateServiceCore(agentId, actionId, suggestedPriority: 100, [], goldenCases, runner, judge, maxGoldenCases, out actionService);
     }
 
     private static PlaybookEvalService CreateServiceWithRunner(Guid agentId,
@@ -216,7 +216,7 @@ public sealed class PlaybookEvalServiceTests
         IPlaybookEvalAgentRunner runner)
     {
         return CreateServiceCore(agentId, actionId, suggestedPriority, enabledActions, goldenCases, runner,
-            new FakePlaybookEvalJudge((_, _) => true), 25, out _);
+            new FakePlaybookEvalJudge((_, _) => true), maxGoldenCases: 25, out _);
     }
 
     private static PlaybookEvalService CreateServiceCore(Guid agentId,
@@ -233,15 +233,15 @@ public sealed class PlaybookEvalServiceTests
             agentId,
             PlaybookActionState.Suggested,
             PlaybookActionSource.Analysis,
-            null,
+            TriggerCondition: null,
             CandidateBehavior,
-            null,
+            Scope: null,
             suggestedPriority,
-            1,
-            10,
-            10,
+            Version: 1,
+            CreatedAtUtc: 10,
+            UpdatedAtUtc: 10,
             [Guid.NewGuid()],
-            0.6d);
+            Confidence: 0.6d);
 
         actionService = Substitute.For<IPlaybookActionService>();
         actionService.LoadPendingSuggestionAsync(agentId, actionId, Arg.Any<CancellationToken>())
@@ -298,12 +298,12 @@ public sealed class PlaybookEvalServiceTests
         return new GoldenConversationRecord(Guid.NewGuid(),
             agentId,
             "Judge case",
-            """[{"role":"user","text":"hello"}]""",
-            null,
+            InputTurns: """[{"role":"user","text":"hello"}]""",
+            Assertion: null,
             "The answer must be helpful.",
-            true,
-            10,
-            10);
+            Enabled: true,
+            CreatedAtUtc: 10,
+            UpdatedAtUtc: 10);
     }
 
     private static GoldenConversationRecord AssertionCase(Guid agentId, string assertion)
@@ -311,29 +311,29 @@ public sealed class PlaybookEvalServiceTests
         return new GoldenConversationRecord(Guid.NewGuid(),
             agentId,
             "Assertion case",
-            """[{"role":"user","text":"hello"}]""",
+            InputTurns: """[{"role":"user","text":"hello"}]""",
             assertion,
-            null,
-            true,
-            10,
-            10);
+            Rubric: null,
+            Enabled: true,
+            CreatedAtUtc: 10,
+            UpdatedAtUtc: 10);
     }
 
     private static AgentDefinitionRecord CreateAgent(Guid agentId)
     {
         return new AgentDefinitionRecord(agentId,
             "Builder",
-            null,
+            Description: null,
             "Base instructions.",
-            null,
-            null,
+            ModelProfile: null,
+            ReasoningEffort: null,
             AgentDefinitionKind.Single,
             [],
             new Dictionary<string, bool>(),
-            null,
-            1,
-            10,
-            10);
+            OrchestrationTopologyJson: null,
+            Version: 1,
+            CreatedAtUtc: 10,
+            UpdatedAtUtc: 10);
     }
 
     /// <summary>

@@ -18,7 +18,7 @@ public sealed class AgentSkillStoreTests : IDisposable
     {
         if (Directory.Exists(_rootPath))
         {
-            Directory.Delete(_rootPath, true);
+            Directory.Delete(_rootPath, recursive: true);
         }
     }
 
@@ -43,7 +43,7 @@ public sealed class AgentSkillStoreTests : IDisposable
             AssertEx.Equal(description, added.Description);
             AssertEx.Equal(body, added.Body);
             AssertEx.True(added.Enabled, "A new skill should default to enabled.");
-            AssertEx.Equal(1, added.Version);
+            AssertEx.Equal(expected: 1, added.Version);
             AssertEx.True(added.Id != Guid.Empty, "Create should assign a skill id.");
             AssertEx.True(added.CreatedAtUtc > 0, "Create should stamp a creation time.");
             AssertEx.Equal(added.CreatedAtUtc, added.UpdatedAtUtc);
@@ -61,7 +61,7 @@ public sealed class AgentSkillStoreTests : IDisposable
             AssertEx.Equal(body, byId.Body);
 
             var list = await readStore.ListAsync();
-            AssertEx.Equal(1, list.Count);
+            AssertEx.Equal(expected: 1, list.Count);
 
             var unknown = await readStore.GetByIdAsync(Guid.NewGuid());
             AssertEx.Null(unknown, "Unknown id should return null.");
@@ -88,28 +88,28 @@ public sealed class AgentSkillStoreTests : IDisposable
         var store = new AgentSkillStore(context, clock);
 
         var added = await store.CreateAsync(new AgentSkillInput(Name, Description, Body));
-        AssertEx.Equal(1, added.Version);
+        AssertEx.Equal(expected: 1, added.Version);
 
         // Toggling Enabled alone gates resolution only; it must not bump Version (membership in the resolved set already
         // covers it in the config hash).
         clock.Advance(10);
-        var toggled = AssertEx.NotNull(await store.UpdateAsync(added.Id, new AgentSkillInput(Name, Description, Body, false)),
+        var toggled = AssertEx.NotNull(await store.UpdateAsync(added.Id, new AgentSkillInput(Name, Description, Body, Enabled: false)),
             "Update should find the skill.");
         AssertEx.False(toggled.Enabled, "The disable toggle should round-trip.");
-        AssertEx.Equal(1, toggled.Version);
+        AssertEx.Equal(expected: 1, toggled.Version);
         AssertEx.True(toggled.UpdatedAtUtc > added.UpdatedAtUtc, "An enabled toggle should still advance UpdatedAtUtc.");
 
         // Editing the body is content-affecting and must bump Version.
         clock.Advance(10);
-        var edited = AssertEx.NotNull(await store.UpdateAsync(added.Id, new AgentSkillInput(Name, Description, "A different body.", false)),
+        var edited = AssertEx.NotNull(await store.UpdateAsync(added.Id, new AgentSkillInput(Name, Description, "A different body.", Enabled: false)),
             "Update should find the skill.");
-        AssertEx.Equal(2, edited.Version);
+        AssertEx.Equal(expected: 2, edited.Version);
 
         // A rename is also content-affecting (the model sees the name) and must bump Version.
         clock.Advance(10);
-        var renamed = AssertEx.NotNull(await store.UpdateAsync(added.Id, new AgentSkillInput("renamed-skill", Description, "A different body.", false)),
+        var renamed = AssertEx.NotNull(await store.UpdateAsync(added.Id, new AgentSkillInput("renamed-skill", Description, "A different body.", Enabled: false)),
             "Update should find the skill.");
-        AssertEx.Equal(3, renamed.Version);
+        AssertEx.Equal(expected: 3, renamed.Version);
     }
 
     [Test]
@@ -145,7 +145,7 @@ public sealed class AgentSkillStoreTests : IDisposable
         var store = new AgentSkillStore(context, TimeProvider.System);
 
         var enabled = await store.CreateAsync(new AgentSkillInput("alpha", Description, Body));
-        var disabled = await store.CreateAsync(new AgentSkillInput("bravo", Description, Body, false));
+        var disabled = await store.CreateAsync(new AgentSkillInput("bravo", Description, Body, Enabled: false));
         var unassigned = await store.CreateAsync(new AgentSkillInput("charlie", Description, Body));
 
         var resolved = await store.ListEnabledByIdsAsync(new[]
@@ -157,7 +157,7 @@ public sealed class AgentSkillStoreTests : IDisposable
 
         // Only the enabled, assigned skill comes back: the disabled id is filtered server-side and the unknown id and
         // the unassigned skill are simply absent.
-        AssertEx.Equal(1, resolved.Count);
+        AssertEx.Equal(expected: 1, resolved.Count);
         AssertEx.Equal(enabled.Id, resolved[0].Id);
         AssertEx.Equal(Description, resolved[0].Description);
         AssertEx.Equal(Body, resolved[0].Body);
@@ -200,7 +200,7 @@ public sealed class AgentSkillStoreTests : IDisposable
 
     private static byte[] CreateKeyMaterial()
     {
-        return Enumerable.Range(0, 32).Select(static value => (byte)(value + 1)).ToArray();
+        return Enumerable.Range(start: 0, count: 32).Select(static value => (byte)(value + 1)).ToArray();
     }
 
     private static bool ContainsSubsequence(byte[] source, byte[] needle)

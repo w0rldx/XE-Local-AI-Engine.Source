@@ -17,15 +17,15 @@ public sealed class EmbeddingPlaybookRetrievalRankerTests
     [Test]
     public async Task SelectTopK_RanksByCosineSimilarity()
     {
-        var weather = Action("weather forecast rain", 10, 1);
-        var cooking = Action("cooking recipe oven", 10, 2);
-        var partial = Action("forecast the weekend weather", 10, 3);
+        var weather = Action("weather forecast rain", priority: 10, createdAtUtc: 1);
+        var cooking = Action("cooking recipe oven", priority: 10, createdAtUtc: 2);
+        var partial = Action("forecast the weekend weather", priority: 10, createdAtUtc: 3);
         var provider = new FakeEmbeddingProvider();
         var ranker = BuildRanker(provider, EmbeddingModel);
 
-        var result = await ranker.SelectTopKAsync("weather forecast", [cooking, partial, weather], 3, CancellationToken.None);
+        var result = await ranker.SelectTopKAsync("weather forecast", [cooking, partial, weather], k: 3, CancellationToken.None);
 
-        AssertEx.Equal(3, result.Count);
+        AssertEx.Equal(expected: 3, result.Count);
         // The two candidates that share tokens with the query embed closer than the unrelated cooking action.
         AssertEx.Equal(cooking.Id, result[2].Id, "Zero-overlap candidate ranks last by cosine.");
         AssertEx.Contains(new[]
@@ -44,12 +44,12 @@ public sealed class EmbeddingPlaybookRetrievalRankerTests
     public async Task SelectTopK_OnScoreTie_BreaksByPriorityThenCreatedAtUtc()
     {
         // Identical candidate text => identical embeddings => identical cosine, so the tiebreak alone decides order.
-        var lowPriority = Action("deploy", 5, 99);
-        var highPriorityOlder = Action("deploy", 50, 1);
-        var highPriorityNewer = Action("deploy", 50, 2);
+        var lowPriority = Action("deploy", priority: 5, createdAtUtc: 99);
+        var highPriorityOlder = Action("deploy", priority: 50, createdAtUtc: 1);
+        var highPriorityNewer = Action("deploy", priority: 50, createdAtUtc: 2);
         var ranker = BuildRanker(new FakeEmbeddingProvider(), EmbeddingModel);
 
-        var result = await ranker.SelectTopKAsync("deploy", [highPriorityNewer, highPriorityOlder, lowPriority], 3, CancellationToken.None);
+        var result = await ranker.SelectTopKAsync("deploy", [highPriorityNewer, highPriorityOlder, lowPriority], k: 3, CancellationToken.None);
 
         AssertEx.Equal(lowPriority.Id, result[0].Id, "Lower Priority wins the tiebreak.");
         AssertEx.Equal(highPriorityOlder.Id, result[1].Id, "Equal Priority breaks by older CreatedAtUtc.");
@@ -63,9 +63,9 @@ public sealed class EmbeddingPlaybookRetrievalRankerTests
         var provider = new FakeEmbeddingProvider();
         var ranker = BuildRanker(provider, EmbeddingModel);
 
-        await ranker.SelectTopKAsync("deploy production", candidates, 2, CancellationToken.None);
+        await ranker.SelectTopKAsync("deploy production", candidates, k: 2, CancellationToken.None);
         var afterFirst = provider.TotalEmbeddedTexts;
-        await ranker.SelectTopKAsync("deploy production", candidates, 2, CancellationToken.None);
+        await ranker.SelectTopKAsync("deploy production", candidates, k: 2, CancellationToken.None);
         var afterSecond = provider.TotalEmbeddedTexts;
 
         AssertEx.Equal(candidates.Count + 1, afterFirst, "First send embeds every candidate plus the query.");
@@ -75,7 +75,7 @@ public sealed class EmbeddingPlaybookRetrievalRankerTests
     [Test]
     public async Task SelectTopK_ReEmbedsCandidate_WhenVersionBumps()
     {
-        var original = Action("deploy production build", 10, 1);
+        var original = Action("deploy production build", priority: 10, createdAtUtc: 1);
         var bumped = original with
         {
             Version = original.Version + 1
@@ -83,29 +83,29 @@ public sealed class EmbeddingPlaybookRetrievalRankerTests
         var provider = new FakeEmbeddingProvider();
         var ranker = BuildRanker(provider, EmbeddingModel);
 
-        await ranker.SelectTopKAsync("deploy", [original], 1, CancellationToken.None);
+        await ranker.SelectTopKAsync("deploy", [original], k: 1, CancellationToken.None);
         var afterOriginal = provider.TotalEmbeddedTexts;
-        await ranker.SelectTopKAsync("deploy", [bumped], 1, CancellationToken.None);
+        await ranker.SelectTopKAsync("deploy", [bumped], k: 1, CancellationToken.None);
         var afterBumped = provider.TotalEmbeddedTexts;
 
         // Each send: 1 candidate + 1 query. The version bump invalidates the cache so the candidate is re-embedded.
-        AssertEx.Equal(2, afterOriginal, "First send embeds the candidate and the query.");
-        AssertEx.Equal(4, afterBumped, "A Version bump re-embeds the candidate rather than serving the cached vector.");
+        AssertEx.Equal(expected: 2, afterOriginal, "First send embeds the candidate and the query.");
+        AssertEx.Equal(expected: 4, afterBumped, "A Version bump re-embeds the candidate rather than serving the cached vector.");
     }
 
     [Test]
     public async Task SelectTopK_EvictsOldestEntries_WhenCacheBoundExceeded()
     {
         // Bound of 1: each new candidate evicts the previous one, so a re-query of the first candidate re-embeds it.
-        var first = Action("alpha task", 10, 1);
-        var second = Action("beta task", 10, 2);
+        var first = Action("alpha task", priority: 10, createdAtUtc: 1);
+        var second = Action("beta task", priority: 10, createdAtUtc: 2);
         var provider = new FakeEmbeddingProvider();
-        var ranker = BuildRanker(provider, EmbeddingModel, 1);
+        var ranker = BuildRanker(provider, EmbeddingModel, cacheMaxEntries: 1);
 
-        await ranker.SelectTopKAsync("alpha", [first], 1, CancellationToken.None); // caches first (count 1)
-        await ranker.SelectTopKAsync("beta", [second], 1, CancellationToken.None); // caches second, evicts first
+        await ranker.SelectTopKAsync("alpha", [first], k: 1, CancellationToken.None); // caches first (count 1)
+        await ranker.SelectTopKAsync("beta", [second], k: 1, CancellationToken.None); // caches second, evicts first
         var beforeReQuery = provider.TotalEmbeddedTexts;
-        await ranker.SelectTopKAsync("alpha", [first], 1, CancellationToken.None); // first evicted => re-embed
+        await ranker.SelectTopKAsync("alpha", [first], k: 1, CancellationToken.None); // first evicted => re-embed
         var afterReQuery = provider.TotalEmbeddedTexts;
 
         AssertEx.Equal(beforeReQuery + 2, afterReQuery, "An evicted candidate is re-embedded (candidate + query) on re-query.");
@@ -116,12 +116,12 @@ public sealed class EmbeddingPlaybookRetrievalRankerTests
     {
         var candidates = SampleCandidates();
         var provider = new FakeEmbeddingProvider();
-        var ranker = BuildRanker(provider, null);
+        var ranker = BuildRanker(provider, embeddingModel: null);
 
-        var result = await ranker.SelectTopKAsync("production deploy", candidates, 2, CancellationToken.None);
+        var result = await ranker.SelectTopKAsync("production deploy", candidates, k: 2, CancellationToken.None);
 
-        AssertEx.Equal(2, result.Count);
-        AssertEx.Equal(0, provider.CreateGeneratorCallCount, "Disabled gate must never construct an embedding generator.");
+        AssertEx.Equal(expected: 2, result.Count);
+        AssertEx.Equal(expected: 0, provider.CreateGeneratorCallCount, "Disabled gate must never construct an embedding generator.");
     }
 
     [Test]
@@ -134,10 +134,10 @@ public sealed class EmbeddingPlaybookRetrievalRankerTests
         };
         var ranker = BuildRanker(provider, EmbeddingModel);
 
-        var result = await ranker.SelectTopKAsync("production deploy", candidates, 2, CancellationToken.None);
+        var result = await ranker.SelectTopKAsync("production deploy", candidates, k: 2, CancellationToken.None);
 
         // Falls back to the deterministic lexical ranker rather than throwing — a send never breaks on an embedding hiccup.
-        AssertEx.Equal(2, result.Count);
+        AssertEx.Equal(expected: 2, result.Count);
         AssertEx.True(provider.CreateGeneratorCallCount > 0, "The active path attempts to embed before falling back.");
     }
 
@@ -153,9 +153,9 @@ public sealed class EmbeddingPlaybookRetrievalRankerTests
 
         // A short/partial embedding response must degrade to lexical rather than throwing ArgumentOutOfRangeException
         // out of the positional indexing — the send never breaks.
-        var result = await ranker.SelectTopKAsync("production deploy", candidates, 2, CancellationToken.None);
+        var result = await ranker.SelectTopKAsync("production deploy", candidates, k: 2, CancellationToken.None);
 
-        var expected = await new LexicalPlaybookRetrievalRanker().SelectTopKAsync("production deploy", candidates, 2, CancellationToken.None);
+        var expected = await new LexicalPlaybookRetrievalRanker().SelectTopKAsync("production deploy", candidates, k: 2, CancellationToken.None);
         AssertEx.Equal(expected.Count, result.Count, "A short embedding response falls back to the lexical ranker.");
         for (var index = 0; index < expected.Count; index++)
         {
@@ -175,7 +175,7 @@ public sealed class EmbeddingPlaybookRetrievalRankerTests
         using var cts = new CancellationTokenSource();
         await cts.CancelAsync();
 
-        await AssertEx.ThrowsAsync<OperationCanceledException>(async () => await ranker.SelectTopKAsync("deploy", candidates, 2, cts.Token));
+        await AssertEx.ThrowsAsync<OperationCanceledException>(async () => await ranker.SelectTopKAsync("deploy", candidates, k: 2, cts.Token));
     }
 
     [Test]
@@ -184,10 +184,10 @@ public sealed class EmbeddingPlaybookRetrievalRankerTests
         var provider = new FakeEmbeddingProvider();
         var ranker = BuildRanker(provider, EmbeddingModel);
 
-        var result = await ranker.SelectTopKAsync("deploy", SampleCandidates(), 0, CancellationToken.None);
+        var result = await ranker.SelectTopKAsync("deploy", SampleCandidates(), k: 0, CancellationToken.None);
 
-        AssertEx.Equal(0, result.Count);
-        AssertEx.Equal(0, provider.CreateGeneratorCallCount, "A non-positive k short-circuits before any embedding.");
+        AssertEx.Equal(expected: 0, result.Count);
+        AssertEx.Equal(expected: 0, provider.CreateGeneratorCallCount, "A non-positive k short-circuits before any embedding.");
     }
 
     [Test]
@@ -200,9 +200,9 @@ public sealed class EmbeddingPlaybookRetrievalRankerTests
         var provider = new FakeEmbeddingProvider();
         var ranker = BuildRanker(provider, EmbeddingModel);
 
-        var result = await ranker.SelectTopKAsync("production deploy", candidates, 2, CancellationToken.None);
+        var result = await ranker.SelectTopKAsync("production deploy", candidates, k: 2, CancellationToken.None);
 
-        AssertEx.Equal(2, result.Count);
+        AssertEx.Equal(expected: 2, result.Count);
         AssertEx.True(provider.CreateGeneratorCallCount > 0, "The configured embedding provider was routed to and embedded the batch.");
         AssertEx.Equal(candidates.Count + 1, provider.TotalEmbeddedTexts, "Routing embeds every candidate plus the query in one batch.");
     }
@@ -216,11 +216,11 @@ public sealed class EmbeddingPlaybookRetrievalRankerTests
         var provider = new FakeEmbeddingProvider();
         var ranker = BuildRanker(provider, EmbeddingModel, embeddingProviderName: "not-registered");
 
-        var result = await ranker.SelectTopKAsync("production deploy", candidates, 2, CancellationToken.None);
+        var result = await ranker.SelectTopKAsync("production deploy", candidates, k: 2, CancellationToken.None);
 
-        var expected = await new LexicalPlaybookRetrievalRanker().SelectTopKAsync("production deploy", candidates, 2, CancellationToken.None);
+        var expected = await new LexicalPlaybookRetrievalRanker().SelectTopKAsync("production deploy", candidates, k: 2, CancellationToken.None);
         AssertEx.Equal(expected.Count, result.Count, "An unregistered embedding provider degrades to lexical.");
-        AssertEx.Equal(0, provider.CreateGeneratorCallCount, "An unresolved provider never reaches the fake generator.");
+        AssertEx.Equal(expected: 0, provider.CreateGeneratorCallCount, "An unresolved provider never reaches the fake generator.");
     }
 
     private static EmbeddingPlaybookRetrievalRanker BuildRanker(FakeEmbeddingProvider provider,
@@ -247,9 +247,9 @@ public sealed class EmbeddingPlaybookRetrievalRankerTests
     {
         return
         [
-            Action("deploy the production build to the cluster", 10, 1),
-            Action("summarise the meeting notes", 20, 2),
-            Action("production incident response runbook", 30, 3)
+            Action("deploy the production build to the cluster", priority: 10, createdAtUtc: 1),
+            Action("summarise the meeting notes", priority: 20, createdAtUtc: 2),
+            Action("production incident response runbook", priority: 30, createdAtUtc: 3)
         ];
     }
 
@@ -261,9 +261,9 @@ public sealed class EmbeddingPlaybookRetrievalRankerTests
             PlaybookActionSource.Manual,
             triggerCondition,
             "behaviour text",
-            null,
+            Scope: null,
             priority,
-            1,
+            Version: 1,
             createdAtUtc,
             createdAtUtc);
     }

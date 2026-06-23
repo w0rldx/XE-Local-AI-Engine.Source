@@ -62,12 +62,12 @@ public sealed class GetAgentPlaybookMonitorEndpointTests
         using var document = JsonDocument.Parse(payload);
         var root = document.RootElement;
 
-        AssertEx.Equal(0, root.GetProperty("items").GetArrayLength());
+        AssertEx.Equal(expected: 0, root.GetProperty("items").GetArrayLength());
 
         var retrieval = root.GetProperty("retrieval");
         // Defaults from PlaybookRetrievalOptions (Section "PlaybookRetrieval"): RetrievalThreshold=8, TopK=8.
-        AssertEx.Equal(8, retrieval.GetProperty("threshold").GetInt32());
-        AssertEx.Equal(8, retrieval.GetProperty("topK").GetInt32());
+        AssertEx.Equal(expected: 8, retrieval.GetProperty("threshold").GetInt32());
+        AssertEx.Equal(expected: 8, retrieval.GetProperty("topK").GetInt32());
         // No EmbeddingModelName configured → the model-free lexical ranker, and embeddingModel is omitted (null).
         AssertEx.Equal("lexical", retrieval.GetProperty("ranker").GetString());
         AssertEx.False(retrieval.TryGetProperty("embeddingModel", out _));
@@ -105,14 +105,14 @@ public sealed class GetAgentPlaybookMonitorEndpointTests
         using var scope = factory.Services.CreateScope();
         var store = scope.ServiceProvider.GetRequiredService<IAgentDefinitionStore>();
         var agent = await store.AddAsync(new AgentDefinitionInput(name,
-            null,
+            Description: null,
             "You are a careful engineering agent.",
-            null,
-            null,
+            ModelProfile: null,
+            ReasoningEffort: null,
             AgentDefinitionKind.Single,
             [],
             new Dictionary<string, bool>(),
-            null)).ConfigureAwait(false);
+            OrchestrationTopologyJson: null)).ConfigureAwait(false);
         return agent.Id;
     }
 }
