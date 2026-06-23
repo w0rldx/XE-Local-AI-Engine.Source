@@ -1704,7 +1704,9 @@
 					"failFallback": "Die Modellempfehlungs-Aktualisierung war nicht erfolgreich.",
 					"successTitle": "Empfehlungen aktualisiert",
 					"success": "Die neuesten Modellempfehlungen sind verfügbar.",
-					"cancelled": "Die Aktualisierung wurde abgebrochen."
+					"cancelled": "Die Aktualisierung wurde abgebrochen.",
+					"startedTitle": "Aktualisierung gestartet",
+					"started": "Die neuesten Modellempfehlungen werden gesucht. Wir benachrichtigen Sie, sobald sie bereit sind."
 				},
 				"available": "Verfügbar",
 				"download": "Herunterladen",

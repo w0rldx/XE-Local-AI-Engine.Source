@@ -1704,7 +1704,9 @@
 					"failFallback": "The model recommendation refresh did not succeed.",
 					"successTitle": "Recommendations refreshed",
 					"success": "The latest model recommendations are ready.",
-					"cancelled": "The refresh was cancelled."
+					"cancelled": "The refresh was cancelled.",
+					"startedTitle": "Refresh started",
+					"started": "Checking for the latest model recommendations. We'll let you know when they're ready."
 				},
 				"available": "Available",
 				"download": "Download",

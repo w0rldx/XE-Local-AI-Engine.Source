@@ -35,7 +35,7 @@ vi.mock("@tanstack/react-router", async (importOriginal) => {
 // Model Management feature: it calls that feature's useStartGgufDownload and marks the model in the SHARED GGUF store
 // (the real store is used here — not mocked — so the test can assert the in-flight set the progress panel reads). The
 // browse/llama.cpp/HF-token/running-models hooks were relocated and are no longer referenced by this page.
-const { hooksMock, ggufMock, schedulerMock, hubMock } = vi.hoisted(() => ({
+const { hooksMock, ggufMock, schedulerMock, hubMock, toastMock } = vi.hoisted(() => ({
 	hooksMock: {
 		useLatestRecommendations: vi.fn(),
 		useRefreshRecommendations: vi.fn(),
@@ -48,12 +48,14 @@ const { hooksMock, ggufMock, schedulerMock, hubMock } = vi.hoisted(() => ({
 		useScheduledJobs: vi.fn(),
 	},
 	hubMock: vi.fn(),
+	toastMock: { success: vi.fn(), error: vi.fn(), info: vi.fn(), warn: vi.fn(), warning: vi.fn(), progress: vi.fn() },
 }));
 
 vi.mock("@/features/model-fit/queries/useModelFit", () => hooksMock);
 vi.mock("@/features/models/queries/useGgufDownload", () => ggufMock);
 vi.mock("@/features/scheduler/queries/useScheduler", () => schedulerMock);
 vi.mock("@/features/model-fit/hooks/useModelFitSchedulerEvents", () => ({ useModelFitSchedulerEvents: hubMock }));
+vi.mock("@/core/ui/notifications/Toast", () => ({ toast: toastMock }));
 
 import { ModelRecommendationsPage } from "@/features/model-fit/pages/ModelRecommendationsPage";
 import { useGgufBrowseStore } from "@/features/models/stores/GgufBrowseStore";
@@ -311,7 +313,25 @@ describe("ModelRecommendationsPage", () => {
 
 		expect(refreshMutation.mutate).toHaveBeenCalledWith(
 			{ scheduledJobId: "job-mf", useCase: "coding", limit: 50 },
-			{ onError: expect.any(Function) },
+			{ onSuccess: expect.any(Function), onError: expect.any(Function) },
+		);
+	});
+
+	it("shows a 'refresh started' info toast when the refresh request is accepted", () => {
+		// The refresh enqueues an async run with no immediate result, so the page confirms the request landed with an info
+		// toast (the terminal success/failure toast arrives later from the scheduler hub). Drive the mutate's onSuccess.
+		const refreshMutation = makeMutation({
+			mutate: vi.fn((_variables, options?: { onSuccess?: () => void }) => options?.onSuccess?.()),
+		});
+		hooksMock.useRefreshRecommendations.mockReturnValue(refreshMutation);
+
+		renderPage();
+
+		fireEvent.click(screen.getByTestId("model-fit-refresh-button"));
+
+		expect(toastMock.info).toHaveBeenCalledWith(
+			expect.stringContaining("Checking for the latest model recommendations"),
+			expect.objectContaining({ id: "model-fit-refresh-start", title: "Refresh started" }),
 		);
 	});
 

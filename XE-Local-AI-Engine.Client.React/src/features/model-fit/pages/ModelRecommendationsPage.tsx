@@ -74,6 +74,17 @@ export function ModelRecommendationsPage() {
 		refreshMutation.mutate(
 			{ scheduledJobId: refreshJob.id, useCase, limit: recommendationRefreshLimit },
 			{
+				// The refresh enqueues an async scheduler run, so there is no immediate result to show. Confirm the request
+				// landed with an info toast (keyed by a stable id so rapid clicks update one toast instead of stacking) — the
+				// terminal Succeeded/Failed/Cancelled toast arrives later from the scheduler hub (ModelFitRefreshNotifications).
+				onSuccess: () =>
+					toast.info(
+						t(
+							"pages.modelFit.recommendations.toasts.started",
+							"Checking for the latest model recommendations. We'll let you know when they're ready.",
+						),
+						{ title: t("pages.modelFit.recommendations.toasts.startedTitle", "Refresh started"), id: "model-fit-refresh-start" },
+					),
 				onError: (error) =>
 					toast.error(errorMessage(error, t("pages.modelFit.recommendations.errors.refresh", "Could not start a refresh."))),
 			},
