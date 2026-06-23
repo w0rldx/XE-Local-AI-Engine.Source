@@ -8,6 +8,7 @@ using XE_Local_AI_Engine.Client.Models;
 using XE_Local_AI_Engine.Client.Models.Enums;
 using XE_Local_AI_Engine.Client.Services.AgentHome;
 using XE_Local_AI_Engine.Client.Services.AgentHome.Tools;
+using XE_Local_AI_Engine.Client.Services.Coder.Tools;
 
 internal sealed class LocalToolOfferProvider : ILocalToolOfferProvider
 {
@@ -34,18 +35,31 @@ internal sealed class LocalToolOfferProvider : ILocalToolOfferProvider
 
         var builtinDescriptors = toolRegistry.GetLocalChatToolDescriptors();
 
+        // The read-only coder tools (list_files / read_file / search_text) are worker-owned IClientLocalToolHandlers,
+        // which IAgentToolRegistry.GetLocalChatToolDescriptors() does NOT project — registering the handlers in DI
+        // surfaces them only in the RESOLUTION seam, never the OFFER seam. The agent-send path intersects
+        // offered ∩ AllowedToolNames, so without merging them here the seeded Coder agent's tool set would be ∅ and the
+        // feature inert. They join the capability-gated (capable-only) built-in set just like run_in_agent_home: present
+        // in the full offer, withheld from a non-tool-capable model. The descriptor set is static, so the merged offer
+        // stays byte-identical across sends (stable config hash).
+        var coderDescriptors = CoderToolDefinition.Descriptors;
+
         // Each tool's Id is derived deterministically from its name so the offer list is byte-identical across sends
         // (the config hash ignores the Id, but a stable Id keeps client-side rendering and equality predictable).
         _builtinAllTools =
         [
-            .. builtinDescriptors.Select(static descriptor => ToOfferDto(descriptor.Name, descriptor.ParameterSchema, descriptor.RequiresApproval))
+            .. builtinDescriptors.Select(static descriptor => ToOfferDto(descriptor.Name, descriptor.ParameterSchema, descriptor.RequiresApproval)),
+            .. coderDescriptors.Select(static descriptor => ToOfferDto(descriptor.Name, descriptor.ParameterSchema, descriptor.RequiresApproval))
         ];
 
-        // Precompute the capability-gated variant once: the built-ins minus run_in_agent_home, returned when the active
-        // model is not tool-capable. The encrypted path stays server-gated and never reaches this provider.
+        // Precompute the capability-gated variant once: the built-ins minus run_in_agent_home AND the coder tools,
+        // returned when the active model is not tool-capable. The coder tools, like run_in_agent_home, are offered only
+        // to a tool-capable model. The encrypted path stays server-gated and never reaches this provider.
+        var coderToolNames = coderDescriptors.Select(static descriptor => descriptor.Name).ToHashSet(StringComparer.Ordinal);
         _builtinWithoutAgentHome =
         [
-            .. _builtinAllTools.Where(static tool => !string.Equals(tool.Name, AgentHomeToolDefinition.ToolName, StringComparison.Ordinal))
+            .. _builtinAllTools.Where(tool => !string.Equals(tool.Name, AgentHomeToolDefinition.ToolName, StringComparison.Ordinal)
+                                              && !coderToolNames.Contains(tool.Name))
         ];
 
         _builtinCatalogEntries =
@@ -56,10 +70,21 @@ internal sealed class LocalToolOfferProvider : ILocalToolOfferProvider
                 Description = descriptor.Description,
                 RequiresApproval = descriptor.RequiresApproval,
                 Source = BuiltinSource
+            }),
+            .. coderDescriptors.Select(static descriptor => new LocalToolCatalogEntry
+            {
+                Name = descriptor.Name,
+                Description = descriptor.Description,
+                RequiresApproval = descriptor.RequiresApproval,
+                Source = BuiltinSource
             })
         ];
 
-        _builtinNames = [.. builtinDescriptors.Select(static descriptor => descriptor.Name)];
+        _builtinNames =
+        [
+            .. builtinDescriptors.Select(static descriptor => descriptor.Name),
+            .. coderDescriptors.Select(static descriptor => descriptor.Name)
+        ];
 
         _toolCapableModels = new HashSet<string>(agentHomeOptions.Value.ToolCapableModels ?? [], StringComparer.Ordinal);
     }

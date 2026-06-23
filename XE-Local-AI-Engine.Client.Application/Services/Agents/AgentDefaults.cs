@@ -13,4 +13,13 @@ public static class AgentDefaults
 
     /// <summary>The data-row display name of the seeded "Default Assistant" definition (not localized).</summary>
     public const string DefaultAgentName = "Default Assistant";
+
+    /// <summary>
+    ///     The forge-proof seed slug of the node-local "Coder (read-only)" definition — a read-only project-access agent
+    ///     carrying the three coder tool names in its <c>AllowedToolNames</c>.
+    /// </summary>
+    public const string CoderAgentSeedSlug = "coder-readonly";
+
+    /// <summary>The data-row display name of the seeded "Coder (read-only)" definition (not localized).</summary>
+    public const string CoderAgentName = "Coder (read-only)";
 }
