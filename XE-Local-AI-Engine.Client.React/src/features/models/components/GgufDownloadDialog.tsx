@@ -1,6 +1,6 @@
 import { Alert, Badge, Button, Group, Loader, Radio, Stack, Table, Text } from "@mantine/core";
 import { IconAlertTriangle, IconCloudDownload } from "@tabler/icons-react";
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
 
 import { DialogShell } from "@/core/ui/components/DialogShell/DialogShell";
@@ -26,7 +26,7 @@ export function GgufDownloadDialog({ repository, onClose, onConfirm, onConfirmDe
 	const { t } = useTranslation();
 	const opened = repository !== null;
 	const inspect = useInspectGgufRepository(repository?.repoId ?? "", opened);
-	const files = inspect.data?.files ?? [];
+	const files = useMemo<readonly GgufRepositoryFile[]>(() => inspect.data?.files ?? [], [inspect.data?.files]);
 	const [selectedFileName, setSelectedFileName] = useState<string | null>(null);
 
 	// Default the selection to the first (smallest) file whenever the list (re)loads; keep a still-present choice.
