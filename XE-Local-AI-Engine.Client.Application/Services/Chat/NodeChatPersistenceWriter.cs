@@ -1,6 +1,7 @@
 namespace XE_Local_AI_Engine.Client.Services.Chat;
 
 using System.Collections.Concurrent;
+using System.Runtime.InteropServices;
 using XE_Local_AI_Engine.Client.Persistence;
 
 /// <summary>
@@ -48,6 +49,7 @@ public sealed class NodeChatPersistenceWriter(IServiceScopeFactory scopeFactory)
     }
 }
 
+[StructLayout(LayoutKind.Auto)]
 public readonly record struct NodeChatPersistenceWriteKey(Guid ConversationId, Guid? MessageId)
 {
     public static NodeChatPersistenceWriteKey ForConversation(Guid conversationId)

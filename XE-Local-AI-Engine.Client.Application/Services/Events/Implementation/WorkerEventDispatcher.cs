@@ -33,7 +33,7 @@ public sealed partial class WorkerEventDispatcher : IWorkerEventDispatcher
     private readonly SemaphoreSlim _remoteInvocationQueue = new(1, 1);
     private readonly INodeChatRemotePersistenceCoordinator _remotePersistenceCoordinator;
     private readonly IRuntimePackageEnvelopeAssembler _runtimePackageEnvelopeAssembler;
-    private readonly object _syncRoot = new();
+    private readonly System.Threading.Lock _syncRoot = new();
     private bool _isAcceptingRemoteInvocations = true;
 
     public WorkerEventDispatcher(IInvocationRunner invocationRunner,
@@ -377,7 +377,7 @@ public sealed partial class WorkerEventDispatcher : IWorkerEventDispatcher
 
         _invocationRunner.Cancel(evt.InvocationId);
 
-        InvocationState? snapshot = null;
+        InvocationState? snapshot;
 
         lock (_syncRoot)
         {

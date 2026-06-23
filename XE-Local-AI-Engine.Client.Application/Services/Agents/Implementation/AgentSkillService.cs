@@ -117,6 +117,6 @@ internal sealed partial class AgentSkillService : IAgentSkillService
         }
     }
 
-    [GeneratedRegex("^[a-z0-9]([a-z0-9-]*[a-z0-9])?$", RegexOptions.CultureInvariant)]
+    [GeneratedRegex("^[a-z0-9]([a-z0-9-]*[a-z0-9])?$", RegexOptions.CultureInvariant | RegexOptions.ExplicitCapture, 2000)]
     private static partial Regex SkillNameRegex();
 }

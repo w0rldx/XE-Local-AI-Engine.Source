@@ -26,11 +26,11 @@ internal sealed class ModelCapabilityProber
     private static readonly string[] ModelConnectionStringNames = ["chat", "embeddings"];
 
     private readonly IReadOnlyList<string> _configuredModelNames;
-    private readonly object _installedModelsCacheSync = new();
+    private readonly System.Threading.Lock _installedModelsCacheSync = new();
     private readonly ILogger<ModelCapabilityProber> _logger;
     private readonly IModelCapabilityClient _modelCapabilityClient;
     private readonly Dictionary<ModelContextCacheKey, int?> _modelContextCache = new();
-    private readonly object _modelContextCacheSync = new();
+    private readonly System.Threading.Lock _modelContextCacheSync = new();
     private readonly TimeProvider _timeProvider;
     private CachedInstalledModels? _installedModelsCache;
 

@@ -17,7 +17,7 @@ using Microsoft.Extensions.Logging;
 /// </summary>
 internal sealed class OrchestrationRunSession : IOrchestrationRunSession
 {
-    private readonly object _idleClockGate = new();
+    private readonly System.Threading.Lock _idleClockGate = new();
     private readonly TimeSpan _idleTimeout;
     private readonly ILogger _logger;
     private readonly IReadOnlyDictionary<string, OrchestrationParticipant> _participantsByAgentId;

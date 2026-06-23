@@ -78,7 +78,7 @@ internal static class NodeChatMetadataSerializer
 
         // String keys/values keep the JSON object portable: the same {variantGroupId->selectedMessageId} map can be
         // parsed by any platform without depending on a Guid dictionary-key converter.
-        var serializable = selectedPath.ToDictionary(pair => pair.Key.ToString(), pair => pair.Value.ToString());
+        var serializable = selectedPath.ToDictionary(pair => pair.Key.ToString(), pair => pair.Value.ToString(), StringComparer.Ordinal);
         return JsonSerializer.Serialize(serializable, SelectedPathJsonOptions);
     }
 

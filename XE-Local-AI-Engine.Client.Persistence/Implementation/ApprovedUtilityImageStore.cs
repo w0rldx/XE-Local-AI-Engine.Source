@@ -40,7 +40,11 @@ public sealed class ApprovedUtilityImageStore(NodeChatDbContext dbContext, TimeP
     public async Task<ApprovedUtilityImageRecord> UpsertSeedAsync(ApprovedUtilityImageRecord record, CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(record);
-        ArgumentException.ThrowIfNullOrWhiteSpace(record.ApprovedImageId);
+
+        if (string.IsNullOrWhiteSpace(record.ApprovedImageId))
+        {
+            throw new ArgumentException("Approved utility image id must be provided.", nameof(record));
+        }
 
         var now = _timeProvider.GetUtcNow().ToUnixTimeMilliseconds();
 

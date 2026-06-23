@@ -20,7 +20,10 @@ internal sealed class NodeChatMessageCommands(NodeChatPersistenceWriter writer)
     public Task<NodeChatPersistedMessageDto> PersistUserMessageAsync(NodeChatPersistUserMessageRequest request, CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(request);
-        ArgumentException.ThrowIfNullOrWhiteSpace(request.Content);
+        if (string.IsNullOrWhiteSpace(request.Content))
+        {
+            throw new ArgumentException("Message content must be provided.", nameof(request));
+        }
 
         return InsertMessageAsync(request.ConversationId,
             request.MessageId,

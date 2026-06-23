@@ -264,12 +264,12 @@ public sealed class LlamaCppBinaryManager : ILlamaCppBinaryManager
 
     private static OSPlatform CurrentOsPlatform()
     {
-        if (RuntimeInformation.IsOSPlatform(OSPlatform.Windows))
+        if (OperatingSystem.IsWindows())
         {
             return OSPlatform.Windows;
         }
 
-        if (RuntimeInformation.IsOSPlatform(OSPlatform.OSX))
+        if (OperatingSystem.IsMacOS())
         {
             return OSPlatform.OSX;
         }

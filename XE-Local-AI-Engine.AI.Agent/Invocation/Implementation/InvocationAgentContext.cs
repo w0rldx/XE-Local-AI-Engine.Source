@@ -26,7 +26,7 @@ public sealed class InvocationAgentContext : IAsyncDisposable
     public AgentRunOptions? RunOptions { get; set; }
 
     /// <summary>Small metadata bag for runner diagnostics, such as resolved model id and tool enablement.</summary>
-    public IDictionary<string, object?> Items { get; } = new Dictionary<string, object?>();
+    public IDictionary<string, object?> Items { get; } = new Dictionary<string, object?>(StringComparer.Ordinal);
 
     /// <summary>Disposes the underlying session when the framework created one.</summary>
     public async ValueTask DisposeAsync()

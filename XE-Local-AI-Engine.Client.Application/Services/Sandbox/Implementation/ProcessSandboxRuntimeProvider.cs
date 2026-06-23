@@ -51,7 +51,7 @@ public sealed class ProcessSandboxRuntimeProvider : ISandboxRuntimeProvider, IDi
 
     private readonly long _maxCopyFileBytes;
     private readonly ConcurrentDictionary<string, JailState> _sandboxes = new(StringComparer.Ordinal);
-    private readonly object _sync = new();
+    private readonly System.Threading.Lock _sync = new();
     private readonly TimeProvider _timeProvider;
     private int _disposed;
 
@@ -822,7 +822,7 @@ public sealed class ProcessSandboxRuntimeProvider : ISandboxRuntimeProvider, IDi
     {
         private readonly StringBuilder _builder = new();
         private readonly int _capBytes;
-        private readonly object _sync = new();
+        private readonly System.Threading.Lock _sync = new();
         private int _byteLength;
         private bool _capped;
 

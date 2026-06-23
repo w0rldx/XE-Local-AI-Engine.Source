@@ -124,10 +124,25 @@ public sealed class CloudCredentialStore : ICloudCredentialStore, IDisposable
 
     private static void ValidateCredentials(StoredCloudCredentials credentials)
     {
-        ArgumentException.ThrowIfNullOrWhiteSpace(credentials.ProviderName);
-        ArgumentException.ThrowIfNullOrWhiteSpace(credentials.Endpoint);
-        ArgumentException.ThrowIfNullOrWhiteSpace(credentials.ApiKey);
-        ArgumentException.ThrowIfNullOrWhiteSpace(credentials.DeploymentName);
+        if (string.IsNullOrWhiteSpace(credentials.ProviderName))
+        {
+            throw new ArgumentException("Stored cloud credential provider name must be provided.", nameof(credentials));
+        }
+
+        if (string.IsNullOrWhiteSpace(credentials.Endpoint))
+        {
+            throw new ArgumentException("Stored cloud credential endpoint must be provided.", nameof(credentials));
+        }
+
+        if (string.IsNullOrWhiteSpace(credentials.ApiKey))
+        {
+            throw new ArgumentException("Stored cloud credential API key must be provided.", nameof(credentials));
+        }
+
+        if (string.IsNullOrWhiteSpace(credentials.DeploymentName))
+        {
+            throw new ArgumentException("Stored cloud credential deployment name must be provided.", nameof(credentials));
+        }
 
         if (!string.Equals(credentials.ProviderName, CloudProviderOptions.ProviderAzureFoundry, StringComparison.OrdinalIgnoreCase))
         {

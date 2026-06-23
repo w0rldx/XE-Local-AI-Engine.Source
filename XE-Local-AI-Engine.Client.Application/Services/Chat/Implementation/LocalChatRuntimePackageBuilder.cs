@@ -12,8 +12,15 @@ public sealed class LocalChatRuntimePackageBuilder : ILocalChatRuntimePackageBui
     public RuntimePackage Build(LocalChatRuntimePackageRequest request)
     {
         ArgumentNullException.ThrowIfNull(request);
-        ArgumentException.ThrowIfNullOrWhiteSpace(request.ResolvedSystemPrompt);
-        ArgumentNullException.ThrowIfNull(request.ConversationContext);
+        if (string.IsNullOrWhiteSpace(request.ResolvedSystemPrompt))
+        {
+            throw new ArgumentException("Resolved system prompt must be provided.", nameof(request));
+        }
+
+        if (request.ConversationContext is null)
+        {
+            throw new ArgumentException("Conversation context must be provided.", nameof(request));
+        }
 
         List<AllowedToolDto> allowedTools = request.AllowedTools is null ? [] : [.. request.AllowedTools];
         var timeouts = request.Timeouts ?? new TimeoutSettings();
@@ -30,7 +37,7 @@ public sealed class LocalChatRuntimePackageBuilder : ILocalChatRuntimePackageBui
             ResolvedSystemPrompt = request.ResolvedSystemPrompt,
             ConversationContext = [.. request.ConversationContext.OrderBy(static message => message.SortOrder)],
             AllowedTools = allowedTools,
-            ToolPolicies = request.ToolPolicies is null ? null : new Dictionary<string, object>(request.ToolPolicies),
+            ToolPolicies = request.ToolPolicies is null ? null : new Dictionary<string, object>(request.ToolPolicies, StringComparer.Ordinal),
             ModelProfile = request.ModelProfile,
             ReasoningEffort = ReasoningEffortNormalizer.Normalize(request.ReasoningEffort),
             // Deliberately NOT fed into the config hash below: capable models keep a byte-identical hash, and only the

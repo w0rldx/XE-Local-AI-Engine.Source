@@ -68,7 +68,7 @@ public sealed partial class WorkerEventDispatcher
     {
         ArgumentNullException.ThrowIfNull(update);
 
-        InvocationState? snapshot = null;
+        InvocationState? snapshot;
 
         lock (_syncRoot)
         {

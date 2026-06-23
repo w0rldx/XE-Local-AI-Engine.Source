@@ -77,6 +77,6 @@ public static partial class OllamaModelInfoParser
         }
     }
 
-    [GeneratedRegex(@"^[^.]+\.context_length$", RegexOptions.CultureInvariant)]
+    [GeneratedRegex(@"^[^.]+\.context_length$", RegexOptions.CultureInvariant, matchTimeoutMilliseconds: 2000)]
     private static partial Regex ContextLengthKeyRegex();
 }

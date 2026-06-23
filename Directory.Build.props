@@ -15,7 +15,24 @@
     <AccelerateBuildsInVisualStudio>true</AccelerateBuildsInVisualStudio>
     <ManagePackageVersionsCentrally>true</ManagePackageVersionsCentrally>
   </PropertyGroup>
+
+  <!-- Test/tooling projects are exempt from the extra banned-API + Meziantou guardrails: they
+       legitimately use ambient time, Thread.Sleep, and sync-over-async in fixtures/harnesses.
+       Product runtime code is held to the strict wall. (tools/AgentTemplateGenerator is already
+       isolated by its own Directory.Build.props, so it is not matched here.) -->
+  <PropertyGroup>
+    <IsTestOrToolingProject>false</IsTestOrToolingProject>
+    <IsTestOrToolingProject Condition="$(MSBuildProjectName.EndsWith('.Tests')) Or $(MSBuildProjectName.Contains('.Tests.')) Or $(MSBuildProjectName.Contains('.Testing')) Or $(MSBuildProjectName.EndsWith('.AppHost'))">true</IsTestOrToolingProject>
+  </PropertyGroup>
+
   <ItemGroup>
     <PackageReference Include="SonarAnalyzer.CSharp" PrivateAssets="all" Condition="$(MSBuildProjectExtension) == '.csproj'" />
+  </ItemGroup>
+
+  <!-- Extra static-analysis guardrails — production projects only. -->
+  <ItemGroup Condition="$(MSBuildProjectExtension) == '.csproj' And '$(IsTestOrToolingProject)' != 'true'">
+    <PackageReference Include="Meziantou.Analyzer" PrivateAssets="all" />
+    <PackageReference Include="Microsoft.CodeAnalysis.BannedApiAnalyzers" PrivateAssets="all" />
+    <AdditionalFiles Include="$(MSBuildThisFileDirectory)BannedSymbols.txt" Visible="false" />
   </ItemGroup>
 </Project>

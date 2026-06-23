@@ -30,66 +30,69 @@ internal static partial class MemoryProposalSecretScanner
 {
     // ── Reject-whole-record patterns ──────────────────────────────────────
     // PEM private-key blocks (any variant).
-    [GeneratedRegex(@"-----BEGIN\s+(?:[A-Z ]+\s+)?PRIVATE KEY-----", RegexOptions.IgnoreCase | RegexOptions.Singleline)]
+    // Match timeout (milliseconds) guarding every pattern below against pathological/ReDoS inputs.
+    private const int RegexTimeoutMilliseconds = 2000;
+
+    [GeneratedRegex(@"-----BEGIN\s+(?:[A-Z ]+\s+)?PRIVATE KEY-----", RegexOptions.IgnoreCase | RegexOptions.Singleline | RegexOptions.ExplicitCapture, RegexTimeoutMilliseconds)]
     private static partial Regex PemPrivateKeyRegex();
 
     // OpenSSH private-key blocks.
-    [GeneratedRegex(@"-----BEGIN OPENSSH PRIVATE KEY-----", RegexOptions.Singleline)]
+    [GeneratedRegex(@"-----BEGIN OPENSSH PRIVATE KEY-----", RegexOptions.Singleline | RegexOptions.ExplicitCapture, RegexTimeoutMilliseconds)]
     private static partial Regex OpenSshPrivateKeyRegex();
 
     // Google service-account JSON: must have both "type": "service_account" AND private_key.
-    [GeneratedRegex(@"""type""\s*:\s*""service_account""", RegexOptions.Singleline)]
+    [GeneratedRegex(@"""type""\s*:\s*""service_account""", RegexOptions.Singleline | RegexOptions.ExplicitCapture, RegexTimeoutMilliseconds)]
     private static partial Regex ServiceAccountTypeRegex();
 
-    [GeneratedRegex(@"""private_key""", RegexOptions.Singleline)]
+    [GeneratedRegex(@"""private_key""", RegexOptions.Singleline | RegexOptions.ExplicitCapture, RegexTimeoutMilliseconds)]
     private static partial Regex ServiceAccountPrivateKeyRegex();
 
     // ── Redact-in-content patterns ────────────────────────────────────────
     // Assignment-like secrets: api_key=, secret:, password =, connectionstring=, client_secret=, access_token=, refresh_token=
     // followed by a non-whitespace, non-comment value (single/double quoted or bare word).
     [GeneratedRegex(@"(?:api[_\-]?key|secret|password|connectionstring|client_secret|access_token|refresh_token)\s*(?:=|:|:=|"":\s*""|':\s*')[^\s,;}{""'\r\n]{4,}",
-        RegexOptions.IgnoreCase | RegexOptions.Singleline)]
+        RegexOptions.IgnoreCase | RegexOptions.Singleline | RegexOptions.ExplicitCapture, RegexTimeoutMilliseconds)]
     private static partial Regex AssignmentSecretRegex();
 
     // GitHub tokens.
-    [GeneratedRegex(@"gh[pos]_[A-Za-z0-9]{36,}", RegexOptions.Singleline)]
+    [GeneratedRegex(@"gh[pos]_[A-Za-z0-9]{36,}", RegexOptions.Singleline | RegexOptions.ExplicitCapture, RegexTimeoutMilliseconds)]
     private static partial Regex GitHubTokenRegex();
 
     // GitHub fine-grained PATs.
-    [GeneratedRegex(@"github_pat_[A-Za-z0-9_]{82,}", RegexOptions.Singleline)]
+    [GeneratedRegex(@"github_pat_[A-Za-z0-9_]{82,}", RegexOptions.Singleline | RegexOptions.ExplicitCapture, RegexTimeoutMilliseconds)]
     private static partial Regex GitHubPatRegex();
 
     // AWS access key IDs.
-    [GeneratedRegex(@"AKIA[0-9A-Z]{16}", RegexOptions.Singleline)]
+    [GeneratedRegex(@"AKIA[0-9A-Z]{16}", RegexOptions.Singleline | RegexOptions.ExplicitCapture, RegexTimeoutMilliseconds)]
     private static partial Regex AwsAccessKeyRegex();
 
     // Azure storage connection strings.
-    [GeneratedRegex(@"DefaultEndpointsProtocol=[^;]+;AccountName=[^;]+;AccountKey=[A-Za-z0-9+/=]{20,}", RegexOptions.IgnoreCase | RegexOptions.Singleline)]
+    [GeneratedRegex(@"DefaultEndpointsProtocol=[^;]+;AccountName=[^;]+;AccountKey=[A-Za-z0-9+/=]{20,}", RegexOptions.IgnoreCase | RegexOptions.Singleline | RegexOptions.ExplicitCapture, RegexTimeoutMilliseconds)]
     private static partial Regex AzureConnectionStringRegex();
 
     // Azure AccountKey= standalone.
-    [GeneratedRegex(@"AccountKey=[A-Za-z0-9+/=]{20,}", RegexOptions.IgnoreCase | RegexOptions.Singleline)]
+    [GeneratedRegex(@"AccountKey=[A-Za-z0-9+/=]{20,}", RegexOptions.IgnoreCase | RegexOptions.Singleline | RegexOptions.ExplicitCapture, RegexTimeoutMilliseconds)]
     private static partial Regex AzureAccountKeyRegex();
 
     // Slack tokens.
-    [GeneratedRegex(@"xox[baprs]-[A-Za-z0-9\-]{10,}", RegexOptions.Singleline)]
+    [GeneratedRegex(@"xox[baprs]-[A-Za-z0-9\-]{10,}", RegexOptions.Singleline | RegexOptions.ExplicitCapture, RegexTimeoutMilliseconds)]
     private static partial Regex SlackTokenRegex();
 
     // JWT-looking values (three base64url segments).
-    [GeneratedRegex(@"eyJ[A-Za-z0-9_\-]+\.[A-Za-z0-9_\-]+\.[A-Za-z0-9_\-]+", RegexOptions.Singleline)]
+    [GeneratedRegex(@"eyJ[A-Za-z0-9_\-]+\.[A-Za-z0-9_\-]+\.[A-Za-z0-9_\-]+", RegexOptions.Singleline | RegexOptions.ExplicitCapture, RegexTimeoutMilliseconds)]
     private static partial Regex JwtRegex();
 
     // High-entropy bearer-like substrings (≥32 chars, token context keyword, Shannon entropy checked separately).
-    [GeneratedRegex(@"(?:Bearer|sk-|token|key)\s+([A-Za-z0-9+/=_\-]{32,})",
-        RegexOptions.IgnoreCase | RegexOptions.Singleline)]
+    [GeneratedRegex(@"(?:Bearer|sk-|token|key)\s+(?<token>[A-Za-z0-9+/=_\-]{32,})",
+        RegexOptions.IgnoreCase | RegexOptions.Singleline | RegexOptions.ExplicitCapture, RegexTimeoutMilliseconds)]
     private static partial Regex BearerLikeRegex();
 
     // Keyword-free high-entropy fallback: a delimited base64/hex-ish run of ≥32 chars with no surrounding token keyword.
     // The whitespace/start/end boundaries (rather than \b) keep the '[REDACTED:…]' markers — which contain '[' and ']' —
     // out of the match, so a second pass never re-redacts an already-redacted span. Shannon entropy is gated separately
     // so an ordinary long identifier (low entropy) is left intact.
-    [GeneratedRegex(@"(?<![A-Za-z0-9+/=_\-])([A-Za-z0-9+/=_\-]{32,})(?![A-Za-z0-9+/=_\-])",
-        RegexOptions.Singleline)]
+    [GeneratedRegex(@"(?<![A-Za-z0-9+/=_\-])(?<token>[A-Za-z0-9+/=_\-]{32,})(?![A-Za-z0-9+/=_\-])",
+        RegexOptions.Singleline | RegexOptions.ExplicitCapture, RegexTimeoutMilliseconds)]
     private static partial Regex BareHighEntropyTokenRegex();
 
     /// <summary>
@@ -197,7 +200,7 @@ internal static partial class MemoryProposalSecretScanner
     {
         foreach (Match match in BearerLikeRegex().Matches(value))
         {
-            var candidate = match.Groups[1].Value;
+            var candidate = match.Groups["token"].Value;
             if (ShannonEntropy(candidate) >= 4.5)
             {
                 return true;
@@ -211,14 +214,14 @@ internal static partial class MemoryProposalSecretScanner
     {
         return BearerLikeRegex().Replace(content, match =>
         {
-            var candidate = match.Groups[1].Value;
+            var candidate = match.Groups["token"].Value;
             if (ShannonEntropy(candidate) >= 4.5)
             {
-                // Keep the keyword; redact the high-entropy token only. Group[1].Index is absolute (into the whole
-                // content), so subtract match.Index to get the keyword length relative to match.Value — otherwise a
-                // match at a non-zero offset slices past the keyword (leaking token bytes) or throws when the absolute
+                // Keep the keyword; redact the high-entropy token only. The token group's Index is absolute (into the
+                // whole content), so subtract match.Index to get the keyword length relative to match.Value — otherwise
+                // a match at a non-zero offset slices past the keyword (leaking token bytes) or throws when the absolute
                 // index exceeds match.Value.Length.
-                var keywordLength = match.Groups[1].Index - match.Index;
+                var keywordLength = match.Groups["token"].Index - match.Index;
                 return match.Value[..keywordLength] + "[REDACTED:high-entropy-token]";
             }
 
@@ -229,14 +232,14 @@ internal static partial class MemoryProposalSecretScanner
     private static bool HasBareHighEntropyToken(string value)
     {
         return BareHighEntropyTokenRegex().Matches(value)
-                                          .Any(match => ShannonEntropy(match.Groups[1].Value) >= 4.5);
+                                          .Any(match => ShannonEntropy(match.Groups["token"].Value) >= 4.5);
     }
 
     private static string RedactBareHighEntropyTokens(string content)
     {
         return BareHighEntropyTokenRegex().Replace(content, match =>
         {
-            var candidate = match.Groups[1].Value;
+            var candidate = match.Groups["token"].Value;
             return ShannonEntropy(candidate) >= 4.5 ? "[REDACTED:high-entropy-token]" : match.Value;
         });
     }

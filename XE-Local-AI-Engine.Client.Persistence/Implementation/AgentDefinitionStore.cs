@@ -289,6 +289,6 @@ public sealed class AgentDefinitionStore(NodeChatDbContext dbContext, TimeProvid
 
     private static IReadOnlyDictionary<string, bool> DeserializeApprovals(string json)
     {
-        return JsonSerializer.Deserialize<Dictionary<string, bool>>(json, SerializerOptions) ?? new Dictionary<string, bool>();
+        return JsonSerializer.Deserialize<Dictionary<string, bool>>(json, SerializerOptions) ?? new Dictionary<string, bool>(StringComparer.Ordinal);
     }
 }

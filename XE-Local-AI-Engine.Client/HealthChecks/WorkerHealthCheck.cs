@@ -27,7 +27,7 @@ public sealed class WorkerHealthCheck : IHealthCheck
     {
         cancellationToken.ThrowIfCancellationRequested();
 
-        var data = new Dictionary<string, object>
+        var data = new Dictionary<string, object>(StringComparer.Ordinal)
         {
             ["paired"] = _tokenStore.IsPaired,
             ["tokenExpired"] = _tokenStore.IsTokenExpired,

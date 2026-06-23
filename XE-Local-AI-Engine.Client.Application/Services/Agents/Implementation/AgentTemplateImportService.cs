@@ -56,7 +56,7 @@ internal sealed class AgentTemplateImportService(IAgentTemplateCatalog catalog, 
             null,
             AgentDefinitionKind.Single,
             [],
-            new Dictionary<string, bool>(),
+            new Dictionary<string, bool>(StringComparer.Ordinal),
             null);
     }
 }

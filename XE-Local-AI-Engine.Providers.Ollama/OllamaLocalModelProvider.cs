@@ -89,7 +89,9 @@ public sealed class OllamaLocalModelProvider : ILocalModelProvider, IDisposable
                 ProviderName = ProviderName,
                 IsAvailable = true,
                 SizeBytes = model.Size,
-                ModifiedAt = model.ModifiedAt,
+                // Explicit ctor (MA0132) with the SAME semantics as the implicit DateTime->DateTimeOffset
+                // conversion, so the value is byte-identical regardless of model.ModifiedAt.Kind.
+                ModifiedAt = new DateTimeOffset(model.ModifiedAt),
                 MaxContextTokens = await TryReadContextLengthAsync(modelName, ct).ConfigureAwait(false)
             });
         }
@@ -152,8 +154,15 @@ public sealed class OllamaLocalModelProvider : ILocalModelProvider, IDisposable
     public IChatClient CreateChatClient(LocalModelSelection selection)
     {
         ArgumentNullException.ThrowIfNull(selection);
-        ArgumentException.ThrowIfNullOrWhiteSpace(selection.ModelName);
-        ArgumentException.ThrowIfNullOrWhiteSpace(selection.ProviderName);
+        if (string.IsNullOrWhiteSpace(selection.ModelName))
+        {
+            throw new ArgumentException("Model selection must include a model name.", nameof(selection));
+        }
+
+        if (string.IsNullOrWhiteSpace(selection.ProviderName))
+        {
+            throw new ArgumentException("Model selection must include a provider name.", nameof(selection));
+        }
 
         if (!string.Equals(selection.ProviderName, ProviderName, StringComparison.OrdinalIgnoreCase))
         {
@@ -167,8 +176,15 @@ public sealed class OllamaLocalModelProvider : ILocalModelProvider, IDisposable
     public IEmbeddingGenerator<string, Embedding<float>> CreateEmbeddingGenerator(LocalModelSelection selection)
     {
         ArgumentNullException.ThrowIfNull(selection);
-        ArgumentException.ThrowIfNullOrWhiteSpace(selection.ModelName);
-        ArgumentException.ThrowIfNullOrWhiteSpace(selection.ProviderName);
+        if (string.IsNullOrWhiteSpace(selection.ModelName))
+        {
+            throw new ArgumentException("Model selection must include a model name.", nameof(selection));
+        }
+
+        if (string.IsNullOrWhiteSpace(selection.ProviderName))
+        {
+            throw new ArgumentException("Model selection must include a provider name.", nameof(selection));
+        }
 
         if (!string.Equals(selection.ProviderName, ProviderName, StringComparison.OrdinalIgnoreCase))
         {

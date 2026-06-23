@@ -153,7 +153,7 @@ public sealed partial class InvocationRunner
 
         public Dictionary<string, long> ToTokenCounts()
         {
-            var counts = new Dictionary<string, long>();
+            var counts = new Dictionary<string, long>(StringComparer.Ordinal);
             AddIfPresent(counts, "inputTokens", InputTokens);
             AddIfPresent(counts, "outputTokens", OutputTokens);
             AddIfPresent(counts, "reasoningTokens", ReasoningTokens);

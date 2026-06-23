@@ -143,8 +143,15 @@ public sealed class LlamaServerLocalModelProvider : ILocalModelProvider
     private void ValidateSelection(LocalModelSelection selection)
     {
         ArgumentNullException.ThrowIfNull(selection);
-        ArgumentException.ThrowIfNullOrWhiteSpace(selection.ModelName);
-        ArgumentException.ThrowIfNullOrWhiteSpace(selection.ProviderName);
+        if (string.IsNullOrWhiteSpace(selection.ModelName))
+        {
+            throw new ArgumentException("Model selection must include a model name.", nameof(selection));
+        }
+
+        if (string.IsNullOrWhiteSpace(selection.ProviderName))
+        {
+            throw new ArgumentException("Model selection must include a provider name.", nameof(selection));
+        }
 
         if (!string.Equals(selection.ProviderName, ProviderName, StringComparison.OrdinalIgnoreCase))
         {

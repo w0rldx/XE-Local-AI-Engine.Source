@@ -125,17 +125,17 @@ internal sealed class HardwareProfiler : IHardwareProfiler
     private GpuVendor DetectLinuxDrmVendor()
     {
         var vendorIds = _environment.ReadDrmVendorIds();
-        if (vendorIds.Contains(PciVendorNvidia))
+        if (vendorIds.Contains(PciVendorNvidia, StringComparer.OrdinalIgnoreCase))
         {
             return GpuVendor.Nvidia;
         }
 
-        if (vendorIds.Contains(PciVendorAmd))
+        if (vendorIds.Contains(PciVendorAmd, StringComparer.OrdinalIgnoreCase))
         {
             return GpuVendor.Amd;
         }
 
-        if (vendorIds.Contains(PciVendorIntel))
+        if (vendorIds.Contains(PciVendorIntel, StringComparer.OrdinalIgnoreCase))
         {
             return GpuVendor.Intel;
         }

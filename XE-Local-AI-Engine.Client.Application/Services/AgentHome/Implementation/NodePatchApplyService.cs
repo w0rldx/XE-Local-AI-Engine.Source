@@ -495,11 +495,11 @@ internal sealed partial class NodePatchApplyService : INodePatchApplyService
         }
     }
 
-    [GeneratedRegex("^[A-Za-z0-9][A-Za-z0-9_-]*$")]
+    [GeneratedRegex("^[A-Za-z0-9][A-Za-z0-9_-]*$", RegexOptions.None, 2000)]
     private static partial Regex RunIdRegex();
 
     // Matches only the residual filename after the temporary-directory prefix has already been replaced.
-    [GeneratedRegex(@"agenthome-apply-[0-9a-fA-F]{32}\.patch")]
+    [GeneratedRegex(@"agenthome-apply-[0-9a-fA-F]{32}\.patch", RegexOptions.None, 2000)]
     private static partial Regex TempPatchFilenameRegex();
 
     private sealed record AliasPlan(string Alias, string ResolvedRoot, string SubPatch, IReadOnlyList<PatchApplyFileEntry> Files);
