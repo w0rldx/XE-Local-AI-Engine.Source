@@ -11,14 +11,26 @@ using XE_Local_AI_Engine.Client.Models;
 public interface ILocalToolOfferProvider
 {
     /// <summary>
-    ///     The catalog tools as offer-list DTOs for the given active model. The executables themselves are resolved by
-    ///     the invocation factory from the registry by name; this list only travels in the runtime package for the
-    ///     config hash and client display. High-risk catalog tools that require a tool-capable model (currently
+    ///     The catalog tools as offer-list DTOs for the given active model — the WHOLE offer the default/mode-off chat
+    ///     path and the seeded "Default Assistant" receive verbatim. The executables themselves are resolved by the
+    ///     invocation factory from the registry by name; this list only travels in the runtime package for the config
+    ///     hash and client display. High-risk catalog tools that require a tool-capable model (currently
     ///     <c>run_in_agent_home</c>) are omitted when <paramref name="activeModelId" /> is not in the worker's
     ///     tool-capable allow-list, so an incapable loopback model is never offered the tool (AgentHome locked decision
-    ///     10). The encrypted path stays server-gated and does not call this seam.
+    ///     10). <c>spawn_subagent</c> is NOT in this whole offer — it is offered ONLY to an explicit agent profile that
+    ///     opts in via its <c>AllowedToolNames</c> (see <see cref="GetOfferedToolsForProfile" />), never to a plain chat
+    ///     turn. The encrypted path stays server-gated and does not call this seam.
     /// </summary>
     IReadOnlyList<AllowedToolDto> GetOfferedTools(string? activeModelId);
+
+    /// <summary>
+    ///     The offer pool an EXPLICIT agent profile may intersect against (<c>offered ∩ AllowedToolNames</c>). Identical
+    ///     to <see cref="GetOfferedTools" /> EXCEPT it also includes <c>spawn_subagent</c> (still capability-gated), so a
+    ///     profile that lists <c>spawn_subagent</c> in its <c>AllowedToolNames</c> on a tool-capable model resolves it,
+    ///     while the default/mode-off path (which uses <see cref="GetOfferedTools" />) never does. This is the
+    ///     opt-in-only seam for the spawn tool.
+    /// </summary>
+    IReadOnlyList<AllowedToolDto> GetOfferedToolsForProfile(string? activeModelId);
 
     /// <summary>
     ///     The names of every catalog tool, independent of model capability gating. This is the canonical set of tool

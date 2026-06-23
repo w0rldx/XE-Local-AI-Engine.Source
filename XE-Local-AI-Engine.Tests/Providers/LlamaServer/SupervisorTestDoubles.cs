@@ -194,6 +194,11 @@ internal sealed class FakeModelStore(
     {
         return Task.FromResult(fixedPath is not null);
     }
+
+    public Task<GgufModelFootprintFacts?> ResolveModelFootprintFactsAsync(string modelName, CancellationToken ct)
+    {
+        return Task.FromResult<GgufModelFootprintFacts?>(null);
+    }
 }
 
 /// <summary>

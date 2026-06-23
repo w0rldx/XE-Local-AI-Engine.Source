@@ -31,6 +31,12 @@ internal sealed class HuggingFaceGgufStore : IGgufModelStore
     // (LocalPath, SizeBytes, DownloadedAtUtc) so a re-download (new size/timestamp) naturally invalidates the entry. A
     // null/empty result is cached too — a model whose header carries no metadata must not be re-read on every list.
     private readonly ConcurrentDictionary<HeaderFactsCacheKey, GgufHeaderFacts> _headerFactsCache = new();
+
+    // Caches the per-file memory-footprint header inputs (param/block/head/embedding/context counts) read from each
+    // installed GGUF header so the capacity gate (which can probe per spawn) never re-reads the file. Keyed identically
+    // to the header-facts cache so a re-download (new size/timestamp) naturally invalidates the entry; a null-bearing
+    // result is cached too so a header that carries no estimator inputs is read at most once.
+    private readonly ConcurrentDictionary<HeaderFactsCacheKey, GgufHeaderFootprintInputs> _footprintFactsCache = new();
     private readonly GgufHeaderReader _headerReader;
     private readonly ILogger<HuggingFaceGgufStore> _logger;
     private readonly HuggingFaceOptions _options;
@@ -70,6 +76,30 @@ internal sealed class HuggingFaceGgufStore : IGgufModelStore
         }
 
         return entry.LocalPath;
+    }
+
+    /// <inheritdoc />
+    public async Task<GgufModelFootprintFacts?> ResolveModelFootprintFactsAsync(string modelName, CancellationToken ct)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(modelName);
+
+        var entry = await _registry.FindAsync(modelName, ct).ConfigureAwait(false);
+        if (entry is null || !File.Exists(entry.LocalPath))
+        {
+            return null;
+        }
+
+        // Quant + file size come from the registry entry (authoritative); the weight/KV inputs come from one tolerant
+        // header read. A header failure yields all-null inputs, so the consumer degrades to the file-size weights term.
+        var inputs = await ResolveFootprintInputsAsync(entry, ct).ConfigureAwait(false);
+        return new GgufModelFootprintFacts(entry.Quant,
+            entry.SizeBytes,
+            inputs.ParamCount,
+            inputs.BlockCount,
+            inputs.AttentionHeadCount,
+            inputs.AttentionHeadCountKV,
+            inputs.EmbeddingLength,
+            inputs.ContextLength);
     }
 
     /// <inheritdoc />
@@ -291,6 +321,39 @@ internal sealed class HuggingFaceGgufStore : IGgufModelStore
         return resolved;
     }
 
+    // Reads (and caches) the GGUF header weight/KV inputs for one installed model in a SINGLE header read. A read
+    // failure yields the empty inputs (all-null) so the footprint consumer falls back to the on-disk file size for the
+    // weights term — a model is never reported "unknown" purely for a header that could not be parsed when its size is
+    // known. Cancellation propagates; every other failure degrades.
+    private async Task<GgufHeaderFootprintInputs> ResolveFootprintInputsAsync(GgufModelRegistryEntry entry, CancellationToken ct)
+    {
+        var key = new HeaderFactsCacheKey(entry.LocalPath, entry.SizeBytes, entry.DownloadedAtUtc);
+        if (_footprintFactsCache.TryGetValue(key, out var cached))
+        {
+            return cached;
+        }
+
+        GgufHeaderFootprintInputs resolved;
+        try
+        {
+            var metadata = await _headerReader.ReadHeaderFromFileAsync(entry.LocalPath, ct).ConfigureAwait(false);
+            resolved = new GgufHeaderFootprintInputs(metadata.ParamCount,
+                metadata.BlockCount,
+                metadata.AttentionHeadCount,
+                metadata.AttentionHeadCountKV,
+                metadata.EmbeddingLength,
+                metadata.ContextLength);
+        }
+        catch (Exception ex) when (ex is not OperationCanceledException)
+        {
+            _logger.LogDebug(ex, "Failed to read GGUF header for an installed model's footprint inputs; degrading to file-size weights.");
+            resolved = GgufHeaderFootprintInputs.Empty;
+        }
+
+        _footprintFactsCache[key] = resolved;
+        return resolved;
+    }
+
     // GGUF context_length is a non-negative long; the descriptor exposes int?. Drop non-positive or out-of-range values.
     private static int? ClampContextLength(long? contextLength)
     {
@@ -345,5 +408,19 @@ internal sealed class HuggingFaceGgufStore : IGgufModelStore
         IReadOnlyList<string> Capabilities)
     {
         public static GgufHeaderFacts Empty { get; } = new(MaxContextTokens: null, IsToolCapable: false, IsReasoningCapable: false, []);
+    }
+
+    // The per-file GGUF header inputs the memory-fit estimator consumes (weights param count + KV-cache dimensions),
+    // derived from one tolerant header read. All-null when the header could not be parsed → file-size weights fallback.
+    private sealed record GgufHeaderFootprintInputs(
+        long? ParamCount,
+        long? BlockCount,
+        long? AttentionHeadCount,
+        long? AttentionHeadCountKV,
+        long? EmbeddingLength,
+        long? ContextLength)
+    {
+        public static GgufHeaderFootprintInputs Empty { get; } = new(ParamCount: null, BlockCount: null, AttentionHeadCount: null, AttentionHeadCountKV: null,
+            EmbeddingLength: null, ContextLength: null);
     }
 }

@@ -129,6 +129,11 @@ public sealed class GgufDownloadCoordinatorRoutingTests
         {
             return Task.FromResult(true);
         }
+
+        public Task<GgufModelFootprintFacts?> ResolveModelFootprintFactsAsync(string modelName, CancellationToken ct)
+        {
+            return Task.FromResult<GgufModelFootprintFacts?>(null);
+        }
     }
 
     /// <summary>An in-memory map store that records upserts (case-insensitive).</summary>

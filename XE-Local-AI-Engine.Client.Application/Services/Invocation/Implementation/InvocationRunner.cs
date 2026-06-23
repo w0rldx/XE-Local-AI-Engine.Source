@@ -15,6 +15,7 @@ using XE_Local_AI_Engine.Client.Models.Encrypted;
 using XE_Local_AI_Engine.Client.Models.Enums;
 using XE_Local_AI_Engine.Client.Models.Events;
 using XE_Local_AI_Engine.Client.Services.Capabilities;
+using XE_Local_AI_Engine.Client.Services.Capacity;
 using XE_Local_AI_Engine.Client.Services.CloudProviders;
 using XE_Local_AI_Engine.Client.Services.Connection;
 using XE_Local_AI_Engine.Client.Services.DeadLetter;
@@ -63,6 +64,7 @@ public sealed partial class InvocationRunner : IInvocationRunner
     private readonly ConcurrentDictionary<string, PendingToolCall> _pendingToolCalls = new(StringComparer.Ordinal);
     private readonly ILocalModelProviderResolver _providerResolver;
     private readonly IRuntimePackageValidator _runtimePackageValidator;
+    private readonly SpawnOptions _spawnOptions;
     private readonly Lock _syncRoot = new();
 
     private Guid? _currentInvocationId;
@@ -82,6 +84,7 @@ public sealed partial class InvocationRunner : IInvocationRunner
         IDeadLetterStore deadLetterStore,
         IConfiguration configuration,
         IOptions<WorkerNodeOptions> workerOptions,
+        IOptions<SpawnOptions> spawnOptions,
         ILogger<InvocationRunner> logger)
     {
         _hubSender = hubSender ?? throw new ArgumentNullException(nameof(hubSender));
@@ -95,6 +98,8 @@ public sealed partial class InvocationRunner : IInvocationRunner
         _deadLetterStore = deadLetterStore ?? throw new ArgumentNullException(nameof(deadLetterStore));
         ArgumentNullException.ThrowIfNull(configuration);
         ArgumentNullException.ThrowIfNull(workerOptions);
+        ArgumentNullException.ThrowIfNull(spawnOptions);
+        _spawnOptions = spawnOptions.Value;
         _logger = logger ?? throw new ArgumentNullException(nameof(logger));
 
         _defaultModel = configuration.GetValue<string>("Agent:LocalChat:DefaultModel")
@@ -144,6 +149,12 @@ public sealed partial class InvocationRunner : IInvocationRunner
             }
 
             var transport = new StreamTransport(this, sender, dispatcher, context, package, sendEncrypted, sendPlain);
+
+            // Seed the per-root-invocation spawn context (Depth 0) for this turn so the spawn_subagent tool (when the
+            // agent calls it) enforces the fan-out and cloud-spawn caps against ONE shared root. The context flows as an
+            // AsyncLocal into the function-invocation pipeline that runs the tool body; disposal restores the prior
+            // ambient value. A turn that never spawns pays only a struct allocation.
+            using var spawnRoot = SpawnContext.BeginRoot(_spawnOptions.MaxConcurrentSpawns, _spawnOptions.MaxCloudSpawns);
 
             // Branch: a package carrying a compiled orchestration spec drives the handoff workflow; everything else is
             // the unchanged single-agent loop. Both accumulate into `stream`, then share the completion block below.

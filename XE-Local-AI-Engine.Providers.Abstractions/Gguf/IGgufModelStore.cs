@@ -46,4 +46,13 @@ public interface IGgufModelStore
 
     /// <summary>Returns whether a verified GGUF file for <paramref name="modelName" /> is present locally.</summary>
     Task<bool> ExistsAsync(string modelName, CancellationToken ct);
+
+    /// <summary>
+    ///     Resolves the memory-footprint inputs for the installed model <paramref name="modelName" /> — the registry
+    ///     quant label + on-disk file size + a single tolerant GGUF header read (param/block/head/embedding/context).
+    ///     Returns <see langword="null" /> when the model is not installed (no registry entry or its file is gone). Used
+    ///     by the capacity footprint provider so it never re-parses GGUF headers or re-reads the quant from the file
+    ///     name. The header read is cached per <c>(path, size, downloaded-at)</c>; a re-download invalidates the entry.
+    /// </summary>
+    Task<GgufModelFootprintFacts?> ResolveModelFootprintFactsAsync(string modelName, CancellationToken ct);
 }

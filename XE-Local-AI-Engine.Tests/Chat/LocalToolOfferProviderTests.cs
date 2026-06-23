@@ -80,6 +80,56 @@ public sealed class LocalToolOfferProviderTests
     }
 
     [Test]
+    public void GetOfferedTools_WhenModelIsToolCapable_DoesNotOfferSpawnSubAgentToDefaultPath()
+    {
+        // spawn_subagent is profile-opt-in only: the WHOLE offer (mode-off / Default-Assistant path) never carries it,
+        // even on a tool-capable model. A plain chat turn must not be able to load another model.
+        var provider = CreateProvider("qwen3:8b");
+
+        var offered = provider.GetOfferedTools("qwen3:8b");
+
+        AssertEx.False(offered.Any(tool => tool.Name == "spawn_subagent"),
+            "spawn_subagent must NOT be in the default/mode-off whole offer");
+    }
+
+    [Test]
+    public void GetOfferedToolsForProfile_WhenModelIsToolCapable_IncludesSpawnSubAgentInProfilePool()
+    {
+        // The profile-intersection pool DOES include spawn_subagent, so a profile that lists it in AllowedToolNames on a
+        // tool-capable model resolves it.
+        var provider = CreateProvider("qwen3:8b");
+
+        var pool = provider.GetOfferedToolsForProfile("qwen3:8b");
+
+        AssertEx.Contains(pool, tool => tool.Name == "spawn_subagent");
+    }
+
+    [Test]
+    public void GetOfferedToolsForProfile_WhenModelIsNotToolCapable_WithholdsSpawnSubAgentTool()
+    {
+        // Even in the profile pool, spawn_subagent stays capability-gated: a non-tool-capable model never gets it, so a
+        // profile opt-in cannot bypass the capability gate.
+        var provider = CreateProvider("qwen3:8b");
+
+        var pool = provider.GetOfferedToolsForProfile("some-other-model");
+
+        AssertEx.False(pool.Any(tool => tool.Name == "spawn_subagent"),
+            "spawn_subagent must be withheld from a model that is not tool-capable, even in the profile pool");
+    }
+
+    [Test]
+    public void GetKnownToolNames_IncludesSpawnSubAgentTool()
+    {
+        // The UI tool picker + CRUD validation must still list spawn_subagent so an operator can add it to a profile's
+        // AllowedToolNames — its absence from the default offer is a runtime gating choice, not a catalog removal.
+        var provider = CreateProvider("qwen3:8b");
+
+        var names = provider.GetKnownToolNames();
+
+        AssertEx.Contains(names, "spawn_subagent");
+    }
+
+    [Test]
     public void GetOfferedTools_WhenModelIsToolCapable_IncludesSnapshottedMcpTools()
     {
         var mcpRegistry = new McpToolRegistry(NullLogger<McpToolRegistry>.Instance);
