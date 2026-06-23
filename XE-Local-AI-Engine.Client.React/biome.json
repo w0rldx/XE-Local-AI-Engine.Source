@@ -208,7 +208,8 @@
 			"!**/uno.config.ts",
 			"!**/playwright-report/**",
 			"!**/test-results/**",
-			"!**/postcss.config.cjs"
+			"!**/postcss.config.cjs",
+			"!**/.dependency-cruiser.cjs"
 		]
 	},
 	"javascript": {
