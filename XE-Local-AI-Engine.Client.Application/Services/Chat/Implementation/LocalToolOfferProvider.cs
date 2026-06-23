@@ -8,6 +8,7 @@ using XE_Local_AI_Engine.Client.Models;
 using XE_Local_AI_Engine.Client.Models.Enums;
 using XE_Local_AI_Engine.Client.Services.AgentHome;
 using XE_Local_AI_Engine.Client.Services.AgentHome.Tools;
+using XE_Local_AI_Engine.Client.Services.Capacity.Tools;
 using XE_Local_AI_Engine.Client.Services.Coder.Tools;
 
 internal sealed class LocalToolOfferProvider : ILocalToolOfferProvider
@@ -23,6 +24,7 @@ internal sealed class LocalToolOfferProvider : ILocalToolOfferProvider
     private readonly IReadOnlyList<string> _builtinNames;
     private readonly IReadOnlyList<AllowedToolDto> _builtinWithoutAgentHome;
     private readonly IMcpToolRegistry _mcpToolRegistry;
+    private readonly AllowedToolDto _spawnOfferDto;
     private readonly HashSet<string> _toolCapableModels;
 
     public LocalToolOfferProvider(IAgentToolRegistry toolRegistry,
@@ -46,20 +48,31 @@ internal sealed class LocalToolOfferProvider : ILocalToolOfferProvider
 
         // Each tool's Id is derived deterministically from its name so the offer list is byte-identical across sends
         // (the config hash ignores the Id, but a stable Id keeps client-side rendering and equality predictable).
+        // The coder tools are worker-owned IClientLocalToolHandlers merged here so they appear in the OFFER seam (the
+        // handler registration surfaces them only in the RESOLUTION seam). They are high-risk, so they join the
+        // capability-gated set just like run_in_agent_home — present in the capable offer, withheld from a non-capable
+        // model. spawn_subagent is deliberately NOT folded into this whole offer: it is profile-opt-in only (below).
         _builtinAllTools =
         [
             .. builtinDescriptors.Select(static descriptor => ToOfferDto(descriptor.Name, descriptor.ParameterSchema, descriptor.RequiresApproval)),
             .. coderDescriptors.Select(static descriptor => ToOfferDto(descriptor.Name, descriptor.ParameterSchema, descriptor.RequiresApproval))
         ];
 
-        // Precompute the capability-gated variant once: the built-ins minus run_in_agent_home AND the coder tools,
-        // returned when the active model is not tool-capable. The coder tools, like run_in_agent_home, are offered only
-        // to a tool-capable model. The encrypted path stays server-gated and never reaches this provider.
-        var coderToolNames = coderDescriptors.Select(static descriptor => descriptor.Name).ToHashSet(StringComparer.Ordinal);
+        // spawn_subagent is offered ONLY to an explicit agent profile that opts in via AllowedToolNames — never to the
+        // default/mode-off chat path. It is therefore held OUT of the whole offer (_builtinAllTools) and added back only
+        // by GetOfferedToolsForProfile (still capability-gated). This is the profile-opt-in seam; loading another model
+        // from an unattended plain chat turn is exactly what we are preventing.
+        _spawnOfferDto = ToOfferDto(SpawnSubAgentToolDefinition.ToolName, SpawnSubAgentToolDefinition.ParameterSchema, requiresApproval: false);
+
+        // Precompute the capability-gated variant once: the built-ins minus run_in_agent_home and the coder tools,
+        // returned when the active model is not tool-capable. Those high-risk tools are offered only to a tool-capable
+        // model. The encrypted path stays server-gated and never reaches this provider. (spawn_subagent is not in
+        // _builtinAllTools at all, so it never appears in either capability variant of the whole offer.)
+        var capableOnlyNames = coderDescriptors.Select(static descriptor => descriptor.Name).ToHashSet(StringComparer.Ordinal);
         _builtinWithoutAgentHome =
         [
             .. _builtinAllTools.Where(tool => !string.Equals(tool.Name, AgentHomeToolDefinition.ToolName, StringComparison.Ordinal)
-                                              && !coderToolNames.Contains(tool.Name))
+                                              && !capableOnlyNames.Contains(tool.Name))
         ];
 
         _builtinCatalogEntries =
@@ -77,13 +90,21 @@ internal sealed class LocalToolOfferProvider : ILocalToolOfferProvider
                 Description = descriptor.Description,
                 RequiresApproval = descriptor.RequiresApproval,
                 Source = BuiltinSource
-            })
+            }),
+            new LocalToolCatalogEntry
+            {
+                Name = SpawnSubAgentToolDefinition.ToolName,
+                Description = SpawnSubAgentToolDefinition.Description,
+                RequiresApproval = false,
+                Source = BuiltinSource
+            }
         ];
 
         _builtinNames =
         [
             .. builtinDescriptors.Select(static descriptor => descriptor.Name),
-            .. coderDescriptors.Select(static descriptor => descriptor.Name)
+            .. coderDescriptors.Select(static descriptor => descriptor.Name),
+            SpawnSubAgentToolDefinition.ToolName
         ];
 
         _toolCapableModels = new HashSet<string>(agentHomeOptions.Value.ToolCapableModels ?? [], StringComparer.Ordinal);
@@ -112,6 +133,20 @@ internal sealed class LocalToolOfferProvider : ILocalToolOfferProvider
             .. _builtinAllTools,
             .. mcpDescriptors.Select(static descriptor => ToOfferDto(descriptor.Name, descriptor.ParameterSchema, descriptor.RequiresApproval))
         ];
+    }
+
+    public IReadOnlyList<AllowedToolDto> GetOfferedToolsForProfile(string? activeModelId)
+    {
+        // The profile-intersection pool: the whole offer PLUS spawn_subagent (so a profile that opts in via
+        // AllowedToolNames resolves it), still capability-gated. A non-tool-capable model gets the whole offer's
+        // non-capable variant and NO spawn tool, so the opt-in cannot bypass the capability gate.
+        var capable = activeModelId is not null && _toolCapableModels.Contains(activeModelId);
+        if (!capable)
+        {
+            return _builtinWithoutAgentHome;
+        }
+
+        return [.. GetOfferedTools(activeModelId), _spawnOfferDto];
     }
 
     public IReadOnlyList<string> GetKnownToolNames()

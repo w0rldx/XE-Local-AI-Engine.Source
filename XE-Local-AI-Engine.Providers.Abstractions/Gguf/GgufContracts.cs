@@ -137,3 +137,21 @@ public sealed record GgufRepoDetail(
     bool IsGated,
     string? License,
     IReadOnlyList<GgufRepoFile> Files);
+
+/// <summary>
+///     The memory-footprint inputs for one INSTALLED GGUF model, sourced from the registry (quant label + on-disk file
+///     size) plus a single tolerant header read (the estimator's weight/KV inputs). The quant label is the registry's
+///     parsed value — never the header's stringified-int <c>general.file_type</c>. Header fields absent from the file are
+///     <see langword="null" />; the consumer falls back to <see cref="FileSizeBytes" /> for the weights term when
+///     <see cref="ParamCount" /> is null. This is the public seam the capacity footprint provider consumes so the GGUF
+///     header reader can stay internal to the Hugging Face provider.
+/// </summary>
+public sealed record GgufModelFootprintFacts(
+    string Quant,
+    long FileSizeBytes,
+    long? ParamCount,
+    long? BlockCount,
+    long? AttentionHeadCount,
+    long? AttentionHeadCountKV,
+    long? EmbeddingLength,
+    long? ContextLength);

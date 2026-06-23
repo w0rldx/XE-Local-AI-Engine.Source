@@ -153,11 +153,12 @@ internal sealed class AgentDefinitionResolver : IAgentDefinitionResolver
             return _localToolOfferProvider.GetOfferedTools(effectiveModelId);
         }
 
-        // Start from the capability-gated offer for the effective model so AgentHome gating is preserved, then keep
-        // only the tools the definition allows and override each tool's approval flag per the definition. Tools the
-        // definition names but the offer does not contain (uninstalled or not capability-eligible) are dropped and
-        // logged — never fabricated, so the model can never be handed a tool the node cannot execute.
-        var offered = _localToolOfferProvider.GetOfferedTools(effectiveModelId);
+        // Start from the PROFILE offer pool for the effective model (the whole capability-gated offer PLUS the
+        // opt-in-only spawn_subagent), then keep only the tools the definition allows and override each tool's approval
+        // flag per the definition. Using the profile pool — not the whole offer — is what lets a profile that lists
+        // spawn_subagent resolve it while the default/mode-off path never does. Tools the definition names but the pool
+        // does not contain (uninstalled or not capability-eligible) are dropped and logged — never fabricated.
+        var offered = _localToolOfferProvider.GetOfferedToolsForProfile(effectiveModelId);
         var allowedNames = new HashSet<string>(definition.AllowedToolNames, StringComparer.Ordinal);
 
         var projected = offered

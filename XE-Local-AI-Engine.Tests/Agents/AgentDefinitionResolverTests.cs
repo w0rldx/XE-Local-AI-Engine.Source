@@ -99,6 +99,57 @@ public sealed class AgentDefinitionResolverTests
     }
 
     [Test]
+    public async Task ResolveAsync_WhenDefaultAssistant_DoesNotGetSpawnSubAgent()
+    {
+        // spawn_subagent is profile-opt-in only: even though it is offered to a tool-capable model, the mode-off Default
+        // Assistant takes the WHOLE offer (which excludes spawn_subagent), so a plain chat turn never gets it.
+        var resolver = CreateResolver(out var store, OfferTool("GetCurrentTime"), OfferTool("spawn_subagent"));
+        var defaultAssistant = CreateDefinition(AgentDefaults.DefaultAgentName, allowedTools: []) with
+        {
+            Source = AgentDefinitionSource.Seeded,
+            SeedSlug = AgentDefaults.DefaultAgentSeedSlug
+        };
+        store.GetByIdAsync(defaultAssistant.Id, Arg.Any<CancellationToken>()).Returns(defaultAssistant);
+
+        var resolved = await resolver.ResolveAsync(defaultAssistant.Id, ToolCapableModel).ConfigureAwait(false);
+
+        AssertEx.NotNull(resolved);
+        AssertEx.False(resolved!.AllowedTools.Any(tool => tool.Name == "spawn_subagent"),
+            "the Default Assistant / mode-off offer must never contain spawn_subagent");
+    }
+
+    [Test]
+    public async Task ResolveAsync_WhenProfileAllowsSpawnSubAgent_OnCapableModel_GetsIt()
+    {
+        // An explicit profile that lists spawn_subagent in AllowedToolNames on a tool-capable model resolves it (the
+        // intersection uses the profile pool, which includes spawn_subagent).
+        var resolver = CreateResolver(out var store, OfferTool("GetCurrentTime"), OfferTool("spawn_subagent"));
+        var definition = CreateDefinition(allowedTools: ["spawn_subagent"], modelProfile: ToolCapableModel);
+        store.GetByIdAsync(definition.Id, Arg.Any<CancellationToken>()).Returns(definition);
+
+        var resolved = await resolver.ResolveAsync(definition.Id, ToolCapableModel).ConfigureAwait(false);
+
+        AssertEx.NotNull(resolved);
+        AssertEx.Contains(resolved!.AllowedTools, tool => tool.Name == "spawn_subagent");
+    }
+
+    [Test]
+    public async Task ResolveAsync_WhenProfileDoesNotAllowSpawnSubAgent_DoesNotGetIt()
+    {
+        // A profile that does NOT list spawn_subagent never receives it, even though the pool offers it.
+        var resolver = CreateResolver(out var store, OfferTool("GetCurrentTime"), OfferTool("spawn_subagent"));
+        var definition = CreateDefinition(allowedTools: ["GetCurrentTime"], modelProfile: ToolCapableModel);
+        store.GetByIdAsync(definition.Id, Arg.Any<CancellationToken>()).Returns(definition);
+
+        var resolved = await resolver.ResolveAsync(definition.Id, ToolCapableModel).ConfigureAwait(false);
+
+        AssertEx.NotNull(resolved);
+        AssertEx.False(resolved!.AllowedTools.Any(tool => tool.Name == "spawn_subagent"),
+            "a profile that does not allow spawn_subagent must not receive it");
+        AssertEx.Contains(resolved.AllowedTools, tool => tool.Name == "GetCurrentTime");
+    }
+
+    [Test]
     public async Task Resolver_ResolvesEnabledAssignedSkills_DropsDisabledAndMissing()
     {
         // The picklist names three skills; the store's enabled-by-ids fast path returns only the one that is still
@@ -699,6 +750,7 @@ public sealed class AgentDefinitionResolverTests
                      .Returns(Task.FromResult<IReadOnlyList<PlaybookActionRecord>>([]));
         var offerProvider = Substitute.For<ILocalToolOfferProvider>();
         offerProvider.GetOfferedTools(Arg.Any<string?>()).Returns([]);
+        offerProvider.GetOfferedToolsForProfile(Arg.Any<string?>()).Returns([]);
         offerProvider.GetKnownToolNames().Returns([]);
         skillStore = Substitute.For<IAgentSkillStore>();
         return new AgentDefinitionResolver(store,
@@ -730,10 +782,16 @@ public sealed class AgentDefinitionResolverTests
         {
             var modelId = callInfo.ArgAt<string?>(0);
             onGetOffered?.Invoke(modelId);
-            var capable = modelId is not null && string.Equals(modelId, ToolCapableModel, StringComparison.Ordinal);
-            return capable
-                ? offeredTools
-                : [.. offeredTools.Where(static tool => !string.Equals(tool.Name, CapabilityGatedToolName, StringComparison.Ordinal))];
+            return GateOffer(offeredTools, modelId);
+        });
+        // The profile-intersection pool mirrors the whole offer PLUS spawn_subagent (still capability-gated), matching
+        // the real LocalToolOfferProvider.GetOfferedToolsForProfile asymmetry that keeps spawn out of the mode-off path.
+        // The model-id observation fires here too, since a non-default profile gates via THIS method.
+        offerProvider.GetOfferedToolsForProfile(Arg.Any<string?>()).Returns(callInfo =>
+        {
+            var modelId = callInfo.ArgAt<string?>(0);
+            onGetOffered?.Invoke(modelId);
+            return GateProfilePool(offeredTools, modelId);
         });
         offerProvider.GetKnownToolNames().Returns([.. offeredTools.Select(static tool => tool.Name)]);
         return new AgentDefinitionResolver(store,
@@ -743,6 +801,28 @@ public sealed class AgentDefinitionResolverTests
             new LexicalPlaybookRetrievalRanker(),
             Options.Create(new PlaybookRetrievalOptions()),
             NullLogger<AgentDefinitionResolver>.Instance);
+    }
+
+    private const string SpawnToolName = "spawn_subagent";
+
+    // The whole offer for a model: high-risk capability-gated tools are withheld from an incapable model; spawn_subagent
+    // is NEVER in this whole offer (mode-off / Default-Assistant path).
+    private static AllowedToolDto[] GateOffer(AllowedToolDto[] offeredTools, string? modelId)
+    {
+        var capable = modelId is not null && string.Equals(modelId, ToolCapableModel, StringComparison.Ordinal);
+        return capable
+            ? [.. offeredTools.Where(static tool => !string.Equals(tool.Name, SpawnToolName, StringComparison.Ordinal))]
+            : [.. offeredTools.Where(static tool => !string.Equals(tool.Name, CapabilityGatedToolName, StringComparison.Ordinal)
+                                                    && !string.Equals(tool.Name, SpawnToolName, StringComparison.Ordinal))];
+    }
+
+    // The profile-intersection pool: the whole offer plus spawn_subagent when the model is tool-capable.
+    private static AllowedToolDto[] GateProfilePool(AllowedToolDto[] offeredTools, string? modelId)
+    {
+        var whole = GateOffer(offeredTools, modelId);
+        var capable = modelId is not null && string.Equals(modelId, ToolCapableModel, StringComparison.Ordinal);
+        var spawn = offeredTools.FirstOrDefault(static tool => string.Equals(tool.Name, SpawnToolName, StringComparison.Ordinal));
+        return capable && spawn is not null ? [.. whole, spawn] : whole;
     }
 
     // The skill picklist is empty for these tool/playbook/retrieval tests, so a skill store that returns no enabled
@@ -771,13 +851,9 @@ public sealed class AgentDefinitionResolverTests
                      .Returns(Task.FromResult<IReadOnlyList<PlaybookActionRecord>>([]));
         var offerProvider = Substitute.For<ILocalToolOfferProvider>();
         offerProvider.GetOfferedTools(Arg.Any<string?>()).Returns(callInfo =>
-        {
-            var modelId = callInfo.ArgAt<string?>(0);
-            var capable = modelId is not null && string.Equals(modelId, ToolCapableModel, StringComparison.Ordinal);
-            return capable
-                ? offeredTools
-                : [.. offeredTools.Where(static tool => !string.Equals(tool.Name, CapabilityGatedToolName, StringComparison.Ordinal))];
-        });
+            GateOffer(offeredTools, callInfo.ArgAt<string?>(0)));
+        offerProvider.GetOfferedToolsForProfile(Arg.Any<string?>()).Returns(callInfo =>
+            GateProfilePool(offeredTools, callInfo.ArgAt<string?>(0)));
         offerProvider.GetKnownToolNames().Returns([.. offeredTools.Select(static tool => tool.Name)]);
         var retrievalOptions = Options.Create(new PlaybookRetrievalOptions
         {

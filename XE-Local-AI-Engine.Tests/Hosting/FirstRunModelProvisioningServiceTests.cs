@@ -286,6 +286,11 @@ public sealed class FirstRunModelProvisioningServiceTests
         {
             return Task.FromResult(false);
         }
+
+        public Task<GgufModelFootprintFacts?> ResolveModelFootprintFactsAsync(string modelName, CancellationToken ct)
+        {
+            return Task.FromResult<GgufModelFootprintFacts?>(null);
+        }
     }
 
     /// <summary>A coordinator that records Start requests and reports a fixed terminal phase for any model name.</summary>

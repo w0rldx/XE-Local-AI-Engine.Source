@@ -21,6 +21,7 @@ using XE_Local_AI_Engine.Client.Models.Enums;
 using XE_Local_AI_Engine.Client.Models.Events;
 using XE_Local_AI_Engine.Client.Persistence.Cryptography;
 using XE_Local_AI_Engine.Client.Services.Capabilities;
+using XE_Local_AI_Engine.Client.Services.Capacity;
 using XE_Local_AI_Engine.Client.Services.Chat;
 using XE_Local_AI_Engine.Client.Services.CloudProviders;
 using XE_Local_AI_Engine.Client.Services.Connection;
@@ -1137,6 +1138,7 @@ public sealed class InvocationRunnerTests
                 MaxResponseSizeMb = 10,
                 MaxPendingToolCallAgeMinutes = 5
             }),
+            Options.Create(new SpawnOptions()),
             NullLogger<InvocationRunner>.Instance);
     }
 
