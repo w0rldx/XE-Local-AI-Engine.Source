@@ -30,7 +30,7 @@ export function InstalledModelsTable({
 
 	return (
 		<Table.ScrollContainer minWidth={820}>
-			<Table striped={true} highlightOnHover={true} verticalSpacing="sm" data-testid="installed-models-table">
+			<Table striped={true} highlightOnHover={true} verticalSpacing="sm" data-testid="installed-models-table" data-tour="set-default-model">
 				<Table.Thead>
 					<Table.Tr>
 						<Table.Th>Name</Table.Th>

@@ -220,7 +220,7 @@ export function ModelRecommendationsPage() {
 					</Alert>
 				) : null}
 
-				<Card withBorder={true} radius="md" p="lg">
+				<Card withBorder={true} radius="md" p="lg" data-tour="recommendation-install">
 					<Stack gap="md">
 						<Group justify="space-between" align="flex-end">
 							<Select
