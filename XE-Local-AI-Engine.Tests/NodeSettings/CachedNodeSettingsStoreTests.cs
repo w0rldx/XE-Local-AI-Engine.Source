@@ -23,7 +23,10 @@ public sealed class CachedNodeSettingsStoreTests
     {
         var inner = Substitute.For<INodeSettingsStore>();
         inner.LoadAsync(Arg.Any<CancellationToken>())
-             .Returns(new StoredNodeSettings { MaxMessageRequestTimeoutSeconds = 120 });
+             .Returns(new StoredNodeSettings
+             {
+                 MaxMessageRequestTimeoutSeconds = 120
+             });
         using var cache = NewCache();
         var sut = new CachedNodeSettingsStore(inner, cache);
 
@@ -50,7 +53,11 @@ public sealed class CachedNodeSettingsStoreTests
             var initial = await sut.LoadAsync();
             AssertEx.Null(initial.DefaultModelName);
 
-            await sut.SaveAsync(new StoredNodeSettings { DefaultModelName = "my-model", MaxMessageRequestTimeoutSeconds = 120 });
+            await sut.SaveAsync(new StoredNodeSettings
+            {
+                DefaultModelName = "my-model",
+                MaxMessageRequestTimeoutSeconds = 120
+            });
 
             var reloaded = await sut.LoadAsync();
             AssertEx.Equal("my-model", reloaded.DefaultModelName);
@@ -70,7 +77,10 @@ public sealed class CachedNodeSettingsStoreTests
         using var cache = NewCache();
         var sut = new CachedNodeSettingsStore(inner, cache);
 
-        await sut.SaveAsync(new StoredNodeSettings { DefaultModelName = "x" });
+        await sut.SaveAsync(new StoredNodeSettings
+        {
+            DefaultModelName = "x"
+        });
 
         await inner.Received(1).SaveAsync(Arg.Is<StoredNodeSettings>(s => s.DefaultModelName == "x"), Arg.Any<CancellationToken>());
     }

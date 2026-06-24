@@ -212,8 +212,8 @@ public sealed class AgentHomePatchServiceTests : IDisposable
     private static AgentHomePatchService CreateService(FakeSandboxRuntimeProvider provider, long maxPatchBytes = 52428800)
     {
         var runtimeSettings = StubNodeRuntimeSettings.Create()
-            .WithAgentHomeMaxPatchBytes(maxPatchBytes)
-            .Build();
+                                                     .WithAgentHomeMaxPatchBytes(maxPatchBytes)
+                                                     .Build();
         return new AgentHomePatchService(provider, runtimeSettings, NullLogger<AgentHomePatchService>.Instance);
     }
 

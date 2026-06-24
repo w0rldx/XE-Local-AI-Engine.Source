@@ -55,7 +55,10 @@ public sealed class CoderWorkspaceReaderTests : IDisposable
         await SeedWorkspaceFileAsync(provider, "src/Program.cs", "line1\nline2\nline3");
         var reader = CreateReader(provider);
 
-        var result = await reader.ReadFileAsync(new ReadFileToolRequest { Path = "src/Program.cs" });
+        var result = await reader.ReadFileAsync(new ReadFileToolRequest
+        {
+            Path = "src/Program.cs"
+        });
 
         AssertEx.Contains(result, "line1");
         AssertEx.Contains(result, "src/Program.cs");
@@ -71,8 +74,14 @@ public sealed class CoderWorkspaceReaderTests : IDisposable
         // Attach the sandbox (otherwise a no-sandbox message would mask the traversal rejection).
         await CreateOrAttachAsync(provider);
 
-        var traversal = await reader.ReadFileAsync(new ReadFileToolRequest { Path = "../../etc/passwd" });
-        var absolute = await reader.ReadFileAsync(new ReadFileToolRequest { Path = "/etc/passwd" });
+        var traversal = await reader.ReadFileAsync(new ReadFileToolRequest
+        {
+            Path = "../../etc/passwd"
+        });
+        var absolute = await reader.ReadFileAsync(new ReadFileToolRequest
+        {
+            Path = "/etc/passwd"
+        });
 
         AssertEx.Contains(traversal, "rejected", StringComparison.OrdinalIgnoreCase);
         AssertEx.Contains(absolute, "rejected", StringComparison.OrdinalIgnoreCase);
@@ -97,7 +106,10 @@ public sealed class CoderWorkspaceReaderTests : IDisposable
             $"mkdir -p agent-home/workspace/selected && ln -s {ShellQuote(Path.Combine(escapeTarget.Path, "secret.txt"))} agent-home/workspace/selected/leak");
 
         var reader = CreateReader(provider);
-        var result = await reader.ReadFileAsync(new ReadFileToolRequest { Path = "leak" });
+        var result = await reader.ReadFileAsync(new ReadFileToolRequest
+        {
+            Path = "leak"
+        });
 
         AssertEx.Contains(result, "rejected", StringComparison.OrdinalIgnoreCase);
         AssertEx.False(result.Contains("OUTSIDE-THE-JAIL", StringComparison.Ordinal), "an escaping symlink must never be followed");
@@ -112,8 +124,14 @@ public sealed class CoderWorkspaceReaderTests : IDisposable
         await SeedWorkspaceFileAsync(provider, "src/big.txt", oversize);
         var reader = CreateReader(provider);
 
-        var binary = await reader.ReadFileAsync(new ReadFileToolRequest { Path = "bin/data.bin" });
-        var large = await reader.ReadFileAsync(new ReadFileToolRequest { Path = "src/big.txt" });
+        var binary = await reader.ReadFileAsync(new ReadFileToolRequest
+        {
+            Path = "bin/data.bin"
+        });
+        var large = await reader.ReadFileAsync(new ReadFileToolRequest
+        {
+            Path = "src/big.txt"
+        });
 
         AssertEx.Contains(binary, "binary", StringComparison.OrdinalIgnoreCase);
         AssertEx.Contains(large, "truncated", StringComparison.OrdinalIgnoreCase);
@@ -127,7 +145,12 @@ public sealed class CoderWorkspaceReaderTests : IDisposable
         await SeedWorkspaceFileAsync(provider, "src/a.txt", "alpha\nbeta\ngamma\ndelta");
         var reader = CreateReader(provider);
 
-        var result = await reader.ReadFileAsync(new ReadFileToolRequest { Path = "src/a.txt", StartLine = 2, EndLine = 3 });
+        var result = await reader.ReadFileAsync(new ReadFileToolRequest
+        {
+            Path = "src/a.txt",
+            StartLine = 2,
+            EndLine = 3
+        });
 
         AssertEx.Contains(result, "beta");
         AssertEx.Contains(result, "gamma");
@@ -178,7 +201,11 @@ public sealed class CoderWorkspaceReaderTests : IDisposable
             + "&& printf 'needle one\\nother\\nneedle two\\n' > agent-home/workspace/selected/src/a.txt");
         var reader = CreateReader(provider);
 
-        var result = await reader.SearchTextAsync(new SearchTextToolRequest { Pattern = "needle", MaxMatches = 1 });
+        var result = await reader.SearchTextAsync(new SearchTextToolRequest
+        {
+            Pattern = "needle",
+            MaxMatches = 1
+        });
 
         AssertEx.Contains(result, "src/a.txt:");
         // Capped at 1 match: only the first needle line appears.
@@ -202,7 +229,10 @@ public sealed class CoderWorkspaceReaderTests : IDisposable
             + "&& echo 'APIKEY=visible' > agent-home/workspace/selected/src/a.txt");
         var reader = CreateReader(provider);
 
-        var result = await reader.SearchTextAsync(new SearchTextToolRequest { Pattern = "APIKEY" });
+        var result = await reader.SearchTextAsync(new SearchTextToolRequest
+        {
+            Pattern = "APIKEY"
+        });
 
         AssertEx.Contains(result, "src/a.txt:");
         AssertEx.False(result.Contains("supersecret", StringComparison.Ordinal), ".env content must never enter search output (grep --exclude)");
@@ -227,10 +257,24 @@ public sealed class CoderWorkspaceReaderTests : IDisposable
         await RunShellInJailAsync(provider, handle, "mkdir -p agent-home/workspace/selected/src && echo inside > agent-home/workspace/selected/src/a.txt");
         var reader = CreateReader(provider);
 
-        var listAbsolute = await reader.ListFilesAsync(new ListFilesToolRequest { Path = "/etc" });
-        var listTraversal = await reader.ListFilesAsync(new ListFilesToolRequest { Path = "../../../.." + escapeTarget.Path });
-        var searchAbsolute = await reader.SearchTextAsync(new SearchTextToolRequest { Pattern = "OUTSIDE", Path = escapeTarget.Path });
-        var searchTraversal = await reader.SearchTextAsync(new SearchTextToolRequest { Pattern = "OUTSIDE", Path = "../../../../etc" });
+        var listAbsolute = await reader.ListFilesAsync(new ListFilesToolRequest
+        {
+            Path = "/etc"
+        });
+        var listTraversal = await reader.ListFilesAsync(new ListFilesToolRequest
+        {
+            Path = "../../../.." + escapeTarget.Path
+        });
+        var searchAbsolute = await reader.SearchTextAsync(new SearchTextToolRequest
+        {
+            Pattern = "OUTSIDE",
+            Path = escapeTarget.Path
+        });
+        var searchTraversal = await reader.SearchTextAsync(new SearchTextToolRequest
+        {
+            Pattern = "OUTSIDE",
+            Path = "../../../../etc"
+        });
 
         AssertEx.Contains(listAbsolute, "rejected", StringComparison.OrdinalIgnoreCase);
         AssertEx.Contains(listTraversal, "rejected", StringComparison.OrdinalIgnoreCase);
@@ -249,9 +293,15 @@ public sealed class CoderWorkspaceReaderTests : IDisposable
         // Do NOT create/attach a sandbox: ConnectAsync throws SandboxHandleInvalidException → no-workspace message.
         var reader = CreateReader(provider);
 
-        var read = await reader.ReadFileAsync(new ReadFileToolRequest { Path = "src/a.txt" });
+        var read = await reader.ReadFileAsync(new ReadFileToolRequest
+        {
+            Path = "src/a.txt"
+        });
         var list = await reader.ListFilesAsync(new ListFilesToolRequest());
-        var search = await reader.SearchTextAsync(new SearchTextToolRequest { Pattern = "x" });
+        var search = await reader.SearchTextAsync(new SearchTextToolRequest
+        {
+            Pattern = "x"
+        });
 
         AssertEx.Contains(read, "select a project folder", StringComparison.OrdinalIgnoreCase);
         AssertEx.Contains(list, "select a project folder", StringComparison.OrdinalIgnoreCase);
@@ -277,8 +327,14 @@ public sealed class CoderWorkspaceReaderTests : IDisposable
         });
         var reader = CreateReader(provider);
 
-        var first = reader.ReadFileAsync(new ReadFileToolRequest { Path = "src/a.txt" });
-        var second = reader.ReadFileAsync(new ReadFileToolRequest { Path = "src/a.txt" });
+        var first = reader.ReadFileAsync(new ReadFileToolRequest
+        {
+            Path = "src/a.txt"
+        });
+        var second = reader.ReadFileAsync(new ReadFileToolRequest
+        {
+            Path = "src/a.txt"
+        });
         var results = await Task.WhenAll(first, second);
 
         AssertEx.Contains(results[0], "hello");

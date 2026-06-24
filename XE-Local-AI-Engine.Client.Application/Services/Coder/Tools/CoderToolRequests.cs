@@ -1,5 +1,7 @@
 namespace XE_Local_AI_Engine.Client.Services.Coder.Tools;
 
+using System.Text.RegularExpressions;
+
 /// <summary>
 ///     Typed projection of the <c>list_files</c> JSON arguments. The bridge stays JSON-in / JSON-out, so the handler
 ///     deserializes into this record and validates it before any sandbox call.
@@ -135,16 +137,16 @@ internal static class CoderToolRequestValidator
         {
             try
             {
-                _ = System.Text.RegularExpressions.Regex.Match(string.Empty,
+                _ = Regex.Match(string.Empty,
                     request.Pattern,
-                    System.Text.RegularExpressions.RegexOptions.None,
+                    RegexOptions.None,
                     TimeSpan.FromMilliseconds(200));
             }
             catch (ArgumentException)
             {
                 errors.Add("'pattern' is not a valid regular expression.");
             }
-            catch (System.Text.RegularExpressions.RegexMatchTimeoutException)
+            catch (RegexMatchTimeoutException)
             {
                 errors.Add("'pattern' is not a valid regular expression.");
             }

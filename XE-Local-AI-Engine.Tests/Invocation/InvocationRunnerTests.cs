@@ -1129,9 +1129,9 @@ public sealed class InvocationRunnerTests
             MaxPendingToolCallAgeMinutes = 5
         };
         var runtimeSettings = StubNodeRuntimeSettings.Create()
-            .WithMaxResponseSizeMb(resolvedWorkerOptions.MaxResponseSizeMb)
-            .WithMaxPendingToolCallAgeMinutes(resolvedWorkerOptions.MaxPendingToolCallAgeMinutes)
-            .Build();
+                                                     .WithMaxResponseSizeMb(resolvedWorkerOptions.MaxResponseSizeMb)
+                                                     .WithMaxPendingToolCallAgeMinutes(resolvedWorkerOptions.MaxPendingToolCallAgeMinutes)
+                                                     .Build();
 
         return new InvocationRunner(new Lazy<IHubMessageSender>(() => sender),
             new Lazy<IWorkerEventDispatcher>(() => resolvedEventDispatcher),

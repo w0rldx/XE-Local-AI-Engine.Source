@@ -80,7 +80,10 @@ public sealed class StoredNodeSettingsNormalizeTests : IDisposable
     [Arguments(17)]
     public async Task LlamaMaxLoadedProcesses_OutOfRange_FallsBackToNull(int value)
     {
-        var loaded = await SaveAndReloadAsync(new StoredNodeSettings { LlamaMaxLoadedProcesses = value });
+        var loaded = await SaveAndReloadAsync(new StoredNodeSettings
+        {
+            LlamaMaxLoadedProcesses = value
+        });
         AssertEx.Null(loaded.LlamaMaxLoadedProcesses);
     }
 
@@ -89,14 +92,20 @@ public sealed class StoredNodeSettingsNormalizeTests : IDisposable
     [Arguments(101)]
     public async Task MaxResponseSizeMb_OutOfRange_FallsBackToNull(int value)
     {
-        var loaded = await SaveAndReloadAsync(new StoredNodeSettings { MaxResponseSizeMb = value });
+        var loaded = await SaveAndReloadAsync(new StoredNodeSettings
+        {
+            MaxResponseSizeMb = value
+        });
         AssertEx.Null(loaded.MaxResponseSizeMb);
     }
 
     [Test]
     public async Task DiskMarginBytes_NonPositive_FallsBackToNull()
     {
-        var loaded = await SaveAndReloadAsync(new StoredNodeSettings { HuggingFaceDiskMarginBytes = 0 });
+        var loaded = await SaveAndReloadAsync(new StoredNodeSettings
+        {
+            HuggingFaceDiskMarginBytes = 0
+        });
         AssertEx.Null(loaded.HuggingFaceDiskMarginBytes);
     }
 
@@ -107,7 +116,10 @@ public sealed class StoredNodeSettingsNormalizeTests : IDisposable
     [Arguments("b")]
     public async Task RecommendedLlamaCppTag_Malformed_FallsBackToNull(string tag)
     {
-        var loaded = await SaveAndReloadAsync(new StoredNodeSettings { RecommendedLlamaCppTag = tag });
+        var loaded = await SaveAndReloadAsync(new StoredNodeSettings
+        {
+            RecommendedLlamaCppTag = tag
+        });
         AssertEx.Null(loaded.RecommendedLlamaCppTag);
     }
 
@@ -147,14 +159,20 @@ public sealed class StoredNodeSettingsNormalizeTests : IDisposable
     [Test]
     public async Task OllamaEndpoint_NonUrl_FallsBackToNull()
     {
-        var loaded = await SaveAndReloadAsync(new StoredNodeSettings { OllamaEndpoint = "not a url" });
+        var loaded = await SaveAndReloadAsync(new StoredNodeSettings
+        {
+            OllamaEndpoint = "not a url"
+        });
         AssertEx.Null(loaded.OllamaEndpoint);
     }
 
     [Test]
     public async Task ToolCapableModels_AllBlank_FallsBackToNull()
     {
-        var loaded = await SaveAndReloadAsync(new StoredNodeSettings { ToolCapableModels = ["", "   "] });
+        var loaded = await SaveAndReloadAsync(new StoredNodeSettings
+        {
+            ToolCapableModels = ["", "   "]
+        });
         AssertEx.Null(loaded.ToolCapableModels);
     }
 

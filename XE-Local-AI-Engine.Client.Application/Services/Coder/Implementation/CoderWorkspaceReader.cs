@@ -24,6 +24,7 @@ internal sealed class CoderWorkspaceReader : ICoderWorkspaceReader
 {
     private const string ListExecutable = "find";
     private const string SearchExecutable = "grep";
+
     private const string NoWorkspaceMessage =
         "No project workspace is available — select a project folder first, then try again.";
 

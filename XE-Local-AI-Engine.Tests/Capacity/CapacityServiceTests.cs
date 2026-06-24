@@ -26,7 +26,10 @@ public sealed class CapacityServiceTests
     [Test]
     public async Task Capacity_WhenCloudModel_ReturnsAllow_WithoutProbe()
     {
-        var harness = new Harness { CloudSelected = true };
+        var harness = new Harness
+        {
+            CloudSelected = true
+        };
         var service = harness.Build();
 
         var decision = await service.DecideAsync(Model, ModelRole.Chat, CancellationToken.None);

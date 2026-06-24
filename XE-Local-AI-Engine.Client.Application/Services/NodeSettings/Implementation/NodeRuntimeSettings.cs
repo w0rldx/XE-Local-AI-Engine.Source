@@ -31,8 +31,7 @@ public sealed class NodeRuntimeSettings : INodeRuntimeSettings
     private readonly INodeSettingsStore _store;
     private readonly IReadOnlyList<string> _toolCapableModelsSeed;
 
-    public NodeRuntimeSettings(
-        INodeSettingsStore store,
+    public NodeRuntimeSettings(INodeSettingsStore store,
         IConfiguration configuration,
         IOptions<LocalChatAgentOptions> localChatOptions,
         IOptions<AgentHomeOptions> agentHomeOptions,
@@ -81,8 +80,8 @@ public sealed class NodeRuntimeSettings : INodeRuntimeSettings
             : configuredOllama;
     }
 
-    public async Task<string> GetDefaultModelNameAsync(CancellationToken cancellationToken = default)
-        => ResolveDefaultModelName(await LoadAsync(cancellationToken).ConfigureAwait(false));
+    public async Task<string> GetDefaultModelNameAsync(CancellationToken cancellationToken = default) =>
+        ResolveDefaultModelName(await LoadAsync(cancellationToken).ConfigureAwait(false));
 
     public async Task<bool> GetEnableToolsAsync(CancellationToken cancellationToken = default)
     {
@@ -90,26 +89,26 @@ public sealed class NodeRuntimeSettings : INodeRuntimeSettings
         return stored.EnableTools ?? _enableToolsSeed;
     }
 
-    public async Task<IReadOnlyList<string>> GetToolCapableModelsAsync(CancellationToken cancellationToken = default)
-        => ResolveToolCapableModels(await LoadAsync(cancellationToken).ConfigureAwait(false));
+    public async Task<IReadOnlyList<string>> GetToolCapableModelsAsync(CancellationToken cancellationToken = default) =>
+        ResolveToolCapableModels(await LoadAsync(cancellationToken).ConfigureAwait(false));
 
-    public async Task<string> GetOllamaEndpointAsync(CancellationToken cancellationToken = default)
-        => ResolveOllamaEndpoint(await LoadAsync(cancellationToken).ConfigureAwait(false));
+    public async Task<string> GetOllamaEndpointAsync(CancellationToken cancellationToken = default) =>
+        ResolveOllamaEndpoint(await LoadAsync(cancellationToken).ConfigureAwait(false));
 
-    public async Task<string> GetHuggingFaceDefaultQuantAsync(CancellationToken cancellationToken = default)
-        => ResolveHuggingFaceDefaultQuant(await LoadAsync(cancellationToken).ConfigureAwait(false));
+    public async Task<string> GetHuggingFaceDefaultQuantAsync(CancellationToken cancellationToken = default) =>
+        ResolveHuggingFaceDefaultQuant(await LoadAsync(cancellationToken).ConfigureAwait(false));
 
-    public async Task<long> GetHuggingFaceDiskMarginBytesAsync(CancellationToken cancellationToken = default)
-        => ResolveHuggingFaceDiskMarginBytes(await LoadAsync(cancellationToken).ConfigureAwait(false));
+    public async Task<long> GetHuggingFaceDiskMarginBytesAsync(CancellationToken cancellationToken = default) =>
+        ResolveHuggingFaceDiskMarginBytes(await LoadAsync(cancellationToken).ConfigureAwait(false));
 
-    public async Task<int> GetLlamaMaxLoadedProcessesAsync(CancellationToken cancellationToken = default)
-        => ResolveLlamaMaxLoadedProcesses(await LoadAsync(cancellationToken).ConfigureAwait(false));
+    public async Task<int> GetLlamaMaxLoadedProcessesAsync(CancellationToken cancellationToken = default) =>
+        ResolveLlamaMaxLoadedProcesses(await LoadAsync(cancellationToken).ConfigureAwait(false));
 
-    public async Task<TimeSpan> GetLlamaIdleTimeToLiveAsync(CancellationToken cancellationToken = default)
-        => ResolveLlamaIdleTimeToLive(await LoadAsync(cancellationToken).ConfigureAwait(false));
+    public async Task<TimeSpan> GetLlamaIdleTimeToLiveAsync(CancellationToken cancellationToken = default) =>
+        ResolveLlamaIdleTimeToLive(await LoadAsync(cancellationToken).ConfigureAwait(false));
 
-    public async Task<int> GetMaxResponseSizeMbAsync(CancellationToken cancellationToken = default)
-        => ResolveMaxResponseSizeMb(await LoadAsync(cancellationToken).ConfigureAwait(false));
+    public async Task<int> GetMaxResponseSizeMbAsync(CancellationToken cancellationToken = default) =>
+        ResolveMaxResponseSizeMb(await LoadAsync(cancellationToken).ConfigureAwait(false));
 
     public async Task<string> GetRecommendedLlamaCppTagAsync(CancellationToken cancellationToken = default)
     {
@@ -119,8 +118,8 @@ public sealed class NodeRuntimeSettings : INodeRuntimeSettings
             : LlamaCppReleasePins.PinnedTag;
     }
 
-    public async Task<int> GetOrchestrationIdleTimeoutSecondsAsync(CancellationToken cancellationToken = default)
-        => ResolveOrchestrationIdleTimeoutSeconds(await LoadAsync(cancellationToken).ConfigureAwait(false));
+    public async Task<int> GetOrchestrationIdleTimeoutSecondsAsync(CancellationToken cancellationToken = default) =>
+        ResolveOrchestrationIdleTimeoutSeconds(await LoadAsync(cancellationToken).ConfigureAwait(false));
 
     public async Task<int> GetAgentHomePrepareTimeoutSecondsAsync(CancellationToken cancellationToken = default)
     {
@@ -146,8 +145,8 @@ public sealed class NodeRuntimeSettings : INodeRuntimeSettings
         return stored.AgentHomeMaxPatchBytes ?? _agentHomeMaxPatchBytesSeed;
     }
 
-    public async Task<int> GetMaxPendingToolCallAgeMinutesAsync(CancellationToken cancellationToken = default)
-        => ResolveMaxPendingToolCallAgeMinutes(await LoadAsync(cancellationToken).ConfigureAwait(false));
+    public async Task<int> GetMaxPendingToolCallAgeMinutesAsync(CancellationToken cancellationToken = default) =>
+        ResolveMaxPendingToolCallAgeMinutes(await LoadAsync(cancellationToken).ConfigureAwait(false));
 
     public async Task<SamplingOptions?> GetSamplingDefaultsAsync(CancellationToken cancellationToken = default)
     {
@@ -157,57 +156,67 @@ public sealed class NodeRuntimeSettings : INodeRuntimeSettings
 
     // --- Synchronous twins (composition/startup path only; see INodeRuntimeSettings) ---
 
-    public string GetDefaultModelName() => ResolveDefaultModelName(LoadStored());
+    public string GetDefaultModelName() =>
+        ResolveDefaultModelName(LoadStored());
 
-    public IReadOnlyList<string> GetToolCapableModels() => ResolveToolCapableModels(LoadStored());
+    public IReadOnlyList<string> GetToolCapableModels() =>
+        ResolveToolCapableModels(LoadStored());
 
-    public string GetOllamaEndpoint() => ResolveOllamaEndpoint(LoadStored());
+    public string GetOllamaEndpoint() =>
+        ResolveOllamaEndpoint(LoadStored());
 
-    public string GetHuggingFaceDefaultQuant() => ResolveHuggingFaceDefaultQuant(LoadStored());
+    public string GetHuggingFaceDefaultQuant() =>
+        ResolveHuggingFaceDefaultQuant(LoadStored());
 
-    public long GetHuggingFaceDiskMarginBytes() => ResolveHuggingFaceDiskMarginBytes(LoadStored());
+    public long GetHuggingFaceDiskMarginBytes() =>
+        ResolveHuggingFaceDiskMarginBytes(LoadStored());
 
-    public int GetLlamaMaxLoadedProcesses() => ResolveLlamaMaxLoadedProcesses(LoadStored());
+    public int GetLlamaMaxLoadedProcesses() =>
+        ResolveLlamaMaxLoadedProcesses(LoadStored());
 
-    public TimeSpan GetLlamaIdleTimeToLive() => ResolveLlamaIdleTimeToLive(LoadStored());
+    public TimeSpan GetLlamaIdleTimeToLive() =>
+        ResolveLlamaIdleTimeToLive(LoadStored());
 
-    public int GetMaxResponseSizeMb() => ResolveMaxResponseSizeMb(LoadStored());
+    public int GetMaxResponseSizeMb() =>
+        ResolveMaxResponseSizeMb(LoadStored());
 
-    public int GetOrchestrationIdleTimeoutSeconds() => ResolveOrchestrationIdleTimeoutSeconds(LoadStored());
+    public int GetOrchestrationIdleTimeoutSeconds() =>
+        ResolveOrchestrationIdleTimeoutSeconds(LoadStored());
 
-    public int GetMaxPendingToolCallAgeMinutes() => ResolveMaxPendingToolCallAgeMinutes(LoadStored());
+    public int GetMaxPendingToolCallAgeMinutes() =>
+        ResolveMaxPendingToolCallAgeMinutes(LoadStored());
 
     // --- Pure resolvers shared by the async getters and their synchronous twins (single source of precedence) ---
 
-    private string ResolveDefaultModelName(StoredNodeSettings stored)
-        => string.IsNullOrWhiteSpace(stored.DefaultModelName) ? _defaultModelSeed : stored.DefaultModelName;
+    private string ResolveDefaultModelName(StoredNodeSettings stored) =>
+        string.IsNullOrWhiteSpace(stored.DefaultModelName) ? _defaultModelSeed : stored.DefaultModelName;
 
-    private IReadOnlyList<string> ResolveToolCapableModels(StoredNodeSettings stored)
-        => stored.ToolCapableModels is { Count: > 0 } models ? models : _toolCapableModelsSeed;
+    private IReadOnlyList<string> ResolveToolCapableModels(StoredNodeSettings stored) =>
+        stored.ToolCapableModels is { Count: > 0 } models ? models : _toolCapableModelsSeed;
 
-    private string ResolveOllamaEndpoint(StoredNodeSettings stored)
-        => string.IsNullOrWhiteSpace(stored.OllamaEndpoint) ? _ollamaEndpointSeed : stored.OllamaEndpoint;
+    private string ResolveOllamaEndpoint(StoredNodeSettings stored) =>
+        string.IsNullOrWhiteSpace(stored.OllamaEndpoint) ? _ollamaEndpointSeed : stored.OllamaEndpoint;
 
-    private string ResolveHuggingFaceDefaultQuant(StoredNodeSettings stored)
-        => string.IsNullOrWhiteSpace(stored.HuggingFaceDefaultQuant) ? _hfQuantSeed : stored.HuggingFaceDefaultQuant;
+    private string ResolveHuggingFaceDefaultQuant(StoredNodeSettings stored) =>
+        string.IsNullOrWhiteSpace(stored.HuggingFaceDefaultQuant) ? _hfQuantSeed : stored.HuggingFaceDefaultQuant;
 
-    private long ResolveHuggingFaceDiskMarginBytes(StoredNodeSettings stored)
-        => stored.HuggingFaceDiskMarginBytes ?? _hfDiskMarginSeed;
+    private long ResolveHuggingFaceDiskMarginBytes(StoredNodeSettings stored) =>
+        stored.HuggingFaceDiskMarginBytes ?? _hfDiskMarginSeed;
 
-    private static int ResolveLlamaMaxLoadedProcesses(StoredNodeSettings stored)
-        => stored.LlamaMaxLoadedProcesses ?? StoredNodeSettings.DefaultLlamaMaxLoadedProcesses;
+    private static int ResolveLlamaMaxLoadedProcesses(StoredNodeSettings stored) =>
+        stored.LlamaMaxLoadedProcesses ?? StoredNodeSettings.DefaultLlamaMaxLoadedProcesses;
 
-    private static TimeSpan ResolveLlamaIdleTimeToLive(StoredNodeSettings stored)
-        => TimeSpan.FromSeconds(stored.LlamaIdleTimeToLiveSeconds ?? StoredNodeSettings.DefaultLlamaIdleTimeToLiveSeconds);
+    private static TimeSpan ResolveLlamaIdleTimeToLive(StoredNodeSettings stored) =>
+        TimeSpan.FromSeconds(stored.LlamaIdleTimeToLiveSeconds ?? StoredNodeSettings.DefaultLlamaIdleTimeToLiveSeconds);
 
-    private int ResolveMaxResponseSizeMb(StoredNodeSettings stored)
-        => stored.MaxResponseSizeMb ?? _maxResponseSizeMbSeed;
+    private int ResolveMaxResponseSizeMb(StoredNodeSettings stored) =>
+        stored.MaxResponseSizeMb ?? _maxResponseSizeMbSeed;
 
-    private int ResolveOrchestrationIdleTimeoutSeconds(StoredNodeSettings stored)
-        => stored.OrchestrationIdleTimeoutSeconds ?? _orchestrationIdleTimeoutSeed;
+    private int ResolveOrchestrationIdleTimeoutSeconds(StoredNodeSettings stored) =>
+        stored.OrchestrationIdleTimeoutSeconds ?? _orchestrationIdleTimeoutSeed;
 
-    private int ResolveMaxPendingToolCallAgeMinutes(StoredNodeSettings stored)
-        => stored.MaxPendingToolCallAgeMinutes ?? _maxPendingToolCallAgeMinutesSeed;
+    private int ResolveMaxPendingToolCallAgeMinutes(StoredNodeSettings stored) =>
+        stored.MaxPendingToolCallAgeMinutes ?? _maxPendingToolCallAgeMinutesSeed;
 
     private async Task<StoredNodeSettings> LoadAsync(CancellationToken cancellationToken)
     {

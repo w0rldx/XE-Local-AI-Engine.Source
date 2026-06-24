@@ -72,8 +72,7 @@ public sealed class BinaryManagerInstallTagTests
             OSPlatform.Linux, Architecture.X64, catalog: null, installedRuntimeStore: store);
 
         var digest = new string('f', 64);
-        var exception = await AssertEx.ThrowsAsync<LlamaRuntimeException>(
-            () => manager.InstallTagAsync(Tag, AssetName, digest, expectedSize: 0, GpuVariant.Cpu, CancellationToken.None));
+        var exception = await AssertEx.ThrowsAsync<LlamaRuntimeException>(() => manager.InstallTagAsync(Tag, AssetName, digest, expectedSize: 0, GpuVariant.Cpu, CancellationToken.None));
 
         // Retried exactly once (two attempts) and surfaced sanitized.
         AssertEx.Equal(expected: 2, handler.CallCount);
@@ -93,8 +92,7 @@ public sealed class BinaryManagerInstallTagTests
         var manager = new LlamaCppBinaryManager(http, cache.Path, LlamaCppReleasePins.PinnedTag,
             OSPlatform.Linux, Architecture.X64, catalog: null, installedRuntimeStore: store);
 
-        await AssertEx.ThrowsAsync<LlamaRuntimeException>(
-            () => manager.InstallTagAsync("../escape", AssetName, new string('a', 64), expectedSize: 0, GpuVariant.Cpu, CancellationToken.None));
+        await AssertEx.ThrowsAsync<LlamaRuntimeException>(() => manager.InstallTagAsync("../escape", AssetName, new string('a', 64), expectedSize: 0, GpuVariant.Cpu, CancellationToken.None));
 
         AssertEx.Equal(expected: 0, handler.CallCount);
     }
@@ -109,10 +107,8 @@ public sealed class BinaryManagerInstallTagTests
         var manager = new LlamaCppBinaryManager(http, cache.Path, LlamaCppReleasePins.PinnedTag,
             OSPlatform.Linux, Architecture.X64, catalog: null, installedRuntimeStore: store);
 
-        await AssertEx.ThrowsAsync<LlamaRuntimeException>(
-            () => manager.InstallTagAsync(Tag, "../../etc/passwd", new string('a', 64), expectedSize: 0, GpuVariant.Cpu, CancellationToken.None));
-        await AssertEx.ThrowsAsync<LlamaRuntimeException>(
-            () => manager.InstallTagAsync(Tag, "sub/dir/asset.tar.gz", new string('a', 64), expectedSize: 0, GpuVariant.Cpu, CancellationToken.None));
+        await AssertEx.ThrowsAsync<LlamaRuntimeException>(() => manager.InstallTagAsync(Tag, "../../etc/passwd", new string('a', 64), expectedSize: 0, GpuVariant.Cpu, CancellationToken.None));
+        await AssertEx.ThrowsAsync<LlamaRuntimeException>(() => manager.InstallTagAsync(Tag, "sub/dir/asset.tar.gz", new string('a', 64), expectedSize: 0, GpuVariant.Cpu, CancellationToken.None));
 
         AssertEx.Equal(expected: 0, handler.CallCount);
     }
@@ -129,8 +125,7 @@ public sealed class BinaryManagerInstallTagTests
 
         // 3 GiB > the 2 GiB absolute ceiling.
         var oversized = 3L * 1024 * 1024 * 1024;
-        var exception = await AssertEx.ThrowsAsync<LlamaRuntimeException>(
-            () => manager.InstallTagAsync(Tag, AssetName, new string('a', 64), oversized, GpuVariant.Cpu, CancellationToken.None));
+        var exception = await AssertEx.ThrowsAsync<LlamaRuntimeException>(() => manager.InstallTagAsync(Tag, AssetName, new string('a', 64), oversized, GpuVariant.Cpu, CancellationToken.None));
 
         AssertEx.Equal(expected: 0, handler.CallCount);
         AssertEx.False(exception.Message.Contains(cache.Path, StringComparison.Ordinal));
@@ -153,8 +148,8 @@ public sealed class BinaryManagerInstallTagTests
         var manager = new LlamaCppBinaryManager(http, cache.Path, LlamaCppReleasePins.PinnedTag,
             OSPlatform.Linux, Architecture.X64, catalog: null, installedRuntimeStore: store);
 
-        var exception = await AssertEx.ThrowsAsync<LlamaRuntimeException>(
-            () => manager.InstallTagAsync(Tag, uniqueAsset, new string('a', 64), expectedSize: 1024, GpuVariant.Cpu, CancellationToken.None));
+        var exception = await AssertEx.ThrowsAsync<LlamaRuntimeException>(() =>
+            manager.InstallTagAsync(Tag, uniqueAsset, new string('a', 64), expectedSize: 1024, GpuVariant.Cpu, CancellationToken.None));
 
         AssertEx.False(exception.Message.Contains(cache.Path, StringComparison.Ordinal));
         // The aborted download left no temp archive for THIS unique asset behind, and no install state was recorded.
@@ -181,8 +176,7 @@ public sealed class BinaryManagerInstallTagTests
 
         // Declare a size that does not equal the actual archive length → the post-download length check must fail.
         var wrongSize = archive.Length + 1;
-        await AssertEx.ThrowsAsync<LlamaRuntimeException>(
-            () => manager.InstallTagAsync(Tag, AssetName, $"sha256:{digest}", wrongSize, GpuVariant.Cpu, CancellationToken.None));
+        await AssertEx.ThrowsAsync<LlamaRuntimeException>(() => manager.InstallTagAsync(Tag, AssetName, $"sha256:{digest}", wrongSize, GpuVariant.Cpu, CancellationToken.None));
 
         AssertEx.Null(await store.ReadAsync(CancellationToken.None));
     }
@@ -211,8 +205,7 @@ public sealed class BinaryManagerInstallTagTests
             OSPlatform.Linux, Architecture.X64, catalog: null, installedRuntimeStore: store);
 
         var variantDir = Path.Combine(cache.Path, "llama.cpp", Tag, "cpu");
-        var exception = await AssertEx.ThrowsAsync<LlamaRuntimeException>(
-            () => manager.InstallTagAsync(Tag, AssetName, $"sha256:{digest}", archive.Length, GpuVariant.Cpu, CancellationToken.None));
+        var exception = await AssertEx.ThrowsAsync<LlamaRuntimeException>(() => manager.InstallTagAsync(Tag, AssetName, $"sha256:{digest}", archive.Length, GpuVariant.Cpu, CancellationToken.None));
 
         AssertEx.False(exception.Message.Contains(cache.Path, StringComparison.Ordinal));
         AssertEx.False(Directory.Exists(variantDir));
@@ -229,8 +222,7 @@ public sealed class BinaryManagerInstallTagTests
         var manager = new LlamaCppBinaryManager(http, cache.Path, LlamaCppReleasePins.PinnedTag,
             OSPlatform.Linux, Architecture.X64, catalog: null, installedRuntimeStore: store);
 
-        await AssertEx.ThrowsAsync<LlamaRuntimeException>(
-            () => manager.InstallTagAsync(Tag, AssetName, digestSha256: "", expectedSize: 0, GpuVariant.Cpu, CancellationToken.None));
+        await AssertEx.ThrowsAsync<LlamaRuntimeException>(() => manager.InstallTagAsync(Tag, AssetName, digestSha256: "", expectedSize: 0, GpuVariant.Cpu, CancellationToken.None));
 
         AssertEx.Equal(expected: 0, handler.CallCount);
     }

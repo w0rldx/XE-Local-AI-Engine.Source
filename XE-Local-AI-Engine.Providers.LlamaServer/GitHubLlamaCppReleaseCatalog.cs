@@ -3,7 +3,6 @@ namespace XE_Local_AI_Engine.Providers.LlamaServer;
 using System.Collections.Concurrent;
 using System.Globalization;
 using System.Net;
-using System.Net.Http.Headers;
 using System.Runtime.InteropServices;
 using System.Text.Json;
 using System.Text.Json.Serialization;
@@ -366,12 +365,18 @@ public sealed partial class GitHubLlamaCppReleaseCatalog : ILlamaCppReleaseCatal
     private sealed record CachedRelease(string? ETag, GitHubRelease? Release, DateTimeOffset FetchedAtUtc);
 
     private sealed record GitHubRelease(
-        [property: JsonPropertyName("tag_name")] string? TagName,
-        [property: JsonPropertyName("assets")] IReadOnlyList<GitHubAsset>? Assets);
+        [property: JsonPropertyName("tag_name")]
+        string? TagName,
+        [property: JsonPropertyName("assets")]
+        IReadOnlyList<GitHubAsset>? Assets);
 
     private sealed record GitHubAsset(
-        [property: JsonPropertyName("name")] string Name,
-        [property: JsonPropertyName("browser_download_url")] string? BrowserDownloadUrl,
-        [property: JsonPropertyName("digest")] string? Digest,
-        [property: JsonPropertyName("size")] long Size);
+        [property: JsonPropertyName("name")]
+        string Name,
+        [property: JsonPropertyName("browser_download_url")]
+        string? BrowserDownloadUrl,
+        [property: JsonPropertyName("digest")]
+        string? Digest,
+        [property: JsonPropertyName("size")]
+        long Size);
 }

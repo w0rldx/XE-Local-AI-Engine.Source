@@ -73,8 +73,8 @@ public sealed class ToolCallCleanupServiceTests
                 CleanupIntervalSeconds = cleanupIntervalSeconds
             }),
             StubNodeRuntimeSettings.Create()
-                .WithMaxPendingToolCallAgeMinutes(maxAgeMinutes)
-                .Build(),
+                                   .WithMaxPendingToolCallAgeMinutes(maxAgeMinutes)
+                                   .Build(),
             NullLogger<ToolCallCleanupService>.Instance);
     }
 

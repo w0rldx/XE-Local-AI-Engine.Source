@@ -644,8 +644,8 @@ public sealed class AgentHomeServiceTests : IDisposable
             CommandTimeoutSeconds = commandTimeoutSeconds
         });
         var runtimeSettings = StubNodeRuntimeSettings.Create()
-            .WithAgentHomeCommandTimeoutSeconds(commandTimeoutSeconds)
-            .Build();
+                                                     .WithAgentHomeCommandTimeoutSeconds(commandTimeoutSeconds)
+                                                     .Build();
         var manifestService = new AgentHomeManifestService(new FakeNodeDataDirectory(root), options, provider, clock, NullLogger<AgentHomeManifestService>.Instance);
 
         var serviceProvider = new ServiceCollection()

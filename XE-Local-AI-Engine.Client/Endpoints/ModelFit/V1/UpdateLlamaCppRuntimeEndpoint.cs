@@ -117,8 +117,7 @@ public sealed class UpdateLlamaCppRuntimeEndpoint(
         var effectiveInstalledTag = installed?.Tag ?? installedTag;
 
         var previous = _updateState.Current;
-        _updateState.Store(new LlamaCppUpdateSnapshot(
-            effectiveInstalledTag,
+        _updateState.Store(new LlamaCppUpdateSnapshot(effectiveInstalledTag,
             recommendedTag,
             previous.UpstreamLatestTag,
             UpdateAvailable: !string.Equals(effectiveInstalledTag, recommendedTag, StringComparison.Ordinal),

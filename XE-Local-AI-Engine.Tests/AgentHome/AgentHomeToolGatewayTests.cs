@@ -25,8 +25,8 @@ public sealed class AgentHomeToolGatewayTests
 
     private static readonly INodeRuntimeSettings GatewayOptions =
         StubNodeRuntimeSettings.Create()
-            .WithAgentHomeCommandTimeoutSeconds(300)
-            .Build();
+                               .WithAgentHomeCommandTimeoutSeconds(300)
+                               .Build();
 
     [Test]
     public async Task ExecuteAsync_WhenRunSucceeds_RendersCompactResult()

@@ -79,8 +79,7 @@ public sealed class GetLlamaCppRuntimeEndpoint(
         var updateAvailable = resolvedRecommended is not null
                               && !string.Equals(installedTag, resolvedRecommended, StringComparison.Ordinal);
 
-        var snapshot = new LlamaCppUpdateSnapshot(
-            installedTag,
+        var snapshot = new LlamaCppUpdateSnapshot(installedTag,
             RecommendedTag: resolvedRecommended ?? recommendedTag,
             UpstreamLatestTag: upstreamResult.Tag,
             updateAvailable,

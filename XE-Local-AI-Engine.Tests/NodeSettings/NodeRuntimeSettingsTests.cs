@@ -21,8 +21,7 @@ public sealed class NodeRuntimeSettingsTests
     [Test]
     public async Task StoredValuesPresent_OverrideSeed()
     {
-        var sut = CreateSut(
-            new StoredNodeSettings
+        var sut = CreateSut(new StoredNodeSettings
             {
                 DefaultModelName = "stored-model",
                 EnableTools = false,
@@ -53,8 +52,7 @@ public sealed class NodeRuntimeSettingsTests
     [Test]
     public async Task StoredAbsent_UsesAppsettingsSeed()
     {
-        var sut = CreateSut(
-            new StoredNodeSettings(),
+        var sut = CreateSut(new StoredNodeSettings(),
             seedConfiguration: new Dictionary<string, string?>(StringComparer.Ordinal)
             {
                 ["Ollama:Endpoint"] = "http://seed:9999",
@@ -62,9 +60,23 @@ public sealed class NodeRuntimeSettingsTests
                 ["HuggingFace:DiskMarginBytes"] = "2000000000",
                 ["Agent:Orchestration:IdleTimeoutSeconds"] = "444"
             },
-            localChat: new LocalChatAgentOptions { DefaultModel = "seed-model", EnableTools = false },
-            agentHome: new AgentHomeOptions { ToolCapableModels = ["seed-tool-model"], PrepareTimeoutSeconds = 111, CommandTimeoutSeconds = 222 },
-            workerNode: new WorkerNodeOptions { NodeName = "n", MaxResponseSizeMb = 77, MaxPendingToolCallAgeMinutes = 33 });
+            localChat: new LocalChatAgentOptions
+            {
+                DefaultModel = "seed-model",
+                EnableTools = false
+            },
+            agentHome: new AgentHomeOptions
+            {
+                ToolCapableModels = ["seed-tool-model"],
+                PrepareTimeoutSeconds = 111,
+                CommandTimeoutSeconds = 222
+            },
+            workerNode: new WorkerNodeOptions
+            {
+                NodeName = "n",
+                MaxResponseSizeMb = 77,
+                MaxPendingToolCallAgeMinutes = 33
+            });
 
         AssertEx.Equal("seed-model", await sut.GetDefaultModelNameAsync());
         AssertEx.Equal(expected: false, await sut.GetEnableToolsAsync());
@@ -97,14 +109,16 @@ public sealed class NodeRuntimeSettingsTests
     public async Task RecommendedTag_FallsBackToPin_WhenStoredMalformed()
     {
         // A malformed stored tag (Normalize would null it, but guard the accessor independently as well).
-        var sut = CreateSut(new StoredNodeSettings { RecommendedLlamaCppTag = "garbage" },
+        var sut = CreateSut(new StoredNodeSettings
+            {
+                RecommendedLlamaCppTag = "garbage"
+            },
             seedConfiguration: new Dictionary<string, string?>(StringComparer.Ordinal));
 
         AssertEx.Equal(LlamaCppReleasePins.PinnedTag, await sut.GetRecommendedLlamaCppTagAsync());
     }
 
-    private static NodeRuntimeSettings CreateSut(
-        StoredNodeSettings stored,
+    private static NodeRuntimeSettings CreateSut(StoredNodeSettings stored,
         IDictionary<string, string?> seedConfiguration,
         LocalChatAgentOptions? localChat = null,
         AgentHomeOptions? agentHome = null,
@@ -116,11 +130,13 @@ public sealed class NodeRuntimeSettingsTests
 
         var configuration = new ConfigurationBuilder().AddInMemoryCollection(seedConfiguration).Build();
 
-        return new NodeRuntimeSettings(
-            store,
+        return new NodeRuntimeSettings(store,
             configuration,
             Options.Create(localChat ?? new LocalChatAgentOptions()),
             Options.Create(agentHome ?? new AgentHomeOptions()),
-            Options.Create(workerNode ?? new WorkerNodeOptions { NodeName = "test-node" }));
+            Options.Create(workerNode ?? new WorkerNodeOptions
+            {
+                NodeName = "test-node"
+            }));
     }
 }

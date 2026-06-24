@@ -53,8 +53,7 @@ public sealed partial class LlamaCppBinaryManager : ILlamaCppBinaryManager
     ///     (live API → <c>installed-runtime.json</c> → pinned floor); when omitted (the test seam) only the pinned floor
     ///     is used, preserving the original behavior.
     /// </summary>
-    public LlamaCppBinaryManager(
-        HttpClient httpClient,
+    public LlamaCppBinaryManager(HttpClient httpClient,
         string? cacheRoot = null,
         string? activeTag = null,
         ILlamaCppReleaseCatalog? catalog = null,
@@ -70,8 +69,7 @@ public sealed partial class LlamaCppBinaryManager : ILlamaCppBinaryManager
     }
 
     /// <summary>Test seam: pins OS/arch so asset selection can be exercised on any host.</summary>
-    internal LlamaCppBinaryManager(
-        HttpClient httpClient,
+    internal LlamaCppBinaryManager(HttpClient httpClient,
         string cacheRoot,
         string activeTag,
         OSPlatform os,

@@ -88,8 +88,7 @@ public sealed class LlamaCppUpdateCheckService : BackgroundService
             // No live data (offline / rate-limited / unresolved) — record an offline snapshot, advertise no update.
             if (recommendedResult.HasNoLiveData || recommendedResult.Tag is null)
             {
-                _updateState.Store(new LlamaCppUpdateSnapshot(
-                    installedTag,
+                _updateState.Store(new LlamaCppUpdateSnapshot(installedTag,
                     RecommendedTag: recommendedTag,
                     UpstreamLatestTag: null,
                     UpdateAvailable: false,
@@ -104,8 +103,7 @@ public sealed class LlamaCppUpdateCheckService : BackgroundService
             // A fresh node (no installed state) is "update available" so the operator can install the recommended build.
             var updateAvailable = !string.Equals(installedTag, resolvedRecommended, StringComparison.Ordinal);
 
-            _updateState.Store(new LlamaCppUpdateSnapshot(
-                installedTag,
+            _updateState.Store(new LlamaCppUpdateSnapshot(installedTag,
                 RecommendedTag: resolvedRecommended,
                 UpstreamLatestTag: null,
                 updateAvailable,

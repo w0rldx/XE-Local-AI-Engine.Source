@@ -1,5 +1,6 @@
 namespace XE_Local_AI_Engine.Tests.Capacity;
 
+using System.Diagnostics.CodeAnalysis;
 using Microsoft.Extensions.AI;
 using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Options;
@@ -55,7 +56,11 @@ public sealed class SubAgentSpawnServiceTests
         var service = harness.Build();
 
         using var root = SpawnContext.BeginRoot(fanOutCap: 3, cloudSpawnCap: 3);
-        var result = await service.SpawnAsync(new SubAgentSpawnRequest { SubAgentKey = id.ToString(), Task = "read it" }, CancellationToken.None);
+        var result = await service.SpawnAsync(new SubAgentSpawnRequest
+        {
+            SubAgentKey = id.ToString(),
+            Task = "read it"
+        }, CancellationToken.None);
 
         AssertEx.Equal("sub-agent-result", result);
         // The child inherited its profile's curated tools…
@@ -216,14 +221,21 @@ public sealed class SubAgentSpawnServiceTests
         using var root = SpawnContext.BeginRoot(fanOutCap: 3, cloudSpawnCap: 3);
 
         // Both bindings present (not mutually exclusive) → invalid.
-        var bothResult = await service.SpawnAsync(
-            new SubAgentSpawnRequest { ModelId = Model, SubAgentKey = "x", Task = "t" },
+        var bothResult = await service.SpawnAsync(new SubAgentSpawnRequest
+            {
+                ModelId = Model,
+                SubAgentKey = "x",
+                Task = "t"
+            },
             CancellationToken.None);
         AssertEx.Contains(bothResult, "exactly one");
 
         // Empty task → invalid.
-        var emptyTask = await service.SpawnAsync(
-            new SubAgentSpawnRequest { ModelId = Model, Task = "   " },
+        var emptyTask = await service.SpawnAsync(new SubAgentSpawnRequest
+            {
+                ModelId = Model,
+                Task = "   "
+            },
             CancellationToken.None);
         AssertEx.Contains(emptyTask, "non-empty task");
 
@@ -232,7 +244,11 @@ public sealed class SubAgentSpawnServiceTests
 
     private static SubAgentSpawnRequest ModelRequest(string task)
     {
-        return new SubAgentSpawnRequest { ModelId = Model, Task = task };
+        return new SubAgentSpawnRequest
+        {
+            ModelId = Model,
+            Task = task
+        };
     }
 
     // Assembles the spawn service over a mocked capacity verdict + a real SpawnSerializer + a gateable RecordingChatClient.
@@ -329,7 +345,10 @@ public sealed class SubAgentSpawnServiceTests
                 new EmptyClientLocalToolRegistry(),
                 new EmptyMcpToolRegistry(),
                 _chatClient,
-                Options.Create(new SpawnOptions { QueueWaitSeconds = 5 }),
+                Options.Create(new SpawnOptions
+                {
+                    QueueWaitSeconds = 5
+                }),
                 NullLoggerFactory.Instance,
                 NullLogger<SubAgentSpawnService>.Instance);
         }
@@ -364,7 +383,7 @@ public sealed class SubAgentSpawnServiceTests
 
     private sealed class EmptyClientLocalToolRegistry : IClientLocalToolRegistry
     {
-        public bool TryResolve(string toolName, [System.Diagnostics.CodeAnalysis.NotNullWhen(true)] out AITool? tool)
+        public bool TryResolve(string toolName, [NotNullWhen(true)] out AITool? tool)
         {
             tool = null;
             return false;
@@ -373,7 +392,7 @@ public sealed class SubAgentSpawnServiceTests
 
     private sealed class EmptyMcpToolRegistry : IMcpToolRegistry
     {
-        public bool TryResolve(string name, [System.Diagnostics.CodeAnalysis.NotNullWhen(true)] out AITool? tool)
+        public bool TryResolve(string name, [NotNullWhen(true)] out AITool? tool)
         {
             tool = null;
             return false;
