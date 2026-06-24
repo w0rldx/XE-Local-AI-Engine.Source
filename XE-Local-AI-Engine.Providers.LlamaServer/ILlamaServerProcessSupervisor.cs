@@ -33,7 +33,17 @@ public interface ILlamaServerProcessSupervisor
 
     /// <summary>
     ///     Aggregates every running process's health into one snapshot — operational iff the supervisor can serve
-    ///     requests; per-process detail is surfaced for diagnostics.
+    ///     requests; per-process detail is surfaced for diagnostics. This performs a live responsiveness probe per
+    ///     process, so it is for the diagnostics surface — NOT a hot path. For a cheap running-count read use
+    ///     <see cref="CountRunningProcesses" />.
     /// </summary>
     Task<IReadOnlyList<LlamaServerProcessHealth>> CheckHealthAsync(CancellationToken ct);
+
+    /// <summary>
+    ///     The number of currently-running <c>(model, role)</c> processes the supervisor owns, counting only handles
+    ///     that have not exited. This is a synchronous in-memory read of the process table — NO health/HTTP probe — so it
+    ///     is safe on hot paths (runtime-status GET, the pre-update safety gate). Ollama is an external provider the
+    ///     supervisor does not own, so it is never counted.
+    /// </summary>
+    int CountRunningProcesses();
 }

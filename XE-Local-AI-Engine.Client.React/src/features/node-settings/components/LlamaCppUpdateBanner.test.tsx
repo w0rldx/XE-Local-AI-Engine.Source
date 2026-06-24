@@ -71,6 +71,7 @@ describe("LlamaCppUpdateBanner", () => {
 			upstreamLatestTag: null,
 			updateAvailable: false,
 			isOffline: false,
+			runningProcessCount: 0,
 		};
 
 		renderBanner();
@@ -84,6 +85,7 @@ describe("LlamaCppUpdateBanner", () => {
 			upstreamLatestTag: null,
 			updateAvailable: true,
 			isOffline: false,
+			runningProcessCount: 0,
 		};
 
 		renderBanner();
@@ -102,6 +104,7 @@ describe("LlamaCppUpdateBanner", () => {
 			upstreamLatestTag: null,
 			updateAvailable: true,
 			isOffline: false,
+			runningProcessCount: 0,
 		};
 
 		renderBanner();

@@ -7,6 +7,7 @@ using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 using NSubstitute;
 using XE_Local_AI_Engine.Providers.LlamaServer;
+using XE_Local_AI_Engine.Tests.Providers.LlamaServer;
 using XE_Local_AI_Engine.Tests.Testing;
 
 /// <summary>
@@ -129,6 +130,61 @@ public sealed class LlamaCppRuntimeEndpointTests
     }
 
     [Test]
+    public async Task RuntimeStatus_WhenModelsRunning_ReportsRunningProcessCount()
+    {
+        // The runtime-status surface must reflect the supervisor's running-process count so the UI can gate the update.
+        var updateState = new LlamaCppUpdateState();
+        updateState.Store(new LlamaCppUpdateSnapshot(InstalledTag: "b9692",
+            RecommendedTag: "b9700",
+            UpstreamLatestTag: "b9777",
+            UpdateAvailable: true,
+            IsOffline: false,
+            CheckedAtUtc: DateTimeOffset.UtcNow));
+        var supervisor = new FakeProcessSupervisor(FakeProcessSupervisor.RunningChat("a"), FakeProcessSupervisor.RunningChat("b"));
+
+        await using var factory = CreateFactory(Substitute.For<ILlamaCppBinaryManager>(), updateState, supervisor: supervisor);
+        using var client = factory.CreateClient();
+
+        using var request = new HttpRequestMessage(HttpMethod.Get, $"{ApiPrefix}/model-fit/llamacpp/runtime");
+        factory.AddNodeBearerToken(request);
+        using var response = await client.SendAsync(request).ConfigureAwait(false);
+
+        AssertEx.Equal(HttpStatusCode.OK, response.StatusCode);
+        var json = await response.Content.ReadAsStringAsync().ConfigureAwait(false);
+        using var doc = JsonDocument.Parse(json);
+        AssertEx.Equal(expected: 2, doc.RootElement.GetProperty("runningProcessCount").GetInt32());
+    }
+
+    [Test]
+    public async Task UpdateRuntime_WhenModelsRunning_ReturnsConflictWithoutInstalling()
+    {
+        // The hard pre-update safety gate: a running llama-server process blocks the install with a 409 — the binary
+        // is never replaced while a process holds it, and the operator must eject deliberately first (no auto-evict).
+        var binaryManager = Substitute.For<ILlamaCppBinaryManager>();
+        var supervisor = new FakeProcessSupervisor(FakeProcessSupervisor.RunningChat());
+        await using var factory = CreateFactory(binaryManager, new LlamaCppUpdateState(), supervisor: supervisor);
+        using var client = factory.CreateClient();
+
+        using var request = new HttpRequestMessage(HttpMethod.Post, $"{ApiPrefix}/model-fit/llamacpp/update")
+        {
+            Content = JsonContent.Create(new
+            {
+                tag = "b9700"
+            })
+        };
+        factory.AddNodeBearerToken(request);
+        using var response = await client.SendAsync(request).ConfigureAwait(false);
+
+        AssertEx.Equal(HttpStatusCode.Conflict, response.StatusCode);
+        var json = await response.Content.ReadAsStringAsync().ConfigureAwait(false);
+        using var doc = JsonDocument.Parse(json);
+        AssertEx.Equal(expected: 1, doc.RootElement.GetProperty("runningProcessCount").GetInt32());
+
+        await binaryManager.DidNotReceiveWithAnyArgs()
+                           .InstallTagAsync(Arg.Any<string>(), Arg.Any<string>(), Arg.Any<string>(), Arg.Any<long>(), Arg.Any<GpuVariant>(), Arg.Any<CancellationToken>());
+    }
+
+    [Test]
     public async Task RuntimeStatus_WhenNoBearerToken_ReturnsUnauthorized()
     {
         await using var factory = CreateFactory(Substitute.For<ILlamaCppBinaryManager>(), new LlamaCppUpdateState());
@@ -140,7 +196,10 @@ public sealed class LlamaCppRuntimeEndpointTests
         AssertEx.Equal(HttpStatusCode.Unauthorized, response.StatusCode);
     }
 
-    private static TestingWebAppFactory CreateFactory(ILlamaCppBinaryManager binaryManager, ILlamaCppUpdateState updateState, ILlamaCppReleaseCatalog? releaseCatalog = null)
+    private static TestingWebAppFactory CreateFactory(ILlamaCppBinaryManager binaryManager,
+        ILlamaCppUpdateState updateState,
+        ILlamaCppReleaseCatalog? releaseCatalog = null,
+        ILlamaServerProcessSupervisor? supervisor = null)
     {
         return new TestingWebAppFactory
         {
@@ -155,6 +214,14 @@ public sealed class LlamaCppRuntimeEndpointTests
                 {
                     services.RemoveAll<ILlamaCppReleaseCatalog>();
                     services.AddSingleton(releaseCatalog);
+                }
+
+                // Deterministic running-process surface for the running-count + 409 safety-gate assertions (a real
+                // supervisor would have no processes on a fresh test host; a fake lets a test simulate "models running").
+                if (supervisor is not null)
+                {
+                    services.RemoveAll<ILlamaServerProcessSupervisor>();
+                    services.AddSingleton(supervisor);
                 }
             }
         };

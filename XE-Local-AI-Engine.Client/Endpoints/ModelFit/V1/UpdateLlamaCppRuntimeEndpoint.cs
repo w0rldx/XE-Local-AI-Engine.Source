@@ -27,12 +27,14 @@ public sealed class UpdateLlamaCppRuntimeEndpoint(
     IInstalledRuntimeStore installedRuntimeStore,
     ILlamaCppUpdateState updateState,
     INodeRuntimeSettings nodeRuntimeSettings,
+    ILlamaServerProcessSupervisor processSupervisor,
     ILogger<UpdateLlamaCppRuntimeEndpoint> logger) : Endpoint<UpdateLlamaCppRuntimeRequest, LlamaCppVersionResponse>
 {
     private readonly ILlamaCppBinaryManager _binaryManager = binaryManager ?? throw new ArgumentNullException(nameof(binaryManager));
     private readonly IInstalledRuntimeStore _installedRuntimeStore = installedRuntimeStore ?? throw new ArgumentNullException(nameof(installedRuntimeStore));
     private readonly ILogger<UpdateLlamaCppRuntimeEndpoint> _logger = logger ?? throw new ArgumentNullException(nameof(logger));
     private readonly INodeRuntimeSettings _nodeRuntimeSettings = nodeRuntimeSettings ?? throw new ArgumentNullException(nameof(nodeRuntimeSettings));
+    private readonly ILlamaServerProcessSupervisor _processSupervisor = processSupervisor ?? throw new ArgumentNullException(nameof(processSupervisor));
     private readonly ILlamaCppReleaseCatalog _releaseCatalog = releaseCatalog ?? throw new ArgumentNullException(nameof(releaseCatalog));
     private readonly ILlamaCppUpdateState _updateState = updateState ?? throw new ArgumentNullException(nameof(updateState));
     private readonly IGpuVariantSelector _variantSelector = variantSelector ?? throw new ArgumentNullException(nameof(variantSelector));
@@ -69,6 +71,22 @@ public sealed class UpdateLlamaCppRuntimeEndpoint(
         {
             AddError(r => r.Variant, "Variant is not supported.");
             await Send.ErrorsAsync(cancellation: ct).ConfigureAwait(false);
+            return;
+        }
+
+        // Hard pre-update safety gate (user requirement 2026-06-24): the runtime binary must NOT be replaced while any
+        // llama-server process is running — replacing/locking an in-use binary is unsafe. The operator must eject all
+        // running models first; this endpoint never auto-evicts. The supervisor is the source of truth (Ollama, an
+        // opt-in external provider, is never represented here, so it is never counted). The cheap in-memory count is
+        // used — the gate only needs "is anything running", not a per-process liveness probe.
+        var runningProcessCount = _processSupervisor.CountRunningProcesses();
+        if (runningProcessCount > 0)
+        {
+            await Send.ResultAsync(Results.Conflict(new LlamaCppUpdateBlockedResponse
+            {
+                RunningProcessCount = runningProcessCount,
+                Message = "Stop or eject all running llama.cpp models before updating the runtime."
+            })).ConfigureAwait(false);
             return;
         }
 

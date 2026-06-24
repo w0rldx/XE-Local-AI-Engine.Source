@@ -110,6 +110,7 @@ public sealed partial class LlamaCppBinaryManager : ILlamaCppBinaryManager
         var cachedServer = ResolveServerPath(variantDir, pin);
         if (cachedServer is not null)
         {
+            await RecordResolvedRuntimeAsync(resolvedTag, pin, variant, installed, ct).ConfigureAwait(false);
             return new LlamaBinary(cachedServer, resolvedTag, variant, isPinnedFallback);
         }
 
@@ -122,7 +123,51 @@ public sealed partial class LlamaCppBinaryManager : ILlamaCppBinaryManager
             throw new LlamaRuntimeException("The downloaded llama.cpp runtime did not contain the expected server executable.");
         }
 
+        await RecordResolvedRuntimeAsync(resolvedTag, pin, variant, installed, ct).ConfigureAwait(false);
         return new LlamaBinary(serverPath, resolvedTag, variant, isPinnedFallback);
+    }
+
+    /// <summary>
+    ///     Records the runtime that <see cref="EnsureBinaryAsync" /> actually resolved on disk into
+    ///     <see cref="IInstalledRuntimeStore" /> so a pin-bootstrapped / cached binary surfaces as "Installed" on first
+    ///     load — without ever having gone through an explicit <see cref="InstallTagAsync" />.
+    ///     <para>
+    ///         <b>Record-integrity invariant:</b> the asset name and SHA256 written here come from <paramref name="pin" />,
+    ///         which is resolved purely by OS/arch/<paramref name="variant" /> — it carries the PINNED-floor asset/digest,
+    ///         NOT the asset/digest of an arbitrary <paramref name="resolvedTag" />. They are therefore truthful ONLY when
+    ///         the resolve actually landed on the pinned floor. So this records exclusively when
+    ///         <c>resolvedTag == PinnedTag</c>: that is the one bootstrap case where no <see cref="InstallTagAsync" /> ever
+    ///         ran yet the binary is on disk. A non-pinned <paramref name="resolvedTag" /> necessarily originated from an
+    ///         existing <see cref="InstallTagAsync" /> record (the only writer of a non-pinned tag) — that record already
+    ///         holds the correct asset/digest, so there is nothing to fill and writing the pin's values would corrupt it.
+    ///     </para>
+    ///     Cheap on the hot path: a write happens only on the first pinned-floor ensure with no matching record; a record
+    ///     that already pins the same (tag, variant) is left untouched, so a steady-state ensure never rewrites.
+    /// </summary>
+    private async Task RecordResolvedRuntimeAsync(string resolvedTag, LlamaCppAssetPin pin, GpuVariant variant, InstalledRuntimeState? installed, CancellationToken ct)
+    {
+        if (_installedRuntimeStore is null)
+        {
+            return;
+        }
+
+        // Only the pinned floor carries a tag whose asset/digest match the pin we are about to record. A non-pinned
+        // resolvedTag came from an existing InstallTagAsync record (already correct) — never overwrite it with pin data.
+        if (!string.Equals(resolvedTag, LlamaCppReleasePins.PinnedTag, StringComparison.Ordinal))
+        {
+            return;
+        }
+
+        // A record already exists for this variant. Whether it pins the same tag (steady state) or a newer
+        // explicitly-installed tag, the pinned floor must not overwrite it — only the live/tier-2 resolve advances a
+        // record, and that path is excluded above. So a record for this variant is left untouched.
+        if (installed is { } current && current.Variant == variant)
+        {
+            return;
+        }
+
+        var state = new InstalledRuntimeState(resolvedTag, pin.AssetName, pin.Sha256, variant, DateTimeOffset.UtcNow);
+        await _installedRuntimeStore.WriteAsync(state, ct).ConfigureAwait(false);
     }
 
     /// <summary>

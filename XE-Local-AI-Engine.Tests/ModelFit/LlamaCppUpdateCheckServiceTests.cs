@@ -21,6 +21,7 @@ public sealed class LlamaCppUpdateCheckServiceTests
         var catalog = Substitute.For<ILlamaCppReleaseCatalog>();
         catalog.ResolveRecommendedAsync("b9700", Arg.Any<CancellationToken>())
                .Returns(LlamaCppReleaseResult.ForTag("b9700"));
+        StubUpstream(catalog, "b9777");
         var installedStore = Substitute.For<IInstalledRuntimeStore>();
         installedStore.ReadAsync(Arg.Any<CancellationToken>())
                       .Returns(new InstalledRuntimeState("b9692", "asset.tar.gz", "deadbeef", GpuVariant.Cpu, DateTimeOffset.UtcNow));
@@ -36,12 +37,53 @@ public sealed class LlamaCppUpdateCheckServiceTests
     }
 
     [Test]
+    public async Task CheckOnce_ResolvesUpstreamLatestTagOntoSnapshot()
+    {
+        // The startup check must populate upstreamLatestTag so developer mode has it on the mount GET — no ?refresh.
+        var state = new LlamaCppUpdateState();
+        var catalog = Substitute.For<ILlamaCppReleaseCatalog>();
+        catalog.ResolveRecommendedAsync("b9700", Arg.Any<CancellationToken>())
+               .Returns(LlamaCppReleaseResult.ForTag("b9700"));
+        StubUpstream(catalog, "b9999");
+        var installedStore = Substitute.For<IInstalledRuntimeStore>();
+        installedStore.ReadAsync(Arg.Any<CancellationToken>())
+                      .Returns(new InstalledRuntimeState("b9692", "asset.tar.gz", "deadbeef", GpuVariant.Cpu, DateTimeOffset.UtcNow));
+        using var service = CreateService(catalog, installedStore, state, recommendedTag: "b9700");
+
+        await service.CheckOnceAsync(CancellationToken.None);
+
+        AssertEx.Equal("b9999", state.Current.UpstreamLatestTag);
+    }
+
+    [Test]
+    public async Task CheckOnce_WhenUpstreamOffline_LeavesUpstreamNullWithoutThrowing()
+    {
+        // An unreachable upstream-latest lookup must degrade to a null upstream tag, never throw, even when the
+        // recommended resolution succeeded.
+        var state = new LlamaCppUpdateState();
+        var catalog = Substitute.For<ILlamaCppReleaseCatalog>();
+        catalog.ResolveRecommendedAsync("b9700", Arg.Any<CancellationToken>())
+               .Returns(LlamaCppReleaseResult.ForTag("b9700"));
+        catalog.ResolveUpstreamLatestAsync(Arg.Any<CancellationToken>()).Returns(LlamaCppReleaseResult.Offline());
+        var installedStore = Substitute.For<IInstalledRuntimeStore>();
+        installedStore.ReadAsync(Arg.Any<CancellationToken>())
+                      .Returns(new InstalledRuntimeState("b9692", "asset.tar.gz", "deadbeef", GpuVariant.Cpu, DateTimeOffset.UtcNow));
+        using var service = CreateService(catalog, installedStore, state, recommendedTag: "b9700");
+
+        await service.CheckOnceAsync(CancellationToken.None);
+
+        AssertEx.Null(state.Current.UpstreamLatestTag);
+        AssertEx.True(state.Current.UpdateAvailable, "A resolvable recommended tag still advertises an update when only upstream is offline.");
+    }
+
+    [Test]
     public async Task CheckOnce_WhenRecommendedEqualsInstalled_DoesNotRaiseUpdateAvailable()
     {
         var state = new LlamaCppUpdateState();
         var catalog = Substitute.For<ILlamaCppReleaseCatalog>();
         catalog.ResolveRecommendedAsync("b9692", Arg.Any<CancellationToken>())
                .Returns(LlamaCppReleaseResult.ForTag("b9692"));
+        StubUpstream(catalog, "b9777");
         var installedStore = Substitute.For<IInstalledRuntimeStore>();
         installedStore.ReadAsync(Arg.Any<CancellationToken>())
                       .Returns(new InstalledRuntimeState("b9692", "asset.tar.gz", "deadbeef", GpuVariant.Cpu, DateTimeOffset.UtcNow));
@@ -59,6 +101,7 @@ public sealed class LlamaCppUpdateCheckServiceTests
         var catalog = Substitute.For<ILlamaCppReleaseCatalog>();
         catalog.ResolveRecommendedAsync(Arg.Any<string>(), Arg.Any<CancellationToken>())
                .Returns(LlamaCppReleaseResult.Offline());
+        catalog.ResolveUpstreamLatestAsync(Arg.Any<CancellationToken>()).Returns(LlamaCppReleaseResult.Offline());
         var installedStore = Substitute.For<IInstalledRuntimeStore>();
         installedStore.ReadAsync(Arg.Any<CancellationToken>())
                       .Returns(new InstalledRuntimeState("b9692", "asset.tar.gz", "deadbeef", GpuVariant.Cpu, DateTimeOffset.UtcNow));
@@ -78,6 +121,7 @@ public sealed class LlamaCppUpdateCheckServiceTests
         var catalog = Substitute.For<ILlamaCppReleaseCatalog>();
         catalog.ResolveRecommendedAsync("b9692", Arg.Any<CancellationToken>())
                .Returns(LlamaCppReleaseResult.ForTag("b9692"));
+        StubUpstream(catalog, "b9777");
         var installedStore = Substitute.For<IInstalledRuntimeStore>();
         installedStore.ReadAsync(Arg.Any<CancellationToken>()).Returns((InstalledRuntimeState?)null);
         using var service = CreateService(catalog, installedStore, state, recommendedTag: "b9692");
@@ -87,6 +131,11 @@ public sealed class LlamaCppUpdateCheckServiceTests
         var snapshot = state.Current;
         AssertEx.True(snapshot.UpdateAvailable, "A fresh node (no install record) must offer the recommended install.");
         AssertEx.Null(snapshot.InstalledTag);
+    }
+
+    private static void StubUpstream(ILlamaCppReleaseCatalog catalog, string upstreamTag)
+    {
+        catalog.ResolveUpstreamLatestAsync(Arg.Any<CancellationToken>()).Returns(LlamaCppReleaseResult.ForTag(upstreamTag));
     }
 
     private static LlamaCppUpdateCheckService CreateService(ILlamaCppReleaseCatalog catalog,

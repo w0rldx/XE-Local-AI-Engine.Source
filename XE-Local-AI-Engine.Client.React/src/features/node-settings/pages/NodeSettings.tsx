@@ -15,9 +15,7 @@ import { useDeveloperModeStore } from "@/core/dev-tools/stores/DeveloperModeStor
 import { toast } from "@/core/ui/notifications/Toast";
 import { HfTokenPanel } from "@/features/node-settings/components/HfTokenPanel";
 import { LlamaCppUpdaterPanel } from "@/features/node-settings/components/LlamaCppUpdaterPanel";
-import { LlamaCppVersionPanel } from "@/features/node-settings/components/LlamaCppVersionPanel";
 import { NodeSettingsFieldsCard } from "@/features/node-settings/components/NodeSettingsFieldsCard";
-import type { LlamaCppVariant } from "@/features/node-settings/models/LocalRuntimeModels";
 import {
 	buildNodeSettingsRequest,
 	type NodeSettingsFieldsForm,
@@ -29,12 +27,7 @@ import {
 	nodeSettingsDefaults,
 	toValidNodeSettingsTimeoutSeconds,
 } from "@/features/node-settings/models/NodeSettingsModel";
-import {
-	useEnsureLlamaCppBinary,
-	useHfTokenStatus,
-	useLlamaCppVersion,
-	useSetHfToken,
-} from "@/features/node-settings/queries/useLocalRuntime";
+import { useHfTokenStatus, useSetHfToken } from "@/features/node-settings/queries/useLocalRuntime";
 import { useHfTokenStore } from "@/features/node-settings/stores/HfTokenStore";
 
 function errorMessage(error: unknown): string {
@@ -105,10 +98,7 @@ export function NodeSettings() {
 		...withResponseValidation(saveNodeSettingsMutation()),
 		onSuccess: async (updatedSettings: SaveNodeSettingsResponse) => {
 			toast.success(
-				t(
-					"pages.nodeSettings.saved",
-					"Node settings saved. Capability reporting was requested for the worker connection.",
-				),
+				t("pages.nodeSettings.saved", "Node settings saved. Capability reporting was requested for the worker connection."),
 			);
 			setTimeoutSeconds(updatedSettings.maxMessageRequestTimeoutSeconds ?? nodeSettingsDefaults.maxMessageRequestTimeoutSeconds);
 			const loaded = toNodeSettingsFieldsForm(updatedSettings);
@@ -140,39 +130,15 @@ export function NodeSettings() {
 
 	const canSave = timeoutToSave !== undefined && !saveMutation.isPending;
 
-	// Local-runtime cards (relocated from the model-fit advisor). The llama.cpp version GET may trigger the first
-	// prebuilt binary download backend-side, so it must NOT run on mount — `versionChecked` latches it on only when the
-	// operator explicitly clicks "Check version". The HF token draft lives in a store so it survives a remount; the
-	// token itself is write-only (never read back into the draft).
-	const [versionChecked, setVersionChecked] = useState(false);
+	// HF token: the draft lives in a store so it survives a remount; the token itself is write-only (never read back
+	// into the draft). The llama.cpp runtime card (installed tag/variant, recommended/upstream, ensure/update) is fully
+	// self-contained in LlamaCppUpdaterPanel and owns its own data layer.
 	const tokenDraft = useHfTokenStore((state) => state.tokenDraft);
 	const setTokenDraft = useHfTokenStore((state) => state.actions.setTokenDraft);
 	const clearTokenDraft = useHfTokenStore((state) => state.actions.clearTokenDraft);
 
-	const versionQuery = useLlamaCppVersion(versionChecked);
 	const hfTokenQuery = useHfTokenStatus();
-	const ensureBinary = useEnsureLlamaCppBinary();
 	const setHfToken = useSetHfToken();
-
-	// Operator-initiated llama.cpp version probe. Latches the flag so the (possibly download-triggering) GET fires
-	// once on demand; a subsequent click re-fetches the now-enabled query.
-	const handleCheckVersion = (): void => {
-		if (!versionChecked) {
-			setVersionChecked(true);
-			return;
-		}
-		versionQuery.refetch().catch(() => undefined);
-	};
-
-	const handleEnsureBinary = (variant: LlamaCppVariant): void => {
-		ensureBinary.mutate(variant, {
-			onSuccess: () => toast.success(t("pages.nodeSettings.llamaCpp.ensured", "llama.cpp binary ready.")),
-			onError: (error) =>
-				toast.error(
-					runtimeErrorMessage(error, t("pages.nodeSettings.llamaCpp.ensureError", "Could not ensure the llama.cpp binary.")),
-				),
-		});
-	};
 
 	const handleSaveToken = (): void => {
 		setHfToken.mutate(tokenDraft.trim(), {
@@ -265,18 +231,6 @@ export function NodeSettings() {
 				</Card>
 
 				<LlamaCppUpdaterPanel />
-
-				<LlamaCppVersionPanel
-					version={versionQuery.data}
-					// `isLoading` is true while a DISABLED query idles, so gate the spinner on an actual in-flight fetch — the
-					// panel shows its idle "not checked yet" state until the operator triggers the (download-capable) probe.
-					isLoading={versionChecked && versionQuery.isFetching}
-					error={versionChecked ? versionQuery.error : null}
-					hasChecked={versionChecked}
-					onCheck={handleCheckVersion}
-					onEnsure={handleEnsureBinary}
-					isEnsuring={ensureBinary.isPending}
-				/>
 
 				<NodeSettingsFieldsCard
 					form={fieldsForm}

@@ -85,12 +85,17 @@ public sealed class LlamaCppUpdateCheckService : BackgroundService
 
             var recommendedResult = await _catalog.ResolveRecommendedAsync(recommendedTag, cancellationToken).ConfigureAwait(false);
 
+            // Also resolve the true upstream-latest tag so developer mode has it on the startup snapshot — without any
+            // ?refresh round-trip (mirrors GetLlamaCppRuntimeEndpoint.ComputeFreshSnapshotAsync). Offline-tolerant: a
+            // no-live-data result yields a null upstream tag, never a throw.
+            var upstreamResult = await _catalog.ResolveUpstreamLatestAsync(cancellationToken).ConfigureAwait(false);
+
             // No live data (offline / rate-limited / unresolved) — record an offline snapshot, advertise no update.
             if (recommendedResult.HasNoLiveData || recommendedResult.Tag is null)
             {
                 _updateState.Store(new LlamaCppUpdateSnapshot(installedTag,
                     RecommendedTag: recommendedTag,
-                    UpstreamLatestTag: null,
+                    UpstreamLatestTag: upstreamResult.Tag,
                     UpdateAvailable: false,
                     IsOffline: recommendedResult.IsOffline || recommendedResult.IsRateLimited,
                     CheckedAtUtc: DateTimeOffset.UtcNow));
@@ -105,7 +110,7 @@ public sealed class LlamaCppUpdateCheckService : BackgroundService
 
             _updateState.Store(new LlamaCppUpdateSnapshot(installedTag,
                 RecommendedTag: resolvedRecommended,
-                UpstreamLatestTag: null,
+                UpstreamLatestTag: upstreamResult.Tag,
                 updateAvailable,
                 IsOffline: false,
                 CheckedAtUtc: DateTimeOffset.UtcNow));

@@ -327,10 +327,12 @@ public sealed class EjectRunningModelResponse
 // ---------------------------------------------------------------------------
 
 /// <summary>
-///     Response for <c>GET/POST model-fit/llamacpp/version</c>. Surfaces the resolved, hash-verified llama.cpp prebuilt
-///     binary: its release tag (<see cref="Version" />), the acceleration <see cref="Variant" /> (<c>cpu|cuda|vulkan</c>),
-///     whether it is the recommended pinned fallback, and the recommended pinned tag. There is no source-build / arbitrary
-///     pin capability — the manager only resolves/ensures the pinned-or-selected prebuilt asset.
+///     Response for <c>POST model-fit/llamacpp/version</c> (ensure-binary) and <c>POST model-fit/llamacpp/update</c>.
+///     Surfaces the resolved, hash-verified llama.cpp prebuilt binary: its release tag (<see cref="Version" />), the
+///     acceleration <see cref="Variant" /> (<c>cpu|cuda|vulkan</c>), whether it is the recommended pinned fallback, and
+///     the recommended pinned tag. There is no source-build / arbitrary pin capability — the manager only resolves/ensures
+///     the pinned-or-selected prebuilt asset. (The read-only GET on this route was removed: it could trigger a
+///     multi-hundred-MB download on a fresh node; the runtime-status GET surfaces the installed tag+variant instead.)
 /// </summary>
 public sealed class LlamaCppVersionResponse
 {
@@ -384,10 +386,24 @@ public sealed class LlamaCppInstalledRuntimeResponse
 }
 
 /// <summary>
+///     Query-string request for <c>GET model-fit/llamacpp/runtime</c>. <see cref="Refresh" /> (default false) forces a
+///     fresh catalog tag-resolution (recommended + upstream-latest) — subject to the endpoint's 60s rate-limit guard.
+///     Declaring it here lands the param in the OpenAPI contract so the generated client can send it (it was previously
+///     read ad-hoc and absent from the schema). This still resolves tags only — never an asset — so it never downloads.
+/// </summary>
+public sealed class GetLlamaCppRuntimeRequest
+{
+    /// <summary>When true, re-checks the live release catalog (rate-limited to once per 60s); null/false serves the cached snapshot.</summary>
+    public bool? Refresh { get; init; }
+}
+
+/// <summary>
 ///     Response for <c>GET model-fit/llamacpp/runtime</c>. Read-only: it surfaces the installed runtime (when recorded),
 ///     the recommended tag, the optional upstream-latest tag (resolved server-side; the client only displays it in
-///     developer mode), whether a newer recommended runtime is available, and whether the live catalog was offline at the
-///     time of the snapshot. It NEVER triggers a binary download.
+///     developer mode), whether a newer recommended runtime is available, whether the live catalog was offline at the
+///     time of the snapshot, and how many llama.cpp model processes are currently running (the pre-update safety gate
+///     reads this — a non-zero count means the runtime must not be replaced until the operator ejects them). It NEVER
+///     triggers a binary download.
 /// </summary>
 public sealed class LlamaCppRuntimeStatusResponse
 {
@@ -405,6 +421,13 @@ public sealed class LlamaCppRuntimeStatusResponse
 
     /// <summary>True when the live release catalog was unreachable/rate-limited at the time of the snapshot.</summary>
     public required bool IsOffline { get; init; }
+
+    /// <summary>
+    ///     The number of running <c>llama-server</c> processes (chat + embedding) reported by the supervisor. Counts
+    ///     llama.cpp binaries only — Ollama is an opt-in external provider and is never counted. A non-zero value gates
+    ///     the runtime update (the binary must not be replaced while a process holds it).
+    /// </summary>
+    public required int RunningProcessCount { get; init; }
 }
 
 /// <summary>
@@ -419,6 +442,21 @@ public sealed class UpdateLlamaCppRuntimeRequest
 
     /// <summary>Optional acceleration variant override — <c>cpu|cuda|vulkan</c>; null auto-selects the host variant.</summary>
     public string? Variant { get; init; }
+}
+
+/// <summary>
+///     409 Conflict body returned by <c>POST model-fit/llamacpp/update</c> when one or more <c>llama-server</c> processes
+///     are still running. Replacing the runtime binary while a process holds it is unsafe, so the operator must eject all
+///     running models first (the update is never auto-evicted). <see cref="RunningProcessCount" /> lets the UI explain how
+///     many remain. The message is sanitized (no internal path/URL).
+/// </summary>
+public sealed class LlamaCppUpdateBlockedResponse
+{
+    /// <summary>The number of running llama.cpp processes that must be ejected before the runtime can be updated.</summary>
+    public required int RunningProcessCount { get; init; }
+
+    /// <summary>A user-safe explanation of why the update was rejected.</summary>
+    public required string Message { get; init; }
 }
 
 // ---------------------------------------------------------------------------
