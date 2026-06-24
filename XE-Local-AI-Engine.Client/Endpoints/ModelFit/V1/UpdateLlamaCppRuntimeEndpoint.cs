@@ -5,6 +5,7 @@ using FastEndpoints;
 using XE_Local_AI_Engine.Client.Endpoints.Common;
 using XE_Local_AI_Engine.Client.Endpoints.ModelFit.V1.Mappers;
 using XE_Local_AI_Engine.Client.Services.Auth;
+using XE_Local_AI_Engine.Client.Services.CloudProviders;
 using XE_Local_AI_Engine.Client.Services.NodeSettings;
 using XE_Local_AI_Engine.Providers.LlamaServer;
 
@@ -28,10 +29,12 @@ public sealed class UpdateLlamaCppRuntimeEndpoint(
     ILlamaCppUpdateState updateState,
     INodeRuntimeSettings nodeRuntimeSettings,
     ILlamaServerProcessSupervisor processSupervisor,
+    ILocalChatClientCacheInvalidator localChatClientCacheInvalidator,
     ILogger<UpdateLlamaCppRuntimeEndpoint> logger) : Endpoint<UpdateLlamaCppRuntimeRequest, LlamaCppVersionResponse>
 {
     private readonly ILlamaCppBinaryManager _binaryManager = binaryManager ?? throw new ArgumentNullException(nameof(binaryManager));
     private readonly IInstalledRuntimeStore _installedRuntimeStore = installedRuntimeStore ?? throw new ArgumentNullException(nameof(installedRuntimeStore));
+    private readonly ILocalChatClientCacheInvalidator _localChatClientCacheInvalidator = localChatClientCacheInvalidator ?? throw new ArgumentNullException(nameof(localChatClientCacheInvalidator));
     private readonly ILogger<UpdateLlamaCppRuntimeEndpoint> _logger = logger ?? throw new ArgumentNullException(nameof(logger));
     private readonly INodeRuntimeSettings _nodeRuntimeSettings = nodeRuntimeSettings ?? throw new ArgumentNullException(nameof(nodeRuntimeSettings));
     private readonly ILlamaServerProcessSupervisor _processSupervisor = processSupervisor ?? throw new ArgumentNullException(nameof(processSupervisor));
@@ -107,6 +110,13 @@ public sealed class UpdateLlamaCppRuntimeEndpoint(
             var binary = await _binaryManager
                                .InstallTagAsync(tag, asset.Asset.Name, asset.Asset.Digest, asset.Asset.Size, variant, ct)
                                .ConfigureAwait(false);
+
+            // The runtime binary has been replaced. The local chat-client router caches a deferred client per
+            // (provider, model) that resolved its llama-server endpoint against the previous binary; the eject-first gate
+            // above guarantees no process is running now, but the cached client still points at the now-gone endpoint and
+            // would connection-time-out on the next send. Clear the cache so the next send re-resolves and ensure-runs the
+            // backing process against the freshly installed binary.
+            _localChatClientCacheInvalidator.ClearClientCache();
 
             await RefreshSnapshotAsync(tag, ct).ConfigureAwait(false);
 

@@ -30,7 +30,7 @@ using XE_Local_AI_Engine.Providers.Abstractions.Contracts;
 ///         not the supervisor processes).
 ///     </para>
 /// </remarks>
-public sealed class ModelRoutingLocalChatClient : IChatClient
+public sealed class ModelRoutingLocalChatClient : IChatClient, ILocalChatClientCacheInvalidator
 {
     private const string ResolvedClientOwnershipNote =
         "Resolved chat clients are cached and owned by this router (disposed in Dispose); the underlying model "
@@ -103,6 +103,23 @@ public sealed class ModelRoutingLocalChatClient : IChatClient
         }
 
         _clientsByProviderAndModel.Clear();
+    }
+
+    /// <inheritdoc />
+    public void ClearClientCache()
+    {
+        // Atomically swap out the cached deferred clients and dispose them. A cleared deferred client holds an inner
+        // adapter pointed at an endpoint that may no longer exist (e.g. after the operator switched/updated the
+        // llama.cpp runtime variant), so it is disposed here; the next send re-resolves a fresh client, which
+        // ensure-runs the backing process against the current binary. The supervisor owns the processes themselves and
+        // is unaffected by this cache reset.
+        foreach (var key in _clientsByProviderAndModel.Keys)
+        {
+            if (_clientsByProviderAndModel.TryRemove(key, out var removed))
+            {
+                removed.Dispose();
+            }
+        }
     }
 
     private async Task<IChatClient> ResolveClientAsync(ChatOptions? options, CancellationToken cancellationToken)
