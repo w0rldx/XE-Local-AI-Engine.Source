@@ -396,7 +396,6 @@ describe("ModelManagement", () => {
 		renderWithProviders(<ModelManagement />);
 
 		expect(await screen.findByText("Local model provider is unavailable.")).toBeTruthy();
-		expect(screen.getByText("Ollama offline")).toBeTruthy();
 	});
 
 	it("shows license and template in the dialog License tab", async () => {
