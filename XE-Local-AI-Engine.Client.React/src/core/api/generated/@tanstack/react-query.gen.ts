@@ -64,6 +64,7 @@ import {
 	getHfTokenStatus,
 	getInvocationMonitor,
 	getLatestRecommendations,
+	getLlamaCppRuntime,
 	getLlamaCppVersion,
 	getLocalModelDetails,
 	getMcpServer,
@@ -126,6 +127,7 @@ import {
 	triggerScheduledJob,
 	unloadLocalModel,
 	updateAgentDefinition,
+	updateLlamaCppRuntime,
 	updateMcpServer,
 	updatePlaybookAction,
 	updatePreviewWorkflow,
@@ -245,6 +247,8 @@ import type {
 	GetInvocationMonitorResponse,
 	GetLatestRecommendationsData,
 	GetLatestRecommendationsResponse,
+	GetLlamaCppRuntimeData,
+	GetLlamaCppRuntimeResponse,
 	GetLlamaCppVersionData,
 	GetLlamaCppVersionResponse,
 	GetLocalModelDetailsData,
@@ -379,6 +383,8 @@ import type {
 	UnloadLocalModelResponse,
 	UpdateAgentDefinitionData,
 	UpdateAgentDefinitionResponse,
+	UpdateLlamaCppRuntimeData,
+	UpdateLlamaCppRuntimeResponse,
 	UpdateMcpServerData,
 	UpdateMcpServerResponse,
 	UpdatePlaybookActionData,
@@ -1230,6 +1236,28 @@ export const getLatestRecommendationsOptions = (options?: Options<GetLatestRecom
 		queryKey: getLatestRecommendationsQueryKey(options),
 	});
 
+export const getLlamaCppRuntimeQueryKey = (options?: Options<GetLlamaCppRuntimeData>) =>
+	createQueryKey("getLlamaCppRuntime", options);
+
+export const getLlamaCppRuntimeOptions = (options?: Options<GetLlamaCppRuntimeData>) =>
+	queryOptions<
+		GetLlamaCppRuntimeResponse,
+		AxiosError<DefaultError>,
+		GetLlamaCppRuntimeResponse,
+		ReturnType<typeof getLlamaCppRuntimeQueryKey>
+	>({
+		queryFn: async ({ queryKey, signal }) => {
+			const { data } = await getLlamaCppRuntime({
+				...options,
+				...queryKey[0],
+				signal,
+				throwOnError: true,
+			});
+			return data;
+		},
+		queryKey: getLlamaCppRuntimeQueryKey(options),
+	});
+
 export const inspectGgufRepositoryQueryKey = (options?: Options<InspectGgufRepositoryData>) =>
 	createQueryKey("inspectGgufRepository", options);
 
@@ -1304,6 +1332,26 @@ export const startGgufDownloadMutation = (
 	> = {
 		mutationFn: async (fnOptions) => {
 			const { data } = await startGgufDownload({
+				...options,
+				...fnOptions,
+				throwOnError: true,
+			});
+			return data;
+		},
+	};
+	return mutationOptions;
+};
+
+export const updateLlamaCppRuntimeMutation = (
+	options?: Partial<Options<UpdateLlamaCppRuntimeData>>,
+): UseMutationOptions<UpdateLlamaCppRuntimeResponse, AxiosError<DefaultError>, Options<UpdateLlamaCppRuntimeData>> => {
+	const mutationOptions: UseMutationOptions<
+		UpdateLlamaCppRuntimeResponse,
+		AxiosError<DefaultError>,
+		Options<UpdateLlamaCppRuntimeData>
+	> = {
+		mutationFn: async (fnOptions) => {
+			const { data } = await updateLlamaCppRuntime({
 				...options,
 				...fnOptions,
 				throwOnError: true,

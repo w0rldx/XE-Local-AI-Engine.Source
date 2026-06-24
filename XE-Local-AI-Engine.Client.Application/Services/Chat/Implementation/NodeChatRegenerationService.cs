@@ -29,6 +29,7 @@ public sealed class NodeChatRegenerationService(
     IInvocationRunner invocationRunner,
     IWorkerEventDispatcher eventDispatcher,
     IOptions<LocalChatAgentOptions> localChatOptions,
+    INodeRuntimeSettings runtimeSettings,
     INodeChatStreamCancellationRegistry cancellationRegistry,
     ILocalToolOfferProvider localToolOfferProvider,
     IAgentDefinitionResolver agentDefinitionResolver,
@@ -178,7 +179,8 @@ public sealed class NodeChatRegenerationService(
         // capability. When offered, the catalog's local tools travel in the runtime package as the offer list; the
         // invocation factory resolves the matching executables from the registry by name. A bound definition narrows
         // that offer to its allowed set (and the resolver already withheld the offer for a non-tools model).
-        var offerTools = useLocalTools && localChatOptions.Value.EnableTools && resolution.SupportsTools;
+        var enableTools = await runtimeSettings.GetEnableToolsAsync(cancellationToken).ConfigureAwait(false);
+        var offerTools = useLocalTools && enableTools && resolution.SupportsTools;
         var allowedTools = offerTools
             ? resolved?.AllowedTools ?? localToolOfferProvider.GetOfferedTools(activeModel)
             : null;

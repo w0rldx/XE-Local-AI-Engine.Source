@@ -1,12 +1,13 @@
 namespace XE_Local_AI_Engine.Tests.AgentHome;
 
-using Microsoft.Extensions.Options;
 using XE_Local_AI_Engine.Client.Services.AgentHome;
 using XE_Local_AI_Engine.Client.Services.AgentHome.Tools;
 using XE_Local_AI_Engine.Client.Services.AgentHome.Tools.Implementation;
+using XE_Local_AI_Engine.Client.Services.NodeSettings;
 using XE_Local_AI_Engine.Client.Services.Sandbox;
 using XE_Local_AI_Engine.Client.Services.Workspace;
 using XE_Local_AI_Engine.Tests.Testing;
+using XE_Local_AI_Engine.Tests.Testing.Builders;
 
 /// <summary>
 ///     Gateway-adapter coverage: the <see cref="AgentHomeToolGateway" /> renders a successful run into a
@@ -22,11 +23,10 @@ public sealed class AgentHomeToolGatewayTests
         AllowedActions = ["read_workspace"]
     };
 
-    private static readonly IOptions<AgentHomeOptions> GatewayOptions =
-        Options.Create(new AgentHomeOptions
-        {
-            CommandTimeoutSeconds = 300
-        });
+    private static readonly INodeRuntimeSettings GatewayOptions =
+        StubNodeRuntimeSettings.Create()
+            .WithAgentHomeCommandTimeoutSeconds(300)
+            .Build();
 
     [Test]
     public async Task ExecuteAsync_WhenRunSucceeds_RendersCompactResult()

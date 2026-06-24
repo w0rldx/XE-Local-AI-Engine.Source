@@ -3,6 +3,7 @@ namespace XE_Local_AI_Engine.Client.Services.AgentHome.Implementation;
 using System.Collections.Concurrent;
 using System.Globalization;
 using Microsoft.Extensions.Options;
+using XE_Local_AI_Engine.Client.Services.NodeSettings;
 using XE_Local_AI_Engine.Client.Services.Sandbox;
 using XE_Local_AI_Engine.Client.Services.Workspace;
 
@@ -49,6 +50,7 @@ internal sealed class AgentHomeService : IAgentHomeService
     private readonly AgentHomeOptions _options;
     private readonly IAgentHomePatchService _patchService;
     private readonly ISandboxRuntimeProvider _provider;
+    private readonly INodeRuntimeSettings _runtimeSettings;
 
     // Run-level single-flight guard: one semaphore per owner-node, created on demand. A second run for
     // the same owner-node while one is in flight is rejected (non-blocking Wait(0)), not queued. Keyed by a string so
@@ -67,6 +69,7 @@ internal sealed class AgentHomeService : IAgentHomeService
         IAgentHomeMemoryProposalService memoryProposalService,
         IServiceScopeFactory scopeFactory,
         IOptions<AgentHomeOptions> options,
+        INodeRuntimeSettings runtimeSettings,
         TimeProvider timeProvider,
         ILogger<AgentHomeService> logger)
     {
@@ -79,6 +82,7 @@ internal sealed class AgentHomeService : IAgentHomeService
         _scopeFactory = scopeFactory ?? throw new ArgumentNullException(nameof(scopeFactory));
         ArgumentNullException.ThrowIfNull(options);
         _options = options.Value;
+        _runtimeSettings = runtimeSettings ?? throw new ArgumentNullException(nameof(runtimeSettings));
         _timeProvider = timeProvider ?? throw new ArgumentNullException(nameof(timeProvider));
         _logger = logger ?? throw new ArgumentNullException(nameof(logger));
     }
@@ -129,8 +133,9 @@ internal sealed class AgentHomeService : IAgentHomeService
         ArgumentNullException.ThrowIfNull(request);
         cancellationToken.ThrowIfCancellationRequested();
 
+        var prepareTimeoutSeconds = await _runtimeSettings.GetAgentHomePrepareTimeoutSecondsAsync(cancellationToken).ConfigureAwait(false);
         using var prepareCts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
-        prepareCts.CancelAfter(TimeSpan.FromSeconds(_options.PrepareTimeoutSeconds));
+        prepareCts.CancelAfter(TimeSpan.FromSeconds(prepareTimeoutSeconds));
         var prepareToken = prepareCts.Token;
 
         // Policy gates first: a disallowed runtime profile or an unknown/invalid selected-folder id is rejected before
@@ -184,7 +189,8 @@ internal sealed class AgentHomeService : IAgentHomeService
         cancellationToken.ThrowIfCancellationRequested();
 
         var runId = CreateRunId();
-        var commandTimeout = TimeSpan.FromSeconds(_options.CommandTimeoutSeconds);
+        var commandTimeoutSeconds = await _runtimeSettings.GetAgentHomeCommandTimeoutSecondsAsync(cancellationToken).ConfigureAwait(false);
+        var commandTimeout = TimeSpan.FromSeconds(commandTimeoutSeconds);
 
         using var commandCts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
         commandCts.CancelAfter(commandTimeout);
@@ -246,12 +252,12 @@ internal sealed class AgentHomeService : IAgentHomeService
             await AppendCommandSafelyAsync(runLogger, runId, descriptor, completed: false, exitCode: -1, commandStartedAt,
                 nameof(OperationCanceledException), CancellationToken.None).ConfigureAwait(false);
             await AppendEventSafelyAsync(runLogger, "timed_out",
-                string.Create(CultureInfo.InvariantCulture, $"timeout_seconds={_options.CommandTimeoutSeconds}"),
+                string.Create(CultureInfo.InvariantCulture, $"timeout_seconds={commandTimeoutSeconds}"),
                 CancellationToken.None).ConfigureAwait(false);
 
             _logger.LogWarning("AgentHome run {RunId} timed out after {TimeoutSeconds}s.",
                 runId,
-                _options.CommandTimeoutSeconds);
+                commandTimeoutSeconds);
 
             return new AgentHomeRunResult
             {

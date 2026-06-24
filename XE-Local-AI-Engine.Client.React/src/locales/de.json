@@ -882,6 +882,32 @@
 					"cpu": "CPU",
 					"cuda": "CUDA",
 					"vulkan": "Vulkan"
+				},
+				"updater": {
+					"title": "llama.cpp runtime updates",
+					"refresh": "Check for updates",
+					"loading": "Resolving runtime status…",
+					"statusError": "Could not resolve the llama.cpp runtime status.",
+					"installed": "Installed",
+					"recommended": "Recommended",
+					"upstream": "Upstream latest",
+					"devBadge": "Dev",
+					"offline": "Offline — using the cached / pinned runtime. Update checks are unavailable until the GitHub release API is reachable.",
+					"updateAvailable": "Update available",
+					"upToDate": "Up to date",
+					"update": "Install recommended ({{tag}})",
+					"installUpstream": "Install upstream ({{tag}})",
+					"toastTitle": "Updating llama.cpp runtime",
+					"toastPreparing": "Downloading and verifying {{tag}}…",
+					"toastSuccess": "llama.cpp runtime updated to {{tag}}.",
+					"toastSuccessTitle": "Runtime updated",
+					"toastError": "Could not update the llama.cpp runtime.",
+					"toastErrorTitle": "Update failed"
+				},
+				"updateBanner": {
+					"message": "A newer llama.cpp runtime ({{tag}}) is available.",
+					"review": "Review update",
+					"dismiss": "Dismiss"
 				}
 			},
 			"hfToken": {
@@ -897,6 +923,87 @@
 				"saveError": "Das Token konnte nicht gespeichert werden.",
 				"cleared": "Token gelöscht.",
 				"clearError": "Das Token konnte nicht gelöscht werden."
+			},
+			"saved": "Node settings saved. Capability reporting was requested for the worker connection.",
+			"fields": {
+				"save": "Save node settings",
+				"validationError": "Some settings are invalid. Fix the highlighted fields.",
+				"allowedRange": "Allowed range",
+				"seconds": "seconds",
+				"minutes": "minutes",
+				"bytesPositive": "A positive number of bytes.",
+				"errors": {
+					"range": "Enter a whole number within the allowed range.",
+					"format": "Must match the format b<number> (e.g. b9692).",
+					"url": "Enter a valid http:// or https:// URL.",
+					"invalid": "One or more entries are invalid.",
+					"positive": "Enter a positive whole number."
+				},
+				"localChat": {
+					"title": "Local chat"
+				},
+				"defaultModelName": {
+					"label": "Default model",
+					"description": "The model used for local chat when none is selected. Leave blank to use the configured default."
+				},
+				"enableTools": {
+					"label": "Enable tools",
+					"description": "Allow local chat agents to call tools."
+				},
+				"toolCapableModels": {
+					"label": "Tool-capable models",
+					"description": "Model names that support tool calling. Press Enter to add each name."
+				},
+				"runtime": {
+					"title": "Local model runtime",
+					"tagHint": "The recommended llama.cpp version is managed in the llama.cpp runtime updates card above."
+				},
+				"llamaMaxLoadedProcesses": {
+					"label": "Max loaded llama-server processes"
+				},
+				"llamaIdleTimeToLiveSeconds": {
+					"label": "Idle process time-to-live"
+				},
+				"ollamaEndpoint": {
+					"label": "Ollama endpoint",
+					"description": "The Ollama API base URL. Applies after a restart."
+				},
+				"huggingFace": {
+					"title": "Hugging Face"
+				},
+				"huggingFaceDefaultQuant": {
+					"label": "Default quantization",
+					"description": "Preferred GGUF quantization when downloading from Hugging Face (e.g. Q4_K_M)."
+				},
+				"worker": {
+					"title": "Worker limits"
+				},
+				"maxResponseSizeMb": {
+					"label": "Max response size"
+				},
+				"advanced": {
+					"title": "Advanced (developer)",
+					"description": "Low-level orchestration and AgentHome limits. Most changes apply after a restart.",
+					"samplingNote": "Node-level sampling defaults are a follow-up: configure sampling per message in chat for now."
+				},
+				"orchestrationIdleTimeoutSeconds": {
+					"label": "Orchestration idle timeout"
+				},
+				"agentHomePrepareTimeoutSeconds": {
+					"label": "AgentHome prepare timeout"
+				},
+				"agentHomeCommandTimeoutSeconds": {
+					"label": "AgentHome command timeout"
+				},
+				"agentHomeMaxSelectedFolderBytes": {
+					"label": "AgentHome max selected folder size"
+				},
+				"agentHomeMaxPatchBytes": {
+					"label": "AgentHome max patch size"
+				},
+				"maxPendingToolCallAgeMinutes": {
+					"label": "Max pending tool-call age"
+				}
 			}
 		},
 		"cloudSettings": {

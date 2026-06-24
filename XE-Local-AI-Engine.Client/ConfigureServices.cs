@@ -234,6 +234,10 @@ public static class ConfigureServices
         // bundled llama.cpp runtime) and selected so a fresh double-click install can chat out of the box. Gated behind
         // desktop launch mode and offline-tolerant — headless/Aspire/CI never auto-download (off-flag invariant).
         builder.Services.AddHostedService<FirstRunModelProvisioningService>();
+        // One-shot llama.cpp runtime update check: after a short non-blocking delay, resolves the recommended tag against
+        // the live release catalog and compares it to the installed runtime, recording an "update available" snapshot
+        // (read by the runtime-status endpoint). Notify-only + offline-tolerant; never downloads a binary on its own.
+        builder.Services.AddHostedService<LlamaCppUpdateCheckService>();
         builder.Services.AddHealthChecks()
                .AddCheck<WorkerHealthCheck>("worker_health", tags: ["ready"]);
     }

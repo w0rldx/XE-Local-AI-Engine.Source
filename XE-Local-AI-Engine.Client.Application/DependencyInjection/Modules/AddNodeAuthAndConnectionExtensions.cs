@@ -1,5 +1,6 @@
 namespace XE_Local_AI_Engine.Client;
 
+using Microsoft.Extensions.Caching.Memory;
 using XE_Local_AI_Engine.Client.Services.Auth;
 using XE_Local_AI_Engine.Client.Services.Auth.Implementation;
 using XE_Local_AI_Engine.Client.Services.CloudProviders;
@@ -51,7 +52,15 @@ internal static class AddNodeAuthAndConnectionExtensions
         builder.Services.AddScoped<INodeAuthService, NodeAuthService>();
         builder.Services.AddSingleton<NodeIdentityInitializationService>();
         builder.Services.AddSingleton<ICloudCredentialStore, CloudCredentialStore>();
-        builder.Services.AddSingleton<INodeSettingsStore, NodeSettingsStore>();
+
+        // Node settings: the file store stays the canonical inner store (semaphore + 0600 perms); a single-entry
+        // IMemoryCache decorator fronts it as INodeSettingsStore, and INodeRuntimeSettings is the read surface migrated
+        // consumers use (precedence stored > appsettings seed > hardcoded default).
+        builder.Services.AddMemoryCache();
+        builder.Services.AddSingleton<NodeSettingsStore>();
+        builder.Services.AddSingleton<INodeSettingsStore>(static sp =>
+            new CachedNodeSettingsStore(sp.GetRequiredService<NodeSettingsStore>(), sp.GetRequiredService<IMemoryCache>()));
+        builder.Services.AddSingleton<INodeRuntimeSettings, NodeRuntimeSettings>();
         builder.Services.AddSingleton<IAzureFoundryChatClientFactory, AzureFoundryChatClientFactory>();
         builder.AddCodexOAuthProvider(configuration);
         builder.Services.AddSingleton<INodeKeyRegistry, NodeKeyRegistry>();

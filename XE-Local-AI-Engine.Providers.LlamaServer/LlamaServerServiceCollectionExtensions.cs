@@ -31,8 +31,24 @@ public static class LlamaServerServiceCollectionExtensions
 
         services.TryAddSingleton<IGpuVendorProbe, ProcessGpuVendorProbe>();
         services.TryAddSingleton<IGpuVariantSelector, GpuVariantSelector>();
+
+        // Dynamic-runtime resolution seams: the live GitHub Releases catalog (tier 1) and the on-disk installed-runtime
+        // state (tier 2). The binary manager consults both, falling back to the pinned floor (tier 3) when both miss.
+        services.TryAddSingleton<ILlamaCppReleaseCatalog>(static sp =>
+            new GitHubLlamaCppReleaseCatalog(sp.GetRequiredService<HttpClient>()));
+        services.TryAddSingleton<IInstalledRuntimeStore>(static _ => new InstalledRuntimeStore());
+
+        // Shared "is there a newer runtime?" snapshot — written once by the startup check service and after a successful
+        // update install, read by the read-only runtime-status endpoint. Decoupled from any app-package updater channel.
+        services.TryAddSingleton<ILlamaCppUpdateState, LlamaCppUpdateState>();
+
         services.TryAddSingleton<ILlamaCppBinaryManager>(static sp =>
-            new LlamaCppBinaryManager(sp.GetRequiredService<HttpClient>()));
+            new LlamaCppBinaryManager(
+                sp.GetRequiredService<HttpClient>(),
+                cacheRoot: null,
+                activeTag: null,
+                sp.GetRequiredService<ILlamaCppReleaseCatalog>(),
+                sp.GetRequiredService<IInstalledRuntimeStore>()));
 
         // Options default here so the supervisor is resolvable; the host overrides them from node config.
         services.TryAddSingleton(new LlamaServerSupervisorOptions());

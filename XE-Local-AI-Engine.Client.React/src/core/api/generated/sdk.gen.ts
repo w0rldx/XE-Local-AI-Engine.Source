@@ -164,6 +164,9 @@ import type {
 	GetLatestRecommendationsData,
 	GetLatestRecommendationsErrors,
 	GetLatestRecommendationsResponses,
+	GetLlamaCppRuntimeData,
+	GetLlamaCppRuntimeErrors,
+	GetLlamaCppRuntimeResponses,
 	GetLlamaCppVersionData,
 	GetLlamaCppVersionErrors,
 	GetLlamaCppVersionResponses,
@@ -345,6 +348,9 @@ import type {
 	UpdateAgentDefinitionData,
 	UpdateAgentDefinitionErrors,
 	UpdateAgentDefinitionResponses,
+	UpdateLlamaCppRuntimeData,
+	UpdateLlamaCppRuntimeErrors,
+	UpdateLlamaCppRuntimeResponses,
 	UpdateMcpServerData,
 	UpdateMcpServerErrors,
 	UpdateMcpServerResponses,
@@ -465,6 +471,7 @@ import {
 	zGetInvocationMonitorResponse,
 	zGetLatestRecommendationsQuery,
 	zGetLatestRecommendationsResponse,
+	zGetLlamaCppRuntimeResponse,
 	zGetLlamaCppVersionResponse,
 	zGetLocalModelDetailsPath,
 	zGetLocalModelDetailsResponse,
@@ -579,6 +586,8 @@ import {
 	zUpdateAgentDefinitionBody,
 	zUpdateAgentDefinitionPath,
 	zUpdateAgentDefinitionResponse,
+	zUpdateLlamaCppRuntimeBody,
+	zUpdateLlamaCppRuntimeResponse,
 	zUpdateMcpServerBody,
 	zUpdateMcpServerPath,
 	zUpdateMcpServerResponse,
@@ -1513,6 +1522,28 @@ export const getLatestRecommendations = <ThrowOnError extends boolean = false>(
 		...options,
 	});
 
+export const getLlamaCppRuntime = <ThrowOnError extends boolean = false>(
+	options?: Options<GetLlamaCppRuntimeData, ThrowOnError>,
+) =>
+	(options?.client ?? client).get<GetLlamaCppRuntimeResponses, GetLlamaCppRuntimeErrors, ThrowOnError>({
+		requestValidator: async (data) =>
+			await z
+				.object({
+					body: z.never().optional(),
+					path: z.never().optional(),
+					query: z.never().optional(),
+				})
+				.parseAsync(data),
+		responseType: "json",
+		responseValidator: async (data) => await zGetLlamaCppRuntimeResponse.parseAsync(data),
+		security: [
+			{ scheme: "bearer", type: "http" },
+			{ scheme: "bearer", type: "http" },
+		],
+		url: "/api/local/v1/model-fit/llamacpp/runtime",
+		...options,
+	});
+
 export const inspectGgufRepository = <ThrowOnError extends boolean = false>(
 	options?: Options<InspectGgufRepositoryData, ThrowOnError>,
 ) =>
@@ -1598,6 +1629,32 @@ export const startGgufDownload = <ThrowOnError extends boolean = false>(options:
 			{ scheme: "bearer", type: "http" },
 		],
 		url: "/api/local/v1/model-fit/download",
+		...options,
+		headers: {
+			"Content-Type": "application/json",
+			...options.headers,
+		},
+	});
+
+export const updateLlamaCppRuntime = <ThrowOnError extends boolean = false>(
+	options: Options<UpdateLlamaCppRuntimeData, ThrowOnError>,
+) =>
+	(options.client ?? client).post<UpdateLlamaCppRuntimeResponses, UpdateLlamaCppRuntimeErrors, ThrowOnError>({
+		requestValidator: async (data) =>
+			await z
+				.object({
+					body: zUpdateLlamaCppRuntimeBody,
+					path: z.never().optional(),
+					query: z.never().optional(),
+				})
+				.parseAsync(data),
+		responseType: "json",
+		responseValidator: async (data) => await zUpdateLlamaCppRuntimeResponse.parseAsync(data),
+		security: [
+			{ scheme: "bearer", type: "http" },
+			{ scheme: "bearer", type: "http" },
+		],
+		url: "/api/local/v1/model-fit/llamacpp/update",
 		...options,
 		headers: {
 			"Content-Type": "application/json",

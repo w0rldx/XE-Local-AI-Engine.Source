@@ -52,6 +52,11 @@ vi.mock("@/core/api/generated/@tanstack/react-query.gen", () => ({
 	ensureLlamaCppBinaryMutation: () => ({ mutationFn: vi.fn() }),
 	getHfTokenStatusOptions: () => ({ queryKey: ["hf-token-status"], queryFn: () => Promise.resolve({ hasToken: false }) }),
 	setHfTokenMutation: () => ({ mutationFn: vi.fn() }),
+	getLlamaCppRuntimeOptions: () => ({
+		queryKey: ["llamacpp-runtime"],
+		queryFn: () => Promise.resolve({ recommendedTag: "b1000", updateAvailable: false, isOffline: false }),
+	}),
+	updateLlamaCppRuntimeMutation: () => ({ mutationFn: vi.fn() }),
 }));
 
 vi.mock("@/core/api/ResponseValidation", () => ({

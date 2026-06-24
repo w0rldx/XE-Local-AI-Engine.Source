@@ -4,6 +4,7 @@ using FastEndpoints;
 using XE_Local_AI_Engine.Client.Endpoints.Common;
 using XE_Local_AI_Engine.Client.Endpoints.ModelFit.V1.Mappers;
 using XE_Local_AI_Engine.Client.Services.Auth;
+using XE_Local_AI_Engine.Client.Services.NodeSettings;
 using XE_Local_AI_Engine.Providers.LlamaServer;
 
 /// <summary>
@@ -21,10 +22,12 @@ using XE_Local_AI_Engine.Providers.LlamaServer;
 public sealed class GetLlamaCppVersionEndpoint(
     ILlamaCppBinaryManager binaryManager,
     IGpuVariantSelector variantSelector,
+    INodeRuntimeSettings nodeRuntimeSettings,
     ILogger<GetLlamaCppVersionEndpoint> logger) : EndpointWithoutRequest<LlamaCppVersionResponse>
 {
     private readonly ILlamaCppBinaryManager _binaryManager = binaryManager ?? throw new ArgumentNullException(nameof(binaryManager));
     private readonly ILogger<GetLlamaCppVersionEndpoint> _logger = logger ?? throw new ArgumentNullException(nameof(logger));
+    private readonly INodeRuntimeSettings _nodeRuntimeSettings = nodeRuntimeSettings ?? throw new ArgumentNullException(nameof(nodeRuntimeSettings));
     private readonly IGpuVariantSelector _variantSelector = variantSelector ?? throw new ArgumentNullException(nameof(variantSelector));
 
     public override void Configure()
@@ -39,7 +42,8 @@ public sealed class GetLlamaCppVersionEndpoint(
         {
             var variant = await _variantSelector.SelectVariantAsync(ct).ConfigureAwait(false);
             var binary = await _binaryManager.EnsureBinaryAsync(variant, ct).ConfigureAwait(false);
-            await Send.OkAsync(binary.ToResponse(), ct).ConfigureAwait(false);
+            var recommendedTag = await _nodeRuntimeSettings.GetRecommendedLlamaCppTagAsync(ct).ConfigureAwait(false);
+            await Send.OkAsync(binary.ToResponse(recommendedTag), ct).ConfigureAwait(false);
         }
         catch (OperationCanceledException) when (ct.IsCancellationRequested)
         {

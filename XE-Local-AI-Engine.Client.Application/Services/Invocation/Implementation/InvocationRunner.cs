@@ -21,6 +21,7 @@ using XE_Local_AI_Engine.Client.Services.Connection;
 using XE_Local_AI_Engine.Client.Services.DeadLetter;
 using XE_Local_AI_Engine.Client.Services.Events;
 using XE_Local_AI_Engine.Client.Services.Invocation.Envelope;
+using XE_Local_AI_Engine.Client.Services.NodeSettings;
 
 /// <summary>
 ///     Represents invocation runner.
@@ -83,7 +84,7 @@ public sealed partial class InvocationRunner : IInvocationRunner
         ILocalModelProviderResolver providerResolver,
         IDeadLetterStore deadLetterStore,
         IConfiguration configuration,
-        IOptions<WorkerNodeOptions> workerOptions,
+        INodeRuntimeSettings runtimeSettings,
         IOptions<SpawnOptions> spawnOptions,
         ILogger<InvocationRunner> logger)
     {
@@ -97,16 +98,20 @@ public sealed partial class InvocationRunner : IInvocationRunner
         _providerResolver = providerResolver ?? throw new ArgumentNullException(nameof(providerResolver));
         _deadLetterStore = deadLetterStore ?? throw new ArgumentNullException(nameof(deadLetterStore));
         ArgumentNullException.ThrowIfNull(configuration);
-        ArgumentNullException.ThrowIfNull(workerOptions);
+        ArgumentNullException.ThrowIfNull(runtimeSettings);
         ArgumentNullException.ThrowIfNull(spawnOptions);
         _spawnOptions = spawnOptions.Value;
         _logger = logger ?? throw new ArgumentNullException(nameof(logger));
 
-        _defaultModel = configuration.GetValue<string>("Agent:LocalChat:DefaultModel")
-                        ?? configuration.GetValue<string>("Ollama:ChatModel")
-                        ?? throw new InvalidOperationException("Agent:LocalChat:DefaultModel is required for invocation execution.");
-        _maxResponseSizeBytes = workerOptions.Value.MaxResponseSizeMb * 1024 * 1024;
-        _maxPendingToolCallAge = TimeSpan.FromMinutes(workerOptions.Value.MaxPendingToolCallAgeMinutes);
+        // The migrated default model + the response-size / pending-tool-call caps are read once at singleton
+        // construction from INodeRuntimeSettings (stored > appsettings seed > default). The caps then live as plain
+        // fields read on the hot streaming/cleanup loops, so an operator edit applies on the next process restart
+        // (plan §7.4). Ollama:ChatModel (an out-of-band runtime override, not a migrated setting) still wins over the
+        // migrated default model when configured, mirroring the chat-connection fallback.
+        _defaultModel = configuration.GetValue<string>("Ollama:ChatModel")
+                        ?? runtimeSettings.GetDefaultModelName();
+        _maxResponseSizeBytes = runtimeSettings.GetMaxResponseSizeMb() * 1024 * 1024;
+        _maxPendingToolCallAge = TimeSpan.FromMinutes(runtimeSettings.GetMaxPendingToolCallAgeMinutes());
     }
 
     public int ActiveInvocationCount => _activeInvocationCompletions.Count;

@@ -267,6 +267,14 @@ public static class LocalApiRoutes
         // variant; POST ensures the binary for a chosen variant is present (download + hash-verify).
         public const string LlamaCppVersion = "model-fit/llamacpp/version";
 
+        // Read-only dynamic-runtime status (ILlamaCppUpdateState + IInstalledRuntimeStore): installed vs recommended
+        // (+ dev-mode upstream-latest) and whether a newer recommended runtime is available. Never triggers a download.
+        public const string LlamaCppRuntime = "model-fit/llamacpp/runtime";
+
+        // Operator-initiated install/update of a chosen llama.cpp release tag (ILlamaCppBinaryManager.InstallTagAsync via
+        // the release catalog). Validates the tag format before resolving the asset + digest and installing.
+        public const string LlamaCppUpdate = "model-fit/llamacpp/update";
+
         // HF access-token set/clear (IHfTokenStore). The endpoint NEVER returns the token; GET reports presence
         // only (security gate).
         public const string HfToken = "model-fit/hf-token";

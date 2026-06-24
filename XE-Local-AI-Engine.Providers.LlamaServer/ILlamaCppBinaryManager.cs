@@ -20,4 +20,21 @@ public interface ILlamaCppBinaryManager
     ///     message is sanitized for direct display.
     /// </exception>
     Task<LlamaBinary> EnsureBinaryAsync(GpuVariant variant, CancellationToken ct);
+
+    /// <summary>
+    ///     Installs a specific, dynamically-resolved release: downloads <paramref name="assetName" /> for
+    ///     <paramref name="tag" />, verifies it against the live publisher <paramref name="digestSha256" /> (a
+    ///     <c>sha256:</c> prefix is tolerated), atomically extracts into the versioned cache dir, smoke-tests the resolved
+    ///     <c>llama-server</c>, and — only on success — records the install in <c>installed-runtime.json</c>. On any
+    ///     failure the previously-installed binary is left untouched and a sanitized error is surfaced.
+    /// </summary>
+    /// <param name="expectedSize">
+    ///     The catalog-reported asset size in bytes. A non-positive value means "unknown" and only the absolute download
+    ///     ceiling is enforced; a positive value adds a pre-download ceiling check and a post-download length match.
+    /// </param>
+    /// <exception cref="LlamaRuntimeException">
+    ///     The tag/asset name is malformed, or the download / size / digest verification / smoke test failed — sanitized
+    ///     for display.
+    /// </exception>
+    Task<LlamaBinary> InstallTagAsync(string tag, string assetName, string digestSha256, long expectedSize, GpuVariant variant, CancellationToken ct);
 }

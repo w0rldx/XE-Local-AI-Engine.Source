@@ -14,3 +14,25 @@ export interface LlamaCppVersion {
 	readonly isPinnedFallback: boolean;
 	readonly pinnedTag: string;
 }
+
+// The installed llama.cpp runtime, as recorded after a verified install. `installedAtUtc` is epoch milliseconds
+// (long on the wire); undefined when nothing has been installed yet (first run resolves from the pin floor).
+export interface LlamaCppInstalledRuntime {
+	readonly tag: string;
+	readonly variant: LlamaCppVariant | string;
+	readonly asset: string;
+	readonly installedAtUtc: number | undefined;
+}
+
+// Domain view-model for the read-only runtime status (GET model-fit/llamacpp/runtime). Drives the updater panel and
+// the global "update available" banner. `installed` is null when no runtime has been installed yet. `updateAvailable`
+// is the single authoritative flag the UI keys off (the backend compares installed vs recommended). `isOffline` flags
+// that the GitHub release API was unreachable — the recommended tag is still served from cache/pins, but the update
+// button is disabled. `upstreamLatestTag` is resolved server-side but only surfaced in the UI under developer mode.
+export interface LlamaCppRuntimeStatus {
+	readonly installed: LlamaCppInstalledRuntime | null;
+	readonly recommendedTag: string;
+	readonly upstreamLatestTag: string | null;
+	readonly updateAvailable: boolean;
+	readonly isOffline: boolean;
+}

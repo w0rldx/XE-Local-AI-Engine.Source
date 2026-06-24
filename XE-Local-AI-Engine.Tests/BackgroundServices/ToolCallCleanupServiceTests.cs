@@ -7,6 +7,7 @@ using XE_Local_AI_Engine.Client.Configuration;
 using XE_Local_AI_Engine.Client.Models.Events;
 using XE_Local_AI_Engine.Client.Services.Invocation;
 using XE_Local_AI_Engine.Tests.Testing;
+using XE_Local_AI_Engine.Tests.Testing.Builders;
 
 public sealed class ToolCallCleanupServiceTests
 {
@@ -71,6 +72,9 @@ public sealed class ToolCallCleanupServiceTests
                 MaxPendingToolCallAgeMinutes = maxAgeMinutes,
                 CleanupIntervalSeconds = cleanupIntervalSeconds
             }),
+            StubNodeRuntimeSettings.Create()
+                .WithMaxPendingToolCallAgeMinutes(maxAgeMinutes)
+                .Build(),
             NullLogger<ToolCallCleanupService>.Instance);
     }
 

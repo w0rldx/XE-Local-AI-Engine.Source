@@ -2,11 +2,9 @@ namespace XE_Local_AI_Engine.Client.Services.Chat.Implementation;
 
 using System.Security.Cryptography;
 using System.Text;
-using Microsoft.Extensions.Options;
 using XE_Local_AI_Engine.AI.Agent.Tools;
 using XE_Local_AI_Engine.Client.Models;
 using XE_Local_AI_Engine.Client.Models.Enums;
-using XE_Local_AI_Engine.Client.Services.AgentHome;
 using XE_Local_AI_Engine.Client.Services.AgentHome.Tools;
 using XE_Local_AI_Engine.Client.Services.Capacity.Tools;
 using XE_Local_AI_Engine.Client.Services.Coder.Tools;
@@ -29,11 +27,11 @@ internal sealed class LocalToolOfferProvider : ILocalToolOfferProvider
 
     public LocalToolOfferProvider(IAgentToolRegistry toolRegistry,
         IMcpToolRegistry mcpToolRegistry,
-        IOptions<AgentHomeOptions> agentHomeOptions)
+        IReadOnlyList<string> toolCapableModels)
     {
         ArgumentNullException.ThrowIfNull(toolRegistry);
         _mcpToolRegistry = mcpToolRegistry ?? throw new ArgumentNullException(nameof(mcpToolRegistry));
-        ArgumentNullException.ThrowIfNull(agentHomeOptions);
+        ArgumentNullException.ThrowIfNull(toolCapableModels);
 
         var builtinDescriptors = toolRegistry.GetLocalChatToolDescriptors();
 
@@ -107,7 +105,10 @@ internal sealed class LocalToolOfferProvider : ILocalToolOfferProvider
             SpawnSubAgentToolDefinition.ToolName
         ];
 
-        _toolCapableModels = new HashSet<string>(agentHomeOptions.Value.ToolCapableModels ?? [], StringComparer.Ordinal);
+        // The migrated AgentHome:ToolCapableModels allow-list, seeded once at construction from INodeRuntimeSettings at
+        // the composition root (this provider is a singleton with a synchronous hot offer path, so the set is captured
+        // here rather than re-read per offer). A runtime edit applies on the next process restart (plan §7.4).
+        _toolCapableModels = new HashSet<string>(toolCapableModels, StringComparer.Ordinal);
     }
 
     public IReadOnlyList<AllowedToolDto> GetOfferedTools(string? activeModelId)

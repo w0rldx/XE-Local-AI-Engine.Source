@@ -360,6 +360,68 @@ public sealed class EnsureLlamaCppBinaryRequest
 }
 
 // ---------------------------------------------------------------------------
+// llama.cpp dynamic-runtime status / update DTOs (runtime updater)
+// ---------------------------------------------------------------------------
+
+/// <summary>
+///     The installed llama.cpp runtime descriptor inside <see cref="LlamaCppRuntimeStatusResponse" />. Present only when
+///     an <c>installed-runtime.json</c> record exists (a runtime was installed via the dynamic updater). Null on a fresh
+///     node whose binary came from the pinned floor and was never recorded by an explicit install.
+/// </summary>
+public sealed class LlamaCppInstalledRuntimeResponse
+{
+    /// <summary>The installed release tag (e.g. <c>b9692</c>).</summary>
+    public required string Tag { get; init; }
+
+    /// <summary>The installed acceleration variant, lowercased — <c>cpu|cuda|vulkan</c>.</summary>
+    public required string Variant { get; init; }
+
+    /// <summary>The installed asset file name.</summary>
+    public required string Asset { get; init; }
+
+    /// <summary>Unix-ms instant the install completed (UTC).</summary>
+    public required long InstalledAtUtc { get; init; }
+}
+
+/// <summary>
+///     Response for <c>GET model-fit/llamacpp/runtime</c>. Read-only: it surfaces the installed runtime (when recorded),
+///     the recommended tag, the optional upstream-latest tag (resolved server-side; the client only displays it in
+///     developer mode), whether a newer recommended runtime is available, and whether the live catalog was offline at the
+///     time of the snapshot. It NEVER triggers a binary download.
+/// </summary>
+public sealed class LlamaCppRuntimeStatusResponse
+{
+    /// <summary>The installed runtime descriptor, or null when no explicit install has been recorded.</summary>
+    public LlamaCppInstalledRuntimeResponse? Installed { get; init; }
+
+    /// <summary>The recommended llama.cpp release tag (the editable node setting).</summary>
+    public required string RecommendedTag { get; init; }
+
+    /// <summary>The true upstream latest tag (developer mode); null when not resolved.</summary>
+    public string? UpstreamLatestTag { get; init; }
+
+    /// <summary>True when a newer recommended runtime is resolvable and differs from the installed one.</summary>
+    public required bool UpdateAvailable { get; init; }
+
+    /// <summary>True when the live release catalog was unreachable/rate-limited at the time of the snapshot.</summary>
+    public required bool IsOffline { get; init; }
+}
+
+/// <summary>
+///     Body for <c>POST model-fit/llamacpp/update</c>. Installs a chosen llama.cpp release <see cref="Tag" /> (validated
+///     against <c>^b\d+$</c>; a malformed tag is rejected with a 400). <see cref="Variant" /> optionally overrides the
+///     auto-selected acceleration variant (<c>cpu|cuda|vulkan</c>); when null the host variant is selected automatically.
+/// </summary>
+public sealed class UpdateLlamaCppRuntimeRequest
+{
+    /// <summary>The release tag to install (e.g. <c>b9700</c>); must match <c>^b\d+$</c>.</summary>
+    public required string Tag { get; init; }
+
+    /// <summary>Optional acceleration variant override — <c>cpu|cuda|vulkan</c>; null auto-selects the host variant.</summary>
+    public string? Variant { get; init; }
+}
+
+// ---------------------------------------------------------------------------
 // HF token DTOs (Hugging Face token store — write-only value; never returned)
 // ---------------------------------------------------------------------------
 

@@ -64,6 +64,44 @@ public sealed class NodeSettingsStore : INodeSettingsStore, IDisposable
         }
     }
 
+    /// <summary>
+    ///     Synchronous twin of <see cref="LoadAsync" /> for the composition/startup path. Uses a synchronous lock + file
+    ///     read so DI factory seeds and singleton constructors never block on async file I/O (which starves the thread
+    ///     pool during host startup). Same tolerant-deserialize + <see cref="Normalize" /> semantics as the async path.
+    /// </summary>
+    public StoredNodeSettings Load(CancellationToken cancellationToken = default)
+    {
+        _lock.Wait(cancellationToken);
+        try
+        {
+            if (!File.Exists(_settingsPath))
+            {
+                return new StoredNodeSettings();
+            }
+
+            try
+            {
+                var json = File.ReadAllText(_settingsPath);
+                var settings = JsonSerializer.Deserialize<StoredNodeSettings>(json, SerializerOptions);
+                return Normalize(settings ?? new StoredNodeSettings());
+            }
+            catch (JsonException exception)
+            {
+                _logger.LogWarning(exception, "Node settings could not be deserialized. Falling back to defaults.");
+                return new StoredNodeSettings();
+            }
+            catch (IOException exception)
+            {
+                _logger.LogWarning(exception, "Node settings could not be read. Falling back to defaults.");
+                return new StoredNodeSettings();
+            }
+        }
+        finally
+        {
+            _lock.Release();
+        }
+    }
+
     public async Task SaveAsync(StoredNodeSettings settings, CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(settings);
@@ -72,12 +110,12 @@ public sealed class NodeSettingsStore : INodeSettingsStore, IDisposable
         await _lock.WaitAsync(cancellationToken).ConfigureAwait(false);
         try
         {
-            await using (var fileStream = File.Create(_settingsPath))
+            // Create with 0600 up front on non-Windows so the file is never briefly world-readable between create and
+            // chmod. Windows relies on the per-user data-directory ACL (UnixCreateMode is unsupported there).
+            await using (var fileStream = CreateOwnerOnly(_settingsPath))
             {
                 await JsonSerializer.SerializeAsync(fileStream, normalizedSettings, SerializerOptions, cancellationToken).ConfigureAwait(false);
             }
-
-            ApplyOwnerOnlyPermissions();
         }
         finally
         {
@@ -86,31 +124,126 @@ public sealed class NodeSettingsStore : INodeSettingsStore, IDisposable
     }
 
     /// <summary>
-    ///     On non-Windows restrict the settings file to owner read/write (0600), matching the key-file posture. Windows
-    ///     relies on the per-user data-directory ACL instead — <see cref="File.SetUnixFileMode" /> is unsupported there.
+    ///     Opens a truncating write stream for <paramref name="path" />. On non-Windows the file is created with
+    ///     owner-only (0600) permissions atomically via <see cref="FileStreamOptions.UnixCreateMode" />, matching the
+    ///     key-file posture. On Windows <see cref="FileStreamOptions.UnixCreateMode" /> is unsupported, so a plain create
+    ///     is used and the per-user data-directory ACL governs access.
     /// </summary>
-    private void ApplyOwnerOnlyPermissions()
+    private static FileStream CreateOwnerOnly(string path)
     {
+        var options = new FileStreamOptions
+        {
+            Mode = FileMode.Create,
+            Access = FileAccess.Write,
+            Share = FileShare.None
+        };
+
         if (!OperatingSystem.IsWindows())
         {
-            File.SetUnixFileMode(_settingsPath, UnixFileMode.UserRead | UnixFileMode.UserWrite);
+            options.UnixCreateMode = UnixFileMode.UserRead | UnixFileMode.UserWrite;
         }
+
+        return new FileStream(path, options);
     }
 
+    /// <summary>
+    ///     Clamps/validates each stored field independently. An out-of-range timeout resets only that one field to its
+    ///     documented default (no longer discarding every other migrated field). Each newer nullable field falls back to
+    ///     <see langword="null" /> when out-of-range/malformed so the accessor re-seeds it (preserving the
+    ///     stored &gt; seed &gt; default precedence).
+    /// </summary>
     private static StoredNodeSettings Normalize(StoredNodeSettings settings)
     {
-        if (settings.MaxMessageRequestTimeoutSeconds is < StoredNodeSettings.MinMaxMessageRequestTimeoutSeconds or > StoredNodeSettings.MaxMaxMessageRequestTimeoutSeconds)
-        {
-            return new StoredNodeSettings();
-        }
-
-        var defaultModelName = string.IsNullOrWhiteSpace(settings.DefaultModelName)
-            ? null
-            : settings.DefaultModelName.Trim();
+        // Clamp the timeout in isolation: one corrupt/out-of-range value in a hand-edited file must not wipe the rest.
+        var timeout = settings.MaxMessageRequestTimeoutSeconds is < StoredNodeSettings.MinMaxMessageRequestTimeoutSeconds or > StoredNodeSettings.MaxMaxMessageRequestTimeoutSeconds
+            ? StoredNodeSettings.DefaultMaxMessageRequestTimeoutSeconds
+            : settings.MaxMessageRequestTimeoutSeconds;
 
         return settings with
         {
-            DefaultModelName = defaultModelName
+            MaxMessageRequestTimeoutSeconds = timeout,
+            DefaultModelName = TrimToNull(settings.DefaultModelName),
+            ToolCapableModels = NormalizeStringList(settings.ToolCapableModels),
+            OllamaEndpoint = NormalizeAbsoluteUrl(settings.OllamaEndpoint),
+            HuggingFaceDefaultQuant = TrimToNull(settings.HuggingFaceDefaultQuant),
+            HuggingFaceDiskMarginBytes = ClampPositiveLong(settings.HuggingFaceDiskMarginBytes),
+            LlamaMaxLoadedProcesses = ClampToRange(settings.LlamaMaxLoadedProcesses,
+                StoredNodeSettings.MinLlamaMaxLoadedProcesses, StoredNodeSettings.MaxLlamaMaxLoadedProcesses),
+            LlamaIdleTimeToLiveSeconds = ClampToRange(settings.LlamaIdleTimeToLiveSeconds,
+                StoredNodeSettings.MinLlamaIdleTimeToLiveSeconds, StoredNodeSettings.MaxLlamaIdleTimeToLiveSeconds),
+            MaxResponseSizeMb = ClampToRange(settings.MaxResponseSizeMb,
+                StoredNodeSettings.MinMaxResponseSizeMb, StoredNodeSettings.MaxMaxResponseSizeMb),
+            RecommendedLlamaCppTag = NormalizeRecommendedTag(settings.RecommendedLlamaCppTag),
+            OrchestrationIdleTimeoutSeconds = ClampToRange(settings.OrchestrationIdleTimeoutSeconds,
+                StoredNodeSettings.MinOrchestrationIdleTimeoutSeconds, StoredNodeSettings.MaxOrchestrationIdleTimeoutSeconds),
+            AgentHomePrepareTimeoutSeconds = ClampToRange(settings.AgentHomePrepareTimeoutSeconds,
+                StoredNodeSettings.MinAgentHomeTimeoutSeconds, StoredNodeSettings.MaxAgentHomeTimeoutSeconds),
+            AgentHomeCommandTimeoutSeconds = ClampToRange(settings.AgentHomeCommandTimeoutSeconds,
+                StoredNodeSettings.MinAgentHomeTimeoutSeconds, StoredNodeSettings.MaxAgentHomeTimeoutSeconds),
+            AgentHomeMaxSelectedFolderBytes = ClampPositiveLong(settings.AgentHomeMaxSelectedFolderBytes),
+            AgentHomeMaxPatchBytes = ClampPositiveLong(settings.AgentHomeMaxPatchBytes),
+            MaxPendingToolCallAgeMinutes = ClampToRange(settings.MaxPendingToolCallAgeMinutes,
+                StoredNodeSettings.MinMaxPendingToolCallAgeMinutes, StoredNodeSettings.MaxMaxPendingToolCallAgeMinutes)
         };
+    }
+
+    private static string? TrimToNull(string? value)
+    {
+        return string.IsNullOrWhiteSpace(value) ? null : value.Trim();
+    }
+
+    private static int? ClampToRange(int? value, int min, int max)
+    {
+        if (value is null)
+        {
+            return null;
+        }
+
+        return value < min || value > max ? null : value;
+    }
+
+    private static long? ClampPositiveLong(long? value)
+    {
+        if (value is null)
+        {
+            return null;
+        }
+
+        return value <= 0 ? null : value;
+    }
+
+    private static string? NormalizeRecommendedTag(string? value)
+    {
+        var trimmed = TrimToNull(value);
+        return StoredNodeSettings.IsValidRecommendedLlamaCppTag(trimmed) ? trimmed : null;
+    }
+
+    private static string? NormalizeAbsoluteUrl(string? value)
+    {
+        var trimmed = TrimToNull(value);
+        if (trimmed is null)
+        {
+            return null;
+        }
+
+        return Uri.TryCreate(trimmed, UriKind.Absolute, out var uri)
+               && (uri.Scheme == Uri.UriSchemeHttp || uri.Scheme == Uri.UriSchemeHttps)
+            ? trimmed
+            : null;
+    }
+
+    private static IReadOnlyList<string>? NormalizeStringList(IReadOnlyList<string>? values)
+    {
+        if (values is null)
+        {
+            return null;
+        }
+
+        var cleaned = values
+            .Where(static value => !string.IsNullOrWhiteSpace(value))
+            .Select(static value => value.Trim())
+            .ToList();
+
+        return cleaned.Count == 0 ? null : cleaned;
     }
 }

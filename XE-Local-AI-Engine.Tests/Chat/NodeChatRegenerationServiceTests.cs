@@ -20,6 +20,7 @@ using XE_Local_AI_Engine.Client.Services.Invocation;
 using XE_Local_AI_Engine.Client.Services.Memory;
 using XE_Local_AI_Engine.Client.Services.NodeSettings;
 using XE_Local_AI_Engine.Tests.Testing;
+using XE_Local_AI_Engine.Tests.Testing.Builders;
 
 public sealed class NodeChatRegenerationServiceTests : IDisposable
 {
@@ -60,6 +61,7 @@ public sealed class NodeChatRegenerationServiceTests : IDisposable
             runner,
             dispatcher,
             Options.Create(new LocalChatAgentOptions()),
+            StubNodeRuntimeSettings.Create().Build(),
             new NodeChatStreamCancellationRegistry(),
             CreateOfferProvider(),
             CreateAgentDefinitionResolver(),
@@ -133,6 +135,7 @@ public sealed class NodeChatRegenerationServiceTests : IDisposable
             runner,
             dispatcher,
             Options.Create(new LocalChatAgentOptions()),
+            StubNodeRuntimeSettings.Create().Build(),
             new NodeChatStreamCancellationRegistry(),
             CreateOfferProvider(),
             CreateAgentDefinitionResolver(),
@@ -201,6 +204,7 @@ public sealed class NodeChatRegenerationServiceTests : IDisposable
             {
                 EnableTools = true
             }),
+            StubNodeRuntimeSettings.Create().WithEnableTools(true).Build(),
             new NodeChatStreamCancellationRegistry(),
             CreateOfferProvider(CreateLocalToolDto("GetCurrentTime", "{\"type\":\"object\"}")),
             resolver,
@@ -279,6 +283,7 @@ public sealed class NodeChatRegenerationServiceTests : IDisposable
             runner,
             dispatcher,
             Options.Create(new LocalChatAgentOptions()),
+            StubNodeRuntimeSettings.Create().Build(),
             new NodeChatStreamCancellationRegistry(),
             CreateOfferProvider(),
             resolver,
@@ -351,6 +356,7 @@ public sealed class NodeChatRegenerationServiceTests : IDisposable
             runner,
             dispatcher,
             Options.Create(new LocalChatAgentOptions()),
+            StubNodeRuntimeSettings.Create().Build(),
             new NodeChatStreamCancellationRegistry(),
             CreateOfferProvider(),
             CreateAgentDefinitionResolver(),
@@ -410,6 +416,7 @@ public sealed class NodeChatRegenerationServiceTests : IDisposable
             runner,
             dispatcher,
             Options.Create(new LocalChatAgentOptions()),
+            StubNodeRuntimeSettings.Create().Build(),
             new NodeChatStreamCancellationRegistry(),
             CreateOfferProvider(),
             resolver,
@@ -463,6 +470,7 @@ public sealed class NodeChatRegenerationServiceTests : IDisposable
             runner,
             dispatcher,
             Options.Create(new LocalChatAgentOptions()),
+            StubNodeRuntimeSettings.Create().Build(),
             new NodeChatStreamCancellationRegistry(),
             CreateOfferProvider(),
             CreateAgentDefinitionResolver(),
@@ -534,6 +542,7 @@ public sealed class NodeChatRegenerationServiceTests : IDisposable
             {
                 EnableTools = true
             }),
+            StubNodeRuntimeSettings.Create().WithEnableTools(true).Build(),
             new NodeChatStreamCancellationRegistry(),
             offerProvider,
             CreateAgentDefinitionResolver(),
@@ -596,6 +605,7 @@ public sealed class NodeChatRegenerationServiceTests : IDisposable
             {
                 EnableTools = true
             }),
+            StubNodeRuntimeSettings.Create().WithEnableTools(true).Build(),
             new NodeChatStreamCancellationRegistry(),
             offerProvider,
             CreateAgentDefinitionResolver(),
@@ -649,6 +659,7 @@ public sealed class NodeChatRegenerationServiceTests : IDisposable
             capturingRunner,
             dispatcher,
             Options.Create(new LocalChatAgentOptions()),
+            StubNodeRuntimeSettings.Create().Build(),
             new NodeChatStreamCancellationRegistry(),
             CreateOfferProvider(),
             CreateAgentDefinitionResolver(),
@@ -720,6 +731,7 @@ public sealed class NodeChatRegenerationServiceTests : IDisposable
             capturingRunner,
             dispatcher,
             Options.Create(new LocalChatAgentOptions()),
+            StubNodeRuntimeSettings.Create().Build(),
             new NodeChatStreamCancellationRegistry(),
             CreateOfferProvider(),
             CreateAgentDefinitionResolver(),
@@ -770,6 +782,7 @@ public sealed class NodeChatRegenerationServiceTests : IDisposable
             capturingRunner,
             dispatcher,
             Options.Create(new LocalChatAgentOptions()),
+            StubNodeRuntimeSettings.Create().Build(),
             new NodeChatStreamCancellationRegistry(),
             CreateOfferProvider(),
             CreateAgentDefinitionResolver(),
@@ -812,6 +825,7 @@ public sealed class NodeChatRegenerationServiceTests : IDisposable
             new RegenCompletingRunner(dispatcher),
             dispatcher,
             Options.Create(new LocalChatAgentOptions()),
+            StubNodeRuntimeSettings.Create().Build(),
             new NodeChatStreamCancellationRegistry(),
             CreateOfferProvider(),
             CreateAgentDefinitionResolver(),
@@ -875,6 +889,7 @@ public sealed class NodeChatRegenerationServiceTests : IDisposable
             {
                 EnableTools = true
             }),
+            StubNodeRuntimeSettings.Create().WithEnableTools(true).Build(),
             new NodeChatStreamCancellationRegistry(),
             offerProvider,
             CreateAgentDefinitionResolver(),

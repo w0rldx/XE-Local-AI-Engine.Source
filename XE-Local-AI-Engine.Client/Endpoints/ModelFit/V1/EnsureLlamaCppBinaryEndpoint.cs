@@ -4,6 +4,7 @@ using FastEndpoints;
 using XE_Local_AI_Engine.Client.Endpoints.Common;
 using XE_Local_AI_Engine.Client.Endpoints.ModelFit.V1.Mappers;
 using XE_Local_AI_Engine.Client.Services.Auth;
+using XE_Local_AI_Engine.Client.Services.NodeSettings;
 using XE_Local_AI_Engine.Providers.LlamaServer;
 
 /// <summary>
@@ -16,10 +17,12 @@ using XE_Local_AI_Engine.Providers.LlamaServer;
 /// </summary>
 public sealed class EnsureLlamaCppBinaryEndpoint(
     ILlamaCppBinaryManager binaryManager,
+    INodeRuntimeSettings nodeRuntimeSettings,
     ILogger<EnsureLlamaCppBinaryEndpoint> logger) : Endpoint<EnsureLlamaCppBinaryRequest, LlamaCppVersionResponse>
 {
     private readonly ILlamaCppBinaryManager _binaryManager = binaryManager ?? throw new ArgumentNullException(nameof(binaryManager));
     private readonly ILogger<EnsureLlamaCppBinaryEndpoint> _logger = logger ?? throw new ArgumentNullException(nameof(logger));
+    private readonly INodeRuntimeSettings _nodeRuntimeSettings = nodeRuntimeSettings ?? throw new ArgumentNullException(nameof(nodeRuntimeSettings));
 
     public override void Configure()
     {
@@ -39,7 +42,8 @@ public sealed class EnsureLlamaCppBinaryEndpoint(
         try
         {
             var binary = await _binaryManager.EnsureBinaryAsync(variant, ct).ConfigureAwait(false);
-            await Send.OkAsync(binary.ToResponse(), ct).ConfigureAwait(false);
+            var recommendedTag = await _nodeRuntimeSettings.GetRecommendedLlamaCppTagAsync(ct).ConfigureAwait(false);
+            await Send.OkAsync(binary.ToResponse(recommendedTag), ct).ConfigureAwait(false);
         }
         catch (OperationCanceledException) when (ct.IsCancellationRequested)
         {
