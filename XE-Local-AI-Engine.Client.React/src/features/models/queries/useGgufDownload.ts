@@ -1,13 +1,16 @@
+import { useEffect } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
 import {
 	browseGgufRepositoriesOptions,
 	cancelGgufDownloadMutation,
+	getGgufDownloadsOptions,
 	inspectGgufRepositoryOptions,
 	startGgufDownloadMutation,
 } from "@/core/api/generated/@tanstack/react-query.gen";
 import { withResponseValidation } from "@/core/api/ResponseValidation";
 import { toGgufRepository, toGgufRepositoryDetail } from "@/features/models/models/GgufMappers";
+import { useGgufBrowseStore } from "@/features/models/stores/GgufBrowseStore";
 
 // Server state for the Hugging Face GGUF browse + download flow on the Model Management page. Reads use the generated
 // hey-api `*Options()` (which wire the shared axios instance + TanStack Query AbortSignal automatically) and a
@@ -97,4 +100,70 @@ export function useCancelGgufDownload() {
 		},
 		onSuccess: () => invalidate(queryClient, ggufQueryIds.runningModels),
 	});
+}
+
+// Domain view-model for a single active GGUF download, derived from the backend DTO.
+export interface GgufDownloadStatus {
+	modelName: string;
+	phase: "Running" | "Completed" | "Cancelled" | "Failed";
+	/** 0–100 when totalBytes is known; undefined when Content-Length is absent (indeterminate). */
+	pct: number | undefined;
+	completedBytes: number | null | undefined;
+	totalBytes: number | null | undefined;
+	sanitizedError: string | null | undefined;
+}
+
+// Polls GET /api/local/v1/model-fit/gguf/downloads (1 s interval while any download is Running).
+// Reconciles the backend list with GgufBrowseStore so:
+//   – downloads started before a navigation refresh rehydrate into the store;
+//   – models no longer Running are removed from the store.
+// Returns a map of modelName → GgufDownloadStatus for all non-idle entries the backend reports.
+export function useActiveGgufDownloads(): ReadonlyMap<string, GgufDownloadStatus> {
+	const markInFlight = useGgufBrowseStore((state) => state.actions.markInFlight);
+	const removeInFlight = useGgufBrowseStore((state) => state.actions.removeInFlight);
+
+	const { data } = useQuery({
+		...withResponseValidation(getGgufDownloadsOptions()),
+		// Poll every second; stop polling once nothing is Running.
+		refetchInterval: (query) => {
+			const items = query.state.data?.items;
+			const hasRunning = items?.some((item) => item.phase === "Running") ?? false;
+			return hasRunning ? 1000 : false;
+		},
+	});
+
+	const items = data?.items ?? [];
+
+	// Reconcile store with backend list on every render where data has updated.
+	useEffect(() => {
+		for (const item of items) {
+			if (item.phase === "Running") {
+				if (item.modelName) {
+					markInFlight(item.modelName);
+				}
+			} else if (item.modelName) {
+				removeInFlight(item.modelName);
+			}
+		}
+	}, [items, markInFlight, removeInFlight]);
+
+	// Build view-model map from all items (Running or terminal) so the panel can show
+	// progress for Running and error state for Failed.
+	const map = new Map<string, GgufDownloadStatus>();
+	for (const item of items) {
+		if (!item.modelName) { continue; }
+		const pct =
+			item.totalBytes && item.completedBytes != null
+				? Math.round((item.completedBytes / item.totalBytes) * 100)
+				: undefined;
+		map.set(item.modelName, {
+			modelName: item.modelName,
+			phase: (item.phase ?? "Running") as GgufDownloadStatus["phase"],
+			pct,
+			completedBytes: item.completedBytes,
+			totalBytes: item.totalBytes,
+			sanitizedError: item.sanitizedError,
+		});
+	}
+	return map;
 }

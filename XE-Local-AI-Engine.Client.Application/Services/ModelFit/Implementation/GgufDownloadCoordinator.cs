@@ -93,6 +93,8 @@ public sealed class GgufDownloadCoordinator : IGgufDownloadCoordinator
         return _status.TryGetValue(modelName, out var status) ? status : null;
     }
 
+    public IReadOnlyList<GgufDownloadStatus> ListStatuses() => _status.Values.ToList();
+
     // Resolves the canonical model name via the store; on a discovery/transport failure (or HttpClient request TIMEOUT,
     // which surfaces as a non-caller OperationCanceledException) falls back to the request-derived label so a download
     // can still be started and surface its own failure. Genuine caller cancellation propagates.

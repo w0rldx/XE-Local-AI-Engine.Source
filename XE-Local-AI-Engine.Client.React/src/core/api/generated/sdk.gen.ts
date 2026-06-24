@@ -152,6 +152,12 @@ import type {
 	GetConnectionStatusData,
 	GetConnectionStatusErrors,
 	GetConnectionStatusResponses,
+	GetGgufDownloadsData,
+	GetGgufDownloadsErrors,
+	GetGgufDownloadsResponses,
+	GetGgufDownloadStatusData,
+	GetGgufDownloadStatusErrors,
+	GetGgufDownloadStatusResponses,
 	GetHardwareProfileData,
 	GetHardwareProfileErrors,
 	GetHardwareProfileResponses,
@@ -468,6 +474,9 @@ import {
 	zGetAgentPlaybookMonitorResponse,
 	zGetCloudSettingsResponse,
 	zGetConnectionStatusResponse,
+	zGetGgufDownloadsResponse,
+	zGetGgufDownloadStatusPath,
+	zGetGgufDownloadStatusResponse,
 	zGetHardwareProfileQuery,
 	zGetHardwareProfileResponse,
 	zGetHfTokenStatusResponse,
@@ -1459,6 +1468,48 @@ export const ensureLlamaCppBinary = <ThrowOnError extends boolean = false>(
 			"Content-Type": "application/json",
 			...options.headers,
 		},
+	});
+
+export const getGgufDownloads = <ThrowOnError extends boolean = false>(options?: Options<GetGgufDownloadsData, ThrowOnError>) =>
+	(options?.client ?? client).get<GetGgufDownloadsResponses, GetGgufDownloadsErrors, ThrowOnError>({
+		requestValidator: async (data) =>
+			await z
+				.object({
+					body: z.never().optional(),
+					path: z.never().optional(),
+					query: z.never().optional(),
+				})
+				.parseAsync(data),
+		responseType: "json",
+		responseValidator: async (data) => await zGetGgufDownloadsResponse.parseAsync(data),
+		security: [
+			{ scheme: "bearer", type: "http" },
+			{ scheme: "bearer", type: "http" },
+		],
+		url: "/api/local/v1/model-fit/gguf/downloads",
+		...options,
+	});
+
+export const getGgufDownloadStatus = <ThrowOnError extends boolean = false>(
+	options: Options<GetGgufDownloadStatusData, ThrowOnError>,
+) =>
+	(options.client ?? client).get<GetGgufDownloadStatusResponses, GetGgufDownloadStatusErrors, ThrowOnError>({
+		requestValidator: async (data) =>
+			await z
+				.object({
+					body: z.never().optional(),
+					path: zGetGgufDownloadStatusPath,
+					query: z.never().optional(),
+				})
+				.parseAsync(data),
+		responseType: "json",
+		responseValidator: async (data) => await zGetGgufDownloadStatusResponse.parseAsync(data),
+		security: [
+			{ scheme: "bearer", type: "http" },
+			{ scheme: "bearer", type: "http" },
+		],
+		url: "/api/local/v1/model-fit/gguf/downloads/{modelName}",
+		...options,
 	});
 
 export const getHardwareProfile = <ThrowOnError extends boolean = false>(

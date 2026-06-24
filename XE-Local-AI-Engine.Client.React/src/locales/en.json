@@ -1118,7 +1118,11 @@
 						"quant": "Quant",
 						"size": "Size"
 					},
-					"defaultFallback": "Download default quant (Q4_K_M)"
+					"defaultFallback": "Download default quant (Q4_K_M)",
+					"progressLabel": "{{pct}}%",
+					"bytesOf": "{{completed}} / {{total}}",
+					"progressAriaLabel": "Download progress",
+					"failedTitle": "Download failed"
 				}
 			}
 		},

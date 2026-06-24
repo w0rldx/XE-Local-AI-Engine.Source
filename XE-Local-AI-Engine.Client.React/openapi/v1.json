@@ -1642,6 +1642,84 @@
         ]
       }
     },
+    "/api/local/v1/model-fit/gguf/downloads": {
+      "get": {
+        "tags": [
+          "Model-Fit"
+        ],
+        "operationId": "getGgufDownloads",
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/XE_Local_AI_EngineClientEndpointsModelFitV1ListGgufDownloadsResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "403": {
+            "description": "Forbidden"
+          }
+        },
+        "security": [
+          {
+            "JWTBearerAuth": []
+          },
+          {
+            "Bearer": []
+          }
+        ]
+      }
+    },
+    "/api/local/v1/model-fit/gguf/downloads/{modelName}": {
+      "get": {
+        "tags": [
+          "Model-Fit"
+        ],
+        "operationId": "getGgufDownloadStatus",
+        "parameters": [
+          {
+            "name": "modelName",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/XE_Local_AI_EngineClientEndpointsModelFitV1GgufDownloadStatusResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "403": {
+            "description": "Forbidden"
+          }
+        },
+        "security": [
+          {
+            "JWTBearerAuth": []
+          },
+          {
+            "Bearer": []
+          }
+        ]
+      }
+    },
     "/api/local/v1/model-fit/hardware-profile": {
       "get": {
         "tags": [
@@ -7115,6 +7193,48 @@
             "type": "string"
           }
         }
+      },
+      "XE_Local_AI_EngineClientEndpointsModelFitV1ListGgufDownloadsResponse": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "items": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/XE_Local_AI_EngineClientEndpointsModelFitV1GgufDownloadStatusResponse"
+            }
+          }
+        }
+      },
+      "XE_Local_AI_EngineClientEndpointsModelFitV1GgufDownloadStatusResponse": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "modelName": {
+            "type": "string"
+          },
+          "phase": {
+            "type": "string"
+          },
+          "completedBytes": {
+            "type": "integer",
+            "format": "int64",
+            "nullable": true
+          },
+          "totalBytes": {
+            "type": "integer",
+            "format": "int64",
+            "nullable": true
+          },
+          "sanitizedError": {
+            "type": "string",
+            "nullable": true
+          }
+        }
+      },
+      "XE_Local_AI_EngineClientEndpointsModelFitV1GetGgufDownloadStatusRequest": {
+        "type": "object",
+        "additionalProperties": false
       },
       "XE_Local_AI_EngineClientEndpointsModelFitV1HardwareProfileResponse": {
         "type": "object",

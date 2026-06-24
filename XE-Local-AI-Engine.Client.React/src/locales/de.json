@@ -1118,7 +1118,11 @@
 						"quant": "Quantisierung",
 						"size": "Größe"
 					},
-					"defaultFallback": "Standard-Quantisierung herunterladen (Q4_K_M)"
+					"defaultFallback": "Standard-Quantisierung herunterladen (Q4_K_M)",
+					"progressLabel": "{{pct}}%",
+					"bytesOf": "{{completed}} / {{total}}",
+					"progressAriaLabel": "Downloadfortschritt",
+					"failedTitle": "Download fehlgeschlagen"
 				}
 			}
 		},

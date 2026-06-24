@@ -60,6 +60,8 @@ import {
 	getAgentPlaybookMonitor,
 	getCloudSettings,
 	getConnectionStatus,
+	getGgufDownloads,
+	getGgufDownloadStatus,
 	getHardwareProfile,
 	getHfTokenStatus,
 	getInvocationMonitor,
@@ -240,6 +242,10 @@ import type {
 	GetCloudSettingsResponse,
 	GetConnectionStatusData,
 	GetConnectionStatusResponse,
+	GetGgufDownloadsData,
+	GetGgufDownloadsResponse,
+	GetGgufDownloadStatusData,
+	GetGgufDownloadStatusResponse,
 	GetHardwareProfileData,
 	GetHardwareProfileResponse,
 	GetHfTokenStatusData,
@@ -1176,6 +1182,49 @@ export const ensureLlamaCppBinaryMutation = (
 	};
 	return mutationOptions;
 };
+
+export const getGgufDownloadsQueryKey = (options?: Options<GetGgufDownloadsData>) => createQueryKey("getGgufDownloads", options);
+
+export const getGgufDownloadsOptions = (options?: Options<GetGgufDownloadsData>) =>
+	queryOptions<
+		GetGgufDownloadsResponse,
+		AxiosError<DefaultError>,
+		GetGgufDownloadsResponse,
+		ReturnType<typeof getGgufDownloadsQueryKey>
+	>({
+		queryFn: async ({ queryKey, signal }) => {
+			const { data } = await getGgufDownloads({
+				...options,
+				...queryKey[0],
+				signal,
+				throwOnError: true,
+			});
+			return data;
+		},
+		queryKey: getGgufDownloadsQueryKey(options),
+	});
+
+export const getGgufDownloadStatusQueryKey = (options: Options<GetGgufDownloadStatusData>) =>
+	createQueryKey("getGgufDownloadStatus", options);
+
+export const getGgufDownloadStatusOptions = (options: Options<GetGgufDownloadStatusData>) =>
+	queryOptions<
+		GetGgufDownloadStatusResponse,
+		AxiosError<DefaultError>,
+		GetGgufDownloadStatusResponse,
+		ReturnType<typeof getGgufDownloadStatusQueryKey>
+	>({
+		queryFn: async ({ queryKey, signal }) => {
+			const { data } = await getGgufDownloadStatus({
+				...options,
+				...queryKey[0],
+				signal,
+				throwOnError: true,
+			});
+			return data;
+		},
+		queryKey: getGgufDownloadStatusQueryKey(options),
+	});
 
 export const getHardwareProfileQueryKey = (options: Options<GetHardwareProfileData>) =>
 	createQueryKey("getHardwareProfile", options);
