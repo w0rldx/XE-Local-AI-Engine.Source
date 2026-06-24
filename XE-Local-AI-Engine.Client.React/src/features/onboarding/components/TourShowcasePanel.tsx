@@ -10,13 +10,19 @@ const SHOWCASE_Z_INDEX = 900;
 // All sections are purely visual — no interactivity. Each sub-section has a stable `data-tour` attribute that Joyride
 // spotlights in the corresponding step. Text is framed as illustrative ("when you use…") so users on hardware that
 // cannot run reasoning-capable models are not misled.
-export function TourShowcasePanel() {
+//
+// The panel is ALWAYS mounted (rendered with `active={false}` outside the showcase steps) so the `data-tour` showcase
+// targets are present in the DOM the moment Joyride needs to anchor a showcase step — otherwise Joyride dims the screen
+// but can never find the target and the tour dead-ends (no tooltip ever appears). When inactive the panel is visually
+// hidden and fully inert, yet keeps layout so Joyride can still measure/anchor its targets.
+export function TourShowcasePanel({ active }: { active: boolean }) {
 	const { t } = useTranslation();
 
 	return (
 		<Box
 			data-tour="tour-showcase"
 			data-testid="tour-showcase-panel"
+			aria-hidden={!active}
 			style={{
 				position: "fixed",
 				inset: 0,
@@ -24,8 +30,12 @@ export function TourShowcasePanel() {
 				display: "flex",
 				alignItems: "center",
 				justifyContent: "center",
-				// Semi-transparent backdrop so the user can see they are in an overlay, not the live app.
-				background: "rgba(0,0,0,0.45)",
+				// Backdrop only while active; transparent when inactive so the hidden panel never tints the live app.
+				background: active ? "rgba(0,0,0,0.45)" : "transparent",
+				// Inactive: invisible + click-through but still laid out so Joyride can measure the showcase targets.
+				// Active: visible; pointerEvents stays none so the underlying app/Joyride spotlight controls interaction.
+				opacity: active ? 1 : 0,
+				visibility: active ? "visible" : "hidden",
 				pointerEvents: "none",
 			}}
 		>

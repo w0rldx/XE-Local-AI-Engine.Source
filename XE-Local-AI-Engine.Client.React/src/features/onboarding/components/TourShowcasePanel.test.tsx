@@ -42,10 +42,10 @@ afterEach(() => {
 	vi.clearAllMocks();
 });
 
-function renderPanel() {
+function renderPanel(active = true) {
 	return render(
 		<MantineProvider>
-			<TourShowcasePanel />
+			<TourShowcasePanel active={active} />
 		</MantineProvider>,
 	);
 }
@@ -79,6 +79,17 @@ describe("TourShowcasePanel", () => {
 	it("renders the agent-mode section with its data-tour anchor", () => {
 		renderPanel();
 		screen.getByTestId("showcase-agent-mode");
+		expect(document.querySelector('[data-tour="showcase-agent-mode"]')).not.toBeNull();
+	});
+
+	it("keeps every showcase target in the DOM when inactive so Joyride can still anchor", () => {
+		// Regression guard: conditionally unmounting the panel left Joyride unable to find the showcase targets,
+		// dead-ending the tour (screen dimmed, no tooltip). Inactive must still render the anchors (hidden, not removed).
+		renderPanel(false);
+		screen.getByTestId("tour-showcase-panel");
+		expect(document.querySelector('[data-tour="showcase-reasoning-effort"]')).not.toBeNull();
+		expect(document.querySelector('[data-tour="showcase-reasoning-trace"]')).not.toBeNull();
+		expect(document.querySelector('[data-tour="showcase-tool-call"]')).not.toBeNull();
 		expect(document.querySelector('[data-tour="showcase-agent-mode"]')).not.toBeNull();
 	});
 
