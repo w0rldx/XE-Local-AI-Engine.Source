@@ -592,6 +592,11 @@ public sealed class LocalModelEndpointTests
             return Task.FromResult(Settings);
         }
 
+        public StoredNodeSettings Load(CancellationToken cancellationToken = default)
+        {
+            return Settings;
+        }
+
         public Task SaveAsync(StoredNodeSettings settings, CancellationToken cancellationToken = default)
         {
             Settings = settings;

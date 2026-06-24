@@ -158,16 +158,55 @@ internal static class ModelFitMapper
     // llama.cpp binary → response
     // -----------------------------------------------------------------------
 
-    public static LlamaCppVersionResponse ToResponse(this LlamaBinary binary)
+    /// <summary>
+    ///     Projects a resolved <see cref="LlamaBinary" /> to its wire DTO. <paramref name="recommendedTag" /> is the
+    ///     effective recommended tag (the editable node setting), threaded in from the endpoint — the mapper no longer
+    ///     reads the compiled-in <c>LlamaCppReleasePins.PinnedTag</c> constant for the recommended value.
+    /// </summary>
+    public static LlamaCppVersionResponse ToResponse(this LlamaBinary binary, string recommendedTag)
     {
         ArgumentNullException.ThrowIfNull(binary);
+        ArgumentException.ThrowIfNullOrWhiteSpace(recommendedTag);
 
         return new LlamaCppVersionResponse
         {
             Version = binary.Version,
             Variant = binary.Variant.ToWireString(),
             IsPinnedFallback = binary.IsPinnedFallback,
-            PinnedTag = LlamaCppReleasePins.PinnedTag
+            PinnedTag = recommendedTag
+        };
+    }
+
+    /// <summary>
+    ///     Projects the dynamic-runtime snapshot + installed-runtime record into the read-only runtime-status DTO.
+    ///     <paramref name="recommendedTag" /> is the effective recommended tag (the snapshot's value, falling back to the
+    ///     node setting when the snapshot has not been computed yet).
+    /// </summary>
+    public static LlamaCppRuntimeStatusResponse ToRuntimeStatusResponse(this LlamaCppUpdateSnapshot snapshot,
+        InstalledRuntimeState? installed,
+        string recommendedTag)
+    {
+        ArgumentNullException.ThrowIfNull(snapshot);
+        ArgumentException.ThrowIfNullOrWhiteSpace(recommendedTag);
+
+        return new LlamaCppRuntimeStatusResponse
+        {
+            Installed = installed?.ToInstalledRuntimeResponse(),
+            RecommendedTag = recommendedTag,
+            UpstreamLatestTag = snapshot.UpstreamLatestTag,
+            UpdateAvailable = snapshot.UpdateAvailable,
+            IsOffline = snapshot.IsOffline
+        };
+    }
+
+    private static LlamaCppInstalledRuntimeResponse ToInstalledRuntimeResponse(this InstalledRuntimeState state)
+    {
+        return new LlamaCppInstalledRuntimeResponse
+        {
+            Tag = state.Tag,
+            Variant = state.Variant.ToWireString(),
+            Asset = state.Asset,
+            InstalledAtUtc = state.InstalledAtUtc.ToUnixTimeMilliseconds()
         };
     }
 

@@ -2,7 +2,6 @@ namespace XE_Local_AI_Engine.Tests.AgentHome;
 
 using System.Text.Json;
 using Microsoft.Extensions.Logging.Abstractions;
-using Microsoft.Extensions.Options;
 using XE_Local_AI_Engine.Client.Persistence;
 using XE_Local_AI_Engine.Client.Services.AgentHome;
 using XE_Local_AI_Engine.Client.Services.AgentHome.Implementation;
@@ -10,6 +9,7 @@ using XE_Local_AI_Engine.Client.Services.Sandbox;
 using XE_Local_AI_Engine.Client.Services.Sandbox.Fake;
 using XE_Local_AI_Engine.Client.Services.Workspace;
 using XE_Local_AI_Engine.Tests.Testing;
+using XE_Local_AI_Engine.Tests.Testing.Builders;
 
 /// <summary>
 ///     Patch-export coverage: the real <see cref="AgentHomePatchService" /> runs the two diff commands against
@@ -211,11 +211,10 @@ public sealed class AgentHomePatchServiceTests : IDisposable
 
     private static AgentHomePatchService CreateService(FakeSandboxRuntimeProvider provider, long maxPatchBytes = 52428800)
     {
-        var options = Options.Create(new AgentHomeOptions
-        {
-            MaxPatchBytes = maxPatchBytes
-        });
-        return new AgentHomePatchService(provider, options, NullLogger<AgentHomePatchService>.Instance);
+        var runtimeSettings = StubNodeRuntimeSettings.Create()
+            .WithAgentHomeMaxPatchBytes(maxPatchBytes)
+            .Build();
+        return new AgentHomePatchService(provider, runtimeSettings, NullLogger<AgentHomePatchService>.Instance);
     }
 
     private static AgentHomePatchExportRequest Request(string runId, string hostRunDirectory, params ResolvedSelectedFolder[] folders)

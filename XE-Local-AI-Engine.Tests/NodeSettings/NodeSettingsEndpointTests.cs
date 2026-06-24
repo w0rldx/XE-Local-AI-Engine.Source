@@ -82,6 +82,138 @@ public sealed class NodeSettingsEndpointTests
         await capabilityReporter.DidNotReceiveWithAnyArgs().ReportToApiAsync(Arg.Any<CancellationToken>());
     }
 
+    [Test]
+    public async Task SaveNodeSettings_WithNewMigratedFields_RoundTripsThroughGet()
+    {
+        StoredNodeSettings? saved = null;
+        var nodeSettingsStore = Substitute.For<INodeSettingsStore>();
+        nodeSettingsStore.LoadAsync(Arg.Any<CancellationToken>())
+                         .Returns(_ => saved ?? new StoredNodeSettings());
+        await nodeSettingsStore.SaveAsync(Arg.Do<StoredNodeSettings>(settings => saved = settings), Arg.Any<CancellationToken>());
+
+        await using var factory = CreateFactory(nodeSettingsStore);
+        using var client = factory.CreateClient();
+
+        using var putRequest = CreateRequest(factory, HttpMethod.Put, "/api/local/v1/node-settings");
+        putRequest.Content = JsonContent.Create(new SaveNodeSettingsRequest
+        {
+            MaxMessageRequestTimeoutSeconds = 300,
+            EnableTools = false,
+            ToolCapableModels = ["qwen3:8b", "gemma3:12b"],
+            OllamaEndpoint = "http://127.0.0.1:11500",
+            HuggingFaceDefaultQuant = "Q5_K_M",
+            LlamaMaxLoadedProcesses = 5,
+            LlamaIdleTimeToLiveSeconds = 1200,
+            MaxResponseSizeMb = 25,
+            RecommendedLlamaCppTag = "b9700",
+            OrchestrationIdleTimeoutSeconds = 240
+        });
+        using var putResponse = await client.SendAsync(putRequest).ConfigureAwait(false);
+        AssertEx.Equal(HttpStatusCode.OK, putResponse.StatusCode);
+
+        using var getRequest = CreateRequest(factory, HttpMethod.Get, "/api/local/v1/node-settings");
+        using var getResponse = await client.SendAsync(getRequest).ConfigureAwait(false);
+        var settings = await ReadJsonAsync<NodeSettingsResponse>(getResponse).ConfigureAwait(false);
+
+        AssertEx.Equal(HttpStatusCode.OK, getResponse.StatusCode);
+        AssertEx.Equal(expected: false, settings.EnableTools);
+        AssertEx.Equal("http://127.0.0.1:11500", settings.OllamaEndpoint);
+        AssertEx.Equal("Q5_K_M", settings.HuggingFaceDefaultQuant);
+        AssertEx.Equal(expected: 5, settings.LlamaMaxLoadedProcesses);
+        AssertEx.Equal(expected: 1200, settings.LlamaIdleTimeToLiveSeconds);
+        AssertEx.Equal(expected: 25, settings.MaxResponseSizeMb);
+        AssertEx.Equal("b9700", settings.RecommendedLlamaCppTag);
+        AssertEx.Equal(expected: 240, settings.OrchestrationIdleTimeoutSeconds);
+        AssertEx.NotNull(settings.ToolCapableModels);
+        AssertEx.Contains(settings.ToolCapableModels!, "gemma3:12b");
+        // Bounds are surfaced for the React form.
+        AssertEx.Equal(StoredNodeSettings.MaxLlamaMaxLoadedProcesses, settings.MaxAllowedLlamaMaxLoadedProcesses);
+    }
+
+    [Test]
+    public async Task SaveNodeSettings_WhenOmittingOptionalFields_KeepsCurrentStoredValues()
+    {
+        var nodeSettingsStore = Substitute.For<INodeSettingsStore>();
+        nodeSettingsStore.LoadAsync(Arg.Any<CancellationToken>())
+                         .Returns(new StoredNodeSettings
+                         {
+                             MaxMessageRequestTimeoutSeconds = 300,
+                             RecommendedLlamaCppTag = "b9692",
+                             OllamaEndpoint = "http://127.0.0.1:11434"
+                         });
+        await using var factory = CreateFactory(nodeSettingsStore);
+        using var client = factory.CreateClient();
+
+        using var request = CreateRequest(factory, HttpMethod.Put, "/api/local/v1/node-settings");
+        // Omit EVERY field — including the chat timeout (now optional) — so the merge must keep all current values.
+        request.Content = JsonContent.Create(new SaveNodeSettingsRequest());
+        using var response = await client.SendAsync(request).ConfigureAwait(false);
+
+        AssertEx.Equal(HttpStatusCode.OK, response.StatusCode);
+        await nodeSettingsStore.Received(1).SaveAsync(
+            Arg.Is<StoredNodeSettings>(stored => stored.MaxMessageRequestTimeoutSeconds == 300
+                                                 && stored.RecommendedLlamaCppTag == "b9692"
+                                                 && stored.OllamaEndpoint == "http://127.0.0.1:11434"),
+            Arg.Any<CancellationToken>());
+    }
+
+    [Test]
+    public async Task SaveNodeSettings_WhenRecommendedTagMalformed_ReturnsValidationProblem()
+    {
+        var nodeSettingsStore = Substitute.For<INodeSettingsStore>();
+        await using var factory = CreateFactory(nodeSettingsStore);
+        using var client = factory.CreateClient();
+
+        using var request = CreateRequest(factory, HttpMethod.Put, "/api/local/v1/node-settings");
+        request.Content = JsonContent.Create(new SaveNodeSettingsRequest
+        {
+            MaxMessageRequestTimeoutSeconds = 300,
+            RecommendedLlamaCppTag = "not-a-tag"
+        });
+        using var response = await client.SendAsync(request).ConfigureAwait(false);
+
+        AssertEx.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+        await nodeSettingsStore.DidNotReceiveWithAnyArgs().SaveAsync(Arg.Any<StoredNodeSettings>(), Arg.Any<CancellationToken>());
+    }
+
+    [Test]
+    public async Task SaveNodeSettings_WhenOllamaEndpointNotAUrl_ReturnsValidationProblem()
+    {
+        var nodeSettingsStore = Substitute.For<INodeSettingsStore>();
+        await using var factory = CreateFactory(nodeSettingsStore);
+        using var client = factory.CreateClient();
+
+        using var request = CreateRequest(factory, HttpMethod.Put, "/api/local/v1/node-settings");
+        request.Content = JsonContent.Create(new SaveNodeSettingsRequest
+        {
+            MaxMessageRequestTimeoutSeconds = 300,
+            OllamaEndpoint = "not a url"
+        });
+        using var response = await client.SendAsync(request).ConfigureAwait(false);
+
+        AssertEx.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+        await nodeSettingsStore.DidNotReceiveWithAnyArgs().SaveAsync(Arg.Any<StoredNodeSettings>(), Arg.Any<CancellationToken>());
+    }
+
+    [Test]
+    public async Task SaveNodeSettings_WhenLlamaMaxLoadedProcessesOutOfRange_ReturnsValidationProblem()
+    {
+        var nodeSettingsStore = Substitute.For<INodeSettingsStore>();
+        await using var factory = CreateFactory(nodeSettingsStore);
+        using var client = factory.CreateClient();
+
+        using var request = CreateRequest(factory, HttpMethod.Put, "/api/local/v1/node-settings");
+        request.Content = JsonContent.Create(new SaveNodeSettingsRequest
+        {
+            MaxMessageRequestTimeoutSeconds = 300,
+            LlamaMaxLoadedProcesses = 999
+        });
+        using var response = await client.SendAsync(request).ConfigureAwait(false);
+
+        AssertEx.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+        await nodeSettingsStore.DidNotReceiveWithAnyArgs().SaveAsync(Arg.Any<StoredNodeSettings>(), Arg.Any<CancellationToken>());
+    }
+
     private static TestingWebAppFactory CreateFactory(INodeSettingsStore nodeSettingsStore, ICapabilityReporter? capabilityReporter = null)
     {
         return new TestingWebAppFactory

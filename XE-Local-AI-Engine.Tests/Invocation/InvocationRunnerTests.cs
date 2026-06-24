@@ -1122,6 +1122,17 @@ public sealed class InvocationRunnerTests
                             })
                             .Build();
 
+        var resolvedWorkerOptions = workerOptions ?? new WorkerNodeOptions
+        {
+            NodeName = "worker",
+            MaxResponseSizeMb = 10,
+            MaxPendingToolCallAgeMinutes = 5
+        };
+        var runtimeSettings = StubNodeRuntimeSettings.Create()
+            .WithMaxResponseSizeMb(resolvedWorkerOptions.MaxResponseSizeMb)
+            .WithMaxPendingToolCallAgeMinutes(resolvedWorkerOptions.MaxPendingToolCallAgeMinutes)
+            .Build();
+
         return new InvocationRunner(new Lazy<IHubMessageSender>(() => sender),
             new Lazy<IWorkerEventDispatcher>(() => resolvedEventDispatcher),
             resolvedFactory,
@@ -1132,12 +1143,7 @@ public sealed class InvocationRunnerTests
             resolvedProviderResolver,
             Substitute.For<IDeadLetterStore>(),
             configuration,
-            Options.Create(workerOptions ?? new WorkerNodeOptions
-            {
-                NodeName = "worker",
-                MaxResponseSizeMb = 10,
-                MaxPendingToolCallAgeMinutes = 5
-            }),
+            runtimeSettings,
             Options.Create(new SpawnOptions()),
             NullLogger<InvocationRunner>.Instance);
     }

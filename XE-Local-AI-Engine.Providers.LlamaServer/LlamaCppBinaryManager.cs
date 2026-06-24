@@ -1,9 +1,11 @@
 namespace XE_Local_AI_Engine.Providers.LlamaServer;
 
+using System.Diagnostics;
 using System.Formats.Tar;
 using System.IO.Compression;
 using System.Runtime.InteropServices;
 using System.Security.Cryptography;
+using System.Text.RegularExpressions;
 
 /// <summary>
 ///     Default <see cref="ILlamaCppBinaryManager" />: resolves the pinned prebuilt asset for the host, downloads it
@@ -21,30 +23,61 @@ using System.Security.Cryptography;
 ///         a sanitized <see cref="LlamaRuntimeException" /> (no internal paths/URLs in the message).
 ///     </para>
 /// </remarks>
-public sealed class LlamaCppBinaryManager : ILlamaCppBinaryManager
+public sealed partial class LlamaCppBinaryManager : ILlamaCppBinaryManager
 {
+    private static readonly TimeSpan SmokeTestTimeout = TimeSpan.FromSeconds(15);
+
+    /// <summary>
+    ///     Absolute hard ceiling on a single runtime download. A prebuilt llama.cpp asset is well under this; the cap is a
+    ///     disk-exhaustion guard against a hostile/buggy server streaming an unbounded body. Enforced on every download
+    ///     path; the size-aware <see cref="InstallTagAsync" /> path tightens it further with the catalog-reported size.
+    /// </summary>
+    private const long MaxDownloadBytes = 2L * 1024 * 1024 * 1024;
+
+    /// <summary>Slack added to the catalog-reported size before aborting an oversized stream (still capped at the ceiling).</summary>
+    private const long DownloadSizeSlackBytes = 1L * 1024 * 1024;
+
     private readonly string _activeTag;
     private readonly Architecture _arch;
     private readonly string _cacheRoot;
+    private readonly ILlamaCppReleaseCatalog? _catalog;
     private readonly HttpClient _httpClient;
+    private readonly IInstalledRuntimeStore? _installedRuntimeStore;
     private readonly OSPlatform _os;
 
     /// <summary>
     ///     Creates a binary manager that downloads through <paramref name="httpClient" /> and caches under
     ///     <paramref name="cacheRoot" />. <paramref name="activeTag" /> selects the recommended-pinned release by
     ///     default; pass a different tag to model a user-selected upgrade (the pinned tag's cache is never touched).
+    ///     The optional <paramref name="catalog" /> + <paramref name="installedRuntimeStore" /> drive the 3-tier resolve
+    ///     (live API → <c>installed-runtime.json</c> → pinned floor); when omitted (the test seam) only the pinned floor
+    ///     is used, preserving the original behavior.
     /// </summary>
-    public LlamaCppBinaryManager(HttpClient httpClient, string? cacheRoot = null, string? activeTag = null)
+    public LlamaCppBinaryManager(
+        HttpClient httpClient,
+        string? cacheRoot = null,
+        string? activeTag = null,
+        ILlamaCppReleaseCatalog? catalog = null,
+        IInstalledRuntimeStore? installedRuntimeStore = null)
         : this(httpClient,
             cacheRoot ?? DefaultCacheRoot(),
             activeTag ?? LlamaCppReleasePins.PinnedTag,
             CurrentOsPlatform(),
-            RuntimeInformation.ProcessArchitecture)
+            RuntimeInformation.ProcessArchitecture,
+            catalog,
+            installedRuntimeStore)
     {
     }
 
     /// <summary>Test seam: pins OS/arch so asset selection can be exercised on any host.</summary>
-    internal LlamaCppBinaryManager(HttpClient httpClient, string cacheRoot, string activeTag, OSPlatform os, Architecture arch)
+    internal LlamaCppBinaryManager(
+        HttpClient httpClient,
+        string cacheRoot,
+        string activeTag,
+        OSPlatform os,
+        Architecture arch,
+        ILlamaCppReleaseCatalog? catalog = null,
+        IInstalledRuntimeStore? installedRuntimeStore = null)
     {
         _httpClient = httpClient ?? throw new ArgumentNullException(nameof(httpClient));
         ArgumentException.ThrowIfNullOrWhiteSpace(cacheRoot);
@@ -53,25 +86,37 @@ public sealed class LlamaCppBinaryManager : ILlamaCppBinaryManager
         _activeTag = activeTag;
         _os = os;
         _arch = arch;
+        _catalog = catalog;
+        _installedRuntimeStore = installedRuntimeStore;
     }
 
     /// <inheritdoc />
     public async Task<LlamaBinary> EnsureBinaryAsync(GpuVariant variant, CancellationToken ct)
     {
+        // Tier 1: a live-resolvable recommended runtime takes precedence. The installed-runtime state (tier 2) records
+        // which tag is actually on disk; the pinned floor (tier 3) is the offline last-resort and the asset-name
+        // template source. A catalog/state-store absence (test seam) collapses straight to the pinned floor.
+        var installed = _installedRuntimeStore is null
+            ? null
+            : await _installedRuntimeStore.ReadAsync(ct).ConfigureAwait(false);
+
+        var resolvedTag = await ResolveActiveTagAsync(variant, installed, ct).ConfigureAwait(false);
+
         var pin = LlamaCppReleasePins.Resolve(_os, _arch, variant)
                   ?? throw new LlamaRuntimeException("No prebuilt llama.cpp runtime is available for this operating system and CPU architecture.");
 
-        var isPinnedFallback = string.Equals(_activeTag, LlamaCppReleasePins.PinnedTag, StringComparison.Ordinal);
-        var variantDir = Path.Combine(_cacheRoot, "llama.cpp", _activeTag, VariantSlug(variant));
+        var isPinnedFallback = string.Equals(resolvedTag, LlamaCppReleasePins.PinnedTag, StringComparison.Ordinal);
+        var variantDir = Path.Combine(_cacheRoot, "llama.cpp", resolvedTag, VariantSlug(variant));
 
         // Offline / already-cached path: reuse a present binary without re-download.
         var cachedServer = ResolveServerPath(variantDir, pin);
         if (cachedServer is not null)
         {
-            return new LlamaBinary(cachedServer, _activeTag, variant, isPinnedFallback);
+            return new LlamaBinary(cachedServer, resolvedTag, variant, isPinnedFallback);
         }
 
-        await DownloadVerifyExtractAsync(pin, variantDir, ct).ConfigureAwait(false);
+        // The pinned path has no catalog-reported size — pass "unknown" (0) so only the absolute ceiling is enforced.
+        await DownloadVerifyExtractAsync(LlamaCppReleasePins.DownloadUri(resolvedTag, pin.AssetName), pin.AssetName, pin.Sha256, expectedSize: 0, variantDir, ct).ConfigureAwait(false);
 
         var serverPath = ResolveServerPath(variantDir, pin);
         if (serverPath is null)
@@ -79,7 +124,163 @@ public sealed class LlamaCppBinaryManager : ILlamaCppBinaryManager
             throw new LlamaRuntimeException("The downloaded llama.cpp runtime did not contain the expected server executable.");
         }
 
-        return new LlamaBinary(serverPath, _activeTag, variant, isPinnedFallback);
+        return new LlamaBinary(serverPath, resolvedTag, variant, isPinnedFallback);
+    }
+
+    /// <summary>
+    ///     3-tier resolve of the tag to acquire: the ctor's <c>_activeTag</c> is the floor (pinned). When a catalog is
+    ///     present, a live-confirmed recommended tag wins; otherwise the on-disk installed tag (tier 2) is used when
+    ///     present. Offline/rate-limited live lookups fall through silently — acquisition never depends on the network.
+    /// </summary>
+    private async Task<string> ResolveActiveTagAsync(GpuVariant variant, InstalledRuntimeState? installed, CancellationToken ct)
+    {
+        if (_catalog is not null && IsValidTag(_activeTag))
+        {
+            var live = await _catalog.ResolveAssetAsync(_activeTag, _os, _arch, variant, ct).ConfigureAwait(false);
+            if (live is { IsOffline: false, IsRateLimited: false } && live.Tag is { Length: > 0 } liveTag)
+            {
+                return liveTag;
+            }
+        }
+
+        // Tier 2: the recorded installed tag, when present (and only when it is not already the floor request).
+        if (installed is { Tag.Length: > 0 } && IsValidTag(installed.Tag))
+        {
+            return installed.Tag;
+        }
+
+        // Tier 3: the pinned floor — the original behavior, including a brand-new offline first run.
+        return _activeTag;
+    }
+
+    /// <inheritdoc />
+    public async Task<LlamaBinary> InstallTagAsync(string tag, string assetName, string digestSha256, long expectedSize, GpuVariant variant, CancellationToken ct)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(assetName);
+
+        if (!IsValidTag(tag))
+        {
+            throw new LlamaRuntimeException("The requested llama.cpp runtime version is not in a recognized format.");
+        }
+
+        // The asset name is interpolated into a temp file path and the download URL — it comes from the live GitHub API,
+        // so gate it against a strict allow-list (no path/URL metacharacters) before it touches either.
+        if (!IsValidAssetName(assetName))
+        {
+            throw new LlamaRuntimeException("The requested llama.cpp runtime asset name is not in a recognized format.");
+        }
+
+        var expectedDigest = StripDigestPrefix(digestSha256);
+        if (expectedDigest.Length != 64 || !expectedDigest.All(Uri.IsHexDigit))
+        {
+            throw new LlamaRuntimeException("The requested llama.cpp runtime could not be verified (missing integrity digest).");
+        }
+
+        // Disk-exhaustion guard: a catalog-reported size beyond the absolute ceiling is rejected before any download.
+        if (expectedSize > MaxDownloadBytes)
+        {
+            throw new LlamaRuntimeException("The requested llama.cpp runtime is larger than the maximum allowed download size.");
+        }
+
+        var variantDir = Path.Combine(_cacheRoot, "llama.cpp", tag, VariantSlug(variant));
+        var url = LlamaCppReleasePins.DownloadUri(tag, assetName);
+
+        // Reuse the shared download→verify→atomic-extract pipeline, verifying against the live publisher digest. On any
+        // failure the previously-installed binary (a sibling versioned dir) is untouched — versioned dirs isolate tiers.
+        await DownloadVerifyExtractAsync(url, assetName, expectedDigest, expectedSize, variantDir, ct).ConfigureAwait(false);
+
+        var pin = LlamaCppReleasePins.Resolve(_os, _arch, variant);
+        var serverPath = ResolveServerPathForAsset(variantDir, pin);
+        if (serverPath is null)
+        {
+            throw new LlamaRuntimeException("The downloaded llama.cpp runtime did not contain the expected server executable.");
+        }
+
+        // Smoke test BEFORE recording the install: a binary that cannot even report its version is not made active. A
+        // failed self-check must not leave a half-validated variant dir on disk where a later EnsureBinaryAsync tier-1
+        // resolve could serve it unverified — best-effort delete it before surfacing the failure.
+        if (!await SmokeTestAsync(serverPath, ct).ConfigureAwait(false))
+        {
+            TryDeleteDirectory(variantDir);
+            throw new LlamaRuntimeException("The downloaded llama.cpp runtime failed its post-install self-check.");
+        }
+
+        if (_installedRuntimeStore is not null)
+        {
+            var state = new InstalledRuntimeState(tag, assetName, expectedDigest, variant, DateTimeOffset.UtcNow);
+            await _installedRuntimeStore.WriteAsync(state, ct).ConfigureAwait(false);
+        }
+
+        return new LlamaBinary(serverPath, tag, variant, IsPinnedFallback: false);
+    }
+
+    /// <summary>
+    ///     Spawns the resolved <c>llama-server</c> with <c>--version</c> and a short timeout. A clean exit (or any
+    ///     version banner output) is a pass; a non-zero hard failure, a launch failure, or a timeout is a fail. The
+    ///     process is tree-killed on timeout so no orphan lingers.
+    /// </summary>
+    private static async Task<bool> SmokeTestAsync(string serverPath, CancellationToken ct)
+    {
+        try
+        {
+            var startInfo = new ProcessStartInfo(serverPath, "--version")
+            {
+                RedirectStandardOutput = true,
+                RedirectStandardError = true,
+                UseShellExecute = false,
+                CreateNoWindow = true,
+                WorkingDirectory = Path.GetDirectoryName(serverPath) ?? Environment.CurrentDirectory
+            };
+
+            using var process = Process.Start(startInfo);
+            if (process is null)
+            {
+                return false;
+            }
+
+            using var timeoutCts = CancellationTokenSource.CreateLinkedTokenSource(ct);
+            timeoutCts.CancelAfter(SmokeTestTimeout);
+            try
+            {
+                await process.WaitForExitAsync(timeoutCts.Token).ConfigureAwait(false);
+            }
+            catch (OperationCanceledException) when (timeoutCts.IsCancellationRequested && !ct.IsCancellationRequested)
+            {
+                TryKill(process);
+                return false;
+            }
+
+            // llama-server --version prints its banner and exits 0; some builds exit non-zero but still print a banner.
+            return process.ExitCode == 0;
+        }
+        catch (OperationCanceledException) when (ct.IsCancellationRequested)
+        {
+            throw;
+        }
+        catch (Exception)
+        {
+            // A launch failure (missing exec bit, wrong arch, missing GPU runtime) is a failed self-check, not a crash.
+            return false;
+        }
+    }
+
+    private static void TryKill(Process process)
+    {
+        try
+        {
+            if (!process.HasExited)
+            {
+                process.Kill(entireProcessTree: true);
+            }
+        }
+        catch (InvalidOperationException)
+        {
+            // Already exited between the check and the kill — nothing to do.
+        }
+        catch (NotSupportedException)
+        {
+            // Platform without tree-kill support — best effort.
+        }
     }
 
     /// <summary>
@@ -91,7 +292,24 @@ public sealed class LlamaCppBinaryManager : ILlamaCppBinaryManager
     /// </summary>
     private static string? ResolveServerPath(string variantDir, LlamaCppAssetPin pin)
     {
-        var pinned = Path.GetFullPath(Path.Combine(variantDir, pin.ServerRelativePath));
+        return ResolveServerPathByName(variantDir, pin.ServerRelativePath);
+    }
+
+    /// <summary>
+    ///     Locates the server executable for a dynamically-installed asset. When a pin for the host exists its relative
+    ///     path/name is used; otherwise the OS-appropriate default server name is searched for. Tolerant of upstream
+    ///     archive layout drift via the recursive tree search.
+    /// </summary>
+    private string? ResolveServerPathForAsset(string variantDir, LlamaCppAssetPin? pin)
+    {
+        var relative = pin?.ServerRelativePath
+                       ?? (_os == OSPlatform.Windows ? "build/bin/llama-server.exe" : "build/bin/llama-server");
+        return ResolveServerPathByName(variantDir, relative);
+    }
+
+    private static string? ResolveServerPathByName(string variantDir, string serverRelativePath)
+    {
+        var pinned = Path.GetFullPath(Path.Combine(variantDir, serverRelativePath));
         if (File.Exists(pinned))
         {
             return pinned;
@@ -102,24 +320,27 @@ public sealed class LlamaCppBinaryManager : ILlamaCppBinaryManager
             return null;
         }
 
-        var serverFileName = Path.GetFileName(pin.ServerRelativePath);
+        var serverFileName = Path.GetFileName(serverRelativePath);
         return Directory
                .EnumerateFiles(variantDir, serverFileName, SearchOption.AllDirectories)
                .FirstOrDefault();
     }
 
-    private async Task DownloadVerifyExtractAsync(LlamaCppAssetPin pin, string variantDir, CancellationToken ct)
+    /// <summary>
+    ///     Shared download → SHA256-verify → atomic-extract pipeline. The expected digest is supplied by the caller —
+    ///     the pinned hash (<see cref="EnsureBinaryAsync" />) or the live publisher digest
+    ///     (<see cref="InstallTagAsync" />) — so both acquisition paths run identical verification logic. A transient
+    ///     failure or a hash mismatch is discarded and retried exactly once.
+    /// </summary>
+    private async Task DownloadVerifyExtractAsync(Uri url, string assetName, string expectedSha256, long expectedSize, string variantDir, CancellationToken ct)
     {
-        var url = LlamaCppReleasePins.DownloadUri(_activeTag, pin.AssetName);
-
-        // First attempt. A transient failure or a hash mismatch is discarded and retried exactly once.
-        var firstError = await TryDownloadVerifyExtractAsync(url, pin, variantDir, ct).ConfigureAwait(false);
+        var firstError = await TryDownloadVerifyExtractAsync(url, assetName, expectedSha256, expectedSize, variantDir, ct).ConfigureAwait(false);
         if (firstError is null)
         {
             return;
         }
 
-        var secondError = await TryDownloadVerifyExtractAsync(url, pin, variantDir, ct).ConfigureAwait(false);
+        var secondError = await TryDownloadVerifyExtractAsync(url, assetName, expectedSha256, expectedSize, variantDir, ct).ConfigureAwait(false);
         if (secondError is null)
         {
             return;
@@ -134,19 +355,27 @@ public sealed class LlamaCppBinaryManager : ILlamaCppBinaryManager
     ///     Runs one download → SHA256 verify → extract pass. Returns <see langword="null" /> on success, or the
     ///     non-fatal failure cause to drive a single retry. Cancellation propagates rather than being swallowed.
     /// </summary>
-    private async Task<Exception?> TryDownloadVerifyExtractAsync(Uri url, LlamaCppAssetPin pin, string variantDir, CancellationToken ct)
+    private async Task<Exception?> TryDownloadVerifyExtractAsync(Uri url, string assetName, string expectedSha256, long expectedSize, string variantDir, CancellationToken ct)
     {
-        var tempArchive = Path.Combine(Path.GetTempPath(), $"llamacpp-{Guid.NewGuid():N}-{pin.AssetName}");
+        // Defense-in-depth: even though assetName is allow-list-validated upstream, strip any directory component before
+        // it composes a temp path so a future caller can never traverse out of the temp dir.
+        var tempArchive = Path.Combine(Path.GetTempPath(), $"llamacpp-{Guid.NewGuid():N}-{Path.GetFileName(assetName)}");
         try
         {
-            await DownloadToFileAsync(url, tempArchive, ct).ConfigureAwait(false);
+            await DownloadToFileAsync(url, tempArchive, expectedSize, ct).ConfigureAwait(false);
 
-            if (!await HashMatchesAsync(tempArchive, pin.Sha256, ct).ConfigureAwait(false))
+            // When the catalog reported a size, the on-disk length must match it exactly before we trust+hash the file.
+            if (expectedSize > 0 && new FileInfo(tempArchive).Length != expectedSize)
+            {
+                return new LlamaRuntimeException("The llama.cpp runtime download did not match its expected size.");
+            }
+
+            if (!await HashMatchesAsync(tempArchive, expectedSha256, ct).ConfigureAwait(false))
             {
                 return new LlamaRuntimeException("The llama.cpp runtime download failed integrity verification.");
             }
 
-            ExtractArchive(tempArchive, pin.AssetName, variantDir);
+            ExtractArchive(tempArchive, assetName, variantDir);
             return null;
         }
         catch (OperationCanceledException) when (ct.IsCancellationRequested)
@@ -163,16 +392,44 @@ public sealed class LlamaCppBinaryManager : ILlamaCppBinaryManager
         }
     }
 
-    private async Task DownloadToFileAsync(Uri url, string destination, CancellationToken ct)
+    private async Task DownloadToFileAsync(Uri url, string destination, long expectedSize, CancellationToken ct)
     {
         using var response = await _httpClient
                                    .GetAsync(url, HttpCompletionOption.ResponseHeadersRead, ct)
                                    .ConfigureAwait(false);
         response.EnsureSuccessStatusCode();
 
+        // Bound the write: when a size is known, allow it plus a small slack; otherwise fall back to the absolute
+        // ceiling. A stream that exceeds the bound (a hostile/buggy server) is aborted and the partial file discarded.
+        var limit = expectedSize > 0
+            ? Math.Min(expectedSize + DownloadSizeSlackBytes, MaxDownloadBytes)
+            : MaxDownloadBytes;
+
         await using var source = await response.Content.ReadAsStreamAsync(ct).ConfigureAwait(false);
-        await using var target = new FileStream(destination, FileMode.Create, FileAccess.Write, FileShare.None);
-        await source.CopyToAsync(target, ct).ConfigureAwait(false);
+
+        try
+        {
+            await using var target = new FileStream(destination, FileMode.Create, FileAccess.Write, FileShare.None);
+
+            var buffer = new byte[81920];
+            long written = 0;
+            int read;
+            while ((read = await source.ReadAsync(buffer, ct).ConfigureAwait(false)) > 0)
+            {
+                written += read;
+                if (written > limit)
+                {
+                    throw new LlamaRuntimeException("The llama.cpp runtime download exceeded the maximum allowed size.");
+                }
+
+                await target.WriteAsync(buffer.AsMemory(0, read), ct).ConfigureAwait(false);
+            }
+        }
+        catch
+        {
+            TryDeleteFile(destination);
+            throw;
+        }
     }
 
     private static async Task<bool> HashMatchesAsync(string filePath, string expectedSha256, CancellationToken ct)
@@ -245,6 +502,69 @@ public sealed class LlamaCppBinaryManager : ILlamaCppBinaryManager
             // Best-effort cleanup of a temp download; ignore.
         }
     }
+
+    /// <summary>Validates a release tag against the upstream <c>b&lt;N&gt;</c> scheme before it is composed into a URL.</summary>
+    private static bool IsValidTag(string? tag)
+    {
+        return !string.IsNullOrWhiteSpace(tag) && TagRegex().IsMatch(tag);
+    }
+
+    /// <summary>
+    ///     Allow-list gate on a release asset name (a live-GitHub value) before it is interpolated into a temp file path or
+    ///     the download URL. Only the file-name alphabet is permitted — no path/URL separators or <c>..</c> segments.
+    /// </summary>
+    private static bool IsValidAssetName(string? assetName)
+    {
+        return !string.IsNullOrWhiteSpace(assetName)
+               && !assetName.Contains("..", StringComparison.Ordinal)
+               && AssetNameRegex().IsMatch(assetName);
+    }
+
+    private static void TryDeleteDirectory(string path)
+    {
+        try
+        {
+            if (Directory.Exists(path))
+            {
+                Directory.Delete(path, recursive: true);
+            }
+        }
+        catch (IOException)
+        {
+            // Best-effort cleanup of a failed install; never mask the original failure.
+        }
+        catch (UnauthorizedAccessException)
+        {
+            // Best-effort cleanup of a failed install; never mask the original failure.
+        }
+    }
+
+    /// <summary>
+    ///     Strips a leading <c>sha256:</c> prefix (if present) from a publisher digest. Case is preserved — the hash
+    ///     comparison in <see cref="HashMatchesAsync" /> is already case-insensitive, so no case folding is needed.
+    /// </summary>
+    private static string StripDigestPrefix(string? digest)
+    {
+        if (string.IsNullOrWhiteSpace(digest))
+        {
+            return string.Empty;
+        }
+
+        var value = digest.Trim();
+        const string prefix = "sha256:";
+        if (value.StartsWith(prefix, StringComparison.OrdinalIgnoreCase))
+        {
+            value = value[prefix.Length..];
+        }
+
+        return value;
+    }
+
+    [GeneratedRegex(@"^b[0-9]+$", RegexOptions.CultureInvariant, matchTimeoutMilliseconds: 2000)]
+    private static partial Regex TagRegex();
+
+    [GeneratedRegex(@"^[A-Za-z0-9._-]+$", RegexOptions.CultureInvariant, matchTimeoutMilliseconds: 2000)]
+    private static partial Regex AssetNameRegex();
 
     private static string VariantSlug(GpuVariant variant)
     {

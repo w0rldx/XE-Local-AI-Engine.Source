@@ -10,6 +10,7 @@ using XE_Local_AI_Engine.Client.Services.AgentHome;
 using XE_Local_AI_Engine.Client.Services.AgentHome.Implementation;
 using XE_Local_AI_Engine.Client.Services.Workspace;
 using XE_Local_AI_Engine.Tests.Testing;
+using XE_Local_AI_Engine.Tests.Testing.Builders;
 
 /// <summary>
 ///     Host patch apply coverage. Uses REAL host <c>git</c> (no Docker, no Ollama) to
@@ -464,14 +465,17 @@ public sealed class NodePatchApplyServiceTests : IDisposable
         var options = Options.Create(new AgentHomeOptions
         {
             RootPath = agentHomeStateRoot,
-            MaxPatchBytes = tinyBudget,
             PatchApplyTimeoutSeconds = 120
         });
+        var runtimeSettings = StubNodeRuntimeSettings.Create()
+            .WithAgentHomeMaxPatchBytes(tinyBudget)
+            .Build();
         var scopeFactory = new ServiceCollection()
                            .AddTransient<IAgentHomeRunLogger>(_ => new AgentHomeRunLogger(TimeProvider.System))
                            .BuildServiceProvider();
         var service = new NodePatchApplyService(resolver,
             options,
+            runtimeSettings,
             new FakeNodeDataDirectory(agentHomeStateRoot),
             new StubIdentityProvider(),
             scopeFactory.GetRequiredService<IServiceScopeFactory>(),
@@ -583,12 +587,14 @@ public sealed class NodePatchApplyServiceTests : IDisposable
             AllowBinaryPatchApply = allowBinary,
             PatchApplyTimeoutSeconds = 120
         });
+        var runtimeSettings = StubNodeRuntimeSettings.Create().Build();
         var scopeFactory = new ServiceCollection()
                            .AddTransient<IAgentHomeRunLogger>(_ => new AgentHomeRunLogger(TimeProvider.System))
                            .BuildServiceProvider();
 
         var service = new NodePatchApplyService(resolver,
             options,
+            runtimeSettings,
             new FakeNodeDataDirectory(agentHomeStateRoot),
             new StubIdentityProvider(),
             scopeFactory.GetRequiredService<IServiceScopeFactory>(),

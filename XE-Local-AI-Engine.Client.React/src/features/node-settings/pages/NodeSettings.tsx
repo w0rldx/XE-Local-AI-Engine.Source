@@ -1,7 +1,7 @@
 import { Alert, Button, Card, Container, Group, Loader, NumberInput, Stack, Switch, Text, Title } from "@mantine/core";
 import { IconAlertTriangle, IconCode, IconDeviceFloppy, IconRefresh, IconSettings } from "@tabler/icons-react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 
 import type { SaveNodeSettingsResponse } from "@/core/api/generated";
@@ -14,8 +14,16 @@ import { withResponseValidation } from "@/core/api/ResponseValidation";
 import { useDeveloperModeStore } from "@/core/dev-tools/stores/DeveloperModeStore";
 import { toast } from "@/core/ui/notifications/Toast";
 import { HfTokenPanel } from "@/features/node-settings/components/HfTokenPanel";
+import { LlamaCppUpdaterPanel } from "@/features/node-settings/components/LlamaCppUpdaterPanel";
 import { LlamaCppVersionPanel } from "@/features/node-settings/components/LlamaCppVersionPanel";
+import { NodeSettingsFieldsCard } from "@/features/node-settings/components/NodeSettingsFieldsCard";
 import type { LlamaCppVariant } from "@/features/node-settings/models/LocalRuntimeModels";
+import {
+	buildNodeSettingsRequest,
+	type NodeSettingsFieldsForm,
+	toNodeSettingsFieldBounds,
+	toNodeSettingsFieldsForm,
+} from "@/features/node-settings/models/NodeSettingsFieldsModel";
 import {
 	type NodeSettingsTimeoutInput,
 	nodeSettingsDefaults,
@@ -48,9 +56,27 @@ export function NodeSettings() {
 		nodeSettingsDefaults.maxMessageRequestTimeoutSeconds,
 	);
 
+	// The migrated appsettings knobs. `fieldsForm` is the editable draft; `fieldsBaselineRef` is the last-loaded
+	// authoritative state — only fields that differ from the baseline are sent on save (optional-request semantics).
+	// The baseline is read only inside handlers (never rendered), so it lives in a ref to avoid an extra render on load.
+	const [fieldsForm, setFieldsForm] = useState<NodeSettingsFieldsForm>(() => toNodeSettingsFieldsForm(undefined));
+	// Lazy ref init: build the default baseline once (on first render), not on every render. The effect overwrites it
+	// with the loaded settings as soon as they arrive.
+	const fieldsBaselineRef = useRef<NodeSettingsFieldsForm | null>(null);
+	if (fieldsBaselineRef.current === null) {
+		fieldsBaselineRef.current = toNodeSettingsFieldsForm(undefined);
+	}
+	const [fieldErrors, setFieldErrors] = useState<Readonly<Record<string, string>>>({});
+	const fieldBounds = useMemo(() => toNodeSettingsFieldBounds(settings), [settings]);
+
 	useEffect(() => {
 		if (settings?.maxMessageRequestTimeoutSeconds !== undefined) {
 			setTimeoutSeconds(settings.maxMessageRequestTimeoutSeconds);
+		}
+		if (settings !== undefined) {
+			const loaded = toNodeSettingsFieldsForm(settings);
+			setFieldsForm(loaded);
+			fieldsBaselineRef.current = loaded;
 		}
 	}, [settings]);
 
@@ -62,16 +88,55 @@ export function NodeSettings() {
 		[maxTimeout, minTimeout, timeoutSeconds],
 	);
 
+	const handleFieldChange = <K extends keyof NodeSettingsFieldsForm>(field: K, value: NodeSettingsFieldsForm[K]): void => {
+		setFieldsForm((current) => ({ ...current, [field]: value }));
+		// Clear a field's stale error as soon as the operator edits it.
+		setFieldErrors((current) => {
+			if (current[field as string] === undefined) {
+				return current;
+			}
+			const next = { ...current };
+			delete next[field as string];
+			return next;
+		});
+	};
+
 	const saveMutation = useMutation({
 		...withResponseValidation(saveNodeSettingsMutation()),
 		onSuccess: async (updatedSettings: SaveNodeSettingsResponse) => {
-			toast.success("Node settings saved. Capability reporting was requested for the worker connection.");
+			toast.success(
+				t(
+					"pages.nodeSettings.saved",
+					"Node settings saved. Capability reporting was requested for the worker connection.",
+				),
+			);
 			setTimeoutSeconds(updatedSettings.maxMessageRequestTimeoutSeconds ?? nodeSettingsDefaults.maxMessageRequestTimeoutSeconds);
+			const loaded = toNodeSettingsFieldsForm(updatedSettings);
+			setFieldsForm(loaded);
+			fieldsBaselineRef.current = loaded;
+			setFieldErrors({});
 			queryClient.setQueryData(getNodeSettingsQueryKey(), updatedSettings);
 			await queryClient.invalidateQueries({ queryKey: getNodeSettingsQueryKey() });
 		},
 		onError: (error) => toast.error(errorMessage(error)),
 	});
+
+	// Builds the merged PUT body (timeout + only-changed migrated fields). Developer-only fields are included ONLY when
+	// developer mode is on (off-mode the advanced card is unmounted, so an off-mode save must not touch them).
+	const handleSave = (): void => {
+		if (timeoutToSave === undefined) {
+			return;
+		}
+		const baseline = fieldsBaselineRef.current ?? toNodeSettingsFieldsForm(undefined);
+		const { body, errors } = buildNodeSettingsRequest(fieldsForm, baseline, fieldBounds, developerMode);
+		if (Object.keys(errors).length > 0) {
+			setFieldErrors(errors);
+			toast.error(t("pages.nodeSettings.fields.validationError", "Some settings are invalid. Fix the highlighted fields."));
+			return;
+		}
+		setFieldErrors({});
+		saveMutation.mutate({ body: { ...body, maxMessageRequestTimeoutSeconds: timeoutToSave } });
+	};
 
 	const canSave = timeoutToSave !== undefined && !saveMutation.isPending;
 
@@ -180,15 +245,10 @@ export function NodeSettings() {
 						<Group>
 							<Button
 								leftSection={<IconDeviceFloppy size={16} />}
-								onClick={() =>
-									saveMutation.mutate({
-										body: {
-											maxMessageRequestTimeoutSeconds: timeoutToSave ?? nodeSettingsDefaults.maxMessageRequestTimeoutSeconds,
-										},
-									})
-								}
+								onClick={handleSave}
 								loading={saveMutation.isPending}
 								disabled={!canSave}
+								data-testid="node-settings-save-button"
 							>
 								Save settings
 							</Button>
@@ -204,6 +264,8 @@ export function NodeSettings() {
 					</Stack>
 				</Card>
 
+				<LlamaCppUpdaterPanel />
+
 				<LlamaCppVersionPanel
 					version={versionQuery.data}
 					// `isLoading` is true while a DISABLED query idles, so gate the spinner on an actual in-flight fetch — the
@@ -215,6 +277,26 @@ export function NodeSettings() {
 					onEnsure={handleEnsureBinary}
 					isEnsuring={ensureBinary.isPending}
 				/>
+
+				<NodeSettingsFieldsCard
+					form={fieldsForm}
+					bounds={fieldBounds}
+					errors={fieldErrors}
+					onChange={handleFieldChange}
+					showDeveloperFields={developerMode}
+				/>
+
+				<Group>
+					<Button
+						leftSection={<IconDeviceFloppy size={16} />}
+						onClick={handleSave}
+						loading={saveMutation.isPending}
+						disabled={!canSave}
+						data-testid="node-settings-fields-save-button"
+					>
+						{t("pages.nodeSettings.fields.save", "Save node settings")}
+					</Button>
+				</Group>
 
 				<HfTokenPanel
 					hasToken={hfTokenQuery.data ?? false}

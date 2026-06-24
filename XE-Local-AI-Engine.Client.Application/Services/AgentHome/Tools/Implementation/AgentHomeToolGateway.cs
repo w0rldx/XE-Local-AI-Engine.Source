@@ -1,7 +1,7 @@
 namespace XE_Local_AI_Engine.Client.Services.AgentHome.Tools.Implementation;
 
 using System.Globalization;
-using Microsoft.Extensions.Options;
+using XE_Local_AI_Engine.Client.Services.NodeSettings;
 using XE_Local_AI_Engine.Client.Services.Workspace;
 
 /// <summary>
@@ -13,14 +13,13 @@ using XE_Local_AI_Engine.Client.Services.Workspace;
 /// </summary>
 internal sealed class AgentHomeToolGateway : IAgentHomeToolGateway
 {
-    private readonly int _commandTimeoutSeconds;
     private readonly IAgentHomeService _service;
+    private readonly INodeRuntimeSettings _runtimeSettings;
 
-    public AgentHomeToolGateway(IAgentHomeService service, IOptions<AgentHomeOptions> options)
+    public AgentHomeToolGateway(IAgentHomeService service, INodeRuntimeSettings runtimeSettings)
     {
         _service = service ?? throw new ArgumentNullException(nameof(service));
-        ArgumentNullException.ThrowIfNull(options);
-        _commandTimeoutSeconds = options.Value.CommandTimeoutSeconds;
+        _runtimeSettings = runtimeSettings ?? throw new ArgumentNullException(nameof(runtimeSettings));
     }
 
     public async Task<string> ExecuteAsync(AgentHomeRunToolRequest request, CancellationToken cancellationToken = default)
@@ -44,8 +43,9 @@ internal sealed class AgentHomeToolGateway : IAgentHomeToolGateway
             // Report a run-relative output location, never the absolute worker-host path, so the model never sees the
             // worker content-root structure. The
             // workspace summary carries aliases and counts only — never host paths (workspace copy).
+            var commandTimeoutSeconds = await _runtimeSettings.GetAgentHomeCommandTimeoutSecondsAsync(cancellationToken).ConfigureAwait(false);
             return string.Create(CultureInfo.InvariantCulture,
-                $"AgentHome run {run.RunId} {DescribeOutcome(run)} (exit code {run.ExitCode}). Run outputs: runs/{run.RunId}/.{BuildWorkspaceSummary(run.FolderSnapshots)}{BuildPatchSummary(run.Patch)}");
+                $"AgentHome run {run.RunId} {DescribeOutcome(run, commandTimeoutSeconds)} (exit code {run.ExitCode}). Run outputs: runs/{run.RunId}/.{BuildWorkspaceSummary(run.FolderSnapshots)}{BuildPatchSummary(run.Patch)}");
         }
         catch (AgentHomeBusyException)
         {
@@ -61,11 +61,11 @@ internal sealed class AgentHomeToolGateway : IAgentHomeToolGateway
         }
     }
 
-    private string DescribeOutcome(AgentHomeRunResult run)
+    private static string DescribeOutcome(AgentHomeRunResult run, int commandTimeoutSeconds)
     {
         if (run.TimedOut)
         {
-            return string.Create(CultureInfo.InvariantCulture, $"did not complete (timed out after {_commandTimeoutSeconds}s)");
+            return string.Create(CultureInfo.InvariantCulture, $"did not complete (timed out after {commandTimeoutSeconds}s)");
         }
 
         return run.Completed ? "completed" : "did not complete";

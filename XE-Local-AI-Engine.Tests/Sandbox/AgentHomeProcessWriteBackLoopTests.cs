@@ -8,11 +8,13 @@ using Microsoft.Extensions.Options;
 using XE_Local_AI_Engine.Client.Persistence;
 using XE_Local_AI_Engine.Client.Services.AgentHome;
 using XE_Local_AI_Engine.Client.Services.AgentHome.Implementation;
+using XE_Local_AI_Engine.Client.Services.NodeSettings;
 using XE_Local_AI_Engine.Client.Services.Sandbox;
 using XE_Local_AI_Engine.Client.Services.Sandbox.Implementation;
 using XE_Local_AI_Engine.Client.Services.Workspace;
 using XE_Local_AI_Engine.Client.Services.Workspace.Implementation;
 using XE_Local_AI_Engine.Tests.Testing;
+using XE_Local_AI_Engine.Tests.Testing.Builders;
 
 /// <summary>
 ///     The acceptance loop on the REAL <see cref="ProcessSandboxRuntimeProvider" />: copy a selected folder into the
@@ -103,7 +105,7 @@ public sealed class AgentHomeProcessWriteBackLoopTests : IDisposable
         AssertEx.Contains(patchText, "bravo");
 
         // 4) APPLY — land the exported patch onto the host folder via the real apply service.
-        var applyService = CreatePatchApplyService(harness.Options, resolver);
+        var applyService = CreatePatchApplyService(harness.Options, harness.RuntimeSettings, resolver);
         var applied = await applyService.ApplyApprovedAsync(new NodePatchApplyRequest
         {
             RunId = run.RunId
@@ -140,7 +142,9 @@ public sealed class AgentHomeProcessWriteBackLoopTests : IDisposable
         }
     }
 
-    private static NodePatchApplyService CreatePatchApplyService(IOptions<AgentHomeOptions> options, ISelectedFolderResolver resolver)
+    private static NodePatchApplyService CreatePatchApplyService(IOptions<AgentHomeOptions> options,
+        INodeRuntimeSettings runtimeSettings,
+        ISelectedFolderResolver resolver)
     {
         var serviceProvider = new ServiceCollection()
                               .AddScoped(_ => resolver)
@@ -149,6 +153,7 @@ public sealed class AgentHomeProcessWriteBackLoopTests : IDisposable
         // the run service both resolve <RootPath>/agent-home, so the exported changes.patch is found.
         return new NodePatchApplyService(resolver,
             options,
+            runtimeSettings,
             new FakeNodeDataDirectory(options.Value.RootPath ?? string.Empty),
             new StaticIdentityProvider("owner-a", "node-1"),
             serviceProvider.GetRequiredService<IServiceScopeFactory>(),
@@ -190,6 +195,9 @@ public sealed class AgentHomeProcessWriteBackLoopTests : IDisposable
             RootPath = root,
             CommandTimeoutSeconds = 120
         });
+        var runtimeSettings = StubNodeRuntimeSettings.Create()
+            .WithAgentHomeCommandTimeoutSeconds(120)
+            .Build();
         var manifestService = new AgentHomeManifestService(new FakeNodeDataDirectory(root), options, provider, clock, NullLogger<AgentHomeManifestService>.Instance);
 
         var serviceProvider = new ServiceCollection()
@@ -200,10 +208,10 @@ public sealed class AgentHomeProcessWriteBackLoopTests : IDisposable
         var memoryProposalService = new AgentHomeMemoryProposalService(NullLogger<AgentHomeMemoryProposalService>.Instance);
         var workspaceService = new AgentHomeWorkspaceService(provider,
             new SensitiveFileExclusionService(),
-            options,
+            runtimeSettings,
             NullLogger<AgentHomeWorkspaceService>.Instance);
         var patchService = new AgentHomePatchService(provider,
-            options,
+            runtimeSettings,
             NullLogger<AgentHomePatchService>.Instance);
 
         var service = new AgentHomeService(manifestService,
@@ -214,10 +222,11 @@ public sealed class AgentHomeProcessWriteBackLoopTests : IDisposable
             memoryProposalService,
             serviceProvider.GetRequiredService<IServiceScopeFactory>(),
             options,
+            runtimeSettings,
             clock,
             NullLogger<AgentHomeService>.Instance);
 
-        return new ServiceHarness(service, manifestService, serviceProvider, options);
+        return new ServiceHarness(service, manifestService, serviceProvider, options, runtimeSettings);
     }
 
     private sealed class ServiceHarness : IDisposable
@@ -228,17 +237,21 @@ public sealed class AgentHomeProcessWriteBackLoopTests : IDisposable
         public ServiceHarness(AgentHomeService service,
             AgentHomeManifestService manifestService,
             ServiceProvider serviceProvider,
-            IOptions<AgentHomeOptions> options)
+            IOptions<AgentHomeOptions> options,
+            INodeRuntimeSettings runtimeSettings)
         {
             Service = service;
             _manifestService = manifestService;
             _serviceProvider = serviceProvider;
             Options = options;
+            RuntimeSettings = runtimeSettings;
         }
 
         public AgentHomeService Service { get; }
 
         public IOptions<AgentHomeOptions> Options { get; }
+
+        public INodeRuntimeSettings RuntimeSettings { get; }
 
         public void Dispose()
         {

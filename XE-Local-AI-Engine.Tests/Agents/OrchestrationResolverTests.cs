@@ -11,6 +11,7 @@ using XE_Local_AI_Engine.Client.Services.Agents;
 using XE_Local_AI_Engine.Client.Services.Agents.Implementation;
 using XE_Local_AI_Engine.Client.Services.Chat;
 using XE_Local_AI_Engine.Tests.Testing;
+using XE_Local_AI_Engine.Tests.Testing.Builders;
 
 public sealed class OrchestrationResolverTests
 {
@@ -301,17 +302,14 @@ public sealed class OrchestrationResolverTests
                 : [.. offeredTools.Where(static tool => !string.Equals(tool.Name, CapabilityGatedToolName, StringComparison.Ordinal))];
         });
 
-        var options = Options.Create(new AgentHomeOptions
-        {
-            ToolCapableModels = [ToolCapableModel]
-        });
+        var runtimeSettings = StubNodeRuntimeSettings.Create().WithToolCapableModels(ToolCapableModel).Build();
         var retrievalOptions = Options.Create(new PlaybookRetrievalOptions());
         return new OrchestrationResolver(store,
             playbookStore,
             offerProvider,
             new LexicalPlaybookRetrievalRanker(),
             retrievalOptions,
-            options,
+            runtimeSettings,
             NullLogger<OrchestrationResolver>.Instance);
     }
 
@@ -338,16 +336,13 @@ public sealed class OrchestrationResolverTests
                 : [.. offeredTools.Where(static tool => !string.Equals(tool.Name, CapabilityGatedToolName, StringComparison.Ordinal))];
         });
 
-        var options = Options.Create(new AgentHomeOptions
-        {
-            ToolCapableModels = [ToolCapableModel]
-        });
+        var runtimeSettings = StubNodeRuntimeSettings.Create().WithToolCapableModels(ToolCapableModel).Build();
         var retrievalOptions = Options.Create(new PlaybookRetrievalOptions
         {
             RetrievalThreshold = threshold,
             TopK = topK
         });
-        return new OrchestrationResolver(store, playbookStore, offerProvider, ranker, retrievalOptions, options, NullLogger<OrchestrationResolver>.Instance);
+        return new OrchestrationResolver(store, playbookStore, offerProvider, ranker, retrievalOptions, runtimeSettings, NullLogger<OrchestrationResolver>.Instance);
     }
 
     private static void SeedParticipants(IAgentDefinitionStore store, params AgentDefinitionRecord[] participants)

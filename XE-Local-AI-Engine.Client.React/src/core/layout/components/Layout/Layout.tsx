@@ -8,6 +8,7 @@ import { DesktopNavigationBar } from "@/core/layout/components/DesktopNavigation
 import { HeaderBar } from "@/core/layout/components/HeaderBar/HeaderBar";
 import useWindowDimensions from "@/core/layout/hooks/useWindowDimensions";
 import { useDesktopNavigationBarStore } from "@/core/layout/stores/DesktopNavigationBarStore";
+import { LlamaCppUpdateBanner } from "@/features/node-settings/components/LlamaCppUpdateBanner";
 
 const DevelopmentUi = import.meta.env.DEV
 	? lazy(() => import("@/core/dev-tools/components/DevelopmentUi/DevelopmentUi").then((m) => ({ default: m.DevelopmentUi })))
@@ -58,6 +59,7 @@ export function Layout() {
 				>
 					<div className="flex-shrink-0">
 						<HeaderBar />
+						<LlamaCppUpdateBanner />
 					</div>
 
 					<div className="flex-1 min-h-0 overflow-y-auto md:px-8 px-2 pt-2">

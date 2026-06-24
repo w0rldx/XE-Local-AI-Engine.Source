@@ -1,11 +1,13 @@
 namespace XE_Local_AI_Engine.Client;
 
 using Microsoft.Extensions.Options;
+using XE_Local_AI_Engine.AI.Agent.Tools;
 using XE_Local_AI_Engine.Client.Configuration.Validation;
 using XE_Local_AI_Engine.Client.Services.Chat;
 using XE_Local_AI_Engine.Client.Services.Chat.Implementation;
 using XE_Local_AI_Engine.Client.Services.Mcp;
 using XE_Local_AI_Engine.Client.Services.Mcp.Implementation;
+using XE_Local_AI_Engine.Client.Services.NodeSettings;
 using XE_Local_AI_Engine.Client.Services.Scheduler;
 
 internal static class AddNodeModelCapabilitiesAndMcpExtensions
@@ -16,7 +18,18 @@ internal static class AddNodeModelCapabilitiesAndMcpExtensions
         ArgumentNullException.ThrowIfNull(configuration);
 
         builder.Services.AddSingleton<ILocalChatRuntimePackageBuilder, LocalChatRuntimePackageBuilder>();
-        builder.Services.AddSingleton<ILocalToolOfferProvider, LocalToolOfferProvider>();
+        // LocalToolOfferProvider is a singleton with a synchronous hot offer path, so its tool-capable allow-list is
+        // SEEDED once here from INodeRuntimeSettings (migrated AgentHome:ToolCapableModels, stored > seed > default)
+        // rather than re-read per offer. The blocking accessor read runs once at singleton construction; a runtime edit
+        // applies on the next process restart (plan §7.4).
+        builder.Services.AddSingleton<ILocalToolOfferProvider>(sp =>
+        {
+            var runtimeSettings = sp.GetRequiredService<INodeRuntimeSettings>();
+            var toolCapableModels = runtimeSettings.GetToolCapableModels();
+            return new LocalToolOfferProvider(sp.GetRequiredService<IAgentToolRegistry>(),
+                sp.GetRequiredService<IMcpToolRegistry>(),
+                toolCapableModels);
+        });
         // MCP tool extensibility. The connection manager owns the MCP client lifecycle and republishes the dynamic
         // tool snapshot into the registry consumed by offered-tool resolution. The startup connector triggers an
         // initial refresh off the hot path; the manager stays singleton because it owns long-lived connections.

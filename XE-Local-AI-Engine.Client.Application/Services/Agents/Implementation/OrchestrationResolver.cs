@@ -3,15 +3,16 @@ namespace XE_Local_AI_Engine.Client.Services.Agents.Implementation;
 using Microsoft.Extensions.Options;
 using XE_Local_AI_Engine.Client.Models;
 using XE_Local_AI_Engine.Client.Persistence;
-using XE_Local_AI_Engine.Client.Services.AgentHome;
 using XE_Local_AI_Engine.Client.Services.Chat;
+using XE_Local_AI_Engine.Client.Services.NodeSettings;
 
 /// <summary>
 ///     Default <see cref="IOrchestrationResolver" />. Compiles a <c>Kind=Orchestrator</c> definition + its topology
 ///     into an <see cref="OrchestrationSpec" />, reusing the per-definition tool projection for every participant.
 ///     Every rejection path returns <c>null</c> (degrade to single-agent) and logs WHY — orchestration never fails a
-///     turn, it falls back. Capability gating mirrors the single-agent path: a model is tool-capable iff it is in
-///     <see cref="AgentHomeOptions.ToolCapableModels" /> (the same allow-list <c>LocalToolOfferProvider</c> uses).
+///     turn, it falls back. Capability gating mirrors the single-agent path: a model is tool-capable iff it is in the
+///     migrated <c>AgentHome:ToolCapableModels</c> allow-list (read via <see cref="INodeRuntimeSettings" />, the same
+///     allow-list <c>LocalToolOfferProvider</c> uses).
 /// </summary>
 internal sealed class OrchestrationResolver : IOrchestrationResolver
 {
@@ -23,15 +24,15 @@ internal sealed class OrchestrationResolver : IOrchestrationResolver
     private readonly PlaybookRetrievalOptions _retrievalOptions;
     private readonly IPlaybookRetrievalRanker _retrievalRanker;
 
+    private readonly INodeRuntimeSettings _runtimeSettings;
     private readonly IAgentDefinitionStore _store;
-    private readonly HashSet<string> _toolCapableModels;
 
     public OrchestrationResolver(IAgentDefinitionStore store,
         IPlaybookActionStore playbookActionStore,
         ILocalToolOfferProvider localToolOfferProvider,
         IPlaybookRetrievalRanker retrievalRanker,
         IOptions<PlaybookRetrievalOptions> retrievalOptions,
-        IOptions<AgentHomeOptions> agentHomeOptions,
+        INodeRuntimeSettings runtimeSettings,
         ILogger<OrchestrationResolver> logger)
     {
         _store = store ?? throw new ArgumentNullException(nameof(store));
@@ -40,10 +41,8 @@ internal sealed class OrchestrationResolver : IOrchestrationResolver
         _retrievalRanker = retrievalRanker ?? throw new ArgumentNullException(nameof(retrievalRanker));
         ArgumentNullException.ThrowIfNull(retrievalOptions);
         _retrievalOptions = retrievalOptions.Value;
-        ArgumentNullException.ThrowIfNull(agentHomeOptions);
+        _runtimeSettings = runtimeSettings ?? throw new ArgumentNullException(nameof(runtimeSettings));
         _logger = logger ?? throw new ArgumentNullException(nameof(logger));
-
-        _toolCapableModels = new HashSet<string>(agentHomeOptions.Value.ToolCapableModels ?? [], StringComparer.Ordinal);
     }
 
     public async Task<ResolvedOrchestration?> ResolveAsync(AgentDefinitionRecord orchestrator,
@@ -76,17 +75,22 @@ internal sealed class OrchestrationResolver : IOrchestrationResolver
             return null;
         }
 
+        // Resolve the tool-capable allow-list once per resolve from the accessor (stored AgentHome:ToolCapableModels >
+        // appsettings seed > default). OrchestrationResolver is scoped (per turn), so this one cached read picks up an
+        // operator edit on the next turn without a restart.
+        var toolCapableModels = await BuildToolCapableSetAsync(cancellationToken).ConfigureAwait(false);
+
         // The whole orchestration is gated on the orchestrator's effective model being tool-capable (handoff routing
         // is multi-hop function calling). An incapable model degrades the entire turn to single-agent — the UI warned
         // at authoring time.
         var orchestratorEffectiveModel = orchestrator.ModelProfile ?? activeModelId;
-        if (!IsToolCapable(orchestratorEffectiveModel))
+        if (!IsToolCapable(toolCapableModels, orchestratorEffectiveModel))
         {
             _logger.LogInformation("Orchestrator {AgentDefinitionId} effective model is not tool-capable; degrading to single-agent.", orchestrator.Id);
             return null;
         }
 
-        var participants = await LoadCapableParticipantsAsync(orchestrator, topology, activeModelId, retrievalQuery, cancellationToken).ConfigureAwait(false);
+        var participants = await LoadCapableParticipantsAsync(orchestrator, topology, activeModelId, retrievalQuery, toolCapableModels, cancellationToken).ConfigureAwait(false);
         if (!participants.TryGetValue(topology.TriageAgentDefinitionId, out var triage))
         {
             _logger.LogWarning("Orchestrator {AgentDefinitionId} triage participant {TriageId} is missing, deleted, or not tool-capable; degrading to single-agent.",
@@ -137,6 +141,7 @@ internal sealed class OrchestrationResolver : IOrchestrationResolver
         OrchestrationTopology topology,
         string? activeModelId,
         string? retrievalQuery,
+        IReadOnlySet<string> toolCapableModels,
         CancellationToken cancellationToken)
     {
         var capable = new Dictionary<Guid, ResolvedParticipant>();
@@ -155,7 +160,7 @@ internal sealed class OrchestrationResolver : IOrchestrationResolver
             // Each participant runs as its own agent, so its OWN effective model must be tool-capable; a participant
             // pinned to an incapable model is dropped/logged rather than handed a tool offer it cannot drive.
             var participantEffectiveModel = participant.ModelProfile ?? activeModelId;
-            if (!IsToolCapable(participantEffectiveModel))
+            if (!IsToolCapable(toolCapableModels, participantEffectiveModel))
             {
                 _logger.LogWarning("Orchestrator {AgentDefinitionId} participant {ParticipantId} effective model is not tool-capable; dropping it.",
                     orchestrator.Id,
@@ -279,9 +284,15 @@ internal sealed class OrchestrationResolver : IOrchestrationResolver
         return projected;
     }
 
-    private bool IsToolCapable(string? modelId)
+    private async Task<IReadOnlySet<string>> BuildToolCapableSetAsync(CancellationToken cancellationToken)
     {
-        return modelId is not null && _toolCapableModels.Contains(modelId);
+        var toolCapableModels = await _runtimeSettings.GetToolCapableModelsAsync(cancellationToken).ConfigureAwait(false);
+        return new HashSet<string>(toolCapableModels, StringComparer.Ordinal);
+    }
+
+    private static bool IsToolCapable(IReadOnlySet<string> toolCapableModels, string? modelId)
+    {
+        return modelId is not null && toolCapableModels.Contains(modelId);
     }
 
     private static string ToKey(Guid agentDefinitionId)

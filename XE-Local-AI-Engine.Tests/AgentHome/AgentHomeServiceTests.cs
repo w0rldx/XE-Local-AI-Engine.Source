@@ -11,6 +11,7 @@ using XE_Local_AI_Engine.Client.Services.Sandbox.Fake;
 using XE_Local_AI_Engine.Client.Services.Workspace;
 using XE_Local_AI_Engine.Client.Services.Workspace.Implementation;
 using XE_Local_AI_Engine.Tests.Testing;
+using XE_Local_AI_Engine.Tests.Testing.Builders;
 
 /// <summary>
 ///     Service-level coverage: the real <see cref="AgentHomeService" /> drives the real
@@ -642,6 +643,9 @@ public sealed class AgentHomeServiceTests : IDisposable
             RootPath = root,
             CommandTimeoutSeconds = commandTimeoutSeconds
         });
+        var runtimeSettings = StubNodeRuntimeSettings.Create()
+            .WithAgentHomeCommandTimeoutSeconds(commandTimeoutSeconds)
+            .Build();
         var manifestService = new AgentHomeManifestService(new FakeNodeDataDirectory(root), options, provider, clock, NullLogger<AgentHomeManifestService>.Instance);
 
         var serviceProvider = new ServiceCollection()
@@ -655,11 +659,11 @@ public sealed class AgentHomeServiceTests : IDisposable
 
         var workspaceService = new AgentHomeWorkspaceService(provider,
             new SensitiveFileExclusionService(),
-            options,
+            runtimeSettings,
             NullLogger<AgentHomeWorkspaceService>.Instance);
 
         var patchService = new AgentHomePatchService(provider,
-            options,
+            runtimeSettings,
             NullLogger<AgentHomePatchService>.Instance);
 
         var service = new AgentHomeService(manifestService,
@@ -670,6 +674,7 @@ public sealed class AgentHomeServiceTests : IDisposable
             memoryProposalService,
             serviceProvider.GetRequiredService<IServiceScopeFactory>(),
             options,
+            runtimeSettings,
             clock,
             NullLogger<AgentHomeService>.Instance);
 

@@ -2,7 +2,7 @@ namespace XE_Local_AI_Engine.Client.Services.AgentHome.Implementation;
 
 using System.Text;
 using System.Text.Json;
-using Microsoft.Extensions.Options;
+using XE_Local_AI_Engine.Client.Services.NodeSettings;
 using XE_Local_AI_Engine.Client.Services.Sandbox;
 using XE_Local_AI_Engine.Client.Services.Workspace;
 
@@ -25,16 +25,15 @@ internal sealed class AgentHomePatchService : IAgentHomePatchService
         };
 
     private readonly ILogger<AgentHomePatchService> _logger;
-    private readonly AgentHomeOptions _options;
     private readonly ISandboxRuntimeProvider _provider;
+    private readonly INodeRuntimeSettings _runtimeSettings;
 
     public AgentHomePatchService(ISandboxRuntimeProvider provider,
-        IOptions<AgentHomeOptions> options,
+        INodeRuntimeSettings runtimeSettings,
         ILogger<AgentHomePatchService> logger)
     {
         _provider = provider ?? throw new ArgumentNullException(nameof(provider));
-        ArgumentNullException.ThrowIfNull(options);
-        _options = options.Value;
+        _runtimeSettings = runtimeSettings ?? throw new ArgumentNullException(nameof(runtimeSettings));
         _logger = logger ?? throw new ArgumentNullException(nameof(logger));
     }
 
@@ -46,7 +45,8 @@ internal sealed class AgentHomePatchService : IAgentHomePatchService
         ArgumentNullException.ThrowIfNull(request);
         cancellationToken.ThrowIfCancellationRequested();
 
-        var commandTimeout = TimeSpan.FromSeconds(_options.CommandTimeoutSeconds);
+        var commandTimeoutSeconds = await _runtimeSettings.GetAgentHomeCommandTimeoutSecondsAsync(cancellationToken).ConfigureAwait(false);
+        var commandTimeout = TimeSpan.FromSeconds(commandTimeoutSeconds);
 
         // Full binary-aware patch. Captured from standard output; the worker writes the file, since the SPI
         // carries no shell redirection.
@@ -95,13 +95,14 @@ internal sealed class AgentHomePatchService : IAgentHomePatchService
 
         var patchText = patchResult.StandardOutput;
         var patchBytes = Encoding.UTF8.GetByteCount(patchText);
-        if (patchBytes > _options.MaxPatchBytes)
+        var maxPatchBytes = await _runtimeSettings.GetAgentHomeMaxPatchBytesAsync(cancellationToken).ConfigureAwait(false);
+        if (patchBytes > maxPatchBytes)
         {
             // Over budget: keep the changed-file metadata, drop the oversized patch.
             _logger.LogWarning("Patch for run {RunId} is {Bytes} byte(s), over the {Budget}-byte budget; changes.patch not written.",
                 request.RunId,
                 patchBytes,
-                _options.MaxPatchBytes);
+                maxPatchBytes);
 
             return new AgentHomePatchExport
             {

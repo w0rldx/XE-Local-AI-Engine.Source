@@ -20,6 +20,7 @@ using XE_Local_AI_Engine.Client.Services.Memory;
 using XE_Local_AI_Engine.Client.Services.NodeSettings;
 using XE_Local_AI_Engine.Providers.Ollama;
 using XE_Local_AI_Engine.Tests.Testing;
+using XE_Local_AI_Engine.Tests.Testing.Builders;
 
 public sealed class NodeChatStreamServiceTests
 {
@@ -40,6 +41,7 @@ public sealed class NodeChatStreamServiceTests
             runner,
             dispatcher,
             Options.Create(new LocalChatAgentOptions()),
+            StubNodeRuntimeSettings.Create().Build(),
             new NodeChatStreamCancellationRegistry(),
             CreateOfferProvider(),
             CreateAgentDefinitionResolver(),
@@ -89,6 +91,7 @@ public sealed class NodeChatStreamServiceTests
             runner,
             dispatcher,
             Options.Create(new LocalChatAgentOptions()),
+            StubNodeRuntimeSettings.Create().Build(),
             new NodeChatStreamCancellationRegistry(),
             CreateOfferProvider(),
             CreateAgentDefinitionResolver(),
@@ -141,6 +144,7 @@ public sealed class NodeChatStreamServiceTests
             runner,
             dispatcher,
             Options.Create(new LocalChatAgentOptions()),
+            StubNodeRuntimeSettings.Create().Build(),
             new NodeChatStreamCancellationRegistry(),
             CreateOfferProvider(),
             CreateAgentDefinitionResolver(),
@@ -201,6 +205,7 @@ public sealed class NodeChatStreamServiceTests
             runner,
             dispatcher,
             Options.Create(new LocalChatAgentOptions()),
+            StubNodeRuntimeSettings.Create().Build(),
             new NodeChatStreamCancellationRegistry(),
             CreateOfferProvider(),
             CreateAgentDefinitionResolver(),
@@ -246,6 +251,7 @@ public sealed class NodeChatStreamServiceTests
             runner,
             dispatcher,
             Options.Create(new LocalChatAgentOptions()),
+            StubNodeRuntimeSettings.Create().Build(),
             new NodeChatStreamCancellationRegistry(),
             CreateOfferProvider(),
             CreateAgentDefinitionResolver(),
@@ -291,6 +297,7 @@ public sealed class NodeChatStreamServiceTests
             runner,
             dispatcher,
             Options.Create(new LocalChatAgentOptions()),
+            StubNodeRuntimeSettings.Create().Build(),
             new NodeChatStreamCancellationRegistry(),
             CreateOfferProvider(),
             CreateAgentDefinitionResolver(),
@@ -346,6 +353,7 @@ public sealed class NodeChatStreamServiceTests
             runner,
             dispatcher,
             Options.Create(new LocalChatAgentOptions()),
+            StubNodeRuntimeSettings.Create().Build(),
             new NodeChatStreamCancellationRegistry(),
             CreateOfferProvider(),
             CreateAgentDefinitionResolver(),
@@ -396,6 +404,7 @@ public sealed class NodeChatStreamServiceTests
             {
                 EnableTools = true
             }),
+            StubNodeRuntimeSettings.Create().WithEnableTools(true).Build(),
             new NodeChatStreamCancellationRegistry(),
             offerProvider,
             CreateAgentDefinitionResolver(),
@@ -453,6 +462,7 @@ public sealed class NodeChatStreamServiceTests
             {
                 EnableTools = true
             }),
+            StubNodeRuntimeSettings.Create().WithEnableTools(true).Build(),
             new NodeChatStreamCancellationRegistry(),
             offerProvider,
             CreateAgentDefinitionResolver(),
@@ -507,6 +517,7 @@ public sealed class NodeChatStreamServiceTests
             {
                 EnableTools = true
             }),
+            StubNodeRuntimeSettings.Create().WithEnableTools(true).Build(),
             new NodeChatStreamCancellationRegistry(),
             offerProvider,
             CreateAgentDefinitionResolver(),
@@ -562,6 +573,7 @@ public sealed class NodeChatStreamServiceTests
             {
                 EnableTools = true
             }),
+            StubNodeRuntimeSettings.Create().WithEnableTools(true).Build(),
             new NodeChatStreamCancellationRegistry(),
             offerProvider,
             CreateAgentDefinitionResolver(),
@@ -609,6 +621,7 @@ public sealed class NodeChatStreamServiceTests
             runner,
             dispatcher,
             Options.Create(new LocalChatAgentOptions()),
+            StubNodeRuntimeSettings.Create().Build(),
             cancellationRegistry,
             CreateOfferProvider(),
             CreateAgentDefinitionResolver(),
@@ -668,6 +681,7 @@ public sealed class NodeChatStreamServiceTests
             runner,
             dispatcher,
             Options.Create(new LocalChatAgentOptions()),
+            StubNodeRuntimeSettings.Create().Build(),
             new NodeChatStreamCancellationRegistry(),
             CreateOfferProvider(),
             CreateAgentDefinitionResolver(),
@@ -745,6 +759,7 @@ public sealed class NodeChatStreamServiceTests
             {
                 EnableTools = true
             }),
+            StubNodeRuntimeSettings.Create().WithEnableTools(true).Build(),
             new NodeChatStreamCancellationRegistry(),
             CreateOfferProvider(CreateLocalToolDto("GetCurrentTime", "{\"type\":\"object\"}")),
             resolver,
@@ -808,6 +823,7 @@ public sealed class NodeChatStreamServiceTests
             runner,
             dispatcher,
             Options.Create(new LocalChatAgentOptions()),
+            StubNodeRuntimeSettings.Create().Build(),
             new NodeChatStreamCancellationRegistry(),
             CreateOfferProvider(),
             resolver,
@@ -863,6 +879,7 @@ public sealed class NodeChatStreamServiceTests
             runner,
             dispatcher,
             Options.Create(new LocalChatAgentOptions()),
+            StubNodeRuntimeSettings.Create().Build(),
             new NodeChatStreamCancellationRegistry(),
             CreateOfferProvider(),
             resolver,
@@ -922,6 +939,7 @@ public sealed class NodeChatStreamServiceTests
             runner,
             dispatcher,
             Options.Create(new LocalChatAgentOptions()),
+            StubNodeRuntimeSettings.Create().Build(),
             new NodeChatStreamCancellationRegistry(),
             CreateOfferProvider(),
             CreateAgentDefinitionResolver(),
@@ -972,6 +990,7 @@ public sealed class NodeChatStreamServiceTests
             runner,
             dispatcher,
             Options.Create(new LocalChatAgentOptions()),
+            StubNodeRuntimeSettings.Create().Build(),
             new NodeChatStreamCancellationRegistry(),
             CreateOfferProvider(),
             resolver,
@@ -1026,6 +1045,7 @@ public sealed class NodeChatStreamServiceTests
             runner,
             dispatcher,
             Options.Create(new LocalChatAgentOptions()),
+            StubNodeRuntimeSettings.Create().Build(),
             new NodeChatStreamCancellationRegistry(),
             CreateOfferProvider(),
             resolver,
@@ -1079,6 +1099,7 @@ public sealed class NodeChatStreamServiceTests
             runner,
             dispatcher,
             Options.Create(new LocalChatAgentOptions()),
+            StubNodeRuntimeSettings.Create().Build(),
             new NodeChatStreamCancellationRegistry(),
             CreateOfferProvider(),
             resolver,
@@ -1131,6 +1152,7 @@ public sealed class NodeChatStreamServiceTests
             runner,
             dispatcher,
             Options.Create(new LocalChatAgentOptions()),
+            StubNodeRuntimeSettings.Create().Build(),
             new NodeChatStreamCancellationRegistry(),
             CreateOfferProvider(),
             resolver,
@@ -1186,6 +1208,7 @@ public sealed class NodeChatStreamServiceTests
             runner,
             dispatcher,
             Options.Create(new LocalChatAgentOptions()),
+            StubNodeRuntimeSettings.Create().Build(),
             new NodeChatStreamCancellationRegistry(),
             CreateOfferProvider(),
             resolver,
@@ -1276,6 +1299,7 @@ public sealed class NodeChatStreamServiceTests
             {
                 EnableTools = true
             }),
+            StubNodeRuntimeSettings.Create().WithEnableTools(true).Build(),
             new NodeChatStreamCancellationRegistry(),
             offerProvider,
             resolver,
@@ -1379,6 +1403,7 @@ public sealed class NodeChatStreamServiceTests
             {
                 EnableTools = true
             }),
+            StubNodeRuntimeSettings.Create().WithEnableTools(true).Build(),
             new NodeChatStreamCancellationRegistry(),
             offerProvider,
             resolver,
@@ -1476,6 +1501,7 @@ public sealed class NodeChatStreamServiceTests
             {
                 EnableTools = true
             }),
+            StubNodeRuntimeSettings.Create().WithEnableTools(true).Build(),
             new NodeChatStreamCancellationRegistry(),
             offerProvider,
             CreateAgentDefinitionResolver(),
@@ -1526,6 +1552,7 @@ public sealed class NodeChatStreamServiceTests
             runner,
             dispatcher,
             Options.Create(new LocalChatAgentOptions()),
+            StubNodeRuntimeSettings.Create().Build(),
             new NodeChatStreamCancellationRegistry(),
             CreateOfferProvider(),
             CreateAgentDefinitionResolver(),
@@ -1581,6 +1608,7 @@ public sealed class NodeChatStreamServiceTests
             {
                 EnableTools = true
             }),
+            StubNodeRuntimeSettings.Create().WithEnableTools(true).Build(),
             new NodeChatStreamCancellationRegistry(),
             offerProvider,
             CreateAgentDefinitionResolver(),
@@ -1638,6 +1666,7 @@ public sealed class NodeChatStreamServiceTests
             {
                 EnableTools = true
             }),
+            StubNodeRuntimeSettings.Create().WithEnableTools(true).Build(),
             new NodeChatStreamCancellationRegistry(),
             offerProvider,
             CreateAgentDefinitionResolver(),
@@ -1976,6 +2005,7 @@ public sealed class NodeChatStreamServiceTests
             runner,
             dispatcher,
             Options.Create(new LocalChatAgentOptions()),
+            StubNodeRuntimeSettings.Create().Build(),
             new NodeChatStreamCancellationRegistry(),
             CreateOfferProvider(),
             CreateAgentDefinitionResolver(),

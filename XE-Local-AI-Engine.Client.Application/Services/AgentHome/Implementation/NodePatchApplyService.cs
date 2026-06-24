@@ -3,6 +3,7 @@ namespace XE_Local_AI_Engine.Client.Services.AgentHome.Implementation;
 using System.Globalization;
 using System.Text.RegularExpressions;
 using Microsoft.Extensions.Options;
+using XE_Local_AI_Engine.Client.Services.NodeSettings;
 using XE_Local_AI_Engine.Client.Services.Workspace;
 using XE_Local_AI_Engine.Client.Services.Workspace.Implementation;
 using XE_Local_AI_Engine.Providers.Abstractions;
@@ -40,10 +41,12 @@ internal sealed partial class NodePatchApplyService : INodePatchApplyService
     private readonly ILogger<NodePatchApplyService> _logger;
     private readonly AgentHomeOptions _options;
     private readonly ISelectedFolderResolver _resolver;
+    private readonly INodeRuntimeSettings _runtimeSettings;
     private readonly IServiceScopeFactory _scopeFactory;
 
     public NodePatchApplyService(ISelectedFolderResolver resolver,
         IOptions<AgentHomeOptions> options,
+        INodeRuntimeSettings runtimeSettings,
         INodeDataDirectory dataDirectory,
         IAgentHomeIdentityProvider identityProvider,
         IServiceScopeFactory scopeFactory,
@@ -53,6 +56,7 @@ internal sealed partial class NodePatchApplyService : INodePatchApplyService
         ArgumentNullException.ThrowIfNull(dataDirectory);
         _resolver = resolver ?? throw new ArgumentNullException(nameof(resolver));
         _options = options.Value;
+        _runtimeSettings = runtimeSettings ?? throw new ArgumentNullException(nameof(runtimeSettings));
         _dataDirectoryRoot = dataDirectory.Root;
         _identityProvider = identityProvider ?? throw new ArgumentNullException(nameof(identityProvider));
         _scopeFactory = scopeFactory ?? throw new ArgumentNullException(nameof(scopeFactory));
@@ -283,7 +287,8 @@ internal sealed partial class NodePatchApplyService : INodePatchApplyService
             return ApplyPlan.Invalid("the exported patch is empty.");
         }
 
-        if (fileInfo.Length > _options.MaxPatchBytes)
+        var maxPatchBytes = await _runtimeSettings.GetAgentHomeMaxPatchBytesAsync(cancellationToken).ConfigureAwait(false);
+        if (fileInfo.Length > maxPatchBytes)
         {
             return ApplyPlan.Invalid("the exported patch exceeds the maximum allowed size.");
         }

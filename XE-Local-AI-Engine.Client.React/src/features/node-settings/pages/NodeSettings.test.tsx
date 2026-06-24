@@ -25,8 +25,12 @@ const { generatedMock } = vi.hoisted(() => ({
 		ensureLlamaCppBinaryMutation: vi.fn(),
 		getHfTokenStatusOptions: vi.fn(),
 		setHfTokenMutation: vi.fn(),
+		// llama.cpp runtime updater (read-only status query + update mutation).
+		getLlamaCppRuntimeOptions: vi.fn(),
+		updateLlamaCppRuntimeMutation: vi.fn(),
 		ensureFn: vi.fn(),
 		setTokenFn: vi.fn(),
+		updateRuntimeFn: vi.fn(),
 	},
 }));
 
@@ -44,8 +48,11 @@ vi.mock("@/core/api/generated/@tanstack/react-query.gen", () => ({
 	ensureLlamaCppBinaryMutation: generatedMock.ensureLlamaCppBinaryMutation,
 	getHfTokenStatusOptions: generatedMock.getHfTokenStatusOptions,
 	setHfTokenMutation: generatedMock.setHfTokenMutation,
+	getLlamaCppRuntimeOptions: generatedMock.getLlamaCppRuntimeOptions,
+	updateLlamaCppRuntimeMutation: generatedMock.updateLlamaCppRuntimeMutation,
 }));
 
+import { useDeveloperModeStore } from "@/core/dev-tools/stores/DeveloperModeStore";
 import { NodeSettings } from "@/features/node-settings/pages/NodeSettings";
 import { useHfTokenStore } from "@/features/node-settings/stores/HfTokenStore";
 
@@ -111,8 +118,23 @@ describe("NodeSettings (generated hey-api data layer)", () => {
 		generatedMock.ensureLlamaCppBinaryMutation.mockReturnValue({ mutationFn: generatedMock.ensureFn });
 		generatedMock.setTokenFn.mockResolvedValue({});
 		generatedMock.setHfTokenMutation.mockReturnValue({ mutationFn: generatedMock.setTokenFn });
+		// Runtime updater: a read-only status query (safe on mount) and an update mutation. Default = up to date.
+		generatedMock.getLlamaCppRuntimeOptions.mockReturnValue({
+			queryKey: fakeQueryKey("getLlamaCppRuntime"),
+			queryFn: async () => ({
+				installed: { tag: "b1000", variant: "cpu", asset: "asset.tar.gz", installedAtUtc: 0 },
+				recommendedTag: "b1000",
+				upstreamLatestTag: null,
+				updateAvailable: false,
+				isOffline: false,
+			}),
+		});
+		generatedMock.updateRuntimeFn.mockResolvedValue({ version: "b1000", variant: "cpu" });
+		generatedMock.updateLlamaCppRuntimeMutation.mockReturnValue({ mutationFn: generatedMock.updateRuntimeFn });
 		// The HF token draft lives in a store that survives a remount — reset it so each test starts blank.
 		useHfTokenStore.setState({ tokenDraft: "" });
+		// Developer mode persists in a store across tests — reset to off so dev-gating tests start from a known state.
+		useDeveloperModeStore.setState({ developerMode: false });
 	});
 
 	afterEach(() => {
@@ -195,5 +217,38 @@ describe("NodeSettings (generated hey-api data layer)", () => {
 
 		// An empty draft clears the token (null body); a non-empty draft is sent verbatim.
 		await waitFor(() => expect(generatedMock.setTokenFn.mock.calls[0]?.[0]).toEqual({ body: { token: "hf_secret" } }));
+	});
+
+	// Migrated appsettings knobs: developer-mode gating and zod validation.
+	it("hides developer-only fields when developer mode is off and reveals them when on", async () => {
+		localStorage.setItem("xe-developer-mode", "false");
+		useDeveloperModeStore.setState({ developerMode: false });
+		renderPage();
+		await screen.findByTestId("node-settings-local-chat-card");
+
+		// Always-shown fields render; the developer-only advanced card does not.
+		expect(screen.getByTestId("node-settings-default-model")).toBeTruthy();
+		expect(screen.queryByTestId("node-settings-advanced-card")).toBeNull();
+
+		// Flip developer mode on via the page switch -> the advanced card mounts. Mantine puts data-testid on the
+		// checkbox input itself.
+		const switchEl = screen.getByTestId("developer-mode-switch");
+		fireEvent.click(switchEl.querySelector("input[type='checkbox']") ?? switchEl);
+		await waitFor(() => expect(screen.getByTestId("node-settings-advanced-card")).toBeTruthy());
+	});
+
+	it("merges the migrated-fields card with the timeout and sends only changed fields on save", async () => {
+		renderPage();
+		// Wait for the loaded settings to sync into the form (timeout 600).
+		await screen.findByDisplayValue(/600/);
+		await screen.findByTestId("node-settings-runtime-card");
+
+		// The migrated-fields card renders and its dedicated save button drives the same merged PUT as the timeout
+		// card. With no migrated field edited, only the timeout is sent (optional-request semantics: omit = unchanged).
+		fireEvent.click(screen.getByTestId("node-settings-fields-save-button"));
+
+		await waitFor(() =>
+			expect(generatedMock.saveFn.mock.calls[0]?.[0]).toEqual({ body: { maxMessageRequestTimeoutSeconds: 600 } }),
+		);
 	});
 });

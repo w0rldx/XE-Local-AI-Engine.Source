@@ -1,7 +1,6 @@
 namespace XE_Local_AI_Engine.Tests.AgentHome;
 
 using Microsoft.Extensions.Logging.Abstractions;
-using Microsoft.Extensions.Options;
 using XE_Local_AI_Engine.Client.Persistence;
 using XE_Local_AI_Engine.Client.Services.AgentHome;
 using XE_Local_AI_Engine.Client.Services.AgentHome.Implementation;
@@ -10,6 +9,7 @@ using XE_Local_AI_Engine.Client.Services.Sandbox.Fake;
 using XE_Local_AI_Engine.Client.Services.Workspace;
 using XE_Local_AI_Engine.Client.Services.Workspace.Implementation;
 using XE_Local_AI_Engine.Tests.Testing;
+using XE_Local_AI_Engine.Tests.Testing.Builders;
 
 /// <summary>
 ///     Workspace-copy coverage: the real <see cref="AgentHomeWorkspaceService" /> walks a real temp source
@@ -231,13 +231,12 @@ public sealed class AgentHomeWorkspaceServiceTests : IDisposable
 
     private static AgentHomeWorkspaceService CreateService(FakeSandboxRuntimeProvider provider, long maxBytes = 536870912)
     {
-        var options = Options.Create(new AgentHomeOptions
-        {
-            MaxSelectedFolderBytes = maxBytes
-        });
+        var runtimeSettings = StubNodeRuntimeSettings.Create()
+            .WithAgentHomeMaxSelectedFolderBytes(maxBytes)
+            .Build();
         return new AgentHomeWorkspaceService(provider,
             new SensitiveFileExclusionService(),
-            options,
+            runtimeSettings,
             NullLogger<AgentHomeWorkspaceService>.Instance);
     }
 

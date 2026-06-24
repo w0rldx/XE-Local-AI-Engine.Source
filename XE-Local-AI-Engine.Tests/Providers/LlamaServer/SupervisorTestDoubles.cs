@@ -133,6 +133,11 @@ internal sealed class FakeBinaryManager : ILlamaCppBinaryManager
     {
         return Task.FromResult(new LlamaBinary("/fake/bin/llama-server", "b9692", variant, IsPinnedFallback: true));
     }
+
+    public Task<LlamaBinary> InstallTagAsync(string tag, string assetName, string digestSha256, long expectedSize, GpuVariant variant, CancellationToken ct)
+    {
+        return Task.FromResult(new LlamaBinary("/fake/bin/llama-server", tag, variant, IsPinnedFallback: false));
+    }
 }
 
 /// <summary>Variant selector returning a fixed variant; never probes hardware.</summary>

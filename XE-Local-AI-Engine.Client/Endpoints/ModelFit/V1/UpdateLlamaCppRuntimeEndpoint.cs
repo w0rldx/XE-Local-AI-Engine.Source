@@ -1,0 +1,138 @@
+namespace XE_Local_AI_Engine.Client.Endpoints.ModelFit.V1;
+
+using System.Runtime.InteropServices;
+using FastEndpoints;
+using XE_Local_AI_Engine.Client.Endpoints.Common;
+using XE_Local_AI_Engine.Client.Endpoints.ModelFit.V1.Mappers;
+using XE_Local_AI_Engine.Client.Services.Auth;
+using XE_Local_AI_Engine.Client.Services.NodeSettings;
+using XE_Local_AI_Engine.Providers.LlamaServer;
+
+/// <summary>
+///     Operator-initiated install/update of a chosen llama.cpp release tag (POST model-fit/llamacpp/update). Validates the
+///     <c>tag</c> against <c>^b\d+$</c> (400 on a bad tag), resolves the acceleration variant (request override or the
+///     auto-selected host variant), resolves the per-variant asset name + publisher digest from the live release catalog,
+///     then installs via <see cref="ILlamaCppBinaryManager.InstallTagAsync" /> (download → digest-verify → atomic extract
+///     → smoke test → record). On success it refreshes the shared update snapshot and returns the resolved binary.
+///     <para>
+///         Errors are sanitized: a malformed tag, an offline/unresolvable catalog, or a failed install surface a 400 with
+///         a user-safe message (no internal path/URL/secret) following the existing <see cref="LlamaRuntimeException" />
+///         catch posture.
+///     </para>
+/// </summary>
+public sealed class UpdateLlamaCppRuntimeEndpoint(
+    ILlamaCppBinaryManager binaryManager,
+    ILlamaCppReleaseCatalog releaseCatalog,
+    IGpuVariantSelector variantSelector,
+    IInstalledRuntimeStore installedRuntimeStore,
+    ILlamaCppUpdateState updateState,
+    INodeRuntimeSettings nodeRuntimeSettings,
+    ILogger<UpdateLlamaCppRuntimeEndpoint> logger) : Endpoint<UpdateLlamaCppRuntimeRequest, LlamaCppVersionResponse>
+{
+    private readonly ILlamaCppBinaryManager _binaryManager = binaryManager ?? throw new ArgumentNullException(nameof(binaryManager));
+    private readonly IInstalledRuntimeStore _installedRuntimeStore = installedRuntimeStore ?? throw new ArgumentNullException(nameof(installedRuntimeStore));
+    private readonly ILogger<UpdateLlamaCppRuntimeEndpoint> _logger = logger ?? throw new ArgumentNullException(nameof(logger));
+    private readonly INodeRuntimeSettings _nodeRuntimeSettings = nodeRuntimeSettings ?? throw new ArgumentNullException(nameof(nodeRuntimeSettings));
+    private readonly ILlamaCppReleaseCatalog _releaseCatalog = releaseCatalog ?? throw new ArgumentNullException(nameof(releaseCatalog));
+    private readonly ILlamaCppUpdateState _updateState = updateState ?? throw new ArgumentNullException(nameof(updateState));
+    private readonly IGpuVariantSelector _variantSelector = variantSelector ?? throw new ArgumentNullException(nameof(variantSelector));
+
+    public override void Configure()
+    {
+        Post(LocalApiRoutes.ModelFit.LlamaCppUpdate);
+        Policies(NodeAuthorizationPolicies.Operator);
+    }
+
+    public override async Task HandleAsync(UpdateLlamaCppRuntimeRequest req, CancellationToken ct)
+    {
+        // Tag-format gate at the transport boundary — rejects path/URL injection before any URL is composed.
+        if (!StoredNodeSettings.IsValidRecommendedLlamaCppTag(req.Tag))
+        {
+            AddError(r => r.Tag, "Tag must be a llama.cpp release tag in the form b<number>.");
+            await Send.ErrorsAsync(cancellation: ct).ConfigureAwait(false);
+            return;
+        }
+
+        var tag = req.Tag.Trim();
+
+        // A supplied variant override must parse; otherwise auto-select the host variant.
+        GpuVariant variant;
+        if (req.Variant is null)
+        {
+            variant = await _variantSelector.SelectVariantAsync(ct).ConfigureAwait(false);
+        }
+        else if (ModelFitMapper.TryParseVariant(req.Variant) is { } parsed)
+        {
+            variant = parsed;
+        }
+        else
+        {
+            AddError(r => r.Variant, "Variant is not supported.");
+            await Send.ErrorsAsync(cancellation: ct).ConfigureAwait(false);
+            return;
+        }
+
+        try
+        {
+            var asset = await _releaseCatalog
+                              .ResolveAssetAsync(tag, CurrentOsPlatform(), RuntimeInformation.OSArchitecture, variant, ct)
+                              .ConfigureAwait(false);
+
+            // The catalog is offline/rate-limited or no matching asset exists for this tag/variant — sanitized 400.
+            if (asset.Asset is null)
+            {
+                AddError("The llama.cpp runtime catalog is unavailable or has no matching asset for the requested tag.");
+                await Send.ErrorsAsync(cancellation: ct).ConfigureAwait(false);
+                return;
+            }
+
+            var binary = await _binaryManager
+                               .InstallTagAsync(tag, asset.Asset.Name, asset.Asset.Digest, asset.Asset.Size, variant, ct)
+                               .ConfigureAwait(false);
+
+            await RefreshSnapshotAsync(tag, ct).ConfigureAwait(false);
+
+            var recommendedTag = await _nodeRuntimeSettings.GetRecommendedLlamaCppTagAsync(ct).ConfigureAwait(false);
+            await Send.OkAsync(binary.ToResponse(recommendedTag), ct).ConfigureAwait(false);
+        }
+        catch (OperationCanceledException) when (ct.IsCancellationRequested)
+        {
+            throw;
+        }
+        catch (LlamaRuntimeException exception)
+        {
+            // Contractually sanitized message (no path/URL/secret) — surface as a 400 so the panel can show the reason.
+            _logger.LogWarning(exception, "Installing the llama.cpp runtime for tag {Tag} failed.", tag);
+            AddError(exception.Message);
+            await Send.ErrorsAsync(cancellation: ct).ConfigureAwait(false);
+        }
+    }
+
+    // After a successful install the installed tag now equals the requested tag, so a subsequent recommended==installed
+    // comparison clears "update available". Recompute the snapshot from the freshly-written installed-runtime record.
+    private async Task RefreshSnapshotAsync(string installedTag, CancellationToken ct)
+    {
+        var recommendedTag = await _nodeRuntimeSettings.GetRecommendedLlamaCppTagAsync(ct).ConfigureAwait(false);
+        var installed = await _installedRuntimeStore.ReadAsync(ct).ConfigureAwait(false);
+        var effectiveInstalledTag = installed?.Tag ?? installedTag;
+
+        var previous = _updateState.Current;
+        _updateState.Store(new LlamaCppUpdateSnapshot(
+            effectiveInstalledTag,
+            recommendedTag,
+            previous.UpstreamLatestTag,
+            UpdateAvailable: !string.Equals(effectiveInstalledTag, recommendedTag, StringComparison.Ordinal),
+            IsOffline: false,
+            CheckedAtUtc: DateTimeOffset.UtcNow));
+    }
+
+    private static OSPlatform CurrentOsPlatform()
+    {
+        if (OperatingSystem.IsWindows())
+        {
+            return OSPlatform.Windows;
+        }
+
+        return OperatingSystem.IsMacOS() ? OSPlatform.OSX : OSPlatform.Linux;
+    }
+}

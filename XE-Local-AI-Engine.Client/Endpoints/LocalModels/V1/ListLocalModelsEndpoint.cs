@@ -17,7 +17,7 @@ public sealed class ListLocalModelsEndpoint(
     IOllamaModelService modelService,
     IModelClassificationService classificationService,
     IGgufModelStore ggufModelStore,
-    INodeSettingsStore nodeSettingsStore,
+    INodeRuntimeSettings runtimeSettings,
     IOptions<LocalChatAgentOptions> localChatOptions,
     ICodexTokenStore codexTokenStore,
     IOptions<CodexOptions> codexOptions,
@@ -31,7 +31,7 @@ public sealed class ListLocalModelsEndpoint(
     private readonly IOptions<LocalChatAgentOptions> _localChatOptions = localChatOptions ?? throw new ArgumentNullException(nameof(localChatOptions));
     private readonly ILogger<ListLocalModelsEndpoint> _logger = logger ?? throw new ArgumentNullException(nameof(logger));
     private readonly IOllamaModelService _modelService = modelService ?? throw new ArgumentNullException(nameof(modelService));
-    private readonly INodeSettingsStore _nodeSettingsStore = nodeSettingsStore ?? throw new ArgumentNullException(nameof(nodeSettingsStore));
+    private readonly INodeRuntimeSettings _runtimeSettings = runtimeSettings ?? throw new ArgumentNullException(nameof(runtimeSettings));
     private readonly TimeProvider _timeProvider = timeProvider ?? throw new ArgumentNullException(nameof(timeProvider));
 
     public override void Configure()
@@ -42,8 +42,10 @@ public sealed class ListLocalModelsEndpoint(
 
     public override async Task HandleAsync(CancellationToken ct)
     {
-        var settings = await _nodeSettingsStore.LoadAsync(ct).ConfigureAwait(false);
-        var selectedModelName = settings.DefaultModelName ?? _localChatOptions.Value.DefaultModel;
+        // The effective selected model resolves through the accessor (stored DefaultModelName > appsettings
+        // Agent:LocalChat:DefaultModel seed); the configured-default arg below stays the appsettings seed so the picker
+        // can still surface "node default" distinctly from the operator's selection.
+        var selectedModelName = await _runtimeSettings.GetDefaultModelNameAsync(ct).ConfigureAwait(false);
 
         // Codex cloud models are offered only when a usable (non-expired) Codex session is present. They do not
         // depend on the local Ollama runtime, so they are resolved up front and included even when Ollama is

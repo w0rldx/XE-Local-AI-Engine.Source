@@ -221,6 +221,11 @@ public sealed class FirstRunModelProvisioningServiceTests
 
             return Task.FromResult(new LlamaBinary("/fake/llama-server", "b9692", variant, IsPinnedFallback: true));
         }
+
+        public Task<LlamaBinary> InstallTagAsync(string tag, string assetName, string digestSha256, long expectedSize, GpuVariant variant, CancellationToken ct)
+        {
+            return Task.FromResult(new LlamaBinary("/fake/llama-server", tag, variant, IsPinnedFallback: false));
+        }
     }
 
     private sealed class FakeVariantSelector : IGpuVariantSelector
@@ -325,6 +330,11 @@ public sealed class FirstRunModelProvisioningServiceTests
         public Task<StoredNodeSettings> LoadAsync(CancellationToken cancellationToken = default)
         {
             return Task.FromResult(_current);
+        }
+
+        public StoredNodeSettings Load(CancellationToken cancellationToken = default)
+        {
+            return _current;
         }
 
         public Task SaveAsync(StoredNodeSettings settings, CancellationToken cancellationToken = default)

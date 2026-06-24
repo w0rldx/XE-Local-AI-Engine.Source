@@ -76,6 +76,11 @@ public sealed class LocalModelEndpointSecurityTests
             return Task.FromResult(new StoredNodeSettings());
         }
 
+        public StoredNodeSettings Load(CancellationToken cancellationToken = default)
+        {
+            return new StoredNodeSettings();
+        }
+
         public Task SaveAsync(StoredNodeSettings settings, CancellationToken cancellationToken = default)
         {
             return Task.CompletedTask;

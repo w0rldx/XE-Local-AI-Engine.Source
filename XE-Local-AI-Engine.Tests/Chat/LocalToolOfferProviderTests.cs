@@ -220,11 +220,7 @@ public sealed class LocalToolOfferProviderTests
             new LocalChatToolDescriptor("open_url", "Opens a URL.", "{\"type\":\"object\"}", RequiresApproval: false)
         ]);
 
-        var options = Options.Create(new AgentHomeOptions
-        {
-            ToolCapableModels = toolCapableModels
-        });
-        return new LocalToolOfferProvider(registry, mcpToolRegistry, options);
+        return new LocalToolOfferProvider(registry, mcpToolRegistry, toolCapableModels);
     }
 
     private sealed class FakeAgentToolRegistry : IAgentToolRegistry

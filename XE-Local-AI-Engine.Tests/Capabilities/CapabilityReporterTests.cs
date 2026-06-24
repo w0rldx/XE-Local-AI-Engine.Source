@@ -533,6 +533,11 @@ public sealed class CapabilityReporterTests
             return Task.FromResult(_settings);
         }
 
+        public StoredNodeSettings Load(CancellationToken cancellationToken = default)
+        {
+            return _settings;
+        }
+
         public Task SaveAsync(StoredNodeSettings settings, CancellationToken cancellationToken = default)
         {
             return Task.CompletedTask;

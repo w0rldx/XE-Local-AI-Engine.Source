@@ -1,7 +1,7 @@
 namespace XE_Local_AI_Engine.Client.Services.AgentHome.Implementation;
 
-using Microsoft.Extensions.Options;
 using XE_Local_AI_Engine.Client.Persistence;
+using XE_Local_AI_Engine.Client.Services.NodeSettings;
 using XE_Local_AI_Engine.Client.Services.Sandbox;
 using XE_Local_AI_Engine.Client.Services.Workspace;
 using XE_Local_AI_Engine.Client.Services.Workspace.Implementation;
@@ -21,18 +21,17 @@ internal sealed class AgentHomeWorkspaceService : IAgentHomeWorkspaceService
 
     private readonly ISensitiveFileExclusionService _exclusionService;
     private readonly ILogger<AgentHomeWorkspaceService> _logger;
-    private readonly AgentHomeOptions _options;
     private readonly ISandboxRuntimeProvider _provider;
+    private readonly INodeRuntimeSettings _runtimeSettings;
 
     public AgentHomeWorkspaceService(ISandboxRuntimeProvider provider,
         ISensitiveFileExclusionService exclusionService,
-        IOptions<AgentHomeOptions> options,
+        INodeRuntimeSettings runtimeSettings,
         ILogger<AgentHomeWorkspaceService> logger)
     {
         _provider = provider ?? throw new ArgumentNullException(nameof(provider));
         _exclusionService = exclusionService ?? throw new ArgumentNullException(nameof(exclusionService));
-        ArgumentNullException.ThrowIfNull(options);
-        _options = options.Value;
+        _runtimeSettings = runtimeSettings ?? throw new ArgumentNullException(nameof(runtimeSettings));
         _logger = logger ?? throw new ArgumentNullException(nameof(logger));
     }
 
@@ -85,12 +84,13 @@ internal sealed class AgentHomeWorkspaceService : IAgentHomeWorkspaceService
         var plan = BuildCopyPlan(root, folder.Alias, cancellationToken);
         var workspacePath = RelativeWorkspacePath(folder.Alias);
 
-        if (plan.TotalBytes > _options.MaxSelectedFolderBytes)
+        var maxSelectedFolderBytes = await _runtimeSettings.GetAgentHomeMaxSelectedFolderBytesAsync(cancellationToken).ConfigureAwait(false);
+        if (plan.TotalBytes > maxSelectedFolderBytes)
         {
             _logger.LogWarning("Selected folder {Alias} is {Bytes} bytes, over the {Budget}-byte budget; copy blocked.",
                 folder.Alias,
                 plan.TotalBytes,
-                _options.MaxSelectedFolderBytes);
+                maxSelectedFolderBytes);
 
             return new SelectedFolderSnapshot
             {
@@ -231,7 +231,8 @@ internal sealed class AgentHomeWorkspaceService : IAgentHomeWorkspaceService
         // diff is taken under. --allow-empty keeps an all-ignored tree (a copied .gitignore that hides every file) from
         // failing the commit and sinking the whole prepare. On the fake provider these are scripted no-ops; real git
         // state arrives with the HostAgent-backed local-container provider.
-        var timeout = TimeSpan.FromSeconds(_options.PrepareTimeoutSeconds);
+        var prepareTimeoutSeconds = await _runtimeSettings.GetAgentHomePrepareTimeoutSecondsAsync(cancellationToken).ConfigureAwait(false);
+        var timeout = TimeSpan.FromSeconds(prepareTimeoutSeconds);
         var commands = new[]
         {
             BaselineCommand("agent-home-baseline-init", timeout, AgentHomeGit.Arguments("init")),
