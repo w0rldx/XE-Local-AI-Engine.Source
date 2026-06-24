@@ -142,7 +142,7 @@ public sealed partial record StoredNodeSettings
 
     /// <summary>
     ///     Node-level sampling defaults (developer-only, optional). <see langword="null" /> = no node-level override —
-    ///     today's behavior. Lane A only persists the shape; consumption on the loopback send path is a Lane B/follow-up.
+    ///     today's behavior. Persisting the shape is done; consumption on the loopback send path is a follow-up.
     /// </summary>
     public SamplingOptions? SamplingDefaults { get; init; }
 }

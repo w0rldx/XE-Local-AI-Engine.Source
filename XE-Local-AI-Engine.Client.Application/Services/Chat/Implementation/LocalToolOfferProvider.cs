@@ -107,7 +107,7 @@ internal sealed class LocalToolOfferProvider : ILocalToolOfferProvider
 
         // The migrated AgentHome:ToolCapableModels allow-list, seeded once at construction from INodeRuntimeSettings at
         // the composition root (this provider is a singleton with a synchronous hot offer path, so the set is captured
-        // here rather than re-read per offer). A runtime edit applies on the next process restart (plan §7.4).
+        // here rather than re-read per offer). A runtime edit applies on the next process restart.
         _toolCapableModels = new HashSet<string>(toolCapableModels, StringComparer.Ordinal);
     }
 

@@ -112,7 +112,7 @@ public sealed class NodeChatRegenerationServiceTests : IDisposable
     {
         // Regenerating a "Local runtime default" turn (the original carried no explicit model) where the resolver finds
         // NO installed GGUF chat model must fail with FailureCategory.ModelNotInstalled — mirroring the send path — not
-        // the generic Unexpected/ProviderUnreachable. Covers plan §B(3): the regenerate path is guarded too.
+        // the generic Unexpected/ProviderUnreachable. The regenerate path is guarded too.
         await using var provider = await BuildProviderAsync("regeneration-no-chat-model.sqlite").ConfigureAwait(false);
         var persistence = new NodeChatPersistenceService(provider.GetRequiredService<NodeChatPersistenceWriter>());
 

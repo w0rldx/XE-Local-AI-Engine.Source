@@ -6,7 +6,7 @@ using XE_Local_AI_Engine.Client.Services.Auth;
 /// <summary>
 ///     Minimal unpaired <see cref="ITokenStore" /> for wave-1 E2E tests.
 ///     Mirrors <c>MockTokenStore.Unpaired()</c> (the shared mock lives in the unit-test
-///     namespace with 11 references; per plan D3 we keep a local stub instead of moving it).
+///     namespace with several references; we keep a local stub instead of moving it).
 ///     Every accessor reports the never-paired state and the mutating calls are no-ops.
 /// </summary>
 public sealed class StubTokenStore : ITokenStore

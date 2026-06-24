@@ -86,8 +86,8 @@ export function McpServerForm({
 	const [envRows, setEnvRows] = useState<McpEnvRow[]>(() => toEnvRows(initialValues.env));
 	const [errors, setErrors] = useState<Record<string, string>>({});
 
-	// Dirty = current values (with env projected back) differ from the initial snapshot. A JSON compare matches
-	// the plan's shallow/JSON dirty-detection contract; the host uses this to guard close + navigation.
+	// Dirty = current values (with env projected back) differ from the initial snapshot. A JSON compare gives
+	// shallow/structural dirty detection; the host uses this to guard close + navigation.
 	const isDirty = useMemo(() => {
 		const candidate: McpServerFormValues = { ...values, env: toEnvEntries(envRows) };
 		return JSON.stringify(candidate) !== JSON.stringify(initialValues);

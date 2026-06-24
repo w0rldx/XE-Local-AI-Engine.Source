@@ -22,7 +22,7 @@ internal static class AddNodeCapacityExtensions
         builder.Services.AddSingleton<IPendingFootprintLedger, PendingFootprintLedger>();
         builder.Services.AddScoped<ICapacityService, CapacityService>();
 
-        // Sub-agent spawn (Lane B). The SpawnOptions bound the per-root fan-out / cloud-spawn caps and the bounded
+        // Sub-agent spawn. The SpawnOptions bound the per-root fan-out / cloud-spawn caps and the bounded
         // same-model queue wait. The SpawnQueue owns the process-wide per-(model,role) serialization map → Singleton
         // (it must be shared across every concurrent spawn). SubAgentSpawnService is Scoped: the spawn tool body
         // resolves it through a fresh DI scope per call (it depends on the scoped IChatClient pipeline + the scoped

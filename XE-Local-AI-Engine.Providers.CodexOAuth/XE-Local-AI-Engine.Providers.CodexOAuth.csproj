@@ -4,7 +4,7 @@
     <RootNamespace>XE_Local_AI_Engine.Providers.CodexOAuth</RootNamespace>
     <!-- The OpenAI 2.10.0 Responses surface (GetResponsesClient/CreateResponseOptions/AsIChatClient) is gated
          behind the experimental OPENAI001 diagnostic. The Codex /responses transport is built entirely on it
-         (plan §5/§8), so the diagnostic is suppressed solution-wide for this provider. -->
+         so the diagnostic is suppressed solution-wide for this provider. -->
     <NoWarn>$(NoWarn);OPENAI001</NoWarn>
   </PropertyGroup>
 
@@ -29,7 +29,7 @@
   </ItemGroup>
 
   <ItemGroup>
-    <!-- The store=false on-wire test (plan §12/R6) constructs the internal CodexStoreDisabledChatClient directly
+    <!-- The store=false on-wire test constructs the internal CodexStoreDisabledChatClient directly
          to prove the disabled-store flag reaches the request options, rather than trusting the wrapper name. -->
     <InternalsVisibleTo Include="XE-Local-AI-Engine.Tests" />
   </ItemGroup>
