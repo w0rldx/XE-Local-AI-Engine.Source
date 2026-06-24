@@ -34,9 +34,10 @@ function collectKeyPaths(node: unknown, prefix = ""): string[] {
 }
 
 describe("mainAppTourSteps", () => {
-	it("builds one step per declared step id, in order", () => {
+	it("builds one step per declared step id, in order (11 total: 7 app steps + 4 showcase steps)", () => {
 		const steps = buildMainAppTourSteps(t);
 		expect(steps).toHaveLength(tourStepIds.length);
+		expect(steps).toHaveLength(11);
 	});
 
 	it("resolves every step title and content to a real i18n key (no missing-key fallthrough)", () => {
