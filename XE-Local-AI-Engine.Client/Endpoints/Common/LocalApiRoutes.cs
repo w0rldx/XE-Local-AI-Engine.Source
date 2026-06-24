@@ -90,6 +90,14 @@ public static class LocalApiRoutes
     }
 
     /// <summary>
+    ///     Per-user onboarding tour state routes. GET reads the current user's recorded tour entries; PUT upserts one.
+    /// </summary>
+    public static class Tutorial
+    {
+        public const string State = "tutorial-state";
+    }
+
+    /// <summary>
     ///     Codex (OpenAI ChatGPT subscription) OAuth sign-in routes. The login lifecycle is kept separate from
     ///     the key-based <see cref="CloudSettings" /> surface.
     /// </summary>
