@@ -5,6 +5,35 @@ import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/re
 import type { ReactElement } from "react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
+import en from "@/locales/en.json";
+
+// Resolve dotted i18n key paths against the English translation JSON so assertions match real copy.
+function resolveKey(key: string, options?: Record<string, unknown>): string {
+	const parts = key.split(".");
+	let node: unknown = en;
+	for (const part of parts) {
+		if (node && typeof node === "object" && part in (node as Record<string, unknown>)) {
+			node = (node as Record<string, unknown>)[part];
+		} else {
+			return key;
+		}
+	}
+	let text = typeof node === "string" ? node : key;
+	if (options) {
+		for (const [name, value] of Object.entries(options)) {
+			text = text.replace(`{{${name}}}`, String(value));
+		}
+	}
+	return text;
+}
+
+vi.mock("react-i18next", () => ({
+	useTranslation: () => ({
+		t: (k: string, options?: Record<string, unknown>) => resolveKey(k, options),
+		i18n: { changeLanguage: vi.fn() },
+	}),
+}));
+
 const { authApiMock, navigateMock, searchState } = vi.hoisted(() => ({
 	authApiMock: {
 		loginNodeAuth: vi.fn(),

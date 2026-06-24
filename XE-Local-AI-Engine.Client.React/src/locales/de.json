@@ -2470,6 +2470,36 @@
 			}
 		}
 	},
+	"auth": {
+		"login": {
+			"title": "Anmelden",
+			"subtitle": "Gib das lokale Node-Admin-Passwort ein.",
+			"passwordLabel": "Passwort",
+			"signInButton": "Anmelden",
+			"errorIncorrectPassword": "Falsches Passwort. Bitte erneut versuchen.",
+			"errorNodeUnreachable": "Node nicht erreichbar. Prüfe, ob sie läuft, und versuche es erneut.",
+			"errorGeneric": "Anmeldung fehlgeschlagen. Bitte erneut versuchen."
+		},
+		"setup": {
+			"title": "Lokalen Admin einrichten",
+			"subtitle": "Erstelle das einmalige Admin-Konto für diesen Node.",
+			"emailLabel": "E-Mail",
+			"passwordLabel": "Passwort",
+			"confirmPasswordLabel": "Passwort bestätigen",
+			"createButton": "Admin erstellen",
+			"errorNodeUnreachable": "Node nicht erreichbar. Prüfe, ob sie läuft, und versuche es erneut.",
+			"errorGeneric": "Einrichtung fehlgeschlagen. Bitte Eingaben prüfen und erneut versuchen.",
+			"validationEmail": "Bitte eine gültige E-Mail-Adresse eingeben.",
+			"validationPasswordRequired": "Passwort ist erforderlich.",
+			"validationPasswordWeak": "Das Passwort benötigt {{unmet}}.",
+			"validationPasswordsNoMatch": "Passwörter stimmen nicht überein.",
+			"passwordRuleLength": "Mindestens 12 Zeichen",
+			"passwordRuleUppercase": "Mindestens ein Großbuchstabe (A–Z)",
+			"passwordRuleLowercase": "Mindestens ein Kleinbuchstabe (a–z)",
+			"passwordRuleDigit": "Mindestens eine Ziffer (0–9)",
+			"passwordRuleSymbol": "Mindestens ein Sonderzeichen (z. B. !@#$%)"
+		}
+	},
 	"errorMessages": {
 		"roleNameAlreadyExists": "Der Rollenname existiert bereits",
 		"emailAlreadyInUse": "Die Email wird bereits verwendet",
