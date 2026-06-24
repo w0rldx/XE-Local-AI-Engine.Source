@@ -2405,11 +2405,11 @@
 			},
 			"recommendationInstall": {
 				"title": "Ein empfohlenes Chat-Modell installieren",
-				"content": "Wähle ein empfohlenes Chat-Modell und starte den Download. Die Tour wartet hier, bis ein chatfähiges Modell tatsächlich installiert ist."
+				"content": "Wähle ein empfohlenes Chat-Modell und starte den Download – mit der Installation geht die Tour automatisch weiter. Noch kein Modell? Klicke einfach auf Weiter."
 			},
 			"setDefaultModel": {
 				"title": "Als Standard festlegen",
-				"content": "Lege dein installiertes Chat-Modell als Standard fest, damit neue Unterhaltungen es automatisch verwenden. Die Tour geht weiter, sobald ein chatfähiger Standard gesetzt ist."
+				"content": "Lege dein installiertes Chat-Modell als Standard fest, damit neue Unterhaltungen es automatisch verwenden. Mit dem Festlegen geht die Tour weiter, oder klicke auf Weiter."
 			},
 			"navChat": {
 				"title": "Chat öffnen",

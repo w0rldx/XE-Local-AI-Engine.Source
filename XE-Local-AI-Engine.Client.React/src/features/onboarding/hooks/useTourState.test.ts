@@ -3,7 +3,14 @@
 import { renderHook } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
-import { MAIN_APP_TOUR_KEY, useTourState } from "@/features/onboarding/hooks/useTourState";
+import {
+	clearTourProgress,
+	MAIN_APP_TOUR_KEY,
+	readTourProgress,
+	TOUR_PROGRESS_STORAGE_KEY,
+	useTourState,
+	writeTourProgress,
+} from "@/features/onboarding/hooks/useTourState";
 
 // Drives the generated GET hook's return so we can assert how shouldPrompt is derived from the persisted entries.
 const { useQueryMock, useMutationMock, invalidateQueriesMock, mutateMock } = vi.hoisted(() => ({
@@ -91,5 +98,38 @@ describe("useTourState", () => {
 			{ body: { key: MAIN_APP_TOUR_KEY, status: "skipped" } },
 			expect.objectContaining({ onSuccess: expect.any(Function) }),
 		);
+	});
+});
+
+describe("tour progress persistence (Bug B resume-on-reload)", () => {
+	afterEach(() => {
+		globalThis.localStorage?.removeItem(TOUR_PROGRESS_STORAGE_KEY);
+	});
+
+	it("returns null when no progress is stored", () => {
+		expect(readTourProgress()).toBeNull();
+	});
+
+	it("round-trips a written index through localStorage", () => {
+		writeTourProgress(4);
+		expect(readTourProgress()).toBe(4);
+		expect(globalThis.localStorage?.getItem(TOUR_PROGRESS_STORAGE_KEY)).toBe("4");
+	});
+
+	it("clear removes the stored index so a finished tour cannot resurrect", () => {
+		writeTourProgress(2);
+		clearTourProgress();
+		expect(readTourProgress()).toBeNull();
+	});
+
+	it("returns null for a non-integer / negative stored value (defensive)", () => {
+		globalThis.localStorage?.setItem(TOUR_PROGRESS_STORAGE_KEY, "not-a-number");
+		expect(readTourProgress()).toBeNull();
+		globalThis.localStorage?.setItem(TOUR_PROGRESS_STORAGE_KEY, "-1");
+		expect(readTourProgress()).toBeNull();
+	});
+
+	it("uses a stable namespaced key bound to the tour key", () => {
+		expect(TOUR_PROGRESS_STORAGE_KEY).toBe(`xe-onboarding-${MAIN_APP_TOUR_KEY}-step`);
 	});
 });

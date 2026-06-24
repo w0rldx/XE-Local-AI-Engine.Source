@@ -7,12 +7,17 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 // Capture the props Joyride is rendered with so we can assert `run` stays false on skip without rendering the real
 // overlay (which needs a live DOM target + portals).
-const { joyrideProps, markDoneMock, shouldPromptRef, onEventRef } = vi.hoisted(() => ({
-	joyrideProps: { current: null as null | { run: boolean; stepIndex: number } },
-	markDoneMock: vi.fn(),
-	shouldPromptRef: { current: true },
-	onEventRef: { current: null as null | ((data: Record<string, unknown>) => void) },
-}));
+const { joyrideProps, markDoneMock, shouldPromptRef, onEventRef, tourProgressRef, clearTourProgressMock } = vi.hoisted(
+	() => ({
+		joyrideProps: { current: null as null | { run: boolean; stepIndex: number } },
+		markDoneMock: vi.fn(),
+		shouldPromptRef: { current: true },
+		onEventRef: { current: null as null | ((data: Record<string, unknown>) => void) },
+		// Controllable persisted in-progress step index for the resume-on-reload tests (Bug B). null = no saved progress.
+		tourProgressRef: { current: null as number | null },
+		clearTourProgressMock: vi.fn(),
+	}),
+);
 
 // Replace only the Joyride component (rendering the real overlay needs live DOM targets + portals); keep the real
 // ACTIONS/EVENTS/STATUS constants the provider imports so the mock can't drift from the library.
@@ -30,6 +35,16 @@ vi.mock("react-joyride", async (importOriginal) => {
 
 vi.mock("@/features/onboarding/hooks/useTourState", () => ({
 	useTourState: () => ({ shouldPrompt: shouldPromptRef.current, isResolved: true, markDone: markDoneMock }),
+	// Persisted-progress helpers (Bug B). readTourProgress is driven by tourProgressRef; write records the latest index
+	// back into the ref so a resume-then-advance round-trips; clear is observable + resets the ref.
+	readTourProgress: () => tourProgressRef.current,
+	writeTourProgress: (index: number) => {
+		tourProgressRef.current = index;
+	},
+	clearTourProgress: () => {
+		tourProgressRef.current = null;
+		clearTourProgressMock();
+	},
 }));
 
 // The provider reads the installed-models query — stub it so the component renders without the real
@@ -116,6 +131,7 @@ beforeEach(() => {
 	shouldPromptRef.current = true;
 	joyrideProps.current = null;
 	onEventRef.current = null;
+	tourProgressRef.current = null;
 });
 
 afterEach(() => {
@@ -157,6 +173,63 @@ describe("OnboardingProvider welcome gate", () => {
 	});
 });
 
+describe("OnboardingProvider resume-on-reload (Bug B)", () => {
+	it("resumes the tour at the persisted step index instead of showing the welcome dialog", () => {
+		// Simulate a mid-tour reload: no terminal entry recorded (shouldPrompt stays true) but a saved in-progress
+		// index exists in localStorage. The provider must RESUME (run=true at that index), not re-open Welcome.
+		shouldPromptRef.current = true;
+		tourProgressRef.current = 3;
+
+		renderWithProviders(<OnboardingProvider>app</OnboardingProvider>);
+
+		expect(screen.queryByTestId("onboarding-welcome-skip")).toBeNull();
+		expect(joyrideProps.current?.run).toBe(true);
+		expect(joyrideProps.current?.stepIndex).toBe(3);
+		expect(markDoneMock).not.toHaveBeenCalled();
+	});
+
+	it("ignores an out-of-range saved index and falls back to the welcome dialog", () => {
+		// Defensive: a stale index beyond the current step array (e.g. tour length shrank) must not resume.
+		shouldPromptRef.current = true;
+		tourProgressRef.current = 9999;
+
+		renderWithProviders(<OnboardingProvider>app</OnboardingProvider>);
+
+		expect(screen.getByTestId("onboarding-welcome-skip")).not.toBeNull();
+		expect(joyrideProps.current?.run).toBe(false);
+	});
+
+	it("does not resume when a terminal outcome is already recorded (completed/skipped tour never resurrects)", () => {
+		// Even if a stale progress index lingers, a recorded terminal status (shouldPrompt=false) must win — no resume,
+		// no welcome.
+		shouldPromptRef.current = false;
+		tourProgressRef.current = 3;
+
+		renderWithProviders(<OnboardingProvider>app</OnboardingProvider>);
+
+		expect(screen.queryByTestId("onboarding-welcome-skip")).toBeNull();
+		expect(joyrideProps.current?.run).toBe(false);
+	});
+
+	it("clears persisted progress on finish so a completed tour cannot resurrect", () => {
+		renderWithProviders(<OnboardingProvider>app</OnboardingProvider>);
+		fireEvent.click(screen.getByTestId("onboarding-welcome-start"));
+
+		// Finishing the tour (last showcase step Next) must clear the saved index.
+		act(() => {
+			onEventRef.current?.({
+				type: EVENTS.STEP_AFTER,
+				action: ACTIONS.NEXT,
+				index: LAST_SHOWCASE_STEP_INDEX,
+				status: STATUS.RUNNING,
+			});
+		});
+
+		expect(clearTourProgressMock).toHaveBeenCalled();
+		expect(tourProgressRef.current).toBeNull();
+	});
+});
+
 describe("OnboardingProvider event handling", () => {
 	it("PREV on an async step advances backward (Back works on async steps)", () => {
 		renderWithProviders(<OnboardingProvider>app</OnboardingProvider>);
@@ -186,7 +259,7 @@ describe("OnboardingProvider event handling", () => {
 		expect(joyrideProps.current?.stepIndex).toBe(0);
 	});
 
-	it("NEXT on an async step is a no-op (tour waits for real-state advance)", () => {
+	it("NEXT on an async step ADVANCES the tour (never strands the overlay)", () => {
 		renderWithProviders(<OnboardingProvider>app</OnboardingProvider>);
 		fireEvent.click(screen.getByTestId("onboarding-welcome-start"));
 
@@ -199,9 +272,11 @@ describe("OnboardingProvider event handling", () => {
 				status: STATUS.RUNNING,
 			});
 		});
-		const indexAtInstall = joyrideProps.current?.stepIndex;
+		const indexAtInstall = joyrideProps.current?.stepIndex ?? 0;
 
-		// NEXT on the async step is swallowed — stepIndex must not change.
+		// NEXT on the async install step now advances like any other step. The old behavior swallowed it (no-op), which in
+		// controlled Joyride hid the tooltip and stranded a grayed overlay with no way forward on a fresh node. The
+		// real-state effects still auto-advance when a model is installed, but a manual Next must always move forward.
 		act(() => {
 			onEventRef.current?.({
 				type: EVENTS.STEP_AFTER,
@@ -210,7 +285,7 @@ describe("OnboardingProvider event handling", () => {
 				status: STATUS.RUNNING,
 			});
 		});
-		expect(joyrideProps.current?.stepIndex).toBe(indexAtInstall);
+		expect(joyrideProps.current?.stepIndex).toBe(indexAtInstall + 1);
 		expect(markDoneMock).not.toHaveBeenCalled();
 	});
 
@@ -232,23 +307,39 @@ describe("OnboardingProvider event handling", () => {
 		expect(markDoneMock).not.toHaveBeenCalled();
 	});
 
-	it("TARGET_NOT_FOUND after MAX_TARGET_RETRIES finishes the tour as skipped", () => {
+	it("TARGET_NOT_FOUND on a ROUTE-BOUND step ADVANCES after retries exhausted (never dead-ends, Bug A)", () => {
+		// Bug A regression: a route-bound step (index < FIRST_SHOWCASE_STEP_INDEX) whose target is absent used to
+		// finish('skipped') after retries, leaving a multi-second grayed screen then ending the tour. It must now
+		// ADVANCE to the next step like showcase steps do. MAX_TARGET_RETRIES rAF retries fire first; the (n+1)th
+		// missing-target event exhausts the budget and advances.
+		const ROUTE_BOUND_INDEX = 1; // recommendationInstall — route-bound, < FIRST_SHOWCASE_STEP_INDEX.
 		renderWithProviders(<OnboardingProvider>app</OnboardingProvider>);
 		fireEvent.click(screen.getByTestId("onboarding-welcome-start"));
 
-		// Fire TARGET_NOT_FOUND 3 times (MAX_TARGET_RETRIES = 2 means 3rd fires finish).
-		for (let i = 0; i < 3; i++) {
+		// Force the step to the route-bound index by simulating a not-found-advance won't apply yet; drive Next on
+		// step 0 to land on the route-bound install step.
+		act(() => {
+			onEventRef.current?.({ type: EVENTS.STEP_AFTER, action: ACTIONS.NEXT, index: 0, status: STATUS.RUNNING });
+		});
+		expect(joyrideProps.current?.stepIndex).toBe(ROUTE_BOUND_INDEX);
+
+		// Fire TARGET_NOT_FOUND enough times to exhaust the retry budget (MAX_TARGET_RETRIES retries + 1 advance).
+		// MAX_TARGET_RETRIES is 4, so 5 events: 4 retries (rAF re-measure) then the 5th advances.
+		for (let i = 0; i < 5; i++) {
 			act(() => {
 				onEventRef.current?.({
 					type: EVENTS.TARGET_NOT_FOUND,
 					action: ACTIONS.UPDATE,
-					index: 1,
+					index: ROUTE_BOUND_INDEX,
 					status: STATUS.RUNNING,
 				});
 			});
 		}
 
-		expect(markDoneMock).toHaveBeenCalledWith("skipped");
+		// Must NOT finish/skip — it advances forward and the tour keeps running.
+		expect(markDoneMock).not.toHaveBeenCalled();
+		expect(joyrideProps.current?.run).toBe(true);
+		expect(joyrideProps.current?.stepIndex).toBe(ROUTE_BOUND_INDEX + 1);
 	});
 });
 

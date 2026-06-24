@@ -12,6 +12,47 @@ import { useNodeAuthStore } from "@/core/auth/stores/NodeAuthStore";
 // reuse the same column/endpoint without a migration, but only this one is built (plan §1 non-goals).
 export const MAIN_APP_TOUR_KEY = "main-app-v1";
 
+// Namespaced localStorage key holding the in-progress step index so a reload mid-tour resumes instead of restarting
+// (Bug B). Client-only and best-effort: the backend still records the TERMINAL status; this only carries transient
+// progress and is always cleared on finish(). Follows the `xe-` key convention used by the other client stores.
+export const TOUR_PROGRESS_STORAGE_KEY = `xe-onboarding-${MAIN_APP_TOUR_KEY}-step`;
+
+// Reads the persisted in-progress step index, or null when none is stored / storage is unavailable / the value is
+// not a non-negative integer. Range-validity against the live step count is the caller's responsibility (the step
+// array length is owned by the provider, not this hook).
+export function readTourProgress(): number | null {
+	try {
+		const raw = globalThis.localStorage?.getItem(TOUR_PROGRESS_STORAGE_KEY);
+		if (raw === null || raw === undefined) {
+			return null;
+		}
+		const parsed = Number.parseInt(raw, 10);
+		return Number.isInteger(parsed) && parsed >= 0 ? parsed : null;
+	} catch {
+		return null;
+	}
+}
+
+// Persists the in-progress step index. Best-effort: storage failures (quota / unavailable) are swallowed so the tour
+// still runs in-memory.
+export function writeTourProgress(index: number): void {
+	try {
+		globalThis.localStorage?.setItem(TOUR_PROGRESS_STORAGE_KEY, String(index));
+	} catch {
+		// Ignore unavailable storage or quota errors; the tour continues from in-memory state.
+	}
+}
+
+// Clears the in-progress step index. Called on every finish() (completed or skipped) so a terminated tour can never
+// resurrect on the next reload.
+export function clearTourProgress(): void {
+	try {
+		globalThis.localStorage?.removeItem(TOUR_PROGRESS_STORAGE_KEY);
+	} catch {
+		// Ignore unavailable storage errors.
+	}
+}
+
 // A recorded tour outcome suppresses the welcome prompt regardless of which terminal status it carries.
 export type TourStatus = "completed" | "skipped";
 

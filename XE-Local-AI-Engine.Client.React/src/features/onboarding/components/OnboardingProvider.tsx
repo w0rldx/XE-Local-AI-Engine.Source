@@ -11,7 +11,7 @@ import { listLocalModelsOptions } from "@/core/api/generated/@tanstack/react-que
 import { router } from "@/core/integrations/tanstack-router/Router";
 import { OnboardingContext } from "@/features/onboarding/context/OnboardingContext";
 import { buildMainAppTourSteps, FIRST_SHOWCASE_STEP_INDEX, stepRoutes, tourStepIds } from "@/features/onboarding/data/MainAppTourSteps";
-import { useTourState } from "@/features/onboarding/hooks/useTourState";
+import { clearTourProgress, readTourProgress, useTourState, writeTourProgress } from "@/features/onboarding/hooks/useTourState";
 import { TourShowcasePanel } from "@/features/onboarding/components/TourShowcasePanel";
 import { WelcomeTourDialog } from "@/features/onboarding/components/WelcomeTourDialog";
 import {
@@ -39,9 +39,12 @@ const INSTALL_STEP_INDEX = tourStepIds.indexOf("recommendationInstall");
 const DEFAULT_STEP_INDEX = tourStepIds.indexOf("setDefaultModel");
 const FIRST_RESPONSE_STEP_INDEX = tourStepIds.indexOf("firstResponse");
 
-// How many times we'll re-navigate + retry when TARGET_NOT_FOUND fires before giving up. In practice this fires only
-// when the route component hasn't finished mounting; a single retry is almost always sufficient.
-const MAX_TARGET_RETRIES = 2;
+// How many times we'll re-navigate + re-measure when TARGET_NOT_FOUND fires before we ADVANCE past the step. This
+// fires when a route component hasn't finished mounting OR when a legit target is still loading (e.g. the
+// recommendations list is fetching on first run). A few rAF-spaced retries give a slow-but-real target a chance to
+// appear before we move on, while the finite cap guarantees we never spin forever. On exhaustion we ADVANCE (never
+// dead-end) — see handleEvent (Bug A).
+const MAX_TARGET_RETRIES = 4;
 
 // Hosts the controlled Joyride tour + the opt-in welcome dialog. Owns run/stepIndex locally (single consumer — no
 // Zustand, plan §9). The tour is purely additive: with this provider removed the app behaves identically (plan §3).
@@ -61,14 +64,6 @@ export function OnboardingProvider({ children }: { children: ReactNode }) {
 
 	const steps = useMemo(() => buildMainAppTourSteps(t, TARGET_WAIT_TIMEOUT_MS), [t]);
 
-	// First-run prompt: surface the welcome dialog once when the persisted state resolves with no recorded entry. Never
-	// re-opens (promptHandledRef) and never blocks anything else.
-	useEffect(() => {
-		if (shouldPrompt && !promptHandledRef.current && !run) {
-			setWelcomeOpen(true);
-		}
-	}, [shouldPrompt, run]);
-
 	// Navigates to a step's bound route (via the router singleton — useNavigate is unavailable outside RouterProvider)
 	// before the step renders so Joyride never targets an unmounted node (plan R2). No-op for unbound steps.
 	const navigateForStep = useCallback((index: number) => {
@@ -84,22 +79,30 @@ export function OnboardingProvider({ children }: { children: ReactNode }) {
 			targetRetryCountRef.current = 0;
 			navigateForStep(index);
 			setStepIndex(index);
+			// Persist progress so a mid-tour reload resumes here (Bug B). Cleared on finish().
+			writeTourProgress(index);
 		},
 		[navigateForStep],
 	);
 
-	const start = useCallback(() => {
-		promptHandledRef.current = true;
-		setWelcomeOpen(false);
-		setStepIndex(0);
-		targetRetryCountRef.current = 0;
-		navigateForStep(0);
-		setRun(true);
-	}, [navigateForStep]);
+	const start = useCallback(
+		(index = 0) => {
+			promptHandledRef.current = true;
+			setWelcomeOpen(false);
+			setStepIndex(index);
+			targetRetryCountRef.current = 0;
+			navigateForStep(index);
+			writeTourProgress(index);
+			setRun(true);
+		},
+		[navigateForStep],
+	);
 
 	const finish = useCallback(
 		(status: "completed" | "skipped") => {
 			setRun(false);
+			// Always clear persisted progress so a completed/skipped tour can never resurrect on the next reload (Bug B).
+			clearTourProgress();
 			markDone(status);
 		},
 		[markDone],
@@ -112,14 +115,33 @@ export function OnboardingProvider({ children }: { children: ReactNode }) {
 		markDone("skipped");
 	}, [markDone]);
 
+	// First-run prompt / resume gate: runs once the persisted state resolves with no recorded TERMINAL entry. If a
+	// mid-tour progress index was persisted to localStorage before a reload (Bug B), RESUME the tour at that index
+	// instead of showing the Welcome dialog; otherwise surface the welcome dialog. Never re-opens / re-resumes
+	// (promptHandledRef) and never blocks anything else. A persisted index out of range for the current step array is
+	// treated as no progress (defensive — e.g. a tour-length change between releases). Declared after start/finish so it
+	// can call start() without hitting a temporal-dead-zone on the memoized callback.
+	useEffect(() => {
+		if (!shouldPrompt || promptHandledRef.current || run) {
+			return;
+		}
+		const savedIndex = readTourProgress();
+		if (savedIndex !== null && savedIndex < steps.length) {
+			start(savedIndex);
+			return;
+		}
+		setWelcomeOpen(true);
+	}, [shouldPrompt, run, steps.length, start]);
+
 	// Controlled-mode event handler. Joyride v3 emits onEvent(data, controls); the parent owns stepIndex and advances
 	// it on the user's Next/Back. Terminal statuses persist the outcome and stop the run.
 	//
 	// Async real-state steps (install / default / first-response) only block FORWARD auto-advance: clicking Next on
 	// them is a no-op so the tour waits for the real action (plan R1). PREV always falls through so Back still works.
 	//
-	// TARGET_NOT_FOUND: re-navigate and retry (up to MAX_TARGET_RETRIES) before finishing as skipped. This recovers
-	// the common case where the route component hasn't mounted before Joyride checks the target selector.
+	// TARGET_NOT_FOUND: re-navigate and re-measure (up to MAX_TARGET_RETRIES) then ADVANCE past the step — never
+	// dead-end (Bug A). This recovers the common case where the route component hasn't mounted (or the data hasn't
+	// finished fetching) before Joyride checks the target selector.
 	const handleEvent = useCallback(
 		(data: EventData) => {
 			const { type, action, index, status } = data;
@@ -134,27 +156,26 @@ export function OnboardingProvider({ children }: { children: ReactNode }) {
 				return;
 			}
 
-			// TARGET_NOT_FOUND: re-navigate and try again, or give up after MAX_TARGET_RETRIES.
+			// TARGET_NOT_FOUND: re-navigate + re-measure for a few frames, then ADVANCE past the step. NO step (route-bound
+			// or showcase) is allowed to dead-end — the old code silently finish("skipped") for route-bound steps, which
+			// left the screen grayed for seconds then ended the tour (Bug A). Unified recovery: every missing target ends
+			// up advancing to the next step, or finishing the tour cleanly if it was the last.
 			if (type === EVENTS.TARGET_NOT_FOUND) {
 				if (targetRetryCountRef.current < MAX_TARGET_RETRIES) {
 					targetRetryCountRef.current += 1;
 					// Showcase steps are NOT route-bound, so navigateForStep is a no-op for them — re-anchoring instead
-					// depends on the always-mounted TourShowcasePanel. Nudge Joyride to re-measure on the next frame
-					// (lets the panel finish mounting) by re-applying the current stepIndex; for route-bound steps this
-					// also re-runs the navigation. rAF avoids a synchronous re-entrant setState during the event.
+					// depends on the always-mounted TourShowcasePanel. Route-bound steps re-run the navigation here so a
+					// slow lazy route gets another chance. Nudge Joyride to re-measure on the next frame (lets the target
+					// finish mounting / the data finish fetching) by re-applying the current stepIndex. rAF avoids a
+					// synchronous re-entrant setState during the event and naturally spaces retries across frames.
 					navigateForStep(index);
 					requestAnimationFrame(() => setStepIndex(index));
 					return;
 				}
-				// Retries exhausted. Non-showcase (route-bound) steps finish as skipped as before.
-				if (index < FIRST_SHOWCASE_STEP_INDEX) {
-					finish("skipped");
-					return;
-				}
-				// Defensive dead-end guard: showcase steps must never silently skip. The TourShowcasePanel is always
-				// mounted so this should be unreachable, but if a showcase target still can't be found, force a real
-				// state change — advance to the next showcase step, or finish the tour if this was the last — rather
-				// than the no-op that left the screen permanently dimmed with no tooltip (the reported bug).
+				// Retries exhausted: ADVANCE rather than dead-end (applies to ALL steps — route-bound and showcase). If
+				// this was the last step, finish the tour as completed; otherwise step forward. goToStep re-navigates +
+				// resets the retry counter so the next step gets its own fresh retry budget, and the overlay clears as the
+				// new step renders (no flicker — the dim only persisted before because we never moved off the missing step).
 				if (index >= steps.length - 1) {
 					finish("completed");
 				} else {
@@ -164,12 +185,12 @@ export function OnboardingProvider({ children }: { children: ReactNode }) {
 			}
 
 			if (type === EVENTS.STEP_AFTER) {
-				// Async real-state steps block FORWARD-only: PREV always falls through so Back works on every step.
-				const isAsyncStep =
-					index === INSTALL_STEP_INDEX || index === DEFAULT_STEP_INDEX || index === FIRST_RESPONSE_STEP_INDEX;
-				if (isAsyncStep && action !== ACTIONS.PREV) {
-					return;
-				}
+				// Next ALWAYS advances — including on the async real-state steps (install / default / first-response). Those
+				// steps still auto-advance via the effects below when their real action completes, but a manual Next must never
+				// be a no-op: in controlled Joyride a blocked Next ends the step lifecycle and hides the tooltip, stranding a
+				// grayed overlay with no way forward (user-reported dead-end on a fresh node with no recommendations). Letting
+				// Next continue keeps the tour navigable on every environment; installing a model simply fast-forwards the
+				// relevant step before the user gets there. PREV always falls through too, so Back works on every step.
 				// Forward past the last step finishes the tour. In controlled mode Joyride does not emit STATUS.FINISHED
 				// on its own, so without this the final step's primary button would clamp back onto itself and never persist.
 				if (action !== ACTIONS.PREV && index >= steps.length - 1) {
@@ -247,6 +268,18 @@ export function OnboardingProvider({ children }: { children: ReactNode }) {
 			goToStep(tourStepIds.indexOf("navChat"));
 		}
 	}, [run, stepIndex, modelItems, selectedModelName, goToStep]);
+
+	// Skip-if-prereq-missing (Bug A polish): the `setDefaultModel` step spotlights a model-row control that only exists
+	// once a chat model is installed. Normally the prior install step gates forward-advance on exactly that, so a model
+	// IS installed by the time we arrive here. But if we land on this step with the installed-models list resolved and
+	// EMPTY (e.g. the user removed the model, or recovery advanced us in unexpectedly), proactively step forward instead
+	// of letting Joyride dim the screen for the full target-wait timeout before TARGET_NOT_FOUND fires. We require the
+	// list to be resolved (modelItems !== undefined) so a still-loading list doesn't trigger a premature skip.
+	useEffect(() => {
+		if (run && stepIndex === DEFAULT_STEP_INDEX && modelItems !== undefined && !hasInstalledChatModel(modelItems)) {
+			goToStep(tourStepIds.indexOf("navChat"));
+		}
+	}, [run, stepIndex, modelItems, goToStep]);
 
 	// The send→response step advances when an assistant message is actually appended to the active conversation. Uses
 	// queryClient.getQueryCache().subscribe() for event-driven notification — no polling timer (plan R1).
