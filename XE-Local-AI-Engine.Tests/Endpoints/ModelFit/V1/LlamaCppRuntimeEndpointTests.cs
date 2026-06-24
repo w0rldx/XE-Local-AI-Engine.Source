@@ -23,8 +23,7 @@ public sealed class LlamaCppRuntimeEndpointTests
     {
         var binaryManager = Substitute.For<ILlamaCppBinaryManager>();
         var updateState = new LlamaCppUpdateState();
-        updateState.Store(new LlamaCppUpdateSnapshot(
-            InstalledTag: "b9692",
+        updateState.Store(new LlamaCppUpdateSnapshot(InstalledTag: "b9692",
             RecommendedTag: "b9700",
             UpstreamLatestTag: "b9777",
             UpdateAvailable: true,
@@ -59,8 +58,7 @@ public sealed class LlamaCppRuntimeEndpointTests
         // cached snapshot and NOT re-hit the live catalog (protecting the 60/hr GitHub budget).
         var catalog = Substitute.For<ILlamaCppReleaseCatalog>();
         var updateState = new LlamaCppUpdateState();
-        updateState.Store(new LlamaCppUpdateSnapshot(
-            InstalledTag: "b9692",
+        updateState.Store(new LlamaCppUpdateSnapshot(InstalledTag: "b9692",
             RecommendedTag: "b9700",
             UpstreamLatestTag: "b9777",
             UpdateAvailable: true,
@@ -90,8 +88,7 @@ public sealed class LlamaCppRuntimeEndpointTests
                .Returns(LlamaCppReleaseResult.ForTag("b9777"));
 
         var updateState = new LlamaCppUpdateState();
-        updateState.Store(new LlamaCppUpdateSnapshot(
-            InstalledTag: "b9692",
+        updateState.Store(new LlamaCppUpdateSnapshot(InstalledTag: "b9692",
             RecommendedTag: "b9700",
             UpstreamLatestTag: "b9777",
             UpdateAvailable: true,

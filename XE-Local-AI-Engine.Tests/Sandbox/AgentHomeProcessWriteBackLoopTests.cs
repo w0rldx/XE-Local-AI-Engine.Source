@@ -196,8 +196,8 @@ public sealed class AgentHomeProcessWriteBackLoopTests : IDisposable
             CommandTimeoutSeconds = 120
         });
         var runtimeSettings = StubNodeRuntimeSettings.Create()
-            .WithAgentHomeCommandTimeoutSeconds(120)
-            .Build();
+                                                     .WithAgentHomeCommandTimeoutSeconds(120)
+                                                     .Build();
         var manifestService = new AgentHomeManifestService(new FakeNodeDataDirectory(root), options, provider, clock, NullLogger<AgentHomeManifestService>.Instance);
 
         var serviceProvider = new ServiceCollection()

@@ -468,8 +468,8 @@ public sealed class NodePatchApplyServiceTests : IDisposable
             PatchApplyTimeoutSeconds = 120
         });
         var runtimeSettings = StubNodeRuntimeSettings.Create()
-            .WithAgentHomeMaxPatchBytes(tinyBudget)
-            .Build();
+                                                     .WithAgentHomeMaxPatchBytes(tinyBudget)
+                                                     .Build();
         var scopeFactory = new ServiceCollection()
                            .AddTransient<IAgentHomeRunLogger>(_ => new AgentHomeRunLogger(TimeProvider.System))
                            .BuildServiceProvider();

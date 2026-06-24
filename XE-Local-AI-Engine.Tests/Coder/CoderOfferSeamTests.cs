@@ -1,12 +1,9 @@
 namespace XE_Local_AI_Engine.Tests.Coder;
 
 using Microsoft.Extensions.Logging.Abstractions;
-using Microsoft.Extensions.Options;
 using XE_Local_AI_Engine.AI.Agent.Tools.Implementation;
-using XE_Local_AI_Engine.Client.Services.AgentHome;
 using XE_Local_AI_Engine.Client.Services.Chat.Implementation;
 using XE_Local_AI_Engine.Client.Services.Coder.Tools;
-using XE_Local_AI_Engine.Client.Services.Mcp.Implementation;
 using XE_Local_AI_Engine.Tests.Testing;
 
 /// <summary>

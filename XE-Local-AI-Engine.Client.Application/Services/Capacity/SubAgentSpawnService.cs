@@ -2,7 +2,6 @@ namespace XE_Local_AI_Engine.Client.Services.Capacity;
 
 using Microsoft.Agents.AI;
 using Microsoft.Extensions.AI;
-using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using XE_Local_AI_Engine.AI.Agent.Tools;
 using XE_Local_AI_Engine.Client.Models;
@@ -196,7 +195,10 @@ internal sealed class SubAgentSpawnService : ISubAgentSpawnService
         // AsAIFunction forwards the outer ct into the inner run, so a cancelled parent cancels the child and an OCE
         // propagates up to the caller's loop (no swallow, no linked CTS needed — verified by the ct-propagation spike).
         // BeginChildScope pushes Depth+1 for the inner run WITHOUT re-seeding a root, then restores the parent context.
-        var arguments = new AIFunctionArguments(StringComparer.Ordinal) { [InnerAgentInputKey] = task };
+        var arguments = new AIFunctionArguments(StringComparer.Ordinal)
+        {
+            [InnerAgentInputKey] = task
+        };
         using (context.BeginChildScope())
         {
             var result = await function.InvokeAsync(arguments, ct).ConfigureAwait(false);

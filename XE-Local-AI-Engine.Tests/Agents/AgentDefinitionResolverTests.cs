@@ -812,8 +812,11 @@ public sealed class AgentDefinitionResolverTests
         var capable = modelId is not null && string.Equals(modelId, ToolCapableModel, StringComparison.Ordinal);
         return capable
             ? [.. offeredTools.Where(static tool => !string.Equals(tool.Name, SpawnToolName, StringComparison.Ordinal))]
-            : [.. offeredTools.Where(static tool => !string.Equals(tool.Name, CapabilityGatedToolName, StringComparison.Ordinal)
-                                                    && !string.Equals(tool.Name, SpawnToolName, StringComparison.Ordinal))];
+            :
+            [
+                .. offeredTools.Where(static tool => !string.Equals(tool.Name, CapabilityGatedToolName, StringComparison.Ordinal)
+                                                     && !string.Equals(tool.Name, SpawnToolName, StringComparison.Ordinal))
+            ];
     }
 
     // The profile-intersection pool: the whole offer plus spawn_subagent when the model is tool-capable.

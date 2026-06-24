@@ -240,9 +240,9 @@ public sealed class NodeSettingsStore : INodeSettingsStore, IDisposable
         }
 
         var cleaned = values
-            .Where(static value => !string.IsNullOrWhiteSpace(value))
-            .Select(static value => value.Trim())
-            .ToList();
+                      .Where(static value => !string.IsNullOrWhiteSpace(value))
+                      .Select(static value => value.Trim())
+                      .ToList();
 
         return cleaned.Count == 0 ? null : cleaned;
     }

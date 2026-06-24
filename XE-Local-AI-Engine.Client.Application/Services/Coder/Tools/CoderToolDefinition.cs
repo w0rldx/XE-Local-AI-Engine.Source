@@ -16,16 +16,16 @@ internal static class CoderToolDefinition
         + "heavy generated directories are excluded.";
 
     public const string ListFilesParameterSchema = """
-                                                    {
-                                                      "type": "object",
-                                                      "additionalProperties": false,
-                                                      "properties": {
-                                                        "path": { "type": "string", "maxLength": 4096 },
-                                                        "glob": { "type": "string", "maxLength": 512 },
-                                                        "maxResults": { "type": "integer", "minimum": 1, "maximum": 5000 }
-                                                      }
-                                                    }
-                                                    """;
+                                                   {
+                                                     "type": "object",
+                                                     "additionalProperties": false,
+                                                     "properties": {
+                                                       "path": { "type": "string", "maxLength": 4096 },
+                                                       "glob": { "type": "string", "maxLength": 512 },
+                                                       "maxResults": { "type": "integer", "minimum": 1, "maximum": 5000 }
+                                                     }
+                                                   }
+                                                   """;
 
     public const string ReadFileToolName = "read_file";
 
@@ -34,17 +34,17 @@ internal static class CoderToolDefinition
         + "refused and oversized files are truncated.";
 
     public const string ReadFileParameterSchema = """
-                                                   {
-                                                     "type": "object",
-                                                     "additionalProperties": false,
-                                                     "required": ["path"],
-                                                     "properties": {
-                                                       "path": { "type": "string", "minLength": 1, "maxLength": 4096 },
-                                                       "startLine": { "type": "integer", "minimum": 1 },
-                                                       "endLine": { "type": "integer", "minimum": 1 }
-                                                     }
-                                                   }
-                                                   """;
+                                                  {
+                                                    "type": "object",
+                                                    "additionalProperties": false,
+                                                    "required": ["path"],
+                                                    "properties": {
+                                                      "path": { "type": "string", "minLength": 1, "maxLength": 4096 },
+                                                      "startLine": { "type": "integer", "minimum": 1 },
+                                                      "endLine": { "type": "integer", "minimum": 1 }
+                                                    }
+                                                  }
+                                                  """;
 
     public const string SearchTextToolName = "search_text";
 
@@ -53,18 +53,18 @@ internal static class CoderToolDefinition
         + "relative/path:line: text; secret files and directories are excluded.";
 
     public const string SearchTextParameterSchema = """
-                                                     {
-                                                       "type": "object",
-                                                       "additionalProperties": false,
-                                                       "required": ["pattern"],
-                                                       "properties": {
-                                                         "pattern": { "type": "string", "minLength": 1, "maxLength": 1024 },
-                                                         "path": { "type": "string", "maxLength": 4096 },
-                                                         "isRegex": { "type": "boolean" },
-                                                         "maxMatches": { "type": "integer", "minimum": 1, "maximum": 2000 }
-                                                       }
-                                                     }
-                                                     """;
+                                                    {
+                                                      "type": "object",
+                                                      "additionalProperties": false,
+                                                      "required": ["pattern"],
+                                                      "properties": {
+                                                        "pattern": { "type": "string", "minLength": 1, "maxLength": 1024 },
+                                                        "path": { "type": "string", "maxLength": 4096 },
+                                                        "isRegex": { "type": "boolean" },
+                                                        "maxMatches": { "type": "integer", "minimum": 1, "maximum": 2000 }
+                                                      }
+                                                    }
+                                                    """;
 
     /// <summary>
     ///     The model-visible descriptors for the three coder tools — name + schema + approval flag. The offer provider

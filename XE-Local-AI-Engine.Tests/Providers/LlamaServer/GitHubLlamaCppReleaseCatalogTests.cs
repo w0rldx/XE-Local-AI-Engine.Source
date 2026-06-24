@@ -1,5 +1,6 @@
 namespace XE_Local_AI_Engine.Tests.Providers.LlamaServer;
 
+using System.Globalization;
 using System.Net;
 using System.Net.Http.Headers;
 using System.Runtime.InteropServices;
@@ -86,7 +87,7 @@ public sealed class GitHubLlamaCppReleaseCatalogTests
         {
             var response = new HttpResponseMessage(HttpStatusCode.Forbidden);
             response.Headers.TryAddWithoutValidation("x-ratelimit-remaining", "0");
-            response.Headers.TryAddWithoutValidation("x-ratelimit-reset", resetEpoch.ToString(System.Globalization.CultureInfo.InvariantCulture));
+            response.Headers.TryAddWithoutValidation("x-ratelimit-reset", resetEpoch.ToString(CultureInfo.InvariantCulture));
             return response;
         });
         using var http = new HttpClient(handler, disposeHandler: false);

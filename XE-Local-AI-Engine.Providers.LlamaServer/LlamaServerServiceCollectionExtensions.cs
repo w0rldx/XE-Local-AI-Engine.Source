@@ -43,8 +43,7 @@ public static class LlamaServerServiceCollectionExtensions
         services.TryAddSingleton<ILlamaCppUpdateState, LlamaCppUpdateState>();
 
         services.TryAddSingleton<ILlamaCppBinaryManager>(static sp =>
-            new LlamaCppBinaryManager(
-                sp.GetRequiredService<HttpClient>(),
+            new LlamaCppBinaryManager(sp.GetRequiredService<HttpClient>(),
                 cacheRoot: null,
                 activeTag: null,
                 sp.GetRequiredService<ILlamaCppReleaseCatalog>(),

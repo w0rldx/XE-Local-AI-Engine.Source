@@ -150,10 +150,9 @@ public sealed class NodeSettingsEndpointTests
         using var response = await client.SendAsync(request).ConfigureAwait(false);
 
         AssertEx.Equal(HttpStatusCode.OK, response.StatusCode);
-        await nodeSettingsStore.Received(1).SaveAsync(
-            Arg.Is<StoredNodeSettings>(stored => stored.MaxMessageRequestTimeoutSeconds == 300
-                                                 && stored.RecommendedLlamaCppTag == "b9692"
-                                                 && stored.OllamaEndpoint == "http://127.0.0.1:11434"),
+        await nodeSettingsStore.Received(1).SaveAsync(Arg.Is<StoredNodeSettings>(stored => stored.MaxMessageRequestTimeoutSeconds == 300
+                                                                                           && stored.RecommendedLlamaCppTag == "b9692"
+                                                                                           && stored.OllamaEndpoint == "http://127.0.0.1:11434"),
             Arg.Any<CancellationToken>());
     }
 

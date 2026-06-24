@@ -232,8 +232,8 @@ public sealed class AgentHomeWorkspaceServiceTests : IDisposable
     private static AgentHomeWorkspaceService CreateService(FakeSandboxRuntimeProvider provider, long maxBytes = 536870912)
     {
         var runtimeSettings = StubNodeRuntimeSettings.Create()
-            .WithAgentHomeMaxSelectedFolderBytes(maxBytes)
-            .Build();
+                                                     .WithAgentHomeMaxSelectedFolderBytes(maxBytes)
+                                                     .Build();
         return new AgentHomeWorkspaceService(provider,
             new SensitiveFileExclusionService(),
             runtimeSettings,

@@ -137,45 +137,34 @@ internal static class NodeSettingsEndpointDtoMapper
             MaxMessageRequestTimeoutSeconds = settings.MaxMessageRequestTimeoutSeconds,
             MinMessageRequestTimeoutSeconds = StoredNodeSettings.MinMaxMessageRequestTimeoutSeconds,
             MaxAllowedMessageRequestTimeoutSeconds = StoredNodeSettings.MaxMaxMessageRequestTimeoutSeconds,
-
             DefaultModelName = settings.DefaultModelName,
             EnableTools = settings.EnableTools,
             ToolCapableModels = settings.ToolCapableModels,
             OllamaEndpoint = settings.OllamaEndpoint,
             HuggingFaceDefaultQuant = settings.HuggingFaceDefaultQuant,
-
             LlamaMaxLoadedProcesses = settings.LlamaMaxLoadedProcesses,
             MinLlamaMaxLoadedProcesses = StoredNodeSettings.MinLlamaMaxLoadedProcesses,
             MaxAllowedLlamaMaxLoadedProcesses = StoredNodeSettings.MaxLlamaMaxLoadedProcesses,
-
             LlamaIdleTimeToLiveSeconds = settings.LlamaIdleTimeToLiveSeconds,
             MinLlamaIdleTimeToLiveSeconds = StoredNodeSettings.MinLlamaIdleTimeToLiveSeconds,
             MaxAllowedLlamaIdleTimeToLiveSeconds = StoredNodeSettings.MaxLlamaIdleTimeToLiveSeconds,
-
             MaxResponseSizeMb = settings.MaxResponseSizeMb,
             MinMaxResponseSizeMb = StoredNodeSettings.MinMaxResponseSizeMb,
             MaxAllowedMaxResponseSizeMb = StoredNodeSettings.MaxMaxResponseSizeMb,
-
             RecommendedLlamaCppTag = settings.RecommendedLlamaCppTag,
-
             HuggingFaceDiskMarginBytes = settings.HuggingFaceDiskMarginBytes,
-
             OrchestrationIdleTimeoutSeconds = settings.OrchestrationIdleTimeoutSeconds,
             MinOrchestrationIdleTimeoutSeconds = StoredNodeSettings.MinOrchestrationIdleTimeoutSeconds,
             MaxAllowedOrchestrationIdleTimeoutSeconds = StoredNodeSettings.MaxOrchestrationIdleTimeoutSeconds,
-
             AgentHomePrepareTimeoutSeconds = settings.AgentHomePrepareTimeoutSeconds,
             AgentHomeCommandTimeoutSeconds = settings.AgentHomeCommandTimeoutSeconds,
             MinAgentHomeTimeoutSeconds = StoredNodeSettings.MinAgentHomeTimeoutSeconds,
             MaxAllowedAgentHomeTimeoutSeconds = StoredNodeSettings.MaxAgentHomeTimeoutSeconds,
-
             AgentHomeMaxSelectedFolderBytes = settings.AgentHomeMaxSelectedFolderBytes,
             AgentHomeMaxPatchBytes = settings.AgentHomeMaxPatchBytes,
-
             MaxPendingToolCallAgeMinutes = settings.MaxPendingToolCallAgeMinutes,
             MinMaxPendingToolCallAgeMinutes = StoredNodeSettings.MinMaxPendingToolCallAgeMinutes,
             MaxAllowedMaxPendingToolCallAgeMinutes = StoredNodeSettings.MaxMaxPendingToolCallAgeMinutes,
-
             SamplingDefaults = settings.SamplingDefaults
         };
     }
