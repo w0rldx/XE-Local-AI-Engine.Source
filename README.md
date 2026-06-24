@@ -30,7 +30,14 @@ The repository is being prepared for an RC release. Release documentation and va
 
 ## Documentation map
 
-- [AI runtime developer notes](docs/ai-runtime.md)
+The contributor deep-dive lives in the **[Developer Wiki](docs/wiki/Home.md)** — code-grounded
+pages covering architecture, every project, the local llama.cpp runtime and providers, agent mode,
+chat, scheduler, model-fit, data/persistence, the API surface, the React client, hosting/deployment,
+security/privacy, and testing. Start at [`docs/wiki/Home.md`](docs/wiki/Home.md).
+
+Supporting notes:
+
+- [AI runtime developer notes](docs/ai-runtime.md) — narrow AI-seam maintenance rules (see the wiki for the full runtime architecture).
 - [Backend commentary map](docs/backend-commentary-map.md)
 
 Component-specific notes:
@@ -45,7 +52,7 @@ Component-specific notes:
 - .NET SDK from [`global.json`](global.json)
 - Node.js compatible with `XE-Local-AI-Engine.Client.React/package.json`
 - pnpm via Corepack or a local install
-- Docker/rootless Docker and Ollama when exercising runtime-fidelity or release-like paths
+- A GPU with current drivers is optional; the app self-provisions its llama.cpp runtime and GGUF models at first run. (Docker and Ollama are **not** required — Docker was removed in the 2026-06-17 runtime re-architecture and llama.cpp is the local runtime; see [docs/wiki/03-local-runtime-and-providers.md](docs/wiki/03-local-runtime-and-providers.md).)
 
 ### Common commands
 
