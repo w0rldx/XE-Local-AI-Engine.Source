@@ -5,6 +5,7 @@ import {
 	browseGgufRepositoriesOptions,
 	cancelGgufDownloadMutation,
 	getGgufDownloadsOptions,
+	getGgufDownloadsQueryKey,
 	inspectGgufRepositoryOptions,
 	startGgufDownloadMutation,
 } from "@/core/api/generated/@tanstack/react-query.gen";
@@ -85,7 +86,14 @@ export function useStartGgufDownload() {
 			const options = withResponseValidation(startGgufDownloadMutation());
 			return await options.mutationFn?.({ body: { ...variables } }, undefined as never);
 		},
-		onSuccess: () => invalidate(queryClient, ggufQueryIds.runningModels),
+		// Invalidate the downloads list so the active-downloads poll refetches immediately and re-arms its interval — the
+		// poll stops once nothing is Running, so a download started from idle would otherwise never be picked up until a
+		// remount (the "Downloading… forever" bug). Also refresh the running-models list the in-flight download surfaces in.
+		onSuccess: () =>
+			Promise.all([
+				invalidate(queryClient, ggufQueryIds.runningModels),
+				queryClient.invalidateQueries({ queryKey: getGgufDownloadsQueryKey() }),
+			]),
 	});
 }
 
@@ -98,7 +106,11 @@ export function useCancelGgufDownload() {
 			const options = withResponseValidation(cancelGgufDownloadMutation());
 			return await options.mutationFn?.({ body: { modelName } }, undefined as never);
 		},
-		onSuccess: () => invalidate(queryClient, ggufQueryIds.runningModels),
+		onSuccess: () =>
+			Promise.all([
+				invalidate(queryClient, ggufQueryIds.runningModels),
+				queryClient.invalidateQueries({ queryKey: getGgufDownloadsQueryKey() }),
+			]),
 	});
 }
 
@@ -118,17 +130,29 @@ export interface GgufDownloadStatus {
 //   – downloads started before a navigation refresh rehydrate into the store;
 //   – models no longer Running are removed from the store.
 // Returns a map of modelName → GgufDownloadStatus for all non-idle entries the backend reports.
-export function useActiveGgufDownloads(): ReadonlyMap<string, GgufDownloadStatus> {
+//
+// `enabled` (default true) gates the underlying query. Pass `false` to suppress the poll
+// pre-auth — the GgufDownloadPoller uses this to avoid a 401 before login (mirrors useTourState).
+export function useActiveGgufDownloads({ enabled = true }: { enabled?: boolean } = {}): ReadonlyMap<string, GgufDownloadStatus> {
 	const markInFlight = useGgufBrowseStore((state) => state.actions.markInFlight);
 	const removeInFlight = useGgufBrowseStore((state) => state.actions.removeInFlight);
+	// Number of downloads started this session (per the store). Read here so this hook re-renders when a download is
+	// kicked off — that re-render lets TanStack re-evaluate refetchInterval and resume polling from idle.
+	const inFlightCount = useGgufBrowseStore((state) => state.inFlightDownloads.length);
 
 	const { data } = useQuery({
 		...withResponseValidation(getGgufDownloadsOptions()),
-		// Poll every second; stop polling once nothing is Running.
+		enabled,
+		// Poll every second while EITHER the backend reports a Running download OR the store still tracks an in-flight one.
+		// Gating only on the query's own last data was a chicken-and-egg bug: once the poll saw no Running items it returned
+		// `false` and stopped, so a download STARTED from that idle state was never picked up (the poll never re-ran to see
+		// it) and the row showed "Downloading…" forever until a remount. Including the store's in-flight count keeps the
+		// poll alive across the start→first-Running window; it winds down once the backend reports terminal AND the store
+		// has been reconciled empty.
 		refetchInterval: (query) => {
 			const items = query.state.data?.items;
 			const hasRunning = items?.some((item) => item.phase === "Running") ?? false;
-			return hasRunning ? 1000 : false;
+			return hasRunning || inFlightCount > 0 ? 1000 : false;
 		},
 	});
 

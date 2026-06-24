@@ -1,4 +1,4 @@
-import { Alert, Badge, Button, Card, Container, Group, Loader, Stack, Text, Title } from "@mantine/core";
+import { Alert, Button, Card, Container, Group, Loader, Stack, Text, Title } from "@mantine/core";
 import { useDisclosure } from "@mantine/hooks";
 import { IconAlertTriangle, IconCloudDownload, IconRefresh, IconRobot } from "@tabler/icons-react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
@@ -249,9 +249,6 @@ export function ModelManagement() {
 						<Text c="dimmed">List, select, pull, and delete local Ollama models without changing runtime providers.</Text>
 					</Stack>
 					<Group gap="sm">
-						<Badge color={modelsResponse?.isAvailable ? "green" : "red"}>
-							{modelsResponse?.isAvailable ? "Ollama online" : "Ollama offline"}
-						</Badge>
 						<Button
 							variant="subtle"
 							leftSection={<IconRefresh size={16} />}
@@ -300,7 +297,7 @@ export function ModelManagement() {
 							onResetKind={(modelName) => resetKindMutation.mutate({ path: { modelName } })}
 						/>
 						{modelViewModels.length === 0 ? (
-							<Text c="dimmed">{modelsResponse?.isAvailable ? "No local models found." : "Ollama is unavailable."}</Text>
+							<Text c="dimmed">{modelsResponse?.isAvailable ? "No local models found." : "Local model provider is unavailable."}</Text>
 						) : null}
 					</Stack>
 				</Card>

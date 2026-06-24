@@ -7,6 +7,7 @@ import { Provider as TanStackQueryProvider } from "@/core/integrations/tanstack-
 import { router } from "@/core/integrations/tanstack-router/Router";
 import { ThemeProvider } from "@/core/theme/provider/ThemeProvider";
 import { ConfirmProvider } from "@/core/ui/components/ConfirmProvider/ConfirmProvider";
+import { GgufDownloadPoller } from "@/features/models/components/GgufDownloadPoller";
 import { OnboardingProvider } from "@/features/onboarding/components/OnboardingProvider";
 
 import { AppErrorFallback } from "@/AppErrorFallback";
@@ -18,6 +19,7 @@ export function App() {
 		<ThemeProvider>
 			<TanStackQueryProvider>
 				<ConfirmProvider>
+					<GgufDownloadPoller />
 					<OnboardingProvider>
 						<ErrorBoundary
 							fallbackRender={({ error, resetErrorBoundary }) => (
