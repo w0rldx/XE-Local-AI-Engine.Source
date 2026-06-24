@@ -46,9 +46,8 @@ vi.mock("@/core/api/generated/@tanstack/react-query.gen", () => ({
 	getNodeSettingsOptions: () => ({ queryKey: ["node-settings"], queryFn: () => Promise.resolve(null) }),
 	getNodeSettingsQueryKey: () => ["node-settings"],
 	saveNodeSettingsMutation: () => ({ mutationFn: vi.fn() }),
-	// Local-runtime cards relocated from the model-fit advisor. The llama.cpp version query is disabled until checked;
-	// the HF token status returns "no token" so the card renders without a backend.
-	getLlamaCppVersionOptions: () => ({ queryKey: ["llamacpp-version"], queryFn: () => Promise.resolve({}) }),
+	// Local-runtime cards relocated from the model-fit advisor. The HF token status returns "no token" so the card
+	// renders without a backend; the llama.cpp runtime card is driven by getLlamaCppRuntimeOptions below.
 	ensureLlamaCppBinaryMutation: () => ({ mutationFn: vi.fn() }),
 	getHfTokenStatusOptions: () => ({ queryKey: ["hf-token-status"], queryFn: () => Promise.resolve({ hasToken: false }) }),
 	setHfTokenMutation: () => ({ mutationFn: vi.fn() }),

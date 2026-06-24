@@ -21,11 +21,12 @@ const { generatedMock } = vi.hoisted(() => ({
 		saveNodeSettingsMutation: vi.fn(),
 		saveFn: vi.fn(),
 		// Local-runtime cards (llama.cpp + HF token) relocated from the model-fit advisor.
-		getLlamaCppVersionOptions: vi.fn(),
 		ensureLlamaCppBinaryMutation: vi.fn(),
 		getHfTokenStatusOptions: vi.fn(),
 		setHfTokenMutation: vi.fn(),
-		// llama.cpp runtime updater (read-only status query + update mutation).
+		// llama.cpp runtime card: read-only status query + ensure + update mutations. The card owns its own data layer;
+		// the page only mounts it. `getLlamaCppRuntimeOptions` returns the queryKey + queryFn for both the mount read and
+		// the refresh-fetch / cache-seed path (the queryKey field is read by `useRefreshLlamaCppRuntime`).
 		getLlamaCppRuntimeOptions: vi.fn(),
 		updateLlamaCppRuntimeMutation: vi.fn(),
 		ensureFn: vi.fn(),
@@ -44,12 +45,21 @@ vi.mock("@/core/api/generated/@tanstack/react-query.gen", () => ({
 	getNodeSettingsOptions: generatedMock.getNodeSettingsOptions,
 	getNodeSettingsQueryKey: generatedMock.getNodeSettingsQueryKey,
 	saveNodeSettingsMutation: generatedMock.saveNodeSettingsMutation,
-	getLlamaCppVersionOptions: generatedMock.getLlamaCppVersionOptions,
 	ensureLlamaCppBinaryMutation: generatedMock.ensureLlamaCppBinaryMutation,
 	getHfTokenStatusOptions: generatedMock.getHfTokenStatusOptions,
 	setHfTokenMutation: generatedMock.setHfTokenMutation,
 	getLlamaCppRuntimeOptions: generatedMock.getLlamaCppRuntimeOptions,
 	updateLlamaCppRuntimeMutation: generatedMock.updateLlamaCppRuntimeMutation,
+}));
+
+// The runtime card renders a TanStack Router <Link> (eject-first notice). Stub it so the page mounts without a
+// RouterProvider OR loading the generated route tree (which eval-fails outside a real router).
+vi.mock("@tanstack/react-router", () => ({
+	Link: ({ children, to, ...props }: { children: ReactNode; to: string; [key: string]: unknown }) => (
+		<a href={to} {...props}>
+			{children}
+		</a>
+	),
 }));
 
 import { useDeveloperModeStore } from "@/core/dev-tools/stores/DeveloperModeStore";
@@ -104,12 +114,7 @@ describe("NodeSettings (generated hey-api data layer)", () => {
 		generatedMock.saveFn.mockResolvedValue(settingsResponse as SaveNodeSettingsResponse);
 		generatedMock.saveNodeSettingsMutation.mockReturnValue({ mutationFn: generatedMock.saveFn });
 
-		// Local-runtime card defaults. The llama.cpp version query is DISABLED until the operator checks it (the GET can
-		// trigger a binary download), so its queryFn never runs on mount; the HF token status returns "no token".
-		generatedMock.getLlamaCppVersionOptions.mockReturnValue({
-			queryKey: fakeQueryKey("getLlamaCppVersion"),
-			queryFn: async () => ({ version: "b1234", variant: "cuda", isPinnedFallback: false, pinnedTag: "b1000" }),
-		});
+		// Local-runtime card defaults. The HF token status returns "no token".
 		generatedMock.getHfTokenStatusOptions.mockReturnValue({
 			queryKey: fakeQueryKey("getHfTokenStatus"),
 			queryFn: async () => ({ hasToken: false }),
@@ -118,7 +123,9 @@ describe("NodeSettings (generated hey-api data layer)", () => {
 		generatedMock.ensureLlamaCppBinaryMutation.mockReturnValue({ mutationFn: generatedMock.ensureFn });
 		generatedMock.setTokenFn.mockResolvedValue({});
 		generatedMock.setHfTokenMutation.mockReturnValue({ mutationFn: generatedMock.setTokenFn });
-		// Runtime updater: a read-only status query (safe on mount) and an update mutation. Default = up to date.
+		// Runtime card: a read-only status query (safe on mount) and an update mutation. Default = up to date, nothing
+		// running. `getLlamaCppRuntimeOptions` is called both with no args (mount + cache-seed key) and with
+		// `{ query: { refresh: true } }` (manual recheck) — return the same shape for either call.
 		generatedMock.getLlamaCppRuntimeOptions.mockReturnValue({
 			queryKey: fakeQueryKey("getLlamaCppRuntime"),
 			queryFn: async () => ({
@@ -127,6 +134,7 @@ describe("NodeSettings (generated hey-api data layer)", () => {
 				upstreamLatestTag: null,
 				updateAvailable: false,
 				isOffline: false,
+				runningProcessCount: 0,
 			}),
 		});
 		generatedMock.updateRuntimeFn.mockResolvedValue({ version: "b1000", variant: "cpu" });
@@ -163,31 +171,22 @@ describe("NodeSettings (generated hey-api data layer)", () => {
 		});
 	});
 
-	// Local-runtime cards relocated from the model-fit advisor.
-	it("renders the llama.cpp runtime and Hugging Face token cards", async () => {
+	// Local-runtime cards relocated from the model-fit advisor (llama.cpp now a single merged card).
+	it("renders the merged llama.cpp runtime card and the Hugging Face token card", async () => {
 		renderPage();
 
-		expect(await screen.findByTestId("model-fit-llamacpp-card")).toBeTruthy();
+		// The merged runtime card shows the installed tag + variant on mount (no operator click / version probe).
+		expect(await screen.findByTestId("llamacpp-updater-card")).toBeTruthy();
+		await waitFor(() => expect(screen.getByTestId("llamacpp-updater-installed").textContent).toContain("b1000"));
 		expect(screen.getByTestId("model-fit-hf-token-card")).toBeTruthy();
-	});
-
-	it("does not show the llama.cpp version until the operator explicitly checks it (avoids a mount-time download)", async () => {
-		renderPage();
-
-		// On mount the version probe is idle: the panel shows its idle hint and renders no version.
-		expect(await screen.findByTestId("model-fit-llamacpp-idle")).toBeTruthy();
-		expect(screen.queryByTestId("model-fit-llamacpp-version")).toBeNull();
-
-		// Triggering the probe reveals the resolved version.
-		fireEvent.click(screen.getByTestId("model-fit-llamacpp-check-button"));
-		await waitFor(() => expect(screen.getByTestId("model-fit-llamacpp-version").textContent).toContain("b1234"));
 	});
 
 	it("ensures the selected llama.cpp variant through the generated mutation", async () => {
 		renderPage();
-		await screen.findByTestId("model-fit-llamacpp-card");
+		// The ensure control only renders once the runtime status has resolved.
+		const ensureButton = await screen.findByTestId("llamacpp-updater-ensure-button");
 
-		fireEvent.click(screen.getByTestId("model-fit-llamacpp-ensure-button"));
+		fireEvent.click(ensureButton);
 
 		// The select defaults to "cpu" until the operator changes it.
 		await waitFor(() => expect(generatedMock.ensureFn.mock.calls[0]?.[0]).toEqual({ body: { variant: "cpu" } }));

@@ -277,6 +277,136 @@ public sealed class BinaryManagerInstallTagTests
         AssertEx.False(binary.IsPinnedFallback);
     }
 
+    [Test]
+    public async Task EnsureBinary_OnFreshNode_RecordsResolvedRuntimeSoItSurfacesAsInstalled()
+    {
+        // Issue #1: a pin-bootstrapped binary with NO installed-runtime record must be recorded on ensure so the
+        // runtime-status surface shows "Installed: <tag> (<variant>)" on first load (no explicit update ever ran).
+        using var cache = new TempDir();
+        var pin = LlamaCppReleasePins.Resolve(OSPlatform.Linux, Architecture.X64, GpuVariant.Cpu)!;
+        var serverPath = Path.Combine(cache.Path, "llama.cpp", LlamaCppReleasePins.PinnedTag, "cpu", pin.ServerRelativePath);
+        Directory.CreateDirectory(Path.GetDirectoryName(serverPath)!);
+        await File.WriteAllTextAsync(serverPath, "pinned-binary");
+
+        using var handler = new ScriptedHandler(() => throw new InvalidOperationException("Cached bootstrap must not download."));
+        using var http = new HttpClient(handler, disposeHandler: false);
+        using var store = new InstalledRuntimeStore(cache.Path);
+        var manager = new LlamaCppBinaryManager(http, cache.Path, LlamaCppReleasePins.PinnedTag,
+            OSPlatform.Linux, Architecture.X64, new OfflineCatalog(), store);
+
+        AssertEx.Null(await store.ReadAsync(CancellationToken.None));
+
+        await manager.EnsureBinaryAsync(GpuVariant.Cpu, CancellationToken.None);
+
+        var state = AssertEx.NotNull(await store.ReadAsync(CancellationToken.None));
+        AssertEx.Equal(LlamaCppReleasePins.PinnedTag, state.Tag);
+        AssertEx.Equal(GpuVariant.Cpu, state.Variant);
+        AssertEx.Equal(pin.AssetName, state.Asset);
+        AssertEx.Equal(expected: 0, handler.CallCount);
+    }
+
+    [Test]
+    public async Task EnsureBinary_WhenRecordAlreadyMatches_DoesNotRewriteState()
+    {
+        // The hot path must not rewrite an identical record on every ensure: a record for the same (tag, variant) the
+        // ensure resolves is left untouched (the InstalledAtUtc stamp must not advance).
+        using var cache = new TempDir();
+        var pin = LlamaCppReleasePins.Resolve(OSPlatform.Linux, Architecture.X64, GpuVariant.Cpu)!;
+        var serverPath = Path.Combine(cache.Path, "llama.cpp", LlamaCppReleasePins.PinnedTag, "cpu", pin.ServerRelativePath);
+        Directory.CreateDirectory(Path.GetDirectoryName(serverPath)!);
+        await File.WriteAllTextAsync(serverPath, "pinned-binary");
+
+        using var store = new InstalledRuntimeStore(cache.Path);
+        var recordedAt = DateTimeOffset.UtcNow - TimeSpan.FromDays(1);
+        await store.WriteAsync(new InstalledRuntimeState(LlamaCppReleasePins.PinnedTag, pin.AssetName, new string('a', 64), GpuVariant.Cpu, recordedAt), CancellationToken.None);
+
+        using var handler = new ScriptedHandler(() => throw new InvalidOperationException("Cached reuse must not download."));
+        using var http = new HttpClient(handler, disposeHandler: false);
+        var manager = new LlamaCppBinaryManager(http, cache.Path, LlamaCppReleasePins.PinnedTag,
+            OSPlatform.Linux, Architecture.X64, new OfflineCatalog(), store);
+
+        await manager.EnsureBinaryAsync(GpuVariant.Cpu, CancellationToken.None);
+
+        var state = AssertEx.NotNull(await store.ReadAsync(CancellationToken.None));
+        // The original digest + timestamp survive — the steady-state ensure performed no write.
+        AssertEx.Equal(new string('a', 64), state.Sha256);
+        AssertEx.Equal(recordedAt.ToUnixTimeMilliseconds(), state.InstalledAtUtc.ToUnixTimeMilliseconds());
+    }
+
+    [Test]
+    public async Task EnsureBinary_WhenResolveIsPinnedFloorButNewerRecordExists_DoesNotClobberRecord()
+    {
+        // The pinned-floor branch must never overwrite a newer explicit-install record for the same variant. Here the
+        // live catalog resolves the pinned floor (e.g. a node whose recommended setting points back at the pin) while a
+        // newer tag is already recorded — the recorded tag must survive (only the live/tier-2 resolve may advance it).
+        using var cache = new TempDir();
+        const string newerTag = "b9799";
+        AssertEx.False(string.Equals(newerTag, LlamaCppReleasePins.PinnedTag, StringComparison.Ordinal), "The recorded tag must differ from the pinned floor for this test to be meaningful.");
+
+        // The pinned-floor binary is cached on disk so the resolve serves it without a download.
+        var pin = LlamaCppReleasePins.Resolve(OSPlatform.Linux, Architecture.X64, GpuVariant.Cpu)!;
+        var pinnedServer = Path.Combine(cache.Path, "llama.cpp", LlamaCppReleasePins.PinnedTag, "cpu", pin.ServerRelativePath);
+        Directory.CreateDirectory(Path.GetDirectoryName(pinnedServer)!);
+        await File.WriteAllTextAsync(pinnedServer, "pinned-binary");
+
+        using var store = new InstalledRuntimeStore(cache.Path);
+        await store.WriteAsync(new InstalledRuntimeState(newerTag, AssetName, new string('b', 64), GpuVariant.Cpu, DateTimeOffset.UtcNow), CancellationToken.None);
+
+        using var handler = new ScriptedHandler(() => throw new InvalidOperationException("Cached resolve must not download."));
+        using var http = new HttpClient(handler, disposeHandler: false);
+        // A catalog that live-resolves the pinned floor (tier 1) → the resolved tag becomes the pinned floor.
+        var manager = new LlamaCppBinaryManager(http, cache.Path, LlamaCppReleasePins.PinnedTag,
+            OSPlatform.Linux, Architecture.X64, new ResolvesPinnedFloorCatalog(), store);
+
+        await manager.EnsureBinaryAsync(GpuVariant.Cpu, CancellationToken.None);
+
+        AssertEx.Equal(expected: 0, handler.CallCount);
+        // The record still points at the newer explicit install — the pinned floor never clobbered it.
+        var state = AssertEx.NotNull(await store.ReadAsync(CancellationToken.None));
+        AssertEx.Equal(newerTag, state.Tag);
+        AssertEx.Equal(new string('b', 64), state.Sha256);
+    }
+
+    [Test]
+    public async Task EnsureBinary_CrossVariantNonPinnedResolve_DoesNotOverwriteRecordAssetOrSha()
+    {
+        // MED-1 record integrity: an ensure for a DIFFERENT variant that resolves a non-pinned tier-2 tag (the recorded
+        // higher tag) must NOT write the pin's asset/sha (which belong to a different variant + the pinned floor) over
+        // the authoritative record. The pin is resolved by OS/arch/variant, so its asset/digest never match an arbitrary
+        // non-pinned tag — recording them would corrupt Tag↔Asset↔Sha256 consistency.
+        using var cache = new TempDir();
+        const string higherTag = "b9700";
+        AssertEx.False(string.Equals(higherTag, LlamaCppReleasePins.PinnedTag, StringComparison.Ordinal), "The recorded tag must be a non-pinned (explicitly-installed) tag for this test.");
+
+        // The record was written by a prior Vulkan InstallTagAsync: tag b9700, the Vulkan asset, a Vulkan digest.
+        var vulkanPin = LlamaCppReleasePins.Resolve(OSPlatform.Linux, Architecture.X64, GpuVariant.Vulkan)!;
+        var recordedAsset = vulkanPin.AssetName;
+        var recordedSha = new string('c', 64);
+        using var store = new InstalledRuntimeStore(cache.Path);
+        await store.WriteAsync(new InstalledRuntimeState(higherTag, recordedAsset, recordedSha, GpuVariant.Vulkan, DateTimeOffset.UtcNow), CancellationToken.None);
+
+        // A cached Cpu binary for the higher tag so the Cpu ensure resolves (tier 2 → higherTag) and reuses it offline.
+        var cpuServer = Path.Combine(cache.Path, "llama.cpp", higherTag, "cpu", "build", "bin", "llama-server");
+        Directory.CreateDirectory(Path.GetDirectoryName(cpuServer)!);
+        await File.WriteAllTextAsync(cpuServer, "cpu-binary");
+
+        using var handler = new ScriptedHandler(() => throw new InvalidOperationException("Cached reuse must not download."));
+        using var http = new HttpClient(handler, disposeHandler: false);
+        var manager = new LlamaCppBinaryManager(http, cache.Path, LlamaCppReleasePins.PinnedTag,
+            OSPlatform.Linux, Architecture.X64, new OfflineCatalog(), store);
+
+        var binary = await manager.EnsureBinaryAsync(GpuVariant.Cpu, CancellationToken.None);
+
+        AssertEx.Equal(expected: 0, handler.CallCount);
+        AssertEx.Equal(higherTag, binary.Version);
+        // The record is byte-for-byte unchanged — no pinned/cpu asset or digest leaked into it.
+        var state = AssertEx.NotNull(await store.ReadAsync(CancellationToken.None));
+        AssertEx.Equal(higherTag, state.Tag);
+        AssertEx.Equal(GpuVariant.Vulkan, state.Variant);
+        AssertEx.Equal(recordedAsset, state.Asset);
+        AssertEx.Equal(recordedSha, state.Sha256);
+    }
+
     private static byte[] BuildExecutableTarGz()
     {
         using var raw = new MemoryStream();
@@ -350,6 +480,25 @@ public sealed class BinaryManagerInstallTagTests
         public Task<LlamaCppReleaseResult> ResolveAssetAsync(string tag, OSPlatform os, Architecture arch, GpuVariant variant, CancellationToken ct)
         {
             return Task.FromResult(LlamaCppReleaseResult.Offline());
+        }
+    }
+
+    /// <summary>Catalog that live-resolves the pinned floor tag (tier 1) so the resolve lands on the pin with a live result.</summary>
+    private sealed class ResolvesPinnedFloorCatalog : ILlamaCppReleaseCatalog
+    {
+        public Task<LlamaCppReleaseResult> ResolveRecommendedAsync(string recommendedTag, CancellationToken ct)
+        {
+            return Task.FromResult(LlamaCppReleaseResult.ForTag(LlamaCppReleasePins.PinnedTag));
+        }
+
+        public Task<LlamaCppReleaseResult> ResolveUpstreamLatestAsync(CancellationToken ct)
+        {
+            return Task.FromResult(LlamaCppReleaseResult.Offline());
+        }
+
+        public Task<LlamaCppReleaseResult> ResolveAssetAsync(string tag, OSPlatform os, Architecture arch, GpuVariant variant, CancellationToken ct)
+        {
+            return Task.FromResult(LlamaCppReleaseResult.ForTag(LlamaCppReleasePins.PinnedTag));
         }
     }
 

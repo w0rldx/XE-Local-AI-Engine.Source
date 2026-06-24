@@ -4,12 +4,11 @@ import {
 	ensureLlamaCppBinaryMutation,
 	getHfTokenStatusOptions,
 	getLlamaCppRuntimeOptions,
-	getLlamaCppVersionOptions,
 	setHfTokenMutation,
 	updateLlamaCppRuntimeMutation,
 } from "@/core/api/generated/@tanstack/react-query.gen";
 import { withResponseValidation } from "@/core/api/ResponseValidation";
-import { toLlamaCppRuntimeStatus, toLlamaCppVersion } from "@/features/node-settings/models/LocalRuntimeMappers";
+import { toLlamaCppRuntimeStatus } from "@/features/node-settings/models/LocalRuntimeMappers";
 import type { LlamaCppVariant } from "@/features/node-settings/models/LocalRuntimeModels";
 
 // Server state for the local-runtime cards on the Node Settings page (relocated from the model-fit advisor — they
@@ -22,7 +21,6 @@ import type { LlamaCppVariant } from "@/features/node-settings/models/LocalRunti
 // `_id` partial object matches every cached variant of that endpoint. Centralized here so the literal `_id` key —
 // which trips biome's naming-convention rule — is constructed in exactly one place.
 const localRuntimeQueryIds = {
-	llamaCppVersion: "getLlamaCppVersion",
 	llamaCppRuntime: "getLlamaCppRuntime",
 	hfTokenStatus: "getHfTokenStatus",
 } as const;
@@ -37,20 +35,8 @@ function invalidate(queryClient: ReturnType<typeof useQueryClient>, operationId:
 	return queryClient.invalidateQueries({ queryKey: localRuntimeInvalidationKey(operationId) });
 }
 
-// Resolved llama.cpp binary (version / variant / pinned-fallback). DISABLED by default: the backend's GET handler may
-// trigger the first multi-hundred-MB prebuilt download as a side effect, so this read must NOT auto-run on page mount.
-// The page passes `enabled:true` only after the operator explicitly clicks "Check version" so the (possibly
-// download-triggering) probe is operator-initiated, never a mount side effect.
-export function useLlamaCppVersion(enabled = false) {
-	return useQuery({
-		...withResponseValidation(getLlamaCppVersionOptions()),
-		select: toLlamaCppVersion,
-		enabled,
-	});
-}
-
-// Ensures (selects/downloads) a llama.cpp binary variant. Invalidates the version query so the panel reflects the
-// newly active binary.
+// Ensures (selects/downloads) a llama.cpp binary variant. Invalidates the runtime-status query so the merged card
+// reflects the newly active binary's installed tag + variant (the backend records the resolved binary on ensure).
 export function useEnsureLlamaCppBinary() {
 	const queryClient = useQueryClient();
 
@@ -59,19 +45,37 @@ export function useEnsureLlamaCppBinary() {
 			const options = withResponseValidation(ensureLlamaCppBinaryMutation());
 			return await options.mutationFn?.({ body: { variant } }, undefined as never);
 		},
-		onSuccess: () => invalidate(queryClient, localRuntimeQueryIds.llamaCppVersion),
+		onSuccess: () => invalidate(queryClient, localRuntimeQueryIds.llamaCppRuntime),
 	});
 }
 
-// Read-only llama.cpp runtime status (installed tag/variant + recommended tag + update-available flag). Unlike
-// `useLlamaCppVersion` this GET does NOT trigger a binary download, so it is safe to auto-run on mount — the page and
-// the global banner both subscribe to it. The mapper coalesces the optional generated fields into the domain shape.
+// Read-only llama.cpp runtime status (installed tag/variant + recommended tag + update-available flag). This GET does
+// NOT trigger a binary download, so it is safe to auto-run on mount — the page and the global banner both subscribe to
+// it. The mount read is cheap (no `refresh`): it returns the cached recommended/upstream snapshot. A manual recheck is
+// driven separately by `useRefreshLlamaCppRuntime`, which hits `?refresh=true` and seeds this query's cache so the
+// subscribed panel re-renders. The mapper coalesces the optional generated fields into the domain shape.
 export function useLlamaCppRuntimeStatus(enabled = true) {
 	return useQuery({
 		...withResponseValidation(getLlamaCppRuntimeOptions()),
 		select: toLlamaCppRuntimeStatus,
 		enabled,
 	});
+}
+
+// Manual recheck of the llama.cpp runtime status. The mount query (`useLlamaCppRuntimeStatus`) intentionally omits
+// `refresh` so the page load stays cheap; this hook fetches the `?refresh=true` variant (which re-resolves recommended
+// + upstream-latest against the GitHub release API, behind the backend's 60s rate-limit guard) and writes the fresh
+// result into the mount query's cache so every subscriber reflects it without a second mount-key network read.
+export function useRefreshLlamaCppRuntime() {
+	const queryClient = useQueryClient();
+
+	return async (): Promise<void> => {
+		const refreshOptions = withResponseValidation(getLlamaCppRuntimeOptions({ query: { refresh: true } }));
+		const fresh = await queryClient.fetchQuery(refreshOptions);
+		// Seed the mount-key cache (no `query`) so the panel + banner — which subscribe to the cheap mount read — update
+		// in place. The mount query key is the no-param variant; the refresh fetch lives under a distinct key.
+		queryClient.setQueryData(getLlamaCppRuntimeOptions().queryKey, fresh);
+	};
 }
 
 // Installs/updates the llama.cpp runtime to the chosen tag (recommended by default; upstream-latest only under
@@ -84,10 +88,7 @@ export function useUpdateLlamaCppRuntime() {
 	return useMutation({
 		mutationFn: async (variables: { tag: string; variant?: LlamaCppVariant }) => {
 			const options = withResponseValidation(updateLlamaCppRuntimeMutation());
-			return await options.mutationFn?.(
-				{ body: { tag: variables.tag, variant: variables.variant ?? null } },
-				undefined as never,
-			);
+			return await options.mutationFn?.({ body: { tag: variables.tag, variant: variables.variant ?? null } }, undefined as never);
 		},
 		onSuccess: () => invalidate(queryClient, localRuntimeQueryIds.llamaCppRuntime),
 	});

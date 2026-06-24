@@ -867,14 +867,7 @@
 			},
 			"llamaCpp": {
 				"title": "llama.cpp-Laufzeit",
-				"loading": "llama.cpp-Binärdatei wird ermittelt…",
-				"error": "Die llama.cpp-Binärdatei konnte nicht ermittelt werden.",
-				"version": "Version",
-				"variant": "Variante",
 				"selectVariant": "Variante",
-				"pinned": "Gepinnter Fallback",
-				"check": "Version prüfen",
-				"idle": "Noch nicht geprüft. Beim Prüfen wird die llama.cpp-Binärdatei ermittelt und bei der ersten Verwendung ggf. heruntergeladen.",
 				"ensure": "Bereitstellen / auswählen",
 				"ensured": "llama.cpp-Binärdatei bereit.",
 				"ensureError": "Die llama.cpp-Binärdatei konnte nicht bereitgestellt werden.",
@@ -884,7 +877,6 @@
 					"vulkan": "Vulkan"
 				},
 				"updater": {
-					"title": "llama.cpp runtime updates",
 					"refresh": "Check for updates",
 					"loading": "Resolving runtime status…",
 					"statusError": "Could not resolve the llama.cpp runtime status.",
@@ -895,6 +887,8 @@
 					"offline": "Offline — using the cached / pinned runtime. Update checks are unavailable until the GitHub release API is reachable.",
 					"updateAvailable": "Update available",
 					"upToDate": "Up to date",
+					"runningNotice": "{{count}} llama.cpp-Modell(e) aktiv — werfen Sie diese aus, bevor Sie die Laufzeit aktualisieren.",
+					"openLoadedModels": "Geladene Modelle öffnen",
 					"update": "Install recommended ({{tag}})",
 					"installUpstream": "Install upstream ({{tag}})",
 					"toastTitle": "Updating llama.cpp runtime",

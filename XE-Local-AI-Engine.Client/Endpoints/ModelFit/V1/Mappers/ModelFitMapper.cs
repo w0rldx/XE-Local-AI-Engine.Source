@@ -184,7 +184,8 @@ internal static class ModelFitMapper
     /// </summary>
     public static LlamaCppRuntimeStatusResponse ToRuntimeStatusResponse(this LlamaCppUpdateSnapshot snapshot,
         InstalledRuntimeState? installed,
-        string recommendedTag)
+        string recommendedTag,
+        int runningProcessCount)
     {
         ArgumentNullException.ThrowIfNull(snapshot);
         ArgumentException.ThrowIfNullOrWhiteSpace(recommendedTag);
@@ -195,7 +196,8 @@ internal static class ModelFitMapper
             RecommendedTag = recommendedTag,
             UpstreamLatestTag = snapshot.UpstreamLatestTag,
             UpdateAvailable = snapshot.UpdateAvailable,
-            IsOffline = snapshot.IsOffline
+            IsOffline = snapshot.IsOffline,
+            RunningProcessCount = runningProcessCount
         };
     }
 

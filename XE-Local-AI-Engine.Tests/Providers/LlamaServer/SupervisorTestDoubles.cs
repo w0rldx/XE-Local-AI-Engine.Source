@@ -150,6 +150,42 @@ internal sealed class FakeVariantSelector(GpuVariant variant = GpuVariant.Cpu) :
 }
 
 /// <summary>
+///     Supervisor fake whose <see cref="CheckHealthAsync" /> returns a configurable health list so the runtime-status
+///     running-count surface and the pre-update 409 safety gate can be exercised deterministically without spawning any
+///     real <c>llama-server</c>. The ensure/evict surface is unused by those tests and is a no-op.
+/// </summary>
+internal sealed class FakeProcessSupervisor(params LlamaServerProcessHealth[] running) : ILlamaServerProcessSupervisor
+{
+    private readonly IReadOnlyList<LlamaServerProcessHealth> _running = running ?? [];
+
+    public Task<LlamaServerEndpoint> EnsureRunningAsync(string modelName, ModelRole role, CancellationToken ct)
+    {
+        throw new NotSupportedException("FakeProcessSupervisor does not ensure-run.");
+    }
+
+    public Task EvictAsync(string modelName, ModelRole role, CancellationToken ct)
+    {
+        return Task.CompletedTask;
+    }
+
+    public Task<IReadOnlyList<LlamaServerProcessHealth>> CheckHealthAsync(CancellationToken ct)
+    {
+        return Task.FromResult(_running);
+    }
+
+    public int CountRunningProcesses()
+    {
+        return _running.Count;
+    }
+
+    /// <summary>One responsive chat process health entry — a convenience for "a model is running" gate tests.</summary>
+    public static LlamaServerProcessHealth RunningChat(string modelName = "demo-model")
+    {
+        return new LlamaServerProcessHealth(modelName, ModelRole.Chat, IsResponsive: true, Detail: "running");
+    }
+}
+
+/// <summary>
 ///     GGUF store fake: resolves a model name to a fixed path (null means "not installed") and reports an optional
 ///     fixed installed-model list. The download/delete surface is not exercised by the supervisor/provider tests, so
 ///     <see cref="EnsureModelAsync" /> throws and delete/exists are trivial.

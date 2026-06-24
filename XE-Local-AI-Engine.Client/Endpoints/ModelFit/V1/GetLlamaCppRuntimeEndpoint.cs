@@ -22,7 +22,8 @@ public sealed class GetLlamaCppRuntimeEndpoint(
     ILlamaCppUpdateState updateState,
     IInstalledRuntimeStore installedRuntimeStore,
     ILlamaCppReleaseCatalog releaseCatalog,
-    INodeRuntimeSettings nodeRuntimeSettings) : EndpointWithoutRequest<LlamaCppRuntimeStatusResponse>
+    INodeRuntimeSettings nodeRuntimeSettings,
+    ILlamaServerProcessSupervisor processSupervisor) : Endpoint<GetLlamaCppRuntimeRequest, LlamaCppRuntimeStatusResponse>
 {
     // Minimum spacing between live catalog refreshes. The unauthenticated GitHub API is 60/hr per IP; a refresh hits it
     // twice (recommended + upstream-latest), so a snapshot younger than this is served from cache even on ?refresh=true.
@@ -30,6 +31,7 @@ public sealed class GetLlamaCppRuntimeEndpoint(
 
     private readonly IInstalledRuntimeStore _installedRuntimeStore = installedRuntimeStore ?? throw new ArgumentNullException(nameof(installedRuntimeStore));
     private readonly INodeRuntimeSettings _nodeRuntimeSettings = nodeRuntimeSettings ?? throw new ArgumentNullException(nameof(nodeRuntimeSettings));
+    private readonly ILlamaServerProcessSupervisor _processSupervisor = processSupervisor ?? throw new ArgumentNullException(nameof(processSupervisor));
     private readonly ILlamaCppReleaseCatalog _releaseCatalog = releaseCatalog ?? throw new ArgumentNullException(nameof(releaseCatalog));
     private readonly ILlamaCppUpdateState _updateState = updateState ?? throw new ArgumentNullException(nameof(updateState));
 
@@ -39,9 +41,9 @@ public sealed class GetLlamaCppRuntimeEndpoint(
         Policies(NodeAuthorizationPolicies.Operator);
     }
 
-    public override async Task HandleAsync(CancellationToken ct)
+    public override async Task HandleAsync(GetLlamaCppRuntimeRequest req, CancellationToken ct)
     {
-        var refresh = string.Equals(Query<string>("refresh", isRequired: false), "true", StringComparison.OrdinalIgnoreCase);
+        var refresh = req.Refresh ?? false;
 
         var recommendedTag = await _nodeRuntimeSettings.GetRecommendedLlamaCppTagAsync(ct).ConfigureAwait(false);
         var installed = await _installedRuntimeStore.ReadAsync(ct).ConfigureAwait(false);
@@ -56,7 +58,12 @@ public sealed class GetLlamaCppRuntimeEndpoint(
             ? await ComputeFreshSnapshotAsync(recommendedTag, installed?.Tag, ct).ConfigureAwait(false)
             : current;
 
-        await Send.OkAsync(snapshot.ToRuntimeStatusResponse(installed, recommendedTag), ct).ConfigureAwait(false);
+        // Source the running-process count from the supervisor (the source of truth for llama.cpp binaries — Ollama is
+        // an opt-in external provider and is never represented here). This is the cheap in-memory count, NOT a per-process
+        // health probe: this GET is a hot path (page mount + the global update banner poll), so no live HTTP probe runs.
+        var runningProcessCount = _processSupervisor.CountRunningProcesses();
+
+        await Send.OkAsync(snapshot.ToRuntimeStatusResponse(installed, recommendedTag, runningProcessCount), ct).ConfigureAwait(false);
     }
 
     // A snapshot that was never computed (null) or is older than the minimum interval may be refreshed against the live

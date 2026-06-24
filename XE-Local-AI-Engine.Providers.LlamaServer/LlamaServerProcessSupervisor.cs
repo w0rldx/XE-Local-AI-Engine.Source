@@ -182,6 +182,23 @@ public sealed class LlamaServerProcessSupervisor : ILlamaServerProcessSupervisor
         return CheckHealthCoreAsync(snapshot, ct);
     }
 
+    /// <inheritdoc />
+    public int CountRunningProcesses()
+    {
+        // Hot-path count: a synchronous in-memory read of the process table with NO health/HTTP probe. Only handles that
+        // have not exited count; the idle reaper removes dead entries, but a just-crashed handle may linger until then.
+        var count = 0;
+        foreach (var (_, running) in _processes)
+        {
+            if (!running.Handle.HasExited)
+            {
+                count++;
+            }
+        }
+
+        return count;
+    }
+
     private async Task<IReadOnlyList<LlamaServerProcessHealth>> CheckHealthCoreAsync(KeyValuePair<ProcessKey, RunningProcess>[] snapshot,
         CancellationToken ct)
     {
