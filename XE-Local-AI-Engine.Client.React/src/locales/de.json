@@ -2392,6 +2392,49 @@
 			"mcpServer": "MCP · {{server}}"
 		}
 	},
+	"onboarding": {
+		"welcome": {
+			"title": "Willkommen — los geht's zu deiner ersten Antwort",
+			"body": "Dieser Knoten hat noch kein Chat-Modell und kann daher erst antworten, wenn du eines installierst. Mach eine kurze geführte Tour: Installiere ein empfohlenes Chat-Modell, lege es als Standard fest und sende deine erste Nachricht. Du kannst jederzeit abbrechen.",
+			"start": "Tour starten",
+			"skip": "Überspringen"
+		},
+		"restart": "Tutorial neu starten",
+		"steps": {
+			"navModels": {
+				"title": "Hier findest du deine Modelle",
+				"content": "Öffne den Bereich Modelle. Hier entdeckst, installierst und verwaltest du die lokalen Modelle, die den Chat antreiben."
+			},
+			"recommendationInstall": {
+				"title": "Ein empfohlenes Chat-Modell installieren",
+				"content": "Wähle ein empfohlenes Chat-Modell und starte den Download. Die Tour wartet hier, bis ein chatfähiges Modell tatsächlich installiert ist."
+			},
+			"setDefaultModel": {
+				"title": "Als Standard festlegen",
+				"content": "Lege dein installiertes Chat-Modell als Standard fest, damit neue Unterhaltungen es automatisch verwenden. Die Tour geht weiter, sobald ein chatfähiger Standard gesetzt ist."
+			},
+			"navChat": {
+				"title": "Chat öffnen",
+				"content": "Wechsle nun in den Bereich Chat, um mit deinem Modell zu sprechen."
+			},
+			"chatInput": {
+				"title": "Schreibe deine erste Nachricht",
+				"content": "Gib ein, was du fragen möchtest — zum Beispiel: \"Hallo, kannst du dich vorstellen?\""
+			},
+			"chatSend": {
+				"title": "Absenden",
+				"content": "Sende deine Nachricht. Das Modell beginnt, eine Antwort zu generieren."
+			},
+			"firstResponse": {
+				"title": "Deine erste Antwort",
+				"content": "Die Antwort des Assistenten erscheint hier nach und nach. Das war's — du bist startklar. Frag als Nächstes, was du möchtest."
+			}
+		},
+		"notes": {
+			"offline": "Du scheinst offline zu sein. Die Modellsuche benötigt eine Internetverbindung — du kannst die Tour überspringen und es später erneut versuchen.",
+			"emptyRecommendations": "Es wurden keine installierbaren Modelle zurückgegeben. Du kannst die Tour überspringen und die Empfehlungen erneut aufrufen, sobald Modelle verfügbar sind."
+		}
+	},
 	"errorMessages": {
 		"roleNameAlreadyExists": "Der Rollenname existiert bereits",
 		"emailAlreadyInUse": "Die Email wird bereits verwendet",

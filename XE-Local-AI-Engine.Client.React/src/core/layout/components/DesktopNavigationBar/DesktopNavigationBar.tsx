@@ -115,7 +115,12 @@ export function DesktopNavigationBar({ sideBarCollapsed, setSideBarCollapsed }: 
 		const controlClassName = `${classes["control"]}${groupActive || itemActive ? ` ${classes["control-active"]}` : ""}`;
 
 		const itemControl = (
-			<UnstyledButton onClick={handleControlClick} className={controlClassName} aria-current={itemActive ? "page" : undefined}>
+			<UnstyledButton
+				onClick={handleControlClick}
+				className={controlClassName}
+				aria-current={itemActive ? "page" : undefined}
+				data-tour={`nav-item-${item.id}`}
+			>
 				<m.div
 					className={classes["control-content"]}
 					animate={{ gap: sideBarCollapsed ? 0 : 12 }}
@@ -213,6 +218,7 @@ export function DesktopNavigationBar({ sideBarCollapsed, setSideBarCollapsed }: 
 			animate={sideBarCollapsed ? "collapsed" : "expanded"}
 			transition={MOTION_SPEC}
 			data-collapsed={sideBarCollapsed ? "true" : "false"}
+			data-tour="nav-sidebar"
 		>
 			<div className={classes["header"]}>
 				<m.div variants={logoMarkVariants} initial={false} transition={MOTION_SPEC} className={classes["logo-mark-wrapper"]}>

@@ -2392,6 +2392,49 @@
 			"mcpServer": "MCP · {{server}}"
 		}
 	},
+	"onboarding": {
+		"welcome": {
+			"title": "Welcome — let's get you to your first answer",
+			"body": "This node has no chat model yet, so it can't reply until you install one. Take a short guided tour: install a recommended chat model, make it the default, then send your first message. You can skip any time.",
+			"start": "Start tour",
+			"skip": "Skip"
+		},
+		"restart": "Restart tutorial",
+		"steps": {
+			"navModels": {
+				"title": "Find your models here",
+				"content": "Open the Models section. This is where you discover, install, and manage the local models that power chat."
+			},
+			"recommendationInstall": {
+				"title": "Install a recommended chat model",
+				"content": "Pick a recommended chat model and start its download. The tour waits here until a chat-capable model is actually installed."
+			},
+			"setDefaultModel": {
+				"title": "Make it your default",
+				"content": "Set your installed chat model as the default so new conversations use it automatically. The tour continues once a chat-capable default is set."
+			},
+			"navChat": {
+				"title": "Open Chat",
+				"content": "Now head to the Chat section to talk to your model."
+			},
+			"chatInput": {
+				"title": "Type your first message",
+				"content": "Enter anything you'd like to ask — for example, \"Hello, can you introduce yourself?\""
+			},
+			"chatSend": {
+				"title": "Send it",
+				"content": "Send your message. The model will start generating a reply."
+			},
+			"firstResponse": {
+				"title": "Your first answer",
+				"content": "The assistant's response streams in here. That's it — you're up and running. Ask anything next."
+			}
+		},
+		"notes": {
+			"offline": "You appear to be offline. Model discovery needs an internet connection — you can skip the tour and try again later.",
+			"emptyRecommendations": "No installable models were returned. You can skip the tour and revisit Recommendations once models are available."
+		}
+	},
 	"errorMessages": {
 		"roleNameAlreadyExists": "Role with name already exists",
 		"emailAlreadyInUse": "Email is already taken",

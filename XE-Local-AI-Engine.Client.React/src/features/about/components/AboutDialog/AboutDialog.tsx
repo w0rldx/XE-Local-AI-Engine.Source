@@ -1,11 +1,12 @@
-import { Anchor, Badge, Group, ScrollArea, Stack, Table, Tabs, Text, TextInput } from "@mantine/core";
-import { IconExternalLink, IconSearch } from "@tabler/icons-react";
+import { Anchor, Badge, Button, Group, ScrollArea, Stack, Table, Tabs, Text, TextInput } from "@mantine/core";
+import { IconExternalLink, IconRoute, IconSearch } from "@tabler/icons-react";
 import type { ChangeEvent } from "react";
 import { useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
 
 import { DialogShell } from "@/core/ui/components/DialogShell/DialogShell";
 import { applicationInfo, thirdPartyPackages } from "@/features/about/data/AboutData";
+import { useOnboarding } from "@/features/onboarding/context/OnboardingContext";
 
 export interface IAboutDialogProps {
 	opened: boolean;
@@ -20,6 +21,14 @@ export interface IAboutDialogProps {
 export function AboutDialog({ opened, onClose }: IAboutDialogProps) {
 	const { t } = useTranslation();
 	const [licenseFilter, setLicenseFilter] = useState("");
+	// Restart the onboarding tour on demand (plan §7.6). The control hides when no OnboardingProvider is mounted so the
+	// dialog stays usable in isolation (e.g. tests) — the tour is purely additive.
+	const onboarding = useOnboarding();
+
+	const handleRestartTutorial = () => {
+		onboarding?.start();
+		onClose();
+	};
 
 	const filteredPackages = useMemo(() => {
 		const query = licenseFilter.trim().toLowerCase();
@@ -74,6 +83,18 @@ export function AboutDialog({ opened, onClose }: IAboutDialogProps) {
 						<Text size="sm" c="dimmed">
 							{applicationInfo.copyright}
 						</Text>
+						{onboarding ? (
+							<Group>
+								<Button
+									variant="light"
+									leftSection={<IconRoute size={16} />}
+									onClick={handleRestartTutorial}
+									data-testid="about-restart-tutorial"
+								>
+									{t("onboarding.restart")}
+								</Button>
+							</Group>
+						) : null}
 					</Stack>
 				</Tabs.Panel>
 
