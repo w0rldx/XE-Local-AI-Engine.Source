@@ -209,6 +209,9 @@ import type {
 	GetToolCatalogData,
 	GetToolCatalogErrors,
 	GetToolCatalogResponses,
+	GetTutorialStateData,
+	GetTutorialStateErrors,
+	GetTutorialStateResponses,
 	HarvestGoldenConversationsData,
 	HarvestGoldenConversationsErrors,
 	HarvestGoldenConversationsResponses,
@@ -315,6 +318,9 @@ import type {
 	SaveNodeSettingsData,
 	SaveNodeSettingsErrors,
 	SaveNodeSettingsResponses,
+	SaveTutorialStateData,
+	SaveTutorialStateErrors,
+	SaveTutorialStateResponses,
 	SelectLocalModelData,
 	SelectLocalModelErrors,
 	SelectLocalModelResponses,
@@ -495,6 +501,7 @@ import {
 	zGetSkillResponse,
 	zGetToolCapableModelsResponse,
 	zGetToolCatalogResponse,
+	zGetTutorialStateResponse,
 	zHarvestGoldenConversationsPath,
 	zHarvestGoldenConversationsResponse,
 	zImportAgentTemplatesBody,
@@ -560,6 +567,8 @@ import {
 	zSaveCloudSettingsResponse,
 	zSaveNodeSettingsBody,
 	zSaveNodeSettingsResponse,
+	zSaveTutorialStateBody,
+	zSaveTutorialStateResponse,
 	zSelectLocalModelBody,
 	zSelectLocalModelResponse,
 	zSetHfTokenBody,
@@ -627,6 +636,49 @@ export type Options<
 	 */
 	meta?: Record<string, unknown>;
 };
+
+export const getTutorialState = <ThrowOnError extends boolean = false>(options?: Options<GetTutorialStateData, ThrowOnError>) =>
+	(options?.client ?? client).get<GetTutorialStateResponses, GetTutorialStateErrors, ThrowOnError>({
+		requestValidator: async (data) =>
+			await z
+				.object({
+					body: z.never().optional(),
+					path: z.never().optional(),
+					query: z.never().optional(),
+				})
+				.parseAsync(data),
+		responseType: "json",
+		responseValidator: async (data) => await zGetTutorialStateResponse.parseAsync(data),
+		security: [
+			{ scheme: "bearer", type: "http" },
+			{ scheme: "bearer", type: "http" },
+		],
+		url: "/api/local/v1/tutorial-state",
+		...options,
+	});
+
+export const saveTutorialState = <ThrowOnError extends boolean = false>(options: Options<SaveTutorialStateData, ThrowOnError>) =>
+	(options.client ?? client).put<SaveTutorialStateResponses, SaveTutorialStateErrors, ThrowOnError>({
+		requestValidator: async (data) =>
+			await z
+				.object({
+					body: zSaveTutorialStateBody,
+					path: z.never().optional(),
+					query: z.never().optional(),
+				})
+				.parseAsync(data),
+		responseValidator: async (data) => await zSaveTutorialStateResponse.parseAsync(data),
+		security: [
+			{ scheme: "bearer", type: "http" },
+			{ scheme: "bearer", type: "http" },
+		],
+		url: "/api/local/v1/tutorial-state",
+		...options,
+		headers: {
+			"Content-Type": "application/json",
+			...options.headers,
+		},
+	});
 
 export const listSkills = <ThrowOnError extends boolean = false>(options?: Options<ListSkillsData, ThrowOnError>) =>
 	(options?.client ?? client).get<ListSkillsResponses, ListSkillsErrors, ThrowOnError>({

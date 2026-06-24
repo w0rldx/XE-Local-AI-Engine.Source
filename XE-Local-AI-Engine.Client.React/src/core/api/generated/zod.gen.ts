@@ -2,6 +2,21 @@
 
 import * as z from "zod";
 
+export const zXeLocalAiEngineClientEndpointsTutorialStateV1TutorialStateEntryResponse = z.object({
+	key: z.string().optional(),
+	status: z.string().optional(),
+	atUtc: z.iso.datetime({ offset: true }).optional(),
+});
+
+export const zXeLocalAiEngineClientEndpointsTutorialStateV1TutorialStateResponse = z.object({
+	entries: z.array(zXeLocalAiEngineClientEndpointsTutorialStateV1TutorialStateEntryResponse).optional(),
+});
+
+export const zXeLocalAiEngineClientEndpointsTutorialStateV1SaveTutorialStateRequest = z.object({
+	key: z.string().optional(),
+	status: z.string().optional(),
+});
+
 export const zXeLocalAiEngineClientEndpointsSkillsV1SkillResponse = z.object({
 	id: z.guid().optional(),
 	name: z.string().optional(),
@@ -2040,6 +2055,18 @@ export const zXeLocalAiEngineClientEndpointsAgentsV1UpdateSuggestedPlaybookActio
 		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" })
 		.optional(),
 });
+
+/**
+ * Success
+ */
+export const zGetTutorialStateResponse = zXeLocalAiEngineClientEndpointsTutorialStateV1TutorialStateResponse;
+
+export const zSaveTutorialStateBody = zXeLocalAiEngineClientEndpointsTutorialStateV1SaveTutorialStateRequest;
+
+/**
+ * No Content
+ */
+export const zSaveTutorialStateResponse = z.void();
 
 /**
  * Success

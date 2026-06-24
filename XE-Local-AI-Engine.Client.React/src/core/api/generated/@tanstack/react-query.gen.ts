@@ -79,6 +79,7 @@ import {
 	getSkill,
 	getToolCapableModels,
 	getToolCatalog,
+	getTutorialState,
 	harvestGoldenConversations,
 	importAgentTemplates,
 	inspectGgufRepository,
@@ -116,6 +117,7 @@ import {
 	runPlaybookActionEval,
 	saveCloudSettings,
 	saveNodeSettings,
+	saveTutorialState,
 	selectLocalModel,
 	setHfToken,
 	setMcpServerEnabled,
@@ -279,6 +281,8 @@ import type {
 	GetToolCapableModelsResponse,
 	GetToolCatalogData,
 	GetToolCatalogResponse,
+	GetTutorialStateData,
+	GetTutorialStateResponse,
 	HarvestGoldenConversationsData,
 	HarvestGoldenConversationsResponse,
 	ImportAgentTemplatesData,
@@ -358,6 +362,8 @@ import type {
 	SaveNodeSettingsData,
 	SaveNodeSettingsError,
 	SaveNodeSettingsResponse,
+	SaveTutorialStateData,
+	SaveTutorialStateResponse,
 	SelectLocalModelData,
 	SelectLocalModelError,
 	SelectLocalModelResponse,
@@ -439,6 +445,47 @@ const createQueryKey = <TOptions extends Options>(
 		params.query = options.query;
 	}
 	return [params];
+};
+
+export const getTutorialStateQueryKey = (options?: Options<GetTutorialStateData>) => createQueryKey("getTutorialState", options);
+
+export const getTutorialStateOptions = (options?: Options<GetTutorialStateData>) =>
+	queryOptions<
+		GetTutorialStateResponse,
+		AxiosError<DefaultError>,
+		GetTutorialStateResponse,
+		ReturnType<typeof getTutorialStateQueryKey>
+	>({
+		queryFn: async ({ queryKey, signal }) => {
+			const { data } = await getTutorialState({
+				...options,
+				...queryKey[0],
+				signal,
+				throwOnError: true,
+			});
+			return data;
+		},
+		queryKey: getTutorialStateQueryKey(options),
+	});
+
+export const saveTutorialStateMutation = (
+	options?: Partial<Options<SaveTutorialStateData>>,
+): UseMutationOptions<SaveTutorialStateResponse, AxiosError<DefaultError>, Options<SaveTutorialStateData>> => {
+	const mutationOptions: UseMutationOptions<
+		SaveTutorialStateResponse,
+		AxiosError<DefaultError>,
+		Options<SaveTutorialStateData>
+	> = {
+		mutationFn: async (fnOptions) => {
+			const { data } = await saveTutorialState({
+				...options,
+				...fnOptions,
+				throwOnError: true,
+			});
+			return data;
+		},
+	};
+	return mutationOptions;
 };
 
 export const listSkillsQueryKey = (options?: Options<ListSkillsData>) => createQueryKey("listSkills", options);
