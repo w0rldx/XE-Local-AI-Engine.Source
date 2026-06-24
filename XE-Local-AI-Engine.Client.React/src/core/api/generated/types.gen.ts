@@ -521,6 +521,7 @@ export type XeLocalAiEngineClientEndpointsModelFitV1LlamaCppRuntimeStatusRespons
 	upstreamLatestTag?: string | null;
 	updateAvailable?: boolean;
 	isOffline?: boolean;
+	runningProcessCount?: number;
 };
 
 export type XeLocalAiEngineClientEndpointsModelFitV1LlamaCppInstalledRuntimeResponse = {
@@ -528,6 +529,10 @@ export type XeLocalAiEngineClientEndpointsModelFitV1LlamaCppInstalledRuntimeResp
 	variant?: string;
 	asset?: string;
 	installedAtUtc?: number;
+};
+
+export type XeLocalAiEngineClientEndpointsModelFitV1GetLlamaCppRuntimeRequest = {
+	[key: string]: never;
 };
 
 export type XeLocalAiEngineClientEndpointsModelFitV1InspectGgufRepositoryResponse = {
@@ -2464,33 +2469,6 @@ export type EjectRunningModelResponses = {
 
 export type EjectRunningModelResponse = EjectRunningModelResponses[keyof EjectRunningModelResponses];
 
-export type GetLlamaCppVersionData = {
-	body?: never;
-	path?: never;
-	query?: never;
-	url: "/api/local/v1/model-fit/llamacpp/version";
-};
-
-export type GetLlamaCppVersionErrors = {
-	/**
-	 * Unauthorized
-	 */
-	401: unknown;
-	/**
-	 * Forbidden
-	 */
-	403: unknown;
-};
-
-export type GetLlamaCppVersionResponses = {
-	/**
-	 * Success
-	 */
-	200: XeLocalAiEngineClientEndpointsModelFitV1LlamaCppVersionResponse;
-};
-
-export type GetLlamaCppVersionResponse = GetLlamaCppVersionResponses[keyof GetLlamaCppVersionResponses];
-
 export type EnsureLlamaCppBinaryData = {
 	body: XeLocalAiEngineClientEndpointsModelFitV1EnsureLlamaCppBinaryRequest;
 	path?: never;
@@ -2633,7 +2611,9 @@ export type GetLatestRecommendationsResponse = GetLatestRecommendationsResponses
 export type GetLlamaCppRuntimeData = {
 	body?: never;
 	path?: never;
-	query?: never;
+	query?: {
+		refresh?: boolean | null;
+	};
 	url: "/api/local/v1/model-fit/llamacpp/runtime";
 };
 

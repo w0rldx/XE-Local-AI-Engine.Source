@@ -167,9 +167,6 @@ import type {
 	GetLlamaCppRuntimeData,
 	GetLlamaCppRuntimeErrors,
 	GetLlamaCppRuntimeResponses,
-	GetLlamaCppVersionData,
-	GetLlamaCppVersionErrors,
-	GetLlamaCppVersionResponses,
 	GetLocalModelDetailsData,
 	GetLocalModelDetailsErrors,
 	GetLocalModelDetailsResponses,
@@ -477,8 +474,8 @@ import {
 	zGetInvocationMonitorResponse,
 	zGetLatestRecommendationsQuery,
 	zGetLatestRecommendationsResponse,
+	zGetLlamaCppRuntimeQuery,
 	zGetLlamaCppRuntimeResponse,
-	zGetLlamaCppVersionResponse,
 	zGetLocalModelDetailsPath,
 	zGetLocalModelDetailsResponse,
 	zGetMcpServerPath,
@@ -1438,28 +1435,6 @@ export const ejectRunningModel = <ThrowOnError extends boolean = false>(options:
 		},
 	});
 
-export const getLlamaCppVersion = <ThrowOnError extends boolean = false>(
-	options?: Options<GetLlamaCppVersionData, ThrowOnError>,
-) =>
-	(options?.client ?? client).get<GetLlamaCppVersionResponses, GetLlamaCppVersionErrors, ThrowOnError>({
-		requestValidator: async (data) =>
-			await z
-				.object({
-					body: z.never().optional(),
-					path: z.never().optional(),
-					query: z.never().optional(),
-				})
-				.parseAsync(data),
-		responseType: "json",
-		responseValidator: async (data) => await zGetLlamaCppVersionResponse.parseAsync(data),
-		security: [
-			{ scheme: "bearer", type: "http" },
-			{ scheme: "bearer", type: "http" },
-		],
-		url: "/api/local/v1/model-fit/llamacpp/version",
-		...options,
-	});
-
 export const ensureLlamaCppBinary = <ThrowOnError extends boolean = false>(
 	options: Options<EnsureLlamaCppBinaryData, ThrowOnError>,
 ) =>
@@ -1583,7 +1558,7 @@ export const getLlamaCppRuntime = <ThrowOnError extends boolean = false>(
 				.object({
 					body: z.never().optional(),
 					path: z.never().optional(),
-					query: z.never().optional(),
+					query: zGetLlamaCppRuntimeQuery.optional(),
 				})
 				.parseAsync(data),
 		responseType: "json",

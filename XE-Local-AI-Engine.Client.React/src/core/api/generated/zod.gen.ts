@@ -883,7 +883,14 @@ export const zXeLocalAiEngineClientEndpointsModelFitV1LlamaCppRuntimeStatusRespo
 	upstreamLatestTag: z.string().nullish(),
 	updateAvailable: z.boolean().optional(),
 	isOffline: z.boolean().optional(),
+	runningProcessCount: z
+		.int()
+		.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })
+		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" })
+		.optional(),
 });
+
+export const zXeLocalAiEngineClientEndpointsModelFitV1GetLlamaCppRuntimeRequest = z.record(z.string(), z.never());
 
 export const zXeLocalAiEngineClientEndpointsModelFitV1GgufRepositoryFileResponse = z.object({
 	fileName: z.string().optional(),
@@ -2357,11 +2364,6 @@ export const zEjectRunningModelBody = zXeLocalAiEngineClientEndpointsModelFitV1E
  */
 export const zEjectRunningModelResponse = zXeLocalAiEngineClientEndpointsModelFitV1EjectRunningModelResponse;
 
-/**
- * Success
- */
-export const zGetLlamaCppVersionResponse = zXeLocalAiEngineClientEndpointsModelFitV1LlamaCppVersionResponse;
-
 export const zEnsureLlamaCppBinaryBody = zXeLocalAiEngineClientEndpointsModelFitV1EnsureLlamaCppBinaryRequest;
 
 /**
@@ -2398,6 +2400,10 @@ export const zGetLatestRecommendationsQuery = z.object({
  * Success
  */
 export const zGetLatestRecommendationsResponse = zXeLocalAiEngineClientEndpointsModelFitV1GetLatestRecommendationsResponse;
+
+export const zGetLlamaCppRuntimeQuery = z.object({
+	refresh: z.boolean().nullish(),
+});
 
 /**
  * Success

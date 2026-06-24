@@ -1640,38 +1640,6 @@
             "Bearer": []
           }
         ]
-      },
-      "get": {
-        "tags": [
-          "Model-Fit"
-        ],
-        "operationId": "getLlamaCppVersion",
-        "responses": {
-          "200": {
-            "description": "Success",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/XE_Local_AI_EngineClientEndpointsModelFitV1LlamaCppVersionResponse"
-                }
-              }
-            }
-          },
-          "401": {
-            "description": "Unauthorized"
-          },
-          "403": {
-            "description": "Forbidden"
-          }
-        },
-        "security": [
-          {
-            "JWTBearerAuth": []
-          },
-          {
-            "Bearer": []
-          }
-        ]
       }
     },
     "/api/local/v1/model-fit/hardware-profile": {
@@ -1847,6 +1815,16 @@
           "Model-Fit"
         ],
         "operationId": "getLlamaCppRuntime",
+        "parameters": [
+          {
+            "name": "refresh",
+            "in": "query",
+            "schema": {
+              "type": "boolean",
+              "nullable": true
+            }
+          }
+        ],
         "responses": {
           "200": {
             "description": "Success",
@@ -7312,6 +7290,10 @@
           },
           "isOffline": {
             "type": "boolean"
+          },
+          "runningProcessCount": {
+            "type": "integer",
+            "format": "int32"
           }
         }
       },
@@ -7333,6 +7315,10 @@
             "format": "int64"
           }
         }
+      },
+      "XE_Local_AI_EngineClientEndpointsModelFitV1GetLlamaCppRuntimeRequest": {
+        "type": "object",
+        "additionalProperties": false
       },
       "XE_Local_AI_EngineClientEndpointsModelFitV1InspectGgufRepositoryResponse": {
         "type": "object",

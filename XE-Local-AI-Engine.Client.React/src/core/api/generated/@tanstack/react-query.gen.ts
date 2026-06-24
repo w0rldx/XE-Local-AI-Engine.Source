@@ -65,7 +65,6 @@ import {
 	getInvocationMonitor,
 	getLatestRecommendations,
 	getLlamaCppRuntime,
-	getLlamaCppVersion,
 	getLocalModelDetails,
 	getMcpServer,
 	getMcpServerTools,
@@ -251,8 +250,6 @@ import type {
 	GetLatestRecommendationsResponse,
 	GetLlamaCppRuntimeData,
 	GetLlamaCppRuntimeResponse,
-	GetLlamaCppVersionData,
-	GetLlamaCppVersionResponse,
 	GetLocalModelDetailsData,
 	GetLocalModelDetailsError,
 	GetLocalModelDetailsResponse,
@@ -1159,28 +1156,6 @@ export const ejectRunningModelMutation = (
 	};
 	return mutationOptions;
 };
-
-export const getLlamaCppVersionQueryKey = (options?: Options<GetLlamaCppVersionData>) =>
-	createQueryKey("getLlamaCppVersion", options);
-
-export const getLlamaCppVersionOptions = (options?: Options<GetLlamaCppVersionData>) =>
-	queryOptions<
-		GetLlamaCppVersionResponse,
-		AxiosError<DefaultError>,
-		GetLlamaCppVersionResponse,
-		ReturnType<typeof getLlamaCppVersionQueryKey>
-	>({
-		queryFn: async ({ queryKey, signal }) => {
-			const { data } = await getLlamaCppVersion({
-				...options,
-				...queryKey[0],
-				signal,
-				throwOnError: true,
-			});
-			return data;
-		},
-		queryKey: getLlamaCppVersionQueryKey(options),
-	});
 
 export const ensureLlamaCppBinaryMutation = (
 	options?: Partial<Options<EnsureLlamaCppBinaryData>>,
