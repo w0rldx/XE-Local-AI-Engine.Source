@@ -138,9 +138,27 @@ export function OnboardingProvider({ children }: { children: ReactNode }) {
 			if (type === EVENTS.TARGET_NOT_FOUND) {
 				if (targetRetryCountRef.current < MAX_TARGET_RETRIES) {
 					targetRetryCountRef.current += 1;
+					// Showcase steps are NOT route-bound, so navigateForStep is a no-op for them — re-anchoring instead
+					// depends on the always-mounted TourShowcasePanel. Nudge Joyride to re-measure on the next frame
+					// (lets the panel finish mounting) by re-applying the current stepIndex; for route-bound steps this
+					// also re-runs the navigation. rAF avoids a synchronous re-entrant setState during the event.
 					navigateForStep(index);
-				} else {
+					requestAnimationFrame(() => setStepIndex(index));
+					return;
+				}
+				// Retries exhausted. Non-showcase (route-bound) steps finish as skipped as before.
+				if (index < FIRST_SHOWCASE_STEP_INDEX) {
 					finish("skipped");
+					return;
+				}
+				// Defensive dead-end guard: showcase steps must never silently skip. The TourShowcasePanel is always
+				// mounted so this should be unreachable, but if a showcase target still can't be found, force a real
+				// state change — advance to the next showcase step, or finish the tour if this was the last — rather
+				// than the no-op that left the screen permanently dimmed with no tooltip (the reported bug).
+				if (index >= steps.length - 1) {
+					finish("completed");
+				} else {
+					goToStep(Math.min(index + 1, steps.length - 1));
 				}
 				return;
 			}
@@ -260,7 +278,10 @@ export function OnboardingProvider({ children }: { children: ReactNode }) {
 					buttons: ["back", "skip", "primary"],
 				}}
 			/>
-			{showcaseActive ? <TourShowcasePanel /> : null}
+			{/* Always mounted so the showcase `data-tour` targets exist in the DOM whenever Joyride anchors a showcase
+			    step. Hidden + inert when not active (see TourShowcasePanel). Conditionally mounting it caused the tour to
+			    dead-end on showcase steps: Joyride dimmed the screen but could never find the (unmounted) target. */}
+			<TourShowcasePanel active={showcaseActive} />
 			<WelcomeTourDialog opened={welcomeOpen} onStart={handleWelcomeStart} onSkip={handleWelcomeSkip} />
 			{children}
 		</OnboardingContext.Provider>

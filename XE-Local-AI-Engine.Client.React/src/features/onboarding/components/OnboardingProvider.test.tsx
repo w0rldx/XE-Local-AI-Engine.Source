@@ -64,9 +64,13 @@ vi.mock("@mantine/notifications", () => ({
 	notifications: { show: vi.fn() },
 }));
 
-// Stub the showcase panel — we only care whether it mounts/unmounts, not its visual content.
+// Stub the showcase panel. It is ALWAYS mounted now (so Joyride can always anchor its targets); the `active` prop —
+// not mount/unmount — gates whether it is the live showcase overlay. We surface `active` via a data attribute so the
+// tests can assert the activeness transition rather than presence.
 vi.mock("@/features/onboarding/components/TourShowcasePanel", () => ({
-	TourShowcasePanel: () => <div data-testid="tour-showcase-panel" />,
+	TourShowcasePanel: ({ active }: { active: boolean }) => (
+		<div data-testid="tour-showcase-panel" data-active={active ? "true" : "false"} />
+	),
 }));
 
 import { ACTIONS, EVENTS, STATUS } from "react-joyride";
@@ -259,12 +263,14 @@ describe("OnboardingProvider showcase transition", () => {
 		expect(FIRST_SHOWCASE_STEP_INDEX).toBe(tourStepIds.indexOf("reasoningEffort"));
 	});
 
-	it("showcase panel is absent before the tour starts", () => {
+	it("showcase panel is mounted-but-inactive before the tour starts (so Joyride can always anchor its targets)", () => {
 		renderWithProviders(<OnboardingProvider>app</OnboardingProvider>);
-		expect(screen.queryByTestId("tour-showcase-panel")).toBeNull();
+		// Always mounted now; inactive (hidden/inert) until the tour reaches a showcase step. No jest-dom in this
+		// project, so read the data attribute directly.
+		expect(screen.getByTestId("tour-showcase-panel").getAttribute("data-active")).toBe("false");
 	});
 
-	it("showcase panel mounts when stepIndex reaches the first showcase step", () => {
+	it("showcase panel stays inactive on non-showcase steps", () => {
 		renderWithProviders(<OnboardingProvider>app</OnboardingProvider>);
 		fireEvent.click(screen.getByTestId("onboarding-welcome-start"));
 
@@ -280,11 +286,11 @@ describe("OnboardingProvider showcase transition", () => {
 		// Async steps (1,2,6) swallow Next — so we can only drive non-async steps with Next events.
 		// We need to bypass async steps in test. The cleanest approach: advance step 0 → 1 via Next;
 		// PREV back to 0; drive forward through all 11 steps using PREV=back logic is convoluted.
-		// Instead assert the panel is absent at a non-showcase step, which is the meaningful invariant.
-		expect(screen.queryByTestId("tour-showcase-panel")).toBeNull();
+		// Instead assert the panel is inactive at a non-showcase step, which is the meaningful invariant.
+		expect(screen.getByTestId("tour-showcase-panel").getAttribute("data-active")).toBe("false");
 
-		// Directly set stepIndex to FIRST_SHOWCASE_STEP_INDEX by advancing step 0 → 1 (async, no-op
-		// Next) but verify that at step 0 the panel is still absent.
+		// Advance step 0 → 1 (async, no-op Next) and verify that on the early (install) step the panel is
+		// still inactive — it is mounted throughout, but only the showcase steps make it active.
 		act(() => {
 			onEventRef.current?.({
 				type: EVENTS.STEP_AFTER,
@@ -293,8 +299,8 @@ describe("OnboardingProvider showcase transition", () => {
 				status: STATUS.RUNNING,
 			});
 		});
-		// Still on an early step (async install step) — panel must not be mounted.
-		expect(screen.queryByTestId("tour-showcase-panel")).toBeNull();
+		// Still on an early step (async install step) — panel must be inactive.
+		expect(screen.getByTestId("tour-showcase-panel").getAttribute("data-active")).toBe("false");
 	});
 
 	it("last showcase step STEP_AFTER+NEXT (real controlled-mode path) calls finish('completed')", () => {
@@ -315,7 +321,7 @@ describe("OnboardingProvider showcase transition", () => {
 		});
 
 		expect(markDoneMock).toHaveBeenCalledWith("completed");
-		// Tour must stop (run → false), which unmounts the showcase panel.
+		// Tour must stop (run → false), which deactivates the (always-mounted) showcase panel.
 		expect(joyrideProps.current?.run).toBe(false);
 	});
 
