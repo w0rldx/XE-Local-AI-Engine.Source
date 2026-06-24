@@ -129,6 +129,15 @@ internal static class AddNodeModelRuntimeExtensions
                 supervisorOptions.MaxLoadedProcesses);
         });
 
+        // The local-branch router is registered as its own singleton so its (provider, model) chat-client cache can be
+        // invalidated out-of-band (the runtime-update endpoint clears it after switching the llama.cpp variant, otherwise
+        // a cached deferred client keeps pointing at the now-gone endpoint and the next send connection-times-out). The
+        // same instance backs both the IChatClient local branch below and ILocalChatClientCacheInvalidator, so clearing
+        // the cache and serving sends operate on one cache. Disposal is idempotent, so the container disposing this
+        // singleton and RuntimeChatClient disposing its local branch is safe.
+        builder.Services.AddSingleton(sp => CreateLocalChatClient(sp, configuration));
+        builder.Services.AddSingleton<ILocalChatClientCacheInvalidator>(sp => sp.GetRequiredService<ModelRoutingLocalChatClient>());
+
         // Register a runtime-re-selecting IChatClient rather than capturing the
         // cloud-vs-local choice once at startup. The wrapper re-evaluates the active provider per send via
         // IActiveCloudChatClientFactory, so signing in/out at runtime takes effect without a node restart.
@@ -137,7 +146,7 @@ internal static class AddNodeModelRuntimeExtensions
         builder.Services.AddSingleton<IChatClient>(sp =>
         {
             var activeCloudFactory = sp.GetRequiredService<IActiveCloudChatClientFactory>();
-            return new RuntimeChatClient(activeCloudFactory, () => CreateLocalChatClient(sp, configuration));
+            return new RuntimeChatClient(activeCloudFactory, sp.GetRequiredService<ModelRoutingLocalChatClient>);
         });
 
         builder.Services.AddLocalAiAgentRuntime(builder.Configuration);
@@ -155,7 +164,7 @@ internal static class AddNodeModelRuntimeExtensions
         return builder;
     }
 
-    private static IChatClient CreateLocalChatClient(IServiceProvider serviceProvider, IConfiguration configuration)
+    private static ModelRoutingLocalChatClient CreateLocalChatClient(IServiceProvider serviceProvider, IConfiguration configuration)
     {
         var chatConnectionSettings = ResolveChatConnectionSettings(serviceProvider, configuration);
 
