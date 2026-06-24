@@ -155,7 +155,7 @@ public sealed class FakeWorkerNodeFixture : IAsyncDisposable
         return FixtureHubState.ReadAsync(_hubState.WorkerHelloReader, timeout);
     }
 
-    [SuppressMessage("Design", "CA1030:Use events where appropriate", Justification = "The plan requires this exact test fixture contract.")]
+    [SuppressMessage("Design", "CA1030:Use events where appropriate", Justification = "Test fixture trigger method; an event would not fit the deterministic drive-the-hub contract callers rely on.")]
     public Task FireConnectionDropAsync()
     {
         _hubState.AbortAllConnections();

@@ -100,7 +100,7 @@ internal static class AddNodeModelRuntimeExtensions
         // Dependency direction: the Providers.* projects reference ONLY Providers.Abstractions and must NOT depend on
         // Client.Application (where INodeRuntimeSettings lives). The provider option objects are therefore SEEDED from
         // the accessor here, at the composition root (Client.Application legitimately references both). Both options are
-        // read at host build, so an operator edit applies on the next process restart (plan §7.4). Each seeded instance
+        // read at host build, so an operator edit applies on the next process restart. Each seeded instance
         // is registered BEFORE the provider extension so its own TryAddSingleton default becomes a no-op (no
         // double-registration). The one-time blocking accessor read runs once at singleton construction — not a hot path.
         builder.Services.AddSingleton(sp => BuildSeededHuggingFaceOptions(sp, configuration));
@@ -145,8 +145,8 @@ internal static class AddNodeModelRuntimeExtensions
         // OrchestrationAgentOptions lives in AI.Agent (no reference to Client.Application), so OrchestrationAgentFactory
         // cannot inject INodeRuntimeSettings. Seed the migrated IdleTimeoutSeconds from the accessor here at the
         // composition root via a DI-resolved Configure action — it is appended after the AI.Agent Bind, so a stored
-        // value overrides the appsettings seed. The factory caches options.Value at construction (apply-after-restart,
-        // plan §7.4); the blocking accessor read runs once during options materialization, not on any hot path. The
+        // value overrides the appsettings seed. The factory caches options.Value at construction (operator edits apply
+        // on the next process restart); the blocking accessor read runs once during options materialization, not on any hot path. The
         // accessor is resolved from the real container (no second ServiceProvider build).
         builder.Services.AddOptions<OrchestrationAgentOptions>()
                .Configure<INodeRuntimeSettings>((options, runtimeSettings) =>
@@ -221,7 +221,7 @@ internal static class AddNodeModelRuntimeExtensions
 
         // Migrated knobs: the Ollama endpoint and the local-chat default model come from INodeRuntimeSettings
         // (stored > appsettings seed > hardcoded default). Read once at host build — an operator edit applies on the
-        // next process restart (plan §7.4). Ollama:ChatModel (an out-of-band runtime override, not a migrated setting)
+        // next process restart. Ollama:ChatModel (an out-of-band runtime override, not a migrated setting)
         // still takes precedence over the migrated default model when configured.
         var runtimeSettings = serviceProvider.GetRequiredService<INodeRuntimeSettings>();
         var fallbackEndpoint = runtimeSettings.GetOllamaEndpoint();
@@ -259,7 +259,7 @@ internal static class AddNodeModelRuntimeExtensions
     ///     loaded-cap consume, with the migrated cap/TTL seeded from <see cref="INodeRuntimeSettings" /> (stored &gt;
     ///     seed &gt; default). The non-migrated port-range/restart fields keep their defaults. The supervisor reads these
     ///     as plain value-object fields on its hot reaper/spawn loop, so the one-time read here keeps that loop
-    ///     allocation- and await-free; an operator cap/TTL edit applies on the next process restart (plan §7.4).
+    ///     allocation- and await-free; an operator cap/TTL edit applies on the next process restart.
     /// </summary>
     private static LlamaServerSupervisorOptions BuildSeededLlamaServerSupervisorOptions(IServiceProvider serviceProvider)
     {

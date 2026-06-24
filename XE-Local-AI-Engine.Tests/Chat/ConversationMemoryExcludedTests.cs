@@ -12,7 +12,7 @@ using XE_Local_AI_Engine.Tests.Testing;
 ///     Behavioral round-trips for the conversation <c>memory_excluded</c> (temporary-chat) flag added by the adaptive-
 ///     memory feature: a new conversation inherits its bound agent's <c>DefaultTemporaryChat</c>, and the per-conversation
 ///     flag round-trips through the raw-SQL read path. The flag suppresses post-run extraction WRITE only — these tests
-///     assert persistence/read; the write-suppression behavior lands with the Phase 3 extraction seam.
+///     assert persistence/read; the write-suppression behavior lands with the extraction seam (follow-up).
 /// </summary>
 public sealed class ConversationMemoryExcludedTests : IDisposable
 {
@@ -73,7 +73,7 @@ public sealed class ConversationMemoryExcludedTests : IDisposable
         var created = await service.CreateConversationAsync(new NodeChatCreateConversationRequest("Toggle chat", "node", CreatedAtUtc: 10)).ConfigureAwait(false);
         AssertEx.False(created.MemoryExcluded, "A fresh unbound conversation starts non-temporary.");
 
-        // The per-conversation override PATCH endpoint lands in Phase 4; here the column write is simulated directly so
+        // The per-conversation override PATCH endpoint is a follow-up; here the column write is simulated directly so
         // the read path is proven to carry the flag. The read seam is what the extraction service will consume.
         await SetMemoryExcludedAsync(provider, created.ConversationId, excluded: true).ConfigureAwait(false);
 

@@ -18,7 +18,7 @@ export interface NumericBounds {
 }
 
 // Hardcoded fallback bounds matching the backend Normalize ranges (used when the response omits a bound on an old
-// server). Sourced from the settings plan §6.1.
+// server). Mirrors the node-settings server contract.
 export const nodeSettingsFieldBounds = {
 	llamaMaxLoadedProcesses: { min: 1, max: 16 },
 	llamaIdleTimeToLiveSeconds: { min: 30, max: 86400 },

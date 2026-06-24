@@ -6,7 +6,7 @@ using XE_Local_AI_Engine.Client.Services.NodeSettings;
 
 /// <summary>
 ///     Builds a configured <see cref="INodeRuntimeSettings" /> substitute for tests of consumers that were repointed off
-///     <c>IOptions&lt;T&gt;</c> onto the accessor (the appsettings-to-node-settings migration, Lane B). Defaults mirror
+///     <c>IOptions&lt;T&gt;</c> onto the accessor (the appsettings-to-node-settings migration). Defaults mirror
 ///     the <c>StoredNodeSettings</c> seed defaults; each <c>With*</c> override sets a single migrated value so a test can
 ///     pin only the knob it asserts on.
 /// </summary>

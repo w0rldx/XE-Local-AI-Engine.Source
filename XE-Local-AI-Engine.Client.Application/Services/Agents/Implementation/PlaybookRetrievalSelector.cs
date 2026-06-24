@@ -17,8 +17,8 @@ internal static class PlaybookRetrievalSelector
     ///     <paramref name="retrievalThreshold" /> or <paramref name="retrievalQuery" /> is blank, the set is returned as-is
     ///     (static prepend, byte-identical to the pre-retrieval path) WITHOUT awaiting or invoking the ranker — so the no-op fast path
     ///     never constructs an embedding client. Otherwise the <paramref name="ranker" /> selects the top
-    ///     <paramref name="topK" />; that relevance-ordered list is then trimmed to the token budgets (adaptive memory,
-    ///     §Phase 2) — lowest-ranked items dropped first — and finally re-ordered by Priority then CreatedAtUtc to preserve
+    ///     <paramref name="topK" />; that relevance-ordered list is then trimmed to the token budgets (adaptive memory)
+    ///     — lowest-ranked items dropped first — and finally re-ordered by Priority then CreatedAtUtc to preserve
     ///     the composer's deterministic store-order contract (the composer never re-sorts). The trim engages ONLY on this
     ///     retrieval path, so the static-prepend fast path above stays byte-identical regardless of any configured budget.
     /// </summary>

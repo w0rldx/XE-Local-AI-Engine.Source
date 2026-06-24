@@ -10,7 +10,7 @@ using XE_Local_AI_Engine.Client.Services.Eval;
 using XE_Local_AI_Engine.Tests.Testing;
 
 /// <summary>
-///     Phase 4 (adaptive agent memory) endpoint contract tests:
+///     Adaptive agent memory endpoint contract tests:
 ///     <list type="bullet">
 ///         <item>the playbook list endpoint surfaces <c>memoryScope</c>/<c>source</c> and filters on <c>?scope=</c>;</item>
 ///         <item>governance still gates an <c>Extracted</c>/<c>Suggested</c> candidate (no Enabled without eval-gate + approval);</item>

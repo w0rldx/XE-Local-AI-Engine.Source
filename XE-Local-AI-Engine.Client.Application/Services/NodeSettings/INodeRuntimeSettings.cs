@@ -3,8 +3,8 @@ namespace XE_Local_AI_Engine.Client.Services.NodeSettings;
 using XE_Local_AI_Engine.Client.Models;
 
 /// <summary>
-///     The single read surface migrated consumers use for user-editable runtime knobs (§7.2 of the
-///     appsettings-to-node-settings plan). Each getter resolves the effective value with the precedence
+///     The single read surface migrated consumers use for user-editable runtime knobs (the
+///     appsettings-to-node-settings migration). Each getter resolves the effective value with the precedence
 ///     <c>stored value &gt; appsettings seed &gt; hardcoded default</c>: it reads the cached
 ///     <see cref="INodeSettingsStore" /> (a sub-millisecond hit after the first load) and falls back to the appsettings
 ///     seed captured from the bound <c>IOptions&lt;T&gt;</c>/<c>IConfiguration</c> at construction, then to a hardcoded

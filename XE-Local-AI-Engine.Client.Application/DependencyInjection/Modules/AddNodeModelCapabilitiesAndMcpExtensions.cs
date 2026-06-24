@@ -21,7 +21,7 @@ internal static class AddNodeModelCapabilitiesAndMcpExtensions
         // LocalToolOfferProvider is a singleton with a synchronous hot offer path, so its tool-capable allow-list is
         // SEEDED once here from INodeRuntimeSettings (migrated AgentHome:ToolCapableModels, stored > seed > default)
         // rather than re-read per offer. The blocking accessor read runs once at singleton construction; a runtime edit
-        // applies on the next process restart (plan §7.4).
+        // applies on the next process restart.
         builder.Services.AddSingleton<ILocalToolOfferProvider>(sp =>
         {
             var runtimeSettings = sp.GetRequiredService<INodeRuntimeSettings>();

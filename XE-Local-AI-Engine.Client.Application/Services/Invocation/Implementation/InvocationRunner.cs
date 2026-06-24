@@ -104,8 +104,8 @@ public sealed partial class InvocationRunner : IInvocationRunner
 
         // The migrated default model + the response-size / pending-tool-call caps are read once at singleton
         // construction from INodeRuntimeSettings (stored > appsettings seed > default). The caps then live as plain
-        // fields read on the hot streaming/cleanup loops, so an operator edit applies on the next process restart
-        // (plan §7.4). Ollama:ChatModel (an out-of-band runtime override, not a migrated setting) still wins over the
+        // fields read on the hot streaming/cleanup loops, so an operator edit applies on the next process restart.
+        // Ollama:ChatModel (an out-of-band runtime override, not a migrated setting) still wins over the
         // migrated default model when configured, mirroring the chat-connection fallback.
         _defaultModel = configuration.GetValue<string>("Ollama:ChatModel")
                         ?? runtimeSettings.GetDefaultModelName();

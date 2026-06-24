@@ -5,7 +5,7 @@ using XE_Local_AI_Engine.Client.Persistence;
 /// <summary>
 ///     Folds an agent's enabled playbook actions into its system prompt. The header text and bullet format live here
 ///     alone so the deferred relevance-retrieval path can reuse the composer with a filtered subset.
-///     Scope-aware (adaptive memory, §Phase 2): positive guidance (Procedural / UserPreference / Project, plus untyped
+///     Scope-aware (adaptive memory): positive guidance (Procedural / UserPreference / Project, plus untyped
 ///     legacy actions) is rendered in the "Operating Playbook" section, while <see cref="MemoryScope.Failure" /> items are
 ///     rendered in a SEPARATE, tightly-framed negative-guidance section ("avoid / what NOT to do") so the model does not
 ///     read failures as instructions to follow.

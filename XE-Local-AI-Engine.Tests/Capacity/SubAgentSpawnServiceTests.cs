@@ -15,7 +15,7 @@ using XE_Local_AI_Engine.Providers.LlamaServer;
 using XE_Local_AI_Engine.Tests.Testing;
 
 /// <summary>
-///     <see cref="SubAgentSpawnService" /> (Lane B) tests: the spawn dispatcher. An admitted local spawn builds a
+///     <see cref="SubAgentSpawnService" /> tests: the spawn dispatcher. An admitted local spawn builds a
 ///     tool-less sub-agent and returns its result while disposing the ledger reservation; a same-model verdict
 ///     serializes (no second load) with a bounded wait that rejects on timeout; an over-cap fan-out or cloud-spawn is
 ///     rejected; a reject verdict returns its sanitized reason as the result (no exception, no path/secret); and the

@@ -17,7 +17,7 @@ export const loadedModelsQueryKey: QueryKey = ["loaded-models", "running"];
 
 // Poll cadence (ms) while the page is mounted. The running set changes as the runtime loads/evicts models and as a
 // model's idle timer (expiresAtUtc) counts down, so a short interval keeps the memory view current without manual
-// refresh. 4s sits in the plan's 3–5s band — frequent enough to feel live, light enough for a local endpoint.
+// refresh. 4s — frequent enough to feel live, light enough for a local endpoint.
 const loadedModelsPollIntervalMs = 4000;
 
 /**
