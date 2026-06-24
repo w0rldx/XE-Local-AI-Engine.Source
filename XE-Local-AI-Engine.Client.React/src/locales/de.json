@@ -2428,11 +2428,52 @@
 			"firstResponse": {
 				"title": "Deine erste Antwort",
 				"content": "Die Antwort des Assistenten erscheint hier nach und nach. Das war's — du bist startklar. Frag als Nächstes, was du möchtest."
+			},
+			"reasoningEffort": {
+				"title": "Einstellbare Denktiefe",
+				"content": "Wenn du ein reasoning-fähiges Modell verwendest, erscheint hier ein Low / Medium / High-Regler. Mehr Aufwand liefert gründlichere Antworten, braucht aber etwas länger."
+			},
+			"reasoningTrace": {
+				"title": "Dem Modell beim Denken zusehen",
+				"content": "Ist ein reasoning-fähiges Modell aktiv, erscheint sein interner Denkprozess vor der Antwort in einem ausklappbaren Block – so kannst du seiner Logik folgen."
+			},
+			"toolCall": {
+				"title": "Tool-Aufrufe im Kontext",
+				"content": "Agent-fähige Modelle können Tools aufrufen (Suche, Code-Ausführung u. v. m.). Jeder Aufruf zeigt den Tool-Namen, die Argumente und das Ergebnis direkt im Gespräch."
+			},
+			"agentMode": {
+				"title": "Spezialisierte Agenten",
+				"content": "Wechsle vom Standard-Assistenten zu einem spezialisierten Agenten – jeder ist mit einem anderen System-Prompt und eigenen Fähigkeiten für bestimmte Aufgaben ausgestattet."
 			}
 		},
 		"notes": {
 			"offline": "Du scheinst offline zu sein. Die Modellsuche benötigt eine Internetverbindung — du kannst die Tour überspringen und es später erneut versuchen.",
 			"emptyRecommendations": "Es wurden keine installierbaren Modelle zurückgegeben. Du kannst die Tour überspringen und die Empfehlungen erneut aufrufen, sobald Modelle verfügbar sind."
+		},
+		"showcase": {
+			"reasoningEffort": {
+				"label": "Denktiefe",
+				"low": "Niedrig",
+				"medium": "Mittel",
+				"high": "Hoch",
+				"description": "Wenn du ein reasoning-fähiges Modell verwendest, bestimmt dieser Regler, wie intensiv es vor der Antwort nachdenkt."
+			},
+			"reasoningTrace": {
+				"label": "Denkprozess",
+				"sample": "Ich gehe das Schritt für Schritt durch. Zunächst sollte ich die Rahmenbedingungen berücksichtigen…",
+				"description": "Das interne Reasoning des Modells erscheint hier vor der endgültigen Antwort – nur bei reasoning-fähigen Modellen."
+			},
+			"toolCall": {
+				"label": "Tool-Aufruf",
+				"sample": "search_web({ query: \"neuestes llama.cpp-Release\" })\n→ Ergebnis: \"b4567 vor 2 Tagen veröffentlicht…\"",
+				"description": "Wenn ein agent-fähiges Modell ein Tool nutzt, erscheinen Aufruf und Ergebnis inline wie hier."
+			},
+			"agentMode": {
+				"label": "Agentenmodus",
+				"defaultAssistant": "Standard-Assistent",
+				"sampleAgent": "Code-Reviewer",
+				"description": "Wähle in der Chat-Toolbar einen spezialisierten Agenten aus, um Fokus und Anweisungen des Modells anzupassen."
+			}
 		}
 	},
 	"errorMessages": {

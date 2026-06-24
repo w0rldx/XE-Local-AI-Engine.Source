@@ -5,7 +5,7 @@ import { nodeRoutePaths } from "@/capabilities/NodeCapabilities";
 
 // Stable identifiers for each tour stop, used by the provider to drive route navigation + advance-on-real-state. The
 // order here IS the tour order (plan §9 happy path): point at Models → install a recommended chat model → confirm it
-// is the default → open Chat → type → send → see the first response.
+// is the default → open Chat → type → send → see the first response → showcase advanced features.
 export const tourStepIds = [
 	"navModels",
 	"recommendationInstall",
@@ -14,13 +14,24 @@ export const tourStepIds = [
 	"chatInput",
 	"chatSend",
 	"firstResponse",
+	// Showcase steps: static illustrative overlay (non-route-bound, non-async-real-state). Always shown regardless of
+	// model capabilities — they illustrate features the user may encounter, not gates on a live model capability.
+	"reasoningEffort",
+	"reasoningTrace",
+	"toolCall",
+	"agentMode",
 ] as const;
 
 export type TourStepId = (typeof tourStepIds)[number];
 
+// The index of the first showcase step. Steps at or above this index target the always-present TourShowcasePanel
+// overlay rather than a live app surface, so they require no route navigation.
+export const FIRST_SHOWCASE_STEP_INDEX = tourStepIds.indexOf("reasoningEffort");
+
 // Maps each step to the DOM selector it spotlights. Reuses the chat feature's existing `data-testid`s as-is (NOT
 // re-attributed, plan §4) and the new `data-tour` attributes added to the nav + models surfaces. Targets are
 // capability-independent (Models + Chat are always present for the default user, plan §7.4).
+// Showcase steps target sub-sections of the TourShowcasePanel overlay (always mounted while tour is on those steps).
 const stepTargets: Record<TourStepId, string> = {
 	navModels: '[data-tour="nav-item-models"]',
 	recommendationInstall: '[data-tour="recommendation-install"]',
@@ -29,6 +40,10 @@ const stepTargets: Record<TourStepId, string> = {
 	chatInput: '[data-testid="chat-input"]',
 	chatSend: '[data-testid="chat-send-button"]',
 	firstResponse: '[data-testid="chat-input-area"]',
+	reasoningEffort: '[data-tour="showcase-reasoning-effort"]',
+	reasoningTrace: '[data-tour="showcase-reasoning-trace"]',
+	toolCall: '[data-tour="showcase-tool-call"]',
+	agentMode: '[data-tour="showcase-agent-mode"]',
 };
 
 // Builds the controlled Joyride steps from i18n keys. Every title/content resolves to an `onboarding.steps.<id>.*`
@@ -51,8 +66,7 @@ export function buildMainAppTourSteps(t: TFunction, targetWaitTimeoutMs = 3000):
 			blockTargetInteraction: !allowTargetInteraction,
 			// Route-bound steps get a wait timeout so Joyride polls for the target after the route transition completes.
 			...(isRouteBound ? { targetWaitTimeout: targetWaitTimeoutMs } : {}),
-			// The first response renders inside the chat input area's surrounding region; placing the tooltip above keeps
-			// the spotlight clear of the message list. Other steps use Joyride's auto placement.
+			// firstResponse tooltip above input so it doesn't cover the message stream; showcase steps auto-place.
 			placement: id === "firstResponse" ? "top" : "auto",
 		} satisfies Step;
 	});
@@ -60,6 +74,7 @@ export function buildMainAppTourSteps(t: TFunction, targetWaitTimeoutMs = 3000):
 
 // Steps that are bound to a specific route. The provider navigates to the route (via the router singleton) before
 // advancing into these steps so it never targets an unmounted node (plan R2).
+// Showcase steps are NOT route-bound — they target the always-present TourShowcasePanel overlay.
 export const stepRoutes: Partial<Record<TourStepId, string>> = {
 	recommendationInstall: nodeRoutePaths.modelRecommendations,
 	setDefaultModel: nodeRoutePaths.models,

@@ -10,8 +10,9 @@ import type { EventData } from "react-joyride";
 import { listLocalModelsOptions } from "@/core/api/generated/@tanstack/react-query.gen";
 import { router } from "@/core/integrations/tanstack-router/Router";
 import { OnboardingContext } from "@/features/onboarding/context/OnboardingContext";
-import { buildMainAppTourSteps, stepRoutes, tourStepIds } from "@/features/onboarding/data/MainAppTourSteps";
+import { buildMainAppTourSteps, FIRST_SHOWCASE_STEP_INDEX, stepRoutes, tourStepIds } from "@/features/onboarding/data/MainAppTourSteps";
 import { useTourState } from "@/features/onboarding/hooks/useTourState";
+import { TourShowcasePanel } from "@/features/onboarding/components/TourShowcasePanel";
 import { WelcomeTourDialog } from "@/features/onboarding/components/WelcomeTourDialog";
 import {
 	hasChatCapableDefault,
@@ -151,6 +152,12 @@ export function OnboardingProvider({ children }: { children: ReactNode }) {
 				if (isAsyncStep && action !== ACTIONS.PREV) {
 					return;
 				}
+				// Forward past the last step finishes the tour. In controlled mode Joyride does not emit STATUS.FINISHED
+				// on its own, so without this the final step's primary button would clamp back onto itself and never persist.
+				if (action !== ACTIONS.PREV && index >= steps.length - 1) {
+					finish("completed");
+					return;
+				}
 				const nextIndex = action === ACTIONS.PREV ? index - 1 : index + 1;
 				goToStep(Math.max(0, Math.min(nextIndex, steps.length - 1)));
 			}
@@ -225,12 +232,17 @@ export function OnboardingProvider({ children }: { children: ReactNode }) {
 
 	// The send→response step advances when an assistant message is actually appended to the active conversation. Uses
 	// queryClient.getQueryCache().subscribe() for event-driven notification — no polling timer (plan R1).
+	// On reply: advance into the first showcase step (NOT finish) — the showcase completes the tour.
 	const hasReply = useChatReplySignal(queryClient, run && stepIndex === FIRST_RESPONSE_STEP_INDEX);
 	useEffect(() => {
 		if (run && stepIndex === FIRST_RESPONSE_STEP_INDEX && hasReply) {
-			finish("completed");
+			goToStep(FIRST_SHOWCASE_STEP_INDEX);
 		}
-	}, [run, stepIndex, hasReply, finish]);
+	}, [run, stepIndex, hasReply, goToStep]);
+
+	// The showcase panel is a fixed centered overlay that exists ONLY while the tour is on a showcase step so it never
+	// blocks the app at any other time (additive/non-blocking invariant, plan §3).
+	const showcaseActive = run && stepIndex >= FIRST_SHOWCASE_STEP_INDEX;
 
 	const contextValue = useMemo(() => ({ start }), [start]);
 
@@ -248,6 +260,7 @@ export function OnboardingProvider({ children }: { children: ReactNode }) {
 					buttons: ["back", "skip", "primary"],
 				}}
 			/>
+			{showcaseActive ? <TourShowcasePanel /> : null}
 			<WelcomeTourDialog opened={welcomeOpen} onStart={handleWelcomeStart} onSkip={handleWelcomeSkip} />
 			{children}
 		</OnboardingContext.Provider>
