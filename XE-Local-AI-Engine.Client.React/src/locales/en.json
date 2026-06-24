@@ -2470,6 +2470,36 @@
 			}
 		}
 	},
+	"auth": {
+		"login": {
+			"title": "Sign in",
+			"subtitle": "Enter the local node admin password.",
+			"passwordLabel": "Password",
+			"signInButton": "Sign in",
+			"errorIncorrectPassword": "Incorrect password. Please try again.",
+			"errorNodeUnreachable": "Can't reach the node. Check that it's running and try again.",
+			"errorGeneric": "Sign in failed. Please try again."
+		},
+		"setup": {
+			"title": "Set up local admin",
+			"subtitle": "Create the one-time admin account for this node.",
+			"emailLabel": "Email",
+			"passwordLabel": "Password",
+			"confirmPasswordLabel": "Confirm password",
+			"createButton": "Create admin",
+			"errorNodeUnreachable": "Can't reach the node. Check that it's running and try again.",
+			"errorGeneric": "Setup failed. Check the inputs and try again.",
+			"validationEmail": "Enter a valid email address.",
+			"validationPasswordRequired": "Password is required.",
+			"validationPasswordWeak": "Password needs {{unmet}}.",
+			"validationPasswordsNoMatch": "Passwords do not match.",
+			"passwordRuleLength": "At least 12 characters",
+			"passwordRuleUppercase": "At least one uppercase letter (A–Z)",
+			"passwordRuleLowercase": "At least one lowercase letter (a–z)",
+			"passwordRuleDigit": "At least one digit (0–9)",
+			"passwordRuleSymbol": "At least one symbol (e.g. !@#$%)"
+		}
+	},
 	"errorMessages": {
 		"roleNameAlreadyExists": "Role with name already exists",
 		"emailAlreadyInUse": "Email is already taken",
