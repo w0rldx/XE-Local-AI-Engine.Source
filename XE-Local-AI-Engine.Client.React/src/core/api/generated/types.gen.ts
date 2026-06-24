@@ -466,6 +466,22 @@ export type XeLocalAiEngineClientEndpointsModelFitV1EnsureLlamaCppBinaryRequest 
 	variant?: string;
 };
 
+export type XeLocalAiEngineClientEndpointsModelFitV1ListGgufDownloadsResponse = {
+	items?: Array<XeLocalAiEngineClientEndpointsModelFitV1GgufDownloadStatusResponse>;
+};
+
+export type XeLocalAiEngineClientEndpointsModelFitV1GgufDownloadStatusResponse = {
+	modelName?: string;
+	phase?: string;
+	completedBytes?: number | null;
+	totalBytes?: number | null;
+	sanitizedError?: string | null;
+};
+
+export type XeLocalAiEngineClientEndpointsModelFitV1GetGgufDownloadStatusRequest = {
+	[key: string]: never;
+};
+
 export type XeLocalAiEngineClientEndpointsModelFitV1HardwareProfileResponse = {
 	totalRamBytes?: number;
 	availableRamBytes?: number;
@@ -2495,6 +2511,62 @@ export type EnsureLlamaCppBinaryResponses = {
 };
 
 export type EnsureLlamaCppBinaryResponse = EnsureLlamaCppBinaryResponses[keyof EnsureLlamaCppBinaryResponses];
+
+export type GetGgufDownloadsData = {
+	body?: never;
+	path?: never;
+	query?: never;
+	url: "/api/local/v1/model-fit/gguf/downloads";
+};
+
+export type GetGgufDownloadsErrors = {
+	/**
+	 * Unauthorized
+	 */
+	401: unknown;
+	/**
+	 * Forbidden
+	 */
+	403: unknown;
+};
+
+export type GetGgufDownloadsResponses = {
+	/**
+	 * Success
+	 */
+	200: XeLocalAiEngineClientEndpointsModelFitV1ListGgufDownloadsResponse;
+};
+
+export type GetGgufDownloadsResponse = GetGgufDownloadsResponses[keyof GetGgufDownloadsResponses];
+
+export type GetGgufDownloadStatusData = {
+	body?: never;
+	path: {
+		modelName: string;
+	};
+	query?: never;
+	url: "/api/local/v1/model-fit/gguf/downloads/{modelName}";
+};
+
+export type GetGgufDownloadStatusErrors = {
+	/**
+	 * Unauthorized
+	 */
+	401: unknown;
+	/**
+	 * Forbidden
+	 */
+	403: unknown;
+};
+
+export type GetGgufDownloadStatusResponses = {
+	/**
+	 * Success
+	 */
+	200: XeLocalAiEngineClientEndpointsModelFitV1GgufDownloadStatusResponse;
+};
+
+export type GetGgufDownloadStatusResponse = GetGgufDownloadStatusResponses[keyof GetGgufDownloadStatusResponses];
 
 export type GetHardwareProfileData = {
 	body?: never;

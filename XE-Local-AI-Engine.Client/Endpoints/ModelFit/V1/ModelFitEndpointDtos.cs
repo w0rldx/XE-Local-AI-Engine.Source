@@ -279,6 +279,43 @@ public sealed class CancelGgufDownloadResponse
 }
 
 // ---------------------------------------------------------------------------
+// Download-status / progress-polling DTOs (IGgufDownloadCoordinator)
+// ---------------------------------------------------------------------------
+
+/// <summary>
+///     Snapshot of one tracked GGUF download returned by <c>GET model-fit/gguf/downloads</c> and
+///     <c>GET model-fit/gguf/downloads/{modelName}</c>. Carries only sanitized fields — no absolute path, URL, or token.
+/// </summary>
+public sealed class GgufDownloadStatusResponse
+{
+    public required string ModelName { get; init; }
+
+    /// <summary>Phase string: <c>Running</c>, <c>Completed</c>, <c>Cancelled</c>, or <c>Failed</c>.</summary>
+    public required string Phase { get; init; }
+
+    /// <summary>Bytes received so far; <c>null</c> until the first progress event.</summary>
+    public long? CompletedBytes { get; init; }
+
+    /// <summary>Total content length in bytes; <c>null</c> when the server did not send Content-Length.</summary>
+    public long? TotalBytes { get; init; }
+
+    /// <summary>Operator-safe error reason; non-<c>null</c> only when <see cref="Phase" /> is <c>Failed</c>.</summary>
+    public string? SanitizedError { get; init; }
+}
+
+/// <summary>Response envelope for <c>GET model-fit/gguf/downloads</c>.</summary>
+public sealed class ListGgufDownloadsResponse
+{
+    public required IReadOnlyList<GgufDownloadStatusResponse> Items { get; init; }
+}
+
+/// <summary>Route-bound request for <c>GET model-fit/gguf/downloads/{modelName}</c>.</summary>
+public sealed class GetGgufDownloadStatusRequest
+{
+    public string? ModelName { get; init; }
+}
+
+// ---------------------------------------------------------------------------
 // Running-models / eject DTOs (llama-server supervisor passthrough)
 // ---------------------------------------------------------------------------
 

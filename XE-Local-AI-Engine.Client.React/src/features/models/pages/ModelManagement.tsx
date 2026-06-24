@@ -29,6 +29,7 @@ import { useModelPull } from "@/features/models/hooks/useModelPull";
 import { defaultGgufQuant, type GgufRepository, type GgufRepositoryFile } from "@/features/models/models/GgufModels";
 import { toLocalModelViewModel } from "@/features/models/models/LocalModelMappers";
 import {
+	useActiveGgufDownloads,
 	useBrowseGgufRepositories,
 	useCancelGgufDownload,
 	useStartGgufDownload,
@@ -61,12 +62,16 @@ export function ModelManagement() {
 	// GGUF browse + download flow (relocated from the model-fit advisor — it is a model-acquisition action). The
 	// committed browse term + the in-flight download set live in a shared store so they survive a remount AND so a
 	// download handed off from the advisor's recommendation row becomes visible + cancellable here. The open-quant-
-	// picker repo is page-local. There is no byte-level progress from the backend, so the set tracks started downloads.
+	// picker repo is page-local. useActiveGgufDownloads polls the backend for byte-level progress and reconciles
+	// the store so downloads survive navigation/refresh — the backend list is the authoritative source of truth.
 	const browseQuery = useGgufBrowseStore((state) => state.browseQuery);
 	const setBrowseQuery = useGgufBrowseStore((state) => state.actions.setBrowseQuery);
 	const inFlightDownloads = useGgufBrowseStore((state) => state.inFlightDownloads);
 	const markInFlight = useGgufBrowseStore((state) => state.actions.markInFlight);
 	const removeInFlight = useGgufBrowseStore((state) => state.actions.removeInFlight);
+	// Polls GET /downloads every second while any download is Running. Reconciles the store so entries started before
+	// a page refresh rehydrate, and terminal entries (Completed/Cancelled/Failed) are removed from the store.
+	const downloadStatuses = useActiveGgufDownloads();
 	// The repo whose quant picker dialog is open (null = closed). Selecting a browse row opens the dialog so the
 	// operator picks the exact quant (incl. Unsloth Dynamic UD- quants) instead of always pulling the default Q4_K_M.
 	const [downloadRepo, setDownloadRepo] = useState<GgufRepository | null>(null);
@@ -302,6 +307,7 @@ export function ModelManagement() {
 
 				<DownloadProgressPanel
 					inFlight={inFlightDownloads}
+					downloadStatuses={downloadStatuses}
 					onCancel={handleCancelDownload}
 					cancellingModelName={cancelGgufDownloadMutation.isPending ? (cancelGgufDownloadMutation.variables ?? null) : null}
 				/>

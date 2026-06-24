@@ -789,6 +789,28 @@ export const zXeLocalAiEngineClientEndpointsModelFitV1EnsureLlamaCppBinaryReques
 	variant: z.string().optional(),
 });
 
+export const zXeLocalAiEngineClientEndpointsModelFitV1GgufDownloadStatusResponse = z.object({
+	modelName: z.string().optional(),
+	phase: z.string().optional(),
+	completedBytes: z.coerce
+		.bigint()
+		.min(BigInt("-9223372036854775808"), { error: "Invalid value: Expected int64 to be >= -9223372036854775808" })
+		.max(BigInt("9223372036854775807"), { error: "Invalid value: Expected int64 to be <= 9223372036854775807" })
+		.nullish(),
+	totalBytes: z.coerce
+		.bigint()
+		.min(BigInt("-9223372036854775808"), { error: "Invalid value: Expected int64 to be >= -9223372036854775808" })
+		.max(BigInt("9223372036854775807"), { error: "Invalid value: Expected int64 to be <= 9223372036854775807" })
+		.nullish(),
+	sanitizedError: z.string().nullish(),
+});
+
+export const zXeLocalAiEngineClientEndpointsModelFitV1ListGgufDownloadsResponse = z.object({
+	items: z.array(zXeLocalAiEngineClientEndpointsModelFitV1GgufDownloadStatusResponse).optional(),
+});
+
+export const zXeLocalAiEngineClientEndpointsModelFitV1GetGgufDownloadStatusRequest = z.record(z.string(), z.never());
+
 export const zXeLocalAiEngineClientEndpointsModelFitV1HardwareProfileResponse = z.object({
 	totalRamBytes: z.coerce
 		.bigint()
@@ -2370,6 +2392,20 @@ export const zEnsureLlamaCppBinaryBody = zXeLocalAiEngineClientEndpointsModelFit
  * Success
  */
 export const zEnsureLlamaCppBinaryResponse = zXeLocalAiEngineClientEndpointsModelFitV1LlamaCppVersionResponse;
+
+/**
+ * Success
+ */
+export const zGetGgufDownloadsResponse = zXeLocalAiEngineClientEndpointsModelFitV1ListGgufDownloadsResponse;
+
+export const zGetGgufDownloadStatusPath = z.object({
+	modelName: z.string(),
+});
+
+/**
+ * Success
+ */
+export const zGetGgufDownloadStatusResponse = zXeLocalAiEngineClientEndpointsModelFitV1GgufDownloadStatusResponse;
 
 export const zGetHardwareProfileQuery = z.object({
 	refresh: z.boolean(),

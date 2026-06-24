@@ -71,6 +71,12 @@ vi.mock("@/core/api/generated/@tanstack/react-query.gen", () => ({
 	}),
 	startGgufDownloadMutation: () => ({ mutationFn: mutationFns.startGgufDownload }),
 	cancelGgufDownloadMutation: () => ({ mutationFn: mutationFns.cancelGgufDownload }),
+	// Active-downloads polling endpoint — returns empty list so no downloads are active in tests by default.
+	getGgufDownloadsQueryKey: () => fakeQueryKey("getGgufDownloads"),
+	getGgufDownloadsOptions: () => ({
+		queryKey: fakeQueryKey("getGgufDownloads"),
+		queryFn: async () => ({ items: [] }),
+	}),
 }));
 
 const { confirmMock } = vi.hoisted(() => ({ confirmMock: vi.fn() }));

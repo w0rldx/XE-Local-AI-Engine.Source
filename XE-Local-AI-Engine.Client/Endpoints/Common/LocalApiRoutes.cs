@@ -267,6 +267,11 @@ public static class LocalApiRoutes
         public const string Download = "model-fit/download";
         public const string DownloadCancel = "model-fit/download/cancel";
 
+        // Progress polling for in-flight and recently-finished GGUF downloads (IGgufDownloadCoordinator status registry).
+        // List returns all tracked statuses; the {modelName} variant returns one (404 when unknown).
+        public const string Downloads = "model-fit/gguf/downloads";
+        public const string DownloadStatus = "model-fit/gguf/downloads/{modelName}";
+
         // Running llama-server processes derived from the supervisor health snapshot; eject tree-kills one.
         public const string Running = "model-fit/running";
         public const string RunningEject = "model-fit/running/eject";
