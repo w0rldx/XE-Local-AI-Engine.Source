@@ -1,0 +1,277 @@
+# Agent Mode & the AI Agent Runtime
+
+> Last reviewed: 2026-06-24 · Code-grounded.
+
+Agent Mode is XE Local AI Engine's governed agentic layer. It is split across two assemblies:
+`XE-Local-AI-Engine.AI.Agent` owns the Microsoft Agent Framework (MAF) / `Microsoft.Extensions.AI`
+(MEAI) wiring — agent construction, the tool-execution pipeline, single-agent invocation, and
+multi-agent handoff orchestration — while `XE-Local-AI-Engine.Client.Application/Services/*` owns the
+*application* decisions: agent definitions, the AgentHome write-back loop, the governed Playbook
+lifecycle (manual → feedback → analysis → eval gate → monitoring/retrieval), adaptive memory, capacity
+gating, sub-agent spawn, and read-only Coder mode. The seam between them is deliberate: all
+`Microsoft.Agents.AI.Workflows` types stay confined behind interfaces so the application layer never
+references MAF workflow primitives directly.
+
+---
+
+## 1. The AI.Agent runtime (`XE-Local-AI-Engine.AI.Agent`)
+
+### 1.1 `AddLocalAiAgentRuntime` — the composition root
+
+`AgentServiceCollectionExtensions.AddLocalAiAgentRuntime` is the single registration entry point
+(`XE-Local-AI-Engine.AI.Agent/DependencyInjection/AgentServiceCollectionExtensions.cs:37`). It does
+five things, in order:
+
+1. **Binds + validates options** — `LocalChatAgentOptions`, `InvocationAgentOptions`,
+   `OrchestrationAgentOptions`, each `Bind` → `ValidateDataAnnotations` → `ValidateOnStart`, with a
+   dedicated `IValidateOptions<>` validator (`Configuration/Validation/*Validator.cs`). The root config
+   key is `"Agent"` (`AgentRuntimeOptions.Section`).
+2. **Decorates the `IChatClient` pipeline** via `DecorateChatClientPipeline` (see §1.2). The host
+   **must** register a base `IChatClient` *before* calling this method — the decorator wraps it.
+3. **Registers the three tool registries** as singletons (see §1.3):
+   `IAgentToolRegistry → LocalAgentToolRegistry`, `IClientLocalToolRegistry → ClientLocalToolRegistry`,
+   `IMcpToolRegistry → McpToolRegistry`.
+4. **Registers the agent factories** — `IInvocationAgentFactory → InvocationAgentFactory` (single
+   agent) and `IOrchestrationAgentFactory → OrchestrationAgentFactory` (multi-agent handoff).
+5. **Registers the gated runners** — `IPlaybookEvalAgentRunner → MafPlaybookEvalAgentRunner` (golden
+   eval) and `IPreviewWorkflowRunner → PreviewWorkflowRunner` (Open Canvas preview).
+
+### 1.2 The chat-client decorator pipeline
+
+`DecorateChatClientPipeline` (`AgentServiceCollectionExtensions.cs:95`) decorates the registered
+`IChatClient` so that **every** code path — local chat, platform invocations, ClientLocal tools, MCP
+tools — shares one execution pipeline:
+
+```
+base IChatClient
+   └─ ToolInvocationObservabilityChatClient   // emits tool-call lifecycle events
+        └─ UseFunctionInvocation (FICC)        // MEAI FunctionInvokingChatClient: auto-executes tools
+```
+
+`ToolInvocationObservabilityChatClient` lives at
+`XE-Local-AI-Engine.AI.Agent/Chat/ToolInvocationObservabilityChatClient.cs`. The decoration is exposed
+as a **public** method specifically so test harnesses that swap the base client for a fake (e.g.
+FakeOllama) can re-apply the full pipeline after their `RemoveAll`/`AddSingleton`.
+
+> **Seam to respect:** because the base client is already FICC-wrapped, `ChatClientAgent`'s constructor
+> detects the existing `FunctionInvokingChatClient` and registers the agent's own tools as
+> `AdditionalTools` rather than re-wrapping. This is what lets the handoff builder inject bodyless
+> `handoff_to_*` declarations that the outer FICC leaves unserviced (the workflow executor routes them).
+
+### 1.3 Tool registries — three sources, one offer
+
+All three resolve to `Microsoft.Extensions.AI.AITool` and are model-agnostic so the agent factories
+treat them uniformly.
+
+| Registry | Interface / impl | Source of tools | Notes |
+|---|---|---|---|
+| Built-in catalog | `IAgentToolRegistry` / `Tools/Implementation/LocalAgentToolRegistry.cs` | `AIFunctionFactory.Create` over in-process methods (`GetCurrentTime`, `Calculate`) | Descriptors are derived **from** the generated `AIFunction.JsonSchema` so the offered contract can't drift from what executes. All catalog tools auto-execute this RC (`CatalogRequiresApproval = false`). |
+| ClientLocal (server-driven) | `IClientLocalToolRegistry` / `Tools/Implementation/ClientLocalToolRegistry.cs` | `IClientLocalToolHandler` implementations registered by the application layer (e.g. `run_in_agent_home`, `spawn_subagent`) | In-process handlers, **not** SignalR. The registry holds the handler-backed tools; the worker app layer registers the handlers. |
+| MCP | `IMcpToolRegistry` / `Tools/Implementation/McpToolRegistry.cs` | An immutable `AITool` snapshot pushed in by the MCP connection manager as servers connect | The registry is MCP-agnostic (only holds `AITool`); the application layer owns the MCP client lifecycle. See [Chat](05-chat.md) and [API & Hubs](09-api-and-hubs.md). |
+
+`InvocationToolResolver` (`Tools/InvocationToolResolver.cs`) merges the three registries into the
+concrete tool list passed to each agent; `InvocationToolBridge` adapts metadata tool functions
+(`Tools/Implementation/MetadataToolFunction.cs`).
+
+### 1.4 Single-agent invocation — `InvocationAgentFactory`
+
+`InvocationAgentFactory.CreateAsync` (`Invocation/Implementation/InvocationAgentFactory.cs:71`) builds
+an `InvocationAgentContext` from an `InvocationAgentDefinition`. It:
+
+- resolves executable tools from the three registries (`ResolveExecutableTools`),
+- builds the `ChatClientAgent` (`BuildAgent`) with resolved skills (MAF progressive disclosure),
+- builds seed messages (`BuildSeedMessages` — a leading `System(instructions)` message), and
+- assembles a `ChatOptions` carrying `ModelId` and a reasoning `think` option computed from the
+  model's thinking capability.
+
+> **Reasoning gotcha (documented in-code, lines ~84–125):** for a **thinking-capable** model the
+> requested effort is honored (`think: false|low|medium|high`); for a **non-thinking** model that has
+> reasoning *requested* the `think` field is **omitted entirely** (Ollama returns HTTP 400 for an
+> unknown think level, but omission lets chat-template-baked reasoning through); only "none"/unspecified
+> sends `think: false`. A Codex side-channel key carries the raw effort for the Responses boundary.
+> Per-send sampling overrides (`ApplySamplingOptions`) are null/no-op by default to keep the mode-off
+> path byte-identical.
+
+### 1.5 Multi-agent handoff orchestration — `OrchestrationAgentFactory` + `OrchestrationRunSession`
+
+`OrchestrationAgentFactory.CreateAsync` (`Invocation/Orchestration/Implementation/OrchestrationAgentFactory.cs:42`)
+builds **one `ChatClientAgent` per participant** over the shared decorated `IChatClient` and the same
+tool registries, then assembles a MAF handoff `Workflow`:
+
+- `AgentWorkflowBuilder.CreateHandoffBuilderWith(triageAgent)` (a deliberately-adopted `[Experimental]`
+  API, `#pragma warning disable MAAIW001`);
+- **no explicit `OrchestrationEdge`s ⇒ fully-connected mesh** (every agent can hand off to every other);
+  explicit edges constrain routing. An agent's `Name`/`Description` drive routing — the target's
+  Description is the routing reason.
+- The workflow is driven by `InProcessExecution.RunStreamingAsync`; a `TurnToken` is sent to actually
+  start the conversation (HandoffStart only *accumulates* the seed without it).
+
+The factory returns an **`IOrchestrationRunSession`** (`Invocation/Orchestration/IOrchestrationRunSession.cs`)
+— the boundary that confines every `Microsoft.Agents.AI.Workflows` type. `OrchestrationRunSession`
+(`.../OrchestrationRunSession.cs`) exposes:
+
+- `WatchAsync` — drains the `StreamingRun`, maps each `WorkflowEvent` to an `OrchestrationUpdate`
+  (streaming update, approval request, terminal, or failure), with a **per-quiescence idle timeout**
+  that is **suspended while a tool-approval is pending** (the consumer may block on a human decision
+  for minutes) and reset after each productive event;
+- `RespondToApprovalAsync` — resolves a pending `ToolApprovalRequestContent`, sends the
+  `ExternalResponse`, and restarts the idle clock.
+
+### 1.6 Other AI.Agent runners
+
+- **`MafPlaybookEvalAgentRunner`** (`Eval/Implementation/MafPlaybookEvalAgentRunner.cs`) — the golden
+  eval gate's executor. Builds a `ChatClientAgent` over a **caller-supplied node-local** `IChatClient`
+  with an **empty tool set** and runs it **threadless** (`session: null`). It mirrors the real worker
+  loop's prompt assembly so the eval measures the injected prompt's effect, not tool behaviour. The
+  client is owned by the caller and intentionally not disposed.
+- **`PreviewWorkflowRunner`** (`PreviewWorkflows/Implementation/PreviewWorkflowRunner.cs`) — the Open
+  Canvas (Preview) visual-workflow runner over a raw MAF `WorkflowBuilder`; again confines all
+  `Workflows` types to the runner.
+
+---
+
+## 2. Application services (`Client.Application/Services/*`)
+
+These services own the product behaviour and are wired in the Client host. They depend only on the
+AI.Agent interfaces, provider seams (`ILocalModelProvider`, `IChatClient`, `IEmbeddingGenerator` — see
+[Local Runtime & Providers](03-local-runtime-and-providers.md)), and persistence stores (see
+[Data & Persistence](08-data-and-persistence.md)).
+
+| Area | Key types | Responsibility |
+|---|---|---|
+| **Agents** | `AgentDefinitionService`, `AgentDefinitionResolver`, `AgentSkillService`, `AgentTemplateCatalog`/`Import`, `DefaultAgentSeeder`, `CoderAgentSeeder`, `OrchestrationResolver` | CRUD of agent definitions; per-turn resolution into a `ResolvedAgentRuntime` (prompt + gated tool offer + pinned model + skills + flags). |
+| **AgentHome** | `AgentHomeService`, `AgentHomeManifestService`, `AgentHomeWorkspaceService`, `AgentHomePatchService`, `NodePatchApplyService`, `MemoryProposalSecretScanner`, `Tools/RunInAgentHomeToolHandler` | The write-back loop: sandboxed git workspace, patch apply, memory proposals. |
+| **Analysis** | `PlaybookAnalysisService`, `OllamaPlaybookAnalysisAgent`, `IPlaybookAnalysisAgent` | Playbook analysis → **Suggested** staging (node-local model only). |
+| **Eval** | (uses AI.Agent `IPlaybookEvalAgentRunner`) + `PlaybookActionService` gate logic | Golden-conversation eval gate (Suggested → Enabled). |
+| **Insights** | `FeedbackInsightsService` / `IFeedbackInsightsService` | Read-only per-agent feedback aggregation (n≥3 threshold). |
+| **Monitoring** | `PlaybookMonitorService` / `IPlaybookMonitorService` | Cohort monitoring of enabled playbook actions. |
+| **Memory** | `MemoryExtractionService`, `MemoryExtractionDispatcher`, `OllamaMemoryExtractionAgent` | Adaptive agent memory: post-run node-local extraction → Suggested/Extracted, token-budgeted. |
+| **Capacity** | `CapacityService`, `ModelFootprintProvider`, `PendingFootprintLedger`, `SpawnSerializer`, `SpawnContext` | Capacity gate for spawning a model process (Allow / QueueSameModel / reject). |
+| **Capacity/Sub-agent** | `SubAgentSpawnService` + `Tools/SpawnSubAgentToolHandler` | The `spawn_subagent` tool: capacity-gated, depth- and fan-out-capped child agents. |
+| **Coder** | `CoderWorkspaceReader`, `Tools/{ListFiles,ReadFile,SearchText}ToolHandler`, `WorkspacePathGuard` | Read-only "coder mode": list/read/search files behind a path guard. |
+
+### 2.1 Per-message agent selection & attribution
+
+`AgentDefinitionResolver.ResolveAsync`
+(`Services/Agents/Implementation/AgentDefinitionResolver.cs:36`) is the per-turn entry point:
+
+- **Unbound conversation ⇒ `null`** → the default persona (embedded prompt, full offer, version 1).
+- A binding to a **deleted** definition degrades to the default persona (logged) rather than failing
+  the turn — there is no FK on the conversation column by design.
+- The definition's **pinned `ModelProfile`** (when set) is the model the turn actually runs on, so the
+  tool offer is gated by it, keeping capability-gating and runtime model consistent.
+
+**Tool-offer security invariant** (`ProjectAllowedTools`): only the seeded **"Default Assistant"**
+(mode-off persona, identified by forge-proof `Source=Seeded` + `SeedSlug`) receives the *full*
+capability-gated offer. **Every other definition is intersected** down to its `AllowedToolNames` — a
+selected agent's offer is never widened beyond its allowed set. `spawn_subagent` is opt-in only (it
+lives in the *profile* pool, not the default offer), and a non-tool-capable model gets an **empty**
+offer before per-name gating. See [Chat](05-chat.md) for how the selected agent surfaces as
+per-message attribution.
+
+### 2.2 The AgentHome write-back loop
+
+`AgentHomeService.RunLifecycleAsync` (`Services/AgentHome/Implementation/AgentHomeService.cs:90`)
+drives a sandboxed workspace lifecycle through `ISandboxRuntimeProvider` (the process-jail provider —
+Docker is removed, see [Local Runtime & Providers](03-local-runtime-and-providers.md)). It resolves
+selected folders into the sandbox (`ISelectedFolderResolver` via a short-lived scope, since the service
+is a singleton and `NodeChatDbContext` isn't thread-safe), runs the agent, applies patches
+(`NodePatchApplyService` with `O_NOFOLLOW`/byte-recheck guards), and stages **memory proposals** that
+are secret-scanned (`MemoryProposalSecretScanner`) before they can be exported. The
+`run_in_agent_home` tool is a ClientLocal handler (`Tools/Implementation/RunInAgentHomeToolHandler.cs`).
+
+### 2.3 Capacity gate & sub-agent spawn
+
+`SubAgentSpawnService.SpawnAsync` (`Services/Capacity/SubAgentSpawnService.cs:87`) implements the
+`spawn_subagent` tool with layered safety:
+
+1. **Validation** — non-blank task and exactly one binding.
+2. **Runtime depth guard** — a child runs at `SpawnContext.Current.Depth >= 1` and its tool set already
+   omits `spawn_subagent`, so recursion is structurally impossible; a missing context defaults SAFE
+   (rejected).
+3. **Per-root fan-out lease** — `context.TryEnterFanOut()`; a missing context is rejected
+   conservatively.
+4. **Capacity decision** — `ICapacityService.DecideAsync(modelName, ModelRole.Chat, ct)` returns
+   `Allow` / `QueueSameModel` / reject:
+   - **Allow** consumes a local ledger reservation (released on child exit) or a **cloud-spawn budget**
+     unit (a DoS-of-wallet cap);
+   - **QueueSameModel** serializes against the one resident process via `ISpawnSerializer` with a
+     bounded wait (no second model load).
+
+The child is built like an orchestration participant (`ChatClientAgent`) with the **curated**
+binding-resolved tool set (spawn already filtered out) and run as an `AIFunction` inside a `Depth+1`
+`SpawnContext` scope. Spawn is restricted to explicit profiles, never the mode-off chat path.
+
+---
+
+## 3. The governed Playbook lifecycle (P1–P5)
+
+A Playbook is a set of per-agent "actions" (learned instructions) that are folded into the agent's
+prompt. Their promotion is governed so that nothing reaches the live prompt without passing the gates:
+
+```
+ P1 manual        operator authors an action  ─────────────┐
+ P2 feedback      👍/👎 aggregated per agent (n≥3)          │  Insights / FeedbackInsightsService
+ P3 analysis      node-local model proposes  ──► Suggested  │  Analysis / OllamaPlaybookAnalysisAgent
+ P4 eval gate     golden conversations re-run ──► Enabled   │  Eval / MafPlaybookEvalAgentRunner
+ P5 monitoring +  cohort monitoring + relevance retrieval   │  Monitoring + PlaybookRetrievalSelector
+    retrieval     (top-k injected, cap MaxEnabledActions=20)─┘
+```
+
+- **P1 Manual** — operator authors actions; `PlaybookActionService` owns the state machine.
+- **P2 Feedback** — `FeedbackInsightsService` aggregates 👍/👎 per agent (read-only, n≥3 threshold).
+- **P3 Analysis** — `PlaybookAnalysisService` + `OllamaPlaybookAnalysisAgent` stage **Suggested**
+  actions. **Privacy invariant: this runs on a node-local model only** (no cloud), so user
+  conversation content never leaves the box for analysis.
+- **P4 Eval gate** — golden conversations are **re-run through the real MAF loop** node-local
+  (`MafPlaybookEvalAgentRunner`) to gate **Suggested → Enabled**; golden conversations are stored
+  encrypted.
+- **P5 Monitoring + retrieval** — `PlaybookMonitorService` does cohort monitoring; at inject time the
+  prompt composer applies **relevance retrieval**.
+
+### 3.1 Relevance retrieval at prompt-compose time
+
+In `AgentDefinitionResolver.ComposePromptAsync` (line ~115): when the playbook is **disabled** the
+base instructions flow through unchanged (keeping the runtime config hash byte-identical). When
+enabled, `PlaybookRetrievalSelector.SelectAsync` chooses what to inject:
+
+- **At/below `RetrievalThreshold`, or a blank query** → the full static prepend (byte-identical to the
+  pre-retrieval path).
+- **Above the threshold with a non-blank query** → only the top-k most relevant actions, ranked by
+  `IPlaybookRetrievalRanker`. The default ranker is **`EmbeddingPlaybookRetrievalRanker`** (cosine over
+  embeddings via `ILocalModelProvider.CreateEmbeddingGenerator`), with **`LexicalPlaybookRetrievalRanker`**
+  as a fallback. `PlaybookPromptComposer.Compose` then folds the selection into the prompt. Token
+  budgets (`MaxInjectedMemoryTokens`, `MaxInjectedFailureMemoryTokens`) bound the injection. See
+  [Local Runtime & Providers](03-local-runtime-and-providers.md) and [Data & Persistence](08-data-and-persistence.md)
+  for embeddings and storage.
+
+---
+
+## Key invariants for maintainers
+
+- **MAF stays behind interfaces.** `Microsoft.Agents.AI.Workflows` types live only inside AI.Agent
+  runners/sessions (`IOrchestrationRunSession`, `IPreviewWorkflowRunner`); the application layer never
+  references them.
+- **One decorated pipeline.** Never bypass `DecorateChatClientPipeline`; tool observability + automatic
+  invocation must wrap every send. Re-apply it after swapping the base client in tests.
+- **Offer is never widened.** Only the seeded Default Assistant gets the full offer; all other agents
+  are intersected to `AllowedToolNames`; `spawn_subagent` is opt-in via profile only.
+- **Privacy-sensitive ops are node-local only.** Playbook analysis (P3), the eval gate (P4), and memory
+  extraction all run on node-local models — never cloud. See [Security & Privacy](12-security-and-privacy.md).
+- **Spawn is bounded.** Depth cap (child omits the tool), per-root fan-out lease, and a cloud-spawn
+  wallet cap are all enforced in `SubAgentSpawnService`.
+
+---
+
+## Related pages
+
+- [Architecture Overview](01-architecture-overview.md)
+- [Project Layout](02-project-layout.md)
+- [Local Runtime & Providers](03-local-runtime-and-providers.md)
+- [Chat](05-chat.md)
+- [Scheduler](06-scheduler.md)
+- [Data & Persistence](08-data-and-persistence.md)
+- [API & Hubs](09-api-and-hubs.md)
+- [React Client](10-react-client.md)
+- [Security & Privacy](12-security-and-privacy.md)
+- [Testing & Validation](13-testing-and-validation.md)
