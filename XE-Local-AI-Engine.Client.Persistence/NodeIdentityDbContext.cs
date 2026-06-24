@@ -34,6 +34,9 @@ public sealed class NodeIdentityDbContext : IdentityDbContext<NodeUser>
 
         builder.Property(entity => entity.CreatedAtUtc)
                .HasColumnName("created_at_utc");
+
+        builder.Property(entity => entity.TutorialState)
+               .HasColumnName("tutorial_state");
     }
 
     private static void ConfigureRefreshToken(EntityTypeBuilder<NodeRefreshToken> builder)

@@ -11,6 +11,8 @@ using XE_Local_AI_Engine.Client.Services.NodeSettings;
 using XE_Local_AI_Engine.Client.Services.NodeSettings.Implementation;
 using XE_Local_AI_Engine.Client.Services.Persistence;
 using XE_Local_AI_Engine.Client.Services.Persistence.Implementation;
+using XE_Local_AI_Engine.Client.Services.Tutorial;
+using XE_Local_AI_Engine.Client.Services.Tutorial.Implementation;
 
 internal static class AddNodeAuthAndConnectionExtensions
 {
@@ -50,6 +52,7 @@ internal static class AddNodeAuthAndConnectionExtensions
         builder.Services.AddSingleton<INodeJwtKeyProvider, NodeJwtKeyProvider>();
         builder.Services.AddSingleton<INodeTokenService, NodeTokenService>();
         builder.Services.AddScoped<INodeAuthService, NodeAuthService>();
+        builder.Services.AddScoped<INodeTutorialStateService, NodeTutorialStateService>();
         builder.Services.AddSingleton<NodeIdentityInitializationService>();
         builder.Services.AddSingleton<ICloudCredentialStore, CloudCredentialStore>();
 
