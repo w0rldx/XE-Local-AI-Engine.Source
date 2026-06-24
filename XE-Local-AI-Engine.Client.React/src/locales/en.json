@@ -2405,11 +2405,11 @@
 			},
 			"recommendationInstall": {
 				"title": "Install a recommended chat model",
-				"content": "Pick a recommended chat model and start its download. The tour waits here until a chat-capable model is actually installed."
+				"content": "Pick a recommended chat model and start its download — installing one moves the tour on automatically. No model yet? Just click Next to continue."
 			},
 			"setDefaultModel": {
 				"title": "Make it your default",
-				"content": "Set your installed chat model as the default so new conversations use it automatically. The tour continues once a chat-capable default is set."
+				"content": "Set your installed chat model as the default so new conversations use it automatically. Setting a default moves the tour on, or click Next to continue."
 			},
 			"navChat": {
 				"title": "Open Chat",
