@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 
 import type { XeLocalAiEngineClientEndpointsLocalModelsV1LocalModelResponse } from "@/core/api/generated";
-import { toChatModelOptions, toModelOption } from "@/features/chat/pages/ChatModelOptions";
+import { resolveLocalDefaultModelCapabilities, toChatModelOptions, toModelOption } from "@/features/chat/pages/ChatModelOptions";
 
 type LocalModelDto = XeLocalAiEngineClientEndpointsLocalModelsV1LocalModelResponse;
 
@@ -54,5 +54,60 @@ describe("toChatModelOptions capability mapping", () => {
 		);
 
 		expect(options).toHaveLength(0);
+	});
+});
+
+describe("resolveLocalDefaultModelCapabilities", () => {
+	it("uses the node default (isSelected) chat model's capabilities", () => {
+		const capabilities = resolveLocalDefaultModelCapabilities([
+			model({ modelName: "gemma:12b", isReasoningCapable: false, isToolCapable: false }),
+			model({ modelName: "qwen3:8b", isSelected: true, isReasoningCapable: true, isToolCapable: true }),
+		]);
+
+		expect(capabilities).toEqual({ isReasoningModel: true, isToolCapable: true });
+	});
+
+	it("falls back to name-ascending order when no model is the node default and mod-times tie", () => {
+		// Neither carries modifiedAtUtc, so the fallback's ThenBy(modelName) decides: "gemma:12b" < "qwen3:8b".
+		const capabilities = resolveLocalDefaultModelCapabilities([
+			model({ modelName: "qwen3:8b", isReasoningCapable: true, isToolCapable: false }),
+			model({ modelName: "gemma:12b", isReasoningCapable: false, isToolCapable: true }),
+		]);
+
+		expect(capabilities).toEqual({ isReasoningModel: false, isToolCapable: true });
+	});
+
+	it("falls back to the most-recently-modified chat model, overriding name order", () => {
+		// Name-ascending would pick "alpha", but modifiedAtUtc-descending must win: "zeta" is newer.
+		const capabilities = resolveLocalDefaultModelCapabilities([
+			model({ modelName: "alpha", modifiedAtUtc: 1000, isReasoningCapable: false, isToolCapable: false }),
+			model({ modelName: "zeta", modifiedAtUtc: 2000, isReasoningCapable: true, isToolCapable: true }),
+		]);
+
+		expect(capabilities).toEqual({ isReasoningModel: true, isToolCapable: true });
+	});
+
+	it("ignores non-chat models when resolving the default", () => {
+		const capabilities = resolveLocalDefaultModelCapabilities([
+			model({ modelName: "embed", kind: "Embedding", isSelected: true, isReasoningCapable: true, isToolCapable: true }),
+			model({ modelName: "qwen3:8b", isReasoningCapable: true, isToolCapable: false }),
+		]);
+
+		expect(capabilities).toEqual({ isReasoningModel: true, isToolCapable: false });
+	});
+
+	it("excludes CodexOAuth provider entries from the resolved default", () => {
+		const capabilities = resolveLocalDefaultModelCapabilities([
+			model({ modelName: "codex", provider: "CodexOAuth", isSelected: true, isReasoningCapable: true, isToolCapable: true }),
+			model({ modelName: "gemma:12b", isReasoningCapable: false, isToolCapable: false }),
+		]);
+
+		expect(capabilities).toEqual({ isReasoningModel: false, isToolCapable: false });
+	});
+
+	it("returns false capabilities when there are no chat models", () => {
+		const capabilities = resolveLocalDefaultModelCapabilities([]);
+
+		expect(capabilities).toEqual({ isReasoningModel: false, isToolCapable: false });
 	});
 });

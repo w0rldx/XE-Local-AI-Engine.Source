@@ -37,7 +37,7 @@ import { toWireSamplingOptions } from "@/features/chat/models/ChatSamplingOption
 import { deriveUsedContextTokens } from "@/features/chat/models/ContextUsageDerivation";
 import { localDefaultModelValue, toNodeChatRequestModel } from "@/features/chat/models/NodeChatModelSelection";
 import { shouldFetchLocalModelDetails } from "@/features/chat/pages/ChatModelDetailsQuery";
-import { toChatModelOptions } from "@/features/chat/pages/ChatModelOptions";
+import { resolveLocalDefaultModelCapabilities, toChatModelOptions } from "@/features/chat/pages/ChatModelOptions";
 import { nodeChatQueryKeys } from "@/features/chat/queries/NodeChatQueryKeys";
 import { useCodexModelOptions } from "@/features/chat/queries/useCodexModelOptions";
 import { useChatSamplingPreferencesStore } from "@/features/chat/stores/ChatSamplingPreferencesStore";
@@ -51,13 +51,14 @@ import {
 
 /* eslint-disable react-doctor/no-giant-component, react-doctor/prefer-useReducer, react-doctor/js-combine-iterations */
 
-const localDefaultModelOption: ModelOption = {
+// Base identity for the synthetic "Local default" composer option. Capabilities are filled in dynamically inside
+// modelOptions (see below) from the concrete model the runtime will resolve, so picking "Local default" mirrors the
+// reasoning/tool controls of picking that model directly. The false capabilities here are only the pre-load default
+// (used until the local model list arrives).
+const localDefaultModelOptionBase: ModelOption = {
 	value: localDefaultModelValue,
 	label: "Local default",
 	displayName: "Local runtime default",
-	// The runtime resolves the concrete model later, so its capabilities are unknown here. Treat as not
-	// reasoning/tool capable (safe default): offer neither the reasoning menu nor the tool controls until
-	// a concrete, capability-known model is selected.
 	isReasoningModel: false,
 	isToolCapable: false,
 	isAvailable: true,
@@ -204,10 +205,17 @@ export function Chat() {
 	const modelOptions = useMemo<ModelOption[]>(() => {
 		const response = localModelsQuery.data;
 		if (!response) {
-			return [localDefaultModelOption];
+			return [localDefaultModelOptionBase];
 		}
 
-		return [localDefaultModelOption, ...toChatModelOptions(response.items ?? [], response.isAvailable ?? false)];
+		// Mirror the resolved concrete model's capabilities onto the Local-default option so its reasoning/tool
+		// controls match picking that model directly (see resolveLocalDefaultModelCapabilities).
+		const items = response.items ?? [];
+		const localDefaultModelOption: ModelOption = {
+			...localDefaultModelOptionBase,
+			...resolveLocalDefaultModelCapabilities(items),
+		};
+		return [localDefaultModelOption, ...toChatModelOptions(items, response.isAvailable ?? false)];
 	}, [localModelsQuery.data]);
 	// Cloud (Codex) model options — empty array when signed out; non-empty only when Codex session active.
 	const cloudModelOptions = useCodexModelOptions();
