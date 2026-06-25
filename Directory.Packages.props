@@ -86,6 +86,7 @@
     <PackageVersion Include="SQLitePCLRaw.lib.e_sqlite3" Version="3.50.3" />
     <PackageVersion Include="System.Numerics.Tensors" Version="10.0.9" />
     <PackageVersion Include="TUnit" Version="1.56.18" />
+    <PackageVersion Include="Velopack" Version="1.2.0" />
     <PackageVersion Include="YamlDotNet" Version="18.0.0" />
   </ItemGroup>
 </Project>

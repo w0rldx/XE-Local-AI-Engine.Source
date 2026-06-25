@@ -61,6 +61,33 @@
     <PackageReference Include="Serilog.Expressions"/>
     <PackageReference Include="Serilog.Settings.Configuration"/>
     <PackageReference Include="Serilog.Sinks.Console"/>
+    <PackageReference Include="Velopack"/>
+  </ItemGroup>
+
+  <!--
+    App self-update build flavor (decision #12). UpdateChannel selects, at publish time, the baked-in update repo URL +
+    GitHub App client_id consumed by AppUpdateChannelOptions. Both values are PUBLIC config (the device-flow client_id
+    needs no client secret; the repo URL is public) — not secrets, safe to bake into the artifact. There is no runtime
+    switch: a tester build can never point at the main repo and vice-versa. The active flavor's
+    appsettings.AppUpdate.{flavor}.json is copied to the output as appsettings.AppUpdate.json so the host loads exactly
+    one channel file regardless of UpdateChannel. Default flavor is main.
+  -->
+  <PropertyGroup>
+    <UpdateChannel Condition="'$(UpdateChannel)' == ''">main</UpdateChannel>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <!-- Keep both flavor sources out of default content globbing so only the active one ships (renamed) below. -->
+    <Content Remove="appsettings.AppUpdate.main.json"/>
+    <Content Remove="appsettings.AppUpdate.tester.json"/>
+    <None Include="appsettings.AppUpdate.main.json"/>
+    <None Include="appsettings.AppUpdate.tester.json"/>
+    <!-- Only the active flavor's source is copied to output (renamed), so the artifact carries exactly one channel. -->
+    <Content Include="appsettings.AppUpdate.$(UpdateChannel).json"
+             Condition="Exists('appsettings.AppUpdate.$(UpdateChannel).json')"
+             Link="appsettings.AppUpdate.json"
+             CopyToOutputDirectory="PreserveNewest"
+             CopyToPublishDirectory="PreserveNewest"/>
   </ItemGroup>
 
   <ItemGroup>

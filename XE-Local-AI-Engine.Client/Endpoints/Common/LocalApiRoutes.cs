@@ -319,6 +319,30 @@ public static class LocalApiRoutes
     }
 
     /// <summary>
+    ///     GitHub App device-flow sign-in routes for app self-update. The device_code (secret polling credential) and the
+    ///     access token NEVER appear in any of these contracts — start returns only the user code + verification URI, and
+    ///     status/poll report presence + login only. Desktop-mode only; Operator-gated.
+    /// </summary>
+    public static class GitHubAuth
+    {
+        public const string Start = "github-auth/start";
+        public const string Poll = "github-auth/poll";
+        public const string Status = "github-auth/status";
+        public const string SignOut = "github-auth/sign-out";
+    }
+
+    /// <summary>
+    ///     App self-update routes (Velopack). Status reads the cached snapshot (<c>?refresh=true</c> forces a check with a
+    ///     60s floor); apply downloads + applies + relaunches. Never exposes the GitHub token. Desktop-mode only;
+    ///     Operator-gated.
+    /// </summary>
+    public static class AppUpdate
+    {
+        public const string Status = "app-update/status";
+        public const string Apply = "app-update/apply";
+    }
+
+    /// <summary>
     ///     MCP server registration and tool-catalog routes.
     /// </summary>
     public static class Mcp
