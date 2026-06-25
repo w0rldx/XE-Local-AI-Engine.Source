@@ -29,8 +29,8 @@ export const applicationInfo: IApplicationInfo = {
 	// build-time define (e.g. import.meta.env.VITE_APP_VERSION) once one exists.
 	version: "0.1.0",
 	description:
-		"Local AI engine worker node for the C0re platform: run, manage, and chat with on-device Ollama models.",
-	copyright: `© ${new Date().getFullYear()} C0re`,
+		"Local AI engine for running, managing, and chatting with on-device AI models.",
+	copyright: `© ${new Date().getFullYear()} XE AI-Engine`,
 };
 
 /**

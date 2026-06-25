@@ -122,7 +122,7 @@ export function AboutDialog({ opened, onClose }: IAboutDialogProps) {
 								<Table.Thead>
 									<Table.Tr>
 										<Table.Th>{t("pages.about.packageName", "Package")}</Table.Th>
-										<Table.Th>{t("pages.about.packageType", "Type")}</Table.Th>
+										<Table.Th w={110}>{t("pages.about.packageType", "Type")}</Table.Th>
 										<Table.Th>{t("pages.about.packageVersion", "Version")}</Table.Th>
 										<Table.Th>{t("pages.about.packageLicense", "License")}</Table.Th>
 									</Table.Tr>
@@ -139,8 +139,13 @@ export function AboutDialog({ opened, onClose }: IAboutDialogProps) {
 													<Text size="sm">{pkg.name}</Text>
 												)}
 											</Table.Td>
-											<Table.Td>
-												<Badge variant="light" size="sm" color={pkg.source === "backend" ? "grape" : "blue"}>
+											<Table.Td style={{ whiteSpace: "nowrap" }}>
+												<Badge
+													variant="light"
+													size="sm"
+													color={pkg.source === "backend" ? "grape" : "blue"}
+													styles={{ label: { overflow: "visible" } }}
+												>
 													{sourceLabel(pkg.source)}
 												</Badge>
 											</Table.Td>
