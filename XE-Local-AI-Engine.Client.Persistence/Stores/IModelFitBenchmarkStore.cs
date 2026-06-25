@@ -1,4 +1,4 @@
-namespace XE_Local_AI_Engine.Client.Persistence;
+namespace XE_Local_AI_Engine.Client.Persistence.Stores;
 
 /// <summary>
 ///     Node-scoped persistence for measured model-fit benchmark rows projected from a benchmark snapshot. The structural

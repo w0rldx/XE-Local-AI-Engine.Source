@@ -1,4 +1,4 @@
-namespace XE_Local_AI_Engine.Client;
+namespace XE_Local_AI_Engine.Client.DependencyInjection;
 
 using Microsoft.Extensions.DependencyInjection.Extensions;
 using Quartz;

@@ -1,6 +1,7 @@
 namespace XE_Local_AI_Engine.Client.Services.Agents.Implementation;
 
 using XE_Local_AI_Engine.Client.Persistence;
+using XE_Local_AI_Engine.Client.Persistence.Stores;
 
 /// <summary>
 ///     Process-lifetime memoization of the seeded "Default Assistant" id. Singleton: the slug is fixed for the boot, so

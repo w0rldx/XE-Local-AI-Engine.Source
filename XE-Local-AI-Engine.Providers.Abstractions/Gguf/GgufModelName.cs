@@ -1,4 +1,4 @@
-namespace XE_Local_AI_Engine.Providers.Abstractions;
+namespace XE_Local_AI_Engine.Providers.Abstractions.Gguf;
 
 /// <summary>
 ///     Single source of truth for the GGUF registry-key convention: a model name is

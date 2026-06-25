@@ -1,4 +1,4 @@
-namespace XE_Local_AI_Engine.Client.Persistence;
+namespace XE_Local_AI_Engine.Client.Persistence.Stores;
 
 /// <summary>
 ///     Node-local read boundary that reconstructs golden-conversation harvest candidates from an agent's thumbs-up

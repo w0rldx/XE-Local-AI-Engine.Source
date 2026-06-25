@@ -3,6 +3,7 @@ namespace XE_Local_AI_Engine.Tests.ModelFit;
 using Microsoft.Extensions.Logging.Abstractions;
 using OllamaSharp.Models;
 using XE_Local_AI_Engine.Client.Persistence;
+using XE_Local_AI_Engine.Client.Persistence.Stores;
 using XE_Local_AI_Engine.Client.Services.Chat;
 using XE_Local_AI_Engine.Client.Services.ModelFit.Implementation;
 using XE_Local_AI_Engine.Providers.Abstractions;

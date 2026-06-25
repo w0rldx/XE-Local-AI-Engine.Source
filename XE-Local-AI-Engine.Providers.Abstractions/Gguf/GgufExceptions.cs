@@ -1,4 +1,4 @@
-namespace XE_Local_AI_Engine.Providers.Abstractions;
+namespace XE_Local_AI_Engine.Providers.Abstractions.Gguf;
 
 /// <summary>Classifies why a Hugging Face GGUF download failed, so callers can surface a clear, sanitized reason.</summary>
 public enum HuggingFaceDownloadFailure

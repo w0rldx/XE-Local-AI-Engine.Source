@@ -4,6 +4,7 @@ using System.Security.Cryptography;
 using Microsoft.Data.Sqlite;
 using XE_Local_AI_Engine.Client.Persistence.Implementation;
 using XE_Local_AI_Engine.Client.Persistence.Tests.Testing;
+using XE_Local_AI_Engine.Client.Persistence.Stores;
 
 /// <summary>
 ///     Persistence round-trips for the adaptive-agent-memory data model: typed <see cref="MemoryScope" /> on a playbook

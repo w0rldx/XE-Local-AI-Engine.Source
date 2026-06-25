@@ -2,6 +2,7 @@ namespace XE_Local_AI_Engine.Client.Services.Monitoring.Implementation;
 
 using Microsoft.Extensions.Options;
 using XE_Local_AI_Engine.Client.Persistence;
+using XE_Local_AI_Engine.Client.Persistence.Stores;
 
 /// <summary>
 ///     Default <see cref="IPlaybookMonitorService" /> (relevance retrieval and cohort monitoring, the cohort-monitor verdict rules). For every Enabled action of the agent

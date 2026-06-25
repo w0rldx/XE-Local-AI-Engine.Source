@@ -1,6 +1,7 @@
 namespace XE_Local_AI_Engine.Client.BackgroundServices;
 
 using XE_Local_AI_Engine.Client.Persistence;
+using XE_Local_AI_Engine.Client.Persistence.Stores;
 
 /// <summary>
 ///     Application service for retention sweeper behavior.

@@ -1,4 +1,4 @@
-namespace XE_Local_AI_Engine.Providers.Abstractions;
+namespace XE_Local_AI_Engine.Providers.Abstractions.Gguf;
 
 /// <summary>
 ///     Queries the Hugging Face Hub for GGUF repos and inspects their actual <c>.gguf</c> files. Repos with zero usable

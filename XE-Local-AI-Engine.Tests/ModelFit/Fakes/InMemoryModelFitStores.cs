@@ -1,6 +1,7 @@
 namespace XE_Local_AI_Engine.Tests.ModelFit.Fakes;
 
 using XE_Local_AI_Engine.Client.Persistence;
+using XE_Local_AI_Engine.Client.Persistence.Stores;
 
 /// <summary>
 ///     In-memory <see cref="IModelFitSnapshotStore" /> for refresh tests. Mirrors the production store's

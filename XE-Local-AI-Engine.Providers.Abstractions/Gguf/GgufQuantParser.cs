@@ -1,4 +1,4 @@
-namespace XE_Local_AI_Engine.Providers.Abstractions;
+namespace XE_Local_AI_Engine.Providers.Abstractions.Gguf;
 
 using System.Text.RegularExpressions;
 

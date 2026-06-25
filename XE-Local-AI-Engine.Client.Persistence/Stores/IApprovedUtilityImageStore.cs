@@ -1,4 +1,4 @@
-namespace XE_Local_AI_Engine.Client.Persistence;
+namespace XE_Local_AI_Engine.Client.Persistence.Stores;
 
 /// <summary>
 ///     Node-scoped persistence for the approved utility image registry. All columns are plaintext (image references,

@@ -1,4 +1,5 @@
-namespace XE_Local_AI_Engine.Client;
+namespace XE_Local_AI_Engine.Client.DependencyInjection;
+using XE_Local_AI_Engine.Client.DependencyInjection.Modules;
 
 /// <summary>
 ///     Registers the node-local application services, persistence boundaries, model providers, and host-agent clients.

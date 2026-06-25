@@ -2,6 +2,7 @@ namespace XE_Local_AI_Engine.Client.Services.Eval;
 
 using Microsoft.Extensions.AI;
 using XE_Local_AI_Engine.Client.Persistence;
+using XE_Local_AI_Engine.Client.Persistence.Stores;
 
 /// <summary>
 ///     Scores a single candidate/baseline agent output against one golden case (hybrid deterministic/model scoring). The

@@ -2,6 +2,7 @@ namespace XE_Local_AI_Engine.Client.Services.Memory.Implementation;
 
 using Microsoft.Extensions.Options;
 using XE_Local_AI_Engine.Client.Persistence;
+using XE_Local_AI_Engine.Client.Persistence.Stores;
 
 /// <summary>
 ///     Default <see cref="IMemoryExtractionService" />. Gates temporary conversations BEFORE any model call (the single

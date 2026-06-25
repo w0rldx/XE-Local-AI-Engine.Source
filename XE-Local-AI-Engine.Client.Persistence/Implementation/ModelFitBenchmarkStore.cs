@@ -3,6 +3,7 @@ namespace XE_Local_AI_Engine.Client.Persistence.Implementation;
 using System.Text;
 using Microsoft.EntityFrameworkCore;
 using XE_Local_AI_Engine.Client.Persistence.Entities;
+using XE_Local_AI_Engine.Client.Persistence.Stores;
 
 /// <summary>
 ///     Persistence boundary for measured model-fit benchmark rows. The raw output and diagnostics columns are encrypted

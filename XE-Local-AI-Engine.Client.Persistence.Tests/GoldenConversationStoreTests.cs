@@ -6,6 +6,7 @@ using Microsoft.Data.Sqlite;
 using XE_Local_AI_Engine.Client.Persistence.Entities;
 using XE_Local_AI_Engine.Client.Persistence.Implementation;
 using XE_Local_AI_Engine.Client.Persistence.Tests.Testing;
+using XE_Local_AI_Engine.Client.Persistence.Stores;
 
 public sealed class GoldenConversationStoreTests : IDisposable
 {

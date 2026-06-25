@@ -4,6 +4,7 @@ using System.Diagnostics.CodeAnalysis;
 using System.Text.RegularExpressions;
 using Microsoft.EntityFrameworkCore;
 using XE_Local_AI_Engine.Client.Persistence;
+using XE_Local_AI_Engine.Client.Persistence.Stores;
 
 internal sealed partial class SelectedFolderResolver(INodeSelectedFolderStore store, ILogger<SelectedFolderResolver> logger) : ISelectedFolderResolver
 {

@@ -1,6 +1,7 @@
 namespace XE_Local_AI_Engine.Client.Services.Agents.Implementation;
 
 using XE_Local_AI_Engine.Client.Persistence;
+using XE_Local_AI_Engine.Client.Persistence.Stores;
 
 /// <summary>
 ///     Folds an agent's enabled playbook actions into its system prompt. The header text and bullet format live here

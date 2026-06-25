@@ -1,4 +1,4 @@
-namespace XE_Local_AI_Engine.Client;
+namespace XE_Local_AI_Engine.Client.DependencyInjection.Modules;
 
 using System.Data.Common;
 using Microsoft.EntityFrameworkCore;
@@ -16,6 +16,7 @@ using XE_Local_AI_Engine.Client.Services.HuggingFace;
 using XE_Local_AI_Engine.Client.Services.NodeSettings;
 using XE_Local_AI_Engine.Client.Services.Persistence.Implementation;
 using XE_Local_AI_Engine.Providers.Abstractions;
+using XE_Local_AI_Engine.Providers.Abstractions.Gguf;
 using XE_Local_AI_Engine.Providers.HuggingFace;
 using XE_Local_AI_Engine.Providers.HuggingFace.Options;
 using XE_Local_AI_Engine.Providers.LlamaServer;

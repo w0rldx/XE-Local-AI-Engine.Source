@@ -5,6 +5,7 @@ using System.Text;
 using Microsoft.Data.Sqlite;
 using XE_Local_AI_Engine.Client.Persistence.Implementation;
 using XE_Local_AI_Engine.Client.Persistence.Tests.Testing;
+using XE_Local_AI_Engine.Client.Persistence.Stores;
 
 public sealed class ModelFitStoreTests : IDisposable
 {

@@ -12,6 +12,7 @@ using ModelContextProtocol;
 using ModelContextProtocol.Client;
 using XE_Local_AI_Engine.AI.Agent.Tools;
 using XE_Local_AI_Engine.Client.Persistence;
+using XE_Local_AI_Engine.Client.Persistence.Stores;
 
 /// <summary>
 ///     Owns the MCP client connections and keeps the MCP tool registry in sync with the enabled registrations. Each

@@ -2,8 +2,10 @@ namespace XE_Local_AI_Engine.Client.Services.ModelFit.Implementation;
 
 using System.Collections.Concurrent;
 using XE_Local_AI_Engine.Client.Persistence;
+using XE_Local_AI_Engine.Client.Persistence.Stores;
 using XE_Local_AI_Engine.Providers.Abstractions;
 using XE_Local_AI_Engine.Providers.Abstractions.Contracts;
+using XE_Local_AI_Engine.Providers.Abstractions.Gguf;
 using XE_Local_AI_Engine.Providers.LlamaServer;
 
 /// <summary>

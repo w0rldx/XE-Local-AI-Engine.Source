@@ -5,6 +5,7 @@ using Quartz;
 using Quartz.Plugin.Interrupt;
 using XE_Local_AI_Engine.Client.Persistence;
 using XE_Local_AI_Engine.Client.Persistence.Entities;
+using XE_Local_AI_Engine.Client.Persistence.Stores;
 
 /// <summary>
 ///     Default <see cref="IScheduledJobManagementService" />. Validates the requested schedule, persists the definition

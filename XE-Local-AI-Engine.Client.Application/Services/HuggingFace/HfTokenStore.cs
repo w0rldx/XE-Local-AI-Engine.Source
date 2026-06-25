@@ -7,6 +7,7 @@ using System.Security.Principal;
 using System.Text;
 using Microsoft.AspNetCore.DataProtection;
 using XE_Local_AI_Engine.Providers.Abstractions;
+using XE_Local_AI_Engine.Providers.Abstractions.Gguf;
 
 /// <summary>
 ///     Encrypted-at-rest store for the optional Hugging Face access token (third instance of the
