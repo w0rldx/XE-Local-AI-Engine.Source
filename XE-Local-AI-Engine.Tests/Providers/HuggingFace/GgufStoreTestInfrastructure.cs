@@ -6,6 +6,9 @@ using NSubstitute;
 using NSubstitute.Core;
 using XE_Local_AI_Engine.Providers.Abstractions;
 using XE_Local_AI_Engine.Providers.HuggingFace;
+using XE_Local_AI_Engine.Providers.HuggingFace.Contracts;
+using XE_Local_AI_Engine.Providers.HuggingFace.Implementation;
+using XE_Local_AI_Engine.Providers.HuggingFace.Options;
 
 /// <summary>
 ///     Shared, network-free test scaffolding for the Hugging Face GGUF store/registry/download tests: a scripted

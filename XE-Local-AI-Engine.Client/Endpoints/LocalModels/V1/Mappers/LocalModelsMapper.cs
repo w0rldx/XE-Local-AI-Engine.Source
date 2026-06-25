@@ -6,6 +6,7 @@ using XE_Local_AI_Engine.Client.Services.Chat;
 using XE_Local_AI_Engine.Providers.Abstractions;
 using XE_Local_AI_Engine.Providers.Abstractions.Contracts;
 using XE_Local_AI_Engine.Providers.CodexOAuth;
+using XE_Local_AI_Engine.Providers.CodexOAuth.Implementation;
 
 internal static class LocalModelsMapper
 {
