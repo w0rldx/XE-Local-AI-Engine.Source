@@ -151,4 +151,18 @@
     <Message Importance="high" Text="Copied node React build from $(NodeReactBuildDir) to $(NodeReactWebRootDir)."/>
   </Target>
 
+  <!--
+    Fail a publish loudly when the React SPA has not been built. wwwroot\** is gitignored (only .gitignore is
+    tracked), so a fresh checkout has an empty wwwroot, and CopyNodeReactBuildToWwwroot above only runs when
+    dist\index.html exists. Without this guard a publish whose React build was skipped ships an empty wwwroot and
+    the host serves 404 for index.html (a blank app) with no build-time signal — exactly how a packaged build can
+    look "started" yet render nothing. Publish-only (BeforeTargets=ComputeFilesToPublish, same phase as the copy
+    above): dotnet build / CI / unit tests never run this, so they are unaffected and need no pnpm build.
+  -->
+  <Target Name="GuardNodeReactBuildPresentOnPublish"
+          BeforeTargets="ComputeFilesToPublish"
+          Condition="!Exists('$(NodeReactBuildDir)index.html')">
+    <Error Text="React SPA build not found at $(NodeReactBuildDir)index.html. Run 'pnpm build' in XE-Local-AI-Engine.Client.React before publishing — otherwise the host ships an empty wwwroot and serves 404 for index.html (a blank app)." />
+  </Target>
+
 </Project>
