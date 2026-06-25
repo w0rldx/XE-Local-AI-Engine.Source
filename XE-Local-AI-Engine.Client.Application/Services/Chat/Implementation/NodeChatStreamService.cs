@@ -97,7 +97,10 @@ public sealed class NodeChatStreamService(
                 assistantMessageId,
                 requestId,
                 NowUnixMilliseconds(),
-                request.Model,
+                // Stamp the placeholder with the model that will actually run (the agent pin when honored, the user's
+                // explicit dropdown pick when it suppressed the pin, else the local-default) — never the raw request
+                // model — so the attribution shown in the UI matches the run from the first pending frame.
+                resolution.EffectiveModel,
                 AgentDefinitionId: resolution.Resolved?.AgentDefinitionId,
                 AgentName: resolution.Resolved?.AgentName,
                 // Persist the effort that actually drives this turn — an agent's pinned effort wins over the request's
@@ -187,7 +190,7 @@ public sealed class NodeChatStreamService(
             request.ConversationId,
             resolved?.ResolvedSystemPrompt ?? LoadResolvedSystemPrompt(localChatOptions.Value),
             BuildConversationContext(conversation, userMessage, selectedPath),
-            resolved?.ModelProfile ?? activeModel,
+            resolution.EffectiveModel,
             resolved?.AgentDefinitionVersion ?? AgentDefinitionVersion,
             LocalChatLoopbackDefaults.ClientNodeId,
             allowedTools,
@@ -207,13 +210,15 @@ public sealed class NodeChatStreamService(
         // hash); the pump stays content-free. The dispatch is fire-and-forget (its own scope + fresh CT) so it never
         // delays the SSE.
         var onTerminal = resolution.Resolved is { PlaybookEnabled: true, MemoryExtractionEnabled: true } memoryAgent
-            ? BuildMemoryExtractionHook(memoryAgent, conversation, userMessage, selectedPath, package, request.Model)
+            ? BuildMemoryExtractionHook(memoryAgent, conversation, userMessage, selectedPath, package, resolution.EffectiveModel)
             : null;
 
         var pumpTask = PumpInvocationStatesAsync(stateChannel.Reader,
             eventChannel.Writer,
             correlation,
-            request.Model,
+            // Stamp the FINAL persisted assistant-message model from the effective model (the pump terminalizes from
+            // this requestedModel), so the stored attribution reflects the model that actually ran, not request.Model.
+            resolution.EffectiveModel,
             sequence,
             parts,
             onTerminal,
@@ -577,6 +582,11 @@ public sealed class NodeChatStreamService(
         // and run_in_agent_home would be withheld even with a tool-capable model selected.
         string? activeModel;
         var requiresInstalledChatModel = false;
+        // The user explicitly picked a concrete model in the chat dropdown when there is no upstream override AND
+        // request.Model is a real id (non-blank; the "Local default" sentinel arrives as null/blank). That pick must
+        // win over a bound agent's pinned ModelProfile for BOTH the run and the persisted attribution, so it suppresses
+        // the pin in the resolve below (honorModelProfile=false) and becomes the effective model directly.
+        var userPickedConcreteModel = activeModelOverride is null && !string.IsNullOrWhiteSpace(request.Model);
         if (activeModelOverride is not null)
         {
             activeModel = activeModelOverride;
@@ -617,7 +627,7 @@ public sealed class NodeChatStreamService(
         // the Default Assistant, intersected otherwise), the pinned model profile, the reasoning effort, the version
         // that feeds the config hash, AND the attribution snapshot (id + display name). The just-sent user turn is the
         // relevance-retrieval query (inert below the threshold / unbound, so the prompt stays byte-identical).
-        var resolved = await agentDefinitionResolver.ResolveAsync(effectiveAgentId, activeModel, trimmedContent, supportsTools, cancellationToken).ConfigureAwait(false);
+        var resolved = await agentDefinitionResolver.ResolveAsync(effectiveAgentId, activeModel, trimmedContent, supportsTools, honorModelProfile: !userPickedConcreteModel, cancellationToken).ConfigureAwait(false);
 
         // When the effective definition is a tool-capable orchestrator, resolve a compiled orchestration spec to carry
         // on the package — the runner branches to the handoff workflow. A null result (not an orchestrator, an
@@ -625,7 +635,13 @@ public sealed class NodeChatStreamService(
         // keeping the unbound/single-agent path byte-identical. The same user turn drives per-participant retrieval.
         var orchestration = await ResolveOrchestrationAsync(effectiveAgentId, activeModel, trimmedContent, supportsTools, cancellationToken).ConfigureAwait(false);
 
-        return new ResolvedTurn(activeModel, resolved, orchestration, supportsThinking, supportsTools, requiresInstalledChatModel);
+        // The single source of truth for the model that actually runs this turn: the resolved pin when honored (the
+        // resolver returned null for ModelProfile when the user's explicit pick suppressed it), otherwise the active
+        // model. Both the runtime package AND the persisted assistant-message attribution are stamped from this so the
+        // label can never disagree with what ran.
+        var effectiveModel = resolved?.ModelProfile ?? activeModel;
+
+        return new ResolvedTurn(activeModel, effectiveModel, resolved, orchestration, supportsThinking, supportsTools, requiresInstalledChatModel);
     }
 
     /// <summary>
@@ -780,6 +796,7 @@ public sealed class NodeChatStreamService(
     /// <summary>The up-front per-turn resolution shared by placeholder stamping and runtime-package construction.</summary>
     private sealed record ResolvedTurn(
         string? ActiveModel,
+        string? EffectiveModel,
         ResolvedAgentRuntime? Resolved,
         ResolvedOrchestration? Orchestration,
         bool SupportsThinking,

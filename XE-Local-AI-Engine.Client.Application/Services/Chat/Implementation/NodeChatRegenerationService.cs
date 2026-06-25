@@ -101,7 +101,10 @@ public sealed class NodeChatRegenerationService(
                               newMessageId,
                               requestId,
                               startedAtUtc,
-                              original.Model,
+                              // Stamp the variant with the model that will actually rerun (agent pin when honored, the
+                              // original turn's explicit pick when it suppressed the pin, else the local-default) — not
+                              // the raw original model — so the variant's attribution matches the rerun.
+                              resolution.EffectiveModel,
                               AgentDefinitionId: resolution.Resolved?.AgentDefinitionId,
                               AgentName: resolution.Resolved?.AgentName,
                               // Persist the effort that actually drives this regenerated variant — an agent's pinned
@@ -190,7 +193,7 @@ public sealed class NodeChatRegenerationService(
             conversationId,
             resolved?.ResolvedSystemPrompt ?? LoadResolvedSystemPrompt(localChatOptions.Value),
             BuildRegenerationContext(conversation, original, selectedPath),
-            resolved?.ModelProfile ?? activeModel,
+            resolution.EffectiveModel,
             resolved?.AgentDefinitionVersion ?? AgentDefinitionVersion,
             LocalChatLoopbackDefaults.ClientNodeId,
             allowedTools,
@@ -206,13 +209,15 @@ public sealed class NodeChatRegenerationService(
         // (extraction off) still uses its memory while mining no new candidates. Built here so it closes over the run
         // context this service holds.
         var onTerminal = resolution.Resolved is { PlaybookEnabled: true, MemoryExtractionEnabled: true } memoryAgent
-            ? BuildMemoryExtractionHook(memoryAgent, conversation, original, selectedPath, package, original.Model)
+            ? BuildMemoryExtractionHook(memoryAgent, conversation, original, selectedPath, package, resolution.EffectiveModel)
             : null;
 
         var pumpTask = PumpInvocationStatesAsync(stateChannel.Reader,
             eventChannel.Writer,
             correlation,
-            original.Model,
+            // Stamp the FINAL persisted variant model from the effective model (the pump terminalizes from this
+            // requestedModel) so the stored attribution reflects the model that actually reran, not original.Model.
+            resolution.EffectiveModel,
             sequence,
             parts,
             onTerminal,
@@ -572,9 +577,14 @@ public sealed class NodeChatRegenerationService(
         // model) is reused unchanged. A regenerate of a "Local runtime default" turn (original.Model null/blank)
         // re-resolves through the installed-GGUF resolver — never Ollama — so a stale config/node-settings id is never
         // routed to a dead provider; a null result flags the turn for a clear ModelNotInstalled terminal below.
+        // Mirror the send path's explicit-pick semantics: the original turn carries a concrete model only when the
+        // operator picked one (the "Local runtime default" turn persisted a null/blank model). A concrete original
+        // model is an explicit pick that must win over a bound agent's pinned ModelProfile for BOTH the rerun and the
+        // variant's attribution, so it suppresses the pin (honorModelProfile=false) and becomes the effective model.
         string? activeModel;
         var requiresInstalledChatModel = false;
-        if (!string.IsNullOrWhiteSpace(original.Model))
+        var userPickedConcreteModel = !string.IsNullOrWhiteSpace(original.Model);
+        if (userPickedConcreteModel)
         {
             activeModel = original.Model;
         }
@@ -598,10 +608,15 @@ public sealed class NodeChatRegenerationService(
         // Ollama 400) and a non-tools model is offered no tools. Unknown/offline resolves to NOT-capable (safe default).
         var (supportsThinking, supportsTools) = await ResolveModelCapabilitiesAsync(activeModel, cancellationToken).ConfigureAwait(false);
 
-        var resolved = await agentDefinitionResolver.ResolveAsync(effectiveAgentId, activeModel, retrievalQuery, supportsTools, cancellationToken).ConfigureAwait(false);
+        var resolved = await agentDefinitionResolver.ResolveAsync(effectiveAgentId, activeModel, retrievalQuery, supportsTools, honorModelProfile: !userPickedConcreteModel, cancellationToken).ConfigureAwait(false);
         var orchestration = await ResolveOrchestrationAsync(effectiveAgentId, activeModel, retrievalQuery, supportsTools, cancellationToken).ConfigureAwait(false);
 
-        return new ResolvedTurn(activeModel, resolved, orchestration, supportsThinking, supportsTools, requiresInstalledChatModel);
+        // The single source of truth for the model that actually reruns this turn (agent pin when honored, else the
+        // active model). Stamped into the variant placeholder, the runtime package, and the persisted attribution so
+        // the variant's label can never disagree with what ran — symmetric with the send path.
+        var effectiveModel = resolved?.ModelProfile ?? activeModel;
+
+        return new ResolvedTurn(activeModel, effectiveModel, resolved, orchestration, supportsThinking, supportsTools, requiresInstalledChatModel);
     }
 
     /// <summary>
@@ -773,6 +788,7 @@ public sealed class NodeChatRegenerationService(
     /// <summary>The up-front per-turn resolution shared by variant stamping and runtime-package construction.</summary>
     private sealed record ResolvedTurn(
         string? ActiveModel,
+        string? EffectiveModel,
         ResolvedAgentRuntime? Resolved,
         ResolvedOrchestration? Orchestration,
         bool SupportsThinking,

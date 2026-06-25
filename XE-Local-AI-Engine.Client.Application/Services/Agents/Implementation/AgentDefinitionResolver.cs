@@ -34,7 +34,7 @@ internal sealed class AgentDefinitionResolver : IAgentDefinitionResolver
     }
 
     public async Task<ResolvedAgentRuntime?> ResolveAsync(Guid? agentDefinitionId, string? activeModelId, string? retrievalQuery = null, bool supportsTools = true,
-        CancellationToken cancellationToken = default)
+        bool honorModelProfile = true, CancellationToken cancellationToken = default)
     {
         if (agentDefinitionId is not { } definitionId)
         {
@@ -51,17 +51,21 @@ internal sealed class AgentDefinitionResolver : IAgentDefinitionResolver
             return null;
         }
 
-        // The definition's pinned ModelProfile (when set) is the model the turn actually runs on, so gate the tool
-        // offer by it — not the caller's active model — to keep capability gating and the runtime model consistent.
-        // When the definition pins no profile the turn keeps the caller's active model.
-        var effectiveModel = definition.ModelProfile ?? activeModelId;
+        // The definition's pinned ModelProfile (when set) is normally the model the turn actually runs on, so gate the
+        // tool offer by it — not the caller's active model — to keep capability gating and the runtime model consistent.
+        // When the user explicitly picked a concrete model in the chat dropdown the caller passes honorModelProfile=false:
+        // the pin is suppressed entirely so the active model wins for BOTH tool gating AND the returned ModelProfile
+        // (null), letting the caller's `resolved?.ModelProfile ?? activeModel` yield the user's pick. When the definition
+        // pins no profile (or the pin is suppressed) the turn keeps the caller's active model.
+        var pinnedModel = honorModelProfile ? definition.ModelProfile : null;
+        var effectiveModel = pinnedModel ?? activeModelId;
         var allowedTools = ProjectAllowedTools(definition, effectiveModel, supportsTools);
         var resolvedPrompt = await ComposePromptAsync(definition, retrievalQuery, cancellationToken).ConfigureAwait(false);
         var skills = await ResolveSkillsAsync(definition, cancellationToken).ConfigureAwait(false);
 
         return new ResolvedAgentRuntime(resolvedPrompt,
             allowedTools,
-            definition.ModelProfile,
+            pinnedModel,
             definition.ReasoningEffort,
             definition.Version,
             definition.Id,

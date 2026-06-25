@@ -300,7 +300,7 @@ public sealed class SubAgentSpawnServiceTests
                               RequiresApproval = false
                           })
                           .ToArray();
-            _resolver.ResolveAsync(id, Arg.Any<string?>(), Arg.Any<string?>(), Arg.Any<bool>(), Arg.Any<CancellationToken>())
+            _resolver.ResolveAsync(id, Arg.Any<string?>(), Arg.Any<string?>(), Arg.Any<bool>(), Arg.Any<bool>(), Arg.Any<CancellationToken>())
                      .Returns(new ResolvedAgentRuntime("child instructions", offered, Model, null, 1, id, name));
             return id;
         }
