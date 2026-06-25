@@ -1,0 +1,239 @@
+name: release
+
+# Triggered by a semver tag push (e.g. v0.1.0-rc.1) or manually via workflow_dispatch.
+# Produces Velopack installer + portable + delta packages for each RID and uploads
+# them to the target GitHub release repo for the chosen build flavor.
+on:
+  push:
+    tags:
+      - "v*.*.*"
+  workflow_dispatch:
+    inputs:
+      update-channel:
+        description: "Build flavor: which release repo to target"
+        required: false
+        default: main
+        type: choice
+        options:
+          - main
+          - tester
+
+# ---------------------------------------------------------------------------
+# Supply-chain hardening (plan §11 sec C1 — REQUIRED during unsigned window)
+#
+# Token posture:
+#   GH_RELEASE_TOKEN_MAIN   — fine-grained PAT, contents:write on the main
+#                             release repo ONLY, NOT org-wide, rotatable,
+#                             never exposed to fork PRs.
+#   GH_RELEASE_TOKEN_TESTER — fine-grained PAT, contents:write on the tester
+#                             repo ONLY, same constraints.
+#
+#   GH_RELEASE_REPO_MAIN    — repo variable (not secret), e.g.
+#                             https://github.com/org/xe-releases
+#   GH_RELEASE_REPO_TESTER  — repo variable (not secret), e.g.
+#                             https://github.com/org/xe-releases-tester
+#
+# Branch / tag protection required before any non-tester rollout:
+#   - Tag protection rule covering v* (restrict to release engineers).
+#   - Default branch: require PR review + passing build-and-test status check.
+#   - CODEOWNERS: /Plans/ and .github/workflows/ restricted to a senior
+#     reviewer so no workflow change ships without an explicit approval.
+#
+# The "release" environment below enables GitHub's environment protection
+# rules (required reviewers). Configure at:
+#   repo -> Settings -> Environments -> release -> Required reviewers
+# Add at least one required reviewer before any non-tester rollout.
+#
+# signing follow-up: hard gate before non-tester rollout.
+#   win-x64:   codesign with an EV or OV cert; pass --signParams to vpk pack.
+#   linux-x64: sign with a GPG key; pass --signEntitlements to vpk pack.
+#   Until signing is wired, the unsigned window is mitigated by the
+#   environment protection rules + token scoping above.
+# ---------------------------------------------------------------------------
+permissions:
+  contents: write   # required: vpk upload github creates a GH release
+
+env:
+  DOTNET_NOLOGO: true
+  DOTNET_CLI_TELEMETRY_OPTOUT: true
+  VPK_VERSION: "1.2.0"
+
+jobs:
+  # ---------------------------------------------------------------------------
+  # Compose the Velopack pack-version once and share it across all matrix legs.
+  # Source of truth: Directory.Build.props VersionPrefix + VersionSuffix.
+  # Current value:  0.1.0-rc.1  (tag convention vX.Y.Z-rc.N)
+  # ---------------------------------------------------------------------------
+  version:
+    runs-on: ubuntu-latest
+    outputs:
+      pack-version: ${{ steps.compose.outputs.pack-version }}
+      is-prerelease: ${{ steps.compose.outputs.is-prerelease }}
+      update-channel: ${{ steps.channel.outputs.update-channel }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Compose version from Directory.Build.props
+        id: compose
+        shell: bash
+        run: |
+          PREFIX=$(grep -oP '(?<=<VersionPrefix>)[^<]+' Directory.Build.props)
+          SUFFIX=$(grep -oP '(?<=<VersionSuffix>)[^<]+' Directory.Build.props)
+          if [[ -n "$SUFFIX" ]]; then
+            PACK_VERSION="${PREFIX}-${SUFFIX}"
+          else
+            PACK_VERSION="${PREFIX}"
+          fi
+          echo "pack-version=${PACK_VERSION}" >> "$GITHUB_OUTPUT"
+          # Any rc/alpha/beta/pre label makes this a prerelease build.
+          if [[ "$PACK_VERSION" =~ -(rc|alpha|beta|pre) ]]; then
+            echo "is-prerelease=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "is-prerelease=false" >> "$GITHUB_OUTPUT"
+          fi
+          echo "Composed pack version: ${PACK_VERSION}"
+
+      # Guard: abort early rather than upload a garbage version string.
+      - name: Assert valid SemVer
+        shell: bash
+        run: |
+          PACK_VERSION="${{ steps.compose.outputs.pack-version }}"
+          if ! echo "$PACK_VERSION" | grep -qE '^[0-9]+\.[0-9]+\.[0-9]+(-[a-zA-Z0-9.]+)?$'; then
+            echo "ERROR: pack-version '${PACK_VERSION}' is not valid SemVer. Aborting." >&2
+            exit 1
+          fi
+
+      - name: Resolve update channel
+        id: channel
+        shell: bash
+        run: |
+          # workflow_dispatch input takes priority; push-triggered runs default to 'main'.
+          CHAN="${{ github.event.inputs.update-channel }}"
+          if [[ -z "$CHAN" ]]; then
+            CHAN="main"
+          fi
+          echo "update-channel=${CHAN}" >> "$GITHUB_OUTPUT"
+          echo "Update channel: ${CHAN}"
+
+  # ---------------------------------------------------------------------------
+  # Release matrix — one leg per RID.
+  # Each leg: dotnet publish -> vpk pack -> vpk upload github.
+  # Installer + portable + delta all share ONE feed (releases.{rid}.json)
+  # per repo; do not split by artifact type.
+  # ---------------------------------------------------------------------------
+  release:
+    needs: version
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - rid: win-x64
+            os: windows-latest
+            vpk-channel: win
+            main-exe: XE-Local-AI-Engine.Client.exe
+            # Path matches win-x64.pubxml PublishDir (forward-slashes for bash on windows runner)
+            publish-dir: XE-Local-AI-Engine.Client/bin/Release/net10.0/win-x64/publish
+
+          - rid: linux-x64
+            os: ubuntu-latest
+            vpk-channel: linux
+            main-exe: XE-Local-AI-Engine.Client
+            # Path matches linux-x64.pubxml PublishDir
+            publish-dir: XE-Local-AI-Engine.Client/bin/Release/net10.0/linux-x64/publish
+
+    runs-on: ${{ matrix.os }}
+
+    # Requires environment protection approval before the upload step.
+    # See supply-chain hardening note at the top of this file.
+    environment: release
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup .NET SDK
+        uses: actions/setup-dotnet@v4
+        with:
+          global-json-file: global.json
+
+      # ------------------------------------------------------------------
+      # Flavor -> repo + token mapping.
+      #
+      # main   flavor: GH_RELEASE_REPO_MAIN   + GH_RELEASE_TOKEN_MAIN
+      # tester flavor: GH_RELEASE_REPO_TESTER + GH_RELEASE_TOKEN_TESTER
+      #
+      # Repo URLs are repository variables (non-secret, public config).
+      # Tokens are repository secrets (fine-grained PATs, contents:write,
+      # single target repo only).
+      #
+      # A tester build MUST NOT upload to the main repo.  The guard step
+      # below enforces this at runtime.
+      # ------------------------------------------------------------------
+      - name: Resolve release repo and token for flavor
+        id: flavor
+        shell: bash
+        run: |
+          CHANNEL="${{ needs.version.outputs.update-channel }}"
+          if [[ "$CHANNEL" == "tester" ]]; then
+            echo "repo-url=${{ vars.GH_RELEASE_REPO_TESTER }}" >> "$GITHUB_OUTPUT"
+            echo "release-token=${{ secrets.GH_RELEASE_TOKEN_TESTER }}" >> "$GITHUB_OUTPUT"
+          else
+            echo "repo-url=${{ vars.GH_RELEASE_REPO_MAIN }}" >> "$GITHUB_OUTPUT"
+            echo "release-token=${{ secrets.GH_RELEASE_TOKEN_MAIN }}" >> "$GITHUB_OUTPUT"
+          fi
+          echo "Flavor resolved: channel=${CHANNEL}"
+
+      # Cross-contamination guard: tester flavor must never point at main repo.
+      - name: Assert tester build never targets main repo
+        shell: bash
+        run: |
+          CHANNEL="${{ needs.version.outputs.update-channel }}"
+          REPO_URL="${{ steps.flavor.outputs.repo-url }}"
+          MAIN_URL="${{ vars.GH_RELEASE_REPO_MAIN }}"
+          if [[ "$CHANNEL" == "tester" && "$REPO_URL" == "$MAIN_URL" ]]; then
+            echo "ERROR: tester flavor resolved to main repo URL. Configuration error. Aborting." >&2
+            exit 1
+          fi
+
+      - name: Publish (${{ matrix.rid }}, channel=${{ needs.version.outputs.update-channel }})
+        shell: bash
+        run: |
+          dotnet publish XE-Local-AI-Engine.Client/XE-Local-AI-Engine.Client.csproj \
+            --configuration Release \
+            -p:PublishProfile=${{ matrix.rid }} \
+            -p:UpdateChannel=${{ needs.version.outputs.update-channel }}
+
+      # vpk is a dotnet tool, not a project dependency; pin to match Velopack NuGet version.
+      - name: Install vpk CLI
+        shell: bash
+        run: dotnet tool install -g vpk --version ${{ env.VPK_VERSION }}
+
+      - name: Pack (Velopack)
+        shell: bash
+        run: |
+          PACK_VERSION="${{ needs.version.outputs.pack-version }}"
+          PRERELEASE_FLAG=""
+          if [[ "${{ needs.version.outputs.is-prerelease }}" == "true" ]]; then
+            PRERELEASE_FLAG="--pre"
+          fi
+          vpk pack \
+            --packId XE-Local-AI-Engine \
+            --packVersion "$PACK_VERSION" \
+            --packDir "${{ matrix.publish-dir }}" \
+            --mainExe "${{ matrix.main-exe }}" \
+            --channel "${{ matrix.vpk-channel }}" \
+            $PRERELEASE_FLAG
+
+      - name: Upload to GitHub releases
+        shell: bash
+        run: |
+          PRERELEASE_FLAG=""
+          if [[ "${{ needs.version.outputs.is-prerelease }}" == "true" ]]; then
+            PRERELEASE_FLAG="--pre"
+          fi
+          vpk upload github \
+            --repoUrl "${{ steps.flavor.outputs.repo-url }}" \
+            --token "${{ steps.flavor.outputs.release-token }}" \
+            --channel "${{ matrix.vpk-channel }}" \
+            $PRERELEASE_FLAG
