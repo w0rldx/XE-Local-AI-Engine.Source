@@ -22,7 +22,7 @@ function model(modelName: string, kind: string): LocalModelDto {
 }
 
 describe("chat model picker filter", () => {
-	it("keeps only chat-capable models and hides embedding and unknown ones (locked decision D3)", () => {
+	it("keeps only chat-capable models and hides embedding and unknown ones", () => {
 		const models = [
 			model("llama3:8b", "Chat"),
 			model("nomic-embed-text", "Embedding"),

@@ -13,7 +13,7 @@ using XE_Local_AI_Engine.Tests.Testing;
 
 /// <summary>
 ///     The HIGH-1 intersection gate. End-to-end across the REAL <see cref="LocalToolOfferProvider" /> (real
-///     <see cref="LocalAgentToolRegistry" /> + the §7.5 coder merge) and the REAL
+///     <see cref="LocalAgentToolRegistry" /> + the coder merge) and the REAL
 ///     <see cref="AgentDefinitionResolver" />: the seeded Coder agent's tool set is the non-empty intersection
 ///     <c>offered ∩ AllowedToolNames</c> for a capable model, and empty for an incapable one. If the merge regresses,
 ///     the intersection collapses to ∅ and this gate fails — proving the feature is wired, not merely resolvable.
@@ -99,7 +99,7 @@ public sealed class CoderAgentSendIntersectionTests
 
     private static AgentDefinitionResolver CreateResolver(out IAgentDefinitionStore store, string capableModel)
     {
-        // The REAL offer provider over the REAL registry + the §7.5 merge — coder tools reach the offer only via the
+        // The REAL offer provider over the REAL registry + the merge — coder tools reach the offer only via the
         // merge, never via the registry.
         var offerProvider = new LocalToolOfferProvider(new LocalAgentToolRegistry(),
             new McpToolRegistry(NullLogger<McpToolRegistry>.Instance),

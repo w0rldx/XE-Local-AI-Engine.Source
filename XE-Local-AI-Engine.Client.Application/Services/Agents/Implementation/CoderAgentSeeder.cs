@@ -9,7 +9,7 @@ using XE_Local_AI_Engine.Client.Services.Coder.Tools;
 ///     <see cref="AgentDefaults.CoderAgentSeedSlug" />) — a read-only project-access agent that can list, read, and
 ///     search a selected project inside the AgentHome sandbox. It carries the three coder tool names in
 ///     <c>AllowedToolNames</c> (so the agent-send intersection <c>offered ∩ AllowedToolNames</c> keeps them once the
-///     §7.5 offer merge is in place) with every tool approval set to <see langword="false" /> (decision 7 — the coder
+///     offer merge is in place) with every tool approval set to <see langword="false" /> (the coder
 ///     tools are read-only and auto-run). It pins no model and disables the playbook.
 ///     <para>
 ///         <b>Idempotent + self-healing.</b> It seeds only when the slug is absent from
@@ -88,7 +88,7 @@ public sealed class CoderAgentSeeder : IHostedService
 
     /// <summary>
     ///     The seed input for the Coder agent: the read-only coding prompt, a single-agent kind, no pinned
-    ///     model/reasoning, the three coder tool names in the allowed set, every tool approval false (decision 7), and
+    ///     model/reasoning, the three coder tool names in the allowed set, every tool approval false, and
     ///     the playbook disabled.
     /// </summary>
     private static AgentDefinitionInput BuildSeedInput()

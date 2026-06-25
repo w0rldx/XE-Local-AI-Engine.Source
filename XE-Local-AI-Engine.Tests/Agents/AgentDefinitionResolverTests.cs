@@ -556,7 +556,7 @@ public sealed class AgentDefinitionResolverTests
     [Test]
     public async Task Retrieval_WhenConversationMemoryExcluded_StillInjects()
     {
-        // §3.4a write-only suppression invariant: the memory-excluded (temporary-chat) flag suppresses EXTRACTION only,
+        // write-only suppression invariant: the memory-excluded (temporary-chat) flag suppresses EXTRACTION only,
         // never retrieval. The resolver — the injection path — has NO conversation/temp parameter at all (its signature
         // is agentId/model/query/supportsTools), so it structurally cannot be gated on conversation state: a temp chat
         // still gets the agent's existing Enabled memory composed into the resolved prompt exactly like a normal chat.

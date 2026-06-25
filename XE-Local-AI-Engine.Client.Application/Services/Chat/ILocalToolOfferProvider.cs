@@ -16,8 +16,8 @@ public interface ILocalToolOfferProvider
     ///     invocation factory from the registry by name; this list only travels in the runtime package for the config
     ///     hash and client display. High-risk catalog tools that require a tool-capable model (currently
     ///     <c>run_in_agent_home</c>) are omitted when <paramref name="activeModelId" /> is not in the worker's
-    ///     tool-capable allow-list, so an incapable loopback model is never offered the tool (AgentHome locked decision
-    ///     10). <c>spawn_subagent</c> is NOT in this whole offer — it is offered ONLY to an explicit agent profile that
+    ///     tool-capable allow-list, so an incapable loopback model is never offered the tool. <c>spawn_subagent</c> is
+    ///     NOT in this whole offer — it is offered ONLY to an explicit agent profile that
     ///     opts in via its <c>AllowedToolNames</c> (see <see cref="GetOfferedToolsForProfile" />), never to a plain chat
     ///     turn. The encrypted path stays server-gated and does not call this seam.
     /// </summary>

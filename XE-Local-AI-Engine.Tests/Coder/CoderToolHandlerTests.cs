@@ -10,7 +10,7 @@ using XE_Local_AI_Engine.Tests.Testing;
 /// <summary>
 ///     Handler-shape coverage for the three coder tools: each flag-gates on <c>AgentHome:Enabled</c>, validates before
 ///     touching the reader (reject-before-side-effect), surfaces validation errors, and reports
-///     <see cref="IClientLocalToolHandler.RequiresApproval" /> == false (decision 7).
+///     <see cref="IClientLocalToolHandler.RequiresApproval" /> == false.
 /// </summary>
 public sealed class CoderToolHandlerTests
 {
@@ -96,9 +96,9 @@ public sealed class CoderToolHandlerTests
         IClientLocalToolHandler read = new ReadFileToolHandler(Configuration(enabled: true), reader);
         IClientLocalToolHandler search = new SearchTextToolHandler(Configuration(enabled: true), reader);
 
-        AssertEx.False(list.RequiresApproval, "list_files is read-only and auto-runs (decision 7)");
-        AssertEx.False(read.RequiresApproval, "read_file is read-only and auto-runs (decision 7)");
-        AssertEx.False(search.RequiresApproval, "search_text is read-only and auto-runs (decision 7)");
+        AssertEx.False(list.RequiresApproval, "list_files is read-only and auto-runs");
+        AssertEx.False(read.RequiresApproval, "read_file is read-only and auto-runs");
+        AssertEx.False(search.RequiresApproval, "search_text is read-only and auto-runs");
     }
 
     private static IConfiguration Configuration(bool enabled)

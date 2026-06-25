@@ -32,7 +32,7 @@ try
 {
     var builder = WebApplication.CreateBuilder(args);
 
-    // App self-update build flavor (decision #12): layer the baked, channel-specific update config (repo URL +
+    // App self-update build flavor: layer the baked, channel-specific update config (repo URL +
     // GitHub App client_id) over the appsettings defaults. The publish output renames the active
     // appsettings.AppUpdate.{flavor}.json to appsettings.AppUpdate.json (see the Client .csproj), so exactly one
     // channel file is present and it can never point a tester build at the main repo. Optional: absent in dev/CI, where

@@ -47,7 +47,7 @@ public sealed class CoderAgentSeederTests
         AssertEx.Contains(seeded.AllowedToolNames, CoderToolDefinition.ReadFileToolName);
         AssertEx.Contains(seeded.AllowedToolNames, CoderToolDefinition.SearchTextToolName);
 
-        // Every tool approval is false (decision 7 — read-only, auto-run).
+        // Every tool approval is false (read-only, auto-run).
         AssertEx.True(seeded.ToolApprovals.Values.All(approval => !approval),
             "the seeded coder tools must have every approval set to false");
 

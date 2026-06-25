@@ -68,8 +68,8 @@ internal static class CoderToolDefinition
 
     /// <summary>
     ///     The model-visible descriptors for the three coder tools — name + schema + approval flag. The offer provider
-    ///     consumes these to merge the coder tools into the capability-gated loopback offer (§7.5). All three are
-    ///     auto-execute (<c>RequiresApproval = false</c>, decision 7): they are read-only, workspace-confined,
+    ///     consumes these to merge the coder tools into the capability-gated loopback offer. All three are
+    ///     auto-execute (<c>RequiresApproval = false</c>): they are read-only, workspace-confined,
     ///     secret-filtered, and capped, so the confinement controls are the safety boundary, not a per-call prompt.
     /// </summary>
     public static IReadOnlyList<CoderToolDescriptor> Descriptors { get; } =
@@ -82,10 +82,10 @@ internal static class CoderToolDefinition
 
 /// <summary>
 ///     Offer-side metadata for a single coder tool. Mirrors the shape the offer provider needs (name + schema +
-///     approval flag); <see cref="RequiresApproval" /> is always <see langword="false" /> for coder tools (decision 7).
+///     approval flag); <see cref="RequiresApproval" /> is always <see langword="false" /> for coder tools.
 /// </summary>
 internal sealed record CoderToolDescriptor(string Name, string Description, string ParameterSchema)
 {
-    /// <summary>Coder read tools never require approval (decision 7).</summary>
+    /// <summary>Coder read tools never require approval.</summary>
     public bool RequiresApproval { get; }
 }

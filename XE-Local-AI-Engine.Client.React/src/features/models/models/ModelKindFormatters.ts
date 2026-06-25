@@ -45,7 +45,7 @@ export function capabilityLabel(t: Translate, capability: string): string {
 	}
 }
 
-// The three classifications the operator can pick from when overriding a model's kind (locked decision D1). Mirrors
+// The three classifications the operator can pick from when overriding a model's kind. Mirrors
 // the persisted ModelKind enum names — the value is sent verbatim to the override endpoint.
 const overridableKinds = ["Chat", "Embedding", "Unknown"] as const;
 

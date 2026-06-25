@@ -26,7 +26,7 @@ internal sealed class MemoryExtractionService(
     {
         ArgumentNullException.ThrowIfNull(run);
 
-        // Temp-chat gate FIRST (§3.4a): a memory-excluded conversation never extracts — no model call, no candidate.
+        // Temp-chat gate FIRST: a memory-excluded conversation never extracts — no model call, no candidate.
         // This is the SINGLE write-only enforcement point; retrieval is never gated on this flag, so a temp chat still
         // gets existing enabled memory injected.
         if (run.MemoryExcluded)

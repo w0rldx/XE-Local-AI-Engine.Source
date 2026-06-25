@@ -10,7 +10,7 @@ using Microsoft.Extensions.Options;
 ///     GitHub App device-flow implementation. Talks to github.com over HTTPS using an injected <see cref="HttpClient" />
 ///     (the host supplies a named client). The device_code is never returned to React (the endpoint maps the start result
 ///     to a token-free DTO); the access token is persisted only via <see cref="IGitHubTokenStore" /> and is never logged
-///     or echoed. There is no refresh path — the GitHub App user-token expiration is off (decision #9); a server-side
+///     or echoed. There is no refresh path — the GitHub App user-token expiration is off by design; a server-side
 ///     revoke surfaces as a 401 on the next update check and is handled there as <c>reauthRequired</c>. Sign-out's
 ///     guaranteed effect is the local token deletion; the server-side revoke call is best-effort only (it is a no-op
 ///     without the App client_secret the device flow does not carry).
@@ -71,7 +71,7 @@ public sealed class GitHubAuthService : IGitHubAuthService
         request.Headers.Accept.Add(new MediaTypeWithQualityHeaderValue("application/json"));
         // GitHub App device flow: the body is client_id only. Token permissions are governed by the GitHub App's
         // fine-grained configuration (contents:read + the forced metadata:read), NOT by an OAuth `scope` param — that
-        // param belongs to legacy OAuth Apps and would be ignored here, so it is intentionally omitted (decision #7).
+        // param belongs to legacy OAuth Apps and would be ignored here, so it is intentionally omitted.
         request.Content = new FormUrlEncodedContent(new[]
         {
             new KeyValuePair<string, string>("client_id", clientId)

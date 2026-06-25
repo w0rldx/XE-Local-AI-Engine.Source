@@ -11,7 +11,7 @@
 # must reproduce that directory layout. We keep the C0re repo root as the context
 # root so the parent props files remain available to the MSBuild Directory.* walk.
 #
-# Build invocation (records a registry-independent config Id — plan §14):
+# Build invocation (records a registry-independent config Id):
 #   docker build --provenance=false --sbom=false --platform linux/amd64 \
 #     -f Apps/XE-Local-AI-Engine/docker/Dockerfile.xe-node \
 #     -t ghcr.io/c0re/xe-local-ai-engine:0.1.0-rc.1 \

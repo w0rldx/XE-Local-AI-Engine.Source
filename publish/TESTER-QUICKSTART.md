@@ -17,8 +17,7 @@ Output (git-ignored): `publish/dist/xe-local-ai-engine-<version>-<rid>.zip` plus
 
 > The win-x64 bundle is cross-built on Linux. **It must be smoke-tested on a real Windows
 > machine before tagging an RC** (native-library self-extract, console-close no-orphan, and
-> browser auto-open cannot be verified off-Windows). See the operator checklist in
-> `Plans/2026-06-20-thin-rc-readiness-findings-and-plan.md` §5.
+> browser auto-open cannot be verified off-Windows).
 
 ## Run it (tester)
 

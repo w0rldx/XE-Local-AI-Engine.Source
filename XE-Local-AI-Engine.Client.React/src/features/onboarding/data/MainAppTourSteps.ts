@@ -4,7 +4,7 @@ import type { Step } from "react-joyride";
 import { nodeRoutePaths } from "@/capabilities/NodeCapabilities";
 
 // Stable identifiers for each tour stop, used by the provider to drive route navigation + advance-on-real-state. The
-// order here IS the tour order (plan §9 happy path): point at Models → install a recommended chat model → confirm it
+// order here IS the tour order: point at Models → install a recommended chat model → confirm it
 // is the default → open Chat → type → send → see the first response → showcase advanced features.
 export const tourStepIds = [
 	"navModels",
@@ -29,8 +29,8 @@ export type TourStepId = (typeof tourStepIds)[number];
 export const FIRST_SHOWCASE_STEP_INDEX = tourStepIds.indexOf("reasoningEffort");
 
 // Maps each step to the DOM selector it spotlights. Reuses the chat feature's existing `data-testid`s as-is (NOT
-// re-attributed, plan §4) and the new `data-tour` attributes added to the nav + models surfaces. Targets are
-// capability-independent (Models + Chat are always present for the default user, plan §7.4).
+// re-attributed) and the new `data-tour` attributes added to the nav + models surfaces. Targets are
+// capability-independent (Models + Chat are always present for the default user).
 // Showcase steps target sub-sections of the TourShowcasePanel overlay (always mounted while tour is on those steps).
 const stepTargets: Record<TourStepId, string> = {
 	navModels: '[data-tour="nav-item-models"]',
@@ -49,10 +49,10 @@ const stepTargets: Record<TourStepId, string> = {
 // Builds the controlled Joyride steps from i18n keys. Every title/content resolves to an `onboarding.steps.<id>.*`
 // key (asserted en/de in tests); no inline English copy. The install + send steps allow the user to interact with the
 // spotlighted target (`blockTargetInteraction: false`, the v3 equivalent of v2 `spotlightClicks`) so they perform the
-// real action the step describes (plan §7.2 / R1); other steps block interaction so a stray click can't desync the
+// real action the step describes; other steps block interaction so a stray click can't desync the
 // controlled tour. `skipBeacon` opens each tooltip immediately rather than showing a beacon first.
 // Route-bound steps receive `targetWaitTimeout` so Joyride waits for the lazy-mounted target after navigation instead
-// of immediately emitting TARGET_NOT_FOUND (plan R2).
+// of immediately emitting TARGET_NOT_FOUND.
 export function buildMainAppTourSteps(t: TFunction, targetWaitTimeoutMs = 3000): Step[] {
 	return tourStepIds.map((id) => {
 		const allowTargetInteraction = id === "recommendationInstall" || id === "chatSend";
@@ -73,7 +73,7 @@ export function buildMainAppTourSteps(t: TFunction, targetWaitTimeoutMs = 3000):
 }
 
 // Steps that are bound to a specific route. The provider navigates to the route (via the router singleton) before
-// advancing into these steps so it never targets an unmounted node (plan R2).
+// advancing into these steps so it never targets an unmounted node.
 // Showcase steps are NOT route-bound — they target the always-present TourShowcasePanel overlay.
 export const stepRoutes: Partial<Record<TourStepId, string>> = {
 	recommendationInstall: nodeRoutePaths.modelRecommendations,

@@ -12,7 +12,7 @@ import {
 } from "@/features/app-update/queries/useAppUpdate";
 
 // Only github.com is an acceptable verification host — reject anything else before
-// navigating the user away (plan §10, security must-have L1).
+// navigating the user away.
 function isSafeVerificationUri(uri: string | undefined): boolean {
 	if (!uri) { return false; }
 	try {
@@ -147,7 +147,7 @@ export function GitHubSignInCard({ onAuthorized }: IGitHubSignInCardProps) {
 
 	return (
 		<Stack gap="sm">
-			{/* Privacy disclosure — plan §10 L2: must be present in sign-in UI. */}
+			{/* Privacy disclosure — must be present in sign-in UI. */}
 			<Text size="xs" c="dimmed">
 				{t("pages.about.appUpdate.privacyNotice")}
 			</Text>

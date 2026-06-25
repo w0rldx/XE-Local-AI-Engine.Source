@@ -1,7 +1,7 @@
 namespace XE_Local_AI_Engine.Client.Services.AppUpdate;
 
 /// <summary>
-///     The build-flavor update channel config (decision #12), baked at publish time into
+///     The build-flavor update channel config, baked at publish time into
 ///     <c>appsettings.AppUpdate.json</c>: the GitHub repository the running build self-updates from and the GitHub App
 ///     client_id the device flow authenticates with. Both are PUBLIC config — the device-flow client_id needs no client
 ///     secret and the repo URL is public — so neither is a secret. The values are fixed per artifact (no runtime switch),

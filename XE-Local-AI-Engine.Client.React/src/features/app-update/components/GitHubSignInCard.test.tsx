@@ -104,7 +104,7 @@ describe("GitHubSignInCard", () => {
 
 	it("shows privacy notice in idle state", () => {
 		renderWithProviders(<GitHubSignInCard />);
-		// Privacy notice must be visible before the user signs in (plan §10 L2).
+		// Privacy notice must be visible before the user signs in.
 		expect(screen.getByText(/contacts GitHub and identifies you/i)).toBeTruthy();
 	});
 

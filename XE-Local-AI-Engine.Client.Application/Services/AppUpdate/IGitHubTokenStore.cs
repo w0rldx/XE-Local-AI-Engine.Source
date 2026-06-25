@@ -4,7 +4,7 @@ namespace XE_Local_AI_Engine.Client.Services.AppUpdate;
 ///     Persistence boundary for the encrypted GitHub user access token used to read private-repo releases for app
 ///     self-update. The token is a secret: it is stored encrypted at rest and exposed only to the update source, which
 ///     sets it as an <c>Authorization: Bearer</c> header. It is never logged, never placed in exceptions, never returned
-///     to React, and never in any DTO. There is no refresh token and no expiry (decision #9).
+///     to React, and never in any DTO. There is no refresh token and no expiry by design.
 /// </summary>
 public interface IGitHubTokenStore
 {

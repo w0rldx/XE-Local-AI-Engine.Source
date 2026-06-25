@@ -2,7 +2,7 @@ namespace XE_Local_AI_Engine.Client.Services.AppUpdate;
 
 /// <summary>
 ///     GitHub App device-flow sign-in for app self-update. Begins a device flow, exchanges the device code for a user
-///     access token (no refresh, no expiry — decision #9), and signs out by revoking the token server-side at GitHub and
+///     access token (no refresh, no expiry — by design), and signs out by revoking the token server-side at GitHub and
 ///     clearing the local store. All calls go to github.com over HTTPS using the baked GitHub App client_id. The token is
 ///     a secret: it is persisted only via <see cref="IGitHubTokenStore" />, never logged, never returned to React.
 /// </summary>

@@ -96,7 +96,7 @@ public sealed class VelopackUpdateManager : IVelopackUpdateManager
 }
 
 /// <summary>
-///     Builds <see cref="VelopackUpdateManager" /> instances bound to the baked flavor repo (decision #12) and a user
+///     Builds <see cref="VelopackUpdateManager" /> instances bound to the baked flavor repo and a user
 ///     access token. The repo URL comes from <see cref="AppUpdateChannelOptions" /> — fixed per artifact, so a tester
 ///     build can never construct a manager against the main repo.
 /// </summary>
