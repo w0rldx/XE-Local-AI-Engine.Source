@@ -215,6 +215,18 @@ describe("NodeChatPreferencesStore", () => {
 		expect(localStorage.getItem(SELECTED_AGENT_STORAGE_KEY)).toBe("");
 	});
 
+	it("clearSelectedAgent resets the agent selection and clears localStorage", async () => {
+		// Simulate a previously-selected agent persisted from a prior conversation.
+		const useStore = await loadStore({ [SELECTED_AGENT_STORAGE_KEY]: "agent-from-prior-convo" });
+
+		expect(useStore.getState().selectedAgentId).toBe("agent-from-prior-convo");
+
+		useStore.getState().actions.clearSelectedAgent();
+
+		expect(useStore.getState().selectedAgentId).toBe("");
+		expect(localStorage.getItem(SELECTED_AGENT_STORAGE_KEY)).toBe("");
+	});
+
 	it("defaults the tokens/sec toggle to off", async () => {
 		const useStore = await loadStore();
 

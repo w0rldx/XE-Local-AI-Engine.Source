@@ -191,7 +191,7 @@ public sealed class NodeChatRegenerationServiceTests : IDisposable
         var runner = new RegenContextCapturingRunner(dispatcher);
         var boundTool = CreateLocalToolDto("Calculate", "{\"type\":\"object\"}");
         var resolver = Substitute.For<IAgentDefinitionResolver>();
-        resolver.ResolveAsync(agentDefinitionId, Arg.Any<string?>(), Arg.Any<string?>(), Arg.Any<bool>(), Arg.Any<CancellationToken>())
+        resolver.ResolveAsync(agentDefinitionId, Arg.Any<string?>(), Arg.Any<string?>(), Arg.Any<bool>(), Arg.Any<bool>(), Arg.Any<CancellationToken>())
                 .Returns(new ResolvedAgentRuntime("Bound persona prompt.", [boundTool], "qwen3:8b", "high", AgentDefinitionVersion: 9));
 
         var service = new NodeChatRegenerationService(persistence,
@@ -229,7 +229,7 @@ public sealed class NodeChatRegenerationServiceTests : IDisposable
         // ResolvePrecedingUserTurnContent anchors the relevance-retrieval query to the user turn the
         // regenerate re-answers — here the seeded "what is 2+2?" — not just any string. This is the only direct
         // coverage of that variant-group-anchored query selection.
-        await resolver.Received().ResolveAsync(agentDefinitionId, Arg.Any<string?>(), Arg.Is<string?>(query => query == "what is 2+2?"), Arg.Any<bool>(), Arg.Any<CancellationToken>())
+        await resolver.Received().ResolveAsync(agentDefinitionId, Arg.Any<string?>(), Arg.Is<string?>(query => query == "what is 2+2?"), Arg.Any<bool>(), Arg.Any<bool>(), Arg.Any<CancellationToken>())
                       .ConfigureAwait(false);
         AssertEx.Equal("Bound persona prompt.", runner.LastSystemPrompt);
         AssertEx.Equal(expected: 9, runner.LastAgentDefinitionVersion);
@@ -237,6 +237,83 @@ public sealed class NodeChatRegenerationServiceTests : IDisposable
         AssertEx.Equal(expected: 1, runner.LastAllowedTools.Count);
         AssertEx.Equal("Calculate", runner.LastAllowedTools[0].Name);
         AssertEx.True(runner.LastOrchestrationSpec is null, "A single-agent regenerate must carry no orchestration spec.");
+    }
+
+    [Test]
+    public async Task Regenerate_WhenOriginalCarriesConcreteModel_SuppressesAgentPin_StampsOriginalModel()
+    {
+        // Parity with the send path: the original turn recorded a CONCRETE model ("model-x") — an explicit user pick —
+        // while the bound agent pins its own ModelProfile ("gemma3:4b"). The explicit pick must win over the pin for
+        // BOTH the rerun (package model) AND the variant's persisted attribution, and the resolver is told
+        // honorModelProfile=false. The resolver mock mirrors the real resolver: a suppressed pin projects a null
+        // ModelProfile so `resolved?.ModelProfile ?? activeModel` yields the original model.
+        const string originalModel = "model-x";
+        await using var provider = await BuildProviderAsync("regeneration-effective-model.sqlite").ConfigureAwait(false);
+        var persistence = new NodeChatPersistenceService(provider.GetRequiredService<NodeChatPersistenceWriter>());
+        var agentDefinitionId = Guid.NewGuid();
+
+        var conversation = await persistence.CreateConversationAsync(new NodeChatCreateConversationRequest("Effective-model regen", "node", CreatedAtUtc: 10, AgentDefinitionId: agentDefinitionId))
+                                            .ConfigureAwait(false);
+        await persistence.PersistUserMessageAsync(new NodeChatPersistUserMessageRequest(conversation.ConversationId, Guid.NewGuid(), "what is 2+2?", CreatedAtUtc: 11)).ConfigureAwait(false);
+        var originalId = Guid.NewGuid();
+        var originalCorrelation = new NodeChatMessageCorrelation(conversation.ConversationId, originalId, Guid.NewGuid());
+        await persistence.CreateAssistantPlaceholderAsync(new NodeChatCreateAssistantPlaceholderRequest(conversation.ConversationId, originalId, originalCorrelation.RequestId, CreatedAtUtc: 12,
+                             originalModel))
+                         .ConfigureAwait(false);
+        await persistence.TerminalizeAssistantMessageAsync(
+                             new NodeChatTerminalizeMessageRequest(originalCorrelation, NodeChatMessageStatusValues.Completed, UpdatedAtUtc: 13, "four", Model: originalModel))
+                         .ConfigureAwait(false);
+
+        var dispatcher = new RegenRecordingDispatcher();
+        var runner = new RegenContextCapturingRunner(dispatcher);
+        var resolver = Substitute.For<IAgentDefinitionResolver>();
+        resolver.ResolveAsync(agentDefinitionId, Arg.Any<string?>(), Arg.Any<string?>(), Arg.Any<bool>(), Arg.Any<bool>(), Arg.Any<CancellationToken>())
+                .Returns(callInfo =>
+                {
+                    var honorModelProfile = callInfo.ArgAt<bool>(4);
+                    return new ResolvedAgentRuntime("Pinned persona.", [], honorModelProfile ? "gemma3:4b" : null, ReasoningEffort: null, AgentDefinitionVersion: 9, agentDefinitionId, "Pinned Agent");
+                });
+
+        var service = new NodeChatRegenerationService(persistence,
+            new NodeChatInvocationPump(persistence, TimeProvider.System),
+            new NodeChatMutationGuard(persistence),
+            new LocalChatRuntimePackageBuilder(),
+            runner,
+            dispatcher,
+            Options.Create(new LocalChatAgentOptions()),
+            StubNodeRuntimeSettings.Create().Build(),
+            new NodeChatStreamCancellationRegistry(),
+            CreateOfferProvider(),
+            resolver,
+            CreateAgentDefinitionStore(),
+            CreateDefaultAgentProvider(),
+            CreateOrchestrationResolver(),
+            CreateNodeSettingsStore(),
+            CreateModelClassificationService(),
+            CreateGgufModelCapabilityResolver(),
+            CreateLocalDefaultChatModelResolver(),
+            CreateMemoryExtractionDispatcher(),
+            TimeProvider.System,
+            NullLogger<NodeChatRegenerationService>.Instance);
+
+        var newVariantId = Guid.Empty;
+        await foreach (var streamEvent in service.RegenerateAsync(conversation.ConversationId, originalId).ConfigureAwait(false))
+        {
+            if (streamEvent.Type == ChatStreamEventTypes.AssistantPending)
+            {
+                newVariantId = streamEvent.MessageId;
+            }
+        }
+
+        // The rerun executed on the original's explicit model, not the agent's pin.
+        AssertEx.Equal(originalModel, runner.LastModelProfile);
+        // The resolver was told to suppress the pin.
+        await resolver.Received().ResolveAsync(agentDefinitionId, Arg.Any<string?>(), Arg.Any<string?>(), Arg.Any<bool>(), Arg.Is<bool>(honor => !honor), Arg.Any<CancellationToken>())
+                      .ConfigureAwait(false);
+        // The persisted variant's attribution reflects the model that actually reran.
+        var loaded = AssertEx.NotNull(await persistence.GetConversationAsync(conversation.ConversationId).ConfigureAwait(false));
+        var variant = loaded.Messages.Single(message => message.MessageId == newVariantId);
+        AssertEx.Equal(originalModel, variant.Model);
     }
 
     [Test]
@@ -273,7 +350,7 @@ public sealed class NodeChatRegenerationServiceTests : IDisposable
         var runner = new RegenContextCapturingRunner(dispatcher);
         var resolver = Substitute.For<IAgentDefinitionResolver>();
         // The agent was renamed since the original turn — the re-resolve picks up the fresh name.
-        resolver.ResolveAsync(originalTurnAgentId, Arg.Any<string?>(), Arg.Any<string?>(), Arg.Any<bool>(), Arg.Any<CancellationToken>())
+        resolver.ResolveAsync(originalTurnAgentId, Arg.Any<string?>(), Arg.Any<string?>(), Arg.Any<bool>(), Arg.Any<bool>(), Arg.Any<CancellationToken>())
                 .Returns(new ResolvedAgentRuntime("Original persona.", [], "model-x", ReasoningEffort: null, AgentDefinitionVersion: 5, originalTurnAgentId, "Renamed Original Agent"));
 
         var service = new NodeChatRegenerationService(persistence,
@@ -308,8 +385,8 @@ public sealed class NodeChatRegenerationServiceTests : IDisposable
         }
 
         // The original turn's agent drove the resolve, NOT the conversation binding.
-        await resolver.Received().ResolveAsync(originalTurnAgentId, Arg.Any<string?>(), Arg.Any<string?>(), Arg.Any<bool>(), Arg.Any<CancellationToken>()).ConfigureAwait(false);
-        await resolver.DidNotReceive().ResolveAsync(conversationAgentId, Arg.Any<string?>(), Arg.Any<string?>(), Arg.Any<bool>(), Arg.Any<CancellationToken>()).ConfigureAwait(false);
+        await resolver.Received().ResolveAsync(originalTurnAgentId, Arg.Any<string?>(), Arg.Any<string?>(), Arg.Any<bool>(), Arg.Any<bool>(), Arg.Any<CancellationToken>()).ConfigureAwait(false);
+        await resolver.DidNotReceive().ResolveAsync(conversationAgentId, Arg.Any<string?>(), Arg.Any<string?>(), Arg.Any<bool>(), Arg.Any<bool>(), Arg.Any<CancellationToken>()).ConfigureAwait(false);
 
         // The regenerated variant is stamped with the FRESH (re-resolved) agent name + the agent id.
         var loaded = AssertEx.NotNull(await persistence.GetConversationAsync(conversation.ConversationId).ConfigureAwait(false));
@@ -438,7 +515,7 @@ public sealed class NodeChatRegenerationServiceTests : IDisposable
         }
 
         AssertEx.True(drained > 0, "Expected the regenerate to stream events.");
-        await resolver.Received().ResolveAsync(agentDefinitionId: null, Arg.Any<string?>(), Arg.Any<string?>(), Arg.Any<bool>(), Arg.Any<CancellationToken>()).ConfigureAwait(false);
+        await resolver.Received().ResolveAsync(agentDefinitionId: null, Arg.Any<string?>(), Arg.Any<string?>(), Arg.Any<bool>(), Arg.Any<bool>(), Arg.Any<CancellationToken>()).ConfigureAwait(false);
         AssertEx.Equal(expected: 1, runner.LastAgentDefinitionVersion);
         AssertEx.NotNullOrEmpty(runner.LastSystemPrompt);
     }
@@ -1027,7 +1104,7 @@ public sealed class NodeChatRegenerationServiceTests : IDisposable
     private static IAgentDefinitionResolver CreateAgentDefinitionResolver()
     {
         var resolver = Substitute.For<IAgentDefinitionResolver>();
-        resolver.ResolveAsync(Arg.Any<Guid?>(), Arg.Any<string?>(), Arg.Any<string?>(), Arg.Any<bool>(), Arg.Any<CancellationToken>()).Returns((ResolvedAgentRuntime?)null);
+        resolver.ResolveAsync(Arg.Any<Guid?>(), Arg.Any<string?>(), Arg.Any<string?>(), Arg.Any<bool>(), Arg.Any<bool>(), Arg.Any<CancellationToken>()).Returns((ResolvedAgentRuntime?)null);
         return resolver;
     }
 
@@ -1181,6 +1258,9 @@ public sealed class NodeChatRegenerationServiceTests : IDisposable
         // bound definition's persona + version reach the regenerate path (a missed hydration site = divergent reruns).
         public string? LastSystemPrompt { get; private set; }
         public int LastAgentDefinitionVersion { get; private set; }
+
+        // The model the runtime package ran on; the effective-model tests assert the dropdown pick / pin precedence.
+        public string? LastModelProfile { get; private set; }
         public OrchestrationSpec? LastOrchestrationSpec { get; private set; }
         public int ActiveInvocationCount => 0;
 
@@ -1191,6 +1271,7 @@ public sealed class NodeChatRegenerationServiceTests : IDisposable
             LastAllowedTools = context.Package.AllowedTools;
             LastSystemPrompt = context.Package.ResolvedSystemPrompt;
             LastAgentDefinitionVersion = context.Package.AgentDefinitionVersion;
+            LastModelProfile = context.Package.ModelProfile;
             LastOrchestrationSpec = context.Package.OrchestrationSpec;
             await dispatcher.ReportInvocationStreamChunkAsync(context.Package.InvocationId, "regenerated answer").ConfigureAwait(false);
             await dispatcher.ReportInvocationCompletedAsync(context.Package.InvocationId, inputTokens: 5, outputTokens: 2, totalTokens: 7, reasoningTokens: 0).ConfigureAwait(false);

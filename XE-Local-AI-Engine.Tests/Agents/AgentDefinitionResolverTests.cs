@@ -371,6 +371,53 @@ public sealed class AgentDefinitionResolverTests
     }
 
     [Test]
+    public async Task ResolveAsync_WhenHonorModelProfileFalse_SuppressesPinForGatingAndProjectsNullModelProfile()
+    {
+        // The user explicitly picked a concrete model in the chat dropdown, so the caller passes honorModelProfile=false.
+        // The definition's pinned ModelProfile is suppressed entirely: the projection's ModelProfile is null (so the
+        // caller's `resolved?.ModelProfile ?? activeModel` yields the user's pick) AND the tool offer is gated by the
+        // caller's active model, NOT the pin. Here the pin is a NON-tool-capable model while the user picked a
+        // tool-capable one, so the capability-gated tool surviving proves the user's model — not the pin — drove gating.
+        string? observedModelId = null;
+        var resolver = CreateResolver(out var store,
+            modelId => observedModelId = modelId,
+            OfferTool(CapabilityGatedToolName),
+            OfferTool("GetCurrentTime"));
+        var definition = CreateDefinition(allowedTools: [CapabilityGatedToolName, "GetCurrentTime"], modelProfile: IncapableModel);
+        store.GetByIdAsync(definition.Id, Arg.Any<CancellationToken>()).Returns(definition);
+
+        var resolved = await resolver.ResolveAsync(definition.Id, ToolCapableModel, retrievalQuery: null, supportsTools: true, honorModelProfile: false).ConfigureAwait(false);
+
+        AssertEx.NotNull(resolved);
+        AssertEx.True(resolved!.ModelProfile is null, "A suppressed pin must project a null ModelProfile so the user's pick wins.");
+        AssertEx.Equal(ToolCapableModel, observedModelId);
+        AssertEx.Contains(resolved.AllowedTools, tool => tool.Name == CapabilityGatedToolName);
+    }
+
+    [Test]
+    public async Task ResolveAsync_WhenHonorModelProfileTrue_KeepsPinForGatingAndProjectsPin()
+    {
+        // Contrast (default precedence, no explicit user pick): honorModelProfile=true keeps the pin. The projection
+        // carries the pinned model AND the offer is gated by it — the pin being a NON-tool-capable model withholds the
+        // capability-gated tool even though the caller's active model is tool-capable.
+        string? observedModelId = null;
+        var resolver = CreateResolver(out var store,
+            modelId => observedModelId = modelId,
+            OfferTool(CapabilityGatedToolName),
+            OfferTool("GetCurrentTime"));
+        var definition = CreateDefinition(allowedTools: [CapabilityGatedToolName, "GetCurrentTime"], modelProfile: IncapableModel);
+        store.GetByIdAsync(definition.Id, Arg.Any<CancellationToken>()).Returns(definition);
+
+        var resolved = await resolver.ResolveAsync(definition.Id, ToolCapableModel, retrievalQuery: null, supportsTools: true, honorModelProfile: true).ConfigureAwait(false);
+
+        AssertEx.NotNull(resolved);
+        AssertEx.Equal(IncapableModel, resolved!.ModelProfile);
+        AssertEx.Equal(IncapableModel, observedModelId);
+        AssertEx.False(resolved.AllowedTools.Any(tool => tool.Name == CapabilityGatedToolName),
+            "An honored non-tool-capable pin must gate out the capability-gated tool.");
+    }
+
+    [Test]
     public async Task ResolveAsync_BoundProjection_ProducesSameConfigHashAsHandBuiltEquivalent()
     {
         var resolver = CreateResolver(out var store, OfferTool("GetCurrentTime"));

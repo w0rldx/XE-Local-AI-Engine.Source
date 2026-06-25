@@ -164,6 +164,7 @@ export function Chat() {
 		toggleSidebar,
 		setAgentModeEnabled,
 		setSelectedAgentId,
+		clearSelectedAgent,
 	} = useNodeChatPreferencesStore((state) => state.actions);
 	// Developer mode + per-send sampling overrides. Read directly from global stores.
 	const developerMode = useDeveloperModeStore((state) => state.developerMode);
@@ -347,6 +348,9 @@ export function Chat() {
 			);
 			queryClient.setQueryData(nodeChatQueryKeys.conversation(conversation.id), conversation);
 			setRequestedConversationId(conversation.id);
+			// A new conversation must not inherit the previous thread's pinned agent — clear the
+			// selection so the composer starts clean. Model stays sticky (intentional UX).
+			clearSelectedAgent();
 			await queryClient.invalidateQueries({ queryKey: nodeChatQueryKeys.conversations() });
 		},
 	});

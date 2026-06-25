@@ -114,6 +114,9 @@ interface NodeChatPreferencesStore {
 		setAgentModeEnabled: (value: boolean) => void;
 		toggleAgentMode: () => void;
 		setSelectedAgentId: (value: string) => void;
+		// Clears the agent selection when starting a fresh conversation so a previously-pinned agent
+		// cannot silently carry over and interfere with a new thread's model selection.
+		clearSelectedAgent: () => void;
 		setShowTokensPerSecond: (value: boolean) => void;
 	};
 }
@@ -229,6 +232,10 @@ export const useNodeChatPreferencesStore = create<NodeChatPreferencesStore>()((s
 		setSelectedAgentId: (value) => {
 			writeStoredValue(SELECTED_AGENT_STORAGE_KEY, value);
 			set({ selectedAgentId: value });
+		},
+		clearSelectedAgent: () => {
+			writeStoredValue(SELECTED_AGENT_STORAGE_KEY, "");
+			set({ selectedAgentId: "" });
 		},
 		setShowTokensPerSecond: (value) => {
 			writeStoredValue(SHOW_TOKENS_PER_SECOND_STORAGE_KEY, String(value));

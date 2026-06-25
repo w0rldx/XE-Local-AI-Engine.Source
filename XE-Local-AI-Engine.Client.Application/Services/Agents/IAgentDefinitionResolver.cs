@@ -29,7 +29,16 @@ public interface IAgentDefinitionResolver
     ///     withheld (the model cannot drive tool calls), independent of the existing per-tool <c>ToolCapableModels</c>
     ///     name allow-list. Defaults to <c>true</c> so callers that do not gate by capability keep today's behaviour.
     /// </param>
-    Task<ResolvedAgentRuntime?> ResolveAsync(Guid? agentDefinitionId, string? activeModelId, string? retrievalQuery = null, bool supportsTools = true, CancellationToken cancellationToken = default);
+    /// <param name="honorModelProfile">
+    ///     Whether the definition's pinned <c>ModelProfile</c> applies. When <c>true</c> (default) the pin — when set —
+    ///     is the model the turn runs on: it gates the tool offer and is returned as the resolved
+    ///     <see cref="ResolvedAgentRuntime.ModelProfile" />. When <c>false</c> the caller supplied an explicit concrete
+    ///     model (the user picked one in the chat dropdown) that must win over the pin: the pin is suppressed entirely,
+    ///     the tool offer is gated by <paramref name="activeModelId" />, and the resolved <c>ModelProfile</c> is
+    ///     <c>null</c> so the caller's <c>resolved?.ModelProfile ?? activeModel</c> yields the user's pick. Defaults to
+    ///     <c>true</c> so callers that do not override the pin keep today's behaviour.
+    /// </param>
+    Task<ResolvedAgentRuntime?> ResolveAsync(Guid? agentDefinitionId, string? activeModelId, string? retrievalQuery = null, bool supportsTools = true, bool honorModelProfile = true, CancellationToken cancellationToken = default);
 }
 
 /// <summary>

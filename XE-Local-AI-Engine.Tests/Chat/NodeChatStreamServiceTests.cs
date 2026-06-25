@@ -747,7 +747,7 @@ public sealed class NodeChatStreamServiceTests
 
         var boundTool = CreateLocalToolDto("Calculate", "{\"type\":\"object\"}");
         var resolver = Substitute.For<IAgentDefinitionResolver>();
-        resolver.ResolveAsync(agentDefinitionId, Arg.Any<string?>(), Arg.Any<string?>(), Arg.Any<bool>(), Arg.Any<CancellationToken>())
+        resolver.ResolveAsync(agentDefinitionId, Arg.Any<string?>(), Arg.Any<string?>(), Arg.Any<bool>(), Arg.Any<bool>(), Arg.Any<CancellationToken>())
                 .Returns(new ResolvedAgentRuntime("Bound persona prompt.", [boundTool], "qwen3:8b", "high", AgentDefinitionVersion: 9));
 
         var service = new NodeChatStreamService(persistence,
@@ -795,7 +795,7 @@ public sealed class NodeChatStreamServiceTests
         AssertEx.True(runner.LastOrchestrationSpec is null, "A single-agent binding must carry no orchestration spec.");
         // The just-sent user turn ("hello") is threaded to the resolver as the relevance-retrieval query —
         // not just any string, the actual turn content drives which playbook actions are injected.
-        await resolver.Received().ResolveAsync(agentDefinitionId, Arg.Any<string?>(), Arg.Is<string?>(query => query == "hello"), Arg.Any<bool>(), Arg.Any<CancellationToken>()).ConfigureAwait(false);
+        await resolver.Received().ResolveAsync(agentDefinitionId, Arg.Any<string?>(), Arg.Is<string?>(query => query == "hello"), Arg.Any<bool>(), Arg.Any<bool>(), Arg.Any<CancellationToken>()).ConfigureAwait(false);
     }
 
     [Test]
@@ -812,7 +812,7 @@ public sealed class NodeChatStreamServiceTests
         var runner = new CompletingInvocationRunner(dispatcher);
 
         var resolver = Substitute.For<IAgentDefinitionResolver>();
-        resolver.ResolveAsync(agentDefinitionId, Arg.Any<string?>(), Arg.Any<string?>(), Arg.Any<bool>(), Arg.Any<CancellationToken>())
+        resolver.ResolveAsync(agentDefinitionId, Arg.Any<string?>(), Arg.Any<string?>(), Arg.Any<bool>(), Arg.Any<bool>(), Arg.Any<CancellationToken>())
                 .Returns(new ResolvedAgentRuntime("Bound persona prompt.", [], "qwen3:8b", ReasoningEffort: null, AgentDefinitionVersion: 9, agentDefinitionId, "Memory Agent", PlaybookEnabled: true,
                     MemoryExtractionEnabled: true));
         var extractionDispatcher = Substitute.For<IMemoryExtractionDispatcher>();
@@ -868,7 +868,7 @@ public sealed class NodeChatStreamServiceTests
         var runner = new CompletingInvocationRunner(dispatcher);
 
         var resolver = Substitute.For<IAgentDefinitionResolver>();
-        resolver.ResolveAsync(agentDefinitionId, Arg.Any<string?>(), Arg.Any<string?>(), Arg.Any<bool>(), Arg.Any<CancellationToken>())
+        resolver.ResolveAsync(agentDefinitionId, Arg.Any<string?>(), Arg.Any<string?>(), Arg.Any<bool>(), Arg.Any<bool>(), Arg.Any<CancellationToken>())
                 .Returns(new ResolvedAgentRuntime("Bound persona prompt.", [], "qwen3:8b", ReasoningEffort: null, AgentDefinitionVersion: 9, agentDefinitionId, "Retrieval Only", PlaybookEnabled: true,
                     MemoryExtractionEnabled: false));
         var extractionDispatcher = Substitute.For<IMemoryExtractionDispatcher>();
@@ -908,7 +908,7 @@ public sealed class NodeChatStreamServiceTests
         AssertEx.True(drained > 0, "Expected the send to stream events.");
         // Retrieval still happens — the definition was resolved with the user turn as the relevance query, so existing
         // memory rides the resolved prompt.
-        await resolver.Received().ResolveAsync(agentDefinitionId, Arg.Any<string?>(), Arg.Is<string?>(query => query == "hello"), Arg.Any<bool>(), Arg.Any<CancellationToken>()).ConfigureAwait(false);
+        await resolver.Received().ResolveAsync(agentDefinitionId, Arg.Any<string?>(), Arg.Is<string?>(query => query == "hello"), Arg.Any<bool>(), Arg.Any<bool>(), Arg.Any<CancellationToken>()).ConfigureAwait(false);
         // …but no NEW candidates are mined: extraction is never dispatched.
         extractionDispatcher.DidNotReceive().Dispatch(Arg.Any<MemoryExtractionDispatchContext>(), Arg.Any<MemoryExtractionRunInput>());
     }
@@ -1019,7 +1019,7 @@ public sealed class NodeChatStreamServiceTests
         AssertEx.True(drained > 0, "Expected the send to stream events.");
         AssertEx.Equal(expected: 1, runner.LastAgentDefinitionVersion);
         AssertEx.NotNullOrEmpty(runner.LastSystemPrompt);
-        await resolver.Received().ResolveAsync(agentDefinitionId: null, Arg.Any<string?>(), Arg.Any<string?>(), Arg.Any<bool>(), Arg.Any<CancellationToken>()).ConfigureAwait(false);
+        await resolver.Received().ResolveAsync(agentDefinitionId: null, Arg.Any<string?>(), Arg.Any<string?>(), Arg.Any<bool>(), Arg.Any<bool>(), Arg.Any<CancellationToken>()).ConfigureAwait(false);
     }
 
     [Test]
@@ -1036,7 +1036,7 @@ public sealed class NodeChatStreamServiceTests
         var dispatcher = new RecordingWorkerEventDispatcher();
         var runner = new CompletingInvocationRunner(dispatcher);
         var resolver = Substitute.For<IAgentDefinitionResolver>();
-        resolver.ResolveAsync(Arg.Any<Guid?>(), Arg.Any<string?>(), Arg.Any<string?>(), Arg.Any<bool>(), Arg.Any<CancellationToken>())
+        resolver.ResolveAsync(Arg.Any<Guid?>(), Arg.Any<string?>(), Arg.Any<string?>(), Arg.Any<bool>(), Arg.Any<bool>(), Arg.Any<CancellationToken>())
                 .Returns(new ResolvedAgentRuntime("Selected persona.", [], "qwen3:8b", ReasoningEffort: null, AgentDefinitionVersion: 3, requestAgentId, "Selected Agent"));
 
         var service = new NodeChatStreamService(persistence,
@@ -1073,8 +1073,8 @@ public sealed class NodeChatStreamServiceTests
         }
 
         AssertEx.True(drained > 0, "Expected the send to stream events.");
-        await resolver.Received().ResolveAsync(requestAgentId, Arg.Any<string?>(), Arg.Any<string?>(), Arg.Any<bool>(), Arg.Any<CancellationToken>()).ConfigureAwait(false);
-        await resolver.DidNotReceive().ResolveAsync(conversationAgentId, Arg.Any<string?>(), Arg.Any<string?>(), Arg.Any<bool>(), Arg.Any<CancellationToken>()).ConfigureAwait(false);
+        await resolver.Received().ResolveAsync(requestAgentId, Arg.Any<string?>(), Arg.Any<string?>(), Arg.Any<bool>(), Arg.Any<bool>(), Arg.Any<CancellationToken>()).ConfigureAwait(false);
+        await resolver.DidNotReceive().ResolveAsync(conversationAgentId, Arg.Any<string?>(), Arg.Any<string?>(), Arg.Any<bool>(), Arg.Any<bool>(), Arg.Any<CancellationToken>()).ConfigureAwait(false);
     }
 
     [Test]
@@ -1090,7 +1090,7 @@ public sealed class NodeChatStreamServiceTests
         var dispatcher = new RecordingWorkerEventDispatcher();
         var runner = new CompletingInvocationRunner(dispatcher);
         var resolver = Substitute.For<IAgentDefinitionResolver>();
-        resolver.ResolveAsync(Arg.Any<Guid?>(), Arg.Any<string?>(), Arg.Any<string?>(), Arg.Any<bool>(), Arg.Any<CancellationToken>())
+        resolver.ResolveAsync(Arg.Any<Guid?>(), Arg.Any<string?>(), Arg.Any<string?>(), Arg.Any<bool>(), Arg.Any<bool>(), Arg.Any<CancellationToken>())
                 .Returns(new ResolvedAgentRuntime("Default persona.", [], ModelProfile: null, ReasoningEffort: null, AgentDefinitionVersion: 1, defaultAssistantId, "Default Assistant"));
 
         var service = new NodeChatStreamService(persistence,
@@ -1126,7 +1126,7 @@ public sealed class NodeChatStreamServiceTests
         }
 
         AssertEx.True(drained > 0, "Expected the send to stream events.");
-        await resolver.Received().ResolveAsync(defaultAssistantId, Arg.Any<string?>(), Arg.Any<string?>(), Arg.Any<bool>(), Arg.Any<CancellationToken>()).ConfigureAwait(false);
+        await resolver.Received().ResolveAsync(defaultAssistantId, Arg.Any<string?>(), Arg.Any<string?>(), Arg.Any<bool>(), Arg.Any<bool>(), Arg.Any<CancellationToken>()).ConfigureAwait(false);
     }
 
     [Test]
@@ -1143,7 +1143,7 @@ public sealed class NodeChatStreamServiceTests
         var dispatcher = new RecordingWorkerEventDispatcher();
         var runner = new CompletingInvocationRunner(dispatcher);
         var resolver = Substitute.For<IAgentDefinitionResolver>();
-        resolver.ResolveAsync(Arg.Any<Guid?>(), Arg.Any<string?>(), Arg.Any<string?>(), Arg.Any<bool>(), Arg.Any<CancellationToken>())
+        resolver.ResolveAsync(Arg.Any<Guid?>(), Arg.Any<string?>(), Arg.Any<string?>(), Arg.Any<bool>(), Arg.Any<bool>(), Arg.Any<CancellationToken>())
                 .Returns(new ResolvedAgentRuntime("Persona.", [], ModelProfile: null, ReasoningEffort: null, AgentDefinitionVersion: 1, agentId, "Backend Buddy"));
 
         var service = new NodeChatStreamService(persistence,
@@ -1199,7 +1199,7 @@ public sealed class NodeChatStreamServiceTests
         var dispatcher = new RecordingWorkerEventDispatcher();
         var runner = new CompletingInvocationRunner(dispatcher);
         var resolver = Substitute.For<IAgentDefinitionResolver>();
-        resolver.ResolveAsync(Arg.Any<Guid?>(), Arg.Any<string?>(), Arg.Any<string?>(), Arg.Any<bool>(), Arg.Any<CancellationToken>())
+        resolver.ResolveAsync(Arg.Any<Guid?>(), Arg.Any<string?>(), Arg.Any<string?>(), Arg.Any<bool>(), Arg.Any<bool>(), Arg.Any<CancellationToken>())
                 .Returns(new ResolvedAgentRuntime("Persona.", [], ModelProfile: null, ReasoningEffort: null, AgentDefinitionVersion: 1, agentId, "Pending Persona"));
 
         var service = new NodeChatStreamService(persistence,
@@ -1243,6 +1243,158 @@ public sealed class NodeChatStreamServiceTests
         var streamingIndex = events.FindIndex(streamEvent => streamEvent.Type == ChatStreamEventTypes.AssistantStreaming);
         AssertEx.True(pendingIndex >= 0 && queuedIndex > pendingIndex && streamingIndex > queuedIndex,
             "SSE order must stay UserMessagePersisted -> AssistantPending -> AssistantQueued -> AssistantStreaming after the hoist.");
+    }
+
+    [Test]
+    public async Task SendMessage_WhenUserPicksConcreteModel_SuppressesAgentPin_StampsDropdownModelEverywhere()
+    {
+        // The bug: a bound agent pins its own ModelProfile, but the user ALSO picked a concrete model in the chat
+        // dropdown. The explicit dropdown pick must WIN — for the run (package model) AND the persisted attribution
+        // (placeholder + terminal model) — and the resolver must be told honorModelProfile=false so the pin is
+        // suppressed. The resolver mock mirrors the real resolver: it returns a null ModelProfile when the pin is
+        // suppressed, so `resolved?.ModelProfile ?? activeModel` yields the user's pick.
+        const string dropdownModel = "qwen2.5:7b";
+        var conversationId = Guid.NewGuid();
+        var assistantMessageId = Guid.NewGuid();
+        var requestId = Guid.NewGuid();
+        var agentDefinitionId = Guid.NewGuid();
+        NodeChatCreateAssistantPlaceholderRequest? capturedPlaceholder = null;
+        NodeChatTerminalizeMessageRequest? terminalRequest = null;
+        var persistence = CreatePersistence(conversationId, assistantMessageId, requestId, request => terminalRequest = request, agentDefinitionId,
+            placeholderObserver: request => capturedPlaceholder = request);
+        var dispatcher = new RecordingWorkerEventDispatcher();
+        var runner = new PackageCapturingInvocationRunner(dispatcher);
+        var resolver = Substitute.For<IAgentDefinitionResolver>();
+        resolver.ResolveAsync(agentDefinitionId, Arg.Any<string?>(), Arg.Any<string?>(), Arg.Any<bool>(), Arg.Any<bool>(), Arg.Any<CancellationToken>())
+                .Returns(callInfo =>
+                {
+                    var honorModelProfile = callInfo.ArgAt<bool>(4);
+                    // The agent pins "gemma3:4b"; when the pin is suppressed the resolver projects a null ModelProfile.
+                    return new ResolvedAgentRuntime("Pinned persona.", [], honorModelProfile ? "gemma3:4b" : null, ReasoningEffort: null, AgentDefinitionVersion: 9, agentDefinitionId, "Pinned Agent");
+                });
+
+        var service = new NodeChatStreamService(persistence,
+            new NodeChatInvocationPump(persistence, TimeProvider.System),
+            new NodeChatMutationGuard(persistence),
+            new LocalChatRuntimePackageBuilder(),
+            runner,
+            dispatcher,
+            Options.Create(new LocalChatAgentOptions()),
+            StubNodeRuntimeSettings.Create().Build(),
+            new NodeChatStreamCancellationRegistry(),
+            CreateOfferProvider(),
+            resolver,
+            CreateAgentDefinitionStore(),
+            CreateDefaultAgentProvider(),
+            CreateOrchestrationResolver(),
+            CreateNodeSettingsStore(),
+            CreateModelClassificationService(),
+            CreateLocalModelProviderResolver(),
+            CreateGgufModelCapabilityResolver(),
+            CreateLocalDefaultChatModelResolver(),
+            CreateMemoryExtractionDispatcher(),
+            TimeProvider.System,
+            NullLogger<NodeChatStreamService>.Instance);
+
+        var drained = 0;
+        await foreach (var _ in service.SendMessageAsync(new NodeChatStreamRequest(conversationId,
+                           "hello",
+                           Model: dropdownModel,
+                           MessageId: assistantMessageId,
+                           RequestId: requestId)).ConfigureAwait(false))
+        {
+            drained++;
+        }
+
+        AssertEx.True(drained > 0, "Expected the send to stream events.");
+        // The run executed on the dropdown model, not the agent's pin.
+        AssertEx.Equal(dropdownModel, runner.LastModelProfile);
+        // Both the placeholder (UI label from the first frame) and the persisted terminal carry the dropdown model.
+        AssertEx.NotNull(capturedPlaceholder);
+        AssertEx.Equal(dropdownModel, capturedPlaceholder!.Model);
+        AssertEx.NotNull(terminalRequest);
+        AssertEx.Equal(dropdownModel, terminalRequest!.Model);
+        // The resolver was told to suppress the pin AND gate by the dropdown model.
+        await resolver.Received().ResolveAsync(agentDefinitionId,
+                          Arg.Is<string?>(model => model == dropdownModel),
+                          Arg.Any<string?>(),
+                          Arg.Any<bool>(),
+                          Arg.Is<bool>(honor => !honor),
+                          Arg.Any<CancellationToken>())
+                      .ConfigureAwait(false);
+    }
+
+    [Test]
+    public async Task SendMessage_WhenNoExplicitPick_HonorsAgentPin_StampsPinnedModelEverywhere()
+    {
+        // The companion case: no concrete dropdown pick (request.Model null = "Local default"), so the bound agent's
+        // pinned ModelProfile applies — for the run AND the persisted attribution — and the resolver is told
+        // honorModelProfile=true (the pin is honored and projected).
+        const string pinnedModel = "gemma3:4b";
+        var conversationId = Guid.NewGuid();
+        var assistantMessageId = Guid.NewGuid();
+        var requestId = Guid.NewGuid();
+        var agentDefinitionId = Guid.NewGuid();
+        NodeChatCreateAssistantPlaceholderRequest? capturedPlaceholder = null;
+        NodeChatTerminalizeMessageRequest? terminalRequest = null;
+        var persistence = CreatePersistence(conversationId, assistantMessageId, requestId, request => terminalRequest = request, agentDefinitionId,
+            placeholderObserver: request => capturedPlaceholder = request);
+        var dispatcher = new RecordingWorkerEventDispatcher();
+        var runner = new PackageCapturingInvocationRunner(dispatcher);
+        var resolver = Substitute.For<IAgentDefinitionResolver>();
+        resolver.ResolveAsync(agentDefinitionId, Arg.Any<string?>(), Arg.Any<string?>(), Arg.Any<bool>(), Arg.Any<bool>(), Arg.Any<CancellationToken>())
+                .Returns(callInfo =>
+                {
+                    var honorModelProfile = callInfo.ArgAt<bool>(4);
+                    return new ResolvedAgentRuntime("Pinned persona.", [], honorModelProfile ? pinnedModel : null, ReasoningEffort: null, AgentDefinitionVersion: 9, agentDefinitionId, "Pinned Agent");
+                });
+
+        var service = new NodeChatStreamService(persistence,
+            new NodeChatInvocationPump(persistence, TimeProvider.System),
+            new NodeChatMutationGuard(persistence),
+            new LocalChatRuntimePackageBuilder(),
+            runner,
+            dispatcher,
+            Options.Create(new LocalChatAgentOptions()),
+            StubNodeRuntimeSettings.Create().Build(),
+            new NodeChatStreamCancellationRegistry(),
+            CreateOfferProvider(),
+            resolver,
+            CreateAgentDefinitionStore(),
+            CreateDefaultAgentProvider(),
+            CreateOrchestrationResolver(),
+            CreateNodeSettingsStore(),
+            CreateModelClassificationService(),
+            CreateLocalModelProviderResolver(),
+            CreateGgufModelCapabilityResolver(),
+            // The local-default resolver would return some installed GGUF; the pin must still win over it.
+            CreateLocalDefaultChatModelResolver(),
+            CreateMemoryExtractionDispatcher(),
+            TimeProvider.System,
+            NullLogger<NodeChatStreamService>.Instance);
+
+        var drained = 0;
+        await foreach (var _ in service.SendMessageAsync(new NodeChatStreamRequest(conversationId,
+                           "hello",
+                           MessageId: assistantMessageId,
+                           RequestId: requestId)).ConfigureAwait(false))
+        {
+            drained++;
+        }
+
+        AssertEx.True(drained > 0, "Expected the send to stream events.");
+        AssertEx.Equal(pinnedModel, runner.LastModelProfile);
+        AssertEx.NotNull(capturedPlaceholder);
+        AssertEx.Equal(pinnedModel, capturedPlaceholder!.Model);
+        AssertEx.NotNull(terminalRequest);
+        AssertEx.Equal(pinnedModel, terminalRequest!.Model);
+        await resolver.Received().ResolveAsync(agentDefinitionId,
+                          Arg.Any<string?>(),
+                          Arg.Any<string?>(),
+                          Arg.Any<bool>(),
+                          Arg.Is<bool>(honor => honor),
+                          Arg.Any<CancellationToken>())
+                      .ConfigureAwait(false);
     }
 
     [Test]
@@ -1805,7 +1957,7 @@ public sealed class NodeChatStreamServiceTests
     private static IAgentDefinitionResolver CreateAgentDefinitionResolver()
     {
         var resolver = Substitute.For<IAgentDefinitionResolver>();
-        resolver.ResolveAsync(Arg.Any<Guid?>(), Arg.Any<string?>(), Arg.Any<string?>(), Arg.Any<bool>(), Arg.Any<CancellationToken>()).Returns((ResolvedAgentRuntime?)null);
+        resolver.ResolveAsync(Arg.Any<Guid?>(), Arg.Any<string?>(), Arg.Any<string?>(), Arg.Any<bool>(), Arg.Any<bool>(), Arg.Any<CancellationToken>()).Returns((ResolvedAgentRuntime?)null);
         return resolver;
     }
 
@@ -2440,6 +2592,7 @@ public sealed class NodeChatStreamServiceTests
         public string? LastSystemPrompt { get; private set; }
         public int LastAgentDefinitionVersion { get; private set; }
         public string? LastReasoningEffort { get; private set; }
+        public string? LastModelProfile { get; private set; }
         public IReadOnlyList<AllowedToolDto> LastAllowedTools { get; private set; } = [];
         public OrchestrationSpec? LastOrchestrationSpec { get; private set; }
         public int ActiveInvocationCount => 0;
@@ -2449,6 +2602,7 @@ public sealed class NodeChatStreamServiceTests
             LastSystemPrompt = context.Package.ResolvedSystemPrompt;
             LastAgentDefinitionVersion = context.Package.AgentDefinitionVersion;
             LastReasoningEffort = context.Package.ReasoningEffort;
+            LastModelProfile = context.Package.ModelProfile;
             LastAllowedTools = context.Package.AllowedTools;
             LastOrchestrationSpec = context.Package.OrchestrationSpec;
             await dispatcher.ReportInvocationStreamChunkAsync(context.Package.InvocationId, "answer").ConfigureAwait(false);
