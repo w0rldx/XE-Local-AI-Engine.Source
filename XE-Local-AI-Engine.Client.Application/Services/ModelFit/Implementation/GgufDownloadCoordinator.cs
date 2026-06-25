@@ -23,17 +23,32 @@ using XE_Local_AI_Engine.Providers.LlamaServer;
 /// </summary>
 public sealed class GgufDownloadCoordinator : IGgufDownloadCoordinator
 {
+    // Minimum gap between two pushed Running progress updates for the same model — protects the socket from a
+    // high-frequency byte callback. Terminal phase changes (Completed/Cancelled/Failed) and the initial Running push
+    // always go out immediately, bypassing the throttle.
+    private static readonly TimeSpan ProgressPushInterval = TimeSpan.FromSeconds(1);
+
+    private readonly IGgufDownloadEventPublisher _eventPublisher;
+
     // Keyed by canonical model name. An in-flight download owns a live CTS; the status cell is updated as progress flows.
     private readonly ConcurrentDictionary<string, CancellationTokenSource> _inFlight = new(StringComparer.OrdinalIgnoreCase);
+    // Last instant a Running progress push was broadcast per model, so high-frequency byte callbacks are throttled to at
+    // most one push per ProgressPushInterval. Keyed by canonical model name; the entry is dropped on terminal phase.
+    private readonly ConcurrentDictionary<string, long> _lastProgressPushTicks = new(StringComparer.OrdinalIgnoreCase);
     private readonly ILogger<GgufDownloadCoordinator> _logger;
     private readonly IGgufModelStore _modelStore;
     private readonly IServiceScopeFactory _scopeFactory;
     private readonly ConcurrentDictionary<string, GgufDownloadStatus> _status = new(StringComparer.OrdinalIgnoreCase);
 
-    public GgufDownloadCoordinator(IGgufModelStore modelStore, IServiceScopeFactory scopeFactory, ILogger<GgufDownloadCoordinator> logger)
+    public GgufDownloadCoordinator(
+        IGgufModelStore modelStore,
+        IServiceScopeFactory scopeFactory,
+        IGgufDownloadEventPublisher eventPublisher,
+        ILogger<GgufDownloadCoordinator> logger)
     {
         _modelStore = modelStore ?? throw new ArgumentNullException(nameof(modelStore));
         _scopeFactory = scopeFactory ?? throw new ArgumentNullException(nameof(scopeFactory));
+        _eventPublisher = eventPublisher ?? throw new ArgumentNullException(nameof(eventPublisher));
         _logger = logger ?? throw new ArgumentNullException(nameof(logger));
     }
 
@@ -56,7 +71,9 @@ public sealed class GgufDownloadCoordinator : IGgufDownloadCoordinator
             return new GgufDownloadTicket(modelName, AlreadyInFlight: true);
         }
 
-        _status[modelName] = new GgufDownloadStatus(modelName, GgufDownloadPhase.Running, CompletedBytes: null, TotalBytes: null, SanitizedError: null);
+        // Initial Running status: write it and push immediately (bypass the progress throttle) so the operator UI shows
+        // the new download the instant it is accepted, even before the first byte callback arrives.
+        SetStatus(new GgufDownloadStatus(modelName, GgufDownloadPhase.Running, CompletedBytes: null, TotalBytes: null, SanitizedError: null), isInitialOrTerminal: true);
 
         // The detached task owns the rest of the CTS lifetime: it captures only the token (a struct), and disposes the
         // CTS by re-reading it from the registry in its finally — so no IDisposable instance is passed into an un-awaited
@@ -140,13 +157,77 @@ public sealed class GgufDownloadCoordinator : IGgufDownloadCoordinator
         }
     }
 
+    // Records the latest status in the registry and broadcasts it to connected operator clients. Running progress pushes
+    // are throttled to at most one per ProgressPushInterval per model so a high-frequency byte callback never floods the
+    // socket; the initial Running push and every terminal phase (Completed/Cancelled/Failed) bypass the throttle and go
+    // out immediately. The registry write is always unconditional, so the list endpoint still serves the freshest bytes.
+    private void SetStatus(GgufDownloadStatus status, bool isInitialOrTerminal = false)
+    {
+        _status[status.ModelName] = status;
+
+        if (isInitialOrTerminal)
+        {
+            // Drop the throttle bookkeeping on a terminal phase; the initial push primes it so the first throttled
+            // progress tick still has to wait out the interval.
+            if (status.Phase == GgufDownloadPhase.Running)
+            {
+                _lastProgressPushTicks[status.ModelName] = DateTimeOffset.UtcNow.UtcTicks;
+            }
+            else
+            {
+                _lastProgressPushTicks.TryRemove(status.ModelName, out _);
+            }
+
+            BroadcastStatus(status);
+            return;
+        }
+
+        // Throttled Running progress: push only when at least ProgressPushInterval has elapsed since the last push.
+        var now = DateTimeOffset.UtcNow.UtcTicks;
+        var last = _lastProgressPushTicks.TryGetValue(status.ModelName, out var ticks) ? ticks : 0L;
+        if (now - last < ProgressPushInterval.Ticks)
+        {
+            return;
+        }
+
+        _lastProgressPushTicks[status.ModelName] = now;
+        BroadcastStatus(status);
+    }
+
+    // Maps the internal status to the sanitized hub event at the broadcast boundary (no internal type leaks) and pushes
+    // it fire-and-forget. The Progress<T> callback is synchronous and must not block byte flow, so a push failure is
+    // swallowed with a debug log — the list endpoint remains the authoritative one-shot hydrate either way.
+    private void BroadcastStatus(GgufDownloadStatus status)
+    {
+        var hubEvent = new GgufDownloadStatusHubEvent(
+            status.ModelName,
+            status.Phase.ToString(),
+            status.CompletedBytes,
+            status.TotalBytes,
+            status.SanitizedError);
+
+        _ = PublishStatusAsync(hubEvent);
+    }
+
+    private async Task PublishStatusAsync(GgufDownloadStatusHubEvent hubEvent)
+    {
+        try
+        {
+            await _eventPublisher.PublishStatusAsync(hubEvent).ConfigureAwait(false);
+        }
+        catch (Exception exception)
+        {
+            _logger.LogDebug(exception, "Could not push the GGUF download status for {ModelName}; the list endpoint still serves it.", hubEvent.ModelName);
+        }
+    }
+
     private async Task RunDownloadAsync(string modelName, GgufModelRequest request, CancellationToken token)
     {
-        var progress = new Progress<PullProgress>(update => _status[modelName] = new GgufDownloadStatus(modelName,
+        var progress = new Progress<PullProgress>(update => SetStatus(new GgufDownloadStatus(modelName,
             GgufDownloadPhase.Running,
             update.CompletedBytes,
             update.TotalBytes,
-            SanitizedError: null));
+            SanitizedError: null)));
 
         try
         {
@@ -160,32 +241,33 @@ public sealed class GgufDownloadCoordinator : IGgufDownloadCoordinator
             await MapModelToLlamaCppAsync(modelName, token).ConfigureAwait(false);
 
             var last = _status.TryGetValue(modelName, out var snapshot) ? snapshot : null;
-            _status[modelName] = new GgufDownloadStatus(modelName,
-                GgufDownloadPhase.Completed,
-                last?.CompletedBytes ?? last?.TotalBytes,
-                last?.TotalBytes,
-                SanitizedError: null);
+            SetStatus(new GgufDownloadStatus(modelName,
+                    GgufDownloadPhase.Completed,
+                    last?.CompletedBytes ?? last?.TotalBytes,
+                    last?.TotalBytes,
+                    SanitizedError: null),
+                isInitialOrTerminal: true);
         }
         catch (OperationCanceledException)
         {
-            _status[modelName] = new GgufDownloadStatus(modelName, GgufDownloadPhase.Cancelled, CompletedBytes: null, TotalBytes: null, SanitizedError: null);
+            SetStatus(new GgufDownloadStatus(modelName, GgufDownloadPhase.Cancelled, CompletedBytes: null, TotalBytes: null, SanitizedError: null), isInitialOrTerminal: true);
             _logger.LogInformation("Operator cancelled the GGUF download for {ModelName}.", modelName);
         }
         catch (HuggingFaceDownloadException exception)
         {
             // Message is contractually sanitized (no token / Bearer / path) — safe to surface to the operator.
-            _status[modelName] = new GgufDownloadStatus(modelName, GgufDownloadPhase.Failed, CompletedBytes: null, TotalBytes: null, exception.Message);
+            SetStatus(new GgufDownloadStatus(modelName, GgufDownloadPhase.Failed, CompletedBytes: null, TotalBytes: null, exception.Message), isInitialOrTerminal: true);
             _logger.LogWarning("GGUF download failed for {ModelName} ({Reason}).", modelName, exception.Reason);
         }
         catch (InsufficientDiskSpaceException exception)
         {
-            _status[modelName] = new GgufDownloadStatus(modelName, GgufDownloadPhase.Failed, CompletedBytes: null, TotalBytes: null, exception.Message);
+            SetStatus(new GgufDownloadStatus(modelName, GgufDownloadPhase.Failed, CompletedBytes: null, TotalBytes: null, exception.Message), isInitialOrTerminal: true);
             _logger.LogWarning("GGUF download failed for {ModelName}: insufficient disk space.", modelName);
         }
         catch (Exception exception) when (exception is HttpRequestException or IOException or TimeoutException or InvalidOperationException)
         {
             // Never surface the raw transport message (it can carry a URL/path): collapse to a generic sanitized reason.
-            _status[modelName] = new GgufDownloadStatus(modelName, GgufDownloadPhase.Failed, CompletedBytes: null, TotalBytes: null, "Download failed.");
+            SetStatus(new GgufDownloadStatus(modelName, GgufDownloadPhase.Failed, CompletedBytes: null, TotalBytes: null, "Download failed."), isInitialOrTerminal: true);
             _logger.LogWarning(exception, "GGUF download failed for {ModelName}.", modelName);
         }
         finally

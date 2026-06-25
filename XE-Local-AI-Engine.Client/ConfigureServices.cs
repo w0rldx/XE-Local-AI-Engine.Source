@@ -26,6 +26,7 @@ using XE_Local_AI_Engine.Client.Persistence;
 using XE_Local_AI_Engine.Client.Persistence.Entities;
 using XE_Local_AI_Engine.Client.Services.Agents.Implementation;
 using XE_Local_AI_Engine.Client.Services.Auth;
+using XE_Local_AI_Engine.Client.Services.ModelFit;
 using XE_Local_AI_Engine.Client.Services.ModelFit.Implementation;
 using XE_Local_AI_Engine.Client.Services.Persistence.Implementation;
 using XE_Local_AI_Engine.Client.Services.PreviewWorkflows;
@@ -63,6 +64,11 @@ public static class ConfigureServices
         // Hub-backed preview-workflow event publisher — supersedes the no-op default registered in AddNodePreviewWorkflows
         // so run/node lifecycle events broadcast to the connected operator (PreviewWorkflowHub mapped in Program).
         builder.Services.AddSingleton<IPreviewWorkflowEventPublisher, PreviewWorkflowEventPublisher>();
+
+        // Hub-backed GGUF download event publisher — supersedes the no-op default registered in AddNodeModelFit so
+        // download status changes push live to operator clients (GgufDownloadHub mapped in Program), replacing the
+        // per-second downloads poll. IHubContext is singleton-safe, so the singleton coordinator can resolve it.
+        builder.Services.AddSingleton<IGgufDownloadEventPublisher, GgufDownloadEventPublisher>();
 
         // Error handling - the order of the exception handlers is important: specific handlers first,
         // DefaultExceptionHandler last as the catch-all 500. Mirrors the central platform's IExceptionHandler pattern.

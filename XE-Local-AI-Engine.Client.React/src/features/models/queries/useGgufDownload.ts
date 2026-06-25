@@ -1,4 +1,5 @@
-import { useEffect } from "react";
+import { HubConnectionBuilder, LogLevel } from "@microsoft/signalr";
+import { useEffect, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
 import {
@@ -9,7 +10,9 @@ import {
 	inspectGgufRepositoryOptions,
 	startGgufDownloadMutation,
 } from "@/core/api/generated/@tanstack/react-query.gen";
+import { buildLocalApiUrl } from "@/core/api/utils/LocalApiUrl";
 import { withResponseValidation } from "@/core/api/ResponseValidation";
+import { useNodeAuthStore } from "@/core/auth/stores/NodeAuthStore";
 import { toGgufRepository, toGgufRepositoryDetail } from "@/features/models/models/GgufMappers";
 import { useGgufBrowseStore } from "@/features/models/stores/GgufBrowseStore";
 
@@ -125,69 +128,143 @@ export interface GgufDownloadStatus {
 	sanitizedError: string | null | undefined;
 }
 
-// Polls GET /api/local/v1/model-fit/gguf/downloads (1 s interval while any download is Running).
-// Reconciles the backend list with GgufBrowseStore so:
-//   – downloads started before a navigation refresh rehydrate into the store;
+// The single SignalR client-method name the GgufDownloadHub invokes. Each push carries the full sanitized status, so the
+// client reconciles by model name with no follow-up REST poll. Must match GgufDownloadHubEvents.StatusChanged.
+const DOWNLOAD_STATUS_CHANGED = "ggufDownload.statusChanged";
+
+// The sanitized status push payload — mirrors the REST GgufDownloadStatusResponse field-for-field (PascalCase off the
+// wire is normalized to camelCase by the SignalR JSON protocol the server configures, matching the generated REST DTO).
+interface GgufDownloadStatusPush {
+	modelName?: string | null;
+	phase?: string | null;
+	completedBytes?: number | null;
+	totalBytes?: number | null;
+	sanitizedError?: string | null;
+}
+
+// Maps a raw status (REST list item or hub push, identical shape) into the strict domain view-model. Returns null when
+// the model name is absent (nothing to key on).
+function toDownloadStatus(raw: GgufDownloadStatusPush): GgufDownloadStatus | null {
+	if (!raw.modelName) {
+		return null;
+	}
+	const pct = raw.totalBytes && raw.completedBytes != null ? Math.round((raw.completedBytes / raw.totalBytes) * 100) : undefined;
+	return {
+		modelName: raw.modelName,
+		phase: (raw.phase ?? "Running") as GgufDownloadStatus["phase"],
+		pct,
+		completedBytes: raw.completedBytes,
+		totalBytes: raw.totalBytes,
+		sanitizedError: raw.sanitizedError,
+	};
+}
+
+// Live GGUF download progress. Does ONE initial fetch of GET model-fit/gguf/downloads to hydrate on mount (no polling),
+// then opens the GgufDownloadHub SignalR connection and merges each pushed status into a local map — replacing the old
+// per-second poll. Reconciles GgufBrowseStore so:
+//   – downloads started before a navigation refresh rehydrate into the store (via the one-shot hydrate + a re-fetch the
+//     start/cancel mutations trigger by invalidating the list key);
 //   – models no longer Running are removed from the store.
-// Returns a map of modelName → GgufDownloadStatus for all non-idle entries the backend reports.
+// Returns a map of modelName → GgufDownloadStatus for all non-idle entries known (hydrate ∪ live pushes).
 //
-// `enabled` (default true) gates the underlying query. Pass `false` to suppress the poll
-// pre-auth — the GgufDownloadPoller uses this to avoid a 401 before login (mirrors useTourState).
+// `enabled` (default true) gates BOTH the hydrate query and the hub. Pass `false` to suppress them pre-auth — the
+// GgufDownloadPoller uses this to avoid a 401 before login (mirrors useTourState / useSchedulerHub auth-gating).
 export function useActiveGgufDownloads({ enabled = true }: { enabled?: boolean } = {}): ReadonlyMap<string, GgufDownloadStatus> {
 	const markInFlight = useGgufBrowseStore((state) => state.actions.markInFlight);
 	const removeInFlight = useGgufBrowseStore((state) => state.actions.removeInFlight);
-	// Number of downloads started this session (per the store). Read here so this hook re-renders when a download is
-	// kicked off — that re-render lets TanStack re-evaluate refetchInterval and resume polling from idle.
-	const inFlightCount = useGgufBrowseStore((state) => state.inFlightDownloads.length);
 
+	// Live merged status map: seeded from the one-shot hydrate, then updated in place by each hub push.
+	const [statuses, setStatuses] = useState<ReadonlyMap<string, GgufDownloadStatus>>(() => new Map());
+
+	// One-shot hydrate on mount. No refetchInterval — live updates arrive over the hub. staleTime keeps a remount within
+	// the session from refetching; the start/cancel mutations invalidate this key to force a fresh hydrate when needed.
 	const { data } = useQuery({
 		...withResponseValidation(getGgufDownloadsOptions()),
 		enabled,
-		// Poll every second while EITHER the backend reports a Running download OR the store still tracks an in-flight one.
-		// Gating only on the query's own last data was a chicken-and-egg bug: once the poll saw no Running items it returned
-		// `false` and stopped, so a download STARTED from that idle state was never picked up (the poll never re-ran to see
-		// it) and the row showed "Downloading…" forever until a remount. Including the store's in-flight count keeps the
-		// poll alive across the start→first-Running window; it winds down once the backend reports terminal AND the store
-		// has been reconciled empty.
-		refetchInterval: (query) => {
-			const items = query.state.data?.items;
-			const hasRunning = items?.some((item) => item.phase === "Running") ?? false;
-			return hasRunning || inFlightCount > 0 ? 1000 : false;
-		},
+		staleTime: 30_000,
 	});
 
-	const items = data?.items ?? [];
-
-	// Reconcile store with backend list on every render where data has updated.
+	// Merge the hydrate snapshot into the live map (without clobbering newer hub pushes for the same model: a push that
+	// arrived first stays unless the hydrate carries a different — i.e. more recent on (re)fetch — phase/bytes).
 	useEffect(() => {
-		for (const item of items) {
-			if (item.phase === "Running") {
-				if (item.modelName) {
-					markInFlight(item.modelName);
+		const items = data?.items;
+		if (!items || items.length === 0) {
+			return;
+		}
+		setStatuses((previous) => {
+			const next = new Map(previous);
+			for (const item of items) {
+				const status = toDownloadStatus(item);
+				if (status) {
+					next.set(status.modelName, status);
 				}
-			} else if (item.modelName) {
-				removeInFlight(item.modelName);
+			}
+			return next;
+		});
+	}, [data]);
+
+	// Live push channel. Mounted for the hook's lifetime (the poller mounts it globally), gated on auth like the
+	// scheduler hub. Each push replaces that model's entry in the live map. StrictMode-safe connect/disconnect mirrors
+	// useSchedulerHub: stop only after start settles, tolerate a start aborted by our own cleanup.
+	useEffect(() => {
+		if (!enabled) {
+			return;
+		}
+
+		const connection = new HubConnectionBuilder()
+			.withUrl(buildLocalApiUrl("model-fit/gguf/downloads/hub"), {
+				accessTokenFactory: () => useNodeAuthStore.getState().accessToken ?? "",
+			})
+			.withAutomaticReconnect()
+			.configureLogging(LogLevel.Warning)
+			.build();
+
+		const onStatus = (push: GgufDownloadStatusPush): void => {
+			const status = toDownloadStatus(push);
+			if (!status) {
+				return;
+			}
+			setStatuses((previous) => {
+				const next = new Map(previous);
+				next.set(status.modelName, status);
+				return next;
+			});
+		};
+
+		connection.on(DOWNLOAD_STATUS_CHANGED, onStatus);
+
+		let disposed = false;
+		const startPromise = connection.start().catch((error: unknown) => {
+			// A start aborted by our own cleanup (StrictMode double-invoke / fast remount) is not a real failure.
+			if (disposed) {
+				return;
+			}
+			// A hub that cannot connect must not break the page — the one-shot hydrate still seeded the last known state.
+			console.warn("gguf download hub failed to start", error);
+		});
+
+		return () => {
+			disposed = true;
+			connection.off(DOWNLOAD_STATUS_CHANGED, onStatus);
+			// Stop only AFTER start settles so cleanup never aborts an in-flight negotiation (the StrictMode race).
+			startPromise.finally(() => {
+				connection.stop().catch((error: unknown) => {
+					console.warn("gguf download hub failed to stop", error);
+				});
+			});
+		};
+	}, [enabled]);
+
+	// Reconcile the store with the live map: Running → markInFlight (show progress), terminal → removeInFlight (clear).
+	useEffect(() => {
+		for (const status of statuses.values()) {
+			if (status.phase === "Running") {
+				markInFlight(status.modelName);
+			} else {
+				removeInFlight(status.modelName);
 			}
 		}
-	}, [items, markInFlight, removeInFlight]);
+	}, [statuses, markInFlight, removeInFlight]);
 
-	// Build view-model map from all items (Running or terminal) so the panel can show
-	// progress for Running and error state for Failed.
-	const map = new Map<string, GgufDownloadStatus>();
-	for (const item of items) {
-		if (!item.modelName) { continue; }
-		const pct =
-			item.totalBytes && item.completedBytes != null
-				? Math.round((item.completedBytes / item.totalBytes) * 100)
-				: undefined;
-		map.set(item.modelName, {
-			modelName: item.modelName,
-			phase: (item.phase ?? "Running") as GgufDownloadStatus["phase"],
-			pct,
-			completedBytes: item.completedBytes,
-			totalBytes: item.totalBytes,
-			sanitizedError: item.sanitizedError,
-		});
-	}
-	return map;
+	return statuses;
 }

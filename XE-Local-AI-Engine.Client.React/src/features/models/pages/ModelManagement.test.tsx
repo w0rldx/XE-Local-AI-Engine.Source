@@ -6,6 +6,28 @@ import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-li
 import type { ReactElement, ReactNode } from "react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
+// Mock the SignalR client the live download-progress hook (useActiveGgufDownloads) opens on mount. The page renders the
+// DownloadProgressPanel which mounts that hook; without this the real HubConnectionBuilder throws in jsdom. The
+// connection is an inert stub (start/stop resolve, on/off no-op) — these tests assert REST-driven download behavior, not
+// live pushes, so no handler needs to be captured here.
+vi.mock("@microsoft/signalr", () => ({
+	HubConnectionBuilder: vi.fn(function HubConnectionBuilder() {
+		const builder = {
+			withUrl: vi.fn(() => builder),
+			withAutomaticReconnect: vi.fn(() => builder),
+			configureLogging: vi.fn(() => builder),
+			build: vi.fn(() => ({
+				on: vi.fn(),
+				off: vi.fn(),
+				start: vi.fn(() => Promise.resolve()),
+				stop: vi.fn(() => Promise.resolve()),
+			})),
+		};
+		return builder;
+	}),
+	LogLevel: { Warning: 3 },
+}));
+
 // Mock the generated hey-api TanStack layer. The read factories return `{ queryKey, queryFn }` (the queryFn is the
 // data source the page renders from); the mutation factories return `{ mutationFn }` the page spreads into
 // useMutation. The page wraps every factory result in the real withResponseValidation (not mocked), then layers its
