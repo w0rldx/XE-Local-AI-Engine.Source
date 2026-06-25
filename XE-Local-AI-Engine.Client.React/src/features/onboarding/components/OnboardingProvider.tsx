@@ -61,6 +61,14 @@ export function OnboardingProvider({ children }: { children: ReactNode }) {
 	const promptHandledRef = useRef(false);
 	// Tracks how many TARGET_NOT_FOUND retries have fired for the current step so we don't retry infinitely.
 	const targetRetryCountRef = useRef(0);
+	// Gates the async real-state auto-advance (install / default / first-response). It must fire ONLY when the step's
+	// condition transitions unmet→met WHILE the user sits on the step (i.e. they performed the action), NEVER when the
+	// condition was already satisfied the moment they arrived. Without this, a returning/test user who already has a
+	// model installed + a default set would see the next step render for ~1s and then auto-advance on its own — the
+	// step flashes and is skipped before it can be read (user-reported flash-then-skip bug). We arm this ref only after
+	// observing the condition UNMET (work still to do); a step that starts already-met leaves it false so auto-advance
+	// stays disabled and the user advances manually with Next. Reset to false on every step change (goToStep/start).
+	const autoAdvanceArmedRef = useRef(false);
 
 	const steps = useMemo(() => buildMainAppTourSteps(t, TARGET_WAIT_TIMEOUT_MS), [t]);
 
@@ -77,6 +85,9 @@ export function OnboardingProvider({ children }: { children: ReactNode }) {
 	const goToStep = useCallback(
 		(index: number) => {
 			targetRetryCountRef.current = 0;
+			// Each step begins disarmed: the new step's own effect re-arms auto-advance only if it observes the condition
+			// still unmet, so a step that arrives already-met never flash-skips (see autoAdvanceArmedRef).
+			autoAdvanceArmedRef.current = false;
 			navigateForStep(index);
 			setStepIndex(index);
 			// Persist progress so a mid-tour reload resumes here (Bug B). Cleared on finish().
@@ -91,6 +102,9 @@ export function OnboardingProvider({ children }: { children: ReactNode }) {
 			setWelcomeOpen(false);
 			setStepIndex(index);
 			targetRetryCountRef.current = 0;
+			// Start (and resume-at-saved-index) lands on a fresh step disarmed — see autoAdvanceArmedRef. A resumed user
+			// whose condition is already met must read the step, not have it flash-skip.
+			autoAdvanceArmedRef.current = false;
 			navigateForStep(index);
 			writeTourProgress(index);
 			setRun(true);
@@ -211,10 +225,22 @@ export function OnboardingProvider({ children }: { children: ReactNode }) {
 	const modelItems = modelsData?.items;
 	const selectedModelName = modelsData?.selectedModelName;
 
-	// R1: the install step does not advance until a chat-capable model is actually installed/selectable. When the
-	// recommendations query errors or returns nothing, surface the R4 guidance note (offline / empty).
+	// R1: the install step does not advance until a chat-capable model is actually installed/selectable. We only
+	// auto-advance on a genuine unmet→met transition (the user installs a model WHILE on this step). Wait for the list
+	// to resolve (modelItems !== undefined) before deciding so a still-loading list neither arms nor advances. If no
+	// chat model is installed yet, arm transition detection (there is work to do); once one appears we advance only if
+	// armed — a user who arrived already having a model installed leaves it disarmed and reads the step instead of
+	// watching it flash past (see autoAdvanceArmedRef). When the recommendations query errors or returns nothing, the
+	// R4 guidance note below surfaces (offline / empty).
 	useEffect(() => {
-		if (run && stepIndex === INSTALL_STEP_INDEX && hasInstalledChatModel(modelItems)) {
+		if (!run || stepIndex !== INSTALL_STEP_INDEX || modelItems === undefined) {
+			return;
+		}
+		if (!hasInstalledChatModel(modelItems)) {
+			autoAdvanceArmedRef.current = true;
+			return;
+		}
+		if (autoAdvanceArmedRef.current) {
 			goToStep(DEFAULT_STEP_INDEX);
 		}
 	}, [run, stepIndex, modelItems, goToStep]);
@@ -262,9 +288,21 @@ export function OnboardingProvider({ children }: { children: ReactNode }) {
 		}
 	}, [installStepActive, queryClient, t]);
 
-	// The default-confirm step advances when a chat-capable default resolves.
+	// The default-confirm step advances when a chat-capable default resolves — but only on a genuine unmet→met
+	// transition (the user picks the default WHILE on this step), never when one was already set on arrival (that would
+	// flash the step and skip it). Wait for the list to resolve first. When NO chat model is installed the
+	// skip-if-prereq-missing recovery effect below owns forward motion, so we bail here (arming/auto-advance is only
+	// meaningful once a model exists to set as default). With a model installed but no chat-capable default yet, arm
+	// transition detection; once a default appears, advance only if armed (see autoAdvanceArmedRef).
 	useEffect(() => {
-		if (run && stepIndex === DEFAULT_STEP_INDEX && hasChatCapableDefault(modelItems, selectedModelName)) {
+		if (!run || stepIndex !== DEFAULT_STEP_INDEX || modelItems === undefined || !hasInstalledChatModel(modelItems)) {
+			return;
+		}
+		if (!hasChatCapableDefault(modelItems, selectedModelName)) {
+			autoAdvanceArmedRef.current = true;
+			return;
+		}
+		if (autoAdvanceArmedRef.current) {
 			goToStep(tourStepIds.indexOf("navChat"));
 		}
 	}, [run, stepIndex, modelItems, selectedModelName, goToStep]);
@@ -286,7 +324,17 @@ export function OnboardingProvider({ children }: { children: ReactNode }) {
 	// On reply: advance into the first showcase step (NOT finish) — the showcase completes the tour.
 	const hasReply = useChatReplySignal(queryClient, run && stepIndex === FIRST_RESPONSE_STEP_INDEX);
 	useEffect(() => {
-		if (run && stepIndex === FIRST_RESPONSE_STEP_INDEX && hasReply) {
+		if (!run || stepIndex !== FIRST_RESPONSE_STEP_INDEX) {
+			return;
+		}
+		// The reply signal is already event-driven (no still-loading ambiguity), so gating on the active step is enough.
+		// No reply yet → arm so the first streamed reply advances us; a reply already present on arrival (returning user)
+		// leaves it disarmed so the step stays visible to be read instead of flashing past (see autoAdvanceArmedRef).
+		if (!hasReply) {
+			autoAdvanceArmedRef.current = true;
+			return;
+		}
+		if (autoAdvanceArmedRef.current) {
 			goToStep(FIRST_SHOWCASE_STEP_INDEX);
 		}
 	}, [run, stepIndex, hasReply, goToStep]);
