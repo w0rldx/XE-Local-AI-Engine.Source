@@ -2,6 +2,7 @@ namespace XE_Local_AI_Engine.Client.BackgroundServices;
 
 using XE_Local_AI_Engine.Client.Services.NodeSettings;
 using XE_Local_AI_Engine.Providers.LlamaServer;
+using XE_Local_AI_Engine.Providers.LlamaServer.Contracts;
 
 /// <summary>
 ///     Runs ONE llama.cpp runtime update check per app start, off the startup path: after a short delay (so host

@@ -5,6 +5,7 @@ using OllamaSharp;
 using OllamaSharp.Models;
 using XE_Local_AI_Engine.Providers.Abstractions;
 using XE_Local_AI_Engine.Providers.Ollama;
+using XE_Local_AI_Engine.Providers.Ollama.Implementation;
 
 public sealed class OllamaModelService : IOllamaModelService, IDisposable
 {

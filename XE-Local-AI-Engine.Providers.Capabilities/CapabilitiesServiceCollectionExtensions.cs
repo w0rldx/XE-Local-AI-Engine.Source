@@ -2,6 +2,9 @@ namespace XE_Local_AI_Engine.Providers.Capabilities;
 
 using Microsoft.Extensions.DependencyInjection;
 using XE_Local_AI_Engine.Providers.Abstractions.Capabilities;
+using XE_Local_AI_Engine.Providers.Capabilities.Contracts;
+using XE_Local_AI_Engine.Providers.Capabilities.Implementation;
+using XE_Local_AI_Engine.Providers.Capabilities.Options;
 
 /// <summary>
 ///     DI wiring for the cross-platform hardware profiler. Mirrors the other provider projects' self-contained

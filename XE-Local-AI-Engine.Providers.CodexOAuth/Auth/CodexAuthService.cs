@@ -7,6 +7,7 @@ using System.Text;
 using System.Text.Json;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
+using XE_Local_AI_Engine.Providers.CodexOAuth.Options;
 
 /// <summary>
 ///     Contract for the Codex OAuth login / refresh lifecycle.

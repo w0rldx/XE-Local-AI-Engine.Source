@@ -7,6 +7,9 @@ using XE_Local_AI_Engine.Client.Configuration;
 using XE_Local_AI_Engine.Client.Services.NodeSettings;
 using XE_Local_AI_Engine.Providers.CodexOAuth;
 using XE_Local_AI_Engine.Providers.CodexOAuth.Auth;
+using XE_Local_AI_Engine.Providers.CodexOAuth.Contracts;
+using XE_Local_AI_Engine.Providers.CodexOAuth.Implementation;
+using XE_Local_AI_Engine.Providers.CodexOAuth.Options;
 
 /// <summary>
 ///     Resolves the active cloud chat client on demand.

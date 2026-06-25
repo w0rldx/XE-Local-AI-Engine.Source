@@ -3,6 +3,7 @@ namespace XE_Local_AI_Engine.Client.Hosting;
 using XE_Local_AI_Engine.Client.Persistence;
 using XE_Local_AI_Engine.Client.Services.Chat;
 using XE_Local_AI_Engine.Providers.Ollama;
+using XE_Local_AI_Engine.Providers.Ollama.Implementation;
 
 /// <summary>
 ///     One-time startup backfill that closes the FRR-2 upgrade gap: before the unmapped-routing default was flipped to

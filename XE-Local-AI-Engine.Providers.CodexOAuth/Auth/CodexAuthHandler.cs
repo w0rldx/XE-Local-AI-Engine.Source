@@ -4,6 +4,7 @@ using System.Net;
 using System.Net.Http.Headers;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
+using XE_Local_AI_Engine.Providers.CodexOAuth.Options;
 
 /// <summary>
 ///     <see cref="DelegatingHandler" /> that owns Codex auth on the SSE Responses path:

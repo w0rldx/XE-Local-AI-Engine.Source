@@ -3,6 +3,7 @@ namespace XE_Local_AI_Engine.Providers.Ollama;
 using Microsoft.Extensions.DependencyInjection;
 using OllamaSharp;
 using XE_Local_AI_Engine.Providers.Abstractions;
+using XE_Local_AI_Engine.Providers.Ollama.Implementation;
 
 /// <summary>
 ///     Dependency-injection helpers for wiring the Ollama implementation of <see cref="ILocalModelProvider" />.

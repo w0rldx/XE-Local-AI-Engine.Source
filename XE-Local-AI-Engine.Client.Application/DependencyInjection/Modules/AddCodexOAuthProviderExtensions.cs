@@ -6,6 +6,9 @@ using XE_Local_AI_Engine.Client.Services.CloudProviders;
 using XE_Local_AI_Engine.Client.Services.CloudProviders.Implementation;
 using XE_Local_AI_Engine.Providers.CodexOAuth;
 using XE_Local_AI_Engine.Providers.CodexOAuth.Auth;
+using XE_Local_AI_Engine.Providers.CodexOAuth.Contracts;
+using XE_Local_AI_Engine.Providers.CodexOAuth.Implementation;
+using XE_Local_AI_Engine.Providers.CodexOAuth.Options;
 
 /// <summary>
 ///     Registers the Codex OAuth cloud provider's auth lifecycle: options binding, the encrypted

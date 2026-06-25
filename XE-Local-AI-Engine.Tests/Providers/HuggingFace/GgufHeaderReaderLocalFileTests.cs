@@ -2,6 +2,8 @@ namespace XE_Local_AI_Engine.Tests.Providers.HuggingFace;
 
 using Microsoft.Extensions.Logging.Abstractions;
 using XE_Local_AI_Engine.Providers.HuggingFace;
+using XE_Local_AI_Engine.Providers.HuggingFace.Implementation;
+using XE_Local_AI_Engine.Providers.HuggingFace.Options;
 using XE_Local_AI_Engine.Tests.Testing;
 
 /// <summary>
