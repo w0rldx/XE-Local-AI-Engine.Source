@@ -9,6 +9,10 @@
     <ImplicitUsings>enable</ImplicitUsings>
     <LangVersion>latest</LangVersion>
     <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
+    <!-- Staged carve-out: IDE0130 (namespace==folder) runs as a visible warning while the
+         pre-existing backlog is cleared, instead of breaking the build via TreatWarningsAsErrors.
+         Remove this once the tree is clean and .editorconfig promotes IDE0130 to error. -->
+    <WarningsNotAsErrors>$(WarningsNotAsErrors);IDE0130</WarningsNotAsErrors>
     <EnforceCodeStyleInBuild>true</EnforceCodeStyleInBuild>
     <AnalysisLevel>latest</AnalysisLevel>
     <AnalysisMode>All</AnalysisMode>
