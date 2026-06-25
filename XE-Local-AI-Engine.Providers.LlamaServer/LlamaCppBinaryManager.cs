@@ -110,6 +110,9 @@ public sealed partial class LlamaCppBinaryManager : ILlamaCppBinaryManager
         var cachedServer = ResolveServerPath(variantDir, pin);
         if (cachedServer is not null)
         {
+            // Idempotent: when the cudart DLLs are already present next to the server this is a no-op; a cached CUDA dir
+            // that is somehow missing them gets them topped up from the pinned companion before the binary is served.
+            await EnsureCudartRuntimeAsync(resolvedTag, pin, cudartAsset: null, variant, variantDir, cachedServer, ct).ConfigureAwait(false);
             await RecordResolvedRuntimeAsync(resolvedTag, pin, variant, installed, ct).ConfigureAwait(false);
             return new LlamaBinary(cachedServer, resolvedTag, variant, isPinnedFallback);
         }
@@ -122,6 +125,10 @@ public sealed partial class LlamaCppBinaryManager : ILlamaCppBinaryManager
         {
             throw new LlamaRuntimeException("The downloaded llama.cpp runtime did not contain the expected server executable.");
         }
+
+        // Pair the CUDA runtime DLLs (pinned companion) before the binary is recorded/served — a CUDA build without its
+        // cudart archive silently degrades to CPU-only. A cudart failure deletes the half-CUDA variant dir and throws.
+        await EnsureCudartRuntimeAsync(resolvedTag, pin, cudartAsset: null, variant, variantDir, serverPath, ct).ConfigureAwait(false);
 
         await RecordResolvedRuntimeAsync(resolvedTag, pin, variant, installed, ct).ConfigureAwait(false);
         return new LlamaBinary(serverPath, resolvedTag, variant, isPinnedFallback);
@@ -239,6 +246,11 @@ public sealed partial class LlamaCppBinaryManager : ILlamaCppBinaryManager
             throw new LlamaRuntimeException("The downloaded llama.cpp runtime did not contain the expected server executable.");
         }
 
+        // Pair the CUDA runtime DLLs (live companion) BEFORE the smoke test so the self-check exercises a complete CUDA
+        // install. The companion name is derived from the resolved main asset and its digest is resolved live the same
+        // way the main asset's was. A cudart failure deletes the half-CUDA variant dir and throws (never install blind).
+        await EnsureCudartRuntimeAsync(tag, pin, cudartAsset: assetName, variant, variantDir, serverPath, ct).ConfigureAwait(false);
+
         // Smoke test BEFORE recording the install: a binary that cannot even report its version is not made active. A
         // failed self-check must not leave a half-validated variant dir on disk where a later EnsureBinaryAsync tier-1
         // resolve could serve it unverified — best-effort delete it before surfacing the failure.
@@ -255,6 +267,182 @@ public sealed partial class LlamaCppBinaryManager : ILlamaCppBinaryManager
         }
 
         return new LlamaBinary(serverPath, tag, variant, IsPinnedFallback: false);
+    }
+
+    /// <summary>
+    ///     Pairs the Windows-CUDA runtime DLLs (<c>cudart64_*.dll</c>, <c>cublas64_*.dll</c>, <c>cublasLt64_*.dll</c>) next
+    ///     to <c>llama-server.exe</c>. llama.cpp ships these in a SEPARATE archive from the main CUDA build; without them
+    ///     the ggml-cuda backend fails to load and the server silently runs CPU-only. No-op for every non-Windows-CUDA
+    ///     acquisition. Idempotent: if the DLLs already sit next to the server (cached-dir reuse) nothing is downloaded.
+    ///     <para>
+    ///         <paramref name="cudartAsset" /> selects the digest source: <see langword="null" /> (the pinned/cached path)
+    ///         uses the pin's companion name + sha; a non-null value (the live <see cref="InstallTagAsync" /> path) is the
+    ///         resolved MAIN asset name from which the cudart name is derived and whose digest is resolved live the SAME
+    ///         way the main asset's was. When the live digest cannot be resolved this throws rather than installing a CUDA
+    ///         build without its runtime (which reproduces the silent-CPU bug). A fetch/verify failure deletes the
+    ///         half-CUDA <paramref name="variantDir" /> so a later resolve cannot serve it as a valid CUDA install.
+    ///     </para>
+    /// </summary>
+    private async Task EnsureCudartRuntimeAsync(string tag, LlamaCppAssetPin? pin, string? cudartAsset, GpuVariant variant, string variantDir, string serverPath, CancellationToken ct)
+    {
+        // Windows-CUDA only — Vulkan/CPU/Linux need no second archive and must be byte-unchanged.
+        if (variant != GpuVariant.Cuda || _os != OSPlatform.Windows)
+        {
+            return;
+        }
+
+        var serverDir = Path.GetDirectoryName(serverPath);
+        if (string.IsNullOrEmpty(serverDir))
+        {
+            throw new LlamaRuntimeException("The llama.cpp CUDA runtime could not be installed (server directory is unresolved).");
+        }
+
+        // Idempotency: the cudart core DLL already next to the server means a hash-valid CUDA dir is being reused — skip.
+        if (CudartRuntimePresent(serverDir))
+        {
+            return;
+        }
+
+        // Resolve the companion archive name + expected digest. Pinned/cached path: the pin row carries both. Live path:
+        // derive the name from the resolved main asset and resolve its digest from the live release-assets API.
+        string cudartName;
+        string cudartDigest;
+        long cudartSize;
+        if (cudartAsset is null)
+        {
+            if (pin?.CudartAssetName is not { Length: > 0 } pinnedName || pin.CudartSha256 is not { Length: > 0 } pinnedSha)
+            {
+                throw new LlamaRuntimeException("The pinned llama.cpp CUDA runtime is missing its companion runtime archive metadata.");
+            }
+
+            cudartName = pinnedName;
+            cudartDigest = pinnedSha;
+            cudartSize = 0;
+        }
+        else
+        {
+            var derived = LlamaCppReleasePins.DeriveCudartAssetName(cudartAsset);
+            if (derived is null)
+            {
+                throw new LlamaRuntimeException("The llama.cpp CUDA runtime companion archive name could not be derived.");
+            }
+
+            var companion = _catalog is null
+                ? null
+                : await _catalog.ResolveCompanionAssetAsync(tag, derived, ct).ConfigureAwait(false);
+            if (companion?.Asset is not { } asset)
+            {
+                // No live digest → fail clearly. Installing the CUDA build without its runtime reproduces the silent-CPU bug.
+                throw new LlamaRuntimeException("The llama.cpp CUDA runtime could not be verified (its companion runtime archive is unavailable).");
+            }
+
+            cudartName = asset.Name;
+            cudartDigest = asset.Digest;
+            cudartSize = asset.Size;
+        }
+
+        try
+        {
+            await DownloadVerifyFlattenCudartAsync(LlamaCppReleasePins.DownloadUri(tag, cudartName), cudartName, cudartDigest, cudartSize, serverDir, ct).ConfigureAwait(false);
+        }
+        catch (OperationCanceledException) when (ct.IsCancellationRequested)
+        {
+            throw;
+        }
+        catch
+        {
+            // A half-CUDA dir (main archive extracted, runtime DLLs missing) must not survive to look like a valid CUDA
+            // install on a later resolve — discard it so the next acquisition re-runs the complete pairing.
+            TryDeleteDirectory(variantDir);
+            throw;
+        }
+
+        if (!CudartRuntimePresent(serverDir))
+        {
+            TryDeleteDirectory(variantDir);
+            throw new LlamaRuntimeException("The llama.cpp CUDA runtime archive did not contain the expected runtime libraries.");
+        }
+    }
+
+    /// <summary>True when the core CUDA runtime DLL is present next to the server (the pairing has already happened).</summary>
+    private static bool CudartRuntimePresent(string serverDir)
+    {
+        return Directory.Exists(serverDir)
+               && Directory.EnumerateFiles(serverDir, "cudart64_*.dll", SearchOption.TopDirectoryOnly).Any();
+    }
+
+    /// <summary>
+    ///     Download → size-check → SHA256-verify the cudart archive, then FLATTEN its DLLs into the server's bin dir
+    ///     (regardless of their internal nesting) so the OS loader finds them next to <c>llama-server.exe</c>. Retried
+    ///     exactly once on a transient failure / hash mismatch, mirroring the main archive pipeline.
+    /// </summary>
+    private async Task DownloadVerifyFlattenCudartAsync(Uri url, string assetName, string expectedSha256, long expectedSize, string serverDir, CancellationToken ct)
+    {
+        var firstError = await TryDownloadVerifyFlattenCudartAsync(url, assetName, expectedSha256, expectedSize, serverDir, ct).ConfigureAwait(false);
+        if (firstError is null)
+        {
+            return;
+        }
+
+        var secondError = await TryDownloadVerifyFlattenCudartAsync(url, assetName, expectedSha256, expectedSize, serverDir, ct).ConfigureAwait(false);
+        if (secondError is null)
+        {
+            return;
+        }
+
+        throw new LlamaRuntimeException("The llama.cpp CUDA runtime archive could not be downloaded or failed integrity verification after a retry.",
+            secondError);
+    }
+
+    private async Task<Exception?> TryDownloadVerifyFlattenCudartAsync(Uri url, string assetName, string expectedSha256, long expectedSize, string serverDir, CancellationToken ct)
+    {
+        var tempArchive = Path.Combine(Path.GetTempPath(), $"llamacpp-cudart-{Guid.NewGuid():N}-{Path.GetFileName(assetName)}");
+        var stagingDir = Path.Combine(Path.GetTempPath(), $"llamacpp-cudart-{Guid.NewGuid():N}");
+        try
+        {
+            await DownloadToFileAsync(url, tempArchive, expectedSize, ct).ConfigureAwait(false);
+
+            if (expectedSize > 0 && new FileInfo(tempArchive).Length != expectedSize)
+            {
+                return new LlamaRuntimeException("The llama.cpp CUDA runtime archive did not match its expected size.");
+            }
+
+            if (!await HashMatchesAsync(tempArchive, expectedSha256, ct).ConfigureAwait(false))
+            {
+                return new LlamaRuntimeException("The llama.cpp CUDA runtime archive failed integrity verification.");
+            }
+
+            // Extract to a temp staging dir, then flatten only the runtime DLLs into the server dir — a partial extract
+            // never touches the live server dir, and the archive's internal nesting (root or build/bin) is irrelevant.
+            Directory.CreateDirectory(stagingDir);
+            await ZipFile.ExtractToDirectoryAsync(tempArchive, stagingDir, ct).ConfigureAwait(false);
+            FlattenDllsInto(stagingDir, serverDir);
+            return null;
+        }
+        catch (OperationCanceledException) when (ct.IsCancellationRequested)
+        {
+            throw;
+        }
+        catch (Exception exception)
+        {
+            return exception;
+        }
+        finally
+        {
+            TryDeleteFile(tempArchive);
+            TryDeleteDirectory(stagingDir);
+        }
+    }
+
+    /// <summary>Copies every <c>*.dll</c> found anywhere under <paramref name="sourceRoot" /> into <paramref name="serverDir" /> (flattened, overwriting).</summary>
+    private static void FlattenDllsInto(string sourceRoot, string serverDir)
+    {
+        Directory.CreateDirectory(serverDir);
+        foreach (var dll in Directory.EnumerateFiles(sourceRoot, "*.dll", SearchOption.AllDirectories))
+        {
+            var destination = Path.Combine(serverDir, Path.GetFileName(dll));
+            File.Copy(dll, destination, overwrite: true);
+        }
     }
 
     /// <summary>

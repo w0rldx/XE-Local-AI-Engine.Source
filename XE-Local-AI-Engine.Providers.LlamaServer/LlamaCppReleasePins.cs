@@ -10,7 +10,19 @@ using System.Runtime.InteropServices;
 /// <param name="ServerRelativePath">
 ///     Path to <c>llama-server</c> inside the extracted archive (Windows archives nest under <c>build/bin/</c>).
 /// </param>
-public sealed record LlamaCppAssetPin(string AssetName, string Sha256, string ServerRelativePath);
+/// <param name="CudartAssetName">
+///     The companion CUDA-runtime archive name, set ONLY on the Windows x64 CUDA pin. llama.cpp ships the CUDA runtime
+///     DLLs (<c>cudart64_*.dll</c>, <c>cublas64_*.dll</c>, <c>cublasLt64_*.dll</c>) in a SEPARATE archive from the main
+///     build; without them next to <c>llama-server.exe</c> the ggml-cuda backend fails to load and the server silently
+///     runs CPU-only. <see langword="null" /> for every non-Windows-CUDA pin (no second archive to fetch).
+/// </param>
+/// <param name="CudartSha256">Lowercase hex SHA256 the companion CUDA-runtime archive must match. <see langword="null" /> when <paramref name="CudartAssetName" /> is.</param>
+public sealed record LlamaCppAssetPin(
+    string AssetName,
+    string Sha256,
+    string ServerRelativePath,
+    string? CudartAssetName = null,
+    string? CudartSha256 = null);
 
 /// <summary>
 ///     Verified, pinned llama.cpp prebuilt-release table — the recommended-pinned acquisition source for
@@ -29,8 +41,9 @@ public sealed record LlamaCppAssetPin(string AssetName, string Sha256, string Se
 ///     <para>
 ///         <strong>Constraint:</strong> llama.cpp ships NO prebuilt Linux CUDA asset — a Linux NVIDIA box selects
 ///         Vulkan (enforced by <see cref="GpuVariantSelector" />). Windows CUDA also needs the separate
-///         <c>cudart-…</c> runtime archive; that second-archive handling is a documented follow-up for the supervisor
-///         lane and not modeled in this pin row.
+///         <c>cudart-…</c> runtime archive; the Windows-CUDA pin row carries it as
+///         <see cref="LlamaCppAssetPin.CudartAssetName" />/<see cref="LlamaCppAssetPin.CudartSha256" /> and
+///         <see cref="LlamaCppBinaryManager" /> fetches it alongside the main archive.
 ///     </para>
 /// </remarks>
 public static class LlamaCppReleasePins
@@ -45,9 +58,12 @@ public static class LlamaCppReleasePins
     private static readonly IReadOnlyDictionary<(OSPlatform Os, Architecture Arch, GpuVariant Variant), LlamaCppAssetPin> Pins =
         new Dictionary<(OSPlatform, Architecture, GpuVariant), LlamaCppAssetPin>
         {
-            // Windows x64
+            // Windows x64 — the CUDA pin also carries its companion runtime archive (cudart-…); both digests are from
+            // the b9692 release-assets digest API. The cudart asset name is NOT tag-prefixed upstream.
             [(OSPlatform.Windows, Architecture.X64, GpuVariant.Cuda)] =
-                new("llama-b9692-bin-win-cuda-12.4-x64.zip", "a10476e348762d75464a698c2e170e814860f3d5959488cb23234e913ef50bc5", WindowsServerPath),
+                new("llama-b9692-bin-win-cuda-12.4-x64.zip", "a10476e348762d75464a698c2e170e814860f3d5959488cb23234e913ef50bc5", WindowsServerPath,
+                    CudartAssetName: "cudart-llama-bin-win-cuda-12.4-x64.zip",
+                    CudartSha256: "8c79a9b226de4b3cacfd1f83d24f962d0773be79f1e7b75c6af4ded7e32ae1d6"),
             [(OSPlatform.Windows, Architecture.X64, GpuVariant.Vulkan)] =
                 new("llama-b9692-bin-win-vulkan-x64.zip", "6d241d2e1f5dc351966bc9aca0f50adf230e094706854fc126ca7331b7f478cd", WindowsServerPath),
             [(OSPlatform.Windows, Architecture.X64, GpuVariant.Cpu)] =
@@ -80,6 +96,34 @@ public static class LlamaCppReleasePins
     public static Uri DownloadUri(string tag, string assetName)
     {
         return new Uri($"https://github.com/ggml-org/llama.cpp/releases/download/{tag}/{assetName}");
+    }
+
+    /// <summary>
+    ///     Derives the companion CUDA-runtime archive name from a Windows-CUDA main asset name. The main asset is
+    ///     <c>llama-{tag}-bin-win-cuda-{ver}-x64.zip</c>; its cudart companion is <c>cudart-llama-bin-win-cuda-{ver}-x64.zip</c>
+    ///     (the cudart name is NOT tag-prefixed). Returns <see langword="null" /> for any name that is not a Windows-CUDA
+    ///     main asset, so only the Windows-CUDA acquisition path ever pairs a second archive.
+    /// </summary>
+    public static string? DeriveCudartAssetName(string? mainAssetName)
+    {
+        if (string.IsNullOrWhiteSpace(mainAssetName))
+        {
+            return null;
+        }
+
+        const string prefix = "llama-";
+        const string suffix = "-bin-win-cuda-";
+        var bin = mainAssetName.IndexOf(suffix, StringComparison.Ordinal);
+        if (!mainAssetName.StartsWith(prefix, StringComparison.Ordinal)
+            || bin < 0
+            || !mainAssetName.EndsWith(".zip", StringComparison.OrdinalIgnoreCase))
+        {
+            return null;
+        }
+
+        // Keep everything from "-bin-win-cuda-" onward (carries the CUDA version + "-x64.zip"); re-prefix with "cudart-llama".
+        var fromBin = mainAssetName[bin..];
+        return $"cudart-llama{fromBin}";
     }
 
     /// <summary>

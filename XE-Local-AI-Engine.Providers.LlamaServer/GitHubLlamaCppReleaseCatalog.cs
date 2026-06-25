@@ -110,6 +110,43 @@ public sealed partial class GitHubLlamaCppReleaseCatalog : ILlamaCppReleaseCatal
         return LlamaCppReleaseResult.ForAsset(release.TagName ?? tag, matched);
     }
 
+    /// <inheritdoc />
+    public async Task<LlamaCppReleaseResult> ResolveCompanionAssetAsync(string tag, string assetName, CancellationToken ct)
+    {
+        if (!IsValidTag(tag) || !IsValidAssetName(assetName))
+        {
+            return LlamaCppReleaseResult.NotFound();
+        }
+
+        var (release, signal) = await GetReleaseByTagAsync(tag, ct).ConfigureAwait(false);
+        if (signal is not null)
+        {
+            return signal;
+        }
+
+        if (release?.Assets is not { Count: > 0 } assets)
+        {
+            return LlamaCppReleaseResult.NotFound();
+        }
+
+        // Exact name match only — a companion archive has a known, derived name (no token/version fuzzing).
+        var chosen = assets.FirstOrDefault(asset => string.Equals(asset.Name, assetName, StringComparison.OrdinalIgnoreCase));
+        if (chosen is null || !IsValidAssetName(chosen.Name))
+        {
+            return LlamaCppReleaseResult.NotFound();
+        }
+
+        var digest = NormalizeDigest(chosen.Digest);
+        if (digest is null || string.IsNullOrWhiteSpace(chosen.BrowserDownloadUrl)
+                           || !Uri.TryCreate(chosen.BrowserDownloadUrl, UriKind.Absolute, out var downloadUrl))
+        {
+            // No usable digest → not safely installable; fall through so the caller fails clearly rather than installing blind.
+            return LlamaCppReleaseResult.NotFound();
+        }
+
+        return LlamaCppReleaseResult.ForAsset(release.TagName ?? tag, new LlamaCppReleaseAsset(chosen.Name, downloadUrl, digest, chosen.Size));
+    }
+
     /// <summary>
     ///     Templates the expected asset name from the pin scheme for the live tag, then matches it against the live
     ///     <c>assets[]</c>. A direct name match wins; otherwise it falls back to a token-based match (os/variant/arch
@@ -155,7 +192,8 @@ public sealed partial class GitHubLlamaCppReleaseCatalog : ILlamaCppReleaseCatal
     /// <summary>
     ///     Token match tolerant of CUDA-version drift: the candidate must carry the same archive extension and every
     ///     distinguishing token of the expected name except any purely-numeric version token (for example <c>12.4</c>).
-    ///     Windows-CUDA cudart pairing is a documented follow-up: only the main asset is matched here.
+    ///     Only the main asset is matched here; the Windows-CUDA <c>cudart-…</c> companion is resolved separately via
+    ///     <see cref="ResolveCompanionAssetAsync" />.
     /// </summary>
     private static bool MatchesByTokens(string candidate, string expectedName)
     {
