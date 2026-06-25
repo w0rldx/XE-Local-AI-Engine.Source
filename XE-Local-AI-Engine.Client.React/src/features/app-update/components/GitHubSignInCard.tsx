@@ -1,5 +1,5 @@
-import { Alert, Anchor, Button, Code, Group, Loader, Stack, Text } from "@mantine/core";
-import { IconAlertCircle, IconBrandGithub, IconLogout } from "@tabler/icons-react";
+import { ActionIcon, Alert, Anchor, Button, Code, CopyButton, Group, Loader, Stack, Text, Tooltip } from "@mantine/core";
+import { IconAlertCircle, IconBrandGithub, IconCheck, IconCopy, IconLogout } from "@tabler/icons-react";
 import { useEffect, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 
@@ -33,8 +33,8 @@ export interface IGitHubSignInCardProps {
 
 /**
  * GitHub device-flow sign-in card. Calls `startGitHubAuth` to get the user code,
- * opens the verification URI (validated to github.com), then polls `pollGitHubAuth`
- * at the server-returned interval until authorized / denied / expired.
+ * then polls `pollGitHubAuth` at the server-returned interval until authorized /
+ * denied / expired. The user opens the verification URI manually via the anchor link.
  *
  * The device_code is never held by React — it stays on the backend. The token never
  * enters React state either; the backend stores it on successful poll.
@@ -103,10 +103,6 @@ export function GitHubSignInCard({ onAuthorized }: IGitHubSignInCardProps) {
 			setStartData(data ?? null);
 			setFlowState("polling");
 			flowStateRef.current = "polling";
-			// Open the verification URI only after validating the host.
-			if (isSafeVerificationUri(data?.verificationUri)) {
-				window.open(data?.verificationUri, "_blank", "noopener,noreferrer");
-			}
 			// Begin polling at the returned interval (default 5 s if absent).
 			schedulePoll(data?.intervalSeconds ?? 5);
 		} catch {
@@ -170,6 +166,24 @@ export function GitHubSignInCard({ onAuthorized }: IGitHubSignInCardProps) {
 						<Code fz="lg" fw={700}>
 							{startData.userCode}
 						</Code>
+						<CopyButton value={startData.userCode ?? ""} timeout={2000}>
+							{({ copied, copy }) => (
+								<Tooltip
+									label={copied ? t("pages.about.appUpdate.copied") : t("pages.about.appUpdate.copyCode")}
+									withArrow={true}
+									position="right"
+								>
+									<ActionIcon
+										color={copied ? "teal" : "gray"}
+										variant="subtle"
+										onClick={copy}
+										aria-label={copied ? t("pages.about.appUpdate.copied") : t("pages.about.appUpdate.copyCode")}
+									>
+										{copied ? <IconCheck size={16} /> : <IconCopy size={16} />}
+									</ActionIcon>
+								</Tooltip>
+							)}
+						</CopyButton>
 						{isSafeVerificationUri(startData.verificationUri) ? (
 							<Anchor
 								href={startData.verificationUri}
