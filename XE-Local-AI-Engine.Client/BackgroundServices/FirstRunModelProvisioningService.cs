@@ -4,6 +4,7 @@ using XE_Local_AI_Engine.Client.Hosting;
 using XE_Local_AI_Engine.Client.Services.ModelFit;
 using XE_Local_AI_Engine.Client.Services.NodeSettings;
 using XE_Local_AI_Engine.Providers.Abstractions;
+using XE_Local_AI_Engine.Providers.Abstractions.Gguf;
 using XE_Local_AI_Engine.Providers.LlamaServer;
 using XE_Local_AI_Engine.Providers.LlamaServer.Contracts;
 
@@ -61,7 +62,7 @@ public sealed class FirstRunModelProvisioningService : BackgroundService
             variantSelector,
             nodeSettingsStore,
             logger,
-            DesktopLaunch.IsDesktopMode(Environment.GetCommandLineArgs()),
+            DesktopLaunch.IsDesktopMode(Environment.GetCommandLineArgs(), VelopackInstall.IsManaged()),
             TimeSpan.FromSeconds(2),
             DefaultGpuProbeCeiling)
     {

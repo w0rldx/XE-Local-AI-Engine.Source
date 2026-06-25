@@ -42,6 +42,27 @@ public sealed class DesktopLaunchTests
     }
 
     [Test]
+    public void DesktopModeGate_WhenVelopackManagedInstall_EnablesDesktopPathWithoutEnvOrArg()
+    {
+        // The Velopack stub launches the bare exe with neither the env var nor the --desktop arg, so the managed-install
+        // signal alone must enable desktop mode — otherwise the packaged build never derives the node-sqlite connection
+        // string and crashes applying migrations at startup.
+        var isDesktop = DesktopLaunch.IsDesktopMode([], static _ => null, isManagedInstall: true);
+
+        AssertEx.True(isDesktop, "A Velopack-managed install must enter desktop mode without an env/arg.");
+    }
+
+    [Test]
+    public void DesktopModeGate_WhenNotManagedAndNoEnvOrArg_StaysOff()
+    {
+        // A raw-exe / dev / Aspire / CI run is not a Velopack install and sets no env/arg: the pipeline stays byte-
+        // identical (HTTPS/HSTS, no loopback override, no browser launch).
+        var isDesktop = DesktopLaunch.IsDesktopMode([], static _ => null, isManagedInstall: false);
+
+        AssertEx.False(isDesktop);
+    }
+
+    [Test]
     public void BrowserLaunchCommand_PerOs_UsesExplorerOrXdgOpen()
     {
         const string url = "http://127.0.0.1:5001/";

@@ -13,6 +13,7 @@ using XE_Local_AI_Engine.Client.Hosting;
 using XE_Local_AI_Engine.Client.Hubs;
 using XE_Local_AI_Engine.Client.Persistence;
 using XE_Local_AI_Engine.Client.Persistence.Entities;
+using XE_Local_AI_Engine.Client.Persistence.Stores;
 using XE_Local_AI_Engine.Client.Services.Auth;
 using XE_Local_AI_Engine.Client.Services.Auth.Implementation;
 using XE_Local_AI_Engine.Client.Services.Chat;
@@ -39,10 +40,14 @@ try
     // the empty appsettings.json defaults leave the updater inert.
     builder.Configuration.AddJsonFile("appsettings.AppUpdate.json", optional: true, reloadOnChange: false);
 
-    // Desktop mode (self-contained double-click launch) is strictly opt-in via env XE_LAUNCH_MODE=desktop or --desktop.
-    // Resolved once, early, so it can gate the loopback bind below and the HTTPS pipeline further down. Off-flag, every
-    // call below is skipped and the pipeline is byte-identical to a headless/Aspire/CI run.
-    var isDesktop = DesktopLaunch.IsDesktopMode(args);
+    // Desktop mode (self-contained double-click launch) is enabled by env XE_LAUNCH_MODE=desktop / --desktop, AND is
+    // implied by a Velopack-managed install (installer or portable): that packaged flavor IS the desktop app — its in-app
+    // updater is desktop-only — but the Velopack stub launches the bare exe without the env/arg a manual launcher sets,
+    // so the install itself is the opt-in signal. VelopackApp.Build().Run() above established the locator this reads.
+    // Resolved once, early, so it can gate the loopback bind below and the HTTPS pipeline further down. A raw-exe/dev/
+    // Aspire/CI run is not a Velopack install and sets no env/arg, so every call below is skipped and the pipeline is
+    // byte-identical to before.
+    var isDesktop = DesktopLaunch.IsDesktopMode(args, VelopackInstall.IsManaged());
     if (isDesktop)
     {
         // Resolve (and create) the per-user data dir up front so both the bind below and the config layer share it.
