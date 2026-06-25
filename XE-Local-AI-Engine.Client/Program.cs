@@ -19,10 +19,25 @@ using XE_Local_AI_Engine.Client.Services.Chat;
 using XE_Local_AI_Engine.Client.Services.Chat.Implementation;
 using XE_Local_AI_Engine.Client.Services.Persistence.Implementation;
 using XE_Local_AI_Engine.Client.Services.Shutdown;
+using Velopack;
+
+// Velopack install, update, and uninstall hook dispatch. This MUST be the FIRST executable statement and is
+// intentionally placed BEFORE the try/catch. When Velopack is invoked for an install, update, or uninstall hook it runs
+// the hook and exits the process, and that hook-driven exit must NOT be intercepted by the app's top-level catch, which
+// logs a fatal startup failure and rethrows. On a normal launch the call returns immediately, so every host — desktop,
+// headless, Aspire, and CI — proceeds unchanged. It is safe in all modes.
+VelopackApp.Build().Run();
 
 try
 {
     var builder = WebApplication.CreateBuilder(args);
+
+    // App self-update build flavor (decision #12): layer the baked, channel-specific update config (repo URL +
+    // GitHub App client_id) over the appsettings defaults. The publish output renames the active
+    // appsettings.AppUpdate.{flavor}.json to appsettings.AppUpdate.json (see the Client .csproj), so exactly one
+    // channel file is present and it can never point a tester build at the main repo. Optional: absent in dev/CI, where
+    // the empty appsettings.json defaults leave the updater inert.
+    builder.Configuration.AddJsonFile("appsettings.AppUpdate.json", optional: true, reloadOnChange: false);
 
     // Desktop mode (self-contained double-click launch) is strictly opt-in via env XE_LAUNCH_MODE=desktop or --desktop.
     // Resolved once, early, so it can gate the loopback bind below and the HTTPS pipeline further down. Off-flag, every
@@ -61,6 +76,11 @@ try
 
     // Add services to the container.
     builder.AddServices(builder.Configuration);
+
+    // App self-update (Velopack + GitHub device flow). Desktop-mode only: off the flag this registers nothing and the
+    // desktop-only endpoints are filtered out of FastEndpoints above. The process args are re-passed on relaunch so the
+    // new version comes back up in desktop mode and re-binds the persisted loopback port.
+    builder.AddAppUpdate(builder.Configuration, isDesktop, args);
 
     // Agent Framework DevUI (development only): a representative named agent plus the
     // OpenAI-compatible Responses/Conversations services the DevUI dashboard requires.
@@ -142,9 +162,15 @@ try
     app.UseAuthentication();
     app.UseAuthorization();
 
-    app.UseFastEndpoints(static config =>
+    app.UseFastEndpoints(config =>
     {
         config.Endpoints.RoutePrefix = LocalApiRoutes.Prefix;
+
+        // Desktop-only surface (app self-update + GitHub auth): off the desktop flag these endpoints are excluded from
+        // registration entirely, so the routes are absent (a request 404s) rather than throwing a 500 for a missing
+        // service. Mirrors the invariant that the updater is desktop-mode only. On the desktop flag the filter is a
+        // no-op (returns true for every endpoint).
+        config.Endpoints.Filter = ep => isDesktop || !typeof(IDesktopOnlyEndpoint).IsAssignableFrom(ep.EndpointType);
 
         // Single source of truth for OpenAPI operationIds (consumed by the generated hey-api React SDK):
         // derive a clean, camelCase name from the endpoint class name, e.g. CreateScheduledJobEndpoint ->
