@@ -49,6 +49,8 @@ vi.mock("@/core/api/generated/@tanstack/react-query.gen", () => ({
 	// biome-ignore lint/style/useNamingConvention: `_id` is the generated hey-api query-key discriminator field.
 	getGgufDownloadsQueryKey: () => [{ _id: "getGgufDownloads" }],
 	inspectGgufRepositoryOptions: vi.fn(),
+	// biome-ignore lint/style/useNamingConvention: `_id` is the generated hey-api query-key discriminator field.
+	listLocalModelsQueryKey: () => [{ _id: "listLocalModels" }],
 	startGgufDownloadMutation: vi.fn(),
 }));
 
@@ -67,7 +69,7 @@ function renderActiveDownloads(enabled = true) {
 	function Wrapper({ children }: { children: ReactNode }) {
 		return <QueryClientProvider client={queryClient}>{children}</QueryClientProvider>;
 	}
-	return renderHook(() => useActiveGgufDownloads({ enabled }), { wrapper: Wrapper });
+	return { ...renderHook(() => useActiveGgufDownloads({ enabled }), { wrapper: Wrapper }), queryClient };
 }
 
 describe("useActiveGgufDownloads", () => {
@@ -112,7 +114,13 @@ describe("useActiveGgufDownloads", () => {
 		const { result } = renderActiveDownloads();
 
 		act(() => {
-			handlers.get(STATUS_CHANGED)?.({ modelName: "unsloth/x:Q4_K_M", phase: "Running", completedBytes: 50, totalBytes: 200, sanitizedError: null });
+			handlers.get(STATUS_CHANGED)?.({
+				modelName: "unsloth/x:Q4_K_M",
+				phase: "Running",
+				completedBytes: 50,
+				totalBytes: 200,
+				sanitizedError: null,
+			});
 		});
 
 		const status = result.current.get("unsloth/x:Q4_K_M");
@@ -125,23 +133,97 @@ describe("useActiveGgufDownloads", () => {
 		const { result } = renderActiveDownloads();
 
 		act(() => {
-			handlers.get(STATUS_CHANGED)?.({ modelName: "unsloth/x:Q4_K_M", phase: "Running", completedBytes: 10, totalBytes: 20, sanitizedError: null });
+			handlers.get(STATUS_CHANGED)?.({
+				modelName: "unsloth/x:Q4_K_M",
+				phase: "Running",
+				completedBytes: 10,
+				totalBytes: 20,
+				sanitizedError: null,
+			});
 		});
 		expect(useGgufBrowseStore.getState().inFlightDownloads).toContain("unsloth/x:Q4_K_M");
 
 		act(() => {
-			handlers.get(STATUS_CHANGED)?.({ modelName: "unsloth/x:Q4_K_M", phase: "Completed", completedBytes: 20, totalBytes: 20, sanitizedError: null });
+			handlers.get(STATUS_CHANGED)?.({
+				modelName: "unsloth/x:Q4_K_M",
+				phase: "Completed",
+				completedBytes: 20,
+				totalBytes: 20,
+				sanitizedError: null,
+			});
 		});
 
 		expect(result.current.get("unsloth/x:Q4_K_M")?.phase).toBe("Completed");
 		expect(useGgufBrowseStore.getState().inFlightDownloads).not.toContain("unsloth/x:Q4_K_M");
 	});
 
+	it("invalidates the installed-models list once on a Completed push so the new model appears without a refresh", () => {
+		const { queryClient } = renderActiveDownloads();
+		const invalidateSpy = vi.spyOn(queryClient, "invalidateQueries").mockResolvedValue();
+
+		act(() => {
+			handlers.get(STATUS_CHANGED)?.({
+				modelName: "unsloth/x:Q4_K_M",
+				phase: "Completed",
+				completedBytes: 20,
+				totalBytes: 20,
+				sanitizedError: null,
+			});
+		});
+
+		const invalidatedListKeys = invalidateSpy.mock.calls.filter(
+			([filter]) => (filter?.queryKey as readonly { _id?: string }[] | undefined)?.[0]?._id === "listLocalModels",
+		);
+		expect(invalidatedListKeys).toHaveLength(1);
+
+		// A re-pushed Completed status (hub reconnect / hydrate refetch) must not trigger another refetch.
+		act(() => {
+			handlers.get(STATUS_CHANGED)?.({
+				modelName: "unsloth/x:Q4_K_M",
+				phase: "Completed",
+				completedBytes: 20,
+				totalBytes: 20,
+				sanitizedError: null,
+			});
+		});
+
+		const invalidatedAgain = invalidateSpy.mock.calls.filter(
+			([filter]) => (filter?.queryKey as readonly { _id?: string }[] | undefined)?.[0]?._id === "listLocalModels",
+		);
+		expect(invalidatedAgain).toHaveLength(1);
+	});
+
+	it("does NOT invalidate the installed-models list while a download is only Running", () => {
+		const { queryClient } = renderActiveDownloads();
+		const invalidateSpy = vi.spyOn(queryClient, "invalidateQueries").mockResolvedValue();
+
+		act(() => {
+			handlers.get(STATUS_CHANGED)?.({
+				modelName: "unsloth/x:Q4_K_M",
+				phase: "Running",
+				completedBytes: 10,
+				totalBytes: 20,
+				sanitizedError: null,
+			});
+		});
+
+		const invalidatedListKeys = invalidateSpy.mock.calls.filter(
+			([filter]) => (filter?.queryKey as readonly { _id?: string }[] | undefined)?.[0]?._id === "listLocalModels",
+		);
+		expect(invalidatedListKeys).toHaveLength(0);
+	});
+
 	it("surfaces a Failed push with its sanitized error and an undefined percent", () => {
 		const { result } = renderActiveDownloads();
 
 		act(() => {
-			handlers.get(STATUS_CHANGED)?.({ modelName: "unsloth/x:Q4_K_M", phase: "Failed", completedBytes: null, totalBytes: null, sanitizedError: "Download failed." });
+			handlers.get(STATUS_CHANGED)?.({
+				modelName: "unsloth/x:Q4_K_M",
+				phase: "Failed",
+				completedBytes: null,
+				totalBytes: null,
+				sanitizedError: "Download failed.",
+			});
 		});
 
 		const status = result.current.get("unsloth/x:Q4_K_M");

@@ -1,6 +1,6 @@
 import { HubConnectionBuilder, LogLevel } from "@microsoft/signalr";
-import { useEffect, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useEffect, useRef, useState } from "react";
 
 import {
 	browseGgufRepositoriesOptions,
@@ -8,10 +8,11 @@ import {
 	getGgufDownloadsOptions,
 	getGgufDownloadsQueryKey,
 	inspectGgufRepositoryOptions,
+	listLocalModelsQueryKey,
 	startGgufDownloadMutation,
 } from "@/core/api/generated/@tanstack/react-query.gen";
-import { buildLocalApiUrl } from "@/core/api/utils/LocalApiUrl";
 import { withResponseValidation } from "@/core/api/ResponseValidation";
+import { buildLocalApiUrl } from "@/core/api/utils/LocalApiUrl";
 import { useNodeAuthStore } from "@/core/auth/stores/NodeAuthStore";
 import { toGgufRepository, toGgufRepositoryDetail } from "@/features/models/models/GgufMappers";
 import { useGgufBrowseStore } from "@/features/models/stores/GgufBrowseStore";
@@ -172,6 +173,13 @@ function toDownloadStatus(raw: GgufDownloadStatusPush): GgufDownloadStatus | nul
 export function useActiveGgufDownloads({ enabled = true }: { enabled?: boolean } = {}): ReadonlyMap<string, GgufDownloadStatus> {
 	const markInFlight = useGgufBrowseStore((state) => state.actions.markInFlight);
 	const removeInFlight = useGgufBrowseStore((state) => state.actions.removeInFlight);
+	const queryClient = useQueryClient();
+
+	// Model names whose terminal "Completed" status we've already reacted to. A completed download adds a file to the
+	// local model store, so we invalidate the installed-models list — but completion arrives ONLY as a hub push (no REST
+	// mutation fires), and that same status re-arrives on hub reconnect / hydrate refetch. Tracking handled names keeps
+	// the invalidation to exactly once per model instead of on every reconcile render.
+	const completedHandled = useRef<Set<string>>(new Set());
 
 	// Live merged status map: seeded from the one-shot hydrate, then updated in place by each hub push.
 	const [statuses, setStatuses] = useState<ReadonlyMap<string, GgufDownloadStatus>>(() => new Map());
@@ -256,15 +264,22 @@ export function useActiveGgufDownloads({ enabled = true }: { enabled?: boolean }
 	}, [enabled]);
 
 	// Reconcile the store with the live map: Running → markInFlight (show progress), terminal → removeInFlight (clear).
+	// On a Completed download, also invalidate the installed-models list so the freshly downloaded GGUF appears without a
+	// page refresh — completion has no REST mutation to hang invalidation off, so this push-driven reconcile is the only
+	// hook point. Guarded by completedHandled so a re-pushed/re-hydrated Completed status refetches exactly once.
 	useEffect(() => {
 		for (const status of statuses.values()) {
 			if (status.phase === "Running") {
 				markInFlight(status.modelName);
-			} else {
-				removeInFlight(status.modelName);
+				continue;
+			}
+			removeInFlight(status.modelName);
+			if (status.phase === "Completed" && !completedHandled.current.has(status.modelName)) {
+				completedHandled.current.add(status.modelName);
+				queryClient.invalidateQueries({ queryKey: listLocalModelsQueryKey() }).catch(() => undefined);
 			}
 		}
-	}, [statuses, markInFlight, removeInFlight]);
+	}, [statuses, markInFlight, removeInFlight, queryClient]);
 
 	return statuses;
 }
