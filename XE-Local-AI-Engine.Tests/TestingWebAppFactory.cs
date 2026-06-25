@@ -109,7 +109,8 @@ public class TestingWebAppFactory : WebApplicationFactory<Program>, IAsyncInitia
                 ["ConnectionStrings:node-sqlite"] = $"Data Source={Path.Combine(Path.GetTempPath(), $"xe-local-ai-engine-tests-{Guid.NewGuid():N}.sqlite")}",
                 ["XE_NODE_SQLITE_KEY"] = Convert.ToBase64String(Enumerable.Range(start: 1, count: 32).Select(static value => (byte)value).ToArray()),
                 ["XE_USE_LOCAL_MODEL_PROVIDER"] = "true",
-                ["Ollama:ChatModel"] = "qwen3.5:0.8b"
+                ["Ollama:ChatModel"] = "qwen3.5:0.8b",
+                ["NodeData:Directory"] = Path.Combine(Path.GetTempPath(), $"xe-local-ai-engine-tests-nodedata-{Guid.NewGuid():N}")
             });
         });
 
