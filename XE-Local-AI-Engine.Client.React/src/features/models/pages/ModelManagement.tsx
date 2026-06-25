@@ -78,13 +78,12 @@ export function ModelManagement() {
 	// ApiError. The list query keeps the generated response envelope (isAvailable / selectedModelName / error) and
 	// maps its optional-field items to the strict view-models in a memo. Invalidation uses the generated query-key
 	// factories so every cached variant of an endpoint refetches.
-	const modelsQuery = useQuery(withResponseValidation(listLocalModelsOptions()));
-	const modelsResponse = modelsQuery.data;
+	const { data: modelsResponse, isLoading: modelsIsLoading, error: modelsError, refetch: modelsRefetch, isFetching: modelsIsFetching } = useQuery(withResponseValidation(listLocalModelsOptions()));
 	const modelItems = useMemo(() => modelsResponse?.items ?? [], [modelsResponse]);
 	const modelViewModels = useMemo(() => modelItems.map(toLocalModelViewModel), [modelItems]);
 
 	// Details are fetched only while a model's dialog is open — there is no longer a persistent details card.
-	const detailsQuery = useQuery({
+	const { data: detailsData, isFetching: detailsIsFetching } = useQuery({
 		...withResponseValidation(getLocalModelDetailsOptions({ path: { modelName: detailsModelName ?? "" } })),
 		enabled: Boolean(detailsModalOpened && detailsModelName && modelsResponse?.isAvailable),
 	});
@@ -240,24 +239,24 @@ export function ModelManagement() {
 						<Button
 							variant="subtle"
 							leftSection={<IconRefresh size={16} />}
-							onClick={() => modelsQuery.refetch()}
-							disabled={modelsQuery.isFetching}
+							onClick={() => modelsRefetch()}
+							disabled={modelsIsFetching}
 						>
 							Refresh
 						</Button>
 					</Group>
 				</Group>
 
-				{modelsQuery.isLoading ? (
+				{modelsIsLoading ? (
 					<Group gap="sm">
 						<Loader size="sm" />
 						<Text c="dimmed">Loading local models…</Text>
 					</Group>
 				) : null}
 
-				{modelsQuery.error ? (
+				{modelsError ? (
 					<Alert color="red" icon={<IconAlertTriangle size={16} />}>
-						{errorMessage(modelsQuery.error)}
+						{errorMessage(modelsError)}
 					</Alert>
 				) : null}
 
@@ -301,8 +300,8 @@ export function ModelManagement() {
 				opened={detailsModalOpened}
 				onClose={closeDetailsModal}
 				model={detailsModel}
-				details={detailsQuery.data}
-				detailsLoading={detailsQuery.isFetching}
+				details={detailsData}
+				detailsLoading={detailsIsFetching}
 				isActionPending={isActionPending}
 				modelFitEnabled={nodeCapabilities.modelFit}
 				onSetKind={(modelName, kind) => setKindMutation.mutate({ path: { modelName }, body: { kind } })}

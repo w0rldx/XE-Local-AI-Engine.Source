@@ -57,9 +57,10 @@ export function GitHubSignInCard({ onAuthorized }: IGitHubSignInCardProps) {
 
 	// Clear the poll timer on unmount.
 	useEffect(() => {
+		const timerRef = pollTimerRef;
 		return () => {
-			if (pollTimerRef.current !== null) {
-				clearTimeout(pollTimerRef.current);
+			if (timerRef.current !== null) {
+				clearTimeout(timerRef.current);
 			}
 		};
 	}, []);

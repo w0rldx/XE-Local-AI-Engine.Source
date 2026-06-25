@@ -99,12 +99,11 @@ function HistoryRows({ history }: { readonly history: InvocationHistoryDto[] }) 
 }
 
 export function Invocations() {
-	const monitorQuery = useQuery({
+	const { data: monitor, isLoading: monitorIsLoading, error: monitorError, refetch: monitorRefetch, isFetching: monitorIsFetching } = useQuery({
 		...withResponseValidation(getInvocationMonitorOptions()),
 		refetchInterval: 5000,
 		select: toInvocationMonitor,
 	});
-	const monitor = monitorQuery.data;
 	const history = useMemo(() => sortInvocationHistory(monitor?.history ?? []), [monitor]);
 	const active = isInvocationActive(monitor?.current?.status);
 
@@ -124,24 +123,24 @@ export function Invocations() {
 						<Button
 							variant="subtle"
 							leftSection={<IconRefresh size={16} />}
-							onClick={() => monitorQuery.refetch()}
-							disabled={monitorQuery.isFetching}
+							onClick={() => monitorRefetch()}
+							disabled={monitorIsFetching}
 						>
 							Refresh
 						</Button>
 					</Group>
 				</Group>
 
-				{monitorQuery.isLoading ? (
+				{monitorIsLoading ? (
 					<Group gap="sm">
 						<Loader size="sm" />
 						<Text c="dimmed">Loading invocation monitor…</Text>
 					</Group>
 				) : null}
 
-				{monitorQuery.error ? (
+				{monitorError ? (
 					<Alert color="red" icon={<IconAlertTriangle size={16} />}>
-						{errorMessage(monitorQuery.error)}
+						{errorMessage(monitorError)}
 					</Alert>
 				) : null}
 

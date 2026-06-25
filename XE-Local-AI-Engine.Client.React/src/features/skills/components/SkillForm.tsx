@@ -1,6 +1,6 @@
 import { Alert, Button, Group, Stack, Switch, Textarea, TextInput } from "@mantine/core";
 import { IconDeviceFloppy, IconInfoCircle, IconX } from "@tabler/icons-react";
-import { type Ref, useCallback, useEffect, useImperativeHandle, useMemo, useState } from "react";
+import { type Ref, useCallback, useImperativeHandle, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 
 import { MarkdownEditorField } from "@/core/ui/components/MarkdownEditorField/MarkdownEditorField";
@@ -51,17 +51,36 @@ export function SkillForm({
 	const [values, setValues] = useState<SkillFormValues>(initialValues);
 	const [errors, setErrors] = useState<SkillFieldErrors>({});
 
-	// Dirty = current values differ from the initial snapshot. The page keys this component by editor target so
-	// initialValues is stable for the lifetime of an editor session — a JSON compare is sufficient.
-	const isDirty = useMemo(() => JSON.stringify(values) !== JSON.stringify(initialValues), [values, initialValues]);
+	// Update values AND report the resulting dirty state to the host in the same event-driven step. Dirty = current
+	// values differ from the mount snapshot (the page keys this component by editor target so initialValues is stable
+	// for the editor session); reporting it from the updater rather than a useEffect that watches state avoids the
+	// extra parent re-render the effect-sync pattern causes. A JSON compare is sufficient — the shape is plain data.
+	const updateValues = useCallback(
+		(updater: (current: SkillFormValues) => SkillFormValues) => {
+			setValues((current) => {
+				const next = updater(current);
+				onDirtyChange?.(JSON.stringify(next) !== JSON.stringify(initialValues));
+				return next;
+			});
+		},
+		[initialValues, onDirtyChange],
+	);
 
-	useEffect(() => {
-		onDirtyChange?.(isDirty);
-	}, [isDirty, onDirtyChange]);
+	// Report the initial (clean) dirty state once on mount. The page keys this component per editor target, so a
+	// fresh mount always starts clean. Done as a one-shot render-time call (ref-guarded) rather than a useEffect that
+	// re-syncs on every change — the latter forces an extra parent re-render per keystroke.
+	const didReportInitialDirty = useRef(false);
+	if (!didReportInitialDirty.current) {
+		didReportInitialDirty.current = true;
+		onDirtyChange?.(JSON.stringify(values) !== JSON.stringify(initialValues));
+	}
 
-	const handleBodyChange = useCallback((value: string) => {
-		setValues((current) => ({ ...current, body: value }));
-	}, []);
+	const handleBodyChange = useCallback(
+		(value: string) => {
+			updateValues((current) => ({ ...current, body: value }));
+		},
+		[updateValues],
+	);
 
 	const handleSubmit = useCallback(() => {
 		const result = skillFormSchema.safeParse(values);
@@ -113,7 +132,7 @@ export function SkillForm({
 				error={nameError}
 				onChange={(event) => {
 					const value = event.currentTarget.value;
-					setValues((current) => ({ ...current, name: value }));
+					updateValues((current) => ({ ...current, name: value }));
 				}}
 				data-testid="skill-form-name"
 			/>
@@ -131,7 +150,7 @@ export function SkillForm({
 				error={errors.description ? t("pages.skills.form.description.required", "Description is required.") : undefined}
 				onChange={(event) => {
 					const value = event.currentTarget.value;
-					setValues((current) => ({ ...current, description: value }));
+					updateValues((current) => ({ ...current, description: value }));
 				}}
 				data-testid="skill-form-description"
 			/>
@@ -159,7 +178,7 @@ export function SkillForm({
 					checked={values.enabled}
 					onChange={(event) => {
 						const checked = event.currentTarget.checked;
-						setValues((current) => ({ ...current, enabled: checked }));
+						updateValues((current) => ({ ...current, enabled: checked }));
 					}}
 					data-testid="skill-form-enabled"
 				/>

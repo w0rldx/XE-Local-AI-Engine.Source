@@ -19,7 +19,7 @@ export interface NumericBounds {
 
 // Hardcoded fallback bounds matching the backend Normalize ranges (used when the response omits a bound on an old
 // server). Mirrors the node-settings server contract.
-export const nodeSettingsFieldBounds = {
+const nodeSettingsFieldBounds = {
 	llamaMaxLoadedProcesses: { min: 1, max: 16 },
 	llamaIdleTimeToLiveSeconds: { min: 30, max: 86400 },
 	maxResponseSizeMb: { min: 1, max: 100 },
@@ -30,7 +30,7 @@ export const nodeSettingsFieldBounds = {
 
 // Recommended llama.cpp tag must match the upstream release-tag scheme `b<N>` (e.g. b9692). Enforced at every entry
 // point (settings save, update endpoint, catalog, manager) to prevent path/URL injection into the download URL.
-export const llamaCppTagPattern = /^b\d+$/;
+const llamaCppTagPattern = /^b\d+$/;
 
 // Resolves a controlled numeric input (number or string) to a valid integer within [min, max], or undefined when the
 // value is empty / fractional / out of range. Mirrors `toValidNodeSettingsTimeoutSeconds`.

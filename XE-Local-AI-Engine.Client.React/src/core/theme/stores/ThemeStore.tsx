@@ -10,7 +10,7 @@ import {
 import type { ThemeState } from "@/core/theme/models/ThemeModels";
 
 function copyThemeConfiguration(configuration: ThemeConfiguration): ThemeConfiguration {
-	return JSON.parse(JSON.stringify(configuration)) as ThemeConfiguration;
+	return structuredClone(configuration);
 }
 
 function readPersistedMode(value: unknown, fallback: ThemeMode): ThemeMode {

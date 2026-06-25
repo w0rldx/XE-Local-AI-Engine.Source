@@ -42,7 +42,7 @@ function formatOptionalDateLocalized(value?: string | null): string {
 export function Dashboard() {
 	const { t } = useTranslation();
 	const queryClient = useQueryClient();
-	const statusQuery = useQuery({
+	const { data: status, isLoading: statusIsLoading, error: statusError, refetch: statusRefetch, isFetching: statusIsFetching } = useQuery({
 		...withResponseValidation(getConnectionStatusOptions()),
 		select: toConnectionStatusViewModel,
 		refetchInterval: 5000,
@@ -82,7 +82,6 @@ export function Dashboard() {
 		onError: onActionError,
 	});
 
-	const status = statusQuery.data;
 	const isActionPending =
 		connectMutation.isPending ||
 		disconnectMutation.isPending ||
@@ -126,16 +125,16 @@ export function Dashboard() {
 					<Text c="dimmed">{t("pages.dashboard.subtitle")}</Text>
 				</Stack>
 
-				{statusQuery.isLoading ? (
+				{statusIsLoading ? (
 					<Group gap="sm">
 						<Loader size="sm" />
 						<Text c="dimmed">{t("pages.dashboard.loadingStatus")}</Text>
 					</Group>
 				) : null}
 
-				{statusQuery.error ? (
+				{statusError ? (
 					<Alert color="red" icon={<IconAlertTriangle size={16} />}>
-						{getErrorMessage(statusQuery.error)}
+						{getErrorMessage(statusError)}
 					</Alert>
 				) : null}
 
@@ -176,8 +175,8 @@ export function Dashboard() {
 									<Button
 										variant="subtle"
 										leftSection={<IconRefresh size={16} />}
-										onClick={() => statusQuery.refetch()}
-										disabled={statusQuery.isFetching}
+										onClick={() => statusRefetch()}
+										disabled={statusIsFetching}
 									>
 										{t("pages.dashboard.platformConnection.refresh")}
 									</Button>

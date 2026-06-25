@@ -1,5 +1,5 @@
-import { Alert, Button, Container, Group, Loader, Stack, Text, Title } from "@mantine/core";
-import { IconAlertTriangle, IconCalendarClock, IconDeviceFloppy, IconPlus, IconX } from "@tabler/icons-react";
+import { Button, Container, Stack } from "@mantine/core";
+import { IconDeviceFloppy, IconX } from "@tabler/icons-react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 
@@ -8,9 +8,10 @@ import { useConfirm } from "@/core/ui/hooks/useConfirm";
 import { useUnsavedChangesGuard } from "@/core/ui/hooks/useUnsavedChangesGuard";
 import { toast } from "@/core/ui/notifications/Toast";
 import { ScheduledJobForm, type ScheduledJobFormHandle } from "@/features/scheduler/components/ScheduledJobForm";
-import { ScheduledJobList } from "@/features/scheduler/components/ScheduledJobList";
-import { ScheduledJobRunDetail } from "@/features/scheduler/components/ScheduledJobRunDetail";
-import { ScheduledJobRunHistoryPanel } from "@/features/scheduler/components/ScheduledJobRunHistoryPanel";
+import { SchedulerJobsSection } from "@/features/scheduler/components/SchedulerJobsSection";
+import { SchedulerPageHeader } from "@/features/scheduler/components/SchedulerPageHeader";
+import { SchedulerRunDetailDialog } from "@/features/scheduler/components/SchedulerRunDetailDialog";
+import { SchedulerRunsSection } from "@/features/scheduler/components/SchedulerRunsSection";
 import { useSchedulerHub } from "@/features/scheduler/hooks/useSchedulerHub";
 import { toSaveScheduledJobRequest } from "@/features/scheduler/models/SchedulerMappers";
 import type {
@@ -239,26 +240,7 @@ export function SchedulerPage() {
 	return (
 		<Container fluid={true} py="lg">
 			<Stack gap="lg">
-				<Group justify="space-between" align="flex-start">
-					<Stack gap={4}>
-						<Text size="sm" tt="uppercase" fw={700} c="dimmed">
-							{t("pages.scheduler.eyebrow", "Worker Node")}
-						</Text>
-						<Group gap="xs" align="center">
-							<IconCalendarClock size={24} />
-							<Title order={2}>{t("pages.scheduler.title", "Scheduler")}</Title>
-						</Group>
-						<Text c="dimmed">
-							{t(
-								"pages.scheduler.subtitle",
-								"Schedule recurring and one-off jobs on this node. Jobs are disabled until you enable them, and parameters are stored encrypted.",
-							)}
-						</Text>
-					</Stack>
-					<Button leftSection={<IconPlus size={16} />} onClick={openCreate} data-testid="scheduler-create-button">
-						{t("pages.scheduler.createButton", "Create job")}
-					</Button>
-				</Group>
+				<SchedulerPageHeader onCreate={openCreate} />
 
 				{/* Editor dialog: replaces the inline card. Both the title-bar X and the footer
 				    Cancel route through requestCloseEditor so a dirty-state confirm is shown
@@ -290,70 +272,50 @@ export function SchedulerPage() {
 				</DialogShell>
 
 				{/* Job list — always visible (dialog overlays it). */}
-				<div data-testid="scheduler-list-card">
-					{jobsQuery.isLoading ? (
-						<Group gap="sm">
-							<Loader size="sm" />
-							<Text c="dimmed">{t("pages.scheduler.list.loading", "Loading scheduled jobs…")}</Text>
-						</Group>
-					) : null}
-					{jobsQuery.error ? (
-						<Alert color="red" icon={<IconAlertTriangle size={16} />} data-testid="scheduler-list-error">
-							{errorMessage(jobsQuery.error, t("pages.scheduler.errors.load", "Could not load scheduled jobs."))}
-						</Alert>
-					) : null}
-					{!jobsQuery.isLoading && !jobsQuery.error ? (
-						<ScheduledJobList
-							jobs={jobs}
-							isMutating={isMutating}
-							onEdit={openEdit}
-							onDelete={handleDelete}
-							onTrigger={handleTrigger}
-							onToggleEnabled={handleToggleEnabled}
-						/>
-					) : null}
-				</div>
+				<SchedulerJobsSection
+					jobs={jobs}
+					isLoading={jobsQuery.isLoading}
+					error={
+						jobsQuery.error
+							? errorMessage(jobsQuery.error, t("pages.scheduler.errors.load", "Could not load scheduled jobs."))
+							: undefined
+					}
+					isMutating={isMutating}
+					onEdit={openEdit}
+					onDelete={handleDelete}
+					onTrigger={handleTrigger}
+					onToggleEnabled={handleToggleEnabled}
+				/>
 
-				<div data-testid="scheduler-runs-card">
-					<Stack gap="md">
-						<Title order={3}>{t("pages.scheduler.runs.title", "Run history")}</Title>
-						<ScheduledJobRunHistoryPanel
-							runs={runs}
-							jobs={jobs}
-							filters={runFilters}
-							isLoading={runsQuery.isLoading}
-							isCancelling={cancelMutation.isPending}
-							error={
-								runsQuery.error
-									? errorMessage(runsQuery.error, t("pages.scheduler.errors.loadRuns", "Could not load run history."))
-									: undefined
-							}
-							selectedRunId={selectedRunId}
-							onFiltersChange={setRunFilters}
-							onSelectRun={selectRun}
-							onCancelRun={handleCancelRun}
-						/>
-					</Stack>
-				</div>
+				<SchedulerRunsSection
+					runs={runs}
+					jobs={jobs}
+					filters={runFilters}
+					isLoading={runsQuery.isLoading}
+					isCancelling={cancelMutation.isPending}
+					error={
+						runsQuery.error
+							? errorMessage(runsQuery.error, t("pages.scheduler.errors.loadRuns", "Could not load run history."))
+							: undefined
+					}
+					selectedRunId={selectedRunId}
+					onFiltersChange={setRunFilters}
+					onSelectRun={selectRun}
+					onCancelRun={handleCancelRun}
+				/>
 
 				{/* Run-detail dialog: read-only, separate from the editor dialog. */}
-				<DialogShell
-					title={t("pages.scheduler.runs.detail.title", "Run detail")}
+				<SchedulerRunDetailDialog
+					run={runQuery.data}
+					isLoading={runQuery.isLoading}
+					error={
+						runQuery.error
+							? errorMessage(runQuery.error, t("pages.scheduler.errors.loadRun", "Could not load the run."))
+							: undefined
+					}
 					opened={selectedRunId !== null}
 					onClose={() => selectRun(null)}
-					enableFullScreenToggle={false}
-					data-testid="scheduler-run-detail-card"
-				>
-					<ScheduledJobRunDetail
-						run={runQuery.data}
-						isLoading={runQuery.isLoading}
-						error={
-							runQuery.error
-								? errorMessage(runQuery.error, t("pages.scheduler.errors.loadRun", "Could not load the run."))
-								: undefined
-						}
-					/>
-				</DialogShell>
+				/>
 			</Stack>
 		</Container>
 	);

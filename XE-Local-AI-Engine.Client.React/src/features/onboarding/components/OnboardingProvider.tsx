@@ -2,7 +2,7 @@ import type { QueryClient } from "@tanstack/react-query";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { notifications } from "@mantine/notifications";
 import type { ReactNode } from "react";
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
 import { useTranslation } from "react-i18next";
 import { ACTIONS, EVENTS, Joyride, STATUS } from "react-joyride";
 import type { EventData } from "react-joyride";
@@ -321,28 +321,26 @@ export function OnboardingProvider({ children }: { children: ReactNode }) {
 	);
 }
 
-// Subscribes to the QueryCache for any update event and recomputes `hasVisibleAssistantReply` from the cache on each
-// notification. Event-driven (no timer) — satisfies "advance on real state, NOT a timer" (plan R1). Resets to false
-// when the step is no longer active so stale state can't trigger a spurious finish on the next tour run.
+// Derives `hasVisibleAssistantReply` directly from the QueryCache (an external store) via useSyncExternalStore, so the
+// value is recomputed on every cache event without copying it into local state (no derived-state effect / cascading
+// setState). Event-driven (no timer) — satisfies "advance on real state, NOT a timer" (plan R1). When the step is not
+// active the snapshot is always false, so stale state can't trigger a spurious finish on the next tour run, and the
+// subscription is a no-op (nothing re-renders this hook on cache events while inactive).
 function useChatReplySignal(queryClient: QueryClient, active: boolean): boolean {
-	const [hasReply, setHasReply] = useState(false);
+	const subscribe = useCallback(
+		(onStoreChange: () => void) => {
+			if (!active) {
+				return () => undefined;
+			}
+			return queryClient.getQueryCache().subscribe(onStoreChange);
+		},
+		[active, queryClient],
+	);
 
-	useEffect(() => {
-		if (!active) {
-			setHasReply(false);
-			return;
-		}
+	const getSnapshot = useCallback(
+		() => (active ? hasVisibleAssistantReply(queryClient) : false),
+		[active, queryClient],
+	);
 
-		// Snapshot immediately in case a reply already landed before this step activated.
-		setHasReply(hasVisibleAssistantReply(queryClient));
-
-		// Subscribe to all cache events; re-evaluate on each one. The subscription is torn down when the step exits.
-		const unsubscribe = queryClient.getQueryCache().subscribe(() => {
-			setHasReply(hasVisibleAssistantReply(queryClient));
-		});
-
-		return unsubscribe;
-	}, [active, queryClient]);
-
-	return hasReply;
+	return useSyncExternalStore(subscribe, getSnapshot);
 }

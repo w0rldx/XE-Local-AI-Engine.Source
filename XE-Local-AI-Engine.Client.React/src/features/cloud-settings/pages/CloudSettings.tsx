@@ -107,7 +107,7 @@ function formReducer(state: FormState, action: FormAction): FormState {
 export function CloudSettings() {
 	const { t } = useTranslation();
 	const queryClient = useQueryClient();
-	const settingsQuery = useQuery(withResponseValidation(getCloudSettingsOptions()));
+	const { data: settingsData, isLoading: settingsIsLoading, error: settingsError, refetch: settingsRefetch, isFetching: settingsIsFetching } = useQuery(withResponseValidation(getCloudSettingsOptions()));
 	const [formState, dispatch] = useReducer(formReducer, initialFormState);
 	const { values: formValues, touched: touchedFields, submitted } = formState;
 
@@ -119,17 +119,17 @@ export function CloudSettings() {
 	}, []);
 
 	useEffect(() => {
-		if (settingsQuery.data) {
+		if (settingsData) {
 			dispatch({
 				type: "reset",
 				values: {
-					endpoint: settingsQuery.data.endpoint ?? "",
+					endpoint: settingsData.endpoint ?? "",
 					apiKey: "",
-					deploymentName: settingsQuery.data.deploymentName ?? "",
+					deploymentName: settingsData.deploymentName ?? "",
 				},
 			});
 		}
-	}, [settingsQuery.data]);
+	}, [settingsData]);
 
 	const errors = useMemo(() => validateCloudSettingsForm(formValues), [formValues]);
 	const hasErrors = Object.keys(errors).length > 0;
@@ -170,7 +170,7 @@ export function CloudSettings() {
 	});
 
 	const isActionPending = saveMutation.isPending || clearMutation.isPending;
-	const settings = settingsQuery.data;
+	const settings = settingsData;
 
 	return (
 		<Container fluid={true} py="lg">
@@ -185,16 +185,16 @@ export function CloudSettings() {
 					</Text>
 				</Stack>
 
-				{settingsQuery.isLoading ? (
+				{settingsIsLoading ? (
 					<Group gap="sm">
 						<Loader size="sm" />
 						<Text c="dimmed">Loading cloud settings…</Text>
 					</Group>
 				) : null}
 
-				{settingsQuery.error ? (
+				{settingsError ? (
 					<Alert color="red" icon={<IconAlertTriangle size={16} />}>
-						{errorMessage(settingsQuery.error)}
+						{errorMessage(settingsError)}
 					</Alert>
 				) : null}
 
@@ -319,8 +319,8 @@ export function CloudSettings() {
 							<Button
 								variant="subtle"
 								leftSection={<IconRefresh size={16} />}
-								onClick={() => settingsQuery.refetch()}
-								disabled={settingsQuery.isFetching}
+								onClick={() => settingsRefetch()}
+								disabled={settingsIsFetching}
 							>
 								Reload
 							</Button>

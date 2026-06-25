@@ -9,6 +9,10 @@ import { localDefaultModelValue } from "@/features/chat/models/NodeChatModelSele
 
 import classes from "./ModelSelectorCard.module.css";
 
+// Stable empty default for `cloudModelOptions` so an unset prop doesn't mint a fresh array each render
+// (a new `[]` literal as a default value breaks memo/identity comparisons in this component's useMemo deps).
+const EMPTY_CLOUD_MODEL_OPTIONS: ModelOption[] = [];
+
 interface ModelSelectorCardProps {
 	modelOptions: ModelOption[];
 	// Cloud (Codex) model options shown in a separate section. Only rendered when non-empty
@@ -179,7 +183,7 @@ function ModelSelectorSection({
 
 export function ModelSelectorCard({
 	modelOptions,
-	cloudModelOptions = [],
+	cloudModelOptions = EMPTY_CLOUD_MODEL_OPTIONS,
 	selectedModel,
 	disabled = false,
 	onModelChange,
