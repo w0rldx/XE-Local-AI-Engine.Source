@@ -7,8 +7,16 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 // Capture the props Joyride is rendered with so we can assert `run` stays false on skip without rendering the real
 // overlay (which needs a live DOM target + portals).
-const { joyrideProps, markDoneMock, shouldPromptRef, onEventRef, tourProgressRef, clearTourProgressMock } = vi.hoisted(
-	() => ({
+const {
+	joyrideProps,
+	markDoneMock,
+	shouldPromptRef,
+	onEventRef,
+	tourProgressRef,
+	clearTourProgressMock,
+	modelsDataRef,
+	conversationsRef,
+} = vi.hoisted(() => ({
 		joyrideProps: { current: null as null | { run: boolean; stepIndex: number } },
 		markDoneMock: vi.fn(),
 		shouldPromptRef: { current: true },
@@ -16,8 +24,22 @@ const { joyrideProps, markDoneMock, shouldPromptRef, onEventRef, tourProgressRef
 		// Controllable persisted in-progress step index for the resume-on-reload tests (Bug B). null = no saved progress.
 		tourProgressRef: { current: null as number | null },
 		clearTourProgressMock: vi.fn(),
-	}),
-);
+		// Controllable installed-models query payload for the flash-then-skip auto-advance tests. `undefined` mirrors a
+		// still-loading list (the default the other tests rely on); set { items, selectedModelName } to drive the
+		// install/default real-state effects. A rerender after mutating this surfaces the new value to the provider.
+		modelsDataRef: {
+			current: undefined as
+				| { items?: { modelName: string; kind?: string }[]; selectedModelName?: string | null }
+				| undefined,
+		},
+		// Controllable conversations-query payload backing the firstResponse reply signal. `hasVisibleAssistantReply`
+		// reads this via queryClient.getQueriesData(); each entry is the [queryKey, conversation] tuple TanStack returns.
+		// Empty = no reply yet; seed a tuple with an assistant message to simulate a streamed reply. A rerender re-reads
+		// the snapshot through useSyncExternalStore, so mutating this + rerender drives the unmet→met transition.
+		conversationsRef: {
+			current: [] as [readonly unknown[], { messages?: { role: string; content: string }[] }][],
+		},
+	}));
 
 // Replace only the Joyride component (rendering the real overlay needs live DOM targets + portals); keep the real
 // ACTIONS/EVENTS/STATUS constants the provider imports so the mock can't drift from the library.
@@ -50,9 +72,9 @@ vi.mock("@/features/onboarding/hooks/useTourState", () => ({
 // The provider reads the installed-models query — stub it so the component renders without the real
 // generated client / a live QueryClient.
 vi.mock("@tanstack/react-query", () => ({
-	useQuery: () => ({ data: undefined }),
+	useQuery: () => ({ data: modelsDataRef.current }),
 	useQueryClient: () => ({
-		getQueriesData: () => [],
+		getQueriesData: () => conversationsRef.current,
 		getQueryCache: () => ({
 			subscribe: () => () => undefined,
 			findAll: () => [],
@@ -95,9 +117,56 @@ import { FIRST_SHOWCASE_STEP_INDEX, tourStepIds } from "@/features/onboarding/da
 // Derived constants used in showcase-step tests.
 const FIRST_RESPONSE_STEP_INDEX = tourStepIds.indexOf("firstResponse");
 const LAST_SHOWCASE_STEP_INDEX = tourStepIds.length - 1;
+const INSTALL_STEP_INDEX = tourStepIds.indexOf("recommendationInstall");
+const DEFAULT_STEP_INDEX = tourStepIds.indexOf("setDefaultModel");
+const NAV_CHAT_STEP_INDEX = tourStepIds.indexOf("navChat");
+
+// A chat-capable installed model (kind !== "Embedding") the install/default real-state effects accept.
+const CHAT_MODEL = { modelName: "llama-3", kind: "Chat" } as const;
+
+// A getQueriesData payload carrying one conversation with a non-empty assistant message — what hasVisibleAssistantReply
+// treats as "the user's first send produced a streamed reply" (the firstResponse step's advance signal).
+const REPLY_CONVERSATIONS: [readonly unknown[], { messages?: { role: string; content: string }[] }][] = [
+	[["conversations"], { messages: [{ role: "assistant", content: "Hello!" }] }],
+];
 
 function renderWithProviders(ui: ReactElement) {
 	return render(<MantineProvider>{ui}</MantineProvider>);
+}
+
+// Mutates the installed-models query payload and re-renders so the provider's real-state effects observe the new value.
+// A bare ref mutation can't re-run the effects (React never re-renders on a ref change); rerendering the same element
+// re-invokes the mocked useQuery, and the new modelItems/selectedModelName references re-fire the dependent effects —
+// this is how we simulate a genuine unmet→met transition while the user sits on a step.
+function applyModelsData(
+	view: ReturnType<typeof renderWithProviders>,
+	data: { items?: { modelName: string; kind?: string }[]; selectedModelName?: string | null } | undefined,
+): void {
+	modelsDataRef.current = data;
+	act(() => {
+		view.rerender(
+			<MantineProvider>
+				<OnboardingProvider>app</OnboardingProvider>
+			</MantineProvider>,
+		);
+	});
+}
+
+// Mutates the conversations query payload and re-renders so the firstResponse reply signal re-reads its snapshot. The
+// signal flows through useSyncExternalStore (getSnapshot calls hasVisibleAssistantReply), which is re-read on every
+// render — so the rerender surfaces the seeded reply and re-fires the firstResponse effect's hasReply dependency.
+function applyConversations(
+	view: ReturnType<typeof renderWithProviders>,
+	data: [readonly unknown[], { messages?: { role: string; content: string }[] }][],
+): void {
+	conversationsRef.current = data;
+	act(() => {
+		view.rerender(
+			<MantineProvider>
+				<OnboardingProvider>app</OnboardingProvider>
+			</MantineProvider>,
+		);
+	});
 }
 
 // Mantine reads matchMedia/ResizeObserver on mount; jsdom provides neither, so stub them (same shape the other
@@ -132,6 +201,8 @@ beforeEach(() => {
 	joyrideProps.current = null;
 	onEventRef.current = null;
 	tourProgressRef.current = null;
+	modelsDataRef.current = undefined;
+	conversationsRef.current = [];
 });
 
 afterEach(() => {
@@ -431,5 +502,103 @@ describe("OnboardingProvider showcase transition", () => {
 		});
 
 		expect(markDoneMock).toHaveBeenCalledWith("completed");
+	});
+});
+
+describe("OnboardingProvider auto-advance arming (flash-then-skip fix)", () => {
+	// These tests resume the tour directly at the step under test via the persisted-progress path (tourProgressRef), so
+	// the provider lands on the async real-state step with the chosen models payload already in place — exactly the
+	// "returning/test user" arrival the fix targets.
+
+	it("does NOT auto-advance the setDefaultModel step when a chat-capable default is already set on arrival", () => {
+		// Returning user: a chat model is installed AND already the default the moment the step renders. Pre-fix this
+		// flashed the step for ~1s then auto-advanced; it must now stay put and wait for a manual Next.
+		modelsDataRef.current = { items: [CHAT_MODEL], selectedModelName: CHAT_MODEL.modelName };
+		tourProgressRef.current = DEFAULT_STEP_INDEX;
+
+		renderWithProviders(<OnboardingProvider>app</OnboardingProvider>);
+
+		expect(joyrideProps.current?.run).toBe(true);
+		expect(joyrideProps.current?.stepIndex).toBe(DEFAULT_STEP_INDEX);
+		expect(markDoneMock).not.toHaveBeenCalled();
+	});
+
+	it("auto-advances the setDefaultModel step on a genuine unmet→met default transition", () => {
+		// Arrival: a chat model is installed but NO default is set yet (condition unmet → effect arms). When the user
+		// then picks a default (unmet→met while on the step), the tour advances to navChat.
+		modelsDataRef.current = { items: [CHAT_MODEL], selectedModelName: undefined };
+		tourProgressRef.current = DEFAULT_STEP_INDEX;
+
+		const view = renderWithProviders(<OnboardingProvider>app</OnboardingProvider>);
+		expect(joyrideProps.current?.stepIndex).toBe(DEFAULT_STEP_INDEX);
+
+		applyModelsData(view, { items: [CHAT_MODEL], selectedModelName: CHAT_MODEL.modelName });
+
+		expect(joyrideProps.current?.stepIndex).toBe(NAV_CHAT_STEP_INDEX);
+	});
+
+	it("does NOT auto-advance the install step when a chat model is already installed on arrival", () => {
+		// Returning user: a chat model is already installed when the install step renders — leave the step visible.
+		modelsDataRef.current = { items: [CHAT_MODEL], selectedModelName: null };
+		tourProgressRef.current = INSTALL_STEP_INDEX;
+
+		renderWithProviders(<OnboardingProvider>app</OnboardingProvider>);
+
+		expect(joyrideProps.current?.run).toBe(true);
+		expect(joyrideProps.current?.stepIndex).toBe(INSTALL_STEP_INDEX);
+		expect(markDoneMock).not.toHaveBeenCalled();
+	});
+
+	it("auto-advances the install step on a genuine unmet→met install transition", () => {
+		// Arrival: the resolved list is empty (no chat model → effect arms). When the user installs one (unmet→met while
+		// on the step), the tour advances to setDefaultModel.
+		modelsDataRef.current = { items: [], selectedModelName: null };
+		tourProgressRef.current = INSTALL_STEP_INDEX;
+
+		const view = renderWithProviders(<OnboardingProvider>app</OnboardingProvider>);
+		expect(joyrideProps.current?.stepIndex).toBe(INSTALL_STEP_INDEX);
+
+		applyModelsData(view, { items: [CHAT_MODEL], selectedModelName: null });
+
+		expect(joyrideProps.current?.stepIndex).toBe(DEFAULT_STEP_INDEX);
+	});
+
+	it("still skips the setDefaultModel step forward when the prerequisite model is missing (recovery preserved)", () => {
+		// Skip-if-prereq-missing recovery: arriving on setDefaultModel with the list resolved AND empty (no chat model to
+		// set as default) must proactively step forward to navChat — unchanged by the arming fix.
+		modelsDataRef.current = { items: [], selectedModelName: null };
+		tourProgressRef.current = DEFAULT_STEP_INDEX;
+
+		renderWithProviders(<OnboardingProvider>app</OnboardingProvider>);
+
+		expect(joyrideProps.current?.stepIndex).toBe(NAV_CHAT_STEP_INDEX);
+		expect(markDoneMock).not.toHaveBeenCalled();
+	});
+
+	it("does NOT auto-advance the firstResponse step when an assistant reply is already present on arrival", () => {
+		// Returning user: a prior conversation already holds an assistant reply the moment the firstResponse step renders
+		// (condition met on arrival, armed=false). The step must stay visible to be read, not flash past.
+		conversationsRef.current = REPLY_CONVERSATIONS;
+		tourProgressRef.current = FIRST_RESPONSE_STEP_INDEX;
+
+		renderWithProviders(<OnboardingProvider>app</OnboardingProvider>);
+
+		expect(joyrideProps.current?.run).toBe(true);
+		expect(joyrideProps.current?.stepIndex).toBe(FIRST_RESPONSE_STEP_INDEX);
+		expect(markDoneMock).not.toHaveBeenCalled();
+	});
+
+	it("auto-advances the firstResponse step to the first showcase step on a genuine reply transition", () => {
+		// Arrival: no assistant reply yet (condition unmet → effect arms). When the user's first send produces a streamed
+		// reply (unmet→met while on the step), the tour advances into the first showcase step.
+		conversationsRef.current = [];
+		tourProgressRef.current = FIRST_RESPONSE_STEP_INDEX;
+
+		const view = renderWithProviders(<OnboardingProvider>app</OnboardingProvider>);
+		expect(joyrideProps.current?.stepIndex).toBe(FIRST_RESPONSE_STEP_INDEX);
+
+		applyConversations(view, REPLY_CONVERSATIONS);
+
+		expect(joyrideProps.current?.stepIndex).toBe(FIRST_SHOWCASE_STEP_INDEX);
 	});
 });
