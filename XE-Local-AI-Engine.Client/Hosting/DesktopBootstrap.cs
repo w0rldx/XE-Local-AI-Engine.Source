@@ -150,6 +150,19 @@ internal static class DesktopBootstrap
         EnsureLocalDataConfiguration(configuration, Environment.GetFolderPath);
     }
 
+    /// <summary>
+    ///     Resolves the per-user desktop data directory (creating it when absent) reading from the real process
+    ///     environment. Used by <c>Program.cs</c> so the desktop branch can locate co-located runtime artifacts (e.g. the
+    ///     persisted loopback port) before the configuration layer is built. Desktop-only: only ever called behind the
+    ///     desktop flag, so the off-flag path is unaffected.
+    /// </summary>
+    internal static string ResolveDataDirectory()
+    {
+        var dataDirectory = ResolveDataDirectory(Environment.GetFolderPath);
+        EnsureDirectory(dataDirectory);
+        return dataDirectory;
+    }
+
     private static string ResolveDataDirectory(Func<Environment.SpecialFolder, string> folderResolver)
     {
         var localApplicationData = folderResolver(Environment.SpecialFolder.LocalApplicationData);
