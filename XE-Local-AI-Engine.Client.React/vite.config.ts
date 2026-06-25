@@ -81,11 +81,14 @@ export default defineConfig(({ command, mode }) => {
 			? {
 					proxy: {
 						// SignalR hubs need the WebSocket upgrade proxied (ws: true); each more-specific hub path MUST come
-						// before the generic "/api" entry or Vite matches "/api" first and the upgrade falls through as plain HTTP.
+						// before the generic "/api" entry or Vite matches "/api" first and the upgrade falls through as
+						// plain HTTP. A hub missing here connects via the ws:false "/api" entry, whose mishandled upgrade
+						// attempts wedge Vite's WebSocket proxy and stall the other (correctly-proxied) hubs too — so EVERY
+						// hub mapped in Program.cs (LocalApiRoutes) must be listed. Keep this set in sync with MapHub<…>.
 						"/api/local/v1/chat/hub": localProxy(proxyTarget, true),
-						"/api/local/v1/runtime/hub": localProxy(proxyTarget, true),
 						"/api/local/v1/scheduler/hub": localProxy(proxyTarget, true),
 						"/api/local/v1/preview/hub": localProxy(proxyTarget, true),
+						"/api/local/v1/model-fit/gguf/downloads/hub": localProxy(proxyTarget, true),
 						"/api": localProxy(proxyTarget),
 						"/openapi": {
 							target: proxyTarget,
