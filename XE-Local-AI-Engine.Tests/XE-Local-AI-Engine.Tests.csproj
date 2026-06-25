@@ -12,6 +12,7 @@
     <PackageReference Include="Microsoft.Testing.Extensions.TrxReport"/>
     <PackageReference Include="Microsoft.Testing.Platform"/>
     <PackageReference Include="ModelContextProtocol"/>
+    <PackageReference Include="NetArchTest.Rules"/>
     <PackageReference Include="NSubstitute"/>
     <PackageReference Include="OllamaSharp"/>
     <PackageReference Include="TUnit"/>

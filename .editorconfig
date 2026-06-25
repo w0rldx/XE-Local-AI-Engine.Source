@@ -443,7 +443,12 @@ dotnet_naming_style.s_camelcase.required_suffix =
 dotnet_naming_style.s_camelcase.word_separator =
 dotnet_naming_style.s_camelcase.capitalization = camel_case
 
-dotnet_style_namespace_match_folder = true:suggestion
+# A type's namespace must match its folder path — prevents files drifting into the wrong folder.
+# Staged rollout: severity=warning + an IDE0130 carve-out in Directory.Build.props/WarningsNotAsErrors
+# keeps the build green while the pre-existing backlog is cleared; flip to `error` and drop the
+# carve-out once `dotnet build` reports zero IDE0130 warnings. (follow-up: promote to error)
+dotnet_style_namespace_match_folder = true
+dotnet_diagnostic.IDE0130.severity = warning
 
 # Parameter names in overrides/interfaces should match.
 # Important when callers use named arguments.
