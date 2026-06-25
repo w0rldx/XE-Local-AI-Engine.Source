@@ -32,6 +32,7 @@ public sealed class GgufDownloadCoordinator : IGgufDownloadCoordinator
 
     // Keyed by canonical model name. An in-flight download owns a live CTS; the status cell is updated as progress flows.
     private readonly ConcurrentDictionary<string, CancellationTokenSource> _inFlight = new(StringComparer.OrdinalIgnoreCase);
+
     // Last instant a Running progress push was broadcast per model, so high-frequency byte callbacks are throttled to at
     // most one push per ProgressPushInterval. Keyed by canonical model name; the entry is dropped on terminal phase.
     private readonly ConcurrentDictionary<string, long> _lastProgressPushTicks = new(StringComparer.OrdinalIgnoreCase);
@@ -40,8 +41,7 @@ public sealed class GgufDownloadCoordinator : IGgufDownloadCoordinator
     private readonly IServiceScopeFactory _scopeFactory;
     private readonly ConcurrentDictionary<string, GgufDownloadStatus> _status = new(StringComparer.OrdinalIgnoreCase);
 
-    public GgufDownloadCoordinator(
-        IGgufModelStore modelStore,
+    public GgufDownloadCoordinator(IGgufModelStore modelStore,
         IServiceScopeFactory scopeFactory,
         IGgufDownloadEventPublisher eventPublisher,
         ILogger<GgufDownloadCoordinator> logger)
@@ -110,7 +110,8 @@ public sealed class GgufDownloadCoordinator : IGgufDownloadCoordinator
         return _status.TryGetValue(modelName, out var status) ? status : null;
     }
 
-    public IReadOnlyList<GgufDownloadStatus> ListStatuses() => _status.Values.ToList();
+    public IReadOnlyList<GgufDownloadStatus> ListStatuses() =>
+        _status.Values.ToList();
 
     // Resolves the canonical model name via the store; on a discovery/transport failure (or HttpClient request TIMEOUT,
     // which surfaces as a non-caller OperationCanceledException) falls back to the request-derived label so a download
@@ -199,8 +200,7 @@ public sealed class GgufDownloadCoordinator : IGgufDownloadCoordinator
     // swallowed with a debug log — the list endpoint remains the authoritative one-shot hydrate either way.
     private void BroadcastStatus(GgufDownloadStatus status)
     {
-        var hubEvent = new GgufDownloadStatusHubEvent(
-            status.ModelName,
+        var hubEvent = new GgufDownloadStatusHubEvent(status.ModelName,
             status.Phase.ToString(),
             status.CompletedBytes,
             status.TotalBytes,

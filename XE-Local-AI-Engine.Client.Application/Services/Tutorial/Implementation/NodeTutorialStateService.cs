@@ -3,7 +3,6 @@ namespace XE_Local_AI_Engine.Client.Services.Tutorial.Implementation;
 using System.Security.Claims;
 using System.Text.Json;
 using Microsoft.AspNetCore.Identity;
-using Microsoft.Extensions.Logging;
 using XE_Local_AI_Engine.Client.Persistence.Entities;
 
 /// <summary>

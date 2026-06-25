@@ -26,16 +26,19 @@ public sealed class GetGgufDownloadsEndpoint(IGgufDownloadCoordinator downloadCo
     {
         var statuses = _downloadCoordinator.ListStatuses();
         var items = statuses
-            .Select(s => new GgufDownloadStatusResponse
-            {
-                ModelName = s.ModelName,
-                Phase = s.Phase.ToString(),
-                CompletedBytes = s.CompletedBytes,
-                TotalBytes = s.TotalBytes,
-                SanitizedError = s.SanitizedError
-            })
-            .ToList();
+                    .Select(s => new GgufDownloadStatusResponse
+                    {
+                        ModelName = s.ModelName,
+                        Phase = s.Phase.ToString(),
+                        CompletedBytes = s.CompletedBytes,
+                        TotalBytes = s.TotalBytes,
+                        SanitizedError = s.SanitizedError
+                    })
+                    .ToList();
 
-        await Send.OkAsync(new ListGgufDownloadsResponse { Items = items }, ct).ConfigureAwait(false);
+        await Send.OkAsync(new ListGgufDownloadsResponse
+        {
+            Items = items
+        }, ct).ConfigureAwait(false);
     }
 }

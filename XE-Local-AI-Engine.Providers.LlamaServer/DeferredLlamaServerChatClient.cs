@@ -1,6 +1,5 @@
 namespace XE_Local_AI_Engine.Providers.LlamaServer;
 
-using System.Net.Http;
 using System.Net.Sockets;
 using System.Runtime.CompilerServices;
 using Microsoft.Extensions.AI;
