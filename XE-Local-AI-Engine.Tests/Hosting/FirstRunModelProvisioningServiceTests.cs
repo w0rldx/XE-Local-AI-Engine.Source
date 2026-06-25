@@ -319,6 +319,11 @@ public sealed class FirstRunModelProvisioningServiceTests
         {
             return new GgufDownloadStatus(modelName, terminalPhase, CompletedBytes: null, TotalBytes: null, terminalPhase == GgufDownloadPhase.Failed ? "Download failed." : null);
         }
+
+        public IReadOnlyList<GgufDownloadStatus> ListStatuses()
+        {
+            return [];
+        }
     }
 
     private sealed class FakeNodeSettingsStore(StoredNodeSettings initial) : INodeSettingsStore

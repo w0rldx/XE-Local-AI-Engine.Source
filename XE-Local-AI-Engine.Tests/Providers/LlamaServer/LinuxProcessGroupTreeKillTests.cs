@@ -3,6 +3,7 @@ namespace XE_Local_AI_Engine.Tests.Providers.LlamaServer;
 using System.Diagnostics;
 using System.Globalization;
 using System.Runtime.InteropServices;
+using Microsoft.Extensions.Logging.Abstractions;
 using XE_Local_AI_Engine.Providers.LlamaServer;
 using XE_Local_AI_Engine.Tests.Testing;
 
@@ -25,7 +26,7 @@ public sealed class LinuxProcessGroupTreeKillTests
             return; // Linux-only runtime verification; the Windows path is operator-verified.
         }
 
-        var launcher = new LlamaServerProcessLauncher();
+        var launcher = new LlamaServerProcessLauncher(NullLogger<LlamaServerProcessLauncher>.Instance);
 
         // A shell that spawns a long-lived grandchild and writes its PID, then sleeps. setsid makes the shell a
         // group leader so kill(-pgid) must reap BOTH the shell and the grandchild.
