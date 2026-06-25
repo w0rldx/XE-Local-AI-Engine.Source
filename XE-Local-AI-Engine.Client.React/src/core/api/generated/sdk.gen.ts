@@ -297,9 +297,6 @@ import type {
 	PromoteSuggestedPlaybookActionData,
 	PromoteSuggestedPlaybookActionErrors,
 	PromoteSuggestedPlaybookActionResponses,
-	PullLocalModelData,
-	PullLocalModelErrors,
-	PullLocalModelResponses,
 	PutModelKindData,
 	PutModelKindErrors,
 	PutModelKindResponses,
@@ -555,8 +552,6 @@ import {
 	zPollNodeBindingResponse,
 	zPromoteSuggestedPlaybookActionPath,
 	zPromoteSuggestedPlaybookActionResponse,
-	zPullLocalModelBody,
-	zPullLocalModelResponse,
 	zPutModelKindBody,
 	zPutModelKindPath,
 	zPutModelKindResponse,
@@ -2039,30 +2034,6 @@ export const listLocalModels = <ThrowOnError extends boolean = false>(options?: 
 		],
 		url: "/api/local/v1/models",
 		...options,
-	});
-
-export const pullLocalModel = <ThrowOnError extends boolean = false>(options: Options<PullLocalModelData, ThrowOnError>) =>
-	(options.client ?? client).post<PullLocalModelResponses, PullLocalModelErrors, ThrowOnError>({
-		requestValidator: async (data) =>
-			await z
-				.object({
-					body: zPullLocalModelBody,
-					path: z.never().optional(),
-					query: z.never().optional(),
-				})
-				.parseAsync(data),
-		responseType: "json",
-		responseValidator: async (data) => await zPullLocalModelResponse.parseAsync(data),
-		security: [
-			{ scheme: "bearer", type: "http" },
-			{ scheme: "bearer", type: "http" },
-		],
-		url: "/api/local/v1/models/pull",
-		...options,
-		headers: {
-			"Content-Type": "application/json",
-			...options.headers,
-		},
 	});
 
 export const selectLocalModel = <ThrowOnError extends boolean = false>(options: Options<SelectLocalModelData, ThrowOnError>) =>

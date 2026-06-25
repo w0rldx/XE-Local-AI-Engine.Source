@@ -41,11 +41,6 @@ public sealed class SelectLocalModelRequest
     public string? ModelName { get; init; }
 }
 
-public sealed class PullLocalModelRequest
-{
-    public string? ModelName { get; init; }
-}
-
 public sealed class LocalModelResponse
 {
     public required string ModelName { get; init; }
@@ -145,17 +140,6 @@ public sealed class SelectLocalModelResponse
     public required string SelectedModelName { get; init; }
 }
 
-public sealed class PullLocalModelResponse
-{
-    public required string ModelName { get; init; }
-
-    public required string Status { get; init; }
-
-    public long? TotalBytes { get; init; }
-
-    public long? CompletedBytes { get; init; }
-}
-
 public sealed class DeleteLocalModelResponse
 {
     public required string ModelName { get; init; }
@@ -204,21 +188,4 @@ public sealed class UnloadLocalModelResponse
     public required string ModelName { get; init; }
 
     public required bool Unloaded { get; init; }
-}
-
-/// <summary>
-///     A single sanitized progress event emitted by <c>POST models/pull/stream</c>.  Contains only the four safe
-///     fields — no paths, tokens, or raw Ollama payloads are forwarded to the client.  <see cref="Error" /> is set
-///     only on the terminal failure line (<c>Status == "error"</c>) and carries a short, sanitized reason.
-/// </summary>
-public sealed class PullStreamProgressEvent
-{
-    public required string Status { get; init; }
-
-    public long? CompletedBytes { get; init; }
-
-    public long? TotalBytes { get; init; }
-
-    /// <summary>Short, sanitized failure reason — present only on the terminal <c>Status == "error"</c> line.</summary>
-    public string? Error { get; init; }
 }

@@ -33,16 +33,6 @@ public sealed class SelectLocalModelRequestValidator : Validator<SelectLocalMode
     }
 }
 
-public sealed class PullLocalModelRequestValidator : Validator<PullLocalModelRequest>
-{
-    public PullLocalModelRequestValidator()
-    {
-        RuleFor(static request => request.ModelName)
-            .NotEmpty()
-            .MaximumLength(100);
-    }
-}
-
 public sealed class UnloadLocalModelRequestValidator : Validator<UnloadLocalModelRequest>
 {
     public UnloadLocalModelRequestValidator()

@@ -2778,63 +2778,6 @@
         ]
       }
     },
-    "/api/local/v1/models/pull": {
-      "post": {
-        "tags": [
-          "Models"
-        ],
-        "operationId": "pullLocalModel",
-        "requestBody": {
-          "x-name": "PullLocalModelRequest",
-          "description": "",
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/XE_Local_AI_EngineClientEndpointsLocalModelsV1PullLocalModelRequest"
-              }
-            }
-          },
-          "required": true,
-          "x-position": 1
-        },
-        "responses": {
-          "200": {
-            "description": "Success",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/XE_Local_AI_EngineClientEndpointsLocalModelsV1PullLocalModelResponse"
-                }
-              }
-            }
-          },
-          "400": {
-            "description": "Bad Request",
-            "content": {
-              "application/problem+json": {
-                "schema": {
-                  "$ref": "#/components/schemas/FastEndpointsProblemDetails"
-                }
-              }
-            }
-          },
-          "401": {
-            "description": "Unauthorized"
-          },
-          "403": {
-            "description": "Forbidden"
-          }
-        },
-        "security": [
-          {
-            "JWTBearerAuth": []
-          },
-          {
-            "Bearer": []
-          }
-        ]
-      }
-    },
     "/api/local/v1/models/select": {
       "post": {
         "tags": [
@@ -8056,43 +7999,6 @@
           },
           "isOverridden": {
             "type": "boolean"
-          }
-        }
-      },
-      "XE_Local_AI_EngineClientEndpointsLocalModelsV1PullLocalModelResponse": {
-        "type": "object",
-        "additionalProperties": false,
-        "properties": {
-          "modelName": {
-            "type": "string"
-          },
-          "status": {
-            "type": "string"
-          },
-          "totalBytes": {
-            "type": "integer",
-            "format": "int64",
-            "nullable": true
-          },
-          "completedBytes": {
-            "type": "integer",
-            "format": "int64",
-            "nullable": true
-          }
-        }
-      },
-      "XE_Local_AI_EngineClientEndpointsLocalModelsV1PullLocalModelRequest": {
-        "type": "object",
-        "additionalProperties": false,
-        "required": [
-          "modelName"
-        ],
-        "properties": {
-          "modelName": {
-            "type": "string",
-            "maxLength": 100,
-            "minLength": 0,
-            "nullable": false
           }
         }
       },

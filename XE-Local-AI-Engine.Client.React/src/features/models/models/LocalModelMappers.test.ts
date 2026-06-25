@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { toLocalModelViewModel, toPullProgressModel } from "@/features/models/models/LocalModelMappers";
+import { toLocalModelViewModel } from "@/features/models/models/LocalModelMappers";
 
 describe("local model mappers", () => {
 	it("maps generated local model items to display labels", () => {
@@ -49,14 +49,4 @@ describe("local model mappers", () => {
 		});
 	});
 
-	it("maps pull progress and clamps percentages", () => {
-		expect(toPullProgressModel({ modelName: "llama", status: "pulling", totalBytes: 100, completedBytes: 150 })).toEqual({
-			status: "pulling",
-			progressPercent: 100,
-		});
-		expect(toPullProgressModel({ modelName: "llama", status: "", totalBytes: null, completedBytes: null })).toEqual({
-			status: "Complete",
-			progressPercent: undefined,
-		});
-	});
 });

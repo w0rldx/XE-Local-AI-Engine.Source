@@ -16,11 +16,6 @@ export interface LocalModelViewModel {
 	isOverridden: boolean;
 }
 
-export interface PullProgressModel {
-	status: string;
-	progressPercent: number | undefined;
-}
-
 export const emptyModelValue = "—";
 
 export function formatModelSize(sizeBytes: number | null | undefined): string {

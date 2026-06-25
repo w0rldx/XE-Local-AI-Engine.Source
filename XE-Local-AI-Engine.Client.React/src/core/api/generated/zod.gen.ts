@@ -1162,25 +1162,6 @@ export const zXeLocalAiEngineClientEndpointsLocalModelsV1ListLocalModelsResponse
 	items: z.array(zXeLocalAiEngineClientEndpointsLocalModelsV1LocalModelResponse).optional(),
 });
 
-export const zXeLocalAiEngineClientEndpointsLocalModelsV1PullLocalModelResponse = z.object({
-	modelName: z.string().optional(),
-	status: z.string().optional(),
-	totalBytes: z.coerce
-		.bigint()
-		.min(BigInt("-9223372036854775808"), { error: "Invalid value: Expected int64 to be >= -9223372036854775808" })
-		.max(BigInt("9223372036854775807"), { error: "Invalid value: Expected int64 to be <= 9223372036854775807" })
-		.nullish(),
-	completedBytes: z.coerce
-		.bigint()
-		.min(BigInt("-9223372036854775808"), { error: "Invalid value: Expected int64 to be >= -9223372036854775808" })
-		.max(BigInt("9223372036854775807"), { error: "Invalid value: Expected int64 to be <= 9223372036854775807" })
-		.nullish(),
-});
-
-export const zXeLocalAiEngineClientEndpointsLocalModelsV1PullLocalModelRequest = z.object({
-	modelName: z.string().min(0).max(100),
-});
-
 export const zXeLocalAiEngineClientEndpointsLocalModelsV1SetModelKindRequest = z.object({
 	kind: z.string().nullish(),
 });
@@ -2594,13 +2575,6 @@ export const zGetRunningLocalModelsResponse = zXeLocalAiEngineClientEndpointsLoc
  * Success
  */
 export const zListLocalModelsResponse = zXeLocalAiEngineClientEndpointsLocalModelsV1ListLocalModelsResponse;
-
-export const zPullLocalModelBody = zXeLocalAiEngineClientEndpointsLocalModelsV1PullLocalModelRequest;
-
-/**
- * Success
- */
-export const zPullLocalModelResponse = zXeLocalAiEngineClientEndpointsLocalModelsV1PullLocalModelResponse;
 
 export const zSelectLocalModelBody = zXeLocalAiEngineClientEndpointsLocalModelsV1SelectLocalModelRequest;
 

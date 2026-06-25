@@ -188,20 +188,6 @@ internal static class LocalModelsMapper
         };
     }
 
-    public static PullLocalModelResponse ToPullResponse(string modelName,
-        string status,
-        long? totalBytes,
-        long? completedBytes)
-    {
-        return new PullLocalModelResponse
-        {
-            ModelName = modelName,
-            Status = status,
-            TotalBytes = totalBytes,
-            CompletedBytes = completedBytes
-        };
-    }
-
     public static LocalModelResponse ToResponse(this Model model,
         string? selectedModelName,
         IReadOnlyDictionary<string, ModelClassificationResult> classifications)
