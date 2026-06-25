@@ -1,4 +1,4 @@
-namespace XE_Local_AI_Engine.Client;
+namespace XE_Local_AI_Engine.Client.DependencyInjection.Modules;
 
 using XE_Local_AI_Engine.Client.Services.Analysis;
 using XE_Local_AI_Engine.Client.Services.Analysis.Implementation;

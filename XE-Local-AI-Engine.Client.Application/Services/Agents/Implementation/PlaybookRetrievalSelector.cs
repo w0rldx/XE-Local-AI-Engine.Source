@@ -1,6 +1,7 @@
 namespace XE_Local_AI_Engine.Client.Services.Agents.Implementation;
 
 using XE_Local_AI_Engine.Client.Persistence;
+using XE_Local_AI_Engine.Client.Persistence.Stores;
 
 /// <summary>
 ///     The single, shared relevance retrieval and cohort monitoring relevance-retrieval decision. Both the single-agent

@@ -1,6 +1,7 @@
 namespace XE_Local_AI_Engine.Client.Services.Memory;
 
 using XE_Local_AI_Engine.Client.Persistence;
+using XE_Local_AI_Engine.Client.Persistence.Stores;
 
 /// <summary>
 ///     Post-run adaptive-memory extraction orchestration: given a completed (or failed) agent run, mine candidate

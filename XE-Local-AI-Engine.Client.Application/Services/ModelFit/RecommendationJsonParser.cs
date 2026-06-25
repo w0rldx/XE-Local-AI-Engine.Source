@@ -3,6 +3,7 @@ namespace XE_Local_AI_Engine.Client.Services.ModelFit;
 using System.Text;
 using System.Text.Json;
 using XE_Local_AI_Engine.Client.Persistence;
+using XE_Local_AI_Engine.Client.Persistence.Stores;
 
 /// <summary>
 ///     Tolerant parser for llmfit <c>recommend --json</c> output (schema captured live, 2026-06-02). It maps the

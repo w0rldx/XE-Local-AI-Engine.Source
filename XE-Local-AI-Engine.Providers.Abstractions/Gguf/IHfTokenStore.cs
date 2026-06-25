@@ -1,4 +1,4 @@
-namespace XE_Local_AI_Engine.Providers.Abstractions;
+namespace XE_Local_AI_Engine.Providers.Abstractions.Gguf;
 
 /// <summary>
 ///     Persistence boundary for the optional Hugging Face access token used to download gated repos. The token is a

@@ -1,4 +1,4 @@
-namespace XE_Local_AI_Engine.Providers.Abstractions;
+namespace XE_Local_AI_Engine.Providers.Abstractions.Gguf;
 
 /// <summary>
 ///     Role a GGUF model file is intended to serve. Mirrors the chat/embedding process split: the same

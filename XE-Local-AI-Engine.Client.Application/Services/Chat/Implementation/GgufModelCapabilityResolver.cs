@@ -1,6 +1,7 @@
 namespace XE_Local_AI_Engine.Client.Services.Chat.Implementation;
 
 using XE_Local_AI_Engine.Providers.Abstractions;
+using XE_Local_AI_Engine.Providers.Abstractions.Gguf;
 
 /// <summary>
 ///     <see cref="IGgufModelCapabilityResolver" /> over <see cref="IGgufModelStore" />: matches the requested model name

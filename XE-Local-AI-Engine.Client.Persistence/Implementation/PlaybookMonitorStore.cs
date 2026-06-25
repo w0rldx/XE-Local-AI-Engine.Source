@@ -4,6 +4,7 @@ using System.Data;
 using System.Data.Common;
 using System.Globalization;
 using Microsoft.EntityFrameworkCore;
+using XE_Local_AI_Engine.Client.Persistence.Stores;
 
 /// <summary>
 ///     Raw-SQL cohort monitor over the node-local chat database. Mirrors

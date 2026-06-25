@@ -1,6 +1,7 @@
 namespace XE_Local_AI_Engine.Client.Services.Memory.Implementation;
 
 using XE_Local_AI_Engine.Client.Persistence;
+using XE_Local_AI_Engine.Client.Persistence.Stores;
 
 /// <summary>
 ///     Default <see cref="IMemoryExtractionDispatcher" />. Singleton: it owns the <see cref="IServiceScopeFactory" /> and

@@ -1,4 +1,4 @@
-namespace XE_Local_AI_Engine.Client.Persistence.Tests;
+namespace XE_Local_AI_Engine.Client.Persistence.Tests.Testing;
 
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Diagnostics;

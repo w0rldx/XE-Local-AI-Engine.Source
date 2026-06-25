@@ -1,7 +1,9 @@
 namespace XE_Local_AI_Engine.Client.Services.Chat.Implementation;
 
 using XE_Local_AI_Engine.Client.Persistence;
+using XE_Local_AI_Engine.Client.Persistence.Stores;
 using XE_Local_AI_Engine.Providers.Abstractions;
+using XE_Local_AI_Engine.Providers.Abstractions.Gguf;
 
 /// <summary>
 ///     Default <see cref="ILocalDefaultChatModelResolver" />. Resolves the local-default chat model from the installed

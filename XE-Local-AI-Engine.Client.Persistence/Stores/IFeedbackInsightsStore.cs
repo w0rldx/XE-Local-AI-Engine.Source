@@ -1,4 +1,4 @@
-namespace XE_Local_AI_Engine.Client.Persistence;
+namespace XE_Local_AI_Engine.Client.Persistence.Stores;
 
 /// <summary>
 ///     Read-only aggregate over the node-local per-message feedback. Groups the

@@ -1,6 +1,7 @@
 namespace XE_Local_AI_Engine.Client.Services.PreviewWorkflows.Implementation;
 
 using XE_Local_AI_Engine.Client.Persistence;
+using XE_Local_AI_Engine.Client.Persistence.Stores;
 
 /// <summary>
 ///     Default <see cref="IPreviewWorkflowService" />: CRUD over <see cref="ICanvasWorkflowStore" /> with graph

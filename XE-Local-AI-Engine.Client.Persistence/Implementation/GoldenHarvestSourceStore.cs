@@ -5,6 +5,7 @@ using System.Data.Common;
 using System.Text;
 using Microsoft.EntityFrameworkCore;
 using XE_Local_AI_Engine.Client.Persistence.Entities;
+using XE_Local_AI_Engine.Client.Persistence.Stores;
 
 /// <summary>
 ///     Reconstructs golden-conversation harvest candidates from an agent's thumbs-up assistant turns. Reads node-local

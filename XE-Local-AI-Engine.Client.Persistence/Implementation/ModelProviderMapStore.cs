@@ -2,6 +2,7 @@ namespace XE_Local_AI_Engine.Client.Persistence.Implementation;
 
 using Microsoft.EntityFrameworkCore;
 using XE_Local_AI_Engine.Client.Persistence.Entities;
+using XE_Local_AI_Engine.Client.Persistence.Stores;
 
 /// <summary>
 ///     Persistence boundary for the per-model→provider map. The <c>model_provider_map</c> table is keyed by model

@@ -1,4 +1,4 @@
-namespace XE_Local_AI_Engine.Providers.Abstractions;
+namespace XE_Local_AI_Engine.Providers.Abstractions.Gguf;
 
 /// <summary>
 ///     Path-safety guards for Hugging-Face-supplied file names (<c>rfilename</c>/<c>path</c>). A repo is untrusted

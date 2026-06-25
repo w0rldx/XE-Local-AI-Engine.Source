@@ -1,4 +1,4 @@
-namespace XE_Local_AI_Engine.Client.Persistence;
+namespace XE_Local_AI_Engine.Client.Persistence.Stores;
 
 /// <summary>
 ///     Node-scoped persistence for agent definitions. <c>Instructions</c> and <c>Description</c> are encrypted at rest

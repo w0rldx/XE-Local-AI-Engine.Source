@@ -3,6 +3,7 @@ namespace XE_Local_AI_Engine.Client.Endpoints.Agents.V1;
 using System.Text.Json;
 using XE_Local_AI_Engine.Client.Persistence;
 using XE_Local_AI_Engine.Client.Persistence.Entities;
+using XE_Local_AI_Engine.Client.Persistence.Stores;
 using XE_Local_AI_Engine.Client.Services.Eval;
 
 /// <summary>

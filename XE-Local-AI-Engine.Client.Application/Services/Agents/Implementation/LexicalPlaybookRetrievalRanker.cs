@@ -1,6 +1,7 @@
 namespace XE_Local_AI_Engine.Client.Services.Agents.Implementation;
 
 using XE_Local_AI_Engine.Client.Persistence;
+using XE_Local_AI_Engine.Client.Persistence.Stores;
 
 /// <summary>
 ///     Deterministic, model-free <see cref="IPlaybookRetrievalRanker" />: scores each candidate by token-overlap

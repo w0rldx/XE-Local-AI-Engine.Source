@@ -1,6 +1,7 @@
 namespace XE_Local_AI_Engine.Client.Services.Analysis;
 
 using XE_Local_AI_Engine.Client.Persistence;
+using XE_Local_AI_Engine.Client.Persistence.Stores;
 
 /// <summary>
 ///     analysis staging orchestration: on demand, read the per-agent feedback aggregate (feedback insights), gate it on the

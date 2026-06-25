@@ -2,6 +2,7 @@ namespace XE_Local_AI_Engine.Client.Services.Agents.Implementation;
 
 using System.Text.RegularExpressions;
 using XE_Local_AI_Engine.Client.Persistence;
+using XE_Local_AI_Engine.Client.Persistence.Stores;
 
 /// <summary>
 ///     Validates skill content (MAF-safe Name, NOCASE-unique Name, non-blank Description/Body, length caps) and delegates

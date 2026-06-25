@@ -1,4 +1,4 @@
-namespace XE_Local_AI_Engine.Client;
+namespace XE_Local_AI_Engine.Client.DependencyInjection.Modules;
 
 using Microsoft.Extensions.Caching.Memory;
 using XE_Local_AI_Engine.Client.Services.Auth;
