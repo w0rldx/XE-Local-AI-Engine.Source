@@ -30,11 +30,16 @@ try
     var isDesktop = DesktopLaunch.IsDesktopMode(args);
     if (isDesktop)
     {
-        // Bind HTTP on a free loopback port (port 0 = OS picks); the real port is read post-bind for the browser launch.
-        builder.WebHost.UseUrls(DesktopLaunch.LoopbackBindUrl);
+        // Resolve (and create) the per-user data dir up front so both the bind below and the config layer share it.
+        var desktopDataDirectory = DesktopBootstrap.ResolveDataDirectory();
+
+        // Re-bind the loopback port remembered from the last launch when it is still free, so the browser origin
+        // (scheme+host+port) stays stable and localStorage-backed user prefs survive between runs; otherwise fall back to
+        // a fresh OS-assigned port (:0). The actually-bound port is read post-bind and persisted for next time.
+        builder.WebHost.UseUrls(DesktopPortStore.ResolveBindUrl(desktopDataDirectory));
 
         // Desktop double-click launch supplies neither the node SQLite connection string nor the operator secret via
-        // env/Aspire, so fill them from a per-user data directory here — BEFORE AddServices reads configuration below.
+        // env/Aspire, so fill them from the per-user data directory here — BEFORE AddServices reads configuration below.
         // Each key is layered in only when absent, so any value already supplied wins and the off-flag (headless/Aspire/
         // CI) path is byte-identical: this branch is never entered without the desktop flag.
         DesktopBootstrap.EnsureLocalDataConfiguration(builder.Configuration);
@@ -280,11 +285,15 @@ static void ActivateDesktopLifecycle(WebApplication app)
     var server = app.Services.GetRequiredService<IServer>();
     var logger = app.Services.GetRequiredService<ILoggerFactory>().CreateLogger<DesktopLifecycle>();
 
+    // The per-user data dir the desktop branch set (see Program top); the lifecycle persists the bound loopback port
+    // there post-start so the next launch can re-bind it for a stable browser origin.
+    var desktopDataDirectory = app.Configuration[DesktopBootstrap.NodeDataDirectoryKey];
+
     // Ownership is transferred to the host lifetime: the instance lives for the app's lifetime (rooting the native
     // console-ctrl delegate held inside it) and is disposed when the host stops. CA2000 can't see the deferred disposal
     // through the lifetime registration, so it is suppressed with that justification.
 #pragma warning disable CA2000 // Disposal is deferred to and owned by ApplicationStopped below.
-    var desktopLifecycle = new DesktopLifecycle(lifetime, server, logger);
+    var desktopLifecycle = new DesktopLifecycle(lifetime, server, logger, desktopDataDirectory);
 #pragma warning restore CA2000
     desktopLifecycle.Activate();
     lifetime.ApplicationStopped.Register(desktopLifecycle.Dispose);

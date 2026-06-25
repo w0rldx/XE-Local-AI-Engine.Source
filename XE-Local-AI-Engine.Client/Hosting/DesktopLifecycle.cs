@@ -40,6 +40,13 @@ internal sealed class DesktopLifecycle : IDisposable
 
     private readonly Func<string?> _browserOpener;
 
+    /// <summary>
+    ///     The per-user data directory the bound loopback port is persisted to (so the next launch can re-bind it for a
+    ///     stable browser origin). Null when port persistence is not wired (e.g. unit tests), in which case nothing is
+    ///     persisted.
+    /// </summary>
+    private readonly string? _dataDirectory;
+
     private readonly IHostApplicationLifetime _lifetime;
     private readonly ILogger<DesktopLifecycle> _logger;
     private readonly IServer _server;
@@ -54,11 +61,13 @@ internal sealed class DesktopLifecycle : IDisposable
     internal DesktopLifecycle(IHostApplicationLifetime lifetime,
         IServer server,
         ILogger<DesktopLifecycle> logger,
+        string? dataDirectory = null,
         Func<string?>? browserOpener = null)
     {
         _lifetime = lifetime ?? throw new ArgumentNullException(nameof(lifetime));
         _server = server ?? throw new ArgumentNullException(nameof(server));
         _logger = logger ?? throw new ArgumentNullException(nameof(logger));
+        _dataDirectory = dataDirectory;
 
         // Returns the resolved URL it attempted to open, or null when no usable address was found. Overridable for tests.
         _browserOpener = browserOpener ?? OpenDefaultBrowser;
@@ -179,6 +188,16 @@ internal sealed class DesktopLifecycle : IDisposable
             if (url is null)
             {
                 _logger.LogWarning("Desktop mode started but no loopback HTTP address was resolved; not opening a browser.");
+                return;
+            }
+
+            // Persist the port Kestrel actually bound so the next launch can re-bind it for a stable browser origin.
+            // This runs on every start, so a :0-fallback launch still records its freshly assigned port for next time.
+            // Persistence is best-effort (DesktopPortStore swallows IO failures) and is inside this try, so it can never
+            // abort startup.
+            if (_dataDirectory is not null && Uri.TryCreate(url, UriKind.Absolute, out var boundUri))
+            {
+                DesktopPortStore.Persist(_dataDirectory, boundUri.Port, _logger);
             }
         }
         catch (Exception exception)
