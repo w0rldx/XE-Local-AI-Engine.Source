@@ -4,7 +4,6 @@ using System.Collections.Concurrent;
 using System.Numerics.Tensors;
 using Microsoft.Extensions.Options;
 using OllamaSharp.Models.Exceptions;
-using XE_Local_AI_Engine.Client.Persistence;
 using XE_Local_AI_Engine.Client.Persistence.Stores;
 using XE_Local_AI_Engine.Client.Services.CloudProviders;
 using XE_Local_AI_Engine.Providers.Abstractions;

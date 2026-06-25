@@ -4,8 +4,8 @@ using System.Security.Cryptography;
 using System.Text;
 using Microsoft.EntityFrameworkCore;
 using XE_Local_AI_Engine.Client.Persistence.Implementation;
-using XE_Local_AI_Engine.Client.Persistence.Tests.Testing;
 using XE_Local_AI_Engine.Client.Persistence.Stores;
+using XE_Local_AI_Engine.Client.Persistence.Tests.Testing;
 
 /// <summary>
 ///     Provenance-path store tests for the starter-pack seed: <c>AddSeededAsync</c> stamps <c>Seeded</c> + the slug,

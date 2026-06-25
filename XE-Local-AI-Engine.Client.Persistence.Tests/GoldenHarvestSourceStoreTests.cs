@@ -7,8 +7,8 @@ using System.Text;
 using Microsoft.EntityFrameworkCore;
 using XE_Local_AI_Engine.Client.Persistence.Entities;
 using XE_Local_AI_Engine.Client.Persistence.Implementation;
-using XE_Local_AI_Engine.Client.Persistence.Tests.Testing;
 using XE_Local_AI_Engine.Client.Persistence.Stores;
+using XE_Local_AI_Engine.Client.Persistence.Tests.Testing;
 
 /// <summary>
 ///     Harvest read boundary <see cref="GoldenHarvestSourceStore" />: reconstructs harvest candidates from an agent's

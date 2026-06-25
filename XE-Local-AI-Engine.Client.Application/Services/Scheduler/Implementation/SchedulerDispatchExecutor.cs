@@ -3,7 +3,6 @@ namespace XE_Local_AI_Engine.Client.Services.Scheduler.Implementation;
 using System.Globalization;
 using System.Text.Json;
 using System.Text.Json.Nodes;
-using XE_Local_AI_Engine.Client.Persistence;
 using XE_Local_AI_Engine.Client.Persistence.Entities;
 using XE_Local_AI_Engine.Client.Persistence.Stores;
 

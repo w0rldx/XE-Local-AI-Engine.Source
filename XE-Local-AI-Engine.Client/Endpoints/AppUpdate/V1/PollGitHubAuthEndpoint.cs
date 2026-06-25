@@ -62,11 +62,12 @@ public sealed class PollGitHubAuthEndpoint(IGitHubAuthService authService, IGitH
         }
     }
 
-    private static string ToWireState(GitHubDeviceFlowState state) => state switch
-    {
-        GitHubDeviceFlowState.Pending => "pending",
-        GitHubDeviceFlowState.Authorized => "authorized",
-        GitHubDeviceFlowState.Denied => "denied",
-        _ => "expired"
-    };
+    private static string ToWireState(GitHubDeviceFlowState state) =>
+        state switch
+        {
+            GitHubDeviceFlowState.Pending => "pending",
+            GitHubDeviceFlowState.Authorized => "authorized",
+            GitHubDeviceFlowState.Denied => "denied",
+            _ => "expired"
+        };
 }

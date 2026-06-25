@@ -1,6 +1,5 @@
 namespace XE_Local_AI_Engine.Client.Services.ModelFit;
 
-using XE_Local_AI_Engine.Providers.Abstractions;
 using XE_Local_AI_Engine.Providers.Abstractions.Gguf;
 
 /// <summary>

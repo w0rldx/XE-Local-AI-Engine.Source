@@ -12,12 +12,12 @@ using Microsoft.Extensions.Logging.Abstractions;
 using NSubstitute;
 using Quartz;
 using Quartz.Plugin.Interrupt;
+using XE_Local_AI_Engine.Client.DependencyInjection;
 using XE_Local_AI_Engine.Client.Persistence.Entities;
 using XE_Local_AI_Engine.Client.Persistence.Implementation;
-using XE_Local_AI_Engine.Client.Persistence.Tests.Testing;
 using XE_Local_AI_Engine.Client.Persistence.Stores;
+using XE_Local_AI_Engine.Client.Persistence.Tests.Testing;
 using XE_Local_AI_Engine.Client.Services.Scheduler;
-using XE_Local_AI_Engine.Client.DependencyInjection;
 
 /// <summary>
 ///     Integration tests for <see cref="ScheduledJobManagementService" />.

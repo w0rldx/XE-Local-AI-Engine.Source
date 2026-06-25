@@ -1,7 +1,5 @@
 namespace XE_Local_AI_Engine.Client.Endpoints.Skills.V1;
 
-using XE_Local_AI_Engine.Client.Persistence;
-
 /// <summary>Create request for a skill. The editable fields mirror <see cref="AgentSkillInput" /> (no Enabled — a new skill defaults to enabled).</summary>
 public sealed class CreateSkillRequest
 {

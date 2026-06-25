@@ -28,7 +28,15 @@ public sealed class DesktopPortStoreTests
     public void ResolveBindUrl_WhenPortFileMalformedOrOutOfRange_FallsBackToDynamicBind()
     {
         // Non-numeric, zero, privileged (<= 1024), and above the max port all reject to the dynamic :0 bind.
-        foreach (var invalid in new[] { "abc", "0", "1024", "70000", "-1", "  " })
+        foreach (var invalid in new[]
+                 {
+                     "abc",
+                     "0",
+                     "1024",
+                     "70000",
+                     "-1",
+                     "  "
+                 })
         {
             using var directory = new TempDirectory();
             WritePortFile(directory.Path, invalid);

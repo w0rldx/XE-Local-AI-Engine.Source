@@ -57,7 +57,10 @@ public sealed class GitHubAuthServiceTests : IDisposable
     {
         using var handler = new CapturingHttpMessageHandler();
         // 1st poll: authorization_pending. 2nd poll: token. 3rd request: GET /user → login.
-        handler.EnqueueJson(HttpStatusCode.OK, JsonSerializer.Serialize(new Dictionary<string, object> { ["error"] = "authorization_pending" }));
+        handler.EnqueueJson(HttpStatusCode.OK, JsonSerializer.Serialize(new Dictionary<string, object>
+        {
+            ["error"] = "authorization_pending"
+        }));
         var tokenStore = Substitute.For<IGitHubTokenStore>();
         var service = CreateService(handler, tokenStore);
 
@@ -71,14 +74,16 @@ public sealed class GitHubAuthServiceTests : IDisposable
             ["token_type"] = "bearer",
             ["scope"] = "repo"
         }));
-        handler.EnqueueJson(HttpStatusCode.OK, JsonSerializer.Serialize(new Dictionary<string, object> { ["login"] = "octocat" }));
+        handler.EnqueueJson(HttpStatusCode.OK, JsonSerializer.Serialize(new Dictionary<string, object>
+        {
+            ["login"] = "octocat"
+        }));
 
         var authorized = await service.PollAsync("dev-code-abc", CancellationToken.None);
 
         AssertEx.Equal(GitHubDeviceFlowState.Authorized, authorized.State);
         AssertEx.Equal("octocat", authorized.Login);
-        await tokenStore.Received(1).SetSessionAsync(
-            Arg.Is<GitHubSession>(s => s.AccessToken == "ghu_authorized_token" && s.Login == "octocat"),
+        await tokenStore.Received(1).SetSessionAsync(Arg.Is<GitHubSession>(s => s.AccessToken == "ghu_authorized_token" && s.Login == "octocat"),
             Arg.Any<CancellationToken>());
     }
 
@@ -86,7 +91,10 @@ public sealed class GitHubAuthServiceTests : IDisposable
     public async Task Poll_WhenAccessDenied_ReportsDeniedAndStoresNothing()
     {
         using var handler = new CapturingHttpMessageHandler();
-        handler.EnqueueJson(HttpStatusCode.OK, JsonSerializer.Serialize(new Dictionary<string, object> { ["error"] = "access_denied" }));
+        handler.EnqueueJson(HttpStatusCode.OK, JsonSerializer.Serialize(new Dictionary<string, object>
+        {
+            ["error"] = "access_denied"
+        }));
         var tokenStore = Substitute.For<IGitHubTokenStore>();
         var service = CreateService(handler, tokenStore);
 
@@ -101,7 +109,10 @@ public sealed class GitHubAuthServiceTests : IDisposable
     public async Task Poll_WhenExpiredToken_ReportsExpiredAndStoresNothing()
     {
         using var handler = new CapturingHttpMessageHandler();
-        handler.EnqueueJson(HttpStatusCode.OK, JsonSerializer.Serialize(new Dictionary<string, object> { ["error"] = "expired_token" }));
+        handler.EnqueueJson(HttpStatusCode.OK, JsonSerializer.Serialize(new Dictionary<string, object>
+        {
+            ["error"] = "expired_token"
+        }));
         var tokenStore = Substitute.For<IGitHubTokenStore>();
         var service = CreateService(handler, tokenStore);
 

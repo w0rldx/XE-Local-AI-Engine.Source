@@ -2,17 +2,11 @@ namespace XE_Local_AI_Engine.Tests.Architecture;
 
 using System.Reflection;
 using NetArchTest.Rules;
-using XE_Local_AI_Engine.AI.Contracts.Enums;
-using XE_Local_AI_Engine.Client.Persistence;
 using XE_Local_AI_Engine.Providers.Abstractions;
 using XE_Local_AI_Engine.Providers.Capabilities;
-using XE_Local_AI_Engine.Providers.CodexOAuth;
 using XE_Local_AI_Engine.Providers.CodexOAuth.Contracts;
-using XE_Local_AI_Engine.Providers.HuggingFace;
 using XE_Local_AI_Engine.Providers.HuggingFace.Options;
-using XE_Local_AI_Engine.Providers.LlamaServer;
 using XE_Local_AI_Engine.Providers.LlamaServer.Contracts;
-using XE_Local_AI_Engine.Providers.Ollama;
 using XE_Local_AI_Engine.Providers.Ollama.Implementation;
 using XE_Local_AI_Engine.Tests.Testing;
 
@@ -52,8 +46,7 @@ public sealed class LayerDependencyTests
     [Test]
     public void OllamaProvider_DoesNotDependOnApplicationPersistenceHostOrSiblingProviders()
     {
-        AssertNoDependency(
-            OllamaAssembly,
+        AssertNoDependency(OllamaAssembly,
             OllamaNamespace,
             ClientNamespace,
             PersistenceNamespace,
@@ -66,8 +59,7 @@ public sealed class LayerDependencyTests
     [Test]
     public void LlamaServerProvider_DoesNotDependOnApplicationPersistenceHostOrSiblingProviders()
     {
-        AssertNoDependency(
-            LlamaServerAssembly,
+        AssertNoDependency(LlamaServerAssembly,
             LlamaServerNamespace,
             ClientNamespace,
             PersistenceNamespace,
@@ -80,8 +72,7 @@ public sealed class LayerDependencyTests
     [Test]
     public void HuggingFaceProvider_DoesNotDependOnApplicationPersistenceHostOrSiblingProviders()
     {
-        AssertNoDependency(
-            HuggingFaceAssembly,
+        AssertNoDependency(HuggingFaceAssembly,
             HuggingFaceNamespace,
             ClientNamespace,
             PersistenceNamespace,
@@ -94,8 +85,7 @@ public sealed class LayerDependencyTests
     [Test]
     public void CodexOAuthProvider_DoesNotDependOnApplicationPersistenceHostOrSiblingProviders()
     {
-        AssertNoDependency(
-            CodexOAuthAssembly,
+        AssertNoDependency(CodexOAuthAssembly,
             CodexOAuthNamespace,
             ClientNamespace,
             PersistenceNamespace,
@@ -108,8 +98,7 @@ public sealed class LayerDependencyTests
     [Test]
     public void CapabilitiesProvider_DoesNotDependOnApplicationPersistenceHostOrSiblingProviders()
     {
-        AssertNoDependency(
-            CapabilitiesAssembly,
+        AssertNoDependency(CapabilitiesAssembly,
             CapabilitiesNamespace,
             ClientNamespace,
             PersistenceNamespace,
@@ -122,8 +111,7 @@ public sealed class LayerDependencyTests
     [Test]
     public void AiContracts_DoesNotDependOnApplicationProvidersPersistenceOrHost()
     {
-        AssertNoDependency(
-            ContractsAssembly,
+        AssertNoDependency(ContractsAssembly,
             "XE_Local_AI_Engine.AI.Contracts",
             ClientNamespace,
             PersistenceNamespace,
@@ -134,8 +122,7 @@ public sealed class LayerDependencyTests
     [Test]
     public void ProvidersAbstractions_DoesNotDependOnConcreteProvidersApplicationPersistenceOrHost()
     {
-        AssertNoDependency(
-            AbstractionsAssembly,
+        AssertNoDependency(AbstractionsAssembly,
             AbstractionsNamespace,
             ClientNamespace,
             PersistenceNamespace,
@@ -152,26 +139,24 @@ public sealed class LayerDependencyTests
     /// <paramref name="assembly"/> has a dependency on any of the
     /// <paramref name="forbiddenNamespaces"/>. Reports the offending type names on failure.
     /// </summary>
-    private static void AssertNoDependency(
-        Assembly assembly,
+    private static void AssertNoDependency(Assembly assembly,
         string sourceNamespace,
         params string[] forbiddenNamespaces)
     {
         var result = Types
-            .InAssembly(assembly)
-            .That()
-            .ResideInNamespaceStartingWith(sourceNamespace)
-            .ShouldNot()
-            .HaveDependencyOnAny(forbiddenNamespaces)
-            .GetResult();
+                     .InAssembly(assembly)
+                     .That()
+                     .ResideInNamespaceStartingWith(sourceNamespace)
+                     .ShouldNot()
+                     .HaveDependencyOnAny(forbiddenNamespaces)
+                     .GetResult();
 
         var failing = result.FailingTypeNames is null
             ? string.Empty
             : string.Join(", ", result.FailingTypeNames);
 
-        AssertEx.True(
-            result.IsSuccessful,
+        AssertEx.True(result.IsSuccessful,
             $"Types in '{sourceNamespace}' must not depend on [{string.Join(", ", forbiddenNamespaces)}]. "
-                + $"Violating types: {failing}");
+            + $"Violating types: {failing}");
     }
 }

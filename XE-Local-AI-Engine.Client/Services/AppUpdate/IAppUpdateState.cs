@@ -42,8 +42,7 @@ public sealed record AppUpdateSnapshot(
     DateTimeOffset? LastCheckedUtc)
 {
     /// <summary>The empty pre-check snapshot: signed out, no update advertised, not offline, version unknown.</summary>
-    public static AppUpdateSnapshot Empty { get; } = new(
-        CurrentVersion: "0.0.0",
+    public static AppUpdateSnapshot Empty { get; } = new(CurrentVersion: "0.0.0",
         AvailableVersion: null,
         UpdateAvailable: false,
         AuthState: AppUpdateAuthState.SignedOut,

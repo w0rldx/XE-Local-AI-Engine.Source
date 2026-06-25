@@ -10,7 +10,6 @@ using XE_Local_AI_Engine.Client.Services.ModelFit.Fit;
 using XE_Local_AI_Engine.Client.Services.ModelFit.Implementation;
 using XE_Local_AI_Engine.Client.Services.ModelFit.Validation;
 using XE_Local_AI_Engine.Client.Services.Validation;
-using XE_Local_AI_Engine.Providers.Abstractions;
 using XE_Local_AI_Engine.Providers.Abstractions.Capabilities;
 using XE_Local_AI_Engine.Providers.Abstractions.Contracts;
 using XE_Local_AI_Engine.Providers.Abstractions.Gguf;

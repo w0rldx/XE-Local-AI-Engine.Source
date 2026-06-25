@@ -23,6 +23,5 @@ public sealed class AppUpdateChannelOptions
     public string GitHubAppClientId { get; init; } = string.Empty;
 
     /// <summary>True only when both the repo URL and client_id were baked, so the updater can actually run.</summary>
-    public bool IsConfigured =>
-        !string.IsNullOrWhiteSpace(GitHubRepositoryUrl) && !string.IsNullOrWhiteSpace(GitHubAppClientId);
+    public bool IsConfigured => !string.IsNullOrWhiteSpace(GitHubRepositoryUrl) && !string.IsNullOrWhiteSpace(GitHubAppClientId);
 }

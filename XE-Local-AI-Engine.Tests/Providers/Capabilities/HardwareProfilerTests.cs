@@ -1,7 +1,6 @@
 namespace XE_Local_AI_Engine.Tests.Providers.Capabilities;
 
 using XE_Local_AI_Engine.Providers.Abstractions.Capabilities;
-using XE_Local_AI_Engine.Providers.Capabilities;
 using XE_Local_AI_Engine.Providers.Capabilities.Contracts;
 using XE_Local_AI_Engine.Providers.Capabilities.Implementation;
 using XE_Local_AI_Engine.Providers.Capabilities.Options;

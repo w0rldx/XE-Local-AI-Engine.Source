@@ -609,7 +609,8 @@ public sealed class NodeChatRegenerationService(
         // Ollama 400) and a non-tools model is offered no tools. Unknown/offline resolves to NOT-capable (safe default).
         var (supportsThinking, supportsTools) = await ResolveModelCapabilitiesAsync(activeModel, cancellationToken).ConfigureAwait(false);
 
-        var resolved = await agentDefinitionResolver.ResolveAsync(effectiveAgentId, activeModel, retrievalQuery, supportsTools, honorModelProfile: !userPickedConcreteModel, cancellationToken).ConfigureAwait(false);
+        var resolved = await agentDefinitionResolver.ResolveAsync(effectiveAgentId, activeModel, retrievalQuery, supportsTools, honorModelProfile: !userPickedConcreteModel, cancellationToken)
+                                                    .ConfigureAwait(false);
         var orchestration = await ResolveOrchestrationAsync(effectiveAgentId, activeModel, retrievalQuery, supportsTools, cancellationToken).ConfigureAwait(false);
 
         // The single source of truth for the model that actually reruns this turn (agent pin when honored, else the

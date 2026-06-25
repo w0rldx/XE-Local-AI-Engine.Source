@@ -4,7 +4,6 @@ using FastEndpoints;
 using Microsoft.Extensions.Options;
 using XE_Local_AI_Engine.Client.Endpoints.Agents.V1.Mappers;
 using XE_Local_AI_Engine.Client.Endpoints.Common;
-using XE_Local_AI_Engine.Client.Persistence;
 using XE_Local_AI_Engine.Client.Persistence.Stores;
 using XE_Local_AI_Engine.Client.Services.Agents;
 using XE_Local_AI_Engine.Client.Services.Auth;

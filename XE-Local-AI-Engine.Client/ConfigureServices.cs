@@ -17,6 +17,7 @@ using Serilog.Sinks.SystemConsole.Themes;
 using XE_Local_AI_Engine.Client.BackgroundServices;
 using XE_Local_AI_Engine.Client.Common;
 using XE_Local_AI_Engine.Client.Configuration;
+using XE_Local_AI_Engine.Client.DependencyInjection;
 using XE_Local_AI_Engine.Client.Endpoints.Common;
 using XE_Local_AI_Engine.Client.ExceptionHandling;
 using XE_Local_AI_Engine.Client.HealthChecks;
@@ -31,7 +32,6 @@ using XE_Local_AI_Engine.Client.Services.ModelFit.Implementation;
 using XE_Local_AI_Engine.Client.Services.Persistence.Implementation;
 using XE_Local_AI_Engine.Client.Services.PreviewWorkflows;
 using XE_Local_AI_Engine.Client.Services.Scheduler;
-using XE_Local_AI_Engine.Client.DependencyInjection;
 
 /// <summary>
 ///     Represents configure services.
