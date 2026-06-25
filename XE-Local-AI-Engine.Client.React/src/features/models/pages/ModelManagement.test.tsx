@@ -3,7 +3,7 @@
 import { MantineProvider } from "@mantine/core";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
-import type { ReactElement, ReactNode } from "react";
+import type { ReactElement } from "react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 // Mock the SignalR client the live download-progress hook (useActiveGgufDownloads) opens on mount. The page renders the
@@ -46,7 +46,6 @@ const { queryFns, mutationFns } = vi.hoisted(() => ({
 	},
 	mutationFns: {
 		selectLocalModel: vi.fn(),
-		pullLocalModel: vi.fn(),
 		deleteLocalModel: vi.fn(),
 		putModelKind: vi.fn(),
 		deleteModelKind: vi.fn(),
@@ -70,7 +69,6 @@ vi.mock("@/core/api/generated/@tanstack/react-query.gen", () => ({
 		queryFn: queryFns.getLocalModelDetails,
 	}),
 	selectLocalModelMutation: () => ({ mutationFn: mutationFns.selectLocalModel }),
-	pullLocalModelMutation: () => ({ mutationFn: mutationFns.pullLocalModel }),
 	deleteLocalModelMutation: () => ({ mutationFn: mutationFns.deleteLocalModel }),
 	putModelKindMutation: () => ({ mutationFn: mutationFns.putModelKind }),
 	deleteModelKindMutation: () => ({ mutationFn: mutationFns.deleteModelKind }),
@@ -106,28 +104,6 @@ vi.mock("@/core/ui/hooks/useConfirm", () => ({
 	useConfirm: () => ({ confirm: confirmMock }),
 }));
 
-// PullModelDialog renders a TanStack Router <Link> (inside Anchor component={Link}) for the recommendations
-// link. Stub the router module so the component mounts without a RouterProvider in unit tests.
-vi.mock("@tanstack/react-router", async (importOriginal) => {
-	const actual = await importOriginal<typeof import("@tanstack/react-router")>();
-	return {
-		...actual,
-		Link: ({ children, to, ...props }: { children: ReactNode; to: string; [key: string]: unknown }) => (
-			<a href={to} {...props}>
-				{children}
-			</a>
-		),
-	};
-});
-
-// The page pulls through the shared useModelPull hook (which consumes the hand-wired NDJSON stream). Mock the hook
-// so the dialog's submit is asserted at the hook boundary without touching the real stream / network.
-const { pullSpy } = vi.hoisted(() => ({ pullSpy: vi.fn() }));
-vi.mock("@/features/models/hooks/useModelPull", () => ({
-	useModelPull: () => ({ pull: pullSpy, isPulling: false, progressPercent: undefined, pullingModelName: undefined }),
-}));
-
-import { PullModelDialog } from "@/features/models/components/PullModelDialog";
 import { ModelManagement } from "@/features/models/pages/ModelManagement";
 import { useGgufBrowseStore } from "@/features/models/stores/GgufBrowseStore";
 
@@ -203,12 +179,6 @@ describe("ModelManagement", () => {
 		});
 		queryFns.getLatestRecommendations.mockResolvedValue({ hasCache: false, recommendations: [] });
 		mutationFns.selectLocalModel.mockResolvedValue({ selectedModelName: "llama3:8b" });
-		mutationFns.pullLocalModel.mockResolvedValue({
-			modelName: "orca-mini:latest",
-			status: "success",
-			totalBytes: 100,
-			completedBytes: 100,
-		});
 		mutationFns.deleteLocalModel.mockResolvedValue({ modelName: "llama3:8b", deleted: true });
 		mutationFns.putModelKind.mockResolvedValue({
 			modelName: "llama3:8b",
@@ -253,7 +223,7 @@ describe("ModelManagement", () => {
 		expect(await within(dialog).findByText("Context length: 8,192")).toBeTruthy();
 	});
 
-	it("selects, pulls, and deletes models through the generated mutations", async () => {
+	it("selects and deletes models through the generated mutations", async () => {
 		renderWithProviders(<ModelManagement />);
 		await screen.findByLabelText("Set llama3:8b as default");
 
@@ -261,44 +231,11 @@ describe("ModelManagement", () => {
 		// TanStack v5 passes (variables, context) — assert the first arg carries the generated body shape.
 		await waitFor(() => expect(mutationFns.selectLocalModel.mock.calls[0]?.[0]).toEqual({ body: { modelName: "llama3:8b" } }));
 
-		// Pull now lives in a dialog opened from the header button.
-		fireEvent.click(screen.getByTestId("open-pull-dialog-button"));
-		const pullInput = (await screen.findAllByTestId("pull-model-name-input")).find((element) => element.tagName === "INPUT");
-		expect(pullInput).toBeTruthy();
-		fireEvent.change(pullInput!, { target: { value: "orca-mini:latest" } });
-		const downloadButton = screen.getAllByTestId("download-model-button").find((element) => element.tagName === "BUTTON");
-		expect(downloadButton).toBeTruthy();
-		fireEvent.click(downloadButton!);
-		// The dialog now drives the shared useModelPull hook with the model name (not the generated mutation),
-		// plus an onSuccess callback the page uses to auto-close/reset the dialog on a finished download.
-		await waitFor(() =>
-			expect(pullSpy).toHaveBeenCalledWith("orca-mini:latest", expect.objectContaining({ onSuccess: expect.any(Function) })),
-		);
-
 		const deleteButton = screen.getAllByLabelText("Delete llama3:8b").find((element) => element.tagName === "BUTTON");
 		expect(deleteButton).toBeTruthy();
 		fireEvent.click(deleteButton!);
 		await waitFor(() => expect(confirmMock).toHaveBeenCalled());
 		await waitFor(() => expect(mutationFns.deleteLocalModel.mock.calls[0]?.[0]).toEqual({ path: { modelName: "llama3:8b" } }));
-	});
-
-	it("clears the model name and closes the pull dialog when the download finishes", async () => {
-		// Drive the hook's onSuccess synchronously, as it fires after a real successful pull.
-		pullSpy.mockImplementationOnce((_modelName: string, options?: { onSuccess?: () => void }) => options?.onSuccess?.());
-
-		renderWithProviders(<ModelManagement />);
-		fireEvent.click(screen.getByTestId("open-pull-dialog-button"));
-		const pullInput = (await screen.findAllByTestId("pull-model-name-input")).find((element) => element.tagName === "INPUT");
-		fireEvent.change(pullInput!, { target: { value: "orca-mini:latest" } });
-		fireEvent.click(screen.getAllByTestId("download-model-button").find((element) => element.tagName === "BUTTON")!);
-
-		// onSuccess ran → the dialog auto-closed (its input is unmounted).
-		await waitFor(() => expect(screen.queryByTestId("pull-model-name-input")).toBeNull());
-
-		// Reopening starts blank — the previous value was cleared, not retained.
-		fireEvent.click(screen.getByTestId("open-pull-dialog-button"));
-		const reopened = (await screen.findAllByTestId("pull-model-name-input")).find((element) => element.tagName === "INPUT");
-		expect((reopened as HTMLInputElement).value).toBe("");
 	});
 
 	it("renders the type column with the effective kind badge and capability badges", async () => {
@@ -406,7 +343,10 @@ describe("ModelManagement", () => {
 		await waitFor(() => expect(mutationFns.deleteModelKind.mock.calls[0]?.[0]).toEqual({ path: { modelName: "llama3:8b" } }));
 	});
 
-	it("shows unavailable Ollama state", async () => {
+	it("renders the empty installed list without surfacing a provider-unavailable error", async () => {
+		// isAvailable=false no longer means the page is broken: installed GGUF + cloud models still render from the same
+		// response even when the legacy Ollama probe reports unavailable, so the page shows the empty-list state rather
+		// than a false error banner.
 		queryFns.listLocalModels.mockResolvedValue({
 			isAvailable: false,
 			selectedModelName: null,
@@ -417,7 +357,9 @@ describe("ModelManagement", () => {
 
 		renderWithProviders(<ModelManagement />);
 
-		expect(await screen.findByText("Local model provider is unavailable.")).toBeTruthy();
+		// The empty installed-models state renders, and the provider-unavailable error is NOT shown.
+		expect(await screen.findByText("No local models found.")).toBeTruthy();
+		expect(screen.queryByText("Local model provider is unavailable.")).toBeNull();
 	});
 
 	it("shows license and template in the dialog License tab", async () => {
@@ -468,66 +410,7 @@ describe("ModelManagement", () => {
 		expect(within(dialog).getByText("Good")).toBeTruthy();
 	});
 
-	it("opens the pull dialog from the header without an inline pull form on the page", async () => {
-		renderWithProviders(<ModelManagement />);
-		await screen.findByTestId("open-pull-dialog-button");
-
-		// The pull form is not rendered on the page until the dialog is opened.
-		expect(screen.queryByTestId("pull-model-name-input")).toBeNull();
-
-		fireEvent.click(screen.getByTestId("open-pull-dialog-button"));
-		const dialog = await screen.findByRole("dialog");
-		expect(within(dialog).getByTestId("pull-model-name-input")).toBeTruthy();
-		expect(within(dialog).getByTestId("download-model-button")).toBeTruthy();
-	});
-
-	it("hides the close button while a pull is in flight", async () => {
-		// Test PullModelDialog's close-guard directly by rendering it with isPulling=true.
-		// The dialog is a controlled component; isPulling is passed from the parent mutation state.
-		// When isPulling=true: showCloseButton=false (the close button is not rendered) and
-		// closeOnEscape=false. When isPulling=false the close button is visible.
-		const { rerender } = renderWithProviders(
-			<PullModelDialog
-				opened={true}
-				onClose={vi.fn()}
-				pullModelName="orca-mini:latest"
-				onPullModelNameChange={vi.fn()}
-				onSubmit={vi.fn()}
-				isPulling={false}
-				isActionPending={false}
-				progress={undefined}
-			/>,
-		);
-
-		const dialog = await screen.findByRole("dialog");
-
-		// Close button is visible when not pulling.
-		expect(within(dialog).getByRole("button", { name: "close" })).toBeTruthy();
-
-		// While pulling the close button is removed entirely — the operator cannot dismiss.
-		rerender(
-			<MantineProvider>
-				<QueryClientProvider
-					client={new QueryClient({ defaultOptions: { queries: { retry: false }, mutations: { retry: false } } })}
-				>
-					<PullModelDialog
-						opened={true}
-						onClose={vi.fn()}
-						pullModelName="orca-mini:latest"
-						onPullModelNameChange={vi.fn()}
-						onSubmit={vi.fn()}
-						isPulling={true}
-						isActionPending={true}
-						progress={42}
-					/>
-				</QueryClientProvider>
-			</MantineProvider>,
-		);
-
-		await waitFor(() => expect(screen.queryByRole("button", { name: "close" })).toBeNull());
-	});
-
-	// GGUF browse + download flow (relocated from the model-fit advisor; it lives alongside "Pull model" now).
+	// GGUF browse + download flow (relocated from the model-fit advisor; it is the model-acquisition path on this page).
 	const ggufRepo = {
 		repoId: "unsloth/llama-3.1-8b-gguf",
 		isGated: false,

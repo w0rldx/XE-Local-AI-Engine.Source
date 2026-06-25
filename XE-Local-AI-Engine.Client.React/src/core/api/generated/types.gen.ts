@@ -771,17 +771,6 @@ export type XeLocalAiEngineClientEndpointsLocalModelsV1LocalModelResponse = {
 	isOverridden?: boolean;
 };
 
-export type XeLocalAiEngineClientEndpointsLocalModelsV1PullLocalModelResponse = {
-	modelName?: string;
-	status?: string;
-	totalBytes?: number | null;
-	completedBytes?: number | null;
-};
-
-export type XeLocalAiEngineClientEndpointsLocalModelsV1PullLocalModelRequest = {
-	modelName: string;
-};
-
 export type XeLocalAiEngineClientEndpointsLocalModelsV1SetModelKindRequest = {
 	kind?: string | null;
 };
@@ -3253,39 +3242,6 @@ export type ListLocalModelsResponses = {
 };
 
 export type ListLocalModelsResponse = ListLocalModelsResponses[keyof ListLocalModelsResponses];
-
-export type PullLocalModelData = {
-	body: XeLocalAiEngineClientEndpointsLocalModelsV1PullLocalModelRequest;
-	path?: never;
-	query?: never;
-	url: "/api/local/v1/models/pull";
-};
-
-export type PullLocalModelErrors = {
-	/**
-	 * Bad Request
-	 */
-	400: FastEndpointsProblemDetails;
-	/**
-	 * Unauthorized
-	 */
-	401: unknown;
-	/**
-	 * Forbidden
-	 */
-	403: unknown;
-};
-
-export type PullLocalModelError = PullLocalModelErrors[keyof PullLocalModelErrors];
-
-export type PullLocalModelResponses = {
-	/**
-	 * Success
-	 */
-	200: XeLocalAiEngineClientEndpointsLocalModelsV1PullLocalModelResponse;
-};
-
-export type PullLocalModelResponse = PullLocalModelResponses[keyof PullLocalModelResponses];
 
 export type SelectLocalModelData = {
 	body: XeLocalAiEngineClientEndpointsLocalModelsV1SelectLocalModelRequest;

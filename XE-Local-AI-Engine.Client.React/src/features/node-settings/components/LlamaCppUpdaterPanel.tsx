@@ -27,7 +27,7 @@ import {
 	useUpdateLlamaCppRuntime,
 } from "@/features/node-settings/queries/useLocalRuntime";
 
-// Keyed progress-toast id so the update surfaces as ONE in-place animating notification (mirrors useModelPull).
+// Keyed progress-toast id so the update surfaces as ONE in-place animating notification.
 const UPDATE_TOAST_ID = "llamacpp-runtime-update";
 
 function errorMessage(error: unknown, fallback: string): string {

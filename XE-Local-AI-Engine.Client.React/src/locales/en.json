@@ -1059,25 +1059,6 @@
 				"overrideLabel": "Override type",
 				"reset": "Reset to detected"
 			},
-			"pull": {
-				"title": "Pull new model",
-				"guidance": "Enter an Ollama-compatible model tag. Browse available models in the Ollama library.",
-				"libraryLink": "Open the Ollama library (ollama.com/library)",
-				"huggingFaceHint": "You can also pull a Hugging Face GGUF model with hf.co/<org>/<repo>:<quant>.",
-				"warning": "A manual pull downloads arbitrary, unvetted model weights and can be very large. Prefer the recommended models for this node.",
-				"recommendationsLink": "See recommended models for this node",
-				"inputLabel": "Model name to pull",
-				"downloadButton": "Download model",
-				"inProgress": "Download in progress — keep this dialog open until it finishes.",
-				"toast": {
-					"title": "Pulling {{model}}",
-					"preparing": "Preparing download…",
-					"successTitle": "Model pulled",
-					"success": "{{model}} is ready.",
-					"errorTitle": "Pull failed",
-					"error": "Could not pull {{model}}."
-				}
-			},
 			"gguf": {
 				"browse": {
 					"title": "Browse Hugging Face GGUF",

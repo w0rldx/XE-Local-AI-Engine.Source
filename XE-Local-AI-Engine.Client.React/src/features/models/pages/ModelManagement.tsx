@@ -1,6 +1,6 @@
 import { Alert, Button, Card, Container, Group, Loader, Stack, Text, Title } from "@mantine/core";
 import { useDisclosure } from "@mantine/hooks";
-import { IconAlertTriangle, IconCloudDownload, IconRefresh, IconRobot } from "@tabler/icons-react";
+import { IconAlertTriangle, IconRefresh, IconRobot } from "@tabler/icons-react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useCallback, useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
@@ -24,8 +24,6 @@ import { GgufBrowsePanel } from "@/features/models/components/GgufBrowsePanel";
 import { GgufDownloadDialog } from "@/features/models/components/GgufDownloadDialog";
 import { InstalledModelsTable } from "@/features/models/components/InstalledModelsTable";
 import { ModelDetailsDialog } from "@/features/models/components/ModelDetailsDialog";
-import { PullModelDialog } from "@/features/models/components/PullModelDialog";
-import { useModelPull } from "@/features/models/hooks/useModelPull";
 import { defaultGgufQuant, type GgufRepository, type GgufRepositoryFile } from "@/features/models/models/GgufModels";
 import { toLocalModelViewModel } from "@/features/models/models/LocalModelMappers";
 import {
@@ -52,12 +50,7 @@ export function ModelManagement() {
 	const { confirm } = useConfirm();
 	// The model whose details dialog is open (also the only model whose details endpoint is fetched).
 	const [detailsModelName, setDetailsModelName] = useState<string | undefined>();
-	const [pullModelName, setPullModelName] = useState("");
 	const [detailsModalOpened, { open: openDetailsModal, close: closeDetailsModal }] = useDisclosure(false);
-	const [pullModalOpened, { open: openPullModal, close: closePullModal }] = useDisclosure(false);
-	// Shared single pull engine (invariant): the dialog's submit + live progress run through this hook, the same
-	// one the recommendation Pull button uses. It owns the progress toast and installed-list invalidation.
-	const modelPull = useModelPull();
 
 	// GGUF browse + download flow (relocated from the model-fit advisor — it is a model-acquisition action). The
 	// committed browse term + the in-flight download set live in a shared store so they survive a remount AND so a
@@ -147,14 +140,9 @@ export function ModelManagement() {
 		onError: (error) => toast.error(errorMessage(error)),
 	});
 
-	// Pull errors surface through the shared hook's progress toast; the other action errors surface via each
-	// mutation's onError toast above (no inline banner).
+	// Action errors surface via each mutation's onError toast above (no inline banner).
 	const isActionPending =
-		selectMutation.isPending ||
-		modelPull.isPulling ||
-		deleteMutation.isPending ||
-		setKindMutation.isPending ||
-		resetKindMutation.isPending;
+		selectMutation.isPending || deleteMutation.isPending || setKindMutation.isPending || resetKindMutation.isPending;
 	const detailsModel = modelViewModels.find((model) => model.modelName === detailsModelName);
 
 	const openDetails = useCallback(
@@ -246,7 +234,7 @@ export function ModelManagement() {
 							Worker Node
 						</Text>
 						<Title order={2}>Model management</Title>
-						<Text c="dimmed">List, select, pull, and delete local Ollama models without changing runtime providers.</Text>
+						<Text c="dimmed">List, select, and delete installed local models.</Text>
 					</Stack>
 					<Group gap="sm">
 						<Button
@@ -256,9 +244,6 @@ export function ModelManagement() {
 							disabled={modelsQuery.isFetching}
 						>
 							Refresh
-						</Button>
-						<Button data-testid="open-pull-dialog-button" leftSection={<IconCloudDownload size={16} />} onClick={openPullModal}>
-							Pull model
 						</Button>
 					</Group>
 				</Group>
@@ -276,12 +261,6 @@ export function ModelManagement() {
 					</Alert>
 				) : null}
 
-				{modelsResponse && !modelsResponse.isAvailable ? (
-					<Alert color="yellow" icon={<IconAlertTriangle size={16} />}>
-						{modelsResponse.error ?? "Local Ollama is not available. Start Ollama to list and manage models."}
-					</Alert>
-				) : null}
-
 				<Card withBorder={true} radius="md" p="lg">
 					<Stack gap="md">
 						<Group justify="space-between">
@@ -296,9 +275,7 @@ export function ModelManagement() {
 							onDelete={confirmDelete}
 							onResetKind={(modelName) => resetKindMutation.mutate({ path: { modelName } })}
 						/>
-						{modelViewModels.length === 0 ? (
-							<Text c="dimmed">{modelsResponse?.isAvailable ? "No local models found." : "Local model provider is unavailable."}</Text>
-						) : null}
+						{modelViewModels.length === 0 ? <Text c="dimmed">No local models found.</Text> : null}
 					</Stack>
 				</Card>
 
@@ -330,26 +307,6 @@ export function ModelManagement() {
 				modelFitEnabled={nodeCapabilities.modelFit}
 				onSetKind={(modelName, kind) => setKindMutation.mutate({ path: { modelName }, body: { kind } })}
 				onResetKind={(modelName) => resetKindMutation.mutate({ path: { modelName } })}
-			/>
-
-			<PullModelDialog
-				opened={pullModalOpened}
-				onClose={closePullModal}
-				pullModelName={pullModelName}
-				onPullModelNameChange={setPullModelName}
-				onSubmit={() =>
-					modelPull.pull(pullModelName, {
-						// On a finished download, clear the typed name and close the dialog so reopening starts blank
-						// (the close button is hidden mid-pull; an error keeps the dialog open with the value for retry).
-						onSuccess: () => {
-							setPullModelName("");
-							closePullModal();
-						},
-					})
-				}
-				isPulling={modelPull.isPulling}
-				isActionPending={isActionPending}
-				progress={modelPull.progressPercent}
 			/>
 
 			<GgufDownloadDialog

@@ -264,23 +264,10 @@ public sealed class LocalModelEndpointTests
     }
 
     [Test]
-    public async Task PullAndDeleteLocalModel_WhenValid_UseOllamaModelService()
+    public async Task DeleteLocalModel_WhenValid_UsesOllamaModelService()
     {
-        await using var context = await CreateContextAsync("chat").ConfigureAwait(false);
+        await using var context = await CreateContextAsync("orca-mini:latest").ConfigureAwait(false);
         using var client = context.Factory.CreateClient();
-
-        using var pullRequest = CreateRequest(context.Factory, HttpMethod.Post, "/api/local/v1/models/pull");
-        pullRequest.Content = JsonContent.Create(new PullLocalModelRequest
-        {
-            ModelName = "orca-mini:latest"
-        });
-        using var pullResponse = await client.SendAsync(pullRequest).ConfigureAwait(false);
-        var pull = await ReadJsonAsync<PullLocalModelResponse>(pullResponse).ConfigureAwait(false);
-
-        AssertEx.Equal(HttpStatusCode.OK, pullResponse.StatusCode);
-        AssertEx.Equal("orca-mini:latest", pull.ModelName);
-        AssertEx.Contains(context.Server!.State.Models, "orca-mini:latest");
-        AssertEx.Contains(context.Server.RecordedRequests, request => request.Path == "/api/pull" && request.ModelName == "orca-mini:latest");
 
         using var deleteRequest = CreateRequest(context.Factory, HttpMethod.Delete, "/api/local/v1/models/orca-mini:latest");
         using var deleteResponse = await client.SendAsync(deleteRequest).ConfigureAwait(false);
@@ -289,26 +276,8 @@ public sealed class LocalModelEndpointTests
         AssertEx.Equal(HttpStatusCode.OK, deleteResponse.StatusCode);
         AssertEx.Equal("orca-mini:latest", deleted.ModelName);
         AssertEx.True(deleted.Deleted);
-        AssertEx.False(context.Server.State.Models.Contains("orca-mini:latest"));
+        AssertEx.False(context.Server!.State.Models.Contains("orca-mini:latest"));
         AssertEx.Contains(context.Server.RecordedRequests, request => request.Path == "/api/delete" && request.ModelName == "orca-mini:latest");
-    }
-
-    [Test]
-    public async Task PullLocalModel_WhenModelNameIsUnsafe_ReturnsValidationProblem()
-    {
-        var modelService = Substitute.For<IOllamaModelService>();
-        await using var context = CreateContext(modelService, new StubNodeSettingsStore(new StoredNodeSettings()));
-        using var client = context.Factory.CreateClient();
-
-        using var request = CreateRequest(context.Factory, HttpMethod.Post, "/api/local/v1/models/pull");
-        request.Content = JsonContent.Create(new PullLocalModelRequest
-        {
-            ModelName = "../secret"
-        });
-        using var response = await client.SendAsync(request).ConfigureAwait(false);
-
-        AssertEx.Equal(HttpStatusCode.BadRequest, response.StatusCode);
-        modelService.DidNotReceiveWithAnyArgs().PullModelAsync(Arg.Any<string>(), Arg.Any<CancellationToken>());
     }
 
     [Test]

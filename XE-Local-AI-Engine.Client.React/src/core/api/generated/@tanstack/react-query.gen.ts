@@ -110,7 +110,6 @@ import {
 	pinNodeChatConversation,
 	pollNodeBinding,
 	promoteSuggestedPlaybookAction,
-	pullLocalModel,
 	putModelKind,
 	refreshRecommendations,
 	rejectSuggestedPlaybookAction,
@@ -346,9 +345,6 @@ import type {
 	PollNodeBindingResponse,
 	PromoteSuggestedPlaybookActionData,
 	PromoteSuggestedPlaybookActionResponse,
-	PullLocalModelData,
-	PullLocalModelError,
-	PullLocalModelResponse,
 	PutModelKindData,
 	PutModelKindResponse,
 	RefreshRecommendationsData,
@@ -1697,26 +1693,6 @@ export const listLocalModelsOptions = (options?: Options<ListLocalModelsData>) =
 		},
 		queryKey: listLocalModelsQueryKey(options),
 	});
-
-export const pullLocalModelMutation = (
-	options?: Partial<Options<PullLocalModelData>>,
-): UseMutationOptions<PullLocalModelResponse, AxiosError<PullLocalModelError>, Options<PullLocalModelData>> => {
-	const mutationOptions: UseMutationOptions<
-		PullLocalModelResponse,
-		AxiosError<PullLocalModelError>,
-		Options<PullLocalModelData>
-	> = {
-		mutationFn: async (fnOptions) => {
-			const { data } = await pullLocalModel({
-				...options,
-				...fnOptions,
-				throwOnError: true,
-			});
-			return data;
-		},
-	};
-	return mutationOptions;
-};
 
 export const selectLocalModelMutation = (
 	options?: Partial<Options<SelectLocalModelData>>,
