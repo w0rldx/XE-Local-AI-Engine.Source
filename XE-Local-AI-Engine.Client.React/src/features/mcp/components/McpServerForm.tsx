@@ -1,6 +1,6 @@
 import { ActionIcon, Alert, Button, Group, Select, Stack, Text, Textarea, TextInput } from "@mantine/core";
 import { IconDeviceFloppy, IconPlus, IconTrash, IconX } from "@tabler/icons-react";
-import { type Ref, useCallback, useEffect, useImperativeHandle, useMemo, useState } from "react";
+import { type Ref, useCallback, useImperativeHandle, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 
 import {
@@ -86,16 +86,52 @@ export function McpServerForm({
 	const [envRows, setEnvRows] = useState<McpEnvRow[]>(() => toEnvRows(initialValues.env));
 	const [errors, setErrors] = useState<Record<string, string>>({});
 
-	// Dirty = current values (with env projected back) differ from the initial snapshot. A JSON compare gives
-	// shallow/structural dirty detection; the host uses this to guard close + navigation.
-	const isDirty = useMemo(() => {
-		const candidate: McpServerFormValues = { ...values, env: toEnvEntries(envRows) };
-		return JSON.stringify(candidate) !== JSON.stringify(initialValues);
-	}, [values, envRows, initialValues]);
+	// Refs mirror the latest committed editing state so an update to one slice (values OR envRows) can build the
+	// combined dirty candidate from the current value of the other without depending on a stale render closure.
+	const valuesRef = useRef(values);
+	valuesRef.current = values;
+	const envRowsRef = useRef(envRows);
+	envRowsRef.current = envRows;
 
-	useEffect(() => {
-		onDirtyChange?.(isDirty);
-	}, [isDirty, onDirtyChange]);
+	// Report the host's dirty state from the event-driven update path rather than a useEffect that watches state —
+	// the effect-sync pattern forces an extra parent re-render on every keystroke. Dirty = current values (with env
+	// projected back) differ from the initial snapshot; a JSON compare gives shallow/structural detection.
+	const reportDirty = useCallback(
+		(nextValues: McpServerFormValues, nextEnvRows: readonly McpEnvRow[]) => {
+			const candidate: McpServerFormValues = { ...nextValues, env: toEnvEntries(nextEnvRows) };
+			onDirtyChange?.(JSON.stringify(candidate) !== JSON.stringify(initialValues));
+		},
+		[initialValues, onDirtyChange],
+	);
+
+	const updateValues = useCallback(
+		(updater: (current: McpServerFormValues) => McpServerFormValues) => {
+			const next = updater(valuesRef.current);
+			valuesRef.current = next;
+			setValues(next);
+			reportDirty(next, envRowsRef.current);
+		},
+		[reportDirty],
+	);
+
+	const updateEnvRows = useCallback(
+		(updater: (current: McpEnvRow[]) => McpEnvRow[]) => {
+			const next = updater(envRowsRef.current);
+			envRowsRef.current = next;
+			setEnvRows(next);
+			reportDirty(valuesRef.current, next);
+		},
+		[reportDirty],
+	);
+
+	// Report the initial (clean) dirty state once on mount. The page keys this component per editor target, so a
+	// fresh mount always starts clean. Done as a one-shot render-time call (ref-guarded) rather than a useEffect that
+	// re-syncs on every change — the latter forces an extra parent re-render per keystroke.
+	const didReportInitialDirty = useRef(false);
+	if (!didReportInitialDirty.current) {
+		didReportInitialDirty.current = true;
+		reportDirty(values, envRows);
+	}
 
 	const transportData = useMemo(
 		() =>
@@ -108,33 +144,48 @@ export function McpServerForm({
 
 	const isStdio = values.transportKind === "Stdio";
 
-	const handleTransportChange = useCallback((value: string | null) => {
-		if (value === null) {
-			return;
-		}
-		setValues((current) => ({ ...current, transportKind: value as McpTransportKind }));
-	}, []);
+	const handleTransportChange = useCallback(
+		(value: string | null) => {
+			if (value === null) {
+				return;
+			}
+			updateValues((current) => ({ ...current, transportKind: value as McpTransportKind }));
+		},
+		[updateValues],
+	);
 
-	const handleArgumentsChange = useCallback((raw: string) => {
-		// Arguments are edited one-per-line; blank lines are dropped at submit (see toSaveMcpServerRequest).
-		setValues((current) => ({ ...current, arguments: raw.split("\n") }));
-	}, []);
+	const handleArgumentsChange = useCallback(
+		(raw: string) => {
+			// Arguments are edited one-per-line; blank lines are dropped at submit (see toSaveMcpServerRequest).
+			updateValues((current) => ({ ...current, arguments: raw.split("\n") }));
+		},
+		[updateValues],
+	);
 
-	const handleEnvKeyChange = useCallback((id: string, key: string) => {
-		setEnvRows((current) => current.map((row) => (row.id === id ? { ...row, key } : row)));
-	}, []);
+	const handleEnvKeyChange = useCallback(
+		(id: string, key: string) => {
+			updateEnvRows((current) => current.map((row) => (row.id === id ? { ...row, key } : row)));
+		},
+		[updateEnvRows],
+	);
 
-	const handleEnvValueChange = useCallback((id: string, value: string) => {
-		setEnvRows((current) => current.map((row) => (row.id === id ? { ...row, value } : row)));
-	}, []);
+	const handleEnvValueChange = useCallback(
+		(id: string, value: string) => {
+			updateEnvRows((current) => current.map((row) => (row.id === id ? { ...row, value } : row)));
+		},
+		[updateEnvRows],
+	);
 
 	const handleAddEnv = useCallback(() => {
-		setEnvRows((current) => [...current, { id: nextEnvRowId(), key: "", value: "" }]);
-	}, []);
+		updateEnvRows((current) => [...current, { id: nextEnvRowId(), key: "", value: "" }]);
+	}, [updateEnvRows]);
 
-	const handleRemoveEnv = useCallback((id: string) => {
-		setEnvRows((current) => current.filter((row) => row.id !== id));
-	}, []);
+	const handleRemoveEnv = useCallback(
+		(id: string) => {
+			updateEnvRows((current) => current.filter((row) => row.id !== id));
+		},
+		[updateEnvRows],
+	);
 
 	const handleSubmit = useCallback(() => {
 		const candidate: McpServerFormValues = { ...values, env: toEnvEntries(envRows) };
@@ -168,7 +219,7 @@ export function McpServerForm({
 				error={fieldError(errors, "name") ? t("pages.mcp.form.name.required", "Name is required") : undefined}
 				onChange={(event) => {
 					const value = event.currentTarget.value;
-					setValues((current) => ({ ...current, name: value }));
+					updateValues((current) => ({ ...current, name: value }));
 				}}
 				data-testid="mcp-form-name"
 			/>
@@ -180,7 +231,7 @@ export function McpServerForm({
 				minRows={2}
 				onChange={(event) => {
 					const value = event.currentTarget.value;
-					setValues((current) => ({ ...current, description: value }));
+					updateValues((current) => ({ ...current, description: value }));
 				}}
 				data-testid="mcp-form-description"
 			/>
@@ -207,7 +258,7 @@ export function McpServerForm({
 						error={fieldError(errors, "command")}
 						onChange={(event) => {
 							const value = event.currentTarget.value;
-							setValues((current) => ({ ...current, command: value }));
+							updateValues((current) => ({ ...current, command: value }));
 						}}
 						data-testid="mcp-form-command"
 					/>
@@ -227,7 +278,7 @@ export function McpServerForm({
 						value={values.workingDirectory}
 						onChange={(event) => {
 							const value = event.currentTarget.value;
-							setValues((current) => ({ ...current, workingDirectory: value }));
+							updateValues((current) => ({ ...current, workingDirectory: value }));
 						}}
 						data-testid="mcp-form-working-directory"
 					/>
@@ -250,7 +301,7 @@ export function McpServerForm({
 					error={fieldError(errors, "url")}
 					onChange={(event) => {
 						const value = event.currentTarget.value;
-						setValues((current) => ({ ...current, url: value }));
+						updateValues((current) => ({ ...current, url: value }));
 					}}
 					data-testid="mcp-form-url"
 				/>

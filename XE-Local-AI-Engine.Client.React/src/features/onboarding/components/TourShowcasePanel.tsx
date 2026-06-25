@@ -1,3 +1,4 @@
+import type { CSSProperties } from "react";
 import { Badge, Box, Card, Code, Group, Stack, Text, UnstyledButton } from "@mantine/core";
 import { IconBrain, IconChevronDown, IconRobot, IconTool } from "@tabler/icons-react";
 import { useTranslation } from "react-i18next";
@@ -5,6 +6,20 @@ import { useTranslation } from "react-i18next";
 // Z-index sits between app chrome (< 400) and the Joyride overlay (TOUR_Z_INDEX = 1000) so the spotlight and tooltip
 // render above the panel but the panel itself occludes the app behind it.
 const SHOWCASE_Z_INDEX = 900;
+
+// Fixed centered overlay layout for the showcase panel. The active-dependent backdrop/opacity/visibility are merged in
+// at the call site; everything here is static so it never rebuilds on render.
+const overlayBaseStyle: CSSProperties = {
+	position: "fixed",
+	inset: 0,
+	zIndex: SHOWCASE_Z_INDEX,
+	display: "flex",
+	alignItems: "center",
+	justifyContent: "center",
+	// Inactive: invisible + click-through but still laid out so Joyride can measure the showcase targets.
+	// Active: visible; pointerEvents stays none so the underlying app/Joyride spotlight controls interaction.
+	pointerEvents: "none",
+};
 
 // Static illustrative "fake chat" card shown as a fixed centered overlay during the showcase steps of the tour.
 // All sections are purely visual — no interactivity. Each sub-section has a stable `data-tour` attribute that Joyride
@@ -24,19 +39,11 @@ export function TourShowcasePanel({ active }: { active: boolean }) {
 			data-testid="tour-showcase-panel"
 			aria-hidden={!active}
 			style={{
-				position: "fixed",
-				inset: 0,
-				zIndex: SHOWCASE_Z_INDEX,
-				display: "flex",
-				alignItems: "center",
-				justifyContent: "center",
+				...overlayBaseStyle,
 				// Backdrop only while active; transparent when inactive so the hidden panel never tints the live app.
 				background: active ? "rgba(0,0,0,0.45)" : "transparent",
-				// Inactive: invisible + click-through but still laid out so Joyride can measure the showcase targets.
-				// Active: visible; pointerEvents stays none so the underlying app/Joyride spotlight controls interaction.
 				opacity: active ? 1 : 0,
 				visibility: active ? "visible" : "hidden",
-				pointerEvents: "none",
 			}}
 		>
 			<Card
@@ -102,7 +109,7 @@ export function TourShowcasePanel({ active }: { active: boolean }) {
 								{t("onboarding.showcase.toolCall.label")}
 							</Text>
 						</Group>
-						<Code block={true} style={{ fontSize: 11 }}>
+						<Code block={true} style={{ fontSize: 12 }}>
 							{t("onboarding.showcase.toolCall.sample")}
 						</Code>
 						<Text size="xs" c="dimmed">

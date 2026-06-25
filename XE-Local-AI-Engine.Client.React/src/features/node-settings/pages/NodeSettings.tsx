@@ -41,10 +41,9 @@ function runtimeErrorMessage(error: unknown, fallback: string): string {
 export function NodeSettings() {
 	const { t } = useTranslation();
 	const queryClient = useQueryClient();
-	const settingsQuery = useQuery(withResponseValidation(getNodeSettingsOptions()));
+	const { data: settings, isLoading: settingsIsLoading, error: settingsError, refetch: settingsRefetch, isFetching: settingsIsFetching } = useQuery(withResponseValidation(getNodeSettingsOptions()));
 	const developerMode = useDeveloperModeStore((state) => state.developerMode);
 	const { toggle: toggleDeveloperMode } = useDeveloperModeStore((state) => state.actions);
-	const settings = settingsQuery.data;
 	const [timeoutSeconds, setTimeoutSeconds] = useState<NodeSettingsTimeoutInput>(
 		nodeSettingsDefaults.maxMessageRequestTimeoutSeconds,
 	);
@@ -173,16 +172,16 @@ export function NodeSettings() {
 					<Text c="dimmed">Tune non-secret local runtime settings stored on this worker.</Text>
 				</Stack>
 
-				{settingsQuery.isLoading ? (
+				{settingsIsLoading ? (
 					<Group gap="sm">
 						<Loader size="sm" />
 						<Text c="dimmed">Loading node settings…</Text>
 					</Group>
 				) : null}
 
-				{settingsQuery.error ? (
+				{settingsError ? (
 					<Alert color="red" icon={<IconAlertTriangle size={16} />}>
-						{errorMessage(settingsQuery.error)}
+						{errorMessage(settingsError)}
 					</Alert>
 				) : null}
 
@@ -221,8 +220,8 @@ export function NodeSettings() {
 							<Button
 								variant="subtle"
 								leftSection={<IconRefresh size={16} />}
-								onClick={() => settingsQuery.refetch()}
-								disabled={settingsQuery.isFetching}
+								onClick={() => settingsRefetch()}
+								disabled={settingsIsFetching}
 							>
 								Reload
 							</Button>

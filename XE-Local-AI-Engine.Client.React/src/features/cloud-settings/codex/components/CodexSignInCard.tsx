@@ -24,7 +24,7 @@ import {
 	IconLogout,
 	IconRefresh,
 } from "@tabler/icons-react";
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 
 import { useCodexLogin, useCodexLogout, useCodexStatus } from "@/features/cloud-settings/codex/queries/useCodexAuth";
@@ -39,18 +39,31 @@ export function CodexSignInCard({ onSignedInChange }: CodexSignInCardProps) {
 
 	// authorizeUrl is set by the login mutation and displayed while the flow is pending.
 	const [authorizeUrl, setAuthorizeUrl] = useState<string | null>(null);
-	const [polling, setPolling] = useState(false);
+	// loginFlowActive is the operator's request to poll (set on sign-in, cleared on sign-out/retry). The query's
+	// effective polling is derived below as loginFlowActive && !isSignedIn, so reaching the signed-in terminal state
+	// stops polling without a separate state-toggling effect (which would chain an extra render).
+	const [loginFlowActive, setLoginFlowActive] = useState(false);
 	const [pollStartedAt, setPollStartedAt] = useState<number | undefined>(undefined);
 
 	// Detect poll timeout to surface a helpful message instead of spinning forever.
-	const timedOut = polling && pollStartedAt !== undefined && Date.now() - pollStartedAt > 5 * 60 * 1_000;
+	const timedOut = loginFlowActive && pollStartedAt !== undefined && Date.now() - pollStartedAt > 5 * 60 * 1_000;
 
-	const statusQuery = useCodexStatus({ polling, pollStartedAt });
+	// prevSignedIn holds the last observed signed-in value; it lets the effective polling flag (below) stop the poll
+	// at the signed-in terminal state without a state-toggling effect. It is updated during render once the latest
+	// query data is read.
+	const prevSignedIn = useRef<boolean | undefined>(undefined);
+
+	// Effective polling: poll while the login flow is active and we have not yet observed sign-in. Deriving the flag
+	// from the last observed value (rather than toggling polling state from an effect) halts polling once sign-in
+	// completes without chaining an extra render.
+	const statusQuery = useCodexStatus({ polling: loginFlowActive && prevSignedIn.current !== true, pollStartedAt });
+	const status = statusQuery.data;
+	const isSignedIn = status?.signedIn === true;
 
 	const loginMutation = useCodexLogin(
 		useCallback((url: string) => {
 			setAuthorizeUrl(url);
-			setPolling(true);
+			setLoginFlowActive(true);
 			setPollStartedAt(Date.now());
 		}, []),
 	);
@@ -58,31 +71,21 @@ export function CodexSignInCard({ onSignedInChange }: CodexSignInCardProps) {
 	const logoutMutation = useCodexLogout(
 		useCallback(() => {
 			setAuthorizeUrl(null);
-			setPolling(false);
+			setLoginFlowActive(false);
 			setPollStartedAt(undefined);
 		}, []),
 	);
 
-	// Stop polling once a terminal state is reached.
-	const status = statusQuery.data;
-	useEffect(() => {
-		if (status?.signedIn) {
-			setPolling(false);
-		}
-	}, [status?.signedIn]);
+	// Propagate signed-in state to the parent for provider-selector gating, and record the latest value for the
+	// polling-stop derivation above. Done during render via a ref-guarded compare (fires once per transition) rather
+	// than from a useEffect that watches state purely to push it up — the effect-sync would force an extra parent
+	// re-render on each change.
+	if (prevSignedIn.current !== isSignedIn) {
+		prevSignedIn.current = isSignedIn;
+		onSignedInChange?.(isSignedIn);
+	}
 
-	// Propagate signed-in state to the parent for provider-selector gating.
-	const prevSignedIn = useRef<boolean | undefined>(undefined);
-	useEffect(() => {
-		const signedIn = status?.signedIn ?? false;
-		if (prevSignedIn.current !== signedIn) {
-			prevSignedIn.current = signedIn;
-			onSignedInChange?.(signedIn);
-		}
-	}, [status?.signedIn, onSignedInChange]);
-
-	const isSignedIn = status?.signedIn === true;
-	const isPending = polling && !isSignedIn && !timedOut;
+	const isPending = loginFlowActive && !isSignedIn && !timedOut;
 
 	function handleSignIn(): void {
 		loginMutation.mutate({});
@@ -94,7 +97,7 @@ export function CodexSignInCard({ onSignedInChange }: CodexSignInCardProps) {
 
 	function handleRetry(): void {
 		setAuthorizeUrl(null);
-		setPolling(false);
+		setLoginFlowActive(false);
 		setPollStartedAt(undefined);
 		loginMutation.reset();
 		loginMutation.mutate({});
@@ -226,7 +229,7 @@ export function CodexSignInCard({ onSignedInChange }: CodexSignInCardProps) {
 				) : null}
 
 				{/* Status query error (not login error — the polling GET failed) */}
-				{statusQuery.isError && polling ? (
+				{statusQuery.isError && loginFlowActive ? (
 					<Alert color="red" icon={<IconAlertTriangle size={16} />}>
 						<Text size="sm">{t("pages.cloudSettings.codex.statusError")}</Text>
 					</Alert>

@@ -1,24 +1,13 @@
-import { ActionIcon, Alert, Anchor, Avatar, Badge, Box, CopyButton, Group, Menu, Paper, Stack, Text, Tooltip } from "@mantine/core";
-import {
-	IconAlertTriangle,
-	IconCheck,
-	IconChevronLeft,
-	IconChevronRight,
-	IconCopy,
-	IconDotsVertical,
-	IconGauge,
-	IconGitBranch,
-	IconRefresh,
-	IconSparkles,
-} from "@tabler/icons-react";
+import { Alert, Anchor, Avatar, Badge, Box, Group, Paper, Stack, Text } from "@mantine/core";
+import { IconAlertTriangle, IconSparkles } from "@tabler/icons-react";
 import { Link } from "@tanstack/react-router";
 import { AnimatePresence, m, useReducedMotion } from "framer-motion";
 import type { ReactNode } from "react";
 import { useTranslation } from "react-i18next";
 
 import { ChatMarkdown } from "@/features/chat/components/ChatMarkdown";
+import { ChatMessageActions, type ChatMessageActionCapabilities, type ChatMessageRevisionNav } from "@/features/chat/components/ChatMessageActions";
 import { CHAT_ACCENT, CHAT_ASSISTANT_BACKGROUND, CHAT_ASSISTANT_BORDER } from "@/features/chat/components/ChatVisualTokens";
-import { MessageFeedbackControl } from "@/features/chat/components/MessageFeedbackControl";
 import { MessageParts } from "@/features/chat/components/MessageParts";
 import type {
 	ChatFeedbackRating,
@@ -50,14 +39,6 @@ function resolveParts(message: ChatMessageModel, streamingParts: ChatMessagePart
 	}
 
 	return EMPTY_PARTS;
-}
-
-/** Prev/next navigation across the sibling revisions (variant group) of an assistant turn. */
-export interface ChatMessageRevisionNav {
-	activeIndex: number;
-	total: number;
-	onPrevious: () => void;
-	onNext: () => void;
 }
 
 interface ChatMessageProps {
@@ -179,128 +160,28 @@ export function ChatMessage({
 	const showMenu = assistantMessage && !isStreaming;
 	const hasActions = canCopy || canRegenerate || canBranch || showRevisionNav || showFeedback || showMenu;
 
+	const actionCapabilities: ChatMessageActionCapabilities = {
+		copy: canCopy,
+		regenerate: canRegenerate,
+		branch: canBranch,
+		revisionNav: showRevisionNav,
+		feedback: showFeedback,
+		menu: showMenu,
+		showTokensPerSecond,
+	};
+
 	const actions = hasActions ? (
-		<Group gap={2} align="center" data-testid={`chat-message-actions-${message.id}`}>
-			{showRevisionNav && revisionNav ? (
-				<Group gap={0} align="center" data-testid={`message-revision-nav-${message.id}`}>
-					<Tooltip label={t("pages.chat.revisions.previous", "Previous revision")} withArrow={true}>
-						<ActionIcon
-							aria-label={t("pages.chat.revisions.previous", "Previous revision")}
-							color="gray"
-							variant="subtle"
-							size="sm"
-							disabled={revisionNav.activeIndex <= 0}
-							onClick={revisionNav.onPrevious}
-							data-testid={`message-revision-prev-${message.id}`}
-						>
-							<IconChevronLeft size={14} />
-						</ActionIcon>
-					</Tooltip>
-					<Text size="xs" c="dimmed" data-testid={`message-revision-count-${message.id}`}>
-						{revisionNav.activeIndex + 1}/{revisionNav.total}
-					</Text>
-					<Tooltip label={t("pages.chat.revisions.next", "Next revision")} withArrow={true}>
-						<ActionIcon
-							aria-label={t("pages.chat.revisions.next", "Next revision")}
-							color="gray"
-							variant="subtle"
-							size="sm"
-							disabled={revisionNav.activeIndex >= revisionNav.total - 1}
-							onClick={revisionNav.onNext}
-							data-testid={`message-revision-next-${message.id}`}
-						>
-							<IconChevronRight size={14} />
-						</ActionIcon>
-					</Tooltip>
-				</Group>
-			) : null}
-			{canCopy ? (
-				<CopyButton value={message.content} timeout={2000}>
-					{({ copied, copy }) => (
-						<Tooltip
-							label={
-								copied
-									? t("pages.chat.actions.copySuccess", "Message copied to clipboard.")
-									: t("pages.chat.actions.copy", "Copy message")
-							}
-							withArrow={true}
-						>
-							<ActionIcon
-								aria-label={t("pages.chat.actions.copy", "Copy message")}
-								color={copied ? "teal" : "gray"}
-								variant="subtle"
-								size="sm"
-								onClick={copy}
-							>
-								{copied ? <IconCheck size={14} /> : <IconCopy size={14} />}
-							</ActionIcon>
-						</Tooltip>
-					)}
-				</CopyButton>
-			) : null}
-			{canRegenerate ? (
-				<Tooltip label={t("pages.chat.actions.regenerate", "Regenerate response")} withArrow={true}>
-					<ActionIcon
-						aria-label={t("pages.chat.actions.regenerate", "Regenerate response")}
-						color="gray"
-						variant="subtle"
-						size="sm"
-						onClick={() => onRegenerate?.(message.id)}
-					>
-						<IconRefresh size={14} />
-					</ActionIcon>
-				</Tooltip>
-			) : null}
-			{canBranch ? (
-				<Tooltip label={t("pages.chat.actions.branch", "Branch from here")} withArrow={true}>
-					<ActionIcon
-						aria-label={t("pages.chat.actions.branch", "Branch from here")}
-						color="gray"
-						variant="subtle"
-						size="sm"
-						onClick={() => onBranch?.(message.id)}
-						data-testid={`message-branch-${message.id}`}
-					>
-						<IconGitBranch size={14} />
-					</ActionIcon>
-				</Tooltip>
-			) : null}
-			{showFeedback && onSubmitFeedback ? (
-				<MessageFeedbackControl
-					messageId={message.id}
-					feedback={feedback}
-					pending={feedbackPending}
-					onSubmit={(rating, comment) => onSubmitFeedback(message.id, rating, comment)}
-				/>
-			) : null}
-			{showMenu ? (
-				<Menu position="bottom-end" withinPortal={true}>
-					<Menu.Target>
-						<ActionIcon
-							aria-label={t("pages.chat.menu.label", "Message options")}
-							color="gray"
-							variant="subtle"
-							size="sm"
-							data-testid={`chat-message-menu-${message.id}`}
-						>
-							<IconDotsVertical size={14} />
-						</ActionIcon>
-					</Menu.Target>
-					<Menu.Dropdown>
-						<Menu.Label>{t("pages.chat.menu.label", "Message options")}</Menu.Label>
-						<Menu.Item
-							leftSection={<IconGauge size={14} />}
-							rightSection={showTokensPerSecond ? <IconCheck size={14} /> : null}
-							closeMenuOnClick={false}
-							onClick={() => setShowTokensPerSecond(!showTokensPerSecond)}
-							data-testid={`chat-message-menu-tps-${message.id}`}
-						>
-							{t("pages.chat.menu.showTokensPerSecond", "Show tokens/sec")}
-						</Menu.Item>
-					</Menu.Dropdown>
-				</Menu>
-			) : null}
-		</Group>
+		<ChatMessageActions
+			message={message}
+			capabilities={actionCapabilities}
+			revisionNav={revisionNav}
+			onRegenerate={onRegenerate}
+			onBranch={onBranch}
+			feedback={feedback}
+			feedbackPending={feedbackPending}
+			onSubmitFeedback={onSubmitFeedback}
+			onToggleTokensPerSecond={() => setShowTokensPerSecond(!showTokensPerSecond)}
+		/>
 	) : null;
 
 	if (userMessage) {

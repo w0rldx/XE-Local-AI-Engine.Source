@@ -101,7 +101,7 @@ export function AgentsPage() {
 
 	const definitionsQuery = useAgentDefinitions();
 	const toolCapableModelsQuery = useToolCapableModels();
-	const modelsQuery = useQuery(withResponseValidation(listLocalModelsOptions()));
+	const { data: modelsData } = useQuery(withResponseValidation(listLocalModelsOptions()));
 
 	const createMutation = useCreateAgentDefinition();
 	const updateMutation = useUpdateAgentDefinition();
@@ -111,8 +111,8 @@ export function AgentsPage() {
 	const toolCapableModels = toolCapableModelsQuery.data ?? [];
 
 	const modelOptions = useMemo<AgentModelOption[]>(
-		() => (modelsQuery.data?.items ?? []).map((model) => ({ value: model.modelName ?? "", label: model.modelName ?? "" })),
-		[modelsQuery.data],
+		() => (modelsData?.items ?? []).map((model) => ({ value: model.modelName ?? "", label: model.modelName ?? "" })),
+		[modelsData],
 	);
 
 	const editingDefinition = useMemo(() => {

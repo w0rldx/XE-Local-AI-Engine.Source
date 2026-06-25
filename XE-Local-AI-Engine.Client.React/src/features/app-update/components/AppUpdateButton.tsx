@@ -27,8 +27,9 @@ export function AppUpdateButton() {
 	const pollStartRef = useRef<number>(0);
 
 	useEffect(() => {
+		const timerRef = pollTimerRef;
 		return () => {
-			if (pollTimerRef.current !== null) { clearTimeout(pollTimerRef.current); }
+			if (timerRef.current !== null) { clearTimeout(timerRef.current); }
 		};
 	}, []);
 

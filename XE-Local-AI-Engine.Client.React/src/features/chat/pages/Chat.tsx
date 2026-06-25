@@ -177,8 +177,13 @@ export function Chat() {
 	const [conversationSearchQuery, setConversationSearchQuery] = useState("");
 	const [showArchivedConversations, setShowArchivedConversations] = useState(false);
 	const [mutatingConversationId, setMutatingConversationId] = useState<string | undefined>();
-	// Operator's chosen revision per variant group (variantGroupId → active messageId). Unset groups default to newest.
-	const [activeRevisionByGroup, setActiveRevisionByGroup] = useState<Record<string, string>>({});
+	// Operator's in-session revision picks (variantGroupId → active messageId), scoped to the conversation they were
+	// made in. Layered over the conversation's persisted selected-path baseline to derive the effective map below, so
+	// the active selection is computed during render rather than copied into state through an effect (no extra render).
+	const [revisionOverrides, setRevisionOverrides] = useState<{ conversationId: string; overrides: Record<string, string> }>({
+		conversationId: "",
+		overrides: {},
+	});
 	const [pendingFeedbackMessageId, setPendingFeedbackMessageId] = useState<string | undefined>();
 	// Conversations whose first message has already promoted their title (avoids re-renaming on every send).
 	// Lazy-init (see deletedConversationIds): build the Set once, not a throwaway per render.
@@ -186,16 +191,25 @@ export function Chat() {
 	if (!titledConversations.current) {
 		titledConversations.current = new Set<string>();
 	}
-	// The conversation whose persisted selected-path has already seeded activeRevisionByGroup, so a background
-	// refetch of the same conversation never clobbers an in-session selection the operator just navigated.
-	const seededSelectionConversationId = useRef<string | undefined>(undefined);
+	// The persisted selected-path baseline latched the first time each conversation's full payload loads. Latching
+	// once (keyed by conversation id) means a later background refetch never clobbers an in-session selection the
+	// operator just navigated — the override layer always wins over this frozen baseline.
+	const revisionBaseline = useRef<{ conversationId: string; selectedPath: Record<string, string> }>({
+		conversationId: "",
+		selectedPath: {},
+	});
 
-	const conversationsQuery = useQuery({
+	const {
+		data: conversationsData,
+		isLoading: conversationsIsLoading,
+		isError: conversationsIsError,
+		error: conversationsError,
+	} = useQuery({
 		queryKey: nodeChatQueryKeys.conversationList(showArchivedConversations),
 		queryFn: ({ signal }) => nodeChatAdapter.listConversations({ includeArchived: showArchivedConversations, signal }),
 	});
 
-	const localModelsQuery = useQuery({
+	const { data: localModelsData } = useQuery({
 		...withResponseValidation(listLocalModelsOptions()),
 		// Keep the prior model list while a refetch is in flight so a transient response that momentarily omits
 		// the selected model can't trip the reconcile effect and reset selectedModel to the default (which would
@@ -204,7 +218,7 @@ export function Chat() {
 	});
 
 	const modelOptions = useMemo<ModelOption[]>(() => {
-		const response = localModelsQuery.data;
+		const response = localModelsData;
 		if (!response) {
 			return [localDefaultModelOptionBase];
 		}
@@ -217,7 +231,7 @@ export function Chat() {
 			...resolveLocalDefaultModelCapabilities(items),
 		};
 		return [localDefaultModelOption, ...toChatModelOptions(items, response.isAvailable ?? false)];
-	}, [localModelsQuery.data]);
+	}, [localModelsData]);
 	// Cloud (Codex) model options — empty array when signed out; non-empty only when Codex session active.
 	const cloudModelOptions = useCodexModelOptions();
 	const selectedModelOption = useMemo(
@@ -299,7 +313,7 @@ export function Chat() {
 	// (before the query settles) does not clobber a still-valid persisted concrete model.
 	// Also exempt cloud model selections — they are not in the local list and must not be evicted.
 	useEffect(() => {
-		if (!localModelsQuery.data) {
+		if (!localModelsData) {
 			return;
 		}
 
@@ -307,7 +321,7 @@ export function Chat() {
 		if (!isCloudSelection && !modelOptions.some((option) => option.value === selectedModel)) {
 			setSelectedModel(localDefaultModelValue);
 		}
-	}, [cloudModelOptions, localModelsQuery.data, modelOptions, selectedModel, setSelectedModel]);
+	}, [cloudModelOptions, localModelsData, modelOptions, selectedModel, setSelectedModel]);
 	// Keep the selected reasoning effort valid for the active model's reasoning mode so the composer never SENDS an
 	// effort the model can't honor. Graded models accept none/low/medium/high; binary models accept on/none; Codex
 	// models add minimal/xhigh. When the current effort isn't in the active model's set (a Codex "xhigh" carried onto
@@ -322,8 +336,8 @@ export function Chat() {
 	}, [availableReasoningEfforts, reasoningEffort, setReasoningEffort]);
 	const selectedConcreteModelName = useMemo(() => {
 		const requestModel = toNodeChatRequestModel(selectedModel);
-		return requestModel ?? localModelsQuery.data?.selectedModelName ?? localModelsQuery.data?.configuredDefaultModelName ?? "";
-	}, [localModelsQuery.data?.configuredDefaultModelName, localModelsQuery.data?.selectedModelName, selectedModel]);
+		return requestModel ?? localModelsData?.selectedModelName ?? localModelsData?.configuredDefaultModelName ?? "";
+	}, [localModelsData?.configuredDefaultModelName, localModelsData?.selectedModelName, selectedModel]);
 
 	// Only poll model-details when the selection can actually return them: a non-empty local (non-cloud) name whose
 	// list option, if known, is available. Cloud (Codex) ids have no LOCAL details (the endpoint 404s for them) and an
@@ -334,7 +348,7 @@ export function Chat() {
 		selectedModelOption,
 		selectedModelIsCloud,
 	);
-	const selectedModelDetailsQuery = useQuery({
+	const { data: selectedModelDetails } = useQuery({
 		...withResponseValidation(getLocalModelDetailsOptions({ path: { modelName: selectedConcreteModelName } })),
 		enabled: selectedModelDetailsEnabled,
 	});
@@ -355,11 +369,16 @@ export function Chat() {
 		},
 	});
 
-	const conversations = conversationsQuery.data ?? emptyConversations;
+	const conversations = conversationsData ?? emptyConversations;
 	const requestedConversationExists = conversations.some((conversation) => conversation.id === requestedConversationId);
 	const selectedConversationId = requestedConversationExists ? requestedConversationId : (conversations[0]?.id ?? "");
 
-	const selectedConversationQuery = useQuery({
+	const {
+		data: selectedConversationData,
+		isLoading: selectedConversationIsLoading,
+		isFetching: selectedConversationIsFetching,
+		isPlaceholderData: selectedConversationIsPlaceholderData,
+	} = useQuery({
 		queryKey: nodeChatQueryKeys.conversation(selectedConversationId),
 		queryFn: ({ signal }) => nodeChatAdapter.getConversation(selectedConversationId, { signal }),
 		enabled: selectedConversationId.length > 0,
@@ -373,35 +392,58 @@ export function Chat() {
 	// false whenever ANY cached/placeholder data exists for the id, which let the empty-state flash mid-fetch.
 	const isLoadingSelectedConversation =
 		selectedConversationId.length > 0 &&
-		(selectedConversationQuery.isLoading ||
-			selectedConversationQuery.isFetching ||
-			selectedConversationQuery.isPlaceholderData ||
-			selectedConversationQuery.data?.id !== selectedConversationId);
+		(selectedConversationIsLoading ||
+			selectedConversationIsFetching ||
+			selectedConversationIsPlaceholderData ||
+			selectedConversationData?.id !== selectedConversationId);
 
+	// Gate the selected conversation against the current selection before merging it into the displayed list.
+	// When the last conversation is deleted, selectedConversationId becomes "" and the query disables — but its
+	// `.data` stays STALE (it still holds the just-deleted conversation, keepPreviousData never clears it).
+	// Injecting that stale payload would render a ghost row, so only feed the merge the selected conversation when
+	// the selection is live (non-empty) AND the cached payload actually matches it.
+	const selectedConversationForMerge =
+		selectedConversationId.length > 0 && selectedConversationData?.id === selectedConversationId
+			? selectedConversationData
+			: undefined;
 	const displayConversations = useMemo(
-		() => mergeSelectedConversation(conversations, selectedConversationQuery.data),
-		[conversations, selectedConversationQuery.data],
+		() => mergeSelectedConversation(conversations, selectedConversationForMerge),
+		[conversations, selectedConversationForMerge],
 	);
 	const activeConversation = displayConversations.find((conversation) => conversation.id === selectedConversationId);
 	// Remote conversations are view-only on this node (server enforces the guard; this is the cosmetic UI hide).
 	const isRemoteConversation = activeConversation?.origin === "remote";
 
-	// Hydrate the active-revision selection from the conversation's persisted selected-path once its full payload
-	// loads, so navigating < N/N > variants survives a reload. Seeds once per conversation (tracked by ref) — a
-	// later background refetch of the same conversation must not overwrite a selection the operator just made.
-	const loadedConversation = selectedConversationQuery.data;
-	useEffect(() => {
-		if (!loadedConversation || loadedConversation.id !== selectedConversationId) {
-			return;
-		}
+	// Latch the persisted selected-path baseline for the current conversation the first time its full payload loads,
+	// so navigating < N/N > variants survives a reload. Latched once per conversation (tracked by ref) — a later
+	// background refetch of the same conversation must not overwrite a selection the operator just made. Computed
+	// during render (no effect → no extra render); writing a ref here is render-safe because it only memoizes and
+	// never schedules a re-render.
+	const loadedConversation = selectedConversationData;
+	if (
+		loadedConversation &&
+		loadedConversation.id === selectedConversationId &&
+		revisionBaseline.current.conversationId !== selectedConversationId
+	) {
+		revisionBaseline.current = { conversationId: selectedConversationId, selectedPath: loadedConversation.selectedPath ?? {} };
+	}
 
-		if (seededSelectionConversationId.current === selectedConversationId) {
-			return;
-		}
-
-		seededSelectionConversationId.current = selectedConversationId;
-		setActiveRevisionByGroup(loadedConversation.selectedPath ?? {});
-	}, [loadedConversation, selectedConversationId]);
+	// Effective active-revision map: the frozen server baseline for the current conversation overlaid with the
+	// operator's in-session picks (only those made in THIS conversation apply). Derived during render instead of
+	// stored in state. Reads loadedConversation so the map recomputes when the full payload loads: the ref-latch block
+	// above sets revisionBaseline.current on that same render, and the fallback below also reads the freshly-loaded
+	// payload directly, so the baseline is correct whether or not the ref has latched yet.
+	const activeRevisionByGroup = useMemo<Record<string, string>>(() => {
+		const isCurrentLoaded = loadedConversation?.id === selectedConversationId;
+		const baseline =
+			revisionBaseline.current.conversationId === selectedConversationId
+				? revisionBaseline.current.selectedPath
+				: isCurrentLoaded
+					? (loadedConversation?.selectedPath ?? {})
+					: {};
+		const overrides = revisionOverrides.conversationId === selectedConversationId ? revisionOverrides.overrides : {};
+		return { ...baseline, ...overrides };
+	}, [revisionOverrides, selectedConversationId, loadedConversation]);
 
 	// Node-local feedback travels on each message in the loaded conversation:
 	// derive the by-message map from the conversation read instead of firing a GET per assistant turn (which
@@ -426,10 +468,10 @@ export function Chat() {
 		() => deriveUsedContextTokens(activeConversation?.messages ?? []),
 		[activeConversation?.messages],
 	);
-	const effectiveMaxContextTokens = selectedModelDetailsQuery.data?.maxContextTokens ?? undefined;
+	const effectiveMaxContextTokens = selectedModelDetails?.maxContextTokens ?? undefined;
 	const contextModelLabel =
 		selectedConcreteModelName || selectedModelOption?.displayName || selectedModelOption?.label || "Local runtime default";
-	const isLoadingInitialConversations = conversationsQuery.isLoading && displayConversations.length === 0;
+	const isLoadingInitialConversations = conversationsIsLoading && displayConversations.length === 0;
 	const isCreatingConversation = createConversationMutation.isPending;
 	const isSending = Boolean(streamingMessage?.isActive);
 
@@ -446,8 +488,8 @@ export function Chat() {
 
 	const resolveSendConversation = useCallback(
 		async (content: string): Promise<ChatConversationModel> => {
-			if (selectedConversationQuery.data) {
-				return selectedConversationQuery.data;
+			if (selectedConversationData) {
+				return selectedConversationData;
 			}
 
 			const summaryConversation = displayConversations.find((conversation) => conversation.id === selectedConversationId);
@@ -462,7 +504,7 @@ export function Chat() {
 			setRequestedConversationId(created.id);
 			return created;
 		},
-		[cacheConversation, displayConversations, selectedConversationId, selectedConversationQuery.data, setRequestedConversationId],
+		[cacheConversation, displayConversations, selectedConversationId, selectedConversationData, setRequestedConversationId],
 	);
 
 	const refreshConversation = useCallback(
@@ -910,7 +952,13 @@ export function Chat() {
 	const handleSelectRevision = useCallback(
 		(variantGroupId: string, messageId: string): void => {
 			const nextSelection: Record<string, string> = { ...activeRevisionByGroup, [variantGroupId]: messageId };
-			setActiveRevisionByGroup(nextSelection);
+			// Record the pick as an in-session override scoped to the current conversation; the effective map is
+			// derived from baseline + overrides during render. A conversation switch carries a fresh overrides bucket
+			// (keyed by conversationId), so picks never leak across threads.
+			setRevisionOverrides((current) => {
+				const base = current.conversationId === selectedConversationId ? current.overrides : {};
+				return { conversationId: selectedConversationId, overrides: { ...base, [variantGroupId]: messageId } };
+			});
 			// Persist the navigated selection so a reload restores it even without sending a message. Fire-and-forget,
 			// consistent with other adapter calls; a failure surfaces in the error banner but never blocks the UI.
 			if (selectedConversationId) {
@@ -998,10 +1046,10 @@ export function Chat() {
 					<Text fw={700}>Local chat stream failed.</Text>
 					<Text size="sm">{streamError}</Text>
 				</Stack>
-			) : conversationsQuery.isError ? (
+			) : conversationsIsError ? (
 				<Stack gap={2}>
 					<Text fw={700}>Unable to load local chat history.</Text>
-					<Text size="sm">{errorMessage(conversationsQuery.error)}</Text>
+					<Text size="sm">{errorMessage(conversationsError)}</Text>
 				</Stack>
 			) : isRemoteConversation ? (
 				<Stack gap={2}>
@@ -1011,7 +1059,7 @@ export function Chat() {
 					</Text>
 				</Stack>
 			) : undefined,
-		[conversationsQuery.error, conversationsQuery.isError, isRemoteConversation, streamError, t],
+		[conversationsError, conversationsIsError, isRemoteConversation, streamError, t],
 	);
 
 	// Module-readiness gate (platform parity): block the chat behind a connecting/error state until the
@@ -1088,7 +1136,7 @@ export function Chat() {
 					isSending,
 					chatInputDisabled: isCreatingConversation || isRemoteConversation,
 					modelSelectorDisabled: isRemoteConversation,
-					sendDisabled: selectedConversationQuery.isLoading || isRemoteConversation,
+					sendDisabled: selectedConversationIsLoading || isRemoteConversation,
 				}}
 				conversationSearchQuery={conversationSearchQuery}
 				showArchivedConversations={showArchivedConversations}

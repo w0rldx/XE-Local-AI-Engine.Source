@@ -1,7 +1,8 @@
-import { Alert, Group, NumberInput, Select, Stack, Switch, Textarea, TextInput } from "@mantine/core";
-import { type Ref, useCallback, useEffect, useImperativeHandle, useMemo, useState } from "react";
+import { Alert, NumberInput, Select, Stack, Switch, Textarea, TextInput } from "@mantine/core";
+import { type Ref, useCallback, useImperativeHandle, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 
+import { ScheduledJobScheduleFields } from "@/features/scheduler/components/ScheduledJobScheduleFields";
 import {
 	type ScheduledJobFormValues,
 	type ScheduledJobTemplate,
@@ -74,10 +75,28 @@ export function ScheduledJobForm({
 	const [values, setValues] = useState<ScheduledJobFormValues>(initialValues);
 	const [errors, setErrors] = useState<Record<string, string>>({});
 
-	// Notify the parent whenever the dirty state changes.
-	useEffect(() => {
+	// Update values AND report the resulting dirty state to the parent in the same event-driven step. Driving the
+	// notification from the updater rather than a useEffect that watches state avoids the extra parent re-render the
+	// effect-sync pattern causes (the parent wires this to its close-guard and route-guard).
+	const updateValues = useCallback(
+		(updater: (current: ScheduledJobFormValues) => ScheduledJobFormValues) => {
+			setValues((current) => {
+				const next = updater(current);
+				onDirtyChange?.(computeIsDirty(next, initialValues));
+				return next;
+			});
+		},
+		[initialValues, onDirtyChange],
+	);
+
+	// Report the initial (clean) dirty state once on mount. The page keys this component per editor target, so a
+	// fresh mount always starts clean. Done as a one-shot render-time call (ref-guarded) rather than a useEffect that
+	// re-syncs on every change — the latter forces an extra parent re-render per keystroke.
+	const didReportInitialDirty = useRef(false);
+	if (!didReportInitialDirty.current) {
+		didReportInitialDirty.current = true;
 		onDirtyChange?.(computeIsDirty(values, initialValues));
-	}, [values, initialValues, onDirtyChange]);
+	}
 
 	const templateData = useMemo(
 		() => templates.map((template) => ({ value: template.templateId, label: template.displayName })),
@@ -118,7 +137,7 @@ export function ScheduledJobForm({
 				return;
 			}
 			const template = templates.find((candidate) => candidate.templateId === value);
-			setValues((current) => ({
+			updateValues((current) => ({
 				...current,
 				templateId: value,
 				scheduleKind: template?.defaultScheduleKind ?? current.scheduleKind,
@@ -128,22 +147,28 @@ export function ScheduledJobForm({
 				parameters: template?.defaultParameters ?? current.parameters,
 			}));
 		},
-		[templates],
+		[templates, updateValues],
 	);
 
-	const handleScheduleKindChange = useCallback((value: string | null) => {
-		if (value === null) {
-			return;
-		}
-		setValues((current) => ({ ...current, scheduleKind: value as ScheduleKind }));
-	}, []);
+	const handleScheduleKindChange = useCallback(
+		(value: string | null) => {
+			if (value === null) {
+				return;
+			}
+			updateValues((current) => ({ ...current, scheduleKind: value as ScheduleKind }));
+		},
+		[updateValues],
+	);
 
-	const handleMisfireChange = useCallback((value: string | null) => {
-		if (value === null) {
-			return;
-		}
-		setValues((current) => ({ ...current, misfirePolicy: value as SchedulerMisfirePolicy }));
-	}, []);
+	const handleMisfireChange = useCallback(
+		(value: string | null) => {
+			if (value === null) {
+				return;
+			}
+			updateValues((current) => ({ ...current, misfirePolicy: value as SchedulerMisfirePolicy }));
+		},
+		[updateValues],
+	);
 
 	const handleSubmit = useCallback(() => {
 		const result = scheduledJobFormSchema.safeParse(values);
@@ -164,12 +189,8 @@ export function ScheduledJobForm({
 	// without coupling the footer to internal form state.
 	useImperativeHandle(ref, () => ({ submit: handleSubmit }), [handleSubmit]);
 
-	const isCron = values.scheduleKind === "Cron";
-	const isInterval = values.scheduleKind === "SimpleInterval";
-	const isOneShot = values.scheduleKind === "OneShot";
-	// A Manual job is a durable on-demand job with no trigger — it has no cron/interval/start-at fields, so those
-	// inputs are hidden and a short note explains that it runs only when triggered.
-	const isManual = values.scheduleKind === "Manual";
+	// Stable per-key error lookup forwarded to the schedule-fields subcomponent.
+	const lookupFieldError = useCallback((key: string) => fieldError(errors, key), [errors]);
 
 	return (
 		<Stack gap="md" data-testid="scheduled-job-form">
@@ -199,7 +220,7 @@ export function ScheduledJobForm({
 				error={fieldError(errors, "displayName")}
 				onChange={(event) => {
 					const value = event.currentTarget.value;
-					setValues((current) => ({ ...current, displayName: value }));
+					updateValues((current) => ({ ...current, displayName: value }));
 				}}
 				data-testid="scheduler-form-name"
 			/>
@@ -211,7 +232,7 @@ export function ScheduledJobForm({
 				minRows={2}
 				onChange={(event) => {
 					const value = event.currentTarget.value;
-					setValues((current) => ({ ...current, description: value }));
+					updateValues((current) => ({ ...current, description: value }));
 				}}
 				data-testid="scheduler-form-description"
 			/>
@@ -225,70 +246,7 @@ export function ScheduledJobForm({
 				data-testid="scheduler-form-schedule-kind"
 			/>
 
-			{isManual ? (
-				<Alert variant="light" data-testid="scheduler-form-manual-note">
-					{t("pages.scheduler.form.scheduleKind.manualNote", "Runs only when triggered manually.")}
-				</Alert>
-			) : null}
-
-			{isCron ? (
-				<TextInput
-					label={t("pages.scheduler.form.cronExpression.label", "Cron expression")}
-					description={t("pages.scheduler.form.cronExpression.description", "Quartz cron syntax, e.g. 0 0 3 * * ?")}
-					placeholder="0 0 3 * * ?"
-					value={values.cronExpression}
-					required={true}
-					error={fieldError(errors, "cronExpression")}
-					onChange={(event) => {
-						const value = event.currentTarget.value;
-						setValues((current) => ({ ...current, cronExpression: value }));
-					}}
-					data-testid="scheduler-form-cron"
-				/>
-			) : null}
-
-			{isInterval ? (
-				<Group grow={true} align="flex-start">
-					<TextInput
-						label={t("pages.scheduler.form.intervalSeconds.label", "Interval (seconds)")}
-						placeholder="300"
-						value={values.intervalSeconds}
-						required={true}
-						error={fieldError(errors, "intervalSeconds")}
-						onChange={(event) => {
-							const value = event.currentTarget.value;
-							setValues((current) => ({ ...current, intervalSeconds: value }));
-						}}
-						data-testid="scheduler-form-interval"
-					/>
-					<TextInput
-						label={t("pages.scheduler.form.repeatCount.label", "Repeat count")}
-						description={t("pages.scheduler.form.repeatCount.description", "Leave blank to repeat forever.")}
-						value={values.repeatCount}
-						error={fieldError(errors, "repeatCount")}
-						onChange={(event) => {
-							const value = event.currentTarget.value;
-							setValues((current) => ({ ...current, repeatCount: value }));
-						}}
-						data-testid="scheduler-form-repeat-count"
-					/>
-				</Group>
-			) : null}
-
-			{isOneShot ? (
-				<TextInput
-					type="datetime-local"
-					label={t("pages.scheduler.form.startAtUtc.label", "Start at")}
-					value={values.startAtUtc}
-					required={true}
-					error={fieldError(errors, "startAtUtc")}
-					onChange={(event) => {
-						const value = event.currentTarget.value;
-						setValues((current) => ({ ...current, startAtUtc: value }));
-					}}
-					data-testid="scheduler-form-start-at"
-				/>
-			) : null}
+			<ScheduledJobScheduleFields values={values} fieldError={lookupFieldError} onFieldChange={updateValues} />
 
 			<TextInput
 				label={t("pages.scheduler.form.timeZoneId.label", "Time zone")}
@@ -298,7 +256,7 @@ export function ScheduledJobForm({
 				error={fieldError(errors, "timeZoneId")}
 				onChange={(event) => {
 					const value = event.currentTarget.value;
-					setValues((current) => ({ ...current, timeZoneId: value }));
+					updateValues((current) => ({ ...current, timeZoneId: value }));
 				}}
 				data-testid="scheduler-form-timezone"
 			/>
@@ -323,7 +281,7 @@ export function ScheduledJobForm({
 				min={1}
 				allowDecimal={false}
 				error={fieldError(errors, "maxRuntimeSeconds")}
-				onChange={(value) => setValues((current) => ({ ...current, maxRuntimeSeconds: value === "" ? "" : String(value) }))}
+				onChange={(value) => updateValues((current) => ({ ...current, maxRuntimeSeconds: value === "" ? "" : String(value) }))}
 				data-testid="scheduler-form-max-runtime"
 			/>
 
@@ -332,7 +290,7 @@ export function ScheduledJobForm({
 				checked={values.preventOverlap}
 				onChange={(event) => {
 					const checked = event.currentTarget.checked;
-					setValues((current) => ({ ...current, preventOverlap: checked }));
+					updateValues((current) => ({ ...current, preventOverlap: checked }));
 				}}
 				data-testid="scheduler-form-prevent-overlap"
 			/>
@@ -348,7 +306,7 @@ export function ScheduledJobForm({
 				minRows={3}
 				onChange={(event) => {
 					const value = event.currentTarget.value;
-					setValues((current) => ({ ...current, parameters: value }));
+					updateValues((current) => ({ ...current, parameters: value }));
 				}}
 				data-testid="scheduler-form-parameters"
 			/>

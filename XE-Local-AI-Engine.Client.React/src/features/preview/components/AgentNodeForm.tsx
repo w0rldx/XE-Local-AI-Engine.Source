@@ -35,11 +35,11 @@ export function AgentNodeForm({ data, onChange }: AgentNodeFormProps) {
 	// Chat-capable models, reusing the chat picker's filter (strict: only kind === "Chat"). The local-default
 	// option is omitted here — a preview Agent node must name a concrete model (the backend validator rejects an
 	// agent without one), so the picker offers only real models.
-	const localModelsQuery = useQuery({
+	const { data: localModelsData } = useQuery({
 		...withResponseValidation(listLocalModelsOptions()),
 	});
 	const modelOptions = useMemo(() => {
-		const response = localModelsQuery.data;
+		const response = localModelsData;
 		if (!response) {
 			return [];
 		}
@@ -47,7 +47,7 @@ export function AgentNodeForm({ data, onChange }: AgentNodeFormProps) {
 			value: option.value,
 			label: option.label,
 		}));
-	}, [localModelsQuery.data]);
+	}, [localModelsData]);
 
 	const importOptions = useMemo(
 		() => (agentDefinitionsQuery.data ?? []).map((definition) => ({ value: definition.id, label: definition.name })),

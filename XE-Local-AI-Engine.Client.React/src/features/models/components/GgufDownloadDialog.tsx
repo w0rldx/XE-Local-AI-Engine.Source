@@ -1,6 +1,6 @@
 import { Alert, Badge, Button, Group, Loader, Radio, Stack, Table, Text } from "@mantine/core";
 import { IconAlertTriangle, IconCloudDownload } from "@tabler/icons-react";
-import { useEffect, useMemo, useState } from "react";
+import { useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
 
 import { DialogShell } from "@/core/ui/components/DialogShell/DialogShell";
@@ -27,18 +27,15 @@ export function GgufDownloadDialog({ repository, onClose, onConfirm, onConfirmDe
 	const opened = repository !== null;
 	const inspect = useInspectGgufRepository(repository?.repoId ?? "", opened);
 	const files = useMemo<readonly GgufRepositoryFile[]>(() => inspect.data?.files ?? [], [inspect.data?.files]);
-	const [selectedFileName, setSelectedFileName] = useState<string | null>(null);
+	// The operator's explicit pick, or null when they haven't chosen yet. The effective selection is DERIVED below so we
+	// never store a value that the list no longer contains (avoids a derived-state effect): default to the first
+	// (smallest) file, but honor a still-present explicit choice.
+	const [pickedFileName, setPickedFileName] = useState<string | null>(null);
 
-	// Default the selection to the first (smallest) file whenever the list (re)loads; keep a still-present choice.
-	useEffect(() => {
-		setSelectedFileName((current) => {
-			const first = files[0];
-			if (first === undefined) {
-				return null;
-			}
-			return current !== null && files.some((file) => file.fileName === current) ? current : first.fileName;
-		});
-	}, [files]);
+	const selectedFileName =
+		pickedFileName !== null && files.some((file) => file.fileName === pickedFileName)
+			? pickedFileName
+			: (files[0]?.fileName ?? null);
 
 	const selectedFile = files.find((file) => file.fileName === selectedFileName) ?? null;
 
@@ -107,7 +104,7 @@ export function GgufDownloadDialog({ repository, onClose, onConfirm, onConfirmDe
 				) : null}
 
 				{files.length > 0 ? (
-					<Radio.Group value={selectedFileName} onChange={setSelectedFileName}>
+					<Radio.Group value={selectedFileName} onChange={setPickedFileName}>
 						<Table verticalSpacing="sm" data-testid="gguf-download-table">
 							<Table.Thead>
 								<Table.Tr>

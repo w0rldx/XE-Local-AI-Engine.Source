@@ -10,28 +10,28 @@ import {
 } from "@tabler/icons-react";
 import {
 	addEdge,
+	applyEdgeChanges,
+	applyNodeChanges,
 	Background,
 	type Connection,
 	Controls,
 	type Edge,
+	type EdgeChange,
 	type Node,
+	type NodeChange,
 	type NodeTypes,
 	ReactFlow,
 	useEdgesState,
 	useNodesState,
 } from "@xyflow/react";
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 
 import "@xyflow/react/dist/style.css";
 
 import { AgentNodeForm } from "@/features/preview/components/AgentNodeForm";
 import { AgentNode, DebugNode, EndNode, PauseNode, StartNode } from "@/features/preview/components/PreviewNodeComponents";
-import {
-	canvasToGraph,
-	type PreviewCanvasNode,
-	type PreviewCanvasNodeData,
-} from "@/features/preview/models/PreviewCanvasModels";
+import { canvasToGraph, type PreviewCanvasNode, type PreviewCanvasNodeData } from "@/features/preview/models/PreviewCanvasModels";
 import type { PreviewNodeKind, PreviewWorkflowGraph } from "@/features/preview/models/PreviewWorkflowModels";
 import { validatePreviewGraph } from "@/features/preview/models/PreviewWorkflowValidation";
 
@@ -101,14 +101,60 @@ export function WorkflowCanvas({
 	onGraphChange,
 }: WorkflowCanvasProps) {
 	const { t } = useTranslation();
-	const [nodes, setNodes, onNodesChange] = useNodesState<PreviewCanvasNode>(initialNodes);
-	const [edges, setEdges, onEdgesChange] = useEdgesState<Edge>(initialEdges);
+	const [nodes, setNodes] = useNodesState<PreviewCanvasNode>(initialNodes);
+	const [edges, setEdges] = useEdgesState<Edge>(initialEdges);
 	const [startText, setStartText] = useState(initialStartText);
 	const [selectedNodeId, setSelectedNodeId] = useState<string | null>(null);
 
+	// Refs mirror the latest committed editing inputs so any single mutation (nodes OR edges OR start text) can build
+	// the lifted graph from the current value of the others without a stale render closure.
+	const nodesRef = useRef(nodes);
+	nodesRef.current = nodes;
+	const edgesRef = useRef(edges);
+	edgesRef.current = edges;
+	const startTextRef = useRef(startText);
+	startTextRef.current = startText;
+
+	// Lift the live graph up so the page can Save the current edits (the canvas owns editing state; the page owns
+	// persistence). Emitted from each mutation entry point — rather than a useEffect that watches the derived graph —
+	// so the parent does not re-render an extra time on every node/edge/start-text change.
+	const emitGraph = useCallback(
+		(nextNodes: PreviewCanvasNode[], nextEdges: Edge[], nextStartText: string) => {
+			onGraphChange(canvasToGraph(nextNodes, nextEdges, nextStartText));
+		},
+		[onGraphChange],
+	);
+
+	// React Flow's built-in onNodesChange/onEdgesChange apply changes to state internally; wrap them so the resulting
+	// graph is also lifted up. applyNode/EdgeChanges reproduce the exact mutation useNodesState/useEdgesState perform.
+	const onNodesChange = useCallback(
+		(changes: NodeChange<PreviewCanvasNode>[]) => {
+			const next = applyNodeChanges(changes, nodesRef.current);
+			nodesRef.current = next;
+			setNodes(next);
+			emitGraph(next, edgesRef.current, startTextRef.current);
+		},
+		[emitGraph, setNodes],
+	);
+
+	const onEdgesChange = useCallback(
+		(changes: EdgeChange<Edge>[]) => {
+			const next = applyEdgeChanges(changes, edgesRef.current);
+			edgesRef.current = next;
+			setEdges(next);
+			emitGraph(nodesRef.current, next, startTextRef.current);
+		},
+		[emitGraph, setEdges],
+	);
+
 	const onConnect = useCallback(
-		(connection: Connection) => setEdges((current) => addEdge(connection, current)),
-		[setEdges],
+		(connection: Connection) => {
+			const next = addEdge(connection, edgesRef.current);
+			edgesRef.current = next;
+			setEdges(next);
+			emitGraph(nodesRef.current, next, startTextRef.current);
+		},
+		[emitGraph, setEdges],
 	);
 
 	const addNode = useCallback(
@@ -118,12 +164,24 @@ export function WorkflowCanvas({
 			const node: PreviewCanvasNode = {
 				id,
 				type,
-				position: { x: 320, y: 80 + nodes.length * 40 },
+				position: { x: 320, y: 80 + nodesRef.current.length * 40 },
 				data,
 			};
-			setNodes((current) => [...current, node]);
+			const next = [...nodesRef.current, node];
+			nodesRef.current = next;
+			setNodes(next);
+			emitGraph(next, edgesRef.current, startTextRef.current);
 		},
-		[nodes.length, setNodes],
+		[emitGraph, setNodes],
+	);
+
+	const handleStartTextChange = useCallback(
+		(value: string) => {
+			startTextRef.current = value;
+			setStartText(value);
+			emitGraph(nodesRef.current, edgesRef.current, value);
+		},
+		[emitGraph],
 	);
 
 	// Keep the config panel open while the operator edits an Agent node. A marquee/shift gesture transiently
@@ -145,29 +203,22 @@ export function WorkflowCanvas({
 			if (selectedNodeId === null) {
 				return;
 			}
-			setNodes((current) =>
-				current.map((node) =>
-					node.id === selectedNodeId ? { ...node, data: { ...node.data, ...patch } } : node,
-				),
+			const next = nodesRef.current.map((node) =>
+				node.id === selectedNodeId ? { ...node, data: { ...node.data, ...patch } } : node,
 			);
+			nodesRef.current = next;
+			setNodes(next);
+			emitGraph(next, edgesRef.current, startTextRef.current);
 		},
-		[selectedNodeId, setNodes],
+		[emitGraph, selectedNodeId, setNodes],
 	);
 
-	const selectedNode = useMemo(
-		() => nodes.find((node) => node.id === selectedNodeId) ?? null,
-		[nodes, selectedNodeId],
-	);
+	const selectedNode = useMemo(() => nodes.find((node) => node.id === selectedNodeId) ?? null, [nodes, selectedNodeId]);
 
-	// Current graph (canvas → wire shape) + client-side validity for the Execute gate.
+	// Current graph (canvas → wire shape) + client-side validity for the Execute gate. The same derived graph is
+	// passed to onExecute below; the live lift-up to the parent happens in emitGraph from each mutation entry point.
 	const graph = useMemo(() => canvasToGraph(nodes, edges, startText), [nodes, edges, startText]);
 	const validation = useMemo(() => validatePreviewGraph(graph), [graph]);
-
-	// Lift the live graph up so the page can Save the current edits (the canvas owns editing state; the page owns
-	// persistence). Fires on every node/edge/start-text change.
-	useEffect(() => {
-		onGraphChange(graph);
-	}, [graph, onGraphChange]);
 
 	const executeDisabled = !validation.isValid || isControlBusy || runState.isRunning || runState.isPaused;
 
@@ -228,7 +279,7 @@ export function WorkflowCanvas({
 				label={t("pages.preview.startText.label", "Start input")}
 				placeholder={t("pages.preview.startText.placeholder", "Seed text the Start node emits…")}
 				value={startText}
-				onChange={(event) => setStartText(event.currentTarget.value)}
+				onChange={(event) => handleStartTextChange(event.currentTarget.value)}
 				data-testid="preview-start-text"
 			/>
 

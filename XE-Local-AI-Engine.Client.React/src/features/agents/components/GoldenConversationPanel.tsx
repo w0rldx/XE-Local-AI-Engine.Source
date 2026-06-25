@@ -1,6 +1,6 @@
 import { ActionIcon, Alert, Badge, Button, Group, Loader, Paper, Stack, Text, Textarea, TextInput } from "@mantine/core";
 import { IconAlertTriangle, IconCheck, IconPlus, IconSparkles, IconTrash, IconX } from "@tabler/icons-react";
-import { useCallback, useState } from "react";
+import { useCallback, useReducer, useState } from "react";
 import { useTranslation } from "react-i18next";
 
 import { useConfirm } from "@/core/ui/hooks/useConfirm";
@@ -403,18 +403,49 @@ interface GoldenConversationFormProps {
 	onCancel: () => void;
 }
 
+// Consolidated form state for the golden-case add form. The text fields plus the on-submit validation message live in
+// one object so a logical update never fans out into separate renders (was 6 useState calls).
+interface GoldenFormState {
+	title: string;
+	turnsText: string;
+	requiredText: string;
+	forbiddenText: string;
+	rubric: string;
+	validationError: string | null;
+}
+
+type GoldenFormAction =
+	| { type: "setField"; field: "title" | "turnsText" | "requiredText" | "forbiddenText" | "rubric"; value: string }
+	| { type: "setValidationError"; value: string | null };
+
+const initialGoldenFormState: GoldenFormState = {
+	title: "",
+	turnsText: "",
+	requiredText: "",
+	forbiddenText: "",
+	rubric: "",
+	validationError: null,
+};
+
+function goldenFormReducer(state: GoldenFormState, action: GoldenFormAction): GoldenFormState {
+	switch (action.type) {
+		case "setField":
+			return { ...state, [action.field]: action.value };
+		case "setValidationError":
+			return { ...state, validationError: action.value };
+		default:
+			return state;
+	}
+}
+
 // Inline add form for a golden case. Input turns are one "role: text" line per turn (a colon-less line is a user
 // turn). Required/forbidden phrases are one phrase per line. A case must carry a title + ≥1 input turn and at
 // least one scoring signal (an assertion phrase or a rubric) — validated on submit, mirroring the backend rule.
 function GoldenConversationForm({ isSubmitting, submitError, onSubmit, onCancel }: GoldenConversationFormProps) {
 	const { t } = useTranslation();
 
-	const [title, setTitle] = useState("");
-	const [turnsText, setTurnsText] = useState("");
-	const [requiredText, setRequiredText] = useState("");
-	const [forbiddenText, setForbiddenText] = useState("");
-	const [rubric, setRubric] = useState("");
-	const [validationError, setValidationError] = useState<string | null>(null);
+	const [state, dispatch] = useReducer(goldenFormReducer, initialGoldenFormState);
+	const { title, turnsText, requiredText, forbiddenText, rubric, validationError } = state;
 
 	const handleSubmit = useCallback(() => {
 		const trimmedTitle = title.trim();
@@ -424,20 +455,24 @@ function GoldenConversationForm({ isSubmitting, submitError, onSubmit, onCancel 
 		const trimmedRubric = rubric.trim();
 
 		if (trimmedTitle.length === 0) {
-			setValidationError(t("pages.agents.golden.form.titleRequired", "Title is required."));
+			dispatch({ type: "setValidationError", value: t("pages.agents.golden.form.titleRequired", "Title is required.") });
 			return;
 		}
 		if (turnLines.length === 0) {
-			setValidationError(t("pages.agents.golden.form.turnsRequired", "At least one input turn is required."));
+			dispatch({
+				type: "setValidationError",
+				value: t("pages.agents.golden.form.turnsRequired", "At least one input turn is required."),
+			});
 			return;
 		}
 
 		const hasAssertion = requiredPhrases.length > 0 || forbiddenPhrases.length > 0;
 		const hasRubric = trimmedRubric.length > 0;
 		if (!hasAssertion && !hasRubric) {
-			setValidationError(
-				t("pages.agents.golden.form.signalRequired", "Add at least a required/forbidden phrase or a rubric."),
-			);
+			dispatch({
+				type: "setValidationError",
+				value: t("pages.agents.golden.form.signalRequired", "Add at least a required/forbidden phrase or a rubric."),
+			});
 			return;
 		}
 
@@ -454,16 +489,17 @@ function GoldenConversationForm({ isSubmitting, submitError, onSubmit, onCancel 
 		// operator gets a precise field message instead of a generic 400.
 		const overLimit = findGoldenFieldOverLimit(request);
 		if (overLimit !== null) {
-			setValidationError(
-				t(`pages.agents.golden.form.tooLong.${overLimit}`, "{{field}} is too long (max {{max}} characters).", {
+			dispatch({
+				type: "setValidationError",
+				value: t(`pages.agents.golden.form.tooLong.${overLimit}`, "{{field}} is too long (max {{max}} characters).", {
 					field: overLimit,
 					max: GOLDEN_FIELD_MAX[overLimit],
 				}),
-			);
+			});
 			return;
 		}
 
-		setValidationError(null);
+		dispatch({ type: "setValidationError", value: null });
 		onSubmit(request);
 	}, [forbiddenText, onSubmit, requiredText, rubric, t, title, turnsText]);
 
@@ -475,7 +511,7 @@ function GoldenConversationForm({ isSubmitting, submitError, onSubmit, onCancel 
 					placeholder={t("pages.agents.golden.form.title.placeholder", "Short operator label")}
 					value={title}
 					required={true}
-					onChange={(event) => setTitle(event.currentTarget.value)}
+					onChange={(event) => dispatch({ type: "setField", field: "title", value: event.currentTarget.value })}
 					data-testid="golden-form-title"
 				/>
 				<Textarea
@@ -489,7 +525,7 @@ function GoldenConversationForm({ isSubmitting, submitError, onSubmit, onCancel 
 					required={true}
 					autosize={true}
 					minRows={2}
-					onChange={(event) => setTurnsText(event.currentTarget.value)}
+					onChange={(event) => dispatch({ type: "setField", field: "turnsText", value: event.currentTarget.value })}
 					data-testid="golden-form-turns"
 				/>
 				<Group grow={true} align="flex-start">
@@ -499,7 +535,7 @@ function GoldenConversationForm({ isSubmitting, submitError, onSubmit, onCancel 
 						value={requiredText}
 						autosize={true}
 						minRows={1}
-						onChange={(event) => setRequiredText(event.currentTarget.value)}
+						onChange={(event) => dispatch({ type: "setField", field: "requiredText", value: event.currentTarget.value })}
 						data-testid="golden-form-required"
 					/>
 					<Textarea
@@ -508,7 +544,7 @@ function GoldenConversationForm({ isSubmitting, submitError, onSubmit, onCancel 
 						value={forbiddenText}
 						autosize={true}
 						minRows={1}
-						onChange={(event) => setForbiddenText(event.currentTarget.value)}
+						onChange={(event) => dispatch({ type: "setField", field: "forbiddenText", value: event.currentTarget.value })}
 						data-testid="golden-form-forbidden"
 					/>
 				</Group>
@@ -521,7 +557,7 @@ function GoldenConversationForm({ isSubmitting, submitError, onSubmit, onCancel 
 					value={rubric}
 					autosize={true}
 					minRows={1}
-					onChange={(event) => setRubric(event.currentTarget.value)}
+					onChange={(event) => dispatch({ type: "setField", field: "rubric", value: event.currentTarget.value })}
 					data-testid="golden-form-rubric"
 				/>
 				{validationError ? (

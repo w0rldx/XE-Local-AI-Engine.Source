@@ -91,6 +91,13 @@
   </ItemGroup>
 
   <ItemGroup>
+    <!-- Development-only config must never ship in release/publish artifacts.
+         The Web SDK auto-publishes appsettings.{Environment}.json; remove it explicitly. -->
+    <Content Remove="appsettings.Development.json"/>
+    <None Include="appsettings.Development.json" CopyToOutputDirectory="Never" CopyToPublishDirectory="Never"/>
+  </ItemGroup>
+
+  <ItemGroup>
     <ProjectReference Include="..\XE-Local-AI-Engine.AI.Agent\XE-Local-AI-Engine.AI.Agent.csproj"/>
     <ProjectReference Include="..\XE-Local-AI-Engine.Client.Application\XE-Local-AI-Engine.Client.Application.csproj"/>
     <ProjectReference Include="..\XE-Local-AI-Engine.Client.Persistence\XE-Local-AI-Engine.Client.Persistence.csproj"/>
