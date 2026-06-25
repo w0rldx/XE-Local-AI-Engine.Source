@@ -42,6 +42,10 @@ internal static class AddNodeModelFitExtensions
         // the singleton Hugging Face GGUF store IGgufModelStore). The advisor management endpoints (download/cancel)
         // consume it.
         builder.Services.AddSingleton<IGgufDownloadCoordinator, GgufDownloadCoordinator>();
+        // No-op download event publisher default — the coordinator (singleton) resolves a publisher even in
+        // Application-only / test hosts that wire no SignalR hub. The Client host supersedes this with a hub-backed
+        // publisher so download status changes push live to operator clients (replacing the per-second downloads poll).
+        builder.Services.AddSingleton<IGgufDownloadEventPublisher, NullGgufDownloadEventPublisher>();
         // Model-fit local-API services. The query service is a pure cache reader over the persistence stores (sanitized
         // snapshot summary + normalized recommendation rows) and takes NO dependency on the runner or refresh service, so
         // a read can never start an advisor run. The refresh trigger is a template-guarded facade over

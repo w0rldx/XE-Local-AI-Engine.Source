@@ -268,9 +268,14 @@ public static class LocalApiRoutes
         public const string DownloadCancel = "model-fit/download/cancel";
 
         // Progress polling for in-flight and recently-finished GGUF downloads (IGgufDownloadCoordinator status registry).
-        // List returns all tracked statuses; the {modelName} variant returns one (404 when unknown).
+        // List returns all tracked statuses; the {modelName} variant returns one (404 when unknown). The list endpoint is
+        // the one-shot hydrate on mount; live progress streams over the DownloadHub below (no more per-second poll).
         public const string Downloads = "model-fit/gguf/downloads";
         public const string DownloadStatus = "model-fit/gguf/downloads/{modelName}";
+
+        // SignalR push hub for GGUF download status changes. Full path (mapped via MapHub, not the FastEndpoints prefix),
+        // mirroring the other local hubs. Replaces the per-second downloads poll; each push carries the sanitized status.
+        public const string DownloadHub = "/api/local/v1/model-fit/gguf/downloads/hub";
 
         // Running llama-server processes derived from the supervisor health snapshot; eject tree-kills one.
         public const string Running = "model-fit/running";

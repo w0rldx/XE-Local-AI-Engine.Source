@@ -166,6 +166,8 @@ try
        .RequireAuthorization(NodeAuthorizationPolicies.Operator);
     app.MapHub<PreviewWorkflowHub>(LocalApiRoutes.Preview.Hub)
        .RequireAuthorization(NodeAuthorizationPolicies.Operator);
+    app.MapHub<GgufDownloadHub>(LocalApiRoutes.ModelFit.DownloadHub)
+       .RequireAuthorization(NodeAuthorizationPolicies.Operator);
 
     if (!app.Environment.IsProduction())
     {

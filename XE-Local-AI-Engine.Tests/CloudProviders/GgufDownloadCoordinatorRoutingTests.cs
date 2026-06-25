@@ -68,7 +68,7 @@ public sealed class GgufDownloadCoordinatorRoutingTests
         services.AddScoped<IModelProviderMapStore>(_ => mapStore);
         var scopeFactory = services.BuildServiceProvider().GetRequiredService<IServiceScopeFactory>();
 
-        return new GgufDownloadCoordinator(store, scopeFactory, NullLogger<GgufDownloadCoordinator>.Instance);
+        return new GgufDownloadCoordinator(store, scopeFactory, new NullGgufDownloadEventPublisher(), NullLogger<GgufDownloadCoordinator>.Instance);
     }
 
     private static async Task WaitForPhaseAsync(IGgufDownloadCoordinator coordinator, string modelName, GgufDownloadPhase phase)
