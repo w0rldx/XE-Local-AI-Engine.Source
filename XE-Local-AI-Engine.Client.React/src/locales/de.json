@@ -109,6 +109,9 @@
 			"packageName": "Paket",
 			"packageVersion": "Version",
 			"packageLicense": "Lizenz",
+			"packageType": "Typ",
+			"sourceFrontend": "Frontend",
+			"sourceBackend": "Backend",
 			"noPackagesFound": "Keine Pakete gefunden.",
 			"appUpdate": {
 				"title": "Updates",
@@ -135,7 +138,9 @@
 				"applyError": "Update fehlgeschlagen. Bitte erneut versuchen.",
 				"upToDate": "Du bist auf dem neuesten Stand.",
 				"availableVersion": "Verfügbar:",
-				"offline": "Die Update-Prüfung ist offline nicht verfügbar."
+				"offline": "Die Update-Prüfung ist offline nicht verfügbar.",
+				"copyCode": "Code kopieren",
+				"copied": "Kopiert"
 			}
 		},
 		"chat": {

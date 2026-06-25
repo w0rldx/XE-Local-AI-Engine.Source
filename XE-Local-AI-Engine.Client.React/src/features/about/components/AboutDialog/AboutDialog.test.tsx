@@ -67,16 +67,29 @@ describe("AboutDialog", () => {
 		expect(within(dialog).getByText(/Local AI engine worker node/)).toBeTruthy();
 	});
 
+	it("renders generated frontend and backend packages with a source type", () => {
+		renderWithProviders(<AboutDialog opened={true} onClose={vi.fn()} />);
+
+		fireEvent.click(screen.getByRole("tab", { name: "Licenses" }));
+
+		// react (npm) and Serilog (NuGet) come from the generated license list, proving
+		// both the frontend and backend sources are rendered.
+		expect(screen.getByText("react")).toBeTruthy();
+		expect(screen.getByText("Serilog")).toBeTruthy();
+		expect(screen.getAllByText("Frontend").length).toBeGreaterThan(0);
+		expect(screen.getAllByText("Backend").length).toBeGreaterThan(0);
+	});
+
 	it("filters the third-party license table by query", () => {
 		renderWithProviders(<AboutDialog opened={true} onClose={vi.fn()} />);
 
 		fireEvent.click(screen.getByRole("tab", { name: "Licenses" }));
-		expect(screen.getByText("zustand")).toBeTruthy();
-		expect(screen.getByText("React")).toBeTruthy();
+		expect(screen.getByText("react")).toBeTruthy();
+		expect(screen.getByText("Serilog")).toBeTruthy();
 
-		fireEvent.change(screen.getByPlaceholderText("Search packages"), { target: { value: "zustand" } });
+		fireEvent.change(screen.getByPlaceholderText("Search packages"), { target: { value: "serilog" } });
 
-		expect(screen.getByText("zustand")).toBeTruthy();
-		expect(screen.queryByText("React")).toBeNull();
+		expect(screen.getByText("Serilog")).toBeTruthy();
+		expect(screen.queryByText("react")).toBeNull();
 	});
 });
