@@ -51,7 +51,7 @@ managed update channel they must perform a one-time re-install:
 **Open question (must resolve before general rollout):** does the Velopack install
 migrate `~/.xe-local-ai-engine/` (user data dir, local models, settings) or start clean?
 This must be confirmed during the manual smoke test. It must not silently discard local
-state. See plan §11 for the decision record.
+state.
 
 ---
 
@@ -90,9 +90,6 @@ while Velopack is in tester rollout. Retire them after all of the following are 
 Once all three gates are green, remove:
 - `installer/install.ps1` and `installer/install.sh`
 - `installer/uninstall.ps1` and `installer/uninstall.sh`
-- The corresponding plan docs (`Plans/2026-06-10-windows-installer-cli-plan.md`,
-  `Plans/2026-06-06-full-uninstaller-cross-platform-plan.md`) can be archived
-  (renamed with a `_RETIRED` suffix) rather than deleted to preserve decision history.
 
 ---
 

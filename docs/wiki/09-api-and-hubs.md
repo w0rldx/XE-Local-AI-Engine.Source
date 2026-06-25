@@ -200,7 +200,7 @@ FastEndpoints (NSwag doc)                       React build
 3. Commit the regenerated artifacts (they are tracked; `openapi:check` enforces this).
 4. For a **streaming** route or a **hub**, do *not* expect a typed SDK fn — wire it by hand on the client (see `models/pull/stream` and the chat hub).
 
-> The exact regen recipe for a throwaway Client host (connection-string CLI arg, `XE_NODE_SQLITE_KEY`, `ASPNETCORE_URLS=:50722`, `OPENAPI_INSECURE=1`) is captured in project memory and in the migration plan `Plans/2026-06-02-heyapi-single-source-of-truth-migration-plan.md`.
+> The exact regen recipe for a throwaway Client host: pass the connection string as a CLI arg, set `XE_NODE_SQLITE_KEY`, `ASPNETCORE_URLS=:50722`, and `OPENAPI_INSECURE=1`.
 
 ---
 

@@ -5,7 +5,7 @@ namespace XE_Local_AI_Engine.Client.Services.Capacity;
 ///     <see cref="AsyncLocal{T}" />. A root invocation (the chat/orchestration turn the operator started) seeds one
 ///     context at <c>Depth = 0</c>; every <c>spawn_subagent</c> call inside that turn reads it to enforce the fan-out
 ///     and cloud-spawn caps. The PRIMARY recursion cap is STRUCTURAL — a spawned child agent is built WITHOUT the
-///     <c>spawn_subagent</c> tool (§7.4), so a depth-≥1 agent can never reach this state to spawn again; the depth
+///     <c>spawn_subagent</c> tool, so a depth-≥1 agent can never reach this state to spawn again; the depth
 ///     field is carried only so the structural omission has an authoritative value to branch on.
 /// </summary>
 /// <remarks>

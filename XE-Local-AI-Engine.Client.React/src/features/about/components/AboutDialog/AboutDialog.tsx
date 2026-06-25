@@ -22,7 +22,7 @@ export interface IAboutDialogProps {
 export function AboutDialog({ opened, onClose }: IAboutDialogProps) {
 	const { t } = useTranslation();
 	const [licenseFilter, setLicenseFilter] = useState("");
-	// Restart the onboarding tour on demand (plan §7.6). The control hides when no OnboardingProvider is mounted so the
+	// Restart the onboarding tour on demand. The control hides when no OnboardingProvider is mounted so the
 	// dialog stays usable in isolation (e.g. tests) — the tour is purely additive.
 	const onboarding = useOnboarding();
 

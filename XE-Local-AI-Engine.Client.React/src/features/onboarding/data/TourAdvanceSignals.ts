@@ -15,7 +15,7 @@ function isChatCapable(model: LocalModelResponse | undefined): boolean {
 	return model.kind !== "Embedding";
 }
 
-// R1: true once at least one chat-capable model is actually installed/selectable. Drives the install step's advance —
+// True once at least one chat-capable model is actually installed/selectable. Drives the install step's advance —
 // the tour never moves past install on a timer, only on this real state flipping.
 export function hasInstalledChatModel(items: readonly LocalModelResponse[] | undefined): boolean {
 	return (items ?? []).some(isChatCapable);

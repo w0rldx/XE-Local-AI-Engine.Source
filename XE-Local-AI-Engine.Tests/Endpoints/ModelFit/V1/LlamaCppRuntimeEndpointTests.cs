@@ -43,7 +43,7 @@ public sealed class LlamaCppRuntimeEndpointTests
         var json = await response.Content.ReadAsStringAsync().ConfigureAwait(false);
         using var doc = JsonDocument.Parse(json);
         // The snapshot drives updateAvailable + upstreamLatestTag; recommendedTag is sourced from the editable
-        // node-settings accessor (the authoritative "recommended" value, locked decision #1), not the snapshot.
+        // node-settings accessor (the authoritative "recommended" value), not the snapshot.
         AssertEx.True(doc.RootElement.GetProperty("updateAvailable").GetBoolean(), "Seeded snapshot advertised an update.");
         AssertEx.Equal("b9777", doc.RootElement.GetProperty("upstreamLatestTag").GetString());
 

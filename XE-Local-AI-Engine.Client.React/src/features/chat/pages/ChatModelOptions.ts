@@ -29,7 +29,7 @@ export function toModelOption(model: LocalModelDto, nodeAvailable: boolean): Mod
 	};
 }
 
-// Strict picker filter (locked decision D3): only chat-capable local models reach the composer's model selector.
+// Strict picker filter: only chat-capable local models reach the composer's model selector.
 // Embedding and Unknown models are hidden because they have no completion head and reject the chat endpoint.
 // CodexOAuth provider entries are excluded here — they appear in the separate cloud section via useCodexModelOptions.
 // Lives in its own module (not Chat.tsx) so it is unit-testable and so exporting it does not break the

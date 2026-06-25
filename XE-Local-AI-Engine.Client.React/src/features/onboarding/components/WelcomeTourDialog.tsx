@@ -10,7 +10,7 @@ export interface WelcomeTourDialogProps {
 	onSkip: () => void;
 }
 
-// Opt-in gate for the first-response tour (plan §9 step 1 — not a Joyride step). Built on the shared DialogShell so it
+// Opt-in gate for the first-response tour (not a Joyride step itself). Built on the shared DialogShell so it
 // matches every other modal. Copy is fully i18n-keyed. Closing via the title bar is treated as Skip so a dismiss still
 // records a terminal outcome and the dialog never re-prompts.
 export function WelcomeTourDialog({ opened, onStart, onSkip }: WelcomeTourDialogProps) {

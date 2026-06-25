@@ -9,7 +9,7 @@ using XE_Local_AI_Engine.Tests.Testing;
 /// <summary>
 ///     The HIGH-1 offer-seam gates. <see cref="LocalToolOfferProvider" /> is built on the REAL
 ///     <see cref="LocalAgentToolRegistry" /> (which hardcodes GetCurrentTime + Calculate and does NOT project any
-///     ClientLocal handler), so these tests fail if the §7.5 coder→offer merge regresses and the feature goes inert.
+///     ClientLocal handler), so these tests fail if the coder→offer merge regresses and the feature goes inert.
 ///     A resolution-seam test alone passes even when the offer seam is broken, so this is the load-bearing gate.
 /// </summary>
 public sealed class CoderOfferSeamTests
@@ -46,7 +46,7 @@ public sealed class CoderOfferSeamTests
         foreach (var toolName in CoderToolNames)
         {
             var tool = offered.Single(candidate => candidate.Name == toolName);
-            AssertEx.False(tool.RequiresApproval, "coder tools auto-run (decision 7)");
+            AssertEx.False(tool.RequiresApproval, "coder tools auto-run");
         }
     }
 
@@ -105,14 +105,14 @@ public sealed class CoderOfferSeamTests
         {
             var entry = catalog.Single(candidate => candidate.Name == toolName);
             AssertEx.Equal("builtin", entry.Source);
-            AssertEx.False(entry.RequiresApproval, "coder tools auto-run (decision 7)");
+            AssertEx.False(entry.RequiresApproval, "coder tools auto-run");
         }
     }
 
     private static LocalToolOfferProvider CreateProvider(params string[] toolCapableModels)
     {
         // The REAL registry: BuildTools() hardcodes GetCurrentTime + Calculate. The coder tools reach the offer ONLY
-        // through the §7.5 merge inside LocalToolOfferProvider, never through the registry.
+        // through the merge inside LocalToolOfferProvider, never through the registry.
         var registry = new LocalAgentToolRegistry();
         var mcpRegistry = new McpToolRegistry(NullLogger<McpToolRegistry>.Instance);
         return new LocalToolOfferProvider(registry, mcpRegistry, toolCapableModels);

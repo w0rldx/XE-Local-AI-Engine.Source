@@ -45,7 +45,7 @@ public sealed class ClientLocalToolRegistryTests
     [Test]
     public void TryResolve_NonApprovalHandler_ResolvesPlainMetadataToolFunction_NotApprovalWrapped()
     {
-        // The coder read tools are RequiresApproval=false (decision 7), so they must resolve to a plain executable
+        // The coder read tools are RequiresApproval=false, so they must resolve to a plain executable
         // MetadataToolFunction — never an ApprovalRequiredAIFunction. This mirrors how the three coder handlers resolve.
         var registry = new ClientLocalToolRegistry([new FakeHandler("read_file", "Reads a file.", parameterSchema: """{"type":"object"}""", requiresApproval: false)]);
 

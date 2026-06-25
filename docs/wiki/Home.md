@@ -23,8 +23,7 @@ This wiki is the contributor deep-dive for the current codebase. It supersedes t
 
 ## The one fact that changed everything
 
-The **runtime re-architecture** (locked 2026-06-17,
-`Plans/2026-06-17-runtime-rearchitecture-epic.md`) replaced the old container/HostAgent model:
+The **runtime re-architecture** (locked 2026-06-17) replaced the old container/HostAgent model:
 
 | Was | Now |
 | --- | --- |

@@ -9,7 +9,7 @@ import {
 import { useNodeAuthStore } from "@/core/auth/stores/NodeAuthStore";
 
 // The single tour key shipped today. The persistence shape is an array keyed by tour key so a future second tour can
-// reuse the same column/endpoint without a migration, but only this one is built (plan §1 non-goals).
+// reuse the same column/endpoint without a migration, but only this one is built.
 export const MAIN_APP_TOUR_KEY = "main-app-v1";
 
 // Namespaced localStorage key holding the in-progress step index so a reload mid-tour resumes instead of restarting
@@ -59,7 +59,7 @@ export type TourStatus = "completed" | "skipped";
 export interface UseTourStateResult {
 	// True only when the GET succeeded and carries no recorded entry for this tour key (neither completed nor skipped).
 	// While the query is loading or errored we do NOT prompt — the tour is purely additive and must never gate the app
-	// on a failed read (plan §3 architecture invariant).
+	// on a failed read.
 	shouldPrompt: boolean;
 	// True once the GET has resolved (success or error) so the provider can decide whether to surface the welcome dialog
 	// without flashing it before the persisted state is known.
@@ -68,8 +68,8 @@ export interface UseTourStateResult {
 	markDone: (status: TourStatus) => void;
 }
 
-// Reads the authenticated user's recorded tour entries through the generated hey-api hooks (never a hand-rolled fetch,
-// plan §4 reuse) and derives whether the welcome dialog should be offered. The mutation upserts one entry by key; the
+// Reads the authenticated user's recorded tour entries through the generated hey-api hooks (never a hand-rolled fetch)
+// and derives whether the welcome dialog should be offered. The mutation upserts one entry by key; the
 // backend merges it into the JSON array so other tour keys are preserved.
 export function useTourState(tourKey: string = MAIN_APP_TOUR_KEY): UseTourStateResult {
 	const queryClient = useQueryClient();

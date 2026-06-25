@@ -27,14 +27,14 @@ import {
 // their intentional effect-driven flows.
 
 // Joyride overlay must sit above Mantine portals. The ConfirmProvider DialogShell renders at zIndex 400 and app chrome
-// is below it, so 1000 keeps the spotlight + tooltip above everything the tour points at (plan §7.2 / locked decision).
+// is below it, so 1000 keeps the spotlight + tooltip above everything the tour points at.
 const TOUR_Z_INDEX = 1000;
 
-// How long (ms) each route-bound step waits for its target to mount after navigation (plan R2). 3 s gives the route
+// How long (ms) each route-bound step waits for its target to mount after navigation. 3 s gives the route
 // lazy-load + React render cycle time to complete without flashing TARGET_NOT_FOUND on a fast box.
 const TARGET_WAIT_TIMEOUT_MS = 3000;
 
-// Index helpers so the advance-on-real-state effects don't hard-code positions (plan §7.4 happy path order).
+// Index helpers so the advance-on-real-state effects don't hard-code positions.
 const INSTALL_STEP_INDEX = tourStepIds.indexOf("recommendationInstall");
 const DEFAULT_STEP_INDEX = tourStepIds.indexOf("setDefaultModel");
 const FIRST_RESPONSE_STEP_INDEX = tourStepIds.indexOf("firstResponse");
@@ -47,7 +47,7 @@ const FIRST_RESPONSE_STEP_INDEX = tourStepIds.indexOf("firstResponse");
 const MAX_TARGET_RETRIES = 4;
 
 // Hosts the controlled Joyride tour + the opt-in welcome dialog. Owns run/stepIndex locally (single consumer — no
-// Zustand, plan §9). The tour is purely additive: with this provider removed the app behaves identically (plan §3).
+// Zustand). The tour is purely additive: with this provider removed the app behaves identically.
 export function OnboardingProvider({ children }: { children: ReactNode }) {
 	const { t } = useTranslation();
 	const queryClient = useQueryClient();
@@ -73,7 +73,7 @@ export function OnboardingProvider({ children }: { children: ReactNode }) {
 	const steps = useMemo(() => buildMainAppTourSteps(t, TARGET_WAIT_TIMEOUT_MS), [t]);
 
 	// Navigates to a step's bound route (via the router singleton — useNavigate is unavailable outside RouterProvider)
-	// before the step renders so Joyride never targets an unmounted node (plan R2). No-op for unbound steps.
+	// before the step renders so Joyride never targets an unmounted node. No-op for unbound steps.
 	const navigateForStep = useCallback((index: number) => {
 		const id = tourStepIds[index];
 		const route = id ? stepRoutes[id] : undefined;
@@ -151,7 +151,7 @@ export function OnboardingProvider({ children }: { children: ReactNode }) {
 	// it on the user's Next/Back. Terminal statuses persist the outcome and stop the run.
 	//
 	// Async real-state steps (install / default / first-response) only block FORWARD auto-advance: clicking Next on
-	// them is a no-op so the tour waits for the real action (plan R1). PREV always falls through so Back still works.
+	// them is a no-op so the tour waits for the real action. PREV always falls through so Back still works.
 	//
 	// TARGET_NOT_FOUND: re-navigate and re-measure (up to MAX_TARGET_RETRIES) then ADVANCE past the step — never
 	// dead-end (Bug A). This recovers the common case where the route component hasn't mounted (or the data hasn't
@@ -218,20 +218,20 @@ export function OnboardingProvider({ children }: { children: ReactNode }) {
 		[finish, goToStep, navigateForStep, steps.length],
 	);
 
-	// Real chat-model state (derived, never authoritative — plan §3). The list query is the same one ModelManagement
+	// Real chat-model state (derived, never authoritative). The list query is the same one ModelManagement
 	// and Chat consume; reading it here only observes already-authorized state. Always enabled (not gated on `run`) so
 	// the install/default effects fire as soon as server state changes — even if the tour was momentarily paused.
 	const { data: modelsData } = useQuery(listLocalModelsOptions());
 	const modelItems = modelsData?.items;
 	const selectedModelName = modelsData?.selectedModelName;
 
-	// R1: the install step does not advance until a chat-capable model is actually installed/selectable. We only
+	// The install step does not advance until a chat-capable model is actually installed/selectable. We only
 	// auto-advance on a genuine unmet→met transition (the user installs a model WHILE on this step). Wait for the list
 	// to resolve (modelItems !== undefined) before deciding so a still-loading list neither arms nor advances. If no
 	// chat model is installed yet, arm transition detection (there is work to do); once one appears we advance only if
 	// armed — a user who arrived already having a model installed leaves it disarmed and reads the step instead of
 	// watching it flash past (see autoAdvanceArmedRef). When the recommendations query errors or returns nothing, the
-	// R4 guidance note below surfaces (offline / empty).
+	// guidance note below surfaces (offline / empty).
 	useEffect(() => {
 		if (!run || stepIndex !== INSTALL_STEP_INDEX || modelItems === undefined) {
 			return;
@@ -245,7 +245,7 @@ export function OnboardingProvider({ children }: { children: ReactNode }) {
 		}
 	}, [run, stepIndex, modelItems, goToStep]);
 
-	// R4: guidance notifications for the install step when the user is offline or recommendations are empty.
+	// Guidance notifications for the install step when the user is offline or recommendations are empty.
 	// These are informational only — the tour stays on the install step; the user can skip any time.
 	const installStepActive = run && stepIndex === INSTALL_STEP_INDEX;
 	useEffect(() => {
@@ -320,7 +320,7 @@ export function OnboardingProvider({ children }: { children: ReactNode }) {
 	}, [run, stepIndex, modelItems, goToStep]);
 
 	// The send→response step advances when an assistant message is actually appended to the active conversation. Uses
-	// queryClient.getQueryCache().subscribe() for event-driven notification — no polling timer (plan R1).
+	// queryClient.getQueryCache().subscribe() for event-driven notification — no polling timer.
 	// On reply: advance into the first showcase step (NOT finish) — the showcase completes the tour.
 	const hasReply = useChatReplySignal(queryClient, run && stepIndex === FIRST_RESPONSE_STEP_INDEX);
 	useEffect(() => {
@@ -340,7 +340,7 @@ export function OnboardingProvider({ children }: { children: ReactNode }) {
 	}, [run, stepIndex, hasReply, goToStep]);
 
 	// The showcase panel is a fixed centered overlay that exists ONLY while the tour is on a showcase step so it never
-	// blocks the app at any other time (additive/non-blocking invariant, plan §3).
+	// blocks the app at any other time (additive/non-blocking invariant).
 	const showcaseActive = run && stepIndex >= FIRST_SHOWCASE_STEP_INDEX;
 
 	const contextValue = useMemo(() => ({ start }), [start]);
@@ -371,7 +371,7 @@ export function OnboardingProvider({ children }: { children: ReactNode }) {
 
 // Derives `hasVisibleAssistantReply` directly from the QueryCache (an external store) via useSyncExternalStore, so the
 // value is recomputed on every cache event without copying it into local state (no derived-state effect / cascading
-// setState). Event-driven (no timer) — satisfies "advance on real state, NOT a timer" (plan R1). When the step is not
+// setState). Event-driven (no timer) — advances on real state, not a timer. When the step is not
 // active the snapshot is always false, so stale state can't trigger a spurious finish on the next tour run, and the
 // subscription is a no-op (nothing re-renders this hook on cache events while inactive).
 function useChatReplySignal(queryClient: QueryClient, active: boolean): boolean {

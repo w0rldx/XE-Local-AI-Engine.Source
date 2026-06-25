@@ -44,4 +44,3 @@ Tag convention: `vX.Y.Z-rc.N` on the RC branch; `vX.Y.Z` on develop after RC val
 This is the first developer RC. It targets Windows 11 external testers via a self-contained ZIP
 with a PowerShell install script. MSI/deb/rpm packaging is deferred to RC2/GA.
 
-See `Plans/2026-06-10-first-rc-readiness-plan.md` for the full RC readiness audit and checklist.

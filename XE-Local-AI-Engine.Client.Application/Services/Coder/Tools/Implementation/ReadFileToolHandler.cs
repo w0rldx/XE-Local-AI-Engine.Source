@@ -6,8 +6,8 @@ using XE_Local_AI_Engine.AI.Agent.Tools;
 /// <summary>
 ///     <see cref="IClientLocalToolHandler" /> for <c>read_file</c> (ClientLocal). JSON-in / JSON-out: deserializes the
 ///     model arguments, validates them, and delegates to <see cref="ICoderWorkspaceReader" />. Read-only and
-///     workspace-confined, so it auto-runs (<c>RequiresApproval => false</c>, decision 7). Gated by
-///     <c>AgentHome:Enabled</c> (decision 8).
+///     workspace-confined, so it auto-runs (<c>RequiresApproval => false</c>). Gated by
+///     <c>AgentHome:Enabled</c>.
 /// </summary>
 internal sealed class ReadFileToolHandler : IClientLocalToolHandler
 {

@@ -202,7 +202,7 @@ export function ModelSelectorCard({
 	const hasOptions = modelOptions.length > 0;
 	const isDisabled = disabled || !hasOptions;
 	const showSearch = modelOptions.length > 5;
-	// The chat picker is strictly filtered to chat-capable models (locked decision D3), so a node whose only installed
+	// The chat picker is strictly filtered to chat-capable models, so a node whose only installed
 	// models are embedding/unknown shows just the local-default option. Detect that to explain the otherwise-bare list.
 	const hasNoChatModels = modelOptions.every((option) => option.value === localDefaultModelValue);
 	const reasoningLabel = t("pages.chat.reasoningLabel", "Reasoning");

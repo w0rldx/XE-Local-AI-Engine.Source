@@ -140,8 +140,7 @@ See [Chat](05-chat.md) and [Agent Mode](04-agent-mode.md).
 
 ## Post-re-architecture runtime model (locked 2026-06-17)
 
-The runtime was deliberately re-architected (`Plans/2026-06-17-runtime-rearchitecture-epic.md`,
-status: *decisions locked*). The driving goals: GPU inference with **zero CUDA-toolkit install** and
+The runtime was deliberately re-architected (status: *decisions locked*). The driving goals: GPU inference with **zero CUDA-toolkit install** and
 **removing Docker entirely**. The locked decisions that shape this whole map:
 
 | # | Decision | Reality in code |
@@ -151,7 +150,7 @@ status: *decisions locked*). The driving goals: GPU inference with **zero CUDA-t
 | 7/8 | Prebuilt llama.cpp, recommended-pinned + user-upgradable; GPU variant selection only | `LlamaCppBinaryManager`, `LlamaCppReleasePins.cs`, `IGpuVariantSelector`, `LlamaCppUpdateCheckService` (notify-only update check). |
 | 14 | **Ollama kept as optional native secondary** (no Docker) | `Providers.Ollama` still exists; **de-orchestrated** from Aspire dev — `AppHost.cs` orchestrates only `app` + Vite + SQLite, llama.cpp is the dev runtime. |
 | 16 | Embeddings via llama.cpp day one | embedding GGUF on a pooling-enabled llama-server process, lexical ranker as fallback. |
-| 17 | **HostAgent deleted entirely** | The old `XE-Local-AI-Engine.HostAgent.*` projects no longer exist in the solution; only a teardown plan remains under `Plans/`. The supervisor runs in-app as an unprivileged same-user child (localhost port, Job Object tree-kill on Windows). |
+| 17 | **HostAgent deleted entirely** | The old `XE-Local-AI-Engine.HostAgent.*` projects no longer exist in the solution. The supervisor runs in-app as an unprivileged same-user child (localhost port, Job Object tree-kill on Windows). |
 
 > **Discrepancy note (code vs. some older docs/comments):** stale comments still reference "host-agent"
 > enums (e.g. the OpenAPI enum comment in `ConfigureServices.cs`). These are leftover wording, **not** a

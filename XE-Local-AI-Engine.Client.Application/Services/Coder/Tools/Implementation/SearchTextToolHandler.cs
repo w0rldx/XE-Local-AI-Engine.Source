@@ -7,7 +7,7 @@ using XE_Local_AI_Engine.AI.Agent.Tools;
 ///     <see cref="IClientLocalToolHandler" /> for <c>search_text</c> (ClientLocal). JSON-in / JSON-out: deserializes the
 ///     model arguments, validates them (including a regex-compiles check before any sandbox call), and delegates to
 ///     <see cref="ICoderWorkspaceReader" />. Read-only and workspace-confined, so it auto-runs
-///     (<c>RequiresApproval => false</c>, decision 7). Gated by <c>AgentHome:Enabled</c> (decision 8).
+///     (<c>RequiresApproval => false</c>). Gated by <c>AgentHome:Enabled</c>.
 /// </summary>
 internal sealed class SearchTextToolHandler : IClientLocalToolHandler
 {
