@@ -104,4 +104,12 @@ public interface ILlamaCppReleaseCatalog
     ///     no-live-data result when unreachable/rate-limited, the tag is malformed/absent, or no asset matches.
     /// </summary>
     Task<LlamaCppReleaseResult> ResolveAssetAsync(string tag, OSPlatform os, Architecture arch, GpuVariant variant, CancellationToken ct);
+
+    /// <summary>
+    ///     Resolves a named companion asset (an exact <paramref name="assetName" /> match) within a concrete
+    ///     <paramref name="tag" /> and reads its publisher digest — used to verify the Windows-CUDA <c>cudart-…</c> runtime
+    ///     archive the SAME way the main asset's live digest is resolved. Returns a tag+asset result, or a no-live-data
+    ///     result when unreachable/rate-limited, the tag/name is malformed/absent, or the asset's digest is unusable.
+    /// </summary>
+    Task<LlamaCppReleaseResult> ResolveCompanionAssetAsync(string tag, string assetName, CancellationToken ct);
 }

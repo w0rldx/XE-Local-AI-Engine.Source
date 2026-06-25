@@ -481,6 +481,11 @@ public sealed class BinaryManagerInstallTagTests
         {
             return Task.FromResult(LlamaCppReleaseResult.Offline());
         }
+
+        public Task<LlamaCppReleaseResult> ResolveCompanionAssetAsync(string tag, string assetName, CancellationToken ct)
+        {
+            return Task.FromResult(LlamaCppReleaseResult.Offline());
+        }
     }
 
     /// <summary>Catalog that live-resolves the pinned floor tag (tier 1) so the resolve lands on the pin with a live result.</summary>
@@ -499,6 +504,11 @@ public sealed class BinaryManagerInstallTagTests
         public Task<LlamaCppReleaseResult> ResolveAssetAsync(string tag, OSPlatform os, Architecture arch, GpuVariant variant, CancellationToken ct)
         {
             return Task.FromResult(LlamaCppReleaseResult.ForTag(LlamaCppReleasePins.PinnedTag));
+        }
+
+        public Task<LlamaCppReleaseResult> ResolveCompanionAssetAsync(string tag, string assetName, CancellationToken ct)
+        {
+            return Task.FromResult(LlamaCppReleaseResult.Offline());
         }
     }
 
