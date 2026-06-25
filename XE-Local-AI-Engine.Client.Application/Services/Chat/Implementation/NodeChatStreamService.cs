@@ -16,7 +16,6 @@ using XE_Local_AI_Engine.Client.Services.Memory;
 using XE_Local_AI_Engine.Client.Services.NodeSettings;
 using XE_Local_AI_Engine.Providers.CodexOAuth;
 using XE_Local_AI_Engine.Providers.CodexOAuth.Implementation;
-using XE_Local_AI_Engine.Providers.Ollama;
 using XE_Local_AI_Engine.Providers.Ollama.Implementation;
 
 public sealed class NodeChatStreamService(
@@ -628,7 +627,8 @@ public sealed class NodeChatStreamService(
         // the Default Assistant, intersected otherwise), the pinned model profile, the reasoning effort, the version
         // that feeds the config hash, AND the attribution snapshot (id + display name). The just-sent user turn is the
         // relevance-retrieval query (inert below the threshold / unbound, so the prompt stays byte-identical).
-        var resolved = await agentDefinitionResolver.ResolveAsync(effectiveAgentId, activeModel, trimmedContent, supportsTools, honorModelProfile: !userPickedConcreteModel, cancellationToken).ConfigureAwait(false);
+        var resolved = await agentDefinitionResolver.ResolveAsync(effectiveAgentId, activeModel, trimmedContent, supportsTools, honorModelProfile: !userPickedConcreteModel, cancellationToken)
+                                                    .ConfigureAwait(false);
 
         // When the effective definition is a tool-capable orchestrator, resolve a compiled orchestration spec to carry
         // on the package — the runner branches to the handoff workflow. A null result (not an orchestrator, an

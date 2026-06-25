@@ -1,7 +1,6 @@
 namespace XE_Local_AI_Engine.Client.Services.AppUpdate;
 
 using Microsoft.Extensions.Options;
-using XE_Local_AI_Engine.Client.Services.AppUpdate;
 
 /// <summary>
 ///     Default <see cref="IAppUpdateService" />. Reads the GitHub session from <see cref="IGitHubTokenStore" />, builds a

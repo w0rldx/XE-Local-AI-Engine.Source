@@ -1,7 +1,6 @@
 namespace XE_Local_AI_Engine.Tests.Providers.Ollama;
 
 using System.Net;
-using XE_Local_AI_Engine.Providers.Ollama;
 using XE_Local_AI_Engine.Providers.Ollama.Implementation;
 using XE_Local_AI_Engine.Tests.Testing;
 

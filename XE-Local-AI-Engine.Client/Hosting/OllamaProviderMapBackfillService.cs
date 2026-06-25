@@ -1,9 +1,7 @@
 namespace XE_Local_AI_Engine.Client.Hosting;
 
-using XE_Local_AI_Engine.Client.Persistence;
 using XE_Local_AI_Engine.Client.Persistence.Stores;
 using XE_Local_AI_Engine.Client.Services.Chat;
-using XE_Local_AI_Engine.Providers.Ollama;
 using XE_Local_AI_Engine.Providers.Ollama.Implementation;
 
 /// <summary>

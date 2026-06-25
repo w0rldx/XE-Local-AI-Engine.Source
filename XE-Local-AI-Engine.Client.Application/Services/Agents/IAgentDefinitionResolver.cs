@@ -38,7 +38,8 @@ public interface IAgentDefinitionResolver
     ///     <c>null</c> so the caller's <c>resolved?.ModelProfile ?? activeModel</c> yields the user's pick. Defaults to
     ///     <c>true</c> so callers that do not override the pin keep today's behaviour.
     /// </param>
-    Task<ResolvedAgentRuntime?> ResolveAsync(Guid? agentDefinitionId, string? activeModelId, string? retrievalQuery = null, bool supportsTools = true, bool honorModelProfile = true, CancellationToken cancellationToken = default);
+    Task<ResolvedAgentRuntime?> ResolveAsync(Guid? agentDefinitionId, string? activeModelId, string? retrievalQuery = null, bool supportsTools = true, bool honorModelProfile = true,
+        CancellationToken cancellationToken = default);
 }
 
 /// <summary>

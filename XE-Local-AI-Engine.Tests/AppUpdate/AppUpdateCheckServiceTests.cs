@@ -4,7 +4,6 @@ using Microsoft.Extensions.Logging.Abstractions;
 using NSubstitute;
 using XE_Local_AI_Engine.Client.BackgroundServices;
 using XE_Local_AI_Engine.Client.Services.AppUpdate;
-using XE_Local_AI_Engine.Tests.Testing;
 
 /// <summary>
 ///     The startup app-update check runs exactly one check (delegating to <see cref="IAppUpdateService" />) and never

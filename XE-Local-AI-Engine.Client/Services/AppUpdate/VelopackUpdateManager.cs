@@ -4,7 +4,6 @@ using System.Net;
 using Microsoft.Extensions.Options;
 using Velopack;
 using Velopack.Sources;
-using XE_Local_AI_Engine.Client.Services.AppUpdate;
 
 /// <summary>
 ///     The real Velopack-backed <see cref="IVelopackUpdateManager" />. Wraps a <see cref="UpdateManager" /> over a

@@ -261,8 +261,8 @@ public sealed class NodeChatRegenerationServiceTests : IDisposable
         await persistence.CreateAssistantPlaceholderAsync(new NodeChatCreateAssistantPlaceholderRequest(conversation.ConversationId, originalId, originalCorrelation.RequestId, CreatedAtUtc: 12,
                              originalModel))
                          .ConfigureAwait(false);
-        await persistence.TerminalizeAssistantMessageAsync(
-                             new NodeChatTerminalizeMessageRequest(originalCorrelation, NodeChatMessageStatusValues.Completed, UpdatedAtUtc: 13, "four", Model: originalModel))
+        await persistence.TerminalizeAssistantMessageAsync(new NodeChatTerminalizeMessageRequest(originalCorrelation, NodeChatMessageStatusValues.Completed, UpdatedAtUtc: 13, "four",
+                             Model: originalModel))
                          .ConfigureAwait(false);
 
         var dispatcher = new RegenRecordingDispatcher();

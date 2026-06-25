@@ -1,6 +1,5 @@
 namespace XE_Local_AI_Engine.Tests.Providers.HuggingFace;
 
-using XE_Local_AI_Engine.Providers.Abstractions;
 using XE_Local_AI_Engine.Providers.Abstractions.Gguf;
 using XE_Local_AI_Engine.Tests.Testing;
 

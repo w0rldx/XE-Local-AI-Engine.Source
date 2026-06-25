@@ -1,7 +1,6 @@
 namespace XE_Local_AI_Engine.Client.Services.AppUpdate;
 
 using System.Net.Http.Headers;
-using System.Net.Http.Json;
 using System.Text.Json;
 using System.Text.Json.Serialization;
 using Microsoft.Extensions.Options;
@@ -248,19 +247,32 @@ public sealed class GitHubAuthService : IGitHubAuthService
     }
 
     private sealed record DeviceCodeResponse(
-        [property: JsonPropertyName("device_code")] string? DeviceCode,
-        [property: JsonPropertyName("user_code")] string? UserCode,
-        [property: JsonPropertyName("verification_uri")] string? VerificationUri,
-        [property: JsonPropertyName("expires_in")] int ExpiresInSeconds,
-        [property: JsonPropertyName("interval")] int IntervalSeconds);
+        [property: JsonPropertyName("device_code")]
+        string? DeviceCode,
+        [property: JsonPropertyName("user_code")]
+        string? UserCode,
+        [property: JsonPropertyName("verification_uri")]
+        string? VerificationUri,
+        [property: JsonPropertyName("expires_in")]
+        int ExpiresInSeconds,
+        [property: JsonPropertyName("interval")]
+        int IntervalSeconds);
 
     private sealed record AccessTokenResponse(
-        [property: JsonPropertyName("access_token")] string? AccessToken,
-        [property: JsonPropertyName("token_type")] string? TokenType,
-        [property: JsonPropertyName("scope")] string? Scope,
-        [property: JsonPropertyName("error")] string? Error);
+        [property: JsonPropertyName("access_token")]
+        string? AccessToken,
+        [property: JsonPropertyName("token_type")]
+        string? TokenType,
+        [property: JsonPropertyName("scope")]
+        string? Scope,
+        [property: JsonPropertyName("error")]
+        string? Error);
 
-    private sealed record GitHubUserResponse([property: JsonPropertyName("login")] string? Login);
+    private sealed record GitHubUserResponse(
+        [property: JsonPropertyName("login")]
+        string? Login);
 
-    private sealed record RevokeTokenRequest([property: JsonPropertyName("access_token")] string AccessToken);
+    private sealed record RevokeTokenRequest(
+        [property: JsonPropertyName("access_token")]
+        string AccessToken);
 }

@@ -1,6 +1,5 @@
 namespace XE_Local_AI_Engine.Client.Endpoints.Agents.V1.Mappers;
 
-using XE_Local_AI_Engine.Client.Persistence;
 using XE_Local_AI_Engine.Client.Persistence.Stores;
 
 internal static class AgentExecutionLogMapper
