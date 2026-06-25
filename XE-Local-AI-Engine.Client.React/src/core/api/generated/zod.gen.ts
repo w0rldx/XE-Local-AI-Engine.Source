@@ -1576,6 +1576,52 @@ export const zXeLocalAiEngineClientEndpointsAuthV1NodeMeResponse = z.object({
 	roles: z.array(z.string()).optional(),
 });
 
+export const zXeLocalAiEngineClientEndpointsAppUpdateV1ApplyAppUpdateResponse = z.object({
+	applying: z.boolean().optional(),
+});
+
+export const zXeLocalAiEngineClientEndpointsAppUpdateV1AppUpdateStatusResponse = z.object({
+	currentVersion: z.string().optional(),
+	availableVersion: z.string().nullish(),
+	updateAvailable: z.boolean().optional(),
+	authState: z.string().optional(),
+	login: z.string().nullish(),
+	isDesktop: z.boolean().optional(),
+	isOffline: z.boolean().optional(),
+	lastCheckedUtc: z.coerce
+		.bigint()
+		.min(BigInt("-9223372036854775808"), { error: "Invalid value: Expected int64 to be >= -9223372036854775808" })
+		.max(BigInt("9223372036854775807"), { error: "Invalid value: Expected int64 to be <= 9223372036854775807" })
+		.nullish(),
+});
+
+export const zXeLocalAiEngineClientEndpointsAppUpdateV1GetAppUpdateStatusRequest = z.record(z.string(), z.never());
+
+export const zXeLocalAiEngineClientEndpointsAppUpdateV1GitHubAuthStatusResponse = z.object({
+	authState: z.string().optional(),
+	login: z.string().nullish(),
+});
+
+export const zXeLocalAiEngineClientEndpointsAppUpdateV1GitHubAuthPollResponse = z.object({
+	state: z.string().optional(),
+	login: z.string().nullish(),
+});
+
+export const zXeLocalAiEngineClientEndpointsAppUpdateV1GitHubAuthStartResponse = z.object({
+	userCode: z.string().optional(),
+	verificationUri: z.string().optional(),
+	expiresInSeconds: z
+		.int()
+		.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })
+		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" })
+		.optional(),
+	intervalSeconds: z
+		.int()
+		.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })
+		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" })
+		.optional(),
+});
+
 export const zXeLocalAiEngineClientEndpointsApiFoundationV1ValidationProblemProbeResponse = z.object({
 	name: z.string().optional(),
 });
@@ -2851,6 +2897,40 @@ export const zNodeChangePasswordResponse = z.void();
  * Success
  */
 export const zNodeMeResponse = zXeLocalAiEngineClientEndpointsAuthV1NodeMeResponse;
+
+/**
+ * Success
+ */
+export const zApplyAppUpdateResponse = zXeLocalAiEngineClientEndpointsAppUpdateV1ApplyAppUpdateResponse;
+
+export const zGetAppUpdateStatusQuery = z.object({
+	refresh: z.boolean().nullish(),
+});
+
+/**
+ * Success
+ */
+export const zGetAppUpdateStatusResponse = zXeLocalAiEngineClientEndpointsAppUpdateV1AppUpdateStatusResponse;
+
+/**
+ * Success
+ */
+export const zGetGitHubAuthStatusResponse = zXeLocalAiEngineClientEndpointsAppUpdateV1GitHubAuthStatusResponse;
+
+/**
+ * Success
+ */
+export const zPollGitHubAuthResponse = zXeLocalAiEngineClientEndpointsAppUpdateV1GitHubAuthPollResponse;
+
+/**
+ * Success
+ */
+export const zSignOutGitHubAuthResponse = zXeLocalAiEngineClientEndpointsAppUpdateV1GitHubAuthStatusResponse;
+
+/**
+ * Success
+ */
+export const zStartGitHubAuthResponse = zXeLocalAiEngineClientEndpointsAppUpdateV1GitHubAuthStartResponse;
 
 export const zValidationProblemProbeBody = zXeLocalAiEngineClientEndpointsApiFoundationV1ValidationProblemProbeRequest;
 
