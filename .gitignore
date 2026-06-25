@@ -358,6 +358,12 @@ repomix-output.*
 # AI Coding files
 **/*.omc/**
 **/*.omx/**
+# Redundant per-tool agent skill mirrors — canonical copy lives under .claude/ only.
+**/.agents/**
+**/.junie/**
+# Per-user editor state — share only .vscode/extensions.json.
+**/.vscode/settings.json
+**/.vscode/launch.json
 
 # Repomix files
 repomix-output.*
