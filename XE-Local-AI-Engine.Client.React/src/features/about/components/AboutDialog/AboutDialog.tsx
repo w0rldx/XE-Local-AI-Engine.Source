@@ -5,7 +5,7 @@ import { useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
 
 import { DialogShell } from "@/core/ui/components/DialogShell/DialogShell";
-import { applicationInfo, thirdPartyPackages } from "@/features/about/data/AboutData";
+import { applicationInfo, type IThirdPartyPackage, thirdPartyPackages } from "@/features/about/data/AboutData";
 import { AppUpdateSection } from "@/features/app-update/components/AppUpdateSection";
 import { useOnboarding } from "@/features/onboarding/context/OnboardingContext";
 
@@ -39,9 +39,15 @@ export function AboutDialog({ opened, onClose }: IAboutDialogProps) {
 		}
 
 		return thirdPartyPackages.filter(
-			(pkg) => pkg.name.toLowerCase().includes(query) || pkg.license.toLowerCase().includes(query),
+			(pkg) =>
+				pkg.name.toLowerCase().includes(query) ||
+				pkg.license.toLowerCase().includes(query) ||
+				(pkg.source ?? "").toLowerCase().includes(query),
 		);
 	}, [licenseFilter]);
+
+	const sourceLabel = (source: IThirdPartyPackage["source"]) =>
+		source === "backend" ? t("pages.about.sourceBackend", "Backend") : t("pages.about.sourceFrontend", "Frontend");
 
 	const handleFilterChange = (event: ChangeEvent<HTMLInputElement>) => {
 		setLicenseFilter(event.currentTarget.value);
@@ -116,6 +122,7 @@ export function AboutDialog({ opened, onClose }: IAboutDialogProps) {
 								<Table.Thead>
 									<Table.Tr>
 										<Table.Th>{t("pages.about.packageName", "Package")}</Table.Th>
+										<Table.Th>{t("pages.about.packageType", "Type")}</Table.Th>
 										<Table.Th>{t("pages.about.packageVersion", "Version")}</Table.Th>
 										<Table.Th>{t("pages.about.packageLicense", "License")}</Table.Th>
 									</Table.Tr>
@@ -133,6 +140,11 @@ export function AboutDialog({ opened, onClose }: IAboutDialogProps) {
 												)}
 											</Table.Td>
 											<Table.Td>
+												<Badge variant="light" size="sm" color={pkg.source === "backend" ? "grape" : "blue"}>
+													{sourceLabel(pkg.source)}
+												</Badge>
+											</Table.Td>
+											<Table.Td>
 												<Text size="sm" c="dimmed">
 													{pkg.version}
 												</Text>
@@ -146,7 +158,7 @@ export function AboutDialog({ opened, onClose }: IAboutDialogProps) {
 									))}
 									{filteredPackages.length === 0 ? (
 										<Table.Tr>
-											<Table.Td colSpan={3}>
+											<Table.Td colSpan={4}>
 												<Text size="sm" c="dimmed" ta="center" py="md">
 													{t("pages.about.noPackagesFound", "No packages found.")}
 												</Text>

@@ -1,4 +1,5 @@
 import { environment } from "@/Environment";
+import generatedLicenses from "@/features/about/data/third-party-licenses.generated.json";
 
 export interface IApplicationInfo {
 	title: string;
@@ -15,6 +16,11 @@ export interface IThirdPartyPackage {
 	version: string;
 	license: string;
 	homepageUrl?: string;
+	source?: "frontend" | "backend";
+}
+
+interface IGeneratedLicenseFile {
+	readonly packages: readonly IThirdPartyPackage[];
 }
 
 export const applicationInfo: IApplicationInfo = {
@@ -28,33 +34,9 @@ export const applicationInfo: IApplicationInfo = {
 };
 
 /**
- * Scaffold of bundled third-party packages shown in the About dialog's Licenses
- * tab. Extend this list as needed; it can later be generated from package.json.
+ * Bundled third-party packages shown in the About dialog's Licenses tab. The list
+ * is auto-generated for BOTH the frontend (npm) and backend (.NET NuGet) by
+ * `pnpm run licenses:generate` (scripts/GenerateLicenses.mjs) and committed as
+ * third-party-licenses.generated.json. Do not hand-edit the generated file.
  */
-export const thirdPartyPackages: readonly IThirdPartyPackage[] = [
-	{ id: "react", name: "React", version: "19.2", license: "MIT", homepageUrl: "https://react.dev" },
-	{ id: "mantine", name: "@mantine/core", version: "9.2", license: "MIT", homepageUrl: "https://mantine.dev" },
-	{
-		id: "tanstack-query",
-		name: "@tanstack/react-query",
-		version: "5.100",
-		license: "MIT",
-		homepageUrl: "https://tanstack.com/query",
-	},
-	{
-		id: "tanstack-router",
-		name: "@tanstack/react-router",
-		version: "1.70",
-		license: "MIT",
-		homepageUrl: "https://tanstack.com/router",
-	},
-	{ id: "zustand", name: "zustand", version: "5.0", license: "MIT", homepageUrl: "https://github.com/pmndrs/zustand" },
-	{ id: "axios", name: "axios", version: "1.16", license: "MIT", homepageUrl: "https://axios-http.com" },
-	{
-		id: "framer-motion",
-		name: "framer-motion",
-		version: "12.38",
-		license: "MIT",
-		homepageUrl: "https://www.framer.com/motion",
-	},
-];
+export const thirdPartyPackages: readonly IThirdPartyPackage[] = (generatedLicenses as IGeneratedLicenseFile).packages;

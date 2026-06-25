@@ -109,6 +109,9 @@
 			"packageName": "Package",
 			"packageVersion": "Version",
 			"packageLicense": "License",
+			"packageType": "Type",
+			"sourceFrontend": "Frontend",
+			"sourceBackend": "Backend",
 			"noPackagesFound": "No packages found.",
 			"appUpdate": {
 				"title": "Updates",
@@ -135,7 +138,9 @@
 				"applyError": "Update failed. Please try again.",
 				"upToDate": "You are up to date.",
 				"availableVersion": "Available:",
-				"offline": "Update check is unavailable while offline."
+				"offline": "Update check is unavailable while offline.",
+				"copyCode": "Copy code",
+				"copied": "Copied"
 			}
 		},
 		"chat": {

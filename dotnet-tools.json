@@ -15,6 +15,13 @@
         "dotnet-ef"
       ],
       "rollForward": false
+    },
+    "nuget-license": {
+      "version": "4.0.13",
+      "commands": [
+        "nuget-license"
+      ],
+      "rollForward": false
     }
   }
 }
