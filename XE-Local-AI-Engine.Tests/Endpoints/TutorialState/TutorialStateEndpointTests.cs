@@ -72,7 +72,11 @@ public sealed class TutorialStateEndpointTests
         // No bearer token added — the Operator policy must reject the request.
         using var request = new HttpRequestMessage(HttpMethod.Put, Route)
         {
-            Content = JsonContent.Create(new { key = "main-app-v1", status = "completed" })
+            Content = JsonContent.Create(new
+            {
+                key = "main-app-v1",
+                status = "completed"
+            })
         };
         request.Headers.Add("Origin", "http://localhost");
 
@@ -111,7 +115,11 @@ public sealed class TutorialStateEndpointTests
     {
         using var request = new HttpRequestMessage(HttpMethod.Put, Route)
         {
-            Content = JsonContent.Create(new { key, status })
+            Content = JsonContent.Create(new
+            {
+                key,
+                status
+            })
         };
         factory.AddNodeBearerToken(request);
         request.Headers.Add("Origin", "http://localhost");
