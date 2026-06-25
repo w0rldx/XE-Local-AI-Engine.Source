@@ -6,6 +6,7 @@ import { useTranslation } from "react-i18next";
 
 import { DialogShell } from "@/core/ui/components/DialogShell/DialogShell";
 import { applicationInfo, thirdPartyPackages } from "@/features/about/data/AboutData";
+import { AppUpdateSection } from "@/features/app-update/components/AppUpdateSection";
 import { useOnboarding } from "@/features/onboarding/context/OnboardingContext";
 
 export interface IAboutDialogProps {
@@ -95,6 +96,7 @@ export function AboutDialog({ opened, onClose }: IAboutDialogProps) {
 								</Button>
 							</Group>
 						) : null}
+						<AppUpdateSection />
 					</Stack>
 				</Tabs.Panel>
 

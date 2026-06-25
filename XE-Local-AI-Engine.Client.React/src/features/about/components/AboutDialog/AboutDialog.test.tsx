@@ -3,14 +3,31 @@
 import "@/i18n";
 
 import { MantineProvider } from "@mantine/core";
+import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { cleanup, fireEvent, render, screen, within } from "@testing-library/react";
-import type { ReactElement } from "react";
+import type { ReactElement, ReactNode } from "react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+
+// Stub out the app-update section so the existing tests are not affected by the
+// QueryClient requirement it introduces.
+vi.mock("@/features/app-update/components/AppUpdateSection", () => ({
+	AppUpdateSection: () => null,
+}));
 
 import { AboutDialog } from "@/features/about/components/AboutDialog/AboutDialog";
 
 function renderWithProviders(ui: ReactElement) {
-	return render(<MantineProvider>{ui}</MantineProvider>);
+	const queryClient = new QueryClient({
+		defaultOptions: { queries: { retry: false }, mutations: { retry: false } },
+	});
+	function Wrapper({ children }: { children: ReactNode }) {
+		return (
+			<QueryClientProvider client={queryClient}>
+				<MantineProvider>{children}</MantineProvider>
+			</QueryClientProvider>
+		);
+	}
+	return render(ui, { wrapper: Wrapper });
 }
 
 describe("AboutDialog", () => {
