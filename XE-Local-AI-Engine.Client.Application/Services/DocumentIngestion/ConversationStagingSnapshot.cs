@@ -6,17 +6,20 @@ namespace XE_Local_AI_Engine.Client.Services.DocumentIngestion;
 /// </summary>
 internal sealed class ConversationStagingSnapshot : IConversationStagingSnapshot
 {
-    public ConversationStagingSnapshot(string hostPath, int fileCount)
+    public ConversationStagingSnapshot(string hostPath, IReadOnlyList<string> fileNames)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(hostPath);
+        ArgumentNullException.ThrowIfNull(fileNames);
 
         HostPath = hostPath;
-        FileCount = fileCount;
+        FileNames = fileNames;
     }
 
     public string HostPath { get; }
 
-    public int FileCount { get; }
+    public int FileCount => FileNames.Count;
+
+    public IReadOnlyList<string> FileNames { get; }
 
     public ValueTask DisposeAsync()
     {

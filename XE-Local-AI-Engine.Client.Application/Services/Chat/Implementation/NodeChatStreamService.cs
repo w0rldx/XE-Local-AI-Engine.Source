@@ -203,10 +203,20 @@ public sealed class NodeChatStreamService(
             ? resolved?.AllowedTools ?? localToolOfferProvider.GetOfferedTools(activeModel)
             : null;
 
-        // In plain chat the conversation's uploaded-file text is inlined as a synthetic context message. In agent mode
-        // nothing is inlined because the agent reads the staged files through its tools, which avoids double-feeding.
+        // Agent mode: when the selected agent can read files through the AgentHome sandbox (its offer includes the
+        // read-only coder tools or run_in_agent_home), re-stage the sandbox with THIS conversation's uploaded attachments
+        // BEFORE building the turn context, so list_files/read_file/search_text see them under attachments/. The stager
+        // returns the exact staged paths (empty when Agent Mode is off or there are no extracted files).
+        var isAgentHomeTurn = offerTools && OffersAgentHomeTools(allowedTools);
+        var stagedAttachmentPaths = isAgentHomeTurn
+            ? await PrepareConversationAttachmentsSafelyAsync(request.ConversationId, runCancellation.Token).ConfigureAwait(false)
+            : [];
+
+        // The synthetic prepended context differs by mode: plain chat inlines the extracted text directly; agent mode
+        // injects only a short pointer naming the staged files (the agent reads their content through its tools, so the
+        // text is not double-fed). The pointer is what stops a weak model from guessing a wrong file name.
         var attachmentContext = offerTools
-            ? null
+            ? BuildAgentAttachmentHint(stagedAttachmentPaths)
             : await BuildAttachmentContextMessageAsync(request.ConversationId, request.AttachmentFileIds, cancellationToken).ConfigureAwait(false);
 
         var package = runtimePackageBuilder.Build(new LocalChatRuntimePackageRequest(requestId,
@@ -235,15 +245,6 @@ public sealed class NodeChatStreamService(
         var onTerminal = resolution.Resolved is { PlaybookEnabled: true, MemoryExtractionEnabled: true } memoryAgent
             ? BuildMemoryExtractionHook(memoryAgent, conversation, userMessage, selectedPath, package, resolution.EffectiveModel)
             : null;
-
-        // Agent mode: when the selected agent can read files through the AgentHome sandbox (its offer includes the
-        // read-only coder tools or run_in_agent_home), re-stage the sandbox with THIS conversation's uploaded
-        // attachments before the tool loop runs, so list_files/read_file/search_text see them under attachments/. The
-        // stager itself short-circuits when Agent Mode is disabled or the conversation has no extracted files.
-        if (offerTools && OffersAgentHomeTools(allowedTools))
-        {
-            await PrepareConversationAttachmentsSafelyAsync(request.ConversationId, runCancellation.Token).ConfigureAwait(false);
-        }
 
         var pumpTask = PumpInvocationStatesAsync(stateChannel.Reader,
             eventChannel.Writer,
@@ -632,20 +633,49 @@ public sealed class NodeChatStreamService(
     }
 
     // Best-effort attachment staging: re-stages the conversation's uploaded attachments into the node sandbox so the
-    // agent's file tools can read them. A failure leaves the agent without the staged workspace (its file tools report
-    // "no workspace") but must never fail the chat turn — a genuine user cancel is handled by the run path downstream.
-    private async Task PrepareConversationAttachmentsSafelyAsync(Guid conversationId, CancellationToken cancellationToken)
+    // agent's file tools can read them, returning the workspace-relative staged paths (empty on failure or no-op). A
+    // failure leaves the agent without the staged workspace (its file tools report "no workspace") but must never fail
+    // the chat turn — a genuine user cancel is handled by the run path downstream.
+    private async Task<IReadOnlyList<string>> PrepareConversationAttachmentsSafelyAsync(Guid conversationId, CancellationToken cancellationToken)
     {
         try
         {
-            await conversationSandboxStager.PrepareConversationAttachmentsAsync(conversationId, cancellationToken).ConfigureAwait(false);
+            return await conversationSandboxStager.PrepareConversationAttachmentsAsync(conversationId, cancellationToken).ConfigureAwait(false) ?? [];
         }
         catch (Exception exception)
         {
             logger.LogWarning(exception,
                 "AgentHome attachment staging for conversation {ConversationId} failed; the agent will run without staged attachments.",
                 conversationId);
+            return [];
         }
+    }
+
+    // Builds the agent-mode pointer message naming the staged attachment paths, so a weak model reads the exact staged
+    // file (whole-file, no guessed name) through its tools. Returns null when nothing was staged, leaving the turn
+    // context byte-identical to the no-attachment agent path. The file CONTENT is never inlined here (the agent reads it
+    // via read_file) — only the pointer travels in context.
+    private static ConversationMessageDto? BuildAgentAttachmentHint(IReadOnlyList<string> stagedAttachmentPaths)
+    {
+        if (stagedAttachmentPaths.Count == 0)
+        {
+            return null;
+        }
+
+        var fileLines = string.Join('\n', stagedAttachmentPaths.Select(static path => "- " + path));
+        var content =
+            "The files the user uploaded to this conversation have been staged into your read-only workspace. Before "
+            + "answering, read them with your file tools — call read_file with the exact path below and no startLine/endLine "
+            + "so you get the whole file. Do not guess other file names.\nStaged files:\n"
+            + fileLines;
+
+        return new ConversationMessageDto
+        {
+            Id = Guid.NewGuid(),
+            Role = MessageRole.User,
+            Content = content,
+            SortOrder = 0
+        };
     }
 
     private static string LoadResolvedSystemPrompt(LocalChatAgentOptions options)

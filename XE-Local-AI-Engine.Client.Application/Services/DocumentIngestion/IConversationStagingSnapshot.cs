@@ -12,4 +12,10 @@ public interface IConversationStagingSnapshot : IAsyncDisposable
 
     /// <summary>Number of decrypted attachment files written into <see cref="HostPath"/>.</summary>
     int FileCount { get; }
+
+    /// <summary>
+    ///     The leaf file names actually written into <see cref="HostPath"/> (e.g. <c>report.md</c>), in staging order.
+    ///     Used to point an agent straight at the staged paths so a weak model need not guess file names.
+    /// </summary>
+    IReadOnlyList<string> FileNames { get; }
 }

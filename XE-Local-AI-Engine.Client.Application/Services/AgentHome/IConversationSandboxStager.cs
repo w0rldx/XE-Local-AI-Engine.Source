@@ -15,9 +15,11 @@ namespace XE_Local_AI_Engine.Client.Services.AgentHome;
 public interface IConversationSandboxStager
 {
     /// <summary>
-    ///     Ensures the node sandbox is freshly staged with the conversation's extracted attachments. A no-op when Agent
-    ///     Mode is disabled or the conversation has no extracted files (the existing sandbox, if any, is left untouched).
-    ///     The owner-node sandbox is recreated before staging so it never carries another conversation's attachments.
+    ///     Ensures the node sandbox is freshly staged with the conversation's extracted attachments and returns the
+    ///     workspace-relative paths of the staged files (e.g. <c>attachments/report.md</c>), in staging order, so the
+    ///     caller can point the model straight at them. Returns an empty list (no-op) when Agent Mode is disabled or the
+    ///     conversation has no extracted files — the existing sandbox, if any, is left untouched. The owner-node sandbox
+    ///     is recreated before staging so it never carries another conversation's attachments.
     /// </summary>
-    Task PrepareConversationAttachmentsAsync(Guid conversationId, CancellationToken cancellationToken = default);
+    Task<IReadOnlyList<string>> PrepareConversationAttachmentsAsync(Guid conversationId, CancellationToken cancellationToken = default);
 }

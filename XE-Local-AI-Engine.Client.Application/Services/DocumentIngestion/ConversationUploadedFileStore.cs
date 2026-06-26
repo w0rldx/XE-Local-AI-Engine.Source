@@ -219,7 +219,7 @@ public sealed class ConversationUploadedFileStore : IConversationUploadedFileSto
 
         try
         {
-            var fileCount = 0;
+            var stagedNames = new List<string>();
             var usedNames = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
             foreach (var file in files)
             {
@@ -231,10 +231,10 @@ public sealed class ConversationUploadedFileStore : IConversationUploadedFileSto
 
                 var stagedName = BuildStagedFileName(file, usedNames);
                 await File.WriteAllTextAsync(Path.Combine(stagingDirectory, stagedName), markdown, cancellationToken).ConfigureAwait(false);
-                fileCount++;
+                stagedNames.Add(stagedName);
             }
 
-            return new ConversationStagingSnapshot(stagingDirectory, fileCount);
+            return new ConversationStagingSnapshot(stagingDirectory, stagedNames);
         }
         catch
         {

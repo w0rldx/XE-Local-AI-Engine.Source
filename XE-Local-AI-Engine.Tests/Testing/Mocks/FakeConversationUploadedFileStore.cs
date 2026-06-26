@@ -77,28 +77,32 @@ public sealed class FakeConversationUploadedFileStore : IConversationUploadedFil
         CreatedSnapshotPaths.Add(hostPath);
 
         var files = _filesByConversation.TryGetValue(conversationId, out var staged) ? staged : [];
+        var stagedNames = new List<string>();
         foreach (var file in files)
         {
             var fileName = Path.GetFileNameWithoutExtension(file.Info.OriginalFileName) + ".md";
             await File.WriteAllTextAsync(Path.Combine(hostPath, fileName), file.Markdown, cancellationToken).ConfigureAwait(false);
+            stagedNames.Add(fileName);
         }
 
-        return new FakeStagingSnapshot(hostPath, files.Count);
+        return new FakeStagingSnapshot(hostPath, stagedNames);
     }
 
     private sealed record StagedFile(ConversationUploadedFileInfo Info, string Markdown);
 
     private sealed class FakeStagingSnapshot : IConversationStagingSnapshot
     {
-        public FakeStagingSnapshot(string hostPath, int fileCount)
+        public FakeStagingSnapshot(string hostPath, IReadOnlyList<string> fileNames)
         {
             HostPath = hostPath;
-            FileCount = fileCount;
+            FileNames = fileNames;
         }
 
         public string HostPath { get; }
 
-        public int FileCount { get; }
+        public int FileCount => FileNames.Count;
+
+        public IReadOnlyList<string> FileNames { get; }
 
         public ValueTask DisposeAsync()
         {

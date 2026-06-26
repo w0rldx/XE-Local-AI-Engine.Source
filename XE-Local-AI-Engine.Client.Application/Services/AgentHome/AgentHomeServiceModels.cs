@@ -39,6 +39,13 @@ internal sealed record AgentHomePrepareResult
 
     /// <summary>The effective runtime profile the sandbox was created with (after worker-policy resolution).</summary>
     public required string RuntimeProfile { get; init; }
+
+    /// <summary>
+    ///     The workspace-relative paths of the conversation attachments staged this prepare (e.g.
+    ///     <c>attachments/report.md</c>), in staging order. Empty when no conversation attachments were staged. The chat
+    ///     agent-mode path surfaces these to the model so a weak model reads the exact staged file instead of guessing.
+    /// </summary>
+    public IReadOnlyList<string> StagedAttachmentRelativePaths { get; init; } = [];
 }
 
 /// <summary>Inputs for <see cref="IAgentHomeService.RunAsync" />.</summary>
