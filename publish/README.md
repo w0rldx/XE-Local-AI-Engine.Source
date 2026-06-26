@@ -80,6 +80,73 @@ resolves there).
 > `release.yml`'s header comment (tag protection, least-priv tokens, environment
 > reviewers) are required.
 
+#### Path A (manual) — cut a tester Velopack build by hand on Windows
+
+When you need a tester build without going through CI (e.g. to smoke a win-x64 build
+locally before tagging), run the steps below **on a Windows machine** (PowerShell).
+This is the manual equivalent of `workflow_dispatch` with `update-channel=tester`: it
+produces a **portable** self-updating build and uploads it to the tester release repo.
+
+```powershell
+$env:VPK_TOKEN = "<fine-grained PAT, contents:write on the tester repo>"
+
+# 0. Build the React SPA FIRST. wwwroot\** is gitignored, so a fresh checkout has an
+#    empty wwwroot; the csproj copies the SPA into wwwroot at publish ONLY when
+#    dist\index.html exists. Skip this and the package ships an empty wwwroot and serves
+#    404 for index.html (the app "starts" but the page is blank). The publish hard-fails
+#    with a clear error if this step is missing.
+cd XE-Local-AI-Engine.Client.React
+# .env is gitignored (absent on a fresh checkout); the tracked .env.template carries the
+# right values (VITE_APP_TITLE=C0re, VITE_API_VERSION=v1). VITE_APP_TITLE is REQUIRED at
+# build time — without it the built bundle throws "Invalid environment variables" in the
+# browser at startup (blank page). The API base is a relative path resolved at runtime
+# against the loopback origin, so no host/URL needs baking.
+if (-not (Test-Path .env)) { Copy-Item .env.template .env }
+pnpm install --frozen-lockfile
+pnpm build
+cd ..
+
+# 1. Publish single-file self-contained win-x64, tester flavor (populates wwwroot from dist\).
+dotnet publish XE-Local-AI-Engine.Client\XE-Local-AI-Engine.Client.csproj `
+  --configuration Release `
+  -p:PublishProfile=win-x64 `
+  -p:UpdateChannel=tester
+
+# 1b. Verify the SPA landed before packing — both must exist:
+dir XE-Local-AI-Engine.Client\bin\Release\net10.0\win-x64\publish\wwwroot\index.html
+dir XE-Local-AI-Engine.Client\bin\Release\net10.0\win-x64\publish\wwwroot\assets
+
+# 2. Pack — --noInst suppresses Setup.exe, leaving Portable.zip + nupkg + releases.win.json.
+#    NOTE: `vpk pack` has NO --pre flag (vpk 1.2.0). The prerelease state comes from the
+#    SemVer suffix in --packVersion (0.1.0-rc.1 IS a prerelease). Passing --pre here fails
+#    with "'--pre' was not matched".
+dnx vpk@1.2.0 pack `
+  --packId XE-Local-AI-Engine `
+  --packVersion 0.1.0-rc.1 `
+  --packDir XE-Local-AI-Engine.Client\bin\Release\net10.0\win-x64\publish `
+  --mainExe XE-Local-AI-Engine.Client.exe `
+  --channel win `
+  --noInst
+
+# 3. Upload — creates the GitHub release on the tester repo. --pre marks it a GitHub
+#    *prerelease*; --publish promotes it from draft to a live release so testers'
+#    self-update can read it (omit --publish to leave a draft you publish manually). Both
+#    flags ARE valid on `upload github` (vpk 1.2.0), unlike `pack`.
+dnx vpk@1.2.0 upload github `
+  --repoUrl https://github.com/w0rldx/XE-Local-AI-Engine.Tester-App `
+  --token $env:VPK_TOKEN `
+  --channel win `
+  --pre `
+  --publish
+```
+
+Notes that bite if missed:
+
+- **`--packVersion` carries the prerelease, not a flag.** `vpk pack` (1.2.0) has **no `--pre`** — a suffixed SemVer (`0.1.0-rc.1.0`) is already a prerelease. `--pre` is valid only on `vpk upload github` (it marks the *GitHub* release as a prerelease). Keep `--packVersion` in sync with `Directory.Build.props`.
+- **`--noInst`** drops `Setup.exe` and ships only the portable `-Portable.zip` + `*.nupkg` + `releases.win.json` feed. Drop `--noInst` if you also want the installer.
+- **`--publish`** promotes the GitHub release from draft to live so the in-app self-update can see it; omit it to inspect a draft first.
+- Run the same steps with `-p:PublishProfile=linux-x64`, `--mainExe XE-Local-AI-Engine.Client`, `--channel linux` to cut the Linux tester build.
+
 ### Path B — Tester zip (manual, no install, no self-update)
 
 `publish/package-rc.sh` builds a self-contained zip an external tester just unzips
