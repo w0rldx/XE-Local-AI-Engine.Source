@@ -1,5 +1,7 @@
 namespace XE_Local_AI_Engine.Client.Services.Chat.Implementation;
 
+using XE_Local_AI_Engine.Client.Services.DocumentIngestion;
+
 /// <summary>
 ///     Facade over the node chat persistence path. Implements <see cref="INodeChatPersistenceService" /> by delegating
 ///     to focused collaborators (conversation commands, read model, message commands, variant/branch, feedback), all
@@ -14,11 +16,14 @@ public sealed class NodeChatPersistenceService : INodeChatPersistenceService
     private readonly NodeChatReadModel _readModel;
     private readonly NodeChatVariantBranchService _variants;
 
-    public NodeChatPersistenceService(NodeChatPersistenceWriter writer)
+    // The uploaded-file store is an optional dependency: the DI container injects the real singleton in production so
+    // conversation-delete also tears down on-disk attachments, while existing single-arg test constructions stay valid
+    // (they exercise paths that create no uploaded files, so a null store simply skips the disk cleanup).
+    public NodeChatPersistenceService(NodeChatPersistenceWriter writer, IConversationUploadedFileStore? uploadedFileStore = null)
     {
         ArgumentNullException.ThrowIfNull(writer);
 
-        _conversations = new NodeChatConversationCommands(writer);
+        _conversations = new NodeChatConversationCommands(writer, uploadedFileStore);
         _readModel = new NodeChatReadModel(writer);
         _messages = new NodeChatMessageCommands(writer);
         _variants = new NodeChatVariantBranchService(writer, _readModel);

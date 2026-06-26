@@ -3,6 +3,7 @@ namespace XE_Local_AI_Engine.Client.Services.Chat.Implementation;
 using System.Globalization;
 using Microsoft.EntityFrameworkCore;
 using XE_Local_AI_Engine.Client.Persistence;
+using XE_Local_AI_Engine.Client.Services.DocumentIngestion;
 using static NodeChatMetadataSerializer;
 using static NodeChatPersistenceSql;
 
@@ -11,9 +12,12 @@ using static NodeChatPersistenceSql;
 ///     archive/delete plus the conversation-scoped origin and selected-path accessors. Shares the single
 ///     <see cref="NodeChatPersistenceWriter" /> so the per-conversation write-key serialization is preserved.
 /// </summary>
-internal sealed class NodeChatConversationCommands(NodeChatPersistenceWriter writer)
+internal sealed class NodeChatConversationCommands(NodeChatPersistenceWriter writer, IConversationUploadedFileStore? uploadedFileStore)
 {
     private readonly NodeChatPersistenceWriter _writer = writer ?? throw new ArgumentNullException(nameof(writer));
+
+    // Optional: present in production (DI), absent in the single-arg test compositions that create no uploaded files.
+    private readonly IConversationUploadedFileStore? _uploadedFileStore = uploadedFileStore;
 
     public async Task<NodeChatConversationDto> CreateConversationAsync(NodeChatCreateConversationRequest request, CancellationToken cancellationToken = default)
     {
@@ -184,7 +188,7 @@ internal sealed class NodeChatConversationCommands(NodeChatPersistenceWriter wri
     {
         ArgumentNullException.ThrowIfNull(request);
 
-        return await _writer.ExecuteAsync(NodeChatPersistenceWriteKey.ForConversation(request.ConversationId),
+        var result = await _writer.ExecuteAsync(NodeChatPersistenceWriteKey.ForConversation(request.ConversationId),
             async (dbContext, token) =>
             {
                 await using var transaction = await dbContext.Database.BeginTransactionAsync(token).ConfigureAwait(false);
@@ -208,6 +212,7 @@ internal sealed class NodeChatConversationCommands(NodeChatPersistenceWriter wri
                     await dbContext.Database.ExecuteSqlRawAsync("DELETE FROM message_feedback WHERE conversation_id = {0};", [request.ConversationId], token).ConfigureAwait(false);
                     await dbContext.Database.ExecuteSqlRawAsync("DELETE FROM messages WHERE conversation_id = {0};", [request.ConversationId], token).ConfigureAwait(false);
                     await dbContext.Database.ExecuteSqlRawAsync("DELETE FROM tool_events WHERE conversation_id = {0};", [request.ConversationId], token).ConfigureAwait(false);
+                    await dbContext.Database.ExecuteSqlRawAsync("DELETE FROM conversation_uploaded_files WHERE conversation_id = {0};", [request.ConversationId], token).ConfigureAwait(false);
                     await dbContext.Database.ExecuteSqlRawAsync("DELETE FROM purged_tombstones WHERE conversation_id = {0};", [request.ConversationId], token).ConfigureAwait(false);
                     await dbContext.Database.ExecuteSqlRawAsync("DELETE FROM conversations WHERE conversation_id = {0};", [request.ConversationId], token).ConfigureAwait(false);
                 }
@@ -222,6 +227,15 @@ internal sealed class NodeChatConversationCommands(NodeChatPersistenceWriter wri
                 return new NodeChatDeleteResultDto(request.ConversationId, cancelCount > 0, request.PurgeImmediately);
             },
             cancellationToken).ConfigureAwait(false);
+
+        if (request.PurgeImmediately && _uploadedFileStore is not null)
+        {
+            // The encrypted upload bytes and cached extracted text live on disk, not in a column, so the FK cascade /
+            // raw-SQL row purge above does not touch them. Remove the conversation's on-disk upload directory too.
+            await _uploadedFileStore.DeleteAllForConversationAsync(request.ConversationId, cancellationToken).ConfigureAwait(false);
+        }
+
+        return result;
     }
 
     public async Task<NodeChatConversationDto?> RenameConversationAsync(NodeChatRenameConversationRequest request, CancellationToken cancellationToken = default)

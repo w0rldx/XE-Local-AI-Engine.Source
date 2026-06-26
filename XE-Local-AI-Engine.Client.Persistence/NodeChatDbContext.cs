@@ -62,6 +62,8 @@ public sealed class NodeChatDbContext : DbContext
 
     internal DbSet<ModelFitBenchmark> ModelFitBenchmarks => Set<ModelFitBenchmark>();
 
+    internal DbSet<ConversationUploadedFile> UploadedFiles => Set<ConversationUploadedFile>();
+
     internal ReadOnlyMemory<byte> NodeEncryptionKey => _nodeSqliteKeyHolder.Key;
 
     /// <summary>
@@ -106,6 +108,31 @@ public sealed class NodeChatDbContext : DbContext
         return Encoding.UTF8.GetString(plaintext);
     }
 
+    /// <summary>
+    ///     Encrypts an uploaded file's display name for raw-SQL persistence by the conversation file store. Mirrors the
+    ///     <see cref="NodeEncryptionSaveChangesInterceptor" /> column posture so an EF-tracked save and this raw-SQL
+    ///     write produce interchangeable ciphertext. AAD = conversationId + fileId + "original_file_name".
+    /// </summary>
+    public byte[] EncryptUploadedFileName(string originalFileName, Guid conversationId, Guid fileId)
+    {
+        ArgumentNullException.ThrowIfNull(originalFileName);
+
+        var plaintext = Encoding.UTF8.GetBytes(originalFileName);
+        return NodePayloadProtector.Encrypt(plaintext, NodeEncryptionKey.Span, conversationId, fileId, "original_file_name");
+    }
+
+    /// <summary>
+    ///     Decrypts an uploaded file's display-name blob back to a string. AAD mirrors
+    ///     <see cref="EncryptUploadedFileName" />: conversationId + fileId + "original_file_name".
+    /// </summary>
+    public string DecryptUploadedFileName(byte[] encrypted, Guid conversationId, Guid fileId)
+    {
+        ArgumentNullException.ThrowIfNull(encrypted);
+
+        var plaintext = NodePayloadProtector.Decrypt(encrypted, NodeEncryptionKey.Span, conversationId, fileId, "original_file_name");
+        return Encoding.UTF8.GetString(plaintext);
+    }
+
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
         ArgumentNullException.ThrowIfNull(modelBuilder);
@@ -132,5 +159,6 @@ public sealed class NodeChatDbContext : DbContext
         modelBuilder.ApplyConfiguration(new ModelFitSnapshotConfiguration());
         modelBuilder.ApplyConfiguration(new ModelFitRecommendationConfiguration());
         modelBuilder.ApplyConfiguration(new ModelFitBenchmarkConfiguration());
+        modelBuilder.ApplyConfiguration(new ConversationUploadedFileConfiguration());
     }
 }

@@ -738,6 +738,14 @@
 			"source": "frontend"
 		},
 		{
+			"id": "backend:DocumentFormat.OpenXml@3.5.1",
+			"name": "DocumentFormat.OpenXml",
+			"version": "3.5.1",
+			"license": "MIT",
+			"homepageUrl": "https://github.com/dotnet/Open-XML-SDK",
+			"source": "backend"
+		},
+		{
 			"id": "frontend:dom-helpers@5.2.1",
 			"name": "dom-helpers",
 			"version": "5.2.1",
@@ -1626,6 +1634,14 @@
 			"source": "backend"
 		},
 		{
+			"id": "backend:Microsoft.Extensions.DataIngestion.Abstractions@10.7.0-preview.1.26309.5",
+			"name": "Microsoft.Extensions.DataIngestion.Abstractions",
+			"version": "10.7.0-preview.1.26309.5",
+			"license": "MIT",
+			"homepageUrl": "https://dot.net/",
+			"source": "backend"
+		},
+		{
 			"id": "backend:Microsoft.Extensions.DependencyInjection.Abstractions@10.0.9",
 			"name": "Microsoft.Extensions.DependencyInjection.Abstractions",
 			"version": "10.0.9",
@@ -1808,6 +1824,14 @@
 			"license": "MIT",
 			"homepageUrl": "https://github.com/wooorm/parse-entities#readme",
 			"source": "frontend"
+		},
+		{
+			"id": "backend:PdfPig@0.1.15",
+			"name": "PdfPig",
+			"version": "0.1.15",
+			"license": "Apache-2.0",
+			"homepageUrl": "https://github.com/UglyToad/PdfPig",
+			"source": "backend"
 		},
 		{
 			"id": "frontend:prismjs@1.30.0",
@@ -2400,6 +2424,14 @@
 			"license": "MIT",
 			"homepageUrl": "https://github.com/facebook/react#readme",
 			"source": "frontend"
+		},
+		{
+			"id": "backend:UTF.Unknown@2.6.0",
+			"name": "UTF.Unknown",
+			"version": "2.6.0",
+			"license": "https://github.com/CharsetDetector/UTF-unknown/blob/master/license/MPL-1.1.txt",
+			"homepageUrl": "https://github.com/CharsetDetector/UTF-unknown",
+			"source": "backend"
 		},
 		{
 			"id": "backend:Velopack@1.2.0",
