@@ -3,7 +3,6 @@ import { IconPlayerPlayFilled, IconPlayerStopFilled } from "@tabler/icons-react"
 import { useTranslation } from "react-i18next";
 
 import type { ChatMessageModel } from "@/features/chat/models/ChatModels";
-import { detectAnswerLanguage } from "@/features/voice/DetectAnswerLanguage";
 import { useVoicePreferencesStore } from "@/features/voice/VoicePreferencesStore";
 import { useVoiceRuntime } from "@/features/voice/VoiceRuntimeContext";
 
@@ -11,6 +10,8 @@ import { useVoiceRuntime } from "@/features/voice/VoiceRuntimeContext";
 // self-gating, so it returns null unless voice is available (dev-gate + manifest) AND the user has voice on AND this
 // is a terminal assistant turn with speakable content. Clicking Play halts any current playback then plays THIS
 // message (runtime.speak does the barge-in); clicking Stop halts it. A new streaming turn / other Play resets the tag.
+// The engine/language is chosen by playMessage from the SELECTED voice ("selected voice always wins", D2), so this
+// button no longer guesses a language from the answer text.
 
 interface VoiceMessagePlayButtonProps {
 	readonly message: ChatMessageModel;
@@ -44,7 +45,7 @@ export function VoiceMessagePlayButton({ message }: VoiceMessagePlayButtonProps)
 						return;
 					}
 
-					playMessage(message.id, content, detectAnswerLanguage(content)).catch(() => undefined);
+					playMessage(message.id, content).catch(() => undefined);
 				}}
 				data-testid={`voice-message-play-${message.id}`}
 			>

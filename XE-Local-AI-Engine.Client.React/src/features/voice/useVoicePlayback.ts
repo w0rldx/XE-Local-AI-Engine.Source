@@ -1,6 +1,7 @@
 import { useCallback, useRef } from "react";
 
 import { SentenceBuffer } from "@/core/runtime/SentenceBuffer";
+import { findVoiceById } from "@/core/runtime/VoiceManifest";
 import type { ChatStreamingState } from "@/features/chat/models/ChatModels";
 import { detectAnswerLanguage } from "@/features/voice/DetectAnswerLanguage";
 import { useVoicePreferencesStore } from "@/features/voice/VoicePreferencesStore";
@@ -38,12 +39,17 @@ export function useVoicePlayback(): VoicePlaybackTap {
 
 			const prefs = useVoicePreferencesStore.getState();
 			const voiceId = prefs.voiceProfile || manifest?.defaultVoiceId || undefined;
-			const language = detectAnswerLanguage(fullText);
+			// "Selected voice always wins" (D2): drive the engine/ladder from the SELECTED voice's OWN language so
+			// auto-play matches the node-settings preview exactly — never re-route an English answer to Kokoro when the
+			// user picked a German voice. detectAnswerLanguage stays only as the fallback when no voice resolves (no
+			// selection AND no manifest default), where there is no chosen language to honor.
+			const selectedVoice = manifest ? findVoiceById(manifest, voiceId) : undefined;
+			const language = selectedVoice?.language ?? detectAnswerLanguage(fullText);
 			// Fire-and-forget: synthesis must not block the hot stream loop (decoupling). Errors degrade via the
 			// runtime's own fallback ladder + onError; swallow here so a TTS hiccup never breaks chat rendering.
 			runtime.enqueue(sentence, { voiceId, rate: prefs.speakingRate, language }).catch(() => undefined);
 		},
-		[runtime, manifest?.defaultVoiceId],
+		[runtime, manifest],
 	);
 
 	const onTurnStart = useCallback((): void => {

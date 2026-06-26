@@ -3,7 +3,7 @@ import { describe, expect, it, type Mock, vi } from "vitest";
 import type { VoiceCapabilities } from "./CapabilityDetector";
 import { PlaybackQueue, type QueueAudioContext } from "./PlaybackQueue";
 import type { AudioChunk, TtsProvider, TtsProviderId, VoiceSynthesisOptions } from "./TtsProvider";
-import { mockVoiceManifest, type VoiceManifest } from "./VoiceManifest";
+import { findVoiceById, mockVoiceManifest, type VoiceManifest } from "./VoiceManifest";
 import { createDefaultProvider, ModelNotAllowedError, selectProviderLadder, VoiceRuntime } from "./VoiceRuntime";
 
 const emptyStream: AsyncIterable<AudioChunk> = {
@@ -102,6 +102,21 @@ describe("selectProviderLadder", () => {
 		});
 
 		expect(ladder).toEqual(["web-speech"]);
+	});
+});
+
+describe("findVoiceById (selected-voice language resolution)", () => {
+	it("returns the German voice's own language so chat routes to Web Speech (selected voice wins)", () => {
+		expect(findVoiceById(mockVoiceManifest, "de_web_default")?.language).toBe("de");
+	});
+
+	it("returns an English voice's language", () => {
+		expect(findVoiceById(mockVoiceManifest, "af_heart")?.language).toBe("en");
+	});
+
+	it("returns undefined for an unknown id or no id, so callers fall back to text detection", () => {
+		expect(findVoiceById(mockVoiceManifest, "nope")).toBeUndefined();
+		expect(findVoiceById(mockVoiceManifest, undefined)).toBeUndefined();
 	});
 });
 
