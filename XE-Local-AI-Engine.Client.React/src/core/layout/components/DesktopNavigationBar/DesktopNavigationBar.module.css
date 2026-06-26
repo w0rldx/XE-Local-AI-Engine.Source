@@ -20,7 +20,9 @@
 	height: 56px;
 	display: flex;
 	align-items: center;
-	gap: var(--mantine-spacing-xs);
+
+	/* Tight gap so the wordmark sits close to the brand mark */
+	gap: 4px;
 	flex-shrink: 0;
 	border-bottom: 1px solid light-dark(var(--mantine-color-gray-2), var(--mantine-color-dark-4));
 }
