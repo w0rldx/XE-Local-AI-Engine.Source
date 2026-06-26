@@ -10,6 +10,7 @@ using XE_Local_AI_Engine.Client.Persistence;
 using XE_Local_AI_Engine.Client.Persistence.Stores;
 using XE_Local_AI_Engine.Client.Services.Agents;
 using XE_Local_AI_Engine.Client.Services.CloudProviders;
+using XE_Local_AI_Engine.Client.Services.DocumentIngestion;
 using XE_Local_AI_Engine.Client.Services.Events;
 using XE_Local_AI_Engine.Client.Services.Invocation;
 using XE_Local_AI_Engine.Client.Services.Memory;
@@ -39,6 +40,7 @@ public sealed class NodeChatStreamService(
     IGgufModelCapabilityResolver ggufModelCapabilityResolver,
     ILocalDefaultChatModelResolver localDefaultChatModelResolver,
     IMemoryExtractionDispatcher memoryExtractionDispatcher,
+    IConversationUploadedFileStore uploadedFileStore,
     TimeProvider timeProvider,
     ILogger<NodeChatStreamService> logger) : INodeChatStreamService
 {
@@ -186,10 +188,16 @@ public sealed class NodeChatStreamService(
             ? resolved?.AllowedTools ?? localToolOfferProvider.GetOfferedTools(activeModel)
             : null;
 
+        // In plain chat the conversation's uploaded-file text is inlined as a synthetic context message. In agent mode
+        // nothing is inlined because the agent reads the staged files through its tools, which avoids double-feeding.
+        var attachmentContext = offerTools
+            ? null
+            : await BuildAttachmentContextMessageAsync(request.ConversationId, request.AttachmentFileIds, cancellationToken).ConfigureAwait(false);
+
         var package = runtimePackageBuilder.Build(new LocalChatRuntimePackageRequest(requestId,
             request.ConversationId,
             resolved?.ResolvedSystemPrompt ?? LoadResolvedSystemPrompt(localChatOptions.Value),
-            BuildConversationContext(conversation, userMessage, selectedPath),
+            BuildConversationContext(conversation, userMessage, selectedPath, attachmentContext),
             resolution.EffectiveModel,
             resolved?.AgentDefinitionVersion ?? AgentDefinitionVersion,
             LocalChatLoopbackDefaults.ClientNodeId,
@@ -515,30 +523,83 @@ public sealed class NodeChatStreamService(
 
     private static IReadOnlyList<ConversationMessageDto> BuildConversationContext(NodeChatConversationDto conversation,
         NodeChatPersistedMessageDto userMessage,
-        IReadOnlyDictionary<Guid, Guid>? selectedPath)
+        IReadOnlyDictionary<Guid, Guid>? selectedPath,
+        ConversationMessageDto? attachmentContext)
     {
         // Collapse variant siblings to the selected path FIRST (one variant per group, newest by default), then
         // apply the existing content/status filters. Without this every regenerated sibling would be sent as
         // context; the resolver keeps only the chosen branch.
         var selected = SelectedPathResolver.Resolve(conversation.Messages, selectedPath);
 
-        var messages = selected
-                       .Where(static message => !string.IsNullOrWhiteSpace(message.Content)
-                                                && string.Equals(message.Status, NodeChatMessageStatusValues.Completed, StringComparison.Ordinal))
-                       .Concat([userMessage])
-                       .OrderBy(static message => message.Sequence)
-                       .Select(static (message, index) => new ConversationMessageDto
-                       {
-                           Id = message.MessageId,
-                           Role = string.Equals(message.Role, "assistant", StringComparison.OrdinalIgnoreCase) ? MessageRole.Assistant : MessageRole.User,
-                           Content = message.Content,
-                           Thinking = message.Reasoning,
-                           ModelUsed = message.Model,
-                           SortOrder = index
-                       })
-                       .ToList();
+        // The attachment context applies to plain chat only and is prepended so the model reads the file content
+        // before the conversation history. When present it takes the first slot and the history shifts down by one.
+        var historyOffset = attachmentContext is null ? 0 : 1;
 
-        return messages;
+        var history = selected
+                      .Where(static message => !string.IsNullOrWhiteSpace(message.Content)
+                                               && string.Equals(message.Status, NodeChatMessageStatusValues.Completed, StringComparison.Ordinal))
+                      .Concat([userMessage])
+                      .OrderBy(static message => message.Sequence)
+                      .Select((message, index) => new ConversationMessageDto
+                      {
+                          Id = message.MessageId,
+                          Role = string.Equals(message.Role, "assistant", StringComparison.OrdinalIgnoreCase) ? MessageRole.Assistant : MessageRole.User,
+                          Content = message.Content,
+                          Thinking = message.Reasoning,
+                          ModelUsed = message.Model,
+                          SortOrder = index + historyOffset
+                      });
+
+        return attachmentContext is null ? history.ToList() : history.Prepend(attachmentContext).ToList();
+    }
+
+    // Builds the synthetic plain-chat context message from the conversation's uploaded attachments named in the send.
+    // Only Extracted files contribute; the combined text is capped to the configured MaxInlinedAttachmentChars budget
+    // with a truncation notice. Returns null when there is nothing to inline (the common no-attachment path
+    // short-circuits before any store call).
+    private async Task<ConversationMessageDto?> BuildAttachmentContextMessageAsync(Guid conversationId,
+        IReadOnlyList<Guid>? attachmentFileIds,
+        CancellationToken cancellationToken)
+    {
+        if (attachmentFileIds is null || attachmentFileIds.Count == 0)
+        {
+            return null;
+        }
+
+        var requested = attachmentFileIds.ToHashSet();
+        var available = await uploadedFileStore.ListAsync(conversationId, cancellationToken).ConfigureAwait(false);
+        var attachments = available
+                          .Where(file => requested.Contains(file.FileId) && file.ExtractionStatus == DocumentExtractionStatus.Extracted)
+                          .ToList();
+
+        if (attachments.Count == 0)
+        {
+            return null;
+        }
+
+        var parts = new List<AttachmentTextPart>(attachments.Count);
+        foreach (var attachment in attachments)
+        {
+            var markdown = await uploadedFileStore.ReadExtractedMarkdownAsync(conversationId, attachment.FileId, cancellationToken).ConfigureAwait(false);
+            if (!string.IsNullOrEmpty(markdown))
+            {
+                parts.Add(new AttachmentTextPart(attachment.OriginalFileName, markdown));
+            }
+        }
+
+        var content = ConversationAttachmentContextComposer.Compose(parts, localChatOptions.Value.MaxInlinedAttachmentChars);
+        if (content is null)
+        {
+            return null;
+        }
+
+        return new ConversationMessageDto
+        {
+            Id = Guid.NewGuid(),
+            Role = MessageRole.User,
+            Content = content,
+            SortOrder = 0
+        };
     }
 
     private static string LoadResolvedSystemPrompt(LocalChatAgentOptions options)

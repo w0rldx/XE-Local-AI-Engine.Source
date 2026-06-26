@@ -24,4 +24,12 @@ public sealed class LocalChatAgentOptions
 
     /// <summary>Whether the local chat offer list should include executable tools by default.</summary>
     public bool EnableTools { get; set; } = true;
+
+    /// <summary>
+    ///     Maximum number of extracted-document characters inlined into a plain-chat turn from the conversation's
+    ///     uploaded attachments. Content beyond this budget is truncated with a notice. Agent-mode turns ignore this
+    ///     (the agent reads the files through its tools).
+    /// </summary>
+    [Range(minimum: 1_000, maximum: 2_000_000)]
+    public int MaxInlinedAttachmentChars { get; set; } = 48_000;
 }

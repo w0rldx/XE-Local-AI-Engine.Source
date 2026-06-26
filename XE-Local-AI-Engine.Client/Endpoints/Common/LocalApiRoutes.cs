@@ -48,6 +48,12 @@ public static class LocalApiRoutes
         public const string MessageRevisions = "chat/conversations/{conversationId}/messages/{messageId}/revisions";
         public const string MessageFeedback = "chat/conversations/{conversationId}/messages/{messageId}/feedback";
         public const string SelectedPath = "chat/conversations/{conversationId}/selected-path";
+
+        // Per-conversation uploaded-file attachments. Collection route (POST multipart upload, GET list) and the
+        // individual file resource (DELETE). The literal "uploads" segment keeps these distinct from the other
+        // conversation action routes; {fileId} is the server-generated file id (never a client-supplied path).
+        public const string ConversationUploads = "chat/conversations/{conversationId}/uploads";
+        public const string ConversationUploadById = "chat/conversations/{conversationId}/uploads/{fileId}";
         public const string Cancel = "chat/cancel";
     }
 

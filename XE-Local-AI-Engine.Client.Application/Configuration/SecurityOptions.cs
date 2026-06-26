@@ -12,6 +12,11 @@ public sealed class SecurityOptions
     [Range(minimum: 1, maximum: 1024)]
     public int MaxMessageSizeKb { get; set; } = 50;
 
+    // Per-file cap for chat upload attachments (multipart upload endpoint). Bounds a single uploaded document; the
+    // extracted text is separately capped before it is inlined into a plain-chat turn.
+    [Range(minimum: 1, maximum: 512)]
+    public int MaxUploadFileSizeMb { get; set; } = 25;
+
     // Accepts either a plain Ollama tag OR an org/repo GGUF reference. The repo branch is exactly org/repo with an
     // optional :quant (no spaces, no extra path segments) and an OPTIONAL hf.co / huggingface.co domain prefix — so
     // both the bare "bartowski/Qwen2.5-0.5B-Instruct-GGUF:Q4_K_M" form (what first-run provisioning and GGUF pulls
