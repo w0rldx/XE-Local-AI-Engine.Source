@@ -1,6 +1,0 @@
-{
-  "version": 1,
-  "networkPolicy": "disabled",
-  "allowReadOnlyMounts": false,
-  "writableMounts": false
-}
