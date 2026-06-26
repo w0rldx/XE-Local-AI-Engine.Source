@@ -72,6 +72,24 @@ export function OnboardingProvider({ children }: { children: ReactNode }) {
 
 	const steps = useMemo(() => buildMainAppTourSteps(t, TARGET_WAIT_TIMEOUT_MS), [t]);
 
+	// Joyride's nav-button labels default to hardcoded English; without an explicit `locale` they stay English even when
+	// the app is in German. Derive them from i18next so they follow the selected language. react-i18next rebinds `t` on
+	// every language change, so depending on `t` (same convention as the `steps` memo above) recomputes the labels on a
+	// live language switch (the welcome-screen picker). Keys match the react-joyride v3.1 Locale shape (back, close,
+	// last, next, nextWithProgress, open, skip).
+	const locale = useMemo(
+		() => ({
+			back: t("onboarding.controls.back"),
+			close: t("onboarding.controls.close"),
+			last: t("onboarding.controls.last"),
+			next: t("onboarding.controls.next"),
+			nextWithProgress: t("onboarding.controls.nextWithProgress"),
+			open: t("onboarding.controls.open"),
+			skip: t("onboarding.controls.skip"),
+		}),
+		[t],
+	);
+
 	// Navigates to a step's bound route (via the router singleton — useNavigate is unavailable outside RouterProvider)
 	// before the step renders so Joyride never targets an unmounted node. No-op for unbound steps.
 	const navigateForStep = useCallback((index: number) => {
@@ -353,6 +371,9 @@ export function OnboardingProvider({ children }: { children: ReactNode }) {
 				stepIndex={stepIndex}
 				continuous={true}
 				onEvent={handleEvent}
+				// Localized nav-button labels (back / next / skip / finish / close) so they follow the selected UI language.
+				// `locale` is a top-level shared prop in react-joyride v3.1 (not part of `options`); see the `locale` memo.
+				locale={locale}
 				options={{
 					zIndex: TOUR_Z_INDEX,
 					// Default buttons plus Skip so every step is skippable (plan acceptance criteria).
