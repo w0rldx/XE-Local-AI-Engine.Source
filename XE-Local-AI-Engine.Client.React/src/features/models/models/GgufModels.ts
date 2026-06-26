@@ -16,6 +16,9 @@ export interface GgufRepository {
 	readonly lastModifiedAtUtc: number | null;
 	readonly license: string | null;
 	readonly hasUsableGguf: boolean;
+	// True when the repo's publisher is a known reputable GGUF packager / first-party org; false for an unknown or
+	// community publisher. Never a filter — untrusted repos still render, but the browse list flags them with a warning badge.
+	readonly isTrustedPublisher: boolean;
 }
 
 // Domain view-model for one selectable .gguf file inside a repo (the quant picker rows). isDynamic flags an Unsloth

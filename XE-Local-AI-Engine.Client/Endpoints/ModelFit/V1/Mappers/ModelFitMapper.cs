@@ -66,7 +66,10 @@ internal static class ModelFitMapper
             ContextTokens = record.ContextTokens,
             IsInstalled = record.IsInstalled,
             PullModelName = record.PullModelName,
-            ReleaseDate = ExtractReleaseDate(record.DiagnosticsJson)
+            ReleaseDate = ExtractReleaseDate(record.DiagnosticsJson),
+            // Soft publisher-trust signal, derived from the publisher segment of the canonical model name (no persisted
+            // column). The UI badges an untrusted publisher with a review-before-downloading warning.
+            IsTrustedPublisher = GgufPublisherTrust.IsTrustedPublisher(record.ModelName)
         };
     }
 
@@ -107,7 +110,8 @@ internal static class ModelFitMapper
             Likes = summary.Likes,
             LastModifiedAtUtc = summary.LastModified.ToUnixTimeMilliseconds(),
             License = summary.License,
-            HasUsableGguf = summary.HasUsableGguf
+            HasUsableGguf = summary.HasUsableGguf,
+            IsTrustedPublisher = summary.IsTrustedPublisher
         };
     }
 

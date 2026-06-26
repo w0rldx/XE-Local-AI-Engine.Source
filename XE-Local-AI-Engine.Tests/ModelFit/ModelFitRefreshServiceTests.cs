@@ -188,6 +188,97 @@ public sealed class ModelFitRefreshServiceTests
     }
 
     [Test]
+    public async Task Advisor_Recommend_RanksMostCapableThatFitsFirst()
+    {
+        var snapshotStore = new InMemoryModelFitSnapshotStore();
+        var recommendationStore = new InMemoryModelFitRecommendationStore();
+        var discovery = Substitute.For<IHuggingFaceGgufDiscovery>();
+
+        // Two repos that both fit a roomy 64 GB budget: a 1B and a 14B. The advisor must lead with the MORE capable
+        // (14B) model — the old "largest leftover VRAM" order would have surfaced the 1B first and truncated the 14B.
+        discovery.SearchAsync(Arg.Any<GgufSearchQuery>(), Arg.Any<CancellationToken>())
+                 .Returns(Task.FromResult<IReadOnlyList<GgufRepoSummary>>([
+                     Summary("org/small-GGUF"),
+                     Summary("org/big-GGUF")
+                 ]));
+        discovery.InspectRepoAsync("org/small-GGUF", Arg.Any<CancellationToken>())
+                 .Returns(Task.FromResult(Detail("org/small-GGUF", File("Q4_K_M", paramCount: 1_000_000_000L))));
+        discovery.InspectRepoAsync("org/big-GGUF", Arg.Any<CancellationToken>())
+                 .Returns(Task.FromResult(Detail("org/big-GGUF", File("Q4_K_M", paramCount: 14_000_000_000L))));
+
+        var advisor = BuildAdvisor(snapshotStore, recommendationStore, discovery, GpuProfile(64 * Gb));
+
+        var result = await advisor.RefreshAsync(Request(), reportProgress: null, CancellationToken.None);
+
+        AssertEx.Equal(ModelFitRunStatus.Succeeded, result.Status);
+        var rows = recommendationStore.RowsFor(snapshotStore.Snapshots.Values.Single().Id);
+        AssertEx.Equal("org/big-GGUF:Q4_K_M", rows[0].ModelName);
+        AssertEx.Equal("org/small-GGUF:Q4_K_M", rows[1].ModelName);
+    }
+
+    [Test]
+    public async Task Advisor_Recommend_MergesUseCaseSearchTerms_AndDedupes()
+    {
+        var snapshotStore = new InMemoryModelFitSnapshotStore();
+        var recommendationStore = new InMemoryModelFitRecommendationStore();
+        var discovery = Substitute.For<IHuggingFaceGgufDiscovery>();
+
+        // Use-case "coding" (the Request() default) maps to terms ["coder", "code"]. Each term's search returns a
+        // distinct repo plus a SHARED one — proving the per-term results are merged AND de-duped by repo id.
+        discovery.SearchAsync(Arg.Is<GgufSearchQuery>(q => q.SearchText == "coder"), Arg.Any<CancellationToken>())
+                 .Returns(Task.FromResult<IReadOnlyList<GgufRepoSummary>>([Summary("org/coder-GGUF"), Summary("org/shared-GGUF")]));
+        discovery.SearchAsync(Arg.Is<GgufSearchQuery>(q => q.SearchText == "code"), Arg.Any<CancellationToken>())
+                 .Returns(Task.FromResult<IReadOnlyList<GgufRepoSummary>>([Summary("org/code-GGUF"), Summary("org/shared-GGUF")]));
+
+        foreach (var repoId in new[] { "org/coder-GGUF", "org/code-GGUF", "org/shared-GGUF" })
+        {
+            discovery.InspectRepoAsync(repoId, Arg.Any<CancellationToken>())
+                     .Returns(Task.FromResult(Detail(repoId, File("Q4_K_M", paramCount: 1_000_000_000L))));
+        }
+
+        var advisor = BuildAdvisor(snapshotStore, recommendationStore, discovery, GpuProfile(64 * Gb));
+
+        var result = await advisor.RefreshAsync(Request(), reportProgress: null, CancellationToken.None);
+
+        AssertEx.Equal(ModelFitRunStatus.Succeeded, result.Status);
+        var rows = recommendationStore.RowsFor(snapshotStore.Snapshots.Values.Single().Id);
+        var names = rows.Select(static row => row.ModelName).ToHashSet(StringComparer.Ordinal);
+        AssertEx.True(names.Contains("org/coder-GGUF:Q4_K_M"), "the 'coder' term's repo must be present.");
+        AssertEx.True(names.Contains("org/code-GGUF:Q4_K_M"), "the 'code' term's repo must be present.");
+        AssertEx.True(names.Contains("org/shared-GGUF:Q4_K_M"), "the shared repo must be present.");
+        // De-duped: the shared repo appears once across the two term searches, so exactly three rows.
+        AssertEx.Equal(expected: 3, rows.Count);
+    }
+
+    [Test]
+    public async Task Advisor_Recommend_TrustedPublisherWinsCapabilityTie()
+    {
+        var snapshotStore = new InMemoryModelFitSnapshotStore();
+        var recommendationStore = new InMemoryModelFitRecommendationStore();
+        var discovery = Substitute.For<IHuggingFaceGgufDiscovery>();
+
+        // Identical capability (same param count → same estimate) and identical downloads. The untrusted repo sorts
+        // FIRST by repo-id ordinal ("aaa" < "unsloth"), so a pass proves the trusted-publisher nudge beats the id tie-break.
+        discovery.SearchAsync(Arg.Any<GgufSearchQuery>(), Arg.Any<CancellationToken>())
+                 .Returns(Task.FromResult<IReadOnlyList<GgufRepoSummary>>([
+                     Summary("aaa/model-GGUF"),
+                     Summary("unsloth/model-GGUF")
+                 ]));
+        discovery.InspectRepoAsync("aaa/model-GGUF", Arg.Any<CancellationToken>())
+                 .Returns(Task.FromResult(Detail("aaa/model-GGUF", File("Q4_K_M", paramCount: 3_000_000_000L))));
+        discovery.InspectRepoAsync("unsloth/model-GGUF", Arg.Any<CancellationToken>())
+                 .Returns(Task.FromResult(Detail("unsloth/model-GGUF", File("Q4_K_M", paramCount: 3_000_000_000L))));
+
+        var advisor = BuildAdvisor(snapshotStore, recommendationStore, discovery, GpuProfile(64 * Gb));
+
+        await advisor.RefreshAsync(Request(), reportProgress: null, CancellationToken.None);
+
+        var rows = recommendationStore.RowsFor(snapshotStore.Snapshots.Values.Single().Id);
+        AssertEx.Equal("unsloth/model-GGUF:Q4_K_M", rows[0].ModelName);
+        AssertEx.Equal("aaa/model-GGUF:Q4_K_M", rows[1].ModelName);
+    }
+
+    [Test]
     public async Task Advisor_Recommend_OuterCancellationCancelsTheRun()
     {
         var snapshotStore = new InMemoryModelFitSnapshotStore();
@@ -300,9 +391,10 @@ public sealed class ModelFitRefreshServiceTests
             NullLogger<ModelFitRefreshService>.Instance);
     }
 
-    private static GgufRepoSummary Summary(string repoId)
+    private static GgufRepoSummary Summary(string repoId, long downloads = 1000)
     {
-        return new GgufRepoSummary(repoId, IsGated: false, Downloads: 1000, Likes: 10, DateTimeOffset.UnixEpoch, "mit", HasUsableGguf: true);
+        return new GgufRepoSummary(repoId, IsGated: false, downloads, Likes: 10, DateTimeOffset.UnixEpoch, "mit", HasUsableGguf: true,
+            GgufPublisherTrust.IsTrustedPublisher(repoId));
     }
 
     private static GgufRepoDetail Detail(string repoId, params GgufRepoFile[] files)

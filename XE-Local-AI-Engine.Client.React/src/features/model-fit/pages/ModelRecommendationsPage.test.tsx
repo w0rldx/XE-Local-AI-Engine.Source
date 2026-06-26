@@ -167,6 +167,7 @@ const populatedView = {
 			isInstalled: false,
 			pullModelName: "unsloth/llama-3.1-8b-gguf",
 			releaseDate: null,
+			isTrustedPublisher: true,
 		},
 	],
 };

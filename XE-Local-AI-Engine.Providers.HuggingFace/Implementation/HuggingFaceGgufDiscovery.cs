@@ -6,8 +6,9 @@ using XE_Local_AI_Engine.Providers.HuggingFace.Options;
 
 /// <summary>
 ///     <see cref="IHuggingFaceGgufDiscovery" /> over <see cref="HfHubClient" /> + <see cref="GgufHeaderReader" />:
-///     searches GGUF repos by popularity (filtering out repos with no usable <c>.gguf</c>) and inspects a single repo's
-///     actual files, populating per-file quant/size/integrity + GGUF header metadata.
+///     searches GGUF repos by the requested order (trending by default; filtering out repos with no usable <c>.gguf</c>)
+///     and inspects a single repo's actual files, populating per-file quant/size/integrity + GGUF header metadata. Each
+///     summary is tagged with a soft <see cref="GgufPublisherTrust" /> publisher-trust flag (never an exclusion gate).
 /// </summary>
 internal sealed class HuggingFaceGgufDiscovery : IHuggingFaceGgufDiscovery
 {
@@ -55,7 +56,8 @@ internal sealed class HuggingFaceGgufDiscovery : IHuggingFaceGgufDiscovery
                 model.Likes,
                 model.LastModified,
                 model.License,
-                HasUsableGguf: true));
+                HasUsableGguf: true,
+                GgufPublisherTrust.IsTrustedPublisher(model.RepoId)));
         }
 
         return summaries;

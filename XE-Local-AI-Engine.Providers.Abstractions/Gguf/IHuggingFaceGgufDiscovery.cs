@@ -8,7 +8,7 @@ namespace XE_Local_AI_Engine.Providers.Abstractions.Gguf;
 /// </summary>
 public interface IHuggingFaceGgufDiscovery
 {
-    /// <summary>Searches GGUF repos sorted by popularity; non-GGUF repos are filtered out.</summary>
+    /// <summary>Searches GGUF repos in the requested order (trending by default); non-GGUF repos are filtered out.</summary>
     Task<IReadOnlyList<GgufRepoSummary>> SearchAsync(GgufSearchQuery query, CancellationToken ct);
 
     /// <summary>

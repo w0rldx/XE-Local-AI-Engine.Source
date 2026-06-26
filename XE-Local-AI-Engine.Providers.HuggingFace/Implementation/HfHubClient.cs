@@ -15,7 +15,9 @@ using XE_Local_AI_Engine.Providers.HuggingFace.Options;
 ///     <see cref="HttpMessageHandler" />.
 /// </summary>
 /// <remarks>
-///     Hub facts (verified live 2026-06-18): listing is <c>GET /api/models?filter=gguf&amp;sort=downloads&amp;limit=N&amp;full=true</c>
+///     Hub facts (verified live 2026-06-18; sort confirmed 2026-06-26): listing is
+///     <c>GET /api/models?filter=gguf&amp;sort=trendingScore&amp;limit=N&amp;full=true</c> (<c>sort</c> is one of
+///     <c>trendingScore|downloads|likes|lastModified</c>)
 ///     returning <c>id</c>, <c>gated</c> (<see langword="false" /> | <c>"auto"</c> | <c>"manual"</c>), <c>downloads</c>,
 ///     <c>likes</c>, <c>lastModified</c>, and <c>siblings[].rfilename</c> (filenames only in the listing). Per-repo detail
 ///     is <c>GET /api/models/{repo}?blobs=true</c> returning <c>sha</c> (resolved commit), <c>cardData.license</c>, and
@@ -178,7 +180,10 @@ internal sealed class HfHubClient
         {
             GgufSearchSort.Likes => "likes",
             GgufSearchSort.LastModified => "lastModified",
-            _ => "downloads"
+            GgufSearchSort.Downloads => "downloads",
+            // Trending (the default): Hugging Face's recency-weighted popularity (the Hub "Trending" ranking). Lifetime
+            // downloads is age-biased and surfaces years-old repos; trendingScore reflects current download/like velocity.
+            _ => "trendingScore"
         };
 
         var limit = Math.Clamp(query.Limit, min: 1, max: 100);

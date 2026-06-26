@@ -1,4 +1,4 @@
-import { Alert, Anchor, Badge, Button, Card, Group, Loader, Stack, Table, Text, TextInput, Title } from "@mantine/core";
+import { Alert, Anchor, Badge, Button, Card, Group, Loader, Stack, Table, Text, TextInput, Title, Tooltip } from "@mantine/core";
 import { IconAlertTriangle, IconCloudDownload, IconExternalLink, IconSearch } from "@tabler/icons-react";
 import { type FormEvent, useState } from "react";
 import { useTranslation } from "react-i18next";
@@ -121,6 +121,26 @@ export function GgufBrowsePanel({
 													<Badge color="yellow" variant="light" size="sm">
 														{t("pages.models.gguf.browse.gated", "Gated")}
 													</Badge>
+												) : null}
+												{!repository.isTrustedPublisher ? (
+													<Tooltip
+														label={t(
+															"pages.models.gguf.browse.untrustedPublisherHint",
+															"This publisher is not a known GGUF packager — review the repo before downloading.",
+														)}
+														multiline={true}
+														w={260}
+													>
+														<Badge
+															color="orange"
+															variant="light"
+															size="sm"
+															leftSection={<IconAlertTriangle size={12} />}
+															data-testid={`model-fit-browse-untrusted-${repository.repoId}`}
+														>
+															{t("pages.models.gguf.browse.untrustedPublisher", "Unverified publisher")}
+														</Badge>
+													</Tooltip>
 												) : null}
 											</Group>
 										</Table.Td>

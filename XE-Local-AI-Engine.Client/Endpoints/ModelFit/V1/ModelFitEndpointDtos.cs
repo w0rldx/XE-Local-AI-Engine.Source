@@ -49,6 +49,12 @@ public sealed class ModelFitRecommendationResponse
 
     /// <summary>The model's release date (ISO date string) when one is reported; null otherwise.</summary>
     public string? ReleaseDate { get; init; }
+
+    /// <summary>
+    ///     Soft publisher-trust signal: <c>true</c> when the model's publisher is a known reputable GGUF packager /
+    ///     first-party org. Never an exclusion gate — when <c>false</c> the UI shows a "review before downloading" warning.
+    /// </summary>
+    public bool IsTrustedPublisher { get; init; }
 }
 
 /// <summary>
@@ -158,8 +164,8 @@ public sealed class HardwareProfileResponse
 
 /// <summary>
 ///     Query-string request for <c>GET model-fit/gguf/browse</c>. <see cref="Query" /> is a free-text repo search term
-///     (null returns the popular GGUF repos); <see cref="Limit" /> bounds the result count; <see cref="Sort" /> is one of
-///     <c>downloads|likes|lastModified</c> (defaults to downloads). No raw command or image reference is accepted.
+///     (null returns the trending GGUF repos); <see cref="Limit" /> bounds the result count; <see cref="Sort" /> is one of
+///     <c>trending|downloads|likes|lastModified</c> (defaults to trending). No raw command or image reference is accepted.
 /// </summary>
 public sealed class BrowseGgufRepositoriesRequest
 {
@@ -167,7 +173,7 @@ public sealed class BrowseGgufRepositoriesRequest
 
     public int? Limit { get; init; }
 
-    /// <summary>Result ordering — <c>downloads|likes|lastModified</c>; unknown/empty defaults to downloads.</summary>
+    /// <summary>Result ordering — <c>trending|downloads|likes|lastModified</c>; unknown/empty defaults to trending.</summary>
     public string? Sort { get; init; }
 }
 
@@ -188,6 +194,13 @@ public sealed class GgufRepositoryResponse
     public string? License { get; init; }
 
     public required bool HasUsableGguf { get; init; }
+
+    /// <summary>
+    ///     Soft publisher-trust signal: <c>true</c> when the repo's publisher is a known reputable GGUF packager /
+    ///     first-party org. Never an exclusion gate — every repo is still returned; when <c>false</c> the UI shows a
+    ///     "review before downloading" warning.
+    /// </summary>
+    public bool IsTrustedPublisher { get; init; }
 }
 
 /// <summary>Response envelope for <c>GET model-fit/gguf/browse</c>.</summary>

@@ -1101,6 +1101,8 @@
 					"error": "Could not search repositories.",
 					"empty": "No GGUF repositories matched that search.",
 					"gated": "Gated",
+					"untrustedPublisher": "Unverified publisher",
+					"untrustedPublisherHint": "This publisher is not a known GGUF packager — review the repo before downloading.",
 					"download": "Download",
 					"noGguf": "No GGUF",
 					"columns": {
@@ -1829,7 +1831,9 @@
 				"available": "Available",
 				"download": "Download",
 				"downloading": "Downloading…",
-				"cpuMode": "CPU mode"
+				"cpuMode": "CPU mode",
+				"untrustedPublisher": "Unverified publisher",
+				"untrustedPublisherHint": "This publisher is not a known GGUF packager — review the repo before downloading."
 			},
 			"hardware": {
 				"title": "Hardware profile",

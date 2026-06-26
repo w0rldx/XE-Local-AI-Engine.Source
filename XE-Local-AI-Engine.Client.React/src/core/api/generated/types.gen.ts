@@ -430,6 +430,7 @@ export type XeLocalAiEngineClientEndpointsModelFitV1GgufRepositoryResponse = {
 	lastModifiedAtUtc?: number;
 	license?: string | null;
 	hasUsableGguf?: boolean;
+	isTrustedPublisher?: boolean;
 };
 
 export type XeLocalAiEngineClientEndpointsModelFitV1BrowseGgufRepositoriesRequest = {
@@ -525,6 +526,7 @@ export type XeLocalAiEngineClientEndpointsModelFitV1ModelFitRecommendationRespon
 	isInstalled?: boolean;
 	pullModelName?: string | null;
 	releaseDate?: string | null;
+	isTrustedPublisher?: boolean;
 };
 
 export type XeLocalAiEngineClientEndpointsModelFitV1GetLatestRecommendationsRequest = {

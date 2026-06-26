@@ -76,30 +76,41 @@ public sealed record GgufModelRegistryEntry
 /// <summary>Sort order for GGUF repo discovery.</summary>
 public enum GgufSearchSort
 {
-    /// <summary>Most downloaded first (popularity default).</summary>
+    /// <summary>Most downloaded first (lifetime cumulative downloads).</summary>
     Downloads = 0,
 
     /// <summary>Most liked first.</summary>
     Likes = 1,
 
     /// <summary>Most recently updated first.</summary>
-    LastModified = 2
+    LastModified = 2,
+
+    /// <summary>
+    ///     Trending now — Hugging Face's recency-weighted popularity (the Hub "Trending" ranking, <c>sort=trendingScore</c>).
+    ///     This is the freshness-aware default: lifetime <see cref="Downloads" /> is age-biased and surfaces years-old
+    ///     repos, whereas trending reflects current download/like velocity.
+    /// </summary>
+    Trending = 3
 }
 
 /// <summary>Query parameters for searching GGUF repos on the Hugging Face Hub.</summary>
 public sealed record GgufSearchQuery
 {
-    /// <summary>Free-text search term; when <see langword="null" /> the popular GGUF repos are returned.</summary>
+    /// <summary>Free-text search term; when <see langword="null" /> the trending GGUF repos are returned.</summary>
     public string? SearchText { get; init; }
 
     /// <summary>Maximum repos to return.</summary>
     public int Limit { get; init; } = 30;
 
-    /// <summary>Result ordering.</summary>
-    public GgufSearchSort Sort { get; init; } = GgufSearchSort.Downloads;
+    /// <summary>Result ordering. Defaults to <see cref="GgufSearchSort.Trending" /> (freshness-aware) rather than lifetime downloads.</summary>
+    public GgufSearchSort Sort { get; init; } = GgufSearchSort.Trending;
 }
 
-/// <summary>Summary of a GGUF repo from a Hub search (popularity + gating + license).</summary>
+/// <summary>
+///     Summary of a GGUF repo from a Hub search (popularity + gating + license). <see cref="IsTrustedPublisher" /> is a
+///     soft quality signal (<see cref="GgufPublisherTrust" />) — a reputable packager / first-party org — never an
+///     exclusion gate; untrusted repos still appear in results and are simply badged for review by the UI.
+/// </summary>
 public sealed record GgufRepoSummary(
     string RepoId,
     bool IsGated,
@@ -107,7 +118,8 @@ public sealed record GgufRepoSummary(
     int Likes,
     DateTimeOffset LastModified,
     string? License,
-    bool HasUsableGguf);
+    bool HasUsableGguf,
+    bool IsTrustedPublisher);
 
 /// <summary>
 ///     One <c>.gguf</c> file inside a repo, with quant/size/integrity plus the GGUF header metadata read via an HTTP

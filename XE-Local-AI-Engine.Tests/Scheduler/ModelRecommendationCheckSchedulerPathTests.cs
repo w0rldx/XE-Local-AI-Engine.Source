@@ -138,7 +138,8 @@ public sealed class ModelRecommendationCheckSchedulerPathTests
         var discovery = Substitute.For<IHuggingFaceGgufDiscovery>();
         discovery.SearchAsync(Arg.Any<GgufSearchQuery>(), Arg.Any<CancellationToken>())
                  .Returns(Task.FromResult<IReadOnlyList<GgufRepoSummary>>([
-                     new GgufRepoSummary("org/qwen-GGUF", IsGated: false, Downloads: 1000, Likes: 10, DateTimeOffset.UnixEpoch, "apache-2.0", HasUsableGguf: true)
+                     new GgufRepoSummary("org/qwen-GGUF", IsGated: false, Downloads: 1000, Likes: 10, DateTimeOffset.UnixEpoch, "apache-2.0", HasUsableGguf: true,
+                         IsTrustedPublisher: false)
                  ]));
         discovery.InspectRepoAsync("org/qwen-GGUF", Arg.Any<CancellationToken>())
                  .Returns(Task.FromResult(new GgufRepoDetail("org/qwen-GGUF", IsGated: false, "apache-2.0",
