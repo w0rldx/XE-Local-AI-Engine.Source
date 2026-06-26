@@ -151,6 +151,23 @@ internal sealed class FakeVariantSelector(GpuVariant variant = GpuVariant.Cpu) :
 }
 
 /// <summary>
+///     Inference-profile resolver returning a fixed <see cref="ResolvedLaunchArguments" /> (default: explore-mode) and
+///     recording the resolve calls so a test can assert the supervisor awaited it on the spawn path.
+/// </summary>
+internal sealed class FakeInferenceProfileResolver(ResolvedLaunchArguments? resolved = null) : IInferenceProfileResolver
+{
+    private readonly ResolvedLaunchArguments _resolved = resolved ?? ResolvedLaunchArguments.Explore();
+
+    public ConcurrentQueue<(string ModelName, ModelRole Role, GpuVariant Backend)> Calls { get; } = new();
+
+    public Task<ResolvedLaunchArguments> ResolveAsync(string modelName, ModelRole role, GpuVariant backend, CancellationToken ct)
+    {
+        Calls.Enqueue((modelName, role, backend));
+        return Task.FromResult(_resolved);
+    }
+}
+
+/// <summary>
 ///     Supervisor fake whose <see cref="CheckHealthAsync" /> returns a configurable health list so the runtime-status
 ///     running-count surface and the pre-update 409 safety gate can be exercised deterministically without spawning any
 ///     real <c>llama-server</c>. The ensure/evict surface is unused by those tests and is a no-op.

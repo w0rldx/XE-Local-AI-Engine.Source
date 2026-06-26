@@ -51,22 +51,26 @@ public sealed class SupervisorSpawnArgsTests
     }
 
     [Test]
-    public async Task EnsureRunning_GpuVariant_LaunchArgsOffloadAllLayersToGpu()
+    public async Task EnsureRunning_GpuVariant_NoProfile_LaunchArgsEmitFitOnAndMetrics()
     {
         var launcher = new FakeProcessLauncher();
+        // The default resolver returns explore-mode (no frozen profile), so a GPU spawn lets llama.cpp auto-fit drive
+        // placement: --fit on + --metrics, NEVER the old forced --n-gpu-layers 999.
         await using var supervisor = SupervisorFactory.Create(launcher, variantSelector: new FakeVariantSelector(GpuVariant.Cuda));
 
         await supervisor.EnsureRunningAsync("llama3", ModelRole.Chat, CancellationToken.None);
 
         AssertEx.True(launcher.Launches.TryDequeue(out var spec));
-        // A GPU variant must offload layers to the GPU; without --n-gpu-layers llama-server keeps everything on the CPU.
-        AssertEx.Contains(spec!.Arguments, "--n-gpu-layers");
-        var index = IndexOf(spec.Arguments, "--n-gpu-layers");
-        AssertEx.Equal("999", spec.Arguments[index + 1]);
+        AssertEx.Contains(spec!.Arguments, "--fit");
+        var fitIndex = IndexOf(spec.Arguments, "--fit");
+        AssertEx.Equal("on", spec.Arguments[fitIndex + 1]);
+        AssertEx.Contains(spec.Arguments, "--metrics");
+        AssertEx.False(spec.Arguments.Contains("--n-gpu-layers"), "Explore mode must not emit an explicit -ngl (it disables auto-fit).");
+        AssertEx.False(spec.Arguments.Contains("999"), "The forced -ngl 999 placement is removed.");
     }
 
     [Test]
-    public async Task EnsureRunning_CpuVariant_LaunchArgsOmitGpuLayers()
+    public async Task EnsureRunning_CpuVariant_LaunchArgsOmitGpuAndFitArgs()
     {
         var launcher = new FakeProcessLauncher();
         await using var supervisor = SupervisorFactory.Create(launcher, variantSelector: new FakeVariantSelector());
@@ -75,6 +79,8 @@ public sealed class SupervisorSpawnArgsTests
 
         AssertEx.True(launcher.Launches.TryDequeue(out var spec));
         AssertEx.False(spec!.Arguments.Contains("--n-gpu-layers"), "The CPU variant must not request GPU layer offload.");
+        AssertEx.False(spec.Arguments.Contains("--fit"), "The CPU variant must not emit auto-fit args.");
+        AssertEx.False(spec.Arguments.Contains("--metrics"), "The CPU variant must not emit --metrics.");
     }
 
     private static void AssertChatBindsLocalhost(LlamaServerLaunchSpec spec)
