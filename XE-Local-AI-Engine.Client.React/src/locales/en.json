@@ -1787,6 +1787,14 @@
 				"enable": "Could not change the job state.",
 				"trigger": "Could not trigger the job.",
 				"cancel": "Could not cancel the run."
+			},
+			"toasts": {
+				"completedTitle": "Scheduled task completed",
+				"completed": "A scheduled task finished successfully.",
+				"failedTitle": "Scheduled task failed",
+				"failedFallback": "A scheduled task did not complete successfully.",
+				"cancelledTitle": "Scheduled task cancelled",
+				"cancelled": "A scheduled task was cancelled."
 			}
 		},
 		"modelFit": {
@@ -2430,6 +2438,16 @@
 			"title": "Welcome — let's get you to your first answer",
 			"body": "This node has no chat model yet, so it can't reply until you install one. Take a short guided tour: install a recommended chat model, make it the default, then send your first message. You can skip any time.",
 			"start": "Start tour",
+			"skip": "Skip",
+			"languageLabel": "Language"
+		},
+		"controls": {
+			"back": "Back",
+			"close": "Close",
+			"last": "Finish",
+			"next": "Next",
+			"nextWithProgress": "Next ({current} of {total})",
+			"open": "Open the dialog",
 			"skip": "Skip"
 		},
 		"restart": "Restart tutorial",
