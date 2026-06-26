@@ -14,6 +14,10 @@ public sealed class TriggerScheduledJobEndpoint(IScheduledJobManagementService s
     {
         Post(LocalApiRoutes.Scheduler.JobTrigger);
         Policies(NodeAuthorizationPolicies.Operator);
+        // Route-only POST: the job id binds from the route, so a well-behaved client sends no body — and therefore no
+        // Content-Type. The default POST "Accepts" metadata only allows application/json, which FastEndpoints answers
+        // with 415 when the header is absent. Overriding Accepts lets the body-less "Run now" request through.
+        Description(x => x.Accepts<ScheduledJobActionRequest>());
     }
 
     public override async Task HandleAsync(ScheduledJobActionRequest req, CancellationToken ct)
