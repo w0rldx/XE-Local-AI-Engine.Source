@@ -8,8 +8,11 @@ using XE_Local_AI_Engine.Client.Models;
 using XE_Local_AI_Engine.Client.Models.Enums;
 using XE_Local_AI_Engine.Client.Persistence;
 using XE_Local_AI_Engine.Client.Persistence.Stores;
+using XE_Local_AI_Engine.Client.Services.AgentHome;
+using XE_Local_AI_Engine.Client.Services.AgentHome.Tools;
 using XE_Local_AI_Engine.Client.Services.Agents;
 using XE_Local_AI_Engine.Client.Services.CloudProviders;
+using XE_Local_AI_Engine.Client.Services.Coder.Tools;
 using XE_Local_AI_Engine.Client.Services.DocumentIngestion;
 using XE_Local_AI_Engine.Client.Services.Events;
 using XE_Local_AI_Engine.Client.Services.Invocation;
@@ -41,10 +44,22 @@ public sealed class NodeChatStreamService(
     ILocalDefaultChatModelResolver localDefaultChatModelResolver,
     IMemoryExtractionDispatcher memoryExtractionDispatcher,
     IConversationUploadedFileStore uploadedFileStore,
+    IConversationSandboxStager conversationSandboxStager,
     TimeProvider timeProvider,
     ILogger<NodeChatStreamService> logger) : INodeChatStreamService
 {
     private const int AgentDefinitionVersion = 1;
+
+    // The tools whose presence in a turn's offer means the selected agent can read files through the AgentHome sandbox
+    // (the read-only coder tools plus the run_in_agent_home gateway). When any is offered AND the conversation has
+    // uploaded attachments, the sandbox is re-staged with this conversation's attachments before the tool loop runs.
+    private static readonly HashSet<string> AgentHomeCapableToolNames = new(StringComparer.Ordinal)
+    {
+        CoderToolDefinition.ListFilesToolName,
+        CoderToolDefinition.ReadFileToolName,
+        CoderToolDefinition.SearchTextToolName,
+        AgentHomeToolDefinition.ToolName
+    };
 
     public IAsyncEnumerable<ChatStreamEvent> SendMessageAsync(NodeChatStreamRequest request,
         CancellationToken cancellationToken = default)
@@ -220,6 +235,15 @@ public sealed class NodeChatStreamService(
         var onTerminal = resolution.Resolved is { PlaybookEnabled: true, MemoryExtractionEnabled: true } memoryAgent
             ? BuildMemoryExtractionHook(memoryAgent, conversation, userMessage, selectedPath, package, resolution.EffectiveModel)
             : null;
+
+        // Agent mode: when the selected agent can read files through the AgentHome sandbox (its offer includes the
+        // read-only coder tools or run_in_agent_home), re-stage the sandbox with THIS conversation's uploaded
+        // attachments before the tool loop runs, so list_files/read_file/search_text see them under attachments/. The
+        // stager itself short-circuits when Agent Mode is disabled or the conversation has no extracted files.
+        if (offerTools && OffersAgentHomeTools(allowedTools))
+        {
+            await PrepareConversationAttachmentsSafelyAsync(request.ConversationId, runCancellation.Token).ConfigureAwait(false);
+        }
 
         var pumpTask = PumpInvocationStatesAsync(stateChannel.Reader,
             eventChannel.Writer,
@@ -600,6 +624,28 @@ public sealed class NodeChatStreamService(
             Content = content,
             SortOrder = 0
         };
+    }
+
+    private static bool OffersAgentHomeTools(IReadOnlyList<AllowedToolDto>? allowedTools)
+    {
+        return allowedTools is not null && allowedTools.Any(tool => AgentHomeCapableToolNames.Contains(tool.Name));
+    }
+
+    // Best-effort attachment staging: re-stages the conversation's uploaded attachments into the node sandbox so the
+    // agent's file tools can read them. A failure leaves the agent without the staged workspace (its file tools report
+    // "no workspace") but must never fail the chat turn — a genuine user cancel is handled by the run path downstream.
+    private async Task PrepareConversationAttachmentsSafelyAsync(Guid conversationId, CancellationToken cancellationToken)
+    {
+        try
+        {
+            await conversationSandboxStager.PrepareConversationAttachmentsAsync(conversationId, cancellationToken).ConfigureAwait(false);
+        }
+        catch (Exception exception)
+        {
+            logger.LogWarning(exception,
+                "AgentHome attachment staging for conversation {ConversationId} failed; the agent will run without staged attachments.",
+                conversationId);
+        }
     }
 
     private static string LoadResolvedSystemPrompt(LocalChatAgentOptions options)

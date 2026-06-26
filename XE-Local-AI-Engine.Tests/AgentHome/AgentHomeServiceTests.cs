@@ -650,6 +650,113 @@ public sealed class AgentHomeServiceTests : IDisposable
         AssertEx.Equal(expected: 0, store.CreatedSnapshotPaths.Count);
     }
 
+    [Test]
+    public async Task PrepareConversationAttachmentsAsync_WhenAgentModeDisabled_StagesNothing()
+    {
+        var clock = new FixedClock(FixedNow);
+        var provider = new FakeSandboxRuntimeProvider(clock);
+        var resolver = new FakeSelectedFolderResolver();
+
+        var conversationId = Guid.NewGuid();
+        var store = new FakeConversationUploadedFileStore();
+        store.Add(conversationId, "report.pdf", "# Report\n\nBearing housing B-12.");
+
+        // enabled defaults to false → the coder tools refuse at execution anyway, so no sandbox is created and no
+        // decrypted snapshot is staged.
+        using var harness = CreateHarness(clock, provider, resolver, uploadedFileStore: store);
+
+        await harness.Service.PrepareConversationAttachmentsAsync(conversationId);
+
+        AssertEx.Equal(expected: 0, store.CreatedSnapshotPaths.Count);
+        AssertEx.False(await HasLiveSandboxAsync(provider), "Agent Mode disabled must not create a sandbox.");
+    }
+
+    [Test]
+    public async Task PrepareConversationAttachmentsAsync_WhenConversationHasNoFiles_LeavesExistingSandboxUntouched()
+    {
+        var clock = new FixedClock(FixedNow);
+        var provider = new FakeSandboxRuntimeProvider(clock);
+        var resolver = new FakeSelectedFolderResolver();
+        var store = new FakeConversationUploadedFileStore();
+
+        using var harness = CreateHarness(clock, provider, resolver, uploadedFileStore: store, enabled: true);
+
+        // A pre-existing sandbox (e.g. from a separate project-workspace prepare) must not be recreated by an
+        // attachment-free chat turn.
+        var existing = await provider.CreateOrAttachAsync(new SandboxCreateRequest
+        {
+            AttachKey = AnyKey(),
+            RuntimeProfile = "dotnet-agent-home",
+            NetworkPolicy = SandboxNetworkPolicy.None
+        });
+
+        await harness.Service.PrepareConversationAttachmentsAsync(Guid.NewGuid());
+
+        var after = await provider.ConnectAsync(AnyKey());
+        AssertEx.Equal(existing.SandboxId, after.SandboxId);
+        AssertEx.Equal(expected: 0, store.CreatedSnapshotPaths.Count);
+    }
+
+    [Test]
+    public async Task PrepareConversationAttachmentsAsync_WhenConversationHasFiles_StagesAttachmentsIntoSandbox()
+    {
+        var clock = new FixedClock(FixedNow);
+        var provider = new FakeSandboxRuntimeProvider(clock);
+        var resolver = new FakeSelectedFolderResolver();
+
+        var conversationId = Guid.NewGuid();
+        var store = new FakeConversationUploadedFileStore();
+        store.Add(conversationId, "spec.pdf", "# Spec\n\nPeak battery endurance 38 minutes.");
+
+        using var harness = CreateHarness(clock, provider, resolver, uploadedFileStore: store, enabled: true);
+
+        await harness.Service.PrepareConversationAttachmentsAsync(conversationId);
+
+        var handle = await provider.ConnectAsync(AnyKey());
+        var copied = provider.SnapshotSandboxPaths(handle);
+        AssertEx.Contains(copied, path => path.EndsWith("/attachments/spec.md", StringComparison.Ordinal));
+    }
+
+    [Test]
+    public async Task PrepareConversationAttachmentsAsync_WhenRestagedForAnotherConversation_LeavesNoResidue()
+    {
+        var clock = new FixedClock(FixedNow);
+        var provider = new FakeSandboxRuntimeProvider(clock);
+        var resolver = new FakeSelectedFolderResolver();
+
+        var conversationA = Guid.NewGuid();
+        var conversationB = Guid.NewGuid();
+        var store = new FakeConversationUploadedFileStore();
+        store.Add(conversationA, "alpha.pdf", "# Alpha");
+        store.Add(conversationB, "bravo.pdf", "# Bravo");
+
+        using var harness = CreateHarness(clock, provider, resolver, uploadedFileStore: store, enabled: true);
+
+        await harness.Service.PrepareConversationAttachmentsAsync(conversationA);
+        await harness.Service.PrepareConversationAttachmentsAsync(conversationB);
+
+        // The per-node sandbox is shared across conversations, so the second re-stage must leave only conversation B's
+        // attachments — never conversation A's (no cross-conversation residue).
+        var handle = await provider.ConnectAsync(AnyKey());
+        var copied = provider.SnapshotSandboxPaths(handle);
+        AssertEx.Contains(copied, path => path.EndsWith("/attachments/bravo.md", StringComparison.Ordinal));
+        AssertEx.True(copied.All(path => !path.EndsWith("/attachments/alpha.md", StringComparison.Ordinal)),
+            "conversation A's attachment must not survive the re-stage for conversation B.");
+    }
+
+    private static async Task<bool> HasLiveSandboxAsync(FakeSandboxRuntimeProvider provider)
+    {
+        try
+        {
+            _ = await provider.ConnectAsync(AnyKey());
+            return true;
+        }
+        catch (SandboxHandleInvalidException)
+        {
+            return false;
+        }
+    }
+
     private static AgentHomeRunLifecycleRequest NewLifecycle(Guid folderId)
     {
         return new AgentHomeRunLifecycleRequest
@@ -729,7 +836,8 @@ public sealed class AgentHomeServiceTests : IDisposable
         ISelectedFolderResolver resolver,
         IAgentHomeIdentityProvider? identity = null,
         int commandTimeoutSeconds = 300,
-        IConversationUploadedFileStore? uploadedFileStore = null)
+        IConversationUploadedFileStore? uploadedFileStore = null,
+        bool enabled = false)
     {
         var root = Path.Combine(Path.GetTempPath(), "agenthome-svc-" + Guid.NewGuid().ToString("N"));
         _tempRoots.Add(root);
@@ -737,7 +845,8 @@ public sealed class AgentHomeServiceTests : IDisposable
         var options = Options.Create(new AgentHomeOptions
         {
             RootPath = root,
-            CommandTimeoutSeconds = commandTimeoutSeconds
+            CommandTimeoutSeconds = commandTimeoutSeconds,
+            Enabled = enabled
         });
         var runtimeSettings = StubNodeRuntimeSettings.Create()
                                                      .WithAgentHomeCommandTimeoutSeconds(commandTimeoutSeconds)

@@ -31,6 +31,9 @@ internal static class AddNodeAgentHomeExtensions
         // Host patch-apply service: approval-gated landing of exported changes.patch onto selected host folders.
         builder.Services.AddScoped<INodePatchApplyService, NodePatchApplyService>();
         builder.Services.AddSingleton<IAgentHomeService, AgentHomeService>();
+        // The chat agent-mode attachment stager is the SAME AgentHomeService singleton, so its conversation re-stage
+        // shares the run-level single-flight guard with run_in_agent_home rather than racing it on the node sandbox.
+        builder.Services.AddSingleton<IConversationSandboxStager>(static sp => (AgentHomeService)sp.GetRequiredService<IAgentHomeService>());
         builder.Services.AddSingleton<IAgentHomeToolGateway, AgentHomeToolGateway>();
         builder.Services.AddSingleton<IClientLocalToolHandler, RunInAgentHomeToolHandler>();
         // Sandbox provider selection. The provider is configuration-bound and resolved once; the default is the
