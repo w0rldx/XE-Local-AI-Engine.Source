@@ -1,6 +1,6 @@
 name: release
 
-# Triggered by a semver tag push (e.g. v0.1.0-rc.1) or manually via workflow_dispatch.
+# Triggered by a semver tag push (e.g. v0.1.0-rc.1.0) or manually via workflow_dispatch.
 # Produces Velopack installer + portable + delta packages for each RID and uploads
 # them to the target GitHub release repo for the chosen build flavor.
 on:
@@ -62,7 +62,7 @@ jobs:
   # ---------------------------------------------------------------------------
   # Compose the Velopack pack-version once and share it across all matrix legs.
   # Source of truth: Directory.Build.props VersionPrefix + VersionSuffix.
-  # Current value:  0.1.0-rc.1  (tag convention vX.Y.Z-rc.N)
+  # Current value:  0.1.0-rc.1.0  (tag convention vX.Y.Z[-suffix])
   # ---------------------------------------------------------------------------
   version:
     runs-on: ubuntu-latest
