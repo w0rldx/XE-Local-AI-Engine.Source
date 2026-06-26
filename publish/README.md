@@ -23,12 +23,12 @@ These compose to a SemVer string `"<VersionPrefix>-<VersionSuffix>"` — current
 
 This one value propagates everywhere — there is no second place to edit:
 
-| Consumer | How it reads the version |
-|---|---|
+| Consumer                  | How it reads the version                                                                                                                                         |
+| ------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | **About dialog** (in-app) | Vite injects `VITE_APP_VERSION` at build time via `XE-Local-AI-Engine.Client.React/vite.config.ts` → `resolveAppVersion()`, which reads `Directory.Build.props`. |
-| **Tester zip filename** | `publish/package-rc.sh` → `read_version()` reads the two props → `xe-local-ai-engine-<version>-<rid>.zip`. |
-| **Velopack package** | `.github/workflows/release.yml` composes `--packVersion` from the same two props (and asserts it is valid SemVer before uploading). |
-| **Git tag** | Convention `vX.Y.Z[-suffix]`, e.g. `v0.1.0-rc.1.0` — must match the composed version. |
+| **Tester zip filename**   | `publish/package-rc.sh` → `read_version()` reads the two props → `xe-local-ai-engine-<version>-<rid>.zip`.                                                       |
+| **Velopack package**      | `.github/workflows/release.yml` composes `--packVersion` from the same two props (and asserts it is valid SemVer before uploading).                              |
+| **Git tag**               | Convention `vX.Y.Z[-suffix]`, e.g. `v0.1.0-rc.1.0` — must match the composed version.                                                                            |
 
 > **To cut a release: bump `VersionPrefix`/`VersionSuffix` in `Directory.Build.props`
 > first, commit, then tag.** Everything downstream picks it up automatically.
