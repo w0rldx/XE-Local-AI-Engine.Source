@@ -13,7 +13,8 @@ internal static class SupervisorFactory
         LlamaServerSupervisorOptions? options = null,
         LlamaServerExternalEndpointOptions? externalEndpoints = null,
         AdvanceableTimeProvider? timeProvider = null,
-        IGpuVariantSelector? variantSelector = null)
+        IGpuVariantSelector? variantSelector = null,
+        IInferenceProfileResolver? profileResolver = null)
     {
         return new LlamaServerProcessSupervisor(new FakeBinaryManager(),
             variantSelector ?? new FakeVariantSelector(),
@@ -27,6 +28,7 @@ internal static class SupervisorFactory
                 MaxLoadedProcesses = 3,
                 MaxRestartAttempts = 3
             },
+            profileResolver ?? new FakeInferenceProfileResolver(),
             externalEndpoints,
             timeProvider ?? new AdvanceableTimeProvider());
     }

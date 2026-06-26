@@ -27,10 +27,6 @@ public sealed class LlamaServerProcessSupervisor : ILlamaServerProcessSupervisor
 {
     private const string NonRetryableMarker = "LlamaServer.NonRetryable";
 
-    // Offload every model layer to the GPU. llama.cpp clamps this to the model's actual layer count, so a value above
-    // any real model's layer count means "all layers on the GPU". Only applied for a GPU runtime variant.
-    private const string OffloadAllGpuLayers = "999";
-
     /// <summary>Cold-start readiness budget for a freshly spawned process before its first request.</summary>
     private static readonly TimeSpan ReadinessTimeout = TimeSpan.FromMinutes(2);
 
@@ -49,6 +45,7 @@ public sealed class LlamaServerProcessSupervisor : ILlamaServerProcessSupervisor
     private readonly ILlamaServerProcessLauncher _launcher;
     private readonly IGgufModelStore _modelStore;
     private readonly LlamaServerSupervisorOptions _options;
+    private readonly IInferenceProfileResolver _profileResolver;
 
     // One running process per (model, role) key.
     private readonly ConcurrentDictionary<ProcessKey, RunningProcess> _processes = new();
@@ -69,6 +66,7 @@ public sealed class LlamaServerProcessSupervisor : ILlamaServerProcessSupervisor
         ILlamaServerProcessLauncher launcher,
         ILlamaServerHealthProbe healthProbe,
         LlamaServerSupervisorOptions options,
+        IInferenceProfileResolver profileResolver,
         LlamaServerExternalEndpointOptions? externalEndpoints = null,
         TimeProvider? timeProvider = null)
     {
@@ -78,6 +76,7 @@ public sealed class LlamaServerProcessSupervisor : ILlamaServerProcessSupervisor
         _launcher = launcher ?? throw new ArgumentNullException(nameof(launcher));
         _healthProbe = healthProbe ?? throw new ArgumentNullException(nameof(healthProbe));
         _options = options ?? throw new ArgumentNullException(nameof(options));
+        _profileResolver = profileResolver ?? throw new ArgumentNullException(nameof(profileResolver));
         _externalEndpoints = externalEndpoints ?? new LlamaServerExternalEndpointOptions();
         _timeProvider = timeProvider ?? TimeProvider.System;
 
@@ -273,12 +272,16 @@ public sealed class LlamaServerProcessSupervisor : ILlamaServerProcessSupervisor
         var variant = await _variantSelector.SelectVariantAsync(ct).ConfigureAwait(false);
         var binary = await _binaryManager.EnsureBinaryAsync(variant, ct).ConfigureAwait(false);
 
+        // Resolve the launch args (frozen-profile replay or explore-mode auto-fit) for this (model, role, backend) BEFORE
+        // taking the admission gate, so a slow profile read never stalls admission for other keys.
+        var resolved = await _profileResolver.ResolveAsync(key.ModelName, key.Role, variant, ct).ConfigureAwait(false);
+
         var port = await AdmitAndAllocatePortAsync(ct).ConfigureAwait(false);
 
         ILlamaServerProcessHandle? handle = null;
         try
         {
-            var spec = BuildLaunchSpec(key, binary.ServerExecutablePath, modelFilePath, port, variant);
+            var spec = BuildLaunchSpec(key, binary.ServerExecutablePath, modelFilePath, port, variant, resolved);
             handle = _launcher.Launch(spec);
 
             var ready = await _healthProbe
@@ -338,7 +341,12 @@ public sealed class LlamaServerProcessSupervisor : ILlamaServerProcessSupervisor
     }
 
     /// <summary>Builds the exact, ordered llama-server argument vector for a <c>(model, role)</c> on a port.</summary>
-    internal static LlamaServerLaunchSpec BuildLaunchSpec(ProcessKey key, string executablePath, string modelFilePath, int port, GpuVariant variant)
+    internal static LlamaServerLaunchSpec BuildLaunchSpec(ProcessKey key,
+        string executablePath,
+        string modelFilePath,
+        int port,
+        GpuVariant variant,
+        ResolvedLaunchArguments resolved)
     {
         var args = new List<string>
         {
@@ -350,14 +358,14 @@ public sealed class LlamaServerProcessSupervisor : ILlamaServerProcessSupervisor
             port.ToString(CultureInfo.InvariantCulture)
         };
 
-        // The variant only selects the GPU-enabled llama.cpp BUILD (Cuda/Vulkan). llama-server's default n-gpu-layers
-        // is 0, so without this flag every layer stays in system RAM and inference runs on the CPU even though CUDA is
-        // present and reported by llama.cpp — exactly the "model loaded in RAM, CUDA detected" symptom. Passing
-        // --n-gpu-layers offloads the layers to the GPU. Omitted for the CPU variant so it stays a pure CPU run.
+        // The variant only selects the GPU-enabled llama.cpp BUILD (Cuda/Vulkan); the CPU variant stays a pure CPU run
+        // and emits NO gpu/fit args. For a GPU build, placement is no longer forced (the old --n-gpu-layers 999 is gone):
+        // llama.cpp's default --fit auto-fit now drives layer/expert placement. Explore mode emits --fit on + --metrics so
+        // llama.cpp fits and prints the chosen params for capture; replay mode emits the frozen profile args verbatim
+        // (and omits --fit, since any explicit fit-arg disables auto-fit — the two are mutually exclusive per run).
         if (variant != GpuVariant.Cpu)
         {
-            args.Add("--n-gpu-layers");
-            args.Add(OffloadAllGpuLayers);
+            AppendGpuPlacementArgs(args, resolved);
         }
 
         if (key.Role == ModelRole.Chat)
@@ -375,6 +383,58 @@ public sealed class LlamaServerProcessSupervisor : ILlamaServerProcessSupervisor
 
         var workingDirectory = Path.GetDirectoryName(Path.GetFullPath(executablePath)) ?? Environment.CurrentDirectory;
         return new LlamaServerLaunchSpec(key.ModelName, key.Role, executablePath, args, port, workingDirectory);
+    }
+
+    /// <summary>
+    ///     Appends the GPU placement args for a non-CPU build: explore-mode auto-fit (<c>--fit on</c> + <c>--metrics</c>)
+    ///     or the resolved profile's explicit replay args (<c>-c/-ngl/-ts/-ot</c> + matched <c>-ctk/-ctv</c> with
+    ///     <c>--flash-attn on</c>). The two paths are mutually exclusive — replay never sets <c>--fit</c>.
+    /// </summary>
+    private static void AppendGpuPlacementArgs(List<string> args, ResolvedLaunchArguments resolved)
+    {
+        if (resolved.ExploreMode)
+        {
+            // Let llama.cpp auto-fit choose and print placement; --metrics exposes the throughput/cache gauges the
+            // benchmark reads. Emitting any explicit fit-arg here would disable auto-fit, so emit none.
+            args.Add("--fit");
+            args.Add("on");
+            args.Add("--metrics");
+            return;
+        }
+
+        // Replay a frozen/explored profile verbatim. --fit is intentionally absent (an explicit fit-arg disables it).
+        args.Add("-c");
+        args.Add(resolved.CtxSize.ToString(CultureInfo.InvariantCulture));
+
+        if (resolved.NGpuLayers is { } gpuLayers)
+        {
+            args.Add("--n-gpu-layers");
+            args.Add(gpuLayers.ToString(CultureInfo.InvariantCulture));
+        }
+
+        if (!string.IsNullOrWhiteSpace(resolved.TensorSplit))
+        {
+            args.Add("-ts");
+            args.Add(resolved.TensorSplit);
+        }
+
+        if (!string.IsNullOrWhiteSpace(resolved.OverrideTensor))
+        {
+            args.Add("-ot");
+            args.Add(resolved.OverrideTensor);
+        }
+
+        if (!string.IsNullOrWhiteSpace(resolved.KvTypeK) && !string.IsNullOrWhiteSpace(resolved.KvTypeV))
+        {
+            // Matching-type rule + flash-attention invariant (enforced upstream in ResolvedLaunchArguments.Replay):
+            // the fused FA path needs equal K/V types and --flash-attn on.
+            args.Add("-ctk");
+            args.Add(resolved.KvTypeK);
+            args.Add("-ctv");
+            args.Add(resolved.KvTypeV);
+            args.Add("--flash-attn");
+            args.Add("on");
+        }
     }
 
     /// <summary>Background reaper: evicts processes idle beyond <see cref="LlamaServerSupervisorOptions.IdleTimeToLive" />.</summary>

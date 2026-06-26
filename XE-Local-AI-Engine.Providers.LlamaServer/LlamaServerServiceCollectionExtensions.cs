@@ -62,6 +62,11 @@ public static class LlamaServerServiceCollectionExtensions
         services.TryAddSingleton<ILlamaServerHealthProbe>(static sp =>
             new LlamaServerHealthProbe(sp.GetRequiredService<HttpClient>()));
 
+        // Self-satisfying launch-arg resolver: explore-mode (auto-fit) until the Application host registers its
+        // DB-backed IInferenceProfileResolver last (last registration wins), keeping the layer arrow Application →
+        // Providers (the interface is DEFINED here, implemented in Application).
+        services.TryAddSingleton<IInferenceProfileResolver, DefaultInferenceProfileResolver>();
+
         // The supervisor owns all llama-server child processes for the node — strictly one singleton. Built via an
         // explicit factory because its ctor is internal (it takes the internal launcher/health-probe seams).
         services.TryAddSingleton(static sp => new LlamaServerProcessSupervisor(sp.GetRequiredService<ILlamaCppBinaryManager>(),
@@ -70,6 +75,7 @@ public static class LlamaServerServiceCollectionExtensions
             sp.GetRequiredService<ILlamaServerProcessLauncher>(),
             sp.GetRequiredService<ILlamaServerHealthProbe>(),
             sp.GetRequiredService<LlamaServerSupervisorOptions>(),
+            sp.GetRequiredService<IInferenceProfileResolver>(),
             sp.GetRequiredService<LlamaServerExternalEndpointOptions>(),
             sp.GetService<TimeProvider>()));
         services.TryAddSingleton<ILlamaServerProcessSupervisor>(static sp =>
