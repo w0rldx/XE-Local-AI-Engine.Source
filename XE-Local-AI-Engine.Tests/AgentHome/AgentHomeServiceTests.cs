@@ -6,12 +6,14 @@ using Microsoft.Extensions.Options;
 using XE_Local_AI_Engine.Client.Persistence;
 using XE_Local_AI_Engine.Client.Services.AgentHome;
 using XE_Local_AI_Engine.Client.Services.AgentHome.Implementation;
+using XE_Local_AI_Engine.Client.Services.DocumentIngestion;
 using XE_Local_AI_Engine.Client.Services.Sandbox;
 using XE_Local_AI_Engine.Client.Services.Sandbox.Fake;
 using XE_Local_AI_Engine.Client.Services.Workspace;
 using XE_Local_AI_Engine.Client.Services.Workspace.Implementation;
 using XE_Local_AI_Engine.Tests.Testing;
 using XE_Local_AI_Engine.Tests.Testing.Builders;
+using XE_Local_AI_Engine.Tests.Testing.Mocks;
 
 /// <summary>
 ///     Service-level coverage: the real <see cref="AgentHomeService" /> drives the real
@@ -555,6 +557,99 @@ public sealed class AgentHomeServiceTests : IDisposable
         AssertEx.Equal("node-1", prepared.Handle.AttachKey.NodeId);
     }
 
+    [Test]
+    public async Task PrepareAsync_WhenConversationHasAttachments_AppendsAttachmentsFolderAndStagesMarkdown()
+    {
+        var clock = new FixedClock(FixedNow);
+        var provider = new FakeSandboxRuntimeProvider(clock);
+        var resolver = new FakeSelectedFolderResolver();
+        var folderId = Guid.NewGuid();
+        resolver.Add(folderId, "selected-project", CreateSourceFolder());
+
+        var conversationId = Guid.NewGuid();
+        var store = new FakeConversationUploadedFileStore();
+        store.Add(conversationId, "report.pdf", "# Quarterly report\n\nRevenue grew 12%.");
+
+        using var harness = CreateHarness(clock, provider, resolver, uploadedFileStore: store);
+
+        var prepared = await harness.Service.PrepareAsync(new AgentHomePrepareRequest
+        {
+            SelectedFolderIds = [folderId.ToString()],
+            ConversationId = conversationId
+        });
+
+        // The synthetic "attachments" folder is appended alongside the user folder, so both are resolved and copied.
+        AssertEx.Contains(prepared.ResolvedFolders, folder => folder.Alias == "attachments");
+        var attachments = prepared.FolderSnapshots.Single(snapshot => snapshot.Alias == "attachments");
+        AssertEx.Equal(SelectedFolderCopyStatus.Copied, attachments.Status);
+        AssertEx.Equal(expected: 1, attachments.CopiedFileCount);
+        AssertEx.Equal("workspace/selected/attachments", attachments.WorkspacePath);
+
+        // The decrypted Markdown was copied into the sandbox so the agent's read tools discover it.
+        var copied = provider.SnapshotSandboxPaths(prepared.Handle);
+        AssertEx.Contains(copied, path => path.EndsWith("/attachments/report.md", StringComparison.Ordinal));
+
+        // The staging snapshot holds DECRYPTED plaintext; it must be disposed once the copy completes so it never lingers.
+        AssertEx.Equal(expected: 1, store.CreatedSnapshotPaths.Count);
+        AssertEx.False(Directory.Exists(store.CreatedSnapshotPaths[0]),
+            "the decrypted staging temp dir must be removed after the workspace copy completes");
+    }
+
+    [Test]
+    public async Task PrepareAsync_WhenNoConversationId_DoesNotAppendAttachmentsFolder()
+    {
+        var clock = new FixedClock(FixedNow);
+        var provider = new FakeSandboxRuntimeProvider(clock);
+        var resolver = new FakeSelectedFolderResolver();
+        var folderId = Guid.NewGuid();
+        resolver.Add(folderId, "selected-project", CreateSourceFolder());
+
+        var conversationId = Guid.NewGuid();
+        var store = new FakeConversationUploadedFileStore();
+        store.Add(conversationId, "report.pdf", "# Quarterly report");
+
+        using var harness = CreateHarness(clock, provider, resolver, uploadedFileStore: store);
+
+        // No ConversationId seeded, so even a conversation WITH files contributes nothing — no snapshot is even created.
+        var prepared = await harness.Service.PrepareAsync(new AgentHomePrepareRequest
+        {
+            SelectedFolderIds = [folderId.ToString()]
+        });
+
+        AssertEx.True(prepared.ResolvedFolders.All(folder => folder.Alias != "attachments"),
+            "with no conversation context no attachments folder is appended");
+        AssertEx.True(prepared.FolderSnapshots.All(snapshot => snapshot.Alias != "attachments"),
+            "with no conversation context no attachments folder is copied");
+        AssertEx.Equal(expected: 0, store.CreatedSnapshotPaths.Count);
+    }
+
+    [Test]
+    public async Task PrepareAsync_WhenConversationHasNoFiles_DoesNotAppendAttachmentsFolder()
+    {
+        var clock = new FixedClock(FixedNow);
+        var provider = new FakeSandboxRuntimeProvider(clock);
+        var resolver = new FakeSelectedFolderResolver();
+        var folderId = Guid.NewGuid();
+        resolver.Add(folderId, "selected-project", CreateSourceFolder());
+
+        // A conversation id is set but the store has no files for it, so the staging step is a no-op.
+        var store = new FakeConversationUploadedFileStore();
+
+        using var harness = CreateHarness(clock, provider, resolver, uploadedFileStore: store);
+
+        var prepared = await harness.Service.PrepareAsync(new AgentHomePrepareRequest
+        {
+            SelectedFolderIds = [folderId.ToString()],
+            ConversationId = Guid.NewGuid()
+        });
+
+        AssertEx.True(prepared.ResolvedFolders.All(folder => folder.Alias != "attachments"),
+            "a conversation with no files appends no attachments folder");
+        AssertEx.True(prepared.FolderSnapshots.All(snapshot => snapshot.Alias != "attachments"),
+            "a conversation with no files copies no attachments folder");
+        AssertEx.Equal(expected: 0, store.CreatedSnapshotPaths.Count);
+    }
+
     private static AgentHomeRunLifecycleRequest NewLifecycle(Guid folderId)
     {
         return new AgentHomeRunLifecycleRequest
@@ -633,7 +728,8 @@ public sealed class AgentHomeServiceTests : IDisposable
         ISandboxRuntimeProvider provider,
         ISelectedFolderResolver resolver,
         IAgentHomeIdentityProvider? identity = null,
-        int commandTimeoutSeconds = 300)
+        int commandTimeoutSeconds = 300,
+        IConversationUploadedFileStore? uploadedFileStore = null)
     {
         var root = Path.Combine(Path.GetTempPath(), "agenthome-svc-" + Guid.NewGuid().ToString("N"));
         _tempRoots.Add(root);
@@ -675,6 +771,7 @@ public sealed class AgentHomeServiceTests : IDisposable
             serviceProvider.GetRequiredService<IServiceScopeFactory>(),
             options,
             runtimeSettings,
+            uploadedFileStore ?? new FakeConversationUploadedFileStore(),
             clock,
             NullLogger<AgentHomeService>.Instance);
 

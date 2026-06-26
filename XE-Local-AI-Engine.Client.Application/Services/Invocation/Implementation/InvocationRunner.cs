@@ -13,6 +13,7 @@ using XE_Local_AI_Engine.Client.Models;
 using XE_Local_AI_Engine.Client.Models.Encrypted;
 using XE_Local_AI_Engine.Client.Models.Enums;
 using XE_Local_AI_Engine.Client.Models.Events;
+using XE_Local_AI_Engine.Client.Services.AgentHome;
 using XE_Local_AI_Engine.Client.Services.Capabilities;
 using XE_Local_AI_Engine.Client.Services.Capacity;
 using XE_Local_AI_Engine.Client.Services.CloudProviders;
@@ -159,6 +160,11 @@ public sealed partial class InvocationRunner : IInvocationRunner
             // AsyncLocal into the function-invocation pipeline that runs the tool body; disposal restores the prior
             // ambient value. A turn that never spawns pays only a struct allocation.
             using var spawnRoot = SpawnContext.BeginRoot(_spawnOptions.MaxConcurrentSpawns, _spawnOptions.MaxCloudSpawns);
+
+            // Seed the active conversation id into the same root tool-loop scope so the AgentHome tool gateway can stage
+            // this conversation's uploaded attachments into the sandbox. Like the spawn context it flows as an
+            // AsyncLocal through the function-invocation pipeline; disposal restores the prior ambient value.
+            using var conversationScope = AgentRunConversationContext.BeginScope(package.ConversationId);
 
             // Branch: a package carrying a compiled orchestration spec drives the handoff workflow; everything else is
             // the unchanged single-agent loop. Both accumulate into `stream`, then share the completion block below.
