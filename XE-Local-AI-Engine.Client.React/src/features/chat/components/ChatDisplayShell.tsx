@@ -1,11 +1,12 @@
-import { ActionIcon, Alert, Drawer, Group, Paper, Stack, Switch, Text, Tooltip } from "@mantine/core";
+import { ActionIcon, Alert, Box, Drawer, Group, Paper, Stack, Switch, Text, Tooltip } from "@mantine/core";
 import { useDisclosure, useMediaQuery } from "@mantine/hooks";
-import { IconInfoCircle, IconLayoutSidebar } from "@tabler/icons-react";
+import { IconInfoCircle, IconLayoutSidebar, IconUpload } from "@tabler/icons-react";
 import { useTranslation } from "react-i18next";
 
 import { ChatInputArea } from "@/features/chat/components/ChatInputArea";
 import { ChatMessageList } from "@/features/chat/components/ChatMessageList";
 import { ConversationList } from "@/features/chat/components/ConversationList";
+import { usePaneFileDrop } from "@/features/chat/hooks/usePaneFileDrop";
 import { defaultChatUiCapabilities } from "@/features/chat/models/ChatCapabilityGates";
 import type { ChatDisplayShellProps } from "@/features/chat/models/ChatModels";
 
@@ -79,6 +80,14 @@ export function ChatDisplayShell({
 	// is the default and the existing desktop tests keep exercising the grid path unchanged.
 	const isMobile = useMediaQuery("(max-width: 767px)");
 	const [conversationDrawerOpened, { open: openConversationDrawer, close: closeConversationDrawer }] = useDisclosure(false);
+
+	// Pane-level file drop: a user can drop files anywhere on the chat window (message list + composer), not only on the
+	// composer's paperclip. Gated by the same capability + wired handler as the composer, and suppressed while the input
+	// is disabled / mid-send. Drops onto the composer itself are handled there (it stops propagation), so this never
+	// double-fires for the same drop.
+	const fileDropEnabled =
+		capabilities.showFileAttachmentControls && Boolean(onUploadFiles) && !inputStatus.chatInputDisabled && !inputStatus.isSending;
+	const { isFileDragActive, dropProps } = usePaneFileDrop(fileDropEnabled, (files) => onUploadFiles?.(files));
 
 	const conversationList = (
 		<ConversationList
@@ -157,7 +166,10 @@ export function ChatDisplayShell({
 			withBorder={true}
 			p="md"
 			h="100%"
+			data-testid="chat-pane"
+			{...dropProps}
 			style={{
+				position: "relative",
 				display: "flex",
 				flexDirection: "column",
 				minHeight: 0,
@@ -165,6 +177,30 @@ export function ChatDisplayShell({
 				borderRadius: isMobile ? "var(--mantine-radius-md)" : "0 var(--mantine-radius-md) var(--mantine-radius-md) 0",
 			}}
 		>
+			{isFileDragActive ? (
+				<Box
+					data-testid="chat-file-drop-overlay"
+					style={{
+						position: "absolute",
+						inset: 0,
+						zIndex: 5,
+						display: "flex",
+						alignItems: "center",
+						justifyContent: "center",
+						borderRadius: "inherit",
+						border: "2px dashed var(--mantine-color-primary-5)",
+						backgroundColor: "var(--mantine-color-body)",
+						opacity: 0.92,
+						// Let drag/drop events fall through to the Paper underneath so the overlay never swallows the drop.
+						pointerEvents: "none",
+					}}
+				>
+					<Group gap="xs" c="primary">
+						<IconUpload size={20} />
+						<Text fw={600}>{t("pages.chat.composer.dropToAttach", "Drop files to attach")}</Text>
+					</Group>
+				</Box>
+			) : null}
 			<Stack gap="md" style={{ flex: 1, minHeight: 0 }}>
 				{chatPaneHeader}
 				<ChatMessageList

@@ -147,11 +147,15 @@ export function ChatInputArea({
 		if (!fileAttachmentsEnabled || attachmentControlsDisabled) {
 			return;
 		}
+		// Stop the event reaching the chat-pane-level drop zone (ChatDisplayShell) so a drop on the composer is handled
+		// here once, not also by the pane — and the pane overlay stays hidden while hovering the composer.
+		event.stopPropagation();
 		event.preventDefault();
 		setDragActive(true);
 	};
 
 	const handleDragLeave = (event: DragEvent<HTMLDivElement>): void => {
+		event.stopPropagation();
 		event.preventDefault();
 		setDragActive(false);
 	};
@@ -160,6 +164,7 @@ export function ChatInputArea({
 		if (!fileAttachmentsEnabled || attachmentControlsDisabled) {
 			return;
 		}
+		event.stopPropagation();
 		event.preventDefault();
 		setDragActive(false);
 		const files = Array.from(event.dataTransfer.files);
