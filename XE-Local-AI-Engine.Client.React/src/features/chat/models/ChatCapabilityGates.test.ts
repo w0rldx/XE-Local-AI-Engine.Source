@@ -12,7 +12,7 @@ describe("chat capability gates", () => {
 			showClientNodeRoutingControls: false,
 			showToolApprovalControls: false,
 			showConversationFeedbackControls: true,
-			showFileAttachmentControls: false,
+			showFileAttachmentControls: true,
 			showImageAttachmentControls: false,
 			showLocalToolControls: true,
 		});

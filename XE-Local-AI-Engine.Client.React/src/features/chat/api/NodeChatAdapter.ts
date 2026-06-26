@@ -68,6 +68,9 @@ export interface SendMessageRequest {
 	// agent mode is enabled, a valid agent is selected, and the agent still exists in the live list (stale/deleted
 	// ids are dropped by Chat.tsx before the send).
 	agentDefinitionId?: string;
+	// Current (non-deleted) attachment file ids for the conversation, re-sent on every turn so the server can
+	// ground plain chat (inline extracted text) and stage files into AgentHome for agent mode. Absent/empty → none.
+	attachmentFileIds?: string[];
 	// Developer-mode per-send sampling overrides. Omitted entirely when developer mode is off or all fields null.
 	samplingOptions?: ChatSamplingOptions;
 }
@@ -127,6 +130,10 @@ function toStreamRequest(request: SendMessageRequest): NodeChatStreamRequestDto 
 		reasoningEffort: request.reasoningEffort,
 		selectedPath: request.selectedPath,
 		agentDefinitionId: request.agentDefinitionId,
+		// Forward the conversation's current attachment ids only when present (omit the empty array to keep the
+		// wire payload byte-identical to the no-attachment path).
+		attachmentFileIds:
+			request.attachmentFileIds && request.attachmentFileIds.length > 0 ? request.attachmentFileIds : undefined,
 		// Forward sampling overrides only when present; omitted when developer mode is off or nothing set.
 		samplingOptions: request.samplingOptions,
 	};

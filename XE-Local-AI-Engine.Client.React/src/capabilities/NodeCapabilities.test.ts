@@ -33,7 +33,7 @@ describe("nodeCapabilities", () => {
 			offlineFirst: false,
 			encryptedConversations: false,
 			clientNodeRouting: false,
-			fileAttachments: false,
+			fileAttachments: true,
 			imageAttachments: false,
 			agentManagement: true,
 		});

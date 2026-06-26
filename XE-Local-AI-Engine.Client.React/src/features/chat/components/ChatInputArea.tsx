@@ -1,4 +1,4 @@
-import { ActionIcon, Box, Button, Group, Menu, Textarea, Tooltip } from "@mantine/core";
+import { ActionIcon, Box, Button, FileButton, Group, Menu, Textarea, Tooltip } from "@mantine/core";
 import {
 	IconAdjustments,
 	IconBrain,
@@ -8,14 +8,16 @@ import {
 	IconPlayerStopFilled,
 	IconSend,
 } from "@tabler/icons-react";
-import { useState } from "react";
+import { type DragEvent, useState } from "react";
 import { useTranslation } from "react-i18next";
 
 import { useDeveloperModeStore } from "@/core/dev-tools/stores/DeveloperModeStore";
 import { AgentSelectorCard } from "@/features/chat/components/AgentSelectorCard";
+import { ChatAttachmentChips } from "@/features/chat/components/ChatAttachmentChips";
 import { ChatSamplingOptionsDialog } from "@/features/chat/components/ChatSamplingOptionsDialog";
 import { ContextUsageBadge } from "@/features/chat/components/ContextUsageBadge";
 import { ModelSelectorCard } from "@/features/chat/components/ModelSelectorCard";
+import type { ChatAttachment, PendingAttachmentUpload } from "@/features/chat/models/ChatAttachmentModels";
 import { defaultChatUiCapabilities } from "@/features/chat/models/ChatCapabilityGates";
 import type {
 	AgentOption,
@@ -37,6 +39,13 @@ const composerStyles = {
 // Stable empty default for the optional agentOptions prop. A fresh `[]` in the destructuring default allocates a
 // new array reference every render, which would defeat referential-equality checks downstream.
 const EMPTY_AGENT_OPTIONS: readonly AgentOption[] = [];
+// Stable empty defaults for the optional attachment props (same referential-stability reasoning as above).
+const EMPTY_ATTACHMENTS: readonly ChatAttachment[] = [];
+const EMPTY_PENDING_UPLOADS: readonly PendingAttachmentUpload[] = [];
+
+// File-picker hint for the OS dialog. The server's extractor allowlist is the source of truth (it rejects
+// anything unsupported); this only nudges the picker toward the common document/text/code formats we extract.
+const ATTACHMENT_ACCEPT = ".txt,.md,.markdown,.csv,.json,.log,.pdf,.docx,text/*,application/pdf";
 
 interface ChatInputAreaProps {
 	availableReasoningEfforts: ReasoningEffort[];
@@ -59,6 +68,12 @@ interface ChatInputAreaProps {
 	agentModeEnabled?: boolean;
 	selectedAgentId?: string;
 	agentOptions?: readonly AgentOption[];
+	// Conversation file attachments. The chip row + paperclip picker only render when the capability gate
+	// (showFileAttachmentControls) is on; the handlers are wired from Chat.tsx via useConversationAttachments.
+	attachments?: readonly ChatAttachment[];
+	pendingUploads?: readonly PendingAttachmentUpload[];
+	onUploadFiles?: (files: File[]) => void;
+	onRemoveAttachment?: (fileId: string) => void;
 	onCancel: () => void;
 	onModelChange: (model: string) => void;
 	onReasoningEffortChange: (effort: ReasoningEffort) => void;
@@ -90,6 +105,10 @@ export function ChatInputArea({
 	agentModeEnabled = false,
 	selectedAgentId = "",
 	agentOptions = EMPTY_AGENT_OPTIONS,
+	attachments = EMPTY_ATTACHMENTS,
+	pendingUploads = EMPTY_PENDING_UPLOADS,
+	onUploadFiles,
+	onRemoveAttachment,
 	onCancel,
 	onModelChange,
 	onReasoningEffortChange,
@@ -100,6 +119,8 @@ export function ChatInputArea({
 	const { t } = useTranslation();
 	const [content, setContent] = useState("");
 	const [samplingDialogOpen, setSamplingDialogOpen] = useState(false);
+	// Drag-over highlight for the file drop target (only meaningful when file attachments are enabled).
+	const [isDragActive, setDragActive] = useState(false);
 	// Read developer mode directly from the global store — avoids prop-drilling through ChatDisplayShell.
 	const developerMode = useDeveloperModeStore((state) => state.developerMode);
 	const trimmed = content.trim();
@@ -111,6 +132,41 @@ export function ChatInputArea({
 	const sendDisabled = isSending ? false : disabled || sendDisabledProp || !trimmed;
 	// Agent selector is disabled while sending or when there are no agents to pick from.
 	const agentSelectorDisabled = disabled || isSending || agentOptions.length === 0;
+	// File attachments are offered only behind the capability gate, with a wired upload handler, and while the
+	// composer is interactive (not disabled / mid-send).
+	const fileAttachmentsEnabled = capabilities.showFileAttachmentControls && Boolean(onUploadFiles);
+	const attachmentControlsDisabled = disabled || isSending;
+
+	const handlePickFiles = (files: File[] | null): void => {
+		if (files && files.length > 0) {
+			onUploadFiles?.(files);
+		}
+	};
+
+	const handleDragOver = (event: DragEvent<HTMLDivElement>): void => {
+		if (!fileAttachmentsEnabled || attachmentControlsDisabled) {
+			return;
+		}
+		event.preventDefault();
+		setDragActive(true);
+	};
+
+	const handleDragLeave = (event: DragEvent<HTMLDivElement>): void => {
+		event.preventDefault();
+		setDragActive(false);
+	};
+
+	const handleDrop = (event: DragEvent<HTMLDivElement>): void => {
+		if (!fileAttachmentsEnabled || attachmentControlsDisabled) {
+			return;
+		}
+		event.preventDefault();
+		setDragActive(false);
+		const files = Array.from(event.dataTransfer.files);
+		if (files.length > 0) {
+			onUploadFiles?.(files);
+		}
+	};
 
 	const submit = (): void => {
 		if (!trimmed) {
@@ -196,12 +252,24 @@ export function ChatInputArea({
 						onSelectAgent={onSelectAgent ?? (() => undefined)}
 					/>
 				) : null}
-				{capabilities.showFileAttachmentControls ? (
-					<Tooltip label={t("pages.chat.composer.attach", "Attach file")}>
-						<ActionIcon size={36} variant="subtle" color="gray" disabled={true} aria-label="Attach file">
-							<IconPaperclip size={15} />
-						</ActionIcon>
-					</Tooltip>
+				{fileAttachmentsEnabled ? (
+					<FileButton onChange={handlePickFiles} multiple={true} accept={ATTACHMENT_ACCEPT}>
+						{(fileButtonProps) => (
+							<Tooltip label={t("pages.chat.composer.attach", "Attach file")}>
+								<ActionIcon
+									{...fileButtonProps}
+									size={36}
+									variant="subtle"
+									color="gray"
+									disabled={attachmentControlsDisabled}
+									aria-label={t("pages.chat.composer.attach", "Attach file")}
+									data-testid="chat-attach-file-trigger"
+								>
+									<IconPaperclip size={15} />
+								</ActionIcon>
+							</Tooltip>
+						)}
+					</FileButton>
 				) : null}
 				{capabilities.showImageAttachmentControls ? (
 					<Tooltip label={t("pages.chat.composer.image", "Attach image")}>
@@ -248,12 +316,30 @@ export function ChatInputArea({
 	);
 
 	return (
-		<Box data-testid="chat-input-area">
+		<Box
+			data-testid="chat-input-area"
+			onDragOver={fileAttachmentsEnabled ? handleDragOver : undefined}
+			onDragLeave={fileAttachmentsEnabled ? handleDragLeave : undefined}
+			onDrop={fileAttachmentsEnabled ? handleDrop : undefined}
+			style={
+				isDragActive
+					? { outline: "2px dashed var(--mantine-color-primary-5)", outlineOffset: 4, borderRadius: "var(--mantine-radius-md)" }
+					: undefined
+			}
+		>
 			{developerMode ? (
 				<ChatSamplingOptionsDialog
 					opened={samplingDialogOpen}
 					onClose={() => setSamplingDialogOpen(false)}
 					maxContextTokens={contextUsage?.maxTokens}
+				/>
+			) : null}
+			{fileAttachmentsEnabled ? (
+				<ChatAttachmentChips
+					attachments={[...attachments]}
+					pendingUploads={[...pendingUploads]}
+					onRemove={onRemoveAttachment ?? (() => undefined)}
+					disabled={attachmentControlsDisabled}
 				/>
 			) : null}
 			<Textarea

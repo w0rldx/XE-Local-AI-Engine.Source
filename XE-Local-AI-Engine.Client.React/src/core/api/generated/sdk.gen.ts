@@ -2,7 +2,7 @@
 
 import * as z from "zod";
 
-import type { Client, Options as Options2, TDataShape } from "./client";
+import { type Client, formDataBodySerializer, type Options as Options2, type TDataShape } from "./client";
 import { client } from "./client.gen";
 import type {
 	AnalyzePlaybookData,
@@ -86,6 +86,9 @@ import type {
 	DeleteAgentDefinitionData,
 	DeleteAgentDefinitionErrors,
 	DeleteAgentDefinitionResponses,
+	DeleteConversationFileData,
+	DeleteConversationFileErrors,
+	DeleteConversationFileResponses,
 	DeleteGoldenConversationData,
 	DeleteGoldenConversationErrors,
 	DeleteGoldenConversationResponses,
@@ -245,6 +248,9 @@ import type {
 	ListAgentTemplatesData,
 	ListAgentTemplatesErrors,
 	ListAgentTemplatesResponses,
+	ListConversationFilesData,
+	ListConversationFilesErrors,
+	ListConversationFilesResponses,
 	ListGoldenConversationsData,
 	ListGoldenConversationsErrors,
 	ListGoldenConversationsResponses,
@@ -393,6 +399,9 @@ import type {
 	UpdateSuggestedPlaybookActionData,
 	UpdateSuggestedPlaybookActionErrors,
 	UpdateSuggestedPlaybookActionResponses,
+	UploadConversationFileData,
+	UploadConversationFileErrors,
+	UploadConversationFileResponses,
 	ValidationProblemProbeData,
 	ValidationProblemProbeErrors,
 	ValidationProblemProbeResponses,
@@ -448,6 +457,8 @@ import {
 	zCreateSkillResponse,
 	zDeleteAgentDefinitionPath,
 	zDeleteAgentDefinitionResponse,
+	zDeleteConversationFilePath,
+	zDeleteConversationFileResponse,
 	zDeleteGoldenConversationPath,
 	zDeleteGoldenConversationResponse,
 	zDeleteLocalModelPath,
@@ -541,6 +552,8 @@ import {
 	zListAgentPlaybookActionsQuery,
 	zListAgentPlaybookActionsResponse,
 	zListAgentTemplatesResponse,
+	zListConversationFilesPath,
+	zListConversationFilesResponse,
 	zListGoldenConversationsPath,
 	zListGoldenConversationsResponse,
 	zListLocalModelsResponse,
@@ -641,6 +654,9 @@ import {
 	zUpdateSuggestedPlaybookActionBody,
 	zUpdateSuggestedPlaybookActionPath,
 	zUpdateSuggestedPlaybookActionResponse,
+	zUploadConversationFileBody,
+	zUploadConversationFilePath,
+	zUploadConversationFileResponse,
 	zValidationProblemProbeBody,
 	zValidationProblemProbeResponse,
 } from "./zod.gen";
@@ -3583,6 +3599,76 @@ export const updateSuggestedPlaybookAction = <ThrowOnError extends boolean = fal
 		...options,
 		headers: {
 			"Content-Type": "application/json",
+			...options.headers,
+		},
+	});
+
+export const deleteConversationFile = <ThrowOnError extends boolean = false>(
+	options: Options<DeleteConversationFileData, ThrowOnError>,
+) =>
+	(options.client ?? client).delete<DeleteConversationFileResponses, DeleteConversationFileErrors, ThrowOnError>({
+		requestValidator: async (data) =>
+			await z
+				.object({
+					body: z.never().optional(),
+					path: zDeleteConversationFilePath,
+					query: z.never().optional(),
+				})
+				.parseAsync(data),
+		responseValidator: async (data) => await zDeleteConversationFileResponse.parseAsync(data),
+		security: [
+			{ scheme: "bearer", type: "http" },
+			{ scheme: "bearer", type: "http" },
+		],
+		url: "/api/local/v1/chat/conversations/{conversationId}/uploads/{fileId}",
+		...options,
+	});
+
+export const listConversationFiles = <ThrowOnError extends boolean = false>(
+	options: Options<ListConversationFilesData, ThrowOnError>,
+) =>
+	(options.client ?? client).get<ListConversationFilesResponses, ListConversationFilesErrors, ThrowOnError>({
+		requestValidator: async (data) =>
+			await z
+				.object({
+					body: z.never().optional(),
+					path: zListConversationFilesPath,
+					query: z.never().optional(),
+				})
+				.parseAsync(data),
+		responseType: "json",
+		responseValidator: async (data) => await zListConversationFilesResponse.parseAsync(data),
+		security: [
+			{ scheme: "bearer", type: "http" },
+			{ scheme: "bearer", type: "http" },
+		],
+		url: "/api/local/v1/chat/conversations/{conversationId}/uploads",
+		...options,
+	});
+
+export const uploadConversationFile = <ThrowOnError extends boolean = false>(
+	options: Options<UploadConversationFileData, ThrowOnError>,
+) =>
+	(options.client ?? client).post<UploadConversationFileResponses, UploadConversationFileErrors, ThrowOnError>({
+		...formDataBodySerializer,
+		requestValidator: async (data) =>
+			await z
+				.object({
+					body: zUploadConversationFileBody,
+					path: zUploadConversationFilePath,
+					query: z.never().optional(),
+				})
+				.parseAsync(data),
+		responseType: "json",
+		responseValidator: async (data) => await zUploadConversationFileResponse.parseAsync(data),
+		security: [
+			{ scheme: "bearer", type: "http" },
+			{ scheme: "bearer", type: "http" },
+		],
+		url: "/api/local/v1/chat/conversations/{conversationId}/uploads",
+		...options,
+		headers: {
+			"Content-Type": null,
 			...options.headers,
 		},
 	});

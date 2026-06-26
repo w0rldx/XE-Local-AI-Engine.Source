@@ -38,6 +38,7 @@ import {
 	createScheduledJob,
 	createSkill,
 	deleteAgentDefinition,
+	deleteConversationFile,
 	deleteGoldenConversation,
 	deleteLocalModel,
 	deleteMcpServer,
@@ -91,6 +92,7 @@ import {
 	listAgentExecutionLogs,
 	listAgentPlaybookActions,
 	listAgentTemplates,
+	listConversationFiles,
 	listGoldenConversations,
 	listLocalModels,
 	listMcpServers,
@@ -142,6 +144,7 @@ import {
 	updateScheduledJob,
 	updateSkill,
 	updateSuggestedPlaybookAction,
+	uploadConversationFile,
 	validationProblemProbe,
 } from "../sdk.gen";
 import type {
@@ -201,6 +204,8 @@ import type {
 	CreateSkillResponse,
 	DeleteAgentDefinitionData,
 	DeleteAgentDefinitionResponse,
+	DeleteConversationFileData,
+	DeleteConversationFileResponse,
 	DeleteGoldenConversationData,
 	DeleteGoldenConversationResponse,
 	DeleteLocalModelData,
@@ -311,6 +316,8 @@ import type {
 	ListAgentPlaybookActionsResponse,
 	ListAgentTemplatesData,
 	ListAgentTemplatesResponse,
+	ListConversationFilesData,
+	ListConversationFilesResponse,
 	ListGoldenConversationsData,
 	ListGoldenConversationsResponse,
 	ListLocalModelsData,
@@ -420,6 +427,8 @@ import type {
 	UpdateSkillResponse,
 	UpdateSuggestedPlaybookActionData,
 	UpdateSuggestedPlaybookActionResponse,
+	UploadConversationFileData,
+	UploadConversationFileResponse,
 	ValidationProblemProbeData,
 	ValidationProblemProbeError,
 	ValidationProblemProbeResponse,
@@ -3163,6 +3172,68 @@ export const updateSuggestedPlaybookActionMutation = (
 	> = {
 		mutationFn: async (fnOptions) => {
 			const { data } = await updateSuggestedPlaybookAction({
+				...options,
+				...fnOptions,
+				throwOnError: true,
+			});
+			return data;
+		},
+	};
+	return mutationOptions;
+};
+
+export const deleteConversationFileMutation = (
+	options?: Partial<Options<DeleteConversationFileData>>,
+): UseMutationOptions<DeleteConversationFileResponse, AxiosError<DefaultError>, Options<DeleteConversationFileData>> => {
+	const mutationOptions: UseMutationOptions<
+		DeleteConversationFileResponse,
+		AxiosError<DefaultError>,
+		Options<DeleteConversationFileData>
+	> = {
+		mutationFn: async (fnOptions) => {
+			const { data } = await deleteConversationFile({
+				...options,
+				...fnOptions,
+				throwOnError: true,
+			});
+			return data;
+		},
+	};
+	return mutationOptions;
+};
+
+export const listConversationFilesQueryKey = (options: Options<ListConversationFilesData>) =>
+	createQueryKey("listConversationFiles", options);
+
+export const listConversationFilesOptions = (options: Options<ListConversationFilesData>) =>
+	queryOptions<
+		ListConversationFilesResponse,
+		AxiosError<DefaultError>,
+		ListConversationFilesResponse,
+		ReturnType<typeof listConversationFilesQueryKey>
+	>({
+		queryFn: async ({ queryKey, signal }) => {
+			const { data } = await listConversationFiles({
+				...options,
+				...queryKey[0],
+				signal,
+				throwOnError: true,
+			});
+			return data;
+		},
+		queryKey: listConversationFilesQueryKey(options),
+	});
+
+export const uploadConversationFileMutation = (
+	options?: Partial<Options<UploadConversationFileData>>,
+): UseMutationOptions<UploadConversationFileResponse, AxiosError<DefaultError>, Options<UploadConversationFileData>> => {
+	const mutationOptions: UseMutationOptions<
+		UploadConversationFileResponse,
+		AxiosError<DefaultError>,
+		Options<UploadConversationFileData>
+	> = {
+		mutationFn: async (fnOptions) => {
+			const { data } = await uploadConversationFile({
 				...options,
 				...fnOptions,
 				throwOnError: true,

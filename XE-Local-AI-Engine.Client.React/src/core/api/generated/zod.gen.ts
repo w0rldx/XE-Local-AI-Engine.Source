@@ -2114,6 +2114,42 @@ export const zXeLocalAiEngineClientEndpointsAgentsV1UpdateSuggestedPlaybookActio
 		.optional(),
 });
 
+export const zXeLocalAiEngineClientEndpointsLocalChatV1DeleteConversationUploadRequest = z.record(z.string(), z.never());
+
+export const zXeLocalAiEngineClientEndpointsLocalChatV1ConversationUploadedFileResponse = z.object({
+	fileId: z.guid().optional(),
+	conversationId: z.guid().optional(),
+	originalFileName: z.string().optional(),
+	mimeType: z.string().optional(),
+	extension: z.string().optional(),
+	sizeBytes: z.coerce
+		.bigint()
+		.min(BigInt("-9223372036854775808"), { error: "Invalid value: Expected int64 to be >= -9223372036854775808" })
+		.max(BigInt("9223372036854775807"), { error: "Invalid value: Expected int64 to be <= 9223372036854775807" })
+		.optional(),
+	extractionStatus: z.string().optional(),
+	extractedChars: z
+		.int()
+		.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })
+		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" })
+		.nullish(),
+	createdAtUtc: z.coerce
+		.bigint()
+		.min(BigInt("-9223372036854775808"), { error: "Invalid value: Expected int64 to be >= -9223372036854775808" })
+		.max(BigInt("9223372036854775807"), { error: "Invalid value: Expected int64 to be <= 9223372036854775807" })
+		.optional(),
+});
+
+export const zXeLocalAiEngineClientEndpointsLocalChatV1ListConversationUploadsResponse = z.object({
+	items: z.array(zXeLocalAiEngineClientEndpointsLocalChatV1ConversationUploadedFileResponse).optional(),
+});
+
+export const zXeLocalAiEngineClientEndpointsLocalChatV1ListConversationUploadsRequest = z.record(z.string(), z.never());
+
+export const zXeLocalAiEngineClientEndpointsLocalChatV1UploadConversationFileRequest = z.object({
+	file: z.string().nullish(),
+});
+
 /**
  * Success
  */
@@ -3184,3 +3220,33 @@ export const zUpdateSuggestedPlaybookActionPath = z.object({
  * Success
  */
 export const zUpdateSuggestedPlaybookActionResponse = zXeLocalAiEngineClientEndpointsAgentsV1PlaybookActionResponse;
+
+export const zDeleteConversationFilePath = z.object({
+	conversationId: z.guid(),
+	fileId: z.guid(),
+});
+
+/**
+ * No Content
+ */
+export const zDeleteConversationFileResponse = z.void();
+
+export const zListConversationFilesPath = z.object({
+	conversationId: z.guid(),
+});
+
+/**
+ * Success
+ */
+export const zListConversationFilesResponse = zXeLocalAiEngineClientEndpointsLocalChatV1ListConversationUploadsResponse;
+
+export const zUploadConversationFileBody = zXeLocalAiEngineClientEndpointsLocalChatV1UploadConversationFileRequest;
+
+export const zUploadConversationFilePath = z.object({
+	conversationId: z.guid(),
+});
+
+/**
+ * Success
+ */
+export const zUploadConversationFileResponse = zXeLocalAiEngineClientEndpointsLocalChatV1ConversationUploadedFileResponse;
