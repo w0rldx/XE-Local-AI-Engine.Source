@@ -105,7 +105,7 @@
 			"version": "Version",
 			"website": "Webseite",
 			"repository": "Repository",
-			"licensesIntro": "Drittanbieter-Pakete, die mit dieser Anwendung gebündelt sind.",
+			"licensesIntro": "Wichtige Drittanbieter-Pakete, die diese Anwendung verwendet.",
 			"searchPackages": "Pakete suchen",
 			"packageName": "Paket",
 			"packageVersion": "Version",

@@ -109,7 +109,7 @@ export function AboutDialog({ opened, onClose }: IAboutDialogProps) {
 				<Tabs.Panel value="licenses" pt="md">
 					<Stack gap="sm">
 						<Text size="sm" c="dimmed">
-							{t("pages.about.licensesIntro", "Third-party packages bundled with this application.")}
+							{t("pages.about.licensesIntro", "Key third-party packages used by this application.")}
 						</Text>
 						<TextInput
 							value={licenseFilter}
