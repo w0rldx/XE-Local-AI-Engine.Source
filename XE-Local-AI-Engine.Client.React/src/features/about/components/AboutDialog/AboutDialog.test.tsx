@@ -64,7 +64,7 @@ describe("AboutDialog", () => {
 
 		const dialog = screen.getByRole("dialog");
 		expect(within(dialog).getByText("0.1.0")).toBeTruthy();
-		expect(within(dialog).getByText(/Local AI engine worker node/)).toBeTruthy();
+		expect(within(dialog).getByText(/Local AI engine for running, managing, and chatting/)).toBeTruthy();
 	});
 
 	it("renders generated frontend and backend packages with a source type", () => {
