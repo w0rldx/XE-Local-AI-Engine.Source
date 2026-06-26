@@ -66,7 +66,7 @@ export class WebSpeechProvider implements TtsProvider {
 		}
 
 		const utterance = this.createUtterance(text);
-		const voice = this.pickVoice(synthesis, options?.language);
+		const voice = this.pickVoice(synthesis, options?.language, options?.voiceId);
 		if (voice) {
 			utterance.voice = voice;
 			utterance.lang = voice.lang;
@@ -91,15 +91,31 @@ export class WebSpeechProvider implements TtsProvider {
 		this.synthesis?.cancel();
 	}
 
-	// Picks an OS voice whose language matches the requested code (prefix match), preferring on-device voices so the
-	// fallback stays offline-capable. Returns undefined when no language match exists (engine picks its default).
-	private pickVoice(synthesis: SpeechSynthesisLike, language?: string): SpeechSynthesisVoice | undefined {
+	// Picks the OS voice to speak with. "Selected voice always wins" (D2): when the caller supplies a concrete
+	// `voiceId` that maps to a real OS voice (by `voiceURI` or `name`), honor it exactly — even a network voice — so a
+	// user's explicit non-English pick takes effect. Manifest voices that are LOGICAL ids (e.g. "de_web_default") map
+	// to no OS voice and correctly fall through to the language-prefix pick, which prefers on-device (`localService`)
+	// voices so the fallback stays offline-capable. Returns undefined when nothing matches (engine picks its default).
+	private pickVoice(
+		synthesis: SpeechSynthesisLike,
+		language?: string,
+		voiceId?: string,
+	): SpeechSynthesisVoice | undefined {
+		const voices = synthesis.getVoices();
+
+		if (voiceId) {
+			const byId = voices.find((voice) => voice.voiceURI === voiceId || voice.name === voiceId);
+			if (byId) {
+				return byId;
+			}
+		}
+
 		if (!language) {
 			return undefined;
 		}
 
 		const prefix = language.toLowerCase();
-		const matches = synthesis.getVoices().filter((voice) => voice.lang.toLowerCase().startsWith(prefix));
+		const matches = voices.filter((voice) => voice.lang.toLowerCase().startsWith(prefix));
 		if (matches.length === 0) {
 			return undefined;
 		}

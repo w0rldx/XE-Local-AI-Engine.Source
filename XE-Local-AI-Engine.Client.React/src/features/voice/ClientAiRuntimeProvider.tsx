@@ -14,8 +14,9 @@ import { detectVoiceCapabilities, type VoiceCapabilities } from "@/core/runtime/
 import { ModelCache, type ModelDownloadError, type ModelDownloadProgress } from "@/core/runtime/ModelCache";
 import { PlaybackQueue } from "@/core/runtime/PlaybackQueue";
 import { sanitizeForSpeech } from "@/core/runtime/SentenceBuffer";
+import { findVoiceById } from "@/core/runtime/VoiceManifest";
 import { VoiceRuntime, type VoiceRuntimeError } from "@/core/runtime/VoiceRuntime";
-import type { AnswerLanguage } from "@/features/voice/DetectAnswerLanguage";
+import { detectAnswerLanguage } from "@/features/voice/DetectAnswerLanguage";
 import { useVoiceManifest } from "@/features/voice/useVoiceManifest";
 import { voicePreviewSample } from "@/features/voice/VoicePreviewSample";
 import { useVoicePreferencesStore } from "@/features/voice/VoicePreferencesStore";
@@ -151,7 +152,7 @@ export function ClientAiRuntimeProvider({ children }: { readonly children: React
 	}, []);
 
 	const playMessage = useCallback(
-		async (messageId: string, text: string, language: AnswerLanguage): Promise<void> => {
+		async (messageId: string, text: string): Promise<void> => {
 			const runtime = bundleRef.current?.runtime;
 			if (!runtime) {
 				return;
@@ -164,11 +165,16 @@ export function ClientAiRuntimeProvider({ children }: { readonly children: React
 
 			const prefs = useVoicePreferencesStore.getState();
 			const voiceId = prefs.voiceProfile || manifest?.defaultVoiceId || undefined;
+			// "Selected voice always wins" (D2): the manual Play button routes by the SELECTED voice's OWN language so
+			// it matches the node-settings preview exactly (the caller no longer guesses a language from the answer).
+			// detectAnswerLanguage is the fallback only when no voice resolves (no selection AND no manifest default).
+			const selectedVoice = manifest ? findVoiceById(manifest, voiceId) : undefined;
+			const language = selectedVoice?.language ?? detectAnswerLanguage(sanitized);
 			setPlayingMessageId(messageId);
 			await resumeAudio();
 			await runtime.speak(sanitized, { language, voiceId, rate: prefs.speakingRate });
 		},
-		[manifest?.defaultVoiceId, resumeAudio],
+		[manifest, resumeAudio],
 	);
 
 	const previewVoice = useCallback(
@@ -181,13 +187,13 @@ export function ClientAiRuntimeProvider({ children }: { readonly children: React
 			// Speak the sample in the voice's OWN language (drives the en→Kokoro / de→Web-Speech routing correctly) at
 			// the user's current speaking rate, so the audition matches what they'd actually hear. Independent of the
 			// per-user enable/autoplay toggles — previewing is exactly how the user decides whether to turn voice on.
-			const voice = manifest?.voices.find((candidate) => candidate.id === voiceId);
+			const voice = manifest ? findVoiceById(manifest, voiceId) : undefined;
 			const language = voice?.language ?? "en";
 			const prefs = useVoicePreferencesStore.getState();
 			await resumeAudio();
 			await runtime.speak(voicePreviewSample(language), { language, voiceId, rate: prefs.speakingRate });
 		},
-		[manifest?.voices, resumeAudio],
+		[manifest, resumeAudio],
 	);
 
 	const value = useMemo<VoiceRuntimeContextValue>(

@@ -99,3 +99,17 @@ export function findAllowedModel(
 ): VoiceModelDescriptor | undefined {
 	return manifest.models.find((model) => model.files.some((file) => file.dtype === dtype));
 }
+
+// Looks up a selectable voice by id (undefined when no id or no catalog match). The "selected voice always wins"
+// routing (D2) uses this to drive the engine/ladder from the chosen voice's OWN language — so chat matches the
+// node-settings preview exactly — instead of guessing the language from the answer text.
+export function findVoiceById(
+	manifest: VoiceManifest,
+	voiceId: string | undefined,
+): VoiceProfile | undefined {
+	if (!voiceId) {
+		return undefined;
+	}
+
+	return manifest.voices.find((voice) => voice.id === voiceId);
+}

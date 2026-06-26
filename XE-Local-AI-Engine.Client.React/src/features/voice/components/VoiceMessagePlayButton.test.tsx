@@ -103,11 +103,11 @@ describe("VoiceMessagePlayButton", () => {
 		expect(screen.queryByTestId("voice-message-play-msg-1")).toBeNull();
 	});
 
-	it("plays this message's sanitized answer with the detected language on click", () => {
+	it("plays this message's answer on click (language is resolved by the runtime from the selected voice)", () => {
 		renderButton(<VoiceMessagePlayButton message={makeMessage()} />);
 		fireEvent.click(screen.getByTestId("voice-message-play-msg-1"));
 		expect(playMessage).toHaveBeenCalledTimes(1);
-		expect(playMessage).toHaveBeenCalledWith("msg-1", "Hello there. This is the answer.", "en");
+		expect(playMessage).toHaveBeenCalledWith("msg-1", "Hello there. This is the answer.");
 		expect(stopPlayback).not.toHaveBeenCalled();
 	});
 

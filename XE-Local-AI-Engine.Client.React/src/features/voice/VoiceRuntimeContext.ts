@@ -8,7 +8,6 @@ import type { VoiceCapabilities } from "@/core/runtime/CapabilityDetector";
 import type { ModelDownloadError, ModelDownloadProgress } from "@/core/runtime/ModelCache";
 import type { VoiceManifest } from "@/core/runtime/VoiceManifest";
 import type { VoiceRuntime, VoiceRuntimeError } from "@/core/runtime/VoiceRuntime";
-import type { AnswerLanguage } from "@/features/voice/DetectAnswerLanguage";
 
 export interface VoiceRuntimeContextValue {
 	/** The adapted backend manifest (operator gate + catalog), or undefined when disabled/unauthorized. */
@@ -33,8 +32,12 @@ export interface VoiceRuntimeContextValue {
 	readonly lastError: VoiceRuntimeError | undefined;
 	/** The message id whose answer is currently being played via a per-message Play button, or undefined. */
 	readonly playingMessageId: string | undefined;
-	/** Barge-in then speak one message's whole (sanitized) answer; tags the playing message for the Play/Stop UI. */
-	readonly playMessage: (messageId: string, text: string, language: AnswerLanguage) => Promise<void>;
+	/**
+	 * Barge-in then speak one message's whole (sanitized) answer; tags the playing message for the Play/Stop UI. The
+	 * engine/language is resolved INSIDE from the selected voice ("selected voice always wins", D2) — callers no
+	 * longer pass a language, so the manual Play button matches the node-settings preview exactly.
+	 */
+	readonly playMessage: (messageId: string, text: string) => Promise<void>;
 	/** Barge-in then speak a short fixed sample with an explicit voice so a user can audition it before choosing it. */
 	readonly previewVoice: (voiceId: string) => Promise<void>;
 	/** Halts playback and clears the playing-message tag (barge-in). */
