@@ -3,7 +3,7 @@
   <PropertyGroup>
     <!-- Single version source of truth. Tag convention: vX.Y.Z-rc.N (e.g. v0.1.0-rc.1). -->
     <VersionPrefix>0.1.0</VersionPrefix>
-    <VersionSuffix>rc.1</VersionSuffix>
+    <VersionSuffix>rc.1.0</VersionSuffix>
     <TargetFramework>net10.0</TargetFramework>
     <Nullable>enable</Nullable>
     <ImplicitUsings>enable</ImplicitUsings>
