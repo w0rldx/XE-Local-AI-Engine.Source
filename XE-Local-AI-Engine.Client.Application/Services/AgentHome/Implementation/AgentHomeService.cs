@@ -25,7 +25,7 @@ using XE_Local_AI_Engine.Client.Services.Workspace;
 ///         and memory exports.
 ///     </para>
 /// </summary>
-internal sealed class AgentHomeService : IAgentHomeService
+internal sealed class AgentHomeService : IAgentHomeService, IConversationSandboxStager
 {
     // Stable sandbox alias for staged conversation upload attachments. The agent reads them at
     // workspace/selected/attachments/ via its existing file tools.
@@ -219,6 +219,83 @@ internal sealed class AgentHomeService : IAgentHomeService
             FolderSnapshots = folderSnapshots,
             RuntimeProfile = effectiveProfile
         };
+    }
+
+    public async Task PrepareConversationAttachmentsAsync(Guid conversationId, CancellationToken cancellationToken = default)
+    {
+        cancellationToken.ThrowIfCancellationRequested();
+
+        // Agent Mode off → the coder / run_in_agent_home tool handlers refuse at execution anyway, so skip the prepare
+        // entirely rather than create a sandbox that nothing can read.
+        if (!_options.Enabled)
+        {
+            return;
+        }
+
+        // Fast path: no extracted attachments to stage → leave any existing sandbox untouched, so an attachment-free
+        // chat turn never disturbs a separately-prepared project workspace.
+        var files = await _uploadedFileStore.ListAsync(conversationId, cancellationToken).ConfigureAwait(false);
+        if (files.Count == 0)
+        {
+            return;
+        }
+
+        var identity = await _identityProvider.GetAsync(cancellationToken).ConfigureAwait(false);
+        var guardKey = string.Create(CultureInfo.InvariantCulture, $"{identity.OwnerUserId} {identity.NodeId}");
+        var guard = _runGuards.GetOrAdd(guardKey, static _ => new SemaphoreSlim(initialCount: 1, maxCount: 1));
+
+        // Share the run-level single-flight guard with RunLifecycleAsync so an in-flight run_in_agent_home run and a
+        // chat-mode re-stage cannot race on the same owner-node sandbox. Non-blocking: if a run already holds the guard,
+        // skip the re-stage (the coder tools will report no workspace) rather than block the chat turn.
+        if (!await guard.WaitAsync(TimeSpan.Zero, CancellationToken.None).ConfigureAwait(false))
+        {
+            _logger.LogDebug("AgentHome attachment staging for node {NodeId} skipped: a run is already in progress.", identity.NodeId);
+            return;
+        }
+
+        try
+        {
+            // The owner-node sandbox is shared across conversations (the attach key carries no conversation id) and the
+            // workspace copy appends rather than replaces, so recreate the sandbox first — it must hold ONLY this
+            // conversation's attachments, never another conversation's files. Chat agent mode selects no project
+            // folders, so the recreate cost is just the (small) attachment copy.
+            await ResetOwnerNodeSandboxAsync(identity, cancellationToken).ConfigureAwait(false);
+            _ = await PrepareAsync(new AgentHomePrepareRequest
+                {
+                    SelectedFolderIds = [],
+                    RuntimeProfile = null,
+                    ConversationId = conversationId
+                },
+                cancellationToken).ConfigureAwait(false);
+        }
+        finally
+        {
+            guard.Release();
+        }
+    }
+
+    // Recreates the owner-node sandbox by killing any live one so the next PrepareAsync stages into a clean workspace.
+    // No-op when no live sandbox matches the key.
+    private async Task ResetOwnerNodeSandboxAsync(AgentHomeOwnerIdentity identity, CancellationToken cancellationToken)
+    {
+        var attachKey = new SandboxAttachKey
+        {
+            OwnerUserId = identity.OwnerUserId,
+            NodeId = identity.NodeId,
+            ProviderName = _provider.ProviderName,
+            RuntimeProfile = _options.DefaultRuntimeProfile,
+            ManifestVersion = AgentHomeManifest.CurrentVersion
+        };
+
+        try
+        {
+            var handle = await _provider.ConnectAsync(attachKey, cancellationToken).ConfigureAwait(false);
+            await _provider.KillAsync(handle, cancellationToken).ConfigureAwait(false);
+        }
+        catch (SandboxHandleInvalidException)
+        {
+            // No live sandbox to clear — the next PrepareAsync creates a fresh one.
+        }
     }
 
     // Builds a decrypted-Markdown staging snapshot for the conversation's uploaded attachments, or null when there is

@@ -1,0 +1,10 @@
+{
+  "version": 1,
+  "status": "Ready",
+  "ownerUserId": "00000000-0000-0000-0000-000000000001",
+  "nodeId": "00000000-0000-0000-0000-000000000001",
+  "providerName": "process",
+  "runtimeProfile": "dotnet-agent-home",
+  "createdAt": "2026-06-26T14:26:41.6889397+00:00",
+  "updatedAt": "2026-06-26T14:26:41.7093923+00:00"
+}

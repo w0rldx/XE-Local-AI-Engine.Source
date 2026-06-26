@@ -10,6 +10,7 @@ using XE_Local_AI_Engine.Client.Models.Enums;
 using XE_Local_AI_Engine.Client.Models.Events;
 using XE_Local_AI_Engine.Client.Persistence;
 using XE_Local_AI_Engine.Client.Persistence.Stores;
+using XE_Local_AI_Engine.Client.Services.AgentHome;
 using XE_Local_AI_Engine.Client.Services.Agents;
 using XE_Local_AI_Engine.Client.Services.Agents.Implementation;
 using XE_Local_AI_Engine.Client.Services.Chat;
@@ -57,6 +58,7 @@ public sealed class NodeChatStreamServiceTests
             CreateLocalDefaultChatModelResolver(),
             CreateMemoryExtractionDispatcher(),
             Substitute.For<IConversationUploadedFileStore>(),
+            Substitute.For<IConversationSandboxStager>(),
             TimeProvider.System,
             NullLogger<NodeChatStreamService>.Instance);
         var events = new List<ChatStreamEvent>();
@@ -108,6 +110,7 @@ public sealed class NodeChatStreamServiceTests
             CreateLocalDefaultChatModelResolver(),
             CreateMemoryExtractionDispatcher(),
             Substitute.For<IConversationUploadedFileStore>(),
+            Substitute.For<IConversationSandboxStager>(),
             TimeProvider.System,
             NullLogger<NodeChatStreamService>.Instance);
         var events = new List<ChatStreamEvent>();
@@ -162,6 +165,7 @@ public sealed class NodeChatStreamServiceTests
             CreateLocalDefaultChatModelResolver(),
             CreateMemoryExtractionDispatcher(),
             Substitute.For<IConversationUploadedFileStore>(),
+            Substitute.For<IConversationSandboxStager>(),
             TimeProvider.System,
             NullLogger<NodeChatStreamService>.Instance);
         var events = new List<ChatStreamEvent>();
@@ -224,6 +228,7 @@ public sealed class NodeChatStreamServiceTests
             CreateLocalDefaultChatModelResolver(),
             CreateMemoryExtractionDispatcher(),
             Substitute.For<IConversationUploadedFileStore>(),
+            Substitute.For<IConversationSandboxStager>(),
             TimeProvider.System,
             NullLogger<NodeChatStreamService>.Instance);
 
@@ -271,6 +276,7 @@ public sealed class NodeChatStreamServiceTests
             CreateLocalDefaultChatModelResolver(),
             CreateMemoryExtractionDispatcher(),
             Substitute.For<IConversationUploadedFileStore>(),
+            Substitute.For<IConversationSandboxStager>(),
             TimeProvider.System,
             NullLogger<NodeChatStreamService>.Instance);
 
@@ -318,6 +324,7 @@ public sealed class NodeChatStreamServiceTests
             CreateLocalDefaultChatModelResolver(),
             CreateMemoryExtractionDispatcher(),
             Substitute.For<IConversationUploadedFileStore>(),
+            Substitute.For<IConversationSandboxStager>(),
             TimeProvider.System,
             NullLogger<NodeChatStreamService>.Instance);
 
@@ -375,6 +382,7 @@ public sealed class NodeChatStreamServiceTests
             CreateLocalDefaultChatModelResolver(),
             CreateMemoryExtractionDispatcher(),
             Substitute.For<IConversationUploadedFileStore>(),
+            Substitute.For<IConversationSandboxStager>(),
             TimeProvider.System,
             NullLogger<NodeChatStreamService>.Instance);
 
@@ -427,6 +435,7 @@ public sealed class NodeChatStreamServiceTests
             CreateLocalDefaultChatModelResolver(),
             CreateMemoryExtractionDispatcher(),
             Substitute.For<IConversationUploadedFileStore>(),
+            Substitute.For<IConversationSandboxStager>(),
             TimeProvider.System,
             NullLogger<NodeChatStreamService>.Instance);
 
@@ -449,6 +458,113 @@ public sealed class NodeChatStreamServiceTests
             AssertEx.Equal(ToolLocation.ClientLocal, tool.Location);
             AssertEx.NotNullOrEmpty(tool.ParameterSchema);
         }
+    }
+
+    [Test]
+    public async Task SendMessageAsync_WhenAgentOffersAgentHomeTools_StagesConversationAttachments()
+    {
+        var conversationId = Guid.NewGuid();
+        var assistantMessageId = Guid.NewGuid();
+        var requestId = Guid.NewGuid();
+        var persistence = CreatePersistence(conversationId, assistantMessageId, requestId, _ => { });
+        var dispatcher = new RecordingWorkerEventDispatcher();
+        var runner = new ReasoningCapturingInvocationRunner(dispatcher);
+        // The offer carries a coder file tool (read_file), so the turn is AgentHome-capable and must re-stage the
+        // conversation's attachments into the sandbox before the tool loop runs.
+        var offerProvider = CreateOfferProvider(CreateLocalToolDto("read_file", "{\"type\":\"object\"}"));
+        var stager = Substitute.For<IConversationSandboxStager>();
+        var service = new NodeChatStreamService(persistence,
+            new NodeChatInvocationPump(persistence, TimeProvider.System),
+            new NodeChatMutationGuard(persistence),
+            new LocalChatRuntimePackageBuilder(),
+            runner,
+            dispatcher,
+            Options.Create(new LocalChatAgentOptions
+            {
+                EnableTools = true
+            }),
+            StubNodeRuntimeSettings.Create().WithEnableTools(true).Build(),
+            new NodeChatStreamCancellationRegistry(),
+            offerProvider,
+            CreateAgentDefinitionResolver(),
+            CreateAgentDefinitionStore(),
+            CreateDefaultAgentProvider(),
+            CreateOrchestrationResolver(),
+            CreateNodeSettingsStore(),
+            CreateModelClassificationService(),
+            CreateLocalModelProviderResolver(),
+            CreateGgufModelCapabilityResolver(),
+            CreateLocalDefaultChatModelResolver(),
+            CreateMemoryExtractionDispatcher(),
+            Substitute.For<IConversationUploadedFileStore>(),
+            stager,
+            TimeProvider.System,
+            NullLogger<NodeChatStreamService>.Instance);
+
+        await foreach (var _ in service.SendMessageAsync(new NodeChatStreamRequest(conversationId,
+                           "hello",
+                           MessageId: assistantMessageId,
+                           RequestId: requestId,
+                           UseLocalTools: true)).ConfigureAwait(false))
+        {
+            // Drain the stream so the turn completes; the assertion below is on the stager interaction.
+        }
+
+        await stager.Received(1).PrepareConversationAttachmentsAsync(conversationId, Arg.Any<CancellationToken>());
+    }
+
+    [Test]
+    public async Task SendMessageAsync_WhenOfferHasNoAgentHomeTools_DoesNotStageAttachments()
+    {
+        var conversationId = Guid.NewGuid();
+        var assistantMessageId = Guid.NewGuid();
+        var requestId = Guid.NewGuid();
+        var persistence = CreatePersistence(conversationId, assistantMessageId, requestId, _ => { });
+        var dispatcher = new RecordingWorkerEventDispatcher();
+        var runner = new ReasoningCapturingInvocationRunner(dispatcher);
+        // Only the default builtins are offered (no coder / run_in_agent_home tools), so the turn is NOT AgentHome-capable
+        // and the sandbox stager must never be touched — today's plain tool chat is byte-identical.
+        var offerProvider = CreateOfferProvider(CreateLocalToolDto("GetCurrentTime", "{\"type\":\"object\"}"),
+            CreateLocalToolDto("Calculate", "{\"type\":\"object\"}"));
+        var stager = Substitute.For<IConversationSandboxStager>();
+        var service = new NodeChatStreamService(persistence,
+            new NodeChatInvocationPump(persistence, TimeProvider.System),
+            new NodeChatMutationGuard(persistence),
+            new LocalChatRuntimePackageBuilder(),
+            runner,
+            dispatcher,
+            Options.Create(new LocalChatAgentOptions
+            {
+                EnableTools = true
+            }),
+            StubNodeRuntimeSettings.Create().WithEnableTools(true).Build(),
+            new NodeChatStreamCancellationRegistry(),
+            offerProvider,
+            CreateAgentDefinitionResolver(),
+            CreateAgentDefinitionStore(),
+            CreateDefaultAgentProvider(),
+            CreateOrchestrationResolver(),
+            CreateNodeSettingsStore(),
+            CreateModelClassificationService(),
+            CreateLocalModelProviderResolver(),
+            CreateGgufModelCapabilityResolver(),
+            CreateLocalDefaultChatModelResolver(),
+            CreateMemoryExtractionDispatcher(),
+            Substitute.For<IConversationUploadedFileStore>(),
+            stager,
+            TimeProvider.System,
+            NullLogger<NodeChatStreamService>.Instance);
+
+        await foreach (var _ in service.SendMessageAsync(new NodeChatStreamRequest(conversationId,
+                           "hello",
+                           MessageId: assistantMessageId,
+                           RequestId: requestId,
+                           UseLocalTools: true)).ConfigureAwait(false))
+        {
+            // Drain the stream so the turn completes; the assertion below is on the stager interaction.
+        }
+
+        await stager.DidNotReceive().PrepareConversationAttachmentsAsync(Arg.Any<Guid>(), Arg.Any<CancellationToken>());
     }
 
     [Test]
@@ -489,6 +605,7 @@ public sealed class NodeChatStreamServiceTests
             CreateLocalDefaultChatModelResolver(),
             CreateMemoryExtractionDispatcher(),
             uploadedFileStore,
+            Substitute.For<IConversationSandboxStager>(),
             TimeProvider.System,
             NullLogger<NodeChatStreamService>.Instance);
 
@@ -545,6 +662,7 @@ public sealed class NodeChatStreamServiceTests
             CreateLocalDefaultChatModelResolver(),
             CreateMemoryExtractionDispatcher(),
             uploadedFileStore,
+            Substitute.For<IConversationSandboxStager>(),
             TimeProvider.System,
             NullLogger<NodeChatStreamService>.Instance);
 
@@ -602,6 +720,7 @@ public sealed class NodeChatStreamServiceTests
             CreateLocalDefaultChatModelResolver(),
             CreateMemoryExtractionDispatcher(),
             Substitute.For<IConversationUploadedFileStore>(),
+            Substitute.For<IConversationSandboxStager>(),
             TimeProvider.System,
             NullLogger<NodeChatStreamService>.Instance);
 
@@ -658,6 +777,7 @@ public sealed class NodeChatStreamServiceTests
             CreateLocalDefaultChatModelResolver(),
             CreateMemoryExtractionDispatcher(),
             Substitute.For<IConversationUploadedFileStore>(),
+            Substitute.For<IConversationSandboxStager>(),
             TimeProvider.System,
             NullLogger<NodeChatStreamService>.Instance);
 
@@ -715,6 +835,7 @@ public sealed class NodeChatStreamServiceTests
             CreateLocalDefaultChatModelResolver(),
             CreateMemoryExtractionDispatcher(),
             Substitute.For<IConversationUploadedFileStore>(),
+            Substitute.For<IConversationSandboxStager>(),
             TimeProvider.System,
             NullLogger<NodeChatStreamService>.Instance);
 
@@ -764,6 +885,7 @@ public sealed class NodeChatStreamServiceTests
             CreateLocalDefaultChatModelResolver(),
             CreateMemoryExtractionDispatcher(),
             Substitute.For<IConversationUploadedFileStore>(),
+            Substitute.For<IConversationSandboxStager>(),
             TimeProvider.System,
             NullLogger<NodeChatStreamService>.Instance);
 
@@ -825,6 +947,7 @@ public sealed class NodeChatStreamServiceTests
             CreateLocalDefaultChatModelResolver(),
             CreateMemoryExtractionDispatcher(),
             Substitute.For<IConversationUploadedFileStore>(),
+            Substitute.For<IConversationSandboxStager>(),
             TimeProvider.System,
             NullLogger<NodeChatStreamService>.Instance);
         using var clientCancellation = new CancellationTokenSource();
@@ -904,6 +1027,7 @@ public sealed class NodeChatStreamServiceTests
             CreateLocalDefaultChatModelResolver(),
             CreateMemoryExtractionDispatcher(),
             Substitute.For<IConversationUploadedFileStore>(),
+            Substitute.For<IConversationSandboxStager>(),
             TimeProvider.System,
             NullLogger<NodeChatStreamService>.Instance);
 
@@ -970,6 +1094,7 @@ public sealed class NodeChatStreamServiceTests
             CreateLocalDefaultChatModelResolver(),
             extractionDispatcher,
             Substitute.For<IConversationUploadedFileStore>(),
+            Substitute.For<IConversationSandboxStager>(),
             TimeProvider.System,
             NullLogger<NodeChatStreamService>.Instance);
 
@@ -1027,6 +1152,7 @@ public sealed class NodeChatStreamServiceTests
             CreateLocalDefaultChatModelResolver(),
             extractionDispatcher,
             Substitute.For<IConversationUploadedFileStore>(),
+            Substitute.For<IConversationSandboxStager>(),
             TimeProvider.System,
             NullLogger<NodeChatStreamService>.Instance);
 
@@ -1089,6 +1215,7 @@ public sealed class NodeChatStreamServiceTests
             CreateLocalDefaultChatModelResolver(),
             CreateMemoryExtractionDispatcher(),
             Substitute.For<IConversationUploadedFileStore>(),
+            Substitute.For<IConversationSandboxStager>(),
             TimeProvider.System,
             NullLogger<NodeChatStreamService>.Instance);
 
@@ -1141,6 +1268,7 @@ public sealed class NodeChatStreamServiceTests
             CreateLocalDefaultChatModelResolver(),
             CreateMemoryExtractionDispatcher(),
             Substitute.For<IConversationUploadedFileStore>(),
+            Substitute.For<IConversationSandboxStager>(),
             TimeProvider.System,
             NullLogger<NodeChatStreamService>.Instance);
 
@@ -1197,6 +1325,7 @@ public sealed class NodeChatStreamServiceTests
             CreateLocalDefaultChatModelResolver(),
             CreateMemoryExtractionDispatcher(),
             Substitute.For<IConversationUploadedFileStore>(),
+            Substitute.For<IConversationSandboxStager>(),
             TimeProvider.System,
             NullLogger<NodeChatStreamService>.Instance);
 
@@ -1252,6 +1381,7 @@ public sealed class NodeChatStreamServiceTests
             CreateLocalDefaultChatModelResolver(),
             CreateMemoryExtractionDispatcher(),
             Substitute.For<IConversationUploadedFileStore>(),
+            Substitute.For<IConversationSandboxStager>(),
             TimeProvider.System,
             NullLogger<NodeChatStreamService>.Instance);
 
@@ -1306,6 +1436,7 @@ public sealed class NodeChatStreamServiceTests
             CreateLocalDefaultChatModelResolver(),
             CreateMemoryExtractionDispatcher(),
             Substitute.For<IConversationUploadedFileStore>(),
+            Substitute.For<IConversationSandboxStager>(),
             TimeProvider.System,
             NullLogger<NodeChatStreamService>.Instance);
 
@@ -1363,6 +1494,7 @@ public sealed class NodeChatStreamServiceTests
             CreateLocalDefaultChatModelResolver(),
             CreateMemoryExtractionDispatcher(),
             Substitute.For<IConversationUploadedFileStore>(),
+            Substitute.For<IConversationSandboxStager>(),
             TimeProvider.System,
             NullLogger<NodeChatStreamService>.Instance);
 
@@ -1435,6 +1567,7 @@ public sealed class NodeChatStreamServiceTests
             CreateLocalDefaultChatModelResolver(),
             CreateMemoryExtractionDispatcher(),
             Substitute.For<IConversationUploadedFileStore>(),
+            Substitute.For<IConversationSandboxStager>(),
             TimeProvider.System,
             NullLogger<NodeChatStreamService>.Instance);
 
@@ -1513,6 +1646,7 @@ public sealed class NodeChatStreamServiceTests
             CreateLocalDefaultChatModelResolver(),
             CreateMemoryExtractionDispatcher(),
             Substitute.For<IConversationUploadedFileStore>(),
+            Substitute.For<IConversationSandboxStager>(),
             TimeProvider.System,
             NullLogger<NodeChatStreamService>.Instance);
 
@@ -1609,6 +1743,7 @@ public sealed class NodeChatStreamServiceTests
             CreateLocalDefaultChatModelResolver(),
             CreateMemoryExtractionDispatcher(),
             Substitute.For<IConversationUploadedFileStore>(),
+            Substitute.For<IConversationSandboxStager>(),
             TimeProvider.System,
             NullLogger<NodeChatStreamService>.Instance);
 
@@ -1714,6 +1849,7 @@ public sealed class NodeChatStreamServiceTests
             CreateLocalDefaultChatModelResolver(),
             CreateMemoryExtractionDispatcher(),
             Substitute.For<IConversationUploadedFileStore>(),
+            Substitute.For<IConversationSandboxStager>(),
             TimeProvider.System,
             NullLogger<NodeChatStreamService>.Instance);
 
@@ -1813,6 +1949,7 @@ public sealed class NodeChatStreamServiceTests
             CreateLocalDefaultChatModelResolver(),
             CreateMemoryExtractionDispatcher(),
             Substitute.For<IConversationUploadedFileStore>(),
+            Substitute.For<IConversationSandboxStager>(),
             TimeProvider.System,
             NullLogger<NodeChatStreamService>.Instance);
 
@@ -1866,6 +2003,7 @@ public sealed class NodeChatStreamServiceTests
             CreateLocalDefaultChatModelResolver(resolved: null, echoPersistedDefault: false),
             CreateMemoryExtractionDispatcher(),
             Substitute.For<IConversationUploadedFileStore>(),
+            Substitute.For<IConversationSandboxStager>(),
             TimeProvider.System,
             NullLogger<NodeChatStreamService>.Instance);
 
@@ -1922,6 +2060,7 @@ public sealed class NodeChatStreamServiceTests
             CreateLocalDefaultChatModelResolver("phi-4:Q4_K_M", echoPersistedDefault: false),
             CreateMemoryExtractionDispatcher(),
             Substitute.For<IConversationUploadedFileStore>(),
+            Substitute.For<IConversationSandboxStager>(),
             TimeProvider.System,
             NullLogger<NodeChatStreamService>.Instance);
 
@@ -1981,6 +2120,7 @@ public sealed class NodeChatStreamServiceTests
             CreateLocalDefaultChatModelResolver(),
             CreateMemoryExtractionDispatcher(),
             Substitute.For<IConversationUploadedFileStore>(),
+            Substitute.For<IConversationSandboxStager>(),
             TimeProvider.System,
             NullLogger<NodeChatStreamService>.Instance);
 
@@ -2321,6 +2461,7 @@ public sealed class NodeChatStreamServiceTests
             CreateLocalDefaultChatModelResolver(),
             CreateMemoryExtractionDispatcher(),
             Substitute.For<IConversationUploadedFileStore>(),
+            Substitute.For<IConversationSandboxStager>(),
             TimeProvider.System,
             NullLogger<NodeChatStreamService>.Instance);
 
