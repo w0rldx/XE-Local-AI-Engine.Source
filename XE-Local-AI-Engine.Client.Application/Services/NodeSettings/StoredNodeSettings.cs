@@ -73,6 +73,22 @@ public sealed partial record StoredNodeSettings
 
     public const int MaxMaxPendingToolCallAgeMinutes = 60;
 
+    /// <summary>Node-level master flag for the client voice (TTS) feature. Default (absent) is off.</summary>
+    public const bool DefaultVoiceFeatureEnabled = false;
+
+    /// <summary>
+    ///     The canonical Kokoro ONNX model id the client may load by default. Mirrors the authoritative metadata source
+    ///     <c>KokoroVoiceCatalog.ModelId</c> (kept as a literal here to keep the settings record free of a runtime-catalog
+    ///     dependency).
+    /// </summary>
+    public const string DefaultVoiceModelId = "onnx-community/Kokoro-82M-v1.0-ONNX";
+
+    /// <summary>The default Kokoro voice profile id when none is stored.</summary>
+    public const string DefaultVoiceProfileId = "af_heart";
+
+    /// <summary>The default allow-list of voice model ids the client may load (just the bundled Kokoro model).</summary>
+    public static readonly IReadOnlyList<string> DefaultAllowedVoiceModels = [DefaultVoiceModelId];
+
     /// <summary>Tag format gate: a llama.cpp release tag is a literal <c>b</c> followed by one or more digits.</summary>
     public const string RecommendedLlamaCppTagPattern = "^b[0-9]+$";
 
@@ -145,4 +161,22 @@ public sealed partial record StoredNodeSettings
     ///     today's behavior. Persisting the shape is done; consumption on the loopback send path is a follow-up.
     /// </summary>
     public SamplingOptions? SamplingDefaults { get; init; }
+
+    /// <summary>
+    ///     Node-level master flag for the client voice (TTS) feature. <see langword="null" /> (absent) reads as
+    ///     <see cref="DefaultVoiceFeatureEnabled" /> (off). The voice manifest endpoint surfaces this as <c>Enabled</c>.
+    /// </summary>
+    public bool? VoiceFeatureEnabled { get; init; }
+
+    /// <summary>
+    ///     Allow-list of voice model ids the client may load. <see langword="null" /> (absent) reads as
+    ///     <see cref="DefaultAllowedVoiceModels" /> (just the bundled Kokoro model).
+    /// </summary>
+    public IReadOnlyList<string>? AllowedVoiceModels { get; init; }
+
+    /// <summary>
+    ///     The default Kokoro voice profile id offered to the client. <see langword="null" /> (absent) reads as
+    ///     <see cref="DefaultVoiceProfileId" /> (<c>af_heart</c>).
+    /// </summary>
+    public string? DefaultVoiceProfile { get; init; }
 }

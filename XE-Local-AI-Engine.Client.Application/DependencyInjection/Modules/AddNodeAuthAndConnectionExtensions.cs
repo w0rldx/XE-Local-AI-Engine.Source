@@ -13,6 +13,8 @@ using XE_Local_AI_Engine.Client.Services.Persistence;
 using XE_Local_AI_Engine.Client.Services.Persistence.Implementation;
 using XE_Local_AI_Engine.Client.Services.Tutorial;
 using XE_Local_AI_Engine.Client.Services.Tutorial.Implementation;
+using XE_Local_AI_Engine.Client.Services.Voice;
+using XE_Local_AI_Engine.Client.Services.Voice.Implementation;
 
 internal static class AddNodeAuthAndConnectionExtensions
 {
@@ -64,6 +66,9 @@ internal static class AddNodeAuthAndConnectionExtensions
         builder.Services.AddSingleton<INodeSettingsStore>(static sp =>
             new CachedNodeSettingsStore(sp.GetRequiredService<NodeSettingsStore>(), sp.GetRequiredService<IMemoryCache>()));
         builder.Services.AddSingleton<INodeRuntimeSettings, NodeRuntimeSettings>();
+
+        // Voice manifest: config-only composition over the node settings store + the static Kokoro catalog (no audio).
+        builder.Services.AddSingleton<IVoiceManifestService, VoiceManifestService>();
         builder.Services.AddSingleton<IAzureFoundryChatClientFactory, AzureFoundryChatClientFactory>();
         builder.AddCodexOAuthProvider(configuration);
         builder.Services.AddSingleton<INodeKeyRegistry, NodeKeyRegistry>();

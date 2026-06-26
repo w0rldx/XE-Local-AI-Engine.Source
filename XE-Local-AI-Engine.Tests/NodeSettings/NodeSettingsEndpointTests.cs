@@ -213,6 +213,37 @@ public sealed class NodeSettingsEndpointTests
         await nodeSettingsStore.DidNotReceiveWithAnyArgs().SaveAsync(Arg.Any<StoredNodeSettings>(), Arg.Any<CancellationToken>());
     }
 
+    [Test]
+    public void NodeSettings_VoiceFields_RoundTripThroughMapper()
+    {
+        var request = new SaveNodeSettingsRequest
+        {
+            VoiceFeatureEnabled = true,
+            AllowedVoiceModels = ["onnx-community/Kokoro-82M-v1.0-ONNX"],
+            DefaultVoiceProfile = "  am_adam  "
+        };
+
+        var stored = request.ToStoredSettings(new StoredNodeSettings());
+
+        AssertEx.Equal(expected: true, stored.VoiceFeatureEnabled);
+        AssertEx.NotNull(stored.AllowedVoiceModels);
+        AssertEx.Contains(stored.AllowedVoiceModels!, "onnx-community/Kokoro-82M-v1.0-ONNX");
+        AssertEx.Equal("am_adam", stored.DefaultVoiceProfile);
+
+        var response = stored.ToResponse();
+
+        AssertEx.Equal(expected: true, response.VoiceFeatureEnabled);
+        AssertEx.NotNull(response.AllowedVoiceModels);
+        AssertEx.Contains(response.AllowedVoiceModels!, "onnx-community/Kokoro-82M-v1.0-ONNX");
+        AssertEx.Equal("am_adam", response.DefaultVoiceProfile);
+
+        // Omitting the voice fields on a later save keeps the current stored values (additive merge).
+        var merged = new SaveNodeSettingsRequest().ToStoredSettings(stored);
+        AssertEx.Equal(expected: true, merged.VoiceFeatureEnabled);
+        AssertEx.Equal("am_adam", merged.DefaultVoiceProfile);
+        AssertEx.NotNull(merged.AllowedVoiceModels);
+    }
+
     private static TestingWebAppFactory CreateFactory(INodeSettingsStore nodeSettingsStore, ICapabilityReporter? capabilityReporter = null)
     {
         return new TestingWebAppFactory

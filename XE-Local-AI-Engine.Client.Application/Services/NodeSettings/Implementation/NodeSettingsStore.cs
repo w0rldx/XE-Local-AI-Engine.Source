@@ -183,7 +183,9 @@ public sealed class NodeSettingsStore : INodeSettingsStore, IDisposable
             AgentHomeMaxSelectedFolderBytes = ClampPositiveLong(settings.AgentHomeMaxSelectedFolderBytes),
             AgentHomeMaxPatchBytes = ClampPositiveLong(settings.AgentHomeMaxPatchBytes),
             MaxPendingToolCallAgeMinutes = ClampToRange(settings.MaxPendingToolCallAgeMinutes,
-                StoredNodeSettings.MinMaxPendingToolCallAgeMinutes, StoredNodeSettings.MaxMaxPendingToolCallAgeMinutes)
+                StoredNodeSettings.MinMaxPendingToolCallAgeMinutes, StoredNodeSettings.MaxMaxPendingToolCallAgeMinutes),
+            AllowedVoiceModels = NormalizeStringList(settings.AllowedVoiceModels),
+            DefaultVoiceProfile = TrimToNull(settings.DefaultVoiceProfile)
         };
     }
 

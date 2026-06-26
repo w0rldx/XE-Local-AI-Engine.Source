@@ -96,6 +96,15 @@ public static class LocalApiRoutes
     }
 
     /// <summary>
+    ///     Client voice (TTS) runtime routes. The manifest is config-only (allowed models, voice profiles, feature flag,
+    ///     integrity hashes, download URLs) — the backend serves no audio.
+    /// </summary>
+    public static class Voice
+    {
+        public const string Manifest = "voice/manifest";
+    }
+
+    /// <summary>
     ///     Per-user onboarding tour state routes. GET reads the current user's recorded tour entries; PUT upserts one.
     /// </summary>
     public static class Tutorial
