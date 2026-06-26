@@ -185,6 +185,16 @@ public sealed class NodeEncryptionSaveChangesInterceptor : SaveChangesIntercepto
             EncryptOptionalProperty(entry, entry.Property(entity => entity.DiagnosticsJson), Guid.Empty, entry.Entity.Id, "bench_diagnostics_json", trackedProperties);
         }
 
+        // Uploaded files are conversation-scoped: the AAD binds the owning conversation id to the file's own id plus the
+        // column name — same layout as conversation titles. Only the display name is encrypted (the durable bytes and
+        // extracted text are encrypted on disk by the file store, not in a column). The store's raw-SQL write path uses
+        // NodeChatDbContext.EncryptUploadedFileName with the identical protector/AAD, so an EF save (used by tests) and
+        // the raw-SQL write are interchangeable; this guard keeps the column encrypted for any EF-tracked save.
+        foreach (var entry in nodeContext.ChangeTracker.Entries<ConversationUploadedFile>())
+        {
+            EncryptRequiredProperty(entry, entry.Property(entity => entity.OriginalFileName), entry.Entity.ConversationId, entry.Entity.FileId, "original_file_name", trackedProperties);
+        }
+
         if (trackedProperties.Count > 0)
         {
             _pendingRestores[nodeContext] = trackedProperties;

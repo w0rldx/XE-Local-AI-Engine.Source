@@ -75,6 +75,9 @@ public sealed class NodeEncryptionMaterializationInterceptor : IMaterializationI
                 benchmark.RawJson = DecryptIfPresent(benchmark.RawJson, context.NodeEncryptionKey.Span, Guid.Empty, benchmark.Id, "bench_raw_json");
                 benchmark.DiagnosticsJson = DecryptIfPresent(benchmark.DiagnosticsJson, context.NodeEncryptionKey.Span, Guid.Empty, benchmark.Id, "bench_diagnostics_json");
                 break;
+            case ConversationUploadedFile uploaded:
+                uploaded.OriginalFileName = NodePayloadProtector.Decrypt(uploaded.OriginalFileName, context.NodeEncryptionKey.Span, uploaded.ConversationId, uploaded.FileId, "original_file_name");
+                break;
         }
 
         return entity;

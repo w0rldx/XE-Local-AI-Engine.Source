@@ -8,11 +8,13 @@
     <PackageReference Include="Azure.AI.OpenAI"/>
     <PackageReference Include="BouncyCastle.Cryptography"/>
     <PackageReference Include="CommunityToolkit.Aspire.OllamaSharp"/>
+    <PackageReference Include="DocumentFormat.OpenXml"/>
     <PackageReference Include="Microsoft.AspNetCore.Identity.EntityFrameworkCore"/>
     <PackageReference Include="Microsoft.AspNetCore.SignalR.Client"/>
     <PackageReference Include="Microsoft.EntityFrameworkCore.Sqlite"/>
     <PackageReference Include="Microsoft.Extensions.AI"/>
     <PackageReference Include="Microsoft.Extensions.AI.OpenAI"/>
+    <PackageReference Include="Microsoft.Extensions.DataIngestion.Abstractions"/>
     <PackageReference Include="Microsoft.Extensions.Http.Resilience"/>
     <PackageReference Include="Microsoft.IdentityModel.JsonWebTokens"/>
     <PackageReference Include="ModelContextProtocol"/>
@@ -25,6 +27,8 @@
     <PackageReference Include="Quartz.Serialization.SystemTextJson"/>
     <PackageReference Include="Serilog"/>
     <PackageReference Include="System.Numerics.Tensors"/>
+    <PackageReference Include="PdfPig"/>
+    <PackageReference Include="UTF.Unknown"/>
   </ItemGroup>
 
   <ItemGroup>
