@@ -110,13 +110,15 @@ const allNavigationLinks: INavigationLink[] = [
 			{ translationKey: "navigation.tools", to: nodeRoutePaths.tools },
 		],
 	},
-	// Open Canvas (Preview) workflow builder — a standalone top-level entry gated on the preview capability.
+	// Preview group: collects experimental / preview features under one menu point. Open Canvas (the MAF
+	// workflow builder) is the first member; future preview features become additional children here. The
+	// whole group is gated on the preview capability — when it is off the group (and its only child) drop.
 	{
 		id: "preview",
 		icon: IconBinaryTree2,
-		translationKey: "navigation.preview",
-		to: nodeRoutePaths.preview,
+		translationKey: "navigation.previewGroup",
 		capability: "preview",
+		links: [{ translationKey: "navigation.preview", to: nodeRoutePaths.preview }],
 	},
 	{
 		id: "invocations",

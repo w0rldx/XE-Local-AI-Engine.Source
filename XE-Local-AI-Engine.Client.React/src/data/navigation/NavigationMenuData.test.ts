@@ -140,6 +140,20 @@ describe("navigationLinks", () => {
 		expect(settings?.links?.some((nestedLink) => nestedLink.to === nodeRoutePaths.cloudSettings)).toBe(false);
 	});
 
+	it("groups Open Canvas under the Preview group as a pure toggle carrying the preview route", () => {
+		const preview = navigationLinks.find((link) => link.id === "preview");
+
+		// Preview is now a group (no own route); Open Canvas is its first child carrying /preview.
+		expect(preview?.to).toBeUndefined();
+		expect(preview?.links?.map((nestedLink) => nestedLink.to)).toEqual([nodeRoutePaths.preview]);
+	});
+
+	it("drops the Preview group entirely when the preview capability is off", async () => {
+		const { navigationLinks: gatedLinks } = await mockCapabilities({ preview: false });
+
+		expect(gatedLinks.some((link) => link.id === "preview")).toBe(false);
+	});
+
 	it("drops the scheduler child from Automation when scheduler is off", async () => {
 		const { navigationLinks: gatedLinks } = await mockCapabilities({ scheduler: false });
 		const automation = gatedLinks.find((link) => link.id === "automation");
