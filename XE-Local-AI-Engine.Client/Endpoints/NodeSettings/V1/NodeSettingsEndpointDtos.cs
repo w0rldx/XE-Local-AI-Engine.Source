@@ -77,6 +77,17 @@ public sealed record NodeSettingsResponse
     public int MaxAllowedMaxPendingToolCallAgeMinutes { get; init; }
 
     public SamplingOptions? SamplingDefaults { get; init; }
+
+    // ── Client voice (TTS) feature ──
+
+    /// <summary>Node-level master flag for the client voice feature. <see langword="null" /> reads as off.</summary>
+    public bool? VoiceFeatureEnabled { get; init; }
+
+    /// <summary>Allow-list of voice model ids the client may load. <see langword="null" /> reads as the bundled Kokoro model.</summary>
+    public IReadOnlyList<string>? AllowedVoiceModels { get; init; }
+
+    /// <summary>The default Kokoro voice profile id. <see langword="null" /> reads as <c>af_heart</c>.</summary>
+    public string? DefaultVoiceProfile { get; init; }
 }
 
 /// <summary>
@@ -124,6 +135,13 @@ public sealed record SaveNodeSettingsRequest
     public int? MaxPendingToolCallAgeMinutes { get; init; }
 
     public SamplingOptions? SamplingDefaults { get; init; }
+
+    // ── Client voice (TTS) feature ──
+    public bool? VoiceFeatureEnabled { get; init; }
+
+    public IReadOnlyList<string>? AllowedVoiceModels { get; init; }
+
+    public string? DefaultVoiceProfile { get; init; }
 }
 
 internal static class NodeSettingsEndpointDtoMapper
@@ -165,7 +183,10 @@ internal static class NodeSettingsEndpointDtoMapper
             MaxPendingToolCallAgeMinutes = settings.MaxPendingToolCallAgeMinutes,
             MinMaxPendingToolCallAgeMinutes = StoredNodeSettings.MinMaxPendingToolCallAgeMinutes,
             MaxAllowedMaxPendingToolCallAgeMinutes = StoredNodeSettings.MaxMaxPendingToolCallAgeMinutes,
-            SamplingDefaults = settings.SamplingDefaults
+            SamplingDefaults = settings.SamplingDefaults,
+            VoiceFeatureEnabled = settings.VoiceFeatureEnabled,
+            AllowedVoiceModels = settings.AllowedVoiceModels,
+            DefaultVoiceProfile = settings.DefaultVoiceProfile
         };
     }
 
@@ -207,7 +228,12 @@ internal static class NodeSettingsEndpointDtoMapper
             AgentHomeMaxSelectedFolderBytes = request.AgentHomeMaxSelectedFolderBytes ?? currentSettings.AgentHomeMaxSelectedFolderBytes,
             AgentHomeMaxPatchBytes = request.AgentHomeMaxPatchBytes ?? currentSettings.AgentHomeMaxPatchBytes,
             MaxPendingToolCallAgeMinutes = request.MaxPendingToolCallAgeMinutes ?? currentSettings.MaxPendingToolCallAgeMinutes,
-            SamplingDefaults = request.SamplingDefaults ?? currentSettings.SamplingDefaults
+            SamplingDefaults = request.SamplingDefaults ?? currentSettings.SamplingDefaults,
+            VoiceFeatureEnabled = request.VoiceFeatureEnabled ?? currentSettings.VoiceFeatureEnabled,
+            AllowedVoiceModels = request.AllowedVoiceModels ?? currentSettings.AllowedVoiceModels,
+            DefaultVoiceProfile = request.DefaultVoiceProfile is null
+                ? currentSettings.DefaultVoiceProfile
+                : request.DefaultVoiceProfile.Trim()
         };
     }
 }
