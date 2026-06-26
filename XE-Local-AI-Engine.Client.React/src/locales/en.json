@@ -2523,6 +2523,7 @@
 			"title": "Set up local admin",
 			"subtitle": "Create the one-time admin account for this node.",
 			"emailLabel": "Email",
+			"emailLocalOnlyNote": "Stored only on this device. Your email never leaves this node.",
 			"passwordLabel": "Password",
 			"confirmPasswordLabel": "Confirm password",
 			"createButton": "Create admin",

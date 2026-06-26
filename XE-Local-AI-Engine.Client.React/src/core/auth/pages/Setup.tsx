@@ -146,6 +146,7 @@ export function Setup() {
 							<Stack gap="md">
 								<TextInput
 									label={t("auth.setup.emailLabel")}
+									description={t("auth.setup.emailLocalOnlyNote")}
 									type="email"
 									autoComplete="email"
 									required={true}
