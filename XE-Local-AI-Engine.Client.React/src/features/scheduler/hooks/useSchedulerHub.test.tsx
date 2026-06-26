@@ -35,6 +35,15 @@ vi.mock("@microsoft/signalr", () => ({
 	LogLevel: { Warning: 3 },
 }));
 
+// Deterministic i18n: `t` echoes the key so toast assertions are stable without an i18n provider (mirrors the model-fit
+// hook test). The hub reads `t` through a ref, so a fresh `t` per render must NOT churn the connection.
+vi.mock("react-i18next", () => ({
+	useTranslation: () => ({ t: (key: string) => key }),
+}));
+
+const toastMock = vi.hoisted(() => ({ success: vi.fn(), error: vi.fn(), warn: vi.fn(), info: vi.fn() }));
+vi.mock("@/core/ui/notifications/Toast", () => ({ toast: toastMock }));
+
 import { useNodeAuthStore } from "@/core/auth/stores/NodeAuthStore";
 import { useSchedulerHub } from "@/features/scheduler/hooks/useSchedulerHub";
 import { schedulerInvalidationKey, schedulerQueryIds } from "@/features/scheduler/queries/useScheduler";
@@ -146,6 +155,17 @@ describe("useSchedulerHub", () => {
 			expect(invalidatedKeys).toContainEqual(RUNS_KEY);
 			expect(invalidatedKeys).toContainEqual(RUN_KEY);
 		}
+	});
+
+	it("raises a completion toast for ANY scheduled task on a terminal run event", () => {
+		renderHub();
+
+		handlers.get("scheduler.runCompleted")?.({ runId: "sched-hub-run-1" });
+
+		expect(toastMock.success).toHaveBeenCalledWith(
+			"pages.scheduler.toasts.completed",
+			expect.objectContaining({ title: "pages.scheduler.toasts.completedTitle" }),
+		);
 	});
 
 	it("marks a seeded jobs query stale via the partial `_id` match (the invalidation bridge end-to-end)", () => {
