@@ -7,8 +7,11 @@ import { fileURLToPath } from "node:url";
  * Generates the third-party license list rendered in the About dialog's Licenses tab.
  *
  * Frontend packages come from `pnpm licenses list --prod --json` (production tree only,
- * resolved versions + licenses read from the installed node_modules). Backend NuGet
- * packages come from the `nuget-license` dotnet tool run against the backend solution.
+ * resolved versions + licenses read from the installed node_modules) and are then
+ * narrowed to the DIRECT dependencies declared in package.json — the packages this
+ * project actually references, not the full transitive tree. Backend NuGet packages
+ * come from the `nuget-license` dotnet tool, which already reports only direct
+ * (top-level) package references per project.
  *
  * The backend step is intentionally non-fatal: if dotnet, the tool, or restore is
  * unavailable (e.g. a frontend-only CI lane) it logs a warning and reuses the
@@ -19,6 +22,7 @@ const scriptDir = dirname(fileURLToPath(import.meta.url));
 const reactRoot = resolve(scriptDir, "..");
 const repoRoot = resolve(reactRoot, "..");
 const solutionPath = resolve(repoRoot, "XE-Local-AI-Engine.slnx");
+const packageJsonPath = resolve(reactRoot, "package.json");
 const outputPath = resolve(reactRoot, "src/features/about/data/third-party-licenses.generated.json");
 
 const GENERATED_NOTICE =
@@ -62,10 +66,24 @@ function normalizeLicense(value) {
 }
 
 /**
- * Collects the production frontend dependency tree via pnpm's own license reader.
+ * Reads the names of the DIRECT production dependencies from package.json. These are the
+ * packages the project explicitly references; everything else in the resolved prod tree is
+ * transitive and intentionally hidden from the About dialog's Licenses tab.
+ * @returns {Set<string>}
+ */
+function readDirectFrontendDependencyNames() {
+	/** @type {{ dependencies?: Record<string, string> }} */
+	const packageJson = JSON.parse(readFileSync(packageJsonPath, "utf8"));
+	return new Set(Object.keys(packageJson.dependencies ?? {}));
+}
+
+/**
+ * Collects the production frontend dependency tree via pnpm's own license reader, then
+ * narrows it to the direct dependencies declared in package.json.
  * @returns {ThirdPartyPackage[]}
  */
 function collectFrontendPackages() {
+	const directDependencyNames = readDirectFrontendDependencyNames();
 	// On Windows pnpm is a .cmd shim; Node refuses to spawn .cmd/.bat directly (EINVAL) and
 	// won't resolve the bare name (ENOENT), so go through the shell there.
 	const isWindows = process.platform === "win32";
@@ -87,6 +105,11 @@ function collectFrontendPackages() {
 
 	for (const entries of Object.values(grouped)) {
 		for (const entry of entries) {
+			// Skip transitive packages — only surface the direct dependencies this project declares.
+			if (!directDependencyNames.has(entry.name)) {
+				continue;
+			}
+
 			const versions = Array.isArray(entry.versions) && entry.versions.length > 0 ? entry.versions : ["unknown"];
 
 			for (const version of versions) {
