@@ -25,9 +25,9 @@ interface IGeneratedLicenseFile {
 
 export const applicationInfo: IApplicationInfo = {
 	title: environment.VITE_APP_TITLE,
-	// No version is exposed via package.json / env yet. Bump here, or wire to a
-	// build-time define (e.g. import.meta.env.VITE_APP_VERSION) once one exists.
-	version: "0.1.0",
+	// Injected at build time from Directory.Build.props (the single version source of truth, also used by
+	// `vpk --packVersion`). See vite.config.ts `resolveAppVersion()`.
+	version: environment.VITE_APP_VERSION,
 	description:
 		"Local AI engine for running, managing, and chatting with on-device AI models.",
 	copyright: `© ${new Date().getFullYear()} XE AI-Engine`,
