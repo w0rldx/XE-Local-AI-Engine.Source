@@ -225,7 +225,7 @@ export function DesktopNavigationBar({ sideBarCollapsed, setSideBarCollapsed }: 
 					<LogoMark />
 				</m.div>
 				<m.div variants={labelVariants} initial={false} transition={MOTION_SPEC} className={classes["logo-text-motion"]}>
-					<LogoText />
+					<LogoText className="h-5 w-auto" />
 				</m.div>
 			</div>
 
