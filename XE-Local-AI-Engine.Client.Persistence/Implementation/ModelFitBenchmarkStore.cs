@@ -38,7 +38,21 @@ public sealed class ModelFitBenchmarkStore(NodeChatDbContext dbContext) : IModel
                            TotalLatencyMs = input.TotalLatencyMs,
                            Runs = input.Runs,
                            RawJson = EncodeOptional(input.RawJson),
-                           DiagnosticsJson = EncodeOptional(input.DiagnosticsJson)
+                           DiagnosticsJson = EncodeOptional(input.DiagnosticsJson),
+                           PpTokensPerSecond = input.PpTokensPerSecond,
+                           CacheHitRate = input.CacheHitRate,
+                           ToolLoopMs = input.ToolLoopMs,
+                           VramLoadBytes = input.VramLoadBytes,
+                           VramAfterBytes = input.VramAfterBytes,
+                           LlamacppBuild = input.LlamacppBuild,
+                           Quant = input.Quant,
+                           CtxSize = input.CtxSize,
+                           KvType = input.KvType,
+                           Backend = input.Backend,
+                           MachineKey = input.MachineKey,
+                           NGpuLayers = input.NGpuLayers,
+                           TensorSplit = input.TensorSplit,
+                           OverrideTensor = input.OverrideTensor
                        })
                        .ToArray();
 
@@ -76,7 +90,21 @@ public sealed class ModelFitBenchmarkStore(NodeChatDbContext dbContext) : IModel
             entity.TotalLatencyMs,
             entity.Runs,
             entity.RawJson is null ? null : Decode(entity.RawJson),
-            entity.DiagnosticsJson is null ? null : Decode(entity.DiagnosticsJson));
+            entity.DiagnosticsJson is null ? null : Decode(entity.DiagnosticsJson),
+            entity.PpTokensPerSecond,
+            entity.CacheHitRate,
+            entity.ToolLoopMs,
+            entity.VramLoadBytes,
+            entity.VramAfterBytes,
+            entity.LlamacppBuild,
+            entity.Quant,
+            entity.CtxSize,
+            entity.KvType,
+            entity.Backend,
+            entity.MachineKey,
+            entity.NGpuLayers,
+            entity.TensorSplit,
+            entity.OverrideTensor);
     }
 
     private static byte[]? EncodeOptional(string? value)

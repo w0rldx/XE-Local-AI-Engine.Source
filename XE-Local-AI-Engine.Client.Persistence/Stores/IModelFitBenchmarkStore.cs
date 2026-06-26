@@ -32,7 +32,21 @@ public sealed record ModelFitBenchmarkRecord(
     double? TotalLatencyMs,
     int? Runs,
     string? RawJson,
-    string? DiagnosticsJson);
+    string? DiagnosticsJson,
+    double? PpTokensPerSecond = null,
+    double? CacheHitRate = null,
+    double? ToolLoopMs = null,
+    long? VramLoadBytes = null,
+    long? VramAfterBytes = null,
+    string? LlamacppBuild = null,
+    string? Quant = null,
+    int? CtxSize = null,
+    string? KvType = null,
+    string? Backend = null,
+    string? MachineKey = null,
+    int? NGpuLayers = null,
+    string? TensorSplit = null,
+    string? OverrideTensor = null);
 
 /// <summary>
 ///     Mutable fields of a benchmark row supplied on replace. <c>RawJson</c> and <c>DiagnosticsJson</c> are passed as
@@ -47,4 +61,18 @@ public sealed record ModelFitBenchmarkInput(
     double? TotalLatencyMs,
     int? Runs,
     string? RawJson,
-    string? DiagnosticsJson);
+    string? DiagnosticsJson,
+    double? PpTokensPerSecond = null,
+    double? CacheHitRate = null,
+    double? ToolLoopMs = null,
+    long? VramLoadBytes = null,
+    long? VramAfterBytes = null,
+    string? LlamacppBuild = null,
+    string? Quant = null,
+    int? CtxSize = null,
+    string? KvType = null,
+    string? Backend = null,
+    string? MachineKey = null,
+    int? NGpuLayers = null,
+    string? TensorSplit = null,
+    string? OverrideTensor = null);

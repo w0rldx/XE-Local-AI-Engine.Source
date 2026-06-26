@@ -25,6 +25,10 @@ internal static class AddNodeModelFitExtensions
         builder.Services.AddScoped<IModelFitSnapshotStore, ModelFitSnapshotStore>();
         builder.Services.AddScoped<IModelFitRecommendationStore, ModelFitRecommendationStore>();
         builder.Services.AddScoped<IModelFitBenchmarkStore, ModelFitBenchmarkStore>();
+        // Inference-profile persistence: one live llama-server launch config per (machine_key, model, role, backend) plus
+        // its freeze/stale status transitions. Plaintext structural rows (no encryption interceptor). Scoped to match the
+        // scoped, DbContext-backed stores.
+        builder.Services.AddScoped<IInferenceProfileStore, InferenceProfileStore>();
         // The request validator allowlists the recommend intent params (use-case + limit bounds). Stateless → singleton.
         builder.Services.AddSingleton<ModelFitRequestValidator>();
         // The memory-fit estimator is a pure, stateless function over GGUF header metadata + the hardware

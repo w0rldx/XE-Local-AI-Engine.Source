@@ -41,6 +41,51 @@ internal sealed class ModelFitBenchmarkConfiguration : IEntityTypeConfiguration<
         builder.Property(entity => entity.DiagnosticsJson)
                .HasColumnName("diagnostics_json");
 
+        // Agent-loop metrics (additive, nullable, plaintext numerics — same posture as tokens_per_second).
+        builder.Property(entity => entity.PpTokensPerSecond)
+               .HasColumnName("pp_tokens_per_second");
+
+        builder.Property(entity => entity.CacheHitRate)
+               .HasColumnName("cache_hit_rate");
+
+        builder.Property(entity => entity.ToolLoopMs)
+               .HasColumnName("tool_loop_ms");
+
+        builder.Property(entity => entity.VramLoadBytes)
+               .HasColumnName("vram_load_bytes");
+
+        builder.Property(entity => entity.VramAfterBytes)
+               .HasColumnName("vram_after_bytes");
+
+        // Reproducibility key.
+        builder.Property(entity => entity.LlamacppBuild)
+               .HasColumnName("llamacpp_build");
+
+        builder.Property(entity => entity.Quant)
+               .HasColumnName("quant");
+
+        builder.Property(entity => entity.CtxSize)
+               .HasColumnName("ctx_size");
+
+        builder.Property(entity => entity.KvType)
+               .HasColumnName("kv_type");
+
+        builder.Property(entity => entity.Backend)
+               .HasColumnName("backend");
+
+        builder.Property(entity => entity.MachineKey)
+               .HasColumnName("machine_key");
+
+        // Placement args that dominate MoE tok/s.
+        builder.Property(entity => entity.NGpuLayers)
+               .HasColumnName("n_gpu_layers");
+
+        builder.Property(entity => entity.TensorSplit)
+               .HasColumnName("tensor_split");
+
+        builder.Property(entity => entity.OverrideTensor)
+               .HasColumnName("override_tensor");
+
         builder.HasIndex(entity => entity.SnapshotId);
 
         // A benchmark row is meaningless without its parent snapshot, so the FK cascades: deleting a snapshot removes

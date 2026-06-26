@@ -44,4 +44,60 @@ internal sealed record class ModelFitBenchmark
     ///     AAD column name <c>bench_diagnostics_json</c>. Optional.
     /// </summary>
     public byte[]? DiagnosticsJson { get; set; }
+
+    // -------------------------------------------------------------------------
+    // Agent-loop benchmark metrics (additive, all nullable — legacy rows pre-date the agent-loop bench). Plaintext
+    // numerics, same posture as tokens_per_second (no secrets).
+    // -------------------------------------------------------------------------
+
+    /// <summary>Prompt-processing throughput (tokens/s), or null. Plaintext.</summary>
+    public double? PpTokensPerSecond { get; set; }
+
+    /// <summary>Prompt-cache hit rate derived from <c>/metrics</c> prompt-token reuse, or null. Plaintext.</summary>
+    public double? CacheHitRate { get; set; }
+
+    /// <summary>Agent tool-call round latency in milliseconds, or null. Plaintext.</summary>
+    public double? ToolLoopMs { get; set; }
+
+    /// <summary>Host-observed free-VRAM delta at load (bytes); a delta estimate, not exact resident bytes. Optional. Plaintext.</summary>
+    public long? VramLoadBytes { get; set; }
+
+    /// <summary>Host-observed free-VRAM delta after the loop (bytes); a delta estimate. Optional. Plaintext.</summary>
+    public long? VramAfterBytes { get; set; }
+
+    // -------------------------------------------------------------------------
+    // Reproducibility key (today only in ephemeral job params).
+    // -------------------------------------------------------------------------
+
+    /// <summary>llama.cpp binary tag/commit the bench ran on, or null. Plaintext.</summary>
+    public string? LlamacppBuild { get; set; }
+
+    /// <summary>Quantization (e.g. <c>Q4_K_M</c>) the bench ran at, or null. Plaintext.</summary>
+    public string? Quant { get; set; }
+
+    /// <summary>Context size (<c>-c</c>) the bench ran at, or null. Plaintext.</summary>
+    public int? CtxSize { get; set; }
+
+    /// <summary>KV cache type the bench ran with (e.g. <c>f16</c>/<c>q8_0</c>), or null. Plaintext.</summary>
+    public string? KvType { get; set; }
+
+    /// <summary>Backend the bench ran on (<c>cuda</c>/<c>vulkan</c>/<c>cpu</c>), or null. Plaintext.</summary>
+    public string? Backend { get; set; }
+
+    /// <summary>Local-only machine key the bench ran on, or null. Never emitted in telemetry/aggregates. Plaintext.</summary>
+    public string? MachineKey { get; set; }
+
+    // -------------------------------------------------------------------------
+    // Placement args that dominate MoE tok/s — persisted on the row so a measurement reproduces itself without
+    // joining back through inference_profiles.
+    // -------------------------------------------------------------------------
+
+    /// <summary>GPU layer count (<c>-ngl</c>) the bench ran with, or null. Plaintext.</summary>
+    public int? NGpuLayers { get; set; }
+
+    /// <summary>Tensor split (<c>-ts</c>) the bench ran with, or null. Plaintext.</summary>
+    public string? TensorSplit { get; set; }
+
+    /// <summary>Expert/tensor placement (<c>-ot</c>) the bench ran with, or null. Plaintext.</summary>
+    public string? OverrideTensor { get; set; }
 }

@@ -62,6 +62,8 @@ public sealed class NodeChatDbContext : DbContext
 
     internal DbSet<ModelFitBenchmark> ModelFitBenchmarks => Set<ModelFitBenchmark>();
 
+    internal DbSet<InferenceProfile> InferenceProfiles => Set<InferenceProfile>();
+
     internal DbSet<ConversationUploadedFile> UploadedFiles => Set<ConversationUploadedFile>();
 
     internal ReadOnlyMemory<byte> NodeEncryptionKey => _nodeSqliteKeyHolder.Key;
@@ -159,6 +161,7 @@ public sealed class NodeChatDbContext : DbContext
         modelBuilder.ApplyConfiguration(new ModelFitSnapshotConfiguration());
         modelBuilder.ApplyConfiguration(new ModelFitRecommendationConfiguration());
         modelBuilder.ApplyConfiguration(new ModelFitBenchmarkConfiguration());
+        modelBuilder.ApplyConfiguration(new InferenceProfileConfiguration());
         modelBuilder.ApplyConfiguration(new ConversationUploadedFileConfiguration());
     }
 }
