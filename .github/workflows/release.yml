@@ -212,18 +212,17 @@ jobs:
       - name: Pack (Velopack)
         shell: bash
         run: |
+          # NOTE: `vpk pack` (1.2.0) has NO --pre flag — passing it fails with
+          # "'--pre' was not matched". The prerelease state rides on the SemVer
+          # suffix in --packVersion (e.g. 0.1.0-rc.1.0 IS a prerelease). The
+          # GitHub-release prerelease marker is set with --pre on `upload github`.
           PACK_VERSION="${{ needs.version.outputs.pack-version }}"
-          PRERELEASE_FLAG=""
-          if [[ "${{ needs.version.outputs.is-prerelease }}" == "true" ]]; then
-            PRERELEASE_FLAG="--pre"
-          fi
           vpk pack \
             --packId XE-Local-AI-Engine \
             --packVersion "$PACK_VERSION" \
             --packDir "${{ matrix.publish-dir }}" \
             --mainExe "${{ matrix.main-exe }}" \
-            --channel "${{ matrix.vpk-channel }}" \
-            $PRERELEASE_FLAG
+            --channel "${{ matrix.vpk-channel }}"
 
       - name: Upload to GitHub releases
         shell: bash
