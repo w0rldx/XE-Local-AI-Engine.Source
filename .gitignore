@@ -353,6 +353,10 @@ ASALocalRun/
 # under the content root in headless/dev mode)
 uploaded-files/
 
+# Runtime AgentHome sandbox/workspace state (manifest, run logs, scratchpads, memory
+# proposals) materialized under the data root in headless/dev mode
+agent-home-state/
+
 # Sonarqube files
 .sonarqube/
 
