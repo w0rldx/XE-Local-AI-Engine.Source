@@ -12,6 +12,7 @@ public sealed class SecurityOptionsValidator : IValidateOptions<SecurityOptions>
         var errors = Enumerable.Empty<string>()
                                .AppendIf(options.MaxSystemPromptSizeKb is < 1 or > 1024, "Security:MaxSystemPromptSizeKb must be between 1 and 1024.")
                                .AppendIf(options.MaxMessageSizeKb is < 1 or > 1024, "Security:MaxMessageSizeKb must be between 1 and 1024.")
+                               .AppendIf(options.MaxUploadFileSizeMb is < 1 or > 512, "Security:MaxUploadFileSizeMb must be between 1 and 512.")
                                .AppendIf(string.IsNullOrWhiteSpace(options.AllowedModelNamePattern), "Security:AllowedModelNamePattern is required.")
                                .AppendIf(!IsValidRegex(options.AllowedModelNamePattern), "Security:AllowedModelNamePattern must be a valid regular expression.")
                                .ToArray();

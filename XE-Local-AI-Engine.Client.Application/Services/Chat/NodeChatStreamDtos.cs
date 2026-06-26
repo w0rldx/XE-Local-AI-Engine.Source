@@ -36,7 +36,12 @@ public sealed record NodeChatStreamRequest(
     Guid? AgentDefinitionId = null,
     // Developer-gated per-send sampling overrides. Null (the default) keeps the no-override path byte-identical to
     // today; the SignalR hub forwards the record unchanged.
-    SamplingOptions? SamplingOptions = null);
+    SamplingOptions? SamplingOptions = null,
+    // The conversation's uploaded-file attachments to ground this turn on. In plain chat (no tools) the extracted text
+    // of these files is inlined (capped) into the context; in agent mode they are read via the file tools, so this is
+    // ignored. The client re-sends the conversation's current attachment ids each turn. Trailing optional so the
+    // SignalR hub forwards the record unchanged.
+    IReadOnlyList<Guid>? AttachmentFileIds = null);
 
 public sealed record ChatStreamEvent(
     string Type,

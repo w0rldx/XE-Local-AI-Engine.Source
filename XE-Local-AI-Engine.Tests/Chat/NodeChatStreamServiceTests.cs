@@ -15,6 +15,7 @@ using XE_Local_AI_Engine.Client.Services.Agents.Implementation;
 using XE_Local_AI_Engine.Client.Services.Chat;
 using XE_Local_AI_Engine.Client.Services.Chat.Implementation;
 using XE_Local_AI_Engine.Client.Services.CloudProviders;
+using XE_Local_AI_Engine.Client.Services.DocumentIngestion;
 using XE_Local_AI_Engine.Client.Services.Events;
 using XE_Local_AI_Engine.Client.Services.Invocation;
 using XE_Local_AI_Engine.Client.Services.Memory;
@@ -55,6 +56,7 @@ public sealed class NodeChatStreamServiceTests
             CreateGgufModelCapabilityResolver(),
             CreateLocalDefaultChatModelResolver(),
             CreateMemoryExtractionDispatcher(),
+            Substitute.For<IConversationUploadedFileStore>(),
             TimeProvider.System,
             NullLogger<NodeChatStreamService>.Instance);
         var events = new List<ChatStreamEvent>();
@@ -105,6 +107,7 @@ public sealed class NodeChatStreamServiceTests
             CreateGgufModelCapabilityResolver(),
             CreateLocalDefaultChatModelResolver(),
             CreateMemoryExtractionDispatcher(),
+            Substitute.For<IConversationUploadedFileStore>(),
             TimeProvider.System,
             NullLogger<NodeChatStreamService>.Instance);
         var events = new List<ChatStreamEvent>();
@@ -158,6 +161,7 @@ public sealed class NodeChatStreamServiceTests
             CreateGgufModelCapabilityResolver(),
             CreateLocalDefaultChatModelResolver(),
             CreateMemoryExtractionDispatcher(),
+            Substitute.For<IConversationUploadedFileStore>(),
             TimeProvider.System,
             NullLogger<NodeChatStreamService>.Instance);
         var events = new List<ChatStreamEvent>();
@@ -219,6 +223,7 @@ public sealed class NodeChatStreamServiceTests
             CreateGgufModelCapabilityResolver(),
             CreateLocalDefaultChatModelResolver(),
             CreateMemoryExtractionDispatcher(),
+            Substitute.For<IConversationUploadedFileStore>(),
             TimeProvider.System,
             NullLogger<NodeChatStreamService>.Instance);
 
@@ -265,6 +270,7 @@ public sealed class NodeChatStreamServiceTests
             CreateGgufModelCapabilityResolver(),
             CreateLocalDefaultChatModelResolver(),
             CreateMemoryExtractionDispatcher(),
+            Substitute.For<IConversationUploadedFileStore>(),
             TimeProvider.System,
             NullLogger<NodeChatStreamService>.Instance);
 
@@ -311,6 +317,7 @@ public sealed class NodeChatStreamServiceTests
             CreateGgufModelCapabilityResolver(),
             CreateLocalDefaultChatModelResolver(),
             CreateMemoryExtractionDispatcher(),
+            Substitute.For<IConversationUploadedFileStore>(),
             TimeProvider.System,
             NullLogger<NodeChatStreamService>.Instance);
 
@@ -367,6 +374,7 @@ public sealed class NodeChatStreamServiceTests
             CreateGgufModelCapabilityResolver(),
             CreateLocalDefaultChatModelResolver(),
             CreateMemoryExtractionDispatcher(),
+            Substitute.For<IConversationUploadedFileStore>(),
             TimeProvider.System,
             NullLogger<NodeChatStreamService>.Instance);
 
@@ -418,6 +426,7 @@ public sealed class NodeChatStreamServiceTests
             CreateGgufModelCapabilityResolver(),
             CreateLocalDefaultChatModelResolver(),
             CreateMemoryExtractionDispatcher(),
+            Substitute.For<IConversationUploadedFileStore>(),
             TimeProvider.System,
             NullLogger<NodeChatStreamService>.Instance);
 
@@ -440,6 +449,122 @@ public sealed class NodeChatStreamServiceTests
             AssertEx.Equal(ToolLocation.ClientLocal, tool.Location);
             AssertEx.NotNullOrEmpty(tool.ParameterSchema);
         }
+    }
+
+    [Test]
+    public async Task SendMessageAsync_WhenPlainChatWithAttachment_InjectsExtractedTextIntoContext()
+    {
+        var conversationId = Guid.NewGuid();
+        var assistantMessageId = Guid.NewGuid();
+        var requestId = Guid.NewGuid();
+        var fileId = Guid.NewGuid();
+        var persistence = CreatePersistence(conversationId, assistantMessageId, requestId, _ => { });
+        var dispatcher = new RecordingWorkerEventDispatcher();
+        var runner = new ContextCapturingInvocationRunner(dispatcher);
+
+        IReadOnlyList<ConversationUploadedFileInfo> files =
+            [new ConversationUploadedFileInfo(fileId, conversationId, "spec.txt", "text/plain", ".txt", SizeBytes: 128, DocumentExtractionStatus.Extracted, ExtractedChars: 24, CreatedAtUtc: 0)];
+        var uploadedFileStore = Substitute.For<IConversationUploadedFileStore>();
+        uploadedFileStore.ListAsync(conversationId, Arg.Any<CancellationToken>()).Returns(files);
+        uploadedFileStore.ReadExtractedMarkdownAsync(conversationId, fileId, Arg.Any<CancellationToken>()).Returns("The launch code is alpha-zero.");
+
+        var service = new NodeChatStreamService(persistence,
+            new NodeChatInvocationPump(persistence, TimeProvider.System),
+            new NodeChatMutationGuard(persistence),
+            new LocalChatRuntimePackageBuilder(),
+            runner,
+            dispatcher,
+            Options.Create(new LocalChatAgentOptions()),
+            StubNodeRuntimeSettings.Create().Build(),
+            new NodeChatStreamCancellationRegistry(),
+            CreateOfferProvider(),
+            CreateAgentDefinitionResolver(),
+            CreateAgentDefinitionStore(),
+            CreateDefaultAgentProvider(),
+            CreateOrchestrationResolver(),
+            CreateNodeSettingsStore(),
+            CreateModelClassificationService(),
+            CreateLocalModelProviderResolver(),
+            CreateGgufModelCapabilityResolver(),
+            CreateLocalDefaultChatModelResolver(),
+            CreateMemoryExtractionDispatcher(),
+            uploadedFileStore,
+            TimeProvider.System,
+            NullLogger<NodeChatStreamService>.Instance);
+
+        var drained = 0;
+        await foreach (var _ in service.SendMessageAsync(new NodeChatStreamRequest(conversationId,
+                           "what is the launch code?",
+                           MessageId: assistantMessageId,
+                           RequestId: requestId,
+                           AttachmentFileIds: [fileId])).ConfigureAwait(false))
+        {
+            drained++;
+        }
+
+        AssertEx.True(drained > 0, "Expected the send to stream events.");
+        AssertEx.True(runner.CaptureObserved, "Expected the runner to observe the package.");
+        AssertEx.Contains(runner.CapturedContext, message => message.Content.Contains("The launch code is alpha-zero.", StringComparison.Ordinal));
+        AssertEx.Contains(runner.CapturedContext, message => message.Content.Contains(ConversationAttachmentContextComposer.Preamble, StringComparison.Ordinal));
+    }
+
+    [Test]
+    public async Task SendMessageAsync_WhenAgentModeWithAttachment_DoesNotInlineExtractedText()
+    {
+        var conversationId = Guid.NewGuid();
+        var assistantMessageId = Guid.NewGuid();
+        var requestId = Guid.NewGuid();
+        var fileId = Guid.NewGuid();
+        var persistence = CreatePersistence(conversationId, assistantMessageId, requestId, _ => { });
+        var dispatcher = new RecordingWorkerEventDispatcher();
+        var runner = new ContextCapturingInvocationRunner(dispatcher);
+        var offerProvider = CreateOfferProvider(CreateLocalToolDto("GetCurrentTime", "{\"type\":\"object\"}"));
+        var uploadedFileStore = Substitute.For<IConversationUploadedFileStore>();
+
+        var service = new NodeChatStreamService(persistence,
+            new NodeChatInvocationPump(persistence, TimeProvider.System),
+            new NodeChatMutationGuard(persistence),
+            new LocalChatRuntimePackageBuilder(),
+            runner,
+            dispatcher,
+            Options.Create(new LocalChatAgentOptions
+            {
+                EnableTools = true
+            }),
+            StubNodeRuntimeSettings.Create().WithEnableTools(true).Build(),
+            new NodeChatStreamCancellationRegistry(),
+            offerProvider,
+            CreateAgentDefinitionResolver(),
+            CreateAgentDefinitionStore(),
+            CreateDefaultAgentProvider(),
+            CreateOrchestrationResolver(),
+            CreateNodeSettingsStore(),
+            CreateModelClassificationService(),
+            CreateLocalModelProviderResolver(),
+            CreateGgufModelCapabilityResolver(),
+            CreateLocalDefaultChatModelResolver(),
+            CreateMemoryExtractionDispatcher(),
+            uploadedFileStore,
+            TimeProvider.System,
+            NullLogger<NodeChatStreamService>.Instance);
+
+        var drained = 0;
+        await foreach (var _ in service.SendMessageAsync(new NodeChatStreamRequest(conversationId,
+                           "summarize the attachment",
+                           MessageId: assistantMessageId,
+                           RequestId: requestId,
+                           UseLocalTools: true,
+                           AttachmentFileIds: [fileId])).ConfigureAwait(false))
+        {
+            drained++;
+        }
+
+        AssertEx.True(drained > 0, "Expected the send to stream events.");
+        AssertEx.True(runner.CaptureObserved, "Expected the runner to observe the package.");
+        AssertEx.False(
+            runner.CapturedContext.Any(message => message.Content.Contains(ConversationAttachmentContextComposer.Preamble, StringComparison.Ordinal)),
+            "Agent mode must not inline attachment text — the agent reads the staged files via its tools.");
+        await uploadedFileStore.DidNotReceive().ListAsync(Arg.Any<Guid>(), Arg.Any<CancellationToken>());
     }
 
     [Test]
@@ -476,6 +601,7 @@ public sealed class NodeChatStreamServiceTests
             CreateGgufModelCapabilityResolver(),
             CreateLocalDefaultChatModelResolver(),
             CreateMemoryExtractionDispatcher(),
+            Substitute.For<IConversationUploadedFileStore>(),
             TimeProvider.System,
             NullLogger<NodeChatStreamService>.Instance);
 
@@ -531,6 +657,7 @@ public sealed class NodeChatStreamServiceTests
             CreateGgufModelCapabilityResolver(new GgufModelCapabilities(SupportsThinking: true, SupportsTools: true)),
             CreateLocalDefaultChatModelResolver(),
             CreateMemoryExtractionDispatcher(),
+            Substitute.For<IConversationUploadedFileStore>(),
             TimeProvider.System,
             NullLogger<NodeChatStreamService>.Instance);
 
@@ -587,6 +714,7 @@ public sealed class NodeChatStreamServiceTests
             CreateGgufModelCapabilityResolver(new GgufModelCapabilities(SupportsThinking: false, SupportsTools: false)),
             CreateLocalDefaultChatModelResolver(),
             CreateMemoryExtractionDispatcher(),
+            Substitute.For<IConversationUploadedFileStore>(),
             TimeProvider.System,
             NullLogger<NodeChatStreamService>.Instance);
 
@@ -635,6 +763,7 @@ public sealed class NodeChatStreamServiceTests
             CreateGgufModelCapabilityResolver(),
             CreateLocalDefaultChatModelResolver(),
             CreateMemoryExtractionDispatcher(),
+            Substitute.For<IConversationUploadedFileStore>(),
             TimeProvider.System,
             NullLogger<NodeChatStreamService>.Instance);
 
@@ -695,6 +824,7 @@ public sealed class NodeChatStreamServiceTests
             CreateGgufModelCapabilityResolver(),
             CreateLocalDefaultChatModelResolver(),
             CreateMemoryExtractionDispatcher(),
+            Substitute.For<IConversationUploadedFileStore>(),
             TimeProvider.System,
             NullLogger<NodeChatStreamService>.Instance);
         using var clientCancellation = new CancellationTokenSource();
@@ -773,6 +903,7 @@ public sealed class NodeChatStreamServiceTests
             CreateGgufModelCapabilityResolver(),
             CreateLocalDefaultChatModelResolver(),
             CreateMemoryExtractionDispatcher(),
+            Substitute.For<IConversationUploadedFileStore>(),
             TimeProvider.System,
             NullLogger<NodeChatStreamService>.Instance);
 
@@ -838,6 +969,7 @@ public sealed class NodeChatStreamServiceTests
             CreateGgufModelCapabilityResolver(),
             CreateLocalDefaultChatModelResolver(),
             extractionDispatcher,
+            Substitute.For<IConversationUploadedFileStore>(),
             TimeProvider.System,
             NullLogger<NodeChatStreamService>.Instance);
 
@@ -894,6 +1026,7 @@ public sealed class NodeChatStreamServiceTests
             CreateGgufModelCapabilityResolver(),
             CreateLocalDefaultChatModelResolver(),
             extractionDispatcher,
+            Substitute.For<IConversationUploadedFileStore>(),
             TimeProvider.System,
             NullLogger<NodeChatStreamService>.Instance);
 
@@ -955,6 +1088,7 @@ public sealed class NodeChatStreamServiceTests
             CreateGgufModelCapabilityResolver(),
             CreateLocalDefaultChatModelResolver(),
             CreateMemoryExtractionDispatcher(),
+            Substitute.For<IConversationUploadedFileStore>(),
             TimeProvider.System,
             NullLogger<NodeChatStreamService>.Instance);
 
@@ -1006,6 +1140,7 @@ public sealed class NodeChatStreamServiceTests
             CreateGgufModelCapabilityResolver(),
             CreateLocalDefaultChatModelResolver(),
             CreateMemoryExtractionDispatcher(),
+            Substitute.For<IConversationUploadedFileStore>(),
             TimeProvider.System,
             NullLogger<NodeChatStreamService>.Instance);
 
@@ -1061,6 +1196,7 @@ public sealed class NodeChatStreamServiceTests
             CreateGgufModelCapabilityResolver(),
             CreateLocalDefaultChatModelResolver(),
             CreateMemoryExtractionDispatcher(),
+            Substitute.For<IConversationUploadedFileStore>(),
             TimeProvider.System,
             NullLogger<NodeChatStreamService>.Instance);
 
@@ -1115,6 +1251,7 @@ public sealed class NodeChatStreamServiceTests
             CreateGgufModelCapabilityResolver(),
             CreateLocalDefaultChatModelResolver(),
             CreateMemoryExtractionDispatcher(),
+            Substitute.For<IConversationUploadedFileStore>(),
             TimeProvider.System,
             NullLogger<NodeChatStreamService>.Instance);
 
@@ -1168,6 +1305,7 @@ public sealed class NodeChatStreamServiceTests
             CreateGgufModelCapabilityResolver(),
             CreateLocalDefaultChatModelResolver(),
             CreateMemoryExtractionDispatcher(),
+            Substitute.For<IConversationUploadedFileStore>(),
             TimeProvider.System,
             NullLogger<NodeChatStreamService>.Instance);
 
@@ -1224,6 +1362,7 @@ public sealed class NodeChatStreamServiceTests
             CreateGgufModelCapabilityResolver(),
             CreateLocalDefaultChatModelResolver(),
             CreateMemoryExtractionDispatcher(),
+            Substitute.For<IConversationUploadedFileStore>(),
             TimeProvider.System,
             NullLogger<NodeChatStreamService>.Instance);
 
@@ -1295,6 +1434,7 @@ public sealed class NodeChatStreamServiceTests
             CreateGgufModelCapabilityResolver(),
             CreateLocalDefaultChatModelResolver(),
             CreateMemoryExtractionDispatcher(),
+            Substitute.For<IConversationUploadedFileStore>(),
             TimeProvider.System,
             NullLogger<NodeChatStreamService>.Instance);
 
@@ -1372,6 +1512,7 @@ public sealed class NodeChatStreamServiceTests
             // The local-default resolver would return some installed GGUF; the pin must still win over it.
             CreateLocalDefaultChatModelResolver(),
             CreateMemoryExtractionDispatcher(),
+            Substitute.For<IConversationUploadedFileStore>(),
             TimeProvider.System,
             NullLogger<NodeChatStreamService>.Instance);
 
@@ -1467,6 +1608,7 @@ public sealed class NodeChatStreamServiceTests
             CreateGgufModelCapabilityResolver(),
             CreateLocalDefaultChatModelResolver(),
             CreateMemoryExtractionDispatcher(),
+            Substitute.For<IConversationUploadedFileStore>(),
             TimeProvider.System,
             NullLogger<NodeChatStreamService>.Instance);
 
@@ -1571,6 +1713,7 @@ public sealed class NodeChatStreamServiceTests
             CreateGgufModelCapabilityResolver(),
             CreateLocalDefaultChatModelResolver(),
             CreateMemoryExtractionDispatcher(),
+            Substitute.For<IConversationUploadedFileStore>(),
             TimeProvider.System,
             NullLogger<NodeChatStreamService>.Instance);
 
@@ -1669,6 +1812,7 @@ public sealed class NodeChatStreamServiceTests
             CreateGgufModelCapabilityResolver(),
             CreateLocalDefaultChatModelResolver(),
             CreateMemoryExtractionDispatcher(),
+            Substitute.For<IConversationUploadedFileStore>(),
             TimeProvider.System,
             NullLogger<NodeChatStreamService>.Instance);
 
@@ -1721,6 +1865,7 @@ public sealed class NodeChatStreamServiceTests
             // Resolver reports no installed GGUF chat model (null), regardless of the persisted node default.
             CreateLocalDefaultChatModelResolver(resolved: null, echoPersistedDefault: false),
             CreateMemoryExtractionDispatcher(),
+            Substitute.For<IConversationUploadedFileStore>(),
             TimeProvider.System,
             NullLogger<NodeChatStreamService>.Instance);
 
@@ -1776,6 +1921,7 @@ public sealed class NodeChatStreamServiceTests
             CreateGgufModelCapabilityResolver(),
             CreateLocalDefaultChatModelResolver("phi-4:Q4_K_M", echoPersistedDefault: false),
             CreateMemoryExtractionDispatcher(),
+            Substitute.For<IConversationUploadedFileStore>(),
             TimeProvider.System,
             NullLogger<NodeChatStreamService>.Instance);
 
@@ -1834,6 +1980,7 @@ public sealed class NodeChatStreamServiceTests
             CreateGgufModelCapabilityResolver(),
             CreateLocalDefaultChatModelResolver(),
             CreateMemoryExtractionDispatcher(),
+            Substitute.For<IConversationUploadedFileStore>(),
             TimeProvider.System,
             NullLogger<NodeChatStreamService>.Instance);
 
@@ -2173,6 +2320,7 @@ public sealed class NodeChatStreamServiceTests
             CreateGgufModelCapabilityResolver(),
             CreateLocalDefaultChatModelResolver(),
             CreateMemoryExtractionDispatcher(),
+            Substitute.For<IConversationUploadedFileStore>(),
             TimeProvider.System,
             NullLogger<NodeChatStreamService>.Instance);
 
