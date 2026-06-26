@@ -19,6 +19,7 @@ export function toGgufRepository(dto: XeLocalAiEngineClientEndpointsModelFitV1Gg
 		lastModifiedAtUtc: dto.lastModifiedAtUtc ?? null,
 		license: dto.license ?? null,
 		hasUsableGguf: dto.hasUsableGguf ?? false,
+		isTrustedPublisher: dto.isTrustedPublisher ?? false,
 	};
 }
 

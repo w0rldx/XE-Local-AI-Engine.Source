@@ -1,5 +1,5 @@
-import { Badge, Button, Group, Stack, Table, Text } from "@mantine/core";
-import { IconCheck, IconCloudDownload, IconCpu, IconDownload } from "@tabler/icons-react";
+import { Badge, Button, Group, Stack, Table, Text, Tooltip } from "@mantine/core";
+import { IconAlertTriangle, IconCheck, IconCloudDownload, IconCpu, IconDownload } from "@tabler/icons-react";
 import { useTranslation } from "react-i18next";
 
 import { TablePaginationFooter } from "@/core/ui/components/TablePagination/TablePaginationFooter";
@@ -103,6 +103,27 @@ export function RecommendationTable({ recommendations, onDownload, downloadingMo
 										<Text size="xs" c="dimmed">
 											{recommendation.providerModelName}
 										</Text>
+									) : null}
+									{!recommendation.isTrustedPublisher ? (
+										<Tooltip
+											label={t(
+												"pages.modelFit.recommendations.untrustedPublisherHint",
+												"This publisher is not a known GGUF packager — review the repo before downloading.",
+											)}
+											multiline={true}
+											w={260}
+										>
+											<Badge
+												color="yellow"
+												variant="light"
+												size="sm"
+												mt={4}
+												leftSection={<IconAlertTriangle size={12} />}
+												data-testid={`model-fit-untrusted-badge-${recommendation.rank}`}
+											>
+												{t("pages.modelFit.recommendations.untrustedPublisher", "Unverified publisher")}
+											</Badge>
+										</Tooltip>
 									) : null}
 								</Table.Td>
 								<Table.Td>{formatModelFitMetric(recommendation.score, "", 1)}</Table.Td>

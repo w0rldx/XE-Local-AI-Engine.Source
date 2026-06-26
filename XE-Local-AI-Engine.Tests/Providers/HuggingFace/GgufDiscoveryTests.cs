@@ -92,6 +92,42 @@ public sealed class GgufDiscoveryTests
     }
 
     [Test]
+    public async Task GgufDiscovery_TrendingSort_RequestsTrendingScore_AndTagsPublisherTrust()
+    {
+        var listing = """
+                      [
+                        {
+                          "id": "unsloth/Qwen3-8B-GGUF",
+                          "downloads": 50,
+                          "likes": 3,
+                          "siblings": [ { "rfilename": "model-Q4_K_M.gguf" } ]
+                        },
+                        {
+                          "id": "randomuser/My-GGUF",
+                          "downloads": 10,
+                          "likes": 1,
+                          "siblings": [ { "rfilename": "model-Q4_K_M.gguf" } ]
+                        }
+                      ]
+                      """;
+
+        using var harness = BuildHarness(listing);
+
+        var results = await harness.Discovery.SearchAsync(new GgufSearchQuery
+            {
+                Sort = GgufSearchSort.Trending
+            },
+            CancellationToken.None);
+
+        // Trending maps to the Hub's recency-weighted sort parameter (not lifetime downloads).
+        AssertEx.Contains(harness.Handler.LastListUrl, "sort=trendingScore");
+        AssertEx.Equal(expected: 2, results.Count);
+        // Publisher trust is a SOFT signal, not a filter: both repos are returned, each tagged by its publisher.
+        AssertEx.True(results.Single(static r => r.RepoId == "unsloth/Qwen3-8B-GGUF").IsTrustedPublisher, "unsloth is a trusted GGUF packager.");
+        AssertEx.False(results.Single(static r => r.RepoId == "randomuser/My-GGUF").IsTrustedPublisher, "an unknown publisher is untrusted (but still returned).");
+    }
+
+    [Test]
     public async Task GgufDiscovery_InspectsRepo_ParsesPerFileQuantSizeGatedLicense()
     {
         // Two valid .gguf (different quants), plus one .gguf with no recognizable quant token (skipped, not repo-dropping),

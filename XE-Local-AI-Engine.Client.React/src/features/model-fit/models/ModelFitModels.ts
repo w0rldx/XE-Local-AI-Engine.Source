@@ -40,6 +40,9 @@ export interface ModelFitRecommendation {
 	readonly pullModelName: string | null;
 	// The model's release date (ISO date string) when the advisor reports one; null otherwise. A "newer model" signal.
 	readonly releaseDate: string | null;
+	// True when the model's publisher is a known reputable GGUF packager / first-party org; false for an unknown or
+	// community publisher. Never a filter — untrusted rows still render, but the table flags them with a warning badge.
+	readonly isTrustedPublisher: boolean;
 }
 
 // Domain view-model for the latest cached recommendation snapshot. hasCache:false is the explicit empty /

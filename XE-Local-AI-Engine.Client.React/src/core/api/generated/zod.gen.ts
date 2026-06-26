@@ -751,6 +751,7 @@ export const zXeLocalAiEngineClientEndpointsModelFitV1GgufRepositoryResponse = z
 		.optional(),
 	license: z.string().nullish(),
 	hasUsableGguf: z.boolean().optional(),
+	isTrustedPublisher: z.boolean().optional(),
 });
 
 export const zXeLocalAiEngineClientEndpointsModelFitV1BrowseGgufRepositoriesResponse = z.object({
@@ -871,6 +872,7 @@ export const zXeLocalAiEngineClientEndpointsModelFitV1ModelFitRecommendationResp
 	isInstalled: z.boolean().optional(),
 	pullModelName: z.string().nullish(),
 	releaseDate: z.string().nullish(),
+	isTrustedPublisher: z.boolean().optional(),
 });
 
 export const zXeLocalAiEngineClientEndpointsModelFitV1GetLatestRecommendationsResponse = z.object({

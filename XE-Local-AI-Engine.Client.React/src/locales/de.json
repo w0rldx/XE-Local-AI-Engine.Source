@@ -1101,6 +1101,8 @@
 					"error": "Repositories konnten nicht durchsucht werden.",
 					"empty": "Keine GGUF-Repositories entsprachen der Suche.",
 					"gated": "Gesperrt",
+					"untrustedPublisher": "Nicht verifizierter Anbieter",
+					"untrustedPublisherHint": "Dieser Anbieter ist kein bekannter GGUF-Packager – prüfe das Repository vor dem Download.",
 					"download": "Herunterladen",
 					"noGguf": "Kein GGUF",
 					"columns": {
@@ -1829,7 +1831,9 @@
 				"available": "Verfügbar",
 				"download": "Herunterladen",
 				"downloading": "Wird heruntergeladen…",
-				"cpuMode": "CPU-Modus"
+				"cpuMode": "CPU-Modus",
+				"untrustedPublisher": "Nicht verifizierter Anbieter",
+				"untrustedPublisherHint": "Dieser Anbieter ist kein bekannter GGUF-Packager – prüfe das Repository vor dem Download."
 			},
 			"hardware": {
 				"title": "Hardware-Profil",

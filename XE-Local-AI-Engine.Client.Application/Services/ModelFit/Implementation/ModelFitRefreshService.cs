@@ -262,32 +262,9 @@ public sealed class ModelFitRefreshService : IModelFitRefreshService
         HardwareProfile profile,
         CancellationToken cancellationToken)
     {
-        var query = new GgufSearchQuery
-        {
-            SearchText = request.UseCase,
-            Limit = DefaultRepoSearchLimit,
-            Sort = GgufSearchSort.Downloads
-        };
-
-        // Wrap the discovery search in a per-call timeout: a stalled search must not hang the whole refresh. A timeout
-        // (or any search failure) reaches the method caller's outer catch and is recorded as a clean Failed run —
-        // SurfaceSearchTimeout maps the timeout-CTS OperationCanceledException to a TimeoutException the outer catch
-        // already handles, while genuine outer-token cancellation is re-thrown unchanged so the run records Cancelled.
-        IReadOnlyList<GgufRepoSummary> repos;
-        using (var searchCts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken))
-        {
-            searchCts.CancelAfter(PerHuggingFaceCallTimeout);
-            try
-            {
-                repos = await _discovery.SearchAsync(query, searchCts.Token).ConfigureAwait(false);
-            }
-            catch (OperationCanceledException) when (!cancellationToken.IsCancellationRequested)
-            {
-                // The timeout CTS fired, not the node token: surface as a TimeoutException so the caller's outer catch
-                // records a clean Failed run instead of letting an OperationCanceledException become a Cancelled run.
-                throw new TimeoutException("GGUF discovery search timed out.");
-            }
-        }
+        // Discover candidate repos by the use-case's mapped search terms (see ModelFitUseCaseSearch — the literal
+        // use-case word under-matches the Hub), merged + de-duped and capped to the inspection budget.
+        var repos = await SearchCandidateReposAsync(request.UseCase, cancellationToken).ConfigureAwait(false);
 
         // Which models are already downloaded (best-effort: a registry failure just marks all as not-installed).
         var installedKeys = await ListInstalledKeysAsync(cancellationToken).ConfigureAwait(false);
@@ -301,7 +278,7 @@ public sealed class ModelFitRefreshService : IModelFitRefreshService
         try
         {
             var evaluations = repos
-                              .Select(repo => EvaluateRepoWithGuardAsync(repo.RepoId, quant, ctxTarget, profile, installedKeys, inspectionGate, cancellationToken))
+                              .Select(repo => EvaluateRepoWithGuardAsync(repo, quant, ctxTarget, profile, installedKeys, inspectionGate, cancellationToken))
                               .ToList();
             candidates = await Task.WhenAll(evaluations).ConfigureAwait(false);
         }
@@ -310,15 +287,121 @@ public sealed class ModelFitRefreshService : IModelFitRefreshService
             inspectionGate.Dispose();
         }
 
-        // Rank by best fit (largest headroom first), break ties by repo id for determinism, then cap to the limit. The
-        // OrderBy makes the result deterministic regardless of which inspection finished first.
+        // Rank the models that FIT by recommendation value, then cap to the limit. The previous order was
+        // OrderByDescending(HeadroomBytes) — most leftover VRAM first — which surfaced the SMALLEST fitting model and
+        // truncated the capable ones out of the limit (even on a roomy GPU). Instead lead with the MOST CAPABLE model
+        // that fits (largest estimated footprint ≈ largest param count at the chosen quant; the estimate already bakes
+        // in a 12% safety margin + runtime overhead, so "fits" is conservative), with a soft trusted-publisher nudge
+        // and download count as tie-breakers, then repo id for a deterministic order regardless of completion order.
         return candidates
                .Where(candidate => candidate is not null)
                .Select(candidate => candidate!)
-               .OrderByDescending(candidate => candidate.Estimate.HeadroomBytes)
+               .OrderByDescending(candidate => candidate.Estimate.EstimatedBytes)
+               .ThenByDescending(candidate => candidate.IsTrustedPublisher)
+               .ThenByDescending(candidate => candidate.Downloads)
                .ThenBy(candidate => candidate.RepoId, StringComparer.Ordinal)
                .Take(request.Limit)
                .ToList();
+    }
+
+    /// <summary>
+    ///     Discovers candidate GGUF repos for a use-case by running one trending search per mapped term
+    ///     (<see cref="ModelFitUseCaseSearch" />), then merging the per-term results round-robin (fair representation
+    ///     across terms), de-duped by repo id and capped to <see cref="DefaultRepoSearchLimit" /> so the downstream
+    ///     per-repo header reads stay bounded regardless of the term count. A single term failing/timing out is tolerated;
+    ///     only when EVERY term's search fails is a timeout surfaced (so the run records a clean Failed instead of an empty
+    ///     Succeeded that hides an unreachable Hub).
+    /// </summary>
+    private async Task<IReadOnlyList<GgufRepoSummary>> SearchCandidateReposAsync(string? useCase, CancellationToken cancellationToken)
+    {
+        var terms = ModelFitUseCaseSearch.Resolve(useCase);
+
+        var perTerm = await Task.WhenAll(terms.Select(term => SearchSingleTermAsync(term, cancellationToken)))
+                                .ConfigureAwait(false);
+
+        if (perTerm.All(static result => result is null))
+        {
+            // Every term's search failed (e.g. the Hub is unreachable / every call timed out): surface a timeout so the
+            // caller's outer catch records a clean Failed run rather than a misleading empty Succeeded.
+            throw new TimeoutException("GGUF discovery search failed for every use-case term.");
+        }
+
+        var lists = perTerm.Where(static result => result is not null).Select(static result => result!).ToList();
+        return MergeReposRoundRobin(lists, DefaultRepoSearchLimit);
+    }
+
+    /// <summary>
+    ///     Runs one trending GGUF search for a single term under a per-call timeout. Returns the results, or
+    ///     <see langword="null" /> when this term's search timed out or failed (network/IO/parse) — a tolerated outcome
+    ///     merged away by <see cref="SearchCandidateReposAsync" />. Genuine outer-token cancellation (node shutdown) is
+    ///     re-thrown unchanged so the run records Cancelled.
+    /// </summary>
+    private async Task<IReadOnlyList<GgufRepoSummary>?> SearchSingleTermAsync(string term, CancellationToken cancellationToken)
+    {
+        var query = new GgufSearchQuery
+        {
+            SearchText = term,
+            Limit = DefaultRepoSearchLimit,
+            // Freshness-aware discovery: trending (HF recency-weighted popularity) instead of lifetime downloads, which
+            // is age-biased and surfaces years-old repos. The publisher-trust signal + the fit ranking keep quality up
+            // without excluding any repo from the candidate pool.
+            Sort = GgufSearchSort.Trending
+        };
+
+        using var searchCts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+        searchCts.CancelAfter(PerHuggingFaceCallTimeout);
+        try
+        {
+            return await _discovery.SearchAsync(query, searchCts.Token).ConfigureAwait(false);
+        }
+        catch (OperationCanceledException) when (!cancellationToken.IsCancellationRequested)
+        {
+            // The per-term timeout CTS fired (not the node token): tolerate this term and let the others stand in.
+            _logger.LogDebug("GGUF discovery search timed out for a use-case term.");
+            return null;
+        }
+        catch (Exception exception) when (exception is HttpRequestException or IOException or InvalidOperationException
+                                              or TimeoutException or HuggingFaceDownloadException)
+        {
+            _logger.LogDebug(exception, "GGUF discovery search failed for a use-case term.");
+            return null;
+        }
+    }
+
+    /// <summary>
+    ///     Merges the per-term (already trending-sorted) repo lists round-robin — take each list's 1st, then each list's
+    ///     2nd, … — de-duped by repo id (case-insensitive, first occurrence wins) and capped to <paramref name="cap" />.
+    ///     Round-robin keeps every term fairly represented in the bounded candidate pool instead of letting the first
+    ///     term's results crowd out the rest.
+    /// </summary>
+    private static IReadOnlyList<GgufRepoSummary> MergeReposRoundRobin(IReadOnlyList<IReadOnlyList<GgufRepoSummary>> lists, int cap)
+    {
+        var seen = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        var merged = new List<GgufRepoSummary>(cap);
+        var longest = lists.Count == 0 ? 0 : lists.Max(static list => list.Count);
+
+        for (var index = 0; index < longest && merged.Count < cap; index++)
+        {
+            foreach (var list in lists)
+            {
+                if (index >= list.Count)
+                {
+                    continue;
+                }
+
+                var repo = list[index];
+                if (seen.Add(repo.RepoId))
+                {
+                    merged.Add(repo);
+                    if (merged.Count >= cap)
+                    {
+                        break;
+                    }
+                }
+            }
+        }
+
+        return merged;
     }
 
     /// <summary>
@@ -327,7 +410,7 @@ public sealed class ModelFitRefreshService : IModelFitRefreshService
     ///     parse) into a <see langword="null" /> candidate so one bad repo never fails the whole refresh. Outer-token
     ///     cancellation (node shutdown) is re-thrown so the run records Cancelled.
     /// </summary>
-    private async Task<AdvisorRecommendation?> EvaluateRepoWithGuardAsync(string repoId,
+    private async Task<AdvisorRecommendation?> EvaluateRepoWithGuardAsync(GgufRepoSummary summary,
         string quant,
         int ctxTarget,
         HardwareProfile profile,
@@ -341,7 +424,7 @@ public sealed class ModelFitRefreshService : IModelFitRefreshService
             using var repoCts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
             repoCts.CancelAfter(PerHuggingFaceCallTimeout);
 
-            return await EvaluateRepoAsync(repoId, quant, ctxTarget, profile, installedKeys, repoCts.Token)
+            return await EvaluateRepoAsync(summary, quant, ctxTarget, profile, installedKeys, repoCts.Token)
                 .ConfigureAwait(false);
         }
         catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
@@ -369,13 +452,14 @@ public sealed class ModelFitRefreshService : IModelFitRefreshService
     ///     <see langword="null" /> when the repo has no usable file, the file lacks the metadata to compute a weights term,
     ///     or the estimate does not fit the budget.
     /// </summary>
-    private async Task<AdvisorRecommendation?> EvaluateRepoAsync(string repoId,
+    private async Task<AdvisorRecommendation?> EvaluateRepoAsync(GgufRepoSummary summary,
         string quant,
         int ctxTarget,
         HardwareProfile profile,
         HashSet<string> installedKeys,
         CancellationToken cancellationToken)
     {
+        var repoId = summary.RepoId;
         var detail = await _discovery.InspectRepoAsync(repoId, cancellationToken).ConfigureAwait(false);
 
         var file = SelectQuantFile(detail.Files, quant);
@@ -407,7 +491,9 @@ public sealed class ModelFitRefreshService : IModelFitRefreshService
             file.FileName,
             file.Quant,
             estimate,
-            installedKeys.Contains(modelName));
+            installedKeys.Contains(modelName),
+            summary.IsTrustedPublisher,
+            summary.Downloads);
     }
 
     private async Task<HashSet<string>> ListInstalledKeysAsync(CancellationToken cancellationToken)
@@ -448,6 +534,10 @@ public sealed class ModelFitRefreshService : IModelFitRefreshService
     /// </summary>
     private static string SerializeAdvisorJson(IReadOnlyList<AdvisorRecommendation> recommendations, HardwareProfile profile)
     {
+        // The fit budget the score is normalized against — VRAM in GPU mode, else available RAM (mirrors MemoryFitEstimator).
+        var useGpu = profile is { GpuAccelAvailable: true, VramKnown: true } && profile.VramBytes is > 0;
+        var budgetBytes = useGpu ? profile.VramBytes!.Value : profile.AvailableRamBytes;
+
         using var buffer = new MemoryStream();
         using (var writer = new Utf8JsonWriter(buffer))
         {
@@ -464,8 +554,13 @@ public sealed class ModelFitRefreshService : IModelFitRefreshService
                 writer.WriteString("best_quant", recommendation.Quant);
                 writer.WriteString("fit_level", estimate.Mode == FitMode.Gpu ? "GPU" : "CPU");
                 writer.WriteString("run_mode", estimate.Mode.ToString());
-                // Score = headroom in GB (more headroom ranks higher); the parser stores it verbatim.
-                writer.WriteNumber("score", Math.Round(estimate.HeadroomBytes / (double)(1024 * 1024 * 1024), digits: 3));
+                // Score = how fully the model uses the fit budget (0–100%). The most-capable model that fits scores
+                // highest, matching the rank order (the old "headroom GB" score ranked the smallest model highest and
+                // read as a non-monotonic column). The parser stores it verbatim.
+                var score = budgetBytes > 0
+                    ? Math.Clamp(Math.Round(estimate.EstimatedBytes / (double)budgetBytes * 100d, digits: 1), min: 0d, max: 100d)
+                    : 0d;
+                writer.WriteNumber("score", score);
                 writer.WriteNumber("memory_required_gb", Math.Round(estimatedGb, digits: 3));
                 if (estimate.Mode == FitMode.Gpu)
                 {
@@ -497,12 +592,18 @@ public sealed class ModelFitRefreshService : IModelFitRefreshService
         return new ModelFitRefreshResult(snapshotId, ModelFitRunStatus.Failed, RecommendationCount: 0, sanitizedError);
     }
 
-    /// <summary>One ranked advisor candidate: the repo/file/quant identity plus its computed memory-fit estimate.</summary>
+    /// <summary>
+    ///     One ranked advisor candidate: the repo/file/quant identity plus its computed memory-fit estimate, the soft
+    ///     publisher-trust signal, and the repo's lifetime download count (both carried from the search summary as ranking
+    ///     tie-breakers — neither excludes a candidate).
+    /// </summary>
     private sealed record AdvisorRecommendation(
         string RepoId,
         string ModelName,
         string FileName,
         string Quant,
         MemoryFitEstimate Estimate,
-        bool IsInstalled);
+        bool IsInstalled,
+        bool IsTrustedPublisher,
+        long Downloads);
 }

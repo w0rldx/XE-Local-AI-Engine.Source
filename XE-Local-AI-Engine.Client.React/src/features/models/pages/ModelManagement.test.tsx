@@ -419,6 +419,7 @@ describe("ModelManagement", () => {
 		lastModifiedAtUtc: 1_700_000_000_000,
 		license: "apache-2.0",
 		hasUsableGguf: true,
+		isTrustedPublisher: true,
 	};
 
 	it("renders the GGUF browse panel on the Model Management page", async () => {

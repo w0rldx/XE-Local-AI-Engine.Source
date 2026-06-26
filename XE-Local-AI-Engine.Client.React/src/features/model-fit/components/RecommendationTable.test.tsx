@@ -41,6 +41,7 @@ function makeRecommendation(overrides: Partial<ModelFitRecommendation>): ModelFi
 		isInstalled: false,
 		pullModelName: null,
 		releaseDate: null,
+		isTrustedPublisher: true,
 		...overrides,
 	};
 }
@@ -107,6 +108,17 @@ describe("RecommendationTable", () => {
 		fireEvent.click(downloadButton);
 		expect(onDownload).toHaveBeenCalledTimes(1);
 		expect(onDownload).toHaveBeenCalledWith(available);
+	});
+
+	it("flags an untrusted publisher with a warning badge and shows none for a trusted publisher", () => {
+		const untrusted = makeRecommendation({ rank: 1, modelName: "sketchy/model", isTrustedPublisher: false });
+		const trusted = makeRecommendation({ rank: 2, modelName: "unsloth/model", isTrustedPublisher: true });
+
+		renderTable(<RecommendationTable recommendations={[untrusted, trusted]} />);
+
+		// The untrusted row (rank 1) carries the warning badge; the trusted row (rank 2) does not.
+		expect(screen.getByTestId("model-fit-untrusted-badge-1")).toBeTruthy();
+		expect(screen.queryByTestId("model-fit-untrusted-badge-2")).toBeNull();
 	});
 
 	it("disables the in-flight row's Download button when downloadingModelName matches its tag", () => {

@@ -71,15 +71,16 @@ public sealed class BrowseGgufRepositoriesEndpoint(
         }
     }
 
-    /// <summary>Maps the wire sort string to <see cref="GgufSearchSort" />; an unknown/empty value defaults to downloads.</summary>
+    /// <summary>Maps the wire sort string to <see cref="GgufSearchSort" />; an unknown/empty value defaults to trending.</summary>
     private static GgufSearchSort ParseSort(string? sort)
     {
         // Upper-invariant (CA1308: upper-casing round-trips safely) for case-insensitive matching of the wire tokens.
         return sort?.Trim().ToUpperInvariant() switch
         {
+            "DOWNLOADS" => GgufSearchSort.Downloads,
             "LIKES" => GgufSearchSort.Likes,
             "LASTMODIFIED" => GgufSearchSort.LastModified,
-            _ => GgufSearchSort.Downloads
+            _ => GgufSearchSort.Trending
         };
     }
 }

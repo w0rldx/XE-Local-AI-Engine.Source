@@ -7271,6 +7271,9 @@
           },
           "hasUsableGguf": {
             "type": "boolean"
+          },
+          "isTrustedPublisher": {
+            "type": "boolean"
           }
         }
       },
@@ -7536,6 +7539,9 @@
           "releaseDate": {
             "type": "string",
             "nullable": true
+          },
+          "isTrustedPublisher": {
+            "type": "boolean"
           }
         }
       },
