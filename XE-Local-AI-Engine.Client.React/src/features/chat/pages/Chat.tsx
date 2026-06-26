@@ -508,9 +508,15 @@ export function Chat() {
 		[cacheConversation, displayConversations, selectedConversationId, selectedConversationData, setRequestedConversationId],
 	);
 
-	// Resolve (creating + selecting when needed) the conversation a file should attach to. Reuses the same
-	// resolve-or-create path as send so attaching to a brand-new thread before the first message lazily creates one.
+	// Resolve the conversation a file should attach to. When a conversation is already on screen — including a
+	// freshly-created empty one from "New plain chat" — attach to IT directly. Going through the create-or-load
+	// path here would race an in-flight conversation creation (the new thread's full payload hasn't settled yet)
+	// and spawn a duplicate empty conversation. Only when nothing is selected (true empty state) do we lazily
+	// create one, mirroring the send path.
 	const ensureConversationId = useCallback(async (): Promise<string> => {
+		if (selectedConversationId.length > 0) {
+			return selectedConversationId;
+		}
 		try {
 			const conversation = await resolveSendConversation("");
 			return conversation.id;
@@ -518,7 +524,7 @@ export function Chat() {
 			setStreamError(errorMessage(error));
 			return "";
 		}
-	}, [resolveSendConversation]);
+	}, [selectedConversationId, resolveSendConversation]);
 
 	const {
 		attachments,
