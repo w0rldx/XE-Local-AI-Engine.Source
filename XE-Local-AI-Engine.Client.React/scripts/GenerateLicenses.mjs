@@ -66,10 +66,14 @@ function normalizeLicense(value) {
  * @returns {ThirdPartyPackage[]}
  */
 function collectFrontendPackages() {
+	// On Windows pnpm is a .cmd shim; Node refuses to spawn .cmd/.bat directly (EINVAL) and
+	// won't resolve the bare name (ENOENT), so go through the shell there.
+	const isWindows = process.platform === "win32";
 	const result = spawnSync("pnpm", ["licenses", "list", "--prod", "--json"], {
 		cwd: reactRoot,
 		encoding: "utf8",
 		maxBuffer: 64 * 1024 * 1024,
+		shell: isWindows,
 	});
 
 	if (result.status !== 0 || typeof result.stdout !== "string" || result.stdout.trim() === "") {
