@@ -15,6 +15,7 @@ vi.mock("@/features/app-update/components/AppUpdateSection", () => ({
 }));
 
 import { AboutDialog } from "@/features/about/components/AboutDialog/AboutDialog";
+import { applicationInfo } from "@/features/about/data/AboutData";
 
 function renderWithProviders(ui: ReactElement) {
 	const queryClient = new QueryClient({
@@ -63,7 +64,9 @@ describe("AboutDialog", () => {
 		renderWithProviders(<AboutDialog opened={true} onClose={vi.fn()} />);
 
 		const dialog = screen.getByRole("dialog");
-		expect(within(dialog).getByText("0.1.0")).toBeTruthy();
+		// Version is injected at build time from Directory.Build.props, so assert against the live source rather than a
+		// hardcoded literal that breaks on every version bump.
+		expect(within(dialog).getByText(applicationInfo.version)).toBeTruthy();
 		expect(within(dialog).getByText(/Local AI engine for running, managing, and chatting/)).toBeTruthy();
 	});
 

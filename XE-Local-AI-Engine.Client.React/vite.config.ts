@@ -8,7 +8,28 @@ import { defineConfig, type ProxyOptions } from "vite";
 
 import aspNetCoreDevelopmentCertificate from "./vite-plugins/aspnetcore-development-certificate";
 import tablerDevelopmentBugfix from "./vite-plugins/tabler-development-bugfix";
+import fs from "node:fs";
 import path from "node:path";
+
+
+// The version shown in the About dialog must match the released artifact without a second hand-maintained constant.
+// Directory.Build.props is the single source of truth for the .NET assembly version AND `vpk --packVersion`; parse it
+// here and compose `VersionPrefix[-VersionSuffix]` (e.g. "0.1.0-rc.1").
+function resolveAppVersion(): string {
+	const propsPath = path.resolve(__dirname, "../Directory.Build.props");
+	const xml = fs.readFileSync(propsPath, "utf8");
+	const prefix = xml.match(/<VersionPrefix>([^<]+)<\/VersionPrefix>/)?.[1]?.trim();
+	const suffix = xml.match(/<VersionSuffix>([^<]+)<\/VersionSuffix>/)?.[1]?.trim();
+	if (!prefix) {
+		throw new Error("VersionPrefix not found in Directory.Build.props — cannot derive the client app version.");
+	}
+
+	return suffix ? `${prefix}-${suffix}` : prefix;
+}
+
+// Set it on process.env BEFORE Vite resolves env so it lands in `import.meta.env` (Vite exposes VITE_-prefixed
+// process.env vars to the client). `??=` lets CI/release override with an explicit value if ever needed.
+process.env.VITE_APP_VERSION ??= resolveAppVersion();
 
 const coverageThresholds = process.env.VITEST_COVERAGE_CHECK === "true"
 	? {
