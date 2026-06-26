@@ -20,6 +20,9 @@ public sealed class CancelScheduledJobRunEndpoint(IScheduledJobManagementService
     {
         Post(LocalApiRoutes.Scheduler.RunCancel);
         Policies(NodeAuthorizationPolicies.Operator);
+        // Route-only POST (run id from the route, no body): override the default application/json-only Accepts so a
+        // body-less request is not rejected with 415 (see TriggerScheduledJobEndpoint for the full rationale).
+        Description(x => x.Accepts<ScheduledJobRunRouteRequest>());
     }
 
     public override async Task HandleAsync(ScheduledJobRunRouteRequest req, CancellationToken ct)

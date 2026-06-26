@@ -15,6 +15,9 @@ public sealed class EnableScheduledJobEndpoint(IScheduledJobManagementService sc
     {
         Post(LocalApiRoutes.Scheduler.JobEnable);
         Policies(NodeAuthorizationPolicies.Operator);
+        // Route-only POST (job id from the route, no body): override the default application/json-only Accepts so a
+        // body-less request is not rejected with 415 (see TriggerScheduledJobEndpoint for the full rationale).
+        Description(x => x.Accepts<ScheduledJobActionRequest>());
     }
 
     public override async Task HandleAsync(ScheduledJobActionRequest req, CancellationToken ct)
