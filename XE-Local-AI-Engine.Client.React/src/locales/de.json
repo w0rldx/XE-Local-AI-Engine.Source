@@ -2594,7 +2594,8 @@
 			"operatorEnableDescription": "Hauptschalter für alle Benutzer auf diesem Knoten. Wird er deaktiviert, ist die Sprachausgabe überall ausgeschaltet.",
 			"operatorDefaultProfileLabel": "Standardstimme",
 			"operatorDefaultProfileDescription": "Die Stimme, mit der neue Benutzer auf diesem Knoten starten.",
-			"operatorSaveError": "Die Sprach-Einstellung des Knotens konnte nicht gespeichert werden."
+			"operatorSaveError": "Die Sprach-Einstellung des Knotens konnte nicht gespeichert werden.",
+			"previewLabel": "Stimme anhören"
 		}
 	}
 }

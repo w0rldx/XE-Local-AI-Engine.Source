@@ -35,6 +35,8 @@ export interface VoiceRuntimeContextValue {
 	readonly playingMessageId: string | undefined;
 	/** Barge-in then speak one message's whole (sanitized) answer; tags the playing message for the Play/Stop UI. */
 	readonly playMessage: (messageId: string, text: string, language: AnswerLanguage) => Promise<void>;
+	/** Barge-in then speak a short fixed sample with an explicit voice so a user can audition it before choosing it. */
+	readonly previewVoice: (voiceId: string) => Promise<void>;
 	/** Halts playback and clears the playing-message tag (barge-in). */
 	readonly stopPlayback: () => void;
 }
@@ -53,6 +55,7 @@ export const INERT_VOICE_RUNTIME_CONTEXT: VoiceRuntimeContextValue = {
 	lastError: undefined,
 	playingMessageId: undefined,
 	playMessage: () => Promise.resolve(),
+	previewVoice: () => Promise.resolve(),
 	stopPlayback: () => undefined,
 };
 
