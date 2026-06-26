@@ -1,9 +1,11 @@
 import { HubConnectionBuilder, LogLevel } from "@microsoft/signalr";
 import { useQueryClient } from "@tanstack/react-query";
-import { useEffect } from "react";
+import { useEffect, useRef } from "react";
+import { useTranslation } from "react-i18next";
 
 import { buildLocalApiUrl } from "@/core/api/utils/LocalApiUrl";
 import { useNodeAuthStore } from "@/core/auth/stores/NodeAuthStore";
+import { notifySchedulerRunEvent } from "@/features/scheduler/notifications/SchedulerRunNotifications";
 import { schedulerInvalidationKey, schedulerQueryIds } from "@/features/scheduler/queries/useScheduler";
 
 // The data layer is the generated hey-api TanStack query layer, whose query keys are single-element arrays
@@ -31,6 +33,11 @@ const RUN_EVENTS = [
 // their last good data and the user can refetch by re-navigating.
 export function useSchedulerHub(): void {
 	const queryClient = useQueryClient();
+	// `t` is read through a ref so a language switch (which hands back a new `t`) re-localizes future toasts WITHOUT
+	// re-running the effect — re-running would tear down and rebuild the live hub connection. Kept current every render.
+	const { t } = useTranslation();
+	const tRef = useRef(t);
+	tRef.current = t;
 
 	useEffect(() => {
 		const connection = new HubConnectionBuilder()
@@ -52,9 +59,21 @@ export function useSchedulerHub(): void {
 			queryClient.invalidateQueries({ queryKey: schedulerInvalidationKey(schedulerQueryIds.getRun) }).catch(() => undefined);
 		};
 
+		// Each run event invalidates the run caches AND (for terminal outcomes) raises a completion toast so the operator
+		// learns when ANY scheduled task finishes. Per-event handler identities are retained so cleanup can `off` them.
+		const runHandlers = new Map<string, (payload: unknown) => void>(
+			RUN_EVENTS.map((eventName) => [
+				eventName,
+				(payload: unknown): void => {
+					invalidateRuns();
+					notifySchedulerRunEvent(eventName, payload, tRef.current);
+				},
+			]),
+		);
+
 		connection.on(JOB_DEFINITION_CHANGED, invalidateJobs);
-		for (const eventName of RUN_EVENTS) {
-			connection.on(eventName, invalidateRuns);
+		for (const [eventName, handler] of runHandlers) {
+			connection.on(eventName, handler);
 		}
 
 		let disposed = false;
@@ -71,8 +90,8 @@ export function useSchedulerHub(): void {
 		return () => {
 			disposed = true;
 			connection.off(JOB_DEFINITION_CHANGED, invalidateJobs);
-			for (const eventName of RUN_EVENTS) {
-				connection.off(eventName, invalidateRuns);
+			for (const [eventName, handler] of runHandlers) {
+				connection.off(eventName, handler);
 			}
 			// Stop only AFTER start settles so cleanup never aborts an in-flight negotiation (the "stopped during
 			// negotiation" race that left the hub permanently disconnected under StrictMode / fast remounts).

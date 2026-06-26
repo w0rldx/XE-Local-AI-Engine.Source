@@ -1,6 +1,6 @@
 import { HubConnectionBuilder, LogLevel } from "@microsoft/signalr";
 import { useQueryClient } from "@tanstack/react-query";
-import { useEffect, useRef } from "react";
+import { useCallback, useEffect, useRef } from "react";
 import { useTranslation } from "react-i18next";
 
 import { buildLocalApiUrl } from "@/core/api/utils/LocalApiUrl";
@@ -72,10 +72,17 @@ function readRefreshFields(payload: unknown): { errorMessage?: string; runId?: s
 //
 // SignalR push is the PRIMARY, instant delivery path. Because a push fired before the hub finishes its initial
 // negotiation (the disabled-image run fails in ~30ms) — or during a reconnect gap — reaches no client and is never
-// replayed, this hook ALSO runs a one-shot REST catch-up each time the connection establishes/reconnects: it fetches
-// the watched job's recent runs once and surfaces the latest terminal run (deduped against the push by run id). There
-// is NO interval polling — the catch-up fires only on connection-established events, so steady state is push-only.
-// Pass the model-recommendation-check job id to enable the catch-up; without it only the push path runs.
+// replayed, this hook ALSO runs a one-shot REST catch-up: it fetches the watched job's recent runs once and surfaces
+// the latest terminal run (deduped against the push by run id in ModelFitRefreshNotifications). There is NO interval
+// polling. The catch-up fires on three triggers, all keyed off the SAME run-id dedupe set so they never double-toast:
+//   1. connection established (start success) — covers a completion missed during initial negotiation;
+//   2. reconnected — covers a completion missed during a reconnect gap;
+//   3. the watched job id resolving AFTER mount — the job id arrives a tick late from a separate jobs query, so a
+//      job that completes before the id lands (and after the connect-time catch-up already early-returned for a
+//      still-undefined id) would otherwise produce NO toast. This trigger lives in a SEPARATE effect keyed on the
+//      job id so it re-runs when undefined → real WITHOUT tearing down / rebuilding the SignalR connection.
+// The connection/handler subscription effect has STABLE deps so live pushes are never dropped and handlers are never
+// double-registered. Pass the model-recommendation-check job id to enable the catch-up; without it only the push runs.
 export function useModelFitSchedulerEvents(scheduledJobId?: string): void {
 	const queryClient = useQueryClient();
 	const { t } = useTranslation();
@@ -99,6 +106,50 @@ export function useModelFitSchedulerEvents(scheduledJobId?: string): void {
 		watermarkUtcRef.current = Date.now();
 	}
 
+	// Gate for the late-job-id catch-up effect: true once the hub has connected at least once. The connection effect
+	// already fires a catch-up the moment it connects, so the job-id effect must only fire its OWN catch-up AFTER a
+	// connection exists — otherwise a job id present at mount would race the connect-time catch-up and fetch twice.
+	const connectionEstablishedRef = useRef(false);
+
+	// One-shot reconciliation: fetch the watched job's recent runs once and surface the latest terminal run (deduped
+	// against any push — and against another catch-up — by run id in ModelFitRefreshNotifications). Covers the
+	// connect-race / reconnect-gap / late-job-id cases WITHOUT polling. Reads job id / watermark / t via refs so it
+	// stays stable across renders (memoized only on the stable queryClient); a stable identity keeps it out of the
+	// connection effect's dependency set, so it never rebuilds the SignalR connection mid-negotiation.
+	const runCatchUp = useCallback(async (): Promise<void> => {
+		const jobId = jobIdRef.current;
+		if (jobId === undefined) {
+			return;
+		}
+		// `current` was stamped at mount (see lazy init above); coalesce only to satisfy the number | null type.
+		const sinceUtc = Math.max(0, (watermarkUtcRef.current ?? Date.now()) - CLOCK_SKEW_TOLERANCE_MS);
+		try {
+			const runs = await fetchScheduledJobRuns(queryClient, { scheduledJobId: jobId, fromUtc: sinceUtc });
+			// Most-recent terminal run since the watermark — order-independent (don't assume the API's sort order).
+			// Single pass tracking the running max instead of sorting the whole array just to read its first element.
+			let terminalRun: (typeof runs)[number] | undefined;
+			for (const run of runs) {
+				if (
+					run.actualFireTimeUtc === null ||
+					run.actualFireTimeUtc < sinceUtc ||
+					!isTerminalRefreshRunStatus(run.status)
+				) {
+					continue;
+				}
+				if (terminalRun === undefined || (run.actualFireTimeUtc ?? 0) > (terminalRun.actualFireTimeUtc ?? 0)) {
+					terminalRun = run;
+				}
+			}
+			if (terminalRun !== undefined) {
+				notifyModelFitRefreshRun(terminalRun, tRef.current);
+			}
+		} catch {
+			// Best-effort reconciliation — the push path stays primary and the cache still serves last-good state.
+		}
+	}, [queryClient]);
+
+	// Connection + handler subscription effect. STABLE deps (queryClient, runCatchUp) so it is built exactly once per
+	// mount: live pushes are never dropped and handlers are never double-registered when the job id resolves later.
 	useEffect(() => {
 		const connection = new HubConnectionBuilder()
 			.withUrl(buildLocalApiUrl("scheduler/hub"), {
@@ -131,41 +182,8 @@ export function useModelFitSchedulerEvents(scheduledJobId?: string): void {
 			return [eventName, handler] as const;
 		});
 
-		// One-shot reconciliation: on every (re)connect, fetch the watched job's recent runs once and surface the latest
-		// terminal run (deduped against any push by run id). Covers the connect-race / reconnect-gap WITHOUT polling.
-		const runCatchUp = async (): Promise<void> => {
-			const jobId = jobIdRef.current;
-			if (jobId === undefined) {
-				return;
-			}
-			// `current` was stamped at mount (see lazy init above); coalesce only to satisfy the number | null type.
-			const sinceUtc = Math.max(0, (watermarkUtcRef.current ?? Date.now()) - CLOCK_SKEW_TOLERANCE_MS);
-			try {
-				const runs = await fetchScheduledJobRuns(queryClient, { scheduledJobId: jobId, fromUtc: sinceUtc });
-				// Most-recent terminal run since the watermark — order-independent (don't assume the API's sort order).
-				// Single pass tracking the running max instead of sorting the whole array just to read its first element.
-				let terminalRun: (typeof runs)[number] | undefined;
-				for (const run of runs) {
-					if (
-						run.actualFireTimeUtc === null ||
-						run.actualFireTimeUtc < sinceUtc ||
-						!isTerminalRefreshRunStatus(run.status)
-					) {
-						continue;
-					}
-					if (terminalRun === undefined || (run.actualFireTimeUtc ?? 0) > (terminalRun.actualFireTimeUtc ?? 0)) {
-						terminalRun = run;
-					}
-				}
-				if (terminalRun !== undefined) {
-					notifyModelFitRefreshRun(terminalRun, tRef.current);
-				}
-			} catch {
-				// Best-effort reconciliation — the push path stays primary and the cache still serves last-good state.
-			}
-		};
-
 		connection.onreconnected(() => {
+			connectionEstablishedRef.current = true;
 			runCatchUp().catch(() => undefined);
 		});
 
@@ -173,6 +191,9 @@ export function useModelFitSchedulerEvents(scheduledJobId?: string): void {
 		const startPromise = connection.start().then(
 			() => {
 				if (!disposed) {
+					// Mark established so the late-job-id effect's own catch-up may fire from here on (and is skipped
+					// before this point so it never double-fetches alongside this connect-time catch-up).
+					connectionEstablishedRef.current = true;
 					runCatchUp().catch(() => undefined);
 				}
 			},
@@ -201,6 +222,18 @@ export function useModelFitSchedulerEvents(scheduledJobId?: string): void {
 			});
 		};
 		// `t` is intentionally NOT a dependency — it is read via tRef so a new `t` reference never rebuilds the
-		// connection mid-negotiation. Matches the stable-deps lifetime of useSchedulerHub. queryClient is stable.
-	}, [queryClient]);
+		// connection mid-negotiation. Matches the stable-deps lifetime of useSchedulerHub. queryClient + runCatchUp stable.
+	}, [queryClient, runCatchUp]);
+
+	// Late-job-id catch-up. The job id arrives a tick after mount from a separate jobs query; when it transitions
+	// undefined → real this effect re-runs and reconciles the run that completed before the id landed (the connect-time
+	// catch-up above early-returned while the id was still undefined). Gated on connectionEstablishedRef so it never
+	// races the connect-time catch-up when the id is already present at mount (that case is covered by the connect path,
+	// keeping the steady mount to a single fetch). Run-id dedupe makes any overlap a no-op rather than a double toast.
+	useEffect(() => {
+		if (scheduledJobId === undefined || !connectionEstablishedRef.current) {
+			return;
+		}
+		runCatchUp().catch(() => undefined);
+	}, [scheduledJobId, runCatchUp]);
 }

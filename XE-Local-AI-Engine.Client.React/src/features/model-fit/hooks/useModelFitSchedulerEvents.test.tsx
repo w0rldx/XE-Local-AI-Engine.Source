@@ -286,7 +286,56 @@ describe("useModelFitSchedulerEvents", () => {
 		);
 	});
 
-	it("does not run the catch-up fetch when no job id is supplied (push-only)", async () => {
+	it("runs the catch-up when the job id resolves AFTER mount and toasts the missed completed run", async () => {
+		// The reported bug: the job id arrives a tick after mount from a separate jobs query, so a fast-completing run
+		// fires its push during negotiation (missed) AND the connect-time catch-up early-returns for the still-undefined
+		// id → NO toast. The fix re-runs the catch-up once the id resolves undefined → real, without rebuilding the hub.
+		const missedRun = {
+			id: "run-late-1",
+			status: "Succeeded",
+			actualFireTimeUtc: 1_900_000_000_000,
+		} as unknown as ScheduledJobRun;
+		vi.mocked(fetchScheduledJobRuns).mockResolvedValue([missedRun]);
+
+		handlers.clear();
+		signalRMock.connection.on.mockImplementation((name: string, handler: (...args: unknown[]) => void) => {
+			handlers.set(name, handler);
+		});
+		const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+		function Wrapper({ children }: { children: ReactNode }) {
+			return <QueryClientProvider client={queryClient}>{children}</QueryClientProvider>;
+		}
+		const { rerender } = renderHook(({ jobId }: { jobId?: string }) => useModelFitSchedulerEvents(jobId), {
+			wrapper: Wrapper,
+			initialProps: { jobId: undefined as string | undefined },
+		});
+
+		// Connection establishes (start resolves) while the id is still undefined → the connect-time catch-up
+		// early-returns and fetches NOTHING. Flush the start().then + early-return microtasks.
+		await vi.waitFor(() => expect(signalRMock.connection.start).toHaveBeenCalled());
+		await Promise.resolve();
+		await Promise.resolve();
+		expect(vi.mocked(fetchScheduledJobRuns)).not.toHaveBeenCalled();
+
+		// The async jobs query resolves: the id transitions undefined → real. The separate job-id-keyed effect re-runs
+		// and reconciles the missed run.
+		rerender({ jobId: "job-late" });
+
+		await vi.waitFor(() =>
+			expect(toast.success).toHaveBeenCalledWith(
+				"pages.modelFit.recommendations.toasts.success",
+				expect.objectContaining({ autoClose: 5000 }),
+			),
+		);
+		expect(vi.mocked(fetchScheduledJobRuns)).toHaveBeenCalledWith(
+			expect.anything(),
+			expect.objectContaining({ scheduledJobId: "job-late" }),
+		);
+		// The id resolving must NOT tear down / rebuild the SignalR connection (no churn, no dropped live pushes).
+		expect(signalRMock.connection.start).toHaveBeenCalledTimes(1);
+	});
+
+	it("does not run the catch-up fetch when no job id is ever supplied (push-only)", async () => {
 		renderHub();
 
 		// Let start()'s resolution + the catch-up's early-return microtasks flush.
