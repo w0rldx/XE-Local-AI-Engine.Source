@@ -17,9 +17,10 @@ const workerScope = globalThis as unknown as {
 };
 
 // Point onnxruntime-web at the self-hosted `/ort` directory (copied by vite-plugin-static-copy) so it never reaches
-// out to a CDN for its WASM binaries.
-const ortEnv = env as unknown as { backends: { onnx: { wasm: { wasmPaths: string } } } };
-ortEnv.backends.onnx.wasm.wasmPaths = "/ort/";
+// out to a CDN for its WASM binaries. kokoro-js re-exports a THIN `env` whose only member is a `wasmPaths` accessor
+// that proxies onnxruntime-web's `backends.onnx.wasm.wasmPaths` — this wrapper has no `backends` property, so reaching
+// through `env.backends.onnx…` throws "Cannot read properties of undefined (reading 'onnx')". Set the accessor directly.
+(env as unknown as { wasmPaths: string }).wasmPaths = "/ort/";
 
 type StreamOptions = Parameters<KokoroTTS["stream"]>[1];
 
