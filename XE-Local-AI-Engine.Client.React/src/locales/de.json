@@ -1787,6 +1787,14 @@
 				"enable": "Der Aufgabenstatus konnte nicht geändert werden.",
 				"trigger": "Die Aufgabe konnte nicht ausgelöst werden.",
 				"cancel": "Die Ausführung konnte nicht abgebrochen werden."
+			},
+			"toasts": {
+				"completedTitle": "Geplante Aufgabe abgeschlossen",
+				"completed": "Eine geplante Aufgabe wurde erfolgreich abgeschlossen.",
+				"failedTitle": "Geplante Aufgabe fehlgeschlagen",
+				"failedFallback": "Eine geplante Aufgabe wurde nicht erfolgreich abgeschlossen.",
+				"cancelledTitle": "Geplante Aufgabe abgebrochen",
+				"cancelled": "Eine geplante Aufgabe wurde abgebrochen."
 			}
 		},
 		"modelFit": {
@@ -2430,6 +2438,16 @@
 			"title": "Willkommen — los geht's zu deiner ersten Antwort",
 			"body": "Dieser Knoten hat noch kein Chat-Modell und kann daher erst antworten, wenn du eines installierst. Mach eine kurze geführte Tour: Installiere ein empfohlenes Chat-Modell, lege es als Standard fest und sende deine erste Nachricht. Du kannst jederzeit abbrechen.",
 			"start": "Tour starten",
+			"skip": "Überspringen",
+			"languageLabel": "Sprache"
+		},
+		"controls": {
+			"back": "Zurück",
+			"close": "Schließen",
+			"last": "Fertig",
+			"next": "Weiter",
+			"nextWithProgress": "Weiter ({current} von {total})",
+			"open": "Dialog öffnen",
 			"skip": "Überspringen"
 		},
 		"restart": "Tutorial neu starten",
