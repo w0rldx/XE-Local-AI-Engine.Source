@@ -11,6 +11,12 @@ internal sealed record AgentHomePrepareRequest
 
     /// <summary>The model-requested runtime profile, or <see langword="null" /> to use the worker default.</summary>
     public string? RuntimeProfile { get; init; }
+
+    /// <summary>
+    ///     The active conversation id (seeded ambiently, NOT model-supplied) whose uploaded attachments are staged into
+    ///     the sandbox as a synthetic read-only folder. <see langword="null" /> when no conversation context was seeded.
+    /// </summary>
+    public Guid? ConversationId { get; init; }
 }
 
 /// <summary>Outcome of <see cref="IAgentHomeService.PrepareAsync" />; consumed by <see cref="IAgentHomeService.RunAsync" />.</summary>
@@ -60,6 +66,12 @@ internal sealed record AgentHomeRunLifecycleRequest
 
     /// <summary>The model-requested runtime profile, or <see langword="null" /> to use the worker default.</summary>
     public string? RuntimeProfile { get; init; }
+
+    /// <summary>
+    ///     The active conversation id (seeded ambiently, NOT model-supplied) whose uploaded attachments are staged into
+    ///     the sandbox. Forwarded into <see cref="AgentHomePrepareRequest" />. <see langword="null" /> when none seeded.
+    /// </summary>
+    public Guid? ConversationId { get; init; }
 
     /// <summary>The model-supplied goal carried into the run for logging.</summary>
     public required string Goal { get; init; }

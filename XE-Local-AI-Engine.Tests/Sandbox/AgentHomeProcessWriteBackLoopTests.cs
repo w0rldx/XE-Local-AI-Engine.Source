@@ -15,6 +15,7 @@ using XE_Local_AI_Engine.Client.Services.Workspace;
 using XE_Local_AI_Engine.Client.Services.Workspace.Implementation;
 using XE_Local_AI_Engine.Tests.Testing;
 using XE_Local_AI_Engine.Tests.Testing.Builders;
+using XE_Local_AI_Engine.Tests.Testing.Mocks;
 
 /// <summary>
 ///     The acceptance loop on the REAL <see cref="ProcessSandboxRuntimeProvider" />: copy a selected folder into the
@@ -223,6 +224,7 @@ public sealed class AgentHomeProcessWriteBackLoopTests : IDisposable
             serviceProvider.GetRequiredService<IServiceScopeFactory>(),
             options,
             runtimeSettings,
+            new FakeConversationUploadedFileStore(),
             clock,
             NullLogger<AgentHomeService>.Instance);
 

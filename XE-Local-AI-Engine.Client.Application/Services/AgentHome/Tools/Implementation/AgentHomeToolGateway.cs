@@ -31,10 +31,14 @@ internal sealed class AgentHomeToolGateway : IAgentHomeToolGateway
         {
             // Single lifecycle entry (AgentHome gateway): the service resolves identity once, acquires the run-level single-flight
             // guard, then runs Prepare + Run under it. The gateway no longer calls Prepare and Run separately.
+            // ConversationId is sourced from the ambient run context (seeded by the chat send at the root tool loop),
+            // NOT from the model-supplied tool args, so it cannot be forged or leak into the tool schema. It lets the
+            // service stage this conversation's uploaded attachments into the sandbox.
             var run = await _service.RunLifecycleAsync(new AgentHomeRunLifecycleRequest
                 {
                     SelectedFolderIds = request.SelectedFolderIds ?? [],
                     RuntimeProfile = request.RuntimeProfile,
+                    ConversationId = AgentRunConversationContext.Current,
                     Goal = request.Goal ?? string.Empty,
                     AllowedActions = request.AllowedActions ?? []
                 },

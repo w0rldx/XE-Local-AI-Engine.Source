@@ -3,6 +3,8 @@ namespace XE_Local_AI_Engine.Client.Services.AgentHome.Implementation;
 using System.Collections.Concurrent;
 using System.Globalization;
 using Microsoft.Extensions.Options;
+using XE_Local_AI_Engine.Client.Persistence;
+using XE_Local_AI_Engine.Client.Services.DocumentIngestion;
 using XE_Local_AI_Engine.Client.Services.NodeSettings;
 using XE_Local_AI_Engine.Client.Services.Sandbox;
 using XE_Local_AI_Engine.Client.Services.Workspace;
@@ -25,6 +27,10 @@ using XE_Local_AI_Engine.Client.Services.Workspace;
 /// </summary>
 internal sealed class AgentHomeService : IAgentHomeService
 {
+    // Stable sandbox alias for staged conversation upload attachments. The agent reads them at
+    // workspace/selected/attachments/ via its existing file tools.
+    private const string AttachmentsFolderAlias = "attachments";
+
     private static readonly AgentHomePatchExport EmptyPatchExport = new()
     {
         ChangedFileCount = 0,
@@ -51,6 +57,7 @@ internal sealed class AgentHomeService : IAgentHomeService
     private readonly IAgentHomePatchService _patchService;
     private readonly ISandboxRuntimeProvider _provider;
     private readonly INodeRuntimeSettings _runtimeSettings;
+    private readonly IConversationUploadedFileStore _uploadedFileStore;
 
     // Run-level single-flight guard: one semaphore per owner-node, created on demand. A second run for
     // the same owner-node while one is in flight is rejected (non-blocking Wait(0)), not queued. Keyed by a string so
@@ -70,6 +77,7 @@ internal sealed class AgentHomeService : IAgentHomeService
         IServiceScopeFactory scopeFactory,
         IOptions<AgentHomeOptions> options,
         INodeRuntimeSettings runtimeSettings,
+        IConversationUploadedFileStore uploadedFileStore,
         TimeProvider timeProvider,
         ILogger<AgentHomeService> logger)
     {
@@ -83,6 +91,7 @@ internal sealed class AgentHomeService : IAgentHomeService
         ArgumentNullException.ThrowIfNull(options);
         _options = options.Value;
         _runtimeSettings = runtimeSettings ?? throw new ArgumentNullException(nameof(runtimeSettings));
+        _uploadedFileStore = uploadedFileStore ?? throw new ArgumentNullException(nameof(uploadedFileStore));
         _timeProvider = timeProvider ?? throw new ArgumentNullException(nameof(timeProvider));
         _logger = logger ?? throw new ArgumentNullException(nameof(logger));
     }
@@ -109,7 +118,8 @@ internal sealed class AgentHomeService : IAgentHomeService
             var prepared = await PrepareAsync(new AgentHomePrepareRequest
                 {
                     SelectedFolderIds = request.SelectedFolderIds,
-                    RuntimeProfile = request.RuntimeProfile
+                    RuntimeProfile = request.RuntimeProfile,
+                    ConversationId = request.ConversationId
                 },
                 cancellationToken).ConfigureAwait(false);
 
@@ -163,24 +173,85 @@ internal sealed class AgentHomeService : IAgentHomeService
         };
         var handle = await _provider.CreateOrAttachAsync(createRequest, prepareToken).ConfigureAwait(false);
 
-        // workspace copy: copy each resolved selected folder into the sandbox workspace (exclusions, symlink-escape guard,
-        // per-folder byte budget, git baseline). Runs under the preparation timeout, separate from the command timeout.
-        var folderSnapshots = await _workspaceService
-                                    .PrepareSelectedFoldersAsync(handle, resolvedFolders, prepareToken).ConfigureAwait(false);
+        // Stage this conversation's uploaded attachments (the extracted, decrypted Markdown) as a synthetic read-only
+        // "attachments" folder so the agent's existing file tools (list_files/read_file/search_text) discover them.
+        // The staging snapshot holds DECRYPTED plaintext in a temp dir; it is disposed in the finally immediately after
+        // the workspace copy completes so the plaintext never outlives the copy into the sandbox.
+        var foldersToCopy = resolvedFolders;
+        IConversationStagingSnapshot? attachmentsSnapshot = null;
+        IReadOnlyList<SelectedFolderSnapshot> folderSnapshots;
+        try
+        {
+            attachmentsSnapshot = await TryStageConversationAttachmentsAsync(request.ConversationId, prepareToken).ConfigureAwait(false);
+            if (attachmentsSnapshot is not null)
+            {
+                foldersToCopy =
+                [
+                    .. resolvedFolders,
+                    new ResolvedSelectedFolder(Guid.NewGuid(), AttachmentsFolderAlias, attachmentsSnapshot.HostPath, SelectedFolderMode.Copy)
+                ];
+            }
+
+            // workspace copy: copy each resolved selected folder into the sandbox workspace (exclusions, symlink-escape
+            // guard, per-folder byte budget, git baseline). Runs under the preparation timeout, separate from the command
+            // timeout.
+            folderSnapshots = await _workspaceService
+                                    .PrepareSelectedFoldersAsync(handle, foldersToCopy, prepareToken).ConfigureAwait(false);
+        }
+        finally
+        {
+            if (attachmentsSnapshot is not null)
+            {
+                await attachmentsSnapshot.DisposeAsync().ConfigureAwait(false);
+            }
+        }
 
         _logger.LogInformation("AgentHome prepared for node {NodeId}: sandbox {SandboxId}, {FolderCount} selected folder(s) resolved.",
             attachKey.NodeId,
             handle.SandboxId,
-            resolvedFolders.Count);
+            foldersToCopy.Count);
 
         return new AgentHomePrepareResult
         {
             Layout = layout,
             Handle = handle,
-            ResolvedFolders = resolvedFolders,
+            ResolvedFolders = foldersToCopy,
             FolderSnapshots = folderSnapshots,
             RuntimeProfile = effectiveProfile
         };
+    }
+
+    // Builds a decrypted-Markdown staging snapshot for the conversation's uploaded attachments, or null when there is
+    // no conversation context or the conversation has no extracted files. The caller appends the snapshot's host path as
+    // a synthetic folder and disposes the snapshot once the copy is done. Logs only counts/aliases — never host paths or
+    // file content.
+    private async Task<IConversationStagingSnapshot?> TryStageConversationAttachmentsAsync(Guid? conversationId,
+        CancellationToken cancellationToken)
+    {
+        if (conversationId is not { } resolvedConversationId)
+        {
+            return null;
+        }
+
+        var files = await _uploadedFileStore.ListAsync(resolvedConversationId, cancellationToken).ConfigureAwait(false);
+        if (files.Count == 0)
+        {
+            return null;
+        }
+
+        var snapshot = await _uploadedFileStore.CreateStagingSnapshotAsync(resolvedConversationId, cancellationToken).ConfigureAwait(false);
+        if (snapshot.FileCount == 0)
+        {
+            // No extracted Markdown was cached (e.g. every file was unsupported/failed): nothing to stage. Dispose the
+            // empty temp dir rather than leave it to the caller.
+            await snapshot.DisposeAsync().ConfigureAwait(false);
+            return null;
+        }
+
+        _logger.LogInformation("AgentHome staging {FileCount} conversation attachment(s) under alias '{Alias}'.",
+            snapshot.FileCount,
+            AttachmentsFolderAlias);
+        return snapshot;
     }
 
     public async Task<AgentHomeRunResult> RunAsync(AgentHomeRunRequest request, CancellationToken cancellationToken = default)
