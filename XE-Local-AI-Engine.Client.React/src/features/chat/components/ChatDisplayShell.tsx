@@ -45,6 +45,10 @@ export function ChatDisplayShell({
 	selectedAgentId = "",
 	agentOptions = EMPTY_AGENT_OPTIONS,
 	onSelectAgent,
+	attachments,
+	pendingUploads,
+	onUploadFiles,
+	onRemoveAttachment,
 	onSend,
 	onCancel,
 	onRegenerate,
@@ -196,6 +200,10 @@ export function ChatDisplayShell({
 					agentModeEnabled={agentModeEnabled}
 					selectedAgentId={selectedAgentId}
 					agentOptions={agentOptions}
+					attachments={attachments}
+					pendingUploads={pendingUploads}
+					onUploadFiles={onUploadFiles}
+					onRemoveAttachment={onRemoveAttachment}
 					onCancel={onCancel}
 					onModelChange={onModelChange}
 					onReasoningEffortChange={onReasoningEffortChange}

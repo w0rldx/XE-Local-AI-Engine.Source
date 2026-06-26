@@ -18,6 +18,10 @@ export interface NodeChatStreamRequestDto {
 	// Agent to resolve for this turn. Absent/null → Default Assistant (today's built-in chat path). This is a
 	// HAND-TYPED SSE DTO field (not generated), so it is safe to add here without touching NodeChatMapper.ts.
 	agentDefinitionId?: string;
+	// File attachments scoped to this conversation. The client re-sends ALL current (non-deleted) attachment
+	// file ids on EVERY turn so the server can inline extracted text for plain chat (capped) and stage the
+	// files into AgentHome for agent mode. Absent/empty → no attachments. Hand-typed SSE DTO field (not generated).
+	attachmentFileIds?: string[];
 	// Developer-mode per-send sampling overrides. Omitted entirely when developer mode is off or all fields
 	// are null — keeps the wire payload byte-identical to the default (non-dev) path.
 	samplingOptions?: {

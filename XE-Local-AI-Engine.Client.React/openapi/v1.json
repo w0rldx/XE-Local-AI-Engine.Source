@@ -5926,6 +5926,154 @@
           }
         ]
       }
+    },
+    "/api/local/v1/chat/conversations/{conversationId}/uploads/{fileId}": {
+      "delete": {
+        "tags": [
+          "Chat"
+        ],
+        "operationId": "deleteConversationFile",
+        "parameters": [
+          {
+            "name": "conversationId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "guid"
+            }
+          },
+          {
+            "name": "fileId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "guid"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "No Content"
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "403": {
+            "description": "Forbidden"
+          }
+        },
+        "security": [
+          {
+            "JWTBearerAuth": []
+          },
+          {
+            "Bearer": []
+          }
+        ]
+      }
+    },
+    "/api/local/v1/chat/conversations/{conversationId}/uploads": {
+      "get": {
+        "tags": [
+          "Chat"
+        ],
+        "operationId": "listConversationFiles",
+        "parameters": [
+          {
+            "name": "conversationId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "guid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/XE_Local_AI_EngineClientEndpointsLocalChatV1ListConversationUploadsResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "403": {
+            "description": "Forbidden"
+          }
+        },
+        "security": [
+          {
+            "JWTBearerAuth": []
+          },
+          {
+            "Bearer": []
+          }
+        ]
+      },
+      "post": {
+        "tags": [
+          "Chat"
+        ],
+        "operationId": "uploadConversationFile",
+        "parameters": [
+          {
+            "name": "conversationId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "guid"
+            }
+          }
+        ],
+        "requestBody": {
+          "x-name": "UploadConversationFileRequest",
+          "description": "",
+          "content": {
+            "multipart/form-data": {
+              "schema": {
+                "$ref": "#/components/schemas/XE_Local_AI_EngineClientEndpointsLocalChatV1UploadConversationFileRequest"
+              }
+            }
+          },
+          "required": true,
+          "x-position": 1
+        },
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/XE_Local_AI_EngineClientEndpointsLocalChatV1ConversationUploadedFileResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "403": {
+            "description": "Forbidden"
+          }
+        },
+        "security": [
+          {
+            "JWTBearerAuth": []
+          },
+          {
+            "Bearer": []
+          }
+        ]
+      }
     }
   },
   "components": {
@@ -10425,6 +10573,76 @@
           "priority": {
             "type": "integer",
             "format": "int32"
+          }
+        }
+      },
+      "XE_Local_AI_EngineClientEndpointsLocalChatV1DeleteConversationUploadRequest": {
+        "type": "object",
+        "additionalProperties": false
+      },
+      "XE_Local_AI_EngineClientEndpointsLocalChatV1ListConversationUploadsResponse": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "items": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/XE_Local_AI_EngineClientEndpointsLocalChatV1ConversationUploadedFileResponse"
+            }
+          }
+        }
+      },
+      "XE_Local_AI_EngineClientEndpointsLocalChatV1ConversationUploadedFileResponse": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "fileId": {
+            "type": "string",
+            "format": "guid"
+          },
+          "conversationId": {
+            "type": "string",
+            "format": "guid"
+          },
+          "originalFileName": {
+            "type": "string"
+          },
+          "mimeType": {
+            "type": "string"
+          },
+          "extension": {
+            "type": "string"
+          },
+          "sizeBytes": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "extractionStatus": {
+            "type": "string"
+          },
+          "extractedChars": {
+            "type": "integer",
+            "format": "int32",
+            "nullable": true
+          },
+          "createdAtUtc": {
+            "type": "integer",
+            "format": "int64"
+          }
+        }
+      },
+      "XE_Local_AI_EngineClientEndpointsLocalChatV1ListConversationUploadsRequest": {
+        "type": "object",
+        "additionalProperties": false
+      },
+      "XE_Local_AI_EngineClientEndpointsLocalChatV1UploadConversationFileRequest": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "file": {
+            "type": "string",
+            "format": "binary",
+            "nullable": true
           }
         }
       }

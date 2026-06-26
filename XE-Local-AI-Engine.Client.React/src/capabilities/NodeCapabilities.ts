@@ -45,7 +45,10 @@ export const nodeCapabilities: NodeCapabilityConfig = {
 		offlineFirst: false,
 		encryptedConversations: false,
 		clientNodeRouting: false,
-		fileAttachments: false,
+		// File attachments are live: a user can attach documents (txt/md/csv/json/code/pdf/docx) to a
+		// conversation; extracted text grounds plain chat and stages into AgentHome for agent mode. Images
+		// stay off (no OCR/vision path in v1).
+		fileAttachments: true,
 		imageAttachments: false,
 		// Agent management is on by default (CRUD, playbook, templates, eval, resolver all built) — mirrors
 		// nodeCapabilities.agentManagement. Repeated here so ChatCapabilityGates derives showAgentControls

@@ -1487,6 +1487,34 @@ export type XeLocalAiEngineClientEndpointsAgentsV1UpdateSuggestedPlaybookActionR
 	priority?: number;
 };
 
+export type XeLocalAiEngineClientEndpointsLocalChatV1DeleteConversationUploadRequest = {
+	[key: string]: never;
+};
+
+export type XeLocalAiEngineClientEndpointsLocalChatV1ListConversationUploadsResponse = {
+	items?: Array<XeLocalAiEngineClientEndpointsLocalChatV1ConversationUploadedFileResponse>;
+};
+
+export type XeLocalAiEngineClientEndpointsLocalChatV1ConversationUploadedFileResponse = {
+	fileId?: string;
+	conversationId?: string;
+	originalFileName?: string;
+	mimeType?: string;
+	extension?: string;
+	sizeBytes?: number;
+	extractionStatus?: string;
+	extractedChars?: number | null;
+	createdAtUtc?: number;
+};
+
+export type XeLocalAiEngineClientEndpointsLocalChatV1ListConversationUploadsRequest = {
+	[key: string]: never;
+};
+
+export type XeLocalAiEngineClientEndpointsLocalChatV1UploadConversationFileRequest = {
+	file?: Blob | File | null;
+};
+
 export type GetTutorialStateData = {
 	body?: never;
 	path?: never;
@@ -5252,3 +5280,91 @@ export type UpdateSuggestedPlaybookActionResponses = {
 
 export type UpdateSuggestedPlaybookActionResponse =
 	UpdateSuggestedPlaybookActionResponses[keyof UpdateSuggestedPlaybookActionResponses];
+
+export type DeleteConversationFileData = {
+	body?: never;
+	path: {
+		conversationId: string;
+		fileId: string;
+	};
+	query?: never;
+	url: "/api/local/v1/chat/conversations/{conversationId}/uploads/{fileId}";
+};
+
+export type DeleteConversationFileErrors = {
+	/**
+	 * Unauthorized
+	 */
+	401: unknown;
+	/**
+	 * Forbidden
+	 */
+	403: unknown;
+};
+
+export type DeleteConversationFileResponses = {
+	/**
+	 * No Content
+	 */
+	204: void;
+};
+
+export type DeleteConversationFileResponse = DeleteConversationFileResponses[keyof DeleteConversationFileResponses];
+
+export type ListConversationFilesData = {
+	body?: never;
+	path: {
+		conversationId: string;
+	};
+	query?: never;
+	url: "/api/local/v1/chat/conversations/{conversationId}/uploads";
+};
+
+export type ListConversationFilesErrors = {
+	/**
+	 * Unauthorized
+	 */
+	401: unknown;
+	/**
+	 * Forbidden
+	 */
+	403: unknown;
+};
+
+export type ListConversationFilesResponses = {
+	/**
+	 * Success
+	 */
+	200: XeLocalAiEngineClientEndpointsLocalChatV1ListConversationUploadsResponse;
+};
+
+export type ListConversationFilesResponse = ListConversationFilesResponses[keyof ListConversationFilesResponses];
+
+export type UploadConversationFileData = {
+	body: XeLocalAiEngineClientEndpointsLocalChatV1UploadConversationFileRequest;
+	path: {
+		conversationId: string;
+	};
+	query?: never;
+	url: "/api/local/v1/chat/conversations/{conversationId}/uploads";
+};
+
+export type UploadConversationFileErrors = {
+	/**
+	 * Unauthorized
+	 */
+	401: unknown;
+	/**
+	 * Forbidden
+	 */
+	403: unknown;
+};
+
+export type UploadConversationFileResponses = {
+	/**
+	 * Success
+	 */
+	200: XeLocalAiEngineClientEndpointsLocalChatV1ConversationUploadedFileResponse;
+};
+
+export type UploadConversationFileResponse = UploadConversationFileResponses[keyof UploadConversationFileResponses];

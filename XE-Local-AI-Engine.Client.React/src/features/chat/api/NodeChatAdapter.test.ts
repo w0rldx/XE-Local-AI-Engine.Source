@@ -150,6 +150,25 @@ describe("nodeChatAdapter SignalR streaming", () => {
 		expect(connectionMock.state.lastPayload).toMatchObject({ useLocalTools: true });
 	});
 
+	it("forwards non-empty attachmentFileIds on the SendMessage stream payload", async () => {
+		nodeChatAdapter
+			.sendMessage({ ...streamRequest, attachmentFileIds: ["file-1", "file-2"] }, new AbortController().signal)
+			[Symbol.asyncIterator]()
+			.next();
+		await settle();
+
+		expect(connectionMock.state.lastMethod).toBe("SendMessage");
+		expect(connectionMock.state.lastPayload).toMatchObject({ attachmentFileIds: ["file-1", "file-2"] });
+	});
+
+	it("omits attachmentFileIds from the payload when there are no attachments", async () => {
+		nodeChatAdapter.sendMessage({ ...streamRequest, attachmentFileIds: [] }, new AbortController().signal)[Symbol.asyncIterator]().next();
+		await settle();
+
+		expect(connectionMock.state.lastMethod).toBe("SendMessage");
+		expect((connectionMock.state.lastPayload as { attachmentFileIds?: unknown }).attachmentFileIds).toBeUndefined();
+	});
+
 	it("resumes via ResumeMessage after a reconnect and remaps the message id", async () => {
 		const iterator = nodeChatAdapter.sendMessage(streamRequest, new AbortController().signal)[Symbol.asyncIterator]();
 		const first = iterator.next();

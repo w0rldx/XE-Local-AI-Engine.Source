@@ -541,7 +541,23 @@
 				"resetField": "Reset {{field}}"
 			},
 			"composer": {
-				"samplingOptions": "Advanced sampling options"
+				"samplingOptions": "Advanced sampling options",
+				"attach": "Attach file",
+				"image": "Attach image",
+				"attachments": {
+					"remove": "Remove {{name}}",
+					"uploadFailed": "Failed to upload {{name}}.",
+					"removeFailed": "Failed to remove the attachment.",
+					"tooLarge": "{{name}} exceeds the {{limit}} MB upload limit.",
+					"noConversation": "Could not prepare a conversation for the upload.",
+					"status": {
+						"extracted": "Extracted",
+						"pending": "Pending",
+						"unsupported": "Unsupported",
+						"failed": "Failed",
+						"unknown": "Unknown"
+					}
+				}
 			},
 			"temporaryChat": {
 				"label": "Temporary chat",

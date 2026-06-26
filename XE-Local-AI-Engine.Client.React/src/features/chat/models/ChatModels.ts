@@ -1,5 +1,7 @@
 import type { ReactNode } from "react";
 
+import type { ChatAttachment, PendingAttachmentUpload } from "@/features/chat/models/ChatAttachmentModels";
+
 export type ChatRole = "user" | "assistant" | "system" | "tool";
 
 export type MessageStatus = "pending" | "queued" | "streaming" | "completed" | "cancelled" | "failed" | "interrupted";
@@ -300,6 +302,12 @@ export interface ChatDisplayShellProps {
 	agentOptions?: readonly AgentOption[];
 	// Single merged agent control: "" => Default Assistant (agent mode off); any other id => enable mode + stamp it.
 	onSelectAgent?: (agentId: string) => void;
+	// Conversation file attachments (chip row + upload picker in the composer). Wired from Chat.tsx via
+	// useConversationAttachments; only rendered behind the showFileAttachmentControls capability gate.
+	attachments?: readonly ChatAttachment[];
+	pendingUploads?: readonly PendingAttachmentUpload[];
+	onUploadFiles?: (files: File[]) => void;
+	onRemoveAttachment?: (fileId: string) => void;
 	onSend: (content: string, effort: ReasoningEffort, model: string) => void;
 	onCancel: () => void;
 	onRegenerate?: (messageId: string) => void;

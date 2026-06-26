@@ -541,7 +541,23 @@
 				"resetField": "{{field}} zurücksetzen"
 			},
 			"composer": {
-				"samplingOptions": "Erweiterte Sampling-Optionen"
+				"samplingOptions": "Erweiterte Sampling-Optionen",
+				"attach": "Datei anhängen",
+				"image": "Bild anhängen",
+				"attachments": {
+					"remove": "{{name}} entfernen",
+					"uploadFailed": "{{name}} konnte nicht hochgeladen werden.",
+					"removeFailed": "Anhang konnte nicht entfernt werden.",
+					"tooLarge": "{{name}} überschreitet das Upload-Limit von {{limit}} MB.",
+					"noConversation": "Für den Upload konnte keine Unterhaltung vorbereitet werden.",
+					"status": {
+						"extracted": "Extrahiert",
+						"pending": "Ausstehend",
+						"unsupported": "Nicht unterstützt",
+						"failed": "Fehlgeschlagen",
+						"unknown": "Unbekannt"
+					}
+				}
 			},
 			"temporaryChat": {
 				"label": "Temporärer Chat",

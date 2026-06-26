@@ -40,6 +40,7 @@ import { shouldFetchLocalModelDetails } from "@/features/chat/pages/ChatModelDet
 import { resolveLocalDefaultModelCapabilities, toChatModelOptions } from "@/features/chat/pages/ChatModelOptions";
 import { nodeChatQueryKeys } from "@/features/chat/queries/NodeChatQueryKeys";
 import { useCodexModelOptions } from "@/features/chat/queries/useCodexModelOptions";
+import { useConversationAttachments } from "@/features/chat/queries/useConversationAttachments";
 import { useChatSamplingPreferencesStore } from "@/features/chat/stores/ChatSamplingPreferencesStore";
 import {
 	binaryReasoningEfforts,
@@ -507,6 +508,26 @@ export function Chat() {
 		[cacheConversation, displayConversations, selectedConversationId, selectedConversationData, setRequestedConversationId],
 	);
 
+	// Resolve (creating + selecting when needed) the conversation a file should attach to. Reuses the same
+	// resolve-or-create path as send so attaching to a brand-new thread before the first message lazily creates one.
+	const ensureConversationId = useCallback(async (): Promise<string> => {
+		try {
+			const conversation = await resolveSendConversation("");
+			return conversation.id;
+		} catch (error) {
+			setStreamError(errorMessage(error));
+			return "";
+		}
+	}, [resolveSendConversation]);
+
+	const {
+		attachments,
+		attachmentFileIds,
+		pendingUploads,
+		uploadFiles: handleUploadAttachments,
+		removeAttachment: handleRemoveAttachment,
+	} = useConversationAttachments({ conversationId: selectedConversationId, ensureConversationId });
+
 	const refreshConversation = useCallback(
 		async (conversationId: string): Promise<void> => {
 			await Promise.all([
@@ -615,6 +636,9 @@ export function Chat() {
 						// branch only. Omit when nothing was navigated this turn so the server keeps the stored map.
 						selectedPath: Object.keys(activeRevisionByGroup).length > 0 ? activeRevisionByGroup : undefined,
 						agentDefinitionId: effectiveAgentId,
+						// Re-send the conversation's CURRENT (non-deleted) attachment ids on every turn so the server can
+						// ground plain chat (inline extracted text, capped) and stage the files into AgentHome for agent mode.
+						attachmentFileIds: attachmentFileIds.length > 0 ? attachmentFileIds : undefined,
 						// Include sampling overrides only when developer mode is on and at least one field is set.
 						// toWireSamplingOptions returns undefined when all fields are null → omitted from wire payload
 						// (byte-identical invariant: the OFF path is byte-identical to the default non-dev path).
@@ -670,6 +694,7 @@ export function Chat() {
 			activeRevisionByGroup,
 			agentModeEnabled,
 			agentOptions,
+			attachmentFileIds,
 			cacheConversation,
 			cloudModelOptions,
 			developerMode,
@@ -1157,6 +1182,10 @@ export function Chat() {
 				selectedAgentId={selectedAgentId}
 				agentOptions={agentOptions}
 				onSelectAgent={handleSelectAgent}
+				attachments={attachments}
+				pendingUploads={pendingUploads}
+				onUploadFiles={handleUploadAttachments}
+				onRemoveAttachment={handleRemoveAttachment}
 				onSend={(content, effort, model) => {
 					handleSend(content, effort, model).catch((error: unknown) => setStreamError(errorMessage(error)));
 				}}
