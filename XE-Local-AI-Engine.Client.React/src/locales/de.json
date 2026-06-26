@@ -543,6 +543,7 @@
 			"composer": {
 				"samplingOptions": "Erweiterte Sampling-Optionen",
 				"attach": "Datei anhängen",
+				"dropToAttach": "Dateien zum Anhängen ablegen",
 				"image": "Bild anhängen",
 				"attachments": {
 					"remove": "{{name}} entfernen",

@@ -543,6 +543,7 @@
 			"composer": {
 				"samplingOptions": "Advanced sampling options",
 				"attach": "Attach file",
+				"dropToAttach": "Drop files to attach",
 				"image": "Attach image",
 				"attachments": {
 					"remove": "Remove {{name}}",
