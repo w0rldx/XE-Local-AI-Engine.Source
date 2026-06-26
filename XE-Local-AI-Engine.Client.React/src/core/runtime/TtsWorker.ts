@@ -7,7 +7,13 @@
 
 import { env, KokoroTTS, TextSplitterStream } from "kokoro-js";
 
+import { installOrtWarningFilter } from "./OrtLogFilter";
 import type { MainToWorkerMessage, WorkerToMainMessage } from "./TtsWorkerProtocol";
+
+// Silence onnxruntime-web's benign Warning-level session-assignment noise in this worker's console. Installed for the
+// worker's lifetime (no restore); ORT errors and all other output still pass through. See OrtLogFilter for why the
+// proper logSeverityLevel route is unreachable through kokoro-js.
+installOrtWarningFilter(globalThis.console);
 
 // The standard DOM lib types `self` as a Window; in a worker it is a DedicatedWorkerGlobalScope. Rather than pull the
 // WebWorker lib (which conflicts with DOM in this shared tsconfig), model only the two members the worker uses.
