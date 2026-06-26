@@ -665,8 +665,9 @@ public sealed class AgentHomeServiceTests : IDisposable
         // decrypted snapshot is staged.
         using var harness = CreateHarness(clock, provider, resolver, uploadedFileStore: store);
 
-        await harness.Service.PrepareConversationAttachmentsAsync(conversationId);
+        var staged = await harness.Service.PrepareConversationAttachmentsAsync(conversationId);
 
+        AssertEx.Empty(staged);
         AssertEx.Equal(expected: 0, store.CreatedSnapshotPaths.Count);
         AssertEx.False(await HasLiveSandboxAsync(provider), "Agent Mode disabled must not create a sandbox.");
     }
@@ -690,8 +691,9 @@ public sealed class AgentHomeServiceTests : IDisposable
             NetworkPolicy = SandboxNetworkPolicy.None
         });
 
-        await harness.Service.PrepareConversationAttachmentsAsync(Guid.NewGuid());
+        var staged = await harness.Service.PrepareConversationAttachmentsAsync(Guid.NewGuid());
 
+        AssertEx.Empty(staged);
         var after = await provider.ConnectAsync(AnyKey());
         AssertEx.Equal(existing.SandboxId, after.SandboxId);
         AssertEx.Equal(expected: 0, store.CreatedSnapshotPaths.Count);
@@ -710,7 +712,10 @@ public sealed class AgentHomeServiceTests : IDisposable
 
         using var harness = CreateHarness(clock, provider, resolver, uploadedFileStore: store, enabled: true);
 
-        await harness.Service.PrepareConversationAttachmentsAsync(conversationId);
+        var staged = await harness.Service.PrepareConversationAttachmentsAsync(conversationId);
+
+        // The returned workspace-relative path points the model straight at the staged file.
+        AssertEx.Contains(staged, path => string.Equals(path, "attachments/spec.md", StringComparison.Ordinal));
 
         var handle = await provider.ConnectAsync(AnyKey());
         var copied = provider.SnapshotSandboxPaths(handle);
@@ -733,7 +738,12 @@ public sealed class AgentHomeServiceTests : IDisposable
         using var harness = CreateHarness(clock, provider, resolver, uploadedFileStore: store, enabled: true);
 
         await harness.Service.PrepareConversationAttachmentsAsync(conversationA);
-        await harness.Service.PrepareConversationAttachmentsAsync(conversationB);
+        var stagedB = await harness.Service.PrepareConversationAttachmentsAsync(conversationB);
+
+        // The second re-stage reports only conversation B's file.
+        AssertEx.Contains(stagedB, path => string.Equals(path, "attachments/bravo.md", StringComparison.Ordinal));
+        AssertEx.True(stagedB.All(path => !string.Equals(path, "attachments/alpha.md", StringComparison.Ordinal)),
+            "the re-stage for conversation B must not report conversation A's file.");
 
         // The per-node sandbox is shared across conversations, so the second re-stage must leave only conversation B's
         // attachments — never conversation A's (no cross-conversation residue).

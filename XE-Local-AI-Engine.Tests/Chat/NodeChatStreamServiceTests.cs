@@ -568,6 +568,66 @@ public sealed class NodeChatStreamServiceTests
     }
 
     [Test]
+    public async Task SendMessageAsync_WhenAgentHomeToolsAndStagedAttachments_InjectsPointerHint()
+    {
+        var conversationId = Guid.NewGuid();
+        var assistantMessageId = Guid.NewGuid();
+        var requestId = Guid.NewGuid();
+        var persistence = CreatePersistence(conversationId, assistantMessageId, requestId, _ => { });
+        var dispatcher = new RecordingWorkerEventDispatcher();
+        var runner = new ContextCapturingInvocationRunner(dispatcher);
+        var offerProvider = CreateOfferProvider(CreateLocalToolDto("read_file", "{\"type\":\"object\"}"));
+        var stager = Substitute.For<IConversationSandboxStager>();
+        IReadOnlyList<string> stagedPaths = ["attachments/spec.md"];
+        stager.PrepareConversationAttachmentsAsync(conversationId, Arg.Any<CancellationToken>()).Returns(stagedPaths);
+
+        var service = new NodeChatStreamService(persistence,
+            new NodeChatInvocationPump(persistence, TimeProvider.System),
+            new NodeChatMutationGuard(persistence),
+            new LocalChatRuntimePackageBuilder(),
+            runner,
+            dispatcher,
+            Options.Create(new LocalChatAgentOptions
+            {
+                EnableTools = true
+            }),
+            StubNodeRuntimeSettings.Create().WithEnableTools(true).Build(),
+            new NodeChatStreamCancellationRegistry(),
+            offerProvider,
+            CreateAgentDefinitionResolver(),
+            CreateAgentDefinitionStore(),
+            CreateDefaultAgentProvider(),
+            CreateOrchestrationResolver(),
+            CreateNodeSettingsStore(),
+            CreateModelClassificationService(),
+            CreateLocalModelProviderResolver(),
+            CreateGgufModelCapabilityResolver(),
+            CreateLocalDefaultChatModelResolver(),
+            CreateMemoryExtractionDispatcher(),
+            Substitute.For<IConversationUploadedFileStore>(),
+            stager,
+            TimeProvider.System,
+            NullLogger<NodeChatStreamService>.Instance);
+
+        await foreach (var _ in service.SendMessageAsync(new NodeChatStreamRequest(conversationId,
+                           "summarize the attachment",
+                           MessageId: assistantMessageId,
+                           RequestId: requestId,
+                           UseLocalTools: true)).ConfigureAwait(false))
+        {
+            // Drain the stream so the turn completes; the assertion below is on the injected context.
+        }
+
+        AssertEx.True(runner.CaptureObserved, "Expected the runner to observe the package.");
+        // The pointer names the exact staged path so a weak model reads it instead of guessing a file name.
+        AssertEx.Contains(runner.CapturedContext, message => message.Content.Contains("attachments/spec.md", StringComparison.Ordinal));
+        // But the file CONTENT is NOT inlined in agent mode (the agent reads it via its tools).
+        AssertEx.False(
+            runner.CapturedContext.Any(message => message.Content.Contains(ConversationAttachmentContextComposer.Preamble, StringComparison.Ordinal)),
+            "Agent mode must not inline attachment text.");
+    }
+
+    [Test]
     public async Task SendMessageAsync_WhenPlainChatWithAttachment_InjectsExtractedTextIntoContext()
     {
         var conversationId = Guid.NewGuid();

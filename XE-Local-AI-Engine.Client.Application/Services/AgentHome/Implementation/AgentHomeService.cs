@@ -178,6 +178,7 @@ internal sealed class AgentHomeService : IAgentHomeService, IConversationSandbox
         // The staging snapshot holds DECRYPTED plaintext in a temp dir; it is disposed in the finally immediately after
         // the workspace copy completes so the plaintext never outlives the copy into the sandbox.
         var foldersToCopy = resolvedFolders;
+        IReadOnlyList<string> stagedAttachmentPaths = [];
         IConversationStagingSnapshot? attachmentsSnapshot = null;
         IReadOnlyList<SelectedFolderSnapshot> folderSnapshots;
         try
@@ -189,6 +190,13 @@ internal sealed class AgentHomeService : IAgentHomeService, IConversationSandbox
                 [
                     .. resolvedFolders,
                     new ResolvedSelectedFolder(Guid.NewGuid(), AttachmentsFolderAlias, attachmentsSnapshot.HostPath, SelectedFolderMode.Copy)
+                ];
+
+                // Capture the workspace-relative staged paths before the snapshot is disposed, so the chat agent-mode
+                // path can point the model straight at them (e.g. attachments/report.md).
+                stagedAttachmentPaths =
+                [
+                    .. attachmentsSnapshot.FileNames.Select(name => string.Create(CultureInfo.InvariantCulture, $"{AttachmentsFolderAlias}/{name}"))
                 ];
             }
 
@@ -217,11 +225,12 @@ internal sealed class AgentHomeService : IAgentHomeService, IConversationSandbox
             Handle = handle,
             ResolvedFolders = foldersToCopy,
             FolderSnapshots = folderSnapshots,
-            RuntimeProfile = effectiveProfile
+            RuntimeProfile = effectiveProfile,
+            StagedAttachmentRelativePaths = stagedAttachmentPaths
         };
     }
 
-    public async Task PrepareConversationAttachmentsAsync(Guid conversationId, CancellationToken cancellationToken = default)
+    public async Task<IReadOnlyList<string>> PrepareConversationAttachmentsAsync(Guid conversationId, CancellationToken cancellationToken = default)
     {
         cancellationToken.ThrowIfCancellationRequested();
 
@@ -229,7 +238,7 @@ internal sealed class AgentHomeService : IAgentHomeService, IConversationSandbox
         // entirely rather than create a sandbox that nothing can read.
         if (!_options.Enabled)
         {
-            return;
+            return [];
         }
 
         // Fast path: no extracted attachments to stage → leave any existing sandbox untouched, so an attachment-free
@@ -237,7 +246,7 @@ internal sealed class AgentHomeService : IAgentHomeService, IConversationSandbox
         var files = await _uploadedFileStore.ListAsync(conversationId, cancellationToken).ConfigureAwait(false);
         if (files.Count == 0)
         {
-            return;
+            return [];
         }
 
         var identity = await _identityProvider.GetAsync(cancellationToken).ConfigureAwait(false);
@@ -250,7 +259,7 @@ internal sealed class AgentHomeService : IAgentHomeService, IConversationSandbox
         if (!await guard.WaitAsync(TimeSpan.Zero, CancellationToken.None).ConfigureAwait(false))
         {
             _logger.LogDebug("AgentHome attachment staging for node {NodeId} skipped: a run is already in progress.", identity.NodeId);
-            return;
+            return [];
         }
 
         try
@@ -260,13 +269,14 @@ internal sealed class AgentHomeService : IAgentHomeService, IConversationSandbox
             // conversation's attachments, never another conversation's files. Chat agent mode selects no project
             // folders, so the recreate cost is just the (small) attachment copy.
             await ResetOwnerNodeSandboxAsync(identity, cancellationToken).ConfigureAwait(false);
-            _ = await PrepareAsync(new AgentHomePrepareRequest
+            var prepared = await PrepareAsync(new AgentHomePrepareRequest
                 {
                     SelectedFolderIds = [],
                     RuntimeProfile = null,
                     ConversationId = conversationId
                 },
                 cancellationToken).ConfigureAwait(false);
+            return prepared.StagedAttachmentRelativePaths;
         }
         finally
         {
