@@ -5,6 +5,7 @@ import { useTranslation } from "react-i18next";
 
 import { useDeveloperModeStore } from "@/core/dev-tools/stores/DeveloperModeStore";
 import { toast } from "@/core/ui/notifications/Toast";
+import { VoicePreviewButton } from "@/features/voice/components/VoicePreviewButton";
 import { useVoiceNodeSettings } from "@/features/voice/useVoiceNodeSettings";
 import { useVoicePreferencesStore, voicePreferencesRateBounds } from "@/features/voice/VoicePreferencesStore";
 import { useVoiceRuntime } from "@/features/voice/VoiceRuntimeContext";
@@ -90,15 +91,19 @@ export function VoiceSettingsCard() {
 						onChange={(event) => handleNodeGateChange(event.currentTarget.checked)}
 						data-testid="voice-settings-node-gate-switch"
 					/>
-					<Select
-						label={t("voice.settings.operatorDefaultProfileLabel")}
-						description={t("voice.settings.operatorDefaultProfileDescription")}
-						data={voiceOptions}
-						value={nodeDefaultProfile}
-						disabled={voiceOptions.length === 0 || nodeVoice.isSaving}
-						onChange={handleNodeDefaultProfileChange}
-						data-testid="voice-settings-node-default-profile"
-					/>
+					<Group align="flex-end" gap="xs" wrap="nowrap">
+						<Select
+							label={t("voice.settings.operatorDefaultProfileLabel")}
+							description={t("voice.settings.operatorDefaultProfileDescription")}
+							data={voiceOptions}
+							value={nodeDefaultProfile}
+							disabled={voiceOptions.length === 0 || nodeVoice.isSaving}
+							onChange={handleNodeDefaultProfileChange}
+							data-testid="voice-settings-node-default-profile"
+							style={{ flex: 1 }}
+						/>
+						<VoicePreviewButton voiceId={nodeDefaultProfile} />
+					</Group>
 				</Stack>
 
 				{operatorEnabled ? (
@@ -116,13 +121,17 @@ export function VoiceSettingsCard() {
 							disabled={!voiceEnabled}
 							onChange={(event) => setAutoPlayAssistant(event.currentTarget.checked)}
 						/>
-						<Select
-							label={t("voice.settings.profileLabel")}
-							data={voiceOptions}
-							value={selectedProfile}
-							disabled={voiceOptions.length === 0}
-							onChange={(value) => setVoiceProfile(value ?? "")}
-						/>
+						<Group align="flex-end" gap="xs" wrap="nowrap">
+							<Select
+								label={t("voice.settings.profileLabel")}
+								data={voiceOptions}
+								value={selectedProfile}
+								disabled={voiceOptions.length === 0}
+								onChange={(value) => setVoiceProfile(value ?? "")}
+								style={{ flex: 1 }}
+							/>
+							<VoicePreviewButton voiceId={selectedProfile} />
+						</Group>
 						<Stack gap={2}>
 							<Text size="sm">{t("voice.settings.rateLabel")}</Text>
 							<Slider

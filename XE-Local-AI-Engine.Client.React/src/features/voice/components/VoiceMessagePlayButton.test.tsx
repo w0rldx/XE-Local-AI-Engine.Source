@@ -33,6 +33,7 @@ function baseContext(overrides: Partial<VoiceRuntimeContextValue> = {}): VoiceRu
 		lastError: undefined,
 		playingMessageId: undefined,
 		playMessage,
+		previewVoice: () => Promise.resolve(),
 		stopPlayback,
 		...overrides,
 	};

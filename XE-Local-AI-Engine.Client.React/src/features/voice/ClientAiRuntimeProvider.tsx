@@ -17,6 +17,7 @@ import { sanitizeForSpeech } from "@/core/runtime/SentenceBuffer";
 import { VoiceRuntime, type VoiceRuntimeError } from "@/core/runtime/VoiceRuntime";
 import type { AnswerLanguage } from "@/features/voice/DetectAnswerLanguage";
 import { useVoiceManifest } from "@/features/voice/useVoiceManifest";
+import { voicePreviewSample } from "@/features/voice/VoicePreviewSample";
 import { useVoicePreferencesStore } from "@/features/voice/VoicePreferencesStore";
 import { VoiceRuntimeContext, type VoiceRuntimeContextValue } from "@/features/voice/VoiceRuntimeContext";
 
@@ -170,6 +171,25 @@ export function ClientAiRuntimeProvider({ children }: { readonly children: React
 		[manifest?.defaultVoiceId, resumeAudio],
 	);
 
+	const previewVoice = useCallback(
+		async (voiceId: string): Promise<void> => {
+			const runtime = bundleRef.current?.runtime;
+			if (!runtime || !voiceId) {
+				return;
+			}
+
+			// Speak the sample in the voice's OWN language (drives the en→Kokoro / de→Web-Speech routing correctly) at
+			// the user's current speaking rate, so the audition matches what they'd actually hear. Independent of the
+			// per-user enable/autoplay toggles — previewing is exactly how the user decides whether to turn voice on.
+			const voice = manifest?.voices.find((candidate) => candidate.id === voiceId);
+			const language = voice?.language ?? "en";
+			const prefs = useVoicePreferencesStore.getState();
+			await resumeAudio();
+			await runtime.speak(voicePreviewSample(language), { language, voiceId, rate: prefs.speakingRate });
+		},
+		[manifest?.voices, resumeAudio],
+	);
+
 	const value = useMemo<VoiceRuntimeContextValue>(
 		() => ({
 			manifest,
@@ -184,6 +204,7 @@ export function ClientAiRuntimeProvider({ children }: { readonly children: React
 			lastError,
 			playingMessageId,
 			playMessage,
+			previewVoice,
 			stopPlayback,
 		}),
 		[
@@ -199,6 +220,7 @@ export function ClientAiRuntimeProvider({ children }: { readonly children: React
 			lastError,
 			playingMessageId,
 			playMessage,
+			previewVoice,
 			stopPlayback,
 		],
 	);

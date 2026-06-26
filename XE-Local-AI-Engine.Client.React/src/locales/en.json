@@ -2594,7 +2594,8 @@
 			"operatorEnableDescription": "Master gate for every user on this node. Turning it off disables voice output everywhere.",
 			"operatorDefaultProfileLabel": "Default voice",
 			"operatorDefaultProfileDescription": "The voice new users start with on this node.",
-			"operatorSaveError": "Could not save the node voice setting."
+			"operatorSaveError": "Could not save the node voice setting.",
+			"previewLabel": "Preview voice"
 		}
 	}
 }
