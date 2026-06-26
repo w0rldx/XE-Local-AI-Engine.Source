@@ -29,6 +29,7 @@ import {
 } from "@/features/node-settings/models/NodeSettingsModel";
 import { useHfTokenStatus, useSetHfToken } from "@/features/node-settings/queries/useLocalRuntime";
 import { useHfTokenStore } from "@/features/node-settings/stores/HfTokenStore";
+import { VoiceSettingsCard } from "@/features/voice/components/VoiceSettingsCard";
 
 function errorMessage(error: unknown): string {
 	return error instanceof Error ? error.message : "Unexpected node settings error";
@@ -41,7 +42,13 @@ function runtimeErrorMessage(error: unknown, fallback: string): string {
 export function NodeSettings() {
 	const { t } = useTranslation();
 	const queryClient = useQueryClient();
-	const { data: settings, isLoading: settingsIsLoading, error: settingsError, refetch: settingsRefetch, isFetching: settingsIsFetching } = useQuery(withResponseValidation(getNodeSettingsOptions()));
+	const {
+		data: settings,
+		isLoading: settingsIsLoading,
+		error: settingsError,
+		refetch: settingsRefetch,
+		isFetching: settingsIsFetching,
+	} = useQuery(withResponseValidation(getNodeSettingsOptions()));
 	const developerMode = useDeveloperModeStore((state) => state.developerMode);
 	const { toggle: toggleDeveloperMode } = useDeveloperModeStore((state) => state.actions);
 	const [timeoutSeconds, setTimeoutSeconds] = useState<NodeSettingsTimeoutInput>(
@@ -260,6 +267,8 @@ export function NodeSettings() {
 					onClear={handleClearToken}
 					isSaving={setHfToken.isPending}
 				/>
+
+				<VoiceSettingsCard />
 
 				<Card withBorder={true} radius="md" p="lg">
 					<Stack gap="md">

@@ -17,9 +17,16 @@ export const defaultChatUiCapabilities: ChatUiCapabilities = {
 	showFileAttachmentControls: false,
 	showImageAttachmentControls: false,
 	showAgentControls: false,
+	showVoiceControls: false,
 };
 
-export function buildChatUiCapabilities(capabilities: ChatCapabilities): ChatUiCapabilities {
+// `manifestVoiceEnabled` is the operator-owned manifest.Enabled gate (server-state, plan §7.1): voice UI is shown
+// only when the node ships the voice surface AND the operator has enabled it on this node. Defaults to false so the
+// module-level call sites (which lack the runtime manifest) keep voice hidden until a manifest-aware caller opts in.
+export function buildChatUiCapabilities(
+	capabilities: ChatCapabilities,
+	manifestVoiceEnabled = false,
+): ChatUiCapabilities {
 	return {
 		showLocalToolControls: capabilities.localTools,
 		showToolApprovalControls: capabilities.toolApprovals,
@@ -31,6 +38,8 @@ export function buildChatUiCapabilities(capabilities: ChatCapabilities): ChatUiC
 		// Agent controls are shown when agent management is available (node-local CRUD backed). The
 		// capability derives from nodeCapabilities.agentManagement at the call site in Chat.tsx.
 		showAgentControls: capabilities.agentManagement ?? false,
+		// Voice controls require BOTH the node `voice` surface flag AND the operator-owned manifest.Enabled.
+		showVoiceControls: (capabilities.voice ?? false) && manifestVoiceEnabled,
 	};
 }
 

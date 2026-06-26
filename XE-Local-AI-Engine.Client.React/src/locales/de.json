@@ -2556,5 +2556,45 @@
 		"userNameNotMatchCriteria": "Der Benutzername darf nur Buchstaben, Zahlen, Punkte, Unterstriche und Bindestriche enthalten und darf nicht leer sein",
 		"defaultErrorMessage": "Ein Fehler ist aufgetreten",
 		"tooManyRequests": "Zu viele Anfragen. Bitte versuchen Sie es später erneut."
+	},
+	"voice": {
+		"composer": {
+			"label": "Sprachausgabe",
+			"enabledTooltip": "Sprachausgabe ist aktiviert",
+			"disabledTooltip": "Sprachausgabe ist deaktiviert",
+			"enableLabel": "Antworten vorlesen",
+			"autoPlayLabel": "Assistenten-Antworten automatisch vorlesen",
+			"profileLabel": "Stimme",
+			"rateLabel": "Sprechgeschwindigkeit"
+		},
+		"message": {
+			"play": "Diese Antwort vorlesen",
+			"stop": "Vorlesen stoppen"
+		},
+		"notice": {
+			"tapToEnable": "Tippen oder eine Taste drücken, um die Audiowiedergabe zu aktivieren.",
+			"downloading": "Sprachmodell wird heruntergeladen…",
+			"downloadProgress": "{{loaded}} / {{total}} MB",
+			"downloadError": "Das Sprachmodell konnte nicht heruntergeladen werden. Es wird auf die Browser-Sprachausgabe zurückgegriffen.",
+			"webSpeechFallback": "Browser-Sprachausgabe wird verwendet – WebGPU ist nicht verfügbar."
+		},
+		"settings": {
+			"title": "Sprachausgabe (Text-to-Speech)",
+			"operatorGate": "Sprachfunktion des Knotens:",
+			"gateOn": "Aktiviert",
+			"gateOff": "Deaktiviert",
+			"enableLabel": "Antworten auf diesem Gerät vorlesen",
+			"enableDescription": "Wird nur in diesem Browser gespeichert. Die Synthese läuft lokal; es werden keine Audiodaten an das Gerät gesendet.",
+			"autoPlayLabel": "Assistenten-Antworten automatisch vorlesen",
+			"profileLabel": "Stimme",
+			"rateLabel": "Sprechgeschwindigkeit",
+			"disabledOnNode": "Die Sprachausgabe ist für diesen Knoten vom Betreiber deaktiviert.",
+			"operatorSectionTitle": "Betreibersteuerung (dieser Knoten)",
+			"operatorEnableLabel": "Sprachfunktion auf diesem Knoten aktivieren",
+			"operatorEnableDescription": "Hauptschalter für alle Benutzer auf diesem Knoten. Wird er deaktiviert, ist die Sprachausgabe überall ausgeschaltet.",
+			"operatorDefaultProfileLabel": "Standardstimme",
+			"operatorDefaultProfileDescription": "Die Stimme, mit der neue Benutzer auf diesem Knoten starten.",
+			"operatorSaveError": "Die Sprach-Einstellung des Knotens konnte nicht gespeichert werden."
+		}
 	}
 }

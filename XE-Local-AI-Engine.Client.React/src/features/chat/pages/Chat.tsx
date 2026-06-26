@@ -49,6 +49,8 @@ import {
 	reasoningEfforts,
 	useNodeChatPreferencesStore,
 } from "@/features/chat/stores/NodeChatPreferencesStore";
+import { useVoicePlayback } from "@/features/voice/useVoicePlayback";
+import { useVoiceRuntime } from "@/features/voice/VoiceRuntimeContext";
 
 /* eslint-disable react-doctor/no-giant-component, react-doctor/prefer-useReducer, react-doctor/js-combine-iterations */
 
@@ -66,7 +68,6 @@ const localDefaultModelOptionBase: ModelOption = {
 	statusLabel: "Runtime-selected model",
 };
 
-const chatUiCapabilities = buildChatUiCapabilities(nodeCapabilities.chat);
 const emptyConversations: ChatConversationModel[] = [];
 
 interface ActiveChatStream {
@@ -170,6 +171,13 @@ export function Chat() {
 	// Developer mode + per-send sampling overrides. Read directly from global stores.
 	const developerMode = useDeveloperModeStore((state) => state.developerMode);
 	const samplingOptions = useChatSamplingPreferencesStore((state) => state.options);
+	// Voice runtime: the manifest-derived gate drives showVoiceControls; the playback tap mirrors the stream into TTS.
+	const voiceRuntime = useVoiceRuntime();
+	const { onTurnStart: onVoiceTurnStart, onAnswerProgress: onVoiceAnswerProgress } = useVoicePlayback();
+	const chatUiCapabilities = useMemo(
+		() => buildChatUiCapabilities(nodeCapabilities.chat, voiceRuntime.manifest?.enabled ?? false),
+		[voiceRuntime.manifest?.enabled],
+	);
 	const { readiness: connectionReadiness, error: connectionError, retry: retryConnection } = useNodeChatConnectionReadiness();
 	const [streamingMessage, setStreamingMessage] = useState<ChatStreamingState | undefined>();
 	// Tool-call activity entries accumulated over the current streaming turn (keyed by tool call id). Reset per turn.
@@ -614,6 +622,8 @@ export function Chat() {
 
 			cacheConversation(optimisticConversation);
 			setTimelineEntries([]);
+			// Barge-in: a fresh send halts any voice playback still running from a previous turn (invariant §3 / §7.3).
+			onVoiceTurnStart();
 			setStreamingMessage({
 				conversationId: conversation.id,
 				messageId: ids.assistantMessageId,
@@ -627,6 +637,7 @@ export function Chat() {
 				abortController,
 			};
 
+			let lastVoiceStreaming: ChatStreamingState | undefined;
 			try {
 				for await (const streamEvent of nodeChatAdapter.sendMessage(
 					{
@@ -663,10 +674,18 @@ export function Chat() {
 					const applied = applyNodeChatStreamEvent(currentConversation, streamEvent);
 					cacheConversation(applied.conversation);
 					setStreamingMessage(applied.streamingMessage);
+					// Decoupled voice tap (R-A MEDIUM-1): mirror the SAME reduced state into the TTS sentence buffer,
+					// next to the reducer call rather than inside it. Only the answer text is read (invariant §3.7).
+					lastVoiceStreaming = applied.streamingMessage;
+					onVoiceAnswerProgress(applied.streamingMessage);
 					const toolEntry = applied.timelineEntry;
 					if (toolEntry) {
 						setTimelineEntries((current) => accumulateToolTimelineEntry(current, toolEntry));
 					}
+				}
+				// Flush the trailing remainder once the stream completes (the terminal flush is idempotent).
+				if (lastVoiceStreaming) {
+					onVoiceAnswerProgress({ ...lastVoiceStreaming, isActive: false });
 				}
 			} catch (error) {
 				if (!abortController.signal.aborted && !deletedConversationIds.current.has(conversation.id)) {
@@ -711,6 +730,8 @@ export function Chat() {
 			samplingOptions,
 			selectedAgentId,
 			toolsEnabled,
+			onVoiceTurnStart,
+			onVoiceAnswerProgress,
 		],
 	);
 
@@ -740,8 +761,11 @@ export function Chat() {
 			const abortController = new AbortController();
 			activeStream.current = { conversationId: conversation.id, messageId: "", requestId: "", abortController };
 			setTimelineEntries([]);
+			// Barge-in: regenerate halts any voice playback still running (invariant §3 / §7.3).
+			onVoiceTurnStart();
 			setStreamingMessage({ conversationId: conversation.id, messageId: "", content: "", isActive: true });
 
+			let lastVoiceStreaming: ChatStreamingState | undefined;
 			try {
 				for await (const streamEvent of nodeChatAdapter.regenerateMessage(
 					conversation.id,
@@ -777,10 +801,17 @@ export function Chat() {
 							: applied.conversation;
 					cacheConversation(grouped);
 					setStreamingMessage(applied.streamingMessage);
+					// Decoupled voice tap (only the answer text is read, invariant §3.7).
+					lastVoiceStreaming = applied.streamingMessage;
+					onVoiceAnswerProgress(applied.streamingMessage);
 					const toolEntry = applied.timelineEntry;
 					if (toolEntry) {
 						setTimelineEntries((current) => accumulateToolTimelineEntry(current, toolEntry));
 					}
+				}
+				// Flush the trailing remainder once the regenerated stream completes (terminal flush is idempotent).
+				if (lastVoiceStreaming) {
+					onVoiceAnswerProgress({ ...lastVoiceStreaming, isActive: false });
 				}
 				// The stream events don't carry variant_group_id; the post-stream refetch loads it from persistence
 				// and groupMessageRevisions surfaces the newest sibling by default, so no explicit selection here.
@@ -813,6 +844,8 @@ export function Chat() {
 			selectedConversationId,
 			t,
 			toolsEnabled,
+			onVoiceTurnStart,
+			onVoiceAnswerProgress,
 		],
 	);
 
@@ -839,6 +872,8 @@ export function Chat() {
 			setStreamError(errorMessage(error));
 		} finally {
 			active.abortController.abort();
+			// Barge-in: cancelling generation halts voice playback immediately (acceptance: stop = halt playback).
+			onVoiceTurnStart();
 			const currentConversation = queryClient.getQueryData<ChatConversationModel>(
 				nodeChatQueryKeys.conversation(active.conversationId),
 			);
@@ -849,7 +884,7 @@ export function Chat() {
 			}
 			await refreshConversation(active.conversationId);
 		}
-	}, [cacheConversation, queryClient, refreshConversation]);
+	}, [cacheConversation, queryClient, refreshConversation, onVoiceTurnStart]);
 
 	const runConversationMutation = useCallback(
 		async (conversationId: string, mutate: () => Promise<ChatConversationModel>): Promise<void> => {

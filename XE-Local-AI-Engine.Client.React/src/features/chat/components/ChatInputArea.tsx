@@ -26,6 +26,8 @@ import type {
 	ModelOption,
 	ReasoningEffort,
 } from "@/features/chat/models/ChatModels";
+import { VoiceComposerControls } from "@/features/voice/components/VoiceComposerControls";
+import { VoiceStatusNotice } from "@/features/voice/components/VoiceStatusNotice";
 
 // The composer toolbar lives inside the Textarea's native bottomSection (Mantine 9.3+). The section has a fixed
 // height driven by --input-bottom-section-height (28px default); we override it to fit the 36px control row and
@@ -136,6 +138,9 @@ export function ChatInputArea({
 	// composer is interactive (not disabled / mid-send).
 	const fileAttachmentsEnabled = capabilities.showFileAttachmentControls && Boolean(onUploadFiles);
 	const attachmentControlsDisabled = disabled || isSending;
+	// Voice controls are dev-gated AND require the operator-owned manifest gate (capabilities.showVoiceControls,
+	// derived from manifest.Enabled). The leaf components additionally self-gate on the runtime context.
+	const showVoiceControls = developerMode && capabilities.showVoiceControls;
 
 	const handlePickFiles = (files: File[] | null): void => {
 		if (files && files.length > 0) {
@@ -297,6 +302,7 @@ export function ChatInputArea({
 						</ActionIcon>
 					</Tooltip>
 				) : null}
+				{showVoiceControls ? <VoiceComposerControls /> : null}
 				{contextUsage ? <ContextUsageBadge {...contextUsage} /> : null}
 			</Group>
 			<Button
@@ -347,6 +353,7 @@ export function ChatInputArea({
 					disabled={attachmentControlsDisabled}
 				/>
 			) : null}
+			{showVoiceControls ? <VoiceStatusNotice /> : null}
 			<Textarea
 				data-testid="chat-input"
 				placeholder={t("pages.chat.inputPlaceholder", "Message the local node")}

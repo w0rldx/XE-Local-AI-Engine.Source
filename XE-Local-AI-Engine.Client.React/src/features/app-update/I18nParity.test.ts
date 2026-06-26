@@ -75,3 +75,29 @@ describe("app-update i18n key parity (en ↔ de)", () => {
 		expect(appUpdateEnKeys.length).toBe(deAppUpdateKeys.length);
 	});
 });
+
+const enVoice = (en as LocaleShape)["voice"] as LocaleShape;
+const deVoice = (de as LocaleShape)["voice"] as LocaleShape;
+
+describe("voice i18n key parity (en ↔ de)", () => {
+	const voiceEnKeys = collectKeys(enVoice).map((k) => `voice.${k}`);
+	const voiceDeKeys = collectKeys(deVoice).map((k) => `voice.${k}`);
+
+	it("has at least one voice key in en.json", () => {
+		expect(voiceEnKeys.length).toBeGreaterThan(0);
+	});
+
+	it("every en.json voice key exists in de.json", () => {
+		const missing = voiceEnKeys.filter((key) => resolvePath(de as LocaleShape, key) === undefined);
+		expect(missing, `Keys present in en.json but missing in de.json: ${missing.join(", ")}`).toHaveLength(0);
+	});
+
+	it("every de.json voice key exists in en.json", () => {
+		const missing = voiceDeKeys.filter((key) => resolvePath(en as LocaleShape, key) === undefined);
+		expect(missing, `Keys present in de.json but missing in en.json: ${missing.join(", ")}`).toHaveLength(0);
+	});
+
+	it("en and de voice key counts are equal", () => {
+		expect(voiceEnKeys.length).toBe(voiceDeKeys.length);
+	});
+});

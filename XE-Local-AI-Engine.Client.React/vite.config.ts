@@ -4,13 +4,35 @@ import { devtools } from "@tanstack/devtools-vite";
 import { tanstackRouter } from "@tanstack/router-plugin/vite";
 import viteReact from "@vitejs/plugin-react";
 import UnoCSS from "unocss/vite";
-import { defineConfig, type ProxyOptions } from "vite";
+import { defineConfig, normalizePath, type ProxyOptions } from "vite";
+import { viteStaticCopy } from "vite-plugin-static-copy";
 
 import aspNetCoreDevelopmentCertificate from "./vite-plugins/aspnetcore-development-certificate";
 import tablerDevelopmentBugfix from "./vite-plugins/tabler-development-bugfix";
 import fs from "node:fs";
 import path from "node:path";
 
+// onnxruntime-web ships the WASM/JSEP binaries the in-browser TTS runtime (Kokoro via @huggingface/transformers)
+// loads at runtime. It is a transitive dependency, so under pnpm it is NOT hoisted to the top-level node_modules —
+// it lives under node_modules/.pnpm/onnxruntime-web@<version-hash>/. We resolve its absolute `dist` directory (no
+// wildcard in the directory path) so the static-copy glob's only wildcard is the filename and the binaries land FLAT
+// in the served `/ort` dir (the runtime points ORT's `wasm.wasmPaths` at `/ort/` — see KokoroProvider/TtsWorker).
+function resolveOnnxRuntimeWebDistDir(): string {
+	const hoisted = path.resolve(__dirname, "node_modules/onnxruntime-web/dist");
+	if (fs.existsSync(hoisted)) {
+		return hoisted;
+	}
+
+	const pnpmDir = path.resolve(__dirname, "node_modules/.pnpm");
+	const pnpmEntry = fs.readdirSync(pnpmDir).find((name) => name.startsWith("onnxruntime-web@"));
+	if (!pnpmEntry) {
+		throw new Error("onnxruntime-web not found in node_modules — install dependencies before building.");
+	}
+
+	return path.join(pnpmDir, pnpmEntry, "node_modules/onnxruntime-web/dist");
+}
+
+const ortWasmCopySource = normalizePath(path.join(resolveOnnxRuntimeWebDistDir(), "*.{wasm,mjs}"));
 
 // The version shown in the About dialog must match the released artifact without a second hand-maintained constant.
 // Directory.Build.props is the single source of truth for the .NET assembly version AND `vpk --packVersion`; parse it
@@ -86,9 +108,23 @@ export default defineConfig(({ command, mode }) => {
 			UnoCSS(),
 			aspNetCoreDevelopmentCertificate({ certificateName: "c0re.client.react.web" }),
 			tablerDevelopmentBugfix(),
+			viteStaticCopy({
+				// `stripBase: true` flattens the matched files into `dist/ort/` (otherwise the deep node_modules path is
+				// reconstructed under the dest).
+				targets: [{ src: ortWasmCopySource, dest: "ort", rename: { stripBase: true } }],
+			}),
 		],
+		// WebGPU needs NO COOP/COEP / cross-origin isolation (only multithreaded SharedArrayBuffer WASM does), so no
+		// cross-origin headers are configured here — see the voice runtime plan §13.
+		assetsInclude: ["**/*.onnx"],
+		// Dedicated ES-module Web Worker (TtsWorker.ts) runs Kokoro synthesis off the main thread; the WebGPU ORT
+		// execution provider forbids ORT's `wasm.proxy`, so an own worker is mandatory and must be emitted as ESM.
+		worker: { format: "es" },
 		optimizeDeps: {
 			include: ["@tanstack/react-form", "@tanstack/react-form-devtools"],
+			// esbuild's dep pre-bundling chokes on the WASM/dynamic imports inside these packages; exclude them so
+			// Vite serves their real ESM (the worker + Kokoro load onnxruntime-web/transformers at runtime).
+			exclude: ["@huggingface/transformers", "onnxruntime-web"],
 		},
 		resolve: {
 			alias: [

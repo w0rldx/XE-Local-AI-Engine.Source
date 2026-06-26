@@ -266,6 +266,10 @@ export interface ChatUiCapabilities {
 	// When true the chat composer renders the agent-mode toggle + agent picker. Derived from the node's
 	// agentManagement surface capability (see ChatCapabilityGates.buildChatUiCapabilities).
 	readonly showAgentControls: boolean;
+	// When true the chat composer renders the voice controls (toggle, profile, rate) + per-message Play. Derived
+	// from the node `voice` surface flag AND the operator-owned manifest.Enabled (see buildChatUiCapabilities).
+	// Voice UI is additionally dev-gated at the render site.
+	readonly showVoiceControls: boolean;
 }
 
 export interface ChatDisplayShellProps {

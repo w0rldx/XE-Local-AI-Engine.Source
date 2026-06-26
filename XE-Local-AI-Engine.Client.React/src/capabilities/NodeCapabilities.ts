@@ -13,6 +13,10 @@ export interface ChatCapabilities {
 	// agentManagement surface capability — same flag, surfaced here so ChatCapabilityGates can derive
 	// showAgentControls without reaching outside the chat capabilities bag.
 	readonly agentManagement?: boolean;
+	// Node-level availability of the client voice (TTS) feature surface. The ACTUAL gate for voice UI also
+	// requires the operator-owned manifest.Enabled (server-state) — this flag only marks the surface as present
+	// in the build. buildChatUiCapabilities combines it with manifest.Enabled to derive showVoiceControls.
+	readonly voice?: boolean;
 }
 
 export interface NodeCapabilityConfig {
@@ -54,6 +58,9 @@ export const nodeCapabilities: NodeCapabilityConfig = {
 		// nodeCapabilities.agentManagement. Repeated here so ChatCapabilityGates derives showAgentControls
 		// without a cross-capability dependency.
 		agentManagement: true,
+		// Client voice (TTS) surface is present in the build. It stays dev-gated and additionally requires the
+		// operator-owned manifest.Enabled before any voice UI shows (see buildChatUiCapabilities).
+		voice: true,
 	},
 	// Central-Platform surfaces (Node Binding + Dashboard + Cloud Settings) are the trio that only make sense once
 	// the node is paired to a Central Platform. In the local-only (LocalTester) profile — no CentralPlatform:BaseUrl

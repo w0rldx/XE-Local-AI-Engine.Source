@@ -594,6 +594,9 @@ export const zXeLocalAiEngineClientEndpointsNodeSettingsV1NodeSettingsResponse =
 		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" })
 		.optional(),
 	samplingDefaults: zXeLocalAiEngineClientModelsSamplingOptions.nullish(),
+	voiceFeatureEnabled: z.boolean().nullish(),
+	allowedVoiceModels: z.array(z.string()).nullish(),
+	defaultVoiceProfile: z.string().nullish(),
 });
 
 export const zXeLocalAiEngineClientEndpointsNodeSettingsV1SaveNodeSettingsRequest = z.object({
@@ -659,6 +662,9 @@ export const zXeLocalAiEngineClientEndpointsNodeSettingsV1SaveNodeSettingsReques
 		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" })
 		.nullish(),
 	samplingDefaults: zXeLocalAiEngineClientModelsSamplingOptions.nullish(),
+	voiceFeatureEnabled: z.boolean().nullish(),
+	allowedVoiceModels: z.array(z.string()).nullish(),
+	defaultVoiceProfile: z.string().nullish(),
 });
 
 /**
@@ -2150,6 +2156,46 @@ export const zXeLocalAiEngineClientEndpointsLocalChatV1UploadConversationFileReq
 	file: z.string().nullish(),
 });
 
+export const zXeLocalAiEngineClientEndpointsVoiceV1VoiceManifestModelFileDto = z.object({
+	dtype: z.string().optional(),
+	file: z.string().optional(),
+	byteSize: z.coerce
+		.bigint()
+		.min(BigInt("-9223372036854775808"), { error: "Invalid value: Expected int64 to be >= -9223372036854775808" })
+		.max(BigInt("9223372036854775807"), { error: "Invalid value: Expected int64 to be <= 9223372036854775807" })
+		.optional(),
+	sha256: z.string().optional(),
+	downloadUrl: z.string().optional(),
+});
+
+export const zXeLocalAiEngineClientEndpointsVoiceV1VoiceManifestModelDto = z.object({
+	id: z.string().optional(),
+	displayName: z.string().optional(),
+	language: z.string().optional(),
+	version: z.string().optional(),
+	files: z.array(zXeLocalAiEngineClientEndpointsVoiceV1VoiceManifestModelFileDto).optional(),
+});
+
+export const zXeLocalAiEngineClientEndpointsVoiceV1VoiceManifestVoiceDto = z.object({
+	id: z.string().optional(),
+	name: z.string().optional(),
+	language: z.string().optional(),
+	gender: z.string().optional(),
+});
+
+export const zXeLocalAiEngineClientEndpointsVoiceV1VoiceManifestRemoteFallbackDto = z.object({
+	enabled: z.boolean().optional(),
+	endpoint: z.string().nullish(),
+});
+
+export const zXeLocalAiEngineClientEndpointsVoiceV1VoiceManifestResponse = z.object({
+	enabled: z.boolean().optional(),
+	models: z.array(zXeLocalAiEngineClientEndpointsVoiceV1VoiceManifestModelDto).optional(),
+	voices: z.array(zXeLocalAiEngineClientEndpointsVoiceV1VoiceManifestVoiceDto).optional(),
+	defaultVoiceId: z.string().optional(),
+	remoteFallback: zXeLocalAiEngineClientEndpointsVoiceV1VoiceManifestRemoteFallbackDto.nullish(),
+});
+
 /**
  * Success
  */
@@ -3250,3 +3296,8 @@ export const zUploadConversationFilePath = z.object({
  * Success
  */
 export const zUploadConversationFileResponse = zXeLocalAiEngineClientEndpointsLocalChatV1ConversationUploadedFileResponse;
+
+/**
+ * Success
+ */
+export const zGetVoiceManifestResponse = zXeLocalAiEngineClientEndpointsVoiceV1VoiceManifestResponse;

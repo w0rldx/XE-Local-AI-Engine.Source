@@ -227,6 +227,9 @@ import type {
 	GetTutorialStateData,
 	GetTutorialStateErrors,
 	GetTutorialStateResponses,
+	GetVoiceManifestData,
+	GetVoiceManifestErrors,
+	GetVoiceManifestResponses,
 	HarvestGoldenConversationsData,
 	HarvestGoldenConversationsErrors,
 	HarvestGoldenConversationsResponses,
@@ -538,6 +541,7 @@ import {
 	zGetToolCapableModelsResponse,
 	zGetToolCatalogResponse,
 	zGetTutorialStateResponse,
+	zGetVoiceManifestResponse,
 	zHarvestGoldenConversationsPath,
 	zHarvestGoldenConversationsResponse,
 	zImportAgentTemplatesBody,
@@ -3671,4 +3675,24 @@ export const uploadConversationFile = <ThrowOnError extends boolean = false>(
 			"Content-Type": null,
 			...options.headers,
 		},
+	});
+
+export const getVoiceManifest = <ThrowOnError extends boolean = false>(options?: Options<GetVoiceManifestData, ThrowOnError>) =>
+	(options?.client ?? client).get<GetVoiceManifestResponses, GetVoiceManifestErrors, ThrowOnError>({
+		requestValidator: async (data) =>
+			await z
+				.object({
+					body: z.never().optional(),
+					path: z.never().optional(),
+					query: z.never().optional(),
+				})
+				.parseAsync(data),
+		responseType: "json",
+		responseValidator: async (data) => await zGetVoiceManifestResponse.parseAsync(data),
+		security: [
+			{ scheme: "bearer", type: "http" },
+			{ scheme: "bearer", type: "http" },
+		],
+		url: "/api/local/v1/voice/manifest",
+		...options,
 	});
