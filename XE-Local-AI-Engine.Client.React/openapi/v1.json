@@ -6074,6 +6074,40 @@
           }
         ]
       }
+    },
+    "/api/local/v1/voice/manifest": {
+      "get": {
+        "tags": [
+          "Voice"
+        ],
+        "operationId": "getVoiceManifest",
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/XE_Local_AI_EngineClientEndpointsVoiceV1VoiceManifestResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "403": {
+            "description": "Forbidden"
+          }
+        },
+        "security": [
+          {
+            "JWTBearerAuth": []
+          },
+          {
+            "Bearer": []
+          }
+        ]
+      }
     }
   },
   "components": {
@@ -7064,6 +7098,21 @@
                 "$ref": "#/components/schemas/XE_Local_AI_EngineClientModelsSamplingOptions"
               }
             ]
+          },
+          "voiceFeatureEnabled": {
+            "type": "boolean",
+            "nullable": true
+          },
+          "allowedVoiceModels": {
+            "type": "array",
+            "nullable": true,
+            "items": {
+              "type": "string"
+            }
+          },
+          "defaultVoiceProfile": {
+            "type": "string",
+            "nullable": true
           }
         }
       },
@@ -7228,6 +7277,21 @@
                 "$ref": "#/components/schemas/XE_Local_AI_EngineClientModelsSamplingOptions"
               }
             ]
+          },
+          "voiceFeatureEnabled": {
+            "type": "boolean",
+            "nullable": true
+          },
+          "allowedVoiceModels": {
+            "type": "array",
+            "nullable": true,
+            "items": {
+              "type": "string"
+            }
+          },
+          "defaultVoiceProfile": {
+            "type": "string",
+            "nullable": true
           }
         }
       },
@@ -10642,6 +10706,115 @@
           "file": {
             "type": "string",
             "format": "binary",
+            "nullable": true
+          }
+        }
+      },
+      "XE_Local_AI_EngineClientEndpointsVoiceV1VoiceManifestResponse": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "enabled": {
+            "type": "boolean"
+          },
+          "models": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/XE_Local_AI_EngineClientEndpointsVoiceV1VoiceManifestModelDto"
+            }
+          },
+          "voices": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/XE_Local_AI_EngineClientEndpointsVoiceV1VoiceManifestVoiceDto"
+            }
+          },
+          "defaultVoiceId": {
+            "type": "string"
+          },
+          "remoteFallback": {
+            "nullable": true,
+            "oneOf": [
+              {
+                "$ref": "#/components/schemas/XE_Local_AI_EngineClientEndpointsVoiceV1VoiceManifestRemoteFallbackDto"
+              }
+            ]
+          }
+        }
+      },
+      "XE_Local_AI_EngineClientEndpointsVoiceV1VoiceManifestModelDto": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "displayName": {
+            "type": "string"
+          },
+          "language": {
+            "type": "string"
+          },
+          "version": {
+            "type": "string"
+          },
+          "files": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/XE_Local_AI_EngineClientEndpointsVoiceV1VoiceManifestModelFileDto"
+            }
+          }
+        }
+      },
+      "XE_Local_AI_EngineClientEndpointsVoiceV1VoiceManifestModelFileDto": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "dtype": {
+            "type": "string"
+          },
+          "file": {
+            "type": "string"
+          },
+          "byteSize": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "sha256": {
+            "type": "string"
+          },
+          "downloadUrl": {
+            "type": "string"
+          }
+        }
+      },
+      "XE_Local_AI_EngineClientEndpointsVoiceV1VoiceManifestVoiceDto": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "language": {
+            "type": "string"
+          },
+          "gender": {
+            "type": "string"
+          }
+        }
+      },
+      "XE_Local_AI_EngineClientEndpointsVoiceV1VoiceManifestRemoteFallbackDto": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "enabled": {
+            "type": "boolean"
+          },
+          "endpoint": {
+            "type": "string",
             "nullable": true
           }
         }

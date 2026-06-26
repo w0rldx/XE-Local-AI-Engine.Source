@@ -312,6 +312,9 @@ export type XeLocalAiEngineClientEndpointsNodeSettingsV1NodeSettingsResponse = {
 	minMaxPendingToolCallAgeMinutes?: number;
 	maxAllowedMaxPendingToolCallAgeMinutes?: number;
 	samplingDefaults?: XeLocalAiEngineClientModelsSamplingOptions | null;
+	voiceFeatureEnabled?: boolean | null;
+	allowedVoiceModels?: Array<string> | null;
+	defaultVoiceProfile?: string | null;
 };
 
 export type XeLocalAiEngineClientModelsSamplingOptions = {
@@ -348,6 +351,9 @@ export type XeLocalAiEngineClientEndpointsNodeSettingsV1SaveNodeSettingsRequest 
 	agentHomeMaxPatchBytes?: number | null;
 	maxPendingToolCallAgeMinutes?: number | null;
 	samplingDefaults?: XeLocalAiEngineClientModelsSamplingOptions | null;
+	voiceFeatureEnabled?: boolean | null;
+	allowedVoiceModels?: Array<string> | null;
+	defaultVoiceProfile?: string | null;
 };
 
 /**
@@ -1513,6 +1519,42 @@ export type XeLocalAiEngineClientEndpointsLocalChatV1ListConversationUploadsRequ
 
 export type XeLocalAiEngineClientEndpointsLocalChatV1UploadConversationFileRequest = {
 	file?: Blob | File | null;
+};
+
+export type XeLocalAiEngineClientEndpointsVoiceV1VoiceManifestResponse = {
+	enabled?: boolean;
+	models?: Array<XeLocalAiEngineClientEndpointsVoiceV1VoiceManifestModelDto>;
+	voices?: Array<XeLocalAiEngineClientEndpointsVoiceV1VoiceManifestVoiceDto>;
+	defaultVoiceId?: string;
+	remoteFallback?: XeLocalAiEngineClientEndpointsVoiceV1VoiceManifestRemoteFallbackDto | null;
+};
+
+export type XeLocalAiEngineClientEndpointsVoiceV1VoiceManifestModelDto = {
+	id?: string;
+	displayName?: string;
+	language?: string;
+	version?: string;
+	files?: Array<XeLocalAiEngineClientEndpointsVoiceV1VoiceManifestModelFileDto>;
+};
+
+export type XeLocalAiEngineClientEndpointsVoiceV1VoiceManifestModelFileDto = {
+	dtype?: string;
+	file?: string;
+	byteSize?: number;
+	sha256?: string;
+	downloadUrl?: string;
+};
+
+export type XeLocalAiEngineClientEndpointsVoiceV1VoiceManifestVoiceDto = {
+	id?: string;
+	name?: string;
+	language?: string;
+	gender?: string;
+};
+
+export type XeLocalAiEngineClientEndpointsVoiceV1VoiceManifestRemoteFallbackDto = {
+	enabled?: boolean;
+	endpoint?: string | null;
 };
 
 export type GetTutorialStateData = {
@@ -5368,3 +5410,30 @@ export type UploadConversationFileResponses = {
 };
 
 export type UploadConversationFileResponse = UploadConversationFileResponses[keyof UploadConversationFileResponses];
+
+export type GetVoiceManifestData = {
+	body?: never;
+	path?: never;
+	query?: never;
+	url: "/api/local/v1/voice/manifest";
+};
+
+export type GetVoiceManifestErrors = {
+	/**
+	 * Unauthorized
+	 */
+	401: unknown;
+	/**
+	 * Forbidden
+	 */
+	403: unknown;
+};
+
+export type GetVoiceManifestResponses = {
+	/**
+	 * Success
+	 */
+	200: XeLocalAiEngineClientEndpointsVoiceV1VoiceManifestResponse;
+};
+
+export type GetVoiceManifestResponse = GetVoiceManifestResponses[keyof GetVoiceManifestResponses];

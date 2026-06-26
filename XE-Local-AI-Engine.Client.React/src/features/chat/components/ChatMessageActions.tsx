@@ -13,6 +13,7 @@ import { useTranslation } from "react-i18next";
 
 import { MessageFeedbackControl } from "@/features/chat/components/MessageFeedbackControl";
 import type { ChatFeedbackRating, ChatMessageFeedback, ChatMessageModel } from "@/features/chat/models/ChatModels";
+import { VoiceMessagePlayButton } from "@/features/voice/components/VoiceMessagePlayButton";
 
 /** Prev/next navigation across the sibling revisions (variant group) of an assistant turn. */
 export interface ChatMessageRevisionNav {
@@ -61,7 +62,15 @@ export function ChatMessageActions({
 	onSubmitFeedback,
 	onToggleTokensPerSecond,
 }: ChatMessageActionsProps) {
-	const { copy: canCopy, regenerate: canRegenerate, branch: canBranch, revisionNav: showRevisionNav, feedback: showFeedback, menu: showMenu, showTokensPerSecond } = capabilities;
+	const {
+		copy: canCopy,
+		regenerate: canRegenerate,
+		branch: canBranch,
+		revisionNav: showRevisionNav,
+		feedback: showFeedback,
+		menu: showMenu,
+		showTokensPerSecond,
+	} = capabilities;
 	const { t } = useTranslation();
 
 	return (
@@ -123,6 +132,7 @@ export function ChatMessageActions({
 					)}
 				</CopyButton>
 			) : null}
+			<VoiceMessagePlayButton message={message} />
 			{canRegenerate ? (
 				<Tooltip label={t("pages.chat.actions.regenerate", "Regenerate response")} withArrow={true}>
 					<ActionIcon

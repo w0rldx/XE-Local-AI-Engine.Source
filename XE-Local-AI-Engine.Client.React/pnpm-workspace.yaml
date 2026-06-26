@@ -3,6 +3,11 @@ trustPolicy: no-downgrade
 
 allowBuilds:
   msgpackr-extract: true
+  # Node-only / native build scripts pulled transitively by kokoro-js → @huggingface/transformers. The browser TTS
+  # runtime uses onnxruntime-WEB (prebuilt wasm), never these; keep them unbuilt so install runs no native scripts.
+  onnxruntime-node: false
+  protobufjs: false
+  sharp: false
 
 trustPolicyExclude:
   - 'semver@6.3.1'

@@ -36,6 +36,7 @@ describe("nodeCapabilities", () => {
 			fileAttachments: true,
 			imageAttachments: false,
 			agentManagement: true,
+			voice: true,
 		});
 	});
 

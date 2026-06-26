@@ -2556,5 +2556,45 @@
 		"userNameNotMatchCriteria": "Username can only contain letters, numbers, dots, underscores, and hyphens and cannot be empty",
 		"defaultErrorMessage": "An error occurred",
 		"tooManyRequests": "Too many requests. Please try again later."
+	},
+	"voice": {
+		"composer": {
+			"label": "Voice output",
+			"enabledTooltip": "Voice output is on",
+			"disabledTooltip": "Voice output is off",
+			"enableLabel": "Read answers aloud",
+			"autoPlayLabel": "Auto-play assistant answers",
+			"profileLabel": "Voice",
+			"rateLabel": "Speaking rate"
+		},
+		"message": {
+			"play": "Read this answer aloud",
+			"stop": "Stop reading"
+		},
+		"notice": {
+			"tapToEnable": "Tap or press a key to enable audio playback.",
+			"downloading": "Downloading voice model…",
+			"downloadProgress": "{{loaded}} / {{total}} MB",
+			"downloadError": "The voice model could not be downloaded. Falling back to browser speech.",
+			"webSpeechFallback": "Using browser speech — WebGPU is unavailable."
+		},
+		"settings": {
+			"title": "Voice output (text-to-speech)",
+			"operatorGate": "Node voice feature:",
+			"gateOn": "Enabled",
+			"gateOff": "Disabled",
+			"enableLabel": "Read answers aloud on this device",
+			"enableDescription": "Stored in this browser only. Synthesis runs locally; no audio leaves the device.",
+			"autoPlayLabel": "Auto-play assistant answers",
+			"profileLabel": "Voice",
+			"rateLabel": "Speaking rate",
+			"disabledOnNode": "Voice output is disabled for this node by the operator.",
+			"operatorSectionTitle": "Operator controls (this node)",
+			"operatorEnableLabel": "Enable voice feature on this node",
+			"operatorEnableDescription": "Master gate for every user on this node. Turning it off disables voice output everywhere.",
+			"operatorDefaultProfileLabel": "Default voice",
+			"operatorDefaultProfileDescription": "The voice new users start with on this node.",
+			"operatorSaveError": "Could not save the node voice setting."
+		}
 	}
 }

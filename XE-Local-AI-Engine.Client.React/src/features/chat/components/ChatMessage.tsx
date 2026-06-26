@@ -6,7 +6,11 @@ import type { ReactNode } from "react";
 import { useTranslation } from "react-i18next";
 
 import { ChatMarkdown } from "@/features/chat/components/ChatMarkdown";
-import { ChatMessageActions, type ChatMessageActionCapabilities, type ChatMessageRevisionNav } from "@/features/chat/components/ChatMessageActions";
+import {
+	type ChatMessageActionCapabilities,
+	ChatMessageActions,
+	type ChatMessageRevisionNav,
+} from "@/features/chat/components/ChatMessageActions";
 import { CHAT_ACCENT, CHAT_ASSISTANT_BACKGROUND, CHAT_ASSISTANT_BORDER } from "@/features/chat/components/ChatVisualTokens";
 import { MessageParts } from "@/features/chat/components/MessageParts";
 import type {
@@ -17,6 +21,7 @@ import type {
 	ReasoningEffort,
 } from "@/features/chat/models/ChatModels";
 import { useNodeChatPreferencesStore } from "@/features/chat/stores/NodeChatPreferencesStore";
+import { useVoiceRuntime } from "@/features/voice/VoiceRuntimeContext";
 
 const EMPTY_PARTS: ChatMessagePart[] = [];
 
@@ -102,6 +107,10 @@ export function ChatMessage({
 	const reducedMotion = useReducedMotion();
 	const showTokensPerSecond = useNodeChatPreferencesStore((state) => state.showTokensPerSecond);
 	const setShowTokensPerSecond = useNodeChatPreferencesStore((state) => state.actions.setShowTokensPerSecond);
+	// When this turn's answer is being read aloud, silence the screen reader on the answer block to avoid a
+	// double-read against the active TTS (R-V MEDIUM-6 / plan §10). Inert when no voice provider is mounted.
+	const { playingMessageId } = useVoiceRuntime();
+	const isBeingSpoken = playingMessageId === message.id;
 	const label = roleLabel(message.role);
 	const userMessage = message.role === "user";
 	const assistantMessage = message.role === "assistant";
@@ -255,6 +264,7 @@ export function ChatMessage({
 							<Paper
 								withBorder={true}
 								p="sm"
+								aria-live={assistantMessage && isBeingSpoken ? "off" : undefined}
 								style={{
 									background: assistantMessage ? CHAT_ASSISTANT_BACKGROUND : "var(--mantine-color-body)",
 									borderColor: assistantMessage ? CHAT_ASSISTANT_BORDER : undefined,
@@ -268,7 +278,7 @@ export function ChatMessage({
 						</m.div>
 					) : null}
 				</AnimatePresence>
-				{(errorText || failureCategory === "ModelNotInstalled") ? (
+				{errorText || failureCategory === "ModelNotInstalled" ? (
 					<Alert
 						color="red"
 						variant="light"
@@ -287,12 +297,7 @@ export function ChatMessage({
 									: errorText}
 							</Text>
 							{failureCategory === "ModelNotInstalled" ? (
-								<Anchor
-									component={Link}
-									to="/models"
-									size="sm"
-									data-testid={`chat-message-error-models-link-${message.id}`}
-								>
+								<Anchor component={Link} to="/models" size="sm" data-testid={`chat-message-error-models-link-${message.id}`}>
 									{t("pages.chat.error.goToModels", "Go to Models")}
 								</Anchor>
 							) : null}

@@ -85,6 +85,7 @@ import {
 	getToolCapableModels,
 	getToolCatalog,
 	getTutorialState,
+	getVoiceManifest,
 	harvestGoldenConversations,
 	importAgentTemplates,
 	inspectGgufRepository,
@@ -302,6 +303,8 @@ import type {
 	GetToolCatalogResponse,
 	GetTutorialStateData,
 	GetTutorialStateResponse,
+	GetVoiceManifestData,
+	GetVoiceManifestResponse,
 	HarvestGoldenConversationsData,
 	HarvestGoldenConversationsResponse,
 	ImportAgentTemplatesData,
@@ -3243,3 +3246,24 @@ export const uploadConversationFileMutation = (
 	};
 	return mutationOptions;
 };
+
+export const getVoiceManifestQueryKey = (options?: Options<GetVoiceManifestData>) => createQueryKey("getVoiceManifest", options);
+
+export const getVoiceManifestOptions = (options?: Options<GetVoiceManifestData>) =>
+	queryOptions<
+		GetVoiceManifestResponse,
+		AxiosError<DefaultError>,
+		GetVoiceManifestResponse,
+		ReturnType<typeof getVoiceManifestQueryKey>
+	>({
+		queryFn: async ({ queryKey, signal }) => {
+			const { data } = await getVoiceManifest({
+				...options,
+				...queryKey[0],
+				signal,
+				throwOnError: true,
+			});
+			return data;
+		},
+		queryKey: getVoiceManifestQueryKey(options),
+	});
