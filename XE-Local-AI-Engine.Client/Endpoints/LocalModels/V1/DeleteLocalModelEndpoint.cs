@@ -3,15 +3,15 @@ namespace XE_Local_AI_Engine.Client.Endpoints.LocalModels.V1;
 using FastEndpoints;
 using XE_Local_AI_Engine.Client.Endpoints.Common;
 using XE_Local_AI_Engine.Client.Services.Auth;
-using XE_Local_AI_Engine.Client.Services.Chat;
 using XE_Local_AI_Engine.Client.Services.Validation;
+using XE_Local_AI_Engine.Providers.Abstractions.Gguf;
 
 public sealed class DeleteLocalModelEndpoint(
-    IOllamaModelService modelService,
+    IGgufModelStore ggufModelStore,
     ModelNameValidator modelNameValidator) : Endpoint<DeleteLocalModelRequest, DeleteLocalModelResponse>
 {
+    private readonly IGgufModelStore _ggufModelStore = ggufModelStore ?? throw new ArgumentNullException(nameof(ggufModelStore));
     private readonly ModelNameValidator _modelNameValidator = modelNameValidator ?? throw new ArgumentNullException(nameof(modelNameValidator));
-    private readonly IOllamaModelService _modelService = modelService ?? throw new ArgumentNullException(nameof(modelService));
 
     public override void Configure()
     {
@@ -30,7 +30,11 @@ public sealed class DeleteLocalModelEndpoint(
         }
 
         var modelName = decodedModelName!.Trim();
-        await _modelService.DeleteModelAsync(modelName, ct).ConfigureAwait(false);
+
+        // Local models are GGUF files served by the bundled llama.cpp runtime (Ollama is no longer a runtime), so delete
+        // via the GGUF store. Its DeleteModelAsync is idempotent — an already-ejected/uninstalled model removes cleanly
+        // rather than 500ing — so no pre-existence probe is needed.
+        await _ggufModelStore.DeleteModelAsync(modelName, ct).ConfigureAwait(false);
         await Send.OkAsync(new DeleteLocalModelResponse
         {
             ModelName = modelName,
