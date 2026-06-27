@@ -7,6 +7,7 @@ import { useTranslation } from "react-i18next";
 import { nodeRoutePaths } from "@/capabilities/NodeCapabilities";
 import { toast } from "@/core/ui/notifications/Toast";
 import { HardwareProfileCard } from "@/features/model-fit/components/HardwareProfileCard";
+import { InferenceProfilePanel } from "@/features/model-fit/components/InferenceProfilePanel";
 import { formatModelFitTimestamp } from "@/features/model-fit/components/ModelFitFormatters";
 import { RecommendationTable } from "@/features/model-fit/components/RecommendationTable";
 import { useModelFitSchedulerEvents } from "@/features/model-fit/hooks/useModelFitSchedulerEvents";
@@ -299,6 +300,10 @@ export function ModelRecommendationsPage() {
 						) : null}
 					</Stack>
 				</Card>
+
+				{/* Inference Optimizer (Lane C3): tuned llama.cpp launch profiles for this node. A distinct, unobtrusive
+				    section below the recommendations — outcomes only (status + tok/s + VRAM), never raw launch flags. */}
+				<InferenceProfilePanel />
 			</Stack>
 		</Container>
 	);
