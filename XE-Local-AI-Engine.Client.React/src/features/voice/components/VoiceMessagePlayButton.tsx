@@ -6,11 +6,11 @@ import type { ChatMessageModel } from "@/features/chat/models/ChatModels";
 import { useVoicePreferencesStore } from "@/features/voice/VoicePreferencesStore";
 import { useVoiceRuntime } from "@/features/voice/VoiceRuntimeContext";
 
-// Per-message Play/Stop affordance (plan §7.3, R-V MEDIUM-10). Rendered inside the assistant turn's action row; it is
+// Per-message Play/Stop affordance. Rendered inside the assistant turn's action row; it is
 // self-gating, so it returns null unless voice is available (dev-gate + manifest) AND the user has voice on AND this
 // is a terminal assistant turn with speakable content. Clicking Play halts any current playback then plays THIS
 // message (runtime.speak does the barge-in); clicking Stop halts it. A new streaming turn / other Play resets the tag.
-// The engine/language is chosen by playMessage from the SELECTED voice ("selected voice always wins", D2), so this
+// The engine/language is chosen by playMessage from the SELECTED voice ("selected voice always wins"), so this
 // button no longer guesses a language from the answer text.
 
 interface VoiceMessagePlayButtonProps {

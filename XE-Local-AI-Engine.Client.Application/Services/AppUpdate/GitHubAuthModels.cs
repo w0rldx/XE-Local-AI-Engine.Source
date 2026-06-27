@@ -2,7 +2,7 @@ namespace XE_Local_AI_Engine.Client.Services.AppUpdate;
 
 /// <summary>
 ///     The result of beginning a GitHub device flow. <see cref="DeviceCode" /> is the SECRET polling credential — it
-///     stays server-side and is NEVER returned to React or placed in any endpoint DTO (sec H4); the user sees only
+///     stays server-side and is NEVER returned to React or placed in any endpoint DTO; the user sees only
 ///     <see cref="UserCode" /> and opens <see cref="VerificationUri" />.
 /// </summary>
 /// <param name="DeviceCode">The secret device verification code used to poll for the token. Server-side only.</param>

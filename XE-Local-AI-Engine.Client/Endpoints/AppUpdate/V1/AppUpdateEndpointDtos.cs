@@ -4,7 +4,7 @@ namespace XE_Local_AI_Engine.Client.Endpoints.AppUpdate.V1;
 // GitHub device-flow DTOs
 //
 // SECURITY INVARIANT: none of these contracts carries the GitHub access token OR the device_code. The device_code stays
-// server-side (sec H4); start returns only the user code + verification URI, and the token is held only in the encrypted
+// server-side; start returns only the user code + verification URI, and the token is held only in the encrypted
 // store. Tests AppUpdateContracts_ContainNoTokenField + GitHubAuth_Start_DoesNotReturnDeviceCode assert this.
 // ---------------------------------------------------------------------------
 

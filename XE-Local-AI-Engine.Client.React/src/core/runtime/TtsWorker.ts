@@ -1,4 +1,4 @@
-// Dedicated ES-module Web Worker running Kokoro TTS off the main thread (plan §3.4, §7.2).
+// Dedicated ES-module Web Worker running Kokoro TTS off the main thread.
 //
 // A dedicated worker is mandatory: the onnxruntime-web WebGPU execution provider forbids ORT's `wasm.proxy`, so the
 // only way to keep synthesis off the UI thread is to own this worker. Audio is streamed back chunk-by-chunk as
@@ -90,5 +90,5 @@ workerScope.addEventListener("message", (event) => {
 		);
 	}
 
-	// "cancel" is accepted for forward-compatibility; M1 barge-in is handled by stopping playback on the main thread.
+	// "cancel" is accepted for forward-compatibility; barge-in is currently handled by stopping playback on the main thread.
 });

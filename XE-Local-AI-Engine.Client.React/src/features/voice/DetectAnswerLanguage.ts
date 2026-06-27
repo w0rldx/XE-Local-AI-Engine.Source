@@ -1,4 +1,4 @@
-// Client-side answer-language heuristic (locked decision D2 / plan §15.1). The backend does NOT tag answers with a
+// Client-side answer-language heuristic. The backend does NOT tag answers with a
 // `contentLanguage`, so the voice runtime needs a cheap local guess to route synthesis: "en" → Kokoro (WebGPU/WASM),
 // "de"/other → Web Speech (Kokoro ships no German voice). This is deliberately small and conservative: it only
 // distinguishes German from English, defaulting to English when there is no positive German signal.

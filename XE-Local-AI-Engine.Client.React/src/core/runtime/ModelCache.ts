@@ -1,9 +1,9 @@
-// Download-on-demand + integrity-verified client cache for voice model weights (plan §3, §7.2, §10, decisions 2/11).
+// Download-on-demand + integrity-verified client cache for voice model weights.
 //
 // Files are fetched from a manifest-supplied URL, their SHA-256 verified against the manifest BEFORE caching (a
 // tampered URL can never poison the offline-forever cache), then stored keyed by `[modelId]::[version]::[file]`. A
 // version bump evicts the stale blob and re-downloads; while offline the runtime falls back to a cached blob and
-// warns. Progress + error events drive the download UI (Lane C). On any failure no partial blob is ever retained.
+// warns. Progress + error events drive the download UI. On any failure no partial blob is ever retained.
 
 import type { VoiceModelFile } from "./VoiceManifest";
 

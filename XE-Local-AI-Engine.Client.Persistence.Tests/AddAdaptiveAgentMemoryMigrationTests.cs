@@ -8,8 +8,8 @@ using XE_Local_AI_Engine.Client.Persistence.Implementation;
 using XE_Local_AI_Engine.Client.Persistence.Tests.Testing;
 
 /// <summary>
-///     Round-trips the additive adaptive-agent-memory migration (M1 memory_scope, M2 agent_execution_logs, M3
-///     conversations.memory_excluded, M4 agent_definitions.default_temporary_chat, M5
+///     Round-trips the additive adaptive-agent-memory migration (memory_scope, agent_execution_logs,
+///     conversations.memory_excluded, agent_definitions.default_temporary_chat,
 ///     agent_definitions.memory_extraction_enabled). Asserts the schema after applying up from the prior migration and
 ///     after rolling back.
 /// </summary>

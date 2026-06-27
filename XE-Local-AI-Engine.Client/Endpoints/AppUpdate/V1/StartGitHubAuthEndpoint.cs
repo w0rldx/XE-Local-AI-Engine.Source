@@ -8,7 +8,7 @@ using XE_Local_AI_Engine.Client.Services.Auth;
 /// <summary>
 ///     Begins the GitHub App device flow (POST github-auth/start). Calls <see cref="IGitHubAuthService.StartAsync" />,
 ///     stores the secret <c>device_code</c> server-side via <see cref="IGitHubDeviceFlowSession" />, and returns ONLY the
-///     user code + verification URI to React. The device_code is NEVER returned (sec H4).
+///     user code + verification URI to React. The device_code is NEVER returned.
 /// </summary>
 public sealed class StartGitHubAuthEndpoint(IGitHubAuthService authService, IGitHubDeviceFlowSession deviceFlowSession)
     : EndpointWithoutRequest<GitHubAuthStartResponse>, IDesktopOnlyEndpoint

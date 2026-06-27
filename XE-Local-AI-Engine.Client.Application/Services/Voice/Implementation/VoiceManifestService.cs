@@ -34,7 +34,7 @@ public sealed class VoiceManifestService(INodeSettingsStore nodeSettingsStore) :
             Voices = KokoroVoiceCatalog.Voices,
             DefaultVoiceId = defaultVoiceId,
 
-            // Remote TTS fallback is deferred in M1 (locked decision 8); the field is kept for forward-compat.
+            // Remote TTS fallback is deferred (not built yet); the field is kept for forward-compat.
             RemoteFallback = null
         };
     }

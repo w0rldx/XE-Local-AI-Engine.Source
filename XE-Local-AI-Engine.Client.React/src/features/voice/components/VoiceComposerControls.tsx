@@ -7,7 +7,7 @@ import { useVoicePreferencesStore, voicePreferencesRateBounds } from "@/features
 import { useVoiceRuntime } from "@/features/voice/VoiceRuntimeContext";
 
 // Composer voice controls: on/off toggle + (when on) a settings menu with the voice-profile picker, autoplay switch,
-// and speaking-rate slider (plan §7.3). Self-gates on the runtime context `enabled` flag (dev-gate + manifest.Enabled)
+// and speaking-rate slider. Self-gates on the runtime context `enabled` flag (dev-gate + manifest.Enabled)
 // so it renders nothing when voice is unavailable. State is the client VoicePreferencesStore + the manifest voices.
 
 export function VoiceComposerControls() {

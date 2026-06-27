@@ -115,7 +115,7 @@ export default defineConfig(({ command, mode }) => {
 			}),
 		],
 		// WebGPU needs NO COOP/COEP / cross-origin isolation (only multithreaded SharedArrayBuffer WASM does), so no
-		// cross-origin headers are configured here — see the voice runtime plan §13.
+		// cross-origin headers are configured here.
 		assetsInclude: ["**/*.onnx"],
 		// Dedicated ES-module Web Worker (TtsWorker.ts) runs Kokoro synthesis off the main thread; the WebGPU ORT
 		// execution provider forbids ORT's `wasm.proxy`, so an own worker is mandatory and must be emitted as ESM.
