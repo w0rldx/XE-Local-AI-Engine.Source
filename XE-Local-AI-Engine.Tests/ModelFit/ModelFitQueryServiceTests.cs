@@ -2,6 +2,7 @@ namespace XE_Local_AI_Engine.Tests.ModelFit;
 
 using Microsoft.Extensions.Logging.Abstractions;
 using OllamaSharp.Models;
+using XE_Local_AI_Engine.Client.Endpoints.ModelFit.V1.Mappers;
 using XE_Local_AI_Engine.Client.Persistence;
 using XE_Local_AI_Engine.Client.Persistence.Stores;
 using XE_Local_AI_Engine.Client.Services.Chat;
@@ -138,6 +139,27 @@ public sealed class ModelFitQueryServiceTests
 
         AssertEx.NotNull(view);
         AssertEx.True(view!.Recommendations[0].IsInstalled, "the stored flag is preserved when the node list cannot be read.");
+    }
+
+    [Test]
+    public async Task GetLatestRecommendationsAsync_WhenDiagnosticsJsonHasSignals_MapperExtractsBothFromBlob()
+    {
+        // Verifies the end-to-end blob path: release_date and is_trusted_publisher written by the parser into
+        // DiagnosticsJson are extracted by ModelFitMapper.ToResponse() and surface on the response DTO.
+        var harness = Harness.Create();
+        var snapshotId = harness.SeedLatestRecommendationSnapshot("coding");
+        const string diagnosticsJson = """{"release_date":"2026-01-15","is_trusted_publisher":false}""";
+        harness.RecommendationStore.Seed(snapshotId,
+            new ModelFitRecommendationInput(Rank: 1, "qwen3-coder", "qwen3-coder", Score: 80.0, "Good", "GPU", "Q4_K_M",
+                EstimatedTokensPerSecond: 30.0, RequiredRamMb: 4096d, RequiredVramMb: null, ContextTokens: 8192,
+                IsInstalled: false, "qwen3-coder", DiagnosticsJson: diagnosticsJson));
+
+        var view = await harness.Service.GetLatestRecommendationsAsync("coding", ProviderName, CancellationToken.None);
+
+        AssertEx.NotNull(view);
+        var response = view!.ToResponse();
+        AssertEx.Equal("2026-01-15", response.Recommendations[0].ReleaseDate);
+        AssertEx.False(response.Recommendations[0].IsTrustedPublisher);
     }
 
     private sealed class Harness

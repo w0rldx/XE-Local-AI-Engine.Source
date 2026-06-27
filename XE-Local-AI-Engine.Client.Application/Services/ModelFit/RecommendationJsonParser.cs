@@ -113,9 +113,10 @@ public static class RecommendationJsonParser
             wroteAny |= CopyProperty(model, "score_components", writer);
             wroteAny |= CopyProperty(model, "is_moe", writer);
             wroteAny |= CopyProperty(model, "params_b", writer);
-            // release_date rides the existing (already-persisted) diagnostics blob so the read mapper can surface it as a
-            // "newer model" signal without a new column/migration.
+            // release_date and is_trusted_publisher ride the existing (already-persisted) diagnostics blob so the read
+            // mapper can surface them as "newer model" and "publisher trust" signals without new columns/migrations.
             wroteAny |= CopyProperty(model, "release_date", writer);
+            wroteAny |= CopyProperty(model, "is_trusted_publisher", writer);
             writer.WriteEndObject();
 
             if (!wroteAny)

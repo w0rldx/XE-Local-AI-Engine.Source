@@ -1,5 +1,6 @@
 namespace XE_Local_AI_Engine.Client.Services.ModelFit.Implementation;
 
+using System.Globalization;
 using System.Text;
 using System.Text.Json;
 using XE_Local_AI_Engine.Client.Persistence;
@@ -43,6 +44,13 @@ public sealed class ModelFitRefreshService : IModelFitRefreshService
 
     /// <summary>How many GGUF repos to inspect per refresh (each inspect is an HTTP range read, not a download).</summary>
     private const int DefaultRepoSearchLimit = 12;
+
+    /// <summary>
+    ///     Capability-tier granularity for ranking (~1 GiB). Fitting models are bucketed by estimated footprint ÷ this so a
+    ///     trivially-larger model does not always outrank a much newer / more popular peer; within a tier the download and
+    ///     recency boosts decide.
+    /// </summary>
+    private const long CapabilityBucketBytes = 1024L * 1024 * 1024;
 
     /// <summary>
     ///     Max concurrent HF inspections per refresh. Bounded so a refresh is fast (the repos are inspected in parallel
@@ -287,18 +295,19 @@ public sealed class ModelFitRefreshService : IModelFitRefreshService
             inspectionGate.Dispose();
         }
 
-        // Rank the models that FIT by recommendation value, then cap to the limit. The previous order was
-        // OrderByDescending(HeadroomBytes) — most leftover VRAM first — which surfaced the SMALLEST fitting model and
-        // truncated the capable ones out of the limit (even on a roomy GPU). Instead lead with the MOST CAPABLE model
-        // that fits (largest estimated footprint ≈ largest param count at the chosen quant; the estimate already bakes
-        // in a 12% safety margin + runtime overhead, so "fits" is conservative), with a soft trusted-publisher nudge
-        // and download count as tie-breakers, then repo id for a deterministic order regardless of completion order.
+        // Rank the models that FIT, then cap to the limit. Capability-first but BUCKETED to ~1 GiB: leading with the raw
+        // estimated footprint made a trivially-larger model always outrank a much newer / far more popular peer, so we
+        // group similar-capability models into a tier (footprint ÷ 1 GiB) and let the popularity (downloads) and recency
+        // (last-modified) boosts decide WITHIN a tier. The estimate bakes in a 12% safety margin + runtime overhead, so
+        // "fits" is conservative. Trusted-publisher is a soft nudge and repo id the final deterministic tie-break (stable
+        // regardless of inspection completion order).
         return candidates
                .Where(candidate => candidate is not null)
                .Select(candidate => candidate!)
-               .OrderByDescending(candidate => candidate.Estimate.EstimatedBytes)
-               .ThenByDescending(candidate => candidate.IsTrustedPublisher)
+               .OrderByDescending(candidate => candidate.Estimate.EstimatedBytes / CapabilityBucketBytes)
                .ThenByDescending(candidate => candidate.Downloads)
+               .ThenByDescending(candidate => candidate.LastModified)
+               .ThenByDescending(candidate => candidate.IsTrustedPublisher)
                .ThenBy(candidate => candidate.RepoId, StringComparer.Ordinal)
                .Take(request.Limit)
                .ToList();
@@ -316,36 +325,47 @@ public sealed class ModelFitRefreshService : IModelFitRefreshService
     {
         var terms = ModelFitUseCaseSearch.Resolve(useCase);
 
-        var perTerm = await Task.WhenAll(terms.Select(term => SearchSingleTermAsync(term, cancellationToken)))
-                                .ConfigureAwait(false);
+        // Two discovery passes per term: Trending (current download/like velocity) AND LastModified (most recently
+        // updated). The recency pass surfaces newly-released big models that a trending-only search misses once the pool
+        // is capped, while trending keeps the established popular repos. Both passes are merged round-robin so neither
+        // crowds the other out of the bounded inspection budget.
+        var searches = terms
+                       .SelectMany(term => new[]
+                       {
+                           SearchSingleTermAsync(term, GgufSearchSort.Trending, cancellationToken),
+                           SearchSingleTermAsync(term, GgufSearchSort.LastModified, cancellationToken)
+                       })
+                       .ToList();
 
-        if (perTerm.All(static result => result is null))
+        var results = await Task.WhenAll(searches).ConfigureAwait(false);
+
+        if (results.All(static result => result is null))
         {
-            // Every term's search failed (e.g. the Hub is unreachable / every call timed out): surface a timeout so the
-            // caller's outer catch records a clean Failed run rather than a misleading empty Succeeded.
+            // Every search failed (e.g. the Hub is unreachable / every call timed out): surface a timeout so the caller's
+            // outer catch records a clean Failed run rather than a misleading empty Succeeded.
             throw new TimeoutException("GGUF discovery search failed for every use-case term.");
         }
 
-        var lists = perTerm.Where(static result => result is not null).Select(static result => result!).ToList();
+        var lists = results.Where(static result => result is not null).Select(static result => result!).ToList();
         return MergeReposRoundRobin(lists, DefaultRepoSearchLimit);
     }
 
     /// <summary>
-    ///     Runs one trending GGUF search for a single term under a per-call timeout. Returns the results, or
-    ///     <see langword="null" /> when this term's search timed out or failed (network/IO/parse) — a tolerated outcome
-    ///     merged away by <see cref="SearchCandidateReposAsync" />. Genuine outer-token cancellation (node shutdown) is
-    ///     re-thrown unchanged so the run records Cancelled.
+    ///     Runs one GGUF search for a single term under the given <paramref name="sort" /> and a per-call timeout. Returns
+    ///     the results, or <see langword="null" /> when this search timed out or failed (network/IO/parse) — a tolerated
+    ///     outcome merged away by <see cref="SearchCandidateReposAsync" />. Genuine outer-token cancellation (node
+    ///     shutdown) is re-thrown unchanged so the run records Cancelled.
     /// </summary>
-    private async Task<IReadOnlyList<GgufRepoSummary>?> SearchSingleTermAsync(string term, CancellationToken cancellationToken)
+    private async Task<IReadOnlyList<GgufRepoSummary>?> SearchSingleTermAsync(string term, GgufSearchSort sort, CancellationToken cancellationToken)
     {
         var query = new GgufSearchQuery
         {
             SearchText = term,
             Limit = DefaultRepoSearchLimit,
-            // Freshness-aware discovery: trending (HF recency-weighted popularity) instead of lifetime downloads, which
-            // is age-biased and surfaces years-old repos. The publisher-trust signal + the fit ranking keep quality up
+            // Sort is supplied by the caller — Trending (HF recency-weighted popularity) for the established-popular pass
+            // and LastModified for the freshness pass. The publisher-trust signal + the fit ranking keep quality up
             // without excluding any repo from the candidate pool.
-            Sort = GgufSearchSort.Trending
+            Sort = sort
         };
 
         using var searchCts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
@@ -448,9 +468,11 @@ public sealed class ModelFitRefreshService : IModelFitRefreshService
     }
 
     /// <summary>
-    ///     Inspects one repo, selects its best quant file, estimates the fit, and returns a ranked candidate — or
-    ///     <see langword="null" /> when the repo has no usable file, the file lacks the metadata to compute a weights term,
-    ///     or the estimate does not fit the budget.
+    ///     Inspects one repo, walks the quant ladder to pick the highest-quality quant whose memory-fit estimate fits the
+    ///     budget (down to the <see cref="QuantLadder.DefaultFloorQuant" /> quality floor), and returns a ranked candidate
+    ///     — or <see langword="null" /> when the repo has no usable file, no file has the metadata to compute a weights
+    ///     term, or no quant at or above the floor fits the budget. This is what keeps a large new model (whose default
+    ///     <c>Q4_K_M</c> is too big) in the list at the largest quant that actually runs instead of dropping it.
     /// </summary>
     private async Task<AdvisorRecommendation?> EvaluateRepoAsync(GgufRepoSummary summary,
         string quant,
@@ -462,29 +484,13 @@ public sealed class ModelFitRefreshService : IModelFitRefreshService
         var repoId = summary.RepoId;
         var detail = await _discovery.InspectRepoAsync(repoId, cancellationToken).ConfigureAwait(false);
 
-        var file = SelectQuantFile(detail.Files, quant);
-        if (file is null)
+        var selected = SelectBestFittingFile(detail.Files, quant, ctxTarget, profile);
+        if (selected is null)
         {
             return null;
         }
 
-        var estimate = _estimator.Estimate(file.Quant,
-            file.ParamCount,
-            file.SizeBytes,
-            file.BlockCount ?? 0,
-            file.AttentionHeadCountKV ?? 0,
-            file.EmbeddingLength ?? 0,
-            file.AttentionHeadCount ?? 0,
-            ctxTarget,
-            profile,
-            kvCacheQuantized: false);
-
-        // Drop insufficient-metadata files (no weights term computable) and non-fitting files.
-        if (estimate.EstimatedBytes <= _estimator.OverheadBytes || !estimate.Fits)
-        {
-            return null;
-        }
-
+        var (file, estimate) = selected.Value;
         var modelName = GgufModelName.Format(repoId, file.Quant);
         return new AdvisorRecommendation(repoId,
             modelName,
@@ -493,7 +499,58 @@ public sealed class ModelFitRefreshService : IModelFitRefreshService
             estimate,
             installedKeys.Contains(modelName),
             summary.IsTrustedPublisher,
-            summary.Downloads);
+            summary.Downloads,
+            summary.LastModified);
+    }
+
+    /// <summary>
+    ///     Walks the repo's files against the <see cref="QuantLadder" />: estimates every file, keeps only the ones that
+    ///     fit the budget, have a computable weights term, and sit at or above the quality floor, then returns the highest
+    ///     quality one that does not exceed the requested <paramref name="quant" /> ceiling. When the only fitting files are
+    ///     higher quality than the ceiling (a roomy box with no file at/below the target quant) it returns the smallest
+    ///     fitting one so the repo still surfaces. Returns <see langword="null" /> when nothing at or above the floor fits.
+    /// </summary>
+    private (GgufRepoFile File, MemoryFitEstimate Estimate)? SelectBestFittingFile(IReadOnlyList<GgufRepoFile> files,
+        string quant,
+        int ctxTarget,
+        HardwareProfile profile)
+    {
+        var ceilingRank = QuantLadder.QualityRank(quant);
+        var floorRank = QuantLadder.FloorRank;
+
+        var fitting = files
+                      .Select(file => (file, estimate: _estimator.Estimate(file.Quant,
+                          file.ParamCount,
+                          file.SizeBytes,
+                          file.BlockCount ?? 0,
+                          file.AttentionHeadCountKV ?? 0,
+                          file.EmbeddingLength ?? 0,
+                          file.AttentionHeadCount ?? 0,
+                          ctxTarget,
+                          profile,
+                          kvCacheQuantized: false), rank: QuantLadder.QualityRank(file.Quant)))
+                      // Drop insufficient-metadata files (no weights term), non-fitting files, and quants below the floor.
+                      .Where(candidate => candidate.estimate.EstimatedBytes > _estimator.OverheadBytes
+                                          && candidate.estimate.Fits
+                                          && candidate.rank <= floorRank)
+                      .ToList();
+
+        if (fitting.Count == 0)
+        {
+            return null;
+        }
+
+        // Prefer the highest quality at or below the requested ceiling (rank >= ceilingRank == quality <= ceiling). If every
+        // fitting file is higher quality than the ceiling, fall back to the smallest fitting (highest rank) so the repo is
+        // still recommended at a runnable quant.
+        // Estimated footprint is an explicit tie-break when two files share a rank (e.g. two off-ladder labels both map to
+        // the unknown rank, or a repo lists a quant twice) so the pick is deterministic regardless of file order.
+        var atOrBelowCeiling = fitting.Where(candidate => candidate.rank >= ceilingRank).ToList();
+        var chosen = atOrBelowCeiling.Count > 0
+            ? atOrBelowCeiling.OrderBy(candidate => candidate.rank).ThenBy(candidate => candidate.estimate.EstimatedBytes).First()
+            : fitting.OrderByDescending(candidate => candidate.rank).ThenBy(candidate => candidate.estimate.EstimatedBytes).First();
+
+        return (chosen.file, chosen.estimate);
     }
 
     private async Task<HashSet<string>> ListInstalledKeysAsync(CancellationToken cancellationToken)
@@ -508,21 +565,6 @@ public sealed class ModelFitRefreshService : IModelFitRefreshService
             _logger.LogDebug(exception, "Could not list installed GGUF models for advisor install-state; reporting all not-installed.");
             return new HashSet<string>(StringComparer.OrdinalIgnoreCase);
         }
-    }
-
-    /// <summary>
-    ///     Selects the file matching <paramref name="quant" /> (case-insensitive) when present; otherwise the first usable
-    ///     file in the repo. Returns <see langword="null" /> when the repo exposes no files.
-    /// </summary>
-    private static GgufRepoFile? SelectQuantFile(IReadOnlyList<GgufRepoFile> files, string quant)
-    {
-        if (files.Count == 0)
-        {
-            return null;
-        }
-
-        return files.FirstOrDefault(file => string.Equals(file.Quant, quant, StringComparison.OrdinalIgnoreCase))
-               ?? files[0];
     }
 
     /// <summary>
@@ -570,6 +612,16 @@ public sealed class ModelFitRefreshService : IModelFitRefreshService
                 writer.WriteString("repo_id", recommendation.RepoId);
                 writer.WriteString("file_name", recommendation.FileName);
                 writer.WriteBoolean("installed", recommendation.IsInstalled);
+                // Recency + trust boosts surfaced to the UI. release_date carries the repo's last-modified timestamp (a
+                // "newer model" signal); the parser preserves both in the recommendation diagnostics blob (no new column).
+                // Only emit a date when HF actually supplied one — a default(DateTimeOffset) would surface as a year-0001
+                // "ancient" date and wrongly sink the repo in the recency tie-break.
+                if (recommendation.LastModified != default)
+                {
+                    writer.WriteString("release_date", recommendation.LastModified.ToString("O", CultureInfo.InvariantCulture));
+                }
+
+                writer.WriteBoolean("is_trusted_publisher", recommendation.IsTrustedPublisher);
                 writer.WriteEndObject();
             }
 
@@ -594,8 +646,9 @@ public sealed class ModelFitRefreshService : IModelFitRefreshService
 
     /// <summary>
     ///     One ranked advisor candidate: the repo/file/quant identity plus its computed memory-fit estimate, the soft
-    ///     publisher-trust signal, and the repo's lifetime download count (both carried from the search summary as ranking
-    ///     tie-breakers — neither excludes a candidate).
+    ///     publisher-trust signal, the repo's lifetime download count, and the repo's last-modified timestamp (a
+    ///     "newer model" recency signal). Downloads / trust / recency are ranking boosts carried from the search summary —
+    ///     none excludes a candidate.
     /// </summary>
     private sealed record AdvisorRecommendation(
         string RepoId,
@@ -605,5 +658,6 @@ public sealed class ModelFitRefreshService : IModelFitRefreshService
         MemoryFitEstimate Estimate,
         bool IsInstalled,
         bool IsTrustedPublisher,
-        long Downloads);
+        long Downloads,
+        DateTimeOffset LastModified);
 }

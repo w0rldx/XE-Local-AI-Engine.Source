@@ -103,4 +103,35 @@ public sealed class RecommendationJsonParserTests
         AssertEx.Contains(diagnostics, "release_date");
         AssertEx.Contains(diagnostics, "2026-01-15");
     }
+
+    [Test]
+    public void Parse_WhenIsTrustedPublisherPresent_CarriesItIntoDiagnostics()
+    {
+        // is_trusted_publisher rides the existing diagnostics blob (no new column) so the read mapper can surface it.
+        const string json = """
+                            { "models": [ { "name": "qwen3-coder", "is_trusted_publisher": false } ] }
+                            """;
+
+        var result = RecommendationJsonParser.Parse(json);
+
+        AssertEx.True(result.IsSuccess);
+        var diagnostics = AssertEx.NotNull(result.Recommendations[0].DiagnosticsJson);
+        AssertEx.Contains(diagnostics, "is_trusted_publisher");
+    }
+
+    [Test]
+    public void Parse_WhenBothSignalsPresent_CarriesBothIntoDiagnostics()
+    {
+        // Both signals ride the same blob; confirms they coexist without clobbering each other.
+        const string json = """
+                            { "models": [ { "name": "qwen3-coder", "release_date": "2026-06-01", "is_trusted_publisher": true } ] }
+                            """;
+
+        var result = RecommendationJsonParser.Parse(json);
+
+        AssertEx.True(result.IsSuccess);
+        var diagnostics = AssertEx.NotNull(result.Recommendations[0].DiagnosticsJson);
+        AssertEx.Contains(diagnostics, "release_date");
+        AssertEx.Contains(diagnostics, "is_trusted_publisher");
+    }
 }
