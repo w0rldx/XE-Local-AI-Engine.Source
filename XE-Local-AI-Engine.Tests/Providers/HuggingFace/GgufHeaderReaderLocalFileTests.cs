@@ -53,6 +53,45 @@ public sealed class GgufHeaderReaderLocalFileTests
         AssertEx.Equal(template, metadata.ChatTemplate!);
     }
 
+    [Test]
+    public async Task ReadHeaderFromFile_ExtractsExpertCount_AndFlagsMoe()
+    {
+        using var dir = new GgufStoreTestInfrastructure.TempModelsDir();
+        var path = dir.FilePath("qwen3moe-Q4_K_M.gguf");
+        // A Mixture-of-Experts GGUF advertises <arch>.expert_count (a u32) — e.g. Qwen3-MoE writes 8 experts.
+        var header = new GgufHeaderBytesBuilder()
+                     .WithString("general.architecture", "qwen3moe")
+                     .WithUint32("qwen3moe.context_length", value: 32768)
+                     .WithUint32("qwen3moe.expert_count", value: 8)
+                     .Build();
+        await File.WriteAllBytesAsync(path, header);
+        var reader = NewReader();
+
+        var metadata = await reader.ReadHeaderFromFileAsync(path, CancellationToken.None);
+
+        AssertEx.Equal(expected: 8L, metadata.ExpertCount!.Value);
+        AssertEx.True(metadata.IsMoe);
+    }
+
+    [Test]
+    public async Task ReadHeaderFromFile_DenseModel_NoExpertCount_IsNotMoe()
+    {
+        using var dir = new GgufStoreTestInfrastructure.TempModelsDir();
+        var path = dir.FilePath("qwen2-0.5b-dense.gguf");
+        // A dense model omits the expert_count key entirely.
+        var header = new GgufHeaderBytesBuilder()
+                     .WithString("general.architecture", "qwen2")
+                     .WithUint32("qwen2.context_length", value: 32768)
+                     .Build();
+        await File.WriteAllBytesAsync(path, header);
+        var reader = NewReader();
+
+        var metadata = await reader.ReadHeaderFromFileAsync(path, CancellationToken.None);
+
+        AssertEx.Null(metadata.ExpertCount);
+        AssertEx.False(metadata.IsMoe);
+    }
+
     private static string[] BuildVocab(int count)
     {
         var tokens = new string[count];

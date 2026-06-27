@@ -253,6 +253,11 @@ internal sealed class GgufHeaderReader
         var embeddingLength = TryGetLong(values, Arch("embedding_length"));
         var contextLength = TryGetLong(values, Arch("context_length"));
 
+        // Mixture-of-Experts marker: a dense model omits this key (or writes 0); an MoE model writes its total expert
+        // count (e.g. <arch>.expert_count = 8 for Mixtral/Qwen-MoE). Drives the inference profile's is_moe/expert_count
+        // so the optimizer measures MoE throughput empirically rather than predicting it.
+        var expertCount = TryGetLong(values, Arch("expert_count"));
+
         // The Jinja chat template (when present) reveals the model's real tool / reasoning surface for capability
         // detection. Architecture-independent key; null when the GGUF was written without one (a raw base model).
         var chatTemplate = GetString(values, "tokenizer.chat_template");
@@ -265,7 +270,8 @@ internal sealed class GgufHeaderReader
             headCountKv,
             embeddingLength,
             contextLength,
-            chatTemplate);
+            chatTemplate,
+            expertCount);
     }
 
     private static string? GetString(IReadOnlyDictionary<string, object> values, string key)
@@ -581,8 +587,12 @@ internal sealed record GgufHeaderMetadata(
     long? AttentionHeadCountKV,
     long? EmbeddingLength,
     long? ContextLength,
-    string? ChatTemplate)
+    string? ChatTemplate,
+    long? ExpertCount)
 {
     public static GgufHeaderMetadata Empty { get; } = new(Architecture: null, QuantType: null, ParamCount: null, BlockCount: null, AttentionHeadCount: null, AttentionHeadCountKV: null,
-        EmbeddingLength: null, ContextLength: null, ChatTemplate: null);
+        EmbeddingLength: null, ContextLength: null, ChatTemplate: null, ExpertCount: null);
+
+    /// <summary>True when the GGUF declares a positive expert count — a Mixture-of-Experts model (dense models omit it).</summary>
+    public bool IsMoe => ExpertCount is > 0;
 }
