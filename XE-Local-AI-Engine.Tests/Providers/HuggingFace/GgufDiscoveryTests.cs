@@ -128,6 +128,63 @@ public sealed class GgufDiscoveryTests
     }
 
     [Test]
+    public async Task GgufDiscovery_LastModifiedSort_RequestsLastModified_Descending()
+    {
+        // LastModified sort should surface newly-released big models missed by the trending-only search.
+        var listing = """
+                      [
+                        {
+                          "id": "owner/New-Model",
+                          "downloads": 10,
+                          "likes": 1,
+                          "lastModified": "2026-06-20T08:00:00.000Z",
+                          "siblings": [ { "rfilename": "model-Q4_K_M.gguf" } ]
+                        }
+                      ]
+                      """;
+
+        using var harness = BuildHarness(listing);
+
+        var results = await harness.Discovery.SearchAsync(new GgufSearchQuery
+            {
+                Sort = GgufSearchSort.LastModified
+            },
+            CancellationToken.None);
+
+        // LastModified maps to sort=lastModified; direction=-1 ensures newest-first (descending).
+        AssertEx.Contains(harness.Handler.LastListUrl, "sort=lastModified");
+        AssertEx.Contains(harness.Handler.LastListUrl, "direction=-1");
+        AssertEx.Equal(expected: 1, results.Count);
+    }
+
+    [Test]
+    public async Task GgufDiscovery_LikesSort_RequestsLikes_Descending()
+    {
+        var listing = """
+                      [
+                        {
+                          "id": "owner/Liked-Model",
+                          "downloads": 5,
+                          "likes": 999,
+                          "siblings": [ { "rfilename": "model-Q4_K_M.gguf" } ]
+                        }
+                      ]
+                      """;
+
+        using var harness = BuildHarness(listing);
+
+        var results = await harness.Discovery.SearchAsync(new GgufSearchQuery
+            {
+                Sort = GgufSearchSort.Likes
+            },
+            CancellationToken.None);
+
+        AssertEx.Contains(harness.Handler.LastListUrl, "sort=likes");
+        AssertEx.Contains(harness.Handler.LastListUrl, "direction=-1");
+        AssertEx.Equal(expected: 1, results.Count);
+    }
+
+    [Test]
     public async Task GgufDiscovery_InspectsRepo_ParsesPerFileQuantSizeGatedLicense()
     {
         // Two valid .gguf (different quants), plus one .gguf with no recognizable quant token (skipped, not repo-dropping),

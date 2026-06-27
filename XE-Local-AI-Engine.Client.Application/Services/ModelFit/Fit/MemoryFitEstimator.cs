@@ -100,8 +100,10 @@ public sealed class MemoryFitEstimator
     }
 
     /// <summary>
-    ///     Bytes-per-weight for a quant label (the dominant llama.cpp K-quants + legacy/full types). Unknown labels fall
-    ///     back to the Q4_K_M density (~0.5625 bytes/weight ≈ 4.5 bits) — a conservative middle ground.
+    ///     Bytes-per-weight for a quant label (the dominant llama.cpp K-quants, I-quants, and legacy/full types). Unknown
+    ///     labels fall back to the Q4_K_M density (~0.5625 bytes/weight ≈ 4.5 bits) — a conservative middle ground. The
+    ///     I-quant (IQ*) bit-widths are the measured effective bpw from the llama.cpp Llama-3.1-8B quantize benchmark, so an
+    ///     IQ file is sized at its true density instead of the legacy 4.5bpw default.
     /// </summary>
     public static double BytesPerWeight(string quant)
     {
@@ -110,10 +112,22 @@ public sealed class MemoryFitEstimator
         // Approximate effective bits-per-weight → bytes-per-weight. Sourced from llama.cpp quant type bit-widths.
         return quant.Trim().ToUpperInvariant() switch
         {
+            "IQ1_S" => 2.0042d / 8d,
+            "IQ1_M" => 2.146d / 8d,
+            "IQ2_XXS" => 2.3824d / 8d,
+            "IQ2_XS" => 2.5882d / 8d,
             "Q2_K" => 2.625d / 8d,
+            "IQ2_S" => 2.7403d / 8d,
+            "IQ2_M" => 2.9294d / 8d,
+            "IQ3_XXS" => 3.2548d / 8d,
             "Q3_K_S" or "Q3_K_M" or "Q3_K_L" or "Q3_K" => 3.4375d / 8d,
+            "IQ3_XS" => 3.4977d / 8d,
+            "IQ3_S" => 3.6606d / 8d,
+            "IQ3_M" => 3.7628d / 8d,
             "Q4_0" or "Q4_1" => 4.5d / 8d,
             "Q4_K_S" or "Q4_K_M" or "Q4_K" => 4.5d / 8d,
+            "IQ4_XS" => 4.4597d / 8d,
+            "IQ4_NL" => 4.6818d / 8d,
             "Q5_0" or "Q5_1" => 5.5d / 8d,
             "Q5_K_S" or "Q5_K_M" or "Q5_K" => 5.5d / 8d,
             "Q6_K" => 6.5625d / 8d,

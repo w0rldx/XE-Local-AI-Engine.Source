@@ -68,9 +68,10 @@ internal static class ModelFitMapper
             IsInstalled = record.IsInstalled,
             PullModelName = record.PullModelName,
             ReleaseDate = ExtractReleaseDate(record.DiagnosticsJson),
-            // Soft publisher-trust signal, derived from the publisher segment of the canonical model name (no persisted
-            // column). The UI badges an untrusted publisher with a review-before-downloading warning.
-            IsTrustedPublisher = GgufPublisherTrust.IsTrustedPublisher(record.ModelName)
+            // Soft publisher-trust signal extracted from the persisted diagnostics blob. The advisor emits
+            // is_trusted_publisher per model; when the blob predates that emit we derive it from the model name so
+            // pre-existing snapshots still flag trust until the next refresh.
+            IsTrustedPublisher = ExtractIsTrustedPublisher(record.DiagnosticsJson, record.ModelName)
         };
     }
 
@@ -367,5 +368,34 @@ internal static class ModelFitMapper
         {
             return null;
         }
+    }
+
+    /// <summary>
+    ///     Pulls the <c>is_trusted_publisher</c> boolean out of the persisted diagnostics blob. When the blob carries an
+    ///     explicit <c>true</c>/<c>false</c> that value wins. When the property is ABSENT (a row persisted before the
+    ///     advisor emitted the signal) or the blob is null/malformed, the trust is derived from the model name so
+    ///     pre-existing snapshots are not all silently flagged untrusted until the next refresh regenerates the blob.
+    /// </summary>
+    private static bool ExtractIsTrustedPublisher(string? diagnosticsJson, string modelName)
+    {
+        if (!string.IsNullOrWhiteSpace(diagnosticsJson))
+        {
+            try
+            {
+                using var document = JsonDocument.Parse(diagnosticsJson);
+                if (document.RootElement.ValueKind == JsonValueKind.Object
+                    && document.RootElement.TryGetProperty("is_trusted_publisher", out var trusted)
+                    && trusted.ValueKind is JsonValueKind.True or JsonValueKind.False)
+                {
+                    return trusted.ValueKind == JsonValueKind.True;
+                }
+            }
+            catch (JsonException)
+            {
+                // Fall through to the name-derived signal below.
+            }
+        }
+
+        return GgufPublisherTrust.IsTrustedPublisher(modelName);
     }
 }

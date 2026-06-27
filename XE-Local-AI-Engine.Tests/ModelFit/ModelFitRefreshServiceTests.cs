@@ -354,6 +354,110 @@ public sealed class ModelFitRefreshServiceTests
         AssertEx.Empty(snapshotStore.Snapshots.Values);
     }
 
+    [Test]
+    public async Task Advisor_Recommend_StepsDownQuantLadder_WhenDefaultQuantDoesNotFit()
+    {
+        var snapshotStore = new InMemoryModelFitSnapshotStore();
+        var recommendationStore = new InMemoryModelFitRecommendationStore();
+        var discovery = Substitute.For<IHuggingFaceGgufDiscovery>();
+
+        // A 14B repo whose Q4_K_M does NOT fit an 8 GiB budget but whose Q3_K_M does. The advisor must keep the model at
+        // the largest quant that fits (Q3_K_M) instead of dropping the whole repo — the keystone of the fix.
+        discovery.SearchAsync(Arg.Any<GgufSearchQuery>(), Arg.Any<CancellationToken>())
+                 .Returns(Task.FromResult<IReadOnlyList<GgufRepoSummary>>([Summary("org/big-GGUF")]));
+        discovery.InspectRepoAsync("org/big-GGUF", Arg.Any<CancellationToken>())
+                 .Returns(Task.FromResult(Detail("org/big-GGUF",
+                     File("Q4_K_M", paramCount: 14_000_000_000L),
+                     File("Q3_K_M", paramCount: 14_000_000_000L))));
+
+        var advisor = BuildAdvisor(snapshotStore, recommendationStore, discovery, GpuProfile(8 * Gb));
+
+        var result = await advisor.RefreshAsync(Request(), reportProgress: null, CancellationToken.None);
+
+        AssertEx.Equal(ModelFitRunStatus.Succeeded, result.Status);
+        AssertEx.Equal(expected: 1, result.RecommendationCount);
+        var rows = recommendationStore.RowsFor(snapshotStore.Snapshots.Values.Single().Id);
+        AssertEx.Equal("org/big-GGUF:Q3_K_M", rows.Single().ModelName);
+        AssertEx.Equal("Q3_K_M", rows.Single().Quantization);
+    }
+
+    [Test]
+    public async Task Advisor_Recommend_DropsRepo_WhenOnlySubFloorQuantsFit()
+    {
+        var snapshotStore = new InMemoryModelFitSnapshotStore();
+        var recommendationStore = new InMemoryModelFitRecommendationStore();
+        var discovery = Substitute.For<IHuggingFaceGgufDiscovery>();
+
+        // A 14B repo where Q4_K_M does not fit 8 GiB and the only fitting file (Q2_K) is BELOW the Q3_K_M quality floor.
+        // The model must be dropped rather than recommended at an unusably-degraded quant.
+        discovery.SearchAsync(Arg.Any<GgufSearchQuery>(), Arg.Any<CancellationToken>())
+                 .Returns(Task.FromResult<IReadOnlyList<GgufRepoSummary>>([Summary("org/big-GGUF")]));
+        discovery.InspectRepoAsync("org/big-GGUF", Arg.Any<CancellationToken>())
+                 .Returns(Task.FromResult(Detail("org/big-GGUF",
+                     File("Q4_K_M", paramCount: 14_000_000_000L),
+                     File("Q2_K", paramCount: 14_000_000_000L))));
+
+        var advisor = BuildAdvisor(snapshotStore, recommendationStore, discovery, GpuProfile(8 * Gb));
+
+        var result = await advisor.RefreshAsync(Request(), reportProgress: null, CancellationToken.None);
+
+        AssertEx.Equal(ModelFitRunStatus.Succeeded, result.Status);
+        AssertEx.Equal(expected: 0, result.RecommendationCount);
+    }
+
+    [Test]
+    public async Task Advisor_Recommend_NewerModelBoostsAboveOlderPeer_AtEqualCapability()
+    {
+        var snapshotStore = new InMemoryModelFitSnapshotStore();
+        var recommendationStore = new InMemoryModelFitRecommendationStore();
+        var discovery = Substitute.For<IHuggingFaceGgufDiscovery>();
+
+        // Two equal-capability (same param count → same tier), equal-download repos. The newer (later last-modified) one
+        // must rank first even though its repo id ("zzz") loses the ordinal tie-break to "aaa" — proving the recency boost.
+        discovery.SearchAsync(Arg.Any<GgufSearchQuery>(), Arg.Any<CancellationToken>())
+                 .Returns(Task.FromResult<IReadOnlyList<GgufRepoSummary>>([
+                     Summary("aaa/old-GGUF", downloads: 5000, lastModified: DateTimeOffset.UnixEpoch),
+                     Summary("zzz/new-GGUF", downloads: 5000, lastModified: DateTimeOffset.UnixEpoch.AddYears(5))
+                 ]));
+        discovery.InspectRepoAsync("aaa/old-GGUF", Arg.Any<CancellationToken>())
+                 .Returns(Task.FromResult(Detail("aaa/old-GGUF", File("Q4_K_M", paramCount: 3_000_000_000L))));
+        discovery.InspectRepoAsync("zzz/new-GGUF", Arg.Any<CancellationToken>())
+                 .Returns(Task.FromResult(Detail("zzz/new-GGUF", File("Q4_K_M", paramCount: 3_000_000_000L))));
+
+        var advisor = BuildAdvisor(snapshotStore, recommendationStore, discovery, GpuProfile(64 * Gb));
+
+        await advisor.RefreshAsync(Request(), reportProgress: null, CancellationToken.None);
+
+        var rows = recommendationStore.RowsFor(snapshotStore.Snapshots.Values.Single().Id);
+        AssertEx.Equal("zzz/new-GGUF:Q4_K_M", rows[0].ModelName);
+        AssertEx.Equal("aaa/old-GGUF:Q4_K_M", rows[1].ModelName);
+    }
+
+    [Test]
+    public async Task Advisor_Recommend_EmitsReleaseDateAndTrustSignalsToSnapshotJson()
+    {
+        var snapshotStore = new InMemoryModelFitSnapshotStore();
+        var recommendationStore = new InMemoryModelFitRecommendationStore();
+        var discovery = Substitute.For<IHuggingFaceGgufDiscovery>();
+
+        discovery.SearchAsync(Arg.Any<GgufSearchQuery>(), Arg.Any<CancellationToken>())
+                 .Returns(Task.FromResult<IReadOnlyList<GgufRepoSummary>>([
+                     Summary("unsloth/model-GGUF", lastModified: DateTimeOffset.UnixEpoch.AddYears(56))
+                 ]));
+        discovery.InspectRepoAsync("unsloth/model-GGUF", Arg.Any<CancellationToken>())
+                 .Returns(Task.FromResult(Detail("unsloth/model-GGUF", File("Q4_K_M", paramCount: 1_000_000_000L))));
+
+        var advisor = BuildAdvisor(snapshotStore, recommendationStore, discovery, GpuProfile(64 * Gb));
+
+        await advisor.RefreshAsync(Request(), reportProgress: null, CancellationToken.None);
+
+        // The advisor JSON the parser consumes must carry the recency + trust boosts per model.
+        var rawJson = snapshotStore.Snapshots.Values.Single().RawJson;
+        AssertEx.NotNull(rawJson);
+        AssertEx.Contains(rawJson!, "release_date");
+        AssertEx.Contains(rawJson!, "is_trusted_publisher");
+    }
+
     private static ModelFitRefreshRequest Request(string? quantOverride = null)
     {
         return new ModelFitRefreshRequest(ModelFitOperation.Recommend, "coding", Limit: 5, quantOverride);
@@ -391,9 +495,9 @@ public sealed class ModelFitRefreshServiceTests
             NullLogger<ModelFitRefreshService>.Instance);
     }
 
-    private static GgufRepoSummary Summary(string repoId, long downloads = 1000)
+    private static GgufRepoSummary Summary(string repoId, long downloads = 1000, DateTimeOffset? lastModified = null)
     {
-        return new GgufRepoSummary(repoId, IsGated: false, downloads, Likes: 10, DateTimeOffset.UnixEpoch, "mit", HasUsableGguf: true,
+        return new GgufRepoSummary(repoId, IsGated: false, downloads, Likes: 10, lastModified ?? DateTimeOffset.UnixEpoch, "mit", HasUsableGguf: true,
             GgufPublisherTrust.IsTrustedPublisher(repoId));
     }
 
