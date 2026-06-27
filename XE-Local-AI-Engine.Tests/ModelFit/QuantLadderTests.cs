@@ -1,6 +1,7 @@
 namespace XE_Local_AI_Engine.Tests.ModelFit;
 
 using XE_Local_AI_Engine.Client.Services.ModelFit.Fit;
+using XE_Local_AI_Engine.Providers.Abstractions.Gguf;
 using XE_Local_AI_Engine.Tests.Testing;
 
 /// <summary>
@@ -46,6 +47,24 @@ public sealed class QuantLadderTests
         AssertEx.False(QuantLadder.MeetsFloor("IQ3_M"), "IQ3_M is below the floor.");
         AssertEx.False(QuantLadder.MeetsFloor("Q2_K"), "Q2_K is below the floor.");
         AssertEx.False(QuantLadder.MeetsFloor("IQ2_M"), "IQ2_M is below the floor.");
+    }
+
+    [Test]
+    public void QualityRank_DynamicPrefix_PricesOffStrippedBase()
+    {
+        // An Unsloth Dynamic (UD-) token ranks as its stripped base, so the advisor orders it correctly.
+        AssertEx.Equal(QuantLadder.QualityRank("Q4_K_M"), QuantLadder.QualityRank("UD-Q4_K_M"));
+    }
+
+    [Test]
+    public void TierOf_ReturnsLadderTier_OnLadder_AndNull_OffLadder()
+    {
+        // The single-source-of-truth tier the download picker (GgufQuantQuality) reads.
+        AssertEx.True(QuantLadder.TierOf("Q4_K_M") == GgufQuantTier.Balanced, "Q4_K_M is Balanced.");
+        AssertEx.True(QuantLadder.TierOf("IQ4_XS") == GgufQuantTier.Small, "IQ4_XS is graded Small for the picker.");
+        AssertEx.True(QuantLadder.TierOf("Q8_0") == GgufQuantTier.NearLossless, "Q8_0 is NearLossless.");
+        // An off-ladder _L variant has no ladder tier — the classifier falls back to its own rules.
+        AssertEx.True(QuantLadder.TierOf("Q4_K_L") is null, "off-ladder Q4_K_L has no ladder tier.");
     }
 
     [Test]

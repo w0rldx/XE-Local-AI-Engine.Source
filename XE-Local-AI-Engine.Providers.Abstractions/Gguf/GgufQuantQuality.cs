@@ -5,6 +5,11 @@ namespace XE_Local_AI_Engine.Providers.Abstractions.Gguf;
 ///     Total: every input yields a tier and it never throws — an Unsloth Dynamic (<c>UD-</c>) token is priced off its
 ///     stripped base (via <see cref="GgufQuantParser.StripDynamicPrefix" />) and an unrecognized token defaults to
 ///     <see cref="GgufQuantTier.Balanced" /> (the safe middle) rather than the lowest grade.
+///     <para>
+///         The core quant tokens' tiers live in <see cref="QuantLadder" /> (the single source of truth it shares with the
+///         advisor's fine quality rank); this classifier delegates to it and only adds the off-ladder aliases (the
+///         <c>_L</c> variants and float aliases) plus the family fallback for tokens neither table enumerates.
+///     </para>
 /// </summary>
 public static class GgufQuantQuality
 {
@@ -21,16 +26,19 @@ public static class GgufQuantQuality
 
         var token = GgufQuantParser.StripDynamicPrefix(quant.Trim()).ToUpperInvariant();
 
+        // The quant ladder owns the core tokens' tier (and their fine quality rank). Off-ladder tokens fall through.
+        if (QuantLadder.TierOf(token) is { } ladderTier)
+        {
+            return ladderTier;
+        }
+
         return token switch
         {
-            // NearLossless — 6-/8-bit K-quants and float formats; visually/numerically near the source weights.
-            "Q8_0" or "Q6_K" or "Q6_K_L" or "F16" or "FP16" or "BF16" or "F32" or "FP32" or "F64" => GgufQuantTier.NearLossless,
-            // SweetSpot — 5-bit K-quants: best quality-per-byte for most users.
-            "Q5_K_M" or "Q5_K_S" or "Q5_K_L" => GgufQuantTier.SweetSpot,
-            // Balanced — 4-bit K-quants: the common default.
-            "Q4_K_M" or "Q4_K_S" or "Q4_K_L" => GgufQuantTier.Balanced,
-            // Minimal — 2-bit K-quant.
-            "Q2_K" => GgufQuantTier.Minimal,
+            // NearLossless aliases the ladder does not enumerate: the _L 6-bit K-quant and the extra float formats.
+            "Q6_K_L" or "FP16" or "BF16" or "FP32" or "F64" => GgufQuantTier.NearLossless,
+            // SweetSpot / Balanced _L variants.
+            "Q5_K_L" => GgufQuantTier.SweetSpot,
+            "Q4_K_L" => GgufQuantTier.Balanced,
             _ => ClassifyByFamily(token)
         };
     }
