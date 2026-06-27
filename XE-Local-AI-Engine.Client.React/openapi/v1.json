@@ -8068,6 +8068,15 @@
           "sizeBytes": {
             "type": "integer",
             "format": "int64"
+          },
+          "qualityTier": {
+            "type": "string"
+          },
+          "fitVerdict": {
+            "type": "string"
+          },
+          "isRecommended": {
+            "type": "boolean"
           }
         }
       },

@@ -232,6 +232,22 @@ public sealed class GgufRepositoryFileResponse
     public required bool IsDynamic { get; init; }
 
     public required long SizeBytes { get; init; }
+
+    /// <summary>
+    ///     Hardware-free quality grade for this quant (<c>NearLossless</c> / <c>SweetSpot</c> / <c>Balanced</c> /
+    ///     <c>Small</c> / <c>Minimal</c>) — the <c>GgufQuantTier</c> enum name. The picker renders it as a quality hint.
+    /// </summary>
+    public required string QualityTier { get; init; }
+
+    /// <summary>
+    ///     How this file's size compares to the host's currently-free GPU VRAM (<c>Fits</c> / <c>Tight</c> /
+    ///     <c>WontFit</c> / <c>Unknown</c>) — the <c>GgufFitVerdict</c> enum name. <c>Unknown</c> when free VRAM could
+    ///     not be probed (no GPU, CPU backend, or dev box without a real probe).
+    /// </summary>
+    public required string FitVerdict { get; init; }
+
+    /// <summary>Whether this is THE recommended variant for the repo. Exactly one file in a non-empty list is flagged.</summary>
+    public required bool IsRecommended { get; init; }
 }
 
 /// <summary>Response envelope for <c>GET model-fit/gguf/inspect</c>: the repo id plus its selectable GGUF files.</summary>

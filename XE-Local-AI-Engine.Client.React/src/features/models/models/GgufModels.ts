@@ -21,18 +21,38 @@ export interface GgufRepository {
 	readonly isTrustedPublisher: boolean;
 }
 
+// Static quality tier the backend classifier assigns to a quant (no hardware involved). Ordered best→smallest:
+// NearLossless (Q8_0/Q6_K/F16…), SweetSpot (Q5_K_*), Balanced (Q4_K_*), Small (Q3*/IQ3/IQ4/legacy), Minimal (Q2*/IQ1/IQ2).
+// String-literal union (not an enum) — matches the backend's emitted enum-name values one-to-one.
+export type GgufQuantTier = "NearLossless" | "SweetSpot" | "Balanced" | "Small" | "Minimal";
+
+// Per-file hardware fit verdict the backend derives from file size vs free VRAM: Fits (size + margin ≤ free),
+// Tight (fits but margin eats in), WontFit (size > free), Unknown (VRAM probe unavailable, e.g. no GPU / WSL).
+export type GgufFitVerdict = "Fits" | "Tight" | "WontFit" | "Unknown";
+
 // Domain view-model for one selectable .gguf file inside a repo (the quant picker rows). isDynamic flags an Unsloth
 // "Dynamic" (UD-) quant so the UI can badge it; sizeBytes drives the size column. fileName is the exact file the
-// download requests verbatim (so a chosen quant resolves unambiguously, including UD- quants).
+// download requests verbatim (so a chosen quant resolves unambiguously, including UD- quants). qualityTier/fitVerdict
+// drive the per-row guidance badges; isRecommended marks the single ★ row the backend recommends (≤1 per non-empty list).
 export interface GgufRepositoryFile {
 	readonly fileName: string;
 	readonly quant: string;
 	readonly isDynamic: boolean;
 	readonly sizeBytes: number;
+	readonly qualityTier: GgufQuantTier;
+	readonly fitVerdict: GgufFitVerdict;
+	readonly isRecommended: boolean;
 }
 
 // Domain view-model for one repo's inspected detail: its selectable GGUF files (quants) keyed by repo id.
 export interface GgufRepositoryDetail {
 	readonly repoId: string;
 	readonly files: readonly GgufRepositoryFile[];
+}
+
+// Pure rule for the picker's initial/derived selection: the backend-flagged recommended file when present, else the
+// first listed file (legacy smallest-first order), else null for an empty list. Kept side-effect-free so the dialog
+// can derive the effective selection without a derived-state effect, and so the rule is unit-testable in isolation.
+export function recommendedGgufFileName(files: readonly GgufRepositoryFile[]): string | null {
+	return (files.find((file) => file.isRecommended) ?? files[0])?.fileName ?? null;
 }

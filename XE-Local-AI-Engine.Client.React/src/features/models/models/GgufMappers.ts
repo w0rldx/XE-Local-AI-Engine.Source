@@ -3,7 +3,13 @@ import type {
 	XeLocalAiEngineClientEndpointsModelFitV1GgufRepositoryResponse,
 	XeLocalAiEngineClientEndpointsModelFitV1InspectGgufRepositoryResponse,
 } from "@/core/api/generated";
-import type { GgufRepository, GgufRepositoryDetail, GgufRepositoryFile } from "@/features/models/models/GgufModels";
+import type {
+	GgufFitVerdict,
+	GgufQuantTier,
+	GgufRepository,
+	GgufRepositoryDetail,
+	GgufRepositoryFile,
+} from "@/features/models/models/GgufModels";
 
 // Maps the generated (OpenAPI) GGUF browse/inspect response types to the stricter domain view-models the Model
 // Management GGUF section depends on. The generated types are the single source of truth for the wire shape; their
@@ -29,6 +35,11 @@ function toGgufRepositoryFile(dto: XeLocalAiEngineClientEndpointsModelFitV1GgufR
 		quant: dto.quant ?? "",
 		isDynamic: dto.isDynamic ?? false,
 		sizeBytes: dto.sizeBytes ?? 0,
+		// The backend only ever emits the known enum-name values, so a plain cast is safe; defaults cover the
+		// degraded/omitted case (e.g. an old backend or a discovery failure) — Balanced/Unknown are the neutral picks.
+		qualityTier: (dto.qualityTier as GgufQuantTier) ?? "Balanced",
+		fitVerdict: (dto.fitVerdict as GgufFitVerdict) ?? "Unknown",
+		isRecommended: dto.isRecommended ?? false,
 	};
 }
 
