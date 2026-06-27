@@ -25,8 +25,12 @@ export interface StreamGuardOptions {
 	interChunkTimeoutMs?: number;
 }
 
-const defaultFirstChunkTimeoutMs = 30_000;
-const defaultInterChunkTimeoutMs = 60_000;
+// Large values are intentional: big local models (20B+, F16 quant) can take well over 30 s to produce
+// the first token during cold prompt processing, and reasoning models can pause silently between answer
+// chunks for many seconds — the server has no client-visible heartbeat during that gap. These defaults
+// must be conservative enough to survive the worst-case generation cadence on modest hardware.
+const defaultFirstChunkTimeoutMs = 120_000;
+const defaultInterChunkTimeoutMs = 180_000;
 
 interface PendingEvent {
 	value: NodeChatStreamEventDto;
