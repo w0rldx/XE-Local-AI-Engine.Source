@@ -1,6 +1,6 @@
 # Data Model & Persistence
 
-> Last reviewed: 2026-06-24 · Code-grounded.
+> Last reviewed: 2026-06-27 · Code-grounded.
 
 The node persists chat, agent, scheduler, model-fit and identity state in local **SQLite** through Entity Framework Core, living in the `XE-Local-AI-Engine.Client.Persistence` project. There are **two** DbContexts (`NodeChatDbContext` and `NodeIdentityDbContext`), an **additive-only** migration convention, and a **per-column AES-256-GCM AEAD** scheme that encrypts privacy-sensitive payloads (conversation titles, message content, agent instructions, golden conversations, …) before they hit disk. This page is the maintainer reference for the schema, the encryption seams, and the migration timeline.
 
@@ -23,7 +23,7 @@ XE-Local-AI-Engine.Client.Persistence/
 ├── Configurations/                    # IEntityTypeConfiguration per entity (table/column/index mapping)
 ├── Implementation/                    # store classes (the persistence boundary the app calls)
 ├── Stores/                            # store interfaces
-└── Migrations/                        # 26 migrations + 2 model snapshots (+ per-migration .Designer.cs)
+└── Migrations/                        # 28 migrations + 2 model snapshots (+ per-migration .Designer.cs)
 ```
 
 The key-holder **implementation** that actually derives the key (`NodeSqliteKeyHolder`) lives one project up in `XE-Local-AI-Engine.Client.Application/Services/Persistence/Implementation/NodeSqliteKeyHolder.cs`; the Persistence project only owns the `INodeSqliteKeyHolder` contract and a zero-key null object. This keeps the operator-secret dependency out of the schema project.
@@ -32,8 +32,8 @@ The key-holder **implementation** that actually derives the key (`NodeSqliteKeyH
 
 | Context | Base type | Migrations history table | Owns |
 |---|---|---|---|
-| `NodeChatDbContext` | `DbContext` | `__EFMigrationsHistory` (default) | All app data: chat, agents, playbook, golden conversations, MCP, model classifications, scheduler, model-fit, approved utility images, adaptive memory |
-| `NodeIdentityDbContext` | `IdentityDbContext<NodeUser>` | `__EFMigrationsHistory_Identity` | ASP.NET Identity tables for `NodeUser`, plus `node_refresh_tokens` |
+| `NodeChatDbContext` | `DbContext` | `__EFMigrationsHistory` (default) | All app data: chat, agents, playbook, golden conversations, MCP, model classifications, scheduler, model-fit, approved utility images, adaptive memory, uploaded files, inference profiles |
+| `NodeIdentityDbContext` | `IdentityDbContext<NodeUser>` | `__EFMigrationsHistory_Identity` | ASP.NET Identity tables for `NodeUser` (incl. the `tutorial_state` onboarding column), plus `node_refresh_tokens` |
 
 `NodeChatDbContext` (`NodeChatDbContext.cs:12`) takes an `INodeSqliteKeyHolder` in its constructor and exposes the derived key via `NodeEncryptionKey` (`:65`). `OnModelCreating` (`:109`) applies one `IEntityTypeConfiguration` per entity from `Configurations/`. The context also exposes raw-SQL crypto helpers used by the chat write path: `EncryptConversationTitle` / `DecryptConversationTitle` / `DecryptMessageContent` (`:72`–`:107`) — these mirror the interceptor's AAD exactly so titles written via raw SQL round-trip with titles written via the change tracker.
 
@@ -73,8 +73,11 @@ Each entity's encrypted columns are registered explicitly with their AAD identit
 | `CanvasWorkflow` | `graph_json` (required) | (`Guid.Empty`, Id, `graph_json`) — node-scoped |
 | `AgentSkill` | `description`, `body` (both required) | (`Guid.Empty`, Id, …) — node-scoped |
 | `PlaybookAction` | behavior (required), trigger condition (optional) | (`Guid.Empty`, Id, …) — node-scoped |
+| `ConversationUploadedFile` | `original_file_name` (required) | (ConversationId, FileId, `original_file_name`) |
 
-Encrypted columns are mapped as `BLOB` in the entity configurations and model snapshot (e.g. `AgentDefinition.Instructions`/`Description` are `byte[]` → `BLOB`, see `NodeChatDbContextModelSnapshot.cs:49`,`:53`). **Golden conversations** carry an encrypted payload too (the `GoldenConversation` entity), which is why eval data is privacy-clean at rest — see [Agent Mode](04-agent-mode.md) for the harvest/eval flow. Node-scoped entities use `Guid.Empty` as the conversation component of the AAD by convention.
+Encrypted columns are mapped as `BLOB` in the entity configurations and model snapshot (e.g. `AgentDefinition.Instructions`/`Description` are `byte[]` → `BLOB`, see `NodeChatDbContextModelSnapshot.cs:49`,`:53`). **Golden conversations** carry an encrypted payload too (the `GoldenConversation` entity), which is why eval data is privacy-clean at rest — see [Agent Mode](04-agent-mode.md) for the harvest/eval flow. Node-scoped entities use `Guid.Empty` as the conversation component of the AAD by convention. A companion read-side `NodeEncryptionMaterializationInterceptor` (`NodeEncryptionMaterializationInterceptor.cs`) decrypts the registered columns when entities are materialized from a query, mirroring the save-side interceptor's AAD.
+
+> **Uploaded-file blobs are encrypted off the column path.** The `ConversationUploadedFile` row only encrypts the display name (`original_file_name`) through the interceptor; the bulk payloads — the raw file bytes and the cached extracted Markdown — are **too large for the column path** and live on disk under `INodeDataDirectory.Root/uploaded-files/conversations/{conversation_id}/`, AES-256-GCM-encrypted by `UploadedFileBlobProtector` (`Client.Application/Services/DocumentIngestion/UploadedFileBlobProtector.cs`). That protector lives in the application layer (the DB-column `NodePayloadProtector` is `internal` to Persistence), so it re-uses the public `AesGcmNodeAeadCipher` primitive and replicates the exact `nonce ‖ ciphertext ‖ tag` framing + AAD layout, binding each blob with a distinct column name (`file_bytes`, `file_md`) so a bytes blob can never be swapped for an extracted-text blob under the same key. See [Security & Privacy](12-security-and-privacy.md).
 
 ## Entity inventory
 
@@ -99,15 +102,17 @@ Entities live in `Entities/` (POCO, one type per file) with mapping in the match
 | `ModelProviderMap` | `model_provider_map` | Models | **not encrypted**; PK `model_name` with `NOCASE` collation |
 | `ScheduledJobDefinition` / `ScheduledJobRun` / `ScheduledJobRunEvent` | scheduler tables | Scheduler ([06](06-scheduler.md)) | Quartz-adjacent app metadata |
 | `ApprovedUtilityImage` | approved utility images | Model-Fit ([07](07-model-fit.md)) | pinned benchmark image allow-list |
-| `ModelFitSnapshot` / `ModelFitRecommendation` / `ModelFitBenchmark` | model-fit tables | Model-Fit | box-aware GGUF fit + benchmark results |
-| `NodeUser` *(NodeIdentity ctx)* | Identity tables | Auth | `setup_completed`, `created_at_utc` |
+| `ModelFitSnapshot` / `ModelFitRecommendation` / `ModelFitBenchmark` | model-fit tables | Model-Fit | box-aware GGUF fit + benchmark results (benchmark metric columns extended by `AddInferenceProfilesAndBenchmarkMetrics`) |
+| `InferenceProfile` | `inference_profiles` | Inference ([03](03-local-runtime-and-providers.md)) | **not encrypted**; one live launch-profile per `(machine_key, model_name, role, backend)` natural key; frozen launch args (`-c`/`-ngl`/`-ts`/`-ot`/`-ctk`/`-ctv`) + MoE attrs + `Explored`/`Frozen`/`Stale` status (`InferenceProfileStatus`) |
+| `ConversationUploadedFile` | `conversation_uploaded_files` | Chat ([05](05-chat.md)) | encrypted `original_file_name`; metadata only — bulk bytes/extracted Markdown encrypted on disk (`UploadedFileBlobProtector`); cascade FK to `conversations` |
+| `NodeUser` *(NodeIdentity ctx)* | Identity tables | Auth | `setup_completed`, `created_at_utc`, `tutorial_state` (onboarding-tour state JSON) |
 | `NodeRefreshToken` *(NodeIdentity ctx)* | `node_refresh_tokens` | Auth | hashed token, one-live-per-user filtered unique index |
 
 The **adaptive agent memory** tables were added later (migration `20260622215652_AddAdaptiveAgentMemory`); their entities surface through the same context and the `MemoryScope` enum.
 
 ### Stores are the boundary
 
-Application code never touches `DbSet`s directly — it calls **store** classes in `Implementation/` behind interfaces in `Stores/` (e.g. `AgentDefinitionStore`, `GoldenConversationStore`, `ModelProviderMapStore`, `ScheduledJobRunStore`). Read queries use `AsNoTracking()` (e.g. `ModelProviderMapStore.GetProviderForModelAsync`, `:21`) and flow `CancellationToken` to every EF async call. This is the one-way dependency the schema project enforces: callers depend on store contracts, not on EF or on entity internals (most `DbSet`s are `internal`).
+Application code never touches `DbSet`s directly — it calls **store** classes in `Implementation/` behind interfaces in `Stores/` (e.g. `AgentDefinitionStore`, `GoldenConversationStore`, `ModelProviderMapStore`, `ScheduledJobRunStore`, and the newer `InferenceProfileStore`/`IInferenceProfileStore` for launch profiles). The chat upload store is the one exception that lives **above** the schema project: `ConversationUploadedFileStore` (`Client.Application/Services/DocumentIngestion/`) owns both the DB row and the encrypted on-disk blobs, so it sits in the application layer rather than `Persistence/Implementation/`. Read queries use `AsNoTracking()` (e.g. `ModelProviderMapStore.GetProviderForModelAsync`, `:21`) and flow `CancellationToken` to every EF async call. This is the one-way dependency the schema project enforces: callers depend on store contracts, not on EF or on entity internals (most `DbSet`s are `internal`).
 
 ## Migration timeline (additive convention)
 
@@ -142,8 +147,11 @@ Migrations live in `Migrations/`. The convention is **additive**: new migrations
 | `20260610165152_EncryptConversationTitle` | Migrate conversation `title` → encrypted BLOB (backfill from first message) |
 | `20260617222625_AddModelProviderMap` | `model_provider_map` (NOCASE PK; unencrypted) — runtime re-arch routing |
 | `20260622215652_AddAdaptiveAgentMemory` | Adaptive agent memory tables + retention/extraction |
+| `20260624184036_AddTutorialState` | **NodeIdentity** context: `tutorial_state` column on `AspNetUsers` (onboarding-tour progress) |
+| `20260626104651_AddConversationUploadedFiles` | `conversation_uploaded_files` (chat upload attachments; encrypted display name, cascade FK) |
+| `20260626234754_AddInferenceProfilesAndBenchmarkMetrics` | `inference_profiles` table (per-machine launch profiles) + benchmark metric columns on the model-fit snapshot (`pp_tokens_per_second`, `tool_loop_ms`, `cache_hit_rate`, `vram_load_bytes`, `vram_after_bytes`, …) |
 
-(Counted on disk: **26 migration files** — 24 timestamped (including the identity-context migration `20260525075351_InitialNodeIdentitySchema`) plus 2 untimestamped chat-schema migrations — and **2 model snapshots** = 28 `.cs` files excluding the per-migration `.Designer.cs`. The "~28" figure is this artifact total, not 28 distinct schema changes.)
+(Counted on disk: **28 migration files** — 26 timestamped (including the identity-context migration `20260525075351_InitialNodeIdentitySchema`) plus 2 untimestamped chat-schema migrations — and **2 model snapshots** = 30 `.cs` files excluding the per-migration `.Designer.cs`. This is the artifact total, not 30 distinct schema changes.)
 
 ### Notable migration mechanics
 

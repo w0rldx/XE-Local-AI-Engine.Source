@@ -1,6 +1,6 @@
 # React Client (Frontend)
 
-> Last reviewed: 2026-06-24 · Code-grounded.
+> Last reviewed: 2026-06-27 · Code-grounded.
 
 The React management UI lives in `XE-Local-AI-Engine.Client.React` and is the operator console for a single node: chat, agent mode, model management/advisor, scheduler, MCP, skills, settings, and dashboards. It is a Vite + React 19 + Mantine SPA, served same-origin from the Node Web Server's `wwwroot`. All server state flows through TanStack Query over a **generated hey-api SDK** that is the single source of truth for REST; SignalR drives the streaming/live surfaces. This page maps the directory layout, the state strategy, the transport plumbing, the shared UI primitives, i18n, and how the bundle is hosted.
 
@@ -26,6 +26,8 @@ Source: `XE-Local-AI-Engine.Client.React/package.json`.
 | Markdown | `react-markdown` + `remark-gfm` + `react-syntax-highlighter` | Chat + editor rendering. |
 | i18n | `i18next` + `react-i18next` + browser language detector | `en` / `de`. |
 | Canvas | `@xyflow/react` | Preview workflow builder (see [Agent Mode](04-agent-mode.md) / Preview). |
+| Voice / TTS | `kokoro-js` | In-browser text-to-speech (Kokoro-82M on WebGPU/WASM); chat voice output, see `features/voice`. No backend egress. |
+| Onboarding tour | `react-joyride` | Guided first-response walkthrough (see `features/onboarding`). |
 
 Tooling gates (`pnpm build` / `pnpm lint`): `tsc --noEmit`, a custom `scripts/CheckEventCurrentTargetInUpdaters.mjs` guard, Biome lint, Stylelint, plus `knip` and `dependency-cruiser` in `pnpm validate`.
 
@@ -51,32 +53,35 @@ i18n is initialized as a side-effect import (`src/i18n.ts`) and `dayjs` is exten
 
 Two top-level trees under `src/`:
 
-- **`src/core/`** — cross-cutting infrastructure: API/transport (`core/api`), auth (`core/auth`), routing/query integrations (`core/integrations`), layout/navigation (`core/layout`), theme (`core/theme`), locales plumbing (`core/locales`), dev tools (`core/dev-tools`), and the shared UI library (`core/ui`).
+- **`src/core/`** — cross-cutting infrastructure: API/transport (`core/api`), auth (`core/auth`), routing/query integrations (`core/integrations`), layout/navigation (`core/layout`), theme (`core/theme`), locales plumbing (`core/locales`), dev tools (`core/dev-tools`), the shared UI library (`core/ui`), and the browser AI runtime (`core/runtime` — the WebGPU/WASM TTS engine: `TtsProvider`/`TtsWorker`, `VoiceRuntime`, `ModelCache`, `CapabilityDetector`, consumed by `features/voice`).
 - **`src/features/`** — one folder per product area, each self-contained with `pages/`, `components/`, `queries/` (TanStack Query hooks), `models/` (DTO ↔ view mappers + Zod), and optionally `stores/`.
 
-### The 17 feature folders
+### The 20 feature folders
 
 Source: `ls XE-Local-AI-Engine.Client.React/src/features`.
 
 | Feature | What it owns | Deep-dive |
 |---|---|---|
-| `about` | About dialog + build/version info | — |
+| `about` | About dialog: build/version (from `Directory.Build.props`) + an auto-generated third-party license list (`data/third-party-licenses.generated.json`, npm + NuGet) | — |
 | `agents` | Agent definitions, templates, playbooks, golden conversations, feedback insights, execution logs, orchestration topology | [Agent Mode](04-agent-mode.md) |
 | `api-foundation` | Validation-problem probe (boundary/error-contract harness) | [API & Hubs](09-api-and-hubs.md) |
+| `app-update` | Velopack self-update UI: GitHub device-flow sign-in + update check/apply | [Hosting & Deployment](11-hosting-and-deployment.md) |
 | `binding` | Node binding to the C0re platform | [Security & Privacy](12-security-and-privacy.md) |
-| `chat` | Streaming chat UI, SignalR adapter, reasoning/tool-call rendering, sampling options | [Chat](05-chat.md) |
+| `chat` | Streaming chat UI, SignalR adapter, reasoning/tool-call rendering, sampling options, file-upload attachments + pane drag-and-drop (`usePaneFileDrop`, `ChatAttachmentChips`) | [Chat](05-chat.md) |
 | `cloud-settings` | Cloud provider credentials/config (kept node-local) | [Security & Privacy](12-security-and-privacy.md) |
 | `dashboard` | Node overview surface | — |
 | `invocations` | Tool/function invocation history | [Agent Mode](04-agent-mode.md) |
 | `loaded-models` | Live loaded-model overview + graceful eject | [Local Runtime & Providers](03-local-runtime-and-providers.md) |
 | `mcp` | MCP server registration + tooling | [API & Hubs](09-api-and-hubs.md) |
-| `model-fit` | Box-aware GGUF recommendation + benchmark | [Model Fit](07-model-fit.md) |
+| `model-fit` | Box-aware GGUF recommendation + quant pick, plus the per-machine inference-profile panel (`InferenceProfilePanel`, explore/benchmark/freeze) | [Model Fit](07-model-fit.md) |
 | `models` | Model management (HF GGUF discovery/download, classification) | [Local Runtime & Providers](03-local-runtime-and-providers.md) |
 | `node-settings` | User-editable cached node settings, local runtime config | [Hosting & Deployment](11-hosting-and-deployment.md) |
-| `preview` | Open Canvas (Preview) workflow builder (React Flow) | [Agent Mode](04-agent-mode.md) |
+| `onboarding` | First-response guided tour (React Joyride) + welcome dialog with language picker + showcase panel | — |
+| `preview` | Open Canvas (Preview) workflow builder (React Flow); surfaced under the "Preview" nav group | [Agent Mode](04-agent-mode.md) |
 | `scheduler` | Quartz job management + run history | [Scheduler](06-scheduler.md) |
 | `skills` | Node skill library + per-agent skill picklist | [Agent Mode](04-agent-mode.md) |
 | `tools` | Tool catalog / capability surface | [Agent Mode](04-agent-mode.md) |
+| `voice` | Browser text-to-speech: voice manifest adapter, preferences store, composer controls, per-message play button, and voice-audition preview (Kokoro on WebGPU) | [Chat](05-chat.md) |
 
 Each feature follows the same shape, e.g. `features/agents/` has `pages/AgentsPage.tsx`, `components/*` (forms, panels, gallery), `queries/use*.ts` (TanStack Query hooks), `models/*Models.ts` + `*Mappers.ts` (Zod + DTO mapping), and `stores/AgentManagementStore.ts`.
 

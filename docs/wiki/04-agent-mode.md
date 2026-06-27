@@ -1,6 +1,6 @@
 # Agent Mode & the AI Agent Runtime
 
-> Last reviewed: 2026-06-24 · Code-grounded.
+> Last reviewed: 2026-06-27 · Code-grounded.
 
 Agent Mode is XE Local AI Engine's governed agentic layer. It is split across two assemblies:
 `XE-Local-AI-Engine.AI.Agent` owns the Microsoft Agent Framework (MAF) / `Microsoft.Extensions.AI`
@@ -140,7 +140,7 @@ AI.Agent interfaces, provider seams (`ILocalModelProvider`, `IChatClient`, `IEmb
 | Area | Key types | Responsibility |
 |---|---|---|
 | **Agents** | `AgentDefinitionService`, `AgentDefinitionResolver`, `AgentSkillService`, `AgentTemplateCatalog`/`Import`, `DefaultAgentSeeder`, `CoderAgentSeeder`, `OrchestrationResolver` | CRUD of agent definitions; per-turn resolution into a `ResolvedAgentRuntime` (prompt + gated tool offer + pinned model + skills + flags). |
-| **AgentHome** | `AgentHomeService`, `AgentHomeManifestService`, `AgentHomeWorkspaceService`, `AgentHomePatchService`, `NodePatchApplyService`, `MemoryProposalSecretScanner`, `Tools/RunInAgentHomeToolHandler` | The write-back loop: sandboxed git workspace, patch apply, memory proposals. |
+| **AgentHome** | `AgentHomeService`, `AgentHomeManifestService`, `AgentHomeWorkspaceService`, `AgentHomePatchService`, `NodePatchApplyService`, `MemoryProposalSecretScanner`, `IConversationSandboxStager`, `Tools/RunInAgentHomeToolHandler` | The write-back loop: sandboxed git workspace, patch apply, memory proposals, conversation-attachment staging. |
 | **Analysis** | `PlaybookAnalysisService`, `OllamaPlaybookAnalysisAgent`, `IPlaybookAnalysisAgent` | Playbook analysis → **Suggested** staging (node-local model only). |
 | **Eval** | (uses AI.Agent `IPlaybookEvalAgentRunner`) + `PlaybookActionService` gate logic | Golden-conversation eval gate (Suggested → Enabled). |
 | **Insights** | `FeedbackInsightsService` / `IFeedbackInsightsService` | Read-only per-agent feedback aggregation (n≥3 threshold). |
@@ -179,6 +179,19 @@ is a singleton and `NodeChatDbContext` isn't thread-safe), runs the agent, appli
 (`NodePatchApplyService` with `O_NOFOLLOW`/byte-recheck guards), and stages **memory proposals** that
 are secret-scanned (`MemoryProposalSecretScanner`) before they can be exported. The
 `run_in_agent_home` tool is a ClientLocal handler (`Tools/Implementation/RunInAgentHomeToolHandler.cs`).
+
+**Conversation-attachment staging** (`IConversationSandboxStager`,
+`Services/AgentHome/IConversationSandboxStager.cs`). `AgentHomeService` also implements this narrow public
+seam (`AgentHomeService.cs:28`, `PrepareConversationAttachmentsAsync` at `:233`) so the public
+`NodeChatStreamService` can stage a chat conversation's uploaded attachments into the per-turn sandbox
+without an inconsistent-accessibility error. When an agent-mode turn offers file tools, the stream
+service re-stages the owner-node sandbox to hold **only** that conversation's extracted attachments under
+the workspace `attachments/` alias (the sandbox is recreated first, so there is no cross-conversation
+residue), then hands the model the staged workspace-relative paths so its `list_files` / `read_file` /
+`search_text` tools read them directly. Because the same shared singleton implements both interfaces, the
+re-stage shares the run-level single-flight guard with `run_in_agent_home`. It is a no-op (empty list)
+when Agent Mode is disabled or the conversation has no extracted files. The chat-side wiring — and the
+contrasting plain-chat path that *inlines* extracted text instead of staging — is in [Chat](05-chat.md).
 
 ### 2.3 Capacity gate & sub-agent spawn
 

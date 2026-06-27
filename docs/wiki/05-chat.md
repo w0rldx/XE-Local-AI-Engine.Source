@@ -1,8 +1,8 @@
 # Chat Subsystem
 
-> Last reviewed: 2026-06-24 · Code-grounded.
+> Last reviewed: 2026-06-27 · Code-grounded.
 
-The chat subsystem is the node's interactive conversation surface: a React feature (`src/features/chat`) that streams turns over a local SignalR hub into a backend pipeline (`Client.Application/Services/Chat`) which resolves a model + agent per turn, runs the Microsoft Agent Framework loop through a single re-selecting `IChatClient`, and persists every turn to encrypted SQLite. This page traces a turn end-to-end: model resolution (including the "local default → installed GGUF chat model" rule), the streaming/persistence pump, ordered reasoning↔tool↔answer parts, per-send sampling, per-message agent attribution, reasoning-effort clamping for cloud models, and the at-rest encryption of titles and content. Provider plumbing lives in [Local runtime & providers](03-local-runtime-and-providers.md); agent resolution in [Agent Mode](04-agent-mode.md); persistence/migrations in [Data & persistence](08-data-and-persistence.md); hubs/endpoints in [API & hubs](09-api-and-hubs.md).
+The chat subsystem is the node's interactive conversation surface: a React feature (`src/features/chat`) that streams turns over a local SignalR hub into a backend pipeline (`Client.Application/Services/Chat`) which resolves a model + agent per turn, runs the Microsoft Agent Framework loop through a single re-selecting `IChatClient`, and persists every turn to encrypted SQLite. This page traces a turn end-to-end: model resolution (including the "local default → installed GGUF chat model" rule), the streaming/persistence pump, ordered reasoning↔tool↔answer parts, per-send sampling, per-message agent attribution, reasoning-effort clamping for cloud models, file attachments (encrypted upload → pure-.NET extraction → plain-chat inlining or agent-mode sandbox staging), browser-side voice / text-to-speech output, the client stream watchdog + provider self-heal, and the at-rest encryption of titles and content. Provider plumbing lives in [Local runtime & providers](03-local-runtime-and-providers.md); agent resolution in [Agent Mode](04-agent-mode.md); persistence/migrations in [Data & persistence](08-data-and-persistence.md); hubs/endpoints in [API & hubs](09-api-and-hubs.md).
 
 ## Scope at a glance
 
@@ -16,6 +16,12 @@ The chat subsystem is the node's interactive conversation surface: a React featu
 | Ordered parts interleave | `NodeChatPartAccumulator` |
 | Tool offer per turn | `LocalToolOfferProvider` |
 | Reasoning-effort vocabulary | `ReasoningEffortNormalizer` (backend) / `clampReasoningEffort` (React) |
+| File attachments (store + extraction) | `ConversationUploadedFileStore` + `DocumentTextExtractor` (`Client.Application/Services/DocumentIngestion`) |
+| Plain-chat attachment inlining | `ConversationAttachmentContextComposer` (`Services/Chat/Implementation`) |
+| Agent-mode attachment staging | `IConversationSandboxStager` (see [Agent Mode](04-agent-mode.md)) |
+| Browser voice / TTS tap | `useVoicePlayback` + `VoiceRuntime` (`Client.React`, see [React client](10-react-client.md)) |
+| Stream watchdog | `guardNodeChatStream` (`features/chat/api/NodeChatStreamGuard.ts`) |
+| Provider self-heal on eject/restart | `DeferredLlamaServerChatClient` (`Providers.LlamaServer`) |
 | At-rest encryption | `NodeChatDbContext` + `NodePayloadProtector` (`Client.Persistence`) |
 | React feature | `Client.React/src/features/chat` |
 
@@ -110,6 +116,39 @@ Tools are offered to the turn only when **all three** hold (`NodeChatStreamServi
 
 A bound agent definition narrows this offer to its allowed set (`resolved?.AllowedTools`); an unbound conversation uses the full capability-gated offer. The chosen offer travels in the runtime package as the tool list; the invocation factory resolves matching executables from the registry by name. MCP registration and the tool registry live in [Agent Mode](04-agent-mode.md).
 
+## File attachments
+
+A conversation can carry uploaded file attachments that the model reads as turn context. The path is fully node-local: upload → pure-.NET text extraction → encrypted-at-rest storage → per-turn injection.
+
+**Endpoints** (FastEndpoints, Operator-policy, routes in `Endpoints/Common/LocalApiRoutes.cs:55-56`):
+
+- `POST chat/conversations/{conversationId}/uploads` (`UploadConversationFileEndpoint.cs:17`) — multipart single-file upload. It enforces the `SecurityOptions.MaxUploadFileSizeMb` cap, sanitizes the client filename to a leaf (`UploadFileNameSanitizer.ToSafeLeafFileName`, so no client string forms a path), checks the extractor's extension allowlist, runs extraction, and persists. The storage path is server-generated; the original name is kept only as **encrypted display metadata**.
+- `GET chat/conversations/{conversationId}/uploads` (`ListConversationFilesEndpoint.cs:13`) — metadata only, never the raw bytes or extracted text.
+- `DELETE chat/conversations/{conversationId}/uploads/{fileId}` (`DeleteConversationFileEndpoint.cs:12`) — drops the metadata row plus the on-disk encrypted bytes and cached Markdown; 204 on remove, 404 when no such file.
+
+**Pure-.NET extraction** (`Services/DocumentIngestion/DocumentTextExtractor.cs:36-42`): readers cover plaintext family (`.txt/.md/.csv/.tsv/.json/.log` … `PlaintextDocumentReader.SupportedExtensions`), `.pdf` (`PdfDocumentReader`), and `.docx` (`DocxDocumentReader`) — no external service, no network. Extraction yields a `DocumentExtractionResult` (status + Markdown + char count); only `Extracted` files later contribute text.
+
+**Encrypted store** (`ConversationUploadedFileStore.cs:18`): the raw bytes and the cached extracted Markdown are encrypted on disk by `UploadedFileBlobProtector` (`UploadedFileBlobProtector.cs:20`) — AES-GCM (`nonce ‖ ciphertext ‖ tag`) keyed off the same `INodeSqliteKeyHolder` material as the DB columns, with per-blob associated data binding `conversationId + fileId + columnName` (distinct `file_bytes` / `file_md` column tags) so a blob can't be relocated. The original filename is encrypted into the DB row via `NodeChatDbContext.EncryptUploadedFileName`. See [Security & privacy](12-security-and-privacy.md).
+
+**Two injection modes** (`NodeChatStreamService.cs:215-220`): the synthetic prepended context differs by turn mode.
+
+- **Plain chat** inlines the extracted text directly. `BuildAttachmentContextMessageAsync` (`:585`) loads the `AttachmentFileIds` named on the send, keeps only `Extracted` files, reads each decrypted Markdown, and composes one capped context message via `ConversationAttachmentContextComposer.Compose(parts, MaxInlinedAttachmentChars)` prepended to the conversation history (`BuildConversationContext` adds a `historyOffset`, `:561`). Returns `null` on the common no-attachment path so the prompt stays byte-identical.
+- **Agent mode** never inlines content. When the turn offers tools, the sandbox is re-staged with this conversation's attachments and the model is handed a pointer message naming the staged paths — see the sandbox-staging path below.
+
+**Agent-mode sandbox staging:** `IConversationSandboxStager.PrepareConversationAttachmentsAsync` re-stages the node sandbox so it holds **only** this conversation's extracted attachments under the workspace `attachments/` alias, then `BuildAgentAttachmentHint` (`:658`) emits a pointer message listing those staged paths so a weak model reads the right files with its `read_file` / `list_files` / `search_text` tools. Staging is best-effort (`PrepareConversationAttachmentsSafelyAsync`, `:639` — a staging failure degrades to an un-staged run, never fails the turn). The stager lives in Agent Mode; see [Agent Mode](04-agent-mode.md).
+
+The same `AttachmentFileIds` are re-sent on **every** turn from the React side (`Chat.tsx:656-658`) so the server always inlines/stages the conversation's *current* (non-deleted) set. On the React side `useConversationAttachments` calls `ensureConversationId` so a first upload attaches to the **selected** conversation rather than minting a duplicate thread; `usePaneFileDrop` adds container-level drag-and-drop over the chat pane and `ChatAttachmentChips` renders the staged set.
+
+## Voice / text-to-speech output
+
+Assistant answers can be spoken aloud. The TTS engine runs **entirely in the browser** (WebGPU Kokoro with a Web Speech fallback ladder) — no audio synthesis touches the backend, so voice adds no new egress channel (the backend only serves a config-only voice manifest; see [React client](10-react-client.md) and [Security & privacy](12-security-and-privacy.md)).
+
+The chat-side tap is `useVoicePlayback` (`features/voice/useVoicePlayback.ts:24`), intentionally **decoupled** from the stream reducer: `Chat.tsx` (`:176`) feeds it the same `ChatStreamingState` it hands to the renderer, and the hook diffs only the **answer** text (never reasoning/tool parts), buffers whole sentences (`SentenceBuffer`), and fire-and-forget-enqueues each completed sentence to the runtime so synthesis never blocks the hot stream loop.
+
+- **Selected voice wins** (`enqueueSentence`, `:41-50`): the engine and its language are driven from the *selected* voice's own language (`VoicePreferencesStore.voiceProfile` → `manifest.defaultVoiceId`), so auto-play matches the node-settings audition exactly — an English answer is never re-routed away from a German voice the user picked. `detectAnswerLanguage` is only the fallback when no voice resolves at all.
+- **Barge-in** (`onTurnStart`, `:55-61`): every new send / regenerate / cancel stops current playback and resets the per-turn sentence buffer, so a new turn's audio never trails the previous one.
+- **Web Speech voiceId** honored: when the runtime ladder falls through to `WebSpeechProvider` (`core/runtime/VoiceRuntime.ts:81-82`), the selected `voiceId` still drives the platform utterance.
+
 ## Per-send advanced sampling
 
 Developer-mode per-send sampling overrides ride the send request end-to-end. The React shape is `ChatSamplingOptions` (`src/features/chat/models/ChatSamplingOptions.ts`): `temperature`, `topP`, `topK`, `minP`, `maxOutputTokens`, `repeatPenalty`, `repeatLastN`, `presencePenalty`, `frequencyPenalty`, `seed`, `stop[]`, `numCtx`. The `samplingFieldGroups` metadata drives the `ChatSamplingOptionsDialog` inputs (ranges, sliders, decimal scale). `toWireSamplingOptions` normalizes finite numbers; the adapter forwards `samplingOptions` only when present (`NodeChatAdapter.ts:130-131`).
@@ -153,6 +192,12 @@ Organized by concern:
 
 `nodeChatAdapter.sendMessage` (`NodeChatAdapter.ts:420`) builds a wire request and opens a SignalR stream (`SendMessage`) through `signalRStream` (`:171`), an `AsyncIterable` that bridges SignalR pushes to `for await`. Its standout behavior is **transparent resume**: if the connection drops mid-stream, rather than failing the turn it waits for reconnect and re-attaches via the hub's `ResumeMessage` keyed by the invocation/request id. Resumed events stamp the invocation id as the message id and are remapped back to the assistant message id the caller renders (`:213-215`). A `ResumeMessage` stream that throws "unknown/terminal invocation" completes cleanly (the response already finished server-side) so the caller refetches the persisted conversation instead of showing a spurious failure. Terminal event types (`assistant-completed/cancelled/failed/interrupted`) end the stream. The same machinery serves `regenerateMessage` (`:434`), where the server mints the sibling variant and the ids are latched from the first event. All REST calls go through hey-api generated clients (`@/core/api/generated`) with `callWithResponseValidation` — see [React client](10-react-client.md) and [API & hubs](09-api-and-hubs.md).
 
+### Stream watchdog & provider self-heal
+
+`guardNodeChatStream` (`features/chat/api/NodeChatStreamGuard.ts:63`) wraps the stream with two guarantees: events are re-ordered by ascending `sequence` (out-of-order arrivals buffered until the gap fills), and a watchdog fails a silent stream. The timeouts are deliberately **large** because a 20B+ model can take well over the old 30 s to emit the first token during cold prompt processing and reasoning models pause silently mid-answer: `defaultFirstChunkTimeoutMs = 120_000` (no-first-chunk, raised from 30 s) and `defaultInterChunkTimeoutMs = 180_000` (inter-chunk-stall, raised from 60 s) (`:32-33`). The categorized `StreamWatchdogError` (`no-first-chunk` / `inter-chunk-stall`, `:3,11`) surfaces in the UI failure label.
+
+On the backend, a transient eject is recovered without an app restart: `DeferredLlamaServerChatClient` (`Providers.LlamaServer/Implementation/DeferredLlamaServerChatClient.cs:20-25`) binds its cached MEAI adapter to a specific llama-server endpoint. If that process is gone when a request is sent (operator ejected the model, variant switched, or the server crashed → the socket is refused) and **no output has streamed yet**, it drops the cached adapter, re-asks the supervisor to ensure a running server (which re-spawns it), and retries the request **once** (`GetResponseAsync`/`GetStreamingResponseAsync`, `:55-62`). Without this a single eject permanently bricked chat for that model. See [Local runtime & providers](03-local-runtime-and-providers.md).
+
 ## Seams & invariants a maintainer must respect
 
 - **`RuntimeChatClient` re-selects per call** — never cache the resolved inner client; never dispose it at the call boundary.
@@ -162,6 +207,8 @@ Organized by concern:
 - **The tool offer must be byte-identical for the same catalog state** (stable config hash) — preserve sorting and capability gating; keep `spawn_subagent` profile-opt-in only.
 - **Effort vocabulary lives in one place** (`ReasoningEffortNormalizer`); Codex-only levels must never reach the Ollama `think` wire as literals.
 - **Titles and content are ciphertext at rest** with per-record AAD; the node key never leaves the node.
+- **Attachment bytes and extracted Markdown are encrypted at rest too** (`UploadedFileBlobProtector`, per-blob AAD); plain chat inlines only `Extracted` text capped to `MaxInlinedAttachmentChars`, agent mode never inlines content — it stages files into the sandbox and points at staged paths.
+- **Voice synthesis is browser-side and answer-only** — feed `useVoicePlayback` only the answer text, never reasoning/tool parts; barge-in must reset on every send/regenerate/cancel; the selected voice's language always wins over auto-detection.
 
 ## Related pages
 
