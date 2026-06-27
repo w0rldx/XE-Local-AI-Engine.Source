@@ -1,0 +1,4 @@
+# Keep shell scripts LF-only so they run under bash on Windows checkouts
+# (CRLF makes bash fail with "set: invalid option name pipefail").
+*.sh text eol=lf
+scripts/* text eol=lf
