@@ -457,7 +457,20 @@ public sealed class LlamaServerProcessSupervisor : ILlamaServerProcessSupervisor
             "--host",
             "127.0.0.1", // localhost-only bind
             "--port",
-            port.ToString(CultureInfo.InvariantCulture)
+            port.ToString(CultureInfo.InvariantCulture),
+
+            // Single-slot serving (the locked design — one in-flight request per (model, role) process). Pinning
+            // --parallel 1 stops llama-server from auto-selecting n_parallel=4, which reserves 4x the KV cache and
+            // starves --fit's weight offload: with the auto default, fit spills weights to system RAM to make room for
+            // KV slots that are never used, so a model that would fit on the GPU runs slow on the CPU instead.
+            "--parallel",
+            "1",
+
+            // Skip the empty-run warmup. On a large model it can take 45-110s and overrun the readiness budget, which
+            // tree-kills the half-ready process and respawns it in a loop (observed as a chat inter-chunk stall and an
+            // explore "did not become ready in time"). The model serves correctly without it — the readiness probe and
+            // the first real request warm it naturally — so dropping it makes startup fast and reliable at any size.
+            "--no-warmup"
         };
 
         // The variant only selects the GPU-enabled llama.cpp BUILD (Cuda/Vulkan); the CPU variant stays a pure CPU run

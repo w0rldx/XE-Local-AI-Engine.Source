@@ -90,6 +90,25 @@ public sealed class SupervisorLaunchSpecProfileTests
     }
 
     [Test]
+    public void LaunchSpec_AlwaysEmitsSingleSlotAndNoWarmup()
+    {
+        // Single-slot serving (locked design) + skip the empty-run warmup so a large model becomes ready before the
+        // readiness budget elapses (otherwise it tree-kills + respawns). Both apply to every spawn regardless of mode.
+        var explore = BuildGpuSpec(ResolvedLaunchArguments.Explore());
+        AssertEx.Equal("1", explore.Arguments[IndexOf(explore.Arguments, "--parallel") + 1]);
+        AssertEx.Contains(explore.Arguments, "--no-warmup");
+
+        var cpu = LlamaServerProcessSupervisor.BuildLaunchSpec(ChatKey,
+            "/fake/bin/llama-server",
+            "/fake/models/model.gguf",
+            port: 8080,
+            GpuVariant.Cpu,
+            ResolvedLaunchArguments.Explore());
+        AssertEx.Equal("1", cpu.Arguments[IndexOf(cpu.Arguments, "--parallel") + 1]);
+        AssertEx.Contains(cpu.Arguments, "--no-warmup");
+    }
+
+    [Test]
     public void LaunchSpec_WhenCpuVariant_EmitsNoGpuOrFitArgs()
     {
         // Even with a replay profile, the CPU variant stays a pure CPU run: no gpu/fit args at all.
