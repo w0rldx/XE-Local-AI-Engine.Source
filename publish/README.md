@@ -46,7 +46,10 @@ bundle with no self-update.
 Tag-triggered CI in `.github/workflows/release.yml`. It publishes per RID, runs
 `vpk pack`, and `vpk upload github`, producing the installer
 (`Setup.exe` / `.AppImage`), a **portable** build, and **delta** packages — all
-sharing one `releases.{rid}.json` feed per repo. Installs made from these artifacts
+sharing one `releases.{rid}.json` feed per repo. The `version` job also auto-generates
+the changelog (git-cliff, commits since the previous tag), uploads it as an artifact,
+and both RID legs pass it to `vpk pack --releaseNotes` so the GitHub release body is the
+grouped changelog. No manual notes step in CI. Installs made from these artifacts
 self-update via the in-app "update available → Update now" flow (GitHub device-flow
 auth; see `Plans/2026-06-25-app-self-update-velopack-plan.md`).
 
@@ -116,7 +119,24 @@ dotnet publish XE-Local-AI-Engine.Client\XE-Local-AI-Engine.Client.csproj `
 dir XE-Local-AI-Engine.Client\bin\Release\net10.0\win-x64\publish\wwwroot\index.html
 dir XE-Local-AI-Engine.Client\bin\Release\net10.0\win-x64\publish\wwwroot\assets
 
+# 1c. Generate the changelog from the commits since the previous tag. `vpk pack --releaseNotes`
+#     embeds RELEASE_NOTES.md and `vpk upload github` publishes it as the GitHub release body.
+#     git-cliff is pinned by version + SHA256 (same convention as the llama.cpp binaries). On
+#     Windows call git-cliff.exe DIRECTLY (the scripts/generate-release-notes.sh is LF-only and is
+#     the CI/Linux path; running it through Git Bash on Windows hits CRLF/quoting issues).
+$gcVersion = "2.13.1"
+$gcSha = "3AE3A5549E85C7AD5B20192EBCFEE4371269DECA51255F6F2F2E051C6541F5CA"  # x86_64-pc-windows-msvc.zip
+$gcZip  = "git-cliff-$gcVersion-x86_64-pc-windows-msvc.zip"
+Invoke-WebRequest "https://github.com/orhun/git-cliff/releases/download/v$gcVersion/$gcZip" -OutFile $gcZip
+if ((Get-FileHash $gcZip -Algorithm SHA256).Hash -ne $gcSha) { throw "git-cliff checksum mismatch" }
+Expand-Archive $gcZip -DestinationPath gc-tmp -Force
+# Resolve the exe by full path and invoke with & (avoids PATH issues across shells):
+$gcExe = Get-ChildItem -Recurse -Filter git-cliff.exe gc-tmp | Select-Object -First 1 -ExpandProperty FullName
+& $gcExe --unreleased --tag v0.1.0-rc.1 --strip header -o RELEASE_NOTES.md
+Get-Content RELEASE_NOTES.md   # sanity-check the body before packing
+
 # 2. Pack — --noInst suppresses Setup.exe, leaving Portable.zip + nupkg + releases.win.json.
+#    --releaseNotes embeds the changelog generated in step 1c as the release body.
 #    NOTE: `vpk pack` has NO --pre flag (vpk 1.2.0). The prerelease state comes from the
 #    SemVer suffix in --packVersion (0.1.0-rc.1 IS a prerelease). Passing --pre here fails
 #    with "'--pre' was not matched".
@@ -126,6 +146,7 @@ dnx vpk@1.2.0 pack `
   --packDir XE-Local-AI-Engine.Client\bin\Release\net10.0\win-x64\publish `
   --mainExe XE-Local-AI-Engine.Client.exe `
   --channel win `
+  --releaseNotes RELEASE_NOTES.md `
   --noInst
 
 # 3. Upload — creates the GitHub release on the tester repo. --pre marks it a GitHub
@@ -145,7 +166,9 @@ Notes that bite if missed:
 - **`--packVersion` carries the prerelease, not a flag.** `vpk pack` (1.2.0) has **no `--pre`** — a suffixed SemVer (`0.1.0-rc.1.0`) is already a prerelease. `--pre` is valid only on `vpk upload github` (it marks the *GitHub* release as a prerelease). Keep `--packVersion` in sync with `Directory.Build.props`.
 - **`--noInst`** drops `Setup.exe` and ships only the portable `-Portable.zip` + `*.nupkg` + `releases.win.json` feed. Drop `--noInst` if you also want the installer.
 - **`--publish`** promotes the GitHub release from draft to live so the in-app self-update can see it; omit it to inspect a draft first.
-- Run the same steps with `-p:PublishProfile=linux-x64`, `--mainExe XE-Local-AI-Engine.Client`, `--channel linux` to cut the Linux tester build.
+- **`--releaseNotes RELEASE_NOTES.md`** (step 1c) sets the GitHub release body. `vpk upload github` has **no** notes flag — notes are embedded at pack time. Skip 1c and the release body is empty. Changelog quality depends on conventional-commit subjects; `merge:` + `chore(build): …version` are auto-skipped (tune in `cliff.toml`).
+- **git-cliff "not recognized"** after `$env:PATH = …` in a new shell → resolve the exe by full path and run it with `& $gcExe …` (as shown in 1c), or re-run the PATH line in the current session.
+- Run the same steps with `-p:PublishProfile=linux-x64`, `--mainExe XE-Local-AI-Engine.Client`, `--channel linux` to cut the Linux tester build. On Linux use the shared generator: `scripts/generate-release-notes.sh 0.1.0-rc.1 RELEASE_NOTES.md` (install the pinned linux tarball `git-cliff-2.13.1-x86_64-unknown-linux-gnu.tar.gz`, sha256 `9a1263f24e59a2f508c7b3d3283c9dea94a8bf697f96dbc18cc783cac6284546`).
 
 ### Path B — Tester zip (manual, no install, no self-update)
 
