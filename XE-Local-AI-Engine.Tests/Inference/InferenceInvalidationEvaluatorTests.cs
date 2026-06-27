@@ -57,8 +57,7 @@ public sealed class InferenceInvalidationEvaluatorTests
     {
         var installedStore = Substitute.For<IInstalledRuntimeStore>();
         installedStore.ReadAsync(Arg.Any<CancellationToken>())
-                      .Returns(Task.FromResult<InstalledRuntimeState?>(
-                          new InstalledRuntimeState(installedTag, "llama.zip", "deadbeef", GpuVariant.Cuda, DateTimeOffset.UnixEpoch)));
+                      .Returns(Task.FromResult<InstalledRuntimeState?>(new InstalledRuntimeState(installedTag, "llama.zip", "deadbeef", GpuVariant.Cuda, DateTimeOffset.UnixEpoch)));
 
         var hardwareProfiler = Substitute.For<IHardwareProfiler>();
         hardwareProfiler.GetProfileAsync(Arg.Any<bool>(), Arg.Any<CancellationToken>())
@@ -88,8 +87,7 @@ public sealed class InferenceInvalidationEvaluatorTests
 
     private static InferenceProfileRecord FrozenRecord(string build, long? freeVramAtFreeze)
     {
-        return new InferenceProfileRecord(
-            Id: Guid.NewGuid(),
+        return new InferenceProfileRecord(Id: Guid.NewGuid(),
             MachineKey: "machine-abc",
             ModelName: "bartowski/Model-GGUF:Q4_K_M",
             Role: (int)ModelRole.Chat,

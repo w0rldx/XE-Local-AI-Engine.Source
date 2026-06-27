@@ -1,7 +1,5 @@
 namespace XE_Local_AI_Engine.Client.Endpoints.LocalChat.V1;
 
-using Microsoft.AspNetCore.Http;
-
 /// <summary>
 ///     Route binding for the multipart upload endpoint. The conversation id travels in the route; the file rides the
 ///     multipart form. The typed <see cref="File"/> property exists so FastEndpoints documents a

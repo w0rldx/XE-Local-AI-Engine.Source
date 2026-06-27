@@ -68,16 +68,26 @@ internal sealed class DocxDocumentReader : IngestionDocumentReader
         if (headingLevel is int level)
         {
             var heading = string.Create(CultureInfo.InvariantCulture, $"{new string('#', level)} {inline}");
-            return new IngestionDocumentHeader(heading) { Text = heading, Level = level };
+            return new IngestionDocumentHeader(heading)
+            {
+                Text = heading,
+                Level = level
+            };
         }
 
         if (IsListItem(paragraph))
         {
             var bullet = "- " + inline;
-            return new IngestionDocumentParagraph(bullet) { Text = bullet };
+            return new IngestionDocumentParagraph(bullet)
+            {
+                Text = bullet
+            };
         }
 
-        return new IngestionDocumentParagraph(inline) { Text = inline };
+        return new IngestionDocumentParagraph(inline)
+        {
+            Text = inline
+        };
     }
 
     private static string RenderInline(Paragraph paragraph)
@@ -183,7 +193,10 @@ internal sealed class DocxDocumentReader : IngestionDocumentReader
         }
 
         var markdown = builder.ToString().TrimEnd('\n');
-        return new IngestionDocumentParagraph(markdown) { Text = markdown };
+        return new IngestionDocumentParagraph(markdown)
+        {
+            Text = markdown
+        };
     }
 
     private static void AppendRow(StringBuilder builder, IReadOnlyList<string> cells, int columnCount)

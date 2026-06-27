@@ -81,8 +81,7 @@ public sealed class UploadConversationFileEndpoint(
             extraction = await _extractor.ExtractAsync(extractionStream, originalName, extension, ct).ConfigureAwait(false);
         }
 
-        var input = new ConversationUploadedFileInput(
-            req.ConversationId,
+        var input = new ConversationUploadedFileInput(req.ConversationId,
             Guid.NewGuid(),
             originalName,
             string.IsNullOrWhiteSpace(file.ContentType) ? DefaultMimeType : file.ContentType,

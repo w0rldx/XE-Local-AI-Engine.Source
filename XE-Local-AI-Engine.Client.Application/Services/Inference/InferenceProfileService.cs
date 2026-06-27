@@ -169,15 +169,15 @@ public sealed class InferenceProfileService : IInferenceProfileService
         {
             _logger.LogWarning(exception, "Benchmark spawn failed for profile {ProfileId}.", profileId);
             await _snapshotStore.MarkTerminalAsync(snapshot.Id,
-                    ModelFitRunStatus.Failed,
-                    exitCode: null,
-                    durationMs: NowUnixMs() - startedAtUtc,
-                    rawJson: null,
-                    stderrExcerpt: $"Benchmark spawn error: {exception.GetType().Name}.",
-                    diagnosticsJson: null,
-                    completedAtUtc: NowUnixMs(),
-                    ct)
-                .ConfigureAwait(false);
+                                    ModelFitRunStatus.Failed,
+                                    exitCode: null,
+                                    durationMs: NowUnixMs() - startedAtUtc,
+                                    rawJson: null,
+                                    stderrExcerpt: $"Benchmark spawn error: {exception.GetType().Name}.",
+                                    diagnosticsJson: null,
+                                    completedAtUtc: NowUnixMs(),
+                                    ct)
+                                .ConfigureAwait(false);
             return BenchmarkResult.Fail($"Benchmark spawn failed: {exception.GetType().Name}.", snapshot.Id);
         }
 
@@ -187,15 +187,15 @@ public sealed class InferenceProfileService : IInferenceProfileService
 
         var terminalStatus = metrics.Success ? ModelFitRunStatus.Succeeded : ModelFitRunStatus.Failed;
         await _snapshotStore.MarkTerminalAsync(snapshot.Id,
-                terminalStatus,
-                exitCode: metrics.Success ? 0 : 1,
-                durationMs: completedAtUtc - startedAtUtc,
-                rawJson: metrics.RawJson,
-                stderrExcerpt: metrics.Success ? null : metrics.FailureReason,
-                diagnosticsJson: null,
-                completedAtUtc: completedAtUtc,
-                ct)
-            .ConfigureAwait(false);
+                                terminalStatus,
+                                exitCode: metrics.Success ? 0 : 1,
+                                durationMs: completedAtUtc - startedAtUtc,
+                                rawJson: metrics.RawJson,
+                                stderrExcerpt: metrics.Success ? null : metrics.FailureReason,
+                                diagnosticsJson: null,
+                                completedAtUtc: completedAtUtc,
+                                ct)
+                            .ConfigureAwait(false);
 
         return new BenchmarkResult(metrics.Success,
             metrics.Success ? null : metrics.FailureReason,
@@ -220,11 +220,11 @@ public sealed class InferenceProfileService : IInferenceProfileService
 
         // The freeze gate: a successful benchmark is the only justification.
         var benchmark = await _snapshotStore.GetLatestSuccessfulSummaryAsync(ModelFitOperation.Benchmark,
-                useCase: null,
-                providerName: ProviderName,
-                modelName: profile.ModelName,
-                ct)
-            .ConfigureAwait(false);
+                                                useCase: null,
+                                                providerName: ProviderName,
+                                                modelName: profile.ModelName,
+                                                ct)
+                                            .ConfigureAwait(false);
         if (benchmark is null)
         {
             return ProfileActionResult.Fail($"Profile {profileId} has no successful benchmark; freeze is gated on a passing benchmark.");

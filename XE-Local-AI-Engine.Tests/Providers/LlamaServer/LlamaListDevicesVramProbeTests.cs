@@ -21,10 +21,10 @@ public sealed class LlamaListDevicesVramProbeTests
     public void TryParse_MultiDevice_ReturnsMaxFreeInBytes()
     {
         const string output = """
-            Available devices:
-              CUDA0: NVIDIA GeForce RTX 4090 (24210 MiB, 23500 MiB free)
-              Vulkan0: Intel(R) Arc(tm) (16000 MiB, 15200 MiB free)
-            """;
+                              Available devices:
+                                CUDA0: NVIDIA GeForce RTX 4090 (24210 MiB, 23500 MiB free)
+                                Vulkan0: Intel(R) Arc(tm) (16000 MiB, 15200 MiB free)
+                              """;
 
         var result = LlamaListDevicesVramProbe.TryParseMaxFreeVramBytes(output);
 
@@ -92,11 +92,11 @@ public sealed class LlamaListDevicesVramProbeTests
     public void TryParse_DevicesUnordered_StillReturnsGlobalMax()
     {
         const string output = """
-            Available devices:
-              GPU0 (16000 MiB, 15200 MiB free)
-              GPU1 (24210 MiB, 23500 MiB free)
-              GPU2 (8000 MiB, 1024 MiB free)
-            """;
+                              Available devices:
+                                GPU0 (16000 MiB, 15200 MiB free)
+                                GPU1 (24210 MiB, 23500 MiB free)
+                                GPU2 (8000 MiB, 1024 MiB free)
+                              """;
 
         var result = LlamaListDevicesVramProbe.TryParseMaxFreeVramBytes(output);
 
@@ -110,7 +110,7 @@ public sealed class LlamaListDevicesVramProbeTests
 
         // If the probe were to spawn a process for a CPU backend it would first call EnsureBinaryAsync — make that loud.
         binaryManager.EnsureBinaryAsync(Arg.Any<GpuVariant>(), Arg.Any<CancellationToken>())
-            .Returns<Task<LlamaBinary>>(_ => throw new InvalidOperationException("The CPU backend must not resolve a binary or spawn a process."));
+                     .Returns<Task<LlamaBinary>>(_ => throw new InvalidOperationException("The CPU backend must not resolve a binary or spawn a process."));
         var probe = new LlamaListDevicesVramProbe(binaryManager, NullLogger<LlamaListDevicesVramProbe>.Instance);
 
         var result = await probe.TryGetFreeVramBytesAsync("cpu", CancellationToken.None);

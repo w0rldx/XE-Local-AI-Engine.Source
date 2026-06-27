@@ -40,7 +40,17 @@ public sealed class ConversationUploadEndpointTests
         await using var factory = new TestingWebAppFactory();
         using var client = factory.CreateClient();
 
-        var pngSignature = new byte[] { 0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A };
+        var pngSignature = new byte[]
+        {
+            0x89,
+            0x50,
+            0x4E,
+            0x47,
+            0x0D,
+            0x0A,
+            0x1A,
+            0x0A
+        };
         using var response = await UploadAsync(factory, client, Guid.NewGuid(), "image.png", pngSignature, "image/png").ConfigureAwait(false);
 
         AssertEx.Equal(HttpStatusCode.BadRequest, response.StatusCode);
@@ -71,7 +81,10 @@ public sealed class ConversationUploadEndpointTests
     {
         using var request = new HttpRequestMessage(HttpMethod.Post, "/api/local/v1/chat/conversations")
         {
-            Content = JsonContent.Create(new { title = "uploads-test" })
+            Content = JsonContent.Create(new
+            {
+                title = "uploads-test"
+            })
         };
         factory.AddNodeBearerToken(request);
         request.Headers.Add("Origin", "http://localhost");

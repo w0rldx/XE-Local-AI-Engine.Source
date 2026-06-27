@@ -25,10 +25,10 @@ public sealed class InferenceProfileStore(NodeChatDbContext dbContext, TimeProvi
 
         var existing = await _dbContext.InferenceProfiles
                                        .FirstOrDefaultAsync(profile =>
-                                           profile.MachineKey == input.MachineKey &&
-                                           profile.ModelName == input.ModelName &&
-                                           profile.Role == input.Role &&
-                                           profile.Backend == input.Backend,
+                                               profile.MachineKey == input.MachineKey &&
+                                               profile.ModelName == input.ModelName &&
+                                               profile.Role == input.Role &&
+                                               profile.Backend == input.Backend,
                                            cancellationToken)
                                        .ConfigureAwait(false);
 
@@ -125,10 +125,10 @@ public sealed class InferenceProfileStore(NodeChatDbContext dbContext, TimeProvi
         var entity = await _dbContext.InferenceProfiles
                                      .AsNoTracking()
                                      .FirstOrDefaultAsync(profile =>
-                                         profile.MachineKey == machineKey &&
-                                         profile.ModelName == modelName &&
-                                         profile.Role == role &&
-                                         profile.Backend == backend,
+                                             profile.MachineKey == machineKey &&
+                                             profile.ModelName == modelName &&
+                                             profile.Role == role &&
+                                             profile.Backend == backend,
                                          cancellationToken)
                                      .ConfigureAwait(false);
 

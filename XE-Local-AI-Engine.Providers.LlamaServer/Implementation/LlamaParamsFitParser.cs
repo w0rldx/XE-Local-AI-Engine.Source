@@ -1,5 +1,6 @@
 namespace XE_Local_AI_Engine.Providers.LlamaServer.Implementation;
 
+using System.Globalization;
 using System.Text.RegularExpressions;
 using XE_Local_AI_Engine.Providers.LlamaServer.Contracts;
 
@@ -67,7 +68,7 @@ internal static partial class LlamaParamsFitParser
         }
 
         var raw = match.Groups["value"].Value;
-        return int.TryParse(raw, System.Globalization.NumberStyles.Integer, System.Globalization.CultureInfo.InvariantCulture, out var value)
+        return int.TryParse(raw, NumberStyles.Integer, CultureInfo.InvariantCulture, out var value)
             ? value
             : null;
     }

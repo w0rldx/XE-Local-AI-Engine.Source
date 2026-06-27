@@ -5,7 +5,7 @@ using System.Text;
 using Microsoft.EntityFrameworkCore;
 using XE_Local_AI_Engine.Client.Persistence;
 using XE_Local_AI_Engine.Providers.Abstractions;
-using static XE_Local_AI_Engine.Client.Services.Chat.Implementation.NodeChatPersistenceSql;
+using static Chat.Implementation.NodeChatPersistenceSql;
 
 /// <summary>
 ///     Durable per-conversation uploaded-file store. Metadata rows are written/read over the raw-SQL path (matching the

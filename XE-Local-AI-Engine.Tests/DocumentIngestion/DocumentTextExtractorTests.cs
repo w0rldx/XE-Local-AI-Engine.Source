@@ -1,5 +1,6 @@
 namespace XE_Local_AI_Engine.Tests.DocumentIngestion;
 
+using System.Globalization;
 using System.Text;
 using DocumentFormat.OpenXml;
 using DocumentFormat.OpenXml.Packaging;
@@ -137,13 +138,19 @@ public sealed class DocumentTextExtractorTests
 
             // Append children one at a time: the constructor-with-children overloads trip Sonar S3220.
             var heading = body.AppendChild(new Paragraph());
-            heading.AppendChild(new ParagraphProperties()).AppendChild(new ParagraphStyleId { Val = "Heading1" });
+            heading.AppendChild(new ParagraphProperties()).AppendChild(new ParagraphStyleId
+            {
+                Val = "Heading1"
+            });
             heading.AppendChild(new Run()).AppendChild(new Text("Project Overview"));
 
             var paragraph = body.AppendChild(new Paragraph());
             var boldRun = paragraph.AppendChild(new Run());
             boldRun.AppendChild(new RunProperties()).AppendChild(new Bold());
-            boldRun.AppendChild(new Text("Important: ") { Space = SpaceProcessingModeValues.Preserve });
+            boldRun.AppendChild(new Text("Important: ")
+            {
+                Space = SpaceProcessingModeValues.Preserve
+            });
             paragraph.AppendChild(new Run()).AppendChild(new Text("the quick brown fox."));
 
             mainPart.Document.Save();
@@ -171,7 +178,9 @@ public sealed class DocumentTextExtractorTests
         builder.Append("%PDF-1.4\n");
 
         var offsets = new int[6];
-        int CurrentOffset() => Encoding.ASCII.GetByteCount(builder.ToString());
+
+        int CurrentOffset() =>
+            Encoding.ASCII.GetByteCount(builder.ToString());
 
         for (var i = 0; i < objects.Length; i++)
         {
@@ -187,7 +196,7 @@ public sealed class DocumentTextExtractorTests
         builder.Append("0000000000 65535 f \n");
         for (var i = 1; i <= 5; i++)
         {
-            builder.Append(offsets[i].ToString("D10", System.Globalization.CultureInfo.InvariantCulture)).Append(" 00000 n \n");
+            builder.Append(offsets[i].ToString("D10", CultureInfo.InvariantCulture)).Append(" 00000 n \n");
         }
 
         builder.Append("trailer\n<< /Size 6 /Root 1 0 R >>\nstartxref\n").Append(startxref).Append("\n%%EOF");

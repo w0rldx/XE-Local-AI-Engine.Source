@@ -30,7 +30,11 @@ internal sealed class PdfDocumentReader : IngestionDocumentReader
                     continue;
                 }
 
-                section.Elements.Add(new IngestionDocumentParagraph(pageText) { Text = pageText, PageNumber = page.Number });
+                section.Elements.Add(new IngestionDocumentParagraph(pageText)
+                {
+                    Text = pageText,
+                    PageNumber = page.Number
+                });
             }
         }
 

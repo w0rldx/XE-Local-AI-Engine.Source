@@ -622,8 +622,7 @@ public sealed class NodeChatStreamServiceTests
         // The pointer names the exact staged path so a weak model reads it instead of guessing a file name.
         AssertEx.Contains(runner.CapturedContext, message => message.Content.Contains("attachments/spec.md", StringComparison.Ordinal));
         // But the file CONTENT is NOT inlined in agent mode (the agent reads it via its tools).
-        AssertEx.False(
-            runner.CapturedContext.Any(message => message.Content.Contains(ConversationAttachmentContextComposer.Preamble, StringComparison.Ordinal)),
+        AssertEx.False(runner.CapturedContext.Any(message => message.Content.Contains(ConversationAttachmentContextComposer.Preamble, StringComparison.Ordinal)),
             "Agent mode must not inline attachment text.");
     }
 
@@ -739,8 +738,7 @@ public sealed class NodeChatStreamServiceTests
 
         AssertEx.True(drained > 0, "Expected the send to stream events.");
         AssertEx.True(runner.CaptureObserved, "Expected the runner to observe the package.");
-        AssertEx.False(
-            runner.CapturedContext.Any(message => message.Content.Contains(ConversationAttachmentContextComposer.Preamble, StringComparison.Ordinal)),
+        AssertEx.False(runner.CapturedContext.Any(message => message.Content.Contains(ConversationAttachmentContextComposer.Preamble, StringComparison.Ordinal)),
             "Agent mode must not inline attachment text — the agent reads the staged files via its tools.");
         await uploadedFileStore.DidNotReceive().ListAsync(Arg.Any<Guid>(), Arg.Any<CancellationToken>());
     }

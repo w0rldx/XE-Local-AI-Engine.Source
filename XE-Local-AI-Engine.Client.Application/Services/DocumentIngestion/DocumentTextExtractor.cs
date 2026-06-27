@@ -80,8 +80,7 @@ public sealed class DocumentTextExtractor : IDocumentTextExtractor
         {
             // Never log file content or the file name: the extension and the exception type are enough to triage.
             _logger.LogWarning("Document extraction failed for a {Extension} upload ({ExceptionType}).", normalizedExtension, exception.GetType().Name);
-            return new DocumentExtractionResult(
-                DocumentExtractionStatus.Failed,
+            return new DocumentExtractionResult(DocumentExtractionStatus.Failed,
                 Markdown: null,
                 ExtractedChars: null,
                 Error: string.Create(CultureInfo.InvariantCulture, $"Extraction failed ({exception.GetType().Name})."));

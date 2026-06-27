@@ -63,8 +63,7 @@ public sealed class InferenceProfileServiceTests
         var profile = AssertEx.NotNull(result.Profile);
         AssertEx.Equal(8192, profile.CtxSize);
         AssertEx.Null(profile.NGpuLayers);
-        await fixture.ProfileStore.Received(1).CreateOrUpdateExploredAsync(
-            Arg.Is<InferenceProfileInput>(input => input.CtxSize == 8192 && input.NGpuLayers == null),
+        await fixture.ProfileStore.Received(1).CreateOrUpdateExploredAsync(Arg.Is<InferenceProfileInput>(input => input.CtxSize == 8192 && input.NGpuLayers == null),
             Arg.Any<CancellationToken>());
     }
 
@@ -155,10 +154,10 @@ public sealed class InferenceProfileServiceTests
         fixture.WithProfiles(profile);
         var snapshotId = Guid.NewGuid();
         fixture.SnapshotStore.GetLatestSuccessfulSummaryAsync(ModelFitOperation.Benchmark,
-                               useCase: null,
-                               providerName: "llamacpp",
-                               modelName: Model,
-                               Arg.Any<CancellationToken>())
+                   useCase: null,
+                   providerName: "llamacpp",
+                   modelName: Model,
+                   Arg.Any<CancellationToken>())
                .Returns(Task.FromResult<ModelFitSnapshotSummaryRecord?>(Summary(snapshotId, ModelFitRunStatus.Succeeded)));
         fixture.VramProbe.TryGetFreeVramBytesAsync("cuda", Arg.Any<CancellationToken>()).Returns(Task.FromResult<long?>(2000));
         fixture.ProfileStore.MarkFrozenAsync(profile.Id, snapshotId, 2000, Arg.Any<CancellationToken>())
@@ -185,10 +184,10 @@ public sealed class InferenceProfileServiceTests
         var profile = ExploredRecord();
         fixture.WithProfiles(profile);
         fixture.SnapshotStore.GetLatestSuccessfulSummaryAsync(Arg.Any<ModelFitOperation>(),
-                               Arg.Any<string?>(),
-                               Arg.Any<string>(),
-                               Arg.Any<string?>(),
-                               Arg.Any<CancellationToken>())
+                   Arg.Any<string?>(),
+                   Arg.Any<string>(),
+                   Arg.Any<string?>(),
+                   Arg.Any<CancellationToken>())
                .Returns(Task.FromResult<ModelFitSnapshotSummaryRecord?>(null));
 
         var result = await fixture.CreateService().FreezeAsync(profile.Id, CancellationToken.None);

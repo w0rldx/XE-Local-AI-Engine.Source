@@ -49,7 +49,10 @@ public sealed class MachineKeyProvider : IMachineKeyProvider, IDisposable
             if (string.IsNullOrWhiteSpace(key))
             {
                 key = Guid.NewGuid().ToString("N");
-                await _settingsStore.SaveAsync(settings with { MachineKey = key }, ct).ConfigureAwait(false);
+                await _settingsStore.SaveAsync(settings with
+                {
+                    MachineKey = key
+                }, ct).ConfigureAwait(false);
             }
 
             _cachedKey = key;
