@@ -3,6 +3,7 @@ namespace XE_Local_AI_Engine.Providers.LlamaServer;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 using XE_Local_AI_Engine.Providers.Abstractions;
+using XE_Local_AI_Engine.Providers.Abstractions.Capabilities;
 using XE_Local_AI_Engine.Providers.Abstractions.Gguf;
 using XE_Local_AI_Engine.Providers.LlamaServer.Contracts;
 using XE_Local_AI_Engine.Providers.LlamaServer.Implementation;
@@ -52,6 +53,11 @@ public static class LlamaServerServiceCollectionExtensions
                 activeTag: null,
                 sp.GetRequiredService<ILlamaCppReleaseCatalog>(),
                 sp.GetRequiredService<IInstalledRuntimeStore>()));
+
+        // Real available-VRAM probe (Lane B1): parses `llama-server --list-devices`. PLAIN AddSingleton (not TryAdd) so
+        // it WINS over the Application-layer TryAddSingleton<IAvailableVramProbe, UnknownAvailableVramProbe>() floor
+        // regardless of registration order — TryAdd no-ops once a registration exists, and last-wins resolves to this one.
+        services.AddSingleton<IAvailableVramProbe, LlamaListDevicesVramProbe>();
 
         // Options default here so the supervisor is resolvable; the host overrides them from node config.
         services.TryAddSingleton(new LlamaServerSupervisorOptions());
