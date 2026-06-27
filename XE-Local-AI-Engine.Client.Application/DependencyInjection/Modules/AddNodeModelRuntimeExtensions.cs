@@ -4,6 +4,7 @@ using System.Data.Common;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Diagnostics;
 using Microsoft.Extensions.AI;
+using Microsoft.Extensions.DependencyInjection.Extensions;
 using XE_Local_AI_Engine.AI.Agent.Configuration;
 using XE_Local_AI_Engine.AI.Agent.DependencyInjection;
 using XE_Local_AI_Engine.Client.Persistence;
@@ -13,13 +14,16 @@ using XE_Local_AI_Engine.Client.Services.Connection;
 using XE_Local_AI_Engine.Client.Services.Connection.Implementation;
 using XE_Local_AI_Engine.Client.Services.Events;
 using XE_Local_AI_Engine.Client.Services.HuggingFace;
+using XE_Local_AI_Engine.Client.Services.Inference;
 using XE_Local_AI_Engine.Client.Services.NodeSettings;
 using XE_Local_AI_Engine.Client.Services.Persistence.Implementation;
 using XE_Local_AI_Engine.Providers.Abstractions;
+using XE_Local_AI_Engine.Providers.Abstractions.Capabilities;
 using XE_Local_AI_Engine.Providers.Abstractions.Gguf;
 using XE_Local_AI_Engine.Providers.HuggingFace;
 using XE_Local_AI_Engine.Providers.HuggingFace.Options;
 using XE_Local_AI_Engine.Providers.LlamaServer;
+using XE_Local_AI_Engine.Providers.LlamaServer.Contracts;
 using XE_Local_AI_Engine.Providers.LlamaServer.Options;
 using XE_Local_AI_Engine.Providers.Ollama;
 
@@ -111,6 +115,19 @@ internal static class AddNodeModelRuntimeExtensions
 
         builder.Services.AddSingleton(sp => BuildSeededLlamaServerSupervisorOptions(sp));
         builder.Services.AddLlamaServerLocalModelProvider();
+
+        // Inference Optimizer: profile-driven launch-arg replay. Registered AFTER AddLlamaServerLocalModelProvider so
+        // the real DB-backed resolver OVERRIDES the provider's explore-only DefaultInferenceProfileResolver — a plain
+        // AddSingleton beats the provider's TryAddSingleton (last registration wins), keeping the layer arrow
+        // Application → Providers (the interface is defined in Providers, implemented here). The resolver is a singleton
+        // on the cold spawn path; it opens a fresh scope per resolve to reach the SCOPED IInferenceProfileStore.
+        // IMachineKeyProvider + IInferenceInvalidationEvaluator are singletons it injects. The free-VRAM probe defaults
+        // to "unknown" via TryAddSingleton so the invalidation evaluator simply skips the live-VRAM check until Lane B
+        // wires the real --list-devices probe over the same seam.
+        builder.Services.AddSingleton<IMachineKeyProvider, MachineKeyProvider>();
+        builder.Services.TryAddSingleton<IAvailableVramProbe, UnknownAvailableVramProbe>();
+        builder.Services.AddSingleton<IInferenceInvalidationEvaluator, InferenceInvalidationEvaluator>();
+        builder.Services.AddSingleton<IInferenceProfileResolver, InferenceProfileResolver>();
 
         // The provider resolver maps ModelName→ProviderName (over the persisted model_provider_map,
         // unmapped → default) then ProviderName→ILocalModelProvider (over the registered set). Singleton; reads the

@@ -179,4 +179,12 @@ public sealed partial record StoredNodeSettings
     ///     <see cref="DefaultVoiceProfileId" /> (<c>af_heart</c>).
     /// </summary>
     public string? DefaultVoiceProfile { get; init; }
+
+    /// <summary>
+    ///     Stable, LOCAL-ONLY machine identifier used to key inference profiles to the box they were tuned on. Generated
+    ///     once (<see cref="System.Guid.NewGuid" />, <c>"N"</c> format) by <c>IMachineKeyProvider</c> on first use and
+    ///     persisted here; <see langword="null" /> until then (it is generated, not seeded — there is no appsettings
+    ///     default). NEVER emitted in telemetry, aggregates, or logs.
+    /// </summary>
+    public string? MachineKey { get; init; }
 }
