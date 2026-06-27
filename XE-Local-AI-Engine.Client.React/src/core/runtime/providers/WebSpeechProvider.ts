@@ -1,4 +1,4 @@
-// Web Speech API provider — the zero-download fallback floor (plan §5, §7.2).
+// Web Speech API provider — the zero-download fallback floor.
 //
 // This is a self-playing provider (`producesPcm: false`): it renders audio through the OS speech engine rather than
 // emitting PCM, so `synthesize` queues an utterance and yields nothing. It is also the German (and any non-English)
@@ -91,7 +91,7 @@ export class WebSpeechProvider implements TtsProvider {
 		this.synthesis?.cancel();
 	}
 
-	// Picks the OS voice to speak with. "Selected voice always wins" (D2): when the caller supplies a concrete
+	// Picks the OS voice to speak with. "Selected voice always wins": when the caller supplies a concrete
 	// `voiceId` that maps to a real OS voice (by `voiceURI` or `name`), honor it exactly — even a network voice — so a
 	// user's explicit non-English pick takes effect. Manifest voices that are LOGICAL ids (e.g. "de_web_default") map
 	// to no OS voice and correctly fall through to the language-prefix pick, which prefers on-device (`localService`)

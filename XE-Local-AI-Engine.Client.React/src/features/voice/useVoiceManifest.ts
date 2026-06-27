@@ -8,10 +8,10 @@ import { adaptVoiceManifest } from "@/features/voice/VoiceManifestAdapter";
 // Server-state for the voice manifest (the operator-owned gate + model/voice catalog). Reads through the generated
 // hey-api `getVoiceManifestOptions()` (which wires the shared axios instance + TanStack Query AbortSignal) wrapped
 // in withResponseValidation so a zod response-shape failure surfaces as an ApiError. The `select` adapter maps the
-// all-optional generated DTO into Lane B's strict `VoiceManifest`, so consumers never touch the raw wire shape. No
-// mirroring into zustand — this is server-state only (plan §9).
+// all-optional generated DTO into the strict client-side `VoiceManifest`, so consumers never touch the raw wire shape.
+// No mirroring into zustand — this is server-state only.
 
-// Voice is dev-gated in M1, and the manifest endpoint is Operator-gated, so the query is disabled unless the caller
+// Voice is dev-gated, and the manifest endpoint is Operator-gated, so the query is disabled unless the caller
 // opts in (the provider passes developerMode). The manifest is near-static config: cache it for the session.
 const VOICE_MANIFEST_STALE_TIME_MS = 5 * 60 * 1000;
 

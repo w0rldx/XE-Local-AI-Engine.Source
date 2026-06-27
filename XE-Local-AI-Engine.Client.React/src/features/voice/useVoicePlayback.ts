@@ -7,10 +7,10 @@ import { detectAnswerLanguage } from "@/features/voice/DetectAnswerLanguage";
 import { useVoicePreferencesStore } from "@/features/voice/VoicePreferencesStore";
 import { useVoiceRuntime } from "@/features/voice/VoiceRuntimeContext";
 
-// The chat-stream voice tap (plan §7.3, R-A MEDIUM-1). It is intentionally DECOUPLED from the stream reducer: Chat.tsx
+// The chat-stream voice tap. It is intentionally DECOUPLED from the stream reducer: Chat.tsx
 // calls `onAnswerProgress` with the SAME `ChatStreamingState` it just handed to `setStreamingMessage`, and this hook
-// diffs the ANSWER text (`streamingMessage.content` — never reasoning/tool parts, invariant §3.7) to feed a
-// SentenceBuffer. Whole sentences (never tokens, invariant §3.3) are enqueued to the runtime. Barge-in (`onTurnStart`)
+// diffs the ANSWER text (`streamingMessage.content` — never reasoning/tool parts) to feed a
+// SentenceBuffer. Whole sentences (never tokens) are enqueued to the runtime. Barge-in (`onTurnStart`)
 // stops playback + resets the buffer on every new send / regenerate / cancel. Engages only when the user has voice +
 // autoplay on and a runtime exists; otherwise every call is a cheap no-op.
 
@@ -39,7 +39,7 @@ export function useVoicePlayback(): VoicePlaybackTap {
 
 			const prefs = useVoicePreferencesStore.getState();
 			const voiceId = prefs.voiceProfile || manifest?.defaultVoiceId || undefined;
-			// "Selected voice always wins" (D2): drive the engine/ladder from the SELECTED voice's OWN language so
+			// "Selected voice always wins": drive the engine/ladder from the SELECTED voice's OWN language so
 			// auto-play matches the node-settings preview exactly — never re-route an English answer to Kokoro when the
 			// user picked a German voice. detectAnswerLanguage stays only as the fallback when no voice resolves (no
 			// selection AND no manifest default), where there is no chosen language to honor.

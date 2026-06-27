@@ -376,7 +376,7 @@ export function OnboardingProvider({ children }: { children: ReactNode }) {
 				locale={locale}
 				options={{
 					zIndex: TOUR_Z_INDEX,
-					// Default buttons plus Skip so every step is skippable (plan acceptance criteria).
+					// Default buttons plus Skip so every step is skippable.
 					buttons: ["back", "skip", "primary"],
 				}}
 			/>

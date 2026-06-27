@@ -1,6 +1,6 @@
-// Accumulates streamed assistant text and flushes it to TTS as whole sentences — never token-by-token (invariant
-// §3.3). Before every flush the text is sanitized (invariant §3.9 / D1) so the synthesizer never reads code, raw
-// URLs, or markdown link syntax aloud. Prose styling (bold/italic markers) is preserved untouched.
+// Accumulates streamed assistant text and flushes it to TTS as whole sentences — never token-by-token. Before every
+// flush the text is sanitized so the synthesizer never reads code, raw URLs, or markdown link syntax aloud. Prose
+// styling (bold/italic markers) is preserved untouched.
 
 const MAX_SENTENCE_LENGTH = 512;
 // Sentence terminators that trigger a flush: `!`/`?`/newline unconditionally, and `.` ONLY when followed by

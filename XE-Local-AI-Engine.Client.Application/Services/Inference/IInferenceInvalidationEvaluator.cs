@@ -5,7 +5,7 @@ using XE_Local_AI_Engine.Client.Persistence.Stores;
 /// <summary>
 ///     Decides whether a persisted, frozen inference profile is STALE — i.e. the box's runtime build or hardware has
 ///     drifted from the freeze baseline so the frozen launch args can no longer be trusted and a fresh explore is
-///     required. A PURE verdict: it never evicts, kills, or restarts a running process (plan invariant: stale &#8800; evict).
+///     required. A PURE verdict: it never evicts, kills, or restarts a running process (invariant: stale &#8800; evict).
 /// </summary>
 public interface IInferenceInvalidationEvaluator
 {

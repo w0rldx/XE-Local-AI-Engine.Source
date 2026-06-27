@@ -15,13 +15,13 @@ public sealed record VoiceManifestResponse
     /// <summary>The downloadable TTS models the client is allowed to load.</summary>
     public required IReadOnlyList<VoiceManifestModelDto> Models { get; init; }
 
-    /// <summary>The selectable voice profiles (Kokoro English voices in M1).</summary>
+    /// <summary>The selectable voice profiles (Kokoro English voices for now).</summary>
     public required IReadOnlyList<VoiceManifestVoiceDto> Voices { get; init; }
 
     /// <summary>The default voice profile id the client pre-selects.</summary>
     public required string DefaultVoiceId { get; init; }
 
-    /// <summary>Remote-TTS fallback config. <see langword="null" /> in M1 (remote TTS deferred); kept for forward-compat.</summary>
+    /// <summary>Remote-TTS fallback config. <see langword="null" /> while remote TTS is deferred (not built yet); kept for forward-compat.</summary>
     public VoiceManifestRemoteFallbackDto? RemoteFallback { get; init; }
 }
 
@@ -72,14 +72,14 @@ public sealed record VoiceManifestVoiceDto
     /// <summary>A human-friendly voice name for the UI.</summary>
     public required string Name { get; init; }
 
-    /// <summary>The IETF language short code (<c>en</c> for all Kokoro voices in M1).</summary>
+    /// <summary>The IETF language short code (<c>en</c> for all Kokoro voices).</summary>
     public required string Language { get; init; }
 
     /// <summary>The voice gender (<c>female</c> or <c>male</c>).</summary>
     public required string Gender { get; init; }
 }
 
-/// <summary>Remote-TTS fallback config. Deferred in M1 (always <see langword="null" /> on the manifest); kept for forward-compat.</summary>
+/// <summary>Remote-TTS fallback config. Deferred (not built yet) — always <see langword="null" /> on the manifest; kept for forward-compat.</summary>
 public sealed record VoiceManifestRemoteFallbackDto
 {
     /// <summary>Whether remote TTS fallback is enabled.</summary>
