@@ -814,6 +814,17 @@ public sealed partial class LlamaCppBinaryManager : ILlamaCppBinaryManager
             "XE-Local-AI-Engine");
     }
 
+    /// <summary>
+    ///     The directory every acquired llama.cpp runtime is cached under for the default app-data root
+    ///     (<c>{cacheRoot}/llama.cpp</c>, the same layout <see cref="EnsureBinaryAsync" /> writes its variant dirs into).
+    ///     Exposed so the startup orphan reaper matches ONLY <c>llama-server</c> binaries this app acquired, never an
+    ///     unrelated install.
+    /// </summary>
+    internal static string DefaultLlamaCppBinariesRoot()
+    {
+        return Path.Combine(DefaultCacheRoot(), "llama.cpp");
+    }
+
     private static OSPlatform CurrentOsPlatform()
     {
         if (OperatingSystem.IsWindows())

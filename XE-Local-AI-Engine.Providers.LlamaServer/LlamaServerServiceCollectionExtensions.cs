@@ -2,6 +2,7 @@ namespace XE_Local_AI_Engine.Providers.LlamaServer;
 
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
+using Microsoft.Extensions.Logging;
 using XE_Local_AI_Engine.Providers.Abstractions;
 using XE_Local_AI_Engine.Providers.Abstractions.Capabilities;
 using XE_Local_AI_Engine.Providers.Abstractions.Gguf;
@@ -97,6 +98,17 @@ public static class LlamaServerServiceCollectionExtensions
                 sp.GetRequiredService<IGgufModelStore>()));
         services.AddSingleton<ILocalModelProvider>(static sp =>
             sp.GetRequiredService<LlamaServerLocalModelProvider>());
+
+        // Startup orphan reaper: kills stale llama-server processes THIS app left behind on a previous run. A hard host
+        // kill (e.g. `aspire stop`) skips the supervisor's graceful DisposeAsync teardown, orphaning the server while it
+        // still holds its loopback port + GPU VRAM and so blocking the next start. The reaper matches ONLY binaries under
+        // our own llama.cpp cache root, so an unrelated llama-server (e.g. Ollama's) is never touched. Best-effort — it
+        // never throws out of StartAsync, so it can never block startup.
+        services.TryAddSingleton<IStaleLlamaServerProcessScanner, OsStaleLlamaServerProcessScanner>();
+        services.AddHostedService(static sp => new StaleLlamaServerReaper(
+            sp.GetRequiredService<IStaleLlamaServerProcessScanner>(),
+            LlamaCppBinaryManager.DefaultLlamaCppBinariesRoot(),
+            sp.GetRequiredService<ILogger<StaleLlamaServerReaper>>()));
 
         return services;
     }
