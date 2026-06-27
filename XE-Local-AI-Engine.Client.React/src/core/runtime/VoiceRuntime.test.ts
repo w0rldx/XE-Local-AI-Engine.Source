@@ -14,6 +14,58 @@ const throwingStream: AsyncIterable<AudioChunk> = {
 	[Symbol.asyncIterator]: () => ({ next: () => Promise.reject(new Error("worker crash")) }),
 };
 
+// A synthesis stream whose chunks are pushed by the test, so a `stop()` can be interleaved between two chunks to
+// reproduce the worker streaming PAST barge-in (the real Kokoro worker ignores `cancel`).
+function makeControlledStream(): {
+	readonly stream: AsyncIterable<AudioChunk>;
+	push: (chunk: AudioChunk) => void;
+	end: () => void;
+} {
+	const queue: AudioChunk[] = [];
+	let done = false;
+	let notify: (() => void) | undefined;
+	const wake = (): void => {
+		notify?.();
+		notify = undefined;
+	};
+
+	const stream: AsyncIterable<AudioChunk> = {
+		[Symbol.asyncIterator]: () => ({
+			next: async () => {
+				for (;;) {
+					const next = queue.shift();
+					if (next !== undefined) {
+						return { value: next, done: false };
+					}
+
+					if (done) {
+						return { value: undefined, done: true };
+					}
+
+					// biome-ignore lint/performance/noAwaitInLoops: the fake stream parks until the next chunk is pushed — sequential by design.
+					await new Promise<void>((resolve) => {
+						notify = resolve;
+					});
+				}
+			},
+		}),
+	};
+
+	return {
+		stream,
+		push: (chunk) => {
+			queue.push(chunk);
+			wake();
+		},
+		end: () => {
+			done = true;
+			wake();
+		},
+	};
+}
+
+const flushMacrotask = (): Promise<void> => new Promise((resolve) => setTimeout(resolve, 0));
+
 interface MockProvider extends TtsProvider {
 	readonly synthesizeSpy: Mock;
 }
@@ -199,6 +251,58 @@ describe("VoiceRuntime fallback", () => {
 
 		expect(providers["web-speech"]?.synthesizeSpy).toHaveBeenCalled();
 		expect(providers["kokoro-webgpu"]?.synthesizeSpy).not.toHaveBeenCalled();
+	});
+
+	it("drops chunks that arrive after stop() so audio does not survive barge-in", async () => {
+		const controlled = makeControlledStream();
+		const provider = makeProvider("kokoro-webgpu", { producesPcm: true });
+		provider.synthesizeSpy.mockReturnValue(controlled.stream);
+
+		// Count source nodes scheduled: while the context is running, each enqueued chunk creates+starts one.
+		let scheduled = 0;
+		const context: QueueAudioContext = {
+			state: "running",
+			currentTime: 0,
+			destination: {},
+			createBuffer: (_channels, length, sampleRate) => ({ duration: length / sampleRate, copyToChannel: () => undefined }),
+			createBufferSource: () => {
+				scheduled++;
+				return {
+					buffer: null,
+					onended: null,
+					connect: () => undefined,
+					disconnect: () => undefined,
+					start: () => undefined,
+					stop: () => undefined,
+				};
+			},
+			resume: () => Promise.resolve(),
+			suspend: () => Promise.resolve(),
+			close: () => Promise.resolve(),
+		};
+
+		const runtime = new VoiceRuntime({
+			manifest: mockVoiceManifest,
+			capabilities: makeCapabilities({ webgpu: true, wasm: false, webSpeech: true }),
+			playbackQueue: new PlaybackQueue(() => context),
+			createProvider: (id) => (id === "kokoro-webgpu" ? provider : makeProvider(id, { producesPcm: false })),
+		});
+
+		const chunk: AudioChunk = { pcm: new Float32Array(8), sampleRate: 24000 };
+		const speaking = runtime.speak("Hello there.", { language: "en" });
+
+		controlled.push(chunk);
+		await flushMacrotask();
+		expect(scheduled).toBe(1);
+
+		// Barge-in mid-stream, then the worker streams one more chunk — it must NOT schedule a new source node.
+		runtime.stop();
+		controlled.push(chunk);
+		controlled.end();
+		await speaking;
+
+		expect(scheduled).toBe(1);
+		expect(provider.stop).toHaveBeenCalled();
 	});
 
 	it("is inert when the manifest disables voice", async () => {

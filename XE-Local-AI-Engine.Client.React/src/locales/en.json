@@ -2590,7 +2590,6 @@
 			"stop": "Stop reading"
 		},
 		"notice": {
-			"tapToEnable": "Tap or press a key to enable audio playback.",
 			"downloading": "Downloading voice model…",
 			"downloadProgress": "{{loaded}} / {{total}} MB",
 			"downloadError": "The voice model could not be downloaded. Falling back to browser speech.",

@@ -2590,7 +2590,6 @@
 			"stop": "Vorlesen stoppen"
 		},
 		"notice": {
-			"tapToEnable": "Tippen oder eine Taste drücken, um die Audiowiedergabe zu aktivieren.",
 			"downloading": "Sprachmodell wird heruntergeladen…",
 			"downloadProgress": "{{loaded}} / {{total}} MB",
 			"downloadError": "Das Sprachmodell konnte nicht heruntergeladen werden. Es wird auf die Browser-Sprachausgabe zurückgegriffen.",
