@@ -1,4 +1,4 @@
-// The TTS provider abstraction — the single contract every speech backend implements (plan §3.5, §7.2).
+// The TTS provider abstraction — the single contract every speech backend implements.
 //
 // Two provider families exist:
 //  - PCM providers (`producesPcm: true`, e.g. Kokoro) yield raw audio chunks the `PlaybackQueue` schedules.
@@ -7,7 +7,7 @@
 
 import type { VoiceLanguageCode } from "./VoiceManifest";
 
-/** Stable provider identifiers, ordered conceptually best→floor down the fallback ladder (plan §5). */
+/** Stable provider identifiers, ordered conceptually best→floor down the fallback ladder. */
 export type TtsProviderId = "kokoro-webgpu" | "kokoro-wasm" | "web-speech" | "remote";
 
 /** A single decoded audio chunk emitted by a PCM provider. Kokoro yields 24 kHz mono `Float32Array` PCM. */

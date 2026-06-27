@@ -1,10 +1,10 @@
 // VoiceRuntime — selects a TTS provider by capability ∩ manifest ∩ answer language, and drives playback with a
-// fall-DOWN-the-ladder recovery so a provider failure degrades instead of hanging (plan §3.5/§3.7, §7.2).
+// fall-DOWN-the-ladder recovery so a provider failure degrades instead of hanging.
 //
-// Routing (invariant §3.7 / decision D2): English answers go to Kokoro (WebGPU → WASM) then Web Speech; non-English
+// Routing: English answers go to Kokoro (WebGPU → WASM) then Web Speech; non-English
 // answers (notably German — Kokoro ships no German voice) route straight to Web Speech, which has OS voices. Web
 // Speech is always the floor. The provider factory is injected so the runtime is unit-testable without real workers,
-// WebGPU, or audio. The manifest is supplied by the caller (Lane C injects the real one; Lane B uses the mock).
+// WebGPU, or audio. The manifest is supplied by the caller (the wiring layer injects the real one; the runtime uses the mock by default).
 
 import { detectVoiceCapabilities, type VoiceCapabilities } from "./CapabilityDetector";
 import { PlaybackQueue } from "./PlaybackQueue";
@@ -82,7 +82,7 @@ export function createDefaultProvider(id: TtsProviderId, manifest: VoiceManifest
 		return new WebSpeechProvider();
 	}
 
-	// Remote TTS is a deferred ladder rung (locked decision 8) — not built in M1.
+	// Remote TTS is a deferred ladder rung — not built yet.
 	throw new Error(`Provider "${id}" is not available in milestone 1`);
 }
 
@@ -264,7 +264,7 @@ export class VoiceRuntime {
 
 /**
  * Convenience factory: probes capabilities, builds a `PlaybackQueue`, and returns a ready `VoiceRuntime` using the
- * mock manifest. LANE SEAM — Lane C calls this (or constructs `VoiceRuntime` directly) with the backend manifest in
+ * mock manifest. The wiring layer calls this (or constructs `VoiceRuntime` directly) with the backend manifest in
  * place of `mockVoiceManifest`.
  */
 export async function createVoiceRuntime(manifest: VoiceManifest = mockVoiceManifest): Promise<VoiceRuntime> {

@@ -136,7 +136,7 @@ describe("node chat mapper", () => {
 		});
 
 		expect(conversation.title).toBe("Untitled conversation");
-		// isArchived maps from the dedicated `archived` column (M2), not `purged`.
+		// isArchived maps from the dedicated `archived` column, not `purged`.
 		expect(conversation.isArchived).toBe(true);
 		expect(conversation.isPinned).toBe(false);
 		// New keys (feedbackRating/feedbackComment) are undefined here; toEqual ignores undefined props.

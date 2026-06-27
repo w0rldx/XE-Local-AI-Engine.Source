@@ -1,5 +1,5 @@
-// Adapts the generated (all-optional, server-shaped) voice manifest response into Lane B's strict `VoiceManifest`
-// shape, filling sane defaults for every absent optional (plan §7.2 / VoiceManifest LANE SEAM). The generated DTO
+// Adapts the generated (all-optional, server-shaped) voice manifest response into the strict client-side
+// `VoiceManifest` shape, filling sane defaults for every absent optional. The generated DTO
 // types every field optional and the wire is camelCase already, so the adapter's job is null-coalescing + dropping
 // entries that are unusable (a file with an unknown dtype, a voice with no id) rather than renaming.
 

@@ -10,7 +10,7 @@ import { useVoiceNodeSettings } from "@/features/voice/useVoiceNodeSettings";
 import { useVoicePreferencesStore, voicePreferencesRateBounds } from "@/features/voice/VoicePreferencesStore";
 import { useVoiceRuntime } from "@/features/voice/VoiceRuntimeContext";
 
-// Node Settings voice block (plan §7.3). Lets the operator drive the node-level voice feature through the existing
+// Node Settings voice block. Lets the operator drive the node-level voice feature through the existing
 // operator-gated node-settings GET/PUT (the master gate `voiceFeatureEnabled` — which composes server-side into the
 // manifest's `enabled` — plus the `defaultVoiceProfile`), and lets each user manage the per-browser client prefs
 // (master enable, autoplay, profile, speaking rate). Saving a node field invalidates the voice manifest so the

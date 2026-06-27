@@ -12,7 +12,7 @@ namespace XE_Local_AI_Engine.Providers.Abstractions.Capabilities;
 ///         (<c>cuda</c> / <c>vulkan</c> / <c>cpu</c>). A plain string is taken deliberately: the acceleration-variant
 ///         type (<c>GpuVariant</c>) lives in <c>Providers.LlamaServer</c>, and <c>Providers.Abstractions</c> must NOT
 ///         depend on it — the string keeps this seam dependency-clean while still conveying the variant the real probe
-///         (Lane B's <c>--list-devices</c> parser) needs.
+///         (the <c>--list-devices</c> parser) needs.
 ///     </para>
 /// </remarks>
 public interface IAvailableVramProbe
@@ -26,8 +26,8 @@ public interface IAvailableVramProbe
 
 /// <summary>
 ///     Default <see cref="IAvailableVramProbe" /> that always reports "unknown" (<see langword="null" />). Wired via
-///     <c>TryAddSingleton</c> so the invalidation evaluator simply skips the live free-VRAM check until Lane B replaces
-///     it with the real <c>--list-devices</c>-backed probe.
+///     <c>TryAddSingleton</c> so the invalidation evaluator simply skips the live free-VRAM check until the real
+///     <c>--list-devices</c>-backed probe replaces it.
 /// </summary>
 public sealed class UnknownAvailableVramProbe : IAvailableVramProbe
 {

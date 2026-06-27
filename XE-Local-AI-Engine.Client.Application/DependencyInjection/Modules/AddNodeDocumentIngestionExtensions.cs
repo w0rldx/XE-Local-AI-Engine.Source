@@ -9,7 +9,7 @@ internal static class AddNodeDocumentIngestionExtensions
         ArgumentNullException.ThrowIfNull(builder);
         ArgumentNullException.ThrowIfNull(configuration);
 
-        // Pure-managed document text extraction (Lane B). Stateless and thread-safe, so a singleton is correct.
+        // Pure-managed document text extraction. Stateless and thread-safe, so a singleton is correct.
         builder.Services.AddSingleton<IDocumentTextExtractor, DocumentTextExtractor>();
 
         // Durable per-conversation uploaded-file store. Singleton: it opens its own DbContext scope per operation and

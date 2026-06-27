@@ -1,4 +1,4 @@
-// Kokoro TTS provider — wraps the dedicated worker that runs `KokoroTTS` (plan §7.2).
+// Kokoro TTS provider — wraps the dedicated worker that runs `KokoroTTS`.
 //
 // One provider instance maps to one execution path: WebGPU (`device:'webgpu'`, `dtype:'fp32'`) or WASM
 // (`device:'wasm'`, `dtype:'q8'`), selected via the constructor. Synthesis is delegated to `TtsWorker` and the
