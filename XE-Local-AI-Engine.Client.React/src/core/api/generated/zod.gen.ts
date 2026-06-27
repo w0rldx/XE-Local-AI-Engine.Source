@@ -2196,6 +2196,113 @@ export const zXeLocalAiEngineClientEndpointsVoiceV1VoiceManifestResponse = z.obj
 	remoteFallback: zXeLocalAiEngineClientEndpointsVoiceV1VoiceManifestRemoteFallbackDto.nullish(),
 });
 
+export const zXeLocalAiEngineClientEndpointsModelFitV1InferenceBenchmarkMetricsDto = z.object({
+	tokensPerSecond: z.number().nullish(),
+	ppTokensPerSecond: z.number().nullish(),
+	ttftMs: z.number().nullish(),
+	totalLatencyMs: z.number().nullish(),
+	cacheHitRate: z.number().nullish(),
+	toolLoopMs: z.number().nullish(),
+	vramLoadBytes: z.coerce
+		.bigint()
+		.min(BigInt("-9223372036854775808"), { error: "Invalid value: Expected int64 to be >= -9223372036854775808" })
+		.max(BigInt("9223372036854775807"), { error: "Invalid value: Expected int64 to be <= 9223372036854775807" })
+		.nullish(),
+	vramAfterBytes: z.coerce
+		.bigint()
+		.min(BigInt("-9223372036854775808"), { error: "Invalid value: Expected int64 to be >= -9223372036854775808" })
+		.max(BigInt("9223372036854775807"), { error: "Invalid value: Expected int64 to be <= 9223372036854775807" })
+		.nullish(),
+	runs: z
+		.int()
+		.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })
+		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" })
+		.optional(),
+});
+
+export const zXeLocalAiEngineClientEndpointsModelFitV1InferenceProfileViewDto = z.object({
+	id: z.guid().optional(),
+	modelName: z.string().optional(),
+	role: z.string().optional(),
+	backend: z.string().optional(),
+	llamacppBuild: z.string().optional(),
+	quant: z.string().optional(),
+	ctxSize: z
+		.int()
+		.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })
+		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" })
+		.optional(),
+	nGpuLayers: z
+		.int()
+		.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })
+		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" })
+		.nullish(),
+	tensorSplit: z.string().nullish(),
+	overrideTensor: z.string().nullish(),
+	kvTypeK: z.string().nullish(),
+	kvTypeV: z.string().nullish(),
+	flashAttn: z.boolean().optional(),
+	nParams: z.coerce
+		.bigint()
+		.min(BigInt("-9223372036854775808"), { error: "Invalid value: Expected int64 to be >= -9223372036854775808" })
+		.max(BigInt("9223372036854775807"), { error: "Invalid value: Expected int64 to be <= 9223372036854775807" })
+		.nullish(),
+	isMoe: z.boolean().optional(),
+	expertCount: z
+		.int()
+		.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })
+		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" })
+		.nullish(),
+	freeVramAtFreezeBytes: z.coerce
+		.bigint()
+		.min(BigInt("-9223372036854775808"), { error: "Invalid value: Expected int64 to be >= -9223372036854775808" })
+		.max(BigInt("9223372036854775807"), { error: "Invalid value: Expected int64 to be <= 9223372036854775807" })
+		.nullish(),
+	status: z.string().optional(),
+	benchmarkSnapshotId: z.guid().nullish(),
+	createdAtUtc: z.coerce
+		.bigint()
+		.min(BigInt("-9223372036854775808"), { error: "Invalid value: Expected int64 to be >= -9223372036854775808" })
+		.max(BigInt("9223372036854775807"), { error: "Invalid value: Expected int64 to be <= 9223372036854775807" })
+		.optional(),
+	updatedAtUtc: z.coerce
+		.bigint()
+		.min(BigInt("-9223372036854775808"), { error: "Invalid value: Expected int64 to be >= -9223372036854775808" })
+		.max(BigInt("9223372036854775807"), { error: "Invalid value: Expected int64 to be <= 9223372036854775807" })
+		.optional(),
+});
+
+export const zXeLocalAiEngineClientEndpointsModelFitV1BenchmarkInferenceProfileResponse = z.object({
+	snapshotId: z.guid().nullish(),
+	metrics: zXeLocalAiEngineClientEndpointsModelFitV1InferenceBenchmarkMetricsDto.nullish(),
+	profile: zXeLocalAiEngineClientEndpointsModelFitV1InferenceProfileViewDto.optional(),
+});
+
+export const zXeLocalAiEngineClientEndpointsModelFitV1BenchmarkInferenceProfileRequest = z.object({
+	profileId: z.guid().optional(),
+});
+
+export const zXeLocalAiEngineClientEndpointsModelFitV1InferenceProfileActionResponse = z.object({
+	profile: zXeLocalAiEngineClientEndpointsModelFitV1InferenceProfileViewDto.optional(),
+});
+
+export const zXeLocalAiEngineClientEndpointsModelFitV1ExploreInferenceProfileRequest = z.object({
+	modelName: z.string().optional(),
+	role: z.string().nullish(),
+});
+
+export const zXeLocalAiEngineClientEndpointsModelFitV1FreezeInferenceProfileRequest = z.object({
+	profileId: z.guid().optional(),
+});
+
+export const zXeLocalAiEngineClientEndpointsModelFitV1InvalidateInferenceProfileRequest = z.object({
+	profileId: z.guid().optional(),
+});
+
+export const zXeLocalAiEngineClientEndpointsModelFitV1ListInferenceProfilesResponse = z.object({
+	items: z.array(zXeLocalAiEngineClientEndpointsModelFitV1InferenceProfileViewDto).optional(),
+});
+
 /**
  * Success
  */
@@ -3301,3 +3408,36 @@ export const zUploadConversationFileResponse = zXeLocalAiEngineClientEndpointsLo
  * Success
  */
 export const zGetVoiceManifestResponse = zXeLocalAiEngineClientEndpointsVoiceV1VoiceManifestResponse;
+
+export const zBenchmarkInferenceProfileBody = zXeLocalAiEngineClientEndpointsModelFitV1BenchmarkInferenceProfileRequest;
+
+/**
+ * Success
+ */
+export const zBenchmarkInferenceProfileResponse = zXeLocalAiEngineClientEndpointsModelFitV1BenchmarkInferenceProfileResponse;
+
+export const zExploreInferenceProfileBody = zXeLocalAiEngineClientEndpointsModelFitV1ExploreInferenceProfileRequest;
+
+/**
+ * Success
+ */
+export const zExploreInferenceProfileResponse = zXeLocalAiEngineClientEndpointsModelFitV1InferenceProfileActionResponse;
+
+export const zFreezeInferenceProfileBody = zXeLocalAiEngineClientEndpointsModelFitV1FreezeInferenceProfileRequest;
+
+/**
+ * Success
+ */
+export const zFreezeInferenceProfileResponse = zXeLocalAiEngineClientEndpointsModelFitV1InferenceProfileActionResponse;
+
+export const zInvalidateInferenceProfileBody = zXeLocalAiEngineClientEndpointsModelFitV1InvalidateInferenceProfileRequest;
+
+/**
+ * Success
+ */
+export const zInvalidateInferenceProfileResponse = zXeLocalAiEngineClientEndpointsModelFitV1InferenceProfileActionResponse;
+
+/**
+ * Success
+ */
+export const zListInferenceProfilesResponse = zXeLocalAiEngineClientEndpointsModelFitV1ListInferenceProfilesResponse;

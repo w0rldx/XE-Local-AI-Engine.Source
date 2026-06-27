@@ -1557,6 +1557,73 @@ export type XeLocalAiEngineClientEndpointsVoiceV1VoiceManifestRemoteFallbackDto 
 	endpoint?: string | null;
 };
 
+export type XeLocalAiEngineClientEndpointsModelFitV1BenchmarkInferenceProfileResponse = {
+	snapshotId?: string | null;
+	metrics?: XeLocalAiEngineClientEndpointsModelFitV1InferenceBenchmarkMetricsDto | null;
+	profile?: XeLocalAiEngineClientEndpointsModelFitV1InferenceProfileViewDto;
+};
+
+export type XeLocalAiEngineClientEndpointsModelFitV1InferenceBenchmarkMetricsDto = {
+	tokensPerSecond?: number | null;
+	ppTokensPerSecond?: number | null;
+	ttftMs?: number | null;
+	totalLatencyMs?: number | null;
+	cacheHitRate?: number | null;
+	toolLoopMs?: number | null;
+	vramLoadBytes?: number | null;
+	vramAfterBytes?: number | null;
+	runs?: number;
+};
+
+export type XeLocalAiEngineClientEndpointsModelFitV1InferenceProfileViewDto = {
+	id?: string;
+	modelName?: string;
+	role?: string;
+	backend?: string;
+	llamacppBuild?: string;
+	quant?: string;
+	ctxSize?: number;
+	nGpuLayers?: number | null;
+	tensorSplit?: string | null;
+	overrideTensor?: string | null;
+	kvTypeK?: string | null;
+	kvTypeV?: string | null;
+	flashAttn?: boolean;
+	nParams?: number | null;
+	isMoe?: boolean;
+	expertCount?: number | null;
+	freeVramAtFreezeBytes?: number | null;
+	status?: string;
+	benchmarkSnapshotId?: string | null;
+	createdAtUtc?: number;
+	updatedAtUtc?: number;
+};
+
+export type XeLocalAiEngineClientEndpointsModelFitV1BenchmarkInferenceProfileRequest = {
+	profileId?: string;
+};
+
+export type XeLocalAiEngineClientEndpointsModelFitV1InferenceProfileActionResponse = {
+	profile?: XeLocalAiEngineClientEndpointsModelFitV1InferenceProfileViewDto;
+};
+
+export type XeLocalAiEngineClientEndpointsModelFitV1ExploreInferenceProfileRequest = {
+	modelName?: string;
+	role?: string | null;
+};
+
+export type XeLocalAiEngineClientEndpointsModelFitV1FreezeInferenceProfileRequest = {
+	profileId?: string;
+};
+
+export type XeLocalAiEngineClientEndpointsModelFitV1InvalidateInferenceProfileRequest = {
+	profileId?: string;
+};
+
+export type XeLocalAiEngineClientEndpointsModelFitV1ListInferenceProfilesResponse = {
+	items?: Array<XeLocalAiEngineClientEndpointsModelFitV1InferenceProfileViewDto>;
+};
+
 export type GetTutorialStateData = {
 	body?: never;
 	path?: never;
@@ -5437,3 +5504,138 @@ export type GetVoiceManifestResponses = {
 };
 
 export type GetVoiceManifestResponse = GetVoiceManifestResponses[keyof GetVoiceManifestResponses];
+
+export type BenchmarkInferenceProfileData = {
+	body: XeLocalAiEngineClientEndpointsModelFitV1BenchmarkInferenceProfileRequest;
+	path?: never;
+	query?: never;
+	url: "/api/local/v1/model-fit/profiles/benchmark";
+};
+
+export type BenchmarkInferenceProfileErrors = {
+	/**
+	 * Unauthorized
+	 */
+	401: unknown;
+	/**
+	 * Forbidden
+	 */
+	403: unknown;
+};
+
+export type BenchmarkInferenceProfileResponses = {
+	/**
+	 * Success
+	 */
+	200: XeLocalAiEngineClientEndpointsModelFitV1BenchmarkInferenceProfileResponse;
+};
+
+export type BenchmarkInferenceProfileResponse = BenchmarkInferenceProfileResponses[keyof BenchmarkInferenceProfileResponses];
+
+export type ExploreInferenceProfileData = {
+	body: XeLocalAiEngineClientEndpointsModelFitV1ExploreInferenceProfileRequest;
+	path?: never;
+	query?: never;
+	url: "/api/local/v1/model-fit/profiles/explore";
+};
+
+export type ExploreInferenceProfileErrors = {
+	/**
+	 * Unauthorized
+	 */
+	401: unknown;
+	/**
+	 * Forbidden
+	 */
+	403: unknown;
+};
+
+export type ExploreInferenceProfileResponses = {
+	/**
+	 * Success
+	 */
+	200: XeLocalAiEngineClientEndpointsModelFitV1InferenceProfileActionResponse;
+};
+
+export type ExploreInferenceProfileResponse = ExploreInferenceProfileResponses[keyof ExploreInferenceProfileResponses];
+
+export type FreezeInferenceProfileData = {
+	body: XeLocalAiEngineClientEndpointsModelFitV1FreezeInferenceProfileRequest;
+	path?: never;
+	query?: never;
+	url: "/api/local/v1/model-fit/profiles/freeze";
+};
+
+export type FreezeInferenceProfileErrors = {
+	/**
+	 * Unauthorized
+	 */
+	401: unknown;
+	/**
+	 * Forbidden
+	 */
+	403: unknown;
+};
+
+export type FreezeInferenceProfileResponses = {
+	/**
+	 * Success
+	 */
+	200: XeLocalAiEngineClientEndpointsModelFitV1InferenceProfileActionResponse;
+};
+
+export type FreezeInferenceProfileResponse = FreezeInferenceProfileResponses[keyof FreezeInferenceProfileResponses];
+
+export type InvalidateInferenceProfileData = {
+	body: XeLocalAiEngineClientEndpointsModelFitV1InvalidateInferenceProfileRequest;
+	path?: never;
+	query?: never;
+	url: "/api/local/v1/model-fit/profiles/invalidate";
+};
+
+export type InvalidateInferenceProfileErrors = {
+	/**
+	 * Unauthorized
+	 */
+	401: unknown;
+	/**
+	 * Forbidden
+	 */
+	403: unknown;
+};
+
+export type InvalidateInferenceProfileResponses = {
+	/**
+	 * Success
+	 */
+	200: XeLocalAiEngineClientEndpointsModelFitV1InferenceProfileActionResponse;
+};
+
+export type InvalidateInferenceProfileResponse = InvalidateInferenceProfileResponses[keyof InvalidateInferenceProfileResponses];
+
+export type ListInferenceProfilesData = {
+	body?: never;
+	path?: never;
+	query?: never;
+	url: "/api/local/v1/model-fit/profiles";
+};
+
+export type ListInferenceProfilesErrors = {
+	/**
+	 * Unauthorized
+	 */
+	401: unknown;
+	/**
+	 * Forbidden
+	 */
+	403: unknown;
+};
+
+export type ListInferenceProfilesResponses = {
+	/**
+	 * Success
+	 */
+	200: XeLocalAiEngineClientEndpointsModelFitV1ListInferenceProfilesResponse;
+};
+
+export type ListInferenceProfilesResponse = ListInferenceProfilesResponses[keyof ListInferenceProfilesResponses];

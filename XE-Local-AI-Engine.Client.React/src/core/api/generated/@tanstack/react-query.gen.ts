@@ -15,6 +15,7 @@ import {
 	applyAppUpdate,
 	approveGoldenConversation,
 	archiveNodeChatConversation,
+	benchmarkInferenceProfile,
 	branchNodeChatConversation,
 	browseGgufRepositories,
 	cancelGgufDownload,
@@ -57,6 +58,8 @@ import {
 	ensureLlamaCppBinary,
 	executeSavedPreviewWorkflow,
 	executeUnsavedPreviewWorkflow,
+	exploreInferenceProfile,
+	freezeInferenceProfile,
 	getAgentDefinition,
 	getAgentFeedbackInsights,
 	getAgentPlaybookMonitor,
@@ -89,12 +92,14 @@ import {
 	harvestGoldenConversations,
 	importAgentTemplates,
 	inspectGgufRepository,
+	invalidateInferenceProfile,
 	listAgentDefinitions,
 	listAgentExecutionLogs,
 	listAgentPlaybookActions,
 	listAgentTemplates,
 	listConversationFiles,
 	listGoldenConversations,
+	listInferenceProfiles,
 	listLocalModels,
 	listMcpServers,
 	listNodeChatConversations,
@@ -157,6 +162,8 @@ import type {
 	ApproveGoldenConversationResponse,
 	ArchiveNodeChatConversationData,
 	ArchiveNodeChatConversationResponse,
+	BenchmarkInferenceProfileData,
+	BenchmarkInferenceProfileResponse,
 	BranchNodeChatConversationData,
 	BranchNodeChatConversationResponse,
 	BrowseGgufRepositoriesData,
@@ -245,6 +252,10 @@ import type {
 	ExecuteSavedPreviewWorkflowResponse,
 	ExecuteUnsavedPreviewWorkflowData,
 	ExecuteUnsavedPreviewWorkflowResponse,
+	ExploreInferenceProfileData,
+	ExploreInferenceProfileResponse,
+	FreezeInferenceProfileData,
+	FreezeInferenceProfileResponse,
 	GetAgentDefinitionData,
 	GetAgentDefinitionResponse,
 	GetAgentFeedbackInsightsData,
@@ -311,6 +322,8 @@ import type {
 	ImportAgentTemplatesResponse,
 	InspectGgufRepositoryData,
 	InspectGgufRepositoryResponse,
+	InvalidateInferenceProfileData,
+	InvalidateInferenceProfileResponse,
 	ListAgentDefinitionsData,
 	ListAgentDefinitionsResponse,
 	ListAgentExecutionLogsData,
@@ -323,6 +336,8 @@ import type {
 	ListConversationFilesResponse,
 	ListGoldenConversationsData,
 	ListGoldenConversationsResponse,
+	ListInferenceProfilesData,
+	ListInferenceProfilesResponse,
 	ListLocalModelsData,
 	ListLocalModelsResponse,
 	ListMcpServersData,
@@ -3266,4 +3281,106 @@ export const getVoiceManifestOptions = (options?: Options<GetVoiceManifestData>)
 			return data;
 		},
 		queryKey: getVoiceManifestQueryKey(options),
+	});
+
+export const benchmarkInferenceProfileMutation = (
+	options?: Partial<Options<BenchmarkInferenceProfileData>>,
+): UseMutationOptions<BenchmarkInferenceProfileResponse, AxiosError<DefaultError>, Options<BenchmarkInferenceProfileData>> => {
+	const mutationOptions: UseMutationOptions<
+		BenchmarkInferenceProfileResponse,
+		AxiosError<DefaultError>,
+		Options<BenchmarkInferenceProfileData>
+	> = {
+		mutationFn: async (fnOptions) => {
+			const { data } = await benchmarkInferenceProfile({
+				...options,
+				...fnOptions,
+				throwOnError: true,
+			});
+			return data;
+		},
+	};
+	return mutationOptions;
+};
+
+export const exploreInferenceProfileMutation = (
+	options?: Partial<Options<ExploreInferenceProfileData>>,
+): UseMutationOptions<ExploreInferenceProfileResponse, AxiosError<DefaultError>, Options<ExploreInferenceProfileData>> => {
+	const mutationOptions: UseMutationOptions<
+		ExploreInferenceProfileResponse,
+		AxiosError<DefaultError>,
+		Options<ExploreInferenceProfileData>
+	> = {
+		mutationFn: async (fnOptions) => {
+			const { data } = await exploreInferenceProfile({
+				...options,
+				...fnOptions,
+				throwOnError: true,
+			});
+			return data;
+		},
+	};
+	return mutationOptions;
+};
+
+export const freezeInferenceProfileMutation = (
+	options?: Partial<Options<FreezeInferenceProfileData>>,
+): UseMutationOptions<FreezeInferenceProfileResponse, AxiosError<DefaultError>, Options<FreezeInferenceProfileData>> => {
+	const mutationOptions: UseMutationOptions<
+		FreezeInferenceProfileResponse,
+		AxiosError<DefaultError>,
+		Options<FreezeInferenceProfileData>
+	> = {
+		mutationFn: async (fnOptions) => {
+			const { data } = await freezeInferenceProfile({
+				...options,
+				...fnOptions,
+				throwOnError: true,
+			});
+			return data;
+		},
+	};
+	return mutationOptions;
+};
+
+export const invalidateInferenceProfileMutation = (
+	options?: Partial<Options<InvalidateInferenceProfileData>>,
+): UseMutationOptions<InvalidateInferenceProfileResponse, AxiosError<DefaultError>, Options<InvalidateInferenceProfileData>> => {
+	const mutationOptions: UseMutationOptions<
+		InvalidateInferenceProfileResponse,
+		AxiosError<DefaultError>,
+		Options<InvalidateInferenceProfileData>
+	> = {
+		mutationFn: async (fnOptions) => {
+			const { data } = await invalidateInferenceProfile({
+				...options,
+				...fnOptions,
+				throwOnError: true,
+			});
+			return data;
+		},
+	};
+	return mutationOptions;
+};
+
+export const listInferenceProfilesQueryKey = (options?: Options<ListInferenceProfilesData>) =>
+	createQueryKey("listInferenceProfiles", options);
+
+export const listInferenceProfilesOptions = (options?: Options<ListInferenceProfilesData>) =>
+	queryOptions<
+		ListInferenceProfilesResponse,
+		AxiosError<DefaultError>,
+		ListInferenceProfilesResponse,
+		ReturnType<typeof listInferenceProfilesQueryKey>
+	>({
+		queryFn: async ({ queryKey, signal }) => {
+			const { data } = await listInferenceProfiles({
+				...options,
+				...queryKey[0],
+				signal,
+				throwOnError: true,
+			});
+			return data;
+		},
+		queryKey: listInferenceProfilesQueryKey(options),
 	});

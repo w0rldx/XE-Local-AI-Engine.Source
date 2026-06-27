@@ -17,6 +17,9 @@ import type {
 	ArchiveNodeChatConversationData,
 	ArchiveNodeChatConversationErrors,
 	ArchiveNodeChatConversationResponses,
+	BenchmarkInferenceProfileData,
+	BenchmarkInferenceProfileErrors,
+	BenchmarkInferenceProfileResponses,
 	BranchNodeChatConversationData,
 	BranchNodeChatConversationErrors,
 	BranchNodeChatConversationResponses,
@@ -143,6 +146,12 @@ import type {
 	ExecuteUnsavedPreviewWorkflowData,
 	ExecuteUnsavedPreviewWorkflowErrors,
 	ExecuteUnsavedPreviewWorkflowResponses,
+	ExploreInferenceProfileData,
+	ExploreInferenceProfileErrors,
+	ExploreInferenceProfileResponses,
+	FreezeInferenceProfileData,
+	FreezeInferenceProfileErrors,
+	FreezeInferenceProfileResponses,
 	GetAgentDefinitionData,
 	GetAgentDefinitionErrors,
 	GetAgentDefinitionResponses,
@@ -239,6 +248,9 @@ import type {
 	InspectGgufRepositoryData,
 	InspectGgufRepositoryErrors,
 	InspectGgufRepositoryResponses,
+	InvalidateInferenceProfileData,
+	InvalidateInferenceProfileErrors,
+	InvalidateInferenceProfileResponses,
 	ListAgentDefinitionsData,
 	ListAgentDefinitionsErrors,
 	ListAgentDefinitionsResponses,
@@ -257,6 +269,9 @@ import type {
 	ListGoldenConversationsData,
 	ListGoldenConversationsErrors,
 	ListGoldenConversationsResponses,
+	ListInferenceProfilesData,
+	ListInferenceProfilesErrors,
+	ListInferenceProfilesResponses,
 	ListLocalModelsData,
 	ListLocalModelsErrors,
 	ListLocalModelsResponses,
@@ -418,6 +433,8 @@ import {
 	zArchiveNodeChatConversationBody,
 	zArchiveNodeChatConversationPath,
 	zArchiveNodeChatConversationResponse,
+	zBenchmarkInferenceProfileBody,
+	zBenchmarkInferenceProfileResponse,
 	zBranchNodeChatConversationPath,
 	zBranchNodeChatConversationResponse,
 	zBrowseGgufRepositoriesQuery,
@@ -496,6 +513,10 @@ import {
 	zExecuteSavedPreviewWorkflowResponse,
 	zExecuteUnsavedPreviewWorkflowBody,
 	zExecuteUnsavedPreviewWorkflowResponse,
+	zExploreInferenceProfileBody,
+	zExploreInferenceProfileResponse,
+	zFreezeInferenceProfileBody,
+	zFreezeInferenceProfileResponse,
 	zGetAgentDefinitionPath,
 	zGetAgentDefinitionResponse,
 	zGetAgentFeedbackInsightsPath,
@@ -548,6 +569,8 @@ import {
 	zImportAgentTemplatesResponse,
 	zInspectGgufRepositoryQuery,
 	zInspectGgufRepositoryResponse,
+	zInvalidateInferenceProfileBody,
+	zInvalidateInferenceProfileResponse,
 	zListAgentDefinitionsResponse,
 	zListAgentExecutionLogsPath,
 	zListAgentExecutionLogsQuery,
@@ -560,6 +583,7 @@ import {
 	zListConversationFilesResponse,
 	zListGoldenConversationsPath,
 	zListGoldenConversationsResponse,
+	zListInferenceProfilesResponse,
 	zListLocalModelsResponse,
 	zListMcpServersResponse,
 	zListNodeChatConversationsQuery,
@@ -3694,5 +3718,131 @@ export const getVoiceManifest = <ThrowOnError extends boolean = false>(options?:
 			{ scheme: "bearer", type: "http" },
 		],
 		url: "/api/local/v1/voice/manifest",
+		...options,
+	});
+
+export const benchmarkInferenceProfile = <ThrowOnError extends boolean = false>(
+	options: Options<BenchmarkInferenceProfileData, ThrowOnError>,
+) =>
+	(options.client ?? client).post<BenchmarkInferenceProfileResponses, BenchmarkInferenceProfileErrors, ThrowOnError>({
+		requestValidator: async (data) =>
+			await z
+				.object({
+					body: zBenchmarkInferenceProfileBody,
+					path: z.never().optional(),
+					query: z.never().optional(),
+				})
+				.parseAsync(data),
+		responseType: "json",
+		responseValidator: async (data) => await zBenchmarkInferenceProfileResponse.parseAsync(data),
+		security: [
+			{ scheme: "bearer", type: "http" },
+			{ scheme: "bearer", type: "http" },
+		],
+		url: "/api/local/v1/model-fit/profiles/benchmark",
+		...options,
+		headers: {
+			"Content-Type": "application/json",
+			...options.headers,
+		},
+	});
+
+export const exploreInferenceProfile = <ThrowOnError extends boolean = false>(
+	options: Options<ExploreInferenceProfileData, ThrowOnError>,
+) =>
+	(options.client ?? client).post<ExploreInferenceProfileResponses, ExploreInferenceProfileErrors, ThrowOnError>({
+		requestValidator: async (data) =>
+			await z
+				.object({
+					body: zExploreInferenceProfileBody,
+					path: z.never().optional(),
+					query: z.never().optional(),
+				})
+				.parseAsync(data),
+		responseType: "json",
+		responseValidator: async (data) => await zExploreInferenceProfileResponse.parseAsync(data),
+		security: [
+			{ scheme: "bearer", type: "http" },
+			{ scheme: "bearer", type: "http" },
+		],
+		url: "/api/local/v1/model-fit/profiles/explore",
+		...options,
+		headers: {
+			"Content-Type": "application/json",
+			...options.headers,
+		},
+	});
+
+export const freezeInferenceProfile = <ThrowOnError extends boolean = false>(
+	options: Options<FreezeInferenceProfileData, ThrowOnError>,
+) =>
+	(options.client ?? client).post<FreezeInferenceProfileResponses, FreezeInferenceProfileErrors, ThrowOnError>({
+		requestValidator: async (data) =>
+			await z
+				.object({
+					body: zFreezeInferenceProfileBody,
+					path: z.never().optional(),
+					query: z.never().optional(),
+				})
+				.parseAsync(data),
+		responseType: "json",
+		responseValidator: async (data) => await zFreezeInferenceProfileResponse.parseAsync(data),
+		security: [
+			{ scheme: "bearer", type: "http" },
+			{ scheme: "bearer", type: "http" },
+		],
+		url: "/api/local/v1/model-fit/profiles/freeze",
+		...options,
+		headers: {
+			"Content-Type": "application/json",
+			...options.headers,
+		},
+	});
+
+export const invalidateInferenceProfile = <ThrowOnError extends boolean = false>(
+	options: Options<InvalidateInferenceProfileData, ThrowOnError>,
+) =>
+	(options.client ?? client).post<InvalidateInferenceProfileResponses, InvalidateInferenceProfileErrors, ThrowOnError>({
+		requestValidator: async (data) =>
+			await z
+				.object({
+					body: zInvalidateInferenceProfileBody,
+					path: z.never().optional(),
+					query: z.never().optional(),
+				})
+				.parseAsync(data),
+		responseType: "json",
+		responseValidator: async (data) => await zInvalidateInferenceProfileResponse.parseAsync(data),
+		security: [
+			{ scheme: "bearer", type: "http" },
+			{ scheme: "bearer", type: "http" },
+		],
+		url: "/api/local/v1/model-fit/profiles/invalidate",
+		...options,
+		headers: {
+			"Content-Type": "application/json",
+			...options.headers,
+		},
+	});
+
+export const listInferenceProfiles = <ThrowOnError extends boolean = false>(
+	options?: Options<ListInferenceProfilesData, ThrowOnError>,
+) =>
+	(options?.client ?? client).get<ListInferenceProfilesResponses, ListInferenceProfilesErrors, ThrowOnError>({
+		requestValidator: async (data) =>
+			await z
+				.object({
+					body: z.never().optional(),
+					path: z.never().optional(),
+					query: z.never().optional(),
+				})
+				.parseAsync(data),
+		responseType: "json",
+		responseValidator: async (data) => await zListInferenceProfilesResponse.parseAsync(data),
+		security: [
+			{ scheme: "bearer", type: "http" },
+			{ scheme: "bearer", type: "http" },
+		],
+		url: "/api/local/v1/model-fit/profiles",
 		...options,
 	});
