@@ -1,6 +1,6 @@
 # Security & Privacy Model
 
-> Last reviewed: 2026-06-24 · Code-grounded.
+> Last reviewed: 2026-06-27 · Code-grounded.
 
 This page documents the cross-cutting security and privacy guarantees of the XE Local AI Engine node — the invariants every contributor must preserve. The node is the *only* component that talks to the C0re platform, it keeps all secrets local, it serves its management/admin APIs to loopback only, it encrypts chat state at rest, it runs privacy-sensitive AI work on node-local models only, and it jails any tool/shell execution behind symlink-escape guards. These are not optional hardening passes layered on top of features; they are seams baked into the runtime, and breaking one is a regression even when "the feature still works."
 
@@ -149,6 +149,7 @@ Chat/state persistence in SQLite is encrypted at the column level. See [Data & P
 | `INodeAeadCipher` | the AEAD seam both at-rest and streaming-envelope crypto delegate to | `.../Cryptography/INodeAeadCipher.cs` |
 | `NodePayloadProtector` | at-rest column protector: random nonce per value, AAD binds `conversationId + recordId + columnName + schemaVersion` | `.../Cryptography/NodePayloadProtector.cs` |
 | `NodeEncryptionSaveChangesInterceptor` | encrypts tracked payloads on `SavingChanges`, restores plaintext on the tracked entity after save | `XE-Local-AI-Engine.Client.Persistence/NodeEncryptionSaveChangesInterceptor.cs` |
+| `UploadedFileBlobProtector` | at-rest protection for chat **uploaded-file blobs** stored on disk (raw bytes + extracted Markdown); re-uses `AesGcmNodeAeadCipher` + the same `nonce ‖ ciphertext ‖ tag` framing/AAD, binding each blob with a distinct column name (`file_bytes`/`file_md`) | `Client.Application/Services/DocumentIngestion/UploadedFileBlobProtector.cs` |
 | `EnvelopeCryptoService` | streaming chat envelopes (chunk/completed/reasoning) with per-kind AAD (`c0re-…` info strings) | `Services/Invocation/Envelope/Implementation/EnvelopeCryptoService.cs` |
 
 Key properties worth preserving:
@@ -163,6 +164,11 @@ Key properties worth preserving:
 Privacy-sensitive AI operations — agent-memory/playbook **analysis**, the playbook **eval/golden-conversation gate**, and memory extraction — execute against **node-local models only**, never a cloud provider. This is the privacy contract behind the playbook pipeline: a user's conversations are analyzed by a model running on the same box, not shipped to a cloud LLM. See [Agent Mode](04-agent-mode.md) for the playbook P1–P5 / eval flow and the adaptive-memory extraction loop; the wiring decisions live in `XE-Local-AI-Engine.Client.Application/Services/*` and the provider seams in `Providers.Abstractions` (`ILocalModelProvider` / `IChatClient` / `IEmbeddingGenerator`).
 
 **Maintainer rule:** when adding any AI step that consumes user conversation/memory content for analysis or evaluation, route it through the node-local provider path. Do not let a cloud provider (Codex OAuth, etc.) become the executor for analysis/eval. Cloud credentials themselves are local-only secrets (§2).
+
+### Two recent subsystems reinforce — not weaken — the no-extra-egress invariant
+
+- **Voice / text-to-speech runs in the browser.** The TTS engine (Kokoro / WebGPU) executes **client-side** in the React app; the node only serves a config-only voice manifest (`Services/Voice/VoiceManifestService.cs`). Spoken output never round-trips audio through a cloud service, so the voice feature opens **no new egress channel** — it stays inside the existing browser↔local-node boundary. See [React Client](10-react-client.md).
+- **Inference profiling / machine key is local-only, per-box.** The per-machine launch-tuning profiles ([Local Runtime & Providers](03-local-runtime-and-providers.md)) are keyed by a `MachineKeyProvider` identifier that is a **local-only random id** — never hardware-derived, and `IMachineKeyProvider` documents it must **NEVER** be emitted in telemetry, aggregates, or logs. The profiles themselves hold only structural launch args (no secrets) and never leave the node. Keep the machine key off every outbound DTO/aggregate.
 
 ---
 
@@ -179,6 +185,10 @@ Guards a contributor must not weaken:
 - **Tree-kill teardown.** Killing a sandbox `TreeKill`s the process tree (`process.Kill(true)`) and best-effort deletes the jail dir, so a sandbox kill terminates every running command.
 
 The same no-follow / byte-recheck philosophy appears in AgentHome host-path safety (`Services/Workspace/Implementation/HostPathSafety.cs`: `TryResolveReparseWithinRoot`, `IsReparsePoint`, `IsPathWithinRoot`) and `HostGitRunner`. Reuse these utilities rather than re-implementing path validation.
+
+### Chat attachments are staged *into* the jail, not read from the host
+
+When a chat agent-mode turn needs to read a conversation's uploaded files, `IConversationSandboxStager` (`Services/AgentHome/IConversationSandboxStager.cs`) re-stages the **existing** node sandbox so it holds **only** that conversation's extracted attachments under the workspace `attachments/` alias (the sandbox is recreated first, so it never carries another conversation's residue). The agent then reaches them with the same jailed `list_files`/`read_file`/`search_text` tools — meaning every read still passes through the §7 path-confinement, symlink-escape, and `O_NOFOLLOW`/byte-cap guards above; staging adds no host-filesystem read path that bypasses the jail. The attachment bytes were themselves secret-clean and encrypted at rest before staging (`UploadedFileBlobProtector`, §5), and any agent-memory proposal derived from them still passes the `MemoryProposalSecretScanner` (§2.2). Don't add a staging path that writes outside the workspace root or skips the recreate-before-stage step.
 
 ---
 

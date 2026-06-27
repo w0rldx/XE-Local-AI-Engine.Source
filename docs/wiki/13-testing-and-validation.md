@@ -1,6 +1,6 @@
 # Testing & Validation
 
-> Last reviewed: 2026-06-24 · Code-grounded.
+> Last reviewed: 2026-06-27 · Code-grounded.
 
 This page is the contributor map of how XE Local AI Engine is tested and what counts as "validated". It covers the test-project topology (backend integration, AI/agent, persistence + migration, Playwright E2E, plus the FakeOllama and Client.Testing support libraries), the validation commands and the `project-validate.sh` scope runner, the GitHub Actions CI pipeline, and the RC evidence bar a maintainer must clear before claiming release/doc work is done. For *what each suite asserts about a subsystem*, follow the per-subsystem links — this page owns the harness, not the features.
 
@@ -20,6 +20,19 @@ Test stack at a glance: **TUnit 1.56.18** on **Microsoft.Testing.Platform (MTP)*
 | `XE-Local-AI-Engine.Client.Testing` | Support library | — | Outbound-event recorders + `RecordingHubMessageSender` to assert what the node *would* send over WorkerHub without a real platform | [API & Hubs](09-api-and-hubs.md), [Security & Privacy](12-security-and-privacy.md) |
 
 React unit/component tests live **inside** the client tree (`XE-Local-AI-Engine.Client.React/src/**/*.test.{ts,tsx}`, ~121 files), colocated with source per the repo convention, and run under Vitest. See [React Client](10-react-client.md).
+
+> The file counts above (`~233`, `~40`, `~121`, etc.) are approximate and have grown since the last review — the subsystems shipped 2026-06-24…27 (inference optimizer, GGUF quant recommendation, chat file upload, client voice runtime, onboarding tour) each added suites. Treat any precise backend/frontend total as **operator re-run needed**: this is a TUnit/MTP backend, so `dotnet test` reports "Zero tests" under WSL and the precise total only comes from running the native test host (see the MTP gotcha above).
+
+### Suites added since the last review
+
+These suites landed with the 2026-06-24…27 subsystems and are confirmed present in the tree (counts left qualitative on purpose):
+
+- **Inference optimizer / per-machine tuning** (`XE-Local-AI-Engine.Tests`): `Inference/InferenceProfileResolverTests.cs`, `Inference/InferenceProfileServiceTests.cs`, `Inference/MachineKeyProviderTests.cs`, and the provider-side `Providers/LlamaServer/LlamaListDevicesVramProbeTests.cs` (the real `--list-devices` VRAM probe). See [Local Runtime & Providers](03-local-runtime-and-providers.md).
+- **Inference profile operator endpoints**: `Endpoints/ModelFit/V1/InferenceProfileEndpointTests.cs` (explore / benchmark / freeze). See [API & Hubs](09-api-and-hubs.md).
+- **GGUF quant recommendation / quant ladder**: `ModelFit/GgufVariantRecommenderTests.cs`, `ModelFit/QuantLadderTests.cs` (quality-tier + hardware-fit + recommended-variant logic). See [Model Fit](07-model-fit.md).
+- **Client voice runtime**: `Voice/VoiceManifestEndpointTests.cs` (config-only backend voice manifest; the TTS engine itself is browser-side). See [React Client](10-react-client.md).
+- **Desktop hosting**: `Hosting/DesktopPortStoreTests.cs` (loopback port persistence across launches). See [Hosting & Deployment](11-hosting-and-deployment.md).
+- **Persistence** (`XE-Local-AI-Engine.Client.Persistence.Tests`): `ConversationUploadedFileStoreTests.cs` (encrypted chat file-upload store). See [Data & Persistence](08-data-and-persistence.md).
 
 > Discrepancy vs older docs: the README "Prerequisites" still lists "Docker/rootless Docker and Ollama" for runtime-fidelity paths. Under the locked 2026-06-17 runtime re-architecture, Docker is removed and llama.cpp is the dev runtime; backend tests use FakeOllama, not a container. Treat that README line as stale. The `Providers.Ollama` provider still exists (and the FakeOllama server fakes *its* HTTP API), but it is de-orchestrated from Aspire dev.
 
@@ -108,6 +121,13 @@ Two deliberate CI choices a maintainer must preserve:
 CI does **not** run E2E (Playwright/browser builds are too heavy for the shared runner; E2E stays a local ask-gated path).
 
 **`client-react` (ubuntu-latest)** — pnpm + Node 22, `install --frozen-lockfile`, then in order: **`openapi:check`** (regenerate the hey-api client from the committed OpenAPI spec and `git diff --exit-code` — fails if generated output drifts from what's committed; deterministic, no running host needed), `lint`, `test`, `build`, and `pnpm audit --prod`. The `openapi:check` drift gate is the mechanism that keeps "OpenAPI → hey-api as single source of truth for all React REST" honest (see [API & Hubs](09-api-and-hubs.md), [React Client](10-react-client.md)).
+
+### Release pipeline gates (separate workflow)
+
+Distinct from `build-and-test.yml`, the release/packaging path adds two gates a maintainer must keep green:
+
+- **git-cliff changelog generation** — release runs git-cliff over the standardised `v`-prefixed tags (config `cliff.toml`, output `CHANGELOG.md` / `RELEASE_NOTES.md`) and feeds the notes into `vpk pack --releaseNotes`. See [Hosting & Deployment](11-hosting-and-deployment.md).
+- **SPA-build-required publish gate** — publishing now **fails fast if the React SPA `dist/` build is missing**, so a packaged build can never ship a blank page. Build the SPA (`pnpm run build`) before any publish/`vpk pack`. See [Hosting & Deployment](11-hosting-and-deployment.md).
 
 ## Coverage gates
 

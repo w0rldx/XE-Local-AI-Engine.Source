@@ -1,8 +1,8 @@
 # Architecture Overview
 
-> Last reviewed: 2026-06-24 · Code-grounded.
+> Last reviewed: 2026-06-27 · Code-grounded.
 
-XE Local AI Engine is the **node-side runtime** of the C0re platform: a single ASP.NET Core process
+XE Local AI Engine (product name **XE AI-Engine**) is the **node-side runtime** of the C0re platform: a single ASP.NET Core process
 (`XE-Local-AI-Engine.Client`) that hosts the React management UI, owns the one outbound platform
 `WorkerHub` connection, serves local APIs and SignalR hubs, persists chat/state in encrypted SQLite,
 and runs the local model runtime **in-process** via a host `llama.cpp` supervisor. This page is the map:
@@ -129,6 +129,17 @@ they stay inside the provider projects (`LlamaServerLocalModelProvider`, `Ollama
 Three concrete impls exist (`LlamaServer`, `Ollama`; plus the HF GGUF store and CodexOAuth cloud path).
 See [Local Runtime & Providers](03-local-runtime-and-providers.md).
 
+### Launch-args seam — the inference profile resolver
+Inside the LlamaServer provider stack the supervisor no longer hard-codes placement: `LlamaServerProcessSupervisor`
+resolves the launch arguments for each `(model, role, backend)` spawn through a second seam,
+`IInferenceProfileResolver` (`Providers.LlamaServer/Contracts/IInferenceProfileResolver.cs`). The interface is
+deliberately **defined inside the provider** so the supervisor depends only on its own contract and never on
+`Client.Application` (preserving the one-way arrow). The in-project `DefaultInferenceProfileResolver`
+(`Implementation/DefaultInferenceProfileResolver.cs`) always returns explore-mode so the provider self-satisfies;
+the real DB-backed implementation in `Client.Application` (replays a frozen profile or triggers explore) is
+DI-injected over it. A real `--list-devices` available-VRAM probe (`Implementation/LlamaListDevicesVramProbe.cs`)
+feeds the resolver. See [Local Runtime & Providers](03-local-runtime-and-providers.md).
+
 ### Per-send model routing
 Because llama.cpp is **spawn-per-model** (one process/port per model, unlike Ollama's hot-swap behind one
 endpoint), the runtime client selects/routes per send rather than caching one baked-in client —
@@ -181,6 +192,10 @@ A maintainer must preserve these. Each is enforced or anchored in code today:
    GPU driver — and CPU fallback always works (re-architecture invariant §3).
 7. **Inference = host llama.cpp process(es).** spawn-per-model, supervised in-app; routing is per-send by
    `ChatOptions.ModelId` (`RuntimeChatClient`). Ollama is an optional secondary, not the dev default.
+   Launch args follow an **explore → freeze → replay** lifecycle: the supervisor no longer forces
+   `--n-gpu-layers 999` — placement comes from `IInferenceProfileResolver` (explore-mode auto-fit, or a frozen
+   per-machine profile replayed verbatim), and every spawn pins `--parallel 1` + `--no-warmup`
+   (`LlamaServerProcessSupervisor.cs:466,473,477`). See [Local Runtime & Providers](03-local-runtime-and-providers.md).
 8. **Privacy-sensitive AI ops run node-local models only** (playbook analysis, eval). Cloud providers are
    never used for those paths. See [Agent Mode](04-agent-mode.md).
 9. **OpenAPI is the single source of truth for all React REST clients** (hey-api generation off the
