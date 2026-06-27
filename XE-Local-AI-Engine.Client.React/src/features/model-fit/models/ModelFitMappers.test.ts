@@ -31,30 +31,30 @@ describe("toLatestRecommendations — releaseDate and isTrustedPublisher mapping
 	it("maps releaseDate from the DTO field preserving the ISO string", () => {
 		const result = toLatestRecommendations(wrapInResponse(makeRecDto({ releaseDate: "2026-01-15" })));
 
-		expect(result.recommendations[0].releaseDate).toBe("2026-01-15");
+		expect(result.recommendations[0]?.releaseDate).toBe("2026-01-15");
 	});
 
 	it("coalesces an absent releaseDate to null", () => {
 		const result = toLatestRecommendations(wrapInResponse(makeRecDto()));
 
-		expect(result.recommendations[0].releaseDate).toBeNull();
+		expect(result.recommendations[0]?.releaseDate).toBeNull();
 	});
 
 	it("maps isTrustedPublisher false from the DTO field", () => {
 		const result = toLatestRecommendations(wrapInResponse(makeRecDto({ isTrustedPublisher: false })));
 
-		expect(result.recommendations[0].isTrustedPublisher).toBe(false);
+		expect(result.recommendations[0]?.isTrustedPublisher).toBe(false);
 	});
 
 	it("maps isTrustedPublisher true from the DTO field", () => {
 		const result = toLatestRecommendations(wrapInResponse(makeRecDto({ isTrustedPublisher: true })));
 
-		expect(result.recommendations[0].isTrustedPublisher).toBe(true);
+		expect(result.recommendations[0]?.isTrustedPublisher).toBe(true);
 	});
 
 	it("coalesces an absent isTrustedPublisher to false (unknown publisher = not trusted)", () => {
 		const result = toLatestRecommendations(wrapInResponse(makeRecDto()));
 
-		expect(result.recommendations[0].isTrustedPublisher).toBe(false);
+		expect(result.recommendations[0]?.isTrustedPublisher).toBe(false);
 	});
 });
