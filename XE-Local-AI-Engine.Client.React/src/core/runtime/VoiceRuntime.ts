@@ -122,6 +122,10 @@ export class VoiceRuntime {
 	// Providers that have failed during the CURRENT turn; skipped until `stop()`/`speak()` resets the turn.
 	private readonly failedThisTurn = new Set<TtsProviderId>();
 	private lastErrorValue: VoiceRuntimeError | undefined;
+	// Monotonic turn token, bumped on every `stop()`. A synthesis loop captures the token it started under and drops any
+	// chunk it pulls once the token has advanced — otherwise the worker keeps streaming and `route` would schedule fresh
+	// source nodes into the running queue AFTER barge-in, so audio would survive Stop (the worker ignores `cancel`).
+	private turn = 0;
 
 	constructor(deps: VoiceRuntimeDeps) {
 		this.manifest = deps.manifest;
@@ -159,8 +163,9 @@ export class VoiceRuntime {
 		await this.synthesizeWithFallback(text, language, options);
 	}
 
-	/** Barge-in: halts playback + the active provider and resets the per-turn failure set. */
+	/** Barge-in: halts playback + the active provider and resets the per-turn failure set. Idempotent / no-op when idle. */
 	stop(): void {
+		this.turn++;
 		this.playbackQueue.stop();
 		this.active?.provider.stop();
 		this.failedThisTurn.clear();
@@ -187,14 +192,19 @@ export class VoiceRuntime {
 		language: VoiceLanguageCode,
 		options: VoiceSynthesisOptions | undefined,
 	): Promise<void> {
+		const turn = this.turn;
 		const ladder = selectProviderLadder({ language, capabilities: this.capabilities, manifest: this.manifest });
 		const candidates = ladder.filter((id) => !this.failedThisTurn.has(id));
 
 		for (const id of candidates) {
+			if (turn !== this.turn) {
+				return;
+			}
+
 			try {
 				// biome-ignore lint/performance/noAwaitInLoops: the fallback ladder is inherently sequential — only try the next provider after the current one fails.
 				const provider = await this.ensureProvider(id, language);
-				await this.route(provider, text, { voiceId: options?.voiceId, rate: options?.rate, language });
+				await this.route(provider, text, { voiceId: options?.voiceId, rate: options?.rate, language }, turn);
 				return;
 			} catch (error) {
 				this.recordFailure(id, error);
@@ -221,9 +231,16 @@ export class VoiceRuntime {
 	}
 
 	// Drains the provider's synthesis stream. PCM providers yield chunks routed to the playback queue; self-playing
-	// providers (Web Speech) render audio internally and yield nothing, so the loop simply completes.
-	private async route(provider: TtsProvider, text: string, options: VoiceSynthesisOptions): Promise<void> {
+	// providers (Web Speech) render audio internally and yield nothing, so the loop simply completes. If `stop()` ran
+	// while a chunk was in flight, the captured `turn` no longer matches: stop the provider and drop the rest so no
+	// post-barge-in chunk reaches the running queue (where it would schedule a fresh source node and keep playing).
+	private async route(provider: TtsProvider, text: string, options: VoiceSynthesisOptions, turn: number): Promise<void> {
 		for await (const chunk of provider.synthesize(text, options) as AsyncIterable<AudioChunk>) {
+			if (turn !== this.turn) {
+				provider.stop();
+				return;
+			}
+
 			this.playbackQueue.enqueue(chunk);
 		}
 	}
