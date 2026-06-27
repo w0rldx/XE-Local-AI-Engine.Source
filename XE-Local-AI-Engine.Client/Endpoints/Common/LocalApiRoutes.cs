@@ -305,6 +305,17 @@ public static class LocalApiRoutes
         // HF access-token set/clear (IHfTokenStore). The endpoint NEVER returns the token; GET reports presence
         // only (security gate).
         public const string HfToken = "model-fit/hf-token";
+
+        // Inference Optimizer profile surface (IInferenceProfileService). The collection GET lists every persisted
+        // node-local profile (machine key omitted). The four POST actions each carry their target in the body (never a
+        // route param) so the POST always has a body, sidestepping the FastEndpoints 415-on-bodyless-POST issue. The
+        // literal "explore|benchmark|freeze|invalidate" action segments follow "profiles", so none can be parsed as a
+        // profile id. Benchmark stays the gate for freeze (a profile can only be frozen after a successful benchmark).
+        public const string Profiles = "model-fit/profiles";
+        public const string ProfilesExplore = "model-fit/profiles/explore";
+        public const string ProfilesBenchmark = "model-fit/profiles/benchmark";
+        public const string ProfilesFreeze = "model-fit/profiles/freeze";
+        public const string ProfilesInvalidate = "model-fit/profiles/invalidate";
     }
 
     /// <summary>
