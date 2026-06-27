@@ -28,9 +28,27 @@ internal sealed class FakeProcessLauncher : ILlamaServerProcessLauncher
 
     public int LaunchCount => Launches.Count;
 
+    /// <summary>
+    ///     Canned startup lines a profiling spawn's <see cref="LlamaServerLaunchSpec.StartupCapture" /> sink receives on
+    ///     launch — simulates the llama.cpp fit/device banner llama-server prints to stdout/stderr. Empty for normal
+    ///     spawns (and harmlessly ignored when the launched spec has no capture sink).
+    /// </summary>
+    public IReadOnlyList<string> StartupLines { get; set; } = [];
+
     public ILlamaServerProcessHandle Launch(LlamaServerLaunchSpec spec)
     {
         Launches.Enqueue(spec);
+
+        // Replay the canned startup output through the spec's capture sink, exactly as the production launcher forwards
+        // each stdout/stderr line. Only profiling spawns set a sink, so a normal spawn skips this.
+        if (spec.StartupCapture is { } capture)
+        {
+            foreach (var line in StartupLines)
+            {
+                capture(line);
+            }
+        }
+
 #pragma warning disable CA2000 // Ownership of the handle transfers to the supervisor under test, which disposes it on teardown.
         var handle = _onLaunch?.Invoke(spec) ?? new FakeProcessHandle(Interlocked.Increment(ref _nextPid));
 #pragma warning restore CA2000
@@ -184,6 +202,16 @@ internal sealed class FakeProcessSupervisor(params LlamaServerProcessHealth[] ru
     public Task EvictAsync(string modelName, ModelRole role, CancellationToken ct)
     {
         return Task.CompletedTask;
+    }
+
+    public Task<T> RunExclusiveProfilingAsync<T>(string modelName,
+        ModelRole role,
+        ResolvedLaunchArguments launchArgs,
+        bool enableMetrics,
+        Func<LlamaServerProfilingContext, CancellationToken, Task<T>> body,
+        CancellationToken ct)
+    {
+        throw new NotSupportedException("FakeProcessSupervisor does not run profiling.");
     }
 
     public Task<IReadOnlyList<LlamaServerProcessHealth>> CheckHealthAsync(CancellationToken ct)

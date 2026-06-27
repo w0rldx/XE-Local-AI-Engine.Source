@@ -34,4 +34,14 @@ internal sealed record LlamaServerLaunchSpec(
 {
     /// <summary>The localhost OpenAI-compatible base URL the MEAI OpenAI adapter points at (ends with <c>/v1</c>).</summary>
     public Uri BaseAddress => new($"http://127.0.0.1:{Port}/v1");
+
+    /// <summary>
+    ///     Optional thread-safe sink invoked once per forwarded stdout/stderr line, IN ADDITION to logging — never
+    ///     instead of it. Set only for operator profiling spawns so the <c>llama_params_fit</c> / device banners
+    ///     (which print mostly to STDERR) can be captured for parsing; left <see langword="null" /> for every normal
+    ///     spawn. Both the stdout and stderr pipes invoke it concurrently, so the supplier MUST back it with a
+    ///     thread-safe sink (for example a <see cref="System.Collections.Concurrent.ConcurrentQueue{T}" />'s
+    ///     <c>Enqueue</c>). Kept last with a default so all existing construction sites are unaffected.
+    /// </summary>
+    public Action<string>? StartupCapture { get; init; }
 }

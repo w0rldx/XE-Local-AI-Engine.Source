@@ -260,8 +260,39 @@ public sealed class LlamaServerProcessSupervisor : ILlamaServerProcessSupervisor
             lastError ?? new InvalidOperationException("Spawn failed."));
     }
 
-    /// <summary>One spawn attempt: admit under the cap, allocate a port, launch, health-probe, register.</summary>
-    private async Task<RunningProcess> SpawnOnceAsync(ProcessKey key, CancellationToken ct)
+    /// <summary>
+    ///     One normal spawn attempt: admit under the cap, allocate a port, launch, health-probe, register. The launch
+    ///     args come from the profile resolver (frozen-profile replay or explore-mode auto-fit) for this
+    ///     <c>(model, role, backend)</c>.
+    /// </summary>
+    private Task<RunningProcess> SpawnOnceAsync(ProcessKey key, CancellationToken ct)
+    {
+        // The resolver is awaited inside the core (after variant selection, before admission) exactly as before — a
+        // slow profile read never stalls admission for other keys. No startup capture, no forced --metrics: byte-for-
+        // byte the same spawn as the pre-profiling path.
+        return SpawnCoreAsync(key,
+            (variant, c) => _profileResolver.ResolveAsync(key.ModelName, key.Role, variant, c),
+            startupCapture: null,
+            ensureMetrics: false,
+            ct);
+    }
+
+    /// <summary>
+    ///     Shared spawn core for both the resolver-driven normal path and the explicit-args operator profiling path:
+    ///     resolve the model file + variant + binary, obtain the launch args via <paramref name="resolveArgs" /> BEFORE
+    ///     taking the admission gate, then admit under the cap, allocate a port, launch, health-probe, and register.
+    /// </summary>
+    /// <remarks>
+    ///     The <paramref name="resolveArgs" /> delegate is awaited at the same point the profile resolver used to be, so
+    ///     admission ordering and the "a slow profile read never stalls admission" invariant are unchanged. When
+    ///     <paramref name="startupCapture" /> and <paramref name="ensureMetrics" /> are both their normal-path defaults
+    ///     (<see langword="null" /> / <see langword="false" />) the built spec is identical to the legacy spawn.
+    /// </remarks>
+    private async Task<RunningProcess> SpawnCoreAsync(ProcessKey key,
+        Func<GpuVariant, CancellationToken, Task<ResolvedLaunchArguments>> resolveArgs,
+        Action<string>? startupCapture,
+        bool ensureMetrics,
+        CancellationToken ct)
     {
         var modelFilePath = await _modelStore.ResolveModelFilePathAsync(key.ModelName, ct).ConfigureAwait(false);
         if (string.IsNullOrWhiteSpace(modelFilePath))
@@ -272,9 +303,10 @@ public sealed class LlamaServerProcessSupervisor : ILlamaServerProcessSupervisor
         var variant = await _variantSelector.SelectVariantAsync(ct).ConfigureAwait(false);
         var binary = await _binaryManager.EnsureBinaryAsync(variant, ct).ConfigureAwait(false);
 
-        // Resolve the launch args (frozen-profile replay or explore-mode auto-fit) for this (model, role, backend) BEFORE
-        // taking the admission gate, so a slow profile read never stalls admission for other keys.
-        var resolved = await _profileResolver.ResolveAsync(key.ModelName, key.Role, variant, ct).ConfigureAwait(false);
+        // Resolve the launch args (frozen-profile replay or explore-mode auto-fit, or operator-supplied profiling args)
+        // for this (model, role, backend) BEFORE taking the admission gate, so a slow profile read never stalls
+        // admission for other keys.
+        var resolved = await resolveArgs(variant, ct).ConfigureAwait(false);
 
         var port = await AdmitAndAllocatePortAsync(ct).ConfigureAwait(false);
 
@@ -282,6 +314,19 @@ public sealed class LlamaServerProcessSupervisor : ILlamaServerProcessSupervisor
         try
         {
             var spec = BuildLaunchSpec(key, binary.ServerExecutablePath, modelFilePath, port, variant, resolved);
+
+            // Benchmark replay spawns need /metrics (explore already carries --metrics); only append when missing.
+            if (ensureMetrics && !spec.Arguments.Contains("--metrics", StringComparer.Ordinal))
+            {
+                spec = spec with { Arguments = [.. spec.Arguments, "--metrics"] };
+            }
+
+            // Operator profiling spawns capture both pipes; the normal path leaves the sink null (spec unchanged).
+            if (startupCapture is not null)
+            {
+                spec = spec with { StartupCapture = startupCapture };
+            }
+
             handle = _launcher.Launch(spec);
 
             var ready = await _healthProbe
@@ -305,6 +350,63 @@ public sealed class LlamaServerProcessSupervisor : ILlamaServerProcessSupervisor
             handle?.Dispose();
             await ReleaseReservedPortAsync(port).ConfigureAwait(false);
             throw;
+        }
+    }
+
+    /// <inheritdoc />
+    public async Task<T> RunExclusiveProfilingAsync<T>(string modelName,
+        ModelRole role,
+        ResolvedLaunchArguments launchArgs,
+        bool enableMetrics,
+        Func<LlamaServerProfilingContext, CancellationToken, Task<T>> body,
+        CancellationToken ct)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(modelName);
+        ArgumentNullException.ThrowIfNull(launchArgs);
+        ArgumentNullException.ThrowIfNull(body);
+        ObjectDisposedException.ThrowIf(Volatile.Read(ref _disposed) != 0, this);
+
+        var key = new ProcessKey(modelName, role);
+
+        // Take the SAME single-flight gate the normal ensure path uses, so a concurrent user EnsureRunningAsync for this
+        // key queues behind the exclusive profiling spawn instead of racing it.
+        var gate = _ensureGates.GetOrAdd(key, static _ => new SemaphoreSlim(initialCount: 1, maxCount: 1));
+        await gate.WaitAsync(ct).ConfigureAwait(false);
+        try
+        {
+            // Explicitly evict any warm process for this key — admission only auto-evicts an IDLE LRU victim, so a
+            // freshly-used warm process would otherwise survive and the profiling spawn would not be exclusive.
+            await EvictAsync(modelName, role, ct).ConfigureAwait(false);
+
+            // Thread-safe per-line sink backing the StartupCapture callback (both server pipes Enqueue concurrently).
+            var startupOutput = new ConcurrentQueue<string>();
+
+            // Spawn exactly one process with the operator-supplied args verbatim (bypass the profile resolver).
+            var running = await SpawnCoreAsync(key,
+                                  (_, _) => Task.FromResult(launchArgs),
+                                  startupOutput.Enqueue,
+                                  ensureMetrics: enableMetrics,
+                                  ct)
+                              .ConfigureAwait(false);
+
+            // Pin against idle eviction for the whole benchmark — the process is never marked-used during the body, so
+            // without the pin the reaper would treat it as idle past the TTL and tear it down mid-measurement.
+            running.Pin();
+            try
+            {
+                var context = new LlamaServerProfilingContext(running.Endpoint, startupOutput.ToArray());
+                return await body(context, ct).ConfigureAwait(false);
+            }
+            finally
+            {
+                // Always unpin + evict the transient profiling process, even on body throw or cancellation.
+                running.Unpin();
+                await RemoveProcessAsync(key, running).ConfigureAwait(false);
+            }
+        }
+        finally
+        {
+            gate.Release();
         }
     }
 
@@ -461,6 +563,13 @@ public sealed class LlamaServerProcessSupervisor : ILlamaServerProcessSupervisor
         var now = _timeProvider.GetUtcNow();
         foreach (var (key, running) in _processes.ToArray())
         {
+            // A live profiling-pinned process is never idle-evicted mid-benchmark; an EXITED one is still reaped below
+            // so a dead handle never leaks even while pinned.
+            if (running.IsProfilingPinned && !running.Handle.HasExited)
+            {
+                continue;
+            }
+
             if (running.Handle.HasExited || now - running.LastUsedUtc >= _options.IdleTimeToLive)
             {
                 await RemoveProcessAsync(key, running).ConfigureAwait(false);
@@ -476,6 +585,13 @@ public sealed class LlamaServerProcessSupervisor : ILlamaServerProcessSupervisor
         RunningProcess? victim = null;
         foreach (var (key, running) in _processes)
         {
+            // A live profiling-pinned process is reserved for its benchmark — never select it as a cap-admission victim
+            // (an EXITED pinned process is a dead handle and stays eligible so its slot/port is reclaimed).
+            if (running.IsProfilingPinned && !running.Handle.HasExited)
+            {
+                continue;
+            }
+
             if (now - running.LastUsedUtc < _options.IdleTimeToLive && !running.Handle.HasExited)
             {
                 continue; // Not idle — never evict an in-window process to admit a new one.
@@ -627,6 +743,7 @@ public sealed class LlamaServerProcessSupervisor : ILlamaServerProcessSupervisor
     private sealed class RunningProcess(ILlamaServerProcessHandle handle, LlamaServerEndpoint endpoint, int port, DateTimeOffset startedUtc)
     {
         private long _lastUsedTicks = startedUtc.UtcTicks;
+        private int _profilingPinned;
 
         public ILlamaServerProcessHandle Handle { get; } = handle;
 
@@ -636,9 +753,27 @@ public sealed class LlamaServerProcessSupervisor : ILlamaServerProcessSupervisor
 
         public DateTimeOffset LastUsedUtc => new(Interlocked.Read(ref _lastUsedTicks), TimeSpan.Zero);
 
+        /// <summary>
+        ///     <see langword="true" /> while an operator profiling benchmark owns this process; the idle reaper and the
+        ///     cap-admission LRU eviction skip a pinned, non-exited process so it is never torn down mid-measurement.
+        /// </summary>
+        public bool IsProfilingPinned => Volatile.Read(ref _profilingPinned) != 0;
+
         public void MarkUsed(DateTimeOffset now)
         {
             Interlocked.Exchange(ref _lastUsedTicks, now.UtcTicks);
+        }
+
+        /// <summary>Reserves this process for a profiling benchmark, exempting it from idle eviction.</summary>
+        public void Pin()
+        {
+            Interlocked.Exchange(ref _profilingPinned, value: 1);
+        }
+
+        /// <summary>Releases the profiling reservation so normal idle eviction resumes.</summary>
+        public void Unpin()
+        {
+            Interlocked.Exchange(ref _profilingPinned, value: 0);
         }
     }
 }
