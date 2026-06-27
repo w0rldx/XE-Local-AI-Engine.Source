@@ -410,3 +410,6 @@ cloud-credentials.enc
 
 # Runtime node settings (written to ContentRootPath at runtime; must never be committed or shipped)
 node-settings.json
+
+# Generated at release time by scripts/generate-release-notes.sh (vpk --releaseNotes)
+RELEASE_NOTES.md

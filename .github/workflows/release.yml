@@ -73,6 +73,10 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+        with:
+          # Full history + tags are required so git-cliff can compute the
+          # commit range since the previous release tag for the changelog.
+          fetch-depth: 0
 
       - name: Compose version from Directory.Build.props
         id: compose
@@ -115,6 +119,47 @@ jobs:
           fi
           echo "update-channel=${CHAN}" >> "$GITHUB_OUTPUT"
           echo "Update channel: ${CHAN}"
+
+      # ------------------------------------------------------------------
+      # Release notes: generate ONCE here (ubuntu) from the conventional
+      # commit history since the previous tag, then share the file with both
+      # RID legs as an artifact. Doing it once guarantees identical notes
+      # across RIDs and keeps git-cliff off the Windows leg. The generated
+      # RELEASE_NOTES.md is fed to `vpk pack --releaseNotes`, which embeds it
+      # so `vpk upload github` publishes it as the GitHub release body.
+      #
+      # git-cliff is pinned by version + SHA256 (same convention as the
+      # llama.cpp prebuilt binaries). The committed scripts/generate-release-notes.sh
+      # is the single generator shared with the manual publish runbook.
+      # ------------------------------------------------------------------
+      - name: Install git-cliff (pinned)
+        shell: bash
+        env:
+          GIT_CLIFF_VERSION: "2.13.1"
+          GIT_CLIFF_SHA256: "9a1263f24e59a2f508c7b3d3283c9dea94a8bf697f96dbc18cc783cac6284546"
+        run: |
+          set -euo pipefail
+          TARBALL="git-cliff-${GIT_CLIFF_VERSION}-x86_64-unknown-linux-gnu.tar.gz"
+          URL="https://github.com/orhun/git-cliff/releases/download/v${GIT_CLIFF_VERSION}/${TARBALL}"
+          curl -fsSL "$URL" -o "$TARBALL"
+          echo "${GIT_CLIFF_SHA256}  ${TARBALL}" | sha256sum -c -
+          tar xzf "$TARBALL"
+          sudo install -m 0755 "git-cliff-${GIT_CLIFF_VERSION}/git-cliff" /usr/local/bin/git-cliff
+          git-cliff --version
+
+      - name: Generate release notes
+        shell: bash
+        run: |
+          chmod +x scripts/generate-release-notes.sh
+          scripts/generate-release-notes.sh "${{ steps.compose.outputs.pack-version }}" RELEASE_NOTES.md
+
+      - name: Upload release notes artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: release-notes
+          path: RELEASE_NOTES.md
+          retention-days: 7
+          if-no-files-found: error
 
   # ---------------------------------------------------------------------------
   # Release matrix — one leg per RID.
@@ -209,6 +254,13 @@ jobs:
         shell: bash
         run: dotnet tool install -g vpk --version ${{ env.VPK_VERSION }}
 
+      # Auto-generated changelog from the version job; embedded into the package
+      # by vpk pack --releaseNotes and published as the GitHub release body.
+      - name: Download release notes artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: release-notes
+
       - name: Pack (Velopack)
         shell: bash
         run: |
@@ -222,7 +274,8 @@ jobs:
             --packVersion "$PACK_VERSION" \
             --packDir "${{ matrix.publish-dir }}" \
             --mainExe "${{ matrix.main-exe }}" \
-            --channel "${{ matrix.vpk-channel }}"
+            --channel "${{ matrix.vpk-channel }}" \
+            --releaseNotes RELEASE_NOTES.md
 
       - name: Upload to GitHub releases
         shell: bash
