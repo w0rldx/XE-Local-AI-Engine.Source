@@ -1881,6 +1881,59 @@
 					"none": "None",
 					"unknown": "Unknown"
 				}
+			},
+			"inferenceProfiles": {
+				"title": "Inference profiles",
+				"subtitle": "Tuned launch profiles this node explored, benchmarked, and froze for repeat use. Outcomes only — tokens/second and VRAM.",
+				"loading": "Loading inference profiles…",
+				"error": "Could not load inference profiles.",
+				"empty": "No inference profiles yet. Explore a model to create one.",
+				"moe": "MoE",
+				"moeExperts": "MoE · {{count}} experts",
+				"explore": {
+					"modelLabel": "Model name",
+					"modelPlaceholder": "e.g. unsloth/Qwen3-4B-GGUF",
+					"roleLabel": "Role",
+						"roleChat": "Chat",
+						"roleEmbedding": "Embedding",
+					"button": "Explore",
+					"success": "Exploring a tuned profile for {{model}}.",
+					"error": "Could not start exploration."
+				},
+				"columns": {
+					"status": "Status",
+					"model": "Model",
+					"outcome": "Outcome",
+					"action": "Action"
+				},
+				"status": {
+					"explored": "Explored",
+					"frozen": "Frozen",
+					"stale": "Stale"
+				},
+				"actions": {
+					"benchmark": "Benchmark",
+					"freeze": "Freeze",
+					"invalidate": "Invalidate",
+					"freezeDisabledHint": "Run a benchmark before freezing this profile.",
+					"benchmarkSuccess": "Benchmarked {{model}}.",
+					"benchmarkError": "Could not benchmark the profile.",
+					"freezeSuccess": "Froze {{model}}.",
+					"freezeError": "Could not freeze the profile.",
+					"invalidateSuccess": "Invalidated {{model}}.",
+					"invalidateError": "Could not invalidate the profile."
+				},
+				"metrics": {
+					"title": "Benchmark metrics",
+					"empty": "This run reported no metrics.",
+					"ttft": "TTFT",
+					"promptTps": "Prompt tok/s",
+					"genTps": "Generation tok/s",
+					"cacheHit": "Cache hit",
+					"toolLoop": "Tool loop",
+					"vramLoad": "VRAM at load",
+					"vramAfter": "VRAM after"
+				}
 			}
 		},
 		"loadedModels": {

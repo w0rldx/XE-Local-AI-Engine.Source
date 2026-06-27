@@ -52,6 +52,15 @@ const { hooksMock, ggufMock, schedulerMock, hubMock, toastMock } = vi.hoisted(()
 }));
 
 vi.mock("@/features/model-fit/queries/useModelFit", () => hooksMock);
+// The page now mounts the InferenceProfilePanel (Lane C3). It owns its own server state via useInferenceProfiles;
+// stub the whole hook module so this page test stays deterministic and offline (the panel has its own test).
+vi.mock("@/features/model-fit/queries/useInferenceProfiles", () => ({
+	useInferenceProfiles: () => ({ data: [], isLoading: false, error: null }),
+	useExploreInferenceProfile: () => ({ mutate: vi.fn(), isPending: false, variables: undefined }),
+	useBenchmarkInferenceProfile: () => ({ mutate: vi.fn(), isPending: false, variables: undefined }),
+	useFreezeInferenceProfile: () => ({ mutate: vi.fn(), isPending: false, variables: undefined }),
+	useInvalidateInferenceProfile: () => ({ mutate: vi.fn(), isPending: false, variables: undefined }),
+}));
 vi.mock("@/features/models/queries/useGgufDownload", () => ggufMock);
 vi.mock("@/features/scheduler/queries/useScheduler", () => schedulerMock);
 vi.mock("@/features/model-fit/hooks/useModelFitSchedulerEvents", () => ({ useModelFitSchedulerEvents: hubMock }));

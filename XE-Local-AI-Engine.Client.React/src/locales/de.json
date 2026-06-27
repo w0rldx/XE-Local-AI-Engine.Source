@@ -1881,6 +1881,59 @@
 					"none": "Keine",
 					"unknown": "Unbekannt"
 				}
+			},
+			"inferenceProfiles": {
+				"title": "Inferenzprofile",
+				"subtitle": "Optimierte Startprofile, die dieser Node erkundet, gemessen und für die Wiederverwendung eingefroren hat. Nur Ergebnisse — Tokens/Sekunde und VRAM.",
+				"loading": "Inferenzprofile werden geladen…",
+				"error": "Inferenzprofile konnten nicht geladen werden.",
+				"empty": "Noch keine Inferenzprofile. Erkunde ein Modell, um eines zu erstellen.",
+				"moe": "MoE",
+				"moeExperts": "MoE · {{count}} Experten",
+				"explore": {
+					"modelLabel": "Modellname",
+					"modelPlaceholder": "z. B. unsloth/Qwen3-4B-GGUF",
+					"roleLabel": "Rolle",
+						"roleChat": "Chat",
+						"roleEmbedding": "Embedding",
+					"button": "Erkunden",
+					"success": "Optimiertes Profil für {{model}} wird erkundet.",
+					"error": "Erkundung konnte nicht gestartet werden."
+				},
+				"columns": {
+					"status": "Status",
+					"model": "Modell",
+					"outcome": "Ergebnis",
+					"action": "Aktion"
+				},
+				"status": {
+					"explored": "Erkundet",
+					"frozen": "Eingefroren",
+					"stale": "Veraltet"
+				},
+				"actions": {
+					"benchmark": "Benchmark",
+					"freeze": "Einfrieren",
+					"invalidate": "Verwerfen",
+					"freezeDisabledHint": "Führe einen Benchmark aus, bevor du dieses Profil einfrierst.",
+					"benchmarkSuccess": "{{model}} wurde gemessen.",
+					"benchmarkError": "Profil konnte nicht gemessen werden.",
+					"freezeSuccess": "{{model}} wurde eingefroren.",
+					"freezeError": "Profil konnte nicht eingefroren werden.",
+					"invalidateSuccess": "{{model}} wurde verworfen.",
+					"invalidateError": "Profil konnte nicht verworfen werden."
+				},
+				"metrics": {
+					"title": "Benchmark-Metriken",
+					"empty": "Dieser Lauf hat keine Metriken gemeldet.",
+					"ttft": "TTFT",
+					"promptTps": "Prompt Tok/s",
+					"genTps": "Generierung Tok/s",
+					"cacheHit": "Cache-Treffer",
+					"toolLoop": "Tool-Schleife",
+					"vramLoad": "VRAM beim Laden",
+					"vramAfter": "VRAM danach"
+				}
 			}
 		},
 		"loadedModels": {
