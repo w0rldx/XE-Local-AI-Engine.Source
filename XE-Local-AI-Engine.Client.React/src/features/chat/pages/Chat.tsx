@@ -622,7 +622,7 @@ export function Chat() {
 
 			cacheConversation(optimisticConversation);
 			setTimelineEntries([]);
-			// Barge-in: a fresh send halts any voice playback still running from a previous turn (invariant §3 / §7.3).
+			// Barge-in: a fresh send halts any voice playback still running from a previous turn.
 			onVoiceTurnStart();
 			setStreamingMessage({
 				conversationId: conversation.id,
@@ -674,8 +674,8 @@ export function Chat() {
 					const applied = applyNodeChatStreamEvent(currentConversation, streamEvent);
 					cacheConversation(applied.conversation);
 					setStreamingMessage(applied.streamingMessage);
-					// Decoupled voice tap (R-A MEDIUM-1): mirror the SAME reduced state into the TTS sentence buffer,
-					// next to the reducer call rather than inside it. Only the answer text is read (invariant §3.7).
+					// Decoupled voice tap: mirror the SAME reduced state into the TTS sentence buffer,
+					// next to the reducer call rather than inside it. Only the answer text is read.
 					lastVoiceStreaming = applied.streamingMessage;
 					onVoiceAnswerProgress(applied.streamingMessage);
 					const toolEntry = applied.timelineEntry;
@@ -761,7 +761,7 @@ export function Chat() {
 			const abortController = new AbortController();
 			activeStream.current = { conversationId: conversation.id, messageId: "", requestId: "", abortController };
 			setTimelineEntries([]);
-			// Barge-in: regenerate halts any voice playback still running (invariant §3 / §7.3).
+			// Barge-in: regenerate halts any voice playback still running.
 			onVoiceTurnStart();
 			setStreamingMessage({ conversationId: conversation.id, messageId: "", content: "", isActive: true });
 
@@ -801,7 +801,7 @@ export function Chat() {
 							: applied.conversation;
 					cacheConversation(grouped);
 					setStreamingMessage(applied.streamingMessage);
-					// Decoupled voice tap (only the answer text is read, invariant §3.7).
+					// Decoupled voice tap (only the answer text is read).
 					lastVoiceStreaming = applied.streamingMessage;
 					onVoiceAnswerProgress(applied.streamingMessage);
 					const toolEntry = applied.timelineEntry;

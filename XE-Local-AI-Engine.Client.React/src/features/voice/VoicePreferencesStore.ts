@@ -3,7 +3,7 @@ import { create } from "zustand";
 // Client-side voice preferences (UI-state), mirroring NodeChatPreferencesStore: zustand + guarded
 // globalThis.localStorage, global (not per-conversation) keys, safe read/write with try/catch. These are the
 // runtime knobs the operator-owned manifest does NOT cover — voice is OFF and autoplay is OFF by default so the
-// dev-gated M1 never speaks unless the user opts in (plan §6.1 / locked decision 6). The selected profile + rate
+// dev-gated feature never speaks unless the user opts in. The selected profile + rate
 // persist across reloads. No server mirroring (server-state lives in the manifest query).
 
 const VOICE_ENABLED_STORAGE_KEY = "xe-voice-enabled";

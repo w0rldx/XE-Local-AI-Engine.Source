@@ -1,8 +1,8 @@
-// Gapless Web Audio scheduler for streamed TTS chunks (plan §3.4, §3.8, §7.2).
+// Gapless Web Audio scheduler for streamed TTS chunks.
 //
-// Owns ONE long-lived AudioContext for the session — never `close()`d per turn (closing is unrecoverable, invariant
-// §3.4). The context starts suspended and only produces sound after `resume()` is called from a user gesture (browser
-// autoplay policy, invariant §3.8); `enqueue` before that point buffers chunks and never throws. Scheduling is
+// Owns ONE long-lived AudioContext for the session — never `close()`d per turn (closing is unrecoverable). The
+// context starts suspended and only produces sound after `resume()` is called from a user gesture (browser autoplay
+// policy); `enqueue` before that point buffers chunks and never throws. Scheduling is
 // gapless: a `nextTime` cursor places each chunk exactly where the previous one ends, with a fresh
 // AudioBufferSourceNode per chunk. `stop()` halts every live node and resets the cursor for barge-in.
 
@@ -100,7 +100,7 @@ export class PlaybackQueue {
 		this.nextTime = this.context.currentTime;
 	}
 
-	/** App-teardown only — closes the context permanently. NEVER call this per turn (invariant §3.4). */
+	/** App-teardown only — closes the context permanently. NEVER call this per turn. */
 	async close(): Promise<void> {
 		this.stop();
 		await this.context.close();

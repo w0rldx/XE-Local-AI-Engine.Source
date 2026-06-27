@@ -108,7 +108,7 @@ export function ChatMessage({
 	const showTokensPerSecond = useNodeChatPreferencesStore((state) => state.showTokensPerSecond);
 	const setShowTokensPerSecond = useNodeChatPreferencesStore((state) => state.actions.setShowTokensPerSecond);
 	// When this turn's answer is being read aloud, silence the screen reader on the answer block to avoid a
-	// double-read against the active TTS (R-V MEDIUM-6 / plan §10). Inert when no voice provider is mounted.
+	// double-read against the active TTS. Inert when no voice provider is mounted.
 	const { playingMessageId } = useVoiceRuntime();
 	const isBeingSpoken = playingMessageId === message.id;
 	const label = roleLabel(message.role);

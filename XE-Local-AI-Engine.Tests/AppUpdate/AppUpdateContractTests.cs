@@ -6,7 +6,7 @@ using XE_Local_AI_Engine.Tests.Testing;
 
 /// <summary>
 ///     Static security guarantees on the app-update / GitHub-auth surface: no response DTO carries the access token or the
-///     device_code (sec H4), and every endpoint is Operator-gated (sec M5). The token/device_code checks reflect over the
+///     device_code, and every endpoint is Operator-gated. The token/device_code checks reflect over the
 ///     wire DTOs; the Operator-gating check scans each endpoint's Configure() source for the Operator policy (the same
 ///     source-scan technique used by CodexAuthServiceTests).
 /// </summary>

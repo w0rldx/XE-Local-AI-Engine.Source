@@ -1,7 +1,7 @@
-// Runtime capability probing for the voice runtime (plan §3.5, §7.2).
+// Runtime capability probing for the voice runtime.
 //
 // The fallback ladder is decided by what the *browser* can actually do, probed once at app init and cached — never a
-// static "this browser supports X" table (invariant §3.5). WebGPU is probed via the real adapter→device handshake
+// static "this browser supports X" table. WebGPU is probed via the real adapter→device handshake
 // (an adapter request can resolve null, and device creation can throw / be lost), so detection must tolerate every
 // failure mode without throwing. Web Speech voices load asynchronously, so detection awaits `voiceschanged` once.
 
@@ -34,7 +34,7 @@ export interface WebSpeechCapability {
 	readonly voices: readonly WebSpeechVoiceInfo[];
 }
 
-/** Immutable snapshot of what the current browser can do; produced once and cached for milestone 1. */
+/** Immutable snapshot of what the current browser can do; produced once and cached for the session. */
 export interface VoiceCapabilities {
 	readonly webgpu: boolean;
 	readonly wasm: boolean;
@@ -67,7 +67,7 @@ export async function detectWebGpu(): Promise<boolean> {
 
 		const device = await adapter.requestDevice();
 		// A device can be lost asynchronously (driver reset, tab backgrounded). Swallow the rejection so an unhandled
-		// promise never surfaces; the M1 cache is not invalidated on loss (dynamic re-probe is deferred to M2).
+		// promise never surfaces; the cache is not invalidated on loss (dynamic re-probe is deferred to a later release).
 		device.lost.catch(() => undefined);
 		return true;
 	} catch {
@@ -130,9 +130,9 @@ export async function probeVoiceCapabilities(voicesTimeoutMs?: number): Promise<
 let cachedCapabilities: Promise<VoiceCapabilities> | undefined;
 
 /**
- * Probes once at app init and caches the result for the session (invariant §7.2). Subsequent calls return the same
+ * Probes once at app init and caches the result for the session. Subsequent calls return the same
  * snapshot. A `voiceschanged` listener is attached so late-loading voices are observable to callers that re-read, but
- * the cached snapshot itself is intentionally NOT invalidated in M1 (dynamic re-probe deferred to M2).
+ * the cached snapshot itself is intentionally NOT invalidated for now (dynamic re-probe deferred to a later release).
  */
 export function detectVoiceCapabilities(voicesTimeoutMs?: number): Promise<VoiceCapabilities> {
 	cachedCapabilities ??= probeVoiceCapabilities(voicesTimeoutMs);

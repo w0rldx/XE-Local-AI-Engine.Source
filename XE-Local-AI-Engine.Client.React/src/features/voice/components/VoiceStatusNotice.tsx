@@ -5,10 +5,10 @@ import { useTranslation } from "react-i18next";
 import { useVoicePreferencesStore } from "@/features/voice/VoicePreferencesStore";
 import { useVoiceRuntime } from "@/features/voice/VoiceRuntimeContext";
 
-// Voice status banners (plan §7.3, §3.8, §10): the one-time model-download progress/error (dismissible) and a
+// Voice status banners: the one-time model-download progress/error (dismissible) and a
 // capability/fallback notice (e.g. "using browser speech — WebGPU unavailable"). Self-gates on the runtime context;
 // renders nothing when voice is off. The AudioContext gesture-unlock still happens in the runtime, but it needs no
-// banner — the user starts playback themselves. NOTE (M1): in the default delivery path the Kokoro worker downloads
+// banner — the user starts playback themselves. NOTE: in the default delivery path the Kokoro worker downloads
 // weights through Transformers.js' own cache, so the ModelCache-driven progress bar is the seam for the
 // self-hosted/prefetch path and only shows when ModelCache actually fetches.
 

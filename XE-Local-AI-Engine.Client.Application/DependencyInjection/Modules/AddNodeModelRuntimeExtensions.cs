@@ -122,8 +122,8 @@ internal static class AddNodeModelRuntimeExtensions
         // Application → Providers (the interface is defined in Providers, implemented here). The resolver is a singleton
         // on the cold spawn path; it opens a fresh scope per resolve to reach the SCOPED IInferenceProfileStore.
         // IMachineKeyProvider + IInferenceInvalidationEvaluator are singletons it injects. The free-VRAM probe defaults
-        // to "unknown" via TryAddSingleton so the invalidation evaluator simply skips the live-VRAM check until Lane B
-        // wires the real --list-devices probe over the same seam.
+        // to "unknown" via TryAddSingleton so the invalidation evaluator simply skips the live-VRAM check until the
+        // real --list-devices probe is wired over the same seam.
         builder.Services.AddSingleton<IMachineKeyProvider, MachineKeyProvider>();
         builder.Services.TryAddSingleton<IAvailableVramProbe, UnknownAvailableVramProbe>();
         builder.Services.AddSingleton<IInferenceInvalidationEvaluator, InferenceInvalidationEvaluator>();
@@ -131,7 +131,7 @@ internal static class AddNodeModelRuntimeExtensions
 
         // The provider resolver maps ModelName→ProviderName (over the persisted model_provider_map,
         // unmapped → default) then ProviderName→ILocalModelProvider (over the registered set). Singleton; reads the
-        // scoped map store through a fresh scope per lookup. DEFAULT for unmapped models = "llamacpp" — post-epic Ollama
+        // scoped map store through a fresh scope per lookup. DEFAULT for unmapped models = "llamacpp" — Ollama
         // is an OPTIONAL secondary runtime and the shipped default model is a GGUF, so a name that somehow lacks a map
         // row (a pre-existing GGUF install, or a registry/map divergence) still routes to llama.cpp. Genuine Ollama
         // models are explicitly mapped to "ollama" at pull time (the symmetric upsert on the Ollama pull endpoints) going

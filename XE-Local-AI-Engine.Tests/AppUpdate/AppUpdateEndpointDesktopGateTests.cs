@@ -8,7 +8,7 @@ using XE_Local_AI_Engine.Tests.Testing;
 ///     every one of the six routes must be ABSENT (the FastEndpoints filter excludes <c>IDesktopOnlyEndpoint</c> off the
 ///     desktop flag) — the route is never mapped, so a POST to an unmapped path is rejected by routing
 ///     (404 / 405, since the SPA fallback only handles GET) and a GET falls through to the SPA fallback (HTML, NOT a JSON
-///     endpoint response). Either way the request never reaches an app-update endpoint (sec M4).
+///     endpoint response). Either way the request never reaches an app-update endpoint.
 /// </summary>
 public sealed class AppUpdateEndpointDesktopGateTests
 {

@@ -1,6 +1,6 @@
-// Client AI Runtime provider — owns the ONE long-lived voice runtime + AudioContext for the whole app session
-// (architecture invariant §3.8 / §7.2). Mounted at the app root so it survives route + conversation changes. It is
-// deliberately NOT a generic feature registry (R-A MEDIUM-2 descope): it owns exactly the VoiceRuntime, its
+// Client AI Runtime provider — owns the ONE long-lived voice runtime + AudioContext for the whole app session.
+// Mounted at the app root so it survives route + conversation changes. It is
+// deliberately NOT a generic feature registry: it owns exactly the VoiceRuntime, its
 // PlaybackQueue (the single AudioContext), and the AudioContext autoplay-gesture lifecycle.
 //
 // The AudioContext starts suspended (browser autoplay policy); a one-shot global pointer/keydown listener resumes it
@@ -123,7 +123,7 @@ export function ClientAiRuntimeProvider({ children }: { readonly children: React
 	}, []);
 
 	// One-shot global gesture listener: unlock the AudioContext on the first user pointer/keydown so later enqueues
-	// play instead of buffering forever (autoplay policy, invariant §3.8). Re-armed whenever a fresh runtime mounts.
+	// play instead of buffering forever (autoplay policy). Re-armed whenever a fresh runtime mounts.
 	useEffect(() => {
 		if (!bundle) {
 			return;
@@ -165,7 +165,7 @@ export function ClientAiRuntimeProvider({ children }: { readonly children: React
 
 			const prefs = useVoicePreferencesStore.getState();
 			const voiceId = prefs.voiceProfile || manifest?.defaultVoiceId || undefined;
-			// "Selected voice always wins" (D2): the manual Play button routes by the SELECTED voice's OWN language so
+			// "Selected voice always wins": the manual Play button routes by the SELECTED voice's OWN language so
 			// it matches the node-settings preview exactly (the caller no longer guesses a language from the answer).
 			// detectAnswerLanguage is the fallback only when no voice resolves (no selection AND no manifest default).
 			const selectedVoice = manifest ? findVoiceById(manifest, voiceId) : undefined;
