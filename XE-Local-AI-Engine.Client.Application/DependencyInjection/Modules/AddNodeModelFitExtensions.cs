@@ -5,6 +5,7 @@ using XE_Local_AI_Engine.Client.Persistence.Stores;
 using XE_Local_AI_Engine.Client.Services.Inference;
 using XE_Local_AI_Engine.Client.Services.ModelFit;
 using XE_Local_AI_Engine.Client.Services.ModelFit.Fit;
+using XE_Local_AI_Engine.Client.Services.ModelFit.Gguf;
 using XE_Local_AI_Engine.Client.Services.ModelFit.Implementation;
 using XE_Local_AI_Engine.Client.Services.ModelFit.Validation;
 using XE_Local_AI_Engine.Client.Services.Persistence.Implementation;
@@ -50,6 +51,10 @@ internal static class AddNodeModelFitExtensions
         // The memory-fit estimator is a pure, stateless function over GGUF header metadata + the hardware
         // profile → singleton. Consumed by the advisor to score each candidate GGUF file's fit.
         builder.Services.AddSingleton<MemoryFitEstimator>();
+        // The GGUF variant recommender annotates a repo's selectable files (quality tier + hardware fit verdict + a single
+        // recommended pick) for the download picker's inspect endpoint. Stateless over the singleton GPU-variant selector
+        // and free-VRAM probe → singleton. Read-time only; never persists.
+        builder.Services.AddSingleton<IGgufVariantRecommender, GgufVariantRecommender>();
         // Model-fit refresh service = the local model advisor: the single non-bypass path that profiles hardware,
         // discovers candidate GGUF files (the Hugging Face GGUF store), estimates memory fit, ranks the survivors and
         // replaces the cached recommendation snapshot. Invoked only by the scheduler's ModelRecommendationCheckHandler.

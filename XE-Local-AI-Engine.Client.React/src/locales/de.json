@@ -1147,9 +1147,23 @@
 					"inspectError": "Die Dateien dieses Repositorys konnten nicht geladen werden.",
 					"noFiles": "Keine herunterladbaren GGUF-Dateien gefunden.",
 					"dynamic": "Dynamisch",
+					"recommended": "Empfohlen",
 					"columns": {
 						"quant": "Quantisierung",
-						"size": "Größe"
+						"size": "Größe",
+						"fit": "Passung"
+					},
+					"fit": {
+						"fits": "Passt",
+						"tight": "Knapp",
+						"wontFit": "Passt nicht"
+					},
+					"quality": {
+						"nearLossless": "Höchste Qualität",
+						"sweetSpot": "Empfohlene Qualität",
+						"balanced": "Ausgewogen",
+						"small": "Kleiner / schneller",
+						"minimal": "Kleinste / geringste Qualität"
 					},
 					"defaultFallback": "Standard-Quantisierung herunterladen (Q4_K_M)",
 					"progressLabel": "{{pct}}%",
@@ -1894,8 +1908,8 @@
 					"modelLabel": "Modellname",
 					"modelPlaceholder": "z. B. unsloth/Qwen3-4B-GGUF",
 					"roleLabel": "Rolle",
-						"roleChat": "Chat",
-						"roleEmbedding": "Embedding",
+					"roleChat": "Chat",
+					"roleEmbedding": "Embedding",
 					"button": "Erkunden",
 					"success": "Optimiertes Profil für {{model}} wird erkundet.",
 					"error": "Erkundung konnte nicht gestartet werden."

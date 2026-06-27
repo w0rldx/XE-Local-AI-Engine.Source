@@ -4,6 +4,7 @@ using FastEndpoints;
 using XE_Local_AI_Engine.Client.Endpoints.Common;
 using XE_Local_AI_Engine.Client.Endpoints.ModelFit.V1.Mappers;
 using XE_Local_AI_Engine.Client.Services.Auth;
+using XE_Local_AI_Engine.Client.Services.ModelFit.Gguf;
 using XE_Local_AI_Engine.Providers.Abstractions.Gguf;
 
 /// <summary>
@@ -17,10 +18,12 @@ using XE_Local_AI_Engine.Providers.Abstractions.Gguf;
 /// </summary>
 public sealed class InspectGgufRepositoryEndpoint(
     IHuggingFaceGgufDiscovery discovery,
+    IGgufVariantRecommender recommender,
     ILogger<InspectGgufRepositoryEndpoint> logger)
     : Endpoint<InspectGgufRepositoryRequest, InspectGgufRepositoryResponse>
 {
     private readonly IHuggingFaceGgufDiscovery _discovery = discovery ?? throw new ArgumentNullException(nameof(discovery));
+    private readonly IGgufVariantRecommender _recommender = recommender ?? throw new ArgumentNullException(nameof(recommender));
     private readonly ILogger<InspectGgufRepositoryEndpoint> _logger = logger ?? throw new ArgumentNullException(nameof(logger));
 
     public override void Configure()
@@ -43,7 +46,8 @@ public sealed class InspectGgufRepositoryEndpoint(
         try
         {
             var detail = await _discovery.ListRepoFilesAsync(repoId, ct).ConfigureAwait(false);
-            await Send.OkAsync(detail.ToResponse(), ct).ConfigureAwait(false);
+            var annotations = await _recommender.AnnotateAsync(detail.Files, ct).ConfigureAwait(false);
+            await Send.OkAsync(detail.ToResponse(annotations), ct).ConfigureAwait(false);
         }
         catch (OperationCanceledException) when (ct.IsCancellationRequested)
         {
