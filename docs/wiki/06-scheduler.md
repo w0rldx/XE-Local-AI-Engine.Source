@@ -1,6 +1,6 @@
 # Scheduler
 
-> Last reviewed: 2026-06-24 · Code-grounded.
+> Last reviewed: 2026-06-27 · Code-grounded.
 
 The node runs a **Quartz.NET-backed job scheduler** entirely in-process inside the Node Web Server (`XE-Local-AI-Engine.Client`). It lets an operator define recurring/one-shot/manual jobs from a registered set of *templates*, fires them through a thin dispatch job, records every fire as a run-history row, supports best-effort cancellation (operator interrupt + auto-interrupt timeout), and pushes live lifecycle events to the React management UI over a SignalR hub. The data layer is encrypted node-local SQLite; the canonical model-fit "Model recommendation check" job is the only template shipped today (see [Model Fit](07-model-fit.md)).
 
@@ -203,6 +203,8 @@ All under the FastEndpoints local prefix; route constants in `LocalApiRoutes.Sch
 
 These endpoints are local/loopback, operator-authenticated, and strict on Host/Origin like the rest of the local admin surface ([Security & Privacy](12-security-and-privacy.md)). The OpenAPI document generated from them is the single source for the React REST clients (hey-api) — see [React Client](10-react-client.md).
 
+> **Body-less POST → 415 fix.** The route-only action POSTs (`enable`, `disable`, `trigger`, run `cancel`) bind their id from the route, so a well-behaved client sends no body and therefore no `Content-Type`. FastEndpoints' default POST `Accepts` metadata only allows `application/json` and answers a missing header with **415**. Each action endpoint overrides this with `Description(x => x.Accepts<ScheduledJobActionRequest>())` so the body-less "Run now"/enable/disable/cancel request goes through (`TriggerScheduledJobEndpoint.cs:20`). No request body or OpenAPI shape change is implied. See [API & Hubs](09-api-and-hubs.md).
+
 ---
 
 ## React scheduler feature
@@ -223,6 +225,7 @@ These endpoints are local/loopback, operator-authenticated, and strict on Host/O
 
 - `scheduler.jobDefinitionChanged` → invalidate the jobs list query.
 - any of the five `scheduler.run*` events → invalidate the run-history list **and** the per-run detail query.
+- a **terminal** run outcome (`runCompleted`/`runFailed`/`runCancelled`) additionally raises a localized **completion toast** via `notifySchedulerRunEvent` (`features/scheduler/notifications/SchedulerRunNotifications.ts`) so the operator sees the result without watching the run-history panel. `t` is read through a ref so a mid-session language switch re-localizes future toasts without re-subscribing the hub.
 
 It connects to `buildLocalApiUrl("scheduler/hub")` with an `accessTokenFactory` from the node auth store, uses `withAutomaticReconnect()`, and tolerates connection failures silently (logged to `console.warn`) so a flaky hub never breaks the page — queries still serve last-good data.
 

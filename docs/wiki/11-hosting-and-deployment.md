@@ -1,6 +1,6 @@
 # Hosting, AppHost & Deployment
 
-> Last reviewed: 2026-06-24 · Code-grounded.
+> Last reviewed: 2026-06-27 · Code-grounded.
 
 This page covers how the XE Local AI Engine node process is **hosted and shipped**: the Aspire AppHost used for local dev/integration, the shared `ServiceDefaults`, the configuration layers (`appsettings` + the user-editable `node-settings.json` + the encrypted `hf-token.enc`), the background hosted services that run inside the node, the self-contained single-file **desktop launcher** (`XE_LAUNCH_MODE=desktop`), the publish profiles + launchers used to produce a double-click distribution, and the (currently deferred) cross-platform uninstaller.
 
@@ -91,14 +91,14 @@ All per-node runtime artifacts (settings, encrypted credential stores, cert pins
 
 ## 5. Self-contained single-file desktop launcher
 
-Desktop mode turns the same binary into a double-click app. It is **strictly opt-in** and resolved by `DesktopLaunch.IsDesktopMode` (`Client/Hosting/DesktopLaunch.cs`): env `XE_LAUNCH_MODE=desktop` **or** CLI `--desktop`. With the flag off, every desktop branch is skipped and behaviour is byte-identical to Aspire/CI/headless.
+Desktop mode turns the same binary into a double-click app. It is **opt-in** and resolved by `DesktopLaunch.IsDesktopMode(args, VelopackInstall.IsManaged())` (`Client/Hosting/DesktopLaunch.cs`, `Program.cs:49`) from any of three signals: env `XE_LAUNCH_MODE=desktop`, CLI `--desktop`, **or** running from a **Velopack-managed install** (`VelopackInstall.IsManaged()` — installer or portable flavor). The managed-install signal exists because the Velopack stub launches the bare exe with no env/arg, yet the packaged app *is* the desktop flavor (its in-app updater is desktop-only); `VelopackApp.Build().Run()` (`Program.cs:29`) establishes the locator `IsManaged()` reads. With **none** of the three signals present — Aspire, CI, and headless runs are not Velopack installs and set no env/arg — every desktop branch is skipped and behaviour is byte-identical.
 
 ```
  launcher script sets XE_LAUNCH_MODE=desktop
             │
             ▼
  Program.cs: isDesktop = true
-   ├─ Kestrel binds http://127.0.0.1:0   (OS picks a free port)
+   ├─ Kestrel binds DesktopPortStore.ResolveBindUrl(dir)   (remembered port, else 127.0.0.1:0)
    ├─ DesktopBootstrap.EnsureLocalDataConfiguration(config)
    │     • NodeData:Directory   → %LOCALAPPDATA%/XE-Local-AI-Engine  (or $XDG_DATA_HOME)
    │     • ConnectionStrings:node-sqlite → Data Source=<dir>/node.sqlite   (if absent)
@@ -114,9 +114,10 @@ Desktop mode turns the same binary into a double-click app. It is **strictly opt
          └─ console-close → graceful StopApplication() (→ llama-server child reaped)
 ```
 
-### Loopback auto-port + browser open
+### Loopback auto-port + persisted port + browser open
 
-- Kestrel binds `http://127.0.0.1:0`; the OS assigns a free port. The concrete URL is only known **post-bind**, so `LoopbackUrlResolver.Resolve` (`Client/Hosting/LoopbackUrlResolver.cs`) reads `IServerAddressesFeature.Addresses`, prefers an explicit `127.0.0.1`/`localhost` address, and **rewrites any wildcard host (`0.0.0.0`/`::`) back to `127.0.0.1`** so the browser never targets a routable interface.
+- The bind URL comes from `DesktopPortStore.ResolveBindUrl(dataDirectory)` (`Client/Hosting/DesktopPortStore.cs`, used at `Program.cs:58`), **not** a hard-coded `:0`. `DesktopPortStore` **remembers the last loopback port** in a `desktop-port.txt` file under the per-user data dir and re-binds it when it is still free; only when there is no remembered port (or it is taken/invalid) does it fall back to the dynamic `http://127.0.0.1:0`. This matters because a fresh OS-assigned port every launch changes the browser **origin** (scheme+host+port) and silently resets every `localStorage`-backed user preference between runs — pinning the port keeps preferences alive. The store writes via temp-file+move (no torn file), probes availability with a throwaway `TcpListener`, and is best-effort: any IO/parse failure resolves to a dynamic bind rather than throwing.
+- Kestrel still binds loopback only. The concrete URL is known **post-bind**, so `LoopbackUrlResolver.Resolve` (`Client/Hosting/LoopbackUrlResolver.cs`) reads `IServerAddressesFeature.Addresses`, prefers an explicit `127.0.0.1`/`localhost` address, and **rewrites any wildcard host (`0.0.0.0`/`::`) back to `127.0.0.1`** so the browser never targets a routable interface.
 - `DesktopLifecycle.OnApplicationStarted` resolves that URL and calls `BrowserLauncher.OpenBrowser` (`Client/Hosting/BrowserLauncher.cs`): `explorer <url>` on Windows, `xdg-open <url>` on Linux, **never via a shell** (`UseShellExecute = false`). Browser launch is strictly non-fatal — failure logs the URL and the server keeps serving.
 
 ### Persistent per-user data + operator key
@@ -152,7 +153,7 @@ Publish e.g. `dotnet publish XE-Local-AI-Engine.Client -c Release -r linux-x64 -
 
 ### Launcher scripts (`publish/`)
 
-The **bare binary does not enter desktop mode** — a launcher must set the flag. Tracked launchers:
+For a **manually unzipped RC build, the bare binary does not enter desktop mode** — a launcher must set `XE_LAUNCH_MODE=desktop` (or pass `--desktop`). (A **Velopack-managed install is the exception**: `VelopackInstall.IsManaged()` flips desktop mode on automatically, so the installer/portable flavor needs no launcher — see §5.) Tracked launchers for the manual/RC-zip path:
 
 - `publish/linux/run-xe-local-ai-engine.sh` — sets `XE_LAUNCH_MODE=desktop`, resolves its own dir (symlink-safe), and `exec`s the binary **in the foreground** so closing the terminal delivers `SIGHUP` to the process group → graceful teardown.
 - `publish/windows/run-xe-local-ai-engine.cmd` — sets `XE_LAUNCH_MODE=desktop` and runs the exe **in the current console window** (no `START`/`Start-Process`); a new/detached window would break the `CTRL_CLOSE_EVENT` → graceful-shutdown chain.
@@ -162,6 +163,20 @@ Both scripts carry an explicit **single-instance caveat**: only one instance per
 ### RC bundle packaging
 
 `publish/package-rc.sh` builds the distributable per-RID zip a tester downloads: the single-file binary + `wwwroot` SPA assets + a prominently named launcher (that sets `XE_LAUNCH_MODE=desktop`) + a `READ-ME-FIRST.txt`, plus a `.sha256` sidecar. It cross-compiles both RIDs from Linux, with `--rid` and `--skip-web` flags. The Windows bundle is built on Linux but **must be smoke-tested on real Windows 11** before tagging (`publish/TESTER-QUICKSTART.md`). The React SPA is built and copied into `wwwroot`, served by ASP.NET Core via `UseStaticFiles` + `MapFallbackToFile("index.html")` (the "C0re static-files" pattern) — see [React Client](10-react-client.md).
+
+> **Packaging fails if the SPA build is missing.** `package-rc.sh` hard-errors (`exit 1`) when `<react>/dist/index.html` is absent — both when `--skip-web` is passed without an existing dist and when a fresh build produced none (`package-rc.sh:55,61`) — so an RC zip can never ship without its frontend (a blank-page regression). The script also scans the staged bundle for leaked runtime/state files (`node-settings.json`, any `*.enc` credential, any `*.pin`) and aborts if one is found, so per-user secrets never ride along in a distributable.
+
+### Changelog automation & release notes
+
+Release notes are generated from conventional-commit history rather than hand-written:
+
+- `cliff.toml` (repo root) configures **git-cliff** to render an auto-grouped changelog from the commits between the previous release tag and HEAD. `scripts/generate-release-notes.sh` (used by CI **and** manual runs) produces a `RELEASE_NOTES.md`, which is fed to **`vpk pack --releaseNotes <file>`** to embed the notes into the Velopack package; `vpk upload github` then publishes them as the GitHub release body. A repo-root `CHANGELOG.md` is the human-readable rollup.
+- **Tags are standardised on a `v` prefix** going forward (e.g. `v0.1.0-rc.1.2`); `cliff.toml`'s `tag_pattern = "v?[0-9]*"` keeps the two legacy unprefixed tags (`0.1.0-rc.1.0`/`.1`) parseable.
+- **`vpk pack` (1.2.0) has no `--pre` flag** — passing it fails with `'--pre' was not matched`. Prerelease state rides on the **SemVer suffix in `--packVersion`** (`0.1.0-rc.1.0` *is* a prerelease); the GitHub-release prerelease marker is set with `--pre` only on `vpk upload github` (`.github/workflows/release.yml:267-270`).
+
+### In-app self-update (Velopack)
+
+The desktop app can update itself: `AddAppUpdateExtensions.cs` wires a Velopack updater fed by a GitHub **device-flow** authorization (the operator copies the device code before the browser opens). The update path is **desktop-only** (gated like every other desktop branch; see the endpoint desktop-gate tests under `XE-Local-AI-Engine.Tests/AppUpdate/`). Update-feed/channel config lives in `appsettings.AppUpdate.{main,tester}.json`. See `docs/velopack-release-install-guide.md`.
 
 ---
 

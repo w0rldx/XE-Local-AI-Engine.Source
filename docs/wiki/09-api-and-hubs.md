@@ -1,8 +1,8 @@
 # API Surface & Realtime Hubs
 
-> Last reviewed: 2026-06-24 · Code-grounded.
+> Last reviewed: 2026-06-27 · Code-grounded.
 
-This page documents the **Node Web Server transport layer**: the HTTP API exposed under `/api/local/v1` (FastEndpoints), the three SignalR push/stream hubs in `Client/Hubs`, the single outbound **WorkerHub** connection to the C0re platform, the cross-cutting transport concerns (security middleware, exception handling, health checks, auth), and how the backend's OpenAPI document becomes the single source of truth for every React REST client via hey-api.
+This page documents the **Node Web Server transport layer**: the HTTP API exposed under `/api/local/v1` (FastEndpoints), the four SignalR push/stream hubs in `Client/Hubs`, the single outbound **WorkerHub** connection to the C0re platform, the cross-cutting transport concerns (security middleware, exception handling, health checks, auth), and how the backend's OpenAPI document becomes the single source of truth for every React REST client via hey-api.
 
 If you are adding or changing an endpoint or hub, this is the page that tells you *where the route lives, how it is secured, and what regen step you must run for the React client to see it*.
 
@@ -13,7 +13,7 @@ If you are adding or changing an endpoint or hub, this is the page that tells yo
 ```
  Browser (React SPA, same origin)                C0re Platform
         │  HTTP /api/local/v1/*  (FastEndpoints)         ▲
-        │  SignalR hubs (chat / scheduler / preview)     │  ONE outbound
+        │  SignalR hubs (chat/sched/preview/gguf)        │  ONE outbound
         ▼                                                │  WorkerHub conn
  ┌──────────────────────────────────────────────────────┴───────────────┐
  │ Node Web Server  (XE-Local-AI-Engine.Client)                          │
@@ -22,7 +22,7 @@ If you are adding or changing an endpoint or hub, this is the page that tells yo
  │  • LocalApiSecurityMiddleware (loopback Host/Origin guard)            │
  │  • UseAuthentication / UseAuthorization (JWT bearer, Operator policy) │
  │  • UseFastEndpoints (RoutePrefix = api/local/v1)                      │
- │  • MapHub<LocalChatHub|SchedulerHub|PreviewWorkflowHub>              │
+ │  • MapHub<LocalChat|Scheduler|Preview|GgufDownload>                  │
  │  • MapFallbackToFile("index.html")  (serves the React build)         │
  └───────────────────────────────────────────────────────────────────────┘
 ```
@@ -59,9 +59,11 @@ Grouped from `Client/Endpoints/**/V1/` and `LocalApiRoutes.cs`. The "Owner page"
 | **NodeSettings** (`node-settings`) | get/save node settings | [Hosting & Deployment](11-hosting-and-deployment.md) |
 | **CloudSettings** (`cloud-settings`) | get/save/clear cloud-provider settings | [Security & Privacy](12-security-and-privacy.md) |
 | **Cloud / Codex** (`cloud/codex/*`) | `cloud/codex/login`, `cloud/codex/status`, `cloud/codex/logout` (ChatGPT OAuth) | [Chat](05-chat.md) |
-| **LocalChat** (`chat/*`) | `chat/conversations` (+ `{id}` rename/pin/archive/branch/memory-excluded/selected-path), `chat/.../messages/{id}/revisions\|feedback`, `chat/cancel` | [Chat](05-chat.md) |
+| **LocalChat** (`chat/*`) | `chat/conversations` (+ `{id}` rename/pin/archive/branch/memory-excluded/selected-path), `chat/.../messages/{id}/revisions\|feedback`, `chat/conversations/{id}/uploads(/{fileId})` (file attachments — POST multipart upload / GET list / DELETE), `chat/cancel` | [Chat](05-chat.md) |
 | **LocalModels** (`models/*`) | `models`, `models/{name}`, `models/{name}/details\|kind\|unload`, `models/select`, `models/pull`, `models/pull/stream`, `models/running` | [Local Runtime & Providers](03-local-runtime-and-providers.md) |
-| **ModelFit** (`model-fit/*`) | `model-fit/recommendations/latest\|refresh`, `model-fit/hardware-profile`, `model-fit/gguf/browse\|inspect`, `model-fit/download(/cancel)`, `model-fit/running(/eject)`, `model-fit/llamacpp/version\|runtime\|update`, `model-fit/hf-token` | [Model Fit](07-model-fit.md) |
+| **ModelFit** (`model-fit/*`) | `model-fit/recommendations/latest\|refresh`, `model-fit/hardware-profile`, `model-fit/gguf/browse\|inspect`, `model-fit/download(/cancel)`, `model-fit/gguf/downloads(/{modelName})`, `model-fit/running(/eject)`, `model-fit/llamacpp/version\|runtime\|update`, `model-fit/hf-token`, `model-fit/profiles(/explore\|benchmark\|freeze\|invalidate)` (inference optimizer) | [Model Fit](07-model-fit.md) |
+| **Voice** (`voice/*`) | `voice/manifest` (GET — config-only TTS manifest: allowed models, voice profiles, feature flag, integrity hashes, download URLs; the backend serves no audio) | [React Client](10-react-client.md) |
+| **Tutorial** (`tutorial-state`) | `tutorial-state` (GET reads the current user's recorded tour entries; PUT upserts one) | [React Client](10-react-client.md) |
 | **Invocations** (`invocations`) | invocation monitor | [Architecture Overview](01-architecture-overview.md) |
 | **Agents** (`agents/*`) | `agents`, `agents/{id}`, `agents/tool-capable-models`, `agents/templates(/import)`, `agents/{id}/playbook(/...)`, `.../golden-conversations(/...)`, `.../feedback-insights`, `.../playbook/monitor`, `.../execution-logs` | [Agent Mode](04-agent-mode.md) |
 | **Skills** (`skills/*`) | `skills`, `skills/{skillId}` | [Agent Mode](04-agent-mode.md) |
@@ -70,6 +72,12 @@ Grouped from `Client/Endpoints/**/V1/` and `LocalApiRoutes.cs`. The "Owner page"
 | **Preview / Open Canvas** (`preview/*`) | `preview/workflows`, `preview/workflows/{id}(/execute)`, `preview/runs/execute`, `preview/runs/{id}/continue\|cancel` | [React Client](10-react-client.md) |
 
 > **Endpoints are orchestration-only.** They validate input, call a service in `XE-Local-AI-Engine.Client.Application/Services/*`, and map to a DTO. Business logic does not live in the endpoint. When tracing a route, jump straight to the matching service area.
+
+### Design notes on the newer endpoint families
+
+- **Inference optimizer profiles (`model-fit/profiles*`).** The collection `GET model-fit/profiles` lists every persisted node-local profile (machine key omitted). The four actions — `explore`, `benchmark`, `freeze`, `invalidate` — are all **POST with the target carried in the body**, never a route param, so the POST always has a body. The literal action segments follow `profiles`, so none can be parsed as a profile id. `benchmark` is the gate for `freeze` (a profile can only be frozen after a successful benchmark). See `Endpoints/ModelFit/V1/{Explore,Benchmark,Freeze,Invalidate}InferenceProfileEndpoint.cs` + `ListInferenceProfilesEndpoint.cs`; runtime side in [Local Runtime & Providers](03-local-runtime-and-providers.md).
+- **Chat file uploads (`chat/conversations/{id}/uploads`).** The upload endpoint is the one multipart surface: it calls `AllowFileUploads()` (`UploadConversationFileEndpoint.cs:32`) and binds an `IFormFile`, enforcing the size cap + extension allowlist and sanitizing the client name to a leaf. List is a plain GET; delete is `DELETE .../uploads/{fileId}` keyed on the server-generated file id. See [Chat](05-chat.md).
+- **Body-less POST (415) override.** Route-only POST actions whose id binds from the route (e.g. scheduler `trigger`/`enable`/`disable`, run `cancel`) send no body and therefore no `Content-Type`; FastEndpoints' default `Accepts` metadata answers that with **415**. Those endpoints override it with `Description(x => x.Accepts<T>())` so the body-less request is accepted (`TriggerScheduledJobEndpoint.cs:20`). See [Scheduler](06-scheduler.md).
 
 ### Notable non-typed routes (SSE streams)
 
@@ -83,13 +91,14 @@ Chat *message streaming itself does not go through HTTP at all* — it is a Sign
 
 ## 2. SignalR hubs (inbound, browser ↔ node)
 
-Only **three** hubs exist (`Client/Hubs/`). All are `[Authorize(... Policy = NodeAuthorizationPolicies.Operator)]` and mapped with `.RequireAuthorization(Operator)` (`Program.cs:163-168`). Their full paths are constants (`...Hub` in `LocalApiRoutes.cs`), mapped via `MapHub` *outside* the FastEndpoints prefix.
+Only **four** hubs exist (`Client/Hubs/`). All are `[Authorize(... Policy = NodeAuthorizationPolicies.Operator)]` and mapped with `.RequireAuthorization(Operator)` (`Program.cs:198-205`). Their full paths are constants (`...Hub` in `LocalApiRoutes.cs`), mapped via `MapHub` *outside* the FastEndpoints prefix.
 
 | Hub | Path | Direction | Purpose | Owner page |
 |---|---|---|---|---|
 | `LocalChatHub` | `/api/local/v1/chat/hub` | client→server **streaming** methods | `SendMessage`, `RegenerateMessage`, `ResumeMessage` — each returns `IAsyncEnumerable<ChatStreamEvent>` (server-streaming) | [Chat](05-chat.md) |
 | `SchedulerHub` | `/api/local/v1/scheduler/hub` | server→client push only | No client-callable methods; the class body is empty. Events are broadcast via `SchedulerEventPublisher` + `IHubContext<SchedulerHub>` | [Scheduler](06-scheduler.md) |
 | `PreviewWorkflowHub` | `/api/local/v1/preview/hub` | mixed | `Subscribe`/`Unsubscribe` opt a connection into a per-run group; `OnDisconnectedAsync` cancels runs owned by a vanished tab; events pushed via `PreviewWorkflowEventPublisher` | [React Client](10-react-client.md) |
+| `GgufDownloadHub` | `/api/local/v1/model-fit/gguf/downloads/hub` | server→client push only | No client-callable methods; the class body is empty (`GgufDownloadHub.cs:15`). Sanitized GGUF download-progress events broadcast via `GgufDownloadEventPublisher` + `IHubContext<GgufDownloadHub>`. Replaces the per-second `GET model-fit/gguf/downloads` poll; the list endpoint stays for the one-shot hydrate on mount | [Model Fit](07-model-fit.md) |
 
 ### Hub event-name contracts
 
@@ -97,6 +106,7 @@ Push hubs use **stable string constants as the SignalR client-method names**, do
 
 - **Scheduler** (`SchedulerHubEvents`, `ISchedulerEventPublisher.cs:28`): `scheduler.jobDefinitionChanged`, `scheduler.runStarted`, `scheduler.runProgress`, `scheduler.runCompleted`, `scheduler.runFailed`, `scheduler.runCancelled`.
 - **Preview** (`PreviewWorkflowHubEvents`, `IPreviewWorkflowEventPublisher.cs:26`): `preview.node.{started|output|debug|completed|failed}` and `preview.run.{started|paused|completed|failed|cancelled}`.
+- **GGUF download** (`GgufDownloadHubEvents`, `IGgufDownloadEventPublisher.cs:26`): a single `ggufDownload.statusChanged` event; each push carries the sanitized `GgufDownloadStatusHubEvent` for one tracked download.
 
 ### Publisher pattern (default no-op + host swap)
 
@@ -201,6 +211,8 @@ FastEndpoints (NSwag doc)                       React build
 4. For a **streaming** route or a **hub**, do *not* expect a typed SDK fn — wire it by hand on the client (see `models/pull/stream` and the chat hub).
 
 > The exact regen recipe for a throwaway Client host: pass the connection string as a CLI arg, set `XE_NODE_SQLITE_KEY`, `ASPNETCORE_URLS=:50722`, and `OPENAPI_INSECURE=1`.
+
+This pipeline is unchanged, but the generated SDK has been regenerated several times as new endpoint families landed (tutorial-state, inference-profile operator actions, chat file upload, running-count). The committed `openapi/v1.json` + `src/core/api/generated/` already include them; `openapi:check` still enforces that they stay in sync.
 
 ---
 

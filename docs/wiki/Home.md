@@ -1,8 +1,8 @@
 # XE Local AI Engine — Developer Wiki
 
-> Last reviewed: 2026-06-24 · Code-grounded.
+> Last reviewed: 2026-06-27 · Code-grounded.
 
-XE Local AI Engine is the **node-side runtime** of the C0re platform. A single in-process
+XE Local AI Engine (product name **XE AI-Engine**) is the **node-side runtime** of the C0re platform. A single in-process
 **Node Web Server** (`XE-Local-AI-Engine.Client`) serves the React management UI, owns the one
 outbound platform link (`WorkerHub`), exposes loopback-only local APIs (`/api/local/v1`) plus
 SignalR hubs, persists chat/agent state in **encrypted SQLite**, and runs the local model runtime
@@ -34,6 +34,13 @@ The **runtime re-architecture** (locked 2026-06-17) replaced the old container/H
 
 If you find a doc, comment, or assumption that still describes Docker or HostAgent as live, it is
 stale — trust the code and these pages.
+
+**Shipped since the last review (2026-06-24…27):** a profile-driven **inference optimizer** (per-machine
+explore → freeze → replay tuning; the supervisor no longer forces `--n-gpu-layers 999` — see
+[Local Runtime & Providers](03-local-runtime-and-providers.md) and the [Architecture Overview](01-architecture-overview.md) launch-args seam),
+**GGUF quant recommendation** (quality tier + hardware-fit + recommended-variant badge — see
+[Model-fit / Advisor](07-model-fit.md)), **chat file upload → agent attachments** (encrypted store — see
+[Chat](05-chat.md)), a browser **client voice runtime** (Kokoro TTS), and an **onboarding first-response tour**.
 
 ## Page index
 
