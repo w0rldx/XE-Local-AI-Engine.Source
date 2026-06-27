@@ -1147,9 +1147,23 @@
 					"inspectError": "Could not load this repository's files.",
 					"noFiles": "No downloadable GGUF files found.",
 					"dynamic": "Dynamic",
+					"recommended": "Recommended",
 					"columns": {
 						"quant": "Quant",
-						"size": "Size"
+						"size": "Size",
+						"fit": "Fit"
+					},
+					"fit": {
+						"fits": "Fits",
+						"tight": "Tight",
+						"wontFit": "Won't fit"
+					},
+					"quality": {
+						"nearLossless": "Highest quality",
+						"sweetSpot": "Recommended quality",
+						"balanced": "Balanced",
+						"small": "Smaller / faster",
+						"minimal": "Smallest / lowest quality"
 					},
 					"defaultFallback": "Download default quant (Q4_K_M)",
 					"progressLabel": "{{pct}}%",
@@ -1894,8 +1908,8 @@
 					"modelLabel": "Model name",
 					"modelPlaceholder": "e.g. unsloth/Qwen3-4B-GGUF",
 					"roleLabel": "Role",
-						"roleChat": "Chat",
-						"roleEmbedding": "Embedding",
+					"roleChat": "Chat",
+					"roleEmbedding": "Embedding",
 					"button": "Explore",
 					"success": "Exploring a tuned profile for {{model}}.",
 					"error": "Could not start exploration."

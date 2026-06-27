@@ -4,6 +4,7 @@ using System.Text.Json;
 using XE_Local_AI_Engine.Client.Persistence.Stores;
 using XE_Local_AI_Engine.Client.Services.Inference;
 using XE_Local_AI_Engine.Client.Services.ModelFit;
+using XE_Local_AI_Engine.Client.Services.ModelFit.Gguf;
 using XE_Local_AI_Engine.Providers.Abstractions.Capabilities;
 using XE_Local_AI_Engine.Providers.Abstractions.Gguf;
 using XE_Local_AI_Engine.Providers.LlamaServer;
@@ -121,26 +122,34 @@ internal static class ModelFitMapper
     // GGUF repo inspection (per-file quants) → response
     // -----------------------------------------------------------------------
 
-    public static InspectGgufRepositoryResponse ToResponse(this GgufRepoDetail detail)
+    public static InspectGgufRepositoryResponse ToResponse(this GgufRepoDetail detail, IReadOnlyList<GgufVariantAnnotation> annotations)
     {
         ArgumentNullException.ThrowIfNull(detail);
+        ArgumentNullException.ThrowIfNull(annotations);
+
+        // Recommendation rows are keyed by file name (one annotation per inspected file). A file with no annotation
+        // (defensive — should not happen) falls back to a hardware-free quality grade and an Unknown verdict.
+        var annotationsByFile = annotations.ToDictionary(static annotation => annotation.FileName, StringComparer.Ordinal);
 
         return new InspectGgufRepositoryResponse
         {
             RepoId = detail.RepoId,
             // Smallest-first so the picker leads with the lightest quant; the UI can re-sort.
-            Files = [.. detail.Files.OrderBy(static file => file.SizeBytes).Select(static file => file.ToFileResponse())]
+            Files = [.. detail.Files.OrderBy(static file => file.SizeBytes).Select(file => file.ToFileResponse(annotationsByFile.GetValueOrDefault(file.FileName)))]
         };
     }
 
-    private static GgufRepositoryFileResponse ToFileResponse(this GgufRepoFile file)
+    private static GgufRepositoryFileResponse ToFileResponse(this GgufRepoFile file, GgufVariantAnnotation? annotation)
     {
         return new GgufRepositoryFileResponse
         {
             FileName = file.FileName,
             Quant = file.Quant,
             IsDynamic = GgufQuantParser.IsDynamic(file.Quant),
-            SizeBytes = file.SizeBytes
+            SizeBytes = file.SizeBytes,
+            QualityTier = (annotation?.QualityTier ?? GgufQuantQuality.Classify(file.Quant)).ToString(),
+            FitVerdict = (annotation?.FitVerdict ?? GgufFitVerdict.Unknown).ToString(),
+            IsRecommended = annotation?.IsRecommended ?? false
         };
     }
 

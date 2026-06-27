@@ -569,6 +569,9 @@ export type XeLocalAiEngineClientEndpointsModelFitV1GgufRepositoryFileResponse =
 	quant?: string;
 	isDynamic?: boolean;
 	sizeBytes?: number;
+	qualityTier?: string;
+	fitVerdict?: string;
+	isRecommended?: boolean;
 };
 
 export type XeLocalAiEngineClientEndpointsModelFitV1InspectGgufRepositoryRequest = {
