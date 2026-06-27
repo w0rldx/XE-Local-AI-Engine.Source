@@ -6108,6 +6108,228 @@
           }
         ]
       }
+    },
+    "/api/local/v1/model-fit/profiles/benchmark": {
+      "post": {
+        "tags": [
+          "Model-Fit"
+        ],
+        "operationId": "benchmarkInferenceProfile",
+        "requestBody": {
+          "x-name": "BenchmarkInferenceProfileRequest",
+          "description": "",
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/XE_Local_AI_EngineClientEndpointsModelFitV1BenchmarkInferenceProfileRequest"
+              }
+            }
+          },
+          "required": true,
+          "x-position": 1
+        },
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/XE_Local_AI_EngineClientEndpointsModelFitV1BenchmarkInferenceProfileResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "403": {
+            "description": "Forbidden"
+          }
+        },
+        "security": [
+          {
+            "JWTBearerAuth": []
+          },
+          {
+            "Bearer": []
+          }
+        ]
+      }
+    },
+    "/api/local/v1/model-fit/profiles/explore": {
+      "post": {
+        "tags": [
+          "Model-Fit"
+        ],
+        "operationId": "exploreInferenceProfile",
+        "requestBody": {
+          "x-name": "ExploreInferenceProfileRequest",
+          "description": "",
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/XE_Local_AI_EngineClientEndpointsModelFitV1ExploreInferenceProfileRequest"
+              }
+            }
+          },
+          "required": true,
+          "x-position": 1
+        },
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/XE_Local_AI_EngineClientEndpointsModelFitV1InferenceProfileActionResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "403": {
+            "description": "Forbidden"
+          }
+        },
+        "security": [
+          {
+            "JWTBearerAuth": []
+          },
+          {
+            "Bearer": []
+          }
+        ]
+      }
+    },
+    "/api/local/v1/model-fit/profiles/freeze": {
+      "post": {
+        "tags": [
+          "Model-Fit"
+        ],
+        "operationId": "freezeInferenceProfile",
+        "requestBody": {
+          "x-name": "FreezeInferenceProfileRequest",
+          "description": "",
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/XE_Local_AI_EngineClientEndpointsModelFitV1FreezeInferenceProfileRequest"
+              }
+            }
+          },
+          "required": true,
+          "x-position": 1
+        },
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/XE_Local_AI_EngineClientEndpointsModelFitV1InferenceProfileActionResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "403": {
+            "description": "Forbidden"
+          }
+        },
+        "security": [
+          {
+            "JWTBearerAuth": []
+          },
+          {
+            "Bearer": []
+          }
+        ]
+      }
+    },
+    "/api/local/v1/model-fit/profiles/invalidate": {
+      "post": {
+        "tags": [
+          "Model-Fit"
+        ],
+        "operationId": "invalidateInferenceProfile",
+        "requestBody": {
+          "x-name": "InvalidateInferenceProfileRequest",
+          "description": "",
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/XE_Local_AI_EngineClientEndpointsModelFitV1InvalidateInferenceProfileRequest"
+              }
+            }
+          },
+          "required": true,
+          "x-position": 1
+        },
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/XE_Local_AI_EngineClientEndpointsModelFitV1InferenceProfileActionResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "403": {
+            "description": "Forbidden"
+          }
+        },
+        "security": [
+          {
+            "JWTBearerAuth": []
+          },
+          {
+            "Bearer": []
+          }
+        ]
+      }
+    },
+    "/api/local/v1/model-fit/profiles": {
+      "get": {
+        "tags": [
+          "Model-Fit"
+        ],
+        "operationId": "listInferenceProfiles",
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/XE_Local_AI_EngineClientEndpointsModelFitV1ListInferenceProfilesResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "403": {
+            "description": "Forbidden"
+          }
+        },
+        "security": [
+          {
+            "JWTBearerAuth": []
+          },
+          {
+            "Bearer": []
+          }
+        ]
+      }
     }
   },
   "components": {
@@ -10816,6 +11038,229 @@
           "endpoint": {
             "type": "string",
             "nullable": true
+          }
+        }
+      },
+      "XE_Local_AI_EngineClientEndpointsModelFitV1BenchmarkInferenceProfileResponse": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "snapshotId": {
+            "type": "string",
+            "format": "guid",
+            "nullable": true
+          },
+          "metrics": {
+            "nullable": true,
+            "oneOf": [
+              {
+                "$ref": "#/components/schemas/XE_Local_AI_EngineClientEndpointsModelFitV1InferenceBenchmarkMetricsDto"
+              }
+            ]
+          },
+          "profile": {
+            "$ref": "#/components/schemas/XE_Local_AI_EngineClientEndpointsModelFitV1InferenceProfileViewDto"
+          }
+        }
+      },
+      "XE_Local_AI_EngineClientEndpointsModelFitV1InferenceBenchmarkMetricsDto": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "tokensPerSecond": {
+            "type": "number",
+            "format": "double",
+            "nullable": true
+          },
+          "ppTokensPerSecond": {
+            "type": "number",
+            "format": "double",
+            "nullable": true
+          },
+          "ttftMs": {
+            "type": "number",
+            "format": "double",
+            "nullable": true
+          },
+          "totalLatencyMs": {
+            "type": "number",
+            "format": "double",
+            "nullable": true
+          },
+          "cacheHitRate": {
+            "type": "number",
+            "format": "double",
+            "nullable": true
+          },
+          "toolLoopMs": {
+            "type": "number",
+            "format": "double",
+            "nullable": true
+          },
+          "vramLoadBytes": {
+            "type": "integer",
+            "format": "int64",
+            "nullable": true
+          },
+          "vramAfterBytes": {
+            "type": "integer",
+            "format": "int64",
+            "nullable": true
+          },
+          "runs": {
+            "type": "integer",
+            "format": "int32"
+          }
+        }
+      },
+      "XE_Local_AI_EngineClientEndpointsModelFitV1InferenceProfileViewDto": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "guid"
+          },
+          "modelName": {
+            "type": "string"
+          },
+          "role": {
+            "type": "string"
+          },
+          "backend": {
+            "type": "string"
+          },
+          "llamacppBuild": {
+            "type": "string"
+          },
+          "quant": {
+            "type": "string"
+          },
+          "ctxSize": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "nGpuLayers": {
+            "type": "integer",
+            "format": "int32",
+            "nullable": true
+          },
+          "tensorSplit": {
+            "type": "string",
+            "nullable": true
+          },
+          "overrideTensor": {
+            "type": "string",
+            "nullable": true
+          },
+          "kvTypeK": {
+            "type": "string",
+            "nullable": true
+          },
+          "kvTypeV": {
+            "type": "string",
+            "nullable": true
+          },
+          "flashAttn": {
+            "type": "boolean"
+          },
+          "nParams": {
+            "type": "integer",
+            "format": "int64",
+            "nullable": true
+          },
+          "isMoe": {
+            "type": "boolean"
+          },
+          "expertCount": {
+            "type": "integer",
+            "format": "int32",
+            "nullable": true
+          },
+          "freeVramAtFreezeBytes": {
+            "type": "integer",
+            "format": "int64",
+            "nullable": true
+          },
+          "status": {
+            "type": "string"
+          },
+          "benchmarkSnapshotId": {
+            "type": "string",
+            "format": "guid",
+            "nullable": true
+          },
+          "createdAtUtc": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "updatedAtUtc": {
+            "type": "integer",
+            "format": "int64"
+          }
+        }
+      },
+      "XE_Local_AI_EngineClientEndpointsModelFitV1BenchmarkInferenceProfileRequest": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "profileId": {
+            "type": "string",
+            "format": "guid"
+          }
+        }
+      },
+      "XE_Local_AI_EngineClientEndpointsModelFitV1InferenceProfileActionResponse": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "profile": {
+            "$ref": "#/components/schemas/XE_Local_AI_EngineClientEndpointsModelFitV1InferenceProfileViewDto"
+          }
+        }
+      },
+      "XE_Local_AI_EngineClientEndpointsModelFitV1ExploreInferenceProfileRequest": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "modelName": {
+            "type": "string"
+          },
+          "role": {
+            "type": "string",
+            "nullable": true
+          }
+        }
+      },
+      "XE_Local_AI_EngineClientEndpointsModelFitV1FreezeInferenceProfileRequest": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "profileId": {
+            "type": "string",
+            "format": "guid"
+          }
+        }
+      },
+      "XE_Local_AI_EngineClientEndpointsModelFitV1InvalidateInferenceProfileRequest": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "profileId": {
+            "type": "string",
+            "format": "guid"
+          }
+        }
+      },
+      "XE_Local_AI_EngineClientEndpointsModelFitV1ListInferenceProfilesResponse": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "items": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/XE_Local_AI_EngineClientEndpointsModelFitV1InferenceProfileViewDto"
+            }
           }
         }
       }
