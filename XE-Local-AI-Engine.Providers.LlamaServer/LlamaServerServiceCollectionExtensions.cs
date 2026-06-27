@@ -105,8 +105,7 @@ public static class LlamaServerServiceCollectionExtensions
         // our own llama.cpp cache root, so an unrelated llama-server (e.g. Ollama's) is never touched. Best-effort — it
         // never throws out of StartAsync, so it can never block startup.
         services.TryAddSingleton<IStaleLlamaServerProcessScanner, OsStaleLlamaServerProcessScanner>();
-        services.AddHostedService(static sp => new StaleLlamaServerReaper(
-            sp.GetRequiredService<IStaleLlamaServerProcessScanner>(),
+        services.AddHostedService(static sp => new StaleLlamaServerReaper(sp.GetRequiredService<IStaleLlamaServerProcessScanner>(),
             LlamaCppBinaryManager.DefaultLlamaCppBinariesRoot(),
             sp.GetRequiredService<ILogger<StaleLlamaServerReaper>>()));
 

@@ -30,7 +30,10 @@ public sealed class OpenAiInferenceChatClientFactory : IInferenceChatClientFacto
         ArgumentNullException.ThrowIfNull(baseAddress);
         ArgumentException.ThrowIfNullOrWhiteSpace(modelId);
 
-        var openAiClient = new OpenAIClient(new ApiKeyCredential(IgnoredApiKey), new OpenAIClientOptions { Endpoint = baseAddress });
+        var openAiClient = new OpenAIClient(new ApiKeyCredential(IgnoredApiKey), new OpenAIClientOptions
+        {
+            Endpoint = baseAddress
+        });
         return openAiClient.GetChatClient(modelId).AsIChatClient();
     }
 }

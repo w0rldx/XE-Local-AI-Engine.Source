@@ -1,6 +1,5 @@
 namespace XE_Local_AI_Engine.Client.Services.ModelFit.Gguf;
 
-using Microsoft.Extensions.Logging;
 using XE_Local_AI_Engine.Client.Services.Inference;
 using XE_Local_AI_Engine.Providers.Abstractions.Capabilities;
 using XE_Local_AI_Engine.Providers.Abstractions.Gguf;
@@ -28,8 +27,7 @@ public sealed class GgufVariantRecommender : IGgufVariantRecommender
     private readonly IGpuVariantSelector _variantSelector;
     private readonly IAvailableVramProbe _vramProbe;
 
-    public GgufVariantRecommender(
-        IGpuVariantSelector variantSelector,
+    public GgufVariantRecommender(IGpuVariantSelector variantSelector,
         IAvailableVramProbe vramProbe,
         ILogger<GgufVariantRecommender> logger)
     {
@@ -110,8 +108,7 @@ public sealed class GgufVariantRecommender : IGgufVariantRecommender
     // quality tier among them wins (ties broken by larger size). Otherwise the best Tight file wins by the same order.
     // When free VRAM is known but nothing fits, the smallest file wins. When VRAM is unknown (no probe ran), a SweetSpot
     // file is preferred, then a Balanced one, and failing both the median file by size is chosen.
-    private static int PickRecommendedIndex(
-        IReadOnlyList<GgufRepoFile> files,
+    private static int PickRecommendedIndex(IReadOnlyList<GgufRepoFile> files,
         IReadOnlyList<GgufQuantTier> tiers,
         IReadOnlyList<GgufFitVerdict> verdicts)
     {
@@ -152,15 +149,14 @@ public sealed class GgufVariantRecommender : IGgufVariantRecommender
         return bySize[bySize.Count / 2];
     }
 
-    private static int BestByTierThenSize(
-        IReadOnlyList<GgufRepoFile> files,
+    private static int BestByTierThenSize(IReadOnlyList<GgufRepoFile> files,
         IReadOnlyList<GgufQuantTier> tiers,
         IReadOnlyList<int> candidates)
     {
         return candidates
-            .OrderByDescending(i => (int)tiers[i])
-            .ThenByDescending(i => files[i].SizeBytes)
-            .First();
+               .OrderByDescending(i => (int)tiers[i])
+               .ThenByDescending(i => files[i].SizeBytes)
+               .First();
     }
 
     private static List<int> IndicesWith(IReadOnlyList<GgufFitVerdict> verdicts, GgufFitVerdict verdict)

@@ -43,7 +43,10 @@ internal sealed class PlaintextDocumentReader : IngestionDocumentReader
         var text = Decode(bytes);
         if (!string.IsNullOrEmpty(text))
         {
-            section.Elements.Add(new IngestionDocumentParagraph(text) { Text = text });
+            section.Elements.Add(new IngestionDocumentParagraph(text)
+            {
+                Text = text
+            });
         }
 
         document.Sections.Add(section);

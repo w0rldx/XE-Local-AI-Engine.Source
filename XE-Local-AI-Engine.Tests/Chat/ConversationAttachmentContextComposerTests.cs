@@ -25,8 +25,7 @@ public sealed class ConversationAttachmentContextComposerTests
         AssertEx.Contains(result, "Hello world");
         AssertEx.Contains(result, "[Attached document: data.csv]");
         AssertEx.Contains(result, "a,b,c");
-        AssertEx.False(
-            result.Contains(ConversationAttachmentContextComposer.TruncationNotice, StringComparison.Ordinal),
+        AssertEx.False(result.Contains(ConversationAttachmentContextComposer.TruncationNotice, StringComparison.Ordinal),
             "no truncation notice when the content fits the budget.");
     }
 
@@ -34,7 +33,10 @@ public sealed class ConversationAttachmentContextComposerTests
     public void Compose_WhenOverBudget_TruncatesAndAppendsNotice()
     {
         var big = new string('x', 5_000);
-        var parts = new List<AttachmentTextPart> { new("big.txt", big) };
+        var parts = new List<AttachmentTextPart>
+        {
+            new("big.txt", big)
+        };
 
         var result = AssertEx.NotNull(ConversationAttachmentContextComposer.Compose(parts, charBudget: 200));
 

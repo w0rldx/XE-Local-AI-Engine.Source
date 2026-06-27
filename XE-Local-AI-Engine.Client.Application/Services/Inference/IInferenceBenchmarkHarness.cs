@@ -53,8 +53,7 @@ public sealed record InferenceBenchmarkSpec(
 
         var safeCtx = ctxSize > 0 ? ctxSize : 4096;
 
-        return new InferenceBenchmarkSpec(
-            Backend: backend,
+        return new InferenceBenchmarkSpec(Backend: backend,
             CtxSize: safeCtx,
             SystemPersona: "You are a concise benchmarking assistant. Answer briefly and deterministically.",
             ColdUserTurn: "List three primary colors, comma separated.",

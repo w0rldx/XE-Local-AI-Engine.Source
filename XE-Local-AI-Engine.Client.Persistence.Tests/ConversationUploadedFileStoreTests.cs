@@ -19,8 +19,8 @@ public sealed class ConversationUploadedFileStoreTests : IDisposable
     // Share one explicit EF internal service provider across this fixture's contexts so EF does not auto-create a new
     // internal provider per options config (which would trip the process-global ManyServiceProvidersCreatedWarning).
     private static readonly IServiceProvider SharedEfServiceProvider = new ServiceCollection()
-        .AddEntityFrameworkSqlite()
-        .BuildServiceProvider();
+                                                                       .AddEntityFrameworkSqlite()
+                                                                       .BuildServiceProvider();
 
     private readonly string _rootPath = Path.Combine(Path.GetTempPath(), Guid.NewGuid().ToString("N"));
 
@@ -209,8 +209,8 @@ public sealed class ConversationUploadedFileStoreTests : IDisposable
         var services = new ServiceCollection();
         services.AddSingleton(keyHolder);
         services.AddDbContext<NodeChatDbContext>(options => options
-            .UseSqlite($"Data Source={databasePath}")
-            .UseInternalServiceProvider(SharedEfServiceProvider));
+                                                            .UseSqlite($"Data Source={databasePath}")
+                                                            .UseInternalServiceProvider(SharedEfServiceProvider));
         services.AddSingleton<NodeChatPersistenceWriter>();
 
         var provider = services.BuildServiceProvider(validateScopes: true);

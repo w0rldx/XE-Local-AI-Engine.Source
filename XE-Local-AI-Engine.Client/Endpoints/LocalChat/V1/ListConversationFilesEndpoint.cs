@@ -26,9 +26,9 @@ public sealed class ListConversationFilesEndpoint(IConversationUploadedFileStore
         var files = await _fileStore.ListAsync(req.ConversationId, ct).ConfigureAwait(false);
 
         await Send.OkAsync(new ListConversationUploadsResponse
-        {
-            Items = files.Select(static file => file.ToResponse()).ToArray()
-        },
-        ct).ConfigureAwait(false);
+            {
+                Items = files.Select(static file => file.ToResponse()).ToArray()
+            },
+            ct).ConfigureAwait(false);
     }
 }

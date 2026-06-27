@@ -25,9 +25,7 @@ public sealed class FakeConversationUploadedFileStore : IConversationUploadedFil
         }
 
         var fileId = Guid.NewGuid();
-        files.Add(new StagedFile(
-            new ConversationUploadedFileInfo(
-                fileId,
+        files.Add(new StagedFile(new ConversationUploadedFileInfo(fileId,
                 conversationId,
                 originalFileName,
                 "text/markdown",

@@ -7,7 +7,6 @@ using XE_Local_AI_Engine.Client.Persistence;
 using XE_Local_AI_Engine.Client.Persistence.Stores;
 using XE_Local_AI_Engine.Client.Services.Inference;
 using XE_Local_AI_Engine.Providers.LlamaServer;
-using XE_Local_AI_Engine.Providers.LlamaServer.Contracts;
 using XE_Local_AI_Engine.Tests.Testing;
 
 /// <summary>
@@ -109,8 +108,7 @@ public sealed class InferenceProfileResolverTests
 
     private static InferenceProfileRecord Record(InferenceProfileStatus status, int ctxSize, int? nGpuLayers)
     {
-        return new InferenceProfileRecord(
-            Id: Guid.NewGuid(),
+        return new InferenceProfileRecord(Id: Guid.NewGuid(),
             MachineKey: MachineKey,
             ModelName: Model,
             Role: (int)ModelRole.Chat,

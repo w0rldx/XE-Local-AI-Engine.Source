@@ -230,7 +230,12 @@ public sealed class ModelFitRefreshServiceTests
         discovery.SearchAsync(Arg.Is<GgufSearchQuery>(q => q.SearchText == "code"), Arg.Any<CancellationToken>())
                  .Returns(Task.FromResult<IReadOnlyList<GgufRepoSummary>>([Summary("org/code-GGUF"), Summary("org/shared-GGUF")]));
 
-        foreach (var repoId in new[] { "org/coder-GGUF", "org/code-GGUF", "org/shared-GGUF" })
+        foreach (var repoId in new[]
+                 {
+                     "org/coder-GGUF",
+                     "org/code-GGUF",
+                     "org/shared-GGUF"
+                 })
         {
             discovery.InspectRepoAsync(repoId, Arg.Any<CancellationToken>())
                      .Returns(Task.FromResult(Detail(repoId, File("Q4_K_M", paramCount: 1_000_000_000L))));

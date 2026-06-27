@@ -318,13 +318,19 @@ public sealed class LlamaServerProcessSupervisor : ILlamaServerProcessSupervisor
             // Benchmark replay spawns need /metrics (explore already carries --metrics); only append when missing.
             if (ensureMetrics && !spec.Arguments.Contains("--metrics", StringComparer.Ordinal))
             {
-                spec = spec with { Arguments = [.. spec.Arguments, "--metrics"] };
+                spec = spec with
+                {
+                    Arguments = [.. spec.Arguments, "--metrics"]
+                };
             }
 
             // Operator profiling spawns capture both pipes; the normal path leaves the sink null (spec unchanged).
             if (startupCapture is not null)
             {
-                spec = spec with { StartupCapture = startupCapture };
+                spec = spec with
+                {
+                    StartupCapture = startupCapture
+                };
             }
 
             handle = _launcher.Launch(spec);
@@ -383,11 +389,11 @@ public sealed class LlamaServerProcessSupervisor : ILlamaServerProcessSupervisor
 
             // Spawn exactly one process with the operator-supplied args verbatim (bypass the profile resolver).
             var running = await SpawnCoreAsync(key,
-                                  (_, _) => Task.FromResult(launchArgs),
-                                  startupOutput.Enqueue,
-                                  ensureMetrics: enableMetrics,
-                                  ct)
-                              .ConfigureAwait(false);
+                    (_, _) => Task.FromResult(launchArgs),
+                    startupOutput.Enqueue,
+                    ensureMetrics: enableMetrics,
+                    ct)
+                .ConfigureAwait(false);
 
             // Pin against idle eviction for the whole benchmark — the process is never marked-used during the body, so
             // without the pin the reaper would treat it as idle past the TTL and tear it down mid-measurement.

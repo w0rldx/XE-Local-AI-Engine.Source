@@ -7,6 +7,7 @@ using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 using NSubstitute;
 using XE_Local_AI_Engine.Client.Services.Inference;
+using XE_Local_AI_Engine.Providers.LlamaServer;
 using XE_Local_AI_Engine.Tests.Testing;
 
 /// <summary>
@@ -91,7 +92,7 @@ public sealed class InferenceProfileEndpointTests
 
         // The role is rejected at the transport boundary — the service must never be reached.
         await service.DidNotReceiveWithAnyArgs()
-                     .ExploreAsync(Arg.Any<string>(), Arg.Any<XE_Local_AI_Engine.Providers.LlamaServer.ModelRole>(), Arg.Any<CancellationToken>());
+                     .ExploreAsync(Arg.Any<string>(), Arg.Any<ModelRole>(), Arg.Any<CancellationToken>());
     }
 
     // ──────────────────────────────────────────────────────────────────────
@@ -160,8 +161,7 @@ public sealed class InferenceProfileEndpointTests
         var profileId = Guid.NewGuid();
         var service = Substitute.For<IInferenceProfileService>();
         service.ListProfilesAsync(Arg.Any<CancellationToken>())
-               .Returns(
-               [
+               .Returns([
                    new InferenceProfileView(profileId,
                        ModelName: "unsloth/gemma-3-12b-it-GGUF",
                        Role: 0,

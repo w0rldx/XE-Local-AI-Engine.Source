@@ -90,8 +90,7 @@ public sealed class StaleLlamaServerReaperTests
             ? @"C:\Program Files\Ollama\llama-server.exe"
             : "/usr/lib/ollama/llama-server";
 
-        var scanner = new FakeStaleLlamaServerProcessScanner(
-        [
+        var scanner = new FakeStaleLlamaServerProcessScanner([
             new StaleLlamaServerProcess(1, first),
             new StaleLlamaServerProcess(2, foreign),
             new StaleLlamaServerProcess(3, ExecutablePath: null),

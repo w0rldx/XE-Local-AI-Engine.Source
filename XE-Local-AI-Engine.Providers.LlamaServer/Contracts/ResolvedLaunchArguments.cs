@@ -57,7 +57,10 @@ public sealed record ResolvedLaunchArguments
     /// </summary>
     public static ResolvedLaunchArguments Explore()
     {
-        return new ResolvedLaunchArguments { ExploreMode = true };
+        return new ResolvedLaunchArguments
+        {
+            ExploreMode = true
+        };
     }
 
     /// <summary>

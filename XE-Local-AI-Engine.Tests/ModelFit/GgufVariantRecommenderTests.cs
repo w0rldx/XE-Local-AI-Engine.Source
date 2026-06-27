@@ -33,7 +33,12 @@ public sealed class GgufVariantRecommenderTests
     public async Task Annotate_PreservesInputOrder_AndAnnotatesEveryFile()
     {
         var recommender = Build(freeVramBytes: 12 * Gib);
-        var files = new[] { RepoFile("Q4_K_M", 4 * Gib), RepoFile("Q6_K", 7 * Gib), RepoFile("Q8_0", 13 * Gib) };
+        var files = new[]
+        {
+            RepoFile("Q4_K_M", 4 * Gib),
+            RepoFile("Q6_K", 7 * Gib),
+            RepoFile("Q8_0", 13 * Gib)
+        };
 
         var result = await recommender.AnnotateAsync(files, CancellationToken.None);
 
@@ -49,7 +54,12 @@ public sealed class GgufVariantRecommenderTests
         // free = 12 GiB. Q4_K_M (Balanced) and Q6_K (NearLossless) both fit; Q8_0 (13 GiB) won't fit. Among the fits the
         // highest tier (Q6_K) is recommended.
         var recommender = Build(freeVramBytes: 12 * Gib);
-        var files = new[] { RepoFile("Q4_K_M", 4 * Gib), RepoFile("Q6_K", 7 * Gib), RepoFile("Q8_0", 13 * Gib) };
+        var files = new[]
+        {
+            RepoFile("Q4_K_M", 4 * Gib),
+            RepoFile("Q6_K", 7 * Gib),
+            RepoFile("Q8_0", 13 * Gib)
+        };
 
         var result = await recommender.AnnotateAsync(files, CancellationToken.None);
 
@@ -65,7 +75,11 @@ public sealed class GgufVariantRecommenderTests
     {
         // Two NearLossless files both fit (free = 14 GiB) → tie broken by larger size (Q8_0 8 GiB over Q6_K 6 GiB).
         var recommender = Build(freeVramBytes: 14 * Gib);
-        var files = new[] { RepoFile("Q6_K", 6 * Gib), RepoFile("Q8_0", 8 * Gib) };
+        var files = new[]
+        {
+            RepoFile("Q6_K", 6 * Gib),
+            RepoFile("Q8_0", 8 * Gib)
+        };
 
         var result = await recommender.AnnotateAsync(files, CancellationToken.None);
 
@@ -79,7 +93,11 @@ public sealed class GgufVariantRecommenderTests
         // free = 5 GiB. Q4_K_M 4.5 GiB fits the raw size but the headroom margin eats in → Tight; Q5_K_M 4.8 GiB also
         // Tight (higher tier). Nothing is a comfortable Fit → the best Tight (Q5_K_M, SweetSpot) is recommended.
         var recommender = Build(freeVramBytes: 5 * Gib);
-        var files = new[] { RepoFile("Q4_K_M", (9 * Gib) / 2), RepoFile("Q5_K_M", (48 * Gib) / 10) };
+        var files = new[]
+        {
+            RepoFile("Q4_K_M", (9 * Gib) / 2),
+            RepoFile("Q5_K_M", (48 * Gib) / 10)
+        };
 
         var result = await recommender.AnnotateAsync(files, CancellationToken.None);
 
@@ -94,7 +112,12 @@ public sealed class GgufVariantRecommenderTests
     {
         // free = 2 GiB. Every file is larger → all WontFit → the smallest file is the least-bad pick.
         var recommender = Build(freeVramBytes: 2 * Gib);
-        var files = new[] { RepoFile("Q6_K", 7 * Gib), RepoFile("Q4_K_M", 5 * Gib), RepoFile("Q8_0", 9 * Gib) };
+        var files = new[]
+        {
+            RepoFile("Q6_K", 7 * Gib),
+            RepoFile("Q4_K_M", 5 * Gib),
+            RepoFile("Q8_0", 9 * Gib)
+        };
 
         var result = await recommender.AnnotateAsync(files, CancellationToken.None);
 
@@ -109,7 +132,12 @@ public sealed class GgufVariantRecommenderTests
         // No probe (free VRAM null) → every verdict is Unknown and the recommendation falls back to the quality
         // sweet-spot (Q5_K_M) over the balanced/near-lossless alternatives.
         var recommender = Build(freeVramBytes: null);
-        var files = new[] { RepoFile("Q4_K_M", 4 * Gib), RepoFile("Q5_K_M", 5 * Gib), RepoFile("Q8_0", 9 * Gib) };
+        var files = new[]
+        {
+            RepoFile("Q4_K_M", 4 * Gib),
+            RepoFile("Q5_K_M", 5 * Gib),
+            RepoFile("Q8_0", 9 * Gib)
+        };
 
         var result = await recommender.AnnotateAsync(files, CancellationToken.None);
 
@@ -123,7 +151,12 @@ public sealed class GgufVariantRecommenderTests
     {
         // No probe and no sweet-spot file → fall back to the balanced default (Q4_K_M) over near-lossless/minimal.
         var recommender = Build(freeVramBytes: null);
-        var files = new[] { RepoFile("Q8_0", 9 * Gib), RepoFile("Q4_K_M", 4 * Gib), RepoFile("Q2_K", 2 * Gib) };
+        var files = new[]
+        {
+            RepoFile("Q8_0", 9 * Gib),
+            RepoFile("Q4_K_M", 4 * Gib),
+            RepoFile("Q2_K", 2 * Gib)
+        };
 
         var result = await recommender.AnnotateAsync(files, CancellationToken.None);
 
@@ -135,7 +168,11 @@ public sealed class GgufVariantRecommenderTests
     public async Task Annotate_CarriesQualityTierPerFile()
     {
         var recommender = Build(freeVramBytes: null);
-        var files = new[] { RepoFile("Q8_0", 9 * Gib), RepoFile("Q4_K_M", 4 * Gib) };
+        var files = new[]
+        {
+            RepoFile("Q8_0", 9 * Gib),
+            RepoFile("Q4_K_M", 4 * Gib)
+        };
 
         var result = await recommender.AnnotateAsync(files, CancellationToken.None);
 

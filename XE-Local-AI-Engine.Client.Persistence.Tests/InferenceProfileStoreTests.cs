@@ -117,8 +117,7 @@ public sealed class InferenceProfileStoreTests : IDisposable
             var snapshotStore = new ModelFitSnapshotStore(writeContext, TimeProvider.System);
             var benchmarkStore = new ModelFitBenchmarkStore(writeContext);
 
-            var snapshot = await snapshotStore.CreateRunningAsync(new ModelFitSnapshotInput(
-                "llmfit-recommender-0-9-30",
+            var snapshot = await snapshotStore.CreateRunningAsync(new ModelFitSnapshotInput("llmfit-recommender-0-9-30",
                 ModelFitOperation.Benchmark,
                 UseCase: null,
                 "llama-server",
