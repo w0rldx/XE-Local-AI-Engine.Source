@@ -2,6 +2,7 @@ namespace XE_Local_AI_Engine.Client.Endpoints.ModelFit.V1.Mappers;
 
 using System.Text.Json;
 using XE_Local_AI_Engine.Client.Persistence.Stores;
+using XE_Local_AI_Engine.Client.Services.Inference;
 using XE_Local_AI_Engine.Client.Services.ModelFit;
 using XE_Local_AI_Engine.Providers.Abstractions.Capabilities;
 using XE_Local_AI_Engine.Providers.Abstractions.Gguf;
@@ -214,6 +215,67 @@ internal static class ModelFitMapper
             Variant = state.Variant.ToWireString(),
             Asset = state.Asset,
             InstalledAtUtc = state.InstalledAtUtc.ToUnixTimeMilliseconds()
+        };
+    }
+
+    // -----------------------------------------------------------------------
+    // Inference Optimizer profile view → response (sanitized: machine key already omitted by the view)
+    // -----------------------------------------------------------------------
+
+    /// <summary>
+    ///     Projects an application-layer <see cref="InferenceProfileView" /> to its wire DTO. The view already omits the
+    ///     local-only machine key; this projection only normalizes the numeric role to its lowercase wire token.
+    /// </summary>
+    public static InferenceProfileViewDto ToDto(this InferenceProfileView view)
+    {
+        ArgumentNullException.ThrowIfNull(view);
+
+        return new InferenceProfileViewDto
+        {
+            Id = view.Id,
+            ModelName = view.ModelName,
+            Role = ((ModelRole)view.Role).ToWireString(),
+            Backend = view.Backend,
+            LlamacppBuild = view.LlamacppBuild,
+            Quant = view.Quant,
+            CtxSize = view.CtxSize,
+            NGpuLayers = view.NGpuLayers,
+            TensorSplit = view.TensorSplit,
+            OverrideTensor = view.OverrideTensor,
+            KvTypeK = view.KvTypeK,
+            KvTypeV = view.KvTypeV,
+            FlashAttn = view.FlashAttn,
+            NParams = view.NParams,
+            IsMoe = view.IsMoe,
+            ExpertCount = view.ExpertCount,
+            FreeVramAtFreezeBytes = view.FreeVramAtFreezeBytes,
+            Status = view.Status,
+            BenchmarkSnapshotId = view.BenchmarkSnapshotId,
+            CreatedAtUtc = view.CreatedAtUtc,
+            UpdatedAtUtc = view.UpdatedAtUtc
+        };
+    }
+
+    /// <summary>
+    ///     Projects the measured <see cref="InferenceBenchmarkMetrics" /> to its wire DTO. The raw <c>/metrics</c> scrape
+    ///     (<see cref="InferenceBenchmarkMetrics.RawJson" />) is deliberately dropped — it stays server-side so the
+    ///     operator projection remains sanitized.
+    /// </summary>
+    public static InferenceBenchmarkMetricsDto ToDto(this InferenceBenchmarkMetrics metrics)
+    {
+        ArgumentNullException.ThrowIfNull(metrics);
+
+        return new InferenceBenchmarkMetricsDto
+        {
+            TokensPerSecond = metrics.TokensPerSecond,
+            PpTokensPerSecond = metrics.PpTokensPerSecond,
+            TtftMs = metrics.TtftMs,
+            TotalLatencyMs = metrics.TotalLatencyMs,
+            CacheHitRate = metrics.CacheHitRate,
+            ToolLoopMs = metrics.ToolLoopMs,
+            VramLoadBytes = metrics.VramLoadBytes,
+            VramAfterBytes = metrics.VramAfterBytes,
+            Runs = metrics.Runs
         };
     }
 

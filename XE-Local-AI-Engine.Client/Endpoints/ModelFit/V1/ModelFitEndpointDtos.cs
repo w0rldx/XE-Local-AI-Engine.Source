@@ -533,3 +533,173 @@ public sealed class HfTokenStatusResponse
     /// <summary>True when a token is currently stored (anonymous when false). The value itself is never exposed.</summary>
     public required bool HasToken { get; init; }
 }
+
+// ---------------------------------------------------------------------------
+// Inference Optimizer profile DTOs (IInferenceProfileService — operator surface)
+// ---------------------------------------------------------------------------
+
+/// <summary>
+///     A node-local inference profile projected for transport (shared by the list, explore, freeze and invalidate
+///     responses). It carries only the launch-arg facts and lifecycle metadata; the local-only machine key is
+///     deliberately OMITTED — it must never leave the box. <see cref="Role" /> is the lowercase wire role
+///     (<c>chat|embedding</c>) and <see cref="Status" /> is the lifecycle name (<c>Explored|Frozen|Stale</c>).
+/// </summary>
+public sealed class InferenceProfileViewDto
+{
+    public required Guid Id { get; init; }
+
+    public required string ModelName { get; init; }
+
+    /// <summary>Lowercase role the profile targets — <c>chat|embedding</c>.</summary>
+    public required string Role { get; init; }
+
+    public required string Backend { get; init; }
+
+    public required string LlamacppBuild { get; init; }
+
+    public required string Quant { get; init; }
+
+    public required int CtxSize { get; init; }
+
+    public int? NGpuLayers { get; init; }
+
+    public string? TensorSplit { get; init; }
+
+    public string? OverrideTensor { get; init; }
+
+    public string? KvTypeK { get; init; }
+
+    public string? KvTypeV { get; init; }
+
+    public required bool FlashAttn { get; init; }
+
+    public long? NParams { get; init; }
+
+    public required bool IsMoe { get; init; }
+
+    public int? ExpertCount { get; init; }
+
+    /// <summary>Free VRAM (bytes) observed when the profile was frozen; null until a freeze records it.</summary>
+    public long? FreeVramAtFreezeBytes { get; init; }
+
+    /// <summary>The lifecycle status name — <c>Explored|Frozen|Stale</c>.</summary>
+    public required string Status { get; init; }
+
+    /// <summary>The id of the benchmark snapshot that justifies a freeze; null until benchmarked.</summary>
+    public Guid? BenchmarkSnapshotId { get; init; }
+
+    public required long CreatedAtUtc { get; init; }
+
+    public required long UpdatedAtUtc { get; init; }
+}
+
+/// <summary>Response envelope for <c>GET model-fit/profiles</c>: every persisted inference profile (machine key omitted).</summary>
+public sealed class ListInferenceProfilesResponse
+{
+    public required IReadOnlyList<InferenceProfileViewDto> Items { get; init; }
+}
+
+/// <summary>
+///     Body for <c>POST model-fit/profiles/explore</c>. Explores a node-local GGUF model to draft its launch args.
+///     <see cref="ModelName" /> must be non-blank and resolve to a local GGUF (a cloud or missing model is rejected with a
+///     400). <see cref="Role" /> is <c>chat|embedding</c> (case-insensitive; defaults to <c>chat</c> when omitted); an
+///     unknown role is rejected with a 400.
+/// </summary>
+public sealed class ExploreInferenceProfileRequest
+{
+    public required string ModelName { get; init; }
+
+    /// <summary>Role to explore — <c>chat|embedding</c>. Defaults to <c>chat</c> when omitted.</summary>
+    public string? Role { get; init; }
+}
+
+/// <summary>
+///     Body for <c>POST model-fit/profiles/benchmark</c>. Benchmarks the drafted profile identified by
+///     <see cref="ProfileId" /> (carried in the body — never a route param — so the POST always has a body). An empty id
+///     is rejected with a 400.
+/// </summary>
+public sealed class BenchmarkInferenceProfileRequest
+{
+    public required Guid ProfileId { get; init; }
+}
+
+/// <summary>
+///     Body for <c>POST model-fit/profiles/freeze</c>. Freezes the Explored profile identified by <see cref="ProfileId" />
+///     — gated on its most recent successful benchmark (a freeze without a justifying benchmark is rejected with a 400).
+///     The id is carried in the body (never a route param) so the POST always has a body. An empty id is rejected with a
+///     400.
+/// </summary>
+public sealed class FreezeInferenceProfileRequest
+{
+    public required Guid ProfileId { get; init; }
+}
+
+/// <summary>
+///     Body for <c>POST model-fit/profiles/invalidate</c>. Manually demotes the profile identified by
+///     <see cref="ProfileId" /> to Stale. The id is carried in the body (never a route param) so the POST always has a
+///     body. An empty id is rejected with a 400.
+/// </summary>
+public sealed class InvalidateInferenceProfileRequest
+{
+    public required Guid ProfileId { get; init; }
+}
+
+/// <summary>
+///     Response carrying a single inference profile view — the result of <c>POST model-fit/profiles/explore</c>,
+///     <c>.../freeze</c> and <c>.../invalidate</c>. A domain rejection (cloud/missing model, freeze-gate failure) is
+///     surfaced as a 400 with an error body rather than this success shape.
+/// </summary>
+public sealed class InferenceProfileActionResponse
+{
+    public required InferenceProfileViewDto Profile { get; init; }
+}
+
+/// <summary>
+///     Sanitized benchmark metrics projected for transport. Carries only the measured figures — NEVER the raw
+///     <c>/metrics</c> scrape (<c>RawJson</c> stays server-side) so the operator surface remains sanitized.
+/// </summary>
+public sealed class InferenceBenchmarkMetricsDto
+{
+    /// <summary>Generation throughput in tokens/second; null when not measured.</summary>
+    public double? TokensPerSecond { get; init; }
+
+    /// <summary>Prompt-processing throughput in tokens/second; null when not measured.</summary>
+    public double? PpTokensPerSecond { get; init; }
+
+    /// <summary>Time-to-first-token in milliseconds; null when not measured.</summary>
+    public double? TtftMs { get; init; }
+
+    /// <summary>Total wall-clock of the whole transcript in milliseconds; null when not measured.</summary>
+    public double? TotalLatencyMs { get; init; }
+
+    /// <summary>Prompt-token reuse ratio (cold vs warm), 0..1; null when not measured.</summary>
+    public double? CacheHitRate { get; init; }
+
+    /// <summary>Wall-clock of the tool-call round in milliseconds; null when not measured.</summary>
+    public double? ToolLoopMs { get; init; }
+
+    /// <summary>Free VRAM (bytes) observed at load; null when not measured.</summary>
+    public long? VramLoadBytes { get; init; }
+
+    /// <summary>Free VRAM (bytes) observed after the loop; null when not measured.</summary>
+    public long? VramAfterBytes { get; init; }
+
+    /// <summary>Number of transcript passes measured (one golden pass = 1).</summary>
+    public required int Runs { get; init; }
+}
+
+/// <summary>
+///     Response for <c>POST model-fit/profiles/benchmark</c>: the measured metrics plus the snapshot they were persisted
+///     under, plus the (un-frozen) profile view. A failed benchmark harness leaves the snapshot Failed and is surfaced as
+///     a 400 with an error body rather than this success shape.
+/// </summary>
+public sealed class BenchmarkInferenceProfileResponse
+{
+    /// <summary>The id of the persisted benchmark snapshot; null when no snapshot was created.</summary>
+    public Guid? SnapshotId { get; init; }
+
+    /// <summary>The sanitized measured metrics; null when the harness produced none.</summary>
+    public InferenceBenchmarkMetricsDto? Metrics { get; init; }
+
+    public required InferenceProfileViewDto Profile { get; init; }
+}
