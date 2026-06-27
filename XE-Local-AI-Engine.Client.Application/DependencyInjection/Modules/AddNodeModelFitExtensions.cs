@@ -2,12 +2,16 @@ namespace XE_Local_AI_Engine.Client.DependencyInjection.Modules;
 
 using XE_Local_AI_Engine.Client.Persistence.Implementation;
 using XE_Local_AI_Engine.Client.Persistence.Stores;
+using XE_Local_AI_Engine.Client.Services.Inference;
 using XE_Local_AI_Engine.Client.Services.ModelFit;
 using XE_Local_AI_Engine.Client.Services.ModelFit.Fit;
 using XE_Local_AI_Engine.Client.Services.ModelFit.Implementation;
 using XE_Local_AI_Engine.Client.Services.ModelFit.Validation;
 using XE_Local_AI_Engine.Client.Services.Persistence.Implementation;
 using XE_Local_AI_Engine.Providers.Capabilities;
+using XE_Local_AI_Engine.Providers.HuggingFace;
+using XE_Local_AI_Engine.Providers.LlamaServer.Contracts;
+using XE_Local_AI_Engine.Providers.LlamaServer.Implementation;
 
 internal static class AddNodeModelFitExtensions
 {
@@ -29,6 +33,18 @@ internal static class AddNodeModelFitExtensions
         // its freeze/stale status transitions. Plaintext structural rows (no encryption interceptor). Scoped to match the
         // scoped, DbContext-backed stores.
         builder.Services.AddScoped<IInferenceProfileStore, InferenceProfileStore>();
+
+        // Inference Optimizer orchestrator (Lane B4): explore → benchmark → freeze over the supervisor's exclusive
+        // profiling entry point. The fit-banner parser and the OpenAI chat-client factory are public seams over the
+        // provider-internal parser/adapter so this layer stays Application → Providers. The metadata reader exposes the
+        // GGUF MoE/param/quant/context inputs over the internal header reader (AddHuggingFaceGgufStore registered it in
+        // AddNodeModelRuntime). The harness is stateless → singleton; the orchestrator composes the Scoped profile +
+        // model-fit snapshot/benchmark stores → Scoped.
+        builder.Services.AddGgufMetadataReader();
+        builder.Services.AddSingleton<IFittedArgsParser, FittedArgsParser>();
+        builder.Services.AddSingleton<IInferenceChatClientFactory, OpenAiInferenceChatClientFactory>();
+        builder.Services.AddSingleton<IInferenceBenchmarkHarness, InferenceBenchmarkHarness>();
+        builder.Services.AddScoped<IInferenceProfileService, InferenceProfileService>();
         // The request validator allowlists the recommend intent params (use-case + limit bounds). Stateless → singleton.
         builder.Services.AddSingleton<ModelFitRequestValidator>();
         // The memory-fit estimator is a pure, stateless function over GGUF header metadata + the hardware
