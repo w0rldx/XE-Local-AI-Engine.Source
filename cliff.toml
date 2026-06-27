@@ -1,0 +1,80 @@
+# git-cliff configuration for XE-Local-AI-Engine release notes.
+#
+# WHY this file exists: `vpk pack --releaseNotes <file>` embeds markdown notes
+# into the Velopack package; `vpk upload github` then publishes them as the
+# GitHub release body. We generate that file from the conventional-commit
+# history between the previous release tag and HEAD so every release (incl.
+# pre-releases) carries an auto-grouped changelog.
+#
+# Invoked via scripts/generate-release-notes.sh (CI + manual). See that script
+# and Plans/2026-06-25-velopack-operator-setup-runbook.md for usage.
+#
+# Docs: https://git-cliff.org/docs/configuration
+
+[changelog]
+# Rendered at the top of the release body. Kept minimal — the GitHub release
+# already shows the version + tag, so no big banner.
+header = ""
+
+# One entry per release. `version` is the tag we pass via --tag; for the
+# pending (untagged) build it is the composed pack-version.
+body = """
+{% if version %}## {{ version | trim_start_matches(pat="v") }}{% if timestamp %} — {{ timestamp | date(format="%Y-%m-%d") }}{% endif %}
+{% else %}## Unreleased
+{% endif %}
+{% for group, commits in commits | group_by(attribute="group") %}
+### {{ group | upper_first }}
+{% for commit in commits %}\
+- {{ commit.message | upper_first }}{% if commit.scope %} ({{ commit.scope }}){% endif %} ({{ commit.id | truncate(length=7, end="") }})
+{% endfor %}\
+{% endfor %}\n
+"""
+
+footer = ""
+# Strip leading/trailing whitespace from each line and collapse blank runs.
+trim = true
+
+[git]
+# Parse commit subjects as conventional commits (feat:, fix(scope):, ...).
+conventional_commits = true
+# Keep non-conventional commits out of the changelog rather than dumping them
+# raw — this repo is disciplined about prefixes, so anything unprefixed is noise.
+filter_unconventional = true
+# Don't split a commit body into multiple changelog lines.
+split_commits = false
+
+# Map commit type -> changelog section. Order here = render order.
+# `skip = true` drops the commit entirely (version bumps, merges, pure-noise).
+commit_parsers = [
+  { message = "^feat", group = "Features" },
+  { message = "^fix", group = "Bug Fixes" },
+  { message = "^perf", group = "Performance" },
+  { message = "^refactor", group = "Refactor" },
+  { message = "^docs", group = "Documentation" },
+  { message = "^i18n", group = "Localization" },
+  { message = "^test", group = "Testing" },
+  { message = "^style", group = "Styling" },
+  { message = "^build", group = "Build System" },
+  { message = "^ci", group = "CI" },
+  # Noise we never want in user-facing release notes:
+  { message = "^chore\\(release\\)", skip = true },
+  { message = "^chore\\(build\\): .*version", skip = true },
+  { message = "^chore\\(version\\)", skip = true },
+  { message = "^chore\\(deps\\)", group = "Dependencies" },
+  { message = "^chore", group = "Miscellaneous" },
+  { message = "^merge", skip = true },
+  { message = "^Merge ", skip = true },
+  # Anything else conventional but unmapped -> Miscellaneous.
+  { message = ".*", group = "Miscellaneous" },
+]
+
+# Tag matching. We standardise on a `v` prefix going forward (v0.1.0-rc.1.2);
+# the two legacy unprefixed tags (0.1.0-rc.1.0/.1) still parse because the
+# range is driven by --unreleased/--latest, not by this pattern alone.
+tag_pattern = "v?[0-9]*"
+
+# Sort newest-first inside each section.
+sort_commits = "newest"
+# Treat rc/alpha/beta tags as real releases for range detection (we DO ship
+# pre-releases and want notes for them).
+# (git-cliff includes pre-release tags by default; no skip_tags entry.)
