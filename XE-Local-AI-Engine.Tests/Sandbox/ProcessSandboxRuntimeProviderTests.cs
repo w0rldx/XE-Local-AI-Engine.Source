@@ -107,7 +107,12 @@ public sealed class ProcessSandboxRuntimeProviderTests : IDisposable
             Arguments = arguments
         }, cancellation.Token);
 
-        await Task.Delay(150);
+        // Poll until the task is confirmed in-flight (process started); exit early if the task
+        // completes unexpectedly (process failed to start) rather than waiting a fixed duration.
+        for (var i = 0; i < 30 && !executeTask.IsCompleted; i++)
+        {
+            await Task.Delay(5);
+        }
         await cancellation.CancelAsync();
 
         await AssertEx.ThrowsAsync<OperationCanceledException>(() => executeTask);
@@ -368,7 +373,11 @@ public sealed class ProcessSandboxRuntimeProviderTests : IDisposable
             Executable = executable,
             Arguments = arguments
         });
-        await Task.Delay(150);
+        // Poll until the task is confirmed in-flight before killing the sandbox.
+        for (var i = 0; i < 30 && !executeTask.IsCompleted; i++)
+        {
+            await Task.Delay(5);
+        }
 
         await provider.KillAsync(handle);
 
@@ -391,7 +400,11 @@ public sealed class ProcessSandboxRuntimeProviderTests : IDisposable
             Arguments = arguments,
             Timeout = TimeSpan.FromSeconds(30)
         });
-        await Task.Delay(150);
+        // Poll until the task is confirmed in-flight before cancelling the command.
+        for (var i = 0; i < 30 && !executeTask.IsCompleted; i++)
+        {
+            await Task.Delay(5);
+        }
 
         await provider.CancelCommandAsync(handle, "cancelcmd-1");
 
