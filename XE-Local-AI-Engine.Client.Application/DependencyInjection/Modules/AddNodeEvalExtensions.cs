@@ -31,7 +31,7 @@ internal static class AddNodeEvalExtensions
                });
         // Eval judge: deterministic assertion path plus node-local judge path. Singleton because it holds no scoped
         // state and receives the per-run node-local client as a parameter.
-        builder.Services.AddSingleton<IPlaybookEvalJudge, OllamaPlaybookEvalJudge>();
+        builder.Services.AddSingleton<IPlaybookEvalJudge, DefaultPlaybookEvalJudge>();
         // Eval orchestration: re-runs the real agent loop over the golden set, scores candidate-vs-baseline output, and
         // persists the plaintext EvalResult consumed by the promotion gate.
         builder.Services.AddScoped<IPlaybookEvalService, PlaybookEvalService>();
