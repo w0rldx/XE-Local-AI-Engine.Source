@@ -1,3 +1,8 @@
+// EXPERIMENTAL / DEV-ONLY: The entire src/features/voice/ module is operator-gated to developer mode.
+// Components and runtime code in this directory must NEVER be exposed outside of the developerMode +
+// manifest.enabled double-gate (see lines 36-38 below and VoiceRuntime.ts:134). This is an intentional
+// operator decision — voice TTS is client-side experimental and not ready for general availability.
+//
 // Client AI Runtime provider — owns the ONE long-lived voice runtime + AudioContext for the whole app session.
 // Mounted at the app root so it survives route + conversation changes. It is
 // deliberately NOT a generic feature registry: it owns exactly the VoiceRuntime, its

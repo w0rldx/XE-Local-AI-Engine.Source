@@ -11,7 +11,7 @@ const config: KnipConfig = {
 	],
 	project: ["src/**/*.{ts,tsx}", "vite-plugins/**/*.ts", "scripts/**/*.mjs"],
 	ignore: ["src/core/api/generated/**"],
-	ignoreDependencies: ["@hey-api/client-axios", "@tanstack/react-form", "@tanstack/react-pacer"],
+	ignoreDependencies: ["@hey-api/client-axios"],
 	rules: {
 		types: "off",
 	},
