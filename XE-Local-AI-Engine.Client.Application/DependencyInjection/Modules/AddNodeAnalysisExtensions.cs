@@ -25,7 +25,7 @@ internal static class AddNodeAnalysisExtensions
                });
         // Analysis agent: proposes suggested actions from feedback aggregates using a node-local model only. Singleton
         // because it holds no scoped state and receives a fresh per-run chat client.
-        builder.Services.AddSingleton<IPlaybookAnalysisAgent, OllamaPlaybookAnalysisAgent>();
+        builder.Services.AddSingleton<IPlaybookAnalysisAgent, DefaultPlaybookAnalysisAgent>();
         // Analysis orchestration: gates on the occurrence threshold, validates proposal evidence, dedupes, and writes
         // suggested actions for human review.
         builder.Services.AddScoped<IPlaybookAnalysisService, PlaybookAnalysisService>();

@@ -62,7 +62,7 @@ jobs:
   # ---------------------------------------------------------------------------
   # Compose the Velopack pack-version once and share it across all matrix legs.
   # Source of truth: Directory.Build.props VersionPrefix + VersionSuffix.
-  # Current value:  0.1.0-rc.1.0  (tag convention vX.Y.Z[-suffix])
+  # (version is read dynamically from Directory.Build.props at build time)
   # ---------------------------------------------------------------------------
   version:
     runs-on: ubuntu-latest

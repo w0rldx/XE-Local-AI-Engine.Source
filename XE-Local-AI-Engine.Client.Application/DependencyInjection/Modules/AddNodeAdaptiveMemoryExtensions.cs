@@ -27,7 +27,7 @@ internal static class AddNodeAdaptiveMemoryExtensions
 
         // Extraction agent: mines candidate memories from a completed run using a node-local model only. Singleton
         // because it holds no scoped state and receives a fresh per-run chat client (mirrors the analysis agent).
-        builder.Services.AddSingleton<IMemoryExtractionAgent, OllamaMemoryExtractionAgent>();
+        builder.Services.AddSingleton<IMemoryExtractionAgent, DefaultMemoryExtractionAgent>();
         // Extraction orchestration: gates temp chats, no-ops without a model, dedupes, and writes Suggested/Extracted
         // actions for human review. Scoped — it consumes the scoped, DbContext-backed playbook action store.
         builder.Services.AddScoped<IMemoryExtractionService, MemoryExtractionService>();

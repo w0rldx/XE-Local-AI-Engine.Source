@@ -165,8 +165,8 @@ public sealed class OrchestrationAgentFactoryTests
             {
                 sawApproval = true;
 
-                // Wait well past the 1s idle timeout before responding; the suspended clock must keep the run alive.
-                await Task.Delay(TimeSpan.FromMilliseconds(2500));
+                // Wait beyond the 1s idle timeout before responding; the suspended-while-pending clock must keep the run alive.
+                await Task.Delay(TimeSpan.FromMilliseconds(1100));
                 await session.RespondToApprovalAsync(update.RequestId!, approved: true, reason: null);
             }
         }

@@ -184,7 +184,7 @@ internal sealed class PreviewWorkflowRunner : IPreviewWorkflowRunner
 
     private AIAgent BuildAgent(PreviewAgentNode node, IChatClient chatClient)
     {
-        // Mirror MafPlaybookEvalAgentRunner / OllamaPlaybookAnalysisAgent: a ChatClientAgent over the caller-supplied
+        // Mirror MafPlaybookEvalAgentRunner / DefaultPlaybookAnalysisAgent: a ChatClientAgent over the caller-supplied
         // node-local client with an empty tool set (basic variant — no tools). Instructions ride ChatOptions.Instructions
         // (passed via the ctor), NOT a system message in the routed list — so the transform's isolation holds.
         return new ChatClientAgent(chatClient,

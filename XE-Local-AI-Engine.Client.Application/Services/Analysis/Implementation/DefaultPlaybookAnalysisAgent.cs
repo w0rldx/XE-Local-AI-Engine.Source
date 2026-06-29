@@ -15,13 +15,13 @@ using XE_Local_AI_Engine.Providers.Abstractions.Contracts;
 ///     This type is intentionally not unit-tested against a live model; tests substitute a fake
 ///     <see cref="IPlaybookAnalysisAgent" />.
 /// </summary>
-internal sealed class OllamaPlaybookAnalysisAgent(
+internal sealed class DefaultPlaybookAnalysisAgent(
     ILocalModelProviderResolver providerResolver,
     IOptions<PlaybookAnalysisOptions> options,
-    ILogger<OllamaPlaybookAnalysisAgent> logger) : IPlaybookAnalysisAgent
+    ILogger<DefaultPlaybookAnalysisAgent> logger) : IPlaybookAnalysisAgent
 {
     private static readonly JsonSerializerOptions SerializerOptions = new(JsonSerializerDefaults.Web);
-    private readonly ILogger<OllamaPlaybookAnalysisAgent> _logger = logger ?? throw new ArgumentNullException(nameof(logger));
+    private readonly ILogger<DefaultPlaybookAnalysisAgent> _logger = logger ?? throw new ArgumentNullException(nameof(logger));
     private readonly PlaybookAnalysisOptions _options = (options ?? throw new ArgumentNullException(nameof(options))).Value;
 
     private readonly ILocalModelProviderResolver _providerResolver = providerResolver ?? throw new ArgumentNullException(nameof(providerResolver));

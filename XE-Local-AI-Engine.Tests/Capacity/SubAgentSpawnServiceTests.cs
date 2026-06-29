@@ -117,7 +117,11 @@ public sealed class SubAgentSpawnServiceTests
         using var root = SpawnContext.BeginRoot(fanOutCap: 3, cloudSpawnCap: 3);
 
         var spawnTask = service.SpawnAsync(ModelRequest("slow task"), cts.Token);
-        await Task.Delay(100);
+        // Poll until the spawn task is confirmed in-flight before cancelling.
+        for (var i = 0; i < 20 && !spawnTask.IsCompleted; i++)
+        {
+            await Task.Delay(5);
+        }
         await cts.CancelAsync();
 
         await AssertEx.ThrowsAsync<OperationCanceledException>(() => spawnTask);

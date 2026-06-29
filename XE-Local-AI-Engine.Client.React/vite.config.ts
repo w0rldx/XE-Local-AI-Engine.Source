@@ -124,7 +124,7 @@ export default defineConfig(({ command, mode }) => {
 		// execution provider forbids ORT's `wasm.proxy`, so an own worker is mandatory and must be emitted as ESM.
 		worker: { format: "es" },
 		optimizeDeps: {
-			include: ["@tanstack/react-form", "@tanstack/react-form-devtools"],
+			include: ["@tanstack/react-form-devtools"],
 			// esbuild's dep pre-bundling chokes on the WASM/dynamic imports inside these packages; exclude them so
 			// Vite serves their real ESM (the worker + Kokoro load onnxruntime-web/transformers at runtime).
 			exclude: ["@huggingface/transformers", "onnxruntime-web"],

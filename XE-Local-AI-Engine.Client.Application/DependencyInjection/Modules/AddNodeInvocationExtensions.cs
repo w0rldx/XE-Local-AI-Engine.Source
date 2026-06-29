@@ -21,9 +21,9 @@ using XE_Local_AI_Engine.Client.Services.Persistence.Implementation;
 using XE_Local_AI_Engine.Client.Services.Validation;
 using XE_Local_AI_Engine.Client.Services.Validation.Implementation;
 
-internal static class AddNodeHostAgentAndInvocationExtensions
+internal static class AddNodeInvocationExtensions
 {
-    public static IHostApplicationBuilder AddNodeHostAgentAndInvocation(this IHostApplicationBuilder builder, IConfiguration configuration)
+    public static IHostApplicationBuilder AddNodeInvocation(this IHostApplicationBuilder builder, IConfiguration configuration)
     {
         ArgumentNullException.ThrowIfNull(builder);
         ArgumentNullException.ThrowIfNull(configuration);
