@@ -9,12 +9,20 @@ namespace XE_Local_AI_Engine.Providers.LlamaServer.Contracts;
 /// <param name="Sha256">The lowercase hex SHA256 the installed archive was verified against.</param>
 /// <param name="Variant">The acceleration variant of the installed binary.</param>
 /// <param name="InstalledAtUtc">When the install completed (UTC).</param>
+/// <param name="SourceBuildPath">
+///     Absolute directory of a source-built (in-app CUDA) runtime, or <see langword="null" /> for a normal downloaded
+///     prebuilt. Presence is the single signal that this record describes a <em>managed source build</em>; readers must
+///     key off this (or the wire <c>isSourceBuild</c> flag), never parse the sentinel <see cref="Asset" /> value
+///     (<c>(source-build:cuda)</c>). Added as an optional trailing positional so old <c>installed-runtime.json</c> files
+///     deserialize with <see langword="null" /> — no migration step.
+/// </param>
 public sealed record InstalledRuntimeState(
     string Tag,
     string Asset,
     string Sha256,
     GpuVariant Variant,
-    DateTimeOffset InstalledAtUtc);
+    DateTimeOffset InstalledAtUtc,
+    string? SourceBuildPath = null);
 
 /// <summary>
 ///     Reads/writes <c>installed-runtime.json</c> under the cache root (sibling to <c>llama.cpp/</c>). The single record
@@ -32,4 +40,11 @@ public interface IInstalledRuntimeStore
 
     /// <summary>Atomically writes the installed-runtime state after a verified, smoke-tested install.</summary>
     Task WriteAsync(InstalledRuntimeState state, CancellationToken ct);
+
+    /// <summary>
+    ///     Deletes the installed-runtime record, returning resolution to the pinned floor. Idempotent (a missing file is a
+    ///     no-op). Used when a managed source build is removed, or when a recorded source build is found missing/invalid at
+    ///     serve time and must be discarded.
+    /// </summary>
+    Task DeleteAsync(CancellationToken ct);
 }

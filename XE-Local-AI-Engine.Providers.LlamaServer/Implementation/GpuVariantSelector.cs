@@ -4,40 +4,49 @@ using XE_Local_AI_Engine.Providers.LlamaServer.Configuration;
 using XE_Local_AI_Engine.Providers.LlamaServer.Contracts;
 
 /// <summary>
-///     Applies the OS-aware variant-selection rule over a detected GPU vendor. Pure decision logic — no I/O — so it
-///     is fully unit-testable by faking <see cref="IGpuVendorProbe" />.
+///     Applies the OS-aware variant-selection rule over a detected GPU vendor. Pure decision logic — no store I/O on the
+///     hot path — so it is fully unit-testable by faking <see cref="IGpuVendorProbe" /> and the cached signal.
 /// </summary>
 /// <remarks>
-///     Rule: NVIDIA → CUDA <em>only on Windows</em> (llama.cpp ships no prebuilt Linux CUDA
-///     asset, so Linux NVIDIA degrades to Vulkan); AMD/Intel → Vulkan; none/unknown → CPU.
+///     Rule: NVIDIA → CUDA on Windows; on Linux NVIDIA → CUDA <em>only when a managed source build is signalled</em>
+///     (<see cref="ICudaManagedBuildSignal" />), else Vulkan (llama.cpp ships no prebuilt Linux CUDA asset); AMD/Intel →
+///     Vulkan; none/unknown → CPU.
 ///     <para>
 ///         When an operator bring-your-own override is active (<see cref="LlamaServerRuntimeOverrideOptions.IsActive" />)
 ///         the configured variant short-circuits the vendor probe entirely. The selector keys off
 ///         <see cref="LlamaServerRuntimeOverrideOptions.IsActive" /> only and never validates the override path — path
 ///         validation is the binary manager's single responsibility.
 ///     </para>
+///     <para>
+///         The managed-CUDA decision reads a CACHED flag (set on adopt, cleared on remove, seeded at startup) rather than
+///         a per-call <see cref="IInstalledRuntimeStore" /> read, so selection stays cheap. Disk-presence/perms/SHA
+///         validity is enforced authoritatively by the binary manager at every serve; a stale flag self-heals there.
+///     </para>
 /// </remarks>
 public sealed class GpuVariantSelector : IGpuVariantSelector
 {
     private readonly bool _isWindows;
+    private readonly ICudaManagedBuildSignal _managedCudaSignal;
     private readonly LlamaServerRuntimeOverrideOptions _overrideOptions;
     private readonly IGpuVendorProbe _vendorProbe;
 
-    /// <summary>Creates a selector over the supplied vendor probe + override options, defaulting OS detection to the live host.</summary>
-    public GpuVariantSelector(IGpuVendorProbe vendorProbe, LlamaServerRuntimeOverrideOptions overrideOptions)
-        : this(vendorProbe, OperatingSystem.IsWindows(), overrideOptions)
+    /// <summary>Creates a selector over the supplied vendor probe + override options + managed-CUDA signal, defaulting OS detection to the live host.</summary>
+    public GpuVariantSelector(IGpuVendorProbe vendorProbe, LlamaServerRuntimeOverrideOptions overrideOptions, ICudaManagedBuildSignal managedCudaSignal)
+        : this(vendorProbe, OperatingSystem.IsWindows(), overrideOptions, managedCudaSignal)
     {
     }
 
     /// <summary>
     ///     Test seam: lets a unit test pin the OS so the NVIDIA→CUDA/Vulkan split can be exercised on any host. The
-    ///     override options default to an inactive instance so existing tests keep the vendor-rule path unchanged.
+    ///     override options default to an inactive instance and the signal to a cleared one so existing tests keep the
+    ///     vendor-rule path unchanged.
     /// </summary>
-    internal GpuVariantSelector(IGpuVendorProbe vendorProbe, bool isWindows, LlamaServerRuntimeOverrideOptions? overrideOptions = null)
+    internal GpuVariantSelector(IGpuVendorProbe vendorProbe, bool isWindows, LlamaServerRuntimeOverrideOptions? overrideOptions = null, ICudaManagedBuildSignal? managedCudaSignal = null)
     {
         _vendorProbe = vendorProbe ?? throw new ArgumentNullException(nameof(vendorProbe));
         _isWindows = isWindows;
         _overrideOptions = overrideOptions ?? new LlamaServerRuntimeOverrideOptions();
+        _managedCudaSignal = managedCudaSignal ?? new CudaManagedBuildSignal();
     }
 
     /// <inheritdoc />
@@ -52,6 +61,14 @@ public sealed class GpuVariantSelector : IGpuVariantSelector
         }
 
         var vendor = await _vendorProbe.DetectVendorAsync(ct).ConfigureAwait(false);
+
+        // Managed source-built CUDA: a Linux NVIDIA box with a recorded build serves CUDA instead of the Vulkan fallback.
+        // Reads the cached signal only (no per-call store read). [archHIGH-2]
+        if (vendor == DetectedGpuVendor.Nvidia && !_isWindows && _managedCudaSignal.IsAvailable)
+        {
+            return GpuVariant.Cuda;
+        }
+
         return SelectForVendor(vendor, _isWindows);
     }
 

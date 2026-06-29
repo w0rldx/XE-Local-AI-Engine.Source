@@ -1,0 +1,56 @@
+namespace XE_Local_AI_Engine.Providers.LlamaServer.Implementation;
+
+using Microsoft.Extensions.Hosting;
+using Microsoft.Extensions.Logging;
+using XE_Local_AI_Engine.Providers.LlamaServer.Contracts;
+
+/// <summary>
+///     Startup <see cref="IHostedService" /> for the in-app CUDA build: (1) cleans a stale build work directory left by a
+///     host crash/kill mid-build (<c>[archLOW-1]</c>), and (2) seeds the cached managed-CUDA signal from the
+///     installed-runtime record so a previously-adopted source build is selected after a restart without a per-call store
+///     read. Best-effort — never throws out of startup.
+/// </summary>
+internal sealed class CudaBuildStartupService : IHostedService
+{
+    private readonly ICudaBuildService _buildService;
+    private readonly IInstalledRuntimeStore _installedRuntimeStore;
+    private readonly ILogger<CudaBuildStartupService> _logger;
+    private readonly ICudaManagedBuildSignal _signal;
+
+    public CudaBuildStartupService(ICudaBuildService buildService,
+        IInstalledRuntimeStore installedRuntimeStore,
+        ICudaManagedBuildSignal signal,
+        ILogger<CudaBuildStartupService> logger)
+    {
+        _buildService = buildService ?? throw new ArgumentNullException(nameof(buildService));
+        _installedRuntimeStore = installedRuntimeStore ?? throw new ArgumentNullException(nameof(installedRuntimeStore));
+        _signal = signal ?? throw new ArgumentNullException(nameof(signal));
+        _logger = logger ?? throw new ArgumentNullException(nameof(logger));
+    }
+
+    public async Task StartAsync(CancellationToken cancellationToken)
+    {
+        try
+        {
+            _buildService.RecoverStaleWorkDirectory();
+
+            var installed = await _installedRuntimeStore.ReadAsync(cancellationToken).ConfigureAwait(false);
+            if (installed?.SourceBuildPath is { Length: > 0 } sourceBuildPath
+                && File.Exists(Path.Combine(sourceBuildPath, "llama-server")))
+            {
+                // Optimistic seed: the serve-time validator (EnsureBinaryAsync) re-checks perms/SHA and clears the signal
+                // if the build is actually invalid, so seeding on presence alone is safe.
+                _signal.MarkAvailable();
+            }
+        }
+        catch (Exception exception)
+        {
+            _logger.LogWarning(exception, "Seeding the managed CUDA build signal at startup failed (non-fatal).");
+        }
+    }
+
+    public Task StopAsync(CancellationToken cancellationToken)
+    {
+        return Task.CompletedTask;
+    }
+}

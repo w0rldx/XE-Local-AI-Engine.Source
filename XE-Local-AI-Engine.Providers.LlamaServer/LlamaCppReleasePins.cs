@@ -51,6 +51,15 @@ public static class LlamaCppReleasePins
     /// <summary>The recommended-pinned llama.cpp release tag.</summary>
     public const string PinnedTag = "b9692";
 
+    /// <summary>
+    ///     The exact upstream commit SHA the <see cref="PinnedTag" /> tag (<c>b9692</c>) resolves to on
+    ///     <c>ggml-org/llama.cpp</c>. The in-app CUDA source build verifies the freshly-cloned tree's checked-out
+    ///     <c>HEAD</c> equals this and HARD-FAILS before any cmake runs, so a moved tag / hijacked ref can never be built.
+    ///     Re-pin this alongside <see cref="PinnedTag" /> when bumping the recommended version
+    ///     (<c>git ls-remote https://github.com/ggml-org/llama.cpp refs/tags/&lt;tag&gt;</c>). <c>[secHIGH-1]</c>
+    /// </summary>
+    public const string PinnedCudaSourceCommitSha = "f3e182816421c648188b5eab269853bf1531d950";
+
     private const string WindowsServerPath = "build/bin/llama-server.exe";
     private const string UnixServerPath = "build/bin/llama-server";
 

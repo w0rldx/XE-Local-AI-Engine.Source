@@ -45,6 +45,7 @@ public sealed partial class LlamaCppBinaryManager : ILlamaCppBinaryManager
     private readonly ILlamaCppReleaseCatalog? _catalog;
     private readonly HttpClient _httpClient;
     private readonly IInstalledRuntimeStore? _installedRuntimeStore;
+    private readonly ICudaManagedBuildSignal? _managedCudaSignal;
     private readonly OSPlatform _os;
     private readonly LlamaServerRuntimeOverrideOptions? _overrideOptions;
 
@@ -63,7 +64,8 @@ public sealed partial class LlamaCppBinaryManager : ILlamaCppBinaryManager
         string? activeTag = null,
         ILlamaCppReleaseCatalog? catalog = null,
         IInstalledRuntimeStore? installedRuntimeStore = null,
-        LlamaServerRuntimeOverrideOptions? overrideOptions = null)
+        LlamaServerRuntimeOverrideOptions? overrideOptions = null,
+        ICudaManagedBuildSignal? managedCudaSignal = null)
         : this(httpClient,
             cacheRoot ?? DefaultCacheRoot(),
             activeTag ?? LlamaCppReleasePins.PinnedTag,
@@ -71,7 +73,8 @@ public sealed partial class LlamaCppBinaryManager : ILlamaCppBinaryManager
             RuntimeInformation.ProcessArchitecture,
             catalog,
             installedRuntimeStore,
-            overrideOptions)
+            overrideOptions,
+            managedCudaSignal)
     {
     }
 
@@ -83,7 +86,8 @@ public sealed partial class LlamaCppBinaryManager : ILlamaCppBinaryManager
         Architecture arch,
         ILlamaCppReleaseCatalog? catalog = null,
         IInstalledRuntimeStore? installedRuntimeStore = null,
-        LlamaServerRuntimeOverrideOptions? overrideOptions = null)
+        LlamaServerRuntimeOverrideOptions? overrideOptions = null,
+        ICudaManagedBuildSignal? managedCudaSignal = null)
     {
         _httpClient = httpClient ?? throw new ArgumentNullException(nameof(httpClient));
         ArgumentException.ThrowIfNullOrWhiteSpace(cacheRoot);
@@ -95,6 +99,7 @@ public sealed partial class LlamaCppBinaryManager : ILlamaCppBinaryManager
         _catalog = catalog;
         _installedRuntimeStore = installedRuntimeStore;
         _overrideOptions = overrideOptions;
+        _managedCudaSignal = managedCudaSignal;
     }
 
     /// <inheritdoc />
@@ -116,6 +121,21 @@ public sealed partial class LlamaCppBinaryManager : ILlamaCppBinaryManager
         var installed = _installedRuntimeStore is null
             ? null
             : await _installedRuntimeStore.ReadAsync(ct).ConfigureAwait(false);
+
+        // Managed source-built CUDA short-circuit: a Cuda request with a recorded source build serves the locally-built
+        // binary instead of an acquisition (upstream ships no Linux CUDA prebuilt, so the pin resolve below would throw).
+        // Re-validated on EVERY serve (full path-chain perms + recorded-SHA256 recompare) so an adopt→restart→serve TOCTOU
+        // or a deep-tree swap is caught. A recorded-but-missing/invalid build clears the record + signal and falls through
+        // to the normal path (which throws the sanitized "no prebuilt for this OS/arch" for a Cuda request — never a
+        // silent CPU serve). Reuses the already-read `installed`, so no extra store I/O.
+        if (variant == GpuVariant.Cuda && installed?.SourceBuildPath is { Length: > 0 })
+        {
+            var managed = await TryServeManagedCudaBinaryAsync(installed, ct).ConfigureAwait(false);
+            if (managed is not null)
+            {
+                return managed;
+            }
+        }
 
         var resolvedTag = await ResolveActiveTagAsync(variant, installed, ct).ConfigureAwait(false);
 
@@ -173,6 +193,14 @@ public sealed partial class LlamaCppBinaryManager : ILlamaCppBinaryManager
     private async Task RecordResolvedRuntimeAsync(string resolvedTag, LlamaCppAssetPin pin, GpuVariant variant, InstalledRuntimeState? installed, CancellationToken ct)
     {
         if (_installedRuntimeStore is null)
+        {
+            return;
+        }
+
+        // The source-build record is immutable to this bootstrap writer: a non-Cuda EnsureBinaryAsync (e.g. the Vulkan
+        // probe at LlamaListDevicesVramProbe) must NEVER overwrite an adopted managed CUDA build. The variant skip below
+        // does not fire for a Cuda record + a Vulkan write, so guard the source build explicitly first. [archHIGH-1]
+        if (installed?.SourceBuildPath is { Length: > 0 })
         {
             return;
         }

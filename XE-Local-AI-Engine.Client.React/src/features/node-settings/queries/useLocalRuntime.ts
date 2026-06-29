@@ -1,14 +1,23 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
 import {
+	cancelCudaBuildMutation,
 	ensureLlamaCppBinaryMutation,
+	getCudaBuildPrerequisitesOptions,
+	getCudaBuildStatusOptions,
 	getHfTokenStatusOptions,
 	getLlamaCppRuntimeOptions,
+	removeCudaBuildMutation,
 	setHfTokenMutation,
+	startCudaBuildMutation,
 	updateLlamaCppRuntimeMutation,
 } from "@/core/api/generated/@tanstack/react-query.gen";
 import { withResponseValidation } from "@/core/api/ResponseValidation";
-import { toLlamaCppRuntimeStatus } from "@/features/node-settings/models/LocalRuntimeMappers";
+import {
+	toCudaBuildPrerequisites,
+	toCudaBuildStatus,
+	toLlamaCppRuntimeStatus,
+} from "@/features/node-settings/models/LocalRuntimeMappers";
 import type { LlamaCppVariant } from "@/features/node-settings/models/LocalRuntimeModels";
 
 // Server state for the local-runtime cards on the Node Settings page (relocated from the model-fit advisor — they
@@ -20,13 +29,15 @@ import type { LlamaCppVariant } from "@/features/node-settings/models/LocalRunti
 // The generated query keys are single-element arrays `[{ _id: "<operationId>", ... }]`. Invalidating with just the
 // `_id` partial object matches every cached variant of that endpoint. Centralized here so the literal `_id` key —
 // which trips biome's naming-convention rule — is constructed in exactly one place.
-const localRuntimeQueryIds = {
+export const localRuntimeQueryIds = {
 	llamaCppRuntime: "getLlamaCppRuntime",
 	hfTokenStatus: "getHfTokenStatus",
+	cudaBuildPrerequisites: "getCudaBuildPrerequisites",
+	cudaBuildStatus: "getCudaBuildStatus",
 } as const;
 
 /** Builds the partial generated-query-key filter that matches every cached variant of one local-runtime endpoint. */
-function localRuntimeInvalidationKey(operationId: string): readonly [{ _id: string }] {
+export function localRuntimeInvalidationKey(operationId: string): readonly [{ _id: string }] {
 	// biome-ignore lint/style/useNamingConvention: `_id` is the generated hey-api query-key discriminator field.
 	return [{ _id: operationId }];
 }
@@ -114,5 +125,83 @@ export function useSetHfToken() {
 			await options.mutationFn?.({ body: { token: token && token.length > 0 ? token : null } }, undefined as never);
 		},
 		onSuccess: () => invalidate(queryClient, localRuntimeQueryIds.hfTokenStatus),
+	});
+}
+
+// Read-only CUDA build prerequisite report (GET cuda-build/prerequisites). Safe to auto-run on mount — it only probes
+// host capabilities (Linux, nvcc, cmake, NVIDIA GPU, disk) and returns the checklist + the authoritative `canBuild`
+// gate. The card derives both its Linux gate and the "Build CUDA" enablement from this query.
+export function useCudaBuildPrerequisites(enabled = true) {
+	return useQuery({
+		...withResponseValidation(getCudaBuildPrerequisitesOptions()),
+		select: toCudaBuildPrerequisites,
+		enabled,
+	});
+}
+
+// Read-only CUDA build status (GET cuda-build/status). Recovers an in-progress build after a client reconnect: a page
+// reload mid-build re-reads the phase + accumulated log here, then the live SignalR hub appends subsequent deltas.
+export function useCudaBuildStatus(enabled = true) {
+	return useQuery({
+		...withResponseValidation(getCudaBuildStatusOptions()),
+		select: toCudaBuildStatus,
+		enabled,
+	});
+}
+
+// Starts the in-app CUDA build (POST cuda-build). The build runs server-side (background), so this mutation only kicks
+// it off; live progress arrives via the SignalR hub and the status query. Invalidates the status query so `isRunning`
+// flips true, and the runtime status so a managed-build adoption is reflected. A 409 (eject-first / already building /
+// disk) is surfaced by the caller from the thrown AxiosError's response body.
+export function useStartCudaBuild() {
+	const queryClient = useQueryClient();
+
+	return useMutation({
+		mutationFn: async () => {
+			const options = withResponseValidation(startCudaBuildMutation());
+			return await options.mutationFn?.({}, undefined as never);
+		},
+		onSuccess: () =>
+			Promise.all([
+				invalidate(queryClient, localRuntimeQueryIds.cudaBuildStatus),
+				invalidate(queryClient, localRuntimeQueryIds.llamaCppRuntime),
+			]),
+	});
+}
+
+// Cancels a running CUDA build (POST cuda-build/cancel). The backend tree-kills the build process group and records a
+// terminal `cancelled` status; invalidate the status query (and the runtime, which may revert to a prior runtime).
+export function useCancelCudaBuild() {
+	const queryClient = useQueryClient();
+
+	return useMutation({
+		mutationFn: async () => {
+			const options = withResponseValidation(cancelCudaBuildMutation());
+			return await options.mutationFn?.({}, undefined as never);
+		},
+		onSuccess: () =>
+			Promise.all([
+				invalidate(queryClient, localRuntimeQueryIds.cudaBuildStatus),
+				invalidate(queryClient, localRuntimeQueryIds.llamaCppRuntime),
+			]),
+	});
+}
+
+// Removes the managed CUDA source build (POST cuda-build/remove). Deletes the built tree (server-side path-guarded) and
+// returns the post-removal runtime status; invalidate the runtime so the card reverts to the prebuilt/download path, and
+// the status query. A 409 (eject-first) is surfaced by the caller from the thrown AxiosError's response body.
+export function useRemoveCudaBuild() {
+	const queryClient = useQueryClient();
+
+	return useMutation({
+		mutationFn: async () => {
+			const options = withResponseValidation(removeCudaBuildMutation());
+			return await options.mutationFn?.({}, undefined as never);
+		},
+		onSuccess: () =>
+			Promise.all([
+				invalidate(queryClient, localRuntimeQueryIds.llamaCppRuntime),
+				invalidate(queryClient, localRuntimeQueryIds.cudaBuildStatus),
+			]),
 	});
 }

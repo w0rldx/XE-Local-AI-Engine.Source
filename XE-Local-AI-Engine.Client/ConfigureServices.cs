@@ -33,6 +33,7 @@ using XE_Local_AI_Engine.Client.Services.ModelFit.Implementation;
 using XE_Local_AI_Engine.Client.Services.Persistence.Implementation;
 using XE_Local_AI_Engine.Client.Services.PreviewWorkflows;
 using XE_Local_AI_Engine.Client.Services.Scheduler;
+using XE_Local_AI_Engine.Providers.LlamaServer.Contracts;
 
 /// <summary>
 ///     Represents configure services.
@@ -97,6 +98,10 @@ public static class ConfigureServices
         // download status changes push live to operator clients (GgufDownloadHub mapped in Program), replacing the
         // per-second downloads poll. IHubContext is singleton-safe, so the singleton coordinator can resolve it.
         builder.Services.AddSingleton<IGgufDownloadEventPublisher, GgufDownloadEventPublisher>();
+
+        // Hub-backed in-app CUDA build event publisher — supersedes the no-op default the provider registers so build
+        // phase + log lines push live to operator clients (CudaBuildHub mapped in Program). IHubContext is singleton-safe.
+        builder.Services.AddSingleton<ICudaBuildEventPublisher, CudaBuildEventPublisher>();
 
         // Error handling - the order of the exception handlers is important: specific handlers first,
         // DefaultExceptionHandler last as the catch-all 500. Mirrors the central platform's IExceptionHandler pattern.

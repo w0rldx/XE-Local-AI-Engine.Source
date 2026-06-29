@@ -18,6 +18,7 @@ import {
 	benchmarkInferenceProfile,
 	branchNodeChatConversation,
 	browseGgufRepositories,
+	cancelCudaBuild,
 	cancelGgufDownload,
 	cancelNodeBinding,
 	cancelNodeChatMessage,
@@ -66,6 +67,8 @@ import {
 	getAppUpdateStatus,
 	getCloudSettings,
 	getConnectionStatus,
+	getCudaBuildPrerequisites,
+	getCudaBuildStatus,
 	getGgufDownloads,
 	getGgufDownloadStatus,
 	getGitHubAuthStatus,
@@ -125,6 +128,7 @@ import {
 	putModelKind,
 	refreshRecommendations,
 	rejectSuggestedPlaybookAction,
+	removeCudaBuild,
 	renameNodeChatConversation,
 	runPlaybookActionEval,
 	saveCloudSettings,
@@ -137,6 +141,7 @@ import {
 	setNodeChatMessageFeedback,
 	setNodeChatSelectedPath,
 	signOutGitHubAuth,
+	startCudaBuild,
 	startGgufDownload,
 	startGitHubAuth,
 	startNodeBinding,
@@ -168,6 +173,8 @@ import type {
 	BranchNodeChatConversationResponse,
 	BrowseGgufRepositoriesData,
 	BrowseGgufRepositoriesResponse,
+	CancelCudaBuildData,
+	CancelCudaBuildResponse,
 	CancelGgufDownloadData,
 	CancelGgufDownloadResponse,
 	CancelNodeBindingData,
@@ -268,6 +275,10 @@ import type {
 	GetCloudSettingsResponse,
 	GetConnectionStatusData,
 	GetConnectionStatusResponse,
+	GetCudaBuildPrerequisitesData,
+	GetCudaBuildPrerequisitesResponse,
+	GetCudaBuildStatusData,
+	GetCudaBuildStatusResponse,
 	GetGgufDownloadsData,
 	GetGgufDownloadsResponse,
 	GetGgufDownloadStatusData,
@@ -390,6 +401,9 @@ import type {
 	RefreshRecommendationsResponse,
 	RejectSuggestedPlaybookActionData,
 	RejectSuggestedPlaybookActionResponse,
+	RemoveCudaBuildData,
+	RemoveCudaBuildError,
+	RemoveCudaBuildResponse,
 	RenameNodeChatConversationData,
 	RenameNodeChatConversationResponse,
 	RunPlaybookActionEvalData,
@@ -418,6 +432,9 @@ import type {
 	SetNodeChatSelectedPathResponse,
 	SignOutGitHubAuthData,
 	SignOutGitHubAuthResponse,
+	StartCudaBuildData,
+	StartCudaBuildError,
+	StartCudaBuildResponse,
 	StartGgufDownloadData,
 	StartGgufDownloadResponse,
 	StartGitHubAuthData,
@@ -3384,3 +3401,103 @@ export const listInferenceProfilesOptions = (options?: Options<ListInferenceProf
 		},
 		queryKey: listInferenceProfilesQueryKey(options),
 	});
+
+export const getCudaBuildPrerequisitesQueryKey = (options?: Options<GetCudaBuildPrerequisitesData>) =>
+	createQueryKey("getCudaBuildPrerequisites", options);
+
+export const getCudaBuildPrerequisitesOptions = (options?: Options<GetCudaBuildPrerequisitesData>) =>
+	queryOptions<
+		GetCudaBuildPrerequisitesResponse,
+		AxiosError<DefaultError>,
+		GetCudaBuildPrerequisitesResponse,
+		ReturnType<typeof getCudaBuildPrerequisitesQueryKey>
+	>({
+		queryFn: async ({ queryKey, signal }) => {
+			const { data } = await getCudaBuildPrerequisites({
+				...options,
+				...queryKey[0],
+				signal,
+				throwOnError: true,
+			});
+			return data;
+		},
+		queryKey: getCudaBuildPrerequisitesQueryKey(options),
+	});
+
+export const startCudaBuildMutation = (
+	options?: Partial<Options<StartCudaBuildData>>,
+): UseMutationOptions<StartCudaBuildResponse, AxiosError<StartCudaBuildError>, Options<StartCudaBuildData>> => {
+	const mutationOptions: UseMutationOptions<
+		StartCudaBuildResponse,
+		AxiosError<StartCudaBuildError>,
+		Options<StartCudaBuildData>
+	> = {
+		mutationFn: async (fnOptions) => {
+			const { data } = await startCudaBuild({
+				...options,
+				...fnOptions,
+				throwOnError: true,
+			});
+			return data;
+		},
+	};
+	return mutationOptions;
+};
+
+export const getCudaBuildStatusQueryKey = (options?: Options<GetCudaBuildStatusData>) =>
+	createQueryKey("getCudaBuildStatus", options);
+
+export const getCudaBuildStatusOptions = (options?: Options<GetCudaBuildStatusData>) =>
+	queryOptions<
+		GetCudaBuildStatusResponse,
+		AxiosError<DefaultError>,
+		GetCudaBuildStatusResponse,
+		ReturnType<typeof getCudaBuildStatusQueryKey>
+	>({
+		queryFn: async ({ queryKey, signal }) => {
+			const { data } = await getCudaBuildStatus({
+				...options,
+				...queryKey[0],
+				signal,
+				throwOnError: true,
+			});
+			return data;
+		},
+		queryKey: getCudaBuildStatusQueryKey(options),
+	});
+
+export const cancelCudaBuildMutation = (
+	options?: Partial<Options<CancelCudaBuildData>>,
+): UseMutationOptions<CancelCudaBuildResponse, AxiosError<DefaultError>, Options<CancelCudaBuildData>> => {
+	const mutationOptions: UseMutationOptions<CancelCudaBuildResponse, AxiosError<DefaultError>, Options<CancelCudaBuildData>> = {
+		mutationFn: async (fnOptions) => {
+			const { data } = await cancelCudaBuild({
+				...options,
+				...fnOptions,
+				throwOnError: true,
+			});
+			return data;
+		},
+	};
+	return mutationOptions;
+};
+
+export const removeCudaBuildMutation = (
+	options?: Partial<Options<RemoveCudaBuildData>>,
+): UseMutationOptions<RemoveCudaBuildResponse, AxiosError<RemoveCudaBuildError>, Options<RemoveCudaBuildData>> => {
+	const mutationOptions: UseMutationOptions<
+		RemoveCudaBuildResponse,
+		AxiosError<RemoveCudaBuildError>,
+		Options<RemoveCudaBuildData>
+	> = {
+		mutationFn: async (fnOptions) => {
+			const { data } = await removeCudaBuild({
+				...options,
+				...fnOptions,
+				throwOnError: true,
+			});
+			return data;
+		},
+	};
+	return mutationOptions;
+};

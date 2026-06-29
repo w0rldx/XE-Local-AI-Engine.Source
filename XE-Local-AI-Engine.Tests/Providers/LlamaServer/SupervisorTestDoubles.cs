@@ -157,6 +157,16 @@ internal sealed class FakeBinaryManager : ILlamaCppBinaryManager
     {
         return Task.FromResult(new LlamaBinary("/fake/bin/llama-server", tag, variant, IsPinnedFallback: false));
     }
+
+    public Task<InstalledRuntimeState> AdoptCudaSourceBuildAsync(string buildBinDir, string tag, CancellationToken ct)
+    {
+        return Task.FromResult(new InstalledRuntimeState(tag, "(source-build:cuda)", new string('a', 64), GpuVariant.Cuda, DateTimeOffset.UtcNow, buildBinDir));
+    }
+
+    public Task RemoveCudaSourceBuildAsync(CancellationToken ct)
+    {
+        return Task.CompletedTask;
+    }
 }
 
 /// <summary>Variant selector returning a fixed variant; never probes hardware.</summary>

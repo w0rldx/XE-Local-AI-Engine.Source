@@ -13,6 +13,7 @@ import {
 import { withResponseValidation } from "@/core/api/ResponseValidation";
 import { useDeveloperModeStore } from "@/core/dev-tools/stores/DeveloperModeStore";
 import { toast } from "@/core/ui/notifications/Toast";
+import { CudaBuildCard } from "@/features/node-settings/components/CudaBuildCard";
 import { HfTokenPanel } from "@/features/node-settings/components/HfTokenPanel";
 import { LlamaCppUpdaterPanel } from "@/features/node-settings/components/LlamaCppUpdaterPanel";
 import { NodeSettingsFieldsCard } from "@/features/node-settings/components/NodeSettingsFieldsCard";
@@ -237,6 +238,8 @@ export function NodeSettings() {
 				</Card>
 
 				<LlamaCppUpdaterPanel />
+
+				<CudaBuildCard />
 
 				<NodeSettingsFieldsCard
 					form={fieldsForm}

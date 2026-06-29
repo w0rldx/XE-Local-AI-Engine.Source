@@ -62,6 +62,12 @@ vi.mock("@/core/api/ResponseValidation", () => ({
 	withResponseValidation: (x: unknown) => x,
 }));
 
+// The CUDA build card owns its own data layer (CUDA-build SDK endpoints + a SignalR hub) and has its own dedicated
+// test; stub it to null here so the developer-mode-switch tests stay isolated to the page composition.
+vi.mock("@/features/node-settings/components/CudaBuildCard", () => ({
+	CudaBuildCard: () => null,
+}));
+
 describe("NodeSettings developer-mode switch", () => {
 	beforeEach(() => {
 		localStorage.clear();
