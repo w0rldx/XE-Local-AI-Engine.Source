@@ -21,10 +21,10 @@
     <PackageVersion Include="CommunityToolkit.Aspire.Hosting.Ollama" Version="13.4.0" />
     <PackageVersion Include="CommunityToolkit.Aspire.Hosting.Sqlite" Version="13.4.0" />
     <PackageVersion Include="CommunityToolkit.Aspire.OllamaSharp" Version="13.4.0" />
-    <PackageVersion Include="FastEndpoints" Version="8.1.0" />
-    <PackageVersion Include="FastEndpoints.Swagger" Version="8.1.0" />
+    <PackageVersion Include="FastEndpoints" Version="8.2.0" />
+    <PackageVersion Include="FastEndpoints.Swagger" Version="8.2.0" />
     <PackageVersion Include="BouncyCastle.Cryptography" Version="2.6.2" />
-    <PackageVersion Include="Meziantou.Analyzer" Version="3.0.110" />
+    <PackageVersion Include="Meziantou.Analyzer" Version="3.0.117" />
     <!-- Architecture conformance tests (layer-dependency direction). Test-project only. -->
     <PackageVersion Include="NetArchTest.Rules" Version="1.3.2" />
     <!-- Newest intended prerelease; banned-API hard wall (RS0030) over BannedSymbols.txt. -->
@@ -41,9 +41,9 @@
     <PackageVersion Include="Microsoft.Testing.Extensions.CodeCoverage" Version="18.8.0" />
     <PackageVersion Include="Microsoft.Testing.Extensions.TrxReport" Version="2.2.3" />
     <PackageVersion Include="Microsoft.Testing.Platform" Version="2.2.3" />
-    <PackageVersion Include="Microsoft.Playwright" Version="1.60.0" />
+    <PackageVersion Include="Microsoft.Playwright" Version="1.61.0" />
     <PackageVersion Include="OllamaSharp" Version="5.4.25" />
-    <PackageVersion Include="TUnit.Playwright" Version="1.56.18" />
+    <PackageVersion Include="TUnit.Playwright" Version="1.57.0" />
     <PackageVersion Include="Microsoft.Extensions.AI" Version="10.7.0" />
     <PackageVersion Include="Microsoft.Extensions.AI.Abstractions" Version="10.7.0" />
     <PackageVersion Include="Microsoft.Extensions.AI.OpenAI" Version="10.7.0" />
@@ -53,28 +53,28 @@
     <PackageVersion Include="Microsoft.Extensions.Options.DataAnnotations" Version="10.0.9" />
     <PackageVersion Include="Microsoft.Extensions.Options.ConfigurationExtensions" Version="10.0.9" />
     <PackageVersion Include="Microsoft.Extensions.Http.Resilience" Version="10.7.0" />
-    <PackageVersion Include="Microsoft.Agents.AI" Version="1.10.0" />
-    <PackageVersion Include="Microsoft.Agents.AI.Abstractions" Version="1.10.0" />
-    <PackageVersion Include="Microsoft.Agents.AI.Workflows" Version="1.10.0" />
-    <PackageVersion Include="Microsoft.Agents.AI.Hosting" Version="1.10.0-preview.260610.1" />
-    <PackageVersion Include="Microsoft.Agents.AI.Hosting.OpenAI" Version="1.10.0-alpha.260610.1" />
-    <PackageVersion Include="Microsoft.Agents.AI.DevUI" Version="1.10.0-preview.260610.1" />
+    <PackageVersion Include="Microsoft.Agents.AI" Version="1.11.1" />
+    <PackageVersion Include="Microsoft.Agents.AI.Abstractions" Version="1.11.1" />
+    <PackageVersion Include="Microsoft.Agents.AI.Workflows" Version="1.11.1" />
+    <PackageVersion Include="Microsoft.Agents.AI.Hosting" Version="1.11.1-preview.260625.1" />
+    <PackageVersion Include="Microsoft.Agents.AI.Hosting.OpenAI" Version="1.11.1-alpha.260625.1" />
+    <PackageVersion Include="Microsoft.Agents.AI.DevUI" Version="1.11.1-preview.260625.1" />
     <PackageVersion Include="Microsoft.Extensions.ServiceDiscovery" Version="10.7.0" />
     <PackageVersion Include="ModelContextProtocol" Version="1.4.0" />
     <PackageVersion Include="NSubstitute" Version="5.3.0" />
     <PackageVersion Include="NSec.Cryptography" Version="26.4.0" />
     <PackageVersion Include="OpenTelemetry.Exporter.OpenTelemetryProtocol" Version="1.16.0" />
     <PackageVersion Include="OpenTelemetry.Extensions.Hosting" Version="1.16.0" />
-    <PackageVersion Include="OpenTelemetry.Instrumentation.AspNetCore" Version="1.15.2" />
-    <PackageVersion Include="OpenTelemetry.Instrumentation.Http" Version="1.15.1" />
+    <PackageVersion Include="OpenTelemetry.Instrumentation.AspNetCore" Version="1.16.0" />
+    <PackageVersion Include="OpenTelemetry.Instrumentation.Http" Version="1.16.0" />
     <PackageVersion Include="OpenTelemetry.Instrumentation.Runtime" Version="1.15.1" />
-    <PackageVersion Include="Quartz" Version="3.18.1" />
-    <PackageVersion Include="Quartz.Extensions.Hosting" Version="3.18.1" />
-    <PackageVersion Include="Quartz.Plugins" Version="3.18.1" />
-    <PackageVersion Include="Quartz.Plugins.TimeZoneConverter" Version="3.18.1" />
-    <PackageVersion Include="Quartz.Serialization.SystemTextJson" Version="3.18.1" />
+    <PackageVersion Include="Quartz" Version="3.18.2" />
+    <PackageVersion Include="Quartz.Extensions.Hosting" Version="3.18.2" />
+    <PackageVersion Include="Quartz.Plugins" Version="3.18.2" />
+    <PackageVersion Include="Quartz.Plugins.TimeZoneConverter" Version="3.18.2" />
+    <PackageVersion Include="Quartz.Serialization.SystemTextJson" Version="3.18.2" />
     <PackageVersion Include="Serilog" Version="4.3.1" />
-    <PackageVersion Include="Scalar.AspNetCore" Version="2.16.4" />
+    <PackageVersion Include="Scalar.AspNetCore" Version="2.16.6" />
     <PackageVersion Include="Scrutor" Version="7.0.0" />
     <PackageVersion Include="Serilog.AspNetCore" Version="10.0.0" />
     <PackageVersion Include="Serilog.Enrichers.Environment" Version="3.0.1" />
@@ -95,7 +95,7 @@
     <PackageVersion Include="SQLitePCLRaw.lib.e_sqlite3" Version="3.50.3" />
     <PackageVersion Include="System.Numerics.Tensors" Version="10.0.9" />
     <PackageVersion Include="System.Security.Cryptography.ProtectedData" Version="10.0.9" />
-    <PackageVersion Include="TUnit" Version="1.56.18" />
+    <PackageVersion Include="TUnit" Version="1.57.0" />
     <PackageVersion Include="Velopack" Version="1.2.0" />
     <PackageVersion Include="YamlDotNet" Version="18.0.0" />
   </ItemGroup>
