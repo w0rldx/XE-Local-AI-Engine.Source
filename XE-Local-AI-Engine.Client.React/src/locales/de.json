@@ -777,7 +777,7 @@
 				}
 			},
 			"appKeys": {
-				"title": "App Keys",
+				"title": "App-Schlüssel",
 				"nameLabel": "Name",
 				"namePlaceholder": "z. B. API-Client Produktion",
 				"appsLabel": "Apps",
@@ -927,31 +927,31 @@
 					"vulkan": "Vulkan"
 				},
 				"updater": {
-					"refresh": "Check for updates",
-					"loading": "Resolving runtime status…",
-					"statusError": "Could not resolve the llama.cpp runtime status.",
-					"installed": "Installed",
-					"recommended": "Recommended",
-					"upstream": "Upstream latest",
+					"refresh": "Nach Updates suchen",
+					"loading": "Laufzeitstatus wird ermittelt…",
+					"statusError": "Der llama.cpp-Laufzeitstatus konnte nicht ermittelt werden.",
+					"installed": "Installiert",
+					"recommended": "Empfohlen",
+					"upstream": "Aktuellste Upstream-Version",
 					"devBadge": "Dev",
-					"offline": "Offline — using the cached / pinned runtime. Update checks are unavailable until the GitHub release API is reachable.",
-					"updateAvailable": "Update available",
-					"upToDate": "Up to date",
+					"offline": "Offline — die zwischengespeicherte / fixierte Laufzeit wird verwendet. Update-Prüfungen sind erst verfügbar, wenn die GitHub-Release-API erreichbar ist.",
+					"updateAvailable": "Update verfügbar",
+					"upToDate": "Aktuell",
 					"runningNotice": "{{count}} llama.cpp-Modell(e) aktiv — werfen Sie diese aus, bevor Sie die Laufzeit aktualisieren.",
 					"openLoadedModels": "Geladene Modelle öffnen",
-					"update": "Install recommended ({{tag}})",
-					"installUpstream": "Install upstream ({{tag}})",
-					"toastTitle": "Updating llama.cpp runtime",
-					"toastPreparing": "Downloading and verifying {{tag}}…",
-					"toastSuccess": "llama.cpp runtime updated to {{tag}}.",
-					"toastSuccessTitle": "Runtime updated",
-					"toastError": "Could not update the llama.cpp runtime.",
-					"toastErrorTitle": "Update failed"
+					"update": "Empfohlene Version installieren ({{tag}})",
+					"installUpstream": "Upstream-Version installieren ({{tag}})",
+					"toastTitle": "llama.cpp-Laufzeit wird aktualisiert",
+					"toastPreparing": "{{tag}} wird heruntergeladen und überprüft…",
+					"toastSuccess": "llama.cpp-Laufzeit auf {{tag}} aktualisiert.",
+					"toastSuccessTitle": "Laufzeit aktualisiert",
+					"toastError": "Die llama.cpp-Laufzeit konnte nicht aktualisiert werden.",
+					"toastErrorTitle": "Update fehlgeschlagen"
 				},
 				"updateBanner": {
-					"message": "A newer llama.cpp runtime ({{tag}}) is available.",
-					"review": "Review update",
-					"dismiss": "Dismiss"
+					"message": "Eine neuere llama.cpp-Laufzeit ({{tag}}) ist verfügbar.",
+					"review": "Update prüfen",
+					"dismiss": "Schließen"
 				}
 			},
 			"hfToken": {
@@ -968,85 +968,85 @@
 				"cleared": "Token gelöscht.",
 				"clearError": "Das Token konnte nicht gelöscht werden."
 			},
-			"saved": "Node settings saved. Capability reporting was requested for the worker connection.",
+			"saved": "Knoteneinstellungen gespeichert. Die Fähigkeitsabfrage wurde für die Worker-Verbindung angefordert.",
 			"fields": {
-				"save": "Save node settings",
-				"validationError": "Some settings are invalid. Fix the highlighted fields.",
-				"allowedRange": "Allowed range",
-				"seconds": "seconds",
-				"minutes": "minutes",
-				"bytesPositive": "A positive number of bytes.",
+				"save": "Knoteneinstellungen speichern",
+				"validationError": "Einige Einstellungen sind ungültig. Bitte die markierten Felder korrigieren.",
+				"allowedRange": "Zulässiger Bereich",
+				"seconds": "Sekunden",
+				"minutes": "Minuten",
+				"bytesPositive": "Eine positive Anzahl an Bytes.",
 				"errors": {
-					"range": "Enter a whole number within the allowed range.",
-					"format": "Must match the format b<number> (e.g. b9692).",
-					"url": "Enter a valid http:// or https:// URL.",
-					"invalid": "One or more entries are invalid.",
-					"positive": "Enter a positive whole number."
+					"range": "Bitte eine ganze Zahl innerhalb des zulässigen Bereichs eingeben.",
+					"format": "Muss dem Format b<Zahl> entsprechen (z. B. b9692).",
+					"url": "Bitte eine gültige http:// oder https:// URL eingeben.",
+					"invalid": "Eine oder mehrere Eingaben sind ungültig.",
+					"positive": "Bitte eine positive ganze Zahl eingeben."
 				},
 				"localChat": {
-					"title": "Local chat"
+					"title": "Lokaler Chat"
 				},
 				"defaultModelName": {
-					"label": "Default model",
-					"description": "The model used for local chat when none is selected. Leave blank to use the configured default."
+					"label": "Standardmodell",
+					"description": "Das Modell, das für den lokalen Chat verwendet wird, wenn keines ausgewählt ist. Leer lassen, um den konfigurierten Standard zu verwenden."
 				},
 				"enableTools": {
-					"label": "Enable tools",
-					"description": "Allow local chat agents to call tools."
+					"label": "Tools aktivieren",
+					"description": "Lokale Chat-Agenten dürfen Tools aufrufen."
 				},
 				"toolCapableModels": {
-					"label": "Tool-capable models",
-					"description": "Model names that support tool calling. Press Enter to add each name."
+					"label": "Tool-fähige Modelle",
+					"description": "Modellnamen, die Tool-Aufrufe unterstützen. Enter drücken, um jeden Namen hinzuzufügen."
 				},
 				"runtime": {
-					"title": "Local model runtime",
-					"tagHint": "The recommended llama.cpp version is managed in the llama.cpp runtime updates card above."
+					"title": "Lokale Modell-Laufzeit",
+					"tagHint": "Die empfohlene llama.cpp-Version wird in der Karte für llama.cpp-Laufzeit-Updates oben verwaltet."
 				},
 				"llamaMaxLoadedProcesses": {
-					"label": "Max loaded llama-server processes"
+					"label": "Max. geladene llama-server-Prozesse"
 				},
 				"llamaIdleTimeToLiveSeconds": {
-					"label": "Idle process time-to-live"
+					"label": "Leerlauf-Prozess-Lebensdauer"
 				},
 				"ollamaEndpoint": {
-					"label": "Ollama endpoint",
-					"description": "The Ollama API base URL. Applies after a restart."
+					"label": "Ollama-Endpunkt",
+					"description": "Die Basis-URL der Ollama-API. Gilt nach einem Neustart."
 				},
 				"huggingFace": {
 					"title": "Hugging Face"
 				},
 				"huggingFaceDefaultQuant": {
-					"label": "Default quantization",
-					"description": "Preferred GGUF quantization when downloading from Hugging Face (e.g. Q4_K_M)."
+					"label": "Standard-Quantisierung",
+					"description": "Bevorzugte GGUF-Quantisierung beim Herunterladen von Hugging Face (z. B. Q4_K_M)."
 				},
 				"worker": {
-					"title": "Worker limits"
+					"title": "Worker-Limits"
 				},
 				"maxResponseSizeMb": {
-					"label": "Max response size"
+					"label": "Maximale Antwortgröße"
 				},
 				"advanced": {
-					"title": "Advanced (developer)",
-					"description": "Low-level orchestration and AgentHome limits. Most changes apply after a restart.",
-					"samplingNote": "Node-level sampling defaults are a follow-up: configure sampling per message in chat for now."
+					"title": "Erweitert (Entwickler)",
+					"description": "Low-Level-Orchestrierung und AgentHome-Limits. Die meisten Änderungen werden nach einem Neustart wirksam.",
+					"samplingNote": "Sampling-Standardwerte auf Node-Ebene sind in Vorbereitung: Sampling vorerst pro Nachricht im Chat konfigurieren."
 				},
 				"orchestrationIdleTimeoutSeconds": {
-					"label": "Orchestration idle timeout"
+					"label": "Orchestrierungs-Leerlauf-Timeout"
 				},
 				"agentHomePrepareTimeoutSeconds": {
-					"label": "AgentHome prepare timeout"
+					"label": "AgentHome-Vorbereitungs-Timeout"
 				},
 				"agentHomeCommandTimeoutSeconds": {
-					"label": "AgentHome command timeout"
+					"label": "AgentHome-Befehls-Timeout"
 				},
 				"agentHomeMaxSelectedFolderBytes": {
-					"label": "AgentHome max selected folder size"
+					"label": "AgentHome max. ausgewählte Ordnergröße"
 				},
 				"agentHomeMaxPatchBytes": {
-					"label": "AgentHome max patch size"
+					"label": "AgentHome max. Patch-Größe"
 				},
 				"maxPendingToolCallAgeMinutes": {
-					"label": "Max pending tool-call age"
+					"label": "Max. ausstehende Tool-Aufruf-Dauer"
 				}
 			}
 		},
