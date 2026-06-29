@@ -49,14 +49,23 @@ function installJsdomEnvironmentMocks(): void {
 			dispatchEvent: vi.fn(),
 		})),
 	});
+	// Mantine's SegmentedControl uses FloatingIndicator, which depends on ResizeObserver.
+	Object.defineProperty(window, "ResizeObserver", {
+		writable: true,
+		value: class ResizeObserverMock {
+			observe = vi.fn();
+
+			unobserve = vi.fn();
+
+			disconnect = vi.fn();
+		},
+	});
 }
 
 function makeSettings(overrides: Partial<GetCloudSettingsResponse> = {}): GetCloudSettingsResponse {
 	return {
 		providerName: "AzureFoundry",
-		endpoint: null,
-		deploymentName: null,
-		hasStoredApiKey: false,
+		azureFoundry: { endpoint: null, authMode: "ApiKey", hasStoredApiKey: false, models: [] },
 		...overrides,
 	};
 }
@@ -73,7 +82,7 @@ function renderCloudSettings(): void {
 	render(ui);
 }
 
-describe("CloudSettings — lazy validation (generated hey-api data layer)", () => {
+describe("CloudSettings — Azure Foundry connection form (generated hey-api data layer)", () => {
 	beforeEach(() => {
 		installJsdomEnvironmentMocks();
 		generatedMock.getFn.mockResolvedValue(makeSettings());
@@ -96,13 +105,10 @@ describe("CloudSettings — lazy validation (generated hey-api data layer)", () 
 	it("shows no field errors on pristine first load", async () => {
 		renderCloudSettings();
 
-		// Wait for the query to settle (loading state gone).
 		await waitFor(() => expect(screen.queryByText(/Loading cloud settings/i)).toBeNull());
 
-		// No validation error text should be visible.
-		// Use exact error message strings so we don't match the PasswordInput description text.
 		expect(screen.queryByText("Enter an absolute HTTPS Azure OpenAI endpoint.")).toBeNull();
-		expect(screen.queryByText("Enter the Azure OpenAI deployment name.")).toBeNull();
+		expect(screen.queryByText("Add at least one deployment name.")).toBeNull();
 		expect(screen.queryByText("Enter the API key. Saved keys are never returned to this page.")).toBeNull();
 	});
 
@@ -110,67 +116,98 @@ describe("CloudSettings — lazy validation (generated hey-api data layer)", () 
 		renderCloudSettings();
 		await waitFor(() => expect(screen.queryByText(/Loading cloud settings/i)).toBeNull());
 
-		const endpointInput = screen.getByLabelText(/Azure OpenAI endpoint/i);
-		fireEvent.blur(endpointInput);
+		fireEvent.blur(screen.getByLabelText(/Azure OpenAI endpoint/i));
 
 		expect(screen.getByText("Enter an absolute HTTPS Azure OpenAI endpoint.")).toBeTruthy();
-		// Other fields not yet touched — still no errors.
-		expect(screen.queryByText("Enter the Azure OpenAI deployment name.")).toBeNull();
+		expect(screen.queryByText("Add at least one deployment name.")).toBeNull();
 		expect(screen.queryByText("Enter the API key. Saved keys are never returned to this page.")).toBeNull();
 	});
 
-	it("shows all field errors after blurring all fields", async () => {
+	it("hides the API-key field and drops its requirement when managed identity is selected", async () => {
 		renderCloudSettings();
 		await waitFor(() => expect(screen.queryByText(/Loading cloud settings/i)).toBeNull());
 
-		// Blur all three fields to mark them touched — this surfaces all validation errors.
-		fireEvent.blur(screen.getByLabelText(/Azure OpenAI endpoint/i));
-		fireEvent.blur(screen.getByLabelText(/Deployment name/i));
-		const apiKeyInput = screen.getByLabelText(/API key/i);
-		fireEvent.blur(apiKeyInput);
+		// The API key input is present in API-key mode (the default). Scope to the password input so the
+		// segmented control's "API key" option label does not also match.
+		expect(screen.getByLabelText("API key", { selector: 'input[type="password"]' })).toBeTruthy();
 
-		expect(screen.getByText("Enter an absolute HTTPS Azure OpenAI endpoint.")).toBeTruthy();
-		expect(screen.getByText("Enter the Azure OpenAI deployment name.")).toBeTruthy();
-		expect(screen.getByText("Enter the API key. Saved keys are never returned to this page.")).toBeTruthy();
+		// Switch to managed identity via the segmented control label.
+		fireEvent.click(screen.getByText("Managed identity"));
+
+		// The key field disappears and its hint is shown instead.
+		expect(screen.queryByLabelText("API key", { selector: 'input[type="password"]' })).toBeNull();
+		expect(screen.queryByText("Enter the API key. Saved keys are never returned to this page.")).toBeNull();
 	});
 
-	it("clears an error once the field has a valid value", async () => {
+	it("adds and removes deployment rows", async () => {
 		renderCloudSettings();
 		await waitFor(() => expect(screen.queryByText(/Loading cloud settings/i)).toBeNull());
 
-		const endpointInput = screen.getByLabelText(/Azure OpenAI endpoint/i);
-		fireEvent.blur(endpointInput);
-		expect(screen.getByText(/Enter an absolute HTTPS/i)).toBeTruthy();
+		// Fresh connection renders exactly one blank deployment row.
+		expect(screen.getAllByLabelText(/Deployment name/i)).toHaveLength(1);
 
-		// Type a valid HTTPS URL then blur again.
-		fireEvent.change(endpointInput, { target: { value: "https://example.openai.azure.com/" } });
-		fireEvent.blur(endpointInput);
+		fireEvent.click(screen.getByTestId("cloud-settings-add-model"));
+		expect(screen.getAllByLabelText(/Deployment name/i)).toHaveLength(2);
 
-		expect(screen.queryByText(/Enter an absolute HTTPS/i)).toBeNull();
+		fireEvent.click(screen.getByTestId("cloud-settings-remove-model-1"));
+		expect(screen.getAllByLabelText(/Deployment name/i)).toHaveLength(1);
 	});
 
-	it("saves through the generated mutation with the cloud settings body", async () => {
+	it("saves the nested Azure Foundry connection body", async () => {
 		generatedMock.getFn.mockResolvedValue(
-			makeSettings({ endpoint: "https://example.openai.azure.com/", deploymentName: "gpt-4o", hasStoredApiKey: true }),
+			makeSettings({
+				azureFoundry: {
+					endpoint: "https://example.openai.azure.com/",
+					authMode: "ApiKey",
+					hasStoredApiKey: true,
+					models: [{ deploymentName: "gpt-4o", displayLabel: null }],
+				},
+			}),
 		);
 		renderCloudSettings();
 		await waitFor(() => expect(screen.queryByText(/Loading cloud settings/i)).toBeNull());
 
-		// Provide a valid API key so the save button enables (endpoint + deployment come from the loaded settings).
-		fireEvent.change(screen.getByLabelText(/API key/i), { target: { value: "secret-key" } });
+		// Provide a valid API key so the save enables (endpoint + model come from the loaded settings).
+		fireEvent.change(screen.getByLabelText("API key", { selector: 'input[type="password"]' }), {
+			target: { value: "secret-key" },
+		});
 
 		fireEvent.click(screen.getByRole("button", { name: /save cloud settings/i }));
 
 		await waitFor(() => {
-			// TanStack passes a second context arg to mutationFn; assert only the request variables.
 			expect(generatedMock.saveFn.mock.calls[0]?.[0]).toEqual({
 				body: {
 					providerName: "AzureFoundry",
 					endpoint: "https://example.openai.azure.com/",
+					authMode: "ApiKey",
 					apiKey: "secret-key",
-					deploymentName: "gpt-4o",
+					models: [{ deploymentName: "gpt-4o" }],
 				},
 			});
+		});
+	});
+
+	it("omits the API key from the save body in managed-identity mode", async () => {
+		generatedMock.getFn.mockResolvedValue(
+			makeSettings({
+				azureFoundry: {
+					endpoint: "https://example.openai.azure.com/",
+					authMode: "ManagedIdentity",
+					hasStoredApiKey: false,
+					models: [{ deploymentName: "gpt-4o", displayLabel: null }],
+				},
+			}),
+		);
+		renderCloudSettings();
+		await waitFor(() => expect(screen.queryByText(/Loading cloud settings/i)).toBeNull());
+
+		// No key field in MI mode — the save button is already enabled.
+		fireEvent.click(screen.getByRole("button", { name: /save cloud settings/i }));
+
+		await waitFor(() => {
+			const body = generatedMock.saveFn.mock.calls[0]?.[0] as { body: Record<string, unknown> };
+			expect(body.body["authMode"]).toBe("ManagedIdentity");
+			expect(body.body["apiKey"]).toBeUndefined();
 		});
 	});
 });

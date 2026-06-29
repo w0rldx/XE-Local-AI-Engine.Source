@@ -3,6 +3,7 @@ namespace XE_Local_AI_Engine.Client.Endpoints.LocalModels.V1.Mappers;
 using OllamaSharp.Models;
 using XE_Local_AI_Engine.Client.Persistence;
 using XE_Local_AI_Engine.Client.Services.Chat;
+using XE_Local_AI_Engine.Client.Services.CloudProviders;
 using XE_Local_AI_Engine.Providers.Abstractions;
 using XE_Local_AI_Engine.Providers.Abstractions.Contracts;
 using XE_Local_AI_Engine.Providers.CodexOAuth;
@@ -125,6 +126,36 @@ internal static class LocalModelsMapper
                                     IsOverridden = false
                                 })
                                 .ToArray();
+    }
+
+    /// <summary>
+    ///     Maps a stored Azure Foundry connection's manually-added deployments to model-list entries tagged
+    ///     <see cref="LocalModelProviders.AzureFoundry" />. The endpoint passes these only when an Azure connection is
+    ///     stored. Each entry advertises the Azure provider's declared capability matrix
+    ///     (<see cref="AzureFoundryProviderCapabilities.V0" />) rather than an Ollama classification (the local runtime
+    ///     has never seen these deployment ids). The deployment name is the model id; an optional display label rides
+    ///     along. Size/quantization fields stay null — they are local-runtime concepts.
+    /// </summary>
+    public static IReadOnlyList<LocalModelResponse> ToAzureFoundryCloudModelResponses(StoredAzureFoundryConnection connection,
+        string? selectedModelName)
+    {
+        ArgumentNullException.ThrowIfNull(connection);
+
+        return connection.Models
+                         .Where(static model => !string.IsNullOrWhiteSpace(model.DeploymentName))
+                         .Select(model => new LocalModelResponse
+                         {
+                             ModelName = model.DeploymentName,
+                             Provider = LocalModelProviders.AzureFoundry,
+                             IsSelected = string.Equals(model.DeploymentName, selectedModelName, StringComparison.OrdinalIgnoreCase),
+                             Kind = ModelKind.Chat.ToString(),
+                             DetectedKind = ModelKind.Chat.ToString(),
+                             Capabilities = [],
+                             IsReasoningCapable = false,
+                             IsToolCapable = AzureFoundryProviderCapabilities.V0.SupportsToolCalling,
+                             IsOverridden = false
+                         })
+                         .ToArray();
     }
 
     public static ListLocalModelsResponse ToUnavailableListResponse(string? selectedModelName,

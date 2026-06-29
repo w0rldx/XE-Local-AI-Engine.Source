@@ -136,6 +136,45 @@ describe("ModelSelectorCard", () => {
 		expect(egressCue.textContent).toContain("Sent to OpenAI");
 	});
 
+	it("renders a separate Azure Foundry group with its own egress cue for AzureFoundry-tagged options", async () => {
+		const codexOption: ModelOption = {
+			value: "codex-mini-latest",
+			label: "Codex Mini",
+			displayName: "Codex Mini",
+			isAvailable: true,
+			isCloud: true,
+			provider: "CodexOAuth",
+		};
+		const azureOption: ModelOption = {
+			value: "gpt-4o",
+			label: "gpt-4o",
+			displayName: "gpt-4o",
+			isAvailable: true,
+			isCloud: true,
+			provider: "AzureFoundry",
+		};
+
+		renderWithProviders(
+			<ModelSelectorCard
+				modelOptions={[localDefaultOption()]}
+				cloudModelOptions={[codexOption, azureOption]}
+				selectedModel={localDefaultModelValue}
+				onModelChange={vi.fn()}
+			/>,
+		);
+
+		fireEvent.click(screen.getByTestId("chat-model-selector-trigger"));
+
+		// Both groups render their entry.
+		expect(await screen.findByTestId("chat-model-selector-option-codex-mini-latest")).toBeTruthy();
+		expect(await screen.findByTestId("chat-model-selector-option-gpt-4o")).toBeTruthy();
+
+		// The Azure group label (with its count suffix) and its dedicated egress cue are present.
+		expect(screen.getByText(/Cloud \(Azure Foundry\)/)).toBeTruthy();
+		const azureEgress = await screen.findByTestId("chat-model-selector-cloud-egress-gpt-4o");
+		expect(azureEgress.textContent).toContain("Sent to Azure");
+	});
+
 	it("calls onModelChange with the cloud model id when a cloud option is selected", async () => {
 		const onModelChange = vi.fn();
 		const cloudOption: ModelOption = {

@@ -1060,17 +1060,16 @@ export type XeLocalAiEngineClientEndpointsConnectionV1ConnectionStatusResponse =
 };
 
 export type XeLocalAiEngineClientEndpointsCloudSettingsV1CloudSettingsResponse = {
-	providerName?: string;
-	endpoint?: string | null;
-	deploymentName?: string | null;
-	hasStoredApiKey?: boolean;
+	providerName: string;
+	azureFoundry?: XeLocalAiEngineClientEndpointsCloudSettingsV1AzureFoundrySettingsResponse | null;
 };
 
 export type XeLocalAiEngineClientEndpointsCloudSettingsV1SaveCloudSettingsRequest = {
 	providerName?: string;
 	endpoint: string;
-	apiKey: string;
-	deploymentName: string;
+	authMode?: string;
+	apiKey?: string | null;
+	models?: Array<XeLocalAiEngineClientEndpointsCloudSettingsV1AzureFoundryModelDto>;
 };
 
 export type XeLocalAiEngineClientEndpointsCloudCodexV1CodexLoginResponse = {
@@ -1659,6 +1658,18 @@ export type XeLocalAiEngineClientEndpointsModelFitV1CudaBuildBlockedResponse = {
 	reason?: string;
 	message?: string;
 	runningProcessCount?: number | null;
+};
+
+export type XeLocalAiEngineClientEndpointsCloudSettingsV1AzureFoundrySettingsResponse = {
+	endpoint?: string | null;
+	authMode: string;
+	hasStoredApiKey?: boolean;
+	models?: Array<XeLocalAiEngineClientEndpointsCloudSettingsV1AzureFoundryModelDto>;
+};
+
+export type XeLocalAiEngineClientEndpointsCloudSettingsV1AzureFoundryModelDto = {
+	deploymentName: string;
+	displayLabel?: string | null;
 };
 
 export type GetTutorialStateData = {

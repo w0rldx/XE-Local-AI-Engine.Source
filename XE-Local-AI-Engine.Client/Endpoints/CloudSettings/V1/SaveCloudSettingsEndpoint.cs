@@ -23,10 +23,10 @@ public sealed class SaveCloudSettingsEndpoint(
 
     public override async Task HandleAsync(SaveCloudSettingsRequest req, CancellationToken ct)
     {
-        var credentials = req.ToStoredCredentials();
-        await _cloudCredentialStore.SaveAsync(credentials, ct).ConfigureAwait(false);
+        var config = req.ToStoredConfig();
+        await _cloudCredentialStore.SaveConfigAsync(config, ct).ConfigureAwait(false);
         await TryReportCapabilitiesAsync(ct).ConfigureAwait(false);
-        await Send.OkAsync(credentials.ToResponse(), ct).ConfigureAwait(false);
+        await Send.OkAsync(config.ToResponse(), ct).ConfigureAwait(false);
     }
 
     private async Task TryReportCapabilitiesAsync(CancellationToken cancellationToken)

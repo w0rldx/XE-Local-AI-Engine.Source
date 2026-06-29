@@ -371,7 +371,7 @@ public sealed class PreviewWorkflowExecutionServiceTests
     {
         public bool WasCalled { get; private set; }
 
-        public IChatClient Create(StoredCloudCredentials credentials)
+        public IChatClient Create(StoredAzureFoundryConnection connection, string deploymentName)
         {
             WasCalled = true;
             throw new InvalidOperationException("The cloud chat-client factory must never be reached by the preview run path.");

@@ -54,13 +54,22 @@ internal sealed class CapabilityReportComposer
         return new HardwareSnapshot(ramMb, gpuInfo, cpuClass);
     }
 
-    /// <summary>Assembles the capability payload for an Azure Foundry cloud node.</summary>
-    public static ClientCapabilities ComposeCloud(StoredCloudCredentials credentials,
+    /// <summary>
+    ///     Assembles the capability payload for an Azure Foundry cloud node from the stored connection. Surfaces every
+    ///     configured deployment (multi-model) and works for both API-key and managed-identity auth (no key needed).
+    /// </summary>
+    public static ClientCapabilities ComposeCloud(StoredAzureFoundryConnection connection,
         StoredNodeSettings nodeSettings,
         HardwareSnapshot hardware,
         DateTimeOffset detectedAt)
     {
-        var deploymentName = credentials.DeploymentName.Trim();
+        ArgumentNullException.ThrowIfNull(connection);
+
+        var deploymentNames = connection.Models
+                                        .Select(static model => model.DeploymentName?.Trim() ?? string.Empty)
+                                        .Where(static name => !string.IsNullOrWhiteSpace(name))
+                                        .ToArray();
+        var activeModel = deploymentNames.Length > 0 ? deploymentNames[0] : string.Empty;
 
         return new ClientCapabilities
         {
@@ -76,18 +85,18 @@ internal sealed class CapabilityReportComposer
             ManagementMode = "unknown",
             LastCapabilityReportAt = detectedAt,
             Diagnostics = NormalizeDiagnostics(BuildHardwareDiagnostics(hardware.GpuInfo)),
-            InstalledModels = [deploymentName],
+            InstalledModels = deploymentNames,
             InstalledModelMetadata =
             [
-                new ClientModelMetadata
+                .. deploymentNames.Select(static name => new ClientModelMetadata
                 {
-                    Name = deploymentName,
+                    Name = name,
                     Digest = null,
                     MaxContextTokens = null
-                }
+                })
             ],
             SupportedCapabilities = ["cloud", "text"],
-            ActiveModel = deploymentName,
+            ActiveModel = activeModel,
             ActiveModelExpiresAt = null,
             MaxMessageRequestTimeoutSeconds = nodeSettings.MaxMessageRequestTimeoutSeconds
         };

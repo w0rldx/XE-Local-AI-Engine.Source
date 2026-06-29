@@ -508,7 +508,34 @@ public sealed class CapabilityReporterTests
             return Task.FromResult(_credentials);
         }
 
+        public Task<StoredCloudProviderConfig?> LoadConfigAsync(CancellationToken cancellationToken = default)
+        {
+            if (_credentials is null)
+            {
+                return Task.FromResult<StoredCloudProviderConfig?>(null);
+            }
+
+            var config = new StoredCloudProviderConfig
+            {
+                ProviderName = _credentials.ProviderName,
+                AzureFoundry = new StoredAzureFoundryConnection
+                {
+                    Endpoint = _credentials.Endpoint,
+                    AuthMode = AzureFoundryAuthMode.ApiKey,
+                    ApiKey = _credentials.ApiKey,
+                    Models = [new StoredAzureFoundryModel { DeploymentName = _credentials.DeploymentName, DisplayLabel = _credentials.DeploymentName }],
+                },
+            };
+
+            return Task.FromResult<StoredCloudProviderConfig?>(config);
+        }
+
         public Task SaveAsync(StoredCloudCredentials credentials, CancellationToken cancellationToken = default)
+        {
+            return Task.CompletedTask;
+        }
+
+        public Task SaveConfigAsync(StoredCloudProviderConfig config, CancellationToken cancellationToken = default)
         {
             return Task.CompletedTask;
         }

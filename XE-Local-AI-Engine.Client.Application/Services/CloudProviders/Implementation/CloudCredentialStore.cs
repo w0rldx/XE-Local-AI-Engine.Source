@@ -1,5 +1,6 @@
 namespace XE_Local_AI_Engine.Client.Services.CloudProviders.Implementation;
 
+using System.Linq;
 using System.Runtime.Versioning;
 using System.Security.AccessControl;
 using System.Security.Cryptography;
@@ -35,7 +36,7 @@ public sealed class CloudCredentialStore : ICloudCredentialStore, IDisposable
         _logger = logger;
     }
 
-    public async Task<StoredCloudCredentials?> LoadAsync(CancellationToken cancellationToken = default)
+    public async Task<StoredCloudProviderConfig?> LoadConfigAsync(CancellationToken cancellationToken = default)
     {
         await _lock.WaitAsync(cancellationToken).ConfigureAwait(false);
         try
@@ -45,11 +46,11 @@ public sealed class CloudCredentialStore : ICloudCredentialStore, IDisposable
                 return null;
             }
 
+            byte[] payload;
             try
             {
                 var protectedPayload = await File.ReadAllBytesAsync(_credentialsPath, cancellationToken).ConfigureAwait(false);
-                var payload = _protector.Unprotect(protectedPayload);
-                return DeserializeCredentials(payload);
+                payload = _protector.Unprotect(protectedPayload);
             }
             catch (CryptographicException exception)
             {
@@ -57,15 +58,21 @@ public sealed class CloudCredentialStore : ICloudCredentialStore, IDisposable
                 ClearCredentialsFileBestEffort();
                 return null;
             }
+            catch (IOException exception)
+            {
+                _logger.LogWarning(exception, "Cloud credentials could not be read from disk.");
+                return null;
+            }
+
+            // Shape-detect before any destructive catch so a liftable legacy payload is never deleted (HIGH-2).
+            try
+            {
+                return ParseConfigPayload(payload);
+            }
             catch (JsonException exception)
             {
                 _logger.LogWarning(exception, "Cloud credentials could not be deserialized. Clearing stored cloud credentials.");
                 ClearCredentialsFileBestEffort();
-                return null;
-            }
-            catch (IOException exception)
-            {
-                _logger.LogWarning(exception, "Cloud credentials could not be read from disk.");
                 return null;
             }
         }
@@ -75,12 +82,12 @@ public sealed class CloudCredentialStore : ICloudCredentialStore, IDisposable
         }
     }
 
-    public async Task SaveAsync(StoredCloudCredentials credentials, CancellationToken cancellationToken = default)
+    public async Task SaveConfigAsync(StoredCloudProviderConfig config, CancellationToken cancellationToken = default)
     {
-        ArgumentNullException.ThrowIfNull(credentials);
-        ValidateCredentials(credentials);
+        ArgumentNullException.ThrowIfNull(config);
+        ValidateConfig(config);
 
-        var payload = JsonSerializer.SerializeToUtf8Bytes(credentials, SerializerOptions);
+        var payload = JsonSerializer.SerializeToUtf8Bytes(config, SerializerOptions);
         var protectedPayload = _protector.Protect(payload);
 
         await _lock.WaitAsync(cancellationToken).ConfigureAwait(false);
@@ -93,6 +100,57 @@ public sealed class CloudCredentialStore : ICloudCredentialStore, IDisposable
         {
             _lock.Release();
         }
+    }
+
+    public async Task<StoredCloudCredentials?> LoadAsync(CancellationToken cancellationToken = default)
+    {
+        var config = await LoadConfigAsync(cancellationToken).ConfigureAwait(false);
+        if (config?.AzureFoundry is not { } connection)
+        {
+            return null;
+        }
+
+        var firstModel = connection.Models.FirstOrDefault(model => !string.IsNullOrWhiteSpace(model.DeploymentName))
+            ?? (connection.Models.Count > 0 ? connection.Models[0] : null);
+        if (firstModel is null)
+        {
+            return null;
+        }
+
+        return new StoredCloudCredentials
+        {
+            ProviderName = config.ProviderName,
+            Endpoint = connection.Endpoint,
+            ApiKey = connection.ApiKey ?? string.Empty,
+            DeploymentName = firstModel.DeploymentName,
+        };
+    }
+
+    public async Task SaveAsync(StoredCloudCredentials credentials, CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(credentials);
+
+        var config = new StoredCloudProviderConfig
+        {
+            SchemaVersion = 2,
+            ProviderName = credentials.ProviderName,
+            AzureFoundry = new StoredAzureFoundryConnection
+            {
+                Endpoint = credentials.Endpoint,
+                AuthMode = AzureFoundryAuthMode.ApiKey,
+                ApiKey = credentials.ApiKey,
+                Models =
+                [
+                    new StoredAzureFoundryModel
+                    {
+                        DeploymentName = credentials.DeploymentName,
+                        DisplayLabel = credentials.DeploymentName,
+                    },
+                ],
+            },
+        };
+
+        await SaveConfigAsync(config, cancellationToken).ConfigureAwait(false);
     }
 
     public async Task ClearAsync(CancellationToken cancellationToken = default)
@@ -116,43 +174,120 @@ public sealed class CloudCredentialStore : ICloudCredentialStore, IDisposable
         _lock.Dispose();
     }
 
-    private static StoredCloudCredentials DeserializeCredentials(byte[] payload)
+    private static StoredCloudProviderConfig? ParseConfigPayload(byte[] payload)
     {
-        var credentials = JsonSerializer.Deserialize<StoredCloudCredentials>(payload, SerializerOptions);
-        return credentials ?? throw new InvalidOperationException("Stored cloud credentials could not be deserialized.");
+        using var document = JsonDocument.Parse(payload);
+        var root = document.RootElement;
+        if (root.ValueKind != JsonValueKind.Object)
+        {
+            throw new JsonException("Stored cloud provider config root was not a JSON object.");
+        }
+
+        // v2 canonical shape: an azureFoundry object or an explicit schemaVersion is present.
+        if (HasProperty(root, "azureFoundry") || HasProperty(root, "schemaVersion"))
+        {
+            return JsonSerializer.Deserialize<StoredCloudProviderConfig>(payload, SerializerOptions)
+                ?? throw new JsonException("Stored cloud provider config could not be deserialized.");
+        }
+
+        // Legacy v1 shape: a flat { providerName, endpoint, apiKey, deploymentName } credential blob.
+        if (HasProperty(root, "deploymentName") || HasProperty(root, "apiKey") || HasProperty(root, "endpoint"))
+        {
+            return LiftLegacyV1(root);
+        }
+
+        throw new JsonException("Stored cloud provider config shape was not recognized.");
     }
 
-    private static void ValidateCredentials(StoredCloudCredentials credentials)
+    private static StoredCloudProviderConfig LiftLegacyV1(JsonElement root)
     {
-        if (string.IsNullOrWhiteSpace(credentials.ProviderName))
+        var providerName = GetString(root, "providerName") ?? CloudProviderOptions.ProviderAzureFoundry;
+        var endpoint = GetString(root, "endpoint") ?? string.Empty;
+        var apiKey = GetString(root, "apiKey");
+        var deploymentName = GetString(root, "deploymentName") ?? string.Empty;
+
+        return new StoredCloudProviderConfig
         {
-            throw new ArgumentException("Stored cloud credential provider name must be provided.", nameof(credentials));
+            SchemaVersion = 2,
+            ProviderName = providerName,
+            AzureFoundry = new StoredAzureFoundryConnection
+            {
+                Endpoint = endpoint,
+                AuthMode = AzureFoundryAuthMode.ApiKey,
+                ApiKey = apiKey,
+                Models =
+                [
+                    new StoredAzureFoundryModel
+                    {
+                        DeploymentName = deploymentName,
+                        DisplayLabel = deploymentName,
+                    },
+                ],
+            },
+        };
+    }
+
+    private static bool HasProperty(JsonElement element, string propertyName)
+    {
+        return element.EnumerateObject()
+            .Any(property => string.Equals(property.Name, propertyName, StringComparison.OrdinalIgnoreCase));
+    }
+
+    private static string? GetString(JsonElement element, string propertyName)
+    {
+        foreach (var property in element.EnumerateObject())
+        {
+            if (string.Equals(property.Name, propertyName, StringComparison.OrdinalIgnoreCase)
+                && property.Value.ValueKind == JsonValueKind.String)
+            {
+                return property.Value.GetString();
+            }
         }
 
-        if (string.IsNullOrWhiteSpace(credentials.Endpoint))
+        return null;
+    }
+
+    private static void ValidateConfig(StoredCloudProviderConfig config)
+    {
+        if (string.IsNullOrWhiteSpace(config.ProviderName))
         {
-            throw new ArgumentException("Stored cloud credential endpoint must be provided.", nameof(credentials));
+            throw new ArgumentException("Stored cloud provider name must be provided.", nameof(config));
         }
 
-        if (string.IsNullOrWhiteSpace(credentials.ApiKey))
+        if (!string.Equals(config.ProviderName, CloudProviderOptions.ProviderAzureFoundry, StringComparison.OrdinalIgnoreCase))
         {
-            throw new ArgumentException("Stored cloud credential API key must be provided.", nameof(credentials));
+            throw new ArgumentException("Stored cloud provider is not supported.", nameof(config));
         }
 
-        if (string.IsNullOrWhiteSpace(credentials.DeploymentName))
+        if (config.AzureFoundry is not { } connection)
         {
-            throw new ArgumentException("Stored cloud credential deployment name must be provided.", nameof(credentials));
+            throw new ArgumentException("Stored cloud provider config must contain an Azure Foundry connection.", nameof(config));
         }
 
-        if (!string.Equals(credentials.ProviderName, CloudProviderOptions.ProviderAzureFoundry, StringComparison.OrdinalIgnoreCase))
+        if (string.IsNullOrWhiteSpace(connection.Endpoint))
         {
-            throw new ArgumentException("Stored cloud credential provider is not supported.", nameof(credentials));
+            throw new ArgumentException("Stored cloud provider endpoint must be provided.", nameof(config));
         }
 
-        if (!Uri.TryCreate(credentials.Endpoint, UriKind.Absolute, out var endpoint)
+        if (!Uri.TryCreate(connection.Endpoint, UriKind.Absolute, out var endpoint)
             || !string.Equals(endpoint.Scheme, Uri.UriSchemeHttps, StringComparison.OrdinalIgnoreCase))
         {
-            throw new ArgumentException("Stored cloud credential endpoint must be an absolute HTTPS URL.", nameof(credentials));
+            throw new ArgumentException("Stored cloud provider endpoint must be an absolute HTTPS URL.", nameof(config));
+        }
+
+        if (!AzureFoundryEndpoints.IsAllowedHost(endpoint))
+        {
+            throw new ArgumentException("Stored cloud provider endpoint host is not an allowed Azure endpoint.", nameof(config));
+        }
+
+        if (!connection.Models.Any(model => !string.IsNullOrWhiteSpace(model.DeploymentName)))
+        {
+            throw new ArgumentException("Stored cloud provider connection must contain at least one model with a deployment name.", nameof(config));
+        }
+
+        if (connection.AuthMode == AzureFoundryAuthMode.ApiKey && string.IsNullOrWhiteSpace(connection.ApiKey))
+        {
+            throw new ArgumentException("Stored cloud provider API key must be provided when the auth mode is API key.", nameof(config));
         }
     }
 

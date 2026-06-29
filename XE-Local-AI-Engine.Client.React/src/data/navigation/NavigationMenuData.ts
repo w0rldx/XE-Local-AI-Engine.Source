@@ -84,9 +84,9 @@ const allNavigationLinks: INavigationLink[] = [
 			{ translationKey: "navigation.loadedModels", to: nodeRoutePaths.loadedModels, capability: "loadedModels" },
 		],
 	},
-	// Settings group: node settings (always) + cloud settings (gated on cloudSettings capability — hidden in
-	// local-only/LocalTester builds where no CentralPlatform:BaseUrl is configured). When cloudSettings is
-	// off the group collapses to just Node Settings and still renders (group never becomes empty).
+	// Settings group: node settings (always) + cloud settings (gated on cloudSettings capability, which is on by
+	// default because Cloud Settings hosts the local cloud-provider credentials — Codex OAuth + Azure Foundry —
+	// and needs no Central Platform pairing). The group always renders (Node Settings + Diagnostics are ungated).
 	{
 		id: "settings",
 		icon: IconSettings,

@@ -3,7 +3,6 @@ namespace XE_Local_AI_Engine.Client.Services.CloudProviders.Implementation;
 using System.Globalization;
 using Microsoft.Extensions.AI;
 using Microsoft.Extensions.Options;
-using XE_Local_AI_Engine.Client.Configuration;
 using XE_Local_AI_Engine.Client.Services.NodeSettings;
 using XE_Local_AI_Engine.Providers.CodexOAuth.Auth;
 using XE_Local_AI_Engine.Providers.CodexOAuth.Contracts;
@@ -13,11 +12,12 @@ using XE_Local_AI_Engine.Providers.CodexOAuth.Options;
 /// <summary>
 ///     Resolves the active cloud chat client on demand.
 ///     <b>Codex selection keys off Codex-session presence</b> — a live OAuth session in the separate encrypted
-///     <see cref="ICodexTokenStore" /> — rather than the Azure-shaped <see cref="StoredCloudCredentials" />. Azure
-///     selection continues to key off the persisted credential's <see cref="StoredCloudCredentials.ProviderName" />.
+///     <see cref="ICodexTokenStore" />. <b>Azure selection is selected-model-driven</b> (HIGH-1): an Azure connection
+///     is selected only when the node-default model id matches one of the stored connection's deployment names; a saved
+///     Azure connection alone never forces cloud, so selecting a local model still routes local.
 ///     <para>
-///         Codex takes precedence when both are present: signing in to Codex is the operator's explicit selection, and
-///         signing out (clearing the session) reverts to Azure-or-local on the next send (the runtime-switch property).
+///         Codex takes precedence when a session is present (the session branch resolves first); signing out (clearing
+///         the session) reverts to Azure-or-local on the next send (the runtime-switch property).
 ///         A Codex session is <em>usable</em> when it is non-expired (skew-adjusted) or carries a refresh token the auth
 ///         handler can rotate; an expired session with no refresh token still selects Codex (never silent-local) but the
 ///         cloud factory surfaces a typed re-auth error rather than building a doomed client.
@@ -213,16 +213,39 @@ public sealed class ActiveCloudChatClientFactory : IActiveCloudChatClientFactory
             return new CloudSelection(fingerprint, () => _codexFactory.Value.Create(selectedModel));
         }
 
-        var credentials = _credentialStore.LoadAsync().GetAwaiter().GetResult();
-        if (credentials is not null
-            && string.Equals(credentials.ProviderName, CloudProviderOptions.ProviderAzureFoundry, StringComparison.OrdinalIgnoreCase))
+        // Azure routing is SELECTED-MODEL-DRIVEN (HIGH-1), NOT connection-presence-driven: a saved Azure connection
+        // alone never forces cloud. Return an Azure selection ONLY when the node-default selection matches one of the
+        // connection's deployment names. Anything else — a local model selected, or a stale node-default that was an
+        // Azure deployment since removed (orphan guard) — yields null so the send routes local. This runs only when no
+        // Codex session is present (the session branch above returns first), so a Codex session still takes precedence.
+        var config = _credentialStore.LoadConfigAsync().GetAwaiter().GetResult();
+        var connection = config?.AzureFoundry;
+        if (connection is { Models.Count: > 0 })
         {
-            var fingerprint = string.Create(CultureInfo.InvariantCulture,
-                $"{AzureFingerprintPrefix}|{credentials.Endpoint}|{credentials.DeploymentName}|{credentials.ApiKey?.Length ?? 0}");
-            return new CloudSelection(fingerprint, () => _azureFactory.Create(credentials));
+            var selectedModel = ResolveSelectedModelName();
+            var matchedDeployment = connection.Models
+                .FirstOrDefault(model => string.Equals(model.DeploymentName, selectedModel, StringComparison.OrdinalIgnoreCase))
+                ?.DeploymentName;
+
+            if (!string.IsNullOrWhiteSpace(matchedDeployment))
+            {
+                var fingerprint = string.Create(CultureInfo.InvariantCulture,
+                    $"{AzureFingerprintPrefix}|{connection.Endpoint}|{connection.AuthMode}|{matchedDeployment}|{connection.ApiKey?.Length ?? 0}");
+                return new CloudSelection(fingerprint, () => _azureFactory.Create(connection, matchedDeployment));
+            }
         }
 
         return null;
+    }
+
+    /// <summary>
+    ///     Returns the operator's node-default selected model id (<see cref="StoredNodeSettings.DefaultModelName" />),
+    ///     or null when none is set. Used to decide whether the selected model is an Azure deployment.
+    /// </summary>
+    private string? ResolveSelectedModelName()
+    {
+        var settings = _nodeSettingsStore.LoadAsync().GetAwaiter().GetResult();
+        return settings.DefaultModelName;
     }
 
     /// <summary>

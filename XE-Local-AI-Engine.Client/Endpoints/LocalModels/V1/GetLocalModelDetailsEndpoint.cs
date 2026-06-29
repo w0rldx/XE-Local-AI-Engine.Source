@@ -14,8 +14,10 @@ public sealed class GetLocalModelDetailsEndpoint(
     IOllamaModelService modelService,
     ILocalModelProviderResolver providerResolver,
     IGgufModelStore ggufModelStore,
+    ICloudCredentialStore cloudCredentialStore,
     ModelNameValidator modelNameValidator) : Endpoint<GetLocalModelDetailsRequest, LocalModelDetailsResponse>
 {
+    private readonly ICloudCredentialStore _cloudCredentialStore = cloudCredentialStore ?? throw new ArgumentNullException(nameof(cloudCredentialStore));
     private readonly IGgufModelStore _ggufModelStore = ggufModelStore ?? throw new ArgumentNullException(nameof(ggufModelStore));
     private readonly ModelNameValidator _modelNameValidator = modelNameValidator ?? throw new ArgumentNullException(nameof(modelNameValidator));
     private readonly IOllamaModelService _modelService = modelService ?? throw new ArgumentNullException(nameof(modelService));
@@ -44,6 +46,15 @@ public sealed class GetLocalModelDetailsEndpoint(
         // local-runtime concept, so a cloud id has no local details — return a clean 404 instead of a 500. The chat
         // UI should not request local details for a cloud model at all.
         if (CodexModelCatalog.IsCodexModel(modelName))
+        {
+            await Send.NotFoundAsync(ct).ConfigureAwait(false);
+            return;
+        }
+
+        // An Azure Foundry deployment id is likewise NOT a local Ollama model: model details (context window, template,
+        // license) are local-runtime concepts an Azure deployment has no equivalent of, and probing /api/show for it
+        // would 500. Return a clean 404 instead, matching the Codex branch above.
+        if (await IsAzureFoundryModelAsync(modelName, ct).ConfigureAwait(false))
         {
             await Send.NotFoundAsync(ct).ConfigureAwait(false);
             return;
@@ -92,6 +103,29 @@ public sealed class GetLocalModelDetailsEndpoint(
         }
 
         await Send.OkAsync(descriptor.ToDetailsResponse(modelName), ct).ConfigureAwait(false);
+    }
+
+    // True when the model id matches one of the stored Azure Foundry connection's deployment names (ordinal,
+    // case-insensitive). Best-effort: any failure resolving the encrypted config is treated as "not Azure" so the
+    // existing local-routing path still runs.
+    private async Task<bool> IsAzureFoundryModelAsync(string modelName, CancellationToken ct)
+    {
+        try
+        {
+            var config = await _cloudCredentialStore.LoadConfigAsync(ct).ConfigureAwait(false);
+            var connection = config?.AzureFoundry;
+            return connection is { Models.Count: > 0 }
+                   && connection.Models.Any(model => string.Equals(model.DeploymentName, modelName, StringComparison.OrdinalIgnoreCase));
+        }
+        catch (OperationCanceledException) when (ct.IsCancellationRequested)
+        {
+            throw;
+        }
+        catch (Exception exception)
+        {
+            Logger.LogDebug(exception, "Azure Foundry deployment match could not be resolved for '{ModelName}'.", modelName);
+            return false;
+        }
     }
 
     private async Task<bool> ValidateModelNameAsync(string? modelName, CancellationToken ct)

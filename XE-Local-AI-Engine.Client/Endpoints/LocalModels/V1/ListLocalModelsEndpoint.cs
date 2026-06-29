@@ -7,6 +7,7 @@ using XE_Local_AI_Engine.Client.Endpoints.Common;
 using XE_Local_AI_Engine.Client.Endpoints.LocalModels.V1.Mappers;
 using XE_Local_AI_Engine.Client.Services.Auth;
 using XE_Local_AI_Engine.Client.Services.Chat;
+using XE_Local_AI_Engine.Client.Services.CloudProviders;
 using XE_Local_AI_Engine.Client.Services.NodeSettings;
 using XE_Local_AI_Engine.Providers.Abstractions.Contracts;
 using XE_Local_AI_Engine.Providers.Abstractions.Gguf;
@@ -21,10 +22,12 @@ public sealed class ListLocalModelsEndpoint(
     IOptions<LocalChatAgentOptions> localChatOptions,
     ICodexTokenStore codexTokenStore,
     IOptions<CodexOptions> codexOptions,
+    ICloudCredentialStore cloudCredentialStore,
     TimeProvider timeProvider,
     ILogger<ListLocalModelsEndpoint> logger) : EndpointWithoutRequest<ListLocalModelsResponse>
 {
     private readonly IModelClassificationService _classificationService = classificationService ?? throw new ArgumentNullException(nameof(classificationService));
+    private readonly ICloudCredentialStore _cloudCredentialStore = cloudCredentialStore ?? throw new ArgumentNullException(nameof(cloudCredentialStore));
     private readonly CodexOptions _codexOptions = (codexOptions ?? throw new ArgumentNullException(nameof(codexOptions))).Value;
     private readonly ICodexTokenStore _codexTokenStore = codexTokenStore ?? throw new ArgumentNullException(nameof(codexTokenStore));
     private readonly IGgufModelStore _ggufModelStore = ggufModelStore ?? throw new ArgumentNullException(nameof(ggufModelStore));
@@ -47,10 +50,13 @@ public sealed class ListLocalModelsEndpoint(
         // can still surface "node default" distinctly from the operator's selection.
         var selectedModelName = await _runtimeSettings.GetDefaultModelNameAsync(ct).ConfigureAwait(false);
 
-        // Codex cloud models are offered only when a usable (non-expired) Codex session is present. They do not
-        // depend on the local Ollama runtime, so they are resolved up front and included even when Ollama is
-        // unavailable below.
-        var cloudModels = await ResolveCodexCloudModelsAsync(selectedModelName, ct).ConfigureAwait(false);
+        // Cloud models (Codex + Azure Foundry) do not depend on the local Ollama runtime, so they are resolved up
+        // front and included even when Ollama is unavailable below. Codex entries appear only when a usable (non-expired)
+        // session is present; Azure entries appear whenever a connection with deployments is stored. The picker groups
+        // by Provider, so the two cloud families stay visually separated.
+        var codexModels = await ResolveCodexCloudModelsAsync(selectedModelName, ct).ConfigureAwait(false);
+        var azureModels = await ResolveAzureCloudModelsAsync(selectedModelName, ct).ConfigureAwait(false);
+        var cloudModels = codexModels.Concat(azureModels).ToArray();
 
         // Installed GGUF models are served by the bundled llama.cpp runtime, NOT Ollama — resolve them up front (like
         // cloud models) so they are included even when Ollama is absent and the call below throws. A best-effort read:
@@ -145,6 +151,36 @@ public sealed class ListLocalModelsEndpoint(
         catch (Exception exception)
         {
             _logger.LogWarning(exception, "Codex cloud model list could not be resolved.");
+            return [];
+        }
+    }
+
+    /// <summary>
+    ///     Returns the Azure Foundry cloud model entries (one per stored deployment) when a connection with ≥1
+    ///     deployment is stored, otherwise an empty list. Unlike Codex, Azure entries do not gate on a live session —
+    ///     a saved connection's deployments are always offered in the picker (routing stays selected-model-driven). A
+    ///     best-effort read: any failure resolving the config yields no Azure models rather than failing the whole list.
+    /// </summary>
+    private async Task<IReadOnlyList<LocalModelResponse>> ResolveAzureCloudModelsAsync(string? selectedModelName, CancellationToken ct)
+    {
+        try
+        {
+            var config = await _cloudCredentialStore.LoadConfigAsync(ct).ConfigureAwait(false);
+            var connection = config?.AzureFoundry;
+            if (connection is not { Models.Count: > 0 })
+            {
+                return [];
+            }
+
+            return LocalModelsMapper.ToAzureFoundryCloudModelResponses(connection, selectedModelName);
+        }
+        catch (OperationCanceledException) when (ct.IsCancellationRequested)
+        {
+            throw;
+        }
+        catch (Exception exception)
+        {
+            _logger.LogWarning(exception, "Azure Foundry cloud model list could not be resolved.");
             return [];
         }
     }

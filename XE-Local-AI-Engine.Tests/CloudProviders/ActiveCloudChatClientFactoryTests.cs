@@ -81,19 +81,45 @@ public sealed class ActiveCloudChatClientFactoryTests
     }
 
     [Test]
-    public void TryCreate_WhenNoCodexSession_ButAzureSelected_ReturnsAzureClient()
+    public void TryCreate_WhenNoCodexSession_ButAzureDeploymentSelected_ReturnsAzureClient()
     {
         using var azureClient = new StubChatClient();
         var harness = new Harness();
         harness.CodexTokenStore.LoadAsync(Arg.Any<CancellationToken>()).Returns((CodexTokens?)null);
-        harness.CredentialStore.LoadAsync(Arg.Any<CancellationToken>())
-               .Returns(CreateAzureCredentials());
-        harness.AzureFactory.Create(Arg.Any<StoredCloudCredentials>()).Returns(azureClient);
+        harness.CredentialStore.LoadConfigAsync(Arg.Any<CancellationToken>())
+               .Returns(CreateAzureConfig());
+        // Selected-model-driven (HIGH-1): the node-default must match a stored deployment for Azure to be selected.
+        harness.NodeSettingsStore.LoadAsync(Arg.Any<CancellationToken>())
+               .Returns(new StoredNodeSettings
+               {
+                   DefaultModelName = "gpt-4o"
+               });
+        harness.AzureFactory.Create(Arg.Any<StoredAzureFoundryConnection>(), "gpt-4o").Returns(azureClient);
 
         var produced = harness.Factory.TryCreateActiveCloudChatClient(out var client);
 
         AssertEx.True(produced);
         AssertEx.True(ReferenceEquals(azureClient, client));
+    }
+
+    [Test]
+    public void TryCreate_WhenAzureConnectionSaved_ButLocalModelSelected_RoutesLocal()
+    {
+        // HIGH-1 regression guard: a saved Azure connection alone must NOT force cloud when a local model is selected.
+        var harness = new Harness();
+        harness.CodexTokenStore.LoadAsync(Arg.Any<CancellationToken>()).Returns((CodexTokens?)null);
+        harness.CredentialStore.LoadConfigAsync(Arg.Any<CancellationToken>())
+               .Returns(CreateAzureConfig());
+        harness.NodeSettingsStore.LoadAsync(Arg.Any<CancellationToken>())
+               .Returns(new StoredNodeSettings
+               {
+                   DefaultModelName = "qwen3:8b"
+               });
+
+        var produced = harness.Factory.TryCreateActiveCloudChatClient(out var client);
+
+        AssertEx.False(produced);
+        AssertEx.Null(client);
     }
 
     [Test]
@@ -312,14 +338,18 @@ public sealed class ActiveCloudChatClientFactoryTests
         AssertEx.Equal(expected: 0, failures);
     }
 
-    private static StoredCloudCredentials CreateAzureCredentials()
+    private static StoredCloudProviderConfig CreateAzureConfig()
     {
-        return new StoredCloudCredentials
+        return new StoredCloudProviderConfig
         {
             ProviderName = CloudProviderOptions.ProviderAzureFoundry,
-            Endpoint = "https://example.openai.azure.com/",
-            ApiKey = "test-api-key",
-            DeploymentName = "gpt-4o"
+            AzureFoundry = new StoredAzureFoundryConnection
+            {
+                Endpoint = "https://example.openai.azure.com/",
+                AuthMode = AzureFoundryAuthMode.ApiKey,
+                ApiKey = "test-api-key",
+                Models = [new StoredAzureFoundryModel { DeploymentName = "gpt-4o" }]
+            }
         };
     }
 

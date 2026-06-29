@@ -1,11 +1,21 @@
 import { Badge, Box, Divider, Group, Paper, Popover, ScrollArea, Stack, Text, TextInput, UnstyledButton } from "@mantine/core";
-import { IconChevronDown, IconChevronRight, IconCloud, IconCpu, IconSearch, IconSparkles } from "@tabler/icons-react";
+import {
+	IconBrandAzure,
+	IconChevronDown,
+	IconChevronRight,
+	IconCloud,
+	IconCpu,
+	IconSearch,
+	IconSparkles,
+} from "@tabler/icons-react";
+import type { ReactNode } from "react";
 import { useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
 
 import { cx, display } from "@/features/chat/components/ModelSelectorCard.helpers";
 import type { ModelOption } from "@/features/chat/models/ChatModels";
 import { localDefaultModelValue } from "@/features/chat/models/NodeChatModelSelection";
+import { AZURE_FOUNDRY_PROVIDER } from "@/features/chat/queries/useCodexModelOptions";
 
 import classes from "./ModelSelectorCard.module.css";
 
@@ -95,11 +105,12 @@ interface CloudModelSectionProps {
 	items: ModelOption[];
 	title: string;
 	egressCue: string;
+	icon: ReactNode;
 	selectedModel: string;
 	onSelect: (value: string) => void;
 }
 
-function CloudModelSection({ items, title, egressCue, selectedModel, onSelect }: CloudModelSectionProps) {
+function CloudModelSection({ items, title, egressCue, icon, selectedModel, onSelect }: CloudModelSectionProps) {
 	if (items.length === 0) {
 		return null;
 	}
@@ -110,7 +121,7 @@ function CloudModelSection({ items, title, egressCue, selectedModel, onSelect }:
 				<Text size="xs" fw={700} c="dimmed" tt="uppercase" className={classes["dropdown-label"]} style={{ flex: 1 }}>
 					{`${title} (${items.length})`}
 				</Text>
-				<IconCloud size={12} color="var(--mantine-color-dimmed)" />
+				{icon}
 			</Group>
 			{items.map((option) => (
 				<UnstyledButton
@@ -239,6 +250,17 @@ export function ModelSelectorCard({
 		);
 	}, [cloudModelOptions, searchQuery]);
 
+	// Cloud options render in one labeled group per provider. Azure deployments carry the AzureFoundry tag;
+	// everything else (Codex, or an untagged cloud option) falls into the Codex group.
+	const azureCloudOptions = useMemo(
+		() => filteredCloud.filter((option) => option.provider === AZURE_FOUNDRY_PROVIDER),
+		[filteredCloud],
+	);
+	const codexCloudOptions = useMemo(
+		() => filteredCloud.filter((option) => option.provider !== AZURE_FOUNDRY_PROVIDER),
+		[filteredCloud],
+	);
+
 	const availableOptions = filtered.filter((option) => option.isAvailable);
 	const unavailableOptions = filtered.filter((option) => !option.isAvailable);
 
@@ -355,9 +377,18 @@ export function ModelSelectorCard({
 									<>
 										<Divider my={4} />
 										<CloudModelSection
-											items={filteredCloud}
+											items={codexCloudOptions}
 											title={t("pages.chat.modelSelector.cloudGroup", "Cloud (Codex)")}
 											egressCue={t("pages.chat.modelSelector.cloudEgressCue", "Sent to OpenAI")}
+											icon={<IconCloud size={12} color="var(--mantine-color-dimmed)" />}
+											selectedModel={selectedModel}
+											onSelect={select}
+										/>
+										<CloudModelSection
+											items={azureCloudOptions}
+											title={t("pages.chat.modelSelector.cloudGroupAzure", "Cloud (Azure Foundry)")}
+											egressCue={t("pages.chat.modelSelector.cloudEgressCueAzure", "Sent to Azure")}
+											icon={<IconBrandAzure size={12} color="var(--mantine-color-dimmed)" />}
 											selectedModel={selectedModel}
 											onSelect={select}
 										/>
