@@ -86,7 +86,8 @@ public sealed class InferenceInvalidationEvaluator : IInferenceInvalidationEvalu
     }
 
     // Live free VRAM below the frozen baseline. Degrades (skips) when the profile never recorded a baseline or the probe
-    // reports "unknown" (the default UnknownAvailableVramProbe until the real --list-devices probe ships).
+    // reports "unknown". The real --list-devices probe has shipped (LlamaListDevicesVramProbe wins the registered floor),
+    // so on supported backends this check runs; it only skips where that probe still reports unknown free VRAM.
     private async Task<bool> HasLiveFreeVramRegressedAsync(InferenceProfileRecord profile, CancellationToken ct)
     {
         if (profile.FreeVramAtFreezeBytes is not { } freezeBaseline)
