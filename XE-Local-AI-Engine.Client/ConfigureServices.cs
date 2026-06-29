@@ -7,6 +7,7 @@ using System.Threading.RateLimiting;
 using FastEndpoints;
 using FastEndpoints.Swagger;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
+using Microsoft.AspNetCore.DataProtection;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.Extensions.Options;
 using Microsoft.IdentityModel.JsonWebTokens;
@@ -48,6 +49,32 @@ public static class ConfigureServices
                                                                    .ReadFrom.Services(serviceCollection)
                                                                    .Enrich.FromLogContext()
                                                                    .WriteTo.Console(theme: ConsoleTheme.None, outputTemplate: ConsoleOutputTemplate));
+
+        // Explicit, stable Data Protection key-ring. The framework already auto-registers Data Protection (so the
+        // encrypted token stores — CloudCredentialStore, CodexTokenStore, HfTokenStore, GitHubTokenStore, the auth
+        // TokenStore — are protected today); this is DEFENSIVE stability hardening, not a confidentiality fix. It pins
+        // a STABLE application-name discriminator so the key-ring never shifts between Velopack updates, and persists
+        // the keys under the SAME per-user data directory the rest of the node state uses (the NodeData:Directory key
+        // DesktopBootstrap layers in for desktop mode; ContentRoot otherwise — preserving the off-flag byte-behavior
+        // invariant), so the key-ring is co-located with node.sqlite/node.key and survives reinstalls instead of
+        // landing in the volatile default location. AddDataProtection() is idempotent (TryAdd-based), so this does not
+        // double-register or change the IDataProtectionProvider existing consumers resolve.
+        var dataProtectionRoot = configuration[DesktopBootstrap.NodeDataDirectoryKey];
+        if (string.IsNullOrWhiteSpace(dataProtectionRoot))
+        {
+            dataProtectionRoot = builder.Environment.ContentRootPath;
+        }
+
+        var dataProtection = builder.Services.AddDataProtection()
+                                    .SetApplicationName("XE-Local-AI-Engine")
+                                    .PersistKeysToFileSystem(new DirectoryInfo(Path.Combine(dataProtectionRoot, "dp-keys")));
+
+        // Encrypt the key-ring at rest with DPAPI (CurrentUser) on Windows. Guarded so the platform-compatibility
+        // analyzer (CA1416) is satisfied and non-Windows hosts keep the default at-rest behavior.
+        if (OperatingSystem.IsWindows())
+        {
+            dataProtection.ProtectKeysWithDpapi(protectToLocalMachine: false);
+        }
 
         // Application layer (services, options, persistence, runtime) lives in the
         // XE-Local-AI-Engine.Client.Application class library. The host only wires web-framework
