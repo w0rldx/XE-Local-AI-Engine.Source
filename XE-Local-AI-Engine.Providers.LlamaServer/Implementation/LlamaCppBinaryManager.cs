@@ -6,6 +6,7 @@ using System.IO.Compression;
 using System.Runtime.InteropServices;
 using System.Security.Cryptography;
 using System.Text.RegularExpressions;
+using XE_Local_AI_Engine.Providers.LlamaServer.Configuration;
 using XE_Local_AI_Engine.Providers.LlamaServer.Contracts;
 
 /// <summary>
@@ -45,6 +46,7 @@ public sealed partial class LlamaCppBinaryManager : ILlamaCppBinaryManager
     private readonly HttpClient _httpClient;
     private readonly IInstalledRuntimeStore? _installedRuntimeStore;
     private readonly OSPlatform _os;
+    private readonly LlamaServerRuntimeOverrideOptions? _overrideOptions;
 
     /// <summary>
     ///     Creates a binary manager that downloads through <paramref name="httpClient" /> and caches under
@@ -52,20 +54,24 @@ public sealed partial class LlamaCppBinaryManager : ILlamaCppBinaryManager
     ///     default; pass a different tag to model a user-selected upgrade (the pinned tag's cache is never touched).
     ///     The optional <paramref name="catalog" /> + <paramref name="installedRuntimeStore" /> drive the 3-tier resolve
     ///     (live API → <c>installed-runtime.json</c> → pinned floor); when omitted (the test seam) only the pinned floor
-    ///     is used, preserving the original behavior.
+    ///     is used, preserving the original behavior. The optional <paramref name="overrideOptions" /> carries the
+    ///     operator bring-your-own override; when active, <see cref="EnsureBinaryAsync" /> validates and serves the
+    ///     supplied binary instead of acquiring one.
     /// </summary>
     public LlamaCppBinaryManager(HttpClient httpClient,
         string? cacheRoot = null,
         string? activeTag = null,
         ILlamaCppReleaseCatalog? catalog = null,
-        IInstalledRuntimeStore? installedRuntimeStore = null)
+        IInstalledRuntimeStore? installedRuntimeStore = null,
+        LlamaServerRuntimeOverrideOptions? overrideOptions = null)
         : this(httpClient,
             cacheRoot ?? DefaultCacheRoot(),
             activeTag ?? LlamaCppReleasePins.PinnedTag,
             CurrentOsPlatform(),
             RuntimeInformation.ProcessArchitecture,
             catalog,
-            installedRuntimeStore)
+            installedRuntimeStore,
+            overrideOptions)
     {
     }
 
@@ -76,7 +82,8 @@ public sealed partial class LlamaCppBinaryManager : ILlamaCppBinaryManager
         OSPlatform os,
         Architecture arch,
         ILlamaCppReleaseCatalog? catalog = null,
-        IInstalledRuntimeStore? installedRuntimeStore = null)
+        IInstalledRuntimeStore? installedRuntimeStore = null,
+        LlamaServerRuntimeOverrideOptions? overrideOptions = null)
     {
         _httpClient = httpClient ?? throw new ArgumentNullException(nameof(httpClient));
         ArgumentException.ThrowIfNullOrWhiteSpace(cacheRoot);
@@ -87,11 +94,22 @@ public sealed partial class LlamaCppBinaryManager : ILlamaCppBinaryManager
         _arch = arch;
         _catalog = catalog;
         _installedRuntimeStore = installedRuntimeStore;
+        _overrideOptions = overrideOptions;
     }
 
     /// <inheritdoc />
     public async Task<LlamaBinary> EnsureBinaryAsync(GpuVariant variant, CancellationToken ct)
     {
+        // Operator bring-your-own override: an active override short-circuits ALL acquisition (no download, no cache write,
+        // no installed-runtime.json mutation). The supplied binary is validated and served as the override's OWN variant —
+        // never the caller-passed variant. A configured-but-broken override throws a sanitized failure rather than falling
+        // through to acquisition or a silent CPU run. This precedes the pinned-floor resolve below, which would otherwise
+        // throw for a (Linux, X64, Cuda) request that has no prebuilt asset.
+        if (_overrideOptions?.IsActive == true)
+        {
+            return await ResolveOverrideBinaryAsync(_overrideOptions, ct).ConfigureAwait(false);
+        }
+
         // Tier 1: a live-resolvable recommended runtime takes precedence. The installed-runtime state (tier 2) records
         // which tag is actually on disk; the pinned floor (tier 3) is the offline last-resort and the asset-name
         // template source. A catalog/state-store absence (test seam) collapses straight to the pinned floor.

@@ -1,5 +1,6 @@
 namespace XE_Local_AI_Engine.Providers.LlamaServer.Implementation;
 
+using XE_Local_AI_Engine.Providers.LlamaServer.Configuration;
 using XE_Local_AI_Engine.Providers.LlamaServer.Contracts;
 
 /// <summary>
@@ -9,28 +10,47 @@ using XE_Local_AI_Engine.Providers.LlamaServer.Contracts;
 /// <remarks>
 ///     Rule: NVIDIA → CUDA <em>only on Windows</em> (llama.cpp ships no prebuilt Linux CUDA
 ///     asset, so Linux NVIDIA degrades to Vulkan); AMD/Intel → Vulkan; none/unknown → CPU.
+///     <para>
+///         When an operator bring-your-own override is active (<see cref="LlamaServerRuntimeOverrideOptions.IsActive" />)
+///         the configured variant short-circuits the vendor probe entirely. The selector keys off
+///         <see cref="LlamaServerRuntimeOverrideOptions.IsActive" /> only and never validates the override path — path
+///         validation is the binary manager's single responsibility.
+///     </para>
 /// </remarks>
 public sealed class GpuVariantSelector : IGpuVariantSelector
 {
     private readonly bool _isWindows;
+    private readonly LlamaServerRuntimeOverrideOptions _overrideOptions;
     private readonly IGpuVendorProbe _vendorProbe;
 
-    /// <summary>Creates a selector over the supplied vendor probe, defaulting OS detection to the live host.</summary>
-    public GpuVariantSelector(IGpuVendorProbe vendorProbe)
-        : this(vendorProbe, OperatingSystem.IsWindows())
+    /// <summary>Creates a selector over the supplied vendor probe + override options, defaulting OS detection to the live host.</summary>
+    public GpuVariantSelector(IGpuVendorProbe vendorProbe, LlamaServerRuntimeOverrideOptions overrideOptions)
+        : this(vendorProbe, OperatingSystem.IsWindows(), overrideOptions)
     {
     }
 
-    /// <summary>Test seam: lets a unit test pin the OS so the NVIDIA→CUDA/Vulkan split can be exercised on any host.</summary>
-    internal GpuVariantSelector(IGpuVendorProbe vendorProbe, bool isWindows)
+    /// <summary>
+    ///     Test seam: lets a unit test pin the OS so the NVIDIA→CUDA/Vulkan split can be exercised on any host. The
+    ///     override options default to an inactive instance so existing tests keep the vendor-rule path unchanged.
+    /// </summary>
+    internal GpuVariantSelector(IGpuVendorProbe vendorProbe, bool isWindows, LlamaServerRuntimeOverrideOptions? overrideOptions = null)
     {
         _vendorProbe = vendorProbe ?? throw new ArgumentNullException(nameof(vendorProbe));
         _isWindows = isWindows;
+        _overrideOptions = overrideOptions ?? new LlamaServerRuntimeOverrideOptions();
     }
 
     /// <inheritdoc />
     public async Task<GpuVariant> SelectVariantAsync(CancellationToken ct)
     {
+        // Override short-circuit: an operator-supplied binary is served as the configured variant; the vendor probe is
+        // skipped entirely (the live host may report a different/absent GPU). The path is NOT validated here — the binary
+        // manager is the single path-validator. No await reaches the vendor probe on this branch.
+        if (_overrideOptions.IsActive)
+        {
+            return _overrideOptions.Variant;
+        }
+
         var vendor = await _vendorProbe.DetectVendorAsync(ct).ConfigureAwait(false);
         return SelectForVendor(vendor, _isWindows);
     }
