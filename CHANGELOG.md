@@ -41,6 +41,8 @@ Tag convention: `vX.Y.Z-rc.N` on the RC branch; `vX.Y.Z` on develop after RC val
 - Windows AMD/Intel GPU: GPU hardware is not detected on Windows for AMD or Intel GPUs; these
   configurations currently fall back to CPU mode. NVIDIA on Windows is unaffected. A DXGI VRAM/vendor
   probe is a deferred follow-up.
+- CI enforces a frontend coverage floor only; a backend hard coverage gate is a deferred follow-up
+  (no baseline yet, so a real threshold would risk blocking the RC or being hollow).
 
 ## [0.1.0-rc.1] — first release candidate (target: 2026-06-10)
 
