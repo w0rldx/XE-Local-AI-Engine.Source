@@ -1,0 +1,68 @@
+name: e2e
+
+# Non-blocking E2E suite. It is NOT a PR merge gate: it builds the SPA in-fixture and needs
+# Playwright browsers, so it runs nightly, on manual dispatch, or on a PR opted in with the
+# `run-e2e` label. The job-level guard skips it for any other pull_request event.
+on:
+  schedule:
+    - cron: "0 3 * * *"
+  workflow_dispatch:
+  pull_request:
+    types: [labeled]
+
+permissions:
+  contents: read
+
+env:
+  DOTNET_NOLOGO: true
+  DOTNET_CLI_TELEMETRY_OPTOUT: true
+
+concurrency:
+  group: e2e-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  e2e:
+    runs-on: ubuntu-latest
+    if: github.event_name != 'pull_request' || github.event.label.name == 'run-e2e'
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup .NET SDK
+        uses: actions/setup-dotnet@v4
+        with:
+          global-json-file: global.json
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+          cache-dependency-path: XE-Local-AI-Engine.Client.React/pnpm-lock.yaml
+
+      - name: Build E2E project
+        run: dotnet build XE-Local-AI-Engine.Tests.E2ETests/XE-Local-AI-Engine.Tests.E2ETests.csproj -p:RunE2ETests=true --configuration Release
+
+      - name: Install Playwright browsers
+        run: pwsh XE-Local-AI-Engine.Tests.E2ETests/bin/Release/net10.0/playwright.ps1 install --with-deps
+
+      - name: Run E2E tests
+        env:
+          TZ: Europe/Berlin
+        run: dotnet test XE-Local-AI-Engine.Tests.E2ETests/XE-Local-AI-Engine.Tests.E2ETests.csproj --configuration Release --no-build -p:RunE2ETests=true
+
+      # The fixture writes a trace .zip per failing test to a relative `test-results/traces/` dir
+      # (XEE2ETestBase.StopTracingAsync); the glob catches it whether the test host CWD is the project
+      # root or the bin output dir. if-no-files-found: ignore => an all-green run uploads nothing.
+      - name: Upload Playwright traces
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-traces
+          path: XE-Local-AI-Engine.Tests.E2ETests/**/test-results/traces/**
+          if-no-files-found: ignore
