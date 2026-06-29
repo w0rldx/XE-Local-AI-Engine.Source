@@ -54,14 +54,14 @@ export function DiagnosticsPanel() {
 
 	if (selected) {
 		return (
-			<Container size="lg" py="md">
+			<Container fluid={true} py="md">
 				<SnapshotDetail snapshot={selected} onBack={() => setSelectedId(undefined)} />
 			</Container>
 		);
 	}
 
 	return (
-		<Container size="lg" py="md">
+		<Container fluid={true} py="md">
 			<Stack gap="md">
 				<Group justify="space-between" align="flex-start">
 					<Stack gap={4}>
