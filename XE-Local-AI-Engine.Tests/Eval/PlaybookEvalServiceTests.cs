@@ -83,7 +83,7 @@ public sealed class PlaybookEvalServiceTests
             forbiddenPhrases = Array.Empty<string>()
         });
         var goldenCase = AssertionCase(agentId, assertion);
-        var service = CreateService(agentId, actionId, [goldenCase], new OllamaPlaybookEvalJudge(NullLogger<OllamaPlaybookEvalJudge>.Instance), out _, out _);
+        var service = CreateService(agentId, actionId, [goldenCase], new DefaultPlaybookEvalJudge(NullLogger<DefaultPlaybookEvalJudge>.Instance), out _, out _);
 
         var outcome = await service.RunEvalAsync(agentId, actionId).ConfigureAwait(false);
 

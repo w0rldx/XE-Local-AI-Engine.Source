@@ -36,10 +36,14 @@ internal static class AddNodeAgentHomeExtensions
         builder.Services.AddSingleton<IConversationSandboxStager>(static sp => (AgentHomeService)sp.GetRequiredService<IAgentHomeService>());
         builder.Services.AddSingleton<IAgentHomeToolGateway, AgentHomeToolGateway>();
         builder.Services.AddSingleton<IClientLocalToolHandler, RunInAgentHomeToolHandler>();
-        // Sandbox provider selection. The provider is configuration-bound and resolved once; the default is the
-        // deterministic fake, while local-container selects the HostAgent-backed provider.
+        // Sandbox provider selection. The provider is configuration-bound and resolved once; known providers are the
+        // deterministic fake and the jailed process provider. There is no execution-capable code default — an unset
+        // provider resolves to fake in non-Production, while SandboxOptionsValidator fails startup in Production (sec
+        // MED-2: a stripped config must never silently grant the command-executing provider).
         builder.Services.AddOptions<SandboxOptions>()
-               .Bind(configuration.GetSection(SandboxOptions.SectionName));
+               .Bind(configuration.GetSection(SandboxOptions.SectionName))
+               .ValidateOnStart();
+        builder.Services.AddSingleton<IValidateOptions<SandboxOptions>, SandboxOptionsValidator>();
         // Local-container provider options. Bound and validated unconditionally; the fail-closed validator matters only
         // when the local-container provider is selected. The provider is a thin gRPC client that reuses HostAgent options.
         builder.Services.AddOptions<LocalContainerOptions>()
