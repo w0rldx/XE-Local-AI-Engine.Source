@@ -215,10 +215,10 @@ internal static class DesktopBootstrap
 
     private static string ReadAndValidateExistingSecret(string keyPath)
     {
-        string base64;
+        string fileContent;
         try
         {
-            base64 = File.ReadAllText(keyPath).Trim();
+            fileContent = File.ReadAllText(keyPath).Trim();
         }
         catch (Exception exception) when (exception is IOException or UnauthorizedAccessException)
         {
@@ -228,10 +228,10 @@ internal static class DesktopBootstrap
 
         // A torn / corrupt key must FAIL LOUDLY: silently regenerating would change the key and brick the encrypted
         // database that the previous (intact) key wrote.
-        byte[] decoded;
+        byte[] fileBytes;
         try
         {
-            decoded = Convert.FromBase64String(base64);
+            fileBytes = Convert.FromBase64String(fileContent);
         }
         catch (FormatException exception)
         {
@@ -241,7 +241,12 @@ internal static class DesktopBootstrap
                 exception);
         }
 
-        if (decoded.Length != NodeOperatorSecretProvider.ExpectedSecretLength)
+        // At-rest format: on Windows the raw secret is wrapped with DPAPI (CurrentUser); on *nix it is stored as raw
+        // base64 guarded by 0600 perms. Existing installs predate the Windows wrap and hold the PLAINTEXT secret, so
+        // unwrap-first and fall back to treating the decoded bytes as the legacy raw secret (then migrate below).
+        var (secret, wasProtected) = UnwrapSecretBytes(fileBytes);
+
+        if (secret.Length != NodeOperatorSecretProvider.ExpectedSecretLength)
         {
             throw new InvalidOperationException($"The desktop operator key file '{keyPath}' does not contain exactly "
                                                 + $"{NodeOperatorSecretProvider.ExpectedSecretLength} bytes. Restore the original key or delete the "
@@ -249,19 +254,72 @@ internal static class DesktopBootstrap
                                                 + "losing data.");
         }
 
-        return base64;
+        // Backward-compatible migration: an existing install stored an unwrapped (legacy plaintext) key. On Windows,
+        // transparently re-write it DPAPI-wrapped so it is encrypted at rest going forward. Best-effort — the in-memory
+        // secret is already valid for this run, so a failed re-wrap leaves the working plaintext key untouched.
+        if (!wasProtected && OperatingSystem.IsWindows())
+        {
+            TryRewriteProtected(keyPath, secret);
+        }
+
+        return Convert.ToBase64String(secret);
     }
 
     private static string GenerateAndPersistSecret(string keyPath)
     {
         var secret = RandomNumberGenerator.GetBytes(NodeOperatorSecretProvider.ExpectedSecretLength);
-        var base64 = Convert.ToBase64String(secret);
+        WriteSecretFile(keyPath, secret);
+        return Convert.ToBase64String(secret);
+    }
 
-        // Write atomically (temp file + move) so a crash mid-write can never leave a torn key that would brick the DB.
+    /// <summary>
+    ///     Decodes the persisted key file into the raw operator secret. On Windows the file is DPAPI-wrapped, so unwrap
+    ///     first; a legacy plaintext file (or any non-Windows file) fails the unwrap and is returned verbatim as the raw
+    ///     secret. The boolean reports whether the bytes were DPAPI-protected, so the caller can migrate legacy files.
+    /// </summary>
+    private static (byte[] Secret, bool WasProtected) UnwrapSecretBytes(byte[] fileBytes)
+    {
+        if (OperatingSystem.IsWindows())
+        {
+            try
+            {
+                var unprotected = ProtectedData.Unprotect(fileBytes, optionalEntropy: null, DataProtectionScope.CurrentUser);
+                return (unprotected, true);
+            }
+            catch (CryptographicException)
+            {
+                // Legacy plaintext key written before the at-rest wrap; treat the decoded bytes as the raw secret and
+                // let the caller migrate it to the protected format.
+            }
+        }
+
+        return (fileBytes, false);
+    }
+
+    /// <summary>
+    ///     Persists the raw operator secret to the key file. On Windows the secret is DPAPI-wrapped (CurrentUser) before
+    ///     encoding so it is encrypted at rest; on *nix the raw secret is written and protected by 0600 owner-only perms
+    ///     (libsecret/Keychain integration is future work — full-disk encryption is the assumed *nix at-rest posture).
+    ///     Always written atomically (temp file + move) so a crash mid-write can never leave a torn key that bricks the DB.
+    /// </summary>
+    private static void WriteSecretFile(string keyPath, byte[] secret)
+    {
+        byte[] fileBytes;
+        if (OperatingSystem.IsWindows())
+        {
+            fileBytes = ProtectedData.Protect(secret, optionalEntropy: null, DataProtectionScope.CurrentUser);
+        }
+        else
+        {
+            fileBytes = secret;
+        }
+
+        var fileContent = Convert.ToBase64String(fileBytes);
+
         var tempPath = keyPath + ".tmp";
         try
         {
-            File.WriteAllText(tempPath, base64);
+            File.WriteAllText(tempPath, fileContent);
             ProtectKeyFile(tempPath);
             File.Move(tempPath, keyPath, overwrite: true);
         }
@@ -271,14 +329,25 @@ internal static class DesktopBootstrap
             throw new InvalidOperationException($"The desktop operator key file '{keyPath}' could not be written. Check filesystem permissions.",
                 exception);
         }
+    }
 
-        return base64;
+    private static void TryRewriteProtected(string keyPath, byte[] secret)
+    {
+        try
+        {
+            WriteSecretFile(keyPath, secret);
+        }
+        catch (Exception exception) when (exception is InvalidOperationException or CryptographicException)
+        {
+            // Best-effort at-rest upgrade: the legacy plaintext key still works for this run, so a failed re-wrap is
+            // non-fatal and is retried on the next launch.
+        }
     }
 
     private static void ProtectKeyFile(string path)
     {
-        // On non-Windows restrict to owner read/write (0600). On Windows the per-user %LOCALAPPDATA% ACL is relied on
-        // (a DPAPI/ProtectedData wrap is a post-RC hardening, tracked as a risk).
+        // On non-Windows restrict to owner read/write (0600). On Windows the key file is DPAPI-wrapped at rest (see
+        // WriteSecretFile) on top of the per-user %LOCALAPPDATA% ACL.
         if (!OperatingSystem.IsWindows())
         {
             File.SetUnixFileMode(path, UnixFileMode.UserRead | UnixFileMode.UserWrite);
