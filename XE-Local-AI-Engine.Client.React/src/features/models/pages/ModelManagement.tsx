@@ -230,7 +230,7 @@ export function ModelManagement() {
 				<Group justify="space-between" align="flex-start">
 					<Stack gap={4}>
 						<Text size="sm" tt="uppercase" fw={700} c="dimmed">
-							Worker Node
+							{t("common.workerNode", "Worker Node")}
 						</Text>
 						<Title order={2}>Model management</Title>
 						<Text c="dimmed">List, select, and delete installed local models.</Text>
