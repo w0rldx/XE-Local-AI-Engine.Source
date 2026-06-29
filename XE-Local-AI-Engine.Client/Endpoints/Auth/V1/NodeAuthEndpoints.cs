@@ -115,6 +115,7 @@ public sealed class NodeRefreshEndpoint(INodeAuthService authService) : Endpoint
     {
         Post(LocalApiRoutes.Auth.Refresh);
         AllowAnonymous();
+        Options(static options => options.RequireRateLimiting(NodeAuthRateLimits.AuthPolicy));
         Description(static descriptor => descriptor.AutoTagOverride("Auth"));
     }
 
