@@ -21,8 +21,10 @@ import {
 	type NodeChange,
 	type NodeTypes,
 	ReactFlow,
+	ReactFlowProvider,
 	useEdgesState,
 	useNodesState,
+	useReactFlow,
 } from "@xyflow/react";
 import { useCallback, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
@@ -54,6 +56,19 @@ const PALETTE: ReadonlyArray<{ kind: PreviewNodeKind; type: string; icon: typeof
 	{ kind: "Pause", type: "pause", icon: IconPlayerPause },
 	{ kind: "End", type: "end", icon: IconFlagCheck },
 ];
+
+// Parse a palette drag payload defensively: returns the matching palette entry's {kind, type} only when the
+// raw string is valid JSON whose type maps to a known PALETTE entry; otherwise null (malformed JSON or a
+// foreign drop). Keeps the drop handler from throwing on untrusted dataTransfer contents.
+function parsePalettePayload(raw: string): { kind: PreviewNodeKind; type: string } | null {
+	try {
+		const parsed = JSON.parse(raw) as { type?: unknown };
+		const entry = PALETTE.find((candidate) => candidate.type === parsed.type);
+		return entry ? { kind: entry.kind, type: entry.type } : null;
+	} catch {
+		return null;
+	}
+}
 
 let nodeSeq = 0;
 function nextNodeId(kind: PreviewNodeKind): string {
@@ -89,7 +104,7 @@ export interface WorkflowCanvasProps {
 // when the graph is invalid (client mirror of the backend validator), offers Cancel while running and Continue
 // while paused. The parent owns run lifecycle + persistence; this component owns only the graph editing state and
 // emits the current graph on Execute.
-export function WorkflowCanvas({
+function WorkflowCanvasInner({
 	initialNodes,
 	initialEdges,
 	initialStartText,
@@ -101,6 +116,7 @@ export function WorkflowCanvas({
 	onGraphChange,
 }: WorkflowCanvasProps) {
 	const { t } = useTranslation();
+	const { screenToFlowPosition } = useReactFlow();
 	const [nodes, setNodes] = useNodesState<PreviewCanvasNode>(initialNodes);
 	const [edges, setEdges] = useEdgesState<Edge>(initialEdges);
 	const [startText, setStartText] = useState(initialStartText);
@@ -157,22 +173,51 @@ export function WorkflowCanvas({
 		[emitGraph, setEdges],
 	);
 
-	const addNode = useCallback(
-		(kind: PreviewNodeKind, type: string) => {
+	const addNodeAt = useCallback(
+		(kind: PreviewNodeKind, type: string, position: { x: number; y: number }) => {
 			const id = nextNodeId(kind);
 			const data: PreviewCanvasNodeData = kind === "Agent" ? { kind, label: "", instructions: "", model: "" } : { kind };
-			const node: PreviewCanvasNode = {
-				id,
-				type,
-				position: { x: 320, y: 80 + nodesRef.current.length * 40 },
-				data,
-			};
+			const node: PreviewCanvasNode = { id, type, position, data };
 			const next = [...nodesRef.current, node];
 			nodesRef.current = next;
 			setNodes(next);
 			emitGraph(next, edgesRef.current, startTextRef.current);
 		},
 		[emitGraph, setNodes],
+	);
+
+	const addNode = useCallback(
+		(kind: PreviewNodeKind, type: string) => addNodeAt(kind, type, { x: 320, y: 80 + nodesRef.current.length * 40 }),
+		[addNodeAt],
+	);
+
+	const onPaletteDragStart = useCallback((event: React.DragEvent, kind: PreviewNodeKind, type: string) => {
+		event.dataTransfer.setData("application/xeflow", JSON.stringify({ kind, type }));
+		event.dataTransfer.effectAllowed = "move";
+	}, []);
+
+	const onDragOver = useCallback((event: React.DragEvent) => {
+		event.preventDefault();
+		event.dataTransfer.dropEffect = "move";
+	}, []);
+
+	const onDrop = useCallback(
+		(event: React.DragEvent) => {
+			event.preventDefault();
+			const raw = event.dataTransfer.getData("application/xeflow");
+			if (!raw) {
+				return;
+			}
+			// Drag payload is boundary data — parse defensively so a malformed/foreign drop is ignored rather
+			// than throwing out of the drop handler.
+			const payload = parsePalettePayload(raw);
+			if (payload === null) {
+				return;
+			}
+			const position = screenToFlowPosition({ x: event.clientX, y: event.clientY });
+			addNodeAt(payload.kind, payload.type, position);
+		},
+		[screenToFlowPosition, addNodeAt],
 	);
 
 	const handleStartTextChange = useCallback(
@@ -227,16 +272,25 @@ export function WorkflowCanvas({
 			<Group justify="space-between" align="flex-end" wrap="wrap">
 				<Group gap="xs">
 					{PALETTE.map((entry) => (
-						<Button
+						// biome-ignore lint/a11y/noStaticElementInteractions: intentional DnD drag-source wrapper; inner Button owns keyboard/click
+						// biome-ignore lint/a11y/noNoninteractiveElementInteractions: same — drag source div is a deliberate DnD pattern
+						<div
 							key={entry.kind}
-							size="xs"
-							variant="light"
-							leftSection={<entry.icon size={14} />}
-							onClick={() => addNode(entry.kind, entry.type)}
-							data-testid={`preview-palette-${entry.type}`}
+							draggable={true}
+							onDragStart={(e) => onPaletteDragStart(e, entry.kind, entry.type)}
+							style={{ display: "inline-flex", cursor: "grab" }}
+							data-testid={`preview-palette-drag-${entry.type}`}
 						>
-							{t(`pages.preview.nodes.${entry.type}`, entry.kind)}
-						</Button>
+							<Button
+								size="xs"
+								variant="light"
+								leftSection={<entry.icon size={14} />}
+								onClick={() => addNode(entry.kind, entry.type)}
+								data-testid={`preview-palette-${entry.type}`}
+							>
+								{t(`pages.preview.nodes.${entry.type}`, entry.kind)}
+							</Button>
+						</div>
 					))}
 				</Group>
 
@@ -307,9 +361,12 @@ export function WorkflowCanvas({
 						onConnect={onConnect}
 						onSelectionChange={onSelectionChange}
 						onPaneClick={onPaneClick}
+						onDrop={onDrop}
+						onDragOver={onDragOver}
 						fitView={true}
 						deleteKeyCode={["Delete", "Backspace"]}
 						proOptions={{ hideAttribution: true }}
+						data-testid="preview-canvas-dropzone"
 					>
 						<Background />
 						<Controls />
@@ -323,5 +380,13 @@ export function WorkflowCanvas({
 				) : null}
 			</Group>
 		</Stack>
+	);
+}
+
+export function WorkflowCanvas(props: WorkflowCanvasProps) {
+	return (
+		<ReactFlowProvider>
+			<WorkflowCanvasInner {...props} />
+		</ReactFlowProvider>
 	);
 }
