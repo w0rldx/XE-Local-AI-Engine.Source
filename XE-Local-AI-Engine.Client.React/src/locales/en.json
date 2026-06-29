@@ -31,7 +31,9 @@
 		"pagination": {
 			"rowsPerPage": "Rows per page",
 			"showingRange": "Showing {{from}}–{{to}} of {{total}}"
-		}
+		},
+		"confirmation": "Confirmation",
+		"workerNode": "Worker Node"
 	},
 	"theme": {
 		"title": "Theme",
@@ -63,17 +65,6 @@
 		"invocations": "Invocations",
 		"schedule": "Schedule",
 		"user": "User",
-		"adminPanel": "Admin Panel",
-		"adminPanelUsers": "Users",
-		"adminPanelRoles": "Roles",
-		"adminPanelPermissions": "Permissions",
-		"adminPanelPairingTokens": "Pairing Tokens",
-		"adminPanelAgentDefinitions": "Agent Definitions",
-		"adminPanelToolDefinitions": "Tool Definitions",
-		"adminPanelClientNodes": "Client Nodes",
-		"adminPanelAiModels": "AI Models",
-		"adminPanelFeedback": "Feedback",
-		"adminPanelAppKeys": "App Keys",
 		"skills": "Skills",
 		"preview": "Open Canvas"
 	},
@@ -95,7 +86,8 @@
 			"resultLabel": "Result",
 			"errorLabel": "Error",
 			"noOutput": "(no output)"
-		}
+		},
+		"reasoningBypassNote": "This model may emit reasoning regardless of the 'none' setting."
 	},
 	"pages": {
 		"about": {
@@ -265,7 +257,20 @@
 				"delete": "Delete",
 				"deleteConfirm": "Delete this conversation? This cannot be undone.",
 				"deleteSuccess": "Conversation deleted.",
-				"deleteShiftHint": "Shift+Click to skip confirm"
+				"deleteShiftHint": "Shift+Click to skip confirm",
+				"actionsAria": "Conversation actions",
+				"archive": "Archive",
+				"noMatches": "No conversations match your search.",
+				"pin": "Pin",
+				"pinned": "Pinned",
+				"recent": "Recent",
+				"rename": "Rename",
+				"renameAria": "Rename conversation",
+				"searchAria": "Search conversations",
+				"searchPlaceholder": "Search",
+				"showArchived": "Show archived",
+				"unarchive": "Unarchive",
+				"unpin": "Unpin"
 			},
 			"disconnect": {
 				"button": "Disconnect",
@@ -465,7 +470,13 @@
 				"additionalFeedback": "Additional feedback",
 				"additionalFeedbackPlaceholder": "What worked well or what should be improved?",
 				"submit": "Submit feedback",
-				"success": "Feedback submitted successfully."
+				"success": "Feedback submitted successfully.",
+				"commentAria": "Feedback comment",
+				"commentPlaceholder": "Add a comment (optional)",
+				"commentTitleDown": "What went wrong?",
+				"commentTitleUp": "What was helpful?",
+				"down": "Bad response",
+				"up": "Good response"
 			},
 			"revisions": {
 				"position": "Revision {{current}} of {{total}}",
@@ -563,7 +574,16 @@
 			"temporaryChat": {
 				"label": "Temporary chat",
 				"tooltip": "This chat won't teach the agent new memory; it still uses existing memory."
-			}
+			},
+			"connecting": "Connecting to local chat…",
+			"connectionFailed": "Could not connect to the local chat hub.",
+			"connectionFailedTitle": "Local chat unavailable",
+			"conversations": "Conversations",
+			"loadingMessages": "Loading messages…",
+			"modelUnavailable": "Unavailable",
+			"reasoningLabel": "Reasoning",
+			"retryConnection": "Retry",
+			"stop": "Stop"
 		},
 		"clientNodes": {
 			"fields": {
@@ -1028,7 +1048,7 @@
 				"advanced": {
 					"title": "Advanced (developer)",
 					"description": "Low-level orchestration and AgentHome limits. Most changes apply after a restart.",
-					"samplingNote": "Node-level sampling defaults are a follow-up: configure sampling per message in chat for now."
+					"samplingNote": "Sampling defaults are configured per message during a chat."
 				},
 				"orchestrationIdleTimeoutSeconds": {
 					"label": "Orchestration idle timeout"
@@ -1785,7 +1805,8 @@
 					"fired": "Fired",
 					"completed": "Completed",
 					"duration": "Duration",
-					"summary": "Summary"
+					"summary": "Summary",
+					"title": "Run detail"
 				}
 			},
 			"delete": {
@@ -2322,6 +2343,10 @@
 				"save": "Could not save the skill.",
 				"delete": "Could not delete the skill."
 			}
+		},
+		"tools": {
+			"title": "Local tools",
+			"subtitle": "Tools available to the local node agent: built-in in-process tools plus tools from enabled MCP servers."
 		}
 	},
 	"components": {

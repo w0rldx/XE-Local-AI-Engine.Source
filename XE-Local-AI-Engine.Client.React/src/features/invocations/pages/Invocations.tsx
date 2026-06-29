@@ -2,6 +2,7 @@ import { Alert, Badge, Button, Card, Container, Group, Loader, SimpleGrid, Stack
 import { IconAlertTriangle, IconHistory, IconPlayerPlay, IconRefresh } from "@tabler/icons-react";
 import { useQuery } from "@tanstack/react-query";
 import { useMemo } from "react";
+import { useTranslation } from "react-i18next";
 
 import { getInvocationMonitorOptions } from "@/core/api/generated/@tanstack/react-query.gen";
 import { withResponseValidation } from "@/core/api/ResponseValidation";
@@ -99,6 +100,7 @@ function HistoryRows({ history }: { readonly history: InvocationHistoryDto[] }) 
 }
 
 export function Invocations() {
+	const { t } = useTranslation();
 	const { data: monitor, isLoading: monitorIsLoading, error: monitorError, refetch: monitorRefetch, isFetching: monitorIsFetching } = useQuery({
 		...withResponseValidation(getInvocationMonitorOptions()),
 		refetchInterval: 5000,
@@ -113,7 +115,7 @@ export function Invocations() {
 				<Group justify="space-between" align="flex-start">
 					<Stack gap={4}>
 						<Text size="sm" tt="uppercase" fw={700} c="dimmed">
-							Worker Node
+							{t("common.workerNode", "Worker Node")}
 						</Text>
 						<Title order={2}>Invocation monitor</Title>
 						<Text c="dimmed">Inspect the active invocation and the local in-memory history retained by the worker.</Text>
