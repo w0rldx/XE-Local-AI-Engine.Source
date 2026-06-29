@@ -4,6 +4,7 @@ using FastEndpoints;
 using XE_Local_AI_Engine.Client.Endpoints.Common;
 using XE_Local_AI_Engine.Client.Endpoints.ModelFit.V1.Mappers;
 using XE_Local_AI_Engine.Client.Services.Auth;
+using XE_Local_AI_Engine.Client.Services.LlamaCpp;
 using XE_Local_AI_Engine.Client.Services.NodeSettings;
 using XE_Local_AI_Engine.Providers.LlamaServer.Contracts;
 
@@ -83,8 +84,7 @@ public sealed class GetLlamaCppRuntimeEndpoint(
         var resolvedRecommended = recommendedResult.Tag;
         var isOffline = recommendedResult.IsOffline || recommendedResult.IsRateLimited;
 
-        var updateAvailable = resolvedRecommended is not null
-                              && !string.Equals(installedTag, resolvedRecommended, StringComparison.Ordinal);
+        var updateAvailable = LlamaCppRuntimeTag.IsUpdateAvailable(installedTag, resolvedRecommended);
 
         var snapshot = new LlamaCppUpdateSnapshot(installedTag,
             RecommendedTag: resolvedRecommended ?? recommendedTag,
