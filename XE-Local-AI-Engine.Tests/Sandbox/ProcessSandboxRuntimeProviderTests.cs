@@ -113,6 +113,7 @@ public sealed class ProcessSandboxRuntimeProviderTests : IDisposable
         {
             await Task.Delay(5);
         }
+
         await cancellation.CancelAsync();
 
         await AssertEx.ThrowsAsync<OperationCanceledException>(() => executeTask);

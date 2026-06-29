@@ -439,7 +439,10 @@ public sealed partial class CudaBuildService : ICudaBuildService, IDisposable
             startInfo.Environment[entry.Key] = entry.Value;
         }
 
-        using var process = new Process { StartInfo = startInfo };
+        using var process = new Process
+        {
+            StartInfo = startInfo
+        };
         if (!process.Start())
         {
             return (-1, string.Empty);

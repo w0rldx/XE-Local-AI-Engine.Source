@@ -92,8 +92,10 @@ public sealed class ConnectionStateTests
     {
         private bool _stepped;
 
-        public void Step() => _stepped = true;
+        public void Step() =>
+            _stepped = true;
 
-        public override DateTimeOffset GetUtcNow() => _stepped ? after : before;
+        public override DateTimeOffset GetUtcNow() =>
+            _stepped ? after : before;
     }
 }

@@ -31,8 +31,13 @@ public sealed class AzureFoundryConfigStoreTests : IDisposable
     {
         // HIGH-2: a tester's pre-existing flat single-deployment blob must be lifted, not silently dropped or deleted.
         Directory.CreateDirectory(_contentRootPath);
-        var legacy = JsonSerializer.SerializeToUtf8Bytes(
-            new { providerName = "AzureFoundry", endpoint = "https://example.openai.azure.com/", apiKey = "legacy-key", deploymentName = "gpt-4o" },
+        var legacy = JsonSerializer.SerializeToUtf8Bytes(new
+            {
+                providerName = "AzureFoundry",
+                endpoint = "https://example.openai.azure.com/",
+                apiKey = "legacy-key",
+                deploymentName = "gpt-4o"
+            },
             JsonOptions);
         await File.WriteAllBytesAsync(GetCredentialsPath(), legacy);
         using var store = CreateStore();
@@ -61,8 +66,15 @@ public sealed class AzureFoundryConfigStoreTests : IDisposable
                 ApiKey = null,
                 Models =
                 [
-                    new StoredAzureFoundryModel { DeploymentName = "gpt-4o", DisplayLabel = "GPT-4o" },
-                    new StoredAzureFoundryModel { DeploymentName = "gpt-4o-mini" }
+                    new StoredAzureFoundryModel
+                    {
+                        DeploymentName = "gpt-4o",
+                        DisplayLabel = "GPT-4o"
+                    },
+                    new StoredAzureFoundryModel
+                    {
+                        DeploymentName = "gpt-4o-mini"
+                    }
                 ]
             }
         };
@@ -152,7 +164,13 @@ public sealed class AzureFoundryConfigStoreTests : IDisposable
                 Endpoint = endpoint,
                 AuthMode = authMode,
                 ApiKey = apiKey,
-                Models = models ?? [new StoredAzureFoundryModel { DeploymentName = "gpt-4o" }]
+                Models = models ??
+                [
+                    new StoredAzureFoundryModel
+                    {
+                        DeploymentName = "gpt-4o"
+                    }
+                ]
             }
         };
     }

@@ -250,12 +250,15 @@ internal static class ModelFitMapper
         return new CudaBuildPrerequisitesResponse
         {
             CanBuild = report.CanBuild,
-            Items = [.. report.Items.Select(static item => new CudaBuildPrerequisiteItemResponse
-            {
-                Key = item.Key,
-                Satisfied = item.Satisfied,
-                Detail = item.Detail
-            })]
+            Items =
+            [
+                .. report.Items.Select(static item => new CudaBuildPrerequisiteItemResponse
+                {
+                    Key = item.Key,
+                    Satisfied = item.Satisfied,
+                    Detail = item.Detail
+                })
+            ]
         };
     }
 

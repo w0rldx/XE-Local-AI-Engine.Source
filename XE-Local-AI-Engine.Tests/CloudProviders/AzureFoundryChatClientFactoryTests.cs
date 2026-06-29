@@ -60,7 +60,13 @@ public sealed class AzureFoundryChatClientFactoryTests
             Endpoint = "https://example.openai.azure.com/",
             AuthMode = AzureFoundryAuthMode.ManagedIdentity,
             ApiKey = null,
-            Models = [new StoredAzureFoundryModel { DeploymentName = "gpt-4o" }]
+            Models =
+            [
+                new StoredAzureFoundryModel
+                {
+                    DeploymentName = "gpt-4o"
+                }
+            ]
         }, "gpt-4o");
 
         AssertEx.NotNull(chatClient);
@@ -90,7 +96,13 @@ public sealed class AzureFoundryChatClientFactoryTests
             Endpoint = endpoint,
             AuthMode = AzureFoundryAuthMode.ApiKey,
             ApiKey = apiKey,
-            Models = [new StoredAzureFoundryModel { DeploymentName = "gpt-4o" }]
+            Models =
+            [
+                new StoredAzureFoundryModel
+                {
+                    DeploymentName = "gpt-4o"
+                }
+            ]
         };
     }
 }

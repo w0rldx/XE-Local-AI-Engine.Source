@@ -16,7 +16,8 @@ using XE_Local_AI_Engine.Tests.Testing;
 /// </summary>
 public sealed class CudaManagedRuntimeTests
 {
-    private const string GpuStub = "#!/bin/sh\ncase \"$1\" in\n  --version) echo 'version: test'; exit 0 ;;\n  --list-devices) echo 'Available devices:'; echo '  CUDA0: Test GPU (24000 MiB, 23000 MiB free)'; exit 0 ;;\n  *) exit 0 ;;\nesac\n";
+    private const string GpuStub =
+        "#!/bin/sh\ncase \"$1\" in\n  --version) echo 'version: test'; exit 0 ;;\n  --list-devices) echo 'Available devices:'; echo '  CUDA0: Test GPU (24000 MiB, 23000 MiB free)'; exit 0 ;;\n  *) exit 0 ;;\nesac\n";
 
     [Test]
     public async Task EnsureBinary_ManagedCuda_ServesBuiltBinaryNoDownload()

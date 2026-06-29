@@ -232,9 +232,8 @@ internal static class AddNodeModelRuntimeExtensions
             return;
         }
 
-        throw new InvalidOperationException(
-            $"The configured Ollama endpoint '{endpoint}' is not a loopback address. The local Ollama API is "
-            + $"unauthenticated; refusing to route prompts to a remote host. Set {OllamaAllowRemoteEndpointConfigurationKey}=true to override.");
+        throw new InvalidOperationException($"The configured Ollama endpoint '{endpoint}' is not a loopback address. The local Ollama API is "
+                                            + $"unauthenticated; refusing to route prompts to a remote host. Set {OllamaAllowRemoteEndpointConfigurationKey}=true to override.");
     }
 
     private static ModelRoutingLocalChatClient CreateLocalChatClient(IServiceProvider serviceProvider, IConfiguration configuration)

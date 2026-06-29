@@ -1,5 +1,7 @@
 namespace XE_Local_AI_Engine.Client.Services.CloudProviders.Implementation;
 
+using System.Globalization;
+using System.Runtime.CompilerServices;
 using Azure;
 using Microsoft.Extensions.AI;
 
@@ -45,7 +47,7 @@ internal sealed class AzureFoundryErrorTranslatingChatClient : DelegatingChatCli
 
     public override async IAsyncEnumerable<ChatResponseUpdate> GetStreamingResponseAsync(IEnumerable<ChatMessage> messages,
         ChatOptions? options = null,
-        [System.Runtime.CompilerServices.EnumeratorCancellation]
+        [EnumeratorCancellation]
         CancellationToken cancellationToken = default)
     {
         // The Azure RequestFailedException can surface during enumeration (the SSE stream opens lazily), so the
@@ -100,7 +102,7 @@ internal sealed class AzureFoundryErrorTranslatingChatClient : DelegatingChatCli
         }
 
         return new AzureFoundryProviderException(AzureFoundryProviderErrorKind.Transport,
-            $"The Azure Foundry endpoint returned an error (HTTP {exception.Status.ToString(System.Globalization.CultureInfo.InvariantCulture)}).",
+            $"The Azure Foundry endpoint returned an error (HTTP {exception.Status.ToString(CultureInfo.InvariantCulture)}).",
             exception);
     }
 }

@@ -224,8 +224,8 @@ public sealed class ActiveCloudChatClientFactory : IActiveCloudChatClientFactory
         {
             var selectedModel = ResolveSelectedModelName();
             var matchedDeployment = connection.Models
-                .FirstOrDefault(model => string.Equals(model.DeploymentName, selectedModel, StringComparison.OrdinalIgnoreCase))
-                ?.DeploymentName;
+                                              .FirstOrDefault(model => string.Equals(model.DeploymentName, selectedModel, StringComparison.OrdinalIgnoreCase))
+                                              ?.DeploymentName;
 
             if (!string.IsNullOrWhiteSpace(matchedDeployment))
             {

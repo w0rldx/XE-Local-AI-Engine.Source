@@ -122,6 +122,7 @@ public sealed class SubAgentSpawnServiceTests
         {
             await Task.Delay(5);
         }
+
         await cts.CancelAsync();
 
         await AssertEx.ThrowsAsync<OperationCanceledException>(() => spawnTask);

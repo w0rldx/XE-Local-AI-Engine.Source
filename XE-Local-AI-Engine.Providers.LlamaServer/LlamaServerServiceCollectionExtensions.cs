@@ -86,8 +86,7 @@ public static class LlamaServerServiceCollectionExtensions
                 sp.GetRequiredService<ILlamaCppBinaryManager>(),
                 sp.GetRequiredService<ICudaBuildEventPublisher>(),
                 sp.GetRequiredService<ILogger<CudaBuildService>>()));
-        services.AddHostedService(static sp => new CudaBuildStartupService(
-            sp.GetRequiredService<ICudaBuildService>(),
+        services.AddHostedService(static sp => new CudaBuildStartupService(sp.GetRequiredService<ICudaBuildService>(),
             sp.GetRequiredService<IInstalledRuntimeStore>(),
             sp.GetRequiredService<ICudaManagedBuildSignal>(),
             sp.GetRequiredService<ILogger<CudaBuildStartupService>>()));
@@ -149,8 +148,7 @@ public static class LlamaServerServiceCollectionExtensions
         // Startup notice: when the bring-your-own override is active, log it once at Warning so it is obvious that an
         // unverified operator-supplied binary is in use (integrity hash verification is skipped). Nothing is logged when
         // the override is unset, so a normal deploy is byte-behavior-unchanged.
-        services.AddHostedService(static sp => new LlamaServerRuntimeOverrideStartupNotice(
-            sp.GetRequiredService<LlamaServerRuntimeOverrideOptions>(),
+        services.AddHostedService(static sp => new LlamaServerRuntimeOverrideStartupNotice(sp.GetRequiredService<LlamaServerRuntimeOverrideOptions>(),
             sp.GetRequiredService<ILogger<LlamaServerRuntimeOverrideStartupNotice>>()));
 
         return services;

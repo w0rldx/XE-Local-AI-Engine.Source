@@ -1,6 +1,5 @@
 namespace XE_Local_AI_Engine.Client.Services.CloudProviders.Implementation;
 
-using System.Linq;
 using System.Runtime.Versioning;
 using System.Security.AccessControl;
 using System.Security.Cryptography;
@@ -111,7 +110,7 @@ public sealed class CloudCredentialStore : ICloudCredentialStore, IDisposable
         }
 
         var firstModel = connection.Models.FirstOrDefault(model => !string.IsNullOrWhiteSpace(model.DeploymentName))
-            ?? (connection.Models.Count > 0 ? connection.Models[0] : null);
+                         ?? (connection.Models.Count > 0 ? connection.Models[0] : null);
         if (firstModel is null)
         {
             return null;
@@ -187,7 +186,7 @@ public sealed class CloudCredentialStore : ICloudCredentialStore, IDisposable
         if (HasProperty(root, "azureFoundry") || HasProperty(root, "schemaVersion"))
         {
             return JsonSerializer.Deserialize<StoredCloudProviderConfig>(payload, SerializerOptions)
-                ?? throw new JsonException("Stored cloud provider config could not be deserialized.");
+                   ?? throw new JsonException("Stored cloud provider config could not be deserialized.");
         }
 
         // Legacy v1 shape: a flat { providerName, endpoint, apiKey, deploymentName } credential blob.
@@ -230,7 +229,7 @@ public sealed class CloudCredentialStore : ICloudCredentialStore, IDisposable
     private static bool HasProperty(JsonElement element, string propertyName)
     {
         return element.EnumerateObject()
-            .Any(property => string.Equals(property.Name, propertyName, StringComparison.OrdinalIgnoreCase));
+                      .Any(property => string.Equals(property.Name, propertyName, StringComparison.OrdinalIgnoreCase));
     }
 
     private static string? GetString(JsonElement element, string propertyName)
