@@ -14,7 +14,7 @@ using XE_Local_AI_Engine.Tests.Testing;
 ///     gate, lesson/no-lesson candidate creation, Failure-scope eligibility, and dedup against existing live memories.
 ///     The model-touching agent is faked (mirrors the analysis-service test seam, so no Ollama in CI); the privacy
 ///     invariant (node-local resolution, never a cloud client) is covered by
-///     <see cref="OllamaMemoryExtractionAgentTests" />.
+///     <see cref="DefaultMemoryExtractionAgentTests" />.
 /// </summary>
 public sealed class MemoryExtractionServiceTests
 {

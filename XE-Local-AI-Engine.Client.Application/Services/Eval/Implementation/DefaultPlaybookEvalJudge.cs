@@ -7,11 +7,11 @@ using XE_Local_AI_Engine.Client.Persistence.Stores;
 /// <summary>
 ///     Default <see cref="IPlaybookEvalJudge" /> for golden-conversation scoring. The deterministic assertion path scores in plain
 ///     code (no model call), keeping gate-critical cases stable; the judge path forces a structured JSON verdict from
-///     the SUPPLIED node-local client (mirrors <c>OllamaPlaybookAnalysisAgent</c>: cached <see cref="JsonSerializerOptions" />,
+///     the SUPPLIED node-local client (mirrors <c>DefaultPlaybookAnalysisAgent</c>: cached <see cref="JsonSerializerOptions" />,
 ///     positional-record DTO, system + user messages, <c>Temperature = 0</c>). Golden text never leaves the node — the
 ///     service resolves and owns the node-local client and passes it in.
 /// </summary>
-internal sealed class OllamaPlaybookEvalJudge(ILogger<OllamaPlaybookEvalJudge> logger) : IPlaybookEvalJudge
+internal sealed class DefaultPlaybookEvalJudge(ILogger<DefaultPlaybookEvalJudge> logger) : IPlaybookEvalJudge
 {
     internal const string AssertionScoredBy = "assertion";
     internal const string JudgeScoredBy = "judge";
@@ -28,7 +28,7 @@ internal sealed class OllamaPlaybookEvalJudge(ILogger<OllamaPlaybookEvalJudge> l
 
     private static readonly JsonSerializerOptions SerializerOptions = new(JsonSerializerDefaults.Web);
 
-    private readonly ILogger<OllamaPlaybookEvalJudge> _logger = logger ?? throw new ArgumentNullException(nameof(logger));
+    private readonly ILogger<DefaultPlaybookEvalJudge> _logger = logger ?? throw new ArgumentNullException(nameof(logger));
 
     public async Task<EvalScore> ScoreAsync(GoldenConversationRecord goldenCase,
         string candidateText,

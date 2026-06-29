@@ -1,7 +1,5 @@
 namespace XE_Local_AI_Engine.Client.Endpoints.Scheduler.V1;
 
-using XE_Local_AI_Engine.Client.Persistence.Entities;
-
 // ---------------------------------------------------------------------------
 // Template DTOs
 // ---------------------------------------------------------------------------

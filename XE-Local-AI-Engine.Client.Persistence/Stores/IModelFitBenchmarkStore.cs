@@ -8,6 +8,9 @@ namespace XE_Local_AI_Engine.Client.Persistence.Stores;
 /// </summary>
 public interface IModelFitBenchmarkStore
 {
+    // Deferred: the ModelFit Benchmark feature is scaffolding and not wired (see release-stability plan 2026-06-29).
+    // This store has no live caller; it is kept so the deferred feature's persistence contract survives.
+
     /// <summary>
     ///     Replaces every benchmark row for <paramref name="snapshotId" /> with <paramref name="benchmarks" /> in a single
     ///     transaction (delete-then-insert). Each input row is assigned a fresh <c>Id</c>. Returns the count inserted.

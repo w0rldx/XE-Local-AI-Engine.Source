@@ -81,6 +81,9 @@ public sealed class ModelFitRequestValidator
             return null;
         }
 
+        // Deferred feature: ModelFit Benchmark is scaffolding that is not yet wired (see release-stability plan 2026-06-29).
+        // Any non-Recommend operation is rejected earlier in the refresh service, so this branch cannot run today. It is
+        // kept ready for the day the deferred feature is turned on.
         if (operation == ModelFitOperation.Benchmark)
         {
             if (string.IsNullOrWhiteSpace(modelName))

@@ -15,13 +15,13 @@ using XE_Local_AI_Engine.Providers.Abstractions.Contracts;
 ///     This type is intentionally not unit-tested against a live model; tests substitute a fake
 ///     <see cref="IMemoryExtractionAgent" /> (mirroring the analysis agent seam, so no Ollama is needed in CI).
 /// </summary>
-internal sealed class OllamaMemoryExtractionAgent(
+internal sealed class DefaultMemoryExtractionAgent(
     ILocalModelProviderResolver providerResolver,
     IOptions<MemoryExtractionOptions> options,
-    ILogger<OllamaMemoryExtractionAgent> logger) : IMemoryExtractionAgent
+    ILogger<DefaultMemoryExtractionAgent> logger) : IMemoryExtractionAgent
 {
     private static readonly JsonSerializerOptions SerializerOptions = new(JsonSerializerDefaults.Web);
-    private readonly ILogger<OllamaMemoryExtractionAgent> _logger = logger ?? throw new ArgumentNullException(nameof(logger));
+    private readonly ILogger<DefaultMemoryExtractionAgent> _logger = logger ?? throw new ArgumentNullException(nameof(logger));
     private readonly MemoryExtractionOptions _options = (options ?? throw new ArgumentNullException(nameof(options))).Value;
 
     private readonly ILocalModelProviderResolver _providerResolver = providerResolver ?? throw new ArgumentNullException(nameof(providerResolver));

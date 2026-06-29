@@ -19,7 +19,7 @@ using XE_Local_AI_Engine.Tests.Testing;
 ///     cloud-capable <see cref="IChatClient" />. The agent has no <c>IChatClient</c> dependency at all (structural
 ///     guarantee); these tests prove it routes through the node-local resolver and disables cleanly without a model.
 /// </summary>
-public sealed class OllamaMemoryExtractionAgentTests
+public sealed class DefaultMemoryExtractionAgentTests
 {
     [Test]
     public async Task MemoryExtraction_NeverUsesCloudChatClient()
@@ -37,12 +37,12 @@ public sealed class OllamaMemoryExtractionAgentTests
         provider.CreateChatClient(Arg.Any<LocalModelSelection>()).Returns(nodeLocalClient);
         resolver.ResolveProviderForModelAsync("qwen3:8b", Arg.Any<CancellationToken>()).Returns(Task.FromResult(provider));
 
-        var agent = new OllamaMemoryExtractionAgent(resolver,
+        var agent = new DefaultMemoryExtractionAgent(resolver,
             Options.Create(new MemoryExtractionOptions
             {
                 ExtractionModelName = "qwen3:8b"
             }),
-            NullLogger<OllamaMemoryExtractionAgent>.Instance);
+            NullLogger<DefaultMemoryExtractionAgent>.Instance);
 
         var proposals = await agent.ProposeAsync(Run()).ConfigureAwait(false);
 
@@ -60,12 +60,12 @@ public sealed class OllamaMemoryExtractionAgentTests
     public async Task MemoryExtraction_WhenNoModelConfigured_ResolvesNothingAndReturnsEmpty()
     {
         var resolver = Substitute.For<ILocalModelProviderResolver>();
-        var agent = new OllamaMemoryExtractionAgent(resolver,
+        var agent = new DefaultMemoryExtractionAgent(resolver,
             Options.Create(new MemoryExtractionOptions
             {
                 ExtractionModelName = string.Empty
             }),
-            NullLogger<OllamaMemoryExtractionAgent>.Instance);
+            NullLogger<DefaultMemoryExtractionAgent>.Instance);
 
         var proposals = await agent.ProposeAsync(Run()).ConfigureAwait(false);
 
@@ -89,12 +89,12 @@ public sealed class OllamaMemoryExtractionAgentTests
         provider.CreateChatClient(Arg.Any<LocalModelSelection>()).Returns(nodeLocalClient);
         resolver.ResolveProviderForModelAsync(Arg.Any<string>(), Arg.Any<CancellationToken>()).Returns(Task.FromResult(provider));
 
-        var agent = new OllamaMemoryExtractionAgent(resolver,
+        var agent = new DefaultMemoryExtractionAgent(resolver,
             Options.Create(new MemoryExtractionOptions
             {
                 ExtractionModelName = "qwen3:8b"
             }),
-            NullLogger<OllamaMemoryExtractionAgent>.Instance);
+            NullLogger<DefaultMemoryExtractionAgent>.Instance);
 
         var proposals = await agent.ProposeAsync(Run(failed: false)).ConfigureAwait(false);
 

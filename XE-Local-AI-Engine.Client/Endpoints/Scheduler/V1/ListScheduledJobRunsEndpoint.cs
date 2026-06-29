@@ -19,7 +19,7 @@ public sealed class ListScheduledJobRunsEndpoint(IScheduledJobManagementService 
 
     public override async Task HandleAsync(ListScheduledJobRunsRequest req, CancellationToken ct)
     {
-        var records = await _scheduledJobManagementService.ListRunsAsync(req.Status, req.FromUtc, req.ToUtc, req.ScheduledJobId, ct).ConfigureAwait(false);
+        var records = await _scheduledJobManagementService.ListRunsAsync(req.Status.ToPersistence(), req.FromUtc, req.ToUtc, req.ScheduledJobId, ct).ConfigureAwait(false);
         await Send.OkAsync(new ListScheduledJobRunsResponse
             {
                 Items = [.. records.Select(static r => r.ToResponse())]

@@ -43,7 +43,18 @@ jobs:
       - name: Run backend tests (auto-enrolled)
         env:
           TZ: Europe/Berlin
-        run: dotnet test XE-Local-AI-Engine.slnx --configuration Release --no-build --max-parallel-test-modules 1
+        run: |
+          set -o pipefail
+          dotnet test XE-Local-AI-Engine.slnx --configuration Release --no-build --max-parallel-test-modules 1 \
+            | tee /tmp/xe-test-output.txt
+          # Hollow-gate guard: MTP always emits a "Passed!" or "Failed!" summary per suite that ran.
+          # If zero suites are enrolled (e.g. misnamed project, MTP not collected), the output has
+          # no summary line and dotnet exits 0 — this check catches that silent green.
+          if ! grep -qE 'Passed!|Failed!' /tmp/xe-test-output.txt; then
+            echo "ERROR: no test-suite summary found — zero test projects enrolled." \
+                 "Check project names or IsTestingPlatformApplication." >&2
+            exit 1
+          fi
 
   client-react:
     runs-on: ubuntu-latest
@@ -83,4 +94,5 @@ jobs:
         run: pnpm run build
 
       - name: Audit production dependencies
-        run: pnpm audit --prod
+        # high/critical block the build; moderate/low are advisory-only and must not red an unrelated PR.
+        run: pnpm audit --prod --audit-level=high

@@ -4,7 +4,6 @@ import {
 	IconBrain,
 	IconDeviceDesktop,
 	IconPaperclip,
-	IconPhoto,
 	IconPlayerStopFilled,
 	IconSend,
 } from "@tabler/icons-react";
@@ -280,13 +279,6 @@ export function ChatInputArea({
 							</Tooltip>
 						)}
 					</FileButton>
-				) : null}
-				{capabilities.showImageAttachmentControls ? (
-					<Tooltip label={t("pages.chat.composer.image", "Attach image")}>
-						<ActionIcon size={36} variant="subtle" color="gray" disabled={true} aria-label="Attach image">
-							<IconPhoto size={15} />
-						</ActionIcon>
-					</Tooltip>
 				) : null}
 				{developerMode ? (
 					<Tooltip label={t("pages.chat.composer.samplingOptions", "Advanced sampling options")}>

@@ -31,6 +31,12 @@ internal static class AddNodeModelRuntimeExtensions
 {
     private const string UseLocalModelProviderConfigurationKey = "XE_USE_LOCAL_MODEL_PROVIDER";
 
+    // Capability gate for the optional Ollama runtime. Enabled when unset, so the default registration is unchanged.
+    private const string OllamaRuntimeEnabledConfigurationKey = "XE_OLLAMA_RUNTIME_ENABLED";
+
+    // Opt-in escape hatch for a non-loopback Ollama endpoint. Off by default — the local Ollama API is unauthenticated.
+    private const string OllamaAllowRemoteEndpointConfigurationKey = "XE_OLLAMA_ALLOW_REMOTE_ENDPOINT";
+
     public static IHostApplicationBuilder AddNodeModelRuntime(this IHostApplicationBuilder builder, IConfiguration configuration)
     {
         ArgumentNullException.ThrowIfNull(builder);
@@ -87,11 +93,11 @@ internal static class AddNodeModelRuntimeExtensions
         // IEmbeddingGenerator — the previous Ollama hardwire and its only consumer (the unused LocalEmbeddingService
         // adapter) were removed so nothing contradicts the multi-provider design.
 
-        builder.Services.AddOllamaLocalModelProvider(sp =>
-        {
-            var chatConnectionSettings = ResolveChatConnectionSettings(sp, configuration);
-            return new OllamaLocalModelProviderRegistration(chatConnectionSettings.Endpoint, chatConnectionSettings.Model);
-        });
+        // Ollama is an OPTIONAL secondary local runtime (Decision #1: keep + isolate). ALL Ollama-specific wiring lives
+        // in AddOllamaRuntime, so this module is the single seam that references Providers.Ollama — runtime selection has
+        // one capability gate, never a second provider-direct code path. Enabled by default, so the registration is
+        // byte-identical to the previous inline call unless an operator opts out.
+        AddOllamaRuntime(builder, configuration);
 
         // Register the llama-server provider stack ALONGSIDE Ollama so the resolver can
         // dispatch a model to either runtime. AddLlamaServerLocalModelProvider adds the binary manager, the GPU
@@ -183,6 +189,52 @@ internal static class AddNodeModelRuntimeExtensions
                    options.IdleTimeoutSeconds = runtimeSettings.GetOrchestrationIdleTimeoutSeconds());
 
         return builder;
+    }
+
+    /// <summary>
+    ///     Registers the OPTIONAL Ollama local-model runtime as one cohesive, capability-gated block (Decision #1:
+    ///     keep + isolate). This is the only place that references <c>Providers.Ollama</c>, so the resolver dispatches a
+    ///     model to either this provider or llama.cpp through a single seam. The runtime is enabled unless
+    ///     <c>XE_OLLAMA_RUNTIME_ENABLED=false</c>, so the default registration is byte-identical to the previous inline
+    ///     call. The resolved endpoint is loopback-guarded (see <see cref="GuardOllamaEndpointIsLoopback" />).
+    /// </summary>
+    private static void AddOllamaRuntime(IHostApplicationBuilder builder, IConfiguration configuration)
+    {
+        ArgumentNullException.ThrowIfNull(builder);
+        ArgumentNullException.ThrowIfNull(configuration);
+
+        // Capability gate: enabled unless explicitly disabled, so an un-flagged box keeps today's behavior exactly.
+        if (!configuration.GetValue(OllamaRuntimeEnabledConfigurationKey, defaultValue: true))
+        {
+            return;
+        }
+
+        builder.Services.AddOllamaLocalModelProvider(sp =>
+        {
+            var chatConnectionSettings = ResolveChatConnectionSettings(sp, configuration);
+            GuardOllamaEndpointIsLoopback(chatConnectionSettings.Endpoint, configuration);
+            return new OllamaLocalModelProviderRegistration(chatConnectionSettings.Endpoint, chatConnectionSettings.Model);
+        });
+    }
+
+    /// <summary>
+    ///     Rejects a non-loopback Ollama endpoint (security LOW-3 / SSRF). The local Ollama HTTP API is unauthenticated,
+    ///     so a stray non-loopback endpoint value would route prompts to an arbitrary host. An operator can opt in to a
+    ///     remote endpoint with <c>XE_OLLAMA_ALLOW_REMOTE_ENDPOINT=true</c>.
+    /// </summary>
+    private static void GuardOllamaEndpointIsLoopback(Uri endpoint, IConfiguration configuration)
+    {
+        ArgumentNullException.ThrowIfNull(endpoint);
+        ArgumentNullException.ThrowIfNull(configuration);
+
+        if (endpoint.IsLoopback || configuration.GetValue(OllamaAllowRemoteEndpointConfigurationKey, defaultValue: false))
+        {
+            return;
+        }
+
+        throw new InvalidOperationException(
+            $"The configured Ollama endpoint '{endpoint}' is not a loopback address. The local Ollama API is "
+            + $"unauthenticated; refusing to route prompts to a remote host. Set {OllamaAllowRemoteEndpointConfigurationKey}=true to override.");
     }
 
     private static ModelRoutingLocalChatClient CreateLocalChatClient(IServiceProvider serviceProvider, IConfiguration configuration)

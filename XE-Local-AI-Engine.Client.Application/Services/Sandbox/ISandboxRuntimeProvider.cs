@@ -4,12 +4,12 @@ namespace XE_Local_AI_Engine.Client.Services.Sandbox;
 ///     Provider-neutral runtime over which AgentHome creates a node-scoped sandbox, copies selected folders in,
 ///     executes commands, reads results, copies artifacts out, and tears the sandbox down. The
 ///     contract is shaped by AgentHome's lifecycle, not by any provider SDK — no Docker / OpenSandbox / gRPC type
-///     appears here. Implementations: <c>FakeSandboxRuntimeProvider</c> (deterministic, CI-mandatory, the current
-///     default) and, from local-container sandbox, a HostAgent-backed local-container provider.
+///     appears here. Implementations: <c>FakeSandboxRuntimeProvider</c> (deterministic, CI-mandatory, the safe default)
+///     and <c>ProcessSandboxRuntimeProvider</c> (a jailed supervised-child process).
 /// </summary>
 public interface ISandboxRuntimeProvider
 {
-    /// <summary>Stable provider identifier (e.g. <c>"fake"</c>, <c>"local-container"</c>) used by configuration-bound selection.</summary>
+    /// <summary>Stable provider identifier (e.g. <c>"fake"</c>, <c>"process"</c>) used by configuration-bound selection.</summary>
     string ProviderName { get; }
 
     /// <summary>The operations this provider can serve. AgentHome gates optional behavior on these flags.</summary>

@@ -16,7 +16,11 @@ internal static class SandboxProviderSelector
     {
         ArgumentNullException.ThrowIfNull(services);
 
-        var providerName = services.GetRequiredService<IOptions<SandboxOptions>>().Value.Provider;
+        // An unset provider resolves to the deterministic fake. This is the safe non-Production path; in Production the
+        // SandboxOptions startup validation rejects an unset provider before anything resolves the selector, so a
+        // stripped config can never reach here and silently fall back.
+        var configuredProvider = services.GetRequiredService<IOptions<SandboxOptions>>().Value.Provider;
+        var providerName = string.IsNullOrWhiteSpace(configuredProvider) ? FakeSandboxRuntimeProvider.Name : configuredProvider;
         return providerName switch
         {
             FakeSandboxRuntimeProvider.Name => ActivatorUtilities.CreateInstance<FakeSandboxRuntimeProvider>(services),

@@ -16,7 +16,7 @@ public static class NodeApplicationServiceCollectionExtensions
 
         builder.AddNodeCoreOptions(configuration);
         builder.AddNodeAuthAndConnection(configuration);
-        builder.AddNodeHostAgentAndInvocation(configuration);
+        builder.AddNodeInvocation(configuration);
         builder.AddNodeWorkspaceAndAgents(configuration);
         builder.AddNodeAnalysis(configuration);
         builder.AddNodeAdaptiveMemory(configuration);
