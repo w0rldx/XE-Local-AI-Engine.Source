@@ -98,6 +98,14 @@
 			"source": "backend"
 		},
 		{
+			"id": "backend:Azure.Identity@1.14.2",
+			"name": "Azure.Identity",
+			"version": "1.14.2",
+			"license": "MIT",
+			"homepageUrl": "https://github.com/Azure/azure-sdk-for-net/blob/Azure.Identity_1.14.2/sdk/identity/Azure.IdentityREADME.md",
+			"source": "backend"
+		},
+		{
 			"id": "backend:BouncyCastle.Cryptography@2.6.2",
 			"name": "BouncyCastle.Cryptography",
 			"version": "2.6.2",
@@ -138,17 +146,17 @@
 			"source": "backend"
 		},
 		{
-			"id": "backend:FastEndpoints@8.1.0",
+			"id": "backend:FastEndpoints@8.2.0",
 			"name": "FastEndpoints",
-			"version": "8.1.0",
+			"version": "8.2.0",
 			"license": "MIT",
 			"homepageUrl": "https://fast-endpoints.com/",
 			"source": "backend"
 		},
 		{
-			"id": "backend:FastEndpoints.Swagger@8.1.0",
+			"id": "backend:FastEndpoints.Swagger@8.2.0",
 			"name": "FastEndpoints.Swagger",
-			"version": "8.1.0",
+			"version": "8.2.0",
 			"license": "MIT",
 			"homepageUrl": "https://fast-endpoints.com/",
 			"source": "backend"
@@ -202,49 +210,49 @@
 			"source": "frontend"
 		},
 		{
-			"id": "backend:Microsoft.Agents.AI@1.10.0",
+			"id": "backend:Microsoft.Agents.AI@1.11.1",
 			"name": "Microsoft.Agents.AI",
-			"version": "1.10.0",
+			"version": "1.11.1",
 			"license": "MIT",
 			"homepageUrl": "https://learn.microsoft.com/agent-framework/",
 			"source": "backend"
 		},
 		{
-			"id": "backend:Microsoft.Agents.AI.Abstractions@1.10.0",
+			"id": "backend:Microsoft.Agents.AI.Abstractions@1.11.1",
 			"name": "Microsoft.Agents.AI.Abstractions",
-			"version": "1.10.0",
+			"version": "1.11.1",
 			"license": "MIT",
 			"homepageUrl": "https://learn.microsoft.com/agent-framework/",
 			"source": "backend"
 		},
 		{
-			"id": "backend:Microsoft.Agents.AI.DevUI@1.10.0-preview.260610.1",
+			"id": "backend:Microsoft.Agents.AI.DevUI@1.11.1-preview.260625.1",
 			"name": "Microsoft.Agents.AI.DevUI",
-			"version": "1.10.0-preview.260610.1",
+			"version": "1.11.1-preview.260625.1",
 			"license": "MIT",
 			"homepageUrl": "https://learn.microsoft.com/agent-framework/",
 			"source": "backend"
 		},
 		{
-			"id": "backend:Microsoft.Agents.AI.Hosting@1.10.0-preview.260610.1",
+			"id": "backend:Microsoft.Agents.AI.Hosting@1.11.1-preview.260625.1",
 			"name": "Microsoft.Agents.AI.Hosting",
-			"version": "1.10.0-preview.260610.1",
+			"version": "1.11.1-preview.260625.1",
 			"license": "MIT",
 			"homepageUrl": "https://learn.microsoft.com/agent-framework/",
 			"source": "backend"
 		},
 		{
-			"id": "backend:Microsoft.Agents.AI.Hosting.OpenAI@1.10.0-alpha.260610.1",
+			"id": "backend:Microsoft.Agents.AI.Hosting.OpenAI@1.11.1-alpha.260625.1",
 			"name": "Microsoft.Agents.AI.Hosting.OpenAI",
-			"version": "1.10.0-alpha.260610.1",
+			"version": "1.11.1-alpha.260625.1",
 			"license": "MIT",
 			"homepageUrl": "https://learn.microsoft.com/agent-framework/",
 			"source": "backend"
 		},
 		{
-			"id": "backend:Microsoft.Agents.AI.Workflows@1.10.0",
+			"id": "backend:Microsoft.Agents.AI.Workflows@1.11.1",
 			"name": "Microsoft.Agents.AI.Workflows",
-			"version": "1.10.0",
+			"version": "1.11.1",
 			"license": "MIT",
 			"homepageUrl": "https://learn.microsoft.com/agent-framework/",
 			"source": "backend"
@@ -394,6 +402,14 @@
 			"source": "backend"
 		},
 		{
+			"id": "backend:Microsoft.NET.ILLink.Tasks@10.0.9",
+			"name": "Microsoft.NET.ILLink.Tasks",
+			"version": "10.0.9",
+			"license": "MIT",
+			"homepageUrl": "https://dot.net/",
+			"source": "backend"
+		},
+		{
 			"id": "backend:ModelContextProtocol@1.4.0",
 			"name": "ModelContextProtocol",
 			"version": "1.4.0",
@@ -434,17 +450,17 @@
 			"source": "backend"
 		},
 		{
-			"id": "backend:OpenTelemetry.Instrumentation.AspNetCore@1.15.2",
+			"id": "backend:OpenTelemetry.Instrumentation.AspNetCore@1.16.0",
 			"name": "OpenTelemetry.Instrumentation.AspNetCore",
-			"version": "1.15.2",
+			"version": "1.16.0",
 			"license": "Apache-2.0",
 			"homepageUrl": "https://opentelemetry.io/",
 			"source": "backend"
 		},
 		{
-			"id": "backend:OpenTelemetry.Instrumentation.Http@1.15.1",
+			"id": "backend:OpenTelemetry.Instrumentation.Http@1.16.0",
 			"name": "OpenTelemetry.Instrumentation.Http",
-			"version": "1.15.1",
+			"version": "1.16.0",
 			"license": "Apache-2.0",
 			"homepageUrl": "https://opentelemetry.io/",
 			"source": "backend"
@@ -466,41 +482,41 @@
 			"source": "backend"
 		},
 		{
-			"id": "backend:Quartz@3.18.1",
+			"id": "backend:Quartz@3.18.2",
 			"name": "Quartz",
-			"version": "3.18.1",
+			"version": "3.18.2",
 			"license": "Apache-2.0",
 			"homepageUrl": "https://www.quartz-scheduler.net/",
 			"source": "backend"
 		},
 		{
-			"id": "backend:Quartz.Extensions.Hosting@3.18.1",
+			"id": "backend:Quartz.Extensions.Hosting@3.18.2",
 			"name": "Quartz.Extensions.Hosting",
-			"version": "3.18.1",
+			"version": "3.18.2",
 			"license": "Apache-2.0",
 			"homepageUrl": "https://www.quartz-scheduler.net/",
 			"source": "backend"
 		},
 		{
-			"id": "backend:Quartz.Plugins@3.18.1",
+			"id": "backend:Quartz.Plugins@3.18.2",
 			"name": "Quartz.Plugins",
-			"version": "3.18.1",
+			"version": "3.18.2",
 			"license": "Apache-2.0",
 			"homepageUrl": "https://www.quartz-scheduler.net/",
 			"source": "backend"
 		},
 		{
-			"id": "backend:Quartz.Plugins.TimeZoneConverter@3.18.1",
+			"id": "backend:Quartz.Plugins.TimeZoneConverter@3.18.2",
 			"name": "Quartz.Plugins.TimeZoneConverter",
-			"version": "3.18.1",
+			"version": "3.18.2",
 			"license": "Apache-2.0",
 			"homepageUrl": "https://www.quartz-scheduler.net/",
 			"source": "backend"
 		},
 		{
-			"id": "backend:Quartz.Serialization.SystemTextJson@3.18.1",
+			"id": "backend:Quartz.Serialization.SystemTextJson@3.18.2",
 			"name": "Quartz.Serialization.SystemTextJson",
-			"version": "3.18.1",
+			"version": "3.18.2",
 			"license": "Apache-2.0",
 			"homepageUrl": "https://www.quartz-scheduler.net/",
 			"source": "backend"
@@ -578,9 +594,9 @@
 			"source": "frontend"
 		},
 		{
-			"id": "backend:Scalar.AspNetCore@2.16.4",
+			"id": "backend:Scalar.AspNetCore@2.16.6",
 			"name": "Scalar.AspNetCore",
-			"version": "2.16.4",
+			"version": "2.16.6",
 			"license": "MIT",
 			"homepageUrl": "https://scalar.com/",
 			"source": "backend"
