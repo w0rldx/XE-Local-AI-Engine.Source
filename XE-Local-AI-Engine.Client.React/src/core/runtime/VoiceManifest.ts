@@ -93,6 +93,18 @@ export const mockVoiceManifest: VoiceManifest = {
 	defaultVoiceId: "af_heart",
 };
 
+// Brand stamped onto the dev/test-only mock so the runtime can refuse it by identity WITHOUT importing the mock data
+// itself — `VoiceRuntime` only needs `isMockVoiceManifest`, never the placeholder catalog. The brand closes the
+// catalog-trust risk (mock `enabled: true` + hardcoded model ids), not hash integrity.
+const mockManifestBrand = Symbol("xe.voice.mockManifest");
+
+(mockVoiceManifest as { [mockManifestBrand]?: true })[mockManifestBrand] = true;
+
+/** True when `manifest` is the dev/test-only placeholder catalog (carries the mock brand). */
+export function isMockVoiceManifest(manifest: VoiceManifest): boolean {
+	return (manifest as { [mockManifestBrand]?: true })[mockManifestBrand] === true;
+}
+
 /** Returns the first allowed model whose files include the requested precision, or undefined if none. */
 export function findAllowedModel(
 	manifest: VoiceManifest,
