@@ -6,6 +6,7 @@ using Microsoft.Extensions.Logging;
 using XE_Local_AI_Engine.Providers.Abstractions;
 using XE_Local_AI_Engine.Providers.Abstractions.Capabilities;
 using XE_Local_AI_Engine.Providers.Abstractions.Gguf;
+using XE_Local_AI_Engine.Providers.LlamaServer.Configuration;
 using XE_Local_AI_Engine.Providers.LlamaServer.Contracts;
 using XE_Local_AI_Engine.Providers.LlamaServer.Implementation;
 using XE_Local_AI_Engine.Providers.LlamaServer.Options;
@@ -36,7 +37,19 @@ public static class LlamaServerServiceCollectionExtensions
         ArgumentNullException.ThrowIfNull(services);
 
         services.TryAddSingleton<IGpuVendorProbe, ProcessGpuVendorProbe>();
-        services.TryAddSingleton<IGpuVariantSelector, GpuVariantSelector>();
+
+        // Operator bring-your-own llama-server override — operator-trust ONLY. Built once from process env vars
+        // (XE_LLAMACPP_SERVER_PATH / XE_LLAMACPP_VARIANT) via explicit reads, NEVER from IConfiguration sections, the
+        // user-editable node settings store, or a request DTO. Off by default; one instance is shared by the selector and
+        // the binary manager so both key off a single source of override truth.
+        var overrideOptions = LlamaServerRuntimeOverrideOptions.FromEnvironment();
+        services.TryAddSingleton(overrideOptions);
+
+        // The selector takes the override options as a dependency, so register it via an explicit factory (rather than the
+        // type-based registration) so the new dependency resolves deterministically.
+        services.TryAddSingleton<IGpuVariantSelector>(static sp =>
+            new GpuVariantSelector(sp.GetRequiredService<IGpuVendorProbe>(),
+                sp.GetRequiredService<LlamaServerRuntimeOverrideOptions>()));
 
         // Dynamic-runtime resolution seams: the live GitHub Releases catalog (tier 1) and the on-disk installed-runtime
         // state (tier 2). The binary manager consults both, falling back to the pinned floor (tier 3) when both miss.
@@ -53,7 +66,8 @@ public static class LlamaServerServiceCollectionExtensions
                 cacheRoot: null,
                 activeTag: null,
                 sp.GetRequiredService<ILlamaCppReleaseCatalog>(),
-                sp.GetRequiredService<IInstalledRuntimeStore>()));
+                sp.GetRequiredService<IInstalledRuntimeStore>(),
+                sp.GetRequiredService<LlamaServerRuntimeOverrideOptions>()));
 
         // Real available-VRAM probe (Lane B1): parses `llama-server --list-devices`. PLAIN AddSingleton (not TryAdd) so
         // it WINS over the Application-layer TryAddSingleton<IAvailableVramProbe, UnknownAvailableVramProbe>() floor
@@ -108,6 +122,13 @@ public static class LlamaServerServiceCollectionExtensions
         services.AddHostedService(static sp => new StaleLlamaServerReaper(sp.GetRequiredService<IStaleLlamaServerProcessScanner>(),
             LlamaCppBinaryManager.DefaultLlamaCppBinariesRoot(),
             sp.GetRequiredService<ILogger<StaleLlamaServerReaper>>()));
+
+        // Startup notice: when the bring-your-own override is active, log it once at Warning so it is obvious that an
+        // unverified operator-supplied binary is in use (integrity hash verification is skipped). Nothing is logged when
+        // the override is unset, so a normal deploy is byte-behavior-unchanged.
+        services.AddHostedService(static sp => new LlamaServerRuntimeOverrideStartupNotice(
+            sp.GetRequiredService<LlamaServerRuntimeOverrideOptions>(),
+            sp.GetRequiredService<ILogger<LlamaServerRuntimeOverrideStartupNotice>>()));
 
         return services;
     }

@@ -8,6 +8,7 @@ using XE_Local_AI_Engine.Client.Services.Auth;
 using XE_Local_AI_Engine.Client.Services.CloudProviders;
 using XE_Local_AI_Engine.Client.Services.NodeSettings;
 using XE_Local_AI_Engine.Providers.LlamaServer;
+using XE_Local_AI_Engine.Providers.LlamaServer.Configuration;
 using XE_Local_AI_Engine.Providers.LlamaServer.Contracts;
 
 /// <summary>
@@ -31,9 +32,11 @@ public sealed class UpdateLlamaCppRuntimeEndpoint(
     INodeRuntimeSettings nodeRuntimeSettings,
     ILlamaServerProcessSupervisor processSupervisor,
     ILocalChatClientCacheInvalidator localChatClientCacheInvalidator,
+    LlamaServerRuntimeOverrideOptions overrideOptions,
     ILogger<UpdateLlamaCppRuntimeEndpoint> logger) : Endpoint<UpdateLlamaCppRuntimeRequest, LlamaCppVersionResponse>
 {
     private readonly ILlamaCppBinaryManager _binaryManager = binaryManager ?? throw new ArgumentNullException(nameof(binaryManager));
+    private readonly LlamaServerRuntimeOverrideOptions _overrideOptions = overrideOptions ?? throw new ArgumentNullException(nameof(overrideOptions));
     private readonly IInstalledRuntimeStore _installedRuntimeStore = installedRuntimeStore ?? throw new ArgumentNullException(nameof(installedRuntimeStore));
     private readonly ILocalChatClientCacheInvalidator _localChatClientCacheInvalidator = localChatClientCacheInvalidator ?? throw new ArgumentNullException(nameof(localChatClientCacheInvalidator));
     private readonly ILogger<UpdateLlamaCppRuntimeEndpoint> _logger = logger ?? throw new ArgumentNullException(nameof(logger));
@@ -51,6 +54,20 @@ public sealed class UpdateLlamaCppRuntimeEndpoint(
 
     public override async Task HandleAsync(UpdateLlamaCppRuntimeRequest req, CancellationToken ct)
     {
+        // Bring-your-own override active: the operator manages the binary out-of-band, so the catalog-driven update path is
+        // disabled. Short-circuit with an explicit, sanitized 409 rather than auto-selecting the override variant (which
+        // would resolve no catalog asset and surface a misleading "no matching asset" error). RunningProcessCount is 0 —
+        // this block is the override, not the eject-first safety gate.
+        if (_overrideOptions.IsActive)
+        {
+            await Send.ResultAsync(Results.Conflict(new LlamaCppUpdateBlockedResponse
+            {
+                RunningProcessCount = 0,
+                Message = "Runtime updates are disabled while a bring-your-own llama-server override is active; the operator manages the binary."
+            })).ConfigureAwait(false);
+            return;
+        }
+
         // Tag-format gate at the transport boundary — rejects path/URL injection before any URL is composed.
         if (!StoredNodeSettings.IsValidRecommendedLlamaCppTag(req.Tag))
         {

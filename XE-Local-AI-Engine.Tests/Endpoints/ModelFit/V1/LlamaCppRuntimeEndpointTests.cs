@@ -7,6 +7,7 @@ using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 using NSubstitute;
 using XE_Local_AI_Engine.Providers.LlamaServer;
+using XE_Local_AI_Engine.Providers.LlamaServer.Configuration;
 using XE_Local_AI_Engine.Providers.LlamaServer.Contracts;
 using XE_Local_AI_Engine.Tests.Providers.LlamaServer;
 using XE_Local_AI_Engine.Tests.Testing;
@@ -186,6 +187,40 @@ public sealed class LlamaCppRuntimeEndpointTests
     }
 
     [Test]
+    public async Task UpdateRuntime_WhenOverrideActive_ShortCircuits()
+    {
+        // [arch HIGH-1] With a bring-your-own override active the operator manages the binary out-of-band, so the
+        // catalog-driven update is disabled: the endpoint returns an explicit "updates disabled" 409 and never installs.
+        var binaryManager = Substitute.For<ILlamaCppBinaryManager>();
+        var overrideOptions = new LlamaServerRuntimeOverrideOptions
+        {
+            ServerPath = "/opt/llama/llama-server",
+            Variant = GpuVariant.Cuda
+        };
+
+        await using var factory = CreateFactory(binaryManager, new LlamaCppUpdateState(), overrideOptions: overrideOptions);
+        using var client = factory.CreateClient();
+
+        using var request = new HttpRequestMessage(HttpMethod.Post, $"{ApiPrefix}/model-fit/llamacpp/update")
+        {
+            Content = JsonContent.Create(new
+            {
+                tag = "b9700"
+            })
+        };
+        factory.AddNodeBearerToken(request);
+        using var response = await client.SendAsync(request).ConfigureAwait(false);
+
+        AssertEx.Equal(HttpStatusCode.Conflict, response.StatusCode);
+        var json = await response.Content.ReadAsStringAsync().ConfigureAwait(false);
+        using var doc = JsonDocument.Parse(json);
+        AssertEx.Contains(doc.RootElement.GetProperty("message").GetString(), "override", StringComparison.OrdinalIgnoreCase);
+
+        await binaryManager.DidNotReceiveWithAnyArgs()
+                           .InstallTagAsync(Arg.Any<string>(), Arg.Any<string>(), Arg.Any<string>(), Arg.Any<long>(), Arg.Any<GpuVariant>(), Arg.Any<CancellationToken>());
+    }
+
+    [Test]
     public async Task RuntimeStatus_WhenNoBearerToken_ReturnsUnauthorized()
     {
         await using var factory = CreateFactory(Substitute.For<ILlamaCppBinaryManager>(), new LlamaCppUpdateState());
@@ -200,7 +235,8 @@ public sealed class LlamaCppRuntimeEndpointTests
     private static TestingWebAppFactory CreateFactory(ILlamaCppBinaryManager binaryManager,
         ILlamaCppUpdateState updateState,
         ILlamaCppReleaseCatalog? releaseCatalog = null,
-        ILlamaServerProcessSupervisor? supervisor = null)
+        ILlamaServerProcessSupervisor? supervisor = null,
+        LlamaServerRuntimeOverrideOptions? overrideOptions = null)
     {
         return new TestingWebAppFactory
         {
@@ -215,6 +251,12 @@ public sealed class LlamaCppRuntimeEndpointTests
                 {
                     services.RemoveAll<ILlamaCppReleaseCatalog>();
                     services.AddSingleton(releaseCatalog);
+                }
+
+                if (overrideOptions is not null)
+                {
+                    services.RemoveAll<LlamaServerRuntimeOverrideOptions>();
+                    services.AddSingleton(overrideOptions);
                 }
 
                 // Deterministic running-process surface for the running-count + 409 safety-gate assertions (a real
