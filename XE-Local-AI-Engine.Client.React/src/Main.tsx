@@ -9,10 +9,17 @@ import { StrictMode } from "react";
 import ReactDOM from "react-dom/client";
 
 import { App } from "@/App";
+import { installCollectors, rootErrorHandlers } from "@/core/diagnostics/Diagnostics";
+import { installAutoCapture } from "@/features/diagnostics/BuildSnapshot";
+
+// Install always-on diagnostics collectors before the first render so early errors are captured,
+// then subscribe auto-capture so a recorded error assembles + persists a snapshot (plan §7.2, §7.4).
+installCollectors();
+installAutoCapture();
 
 const rootElement = document.querySelector("#root");
 if (rootElement && !rootElement.innerHTML) {
-	const root = ReactDOM.createRoot(rootElement);
+	const root = ReactDOM.createRoot(rootElement, rootErrorHandlers);
 	root.render(
 		<StrictMode>
 			<LazyMotion features={domAnimation}>

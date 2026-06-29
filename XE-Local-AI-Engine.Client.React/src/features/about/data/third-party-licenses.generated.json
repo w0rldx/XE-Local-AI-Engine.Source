@@ -170,6 +170,14 @@
 			"source": "backend"
 		},
 		{
+			"id": "frontend:fflate@0.8.3",
+			"name": "fflate",
+			"version": "0.8.3",
+			"license": "MIT",
+			"homepageUrl": "https://101arrowz.github.io/fflate",
+			"source": "frontend"
+		},
+		{
 			"id": "frontend:framer-motion@12.40.0",
 			"name": "framer-motion",
 			"version": "12.40.0",
@@ -191,6 +199,14 @@
 			"version": "8.2.1",
 			"license": "MIT",
 			"homepageUrl": "https://github.com/i18next/i18next-browser-languageDetector",
+			"source": "frontend"
+		},
+		{
+			"id": "frontend:idb@8.0.3",
+			"name": "idb",
+			"version": "8.0.3",
+			"license": "ISC",
+			"homepageUrl": "https://github.com/jakearchibald/idb#readme",
 			"source": "frontend"
 		},
 		{
@@ -570,6 +586,14 @@
 			"source": "frontend"
 		},
 		{
+			"id": "frontend:rrweb@2.0.1",
+			"name": "rrweb",
+			"version": "2.0.1",
+			"license": "MIT",
+			"homepageUrl": "https://github.com/rrweb-io/rrweb#readme",
+			"source": "frontend"
+		},
+		{
 			"id": "backend:Scalar.AspNetCore@2.16.4",
 			"name": "Scalar.AspNetCore",
 			"version": "2.16.4",
@@ -652,6 +676,14 @@
 		{
 			"id": "backend:System.Numerics.Tensors@10.0.9",
 			"name": "System.Numerics.Tensors",
+			"version": "10.0.9",
+			"license": "MIT",
+			"homepageUrl": "https://dot.net/",
+			"source": "backend"
+		},
+		{
+			"id": "backend:System.Security.Cryptography.ProtectedData@10.0.9",
+			"name": "System.Security.Cryptography.ProtectedData",
 			"version": "10.0.9",
 			"license": "MIT",
 			"homepageUrl": "https://dot.net/",
