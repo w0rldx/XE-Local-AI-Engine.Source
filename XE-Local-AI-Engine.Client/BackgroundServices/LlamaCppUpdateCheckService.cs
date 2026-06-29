@@ -1,5 +1,6 @@
 namespace XE_Local_AI_Engine.Client.BackgroundServices;
 
+using XE_Local_AI_Engine.Client.Services.LlamaCpp;
 using XE_Local_AI_Engine.Client.Services.NodeSettings;
 using XE_Local_AI_Engine.Providers.LlamaServer.Contracts;
 
@@ -104,9 +105,10 @@ public sealed class LlamaCppUpdateCheckService : BackgroundService
 
             var resolvedRecommended = recommendedResult.Tag;
 
-            // An update is available only when the recommended tag is resolvable AND it differs from the installed one.
-            // A fresh node (no installed state) is "update available" so the operator can install the recommended build.
-            var updateAvailable = !string.Equals(installedTag, resolvedRecommended, StringComparison.Ordinal);
+            // An update is available only when the resolvable recommended tag is NEWER than the installed one. A fresh
+            // node (no installed state) is "update available" so the operator can install the recommended build. The
+            // helper encodes both rules (and never advertises a downgrade when installed > recommended).
+            var updateAvailable = LlamaCppRuntimeTag.IsUpdateAvailable(installedTag, resolvedRecommended);
 
             _updateState.Store(new LlamaCppUpdateSnapshot(installedTag,
                 RecommendedTag: resolvedRecommended,

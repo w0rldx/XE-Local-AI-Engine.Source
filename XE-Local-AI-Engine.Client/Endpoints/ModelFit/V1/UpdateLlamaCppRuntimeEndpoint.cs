@@ -6,6 +6,7 @@ using XE_Local_AI_Engine.Client.Endpoints.Common;
 using XE_Local_AI_Engine.Client.Endpoints.ModelFit.V1.Mappers;
 using XE_Local_AI_Engine.Client.Services.Auth;
 using XE_Local_AI_Engine.Client.Services.CloudProviders;
+using XE_Local_AI_Engine.Client.Services.LlamaCpp;
 using XE_Local_AI_Engine.Client.Services.NodeSettings;
 using XE_Local_AI_Engine.Providers.LlamaServer;
 using XE_Local_AI_Engine.Providers.LlamaServer.Contracts;
@@ -149,7 +150,7 @@ public sealed class UpdateLlamaCppRuntimeEndpoint(
         _updateState.Store(new LlamaCppUpdateSnapshot(effectiveInstalledTag,
             recommendedTag,
             previous.UpstreamLatestTag,
-            UpdateAvailable: !string.Equals(effectiveInstalledTag, recommendedTag, StringComparison.Ordinal),
+            UpdateAvailable: LlamaCppRuntimeTag.IsUpdateAvailable(effectiveInstalledTag, recommendedTag),
             IsOffline: false,
             CheckedAtUtc: DateTimeOffset.UtcNow));
     }
