@@ -4,7 +4,8 @@
 // Routing: English answers go to Kokoro (WebGPU → WASM) then Web Speech; non-English
 // answers (notably German — Kokoro ships no German voice) route straight to Web Speech, which has OS voices. Web
 // Speech is always the floor. The provider factory is injected so the runtime is unit-testable without real workers,
-// WebGPU, or audio. The manifest is supplied by the caller (the wiring layer injects the real one; the runtime uses the mock by default).
+// WebGPU, or audio. The manifest is supplied by the caller (the wiring layer injects the backend manifest). A
+// production build refuses the dev/test-only mock catalog (see the constructor guard).
 
 import { detectVoiceCapabilities, type VoiceCapabilities } from "./CapabilityDetector";
 import { PlaybackQueue } from "./PlaybackQueue";
@@ -13,7 +14,7 @@ import { WebSpeechProvider } from "./providers/WebSpeechProvider";
 import type { AudioChunk, TtsProvider, TtsProviderId, VoiceSynthesisOptions } from "./TtsProvider";
 import {
 	findAllowedModel,
-	mockVoiceManifest,
+	isMockVoiceManifest,
 	type VoiceLanguageCode,
 	type VoiceManifest,
 } from "./VoiceManifest";
@@ -128,6 +129,12 @@ export class VoiceRuntime {
 	private turn = 0;
 
 	constructor(deps: VoiceRuntimeDeps) {
+		// Catalog-trust guard: a production build must never run on the dev/test-only mock catalog (it ships
+		// `enabled: true` + hardcoded model ids with placeholder hashes). DEV/test may use the mock explicitly.
+		if (!import.meta.env.DEV && isMockVoiceManifest(deps.manifest)) {
+			throw new Error("VoiceRuntime refuses the mock voice manifest in a production build.");
+		}
+
 		this.manifest = deps.manifest;
 		this.capabilities = deps.capabilities;
 		this.playbackQueue = deps.playbackQueue;
@@ -263,11 +270,11 @@ export class VoiceRuntime {
 }
 
 /**
- * Convenience factory: probes capabilities, builds a `PlaybackQueue`, and returns a ready `VoiceRuntime` using the
- * mock manifest. The wiring layer calls this (or constructs `VoiceRuntime` directly) with the backend manifest in
- * place of `mockVoiceManifest`.
+ * Convenience factory: probes capabilities, builds a `PlaybackQueue`, and returns a ready `VoiceRuntime` for the
+ * supplied manifest. The caller owns the manifest (the wiring layer passes the backend-supplied one); there is no
+ * mock default, so the mock catalog is never pulled into a production bundle through this factory.
  */
-export async function createVoiceRuntime(manifest: VoiceManifest = mockVoiceManifest): Promise<VoiceRuntime> {
+export async function createVoiceRuntime(manifest: VoiceManifest): Promise<VoiceRuntime> {
 	const capabilities = await detectVoiceCapabilities();
 	return new VoiceRuntime({ manifest, capabilities, playbackQueue: new PlaybackQueue() });
 }

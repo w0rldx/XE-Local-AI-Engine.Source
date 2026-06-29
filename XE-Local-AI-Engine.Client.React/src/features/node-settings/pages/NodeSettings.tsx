@@ -174,7 +174,7 @@ export function NodeSettings() {
 			<Stack gap="lg">
 				<Stack gap={4}>
 					<Text size="sm" tt="uppercase" fw={700} c="dimmed">
-						Worker Node
+						{t("common.workerNode", "Worker Node")}
 					</Text>
 					<Title order={2}>Node settings</Title>
 					<Text c="dimmed">Tune non-secret local runtime settings stored on this worker.</Text>

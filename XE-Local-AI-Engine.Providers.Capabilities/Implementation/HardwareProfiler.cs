@@ -217,6 +217,9 @@ internal sealed class HardwareProfiler : IHardwareProfiler
         _ = vendor;
         _ = ct;
 
+        // Known, intentionally-deferred limitation (release cleanup, doc-and-defer): AMD/Intel GPUs on Windows have no
+        // VRAM probe and fall back to CPU mode; NVIDIA on Windows is unaffected (nvidia-smi branch above). The DXGI
+        // P/Invoke can't be live-verified on this Linux/WSL box, so it is deferred to a Windows-capable session.
         // Win11 follow-up: implement DXGI DedicatedVideoMemory P/Invoke (vendor-neutral, no NuGet) → WMI
         // Win32_VideoController vendor-name fallback. System.Management is intentionally NOT referenced (avoids a
         // Windows-only NuGet on this cross-platform project); prefer DXGI P/Invoke validated on a real Win11 box.
@@ -231,9 +234,11 @@ internal sealed class HardwareProfiler : IHardwareProfiler
     /// </summary>
     private static GpuVendor ProbeWindowsAdapterVendor()
     {
+        // Known, intentionally-deferred limitation (release cleanup, doc-and-defer): the Windows non-NVIDIA vendor
+        // probe is not built this release because it can't be live-verified on this Linux/WSL box; AMD/Intel on Windows
+        // therefore report Unknown and run in CPU mode, while NVIDIA on Windows is unaffected (nvidia-smi).
         // Win11 follow-up: enumerate DXGI adapter descriptions / WMI Win32_VideoController.Name and map
-        // "AMD"/"Radeon"/"Advanced Micro Devices"→Amd, "Intel"→Intel. NVIDIA is already covered by nvidia-smi,
-        // so the gap here is AMD/Intel-on-Windows only; until filled they degrade to Unknown (CPU mode).
+        // "AMD"/"Radeon"/"Advanced Micro Devices"→Amd, "Intel"→Intel.
         return GpuVendor.Unknown;
     }
 
