@@ -11,6 +11,9 @@ public static class LocalModelProviders
 
     /// <summary>A ChatGPT-subscription Codex cloud model (egress to the Codex backend).</summary>
     public const string CodexOAuth = "CodexOAuth";
+
+    /// <summary>An Azure Foundry / Azure OpenAI deployment (egress to the configured Azure endpoint).</summary>
+    public const string AzureFoundry = "AzureFoundry";
 }
 
 public sealed class ListLocalModelsResponse

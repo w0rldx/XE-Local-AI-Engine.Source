@@ -73,10 +73,11 @@ describe("navigationLinks", () => {
 			nodeRoutePaths.modelRecommendations,
 			nodeRoutePaths.loadedModels,
 		]);
-		// cloudSettings capability is false in the default nodeCapabilities (local-only profile),
-		// so the settings group shows Node Settings + the ungated Diagnostics panel; Cloud Settings is filtered out.
+		// cloudSettings capability is on by default (Cloud Settings is a local cloud-provider surface — Codex +
+		// Azure Foundry — needing no Central Platform), so the settings group shows all three children.
 		expect(settings?.links?.map((nestedLink) => nestedLink.to)).toEqual([
 			nodeRoutePaths.nodeSettings,
+			nodeRoutePaths.cloudSettings,
 			nodeRoutePaths.diagnostics,
 		]);
 		expect(automation?.links?.map((nestedLink) => nestedLink.to)).toEqual([

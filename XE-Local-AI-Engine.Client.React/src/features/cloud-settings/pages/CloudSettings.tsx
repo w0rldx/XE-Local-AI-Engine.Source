@@ -1,4 +1,5 @@
 import {
+	ActionIcon,
 	Alert,
 	Badge,
 	Button,
@@ -7,12 +8,13 @@ import {
 	Group,
 	Loader,
 	PasswordInput,
+	SegmentedControl,
 	Stack,
 	Text,
 	TextInput,
 	Title,
 } from "@mantine/core";
-import { IconAlertTriangle, IconDeviceFloppy, IconRefresh, IconTrash } from "@tabler/icons-react";
+import { IconAlertTriangle, IconDeviceFloppy, IconPlus, IconRefresh, IconTrash } from "@tabler/icons-react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useCallback, useEffect, useMemo, useReducer, useState } from "react";
 import { useTranslation } from "react-i18next";
@@ -28,7 +30,12 @@ import {
 import { withResponseValidation } from "@/core/api/ResponseValidation";
 import { toast } from "@/core/ui/notifications/Toast";
 import { CodexSignInCard } from "@/features/cloud-settings/codex/components/CodexSignInCard";
-import { type CloudSettingsFormValues, validateCloudSettingsForm } from "@/features/cloud-settings/models/CloudSettingsModel";
+import {
+	type CloudAuthMode,
+	type CloudFoundryModelDraft,
+	type CloudSettingsFormValues,
+	validateCloudSettingsForm,
+} from "@/features/cloud-settings/models/CloudSettingsModel";
 
 // The generated cloud-settings responses share one shape, so both the save and clear mutations resolve the same
 // view; this alias keeps the onSuccess handlers readable.
@@ -38,26 +45,41 @@ function errorMessage(error: unknown): string {
 	return error instanceof Error ? error.message : "Unexpected cloud settings error";
 }
 
+// Always show at least one (blank) deployment row so the user has somewhere to type on a fresh connection.
+function withAtLeastOneRow(models: CloudFoundryModelDraft[]): CloudFoundryModelDraft[] {
+	return models.length > 0 ? models : [{ deploymentName: "", displayLabel: "" }];
+}
+
 // Save and clear return the same view; both reset the form to the stored (redacted) values. The API key is never
 // echoed back, so it always resets to empty. Module-scoped because it uses no component state.
 function settingsToFormValues(settings: CloudSettings): CloudSettingsFormValues {
+	const azure = settings.azureFoundry;
 	return {
-		endpoint: settings.endpoint ?? "",
+		endpoint: azure?.endpoint ?? "",
+		authMode: (azure?.authMode as CloudAuthMode) ?? "ApiKey",
 		apiKey: "",
-		deploymentName: settings.deploymentName ?? "",
+		models: withAtLeastOneRow(
+			(azure?.models ?? []).map((model) => ({
+				deploymentName: model.deploymentName ?? "",
+				displayLabel: model.displayLabel ?? "",
+			})),
+		),
 	};
 }
 
 function toastSettingsResult(settings: CloudSettings): void {
 	toast.success(
-		settings.hasStoredApiKey ? "Cloud settings saved. Capability reporting was requested." : "Cloud settings cleared.",
+		settings.azureFoundry?.hasStoredApiKey
+			? "Cloud settings saved. Capability reporting was requested."
+			: "Cloud settings cleared.",
 	);
 }
 
 const emptyFormValues: CloudSettingsFormValues = {
 	endpoint: "",
+	authMode: "ApiKey",
 	apiKey: "",
-	deploymentName: "",
+	models: [{ deploymentName: "", displayLabel: "" }],
 };
 
 // The form values, the per-field "touched" map, and the submit flag always reset together when the
@@ -73,7 +95,11 @@ interface FormState {
 type FormAction =
 	| { type: "reset"; values: CloudSettingsFormValues }
 	| { type: "setValues"; values: CloudSettingsFormValues }
-	| { type: "setField"; field: keyof CloudSettingsFormValues; value: string }
+	| { type: "setField"; field: "endpoint" | "apiKey"; value: string }
+	| { type: "setAuthMode"; value: CloudAuthMode }
+	| { type: "addModel" }
+	| { type: "removeModel"; index: number }
+	| { type: "setModelField"; index: number; field: keyof CloudFoundryModelDraft; value: string }
 	| { type: "touchField"; field: keyof CloudSettingsFormValues }
 	| { type: "submit" };
 
@@ -95,6 +121,24 @@ function formReducer(state: FormState, action: FormAction): FormState {
 			return { ...state, values: action.values };
 		case "setField":
 			return { ...state, values: { ...state.values, [action.field]: action.value } };
+		case "setAuthMode":
+			return { ...state, values: { ...state.values, authMode: action.value } };
+		case "addModel":
+			return {
+				...state,
+				values: { ...state.values, models: [...state.values.models, { deploymentName: "", displayLabel: "" }] },
+			};
+		case "removeModel": {
+			// Never drop the last row — keep one blank row so the list is always editable.
+			const next = state.values.models.filter((_, index) => index !== action.index);
+			return { ...state, values: { ...state.values, models: withAtLeastOneRow(next) } };
+		}
+		case "setModelField": {
+			const next = state.values.models.map((model, index) =>
+				index === action.index ? { ...model, [action.field]: action.value } : model,
+			);
+			return { ...state, values: { ...state.values, models: next } };
+		}
 		case "touchField":
 			return { ...state, touched: { ...state.touched, [action.field]: true } };
 		case "submit":
@@ -107,7 +151,13 @@ function formReducer(state: FormState, action: FormAction): FormState {
 export function CloudSettings() {
 	const { t } = useTranslation();
 	const queryClient = useQueryClient();
-	const { data: settingsData, isLoading: settingsIsLoading, error: settingsError, refetch: settingsRefetch, isFetching: settingsIsFetching } = useQuery(withResponseValidation(getCloudSettingsOptions()));
+	const {
+		data: settingsData,
+		isLoading: settingsIsLoading,
+		error: settingsError,
+		refetch: settingsRefetch,
+		isFetching: settingsIsFetching,
+	} = useQuery(withResponseValidation(getCloudSettingsOptions()));
 	const [formState, dispatch] = useReducer(formReducer, initialFormState);
 	const { values: formValues, touched: touchedFields, submitted } = formState;
 
@@ -120,14 +170,7 @@ export function CloudSettings() {
 
 	useEffect(() => {
 		if (settingsData) {
-			dispatch({
-				type: "reset",
-				values: {
-					endpoint: settingsData.endpoint ?? "",
-					apiKey: "",
-					deploymentName: settingsData.deploymentName ?? "",
-				},
-			});
+			dispatch({ type: "reset", values: settingsToFormValues(settingsData) });
 		}
 	}, [settingsData]);
 
@@ -171,6 +214,29 @@ export function CloudSettings() {
 
 	const isActionPending = saveMutation.isPending || clearMutation.isPending;
 	const settings = settingsData;
+	const azure = settings?.azureFoundry;
+	// A connection is stored when any of its fields persisted — gates the Clear button (managed identity stores
+	// no key, so hasStoredApiKey alone is insufficient).
+	const hasStoredConnection = Boolean(azure?.endpoint) || (azure?.hasStoredApiKey ?? false) || (azure?.models?.length ?? 0) > 0;
+	const isManagedIdentity = formValues.authMode === "ManagedIdentity";
+
+	const handleSave = (): void => {
+		dispatch({ type: "submit" });
+		saveMutation.mutate({
+			body: {
+				providerName: "AzureFoundry",
+				endpoint: formValues.endpoint.trim(),
+				authMode: formValues.authMode,
+				apiKey: isManagedIdentity ? undefined : formValues.apiKey.trim(),
+				models: formValues.models
+					.map((model) => ({
+						deploymentName: model.deploymentName.trim(),
+						displayLabel: model.displayLabel.trim().length > 0 ? model.displayLabel.trim() : undefined,
+					}))
+					.filter((model) => model.deploymentName.length > 0),
+			},
+		});
+	};
 
 	return (
 		<Container fluid={true} py="lg">
@@ -222,7 +288,7 @@ export function CloudSettings() {
 								<Badge color="orange" variant="light" size="lg">
 									{t("pages.cloudSettings.provider.codexOAuth")}
 								</Badge>
-							) : settings?.hasStoredApiKey ? (
+							) : hasStoredConnection ? (
 								<Badge color="blue" variant="light" size="lg">
 									{t("pages.cloudSettings.provider.azureFoundry")}
 								</Badge>
@@ -241,18 +307,17 @@ export function CloudSettings() {
 				<Card withBorder={true} radius="md" p="lg">
 					<Stack gap="md">
 						<Group justify="space-between" align="center">
-							<Title order={3}>Azure OpenAI</Title>
-							<Badge color={settings?.hasStoredApiKey ? "green" : "gray"}>
-								{settings?.hasStoredApiKey ? "Configured" : "Not configured"}
+							<Title order={3}>{t("pages.cloudSettings.azure.title", "Azure OpenAI")}</Title>
+							<Badge color={hasStoredConnection ? "green" : "gray"}>
+								{hasStoredConnection
+									? t("pages.cloudSettings.azure.configured", "Configured")
+									: t("pages.cloudSettings.azure.notConfigured", "Not configured")}
 							</Badge>
 						</Group>
-						<Text c="dimmed">
-							Cloud credentials are encrypted on this worker. Enter the API key every time you save because stored keys are
-							write-only.
-						</Text>
+						<Text c="dimmed">{t("pages.cloudSettings.azure.description")}</Text>
 						<TextInput
-							label="Azure OpenAI endpoint"
-							placeholder="https://example.openai.azure.com/"
+							label={t("pages.cloudSettings.azure.endpointLabel", "Azure OpenAI endpoint")}
+							placeholder={t("pages.cloudSettings.azure.endpointPlaceholder", "https://example.openai.azure.com/")}
 							value={formValues.endpoint}
 							onChange={(event) => {
 								const value = event.currentTarget.value;
@@ -261,50 +326,118 @@ export function CloudSettings() {
 							onBlur={() => dispatch({ type: "touchField", field: "endpoint" })}
 							error={visibleErrors.endpoint}
 						/>
-						<TextInput
-							label="Deployment name"
-							placeholder="gpt-4o"
-							value={formValues.deploymentName}
-							onChange={(event) => {
-								const value = event.currentTarget.value;
-								dispatch({ type: "setField", field: "deploymentName", value });
-							}}
-							onBlur={() => dispatch({ type: "touchField", field: "deploymentName" })}
-							error={visibleErrors.deploymentName}
-						/>
-						<PasswordInput
-							label="API key"
-							description={
-								settings?.hasStoredApiKey
-									? "A key is stored. Enter a key to save or rotate cloud settings."
-									: "The key is sent only to the local worker API."
-							}
-							value={formValues.apiKey}
-							onChange={(event) => {
-								const value = event.currentTarget.value;
-								dispatch({ type: "setField", field: "apiKey", value });
-							}}
-							onBlur={() => dispatch({ type: "touchField", field: "apiKey" })}
-							error={visibleErrors.apiKey}
-						/>
+
+						<Stack gap={4}>
+							<Text size="sm" fw={500}>
+								{t("pages.cloudSettings.azure.authModeLabel", "Authentication")}
+							</Text>
+							<SegmentedControl
+								data-testid="cloud-settings-auth-mode"
+								value={formValues.authMode}
+								onChange={(value) => dispatch({ type: "setAuthMode", value: value as CloudAuthMode })}
+								data={[
+									{ value: "ApiKey", label: t("pages.cloudSettings.azure.authModeApiKey", "API key") },
+									{
+										value: "ManagedIdentity",
+										label: t("pages.cloudSettings.azure.authModeManagedIdentity", "Managed identity"),
+									},
+								]}
+							/>
+						</Stack>
+
+						{isManagedIdentity ? (
+							<Text size="sm" c="dimmed">
+								{t("pages.cloudSettings.azure.managedIdentityHint")}
+							</Text>
+						) : (
+							<PasswordInput
+								label={t("pages.cloudSettings.azure.apiKeyLabel", "API key")}
+								description={
+									azure?.hasStoredApiKey
+										? t("pages.cloudSettings.azure.apiKeyStoredHint")
+										: t("pages.cloudSettings.azure.apiKeyHint")
+								}
+								value={formValues.apiKey}
+								onChange={(event) => {
+									const value = event.currentTarget.value;
+									dispatch({ type: "setField", field: "apiKey", value });
+								}}
+								onBlur={() => dispatch({ type: "touchField", field: "apiKey" })}
+								error={visibleErrors.apiKey}
+							/>
+						)}
+
+						<Stack gap={6}>
+							<Text size="sm" fw={500}>
+								{t("pages.cloudSettings.azure.modelsLabel", "Models")}
+							</Text>
+							<Text size="xs" c="dimmed">
+								{t("pages.cloudSettings.azure.deploymentNameHelp")}
+							</Text>
+							{formValues.models.map((model, index) => (
+								// biome-ignore lint/suspicious/noArrayIndexKey: rows are positional and have no stable id; index is the row identity.
+								<Group key={index} align="flex-end" gap="xs" wrap="nowrap">
+									<TextInput
+										style={{ flex: 1 }}
+										aria-label={t("pages.cloudSettings.azure.deploymentNameLabel", "Deployment name")}
+										label={index === 0 ? t("pages.cloudSettings.azure.deploymentNameLabel", "Deployment name") : undefined}
+										placeholder={t("pages.cloudSettings.azure.deploymentNamePlaceholder", "gpt-4o")}
+										value={model.deploymentName}
+										onChange={(event) => {
+											const value = event.currentTarget.value;
+											dispatch({ type: "setModelField", index, field: "deploymentName", value });
+										}}
+										onBlur={() => dispatch({ type: "touchField", field: "models" })}
+									/>
+									<TextInput
+										style={{ flex: 1 }}
+										aria-label={t("pages.cloudSettings.azure.displayLabelLabel", "Display label (optional)")}
+										label={index === 0 ? t("pages.cloudSettings.azure.displayLabelLabel", "Display label (optional)") : undefined}
+										placeholder={t("pages.cloudSettings.azure.displayLabelPlaceholder", "GPT-4o")}
+										value={model.displayLabel}
+										onChange={(event) => {
+											const value = event.currentTarget.value;
+											dispatch({ type: "setModelField", index, field: "displayLabel", value });
+										}}
+									/>
+									<ActionIcon
+										variant="subtle"
+										color="red"
+										size="lg"
+										data-testid={`cloud-settings-remove-model-${index}`}
+										aria-label={t("pages.cloudSettings.azure.removeModel", "Remove model")}
+										onClick={() => dispatch({ type: "removeModel", index })}
+									>
+										<IconTrash size={16} />
+									</ActionIcon>
+								</Group>
+							))}
+							{visibleErrors.models ? (
+								<Text size="xs" c="red" data-testid="cloud-settings-models-error">
+									{visibleErrors.models}
+								</Text>
+							) : null}
+							<Group>
+								<Button
+									variant="light"
+									size="xs"
+									leftSection={<IconPlus size={14} />}
+									data-testid="cloud-settings-add-model"
+									onClick={() => dispatch({ type: "addModel" })}
+								>
+									{t("pages.cloudSettings.azure.addModel", "Add model")}
+								</Button>
+							</Group>
+						</Stack>
+
 						<Group>
 							<Button
 								leftSection={<IconDeviceFloppy size={16} />}
-								onClick={() => {
-									dispatch({ type: "submit" });
-									saveMutation.mutate({
-										body: {
-											providerName: "AzureFoundry",
-											endpoint: formValues.endpoint.trim(),
-											apiKey: formValues.apiKey.trim(),
-											deploymentName: formValues.deploymentName.trim(),
-										},
-									});
-								}}
+								onClick={handleSave}
 								loading={saveMutation.isPending}
 								disabled={hasErrors || isActionPending}
 							>
-								Save cloud settings
+								{t("pages.cloudSettings.azure.save", "Save cloud settings")}
 							</Button>
 							<Button
 								variant="outline"
@@ -312,9 +445,9 @@ export function CloudSettings() {
 								leftSection={<IconTrash size={16} />}
 								onClick={() => clearMutation.mutate({})}
 								loading={clearMutation.isPending}
-								disabled={!settings?.hasStoredApiKey || isActionPending}
+								disabled={!hasStoredConnection || isActionPending}
 							>
-								Clear saved credentials
+								{t("pages.cloudSettings.azure.clear", "Clear saved credentials")}
 							</Button>
 							<Button
 								variant="subtle"
@@ -322,7 +455,7 @@ export function CloudSettings() {
 								onClick={() => settingsRefetch()}
 								disabled={settingsIsFetching}
 							>
-								Reload
+								{t("pages.cloudSettings.azure.reload", "Reload")}
 							</Button>
 						</Group>
 					</Stack>

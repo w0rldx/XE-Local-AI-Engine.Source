@@ -16,6 +16,7 @@ using XE_Local_AI_Engine.Client.Persistence.Stores;
 using XE_Local_AI_Engine.Client.Services.Agents;
 using XE_Local_AI_Engine.Client.Services.Chat;
 using XE_Local_AI_Engine.Client.Services.Chat.Implementation;
+using XE_Local_AI_Engine.Client.Services.CloudProviders;
 using XE_Local_AI_Engine.Client.Services.Events;
 using XE_Local_AI_Engine.Client.Services.Invocation;
 using XE_Local_AI_Engine.Client.Services.Memory;
@@ -73,6 +74,7 @@ public sealed class NodeChatRegenerationServiceTests : IDisposable
             CreateModelClassificationService(),
             CreateGgufModelCapabilityResolver(),
             CreateLocalDefaultChatModelResolver(),
+            Substitute.For<ICloudCredentialStore>(),
             CreateMemoryExtractionDispatcher(),
             TimeProvider.System,
             NullLogger<NodeChatRegenerationService>.Instance);
@@ -148,6 +150,7 @@ public sealed class NodeChatRegenerationServiceTests : IDisposable
             CreateGgufModelCapabilityResolver(),
             // Resolver reports no installed GGUF chat model (null).
             CreateLocalDefaultChatModelResolver(resolved: null, echoPersistedDefault: false),
+            Substitute.For<ICloudCredentialStore>(),
             CreateMemoryExtractionDispatcher(),
             TimeProvider.System,
             NullLogger<NodeChatRegenerationService>.Instance);
@@ -216,6 +219,7 @@ public sealed class NodeChatRegenerationServiceTests : IDisposable
             CreateModelClassificationService(),
             CreateGgufModelCapabilityResolver(),
             CreateLocalDefaultChatModelResolver(),
+            Substitute.For<ICloudCredentialStore>(),
             CreateMemoryExtractionDispatcher(),
             TimeProvider.System,
             NullLogger<NodeChatRegenerationService>.Instance);
@@ -293,6 +297,7 @@ public sealed class NodeChatRegenerationServiceTests : IDisposable
             CreateModelClassificationService(),
             CreateGgufModelCapabilityResolver(),
             CreateLocalDefaultChatModelResolver(),
+            Substitute.For<ICloudCredentialStore>(),
             CreateMemoryExtractionDispatcher(),
             TimeProvider.System,
             NullLogger<NodeChatRegenerationService>.Instance);
@@ -372,6 +377,7 @@ public sealed class NodeChatRegenerationServiceTests : IDisposable
             CreateModelClassificationService(),
             CreateGgufModelCapabilityResolver(),
             CreateLocalDefaultChatModelResolver(),
+            Substitute.For<ICloudCredentialStore>(),
             CreateMemoryExtractionDispatcher(),
             TimeProvider.System,
             NullLogger<NodeChatRegenerationService>.Instance);
@@ -445,6 +451,7 @@ public sealed class NodeChatRegenerationServiceTests : IDisposable
             CreateModelClassificationService(),
             CreateGgufModelCapabilityResolver(),
             CreateLocalDefaultChatModelResolver(),
+            Substitute.For<ICloudCredentialStore>(),
             CreateMemoryExtractionDispatcher(),
             TimeProvider.System,
             NullLogger<NodeChatRegenerationService>.Instance);
@@ -505,6 +512,7 @@ public sealed class NodeChatRegenerationServiceTests : IDisposable
             CreateModelClassificationService(),
             CreateGgufModelCapabilityResolver(),
             CreateLocalDefaultChatModelResolver(),
+            Substitute.For<ICloudCredentialStore>(),
             CreateMemoryExtractionDispatcher(),
             TimeProvider.System,
             NullLogger<NodeChatRegenerationService>.Instance);
@@ -559,6 +567,7 @@ public sealed class NodeChatRegenerationServiceTests : IDisposable
             CreateModelClassificationService(),
             CreateGgufModelCapabilityResolver(),
             CreateLocalDefaultChatModelResolver(),
+            Substitute.For<ICloudCredentialStore>(),
             CreateMemoryExtractionDispatcher(),
             TimeProvider.System,
             NullLogger<NodeChatRegenerationService>.Instance);
@@ -631,6 +640,7 @@ public sealed class NodeChatRegenerationServiceTests : IDisposable
             CreateModelClassificationService(),
             CreateGgufModelCapabilityResolver(),
             CreateLocalDefaultChatModelResolver(),
+            Substitute.For<ICloudCredentialStore>(),
             CreateMemoryExtractionDispatcher(),
             TimeProvider.System,
             NullLogger<NodeChatRegenerationService>.Instance);
@@ -694,6 +704,7 @@ public sealed class NodeChatRegenerationServiceTests : IDisposable
             CreateModelClassificationService(),
             CreateGgufModelCapabilityResolver(),
             CreateLocalDefaultChatModelResolver(),
+            Substitute.For<ICloudCredentialStore>(),
             CreateMemoryExtractionDispatcher(),
             TimeProvider.System,
             NullLogger<NodeChatRegenerationService>.Instance);
@@ -748,6 +759,7 @@ public sealed class NodeChatRegenerationServiceTests : IDisposable
             CreateModelClassificationService(),
             CreateGgufModelCapabilityResolver(),
             CreateLocalDefaultChatModelResolver(),
+            Substitute.For<ICloudCredentialStore>(),
             CreateMemoryExtractionDispatcher(),
             TimeProvider.System,
             NullLogger<NodeChatRegenerationService>.Instance);
@@ -820,6 +832,7 @@ public sealed class NodeChatRegenerationServiceTests : IDisposable
             CreateModelClassificationService(),
             CreateGgufModelCapabilityResolver(),
             CreateLocalDefaultChatModelResolver(),
+            Substitute.For<ICloudCredentialStore>(),
             CreateMemoryExtractionDispatcher(),
             TimeProvider.System,
             NullLogger<NodeChatRegenerationService>.Instance);
@@ -871,6 +884,7 @@ public sealed class NodeChatRegenerationServiceTests : IDisposable
             CreateModelClassificationService(),
             CreateGgufModelCapabilityResolver(),
             CreateLocalDefaultChatModelResolver(),
+            Substitute.For<ICloudCredentialStore>(),
             CreateMemoryExtractionDispatcher(),
             TimeProvider.System,
             NullLogger<NodeChatRegenerationService>.Instance);
@@ -914,6 +928,7 @@ public sealed class NodeChatRegenerationServiceTests : IDisposable
             CreateModelClassificationService(),
             CreateGgufModelCapabilityResolver(),
             CreateLocalDefaultChatModelResolver(),
+            Substitute.For<ICloudCredentialStore>(),
             CreateMemoryExtractionDispatcher(),
             TimeProvider.System,
             NullLogger<NodeChatRegenerationService>.Instance);
@@ -978,6 +993,7 @@ public sealed class NodeChatRegenerationServiceTests : IDisposable
             classificationService,
             CreateGgufModelCapabilityResolver(),
             CreateLocalDefaultChatModelResolver(),
+            Substitute.For<ICloudCredentialStore>(),
             CreateMemoryExtractionDispatcher(),
             TimeProvider.System,
             NullLogger<NodeChatRegenerationService>.Instance);

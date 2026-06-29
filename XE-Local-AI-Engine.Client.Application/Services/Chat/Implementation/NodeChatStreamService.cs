@@ -42,6 +42,7 @@ public sealed class NodeChatStreamService(
     ILocalModelProviderResolver localModelProviderResolver,
     IGgufModelCapabilityResolver ggufModelCapabilityResolver,
     ILocalDefaultChatModelResolver localDefaultChatModelResolver,
+    ICloudCredentialStore cloudCredentialStore,
     IMemoryExtractionDispatcher memoryExtractionDispatcher,
     IConversationUploadedFileStore uploadedFileStore,
     IConversationSandboxStager conversationSandboxStager,
@@ -805,6 +806,14 @@ public sealed class NodeChatStreamService(
             return (SupportsThinking: true, CodexProviderCapabilities.V0.SupportsToolCalling);
         }
 
+        // An Azure Foundry deployment id is NOT an Ollama model either: probing /api/show for it would 500/stall.
+        // When the active model matches a stored Azure deployment name, advertise the Azure provider's declared
+        // capability matrix instead of an Ollama classification, so an Azure id never falls through to the local probe.
+        if (await IsAzureFoundryModelAsync(activeModel, cancellationToken).ConfigureAwait(false))
+        {
+            return (SupportsThinking: false, SupportsTools: AzureFoundryProviderCapabilities.V0.SupportsToolCalling);
+        }
+
         // /api/show classification only makes sense for an Ollama-routed model. A llama.cpp (GGUF) model has no Ollama
         // entry, so probing the local runtime would always fail — and in desktop mode there is no Ollama daemon at all,
         // so the probe would stall (up to the connect timeout) on every send. Instead, read the GGUF's capabilities
@@ -835,6 +844,32 @@ public sealed class NodeChatStreamService(
 
         return (ModelKindDetector.SupportsThinking(classification.Capabilities),
             ModelKindDetector.SupportsTools(classification.Capabilities));
+    }
+
+    /// <summary>
+    ///     True when <paramref name="activeModel" /> matches one of the stored Azure Foundry connection's deployment
+    ///     names (ordinal, case-insensitive). A best-effort read: any failure resolving the encrypted config is treated
+    ///     as "not Azure" so the capability gate falls through to its existing (safe) classification rather than failing
+    ///     the send.
+    /// </summary>
+    private async Task<bool> IsAzureFoundryModelAsync(string activeModel, CancellationToken cancellationToken)
+    {
+        try
+        {
+            var config = await cloudCredentialStore.LoadConfigAsync(cancellationToken).ConfigureAwait(false);
+            var connection = config?.AzureFoundry;
+            return connection is { Models.Count: > 0 }
+                   && connection.Models.Any(model => string.Equals(model.DeploymentName, activeModel, StringComparison.OrdinalIgnoreCase));
+        }
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+        {
+            throw;
+        }
+        catch (Exception exception)
+        {
+            logger.LogDebug(exception, "Azure Foundry deployment match could not be resolved for '{Model}'.", activeModel);
+            return false;
+        }
     }
 
     /// <summary>

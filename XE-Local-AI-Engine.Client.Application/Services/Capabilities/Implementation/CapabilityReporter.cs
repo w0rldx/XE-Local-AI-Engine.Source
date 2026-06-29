@@ -58,14 +58,16 @@ internal sealed class CapabilityReporter : ICapabilityReporter, IDisposable
         cancellationToken.ThrowIfCancellationRequested();
 
         var hardware = await _composer.DetectHardwareAsync(cancellationToken).ConfigureAwait(false);
-        var cloudCredentials = await _cloudCredentialStore.LoadAsync(cancellationToken).ConfigureAwait(false);
+        var cloudConfig = await _cloudCredentialStore.LoadConfigAsync(cancellationToken).ConfigureAwait(false);
         var nodeSettings = await _nodeSettingsStore.LoadAsync(cancellationToken).ConfigureAwait(false);
         var detectedAt = _timeProvider.GetUtcNow();
 
-        if (cloudCredentials is not null
-            && string.Equals(cloudCredentials.ProviderName, CloudProviderOptions.ProviderAzureFoundry, StringComparison.OrdinalIgnoreCase))
+        // An Azure connection (API-key or managed-identity, single- or multi-model) reports as a configured cloud node.
+        if (cloudConfig?.AzureFoundry is { } connection
+            && string.Equals(cloudConfig.ProviderName, CloudProviderOptions.ProviderAzureFoundry, StringComparison.OrdinalIgnoreCase)
+            && connection.Models.Any(static model => !string.IsNullOrWhiteSpace(model.DeploymentName)))
         {
-            return CapabilityReportComposer.ComposeCloud(cloudCredentials, nodeSettings, hardware, detectedAt);
+            return CapabilityReportComposer.ComposeCloud(connection, nodeSettings, hardware, detectedAt);
         }
 
         var ollamaStatus = await _prober.DetectOllamaRuntimeAsync(cancellationToken).ConfigureAwait(false);

@@ -1526,20 +1526,6 @@ export const zXeLocalAiEngineClientEndpointsConnectionV1ConnectionStatusResponse
 	canDisableAutoConnect: z.boolean().optional(),
 });
 
-export const zXeLocalAiEngineClientEndpointsCloudSettingsV1CloudSettingsResponse = z.object({
-	providerName: z.string().optional(),
-	endpoint: z.string().nullish(),
-	deploymentName: z.string().nullish(),
-	hasStoredApiKey: z.boolean().optional(),
-});
-
-export const zXeLocalAiEngineClientEndpointsCloudSettingsV1SaveCloudSettingsRequest = z.object({
-	providerName: z.string().optional(),
-	endpoint: z.string().min(1),
-	apiKey: z.string().min(1),
-	deploymentName: z.string().min(0).max(128),
-});
-
 export const zXeLocalAiEngineClientEndpointsCloudCodexV1CodexLoginResponse = z.object({
 	authorizeUrl: z.string().optional(),
 });
@@ -2342,6 +2328,31 @@ export const zXeLocalAiEngineClientEndpointsModelFitV1CudaBuildBlockedResponse =
 		.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })
 		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" })
 		.nullish(),
+});
+
+export const zXeLocalAiEngineClientEndpointsCloudSettingsV1AzureFoundryModelDto = z.object({
+	deploymentName: z.string(),
+	displayLabel: z.string().nullish(),
+});
+
+export const zXeLocalAiEngineClientEndpointsCloudSettingsV1SaveCloudSettingsRequest = z.object({
+	providerName: z.string().optional(),
+	endpoint: z.string().min(1),
+	authMode: z.string().optional(),
+	apiKey: z.string().nullish(),
+	models: z.array(zXeLocalAiEngineClientEndpointsCloudSettingsV1AzureFoundryModelDto).optional(),
+});
+
+export const zXeLocalAiEngineClientEndpointsCloudSettingsV1AzureFoundrySettingsResponse = z.object({
+	endpoint: z.string().nullish(),
+	authMode: z.string(),
+	hasStoredApiKey: z.boolean().optional(),
+	models: z.array(zXeLocalAiEngineClientEndpointsCloudSettingsV1AzureFoundryModelDto).optional(),
+});
+
+export const zXeLocalAiEngineClientEndpointsCloudSettingsV1CloudSettingsResponse = z.object({
+	providerName: z.string(),
+	azureFoundry: zXeLocalAiEngineClientEndpointsCloudSettingsV1AzureFoundrySettingsResponse.nullish(),
 });
 
 /**

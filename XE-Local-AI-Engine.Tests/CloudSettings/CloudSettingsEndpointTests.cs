@@ -1,5 +1,6 @@
 namespace XE_Local_AI_Engine.Tests.CloudSettings;
 
+using System.Linq;
 using System.Net;
 using System.Net.Http.Json;
 using System.Text.Json;
@@ -19,7 +20,7 @@ public sealed class CloudSettingsEndpointTests
     public async Task GetCloudSettings_WhenCredentialsExist_ReturnsSecretSafeMetadata()
     {
         var cloudCredentialStore = Substitute.For<ICloudCredentialStore>();
-        cloudCredentialStore.LoadAsync(Arg.Any<CancellationToken>()).Returns(CreateCredentials());
+        cloudCredentialStore.LoadConfigAsync(Arg.Any<CancellationToken>()).Returns(CreateConfig());
         await using var factory = CreateFactory(cloudCredentialStore);
         using var client = factory.CreateClient();
 
@@ -30,9 +31,10 @@ public sealed class CloudSettingsEndpointTests
 
         AssertEx.Equal(HttpStatusCode.OK, response.StatusCode);
         AssertEx.Equal("AzureFoundry", settings.ProviderName);
-        AssertEx.Equal("https://example.openai.azure.com/", settings.Endpoint);
-        AssertEx.Equal("gpt-4o", settings.DeploymentName);
-        AssertEx.True(settings.HasStoredApiKey);
+        AssertEx.NotNull(settings.AzureFoundry);
+        AssertEx.Equal("https://example.openai.azure.com/", settings.AzureFoundry!.Endpoint);
+        AssertEx.Equal("gpt-4o", settings.AzureFoundry.Models.Single().DeploymentName);
+        AssertEx.True(settings.AzureFoundry.HasStoredApiKey);
         AssertEx.False(body.Contains("test-api-key", StringComparison.Ordinal));
     }
 
@@ -50,18 +52,24 @@ public sealed class CloudSettingsEndpointTests
         {
             ProviderName = "AzureFoundry",
             Endpoint = "https://example.openai.azure.com/",
+            AuthMode = "ApiKey",
             ApiKey = "new-secret-api-key",
-            DeploymentName = "gpt-4o-mini"
+            Models = [new AzureFoundryModelDto { DeploymentName = "gpt-4o-mini" }]
         });
         using var response = await client.SendAsync(request).ConfigureAwait(false);
         var body = await response.Content.ReadAsStringAsync().ConfigureAwait(false);
         var settings = Deserialize<CloudSettingsResponse>(body);
 
         AssertEx.Equal(HttpStatusCode.OK, response.StatusCode);
-        AssertEx.Equal("gpt-4o-mini", settings.DeploymentName);
-        AssertEx.True(settings.HasStoredApiKey);
+        AssertEx.NotNull(settings.AzureFoundry);
+        AssertEx.Equal("gpt-4o-mini", settings.AzureFoundry!.Models.Single().DeploymentName);
+        AssertEx.True(settings.AzureFoundry.HasStoredApiKey);
         AssertEx.False(body.Contains("new-secret-api-key", StringComparison.Ordinal));
-        await cloudCredentialStore.Received(1).SaveAsync(Arg.Is<StoredCloudCredentials>(credentials => credentials.ApiKey == "new-secret-api-key" && credentials.DeploymentName == "gpt-4o-mini"),
+        await cloudCredentialStore.Received(1).SaveConfigAsync(
+            Arg.Is<StoredCloudProviderConfig>(config =>
+                config.AzureFoundry != null
+                && config.AzureFoundry.ApiKey == "new-secret-api-key"
+                && config.AzureFoundry.Models.Any(model => model.DeploymentName == "gpt-4o-mini")),
             Arg.Any<CancellationToken>());
         await capabilityReporter.Received(1).ReportToApiAsync(Arg.Any<CancellationToken>());
     }
@@ -79,13 +87,14 @@ public sealed class CloudSettingsEndpointTests
         {
             ProviderName = "AzureFoundry",
             Endpoint = "http://example.openai.azure.com/",
+            AuthMode = "ApiKey",
             ApiKey = "secret",
-            DeploymentName = "gpt-4o"
+            Models = [new AzureFoundryModelDto { DeploymentName = "gpt-4o" }]
         });
         using var response = await client.SendAsync(request).ConfigureAwait(false);
 
         AssertEx.Equal(HttpStatusCode.BadRequest, response.StatusCode);
-        await cloudCredentialStore.DidNotReceiveWithAnyArgs().SaveAsync(Arg.Any<StoredCloudCredentials>(), Arg.Any<CancellationToken>());
+        await cloudCredentialStore.DidNotReceiveWithAnyArgs().SaveConfigAsync(Arg.Any<StoredCloudProviderConfig>(), Arg.Any<CancellationToken>());
         await capabilityReporter.DidNotReceiveWithAnyArgs().ReportToApiAsync(Arg.Any<CancellationToken>());
     }
 
@@ -103,8 +112,8 @@ public sealed class CloudSettingsEndpointTests
         var settings = await ReadJsonAsync<CloudSettingsResponse>(response).ConfigureAwait(false);
 
         AssertEx.Equal(HttpStatusCode.OK, response.StatusCode);
-        AssertEx.False(settings.HasStoredApiKey);
         AssertEx.Equal("None", settings.ProviderName);
+        AssertEx.False(settings.AzureFoundry?.HasStoredApiKey == true);
         await cloudCredentialStore.Received(1).ClearAsync(Arg.Any<CancellationToken>());
         await capabilityReporter.Received(1).ReportToApiAsync(Arg.Any<CancellationToken>());
     }
@@ -131,14 +140,18 @@ public sealed class CloudSettingsEndpointTests
         return request;
     }
 
-    private static StoredCloudCredentials CreateCredentials()
+    private static StoredCloudProviderConfig CreateConfig()
     {
-        return new StoredCloudCredentials
+        return new StoredCloudProviderConfig
         {
             ProviderName = "AzureFoundry",
-            Endpoint = "https://example.openai.azure.com/",
-            ApiKey = "test-api-key",
-            DeploymentName = "gpt-4o"
+            AzureFoundry = new StoredAzureFoundryConnection
+            {
+                Endpoint = "https://example.openai.azure.com/",
+                AuthMode = AzureFoundryAuthMode.ApiKey,
+                ApiKey = "test-api-key",
+                Models = [new StoredAzureFoundryModel { DeploymentName = "gpt-4o", DisplayLabel = "gpt-4o" }]
+            }
         };
     }
 

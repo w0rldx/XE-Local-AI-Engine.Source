@@ -9696,20 +9696,20 @@
       "XE_Local_AI_EngineClientEndpointsCloudSettingsV1CloudSettingsResponse": {
         "type": "object",
         "additionalProperties": false,
+        "required": [
+          "providerName"
+        ],
         "properties": {
           "providerName": {
             "type": "string"
           },
-          "endpoint": {
-            "type": "string",
-            "nullable": true
-          },
-          "deploymentName": {
-            "type": "string",
-            "nullable": true
-          },
-          "hasStoredApiKey": {
-            "type": "boolean"
+          "azureFoundry": {
+            "nullable": true,
+            "oneOf": [
+              {
+                "$ref": "#/components/schemas/XE_Local_AI_EngineClientEndpointsCloudSettingsV1AzureFoundrySettingsResponse"
+              }
+            ]
           }
         }
       },
@@ -9717,9 +9717,7 @@
         "type": "object",
         "additionalProperties": false,
         "required": [
-          "endpoint",
-          "apiKey",
-          "deploymentName"
+          "endpoint"
         ],
         "properties": {
           "providerName": {
@@ -9730,16 +9728,18 @@
             "minLength": 1,
             "nullable": false
           },
+          "authMode": {
+            "type": "string"
+          },
           "apiKey": {
             "type": "string",
-            "minLength": 1,
-            "nullable": false
+            "nullable": true
           },
-          "deploymentName": {
-            "type": "string",
-            "maxLength": 128,
-            "minLength": 0,
-            "nullable": false
+          "models": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/XE_Local_AI_EngineClientEndpointsCloudSettingsV1AzureFoundryModelDto"
+            }
           }
         }
       },
@@ -11556,6 +11556,47 @@
           "runningProcessCount": {
             "type": "integer",
             "format": "int32",
+            "nullable": true
+          }
+        }
+      },
+      "XE_Local_AI_EngineClientEndpointsCloudSettingsV1AzureFoundrySettingsResponse": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "authMode"
+        ],
+        "properties": {
+          "endpoint": {
+            "type": "string",
+            "nullable": true
+          },
+          "authMode": {
+            "type": "string"
+          },
+          "hasStoredApiKey": {
+            "type": "boolean"
+          },
+          "models": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/XE_Local_AI_EngineClientEndpointsCloudSettingsV1AzureFoundryModelDto"
+            }
+          }
+        }
+      },
+      "XE_Local_AI_EngineClientEndpointsCloudSettingsV1AzureFoundryModelDto": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "deploymentName"
+        ],
+        "properties": {
+          "deploymentName": {
+            "type": "string"
+          },
+          "displayLabel": {
+            "type": "string",
             "nullable": true
           }
         }

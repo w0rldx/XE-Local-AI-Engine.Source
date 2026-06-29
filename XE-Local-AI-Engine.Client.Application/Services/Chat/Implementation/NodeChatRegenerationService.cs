@@ -9,6 +9,7 @@ using XE_Local_AI_Engine.Client.Models.Enums;
 using XE_Local_AI_Engine.Client.Persistence;
 using XE_Local_AI_Engine.Client.Persistence.Stores;
 using XE_Local_AI_Engine.Client.Services.Agents;
+using XE_Local_AI_Engine.Client.Services.CloudProviders;
 using XE_Local_AI_Engine.Client.Services.Events;
 using XE_Local_AI_Engine.Client.Services.Invocation;
 using XE_Local_AI_Engine.Client.Services.Memory;
@@ -42,6 +43,7 @@ public sealed class NodeChatRegenerationService(
     IModelClassificationService modelClassificationService,
     IGgufModelCapabilityResolver ggufModelCapabilityResolver,
     ILocalDefaultChatModelResolver localDefaultChatModelResolver,
+    ICloudCredentialStore cloudCredentialStore,
     IMemoryExtractionDispatcher memoryExtractionDispatcher,
     TimeProvider timeProvider,
     ILogger<NodeChatRegenerationService> logger) : INodeChatRegenerationService
@@ -644,6 +646,14 @@ public sealed class NodeChatRegenerationService(
             return (SupportsThinking: true, CodexProviderCapabilities.V0.SupportsToolCalling);
         }
 
+        // An Azure Foundry deployment id is NOT an Ollama model: advertise the Azure provider's declared capability
+        // matrix instead of an Ollama /api/show classification so an Azure id never hits the local probe. Mirrors
+        // NodeChatStreamService.ResolveModelCapabilitiesAsync so regenerate matches the send path.
+        if (await IsAzureFoundryModelAsync(activeModel, cancellationToken).ConfigureAwait(false))
+        {
+            return (SupportsThinking: false, SupportsTools: AzureFoundryProviderCapabilities.V0.SupportsToolCalling);
+        }
+
         // A llama.cpp (GGUF) model has no Ollama entry — and in desktop mode there is no Ollama daemon — so an
         // /api/show classification would fail or stall. When the active model is an installed GGUF, read the
         // capabilities detected offline from its chat template (cheap, cached) instead of probing Ollama, mirroring the
@@ -667,6 +677,31 @@ public sealed class NodeChatRegenerationService(
 
         return (ModelKindDetector.SupportsThinking(classification.Capabilities),
             ModelKindDetector.SupportsTools(classification.Capabilities));
+    }
+
+    /// <summary>
+    ///     True when <paramref name="activeModel" /> matches one of the stored Azure Foundry connection's deployment
+    ///     names (ordinal, case-insensitive). Mirrors <c>NodeChatStreamService.IsAzureFoundryModelAsync</c>; any failure
+    ///     resolving the encrypted config is treated as "not Azure" so the gate falls through safely.
+    /// </summary>
+    private async Task<bool> IsAzureFoundryModelAsync(string activeModel, CancellationToken cancellationToken)
+    {
+        try
+        {
+            var config = await cloudCredentialStore.LoadConfigAsync(cancellationToken).ConfigureAwait(false);
+            var connection = config?.AzureFoundry;
+            return connection is { Models.Count: > 0 }
+                   && connection.Models.Any(model => string.Equals(model.DeploymentName, activeModel, StringComparison.OrdinalIgnoreCase));
+        }
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+        {
+            throw;
+        }
+        catch (Exception exception)
+        {
+            logger.LogDebug(exception, "Azure Foundry deployment match could not be resolved for '{Model}'.", activeModel);
+            return false;
+        }
     }
 
     /// <summary>

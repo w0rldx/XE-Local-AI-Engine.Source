@@ -25,7 +25,8 @@ export interface NodeCapabilityConfig {
 	readonly dashboard: boolean;
 	readonly nodeSettings: boolean;
 	// When false the Cloud Settings nav entry is hidden and the /cloud-settings route is inaccessible.
-	// Set to false for local-only (LocalTester) builds where no CentralPlatform:BaseUrl is configured.
+	// Cloud Settings is a LOCAL cloud-provider surface (Codex OAuth + Azure Foundry credentials, stored
+	// encrypted on this node) — it does NOT require a Central Platform pairing, so it is on by default.
 	readonly cloudSettings: boolean;
 	readonly modelManagement: boolean;
 	readonly invocationMonitor: boolean;
@@ -62,14 +63,15 @@ export const nodeCapabilities: NodeCapabilityConfig = {
 		// operator-owned manifest.Enabled before any voice UI shows (see buildChatUiCapabilities).
 		voice: true,
 	},
-	// Central-Platform surfaces (Node Binding + Dashboard + Cloud Settings) are the trio that only make sense once
-	// the node is paired to a Central Platform. In the local-only (LocalTester) profile — no CentralPlatform:BaseUrl
-	// configured — they are all hidden so the menu does not show dead "disconnected / not paired" pages. Flip all
-	// three to true together when the node is paired to a central platform instance.
+	// Central-Platform surfaces (Node Binding + Dashboard) only make sense once the node is paired to a Central
+	// Platform. In the local-only (LocalTester) profile — no CentralPlatform:BaseUrl configured — they are hidden
+	// so the menu does not show dead "disconnected / not paired" pages. Flip both to true when paired.
 	binding: false,
 	dashboard: false,
 	nodeSettings: true,
-	cloudSettings: false,
+	// Cloud Settings is a LOCAL cloud-provider surface (Codex OAuth sign-in + Azure Foundry connection/models,
+	// stored encrypted on this node). It needs no Central Platform pairing, so it is on by default.
+	cloudSettings: true,
 	modelManagement: true,
 	invocationMonitor: true,
 	// Agent definition authoring surface (agent-management). On by default; node-local SQLite-backed CRUD.
