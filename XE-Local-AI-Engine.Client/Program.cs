@@ -1,3 +1,4 @@
+using System.Diagnostics;
 using FastEndpoints;
 using FastEndpoints.Swagger;
 using Microsoft.Agents.AI.DevUI;
@@ -96,6 +97,22 @@ try
         builder.AddDevUI();
     }
 
+    // W3C trace correlation that works with Aspire/OpenTelemetry OFF (the desktop/RC default). Forcing the W3C
+    // Activity id format and registering a no-op ActivityListener makes ASP.NET create a request Activity from an
+    // inbound `traceparent` header even when no OTel listener is present; otherwise Activity.Current would be null in
+    // the request pipeline and the emitted trace id would regress to the Kestrel connection id (TraceIdentifier).
+    // When Aspire is ON, the OTel listener coexists with this one. Process-global, so set once before Build().
+    Activity.DefaultIdFormat = ActivityIdFormat.W3C;
+    Activity.ForceDefaultIdFormat = true;
+#pragma warning disable CA2000 // The no-op listener is owned by the static ActivitySource registry for the app's lifetime.
+    ActivitySource.AddActivityListener(new ActivityListener
+    {
+        ShouldListenTo = static _ => true,
+        Sample = static (ref ActivityCreationOptions<ActivityContext> _) => ActivitySamplingResult.AllData,
+        SampleUsingParentId = static (ref ActivityCreationOptions<string> _) => ActivitySamplingResult.AllData
+    });
+#pragma warning restore CA2000
+
     var app = builder.Build();
 
     await ApplyNodeChatMigrationsAsync(app.Services).ConfigureAwait(false);
@@ -119,6 +136,28 @@ try
     // Standardized typed exception handling (mirrors the central platform): translates domain
     // exceptions into RFC7807 ProblemDetails. Registered before UseFastEndpoints so it wraps endpoints.
     app.UseExceptionHandler();
+
+    // Emit the W3C trace id on the success path too, so the local diagnostics snapshot can correlate a 2xx response
+    // with backend logs (the error path carries the same id via ProblemDetails.traceId). The header is set in
+    // Response.OnStarting so it lands before the body flushes, and an already-present value is never overwritten.
+    app.Use(static async (context, next) =>
+    {
+        var activity = Activity.Current;
+        if (activity is not null)
+        {
+            context.Response.OnStarting(() =>
+            {
+                if (!context.Response.Headers.ContainsKey("traceresponse"))
+                {
+                    context.Response.Headers["traceresponse"] = $"00-{activity.TraceId}-{activity.SpanId}-01";
+                }
+
+                return Task.CompletedTask;
+            });
+        }
+
+        await next().ConfigureAwait(false);
+    });
 
     // Desktop mode serves plain HTTP on loopback only, so the HTTPS-redirect/HSTS pipeline is
     // bypassed entirely. Off-flag both branches are exactly as before. UseAntiforgery is scheme-agnostic and stays.
