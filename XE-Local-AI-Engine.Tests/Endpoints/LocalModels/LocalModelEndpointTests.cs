@@ -264,9 +264,13 @@ public sealed class LocalModelEndpointTests
     }
 
     [Test]
-    public async Task DeleteLocalModel_WhenValid_UsesOllamaModelService()
+    public async Task DeleteLocalModel_WhenValid_UsesGgufModelStore()
     {
-        await using var context = await CreateContextAsync("orca-mini:latest").ConfigureAwait(false);
+        // Local models are GGUF files served by the bundled llama.cpp runtime (Ollama is no longer a runtime), so the
+        // delete endpoint routes to IGgufModelStore.DeleteModelAsync — assert the GGUF store is the deletion path.
+        var modelService = Substitute.For<IOllamaModelService>();
+        var ggufModelStore = Substitute.For<IGgufModelStore>();
+        await using var context = CreateContext(modelService, new StubNodeSettingsStore(new StoredNodeSettings()), LlamaCppProviderName, ggufModelStore);
         using var client = context.Factory.CreateClient();
 
         using var deleteRequest = CreateRequest(context.Factory, HttpMethod.Delete, "/api/local/v1/models/orca-mini:latest");
@@ -276,8 +280,8 @@ public sealed class LocalModelEndpointTests
         AssertEx.Equal(HttpStatusCode.OK, deleteResponse.StatusCode);
         AssertEx.Equal("orca-mini:latest", deleted.ModelName);
         AssertEx.True(deleted.Deleted);
-        AssertEx.False(context.Server!.State.Models.Contains("orca-mini:latest"));
-        AssertEx.Contains(context.Server.RecordedRequests, request => request.Path == "/api/delete" && request.ModelName == "orca-mini:latest");
+        await ggufModelStore.Received(1).DeleteModelAsync("orca-mini:latest", Arg.Any<CancellationToken>());
+        await modelService.DidNotReceiveWithAnyArgs().DeleteModelAsync(Arg.Any<string>(), Arg.Any<CancellationToken>());
     }
 
     [Test]
@@ -286,7 +290,8 @@ public sealed class LocalModelEndpointTests
         // The hey-api client escapes the route segment with encodeURIComponent, and Kestrel leaves %2F encoded by design,
         // so the bound name arrives as "hf.co%2F...". The endpoint must decode it and delete the canonical HF reference.
         var modelService = Substitute.For<IOllamaModelService>();
-        await using var context = CreateContext(modelService, new StubNodeSettingsStore(new StoredNodeSettings()));
+        var ggufModelStore = Substitute.For<IGgufModelStore>();
+        await using var context = CreateContext(modelService, new StubNodeSettingsStore(new StoredNodeSettings()), LlamaCppProviderName, ggufModelStore);
         using var client = context.Factory.CreateClient();
 
         using var request = CreateRequest(context.Factory,
@@ -298,15 +303,16 @@ public sealed class LocalModelEndpointTests
         AssertEx.Equal(HttpStatusCode.OK, response.StatusCode);
         AssertEx.Equal("hf.co/unsloth/gemma-4-12b-it-GGUF:UD-Q4_K_XL", deleted.ModelName);
         AssertEx.True(deleted.Deleted);
-        await modelService.Received(1)
-                          .DeleteModelAsync("hf.co/unsloth/gemma-4-12b-it-GGUF:UD-Q4_K_XL", Arg.Any<CancellationToken>());
+        await ggufModelStore.Received(1)
+                            .DeleteModelAsync("hf.co/unsloth/gemma-4-12b-it-GGUF:UD-Q4_K_XL", Arg.Any<CancellationToken>());
     }
 
     [Test]
     public async Task DeleteLocalModel_WhenNameIsPlainTag_DeletesUnchanged()
     {
         var modelService = Substitute.For<IOllamaModelService>();
-        await using var context = CreateContext(modelService, new StubNodeSettingsStore(new StoredNodeSettings()));
+        var ggufModelStore = Substitute.For<IGgufModelStore>();
+        await using var context = CreateContext(modelService, new StubNodeSettingsStore(new StoredNodeSettings()), LlamaCppProviderName, ggufModelStore);
         using var client = context.Factory.CreateClient();
 
         using var request = CreateRequest(context.Factory, HttpMethod.Delete, "/api/local/v1/models/llama3:8b");
@@ -315,7 +321,7 @@ public sealed class LocalModelEndpointTests
 
         AssertEx.Equal(HttpStatusCode.OK, response.StatusCode);
         AssertEx.Equal("llama3:8b", deleted.ModelName);
-        await modelService.Received(1).DeleteModelAsync("llama3:8b", Arg.Any<CancellationToken>());
+        await ggufModelStore.Received(1).DeleteModelAsync("llama3:8b", Arg.Any<CancellationToken>());
     }
 
     [Test]
@@ -324,14 +330,15 @@ public sealed class LocalModelEndpointTests
         // ..%2F..%2Fetc decodes to "../../etc", which the validator's ".." guard rejects AFTER decoding — so decoding
         // cannot smuggle path traversal past the guard.
         var modelService = Substitute.For<IOllamaModelService>();
-        await using var context = CreateContext(modelService, new StubNodeSettingsStore(new StoredNodeSettings()));
+        var ggufModelStore = Substitute.For<IGgufModelStore>();
+        await using var context = CreateContext(modelService, new StubNodeSettingsStore(new StoredNodeSettings()), LlamaCppProviderName, ggufModelStore);
         using var client = context.Factory.CreateClient();
 
         using var request = CreateRequest(context.Factory, HttpMethod.Delete, "/api/local/v1/models/hf.co%2F..%2F..%2Fetc");
         using var response = await client.SendAsync(request).ConfigureAwait(false);
 
         AssertEx.Equal(HttpStatusCode.BadRequest, response.StatusCode);
-        await modelService.DidNotReceiveWithAnyArgs().DeleteModelAsync(Arg.Any<string>(), Arg.Any<CancellationToken>());
+        await ggufModelStore.DidNotReceiveWithAnyArgs().DeleteModelAsync(Arg.Any<string>(), Arg.Any<CancellationToken>());
     }
 
     [Test]
