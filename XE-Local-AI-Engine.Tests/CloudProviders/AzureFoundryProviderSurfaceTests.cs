@@ -1,5 +1,6 @@
 namespace XE_Local_AI_Engine.Tests.CloudProviders;
 
+using System.Runtime.CompilerServices;
 using Azure;
 using Microsoft.Extensions.AI;
 using XE_Local_AI_Engine.Client.Endpoints.LocalModels.V1;
@@ -25,9 +26,19 @@ public sealed class AzureFoundryProviderSurfaceTests
             ApiKey = "k",
             Models =
             [
-                new StoredAzureFoundryModel { DeploymentName = "gpt-4o", DisplayLabel = "GPT-4o" },
-                new StoredAzureFoundryModel { DeploymentName = "gpt-4o-mini" },
-                new StoredAzureFoundryModel { DeploymentName = "  " }
+                new StoredAzureFoundryModel
+                {
+                    DeploymentName = "gpt-4o",
+                    DisplayLabel = "GPT-4o"
+                },
+                new StoredAzureFoundryModel
+                {
+                    DeploymentName = "gpt-4o-mini"
+                },
+                new StoredAzureFoundryModel
+                {
+                    DeploymentName = "  "
+                }
             ]
         };
 
@@ -45,7 +56,8 @@ public sealed class AzureFoundryProviderSurfaceTests
     [Test]
     public async Task ErrorTranslatingChatClient_WhenContentFilter400_ThrowsContentFiltered_WithoutSecret()
     {
-        var requestFailed = new RequestFailedException(status: 400, message: "The response was filtered due to the prompt triggering the content management policy.", errorCode: "content_filter", innerException: null);
+        var requestFailed = new RequestFailedException(status: 400, message: "The response was filtered due to the prompt triggering the content management policy.", errorCode: "content_filter",
+            innerException: null);
         using var inner = new ThrowingChatClient(requestFailed);
         using var client = new AzureFoundryErrorTranslatingChatClient(inner);
 
@@ -95,7 +107,7 @@ public sealed class AzureFoundryProviderSurfaceTests
 
         public async IAsyncEnumerable<ChatResponseUpdate> GetStreamingResponseAsync(IEnumerable<ChatMessage> messages,
             ChatOptions? options = null,
-            [System.Runtime.CompilerServices.EnumeratorCancellation]
+            [EnumeratorCancellation]
             CancellationToken cancellationToken = default)
         {
             await Task.CompletedTask.ConfigureAwait(false);

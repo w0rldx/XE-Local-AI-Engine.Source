@@ -348,7 +348,13 @@ public sealed class ActiveCloudChatClientFactoryTests
                 Endpoint = "https://example.openai.azure.com/",
                 AuthMode = AzureFoundryAuthMode.ApiKey,
                 ApiKey = "test-api-key",
-                Models = [new StoredAzureFoundryModel { DeploymentName = "gpt-4o" }]
+                Models =
+                [
+                    new StoredAzureFoundryModel
+                    {
+                        DeploymentName = "gpt-4o"
+                    }
+                ]
             }
         };
     }

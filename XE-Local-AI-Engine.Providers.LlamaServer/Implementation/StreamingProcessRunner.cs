@@ -97,7 +97,10 @@ internal static class StreamingProcessRunner
     // failure. On success ownership is transferred to the caller (which wraps it in a LinuxProcessGroupHandle).
     private static Process StartStreaming(ProcessStartInfo startInfo, Action<string> logSink)
     {
-        var process = new Process { StartInfo = startInfo };
+        var process = new Process
+        {
+            StartInfo = startInfo
+        };
         process.OutputDataReceived += (_, e) => Forward(e.Data, logSink);
         process.ErrorDataReceived += (_, e) => Forward(e.Data, logSink);
 

@@ -138,7 +138,10 @@ public sealed class CudaBuildPrerequisiteProbe : ICudaBuildPrerequisiteProbe
             startInfo.ArgumentList.Add(arg);
         }
 
-        using var process = new Process { StartInfo = startInfo };
+        using var process = new Process
+        {
+            StartInfo = startInfo
+        };
         try
         {
             if (!process.Start())

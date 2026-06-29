@@ -1,6 +1,5 @@
 namespace XE_Local_AI_Engine.Tests.CloudSettings;
 
-using System.Linq;
 using System.Net;
 using System.Net.Http.Json;
 using System.Text.Json;
@@ -54,7 +53,13 @@ public sealed class CloudSettingsEndpointTests
             Endpoint = "https://example.openai.azure.com/",
             AuthMode = "ApiKey",
             ApiKey = "new-secret-api-key",
-            Models = [new AzureFoundryModelDto { DeploymentName = "gpt-4o-mini" }]
+            Models =
+            [
+                new AzureFoundryModelDto
+                {
+                    DeploymentName = "gpt-4o-mini"
+                }
+            ]
         });
         using var response = await client.SendAsync(request).ConfigureAwait(false);
         var body = await response.Content.ReadAsStringAsync().ConfigureAwait(false);
@@ -65,8 +70,7 @@ public sealed class CloudSettingsEndpointTests
         AssertEx.Equal("gpt-4o-mini", settings.AzureFoundry!.Models.Single().DeploymentName);
         AssertEx.True(settings.AzureFoundry.HasStoredApiKey);
         AssertEx.False(body.Contains("new-secret-api-key", StringComparison.Ordinal));
-        await cloudCredentialStore.Received(1).SaveConfigAsync(
-            Arg.Is<StoredCloudProviderConfig>(config =>
+        await cloudCredentialStore.Received(1).SaveConfigAsync(Arg.Is<StoredCloudProviderConfig>(config =>
                 config.AzureFoundry != null
                 && config.AzureFoundry.ApiKey == "new-secret-api-key"
                 && config.AzureFoundry.Models.Any(model => model.DeploymentName == "gpt-4o-mini")),
@@ -89,7 +93,13 @@ public sealed class CloudSettingsEndpointTests
             Endpoint = "http://example.openai.azure.com/",
             AuthMode = "ApiKey",
             ApiKey = "secret",
-            Models = [new AzureFoundryModelDto { DeploymentName = "gpt-4o" }]
+            Models =
+            [
+                new AzureFoundryModelDto
+                {
+                    DeploymentName = "gpt-4o"
+                }
+            ]
         });
         using var response = await client.SendAsync(request).ConfigureAwait(false);
 
@@ -150,7 +160,14 @@ public sealed class CloudSettingsEndpointTests
                 Endpoint = "https://example.openai.azure.com/",
                 AuthMode = AzureFoundryAuthMode.ApiKey,
                 ApiKey = "test-api-key",
-                Models = [new StoredAzureFoundryModel { DeploymentName = "gpt-4o", DisplayLabel = "gpt-4o" }]
+                Models =
+                [
+                    new StoredAzureFoundryModel
+                    {
+                        DeploymentName = "gpt-4o",
+                        DisplayLabel = "gpt-4o"
+                    }
+                ]
             }
         };
     }

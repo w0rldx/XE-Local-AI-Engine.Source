@@ -4,7 +4,6 @@ using System.Runtime.InteropServices;
 using System.Runtime.Versioning;
 using XE_Local_AI_Engine.Providers.LlamaServer;
 using XE_Local_AI_Engine.Providers.LlamaServer.Configuration;
-using XE_Local_AI_Engine.Providers.LlamaServer.Contracts;
 using XE_Local_AI_Engine.Providers.LlamaServer.Implementation;
 using XE_Local_AI_Engine.Tests.Testing;
 
@@ -228,7 +227,8 @@ public sealed class OverrideBinaryManagerTests
     }
 
     // A stub that branches on the llama.cpp arg: --version passes; --list-devices enumerates a GPU device.
-    private const string GpuStub = "#!/bin/sh\ncase \"$1\" in\n  --version) echo 'version: test'; exit 0 ;;\n  --list-devices) echo 'Available devices:'; echo '  CUDA0: Test GPU (24000 MiB, 23000 MiB free)'; exit 0 ;;\n  *) exit 0 ;;\nesac\n";
+    private const string GpuStub =
+        "#!/bin/sh\ncase \"$1\" in\n  --version) echo 'version: test'; exit 0 ;;\n  --list-devices) echo 'Available devices:'; echo '  CUDA0: Test GPU (24000 MiB, 23000 MiB free)'; exit 0 ;;\n  *) exit 0 ;;\nesac\n";
 
     // --version passes; --list-devices enumerates NO GPU device.
     private const string NoGpuStub = "#!/bin/sh\ncase \"$1\" in\n  --version) echo 'version: test'; exit 0 ;;\n  --list-devices) echo 'Available devices:'; exit 0 ;;\n  *) exit 0 ;;\nesac\n";

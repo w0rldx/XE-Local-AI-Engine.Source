@@ -96,7 +96,6 @@ public sealed class LlamaServerRuntimeOverrideOptions
             return GpuVariant.Cpu;
         }
 
-        throw new InvalidOperationException(
-            $"The environment variable '{VariantEnvironmentVariable}' is set to an unrecognized llama.cpp acceleration variant. Use one of: cpu, cuda, vulkan.");
+        throw new InvalidOperationException($"The environment variable '{VariantEnvironmentVariable}' is set to an unrecognized llama.cpp acceleration variant. Use one of: cpu, cuda, vulkan.");
     }
 }

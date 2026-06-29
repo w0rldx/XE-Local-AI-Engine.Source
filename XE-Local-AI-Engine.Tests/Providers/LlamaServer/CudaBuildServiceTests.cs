@@ -17,7 +17,6 @@ using XE_Local_AI_Engine.Tests.Testing;
 [NotInParallel]
 public sealed class CudaBuildServiceTests
 {
-
     [Test]
     public async Task BuildService_VerifiesCommitSha_HardFailsOnMismatch()
     {
@@ -200,7 +199,15 @@ public sealed class CudaBuildServiceTests
         using var dir = new TempDir();
         var stubDir = Path.Combine(dir.Path, "stubs");
         Directory.CreateDirectory(stubDir);
-        foreach (var tool in new[] { "nvcc", "cmake", "gcc", "g++", "make", "git" })
+        foreach (var tool in new[]
+                 {
+                     "nvcc",
+                     "cmake",
+                     "gcc",
+                     "g++",
+                     "make",
+                     "git"
+                 })
         {
             WriteToolStub(stubDir, tool);
         }
@@ -224,7 +231,14 @@ public sealed class CudaBuildServiceTests
         var stubDir = Path.Combine(dir.Path, "stubs");
         Directory.CreateDirectory(stubDir);
         // Everything EXCEPT nvcc.
-        foreach (var tool in new[] { "cmake", "gcc", "g++", "make", "git" })
+        foreach (var tool in new[]
+                 {
+                     "cmake",
+                     "gcc",
+                     "g++",
+                     "make",
+                     "git"
+                 })
         {
             WriteToolStub(stubDir, tool);
         }

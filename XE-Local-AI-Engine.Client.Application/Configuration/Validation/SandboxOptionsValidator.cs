@@ -1,6 +1,5 @@
 namespace XE_Local_AI_Engine.Client.Configuration.Validation;
 
-using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Options;
 using XE_Local_AI_Engine.Client.Services.Sandbox;
 
@@ -20,9 +19,8 @@ public sealed class SandboxOptionsValidator(IHostEnvironment environment) : IVal
 
         if (_environment.IsProduction() && string.IsNullOrWhiteSpace(options.Provider))
         {
-            throw new InvalidOperationException(
-                $"{SandboxOptions.SectionName}:{nameof(SandboxOptions.Provider)} must be set in Production. There is no "
-                + "execution-capable default; refusing to start rather than silently fall back to a command-executing provider.");
+            throw new InvalidOperationException($"{SandboxOptions.SectionName}:{nameof(SandboxOptions.Provider)} must be set in Production. There is no "
+                                                + "execution-capable default; refusing to start rather than silently fall back to a command-executing provider.");
         }
 
         return ValidateOptionsResult.Success;

@@ -523,7 +523,14 @@ public sealed class CapabilityReporterTests
                     Endpoint = _credentials.Endpoint,
                     AuthMode = AzureFoundryAuthMode.ApiKey,
                     ApiKey = _credentials.ApiKey,
-                    Models = [new StoredAzureFoundryModel { DeploymentName = _credentials.DeploymentName, DisplayLabel = _credentials.DeploymentName }],
+                    Models =
+                    [
+                        new StoredAzureFoundryModel
+                        {
+                            DeploymentName = _credentials.DeploymentName,
+                            DisplayLabel = _credentials.DeploymentName
+                        }
+                    ],
                 },
             };
 

@@ -1,8 +1,5 @@
 namespace XE_Local_AI_Engine.Client.Services.CloudProviders;
 
-using System;
-using System.Linq;
-
 /// <summary>
 ///     Host-allowlist guard for Azure Foundry / Azure OpenAI endpoints.
 /// </summary>

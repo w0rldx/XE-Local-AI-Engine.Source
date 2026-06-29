@@ -29,8 +29,7 @@ internal sealed class LlamaServerRuntimeOverrideStartupNotice : IHostedService
     {
         if (_options.IsActive)
         {
-            _logger.LogWarning(
-                "Using operator-supplied llama-server at {ServerPath} (variant {Variant}); integrity hash verification is skipped.",
+            _logger.LogWarning("Using operator-supplied llama-server at {ServerPath} (variant {Variant}); integrity hash verification is skipped.",
                 _options.ServerPath,
                 _options.Variant);
         }
