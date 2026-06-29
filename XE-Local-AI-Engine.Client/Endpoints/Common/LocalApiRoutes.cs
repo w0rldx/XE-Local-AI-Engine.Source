@@ -13,6 +13,7 @@ public static class LocalApiRoutes
     public static class ApiFoundation
     {
         public const string ValidationProblemProbe = "diagnostics/validation-probe";
+        public const string UnhandledExceptionProbe = "diagnostics/exception-probe";
     }
 
     /// <summary>
