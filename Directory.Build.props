@@ -3,7 +3,7 @@
   <PropertyGroup>
     <!-- Single version source of truth. Tag convention: vX.Y.Z-rc.N (e.g. v0.1.0-rc.1). -->
     <VersionPrefix>0.1.0</VersionPrefix>
-    <VersionSuffix>rc.1.2</VersionSuffix>
+    <VersionSuffix>rc.2</VersionSuffix>
     <TargetFramework>net10.0</TargetFramework>
     <Nullable>enable</Nullable>
     <ImplicitUsings>enable</ImplicitUsings>
@@ -26,6 +26,13 @@
       Condition="$(MSBuildProjectName.EndsWith('.Tests')) Or $(MSBuildProjectName.Contains('.Tests.')) Or $(MSBuildProjectName.Contains('.Testing')) Or $(MSBuildProjectName.EndsWith('.AppHost'))">
       true
     </IsTestOrToolingProject>
+  </PropertyGroup>
+
+  <!-- Bridge so `dotnet test` (the VSTest entrypoint used in CI) actually runs the
+       Microsoft.Testing.Platform / TUnit suites instead of silently reporting "Zero tests ran".
+       Scoped to MTP test projects only. Without this the CI quality gate is hollow. -->
+  <PropertyGroup Condition="$(MSBuildProjectName.EndsWith('.Tests')) Or $(MSBuildProjectName.Contains('.Tests.'))">
+    <TestingPlatformDotnetTestSupport>true</TestingPlatformDotnetTestSupport>
   </PropertyGroup>
 
   <ItemGroup>

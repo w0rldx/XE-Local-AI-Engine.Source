@@ -413,3 +413,6 @@ node-settings.json
 
 # Generated at release time by scripts/generate-release-notes.sh (vpk --releaseNotes)
 RELEASE_NOTES.md
+
+# DataProtection key-ring (runtime; per-user data dir in prod, content-root fallback in dev/test)
+dp-keys/

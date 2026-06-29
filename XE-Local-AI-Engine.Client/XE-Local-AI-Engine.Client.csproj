@@ -53,6 +53,7 @@
     <PackageReference Include="NSec.Cryptography"/>
     <PackageReference Include="OllamaSharp"/>
     <PackageReference Include="Scalar.AspNetCore"/>
+    <PackageReference Include="System.Security.Cryptography.ProtectedData"/>
     <PackageReference Include="Serilog"/>
     <PackageReference Include="Serilog.AspNetCore"/>
     <PackageReference Include="Serilog.Enrichers.Environment"/>
