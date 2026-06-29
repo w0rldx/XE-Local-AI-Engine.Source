@@ -20,6 +20,7 @@ describe("toLlamaCppRuntimeStatus", () => {
 			variant: "cuda",
 			asset: "asset.zip",
 			installedAtUtc: 1700000000000,
+			isSourceBuild: false,
 		});
 		expect(status.recommendedTag).toBe("b9692");
 		expect(status.upstreamLatestTag).toBe("b9999");

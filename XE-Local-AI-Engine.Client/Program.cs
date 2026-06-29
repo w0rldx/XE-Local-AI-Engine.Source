@@ -203,6 +203,8 @@ try
        .RequireAuthorization(NodeAuthorizationPolicies.Operator);
     app.MapHub<GgufDownloadHub>(LocalApiRoutes.ModelFit.DownloadHub)
        .RequireAuthorization(NodeAuthorizationPolicies.Operator);
+    app.MapHub<CudaBuildHub>(LocalApiRoutes.ModelFit.CudaBuildHub)
+       .RequireAuthorization(NodeAuthorizationPolicies.Operator);
 
     if (!app.Environment.IsProduction())
     {

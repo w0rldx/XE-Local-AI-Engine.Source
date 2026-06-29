@@ -302,6 +302,20 @@ public static class LocalApiRoutes
         // the release catalog). Validates the tag format before resolving the asset + digest and installing.
         public const string LlamaCppUpdate = "model-fit/llamacpp/update";
 
+        // In-app Linux CUDA source build (no upstream prebuilt exists). Prerequisites reports the itemized toolchain
+        // checklist (any OS; non-Linux → canBuild=false). The build action is Linux+prereq+disk+eject-first+single-flight
+        // gated server-side; status/cancel/remove drive the in-flight build and the adopted managed runtime. Literal
+        // "cuda-build" segments follow "llamacpp" so none collide with the version/runtime/update routes above.
+        public const string CudaBuildPrerequisites = "model-fit/llamacpp/cuda-build/prerequisites";
+        public const string CudaBuild = "model-fit/llamacpp/cuda-build";
+        public const string CudaBuildStatus = "model-fit/llamacpp/cuda-build/status";
+        public const string CudaBuildCancel = "model-fit/llamacpp/cuda-build/cancel";
+        public const string CudaBuildRemove = "model-fit/llamacpp/cuda-build/remove";
+
+        // SignalR push hub for in-app CUDA build progress. Full path (mapped via MapHub, not the FastEndpoints prefix),
+        // mirroring the other local hubs. Each push carries the phase + appended log lines.
+        public const string CudaBuildHub = "/api/local/v1/model-fit/llamacpp/cuda-build/hub";
+
         // HF access-token set/clear (IHfTokenStore). The endpoint NEVER returns the token; GET reports presence
         // only (security gate).
         public const string HfToken = "model-fit/hf-token";

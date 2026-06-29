@@ -444,11 +444,17 @@ public sealed class LlamaCppInstalledRuntimeResponse
     /// <summary>The installed acceleration variant, lowercased — <c>cpu|cuda|vulkan</c>.</summary>
     public required string Variant { get; init; }
 
-    /// <summary>The installed asset file name.</summary>
+    /// <summary>The installed asset file name (the sentinel <c>(source-build:cuda)</c> for a managed source build — never parse it; use <see cref="IsSourceBuild" />).</summary>
     public required string Asset { get; init; }
 
     /// <summary>Unix-ms instant the install completed (UTC).</summary>
     public required long InstalledAtUtc { get; init; }
+
+    /// <summary>
+    ///     True when this runtime is an in-app source-built CUDA build (its source-build path is set) rather than a
+    ///     downloaded prebuilt. The client uses this to label the runtime and suppress the phantom "update available".
+    /// </summary>
+    public required bool IsSourceBuild { get; init; }
 }
 
 /// <summary>
@@ -494,6 +500,19 @@ public sealed class LlamaCppRuntimeStatusResponse
     ///     the runtime update (the binary must not be replaced while a process holds it).
     /// </summary>
     public required int RunningProcessCount { get; init; }
+
+    /// <summary>
+    ///     True when the installed runtime is an in-app source-built CUDA build. When true the catalog-driven
+    ///     "update available" is suppressed (a source build is not on the prebuilt update channel); use
+    ///     <see cref="RebuildAvailable" /> instead. <c>[archMED-2]</c>
+    /// </summary>
+    public required bool IsSourceBuild { get; init; }
+
+    /// <summary>
+    ///     True when the installed runtime is a source build whose tag differs from the engine's current pinned tag —
+    ///     i.e. a fresh in-app CUDA rebuild is available. Always false for a downloaded prebuilt. <c>[archMED-4]</c>
+    /// </summary>
+    public required bool RebuildAvailable { get; init; }
 }
 
 /// <summary>
@@ -523,6 +542,89 @@ public sealed class LlamaCppUpdateBlockedResponse
 
     /// <summary>A user-safe explanation of why the update was rejected.</summary>
     public required string Message { get; init; }
+}
+
+// ---------------------------------------------------------------------------
+// In-app CUDA build DTOs (ICudaBuildPrerequisiteProbe + ICudaBuildService)
+// ---------------------------------------------------------------------------
+
+/// <summary>One prerequisite checklist row for <c>GET model-fit/llamacpp/cuda-build/prerequisites</c>.</summary>
+public sealed class CudaBuildPrerequisiteItemResponse
+{
+    /// <summary>Stable item key (e.g. <c>os-is-linux</c>, <c>nvcc</c>, <c>free-disk</c>).</summary>
+    public required string Key { get; init; }
+
+    /// <summary>Whether this prerequisite is satisfied.</summary>
+    public required bool Satisfied { get; init; }
+
+    /// <summary>A short, sanitized note (version banner or reason) — never a path/URL/secret.</summary>
+    public required string Detail { get; init; }
+}
+
+/// <summary>
+///     Response for <c>GET model-fit/llamacpp/cuda-build/prerequisites</c>: the itemized toolchain checklist plus the
+///     overall <see cref="CanBuild" /> gate (true only on Linux when every item is satisfied).
+/// </summary>
+public sealed class CudaBuildPrerequisitesResponse
+{
+    /// <summary>The itemized checklist, in display order.</summary>
+    public required IReadOnlyList<CudaBuildPrerequisiteItemResponse> Items { get; init; }
+
+    /// <summary>True only when the OS is Linux and every item is satisfied.</summary>
+    public required bool CanBuild { get; init; }
+}
+
+/// <summary>
+///     The current in-app CUDA build status (shared by <c>GET …/cuda-build/status</c>, <c>POST …/cuda-build/cancel</c>,
+///     and the body of the start response): the coarse <see cref="Phase" />, whether a build is running/terminal, the last
+///     N streamed log lines, a sanitized error on failure, and the pinned tag being built.
+/// </summary>
+public sealed class CudaBuildStatusResponse
+{
+    /// <summary>The coarse build phase name (e.g. <c>Cloning</c>, <c>Building</c>, <c>Completed</c>, <c>Failed</c>).</summary>
+    public required string Phase { get; init; }
+
+    /// <summary>True while a build is in flight.</summary>
+    public required bool IsRunning { get; init; }
+
+    /// <summary>True once the build has finished (Completed/Cancelled/Failed).</summary>
+    public required bool Terminal { get; init; }
+
+    /// <summary>The last N streamed log lines (cache-root/HOME prefixes redacted).</summary>
+    public required IReadOnlyList<string> LogLines { get; init; }
+
+    /// <summary>A user-safe error reason when the build failed; otherwise null.</summary>
+    public string? SanitizedError { get; init; }
+
+    /// <summary>The pinned llama.cpp tag being built; null before the first build.</summary>
+    public string? Tag { get; init; }
+}
+
+/// <summary>Response for <c>POST model-fit/llamacpp/cuda-build</c>: whether a new build started, plus the current status.</summary>
+public sealed class StartCudaBuildResponse
+{
+    /// <summary>True when this request started a new build; false when one was already in flight (single-flight).</summary>
+    public required bool Started { get; init; }
+
+    /// <summary>The current build status snapshot.</summary>
+    public required CudaBuildStatusResponse Status { get; init; }
+}
+
+/// <summary>
+///     409 Conflict body for the CUDA build start/remove endpoints when a server-side gate rejects the request
+///     (non-Linux, a missing prerequisite, low disk, running processes, or a build already in flight).
+///     <see cref="Reason" /> is a stable machine code; <see cref="Message" /> is the sanitized explanation.
+/// </summary>
+public sealed class CudaBuildBlockedResponse
+{
+    /// <summary>Stable machine reason code (<c>not-linux</c>, <c>prerequisites</c>, <c>disk</c>, <c>processes-running</c>, <c>already-building</c>).</summary>
+    public required string Reason { get; init; }
+
+    /// <summary>A user-safe explanation of why the request was rejected.</summary>
+    public required string Message { get; init; }
+
+    /// <summary>The number of running llama.cpp processes that must be ejected first; null when not a process-gate rejection.</summary>
+    public int? RunningProcessCount { get; init; }
 }
 
 // ---------------------------------------------------------------------------

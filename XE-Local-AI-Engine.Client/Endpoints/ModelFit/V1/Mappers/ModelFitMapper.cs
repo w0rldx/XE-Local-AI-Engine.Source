@@ -206,14 +206,23 @@ internal static class ModelFitMapper
         ArgumentNullException.ThrowIfNull(snapshot);
         ArgumentException.ThrowIfNullOrWhiteSpace(recommendedTag);
 
+        // A managed source build is NOT on the prebuilt update channel: suppress the catalog-driven "update available"
+        // and surface "rebuild available" instead when its tag differs from the engine's current pinned tag. [archMED-2/4]
+        var isSourceBuild = installed?.SourceBuildPath is { Length: > 0 };
+        var rebuildAvailable = isSourceBuild
+                               && installed is not null
+                               && !string.Equals(installed.Tag, LlamaCppReleasePins.PinnedTag, StringComparison.Ordinal);
+
         return new LlamaCppRuntimeStatusResponse
         {
             Installed = installed?.ToInstalledRuntimeResponse(),
             RecommendedTag = recommendedTag,
             UpstreamLatestTag = snapshot.UpstreamLatestTag,
-            UpdateAvailable = snapshot.UpdateAvailable,
+            UpdateAvailable = !isSourceBuild && snapshot.UpdateAvailable,
             IsOffline = snapshot.IsOffline,
-            RunningProcessCount = runningProcessCount
+            RunningProcessCount = runningProcessCount,
+            IsSourceBuild = isSourceBuild,
+            RebuildAvailable = rebuildAvailable
         };
     }
 
@@ -224,7 +233,45 @@ internal static class ModelFitMapper
             Tag = state.Tag,
             Variant = state.Variant.ToWireString(),
             Asset = state.Asset,
-            InstalledAtUtc = state.InstalledAtUtc.ToUnixTimeMilliseconds()
+            InstalledAtUtc = state.InstalledAtUtc.ToUnixTimeMilliseconds(),
+            IsSourceBuild = state.SourceBuildPath is { Length: > 0 }
+        };
+    }
+
+    // -----------------------------------------------------------------------
+    // In-app CUDA build → responses
+    // -----------------------------------------------------------------------
+
+    /// <summary>Projects the prerequisite report to its wire DTO.</summary>
+    public static CudaBuildPrerequisitesResponse ToResponse(this CudaBuildPrerequisiteReport report)
+    {
+        ArgumentNullException.ThrowIfNull(report);
+
+        return new CudaBuildPrerequisitesResponse
+        {
+            CanBuild = report.CanBuild,
+            Items = [.. report.Items.Select(static item => new CudaBuildPrerequisiteItemResponse
+            {
+                Key = item.Key,
+                Satisfied = item.Satisfied,
+                Detail = item.Detail
+            })]
+        };
+    }
+
+    /// <summary>Projects the build status to its wire DTO.</summary>
+    public static CudaBuildStatusResponse ToResponse(this CudaBuildStatus status)
+    {
+        ArgumentNullException.ThrowIfNull(status);
+
+        return new CudaBuildStatusResponse
+        {
+            Phase = status.Phase.ToString(),
+            IsRunning = status.IsRunning,
+            Terminal = status.Terminal,
+            LogLines = status.LogLines,
+            SanitizedError = status.SanitizedError,
+            Tag = status.Tag
         };
     }
 

@@ -6330,6 +6330,196 @@
           }
         ]
       }
+    },
+    "/api/local/v1/model-fit/llamacpp/cuda-build/prerequisites": {
+      "get": {
+        "tags": [
+          "Model-Fit"
+        ],
+        "operationId": "getCudaBuildPrerequisites",
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/XE_Local_AI_EngineClientEndpointsModelFitV1CudaBuildPrerequisitesResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "403": {
+            "description": "Forbidden"
+          }
+        },
+        "security": [
+          {
+            "JWTBearerAuth": []
+          },
+          {
+            "Bearer": []
+          }
+        ]
+      }
+    },
+    "/api/local/v1/model-fit/llamacpp/cuda-build": {
+      "post": {
+        "tags": [
+          "Model-Fit"
+        ],
+        "operationId": "startCudaBuild",
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/XE_Local_AI_EngineClientEndpointsModelFitV1StartCudaBuildResponse"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Conflict",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/XE_Local_AI_EngineClientEndpointsModelFitV1CudaBuildBlockedResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "403": {
+            "description": "Forbidden"
+          }
+        },
+        "security": [
+          {
+            "JWTBearerAuth": []
+          },
+          {
+            "Bearer": []
+          }
+        ]
+      }
+    },
+    "/api/local/v1/model-fit/llamacpp/cuda-build/status": {
+      "get": {
+        "tags": [
+          "Model-Fit"
+        ],
+        "operationId": "getCudaBuildStatus",
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/XE_Local_AI_EngineClientEndpointsModelFitV1CudaBuildStatusResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "403": {
+            "description": "Forbidden"
+          }
+        },
+        "security": [
+          {
+            "JWTBearerAuth": []
+          },
+          {
+            "Bearer": []
+          }
+        ]
+      }
+    },
+    "/api/local/v1/model-fit/llamacpp/cuda-build/cancel": {
+      "post": {
+        "tags": [
+          "Model-Fit"
+        ],
+        "operationId": "cancelCudaBuild",
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/XE_Local_AI_EngineClientEndpointsModelFitV1CudaBuildStatusResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "403": {
+            "description": "Forbidden"
+          }
+        },
+        "security": [
+          {
+            "JWTBearerAuth": []
+          },
+          {
+            "Bearer": []
+          }
+        ]
+      }
+    },
+    "/api/local/v1/model-fit/llamacpp/cuda-build/remove": {
+      "post": {
+        "tags": [
+          "Model-Fit"
+        ],
+        "operationId": "removeCudaBuild",
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/XE_Local_AI_EngineClientEndpointsModelFitV1LlamaCppRuntimeStatusResponse"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Conflict",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/XE_Local_AI_EngineClientEndpointsModelFitV1CudaBuildBlockedResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "403": {
+            "description": "Forbidden"
+          }
+        },
+        "security": [
+          {
+            "JWTBearerAuth": []
+          },
+          {
+            "Bearer": []
+          }
+        ]
+      }
     }
   },
   "components": {
@@ -8011,6 +8201,12 @@
           "runningProcessCount": {
             "type": "integer",
             "format": "int32"
+          },
+          "isSourceBuild": {
+            "type": "boolean"
+          },
+          "rebuildAvailable": {
+            "type": "boolean"
           }
         }
       },
@@ -8030,6 +8226,9 @@
           "installedAtUtc": {
             "type": "integer",
             "format": "int64"
+          },
+          "isSourceBuild": {
+            "type": "boolean"
           }
         }
       },
@@ -11270,6 +11469,94 @@
             "items": {
               "$ref": "#/components/schemas/XE_Local_AI_EngineClientEndpointsModelFitV1InferenceProfileViewDto"
             }
+          }
+        }
+      },
+      "XE_Local_AI_EngineClientEndpointsModelFitV1CudaBuildPrerequisiteItemResponse": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "key": {
+            "type": "string"
+          },
+          "satisfied": {
+            "type": "boolean"
+          },
+          "detail": {
+            "type": "string"
+          }
+        }
+      },
+      "XE_Local_AI_EngineClientEndpointsModelFitV1CudaBuildPrerequisitesResponse": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "items": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/XE_Local_AI_EngineClientEndpointsModelFitV1CudaBuildPrerequisiteItemResponse"
+            }
+          },
+          "canBuild": {
+            "type": "boolean"
+          }
+        }
+      },
+      "XE_Local_AI_EngineClientEndpointsModelFitV1CudaBuildStatusResponse": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "phase": {
+            "type": "string"
+          },
+          "isRunning": {
+            "type": "boolean"
+          },
+          "terminal": {
+            "type": "boolean"
+          },
+          "logLines": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "sanitizedError": {
+            "type": "string",
+            "nullable": true
+          },
+          "tag": {
+            "type": "string",
+            "nullable": true
+          }
+        }
+      },
+      "XE_Local_AI_EngineClientEndpointsModelFitV1StartCudaBuildResponse": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "started": {
+            "type": "boolean"
+          },
+          "status": {
+            "$ref": "#/components/schemas/XE_Local_AI_EngineClientEndpointsModelFitV1CudaBuildStatusResponse"
+          }
+        }
+      },
+      "XE_Local_AI_EngineClientEndpointsModelFitV1CudaBuildBlockedResponse": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "reason": {
+            "type": "string"
+          },
+          "message": {
+            "type": "string"
+          },
+          "runningProcessCount": {
+            "type": "integer",
+            "format": "int32",
+            "nullable": true
           }
         }
       }

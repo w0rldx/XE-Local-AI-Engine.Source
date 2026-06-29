@@ -952,6 +952,28 @@
 					"message": "Eine neuere llama.cpp-Laufzeit ({{tag}}) ist verfügbar.",
 					"review": "Update prüfen",
 					"dismiss": "Schließen"
+				},
+				"cudaBuild": {
+					"title": "CUDA (aus Quellcode erstellen)",
+					"devBadge": "Dev",
+					"description": "Erstellen Sie eine CUDA-beschleunigte llama.cpp-Laufzeit aus dem Quellcode auf diesem Linux-Host. Upstream liefert keine vorkompilierte Linux-CUDA-Version, daher ist dies der Weg zur GPU-Beschleunigung ohne Build-Kenntnisse.",
+					"loading": "Build-Voraussetzungen werden geprüft…",
+					"prereqError": "Die CUDA-Build-Voraussetzungen konnten nicht geprüft werden.",
+					"notLinux": "Der In-App-CUDA-Build ist nur unter Linux verfügbar. Die folgende Checkliste zeigt, was auf diesem Host fehlt.",
+					"build": "CUDA erstellen",
+					"rebuild": "Neu erstellen",
+					"remove": "Entfernen",
+					"cancel": "Build abbrechen",
+					"activeBadge": "Verwaltete CUDA-Laufzeit aktiv",
+					"rebuildAvailable": "Ein neuerer fixierter Quellcode-Tag ist verfügbar — erstellen Sie neu, um die verwaltete CUDA-Laufzeit zu aktualisieren.",
+					"runningNotice": "{{count}} llama.cpp-Modell(e) aktiv — werfen Sie diese aus, bevor Sie die Laufzeit neu erstellen oder entfernen.",
+					"openLoadedModels": "Geladene Modelle öffnen",
+					"phaseLabel": "Phase",
+					"logEmpty": "Warten auf Build-Ausgabe…",
+					"startError": "Der CUDA-Build konnte nicht gestartet werden.",
+					"cancelError": "Der CUDA-Build konnte nicht abgebrochen werden.",
+					"removeError": "Der CUDA-Build konnte nicht entfernt werden.",
+					"removed": "Verwalteter CUDA-Build entfernt."
 				}
 			},
 			"hfToken": {

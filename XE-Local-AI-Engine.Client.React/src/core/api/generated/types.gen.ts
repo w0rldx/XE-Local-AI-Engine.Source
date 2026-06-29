@@ -546,6 +546,8 @@ export type XeLocalAiEngineClientEndpointsModelFitV1LlamaCppRuntimeStatusRespons
 	updateAvailable?: boolean;
 	isOffline?: boolean;
 	runningProcessCount?: number;
+	isSourceBuild?: boolean;
+	rebuildAvailable?: boolean;
 };
 
 export type XeLocalAiEngineClientEndpointsModelFitV1LlamaCppInstalledRuntimeResponse = {
@@ -553,6 +555,7 @@ export type XeLocalAiEngineClientEndpointsModelFitV1LlamaCppInstalledRuntimeResp
 	variant?: string;
 	asset?: string;
 	installedAtUtc?: number;
+	isSourceBuild?: boolean;
 };
 
 export type XeLocalAiEngineClientEndpointsModelFitV1GetLlamaCppRuntimeRequest = {
@@ -1625,6 +1628,37 @@ export type XeLocalAiEngineClientEndpointsModelFitV1InvalidateInferenceProfileRe
 
 export type XeLocalAiEngineClientEndpointsModelFitV1ListInferenceProfilesResponse = {
 	items?: Array<XeLocalAiEngineClientEndpointsModelFitV1InferenceProfileViewDto>;
+};
+
+export type XeLocalAiEngineClientEndpointsModelFitV1CudaBuildPrerequisiteItemResponse = {
+	key?: string;
+	satisfied?: boolean;
+	detail?: string;
+};
+
+export type XeLocalAiEngineClientEndpointsModelFitV1CudaBuildPrerequisitesResponse = {
+	items?: Array<XeLocalAiEngineClientEndpointsModelFitV1CudaBuildPrerequisiteItemResponse>;
+	canBuild?: boolean;
+};
+
+export type XeLocalAiEngineClientEndpointsModelFitV1CudaBuildStatusResponse = {
+	phase?: string;
+	isRunning?: boolean;
+	terminal?: boolean;
+	logLines?: Array<string>;
+	sanitizedError?: string | null;
+	tag?: string | null;
+};
+
+export type XeLocalAiEngineClientEndpointsModelFitV1StartCudaBuildResponse = {
+	started?: boolean;
+	status?: XeLocalAiEngineClientEndpointsModelFitV1CudaBuildStatusResponse;
+};
+
+export type XeLocalAiEngineClientEndpointsModelFitV1CudaBuildBlockedResponse = {
+	reason?: string;
+	message?: string;
+	runningProcessCount?: number | null;
 };
 
 export type GetTutorialStateData = {
@@ -5642,3 +5676,150 @@ export type ListInferenceProfilesResponses = {
 };
 
 export type ListInferenceProfilesResponse = ListInferenceProfilesResponses[keyof ListInferenceProfilesResponses];
+
+export type GetCudaBuildPrerequisitesData = {
+	body?: never;
+	path?: never;
+	query?: never;
+	url: "/api/local/v1/model-fit/llamacpp/cuda-build/prerequisites";
+};
+
+export type GetCudaBuildPrerequisitesErrors = {
+	/**
+	 * Unauthorized
+	 */
+	401: unknown;
+	/**
+	 * Forbidden
+	 */
+	403: unknown;
+};
+
+export type GetCudaBuildPrerequisitesResponses = {
+	/**
+	 * Success
+	 */
+	200: XeLocalAiEngineClientEndpointsModelFitV1CudaBuildPrerequisitesResponse;
+};
+
+export type GetCudaBuildPrerequisitesResponse = GetCudaBuildPrerequisitesResponses[keyof GetCudaBuildPrerequisitesResponses];
+
+export type StartCudaBuildData = {
+	body?: never;
+	path?: never;
+	query?: never;
+	url: "/api/local/v1/model-fit/llamacpp/cuda-build";
+};
+
+export type StartCudaBuildErrors = {
+	/**
+	 * Unauthorized
+	 */
+	401: unknown;
+	/**
+	 * Forbidden
+	 */
+	403: unknown;
+	/**
+	 * Conflict
+	 */
+	409: XeLocalAiEngineClientEndpointsModelFitV1CudaBuildBlockedResponse;
+};
+
+export type StartCudaBuildError = StartCudaBuildErrors[keyof StartCudaBuildErrors];
+
+export type StartCudaBuildResponses = {
+	/**
+	 * Success
+	 */
+	200: XeLocalAiEngineClientEndpointsModelFitV1StartCudaBuildResponse;
+};
+
+export type StartCudaBuildResponse = StartCudaBuildResponses[keyof StartCudaBuildResponses];
+
+export type GetCudaBuildStatusData = {
+	body?: never;
+	path?: never;
+	query?: never;
+	url: "/api/local/v1/model-fit/llamacpp/cuda-build/status";
+};
+
+export type GetCudaBuildStatusErrors = {
+	/**
+	 * Unauthorized
+	 */
+	401: unknown;
+	/**
+	 * Forbidden
+	 */
+	403: unknown;
+};
+
+export type GetCudaBuildStatusResponses = {
+	/**
+	 * Success
+	 */
+	200: XeLocalAiEngineClientEndpointsModelFitV1CudaBuildStatusResponse;
+};
+
+export type GetCudaBuildStatusResponse = GetCudaBuildStatusResponses[keyof GetCudaBuildStatusResponses];
+
+export type CancelCudaBuildData = {
+	body?: never;
+	path?: never;
+	query?: never;
+	url: "/api/local/v1/model-fit/llamacpp/cuda-build/cancel";
+};
+
+export type CancelCudaBuildErrors = {
+	/**
+	 * Unauthorized
+	 */
+	401: unknown;
+	/**
+	 * Forbidden
+	 */
+	403: unknown;
+};
+
+export type CancelCudaBuildResponses = {
+	/**
+	 * Success
+	 */
+	200: XeLocalAiEngineClientEndpointsModelFitV1CudaBuildStatusResponse;
+};
+
+export type CancelCudaBuildResponse = CancelCudaBuildResponses[keyof CancelCudaBuildResponses];
+
+export type RemoveCudaBuildData = {
+	body?: never;
+	path?: never;
+	query?: never;
+	url: "/api/local/v1/model-fit/llamacpp/cuda-build/remove";
+};
+
+export type RemoveCudaBuildErrors = {
+	/**
+	 * Unauthorized
+	 */
+	401: unknown;
+	/**
+	 * Forbidden
+	 */
+	403: unknown;
+	/**
+	 * Conflict
+	 */
+	409: XeLocalAiEngineClientEndpointsModelFitV1CudaBuildBlockedResponse;
+};
+
+export type RemoveCudaBuildError = RemoveCudaBuildErrors[keyof RemoveCudaBuildErrors];
+
+export type RemoveCudaBuildResponses = {
+	/**
+	 * Success
+	 */
+	200: XeLocalAiEngineClientEndpointsModelFitV1LlamaCppRuntimeStatusResponse;
+};
+
+export type RemoveCudaBuildResponse = RemoveCudaBuildResponses[keyof RemoveCudaBuildResponses];

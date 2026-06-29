@@ -37,4 +37,25 @@ public interface ILlamaCppBinaryManager
     ///     for display.
     /// </exception>
     Task<LlamaBinary> InstallTagAsync(string tag, string assetName, string digestSha256, long expectedSize, GpuVariant variant, CancellationToken ct);
+
+    /// <summary>
+    ///     Adopts an in-app source-built CUDA runtime: validates the freshly-built <c>llama-server</c> under
+    ///     <paramref name="buildBinDir" /> (full path-chain perms/ownership + <c>--version</c> smoke + <c>--list-devices</c>
+    ///     GPU presence), records it in <c>installed-runtime.json</c> with its computed SHA256 and
+    ///     <see cref="InstalledRuntimeState.SourceBuildPath" /> set, and marks the managed-CUDA cached signal available. A
+    ///     validation failure throws a sanitized <see cref="LlamaRuntimeException" /> and records nothing — a failed build
+    ///     never becomes active and never silently degrades to CPU.
+    /// </summary>
+    /// <param name="buildBinDir">Absolute directory holding the built <c>llama-server</c> (and its sibling <c>.so</c> files).</param>
+    /// <param name="tag">The pinned llama.cpp tag the build was produced from (for the runtime record + rebuild-staleness).</param>
+    /// <exception cref="LlamaRuntimeException">Validation failed (path-chain, smoke, or GPU presence) — sanitized for display.</exception>
+    Task<InstalledRuntimeState> AdoptCudaSourceBuildAsync(string buildBinDir, string tag, CancellationToken ct);
+
+    /// <summary>
+    ///     Removes a managed CUDA source build: deletes the on-disk build tree (ONLY after asserting the recorded
+    ///     <see cref="InstalledRuntimeState.SourceBuildPath" /> is a normalized child of
+    ///     <c>{cacheRoot}/llama.cpp/source-cuda/</c> — never deleting outside it), clears the installed-runtime record, and
+    ///     clears the managed-CUDA cached signal. Idempotent: a no-op when no source build is recorded. <c>[secMED-3]</c>
+    /// </summary>
+    Task RemoveCudaSourceBuildAsync(CancellationToken ct);
 }

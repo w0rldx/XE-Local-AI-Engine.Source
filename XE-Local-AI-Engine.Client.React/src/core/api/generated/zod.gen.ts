@@ -905,6 +905,7 @@ export const zXeLocalAiEngineClientEndpointsModelFitV1LlamaCppInstalledRuntimeRe
 		.min(BigInt("-9223372036854775808"), { error: "Invalid value: Expected int64 to be >= -9223372036854775808" })
 		.max(BigInt("9223372036854775807"), { error: "Invalid value: Expected int64 to be <= 9223372036854775807" })
 		.optional(),
+	isSourceBuild: z.boolean().optional(),
 });
 
 export const zXeLocalAiEngineClientEndpointsModelFitV1LlamaCppRuntimeStatusResponse = z.object({
@@ -918,6 +919,8 @@ export const zXeLocalAiEngineClientEndpointsModelFitV1LlamaCppRuntimeStatusRespo
 		.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })
 		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" })
 		.optional(),
+	isSourceBuild: z.boolean().optional(),
+	rebuildAvailable: z.boolean().optional(),
 });
 
 export const zXeLocalAiEngineClientEndpointsModelFitV1GetLlamaCppRuntimeRequest = z.record(z.string(), z.never());
@@ -2306,6 +2309,41 @@ export const zXeLocalAiEngineClientEndpointsModelFitV1ListInferenceProfilesRespo
 	items: z.array(zXeLocalAiEngineClientEndpointsModelFitV1InferenceProfileViewDto).optional(),
 });
 
+export const zXeLocalAiEngineClientEndpointsModelFitV1CudaBuildPrerequisiteItemResponse = z.object({
+	key: z.string().optional(),
+	satisfied: z.boolean().optional(),
+	detail: z.string().optional(),
+});
+
+export const zXeLocalAiEngineClientEndpointsModelFitV1CudaBuildPrerequisitesResponse = z.object({
+	items: z.array(zXeLocalAiEngineClientEndpointsModelFitV1CudaBuildPrerequisiteItemResponse).optional(),
+	canBuild: z.boolean().optional(),
+});
+
+export const zXeLocalAiEngineClientEndpointsModelFitV1CudaBuildStatusResponse = z.object({
+	phase: z.string().optional(),
+	isRunning: z.boolean().optional(),
+	terminal: z.boolean().optional(),
+	logLines: z.array(z.string()).optional(),
+	sanitizedError: z.string().nullish(),
+	tag: z.string().nullish(),
+});
+
+export const zXeLocalAiEngineClientEndpointsModelFitV1StartCudaBuildResponse = z.object({
+	started: z.boolean().optional(),
+	status: zXeLocalAiEngineClientEndpointsModelFitV1CudaBuildStatusResponse.optional(),
+});
+
+export const zXeLocalAiEngineClientEndpointsModelFitV1CudaBuildBlockedResponse = z.object({
+	reason: z.string().optional(),
+	message: z.string().optional(),
+	runningProcessCount: z
+		.int()
+		.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })
+		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" })
+		.nullish(),
+});
+
 /**
  * Success
  */
@@ -3444,3 +3482,28 @@ export const zInvalidateInferenceProfileResponse = zXeLocalAiEngineClientEndpoin
  * Success
  */
 export const zListInferenceProfilesResponse = zXeLocalAiEngineClientEndpointsModelFitV1ListInferenceProfilesResponse;
+
+/**
+ * Success
+ */
+export const zGetCudaBuildPrerequisitesResponse = zXeLocalAiEngineClientEndpointsModelFitV1CudaBuildPrerequisitesResponse;
+
+/**
+ * Success
+ */
+export const zStartCudaBuildResponse = zXeLocalAiEngineClientEndpointsModelFitV1StartCudaBuildResponse;
+
+/**
+ * Success
+ */
+export const zGetCudaBuildStatusResponse = zXeLocalAiEngineClientEndpointsModelFitV1CudaBuildStatusResponse;
+
+/**
+ * Success
+ */
+export const zCancelCudaBuildResponse = zXeLocalAiEngineClientEndpointsModelFitV1CudaBuildStatusResponse;
+
+/**
+ * Success
+ */
+export const zRemoveCudaBuildResponse = zXeLocalAiEngineClientEndpointsModelFitV1LlamaCppRuntimeStatusResponse;

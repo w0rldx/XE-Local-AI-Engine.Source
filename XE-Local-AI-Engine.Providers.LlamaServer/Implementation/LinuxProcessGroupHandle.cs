@@ -21,6 +21,9 @@ internal sealed partial class LinuxProcessGroupHandle(Process process) : ILlamaS
 
     public int ProcessId => _process.Id;
 
+    /// <summary>The wrapped process. Exposed for the streaming build runner, which awaits exit + reads the exit code while the handle owns disposal/tree-kill.</summary>
+    internal Process Process => _process;
+
     public bool HasExited => SafeHasExited(_process);
 
     public void TreeKill()

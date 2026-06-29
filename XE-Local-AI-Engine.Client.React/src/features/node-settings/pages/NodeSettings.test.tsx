@@ -52,6 +52,12 @@ vi.mock("@/core/api/generated/@tanstack/react-query.gen", () => ({
 	updateLlamaCppRuntimeMutation: generatedMock.updateLlamaCppRuntimeMutation,
 }));
 
+// The CUDA build card owns its own data layer (CUDA-build SDK endpoints + a SignalR hub) and has its own dedicated
+// test; stub it to null here so these page tests stay isolated to the settings/runtime/HF-token composition.
+vi.mock("@/features/node-settings/components/CudaBuildCard", () => ({
+	CudaBuildCard: () => null,
+}));
+
 // The runtime card renders a TanStack Router <Link> (eject-first notice). Stub it so the page mounts without a
 // RouterProvider OR loading the generated route tree (which eval-fails outside a real router).
 vi.mock("@tanstack/react-router", () => ({

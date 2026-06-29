@@ -12,6 +12,8 @@ Upstream llama.cpp (`ggml-org/llama.cpp`) ships **no Linux CUDA prebuilt** — o
 
 It is **off by default**. When the override env var is unset, acquisition behaves exactly as today (pinned download + SHA256 verify). The override **skips** the download + hash step (an operator-built binary has no publisher digest) and instead validates the binary you supply.
 
+> **No-build-knowledge alternative — in-app CUDA build.** If you have the toolchain installed (nvcc/cmake/gcc/g++/make-or-ninja/git + an NVIDIA driver + free disk) but do not want to hand-build llama.cpp, the engine can build it for you: **Node Settings ▸ llama.cpp runtime ▸ "CUDA (build from source)"** (developer-mode / opt-in gated, Linux only). It clones the engine's **pinned** llama.cpp tag, verifies the checked-out commit equals the pinned SHA, builds a CUDA `llama-server` under a scrubbed environment, validates it, and **adopts it as a managed CUDA runtime** that is then selected automatically — no env var, survives restart, removable/rebuildable from the same card. The build option is disabled with an itemized checklist when any prerequisite is missing. See plan `2026-06-29-linux-cuda-inapp-build-plan.md`. The bring-your-own override below remains the manual alternative (and the fallback when the in-app build is too fragile across distros).
+
 > **WSL caveat:** a WSL2 instance with **no GPU passthrough cannot run this path** — the `--list-devices` GPU check will (correctly) reject the binary. You need a real Linux+NVIDIA host, or WSL2 with NVIDIA GPU passthrough configured.
 
 ---

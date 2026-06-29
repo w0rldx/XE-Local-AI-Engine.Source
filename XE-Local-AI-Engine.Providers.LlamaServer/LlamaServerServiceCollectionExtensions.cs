@@ -38,6 +38,10 @@ public static class LlamaServerServiceCollectionExtensions
 
         services.TryAddSingleton<IGpuVendorProbe, ProcessGpuVendorProbe>();
 
+        // Cached managed-CUDA signal: a single flag the variant selector reads (no per-call store I/O), set on adopt,
+        // cleared on remove / invalid-serve, seeded once at startup. Shared by the selector + the binary manager.
+        services.TryAddSingleton<ICudaManagedBuildSignal, CudaManagedBuildSignal>();
+
         // Operator bring-your-own llama-server override — operator-trust ONLY. Built once from process env vars
         // (XE_LLAMACPP_SERVER_PATH / XE_LLAMACPP_VARIANT) via explicit reads, NEVER from IConfiguration sections, the
         // user-editable node settings store, or a request DTO. Off by default; one instance is shared by the selector and
@@ -49,7 +53,8 @@ public static class LlamaServerServiceCollectionExtensions
         // type-based registration) so the new dependency resolves deterministically.
         services.TryAddSingleton<IGpuVariantSelector>(static sp =>
             new GpuVariantSelector(sp.GetRequiredService<IGpuVendorProbe>(),
-                sp.GetRequiredService<LlamaServerRuntimeOverrideOptions>()));
+                sp.GetRequiredService<LlamaServerRuntimeOverrideOptions>(),
+                sp.GetRequiredService<ICudaManagedBuildSignal>()));
 
         // Dynamic-runtime resolution seams: the live GitHub Releases catalog (tier 1) and the on-disk installed-runtime
         // state (tier 2). The binary manager consults both, falling back to the pinned floor (tier 3) when both miss.
@@ -67,7 +72,25 @@ public static class LlamaServerServiceCollectionExtensions
                 activeTag: null,
                 sp.GetRequiredService<ILlamaCppReleaseCatalog>(),
                 sp.GetRequiredService<IInstalledRuntimeStore>(),
-                sp.GetRequiredService<LlamaServerRuntimeOverrideOptions>()));
+                sp.GetRequiredService<LlamaServerRuntimeOverrideOptions>(),
+                sp.GetRequiredService<ICudaManagedBuildSignal>()));
+
+        // In-app Linux CUDA source build (no upstream prebuilt exists): the prerequisite probe, the no-op build-event
+        // publisher (the Client host swaps in a hub-backed one), and the single-flight build service. The startup service
+        // cleans a stale work dir + seeds the managed-CUDA signal from the installed-runtime record.
+        services.TryAddSingleton<ICudaBuildPrerequisiteProbe>(static sp =>
+            new CudaBuildPrerequisiteProbe(sp.GetRequiredService<IGpuVendorProbe>()));
+        services.TryAddSingleton<ICudaBuildEventPublisher, NullCudaBuildEventPublisher>();
+        services.TryAddSingleton<ICudaBuildService>(static sp =>
+            new CudaBuildService(sp.GetRequiredService<ICudaBuildPrerequisiteProbe>(),
+                sp.GetRequiredService<ILlamaCppBinaryManager>(),
+                sp.GetRequiredService<ICudaBuildEventPublisher>(),
+                sp.GetRequiredService<ILogger<CudaBuildService>>()));
+        services.AddHostedService(static sp => new CudaBuildStartupService(
+            sp.GetRequiredService<ICudaBuildService>(),
+            sp.GetRequiredService<IInstalledRuntimeStore>(),
+            sp.GetRequiredService<ICudaManagedBuildSignal>(),
+            sp.GetRequiredService<ILogger<CudaBuildStartupService>>()));
 
         // Real available-VRAM probe (Lane B1): parses `llama-server --list-devices`. PLAIN AddSingleton (not TryAdd) so
         // it WINS over the Application-layer TryAddSingleton<IAvailableVramProbe, UnknownAvailableVramProbe>() floor

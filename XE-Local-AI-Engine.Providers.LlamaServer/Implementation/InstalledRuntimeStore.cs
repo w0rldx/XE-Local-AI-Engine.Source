@@ -101,6 +101,20 @@ public sealed class InstalledRuntimeStore : IInstalledRuntimeStore, IDisposable
         }
     }
 
+    /// <inheritdoc />
+    public async Task DeleteAsync(CancellationToken ct)
+    {
+        await _lock.WaitAsync(ct).ConfigureAwait(false);
+        try
+        {
+            TryDeleteFile(_statePath);
+        }
+        finally
+        {
+            _lock.Release();
+        }
+    }
+
     /// <summary>
     ///     Opens a truncating write stream for <paramref name="path" />. On non-Windows the file is created with
     ///     owner-only (0600) permissions atomically via <see cref="FileStreamOptions.UnixCreateMode" />, mirroring the

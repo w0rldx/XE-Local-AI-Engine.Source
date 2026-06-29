@@ -952,6 +952,28 @@
 					"message": "A newer llama.cpp runtime ({{tag}}) is available.",
 					"review": "Review update",
 					"dismiss": "Dismiss"
+				},
+				"cudaBuild": {
+					"title": "CUDA (build from source)",
+					"devBadge": "Dev",
+					"description": "Build a CUDA-accelerated llama.cpp runtime from source on this Linux host. Upstream ships no Linux CUDA prebuilt, so this is the no-build-knowledge path to GPU acceleration.",
+					"loading": "Checking build prerequisites…",
+					"prereqError": "Could not check the CUDA build prerequisites.",
+					"notLinux": "The in-app CUDA build is available on Linux only. The checklist below shows what this host is missing.",
+					"build": "Build CUDA",
+					"rebuild": "Rebuild",
+					"remove": "Remove",
+					"cancel": "Cancel build",
+					"activeBadge": "Managed CUDA runtime active",
+					"rebuildAvailable": "A newer pinned source tag is available — rebuild to update the managed CUDA runtime.",
+					"runningNotice": "{{count}} llama.cpp model(s) running — eject them before rebuilding or removing the runtime.",
+					"openLoadedModels": "Open Loaded models",
+					"phaseLabel": "Phase",
+					"logEmpty": "Waiting for build output…",
+					"startError": "Could not start the CUDA build.",
+					"cancelError": "Could not cancel the CUDA build.",
+					"removeError": "Could not remove the CUDA build.",
+					"removed": "Managed CUDA build removed."
 				}
 			},
 			"hfToken": {

@@ -26,6 +26,9 @@ import type {
 	BrowseGgufRepositoriesData,
 	BrowseGgufRepositoriesErrors,
 	BrowseGgufRepositoriesResponses,
+	CancelCudaBuildData,
+	CancelCudaBuildErrors,
+	CancelCudaBuildResponses,
 	CancelGgufDownloadData,
 	CancelGgufDownloadErrors,
 	CancelGgufDownloadResponses,
@@ -170,6 +173,12 @@ import type {
 	GetConnectionStatusData,
 	GetConnectionStatusErrors,
 	GetConnectionStatusResponses,
+	GetCudaBuildPrerequisitesData,
+	GetCudaBuildPrerequisitesErrors,
+	GetCudaBuildPrerequisitesResponses,
+	GetCudaBuildStatusData,
+	GetCudaBuildStatusErrors,
+	GetCudaBuildStatusResponses,
 	GetGgufDownloadsData,
 	GetGgufDownloadsErrors,
 	GetGgufDownloadsResponses,
@@ -342,6 +351,9 @@ import type {
 	RejectSuggestedPlaybookActionData,
 	RejectSuggestedPlaybookActionErrors,
 	RejectSuggestedPlaybookActionResponses,
+	RemoveCudaBuildData,
+	RemoveCudaBuildErrors,
+	RemoveCudaBuildResponses,
 	RenameNodeChatConversationData,
 	RenameNodeChatConversationErrors,
 	RenameNodeChatConversationResponses,
@@ -378,6 +390,9 @@ import type {
 	SignOutGitHubAuthData,
 	SignOutGitHubAuthErrors,
 	SignOutGitHubAuthResponses,
+	StartCudaBuildData,
+	StartCudaBuildErrors,
+	StartCudaBuildResponses,
 	StartGgufDownloadData,
 	StartGgufDownloadErrors,
 	StartGgufDownloadResponses,
@@ -439,6 +454,7 @@ import {
 	zBranchNodeChatConversationResponse,
 	zBrowseGgufRepositoriesQuery,
 	zBrowseGgufRepositoriesResponse,
+	zCancelCudaBuildResponse,
 	zCancelGgufDownloadBody,
 	zCancelGgufDownloadResponse,
 	zCancelNodeBindingResponse,
@@ -527,6 +543,8 @@ import {
 	zGetAppUpdateStatusResponse,
 	zGetCloudSettingsResponse,
 	zGetConnectionStatusResponse,
+	zGetCudaBuildPrerequisitesResponse,
+	zGetCudaBuildStatusResponse,
 	zGetGgufDownloadsResponse,
 	zGetGgufDownloadStatusPath,
 	zGetGgufDownloadStatusResponse,
@@ -623,6 +641,7 @@ import {
 	zRefreshRecommendationsResponse,
 	zRejectSuggestedPlaybookActionPath,
 	zRejectSuggestedPlaybookActionResponse,
+	zRemoveCudaBuildResponse,
 	zRenameNodeChatConversationBody,
 	zRenameNodeChatConversationPath,
 	zRenameNodeChatConversationResponse,
@@ -651,6 +670,7 @@ import {
 	zSetNodeChatSelectedPathPath,
 	zSetNodeChatSelectedPathResponse,
 	zSignOutGitHubAuthResponse,
+	zStartCudaBuildResponse,
 	zStartGgufDownloadBody,
 	zStartGgufDownloadResponse,
 	zStartGitHubAuthResponse,
@@ -3844,5 +3864,109 @@ export const listInferenceProfiles = <ThrowOnError extends boolean = false>(
 			{ scheme: "bearer", type: "http" },
 		],
 		url: "/api/local/v1/model-fit/profiles",
+		...options,
+	});
+
+export const getCudaBuildPrerequisites = <ThrowOnError extends boolean = false>(
+	options?: Options<GetCudaBuildPrerequisitesData, ThrowOnError>,
+) =>
+	(options?.client ?? client).get<GetCudaBuildPrerequisitesResponses, GetCudaBuildPrerequisitesErrors, ThrowOnError>({
+		requestValidator: async (data) =>
+			await z
+				.object({
+					body: z.never().optional(),
+					path: z.never().optional(),
+					query: z.never().optional(),
+				})
+				.parseAsync(data),
+		responseType: "json",
+		responseValidator: async (data) => await zGetCudaBuildPrerequisitesResponse.parseAsync(data),
+		security: [
+			{ scheme: "bearer", type: "http" },
+			{ scheme: "bearer", type: "http" },
+		],
+		url: "/api/local/v1/model-fit/llamacpp/cuda-build/prerequisites",
+		...options,
+	});
+
+export const startCudaBuild = <ThrowOnError extends boolean = false>(options?: Options<StartCudaBuildData, ThrowOnError>) =>
+	(options?.client ?? client).post<StartCudaBuildResponses, StartCudaBuildErrors, ThrowOnError>({
+		requestValidator: async (data) =>
+			await z
+				.object({
+					body: z.never().optional(),
+					path: z.never().optional(),
+					query: z.never().optional(),
+				})
+				.parseAsync(data),
+		responseType: "json",
+		responseValidator: async (data) => await zStartCudaBuildResponse.parseAsync(data),
+		security: [
+			{ scheme: "bearer", type: "http" },
+			{ scheme: "bearer", type: "http" },
+		],
+		url: "/api/local/v1/model-fit/llamacpp/cuda-build",
+		...options,
+	});
+
+export const getCudaBuildStatus = <ThrowOnError extends boolean = false>(
+	options?: Options<GetCudaBuildStatusData, ThrowOnError>,
+) =>
+	(options?.client ?? client).get<GetCudaBuildStatusResponses, GetCudaBuildStatusErrors, ThrowOnError>({
+		requestValidator: async (data) =>
+			await z
+				.object({
+					body: z.never().optional(),
+					path: z.never().optional(),
+					query: z.never().optional(),
+				})
+				.parseAsync(data),
+		responseType: "json",
+		responseValidator: async (data) => await zGetCudaBuildStatusResponse.parseAsync(data),
+		security: [
+			{ scheme: "bearer", type: "http" },
+			{ scheme: "bearer", type: "http" },
+		],
+		url: "/api/local/v1/model-fit/llamacpp/cuda-build/status",
+		...options,
+	});
+
+export const cancelCudaBuild = <ThrowOnError extends boolean = false>(options?: Options<CancelCudaBuildData, ThrowOnError>) =>
+	(options?.client ?? client).post<CancelCudaBuildResponses, CancelCudaBuildErrors, ThrowOnError>({
+		requestValidator: async (data) =>
+			await z
+				.object({
+					body: z.never().optional(),
+					path: z.never().optional(),
+					query: z.never().optional(),
+				})
+				.parseAsync(data),
+		responseType: "json",
+		responseValidator: async (data) => await zCancelCudaBuildResponse.parseAsync(data),
+		security: [
+			{ scheme: "bearer", type: "http" },
+			{ scheme: "bearer", type: "http" },
+		],
+		url: "/api/local/v1/model-fit/llamacpp/cuda-build/cancel",
+		...options,
+	});
+
+export const removeCudaBuild = <ThrowOnError extends boolean = false>(options?: Options<RemoveCudaBuildData, ThrowOnError>) =>
+	(options?.client ?? client).post<RemoveCudaBuildResponses, RemoveCudaBuildErrors, ThrowOnError>({
+		requestValidator: async (data) =>
+			await z
+				.object({
+					body: z.never().optional(),
+					path: z.never().optional(),
+					query: z.never().optional(),
+				})
+				.parseAsync(data),
+		responseType: "json",
+		responseValidator: async (data) => await zRemoveCudaBuildResponse.parseAsync(data),
+		security: [
+			{ scheme: "bearer", type: "http" },
+			{ scheme: "bearer", type: "http" },
+		],
+		url: "/api/local/v1/model-fit/llamacpp/cuda-build/remove",
 		...options,
 	});
