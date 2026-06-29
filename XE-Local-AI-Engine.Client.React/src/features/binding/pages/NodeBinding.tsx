@@ -2,6 +2,7 @@ import { Alert, Anchor, Button, Card, Container, Group, List, Stack, Table, Text
 import { IconAlertTriangle, IconCheck, IconExternalLink, IconInfoCircle } from "@tabler/icons-react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useTranslation } from "react-i18next";
 
 import type { PollNodeBindingResponse, StartNodeBindingResponse } from "@/core/api/generated";
 import {
@@ -35,6 +36,7 @@ function formatDate(value: string): string {
 }
 
 export function NodeBinding() {
+	const { t } = useTranslation();
 	const queryClient = useQueryClient();
 	const pollAbortController = useRef<AbortController | null>(null);
 	const [session, setSession] = useState<StartNodeBindingResponse | undefined>();
@@ -133,7 +135,7 @@ export function NodeBinding() {
 			<Stack gap="lg">
 				<Stack gap={4}>
 					<Text size="sm" tt="uppercase" fw={700} c="dimmed">
-						Worker Node
+						{t("common.workerNode", "Worker Node")}
 					</Text>
 					<Title order={2}>Bind this node to your Central Platform account</Title>
 					<Text c="dimmed">

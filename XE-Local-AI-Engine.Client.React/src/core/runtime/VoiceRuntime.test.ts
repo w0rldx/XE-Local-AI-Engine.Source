@@ -1,4 +1,4 @@
-import { describe, expect, it, type Mock, vi } from "vitest";
+import { afterEach, describe, expect, it, type Mock, vi } from "vitest";
 
 import type { VoiceCapabilities } from "./CapabilityDetector";
 import { PlaybackQueue, type QueueAudioContext } from "./PlaybackQueue";
@@ -317,5 +317,37 @@ describe("VoiceRuntime fallback", () => {
 		await runtime.enqueue("Hello.", { language: "en" });
 
 		expect(createProvider).not.toHaveBeenCalled();
+	});
+});
+
+describe("VoiceRuntime mock-manifest guard", () => {
+	const deps = () => ({
+		manifest: mockVoiceManifest,
+		capabilities: makeCapabilities({ webgpu: true, wasm: true, webSpeech: true }),
+		playbackQueue: makePlaybackQueue(),
+		createProvider: (id: TtsProviderId) => makeProvider(id, { producesPcm: false }),
+	});
+
+	afterEach(() => {
+		vi.unstubAllEnvs();
+	});
+
+	it("refuses the mock manifest in a production build", () => {
+		vi.stubEnv("DEV", false);
+
+		expect(() => new VoiceRuntime(deps())).toThrow(/mock voice manifest/i);
+	});
+
+	it("still accepts the mock manifest in a dev/test build", () => {
+		vi.stubEnv("DEV", true);
+
+		expect(() => new VoiceRuntime(deps())).not.toThrow();
+	});
+
+	it("accepts a real (unbranded) manifest in a production build", () => {
+		vi.stubEnv("DEV", false);
+		const realManifest: VoiceManifest = { enabled: true, models: [], voices: [], defaultVoiceId: "" };
+
+		expect(() => new VoiceRuntime({ ...deps(), manifest: realManifest })).not.toThrow();
 	});
 });

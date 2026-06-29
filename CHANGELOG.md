@@ -38,6 +38,9 @@ Tag convention: `vX.Y.Z-rc.N` on the RC branch; `vX.Y.Z` on develop after RC val
 - Local-only mode (no `CentralPlatform:BaseUrl`): cloud services remain registered and fail with a generic
   HTTP error if invoked directly; the UI surface is capability-gated off. Proper fail-fast messaging is an
   RC2 follow-up.
+- Windows AMD/Intel GPU: GPU hardware is not detected on Windows for AMD or Intel GPUs; these
+  configurations currently fall back to CPU mode. NVIDIA on Windows is unaffected. A DXGI VRAM/vendor
+  probe is a deferred follow-up.
 
 ## [0.1.0-rc.1] — first release candidate (target: 2026-06-10)
 

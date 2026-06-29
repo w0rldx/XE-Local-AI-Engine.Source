@@ -12,14 +12,14 @@ The repository is being prepared for an RC release. Release documentation and va
 - **Node Web Server** (`XE-Local-AI-Engine.Client`) — serves the React UI, local APIs under `/api/local/v1`, local SignalR hubs, SQLite-backed chat state, and the existing platform `WorkerHub`
   connection.
 - **React management UI** (`XE-Local-AI-Engine.Client.React`) — node-local browser UI for chat, settings, runtime status, logs, and models.
-- **Providers and agents** — local provider abstractions, Ollama provider integration, and shared agent execution loop.
+- **Providers and agents** — local provider abstractions, llama.cpp in-app runtime (primary/default), Ollama provider (opt-in secondary), and shared agent execution loop.
 - **Scheduler** — Quartz.NET-backed job scheduler with job definitions, run history, cancellation, and live run updates over a local SignalR hub (`Services/Scheduler`, `src/features/scheduler`).
 - **Model-fit** — on-demand model recommendation and benchmark runs against a digest-pinned, approved utility image, exposed as cache-only reads plus a scheduler-driven refresh (`Services/ModelFit`,
   `src/features/model-fit`).
 - **Agent mode** — per-agent definitions plus a governed playbook: manual and analysis-proposed actions, an offline eval gate over golden conversations, relevance-gated action retrieval, and cohort
   monitoring (`Services/{Agents,Eval,Insights,Monitoring}`, `XE-Local-AI-Engine.AI.Agent`, `src/features/agents`).
 - **MCP tool extensibility** — registered MCP servers whose live tool snapshots are offered to agents through the local tool registry (`Services/Mcp`, `src/features/mcp`).
-- **Tests and fixtures** — backend/client persistence tests, integration-style tests, E2E harness, and FakeOllama support.
+- **Tests and fixtures** — backend/client persistence tests, integration-style tests, E2E harness, and FakeOllama in-process test server.
 
 ## Architecture rules
 

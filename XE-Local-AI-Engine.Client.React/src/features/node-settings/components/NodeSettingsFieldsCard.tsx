@@ -251,7 +251,7 @@ export function NodeSettingsFieldsCard({ form, bounds, errors, onChange, showDev
 						<Text size="xs" c="dimmed">
 							{t(
 								"pages.nodeSettings.fields.advanced.samplingNote",
-								"Node-level sampling defaults are a follow-up: configure sampling per message in chat for now.",
+								"Sampling defaults are configured per message during a chat.",
 							)}
 						</Text>
 					</Stack>
