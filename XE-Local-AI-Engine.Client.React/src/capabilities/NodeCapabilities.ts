@@ -118,6 +118,8 @@ export const nodeRoutePaths = {
 	loadedModels: "/loaded-models",
 	// Open Canvas (Preview) workflow builder page — gated on nodeCapabilities.preview
 	preview: "/preview",
+	// Local-only diagnostics panel (frontend error snapshots) — always available (plan §1)
+	diagnostics: "/diagnostics",
 } as const;
 
 export type NodeRouteId = keyof typeof nodeRoutePaths;

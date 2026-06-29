@@ -58,6 +58,7 @@ describe("nodeCapabilities", () => {
 			modelRecommendations: "/model-recommendations",
 			loadedModels: "/loaded-models",
 			preview: "/preview",
+			diagnostics: "/diagnostics",
 		});
 	});
 });

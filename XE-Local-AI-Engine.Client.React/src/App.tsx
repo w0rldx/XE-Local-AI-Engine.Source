@@ -4,6 +4,7 @@ import utc from "dayjs/plugin/utc";
 import { ErrorBoundary } from "react-error-boundary";
 
 import { AppErrorFallback } from "@/AppErrorFallback";
+import { onAppError } from "@/core/diagnostics/Diagnostics";
 import { Provider as TanStackQueryProvider } from "@/core/integrations/tanstack-query/Provider";
 import { router } from "@/core/integrations/tanstack-router/Router";
 import { ThemeProvider } from "@/core/theme/provider/ThemeProvider";
@@ -32,6 +33,7 @@ export function App() {
 										}}
 									/>
 								)}
+								onError={onAppError}
 								onReset={() => {
 									router.invalidate();
 								}}

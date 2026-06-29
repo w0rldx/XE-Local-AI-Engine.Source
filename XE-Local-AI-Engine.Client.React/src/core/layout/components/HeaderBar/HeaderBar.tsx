@@ -4,7 +4,6 @@ import { ActionIcon, Button } from "@mantine/core";
 import { IconLogout, IconMenu2 as MenuIcon } from "@tabler/icons-react";
 import { useNavigate } from "@tanstack/react-router";
 import { useState } from "react";
-
 import { useTranslation } from "react-i18next";
 
 import { logoutNodeAuth } from "@/core/auth/api/NodeAuthApi";
@@ -14,6 +13,7 @@ import { LanguageMenu } from "@/core/locales/components/LanguageMenu/LanguageMen
 import { ThemeModeToggle } from "@/core/theme/components/ThemeModeToggle/ThemeModeToggle";
 import { useAppTheme as useTheme } from "@/core/theme/hooks/useAppTheme";
 import { AboutDialogButton } from "@/features/about/components/AboutDialogButton/AboutDialogButton";
+import { ReportProblemButton } from "@/features/diagnostics/components/ReportProblemButton";
 import { ThemeConfiguratorDialogButton } from "@/modules/theme-configurator/Index";
 
 export function HeaderBar() {
@@ -53,6 +53,11 @@ export function HeaderBar() {
 				<div className="hidden md:flex flex-row items-center gap-2">
 					<ThemeModeToggle />
 					<ThemeConfiguratorDialogButton />
+					<ReportProblemButton
+						onReported={() => {
+							navigate({ to: "/diagnostics" }).catch(() => undefined);
+						}}
+					/>
 					<AboutDialogButton />
 					<LanguageMenu />
 					<Button variant="subtle" leftSection={<IconLogout size={16} />} loading={logoutPending} onClick={handleLogout}>

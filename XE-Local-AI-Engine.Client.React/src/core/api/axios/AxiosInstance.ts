@@ -6,6 +6,7 @@ import {
 	addRateLimitingInterceptor,
 	addUnauthorizedErrorInterceptor,
 } from "@/core/api/axios/Interceptors";
+import { addDiagnosticsNetworkInterceptor } from "@/core/diagnostics/collectors/Network.axios";
 
 const axiosInstance = axios.create({
 	// Same-origin relative base. MUST stay "" (not "/"). The generated hey-api client
@@ -29,5 +30,9 @@ addAuthRequestInterceptor(axiosInstance);
 addUnauthorizedErrorInterceptor(axiosInstance);
 addRateLimitingInterceptor(axiosInstance);
 addApiProblemDetailsInterceptor(axiosInstance);
+
+// Diagnostics trace/network collector — registered LAST so its request interceptor injects the
+// `traceparent` after auth and its response interceptor records the final outcome (plan §7.2).
+addDiagnosticsNetworkInterceptor(axiosInstance);
 
 export { axiosInstance };

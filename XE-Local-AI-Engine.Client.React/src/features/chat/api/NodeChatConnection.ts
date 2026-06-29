@@ -3,6 +3,7 @@ import { type HubConnection, HubConnectionBuilder, HubConnectionState, LogLevel 
 import { buildLocalApiUrl } from "@/core/api/utils/LocalApiUrl";
 import { refreshNodeAuthToken } from "@/core/auth/api/NodeAuthApi";
 import { useNodeAuthStore } from "@/core/auth/stores/NodeAuthStore";
+import { diagnosticsSignalrHeaders } from "@/core/diagnostics/collectors/Network.signalr";
 
 /* eslint-disable react-doctor/async-await-in-loop */
 
@@ -117,9 +118,13 @@ class NodeChatConnectionManager {
 			return this.connection;
 		}
 
+		const hubUrl = buildLocalApiUrl(chatHubPath);
 		const connection = new HubConnectionBuilder()
-			.withUrl(buildLocalApiUrl(chatHubPath), {
+			.withUrl(hubUrl, {
 				accessTokenFactory: () => resolveAccessToken(),
+				// FE-generated W3C trace header for the SignalR transport (plan §7.2) — merged with the
+				// existing accessTokenFactory + autoReconnect, never replacing them.
+				headers: diagnosticsSignalrHeaders(hubUrl),
 			})
 			.withAutomaticReconnect(reconnectDelaysMs)
 			.configureLogging(LogLevel.Warning)

@@ -24,6 +24,7 @@ import { Route as LayoutModelRecommendationsRouteImport } from './routes/_layout
 import { Route as LayoutMcpRouteImport } from './routes/_layout/mcp'
 import { Route as LayoutLoadedModelsRouteImport } from './routes/_layout/loaded-models'
 import { Route as LayoutInvocationsRouteImport } from './routes/_layout/invocations'
+import { Route as LayoutDiagnosticsRouteImport } from './routes/_layout/diagnostics'
 import { Route as LayoutDashboardRouteImport } from './routes/_layout/dashboard'
 import { Route as LayoutCloudSettingsRouteImport } from './routes/_layout/cloud-settings'
 import { Route as LayoutChatRouteImport } from './routes/_layout/chat'
@@ -104,6 +105,11 @@ const LayoutInvocationsRoute = LayoutInvocationsRouteImport.update({
   path: '/invocations',
   getParentRoute: () => LayoutRoute,
 } as any)
+const LayoutDiagnosticsRoute = LayoutDiagnosticsRouteImport.update({
+  id: '/diagnostics',
+  path: '/diagnostics',
+  getParentRoute: () => LayoutRoute,
+} as any)
 const LayoutDashboardRoute = LayoutDashboardRouteImport.update({
   id: '/dashboard',
   path: '/dashboard',
@@ -133,6 +139,7 @@ export interface FileRoutesByFullPath {
   '/chat': typeof LayoutChatRoute
   '/cloud-settings': typeof LayoutCloudSettingsRoute
   '/dashboard': typeof LayoutDashboardRoute
+  '/diagnostics': typeof LayoutDiagnosticsRoute
   '/invocations': typeof LayoutInvocationsRoute
   '/loaded-models': typeof LayoutLoadedModelsRoute
   '/mcp': typeof LayoutMcpRoute
@@ -152,6 +159,7 @@ export interface FileRoutesByTo {
   '/chat': typeof LayoutChatRoute
   '/cloud-settings': typeof LayoutCloudSettingsRoute
   '/dashboard': typeof LayoutDashboardRoute
+  '/diagnostics': typeof LayoutDiagnosticsRoute
   '/invocations': typeof LayoutInvocationsRoute
   '/loaded-models': typeof LayoutLoadedModelsRoute
   '/mcp': typeof LayoutMcpRoute
@@ -174,6 +182,7 @@ export interface FileRoutesById {
   '/_layout/chat': typeof LayoutChatRoute
   '/_layout/cloud-settings': typeof LayoutCloudSettingsRoute
   '/_layout/dashboard': typeof LayoutDashboardRoute
+  '/_layout/diagnostics': typeof LayoutDiagnosticsRoute
   '/_layout/invocations': typeof LayoutInvocationsRoute
   '/_layout/loaded-models': typeof LayoutLoadedModelsRoute
   '/_layout/mcp': typeof LayoutMcpRoute
@@ -197,6 +206,7 @@ export interface FileRouteTypes {
     | '/chat'
     | '/cloud-settings'
     | '/dashboard'
+    | '/diagnostics'
     | '/invocations'
     | '/loaded-models'
     | '/mcp'
@@ -216,6 +226,7 @@ export interface FileRouteTypes {
     | '/chat'
     | '/cloud-settings'
     | '/dashboard'
+    | '/diagnostics'
     | '/invocations'
     | '/loaded-models'
     | '/mcp'
@@ -237,6 +248,7 @@ export interface FileRouteTypes {
     | '/_layout/chat'
     | '/_layout/cloud-settings'
     | '/_layout/dashboard'
+    | '/_layout/diagnostics'
     | '/_layout/invocations'
     | '/_layout/loaded-models'
     | '/_layout/mcp'
@@ -364,6 +376,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof LayoutInvocationsRouteImport
       parentRoute: typeof LayoutRoute
     }
+    '/_layout/diagnostics': {
+      id: '/_layout/diagnostics'
+      path: '/diagnostics'
+      fullPath: '/diagnostics'
+      preLoaderRoute: typeof LayoutDiagnosticsRouteImport
+      parentRoute: typeof LayoutRoute
+    }
     '/_layout/dashboard': {
       id: '/_layout/dashboard'
       path: '/dashboard'
@@ -400,6 +419,7 @@ interface LayoutRouteChildren {
   LayoutChatRoute: typeof LayoutChatRoute
   LayoutCloudSettingsRoute: typeof LayoutCloudSettingsRoute
   LayoutDashboardRoute: typeof LayoutDashboardRoute
+  LayoutDiagnosticsRoute: typeof LayoutDiagnosticsRoute
   LayoutInvocationsRoute: typeof LayoutInvocationsRoute
   LayoutLoadedModelsRoute: typeof LayoutLoadedModelsRoute
   LayoutMcpRoute: typeof LayoutMcpRoute
@@ -419,6 +439,7 @@ const LayoutRouteChildren: LayoutRouteChildren = {
   LayoutChatRoute: LayoutChatRoute,
   LayoutCloudSettingsRoute: LayoutCloudSettingsRoute,
   LayoutDashboardRoute: LayoutDashboardRoute,
+  LayoutDiagnosticsRoute: LayoutDiagnosticsRoute,
   LayoutInvocationsRoute: LayoutInvocationsRoute,
   LayoutLoadedModelsRoute: LayoutLoadedModelsRoute,
   LayoutMcpRoute: LayoutMcpRoute,

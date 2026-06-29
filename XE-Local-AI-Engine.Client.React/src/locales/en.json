@@ -48,6 +48,7 @@
 		"binding": "Node Binding",
 		"nodeSettings": "Node Settings",
 		"cloudSettings": "Cloud Settings",
+		"diagnostics": "Diagnostics",
 		"settingsGroup": "Settings",
 		"automationGroup": "Automation",
 		"previewGroup": "Preview",
@@ -2663,6 +2664,82 @@
 		"userNameNotMatchCriteria": "Username can only contain letters, numbers, dots, underscores, and hyphens and cannot be empty",
 		"defaultErrorMessage": "An error occurred",
 		"tooManyRequests": "Too many requests. Please try again later."
+	},
+	"diagnostics": {
+		"title": "Diagnostics",
+		"description": "Local-only error snapshots captured in this browser. Nothing is sent to the server.",
+		"reportProblem": "Report a problem",
+		"reportProblemTooltip": "Capture a diagnostics snapshot of the current app state",
+		"reportSuccess": "Diagnostics snapshot captured.",
+		"reportError": "Could not capture a diagnostics snapshot.",
+		"import": "Import",
+		"importSuccess": "Snapshot imported.",
+		"importError": "Could not import the snapshot file.",
+		"clearAll": "Clear all",
+		"clearAllConfirm": "Remove all stored snapshots? This cannot be undone.",
+		"privacyNote": "Snapshots stay in this browser. Exported files may contain app state — share them carefully.",
+		"loading": "Loading snapshots…",
+		"loadError": "Could not load snapshots.",
+		"empty": {
+			"title": "No snapshots yet",
+			"description": "Snapshots appear here when an error occurs or when you report a problem."
+		},
+		"columns": {
+			"time": "Time",
+			"kind": "Kind",
+			"route": "Route",
+			"error": "Error",
+			"actions": "Actions"
+		},
+		"kind": {
+			"error": "Error",
+			"manual": "Manual"
+		},
+		"actions": {
+			"view": "View",
+			"export": "Export",
+			"delete": "Delete",
+			"back": "Back"
+		},
+		"detail": {
+			"title": "Snapshot details",
+			"capturedAt": "Captured {{time}}",
+			"error": "Error",
+			"message": "Message",
+			"source": "Source",
+			"componentStack": "Component stack",
+			"noError": "No error — this is a manual snapshot.",
+			"breadcrumbs": "Breadcrumbs",
+			"network": "Network",
+			"environment": "Environment",
+			"route": "Route",
+			"appVersion": "App version",
+			"locale": "Locale",
+			"viewport": "Viewport",
+			"userAgent": "User agent",
+			"state": "State",
+			"noState": "No state captured.",
+			"rawJson": "Raw JSON"
+		},
+		"breadcrumbs": {
+			"empty": "No breadcrumbs recorded."
+		},
+		"network": {
+			"empty": "No network activity recorded.",
+			"method": "Method",
+			"url": "URL",
+			"status": "Status",
+			"duration": "Duration",
+			"transport": "Transport",
+			"traceId": "Trace ID"
+		},
+		"replay": {
+			"title": "DOM replay",
+			"masked": "Rendered text is masked for privacy; the replay shows layout and interactions only.",
+			"segmentPresent": "DOM replay segment present ({{count}} events).",
+			"play": "Play replay",
+			"unavailable": "Replay could not be initialised; the captured segment is still stored."
+		}
 	},
 	"voice": {
 		"composer": {

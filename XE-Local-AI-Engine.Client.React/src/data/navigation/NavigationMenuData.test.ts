@@ -74,8 +74,11 @@ describe("navigationLinks", () => {
 			nodeRoutePaths.loadedModels,
 		]);
 		// cloudSettings capability is false in the default nodeCapabilities (local-only profile),
-		// so the settings group shows only Node Settings; Cloud Settings is filtered out.
-		expect(settings?.links?.map((nestedLink) => nestedLink.to)).toEqual([nodeRoutePaths.nodeSettings]);
+		// so the settings group shows Node Settings + the ungated Diagnostics panel; Cloud Settings is filtered out.
+		expect(settings?.links?.map((nestedLink) => nestedLink.to)).toEqual([
+			nodeRoutePaths.nodeSettings,
+			nodeRoutePaths.diagnostics,
+		]);
 		expect(automation?.links?.map((nestedLink) => nestedLink.to)).toEqual([
 			nodeRoutePaths.agents,
 			nodeRoutePaths.skills,
@@ -128,6 +131,7 @@ describe("navigationLinks", () => {
 		expect(settings?.links?.map((nestedLink) => nestedLink.to)).toEqual([
 			nodeRoutePaths.nodeSettings,
 			nodeRoutePaths.cloudSettings,
+			nodeRoutePaths.diagnostics,
 		]);
 	});
 
@@ -135,8 +139,11 @@ describe("navigationLinks", () => {
 		const { navigationLinks: gatedLinks } = await mockCapabilities({ cloudSettings: false });
 		const settings = gatedLinks.find((link) => link.id === "settings");
 
-		// Settings group still renders (nodeSettings is ungated); cloud settings child is dropped.
-		expect(settings?.links?.map((nestedLink) => nestedLink.to)).toEqual([nodeRoutePaths.nodeSettings]);
+		// Settings group still renders (nodeSettings + ungated Diagnostics); cloud settings child is dropped.
+		expect(settings?.links?.map((nestedLink) => nestedLink.to)).toEqual([
+			nodeRoutePaths.nodeSettings,
+			nodeRoutePaths.diagnostics,
+		]);
 		expect(settings?.links?.some((nestedLink) => nestedLink.to === nodeRoutePaths.cloudSettings)).toBe(false);
 	});
 

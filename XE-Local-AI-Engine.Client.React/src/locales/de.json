@@ -48,6 +48,7 @@
 		"binding": "Node-Bindung",
 		"nodeSettings": "Node-Einstellungen",
 		"cloudSettings": "Cloud-Einstellungen",
+		"diagnostics": "Diagnose",
 		"settingsGroup": "Einstellungen",
 		"automationGroup": "Automatisierung",
 		"previewGroup": "Vorschau",
@@ -2663,6 +2664,82 @@
 		"userNameNotMatchCriteria": "Der Benutzername darf nur Buchstaben, Zahlen, Punkte, Unterstriche und Bindestriche enthalten und darf nicht leer sein",
 		"defaultErrorMessage": "Ein Fehler ist aufgetreten",
 		"tooManyRequests": "Zu viele Anfragen. Bitte versuchen Sie es später erneut."
+	},
+	"diagnostics": {
+		"title": "Diagnose",
+		"description": "Nur lokal gespeicherte Fehler-Snapshots aus diesem Browser. Es wird nichts an den Server gesendet.",
+		"reportProblem": "Problem melden",
+		"reportProblemTooltip": "Einen Diagnose-Snapshot des aktuellen App-Zustands erstellen",
+		"reportSuccess": "Diagnose-Snapshot erstellt.",
+		"reportError": "Diagnose-Snapshot konnte nicht erstellt werden.",
+		"import": "Importieren",
+		"importSuccess": "Snapshot importiert.",
+		"importError": "Die Snapshot-Datei konnte nicht importiert werden.",
+		"clearAll": "Alle löschen",
+		"clearAllConfirm": "Alle gespeicherten Snapshots entfernen? Dies kann nicht rückgängig gemacht werden.",
+		"privacyNote": "Snapshots bleiben in diesem Browser. Exportierte Dateien können App-Zustände enthalten — teilen Sie sie mit Bedacht.",
+		"loading": "Snapshots werden geladen…",
+		"loadError": "Snapshots konnten nicht geladen werden.",
+		"empty": {
+			"title": "Noch keine Snapshots",
+			"description": "Snapshots erscheinen hier, wenn ein Fehler auftritt oder wenn Sie ein Problem melden."
+		},
+		"columns": {
+			"time": "Zeit",
+			"kind": "Art",
+			"route": "Route",
+			"error": "Fehler",
+			"actions": "Aktionen"
+		},
+		"kind": {
+			"error": "Fehler",
+			"manual": "Manuell"
+		},
+		"actions": {
+			"view": "Ansehen",
+			"export": "Exportieren",
+			"delete": "Löschen",
+			"back": "Zurück"
+		},
+		"detail": {
+			"title": "Snapshot-Details",
+			"capturedAt": "Erfasst {{time}}",
+			"error": "Fehler",
+			"message": "Nachricht",
+			"source": "Quelle",
+			"componentStack": "Komponenten-Stack",
+			"noError": "Kein Fehler — dies ist ein manueller Snapshot.",
+			"breadcrumbs": "Verlauf",
+			"network": "Netzwerk",
+			"environment": "Umgebung",
+			"route": "Route",
+			"appVersion": "App-Version",
+			"locale": "Sprache",
+			"viewport": "Ansichtsfenster",
+			"userAgent": "User-Agent",
+			"state": "Zustand",
+			"noState": "Kein Zustand erfasst.",
+			"rawJson": "Roh-JSON"
+		},
+		"breadcrumbs": {
+			"empty": "Keine Verlaufseinträge aufgezeichnet."
+		},
+		"network": {
+			"empty": "Keine Netzwerkaktivität aufgezeichnet.",
+			"method": "Methode",
+			"url": "URL",
+			"status": "Status",
+			"duration": "Dauer",
+			"transport": "Transport",
+			"traceId": "Trace-ID"
+		},
+		"replay": {
+			"title": "DOM-Wiedergabe",
+			"masked": "Angezeigter Text ist aus Datenschutzgründen maskiert; die Wiedergabe zeigt nur Layout und Interaktionen.",
+			"segmentPresent": "DOM-Wiedergabesegment vorhanden ({{count}} Ereignisse).",
+			"play": "Wiedergabe abspielen",
+			"unavailable": "Die Wiedergabe konnte nicht initialisiert werden; das erfasste Segment ist weiterhin gespeichert."
+		}
 	},
 	"voice": {
 		"composer": {

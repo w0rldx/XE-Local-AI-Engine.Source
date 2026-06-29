@@ -94,6 +94,7 @@ const allNavigationLinks: INavigationLink[] = [
 		links: [
 			{ translationKey: "navigation.nodeSettings", to: nodeRoutePaths.nodeSettings },
 			{ translationKey: "navigation.cloudSettings", to: nodeRoutePaths.cloudSettings, capability: "cloudSettings" },
+			{ translationKey: "navigation.diagnostics", to: nodeRoutePaths.diagnostics },
 		],
 	},
 	// Automation group: agents / MCP servers / scheduler are each gated on their own capability; tools is
