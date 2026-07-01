@@ -25,6 +25,7 @@ import { Route as LayoutMcpRouteImport } from './routes/_layout/mcp'
 import { Route as LayoutLoadedModelsRouteImport } from './routes/_layout/loaded-models'
 import { Route as LayoutKnowledgeBaseRouteImport } from './routes/_layout/knowledge-base'
 import { Route as LayoutInvocationsRouteImport } from './routes/_layout/invocations'
+import { Route as LayoutImagesRouteImport } from './routes/_layout/images'
 import { Route as LayoutDiagnosticsRouteImport } from './routes/_layout/diagnostics'
 import { Route as LayoutDashboardRouteImport } from './routes/_layout/dashboard'
 import { Route as LayoutCloudSettingsRouteImport } from './routes/_layout/cloud-settings'
@@ -111,6 +112,11 @@ const LayoutInvocationsRoute = LayoutInvocationsRouteImport.update({
   path: '/invocations',
   getParentRoute: () => LayoutRoute,
 } as any)
+const LayoutImagesRoute = LayoutImagesRouteImport.update({
+  id: '/images',
+  path: '/images',
+  getParentRoute: () => LayoutRoute,
+} as any)
 const LayoutDiagnosticsRoute = LayoutDiagnosticsRouteImport.update({
   id: '/diagnostics',
   path: '/diagnostics',
@@ -146,6 +152,7 @@ export interface FileRoutesByFullPath {
   '/cloud-settings': typeof LayoutCloudSettingsRoute
   '/dashboard': typeof LayoutDashboardRoute
   '/diagnostics': typeof LayoutDiagnosticsRoute
+  '/images': typeof LayoutImagesRoute
   '/invocations': typeof LayoutInvocationsRoute
   '/knowledge-base': typeof LayoutKnowledgeBaseRoute
   '/loaded-models': typeof LayoutLoadedModelsRoute
@@ -167,6 +174,7 @@ export interface FileRoutesByTo {
   '/cloud-settings': typeof LayoutCloudSettingsRoute
   '/dashboard': typeof LayoutDashboardRoute
   '/diagnostics': typeof LayoutDiagnosticsRoute
+  '/images': typeof LayoutImagesRoute
   '/invocations': typeof LayoutInvocationsRoute
   '/knowledge-base': typeof LayoutKnowledgeBaseRoute
   '/loaded-models': typeof LayoutLoadedModelsRoute
@@ -191,6 +199,7 @@ export interface FileRoutesById {
   '/_layout/cloud-settings': typeof LayoutCloudSettingsRoute
   '/_layout/dashboard': typeof LayoutDashboardRoute
   '/_layout/diagnostics': typeof LayoutDiagnosticsRoute
+  '/_layout/images': typeof LayoutImagesRoute
   '/_layout/invocations': typeof LayoutInvocationsRoute
   '/_layout/knowledge-base': typeof LayoutKnowledgeBaseRoute
   '/_layout/loaded-models': typeof LayoutLoadedModelsRoute
@@ -216,6 +225,7 @@ export interface FileRouteTypes {
     | '/cloud-settings'
     | '/dashboard'
     | '/diagnostics'
+    | '/images'
     | '/invocations'
     | '/knowledge-base'
     | '/loaded-models'
@@ -237,6 +247,7 @@ export interface FileRouteTypes {
     | '/cloud-settings'
     | '/dashboard'
     | '/diagnostics'
+    | '/images'
     | '/invocations'
     | '/knowledge-base'
     | '/loaded-models'
@@ -260,6 +271,7 @@ export interface FileRouteTypes {
     | '/_layout/cloud-settings'
     | '/_layout/dashboard'
     | '/_layout/diagnostics'
+    | '/_layout/images'
     | '/_layout/invocations'
     | '/_layout/knowledge-base'
     | '/_layout/loaded-models'
@@ -395,6 +407,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof LayoutInvocationsRouteImport
       parentRoute: typeof LayoutRoute
     }
+    '/_layout/images': {
+      id: '/_layout/images'
+      path: '/images'
+      fullPath: '/images'
+      preLoaderRoute: typeof LayoutImagesRouteImport
+      parentRoute: typeof LayoutRoute
+    }
     '/_layout/diagnostics': {
       id: '/_layout/diagnostics'
       path: '/diagnostics'
@@ -439,6 +458,7 @@ interface LayoutRouteChildren {
   LayoutCloudSettingsRoute: typeof LayoutCloudSettingsRoute
   LayoutDashboardRoute: typeof LayoutDashboardRoute
   LayoutDiagnosticsRoute: typeof LayoutDiagnosticsRoute
+  LayoutImagesRoute: typeof LayoutImagesRoute
   LayoutInvocationsRoute: typeof LayoutInvocationsRoute
   LayoutKnowledgeBaseRoute: typeof LayoutKnowledgeBaseRoute
   LayoutLoadedModelsRoute: typeof LayoutLoadedModelsRoute
@@ -460,6 +480,7 @@ const LayoutRouteChildren: LayoutRouteChildren = {
   LayoutCloudSettingsRoute: LayoutCloudSettingsRoute,
   LayoutDashboardRoute: LayoutDashboardRoute,
   LayoutDiagnosticsRoute: LayoutDiagnosticsRoute,
+  LayoutImagesRoute: LayoutImagesRoute,
   LayoutInvocationsRoute: LayoutInvocationsRoute,
   LayoutKnowledgeBaseRoute: LayoutKnowledgeBaseRoute,
   LayoutLoadedModelsRoute: LayoutLoadedModelsRoute,

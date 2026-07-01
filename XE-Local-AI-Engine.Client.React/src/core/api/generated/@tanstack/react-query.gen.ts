@@ -20,6 +20,7 @@ import {
 	browseGgufRepositories,
 	cancelCudaBuild,
 	cancelGgufDownload,
+	cancelImageJob,
 	cancelNodeBinding,
 	cancelNodeChatMessage,
 	cancelPreviewRun,
@@ -32,6 +33,7 @@ import {
 	continuePreviewRun,
 	createAgentDefinition,
 	createGoldenConversation,
+	createImageJob,
 	createMcpServer,
 	createNodeChatConversation,
 	createNodeChatMessageRevision,
@@ -75,6 +77,7 @@ import {
 	getGitHubAuthStatus,
 	getHardwareProfile,
 	getHfTokenStatus,
+	getImageJob,
 	getInvocationMonitor,
 	getKnowledgeDocument,
 	getLatestRecommendations,
@@ -104,6 +107,8 @@ import {
 	listAgentTemplates,
 	listConversationFiles,
 	listGoldenConversations,
+	listImageJobs,
+	listImageModels,
 	listInferenceProfiles,
 	listKnowledgeDocuments,
 	listLocalModels,
@@ -123,7 +128,6 @@ import {
 	nodeMe,
 	nodeRefresh,
 	nodeSetup,
-	type Options,
 	pinNodeChatConversation,
 	pollGitHubAuth,
 	pollNodeBinding,
@@ -135,6 +139,7 @@ import {
 	rejectSuggestedPlaybookAction,
 	removeCudaBuild,
 	renameNodeChatConversation,
+	retrieveImage,
 	runPlaybookActionEval,
 	saveCloudSettings,
 	saveNodeSettings,
@@ -150,8 +155,10 @@ import {
 	startCudaBuild,
 	startGgufDownload,
 	startGitHubAuth,
+	startImageModelDownload,
 	startNodeBinding,
 	triggerScheduledJob,
+	type Options,
 	unloadLocalModel,
 	updateAgentDefinition,
 	updateLlamaCppRuntime,
@@ -184,6 +191,8 @@ import type {
 	CancelCudaBuildResponse,
 	CancelGgufDownloadData,
 	CancelGgufDownloadResponse,
+	CancelImageJobData,
+	CancelImageJobResponse,
 	CancelNodeBindingData,
 	CancelNodeBindingResponse,
 	CancelNodeChatMessageData,
@@ -209,6 +218,8 @@ import type {
 	CreateAgentDefinitionResponse,
 	CreateGoldenConversationData,
 	CreateGoldenConversationResponse,
+	CreateImageJobData,
+	CreateImageJobResponse,
 	CreateMcpServerData,
 	CreateMcpServerResponse,
 	CreateNodeChatConversationData,
@@ -298,6 +309,8 @@ import type {
 	GetHardwareProfileResponse,
 	GetHfTokenStatusData,
 	GetHfTokenStatusResponse,
+	GetImageJobData,
+	GetImageJobResponse,
 	GetInvocationMonitorData,
 	GetInvocationMonitorResponse,
 	GetKnowledgeDocumentData,
@@ -358,6 +371,10 @@ import type {
 	ListConversationFilesResponse,
 	ListGoldenConversationsData,
 	ListGoldenConversationsResponse,
+	ListImageJobsData,
+	ListImageJobsResponse,
+	ListImageModelsData,
+	ListImageModelsResponse,
 	ListInferenceProfilesData,
 	ListInferenceProfilesResponse,
 	ListKnowledgeDocumentsData,
@@ -423,6 +440,8 @@ import type {
 	RemoveCudaBuildResponse,
 	RenameNodeChatConversationData,
 	RenameNodeChatConversationResponse,
+	RetrieveImageData,
+	RetrieveImageResponse,
 	RunPlaybookActionEvalData,
 	RunPlaybookActionEvalResponse,
 	SaveCloudSettingsData,
@@ -458,6 +477,8 @@ import type {
 	StartGgufDownloadResponse,
 	StartGitHubAuthData,
 	StartGitHubAuthResponse,
+	StartImageModelDownloadData,
+	StartImageModelDownloadResponse,
 	StartNodeBindingData,
 	StartNodeBindingResponse,
 	TriggerScheduledJobData,
@@ -3658,3 +3679,124 @@ export const getVoiceManifestOptions = (options?: Options<GetVoiceManifestData>)
 		},
 		queryKey: getVoiceManifestQueryKey(options),
 	});
+
+export const cancelImageJobMutation = (
+	options?: Partial<Options<CancelImageJobData>>,
+): UseMutationOptions<CancelImageJobResponse, AxiosError<DefaultError>, Options<CancelImageJobData>> => {
+	const mutationOptions: UseMutationOptions<CancelImageJobResponse, AxiosError<DefaultError>, Options<CancelImageJobData>> = {
+		mutationFn: async (fnOptions) => {
+			const { data } = await cancelImageJob({
+				...options,
+				...fnOptions,
+				throwOnError: true,
+			});
+			return data;
+		},
+	};
+	return mutationOptions;
+};
+
+export const listImageJobsQueryKey = (options?: Options<ListImageJobsData>) => createQueryKey("listImageJobs", options);
+
+export const listImageJobsOptions = (options?: Options<ListImageJobsData>) =>
+	queryOptions<ListImageJobsResponse, AxiosError<DefaultError>, ListImageJobsResponse, ReturnType<typeof listImageJobsQueryKey>>({
+		queryFn: async ({ queryKey, signal }) => {
+			const { data } = await listImageJobs({
+				...options,
+				...queryKey[0],
+				signal,
+				throwOnError: true,
+			});
+			return data;
+		},
+		queryKey: listImageJobsQueryKey(options),
+	});
+
+export const createImageJobMutation = (
+	options?: Partial<Options<CreateImageJobData>>,
+): UseMutationOptions<CreateImageJobResponse, AxiosError<DefaultError>, Options<CreateImageJobData>> => {
+	const mutationOptions: UseMutationOptions<CreateImageJobResponse, AxiosError<DefaultError>, Options<CreateImageJobData>> = {
+		mutationFn: async (fnOptions) => {
+			const { data } = await createImageJob({
+				...options,
+				...fnOptions,
+				throwOnError: true,
+			});
+			return data;
+		},
+	};
+	return mutationOptions;
+};
+
+export const getImageJobQueryKey = (options: Options<GetImageJobData>) => createQueryKey("getImageJob", options);
+
+export const getImageJobOptions = (options: Options<GetImageJobData>) =>
+	queryOptions<GetImageJobResponse, AxiosError<DefaultError>, GetImageJobResponse, ReturnType<typeof getImageJobQueryKey>>({
+		queryFn: async ({ queryKey, signal }) => {
+			const { data } = await getImageJob({
+				...options,
+				...queryKey[0],
+				signal,
+				throwOnError: true,
+			});
+			return data;
+		},
+		queryKey: getImageJobQueryKey(options),
+	});
+
+export const listImageModelsQueryKey = (options?: Options<ListImageModelsData>) => createQueryKey("listImageModels", options);
+
+export const listImageModelsOptions = (options?: Options<ListImageModelsData>) =>
+	queryOptions<
+		ListImageModelsResponse,
+		AxiosError<DefaultError>,
+		ListImageModelsResponse,
+		ReturnType<typeof listImageModelsQueryKey>
+	>({
+		queryFn: async ({ queryKey, signal }) => {
+			const { data } = await listImageModels({
+				...options,
+				...queryKey[0],
+				signal,
+				throwOnError: true,
+			});
+			return data;
+		},
+		queryKey: listImageModelsQueryKey(options),
+	});
+
+export const retrieveImageQueryKey = (options: Options<RetrieveImageData>) => createQueryKey("retrieveImage", options);
+
+export const retrieveImageOptions = (options: Options<RetrieveImageData>) =>
+	queryOptions<RetrieveImageResponse, AxiosError<DefaultError>, RetrieveImageResponse, ReturnType<typeof retrieveImageQueryKey>>({
+		queryFn: async ({ queryKey, signal }) => {
+			const { data } = await retrieveImage({
+				...options,
+				...queryKey[0],
+				signal,
+				throwOnError: true,
+			});
+			return data;
+		},
+		queryKey: retrieveImageQueryKey(options),
+	});
+
+export const startImageModelDownloadMutation = (
+	options?: Partial<Options<StartImageModelDownloadData>>,
+): UseMutationOptions<StartImageModelDownloadResponse, AxiosError<DefaultError>, Options<StartImageModelDownloadData>> => {
+	const mutationOptions: UseMutationOptions<
+		StartImageModelDownloadResponse,
+		AxiosError<DefaultError>,
+		Options<StartImageModelDownloadData>
+	> = {
+		mutationFn: async (fnOptions) => {
+			const { data } = await startImageModelDownload({
+				...options,
+				...fnOptions,
+				throwOnError: true,
+			});
+			return data;
+		},
+	};
+	return mutationOptions;
+};
