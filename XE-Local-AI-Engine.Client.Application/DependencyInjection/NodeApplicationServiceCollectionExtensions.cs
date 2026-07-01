@@ -32,6 +32,7 @@ public static class NodeApplicationServiceCollectionExtensions
         builder.AddNodeCoder(configuration);
         builder.AddNodePreviewWorkflows(configuration);
         builder.AddNodeDocumentIngestion(configuration);
+        builder.AddNodeKnowledgeBase(configuration);
         builder.AddNodeChat(configuration);
         builder.AddNodeModelRuntime(configuration);
 
