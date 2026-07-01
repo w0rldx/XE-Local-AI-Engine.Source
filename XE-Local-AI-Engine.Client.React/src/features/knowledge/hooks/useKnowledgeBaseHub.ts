@@ -5,12 +5,27 @@ import { useEffect } from "react";
 import { buildLocalApiUrl } from "@/core/api/utils/LocalApiUrl";
 import { useNodeAuthStore } from "@/core/auth/stores/NodeAuthStore";
 import { knowledgeInvalidationKey, knowledgeQueryIds } from "@/features/knowledge/queries/useKnowledgeDocuments";
+import type { KnowledgeDocument, KnowledgeDocumentStatus } from "@/features/knowledge/models/KnowledgeModels";
 
-// Server-pushed knowledge-base events. The hub is notification-only: a push tells the client that a document's
-// indexing status changed but carries no authoritative payload to render directly, so the handler simply
-// invalidates the matching TanStack Query caches and lets them refetch the canonical state. The event name is the
-// string method name the backend invokes on the client.
+// Server-pushed knowledge-base events. Each push carries the document id + its new indexing status. The handler
+// applies that status to the cached list row IMMEDIATELY (optimistic), then invalidates so the remaining fields
+// (chunk count, failure reason) refetch canonical state. The optimistic write matters because a fast transition
+// (e.g. an instant Pending→Extracting→Failed when the embedding model is unavailable) fires several pushes in the
+// same tick; a pure invalidate can let an in-flight refetch settle on a stale intermediate snapshot, leaving the
+// row visually stuck. Writing the pushed status directly guarantees the terminal status is never lost. The event
+// name is the string method name the backend invokes on the client.
 const DOCUMENT_CHANGED = "knowledge.documentChanged";
+
+/** Payload of the {@link DOCUMENT_CHANGED} push: which document changed and its new status. */
+interface KnowledgeDocumentChangedEvent {
+	readonly documentId: string;
+	readonly status: KnowledgeDocumentStatus;
+}
+
+/** The cached shape of the list query (the raw response before the `select` extracts `items`). */
+interface KnowledgeDocumentListCache {
+	readonly items?: readonly KnowledgeDocument[];
+}
 
 // Subscribes to the knowledge-base SignalR hub for the lifetime of the mounting component. On any document change
 // (a Pending→Extracting→…→Indexed/Failed transition, or an add/delete) the document list AND every open document
@@ -41,7 +56,28 @@ export function useKnowledgeBaseHub(): void {
 				.catch(() => undefined);
 		};
 
-		connection.on(DOCUMENT_CHANGED, invalidateDocuments);
+		const applyDocumentChanged = (event: KnowledgeDocumentChangedEvent | undefined): void => {
+			// Optimistically stamp the pushed status onto the matching cached row so a rapid multi-transition burst
+			// cannot leave the row stuck on a stale intermediate status while the refetch is still in flight.
+			if (event && typeof event.documentId === "string" && typeof event.status === "string") {
+				queryClient.setQueriesData<KnowledgeDocumentListCache>(
+					{ queryKey: knowledgeInvalidationKey(knowledgeQueryIds.listDocuments) },
+					(old) =>
+						old
+							? {
+									...old,
+									items: old.items?.map((item) =>
+										item.documentId === event.documentId ? { ...item, status: event.status } : item,
+									),
+								}
+							: old,
+				);
+			}
+
+			invalidateDocuments();
+		};
+
+		connection.on(DOCUMENT_CHANGED, applyDocumentChanged);
 
 		let disposed = false;
 		const startPromise = connection.start().catch((error: unknown) => {
@@ -55,7 +91,7 @@ export function useKnowledgeBaseHub(): void {
 
 		return () => {
 			disposed = true;
-			connection.off(DOCUMENT_CHANGED, invalidateDocuments);
+			connection.off(DOCUMENT_CHANGED, applyDocumentChanged);
 			// Stop only AFTER start settles so cleanup never aborts an in-flight negotiation (the "stopped during
 			// negotiation" race that left the hub permanently disconnected under StrictMode / fast remounts).
 			startPromise.finally(() => {
