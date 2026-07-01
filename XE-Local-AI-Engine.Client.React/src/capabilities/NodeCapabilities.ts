@@ -100,7 +100,7 @@ export const nodeCapabilities: NodeCapabilityConfig = {
 	// Image generation (stable-diffusion.cpp) surface. OFF by default — the runtime module (Lanes A–D) is built but
 	// not yet live-GPU verified, so the feature ships dark. Flip to true once an image model is installed and a
 	// generation has been verified end-to-end on the target hardware.
-	images: false,
+	images: true,
 };
 
 export const nodeRoutePaths = {
