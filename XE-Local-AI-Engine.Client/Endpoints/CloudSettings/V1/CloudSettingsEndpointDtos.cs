@@ -31,6 +31,15 @@ public sealed record AzureFoundrySettingsResponse
     public bool HasStoredApiKey { get; init; }
 
     public IReadOnlyList<AzureFoundryModelDto> Models { get; init; } = [];
+
+    /// <summary>
+    ///     Custom request headers on this connection. Secret header values are never returned (Value is null); presence
+    ///     is signalled by <see cref="AzureFoundryHeaderDto.HasStoredValue" />.
+    /// </summary>
+    public IReadOnlyList<AzureFoundryHeaderDto> Headers { get; init; } = [];
+
+    /// <summary>Operator-added extra allowed host suffixes (Locked #14). Not secret — round-trips for inline editing.</summary>
+    public IReadOnlyList<string> AdditionalAllowedHostSuffixes { get; init; } = [];
 }
 
 public sealed record AzureFoundryModelDto
@@ -38,6 +47,19 @@ public sealed record AzureFoundryModelDto
     public required string DeploymentName { get; init; }
 
     public string? DisplayLabel { get; init; }
+}
+
+public sealed record AzureFoundryHeaderDto
+{
+    public required string Name { get; init; }
+
+    /// <summary>The header value for a non-secret header; always null for a secret header (write-only).</summary>
+    public string? Value { get; init; }
+
+    public bool IsSecret { get; init; }
+
+    /// <summary>True when a value is stored for this header (used to show a "stored" placeholder for secret headers).</summary>
+    public bool HasStoredValue { get; init; }
 }
 
 public sealed record SaveCloudSettingsRequest
@@ -53,6 +75,24 @@ public sealed record SaveCloudSettingsRequest
     public string? ApiKey { get; init; }
 
     public IReadOnlyList<AzureFoundryModelDto> Models { get; init; } = [];
+
+    /// <summary>
+    ///     Custom request headers to persist. A secret header sent with a blank value keeps the previously stored value
+    ///     (merge happens in the endpoint, Locked #10/#12).
+    /// </summary>
+    public IReadOnlyList<SaveAzureFoundryHeaderRequest> Headers { get; init; } = [];
+
+    /// <summary>Operator-added extra allowed host suffixes (Locked #14). Shape-validated on save.</summary>
+    public IReadOnlyList<string> AdditionalAllowedHostSuffixes { get; init; } = [];
+}
+
+public sealed record SaveAzureFoundryHeaderRequest
+{
+    public string Name { get; init; } = string.Empty;
+
+    public string? Value { get; init; }
+
+    public bool IsSecret { get; init; }
 }
 
 internal static class CloudSettingsEndpointDtoMapper
@@ -80,14 +120,32 @@ internal static class CloudSettingsEndpointDtoMapper
                         DeploymentName = model.DeploymentName,
                         DisplayLabel = model.DisplayLabel
                     })
-                ]
+                ],
+                Headers =
+                [
+                    .. connection.Headers.Select(static header => new AzureFoundryHeaderDto
+                    {
+                        Name = header.Name,
+                        // Never emit a secret value — presence only. Non-secret values round-trip for inline editing.
+                        Value = header.IsSecret ? null : header.Value,
+                        IsSecret = header.IsSecret,
+                        HasStoredValue = !string.IsNullOrWhiteSpace(header.Value)
+                    })
+                ],
+                AdditionalAllowedHostSuffixes = [.. connection.AdditionalAllowedHostSuffixes]
             }
         };
     }
 
-    public static StoredCloudProviderConfig ToStoredConfig(this SaveCloudSettingsRequest request)
+    /// <summary>
+    ///     Maps a save request to the stored config. Pure: the secret-header merge that needs prior state runs in the
+    ///     endpoint and is passed in via <paramref name="mergedHeaders" /> (Locked #12).
+    /// </summary>
+    public static StoredCloudProviderConfig ToStoredConfig(this SaveCloudSettingsRequest request,
+        IReadOnlyList<StoredAzureFoundryHeader> mergedHeaders)
     {
         ArgumentNullException.ThrowIfNull(request);
+        ArgumentNullException.ThrowIfNull(mergedHeaders);
 
         var authMode = ParseAuthMode(request.AuthMode);
 
@@ -110,6 +168,13 @@ internal static class CloudSettingsEndpointDtoMapper
                         DeploymentName = model.DeploymentName?.Trim() ?? string.Empty,
                         DisplayLabel = string.IsNullOrWhiteSpace(model.DisplayLabel) ? null : model.DisplayLabel.Trim()
                     })
+                ],
+                Headers = mergedHeaders,
+                AdditionalAllowedHostSuffixes =
+                [
+                    .. request.AdditionalAllowedHostSuffixes
+                        .Select(static suffix => suffix?.Trim() ?? string.Empty)
+                        .Where(static suffix => suffix.Length > 0)
                 ]
             }
         };
