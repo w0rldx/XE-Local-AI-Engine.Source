@@ -110,6 +110,32 @@ public sealed class ModelKindDetectorTests
     }
 
     [Test]
+    [Arguments("nomic-ai/nomic-embed-text-v1.5-GGUF:Q4_K_M")]
+    [Arguments("mxbai-embed-large:Q8_0")]
+    [Arguments("bge-small:Q4")]
+    [Arguments("bge:latest")]
+    [Arguments("all-minilm:Q4_K_M")]
+    public void IsEmbeddingName_WhenEmbeddingName_ReturnsTrue(string modelName)
+    {
+        var result = ModelKindDetector.IsEmbeddingName(modelName);
+
+        AssertEx.True(result, "an embedding-named model must be recognized by name alone");
+    }
+
+    [Test]
+    [Arguments("qwen2.5:Q4_K_M")]
+    [Arguments("llama-3.1-8b-instruct:Q6_K")]
+    [Arguments("mistral")]
+    [Arguments("")]
+    [Arguments("   ")]
+    public void IsEmbeddingName_WhenNotEmbeddingName_ReturnsFalse(string modelName)
+    {
+        var result = ModelKindDetector.IsEmbeddingName(modelName);
+
+        AssertEx.False(result, "a chat / unknown model name must never be guessed as embedding");
+    }
+
+    [Test]
     [Arguments("thinking")]
     [Arguments("THINKING")]
     [Arguments("Thinking")]

@@ -60,6 +60,17 @@ public static class ModelKindDetector
     }
 
     /// <summary>
+    ///     True when the model NAME alone identifies an embedding-only model (case-insensitive fragment/prefix match),
+    ///     independent of any reported capabilities. Used where only a name is available (for example an installed GGUF
+    ///     descriptor <c>&lt;repo&gt;:&lt;quant&gt;</c> carries no capability probe) to keep an embedding model out of the
+    ///     chat surfaces and to auto-resolve it for knowledge-base embedding. Never guesses Chat.
+    /// </summary>
+    public static bool IsEmbeddingName(string modelName)
+    {
+        return FromNameHeuristic(modelName) == ModelKind.Embedding;
+    }
+
+    /// <summary>
     ///     True when the supplied Ollama capabilities advertise the <c>thinking</c> capability (case-insensitive). A
     ///     model without it returns HTTP 400 for any <c>think</c> request field, so the loopback path gates the field on
     ///     this. Null/empty capabilities (older daemon or offline) are treated as NOT thinking-capable — the safe choice
