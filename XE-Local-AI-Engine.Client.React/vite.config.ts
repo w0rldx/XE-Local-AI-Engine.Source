@@ -149,6 +149,7 @@ export default defineConfig(({ command, mode }) => {
 						"/api/local/v1/scheduler/hub": localProxy(proxyTarget, true),
 						"/api/local/v1/preview/hub": localProxy(proxyTarget, true),
 						"/api/local/v1/model-fit/gguf/downloads/hub": localProxy(proxyTarget, true),
+						"/api/local/v1/knowledge-base/hub": localProxy(proxyTarget, true),
 						"/api": localProxy(proxyTarget),
 						"/openapi": {
 							target: proxyTarget,
