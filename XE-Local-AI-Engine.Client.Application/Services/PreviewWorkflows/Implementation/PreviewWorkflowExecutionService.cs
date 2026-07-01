@@ -21,6 +21,12 @@ using XE_Local_AI_Engine.Providers.Abstractions.Contracts;
 internal sealed class PreviewWorkflowExecutionService : IPreviewWorkflowExecutionService, IAsyncDisposable
 {
     private readonly ConcurrentDictionary<Guid, Task> _drainTasks = new();
+
+    // Per-run ordered event log for late-subscriber replay, SEPARATE from _runs because it must OUTLIVE the run: the
+    // whole bug is a client that subscribes AFTER the run finished, so the terminal event must still be replayable. A
+    // log is created in StartAsync (so RunStarted is buffered as seq 0), lingers past RemoveAndDisposeAsync, and is
+    // evicted by SweepAsync once ReplayRetention elapses past its terminal event.
+    private readonly ConcurrentDictionary<Guid, RunEventLog> _eventLogs = new();
     private readonly IPreviewWorkflowEventPublisher _eventPublisher;
     private readonly ILogger<PreviewWorkflowExecutionService> _logger;
     private readonly ILoggerFactory _loggerFactory;
@@ -149,6 +155,9 @@ internal sealed class PreviewWorkflowExecutionService : IPreviewWorkflowExecutio
             await handle.DisposeAsync().ConfigureAwait(false);
             throw new InvalidOperationException($"A preview run with id '{runId}' already exists.");
         }
+
+        // Create the replay log BEFORE the first publish so RunStarted is buffered as seq 0.
+        _ = GetOrCreateEventLog(runId);
 
         await PublishRunAsync(PreviewWorkflowHubEvents.RunStarted, runId, cancellationToken).ConfigureAwait(false);
 
@@ -288,6 +297,11 @@ internal sealed class PreviewWorkflowExecutionService : IPreviewWorkflowExecutio
         }
     }
 
+    public IReadOnlyList<PreviewWorkflowBufferedEvent> SnapshotBufferedEvents(Guid runId)
+    {
+        return _eventLogs.TryGetValue(runId, out var log) ? log.Snapshot() : [];
+    }
+
     /// <summary>Idle/wall-clock sweep step, invoked by <see cref="PreviewWorkflowIdleSweeper" />.</summary>
     internal async Task SweepAsync(CancellationToken cancellationToken)
     {
@@ -304,6 +318,34 @@ internal sealed class PreviewWorkflowExecutionService : IPreviewWorkflowExecutio
             {
                 _logger.LogInformation("Sweeping idle/expired preview run {RunId}.", handle.RunId);
                 _ = await CancelAsync(handle.RunId, cancellationToken).ConfigureAwait(false);
+            }
+        }
+
+        EvictExpiredEventLogs();
+    }
+
+    /// <summary>
+    ///     Evicts replay logs that have outlived their usefulness: a terminal log once <see cref="PreviewWorkflowExecutionOptions.ReplayRetention" />
+    ///     has elapsed past its terminal event, plus a defensive sweep of any log whose run is gone that never got a
+    ///     terminal event yet is older than <see cref="PreviewWorkflowExecutionOptions.MaxRunDuration" /> (guards a leak).
+    /// </summary>
+    private void EvictExpiredEventLogs()
+    {
+        var nowUnixMs = _timeProvider.GetUtcNow().ToUnixTimeMilliseconds();
+        var retentionMs = (long)_options.ReplayRetention.TotalMilliseconds;
+        var maxRunMs = (long)_options.MaxRunDuration.TotalMilliseconds;
+
+        foreach (var (runId, log) in _eventLogs)
+        {
+            var terminalAt = log.TerminalAtUnixMs;
+            var expiredTerminal = terminalAt is { } terminal && nowUnixMs - terminal >= retentionMs;
+            var orphanedNonTerminal = terminalAt is null
+                                      && !_runs.ContainsKey(runId)
+                                      && nowUnixMs - log.CreatedAtUnixMs >= maxRunMs;
+
+            if (expiredTerminal || orphanedNonTerminal)
+            {
+                _ = _eventLogs.TryRemove(runId, out _);
             }
         }
     }
@@ -529,8 +571,25 @@ internal sealed class PreviewWorkflowExecutionService : IPreviewWorkflowExecutio
         string? requestId,
         CancellationToken cancellationToken)
     {
-        var runEvent = new PreviewWorkflowRunHubEvent(eventType, runId, nodeId, output, error, requestId,
-            _timeProvider.GetUtcNow().ToUnixTimeMilliseconds());
+        var log = GetOrCreateEventLog(runId);
+        var nowUnixMs = _timeProvider.GetUtcNow().ToUnixTimeMilliseconds();
+        var isTerminal = IsTerminalRunEvent(eventType);
+
+        // Assign the next seq, stamp the event with it, and append to the replay log atomically — then publish the
+        // seq-stamped event as before. A terminal run event marks the log for later eviction.
+        var runEvent = (PreviewWorkflowRunHubEvent)log.Append(
+            eventType,
+            seq => new PreviewWorkflowRunHubEvent(eventType, runId, nodeId, output, error, requestId, nowUnixMs, seq),
+            isTerminal,
+            nowUnixMs,
+            out var truncated);
+
+        if (truncated)
+        {
+            _logger.LogWarning("Preview run {RunId} replay buffer exceeded {Cap}; dropping oldest events.",
+                runId, _options.MaxBufferedEventsPerRun);
+        }
+
         return SafePublishAsync(() => _eventPublisher.PublishRunAsync(runEvent, cancellationToken), runId);
     }
 
@@ -541,9 +600,38 @@ internal sealed class PreviewWorkflowExecutionService : IPreviewWorkflowExecutio
         string? error,
         CancellationToken cancellationToken)
     {
-        var nodeEvent = new PreviewWorkflowNodeHubEvent(eventType, runId, nodeId, output, error,
-            _timeProvider.GetUtcNow().ToUnixTimeMilliseconds());
+        var log = GetOrCreateEventLog(runId);
+        var nowUnixMs = _timeProvider.GetUtcNow().ToUnixTimeMilliseconds();
+
+        var nodeEvent = (PreviewWorkflowNodeHubEvent)log.Append(
+            eventType,
+            seq => new PreviewWorkflowNodeHubEvent(eventType, runId, nodeId, output, error, nowUnixMs, seq),
+            isTerminal: false,
+            terminalAtUnixMs: null,
+            out var truncated);
+
+        if (truncated)
+        {
+            _logger.LogWarning("Preview run {RunId} replay buffer exceeded {Cap}; dropping oldest events.",
+                runId, _options.MaxBufferedEventsPerRun);
+        }
+
         return SafePublishAsync(() => _eventPublisher.PublishNodeAsync(nodeEvent, cancellationToken), runId);
+    }
+
+    /// <summary>Returns the run's replay log, creating it on first use so a publish never NREs.</summary>
+    private RunEventLog GetOrCreateEventLog(Guid runId)
+    {
+        return _eventLogs.GetOrAdd(runId,
+            _ => new RunEventLog(_options.MaxBufferedEventsPerRun, _timeProvider.GetUtcNow().ToUnixTimeMilliseconds()));
+    }
+
+    /// <summary>A terminal run event (completed/failed/cancelled) marks the log for eviction after ReplayRetention.</summary>
+    private static bool IsTerminalRunEvent(string eventType)
+    {
+        return eventType is PreviewWorkflowHubEvents.RunCompleted
+            or PreviewWorkflowHubEvents.RunFailed
+            or PreviewWorkflowHubEvents.RunCancelled;
     }
 
     private async Task SafePublishAsync(Func<Task> publish, Guid runId)
@@ -578,6 +666,9 @@ internal sealed class PreviewWorkflowExecutionService : IPreviewWorkflowExecutio
                 await handle.DisposeAsync().ConfigureAwait(false);
             }
         }
+
+        // Replay logs outlive their runs; a shutdown must not leave them behind.
+        _eventLogs.Clear();
     }
 
     /// <summary>Fires a run's cancellation token, tolerating a concurrent dispose (no <see cref="ObjectDisposedException" />).</summary>
@@ -620,5 +711,73 @@ internal sealed class PreviewWorkflowExecutionService : IPreviewWorkflowExecutio
         Continue,
         Paused,
         Terminal
+    }
+
+    /// <summary>One buffered event in a run's replay log: the SignalR method name, the seq-stamped payload, and its seq.</summary>
+    private sealed record BufferedPreviewEvent(string MethodName, object Payload, long Seq);
+
+    /// <summary>
+    ///     A per-run ordered, bounded event log for late-subscriber replay. Seq assignment + append are atomic under a
+    ///     lock so concurrent publishes (the drain task and CancelAsync can publish for the same run) never collide on a
+    ///     seq or append out of order; <see cref="Snapshot" /> copies under the same lock for a consistent ordered view.
+    /// </summary>
+    private sealed class RunEventLog(int maxEvents, long createdAtUnixMs)
+    {
+        private readonly List<BufferedPreviewEvent> _events = [];
+        private readonly Lock _gate = new();
+
+        private long _nextSeq;
+
+        public long CreatedAtUnixMs { get; } = createdAtUnixMs;
+
+        /// <summary>Set to the terminal event's timestamp once a terminal run event is buffered; drives eviction.</summary>
+        public long? TerminalAtUnixMs { get; private set; }
+
+        /// <summary>
+        ///     Assigns the next seq, builds the seq-stamped payload via <paramref name="payloadFactory" />, appends it,
+        ///     and returns that payload. Drops the oldest entry when the cap is exceeded (setting
+        ///     <paramref name="truncated" />). Records the terminal timestamp when <paramref name="isTerminal" /> is set.
+        /// </summary>
+        public object Append(string methodName,
+            Func<long, object> payloadFactory,
+            bool isTerminal,
+            long? terminalAtUnixMs,
+            out bool truncated)
+        {
+            lock (_gate)
+            {
+                var seq = _nextSeq++;
+                var payload = payloadFactory(seq);
+                _events.Add(new BufferedPreviewEvent(methodName, payload, seq));
+
+                truncated = false;
+                if (_events.Count > maxEvents)
+                {
+                    _events.RemoveAt(0);
+                    truncated = true;
+                }
+
+                if (isTerminal)
+                {
+                    TerminalAtUnixMs = terminalAtUnixMs;
+                }
+
+                return payload;
+            }
+        }
+
+        public IReadOnlyList<PreviewWorkflowBufferedEvent> Snapshot()
+        {
+            lock (_gate)
+            {
+                var copy = new List<PreviewWorkflowBufferedEvent>(_events.Count);
+                foreach (var buffered in _events)
+                {
+                    copy.Add(new PreviewWorkflowBufferedEvent(buffered.MethodName, buffered.Payload));
+                }
+
+                return copy;
+            }
+        }
     }
 }

@@ -36,4 +36,17 @@ public sealed class PreviewWorkflowExecutionOptions
     ///     ("output limit exceeded"). Mirrors <c>InvocationRunner</c>'s 10&#160;MB default (<c>MaxResponseSizeMb</c>).
     /// </summary>
     public int MaxOutputBytes { get; set; } = 10 * 1024 * 1024;
+
+    /// <summary>
+    ///     Backstop cap on the per-run replay buffer (the ordered event log a late subscriber replays on Subscribe).
+    ///     Exceeding it drops the OLDEST buffered event so the log stays bounded. <see cref="MaxOutputBytes" /> already
+    ///     bounds total output, so this only guards against a pathological event count.
+    /// </summary>
+    public int MaxBufferedEventsPerRun { get; set; } = 4096;
+
+    /// <summary>
+    ///     How long a run's event log lingers after its terminal event so a client that subscribes AFTER the run
+    ///     finished can still replay and catch up. The sweeper evicts a terminal log once this elapses.
+    /// </summary>
+    public TimeSpan ReplayRetention { get; set; } = TimeSpan.FromSeconds(60);
 }

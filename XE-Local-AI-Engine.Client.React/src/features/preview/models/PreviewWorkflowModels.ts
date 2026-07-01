@@ -90,7 +90,10 @@ export type PreviewRunStartedResponse = z.infer<typeof previewRunStartedResponse
 // SignalR method name (see previewHubEvents below).
 
 // Node-scoped event (preview.node.started|output|debug|completed|failed). `output` carries the
-// operator's transient node/debug output; `error` a sanitized failure message.
+// operator's transient node/debug output; `error` a sanitized failure message. `seq` is a per-run
+// monotonically increasing sequence number (shared with run events of the same run) — the client uses
+// it to dedupe a replayed event (backend buffers + replays on Subscribe) against the same event arriving
+// live, so a late-subscribing connection never applies an event twice.
 export const previewNodeEventSchema = z.object({
 	eventType: z.string(),
 	runId: z.string(),
@@ -98,13 +101,14 @@ export const previewNodeEventSchema = z.object({
 	output: z.string().nullish(),
 	error: z.string().nullish(),
 	occurredAtUtc: z.number(),
+	seq: z.number(),
 });
 
 export type PreviewNodeEvent = z.infer<typeof previewNodeEventSchema>;
 
 // Run-lifecycle event (preview.run.started|paused|completed|failed|cancelled). `nodeId` is set only for
 // pause (the Pause node); `output` for pause (upstream display) and completed (terminal output);
-// `requestId` for pause (the resume token); `error` for failed.
+// `requestId` for pause (the resume token); `error` for failed. `seq` — see previewNodeEventSchema.
 export const previewRunEventSchema = z.object({
 	eventType: z.string(),
 	runId: z.string(),
@@ -113,6 +117,7 @@ export const previewRunEventSchema = z.object({
 	error: z.string().nullish(),
 	requestId: z.string().nullish(),
 	occurredAtUtc: z.number(),
+	seq: z.number(),
 });
 
 export type PreviewRunEvent = z.infer<typeof previewRunEventSchema>;
