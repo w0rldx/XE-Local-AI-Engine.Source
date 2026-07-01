@@ -13,9 +13,14 @@ using static Chat.Implementation.NodeChatPersistenceSql;
 ///     matching <see cref="NodeChatDbContext" /> helper. The stale-model flag compares each row's stored embedding model
 ///     against the RESOLVED embedding model name (from <see cref="IEmbeddingModelResolver" />, computed once per call) —
 ///     the same identity the ingestion and search lanes use as the vector scope key — so a same-dimension model swap that
-///     leaves <see cref="KnowledgeBaseOptions.EmbeddingModelName" /> unchanged is still detected as stale. If the provider
-///     or model cannot be resolved, it falls back to the configured name so staleness never throws. Scoped: it uses the
-///     request-scoped db context.
+///     leaves <see cref="KnowledgeBaseOptions.EmbeddingModelName" /> unchanged is still detected as stale. Staleness is
+///     evaluated ONLY when the resolver's outcome is confident (an installed model was actually matched). When resolution
+///     is not confident (the provider could not be reached, or the resolver could not match anything installed and fell
+///     back to the configured name), staleness is skipped entirely rather than compared against that fallback name — on a
+///     llama.cpp node the stored <c>embedding_model</c> is a resolved GGUF name that never equals the plain configured
+///     name, so comparing against a mere fallback during a transient outage would misclassify (and
+///     <see cref="ResetStaleDocumentsToPendingAsync" /> would reset) the ENTIRE indexed corpus instead of leaving it
+///     untouched. Scoped: it uses the request-scoped db context.
 /// </summary>
 public sealed class KnowledgeDocumentCatalogService : IKnowledgeDocumentCatalogService
 {
@@ -41,7 +46,7 @@ public sealed class KnowledgeDocumentCatalogService : IKnowledgeDocumentCatalogS
 
     public async Task<IReadOnlyList<KnowledgeDocumentSummary>> ListAsync(CancellationToken cancellationToken)
     {
-        var resolvedModel = await ResolveEmbeddingModelAsync(cancellationToken).ConfigureAwait(false);
+        var resolution = await ResolveEmbeddingModelAsync(cancellationToken).ConfigureAwait(false);
 
         var connection = _dbContext.Database.GetDbConnection();
         await OpenIfNeededAsync(connection, cancellationToken).ConfigureAwait(false);
@@ -68,7 +73,7 @@ public sealed class KnowledgeDocumentCatalogService : IKnowledgeDocumentCatalogS
                 await reader.IsDBNullAsync(ordinal: 3, cancellationToken).ConfigureAwait(false) ? null : reader.GetString(3),
                 reader.GetInt32(4),
                 embeddingModel,
-                IsStaleModel(status, embeddingModel, resolvedModel),
+                IsStaleModel(status, embeddingModel, resolution),
                 reader.GetInt64(6),
                 reader.GetInt64(7)));
         }
@@ -78,7 +83,7 @@ public sealed class KnowledgeDocumentCatalogService : IKnowledgeDocumentCatalogS
 
     public async Task<KnowledgeDocumentDetail?> GetAsync(Guid documentId, CancellationToken cancellationToken)
     {
-        var resolvedModel = await ResolveEmbeddingModelAsync(cancellationToken).ConfigureAwait(false);
+        var resolution = await ResolveEmbeddingModelAsync(cancellationToken).ConfigureAwait(false);
 
         var connection = _dbContext.Database.GetDbConnection();
         await OpenIfNeededAsync(connection, cancellationToken).ConfigureAwait(false);
@@ -109,7 +114,7 @@ public sealed class KnowledgeDocumentCatalogService : IKnowledgeDocumentCatalogS
                 await reader.IsDBNullAsync(ordinal: 3, cancellationToken).ConfigureAwait(false) ? null : reader.GetString(3),
                 reader.GetInt32(4),
                 embeddingModel,
-                IsStaleModel(status, embeddingModel, resolvedModel),
+                IsStaleModel(status, embeddingModel, resolution),
                 reader.GetInt64(6),
                 reader.GetInt64(7),
                 reader.GetInt64(8),
@@ -152,8 +157,15 @@ public sealed class KnowledgeDocumentCatalogService : IKnowledgeDocumentCatalogS
 
     public async Task<IReadOnlyList<Guid>> ResetStaleDocumentsToPendingAsync(CancellationToken cancellationToken)
     {
-        // Resolve the current embedding model once; every row whose stored embedding_model differs from it is stale.
-        var resolvedModel = await ResolveEmbeddingModelAsync(cancellationToken).ConfigureAwait(false);
+        // Resolve the current embedding model once; every INDEXED row whose stored embedding_model differs from it is
+        // stale. When resolution is not confident (transient provider outage, or nothing installed matched), never
+        // touch the table: comparing against a mere fallback name would reset the entire indexed corpus during an
+        // outage instead of leaving it untouched, and a re-ingest attempted mid-outage would just fail again.
+        var resolution = await ResolveEmbeddingModelAsync(cancellationToken).ConfigureAwait(false);
+        if (!resolution.IsConfident)
+        {
+            return [];
+        }
 
         var connection = _dbContext.Database.GetDbConnection();
         await OpenIfNeededAsync(connection, cancellationToken).ConfigureAwait(false);
@@ -164,6 +176,7 @@ public sealed class KnowledgeDocumentCatalogService : IKnowledgeDocumentCatalogS
         // still holds the upload-time placeholder (the configured name written by the blob store), which is not a
         // vector-identity and must never trigger a reset of an in-flight or pending document.
         var indexedStatus = KnowledgeDocumentStatus.Indexed.ToString();
+        var resolvedModel = resolution.Name;
 
         var staleIds = new List<Guid>();
         await using (var selectCommand = connection.CreateCommand())
@@ -232,10 +245,10 @@ public sealed class KnowledgeDocumentCatalogService : IKnowledgeDocumentCatalogS
 
     // Resolves the embedding model the same way the ingestion/search lanes do (provider → IEmbeddingModelResolver), so
     // staleness compares each stored name against the model that would actually build vectors now. The resolver already
-    // degrades transport failures to the configured name; a missing/unregistered provider surfaces as
-    // InvalidOperationException here and also falls back to the configured name so staleness never throws. A genuine
-    // caller cancellation propagates.
-    private async Task<string> ResolveEmbeddingModelAsync(CancellationToken cancellationToken)
+    // degrades transport failures to a NOT-confident configured-name fallback; a missing/unregistered provider surfaces
+    // as InvalidOperationException here and is folded into the same not-confident outcome so staleness never throws and
+    // never compares against a name nothing installed actually matched. A genuine caller cancellation propagates.
+    private async Task<EmbeddingModelResolution> ResolveEmbeddingModelAsync(CancellationToken cancellationToken)
     {
         try
         {
@@ -244,17 +257,22 @@ public sealed class KnowledgeDocumentCatalogService : IKnowledgeDocumentCatalogS
         }
         catch (InvalidOperationException)
         {
-            return _options.EmbeddingModelName;
+            return new EmbeddingModelResolution(_options.EmbeddingModelName, IsConfident: false);
         }
     }
 
     // A document is stale only when it is INDEXED (its stored embedding_model names the model that actually built its
-    // committed vectors) and that stored name differs from the currently resolved model. A non-indexed row still carries
-    // the upload-time placeholder, which is not a vector identity and is never treated as stale.
-    private static bool IsStaleModel(KnowledgeDocumentStatus status, string embeddingModel, string resolvedModel)
+    // committed vectors), the current resolution is CONFIDENT (an installed model was actually matched — not a mere
+    // fallback from an unreachable provider or an unmatched configured name), and the stored name differs from the
+    // resolved one. Skipping staleness on a non-confident resolution is the guard against a transient provider outage
+    // making the resolver fall back to the plain configured name — on a llama.cpp node the stored name is a resolved
+    // GGUF name that never equals that fallback, so comparing against it would flag (and reset) the entire indexed
+    // corpus during the outage instead of leaving it untouched.
+    private static bool IsStaleModel(KnowledgeDocumentStatus status, string embeddingModel, EmbeddingModelResolution resolution)
     {
         return status == KnowledgeDocumentStatus.Indexed
-               && !string.Equals(embeddingModel, resolvedModel, StringComparison.Ordinal);
+               && resolution.IsConfident
+               && !string.Equals(embeddingModel, resolution.Name, StringComparison.Ordinal);
     }
 
     private static KnowledgeDocumentStatus ParseStatus(string status)

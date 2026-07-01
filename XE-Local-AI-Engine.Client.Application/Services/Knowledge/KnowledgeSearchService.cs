@@ -153,8 +153,9 @@ public sealed class KnowledgeSearchService : IKnowledgeSearchService
             // Resolve ONCE. The same resolved name embeds the query AND filters the stored chunk vectors, so query and
             // chunk vectors are only ever compared when the identical model produced both (the ingestion lane stamps the
             // same resolved name as the scope key). A later same-dimension model swap changes this name and excludes the
-            // now-incompatible old vectors instead of silently mis-comparing them.
-            var embeddingModelName = await _embeddingModelResolver.ResolveAsync(provider, cancellationToken).ConfigureAwait(false);
+            // now-incompatible old vectors instead of silently mis-comparing them. The confidence bit is irrelevant here —
+            // search degrades to lexical-only on any embedding failure regardless of why the name is what it is.
+            var embeddingModelName = (await _embeddingModelResolver.ResolveAsync(provider, cancellationToken).ConfigureAwait(false)).Name;
             using var generator = provider.CreateEmbeddingGenerator(new LocalModelSelection
             {
                 ModelName = embeddingModelName,
