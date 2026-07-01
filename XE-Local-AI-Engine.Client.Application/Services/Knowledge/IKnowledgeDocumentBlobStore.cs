@@ -18,9 +18,6 @@ public interface IKnowledgeDocumentBlobStore
     /// <summary>Decrypts and returns the raw bytes for one document, or null when the row or blob is absent.</summary>
     Task<byte[]?> ReadBytesAsync(Guid documentId, CancellationToken cancellationToken);
 
-    /// <summary>Removes one document's metadata row plus its on-disk encrypted bytes. Returns whether a row existed.</summary>
-    Task<bool> DeleteAsync(Guid documentId, CancellationToken cancellationToken);
-
     /// <summary>
     ///     Removes only the on-disk encrypted bytes for one document, deriving the path from the server-generated
     ///     <paramref name="documentId" /> plus its <paramref name="extension" /> (never a stored path string). Used by the

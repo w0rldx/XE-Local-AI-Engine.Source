@@ -2,9 +2,11 @@ namespace XE_Local_AI_Engine.Client.Persistence.Entities;
 
 /// <summary>
 ///     Rebuildable embedding index for a <see cref="KnowledgeDocumentChunk" /> (managed cosine-search path). One row per
-///     chunk; the <see cref="Embedding" /> BLOB is a little-endian <c>float32</c> array. Vectors are always compared only
-///     within a single <see cref="EmbeddingModel" /> (same-dimension, same-model), so the model id is stored alongside the
-///     blob as the search filter key. Fully derivable from <c>knowledge_document_chunks</c> by re-embedding.
+///     chunk; the <see cref="Embedding" /> BLOB is a <c>float32</c> array laid out in the platform's native byte order
+///     (little-endian on the shipped x64/ARM64 targets; a store moved to a big-endian host would need re-embedding).
+///     Vectors are always compared only within a single <see cref="EmbeddingModel" /> (same-dimension, same-model), so
+///     the model id is stored alongside the blob as the search filter key. Fully derivable from
+///     <c>knowledge_document_chunks</c> by re-embedding.
 /// </summary>
 internal sealed record class KnowledgeChunkVector
 {
@@ -17,7 +19,7 @@ internal sealed record class KnowledgeChunkVector
     /// <summary>Vector dimensionality (e.g. 768); guards against comparing vectors built at a different dimension.</summary>
     public int Dim { get; set; }
 
-    /// <summary>Little-endian <c>float32[Dim]</c> embedding bytes (via <c>MemoryMarshal.AsBytes</c>).</summary>
+    /// <summary>Platform-native-byte-order <c>float32[Dim]</c> embedding bytes (via <c>MemoryMarshal.AsBytes</c>).</summary>
     public byte[] Embedding { get; set; } = [];
 
     /// <summary>Embedding model id that produced this vector; the search compares only rows where this equals the current model.</summary>
