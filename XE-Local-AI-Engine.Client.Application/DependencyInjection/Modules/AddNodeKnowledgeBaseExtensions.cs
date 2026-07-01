@@ -25,9 +25,18 @@ internal static class AddNodeKnowledgeBaseExtensions
         // Depends only on singletons (provider resolver, prefixer, options); disposes each generator per call.
         builder.Services.AddSingleton<IKnowledgeChunkEmbedder, KnowledgeChunkEmbedder>();
 
+        // No-op indexing notifier default so the ingestion service always resolves one (Application-only/test hosts). The
+        // Client host supersedes this with a hub-backed notifier that pushes status changes over SignalR.
+        builder.Services.AddSingleton<IKnowledgeIndexingNotifier, NullKnowledgeIndexingNotifier>();
+
         // Scoped: these use the scoped NodeChatDbContext and are resolved inside the per-ingestion-job scope.
         builder.Services.AddScoped<IKnowledgeIndexWriter, KnowledgeIndexWriter>();
         builder.Services.AddScoped<IKnowledgeIngestionService, KnowledgeIngestionService>();
+
+        // Scoped management surfaces for the Lane-D endpoints: the delete purge (explicit ordered raw-SQL deletes, since
+        // FK cascade is OFF) and the read + reindex-reset catalog. Both drive the request-scoped NodeChatDbContext.
+        builder.Services.AddScoped<IKnowledgeDocumentPurgeService, KnowledgeDocumentPurgeService>();
+        builder.Services.AddScoped<IKnowledgeDocumentCatalogService, KnowledgeDocumentCatalogService>();
 
         // Reciprocal Rank Fusion is a pure, stateless function over rank lists — safe as a singleton, no DbContext.
         builder.Services.AddSingleton<IRankingFusionService, ReciprocalRankFusion>();

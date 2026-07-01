@@ -155,6 +155,16 @@ public sealed class KnowledgeDocumentBlobStore : IKnowledgeDocumentBlobStore
         return true;
     }
 
+    public Task DeleteBytesAsync(Guid documentId, string extension, CancellationToken cancellationToken)
+    {
+        ArgumentNullException.ThrowIfNull(extension);
+
+        // The path is derived purely from the id + normalized extension, mirroring the write path — the caller's stored
+        // extension is already normalized, but re-normalize defensively so a raw ".TXT" still resolves the same file.
+        DeleteFileIfExists(BytesPath(documentId, NormalizeExtension(extension)));
+        return Task.CompletedTask;
+    }
+
     private static async Task<Guid> SelectDocumentIdByHashAsync(System.Data.Common.DbConnection connection, string contentHash, CancellationToken cancellationToken)
     {
         await using var command = connection.CreateCommand();

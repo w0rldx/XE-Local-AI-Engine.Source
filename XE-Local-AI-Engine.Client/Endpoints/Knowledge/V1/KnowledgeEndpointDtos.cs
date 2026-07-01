@@ -1,0 +1,162 @@
+namespace XE_Local_AI_Engine.Client.Endpoints.Knowledge.V1;
+
+using XE_Local_AI_Engine.Client.Services.Knowledge;
+
+// ---------------------------------------------------------------------------
+// Request DTOs
+//
+// These mirror the established endpoint-DTO style in this project (sealed class + required/init, e.g.
+// SchedulerEndpointDtos / ConversationUploadEndpointDtos) rather than positional records: the multipart upload binding
+// and the route/query binding are proven against this shape, and keeping the whole file consistent avoids mixing styles.
+// ---------------------------------------------------------------------------
+
+/// <summary>
+///     Route binding for the multipart knowledge-document upload. The file rides the multipart form; the typed
+///     <see cref="File" /> property exists so FastEndpoints documents a <c>multipart/form-data</c> body in OpenAPI (the
+///     generated hey-api client then serializes the upload as form-data rather than JSON). The handler still reads the
+///     form-file collection directly, so the binding tolerates whichever multipart field name the client chooses.
+/// </summary>
+public sealed class UploadKnowledgeDocumentRequest
+{
+    public IFormFile? File { get; init; }
+}
+
+/// <summary>Route-only request for <c>GET/DELETE knowledge-base/documents/{documentId}</c> and the reindex action.</summary>
+public sealed class KnowledgeDocumentRouteRequest
+{
+    public Guid DocumentId { get; init; }
+}
+
+/// <summary>Body for <c>POST knowledge-base/search</c>. The query is untrusted and escaped/embedded by the search service.</summary>
+public sealed class SearchKnowledgeRequest
+{
+    public required string Query { get; init; }
+
+    /// <summary>Maximum number of fused results to return. Bounded server-side to a safe range.</summary>
+    public int Limit { get; init; } = 10;
+
+    /// <summary>Optional scope: restrict the search to a single document.</summary>
+    public Guid? DocumentId { get; init; }
+
+    /// <summary>When true, each hit's content is expanded with its surrounding neighbor chunks.</summary>
+    public bool ExpandNeighbors { get; init; }
+}
+
+// ---------------------------------------------------------------------------
+// Response DTOs
+// ---------------------------------------------------------------------------
+
+/// <summary>
+///     Result of a multipart upload. <see cref="Deduplicated" /> is true when an identical file (same content hash)
+///     already existed — in that case <see cref="DocumentId" /> is the pre-existing document's id and no new ingestion
+///     was enqueued. <see cref="Status" /> is the document's current pipeline status. Enums serialize as their string
+///     names via the globally registered converter.
+/// </summary>
+public sealed class UploadKnowledgeDocumentResponse
+{
+    public required Guid DocumentId { get; init; }
+
+    public required KnowledgeDocumentStatus Status { get; init; }
+
+    public required bool Deduplicated { get; init; }
+}
+
+/// <summary>
+///     Management summary of one knowledge-base document. <see cref="DisplayName" /> is the decrypted original file name
+///     (owner-only, over this authenticated surface). <see cref="StaleModel" /> is true when the document was embedded
+///     with a model other than the currently configured one, so the UI can offer a reindex.
+/// </summary>
+public sealed class KnowledgeDocumentResponse
+{
+    public required Guid DocumentId { get; init; }
+
+    public required string DisplayName { get; init; }
+
+    public required KnowledgeDocumentStatus Status { get; init; }
+
+    public string? FailureReason { get; init; }
+
+    public required int ChunkCount { get; init; }
+
+    public required string EmbeddingModel { get; init; }
+
+    public required bool StaleModel { get; init; }
+
+    public required long SizeBytes { get; init; }
+
+    public required long CreatedAtUtc { get; init; }
+}
+
+/// <summary>Response envelope for <c>GET knowledge-base/documents</c>.</summary>
+public sealed class ListKnowledgeDocumentsResponse
+{
+    public required IReadOnlyList<KnowledgeDocumentResponse> Items { get; init; }
+}
+
+/// <summary>One chunk of a document, for the detail drawer.</summary>
+public sealed class KnowledgeDocumentChunkResponse
+{
+    public required int ChunkIndex { get; init; }
+
+    public string? HeadingPath { get; init; }
+
+    public required string Content { get; init; }
+}
+
+/// <summary>Full detail of one document plus its ordered chunks. Response for <c>GET knowledge-base/documents/{documentId}</c>.</summary>
+public sealed class KnowledgeDocumentDetailResponse
+{
+    public required Guid DocumentId { get; init; }
+
+    public required string DisplayName { get; init; }
+
+    public required KnowledgeDocumentStatus Status { get; init; }
+
+    public string? FailureReason { get; init; }
+
+    public required int ChunkCount { get; init; }
+
+    public required string EmbeddingModel { get; init; }
+
+    public required bool StaleModel { get; init; }
+
+    public required long SizeBytes { get; init; }
+
+    public required long CreatedAtUtc { get; init; }
+
+    public required long UpdatedAtUtc { get; init; }
+
+    public required IReadOnlyList<KnowledgeDocumentChunkResponse> Chunks { get; init; }
+}
+
+/// <summary>One hydrated search hit. Titles/sections derive from non-sensitive heading/storage refs, never the file name.</summary>
+public sealed class KnowledgeSearchHitResponse
+{
+    public required Guid DocumentId { get; init; }
+
+    public required Guid ChunkId { get; init; }
+
+    public required string Title { get; init; }
+
+    public string? Section { get; init; }
+
+    public required string Content { get; init; }
+
+    public required string Source { get; init; }
+
+    public required double Score { get; init; }
+
+    public required int ChunkIndex { get; init; }
+}
+
+/// <summary>Response envelope for <c>POST knowledge-base/search</c>.</summary>
+public sealed class SearchKnowledgeResponse
+{
+    public required IReadOnlyList<KnowledgeSearchHitResponse> Results { get; init; }
+}
+
+/// <summary>Result of a corpus-wide reindex: how many stale-model documents were reset to Pending and enqueued.</summary>
+public sealed class ReindexCorpusResponse
+{
+    public required int EnqueuedCount { get; init; }
+}

@@ -28,6 +28,7 @@ public sealed class KnowledgeIngestionService : IKnowledgeIngestionService
     private readonly IChunkingService _chunkingService;
     private readonly IKnowledgeChunkEmbedder _embedder;
     private readonly IKnowledgeIndexWriter _indexWriter;
+    private readonly IKnowledgeIndexingNotifier _notifier;
     private readonly KnowledgeBaseOptions _options;
     private readonly TimeProvider _timeProvider;
     private readonly ILogger<KnowledgeIngestionService> _logger;
@@ -38,6 +39,7 @@ public sealed class KnowledgeIngestionService : IKnowledgeIngestionService
         IChunkingService chunkingService,
         IKnowledgeChunkEmbedder embedder,
         IKnowledgeIndexWriter indexWriter,
+        IKnowledgeIndexingNotifier notifier,
         IOptions<KnowledgeBaseOptions> options,
         TimeProvider timeProvider,
         ILogger<KnowledgeIngestionService> logger)
@@ -48,6 +50,7 @@ public sealed class KnowledgeIngestionService : IKnowledgeIngestionService
         _chunkingService = chunkingService ?? throw new ArgumentNullException(nameof(chunkingService));
         _embedder = embedder ?? throw new ArgumentNullException(nameof(embedder));
         _indexWriter = indexWriter ?? throw new ArgumentNullException(nameof(indexWriter));
+        _notifier = notifier ?? throw new ArgumentNullException(nameof(notifier));
         ArgumentNullException.ThrowIfNull(options);
         _options = options.Value;
         _timeProvider = timeProvider ?? throw new ArgumentNullException(nameof(timeProvider));
@@ -140,8 +143,13 @@ public sealed class KnowledgeIngestionService : IKnowledgeIngestionService
         var input = new KnowledgeIndexInput(documentId, _options.EmbeddingModelName, chunking.Sections, indexChunks);
 
         // The writer performs the final Indexed transition atomically. A false result means the document was deleted mid
-        // flight (the write was skipped) — there is nothing more to do.
-        _ = await _indexWriter.WriteAsync(input, cancellationToken).ConfigureAwait(false);
+        // flight (the write was skipped) — there is nothing more to do. On success push the Indexed transition, since the
+        // writer sets that status inside its own transaction rather than through SetStatusAsync.
+        var indexed = await _indexWriter.WriteAsync(input, cancellationToken).ConfigureAwait(false);
+        if (indexed)
+        {
+            await _notifier.NotifyDocumentChangedAsync(documentId, KnowledgeDocumentStatus.Indexed, cancellationToken).ConfigureAwait(false);
+        }
     }
 
     private List<KnowledgeIndexChunk> BuildIndexChunks(IReadOnlyList<KnowledgeChunk> chunks, IReadOnlyList<byte[]> embeddings)
@@ -203,6 +211,10 @@ public sealed class KnowledgeIngestionService : IKnowledgeIngestionService
         AddParameter(command, "$updated_at_utc", _timeProvider.GetUtcNow().ToUnixTimeMilliseconds());
         AddParameter(command, "$document_id", documentId);
         _ = await command.ExecuteNonQueryAsync(cancellationToken).ConfigureAwait(false);
+
+        // Push every non-terminal transition and any Failed transition (the Indexed transition is pushed by the caller,
+        // since the index writer sets it inside its own transaction). Best-effort — the notifier never throws.
+        await _notifier.NotifyDocumentChangedAsync(documentId, status, cancellationToken).ConfigureAwait(false);
     }
 
     // Failure-path status write on a fresh token so a status update is never lost to the original cancellation.
