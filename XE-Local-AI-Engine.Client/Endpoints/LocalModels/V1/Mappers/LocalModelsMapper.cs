@@ -53,9 +53,10 @@ internal static class LocalModelsMapper
     ///     WITHOUT an <c>/api/show</c> probe — a downloaded GGUF in the chat picker has a completion head by
     ///     construction. Reasoning/tool support and the capability tokens are detected offline from the model's GGUF
     ///     chat template (carried on the descriptor by the store); a model whose template could not be read defaults to
-    ///     the safe no-tools/no-reasoning classification (a non-tool model is never offered tools). Embedding-role files
-    ///     would be filtered out of the chat picker, but the installed-model descriptor carries no role hint today, so
-    ///     every installed GGUF lists as Chat (note: an embedding-only GGUF would still appear).
+    ///     the safe no-tools/no-reasoning classification (a non-tool model is never offered tools). An embedding-only
+    ///     GGUF is recognized offline from its name (<see cref="ModelKindDetector.IsEmbeddingName" />, matching
+    ///     EMBED/NOMIC-EMBED/BGE-… fragments) and tagged <see cref="ModelKind.Embedding" /> so the React
+    ///     <c>kind === "Chat"</c> picker filters it out; every other GGUF stays Chat.
     /// </summary>
     public static IReadOnlyList<LocalModelResponse> ToLlamaCppModelResponses(IReadOnlyList<LocalModelDescriptor> ggufModels,
         string? selectedModelName)
@@ -64,19 +65,25 @@ internal static class LocalModelsMapper
 
         return ggufModels
                .Where(static descriptor => !string.IsNullOrWhiteSpace(descriptor.ModelName))
-               .Select(descriptor => new LocalModelResponse
+               .Select(descriptor =>
                {
-                   ModelName = descriptor.ModelName,
-                   Provider = LocalModelProviders.LlamaCpp,
-                   SizeBytes = descriptor.SizeBytes,
-                   ModifiedAtUtc = descriptor.ModifiedAt?.ToUnixTimeMilliseconds(),
-                   IsSelected = string.Equals(descriptor.ModelName, selectedModelName, StringComparison.OrdinalIgnoreCase),
-                   Kind = ModelKind.Chat.ToString(),
-                   DetectedKind = ModelKind.Chat.ToString(),
-                   Capabilities = descriptor.Capabilities,
-                   IsReasoningCapable = descriptor.IsReasoningCapable,
-                   IsToolCapable = descriptor.IsToolCapable,
-                   IsOverridden = false
+                   var kind = ModelKindDetector.IsEmbeddingName(descriptor.ModelName)
+                       ? ModelKind.Embedding
+                       : ModelKind.Chat;
+                   return new LocalModelResponse
+                   {
+                       ModelName = descriptor.ModelName,
+                       Provider = LocalModelProviders.LlamaCpp,
+                       SizeBytes = descriptor.SizeBytes,
+                       ModifiedAtUtc = descriptor.ModifiedAt?.ToUnixTimeMilliseconds(),
+                       IsSelected = string.Equals(descriptor.ModelName, selectedModelName, StringComparison.OrdinalIgnoreCase),
+                       Kind = kind.ToString(),
+                       DetectedKind = kind.ToString(),
+                       Capabilities = descriptor.Capabilities,
+                       IsReasoningCapable = descriptor.IsReasoningCapable,
+                       IsToolCapable = descriptor.IsToolCapable,
+                       IsOverridden = false
+                   };
                })
                .OrderBy(static model => model.ModelName, StringComparer.OrdinalIgnoreCase)
                .ToArray();

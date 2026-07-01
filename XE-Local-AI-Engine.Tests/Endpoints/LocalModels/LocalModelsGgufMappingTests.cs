@@ -55,6 +55,30 @@ public sealed class LocalModelsGgufMappingTests
     }
 
     [Test]
+    public void ToLlamaCppModelResponses_ClassifiesEmbeddingNamedGgufAsEmbedding()
+    {
+        // A GGUF whose name identifies an embedding model (nomic-embed) is tagged Embedding so the React
+        // `kind === "Chat"` picker filters it out — a fresh GGUF has no capability probe, only its name.
+        var gguf = LocalModelsMapper.ToLlamaCppModelResponses([Gguf("nomic-ai/nomic-embed-text-v1.5-GGUF:Q4_K_M")],
+            selectedModelName: null);
+
+        AssertEx.Equal(expected: 1, gguf.Count);
+        AssertEx.Equal(ModelKind.Embedding.ToString(), gguf[0].Kind);
+        AssertEx.Equal(ModelKind.Embedding.ToString(), gguf[0].DetectedKind);
+    }
+
+    [Test]
+    public void ToLlamaCppModelResponses_ClassifiesChatNamedGgufAsChat()
+    {
+        // A non-embedding GGUF name stays Chat (the heuristic never guesses Chat from a name — it defaults to it).
+        var gguf = LocalModelsMapper.ToLlamaCppModelResponses([Gguf("bartowski/Qwen2.5-0.5B-Instruct-GGUF:Q4_K_M")],
+            selectedModelName: null);
+
+        AssertEx.Equal(ModelKind.Chat.ToString(), gguf[0].Kind);
+        AssertEx.Equal(ModelKind.Chat.ToString(), gguf[0].DetectedKind);
+    }
+
+    [Test]
     public void ToLlamaCppModelResponses_SurfacesDetectedCapabilities()
     {
         // A descriptor whose chat template was classified tool- and reasoning-capable must surface those flags + tokens
