@@ -2,6 +2,7 @@
   "basicFormatOption": "de-DE",
   "common": {
     "loading": "Lädt...",
+    "refresh": "Aktualisieren",
     "refreshing": "Aktualisiere...",
     "filterReset": "Filter zurücksetzen",
     "close": "Schließen",
@@ -46,6 +47,7 @@
   "navigation": {
     "home": "Start",
     "chat": "Chat",
+    "knowledgeBase": "Wissensdatenbank",
     "dashboard": "Dashboard",
     "binding": "Node-Bindung",
     "nodeSettings": "Node-Einstellungen",
@@ -91,6 +93,87 @@
     "reasoningBypassNote": "Dieses Modell gibt möglicherweise unabhängig von der Einstellung 'Keine' Reasoning aus."
   },
   "pages": {
+    "knowledgeBase": {
+      "title": "Wissensdatenbank",
+      "subtitle": "Dokumente hochladen, indexieren und fundiertes Wissen durchsuchen.",
+      "loadError": "Die Wissensdatenbank konnte nicht geladen werden.",
+      "upload": {
+        "heading": "Dokumente hinzufügen",
+        "prompt": "Dokumente hier ablegen oder zum Durchsuchen klicken",
+        "hint": "PDF, DOCX, Markdown, Text, CSV, JSON — bis zu {{limit}} MB pro Datei.",
+        "dropzoneAria": "Dokumente in die Wissensdatenbank hochladen",
+        "queued": "{{name}} wird indexiert.",
+        "deduplicated": "{{name}} ist bereits in der Wissensdatenbank.",
+        "failed": "{{name}} konnte nicht hochgeladen werden.",
+        "tooLarge": "{{name}} überschreitet das Upload-Limit von {{limit}} MB.",
+        "unsupported": "{{name}} ist kein unterstützter Dokumenttyp."
+      },
+      "documents": {
+        "heading": "Dokumente",
+        "loading": "Dokumente werden geladen…",
+        "empty": "Noch keine Dokumente. Laden Sie oben eines hoch, um zu beginnen."
+      },
+      "status": {
+        "pending": "Ausstehend",
+        "extracting": "Extrahiere",
+        "chunking": "Zerlege",
+        "embedding": "Einbettung",
+        "indexed": "Indexiert",
+        "failed": "Fehlgeschlagen"
+      },
+      "table": {
+        "name": "Name",
+        "status": "Status",
+        "chunks": "Segmente",
+        "embeddingModel": "Einbettungsmodell",
+        "size": "Größe",
+        "created": "Erstellt",
+        "actions": "Aktionen",
+        "stale": "Veraltet",
+        "staleTooltip": "Mit einem älteren Modell eingebettet — zum Aktualisieren neu indexieren."
+      },
+      "actions": {
+        "view": "Details anzeigen",
+        "viewAria": "Details von {{name}} anzeigen",
+        "reindex": "Neu indexieren",
+        "reindexAria": "{{name}} neu indexieren",
+        "delete": "Löschen",
+        "deleteAria": "{{name}} löschen"
+      },
+      "reindex": {
+        "success": "Neuindexierung gestartet.",
+        "error": "Neuindexierung konnte nicht gestartet werden."
+      },
+      "reindexCorpus": {
+        "action": "Veraltete neu indexieren",
+        "success": "{{count}} Dokument(e) werden neu indexiert.",
+        "error": "Neuindexierung konnte nicht gestartet werden."
+      },
+      "delete": {
+        "title": "Dokument löschen",
+        "description": "'{{name}}' und die zugehörigen indexierten Segmente aus der Wissensdatenbank löschen? Dies kann nicht rückgängig gemacht werden.",
+        "success": "Dokument aus der Wissensdatenbank entfernt.",
+        "error": "Das Dokument konnte nicht gelöscht werden."
+      },
+      "search": {
+        "heading": "Suche",
+        "placeholder": "Die Wissensdatenbank fragen…",
+        "aria": "Wissensdatenbank durchsuchen",
+        "submit": "Suchen",
+        "score": "Wert {{score}}",
+        "hint": "Die Suche läuft über jedes indexierte Dokument in dieser Wissensdatenbank.",
+        "noResults": "Kein indexierter Inhalt passt zu \"{{query}}\".",
+        "error": "Die Suche konnte nicht abgeschlossen werden."
+      },
+      "detail": {
+        "title": "Dokument",
+        "loading": "Dokument wird geladen…",
+        "updated": "Aktualisiert",
+        "chunks": "Segmente",
+        "chunkLabel": "Segment {{index}}",
+        "noChunks": "Dieses Dokument hat noch keine indexierten Segmente."
+      }
+    },
     "about": {
       "title": "Über",
       "applicationTab": "Anwendung",

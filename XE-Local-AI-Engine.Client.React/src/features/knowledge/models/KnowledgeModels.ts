@@ -1,0 +1,94 @@
+import type {
+	XeLocalAiEngineClientEndpointsKnowledgeV1KnowledgeDocumentDetailResponse,
+	XeLocalAiEngineClientEndpointsKnowledgeV1KnowledgeDocumentResponse,
+	XeLocalAiEngineClientEndpointsKnowledgeV1KnowledgeSearchHitResponse,
+	XeLocalAiEngineClientServicesKnowledgeKnowledgeDocumentStatus,
+} from "@/core/api/generated";
+
+// Local aliases for the (verbose) generated DTO names so the feature code reads cleanly. The generated types stay
+// the single source of truth — these are pure re-exports, not parallel shapes.
+export type KnowledgeDocumentStatus = XeLocalAiEngineClientServicesKnowledgeKnowledgeDocumentStatus;
+export type KnowledgeDocument = XeLocalAiEngineClientEndpointsKnowledgeV1KnowledgeDocumentResponse;
+export type KnowledgeDocumentDetail = XeLocalAiEngineClientEndpointsKnowledgeV1KnowledgeDocumentDetailResponse;
+export type KnowledgeSearchHit = XeLocalAiEngineClientEndpointsKnowledgeV1KnowledgeSearchHitResponse;
+
+// Advisory upload guards. The endpoint re-enforces both (extension allow-list + size cap + extraction) — these
+// only avoid a guaranteed-reject round trip and give the operator instant feedback. Mirrors the chat-attachment
+// surface's advisory-then-server-authoritative posture.
+export const KNOWLEDGE_MAX_UPLOAD_SIZE_MB = 25;
+export const KNOWLEDGE_MAX_UPLOAD_SIZE_BYTES = KNOWLEDGE_MAX_UPLOAD_SIZE_MB * 1024 * 1024;
+
+// Extensions the ingestion pipeline can extract text from (documents + plain text + common code). Advisory only.
+export const KNOWLEDGE_ACCEPTED_EXTENSIONS: readonly string[] = [
+	".txt",
+	".md",
+	".markdown",
+	".csv",
+	".json",
+	".pdf",
+	".docx",
+	".html",
+	".htm",
+	".xml",
+	".yaml",
+	".yml",
+];
+
+// The `accept` attribute value for the hidden file input (comma-separated extension list).
+export const KNOWLEDGE_ACCEPT_ATTRIBUTE = KNOWLEDGE_ACCEPTED_EXTENSIONS.join(",");
+
+export interface KnowledgeStatusDescriptor {
+	readonly status: KnowledgeDocumentStatus;
+	// Mantine semantic color for the status pill.
+	readonly color: string;
+	// i18n key for the human-readable status label.
+	readonly labelKey: string;
+	// In-progress states (queued + the extract→chunk→embed pipeline) render an animated spinner in the pill.
+	readonly inProgress: boolean;
+}
+
+// Status → visual descriptor. Terminal states are sharp accents (Indexed green, Failed red); the whole
+// ingestion pipeline (Pending/Extracting/Chunking/Embedding) reads as one "working" amber state with a spinner.
+const STATUS_DESCRIPTORS: Record<KnowledgeDocumentStatus, KnowledgeStatusDescriptor> = {
+	Pending: { status: "Pending", color: "yellow", labelKey: "pages.knowledgeBase.status.pending", inProgress: true },
+	Extracting: { status: "Extracting", color: "yellow", labelKey: "pages.knowledgeBase.status.extracting", inProgress: true },
+	Chunking: { status: "Chunking", color: "yellow", labelKey: "pages.knowledgeBase.status.chunking", inProgress: true },
+	Embedding: { status: "Embedding", color: "yellow", labelKey: "pages.knowledgeBase.status.embedding", inProgress: true },
+	Indexed: { status: "Indexed", color: "green", labelKey: "pages.knowledgeBase.status.indexed", inProgress: false },
+	Failed: { status: "Failed", color: "red", labelKey: "pages.knowledgeBase.status.failed", inProgress: false },
+};
+
+export function knowledgeStatusDescriptor(status: KnowledgeDocumentStatus): KnowledgeStatusDescriptor {
+	return STATUS_DESCRIPTORS[status];
+}
+
+const BYTE_UNITS: readonly string[] = ["B", "KB", "MB", "GB", "TB"];
+
+// Human-readable byte size (e.g. "1.4 MB"). Whole bytes for the B unit, one decimal above it.
+export function formatKnowledgeBytes(bytes: number): string {
+	if (!Number.isFinite(bytes) || bytes <= 0) {
+		return "0 B";
+	}
+	const exponent = Math.min(Math.floor(Math.log(bytes) / Math.log(1024)), BYTE_UNITS.length - 1);
+	const value = bytes / 1024 ** exponent;
+	return `${value.toFixed(exponent === 0 ? 0 : 1)} ${BYTE_UNITS[exponent]}`;
+}
+
+// createdAtUtc / updatedAtUtc ride the wire as epoch MILLISECONDS (matches the agent-execution-log convention).
+export function formatKnowledgeTimestamp(epochMs: number): string {
+	if (!Number.isFinite(epochMs) || epochMs <= 0) {
+		return "—";
+	}
+	const date = new Date(epochMs);
+	return Number.isNaN(date.getTime()) ? "—" : date.toLocaleString();
+}
+
+// Returns the lower-cased extension of a filename (including the leading dot), or "" when there is none.
+function fileExtension(fileName: string): string {
+	const lastDot = fileName.lastIndexOf(".");
+	return lastDot >= 0 ? fileName.slice(lastDot).toLowerCase() : "";
+}
+
+export function isAcceptedKnowledgeFile(fileName: string): boolean {
+	return KNOWLEDGE_ACCEPTED_EXTENSIONS.includes(fileExtension(fileName));
+}

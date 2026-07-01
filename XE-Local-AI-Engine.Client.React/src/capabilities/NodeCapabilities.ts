@@ -36,6 +36,7 @@ export interface NodeCapabilityConfig {
 	readonly modelFit: boolean;
 	readonly loadedModels: boolean;
 	readonly preview: boolean;
+	readonly knowledgeBase: boolean;
 }
 
 export const nodeCapabilities: NodeCapabilityConfig = {
@@ -93,6 +94,10 @@ export const nodeCapabilities: NodeCapabilityConfig = {
 	// live per-node run output streamed over the preview SignalR hub. Workflows persist; run output is transient
 	// (never logged/indexed) and the run-output store is empty on every page load.
 	preview: true,
+	// Knowledge-base management surface (document ingestion + semantic search). On by default; node-local
+	// SQLite-backed document store with a background extract→chunk→embed→index pipeline, live status over the
+	// knowledge-base SignalR hub. Documents + chunks are stored encrypted (display names decrypted server-side).
+	knowledgeBase: true,
 };
 
 export const nodeRoutePaths = {
@@ -120,6 +125,8 @@ export const nodeRoutePaths = {
 	loadedModels: "/loaded-models",
 	// Open Canvas (Preview) workflow builder page — gated on nodeCapabilities.preview
 	preview: "/preview",
+	// Knowledge-base management page (document ingestion + semantic search) — gated on nodeCapabilities.knowledgeBase
+	knowledgeBase: "/knowledge-base",
 	// Local-only diagnostics panel (frontend error snapshots) — always available (plan §1)
 	diagnostics: "/diagnostics",
 } as const;

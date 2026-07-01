@@ -2,6 +2,7 @@
   "basicFormatOption": "en-US",
   "common": {
     "loading": "Loading...",
+    "refresh": "Refresh",
     "refreshing": "Refreshing...",
     "filterReset": "Reset Filters",
     "close": "Close",
@@ -46,6 +47,7 @@
   "navigation": {
     "home": "Home",
     "chat": "Chat",
+    "knowledgeBase": "Knowledge Base",
     "dashboard": "Dashboard",
     "binding": "Node Binding",
     "nodeSettings": "Node Settings",
@@ -91,6 +93,87 @@
     "reasoningBypassNote": "This model may emit reasoning regardless of the 'none' setting."
   },
   "pages": {
+    "knowledgeBase": {
+      "title": "Knowledge base",
+      "subtitle": "Upload documents, index them, and search grounded knowledge.",
+      "loadError": "Could not load the knowledge base.",
+      "upload": {
+        "heading": "Add documents",
+        "prompt": "Drop documents here or click to browse",
+        "hint": "PDF, DOCX, Markdown, text, CSV, JSON — up to {{limit}} MB each.",
+        "dropzoneAria": "Upload documents to the knowledge base",
+        "queued": "{{name}} is being indexed.",
+        "deduplicated": "{{name}} is already in the knowledge base.",
+        "failed": "Failed to upload {{name}}.",
+        "tooLarge": "{{name}} exceeds the {{limit}} MB upload limit.",
+        "unsupported": "{{name}} is not a supported document type."
+      },
+      "documents": {
+        "heading": "Documents",
+        "loading": "Loading documents…",
+        "empty": "No documents yet. Upload one above to get started."
+      },
+      "status": {
+        "pending": "Pending",
+        "extracting": "Extracting",
+        "chunking": "Chunking",
+        "embedding": "Embedding",
+        "indexed": "Indexed",
+        "failed": "Failed"
+      },
+      "table": {
+        "name": "Name",
+        "status": "Status",
+        "chunks": "Chunks",
+        "embeddingModel": "Embedding model",
+        "size": "Size",
+        "created": "Created",
+        "actions": "Actions",
+        "stale": "Stale",
+        "staleTooltip": "Embedded with an older model — reindex to refresh."
+      },
+      "actions": {
+        "view": "View details",
+        "viewAria": "View {{name}} details",
+        "reindex": "Reindex",
+        "reindexAria": "Reindex {{name}}",
+        "delete": "Delete",
+        "deleteAria": "Delete {{name}}"
+      },
+      "reindex": {
+        "success": "Reindexing started.",
+        "error": "Failed to start reindexing."
+      },
+      "reindexCorpus": {
+        "action": "Reindex stale",
+        "success": "Reindexing {{count}} document(s).",
+        "error": "Failed to start reindexing."
+      },
+      "delete": {
+        "title": "Delete document",
+        "description": "Delete '{{name}}' and its indexed chunks from the knowledge base? This cannot be undone.",
+        "success": "Document removed from the knowledge base.",
+        "error": "Failed to delete the document."
+      },
+      "search": {
+        "heading": "Search",
+        "placeholder": "Ask the knowledge base…",
+        "aria": "Search the knowledge base",
+        "submit": "Search",
+        "score": "Score {{score}}",
+        "hint": "Search runs over every indexed document in this knowledge base.",
+        "noResults": "No indexed content matches \"{{query}}\".",
+        "error": "The search could not be completed."
+      },
+      "detail": {
+        "title": "Document",
+        "loading": "Loading document…",
+        "updated": "Updated",
+        "chunks": "Chunks",
+        "chunkLabel": "Chunk {{index}}",
+        "noChunks": "This document has no indexed chunks yet."
+      }
+    },
     "about": {
       "title": "About",
       "applicationTab": "Application",
