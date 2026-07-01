@@ -74,12 +74,9 @@ public sealed class KnowledgeSearchService : IKnowledgeSearchService
         var limit = Math.Max(1, request.Limit);
         var candidatePool = Math.Max(MinimumCandidatePool, limit * CandidatePoolMultiplier);
 
-        // Lexical arm: FTS has no document scope of its own, so a document-scoped request is filtered in memory below.
-        var ftsHits = await _ftsSearch.SearchAsync(request.Query, candidatePool, cancellationToken).ConfigureAwait(false);
-        var ftsRanked = ftsHits
-                        .Where(hit => request.DocumentId is null || hit.DocumentId == request.DocumentId.Value)
-                        .Select(hit => hit.ChunkId)
-                        .ToList();
+        // Lexical arm: the document scope is pushed into the FTS MATCH query itself, matching the vector arm below.
+        var ftsHits = await _ftsSearch.SearchAsync(request.Query, candidatePool, request.DocumentId, cancellationToken).ConfigureAwait(false);
+        var ftsRanked = ftsHits.Select(hit => hit.ChunkId).ToList();
 
         // Semantic arm: only runs when the query vector is available; otherwise the search degrades to lexical-only.
         var queryVector = await TryEmbedQueryAsync(request.Query, cancellationToken).ConfigureAwait(false);

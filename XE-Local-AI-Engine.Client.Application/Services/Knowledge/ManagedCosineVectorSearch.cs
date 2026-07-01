@@ -8,9 +8,9 @@ using static Chat.Implementation.NodeChatPersistenceSql;
 
 /// <summary>
 ///     Default <see cref="IVectorSearch" />. Streams candidate rows from <c>knowledge_chunk_vectors</c> filtered to the
-///     current embedding model (M1 — never cosine across models), reinterprets each little-endian <c>float32</c> BLOB as a
-///     <see cref="ReadOnlySpan{Single}" /> without a copy, scores it against the query vector with
-///     <see cref="TensorPrimitives.CosineSimilarity(ReadOnlySpan{float}, ReadOnlySpan{float})" />, and returns the top-k.
+///     current embedding model (M1 — never cosine across models), reinterprets each <c>float32</c> BLOB (laid out in the
+///     platform's native byte order) as a <see cref="ReadOnlySpan{Single}" /> without a copy, scores it against the
+///     query vector with <see cref="TensorPrimitives.CosineSimilarity(ReadOnlySpan{float}, ReadOnlySpan{float})" />, and returns the top-k.
 ///     Vectors are scored one row at a time; only the resulting scalar score and identifiers are retained, never the full
 ///     set of vectors. Scoped: depends on the request-scoped <see cref="NodeChatDbContext" />.
 /// </summary>

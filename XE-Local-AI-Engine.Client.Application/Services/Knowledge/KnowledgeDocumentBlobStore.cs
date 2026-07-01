@@ -135,26 +135,6 @@ public sealed class KnowledgeDocumentBlobStore : IKnowledgeDocumentBlobStore
         return _blobProtector.Decrypt(Guid.Empty, documentId, UploadedFileBlobProtector.FileBytesColumn, encrypted);
     }
 
-    public async Task<bool> DeleteAsync(Guid documentId, CancellationToken cancellationToken)
-    {
-        await using var scope = _scopeFactory.CreateAsyncScope();
-        var dbContext = scope.ServiceProvider.GetRequiredService<NodeChatDbContext>();
-        var connection = dbContext.Database.GetDbConnection();
-        await OpenIfNeededAsync(connection, cancellationToken).ConfigureAwait(false);
-
-        // Read the stored extension so the server-named bytes file can be located precisely; a missing row means there
-        // is nothing to delete.
-        var extension = await SelectExtensionAsync(connection, documentId, cancellationToken).ConfigureAwait(false);
-        if (extension is null)
-        {
-            return false;
-        }
-
-        await DeleteRowAsync(connection, documentId, cancellationToken).ConfigureAwait(false);
-        DeleteFileIfExists(BytesPath(documentId, extension));
-        return true;
-    }
-
     public Task DeleteBytesAsync(Guid documentId, string extension, CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(extension);

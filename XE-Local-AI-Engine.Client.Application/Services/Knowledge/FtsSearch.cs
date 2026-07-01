@@ -17,7 +17,7 @@ public sealed class FtsSearch : IFtsSearch
         _dbContext = dbContext ?? throw new ArgumentNullException(nameof(dbContext));
     }
 
-    public async Task<IReadOnlyList<FtsSearchHit>> SearchAsync(string query, int limit, CancellationToken cancellationToken)
+    public async Task<IReadOnlyList<FtsSearchHit>> SearchAsync(string query, int limit, Guid? documentId, CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(query);
         if (string.IsNullOrWhiteSpace(query) || limit <= 0)
@@ -30,16 +30,37 @@ public sealed class FtsSearch : IFtsSearch
 
         await using var command = connection.CreateCommand();
         // Order by the BM25 score ascending: FTS5 returns more-negative scores for stronger matches, so ascending yields
-        // the strongest matches first. The chunk and document identifiers are stored as GUID text.
-        command.CommandText = """
-                              SELECT chunk_id, document_id, bm25(chunk_fts) AS score
-                              FROM chunk_fts
-                              WHERE chunk_fts MATCH $match
-                              ORDER BY score ASC
-                              LIMIT $limit;
-                              """;
+        // the strongest matches first. The chunk and document identifiers are stored as GUID text. chunk_fts.document_id
+        // is an available UNINDEXED column, so a document-scoped search can filter in the same MATCH query rather than
+        // post-filtering in memory. Two separate string-literal CommandText assignments (never concatenation, which trips
+        // CA2100) mirror the pattern in ManagedCosineVectorSearch.
+        if (documentId is null)
+        {
+            command.CommandText = """
+                                  SELECT chunk_id, document_id, bm25(chunk_fts) AS score
+                                  FROM chunk_fts
+                                  WHERE chunk_fts MATCH $match
+                                  ORDER BY score ASC
+                                  LIMIT $limit;
+                                  """;
+        }
+        else
+        {
+            command.CommandText = """
+                                  SELECT chunk_id, document_id, bm25(chunk_fts) AS score
+                                  FROM chunk_fts
+                                  WHERE chunk_fts MATCH $match AND document_id = $document_id
+                                  ORDER BY score ASC
+                                  LIMIT $limit;
+                                  """;
+        }
+
         AddParameter(command, "$match", EscapeMatchQuery(query));
         AddParameter(command, "$limit", limit);
+        if (documentId is not null)
+        {
+            AddParameter(command, "$document_id", documentId.Value);
+        }
 
         await using var reader = await command.ExecuteReaderAsync(cancellationToken).ConfigureAwait(false);
         var hits = new List<FtsSearchHit>();

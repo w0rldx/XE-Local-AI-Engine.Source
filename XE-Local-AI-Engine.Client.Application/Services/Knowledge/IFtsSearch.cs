@@ -11,9 +11,11 @@ public interface IFtsSearch
 {
     /// <summary>
     ///     Returns up to <paramref name="limit" /> chunks matching <paramref name="query" />, best first. A blank query or
-    ///     a query with no indexable terms yields an empty list rather than an error.
+    ///     a query with no indexable terms yields an empty list rather than an error. When <paramref name="documentId" />
+    ///     is non-null, the scope is pushed into the SQL <c>WHERE</c> clause so a scoped search over a large corpus cannot
+    ///     miss the target document's chunks.
     /// </summary>
-    Task<IReadOnlyList<FtsSearchHit>> SearchAsync(string query, int limit, CancellationToken cancellationToken);
+    Task<IReadOnlyList<FtsSearchHit>> SearchAsync(string query, int limit, Guid? documentId, CancellationToken cancellationToken);
 }
 
 /// <summary>One lexical match: the chunk, its owning document, and its BM25 score (lower is a better match in FTS5).</summary>
