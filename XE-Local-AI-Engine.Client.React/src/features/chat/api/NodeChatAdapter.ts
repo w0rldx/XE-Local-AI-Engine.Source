@@ -231,8 +231,17 @@ function signalRStream(opening: StreamOpening, signal: AbortSignal): AsyncIterab
 							notify();
 							return;
 						}
-						// A drop while the connection is reconnecting is recoverable via resume; otherwise fail.
-						if (signal.aborted || reachedTerminal || !invocationId || nodeChatConnection.status === "disconnected") {
+						// Only a transport interruption is recoverable via resume: the run keeps going server-side
+						// and onReconnected will re-subscribe. A subscription error while the connection is stably
+						// connected is a genuine hub/application failure (the invocation threw during turn setup
+						// before any terminal event) — fail fast so the caller surfaces it instead of waiting for a
+						// resume that will never come.
+						const recoverable =
+							!signal.aborted &&
+							!reachedTerminal &&
+							!!invocationId &&
+							(nodeChatConnection.status === "reconnecting" || nodeChatConnection.status === "connecting");
+						if (!recoverable) {
 							failure = error;
 							completed = true;
 						}
