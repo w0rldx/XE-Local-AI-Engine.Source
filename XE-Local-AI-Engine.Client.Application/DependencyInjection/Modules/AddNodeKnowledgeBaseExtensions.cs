@@ -24,7 +24,10 @@ internal static class AddNodeKnowledgeBaseExtensions
         // Stateless, thread-safe collaborators — safe as singletons and injectable into the scoped ingestion service.
         builder.Services.AddSingleton<IChunkingService, HeaderBoundaryChunkingService>();
         builder.Services.AddSingleton<IKnowledgeEmbeddingPrefixer, KnowledgeEmbeddingPrefixer>();
-        // Depends only on singletons (provider resolver, prefixer, options); disposes each generator per call.
+        // Maps the configured embedding name to a model actually installed on the resolved provider (shared by the
+        // ingestion embedder and the search lane so chunk + query vectors use the identical model). Options-only → singleton.
+        builder.Services.AddSingleton<IEmbeddingModelResolver, EmbeddingModelResolver>();
+        // Depends only on singletons (provider resolver, embedding-model resolver, prefixer, options); disposes each generator per call.
         builder.Services.AddSingleton<IKnowledgeChunkEmbedder, KnowledgeChunkEmbedder>();
 
         // No-op indexing notifier default so the ingestion service always resolves one (Application-only/test hosts). The

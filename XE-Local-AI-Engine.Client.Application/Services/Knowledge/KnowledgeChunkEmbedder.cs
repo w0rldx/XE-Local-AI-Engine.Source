@@ -29,17 +29,21 @@ public sealed class KnowledgeChunkEmbedder : IKnowledgeChunkEmbedder
 
     private readonly KnowledgeBaseOptions _options;
     private readonly ILocalModelProviderResolver _providerResolver;
+    private readonly IEmbeddingModelResolver _embeddingModelResolver;
     private readonly IKnowledgeEmbeddingPrefixer _prefixer;
 
     public KnowledgeChunkEmbedder(ILocalModelProviderResolver providerResolver,
+        IEmbeddingModelResolver embeddingModelResolver,
         IKnowledgeEmbeddingPrefixer prefixer,
         IOptions<KnowledgeBaseOptions> options)
     {
         ArgumentNullException.ThrowIfNull(providerResolver);
+        ArgumentNullException.ThrowIfNull(embeddingModelResolver);
         ArgumentNullException.ThrowIfNull(prefixer);
         ArgumentNullException.ThrowIfNull(options);
 
         _providerResolver = providerResolver;
+        _embeddingModelResolver = embeddingModelResolver;
         _prefixer = prefixer;
         _options = options.Value;
     }
@@ -53,9 +57,14 @@ public sealed class KnowledgeChunkEmbedder : IKnowledgeChunkEmbedder
         }
 
         var provider = ResolveProvider();
+
+        // Resolve the configured embedding name to a model actually installed on this provider (an Ollama-style default
+        // maps to the installed nomic-embed GGUF on a llama.cpp node). The same resolved name is used by the search lane
+        // so chunk vectors and query vectors are built by the identical model.
+        var embeddingModelName = await _embeddingModelResolver.ResolveAsync(provider, cancellationToken).ConfigureAwait(false);
         using var generator = provider.CreateEmbeddingGenerator(new LocalModelSelection
         {
-            ModelName = _options.EmbeddingModelName,
+            ModelName = embeddingModelName,
             ProviderName = _options.EmbeddingProviderName
         });
 
