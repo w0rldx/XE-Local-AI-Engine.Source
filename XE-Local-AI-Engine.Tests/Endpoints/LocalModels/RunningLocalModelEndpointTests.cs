@@ -81,6 +81,27 @@ public sealed class RunningLocalModelEndpointTests
     }
 
     [Test]
+    public async Task GetRunningModels_WhenOllamaUnreachable_ReturnsSafeUnavailableResponse()
+    {
+        // Desktop mode has no Ollama endpoint, so ListRunningModelsAsync throws HttpRequestException on every poll.
+        // The endpoint must degrade to the same OK-unavailable response as any other provider failure (never a 500).
+        var modelService = Substitute.For<IOllamaModelService>();
+        modelService.ListRunningModelsAsync(Arg.Any<CancellationToken>())
+                    .Returns<Task<IReadOnlyList<RunningModelSnapshot>>>(_ => throw new HttpRequestException("Connection refused"));
+        await using var context = CreateContext(modelService);
+        using var client = context.Factory.CreateClient();
+
+        using var request = CreateRequest(context.Factory, HttpMethod.Get, "/api/local/v1/models/running");
+        using var response = await client.SendAsync(request).ConfigureAwait(false);
+        var running = await ReadJsonAsync<RunningLocalModelsResponse>(response).ConfigureAwait(false);
+
+        AssertEx.Equal(HttpStatusCode.OK, response.StatusCode);
+        AssertEx.False(running.IsAvailable);
+        AssertEx.Empty(running.Items);
+        AssertEx.Equal("Local model provider is unavailable.", running.Error);
+    }
+
+    [Test]
     public async Task UnloadModel_WhenValid_GracefullyUnloadsAndReportsSuccess()
     {
         var modelService = Substitute.For<IOllamaModelService>();
