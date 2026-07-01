@@ -48,20 +48,25 @@ public sealed class KnowledgeChunkEmbedder : IKnowledgeChunkEmbedder
         _options = options.Value;
     }
 
-    public async Task<IReadOnlyList<byte[]>> EmbedAsync(IReadOnlyList<string> chunkContents, CancellationToken cancellationToken)
+    public async Task<KnowledgeEmbeddingResult> EmbedAsync(IReadOnlyList<string> chunkContents, CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(chunkContents);
         if (chunkContents.Count == 0)
         {
-            return [];
+            // No provider round-trip for empty input; report the configured name as the resolved identity. The sole
+            // caller (KnowledgeIngestionService) only reaches EmbedAsync with chunking.Chunks, and RunAsync marks a
+            // zero-chunk document Failed before it ever calls EmbedAsync — so a document stamped via this branch can
+            // never reach Indexed, and this placeholder name is never compared as a vector identity.
+            return new KnowledgeEmbeddingResult([], _options.EmbeddingModelName);
         }
 
         var provider = ResolveProvider();
 
         // Resolve the configured embedding name to a model actually installed on this provider (an Ollama-style default
-        // maps to the installed nomic-embed GGUF on a llama.cpp node). The same resolved name is used by the search lane
-        // so chunk vectors and query vectors are built by the identical model.
-        var embeddingModelName = await _embeddingModelResolver.ResolveAsync(provider, cancellationToken).ConfigureAwait(false);
+        // maps to the installed nomic-embed GGUF on a llama.cpp node). Resolve ONCE and return the resolved name so the
+        // ingestion lane can stamp the exact model that produced these vectors as the document row and chunk-vector scope
+        // key. The search lane resolves the same way, so chunk vectors and query vectors are built by the identical model.
+        var embeddingModelName = (await _embeddingModelResolver.ResolveAsync(provider, cancellationToken).ConfigureAwait(false)).Name;
         using var generator = provider.CreateEmbeddingGenerator(new LocalModelSelection
         {
             ModelName = embeddingModelName,
@@ -101,7 +106,7 @@ public sealed class KnowledgeChunkEmbedder : IKnowledgeChunkEmbedder
             blobs.AddRange(generated.Select(embedding => ToEmbeddingBlob(embedding.Vector)));
         }
 
-        return blobs;
+        return new KnowledgeEmbeddingResult(blobs, embeddingModelName);
     }
 
     private byte[] ToEmbeddingBlob(ReadOnlyMemory<float> vector)

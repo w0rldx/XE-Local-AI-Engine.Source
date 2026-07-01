@@ -27,9 +27,11 @@ public sealed class KnowledgeChunkEmbedderResolutionTests
         var provider = new CapturingProvider(Descriptor(ConfiguredName), Descriptor("qwen2.5:Q4_K_M"));
         var embedder = CreateEmbedder(provider);
 
-        _ = await embedder.EmbedAsync(["chunk one"], CancellationToken.None).ConfigureAwait(false);
+        var result = await embedder.EmbedAsync(["chunk one"], CancellationToken.None).ConfigureAwait(false);
 
         AssertEx.Equal(ConfiguredName, provider.LastSelectedModelName);
+        AssertEx.Equal(ConfiguredName, result.ResolvedModel);
+        AssertEx.Equal(1, result.Vectors.Count);
     }
 
     [Test]
@@ -39,9 +41,11 @@ public sealed class KnowledgeChunkEmbedderResolutionTests
         var provider = new CapturingProvider(Descriptor("qwen2.5:Q4_K_M"), Descriptor(ggufName));
         var embedder = CreateEmbedder(provider);
 
-        _ = await embedder.EmbedAsync(["chunk one"], CancellationToken.None).ConfigureAwait(false);
+        var result = await embedder.EmbedAsync(["chunk one"], CancellationToken.None).ConfigureAwait(false);
 
         AssertEx.Equal(ggufName, provider.LastSelectedModelName);
+        // The resolved (GGUF) name — not the configured name — is what the ingestion lane stamps as the vector scope key.
+        AssertEx.Equal(ggufName, result.ResolvedModel);
     }
 
     [Test]
