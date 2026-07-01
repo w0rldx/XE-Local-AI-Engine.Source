@@ -44,9 +44,14 @@ public static class StableDiffusionCppServiceCollectionExtensions
 
         services.AddHttpClient(BinaryHttpClientName);
 
+        // Cheap host-local probe: is a Vulkan device actually enumerable? The selector consults it so it never picks a
+        // Vulkan backend on a box (e.g. WSL2) where sd-server would hard-fail with "backend 'vulkan0' was not found".
+        services.TryAddSingleton<IVulkanDeviceProbe, DefaultVulkanDeviceProbe>();
+
         services.TryAddSingleton<ISdGpuBackendSelector>(static sp =>
             new SdGpuBackendSelector(sp.GetRequiredService<IHardwareProfiler>(),
-                sp.GetRequiredService<StableDiffusionServerRuntimeOverrideOptions>()));
+                sp.GetRequiredService<StableDiffusionServerRuntimeOverrideOptions>(),
+                sp.GetRequiredService<IVulkanDeviceProbe>()));
 
         services.TryAddSingleton<IStableDiffusionBinaryManager>(static sp =>
             new StableDiffusionCppBinaryManager(sp.GetRequiredService<IHttpClientFactory>().CreateClient(BinaryHttpClientName),
