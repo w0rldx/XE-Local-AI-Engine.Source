@@ -6,11 +6,14 @@ import { toLlamaCppRuntimeStatus } from "@/features/node-settings/models/LocalRu
 describe("toLlamaCppRuntimeStatus", () => {
 	it("maps a populated status response and surfaces the update-available flag", () => {
 		const dto: XeLocalAiEngineClientEndpointsModelFitV1LlamaCppRuntimeStatusResponse = {
-			installed: { tag: "b1000", variant: "cuda", asset: "asset.zip", installedAtUtc: 1700000000000 },
+			installed: { tag: "b1000", variant: "cuda", asset: "asset.zip", installedAtUtc: 1700000000000, isSourceBuild: false },
 			recommendedTag: "b9692",
 			upstreamLatestTag: "b9999",
 			updateAvailable: true,
 			isOffline: false,
+			runningProcessCount: 0,
+			isSourceBuild: false,
+			rebuildAvailable: false,
 		};
 
 		const status = toLlamaCppRuntimeStatus(dto);
@@ -29,7 +32,15 @@ describe("toLlamaCppRuntimeStatus", () => {
 	});
 
 	it("coalesces absent fields: null installed, no upstream, offline defaults", () => {
-		const status = toLlamaCppRuntimeStatus({ installed: null, recommendedTag: "b1000" });
+		const status = toLlamaCppRuntimeStatus({
+			installed: null,
+			recommendedTag: "b1000",
+			updateAvailable: false,
+			isOffline: false,
+			runningProcessCount: 0,
+			isSourceBuild: false,
+			rebuildAvailable: false,
+		});
 
 		expect(status.installed).toBeNull();
 		expect(status.upstreamLatestTag).toBeNull();

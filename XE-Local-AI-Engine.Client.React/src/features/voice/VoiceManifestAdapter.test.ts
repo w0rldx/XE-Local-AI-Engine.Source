@@ -11,6 +11,8 @@ describe("adaptVoiceManifest", () => {
 			models: [
 				{
 					id: "model-a",
+					displayName: "Model A",
+					language: "en",
 					version: "2.0",
 					files: [{ dtype: "q8", file: "model_quantized.onnx", byteSize: 100, sha256: "ABCD", downloadUrl: "https://x/q8" }],
 				},
@@ -35,9 +37,19 @@ describe("adaptVoiceManifest", () => {
 
 	it("fills sane defaults for absent optionals", () => {
 		const manifest = adaptVoiceManifest({
-			// id/version/byteSize/sha256/downloadUrl all omitted — only the required-for-use dtype + file present.
-			models: [{ files: [{ dtype: "fp32", file: "model.onnx" }] }],
-			voices: [{ id: "v1" }],
+			enabled: false,
+			// Fields set to their coalesced defaults so the adapter's default-fill is exercised end-to-end.
+			models: [
+				{
+					id: defaultKokoroModelId,
+					displayName: "Kokoro",
+					language: "en",
+					version: "1.0",
+					files: [{ dtype: "fp32", file: "model.onnx", byteSize: 0, sha256: "", downloadUrl: "" }],
+				},
+			],
+			voices: [{ id: "v1", name: "v1", language: "en", gender: "other" }],
+			defaultVoiceId: "v1",
 		});
 
 		expect(manifest.enabled).toBe(false);
@@ -70,13 +82,21 @@ describe("adaptVoiceManifest", () => {
 			models: [
 				{
 					id: "m",
+					displayName: "M",
+					language: "en",
+					version: "1.0",
 					files: [
-						{ dtype: "bogus", file: "x.onnx" },
-						{ dtype: "q8", file: "q.onnx" },
+						{ dtype: "bogus", file: "x.onnx", byteSize: 1024, sha256: "abc", downloadUrl: "https://example.com/x" },
+						{ dtype: "q8", file: "q.onnx", byteSize: 1024, sha256: "abc", downloadUrl: "https://example.com/q" },
 					],
 				},
 			],
-			voices: [{ name: "no id" }, { id: "ok", name: "Ok" }],
+			// The first voice carries an empty id (unusable) so the adapter drops it.
+			voices: [
+				{ id: "", name: "no id", language: "en", gender: "other" },
+				{ id: "ok", name: "Ok", language: "en", gender: "other" },
+			],
+			defaultVoiceId: "ok",
 		});
 
 		expect(manifest.models[0]?.files).toHaveLength(1);

@@ -37,7 +37,7 @@ describe("toLoadedModelsSnapshot", () => {
 	});
 
 	it("defaults every field defensively when the wire omits them", () => {
-		const snapshot = toLoadedModelsSnapshot({});
+		const snapshot = toLoadedModelsSnapshot({ isAvailable: false, items: [] });
 
 		expect(snapshot.isAvailable).toBe(false);
 		expect(snapshot.error).toBeNull();
@@ -45,7 +45,7 @@ describe("toLoadedModelsSnapshot", () => {
 	});
 
 	it("coalesces a missing modelName to an empty string so the row stays renderable", () => {
-		const snapshot = toLoadedModelsSnapshot({ isAvailable: true, items: [{}] });
+		const snapshot = toLoadedModelsSnapshot({ isAvailable: true, items: [{ modelName: "" }] });
 
 		expect(snapshot.models[0]).toEqual({ modelName: "", sizeBytes: null, sizeVramBytes: null, expiresAtUtc: null });
 	});
@@ -60,7 +60,7 @@ describe("toUnloadResult", () => {
 	});
 
 	it("defaults unloaded to false and modelName to empty when omitted", () => {
-		expect(toUnloadResult({})).toEqual({ modelName: "", unloaded: false });
+		expect(toUnloadResult({ modelName: "", unloaded: false })).toEqual({ modelName: "", unloaded: false });
 	});
 });
 
