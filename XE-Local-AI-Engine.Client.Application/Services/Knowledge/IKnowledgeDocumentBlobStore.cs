@@ -20,4 +20,12 @@ public interface IKnowledgeDocumentBlobStore
 
     /// <summary>Removes one document's metadata row plus its on-disk encrypted bytes. Returns whether a row existed.</summary>
     Task<bool> DeleteAsync(Guid documentId, CancellationToken cancellationToken);
+
+    /// <summary>
+    ///     Removes only the on-disk encrypted bytes for one document, deriving the path from the server-generated
+    ///     <paramref name="documentId" /> plus its <paramref name="extension" /> (never a stored path string). Used by the
+    ///     purge service, which removes the metadata rows itself in an ordered transaction and then calls this so the file
+    ///     deletion still runs after the row (and its extension) is gone. Best-effort: a missing file is a no-op.
+    /// </summary>
+    Task DeleteBytesAsync(Guid documentId, string extension, CancellationToken cancellationToken);
 }

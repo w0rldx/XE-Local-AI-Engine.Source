@@ -28,6 +28,7 @@ using XE_Local_AI_Engine.Client.Persistence;
 using XE_Local_AI_Engine.Client.Persistence.Entities;
 using XE_Local_AI_Engine.Client.Services.Agents.Implementation;
 using XE_Local_AI_Engine.Client.Services.Auth;
+using XE_Local_AI_Engine.Client.Services.Knowledge;
 using XE_Local_AI_Engine.Client.Services.ModelFit;
 using XE_Local_AI_Engine.Client.Services.ModelFit.Implementation;
 using XE_Local_AI_Engine.Client.Services.Persistence.Implementation;
@@ -102,6 +103,11 @@ public static class ConfigureServices
         // Hub-backed in-app CUDA build event publisher — supersedes the no-op default the provider registers so build
         // phase + log lines push live to operator clients (CudaBuildHub mapped in Program). IHubContext is singleton-safe.
         builder.Services.AddSingleton<ICudaBuildEventPublisher, CudaBuildEventPublisher>();
+
+        // Hub-backed knowledge-base indexing notifier — supersedes the no-op default registered in AddNodeKnowledgeBase so
+        // document status changes push live to operator clients (KnowledgeBaseHub mapped in Program). IHubContext is
+        // singleton-safe, so the scoped ingestion service can resolve this singleton.
+        builder.Services.AddSingleton<IKnowledgeIndexingNotifier, KnowledgeIndexingNotifier>();
 
         // Error handling - the order of the exception handlers is important: specific handlers first,
         // DefaultExceptionHandler last as the catch-all 500. Mirrors the central platform's IExceptionHandler pattern.
