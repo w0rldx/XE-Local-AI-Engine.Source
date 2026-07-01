@@ -63,7 +63,7 @@ vi.mock("@/core/auth/stores/NodeAuthStore", () => ({
 
 function emitNode(runId: string, nodeId: string, eventType: string, output: string): void {
 	const handler = registeredHandlers.get(eventType);
-	handler?.({ eventType, runId, nodeId, output, error: null, occurredAtUtc: 1 });
+	handler?.({ eventType, runId, nodeId, output, error: null, occurredAtUtc: 1, seq: 0 });
 }
 
 describe("usePreviewWorkflowHub", () => {

@@ -33,7 +33,22 @@ public interface IPreviewWorkflowExecutionService
 
     /// <summary>Cancels every run owned by a hub connection (called from the hub's <c>OnDisconnectedAsync</c>).</summary>
     Task CancelRunsForConnectionAsync(string connectionId, CancellationToken cancellationToken = default);
+
+    /// <summary>
+    ///     Returns an ordered snapshot copy of the run's buffered events so a client that subscribes AFTER events were
+    ///     published (or after the run finished) can replay and catch up — SignalR does not replay to late group
+    ///     joiners. Returns an empty list for an unknown/evicted run. Each buffered payload is already stamped with its
+    ///     per-run <c>Seq</c>, so a client dedupes an event delivered both via replay and live by that sequence.
+    /// </summary>
+    IReadOnlyList<PreviewWorkflowBufferedEvent> SnapshotBufferedEvents(Guid runId);
 }
+
+/// <summary>
+///     One buffered preview event ready for hub replay: the SignalR method name (the event type) and the already
+///     seq-stamped payload (<see cref="PreviewWorkflowNodeHubEvent" /> or <see cref="PreviewWorkflowRunHubEvent" />).
+///     The hub sends <see cref="Payload" /> under <see cref="MethodName" /> to the subscribing caller.
+/// </summary>
+public sealed record PreviewWorkflowBufferedEvent(string MethodName, object Payload);
 
 /// <summary>Outcome of a continue/cancel command against a run.</summary>
 public enum PreviewRunCommandOutcome

@@ -11,8 +11,8 @@ function resetStore(): void {
 const RUN_A = "run-a";
 const RUN_B = "run-b";
 
-function nodeEvent(runId: string, nodeId: string, eventType: string, output?: string) {
-	return { eventType, runId, nodeId, output: output ?? null, error: null, occurredAtUtc: 1 };
+function nodeEvent(runId: string, nodeId: string, eventType: string, output?: string, seq = 0) {
+	return { eventType, runId, nodeId, output: output ?? null, error: null, occurredAtUtc: 1, seq };
 }
 
 describe("PreviewRunStore", () => {
@@ -22,8 +22,8 @@ describe("PreviewRunStore", () => {
 		const { actions } = usePreviewRunStore.getState();
 		actions.registerRun(RUN_A);
 
-		actions.applyNodeEvent(nodeEvent(RUN_A, "agent-1", previewHubEvents.nodeOutput, "Hello "));
-		actions.applyNodeEvent(nodeEvent(RUN_A, "agent-1", previewHubEvents.nodeOutput, "world"));
+		actions.applyNodeEvent(nodeEvent(RUN_A, "agent-1", previewHubEvents.nodeOutput, "Hello ", 0));
+		actions.applyNodeEvent(nodeEvent(RUN_A, "agent-1", previewHubEvents.nodeOutput, "world", 1));
 
 		const state = usePreviewRunStore.getState().runs[RUN_A]?.nodes["agent-1"];
 		expect(state?.output).toBe("Hello world");
@@ -74,6 +74,7 @@ describe("PreviewRunStore", () => {
 			error: null,
 			requestId: "resume-token",
 			occurredAtUtc: 1,
+			seq: 0,
 		});
 
 		const run = usePreviewRunStore.getState().runs[RUN_A];
@@ -90,5 +91,82 @@ describe("PreviewRunStore", () => {
 		actions.reset();
 
 		expect(usePreviewRunStore.getState().runs).toEqual({});
+	});
+
+	it("does NOT double nodeOutput when a replayed event (same seq) is applied twice", () => {
+		const { actions } = usePreviewRunStore.getState();
+		actions.registerRun(RUN_A);
+
+		const event = nodeEvent(RUN_A, "agent-1", previewHubEvents.nodeOutput, "Hello ", 0);
+		actions.applyNodeEvent(event);
+		// Same seq arriving again (e.g. backend replay racing the live group broadcast) must be dropped.
+		actions.applyNodeEvent(event);
+
+		expect(usePreviewRunStore.getState().runs[RUN_A]?.nodes["agent-1"]?.output).toBe("Hello ");
+	});
+
+	it("applies a new seq normally after a duplicate of an earlier seq was dropped", () => {
+		const { actions } = usePreviewRunStore.getState();
+		actions.registerRun(RUN_A);
+
+		actions.applyNodeEvent(nodeEvent(RUN_A, "agent-1", previewHubEvents.nodeOutput, "Hello ", 0));
+		actions.applyNodeEvent(nodeEvent(RUN_A, "agent-1", previewHubEvents.nodeOutput, "Hello ", 0)); // duplicate, dropped
+		actions.applyNodeEvent(nodeEvent(RUN_A, "agent-1", previewHubEvents.nodeOutput, "world", 1)); // new seq, applied
+
+		expect(usePreviewRunStore.getState().runs[RUN_A]?.nodes["agent-1"]?.output).toBe("Hello world");
+	});
+
+	it("applies out-of-order seqs exactly once each, then drops both on redelivery", () => {
+		const { actions } = usePreviewRunStore.getState();
+		actions.registerRun(RUN_A);
+
+		// seq 2 arrives (e.g. live) before seq 1 (e.g. replay) — neither is a duplicate yet, so both must apply.
+		actions.applyNodeEvent(nodeEvent(RUN_A, "agent-1", previewHubEvents.nodeOutput, "second-", 2));
+		actions.applyNodeEvent(nodeEvent(RUN_A, "agent-1", previewHubEvents.nodeOutput, "first-", 1));
+
+		expect(usePreviewRunStore.getState().runs[RUN_A]?.nodes["agent-1"]?.output).toBe("second-first-");
+
+		// Re-delivery of either seq (replay racing live, or vice versa) must now be dropped as a duplicate.
+		actions.applyNodeEvent(nodeEvent(RUN_A, "agent-1", previewHubEvents.nodeOutput, "first-", 1));
+		actions.applyNodeEvent(nodeEvent(RUN_A, "agent-1", previewHubEvents.nodeOutput, "second-", 2));
+
+		expect(usePreviewRunStore.getState().runs[RUN_A]?.nodes["agent-1"]?.output).toBe("second-first-");
+	});
+
+	it("sets run status to completed on a terminal run event", () => {
+		const { actions } = usePreviewRunStore.getState();
+		actions.registerRun(RUN_A);
+
+		actions.applyRunEvent({
+			eventType: previewHubEvents.runCompleted,
+			runId: RUN_A,
+			nodeId: null,
+			output: "final",
+			error: null,
+			requestId: null,
+			occurredAtUtc: 1,
+			seq: 0,
+		});
+
+		const run = usePreviewRunStore.getState().runs[RUN_A];
+		expect(run?.status).toBe("completed");
+		expect(run?.finalOutput).toBe("final");
+	});
+
+	it("marks a run cancelled locally via markCancelled (optimistic Cancel button hide)", () => {
+		const { actions } = usePreviewRunStore.getState();
+		actions.registerRun(RUN_A);
+
+		actions.markCancelled(RUN_A);
+
+		expect(usePreviewRunStore.getState().runs[RUN_A]?.status).toBe("cancelled");
+	});
+
+	it("ignores markCancelled for a runId this tab did not register (foreign-run guard)", () => {
+		const { actions } = usePreviewRunStore.getState();
+
+		actions.markCancelled(RUN_B);
+
+		expect(usePreviewRunStore.getState().runs[RUN_B]).toBeUndefined();
 	});
 });

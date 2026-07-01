@@ -33,7 +33,8 @@ public sealed class PreviewWorkflowExecutionServiceTests
         RecordingPreviewEventPublisher publisher,
         FakeLocalModelProvider provider,
         PreviewWorkflowExecutionOptions? options = null,
-        int maxLoadedProcesses = 8)
+        int maxLoadedProcesses = 8,
+        TimeProvider? timeProvider = null)
     {
         // Wrap the single fake provider in the real resolver (default = the fake provider, unmapped models route to it),
         // so the service exercises the production lazy-per-model + cap-reject path.
@@ -42,7 +43,7 @@ public sealed class PreviewWorkflowExecutionServiceTests
             runner,
             publisher,
             Options.Create(options ?? DefaultOptions()),
-            TimeProvider.System,
+            timeProvider ?? TimeProvider.System,
             NullLoggerFactory.Instance);
     }
 
@@ -365,6 +366,149 @@ public sealed class PreviewWorkflowExecutionServiceTests
 
         _ = await AssertEx.ThrowsAsync<PreviewWorkflowValidationException>(async () => await service.StartAsync(noAgentGraph, connectionId: null).ConfigureAwait(false))
                           .ConfigureAwait(false);
+    }
+
+    [Test]
+    public async Task PreviewExec_LateSubscriber_ReplaysAllEventsInOrder_AfterRunFinished()
+    {
+        // The subscribe-after-publish race: a fast run emits NodeStarted→NodeOutput→RunCompleted synchronously, and a
+        // caller snapshots the buffer AFTER the run finished — it must still get EVERY event in order with contiguous
+        // seq (0..n) including the terminal, proving a late subscriber can catch up.
+        var provider = new FakeLocalModelProvider();
+        var publisher = new RecordingPreviewEventPublisher();
+        var runner = new FakePreviewWorkflowRunner((_, _) =>
+            new ScriptedPreviewRunSession(
+            [
+                PreviewWorkflowUpdate.NodeStarted("agent"),
+                PreviewWorkflowUpdate.NodeOutput("agent", "hello"),
+                PreviewWorkflowUpdate.RunCompleted("done")
+            ]));
+
+        await using var service = CreateService(runner, publisher, provider);
+        var runId = await service.StartAsync(PreviewGraphBuilder.Linear(), connectionId: null).ConfigureAwait(false);
+
+        // Wait until the run is fully terminal AND removed from the registry (i.e. a "late" subscriber).
+        await WaitForAsync(() => publisher.HasRunEvent(PreviewWorkflowHubEvents.RunCompleted), TimeSpan.FromSeconds(5)).ConfigureAwait(false);
+        await WaitForAsync(() => service.ActiveRunIds.Count == 0, TimeSpan.FromSeconds(5)).ConfigureAwait(false);
+
+        var snapshot = service.SnapshotBufferedEvents(runId);
+
+        string[] expectedMethods =
+        [
+            PreviewWorkflowHubEvents.RunStarted,
+            PreviewWorkflowHubEvents.NodeStarted,
+            PreviewWorkflowHubEvents.NodeOutput,
+            PreviewWorkflowHubEvents.NodeCompleted,
+            PreviewWorkflowHubEvents.RunCompleted
+        ];
+        var methodNames = snapshot.Select(e => e.MethodName).ToList();
+        AssertEx.True(methodNames.SequenceEqual(expectedMethods),
+            $"a late subscriber must replay every event in publish order, including the terminal event. Got: {string.Join(",", methodNames)}");
+
+        var seqs = snapshot.Select(SeqOf).ToList();
+        var expectedSeqs = Enumerable.Range(0, snapshot.Count).Select(static i => (long)i);
+        AssertEx.True(seqs.SequenceEqual(expectedSeqs),
+            $"seq must be contiguous 0..n across node AND run events of the run. Got: {string.Join(",", seqs)}");
+    }
+
+    [Test]
+    public async Task PreviewExec_RunStarted_IsBufferedAsSeqZero()
+    {
+        var provider = new FakeLocalModelProvider();
+        var publisher = new RecordingPreviewEventPublisher();
+        var runner = new FakePreviewWorkflowRunner((_, _) =>
+            new ScriptedPreviewRunSession([PreviewWorkflowUpdate.RunPaused("pause", "x", "req-1")]));
+
+        await using var service = CreateService(runner, publisher, provider);
+        var runId = await service.StartAsync(PreviewGraphBuilder.Linear(), connectionId: null).ConfigureAwait(false);
+        await WaitForAsync(() => publisher.HasRunEvent(PreviewWorkflowHubEvents.RunPaused), TimeSpan.FromSeconds(5)).ConfigureAwait(false);
+
+        var snapshot = service.SnapshotBufferedEvents(runId);
+        AssertEx.NotEmpty(snapshot);
+        AssertEx.Equal(PreviewWorkflowHubEvents.RunStarted, snapshot[0].MethodName, "RunStarted must be the first buffered event.");
+        AssertEx.Equal(expected: 0L, SeqOf(snapshot[0]), "RunStarted must be buffered as seq 0.");
+    }
+
+    [Test]
+    public async Task PreviewExec_ReplayBuffer_BoundedToMax_OldestDropped()
+    {
+        var provider = new FakeLocalModelProvider();
+        var publisher = new RecordingPreviewEventPublisher();
+        var options = DefaultOptions();
+        options.MaxBufferedEventsPerRun = 3; // tiny cap so early events are dropped.
+
+        // A run that emits several node debug events then completes — many published events, one small buffer.
+        var runner = new FakePreviewWorkflowRunner((_, _) =>
+            new ScriptedPreviewRunSession(
+            [
+                PreviewWorkflowUpdate.NodeStarted("agent"),
+                PreviewWorkflowUpdate.NodeDebug("agent", "d1"),
+                PreviewWorkflowUpdate.NodeDebug("agent", "d2"),
+                PreviewWorkflowUpdate.NodeDebug("agent", "d3"),
+                PreviewWorkflowUpdate.RunCompleted("done")
+            ]));
+
+        await using var service = CreateService(runner, publisher, provider, options);
+        var runId = await service.StartAsync(PreviewGraphBuilder.Linear(), connectionId: null).ConfigureAwait(false);
+        await WaitForAsync(() => publisher.HasRunEvent(PreviewWorkflowHubEvents.RunCompleted), TimeSpan.FromSeconds(5)).ConfigureAwait(false);
+
+        var snapshot = service.SnapshotBufferedEvents(runId);
+        AssertEx.Equal(expected: 3, snapshot.Count, "the buffer must be bounded to MaxBufferedEventsPerRun.");
+        // The newest events are retained: the last buffered event is the terminal RunCompleted, and the oldest
+        // (RunStarted, seq 0) was dropped — its seq is no longer the first entry.
+        AssertEx.Equal(PreviewWorkflowHubEvents.RunCompleted, snapshot[^1].MethodName, "the terminal event must be retained (newest).");
+        AssertEx.True(SeqOf(snapshot[0]) > 0L, "the oldest event (seq 0) must have been dropped once the cap was exceeded.");
+    }
+
+    [Test]
+    public async Task PreviewExec_TerminalLog_EvictedBySweep_AfterReplayRetention()
+    {
+        var provider = new FakeLocalModelProvider();
+        var publisher = new RecordingPreviewEventPublisher();
+        var time = new AdjustableTimeProvider();
+        var options = DefaultOptions();
+        options.ReplayRetention = TimeSpan.FromSeconds(60);
+        var runner = new FakePreviewWorkflowRunner((_, _) =>
+            new ScriptedPreviewRunSession([PreviewWorkflowUpdate.RunCompleted("done")]));
+
+        await using var service = CreateService(runner, publisher, provider, options, timeProvider: time);
+        var runId = await service.StartAsync(PreviewGraphBuilder.Linear(), connectionId: null).ConfigureAwait(false);
+        await WaitForAsync(() => publisher.HasRunEvent(PreviewWorkflowHubEvents.RunCompleted), TimeSpan.FromSeconds(5)).ConfigureAwait(false);
+        await WaitForAsync(() => service.ActiveRunIds.Count == 0, TimeSpan.FromSeconds(5)).ConfigureAwait(false);
+
+        // Before retention elapses the log is retained (a late subscriber can still catch up), and a sweep is a no-op.
+        await service.SweepAsync(CancellationToken.None).ConfigureAwait(false);
+        AssertEx.NotEmpty(service.SnapshotBufferedEvents(runId));
+
+        // After retention elapses the sweep evicts the terminal log.
+        time.Advance(TimeSpan.FromSeconds(61));
+        await service.SweepAsync(CancellationToken.None).ConfigureAwait(false);
+        AssertEx.Empty(service.SnapshotBufferedEvents(runId));
+    }
+
+    private static long SeqOf(PreviewWorkflowBufferedEvent bufferedEvent)
+    {
+        return bufferedEvent.Payload switch
+        {
+            PreviewWorkflowRunHubEvent runEvent => runEvent.Seq,
+            PreviewWorkflowNodeHubEvent nodeEvent => nodeEvent.Seq,
+            _ => throw new InvalidOperationException($"Unexpected buffered payload type '{bufferedEvent.Payload.GetType().Name}'.")
+        };
+    }
+
+    private sealed class AdjustableTimeProvider : TimeProvider
+    {
+        private DateTimeOffset _utcNow = DateTimeOffset.UtcNow;
+
+        public override DateTimeOffset GetUtcNow()
+        {
+            return _utcNow;
+        }
+
+        public void Advance(TimeSpan delta)
+        {
+            _utcNow = _utcNow.Add(delta);
+        }
     }
 
     private sealed class ThrowingAzureFoundryChatClientFactory : IAzureFoundryChatClientFactory

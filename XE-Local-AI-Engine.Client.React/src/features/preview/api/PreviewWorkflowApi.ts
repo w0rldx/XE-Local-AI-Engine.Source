@@ -1,6 +1,7 @@
 import type { GenericAbortSignal } from "axios";
 
 import { axiosInstance } from "@/core/api/axios/AxiosInstance";
+import { ApiError } from "@/core/api/errors/ApiError";
 import { buildLocalApiUrl } from "@/core/api/utils/LocalApiUrl";
 import {
 	listPreviewWorkflowsResponseSchema,
@@ -94,9 +95,20 @@ export async function continuePreviewRun(runId: string, signal?: GenericAbortSig
 	await axiosInstance.post(buildLocalApiUrl(`preview/runs/${runId}/continue`), {}, { signal });
 }
 
-// Request cancellation of an active run. 404 unknown, 409 wrong state (both surfaced as ApiError); 202 accepted.
+// Request cancellation of an active run. 409 wrong state is a real error (surfaced as ApiError); 202 accepted. A
+// 404 is swallowed: it means the run is already gone (completed/failed/cancelled and removed), which is the
+// IDEMPOTENT outcome Cancel is trying to reach anyway — surfacing it as an error would show a confusing toast for
+// a run the operator can no longer act on.
 export async function cancelPreviewRun(runId: string, signal?: GenericAbortSignal): Promise<void> {
-	// Empty object body → axios sets `Content-Type: application/json`, avoiding the FastEndpoints 415 on a body-less
-	// route-only POST (the backend binder tolerates the missing body too; this keeps raw-fetch clients working).
-	await axiosInstance.post(buildLocalApiUrl(`preview/runs/${runId}/cancel`), {}, { signal });
+	try {
+		// Empty object body → axios sets `Content-Type: application/json`, avoiding the FastEndpoints 415 on a
+		// body-less route-only POST (the backend binder tolerates the missing body too; this keeps raw-fetch
+		// clients working).
+		await axiosInstance.post(buildLocalApiUrl(`preview/runs/${runId}/cancel`), {}, { signal });
+	} catch (error) {
+		if (error instanceof ApiError && error.statusCode === 404) {
+			return;
+		}
+		throw error;
+	}
 }

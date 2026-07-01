@@ -1,7 +1,11 @@
 import { describe, expect, it } from "vitest";
 
 import { canvasToGraph, graphsEqual, graphToCanvas } from "@/features/preview/models/PreviewCanvasModels";
-import type { PreviewWorkflowGraph } from "@/features/preview/models/PreviewWorkflowModels";
+import {
+	type PreviewWorkflowGraph,
+	previewNodeEventSchema,
+	previewRunEventSchema,
+} from "@/features/preview/models/PreviewWorkflowModels";
 import { validatePreviewGraph } from "@/features/preview/models/PreviewWorkflowValidation";
 
 const LINEAR_GRAPH: PreviewWorkflowGraph = {
@@ -135,5 +139,42 @@ describe("validatePreviewGraph", () => {
 		});
 		expect(result.isValid).toBe(false);
 		expect(result.errorKeys).toContain("pages.preview.validation.notLinear");
+	});
+});
+
+describe("preview hub event schemas (seq wire field)", () => {
+	const NODE_PAYLOAD = {
+		eventType: "preview.node.output",
+		runId: "run-1",
+		nodeId: "agent-1",
+		output: "hello",
+		error: null,
+		occurredAtUtc: 1,
+	};
+
+	const RUN_PAYLOAD = {
+		eventType: "preview.run.completed",
+		runId: "run-1",
+		nodeId: null,
+		output: "done",
+		error: null,
+		requestId: null,
+		occurredAtUtc: 1,
+	};
+
+	it("rejects a node event payload missing seq (untrusted wire data dropped by safeParse)", () => {
+		expect(previewNodeEventSchema.safeParse(NODE_PAYLOAD).success).toBe(false);
+	});
+
+	it("accepts a node event payload with seq", () => {
+		expect(previewNodeEventSchema.safeParse({ ...NODE_PAYLOAD, seq: 0 }).success).toBe(true);
+	});
+
+	it("rejects a run event payload missing seq", () => {
+		expect(previewRunEventSchema.safeParse(RUN_PAYLOAD).success).toBe(false);
+	});
+
+	it("accepts a run event payload with seq", () => {
+		expect(previewRunEventSchema.safeParse({ ...RUN_PAYLOAD, seq: 3 }).success).toBe(true);
 	});
 });
