@@ -67,7 +67,8 @@
     "schedule": "Schedule",
     "user": "User",
     "skills": "Skills",
-    "preview": "Open Canvas"
+    "preview": "Open Canvas",
+    "images": "Image Generation"
   },
   "chat": {
     "thoughts": "Thoughts",
@@ -2119,6 +2120,105 @@
       "appointmentCreated": "Appointment created successfully",
       "appointmentUpdated": "Appointment updated successfully",
       "appointmentDeleted": "Appointment deleted successfully"
+    },
+    "images": {
+      "eyebrow": "Worker Node",
+      "title": "Image Generation",
+      "subtitle": "Generate images locally with stable-diffusion.cpp. Jobs run one at a time and stream coarse status as they progress.",
+      "jobs": {
+        "title": "Jobs",
+        "empty": "No image jobs yet. Generate one to see it here.",
+        "cancelError": "Could not cancel the job."
+      },
+      "job": {
+        "elapsed": "{{seconds}}s",
+        "duration": "{{seconds}}s",
+        "meta": "{{model}} · {{width}}×{{height}} · {{steps}} steps · {{sampler}}"
+      },
+      "status": {
+        "Queued": "Queued",
+        "Generating": "Generating",
+        "Succeeded": "Succeeded",
+        "Failed": "Failed",
+        "Cancelled": "Cancelled"
+      },
+      "form": {
+        "model": {
+          "label": "Model",
+          "placeholder": "Select an image model"
+        },
+        "prompt": {
+          "label": "Prompt",
+          "placeholder": "A watercolor fox in a misty forest"
+        },
+        "negativePrompt": {
+          "label": "Negative prompt",
+          "placeholder": "blurry, low quality"
+        },
+        "width": {
+          "label": "Width"
+        },
+        "height": {
+          "label": "Height"
+        },
+        "steps": {
+          "label": "Steps"
+        },
+        "cfgScale": {
+          "label": "CFG scale"
+        },
+        "sampler": {
+          "label": "Sampler"
+        },
+        "seed": {
+          "label": "Seed",
+          "description": "-1 for a random seed"
+        },
+        "samplers": {
+          "euler": "Euler",
+          "euler_a": "Euler a",
+          "heun": "Heun",
+          "dpm2": "DPM2",
+          "dpmpp2m": "DPM++ 2M",
+          "dpmpp2s_a": "DPM++ 2S a",
+          "lcm": "LCM"
+        },
+        "noModels": "Install an image model below before generating.",
+        "submit": "Generate",
+        "error": "Could not start generation."
+      },
+      "result": {
+        "error": "Could not load the generated image."
+      },
+      "models": {
+        "installedTitle": "Installed image models",
+        "empty": "No image models installed yet.",
+        "families": {
+          "Sd15": "Stable Diffusion 1.5",
+          "Sdxl": "Stable Diffusion XL",
+          "Sd3": "Stable Diffusion 3",
+          "Flux": "FLUX.1"
+        },
+        "download": {
+          "title": "Download a model",
+          "started": "Download started. The model will appear once ready.",
+          "error": "Could not start the model download.",
+          "hint": "Single-file (SD1.5-style) weights only. Multi-part models are a follow-up.",
+          "submit": "Download",
+          "repoId": {
+            "label": "Hugging Face repo"
+          },
+          "fileName": {
+            "label": "Weight file"
+          },
+          "modelName": {
+            "label": "Model name"
+          },
+          "family": {
+            "label": "Family"
+          }
+        }
+      }
     },
     "preview": {
       "eyebrow": "Worker Node",

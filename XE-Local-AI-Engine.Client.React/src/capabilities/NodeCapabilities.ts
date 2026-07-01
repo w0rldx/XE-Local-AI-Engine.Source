@@ -36,6 +36,10 @@ export interface NodeCapabilityConfig {
 	readonly modelFit: boolean;
 	readonly loadedModels: boolean;
 	readonly preview: boolean;
+	// Local image-generation surface (stable-diffusion.cpp text-to-image). Ships DARK by default: the runtime is not
+	// yet live-GPU verified, so the nav entry + /images route stay hidden until an operator flips this on (plan §9 —
+	// "ship dark until the runtime is verified").
+	readonly images: boolean;
 }
 
 export const nodeCapabilities: NodeCapabilityConfig = {
@@ -93,6 +97,10 @@ export const nodeCapabilities: NodeCapabilityConfig = {
 	// live per-node run output streamed over the preview SignalR hub. Workflows persist; run output is transient
 	// (never logged/indexed) and the run-output store is empty on every page load.
 	preview: true,
+	// Image generation (stable-diffusion.cpp) surface. OFF by default — the runtime module (Lanes A–D) is built but
+	// not yet live-GPU verified, so the feature ships dark. Flip to true once an image model is installed and a
+	// generation has been verified end-to-end on the target hardware.
+	images: false,
 };
 
 export const nodeRoutePaths = {
@@ -120,6 +128,8 @@ export const nodeRoutePaths = {
 	loadedModels: "/loaded-models",
 	// Open Canvas (Preview) workflow builder page — gated on nodeCapabilities.preview
 	preview: "/preview",
+	// Local image-generation page (text-to-image) — gated on nodeCapabilities.images
+	images: "/images",
 	// Local-only diagnostics panel (frontend error snapshots) — always available (plan §1)
 	diagnostics: "/diagnostics",
 } as const;
