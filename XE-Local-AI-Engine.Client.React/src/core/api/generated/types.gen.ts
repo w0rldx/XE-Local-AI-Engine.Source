@@ -1672,6 +1672,91 @@ export type XeLocalAiEngineClientEndpointsCloudSettingsV1AzureFoundryModelDto = 
 	displayLabel?: string | null;
 };
 
+export type XeLocalAiEngineClientEndpointsImagesV1ImageJobRouteRequest = {
+	[key: string]: never;
+};
+
+export type XeLocalAiEngineClientEndpointsImagesV1ImageJobResponse = {
+	id: string;
+	modelName: string;
+	prompt: string;
+	negativePrompt?: string | null;
+	seed: number;
+	width: number;
+	height: number;
+	steps: number;
+	sampler: string;
+	cfgScale: number;
+	status: string;
+	createdAtUtc: number;
+	startedAtUtc?: number | null;
+	completedAtUtc?: number | null;
+	durationMs?: number | null;
+	imageId?: string | null;
+	sanitizedError?: string | null;
+	cancellationRequestedAtUtc?: number | null;
+};
+
+export type XeLocalAiEngineClientEndpointsImagesV1CreateImageJobRequest = {
+	modelName: string;
+	prompt: string;
+	negativePrompt?: string | null;
+	seed?: number;
+	width?: number;
+	height?: number;
+	steps?: number;
+	sampler?: string | null;
+	cfgScale?: number;
+};
+
+export type XeLocalAiEngineClientEndpointsImagesV1ListImageJobsResponse = {
+	items: Array<XeLocalAiEngineClientEndpointsImagesV1ImageJobResponse>;
+};
+
+export type XeLocalAiEngineClientEndpointsImagesV1ListImageModelsResponse = {
+	items: Array<XeLocalAiEngineClientEndpointsImagesV1ImageModelResponse>;
+};
+
+export type XeLocalAiEngineClientEndpointsImagesV1ImageModelResponse = {
+	modelName: string;
+	repoId: string;
+	family: string;
+	kind: string;
+	sizeBytes: number;
+	parts: Array<XeLocalAiEngineClientEndpointsImagesV1ImageModelPartResponse>;
+	downloadedAtUtc: number;
+};
+
+export type XeLocalAiEngineClientEndpointsImagesV1ImageModelPartResponse = {
+	role: string;
+	fileName: string;
+	sizeBytes: number;
+};
+
+export type XeLocalAiEngineClientEndpointsImagesV1RetrieveImageRequest = {
+	[key: string]: never;
+};
+
+export type XeLocalAiEngineClientEndpointsImagesV1StartImageModelDownloadResponse = {
+	modelName: string;
+	accepted: boolean;
+};
+
+export type XeLocalAiEngineClientEndpointsImagesV1StartImageModelDownloadRequest = {
+	modelName: string;
+	repoId: string;
+	family: string;
+	kind?: string | null;
+	revision?: string | null;
+	parts: Array<XeLocalAiEngineClientEndpointsImagesV1ImageModelPartDownloadRequest>;
+};
+
+export type XeLocalAiEngineClientEndpointsImagesV1ImageModelPartDownloadRequest = {
+	role: string;
+	fileName: string;
+	sha256?: string | null;
+};
+
 export type GetTutorialStateData = {
 	body?: never;
 	path?: never;
@@ -5834,3 +5919,198 @@ export type RemoveCudaBuildResponses = {
 };
 
 export type RemoveCudaBuildResponse = RemoveCudaBuildResponses[keyof RemoveCudaBuildResponses];
+
+export type CancelImageJobData = {
+	body?: never;
+	path: {
+		jobId: string;
+	};
+	query?: never;
+	url: "/api/local/v1/images/jobs/{jobId}/cancel";
+};
+
+export type CancelImageJobErrors = {
+	/**
+	 * Unauthorized
+	 */
+	401: unknown;
+	/**
+	 * Forbidden
+	 */
+	403: unknown;
+};
+
+export type CancelImageJobResponses = {
+	/**
+	 * No Content
+	 */
+	204: void;
+};
+
+export type CancelImageJobResponse = CancelImageJobResponses[keyof CancelImageJobResponses];
+
+export type ListImageJobsData = {
+	body?: never;
+	path?: never;
+	query?: never;
+	url: "/api/local/v1/images/jobs";
+};
+
+export type ListImageJobsErrors = {
+	/**
+	 * Unauthorized
+	 */
+	401: unknown;
+	/**
+	 * Forbidden
+	 */
+	403: unknown;
+};
+
+export type ListImageJobsResponses = {
+	/**
+	 * Success
+	 */
+	200: XeLocalAiEngineClientEndpointsImagesV1ListImageJobsResponse;
+};
+
+export type ListImageJobsResponse = ListImageJobsResponses[keyof ListImageJobsResponses];
+
+export type CreateImageJobData = {
+	body: XeLocalAiEngineClientEndpointsImagesV1CreateImageJobRequest;
+	path?: never;
+	query?: never;
+	url: "/api/local/v1/images/jobs";
+};
+
+export type CreateImageJobErrors = {
+	/**
+	 * Unauthorized
+	 */
+	401: unknown;
+	/**
+	 * Forbidden
+	 */
+	403: unknown;
+};
+
+export type CreateImageJobResponses = {
+	/**
+	 * Success
+	 */
+	200: XeLocalAiEngineClientEndpointsImagesV1ImageJobResponse;
+};
+
+export type CreateImageJobResponse = CreateImageJobResponses[keyof CreateImageJobResponses];
+
+export type GetImageJobData = {
+	body?: never;
+	path: {
+		jobId: string;
+	};
+	query?: never;
+	url: "/api/local/v1/images/jobs/{jobId}";
+};
+
+export type GetImageJobErrors = {
+	/**
+	 * Unauthorized
+	 */
+	401: unknown;
+	/**
+	 * Forbidden
+	 */
+	403: unknown;
+};
+
+export type GetImageJobResponses = {
+	/**
+	 * Success
+	 */
+	200: XeLocalAiEngineClientEndpointsImagesV1ImageJobResponse;
+};
+
+export type GetImageJobResponse = GetImageJobResponses[keyof GetImageJobResponses];
+
+export type ListImageModelsData = {
+	body?: never;
+	path?: never;
+	query?: never;
+	url: "/api/local/v1/images/models";
+};
+
+export type ListImageModelsErrors = {
+	/**
+	 * Unauthorized
+	 */
+	401: unknown;
+	/**
+	 * Forbidden
+	 */
+	403: unknown;
+};
+
+export type ListImageModelsResponses = {
+	/**
+	 * Success
+	 */
+	200: XeLocalAiEngineClientEndpointsImagesV1ListImageModelsResponse;
+};
+
+export type ListImageModelsResponse = ListImageModelsResponses[keyof ListImageModelsResponses];
+
+export type RetrieveImageData = {
+	body?: never;
+	path: {
+		imageId: string;
+	};
+	query?: never;
+	url: "/api/local/v1/images/{imageId}";
+};
+
+export type RetrieveImageErrors = {
+	/**
+	 * Unauthorized
+	 */
+	401: unknown;
+	/**
+	 * Forbidden
+	 */
+	403: unknown;
+};
+
+export type RetrieveImageResponses = {
+	/**
+	 * No Content
+	 */
+	204: void;
+};
+
+export type RetrieveImageResponse = RetrieveImageResponses[keyof RetrieveImageResponses];
+
+export type StartImageModelDownloadData = {
+	body: XeLocalAiEngineClientEndpointsImagesV1StartImageModelDownloadRequest;
+	path?: never;
+	query?: never;
+	url: "/api/local/v1/images/models/downloads";
+};
+
+export type StartImageModelDownloadErrors = {
+	/**
+	 * Unauthorized
+	 */
+	401: unknown;
+	/**
+	 * Forbidden
+	 */
+	403: unknown;
+};
+
+export type StartImageModelDownloadResponses = {
+	/**
+	 * Success
+	 */
+	200: XeLocalAiEngineClientEndpointsImagesV1StartImageModelDownloadResponse;
+};
+
+export type StartImageModelDownloadResponse = StartImageModelDownloadResponses[keyof StartImageModelDownloadResponses];

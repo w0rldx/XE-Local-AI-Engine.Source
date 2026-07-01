@@ -6520,6 +6520,287 @@
           }
         ]
       }
+    },
+    "/api/local/v1/images/jobs/{jobId}/cancel": {
+      "post": {
+        "tags": [
+          "Images"
+        ],
+        "operationId": "cancelImageJob",
+        "parameters": [
+          {
+            "name": "jobId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "guid"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "No Content"
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "403": {
+            "description": "Forbidden"
+          }
+        },
+        "security": [
+          {
+            "JWTBearerAuth": []
+          },
+          {
+            "Bearer": []
+          }
+        ]
+      }
+    },
+    "/api/local/v1/images/jobs": {
+      "post": {
+        "tags": [
+          "Images"
+        ],
+        "operationId": "createImageJob",
+        "requestBody": {
+          "x-name": "CreateImageJobRequest",
+          "description": "",
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/XE_Local_AI_EngineClientEndpointsImagesV1CreateImageJobRequest"
+              }
+            }
+          },
+          "required": true,
+          "x-position": 1
+        },
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/XE_Local_AI_EngineClientEndpointsImagesV1ImageJobResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "403": {
+            "description": "Forbidden"
+          }
+        },
+        "security": [
+          {
+            "JWTBearerAuth": []
+          },
+          {
+            "Bearer": []
+          }
+        ]
+      },
+      "get": {
+        "tags": [
+          "Images"
+        ],
+        "operationId": "listImageJobs",
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/XE_Local_AI_EngineClientEndpointsImagesV1ListImageJobsResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "403": {
+            "description": "Forbidden"
+          }
+        },
+        "security": [
+          {
+            "JWTBearerAuth": []
+          },
+          {
+            "Bearer": []
+          }
+        ]
+      }
+    },
+    "/api/local/v1/images/jobs/{jobId}": {
+      "get": {
+        "tags": [
+          "Images"
+        ],
+        "operationId": "getImageJob",
+        "parameters": [
+          {
+            "name": "jobId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "guid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/XE_Local_AI_EngineClientEndpointsImagesV1ImageJobResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "403": {
+            "description": "Forbidden"
+          }
+        },
+        "security": [
+          {
+            "JWTBearerAuth": []
+          },
+          {
+            "Bearer": []
+          }
+        ]
+      }
+    },
+    "/api/local/v1/images/models": {
+      "get": {
+        "tags": [
+          "Images"
+        ],
+        "operationId": "listImageModels",
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/XE_Local_AI_EngineClientEndpointsImagesV1ListImageModelsResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "403": {
+            "description": "Forbidden"
+          }
+        },
+        "security": [
+          {
+            "JWTBearerAuth": []
+          },
+          {
+            "Bearer": []
+          }
+        ]
+      }
+    },
+    "/api/local/v1/images/{imageId}": {
+      "get": {
+        "tags": [
+          "Images"
+        ],
+        "operationId": "retrieveImage",
+        "parameters": [
+          {
+            "name": "imageId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "guid"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "No Content"
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "403": {
+            "description": "Forbidden"
+          }
+        },
+        "security": [
+          {
+            "JWTBearerAuth": []
+          },
+          {
+            "Bearer": []
+          }
+        ]
+      }
+    },
+    "/api/local/v1/images/models/downloads": {
+      "post": {
+        "tags": [
+          "Images"
+        ],
+        "operationId": "startImageModelDownload",
+        "requestBody": {
+          "x-name": "StartImageModelDownloadRequest",
+          "description": "",
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/XE_Local_AI_EngineClientEndpointsImagesV1StartImageModelDownloadRequest"
+              }
+            }
+          },
+          "required": true,
+          "x-position": 1
+        },
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/XE_Local_AI_EngineClientEndpointsImagesV1StartImageModelDownloadResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "403": {
+            "description": "Forbidden"
+          }
+        },
+        "security": [
+          {
+            "JWTBearerAuth": []
+          },
+          {
+            "Bearer": []
+          }
+        ]
+      }
     }
   },
   "components": {
@@ -11596,6 +11877,313 @@
             "type": "string"
           },
           "displayLabel": {
+            "type": "string",
+            "nullable": true
+          }
+        }
+      },
+      "XE_Local_AI_EngineClientEndpointsImagesV1ImageJobRouteRequest": {
+        "type": "object",
+        "additionalProperties": false
+      },
+      "XE_Local_AI_EngineClientEndpointsImagesV1ImageJobResponse": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "id",
+          "modelName",
+          "prompt",
+          "seed",
+          "width",
+          "height",
+          "steps",
+          "sampler",
+          "cfgScale",
+          "status",
+          "createdAtUtc"
+        ],
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "guid"
+          },
+          "modelName": {
+            "type": "string"
+          },
+          "prompt": {
+            "type": "string"
+          },
+          "negativePrompt": {
+            "type": "string",
+            "nullable": true
+          },
+          "seed": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "width": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "height": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "steps": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "sampler": {
+            "type": "string"
+          },
+          "cfgScale": {
+            "type": "number",
+            "format": "double"
+          },
+          "status": {
+            "type": "string"
+          },
+          "createdAtUtc": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "startedAtUtc": {
+            "type": "integer",
+            "format": "int64",
+            "nullable": true
+          },
+          "completedAtUtc": {
+            "type": "integer",
+            "format": "int64",
+            "nullable": true
+          },
+          "durationMs": {
+            "type": "integer",
+            "format": "int64",
+            "nullable": true
+          },
+          "imageId": {
+            "type": "string",
+            "format": "guid",
+            "nullable": true
+          },
+          "sanitizedError": {
+            "type": "string",
+            "nullable": true
+          },
+          "cancellationRequestedAtUtc": {
+            "type": "integer",
+            "format": "int64",
+            "nullable": true
+          }
+        }
+      },
+      "XE_Local_AI_EngineClientEndpointsImagesV1CreateImageJobRequest": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "modelName",
+          "prompt"
+        ],
+        "properties": {
+          "modelName": {
+            "type": "string"
+          },
+          "prompt": {
+            "type": "string"
+          },
+          "negativePrompt": {
+            "type": "string",
+            "nullable": true
+          },
+          "seed": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "width": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "height": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "steps": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "sampler": {
+            "type": "string",
+            "nullable": true
+          },
+          "cfgScale": {
+            "type": "number",
+            "format": "double"
+          }
+        }
+      },
+      "XE_Local_AI_EngineClientEndpointsImagesV1ListImageJobsResponse": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "items"
+        ],
+        "properties": {
+          "items": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/XE_Local_AI_EngineClientEndpointsImagesV1ImageJobResponse"
+            }
+          }
+        }
+      },
+      "XE_Local_AI_EngineClientEndpointsImagesV1ListImageModelsResponse": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "items"
+        ],
+        "properties": {
+          "items": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/XE_Local_AI_EngineClientEndpointsImagesV1ImageModelResponse"
+            }
+          }
+        }
+      },
+      "XE_Local_AI_EngineClientEndpointsImagesV1ImageModelResponse": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "modelName",
+          "repoId",
+          "family",
+          "kind",
+          "sizeBytes",
+          "parts",
+          "downloadedAtUtc"
+        ],
+        "properties": {
+          "modelName": {
+            "type": "string"
+          },
+          "repoId": {
+            "type": "string"
+          },
+          "family": {
+            "type": "string"
+          },
+          "kind": {
+            "type": "string"
+          },
+          "sizeBytes": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "parts": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/XE_Local_AI_EngineClientEndpointsImagesV1ImageModelPartResponse"
+            }
+          },
+          "downloadedAtUtc": {
+            "type": "integer",
+            "format": "int64"
+          }
+        }
+      },
+      "XE_Local_AI_EngineClientEndpointsImagesV1ImageModelPartResponse": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "role",
+          "fileName",
+          "sizeBytes"
+        ],
+        "properties": {
+          "role": {
+            "type": "string"
+          },
+          "fileName": {
+            "type": "string"
+          },
+          "sizeBytes": {
+            "type": "integer",
+            "format": "int64"
+          }
+        }
+      },
+      "XE_Local_AI_EngineClientEndpointsImagesV1RetrieveImageRequest": {
+        "type": "object",
+        "additionalProperties": false
+      },
+      "XE_Local_AI_EngineClientEndpointsImagesV1StartImageModelDownloadResponse": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "modelName",
+          "accepted"
+        ],
+        "properties": {
+          "modelName": {
+            "type": "string"
+          },
+          "accepted": {
+            "type": "boolean"
+          }
+        }
+      },
+      "XE_Local_AI_EngineClientEndpointsImagesV1StartImageModelDownloadRequest": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "modelName",
+          "repoId",
+          "family",
+          "parts"
+        ],
+        "properties": {
+          "modelName": {
+            "type": "string"
+          },
+          "repoId": {
+            "type": "string"
+          },
+          "family": {
+            "type": "string"
+          },
+          "kind": {
+            "type": "string",
+            "nullable": true
+          },
+          "revision": {
+            "type": "string",
+            "nullable": true
+          },
+          "parts": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/XE_Local_AI_EngineClientEndpointsImagesV1ImageModelPartDownloadRequest"
+            }
+          }
+        }
+      },
+      "XE_Local_AI_EngineClientEndpointsImagesV1ImageModelPartDownloadRequest": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "role",
+          "fileName"
+        ],
+        "properties": {
+          "role": {
+            "type": "string"
+          },
+          "fileName": {
+            "type": "string"
+          },
+          "sha256": {
             "type": "string",
             "nullable": true
           }
