@@ -39,17 +39,23 @@ public sealed class ManagedCosineVectorSearch : IVectorSearch
         await OpenIfNeededAsync(connection, cancellationToken).ConfigureAwait(false);
 
         await using var command = connection.CreateCommand();
-        command.CommandText = documentId is null
-            ? """
-              SELECT chunk_id, document_id, embedding
-              FROM knowledge_chunk_vectors
-              WHERE embedding_model = $embedding_model;
-              """
-            : """
-              SELECT chunk_id, document_id, embedding
-              FROM knowledge_chunk_vectors
-              WHERE embedding_model = $embedding_model AND document_id = $document_id;
-              """;
+        if (documentId is null)
+        {
+            command.CommandText = """
+                                   SELECT chunk_id, document_id, embedding
+                                   FROM knowledge_chunk_vectors
+                                   WHERE embedding_model = $embedding_model;
+                                   """;
+        }
+        else
+        {
+            command.CommandText = """
+                                   SELECT chunk_id, document_id, embedding
+                                   FROM knowledge_chunk_vectors
+                                   WHERE embedding_model = $embedding_model AND document_id = $document_id;
+                                   """;
+        }
+
         AddParameter(command, "$embedding_model", embeddingModel);
         if (documentId is not null)
         {

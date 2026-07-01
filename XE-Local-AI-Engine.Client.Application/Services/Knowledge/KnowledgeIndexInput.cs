@@ -31,5 +31,5 @@ public sealed record KnowledgeIndexChunk(
     string Content,
     string? HeadingPath,
     int TokenCount,
-    byte[] Embedding,
+    ReadOnlyMemory<byte> Embedding,
     int Dim);

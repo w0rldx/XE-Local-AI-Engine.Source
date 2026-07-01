@@ -42,10 +42,37 @@ public sealed class KnowledgeDocumentPurgeService : IKnowledgeDocumentPurgeServi
 
         // FK cascade is OFF, so delete every dependent row explicitly, child-to-parent, in one transaction:
         // vectors → chunks (fires the FTS delete trigger) → sections → the document row.
-        await ExecuteAsync(connection, transaction, "DELETE FROM knowledge_chunk_vectors WHERE document_id = $document_id;", documentId, cancellationToken).ConfigureAwait(false);
-        await ExecuteAsync(connection, transaction, "DELETE FROM knowledge_document_chunks WHERE document_id = $document_id;", documentId, cancellationToken).ConfigureAwait(false);
-        await ExecuteAsync(connection, transaction, "DELETE FROM knowledge_document_sections WHERE document_id = $document_id;", documentId, cancellationToken).ConfigureAwait(false);
-        await ExecuteAsync(connection, transaction, "DELETE FROM knowledge_documents WHERE document_id = $document_id;", documentId, cancellationToken).ConfigureAwait(false);
+        await using (var vectorsCommand = connection.CreateCommand())
+        {
+            vectorsCommand.Transaction = transaction;
+            vectorsCommand.CommandText = "DELETE FROM knowledge_chunk_vectors WHERE document_id = $document_id;";
+            AddParameter(vectorsCommand, "$document_id", documentId);
+            _ = await vectorsCommand.ExecuteNonQueryAsync(cancellationToken).ConfigureAwait(false);
+        }
+
+        await using (var chunksCommand = connection.CreateCommand())
+        {
+            chunksCommand.Transaction = transaction;
+            chunksCommand.CommandText = "DELETE FROM knowledge_document_chunks WHERE document_id = $document_id;";
+            AddParameter(chunksCommand, "$document_id", documentId);
+            _ = await chunksCommand.ExecuteNonQueryAsync(cancellationToken).ConfigureAwait(false);
+        }
+
+        await using (var sectionsCommand = connection.CreateCommand())
+        {
+            sectionsCommand.Transaction = transaction;
+            sectionsCommand.CommandText = "DELETE FROM knowledge_document_sections WHERE document_id = $document_id;";
+            AddParameter(sectionsCommand, "$document_id", documentId);
+            _ = await sectionsCommand.ExecuteNonQueryAsync(cancellationToken).ConfigureAwait(false);
+        }
+
+        await using (var documentCommand = connection.CreateCommand())
+        {
+            documentCommand.Transaction = transaction;
+            documentCommand.CommandText = "DELETE FROM knowledge_documents WHERE document_id = $document_id;";
+            AddParameter(documentCommand, "$document_id", documentId);
+            _ = await documentCommand.ExecuteNonQueryAsync(cancellationToken).ConfigureAwait(false);
+        }
 
         await transaction.CommitAsync(cancellationToken).ConfigureAwait(false);
 
@@ -63,14 +90,5 @@ public sealed class KnowledgeDocumentPurgeService : IKnowledgeDocumentPurgeServi
         AddParameter(command, "$document_id", documentId);
         var result = await command.ExecuteScalarAsync(cancellationToken).ConfigureAwait(false);
         return result is null or DBNull ? null : result as string ?? string.Empty;
-    }
-
-    private static async Task ExecuteAsync(DbConnection connection, DbTransaction transaction, string commandText, Guid documentId, CancellationToken cancellationToken)
-    {
-        await using var command = connection.CreateCommand();
-        command.Transaction = transaction;
-        command.CommandText = commandText;
-        AddParameter(command, "$document_id", documentId);
-        _ = await command.ExecuteNonQueryAsync(cancellationToken).ConfigureAwait(false);
     }
 }
