@@ -1,5 +1,6 @@
 namespace XE_Local_AI_Engine.Client.Services.DocumentIngestion;
 
+using System.Buffers;
 using System.Globalization;
 using Microsoft.Extensions.DataIngestion;
 using XE_Local_AI_Engine.Client.Services.DocumentIngestion.Extraction;
@@ -119,12 +120,43 @@ public sealed class DocumentTextExtractor : IDocumentTextExtractor
         CancellationToken cancellationToken)
     {
         // Buffer to a seekable stream: PdfPig and the Open XML SDK both seek, and an upload stream may be
-        // forward-only. The endpoint caps the upload size, so the buffered input is bounded.
+        // forward-only. The endpoint caps the upload size, but a container format (.docx zip / .pdf) can expand well
+        // beyond its on-disk size, so buffering is bounded here by MaxDecompressedBytes as a decompression-bomb ceiling:
+        // exceeding it throws (surfaced as a content-free Failed result by the caller) instead of risking OOM.
+        // Residual risk: this bounds the bytes we materialize into the buffer; the reader still decompresses the zip/pdf
+        // internally, so a container that stays under the ceiling but expands hugely inside the SDK is not fully bounded
+        // by this guard alone.
         using var buffer = new MemoryStream();
-        await content.CopyToAsync(buffer, cancellationToken).ConfigureAwait(false);
+        await CopyWithCeilingAsync(content, buffer, DocumentExtractionLimits.MaxDecompressedBytes, cancellationToken).ConfigureAwait(false);
         buffer.Position = 0;
 
         return await reader.ReadAsync(buffer, fileName, normalizedExtension, cancellationToken).ConfigureAwait(false);
+    }
+
+    // Copies source into destination, failing fast once more than maxBytes have been read so a bomb upload cannot
+    // materialize an unbounded buffer. Throws InvalidDataException (content-free) when the ceiling is exceeded.
+    private static async Task CopyWithCeilingAsync(Stream source, Stream destination, long maxBytes, CancellationToken cancellationToken)
+    {
+        var rented = ArrayPool<byte>.Shared.Rent(81920);
+        try
+        {
+            long total = 0;
+            int read;
+            while ((read = await source.ReadAsync(rented, cancellationToken).ConfigureAwait(false)) > 0)
+            {
+                total += read;
+                if (total > maxBytes)
+                {
+                    throw new InvalidDataException("Document exceeds the maximum decompressed size allowed for extraction.");
+                }
+
+                await destination.WriteAsync(rented.AsMemory(0, read), cancellationToken).ConfigureAwait(false);
+            }
+        }
+        finally
+        {
+            ArrayPool<byte>.Shared.Return(rented);
+        }
     }
 
     private string Truncate(string markdown)

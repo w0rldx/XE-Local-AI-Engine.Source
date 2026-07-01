@@ -8,6 +8,7 @@ using XE_Local_AI_Engine.Client.Models.Enums;
 using XE_Local_AI_Engine.Client.Services.AgentHome.Tools;
 using XE_Local_AI_Engine.Client.Services.Capacity.Tools;
 using XE_Local_AI_Engine.Client.Services.Coder.Tools;
+using XE_Local_AI_Engine.Client.Services.Knowledge.Tools;
 
 internal sealed class LocalToolOfferProvider : ILocalToolOfferProvider
 {
@@ -44,16 +45,21 @@ internal sealed class LocalToolOfferProvider : ILocalToolOfferProvider
         // stays byte-identical across sends (stable config hash).
         var coderDescriptors = CoderToolDefinition.Descriptors;
 
+        // The read-only knowledge-base tools (search_knowledge_base / read_document / read_surrounding_chunks) are also
+        // worker-owned IClientLocalToolHandlers, merged the same way as the coder tools so they appear in the OFFER seam.
+        var knowledgeDescriptors = KnowledgeToolCatalog.Descriptors;
+
         // Each tool's Id is derived deterministically from its name so the offer list is byte-identical across sends
         // (the config hash ignores the Id, but a stable Id keeps client-side rendering and equality predictable).
-        // The coder tools are worker-owned IClientLocalToolHandlers merged here so they appear in the OFFER seam (the
-        // handler registration surfaces them only in the RESOLUTION seam). They are high-risk, so they join the
+        // The coder and knowledge-base tools are worker-owned IClientLocalToolHandlers merged here so they appear in the
+        // OFFER seam (the handler registration surfaces them only in the RESOLUTION seam). They join the
         // capability-gated set just like run_in_agent_home — present in the capable offer, withheld from a non-capable
         // model. spawn_subagent is deliberately NOT folded into this whole offer: it is profile-opt-in only (below).
         _builtinAllTools =
         [
             .. builtinDescriptors.Select(static descriptor => ToOfferDto(descriptor.Name, descriptor.ParameterSchema, descriptor.RequiresApproval)),
-            .. coderDescriptors.Select(static descriptor => ToOfferDto(descriptor.Name, descriptor.ParameterSchema, descriptor.RequiresApproval))
+            .. coderDescriptors.Select(static descriptor => ToOfferDto(descriptor.Name, descriptor.ParameterSchema, descriptor.RequiresApproval)),
+            .. knowledgeDescriptors.Select(static descriptor => ToOfferDto(descriptor.Name, descriptor.ParameterSchema, descriptor.RequiresApproval))
         ];
 
         // spawn_subagent is offered ONLY to an explicit agent profile that opts in via AllowedToolNames — never to the
@@ -66,7 +72,9 @@ internal sealed class LocalToolOfferProvider : ILocalToolOfferProvider
         // returned when the active model is not tool-capable. Those high-risk tools are offered only to a tool-capable
         // model. The encrypted path stays server-gated and never reaches this provider. (spawn_subagent is not in
         // _builtinAllTools at all, so it never appears in either capability variant of the whole offer.)
-        var capableOnlyNames = coderDescriptors.Select(static descriptor => descriptor.Name).ToHashSet(StringComparer.Ordinal);
+        var capableOnlyNames = coderDescriptors.Select(static descriptor => descriptor.Name)
+                                               .Concat(knowledgeDescriptors.Select(static descriptor => descriptor.Name))
+                                               .ToHashSet(StringComparer.Ordinal);
         _builtinWithoutAgentHome =
         [
             .. _builtinAllTools.Where(tool => !string.Equals(tool.Name, AgentHomeToolDefinition.ToolName, StringComparison.Ordinal)
@@ -89,6 +97,13 @@ internal sealed class LocalToolOfferProvider : ILocalToolOfferProvider
                 RequiresApproval = descriptor.RequiresApproval,
                 Source = BuiltinSource
             }),
+            .. knowledgeDescriptors.Select(static descriptor => new LocalToolCatalogEntry
+            {
+                Name = descriptor.Name,
+                Description = descriptor.Description,
+                RequiresApproval = descriptor.RequiresApproval,
+                Source = BuiltinSource
+            }),
             new LocalToolCatalogEntry
             {
                 Name = SpawnSubAgentToolDefinition.ToolName,
@@ -102,6 +117,7 @@ internal sealed class LocalToolOfferProvider : ILocalToolOfferProvider
         [
             .. builtinDescriptors.Select(static descriptor => descriptor.Name),
             .. coderDescriptors.Select(static descriptor => descriptor.Name),
+            .. knowledgeDescriptors.Select(static descriptor => descriptor.Name),
             SpawnSubAgentToolDefinition.ToolName
         ];
 
