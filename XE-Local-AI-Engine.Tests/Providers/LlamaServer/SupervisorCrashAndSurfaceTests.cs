@@ -57,6 +57,39 @@ public sealed class SupervisorCrashAndSurfaceTests
     }
 
     [Test]
+    public async Task EnsureRunning_ProcessExitsDuringLoad_FailsFastWithoutRetry()
+    {
+        // A model whose llama-server crashes during context creation: the child exits almost immediately while
+        // /health never becomes ready. The supervisor must observe the exit and fail fast — not poll /health for the
+        // full readiness budget and then retry the guaranteed-to-re-crash spawn MaxRestartAttempts times.
+        var launcher = new FakeProcessLauncher(_ =>
+        {
+#pragma warning disable CA2000 // Ownership transfers to the supervisor (via the launcher fake), which disposes it on teardown.
+            var handle = new FakeProcessHandle(3000);
+#pragma warning restore CA2000
+            handle.SimulateExit(); // died during load, before readiness.
+            return handle;
+        });
+
+        // GatedHealthProbe never becomes ready (never Release()d), so ONLY the process-exit race can complete the wait.
+        await using var supervisor = SupervisorFactory.Create(launcher,
+            new GatedHealthProbe(),
+            options: new LlamaServerSupervisorOptions
+            {
+                MaxRestartAttempts = 3,
+                IdleTimeToLive = TimeSpan.FromHours(1)
+            });
+
+        var ex = await AssertEx.ThrowsAsync<LlamaRuntimeException>(() => supervisor.EnsureRunningAsync("crashy-model", ModelRole.Chat, CancellationToken.None));
+
+        AssertEx.Equal(expected: 1, launcher.LaunchCount); // non-retryable: one spawn, NOT MaxRestartAttempts (3).
+        AssertEx.Contains(ex.Message, "exited while loading", StringComparison.OrdinalIgnoreCase);
+        // No internal path leaks, and the dead child is reaped so its port is freed.
+        AssertEx.False(ex.Message.Contains("/fake/", StringComparison.OrdinalIgnoreCase));
+        AssertEx.True(launcher.Handles.All(h => h.WasTreeKilled), "The crashed child must be tree-killed.");
+    }
+
+    [Test]
     public async Task EnsureRunning_ModelNotInstalled_SurfacesSanitized()
     {
         await using var supervisor = SupervisorFactory.Create(modelStore: new FakeModelStore(null));
