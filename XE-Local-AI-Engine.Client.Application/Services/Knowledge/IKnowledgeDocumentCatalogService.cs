@@ -25,9 +25,10 @@ public interface IKnowledgeDocumentCatalogService
     Task<bool> ResetToPendingAsync(Guid documentId, CancellationToken cancellationToken);
 
     /// <summary>
-    ///     Resets every document whose <c>embedding_model</c> differs from the current model to
-    ///     <see cref="KnowledgeDocumentStatus.Pending" /> and returns their ids, so the caller can enqueue a corpus-wide
-    ///     reindex that rebuilds only the stale-model documents.
+    ///     Resets every INDEXED document whose stored <c>embedding_model</c> differs from the currently RESOLVED embedding
+    ///     model (from <see cref="IEmbeddingModelResolver" />) to <see cref="KnowledgeDocumentStatus.Pending" /> and returns
+    ///     their ids, so the caller can enqueue a corpus-wide reindex that rebuilds only the stale-model documents.
+    ///     Non-indexed rows carry only the upload-time placeholder model name and are never treated as stale.
     /// </summary>
     Task<IReadOnlyList<Guid>> ResetStaleDocumentsToPendingAsync(CancellationToken cancellationToken);
 }
@@ -35,7 +36,8 @@ public interface IKnowledgeDocumentCatalogService
 /// <summary>
 ///     Management summary of one knowledge-base document. <see cref="DisplayName" /> is the decrypted original file name
 ///     (owner-only, over the authenticated management surface). <see cref="StaleModel" /> is <see langword="true" /> when
-///     the document was embedded with a model other than the currently configured one, so the UI can offer a reindex.
+///     the document is Indexed but was embedded with a model other than the currently resolved one, so the UI can offer a
+///     reindex.
 /// </summary>
 public sealed record KnowledgeDocumentSummary(
     Guid DocumentId,
