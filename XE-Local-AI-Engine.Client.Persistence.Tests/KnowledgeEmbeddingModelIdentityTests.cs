@@ -143,6 +143,44 @@ public sealed class KnowledgeEmbeddingModelIdentityTests : IDisposable
         AssertEx.Equal(ResolvedGgufName, capturedModel);
     }
 
+    [Test]
+    public async Task DuringATransientProviderOutage_ResetReturnsEmptyAndListFlagsNoDocumentStale()
+    {
+        var databasePath = GetDatabasePath("catalog-outage.sqlite");
+        var indexedId = Guid.NewGuid();
+
+        await MigrateAsync(databasePath).ConfigureAwait(false);
+        // Stored under the RESOLVED GGUF name (the real, pre-outage identity) — NOT the plain configured name a
+        // non-confident resolution would fall back to. If the confidence guard were missing, this row would compare
+        // unequal to that fallback and get (wrongly) flagged stale and reset during the outage.
+        await SeedDocumentAsync(databasePath, indexedId, ResolvedGgufName, KnowledgeDocumentStatus.Indexed).ConfigureAwait(false);
+
+        var options = Options.Create(new KnowledgeBaseOptions());
+
+        IReadOnlyList<Guid> reset;
+        IReadOnlyList<KnowledgeDocumentSummary> documents;
+        await using (var context = AgentDefinitionTestContextFactory.CreateForMigration(databasePath, _keyHolder))
+        {
+            await EnsureForeignKeysOffAsync(context.Database.GetDbConnection()).ConfigureAwait(false);
+            var catalogService = new KnowledgeDocumentCatalogService(context,
+                CreateOutageProviderResolver(),
+                new EmbeddingModelResolver(options),
+                options,
+                TimeProvider.System);
+
+            reset = await catalogService.ResetStaleDocumentsToPendingAsync(CancellationToken.None).ConfigureAwait(false);
+            documents = await catalogService.ListAsync(CancellationToken.None).ConfigureAwait(false);
+        }
+
+        AssertEx.Empty(reset, "A non-confident resolution (transient provider outage) must never reset any document, "
+                              + "or it would reset the entire indexed corpus during the outage.");
+
+        var indexed = documents.Single(document => document.DocumentId == indexedId);
+        AssertEx.False(indexed.StaleModel,
+            "A non-confident resolution must never flag a document stale, even though its stored name differs from the fallback.");
+        AssertEx.Equal(KnowledgeDocumentStatus.Indexed.ToString(), await ReadStatusAsync(databasePath, indexedId).ConfigureAwait(false));
+    }
+
     // ── service factories ────────────────────────────────────────────────────────────────────────────
 
     private static KnowledgeIngestionService CreateIngestionService(NodeChatDbContext context)
@@ -211,6 +249,19 @@ public sealed class KnowledgeEmbeddingModelIdentityTests : IDisposable
     private static ILocalModelProviderResolver CreateResolvingProviderResolver()
     {
         var provider = new FixedEmbeddingProvider(Descriptor(ResolvedGgufName), Descriptor("qwen2.5:Q4_K_M"));
+        var resolver = Substitute.For<ILocalModelProviderResolver>();
+        resolver.ResolveProvider(Arg.Any<string>()).Returns(provider);
+        return resolver;
+    }
+
+    // A provider resolver whose provider fails to list installed models (a transient outage), so the embedding-model
+    // resolver's outcome is NOT confident — the catalog must never treat this fallback as the vectors' real identity.
+    private static ILocalModelProviderResolver CreateOutageProviderResolver()
+    {
+        var provider = Substitute.For<ILocalModelProvider>();
+        provider.ListModelsAsync(Arg.Any<CancellationToken>())
+                .Returns<Task<IReadOnlyList<LocalModelDescriptor>>>(_ => throw new HttpRequestException("provider down"));
+
         var resolver = Substitute.For<ILocalModelProviderResolver>();
         resolver.ResolveProvider(Arg.Any<string>()).Returns(provider);
         return resolver;

@@ -53,7 +53,10 @@ public sealed class KnowledgeChunkEmbedder : IKnowledgeChunkEmbedder
         ArgumentNullException.ThrowIfNull(chunkContents);
         if (chunkContents.Count == 0)
         {
-            // No provider round-trip for empty input; report the configured name as the resolved identity.
+            // No provider round-trip for empty input; report the configured name as the resolved identity. The sole
+            // caller (KnowledgeIngestionService) only reaches EmbedAsync with chunking.Chunks, and RunAsync marks a
+            // zero-chunk document Failed before it ever calls EmbedAsync — so a document stamped via this branch can
+            // never reach Indexed, and this placeholder name is never compared as a vector identity.
             return new KnowledgeEmbeddingResult([], _options.EmbeddingModelName);
         }
 
@@ -63,7 +66,7 @@ public sealed class KnowledgeChunkEmbedder : IKnowledgeChunkEmbedder
         // maps to the installed nomic-embed GGUF on a llama.cpp node). Resolve ONCE and return the resolved name so the
         // ingestion lane can stamp the exact model that produced these vectors as the document row and chunk-vector scope
         // key. The search lane resolves the same way, so chunk vectors and query vectors are built by the identical model.
-        var embeddingModelName = await _embeddingModelResolver.ResolveAsync(provider, cancellationToken).ConfigureAwait(false);
+        var embeddingModelName = (await _embeddingModelResolver.ResolveAsync(provider, cancellationToken).ConfigureAwait(false)).Name;
         using var generator = provider.CreateEmbeddingGenerator(new LocalModelSelection
         {
             ModelName = embeddingModelName,

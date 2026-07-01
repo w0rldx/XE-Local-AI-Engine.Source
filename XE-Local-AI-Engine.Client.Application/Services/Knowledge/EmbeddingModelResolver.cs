@@ -20,14 +20,28 @@ public interface IEmbeddingModelResolver
 {
     /// <summary>
     ///     Resolves the embedding model name to use on <paramref name="provider" />. Resolution order:
-    ///     (1) the configured name when a case-insensitively equal model is installed;
+    ///     (1) the configured name when a case-insensitively equal model is installed (confident);
     ///     (2) otherwise the first installed model whose NAME identifies an embedding model
-    ///     (<see cref="ModelKindDetector.IsEmbeddingName" />), by ordinal-ignore-case name order;
-    ///     (3) otherwise the configured name unchanged (the caller's graceful "not available" path then fires).
-    ///     A transport failure while enumerating installed models degrades to (3) rather than throwing.
+    ///     (<see cref="ModelKindDetector.IsEmbeddingName" />), by ordinal-ignore-case name order (confident);
+    ///     (3) otherwise the configured name unchanged, NOT confident (the caller's graceful "not available" path then
+    ///     fires). A transport failure while enumerating installed models also degrades to (3), NOT confident, rather
+    ///     than throwing.
     /// </summary>
-    Task<string> ResolveAsync(ILocalModelProvider provider, CancellationToken cancellationToken);
+    Task<EmbeddingModelResolution> ResolveAsync(ILocalModelProvider provider, CancellationToken cancellationToken);
 }
+
+/// <summary>
+///     The outcome of one <see cref="IEmbeddingModelResolver.ResolveAsync" /> call. <see cref="Name" /> is always the
+///     model name to embed with — ingestion and search consume only that. <see cref="IsConfident" /> distinguishes a
+///     REAL resolution (an installed model was actually matched — either the exact configured name or a fallback GGUF)
+///     from a degrade-to-configured-name outcome (nothing installed matched, or the provider could not be reached). A
+///     non-confident name must never be treated as a vector identity: comparing stored vectors/staleness against a name
+///     that was merely a fallback — rather than an actually-resolved installed model — would misclassify every document
+///     as stale during a transient provider outage instead of leaving their status untouched.
+/// </summary>
+/// <param name="Name">The model name to hand to the embedding generator.</param>
+/// <param name="IsConfident">Whether an installed model was actually matched (as opposed to a bare fallback).</param>
+public sealed record EmbeddingModelResolution(string Name, bool IsConfident);
 
 /// <inheritdoc />
 public sealed class EmbeddingModelResolver : IEmbeddingModelResolver
@@ -40,7 +54,7 @@ public sealed class EmbeddingModelResolver : IEmbeddingModelResolver
         _options = options.Value;
     }
 
-    public async Task<string> ResolveAsync(ILocalModelProvider provider, CancellationToken cancellationToken)
+    public async Task<EmbeddingModelResolution> ResolveAsync(ILocalModelProvider provider, CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(provider);
 
@@ -55,7 +69,8 @@ public sealed class EmbeddingModelResolver : IEmbeddingModelResolver
         {
             // Provider process down / transport error / unmapped provider. Keep the configured name so the caller's
             // existing graceful "embedding model not available" path fires unchanged. No model or chunk text is involved.
-            return configuredName;
+            // NOT confident: no installed model was actually matched, so this must never be treated as a vector identity.
+            return new EmbeddingModelResolution(configuredName, IsConfident: false);
         }
         catch (OperationCanceledException) when (!cancellationToken.IsCancellationRequested)
         {
@@ -64,7 +79,7 @@ public sealed class EmbeddingModelResolver : IEmbeddingModelResolver
             // token was NOT the one that fired, this is a timeout, so degrade to the configured name like the other
             // transport failures above. A genuine caller cancellation (cancellationToken.IsCancellationRequested is
             // true) falls through this filter and rethrows, propagating as normal.
-            return configuredName;
+            return new EmbeddingModelResolution(configuredName, IsConfident: false);
         }
 
         // (1) Exact configured name is installed → keep it (an Ollama node with nomic-embed-text is unaffected).
@@ -72,7 +87,7 @@ public sealed class EmbeddingModelResolver : IEmbeddingModelResolver
             string.Equals(descriptor.ModelName, configuredName, StringComparison.OrdinalIgnoreCase));
         if (exactMatch is not null)
         {
-            return configuredName;
+            return new EmbeddingModelResolution(configuredName, IsConfident: true);
         }
 
         // (2) First installed embedding-named model in a deterministic order (for example a nomic-embed GGUF).
@@ -81,8 +96,12 @@ public sealed class EmbeddingModelResolver : IEmbeddingModelResolver
                                                   && ModelKindDetector.IsEmbeddingName(descriptor.ModelName))
                              .OrderBy(descriptor => descriptor.ModelName, StringComparer.OrdinalIgnoreCase)
                              .FirstOrDefault();
+        if (embeddingModel is not null)
+        {
+            return new EmbeddingModelResolution(embeddingModel.ModelName, IsConfident: true);
+        }
 
-        // (3) Nothing installed matches → keep the configured name (graceful failure downstream).
-        return embeddingModel?.ModelName ?? configuredName;
+        // (3) Nothing installed matches → keep the configured name, NOT confident (graceful failure downstream).
+        return new EmbeddingModelResolution(configuredName, IsConfident: false);
     }
 }
