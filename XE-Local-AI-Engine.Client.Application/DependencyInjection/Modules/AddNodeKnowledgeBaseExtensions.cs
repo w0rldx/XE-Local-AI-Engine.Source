@@ -14,6 +14,29 @@ internal static class AddNodeKnowledgeBaseExtensions
         // store, so it can be injected into the singleton ingestion/cleanup surfaces that reach it.
         builder.Services.AddSingleton<IKnowledgeDocumentBlobStore, KnowledgeDocumentBlobStore>();
 
+        // Ingestion + embedding options (section "KnowledgeBase").
+        _ = builder.Services.AddOptions<KnowledgeBaseOptions>()
+                   .Bind(configuration.GetSection(KnowledgeBaseOptions.Section))
+                   .ValidateOnStart();
+
+        // Stateless, thread-safe collaborators — safe as singletons and injectable into the scoped ingestion service.
+        builder.Services.AddSingleton<IChunkingService, HeaderBoundaryChunkingService>();
+        builder.Services.AddSingleton<IKnowledgeEmbeddingPrefixer, KnowledgeEmbeddingPrefixer>();
+        // Depends only on singletons (provider resolver, prefixer, options); disposes each generator per call.
+        builder.Services.AddSingleton<IKnowledgeChunkEmbedder, KnowledgeChunkEmbedder>();
+
+        // Scoped: these use the scoped NodeChatDbContext and are resolved inside the per-ingestion-job scope.
+        builder.Services.AddScoped<IKnowledgeIndexWriter, KnowledgeIndexWriter>();
+        builder.Services.AddScoped<IKnowledgeIngestionService, KnowledgeIngestionService>();
+
+        // Singleton queue seam the upload endpoint calls; registered as the concrete type AND the interface so the worker
+        // drains the SAME instance the endpoint enqueues onto.
+        builder.Services.AddSingleton<KnowledgeIngestionDispatcher>();
+        builder.Services.AddSingleton<IKnowledgeIngestionDispatcher>(sp => sp.GetRequiredService<KnowledgeIngestionDispatcher>());
+
+        // Background worker: drains the queue with SemaphoreSlim-bounded concurrency, a fresh scope per document.
+        builder.Services.AddHostedService<KnowledgeIngestionWorker>();
+
         return builder;
     }
 }

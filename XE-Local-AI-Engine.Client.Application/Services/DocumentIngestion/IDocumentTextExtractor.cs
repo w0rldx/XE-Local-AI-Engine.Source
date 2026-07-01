@@ -22,4 +22,17 @@ public interface IDocumentTextExtractor
     /// <param name="extension">The file extension that selects the reader (case-insensitive, leading dot optional).</param>
     /// <param name="cancellationToken">Cancels the extraction.</param>
     Task<DocumentExtractionResult> ExtractAsync(Stream content, string fileName, string extension, CancellationToken cancellationToken);
+
+    /// <summary>
+    ///     Extracts the structured <c>IngestionDocument</c> (the reader's sections/headers/paragraphs) from
+    ///     <paramref name="content" /> before it is flattened to Markdown, for lanes that need the heading structure
+    ///     (chunking, section metadata). Same reader dispatch and failure discipline as <see cref="ExtractAsync" />: a
+    ///     corrupt or unreadable file yields <see cref="DocumentExtractionStatus.Failed" /> and an unknown extension yields
+    ///     <see cref="DocumentExtractionStatus.Unsupported" />; it never throws for malformed input.
+    /// </summary>
+    /// <param name="content">The uploaded file bytes. The stream is consumed but not disposed by this method.</param>
+    /// <param name="fileName">The original file name, used only as the document identifier (never logged).</param>
+    /// <param name="extension">The file extension that selects the reader (case-insensitive, leading dot optional).</param>
+    /// <param name="cancellationToken">Cancels the extraction.</param>
+    Task<DocumentStructuredExtractionResult> ExtractStructuredAsync(Stream content, string fileName, string extension, CancellationToken cancellationToken);
 }
