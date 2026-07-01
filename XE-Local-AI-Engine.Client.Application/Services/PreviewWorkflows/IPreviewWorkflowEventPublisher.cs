@@ -41,7 +41,9 @@ public static class PreviewWorkflowHubEvents
 /// <summary>
 ///     Node-scoped run event. <see cref="RunId" /> is mandatory (scopes delivery / prevents cross-run contamination).
 ///     <see cref="Output" /> carries the operator's transient node/debug output (documented privacy exception);
-///     <see cref="Error" /> a sanitized failure message.
+///     <see cref="Error" /> a sanitized failure message. <see cref="Seq" /> is a per-run monotonically increasing
+///     sequence shared across BOTH node and run events of the same run (one counter per run) so a late subscriber can
+///     replay the buffer and dedupe any event delivered both via replay and live.
 /// </summary>
 public sealed record PreviewWorkflowNodeHubEvent(
     string EventType,
@@ -49,12 +51,15 @@ public sealed record PreviewWorkflowNodeHubEvent(
     string NodeId,
     string? Output,
     string? Error,
-    long OccurredAtUtc);
+    long OccurredAtUtc,
+    long Seq);
 
 /// <summary>
 ///     Run-lifecycle event. <see cref="RunId" /> is mandatory. <see cref="NodeId" /> is set only for the pause event
 ///     (the Pause node), <see cref="Output" /> for pause (upstream display) and completed (terminal output),
-///     <see cref="RequestId" /> for pause (the resume token), <see cref="Error" /> for failed.
+///     <see cref="RequestId" /> for pause (the resume token), <see cref="Error" /> for failed. <see cref="Seq" /> is a
+///     per-run monotonically increasing sequence shared across BOTH node and run events of the same run (one counter
+///     per run) so a late subscriber can replay the buffer and dedupe any event delivered both via replay and live.
 /// </summary>
 public sealed record PreviewWorkflowRunHubEvent(
     string EventType,
@@ -63,4 +68,5 @@ public sealed record PreviewWorkflowRunHubEvent(
     string? Output,
     string? Error,
     string? RequestId,
-    long OccurredAtUtc);
+    long OccurredAtUtc,
+    long Seq);

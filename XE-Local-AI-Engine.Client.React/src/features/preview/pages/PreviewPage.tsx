@@ -30,7 +30,11 @@ import {
 import { usePreviewManagementStore } from "@/features/preview/stores/PreviewManagementStore";
 import { usePreviewRunStore } from "@/features/preview/stores/PreviewRunStore";
 
-const errorMessage = (error: unknown, fallback: string): string => (error instanceof Error ? error.message : fallback);
+// Falls back when `error` isn't an Error OR its message is blank (e.g. a 404 ApiError built from a ProblemDetails
+// with no title/detail — `error.message === ""` is truthy-checked-as-Error but would otherwise render an empty
+// toast).
+const errorMessage = (error: unknown, fallback: string): string =>
+	error instanceof Error && error.message ? error.message : fallback;
 
 // The empty graph a fresh canvas starts from: a Start and an End block, no agents (the canvas is invalid until
 // the operator adds an agent between them — the Execute button stays disabled accordingly).
@@ -173,9 +177,13 @@ export function PreviewPage() {
 			return;
 		}
 		cancelMutation.mutate(activeRunId, {
+			// Defense-in-depth: mark the run cancelled locally right away so the Cancel button hides even if the
+			// authoritative `runCancelled` hub event is somehow delayed. The hub event still arrives and applies
+			// normally (seq-deduped like any other event); this is just an optimistic override of `status`.
+			onSuccess: () => runActions.markCancelled(activeRunId),
 			onError: (error) => toast.error(errorMessage(error, t("pages.preview.errors.cancel", "Could not cancel the run."))),
 		});
-	}, [activeRunId, cancelMutation, t]);
+	}, [activeRunId, cancelMutation, runActions, t]);
 
 	// Save the current canvas graph. A new workflow is created (prompting for a name via confirm-with-input is out
 	// of scope here — a default name is used and the operator renames later); an opened one is updated, carrying

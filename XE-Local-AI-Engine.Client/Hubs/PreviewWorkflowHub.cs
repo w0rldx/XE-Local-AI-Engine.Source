@@ -25,10 +25,21 @@ public sealed class PreviewWorkflowHub(IPreviewWorkflowExecutionService executio
         return $"preview-run-{runId:N}";
     }
 
-    /// <summary>Opts this connection into the per-run group so it receives only that run's scoped events.</summary>
-    public Task Subscribe(Guid runId)
+    /// <summary>
+    ///     Opts this connection into the per-run group so it receives only that run's scoped events, THEN replays the
+    ///     run's buffered events to the caller. Join-then-replay (not replay-then-join) closes the subscribe-after-publish
+    ///     race: events published between the two steps still reach the group, and any event delivered both via replay
+    ///     (Caller) and live (Group) is deduped by the client on the payload's monotonic <c>seq</c>.
+    /// </summary>
+    public async Task Subscribe(Guid runId)
     {
-        return Groups.AddToGroupAsync(Context.ConnectionId, RunGroup(runId));
+        var ct = Context.ConnectionAborted;
+        await Groups.AddToGroupAsync(Context.ConnectionId, RunGroup(runId), ct).ConfigureAwait(false);
+
+        foreach (var bufferedEvent in _executionService.SnapshotBufferedEvents(runId))
+        {
+            await Clients.Caller.SendAsync(bufferedEvent.MethodName, bufferedEvent.Payload, ct).ConfigureAwait(false);
+        }
     }
 
     /// <summary>Removes this connection from a run's group (e.g. when the canvas closes a run view).</summary>
