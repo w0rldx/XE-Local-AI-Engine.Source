@@ -66,6 +66,14 @@ public sealed class NodeChatDbContext : DbContext
 
     internal DbSet<ConversationUploadedFile> UploadedFiles => Set<ConversationUploadedFile>();
 
+    internal DbSet<KnowledgeDocument> KnowledgeDocuments => Set<KnowledgeDocument>();
+
+    internal DbSet<KnowledgeDocumentSection> KnowledgeDocumentSections => Set<KnowledgeDocumentSection>();
+
+    internal DbSet<KnowledgeDocumentChunk> KnowledgeDocumentChunks => Set<KnowledgeDocumentChunk>();
+
+    internal DbSet<KnowledgeChunkVector> KnowledgeChunkVectors => Set<KnowledgeChunkVector>();
+
     internal ReadOnlyMemory<byte> NodeEncryptionKey => _nodeSqliteKeyHolder.Key;
 
     /// <summary>
@@ -135,6 +143,32 @@ public sealed class NodeChatDbContext : DbContext
         return Encoding.UTF8.GetString(plaintext);
     }
 
+    /// <summary>
+    ///     Encrypts a knowledge-base document's display name for raw-SQL persistence by the knowledge document store.
+    ///     Mirrors <see cref="EncryptUploadedFileName" /> but a knowledge document has no owning conversation, so the AAD
+    ///     binds to <c>(Guid.Empty, documentId, "original_file_name")</c>. The name is encrypted only on the store's
+    ///     raw-SQL insert path — this column is deliberately kept out of the node-encryption interceptor.
+    /// </summary>
+    public byte[] EncryptKnowledgeFileName(string originalFileName, Guid documentId)
+    {
+        ArgumentNullException.ThrowIfNull(originalFileName);
+
+        var plaintext = Encoding.UTF8.GetBytes(originalFileName);
+        return NodePayloadProtector.Encrypt(plaintext, NodeEncryptionKey.Span, Guid.Empty, documentId, "original_file_name");
+    }
+
+    /// <summary>
+    ///     Decrypts a knowledge-base document's display-name blob back to a string. AAD mirrors
+    ///     <see cref="EncryptKnowledgeFileName" />: <c>(Guid.Empty, documentId, "original_file_name")</c>.
+    /// </summary>
+    public string DecryptKnowledgeFileName(byte[] encrypted, Guid documentId)
+    {
+        ArgumentNullException.ThrowIfNull(encrypted);
+
+        var plaintext = NodePayloadProtector.Decrypt(encrypted, NodeEncryptionKey.Span, Guid.Empty, documentId, "original_file_name");
+        return Encoding.UTF8.GetString(plaintext);
+    }
+
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
         ArgumentNullException.ThrowIfNull(modelBuilder);
@@ -163,5 +197,9 @@ public sealed class NodeChatDbContext : DbContext
         modelBuilder.ApplyConfiguration(new ModelFitBenchmarkConfiguration());
         modelBuilder.ApplyConfiguration(new InferenceProfileConfiguration());
         modelBuilder.ApplyConfiguration(new ConversationUploadedFileConfiguration());
+        modelBuilder.ApplyConfiguration(new KnowledgeDocumentConfiguration());
+        modelBuilder.ApplyConfiguration(new KnowledgeDocumentSectionConfiguration());
+        modelBuilder.ApplyConfiguration(new KnowledgeDocumentChunkConfiguration());
+        modelBuilder.ApplyConfiguration(new KnowledgeChunkVectorConfiguration());
     }
 }
