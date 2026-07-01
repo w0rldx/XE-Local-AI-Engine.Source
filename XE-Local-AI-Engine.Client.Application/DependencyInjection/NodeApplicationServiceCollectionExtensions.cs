@@ -35,6 +35,10 @@ public static class NodeApplicationServiceCollectionExtensions
         builder.AddNodeChat(configuration);
         builder.AddNodeModelRuntime(configuration);
 
+        // Runs after AddNodeModelRuntime: the image model store reuses the Hugging Face download client that
+        // AddHuggingFaceGgufStore (invoked there) registers.
+        builder.AddNodeImages(configuration);
+
         return builder;
     }
 }

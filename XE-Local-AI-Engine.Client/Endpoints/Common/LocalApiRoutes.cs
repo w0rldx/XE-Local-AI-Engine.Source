@@ -360,6 +360,31 @@ public static class LocalApiRoutes
     }
 
     /// <summary>
+    ///     Local image-generation routes (jobs create/list/get/cancel, encrypted PNG retrieve, installed models) and the
+    ///     progress hub path. Jobs persist; the coordinator serializes generation to one running job at a time.
+    /// </summary>
+    public static class Images
+    {
+        // Job collection (POST create, GET list) and individual job resource (GET status).
+        public const string Jobs = "images/jobs";
+        public const string JobById = "images/jobs/{jobId}";
+
+        // Cancel is job-scoped; the coordinator picks clean-cancel (queued) vs kill+restart (generating) internally. The
+        // literal "cancel" segment follows the job id, keeping it distinct from JobById.
+        public const string JobCancel = "images/jobs/{jobId}/cancel";
+
+        // Decrypted PNG retrieve. {imageId} is the server-generated image id (never a client-supplied path).
+        public const string ImageById = "images/{imageId}";
+
+        // Installed image-model registry (GET list).
+        public const string Models = "images/models";
+
+        // SignalR push hub for image-job progress. Full path (mapped via MapHub, not the FastEndpoints prefix),
+        // mirroring the other local hubs. Each push carries the coarse status + seq.
+        public const string Hub = "/api/local/v1/images/hub";
+    }
+
+    /// <summary>
     ///     GitHub App device-flow sign-in routes for app self-update. The device_code (secret polling credential) and the
     ///     access token NEVER appear in any of these contracts — start returns only the user code + verification URI, and
     ///     status/poll report presence + login only. Desktop-mode only; Operator-gated.
