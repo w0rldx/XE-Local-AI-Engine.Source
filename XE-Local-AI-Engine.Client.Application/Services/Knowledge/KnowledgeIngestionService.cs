@@ -132,15 +132,19 @@ public sealed class KnowledgeIngestionService : IKnowledgeIngestionService
         // Embed the contextual text (heading trail + content) so short chunks under a heading stay retrievable; the stored
         // chunk content remains the plain text.
         var contextualTexts = chunking.Chunks.Select(chunk => chunk.ContextualContent).ToList();
-        var embeddings = await _embedder.EmbedAsync(contextualTexts, cancellationToken).ConfigureAwait(false);
-        if (embeddings.Count != chunking.Chunks.Count)
+        var embeddingResult = await _embedder.EmbedAsync(contextualTexts, cancellationToken).ConfigureAwait(false);
+        if (embeddingResult.Vectors.Count != chunking.Chunks.Count)
         {
             await SetStatusAsync(documentId, KnowledgeDocumentStatus.Failed, UnexpectedReason, cancellationToken).ConfigureAwait(false);
             return;
         }
 
-        var indexChunks = BuildIndexChunks(chunking.Chunks, embeddings);
-        var input = new KnowledgeIndexInput(documentId, _options.EmbeddingModelName, chunking.Sections, indexChunks);
+        var indexChunks = BuildIndexChunks(chunking.Chunks, embeddingResult.Vectors);
+
+        // Stamp the RESOLVED model that actually produced the vectors (not the configured name) as both the document row's
+        // embedding_model and every chunk-vector scope key, so a later same-dimension model swap makes stored-name differ
+        // from the current resolved name → the catalog flags the document stale → the operator reindexes it.
+        var input = new KnowledgeIndexInput(documentId, embeddingResult.ResolvedModel, chunking.Sections, indexChunks);
 
         // The writer performs the final Indexed transition atomically. A false result means the document was deleted mid
         // flight (the write was skipped) — there is nothing more to do. On success push the Indexed transition, since the

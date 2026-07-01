@@ -81,13 +81,15 @@ public sealed class KnowledgeSearchService : IKnowledgeSearchService
         var ftsHits = await _ftsSearch.SearchAsync(request.Query, candidatePool, request.DocumentId, cancellationToken).ConfigureAwait(false);
         var ftsRanked = ftsHits.Select(hit => hit.ChunkId).ToList();
 
-        // Semantic arm: only runs when the query vector is available; otherwise the search degrades to lexical-only.
-        var queryVector = await TryEmbedQueryAsync(request.Query, cancellationToken).ConfigureAwait(false);
+        // Semantic arm: only runs when the query vector is available; otherwise the search degrades to lexical-only. The
+        // vector arm is filtered by the SAME resolved model name the query was embedded with, so query vectors are only
+        // ever compared against chunk vectors built by that identical model (the ingestion lane stamps the same key).
+        var (queryVector, resolvedModel) = await TryEmbedQueryAsync(request.Query, cancellationToken).ConfigureAwait(false);
         var vectorRanked = new List<Guid>();
         if (!queryVector.IsEmpty)
         {
             var vectorHits = await _vectorSearchFactory.Create()
-                .SearchAsync(queryVector, _options.EmbeddingModelName, candidatePool, request.DocumentId, cancellationToken)
+                .SearchAsync(queryVector, resolvedModel, candidatePool, request.DocumentId, cancellationToken)
                 .ConfigureAwait(false);
             vectorRanked = vectorHits.Select(hit => hit.ChunkId).ToList();
         }
@@ -139,15 +141,19 @@ public sealed class KnowledgeSearchService : IKnowledgeSearchService
         return string.Join(Environment.NewLine, neighbors.Select(neighbor => neighbor.Content));
     }
 
-    private async Task<ReadOnlyMemory<float>> TryEmbedQueryAsync(string query, CancellationToken cancellationToken)
+    // Returns the query vector plus the resolved model name it was embedded with (the vector-search scope key). On the
+    // degrade path the vector is empty and the resolved name falls back to the configured name (unused, since the vector
+    // arm is skipped when the vector is empty).
+    private async Task<(ReadOnlyMemory<float> Vector, string ResolvedModel)> TryEmbedQueryAsync(string query, CancellationToken cancellationToken)
     {
         try
         {
             var provider = _providerResolver.ResolveProvider(_options.EmbeddingProviderName);
 
-            // Build the query vector with the SAME model the ingestion lane resolved for the chunk vectors, so the two
-            // vector sets are comparable. The vector-search arm still filters by the configured EmbeddingModelName scope
-            // key (below), which both lanes stamp on stored vectors regardless of the resolved generator name.
+            // Resolve ONCE. The same resolved name embeds the query AND filters the stored chunk vectors, so query and
+            // chunk vectors are only ever compared when the identical model produced both (the ingestion lane stamps the
+            // same resolved name as the scope key). A later same-dimension model swap changes this name and excludes the
+            // now-incompatible old vectors instead of silently mis-comparing them.
             var embeddingModelName = await _embeddingModelResolver.ResolveAsync(provider, cancellationToken).ConfigureAwait(false);
             using var generator = provider.CreateEmbeddingGenerator(new LocalModelSelection
             {
@@ -159,17 +165,17 @@ public sealed class KnowledgeSearchService : IKnowledgeSearchService
             var generated = await generator.GenerateAsync([_prefixer.ForQuery(query)], options: null, cancellationToken).ConfigureAwait(false);
             if (generated.Count == 0)
             {
-                return ReadOnlyMemory<float>.Empty;
+                return (ReadOnlyMemory<float>.Empty, embeddingModelName);
             }
 
             var vector = generated[0].Vector;
             if (vector.Length != _options.EmbeddingDimension)
             {
                 // A wrong-dimension query vector cannot be compared to the model-scoped chunk vectors; drop the vector arm.
-                return ReadOnlyMemory<float>.Empty;
+                return (ReadOnlyMemory<float>.Empty, embeddingModelName);
             }
 
-            return vector;
+            return (vector, embeddingModelName);
         }
         catch (Exception exception) when (exception is HttpRequestException or IOException or OllamaException or InvalidOperationException)
         {
@@ -177,7 +183,7 @@ public sealed class KnowledgeSearchService : IKnowledgeSearchService
             // Log the exception type only — never its message, never the query.
             _logger.LogWarning("Knowledge search query embedding unavailable; returning lexical results only. Exception type: {ExceptionType}.",
                 exception.GetType().Name);
-            return ReadOnlyMemory<float>.Empty;
+            return (ReadOnlyMemory<float>.Empty, _options.EmbeddingModelName);
         }
     }
 
