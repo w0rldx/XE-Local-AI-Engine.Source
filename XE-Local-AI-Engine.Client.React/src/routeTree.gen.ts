@@ -23,6 +23,7 @@ import { Route as LayoutModelsRouteImport } from './routes/_layout/models'
 import { Route as LayoutModelRecommendationsRouteImport } from './routes/_layout/model-recommendations'
 import { Route as LayoutMcpRouteImport } from './routes/_layout/mcp'
 import { Route as LayoutLoadedModelsRouteImport } from './routes/_layout/loaded-models'
+import { Route as LayoutKnowledgeBaseRouteImport } from './routes/_layout/knowledge-base'
 import { Route as LayoutInvocationsRouteImport } from './routes/_layout/invocations'
 import { Route as LayoutDiagnosticsRouteImport } from './routes/_layout/diagnostics'
 import { Route as LayoutDashboardRouteImport } from './routes/_layout/dashboard'
@@ -100,6 +101,11 @@ const LayoutLoadedModelsRoute = LayoutLoadedModelsRouteImport.update({
   path: '/loaded-models',
   getParentRoute: () => LayoutRoute,
 } as any)
+const LayoutKnowledgeBaseRoute = LayoutKnowledgeBaseRouteImport.update({
+  id: '/knowledge-base',
+  path: '/knowledge-base',
+  getParentRoute: () => LayoutRoute,
+} as any)
 const LayoutInvocationsRoute = LayoutInvocationsRouteImport.update({
   id: '/invocations',
   path: '/invocations',
@@ -141,6 +147,7 @@ export interface FileRoutesByFullPath {
   '/dashboard': typeof LayoutDashboardRoute
   '/diagnostics': typeof LayoutDiagnosticsRoute
   '/invocations': typeof LayoutInvocationsRoute
+  '/knowledge-base': typeof LayoutKnowledgeBaseRoute
   '/loaded-models': typeof LayoutLoadedModelsRoute
   '/mcp': typeof LayoutMcpRoute
   '/model-recommendations': typeof LayoutModelRecommendationsRoute
@@ -161,6 +168,7 @@ export interface FileRoutesByTo {
   '/dashboard': typeof LayoutDashboardRoute
   '/diagnostics': typeof LayoutDiagnosticsRoute
   '/invocations': typeof LayoutInvocationsRoute
+  '/knowledge-base': typeof LayoutKnowledgeBaseRoute
   '/loaded-models': typeof LayoutLoadedModelsRoute
   '/mcp': typeof LayoutMcpRoute
   '/model-recommendations': typeof LayoutModelRecommendationsRoute
@@ -184,6 +192,7 @@ export interface FileRoutesById {
   '/_layout/dashboard': typeof LayoutDashboardRoute
   '/_layout/diagnostics': typeof LayoutDiagnosticsRoute
   '/_layout/invocations': typeof LayoutInvocationsRoute
+  '/_layout/knowledge-base': typeof LayoutKnowledgeBaseRoute
   '/_layout/loaded-models': typeof LayoutLoadedModelsRoute
   '/_layout/mcp': typeof LayoutMcpRoute
   '/_layout/model-recommendations': typeof LayoutModelRecommendationsRoute
@@ -208,6 +217,7 @@ export interface FileRouteTypes {
     | '/dashboard'
     | '/diagnostics'
     | '/invocations'
+    | '/knowledge-base'
     | '/loaded-models'
     | '/mcp'
     | '/model-recommendations'
@@ -228,6 +238,7 @@ export interface FileRouteTypes {
     | '/dashboard'
     | '/diagnostics'
     | '/invocations'
+    | '/knowledge-base'
     | '/loaded-models'
     | '/mcp'
     | '/model-recommendations'
@@ -250,6 +261,7 @@ export interface FileRouteTypes {
     | '/_layout/dashboard'
     | '/_layout/diagnostics'
     | '/_layout/invocations'
+    | '/_layout/knowledge-base'
     | '/_layout/loaded-models'
     | '/_layout/mcp'
     | '/_layout/model-recommendations'
@@ -369,6 +381,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof LayoutLoadedModelsRouteImport
       parentRoute: typeof LayoutRoute
     }
+    '/_layout/knowledge-base': {
+      id: '/_layout/knowledge-base'
+      path: '/knowledge-base'
+      fullPath: '/knowledge-base'
+      preLoaderRoute: typeof LayoutKnowledgeBaseRouteImport
+      parentRoute: typeof LayoutRoute
+    }
     '/_layout/invocations': {
       id: '/_layout/invocations'
       path: '/invocations'
@@ -421,6 +440,7 @@ interface LayoutRouteChildren {
   LayoutDashboardRoute: typeof LayoutDashboardRoute
   LayoutDiagnosticsRoute: typeof LayoutDiagnosticsRoute
   LayoutInvocationsRoute: typeof LayoutInvocationsRoute
+  LayoutKnowledgeBaseRoute: typeof LayoutKnowledgeBaseRoute
   LayoutLoadedModelsRoute: typeof LayoutLoadedModelsRoute
   LayoutMcpRoute: typeof LayoutMcpRoute
   LayoutModelRecommendationsRoute: typeof LayoutModelRecommendationsRoute
@@ -441,6 +461,7 @@ const LayoutRouteChildren: LayoutRouteChildren = {
   LayoutDashboardRoute: LayoutDashboardRoute,
   LayoutDiagnosticsRoute: LayoutDiagnosticsRoute,
   LayoutInvocationsRoute: LayoutInvocationsRoute,
+  LayoutKnowledgeBaseRoute: LayoutKnowledgeBaseRoute,
   LayoutLoadedModelsRoute: LayoutLoadedModelsRoute,
   LayoutMcpRoute: LayoutMcpRoute,
   LayoutModelRecommendationsRoute: LayoutModelRecommendationsRoute,

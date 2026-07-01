@@ -3,6 +3,7 @@ import {
 	IconBinaryTree2,
 	IconCpu,
 	IconDashboard,
+	IconDatabase,
 	IconHome,
 	IconListDetails,
 	IconMessageCircle,
@@ -23,6 +24,7 @@ type NavigationCapabilityKey =
 	| "modelFit"
 	| "loadedModels"
 	| "preview"
+	| "knowledgeBase"
 	| "cloudSettings"
 	| "dashboard"
 	| "binding";
@@ -63,6 +65,13 @@ const allNavigationLinks: INavigationLink[] = [
 		icon: IconMessageCircle,
 		translationKey: "navigation.chat",
 		to: nodeRoutePaths.chat,
+	},
+	{
+		id: "knowledgeBase",
+		icon: IconDatabase,
+		translationKey: "navigation.knowledgeBase",
+		to: nodeRoutePaths.knowledgeBase,
+		capability: "knowledgeBase",
 	},
 	{
 		id: "binding",

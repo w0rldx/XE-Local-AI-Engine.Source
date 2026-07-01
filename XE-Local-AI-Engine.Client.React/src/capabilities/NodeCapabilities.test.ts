@@ -44,6 +44,7 @@ describe("nodeCapabilities", () => {
 		expect(nodeRoutePaths).toEqual({
 			home: "/",
 			chat: "/chat",
+			knowledgeBase: "/knowledge-base",
 			dashboard: "/dashboard",
 			binding: "/node-binding",
 			nodeSettings: "/node-settings",

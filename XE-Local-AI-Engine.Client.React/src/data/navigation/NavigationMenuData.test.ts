@@ -28,6 +28,7 @@ describe("navigationLinks", () => {
 		expect(navigationLinks.map((link) => link.id)).toEqual([
 			"home",
 			"chat",
+			"knowledgeBase",
 			"models",
 			"settings",
 			"automation",
@@ -43,6 +44,7 @@ describe("navigationLinks", () => {
 			"home",
 			"dashboard",
 			"chat",
+			"knowledgeBase",
 			"binding",
 			"models",
 			"settings",
