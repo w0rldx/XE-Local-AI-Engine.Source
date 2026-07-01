@@ -42,6 +42,7 @@ import {
 	deleteAgentDefinition,
 	deleteConversationFile,
 	deleteGoldenConversation,
+	deleteKnowledgeDocument,
 	deleteLocalModel,
 	deleteMcpServer,
 	deleteModelKind,
@@ -75,6 +76,7 @@ import {
 	getHardwareProfile,
 	getHfTokenStatus,
 	getInvocationMonitor,
+	getKnowledgeDocument,
 	getLatestRecommendations,
 	getLlamaCppRuntime,
 	getLocalModelDetails,
@@ -103,6 +105,7 @@ import {
 	listConversationFiles,
 	listGoldenConversations,
 	listInferenceProfiles,
+	listKnowledgeDocuments,
 	listLocalModels,
 	listMcpServers,
 	listNodeChatConversations,
@@ -127,6 +130,8 @@ import {
 	promoteSuggestedPlaybookAction,
 	putModelKind,
 	refreshRecommendations,
+	reindexCorpus,
+	reindexKnowledgeDocument,
 	rejectSuggestedPlaybookAction,
 	removeCudaBuild,
 	renameNodeChatConversation,
@@ -134,6 +139,7 @@ import {
 	saveCloudSettings,
 	saveNodeSettings,
 	saveTutorialState,
+	searchKnowledge,
 	selectLocalModel,
 	setHfToken,
 	setMcpServerEnabled,
@@ -156,6 +162,7 @@ import {
 	updateSkill,
 	updateSuggestedPlaybookAction,
 	uploadConversationFile,
+	uploadKnowledgeDocument,
 	validationProblemProbe,
 } from "../sdk.gen";
 import type {
@@ -223,6 +230,8 @@ import type {
 	DeleteConversationFileResponse,
 	DeleteGoldenConversationData,
 	DeleteGoldenConversationResponse,
+	DeleteKnowledgeDocumentData,
+	DeleteKnowledgeDocumentResponse,
 	DeleteLocalModelData,
 	DeleteLocalModelError,
 	DeleteLocalModelResponse,
@@ -291,6 +300,8 @@ import type {
 	GetHfTokenStatusResponse,
 	GetInvocationMonitorData,
 	GetInvocationMonitorResponse,
+	GetKnowledgeDocumentData,
+	GetKnowledgeDocumentResponse,
 	GetLatestRecommendationsData,
 	GetLatestRecommendationsResponse,
 	GetLlamaCppRuntimeData,
@@ -349,6 +360,8 @@ import type {
 	ListGoldenConversationsResponse,
 	ListInferenceProfilesData,
 	ListInferenceProfilesResponse,
+	ListKnowledgeDocumentsData,
+	ListKnowledgeDocumentsResponse,
 	ListLocalModelsData,
 	ListLocalModelsResponse,
 	ListMcpServersData,
@@ -399,6 +412,10 @@ import type {
 	PutModelKindResponse,
 	RefreshRecommendationsData,
 	RefreshRecommendationsResponse,
+	ReindexCorpusData,
+	ReindexCorpusResponse,
+	ReindexKnowledgeDocumentData,
+	ReindexKnowledgeDocumentResponse,
 	RejectSuggestedPlaybookActionData,
 	RejectSuggestedPlaybookActionResponse,
 	RemoveCudaBuildData,
@@ -416,6 +433,8 @@ import type {
 	SaveNodeSettingsResponse,
 	SaveTutorialStateData,
 	SaveTutorialStateResponse,
+	SearchKnowledgeData,
+	SearchKnowledgeResponse,
 	SelectLocalModelData,
 	SelectLocalModelError,
 	SelectLocalModelResponse,
@@ -464,6 +483,8 @@ import type {
 	UpdateSuggestedPlaybookActionResponse,
 	UploadConversationFileData,
 	UploadConversationFileResponse,
+	UploadKnowledgeDocumentData,
+	UploadKnowledgeDocumentResponse,
 	ValidationProblemProbeData,
 	ValidationProblemProbeError,
 	ValidationProblemProbeResponse,
@@ -508,17 +529,18 @@ const createQueryKey = <TOptions extends Options>(
 	return [params];
 };
 
-export const getTutorialStateQueryKey = (options?: Options<GetTutorialStateData>) => createQueryKey("getTutorialState", options);
+export const listAgentDefinitionsQueryKey = (options?: Options<ListAgentDefinitionsData>) =>
+	createQueryKey("listAgentDefinitions", options);
 
-export const getTutorialStateOptions = (options?: Options<GetTutorialStateData>) =>
+export const listAgentDefinitionsOptions = (options?: Options<ListAgentDefinitionsData>) =>
 	queryOptions<
-		GetTutorialStateResponse,
+		ListAgentDefinitionsResponse,
 		AxiosError<DefaultError>,
-		GetTutorialStateResponse,
-		ReturnType<typeof getTutorialStateQueryKey>
+		ListAgentDefinitionsResponse,
+		ReturnType<typeof listAgentDefinitionsQueryKey>
 	>({
 		queryFn: async ({ queryKey, signal }) => {
-			const { data } = await getTutorialState({
+			const { data } = await listAgentDefinitions({
 				...options,
 				...queryKey[0],
 				signal,
@@ -526,19 +548,19 @@ export const getTutorialStateOptions = (options?: Options<GetTutorialStateData>)
 			});
 			return data;
 		},
-		queryKey: getTutorialStateQueryKey(options),
+		queryKey: listAgentDefinitionsQueryKey(options),
 	});
 
-export const saveTutorialStateMutation = (
-	options?: Partial<Options<SaveTutorialStateData>>,
-): UseMutationOptions<SaveTutorialStateResponse, AxiosError<DefaultError>, Options<SaveTutorialStateData>> => {
+export const createAgentDefinitionMutation = (
+	options?: Partial<Options<CreateAgentDefinitionData>>,
+): UseMutationOptions<CreateAgentDefinitionResponse, AxiosError<DefaultError>, Options<CreateAgentDefinitionData>> => {
 	const mutationOptions: UseMutationOptions<
-		SaveTutorialStateResponse,
+		CreateAgentDefinitionResponse,
 		AxiosError<DefaultError>,
-		Options<SaveTutorialStateData>
+		Options<CreateAgentDefinitionData>
 	> = {
 		mutationFn: async (fnOptions) => {
-			const { data } = await saveTutorialState({
+			const { data } = await createAgentDefinition({
 				...options,
 				...fnOptions,
 				throwOnError: true,
@@ -549,96 +571,2672 @@ export const saveTutorialStateMutation = (
 	return mutationOptions;
 };
 
-export const listSkillsQueryKey = (options?: Options<ListSkillsData>) => createQueryKey("listSkills", options);
-
-export const listSkillsOptions = (options?: Options<ListSkillsData>) =>
-	queryOptions<ListSkillsResponse, AxiosError<DefaultError>, ListSkillsResponse, ReturnType<typeof listSkillsQueryKey>>({
-		queryFn: async ({ queryKey, signal }) => {
-			const { data } = await listSkills({
-				...options,
-				...queryKey[0],
-				signal,
-				throwOnError: true,
-			});
-			return data;
-		},
-		queryKey: listSkillsQueryKey(options),
-	});
-
-export const createSkillMutation = (
-	options?: Partial<Options<CreateSkillData>>,
-): UseMutationOptions<CreateSkillResponse, AxiosError<DefaultError>, Options<CreateSkillData>> => {
-	const mutationOptions: UseMutationOptions<CreateSkillResponse, AxiosError<DefaultError>, Options<CreateSkillData>> = {
-		mutationFn: async (fnOptions) => {
-			const { data } = await createSkill({
-				...options,
-				...fnOptions,
-				throwOnError: true,
-			});
-			return data;
-		},
-	};
-	return mutationOptions;
-};
-
-export const deleteSkillMutation = (
-	options?: Partial<Options<DeleteSkillData>>,
-): UseMutationOptions<DeleteSkillResponse, AxiosError<DefaultError>, Options<DeleteSkillData>> => {
-	const mutationOptions: UseMutationOptions<DeleteSkillResponse, AxiosError<DefaultError>, Options<DeleteSkillData>> = {
-		mutationFn: async (fnOptions) => {
-			const { data } = await deleteSkill({
-				...options,
-				...fnOptions,
-				throwOnError: true,
-			});
-			return data;
-		},
-	};
-	return mutationOptions;
-};
-
-export const getSkillQueryKey = (options: Options<GetSkillData>) => createQueryKey("getSkill", options);
-
-export const getSkillOptions = (options: Options<GetSkillData>) =>
-	queryOptions<GetSkillResponse, AxiosError<DefaultError>, GetSkillResponse, ReturnType<typeof getSkillQueryKey>>({
-		queryFn: async ({ queryKey, signal }) => {
-			const { data } = await getSkill({
-				...options,
-				...queryKey[0],
-				signal,
-				throwOnError: true,
-			});
-			return data;
-		},
-		queryKey: getSkillQueryKey(options),
-	});
-
-export const updateSkillMutation = (
-	options?: Partial<Options<UpdateSkillData>>,
-): UseMutationOptions<UpdateSkillResponse, AxiosError<DefaultError>, Options<UpdateSkillData>> => {
-	const mutationOptions: UseMutationOptions<UpdateSkillResponse, AxiosError<DefaultError>, Options<UpdateSkillData>> = {
-		mutationFn: async (fnOptions) => {
-			const { data } = await updateSkill({
-				...options,
-				...fnOptions,
-				throwOnError: true,
-			});
-			return data;
-		},
-	};
-	return mutationOptions;
-};
-
-export const cancelScheduledJobRunMutation = (
-	options?: Partial<Options<CancelScheduledJobRunData>>,
-): UseMutationOptions<CancelScheduledJobRunResponse, AxiosError<DefaultError>, Options<CancelScheduledJobRunData>> => {
+export const deleteAgentDefinitionMutation = (
+	options?: Partial<Options<DeleteAgentDefinitionData>>,
+): UseMutationOptions<DeleteAgentDefinitionResponse, AxiosError<DefaultError>, Options<DeleteAgentDefinitionData>> => {
 	const mutationOptions: UseMutationOptions<
-		CancelScheduledJobRunResponse,
+		DeleteAgentDefinitionResponse,
 		AxiosError<DefaultError>,
-		Options<CancelScheduledJobRunData>
+		Options<DeleteAgentDefinitionData>
 	> = {
 		mutationFn: async (fnOptions) => {
-			const { data } = await cancelScheduledJobRun({
+			const { data } = await deleteAgentDefinition({
+				...options,
+				...fnOptions,
+				throwOnError: true,
+			});
+			return data;
+		},
+	};
+	return mutationOptions;
+};
+
+export const getAgentDefinitionQueryKey = (options: Options<GetAgentDefinitionData>) =>
+	createQueryKey("getAgentDefinition", options);
+
+export const getAgentDefinitionOptions = (options: Options<GetAgentDefinitionData>) =>
+	queryOptions<
+		GetAgentDefinitionResponse,
+		AxiosError<DefaultError>,
+		GetAgentDefinitionResponse,
+		ReturnType<typeof getAgentDefinitionQueryKey>
+	>({
+		queryFn: async ({ queryKey, signal }) => {
+			const { data } = await getAgentDefinition({
+				...options,
+				...queryKey[0],
+				signal,
+				throwOnError: true,
+			});
+			return data;
+		},
+		queryKey: getAgentDefinitionQueryKey(options),
+	});
+
+export const updateAgentDefinitionMutation = (
+	options?: Partial<Options<UpdateAgentDefinitionData>>,
+): UseMutationOptions<UpdateAgentDefinitionResponse, AxiosError<DefaultError>, Options<UpdateAgentDefinitionData>> => {
+	const mutationOptions: UseMutationOptions<
+		UpdateAgentDefinitionResponse,
+		AxiosError<DefaultError>,
+		Options<UpdateAgentDefinitionData>
+	> = {
+		mutationFn: async (fnOptions) => {
+			const { data } = await updateAgentDefinition({
+				...options,
+				...fnOptions,
+				throwOnError: true,
+			});
+			return data;
+		},
+	};
+	return mutationOptions;
+};
+
+export const listAgentExecutionLogsQueryKey = (options: Options<ListAgentExecutionLogsData>) =>
+	createQueryKey("listAgentExecutionLogs", options);
+
+export const listAgentExecutionLogsOptions = (options: Options<ListAgentExecutionLogsData>) =>
+	queryOptions<
+		ListAgentExecutionLogsResponse,
+		AxiosError<DefaultError>,
+		ListAgentExecutionLogsResponse,
+		ReturnType<typeof listAgentExecutionLogsQueryKey>
+	>({
+		queryFn: async ({ queryKey, signal }) => {
+			const { data } = await listAgentExecutionLogs({
+				...options,
+				...queryKey[0],
+				signal,
+				throwOnError: true,
+			});
+			return data;
+		},
+		queryKey: listAgentExecutionLogsQueryKey(options),
+	});
+
+const createInfiniteParams = <K extends Pick<QueryKey<Options>[0], "body" | "headers" | "path" | "query">>(
+	queryKey: QueryKey<Options>,
+	page: K,
+) => {
+	const params = { ...queryKey[0] };
+	if (page.body) {
+		params.body = {
+			...(queryKey[0].body as any),
+			...(page.body as any),
+		};
+	}
+	if (page.headers) {
+		params.headers = {
+			...queryKey[0].headers,
+			...page.headers,
+		};
+	}
+	if (page.path) {
+		params.path = {
+			...(queryKey[0].path as any),
+			...(page.path as any),
+		};
+	}
+	if (page.query) {
+		params.query = {
+			...(queryKey[0].query as any),
+			...(page.query as any),
+		};
+	}
+	return params as unknown as typeof page;
+};
+
+export const listAgentExecutionLogsInfiniteQueryKey = (
+	options: Options<ListAgentExecutionLogsData>,
+): QueryKey<Options<ListAgentExecutionLogsData>> => createQueryKey("listAgentExecutionLogs", options, true);
+
+export const listAgentExecutionLogsInfiniteOptions = (options: Options<ListAgentExecutionLogsData>) =>
+	infiniteQueryOptions<
+		ListAgentExecutionLogsResponse,
+		AxiosError<DefaultError>,
+		InfiniteData<ListAgentExecutionLogsResponse>,
+		QueryKey<Options<ListAgentExecutionLogsData>>,
+		number | null | Pick<QueryKey<Options<ListAgentExecutionLogsData>>[0], "body" | "headers" | "path" | "query">
+	>(
+		// @ts-ignore
+		{
+			queryFn: async ({ pageParam, queryKey, signal }) => {
+				// @ts-ignore
+				const page: Pick<QueryKey<Options<ListAgentExecutionLogsData>>[0], "body" | "headers" | "path" | "query"> =
+					typeof pageParam === "object"
+						? pageParam
+						: {
+								query: {
+									offset: pageParam,
+								},
+							};
+				const params = createInfiniteParams(queryKey, page);
+				const { data } = await listAgentExecutionLogs({
+					...options,
+					...params,
+					signal,
+					throwOnError: true,
+				});
+				return data;
+			},
+			queryKey: listAgentExecutionLogsInfiniteQueryKey(options),
+		},
+	);
+
+export const getAgentFeedbackInsightsQueryKey = (options: Options<GetAgentFeedbackInsightsData>) =>
+	createQueryKey("getAgentFeedbackInsights", options);
+
+export const getAgentFeedbackInsightsOptions = (options: Options<GetAgentFeedbackInsightsData>) =>
+	queryOptions<
+		GetAgentFeedbackInsightsResponse,
+		AxiosError<DefaultError>,
+		GetAgentFeedbackInsightsResponse,
+		ReturnType<typeof getAgentFeedbackInsightsQueryKey>
+	>({
+		queryFn: async ({ queryKey, signal }) => {
+			const { data } = await getAgentFeedbackInsights({
+				...options,
+				...queryKey[0],
+				signal,
+				throwOnError: true,
+			});
+			return data;
+		},
+		queryKey: getAgentFeedbackInsightsQueryKey(options),
+	});
+
+export const listGoldenConversationsQueryKey = (options: Options<ListGoldenConversationsData>) =>
+	createQueryKey("listGoldenConversations", options);
+
+export const listGoldenConversationsOptions = (options: Options<ListGoldenConversationsData>) =>
+	queryOptions<
+		ListGoldenConversationsResponse,
+		AxiosError<DefaultError>,
+		ListGoldenConversationsResponse,
+		ReturnType<typeof listGoldenConversationsQueryKey>
+	>({
+		queryFn: async ({ queryKey, signal }) => {
+			const { data } = await listGoldenConversations({
+				...options,
+				...queryKey[0],
+				signal,
+				throwOnError: true,
+			});
+			return data;
+		},
+		queryKey: listGoldenConversationsQueryKey(options),
+	});
+
+export const createGoldenConversationMutation = (
+	options?: Partial<Options<CreateGoldenConversationData>>,
+): UseMutationOptions<CreateGoldenConversationResponse, AxiosError<DefaultError>, Options<CreateGoldenConversationData>> => {
+	const mutationOptions: UseMutationOptions<
+		CreateGoldenConversationResponse,
+		AxiosError<DefaultError>,
+		Options<CreateGoldenConversationData>
+	> = {
+		mutationFn: async (fnOptions) => {
+			const { data } = await createGoldenConversation({
+				...options,
+				...fnOptions,
+				throwOnError: true,
+			});
+			return data;
+		},
+	};
+	return mutationOptions;
+};
+
+export const deleteGoldenConversationMutation = (
+	options?: Partial<Options<DeleteGoldenConversationData>>,
+): UseMutationOptions<DeleteGoldenConversationResponse, AxiosError<DefaultError>, Options<DeleteGoldenConversationData>> => {
+	const mutationOptions: UseMutationOptions<
+		DeleteGoldenConversationResponse,
+		AxiosError<DefaultError>,
+		Options<DeleteGoldenConversationData>
+	> = {
+		mutationFn: async (fnOptions) => {
+			const { data } = await deleteGoldenConversation({
+				...options,
+				...fnOptions,
+				throwOnError: true,
+			});
+			return data;
+		},
+	};
+	return mutationOptions;
+};
+
+export const approveGoldenConversationMutation = (
+	options?: Partial<Options<ApproveGoldenConversationData>>,
+): UseMutationOptions<ApproveGoldenConversationResponse, AxiosError<DefaultError>, Options<ApproveGoldenConversationData>> => {
+	const mutationOptions: UseMutationOptions<
+		ApproveGoldenConversationResponse,
+		AxiosError<DefaultError>,
+		Options<ApproveGoldenConversationData>
+	> = {
+		mutationFn: async (fnOptions) => {
+			const { data } = await approveGoldenConversation({
+				...options,
+				...fnOptions,
+				throwOnError: true,
+			});
+			return data;
+		},
+	};
+	return mutationOptions;
+};
+
+export const harvestGoldenConversationsMutation = (
+	options?: Partial<Options<HarvestGoldenConversationsData>>,
+): UseMutationOptions<HarvestGoldenConversationsResponse, AxiosError<DefaultError>, Options<HarvestGoldenConversationsData>> => {
+	const mutationOptions: UseMutationOptions<
+		HarvestGoldenConversationsResponse,
+		AxiosError<DefaultError>,
+		Options<HarvestGoldenConversationsData>
+	> = {
+		mutationFn: async (fnOptions) => {
+			const { data } = await harvestGoldenConversations({
+				...options,
+				...fnOptions,
+				throwOnError: true,
+			});
+			return data;
+		},
+	};
+	return mutationOptions;
+};
+
+export const listAgentPlaybookActionsQueryKey = (options: Options<ListAgentPlaybookActionsData>) =>
+	createQueryKey("listAgentPlaybookActions", options);
+
+export const listAgentPlaybookActionsOptions = (options: Options<ListAgentPlaybookActionsData>) =>
+	queryOptions<
+		ListAgentPlaybookActionsResponse,
+		AxiosError<DefaultError>,
+		ListAgentPlaybookActionsResponse,
+		ReturnType<typeof listAgentPlaybookActionsQueryKey>
+	>({
+		queryFn: async ({ queryKey, signal }) => {
+			const { data } = await listAgentPlaybookActions({
+				...options,
+				...queryKey[0],
+				signal,
+				throwOnError: true,
+			});
+			return data;
+		},
+		queryKey: listAgentPlaybookActionsQueryKey(options),
+	});
+
+export const createPlaybookActionMutation = (
+	options?: Partial<Options<CreatePlaybookActionData>>,
+): UseMutationOptions<CreatePlaybookActionResponse, AxiosError<DefaultError>, Options<CreatePlaybookActionData>> => {
+	const mutationOptions: UseMutationOptions<
+		CreatePlaybookActionResponse,
+		AxiosError<DefaultError>,
+		Options<CreatePlaybookActionData>
+	> = {
+		mutationFn: async (fnOptions) => {
+			const { data } = await createPlaybookAction({
+				...options,
+				...fnOptions,
+				throwOnError: true,
+			});
+			return data;
+		},
+	};
+	return mutationOptions;
+};
+
+export const deletePlaybookActionMutation = (
+	options?: Partial<Options<DeletePlaybookActionData>>,
+): UseMutationOptions<DeletePlaybookActionResponse, AxiosError<DefaultError>, Options<DeletePlaybookActionData>> => {
+	const mutationOptions: UseMutationOptions<
+		DeletePlaybookActionResponse,
+		AxiosError<DefaultError>,
+		Options<DeletePlaybookActionData>
+	> = {
+		mutationFn: async (fnOptions) => {
+			const { data } = await deletePlaybookAction({
+				...options,
+				...fnOptions,
+				throwOnError: true,
+			});
+			return data;
+		},
+	};
+	return mutationOptions;
+};
+
+export const updatePlaybookActionMutation = (
+	options?: Partial<Options<UpdatePlaybookActionData>>,
+): UseMutationOptions<UpdatePlaybookActionResponse, AxiosError<DefaultError>, Options<UpdatePlaybookActionData>> => {
+	const mutationOptions: UseMutationOptions<
+		UpdatePlaybookActionResponse,
+		AxiosError<DefaultError>,
+		Options<UpdatePlaybookActionData>
+	> = {
+		mutationFn: async (fnOptions) => {
+			const { data } = await updatePlaybookAction({
+				...options,
+				...fnOptions,
+				throwOnError: true,
+			});
+			return data;
+		},
+	};
+	return mutationOptions;
+};
+
+export const runPlaybookActionEvalMutation = (
+	options?: Partial<Options<RunPlaybookActionEvalData>>,
+): UseMutationOptions<RunPlaybookActionEvalResponse, AxiosError<DefaultError>, Options<RunPlaybookActionEvalData>> => {
+	const mutationOptions: UseMutationOptions<
+		RunPlaybookActionEvalResponse,
+		AxiosError<DefaultError>,
+		Options<RunPlaybookActionEvalData>
+	> = {
+		mutationFn: async (fnOptions) => {
+			const { data } = await runPlaybookActionEval({
+				...options,
+				...fnOptions,
+				throwOnError: true,
+			});
+			return data;
+		},
+	};
+	return mutationOptions;
+};
+
+export const promoteSuggestedPlaybookActionMutation = (
+	options?: Partial<Options<PromoteSuggestedPlaybookActionData>>,
+): UseMutationOptions<
+	PromoteSuggestedPlaybookActionResponse,
+	AxiosError<DefaultError>,
+	Options<PromoteSuggestedPlaybookActionData>
+> => {
+	const mutationOptions: UseMutationOptions<
+		PromoteSuggestedPlaybookActionResponse,
+		AxiosError<DefaultError>,
+		Options<PromoteSuggestedPlaybookActionData>
+	> = {
+		mutationFn: async (fnOptions) => {
+			const { data } = await promoteSuggestedPlaybookAction({
+				...options,
+				...fnOptions,
+				throwOnError: true,
+			});
+			return data;
+		},
+	};
+	return mutationOptions;
+};
+
+export const rejectSuggestedPlaybookActionMutation = (
+	options?: Partial<Options<RejectSuggestedPlaybookActionData>>,
+): UseMutationOptions<
+	RejectSuggestedPlaybookActionResponse,
+	AxiosError<DefaultError>,
+	Options<RejectSuggestedPlaybookActionData>
+> => {
+	const mutationOptions: UseMutationOptions<
+		RejectSuggestedPlaybookActionResponse,
+		AxiosError<DefaultError>,
+		Options<RejectSuggestedPlaybookActionData>
+	> = {
+		mutationFn: async (fnOptions) => {
+			const { data } = await rejectSuggestedPlaybookAction({
+				...options,
+				...fnOptions,
+				throwOnError: true,
+			});
+			return data;
+		},
+	};
+	return mutationOptions;
+};
+
+export const updateSuggestedPlaybookActionMutation = (
+	options?: Partial<Options<UpdateSuggestedPlaybookActionData>>,
+): UseMutationOptions<
+	UpdateSuggestedPlaybookActionResponse,
+	AxiosError<DefaultError>,
+	Options<UpdateSuggestedPlaybookActionData>
+> => {
+	const mutationOptions: UseMutationOptions<
+		UpdateSuggestedPlaybookActionResponse,
+		AxiosError<DefaultError>,
+		Options<UpdateSuggestedPlaybookActionData>
+	> = {
+		mutationFn: async (fnOptions) => {
+			const { data } = await updateSuggestedPlaybookAction({
+				...options,
+				...fnOptions,
+				throwOnError: true,
+			});
+			return data;
+		},
+	};
+	return mutationOptions;
+};
+
+export const analyzePlaybookMutation = (
+	options?: Partial<Options<AnalyzePlaybookData>>,
+): UseMutationOptions<AnalyzePlaybookResponse, AxiosError<DefaultError>, Options<AnalyzePlaybookData>> => {
+	const mutationOptions: UseMutationOptions<AnalyzePlaybookResponse, AxiosError<DefaultError>, Options<AnalyzePlaybookData>> = {
+		mutationFn: async (fnOptions) => {
+			const { data } = await analyzePlaybook({
+				...options,
+				...fnOptions,
+				throwOnError: true,
+			});
+			return data;
+		},
+	};
+	return mutationOptions;
+};
+
+export const getAgentPlaybookMonitorQueryKey = (options: Options<GetAgentPlaybookMonitorData>) =>
+	createQueryKey("getAgentPlaybookMonitor", options);
+
+export const getAgentPlaybookMonitorOptions = (options: Options<GetAgentPlaybookMonitorData>) =>
+	queryOptions<
+		GetAgentPlaybookMonitorResponse,
+		AxiosError<DefaultError>,
+		GetAgentPlaybookMonitorResponse,
+		ReturnType<typeof getAgentPlaybookMonitorQueryKey>
+	>({
+		queryFn: async ({ queryKey, signal }) => {
+			const { data } = await getAgentPlaybookMonitor({
+				...options,
+				...queryKey[0],
+				signal,
+				throwOnError: true,
+			});
+			return data;
+		},
+		queryKey: getAgentPlaybookMonitorQueryKey(options),
+	});
+
+export const listAgentTemplatesQueryKey = (options?: Options<ListAgentTemplatesData>) =>
+	createQueryKey("listAgentTemplates", options);
+
+export const listAgentTemplatesOptions = (options?: Options<ListAgentTemplatesData>) =>
+	queryOptions<
+		ListAgentTemplatesResponse,
+		AxiosError<DefaultError>,
+		ListAgentTemplatesResponse,
+		ReturnType<typeof listAgentTemplatesQueryKey>
+	>({
+		queryFn: async ({ queryKey, signal }) => {
+			const { data } = await listAgentTemplates({
+				...options,
+				...queryKey[0],
+				signal,
+				throwOnError: true,
+			});
+			return data;
+		},
+		queryKey: listAgentTemplatesQueryKey(options),
+	});
+
+export const importAgentTemplatesMutation = (
+	options?: Partial<Options<ImportAgentTemplatesData>>,
+): UseMutationOptions<ImportAgentTemplatesResponse, AxiosError<DefaultError>, Options<ImportAgentTemplatesData>> => {
+	const mutationOptions: UseMutationOptions<
+		ImportAgentTemplatesResponse,
+		AxiosError<DefaultError>,
+		Options<ImportAgentTemplatesData>
+	> = {
+		mutationFn: async (fnOptions) => {
+			const { data } = await importAgentTemplates({
+				...options,
+				...fnOptions,
+				throwOnError: true,
+			});
+			return data;
+		},
+	};
+	return mutationOptions;
+};
+
+export const getToolCapableModelsQueryKey = (options?: Options<GetToolCapableModelsData>) =>
+	createQueryKey("getToolCapableModels", options);
+
+export const getToolCapableModelsOptions = (options?: Options<GetToolCapableModelsData>) =>
+	queryOptions<
+		GetToolCapableModelsResponse,
+		AxiosError<DefaultError>,
+		GetToolCapableModelsResponse,
+		ReturnType<typeof getToolCapableModelsQueryKey>
+	>({
+		queryFn: async ({ queryKey, signal }) => {
+			const { data } = await getToolCapableModels({
+				...options,
+				...queryKey[0],
+				signal,
+				throwOnError: true,
+			});
+			return data;
+		},
+		queryKey: getToolCapableModelsQueryKey(options),
+	});
+
+export const applyAppUpdateMutation = (
+	options?: Partial<Options<ApplyAppUpdateData>>,
+): UseMutationOptions<ApplyAppUpdateResponse, AxiosError<DefaultError>, Options<ApplyAppUpdateData>> => {
+	const mutationOptions: UseMutationOptions<ApplyAppUpdateResponse, AxiosError<DefaultError>, Options<ApplyAppUpdateData>> = {
+		mutationFn: async (fnOptions) => {
+			const { data } = await applyAppUpdate({
+				...options,
+				...fnOptions,
+				throwOnError: true,
+			});
+			return data;
+		},
+	};
+	return mutationOptions;
+};
+
+export const getAppUpdateStatusQueryKey = (options?: Options<GetAppUpdateStatusData>) =>
+	createQueryKey("getAppUpdateStatus", options);
+
+export const getAppUpdateStatusOptions = (options?: Options<GetAppUpdateStatusData>) =>
+	queryOptions<
+		GetAppUpdateStatusResponse,
+		AxiosError<DefaultError>,
+		GetAppUpdateStatusResponse,
+		ReturnType<typeof getAppUpdateStatusQueryKey>
+	>({
+		queryFn: async ({ queryKey, signal }) => {
+			const { data } = await getAppUpdateStatus({
+				...options,
+				...queryKey[0],
+				signal,
+				throwOnError: true,
+			});
+			return data;
+		},
+		queryKey: getAppUpdateStatusQueryKey(options),
+	});
+
+export const nodeChangePasswordMutation = (
+	options?: Partial<Options<NodeChangePasswordData>>,
+): UseMutationOptions<NodeChangePasswordResponse, AxiosError<NodeChangePasswordError>, Options<NodeChangePasswordData>> => {
+	const mutationOptions: UseMutationOptions<
+		NodeChangePasswordResponse,
+		AxiosError<NodeChangePasswordError>,
+		Options<NodeChangePasswordData>
+	> = {
+		mutationFn: async (fnOptions) => {
+			const { data } = await nodeChangePassword({
+				...options,
+				...fnOptions,
+				throwOnError: true,
+			});
+			return data;
+		},
+	};
+	return mutationOptions;
+};
+
+export const nodeLoginMutation = (
+	options?: Partial<Options<NodeLoginData>>,
+): UseMutationOptions<NodeLoginResponse, AxiosError<NodeLoginError>, Options<NodeLoginData>> => {
+	const mutationOptions: UseMutationOptions<NodeLoginResponse, AxiosError<NodeLoginError>, Options<NodeLoginData>> = {
+		mutationFn: async (fnOptions) => {
+			const { data } = await nodeLogin({
+				...options,
+				...fnOptions,
+				throwOnError: true,
+			});
+			return data;
+		},
+	};
+	return mutationOptions;
+};
+
+export const nodeLogoutMutation = (
+	options?: Partial<Options<NodeLogoutData>>,
+): UseMutationOptions<NodeLogoutResponse, AxiosError<DefaultError>, Options<NodeLogoutData>> => {
+	const mutationOptions: UseMutationOptions<NodeLogoutResponse, AxiosError<DefaultError>, Options<NodeLogoutData>> = {
+		mutationFn: async (fnOptions) => {
+			const { data } = await nodeLogout({
+				...options,
+				...fnOptions,
+				throwOnError: true,
+			});
+			return data;
+		},
+	};
+	return mutationOptions;
+};
+
+export const nodeMeQueryKey = (options?: Options<NodeMeData>) => createQueryKey("nodeMe", options);
+
+export const nodeMeOptions = (options?: Options<NodeMeData>) =>
+	queryOptions<NodeMeResponse, AxiosError<DefaultError>, NodeMeResponse, ReturnType<typeof nodeMeQueryKey>>({
+		queryFn: async ({ queryKey, signal }) => {
+			const { data } = await nodeMe({
+				...options,
+				...queryKey[0],
+				signal,
+				throwOnError: true,
+			});
+			return data;
+		},
+		queryKey: nodeMeQueryKey(options),
+	});
+
+export const nodeRefreshMutation = (
+	options?: Partial<Options<NodeRefreshData>>,
+): UseMutationOptions<NodeRefreshResponse, AxiosError<DefaultError>, Options<NodeRefreshData>> => {
+	const mutationOptions: UseMutationOptions<NodeRefreshResponse, AxiosError<DefaultError>, Options<NodeRefreshData>> = {
+		mutationFn: async (fnOptions) => {
+			const { data } = await nodeRefresh({
+				...options,
+				...fnOptions,
+				throwOnError: true,
+			});
+			return data;
+		},
+	};
+	return mutationOptions;
+};
+
+export const nodeSetupMutation = (
+	options?: Partial<Options<NodeSetupData>>,
+): UseMutationOptions<NodeSetupResponse, AxiosError<NodeSetupError>, Options<NodeSetupData>> => {
+	const mutationOptions: UseMutationOptions<NodeSetupResponse, AxiosError<NodeSetupError>, Options<NodeSetupData>> = {
+		mutationFn: async (fnOptions) => {
+			const { data } = await nodeSetup({
+				...options,
+				...fnOptions,
+				throwOnError: true,
+			});
+			return data;
+		},
+	};
+	return mutationOptions;
+};
+
+export const nodeAuthStatusQueryKey = (options?: Options<NodeAuthStatusData>) => createQueryKey("nodeAuthStatus", options);
+
+export const nodeAuthStatusOptions = (options?: Options<NodeAuthStatusData>) =>
+	queryOptions<
+		NodeAuthStatusResponse,
+		AxiosError<DefaultError>,
+		NodeAuthStatusResponse,
+		ReturnType<typeof nodeAuthStatusQueryKey>
+	>({
+		queryFn: async ({ queryKey, signal }) => {
+			const { data } = await nodeAuthStatus({
+				...options,
+				...queryKey[0],
+				signal,
+				throwOnError: true,
+			});
+			return data;
+		},
+		queryKey: nodeAuthStatusQueryKey(options),
+	});
+
+export const cancelNodeBindingMutation = (
+	options?: Partial<Options<CancelNodeBindingData>>,
+): UseMutationOptions<CancelNodeBindingResponse, AxiosError<DefaultError>, Options<CancelNodeBindingData>> => {
+	const mutationOptions: UseMutationOptions<
+		CancelNodeBindingResponse,
+		AxiosError<DefaultError>,
+		Options<CancelNodeBindingData>
+	> = {
+		mutationFn: async (fnOptions) => {
+			const { data } = await cancelNodeBinding({
+				...options,
+				...fnOptions,
+				throwOnError: true,
+			});
+			return data;
+		},
+	};
+	return mutationOptions;
+};
+
+export const pollNodeBindingMutation = (
+	options?: Partial<Options<PollNodeBindingData>>,
+): UseMutationOptions<PollNodeBindingResponse, AxiosError<DefaultError>, Options<PollNodeBindingData>> => {
+	const mutationOptions: UseMutationOptions<PollNodeBindingResponse, AxiosError<DefaultError>, Options<PollNodeBindingData>> = {
+		mutationFn: async (fnOptions) => {
+			const { data } = await pollNodeBinding({
+				...options,
+				...fnOptions,
+				throwOnError: true,
+			});
+			return data;
+		},
+	};
+	return mutationOptions;
+};
+
+export const startNodeBindingMutation = (
+	options?: Partial<Options<StartNodeBindingData>>,
+): UseMutationOptions<StartNodeBindingResponse, AxiosError<DefaultError>, Options<StartNodeBindingData>> => {
+	const mutationOptions: UseMutationOptions<StartNodeBindingResponse, AxiosError<DefaultError>, Options<StartNodeBindingData>> = {
+		mutationFn: async (fnOptions) => {
+			const { data } = await startNodeBinding({
+				...options,
+				...fnOptions,
+				throwOnError: true,
+			});
+			return data;
+		},
+	};
+	return mutationOptions;
+};
+
+export const cancelNodeChatMessageMutation = (
+	options?: Partial<Options<CancelNodeChatMessageData>>,
+): UseMutationOptions<
+	CancelNodeChatMessageResponse,
+	AxiosError<CancelNodeChatMessageError>,
+	Options<CancelNodeChatMessageData>
+> => {
+	const mutationOptions: UseMutationOptions<
+		CancelNodeChatMessageResponse,
+		AxiosError<CancelNodeChatMessageError>,
+		Options<CancelNodeChatMessageData>
+	> = {
+		mutationFn: async (fnOptions) => {
+			const { data } = await cancelNodeChatMessage({
+				...options,
+				...fnOptions,
+				throwOnError: true,
+			});
+			return data;
+		},
+	};
+	return mutationOptions;
+};
+
+export const listNodeChatConversationsQueryKey = (options: Options<ListNodeChatConversationsData>) =>
+	createQueryKey("listNodeChatConversations", options);
+
+export const listNodeChatConversationsOptions = (options: Options<ListNodeChatConversationsData>) =>
+	queryOptions<
+		ListNodeChatConversationsResponse,
+		AxiosError<ListNodeChatConversationsError>,
+		ListNodeChatConversationsResponse,
+		ReturnType<typeof listNodeChatConversationsQueryKey>
+	>({
+		queryFn: async ({ queryKey, signal }) => {
+			const { data } = await listNodeChatConversations({
+				...options,
+				...queryKey[0],
+				signal,
+				throwOnError: true,
+			});
+			return data;
+		},
+		queryKey: listNodeChatConversationsQueryKey(options),
+	});
+
+export const createNodeChatConversationMutation = (
+	options?: Partial<Options<CreateNodeChatConversationData>>,
+): UseMutationOptions<
+	CreateNodeChatConversationResponse,
+	AxiosError<CreateNodeChatConversationError>,
+	Options<CreateNodeChatConversationData>
+> => {
+	const mutationOptions: UseMutationOptions<
+		CreateNodeChatConversationResponse,
+		AxiosError<CreateNodeChatConversationError>,
+		Options<CreateNodeChatConversationData>
+	> = {
+		mutationFn: async (fnOptions) => {
+			const { data } = await createNodeChatConversation({
+				...options,
+				...fnOptions,
+				throwOnError: true,
+			});
+			return data;
+		},
+	};
+	return mutationOptions;
+};
+
+export const deleteNodeChatConversationMutation = (
+	options?: Partial<Options<DeleteNodeChatConversationData>>,
+): UseMutationOptions<
+	DeleteNodeChatConversationResponse,
+	AxiosError<DeleteNodeChatConversationError>,
+	Options<DeleteNodeChatConversationData>
+> => {
+	const mutationOptions: UseMutationOptions<
+		DeleteNodeChatConversationResponse,
+		AxiosError<DeleteNodeChatConversationError>,
+		Options<DeleteNodeChatConversationData>
+	> = {
+		mutationFn: async (fnOptions) => {
+			const { data } = await deleteNodeChatConversation({
+				...options,
+				...fnOptions,
+				throwOnError: true,
+			});
+			return data;
+		},
+	};
+	return mutationOptions;
+};
+
+export const getNodeChatConversationQueryKey = (options: Options<GetNodeChatConversationData>) =>
+	createQueryKey("getNodeChatConversation", options);
+
+export const getNodeChatConversationOptions = (options: Options<GetNodeChatConversationData>) =>
+	queryOptions<
+		GetNodeChatConversationResponse,
+		AxiosError<GetNodeChatConversationError>,
+		GetNodeChatConversationResponse,
+		ReturnType<typeof getNodeChatConversationQueryKey>
+	>({
+		queryFn: async ({ queryKey, signal }) => {
+			const { data } = await getNodeChatConversation({
+				...options,
+				...queryKey[0],
+				signal,
+				throwOnError: true,
+			});
+			return data;
+		},
+		queryKey: getNodeChatConversationQueryKey(options),
+	});
+
+export const archiveNodeChatConversationMutation = (
+	options?: Partial<Options<ArchiveNodeChatConversationData>>,
+): UseMutationOptions<
+	ArchiveNodeChatConversationResponse,
+	AxiosError<DefaultError>,
+	Options<ArchiveNodeChatConversationData>
+> => {
+	const mutationOptions: UseMutationOptions<
+		ArchiveNodeChatConversationResponse,
+		AxiosError<DefaultError>,
+		Options<ArchiveNodeChatConversationData>
+	> = {
+		mutationFn: async (fnOptions) => {
+			const { data } = await archiveNodeChatConversation({
+				...options,
+				...fnOptions,
+				throwOnError: true,
+			});
+			return data;
+		},
+	};
+	return mutationOptions;
+};
+
+export const branchNodeChatConversationMutation = (
+	options?: Partial<Options<BranchNodeChatConversationData>>,
+): UseMutationOptions<BranchNodeChatConversationResponse, AxiosError<DefaultError>, Options<BranchNodeChatConversationData>> => {
+	const mutationOptions: UseMutationOptions<
+		BranchNodeChatConversationResponse,
+		AxiosError<DefaultError>,
+		Options<BranchNodeChatConversationData>
+	> = {
+		mutationFn: async (fnOptions) => {
+			const { data } = await branchNodeChatConversation({
+				...options,
+				...fnOptions,
+				throwOnError: true,
+			});
+			return data;
+		},
+	};
+	return mutationOptions;
+};
+
+export const setNodeChatConversationMemoryExcludedMutation = (
+	options?: Partial<Options<SetNodeChatConversationMemoryExcludedData>>,
+): UseMutationOptions<
+	SetNodeChatConversationMemoryExcludedResponse,
+	AxiosError<DefaultError>,
+	Options<SetNodeChatConversationMemoryExcludedData>
+> => {
+	const mutationOptions: UseMutationOptions<
+		SetNodeChatConversationMemoryExcludedResponse,
+		AxiosError<DefaultError>,
+		Options<SetNodeChatConversationMemoryExcludedData>
+	> = {
+		mutationFn: async (fnOptions) => {
+			const { data } = await setNodeChatConversationMemoryExcluded({
+				...options,
+				...fnOptions,
+				throwOnError: true,
+			});
+			return data;
+		},
+	};
+	return mutationOptions;
+};
+
+export const getNodeChatMessageFeedbackQueryKey = (options: Options<GetNodeChatMessageFeedbackData>) =>
+	createQueryKey("getNodeChatMessageFeedback", options);
+
+export const getNodeChatMessageFeedbackOptions = (options: Options<GetNodeChatMessageFeedbackData>) =>
+	queryOptions<
+		GetNodeChatMessageFeedbackResponse,
+		AxiosError<DefaultError>,
+		GetNodeChatMessageFeedbackResponse,
+		ReturnType<typeof getNodeChatMessageFeedbackQueryKey>
+	>({
+		queryFn: async ({ queryKey, signal }) => {
+			const { data } = await getNodeChatMessageFeedback({
+				...options,
+				...queryKey[0],
+				signal,
+				throwOnError: true,
+			});
+			return data;
+		},
+		queryKey: getNodeChatMessageFeedbackQueryKey(options),
+	});
+
+export const setNodeChatMessageFeedbackMutation = (
+	options?: Partial<Options<SetNodeChatMessageFeedbackData>>,
+): UseMutationOptions<SetNodeChatMessageFeedbackResponse, AxiosError<DefaultError>, Options<SetNodeChatMessageFeedbackData>> => {
+	const mutationOptions: UseMutationOptions<
+		SetNodeChatMessageFeedbackResponse,
+		AxiosError<DefaultError>,
+		Options<SetNodeChatMessageFeedbackData>
+	> = {
+		mutationFn: async (fnOptions) => {
+			const { data } = await setNodeChatMessageFeedback({
+				...options,
+				...fnOptions,
+				throwOnError: true,
+			});
+			return data;
+		},
+	};
+	return mutationOptions;
+};
+
+export const listNodeChatMessageRevisionsQueryKey = (options: Options<ListNodeChatMessageRevisionsData>) =>
+	createQueryKey("listNodeChatMessageRevisions", options);
+
+export const listNodeChatMessageRevisionsOptions = (options: Options<ListNodeChatMessageRevisionsData>) =>
+	queryOptions<
+		ListNodeChatMessageRevisionsResponse,
+		AxiosError<DefaultError>,
+		ListNodeChatMessageRevisionsResponse,
+		ReturnType<typeof listNodeChatMessageRevisionsQueryKey>
+	>({
+		queryFn: async ({ queryKey, signal }) => {
+			const { data } = await listNodeChatMessageRevisions({
+				...options,
+				...queryKey[0],
+				signal,
+				throwOnError: true,
+			});
+			return data;
+		},
+		queryKey: listNodeChatMessageRevisionsQueryKey(options),
+	});
+
+export const createNodeChatMessageRevisionMutation = (
+	options?: Partial<Options<CreateNodeChatMessageRevisionData>>,
+): UseMutationOptions<
+	CreateNodeChatMessageRevisionResponse,
+	AxiosError<DefaultError>,
+	Options<CreateNodeChatMessageRevisionData>
+> => {
+	const mutationOptions: UseMutationOptions<
+		CreateNodeChatMessageRevisionResponse,
+		AxiosError<DefaultError>,
+		Options<CreateNodeChatMessageRevisionData>
+	> = {
+		mutationFn: async (fnOptions) => {
+			const { data } = await createNodeChatMessageRevision({
+				...options,
+				...fnOptions,
+				throwOnError: true,
+			});
+			return data;
+		},
+	};
+	return mutationOptions;
+};
+
+export const pinNodeChatConversationMutation = (
+	options?: Partial<Options<PinNodeChatConversationData>>,
+): UseMutationOptions<PinNodeChatConversationResponse, AxiosError<DefaultError>, Options<PinNodeChatConversationData>> => {
+	const mutationOptions: UseMutationOptions<
+		PinNodeChatConversationResponse,
+		AxiosError<DefaultError>,
+		Options<PinNodeChatConversationData>
+	> = {
+		mutationFn: async (fnOptions) => {
+			const { data } = await pinNodeChatConversation({
+				...options,
+				...fnOptions,
+				throwOnError: true,
+			});
+			return data;
+		},
+	};
+	return mutationOptions;
+};
+
+export const renameNodeChatConversationMutation = (
+	options?: Partial<Options<RenameNodeChatConversationData>>,
+): UseMutationOptions<RenameNodeChatConversationResponse, AxiosError<DefaultError>, Options<RenameNodeChatConversationData>> => {
+	const mutationOptions: UseMutationOptions<
+		RenameNodeChatConversationResponse,
+		AxiosError<DefaultError>,
+		Options<RenameNodeChatConversationData>
+	> = {
+		mutationFn: async (fnOptions) => {
+			const { data } = await renameNodeChatConversation({
+				...options,
+				...fnOptions,
+				throwOnError: true,
+			});
+			return data;
+		},
+	};
+	return mutationOptions;
+};
+
+export const setNodeChatSelectedPathMutation = (
+	options?: Partial<Options<SetNodeChatSelectedPathData>>,
+): UseMutationOptions<
+	SetNodeChatSelectedPathResponse,
+	AxiosError<SetNodeChatSelectedPathError>,
+	Options<SetNodeChatSelectedPathData>
+> => {
+	const mutationOptions: UseMutationOptions<
+		SetNodeChatSelectedPathResponse,
+		AxiosError<SetNodeChatSelectedPathError>,
+		Options<SetNodeChatSelectedPathData>
+	> = {
+		mutationFn: async (fnOptions) => {
+			const { data } = await setNodeChatSelectedPath({
+				...options,
+				...fnOptions,
+				throwOnError: true,
+			});
+			return data;
+		},
+	};
+	return mutationOptions;
+};
+
+export const listConversationFilesQueryKey = (options: Options<ListConversationFilesData>) =>
+	createQueryKey("listConversationFiles", options);
+
+export const listConversationFilesOptions = (options: Options<ListConversationFilesData>) =>
+	queryOptions<
+		ListConversationFilesResponse,
+		AxiosError<DefaultError>,
+		ListConversationFilesResponse,
+		ReturnType<typeof listConversationFilesQueryKey>
+	>({
+		queryFn: async ({ queryKey, signal }) => {
+			const { data } = await listConversationFiles({
+				...options,
+				...queryKey[0],
+				signal,
+				throwOnError: true,
+			});
+			return data;
+		},
+		queryKey: listConversationFilesQueryKey(options),
+	});
+
+export const uploadConversationFileMutation = (
+	options?: Partial<Options<UploadConversationFileData>>,
+): UseMutationOptions<UploadConversationFileResponse, AxiosError<DefaultError>, Options<UploadConversationFileData>> => {
+	const mutationOptions: UseMutationOptions<
+		UploadConversationFileResponse,
+		AxiosError<DefaultError>,
+		Options<UploadConversationFileData>
+	> = {
+		mutationFn: async (fnOptions) => {
+			const { data } = await uploadConversationFile({
+				...options,
+				...fnOptions,
+				throwOnError: true,
+			});
+			return data;
+		},
+	};
+	return mutationOptions;
+};
+
+export const deleteConversationFileMutation = (
+	options?: Partial<Options<DeleteConversationFileData>>,
+): UseMutationOptions<DeleteConversationFileResponse, AxiosError<DefaultError>, Options<DeleteConversationFileData>> => {
+	const mutationOptions: UseMutationOptions<
+		DeleteConversationFileResponse,
+		AxiosError<DefaultError>,
+		Options<DeleteConversationFileData>
+	> = {
+		mutationFn: async (fnOptions) => {
+			const { data } = await deleteConversationFile({
+				...options,
+				...fnOptions,
+				throwOnError: true,
+			});
+			return data;
+		},
+	};
+	return mutationOptions;
+};
+
+export const clearCloudSettingsMutation = (
+	options?: Partial<Options<ClearCloudSettingsData>>,
+): UseMutationOptions<ClearCloudSettingsResponse, AxiosError<DefaultError>, Options<ClearCloudSettingsData>> => {
+	const mutationOptions: UseMutationOptions<
+		ClearCloudSettingsResponse,
+		AxiosError<DefaultError>,
+		Options<ClearCloudSettingsData>
+	> = {
+		mutationFn: async (fnOptions) => {
+			const { data } = await clearCloudSettings({
+				...options,
+				...fnOptions,
+				throwOnError: true,
+			});
+			return data;
+		},
+	};
+	return mutationOptions;
+};
+
+export const getCloudSettingsQueryKey = (options?: Options<GetCloudSettingsData>) => createQueryKey("getCloudSettings", options);
+
+export const getCloudSettingsOptions = (options?: Options<GetCloudSettingsData>) =>
+	queryOptions<
+		GetCloudSettingsResponse,
+		AxiosError<DefaultError>,
+		GetCloudSettingsResponse,
+		ReturnType<typeof getCloudSettingsQueryKey>
+	>({
+		queryFn: async ({ queryKey, signal }) => {
+			const { data } = await getCloudSettings({
+				...options,
+				...queryKey[0],
+				signal,
+				throwOnError: true,
+			});
+			return data;
+		},
+		queryKey: getCloudSettingsQueryKey(options),
+	});
+
+export const saveCloudSettingsMutation = (
+	options?: Partial<Options<SaveCloudSettingsData>>,
+): UseMutationOptions<SaveCloudSettingsResponse, AxiosError<SaveCloudSettingsError>, Options<SaveCloudSettingsData>> => {
+	const mutationOptions: UseMutationOptions<
+		SaveCloudSettingsResponse,
+		AxiosError<SaveCloudSettingsError>,
+		Options<SaveCloudSettingsData>
+	> = {
+		mutationFn: async (fnOptions) => {
+			const { data } = await saveCloudSettings({
+				...options,
+				...fnOptions,
+				throwOnError: true,
+			});
+			return data;
+		},
+	};
+	return mutationOptions;
+};
+
+export const codexLoginMutation = (
+	options?: Partial<Options<CodexLoginData>>,
+): UseMutationOptions<CodexLoginResponse, AxiosError<DefaultError>, Options<CodexLoginData>> => {
+	const mutationOptions: UseMutationOptions<CodexLoginResponse, AxiosError<DefaultError>, Options<CodexLoginData>> = {
+		mutationFn: async (fnOptions) => {
+			const { data } = await codexLogin({
+				...options,
+				...fnOptions,
+				throwOnError: true,
+			});
+			return data;
+		},
+	};
+	return mutationOptions;
+};
+
+export const codexLogoutMutation = (
+	options?: Partial<Options<CodexLogoutData>>,
+): UseMutationOptions<CodexLogoutResponse, AxiosError<DefaultError>, Options<CodexLogoutData>> => {
+	const mutationOptions: UseMutationOptions<CodexLogoutResponse, AxiosError<DefaultError>, Options<CodexLogoutData>> = {
+		mutationFn: async (fnOptions) => {
+			const { data } = await codexLogout({
+				...options,
+				...fnOptions,
+				throwOnError: true,
+			});
+			return data;
+		},
+	};
+	return mutationOptions;
+};
+
+export const codexStatusQueryKey = (options?: Options<CodexStatusData>) => createQueryKey("codexStatus", options);
+
+export const codexStatusOptions = (options?: Options<CodexStatusData>) =>
+	queryOptions<CodexStatusResponse, AxiosError<DefaultError>, CodexStatusResponse, ReturnType<typeof codexStatusQueryKey>>({
+		queryFn: async ({ queryKey, signal }) => {
+			const { data } = await codexStatus({
+				...options,
+				...queryKey[0],
+				signal,
+				throwOnError: true,
+			});
+			return data;
+		},
+		queryKey: codexStatusQueryKey(options),
+	});
+
+export const getConnectionStatusQueryKey = (options?: Options<GetConnectionStatusData>) =>
+	createQueryKey("getConnectionStatus", options);
+
+export const getConnectionStatusOptions = (options?: Options<GetConnectionStatusData>) =>
+	queryOptions<
+		GetConnectionStatusResponse,
+		AxiosError<DefaultError>,
+		GetConnectionStatusResponse,
+		ReturnType<typeof getConnectionStatusQueryKey>
+	>({
+		queryFn: async ({ queryKey, signal }) => {
+			const { data } = await getConnectionStatus({
+				...options,
+				...queryKey[0],
+				signal,
+				throwOnError: true,
+			});
+			return data;
+		},
+		queryKey: getConnectionStatusQueryKey(options),
+	});
+
+export const disableAutoConnectMutation = (
+	options?: Partial<Options<DisableAutoConnectData>>,
+): UseMutationOptions<DisableAutoConnectResponse, AxiosError<DefaultError>, Options<DisableAutoConnectData>> => {
+	const mutationOptions: UseMutationOptions<
+		DisableAutoConnectResponse,
+		AxiosError<DefaultError>,
+		Options<DisableAutoConnectData>
+	> = {
+		mutationFn: async (fnOptions) => {
+			const { data } = await disableAutoConnect({
+				...options,
+				...fnOptions,
+				throwOnError: true,
+			});
+			return data;
+		},
+	};
+	return mutationOptions;
+};
+
+export const enableAutoConnectMutation = (
+	options?: Partial<Options<EnableAutoConnectData>>,
+): UseMutationOptions<EnableAutoConnectResponse, AxiosError<DefaultError>, Options<EnableAutoConnectData>> => {
+	const mutationOptions: UseMutationOptions<
+		EnableAutoConnectResponse,
+		AxiosError<DefaultError>,
+		Options<EnableAutoConnectData>
+	> = {
+		mutationFn: async (fnOptions) => {
+			const { data } = await enableAutoConnect({
+				...options,
+				...fnOptions,
+				throwOnError: true,
+			});
+			return data;
+		},
+	};
+	return mutationOptions;
+};
+
+export const connectConnectionMutation = (
+	options?: Partial<Options<ConnectConnectionData>>,
+): UseMutationOptions<ConnectConnectionResponse, AxiosError<DefaultError>, Options<ConnectConnectionData>> => {
+	const mutationOptions: UseMutationOptions<
+		ConnectConnectionResponse,
+		AxiosError<DefaultError>,
+		Options<ConnectConnectionData>
+	> = {
+		mutationFn: async (fnOptions) => {
+			const { data } = await connectConnection({
+				...options,
+				...fnOptions,
+				throwOnError: true,
+			});
+			return data;
+		},
+	};
+	return mutationOptions;
+};
+
+export const disconnectConnectionMutation = (
+	options?: Partial<Options<DisconnectConnectionData>>,
+): UseMutationOptions<DisconnectConnectionResponse, AxiosError<DefaultError>, Options<DisconnectConnectionData>> => {
+	const mutationOptions: UseMutationOptions<
+		DisconnectConnectionResponse,
+		AxiosError<DefaultError>,
+		Options<DisconnectConnectionData>
+	> = {
+		mutationFn: async (fnOptions) => {
+			const { data } = await disconnectConnection({
+				...options,
+				...fnOptions,
+				throwOnError: true,
+			});
+			return data;
+		},
+	};
+	return mutationOptions;
+};
+
+export const validationProblemProbeMutation = (
+	options?: Partial<Options<ValidationProblemProbeData>>,
+): UseMutationOptions<
+	ValidationProblemProbeResponse,
+	AxiosError<ValidationProblemProbeError>,
+	Options<ValidationProblemProbeData>
+> => {
+	const mutationOptions: UseMutationOptions<
+		ValidationProblemProbeResponse,
+		AxiosError<ValidationProblemProbeError>,
+		Options<ValidationProblemProbeData>
+	> = {
+		mutationFn: async (fnOptions) => {
+			const { data } = await validationProblemProbe({
+				...options,
+				...fnOptions,
+				throwOnError: true,
+			});
+			return data;
+		},
+	};
+	return mutationOptions;
+};
+
+export const pollGitHubAuthMutation = (
+	options?: Partial<Options<PollGitHubAuthData>>,
+): UseMutationOptions<PollGitHubAuthResponse, AxiosError<DefaultError>, Options<PollGitHubAuthData>> => {
+	const mutationOptions: UseMutationOptions<PollGitHubAuthResponse, AxiosError<DefaultError>, Options<PollGitHubAuthData>> = {
+		mutationFn: async (fnOptions) => {
+			const { data } = await pollGitHubAuth({
+				...options,
+				...fnOptions,
+				throwOnError: true,
+			});
+			return data;
+		},
+	};
+	return mutationOptions;
+};
+
+export const signOutGitHubAuthMutation = (
+	options?: Partial<Options<SignOutGitHubAuthData>>,
+): UseMutationOptions<SignOutGitHubAuthResponse, AxiosError<DefaultError>, Options<SignOutGitHubAuthData>> => {
+	const mutationOptions: UseMutationOptions<
+		SignOutGitHubAuthResponse,
+		AxiosError<DefaultError>,
+		Options<SignOutGitHubAuthData>
+	> = {
+		mutationFn: async (fnOptions) => {
+			const { data } = await signOutGitHubAuth({
+				...options,
+				...fnOptions,
+				throwOnError: true,
+			});
+			return data;
+		},
+	};
+	return mutationOptions;
+};
+
+export const startGitHubAuthMutation = (
+	options?: Partial<Options<StartGitHubAuthData>>,
+): UseMutationOptions<StartGitHubAuthResponse, AxiosError<DefaultError>, Options<StartGitHubAuthData>> => {
+	const mutationOptions: UseMutationOptions<StartGitHubAuthResponse, AxiosError<DefaultError>, Options<StartGitHubAuthData>> = {
+		mutationFn: async (fnOptions) => {
+			const { data } = await startGitHubAuth({
+				...options,
+				...fnOptions,
+				throwOnError: true,
+			});
+			return data;
+		},
+	};
+	return mutationOptions;
+};
+
+export const getGitHubAuthStatusQueryKey = (options?: Options<GetGitHubAuthStatusData>) =>
+	createQueryKey("getGitHubAuthStatus", options);
+
+export const getGitHubAuthStatusOptions = (options?: Options<GetGitHubAuthStatusData>) =>
+	queryOptions<
+		GetGitHubAuthStatusResponse,
+		AxiosError<DefaultError>,
+		GetGitHubAuthStatusResponse,
+		ReturnType<typeof getGitHubAuthStatusQueryKey>
+	>({
+		queryFn: async ({ queryKey, signal }) => {
+			const { data } = await getGitHubAuthStatus({
+				...options,
+				...queryKey[0],
+				signal,
+				throwOnError: true,
+			});
+			return data;
+		},
+		queryKey: getGitHubAuthStatusQueryKey(options),
+	});
+
+export const getInvocationMonitorQueryKey = (options?: Options<GetInvocationMonitorData>) =>
+	createQueryKey("getInvocationMonitor", options);
+
+export const getInvocationMonitorOptions = (options?: Options<GetInvocationMonitorData>) =>
+	queryOptions<
+		GetInvocationMonitorResponse,
+		AxiosError<DefaultError>,
+		GetInvocationMonitorResponse,
+		ReturnType<typeof getInvocationMonitorQueryKey>
+	>({
+		queryFn: async ({ queryKey, signal }) => {
+			const { data } = await getInvocationMonitor({
+				...options,
+				...queryKey[0],
+				signal,
+				throwOnError: true,
+			});
+			return data;
+		},
+		queryKey: getInvocationMonitorQueryKey(options),
+	});
+
+export const listKnowledgeDocumentsQueryKey = (options?: Options<ListKnowledgeDocumentsData>) =>
+	createQueryKey("listKnowledgeDocuments", options);
+
+export const listKnowledgeDocumentsOptions = (options?: Options<ListKnowledgeDocumentsData>) =>
+	queryOptions<
+		ListKnowledgeDocumentsResponse,
+		AxiosError<DefaultError>,
+		ListKnowledgeDocumentsResponse,
+		ReturnType<typeof listKnowledgeDocumentsQueryKey>
+	>({
+		queryFn: async ({ queryKey, signal }) => {
+			const { data } = await listKnowledgeDocuments({
+				...options,
+				...queryKey[0],
+				signal,
+				throwOnError: true,
+			});
+			return data;
+		},
+		queryKey: listKnowledgeDocumentsQueryKey(options),
+	});
+
+export const uploadKnowledgeDocumentMutation = (
+	options?: Partial<Options<UploadKnowledgeDocumentData>>,
+): UseMutationOptions<UploadKnowledgeDocumentResponse, AxiosError<DefaultError>, Options<UploadKnowledgeDocumentData>> => {
+	const mutationOptions: UseMutationOptions<
+		UploadKnowledgeDocumentResponse,
+		AxiosError<DefaultError>,
+		Options<UploadKnowledgeDocumentData>
+	> = {
+		mutationFn: async (fnOptions) => {
+			const { data } = await uploadKnowledgeDocument({
+				...options,
+				...fnOptions,
+				throwOnError: true,
+			});
+			return data;
+		},
+	};
+	return mutationOptions;
+};
+
+export const deleteKnowledgeDocumentMutation = (
+	options?: Partial<Options<DeleteKnowledgeDocumentData>>,
+): UseMutationOptions<DeleteKnowledgeDocumentResponse, AxiosError<DefaultError>, Options<DeleteKnowledgeDocumentData>> => {
+	const mutationOptions: UseMutationOptions<
+		DeleteKnowledgeDocumentResponse,
+		AxiosError<DefaultError>,
+		Options<DeleteKnowledgeDocumentData>
+	> = {
+		mutationFn: async (fnOptions) => {
+			const { data } = await deleteKnowledgeDocument({
+				...options,
+				...fnOptions,
+				throwOnError: true,
+			});
+			return data;
+		},
+	};
+	return mutationOptions;
+};
+
+export const getKnowledgeDocumentQueryKey = (options: Options<GetKnowledgeDocumentData>) =>
+	createQueryKey("getKnowledgeDocument", options);
+
+export const getKnowledgeDocumentOptions = (options: Options<GetKnowledgeDocumentData>) =>
+	queryOptions<
+		GetKnowledgeDocumentResponse,
+		AxiosError<DefaultError>,
+		GetKnowledgeDocumentResponse,
+		ReturnType<typeof getKnowledgeDocumentQueryKey>
+	>({
+		queryFn: async ({ queryKey, signal }) => {
+			const { data } = await getKnowledgeDocument({
+				...options,
+				...queryKey[0],
+				signal,
+				throwOnError: true,
+			});
+			return data;
+		},
+		queryKey: getKnowledgeDocumentQueryKey(options),
+	});
+
+export const reindexKnowledgeDocumentMutation = (
+	options?: Partial<Options<ReindexKnowledgeDocumentData>>,
+): UseMutationOptions<ReindexKnowledgeDocumentResponse, AxiosError<DefaultError>, Options<ReindexKnowledgeDocumentData>> => {
+	const mutationOptions: UseMutationOptions<
+		ReindexKnowledgeDocumentResponse,
+		AxiosError<DefaultError>,
+		Options<ReindexKnowledgeDocumentData>
+	> = {
+		mutationFn: async (fnOptions) => {
+			const { data } = await reindexKnowledgeDocument({
+				...options,
+				...fnOptions,
+				throwOnError: true,
+			});
+			return data;
+		},
+	};
+	return mutationOptions;
+};
+
+export const reindexCorpusMutation = (
+	options?: Partial<Options<ReindexCorpusData>>,
+): UseMutationOptions<ReindexCorpusResponse, AxiosError<DefaultError>, Options<ReindexCorpusData>> => {
+	const mutationOptions: UseMutationOptions<ReindexCorpusResponse, AxiosError<DefaultError>, Options<ReindexCorpusData>> = {
+		mutationFn: async (fnOptions) => {
+			const { data } = await reindexCorpus({
+				...options,
+				...fnOptions,
+				throwOnError: true,
+			});
+			return data;
+		},
+	};
+	return mutationOptions;
+};
+
+export const searchKnowledgeMutation = (
+	options?: Partial<Options<SearchKnowledgeData>>,
+): UseMutationOptions<SearchKnowledgeResponse, AxiosError<DefaultError>, Options<SearchKnowledgeData>> => {
+	const mutationOptions: UseMutationOptions<SearchKnowledgeResponse, AxiosError<DefaultError>, Options<SearchKnowledgeData>> = {
+		mutationFn: async (fnOptions) => {
+			const { data } = await searchKnowledge({
+				...options,
+				...fnOptions,
+				throwOnError: true,
+			});
+			return data;
+		},
+	};
+	return mutationOptions;
+};
+
+export const listMcpServersQueryKey = (options?: Options<ListMcpServersData>) => createQueryKey("listMcpServers", options);
+
+export const listMcpServersOptions = (options?: Options<ListMcpServersData>) =>
+	queryOptions<
+		ListMcpServersResponse,
+		AxiosError<DefaultError>,
+		ListMcpServersResponse,
+		ReturnType<typeof listMcpServersQueryKey>
+	>({
+		queryFn: async ({ queryKey, signal }) => {
+			const { data } = await listMcpServers({
+				...options,
+				...queryKey[0],
+				signal,
+				throwOnError: true,
+			});
+			return data;
+		},
+		queryKey: listMcpServersQueryKey(options),
+	});
+
+export const createMcpServerMutation = (
+	options?: Partial<Options<CreateMcpServerData>>,
+): UseMutationOptions<CreateMcpServerResponse, AxiosError<DefaultError>, Options<CreateMcpServerData>> => {
+	const mutationOptions: UseMutationOptions<CreateMcpServerResponse, AxiosError<DefaultError>, Options<CreateMcpServerData>> = {
+		mutationFn: async (fnOptions) => {
+			const { data } = await createMcpServer({
+				...options,
+				...fnOptions,
+				throwOnError: true,
+			});
+			return data;
+		},
+	};
+	return mutationOptions;
+};
+
+export const deleteMcpServerMutation = (
+	options?: Partial<Options<DeleteMcpServerData>>,
+): UseMutationOptions<DeleteMcpServerResponse, AxiosError<DefaultError>, Options<DeleteMcpServerData>> => {
+	const mutationOptions: UseMutationOptions<DeleteMcpServerResponse, AxiosError<DefaultError>, Options<DeleteMcpServerData>> = {
+		mutationFn: async (fnOptions) => {
+			const { data } = await deleteMcpServer({
+				...options,
+				...fnOptions,
+				throwOnError: true,
+			});
+			return data;
+		},
+	};
+	return mutationOptions;
+};
+
+export const getMcpServerQueryKey = (options: Options<GetMcpServerData>) => createQueryKey("getMcpServer", options);
+
+export const getMcpServerOptions = (options: Options<GetMcpServerData>) =>
+	queryOptions<GetMcpServerResponse, AxiosError<DefaultError>, GetMcpServerResponse, ReturnType<typeof getMcpServerQueryKey>>({
+		queryFn: async ({ queryKey, signal }) => {
+			const { data } = await getMcpServer({
+				...options,
+				...queryKey[0],
+				signal,
+				throwOnError: true,
+			});
+			return data;
+		},
+		queryKey: getMcpServerQueryKey(options),
+	});
+
+export const updateMcpServerMutation = (
+	options?: Partial<Options<UpdateMcpServerData>>,
+): UseMutationOptions<UpdateMcpServerResponse, AxiosError<DefaultError>, Options<UpdateMcpServerData>> => {
+	const mutationOptions: UseMutationOptions<UpdateMcpServerResponse, AxiosError<DefaultError>, Options<UpdateMcpServerData>> = {
+		mutationFn: async (fnOptions) => {
+			const { data } = await updateMcpServer({
+				...options,
+				...fnOptions,
+				throwOnError: true,
+			});
+			return data;
+		},
+	};
+	return mutationOptions;
+};
+
+export const setMcpServerEnabledMutation = (
+	options?: Partial<Options<SetMcpServerEnabledData>>,
+): UseMutationOptions<SetMcpServerEnabledResponse, AxiosError<DefaultError>, Options<SetMcpServerEnabledData>> => {
+	const mutationOptions: UseMutationOptions<
+		SetMcpServerEnabledResponse,
+		AxiosError<DefaultError>,
+		Options<SetMcpServerEnabledData>
+	> = {
+		mutationFn: async (fnOptions) => {
+			const { data } = await setMcpServerEnabled({
+				...options,
+				...fnOptions,
+				throwOnError: true,
+			});
+			return data;
+		},
+	};
+	return mutationOptions;
+};
+
+export const getMcpServerToolsQueryKey = (options: Options<GetMcpServerToolsData>) =>
+	createQueryKey("getMcpServerTools", options);
+
+export const getMcpServerToolsOptions = (options: Options<GetMcpServerToolsData>) =>
+	queryOptions<
+		GetMcpServerToolsResponse,
+		AxiosError<DefaultError>,
+		GetMcpServerToolsResponse,
+		ReturnType<typeof getMcpServerToolsQueryKey>
+	>({
+		queryFn: async ({ queryKey, signal }) => {
+			const { data } = await getMcpServerTools({
+				...options,
+				...queryKey[0],
+				signal,
+				throwOnError: true,
+			});
+			return data;
+		},
+		queryKey: getMcpServerToolsQueryKey(options),
+	});
+
+export const startGgufDownloadMutation = (
+	options?: Partial<Options<StartGgufDownloadData>>,
+): UseMutationOptions<StartGgufDownloadResponse, AxiosError<DefaultError>, Options<StartGgufDownloadData>> => {
+	const mutationOptions: UseMutationOptions<
+		StartGgufDownloadResponse,
+		AxiosError<DefaultError>,
+		Options<StartGgufDownloadData>
+	> = {
+		mutationFn: async (fnOptions) => {
+			const { data } = await startGgufDownload({
+				...options,
+				...fnOptions,
+				throwOnError: true,
+			});
+			return data;
+		},
+	};
+	return mutationOptions;
+};
+
+export const cancelGgufDownloadMutation = (
+	options?: Partial<Options<CancelGgufDownloadData>>,
+): UseMutationOptions<CancelGgufDownloadResponse, AxiosError<DefaultError>, Options<CancelGgufDownloadData>> => {
+	const mutationOptions: UseMutationOptions<
+		CancelGgufDownloadResponse,
+		AxiosError<DefaultError>,
+		Options<CancelGgufDownloadData>
+	> = {
+		mutationFn: async (fnOptions) => {
+			const { data } = await cancelGgufDownload({
+				...options,
+				...fnOptions,
+				throwOnError: true,
+			});
+			return data;
+		},
+	};
+	return mutationOptions;
+};
+
+export const browseGgufRepositoriesQueryKey = (options?: Options<BrowseGgufRepositoriesData>) =>
+	createQueryKey("browseGgufRepositories", options);
+
+export const browseGgufRepositoriesOptions = (options?: Options<BrowseGgufRepositoriesData>) =>
+	queryOptions<
+		BrowseGgufRepositoriesResponse,
+		AxiosError<DefaultError>,
+		BrowseGgufRepositoriesResponse,
+		ReturnType<typeof browseGgufRepositoriesQueryKey>
+	>({
+		queryFn: async ({ queryKey, signal }) => {
+			const { data } = await browseGgufRepositories({
+				...options,
+				...queryKey[0],
+				signal,
+				throwOnError: true,
+			});
+			return data;
+		},
+		queryKey: browseGgufRepositoriesQueryKey(options),
+	});
+
+export const getGgufDownloadsQueryKey = (options?: Options<GetGgufDownloadsData>) => createQueryKey("getGgufDownloads", options);
+
+export const getGgufDownloadsOptions = (options?: Options<GetGgufDownloadsData>) =>
+	queryOptions<
+		GetGgufDownloadsResponse,
+		AxiosError<DefaultError>,
+		GetGgufDownloadsResponse,
+		ReturnType<typeof getGgufDownloadsQueryKey>
+	>({
+		queryFn: async ({ queryKey, signal }) => {
+			const { data } = await getGgufDownloads({
+				...options,
+				...queryKey[0],
+				signal,
+				throwOnError: true,
+			});
+			return data;
+		},
+		queryKey: getGgufDownloadsQueryKey(options),
+	});
+
+export const getGgufDownloadStatusQueryKey = (options: Options<GetGgufDownloadStatusData>) =>
+	createQueryKey("getGgufDownloadStatus", options);
+
+export const getGgufDownloadStatusOptions = (options: Options<GetGgufDownloadStatusData>) =>
+	queryOptions<
+		GetGgufDownloadStatusResponse,
+		AxiosError<DefaultError>,
+		GetGgufDownloadStatusResponse,
+		ReturnType<typeof getGgufDownloadStatusQueryKey>
+	>({
+		queryFn: async ({ queryKey, signal }) => {
+			const { data } = await getGgufDownloadStatus({
+				...options,
+				...queryKey[0],
+				signal,
+				throwOnError: true,
+			});
+			return data;
+		},
+		queryKey: getGgufDownloadStatusQueryKey(options),
+	});
+
+export const inspectGgufRepositoryQueryKey = (options?: Options<InspectGgufRepositoryData>) =>
+	createQueryKey("inspectGgufRepository", options);
+
+export const inspectGgufRepositoryOptions = (options?: Options<InspectGgufRepositoryData>) =>
+	queryOptions<
+		InspectGgufRepositoryResponse,
+		AxiosError<DefaultError>,
+		InspectGgufRepositoryResponse,
+		ReturnType<typeof inspectGgufRepositoryQueryKey>
+	>({
+		queryFn: async ({ queryKey, signal }) => {
+			const { data } = await inspectGgufRepository({
+				...options,
+				...queryKey[0],
+				signal,
+				throwOnError: true,
+			});
+			return data;
+		},
+		queryKey: inspectGgufRepositoryQueryKey(options),
+	});
+
+export const getHardwareProfileQueryKey = (options: Options<GetHardwareProfileData>) =>
+	createQueryKey("getHardwareProfile", options);
+
+export const getHardwareProfileOptions = (options: Options<GetHardwareProfileData>) =>
+	queryOptions<
+		GetHardwareProfileResponse,
+		AxiosError<DefaultError>,
+		GetHardwareProfileResponse,
+		ReturnType<typeof getHardwareProfileQueryKey>
+	>({
+		queryFn: async ({ queryKey, signal }) => {
+			const { data } = await getHardwareProfile({
+				...options,
+				...queryKey[0],
+				signal,
+				throwOnError: true,
+			});
+			return data;
+		},
+		queryKey: getHardwareProfileQueryKey(options),
+	});
+
+export const getHfTokenStatusQueryKey = (options?: Options<GetHfTokenStatusData>) => createQueryKey("getHfTokenStatus", options);
+
+export const getHfTokenStatusOptions = (options?: Options<GetHfTokenStatusData>) =>
+	queryOptions<
+		GetHfTokenStatusResponse,
+		AxiosError<DefaultError>,
+		GetHfTokenStatusResponse,
+		ReturnType<typeof getHfTokenStatusQueryKey>
+	>({
+		queryFn: async ({ queryKey, signal }) => {
+			const { data } = await getHfTokenStatus({
+				...options,
+				...queryKey[0],
+				signal,
+				throwOnError: true,
+			});
+			return data;
+		},
+		queryKey: getHfTokenStatusQueryKey(options),
+	});
+
+export const setHfTokenMutation = (
+	options?: Partial<Options<SetHfTokenData>>,
+): UseMutationOptions<SetHfTokenResponse, AxiosError<DefaultError>, Options<SetHfTokenData>> => {
+	const mutationOptions: UseMutationOptions<SetHfTokenResponse, AxiosError<DefaultError>, Options<SetHfTokenData>> = {
+		mutationFn: async (fnOptions) => {
+			const { data } = await setHfToken({
+				...options,
+				...fnOptions,
+				throwOnError: true,
+			});
+			return data;
+		},
+	};
+	return mutationOptions;
+};
+
+export const startCudaBuildMutation = (
+	options?: Partial<Options<StartCudaBuildData>>,
+): UseMutationOptions<StartCudaBuildResponse, AxiosError<StartCudaBuildError>, Options<StartCudaBuildData>> => {
+	const mutationOptions: UseMutationOptions<
+		StartCudaBuildResponse,
+		AxiosError<StartCudaBuildError>,
+		Options<StartCudaBuildData>
+	> = {
+		mutationFn: async (fnOptions) => {
+			const { data } = await startCudaBuild({
+				...options,
+				...fnOptions,
+				throwOnError: true,
+			});
+			return data;
+		},
+	};
+	return mutationOptions;
+};
+
+export const cancelCudaBuildMutation = (
+	options?: Partial<Options<CancelCudaBuildData>>,
+): UseMutationOptions<CancelCudaBuildResponse, AxiosError<DefaultError>, Options<CancelCudaBuildData>> => {
+	const mutationOptions: UseMutationOptions<CancelCudaBuildResponse, AxiosError<DefaultError>, Options<CancelCudaBuildData>> = {
+		mutationFn: async (fnOptions) => {
+			const { data } = await cancelCudaBuild({
+				...options,
+				...fnOptions,
+				throwOnError: true,
+			});
+			return data;
+		},
+	};
+	return mutationOptions;
+};
+
+export const getCudaBuildPrerequisitesQueryKey = (options?: Options<GetCudaBuildPrerequisitesData>) =>
+	createQueryKey("getCudaBuildPrerequisites", options);
+
+export const getCudaBuildPrerequisitesOptions = (options?: Options<GetCudaBuildPrerequisitesData>) =>
+	queryOptions<
+		GetCudaBuildPrerequisitesResponse,
+		AxiosError<DefaultError>,
+		GetCudaBuildPrerequisitesResponse,
+		ReturnType<typeof getCudaBuildPrerequisitesQueryKey>
+	>({
+		queryFn: async ({ queryKey, signal }) => {
+			const { data } = await getCudaBuildPrerequisites({
+				...options,
+				...queryKey[0],
+				signal,
+				throwOnError: true,
+			});
+			return data;
+		},
+		queryKey: getCudaBuildPrerequisitesQueryKey(options),
+	});
+
+export const removeCudaBuildMutation = (
+	options?: Partial<Options<RemoveCudaBuildData>>,
+): UseMutationOptions<RemoveCudaBuildResponse, AxiosError<RemoveCudaBuildError>, Options<RemoveCudaBuildData>> => {
+	const mutationOptions: UseMutationOptions<
+		RemoveCudaBuildResponse,
+		AxiosError<RemoveCudaBuildError>,
+		Options<RemoveCudaBuildData>
+	> = {
+		mutationFn: async (fnOptions) => {
+			const { data } = await removeCudaBuild({
+				...options,
+				...fnOptions,
+				throwOnError: true,
+			});
+			return data;
+		},
+	};
+	return mutationOptions;
+};
+
+export const getCudaBuildStatusQueryKey = (options?: Options<GetCudaBuildStatusData>) =>
+	createQueryKey("getCudaBuildStatus", options);
+
+export const getCudaBuildStatusOptions = (options?: Options<GetCudaBuildStatusData>) =>
+	queryOptions<
+		GetCudaBuildStatusResponse,
+		AxiosError<DefaultError>,
+		GetCudaBuildStatusResponse,
+		ReturnType<typeof getCudaBuildStatusQueryKey>
+	>({
+		queryFn: async ({ queryKey, signal }) => {
+			const { data } = await getCudaBuildStatus({
+				...options,
+				...queryKey[0],
+				signal,
+				throwOnError: true,
+			});
+			return data;
+		},
+		queryKey: getCudaBuildStatusQueryKey(options),
+	});
+
+export const getLlamaCppRuntimeQueryKey = (options?: Options<GetLlamaCppRuntimeData>) =>
+	createQueryKey("getLlamaCppRuntime", options);
+
+export const getLlamaCppRuntimeOptions = (options?: Options<GetLlamaCppRuntimeData>) =>
+	queryOptions<
+		GetLlamaCppRuntimeResponse,
+		AxiosError<DefaultError>,
+		GetLlamaCppRuntimeResponse,
+		ReturnType<typeof getLlamaCppRuntimeQueryKey>
+	>({
+		queryFn: async ({ queryKey, signal }) => {
+			const { data } = await getLlamaCppRuntime({
+				...options,
+				...queryKey[0],
+				signal,
+				throwOnError: true,
+			});
+			return data;
+		},
+		queryKey: getLlamaCppRuntimeQueryKey(options),
+	});
+
+export const updateLlamaCppRuntimeMutation = (
+	options?: Partial<Options<UpdateLlamaCppRuntimeData>>,
+): UseMutationOptions<UpdateLlamaCppRuntimeResponse, AxiosError<DefaultError>, Options<UpdateLlamaCppRuntimeData>> => {
+	const mutationOptions: UseMutationOptions<
+		UpdateLlamaCppRuntimeResponse,
+		AxiosError<DefaultError>,
+		Options<UpdateLlamaCppRuntimeData>
+	> = {
+		mutationFn: async (fnOptions) => {
+			const { data } = await updateLlamaCppRuntime({
+				...options,
+				...fnOptions,
+				throwOnError: true,
+			});
+			return data;
+		},
+	};
+	return mutationOptions;
+};
+
+export const ensureLlamaCppBinaryMutation = (
+	options?: Partial<Options<EnsureLlamaCppBinaryData>>,
+): UseMutationOptions<EnsureLlamaCppBinaryResponse, AxiosError<DefaultError>, Options<EnsureLlamaCppBinaryData>> => {
+	const mutationOptions: UseMutationOptions<
+		EnsureLlamaCppBinaryResponse,
+		AxiosError<DefaultError>,
+		Options<EnsureLlamaCppBinaryData>
+	> = {
+		mutationFn: async (fnOptions) => {
+			const { data } = await ensureLlamaCppBinary({
+				...options,
+				...fnOptions,
+				throwOnError: true,
+			});
+			return data;
+		},
+	};
+	return mutationOptions;
+};
+
+export const listInferenceProfilesQueryKey = (options?: Options<ListInferenceProfilesData>) =>
+	createQueryKey("listInferenceProfiles", options);
+
+export const listInferenceProfilesOptions = (options?: Options<ListInferenceProfilesData>) =>
+	queryOptions<
+		ListInferenceProfilesResponse,
+		AxiosError<DefaultError>,
+		ListInferenceProfilesResponse,
+		ReturnType<typeof listInferenceProfilesQueryKey>
+	>({
+		queryFn: async ({ queryKey, signal }) => {
+			const { data } = await listInferenceProfiles({
+				...options,
+				...queryKey[0],
+				signal,
+				throwOnError: true,
+			});
+			return data;
+		},
+		queryKey: listInferenceProfilesQueryKey(options),
+	});
+
+export const benchmarkInferenceProfileMutation = (
+	options?: Partial<Options<BenchmarkInferenceProfileData>>,
+): UseMutationOptions<BenchmarkInferenceProfileResponse, AxiosError<DefaultError>, Options<BenchmarkInferenceProfileData>> => {
+	const mutationOptions: UseMutationOptions<
+		BenchmarkInferenceProfileResponse,
+		AxiosError<DefaultError>,
+		Options<BenchmarkInferenceProfileData>
+	> = {
+		mutationFn: async (fnOptions) => {
+			const { data } = await benchmarkInferenceProfile({
+				...options,
+				...fnOptions,
+				throwOnError: true,
+			});
+			return data;
+		},
+	};
+	return mutationOptions;
+};
+
+export const exploreInferenceProfileMutation = (
+	options?: Partial<Options<ExploreInferenceProfileData>>,
+): UseMutationOptions<ExploreInferenceProfileResponse, AxiosError<DefaultError>, Options<ExploreInferenceProfileData>> => {
+	const mutationOptions: UseMutationOptions<
+		ExploreInferenceProfileResponse,
+		AxiosError<DefaultError>,
+		Options<ExploreInferenceProfileData>
+	> = {
+		mutationFn: async (fnOptions) => {
+			const { data } = await exploreInferenceProfile({
+				...options,
+				...fnOptions,
+				throwOnError: true,
+			});
+			return data;
+		},
+	};
+	return mutationOptions;
+};
+
+export const freezeInferenceProfileMutation = (
+	options?: Partial<Options<FreezeInferenceProfileData>>,
+): UseMutationOptions<FreezeInferenceProfileResponse, AxiosError<DefaultError>, Options<FreezeInferenceProfileData>> => {
+	const mutationOptions: UseMutationOptions<
+		FreezeInferenceProfileResponse,
+		AxiosError<DefaultError>,
+		Options<FreezeInferenceProfileData>
+	> = {
+		mutationFn: async (fnOptions) => {
+			const { data } = await freezeInferenceProfile({
+				...options,
+				...fnOptions,
+				throwOnError: true,
+			});
+			return data;
+		},
+	};
+	return mutationOptions;
+};
+
+export const invalidateInferenceProfileMutation = (
+	options?: Partial<Options<InvalidateInferenceProfileData>>,
+): UseMutationOptions<InvalidateInferenceProfileResponse, AxiosError<DefaultError>, Options<InvalidateInferenceProfileData>> => {
+	const mutationOptions: UseMutationOptions<
+		InvalidateInferenceProfileResponse,
+		AxiosError<DefaultError>,
+		Options<InvalidateInferenceProfileData>
+	> = {
+		mutationFn: async (fnOptions) => {
+			const { data } = await invalidateInferenceProfile({
+				...options,
+				...fnOptions,
+				throwOnError: true,
+			});
+			return data;
+		},
+	};
+	return mutationOptions;
+};
+
+export const getLatestRecommendationsQueryKey = (options?: Options<GetLatestRecommendationsData>) =>
+	createQueryKey("getLatestRecommendations", options);
+
+export const getLatestRecommendationsOptions = (options?: Options<GetLatestRecommendationsData>) =>
+	queryOptions<
+		GetLatestRecommendationsResponse,
+		AxiosError<DefaultError>,
+		GetLatestRecommendationsResponse,
+		ReturnType<typeof getLatestRecommendationsQueryKey>
+	>({
+		queryFn: async ({ queryKey, signal }) => {
+			const { data } = await getLatestRecommendations({
+				...options,
+				...queryKey[0],
+				signal,
+				throwOnError: true,
+			});
+			return data;
+		},
+		queryKey: getLatestRecommendationsQueryKey(options),
+	});
+
+export const refreshRecommendationsMutation = (
+	options?: Partial<Options<RefreshRecommendationsData>>,
+): UseMutationOptions<RefreshRecommendationsResponse, AxiosError<DefaultError>, Options<RefreshRecommendationsData>> => {
+	const mutationOptions: UseMutationOptions<
+		RefreshRecommendationsResponse,
+		AxiosError<DefaultError>,
+		Options<RefreshRecommendationsData>
+	> = {
+		mutationFn: async (fnOptions) => {
+			const { data } = await refreshRecommendations({
+				...options,
+				...fnOptions,
+				throwOnError: true,
+			});
+			return data;
+		},
+	};
+	return mutationOptions;
+};
+
+export const listRunningModelsQueryKey = (options?: Options<ListRunningModelsData>) =>
+	createQueryKey("listRunningModels", options);
+
+export const listRunningModelsOptions = (options?: Options<ListRunningModelsData>) =>
+	queryOptions<
+		ListRunningModelsResponse,
+		AxiosError<DefaultError>,
+		ListRunningModelsResponse,
+		ReturnType<typeof listRunningModelsQueryKey>
+	>({
+		queryFn: async ({ queryKey, signal }) => {
+			const { data } = await listRunningModels({
+				...options,
+				...queryKey[0],
+				signal,
+				throwOnError: true,
+			});
+			return data;
+		},
+		queryKey: listRunningModelsQueryKey(options),
+	});
+
+export const ejectRunningModelMutation = (
+	options?: Partial<Options<EjectRunningModelData>>,
+): UseMutationOptions<EjectRunningModelResponse, AxiosError<DefaultError>, Options<EjectRunningModelData>> => {
+	const mutationOptions: UseMutationOptions<
+		EjectRunningModelResponse,
+		AxiosError<DefaultError>,
+		Options<EjectRunningModelData>
+	> = {
+		mutationFn: async (fnOptions) => {
+			const { data } = await ejectRunningModel({
+				...options,
+				...fnOptions,
+				throwOnError: true,
+			});
+			return data;
+		},
+	};
+	return mutationOptions;
+};
+
+export const listLocalModelsQueryKey = (options?: Options<ListLocalModelsData>) => createQueryKey("listLocalModels", options);
+
+export const listLocalModelsOptions = (options?: Options<ListLocalModelsData>) =>
+	queryOptions<
+		ListLocalModelsResponse,
+		AxiosError<DefaultError>,
+		ListLocalModelsResponse,
+		ReturnType<typeof listLocalModelsQueryKey>
+	>({
+		queryFn: async ({ queryKey, signal }) => {
+			const { data } = await listLocalModels({
+				...options,
+				...queryKey[0],
+				signal,
+				throwOnError: true,
+			});
+			return data;
+		},
+		queryKey: listLocalModelsQueryKey(options),
+	});
+
+export const deleteLocalModelMutation = (
+	options?: Partial<Options<DeleteLocalModelData>>,
+): UseMutationOptions<DeleteLocalModelResponse, AxiosError<DeleteLocalModelError>, Options<DeleteLocalModelData>> => {
+	const mutationOptions: UseMutationOptions<
+		DeleteLocalModelResponse,
+		AxiosError<DeleteLocalModelError>,
+		Options<DeleteLocalModelData>
+	> = {
+		mutationFn: async (fnOptions) => {
+			const { data } = await deleteLocalModel({
+				...options,
+				...fnOptions,
+				throwOnError: true,
+			});
+			return data;
+		},
+	};
+	return mutationOptions;
+};
+
+export const getLocalModelDetailsQueryKey = (options: Options<GetLocalModelDetailsData>) =>
+	createQueryKey("getLocalModelDetails", options);
+
+export const getLocalModelDetailsOptions = (options: Options<GetLocalModelDetailsData>) =>
+	queryOptions<
+		GetLocalModelDetailsResponse,
+		AxiosError<GetLocalModelDetailsError>,
+		GetLocalModelDetailsResponse,
+		ReturnType<typeof getLocalModelDetailsQueryKey>
+	>({
+		queryFn: async ({ queryKey, signal }) => {
+			const { data } = await getLocalModelDetails({
+				...options,
+				...queryKey[0],
+				signal,
+				throwOnError: true,
+			});
+			return data;
+		},
+		queryKey: getLocalModelDetailsQueryKey(options),
+	});
+
+export const deleteModelKindMutation = (
+	options?: Partial<Options<DeleteModelKindData>>,
+): UseMutationOptions<DeleteModelKindResponse, AxiosError<DefaultError>, Options<DeleteModelKindData>> => {
+	const mutationOptions: UseMutationOptions<DeleteModelKindResponse, AxiosError<DefaultError>, Options<DeleteModelKindData>> = {
+		mutationFn: async (fnOptions) => {
+			const { data } = await deleteModelKind({
+				...options,
+				...fnOptions,
+				throwOnError: true,
+			});
+			return data;
+		},
+	};
+	return mutationOptions;
+};
+
+export const putModelKindMutation = (
+	options?: Partial<Options<PutModelKindData>>,
+): UseMutationOptions<PutModelKindResponse, AxiosError<DefaultError>, Options<PutModelKindData>> => {
+	const mutationOptions: UseMutationOptions<PutModelKindResponse, AxiosError<DefaultError>, Options<PutModelKindData>> = {
+		mutationFn: async (fnOptions) => {
+			const { data } = await putModelKind({
+				...options,
+				...fnOptions,
+				throwOnError: true,
+			});
+			return data;
+		},
+	};
+	return mutationOptions;
+};
+
+export const unloadLocalModelMutation = (
+	options?: Partial<Options<UnloadLocalModelData>>,
+): UseMutationOptions<UnloadLocalModelResponse, AxiosError<UnloadLocalModelError>, Options<UnloadLocalModelData>> => {
+	const mutationOptions: UseMutationOptions<
+		UnloadLocalModelResponse,
+		AxiosError<UnloadLocalModelError>,
+		Options<UnloadLocalModelData>
+	> = {
+		mutationFn: async (fnOptions) => {
+			const { data } = await unloadLocalModel({
+				...options,
+				...fnOptions,
+				throwOnError: true,
+			});
+			return data;
+		},
+	};
+	return mutationOptions;
+};
+
+export const getRunningLocalModelsQueryKey = (options?: Options<GetRunningLocalModelsData>) =>
+	createQueryKey("getRunningLocalModels", options);
+
+export const getRunningLocalModelsOptions = (options?: Options<GetRunningLocalModelsData>) =>
+	queryOptions<
+		GetRunningLocalModelsResponse,
+		AxiosError<DefaultError>,
+		GetRunningLocalModelsResponse,
+		ReturnType<typeof getRunningLocalModelsQueryKey>
+	>({
+		queryFn: async ({ queryKey, signal }) => {
+			const { data } = await getRunningLocalModels({
+				...options,
+				...queryKey[0],
+				signal,
+				throwOnError: true,
+			});
+			return data;
+		},
+		queryKey: getRunningLocalModelsQueryKey(options),
+	});
+
+export const selectLocalModelMutation = (
+	options?: Partial<Options<SelectLocalModelData>>,
+): UseMutationOptions<SelectLocalModelResponse, AxiosError<SelectLocalModelError>, Options<SelectLocalModelData>> => {
+	const mutationOptions: UseMutationOptions<
+		SelectLocalModelResponse,
+		AxiosError<SelectLocalModelError>,
+		Options<SelectLocalModelData>
+	> = {
+		mutationFn: async (fnOptions) => {
+			const { data } = await selectLocalModel({
+				...options,
+				...fnOptions,
+				throwOnError: true,
+			});
+			return data;
+		},
+	};
+	return mutationOptions;
+};
+
+export const getNodeSettingsQueryKey = (options?: Options<GetNodeSettingsData>) => createQueryKey("getNodeSettings", options);
+
+export const getNodeSettingsOptions = (options?: Options<GetNodeSettingsData>) =>
+	queryOptions<
+		GetNodeSettingsResponse,
+		AxiosError<DefaultError>,
+		GetNodeSettingsResponse,
+		ReturnType<typeof getNodeSettingsQueryKey>
+	>({
+		queryFn: async ({ queryKey, signal }) => {
+			const { data } = await getNodeSettings({
+				...options,
+				...queryKey[0],
+				signal,
+				throwOnError: true,
+			});
+			return data;
+		},
+		queryKey: getNodeSettingsQueryKey(options),
+	});
+
+export const saveNodeSettingsMutation = (
+	options?: Partial<Options<SaveNodeSettingsData>>,
+): UseMutationOptions<SaveNodeSettingsResponse, AxiosError<SaveNodeSettingsError>, Options<SaveNodeSettingsData>> => {
+	const mutationOptions: UseMutationOptions<
+		SaveNodeSettingsResponse,
+		AxiosError<SaveNodeSettingsError>,
+		Options<SaveNodeSettingsData>
+	> = {
+		mutationFn: async (fnOptions) => {
+			const { data } = await saveNodeSettings({
+				...options,
+				...fnOptions,
+				throwOnError: true,
+			});
+			return data;
+		},
+	};
+	return mutationOptions;
+};
+
+export const cancelPreviewRunMutation = (
+	options?: Partial<Options<CancelPreviewRunData>>,
+): UseMutationOptions<CancelPreviewRunResponse, AxiosError<DefaultError>, Options<CancelPreviewRunData>> => {
+	const mutationOptions: UseMutationOptions<CancelPreviewRunResponse, AxiosError<DefaultError>, Options<CancelPreviewRunData>> = {
+		mutationFn: async (fnOptions) => {
+			const { data } = await cancelPreviewRun({
+				...options,
+				...fnOptions,
+				throwOnError: true,
+			});
+			return data;
+		},
+	};
+	return mutationOptions;
+};
+
+export const continuePreviewRunMutation = (
+	options?: Partial<Options<ContinuePreviewRunData>>,
+): UseMutationOptions<ContinuePreviewRunResponse, AxiosError<DefaultError>, Options<ContinuePreviewRunData>> => {
+	const mutationOptions: UseMutationOptions<
+		ContinuePreviewRunResponse,
+		AxiosError<DefaultError>,
+		Options<ContinuePreviewRunData>
+	> = {
+		mutationFn: async (fnOptions) => {
+			const { data } = await continuePreviewRun({
+				...options,
+				...fnOptions,
+				throwOnError: true,
+			});
+			return data;
+		},
+	};
+	return mutationOptions;
+};
+
+export const executeUnsavedPreviewWorkflowMutation = (
+	options?: Partial<Options<ExecuteUnsavedPreviewWorkflowData>>,
+): UseMutationOptions<
+	ExecuteUnsavedPreviewWorkflowResponse,
+	AxiosError<DefaultError>,
+	Options<ExecuteUnsavedPreviewWorkflowData>
+> => {
+	const mutationOptions: UseMutationOptions<
+		ExecuteUnsavedPreviewWorkflowResponse,
+		AxiosError<DefaultError>,
+		Options<ExecuteUnsavedPreviewWorkflowData>
+	> = {
+		mutationFn: async (fnOptions) => {
+			const { data } = await executeUnsavedPreviewWorkflow({
+				...options,
+				...fnOptions,
+				throwOnError: true,
+			});
+			return data;
+		},
+	};
+	return mutationOptions;
+};
+
+export const listPreviewWorkflowsQueryKey = (options?: Options<ListPreviewWorkflowsData>) =>
+	createQueryKey("listPreviewWorkflows", options);
+
+export const listPreviewWorkflowsOptions = (options?: Options<ListPreviewWorkflowsData>) =>
+	queryOptions<
+		ListPreviewWorkflowsResponse,
+		AxiosError<DefaultError>,
+		ListPreviewWorkflowsResponse,
+		ReturnType<typeof listPreviewWorkflowsQueryKey>
+	>({
+		queryFn: async ({ queryKey, signal }) => {
+			const { data } = await listPreviewWorkflows({
+				...options,
+				...queryKey[0],
+				signal,
+				throwOnError: true,
+			});
+			return data;
+		},
+		queryKey: listPreviewWorkflowsQueryKey(options),
+	});
+
+export const createPreviewWorkflowMutation = (
+	options?: Partial<Options<CreatePreviewWorkflowData>>,
+): UseMutationOptions<CreatePreviewWorkflowResponse, AxiosError<DefaultError>, Options<CreatePreviewWorkflowData>> => {
+	const mutationOptions: UseMutationOptions<
+		CreatePreviewWorkflowResponse,
+		AxiosError<DefaultError>,
+		Options<CreatePreviewWorkflowData>
+	> = {
+		mutationFn: async (fnOptions) => {
+			const { data } = await createPreviewWorkflow({
+				...options,
+				...fnOptions,
+				throwOnError: true,
+			});
+			return data;
+		},
+	};
+	return mutationOptions;
+};
+
+export const deletePreviewWorkflowMutation = (
+	options?: Partial<Options<DeletePreviewWorkflowData>>,
+): UseMutationOptions<DeletePreviewWorkflowResponse, AxiosError<DefaultError>, Options<DeletePreviewWorkflowData>> => {
+	const mutationOptions: UseMutationOptions<
+		DeletePreviewWorkflowResponse,
+		AxiosError<DefaultError>,
+		Options<DeletePreviewWorkflowData>
+	> = {
+		mutationFn: async (fnOptions) => {
+			const { data } = await deletePreviewWorkflow({
+				...options,
+				...fnOptions,
+				throwOnError: true,
+			});
+			return data;
+		},
+	};
+	return mutationOptions;
+};
+
+export const getPreviewWorkflowQueryKey = (options: Options<GetPreviewWorkflowData>) =>
+	createQueryKey("getPreviewWorkflow", options);
+
+export const getPreviewWorkflowOptions = (options: Options<GetPreviewWorkflowData>) =>
+	queryOptions<
+		GetPreviewWorkflowResponse,
+		AxiosError<DefaultError>,
+		GetPreviewWorkflowResponse,
+		ReturnType<typeof getPreviewWorkflowQueryKey>
+	>({
+		queryFn: async ({ queryKey, signal }) => {
+			const { data } = await getPreviewWorkflow({
+				...options,
+				...queryKey[0],
+				signal,
+				throwOnError: true,
+			});
+			return data;
+		},
+		queryKey: getPreviewWorkflowQueryKey(options),
+	});
+
+export const updatePreviewWorkflowMutation = (
+	options?: Partial<Options<UpdatePreviewWorkflowData>>,
+): UseMutationOptions<UpdatePreviewWorkflowResponse, AxiosError<DefaultError>, Options<UpdatePreviewWorkflowData>> => {
+	const mutationOptions: UseMutationOptions<
+		UpdatePreviewWorkflowResponse,
+		AxiosError<DefaultError>,
+		Options<UpdatePreviewWorkflowData>
+	> = {
+		mutationFn: async (fnOptions) => {
+			const { data } = await updatePreviewWorkflow({
+				...options,
+				...fnOptions,
+				throwOnError: true,
+			});
+			return data;
+		},
+	};
+	return mutationOptions;
+};
+
+export const executeSavedPreviewWorkflowMutation = (
+	options?: Partial<Options<ExecuteSavedPreviewWorkflowData>>,
+): UseMutationOptions<
+	ExecuteSavedPreviewWorkflowResponse,
+	AxiosError<DefaultError>,
+	Options<ExecuteSavedPreviewWorkflowData>
+> => {
+	const mutationOptions: UseMutationOptions<
+		ExecuteSavedPreviewWorkflowResponse,
+		AxiosError<DefaultError>,
+		Options<ExecuteSavedPreviewWorkflowData>
+	> = {
+		mutationFn: async (fnOptions) => {
+			const { data } = await executeSavedPreviewWorkflow({
 				...options,
 				...fnOptions,
 				throwOnError: true,
@@ -792,27 +3390,25 @@ export const enableScheduledJobMutation = (
 	return mutationOptions;
 };
 
-export const getScheduledJobRunQueryKey = (options: Options<GetScheduledJobRunData>) =>
-	createQueryKey("getScheduledJobRun", options);
-
-export const getScheduledJobRunOptions = (options: Options<GetScheduledJobRunData>) =>
-	queryOptions<
-		GetScheduledJobRunResponse,
+export const triggerScheduledJobMutation = (
+	options?: Partial<Options<TriggerScheduledJobData>>,
+): UseMutationOptions<TriggerScheduledJobResponse, AxiosError<DefaultError>, Options<TriggerScheduledJobData>> => {
+	const mutationOptions: UseMutationOptions<
+		TriggerScheduledJobResponse,
 		AxiosError<DefaultError>,
-		GetScheduledJobRunResponse,
-		ReturnType<typeof getScheduledJobRunQueryKey>
-	>({
-		queryFn: async ({ queryKey, signal }) => {
-			const { data } = await getScheduledJobRun({
+		Options<TriggerScheduledJobData>
+	> = {
+		mutationFn: async (fnOptions) => {
+			const { data } = await triggerScheduledJob({
 				...options,
-				...queryKey[0],
-				signal,
+				...fnOptions,
 				throwOnError: true,
 			});
 			return data;
 		},
-		queryKey: getScheduledJobRunQueryKey(options),
-	});
+	};
+	return mutationOptions;
+};
 
 export const listScheduledJobRunsQueryKey = (options?: Options<ListScheduledJobRunsData>) =>
 	createQueryKey("listScheduledJobRuns", options);
@@ -836,6 +3432,48 @@ export const listScheduledJobRunsOptions = (options?: Options<ListScheduledJobRu
 		queryKey: listScheduledJobRunsQueryKey(options),
 	});
 
+export const getScheduledJobRunQueryKey = (options: Options<GetScheduledJobRunData>) =>
+	createQueryKey("getScheduledJobRun", options);
+
+export const getScheduledJobRunOptions = (options: Options<GetScheduledJobRunData>) =>
+	queryOptions<
+		GetScheduledJobRunResponse,
+		AxiosError<DefaultError>,
+		GetScheduledJobRunResponse,
+		ReturnType<typeof getScheduledJobRunQueryKey>
+	>({
+		queryFn: async ({ queryKey, signal }) => {
+			const { data } = await getScheduledJobRun({
+				...options,
+				...queryKey[0],
+				signal,
+				throwOnError: true,
+			});
+			return data;
+		},
+		queryKey: getScheduledJobRunQueryKey(options),
+	});
+
+export const cancelScheduledJobRunMutation = (
+	options?: Partial<Options<CancelScheduledJobRunData>>,
+): UseMutationOptions<CancelScheduledJobRunResponse, AxiosError<DefaultError>, Options<CancelScheduledJobRunData>> => {
+	const mutationOptions: UseMutationOptions<
+		CancelScheduledJobRunResponse,
+		AxiosError<DefaultError>,
+		Options<CancelScheduledJobRunData>
+	> = {
+		mutationFn: async (fnOptions) => {
+			const { data } = await cancelScheduledJobRun({
+				...options,
+				...fnOptions,
+				throwOnError: true,
+			});
+			return data;
+		},
+	};
+	return mutationOptions;
+};
+
 export const listScheduledJobTemplatesQueryKey = (options?: Options<ListScheduledJobTemplatesData>) =>
 	createQueryKey("listScheduledJobTemplates", options);
 
@@ -858,74 +3496,12 @@ export const listScheduledJobTemplatesOptions = (options?: Options<ListScheduled
 		queryKey: listScheduledJobTemplatesQueryKey(options),
 	});
 
-export const triggerScheduledJobMutation = (
-	options?: Partial<Options<TriggerScheduledJobData>>,
-): UseMutationOptions<TriggerScheduledJobResponse, AxiosError<DefaultError>, Options<TriggerScheduledJobData>> => {
-	const mutationOptions: UseMutationOptions<
-		TriggerScheduledJobResponse,
-		AxiosError<DefaultError>,
-		Options<TriggerScheduledJobData>
-	> = {
-		mutationFn: async (fnOptions) => {
-			const { data } = await triggerScheduledJob({
-				...options,
-				...fnOptions,
-				throwOnError: true,
-			});
-			return data;
-		},
-	};
-	return mutationOptions;
-};
+export const listSkillsQueryKey = (options?: Options<ListSkillsData>) => createQueryKey("listSkills", options);
 
-export const cancelPreviewRunMutation = (
-	options?: Partial<Options<CancelPreviewRunData>>,
-): UseMutationOptions<CancelPreviewRunResponse, AxiosError<DefaultError>, Options<CancelPreviewRunData>> => {
-	const mutationOptions: UseMutationOptions<CancelPreviewRunResponse, AxiosError<DefaultError>, Options<CancelPreviewRunData>> = {
-		mutationFn: async (fnOptions) => {
-			const { data } = await cancelPreviewRun({
-				...options,
-				...fnOptions,
-				throwOnError: true,
-			});
-			return data;
-		},
-	};
-	return mutationOptions;
-};
-
-export const continuePreviewRunMutation = (
-	options?: Partial<Options<ContinuePreviewRunData>>,
-): UseMutationOptions<ContinuePreviewRunResponse, AxiosError<DefaultError>, Options<ContinuePreviewRunData>> => {
-	const mutationOptions: UseMutationOptions<
-		ContinuePreviewRunResponse,
-		AxiosError<DefaultError>,
-		Options<ContinuePreviewRunData>
-	> = {
-		mutationFn: async (fnOptions) => {
-			const { data } = await continuePreviewRun({
-				...options,
-				...fnOptions,
-				throwOnError: true,
-			});
-			return data;
-		},
-	};
-	return mutationOptions;
-};
-
-export const listPreviewWorkflowsQueryKey = (options?: Options<ListPreviewWorkflowsData>) =>
-	createQueryKey("listPreviewWorkflows", options);
-
-export const listPreviewWorkflowsOptions = (options?: Options<ListPreviewWorkflowsData>) =>
-	queryOptions<
-		ListPreviewWorkflowsResponse,
-		AxiosError<DefaultError>,
-		ListPreviewWorkflowsResponse,
-		ReturnType<typeof listPreviewWorkflowsQueryKey>
-	>({
+export const listSkillsOptions = (options?: Options<ListSkillsData>) =>
+	queryOptions<ListSkillsResponse, AxiosError<DefaultError>, ListSkillsResponse, ReturnType<typeof listSkillsQueryKey>>({
 		queryFn: async ({ queryKey, signal }) => {
-			const { data } = await listPreviewWorkflows({
+			const { data } = await listSkills({
 				...options,
 				...queryKey[0],
 				signal,
@@ -933,19 +3509,15 @@ export const listPreviewWorkflowsOptions = (options?: Options<ListPreviewWorkflo
 			});
 			return data;
 		},
-		queryKey: listPreviewWorkflowsQueryKey(options),
+		queryKey: listSkillsQueryKey(options),
 	});
 
-export const createPreviewWorkflowMutation = (
-	options?: Partial<Options<CreatePreviewWorkflowData>>,
-): UseMutationOptions<CreatePreviewWorkflowResponse, AxiosError<DefaultError>, Options<CreatePreviewWorkflowData>> => {
-	const mutationOptions: UseMutationOptions<
-		CreatePreviewWorkflowResponse,
-		AxiosError<DefaultError>,
-		Options<CreatePreviewWorkflowData>
-	> = {
+export const createSkillMutation = (
+	options?: Partial<Options<CreateSkillData>>,
+): UseMutationOptions<CreateSkillResponse, AxiosError<DefaultError>, Options<CreateSkillData>> => {
+	const mutationOptions: UseMutationOptions<CreateSkillResponse, AxiosError<DefaultError>, Options<CreateSkillData>> = {
 		mutationFn: async (fnOptions) => {
-			const { data } = await createPreviewWorkflow({
+			const { data } = await createSkill({
 				...options,
 				...fnOptions,
 				throwOnError: true,
@@ -956,16 +3528,12 @@ export const createPreviewWorkflowMutation = (
 	return mutationOptions;
 };
 
-export const deletePreviewWorkflowMutation = (
-	options?: Partial<Options<DeletePreviewWorkflowData>>,
-): UseMutationOptions<DeletePreviewWorkflowResponse, AxiosError<DefaultError>, Options<DeletePreviewWorkflowData>> => {
-	const mutationOptions: UseMutationOptions<
-		DeletePreviewWorkflowResponse,
-		AxiosError<DefaultError>,
-		Options<DeletePreviewWorkflowData>
-	> = {
+export const deleteSkillMutation = (
+	options?: Partial<Options<DeleteSkillData>>,
+): UseMutationOptions<DeleteSkillResponse, AxiosError<DefaultError>, Options<DeleteSkillData>> => {
+	const mutationOptions: UseMutationOptions<DeleteSkillResponse, AxiosError<DefaultError>, Options<DeleteSkillData>> = {
 		mutationFn: async (fnOptions) => {
-			const { data } = await deletePreviewWorkflow({
+			const { data } = await deleteSkill({
 				...options,
 				...fnOptions,
 				throwOnError: true,
@@ -976,18 +3544,12 @@ export const deletePreviewWorkflowMutation = (
 	return mutationOptions;
 };
 
-export const getPreviewWorkflowQueryKey = (options: Options<GetPreviewWorkflowData>) =>
-	createQueryKey("getPreviewWorkflow", options);
+export const getSkillQueryKey = (options: Options<GetSkillData>) => createQueryKey("getSkill", options);
 
-export const getPreviewWorkflowOptions = (options: Options<GetPreviewWorkflowData>) =>
-	queryOptions<
-		GetPreviewWorkflowResponse,
-		AxiosError<DefaultError>,
-		GetPreviewWorkflowResponse,
-		ReturnType<typeof getPreviewWorkflowQueryKey>
-	>({
+export const getSkillOptions = (options: Options<GetSkillData>) =>
+	queryOptions<GetSkillResponse, AxiosError<DefaultError>, GetSkillResponse, ReturnType<typeof getSkillQueryKey>>({
 		queryFn: async ({ queryKey, signal }) => {
-			const { data } = await getPreviewWorkflow({
+			const { data } = await getSkill({
 				...options,
 				...queryKey[0],
 				signal,
@@ -995,19 +3557,15 @@ export const getPreviewWorkflowOptions = (options: Options<GetPreviewWorkflowDat
 			});
 			return data;
 		},
-		queryKey: getPreviewWorkflowQueryKey(options),
+		queryKey: getSkillQueryKey(options),
 	});
 
-export const updatePreviewWorkflowMutation = (
-	options?: Partial<Options<UpdatePreviewWorkflowData>>,
-): UseMutationOptions<UpdatePreviewWorkflowResponse, AxiosError<DefaultError>, Options<UpdatePreviewWorkflowData>> => {
-	const mutationOptions: UseMutationOptions<
-		UpdatePreviewWorkflowResponse,
-		AxiosError<DefaultError>,
-		Options<UpdatePreviewWorkflowData>
-	> = {
+export const updateSkillMutation = (
+	options?: Partial<Options<UpdateSkillData>>,
+): UseMutationOptions<UpdateSkillResponse, AxiosError<DefaultError>, Options<UpdateSkillData>> => {
+	const mutationOptions: UseMutationOptions<UpdateSkillResponse, AxiosError<DefaultError>, Options<UpdateSkillData>> = {
 		mutationFn: async (fnOptions) => {
-			const { data } = await updatePreviewWorkflow({
+			const { data } = await updateSkill({
 				...options,
 				...fnOptions,
 				throwOnError: true,
@@ -1017,586 +3575,6 @@ export const updatePreviewWorkflowMutation = (
 	};
 	return mutationOptions;
 };
-
-export const executeSavedPreviewWorkflowMutation = (
-	options?: Partial<Options<ExecuteSavedPreviewWorkflowData>>,
-): UseMutationOptions<
-	ExecuteSavedPreviewWorkflowResponse,
-	AxiosError<DefaultError>,
-	Options<ExecuteSavedPreviewWorkflowData>
-> => {
-	const mutationOptions: UseMutationOptions<
-		ExecuteSavedPreviewWorkflowResponse,
-		AxiosError<DefaultError>,
-		Options<ExecuteSavedPreviewWorkflowData>
-	> = {
-		mutationFn: async (fnOptions) => {
-			const { data } = await executeSavedPreviewWorkflow({
-				...options,
-				...fnOptions,
-				throwOnError: true,
-			});
-			return data;
-		},
-	};
-	return mutationOptions;
-};
-
-export const executeUnsavedPreviewWorkflowMutation = (
-	options?: Partial<Options<ExecuteUnsavedPreviewWorkflowData>>,
-): UseMutationOptions<
-	ExecuteUnsavedPreviewWorkflowResponse,
-	AxiosError<DefaultError>,
-	Options<ExecuteUnsavedPreviewWorkflowData>
-> => {
-	const mutationOptions: UseMutationOptions<
-		ExecuteUnsavedPreviewWorkflowResponse,
-		AxiosError<DefaultError>,
-		Options<ExecuteUnsavedPreviewWorkflowData>
-	> = {
-		mutationFn: async (fnOptions) => {
-			const { data } = await executeUnsavedPreviewWorkflow({
-				...options,
-				...fnOptions,
-				throwOnError: true,
-			});
-			return data;
-		},
-	};
-	return mutationOptions;
-};
-
-export const getNodeSettingsQueryKey = (options?: Options<GetNodeSettingsData>) => createQueryKey("getNodeSettings", options);
-
-export const getNodeSettingsOptions = (options?: Options<GetNodeSettingsData>) =>
-	queryOptions<
-		GetNodeSettingsResponse,
-		AxiosError<DefaultError>,
-		GetNodeSettingsResponse,
-		ReturnType<typeof getNodeSettingsQueryKey>
-	>({
-		queryFn: async ({ queryKey, signal }) => {
-			const { data } = await getNodeSettings({
-				...options,
-				...queryKey[0],
-				signal,
-				throwOnError: true,
-			});
-			return data;
-		},
-		queryKey: getNodeSettingsQueryKey(options),
-	});
-
-export const saveNodeSettingsMutation = (
-	options?: Partial<Options<SaveNodeSettingsData>>,
-): UseMutationOptions<SaveNodeSettingsResponse, AxiosError<SaveNodeSettingsError>, Options<SaveNodeSettingsData>> => {
-	const mutationOptions: UseMutationOptions<
-		SaveNodeSettingsResponse,
-		AxiosError<SaveNodeSettingsError>,
-		Options<SaveNodeSettingsData>
-	> = {
-		mutationFn: async (fnOptions) => {
-			const { data } = await saveNodeSettings({
-				...options,
-				...fnOptions,
-				throwOnError: true,
-			});
-			return data;
-		},
-	};
-	return mutationOptions;
-};
-
-export const cancelNodeBindingMutation = (
-	options?: Partial<Options<CancelNodeBindingData>>,
-): UseMutationOptions<CancelNodeBindingResponse, AxiosError<DefaultError>, Options<CancelNodeBindingData>> => {
-	const mutationOptions: UseMutationOptions<
-		CancelNodeBindingResponse,
-		AxiosError<DefaultError>,
-		Options<CancelNodeBindingData>
-	> = {
-		mutationFn: async (fnOptions) => {
-			const { data } = await cancelNodeBinding({
-				...options,
-				...fnOptions,
-				throwOnError: true,
-			});
-			return data;
-		},
-	};
-	return mutationOptions;
-};
-
-export const pollNodeBindingMutation = (
-	options?: Partial<Options<PollNodeBindingData>>,
-): UseMutationOptions<PollNodeBindingResponse, AxiosError<DefaultError>, Options<PollNodeBindingData>> => {
-	const mutationOptions: UseMutationOptions<PollNodeBindingResponse, AxiosError<DefaultError>, Options<PollNodeBindingData>> = {
-		mutationFn: async (fnOptions) => {
-			const { data } = await pollNodeBinding({
-				...options,
-				...fnOptions,
-				throwOnError: true,
-			});
-			return data;
-		},
-	};
-	return mutationOptions;
-};
-
-export const startNodeBindingMutation = (
-	options?: Partial<Options<StartNodeBindingData>>,
-): UseMutationOptions<StartNodeBindingResponse, AxiosError<DefaultError>, Options<StartNodeBindingData>> => {
-	const mutationOptions: UseMutationOptions<StartNodeBindingResponse, AxiosError<DefaultError>, Options<StartNodeBindingData>> = {
-		mutationFn: async (fnOptions) => {
-			const { data } = await startNodeBinding({
-				...options,
-				...fnOptions,
-				throwOnError: true,
-			});
-			return data;
-		},
-	};
-	return mutationOptions;
-};
-
-export const browseGgufRepositoriesQueryKey = (options?: Options<BrowseGgufRepositoriesData>) =>
-	createQueryKey("browseGgufRepositories", options);
-
-export const browseGgufRepositoriesOptions = (options?: Options<BrowseGgufRepositoriesData>) =>
-	queryOptions<
-		BrowseGgufRepositoriesResponse,
-		AxiosError<DefaultError>,
-		BrowseGgufRepositoriesResponse,
-		ReturnType<typeof browseGgufRepositoriesQueryKey>
-	>({
-		queryFn: async ({ queryKey, signal }) => {
-			const { data } = await browseGgufRepositories({
-				...options,
-				...queryKey[0],
-				signal,
-				throwOnError: true,
-			});
-			return data;
-		},
-		queryKey: browseGgufRepositoriesQueryKey(options),
-	});
-
-export const cancelGgufDownloadMutation = (
-	options?: Partial<Options<CancelGgufDownloadData>>,
-): UseMutationOptions<CancelGgufDownloadResponse, AxiosError<DefaultError>, Options<CancelGgufDownloadData>> => {
-	const mutationOptions: UseMutationOptions<
-		CancelGgufDownloadResponse,
-		AxiosError<DefaultError>,
-		Options<CancelGgufDownloadData>
-	> = {
-		mutationFn: async (fnOptions) => {
-			const { data } = await cancelGgufDownload({
-				...options,
-				...fnOptions,
-				throwOnError: true,
-			});
-			return data;
-		},
-	};
-	return mutationOptions;
-};
-
-export const ejectRunningModelMutation = (
-	options?: Partial<Options<EjectRunningModelData>>,
-): UseMutationOptions<EjectRunningModelResponse, AxiosError<DefaultError>, Options<EjectRunningModelData>> => {
-	const mutationOptions: UseMutationOptions<
-		EjectRunningModelResponse,
-		AxiosError<DefaultError>,
-		Options<EjectRunningModelData>
-	> = {
-		mutationFn: async (fnOptions) => {
-			const { data } = await ejectRunningModel({
-				...options,
-				...fnOptions,
-				throwOnError: true,
-			});
-			return data;
-		},
-	};
-	return mutationOptions;
-};
-
-export const ensureLlamaCppBinaryMutation = (
-	options?: Partial<Options<EnsureLlamaCppBinaryData>>,
-): UseMutationOptions<EnsureLlamaCppBinaryResponse, AxiosError<DefaultError>, Options<EnsureLlamaCppBinaryData>> => {
-	const mutationOptions: UseMutationOptions<
-		EnsureLlamaCppBinaryResponse,
-		AxiosError<DefaultError>,
-		Options<EnsureLlamaCppBinaryData>
-	> = {
-		mutationFn: async (fnOptions) => {
-			const { data } = await ensureLlamaCppBinary({
-				...options,
-				...fnOptions,
-				throwOnError: true,
-			});
-			return data;
-		},
-	};
-	return mutationOptions;
-};
-
-export const getGgufDownloadsQueryKey = (options?: Options<GetGgufDownloadsData>) => createQueryKey("getGgufDownloads", options);
-
-export const getGgufDownloadsOptions = (options?: Options<GetGgufDownloadsData>) =>
-	queryOptions<
-		GetGgufDownloadsResponse,
-		AxiosError<DefaultError>,
-		GetGgufDownloadsResponse,
-		ReturnType<typeof getGgufDownloadsQueryKey>
-	>({
-		queryFn: async ({ queryKey, signal }) => {
-			const { data } = await getGgufDownloads({
-				...options,
-				...queryKey[0],
-				signal,
-				throwOnError: true,
-			});
-			return data;
-		},
-		queryKey: getGgufDownloadsQueryKey(options),
-	});
-
-export const getGgufDownloadStatusQueryKey = (options: Options<GetGgufDownloadStatusData>) =>
-	createQueryKey("getGgufDownloadStatus", options);
-
-export const getGgufDownloadStatusOptions = (options: Options<GetGgufDownloadStatusData>) =>
-	queryOptions<
-		GetGgufDownloadStatusResponse,
-		AxiosError<DefaultError>,
-		GetGgufDownloadStatusResponse,
-		ReturnType<typeof getGgufDownloadStatusQueryKey>
-	>({
-		queryFn: async ({ queryKey, signal }) => {
-			const { data } = await getGgufDownloadStatus({
-				...options,
-				...queryKey[0],
-				signal,
-				throwOnError: true,
-			});
-			return data;
-		},
-		queryKey: getGgufDownloadStatusQueryKey(options),
-	});
-
-export const getHardwareProfileQueryKey = (options: Options<GetHardwareProfileData>) =>
-	createQueryKey("getHardwareProfile", options);
-
-export const getHardwareProfileOptions = (options: Options<GetHardwareProfileData>) =>
-	queryOptions<
-		GetHardwareProfileResponse,
-		AxiosError<DefaultError>,
-		GetHardwareProfileResponse,
-		ReturnType<typeof getHardwareProfileQueryKey>
-	>({
-		queryFn: async ({ queryKey, signal }) => {
-			const { data } = await getHardwareProfile({
-				...options,
-				...queryKey[0],
-				signal,
-				throwOnError: true,
-			});
-			return data;
-		},
-		queryKey: getHardwareProfileQueryKey(options),
-	});
-
-export const getHfTokenStatusQueryKey = (options?: Options<GetHfTokenStatusData>) => createQueryKey("getHfTokenStatus", options);
-
-export const getHfTokenStatusOptions = (options?: Options<GetHfTokenStatusData>) =>
-	queryOptions<
-		GetHfTokenStatusResponse,
-		AxiosError<DefaultError>,
-		GetHfTokenStatusResponse,
-		ReturnType<typeof getHfTokenStatusQueryKey>
-	>({
-		queryFn: async ({ queryKey, signal }) => {
-			const { data } = await getHfTokenStatus({
-				...options,
-				...queryKey[0],
-				signal,
-				throwOnError: true,
-			});
-			return data;
-		},
-		queryKey: getHfTokenStatusQueryKey(options),
-	});
-
-export const setHfTokenMutation = (
-	options?: Partial<Options<SetHfTokenData>>,
-): UseMutationOptions<SetHfTokenResponse, AxiosError<DefaultError>, Options<SetHfTokenData>> => {
-	const mutationOptions: UseMutationOptions<SetHfTokenResponse, AxiosError<DefaultError>, Options<SetHfTokenData>> = {
-		mutationFn: async (fnOptions) => {
-			const { data } = await setHfToken({
-				...options,
-				...fnOptions,
-				throwOnError: true,
-			});
-			return data;
-		},
-	};
-	return mutationOptions;
-};
-
-export const getLatestRecommendationsQueryKey = (options?: Options<GetLatestRecommendationsData>) =>
-	createQueryKey("getLatestRecommendations", options);
-
-export const getLatestRecommendationsOptions = (options?: Options<GetLatestRecommendationsData>) =>
-	queryOptions<
-		GetLatestRecommendationsResponse,
-		AxiosError<DefaultError>,
-		GetLatestRecommendationsResponse,
-		ReturnType<typeof getLatestRecommendationsQueryKey>
-	>({
-		queryFn: async ({ queryKey, signal }) => {
-			const { data } = await getLatestRecommendations({
-				...options,
-				...queryKey[0],
-				signal,
-				throwOnError: true,
-			});
-			return data;
-		},
-		queryKey: getLatestRecommendationsQueryKey(options),
-	});
-
-export const getLlamaCppRuntimeQueryKey = (options?: Options<GetLlamaCppRuntimeData>) =>
-	createQueryKey("getLlamaCppRuntime", options);
-
-export const getLlamaCppRuntimeOptions = (options?: Options<GetLlamaCppRuntimeData>) =>
-	queryOptions<
-		GetLlamaCppRuntimeResponse,
-		AxiosError<DefaultError>,
-		GetLlamaCppRuntimeResponse,
-		ReturnType<typeof getLlamaCppRuntimeQueryKey>
-	>({
-		queryFn: async ({ queryKey, signal }) => {
-			const { data } = await getLlamaCppRuntime({
-				...options,
-				...queryKey[0],
-				signal,
-				throwOnError: true,
-			});
-			return data;
-		},
-		queryKey: getLlamaCppRuntimeQueryKey(options),
-	});
-
-export const inspectGgufRepositoryQueryKey = (options?: Options<InspectGgufRepositoryData>) =>
-	createQueryKey("inspectGgufRepository", options);
-
-export const inspectGgufRepositoryOptions = (options?: Options<InspectGgufRepositoryData>) =>
-	queryOptions<
-		InspectGgufRepositoryResponse,
-		AxiosError<DefaultError>,
-		InspectGgufRepositoryResponse,
-		ReturnType<typeof inspectGgufRepositoryQueryKey>
-	>({
-		queryFn: async ({ queryKey, signal }) => {
-			const { data } = await inspectGgufRepository({
-				...options,
-				...queryKey[0],
-				signal,
-				throwOnError: true,
-			});
-			return data;
-		},
-		queryKey: inspectGgufRepositoryQueryKey(options),
-	});
-
-export const listRunningModelsQueryKey = (options?: Options<ListRunningModelsData>) =>
-	createQueryKey("listRunningModels", options);
-
-export const listRunningModelsOptions = (options?: Options<ListRunningModelsData>) =>
-	queryOptions<
-		ListRunningModelsResponse,
-		AxiosError<DefaultError>,
-		ListRunningModelsResponse,
-		ReturnType<typeof listRunningModelsQueryKey>
-	>({
-		queryFn: async ({ queryKey, signal }) => {
-			const { data } = await listRunningModels({
-				...options,
-				...queryKey[0],
-				signal,
-				throwOnError: true,
-			});
-			return data;
-		},
-		queryKey: listRunningModelsQueryKey(options),
-	});
-
-export const refreshRecommendationsMutation = (
-	options?: Partial<Options<RefreshRecommendationsData>>,
-): UseMutationOptions<RefreshRecommendationsResponse, AxiosError<DefaultError>, Options<RefreshRecommendationsData>> => {
-	const mutationOptions: UseMutationOptions<
-		RefreshRecommendationsResponse,
-		AxiosError<DefaultError>,
-		Options<RefreshRecommendationsData>
-	> = {
-		mutationFn: async (fnOptions) => {
-			const { data } = await refreshRecommendations({
-				...options,
-				...fnOptions,
-				throwOnError: true,
-			});
-			return data;
-		},
-	};
-	return mutationOptions;
-};
-
-export const startGgufDownloadMutation = (
-	options?: Partial<Options<StartGgufDownloadData>>,
-): UseMutationOptions<StartGgufDownloadResponse, AxiosError<DefaultError>, Options<StartGgufDownloadData>> => {
-	const mutationOptions: UseMutationOptions<
-		StartGgufDownloadResponse,
-		AxiosError<DefaultError>,
-		Options<StartGgufDownloadData>
-	> = {
-		mutationFn: async (fnOptions) => {
-			const { data } = await startGgufDownload({
-				...options,
-				...fnOptions,
-				throwOnError: true,
-			});
-			return data;
-		},
-	};
-	return mutationOptions;
-};
-
-export const updateLlamaCppRuntimeMutation = (
-	options?: Partial<Options<UpdateLlamaCppRuntimeData>>,
-): UseMutationOptions<UpdateLlamaCppRuntimeResponse, AxiosError<DefaultError>, Options<UpdateLlamaCppRuntimeData>> => {
-	const mutationOptions: UseMutationOptions<
-		UpdateLlamaCppRuntimeResponse,
-		AxiosError<DefaultError>,
-		Options<UpdateLlamaCppRuntimeData>
-	> = {
-		mutationFn: async (fnOptions) => {
-			const { data } = await updateLlamaCppRuntime({
-				...options,
-				...fnOptions,
-				throwOnError: true,
-			});
-			return data;
-		},
-	};
-	return mutationOptions;
-};
-
-export const listMcpServersQueryKey = (options?: Options<ListMcpServersData>) => createQueryKey("listMcpServers", options);
-
-export const listMcpServersOptions = (options?: Options<ListMcpServersData>) =>
-	queryOptions<
-		ListMcpServersResponse,
-		AxiosError<DefaultError>,
-		ListMcpServersResponse,
-		ReturnType<typeof listMcpServersQueryKey>
-	>({
-		queryFn: async ({ queryKey, signal }) => {
-			const { data } = await listMcpServers({
-				...options,
-				...queryKey[0],
-				signal,
-				throwOnError: true,
-			});
-			return data;
-		},
-		queryKey: listMcpServersQueryKey(options),
-	});
-
-export const createMcpServerMutation = (
-	options?: Partial<Options<CreateMcpServerData>>,
-): UseMutationOptions<CreateMcpServerResponse, AxiosError<DefaultError>, Options<CreateMcpServerData>> => {
-	const mutationOptions: UseMutationOptions<CreateMcpServerResponse, AxiosError<DefaultError>, Options<CreateMcpServerData>> = {
-		mutationFn: async (fnOptions) => {
-			const { data } = await createMcpServer({
-				...options,
-				...fnOptions,
-				throwOnError: true,
-			});
-			return data;
-		},
-	};
-	return mutationOptions;
-};
-
-export const deleteMcpServerMutation = (
-	options?: Partial<Options<DeleteMcpServerData>>,
-): UseMutationOptions<DeleteMcpServerResponse, AxiosError<DefaultError>, Options<DeleteMcpServerData>> => {
-	const mutationOptions: UseMutationOptions<DeleteMcpServerResponse, AxiosError<DefaultError>, Options<DeleteMcpServerData>> = {
-		mutationFn: async (fnOptions) => {
-			const { data } = await deleteMcpServer({
-				...options,
-				...fnOptions,
-				throwOnError: true,
-			});
-			return data;
-		},
-	};
-	return mutationOptions;
-};
-
-export const getMcpServerQueryKey = (options: Options<GetMcpServerData>) => createQueryKey("getMcpServer", options);
-
-export const getMcpServerOptions = (options: Options<GetMcpServerData>) =>
-	queryOptions<GetMcpServerResponse, AxiosError<DefaultError>, GetMcpServerResponse, ReturnType<typeof getMcpServerQueryKey>>({
-		queryFn: async ({ queryKey, signal }) => {
-			const { data } = await getMcpServer({
-				...options,
-				...queryKey[0],
-				signal,
-				throwOnError: true,
-			});
-			return data;
-		},
-		queryKey: getMcpServerQueryKey(options),
-	});
-
-export const updateMcpServerMutation = (
-	options?: Partial<Options<UpdateMcpServerData>>,
-): UseMutationOptions<UpdateMcpServerResponse, AxiosError<DefaultError>, Options<UpdateMcpServerData>> => {
-	const mutationOptions: UseMutationOptions<UpdateMcpServerResponse, AxiosError<DefaultError>, Options<UpdateMcpServerData>> = {
-		mutationFn: async (fnOptions) => {
-			const { data } = await updateMcpServer({
-				...options,
-				...fnOptions,
-				throwOnError: true,
-			});
-			return data;
-		},
-	};
-	return mutationOptions;
-};
-
-export const getMcpServerToolsQueryKey = (options: Options<GetMcpServerToolsData>) =>
-	createQueryKey("getMcpServerTools", options);
-
-export const getMcpServerToolsOptions = (options: Options<GetMcpServerToolsData>) =>
-	queryOptions<
-		GetMcpServerToolsResponse,
-		AxiosError<DefaultError>,
-		GetMcpServerToolsResponse,
-		ReturnType<typeof getMcpServerToolsQueryKey>
-	>({
-		queryFn: async ({ queryKey, signal }) => {
-			const { data } = await getMcpServerTools({
-				...options,
-				...queryKey[0],
-				signal,
-				throwOnError: true,
-			});
-			return data;
-		},
-		queryKey: getMcpServerToolsQueryKey(options),
-	});
 
 export const getToolCatalogQueryKey = (options?: Options<GetToolCatalogData>) => createQueryKey("getToolCatalog", options);
 
@@ -1619,90 +3597,17 @@ export const getToolCatalogOptions = (options?: Options<GetToolCatalogData>) =>
 		queryKey: getToolCatalogQueryKey(options),
 	});
 
-export const setMcpServerEnabledMutation = (
-	options?: Partial<Options<SetMcpServerEnabledData>>,
-): UseMutationOptions<SetMcpServerEnabledResponse, AxiosError<DefaultError>, Options<SetMcpServerEnabledData>> => {
-	const mutationOptions: UseMutationOptions<
-		SetMcpServerEnabledResponse,
-		AxiosError<DefaultError>,
-		Options<SetMcpServerEnabledData>
-	> = {
-		mutationFn: async (fnOptions) => {
-			const { data } = await setMcpServerEnabled({
-				...options,
-				...fnOptions,
-				throwOnError: true,
-			});
-			return data;
-		},
-	};
-	return mutationOptions;
-};
+export const getTutorialStateQueryKey = (options?: Options<GetTutorialStateData>) => createQueryKey("getTutorialState", options);
 
-export const deleteLocalModelMutation = (
-	options?: Partial<Options<DeleteLocalModelData>>,
-): UseMutationOptions<DeleteLocalModelResponse, AxiosError<DeleteLocalModelError>, Options<DeleteLocalModelData>> => {
-	const mutationOptions: UseMutationOptions<
-		DeleteLocalModelResponse,
-		AxiosError<DeleteLocalModelError>,
-		Options<DeleteLocalModelData>
-	> = {
-		mutationFn: async (fnOptions) => {
-			const { data } = await deleteLocalModel({
-				...options,
-				...fnOptions,
-				throwOnError: true,
-			});
-			return data;
-		},
-	};
-	return mutationOptions;
-};
-
-export const deleteModelKindMutation = (
-	options?: Partial<Options<DeleteModelKindData>>,
-): UseMutationOptions<DeleteModelKindResponse, AxiosError<DefaultError>, Options<DeleteModelKindData>> => {
-	const mutationOptions: UseMutationOptions<DeleteModelKindResponse, AxiosError<DefaultError>, Options<DeleteModelKindData>> = {
-		mutationFn: async (fnOptions) => {
-			const { data } = await deleteModelKind({
-				...options,
-				...fnOptions,
-				throwOnError: true,
-			});
-			return data;
-		},
-	};
-	return mutationOptions;
-};
-
-export const putModelKindMutation = (
-	options?: Partial<Options<PutModelKindData>>,
-): UseMutationOptions<PutModelKindResponse, AxiosError<DefaultError>, Options<PutModelKindData>> => {
-	const mutationOptions: UseMutationOptions<PutModelKindResponse, AxiosError<DefaultError>, Options<PutModelKindData>> = {
-		mutationFn: async (fnOptions) => {
-			const { data } = await putModelKind({
-				...options,
-				...fnOptions,
-				throwOnError: true,
-			});
-			return data;
-		},
-	};
-	return mutationOptions;
-};
-
-export const getLocalModelDetailsQueryKey = (options: Options<GetLocalModelDetailsData>) =>
-	createQueryKey("getLocalModelDetails", options);
-
-export const getLocalModelDetailsOptions = (options: Options<GetLocalModelDetailsData>) =>
+export const getTutorialStateOptions = (options?: Options<GetTutorialStateData>) =>
 	queryOptions<
-		GetLocalModelDetailsResponse,
-		AxiosError<GetLocalModelDetailsError>,
-		GetLocalModelDetailsResponse,
-		ReturnType<typeof getLocalModelDetailsQueryKey>
+		GetTutorialStateResponse,
+		AxiosError<DefaultError>,
+		GetTutorialStateResponse,
+		ReturnType<typeof getTutorialStateQueryKey>
 	>({
 		queryFn: async ({ queryKey, signal }) => {
-			const { data } = await getLocalModelDetails({
+			const { data } = await getTutorialState({
 				...options,
 				...queryKey[0],
 				signal,
@@ -1710,1565 +3615,19 @@ export const getLocalModelDetailsOptions = (options: Options<GetLocalModelDetail
 			});
 			return data;
 		},
-		queryKey: getLocalModelDetailsQueryKey(options),
+		queryKey: getTutorialStateQueryKey(options),
 	});
 
-export const getRunningLocalModelsQueryKey = (options?: Options<GetRunningLocalModelsData>) =>
-	createQueryKey("getRunningLocalModels", options);
-
-export const getRunningLocalModelsOptions = (options?: Options<GetRunningLocalModelsData>) =>
-	queryOptions<
-		GetRunningLocalModelsResponse,
-		AxiosError<DefaultError>,
-		GetRunningLocalModelsResponse,
-		ReturnType<typeof getRunningLocalModelsQueryKey>
-	>({
-		queryFn: async ({ queryKey, signal }) => {
-			const { data } = await getRunningLocalModels({
-				...options,
-				...queryKey[0],
-				signal,
-				throwOnError: true,
-			});
-			return data;
-		},
-		queryKey: getRunningLocalModelsQueryKey(options),
-	});
-
-export const listLocalModelsQueryKey = (options?: Options<ListLocalModelsData>) => createQueryKey("listLocalModels", options);
-
-export const listLocalModelsOptions = (options?: Options<ListLocalModelsData>) =>
-	queryOptions<
-		ListLocalModelsResponse,
-		AxiosError<DefaultError>,
-		ListLocalModelsResponse,
-		ReturnType<typeof listLocalModelsQueryKey>
-	>({
-		queryFn: async ({ queryKey, signal }) => {
-			const { data } = await listLocalModels({
-				...options,
-				...queryKey[0],
-				signal,
-				throwOnError: true,
-			});
-			return data;
-		},
-		queryKey: listLocalModelsQueryKey(options),
-	});
-
-export const selectLocalModelMutation = (
-	options?: Partial<Options<SelectLocalModelData>>,
-): UseMutationOptions<SelectLocalModelResponse, AxiosError<SelectLocalModelError>, Options<SelectLocalModelData>> => {
+export const saveTutorialStateMutation = (
+	options?: Partial<Options<SaveTutorialStateData>>,
+): UseMutationOptions<SaveTutorialStateResponse, AxiosError<DefaultError>, Options<SaveTutorialStateData>> => {
 	const mutationOptions: UseMutationOptions<
-		SelectLocalModelResponse,
-		AxiosError<SelectLocalModelError>,
-		Options<SelectLocalModelData>
+		SaveTutorialStateResponse,
+		AxiosError<DefaultError>,
+		Options<SaveTutorialStateData>
 	> = {
 		mutationFn: async (fnOptions) => {
-			const { data } = await selectLocalModel({
-				...options,
-				...fnOptions,
-				throwOnError: true,
-			});
-			return data;
-		},
-	};
-	return mutationOptions;
-};
-
-export const unloadLocalModelMutation = (
-	options?: Partial<Options<UnloadLocalModelData>>,
-): UseMutationOptions<UnloadLocalModelResponse, AxiosError<UnloadLocalModelError>, Options<UnloadLocalModelData>> => {
-	const mutationOptions: UseMutationOptions<
-		UnloadLocalModelResponse,
-		AxiosError<UnloadLocalModelError>,
-		Options<UnloadLocalModelData>
-	> = {
-		mutationFn: async (fnOptions) => {
-			const { data } = await unloadLocalModel({
-				...options,
-				...fnOptions,
-				throwOnError: true,
-			});
-			return data;
-		},
-	};
-	return mutationOptions;
-};
-
-export const cancelNodeChatMessageMutation = (
-	options?: Partial<Options<CancelNodeChatMessageData>>,
-): UseMutationOptions<
-	CancelNodeChatMessageResponse,
-	AxiosError<CancelNodeChatMessageError>,
-	Options<CancelNodeChatMessageData>
-> => {
-	const mutationOptions: UseMutationOptions<
-		CancelNodeChatMessageResponse,
-		AxiosError<CancelNodeChatMessageError>,
-		Options<CancelNodeChatMessageData>
-	> = {
-		mutationFn: async (fnOptions) => {
-			const { data } = await cancelNodeChatMessage({
-				...options,
-				...fnOptions,
-				throwOnError: true,
-			});
-			return data;
-		},
-	};
-	return mutationOptions;
-};
-
-export const listNodeChatConversationsQueryKey = (options: Options<ListNodeChatConversationsData>) =>
-	createQueryKey("listNodeChatConversations", options);
-
-export const listNodeChatConversationsOptions = (options: Options<ListNodeChatConversationsData>) =>
-	queryOptions<
-		ListNodeChatConversationsResponse,
-		AxiosError<ListNodeChatConversationsError>,
-		ListNodeChatConversationsResponse,
-		ReturnType<typeof listNodeChatConversationsQueryKey>
-	>({
-		queryFn: async ({ queryKey, signal }) => {
-			const { data } = await listNodeChatConversations({
-				...options,
-				...queryKey[0],
-				signal,
-				throwOnError: true,
-			});
-			return data;
-		},
-		queryKey: listNodeChatConversationsQueryKey(options),
-	});
-
-export const createNodeChatConversationMutation = (
-	options?: Partial<Options<CreateNodeChatConversationData>>,
-): UseMutationOptions<
-	CreateNodeChatConversationResponse,
-	AxiosError<CreateNodeChatConversationError>,
-	Options<CreateNodeChatConversationData>
-> => {
-	const mutationOptions: UseMutationOptions<
-		CreateNodeChatConversationResponse,
-		AxiosError<CreateNodeChatConversationError>,
-		Options<CreateNodeChatConversationData>
-	> = {
-		mutationFn: async (fnOptions) => {
-			const { data } = await createNodeChatConversation({
-				...options,
-				...fnOptions,
-				throwOnError: true,
-			});
-			return data;
-		},
-	};
-	return mutationOptions;
-};
-
-export const deleteNodeChatConversationMutation = (
-	options?: Partial<Options<DeleteNodeChatConversationData>>,
-): UseMutationOptions<
-	DeleteNodeChatConversationResponse,
-	AxiosError<DeleteNodeChatConversationError>,
-	Options<DeleteNodeChatConversationData>
-> => {
-	const mutationOptions: UseMutationOptions<
-		DeleteNodeChatConversationResponse,
-		AxiosError<DeleteNodeChatConversationError>,
-		Options<DeleteNodeChatConversationData>
-	> = {
-		mutationFn: async (fnOptions) => {
-			const { data } = await deleteNodeChatConversation({
-				...options,
-				...fnOptions,
-				throwOnError: true,
-			});
-			return data;
-		},
-	};
-	return mutationOptions;
-};
-
-export const getNodeChatConversationQueryKey = (options: Options<GetNodeChatConversationData>) =>
-	createQueryKey("getNodeChatConversation", options);
-
-export const getNodeChatConversationOptions = (options: Options<GetNodeChatConversationData>) =>
-	queryOptions<
-		GetNodeChatConversationResponse,
-		AxiosError<GetNodeChatConversationError>,
-		GetNodeChatConversationResponse,
-		ReturnType<typeof getNodeChatConversationQueryKey>
-	>({
-		queryFn: async ({ queryKey, signal }) => {
-			const { data } = await getNodeChatConversation({
-				...options,
-				...queryKey[0],
-				signal,
-				throwOnError: true,
-			});
-			return data;
-		},
-		queryKey: getNodeChatConversationQueryKey(options),
-	});
-
-export const renameNodeChatConversationMutation = (
-	options?: Partial<Options<RenameNodeChatConversationData>>,
-): UseMutationOptions<RenameNodeChatConversationResponse, AxiosError<DefaultError>, Options<RenameNodeChatConversationData>> => {
-	const mutationOptions: UseMutationOptions<
-		RenameNodeChatConversationResponse,
-		AxiosError<DefaultError>,
-		Options<RenameNodeChatConversationData>
-	> = {
-		mutationFn: async (fnOptions) => {
-			const { data } = await renameNodeChatConversation({
-				...options,
-				...fnOptions,
-				throwOnError: true,
-			});
-			return data;
-		},
-	};
-	return mutationOptions;
-};
-
-export const pinNodeChatConversationMutation = (
-	options?: Partial<Options<PinNodeChatConversationData>>,
-): UseMutationOptions<PinNodeChatConversationResponse, AxiosError<DefaultError>, Options<PinNodeChatConversationData>> => {
-	const mutationOptions: UseMutationOptions<
-		PinNodeChatConversationResponse,
-		AxiosError<DefaultError>,
-		Options<PinNodeChatConversationData>
-	> = {
-		mutationFn: async (fnOptions) => {
-			const { data } = await pinNodeChatConversation({
-				...options,
-				...fnOptions,
-				throwOnError: true,
-			});
-			return data;
-		},
-	};
-	return mutationOptions;
-};
-
-export const archiveNodeChatConversationMutation = (
-	options?: Partial<Options<ArchiveNodeChatConversationData>>,
-): UseMutationOptions<
-	ArchiveNodeChatConversationResponse,
-	AxiosError<DefaultError>,
-	Options<ArchiveNodeChatConversationData>
-> => {
-	const mutationOptions: UseMutationOptions<
-		ArchiveNodeChatConversationResponse,
-		AxiosError<DefaultError>,
-		Options<ArchiveNodeChatConversationData>
-	> = {
-		mutationFn: async (fnOptions) => {
-			const { data } = await archiveNodeChatConversation({
-				...options,
-				...fnOptions,
-				throwOnError: true,
-			});
-			return data;
-		},
-	};
-	return mutationOptions;
-};
-
-export const setNodeChatConversationMemoryExcludedMutation = (
-	options?: Partial<Options<SetNodeChatConversationMemoryExcludedData>>,
-): UseMutationOptions<
-	SetNodeChatConversationMemoryExcludedResponse,
-	AxiosError<DefaultError>,
-	Options<SetNodeChatConversationMemoryExcludedData>
-> => {
-	const mutationOptions: UseMutationOptions<
-		SetNodeChatConversationMemoryExcludedResponse,
-		AxiosError<DefaultError>,
-		Options<SetNodeChatConversationMemoryExcludedData>
-	> = {
-		mutationFn: async (fnOptions) => {
-			const { data } = await setNodeChatConversationMemoryExcluded({
-				...options,
-				...fnOptions,
-				throwOnError: true,
-			});
-			return data;
-		},
-	};
-	return mutationOptions;
-};
-
-export const branchNodeChatConversationMutation = (
-	options?: Partial<Options<BranchNodeChatConversationData>>,
-): UseMutationOptions<BranchNodeChatConversationResponse, AxiosError<DefaultError>, Options<BranchNodeChatConversationData>> => {
-	const mutationOptions: UseMutationOptions<
-		BranchNodeChatConversationResponse,
-		AxiosError<DefaultError>,
-		Options<BranchNodeChatConversationData>
-	> = {
-		mutationFn: async (fnOptions) => {
-			const { data } = await branchNodeChatConversation({
-				...options,
-				...fnOptions,
-				throwOnError: true,
-			});
-			return data;
-		},
-	};
-	return mutationOptions;
-};
-
-export const listNodeChatMessageRevisionsQueryKey = (options: Options<ListNodeChatMessageRevisionsData>) =>
-	createQueryKey("listNodeChatMessageRevisions", options);
-
-export const listNodeChatMessageRevisionsOptions = (options: Options<ListNodeChatMessageRevisionsData>) =>
-	queryOptions<
-		ListNodeChatMessageRevisionsResponse,
-		AxiosError<DefaultError>,
-		ListNodeChatMessageRevisionsResponse,
-		ReturnType<typeof listNodeChatMessageRevisionsQueryKey>
-	>({
-		queryFn: async ({ queryKey, signal }) => {
-			const { data } = await listNodeChatMessageRevisions({
-				...options,
-				...queryKey[0],
-				signal,
-				throwOnError: true,
-			});
-			return data;
-		},
-		queryKey: listNodeChatMessageRevisionsQueryKey(options),
-	});
-
-export const createNodeChatMessageRevisionMutation = (
-	options?: Partial<Options<CreateNodeChatMessageRevisionData>>,
-): UseMutationOptions<
-	CreateNodeChatMessageRevisionResponse,
-	AxiosError<DefaultError>,
-	Options<CreateNodeChatMessageRevisionData>
-> => {
-	const mutationOptions: UseMutationOptions<
-		CreateNodeChatMessageRevisionResponse,
-		AxiosError<DefaultError>,
-		Options<CreateNodeChatMessageRevisionData>
-	> = {
-		mutationFn: async (fnOptions) => {
-			const { data } = await createNodeChatMessageRevision({
-				...options,
-				...fnOptions,
-				throwOnError: true,
-			});
-			return data;
-		},
-	};
-	return mutationOptions;
-};
-
-export const getNodeChatMessageFeedbackQueryKey = (options: Options<GetNodeChatMessageFeedbackData>) =>
-	createQueryKey("getNodeChatMessageFeedback", options);
-
-export const getNodeChatMessageFeedbackOptions = (options: Options<GetNodeChatMessageFeedbackData>) =>
-	queryOptions<
-		GetNodeChatMessageFeedbackResponse,
-		AxiosError<DefaultError>,
-		GetNodeChatMessageFeedbackResponse,
-		ReturnType<typeof getNodeChatMessageFeedbackQueryKey>
-	>({
-		queryFn: async ({ queryKey, signal }) => {
-			const { data } = await getNodeChatMessageFeedback({
-				...options,
-				...queryKey[0],
-				signal,
-				throwOnError: true,
-			});
-			return data;
-		},
-		queryKey: getNodeChatMessageFeedbackQueryKey(options),
-	});
-
-export const setNodeChatMessageFeedbackMutation = (
-	options?: Partial<Options<SetNodeChatMessageFeedbackData>>,
-): UseMutationOptions<SetNodeChatMessageFeedbackResponse, AxiosError<DefaultError>, Options<SetNodeChatMessageFeedbackData>> => {
-	const mutationOptions: UseMutationOptions<
-		SetNodeChatMessageFeedbackResponse,
-		AxiosError<DefaultError>,
-		Options<SetNodeChatMessageFeedbackData>
-	> = {
-		mutationFn: async (fnOptions) => {
-			const { data } = await setNodeChatMessageFeedback({
-				...options,
-				...fnOptions,
-				throwOnError: true,
-			});
-			return data;
-		},
-	};
-	return mutationOptions;
-};
-
-export const setNodeChatSelectedPathMutation = (
-	options?: Partial<Options<SetNodeChatSelectedPathData>>,
-): UseMutationOptions<
-	SetNodeChatSelectedPathResponse,
-	AxiosError<SetNodeChatSelectedPathError>,
-	Options<SetNodeChatSelectedPathData>
-> => {
-	const mutationOptions: UseMutationOptions<
-		SetNodeChatSelectedPathResponse,
-		AxiosError<SetNodeChatSelectedPathError>,
-		Options<SetNodeChatSelectedPathData>
-	> = {
-		mutationFn: async (fnOptions) => {
-			const { data } = await setNodeChatSelectedPath({
-				...options,
-				...fnOptions,
-				throwOnError: true,
-			});
-			return data;
-		},
-	};
-	return mutationOptions;
-};
-
-export const getInvocationMonitorQueryKey = (options?: Options<GetInvocationMonitorData>) =>
-	createQueryKey("getInvocationMonitor", options);
-
-export const getInvocationMonitorOptions = (options?: Options<GetInvocationMonitorData>) =>
-	queryOptions<
-		GetInvocationMonitorResponse,
-		AxiosError<DefaultError>,
-		GetInvocationMonitorResponse,
-		ReturnType<typeof getInvocationMonitorQueryKey>
-	>({
-		queryFn: async ({ queryKey, signal }) => {
-			const { data } = await getInvocationMonitor({
-				...options,
-				...queryKey[0],
-				signal,
-				throwOnError: true,
-			});
-			return data;
-		},
-		queryKey: getInvocationMonitorQueryKey(options),
-	});
-
-export const connectConnectionMutation = (
-	options?: Partial<Options<ConnectConnectionData>>,
-): UseMutationOptions<ConnectConnectionResponse, AxiosError<DefaultError>, Options<ConnectConnectionData>> => {
-	const mutationOptions: UseMutationOptions<
-		ConnectConnectionResponse,
-		AxiosError<DefaultError>,
-		Options<ConnectConnectionData>
-	> = {
-		mutationFn: async (fnOptions) => {
-			const { data } = await connectConnection({
-				...options,
-				...fnOptions,
-				throwOnError: true,
-			});
-			return data;
-		},
-	};
-	return mutationOptions;
-};
-
-export const disableAutoConnectMutation = (
-	options?: Partial<Options<DisableAutoConnectData>>,
-): UseMutationOptions<DisableAutoConnectResponse, AxiosError<DefaultError>, Options<DisableAutoConnectData>> => {
-	const mutationOptions: UseMutationOptions<
-		DisableAutoConnectResponse,
-		AxiosError<DefaultError>,
-		Options<DisableAutoConnectData>
-	> = {
-		mutationFn: async (fnOptions) => {
-			const { data } = await disableAutoConnect({
-				...options,
-				...fnOptions,
-				throwOnError: true,
-			});
-			return data;
-		},
-	};
-	return mutationOptions;
-};
-
-export const disconnectConnectionMutation = (
-	options?: Partial<Options<DisconnectConnectionData>>,
-): UseMutationOptions<DisconnectConnectionResponse, AxiosError<DefaultError>, Options<DisconnectConnectionData>> => {
-	const mutationOptions: UseMutationOptions<
-		DisconnectConnectionResponse,
-		AxiosError<DefaultError>,
-		Options<DisconnectConnectionData>
-	> = {
-		mutationFn: async (fnOptions) => {
-			const { data } = await disconnectConnection({
-				...options,
-				...fnOptions,
-				throwOnError: true,
-			});
-			return data;
-		},
-	};
-	return mutationOptions;
-};
-
-export const enableAutoConnectMutation = (
-	options?: Partial<Options<EnableAutoConnectData>>,
-): UseMutationOptions<EnableAutoConnectResponse, AxiosError<DefaultError>, Options<EnableAutoConnectData>> => {
-	const mutationOptions: UseMutationOptions<
-		EnableAutoConnectResponse,
-		AxiosError<DefaultError>,
-		Options<EnableAutoConnectData>
-	> = {
-		mutationFn: async (fnOptions) => {
-			const { data } = await enableAutoConnect({
-				...options,
-				...fnOptions,
-				throwOnError: true,
-			});
-			return data;
-		},
-	};
-	return mutationOptions;
-};
-
-export const getConnectionStatusQueryKey = (options?: Options<GetConnectionStatusData>) =>
-	createQueryKey("getConnectionStatus", options);
-
-export const getConnectionStatusOptions = (options?: Options<GetConnectionStatusData>) =>
-	queryOptions<
-		GetConnectionStatusResponse,
-		AxiosError<DefaultError>,
-		GetConnectionStatusResponse,
-		ReturnType<typeof getConnectionStatusQueryKey>
-	>({
-		queryFn: async ({ queryKey, signal }) => {
-			const { data } = await getConnectionStatus({
-				...options,
-				...queryKey[0],
-				signal,
-				throwOnError: true,
-			});
-			return data;
-		},
-		queryKey: getConnectionStatusQueryKey(options),
-	});
-
-export const clearCloudSettingsMutation = (
-	options?: Partial<Options<ClearCloudSettingsData>>,
-): UseMutationOptions<ClearCloudSettingsResponse, AxiosError<DefaultError>, Options<ClearCloudSettingsData>> => {
-	const mutationOptions: UseMutationOptions<
-		ClearCloudSettingsResponse,
-		AxiosError<DefaultError>,
-		Options<ClearCloudSettingsData>
-	> = {
-		mutationFn: async (fnOptions) => {
-			const { data } = await clearCloudSettings({
-				...options,
-				...fnOptions,
-				throwOnError: true,
-			});
-			return data;
-		},
-	};
-	return mutationOptions;
-};
-
-export const getCloudSettingsQueryKey = (options?: Options<GetCloudSettingsData>) => createQueryKey("getCloudSettings", options);
-
-export const getCloudSettingsOptions = (options?: Options<GetCloudSettingsData>) =>
-	queryOptions<
-		GetCloudSettingsResponse,
-		AxiosError<DefaultError>,
-		GetCloudSettingsResponse,
-		ReturnType<typeof getCloudSettingsQueryKey>
-	>({
-		queryFn: async ({ queryKey, signal }) => {
-			const { data } = await getCloudSettings({
-				...options,
-				...queryKey[0],
-				signal,
-				throwOnError: true,
-			});
-			return data;
-		},
-		queryKey: getCloudSettingsQueryKey(options),
-	});
-
-export const saveCloudSettingsMutation = (
-	options?: Partial<Options<SaveCloudSettingsData>>,
-): UseMutationOptions<SaveCloudSettingsResponse, AxiosError<SaveCloudSettingsError>, Options<SaveCloudSettingsData>> => {
-	const mutationOptions: UseMutationOptions<
-		SaveCloudSettingsResponse,
-		AxiosError<SaveCloudSettingsError>,
-		Options<SaveCloudSettingsData>
-	> = {
-		mutationFn: async (fnOptions) => {
-			const { data } = await saveCloudSettings({
-				...options,
-				...fnOptions,
-				throwOnError: true,
-			});
-			return data;
-		},
-	};
-	return mutationOptions;
-};
-
-export const codexLoginMutation = (
-	options?: Partial<Options<CodexLoginData>>,
-): UseMutationOptions<CodexLoginResponse, AxiosError<DefaultError>, Options<CodexLoginData>> => {
-	const mutationOptions: UseMutationOptions<CodexLoginResponse, AxiosError<DefaultError>, Options<CodexLoginData>> = {
-		mutationFn: async (fnOptions) => {
-			const { data } = await codexLogin({
-				...options,
-				...fnOptions,
-				throwOnError: true,
-			});
-			return data;
-		},
-	};
-	return mutationOptions;
-};
-
-export const codexLogoutMutation = (
-	options?: Partial<Options<CodexLogoutData>>,
-): UseMutationOptions<CodexLogoutResponse, AxiosError<DefaultError>, Options<CodexLogoutData>> => {
-	const mutationOptions: UseMutationOptions<CodexLogoutResponse, AxiosError<DefaultError>, Options<CodexLogoutData>> = {
-		mutationFn: async (fnOptions) => {
-			const { data } = await codexLogout({
-				...options,
-				...fnOptions,
-				throwOnError: true,
-			});
-			return data;
-		},
-	};
-	return mutationOptions;
-};
-
-export const codexStatusQueryKey = (options?: Options<CodexStatusData>) => createQueryKey("codexStatus", options);
-
-export const codexStatusOptions = (options?: Options<CodexStatusData>) =>
-	queryOptions<CodexStatusResponse, AxiosError<DefaultError>, CodexStatusResponse, ReturnType<typeof codexStatusQueryKey>>({
-		queryFn: async ({ queryKey, signal }) => {
-			const { data } = await codexStatus({
-				...options,
-				...queryKey[0],
-				signal,
-				throwOnError: true,
-			});
-			return data;
-		},
-		queryKey: codexStatusQueryKey(options),
-	});
-
-export const nodeAuthStatusQueryKey = (options?: Options<NodeAuthStatusData>) => createQueryKey("nodeAuthStatus", options);
-
-export const nodeAuthStatusOptions = (options?: Options<NodeAuthStatusData>) =>
-	queryOptions<
-		NodeAuthStatusResponse,
-		AxiosError<DefaultError>,
-		NodeAuthStatusResponse,
-		ReturnType<typeof nodeAuthStatusQueryKey>
-	>({
-		queryFn: async ({ queryKey, signal }) => {
-			const { data } = await nodeAuthStatus({
-				...options,
-				...queryKey[0],
-				signal,
-				throwOnError: true,
-			});
-			return data;
-		},
-		queryKey: nodeAuthStatusQueryKey(options),
-	});
-
-export const nodeSetupMutation = (
-	options?: Partial<Options<NodeSetupData>>,
-): UseMutationOptions<NodeSetupResponse, AxiosError<NodeSetupError>, Options<NodeSetupData>> => {
-	const mutationOptions: UseMutationOptions<NodeSetupResponse, AxiosError<NodeSetupError>, Options<NodeSetupData>> = {
-		mutationFn: async (fnOptions) => {
-			const { data } = await nodeSetup({
-				...options,
-				...fnOptions,
-				throwOnError: true,
-			});
-			return data;
-		},
-	};
-	return mutationOptions;
-};
-
-export const nodeLoginMutation = (
-	options?: Partial<Options<NodeLoginData>>,
-): UseMutationOptions<NodeLoginResponse, AxiosError<NodeLoginError>, Options<NodeLoginData>> => {
-	const mutationOptions: UseMutationOptions<NodeLoginResponse, AxiosError<NodeLoginError>, Options<NodeLoginData>> = {
-		mutationFn: async (fnOptions) => {
-			const { data } = await nodeLogin({
-				...options,
-				...fnOptions,
-				throwOnError: true,
-			});
-			return data;
-		},
-	};
-	return mutationOptions;
-};
-
-export const nodeRefreshMutation = (
-	options?: Partial<Options<NodeRefreshData>>,
-): UseMutationOptions<NodeRefreshResponse, AxiosError<DefaultError>, Options<NodeRefreshData>> => {
-	const mutationOptions: UseMutationOptions<NodeRefreshResponse, AxiosError<DefaultError>, Options<NodeRefreshData>> = {
-		mutationFn: async (fnOptions) => {
-			const { data } = await nodeRefresh({
-				...options,
-				...fnOptions,
-				throwOnError: true,
-			});
-			return data;
-		},
-	};
-	return mutationOptions;
-};
-
-export const nodeLogoutMutation = (
-	options?: Partial<Options<NodeLogoutData>>,
-): UseMutationOptions<NodeLogoutResponse, AxiosError<DefaultError>, Options<NodeLogoutData>> => {
-	const mutationOptions: UseMutationOptions<NodeLogoutResponse, AxiosError<DefaultError>, Options<NodeLogoutData>> = {
-		mutationFn: async (fnOptions) => {
-			const { data } = await nodeLogout({
-				...options,
-				...fnOptions,
-				throwOnError: true,
-			});
-			return data;
-		},
-	};
-	return mutationOptions;
-};
-
-export const nodeChangePasswordMutation = (
-	options?: Partial<Options<NodeChangePasswordData>>,
-): UseMutationOptions<NodeChangePasswordResponse, AxiosError<NodeChangePasswordError>, Options<NodeChangePasswordData>> => {
-	const mutationOptions: UseMutationOptions<
-		NodeChangePasswordResponse,
-		AxiosError<NodeChangePasswordError>,
-		Options<NodeChangePasswordData>
-	> = {
-		mutationFn: async (fnOptions) => {
-			const { data } = await nodeChangePassword({
-				...options,
-				...fnOptions,
-				throwOnError: true,
-			});
-			return data;
-		},
-	};
-	return mutationOptions;
-};
-
-export const nodeMeQueryKey = (options?: Options<NodeMeData>) => createQueryKey("nodeMe", options);
-
-export const nodeMeOptions = (options?: Options<NodeMeData>) =>
-	queryOptions<NodeMeResponse, AxiosError<DefaultError>, NodeMeResponse, ReturnType<typeof nodeMeQueryKey>>({
-		queryFn: async ({ queryKey, signal }) => {
-			const { data } = await nodeMe({
-				...options,
-				...queryKey[0],
-				signal,
-				throwOnError: true,
-			});
-			return data;
-		},
-		queryKey: nodeMeQueryKey(options),
-	});
-
-export const applyAppUpdateMutation = (
-	options?: Partial<Options<ApplyAppUpdateData>>,
-): UseMutationOptions<ApplyAppUpdateResponse, AxiosError<DefaultError>, Options<ApplyAppUpdateData>> => {
-	const mutationOptions: UseMutationOptions<ApplyAppUpdateResponse, AxiosError<DefaultError>, Options<ApplyAppUpdateData>> = {
-		mutationFn: async (fnOptions) => {
-			const { data } = await applyAppUpdate({
-				...options,
-				...fnOptions,
-				throwOnError: true,
-			});
-			return data;
-		},
-	};
-	return mutationOptions;
-};
-
-export const getAppUpdateStatusQueryKey = (options?: Options<GetAppUpdateStatusData>) =>
-	createQueryKey("getAppUpdateStatus", options);
-
-export const getAppUpdateStatusOptions = (options?: Options<GetAppUpdateStatusData>) =>
-	queryOptions<
-		GetAppUpdateStatusResponse,
-		AxiosError<DefaultError>,
-		GetAppUpdateStatusResponse,
-		ReturnType<typeof getAppUpdateStatusQueryKey>
-	>({
-		queryFn: async ({ queryKey, signal }) => {
-			const { data } = await getAppUpdateStatus({
-				...options,
-				...queryKey[0],
-				signal,
-				throwOnError: true,
-			});
-			return data;
-		},
-		queryKey: getAppUpdateStatusQueryKey(options),
-	});
-
-export const getGitHubAuthStatusQueryKey = (options?: Options<GetGitHubAuthStatusData>) =>
-	createQueryKey("getGitHubAuthStatus", options);
-
-export const getGitHubAuthStatusOptions = (options?: Options<GetGitHubAuthStatusData>) =>
-	queryOptions<
-		GetGitHubAuthStatusResponse,
-		AxiosError<DefaultError>,
-		GetGitHubAuthStatusResponse,
-		ReturnType<typeof getGitHubAuthStatusQueryKey>
-	>({
-		queryFn: async ({ queryKey, signal }) => {
-			const { data } = await getGitHubAuthStatus({
-				...options,
-				...queryKey[0],
-				signal,
-				throwOnError: true,
-			});
-			return data;
-		},
-		queryKey: getGitHubAuthStatusQueryKey(options),
-	});
-
-export const pollGitHubAuthMutation = (
-	options?: Partial<Options<PollGitHubAuthData>>,
-): UseMutationOptions<PollGitHubAuthResponse, AxiosError<DefaultError>, Options<PollGitHubAuthData>> => {
-	const mutationOptions: UseMutationOptions<PollGitHubAuthResponse, AxiosError<DefaultError>, Options<PollGitHubAuthData>> = {
-		mutationFn: async (fnOptions) => {
-			const { data } = await pollGitHubAuth({
-				...options,
-				...fnOptions,
-				throwOnError: true,
-			});
-			return data;
-		},
-	};
-	return mutationOptions;
-};
-
-export const signOutGitHubAuthMutation = (
-	options?: Partial<Options<SignOutGitHubAuthData>>,
-): UseMutationOptions<SignOutGitHubAuthResponse, AxiosError<DefaultError>, Options<SignOutGitHubAuthData>> => {
-	const mutationOptions: UseMutationOptions<
-		SignOutGitHubAuthResponse,
-		AxiosError<DefaultError>,
-		Options<SignOutGitHubAuthData>
-	> = {
-		mutationFn: async (fnOptions) => {
-			const { data } = await signOutGitHubAuth({
-				...options,
-				...fnOptions,
-				throwOnError: true,
-			});
-			return data;
-		},
-	};
-	return mutationOptions;
-};
-
-export const startGitHubAuthMutation = (
-	options?: Partial<Options<StartGitHubAuthData>>,
-): UseMutationOptions<StartGitHubAuthResponse, AxiosError<DefaultError>, Options<StartGitHubAuthData>> => {
-	const mutationOptions: UseMutationOptions<StartGitHubAuthResponse, AxiosError<DefaultError>, Options<StartGitHubAuthData>> = {
-		mutationFn: async (fnOptions) => {
-			const { data } = await startGitHubAuth({
-				...options,
-				...fnOptions,
-				throwOnError: true,
-			});
-			return data;
-		},
-	};
-	return mutationOptions;
-};
-
-export const validationProblemProbeMutation = (
-	options?: Partial<Options<ValidationProblemProbeData>>,
-): UseMutationOptions<
-	ValidationProblemProbeResponse,
-	AxiosError<ValidationProblemProbeError>,
-	Options<ValidationProblemProbeData>
-> => {
-	const mutationOptions: UseMutationOptions<
-		ValidationProblemProbeResponse,
-		AxiosError<ValidationProblemProbeError>,
-		Options<ValidationProblemProbeData>
-	> = {
-		mutationFn: async (fnOptions) => {
-			const { data } = await validationProblemProbe({
-				...options,
-				...fnOptions,
-				throwOnError: true,
-			});
-			return data;
-		},
-	};
-	return mutationOptions;
-};
-
-export const analyzePlaybookMutation = (
-	options?: Partial<Options<AnalyzePlaybookData>>,
-): UseMutationOptions<AnalyzePlaybookResponse, AxiosError<DefaultError>, Options<AnalyzePlaybookData>> => {
-	const mutationOptions: UseMutationOptions<AnalyzePlaybookResponse, AxiosError<DefaultError>, Options<AnalyzePlaybookData>> = {
-		mutationFn: async (fnOptions) => {
-			const { data } = await analyzePlaybook({
-				...options,
-				...fnOptions,
-				throwOnError: true,
-			});
-			return data;
-		},
-	};
-	return mutationOptions;
-};
-
-export const approveGoldenConversationMutation = (
-	options?: Partial<Options<ApproveGoldenConversationData>>,
-): UseMutationOptions<ApproveGoldenConversationResponse, AxiosError<DefaultError>, Options<ApproveGoldenConversationData>> => {
-	const mutationOptions: UseMutationOptions<
-		ApproveGoldenConversationResponse,
-		AxiosError<DefaultError>,
-		Options<ApproveGoldenConversationData>
-	> = {
-		mutationFn: async (fnOptions) => {
-			const { data } = await approveGoldenConversation({
-				...options,
-				...fnOptions,
-				throwOnError: true,
-			});
-			return data;
-		},
-	};
-	return mutationOptions;
-};
-
-export const listAgentDefinitionsQueryKey = (options?: Options<ListAgentDefinitionsData>) =>
-	createQueryKey("listAgentDefinitions", options);
-
-export const listAgentDefinitionsOptions = (options?: Options<ListAgentDefinitionsData>) =>
-	queryOptions<
-		ListAgentDefinitionsResponse,
-		AxiosError<DefaultError>,
-		ListAgentDefinitionsResponse,
-		ReturnType<typeof listAgentDefinitionsQueryKey>
-	>({
-		queryFn: async ({ queryKey, signal }) => {
-			const { data } = await listAgentDefinitions({
-				...options,
-				...queryKey[0],
-				signal,
-				throwOnError: true,
-			});
-			return data;
-		},
-		queryKey: listAgentDefinitionsQueryKey(options),
-	});
-
-export const createAgentDefinitionMutation = (
-	options?: Partial<Options<CreateAgentDefinitionData>>,
-): UseMutationOptions<CreateAgentDefinitionResponse, AxiosError<DefaultError>, Options<CreateAgentDefinitionData>> => {
-	const mutationOptions: UseMutationOptions<
-		CreateAgentDefinitionResponse,
-		AxiosError<DefaultError>,
-		Options<CreateAgentDefinitionData>
-	> = {
-		mutationFn: async (fnOptions) => {
-			const { data } = await createAgentDefinition({
-				...options,
-				...fnOptions,
-				throwOnError: true,
-			});
-			return data;
-		},
-	};
-	return mutationOptions;
-};
-
-export const listGoldenConversationsQueryKey = (options: Options<ListGoldenConversationsData>) =>
-	createQueryKey("listGoldenConversations", options);
-
-export const listGoldenConversationsOptions = (options: Options<ListGoldenConversationsData>) =>
-	queryOptions<
-		ListGoldenConversationsResponse,
-		AxiosError<DefaultError>,
-		ListGoldenConversationsResponse,
-		ReturnType<typeof listGoldenConversationsQueryKey>
-	>({
-		queryFn: async ({ queryKey, signal }) => {
-			const { data } = await listGoldenConversations({
-				...options,
-				...queryKey[0],
-				signal,
-				throwOnError: true,
-			});
-			return data;
-		},
-		queryKey: listGoldenConversationsQueryKey(options),
-	});
-
-export const createGoldenConversationMutation = (
-	options?: Partial<Options<CreateGoldenConversationData>>,
-): UseMutationOptions<CreateGoldenConversationResponse, AxiosError<DefaultError>, Options<CreateGoldenConversationData>> => {
-	const mutationOptions: UseMutationOptions<
-		CreateGoldenConversationResponse,
-		AxiosError<DefaultError>,
-		Options<CreateGoldenConversationData>
-	> = {
-		mutationFn: async (fnOptions) => {
-			const { data } = await createGoldenConversation({
-				...options,
-				...fnOptions,
-				throwOnError: true,
-			});
-			return data;
-		},
-	};
-	return mutationOptions;
-};
-
-export const listAgentPlaybookActionsQueryKey = (options: Options<ListAgentPlaybookActionsData>) =>
-	createQueryKey("listAgentPlaybookActions", options);
-
-export const listAgentPlaybookActionsOptions = (options: Options<ListAgentPlaybookActionsData>) =>
-	queryOptions<
-		ListAgentPlaybookActionsResponse,
-		AxiosError<DefaultError>,
-		ListAgentPlaybookActionsResponse,
-		ReturnType<typeof listAgentPlaybookActionsQueryKey>
-	>({
-		queryFn: async ({ queryKey, signal }) => {
-			const { data } = await listAgentPlaybookActions({
-				...options,
-				...queryKey[0],
-				signal,
-				throwOnError: true,
-			});
-			return data;
-		},
-		queryKey: listAgentPlaybookActionsQueryKey(options),
-	});
-
-export const createPlaybookActionMutation = (
-	options?: Partial<Options<CreatePlaybookActionData>>,
-): UseMutationOptions<CreatePlaybookActionResponse, AxiosError<DefaultError>, Options<CreatePlaybookActionData>> => {
-	const mutationOptions: UseMutationOptions<
-		CreatePlaybookActionResponse,
-		AxiosError<DefaultError>,
-		Options<CreatePlaybookActionData>
-	> = {
-		mutationFn: async (fnOptions) => {
-			const { data } = await createPlaybookAction({
-				...options,
-				...fnOptions,
-				throwOnError: true,
-			});
-			return data;
-		},
-	};
-	return mutationOptions;
-};
-
-export const deleteAgentDefinitionMutation = (
-	options?: Partial<Options<DeleteAgentDefinitionData>>,
-): UseMutationOptions<DeleteAgentDefinitionResponse, AxiosError<DefaultError>, Options<DeleteAgentDefinitionData>> => {
-	const mutationOptions: UseMutationOptions<
-		DeleteAgentDefinitionResponse,
-		AxiosError<DefaultError>,
-		Options<DeleteAgentDefinitionData>
-	> = {
-		mutationFn: async (fnOptions) => {
-			const { data } = await deleteAgentDefinition({
-				...options,
-				...fnOptions,
-				throwOnError: true,
-			});
-			return data;
-		},
-	};
-	return mutationOptions;
-};
-
-export const getAgentDefinitionQueryKey = (options: Options<GetAgentDefinitionData>) =>
-	createQueryKey("getAgentDefinition", options);
-
-export const getAgentDefinitionOptions = (options: Options<GetAgentDefinitionData>) =>
-	queryOptions<
-		GetAgentDefinitionResponse,
-		AxiosError<DefaultError>,
-		GetAgentDefinitionResponse,
-		ReturnType<typeof getAgentDefinitionQueryKey>
-	>({
-		queryFn: async ({ queryKey, signal }) => {
-			const { data } = await getAgentDefinition({
-				...options,
-				...queryKey[0],
-				signal,
-				throwOnError: true,
-			});
-			return data;
-		},
-		queryKey: getAgentDefinitionQueryKey(options),
-	});
-
-export const updateAgentDefinitionMutation = (
-	options?: Partial<Options<UpdateAgentDefinitionData>>,
-): UseMutationOptions<UpdateAgentDefinitionResponse, AxiosError<DefaultError>, Options<UpdateAgentDefinitionData>> => {
-	const mutationOptions: UseMutationOptions<
-		UpdateAgentDefinitionResponse,
-		AxiosError<DefaultError>,
-		Options<UpdateAgentDefinitionData>
-	> = {
-		mutationFn: async (fnOptions) => {
-			const { data } = await updateAgentDefinition({
-				...options,
-				...fnOptions,
-				throwOnError: true,
-			});
-			return data;
-		},
-	};
-	return mutationOptions;
-};
-
-export const deleteGoldenConversationMutation = (
-	options?: Partial<Options<DeleteGoldenConversationData>>,
-): UseMutationOptions<DeleteGoldenConversationResponse, AxiosError<DefaultError>, Options<DeleteGoldenConversationData>> => {
-	const mutationOptions: UseMutationOptions<
-		DeleteGoldenConversationResponse,
-		AxiosError<DefaultError>,
-		Options<DeleteGoldenConversationData>
-	> = {
-		mutationFn: async (fnOptions) => {
-			const { data } = await deleteGoldenConversation({
-				...options,
-				...fnOptions,
-				throwOnError: true,
-			});
-			return data;
-		},
-	};
-	return mutationOptions;
-};
-
-export const deletePlaybookActionMutation = (
-	options?: Partial<Options<DeletePlaybookActionData>>,
-): UseMutationOptions<DeletePlaybookActionResponse, AxiosError<DefaultError>, Options<DeletePlaybookActionData>> => {
-	const mutationOptions: UseMutationOptions<
-		DeletePlaybookActionResponse,
-		AxiosError<DefaultError>,
-		Options<DeletePlaybookActionData>
-	> = {
-		mutationFn: async (fnOptions) => {
-			const { data } = await deletePlaybookAction({
-				...options,
-				...fnOptions,
-				throwOnError: true,
-			});
-			return data;
-		},
-	};
-	return mutationOptions;
-};
-
-export const updatePlaybookActionMutation = (
-	options?: Partial<Options<UpdatePlaybookActionData>>,
-): UseMutationOptions<UpdatePlaybookActionResponse, AxiosError<DefaultError>, Options<UpdatePlaybookActionData>> => {
-	const mutationOptions: UseMutationOptions<
-		UpdatePlaybookActionResponse,
-		AxiosError<DefaultError>,
-		Options<UpdatePlaybookActionData>
-	> = {
-		mutationFn: async (fnOptions) => {
-			const { data } = await updatePlaybookAction({
-				...options,
-				...fnOptions,
-				throwOnError: true,
-			});
-			return data;
-		},
-	};
-	return mutationOptions;
-};
-
-export const getAgentFeedbackInsightsQueryKey = (options: Options<GetAgentFeedbackInsightsData>) =>
-	createQueryKey("getAgentFeedbackInsights", options);
-
-export const getAgentFeedbackInsightsOptions = (options: Options<GetAgentFeedbackInsightsData>) =>
-	queryOptions<
-		GetAgentFeedbackInsightsResponse,
-		AxiosError<DefaultError>,
-		GetAgentFeedbackInsightsResponse,
-		ReturnType<typeof getAgentFeedbackInsightsQueryKey>
-	>({
-		queryFn: async ({ queryKey, signal }) => {
-			const { data } = await getAgentFeedbackInsights({
-				...options,
-				...queryKey[0],
-				signal,
-				throwOnError: true,
-			});
-			return data;
-		},
-		queryKey: getAgentFeedbackInsightsQueryKey(options),
-	});
-
-export const getAgentPlaybookMonitorQueryKey = (options: Options<GetAgentPlaybookMonitorData>) =>
-	createQueryKey("getAgentPlaybookMonitor", options);
-
-export const getAgentPlaybookMonitorOptions = (options: Options<GetAgentPlaybookMonitorData>) =>
-	queryOptions<
-		GetAgentPlaybookMonitorResponse,
-		AxiosError<DefaultError>,
-		GetAgentPlaybookMonitorResponse,
-		ReturnType<typeof getAgentPlaybookMonitorQueryKey>
-	>({
-		queryFn: async ({ queryKey, signal }) => {
-			const { data } = await getAgentPlaybookMonitor({
-				...options,
-				...queryKey[0],
-				signal,
-				throwOnError: true,
-			});
-			return data;
-		},
-		queryKey: getAgentPlaybookMonitorQueryKey(options),
-	});
-
-export const getToolCapableModelsQueryKey = (options?: Options<GetToolCapableModelsData>) =>
-	createQueryKey("getToolCapableModels", options);
-
-export const getToolCapableModelsOptions = (options?: Options<GetToolCapableModelsData>) =>
-	queryOptions<
-		GetToolCapableModelsResponse,
-		AxiosError<DefaultError>,
-		GetToolCapableModelsResponse,
-		ReturnType<typeof getToolCapableModelsQueryKey>
-	>({
-		queryFn: async ({ queryKey, signal }) => {
-			const { data } = await getToolCapableModels({
-				...options,
-				...queryKey[0],
-				signal,
-				throwOnError: true,
-			});
-			return data;
-		},
-		queryKey: getToolCapableModelsQueryKey(options),
-	});
-
-export const harvestGoldenConversationsMutation = (
-	options?: Partial<Options<HarvestGoldenConversationsData>>,
-): UseMutationOptions<HarvestGoldenConversationsResponse, AxiosError<DefaultError>, Options<HarvestGoldenConversationsData>> => {
-	const mutationOptions: UseMutationOptions<
-		HarvestGoldenConversationsResponse,
-		AxiosError<DefaultError>,
-		Options<HarvestGoldenConversationsData>
-	> = {
-		mutationFn: async (fnOptions) => {
-			const { data } = await harvestGoldenConversations({
-				...options,
-				...fnOptions,
-				throwOnError: true,
-			});
-			return data;
-		},
-	};
-	return mutationOptions;
-};
-
-export const importAgentTemplatesMutation = (
-	options?: Partial<Options<ImportAgentTemplatesData>>,
-): UseMutationOptions<ImportAgentTemplatesResponse, AxiosError<DefaultError>, Options<ImportAgentTemplatesData>> => {
-	const mutationOptions: UseMutationOptions<
-		ImportAgentTemplatesResponse,
-		AxiosError<DefaultError>,
-		Options<ImportAgentTemplatesData>
-	> = {
-		mutationFn: async (fnOptions) => {
-			const { data } = await importAgentTemplates({
-				...options,
-				...fnOptions,
-				throwOnError: true,
-			});
-			return data;
-		},
-	};
-	return mutationOptions;
-};
-
-export const listAgentExecutionLogsQueryKey = (options: Options<ListAgentExecutionLogsData>) =>
-	createQueryKey("listAgentExecutionLogs", options);
-
-export const listAgentExecutionLogsOptions = (options: Options<ListAgentExecutionLogsData>) =>
-	queryOptions<
-		ListAgentExecutionLogsResponse,
-		AxiosError<DefaultError>,
-		ListAgentExecutionLogsResponse,
-		ReturnType<typeof listAgentExecutionLogsQueryKey>
-	>({
-		queryFn: async ({ queryKey, signal }) => {
-			const { data } = await listAgentExecutionLogs({
-				...options,
-				...queryKey[0],
-				signal,
-				throwOnError: true,
-			});
-			return data;
-		},
-		queryKey: listAgentExecutionLogsQueryKey(options),
-	});
-
-const createInfiniteParams = <K extends Pick<QueryKey<Options>[0], "body" | "headers" | "path" | "query">>(
-	queryKey: QueryKey<Options>,
-	page: K,
-) => {
-	const params = { ...queryKey[0] };
-	if (page.body) {
-		params.body = {
-			...(queryKey[0].body as any),
-			...(page.body as any),
-		};
-	}
-	if (page.headers) {
-		params.headers = {
-			...queryKey[0].headers,
-			...page.headers,
-		};
-	}
-	if (page.path) {
-		params.path = {
-			...(queryKey[0].path as any),
-			...(page.path as any),
-		};
-	}
-	if (page.query) {
-		params.query = {
-			...(queryKey[0].query as any),
-			...(page.query as any),
-		};
-	}
-	return params as unknown as typeof page;
-};
-
-export const listAgentExecutionLogsInfiniteQueryKey = (
-	options: Options<ListAgentExecutionLogsData>,
-): QueryKey<Options<ListAgentExecutionLogsData>> => createQueryKey("listAgentExecutionLogs", options, true);
-
-export const listAgentExecutionLogsInfiniteOptions = (options: Options<ListAgentExecutionLogsData>) =>
-	infiniteQueryOptions<
-		ListAgentExecutionLogsResponse,
-		AxiosError<DefaultError>,
-		InfiniteData<ListAgentExecutionLogsResponse>,
-		QueryKey<Options<ListAgentExecutionLogsData>>,
-		number | null | Pick<QueryKey<Options<ListAgentExecutionLogsData>>[0], "body" | "headers" | "path" | "query">
-	>(
-		// @ts-ignore
-		{
-			queryFn: async ({ pageParam, queryKey, signal }) => {
-				// @ts-ignore
-				const page: Pick<QueryKey<Options<ListAgentExecutionLogsData>>[0], "body" | "headers" | "path" | "query"> =
-					typeof pageParam === "object"
-						? pageParam
-						: {
-								query: {
-									offset: pageParam,
-								},
-							};
-				const params = createInfiniteParams(queryKey, page);
-				const { data } = await listAgentExecutionLogs({
-					...options,
-					...params,
-					signal,
-					throwOnError: true,
-				});
-				return data;
-			},
-			queryKey: listAgentExecutionLogsInfiniteQueryKey(options),
-		},
-	);
-
-export const listAgentTemplatesQueryKey = (options?: Options<ListAgentTemplatesData>) =>
-	createQueryKey("listAgentTemplates", options);
-
-export const listAgentTemplatesOptions = (options?: Options<ListAgentTemplatesData>) =>
-	queryOptions<
-		ListAgentTemplatesResponse,
-		AxiosError<DefaultError>,
-		ListAgentTemplatesResponse,
-		ReturnType<typeof listAgentTemplatesQueryKey>
-	>({
-		queryFn: async ({ queryKey, signal }) => {
-			const { data } = await listAgentTemplates({
-				...options,
-				...queryKey[0],
-				signal,
-				throwOnError: true,
-			});
-			return data;
-		},
-		queryKey: listAgentTemplatesQueryKey(options),
-	});
-
-export const promoteSuggestedPlaybookActionMutation = (
-	options?: Partial<Options<PromoteSuggestedPlaybookActionData>>,
-): UseMutationOptions<
-	PromoteSuggestedPlaybookActionResponse,
-	AxiosError<DefaultError>,
-	Options<PromoteSuggestedPlaybookActionData>
-> => {
-	const mutationOptions: UseMutationOptions<
-		PromoteSuggestedPlaybookActionResponse,
-		AxiosError<DefaultError>,
-		Options<PromoteSuggestedPlaybookActionData>
-	> = {
-		mutationFn: async (fnOptions) => {
-			const { data } = await promoteSuggestedPlaybookAction({
-				...options,
-				...fnOptions,
-				throwOnError: true,
-			});
-			return data;
-		},
-	};
-	return mutationOptions;
-};
-
-export const rejectSuggestedPlaybookActionMutation = (
-	options?: Partial<Options<RejectSuggestedPlaybookActionData>>,
-): UseMutationOptions<
-	RejectSuggestedPlaybookActionResponse,
-	AxiosError<DefaultError>,
-	Options<RejectSuggestedPlaybookActionData>
-> => {
-	const mutationOptions: UseMutationOptions<
-		RejectSuggestedPlaybookActionResponse,
-		AxiosError<DefaultError>,
-		Options<RejectSuggestedPlaybookActionData>
-	> = {
-		mutationFn: async (fnOptions) => {
-			const { data } = await rejectSuggestedPlaybookAction({
-				...options,
-				...fnOptions,
-				throwOnError: true,
-			});
-			return data;
-		},
-	};
-	return mutationOptions;
-};
-
-export const runPlaybookActionEvalMutation = (
-	options?: Partial<Options<RunPlaybookActionEvalData>>,
-): UseMutationOptions<RunPlaybookActionEvalResponse, AxiosError<DefaultError>, Options<RunPlaybookActionEvalData>> => {
-	const mutationOptions: UseMutationOptions<
-		RunPlaybookActionEvalResponse,
-		AxiosError<DefaultError>,
-		Options<RunPlaybookActionEvalData>
-	> = {
-		mutationFn: async (fnOptions) => {
-			const { data } = await runPlaybookActionEval({
-				...options,
-				...fnOptions,
-				throwOnError: true,
-			});
-			return data;
-		},
-	};
-	return mutationOptions;
-};
-
-export const updateSuggestedPlaybookActionMutation = (
-	options?: Partial<Options<UpdateSuggestedPlaybookActionData>>,
-): UseMutationOptions<
-	UpdateSuggestedPlaybookActionResponse,
-	AxiosError<DefaultError>,
-	Options<UpdateSuggestedPlaybookActionData>
-> => {
-	const mutationOptions: UseMutationOptions<
-		UpdateSuggestedPlaybookActionResponse,
-		AxiosError<DefaultError>,
-		Options<UpdateSuggestedPlaybookActionData>
-	> = {
-		mutationFn: async (fnOptions) => {
-			const { data } = await updateSuggestedPlaybookAction({
-				...options,
-				...fnOptions,
-				throwOnError: true,
-			});
-			return data;
-		},
-	};
-	return mutationOptions;
-};
-
-export const deleteConversationFileMutation = (
-	options?: Partial<Options<DeleteConversationFileData>>,
-): UseMutationOptions<DeleteConversationFileResponse, AxiosError<DefaultError>, Options<DeleteConversationFileData>> => {
-	const mutationOptions: UseMutationOptions<
-		DeleteConversationFileResponse,
-		AxiosError<DefaultError>,
-		Options<DeleteConversationFileData>
-	> = {
-		mutationFn: async (fnOptions) => {
-			const { data } = await deleteConversationFile({
-				...options,
-				...fnOptions,
-				throwOnError: true,
-			});
-			return data;
-		},
-	};
-	return mutationOptions;
-};
-
-export const listConversationFilesQueryKey = (options: Options<ListConversationFilesData>) =>
-	createQueryKey("listConversationFiles", options);
-
-export const listConversationFilesOptions = (options: Options<ListConversationFilesData>) =>
-	queryOptions<
-		ListConversationFilesResponse,
-		AxiosError<DefaultError>,
-		ListConversationFilesResponse,
-		ReturnType<typeof listConversationFilesQueryKey>
-	>({
-		queryFn: async ({ queryKey, signal }) => {
-			const { data } = await listConversationFiles({
-				...options,
-				...queryKey[0],
-				signal,
-				throwOnError: true,
-			});
-			return data;
-		},
-		queryKey: listConversationFilesQueryKey(options),
-	});
-
-export const uploadConversationFileMutation = (
-	options?: Partial<Options<UploadConversationFileData>>,
-): UseMutationOptions<UploadConversationFileResponse, AxiosError<DefaultError>, Options<UploadConversationFileData>> => {
-	const mutationOptions: UseMutationOptions<
-		UploadConversationFileResponse,
-		AxiosError<DefaultError>,
-		Options<UploadConversationFileData>
-	> = {
-		mutationFn: async (fnOptions) => {
-			const { data } = await uploadConversationFile({
+			const { data } = await saveTutorialState({
 				...options,
 				...fnOptions,
 				throwOnError: true,
@@ -3299,205 +3658,3 @@ export const getVoiceManifestOptions = (options?: Options<GetVoiceManifestData>)
 		},
 		queryKey: getVoiceManifestQueryKey(options),
 	});
-
-export const benchmarkInferenceProfileMutation = (
-	options?: Partial<Options<BenchmarkInferenceProfileData>>,
-): UseMutationOptions<BenchmarkInferenceProfileResponse, AxiosError<DefaultError>, Options<BenchmarkInferenceProfileData>> => {
-	const mutationOptions: UseMutationOptions<
-		BenchmarkInferenceProfileResponse,
-		AxiosError<DefaultError>,
-		Options<BenchmarkInferenceProfileData>
-	> = {
-		mutationFn: async (fnOptions) => {
-			const { data } = await benchmarkInferenceProfile({
-				...options,
-				...fnOptions,
-				throwOnError: true,
-			});
-			return data;
-		},
-	};
-	return mutationOptions;
-};
-
-export const exploreInferenceProfileMutation = (
-	options?: Partial<Options<ExploreInferenceProfileData>>,
-): UseMutationOptions<ExploreInferenceProfileResponse, AxiosError<DefaultError>, Options<ExploreInferenceProfileData>> => {
-	const mutationOptions: UseMutationOptions<
-		ExploreInferenceProfileResponse,
-		AxiosError<DefaultError>,
-		Options<ExploreInferenceProfileData>
-	> = {
-		mutationFn: async (fnOptions) => {
-			const { data } = await exploreInferenceProfile({
-				...options,
-				...fnOptions,
-				throwOnError: true,
-			});
-			return data;
-		},
-	};
-	return mutationOptions;
-};
-
-export const freezeInferenceProfileMutation = (
-	options?: Partial<Options<FreezeInferenceProfileData>>,
-): UseMutationOptions<FreezeInferenceProfileResponse, AxiosError<DefaultError>, Options<FreezeInferenceProfileData>> => {
-	const mutationOptions: UseMutationOptions<
-		FreezeInferenceProfileResponse,
-		AxiosError<DefaultError>,
-		Options<FreezeInferenceProfileData>
-	> = {
-		mutationFn: async (fnOptions) => {
-			const { data } = await freezeInferenceProfile({
-				...options,
-				...fnOptions,
-				throwOnError: true,
-			});
-			return data;
-		},
-	};
-	return mutationOptions;
-};
-
-export const invalidateInferenceProfileMutation = (
-	options?: Partial<Options<InvalidateInferenceProfileData>>,
-): UseMutationOptions<InvalidateInferenceProfileResponse, AxiosError<DefaultError>, Options<InvalidateInferenceProfileData>> => {
-	const mutationOptions: UseMutationOptions<
-		InvalidateInferenceProfileResponse,
-		AxiosError<DefaultError>,
-		Options<InvalidateInferenceProfileData>
-	> = {
-		mutationFn: async (fnOptions) => {
-			const { data } = await invalidateInferenceProfile({
-				...options,
-				...fnOptions,
-				throwOnError: true,
-			});
-			return data;
-		},
-	};
-	return mutationOptions;
-};
-
-export const listInferenceProfilesQueryKey = (options?: Options<ListInferenceProfilesData>) =>
-	createQueryKey("listInferenceProfiles", options);
-
-export const listInferenceProfilesOptions = (options?: Options<ListInferenceProfilesData>) =>
-	queryOptions<
-		ListInferenceProfilesResponse,
-		AxiosError<DefaultError>,
-		ListInferenceProfilesResponse,
-		ReturnType<typeof listInferenceProfilesQueryKey>
-	>({
-		queryFn: async ({ queryKey, signal }) => {
-			const { data } = await listInferenceProfiles({
-				...options,
-				...queryKey[0],
-				signal,
-				throwOnError: true,
-			});
-			return data;
-		},
-		queryKey: listInferenceProfilesQueryKey(options),
-	});
-
-export const getCudaBuildPrerequisitesQueryKey = (options?: Options<GetCudaBuildPrerequisitesData>) =>
-	createQueryKey("getCudaBuildPrerequisites", options);
-
-export const getCudaBuildPrerequisitesOptions = (options?: Options<GetCudaBuildPrerequisitesData>) =>
-	queryOptions<
-		GetCudaBuildPrerequisitesResponse,
-		AxiosError<DefaultError>,
-		GetCudaBuildPrerequisitesResponse,
-		ReturnType<typeof getCudaBuildPrerequisitesQueryKey>
-	>({
-		queryFn: async ({ queryKey, signal }) => {
-			const { data } = await getCudaBuildPrerequisites({
-				...options,
-				...queryKey[0],
-				signal,
-				throwOnError: true,
-			});
-			return data;
-		},
-		queryKey: getCudaBuildPrerequisitesQueryKey(options),
-	});
-
-export const startCudaBuildMutation = (
-	options?: Partial<Options<StartCudaBuildData>>,
-): UseMutationOptions<StartCudaBuildResponse, AxiosError<StartCudaBuildError>, Options<StartCudaBuildData>> => {
-	const mutationOptions: UseMutationOptions<
-		StartCudaBuildResponse,
-		AxiosError<StartCudaBuildError>,
-		Options<StartCudaBuildData>
-	> = {
-		mutationFn: async (fnOptions) => {
-			const { data } = await startCudaBuild({
-				...options,
-				...fnOptions,
-				throwOnError: true,
-			});
-			return data;
-		},
-	};
-	return mutationOptions;
-};
-
-export const getCudaBuildStatusQueryKey = (options?: Options<GetCudaBuildStatusData>) =>
-	createQueryKey("getCudaBuildStatus", options);
-
-export const getCudaBuildStatusOptions = (options?: Options<GetCudaBuildStatusData>) =>
-	queryOptions<
-		GetCudaBuildStatusResponse,
-		AxiosError<DefaultError>,
-		GetCudaBuildStatusResponse,
-		ReturnType<typeof getCudaBuildStatusQueryKey>
-	>({
-		queryFn: async ({ queryKey, signal }) => {
-			const { data } = await getCudaBuildStatus({
-				...options,
-				...queryKey[0],
-				signal,
-				throwOnError: true,
-			});
-			return data;
-		},
-		queryKey: getCudaBuildStatusQueryKey(options),
-	});
-
-export const cancelCudaBuildMutation = (
-	options?: Partial<Options<CancelCudaBuildData>>,
-): UseMutationOptions<CancelCudaBuildResponse, AxiosError<DefaultError>, Options<CancelCudaBuildData>> => {
-	const mutationOptions: UseMutationOptions<CancelCudaBuildResponse, AxiosError<DefaultError>, Options<CancelCudaBuildData>> = {
-		mutationFn: async (fnOptions) => {
-			const { data } = await cancelCudaBuild({
-				...options,
-				...fnOptions,
-				throwOnError: true,
-			});
-			return data;
-		},
-	};
-	return mutationOptions;
-};
-
-export const removeCudaBuildMutation = (
-	options?: Partial<Options<RemoveCudaBuildData>>,
-): UseMutationOptions<RemoveCudaBuildResponse, AxiosError<RemoveCudaBuildError>, Options<RemoveCudaBuildData>> => {
-	const mutationOptions: UseMutationOptions<
-		RemoveCudaBuildResponse,
-		AxiosError<RemoveCudaBuildError>,
-		Options<RemoveCudaBuildData>
-	> = {
-		mutationFn: async (fnOptions) => {
-			const { data } = await removeCudaBuild({
-				...options,
-				...fnOptions,
-				throwOnError: true,
-			});
-			return data;
-		},
-	};
-	return mutationOptions;
-};
