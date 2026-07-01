@@ -246,6 +246,20 @@ describe("nodeChatAdapter SignalR streaming", () => {
 		await expect(pending).rejects.toThrow("closed");
 	});
 
+	it("fails the send immediately when the subscription errors while the connection is still connected", async () => {
+		const iterator = nodeChatAdapter.sendMessage(streamRequest, new AbortController().signal)[Symbol.asyncIterator]();
+		const pending = iterator.next();
+		await settle();
+
+		// A hub/application error thrown during turn setup: no terminal event, invocation id known,
+		// not aborted, and the connection is still stably "connected" (no transport drop). This is NOT
+		// recoverable via resume, so the stream must reject instead of hanging until the watchdog trips.
+		expect(connectionMock.state.status).toBe("connected");
+		connectionMock.state.currentSubscriber?.error(new Error("model failed to load"));
+
+		await expect(pending).rejects.toThrow("model failed to load");
+	});
+
 	it("streams a regenerate over RegenerateMessage and yields the server-minted variant", async () => {
 		const iterator = nodeChatAdapter
 			.regenerateMessage("conversation-1", "assistant-1", "high", true, undefined, new AbortController().signal)
