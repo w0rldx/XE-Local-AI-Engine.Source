@@ -152,6 +152,50 @@ public sealed class LocalDefaultChatModelResolverTests
         AssertEx.Null(resolved);
     }
 
+    [Test]
+    public async Task ResolveAsync_ExcludesEmbeddingNamedGgufWithNoPersistedRow()
+    {
+        // Belt-and-suspenders: a freshly-installed embedding GGUF has NO classification row, so the persisted-kind check
+        // alone would leave it eligible. Its NAME (nomic-embed) must exclude it, leaving the chat GGUF as the default.
+        LocalModelDescriptor[] installed =
+        [
+            Gguf("nomic-ai/nomic-embed-text-v1.5-GGUF:Q4_K_M", DateTimeOffset.UnixEpoch.AddDays(9)),
+            Gguf("qwen2.5:Q4_K_M", DateTimeOffset.UnixEpoch.AddDays(1))
+        ];
+        var resolver = CreateResolver([], installed);
+
+        var resolved = await resolver.ResolveAsync(persistedDefault: null).ConfigureAwait(false);
+
+        AssertEx.Equal("qwen2.5:Q4_K_M", resolved);
+    }
+
+    [Test]
+    public async Task ResolveAsync_WhenOnlyInstalledGgufIsEmbeddingNamedWithNoRow_ReturnsNull()
+    {
+        LocalModelDescriptor[] installed = [Gguf("mxbai-embed-large:Q8_0", DateTimeOffset.UnixEpoch)];
+        var resolver = CreateResolver([], installed);
+
+        var resolved = await resolver.ResolveAsync(persistedDefault: null).ConfigureAwait(false);
+
+        AssertEx.Null(resolved);
+    }
+
+    [Test]
+    public async Task ResolveAsync_IncludesEmbeddingNamedGgufWhenChatOverride()
+    {
+        // An explicit operator override to Chat wins over the name heuristic — the corrected model stays eligible.
+        ModelClassificationRecord[] classifications =
+        [
+            Classification("nomic-embed-chat:Q4_K_M", ModelKind.Embedding, ModelKind.Chat)
+        ];
+        LocalModelDescriptor[] installed = [Gguf("nomic-embed-chat:Q4_K_M", DateTimeOffset.UnixEpoch)];
+        var resolver = CreateResolver(classifications, installed);
+
+        var resolved = await resolver.ResolveAsync(persistedDefault: null).ConfigureAwait(false);
+
+        AssertEx.Equal("nomic-embed-chat:Q4_K_M", resolved);
+    }
+
     // ── helpers ─────────────────────────────────────────────────────────────────────────────────────
 
     private static LocalDefaultChatModelResolver CreateResolver(params LocalModelDescriptor[] installed)

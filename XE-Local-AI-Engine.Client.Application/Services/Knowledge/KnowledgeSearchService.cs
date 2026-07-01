@@ -33,6 +33,7 @@ public sealed class KnowledgeSearchService : IKnowledgeSearchService
 
     private readonly NodeChatDbContext _dbContext;
     private readonly ILocalModelProviderResolver _providerResolver;
+    private readonly IEmbeddingModelResolver _embeddingModelResolver;
     private readonly IKnowledgeEmbeddingPrefixer _prefixer;
     private readonly IFtsSearch _ftsSearch;
     private readonly IVectorSearchFactory _vectorSearchFactory;
@@ -43,6 +44,7 @@ public sealed class KnowledgeSearchService : IKnowledgeSearchService
 
     public KnowledgeSearchService(NodeChatDbContext dbContext,
         ILocalModelProviderResolver providerResolver,
+        IEmbeddingModelResolver embeddingModelResolver,
         IKnowledgeEmbeddingPrefixer prefixer,
         IFtsSearch ftsSearch,
         IVectorSearchFactory vectorSearchFactory,
@@ -53,6 +55,7 @@ public sealed class KnowledgeSearchService : IKnowledgeSearchService
     {
         _dbContext = dbContext ?? throw new ArgumentNullException(nameof(dbContext));
         _providerResolver = providerResolver ?? throw new ArgumentNullException(nameof(providerResolver));
+        _embeddingModelResolver = embeddingModelResolver ?? throw new ArgumentNullException(nameof(embeddingModelResolver));
         _prefixer = prefixer ?? throw new ArgumentNullException(nameof(prefixer));
         _ftsSearch = ftsSearch ?? throw new ArgumentNullException(nameof(ftsSearch));
         _vectorSearchFactory = vectorSearchFactory ?? throw new ArgumentNullException(nameof(vectorSearchFactory));
@@ -141,9 +144,14 @@ public sealed class KnowledgeSearchService : IKnowledgeSearchService
         try
         {
             var provider = _providerResolver.ResolveProvider(_options.EmbeddingProviderName);
+
+            // Build the query vector with the SAME model the ingestion lane resolved for the chunk vectors, so the two
+            // vector sets are comparable. The vector-search arm still filters by the configured EmbeddingModelName scope
+            // key (below), which both lanes stamp on stored vectors regardless of the resolved generator name.
+            var embeddingModelName = await _embeddingModelResolver.ResolveAsync(provider, cancellationToken).ConfigureAwait(false);
             using var generator = provider.CreateEmbeddingGenerator(new LocalModelSelection
             {
-                ModelName = _options.EmbeddingModelName,
+                ModelName = embeddingModelName,
                 ProviderName = _options.EmbeddingProviderName
             });
 
