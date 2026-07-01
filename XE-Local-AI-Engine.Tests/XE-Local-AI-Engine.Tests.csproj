@@ -27,6 +27,7 @@
     <ProjectReference Include="..\XE-Local-AI-Engine.Providers.HuggingFace\XE-Local-AI-Engine.Providers.HuggingFace.csproj"/>
     <ProjectReference Include="..\XE-Local-AI-Engine.Providers.LlamaServer\XE-Local-AI-Engine.Providers.LlamaServer.csproj"/>
     <ProjectReference Include="..\XE-Local-AI-Engine.Providers.Ollama\XE-Local-AI-Engine.Providers.Ollama.csproj"/>
+    <ProjectReference Include="..\XE-Local-AI-Engine.Providers.StableDiffusionCpp\XE-Local-AI-Engine.Providers.StableDiffusionCpp.csproj"/>
   </ItemGroup>
 
   <ItemGroup>
