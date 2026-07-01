@@ -379,6 +379,9 @@ public static class LocalApiRoutes
         // Installed image-model registry (GET list).
         public const string Models = "images/models";
 
+        // Image-model weight download (POST start). Fire-and-forget file-set pull; presence surfaces via Models.
+        public const string ModelDownloads = "images/models/downloads";
+
         // SignalR push hub for image-job progress. Full path (mapped via MapHub, not the FastEndpoints prefix),
         // mirroring the other local hubs. Each push carries the coarse status + seq.
         public const string Hub = "/api/local/v1/images/hub";

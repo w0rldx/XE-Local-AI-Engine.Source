@@ -32,6 +32,9 @@ import type {
 	CancelGgufDownloadData,
 	CancelGgufDownloadErrors,
 	CancelGgufDownloadResponses,
+	CancelImageJobData,
+	CancelImageJobErrors,
+	CancelImageJobResponses,
 	CancelNodeBindingData,
 	CancelNodeBindingErrors,
 	CancelNodeBindingResponses,
@@ -68,6 +71,9 @@ import type {
 	CreateGoldenConversationData,
 	CreateGoldenConversationErrors,
 	CreateGoldenConversationResponses,
+	CreateImageJobData,
+	CreateImageJobErrors,
+	CreateImageJobResponses,
 	CreateMcpServerData,
 	CreateMcpServerErrors,
 	CreateMcpServerResponses,
@@ -194,6 +200,9 @@ import type {
 	GetHfTokenStatusData,
 	GetHfTokenStatusErrors,
 	GetHfTokenStatusResponses,
+	GetImageJobData,
+	GetImageJobErrors,
+	GetImageJobResponses,
 	GetInvocationMonitorData,
 	GetInvocationMonitorErrors,
 	GetInvocationMonitorResponses,
@@ -278,6 +287,12 @@ import type {
 	ListGoldenConversationsData,
 	ListGoldenConversationsErrors,
 	ListGoldenConversationsResponses,
+	ListImageJobsData,
+	ListImageJobsErrors,
+	ListImageJobsResponses,
+	ListImageModelsData,
+	ListImageModelsErrors,
+	ListImageModelsResponses,
 	ListInferenceProfilesData,
 	ListInferenceProfilesErrors,
 	ListInferenceProfilesResponses,
@@ -357,6 +372,9 @@ import type {
 	RenameNodeChatConversationData,
 	RenameNodeChatConversationErrors,
 	RenameNodeChatConversationResponses,
+	RetrieveImageData,
+	RetrieveImageErrors,
+	RetrieveImageResponses,
 	RunPlaybookActionEvalData,
 	RunPlaybookActionEvalErrors,
 	RunPlaybookActionEvalResponses,
@@ -399,6 +417,9 @@ import type {
 	StartGitHubAuthData,
 	StartGitHubAuthErrors,
 	StartGitHubAuthResponses,
+	StartImageModelDownloadData,
+	StartImageModelDownloadErrors,
+	StartImageModelDownloadResponses,
 	StartNodeBindingData,
 	StartNodeBindingErrors,
 	StartNodeBindingResponses,
@@ -457,6 +478,8 @@ import {
 	zCancelCudaBuildResponse,
 	zCancelGgufDownloadBody,
 	zCancelGgufDownloadResponse,
+	zCancelImageJobPath,
+	zCancelImageJobResponse,
 	zCancelNodeBindingResponse,
 	zCancelNodeChatMessageBody,
 	zCancelNodeChatMessageResponse,
@@ -476,6 +499,8 @@ import {
 	zCreateGoldenConversationBody,
 	zCreateGoldenConversationPath,
 	zCreateGoldenConversationResponse,
+	zCreateImageJobBody,
+	zCreateImageJobResponse,
 	zCreateMcpServerBody,
 	zCreateMcpServerResponse,
 	zCreateNodeChatConversationBody,
@@ -552,6 +577,8 @@ import {
 	zGetHardwareProfileQuery,
 	zGetHardwareProfileResponse,
 	zGetHfTokenStatusResponse,
+	zGetImageJobPath,
+	zGetImageJobResponse,
 	zGetInvocationMonitorResponse,
 	zGetLatestRecommendationsQuery,
 	zGetLatestRecommendationsResponse,
@@ -601,6 +628,8 @@ import {
 	zListConversationFilesResponse,
 	zListGoldenConversationsPath,
 	zListGoldenConversationsResponse,
+	zListImageJobsResponse,
+	zListImageModelsResponse,
 	zListInferenceProfilesResponse,
 	zListLocalModelsResponse,
 	zListMcpServersResponse,
@@ -645,6 +674,8 @@ import {
 	zRenameNodeChatConversationBody,
 	zRenameNodeChatConversationPath,
 	zRenameNodeChatConversationResponse,
+	zRetrieveImagePath,
+	zRetrieveImageResponse,
 	zRunPlaybookActionEvalPath,
 	zRunPlaybookActionEvalResponse,
 	zSaveCloudSettingsBody,
@@ -674,6 +705,8 @@ import {
 	zStartGgufDownloadBody,
 	zStartGgufDownloadResponse,
 	zStartGitHubAuthResponse,
+	zStartImageModelDownloadBody,
+	zStartImageModelDownloadResponse,
 	zStartNodeBindingResponse,
 	zTriggerScheduledJobPath,
 	zTriggerScheduledJobResponse,
@@ -3969,4 +4002,152 @@ export const removeCudaBuild = <ThrowOnError extends boolean = false>(options?: 
 		],
 		url: "/api/local/v1/model-fit/llamacpp/cuda-build/remove",
 		...options,
+	});
+
+export const cancelImageJob = <ThrowOnError extends boolean = false>(options: Options<CancelImageJobData, ThrowOnError>) =>
+	(options.client ?? client).post<CancelImageJobResponses, CancelImageJobErrors, ThrowOnError>({
+		requestValidator: async (data) =>
+			await z
+				.object({
+					body: z.never().optional(),
+					path: zCancelImageJobPath,
+					query: z.never().optional(),
+				})
+				.parseAsync(data),
+		responseValidator: async (data) => await zCancelImageJobResponse.parseAsync(data),
+		security: [
+			{ scheme: "bearer", type: "http" },
+			{ scheme: "bearer", type: "http" },
+		],
+		url: "/api/local/v1/images/jobs/{jobId}/cancel",
+		...options,
+	});
+
+export const listImageJobs = <ThrowOnError extends boolean = false>(options?: Options<ListImageJobsData, ThrowOnError>) =>
+	(options?.client ?? client).get<ListImageJobsResponses, ListImageJobsErrors, ThrowOnError>({
+		requestValidator: async (data) =>
+			await z
+				.object({
+					body: z.never().optional(),
+					path: z.never().optional(),
+					query: z.never().optional(),
+				})
+				.parseAsync(data),
+		responseType: "json",
+		responseValidator: async (data) => await zListImageJobsResponse.parseAsync(data),
+		security: [
+			{ scheme: "bearer", type: "http" },
+			{ scheme: "bearer", type: "http" },
+		],
+		url: "/api/local/v1/images/jobs",
+		...options,
+	});
+
+export const createImageJob = <ThrowOnError extends boolean = false>(options: Options<CreateImageJobData, ThrowOnError>) =>
+	(options.client ?? client).post<CreateImageJobResponses, CreateImageJobErrors, ThrowOnError>({
+		requestValidator: async (data) =>
+			await z
+				.object({
+					body: zCreateImageJobBody,
+					path: z.never().optional(),
+					query: z.never().optional(),
+				})
+				.parseAsync(data),
+		responseType: "json",
+		responseValidator: async (data) => await zCreateImageJobResponse.parseAsync(data),
+		security: [
+			{ scheme: "bearer", type: "http" },
+			{ scheme: "bearer", type: "http" },
+		],
+		url: "/api/local/v1/images/jobs",
+		...options,
+		headers: {
+			"Content-Type": "application/json",
+			...options.headers,
+		},
+	});
+
+export const getImageJob = <ThrowOnError extends boolean = false>(options: Options<GetImageJobData, ThrowOnError>) =>
+	(options.client ?? client).get<GetImageJobResponses, GetImageJobErrors, ThrowOnError>({
+		requestValidator: async (data) =>
+			await z
+				.object({
+					body: z.never().optional(),
+					path: zGetImageJobPath,
+					query: z.never().optional(),
+				})
+				.parseAsync(data),
+		responseType: "json",
+		responseValidator: async (data) => await zGetImageJobResponse.parseAsync(data),
+		security: [
+			{ scheme: "bearer", type: "http" },
+			{ scheme: "bearer", type: "http" },
+		],
+		url: "/api/local/v1/images/jobs/{jobId}",
+		...options,
+	});
+
+export const listImageModels = <ThrowOnError extends boolean = false>(options?: Options<ListImageModelsData, ThrowOnError>) =>
+	(options?.client ?? client).get<ListImageModelsResponses, ListImageModelsErrors, ThrowOnError>({
+		requestValidator: async (data) =>
+			await z
+				.object({
+					body: z.never().optional(),
+					path: z.never().optional(),
+					query: z.never().optional(),
+				})
+				.parseAsync(data),
+		responseType: "json",
+		responseValidator: async (data) => await zListImageModelsResponse.parseAsync(data),
+		security: [
+			{ scheme: "bearer", type: "http" },
+			{ scheme: "bearer", type: "http" },
+		],
+		url: "/api/local/v1/images/models",
+		...options,
+	});
+
+export const retrieveImage = <ThrowOnError extends boolean = false>(options: Options<RetrieveImageData, ThrowOnError>) =>
+	(options.client ?? client).get<RetrieveImageResponses, RetrieveImageErrors, ThrowOnError>({
+		requestValidator: async (data) =>
+			await z
+				.object({
+					body: z.never().optional(),
+					path: zRetrieveImagePath,
+					query: z.never().optional(),
+				})
+				.parseAsync(data),
+		responseValidator: async (data) => await zRetrieveImageResponse.parseAsync(data),
+		security: [
+			{ scheme: "bearer", type: "http" },
+			{ scheme: "bearer", type: "http" },
+		],
+		url: "/api/local/v1/images/{imageId}",
+		...options,
+	});
+
+export const startImageModelDownload = <ThrowOnError extends boolean = false>(
+	options: Options<StartImageModelDownloadData, ThrowOnError>,
+) =>
+	(options.client ?? client).post<StartImageModelDownloadResponses, StartImageModelDownloadErrors, ThrowOnError>({
+		requestValidator: async (data) =>
+			await z
+				.object({
+					body: zStartImageModelDownloadBody,
+					path: z.never().optional(),
+					query: z.never().optional(),
+				})
+				.parseAsync(data),
+		responseType: "json",
+		responseValidator: async (data) => await zStartImageModelDownloadResponse.parseAsync(data),
+		security: [
+			{ scheme: "bearer", type: "http" },
+			{ scheme: "bearer", type: "http" },
+		],
+		url: "/api/local/v1/images/models/downloads",
+		...options,
+		headers: {
+			"Content-Type": "application/json",
+			...options.headers,
+		},
 	});
