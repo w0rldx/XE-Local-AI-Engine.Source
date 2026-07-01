@@ -89,19 +89,20 @@ public sealed class KnowledgeChunkEmbedder : IKnowledgeChunkEmbedder
                 throw new KnowledgeIngestionException(EmbeddingIncompleteReason);
             }
 
-            foreach (var embedding in generated)
-            {
-                var vector = embedding.Vector;
-                if (vector.Length != _options.EmbeddingDimension)
-                {
-                    throw new KnowledgeIngestionException(DimensionMismatchReason);
-                }
-
-                blobs.Add(MemoryMarshal.AsBytes(vector.Span).ToArray());
-            }
+            blobs.AddRange(generated.Select(embedding => ToEmbeddingBlob(embedding.Vector)));
         }
 
         return blobs;
+    }
+
+    private byte[] ToEmbeddingBlob(ReadOnlyMemory<float> vector)
+    {
+        if (vector.Length != _options.EmbeddingDimension)
+        {
+            throw new KnowledgeIngestionException(DimensionMismatchReason);
+        }
+
+        return MemoryMarshal.AsBytes(vector.Span).ToArray();
     }
 
     private ILocalModelProvider ResolveProvider()
