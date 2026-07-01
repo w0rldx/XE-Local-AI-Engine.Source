@@ -74,7 +74,10 @@ export function useCreatePlaybookAction(agentDefinitionId: string) {
 				{ path: { agentDefinitionId }, body: toPlaybookActionRequestBody(request) },
 				undefined as never,
 			);
-			return toPlaybookAction(data ?? {});
+			if (!data) {
+				throw new Error("Playbook action request returned an empty response.");
+			}
+			return toPlaybookAction(data);
 		},
 		onSuccess: () => invalidateActions(queryClient),
 	});
@@ -95,7 +98,10 @@ export function useUpdatePlaybookAction(agentDefinitionId: string) {
 				{ path: { agentDefinitionId, actionId }, body: toPlaybookActionRequestBody(request) },
 				undefined as never,
 			);
-			return toPlaybookAction(data ?? {});
+			if (!data) {
+				throw new Error("Playbook action request returned an empty response.");
+			}
+			return toPlaybookAction(data);
 		},
 		onSuccess: () => invalidateActions(queryClient),
 	});
@@ -144,7 +150,10 @@ export function usePromoteSuggestedAction(agentDefinitionId: string) {
 			try {
 				const options = withResponseValidation(promoteSuggestedPlaybookActionMutation());
 				const data = await options.mutationFn?.({ path: { agentDefinitionId, actionId } }, undefined as never);
-				return toPlaybookAction(data ?? {});
+				if (!data) {
+					throw new Error("Playbook action request returned an empty response.");
+				}
+				return toPlaybookAction(data);
 			} catch (error) {
 				throw toPromoteError(error);
 			}
@@ -163,7 +172,10 @@ export function useRunEval(agentDefinitionId: string) {
 		mutationFn: async (actionId: string): Promise<PlaybookAction> => {
 			const options = withResponseValidation(runPlaybookActionEvalMutation());
 			const data = await options.mutationFn?.({ path: { agentDefinitionId, actionId } }, undefined as never);
-			return toPlaybookAction(data ?? {});
+			if (!data) {
+				throw new Error("Playbook action request returned an empty response.");
+			}
+			return toPlaybookAction(data);
 		},
 		onSuccess: () => invalidateActions(queryClient),
 	});
@@ -176,7 +188,10 @@ export function useRejectSuggestedAction(agentDefinitionId: string) {
 		mutationFn: async (actionId: string): Promise<PlaybookAction> => {
 			const options = withResponseValidation(rejectSuggestedPlaybookActionMutation());
 			const data = await options.mutationFn?.({ path: { agentDefinitionId, actionId } }, undefined as never);
-			return toPlaybookAction(data ?? {});
+			if (!data) {
+				throw new Error("Playbook action request returned an empty response.");
+			}
+			return toPlaybookAction(data);
 		},
 		onSuccess: () => invalidateActions(queryClient),
 	});
@@ -196,7 +211,10 @@ export function useUpdateSuggestedAction(agentDefinitionId: string) {
 		mutationFn: async ({ actionId, request }: UpdateSuggestedActionVariables): Promise<PlaybookAction> => {
 			const options = withResponseValidation(updateSuggestedPlaybookActionMutation());
 			const data = await options.mutationFn?.({ path: { agentDefinitionId, actionId }, body: request }, undefined as never);
-			return toPlaybookAction(data ?? {});
+			if (!data) {
+				throw new Error("Playbook action request returned an empty response.");
+			}
+			return toPlaybookAction(data);
 		},
 		onSuccess: () => invalidateActions(queryClient),
 	});

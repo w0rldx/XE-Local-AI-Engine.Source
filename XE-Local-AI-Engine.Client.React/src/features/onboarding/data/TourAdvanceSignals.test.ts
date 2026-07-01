@@ -9,8 +9,26 @@ import {
 	hasVisibleAssistantReply,
 } from "@/features/onboarding/data/TourAdvanceSignals";
 
-const chatModel: LocalModelResponse = { modelName: "qwen3:8b", kind: "Chat" };
-const embeddingModel: LocalModelResponse = { modelName: "nomic-embed", kind: "Embedding" };
+const chatModel: LocalModelResponse = {
+	modelName: "qwen3:8b",
+	kind: "Chat",
+	detectedKind: "Chat",
+	isSelected: false,
+	capabilities: [],
+	isReasoningCapable: false,
+	isToolCapable: false,
+	isOverridden: false,
+};
+const embeddingModel: LocalModelResponse = {
+	modelName: "nomic-embed",
+	kind: "Embedding",
+	detectedKind: "Embedding",
+	isSelected: false,
+	capabilities: [],
+	isReasoningCapable: false,
+	isToolCapable: false,
+	isOverridden: false,
+};
 
 describe("hasInstalledChatModel (install step advances on real state, not a timer)", () => {
 	it("is false when no models are installed", () => {
