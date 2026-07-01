@@ -1,6 +1,8 @@
 namespace XE_Local_AI_Engine.Client.DependencyInjection.Modules;
 
+using XE_Local_AI_Engine.AI.Agent.Tools;
 using XE_Local_AI_Engine.Client.Services.Knowledge;
+using XE_Local_AI_Engine.Client.Services.Knowledge.Tools.Implementation;
 
 internal static class AddNodeKnowledgeBaseExtensions
 {
@@ -57,6 +59,15 @@ internal static class AddNodeKnowledgeBaseExtensions
 
         // Background worker: drains the queue with SemaphoreSlim-bounded concurrency, a fresh scope per document.
         builder.Services.AddHostedService<KnowledgeIngestionWorker>();
+
+        // Read-only knowledge-base agent tools (search_knowledge_base / read_document / read_surrounding_chunks). All
+        // Singleton: ClientLocalToolRegistry captures the IClientLocalToolHandler IEnumerable at construction, so a
+        // scoped handler would be a captive dependency; each resolves its scoped retrieval service from a fresh scope
+        // per call. They are gated by KnowledgeBase:AgentToolsEnabled (default true) and merged into the capability-gated
+        // loopback offer by LocalToolOfferProvider.
+        builder.Services.AddSingleton<IClientLocalToolHandler, SearchKnowledgeBaseToolHandler>();
+        builder.Services.AddSingleton<IClientLocalToolHandler, ReadDocumentToolHandler>();
+        builder.Services.AddSingleton<IClientLocalToolHandler, ReadSurroundingChunksToolHandler>();
 
         return builder;
     }

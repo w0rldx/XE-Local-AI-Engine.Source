@@ -14,8 +14,23 @@ public sealed class KnowledgeBaseOptions
     /// <summary>Node-local embedding model that builds chunk vectors and the search query vector.</summary>
     public string EmbeddingModelName { get; set; } = "nomic-embed-text";
 
-    /// <summary>Provider key for the embedding model; must match a registered node-local provider (default "llamacpp").</summary>
+    /// <summary>
+    ///     Provider key for the embedding model; must match a registered node-local provider (default "llamacpp"). The
+    ///     default keeps embedding on-device: both the chunk text (at ingestion) and the query text (at search) are sent
+    ///     only to the local llama.cpp process and never leave the node. Pointing this at a cloud embedding provider
+    ///     would send that same chunk and query text off-node to a third party — a privacy tradeoff the operator
+    ///     explicitly accepts by changing this value. Leave it on the local provider to keep knowledge-base content
+    ///     private to the machine.
+    /// </summary>
     public string EmbeddingProviderName { get; set; } = "llamacpp";
+
+    /// <summary>
+    ///     Whether the read-only knowledge-base agent tools (<c>search_knowledge_base</c>, <c>read_document</c>,
+    ///     <c>read_surrounding_chunks</c>) are offered to agents and executed. Default <see langword="true" /> (the
+    ///     feature is built); set to <see langword="false" /> to turn the tools off node-wide, in which case each handler
+    ///     returns a short "tools are disabled" message instead of running a retrieval.
+    /// </summary>
+    public bool AgentToolsEnabled { get; set; } = true;
 
     /// <summary>
     ///     Maximum number of documents ingested concurrently by the background worker. Bounded (default 1) so N uploads
