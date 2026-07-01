@@ -3686,3 +3686,202 @@ export const zSaveTutorialStateResponse = z.void();
  * Success
  */
 export const zGetVoiceManifestResponse = zXeLocalAiEngineClientEndpointsVoiceV1VoiceManifestResponse;
+
+export const zXeLocalAiEngineClientEndpointsImagesV1ImageJobRouteRequest = z.record(z.string(), z.never());
+
+export const zXeLocalAiEngineClientEndpointsImagesV1ImageJobResponse = z.object({
+	id: z.guid(),
+	modelName: z.string(),
+	prompt: z.string(),
+	negativePrompt: z.string().nullish(),
+	seed: z.coerce
+		.bigint()
+		.min(BigInt("-9223372036854775808"), { error: "Invalid value: Expected int64 to be >= -9223372036854775808" })
+		.max(BigInt("9223372036854775807"), { error: "Invalid value: Expected int64 to be <= 9223372036854775807" }),
+	width: z
+		.int()
+		.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })
+		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" }),
+	height: z
+		.int()
+		.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })
+		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" }),
+	steps: z
+		.int()
+		.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })
+		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" }),
+	sampler: z.string(),
+	cfgScale: z.number(),
+	status: z.string(),
+	createdAtUtc: z.coerce
+		.bigint()
+		.min(BigInt("-9223372036854775808"), { error: "Invalid value: Expected int64 to be >= -9223372036854775808" })
+		.max(BigInt("9223372036854775807"), { error: "Invalid value: Expected int64 to be <= 9223372036854775807" }),
+	startedAtUtc: z.coerce
+		.bigint()
+		.min(BigInt("-9223372036854775808"), { error: "Invalid value: Expected int64 to be >= -9223372036854775808" })
+		.max(BigInt("9223372036854775807"), { error: "Invalid value: Expected int64 to be <= 9223372036854775807" })
+		.nullish(),
+	completedAtUtc: z.coerce
+		.bigint()
+		.min(BigInt("-9223372036854775808"), { error: "Invalid value: Expected int64 to be >= -9223372036854775808" })
+		.max(BigInt("9223372036854775807"), { error: "Invalid value: Expected int64 to be <= 9223372036854775807" })
+		.nullish(),
+	durationMs: z.coerce
+		.bigint()
+		.min(BigInt("-9223372036854775808"), { error: "Invalid value: Expected int64 to be >= -9223372036854775808" })
+		.max(BigInt("9223372036854775807"), { error: "Invalid value: Expected int64 to be <= 9223372036854775807" })
+		.nullish(),
+	imageId: z.guid().nullish(),
+	sanitizedError: z.string().nullish(),
+	cancellationRequestedAtUtc: z.coerce
+		.bigint()
+		.min(BigInt("-9223372036854775808"), { error: "Invalid value: Expected int64 to be >= -9223372036854775808" })
+		.max(BigInt("9223372036854775807"), { error: "Invalid value: Expected int64 to be <= 9223372036854775807" })
+		.nullish(),
+});
+
+export const zXeLocalAiEngineClientEndpointsImagesV1CreateImageJobRequest = z.object({
+	modelName: z.string(),
+	prompt: z.string(),
+	negativePrompt: z.string().nullish(),
+	seed: z.coerce
+		.bigint()
+		.min(BigInt("-9223372036854775808"), { error: "Invalid value: Expected int64 to be >= -9223372036854775808" })
+		.max(BigInt("9223372036854775807"), { error: "Invalid value: Expected int64 to be <= 9223372036854775807" })
+		.optional(),
+	width: z
+		.int()
+		.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })
+		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" })
+		.optional(),
+	height: z
+		.int()
+		.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })
+		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" })
+		.optional(),
+	steps: z
+		.int()
+		.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })
+		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" })
+		.optional(),
+	sampler: z.string().nullish(),
+	cfgScale: z.number().optional(),
+});
+
+export const zXeLocalAiEngineClientEndpointsImagesV1ListImageJobsResponse = z.object({
+	items: z.array(zXeLocalAiEngineClientEndpointsImagesV1ImageJobResponse),
+});
+
+export const zXeLocalAiEngineClientEndpointsImagesV1ImageModelPartResponse = z.object({
+	role: z.string(),
+	fileName: z.string(),
+	sizeBytes: z.coerce
+		.bigint()
+		.min(BigInt("-9223372036854775808"), { error: "Invalid value: Expected int64 to be >= -9223372036854775808" })
+		.max(BigInt("9223372036854775807"), { error: "Invalid value: Expected int64 to be <= 9223372036854775807" }),
+});
+
+export const zXeLocalAiEngineClientEndpointsImagesV1ImageModelResponse = z.object({
+	modelName: z.string(),
+	repoId: z.string(),
+	family: z.string(),
+	kind: z.string(),
+	sizeBytes: z.coerce
+		.bigint()
+		.min(BigInt("-9223372036854775808"), { error: "Invalid value: Expected int64 to be >= -9223372036854775808" })
+		.max(BigInt("9223372036854775807"), { error: "Invalid value: Expected int64 to be <= 9223372036854775807" }),
+	parts: z.array(zXeLocalAiEngineClientEndpointsImagesV1ImageModelPartResponse),
+	downloadedAtUtc: z.coerce
+		.bigint()
+		.min(BigInt("-9223372036854775808"), { error: "Invalid value: Expected int64 to be >= -9223372036854775808" })
+		.max(BigInt("9223372036854775807"), { error: "Invalid value: Expected int64 to be <= 9223372036854775807" }),
+});
+
+export const zXeLocalAiEngineClientEndpointsImagesV1ListImageModelsResponse = z.object({
+	items: z.array(zXeLocalAiEngineClientEndpointsImagesV1ImageModelResponse),
+});
+
+export const zXeLocalAiEngineClientEndpointsImagesV1RetrieveImageRequest = z.record(z.string(), z.never());
+
+export const zXeLocalAiEngineClientEndpointsImagesV1StartImageModelDownloadResponse = z.object({
+	modelName: z.string(),
+	accepted: z.boolean(),
+});
+
+export const zXeLocalAiEngineClientEndpointsImagesV1ImageModelPartDownloadRequest = z.object({
+	role: z.string(),
+	fileName: z.string(),
+	sha256: z.string().nullish(),
+});
+
+export const zXeLocalAiEngineClientEndpointsImagesV1StartImageModelDownloadRequest = z.object({
+	modelName: z.string(),
+	repoId: z.string(),
+	family: z.string(),
+	kind: z.string().nullish(),
+	revision: z.string().nullish(),
+	parts: z.array(zXeLocalAiEngineClientEndpointsImagesV1ImageModelPartDownloadRequest),
+});
+
+/**
+ * Success
+ */
+
+export const zCancelImageJobPath = z.object({
+	jobId: z.guid(),
+});
+
+/**
+ * No Content
+ */
+
+export const zCancelImageJobResponse = z.void();
+
+/**
+ * Success
+ */
+
+export const zListImageJobsResponse = zXeLocalAiEngineClientEndpointsImagesV1ListImageJobsResponse;
+
+export const zCreateImageJobBody = zXeLocalAiEngineClientEndpointsImagesV1CreateImageJobRequest;
+
+/**
+ * Success
+ */
+
+export const zCreateImageJobResponse = zXeLocalAiEngineClientEndpointsImagesV1ImageJobResponse;
+
+export const zGetImageJobPath = z.object({
+	jobId: z.guid(),
+});
+
+/**
+ * Success
+ */
+
+export const zGetImageJobResponse = zXeLocalAiEngineClientEndpointsImagesV1ImageJobResponse;
+
+/**
+ * Success
+ */
+
+export const zListImageModelsResponse = zXeLocalAiEngineClientEndpointsImagesV1ListImageModelsResponse;
+
+export const zRetrieveImagePath = z.object({
+	imageId: z.guid(),
+});
+
+/**
+ * No Content
+ */
+
+export const zRetrieveImageResponse = z.void();
+
+export const zStartImageModelDownloadBody = zXeLocalAiEngineClientEndpointsImagesV1StartImageModelDownloadRequest;
+
+/**
+ * Success
+ */
+
+export const zStartImageModelDownloadResponse = zXeLocalAiEngineClientEndpointsImagesV1StartImageModelDownloadResponse;

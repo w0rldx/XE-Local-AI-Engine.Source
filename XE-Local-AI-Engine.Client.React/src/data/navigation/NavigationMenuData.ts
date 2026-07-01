@@ -7,6 +7,7 @@ import {
 	IconHome,
 	IconListDetails,
 	IconMessageCircle,
+	IconPhoto,
 	IconPlugConnected,
 	IconRobot,
 	IconSettings,
@@ -25,6 +26,7 @@ type NavigationCapabilityKey =
 	| "loadedModels"
 	| "preview"
 	| "knowledgeBase"
+	| "images"
 	| "cloudSettings"
 	| "dashboard"
 	| "binding";
@@ -129,6 +131,15 @@ const allNavigationLinks: INavigationLink[] = [
 		translationKey: "navigation.previewGroup",
 		capability: "preview",
 		links: [{ translationKey: "navigation.preview", to: nodeRoutePaths.preview }],
+	},
+	// Image generation (stable-diffusion.cpp) — a top-level entry gated on the images capability. Ships dark
+	// (capability off) until the runtime is live-GPU verified.
+	{
+		id: "images",
+		icon: IconPhoto,
+		translationKey: "navigation.images",
+		to: nodeRoutePaths.images,
+		capability: "images",
 	},
 	{
 		id: "invocations",

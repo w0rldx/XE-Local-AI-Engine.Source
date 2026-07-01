@@ -394,6 +394,50 @@ namespace XE_Local_AI_Engine.Client.Persistence.Migrations
                     b.ToTable("conversation_uploaded_files", (string)null);
                 });
 
+            modelBuilder.Entity("XE_Local_AI_Engine.Client.Persistence.Entities.GeneratedImage", b =>
+                {
+                    b.Property<Guid>("ImageId")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("TEXT")
+                        .HasColumnName("image_id");
+
+                    b.Property<long>("CreatedAtUtc")
+                        .HasColumnType("INTEGER")
+                        .HasColumnName("created_at_utc");
+
+                    b.Property<int>("Height")
+                        .HasColumnType("INTEGER")
+                        .HasColumnName("height");
+
+                    b.Property<Guid>("JobId")
+                        .HasColumnType("TEXT")
+                        .HasColumnName("job_id");
+
+                    b.Property<string>("MimeType")
+                        .IsRequired()
+                        .HasColumnType("TEXT")
+                        .HasColumnName("mime_type");
+
+                    b.Property<long>("SizeBytes")
+                        .HasColumnType("INTEGER")
+                        .HasColumnName("size_bytes");
+
+                    b.Property<string>("StoragePath")
+                        .IsRequired()
+                        .HasColumnType("TEXT")
+                        .HasColumnName("storage_path");
+
+                    b.Property<int>("Width")
+                        .HasColumnType("INTEGER")
+                        .HasColumnName("width");
+
+                    b.HasKey("ImageId");
+
+                    b.HasIndex("JobId");
+
+                    b.ToTable("generated_images", (string)null);
+                });
+
             modelBuilder.Entity("XE_Local_AI_Engine.Client.Persistence.Entities.GoldenConversation", b =>
                 {
                     b.Property<Guid>("Id")
@@ -454,6 +498,158 @@ namespace XE_Local_AI_Engine.Client.Persistence.Migrations
                     b.HasIndex("AgentDefinitionId");
 
                     b.ToTable("golden_conversations", (string)null);
+                });
+
+            modelBuilder.Entity("XE_Local_AI_Engine.Client.Persistence.Entities.ImageJob", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("TEXT")
+                        .HasColumnName("id");
+
+                    b.Property<long?>("CancellationRequestedAtUtc")
+                        .HasColumnType("INTEGER")
+                        .HasColumnName("cancellation_requested_at_utc");
+
+                    b.Property<double>("CfgScale")
+                        .HasColumnType("REAL")
+                        .HasColumnName("cfg_scale");
+
+                    b.Property<long?>("CompletedAtUtc")
+                        .HasColumnType("INTEGER")
+                        .HasColumnName("completed_at_utc");
+
+                    b.Property<long>("CreatedAtUtc")
+                        .HasColumnType("INTEGER")
+                        .HasColumnName("created_at_utc");
+
+                    b.Property<long?>("DurationMs")
+                        .HasColumnType("INTEGER")
+                        .HasColumnName("duration_ms");
+
+                    b.Property<int>("Height")
+                        .HasColumnType("INTEGER")
+                        .HasColumnName("height");
+
+                    b.Property<Guid?>("ImageId")
+                        .HasColumnType("TEXT")
+                        .HasColumnName("image_id");
+
+                    b.Property<string>("ModelName")
+                        .IsRequired()
+                        .HasColumnType("TEXT")
+                        .HasColumnName("model_name");
+
+                    b.Property<byte[]>("NegativePrompt")
+                        .HasColumnType("BLOB")
+                        .HasColumnName("negative_prompt");
+
+                    b.Property<byte[]>("Prompt")
+                        .IsRequired()
+                        .HasColumnType("BLOB")
+                        .HasColumnName("prompt");
+
+                    b.Property<string>("Sampler")
+                        .IsRequired()
+                        .HasColumnType("TEXT")
+                        .HasColumnName("sampler");
+
+                    b.Property<string>("SanitizedError")
+                        .HasColumnType("TEXT")
+                        .HasColumnName("sanitized_error");
+
+                    b.Property<long>("Seed")
+                        .HasColumnType("INTEGER")
+                        .HasColumnName("seed");
+
+                    b.Property<long?>("StartedAtUtc")
+                        .HasColumnType("INTEGER")
+                        .HasColumnName("started_at_utc");
+
+                    b.Property<int>("Status")
+                        .HasColumnType("INTEGER")
+                        .HasColumnName("status");
+
+                    b.Property<int>("Steps")
+                        .HasColumnType("INTEGER")
+                        .HasColumnName("steps");
+
+                    b.Property<int>("Width")
+                        .HasColumnType("INTEGER")
+                        .HasColumnName("width");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("CreatedAtUtc");
+
+                    b.HasIndex("Status");
+
+                    b.ToTable("image_jobs", (string)null);
+                });
+
+            modelBuilder.Entity("XE_Local_AI_Engine.Client.Persistence.Entities.ImageModelProfile", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("TEXT")
+                        .HasColumnName("id");
+
+                    b.Property<string>("Backend")
+                        .IsRequired()
+                        .HasColumnType("TEXT")
+                        .HasColumnName("backend");
+
+                    b.Property<long>("CreatedAtUtc")
+                        .HasColumnType("INTEGER")
+                        .HasColumnName("created_at_utc");
+
+                    b.Property<double>("DefaultCfg")
+                        .HasColumnType("REAL")
+                        .HasColumnName("default_cfg");
+
+                    b.Property<int>("DefaultHeight")
+                        .HasColumnType("INTEGER")
+                        .HasColumnName("default_height");
+
+                    b.Property<string>("DefaultSampler")
+                        .IsRequired()
+                        .HasColumnType("TEXT")
+                        .HasColumnName("default_sampler");
+
+                    b.Property<int>("DefaultSteps")
+                        .HasColumnType("INTEGER")
+                        .HasColumnName("default_steps");
+
+                    b.Property<int>("DefaultWidth")
+                        .HasColumnType("INTEGER")
+                        .HasColumnName("default_width");
+
+                    b.Property<string>("MachineKey")
+                        .IsRequired()
+                        .HasColumnType("TEXT")
+                        .HasColumnName("machine_key");
+
+                    b.Property<string>("ModelName")
+                        .IsRequired()
+                        .HasColumnType("TEXT")
+                        .HasColumnName("model_name");
+
+                    b.Property<int>("Status")
+                        .HasColumnType("INTEGER")
+                        .HasColumnName("status");
+
+                    b.Property<long>("UpdatedAtUtc")
+                        .HasColumnType("INTEGER")
+                        .HasColumnName("updated_at_utc");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("Status");
+
+                    b.HasIndex("MachineKey", "ModelName", "Backend")
+                        .IsUnique();
+
+                    b.ToTable("image_model_profiles", (string)null);
                 });
 
             modelBuilder.Entity("XE_Local_AI_Engine.Client.Persistence.Entities.InferenceProfile", b =>
@@ -1714,6 +1910,15 @@ namespace XE_Local_AI_Engine.Client.Persistence.Migrations
                     b.HasOne("XE_Local_AI_Engine.Client.Persistence.Entities.NodeConversation", null)
                         .WithMany()
                         .HasForeignKey("ConversationId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("XE_Local_AI_Engine.Client.Persistence.Entities.GeneratedImage", b =>
+                {
+                    b.HasOne("XE_Local_AI_Engine.Client.Persistence.Entities.ImageJob", null)
+                        .WithMany()
+                        .HasForeignKey("JobId")
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
                 });
