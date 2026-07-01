@@ -29,6 +29,18 @@ internal static class AddNodeKnowledgeBaseExtensions
         builder.Services.AddScoped<IKnowledgeIndexWriter, KnowledgeIndexWriter>();
         builder.Services.AddScoped<IKnowledgeIngestionService, KnowledgeIngestionService>();
 
+        // Reciprocal Rank Fusion is a pure, stateless function over rank lists — safe as a singleton, no DbContext.
+        builder.Services.AddSingleton<IRankingFusionService, ReciprocalRankFusion>();
+
+        // Search lane (Lane C). SCOPED (M3): each retrieval collaborator reads through the request-scoped NodeChatDbContext
+        // connection, so all are resolved inside the per-search scope. The vector backend is selected via the
+        // scoped-resolving IVectorSearchFactory — NOT a singleton keyed registration that would capture a scoped DbContext.
+        builder.Services.AddScoped<IFtsSearch, FtsSearch>();
+        builder.Services.AddScoped<IVectorSearch, ManagedCosineVectorSearch>();
+        builder.Services.AddScoped<IVectorSearchFactory, VectorSearchFactory>();
+        builder.Services.AddScoped<IContextExpansionService, ContextExpansionService>();
+        builder.Services.AddScoped<IKnowledgeSearchService, KnowledgeSearchService>();
+
         // Singleton queue seam the upload endpoint calls; registered as the concrete type AND the interface so the worker
         // drains the SAME instance the endpoint enqueues onto.
         builder.Services.AddSingleton<KnowledgeIngestionDispatcher>();
