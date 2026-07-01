@@ -477,6 +477,8 @@ export type XeLocalAiEngineClientEndpointsCloudSettingsV1AzureFoundrySettingsRes
 	authMode: string;
 	hasStoredApiKey?: boolean;
 	models?: Array<XeLocalAiEngineClientEndpointsCloudSettingsV1AzureFoundryModelDto>;
+	headers?: Array<XeLocalAiEngineClientEndpointsCloudSettingsV1AzureFoundryHeaderDto>;
+	additionalAllowedHostSuffixes?: Array<string>;
 };
 
 export type XeLocalAiEngineClientEndpointsCloudSettingsV1CloudSettingsResponse = {
@@ -490,6 +492,8 @@ export type XeLocalAiEngineClientEndpointsCloudSettingsV1SaveCloudSettingsReques
 	authMode?: string;
 	apiKey?: string | null;
 	models?: Array<XeLocalAiEngineClientEndpointsCloudSettingsV1AzureFoundryModelDto>;
+	headers?: Array<XeLocalAiEngineClientEndpointsCloudSettingsV1SaveAzureFoundryHeaderRequest>;
+	additionalAllowedHostSuffixes?: Array<string>;
 };
 
 export type XeLocalAiEngineClientEndpointsConnectionV1ConnectionStatusResponse = {
@@ -1755,6 +1759,19 @@ export type XeLocalAiEngineClientServicesPreviewWorkflowsPreviewWorkflowGraphNod
 };
 
 export type XeLocalAiEngineClientServicesPreviewWorkflowsPreviewWorkflowNodeKind = "Start" | "Agent" | "Debug" | "Pause" | "End";
+
+export type XeLocalAiEngineClientEndpointsCloudSettingsV1AzureFoundryHeaderDto = {
+	name: string;
+	value?: string | null;
+	isSecret?: boolean;
+	hasStoredValue?: boolean;
+};
+
+export type XeLocalAiEngineClientEndpointsCloudSettingsV1SaveAzureFoundryHeaderRequest = {
+	name?: string;
+	value?: string | null;
+	isSecret?: boolean;
+};
 
 export type ListAgentDefinitionsData = {
 	body?: never;

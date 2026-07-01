@@ -8180,6 +8180,18 @@
             "items": {
               "$ref": "#/components/schemas/XE_Local_AI_EngineClientEndpointsCloudSettingsV1AzureFoundryModelDto"
             }
+          },
+          "headers": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/XE_Local_AI_EngineClientEndpointsCloudSettingsV1AzureFoundryHeaderDto"
+            }
+          },
+          "additionalAllowedHostSuffixes": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
           }
         }
       },
@@ -8229,6 +8241,18 @@
             "type": "array",
             "items": {
               "$ref": "#/components/schemas/XE_Local_AI_EngineClientEndpointsCloudSettingsV1AzureFoundryModelDto"
+            }
+          },
+          "headers": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/XE_Local_AI_EngineClientEndpointsCloudSettingsV1SaveAzureFoundryHeaderRequest"
+            }
+          },
+          "additionalAllowedHostSuffixes": {
+            "type": "array",
+            "items": {
+              "type": "string"
             }
           }
         }
@@ -12175,6 +12199,44 @@
           "Pause",
           "End"
         ]
+      },
+      "XE_Local_AI_EngineClientEndpointsCloudSettingsV1AzureFoundryHeaderDto": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "name"
+        ],
+        "properties": {
+          "name": {
+            "type": "string"
+          },
+          "value": {
+            "type": "string",
+            "nullable": true
+          },
+          "isSecret": {
+            "type": "boolean"
+          },
+          "hasStoredValue": {
+            "type": "boolean"
+          }
+        }
+      },
+      "XE_Local_AI_EngineClientEndpointsCloudSettingsV1SaveAzureFoundryHeaderRequest": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "name": {
+            "type": "string"
+          },
+          "value": {
+            "type": "string",
+            "nullable": true
+          },
+          "isSecret": {
+            "type": "boolean"
+          }
+        }
       }
     },
     "securitySchemes": {

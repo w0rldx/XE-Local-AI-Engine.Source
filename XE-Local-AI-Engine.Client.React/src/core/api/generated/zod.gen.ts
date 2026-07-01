@@ -462,26 +462,6 @@ export const zXeLocalAiEngineClientEndpointsCloudSettingsV1AzureFoundryModelDto 
 	displayLabel: z.string().nullish(),
 });
 
-export const zXeLocalAiEngineClientEndpointsCloudSettingsV1AzureFoundrySettingsResponse = z.object({
-	endpoint: z.string().nullish(),
-	authMode: z.string(),
-	hasStoredApiKey: z.boolean().optional(),
-	models: z.array(zXeLocalAiEngineClientEndpointsCloudSettingsV1AzureFoundryModelDto).optional(),
-});
-
-export const zXeLocalAiEngineClientEndpointsCloudSettingsV1CloudSettingsResponse = z.object({
-	providerName: z.string(),
-	azureFoundry: zXeLocalAiEngineClientEndpointsCloudSettingsV1AzureFoundrySettingsResponse.nullish(),
-});
-
-export const zXeLocalAiEngineClientEndpointsCloudSettingsV1SaveCloudSettingsRequest = z.object({
-	providerName: z.string().optional(),
-	endpoint: z.string().min(1),
-	authMode: z.string().optional(),
-	apiKey: z.string().nullish(),
-	models: z.array(zXeLocalAiEngineClientEndpointsCloudSettingsV1AzureFoundryModelDto).optional(),
-});
-
 export const zXeLocalAiEngineClientEndpointsConnectionV1ConnectionStatusResponse = z.object({
 	state: z.string().optional(),
 	lastError: z.string().nullish(),
@@ -2470,6 +2450,43 @@ export const zXeLocalAiEngineClientEndpointsPreviewV1UpdatePreviewWorkflowReques
 		.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })
 		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" })
 		.optional(),
+});
+
+export const zXeLocalAiEngineClientEndpointsCloudSettingsV1AzureFoundryHeaderDto = z.object({
+	name: z.string(),
+	value: z.string().nullish(),
+	isSecret: z.boolean().optional(),
+	hasStoredValue: z.boolean().optional(),
+});
+
+export const zXeLocalAiEngineClientEndpointsCloudSettingsV1AzureFoundrySettingsResponse = z.object({
+	endpoint: z.string().nullish(),
+	authMode: z.string(),
+	hasStoredApiKey: z.boolean().optional(),
+	models: z.array(zXeLocalAiEngineClientEndpointsCloudSettingsV1AzureFoundryModelDto).optional(),
+	headers: z.array(zXeLocalAiEngineClientEndpointsCloudSettingsV1AzureFoundryHeaderDto).optional(),
+	additionalAllowedHostSuffixes: z.array(z.string()).optional(),
+});
+
+export const zXeLocalAiEngineClientEndpointsCloudSettingsV1CloudSettingsResponse = z.object({
+	providerName: z.string(),
+	azureFoundry: zXeLocalAiEngineClientEndpointsCloudSettingsV1AzureFoundrySettingsResponse.nullish(),
+});
+
+export const zXeLocalAiEngineClientEndpointsCloudSettingsV1SaveAzureFoundryHeaderRequest = z.object({
+	name: z.string().optional(),
+	value: z.string().nullish(),
+	isSecret: z.boolean().optional(),
+});
+
+export const zXeLocalAiEngineClientEndpointsCloudSettingsV1SaveCloudSettingsRequest = z.object({
+	providerName: z.string().optional(),
+	endpoint: z.string().min(1),
+	authMode: z.string().optional(),
+	apiKey: z.string().nullish(),
+	models: z.array(zXeLocalAiEngineClientEndpointsCloudSettingsV1AzureFoundryModelDto).optional(),
+	headers: z.array(zXeLocalAiEngineClientEndpointsCloudSettingsV1SaveAzureFoundryHeaderRequest).optional(),
+	additionalAllowedHostSuffixes: z.array(z.string()).optional(),
 });
 
 /**
