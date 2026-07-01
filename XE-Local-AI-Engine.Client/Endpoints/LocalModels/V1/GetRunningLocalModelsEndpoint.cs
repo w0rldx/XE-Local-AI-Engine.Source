@@ -37,7 +37,18 @@ public sealed class GetRunningLocalModelsEndpoint(
         }
         catch (Exception exception)
         {
-            _logger.LogWarning(exception, "Running model list could not be loaded.");
+            // An unreachable Ollama endpoint (HttpRequestException) is expected in desktop mode and this endpoint is
+            // polled by the loaded-models page — log it at Debug so it doesn't flood the console. Any OTHER failure is
+            // unexpected and stays at Warning. Mirrors ListLocalModelsEndpoint.
+            if (exception is HttpRequestException)
+            {
+                _logger.LogDebug(exception, "Ollama not reachable while loading the running model list; returning unavailable.");
+            }
+            else
+            {
+                _logger.LogWarning(exception, "Running model list could not be loaded.");
+            }
+
             await Send.OkAsync(LocalModelsMapper.ToUnavailableRunningResponse("Local model provider is unavailable."), ct)
                       .ConfigureAwait(false);
         }
