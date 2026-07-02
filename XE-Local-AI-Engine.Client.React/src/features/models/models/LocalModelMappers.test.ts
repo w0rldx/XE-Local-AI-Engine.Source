@@ -16,6 +16,8 @@ describe("local model mappers", () => {
 				kind: "Chat",
 				detectedKind: "Chat",
 				capabilities: ["completion", "tools"],
+				isReasoningCapable: false,
+				isToolCapable: true,
 				isOverridden: false,
 			}),
 		).toEqual({
@@ -34,7 +36,18 @@ describe("local model mappers", () => {
 	});
 
 	it("falls back to em-dash labels and Unknown kind for an empty generated item", () => {
-		expect(toLocalModelViewModel({})).toEqual({
+		expect(
+			toLocalModelViewModel({
+				modelName: "",
+				isSelected: false,
+				kind: "Unknown",
+				detectedKind: "Unknown",
+				capabilities: [],
+				isReasoningCapable: false,
+				isToolCapable: false,
+				isOverridden: false,
+			}),
+		).toEqual({
 			modelName: "",
 			sizeLabel: "—",
 			modifiedDateLabel: "—",

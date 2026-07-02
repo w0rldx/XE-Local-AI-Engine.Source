@@ -33,6 +33,7 @@ describe("navigationLinks", () => {
 			"settings",
 			"automation",
 			"preview",
+			"images",
 			"invocations",
 		]);
 	});
@@ -50,6 +51,7 @@ describe("navigationLinks", () => {
 			"settings",
 			"automation",
 			"preview",
+			"images",
 			"invocations",
 		]);
 	});

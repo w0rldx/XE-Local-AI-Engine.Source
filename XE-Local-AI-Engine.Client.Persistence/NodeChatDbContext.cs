@@ -74,6 +74,12 @@ public sealed class NodeChatDbContext : DbContext
 
     internal DbSet<KnowledgeChunkVector> KnowledgeChunkVectors => Set<KnowledgeChunkVector>();
 
+    internal DbSet<ImageJob> ImageJobs => Set<ImageJob>();
+
+    internal DbSet<GeneratedImage> GeneratedImages => Set<GeneratedImage>();
+
+    internal DbSet<ImageModelProfile> ImageModelProfiles => Set<ImageModelProfile>();
+
     internal ReadOnlyMemory<byte> NodeEncryptionKey => _nodeSqliteKeyHolder.Key;
 
     /// <summary>
@@ -201,5 +207,8 @@ public sealed class NodeChatDbContext : DbContext
         modelBuilder.ApplyConfiguration(new KnowledgeDocumentSectionConfiguration());
         modelBuilder.ApplyConfiguration(new KnowledgeDocumentChunkConfiguration());
         modelBuilder.ApplyConfiguration(new KnowledgeChunkVectorConfiguration());
+        modelBuilder.ApplyConfiguration(new ImageJobConfiguration());
+        modelBuilder.ApplyConfiguration(new GeneratedImageConfiguration());
+        modelBuilder.ApplyConfiguration(new ImageModelProfileConfiguration());
     }
 }

@@ -6,7 +6,17 @@ import { resolveLocalDefaultModelCapabilities, toChatModelOptions, toModelOption
 type LocalModelDto = XeLocalAiEngineClientEndpointsLocalModelsV1LocalModelResponse;
 
 function model(overrides: Partial<LocalModelDto>): LocalModelDto {
-	return { modelName: "qwen3:8b", kind: "Chat", ...overrides };
+	return {
+		modelName: "qwen3:8b",
+		kind: "Chat",
+		detectedKind: "Chat",
+		isSelected: false,
+		capabilities: [],
+		isReasoningCapable: false,
+		isToolCapable: false,
+		isOverridden: false,
+		...overrides,
+	};
 }
 
 describe("toModelOption capability mapping", () => {

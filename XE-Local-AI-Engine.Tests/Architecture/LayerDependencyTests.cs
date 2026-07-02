@@ -8,6 +8,7 @@ using XE_Local_AI_Engine.Providers.CodexOAuth.Contracts;
 using XE_Local_AI_Engine.Providers.HuggingFace.Options;
 using XE_Local_AI_Engine.Providers.LlamaServer.Contracts;
 using XE_Local_AI_Engine.Providers.Ollama.Implementation;
+using XE_Local_AI_Engine.Providers.StableDiffusionCpp.Contracts;
 using XE_Local_AI_Engine.Tests.Testing;
 
 /// <summary>
@@ -31,6 +32,7 @@ public sealed class LayerDependencyTests
     private const string HuggingFaceNamespace = "XE_Local_AI_Engine.Providers.HuggingFace";
     private const string CodexOAuthNamespace = "XE_Local_AI_Engine.Providers.CodexOAuth";
     private const string CapabilitiesNamespace = "XE_Local_AI_Engine.Providers.Capabilities";
+    private const string StableDiffusionCppNamespace = "XE_Local_AI_Engine.Providers.StableDiffusionCpp";
     private const string AbstractionsNamespace = "XE_Local_AI_Engine.Providers.Abstractions";
 
     // Marker types anchor each assembly so we test the real compiled IL, not a
@@ -40,6 +42,7 @@ public sealed class LayerDependencyTests
     private static readonly Assembly HuggingFaceAssembly = typeof(HuggingFaceOptions).Assembly;
     private static readonly Assembly CodexOAuthAssembly = typeof(ICodexOAuthChatClientFactory).Assembly;
     private static readonly Assembly CapabilitiesAssembly = typeof(CapabilitiesServiceCollectionExtensions).Assembly;
+    private static readonly Assembly StableDiffusionCppAssembly = typeof(IStableDiffusionBinaryManager).Assembly;
     private static readonly Assembly AbstractionsAssembly = typeof(ILocalModelProvider).Assembly;
     private static readonly Assembly ContractsAssembly = typeof(MessageRole).Assembly;
 
@@ -92,6 +95,20 @@ public sealed class LayerDependencyTests
             OllamaNamespace,
             LlamaServerNamespace,
             HuggingFaceNamespace,
+            CapabilitiesNamespace);
+    }
+
+    [Test]
+    public void StableDiffusionCppProvider_DoesNotDependOnApplicationPersistenceHostOrSiblingProviders()
+    {
+        AssertNoDependency(StableDiffusionCppAssembly,
+            StableDiffusionCppNamespace,
+            ClientNamespace,
+            PersistenceNamespace,
+            OllamaNamespace,
+            LlamaServerNamespace,
+            HuggingFaceNamespace,
+            CodexOAuthNamespace,
             CapabilitiesNamespace);
     }
 

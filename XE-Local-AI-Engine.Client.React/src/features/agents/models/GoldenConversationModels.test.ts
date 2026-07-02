@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 
+import type { XeLocalAiEngineClientEndpointsAgentsV1GoldenConversationResponse } from "@/core/api/generated";
 import {
 	toGoldenConversation,
 	toGoldenConversations,
@@ -16,7 +17,9 @@ import {
 // malformed behaviour. Instead they cover (1) the coalescing mappers that project the optional-field generated wire
 // shape into the strict domain view-model, (2) the surviving FORM-cap validator, and (3) the 409 promote-conflict
 // body parser (consumed by PlaybookActionMappers). A generated-shaped DTO has every field optional (`x?: T`).
-function makeResponseDto(overrides: Record<string, unknown> = {}): Record<string, unknown> {
+function makeResponseDto(
+	overrides: Partial<XeLocalAiEngineClientEndpointsAgentsV1GoldenConversationResponse> = {},
+): XeLocalAiEngineClientEndpointsAgentsV1GoldenConversationResponse {
 	return {
 		id: "g-10",
 		agentDefinitionId: "agent-1",
@@ -46,6 +49,7 @@ describe("toGoldenConversations — list mapper", () => {
 					assertion: { requiredPhrases: ["summary"], forbiddenPhrases: ["error"] },
 					rubric: null,
 					enabled: true,
+					source: "manual",
 					createdAtUtc: 1,
 					updatedAtUtc: 2,
 				},
@@ -57,6 +61,7 @@ describe("toGoldenConversations — list mapper", () => {
 					// assertion omitted entirely; rubric present (the judge path).
 					rubric: "Is the explanation correct?",
 					enabled: false,
+					source: "manual",
 					createdAtUtc: 3,
 					updatedAtUtc: 4,
 				},
@@ -74,8 +79,8 @@ describe("toGoldenConversations — list mapper", () => {
 		expect(result[0]?.sourceMessageId).toBeNull();
 	});
 
-	it("coalesces an absent items array to an empty list", () => {
-		expect(toGoldenConversations({})).toEqual([]);
+	it("coalesces an empty items array to an empty list", () => {
+		expect(toGoldenConversations({ items: [] })).toEqual([]);
 	});
 });
 
@@ -89,6 +94,7 @@ describe("toGoldenConversation — single mapper + provenance", () => {
 			assertion: { requiredPhrases: [], forbiddenPhrases: ["oops"] },
 			rubric: null,
 			enabled: true,
+			source: "manual",
 			createdAtUtc: 5,
 			updatedAtUtc: 6,
 		});
@@ -125,8 +131,17 @@ describe("toGoldenConversation — single mapper + provenance", () => {
 		expect(result.source).toBe("manual");
 	});
 
-	it("coalesces missing fields to safe domain defaults", () => {
-		const result = toGoldenConversation({});
+	it("coalesces empty/zero fields to safe domain defaults", () => {
+		const result = toGoldenConversation({
+			id: "",
+			agentDefinitionId: "",
+			title: "",
+			inputTurns: [],
+			enabled: false,
+			source: "manual",
+			createdAtUtc: 0,
+			updatedAtUtc: 0,
+		});
 
 		expect(result.id).toBe("");
 		expect(result.title).toBe("");

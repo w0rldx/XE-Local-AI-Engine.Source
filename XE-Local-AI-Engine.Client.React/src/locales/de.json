@@ -69,7 +69,8 @@
 		"schedule": "Terminplaner",
 		"user": "Benutzer",
 		"skills": "Skills",
-		"preview": "Open Canvas"
+		"preview": "Open Canvas",
+		"images": "Bildgenerierung"
 	},
 	"chat": {
 		"thoughts": "Gedanken",
@@ -1238,6 +1239,9 @@
 				"displayLabelPlaceholder": "GPT-4o",
 				"addModel": "Modell hinzufügen",
 				"removeModel": "Modell entfernen",
+				"save": "Cloud-Einstellungen speichern",
+				"clear": "Gespeicherte Anmeldedaten löschen",
+				"reload": "Neu laden",
 				"headers": {
 					"title": "Benutzerdefinierte Header",
 					"description": "Füge jeder Azure-Anfrage benutzerdefinierte HTTP-Header hinzu (zum Beispiel einen APIM-Gateway-Abonnementschlüssel). Markiere einen Wert als geheim, um ihn nur schreibbar zu speichern.",
@@ -1258,10 +1262,7 @@
 					"addHost": "Erlaubten Host hinzufügen",
 					"removeHost": "Erlaubten Host entfernen"
 				},
-				"managedIdentityEgressWarning": "Verwaltete Identität ist ausgewählt und dieser Endpunkt-Host ist keine Microsoft-Azure-Domain. Ein Entra-Token der verwalteten Identität wird an diesen Nicht-Microsoft-Host gesendet.",
-				"save": "Cloud-Einstellungen speichern",
-				"clear": "Gespeicherte Anmeldedaten löschen",
-				"reload": "Neu laden"
+				"managedIdentityEgressWarning": "Verwaltete Identität ist ausgewählt und dieser Endpunkt-Host ist keine Microsoft-Azure-Domain. Ein Entra-Token der verwalteten Identität wird an diesen Nicht-Microsoft-Host gesendet."
 			}
 		},
 		"models": {
@@ -2223,6 +2224,105 @@
 			"appointmentCreated": "Termin erfolgreich erstellt",
 			"appointmentUpdated": "Termin erfolgreich aktualisiert",
 			"appointmentDeleted": "Termin erfolgreich gelöscht"
+		},
+		"images": {
+			"eyebrow": "Worker-Knoten",
+			"title": "Bildgenerierung",
+			"subtitle": "Erzeugen Sie Bilder lokal mit stable-diffusion.cpp. Aufträge laufen einzeln und übertragen ihren groben Status während der Verarbeitung.",
+			"jobs": {
+				"title": "Aufträge",
+				"empty": "Noch keine Bildaufträge. Erzeugen Sie einen, um ihn hier zu sehen.",
+				"cancelError": "Der Auftrag konnte nicht abgebrochen werden."
+			},
+			"job": {
+				"elapsed": "{{seconds}} s",
+				"duration": "{{seconds}} s",
+				"meta": "{{model}} · {{width}}×{{height}} · {{steps}} Schritte · {{sampler}}"
+			},
+			"status": {
+				"Queued": "In Warteschlange",
+				"Generating": "Wird erzeugt",
+				"Succeeded": "Erfolgreich",
+				"Failed": "Fehlgeschlagen",
+				"Cancelled": "Abgebrochen"
+			},
+			"form": {
+				"model": {
+					"label": "Modell",
+					"placeholder": "Bildmodell auswählen"
+				},
+				"prompt": {
+					"label": "Prompt",
+					"placeholder": "Ein Aquarell-Fuchs in einem nebligen Wald"
+				},
+				"negativePrompt": {
+					"label": "Negativer Prompt",
+					"placeholder": "unscharf, geringe Qualität"
+				},
+				"width": {
+					"label": "Breite"
+				},
+				"height": {
+					"label": "Höhe"
+				},
+				"steps": {
+					"label": "Schritte"
+				},
+				"cfgScale": {
+					"label": "CFG-Skala"
+				},
+				"sampler": {
+					"label": "Sampler"
+				},
+				"seed": {
+					"label": "Seed",
+					"description": "-1 für einen zufälligen Seed"
+				},
+				"samplers": {
+					"euler": "Euler",
+					"euler_a": "Euler a",
+					"heun": "Heun",
+					"dpm2": "DPM2",
+					"dpmpp2m": "DPM++ 2M",
+					"dpmpp2s_a": "DPM++ 2S a",
+					"lcm": "LCM"
+				},
+				"noModels": "Installieren Sie unten ein Bildmodell, bevor Sie generieren.",
+				"submit": "Generieren",
+				"error": "Die Generierung konnte nicht gestartet werden."
+			},
+			"result": {
+				"error": "Das erzeugte Bild konnte nicht geladen werden."
+			},
+			"models": {
+				"installedTitle": "Installierte Bildmodelle",
+				"empty": "Noch keine Bildmodelle installiert.",
+				"families": {
+					"Sd15": "Stable Diffusion 1.5",
+					"Sdxl": "Stable Diffusion XL",
+					"Sd3": "Stable Diffusion 3",
+					"Flux": "FLUX.1"
+				},
+				"download": {
+					"title": "Modell herunterladen",
+					"started": "Download gestartet. Das Modell erscheint, sobald es bereit ist.",
+					"error": "Der Modell-Download konnte nicht gestartet werden.",
+					"hint": "Nur Einzeldatei-Gewichte (SD1.5-Stil). Mehrteilige Modelle folgen später.",
+					"submit": "Herunterladen",
+					"repoId": {
+						"label": "Hugging-Face-Repository"
+					},
+					"fileName": {
+						"label": "Gewichtsdatei"
+					},
+					"modelName": {
+						"label": "Modellname"
+					},
+					"family": {
+						"label": "Familie"
+					}
+				}
+			}
 		},
 		"preview": {
 			"eyebrow": "Worker-Knoten",
