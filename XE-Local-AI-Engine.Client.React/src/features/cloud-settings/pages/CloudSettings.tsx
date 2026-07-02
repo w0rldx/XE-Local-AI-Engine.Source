@@ -10,6 +10,7 @@ import {
 	PasswordInput,
 	SegmentedControl,
 	Stack,
+	Switch,
 	Text,
 	TextInput,
 	Title,
@@ -34,6 +35,7 @@ import {
 	type CloudAuthMode,
 	type CloudFoundryModelDraft,
 	type CloudSettingsFormValues,
+	shouldWarnManagedIdentityEgress,
 	validateCloudSettingsForm,
 } from "@/features/cloud-settings/models/CloudSettingsModel";
 
@@ -64,6 +66,15 @@ function settingsToFormValues(settings: CloudSettings): CloudSettingsFormValues 
 				displayLabel: model.displayLabel ?? "",
 			})),
 		),
+		// Secret header values are write-only: they load blank with a "stored" hint driven by hasStoredValue;
+		// non-secret values round-trip for inline editing.
+		headers: (azure?.headers ?? []).map((header) => ({
+			name: header.name ?? "",
+			value: header.isSecret ? "" : (header.value ?? ""),
+			isSecret: header.isSecret ?? false,
+			hasStoredValue: header.hasStoredValue ?? false,
+		})),
+		hostSuffixes: azure?.additionalAllowedHostSuffixes ?? [],
 	};
 }
 
@@ -80,6 +91,8 @@ const emptyFormValues: CloudSettingsFormValues = {
 	authMode: "ApiKey",
 	apiKey: "",
 	models: [{ deploymentName: "", displayLabel: "" }],
+	headers: [],
+	hostSuffixes: [],
 };
 
 // The form values, the per-field "touched" map, and the submit flag always reset together when the
@@ -100,6 +113,13 @@ type FormAction =
 	| { type: "addModel" }
 	| { type: "removeModel"; index: number }
 	| { type: "setModelField"; index: number; field: keyof CloudFoundryModelDraft; value: string }
+	| { type: "addHeader" }
+	| { type: "removeHeader"; index: number }
+	| { type: "setHeaderField"; index: number; field: "name" | "value"; value: string }
+	| { type: "toggleHeaderSecret"; index: number }
+	| { type: "addHostSuffix" }
+	| { type: "removeHostSuffix"; index: number }
+	| { type: "setHostSuffix"; index: number; value: string }
 	| { type: "touchField"; field: keyof CloudSettingsFormValues }
 	| { type: "submit" };
 
@@ -138,6 +158,45 @@ function formReducer(state: FormState, action: FormAction): FormState {
 				index === action.index ? { ...model, [action.field]: action.value } : model,
 			);
 			return { ...state, values: { ...state.values, models: next } };
+		}
+		case "addHeader":
+			return {
+				...state,
+				values: {
+					...state.values,
+					headers: [...state.values.headers, { name: "", value: "", isSecret: false, hasStoredValue: false }],
+				},
+			};
+		case "removeHeader":
+			return {
+				...state,
+				values: { ...state.values, headers: state.values.headers.filter((_, index) => index !== action.index) },
+			};
+		case "setHeaderField": {
+			const next = state.values.headers.map((header, index) =>
+				index === action.index ? { ...header, [action.field]: action.value } : header,
+			);
+			return { ...state, values: { ...state.values, headers: next } };
+		}
+		case "toggleHeaderSecret": {
+			const next = state.values.headers.map((header, index) =>
+				index === action.index ? { ...header, isSecret: !header.isSecret } : header,
+			);
+			return { ...state, values: { ...state.values, headers: next } };
+		}
+		case "addHostSuffix":
+			return { ...state, values: { ...state.values, hostSuffixes: [...state.values.hostSuffixes, ""] } };
+		case "removeHostSuffix":
+			return {
+				...state,
+				values: {
+					...state.values,
+					hostSuffixes: state.values.hostSuffixes.filter((_, index) => index !== action.index),
+				},
+			};
+		case "setHostSuffix": {
+			const next = state.values.hostSuffixes.map((suffix, index) => (index === action.index ? action.value : suffix));
+			return { ...state, values: { ...state.values, hostSuffixes: next } };
 		}
 		case "touchField":
 			return { ...state, touched: { ...state.touched, [action.field]: true } };
@@ -219,9 +278,15 @@ export function CloudSettings() {
 	// no key, so hasStoredApiKey alone is insufficient).
 	const hasStoredConnection = Boolean(azure?.endpoint) || (azure?.hasStoredApiKey ?? false) || (azure?.models?.length ?? 0) > 0;
 	const isManagedIdentity = formValues.authMode === "ManagedIdentity";
+	const showManagedIdentityEgressWarning = useMemo(() => shouldWarnManagedIdentityEgress(formValues), [formValues]);
 
 	const handleSave = (): void => {
 		dispatch({ type: "submit" });
+		// Always dispatch submit so inline errors render, but only fire the mutation when the form is valid —
+		// mirrors the disabled state on the Save button as defense in depth (e.g. non-pointer submit paths).
+		if (hasErrors) {
+			return;
+		}
 		saveMutation.mutate({
 			body: {
 				providerName: "AzureFoundry",
@@ -234,6 +299,18 @@ export function CloudSettings() {
 						displayLabel: model.displayLabel.trim().length > 0 ? model.displayLabel.trim() : undefined,
 					}))
 					.filter((model) => model.deploymentName.length > 0),
+				// Drop blank-name rows. Secret rows send no value when left blank so the stored secret is kept;
+				// a typed value replaces it. Non-secret values round-trip as entered.
+				headers: formValues.headers
+					.filter((header) => header.name.trim().length > 0)
+					.map((header) => ({
+						name: header.name.trim(),
+						isSecret: header.isSecret,
+						value: header.isSecret ? (header.value.trim().length > 0 ? header.value : undefined) : header.value,
+					})),
+				additionalAllowedHostSuffixes: formValues.hostSuffixes
+					.map((suffix) => suffix.trim())
+					.filter((suffix) => suffix.length > 0),
 			},
 		});
 	};
@@ -429,6 +506,151 @@ export function CloudSettings() {
 								</Button>
 							</Group>
 						</Stack>
+
+						<Stack gap={6}>
+							<Text size="sm" fw={500}>
+								{t("pages.cloudSettings.azure.headers.title", "Custom headers")}
+							</Text>
+							<Text size="xs" c="dimmed">
+								{t("pages.cloudSettings.azure.headers.description")}
+							</Text>
+							{formValues.headers.map((header, index) => (
+								// biome-ignore lint/suspicious/noArrayIndexKey: rows are positional and have no stable id; index is the row identity.
+								<Group key={index} align="flex-end" gap="xs" wrap="nowrap">
+									<TextInput
+										style={{ flex: 1 }}
+										aria-label={t("pages.cloudSettings.azure.headers.nameLabel", "Header name")}
+										label={index === 0 ? t("pages.cloudSettings.azure.headers.nameLabel", "Header name") : undefined}
+										placeholder={t("pages.cloudSettings.azure.headers.namePlaceholder", "Ocp-Apim-Subscription-Key")}
+										value={header.name}
+										onChange={(event) => {
+											const value = event.currentTarget.value;
+											dispatch({ type: "setHeaderField", index, field: "name", value });
+										}}
+										onBlur={() => dispatch({ type: "touchField", field: "headers" })}
+									/>
+									{header.isSecret ? (
+										<PasswordInput
+											style={{ flex: 1 }}
+											aria-label={t("pages.cloudSettings.azure.headers.valueLabel", "Value")}
+											label={index === 0 ? t("pages.cloudSettings.azure.headers.valueLabel", "Value") : undefined}
+											description={header.hasStoredValue ? t("pages.cloudSettings.azure.headers.secretStoredHint") : undefined}
+											placeholder={t("pages.cloudSettings.azure.headers.valuePlaceholder", "value")}
+											value={header.value}
+											onChange={(event) => {
+												const value = event.currentTarget.value;
+												dispatch({ type: "setHeaderField", index, field: "value", value });
+											}}
+											onBlur={() => dispatch({ type: "touchField", field: "headers" })}
+										/>
+									) : (
+										<TextInput
+											style={{ flex: 1 }}
+											aria-label={t("pages.cloudSettings.azure.headers.valueLabel", "Value")}
+											label={index === 0 ? t("pages.cloudSettings.azure.headers.valueLabel", "Value") : undefined}
+											placeholder={t("pages.cloudSettings.azure.headers.valuePlaceholder", "value")}
+											value={header.value}
+											onChange={(event) => {
+												const value = event.currentTarget.value;
+												dispatch({ type: "setHeaderField", index, field: "value", value });
+											}}
+											onBlur={() => dispatch({ type: "touchField", field: "headers" })}
+										/>
+									)}
+									<Switch
+										data-testid={`cloud-settings-header-secret-${index}`}
+										aria-label={t("pages.cloudSettings.azure.headers.secretLabel", "Secret")}
+										label={index === 0 ? t("pages.cloudSettings.azure.headers.secretLabel", "Secret") : undefined}
+										checked={header.isSecret}
+										onChange={() => dispatch({ type: "toggleHeaderSecret", index })}
+									/>
+									<ActionIcon
+										variant="subtle"
+										color="red"
+										size="lg"
+										data-testid={`cloud-settings-remove-header-${index}`}
+										aria-label={t("pages.cloudSettings.azure.headers.removeHeader", "Remove header")}
+										onClick={() => dispatch({ type: "removeHeader", index })}
+									>
+										<IconTrash size={16} />
+									</ActionIcon>
+								</Group>
+							))}
+							{visibleErrors.headers ? (
+								<Text size="xs" c="red" data-testid="cloud-settings-headers-error">
+									{visibleErrors.headers}
+								</Text>
+							) : null}
+							<Group>
+								<Button
+									variant="light"
+									size="xs"
+									leftSection={<IconPlus size={14} />}
+									data-testid="cloud-settings-add-header"
+									onClick={() => dispatch({ type: "addHeader" })}
+								>
+									{t("pages.cloudSettings.azure.headers.addHeader", "Add header")}
+								</Button>
+							</Group>
+						</Stack>
+
+						<Stack gap={6}>
+							<Text size="sm" fw={500}>
+								{t("pages.cloudSettings.azure.hostSuffixes.title", "Allowed host suffixes")}
+							</Text>
+							<Text size="xs" c="dimmed">
+								{t("pages.cloudSettings.azure.hostSuffixes.description")}
+							</Text>
+							{formValues.hostSuffixes.map((suffix, index) => (
+								// biome-ignore lint/suspicious/noArrayIndexKey: rows are positional and have no stable id; index is the row identity.
+								<Group key={index} align="flex-end" gap="xs" wrap="nowrap">
+									<TextInput
+										style={{ flex: 1 }}
+										aria-label={t("pages.cloudSettings.azure.hostSuffixes.label", "Host suffix")}
+										label={index === 0 ? t("pages.cloudSettings.azure.hostSuffixes.label", "Host suffix") : undefined}
+										placeholder={t("pages.cloudSettings.azure.hostSuffixes.placeholder", ".azure-api.net")}
+										value={suffix}
+										onChange={(event) => {
+											const value = event.currentTarget.value;
+											dispatch({ type: "setHostSuffix", index, value });
+										}}
+										onBlur={() => dispatch({ type: "touchField", field: "hostSuffixes" })}
+									/>
+									<ActionIcon
+										variant="subtle"
+										color="red"
+										size="lg"
+										data-testid={`cloud-settings-remove-host-${index}`}
+										aria-label={t("pages.cloudSettings.azure.hostSuffixes.removeHost", "Remove allowed host")}
+										onClick={() => dispatch({ type: "removeHostSuffix", index })}
+									>
+										<IconTrash size={16} />
+									</ActionIcon>
+								</Group>
+							))}
+							{visibleErrors.hostSuffixes ? (
+								<Text size="xs" c="red" data-testid="cloud-settings-host-suffixes-error">
+									{visibleErrors.hostSuffixes}
+								</Text>
+							) : null}
+							<Group>
+								<Button
+									variant="light"
+									size="xs"
+									leftSection={<IconPlus size={14} />}
+									data-testid="cloud-settings-add-host"
+									onClick={() => dispatch({ type: "addHostSuffix" })}
+								>
+									{t("pages.cloudSettings.azure.hostSuffixes.addHost", "Add allowed host")}
+								</Button>
+							</Group>
+						</Stack>
+
+						{showManagedIdentityEgressWarning ? (
+							<Alert color="orange" icon={<IconAlertTriangle size={16} />} data-testid="cloud-settings-mi-egress-warning">
+								<Text size="sm">{t("pages.cloudSettings.azure.managedIdentityEgressWarning")}</Text>
+							</Alert>
+						) : null}
 
 						<Group>
 							<Button

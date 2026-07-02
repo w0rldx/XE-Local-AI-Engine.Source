@@ -274,7 +274,11 @@ public sealed class CloudCredentialStore : ICloudCredentialStore, IDisposable
             throw new ArgumentException("Stored cloud provider endpoint must be an absolute HTTPS URL.", nameof(config));
         }
 
-        if (!AzureFoundryEndpoints.IsAllowedHost(endpoint))
+        ValidateHostSuffixes(connection, nameof(config));
+
+        // Enforce the endpoint host is within the effective allowlist (built-in Azure suffixes ∪ operator suffixes) so an
+        // operator can never save a connection whose own endpoint host isn't covered (Locked #14).
+        if (!AzureFoundryEndpoints.IsAllowedHost(endpoint, connection.AdditionalAllowedHostSuffixes))
         {
             throw new ArgumentException("Stored cloud provider endpoint host is not an allowed Azure endpoint.", nameof(config));
         }
@@ -287,6 +291,68 @@ public sealed class CloudCredentialStore : ICloudCredentialStore, IDisposable
         if (connection.AuthMode == AzureFoundryAuthMode.ApiKey && string.IsNullOrWhiteSpace(connection.ApiKey))
         {
             throw new ArgumentException("Stored cloud provider API key must be provided when the auth mode is API key.", nameof(config));
+        }
+
+        ValidateHeaders(connection, nameof(config));
+    }
+
+    // Defense-in-depth behind the endpoint: reserved names, non-token names, non-field-value values, duplicates, caps
+    // (Locked #6–#9), and a secret header that never resolved to a value (Locked #10/#12).
+    private static void ValidateHeaders(StoredAzureFoundryConnection connection, string paramName)
+    {
+        if (connection.Headers.Count > AzureFoundryHeaderRules.MaxHeaderCount)
+        {
+            throw new ArgumentException(
+                $"Stored cloud provider connection has more than {AzureFoundryHeaderRules.MaxHeaderCount} custom headers.",
+                paramName);
+        }
+
+        var seen = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        foreach (var header in connection.Headers)
+        {
+            var name = header.Name?.Trim() ?? string.Empty;
+
+            if (!AzureFoundryHeaderRules.IsValidHeaderName(name)
+                || name.Length > AzureFoundryHeaderRules.MaxHeaderNameLength)
+            {
+                throw new ArgumentException("A stored custom header name is empty, too long, or contains invalid characters.", paramName);
+            }
+
+            if (AzureFoundryHeaderRules.IsReservedName(name))
+            {
+                throw new ArgumentException("A stored custom header uses a reserved header name.", paramName);
+            }
+
+            if (!seen.Add(name))
+            {
+                throw new ArgumentException("A stored custom header name is duplicated.", paramName);
+            }
+
+            if ((header.Value?.Length ?? 0) > AzureFoundryHeaderRules.MaxHeaderValueLength
+                || !AzureFoundryHeaderRules.IsValidHeaderValue(header.Value))
+            {
+                throw new ArgumentException("A stored custom header value is too long or contains invalid control characters.", paramName);
+            }
+
+            if (header.IsSecret && string.IsNullOrWhiteSpace(header.Value))
+            {
+                throw new ArgumentException("A stored secret custom header has no resolvable value.", paramName);
+            }
+        }
+    }
+
+    private static void ValidateHostSuffixes(StoredAzureFoundryConnection connection, string paramName)
+    {
+        if (connection.AdditionalAllowedHostSuffixes.Count > AzureFoundryHeaderRules.MaxHostSuffixCount)
+        {
+            throw new ArgumentException(
+                $"Stored cloud provider connection has more than {AzureFoundryHeaderRules.MaxHostSuffixCount} allowed host suffixes.",
+                paramName);
+        }
+
+        if (connection.AdditionalAllowedHostSuffixes.Any(suffix => !AzureFoundryEndpoints.ValidateHostSuffix(suffix)))
+        {
+            throw new ArgumentException("A stored allowed host suffix is not a valid domain suffix.", paramName);
         }
     }
 

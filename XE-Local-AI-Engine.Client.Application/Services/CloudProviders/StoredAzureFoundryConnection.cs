@@ -1,5 +1,7 @@
 namespace XE_Local_AI_Engine.Client.Services.CloudProviders;
 
+using System.Text;
+
 /// <summary>
 ///     A single Azure Foundry / Azure OpenAI connection holding N manually-added deployments.
 /// </summary>
@@ -29,4 +31,31 @@ public sealed record StoredAzureFoundryConnection
     ///     The deployments manually added to this connection.
     /// </summary>
     public IReadOnlyList<StoredAzureFoundryModel> Models { get; init; } = [];
+
+    /// <summary>
+    ///     Custom HTTP headers appended to every outbound request on this connection (both auth modes). Default empty;
+    ///     legacy blobs with no <c>Headers</c> field deserialize to an empty list.
+    /// </summary>
+    public IReadOnlyList<StoredAzureFoundryHeader> Headers { get; init; } = [];
+
+    /// <summary>
+    ///     Operator-added extra allowed host suffixes (e.g. an APIM gateway host, Locked #14). Union'd with the built-in
+    ///     Azure suffixes to form the effective endpoint allowlist. Not secret — round-trips to the UI. Default empty.
+    /// </summary>
+    public IReadOnlyList<string> AdditionalAllowedHostSuffixes { get; init; } = [];
+
+    // Sealed-record PrintMembers signature is private (Locked #11). Redacts the API key and delegates per-header secret
+    // redaction (each header's own ToString redacts) so no secret value or key ever leaks via ToString (HIGH-2).
+    private bool PrintMembers(StringBuilder builder)
+    {
+        ArgumentNullException.ThrowIfNull(builder);
+
+        builder.Append("Endpoint = ").Append(Endpoint);
+        builder.Append(", AuthMode = ").Append(AuthMode);
+        builder.Append(", ApiKey = ").Append(ApiKey is null ? "null" : "[REDACTED]");
+        builder.Append(", Models = [").AppendJoin(", ", Models).Append(']');
+        builder.Append(", Headers = [").AppendJoin(", ", Headers).Append(']');
+        builder.Append(", AdditionalAllowedHostSuffixes = [").AppendJoin(", ", AdditionalAllowedHostSuffixes).Append(']');
+        return true;
+    }
 }

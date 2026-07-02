@@ -182,9 +182,74 @@ describe("CloudSettings — Azure Foundry connection form (generated hey-api dat
 					authMode: "ApiKey",
 					apiKey: "secret-key",
 					models: [{ deploymentName: "gpt-4o" }],
+					headers: [],
+					additionalAllowedHostSuffixes: [],
 				},
 			});
 		});
+	});
+
+	it("adds, edits, toggles secret on, and removes custom header rows", async () => {
+		renderCloudSettings();
+		await waitFor(() => expect(screen.queryByText(/Loading cloud settings/i)).toBeNull());
+
+		// No header rows on a fresh connection.
+		expect(screen.queryAllByLabelText("Header name")).toHaveLength(0);
+
+		fireEvent.click(screen.getByTestId("cloud-settings-add-header"));
+		expect(screen.getAllByLabelText("Header name")).toHaveLength(1);
+
+		// The value input starts as a text input; toggling Secret swaps it to a password input.
+		expect(screen.getByLabelText("Value", { selector: 'input:not([type="password"])' })).toBeTruthy();
+		fireEvent.click(screen.getByTestId("cloud-settings-header-secret-0"));
+		expect(screen.getByLabelText("Value", { selector: 'input[type="password"]' })).toBeTruthy();
+
+		fireEvent.click(screen.getByTestId("cloud-settings-remove-header-0"));
+		expect(screen.queryAllByLabelText("Header name")).toHaveLength(0);
+	});
+
+	it("adds and removes allowed host suffix rows", async () => {
+		renderCloudSettings();
+		await waitFor(() => expect(screen.queryByText(/Loading cloud settings/i)).toBeNull());
+
+		expect(screen.queryAllByLabelText("Host suffix")).toHaveLength(0);
+		fireEvent.click(screen.getByTestId("cloud-settings-add-host"));
+		expect(screen.getAllByLabelText("Host suffix")).toHaveLength(1);
+		fireEvent.click(screen.getByTestId("cloud-settings-remove-host-0"));
+		expect(screen.queryAllByLabelText("Host suffix")).toHaveLength(0);
+	});
+
+	it("shows the managed-identity egress warning for a non-Azure host matched by an operator suffix", async () => {
+		generatedMock.getFn.mockResolvedValue(
+			makeSettings({
+				azureFoundry: {
+					endpoint: "https://gw.azure-api.net/",
+					authMode: "ManagedIdentity",
+					hasStoredApiKey: false,
+					models: [{ deploymentName: "gpt-4o", displayLabel: null }],
+					additionalAllowedHostSuffixes: [".azure-api.net"],
+				},
+			}),
+		);
+		renderCloudSettings();
+		await waitFor(() => expect(screen.queryByText(/Loading cloud settings/i)).toBeNull());
+
+		expect(screen.getByTestId("cloud-settings-mi-egress-warning")).toBeTruthy();
+	});
+
+	it("does not call the save mutation when a validation error is present", async () => {
+		renderCloudSettings();
+		await waitFor(() => expect(screen.queryByText(/Loading cloud settings/i)).toBeNull());
+
+		// Fresh connection has no endpoint/deployment/API key, so validateCloudSettingsForm reports errors, the Save
+		// button is disabled (disabled={hasErrors || isActionPending}), and handleSave's own `if (hasErrors) return;`
+		// guard is what actually keeps the mutation from firing — the button's disabled attribute mirrors the same
+		// `hasErrors` check, so this asserts the end-to-end guarantee that an invalid form never reaches saveFn.
+		const saveButton = screen.getByRole("button", { name: /save cloud settings/i }) as HTMLButtonElement;
+		expect(saveButton.disabled).toBe(true);
+		fireEvent.click(saveButton);
+
+		expect(generatedMock.saveFn).not.toHaveBeenCalled();
 	});
 
 	it("omits the API key from the save body in managed-identity mode", async () => {

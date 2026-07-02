@@ -1394,11 +1394,20 @@ export type XeLocalAiEngineClientEndpointsCloudSettingsV1AzureFoundrySettingsRes
 	authMode: string;
 	hasStoredApiKey?: boolean;
 	models?: Array<XeLocalAiEngineClientEndpointsCloudSettingsV1AzureFoundryModelDto>;
+	headers?: Array<XeLocalAiEngineClientEndpointsCloudSettingsV1AzureFoundryHeaderDto>;
+	additionalAllowedHostSuffixes?: Array<string>;
 };
 
 export type XeLocalAiEngineClientEndpointsCloudSettingsV1AzureFoundryModelDto = {
 	deploymentName: string;
 	displayLabel?: string | null;
+};
+
+export type XeLocalAiEngineClientEndpointsCloudSettingsV1AzureFoundryHeaderDto = {
+	name: string;
+	value?: string | null;
+	isSecret?: boolean;
+	hasStoredValue?: boolean;
 };
 
 export type XeLocalAiEngineClientEndpointsCloudSettingsV1SaveCloudSettingsRequest = {
@@ -1407,6 +1416,14 @@ export type XeLocalAiEngineClientEndpointsCloudSettingsV1SaveCloudSettingsReques
 	authMode?: string;
 	apiKey?: string | null;
 	models?: Array<XeLocalAiEngineClientEndpointsCloudSettingsV1AzureFoundryModelDto>;
+	headers?: Array<XeLocalAiEngineClientEndpointsCloudSettingsV1SaveAzureFoundryHeaderRequest>;
+	additionalAllowedHostSuffixes?: Array<string>;
+};
+
+export type XeLocalAiEngineClientEndpointsCloudSettingsV1SaveAzureFoundryHeaderRequest = {
+	name?: string;
+	value?: string | null;
+	isSecret?: boolean;
 };
 
 export type XeLocalAiEngineClientEndpointsCloudCodexV1CodexLoginResponse = {
