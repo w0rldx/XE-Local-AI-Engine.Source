@@ -1945,16 +1945,31 @@ export const zXeLocalAiEngineClientEndpointsCloudSettingsV1AzureFoundryModelDto 
 	displayLabel: z.string().nullish(),
 });
 
+export const zXeLocalAiEngineClientEndpointsCloudSettingsV1AzureFoundryHeaderDto = z.object({
+	name: z.string(),
+	value: z.string().nullish(),
+	isSecret: z.boolean().optional(),
+	hasStoredValue: z.boolean().optional(),
+});
+
 export const zXeLocalAiEngineClientEndpointsCloudSettingsV1AzureFoundrySettingsResponse = z.object({
 	endpoint: z.string().nullish(),
 	authMode: z.string(),
 	hasStoredApiKey: z.boolean().optional(),
 	models: z.array(zXeLocalAiEngineClientEndpointsCloudSettingsV1AzureFoundryModelDto).optional(),
+	headers: z.array(zXeLocalAiEngineClientEndpointsCloudSettingsV1AzureFoundryHeaderDto).optional(),
+	additionalAllowedHostSuffixes: z.array(z.string()).optional(),
 });
 
 export const zXeLocalAiEngineClientEndpointsCloudSettingsV1CloudSettingsResponse = z.object({
 	providerName: z.string(),
 	azureFoundry: zXeLocalAiEngineClientEndpointsCloudSettingsV1AzureFoundrySettingsResponse.nullish(),
+});
+
+export const zXeLocalAiEngineClientEndpointsCloudSettingsV1SaveAzureFoundryHeaderRequest = z.object({
+	name: z.string().optional(),
+	value: z.string().nullish(),
+	isSecret: z.boolean().optional(),
 });
 
 export const zXeLocalAiEngineClientEndpointsCloudSettingsV1SaveCloudSettingsRequest = z.object({
@@ -1963,6 +1978,8 @@ export const zXeLocalAiEngineClientEndpointsCloudSettingsV1SaveCloudSettingsRequ
 	authMode: z.string().optional(),
 	apiKey: z.string().nullish(),
 	models: z.array(zXeLocalAiEngineClientEndpointsCloudSettingsV1AzureFoundryModelDto).optional(),
+	headers: z.array(zXeLocalAiEngineClientEndpointsCloudSettingsV1SaveAzureFoundryHeaderRequest).optional(),
+	additionalAllowedHostSuffixes: z.array(z.string()).optional(),
 });
 
 export const zXeLocalAiEngineClientEndpointsCloudCodexV1CodexLoginResponse = z.object({
