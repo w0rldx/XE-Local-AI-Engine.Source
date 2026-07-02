@@ -78,6 +78,10 @@ public sealed class NodeEncryptionMaterializationInterceptor : IMaterializationI
             case ConversationUploadedFile uploaded:
                 uploaded.OriginalFileName = NodePayloadProtector.Decrypt(uploaded.OriginalFileName, context.NodeEncryptionKey.Span, uploaded.ConversationId, uploaded.FileId, "original_file_name");
                 break;
+            case ImageJob imageJob:
+                imageJob.Prompt = NodePayloadProtector.Decrypt(imageJob.Prompt, context.NodeEncryptionKey.Span, Guid.Empty, imageJob.Id, "image_prompt");
+                imageJob.NegativePrompt = DecryptIfPresent(imageJob.NegativePrompt, context.NodeEncryptionKey.Span, Guid.Empty, imageJob.Id, "image_negative_prompt");
+                break;
         }
 
         return entity;

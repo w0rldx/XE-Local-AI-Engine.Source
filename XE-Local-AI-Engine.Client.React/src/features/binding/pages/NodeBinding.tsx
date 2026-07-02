@@ -71,7 +71,10 @@ export function NodeBinding() {
 				},
 				undefined as never,
 			);
-			return result ?? {};
+			if (!result) {
+				throw new Error("Node binding poll returned an empty response.");
+			}
+			return result;
 		},
 		onSuccess: (result) => {
 			const resultStatus = result.status ?? "";

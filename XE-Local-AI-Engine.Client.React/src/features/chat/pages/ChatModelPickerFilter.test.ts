@@ -17,6 +17,8 @@ function model(modelName: string, kind: string): LocalModelDto {
 		kind,
 		detectedKind: kind,
 		capabilities: [],
+		isReasoningCapable: false,
+		isToolCapable: false,
 		isOverridden: false,
 	};
 }

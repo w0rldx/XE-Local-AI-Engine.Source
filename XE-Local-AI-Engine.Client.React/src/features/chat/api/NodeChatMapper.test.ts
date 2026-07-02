@@ -32,6 +32,7 @@ function mapSingleMessage(overrides: Partial<NodeChatMessageResponseDto> = {}) {
 		origin: "Local",
 		isPinned: false,
 		archived: false,
+		memoryExcluded: false,
 		messages: [messageDto(overrides)],
 	}).messages;
 	if (!message) {
@@ -93,6 +94,7 @@ describe("node chat mapper", () => {
 			origin: "Local",
 			isPinned: false,
 			archived: true,
+			memoryExcluded: false,
 			messages: [
 				{
 					messageId: "message-1",

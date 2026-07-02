@@ -246,6 +246,8 @@ try
        .RequireAuthorization(NodeAuthorizationPolicies.Operator);
     app.MapHub<KnowledgeBaseHub>(LocalApiRoutes.KnowledgeBase.Hub)
        .RequireAuthorization(NodeAuthorizationPolicies.Operator);
+    app.MapHub<ImageJobHub>(LocalApiRoutes.Images.Hub)
+       .RequireAuthorization(NodeAuthorizationPolicies.Operator);
 
     if (!app.Environment.IsProduction())
     {

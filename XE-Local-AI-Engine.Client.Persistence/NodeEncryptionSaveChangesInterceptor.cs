@@ -195,6 +195,15 @@ public sealed class NodeEncryptionSaveChangesInterceptor : SaveChangesIntercepto
             EncryptRequiredProperty(entry, entry.Property(entity => entity.OriginalFileName), entry.Entity.ConversationId, entry.Entity.FileId, "original_file_name", trackedProperties);
         }
 
+        // Image jobs are node-scoped (no conversation/message), so the AAD binds the empty conversation id to the job's
+        // own id plus the column name — same layout as agent definitions. The prompt is required; the negative prompt
+        // only encrypts when present. Distinct AAD column names (image_*) avoid cross-entity collision.
+        foreach (var entry in nodeContext.ChangeTracker.Entries<ImageJob>())
+        {
+            EncryptRequiredProperty(entry, entry.Property(entity => entity.Prompt), Guid.Empty, entry.Entity.Id, "image_prompt", trackedProperties);
+            EncryptOptionalProperty(entry, entry.Property(entity => entity.NegativePrompt), Guid.Empty, entry.Entity.Id, "image_negative_prompt", trackedProperties);
+        }
+
         if (trackedProperties.Count > 0)
         {
             _pendingRestores[nodeContext] = trackedProperties;

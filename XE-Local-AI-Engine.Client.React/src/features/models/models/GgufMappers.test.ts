@@ -33,7 +33,17 @@ describe("toGgufRepositoryDetail file mapping", () => {
 	it("coalesces omitted quality/fit/recommended fields to neutral defaults", () => {
 		const response: XeLocalAiEngineClientEndpointsModelFitV1InspectGgufRepositoryResponse = {
 			repoId: "owner/repo",
-			files: [{ fileName: "model-Q4_K_M.gguf", quant: "Q4_K_M", isDynamic: false, sizeBytes: 4_000_000_000 }],
+			files: [
+				{
+					fileName: "model-Q4_K_M.gguf",
+					quant: "Q4_K_M",
+					isDynamic: false,
+					sizeBytes: 4_000_000_000,
+					qualityTier: "Balanced",
+					fitVerdict: "Unknown",
+					isRecommended: false,
+				},
+			],
 		};
 
 		const detail = toGgufRepositoryDetail(response);

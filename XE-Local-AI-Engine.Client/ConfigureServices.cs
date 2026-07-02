@@ -28,6 +28,7 @@ using XE_Local_AI_Engine.Client.Persistence;
 using XE_Local_AI_Engine.Client.Persistence.Entities;
 using XE_Local_AI_Engine.Client.Services.Agents.Implementation;
 using XE_Local_AI_Engine.Client.Services.Auth;
+using XE_Local_AI_Engine.Client.Services.Images;
 using XE_Local_AI_Engine.Client.Services.Knowledge;
 using XE_Local_AI_Engine.Client.Services.ModelFit;
 using XE_Local_AI_Engine.Client.Services.ModelFit.Implementation;
@@ -108,6 +109,11 @@ public static class ConfigureServices
         // document status changes push live to operator clients (KnowledgeBaseHub mapped in Program). IHubContext is
         // singleton-safe, so the scoped ingestion service can resolve this singleton.
         builder.Services.AddSingleton<IKnowledgeIndexingNotifier, KnowledgeIndexingNotifier>();
+
+        // Hub-backed image-job event publisher — supersedes the no-op default registered in AddNodeImages so coarse job
+        // status transitions push live to operator clients (ImageJobHub mapped in Program). IHubContext is singleton-safe,
+        // so the singleton image-job coordinator can resolve it.
+        builder.Services.AddSingleton<IImageJobEventPublisher, ImageJobEventPublisher>();
 
         // Error handling - the order of the exception handlers is important: specific handlers first,
         // DefaultExceptionHandler last as the catch-all 500. Mirrors the central platform's IExceptionHandler pattern.

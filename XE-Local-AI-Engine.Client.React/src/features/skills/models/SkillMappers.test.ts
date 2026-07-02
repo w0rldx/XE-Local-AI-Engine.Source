@@ -29,7 +29,7 @@ describe("toSkill", () => {
 	});
 
 	it("defaults every omitted optional field", () => {
-		expect(toSkill({})).toEqual({
+		expect(toSkill({ id: "", name: "", description: "", body: "", enabled: false, version: 0, createdAtUtc: 0, updatedAtUtc: 0 })).toEqual({
 			id: "",
 			name: "",
 			description: "",
@@ -44,7 +44,9 @@ describe("toSkill", () => {
 
 describe("toSkillSummary", () => {
 	it("maps a summary response (no body field) into the domain summary", () => {
-		expect(toSkillSummary({ id: "skill-2", name: "legal-redline", description: "d", enabled: false, version: 1 })).toEqual({
+		expect(
+			toSkillSummary({ id: "skill-2", name: "legal-redline", description: "d", enabled: false, version: 1, createdAtUtc: 0, updatedAtUtc: 0 }),
+		).toEqual({
 			id: "skill-2",
 			name: "legal-redline",
 			description: "d",
