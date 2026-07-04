@@ -163,34 +163,36 @@ export function NodeBinding() {
 							<Title order={3}>Device binding</Title>
 							{session ? (
 								<>
-									<Table withTableBorder={true} withColumnBorders={true}>
-										<Table.Tbody>
-											<Table.Tr>
-												<Table.Th>Status</Table.Th>
-												<Table.Td>{status}</Table.Td>
-											</Table.Tr>
-											<Table.Tr>
-												<Table.Th>User code</Table.Th>
-												<Table.Td>
-													<Text component="span" fw={800} size="lg">
-														{session.userCode}
-													</Text>
-												</Table.Td>
-											</Table.Tr>
-											<Table.Tr>
-												<Table.Th>Verification URL</Table.Th>
-												<Table.Td>
-													<Anchor href={session.verificationUriComplete} target="_blank" rel="noreferrer">
-														{session.verificationUriComplete}
-													</Anchor>
-												</Table.Td>
-											</Table.Tr>
-											<Table.Tr>
-												<Table.Th>Expires</Table.Th>
-												<Table.Td>{formatDate(session.expiresAt ?? "")}</Table.Td>
-											</Table.Tr>
-										</Table.Tbody>
-									</Table>
+									<Table.ScrollContainer minWidth={480}>
+										<Table withTableBorder={true} withColumnBorders={true}>
+											<Table.Tbody>
+												<Table.Tr>
+													<Table.Th>Status</Table.Th>
+													<Table.Td>{status}</Table.Td>
+												</Table.Tr>
+												<Table.Tr>
+													<Table.Th>User code</Table.Th>
+													<Table.Td>
+														<Text component="span" fw={800} size="lg">
+															{session.userCode}
+														</Text>
+													</Table.Td>
+												</Table.Tr>
+												<Table.Tr>
+													<Table.Th>Verification URL</Table.Th>
+													<Table.Td>
+														<Anchor href={session.verificationUriComplete} target="_blank" rel="noreferrer">
+															{session.verificationUriComplete}
+														</Anchor>
+													</Table.Td>
+												</Table.Tr>
+												<Table.Tr>
+													<Table.Th>Expires</Table.Th>
+													<Table.Td>{formatDate(session.expiresAt ?? "")}</Table.Td>
+												</Table.Tr>
+											</Table.Tbody>
+										</Table>
+									</Table.ScrollContainer>
 									<Group>
 										<Button variant="outline" onClick={handleCancel} disabled={!canCancel || cancelMutation.isPending}>
 											{cancelMutation.isPending ? "Cancelling..." : "Cancel polling"}

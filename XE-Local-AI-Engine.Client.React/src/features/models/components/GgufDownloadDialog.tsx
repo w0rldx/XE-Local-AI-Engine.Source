@@ -131,69 +131,71 @@ export function GgufDownloadDialog({ repository, onClose, onConfirm, onConfirmDe
 
 				{files.length > 0 ? (
 					<Radio.Group value={selectedFileName} onChange={setPickedFileName}>
-						<Table verticalSpacing="sm" data-testid="gguf-download-table">
-							<Table.Thead>
-								<Table.Tr>
-									<Table.Th />
-									<Table.Th>{t("pages.models.gguf.download.columns.quant", "Quant")}</Table.Th>
-									<Table.Th>{t("pages.models.gguf.download.columns.size", "Size")}</Table.Th>
-									<Table.Th>{t("pages.models.gguf.download.columns.fit", "Fit")}</Table.Th>
-								</Table.Tr>
-							</Table.Thead>
-							<Table.Tbody>
-								{files.map((file) => {
-									const fitColor = fitVerdictColor[file.fitVerdict];
-									const fitLabelKey = file.fitVerdict === "Unknown" ? null : fitVerdictLabelKey[file.fitVerdict];
-									return (
-										<Table.Tr key={file.fileName} data-testid={`gguf-download-row-${file.quant}`}>
-											<Table.Td>
-												<Radio value={file.fileName} aria-label={file.quant} />
-											</Table.Td>
-											<Table.Td>
-												<Stack gap={2}>
-													<Group gap="xs" wrap="nowrap">
-														<Text size="sm" fw={500}>
-															{file.quant}
+						<Table.ScrollContainer minWidth={480}>
+							<Table verticalSpacing="sm" data-testid="gguf-download-table">
+								<Table.Thead>
+									<Table.Tr>
+										<Table.Th />
+										<Table.Th>{t("pages.models.gguf.download.columns.quant", "Quant")}</Table.Th>
+										<Table.Th>{t("pages.models.gguf.download.columns.size", "Size")}</Table.Th>
+										<Table.Th>{t("pages.models.gguf.download.columns.fit", "Fit")}</Table.Th>
+									</Table.Tr>
+								</Table.Thead>
+								<Table.Tbody>
+									{files.map((file) => {
+										const fitColor = fitVerdictColor[file.fitVerdict];
+										const fitLabelKey = file.fitVerdict === "Unknown" ? null : fitVerdictLabelKey[file.fitVerdict];
+										return (
+											<Table.Tr key={file.fileName} data-testid={`gguf-download-row-${file.quant}`}>
+												<Table.Td>
+													<Radio value={file.fileName} aria-label={file.quant} />
+												</Table.Td>
+												<Table.Td>
+													<Stack gap={2}>
+														<Group gap="xs" wrap="nowrap">
+															<Text size="sm" fw={500}>
+																{file.quant}
+															</Text>
+															{file.isDynamic ? (
+																<Badge color="grape" variant="light" size="sm">
+																	{t("pages.models.gguf.download.dynamic", "Dynamic")}
+																</Badge>
+															) : null}
+															{file.isRecommended ? (
+																<Badge
+																	color="blue"
+																	variant="filled"
+																	size="sm"
+																	leftSection={<IconStar size={12} />}
+																	data-testid={`gguf-recommended-${file.quant}`}
+																>
+																	{t("pages.models.gguf.download.recommended", "Recommended")}
+																</Badge>
+															) : null}
+														</Group>
+														<Text size="xs" c="dimmed">
+															{t(`pages.models.gguf.download.quality.${qualityTierLabelKey[file.qualityTier]}`, file.qualityTier)}
 														</Text>
-														{file.isDynamic ? (
-															<Badge color="grape" variant="light" size="sm">
-																{t("pages.models.gguf.download.dynamic", "Dynamic")}
-															</Badge>
-														) : null}
-														{file.isRecommended ? (
-															<Badge
-																color="blue"
-																variant="filled"
-																size="sm"
-																leftSection={<IconStar size={12} />}
-																data-testid={`gguf-recommended-${file.quant}`}
-															>
-																{t("pages.models.gguf.download.recommended", "Recommended")}
-															</Badge>
-														) : null}
-													</Group>
-													<Text size="xs" c="dimmed">
-														{t(`pages.models.gguf.download.quality.${qualityTierLabelKey[file.qualityTier]}`, file.qualityTier)}
-													</Text>
-												</Stack>
-											</Table.Td>
-											<Table.Td>{formatBytesAsGb(file.sizeBytes)}</Table.Td>
-											<Table.Td>
-												{fitColor !== null && fitLabelKey !== null ? (
-													<Badge color={fitColor} variant="light" size="sm" data-testid={`gguf-fit-${file.quant}`}>
-														{t(`pages.models.gguf.download.fit.${fitLabelKey}`, file.fitVerdict)}
-													</Badge>
-												) : (
-													<Text size="sm" c="dimmed" data-testid={`gguf-fit-${file.quant}`}>
-														—
-													</Text>
-												)}
-											</Table.Td>
-										</Table.Tr>
-									);
-								})}
-							</Table.Tbody>
-						</Table>
+													</Stack>
+												</Table.Td>
+												<Table.Td>{formatBytesAsGb(file.sizeBytes)}</Table.Td>
+												<Table.Td>
+													{fitColor !== null && fitLabelKey !== null ? (
+														<Badge color={fitColor} variant="light" size="sm" data-testid={`gguf-fit-${file.quant}`}>
+															{t(`pages.models.gguf.download.fit.${fitLabelKey}`, file.fitVerdict)}
+														</Badge>
+													) : (
+														<Text size="sm" c="dimmed" data-testid={`gguf-fit-${file.quant}`}>
+															—
+														</Text>
+													)}
+												</Table.Td>
+											</Table.Tr>
+										);
+									})}
+								</Table.Tbody>
+							</Table>
+						</Table.ScrollContainer>
 					</Radio.Group>
 				) : null}
 			</Stack>

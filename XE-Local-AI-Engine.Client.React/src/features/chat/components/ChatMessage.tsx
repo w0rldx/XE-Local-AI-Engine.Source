@@ -195,9 +195,12 @@ export function ChatMessage({
 
 	if (userMessage) {
 		return (
-			<Group justify="flex-end" align="flex-end" wrap="nowrap" data-testid={`chat-message-${message.id}`}>
-				<Stack gap={4} align="flex-end" style={{ maxWidth: "82%" }}>
-					<Paper p="sm" style={{ background: "var(--mantine-primary-color-light)", borderRadius: "14px 14px 4px 14px" }}>
+			<Group justify="flex-end" align="flex-end" wrap="nowrap" style={{ minWidth: 0 }} data-testid={`chat-message-${message.id}`}>
+				<Stack gap={4} align="flex-end" style={{ maxWidth: "82%", minWidth: 0 }}>
+					<Paper
+						p="sm"
+						style={{ background: "var(--mantine-primary-color-light)", borderRadius: "14px 14px 4px 14px", minWidth: 0 }}
+					>
 						{content ? <ChatMarkdown content={content} /> : null}
 					</Paper>
 					<Group gap={4} align="center">

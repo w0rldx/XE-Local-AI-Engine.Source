@@ -7,10 +7,11 @@ import {
 	IconPlayerStopFilled,
 	IconSend,
 } from "@tabler/icons-react";
-import { type DragEvent, useState } from "react";
+import { type DragEvent, useEffect, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 
 import { useDeveloperModeStore } from "@/core/dev-tools/stores/DeveloperModeStore";
+import useWindowDimensions from "@/core/layout/hooks/useWindowDimensions";
 import { AgentSelectorCard } from "@/features/chat/components/AgentSelectorCard";
 import { ChatAttachmentChips } from "@/features/chat/components/ChatAttachmentChips";
 import { ChatSamplingOptionsDialog } from "@/features/chat/components/ChatSamplingOptionsDialog";
@@ -28,14 +29,16 @@ import type {
 import { VoiceComposerControls } from "@/features/voice/components/VoiceComposerControls";
 import { VoiceStatusNotice } from "@/features/voice/components/VoiceStatusNotice";
 
-// The composer toolbar lives inside the Textarea's native bottomSection (Mantine 9.3+). The section has a fixed
-// height driven by --input-bottom-section-height (28px default); we override it to fit the 36px control row and
-// match the input's bottom padding so the typed text never sits under the toolbar.
-const TOOLBAR_HEIGHT = "3rem";
-const composerStyles = {
-	input: { paddingBottom: `calc(${TOOLBAR_HEIGHT} + var(--mantine-spacing-xs))` },
-	bottomSection: { height: TOOLBAR_HEIGHT },
-} as const;
+// The composer toolbar lives inside the Textarea's native bottomSection (Mantine 9.3+), which is absolutely
+// positioned at a fixed height — it does not grow to fit its content. On wide viewports the toolbar is one
+// 36px row and a static height works, but on narrow panes the controls wrap to two or three rows (see the
+// toolbar's `wrap="wrap"` below), so the height is measured live via ResizeObserver (below) and both the
+// section height and the input's reserved bottom padding are driven from that measurement — otherwise a
+// wrapped toolbar either gets clipped or the typed text renders underneath it.
+const DEFAULT_TOOLBAR_HEIGHT_PX = 48;
+// Below this window width the context-usage badge is dropped from the toolbar entirely rather than adding yet
+// another row — it's the least essential control and the composer needs the space more on very narrow phones.
+const CONTEXT_USAGE_HIDE_WIDTH = 480;
 
 // Stable empty default for the optional agentOptions prop. A fresh `[]` in the destructuring default allocates a
 // new array reference every render, which would defeat referential-equality checks downstream.
@@ -140,6 +143,41 @@ export function ChatInputArea({
 	// Voice controls are dev-gated AND require the operator-owned manifest gate (capabilities.showVoiceControls,
 	// derived from manifest.Enabled). The leaf components additionally self-gate on the runtime context.
 	const showVoiceControls = developerMode && capabilities.showVoiceControls;
+	const { width } = useWindowDimensions();
+	const showContextUsage = Boolean(contextUsage) && width >= CONTEXT_USAGE_HIDE_WIDTH;
+
+	// Measures the toolbar's actual rendered height (it wraps to 2-3 rows on narrow panes) so the Textarea's
+	// fixed-height bottomSection and its own bottom padding can be kept in sync with however tall the toolbar
+	// really is — a static height either clips a wrapped toolbar or lets typed text render underneath it.
+	const toolbarRef = useRef<HTMLDivElement>(null);
+	const [toolbarHeight, setToolbarHeight] = useState(DEFAULT_TOOLBAR_HEIGHT_PX);
+
+	useEffect(() => {
+		const node = toolbarRef.current;
+		if (!node || typeof ResizeObserver === "undefined") {
+			return undefined;
+		}
+
+		const observer = new ResizeObserver((entries) => {
+			const measuredHeight = entries[0]?.contentRect.height;
+			if (measuredHeight) {
+				setToolbarHeight(measuredHeight);
+			}
+		});
+		observer.observe(node);
+		return () => observer.disconnect();
+	}, []);
+
+	// bottomSection is border-box: its fixed height must include its own paddingBlock (2 × xs) on top of the
+	// measured toolbar height, otherwise the last wrapped toolbar row clips past the composer's bottom edge.
+	const composerStyles = {
+		input: { paddingBottom: `calc(${toolbarHeight}px + 3 * var(--mantine-spacing-xs))` },
+		bottomSection: {
+			height: `calc(${toolbarHeight}px + 2 * var(--mantine-spacing-xs))`,
+			alignItems: "flex-start",
+			paddingBlock: "var(--mantine-spacing-xs)",
+		},
+	};
 
 	const handlePickFiles = (files: File[] | null): void => {
 		if (files && files.length > 0) {
@@ -190,10 +228,13 @@ export function ChatInputArea({
 	};
 
 	// The toolbar is hosted in the Textarea's bottomSection (rendered inside the input border, pointer-events:all —
-	// so the Stop button stays interactive even while the input element itself is disabled during a send).
+	// so the Stop button stays interactive even while the input element itself is disabled during a send). A
+	// single wrap="wrap" Group (rather than nowrap) lets the controls reflow onto extra rows instead of
+	// overlapping on narrow panes; the Send button carries its own auto left-margin so it always lands at the
+	// right edge of whichever row it ends up on, including a row of its own.
 	const toolbar = (
-		<Group justify="space-between" align="center" wrap="nowrap" gap="xs" style={{ width: "100%" }}>
-			<Group gap={4} wrap="nowrap" style={{ flex: 1, minWidth: 0 }}>
+		<Group ref={toolbarRef} align="center" wrap="wrap" gap="xs" style={{ width: "100%" }}>
+			<Group gap={4} wrap="wrap" style={{ flex: 1, minWidth: 0 }}>
 				<ModelSelectorCard
 					modelOptions={modelOptions}
 					cloudModelOptions={cloudModelOptions}
@@ -295,7 +336,7 @@ export function ChatInputArea({
 					</Tooltip>
 				) : null}
 				{showVoiceControls ? <VoiceComposerControls /> : null}
-				{contextUsage ? <ContextUsageBadge {...contextUsage} /> : null}
+				{showContextUsage && contextUsage ? <ContextUsageBadge {...contextUsage} /> : null}
 			</Group>
 			<Button
 				data-testid="chat-send-button"

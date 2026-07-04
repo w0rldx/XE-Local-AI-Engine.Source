@@ -138,7 +138,7 @@ export function InferenceProfilePanel() {
 						value={modelName}
 						onChange={(event) => setModelName(event.currentTarget.value)}
 						data-testid="inference-profile-explore-model"
-						w={320}
+						style={{ flex: 1, minWidth: 200, maxWidth: 320 }}
 					/>
 					<Select
 						label={t("pages.modelFit.inferenceProfiles.explore.roleLabel", "Role")}
@@ -282,7 +282,7 @@ export function InferenceProfilePanel() {
 																			"Run a benchmark before freezing this profile.",
 																		)}
 																		multiline={true}
-																		w={220}
+																		maw={220}
 																	>
 																		<span>{freezeButton}</span>
 																	</Tooltip>

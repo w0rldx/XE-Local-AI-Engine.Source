@@ -1,8 +1,9 @@
 import { ActionIcon, Alert, Box, Drawer, Group, Paper, Stack, Switch, Text, Tooltip } from "@mantine/core";
-import { useDisclosure, useMediaQuery } from "@mantine/hooks";
+import { useDisclosure } from "@mantine/hooks";
 import { IconInfoCircle, IconLayoutSidebar, IconUpload } from "@tabler/icons-react";
 import { useTranslation } from "react-i18next";
 
+import useWindowDimensions from "@/core/layout/hooks/useWindowDimensions";
 import { ChatInputArea } from "@/features/chat/components/ChatInputArea";
 import { ChatMessageList } from "@/features/chat/components/ChatMessageList";
 import { ConversationList } from "@/features/chat/components/ConversationList";
@@ -73,12 +74,15 @@ export function ChatDisplayShell({
 }: ChatDisplayShellProps) {
 	const { t } = useTranslation();
 	const conversation = conversations.find((item) => item.id === selectedConversationId);
-	// Below the md breakpoint (mirrors Layout.tsx / useWindowDimensions' 768 cutoff) the two-pane grid is
-	// unusable — the 320px list squeezes the chat pane to a sliver. Switch to a single full-width column and
-	// move the conversation list into an off-canvas Drawer toggled from the header. useMediaQuery is undefined
-	// on the server / first synchronous render and in jsdom's mocked matchMedia (matches: false), so desktop
-	// is the default and the existing desktop tests keep exercising the grid path unchanged.
-	const isMobile = useMediaQuery("(max-width: 767px)");
+	// The app shell shows a persistent 220px sidebar from width 768 up (Layout.tsx's own useWindowDimensions
+	// check), so the two-pane grid here (320px conversation list + chat pane) doesn't have room to breathe until
+	// the window is wider than roughly 220 + 320 + ~480 usable chat pane ≈ 1024px. Below that, collapse to a
+	// single full-width column and move the conversation list into an off-canvas Drawer toggled from the header.
+	// useWindowDimensions (unlike useMediaQuery) reads window.innerWidth synchronously on first render, so there
+	// is no undefined-value flash of the desktop grid before it collapses. jsdom defaults innerWidth to 1024, so
+	// `< 1024` (not `<=`) keeps desktop the default under the existing tests.
+	const { width } = useWindowDimensions();
+	const isMobile = width < 1024;
 	const [conversationDrawerOpened, { open: openConversationDrawer, close: closeConversationDrawer }] = useDisclosure(false);
 
 	// Pane-level file drop: a user can drop files anywhere on the chat window (message list + composer), not only on the
@@ -145,7 +149,7 @@ export function ChatDisplayShell({
 						)}
 						withArrow={true}
 						multiline={true}
-						w={240}
+						maw={240}
 					>
 						<Switch
 							size="xs"
@@ -282,7 +286,10 @@ export function ChatDisplayShell({
 	}
 
 	return (
-		<Stack gap="md" h="100%" mih={620}>
+		// mih is a floor, not a fixed height (h="100%" above governs normal sizing) — it exists so the two-pane
+		// grid doesn't collapse below a usable size, but a flat 620px overflows short/landscape desktop windows.
+		// min() caps it at the viewport height (minus a small allowance for whatever sits above this shell).
+		<Stack gap="md" h="100%" mih="min(620px, calc(100dvh - 96px))">
 			{notice}
 			<div
 				style={{

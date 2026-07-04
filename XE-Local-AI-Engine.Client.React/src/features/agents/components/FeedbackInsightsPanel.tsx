@@ -133,38 +133,40 @@ function FeedbackInsightsContent({ overall, byTool, exemplars, threshold }: Feed
 						{t("pages.agents.insights.toolsEmpty", "No tool-attributed feedback yet.")}
 					</Text>
 				) : (
-					<Table data-testid="feedback-insights-tools">
-						<Table.Thead>
-							<Table.Tr>
-								<Table.Th>{t("pages.agents.insights.toolHeader", "Tool")}</Table.Th>
-								<Table.Th>{t("pages.agents.insights.upHeader", "Up")}</Table.Th>
-								<Table.Th>{t("pages.agents.insights.downHeader", "Down")}</Table.Th>
-								<Table.Th>{t("pages.agents.insights.countHeader", "Total")}</Table.Th>
-								<Table.Th>{t("pages.agents.insights.downRateHeader", "Down rate")}</Table.Th>
-							</Table.Tr>
-						</Table.Thead>
-						<Table.Tbody>
-							{byTool.map((tool) => (
-								<Table.Tr key={tool.toolName} data-testid={`feedback-insights-tool-${tool.toolName}`}>
-									<Table.Td>
-										<Group gap="xs" align="center" wrap="wrap">
-											<Text size="sm">{tool.toolName}</Text>
-											{!tool.meetsThreshold ? (
-												<NotEnoughSignalLabel
-													threshold={threshold}
-													testId={`feedback-insights-tool-threshold-${tool.toolName}`}
-												/>
-											) : null}
-										</Group>
-									</Table.Td>
-									<Table.Td>{tool.up}</Table.Td>
-									<Table.Td>{tool.down}</Table.Td>
-									<Table.Td>{tool.total}</Table.Td>
-									<Table.Td>{toPercent(tool.downRate)}</Table.Td>
+					<Table.ScrollContainer minWidth={520}>
+						<Table data-testid="feedback-insights-tools">
+							<Table.Thead>
+								<Table.Tr>
+									<Table.Th>{t("pages.agents.insights.toolHeader", "Tool")}</Table.Th>
+									<Table.Th>{t("pages.agents.insights.upHeader", "Up")}</Table.Th>
+									<Table.Th>{t("pages.agents.insights.downHeader", "Down")}</Table.Th>
+									<Table.Th>{t("pages.agents.insights.countHeader", "Total")}</Table.Th>
+									<Table.Th>{t("pages.agents.insights.downRateHeader", "Down rate")}</Table.Th>
 								</Table.Tr>
-							))}
-						</Table.Tbody>
-					</Table>
+							</Table.Thead>
+							<Table.Tbody>
+								{byTool.map((tool) => (
+									<Table.Tr key={tool.toolName} data-testid={`feedback-insights-tool-${tool.toolName}`}>
+										<Table.Td>
+											<Group gap="xs" align="center" wrap="wrap">
+												<Text size="sm">{tool.toolName}</Text>
+												{!tool.meetsThreshold ? (
+													<NotEnoughSignalLabel
+														threshold={threshold}
+														testId={`feedback-insights-tool-threshold-${tool.toolName}`}
+													/>
+												) : null}
+											</Group>
+										</Table.Td>
+										<Table.Td>{tool.up}</Table.Td>
+										<Table.Td>{tool.down}</Table.Td>
+										<Table.Td>{tool.total}</Table.Td>
+										<Table.Td>{toPercent(tool.downRate)}</Table.Td>
+									</Table.Tr>
+								))}
+							</Table.Tbody>
+						</Table>
+					</Table.ScrollContainer>
 				)}
 				<Text size="xs" c="dimmed" data-testid="feedback-insights-attribution">
 					{t(

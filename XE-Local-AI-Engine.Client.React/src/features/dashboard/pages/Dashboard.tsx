@@ -219,43 +219,45 @@ export function Dashboard() {
 						<Card withBorder={true} radius="md" p="lg">
 							<Stack gap="md">
 								<Title order={3}>{t("pages.dashboard.nodeCredentials.title")}</Title>
-								<Table withTableBorder={true} withColumnBorders={true}>
-									<Table.Tbody>
-										<Table.Tr>
-											<Table.Th>{t("pages.dashboard.nodeCredentials.binding")}</Table.Th>
-											<Table.Td>
-												{status.isPaired
-													? t("pages.dashboard.nodeCredentials.paired")
-													: t("pages.dashboard.nodeCredentials.notPaired")}
-											</Table.Td>
-										</Table.Tr>
-										<Table.Tr>
-											<Table.Th>{t("pages.dashboard.nodeCredentials.bindingMethod")}</Table.Th>
-											<Table.Td>
-												{status.bindingMethod ?? t("pages.dashboard.nodeCredentials.notAvailable")}
-											</Table.Td>
-										</Table.Tr>
-										<Table.Tr>
-											<Table.Th>{t("pages.dashboard.nodeCredentials.nodeName")}</Table.Th>
-											<Table.Td>
-												{status.lastKnownNodeName ?? t("pages.dashboard.nodeCredentials.notAvailable")}
-											</Table.Td>
-										</Table.Tr>
-										<Table.Tr>
-											<Table.Th>{t("pages.dashboard.nodeCredentials.tokenExpires")}</Table.Th>
-											<Table.Td>
-												<Group gap="xs" wrap="nowrap">
-													<span>{tokenDisplay}</span>
-													{tokenExpired ? (
-														<Badge color="red" size="sm">
-															{t("pages.dashboard.nodeCredentials.tokenExpiredBadge")}
-														</Badge>
-													) : null}
-												</Group>
-											</Table.Td>
-										</Table.Tr>
-									</Table.Tbody>
-								</Table>
+								<Table.ScrollContainer minWidth={420}>
+									<Table withTableBorder={true} withColumnBorders={true}>
+										<Table.Tbody>
+											<Table.Tr>
+												<Table.Th>{t("pages.dashboard.nodeCredentials.binding")}</Table.Th>
+												<Table.Td>
+													{status.isPaired
+														? t("pages.dashboard.nodeCredentials.paired")
+														: t("pages.dashboard.nodeCredentials.notPaired")}
+												</Table.Td>
+											</Table.Tr>
+											<Table.Tr>
+												<Table.Th>{t("pages.dashboard.nodeCredentials.bindingMethod")}</Table.Th>
+												<Table.Td>
+													{status.bindingMethod ?? t("pages.dashboard.nodeCredentials.notAvailable")}
+												</Table.Td>
+											</Table.Tr>
+											<Table.Tr>
+												<Table.Th>{t("pages.dashboard.nodeCredentials.nodeName")}</Table.Th>
+												<Table.Td>
+													{status.lastKnownNodeName ?? t("pages.dashboard.nodeCredentials.notAvailable")}
+												</Table.Td>
+											</Table.Tr>
+											<Table.Tr>
+												<Table.Th>{t("pages.dashboard.nodeCredentials.tokenExpires")}</Table.Th>
+												<Table.Td>
+													<Group gap="xs" wrap="nowrap">
+														<span>{tokenDisplay}</span>
+														{tokenExpired ? (
+															<Badge color="red" size="sm">
+																{t("pages.dashboard.nodeCredentials.tokenExpiredBadge")}
+															</Badge>
+														) : null}
+													</Group>
+												</Table.Td>
+											</Table.Tr>
+										</Table.Tbody>
+									</Table>
+								</Table.ScrollContainer>
 							</Stack>
 						</Card>
 
