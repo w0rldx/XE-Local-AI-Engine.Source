@@ -46,6 +46,13 @@ internal sealed class ImageServerReadinessProbe(HttpClient httpClient) : IImageS
         return false;
     }
 
+    /// <inheritdoc />
+    public Task<bool> CheckResponsiveAsync(Uri baseAddress, CancellationToken ct)
+    {
+        ArgumentNullException.ThrowIfNull(baseAddress);
+        return TryProbeAsync(new Uri(baseAddress, CapabilitiesRoute), ct);
+    }
+
     private async Task<bool> TryProbeAsync(Uri capabilitiesUri, CancellationToken ct)
     {
         try

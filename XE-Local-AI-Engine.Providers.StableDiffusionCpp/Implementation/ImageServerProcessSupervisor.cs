@@ -97,11 +97,15 @@ internal sealed class ImageServerProcessSupervisor : IImageServerSupervisor, IAs
         ArgumentException.ThrowIfNullOrWhiteSpace(modelName);
         ObjectDisposedException.ThrowIf(Volatile.Read(ref _disposed) != 0, this);
 
-        // Fast path: an already-running, live daemon is reused without taking the spawn gate.
+        // Fast path: an already-running, live daemon is reused without taking the spawn gate — subject to a rate-limited
+        // liveness probe so a wedged (alive but unresponsive) daemon is respawned instead of handed out.
         if (_processes.TryGetValue(modelName, out var existing) && !existing.Handle.HasExited)
         {
-            existing.MarkUsed(_timeProvider.GetUtcNow());
-            return existing.Endpoint;
+            var reused = await TryReuseAsync(modelName, existing, ct).ConfigureAwait(false);
+            if (reused is not null)
+            {
+                return reused;
+            }
         }
 
         return await SpawnUnderGateAsync(modelName, evictFirst: false, ct).ConfigureAwait(false);
@@ -127,6 +131,69 @@ internal sealed class ImageServerProcessSupervisor : IImageServerSupervisor, IAs
         }
     }
 
+    /// <summary>
+    ///     Reuse decision for an already-registered, not-yet-exited daemon: hands back its endpoint when it is healthy
+    ///     enough, or returns <see langword="null" /> after tearing it down when it is wedged (alive but unresponsive to
+    ///     <see cref="StableDiffusionRuntimeOptions.MaxReuseLivenessFailures" /> consecutive liveness probes). The probe is
+    ///     rate-limited to at most one per <see cref="StableDiffusionRuntimeOptions.ReuseLivenessProbeInterval" /> per
+    ///     daemon, so the hot path stays cheap — between probes the endpoint is reused with no HTTP.
+    /// </summary>
+    private async Task<ImageServerEndpoint?> TryReuseAsync(string modelName, RunningServer existing, CancellationToken ct)
+    {
+        var now = _timeProvider.GetUtcNow();
+
+        // Rate limit: only the caller that wins the probe claim issues the HTTP probe this interval; every other caller
+        // (and every reuse inside the interval) is handed the endpoint immediately with no probe.
+        if (!existing.TryClaimLivenessProbe(now, _options.ReuseLivenessProbeInterval))
+        {
+            existing.MarkUsed(now);
+            return existing.Endpoint;
+        }
+
+        var responsive = await ProbeResponsiveWithTimeoutAsync(existing.Endpoint.BaseAddress, ct).ConfigureAwait(false);
+        if (responsive)
+        {
+            existing.ResetLivenessFailures();
+            existing.MarkUsed(_timeProvider.GetUtcNow());
+            return existing.Endpoint;
+        }
+
+        // A failed probe: count it. Under the threshold the daemon is still handed out — a single transient probe failure
+        // must never tear down a busy daemon. At/above the threshold it is treated as wedged.
+        var failures = existing.RecordLivenessFailure();
+        if (failures < _options.MaxReuseLivenessFailures)
+        {
+            existing.MarkUsed(_timeProvider.GetUtcNow());
+            return existing.Endpoint;
+        }
+
+        // Wedged: the daemon is alive but has failed the liveness probe N consecutive times, so every reuse refreshes
+        // LastUsedUtc and the idle reaper never sees it. Tear it down here so the caller respawns a fresh daemon instead
+        // of being handed the hung endpoint forever.
+        await RemoveProcessAsync(modelName, existing).ConfigureAwait(false);
+        return null;
+    }
+
+    /// <summary>
+    ///     Runs one liveness probe bounded by <see cref="StableDiffusionRuntimeOptions.ReuseLivenessProbeTimeout" /> so a
+    ///     hung daemon that accepts the socket but never answers cannot stall the reuse hot path for the whole HTTP-client
+    ///     timeout. A probe that times out (the caller's own token is NOT cancelled) counts as not-responsive.
+    /// </summary>
+    private async Task<bool> ProbeResponsiveWithTimeoutAsync(Uri baseAddress, CancellationToken ct)
+    {
+        using var timeoutCts = CancellationTokenSource.CreateLinkedTokenSource(ct);
+        timeoutCts.CancelAfter(_options.ReuseLivenessProbeTimeout);
+        try
+        {
+            return await _readinessProbe.CheckResponsiveAsync(baseAddress, timeoutCts.Token).ConfigureAwait(false);
+        }
+        catch (OperationCanceledException) when (!ct.IsCancellationRequested)
+        {
+            // The probe exceeded its own budget (not a caller cancellation) — treat the daemon as unresponsive.
+            return false;
+        }
+    }
+
     private async Task<ImageServerEndpoint> SpawnUnderGateAsync(string modelName, bool evictFirst, CancellationToken ct)
     {
         var gate = _ensureGates.GetOrAdd(modelName, static _ => new SemaphoreSlim(initialCount: 1, maxCount: 1));
@@ -136,11 +203,15 @@ internal sealed class ImageServerProcessSupervisor : IImageServerSupervisor, IAs
             // Re-check under the gate — another caller may have spawned while we waited (ensure path only).
             if (!evictFirst && _processes.TryGetValue(modelName, out var existing) && !existing.Handle.HasExited)
             {
-                existing.MarkUsed(_timeProvider.GetUtcNow());
-                return existing.Endpoint;
+                var reused = await TryReuseAsync(modelName, existing, ct).ConfigureAwait(false);
+                if (reused is not null)
+                {
+                    return reused;
+                }
             }
 
-            // A stale/exited (or, on restart, the outgoing) daemon under this key is reaped before respawn.
+            // A stale/exited/wedged (or, on restart, the outgoing) daemon under this key is reaped before respawn (a
+            // wedged one was already torn down by TryReuseAsync; RemoveProcessAsync is idempotent so the retry is a no-op).
             if (_processes.TryGetValue(modelName, out var stale))
             {
                 await RemoveProcessAsync(modelName, stale).ConfigureAwait(false);
@@ -285,18 +356,66 @@ internal sealed class ImageServerProcessSupervisor : IImageServerSupervisor, IAs
         }
     }
 
+    /// <summary>
+    ///     Reserves a slot under the loaded cap (evicting an idle LRU daemon to make room when possible) and allocates a
+    ///     free loopback port. The admission gate serializes the cap decision so it can never be raced past. The cap is
+    ///     measured by the reserved-port count (which already includes in-flight spawns), mirroring the llama supervisor.
+    /// </summary>
     private async Task<int> AllocatePortAsync(CancellationToken ct)
     {
         await _admissionGate.WaitAsync(ct).ConfigureAwait(false);
         try
         {
+            // Drop any daemon that has already exited so its slot/port is reclaimed before the cap check.
             PruneExitedProcesses();
+
+            if (_allocatedPorts.Count >= _options.MaxLoadedProcesses && !TryEvictIdleLeastRecentlyUsed())
+            {
+                throw CapReached();
+            }
+
             return AllocatePort();
         }
         finally
         {
             _admissionGate.Release();
         }
+    }
+
+    /// <summary>Evicts the least-recently-used daemon that is currently idle (caller holds the admission gate).</summary>
+    private bool TryEvictIdleLeastRecentlyUsed()
+    {
+        var now = _timeProvider.GetUtcNow();
+        string? victimKey = null;
+        RunningServer? victim = null;
+        foreach (var (key, running) in _processes)
+        {
+            if (now - running.LastUsedUtc < _options.IdleTimeToLive && !running.Handle.HasExited)
+            {
+                continue; // Not idle — never evict an in-window daemon to admit a new one.
+            }
+
+            if (victim is null || running.LastUsedUtc < victim.LastUsedUtc)
+            {
+                victimKey = key;
+                victim = running;
+            }
+        }
+
+        if (victimKey is null || victim is null)
+        {
+            return false;
+        }
+
+        // Synchronous teardown under the admission gate: free the slot/port before the new admission proceeds.
+        TeardownProcess(victimKey, victim);
+        return true;
+    }
+
+    private static StableDiffusionRuntimeException CapReached()
+    {
+        return new StableDiffusionRuntimeException(
+            "The maximum number of local image models are already loaded. Unload a model or raise the limit, then try again.");
     }
 
     private void PruneExitedProcesses()
@@ -395,6 +514,10 @@ internal sealed class ImageServerProcessSupervisor : IImageServerSupervisor, IAs
     {
         private long _lastUsedTicks = startedUtc.UtcTicks;
 
+        // Seeded to the spawn time so a freshly-ready daemon is not re-probed until one full interval has passed.
+        private long _lastLivenessProbeTicks = startedUtc.UtcTicks;
+        private int _consecutiveLivenessFailures;
+
         public IImageServerProcessHandle Handle { get; } = handle;
 
         public ImageServerEndpoint Endpoint { get; } = endpoint;
@@ -406,6 +529,40 @@ internal sealed class ImageServerProcessSupervisor : IImageServerSupervisor, IAs
         public void MarkUsed(DateTimeOffset now)
         {
             Interlocked.Exchange(ref _lastUsedTicks, now.UtcTicks);
+        }
+
+        /// <summary>
+        ///     Atomically claims the right to run the reuse-path liveness probe: succeeds (advancing the probe clock to
+        ///     <paramref name="now" />) only when at least <paramref name="interval" /> has elapsed since the last claim.
+        ///     Serializes probes across concurrent reuses so at most one HTTP probe runs per daemon per interval.
+        /// </summary>
+        public bool TryClaimLivenessProbe(DateTimeOffset now, TimeSpan interval)
+        {
+            while (true)
+            {
+                var last = Interlocked.Read(ref _lastLivenessProbeTicks);
+                if (now.UtcTicks - last < interval.Ticks)
+                {
+                    return false;
+                }
+
+                if (Interlocked.CompareExchange(ref _lastLivenessProbeTicks, now.UtcTicks, last) == last)
+                {
+                    return true;
+                }
+            }
+        }
+
+        /// <summary>Resets the consecutive-failure count after a successful liveness probe.</summary>
+        public void ResetLivenessFailures()
+        {
+            Interlocked.Exchange(ref _consecutiveLivenessFailures, value: 0);
+        }
+
+        /// <summary>Records a failed liveness probe and returns the new consecutive-failure count.</summary>
+        public int RecordLivenessFailure()
+        {
+            return Interlocked.Increment(ref _consecutiveLivenessFailures);
         }
     }
 }
