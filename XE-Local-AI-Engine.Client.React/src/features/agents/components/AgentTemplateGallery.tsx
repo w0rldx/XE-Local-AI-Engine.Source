@@ -188,7 +188,7 @@ export function AgentTemplateGallery({ opened, onClose }: AgentTemplateGalleryPr
 									{overBudget ? (
 										<Tooltip
 											multiline={true}
-											w={240}
+											maw={240}
 											label={t(
 												"pages.agents.templates.tokenWarning",
 												"This persona's estimated prompt is large for local models. Estimate is a chars/4 heuristic.",

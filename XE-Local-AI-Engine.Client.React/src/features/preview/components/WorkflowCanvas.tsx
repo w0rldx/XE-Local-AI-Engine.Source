@@ -374,7 +374,12 @@ function WorkflowCanvasInner({
 				</Paper>
 
 				{selectedNode?.data.kind === "Agent" ? (
-					<Paper withBorder={true} p="sm" style={{ width: 360 }} data-testid="preview-node-config">
+					<Paper
+						withBorder={true}
+						p="sm"
+						style={{ width: "100%", maxWidth: 360 }}
+						data-testid="preview-node-config"
+					>
 						<AgentNodeForm data={selectedNode.data} onChange={patchSelectedNode} />
 					</Paper>
 				) : null}

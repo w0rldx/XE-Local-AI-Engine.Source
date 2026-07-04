@@ -111,7 +111,7 @@ export function RecommendationTable({ recommendations, onDownload, downloadingMo
 												"This publisher is not a known GGUF packager — review the repo before downloading.",
 											)}
 											multiline={true}
-											w={260}
+											maw={260}
 										>
 											<Badge
 												color="yellow"

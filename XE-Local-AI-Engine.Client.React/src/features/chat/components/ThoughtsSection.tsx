@@ -148,12 +148,9 @@ export function ThoughtsSection({
 								{reasoningBypassed ? (
 									<Tooltip
 										multiline={true}
-										w={260}
+										maw={260}
 										withArrow={true}
-										label={t(
-											"chat.reasoningBypassNote",
-											"This model may emit reasoning regardless of the 'none' setting.",
-										)}
+										label={t("chat.reasoningBypassNote", "This model may emit reasoning regardless of the 'none' setting.")}
 									>
 										<ThemeIcon
 											size={18}

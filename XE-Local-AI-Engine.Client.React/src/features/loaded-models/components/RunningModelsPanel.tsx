@@ -50,58 +50,60 @@ export function RunningModelsPanel({ runningModels, isLoading, error, onEject, e
 				) : null}
 
 				{!isLoading && !error && runningModels.length > 0 ? (
-					<Table striped={true} highlightOnHover={true} verticalSpacing="sm" data-testid="model-fit-running-table">
-						<Table.Thead>
-							<Table.Tr>
-								<Table.Th>{t("pages.loadedModels.llamaCpp.columns.model", "Model")}</Table.Th>
-								<Table.Th>{t("pages.loadedModels.llamaCpp.columns.role", "Role")}</Table.Th>
-								<Table.Th>{t("pages.loadedModels.llamaCpp.columns.status", "Status")}</Table.Th>
-								<Table.Th>{t("pages.loadedModels.llamaCpp.columns.action", "Action")}</Table.Th>
-							</Table.Tr>
-						</Table.Thead>
-						<Table.Tbody>
-							{runningModels.map((model) => (
-								<Table.Tr key={`${model.modelName}-${model.role}`} data-testid={`model-fit-running-row-${model.modelName}`}>
-									<Table.Td>
-										<Text size="sm" fw={500}>
-											{model.modelName}
-										</Text>
-										{model.detail ? (
-											<Text size="xs" c="dimmed">
-												{model.detail}
-											</Text>
-										) : null}
-									</Table.Td>
-									<Table.Td>{model.role ? <Badge variant="outline">{model.role}</Badge> : "—"}</Table.Td>
-									<Table.Td>
-										{model.isResponsive ? (
-											<Badge color="green" variant="light">
-												{t("pages.loadedModels.llamaCpp.responsive", "Responsive")}
-											</Badge>
-										) : (
-											<Badge color="yellow" variant="light">
-												{t("pages.loadedModels.llamaCpp.unresponsive", "Starting / unresponsive")}
-											</Badge>
-										)}
-									</Table.Td>
-									<Table.Td>
-										<Button
-											size="xs"
-											variant="light"
-											color="red"
-											leftSection={<IconPlayerEject size={14} />}
-											loading={ejectingModelName === model.modelName}
-											disabled={ejectingModelName === model.modelName}
-											onClick={() => onEject(model)}
-											data-testid={`model-fit-eject-button-${model.modelName}`}
-										>
-											{t("pages.loadedModels.llamaCpp.eject", "Eject")}
-										</Button>
-									</Table.Td>
+					<Table.ScrollContainer minWidth={600}>
+						<Table striped={true} highlightOnHover={true} verticalSpacing="sm" data-testid="model-fit-running-table">
+							<Table.Thead>
+								<Table.Tr>
+									<Table.Th>{t("pages.loadedModels.llamaCpp.columns.model", "Model")}</Table.Th>
+									<Table.Th>{t("pages.loadedModels.llamaCpp.columns.role", "Role")}</Table.Th>
+									<Table.Th>{t("pages.loadedModels.llamaCpp.columns.status", "Status")}</Table.Th>
+									<Table.Th>{t("pages.loadedModels.llamaCpp.columns.action", "Action")}</Table.Th>
 								</Table.Tr>
-							))}
-						</Table.Tbody>
-					</Table>
+							</Table.Thead>
+							<Table.Tbody>
+								{runningModels.map((model) => (
+									<Table.Tr key={`${model.modelName}-${model.role}`} data-testid={`model-fit-running-row-${model.modelName}`}>
+										<Table.Td>
+											<Text size="sm" fw={500}>
+												{model.modelName}
+											</Text>
+											{model.detail ? (
+												<Text size="xs" c="dimmed">
+													{model.detail}
+												</Text>
+											) : null}
+										</Table.Td>
+										<Table.Td>{model.role ? <Badge variant="outline">{model.role}</Badge> : "—"}</Table.Td>
+										<Table.Td>
+											{model.isResponsive ? (
+												<Badge color="green" variant="light">
+													{t("pages.loadedModels.llamaCpp.responsive", "Responsive")}
+												</Badge>
+											) : (
+												<Badge color="yellow" variant="light">
+													{t("pages.loadedModels.llamaCpp.unresponsive", "Starting / unresponsive")}
+												</Badge>
+											)}
+										</Table.Td>
+										<Table.Td>
+											<Button
+												size="xs"
+												variant="light"
+												color="red"
+												leftSection={<IconPlayerEject size={14} />}
+												loading={ejectingModelName === model.modelName}
+												disabled={ejectingModelName === model.modelName}
+												onClick={() => onEject(model)}
+												data-testid={`model-fit-eject-button-${model.modelName}`}
+											>
+												{t("pages.loadedModels.llamaCpp.eject", "Eject")}
+											</Button>
+										</Table.Td>
+									</Table.Tr>
+								))}
+							</Table.Tbody>
+						</Table>
+					</Table.ScrollContainer>
 				) : null}
 			</Stack>
 		</Card>
