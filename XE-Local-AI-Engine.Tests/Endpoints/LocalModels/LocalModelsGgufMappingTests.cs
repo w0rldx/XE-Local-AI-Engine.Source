@@ -68,6 +68,19 @@ public sealed class LocalModelsGgufMappingTests
     }
 
     [Test]
+    public void ToLlamaCppModelResponses_ClassifiesRerankerNamedGgufAsReranker()
+    {
+        // A reranker (cross-encoder) GGUF name is tagged Reranker so the React `kind === "Chat"` picker filters it out.
+        // The name matches the BGE- embedding prefix too, but reranker wins — it must NOT be tagged Embedding.
+        var gguf = LocalModelsMapper.ToLlamaCppModelResponses([Gguf("BAAI/bge-reranker-v2-m3-GGUF:Q4_K_M")],
+            selectedModelName: null);
+
+        AssertEx.Equal(expected: 1, gguf.Count);
+        AssertEx.Equal(ModelKind.Reranker.ToString(), gguf[0].Kind);
+        AssertEx.Equal(ModelKind.Reranker.ToString(), gguf[0].DetectedKind);
+    }
+
+    [Test]
     public void ToLlamaCppModelResponses_ClassifiesChatNamedGgufAsChat()
     {
         // A non-embedding GGUF name stays Chat (the heuristic never guesses Chat from a name — it defaults to it).

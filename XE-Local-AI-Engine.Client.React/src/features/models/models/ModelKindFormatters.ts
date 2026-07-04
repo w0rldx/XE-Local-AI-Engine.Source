@@ -5,13 +5,15 @@
 type Translate = (key: string, fallback: string) => string;
 
 // Effective-kind badge color: chat-capable models stand out (blue), embedding models are visually distinct (grape),
-// and an unclassified/unknown model is muted (gray).
+// reranker (cross-encoder) models get their own hue (orange), and an unclassified/unknown model is muted (gray).
 export function kindBadgeColor(kind: string): string {
 	switch (kind) {
 		case "Chat":
 			return "blue";
 		case "Embedding":
 			return "grape";
+		case "Reranker":
+			return "orange";
 		default:
 			return "gray";
 	}
@@ -24,6 +26,8 @@ export function kindLabel(t: Translate, kind: string): string {
 			return t("pages.models.type.kind.chat", "Chat");
 		case "Embedding":
 			return t("pages.models.type.kind.embedding", "Embedding");
+		case "Reranker":
+			return t("pages.models.type.kind.reranker", "Reranker");
 		case "Unknown":
 			return t("pages.models.type.kind.unknown", "Unknown");
 		default:
@@ -47,7 +51,7 @@ export function capabilityLabel(t: Translate, capability: string): string {
 
 // The three classifications the operator can pick from when overriding a model's kind. Mirrors
 // the persisted ModelKind enum names — the value is sent verbatim to the override endpoint.
-const overridableKinds = ["Chat", "Embedding", "Unknown"] as const;
+const overridableKinds = ["Chat", "Embedding", "Reranker", "Unknown"] as const;
 
 // Override options for a given model: the fixed overridable kinds, plus the model's current effective kind when it is
 // not already in the list. This keeps the Select's value (the effective model.kind) always matching an option, so a

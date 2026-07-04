@@ -29,6 +29,16 @@ const embeddingModel: LocalModelResponse = {
 	isToolCapable: false,
 	isOverridden: false,
 };
+const rerankerModel: LocalModelResponse = {
+	modelName: "bge-reranker-v2-m3",
+	kind: "Reranker",
+	detectedKind: "Reranker",
+	isSelected: false,
+	capabilities: [],
+	isReasoningCapable: false,
+	isToolCapable: false,
+	isOverridden: false,
+};
 
 describe("hasInstalledChatModel (install step advances on real state, not a timer)", () => {
 	it("is false when no models are installed", () => {
@@ -40,11 +50,16 @@ describe("hasInstalledChatModel (install step advances on real state, not a time
 		expect(hasInstalledChatModel([embeddingModel])).toBe(false);
 	});
 
+	it("is false when only a reranker model is installed (whitelist excludes non-chat kinds)", () => {
+		// A reranker (cross-encoder) has no completion head; the tour must not treat it as an installed chat model.
+		expect(hasInstalledChatModel([rerankerModel])).toBe(false);
+	});
+
 	it("flips to true only once a chat-capable model is actually installed", () => {
-		// Pre-install state: the install step must NOT advance.
-		expect(hasInstalledChatModel([embeddingModel])).toBe(false);
+		// Pre-install state: only non-chat kinds present → the install step must NOT advance.
+		expect(hasInstalledChatModel([embeddingModel, rerankerModel])).toBe(false);
 		// State flips when the real download completes and the chat model appears in the list.
-		expect(hasInstalledChatModel([embeddingModel, chatModel])).toBe(true);
+		expect(hasInstalledChatModel([embeddingModel, rerankerModel, chatModel])).toBe(true);
 	});
 });
 
@@ -56,6 +71,10 @@ describe("hasChatCapableDefault", () => {
 
 	it("is false when the selected default is an embedding model", () => {
 		expect(hasChatCapableDefault([embeddingModel], "nomic-embed")).toBe(false);
+	});
+
+	it("is false when the selected default is a reranker model", () => {
+		expect(hasChatCapableDefault([rerankerModel], "bge-reranker-v2-m3")).toBe(false);
 	});
 
 	it("is true when the selected default names an installed chat-capable model", () => {

@@ -7,12 +7,14 @@ using XE_Local_AI_Engine.Providers.Abstractions.Gguf;
 /// <summary>
 ///     Default <see cref="ILocalDefaultChatModelResolver" />. Resolves the local-default chat model from the installed
 ///     GGUF (llama.cpp) models ONLY — never Ollama. An installed GGUF is chat-capable by construction; a model is
-///     excluded when its PERSISTED effective kind (<c>OverrideKind ?? DetectedKind</c>) is
-///     <see cref="ModelKind.Embedding" />, OR — belt-and-suspenders, since a freshly-installed GGUF has NO persisted
-///     row — when its NAME identifies an embedding model (<see cref="ModelKindDetector.IsEmbeddingName" />, matching
-///     EMBED/NOMIC-EMBED/BGE-… fragments). An explicit operator override to a non-Embedding kind wins over the name
-///     heuristic (a corrected model stays eligible). A model absent from the classifications table (no row) whose name
-///     is not an embedding name, or whose effective kind is Unknown or Chat, stays eligible — matching the chat picker.
+///     excluded when its PERSISTED effective kind (<c>OverrideKind ?? DetectedKind</c>) is a non-chat kind
+///     (<see cref="ModelKind.Embedding" /> or <see cref="ModelKind.Reranker" />), OR — belt-and-suspenders, since a
+///     freshly-installed GGUF has NO persisted row — when its NAME identifies an embedding model
+///     (<see cref="ModelKindDetector.IsEmbeddingName" />, matching EMBED/NOMIC-EMBED/BGE-… fragments) or a reranker
+///     (<see cref="ModelKindDetector.IsRerankerName" />, matching RERANK). An explicit operator override to a chat-
+///     eligible kind wins over the name heuristic (a corrected model stays eligible). A model absent from the
+///     classifications table (no row) whose name is neither an embedding nor a reranker name, or whose effective kind is
+///     Unknown or Chat, stays eligible — matching the chat picker.
 ///     <para>
 ///         This resolver reads only from <see cref="IModelClassificationStore" /> (a plain DB read) and NEVER triggers
 ///         the Ollama <c>/api/show</c> detection probe. Passing <c>Digest=null</c> to
@@ -44,12 +46,12 @@ public sealed class LocalDefaultChatModelResolver(
 
         // Read the persisted classifications for all installed GGUFs in one DB round-trip.
         // A missing row means unknown/unprobed → eligible. We exclude ONLY when the effective
-        // kind (OverrideKind ?? DetectedKind) is explicitly Embedding.
+        // kind (OverrideKind ?? DetectedKind) is explicitly a non-chat kind (Embedding or Reranker).
         var records = await _modelClassificationStore.ListAsync(cancellationToken).ConfigureAwait(false);
         var classificationIndex = records.ToDictionary(static r => r.ModelName, static r => r, StringComparer.OrdinalIgnoreCase);
 
         var chatModels = named
-                         .Where(descriptor => !IsExcludedAsEmbedding(classificationIndex, descriptor.ModelName))
+                         .Where(descriptor => !IsExcludedFromChat(classificationIndex, descriptor.ModelName))
                          .ToArray();
         if (chatModels.Length == 0)
         {
@@ -78,33 +80,34 @@ public sealed class LocalDefaultChatModelResolver(
 
     /// <summary>
     ///     Returns <c>true</c> when the model must be excluded from the local-default chat pick: its persisted effective
-    ///     kind is <see cref="ModelKind.Embedding" />, or its name identifies an embedding model and the operator did NOT
-    ///     explicitly override the kind to something non-Embedding. An explicit non-Embedding override wins over the name
-    ///     heuristic, so a corrected model stays eligible.
+    ///     kind is a non-chat kind (<see cref="ModelKind.Embedding" /> or <see cref="ModelKind.Reranker" />), or its name
+    ///     identifies an embedding/reranker model and the operator did NOT explicitly override the kind to a chat-eligible
+    ///     one. An explicit chat-eligible override wins over the name heuristic, so a corrected model stays eligible.
     /// </summary>
-    private static bool IsExcludedAsEmbedding(IReadOnlyDictionary<string, ModelClassificationRecord> index,
+    private static bool IsExcludedFromChat(IReadOnlyDictionary<string, ModelClassificationRecord> index,
         string modelName)
     {
-        if (IsPersistedEmbedding(index, modelName))
+        if (IsPersistedNonChat(index, modelName))
         {
             return true;
         }
 
-        // An explicit operator override to a non-Embedding kind (for example correcting a misdetected embedding GGUF to
+        // An explicit operator override to a chat-eligible kind (for example correcting a misdetected embedding GGUF to
         // Chat) is authoritative — do not second-guess it with the name heuristic.
-        if (HasExplicitNonEmbeddingOverride(index, modelName))
+        if (HasExplicitChatEligibleOverride(index, modelName))
         {
             return false;
         }
 
-        return ModelKindDetector.IsEmbeddingName(modelName);
+        return ModelKindDetector.IsEmbeddingName(modelName) || ModelKindDetector.IsRerankerName(modelName);
     }
 
     /// <summary>
-    ///     Returns <c>true</c> when the PERSISTED effective kind (<c>OverrideKind ?? DetectedKind</c>) is
-    ///     <see cref="ModelKind.Embedding" />. An absent row returns <c>false</c> (eligible).
+    ///     Returns <c>true</c> when the PERSISTED effective kind (<c>OverrideKind ?? DetectedKind</c>) is a non-chat kind
+    ///     (<see cref="ModelKind.Embedding" /> or <see cref="ModelKind.Reranker" />). An absent row returns <c>false</c>
+    ///     (eligible).
     /// </summary>
-    private static bool IsPersistedEmbedding(IReadOnlyDictionary<string, ModelClassificationRecord> index,
+    private static bool IsPersistedNonChat(IReadOnlyDictionary<string, ModelClassificationRecord> index,
         string modelName)
     {
         if (!index.TryGetValue(modelName, out var record))
@@ -113,19 +116,20 @@ public sealed class LocalDefaultChatModelResolver(
         }
 
         var effectiveKind = record.OverrideKind ?? record.DetectedKind;
-        return effectiveKind == ModelKind.Embedding;
+        return effectiveKind is ModelKind.Embedding or ModelKind.Reranker;
     }
 
     /// <summary>
-    ///     Returns <c>true</c> when the operator explicitly overrode the kind to a non-Embedding value
-    ///     (<c>OverrideKind</c> is set and is not <see cref="ModelKind.Embedding" />). Only an explicit override — not an
-    ///     auto-detected kind — suppresses the name heuristic.
+    ///     Returns <c>true</c> when the operator explicitly overrode the kind to a chat-eligible value
+    ///     (<c>OverrideKind</c> is set and is neither <see cref="ModelKind.Embedding" /> nor
+    ///     <see cref="ModelKind.Reranker" />). Only an explicit override — not an auto-detected kind — suppresses the name
+    ///     heuristic.
     /// </summary>
-    private static bool HasExplicitNonEmbeddingOverride(IReadOnlyDictionary<string, ModelClassificationRecord> index,
+    private static bool HasExplicitChatEligibleOverride(IReadOnlyDictionary<string, ModelClassificationRecord> index,
         string modelName)
     {
         return index.TryGetValue(modelName, out var record)
                && record.OverrideKind is { } overrideKind
-               && overrideKind != ModelKind.Embedding;
+               && overrideKind is not (ModelKind.Embedding or ModelKind.Reranker);
     }
 }

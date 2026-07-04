@@ -136,6 +136,66 @@ public sealed class ModelKindDetectorTests
     }
 
     [Test]
+    [Arguments("bge-reranker-v2-m3")]
+    [Arguments("BAAI/bge-reranker-large:Q8_0")]
+    [Arguments("jina-reranker-v2")]
+    [Arguments("mxbai-rerank-large-v1:Q4_K_M")]
+    public void FromCapabilities_WhenNoCapabilitiesAndRerankerName_ReturnsReranker(string modelName)
+    {
+        var result = ModelKindDetector.FromCapabilities([], modelName);
+
+        AssertEx.Equal(ModelKind.Reranker, result);
+    }
+
+    [Test]
+    public void FromCapabilities_WhenRerankerNameAndEmbeddingCapability_ReturnsReranker()
+    {
+        // A cross-encoder can advertise an embedding capability; the reranker name must still win so it is never
+        // classified as Embedding (which would auto-resolve it as the knowledge-base embedding model).
+        var result = ModelKindDetector.FromCapabilities(["embedding"], "bge-reranker-v2-m3");
+
+        AssertEx.Equal(ModelKind.Reranker, result);
+    }
+
+    [Test]
+    [Arguments("bge-reranker-v2-m3:Q4_K_M")]
+    [Arguments("BAAI/bge-reranker-base")]
+    [Arguments("jina-reranker-v2-base-multilingual")]
+    [Arguments("mxbai-rerank-xsmall-v1:Q8_0")]
+    public void IsRerankerName_WhenRerankerName_ReturnsTrue(string modelName)
+    {
+        var result = ModelKindDetector.IsRerankerName(modelName);
+
+        AssertEx.True(result, "a reranker-named model must be recognized by name alone");
+    }
+
+    [Test]
+    [Arguments("bge-reranker-v2-m3")]
+    [Arguments("bge-reranker-large:Q8_0")]
+    public void IsEmbeddingName_WhenRerankerName_ReturnsFalse(string modelName)
+    {
+        // A reranker name also matches the BGE- embedding prefix, but reranker takes precedence — it must NOT be
+        // treated as an embedding model (else it would be auto-picked for knowledge-base embedding).
+        var result = ModelKindDetector.IsEmbeddingName(modelName);
+
+        AssertEx.False(result, "a reranker model name must never be guessed as embedding");
+    }
+
+    [Test]
+    [Arguments("qwen2.5:Q4_K_M")]
+    [Arguments("llama-3.1-8b-instruct:Q6_K")]
+    [Arguments("nomic-embed-text")]
+    [Arguments("bge-large")]
+    [Arguments("")]
+    [Arguments("   ")]
+    public void IsRerankerName_WhenNotRerankerName_ReturnsFalse(string modelName)
+    {
+        var result = ModelKindDetector.IsRerankerName(modelName);
+
+        AssertEx.False(result, "a chat / embedding / unknown model name must never be guessed as reranker");
+    }
+
+    [Test]
     [Arguments("thinking")]
     [Arguments("THINKING")]
     [Arguments("Thinking")]

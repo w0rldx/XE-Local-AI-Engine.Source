@@ -55,8 +55,11 @@ internal static class LocalModelsMapper
     ///     chat template (carried on the descriptor by the store); a model whose template could not be read defaults to
     ///     the safe no-tools/no-reasoning classification (a non-tool model is never offered tools). An embedding-only
     ///     GGUF is recognized offline from its name (<see cref="ModelKindDetector.IsEmbeddingName" />, matching
-    ///     EMBED/NOMIC-EMBED/BGE-… fragments) and tagged <see cref="ModelKind.Embedding" /> so the React
-    ///     <c>kind === "Chat"</c> picker filters it out; every other GGUF stays Chat.
+    ///     EMBED/NOMIC-EMBED/BGE-… fragments) and tagged <see cref="ModelKind.Embedding" />; a reranker
+    ///     (cross-encoder) GGUF is recognized from its name (<see cref="ModelKindDetector.IsRerankerName" />, matching
+    ///     RERANK, checked FIRST since a name like <c>bge-reranker-…</c> matches the embedding prefix too) and tagged
+    ///     <see cref="ModelKind.Reranker" />. Both are filtered out by the React <c>kind === "Chat"</c> picker; every
+    ///     other GGUF stays Chat.
     /// </summary>
     public static IReadOnlyList<LocalModelResponse> ToLlamaCppModelResponses(IReadOnlyList<LocalModelDescriptor> ggufModels,
         string? selectedModelName)
@@ -67,9 +70,7 @@ internal static class LocalModelsMapper
                .Where(static descriptor => !string.IsNullOrWhiteSpace(descriptor.ModelName))
                .Select(descriptor =>
                {
-                   var kind = ModelKindDetector.IsEmbeddingName(descriptor.ModelName)
-                       ? ModelKind.Embedding
-                       : ModelKind.Chat;
+                   var kind = ClassifyGgufKindByName(descriptor.ModelName);
                    return new LocalModelResponse
                    {
                        ModelName = descriptor.ModelName,
@@ -87,6 +88,21 @@ internal static class LocalModelsMapper
                })
                .OrderBy(static model => model.ModelName, StringComparer.OrdinalIgnoreCase)
                .ToArray();
+    }
+
+    /// <summary>
+    ///     Classifies an installed GGUF from its name alone (a fresh GGUF carries no capability probe). Reranker is
+    ///     checked before embedding because a reranker name such as <c>bge-reranker-…</c> also matches the embedding
+    ///     prefix, and the reranker classification is the correct one. Any other name defaults to Chat.
+    /// </summary>
+    private static ModelKind ClassifyGgufKindByName(string modelName)
+    {
+        if (ModelKindDetector.IsRerankerName(modelName))
+        {
+            return ModelKind.Reranker;
+        }
+
+        return ModelKindDetector.IsEmbeddingName(modelName) ? ModelKind.Embedding : ModelKind.Chat;
     }
 
     // Appends GGUF entries after the Ollama group, deduping by ModelName (case-insensitive) so a name installed under

@@ -121,7 +121,7 @@ const INSTALL_STEP_INDEX = tourStepIds.indexOf("recommendationInstall");
 const DEFAULT_STEP_INDEX = tourStepIds.indexOf("setDefaultModel");
 const NAV_CHAT_STEP_INDEX = tourStepIds.indexOf("navChat");
 
-// A chat-capable installed model (kind !== "Embedding") the install/default real-state effects accept.
+// A chat-capable installed model (kind === "Chat") the install/default real-state effects accept.
 const CHAT_MODEL = { modelName: "llama-3", kind: "Chat" } as const;
 
 // A getQueriesData payload carrying one conversation with a non-empty assistant message — what hasVisibleAssistantReply

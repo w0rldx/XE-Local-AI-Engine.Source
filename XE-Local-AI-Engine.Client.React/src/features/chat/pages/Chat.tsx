@@ -495,6 +495,15 @@ export function Chat() {
 	const isCreatingConversation = createConversationMutation.isPending;
 	const isSending = Boolean(streamingMessage?.isActive);
 
+	// Stable identity so the memoized ConversationList isn't re-rendered every streaming token by a fresh inline
+	// arrow. `.mutate` is referentially stable across renders; the guard reads the current pending flag.
+	const createConversationMutate = createConversationMutation.mutate;
+	const handleCreateConversation = useCallback(() => {
+		if (!isCreatingConversation) {
+			createConversationMutate();
+		}
+	}, [isCreatingConversation, createConversationMutate]);
+
 	// Write only the selected-conversation detail cache. Used for per-frame streaming commits: the sidebar has
 	// nothing to show for an in-flight turn, so folding the growing conversation into the whole list every frame
 	// (mergeSelectedConversation is O(list)) is wasted work. The list is refreshed on terminal events instead.
@@ -1296,11 +1305,7 @@ export function Chat() {
 				mutatingConversationId={mutatingConversationId}
 				conversationListCollapsed={collapsed}
 				onSelectConversation={setRequestedConversationId}
-				onCreateConversation={() => {
-					if (!isCreatingConversation) {
-						createConversationMutation.mutate();
-					}
-				}}
+				onCreateConversation={handleCreateConversation}
 				onToggleConversationList={toggleSidebar}
 				onModelChange={setSelectedModel}
 				onReasoningEffortChange={setReasoningEffort}

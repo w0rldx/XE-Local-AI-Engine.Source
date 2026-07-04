@@ -24,10 +24,11 @@ function model(modelName: string, kind: string): LocalModelDto {
 }
 
 describe("chat model picker filter", () => {
-	it("keeps only chat-capable models and hides embedding and unknown ones", () => {
+	it("keeps only chat-capable models and hides embedding, reranker and unknown ones", () => {
 		const models = [
 			model("llama3:8b", "Chat"),
 			model("nomic-embed-text", "Embedding"),
+			model("bge-reranker-v2-m3", "Reranker"),
 			model("mystery-model", "Unknown"),
 			model("mistral", "Chat"),
 		];
@@ -38,7 +39,10 @@ describe("chat model picker filter", () => {
 	});
 
 	it("returns no options when every model is non-chat", () => {
-		const options = toChatModelOptions([model("nomic-embed-text", "Embedding"), model("mystery", "Unknown")], true);
+		const options = toChatModelOptions(
+			[model("nomic-embed-text", "Embedding"), model("bge-reranker-v2-m3", "Reranker"), model("mystery", "Unknown")],
+			true,
+		);
 
 		expect(options).toHaveLength(0);
 	});

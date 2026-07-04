@@ -1,6 +1,7 @@
 import { ActionIcon, Alert, Box, Drawer, Group, Paper, Stack, Switch, Text, Tooltip } from "@mantine/core";
 import { useDisclosure } from "@mantine/hooks";
 import { IconInfoCircle, IconLayoutSidebar, IconUpload } from "@tabler/icons-react";
+import { useCallback, useRef } from "react";
 import { useTranslation } from "react-i18next";
 
 import useWindowDimensions from "@/core/layout/hooks/useWindowDimensions";
@@ -9,7 +10,7 @@ import { ChatMessageList } from "@/features/chat/components/ChatMessageList";
 import { ConversationList } from "@/features/chat/components/ConversationList";
 import { usePaneFileDrop } from "@/features/chat/hooks/usePaneFileDrop";
 import { defaultChatUiCapabilities } from "@/features/chat/models/ChatCapabilityGates";
-import type { ChatDisplayShellProps } from "@/features/chat/models/ChatModels";
+import type { ChatConversationModel, ChatDisplayShellProps } from "@/features/chat/models/ChatModels";
 
 const EMPTY_TIMELINE_ENTRIES: ChatDisplayShellProps["timelineEntries"] = [];
 // Stable empty default for the optional agentOptions prop — a fresh `[]` default would allocate a new array
@@ -85,6 +86,34 @@ export function ChatDisplayShell({
 	const isMobile = width < 1024;
 	const [conversationDrawerOpened, { open: openConversationDrawer, close: closeConversationDrawer }] = useDisclosure(false);
 
+	// The sidebar renders only conversation summaries (title, preview, timestamp, pin/archive/origin), never the
+	// message body. During generation the parent re-folds the live conversation into `conversations` every token, so
+	// passing it straight through would defeat ConversationList's memo and re-render every row per token. Project a
+	// signature over just the fields the sidebar shows and return a reference-stable array while that signature is
+	// unchanged (writing a ref during render is memoization only — no state, no effect), so mid-stream body growth of
+	// the active thread produces no new identity; the sidebar refreshes only when a summary field actually changes.
+	const sidebarSignature = conversations
+		.map(
+			(item) =>
+				`${item.id}\u0000${item.title}\u0000${item.lastMessagePreview ?? ""}\u0000${item.lastActivity ?? ""}\u0000${item.updatedAt ?? ""}\u0000${item.isPinned ? 1 : 0}${item.isArchived ? 1 : 0}\u0000${item.origin ?? ""}`,
+		)
+		.join("");
+	const stableSidebarRef = useRef<{ signature: string; value: ChatConversationModel[] }>({ signature: sidebarSignature, value: conversations });
+	if (stableSidebarRef.current.signature !== sidebarSignature) {
+		stableSidebarRef.current = { signature: sidebarSignature, value: conversations };
+	}
+	const sidebarConversations = stableSidebarRef.current.value;
+
+	const handleSelectConversation = useCallback(
+		(conversationId: string) => {
+			onSelectConversation(conversationId);
+			if (isMobile) {
+				closeConversationDrawer();
+			}
+		},
+		[onSelectConversation, isMobile, closeConversationDrawer],
+	);
+
 	// Pane-level file drop: a user can drop files anywhere on the chat window (message list + composer), not only on the
 	// composer's paperclip. Gated by the same capability + wired handler as the composer, and suppressed while the input
 	// is disabled / mid-send. Drops onto the composer itself are handled there (it stops propagation), so this never
@@ -95,7 +124,7 @@ export function ChatDisplayShell({
 
 	const conversationList = (
 		<ConversationList
-			conversations={conversations}
+			conversations={sidebarConversations}
 			selectedConversationId={selectedConversationId}
 			collapsed={isMobile ? false : conversationListCollapsed}
 			embedded={isMobile}
@@ -104,12 +133,7 @@ export function ChatDisplayShell({
 			showArchived={showArchivedConversations}
 			mutatingConversationId={mutatingConversationId}
 			onCreateConversation={onCreateConversation}
-			onSelect={(conversationId) => {
-				onSelectConversation(conversationId);
-				if (isMobile) {
-					closeConversationDrawer();
-				}
-			}}
+			onSelect={handleSelectConversation}
 			onToggleCollapse={onToggleConversationList}
 			onSearchChange={onConversationSearchChange}
 			onToggleShowArchived={onToggleShowArchivedConversations}

@@ -14,7 +14,7 @@ import {
 	IconSearch,
 	IconTrash,
 } from "@tabler/icons-react";
-import { type KeyboardEvent, type MouseEvent, useState } from "react";
+import { type KeyboardEvent, memo, type MouseEvent, useState } from "react";
 import { useTranslation } from "react-i18next";
 
 import type { ChatConversationModel } from "@/features/chat/models/ChatModels";
@@ -79,7 +79,10 @@ function matchesQuery(conversation: ChatConversationModel, query: string): boole
 	return haystack.includes(query);
 }
 
-export function ConversationList({
+// Memoized: the parent re-folds the conversation array on every streaming token (the message pane reads the live
+// conversation from it), but the sidebar renders only summaries. Callers pass a reference-stable summary array +
+// stable callbacks, so an unchanged sidebar skips the whole row/menu subtree during generation.
+export const ConversationList = memo(function ConversationList({
 	conversations,
 	selectedConversationId,
 	collapsed = false,
@@ -449,4 +452,4 @@ export function ConversationList({
 			</ScrollArea>
 		</Paper>
 	);
-}
+});
