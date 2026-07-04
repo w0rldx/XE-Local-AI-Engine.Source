@@ -13,8 +13,10 @@ using static Chat.Implementation.NodeChatPersistenceSql;
 /// <summary>
 ///     Default <see cref="IKnowledgeSearchService" />. Embeds the query with the current model (query-intent prefix),
 ///     retrieves candidates from the lexical FTS arm and the model-scoped semantic vector arm, fuses their rankings with
-///     Reciprocal Rank Fusion, hydrates the top chunks over the raw-SQL path, and optionally expands each hit with its
-///     surrounding neighbors. If the embedding model is unavailable the search degrades to lexical-only results rather than
+///     Reciprocal Rank Fusion, optionally rescoring the fused candidate pool with a local cross-encoder reranker
+///     (<see cref="KnowledgeBaseOptions.RerankerModelName" />) before the top-<c>limit</c> cut, hydrates the selected
+///     chunks over the raw-SQL path, and optionally expands each hit with its surrounding neighbors. If the embedding
+///     model or the reranker is unavailable the search degrades gracefully (lexical-only / fusion order) rather than
 ///     failing. No query or chunk text is ever logged. Scoped: it drives the scoped retrieval collaborators through the
 ///     request-scoped <see cref="NodeChatDbContext" />.
 /// </summary>
@@ -38,6 +40,7 @@ public sealed class KnowledgeSearchService : IKnowledgeSearchService
     private readonly IFtsSearch _ftsSearch;
     private readonly IVectorSearchFactory _vectorSearchFactory;
     private readonly IRankingFusionService _fusion;
+    private readonly IRerankerClient _reranker;
     private readonly IContextExpansionService _contextExpansion;
     private readonly KnowledgeBaseOptions _options;
     private readonly ILogger<KnowledgeSearchService> _logger;
@@ -49,6 +52,7 @@ public sealed class KnowledgeSearchService : IKnowledgeSearchService
         IFtsSearch ftsSearch,
         IVectorSearchFactory vectorSearchFactory,
         IRankingFusionService fusion,
+        IRerankerClient reranker,
         IContextExpansionService contextExpansion,
         IOptions<KnowledgeBaseOptions> options,
         ILogger<KnowledgeSearchService> logger)
@@ -60,6 +64,7 @@ public sealed class KnowledgeSearchService : IKnowledgeSearchService
         _ftsSearch = ftsSearch ?? throw new ArgumentNullException(nameof(ftsSearch));
         _vectorSearchFactory = vectorSearchFactory ?? throw new ArgumentNullException(nameof(vectorSearchFactory));
         _fusion = fusion ?? throw new ArgumentNullException(nameof(fusion));
+        _reranker = reranker ?? throw new ArgumentNullException(nameof(reranker));
         _contextExpansion = contextExpansion ?? throw new ArgumentNullException(nameof(contextExpansion));
         ArgumentNullException.ThrowIfNull(options);
         _options = options.Value;
@@ -103,31 +108,100 @@ public sealed class KnowledgeSearchService : IKnowledgeSearchService
         var connection = _dbContext.Database.GetDbConnection();
         await OpenIfNeededAsync(connection, cancellationToken).ConfigureAwait(false);
 
-        var hits = new List<KnowledgeSearchHit>(Math.Min(limit, fused.Count));
+        // Optional rerank stage: when a reranker model is configured, the fused CANDIDATE POOL (bounded to candidatePool)
+        // is rescored by a local cross-encoder and reordered BEFORE the top-`limit` cut, so a strong-but-lexically-weak
+        // chunk can be pulled into the results. When reranking is off — or on ANY rerank failure — the behavior is the
+        // exact original: RRF order, Take(limit). Reranking scores the BASE chunk content (pre-expansion); neighbor
+        // expansion is applied only to the final selected top-k below.
+        var selections = string.IsNullOrWhiteSpace(_options.RerankerModelName)
+            ? await SelectByFusionOrderAsync(connection, fused, limit, cancellationToken).ConfigureAwait(false)
+            : await SelectByRerankAsync(connection, request.Query, fused, candidatePool, limit, cancellationToken).ConfigureAwait(false);
+
+        var hits = new List<KnowledgeSearchHit>(selections.Count);
+        foreach (var selection in selections)
+        {
+            var content = request.ExpandNeighbors
+                ? await ExpandContentAsync(selection.Row.DocumentId, selection.Row.ChunkIndex, selection.Row.Content, cancellationToken).ConfigureAwait(false)
+                : selection.Row.Content;
+
+            hits.Add(new KnowledgeSearchHit(selection.Row.DocumentId,
+                selection.ChunkId,
+                DeriveTitle(selection.Row.HeadingPath, selection.Row.StoragePath),
+                selection.Row.HeadingPath,
+                content,
+                SourceTag,
+                selection.Score,
+                selection.Row.ChunkIndex));
+        }
+
+        return new KnowledgeSearchResult(hits);
+    }
+
+    // Disabled-rerank path (the original behavior): hydrate the top-`limit` fused entries in RRF order, stamping the RRF
+    // score. A chunk that disappeared between retrieval and hydration (concurrent delete/reindex) is skipped.
+    private static async Task<IReadOnlyList<ChunkSelection>> SelectByFusionOrderAsync(DbConnection connection,
+        IReadOnlyList<RankFusionEntry> fused,
+        int limit,
+        CancellationToken cancellationToken)
+    {
+        var selections = new List<ChunkSelection>(Math.Min(limit, fused.Count));
         foreach (var entry in fused.Take(limit))
         {
             var row = await HydrateChunkAsync(connection, entry.ChunkId, cancellationToken).ConfigureAwait(false);
             if (row is null)
             {
-                // The chunk disappeared between retrieval and hydration (concurrent delete/reindex); skip it.
                 continue;
             }
 
-            var content = request.ExpandNeighbors
-                ? await ExpandContentAsync(row.DocumentId, row.ChunkIndex, row.Content, cancellationToken).ConfigureAwait(false)
-                : row.Content;
-
-            hits.Add(new KnowledgeSearchHit(row.DocumentId,
-                entry.ChunkId,
-                DeriveTitle(row.HeadingPath, row.StoragePath),
-                row.HeadingPath,
-                content,
-                SourceTag,
-                entry.Score,
-                row.ChunkIndex));
+            selections.Add(new ChunkSelection(entry.ChunkId, row, entry.Score));
         }
 
-        return new KnowledgeSearchResult(hits);
+        return selections;
+    }
+
+    // Enabled-rerank path: hydrate the fused candidate POOL (bounded to candidatePool — NOT the whole fused list), send
+    // the base chunk contents to the local reranker, and reorder by descending relevance before taking `limit`. On any
+    // rerank failure (null / count mismatch) the pool is kept in its original RRF order with the RRF score, so the result
+    // is never worse than the disabled path. Hydration is bounded to candidatePool, capping the extra pre-cut cost.
+    private async Task<IReadOnlyList<ChunkSelection>> SelectByRerankAsync(DbConnection connection,
+        string query,
+        IReadOnlyList<RankFusionEntry> fused,
+        int candidatePool,
+        int limit,
+        CancellationToken cancellationToken)
+    {
+        var pool = new List<ChunkSelection>(Math.Min(candidatePool, fused.Count));
+        foreach (var entry in fused.Take(candidatePool))
+        {
+            var row = await HydrateChunkAsync(connection, entry.ChunkId, cancellationToken).ConfigureAwait(false);
+            if (row is null)
+            {
+                continue;
+            }
+
+            pool.Add(new ChunkSelection(entry.ChunkId, row, entry.Score));
+        }
+
+        if (pool.Count == 0)
+        {
+            return pool;
+        }
+
+        var documents = pool.Select(static candidate => candidate.Row.Content).ToList();
+        var scores = await _reranker.RerankAsync(_options.RerankerModelName, query, documents, cancellationToken).ConfigureAwait(false);
+        if (scores is null || scores.Count != pool.Count)
+        {
+            // Reranker unavailable or malformed response: keep the RRF order + score, take the top-`limit`.
+            return pool.Take(limit).ToList();
+        }
+
+        // Reorder the pool by descending rerank relevance, stamping the rerank score onto each surviving hit, then cut to
+        // `limit`. OrderByDescending is a stable sort, so equal scores preserve the RRF tie-break order.
+        return pool
+               .Select((candidate, index) => candidate with { Score = scores[index] })
+               .OrderByDescending(static candidate => candidate.Score)
+               .Take(limit)
+               .ToList();
     }
 
     private async Task<string> ExpandContentAsync(Guid documentId, int chunkIndex, string matchedContent, CancellationToken cancellationToken)
@@ -226,4 +300,8 @@ public sealed class KnowledgeSearchService : IKnowledgeSearchService
     }
 
     private sealed record HydratedChunk(Guid DocumentId, int ChunkIndex, string Content, string? HeadingPath, string StoragePath);
+
+    // One selected candidate carried from ranking to hit-building: the chunk id, its hydrated row, and the score to
+    // stamp on the hit (the RRF score on the fusion/degrade paths, the rerank relevance on the reranked path).
+    private sealed record ChunkSelection(Guid ChunkId, HydratedChunk Row, double Score);
 }

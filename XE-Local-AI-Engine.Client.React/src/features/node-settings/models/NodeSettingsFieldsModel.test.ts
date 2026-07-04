@@ -60,6 +60,8 @@ describe("NodeSettingsFieldsModel mapping", () => {
 	it("maps a response into the form, falling back to seed defaults for absent fields", () => {
 		const form = toNodeSettingsFieldsForm(response);
 		expect(form.defaultModelName).toBe("qwen3:8b");
+		// Absent in the response -> reranking off (empty string).
+		expect(form.rerankerModelName).toBe("");
 		expect(form.enableTools).toBe(false);
 		expect(form.toolCapableModels).toEqual(["qwen3:8b"]);
 		expect(form.llamaMaxLoadedProcesses).toBe(5);
@@ -177,5 +179,20 @@ describe("buildNodeSettingsRequest", () => {
 		const form = { ...baseline, speculativeMode: "draft-simple", speculativeDraftModelName: "d", speculativeDraftMaxTokens: 99 };
 		const { errors } = buildNodeSettingsRequest(form, baseline, bounds, false);
 		expect(errors["speculativeDraftMaxTokens"]).toBe("range");
+	});
+
+	it("sends a changed reranker model name (free string, no developer gate)", () => {
+		const form = { ...baseline, rerankerModelName: "  bge-reranker-v2-m3  " };
+		const { body, errors } = buildNodeSettingsRequest(form, baseline, bounds, false);
+		expect(errors).toEqual({});
+		expect(body.rerankerModelName).toBe("bge-reranker-v2-m3");
+	});
+
+	it("sends an empty string when the reranker is switched Off", () => {
+		const withModel = { ...baseline, rerankerModelName: "bge-reranker-v2-m3" };
+		const off = { ...withModel, rerankerModelName: "" };
+		const { body, errors } = buildNodeSettingsRequest(off, withModel, bounds, false);
+		expect(errors).toEqual({});
+		expect(body.rerankerModelName).toBe("");
 	});
 });

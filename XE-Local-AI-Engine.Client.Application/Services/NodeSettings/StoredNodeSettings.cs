@@ -230,6 +230,14 @@ public sealed partial record StoredNodeSettings
     public int? SpeculativeDraftGpuLayers { get; init; }
 
     /// <summary>
+    ///     Installed cross-encoder reranker model NAME for the knowledge-base search rerank stage
+    ///     (<c>KnowledgeBaseOptions.RerankerModelName</c>). <see langword="null" />/blank (default) leaves reranking OFF;
+    ///     a value enables it, resolved server-side to a rerank-role llama-server on the search path. Applies on the next
+    ///     node restart (seeded into the knowledge-base options at host build).
+    /// </summary>
+    public string? RerankerModelName { get; init; }
+
+    /// <summary>
     ///     Node-level sampling defaults (developer-only, optional). <see langword="null" /> = no node-level override —
     ///     today's behavior. Persisting the shape is done; consumption on the loopback send path is a follow-up.
     /// </summary>

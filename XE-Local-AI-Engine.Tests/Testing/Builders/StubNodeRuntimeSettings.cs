@@ -30,6 +30,7 @@ public sealed class StubNodeRuntimeSettings
     private string? _speculativeDraftModelName;
     private int _speculativeDraftMaxTokens = StoredNodeSettings.DefaultSpeculativeDraftMaxTokens;
     private int? _speculativeDraftGpuLayers;
+    private string? _rerankerModelName;
 
     public static StubNodeRuntimeSettings Create()
     {
@@ -148,6 +149,12 @@ public sealed class StubNodeRuntimeSettings
         return this;
     }
 
+    public StubNodeRuntimeSettings WithRerankerModelName(string? rerankerModelName)
+    {
+        _rerankerModelName = rerankerModelName;
+        return this;
+    }
+
     public INodeRuntimeSettings Build()
     {
         var settings = Substitute.For<INodeRuntimeSettings>();
@@ -173,6 +180,7 @@ public sealed class StubNodeRuntimeSettings
         settings.GetSpeculativeDraftModelNameAsync(Arg.Any<CancellationToken>()).Returns(_speculativeDraftModelName);
         settings.GetSpeculativeDraftMaxTokensAsync(Arg.Any<CancellationToken>()).Returns(_speculativeDraftMaxTokens);
         settings.GetSpeculativeDraftGpuLayersAsync(Arg.Any<CancellationToken>()).Returns(_speculativeDraftGpuLayers);
+        settings.GetRerankerModelNameAsync(Arg.Any<CancellationToken>()).Returns(_rerankerModelName);
 
         // Synchronous twins (composition/ctor path) must mirror the async values so consumers repointed onto the sync
         // getters (e.g. InvocationRunner, the DI factory seeds) observe the same configured knobs.
@@ -191,6 +199,7 @@ public sealed class StubNodeRuntimeSettings
         settings.GetSpeculativeDraftModelName().Returns(_speculativeDraftModelName);
         settings.GetSpeculativeDraftMaxTokens().Returns(_speculativeDraftMaxTokens);
         settings.GetSpeculativeDraftGpuLayers().Returns(_speculativeDraftGpuLayers);
+        settings.GetRerankerModelName().Returns(_rerankerModelName);
         return settings;
     }
 }

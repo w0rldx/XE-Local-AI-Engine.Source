@@ -25,6 +25,19 @@ public sealed class KnowledgeBaseOptions
     public string EmbeddingProviderName { get; set; } = "llamacpp";
 
     /// <summary>
+    ///     Node-local cross-encoder reranker model that rescores the fused candidate pool at search time. Empty
+    ///     (default) turns reranking OFF — the search returns the Reciprocal-Rank-Fusion order unchanged. When set to an
+    ///     installed reranker model name (for example <c>bge-reranker-v2-m3</c>), the search hydrates the fused candidate
+    ///     pool, scores each candidate against the query on the local rerank-role llama-server (<c>/v1/rerank</c>), and
+    ///     reorders by descending relevance before taking the top results. Like the embedding model this keeps
+    ///     retrieval on-device: the query and chunk text are sent only to the local rerank process. If the model is not
+    ///     installed or the rerank runtime is unavailable, the search silently degrades to the fusion order. Seeded from
+    ///     the node settings store (stored value &gt; this config value &gt; off) so an operator can enable it without a
+    ///     rebuild.
+    /// </summary>
+    public string RerankerModelName { get; set; } = string.Empty;
+
+    /// <summary>
     ///     Whether the read-only knowledge-base agent tools (<c>search_knowledge_base</c>, <c>read_document</c>,
     ///     <c>read_surrounding_chunks</c>) are offered to agents and executed. Default <see langword="true" /> (the
     ///     feature is built); set to <see langword="false" /> to turn the tools off node-wide, in which case each handler

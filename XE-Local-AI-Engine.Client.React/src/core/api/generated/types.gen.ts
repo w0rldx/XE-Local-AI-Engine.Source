@@ -345,6 +345,7 @@ export type XeLocalAiEngineClientEndpointsNodeSettingsV1NodeSettingsResponse = {
 	speculativeDraftGpuLayers?: number | null;
 	minSpeculativeDraftGpuLayers?: number;
 	maxAllowedSpeculativeDraftGpuLayers?: number;
+	rerankerModelName?: string | null;
 	huggingFaceDiskMarginBytes?: number | null;
 	orchestrationIdleTimeoutSeconds?: number | null;
 	minOrchestrationIdleTimeoutSeconds?: number;
@@ -395,6 +396,7 @@ export type XeLocalAiEngineClientEndpointsNodeSettingsV1SaveNodeSettingsRequest 
 	speculativeDraftModelName?: string | null;
 	speculativeDraftMaxTokens?: number | null;
 	speculativeDraftGpuLayers?: number | null;
+	rerankerModelName?: string | null;
 	huggingFaceDiskMarginBytes?: number | null;
 	orchestrationIdleTimeoutSeconds?: number | null;
 	agentHomePrepareTimeoutSeconds?: number | null;

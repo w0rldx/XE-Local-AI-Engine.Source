@@ -3,6 +3,7 @@ namespace XE_Local_AI_Engine.Client.DependencyInjection.Modules;
 using XE_Local_AI_Engine.AI.Agent.Tools;
 using XE_Local_AI_Engine.Client.Services.Knowledge;
 using XE_Local_AI_Engine.Client.Services.Knowledge.Tools.Implementation;
+using XE_Local_AI_Engine.Client.Services.NodeSettings;
 
 internal static class AddNodeKnowledgeBaseExtensions
 {
@@ -16,9 +17,20 @@ internal static class AddNodeKnowledgeBaseExtensions
         // store, so it can be injected into the singleton ingestion/cleanup surfaces that reach it.
         builder.Services.AddSingleton<IKnowledgeDocumentBlobStore, KnowledgeDocumentBlobStore>();
 
-        // Ingestion + embedding options (section "KnowledgeBase").
+        // Ingestion + embedding options (section "KnowledgeBase"). The reranker model name is a MIGRATED knob seeded from
+        // the node settings store the same way the llama.cpp cap/TTL + speculative knobs are: PostConfigure resolves the
+        // stored value (sync twin — startup path) and, when set, overrides the config-bound value, giving the precedence
+        // stored > config > off. This keeps a follow-up operator UI a thin add (it only needs a request field + endpoint).
         _ = builder.Services.AddOptions<KnowledgeBaseOptions>()
                    .Bind(configuration.GetSection(KnowledgeBaseOptions.Section))
+                   .PostConfigure<INodeRuntimeSettings>(static (options, runtimeSettings) =>
+                   {
+                       var storedRerankerModel = runtimeSettings.GetRerankerModelName();
+                       if (!string.IsNullOrWhiteSpace(storedRerankerModel))
+                       {
+                           options.RerankerModelName = storedRerankerModel;
+                       }
+                   })
                    .ValidateOnStart();
 
         // Stateless, thread-safe collaborators — safe as singletons and injectable into the scoped ingestion service.

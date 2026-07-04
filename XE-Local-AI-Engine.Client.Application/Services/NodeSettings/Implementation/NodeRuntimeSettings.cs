@@ -169,6 +169,9 @@ public sealed class NodeRuntimeSettings : INodeRuntimeSettings
     public async Task<int?> GetSpeculativeDraftGpuLayersAsync(CancellationToken cancellationToken = default) =>
         ResolveSpeculativeDraftGpuLayers(await LoadAsync(cancellationToken).ConfigureAwait(false));
 
+    public async Task<string?> GetRerankerModelNameAsync(CancellationToken cancellationToken = default) =>
+        ResolveRerankerModelName(await LoadAsync(cancellationToken).ConfigureAwait(false));
+
     // --- Synchronous twins (composition/startup path only; see INodeRuntimeSettings) ---
 
     public string GetDefaultModelName() =>
@@ -215,6 +218,9 @@ public sealed class NodeRuntimeSettings : INodeRuntimeSettings
 
     public int? GetSpeculativeDraftGpuLayers() =>
         ResolveSpeculativeDraftGpuLayers(LoadStored());
+
+    public string? GetRerankerModelName() =>
+        ResolveRerankerModelName(LoadStored());
 
     // --- Pure resolvers shared by the async getters and their synchronous twins (single source of precedence) ---
 
@@ -266,6 +272,10 @@ public sealed class NodeRuntimeSettings : INodeRuntimeSettings
 
     private static int? ResolveSpeculativeDraftGpuLayers(StoredNodeSettings stored) =>
         stored.SpeculativeDraftGpuLayers;
+
+    // Reranking has no appsettings section: the stored name is the only source, blank → null (off).
+    private static string? ResolveRerankerModelName(StoredNodeSettings stored) =>
+        string.IsNullOrWhiteSpace(stored.RerankerModelName) ? null : stored.RerankerModelName;
 
     private async Task<StoredNodeSettings> LoadAsync(CancellationToken cancellationToken)
     {
