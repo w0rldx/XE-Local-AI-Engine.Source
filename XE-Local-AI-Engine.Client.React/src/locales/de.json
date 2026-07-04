@@ -1110,7 +1110,9 @@
 					"format": "Muss dem Format b<Zahl> entsprechen (z. B. b9692).",
 					"url": "Bitte eine gültige http:// oder https:// URL eingeben.",
 					"invalid": "Eine oder mehrere Eingaben sind ungültig.",
-					"positive": "Bitte eine positive ganze Zahl eingeben."
+					"positive": "Bitte eine positive ganze Zahl eingeben.",
+					"mode": "Unbekannter Modus für spekulatives Decoding.",
+					"required": "Wähle für diesen Modus ein Entwurfsmodell."
 				},
 				"localChat": {
 					"title": "Lokaler Chat"
@@ -1176,6 +1178,31 @@
 				},
 				"maxPendingToolCallAgeMinutes": {
 					"label": "Max. ausstehende Tool-Aufruf-Dauer"
+				},
+				"speculativeMode": {
+					"label": "Spekulatives Decoding",
+					"description": "Draft-and-Verify-Decoding erhöht den Durchsatz für einzelne Nutzer. n-Gramm-Modi brauchen kein zusätzliches Modell; Entwurfsmodelle belegen zusätzlichen VRAM, der von den Kapazitätsprüfungen noch nicht berücksichtigt wird. Wird nach einem Neustart des Knotens wirksam.",
+					"options": {
+						"off": "Aus",
+						"ngram-mod": "n-Gramm (kein Entwurfsmodell)",
+						"ngram-cache": "n-Gramm-Cache (kein Entwurfsmodell)",
+						"draft-simple": "Entwurfsmodell (einfach)",
+						"draft-eagle3": "Entwurfsmodell (EAGLE-3)",
+						"draft-mtp": "Entwurfsmodell (MTP)"
+					}
+				},
+				"speculativeDraftModel": {
+					"label": "Entwurfsmodell",
+					"description": "Ein installiertes chatfähiges Modell als Entwurfsmodell. Muss zur Tokenizer-Familie des Zielmodells passen.",
+					"placeholder": "Entwurfsmodell auswählen",
+					"empty": "Keine installierten Chat-Modelle"
+				},
+				"speculativeDraftMaxTokens": {
+					"label": "Entwurfstoken pro Schritt"
+				},
+				"chatCacheReuse": {
+					"label": "Prompt-Cache-Wiederverwendung",
+					"description": "Unveränderten Prompt-Präfix über Turns hinweg wiederverwenden (Token). 0 deaktiviert. Wird nach einem Neustart des Knotens wirksam."
 				}
 			}
 		},

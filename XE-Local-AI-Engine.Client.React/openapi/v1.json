@@ -8249,6 +8249,53 @@
             "type": "string",
             "nullable": true
           },
+          "chatCacheReuse": {
+            "type": "integer",
+            "format": "int32",
+            "nullable": true
+          },
+          "minChatCacheReuse": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "maxAllowedChatCacheReuse": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "speculativeMode": {
+            "type": "string",
+            "nullable": true
+          },
+          "speculativeDraftModelName": {
+            "type": "string",
+            "nullable": true
+          },
+          "speculativeDraftMaxTokens": {
+            "type": "integer",
+            "format": "int32",
+            "nullable": true
+          },
+          "minSpeculativeDraftMaxTokens": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "maxAllowedSpeculativeDraftMaxTokens": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "speculativeDraftGpuLayers": {
+            "type": "integer",
+            "format": "int32",
+            "nullable": true
+          },
+          "minSpeculativeDraftGpuLayers": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "maxAllowedSpeculativeDraftGpuLayers": {
+            "type": "integer",
+            "format": "int32"
+          },
           "huggingFaceDiskMarginBytes": {
             "type": "integer",
             "format": "int64",
@@ -8450,6 +8497,29 @@
           },
           "recommendedLlamaCppTag": {
             "type": "string",
+            "nullable": true
+          },
+          "chatCacheReuse": {
+            "type": "integer",
+            "format": "int32",
+            "nullable": true
+          },
+          "speculativeMode": {
+            "type": "string",
+            "nullable": true
+          },
+          "speculativeDraftModelName": {
+            "type": "string",
+            "nullable": true
+          },
+          "speculativeDraftMaxTokens": {
+            "type": "integer",
+            "format": "int32",
+            "nullable": true
+          },
+          "speculativeDraftGpuLayers": {
+            "type": "integer",
+            "format": "int32",
             "nullable": true
           },
           "huggingFaceDiskMarginBytes": {

@@ -214,6 +214,92 @@ public sealed class NodeSettingsEndpointTests
     }
 
     [Test]
+    public async Task SaveNodeSettings_WhenDraftModeWithoutDraftModel_ReturnsValidationProblem()
+    {
+        // A draft-* speculative mode with no draft model must be rejected at the boundary (would fail chat-server start).
+        var nodeSettingsStore = Substitute.For<INodeSettingsStore>();
+        await using var factory = CreateFactory(nodeSettingsStore);
+        using var client = factory.CreateClient();
+
+        using var request = CreateRequest(factory, HttpMethod.Put, "/api/local/v1/node-settings");
+        request.Content = JsonContent.Create(new SaveNodeSettingsRequest
+        {
+            SpeculativeMode = "draft-simple"
+        });
+        using var response = await client.SendAsync(request).ConfigureAwait(false);
+
+        AssertEx.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+        await nodeSettingsStore.DidNotReceiveWithAnyArgs().SaveAsync(Arg.Any<StoredNodeSettings>(), Arg.Any<CancellationToken>());
+    }
+
+    [Test]
+    public async Task SaveNodeSettings_WhenNgramModeWithoutDraftModel_Saves()
+    {
+        // ngram-* modes self-speculate; they need no draft model, so an empty draft-model name is valid.
+        var nodeSettingsStore = Substitute.For<INodeSettingsStore>();
+        await using var factory = CreateFactory(nodeSettingsStore);
+        using var client = factory.CreateClient();
+
+        using var request = CreateRequest(factory, HttpMethod.Put, "/api/local/v1/node-settings");
+        request.Content = JsonContent.Create(new SaveNodeSettingsRequest
+        {
+            SpeculativeMode = "ngram-mod"
+        });
+        using var response = await client.SendAsync(request).ConfigureAwait(false);
+
+        AssertEx.Equal(HttpStatusCode.OK, response.StatusCode);
+        await nodeSettingsStore.Received(1).SaveAsync(Arg.Is<StoredNodeSettings>(stored => stored.SpeculativeMode == "ngram-mod"),
+            Arg.Any<CancellationToken>());
+    }
+
+    [Test]
+    public async Task SaveNodeSettings_WhenDraftModeWithDraftModel_Saves()
+    {
+        var nodeSettingsStore = Substitute.For<INodeSettingsStore>();
+        await using var factory = CreateFactory(nodeSettingsStore);
+        using var client = factory.CreateClient();
+
+        using var request = CreateRequest(factory, HttpMethod.Put, "/api/local/v1/node-settings");
+        request.Content = JsonContent.Create(new SaveNodeSettingsRequest
+        {
+            SpeculativeMode = "draft-simple",
+            SpeculativeDraftModelName = "my-draft"
+        });
+        using var response = await client.SendAsync(request).ConfigureAwait(false);
+
+        AssertEx.Equal(HttpStatusCode.OK, response.StatusCode);
+        await nodeSettingsStore.Received(1).SaveAsync(
+            Arg.Is<StoredNodeSettings>(stored => stored.SpeculativeMode == "draft-simple" && stored.SpeculativeDraftModelName == "my-draft"),
+            Arg.Any<CancellationToken>());
+    }
+
+    [Test]
+    public async Task SaveNodeSettings_WhenClearingDraftModelUnderStoredDraftMode_ReturnsValidationProblem()
+    {
+        // The partial-update edge the boundary validator can't see: a draft-* mode is already stored, and this request
+        // (which omits SpeculativeMode) clears the draft model name. The post-merge guard must still reject it.
+        var nodeSettingsStore = Substitute.For<INodeSettingsStore>();
+        nodeSettingsStore.LoadAsync(Arg.Any<CancellationToken>())
+                         .Returns(new StoredNodeSettings
+                         {
+                             SpeculativeMode = "draft-simple",
+                             SpeculativeDraftModelName = "my-draft"
+                         });
+        await using var factory = CreateFactory(nodeSettingsStore);
+        using var client = factory.CreateClient();
+
+        using var request = CreateRequest(factory, HttpMethod.Put, "/api/local/v1/node-settings");
+        request.Content = JsonContent.Create(new SaveNodeSettingsRequest
+        {
+            SpeculativeDraftModelName = "   "
+        });
+        using var response = await client.SendAsync(request).ConfigureAwait(false);
+
+        AssertEx.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+        await nodeSettingsStore.DidNotReceiveWithAnyArgs().SaveAsync(Arg.Any<StoredNodeSettings>(), Arg.Any<CancellationToken>());
+    }
+
+    [Test]
     public void NodeSettings_VoiceFields_RoundTripThroughMapper()
     {
         var request = new SaveNodeSettingsRequest

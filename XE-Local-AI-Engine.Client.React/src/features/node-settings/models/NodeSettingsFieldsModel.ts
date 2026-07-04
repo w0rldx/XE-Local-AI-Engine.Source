@@ -26,7 +26,46 @@ const nodeSettingsFieldBounds = {
 	orchestrationIdleTimeoutSeconds: { min: 1, max: 3600 },
 	agentHomeTimeoutSeconds: { min: 1, max: 86400 },
 	maxPendingToolCallAgeMinutes: { min: 1, max: 60 },
+	chatCacheReuse: { min: 0, max: 8192 },
+	speculativeDraftMaxTokens: { min: 0, max: 16 },
 } as const satisfies Record<string, NumericBounds>;
+
+// Speculative-decoding modes. `none` disables. `ngram-*` self-speculate from context (no draft model, no extra VRAM);
+// `draft-*` run a second GGUF drafter (needs a draft model, uses additional VRAM). Kept in sync with the backend
+// SpeculativeDecodingSettings accepted set (pinned llama.cpp build b9692). The full set is used for validation; the
+// settings UI offers a curated subset (see speculativeModeSelectValues).
+export const SPECULATIVE_DISABLED_MODE = "none";
+
+const allowedSpeculativeModes = new Set<string>([
+	SPECULATIVE_DISABLED_MODE,
+	"ngram-simple",
+	"ngram-map-k",
+	"ngram-map-k4v",
+	"ngram-mod",
+	"ngram-cache",
+	"draft-simple",
+	"draft-eagle3",
+	"draft-mtp",
+]);
+
+// The modes surfaced in the settings Select (curated for operators), in display order. `none` renders as "Off".
+export const speculativeModeSelectValues = [
+	SPECULATIVE_DISABLED_MODE,
+	"ngram-mod",
+	"ngram-cache",
+	"draft-simple",
+	"draft-eagle3",
+	"draft-mtp",
+] as const;
+
+export function isAllowedSpeculativeMode(mode: string): boolean {
+	return allowedSpeculativeModes.has(mode.trim());
+}
+
+// `draft-*` modes require a draft model and consume extra VRAM; `ngram-*` and `none` do not.
+export function isDraftSpeculativeMode(mode: string): boolean {
+	return mode.trim().startsWith("draft-");
+}
 
 // Recommended llama.cpp tag must match the upstream release-tag scheme `b<N>` (e.g. b9692). Enforced at every entry
 // point (settings save, update endpoint, catalog, manager) to prevent path/URL injection into the download URL.
@@ -105,6 +144,11 @@ export interface NodeSettingsFieldsForm {
 	llamaMaxLoadedProcesses: number | string;
 	llamaIdleTimeToLiveSeconds: number | string;
 	maxResponseSizeMb: number | string;
+	// Chat launch tuning (speculative decoding + prompt-cache reuse)
+	speculativeMode: string;
+	speculativeDraftModelName: string;
+	speculativeDraftMaxTokens: number | string;
+	chatCacheReuse: number | string;
 	// Developer-only
 	orchestrationIdleTimeoutSeconds: number | string;
 	agentHomePrepareTimeoutSeconds: number | string;
@@ -126,6 +170,10 @@ export const nodeSettingsFieldDefaults: NodeSettingsFieldsForm = {
 	llamaMaxLoadedProcesses: 3,
 	llamaIdleTimeToLiveSeconds: 900,
 	maxResponseSizeMb: 10,
+	speculativeMode: SPECULATIVE_DISABLED_MODE,
+	speculativeDraftModelName: "",
+	speculativeDraftMaxTokens: 3,
+	chatCacheReuse: 256,
 	orchestrationIdleTimeoutSeconds: 120,
 	agentHomePrepareTimeoutSeconds: 900,
 	agentHomeCommandTimeoutSeconds: 300,
@@ -158,6 +206,10 @@ export function toNodeSettingsFieldsForm(response: NodeSettingsResponse | undefi
 			nodeSettingsFieldDefaults.llamaIdleTimeToLiveSeconds,
 		),
 		maxResponseSizeMb: numberOr(response.maxResponseSizeMb, nodeSettingsFieldDefaults.maxResponseSizeMb),
+		speculativeMode: response.speculativeMode ?? nodeSettingsFieldDefaults.speculativeMode,
+		speculativeDraftModelName: response.speculativeDraftModelName ?? "",
+		speculativeDraftMaxTokens: numberOr(response.speculativeDraftMaxTokens, nodeSettingsFieldDefaults.speculativeDraftMaxTokens),
+		chatCacheReuse: numberOr(response.chatCacheReuse, nodeSettingsFieldDefaults.chatCacheReuse),
 		orchestrationIdleTimeoutSeconds: numberOr(
 			response.orchestrationIdleTimeoutSeconds,
 			nodeSettingsFieldDefaults.orchestrationIdleTimeoutSeconds,
@@ -194,6 +246,8 @@ export interface NodeSettingsFieldBounds {
 	readonly llamaMaxLoadedProcesses: NumericBounds;
 	readonly llamaIdleTimeToLiveSeconds: NumericBounds;
 	readonly maxResponseSizeMb: NumericBounds;
+	readonly chatCacheReuse: NumericBounds;
+	readonly speculativeDraftMaxTokens: NumericBounds;
 	readonly orchestrationIdleTimeoutSeconds: NumericBounds;
 	readonly agentHomeTimeoutSeconds: NumericBounds;
 	readonly maxPendingToolCallAgeMinutes: NumericBounds;
@@ -215,6 +269,16 @@ export function toNodeSettingsFieldBounds(response: NodeSettingsResponse | undef
 			response?.minMaxResponseSizeMb,
 			response?.maxAllowedMaxResponseSizeMb,
 			nodeSettingsFieldBounds.maxResponseSizeMb,
+		),
+		chatCacheReuse: boundsOf(
+			response?.minChatCacheReuse,
+			response?.maxAllowedChatCacheReuse,
+			nodeSettingsFieldBounds.chatCacheReuse,
+		),
+		speculativeDraftMaxTokens: boundsOf(
+			response?.minSpeculativeDraftMaxTokens,
+			response?.maxAllowedSpeculativeDraftMaxTokens,
+			nodeSettingsFieldBounds.speculativeDraftMaxTokens,
 		),
 		orchestrationIdleTimeoutSeconds: boundsOf(
 			response?.minOrchestrationIdleTimeoutSeconds,
@@ -334,6 +398,48 @@ export function buildNodeSettingsRequest(
 		errors,
 		(v) => {
 			body.maxResponseSizeMb = v;
+		},
+	);
+
+	// Speculative decoding mode. Sent whenever it differs from the baseline (including a switch back to "none"). An
+	// unknown mode is a hard error rather than a silent drop.
+	if (form.speculativeMode !== baseline.speculativeMode) {
+		if (!isAllowedSpeculativeMode(form.speculativeMode)) {
+			errors["speculativeMode"] = "mode";
+		} else {
+			body.speculativeMode = form.speculativeMode.trim();
+		}
+	}
+
+	// A draft-* mode requires a draft model; guard even when the mode itself did not change (e.g. the model was cleared).
+	const draftModelName = form.speculativeDraftModelName.trim();
+	if (isDraftSpeculativeMode(form.speculativeMode) && draftModelName.length === 0) {
+		errors["speculativeDraftModelName"] = "required";
+	} else if (form.speculativeDraftModelName !== baseline.speculativeDraftModelName) {
+		// Empty clears the stored name (sent as null); a non-empty value is the installed model name to resolve.
+		body.speculativeDraftModelName = draftModelName.length > 0 ? draftModelName : null;
+	}
+
+	collectBoundedInt(
+		form.speculativeDraftMaxTokens,
+		baseline.speculativeDraftMaxTokens,
+		bounds.speculativeDraftMaxTokens,
+		"speculativeDraftMaxTokens",
+		body,
+		errors,
+		(v) => {
+			body.speculativeDraftMaxTokens = v;
+		},
+	);
+	collectBoundedInt(
+		form.chatCacheReuse,
+		baseline.chatCacheReuse,
+		bounds.chatCacheReuse,
+		"chatCacheReuse",
+		body,
+		errors,
+		(v) => {
+			body.chatCacheReuse = v;
 		},
 	);
 

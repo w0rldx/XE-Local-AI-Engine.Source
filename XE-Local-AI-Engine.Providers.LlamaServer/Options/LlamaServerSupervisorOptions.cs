@@ -35,6 +35,48 @@ public sealed class LlamaServerSupervisorOptions
     public int ChatCacheReuse { get; init; } = 256;
 
     /// <summary>
+    ///     Chat-role speculative-decoding <c>--spec-type</c>. Ships <see cref="SpeculativeDecodingSettings.DisabledMode" />
+    ///     (<c>none</c>, off) — operator opt-in. Validated against the pinned build's accepted set; <c>draft-*</c> modes
+    ///     also need <see cref="SpeculativeDraftModelPath" />, <c>ngram-*</c> modes self-speculate with no draft model.
+    ///     Applies to the chat role only (embedding servers have nothing to draft) and, like <see cref="ChatCacheReuse" />,
+    ///     is a launch flag independent of any frozen inference profile — changing it never invalidates a stored profile.
+    /// </summary>
+    public string SpeculativeMode { get; init; } = SpeculativeDecodingSettings.DisabledMode;
+
+    /// <summary>
+    ///     Installed draft model NAME for <c>draft-*</c> speculative modes, resolved to its on-disk GGUF on the spawn path
+    ///     via <see cref="XE_Local_AI_Engine.Providers.Abstractions.Gguf.IGgufModelStore.ResolveModelFilePathAsync" /> —
+    ///     the same resolution the target model uses — so the operator UI can offer installed model names without knowing
+    ///     file paths. Ignored by <c>ngram-*</c> modes. When <see cref="SpeculativeDraftModelPath" /> is also set, the
+    ///     explicit path wins and this name is not resolved.
+    /// </summary>
+    public string? SpeculativeDraftModelName { get; init; }
+
+    /// <summary>
+    ///     Explicit path to the draft GGUF for <c>draft-*</c> speculative modes (must share the target model's tokenizer
+    ///     family). An escape hatch that takes precedence over <see cref="SpeculativeDraftModelName" /> when set; normally
+    ///     left unset so the name is resolved on the spawn path. Ignored by <c>ngram-*</c> modes. The draft model consumes
+    ///     VRAM the <c>CapacityService</c> does not account for (see supervisor spawn path).
+    /// </summary>
+    public string? SpeculativeDraftModelPath { get; init; }
+
+    /// <summary>
+    ///     Draft tokens proposed per step (<c>--spec-draft-n-max</c>, upstream default 3). <c>0</c> omits the flag.
+    ///     Only meaningful for <c>draft-*</c> modes.
+    /// </summary>
+    public int SpeculativeDraftMaxTokens { get; init; } = 3;
+
+    /// <summary>
+    ///     GPU layers to offload for the draft model (<c>--spec-draft-ngl</c>). <c>null</c> omits the flag (draft model
+    ///     placement left to the runtime default). Only meaningful for <c>draft-*</c> modes.
+    /// </summary>
+    public int? SpeculativeDraftGpuLayers { get; init; }
+
+    /// <summary>Validated speculative-decoding bundle assembled from the four <c>Speculative*</c> keys for the launch path.</summary>
+    public SpeculativeDecodingSettings Speculative =>
+        new(SpeculativeMode, SpeculativeDraftModelPath, SpeculativeDraftMaxTokens, SpeculativeDraftGpuLayers);
+
+    /// <summary>
     ///     Minimum interval between reuse-path liveness probes for a single process. A reuse is handed out immediately
     ///     (no HTTP) unless at least this long has passed since the last probe of that process, so the hot path stays
     ///     cheap: at most one <c>/health</c> probe per process per interval, not one per request.

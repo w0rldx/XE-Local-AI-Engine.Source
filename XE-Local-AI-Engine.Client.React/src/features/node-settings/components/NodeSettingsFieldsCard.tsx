@@ -1,8 +1,21 @@
-import { Card, Group, NumberInput, Stack, Switch, TagsInput, Text, TextInput, Title } from "@mantine/core";
+import { Card, Group, NumberInput, Select, Stack, Switch, TagsInput, Text, TextInput, Title } from "@mantine/core";
 import { IconCpu, IconRobot, IconServer, IconTool } from "@tabler/icons-react";
+import { useMemo } from "react";
 import { useTranslation } from "react-i18next";
 
-import type { NodeSettingsFieldBounds, NodeSettingsFieldsForm } from "@/features/node-settings/models/NodeSettingsFieldsModel";
+import {
+	isDraftSpeculativeMode,
+	type NodeSettingsFieldBounds,
+	type NodeSettingsFieldsForm,
+	SPECULATIVE_DISABLED_MODE,
+	speculativeModeSelectValues,
+} from "@/features/node-settings/models/NodeSettingsFieldsModel";
+
+// A chat-capable installed model offered as a draft-model choice (value = model name, resolved server-side to a path).
+export interface DraftModelOption {
+	readonly value: string;
+	readonly label: string;
+}
 
 // Presentational card group for the migrated appsettings knobs. The page owns the form state, bounds, errors and the
 // change handlers; this component only renders the controls. Always-shown fields live in the first three cards; the
@@ -15,6 +28,8 @@ export interface NodeSettingsFieldsCardProps {
 	readonly onChange: <K extends keyof NodeSettingsFieldsForm>(field: K, value: NodeSettingsFieldsForm[K]) => void;
 	// When true, the developer-only advanced card is rendered. Driven by the page's developer-mode flag.
 	readonly showDeveloperFields: boolean;
+	// Installed chat-capable models offered as the draft model for draft-* speculative modes.
+	readonly draftModelOptions: readonly DraftModelOption[];
 }
 
 function fieldError(
@@ -29,8 +44,30 @@ function fieldError(
 	return t(`pages.nodeSettings.fields.errors.${code}`, "Invalid value.");
 }
 
-export function NodeSettingsFieldsCard({ form, bounds, errors, onChange, showDeveloperFields }: NodeSettingsFieldsCardProps) {
+export function NodeSettingsFieldsCard({
+	form,
+	bounds,
+	errors,
+	onChange,
+	showDeveloperFields,
+	draftModelOptions,
+}: NodeSettingsFieldsCardProps) {
 	const { t } = useTranslation();
+
+	// Curated mode options with i18n labels; `none` renders as "Off". Kept as data so the Select stays declarative.
+	const speculativeModeOptions = useMemo(
+		() =>
+			speculativeModeSelectValues.map((mode) => ({
+				value: mode,
+				label:
+					mode === SPECULATIVE_DISABLED_MODE
+						? t("pages.nodeSettings.fields.speculativeMode.options.off", "Off")
+						: t(`pages.nodeSettings.fields.speculativeMode.options.${mode}`, mode),
+			})),
+		[t],
+	);
+
+	const isDraftMode = isDraftSpeculativeMode(form.speculativeMode);
 
 	return (
 		<>
@@ -122,6 +159,63 @@ export function NodeSettingsFieldsCard({ form, bounds, errors, onChange, showDev
 							"The recommended llama.cpp version is managed in the llama.cpp runtime updates card above.",
 						)}
 					</Text>
+					<Select
+						label={t("pages.nodeSettings.fields.speculativeMode.label", "Speculative decoding")}
+						description={t(
+							"pages.nodeSettings.fields.speculativeMode.description",
+							"Draft-and-verify decoding raises single-user throughput. n-gram modes need no extra model; draft models use additional VRAM not yet counted by capacity checks. Applies after the node restarts.",
+						)}
+						data={speculativeModeOptions}
+						value={form.speculativeMode}
+						onChange={(value) => onChange("speculativeMode", value ?? SPECULATIVE_DISABLED_MODE)}
+						allowDeselect={false}
+						error={fieldError(t, errors, "speculativeMode")}
+						data-testid="node-settings-speculative-mode"
+					/>
+					{isDraftMode ? (
+						<>
+							<Select
+								label={t("pages.nodeSettings.fields.speculativeDraftModel.label", "Draft model")}
+								description={t(
+									"pages.nodeSettings.fields.speculativeDraftModel.description",
+									"An installed chat-capable model used as the drafter. Must share the target model's tokenizer family.",
+								)}
+								placeholder={t("pages.nodeSettings.fields.speculativeDraftModel.placeholder", "Select a draft model")}
+								data={[...draftModelOptions]}
+								value={form.speculativeDraftModelName === "" ? null : form.speculativeDraftModelName}
+								onChange={(value) => onChange("speculativeDraftModelName", value ?? "")}
+								searchable={true}
+								nothingFoundMessage={t("pages.nodeSettings.fields.speculativeDraftModel.empty", "No installed chat models")}
+								error={fieldError(t, errors, "speculativeDraftModelName")}
+								data-testid="node-settings-speculative-draft-model"
+							/>
+							<NumberInput
+								label={t("pages.nodeSettings.fields.speculativeDraftMaxTokens.label", "Draft tokens per step")}
+								description={`${t("pages.nodeSettings.fields.allowedRange", "Allowed range")}: ${bounds.speculativeDraftMaxTokens.min}–${bounds.speculativeDraftMaxTokens.max}.`}
+								min={bounds.speculativeDraftMaxTokens.min}
+								max={bounds.speculativeDraftMaxTokens.max}
+								allowDecimal={false}
+								value={form.speculativeDraftMaxTokens}
+								onChange={(value) => onChange("speculativeDraftMaxTokens", value)}
+								error={fieldError(t, errors, "speculativeDraftMaxTokens")}
+								data-testid="node-settings-speculative-draft-max-tokens"
+							/>
+						</>
+					) : null}
+					<NumberInput
+						label={t("pages.nodeSettings.fields.chatCacheReuse.label", "Prompt cache reuse")}
+						description={t(
+							"pages.nodeSettings.fields.chatCacheReuse.description",
+							"Reuse an unchanged prompt prefix across turns (tokens). 0 disables. Applies after the node restarts.",
+						)}
+						min={bounds.chatCacheReuse.min}
+						max={bounds.chatCacheReuse.max}
+						allowDecimal={false}
+						value={form.chatCacheReuse}
+						onChange={(value) => onChange("chatCacheReuse", value)}
+						error={fieldError(t, errors, "chatCacheReuse")}
+						data-testid="node-settings-chat-cache-reuse"
+					/>
 				</Stack>
 			</Card>
 

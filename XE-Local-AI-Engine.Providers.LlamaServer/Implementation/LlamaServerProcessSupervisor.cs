@@ -374,6 +374,29 @@ public sealed class LlamaServerProcessSupervisor : ILlamaServerProcessSupervisor
             throw NonRetryable("The requested model is not installed.");
         }
 
+        // A chat-role draft-* speculative mode needs its draft GGUF present before launch — a missing file would
+        // otherwise start a server that dies cryptically. Deterministic misconfiguration → non-retryable (mirrors the
+        // model-not-installed guard above). ngram-* and disabled modes never reach this (IsDraftMode is false).
+        // The operator selects a draft model by NAME (installed chat model); resolve it to its on-disk GGUF the same way
+        // the target model is resolved above so the effective launch args carry a real path. An explicit path override
+        // (SpeculativeDraftModelPath), when set, wins and skips resolution.
+        var speculative = _options.Speculative;
+        if (key.Role == ModelRole.Chat && speculative.IsDraftMode)
+        {
+            var draftModelPath = speculative.DraftModelPath;
+            if (string.IsNullOrWhiteSpace(draftModelPath) && !string.IsNullOrWhiteSpace(_options.SpeculativeDraftModelName))
+            {
+                draftModelPath = await _modelStore.ResolveModelFilePathAsync(_options.SpeculativeDraftModelName, ct).ConfigureAwait(false);
+                speculative = speculative with { DraftModelPath = draftModelPath };
+            }
+
+            if (string.IsNullOrWhiteSpace(draftModelPath) || !File.Exists(draftModelPath))
+            {
+                throw NonRetryable(
+                    "Speculative decoding is set to a draft model, but the configured draft model file was not found. Check the draft model or disable speculative decoding.");
+            }
+        }
+
         var variant = await _variantSelector.SelectVariantAsync(ct).ConfigureAwait(false);
         var binary = await _binaryManager.EnsureBinaryAsync(variant, ct).ConfigureAwait(false);
 
@@ -387,7 +410,8 @@ public sealed class LlamaServerProcessSupervisor : ILlamaServerProcessSupervisor
         ILlamaServerProcessHandle? handle = null;
         try
         {
-            var spec = BuildLaunchSpec(key, binary.ServerExecutablePath, modelFilePath, port, variant, resolved, _options.ChatCacheReuse);
+            var spec = BuildLaunchSpec(key, binary.ServerExecutablePath, modelFilePath, port, variant, resolved,
+                _options.ChatCacheReuse, speculative);
 
             // Benchmark replay spawns need /metrics (explore already carries --metrics); only append when missing.
             if (ensureMetrics && !spec.Arguments.Contains("--metrics", StringComparer.Ordinal))
@@ -586,6 +610,8 @@ public sealed class LlamaServerProcessSupervisor : ILlamaServerProcessSupervisor
     ///     Builds the exact, ordered llama-server argument vector for a <c>(model, role)</c> on a port.
     ///     <paramref name="chatCacheReuse" /> is the chat-role <c>--cache-reuse</c> window
     ///     (<see cref="LlamaServerSupervisorOptions.ChatCacheReuse" />); <c>0</c> omits the flag.
+    ///     <paramref name="speculative" /> is the chat-role speculative-decoding config
+    ///     (<see cref="LlamaServerSupervisorOptions.Speculative" />); disabled/default emits no <c>--spec-*</c> flags.
     /// </summary>
     internal static LlamaServerLaunchSpec BuildLaunchSpec(ProcessKey key,
         string executablePath,
@@ -593,7 +619,8 @@ public sealed class LlamaServerProcessSupervisor : ILlamaServerProcessSupervisor
         int port,
         GpuVariant variant,
         ResolvedLaunchArguments resolved,
-        int chatCacheReuse)
+        int chatCacheReuse,
+        SpeculativeDecodingSettings speculative = default)
     {
         var args = new List<string>
         {
@@ -644,6 +671,8 @@ public sealed class LlamaServerProcessSupervisor : ILlamaServerProcessSupervisor
                 args.Add("--cache-reuse");
                 args.Add(chatCacheReuse.ToString(CultureInfo.InvariantCulture));
             }
+
+            AppendSpeculativeArgs(args, speculative);
         }
         else
         {
@@ -706,6 +735,51 @@ public sealed class LlamaServerProcessSupervisor : ILlamaServerProcessSupervisor
             args.Add(resolved.KvTypeV);
             args.Add("--flash-attn");
             args.Add("on");
+        }
+    }
+
+    /// <summary>
+    ///     Appends the chat-role speculative-decoding flags. Disabled/default (<c>none</c>) emits nothing. A configured
+    ///     mode is validated first (unknown mode, or a <c>draft-*</c> mode with no draft path, is a deterministic
+    ///     misconfiguration surfaced as a NON-RETRYABLE error rather than a server that dies cryptically on launch).
+    ///     <c>draft-*</c> modes emit <c>--spec-draft-model</c> (the drafter's VRAM is NOT visible to <c>CapacityService</c>;
+    ///     an operator enabling a draft model must size for it themselves) plus <c>--spec-draft-n-max</c>/<c>-ngl</c> when
+    ///     set; <c>ngram-*</c> modes self-speculate and emit only <c>--spec-type</c>.
+    /// </summary>
+    private static void AppendSpeculativeArgs(List<string> args, in SpeculativeDecodingSettings speculative)
+    {
+        if (!speculative.IsEnabled)
+        {
+            return;
+        }
+
+        if (!speculative.TryValidate(out var error))
+        {
+            throw NonRetryable(error!);
+        }
+
+        args.Add("--spec-type");
+        args.Add(speculative.NormalizedMode);
+
+        if (!speculative.IsDraftMode)
+        {
+            return;
+        }
+
+        // Validated non-empty above; the file's existence on disk is enforced on the spawn path before launch.
+        args.Add("--spec-draft-model");
+        args.Add(speculative.DraftModelPath!);
+
+        if (speculative.DraftMaxTokens > 0)
+        {
+            args.Add("--spec-draft-n-max");
+            args.Add(speculative.DraftMaxTokens.ToString(CultureInfo.InvariantCulture));
+        }
+
+        if (speculative.DraftGpuLayers is { } draftGpuLayers)
+        {
+            args.Add("--spec-draft-ngl");
+            args.Add(draftGpuLayers.ToString(CultureInfo.InvariantCulture));
         }
     }
 

@@ -8,9 +8,11 @@ import type { SaveNodeSettingsResponse } from "@/core/api/generated";
 import {
 	getNodeSettingsOptions,
 	getNodeSettingsQueryKey,
+	listLocalModelsOptions,
 	saveNodeSettingsMutation,
 } from "@/core/api/generated/@tanstack/react-query.gen";
 import { withResponseValidation } from "@/core/api/ResponseValidation";
+import { toChatModelOptions } from "@/features/chat/pages/ChatModelOptions";
 import { useDeveloperModeStore } from "@/core/dev-tools/stores/DeveloperModeStore";
 import { toast } from "@/core/ui/notifications/Toast";
 import { CudaBuildCard } from "@/features/node-settings/components/CudaBuildCard";
@@ -68,6 +70,17 @@ export function NodeSettings() {
 	}
 	const [fieldErrors, setFieldErrors] = useState<Readonly<Record<string, string>>>({});
 	const fieldBounds = useMemo(() => toNodeSettingsFieldBounds(settings), [settings]);
+
+	// Installed chat-capable models offered as the speculative draft model (value = model name, resolved server-side).
+	const { data: localModels } = useQuery(withResponseValidation(listLocalModelsOptions()));
+	const draftModelOptions = useMemo(
+		() =>
+			toChatModelOptions(localModels?.items ?? [], localModels?.isAvailable ?? false).map((option) => ({
+				value: option.value,
+				label: option.label,
+			})),
+		[localModels],
+	);
 
 	useEffect(() => {
 		if (settings?.maxMessageRequestTimeoutSeconds !== undefined) {
@@ -247,6 +260,7 @@ export function NodeSettings() {
 					errors={fieldErrors}
 					onChange={handleFieldChange}
 					showDeveloperFields={developerMode}
+					draftModelOptions={draftModelOptions}
 				/>
 
 				<Group>

@@ -20,6 +20,8 @@ const { generatedMock } = vi.hoisted(() => ({
 		getNodeSettingsQueryKey: vi.fn(() => ["getNodeSettings"]),
 		saveNodeSettingsMutation: vi.fn(),
 		saveFn: vi.fn(),
+		// Installed-models query feeding the speculative draft-model picker.
+		listLocalModelsOptions: vi.fn(),
 		// Local-runtime cards (llama.cpp + HF token) relocated from the model-fit advisor.
 		ensureLlamaCppBinaryMutation: vi.fn(),
 		getHfTokenStatusOptions: vi.fn(),
@@ -45,6 +47,7 @@ vi.mock("@/core/api/generated/@tanstack/react-query.gen", () => ({
 	getNodeSettingsOptions: generatedMock.getNodeSettingsOptions,
 	getNodeSettingsQueryKey: generatedMock.getNodeSettingsQueryKey,
 	saveNodeSettingsMutation: generatedMock.saveNodeSettingsMutation,
+	listLocalModelsOptions: generatedMock.listLocalModelsOptions,
 	ensureLlamaCppBinaryMutation: generatedMock.ensureLlamaCppBinaryMutation,
 	getHfTokenStatusOptions: generatedMock.getHfTokenStatusOptions,
 	setHfTokenMutation: generatedMock.setHfTokenMutation,
@@ -119,6 +122,11 @@ describe("NodeSettings (generated hey-api data layer)", () => {
 		});
 		generatedMock.saveFn.mockResolvedValue(settingsResponse as SaveNodeSettingsResponse);
 		generatedMock.saveNodeSettingsMutation.mockReturnValue({ mutationFn: generatedMock.saveFn });
+		// The draft-model picker's installed-models query resolves to an empty list by default (no draft models offered).
+		generatedMock.listLocalModelsOptions.mockReturnValue({
+			queryKey: fakeQueryKey("listLocalModels"),
+			queryFn: async () => ({ items: [], isAvailable: false }),
+		});
 
 		// Local-runtime card defaults. The HF token status returns "no token".
 		generatedMock.getHfTokenStatusOptions.mockReturnValue({

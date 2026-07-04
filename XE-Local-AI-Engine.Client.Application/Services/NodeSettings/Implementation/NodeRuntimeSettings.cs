@@ -154,6 +154,21 @@ public sealed class NodeRuntimeSettings : INodeRuntimeSettings
         return stored.SamplingDefaults;
     }
 
+    public async Task<int> GetChatCacheReuseAsync(CancellationToken cancellationToken = default) =>
+        ResolveChatCacheReuse(await LoadAsync(cancellationToken).ConfigureAwait(false));
+
+    public async Task<string> GetSpeculativeModeAsync(CancellationToken cancellationToken = default) =>
+        ResolveSpeculativeMode(await LoadAsync(cancellationToken).ConfigureAwait(false));
+
+    public async Task<string?> GetSpeculativeDraftModelNameAsync(CancellationToken cancellationToken = default) =>
+        ResolveSpeculativeDraftModelName(await LoadAsync(cancellationToken).ConfigureAwait(false));
+
+    public async Task<int> GetSpeculativeDraftMaxTokensAsync(CancellationToken cancellationToken = default) =>
+        ResolveSpeculativeDraftMaxTokens(await LoadAsync(cancellationToken).ConfigureAwait(false));
+
+    public async Task<int?> GetSpeculativeDraftGpuLayersAsync(CancellationToken cancellationToken = default) =>
+        ResolveSpeculativeDraftGpuLayers(await LoadAsync(cancellationToken).ConfigureAwait(false));
+
     // --- Synchronous twins (composition/startup path only; see INodeRuntimeSettings) ---
 
     public string GetDefaultModelName() =>
@@ -186,6 +201,21 @@ public sealed class NodeRuntimeSettings : INodeRuntimeSettings
     public int GetMaxPendingToolCallAgeMinutes() =>
         ResolveMaxPendingToolCallAgeMinutes(LoadStored());
 
+    public int GetChatCacheReuse() =>
+        ResolveChatCacheReuse(LoadStored());
+
+    public string GetSpeculativeMode() =>
+        ResolveSpeculativeMode(LoadStored());
+
+    public string? GetSpeculativeDraftModelName() =>
+        ResolveSpeculativeDraftModelName(LoadStored());
+
+    public int GetSpeculativeDraftMaxTokens() =>
+        ResolveSpeculativeDraftMaxTokens(LoadStored());
+
+    public int? GetSpeculativeDraftGpuLayers() =>
+        ResolveSpeculativeDraftGpuLayers(LoadStored());
+
     // --- Pure resolvers shared by the async getters and their synchronous twins (single source of precedence) ---
 
     private string ResolveDefaultModelName(StoredNodeSettings stored) =>
@@ -217,6 +247,25 @@ public sealed class NodeRuntimeSettings : INodeRuntimeSettings
 
     private int ResolveMaxPendingToolCallAgeMinutes(StoredNodeSettings stored) =>
         stored.MaxPendingToolCallAgeMinutes ?? _maxPendingToolCallAgeMinutesSeed;
+
+    // The speculative-decoding + cache-reuse knobs have no appsettings section today: the seed IS the hardcoded default
+    // (mirrors the llama.cpp supervisor cap/TTL), so these resolvers coalesce the stored value against the Default* const.
+    private static int ResolveChatCacheReuse(StoredNodeSettings stored) =>
+        stored.ChatCacheReuse ?? StoredNodeSettings.DefaultChatCacheReuse;
+
+    private static string ResolveSpeculativeMode(StoredNodeSettings stored) =>
+        StoredNodeSettings.IsValidSpeculativeMode(stored.SpeculativeMode) && !string.IsNullOrWhiteSpace(stored.SpeculativeMode)
+            ? stored.SpeculativeMode!
+            : StoredNodeSettings.DefaultSpeculativeMode;
+
+    private static string? ResolveSpeculativeDraftModelName(StoredNodeSettings stored) =>
+        string.IsNullOrWhiteSpace(stored.SpeculativeDraftModelName) ? null : stored.SpeculativeDraftModelName;
+
+    private static int ResolveSpeculativeDraftMaxTokens(StoredNodeSettings stored) =>
+        stored.SpeculativeDraftMaxTokens ?? StoredNodeSettings.DefaultSpeculativeDraftMaxTokens;
+
+    private static int? ResolveSpeculativeDraftGpuLayers(StoredNodeSettings stored) =>
+        stored.SpeculativeDraftGpuLayers;
 
     private async Task<StoredNodeSettings> LoadAsync(CancellationToken cancellationToken)
     {

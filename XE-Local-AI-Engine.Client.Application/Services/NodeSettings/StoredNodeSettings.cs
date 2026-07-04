@@ -2,6 +2,7 @@ namespace XE_Local_AI_Engine.Client.Services.NodeSettings;
 
 using System.Text.RegularExpressions;
 using XE_Local_AI_Engine.Client.Models;
+using XE_Local_AI_Engine.Providers.LlamaServer.Options;
 
 /// <summary>
 ///     The persisted, user-editable subset of node runtime settings. Every field beyond the original
@@ -73,6 +74,33 @@ public sealed partial record StoredNodeSettings
 
     public const int MaxMaxPendingToolCallAgeMinutes = 60;
 
+    /// <summary>Default chat-role <c>--cache-reuse</c> window (tokens); mirrors <c>LlamaServerSupervisorOptions.ChatCacheReuse</c>.</summary>
+    public const int DefaultChatCacheReuse = 256;
+
+    /// <summary><c>0</c> disables prompt-cache prefix reuse (upstream default).</summary>
+    public const int MinChatCacheReuse = 0;
+
+    /// <summary>Upper guard for the cache-reuse window; larger values are clamped away as almost certainly a mistake.</summary>
+    public const int MaxChatCacheReuse = 8192;
+
+    /// <summary>Default <c>--spec-type</c> — speculative decoding off (operator opt-in). Mirrors <c>SpeculativeDecodingSettings.DisabledMode</c>.</summary>
+    public const string DefaultSpeculativeMode = SpeculativeDecodingSettings.DisabledMode;
+
+    /// <summary>Default draft tokens per step (<c>--spec-draft-n-max</c>); mirrors <c>LlamaServerSupervisorOptions.SpeculativeDraftMaxTokens</c>.</summary>
+    public const int DefaultSpeculativeDraftMaxTokens = 3;
+
+    /// <summary><c>0</c> omits the <c>--spec-draft-n-max</c> flag (runtime default drafting).</summary>
+    public const int MinSpeculativeDraftMaxTokens = 0;
+
+    /// <summary>Upper guard for draft tokens per step.</summary>
+    public const int MaxSpeculativeDraftMaxTokens = 16;
+
+    /// <summary><c>0</c> offloads no draft-model layers to the GPU (<c>--spec-draft-ngl</c>).</summary>
+    public const int MinSpeculativeDraftGpuLayers = 0;
+
+    /// <summary>Upper guard for draft-model GPU layers (well above any real model's layer count).</summary>
+    public const int MaxSpeculativeDraftGpuLayers = 1000;
+
     /// <summary>Node-level master flag for the client voice (TTS) feature. Default (absent) is off.</summary>
     public const bool DefaultVoiceFeatureEnabled = false;
 
@@ -101,6 +129,26 @@ public sealed partial record StoredNodeSettings
     public static bool IsValidRecommendedLlamaCppTag(string? tag)
     {
         return !string.IsNullOrWhiteSpace(tag) && RecommendedTagRegex().IsMatch(tag);
+    }
+
+    /// <summary>
+    ///     Returns <see langword="true" /> when <paramref name="mode" /> is a recognized <c>--spec-type</c> value (or
+    ///     empty/<c>none</c>, i.e. disabled). Delegates to <see cref="SpeculativeDecodingSettings.IsAllowedMode" /> so the
+    ///     accepted set has one authority (the pinned-build-verified list in the provider).
+    /// </summary>
+    public static bool IsValidSpeculativeMode(string? mode)
+    {
+        return SpeculativeDecodingSettings.IsAllowedMode(mode);
+    }
+
+    /// <summary>
+    ///     Returns <see langword="true" /> when <paramref name="mode" /> is a <c>draft-*</c> speculative mode that REQUIRES
+    ///     a draft model. Delegates to <see cref="SpeculativeDecodingSettings.ModeRequiresDraftModel" /> so the boundary
+    ///     validator + save-endpoint cross-field guard share one authority for the draft-family test.
+    /// </summary>
+    public static bool SpeculativeModeRequiresDraftModel(string? mode)
+    {
+        return SpeculativeDecodingSettings.ModeRequiresDraftModel(mode);
     }
 
     public int MaxMessageRequestTimeoutSeconds { get; init; } = DefaultMaxMessageRequestTimeoutSeconds;
@@ -155,6 +203,31 @@ public sealed partial record StoredNodeSettings
 
     /// <summary>Pending tool-call max age (minutes, developer-only). Seed: <c>WorkerNode:MaxPendingToolCallAgeMinutes</c> (10).</summary>
     public int? MaxPendingToolCallAgeMinutes { get; init; }
+
+    /// <summary>
+    ///     Chat-role prompt-cache prefix-reuse window in tokens (<c>--cache-reuse</c>). Seed: 256; <c>0</c> disables.
+    ///     Applies on the next node restart (seeded into the supervisor options at host build).
+    /// </summary>
+    public int? ChatCacheReuse { get; init; }
+
+    /// <summary>
+    ///     Chat-role speculative-decoding <c>--spec-type</c> (e.g. <c>ngram-mod</c>, <c>draft-simple</c>). Seed:
+    ///     <c>none</c> (off). Out-of-range/unknown falls back to <see langword="null" /> (re-seeded to disabled). Applies
+    ///     on the next node restart.
+    /// </summary>
+    public string? SpeculativeMode { get; init; }
+
+    /// <summary>
+    ///     Installed draft-model NAME for <c>draft-*</c> speculative modes, resolved server-side to its GGUF path on the
+    ///     spawn path (like the target model). Ignored by <c>ngram-*</c> modes. Applies on the next node restart.
+    /// </summary>
+    public string? SpeculativeDraftModelName { get; init; }
+
+    /// <summary>Draft tokens proposed per step (<c>--spec-draft-n-max</c>). Seed: 3; <c>0</c> omits the flag.</summary>
+    public int? SpeculativeDraftMaxTokens { get; init; }
+
+    /// <summary>Draft-model GPU layers to offload (<c>--spec-draft-ngl</c>). <see langword="null" /> omits the flag.</summary>
+    public int? SpeculativeDraftGpuLayers { get; init; }
 
     /// <summary>
     ///     Node-level sampling defaults (developer-only, optional). <see langword="null" /> = no node-level override —
