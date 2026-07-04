@@ -1,4 +1,17 @@
-import { Alert, Badge, Card, Group, Select, Slider, Stack, Switch, Text, Title } from "@mantine/core";
+import {
+	Alert,
+	Badge,
+	Card,
+	type ComboboxItem,
+	type ComboboxItemGroup,
+	Group,
+	Select,
+	Slider,
+	Stack,
+	Switch,
+	Text,
+	Title,
+} from "@mantine/core";
 import { IconInfoCircle, IconVolume } from "@tabler/icons-react";
 import { useMemo } from "react";
 import { useTranslation } from "react-i18next";
@@ -9,6 +22,45 @@ import { VoicePreviewButton } from "@/features/voice/components/VoicePreviewButt
 import { useVoiceNodeSettings } from "@/features/voice/useVoiceNodeSettings";
 import { useVoicePreferencesStore, voicePreferencesRateBounds } from "@/features/voice/VoicePreferencesStore";
 import { useVoiceRuntime } from "@/features/voice/VoiceRuntimeContext";
+import { type OsVoiceCatalog, useWebSpeechVoices } from "@/features/voice/WebSpeechVoiceCatalog";
+
+/** Best-effort human language name for a short IETF code (e.g. "de" → "German"), falling back to the bare code
+ * when the runtime has no `Intl.DisplayNames` data for it. */
+function languageDisplayName(code: string, uiLocale: string): string {
+	try {
+		return new Intl.DisplayNames([uiLocale], { type: "language" }).of(code) ?? code;
+	} catch {
+		return code;
+	}
+}
+
+/** Builds the grouped Select data: the manifest's own voices first, then every OS/browser voice grouped per
+ * language — so the picker offers any system voice, not just the manifest catalog. */
+function buildVoiceGroups(
+	manifestOptions: readonly ComboboxItem[],
+	osVoices: OsVoiceCatalog,
+	uiLocale: string,
+	builtInGroupLabel: string,
+	systemGroupLabel: (language: string) => string,
+): ComboboxItemGroup<ComboboxItem>[] {
+	const groups: ComboboxItemGroup<ComboboxItem>[] = [];
+	if (manifestOptions.length > 0) {
+		groups.push({ group: builtInGroupLabel, items: [...manifestOptions] });
+	}
+
+	const languages = [...osVoices.keys()].sort((a, b) =>
+		languageDisplayName(a, uiLocale).localeCompare(languageDisplayName(b, uiLocale)),
+	);
+	for (const language of languages) {
+		const entries = osVoices.get(language) ?? [];
+		groups.push({
+			group: systemGroupLabel(languageDisplayName(language, uiLocale)),
+			items: entries.map((entry) => ({ value: entry.id, label: entry.name })),
+		});
+	}
+
+	return groups;
+}
 
 // Node Settings voice block. Lets the operator drive the node-level voice feature through the existing
 // operator-gated node-settings GET/PUT (the master gate `voiceFeatureEnabled` — which composes server-side into the
@@ -17,13 +69,16 @@ import { useVoiceRuntime } from "@/features/voice/VoiceRuntimeContext";
 // surface gate below re-evaluates immediately.
 
 export function VoiceSettingsCard() {
-	const { t } = useTranslation();
+	const { t, i18n } = useTranslation();
 	const developerMode = useDeveloperModeStore((state) => state.developerMode);
 	// Reuse the single manifest fetched by the app-root ClientAiRuntimeProvider (no duplicate query). The provider
 	// fetches it only under developer mode, which matches this card's own gate.
 	const { manifest } = useVoiceRuntime();
 	// Operator-owned node settings (read + write the node-level voice fields via the existing node-settings endpoint).
 	const nodeVoice = useVoiceNodeSettings(developerMode);
+	// Every OS/browser voice, grouped by language, so the pickers below offer any installed system voice alongside
+	// the manifest's own catalog (Kokoro EN + logical web-speech entries).
+	const osVoices = useWebSpeechVoices();
 
 	const voiceEnabled = useVoicePreferencesStore((state) => state.voiceEnabled);
 	const voiceProfile = useVoicePreferencesStore((state) => state.voiceProfile);
@@ -33,9 +88,16 @@ export function VoiceSettingsCard() {
 		(state) => state.actions,
 	);
 
-	const voiceOptions = useMemo(
+	const manifestOptions = useMemo(
 		() => (manifest?.voices ?? []).map((voice) => ({ value: voice.id, label: `${voice.name} (${voice.language})` })),
 		[manifest?.voices],
+	);
+	const voiceOptions = useMemo(
+		() =>
+			buildVoiceGroups(manifestOptions, osVoices, i18n.language, t("voice.settings.builtInVoicesGroupLabel"), (language) =>
+				t("voice.settings.systemVoiceGroupLabel", { language }),
+			),
+		[manifestOptions, osVoices, i18n.language, t],
 	);
 
 	if (!developerMode) {
@@ -47,20 +109,14 @@ export function VoiceSettingsCard() {
 	const nodeDefaultProfile = nodeVoice.defaultVoiceProfile || manifest?.defaultVoiceId || null;
 
 	const handleNodeGateChange = (checked: boolean): void => {
-		nodeVoice.save(
-			{ voiceFeatureEnabled: checked },
-			{ onError: () => toast.error(t("voice.settings.operatorSaveError")) },
-		);
+		nodeVoice.save({ voiceFeatureEnabled: checked }, { onError: () => toast.error(t("voice.settings.operatorSaveError")) });
 	};
 
 	const handleNodeDefaultProfileChange = (value: string | null): void => {
 		if (!value) {
 			return;
 		}
-		nodeVoice.save(
-			{ defaultVoiceProfile: value },
-			{ onError: () => toast.error(t("voice.settings.operatorSaveError")) },
-		);
+		nodeVoice.save({ defaultVoiceProfile: value }, { onError: () => toast.error(t("voice.settings.operatorSaveError")) });
 	};
 
 	return (
