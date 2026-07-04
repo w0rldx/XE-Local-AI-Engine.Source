@@ -86,7 +86,6 @@ public sealed class KnowledgeIngestionServiceFailureTests : IDisposable
             embedder,
             Substitute.For<IKnowledgeIndexWriter>(),
             Substitute.For<IKnowledgeIndexingNotifier>(),
-            options,
             TimeProvider.System,
             NullLogger<KnowledgeIngestionService>.Instance);
     }

@@ -32,6 +32,39 @@ public sealed class KnowledgeChunkEmbedderResolutionTests
         AssertEx.Equal(ConfiguredName, provider.LastSelectedModelName);
         AssertEx.Equal(ConfiguredName, result.ResolvedModel);
         AssertEx.Equal(1, result.Vectors.Count);
+        // Dimension is derived from the produced vector, not a static config constant.
+        AssertEx.Equal(Dimensions, result.Dimension);
+    }
+
+    [Test]
+    public async Task EmbedAsync_WhenModelWidthIsNotTheLegacyDefault_DerivesItAndSucceeds()
+    {
+        // Regression: a 1024-wide model (bge-m3/mxbai) previously failed every chunk against the static 768 constant.
+        const int width = 1024;
+        var provider = new CapturingProvider(Descriptor(ConfiguredName)) { VectorDimensions = [width] };
+        var embedder = CreateEmbedder(provider);
+
+        var result = await embedder.EmbedAsync(["chunk one", "chunk two"], CancellationToken.None).ConfigureAwait(false);
+
+        AssertEx.Equal(2, result.Vectors.Count);
+        AssertEx.Equal(width, result.Dimension);
+        // Each blob is width float32 values → width * 4 bytes.
+        AssertEx.Equal(width * sizeof(float), result.Vectors[0].Length);
+    }
+
+    [Test]
+    public async Task EmbedAsync_WhenModelReturnsInconsistentWidths_ThrowsContentFreeFailure()
+    {
+        // A dimension-stable model never does this; an inconsistent width within one run is a genuinely broken model.
+        var provider = new CapturingProvider(Descriptor(ConfiguredName)) { VectorDimensions = [1024, 512] };
+        var embedder = CreateEmbedder(provider);
+
+        var exception = await AssertEx.ThrowsAsync<KnowledgeIngestionException>(
+            () => embedder.EmbedAsync(["chunk one", "chunk two"], CancellationToken.None)).ConfigureAwait(false);
+
+        // Reason names the mismatch (integers only, content-free) so an operator can act.
+        AssertEx.True(exception.Reason.Contains("1024", StringComparison.Ordinal), "Reason should name the expected width.");
+        AssertEx.True(exception.Reason.Contains("512", StringComparison.Ordinal), "Reason should name the observed width.");
     }
 
     [Test]
@@ -64,8 +97,7 @@ public sealed class KnowledgeChunkEmbedderResolutionTests
     {
         var options = Options.Create(new KnowledgeBaseOptions
         {
-            EmbeddingModelName = ConfiguredName,
-            EmbeddingDimension = Dimensions
+            EmbeddingModelName = ConfiguredName
         });
 
         var providerResolver = Substitute.For<ILocalModelProviderResolver>();
@@ -99,12 +131,17 @@ public sealed class KnowledgeChunkEmbedderResolutionTests
 
         public bool ThrowOnGenerate { get; init; }
 
+        // Width of each produced vector, by position; the last entry repeats when more vectors than entries are generated.
+        // Defaults to the shipped nomic width so the resolution tests are unaffected; overridden to exercise arbitrary and
+        // inconsistent widths.
+        public IReadOnlyList<int> VectorDimensions { get; init; } = [Dimensions];
+
         public string ProviderName => "llamacpp";
 
         public IEmbeddingGenerator<string, Embedding<float>> CreateEmbeddingGenerator(LocalModelSelection selection)
         {
             LastSelectedModelName = selection.ModelName;
-            return new FixedEmbeddingGenerator(ThrowOnGenerate);
+            return new FixedEmbeddingGenerator(ThrowOnGenerate, VectorDimensions);
         }
 
         public Task<IReadOnlyList<LocalModelDescriptor>> ListModelsAsync(CancellationToken ct)
@@ -124,7 +161,7 @@ public sealed class KnowledgeChunkEmbedderResolutionTests
 
         public Task UnloadModelAsync(string modelName, CancellationToken ct) => throw new NotSupportedException();
 
-        private sealed class FixedEmbeddingGenerator(bool throwOnGenerate) : IEmbeddingGenerator<string, Embedding<float>>
+        private sealed class FixedEmbeddingGenerator(bool throwOnGenerate, IReadOnlyList<int> dimensions) : IEmbeddingGenerator<string, Embedding<float>>
         {
             public Task<GeneratedEmbeddings<Embedding<float>>> GenerateAsync(IEnumerable<string> values,
                 EmbeddingGenerationOptions? options = null,
@@ -135,7 +172,8 @@ public sealed class KnowledgeChunkEmbedderResolutionTests
                     throw new HttpRequestException("fake embedding transport failure");
                 }
 
-                var embeddings = values.Select(static _ => new Embedding<float>(new float[Dimensions]));
+                var embeddings = values.Select((_, index) =>
+                    new Embedding<float>(new float[dimensions[Math.Min(index, dimensions.Count - 1)]]));
                 return Task.FromResult(new GeneratedEmbeddings<Embedding<float>>(embeddings));
             }
 

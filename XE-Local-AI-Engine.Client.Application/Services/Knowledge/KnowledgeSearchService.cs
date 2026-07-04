@@ -169,14 +169,10 @@ public sealed class KnowledgeSearchService : IKnowledgeSearchService
                 return (ReadOnlyMemory<float>.Empty, embeddingModelName);
             }
 
-            var vector = generated[0].Vector;
-            if (vector.Length != _options.EmbeddingDimension)
-            {
-                // A wrong-dimension query vector cannot be compared to the model-scoped chunk vectors; drop the vector arm.
-                return (ReadOnlyMemory<float>.Empty, embeddingModelName);
-            }
-
-            return (vector, embeddingModelName);
+            // No static dimension check here: the query is embedded by the SAME resolved model that keys the stored chunk
+            // vectors, and ManagedCosineVectorSearch skips any candidate whose width differs from the query (defense in
+            // depth). A model with a non-768 native width therefore searches correctly instead of silently degrading.
+            return (generated[0].Vector, embeddingModelName);
         }
         catch (Exception exception) when (exception is HttpRequestException or IOException or OllamaException or InvalidOperationException)
         {

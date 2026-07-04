@@ -2,7 +2,7 @@ import { Alert, Anchor, Avatar, Badge, Box, Group, Paper, Stack, Text } from "@m
 import { IconAlertTriangle, IconSparkles } from "@tabler/icons-react";
 import { Link } from "@tanstack/react-router";
 import { AnimatePresence, m, useReducedMotion } from "framer-motion";
-import type { ReactNode } from "react";
+import { memo, type ReactNode } from "react";
 import { useTranslation } from "react-i18next";
 
 import { ChatMarkdown } from "@/features/chat/components/ChatMarkdown";
@@ -86,7 +86,11 @@ function roleLabel(role: ChatMessageModel["role"]): string {
 	return role === "assistant" ? "Assistant" : role === "user" ? "You" : role;
 }
 
-export function ChatMessage({
+// Memoized: during a streaming turn the parent ChatMessageList re-renders every frame, but prior turns receive
+// referentially stable props (message from a cached array, callbacks are useCallback'd, streaming-only props are
+// undefined for non-target rows) so React.memo skips re-rendering — and re-tokenizing their code blocks — for the
+// whole thread on every token of the active turn.
+export const ChatMessage = memo(function ChatMessage({
 	message,
 	placeholder,
 	footer,
@@ -332,4 +336,4 @@ export function ChatMessage({
 			</Stack>
 		</Group>
 	);
-}
+});

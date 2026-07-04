@@ -67,6 +67,7 @@ internal sealed class HardwareProfiler : IHardwareProfiler
         var (totalRam, availableRam) = ProbeRam();
         var vendor = await DetectGpuVendorAsync(ct).ConfigureAwait(false);
         var vramBytes = await DetectVramAsync(vendor, ct).ConfigureAwait(false);
+        var availableVramBytes = await DetectAvailableVramAsync(vendor, vramBytes, ct).ConfigureAwait(false);
 
         var vramKnown = vramBytes is not null;
         // Degrade rule: VRAM unknown ⇒ no GPU budget, regardless of a detected vendor.
@@ -77,6 +78,7 @@ internal sealed class HardwareProfiler : IHardwareProfiler
             TotalRamBytes = totalRam,
             AvailableRamBytes = availableRam,
             VramBytes = vramBytes,
+            AvailableVramBytes = availableVramBytes,
             VramKnown = vramKnown,
             GpuVendor = vendor,
             GpuAccelAvailable = gpuAccelAvailable,
@@ -167,6 +169,19 @@ internal sealed class HardwareProfiler : IHardwareProfiler
         return null;
     }
 
+    // Free VRAM is only byte-accurate on NVIDIA (nvidia-smi memory.free). For every other vendor — and when total VRAM
+    // itself is unknown — the free baseline is null, which forces the capacity gate onto its total-VRAM fallback. This
+    // is the GPU analogue of AvailableRamBytes: it nets out VRAM already resident in loaded llama-server processes.
+    private async Task<long?> DetectAvailableVramAsync(GpuVendor vendor, long? totalVramBytes, CancellationToken ct)
+    {
+        if (vendor != GpuVendor.Nvidia || totalVramBytes is null)
+        {
+            return null;
+        }
+
+        return await ProbeNvidiaMemoryMibBytesAsync("memory.free", ct).ConfigureAwait(false);
+    }
+
     private async Task<bool> NvidiaPresentAsync(CancellationToken ct)
     {
         var result = await _processProbe
@@ -175,10 +190,17 @@ internal sealed class HardwareProfiler : IHardwareProfiler
         return result is { ExitCode: 0 } && !string.IsNullOrWhiteSpace(result.StandardOutput);
     }
 
-    private async Task<long?> ProbeNvidiaVramBytesAsync(CancellationToken ct)
+    private Task<long?> ProbeNvidiaVramBytesAsync(CancellationToken ct)
+    {
+        return ProbeNvidiaMemoryMibBytesAsync("memory.total", ct);
+    }
+
+    // Runs a single-field nvidia-smi memory query and returns the first GPU's figure in bytes (the field is reported in
+    // MiB). Shared by the total- and free-VRAM probes so both parse identically.
+    private async Task<long?> ProbeNvidiaMemoryMibBytesAsync(string queryField, CancellationToken ct)
     {
         var result = await _processProbe
-                           .RunAsync("nvidia-smi", ["--query-gpu=memory.total", "--format=csv,noheader,nounits"], ct)
+                           .RunAsync("nvidia-smi", [$"--query-gpu={queryField}", "--format=csv,noheader,nounits"], ct)
                            .ConfigureAwait(false);
 
         if (result is not { ExitCode: 0 })
@@ -186,7 +208,7 @@ internal sealed class HardwareProfiler : IHardwareProfiler
             return null;
         }
 
-        // First PARSEABLE line is the first GPU's total VRAM in MiB. Scan past any leading non-numeric lines
+        // First PARSEABLE line is the first GPU's VRAM figure in MiB. Scan past any leading non-numeric lines
         // (e.g. an nvidia-smi warning banner) so a noise line doesn't defeat detection; "first GPU wins" still holds.
         foreach (var line in result.StandardOutput.Split('\n'))
         {

@@ -1,4 +1,5 @@
 import { Stack } from "@mantine/core";
+import { memo } from "react";
 
 import { ChatMarkdown } from "@/features/chat/components/ChatMarkdown";
 import { ThoughtsSection } from "@/features/chat/components/ThoughtsSection";
@@ -33,7 +34,7 @@ function lastReasoningIndex(parts: ChatMessagePart[]): number {
  * reasoning run as its own folded `ThoughtsSection`, each tool as a state-driven `ToolCallCard`, and any mid-turn
  * text as markdown. The single source of truth shared by the live stream and the post-reload render.
  */
-export function MessageParts({
+export const MessageParts = memo(function MessageParts({
 	parts,
 	isStreaming = false,
 	streamingReasoningOverflowBytes = 0,
@@ -75,4 +76,4 @@ export function MessageParts({
 			})}
 		</Stack>
 	);
-}
+});

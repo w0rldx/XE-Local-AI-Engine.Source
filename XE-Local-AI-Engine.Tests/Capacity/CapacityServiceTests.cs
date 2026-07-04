@@ -16,7 +16,9 @@ using XE_Local_AI_Engine.Tests.Testing;
 ///     model already running queues; a fitting local model with process headroom is admitted (and reserves its
 ///     footprint); the process cap and byte budget each reject independently; an unknown footprint rejects; CPU mode
 ///     does not double-count resident models; concurrent different-model spawns cannot both pass (TOCTOU); and a
-///     non-fitting Ollama model rejects with the eviction warning flagged. Every probe is mocked — no Ollama/network.
+///     non-fitting Ollama model rejects with the eviction warning flagged; GPU mode fits against measured FREE VRAM
+///     (not total) and falls back to total when free is unmeasurable; the decision reads a fresh (forceRefresh) profile.
+///     Every probe is mocked — no Ollama/network.
 /// </summary>
 public sealed class CapacityServiceTests
 {
@@ -173,6 +175,77 @@ public sealed class CapacityServiceTests
     }
 
     [Test]
+    public async Task Capacity_GpuMode_UsesFreeVramBaseline_NotTotalVram()
+    {
+        // The bug: a GPU whose TOTAL VRAM fits the model but whose FREE VRAM does not (residents outside the ledger —
+        // the main chat model / warm sub-agents — hold the rest). Total-based math would over-admit; the free baseline
+        // must reject. Total = 64 GB, free = 4 GB, footprint = 8 GB → reject.
+        var harness = new Harness
+        {
+            Profile = GpuProfileWithFreeVram(64 * Gb, availableVramBytes: 4 * Gb),
+            Footprint = ModelFootprint.Known(8 * Gb)
+        };
+        var service = harness.Build();
+
+        var decision = await service.DecideAsync(Model, ModelRole.Chat, CancellationToken.None);
+
+        AssertEx.Equal(CapacityVerdict.RejectInsufficient, decision.Verdict);
+        AssertEx.Equal(0, harness.Ledger.ReservedBytes);
+    }
+
+    [Test]
+    public async Task Capacity_GpuMode_WhenFreeVramFits_Admits()
+    {
+        // Free baseline comfortably fits the footprint → admit and reserve. Total is larger but irrelevant now.
+        var harness = new Harness
+        {
+            Profile = GpuProfileWithFreeVram(64 * Gb, availableVramBytes: 20 * Gb),
+            Footprint = ModelFootprint.Known(8 * Gb)
+        };
+        var service = harness.Build();
+
+        var decision = await service.DecideAsync(Model, ModelRole.Chat, CancellationToken.None);
+
+        AssertEx.Equal(CapacityVerdict.Allow, decision.Verdict);
+        AssertEx.Equal(8 * Gb, harness.Ledger.ReservedBytes);
+    }
+
+    [Test]
+    public async Task Capacity_GpuMode_WhenFreeVramUnknown_FallsBackToTotalVram()
+    {
+        // Free-VRAM probe unavailable (AvailableVramBytes null) → degraded fallback uses total VRAM minus the ledger.
+        // Total = 64 GB, footprint = 8 GB → admit (the documented over-admission risk; process cap is the backstop).
+        var harness = new Harness
+        {
+            Profile = GpuProfileWithFreeVram(64 * Gb, availableVramBytes: null),
+            Footprint = ModelFootprint.Known(8 * Gb)
+        };
+        var service = harness.Build();
+
+        var decision = await service.DecideAsync(Model, ModelRole.Chat, CancellationToken.None);
+
+        AssertEx.Equal(CapacityVerdict.Allow, decision.Verdict);
+    }
+
+    [Test]
+    public async Task Capacity_LocalDecision_ReadsFreshProfile_NotBootCache()
+    {
+        // A capacity decision must re-probe live VRAM/RAM (forceRefresh:true) — a boot-time cached free-VRAM figure
+        // would defeat the resident-model accounting.
+        var harness = new Harness
+        {
+            Profile = GpuProfile(64 * Gb),
+            Footprint = ModelFootprint.Known(4 * Gb)
+        };
+        var service = harness.Build();
+
+        await service.DecideAsync(Model, ModelRole.Chat, CancellationToken.None);
+
+        await harness.HardwareProfiler.Received().GetProfileAsync(forceRefresh: true, Arg.Any<CancellationToken>());
+        await harness.HardwareProfiler.DidNotReceive().GetProfileAsync(forceRefresh: false, Arg.Any<CancellationToken>());
+    }
+
+    [Test]
     public async Task Capacity_WhenTwoDifferentModelsRaceTheGate_DoesNotDoubleAdmit()
     {
         // Budget = 10 GB, each model = 6 GB → at most one of two concurrent different-model spawns can be admitted; the
@@ -217,13 +290,22 @@ public sealed class CapacityServiceTests
         AssertEx.True(decision.OllamaEvictionWarning, "a different running Ollama model that won't fit must flag the eviction warning.");
     }
 
+    // An empty-GPU profile: the measured free-VRAM baseline equals total, so existing fit expectations are unchanged.
     private static HardwareProfile GpuProfile(long vramBytes)
+    {
+        return GpuProfileWithFreeVram(vramBytes, availableVramBytes: vramBytes);
+    }
+
+    // A GPU profile with an explicit free-VRAM baseline (or null to force the total-VRAM fallback). Total VRAM is held
+    // separate from free so a test can model residents already holding VRAM the ledger never saw.
+    private static HardwareProfile GpuProfileWithFreeVram(long vramBytes, long? availableVramBytes)
     {
         return new HardwareProfile
         {
             TotalRamBytes = 64 * Gb,
             AvailableRamBytes = 48 * Gb,
             VramBytes = vramBytes,
+            AvailableVramBytes = availableVramBytes,
             VramKnown = true,
             GpuVendor = GpuVendor.Nvidia,
             GpuAccelAvailable = true,

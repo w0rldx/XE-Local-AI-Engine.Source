@@ -73,15 +73,29 @@ public sealed class FtsSearch : IFtsSearch
     }
 
     /// <summary>
-    ///     Escapes an untrusted search string into a single safe FTS5 <c>MATCH</c> term. The whole string is wrapped in
-    ///     double quotes and every embedded double quote is doubled, so FTS5 reads it as one quoted string literal (a
-    ///     phrase). Operator characters (<c>- * : ( ) " ^</c>) inside the string are therefore treated as ordinary text
-    ///     and can never inject query syntax or trigger a MATCH parse error. Example: the input <c>foo "bar</c> becomes
-    ///     <c>"foo ""bar"</c>.
+    ///     Escapes an untrusted search string into a safe FTS5 <c>MATCH</c> expression. The string is split on whitespace
+    ///     and each token is wrapped in double quotes (with embedded double quotes doubled), then the quoted tokens are
+    ///     joined with the <c>OR</c> operator. Quoting each token individually makes operator characters
+    ///     (<c>- * : ( ) " ^</c>) and bare keywords (<c>OR AND NOT NEAR</c>) inside a token ordinary text, so the input
+    ///     can never inject query syntax or trigger a MATCH parse error. <c>OR</c> (rather than implicit <c>AND</c>) keeps
+    ///     recall high for RRF fusion: a document matching any term still surfaces, while BM25 continues to rank documents
+    ///     that match more terms higher. A whitespace-only or empty input yields an empty quoted phrase, which is valid
+    ///     FTS5 syntax that matches no rows. Example: <c>embedding model config</c> becomes
+    ///     <c>"embedding" OR "model" OR "config"</c>.
     /// </summary>
     public static string EscapeMatchQuery(string query)
     {
         ArgumentNullException.ThrowIfNull(query);
-        return string.Concat("\"", query.Replace("\"", "\"\"", StringComparison.Ordinal), "\"");
+
+        var tokens = query.Split((char[]?)null, StringSplitOptions.RemoveEmptyEntries);
+        if (tokens.Length == 0)
+        {
+            // An empty MATCH string is a parse error, so emit an empty quoted phrase: valid syntax that matches nothing.
+            return "\"\"";
+        }
+
+        return string.Join(
+            " OR ",
+            tokens.Select(static token => string.Concat("\"", token.Replace("\"", "\"\"", StringComparison.Ordinal), "\"")));
     }
 }
