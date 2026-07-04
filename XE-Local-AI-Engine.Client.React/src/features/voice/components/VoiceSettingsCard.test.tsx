@@ -11,14 +11,15 @@ import type { VoiceManifest } from "@/core/runtime/VoiceManifest";
 // Mock the generated TanStack factories so the card → useVoiceNodeSettings → real withResponseValidation bridge runs
 // against owned queryFn/mutationFn (no network). The real hook still composes the mutation onSuccess invalidation, so
 // this exercises the full read → toggle → save → invalidate path.
-const { getNodeSettingsOptionsMock, saveMutationFn, toastError, nodeSettingsQueryKey, voiceManifestQueryKey } =
-	vi.hoisted(() => ({
+const { getNodeSettingsOptionsMock, saveMutationFn, toastError, nodeSettingsQueryKey, voiceManifestQueryKey } = vi.hoisted(
+	() => ({
 		getNodeSettingsOptionsMock: vi.fn(),
 		saveMutationFn: vi.fn(),
 		toastError: vi.fn(),
 		nodeSettingsQueryKey: ["getNodeSettings"] as const,
 		voiceManifestQueryKey: ["getVoiceManifest"] as const,
-	}));
+	}),
+);
 
 vi.mock("@/core/api/generated/@tanstack/react-query.gen", () => ({
 	getNodeSettingsOptions: getNodeSettingsOptionsMock,
@@ -39,7 +40,7 @@ vi.mock("@/features/voice/VoiceRuntimeContext", () => ({
 vi.mock("@/core/ui/notifications/Toast", () => ({ toast: { error: toastError, success: vi.fn() } }));
 
 vi.mock("react-i18next", () => ({
-	useTranslation: () => ({ t: (key: string) => key }),
+	useTranslation: () => ({ t: (key: string) => key, i18n: { language: "en" } }),
 }));
 
 import { VoiceSettingsCard } from "@/features/voice/components/VoiceSettingsCard";
@@ -133,9 +134,7 @@ describe("VoiceSettingsCard operator controls", () => {
 
 		fireEvent.click(gate);
 
-		await waitFor(() =>
-			expect(invalidateSpy).toHaveBeenCalledWith(expect.objectContaining({ queryKey: voiceManifestQueryKey })),
-		);
+		await waitFor(() => expect(invalidateSpy).toHaveBeenCalledWith(expect.objectContaining({ queryKey: voiceManifestQueryKey })));
 		expect(invalidateSpy).toHaveBeenCalledWith(expect.objectContaining({ queryKey: nodeSettingsQueryKey }));
 	});
 });

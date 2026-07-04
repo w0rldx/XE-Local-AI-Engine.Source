@@ -22,10 +22,12 @@ import { sanitizeForSpeech } from "@/core/runtime/SentenceBuffer";
 import { findVoiceById } from "@/core/runtime/VoiceManifest";
 import { VoiceRuntime, type VoiceRuntimeError } from "@/core/runtime/VoiceRuntime";
 import { detectAnswerLanguage } from "@/features/voice/DetectAnswerLanguage";
+import { toSpeakableText } from "@/features/voice/SpeakableText";
 import { useVoiceManifest } from "@/features/voice/useVoiceManifest";
-import { voicePreviewSample } from "@/features/voice/VoicePreviewSample";
 import { useVoicePreferencesStore } from "@/features/voice/VoicePreferencesStore";
+import { voicePreviewSample } from "@/features/voice/VoicePreviewSample";
 import { VoiceRuntimeContext, type VoiceRuntimeContextValue } from "@/features/voice/VoiceRuntimeContext";
+import { resolveOsVoiceLanguage } from "@/features/voice/WebSpeechVoiceCatalog";
 
 function hasAudioContext(): boolean {
 	return typeof AudioContext !== "undefined";
@@ -163,7 +165,7 @@ export function ClientAiRuntimeProvider({ children }: { readonly children: React
 				return;
 			}
 
-			const sanitized = sanitizeForSpeech(text);
+			const sanitized = sanitizeForSpeech(toSpeakableText(text));
 			if (sanitized.length === 0) {
 				return;
 			}
@@ -172,9 +174,12 @@ export function ClientAiRuntimeProvider({ children }: { readonly children: React
 			const voiceId = prefs.voiceProfile || manifest?.defaultVoiceId || undefined;
 			// "Selected voice always wins": the manual Play button routes by the SELECTED voice's OWN language so
 			// it matches the node-settings preview exactly (the caller no longer guesses a language from the answer).
-			// detectAnswerLanguage is the fallback only when no voice resolves (no selection AND no manifest default).
+			// A voiceId that resolves to no manifest entry may still be a real OS voice picked from the full system
+			// catalog (WebSpeechVoiceCatalog) — resolve its language there before falling back to detectAnswerLanguage,
+			// which only applies when no voice resolves at all (no selection AND no manifest default).
 			const selectedVoice = manifest ? findVoiceById(manifest, voiceId) : undefined;
-			const language = selectedVoice?.language ?? detectAnswerLanguage(sanitized);
+			const osVoiceLanguage = selectedVoice || !voiceId ? undefined : resolveOsVoiceLanguage(voiceId);
+			const language = selectedVoice?.language ?? osVoiceLanguage ?? detectAnswerLanguage(sanitized);
 			setPlayingMessageId(messageId);
 			await resumeAudio();
 			await runtime.speak(sanitized, { language, voiceId, rate: prefs.speakingRate });
@@ -192,8 +197,10 @@ export function ClientAiRuntimeProvider({ children }: { readonly children: React
 			// Speak the sample in the voice's OWN language (drives the en→Kokoro / de→Web-Speech routing correctly) at
 			// the user's current speaking rate, so the audition matches what they'd actually hear. Independent of the
 			// per-user enable/autoplay toggles — previewing is exactly how the user decides whether to turn voice on.
+			// A voiceId outside the manifest may be an OS voice picked from the full system catalog — resolve its
+			// language there so previewing an arbitrary OS voice speaks that voice's own language, not English.
 			const voice = manifest ? findVoiceById(manifest, voiceId) : undefined;
-			const language = voice?.language ?? "en";
+			const language = voice?.language ?? resolveOsVoiceLanguage(voiceId) ?? "en";
 			const prefs = useVoicePreferencesStore.getState();
 			await resumeAudio();
 			await runtime.speak(voicePreviewSample(language), { language, voiceId, rate: prefs.speakingRate });

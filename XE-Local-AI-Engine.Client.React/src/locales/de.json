@@ -3035,7 +3035,9 @@
 			"operatorDefaultProfileLabel": "Standardstimme",
 			"operatorDefaultProfileDescription": "Die Stimme, mit der neue Benutzer auf diesem Knoten starten.",
 			"operatorSaveError": "Die Sprach-Einstellung des Knotens konnte nicht gespeichert werden.",
-			"previewLabel": "Stimme anhören"
+			"previewLabel": "Stimme anhören",
+			"builtInVoicesGroupLabel": "Integrierte Stimmen",
+			"systemVoiceGroupLabel": "Systemstimmen ({{language}})"
 		}
 	}
 }
