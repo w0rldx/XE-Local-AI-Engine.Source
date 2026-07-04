@@ -121,4 +121,61 @@ describe("buildNodeSettingsRequest", () => {
 		const onResult = buildNodeSettingsRequest(form, baseline, bounds, true);
 		expect(onResult.body.orchestrationIdleTimeoutSeconds).toBe(99);
 	});
+
+	it("sends a changed speculative mode and prompt-cache reuse (always shown, no developer gate)", () => {
+		const form = { ...baseline, speculativeMode: "ngram-mod", chatCacheReuse: 512 };
+		const { body, errors } = buildNodeSettingsRequest(form, baseline, bounds, false);
+		expect(errors).toEqual({});
+		expect(body.speculativeMode).toBe("ngram-mod");
+		expect(body.chatCacheReuse).toBe(512);
+	});
+
+	it("accepts 0 as the disable value for prompt-cache reuse", () => {
+		const form = { ...baseline, chatCacheReuse: 0 };
+		const { body, errors } = buildNodeSettingsRequest(form, baseline, bounds, false);
+		expect(errors["chatCacheReuse"]).toBeUndefined();
+		expect(body.chatCacheReuse).toBe(0);
+	});
+
+	it("rejects an unknown speculative mode", () => {
+		const form = { ...baseline, speculativeMode: "totally-bogus" };
+		const { errors } = buildNodeSettingsRequest(form, baseline, bounds, false);
+		expect(errors["speculativeMode"]).toBe("mode");
+	});
+
+	it("requires a draft model for a draft-* mode", () => {
+		const form = { ...baseline, speculativeMode: "draft-simple", speculativeDraftModelName: "" };
+		const { body, errors } = buildNodeSettingsRequest(form, baseline, bounds, false);
+		expect(errors["speculativeDraftModelName"]).toBe("required");
+		// The mode itself is still valid, so no mode error — only the missing draft model blocks the save.
+		expect(errors["speculativeMode"]).toBeUndefined();
+		expect(body.speculativeDraftModelName).toBeUndefined();
+	});
+
+	it("does NOT require a draft model for an ngram-* mode with no draft model", () => {
+		const form = { ...baseline, speculativeMode: "ngram-mod", speculativeDraftModelName: "" };
+		const { body, errors } = buildNodeSettingsRequest(form, baseline, bounds, false);
+		expect(errors["speculativeDraftModelName"]).toBeUndefined();
+		expect(body.speculativeMode).toBe("ngram-mod");
+	});
+
+	it("sends the draft model name and draft tokens for a draft-* mode", () => {
+		const form = {
+			...baseline,
+			speculativeMode: "draft-simple",
+			speculativeDraftModelName: "my-draft",
+			speculativeDraftMaxTokens: 5,
+		};
+		const { body, errors } = buildNodeSettingsRequest(form, baseline, bounds, false);
+		expect(errors).toEqual({});
+		expect(body.speculativeMode).toBe("draft-simple");
+		expect(body.speculativeDraftModelName).toBe("my-draft");
+		expect(body.speculativeDraftMaxTokens).toBe(5);
+	});
+
+	it("rejects out-of-range draft tokens", () => {
+		const form = { ...baseline, speculativeMode: "draft-simple", speculativeDraftModelName: "d", speculativeDraftMaxTokens: 99 };
+		const { errors } = buildNodeSettingsRequest(form, baseline, bounds, false);
+		expect(errors["speculativeDraftMaxTokens"]).toBe("range");
+	});
 });

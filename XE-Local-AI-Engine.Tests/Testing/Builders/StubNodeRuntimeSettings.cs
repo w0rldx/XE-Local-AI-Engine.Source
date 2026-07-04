@@ -25,6 +25,11 @@ public sealed class StubNodeRuntimeSettings
     private int _maxResponseSizeMb = StoredNodeSettings.DefaultMaxResponseSizeMb;
     private int _orchestrationIdleTimeoutSeconds = StoredNodeSettings.DefaultOrchestrationIdleTimeoutSeconds;
     private IReadOnlyList<string> _toolCapableModels = ["qwen3:8b"];
+    private int _chatCacheReuse = StoredNodeSettings.DefaultChatCacheReuse;
+    private string _speculativeMode = StoredNodeSettings.DefaultSpeculativeMode;
+    private string? _speculativeDraftModelName;
+    private int _speculativeDraftMaxTokens = StoredNodeSettings.DefaultSpeculativeDraftMaxTokens;
+    private int? _speculativeDraftGpuLayers;
 
     public static StubNodeRuntimeSettings Create()
     {
@@ -112,6 +117,37 @@ public sealed class StubNodeRuntimeSettings
         return this;
     }
 
+    public StubNodeRuntimeSettings WithChatCacheReuse(int chatCacheReuse)
+    {
+        _chatCacheReuse = chatCacheReuse;
+        return this;
+    }
+
+    public StubNodeRuntimeSettings WithSpeculativeMode(string speculativeMode)
+    {
+        ArgumentNullException.ThrowIfNull(speculativeMode);
+        _speculativeMode = speculativeMode;
+        return this;
+    }
+
+    public StubNodeRuntimeSettings WithSpeculativeDraftModelName(string? speculativeDraftModelName)
+    {
+        _speculativeDraftModelName = speculativeDraftModelName;
+        return this;
+    }
+
+    public StubNodeRuntimeSettings WithSpeculativeDraftMaxTokens(int speculativeDraftMaxTokens)
+    {
+        _speculativeDraftMaxTokens = speculativeDraftMaxTokens;
+        return this;
+    }
+
+    public StubNodeRuntimeSettings WithSpeculativeDraftGpuLayers(int? speculativeDraftGpuLayers)
+    {
+        _speculativeDraftGpuLayers = speculativeDraftGpuLayers;
+        return this;
+    }
+
     public INodeRuntimeSettings Build()
     {
         var settings = Substitute.For<INodeRuntimeSettings>();
@@ -132,6 +168,11 @@ public sealed class StubNodeRuntimeSettings
         settings.GetAgentHomeMaxPatchBytesAsync(Arg.Any<CancellationToken>()).Returns(_agentHomeMaxPatchBytes);
         settings.GetMaxPendingToolCallAgeMinutesAsync(Arg.Any<CancellationToken>()).Returns(_maxPendingToolCallAgeMinutes);
         settings.GetSamplingDefaultsAsync(Arg.Any<CancellationToken>()).Returns((SamplingOptions?)null);
+        settings.GetChatCacheReuseAsync(Arg.Any<CancellationToken>()).Returns(_chatCacheReuse);
+        settings.GetSpeculativeModeAsync(Arg.Any<CancellationToken>()).Returns(_speculativeMode);
+        settings.GetSpeculativeDraftModelNameAsync(Arg.Any<CancellationToken>()).Returns(_speculativeDraftModelName);
+        settings.GetSpeculativeDraftMaxTokensAsync(Arg.Any<CancellationToken>()).Returns(_speculativeDraftMaxTokens);
+        settings.GetSpeculativeDraftGpuLayersAsync(Arg.Any<CancellationToken>()).Returns(_speculativeDraftGpuLayers);
 
         // Synchronous twins (composition/ctor path) must mirror the async values so consumers repointed onto the sync
         // getters (e.g. InvocationRunner, the DI factory seeds) observe the same configured knobs.
@@ -145,6 +186,11 @@ public sealed class StubNodeRuntimeSettings
         settings.GetMaxResponseSizeMb().Returns(_maxResponseSizeMb);
         settings.GetOrchestrationIdleTimeoutSeconds().Returns(_orchestrationIdleTimeoutSeconds);
         settings.GetMaxPendingToolCallAgeMinutes().Returns(_maxPendingToolCallAgeMinutes);
+        settings.GetChatCacheReuse().Returns(_chatCacheReuse);
+        settings.GetSpeculativeMode().Returns(_speculativeMode);
+        settings.GetSpeculativeDraftModelName().Returns(_speculativeDraftModelName);
+        settings.GetSpeculativeDraftMaxTokens().Returns(_speculativeDraftMaxTokens);
+        settings.GetSpeculativeDraftGpuLayers().Returns(_speculativeDraftGpuLayers);
         return settings;
     }
 }

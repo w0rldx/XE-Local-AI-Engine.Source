@@ -3,6 +3,7 @@ namespace XE_Local_AI_Engine.Tests.Providers.LlamaServer;
 using XE_Local_AI_Engine.Providers.LlamaServer;
 using XE_Local_AI_Engine.Providers.LlamaServer.Contracts;
 using XE_Local_AI_Engine.Providers.LlamaServer.Implementation;
+using XE_Local_AI_Engine.Providers.LlamaServer.Options;
 using XE_Local_AI_Engine.Tests.Testing;
 
 /// <summary>
@@ -169,6 +170,96 @@ public sealed class SupervisorLaunchSpecProfileTests
     }
 
     [Test]
+    public void LaunchSpec_WhenNgramSpeculative_EmitsSpecTypeOnly_NoDraftFlags()
+    {
+        // ngram-* modes self-speculate from context — only --spec-type, never a draft-model/n-max/ngl flag.
+        var spec = BuildGpuSpec(ResolvedLaunchArguments.Explore(),
+            speculative: new SpeculativeDecodingSettings("ngram-mod", DraftModelPath: null, DraftMaxTokens: 0, DraftGpuLayers: null));
+
+        AssertEx.Equal("ngram-mod", spec.Arguments[IndexOf(spec.Arguments, "--spec-type") + 1]);
+        AssertEx.False(spec.Arguments.Contains("--spec-draft-model"), "ngram modes must not emit --spec-draft-model.");
+        AssertEx.False(spec.Arguments.Contains("--spec-draft-n-max"), "ngram modes must not emit --spec-draft-n-max.");
+        AssertEx.False(spec.Arguments.Contains("--spec-draft-ngl"), "ngram modes must not emit --spec-draft-ngl.");
+    }
+
+    [Test]
+    public void LaunchSpec_WhenDraftSpeculative_EmitsTypeModelAndNMax()
+    {
+        // draft-* modes run a second GGUF: --spec-type + --spec-draft-model + --spec-draft-n-max (+ -ngl when set).
+        var spec = BuildGpuSpec(ResolvedLaunchArguments.Explore(),
+            speculative: new SpeculativeDecodingSettings("draft-simple", DraftModelPath: "/fake/models/draft.gguf", DraftMaxTokens: 3, DraftGpuLayers: 16));
+
+        AssertEx.Equal("draft-simple", spec.Arguments[IndexOf(spec.Arguments, "--spec-type") + 1]);
+        AssertEx.Equal("/fake/models/draft.gguf", spec.Arguments[IndexOf(spec.Arguments, "--spec-draft-model") + 1]);
+        AssertEx.Equal("3", spec.Arguments[IndexOf(spec.Arguments, "--spec-draft-n-max") + 1]);
+        AssertEx.Equal("16", spec.Arguments[IndexOf(spec.Arguments, "--spec-draft-ngl") + 1]);
+    }
+
+    [Test]
+    public void LaunchSpec_WhenDraftMaxTokensZero_OmitsNMax()
+    {
+        // 0 is the "omit" sentinel: the flag must be absent, not "--spec-draft-n-max 0".
+        var spec = BuildGpuSpec(ResolvedLaunchArguments.Explore(),
+            speculative: new SpeculativeDecodingSettings("draft-mtp", DraftModelPath: "/fake/models/draft.gguf", DraftMaxTokens: 0, DraftGpuLayers: null));
+
+        AssertEx.Contains(spec.Arguments, "--spec-draft-model");
+        AssertEx.False(spec.Arguments.Contains("--spec-draft-n-max"), "DraftMaxTokens=0 must omit --spec-draft-n-max.");
+        AssertEx.False(spec.Arguments.Contains("--spec-draft-ngl"), "null DraftGpuLayers must omit --spec-draft-ngl.");
+    }
+
+    [Test]
+    public void LaunchSpec_WhenSpeculativeDisabled_EmitsNoSpecFlags()
+    {
+        // Default (none) is the ship-off state: no --spec-* flag anywhere.
+        var spec = BuildGpuSpec(ResolvedLaunchArguments.Explore());
+        AssertEx.False(spec.Arguments.Contains("--spec-type"), "Disabled speculative must omit --spec-type.");
+
+        var explicitNone = BuildGpuSpec(ResolvedLaunchArguments.Explore(), speculative: SpeculativeDecodingSettings.Disabled);
+        AssertEx.False(explicitNone.Arguments.Contains("--spec-type"), "mode=none must omit --spec-type.");
+    }
+
+    [Test]
+    public void LaunchSpec_WhenEmbeddingRole_NeverEmitsSpecFlags()
+    {
+        // Speculative decoding is chat-only; an embedding server must never carry --spec-* even if a mode is configured.
+        var spec = LlamaServerProcessSupervisor.BuildLaunchSpec(EmbeddingKey,
+            "/fake/bin/llama-server",
+            "/fake/models/embed.gguf",
+            port: 8080,
+            GpuVariant.Cuda,
+            ResolvedLaunchArguments.Explore(),
+            chatCacheReuse: 256,
+            speculative: new SpeculativeDecodingSettings("draft-simple", DraftModelPath: "/fake/models/draft.gguf", DraftMaxTokens: 3, DraftGpuLayers: null));
+
+        AssertEx.False(spec.Arguments.Contains("--spec-type"), "Embedding role must never emit --spec-type.");
+        AssertEx.False(spec.Arguments.Contains("--spec-draft-model"), "Embedding role must never emit --spec-draft-model.");
+    }
+
+    [Test]
+    public async Task LaunchSpec_WhenDraftModeMissingPath_FailsValidation()
+    {
+        // A draft-* mode with no draft model path is a deterministic misconfig — reject at build time, don't spawn.
+        await AssertEx.ThrowsAsync<LlamaRuntimeException>(() =>
+        {
+            _ = BuildGpuSpec(ResolvedLaunchArguments.Explore(),
+                speculative: new SpeculativeDecodingSettings("draft-eagle3", DraftModelPath: null, DraftMaxTokens: 3, DraftGpuLayers: null));
+            return Task.CompletedTask;
+        });
+    }
+
+    [Test]
+    public async Task LaunchSpec_WhenUnknownSpecMode_FailsValidation()
+    {
+        // An unrecognized --spec-type value is a config error surfaced clearly, not passed through to the server.
+        await AssertEx.ThrowsAsync<LlamaRuntimeException>(() =>
+        {
+            _ = BuildGpuSpec(ResolvedLaunchArguments.Explore(),
+                speculative: new SpeculativeDecodingSettings("draft-bogus", DraftModelPath: "/fake/models/draft.gguf", DraftMaxTokens: 3, DraftGpuLayers: null));
+            return Task.CompletedTask;
+        });
+    }
+
+    [Test]
     public async Task SpawnPath_AwaitsResolver_AndAppliesReplayArgs()
     {
         var launcher = new FakeProcessLauncher();
@@ -193,7 +284,43 @@ public sealed class SupervisorLaunchSpecProfileTests
         AssertEx.False(spec.Arguments.Contains("999"), "Replay spawn must not carry the old forced -ngl 999.");
     }
 
-    private static LlamaServerLaunchSpec BuildGpuSpec(ResolvedLaunchArguments resolved, int chatCacheReuse = 256)
+    [Test]
+    public async Task SpawnPath_ResolvesDraftModelNameToPath_AndEmitsIt()
+    {
+        // A draft-* mode stores the draft model by NAME; the supervisor must resolve it to an on-disk GGUF (the same way
+        // the target model is resolved) and emit that resolved path as --spec-draft-model. A real temp file is used so
+        // the spawn-path File.Exists guard passes.
+        var draftFile = Path.GetTempFileName();
+        try
+        {
+            var launcher = new FakeProcessLauncher();
+            var options = new LlamaServerSupervisorOptions
+            {
+                IdleTimeToLive = TimeSpan.FromHours(1),
+                MaxLoadedProcesses = 3,
+                SpeculativeMode = "draft-simple",
+                SpeculativeDraftModelName = "my-draft"
+            };
+            await using var supervisor = SupervisorFactory.Create(launcher,
+                modelStore: new FakeModelStore(fixedPath: draftFile),
+                variantSelector: new FakeVariantSelector(GpuVariant.Cuda),
+                options: options);
+
+            await supervisor.EnsureRunningAsync("llama3", ModelRole.Chat, CancellationToken.None);
+
+            AssertEx.True(launcher.Launches.TryDequeue(out var spec));
+            AssertEx.Equal("draft-simple", spec!.Arguments[IndexOf(spec.Arguments, "--spec-type") + 1]);
+            AssertEx.Equal(draftFile, spec.Arguments[IndexOf(spec.Arguments, "--spec-draft-model") + 1]);
+        }
+        finally
+        {
+            File.Delete(draftFile);
+        }
+    }
+
+    private static LlamaServerLaunchSpec BuildGpuSpec(ResolvedLaunchArguments resolved,
+        int chatCacheReuse = 256,
+        SpeculativeDecodingSettings speculative = default)
     {
         return LlamaServerProcessSupervisor.BuildLaunchSpec(ChatKey,
             "/fake/bin/llama-server",
@@ -201,7 +328,8 @@ public sealed class SupervisorLaunchSpecProfileTests
             port: 8080,
             GpuVariant.Cuda,
             resolved,
-            chatCacheReuse);
+            chatCacheReuse,
+            speculative);
     }
 
     private static int IndexOf(IReadOnlyList<string> args, string flag)

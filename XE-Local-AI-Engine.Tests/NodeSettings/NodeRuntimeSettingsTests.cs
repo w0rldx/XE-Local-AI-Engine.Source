@@ -106,6 +106,51 @@ public sealed class NodeRuntimeSettingsTests
     }
 
     [Test]
+    public async Task SpeculativeAndCacheReuse_StoredValuesPresent_OverrideDefaults()
+    {
+        var sut = CreateSut(new StoredNodeSettings
+            {
+                ChatCacheReuse = 512,
+                SpeculativeMode = "draft-simple",
+                SpeculativeDraftModelName = "draft-model",
+                SpeculativeDraftMaxTokens = 5,
+                SpeculativeDraftGpuLayers = 12
+            },
+            seedConfiguration: new Dictionary<string, string?>(StringComparer.Ordinal));
+
+        AssertEx.Equal(expected: 512, await sut.GetChatCacheReuseAsync());
+        AssertEx.Equal("draft-simple", await sut.GetSpeculativeModeAsync());
+        AssertEx.Equal("draft-model", await sut.GetSpeculativeDraftModelNameAsync());
+        AssertEx.Equal(expected: 5, await sut.GetSpeculativeDraftMaxTokensAsync());
+        AssertEx.Equal(expected: 12, await sut.GetSpeculativeDraftGpuLayersAsync());
+    }
+
+    [Test]
+    public async Task SpeculativeAndCacheReuse_StoredAbsent_UsesHardcodedDefaults()
+    {
+        var sut = CreateSut(new StoredNodeSettings(), seedConfiguration: new Dictionary<string, string?>(StringComparer.Ordinal));
+
+        AssertEx.Equal(expected: StoredNodeSettings.DefaultChatCacheReuse, await sut.GetChatCacheReuseAsync());
+        AssertEx.Equal(StoredNodeSettings.DefaultSpeculativeMode, await sut.GetSpeculativeModeAsync());
+        AssertEx.Null(await sut.GetSpeculativeDraftModelNameAsync());
+        AssertEx.Equal(expected: StoredNodeSettings.DefaultSpeculativeDraftMaxTokens, await sut.GetSpeculativeDraftMaxTokensAsync());
+        AssertEx.Null(await sut.GetSpeculativeDraftGpuLayersAsync());
+    }
+
+    [Test]
+    public async Task SpeculativeMode_FallsBackToDisabled_WhenStoredUnknown()
+    {
+        // A malformed stored mode (Normalize would null it, but the accessor guards independently as well).
+        var sut = CreateSut(new StoredNodeSettings
+            {
+                SpeculativeMode = "not-a-real-mode"
+            },
+            seedConfiguration: new Dictionary<string, string?>(StringComparer.Ordinal));
+
+        AssertEx.Equal(StoredNodeSettings.DefaultSpeculativeMode, await sut.GetSpeculativeModeAsync());
+    }
+
+    [Test]
     public async Task RecommendedTag_FallsBackToPin_WhenStoredMalformed()
     {
         // A malformed stored tag (Normalize would null it, but guard the accessor independently as well).

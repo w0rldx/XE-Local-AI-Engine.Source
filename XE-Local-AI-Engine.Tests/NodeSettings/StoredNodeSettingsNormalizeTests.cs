@@ -110,6 +110,85 @@ public sealed class StoredNodeSettingsNormalizeTests : IDisposable
     }
 
     [Test]
+    public async Task SpeculativeAndCacheReuse_WithinRange_RoundTrip()
+    {
+        var loaded = await SaveAndReloadAsync(new StoredNodeSettings
+        {
+            ChatCacheReuse = 512,
+            SpeculativeMode = "draft-simple",
+            SpeculativeDraftModelName = "  draft-model  ",
+            SpeculativeDraftMaxTokens = 5,
+            SpeculativeDraftGpuLayers = 12
+        });
+
+        AssertEx.Equal(expected: 512, loaded.ChatCacheReuse);
+        AssertEx.Equal("draft-simple", loaded.SpeculativeMode);
+        AssertEx.Equal("draft-model", loaded.SpeculativeDraftModelName);
+        AssertEx.Equal(expected: 5, loaded.SpeculativeDraftMaxTokens);
+        AssertEx.Equal(expected: 12, loaded.SpeculativeDraftGpuLayers);
+    }
+
+    [Test]
+    public async Task ChatCacheReuse_Zero_IsKept_AsDisableSentinel()
+    {
+        // 0 is the "disabled" value, inside [0, 8192], so it must survive normalization (not fall back to null/default).
+        var loaded = await SaveAndReloadAsync(new StoredNodeSettings
+        {
+            ChatCacheReuse = 0
+        });
+        AssertEx.Equal(expected: 0, loaded.ChatCacheReuse);
+    }
+
+    [Test]
+    [Arguments(-1)]
+    [Arguments(8193)]
+    public async Task ChatCacheReuse_OutOfRange_FallsBackToNull(int value)
+    {
+        var loaded = await SaveAndReloadAsync(new StoredNodeSettings
+        {
+            ChatCacheReuse = value
+        });
+        AssertEx.Null(loaded.ChatCacheReuse);
+    }
+
+    [Test]
+    [Arguments(-1)]
+    [Arguments(17)]
+    public async Task SpeculativeDraftMaxTokens_OutOfRange_FallsBackToNull(int value)
+    {
+        var loaded = await SaveAndReloadAsync(new StoredNodeSettings
+        {
+            SpeculativeDraftMaxTokens = value
+        });
+        AssertEx.Null(loaded.SpeculativeDraftMaxTokens);
+    }
+
+    [Test]
+    [Arguments("not-a-real-mode")]
+    [Arguments("draft-bogus")]
+    public async Task SpeculativeMode_Unknown_FallsBackToNull(string mode)
+    {
+        var loaded = await SaveAndReloadAsync(new StoredNodeSettings
+        {
+            SpeculativeMode = mode
+        });
+        AssertEx.Null(loaded.SpeculativeMode);
+    }
+
+    [Test]
+    [Arguments("ngram-mod")]
+    [Arguments("draft-eagle3")]
+    [Arguments("none")]
+    public async Task SpeculativeMode_Known_IsKept(string mode)
+    {
+        var loaded = await SaveAndReloadAsync(new StoredNodeSettings
+        {
+            SpeculativeMode = mode
+        });
+        AssertEx.Equal(mode, loaded.SpeculativeMode);
+    }
+
+    [Test]
     [Arguments("9692")]
     [Arguments("v9692")]
     [Arguments("bxyz")]

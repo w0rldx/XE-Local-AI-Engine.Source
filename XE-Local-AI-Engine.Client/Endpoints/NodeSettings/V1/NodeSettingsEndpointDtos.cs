@@ -49,6 +49,29 @@ public sealed record NodeSettingsResponse
 
     public string? RecommendedLlamaCppTag { get; init; }
 
+    // ── Chat launch tuning (speculative decoding + prompt-cache reuse; always shown) ──
+    public int? ChatCacheReuse { get; init; }
+
+    public int MinChatCacheReuse { get; init; }
+
+    public int MaxAllowedChatCacheReuse { get; init; }
+
+    public string? SpeculativeMode { get; init; }
+
+    public string? SpeculativeDraftModelName { get; init; }
+
+    public int? SpeculativeDraftMaxTokens { get; init; }
+
+    public int MinSpeculativeDraftMaxTokens { get; init; }
+
+    public int MaxAllowedSpeculativeDraftMaxTokens { get; init; }
+
+    public int? SpeculativeDraftGpuLayers { get; init; }
+
+    public int MinSpeculativeDraftGpuLayers { get; init; }
+
+    public int MaxAllowedSpeculativeDraftGpuLayers { get; init; }
+
     // ── Advanced / developer-only ──
     public long? HuggingFaceDiskMarginBytes { get; init; }
 
@@ -119,6 +142,17 @@ public sealed record SaveNodeSettingsRequest
 
     public string? RecommendedLlamaCppTag { get; init; }
 
+    // ── Chat launch tuning (speculative decoding + prompt-cache reuse) ──
+    public int? ChatCacheReuse { get; init; }
+
+    public string? SpeculativeMode { get; init; }
+
+    public string? SpeculativeDraftModelName { get; init; }
+
+    public int? SpeculativeDraftMaxTokens { get; init; }
+
+    public int? SpeculativeDraftGpuLayers { get; init; }
+
     // ── Advanced / developer-only ──
     public long? HuggingFaceDiskMarginBytes { get; init; }
 
@@ -170,6 +204,17 @@ internal static class NodeSettingsEndpointDtoMapper
             MinMaxResponseSizeMb = StoredNodeSettings.MinMaxResponseSizeMb,
             MaxAllowedMaxResponseSizeMb = StoredNodeSettings.MaxMaxResponseSizeMb,
             RecommendedLlamaCppTag = settings.RecommendedLlamaCppTag,
+            ChatCacheReuse = settings.ChatCacheReuse,
+            MinChatCacheReuse = StoredNodeSettings.MinChatCacheReuse,
+            MaxAllowedChatCacheReuse = StoredNodeSettings.MaxChatCacheReuse,
+            SpeculativeMode = settings.SpeculativeMode,
+            SpeculativeDraftModelName = settings.SpeculativeDraftModelName,
+            SpeculativeDraftMaxTokens = settings.SpeculativeDraftMaxTokens,
+            MinSpeculativeDraftMaxTokens = StoredNodeSettings.MinSpeculativeDraftMaxTokens,
+            MaxAllowedSpeculativeDraftMaxTokens = StoredNodeSettings.MaxSpeculativeDraftMaxTokens,
+            SpeculativeDraftGpuLayers = settings.SpeculativeDraftGpuLayers,
+            MinSpeculativeDraftGpuLayers = StoredNodeSettings.MinSpeculativeDraftGpuLayers,
+            MaxAllowedSpeculativeDraftGpuLayers = StoredNodeSettings.MaxSpeculativeDraftGpuLayers,
             HuggingFaceDiskMarginBytes = settings.HuggingFaceDiskMarginBytes,
             OrchestrationIdleTimeoutSeconds = settings.OrchestrationIdleTimeoutSeconds,
             MinOrchestrationIdleTimeoutSeconds = StoredNodeSettings.MinOrchestrationIdleTimeoutSeconds,
@@ -222,6 +267,15 @@ internal static class NodeSettingsEndpointDtoMapper
             RecommendedLlamaCppTag = request.RecommendedLlamaCppTag is null
                 ? currentSettings.RecommendedLlamaCppTag
                 : request.RecommendedLlamaCppTag.Trim(),
+            ChatCacheReuse = request.ChatCacheReuse ?? currentSettings.ChatCacheReuse,
+            SpeculativeMode = request.SpeculativeMode is null
+                ? currentSettings.SpeculativeMode
+                : request.SpeculativeMode.Trim(),
+            SpeculativeDraftModelName = request.SpeculativeDraftModelName is null
+                ? currentSettings.SpeculativeDraftModelName
+                : request.SpeculativeDraftModelName.Trim(),
+            SpeculativeDraftMaxTokens = request.SpeculativeDraftMaxTokens ?? currentSettings.SpeculativeDraftMaxTokens,
+            SpeculativeDraftGpuLayers = request.SpeculativeDraftGpuLayers ?? currentSettings.SpeculativeDraftGpuLayers,
             OrchestrationIdleTimeoutSeconds = request.OrchestrationIdleTimeoutSeconds ?? currentSettings.OrchestrationIdleTimeoutSeconds,
             AgentHomePrepareTimeoutSeconds = request.AgentHomePrepareTimeoutSeconds ?? currentSettings.AgentHomePrepareTimeoutSeconds,
             AgentHomeCommandTimeoutSeconds = request.AgentHomeCommandTimeoutSeconds ?? currentSettings.AgentHomeCommandTimeoutSeconds,

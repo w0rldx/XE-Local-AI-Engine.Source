@@ -25,6 +25,19 @@ public sealed class SaveNodeSettingsEndpoint(
     {
         var currentSettings = await _nodeSettingsStore.LoadAsync(ct).ConfigureAwait(false) ?? new StoredNodeSettings();
         var settings = req.ToStoredSettings(currentSettings);
+
+        // Cross-field guard on the MERGED result (the boundary validator only sees the request, not the current stored
+        // state): a draft-* speculative mode with no draft model must never persist — it would pass every field-level
+        // check and then fail chat-server start on the next spawn. This also covers the partial update that clears the
+        // draft model while leaving a previously-stored draft-* mode in place.
+        if (StoredNodeSettings.SpeculativeModeRequiresDraftModel(settings.SpeculativeMode)
+            && string.IsNullOrWhiteSpace(settings.SpeculativeDraftModelName))
+        {
+            AddError(r => r.SpeculativeDraftModelName, "Speculative decoding is set to a draft model mode, but no draft model was selected.");
+            await Send.ErrorsAsync(cancellation: ct).ConfigureAwait(false);
+            return;
+        }
+
         await _nodeSettingsStore.SaveAsync(settings, ct).ConfigureAwait(false);
         await TryReportCapabilitiesAsync(ct).ConfigureAwait(false);
         await Send.OkAsync(settings.ToResponse(), ct).ConfigureAwait(false);

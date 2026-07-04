@@ -46,6 +46,33 @@ public sealed class SaveNodeSettingsRequestValidator : Validator<SaveNodeSetting
             .InclusiveBetween(StoredNodeSettings.MinMaxResponseSizeMb, StoredNodeSettings.MaxMaxResponseSizeMb)
             .When(static request => request.MaxResponseSizeMb is not null);
 
+        // ── Chat launch tuning (speculative decoding + prompt-cache reuse) ──
+        RuleFor(static request => request.ChatCacheReuse!.Value)
+            .InclusiveBetween(StoredNodeSettings.MinChatCacheReuse, StoredNodeSettings.MaxChatCacheReuse)
+            .When(static request => request.ChatCacheReuse is not null);
+
+        RuleFor(static request => request.SpeculativeMode)
+            .Must(StoredNodeSettings.IsValidSpeculativeMode)
+            .When(static request => !string.IsNullOrWhiteSpace(request.SpeculativeMode))
+            .WithMessage("Unknown speculative decoding mode.");
+
+        RuleFor(static request => request.SpeculativeDraftMaxTokens!.Value)
+            .InclusiveBetween(StoredNodeSettings.MinSpeculativeDraftMaxTokens, StoredNodeSettings.MaxSpeculativeDraftMaxTokens)
+            .When(static request => request.SpeculativeDraftMaxTokens is not null);
+
+        RuleFor(static request => request.SpeculativeDraftGpuLayers!.Value)
+            .InclusiveBetween(StoredNodeSettings.MinSpeculativeDraftGpuLayers, StoredNodeSettings.MaxSpeculativeDraftGpuLayers)
+            .When(static request => request.SpeculativeDraftGpuLayers is not null);
+
+        // Cross-field: a draft-* mode needs a draft model. This boundary rule fires when the request itself sets a draft-*
+        // SpeculativeMode; it catches the common "pick draft mode, forget the model" case with an immediate 400. It cannot
+        // see the CURRENT stored mode (partial-update merge), so the endpoint additionally re-checks the merged result —
+        // together they guarantee a draft-* mode never persists without a draft model (which would fail chat-server start).
+        RuleFor(static request => request.SpeculativeDraftModelName)
+            .Must(static name => !string.IsNullOrWhiteSpace(name))
+            .When(static request => StoredNodeSettings.SpeculativeModeRequiresDraftModel(request.SpeculativeMode))
+            .WithMessage("Speculative decoding is set to a draft model mode, but no draft model was selected.");
+
         // ── Advanced / developer-only ──
         RuleFor(static request => request.HuggingFaceDiskMarginBytes!.Value)
             .GreaterThan(0)

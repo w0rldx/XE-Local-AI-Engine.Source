@@ -184,6 +184,14 @@ public sealed class NodeSettingsStore : INodeSettingsStore, IDisposable
             AgentHomeMaxPatchBytes = ClampPositiveLong(settings.AgentHomeMaxPatchBytes),
             MaxPendingToolCallAgeMinutes = ClampToRange(settings.MaxPendingToolCallAgeMinutes,
                 StoredNodeSettings.MinMaxPendingToolCallAgeMinutes, StoredNodeSettings.MaxMaxPendingToolCallAgeMinutes),
+            ChatCacheReuse = ClampToRange(settings.ChatCacheReuse,
+                StoredNodeSettings.MinChatCacheReuse, StoredNodeSettings.MaxChatCacheReuse),
+            SpeculativeMode = NormalizeSpeculativeMode(settings.SpeculativeMode),
+            SpeculativeDraftModelName = TrimToNull(settings.SpeculativeDraftModelName),
+            SpeculativeDraftMaxTokens = ClampToRange(settings.SpeculativeDraftMaxTokens,
+                StoredNodeSettings.MinSpeculativeDraftMaxTokens, StoredNodeSettings.MaxSpeculativeDraftMaxTokens),
+            SpeculativeDraftGpuLayers = ClampToRange(settings.SpeculativeDraftGpuLayers,
+                StoredNodeSettings.MinSpeculativeDraftGpuLayers, StoredNodeSettings.MaxSpeculativeDraftGpuLayers),
             AllowedVoiceModels = NormalizeStringList(settings.AllowedVoiceModels),
             DefaultVoiceProfile = TrimToNull(settings.DefaultVoiceProfile)
         };
@@ -218,6 +226,14 @@ public sealed class NodeSettingsStore : INodeSettingsStore, IDisposable
     {
         var trimmed = TrimToNull(value);
         return StoredNodeSettings.IsValidRecommendedLlamaCppTag(trimmed) ? trimmed : null;
+    }
+
+    private static string? NormalizeSpeculativeMode(string? value)
+    {
+        // An unknown/malformed mode falls back to null so the accessor re-seeds it to disabled (never persist junk that
+        // would surface as an invalid --spec-type at launch). A valid mode is kept trimmed.
+        var trimmed = TrimToNull(value);
+        return StoredNodeSettings.IsValidSpeculativeMode(trimmed) ? trimmed : null;
     }
 
     private static string? NormalizeAbsoluteUrl(string? value)

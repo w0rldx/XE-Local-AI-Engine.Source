@@ -46,6 +46,8 @@ vi.mock("@/core/api/generated/@tanstack/react-query.gen", () => ({
 	getNodeSettingsOptions: () => ({ queryKey: ["node-settings"], queryFn: () => Promise.resolve(null) }),
 	getNodeSettingsQueryKey: () => ["node-settings"],
 	saveNodeSettingsMutation: () => ({ mutationFn: vi.fn() }),
+	// Installed-models query feeding the speculative draft-model picker; empty list is enough for these tests.
+	listLocalModelsOptions: () => ({ queryKey: ["local-models"], queryFn: () => Promise.resolve({ items: [], isAvailable: false }) }),
 	// Local-runtime cards relocated from the model-fit advisor. The HF token status returns "no token" so the card
 	// renders without a backend; the llama.cpp runtime card is driven by getLlamaCppRuntimeOptions below.
 	ensureLlamaCppBinaryMutation: () => ({ mutationFn: vi.fn() }),

@@ -348,7 +348,18 @@ internal static class AddNodeModelRuntimeExtensions
         return new LlamaServerSupervisorOptions
         {
             MaxLoadedProcesses = runtimeSettings.GetLlamaMaxLoadedProcesses(),
-            IdleTimeToLive = runtimeSettings.GetLlamaIdleTimeToLive()
+            IdleTimeToLive = runtimeSettings.GetLlamaIdleTimeToLive(),
+
+            // Chat-role launch flags: prompt-cache reuse + speculative decoding. Seeded here (like the cap/TTL) because
+            // the provider option object cannot reach INodeRuntimeSettings (layer arrow Application → Providers). The
+            // draft model is stored as a NAME and resolved to its GGUF path on the supervisor spawn path, the same way
+            // the target model is — so the UI offers installed model names without knowing file paths. All of these are
+            // captured at host build, so an operator edit applies on the next node restart.
+            ChatCacheReuse = runtimeSettings.GetChatCacheReuse(),
+            SpeculativeMode = runtimeSettings.GetSpeculativeMode(),
+            SpeculativeDraftModelName = runtimeSettings.GetSpeculativeDraftModelName(),
+            SpeculativeDraftMaxTokens = runtimeSettings.GetSpeculativeDraftMaxTokens(),
+            SpeculativeDraftGpuLayers = runtimeSettings.GetSpeculativeDraftGpuLayers()
         };
     }
 

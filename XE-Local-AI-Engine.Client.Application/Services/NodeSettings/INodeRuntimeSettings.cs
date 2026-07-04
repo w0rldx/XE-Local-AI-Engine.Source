@@ -67,6 +67,21 @@ public interface INodeRuntimeSettings
     /// </summary>
     Task<SamplingOptions?> GetSamplingDefaultsAsync(CancellationToken cancellationToken = default);
 
+    /// <summary>The chat-role prompt-cache prefix-reuse window in tokens (stored &gt; seed 256; <c>0</c> disables).</summary>
+    Task<int> GetChatCacheReuseAsync(CancellationToken cancellationToken = default);
+
+    /// <summary>The chat-role speculative-decoding <c>--spec-type</c> (stored &gt; seed <c>none</c>).</summary>
+    Task<string> GetSpeculativeModeAsync(CancellationToken cancellationToken = default);
+
+    /// <summary>The installed draft-model name for <c>draft-*</c> modes, or <see langword="null" /> when unset.</summary>
+    Task<string?> GetSpeculativeDraftModelNameAsync(CancellationToken cancellationToken = default);
+
+    /// <summary>The draft tokens per step <c>--spec-draft-n-max</c> (stored &gt; seed 3; <c>0</c> omits the flag).</summary>
+    Task<int> GetSpeculativeDraftMaxTokensAsync(CancellationToken cancellationToken = default);
+
+    /// <summary>The draft-model GPU layers <c>--spec-draft-ngl</c>, or <see langword="null" /> when unset (flag omitted).</summary>
+    Task<int?> GetSpeculativeDraftGpuLayersAsync(CancellationToken cancellationToken = default);
+
     // Synchronous twins for the composition/startup path only (DI factory seeds + singleton constructors). These read
     // the stored settings synchronously to avoid blocking on async file I/O during host startup, which starves the
     // thread pool. Request-time consumers must use the async getters above.
@@ -100,4 +115,19 @@ public interface INodeRuntimeSettings
 
     /// <inheritdoc cref="GetMaxPendingToolCallAgeMinutesAsync" />
     int GetMaxPendingToolCallAgeMinutes();
+
+    /// <inheritdoc cref="GetChatCacheReuseAsync" />
+    int GetChatCacheReuse();
+
+    /// <inheritdoc cref="GetSpeculativeModeAsync" />
+    string GetSpeculativeMode();
+
+    /// <inheritdoc cref="GetSpeculativeDraftModelNameAsync" />
+    string? GetSpeculativeDraftModelName();
+
+    /// <inheritdoc cref="GetSpeculativeDraftMaxTokensAsync" />
+    int GetSpeculativeDraftMaxTokens();
+
+    /// <inheritdoc cref="GetSpeculativeDraftGpuLayersAsync" />
+    int? GetSpeculativeDraftGpuLayers();
 }

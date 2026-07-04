@@ -1110,7 +1110,9 @@
 					"format": "Must match the format b<number> (e.g. b9692).",
 					"url": "Enter a valid http:// or https:// URL.",
 					"invalid": "One or more entries are invalid.",
-					"positive": "Enter a positive whole number."
+					"positive": "Enter a positive whole number.",
+					"mode": "Unknown speculative decoding mode.",
+					"required": "Select a draft model for this mode."
 				},
 				"localChat": {
 					"title": "Local chat"
@@ -1176,6 +1178,31 @@
 				},
 				"maxPendingToolCallAgeMinutes": {
 					"label": "Max pending tool-call age"
+				},
+				"speculativeMode": {
+					"label": "Speculative decoding",
+					"description": "Draft-and-verify decoding raises single-user throughput. n-gram modes need no extra model; draft models use additional VRAM not yet counted by capacity checks. Applies after the node restarts.",
+					"options": {
+						"off": "Off",
+						"ngram-mod": "n-gram (no draft model)",
+						"ngram-cache": "n-gram cache (no draft model)",
+						"draft-simple": "Draft model (simple)",
+						"draft-eagle3": "Draft model (EAGLE-3)",
+						"draft-mtp": "Draft model (MTP)"
+					}
+				},
+				"speculativeDraftModel": {
+					"label": "Draft model",
+					"description": "An installed chat-capable model used as the drafter. Must share the target model's tokenizer family.",
+					"placeholder": "Select a draft model",
+					"empty": "No installed chat models"
+				},
+				"speculativeDraftMaxTokens": {
+					"label": "Draft tokens per step"
+				},
+				"chatCacheReuse": {
+					"label": "Prompt cache reuse",
+					"description": "Reuse an unchanged prompt prefix across turns (tokens). 0 disables. Applies after the node restarts."
 				}
 			}
 		},
