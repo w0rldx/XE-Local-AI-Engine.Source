@@ -2,6 +2,7 @@ namespace XE_Local_AI_Engine.Providers.StableDiffusionCpp;
 
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
+using Microsoft.Extensions.Logging;
 using XE_Local_AI_Engine.Providers.Abstractions.Image;
 using XE_Local_AI_Engine.Providers.StableDiffusionCpp.Contracts;
 using XE_Local_AI_Engine.Providers.StableDiffusionCpp.Implementation;
@@ -60,6 +61,16 @@ public static class StableDiffusionCppRuntimeServiceCollectionExtensions
         services.TryAddSingleton<IImageRuntime>(static sp =>
             new StableDiffusionCppRuntime(sp.GetRequiredService<IImageServerSupervisor>(),
                 sp.GetRequiredService<SdServerJobClient>()));
+
+        // Startup orphan reaper: kills stale sd-server processes THIS app left behind on a previous run. A hard host kill
+        // (e.g. `aspire stop`) skips the supervisor's graceful DisposeAsync teardown, orphaning the daemon while it still
+        // holds its loopback port + GPU VRAM and so blocking the next start. The reaper matches ONLY binaries under our own
+        // stable-diffusion.cpp cache root, so an unrelated sd-server is never touched. Best-effort — it never throws out of
+        // StartAsync, so it can never block startup. Mirrors the llama-server orphan reaper.
+        services.TryAddSingleton<IStaleImageServerProcessScanner, OsStaleImageServerProcessScanner>();
+        services.AddHostedService(static sp => new StaleImageServerReaper(sp.GetRequiredService<IStaleImageServerProcessScanner>(),
+            StableDiffusionCppBinaryManager.DefaultStableDiffusionBinariesRoot(),
+            sp.GetRequiredService<ILogger<StaleImageServerReaper>>()));
 
         return services;
     }

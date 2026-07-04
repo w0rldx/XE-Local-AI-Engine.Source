@@ -46,6 +46,53 @@ public sealed class HardwareProfilerTests
     }
 
     [Test]
+    public async Task HardwareProfiler_Nvidia_ParsesFreeVram_AsAvailableVramBytes()
+    {
+        // nvidia-smi memory.free yields the free-VRAM baseline the capacity gate uses; it is reported in MiB like total.
+        const string memInfo = "MemTotal:       32830012 kB\nMemAvailable:   24000000 kB\n";
+        var probe = new FakeProcessProbe()
+                    .OnNvidiaName("NVIDIA GeForce RTX 4090\n")
+                    .OnNvidiaMemoryTotal("24564\n")
+                    .OnNvidiaMemoryFree("8192\n");
+        var environment = new FakeEnvironment
+        {
+            IsLinux = true,
+            ProcMemInfo = memInfo,
+            ProcessorCount = 16
+        };
+
+        var profiler = new HardwareProfiler(probe, environment, new HardwareProfilerOptions());
+        var profile = await profiler.GetProfileAsync(forceRefresh: false, CancellationToken.None);
+
+        AssertEx.Equal(24564L * Mib, profile.VramBytes!.Value);
+        AssertEx.Equal(8192L * Mib, profile.AvailableVramBytes!.Value);
+    }
+
+    [Test]
+    public async Task HardwareProfiler_Nvidia_WhenFreeVramUnprobed_LeavesAvailableVramNull()
+    {
+        // When nvidia-smi reports total but the free query fails, AvailableVramBytes stays null so the capacity gate
+        // falls back to total-VRAM math rather than trusting a missing free figure.
+        const string memInfo = "MemTotal:       32830012 kB\nMemAvailable:   24000000 kB\n";
+        var probe = new FakeProcessProbe()
+                    .OnNvidiaName("NVIDIA GeForce RTX 4090\n")
+                    .OnNvidiaMemoryTotal("24564\n"); // no OnNvidiaMemoryFree → free query returns null.
+        var environment = new FakeEnvironment
+        {
+            IsLinux = true,
+            ProcMemInfo = memInfo,
+            ProcessorCount = 16
+        };
+
+        var profiler = new HardwareProfiler(probe, environment, new HardwareProfilerOptions());
+        var profile = await profiler.GetProfileAsync(forceRefresh: false, CancellationToken.None);
+
+        AssertEx.True(profile.VramKnown);
+        AssertEx.Equal(24564L * Mib, profile.VramBytes!.Value);
+        AssertEx.Null(profile.AvailableVramBytes);
+    }
+
+    [Test]
     public async Task HardwareProfiler_Linux_NvidiaSmi_SkipsLeadingNonNumericLine_ParsesVram()
     {
         // nvidia-smi can emit a leading warning banner before the numeric VRAM line; the profiler must scan past it
@@ -200,6 +247,7 @@ public sealed class HardwareProfilerTests
 
     private sealed class FakeProcessProbe : IProcessProbe
     {
+        private string? _nvidiaMemoryFree;
         private string? _nvidiaMemoryTotal;
         private string? _nvidiaName;
 
@@ -215,6 +263,11 @@ public sealed class HardwareProfilerTests
                 return Task.FromResult(_nvidiaMemoryTotal is null ? null : new ProcessProbeResult(ExitCode: 0, _nvidiaMemoryTotal));
             }
 
+            if (fileName == "nvidia-smi" && arguments.Any(argument => argument.Contains("memory.free", StringComparison.Ordinal)))
+            {
+                return Task.FromResult(_nvidiaMemoryFree is null ? null : new ProcessProbeResult(ExitCode: 0, _nvidiaMemoryFree));
+            }
+
             return Task.FromResult<ProcessProbeResult?>(null);
         }
 
@@ -227,6 +280,12 @@ public sealed class HardwareProfilerTests
         public FakeProcessProbe OnNvidiaMemoryTotal(string stdout)
         {
             _nvidiaMemoryTotal = stdout;
+            return this;
+        }
+
+        public FakeProcessProbe OnNvidiaMemoryFree(string stdout)
+        {
+            _nvidiaMemoryFree = stdout;
             return this;
         }
     }

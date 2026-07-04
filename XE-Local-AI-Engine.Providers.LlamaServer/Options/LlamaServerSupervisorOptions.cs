@@ -21,4 +21,25 @@ public sealed class LlamaServerSupervisorOptions
 
     /// <summary>Max consecutive crash-restarts for a single process before it surfaces a sanitized failure.</summary>
     public int MaxRestartAttempts { get; init; } = 3;
+
+    /// <summary>
+    ///     Minimum interval between reuse-path liveness probes for a single process. A reuse is handed out immediately
+    ///     (no HTTP) unless at least this long has passed since the last probe of that process, so the hot path stays
+    ///     cheap: at most one <c>/health</c> probe per process per interval, not one per request.
+    /// </summary>
+    public TimeSpan ReuseLivenessProbeInterval { get; init; } = TimeSpan.FromSeconds(5);
+
+    /// <summary>
+    ///     Number of <em>consecutive</em> failed reuse-path liveness probes after which a still-alive-but-unresponsive
+    ///     (wedged) process is torn down and respawned instead of being handed out again. A single transient failure never
+    ///     evicts a busy server; one successful probe resets the count.
+    /// </summary>
+    public int MaxReuseLivenessFailures { get; init; } = 3;
+
+    /// <summary>
+    ///     Bounds a single reuse-path liveness probe so a hung server (accepts the connection but never answers) cannot
+    ///     stall the hot path for the whole <see cref="System.Net.Http.HttpClient" /> timeout; exceeding it counts as a
+    ///     failed probe.
+    /// </summary>
+    public TimeSpan ReuseLivenessProbeTimeout { get; init; } = TimeSpan.FromSeconds(2);
 }

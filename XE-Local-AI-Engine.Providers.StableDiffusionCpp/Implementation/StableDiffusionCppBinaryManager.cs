@@ -442,6 +442,17 @@ public sealed class StableDiffusionCppBinaryManager : IStableDiffusionBinaryMana
             "XE-Local-AI-Engine");
     }
 
+    /// <summary>
+    ///     The directory every acquired stable-diffusion.cpp runtime is cached under for the default app-data root
+    ///     (<c>{cacheRoot}/stable-diffusion.cpp</c>, the same layout <see cref="EnsureBinaryAsync" /> writes its backend
+    ///     dirs into). Exposed so the startup orphan reaper matches ONLY <c>sd-server</c> binaries this app acquired,
+    ///     never an unrelated install.
+    /// </summary>
+    internal static string DefaultStableDiffusionBinariesRoot()
+    {
+        return Path.Combine(DefaultCacheRoot(), "stable-diffusion.cpp");
+    }
+
     private static OSPlatform CurrentOsPlatform()
     {
         if (OperatingSystem.IsWindows())

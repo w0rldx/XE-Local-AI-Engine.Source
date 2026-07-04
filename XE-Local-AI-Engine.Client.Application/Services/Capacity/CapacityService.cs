@@ -77,7 +77,10 @@ public sealed class CapacityService : ICapacityService
 
         var ollamaWarning = isOllama && running.Count > 0;
 
-        var profile = await _hardwareProfiler.GetProfileAsync(forceRefresh: false, ct).ConfigureAwait(false);
+        // forceRefresh: an admission decision runs per model-load (rare, and already serialized under this gate), so it
+        // must read a live VRAM/RAM snapshot rather than the profiler's boot-time cache — a stale free-VRAM figure would
+        // defeat the resident-model accounting below. Bounded: at most one probe in flight because of the gate.
+        var profile = await _hardwareProfiler.GetProfileAsync(forceRefresh: true, ct).ConfigureAwait(false);
         var footprint = await _footprintProvider.ResolveFootprintAsync(modelName, profile, ct).ConfigureAwait(false);
         if (!footprint.IsKnown)
         {
@@ -100,16 +103,28 @@ public sealed class CapacityService : ICapacityService
         return new CapacityDecision(CapacityVerdict.Allow, ReasonAllow, ollamaWarning, reservation);
     }
 
-    // The free byte budget. GPU mode: VRAM minus the running models' resident VRAM minus the ledger reservations. CPU
-    // mode: AvailableRamBytes is point-in-time and already nets out resident loaded models, so subtract ONLY the ledger
-    // reservations (in-flight-not-yet-resident spawns) — subtracting running footprints again would double-count.
+    // The free byte budget. Both modes measure a *free* baseline (which already nets out resident loaded models) and
+    // subtract ONLY the ledger reservations (in-flight-not-yet-resident spawns); subtracting resident footprints again
+    // would double-count. GPU mode uses AvailableVramBytes (nvidia-smi memory.free) as that baseline; CPU mode uses
+    // AvailableRamBytes. See the fallback note for the degraded GPU path when free VRAM could not be measured.
     private bool FitsByteBudget(HardwareProfile profile, long footprintBytes)
     {
         var useGpu = profile is { GpuAccelAvailable: true, VramKnown: true } && profile.VramBytes is > 0;
         if (useGpu)
         {
-            var free = profile.VramBytes!.Value - _ledger.ReservedBytes;
-            return footprintBytes <= free;
+            // Preferred: the measured free-VRAM baseline nets out VRAM already held by the main chat model and any warm
+            // sub-agent servers — none of which pass through the ledger — so subtract only the ledger reservations.
+            if (profile.AvailableVramBytes is { } freeVram)
+            {
+                return footprintBytes <= freeVram - _ledger.ReservedBytes;
+            }
+
+            // Fallback (free VRAM unmeasurable — e.g. a transient nvidia-smi partial, or a non-NVIDIA GPU that still
+            // reported a total): total VRAM minus the ledger only. Honest limitation — resident VRAM held outside the
+            // ledger (main chat model, warm sub-agents) is INVISIBLE on this path because the supervisor health rows
+            // carry no per-process byte footprint, so it can over-admit; the process-count cap is the backstop.
+            // follow-up: surface per-process footprints on the health snapshot to subtract them here too.
+            return footprintBytes <= profile.VramBytes!.Value - _ledger.ReservedBytes;
         }
 
         // CPU/RAM mode: a measured RAM budget is required; the estimator's own budget rule has no further fallback, so
