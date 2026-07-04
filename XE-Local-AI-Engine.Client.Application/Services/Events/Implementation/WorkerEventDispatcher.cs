@@ -57,6 +57,10 @@ public sealed partial class WorkerEventDispatcher : IWorkerEventDispatcher
 
     public event EventHandler<ToolCallLifecycleChangedEventArgs>? ToolCallLifecycleChanged;
 
+    // The live invocation, mutated in place only under _syncRoot. Off-lock consumers must not read its
+    // StreamedContent/StreamedThinkingContent (those getters materialize a StringBuilder that is unsafe against the
+    // concurrent streaming appends) — see IWorkerEventDispatcher.CurrentInvocation. Internal callers already hold
+    // _syncRoot when they touch it; GetCurrentInvocationSnapshot returns a locked clone for anyone who needs a copy.
     public InvocationState? CurrentInvocation { get; private set; }
 
     public bool IsAcceptingRemoteInvocations
@@ -410,7 +414,7 @@ public sealed partial class WorkerEventDispatcher : IWorkerEventDispatcher
             state =>
             {
                 state.Status = InvocationStatus.Running;
-                state.StreamedContent = string.Concat(state.StreamedContent, chunk);
+                state.AppendStreamedContent(chunk);
                 state.StreamedChunkCount++;
                 return state;
             });
@@ -426,7 +430,7 @@ public sealed partial class WorkerEventDispatcher : IWorkerEventDispatcher
             state =>
             {
                 state.Status = InvocationStatus.Running;
-                state.StreamedThinkingContent = string.Concat(state.StreamedThinkingContent, chunk);
+                state.AppendStreamedThinkingContent(chunk);
                 state.StreamedThinkingChunkCount++;
                 return state;
             });

@@ -1,5 +1,6 @@
 import { ActionIcon, CopyButton, Tooltip } from "@mantine/core";
 import { IconCheck, IconCopy } from "@tabler/icons-react";
+import { memo } from "react";
 import { useTranslation } from "react-i18next";
 import { PrismLight as SyntaxHighlighter } from "react-syntax-highlighter";
 import csharp from "react-syntax-highlighter/dist/esm/languages/prism/csharp";
@@ -30,8 +31,11 @@ SyntaxHighlighter.registerLanguage("ts", typescript);
  * Shared syntax-highlighted code block (PrismLight + oneDark + copy button). The single chat code-block
  * renderer — used by both the markdown component map and the tool-call card so highlighting, theming, and
  * the copy affordance stay visually consistent across chat.
+ *
+ * Memoized on (language, code): a completed message's fenced code blocks keep re-tokenizing through Prism on
+ * every streaming token of a later turn without this, since the whole message tree re-renders per token.
  */
-export function CodeBlock({ language, code }: { language: string; code: string }) {
+export const CodeBlock = memo(function CodeBlock({ language, code }: { language: string; code: string }) {
 	const { t } = useTranslation();
 
 	return (
@@ -65,4 +69,4 @@ export function CodeBlock({ language, code }: { language: string; code: string }
 			</SyntaxHighlighter>
 		</div>
 	);
-}
+});

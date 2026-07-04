@@ -16,6 +16,9 @@ import type {
 import { groupMessageRevisions } from "@/features/chat/models/MessageRevisionGrouping";
 
 const EMPTY_TIMELINE_ENTRIES: ChatTimelineEntry[] = [];
+// A scroll landing within this many pixels of the bottom counts as "at the bottom" and keeps auto-scroll
+// latched on; scrolling further up unlatches it so a user reading earlier output mid-generation is left alone.
+const NEAR_BOTTOM_THRESHOLD_PX = 100;
 
 interface ChatMessageListProps {
 	conversation?: ChatConversationModel;
@@ -64,6 +67,13 @@ export function ChatMessageList({
 }: ChatMessageListProps) {
 	const { t } = useTranslation();
 	const endRef = useRef<HTMLDivElement>(null);
+	// The ScrollArea viewport: a scroll listener on it drives the stick-to-bottom latch below.
+	const viewportRef = useRef<HTMLDivElement>(null);
+	// Whether auto-scroll should follow new content. Latched from actual scroll position (scroll listener), NOT
+	// inferred from geometry after content grows — a single large coalesced frame can add >100px in one commit,
+	// so measuring distance post-growth would wrongly disengage and strand the stream off-screen. The user
+	// scrolling up unlatches; scrolling back near the bottom re-latches. Defaults on so a fresh list sticks.
+	const stickToBottomRef = useRef(true);
 	const normalizedMessages = useMemo(
 		() =>
 			(messages ?? conversation?.messages ?? [])
@@ -109,18 +119,64 @@ export function ChatMessageList({
 	// startedAt, or the optimistic assistant row's createdAt — never the conversation's updatedAt,
 	// which tracks the latest mutation (the just-sent user message) and would mislabel the reply.
 	const streamingStartedAt = scopedStreamingMessage?.startedAt ?? streamingAssistantMessage?.createdAt;
-	const scrollKey = `${revisionGroups.length}:${timelineEntries.length}:${streamingContent.length}:${scopedStreamingMessage?.isActive ?? false}`;
+	const isStreamingActive = scopedStreamingMessage?.isActive ?? false;
+	const streamingTurnId = scopedStreamingMessage?.messageId;
+	const scrollKey = `${revisionGroups.length}:${timelineEntries.length}:${streamingContent.length}:${isStreamingActive}`;
+
+	// Drive the stick-to-bottom latch from real scroll events: unlatch once the user scrolls further than the
+	// threshold from the bottom, re-latch when they return near it. Our own scrollIntoView also lands near the
+	// bottom, so it keeps the latch engaged. Attached once; the viewport ref is populated by commit time.
+	useEffect(() => {
+		const viewport = viewportRef.current;
+		if (!viewport) {
+			return;
+		}
+
+		const handleScroll = (): void => {
+			const distanceFromBottom = viewport.scrollHeight - viewport.scrollTop - viewport.clientHeight;
+			stickToBottomRef.current = distanceFromBottom <= NEAR_BOTTOM_THRESHOLD_PX;
+		};
+
+		viewport.addEventListener("scroll", handleScroll, { passive: true });
+		return () => viewport.removeEventListener("scroll", handleScroll);
+	}, []);
+
+	// Re-latch when the thread changes or a NEW streaming turn begins so switching conversations or sending a
+	// message returns the view to the newest content — but never when a turn CLEARS on completion, which must
+	// leave a scrolled-up reader exactly where they are (that terminal case is guarded by the latch below).
+	const previousStreamingTurnRef = useRef<string | undefined>(undefined);
+	const previousConversationIdRef = useRef<string | undefined>(undefined);
+	useEffect(() => {
+		const conversationId = conversation?.id;
+		const turnStarted = Boolean(streamingTurnId) && streamingTurnId !== previousStreamingTurnRef.current;
+		const conversationChanged = conversationId !== previousConversationIdRef.current;
+		if (turnStarted || conversationChanged) {
+			stickToBottomRef.current = true;
+		}
+		previousStreamingTurnRef.current = streamingTurnId;
+		previousConversationIdRef.current = conversationId;
+	}, [conversation?.id, streamingTurnId]);
 
 	useEffect(() => {
+		// scrollKey is the re-run trigger: it changes whenever rendered content grows (new revision group, tool
+		// entry, or streamed character), which is exactly when we may need to follow the stream. Reading it here
+		// also keeps it a declared dependency.
 		if (scrollKey.length === 0) {
 			return;
 		}
 
-		endRef.current?.scrollIntoView({ behavior: "smooth", block: "end" });
-	}, [scrollKey]);
+		// Only follow the stream while latched (fixes both the large-frame disengage and the terminal-completion
+		// yank). Jump with "auto" during streaming so per-frame growth doesn't stack overlapping smooth-scroll
+		// animations; use "smooth" for one-off transitions (open/switch conversation, turn completion).
+		if (!stickToBottomRef.current) {
+			return;
+		}
+
+		endRef.current?.scrollIntoView({ behavior: isStreamingActive ? "auto" : "smooth", block: "end" });
+	}, [scrollKey, isStreamingActive]);
 
 	return (
-		<ScrollArea type="hover" scrollbarSize={8} offsetScrollbars="y" style={{ flex: 1, minHeight: 0 }}>
+		<ScrollArea type="hover" scrollbarSize={8} offsetScrollbars="y" viewportRef={viewportRef} style={{ flex: 1, minHeight: 0 }}>
 			<Stack gap="sm">
 				{revisionGroups.map((group) => {
 					const message = group.active;

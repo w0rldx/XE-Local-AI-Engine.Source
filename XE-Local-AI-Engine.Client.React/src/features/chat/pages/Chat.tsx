@@ -21,6 +21,7 @@ import {
 } from "@/features/chat/api/NodeChatStreamState";
 import { useNodeChatConnectionReadiness } from "@/features/chat/api/useNodeChatConnectionReadiness";
 import { ChatDisplayShell } from "@/features/chat/components/ChatDisplayShell";
+import { useStreamCommitScheduler } from "@/features/chat/hooks/useStreamCommitScheduler";
 import { buildChatUiCapabilities } from "@/features/chat/models/ChatCapabilityGates";
 import type {
 	AgentOption,
@@ -75,6 +76,16 @@ interface ActiveChatStream {
 	messageId: string;
 	requestId: string;
 	abortController: AbortController;
+}
+
+// One rAF-batched streaming commit (see commitStreamState / useStreamCommitScheduler).
+interface PendingStreamCommit {
+	conversation: ChatConversationModel;
+	// Terminal frames also refresh the conversation-LIST cache; per-token frames update only the detail cache.
+	writeConversationList: boolean;
+	streamingMessage: ChatStreamingState;
+	// Tool-lifecycle entries seen since the last flush; empty on plain token deltas.
+	toolTimelineEntries: ChatTimelineEntry[];
 }
 
 function mergeSelectedConversation(
@@ -484,16 +495,64 @@ export function Chat() {
 	const isCreatingConversation = createConversationMutation.isPending;
 	const isSending = Boolean(streamingMessage?.isActive);
 
-	const cacheConversation = useCallback(
+	// Write only the selected-conversation detail cache. Used for per-frame streaming commits: the sidebar has
+	// nothing to show for an in-flight turn, so folding the growing conversation into the whole list every frame
+	// (mergeSelectedConversation is O(list)) is wasted work. The list is refreshed on terminal events instead.
+	const cacheConversationDetail = useCallback(
 		(conversation: ChatConversationModel): void => {
 			queryClient.setQueryData(nodeChatQueryKeys.conversation(conversation.id), conversation);
+		},
+		[queryClient],
+	);
+
+	const cacheConversation = useCallback(
+		(conversation: ChatConversationModel): void => {
+			cacheConversationDetail(conversation);
 			queryClient.setQueryData<ChatConversationModel[]>(
 				nodeChatQueryKeys.conversationList(showArchivedConversations),
 				(current = emptyConversations) => mergeSelectedConversation(current, conversation),
 			);
 		},
-		[queryClient, showArchivedConversations],
+		[cacheConversationDetail, queryClient, showArchivedConversations],
 	);
+
+	// Per-frame stream commit: the streaming loops fold each SignalR event onto the previous state synchronously,
+	// then hand the derived state here; the scheduler batches these setState/cache writes to one commit per
+	// animation frame (terminal events flush immediately). Only the terminal frame refreshes the list cache.
+	const commitStreamState = useCallback(
+		(pending: PendingStreamCommit): void => {
+			if (pending.writeConversationList) {
+				cacheConversation(pending.conversation);
+			} else {
+				cacheConversationDetail(pending.conversation);
+			}
+			setStreamingMessage(pending.streamingMessage);
+			if (pending.toolTimelineEntries.length > 0) {
+				setTimelineEntries((current) => pending.toolTimelineEntries.reduce(accumulateToolTimelineEntry, current));
+			}
+			// Decoupled voice tap: mirror the reduced answer text into the TTS sentence buffer. Per-frame cadence is
+			// fine for sentence detection; the loops fire a final isActive:false flush when the stream ends.
+			onVoiceAnswerProgress(pending.streamingMessage);
+		},
+		[cacheConversation, cacheConversationDetail, onVoiceAnswerProgress],
+	);
+
+	// Fold two same-frame pending commits: the reducer already accumulated conversation + streamingMessage onto the
+	// latest, so those take the newer value; tool timeline entries are rare but must all survive to the flush.
+	const mergePendingStreamCommit = useCallback(
+		(previous: PendingStreamCommit, next: PendingStreamCommit): PendingStreamCommit => ({
+			conversation: next.conversation,
+			writeConversationList: previous.writeConversationList || next.writeConversationList,
+			streamingMessage: next.streamingMessage,
+			toolTimelineEntries:
+				previous.toolTimelineEntries.length > 0
+					? [...previous.toolTimelineEntries, ...next.toolTimelineEntries]
+					: next.toolTimelineEntries,
+		}),
+		[],
+	);
+
+	const streamScheduler = useStreamCommitScheduler(commitStreamState, mergePendingStreamCommit);
 
 	const resolveSendConversation = useCallback(
 		async (content: string): Promise<ChatConversationModel> => {
@@ -638,6 +697,9 @@ export function Chat() {
 			};
 
 			let lastVoiceStreaming: ChatStreamingState | undefined;
+			// Running reduced conversation for THIS turn: each event folds onto the previous one here so batched
+			// per-frame commits don't have to round-trip the query cache (which the scheduler hasn't flushed yet).
+			let latestConversation: ChatConversationModel | undefined;
 			try {
 				for await (const streamEvent of nodeChatAdapter.sendMessage(
 					{
@@ -663,35 +725,47 @@ export function Chat() {
 					},
 					abortController.signal,
 				)) {
-					// The conversation was deleted mid-stream: stop touching its cache so the aborted turn can
-					// neither re-create the removed cache entry nor be refetched in the finally below.
+					// The conversation was deleted mid-stream: drop any batched commit and stop touching its cache so
+					// the aborted turn can neither re-create the removed cache entry nor be refetched in the finally.
 					if (deletedConversationIds.current.has(conversation.id)) {
+						streamScheduler.cancel();
 						break;
 					}
 					const currentConversation =
+						latestConversation ??
 						queryClient.getQueryData<ChatConversationModel>(nodeChatQueryKeys.conversation(conversation.id)) ??
 						optimisticConversation;
 					const applied = applyNodeChatStreamEvent(currentConversation, streamEvent);
-					cacheConversation(applied.conversation);
-					setStreamingMessage(applied.streamingMessage);
-					// Decoupled voice tap: mirror the SAME reduced state into the TTS sentence buffer,
-					// next to the reducer call rather than inside it. Only the answer text is read.
+					latestConversation = applied.conversation;
 					lastVoiceStreaming = applied.streamingMessage;
-					onVoiceAnswerProgress(applied.streamingMessage);
-					const toolEntry = applied.timelineEntry;
-					if (toolEntry) {
-						setTimelineEntries((current) => accumulateToolTimelineEntry(current, toolEntry));
+					streamScheduler.schedule({
+						conversation: applied.conversation,
+						writeConversationList: applied.isTerminal,
+						streamingMessage: applied.streamingMessage,
+						toolTimelineEntries: applied.timelineEntry ? [applied.timelineEntry] : [],
+					});
+					// Commit terminal state now instead of waiting for the next frame so completion/failure lands
+					// promptly and the list-cache refresh above isn't left pending.
+					if (applied.isTerminal) {
+						streamScheduler.flush();
 					}
 				}
-				// Flush the trailing remainder once the stream completes (the terminal flush is idempotent).
+				// Flush any trailing batched delta (a stream that ended without an explicit terminal event).
+				streamScheduler.flush();
+				// Fire the final voice flush once the stream completes (the terminal flush is idempotent).
 				if (lastVoiceStreaming) {
 					onVoiceAnswerProgress({ ...lastVoiceStreaming, isActive: false });
 				}
 			} catch (error) {
+				// The turn errored: drop any batched delta and write the failed state synchronously below.
+				streamScheduler.cancel();
 				if (!abortController.signal.aborted && !deletedConversationIds.current.has(conversation.id)) {
 					const message = errorMessage(error);
 					const failureCategory = error instanceof StreamWatchdogError ? error.category : undefined;
+					// Prefer the running reduced state (which includes any delta whose frame we just cancelled) over the
+					// query cache so a failed turn keeps every received partial token, not the last flushed frame.
 					const currentConversation =
+						latestConversation ??
 						queryClient.getQueryData<ChatConversationModel>(nodeChatQueryKeys.conversation(conversation.id)) ??
 						optimisticConversation;
 					const failed = markNodeChatStreamTerminated(
@@ -729,6 +803,7 @@ export function Chat() {
 			resolveSendConversation,
 			samplingOptions,
 			selectedAgentId,
+			streamScheduler,
 			toolsEnabled,
 			onVoiceTurnStart,
 			onVoiceAnswerProgress,
@@ -766,6 +841,9 @@ export function Chat() {
 			setStreamingMessage({ conversationId: conversation.id, messageId: "", content: "", isActive: true });
 
 			let lastVoiceStreaming: ChatStreamingState | undefined;
+			// Running reduced conversation for THIS regenerate turn (see handleSend): each event folds onto the
+			// previous grouped conversation so batched frames don't read a not-yet-flushed query cache.
+			let latestConversation: ChatConversationModel | undefined;
 			try {
 				for await (const streamEvent of nodeChatAdapter.regenerateMessage(
 					conversation.id,
@@ -777,9 +855,10 @@ export function Chat() {
 					Object.keys(activeRevisionByGroup).length > 0 ? activeRevisionByGroup : undefined,
 					abortController.signal,
 				)) {
-					// The conversation was deleted mid-stream: stop touching its cache so the aborted turn can
-					// neither re-create the removed cache entry nor be refetched in the finally below.
+					// The conversation was deleted mid-stream: drop any batched commit and stop touching its cache so
+					// the aborted turn can neither re-create the removed cache entry nor be refetched in the finally.
 					if (deletedConversationIds.current.has(conversation.id)) {
+						streamScheduler.cancel();
 						break;
 					}
 					if (activeStream.current) {
@@ -790,7 +869,9 @@ export function Chat() {
 						};
 					}
 					const currentConversation =
-						queryClient.getQueryData<ChatConversationModel>(nodeChatQueryKeys.conversation(conversation.id)) ?? conversation;
+						latestConversation ??
+						queryClient.getQueryData<ChatConversationModel>(nodeChatQueryKeys.conversation(conversation.id)) ??
+						conversation;
 					const applied = applyNodeChatStreamEvent(currentConversation, streamEvent);
 					// Collapse the streaming variant onto the original in place (applyNodeChatStreamEvent rebuilds the
 					// variant row per event without a group id, so re-stamp every iteration). Only once the server id
@@ -799,23 +880,29 @@ export function Chat() {
 						streamEvent.messageId && streamEvent.messageId !== assistantMessageId
 							? stampVariantGroup(applied.conversation, assistantMessageId, streamEvent.messageId, variantGroupId)
 							: applied.conversation;
-					cacheConversation(grouped);
-					setStreamingMessage(applied.streamingMessage);
-					// Decoupled voice tap (only the answer text is read).
+					latestConversation = grouped;
 					lastVoiceStreaming = applied.streamingMessage;
-					onVoiceAnswerProgress(applied.streamingMessage);
-					const toolEntry = applied.timelineEntry;
-					if (toolEntry) {
-						setTimelineEntries((current) => accumulateToolTimelineEntry(current, toolEntry));
+					streamScheduler.schedule({
+						conversation: grouped,
+						writeConversationList: applied.isTerminal,
+						streamingMessage: applied.streamingMessage,
+						toolTimelineEntries: applied.timelineEntry ? [applied.timelineEntry] : [],
+					});
+					if (applied.isTerminal) {
+						streamScheduler.flush();
 					}
 				}
-				// Flush the trailing remainder once the regenerated stream completes (terminal flush is idempotent).
+				// Flush any trailing batched delta the loop left pending.
+				streamScheduler.flush();
+				// Fire the final voice flush once the regenerated stream completes (terminal flush is idempotent).
 				if (lastVoiceStreaming) {
 					onVoiceAnswerProgress({ ...lastVoiceStreaming, isActive: false });
 				}
 				// The stream events don't carry variant_group_id; the post-stream refetch loads it from persistence
 				// and groupMessageRevisions surfaces the newest sibling by default, so no explicit selection here.
 			} catch (error) {
+				// The turn errored: drop any batched delta before surfacing the error.
+				streamScheduler.cancel();
 				if (!abortController.signal.aborted && !deletedConversationIds.current.has(conversation.id)) {
 					if (isNodeChatReadOnlyConflict(error)) {
 						setStreamError(
@@ -836,12 +923,12 @@ export function Chat() {
 		},
 		[
 			activeRevisionByGroup,
-			cacheConversation,
 			displayConversations,
 			queryClient,
 			reasoningEffort,
 			refreshConversation,
 			selectedConversationId,
+			streamScheduler,
 			t,
 			toolsEnabled,
 			onVoiceTurnStart,
