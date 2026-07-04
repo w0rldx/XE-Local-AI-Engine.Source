@@ -387,7 +387,7 @@ public sealed class LlamaServerProcessSupervisor : ILlamaServerProcessSupervisor
         ILlamaServerProcessHandle? handle = null;
         try
         {
-            var spec = BuildLaunchSpec(key, binary.ServerExecutablePath, modelFilePath, port, variant, resolved);
+            var spec = BuildLaunchSpec(key, binary.ServerExecutablePath, modelFilePath, port, variant, resolved, _options.ChatCacheReuse);
 
             // Benchmark replay spawns need /metrics (explore already carries --metrics); only append when missing.
             if (ensureMetrics && !spec.Arguments.Contains("--metrics", StringComparer.Ordinal))
@@ -582,13 +582,18 @@ public sealed class LlamaServerProcessSupervisor : ILlamaServerProcessSupervisor
         }
     }
 
-    /// <summary>Builds the exact, ordered llama-server argument vector for a <c>(model, role)</c> on a port.</summary>
+    /// <summary>
+    ///     Builds the exact, ordered llama-server argument vector for a <c>(model, role)</c> on a port.
+    ///     <paramref name="chatCacheReuse" /> is the chat-role <c>--cache-reuse</c> window
+    ///     (<see cref="LlamaServerSupervisorOptions.ChatCacheReuse" />); <c>0</c> omits the flag.
+    /// </summary>
     internal static LlamaServerLaunchSpec BuildLaunchSpec(ProcessKey key,
         string executablePath,
         string modelFilePath,
         int port,
         GpuVariant variant,
-        ResolvedLaunchArguments resolved)
+        ResolvedLaunchArguments resolved,
+        int chatCacheReuse)
     {
         var args = new List<string>
         {
@@ -627,6 +632,18 @@ public sealed class LlamaServerProcessSupervisor : ILlamaServerProcessSupervisor
         {
             // Mandatory for tool/function calling — without it llama-server ignores the GGUF tool grammar.
             args.Add("--jinja");
+
+            // Prompt-cache prefix reuse. The app resends the full selected-path history every turn, so cache-reuse
+            // lets llama-server reuse the unchanged prompt prefix via KV cache shifting instead of reprocessing it —
+            // a large time-to-first-token win on multi-turn chat/agent conversations. A positive window enables the
+            // flag; 0 (upstream default) omits it. Chat role only: an embedding server does one-shot forward passes
+            // with no shared conversational prefix to reuse, so the flag is meaningless there. This is a server-launch
+            // flag independent of the OpenAI-compat request body (which exposes no cache_prompt/n_keep field).
+            if (chatCacheReuse > 0)
+            {
+                args.Add("--cache-reuse");
+                args.Add(chatCacheReuse.ToString(CultureInfo.InvariantCulture));
+            }
         }
         else
         {
