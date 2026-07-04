@@ -404,9 +404,75 @@ public sealed partial class InvocationRunner : IInvocationRunner
             {
                 segmentUpdates.Add(update);
                 var textChunk = update.Text;
-                var thinkingChunk = string.Concat(update.Contents?.OfType<TextReasoningContent>()
-                                                        .Select(t => t.Text) ?? Enumerable.Empty<string>());
-                var usage = update.Contents?.OfType<UsageContent>().LastOrDefault()?.Details;
+
+                // Reasoning text and the terminal usage snapshot are pulled in the SAME pass that fires the tool-call
+                // lifecycle events, rather than the three separate OfType/Concat/LastOrDefault scans this ran per
+                // streamed token. Local (ClientSide) tools execute via FunctionInvokingChatClient and never reach
+                // ExecuteApiToolCallAsync, so detecting FunctionCallContent / FunctionResultContent here is what keeps
+                // their lifecycle events on the SSE stream. Updates with no Contents (a plain text-only token) skip the
+                // loop entirely.
+                StringBuilder? thinkingBuilder = null;
+                UsageDetails? usage = null;
+
+                if (update.Contents is { Count: > 0 } contents)
+                {
+                    foreach (var content in contents)
+                    {
+                        switch (content)
+                        {
+                            case TextReasoningContent reasoning:
+                                (thinkingBuilder ??= new StringBuilder()).Append(reasoning.Text);
+                                break;
+
+                            case UsageContent usageContent:
+                                // LastOrDefault semantics: the last usage content in the update wins.
+                                usage = usageContent.Details;
+                                break;
+
+                            case FunctionCallContent functionCall:
+                                var callId = functionCall.CallId ?? functionCall.Name;
+                                pendingLocalToolCallNames[callId] = functionCall.Name;
+
+                                await transport.Dispatcher.ReportToolCallLifecycleAsync(new ToolCallLifecyclePayload
+                                {
+                                    InvocationId = package.InvocationId,
+                                    ToolCallId = callId,
+                                    ToolName = functionCall.Name,
+                                    Phase = ToolCallLifecyclePhase.Requested,
+                                    Arguments = functionCall.Arguments is not null
+                                        ? JsonSerializer.Serialize(functionCall.Arguments)
+                                        : null,
+                                    RequiresApproval = false
+                                }).ConfigureAwait(false);
+                                break;
+
+                            case FunctionResultContent functionResult:
+                                var resultCallId = functionResult.CallId ?? string.Empty;
+                                var toolName = pendingLocalToolCallNames.TryGetValue(resultCallId, out var name)
+                                    ? name
+                                    : resultCallId;
+
+                                await transport.Dispatcher.ReportToolCallLifecycleAsync(new ToolCallLifecyclePayload
+                                {
+                                    InvocationId = package.InvocationId,
+                                    ToolCallId = resultCallId,
+                                    ToolName = toolName,
+                                    Phase = ToolCallLifecyclePhase.Completed,
+                                    Result = functionResult.Result?.ToString(),
+                                    IsError = functionResult.Exception is not null
+                                }).ConfigureAwait(false);
+                                break;
+
+                            case ToolApprovalRequestContent approvalRequest:
+                                // FunctionInvokingChatClient surfaces this for an ApprovalRequiredAIFunction instead of
+                                // executing the tool. Capture it; the segment ends and the outer loop runs the approval
+                                // round-trip, then resumes threadlessly with the decision.
+                                pendingApproval = approvalRequest;
+                                break;
+                        }
+                    }
+                }
+
                 if (usage is not null)
                 {
                     stream.UsageSnapshot = UsageSnapshot.From(usage);
@@ -418,61 +484,9 @@ public sealed partial class InvocationRunner : IInvocationRunner
                         stream.UsageSnapshot.TotalTokens);
                 }
 
-                // Local (ClientSide) tools execute via FunctionInvokingChatClient and never reach
-                // ExecuteApiToolCallAsync, so their lifecycle events would otherwise be lost.
-                // Detect FunctionCallContent / FunctionResultContent in streaming updates and
-                // fire the matching lifecycle phases so the SSE stream carries tool-call events.
-                if (update.Contents is { Count: > 0 })
+                if (thinkingBuilder is { Length: > 0 })
                 {
-                    foreach (var content in update.Contents)
-                    {
-                        if (content is FunctionCallContent functionCall)
-                        {
-                            var callId = functionCall.CallId ?? functionCall.Name;
-                            pendingLocalToolCallNames[callId] = functionCall.Name;
-
-                            await transport.Dispatcher.ReportToolCallLifecycleAsync(new ToolCallLifecyclePayload
-                            {
-                                InvocationId = package.InvocationId,
-                                ToolCallId = callId,
-                                ToolName = functionCall.Name,
-                                Phase = ToolCallLifecyclePhase.Requested,
-                                Arguments = functionCall.Arguments is not null
-                                    ? JsonSerializer.Serialize(functionCall.Arguments)
-                                    : null,
-                                RequiresApproval = false
-                            }).ConfigureAwait(false);
-                        }
-                        else if (content is FunctionResultContent functionResult)
-                        {
-                            var resultCallId = functionResult.CallId ?? string.Empty;
-                            var toolName = pendingLocalToolCallNames.TryGetValue(resultCallId, out var name)
-                                ? name
-                                : resultCallId;
-
-                            await transport.Dispatcher.ReportToolCallLifecycleAsync(new ToolCallLifecyclePayload
-                            {
-                                InvocationId = package.InvocationId,
-                                ToolCallId = resultCallId,
-                                ToolName = toolName,
-                                Phase = ToolCallLifecyclePhase.Completed,
-                                Result = functionResult.Result?.ToString(),
-                                IsError = functionResult.Exception is not null
-                            }).ConfigureAwait(false);
-                        }
-                        else if (content is ToolApprovalRequestContent approvalRequest)
-                        {
-                            // FunctionInvokingChatClient surfaces this for an ApprovalRequiredAIFunction instead of
-                            // executing the tool. Capture it; the segment ends and the outer loop runs the approval
-                            // round-trip, then resumes threadlessly with the decision.
-                            pendingApproval = approvalRequest;
-                        }
-                    }
-                }
-
-                if (!string.IsNullOrEmpty(thinkingChunk))
-                {
-                    await transport.EmitReasoningAsync(stream, thinkingChunk, invocationToken).ConfigureAwait(false);
+                    await transport.EmitReasoningAsync(stream, thinkingBuilder.ToString(), invocationToken).ConfigureAwait(false);
                 }
 
                 if (string.IsNullOrEmpty(textChunk))

@@ -17,4 +17,10 @@ internal interface IImageServerReadinessProbe
     /// <param name="readinessTimeout">Max time to wait for first readiness (cold-start budget).</param>
     /// <param name="ct">Cancellation for the wait.</param>
     Task<bool> WaitForReadyAsync(Uri baseAddress, TimeSpan readinessTimeout, CancellationToken ct);
+
+    /// <summary>
+    ///     Performs a single, fast liveness check against <paramref name="baseAddress" /> (no polling) for the reuse-path
+    ///     wedged-daemon guard. Returns <see langword="true" /> when the daemon answered <c>/sdcpp/v1/capabilities</c>.
+    /// </summary>
+    Task<bool> CheckResponsiveAsync(Uri baseAddress, CancellationToken ct);
 }

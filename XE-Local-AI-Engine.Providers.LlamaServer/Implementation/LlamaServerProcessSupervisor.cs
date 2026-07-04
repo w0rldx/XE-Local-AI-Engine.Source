@@ -133,11 +133,15 @@ public sealed class LlamaServerProcessSupervisor : ILlamaServerProcessSupervisor
 
         var key = new ProcessKey(modelName, role);
 
-        // Fast path: an already-running, live process is reused without taking the spawn gate.
+        // Fast path: an already-running, live process is reused without taking the spawn gate — subject to a
+        // rate-limited liveness probe so a wedged (alive but unresponsive) process is respawned instead of handed out.
         if (_processes.TryGetValue(key, out var existing) && !existing.Handle.HasExited)
         {
-            existing.MarkUsed(_timeProvider.GetUtcNow());
-            return existing.Endpoint;
+            var reused = await TryReuseAsync(key, existing, ct).ConfigureAwait(false);
+            if (reused is not null)
+            {
+                return reused;
+            }
         }
 
         // Single-flight: concurrent callers for the same key spawn exactly once.
@@ -148,11 +152,15 @@ public sealed class LlamaServerProcessSupervisor : ILlamaServerProcessSupervisor
             // Re-check under the gate — another caller may have spawned while we waited.
             if (_processes.TryGetValue(key, out existing) && !existing.Handle.HasExited)
             {
-                existing.MarkUsed(_timeProvider.GetUtcNow());
-                return existing.Endpoint;
+                var reused = await TryReuseAsync(key, existing, ct).ConfigureAwait(false);
+                if (reused is not null)
+                {
+                    return reused;
+                }
             }
 
-            // A crashed/exited process lingering under this key is reaped before respawn.
+            // A crashed/exited/wedged process lingering under this key is reaped before respawn (a wedged one was already
+            // torn down by TryReuseAsync; RemoveProcessAsync is idempotent on the instance so the extra call is a no-op).
             if (existing is not null)
             {
                 await RemoveProcessAsync(key, existing).ConfigureAwait(false);
@@ -164,6 +172,69 @@ public sealed class LlamaServerProcessSupervisor : ILlamaServerProcessSupervisor
         finally
         {
             gate.Release();
+        }
+    }
+
+    /// <summary>
+    ///     Reuse decision for an already-registered, not-yet-exited process: hands back its endpoint when it is healthy
+    ///     enough, or returns <see langword="null" /> after tearing it down when it is wedged (alive but unresponsive to
+    ///     <see cref="LlamaServerSupervisorOptions.MaxReuseLivenessFailures" /> consecutive liveness probes). The liveness
+    ///     probe is rate-limited to at most one per <see cref="LlamaServerSupervisorOptions.ReuseLivenessProbeInterval" />
+    ///     per process, so the hot path stays cheap — between probes the endpoint is reused with no HTTP.
+    /// </summary>
+    private async Task<LlamaServerEndpoint?> TryReuseAsync(ProcessKey key, RunningProcess existing, CancellationToken ct)
+    {
+        var now = _timeProvider.GetUtcNow();
+
+        // Rate limit: only the caller that wins the probe claim issues the HTTP probe this interval; every other caller
+        // (and every reuse inside the interval) is handed the endpoint immediately with no probe.
+        if (!existing.TryClaimLivenessProbe(now, _options.ReuseLivenessProbeInterval))
+        {
+            existing.MarkUsed(now);
+            return existing.Endpoint;
+        }
+
+        var responsive = await ProbeResponsiveWithTimeoutAsync(existing.Endpoint.BaseAddress, ct).ConfigureAwait(false);
+        if (responsive)
+        {
+            existing.ResetLivenessFailures();
+            existing.MarkUsed(_timeProvider.GetUtcNow());
+            return existing.Endpoint;
+        }
+
+        // A failed probe: count it. Under the threshold the process is still handed out — a single transient probe
+        // failure must never tear down a busy server. At/above the threshold it is treated as wedged.
+        var failures = existing.RecordLivenessFailure();
+        if (failures < _options.MaxReuseLivenessFailures)
+        {
+            existing.MarkUsed(_timeProvider.GetUtcNow());
+            return existing.Endpoint;
+        }
+
+        // Wedged: the process is alive but has failed the liveness probe N consecutive times, so every reuse refreshes
+        // LastUsedUtc and the idle reaper never sees it. Tear it down here so the caller respawns a fresh server instead
+        // of being handed the hung endpoint forever.
+        await RemoveProcessAsync(key, existing).ConfigureAwait(false);
+        return null;
+    }
+
+    /// <summary>
+    ///     Runs one liveness probe bounded by <see cref="LlamaServerSupervisorOptions.ReuseLivenessProbeTimeout" /> so a
+    ///     hung server that accepts the socket but never answers cannot stall the reuse hot path for the whole HTTP-client
+    ///     timeout. A probe that times out (the caller's own token is NOT cancelled) counts as not-responsive.
+    /// </summary>
+    private async Task<bool> ProbeResponsiveWithTimeoutAsync(Uri baseAddress, CancellationToken ct)
+    {
+        using var timeoutCts = CancellationTokenSource.CreateLinkedTokenSource(ct);
+        timeoutCts.CancelAfter(_options.ReuseLivenessProbeTimeout);
+        try
+        {
+            return await _healthProbe.CheckResponsiveAsync(baseAddress, timeoutCts.Token).ConfigureAwait(false);
+        }
+        catch (OperationCanceledException) when (!ct.IsCancellationRequested)
+        {
+            // The probe exceeded its own budget (not a caller cancellation) — treat the server as unresponsive.
+            return false;
         }
     }
 
@@ -316,7 +387,7 @@ public sealed class LlamaServerProcessSupervisor : ILlamaServerProcessSupervisor
         ILlamaServerProcessHandle? handle = null;
         try
         {
-            var spec = BuildLaunchSpec(key, binary.ServerExecutablePath, modelFilePath, port, variant, resolved);
+            var spec = BuildLaunchSpec(key, binary.ServerExecutablePath, modelFilePath, port, variant, resolved, _options.ChatCacheReuse);
 
             // Benchmark replay spawns need /metrics (explore already carries --metrics); only append when missing.
             if (ensureMetrics && !spec.Arguments.Contains("--metrics", StringComparer.Ordinal))
@@ -511,13 +582,18 @@ public sealed class LlamaServerProcessSupervisor : ILlamaServerProcessSupervisor
         }
     }
 
-    /// <summary>Builds the exact, ordered llama-server argument vector for a <c>(model, role)</c> on a port.</summary>
+    /// <summary>
+    ///     Builds the exact, ordered llama-server argument vector for a <c>(model, role)</c> on a port.
+    ///     <paramref name="chatCacheReuse" /> is the chat-role <c>--cache-reuse</c> window
+    ///     (<see cref="LlamaServerSupervisorOptions.ChatCacheReuse" />); <c>0</c> omits the flag.
+    /// </summary>
     internal static LlamaServerLaunchSpec BuildLaunchSpec(ProcessKey key,
         string executablePath,
         string modelFilePath,
         int port,
         GpuVariant variant,
-        ResolvedLaunchArguments resolved)
+        ResolvedLaunchArguments resolved,
+        int chatCacheReuse)
     {
         var args = new List<string>
         {
@@ -556,6 +632,18 @@ public sealed class LlamaServerProcessSupervisor : ILlamaServerProcessSupervisor
         {
             // Mandatory for tool/function calling — without it llama-server ignores the GGUF tool grammar.
             args.Add("--jinja");
+
+            // Prompt-cache prefix reuse. The app resends the full selected-path history every turn, so cache-reuse
+            // lets llama-server reuse the unchanged prompt prefix via KV cache shifting instead of reprocessing it —
+            // a large time-to-first-token win on multi-turn chat/agent conversations. A positive window enables the
+            // flag; 0 (upstream default) omits it. Chat role only: an embedding server does one-shot forward passes
+            // with no shared conversational prefix to reuse, so the flag is meaningless there. This is a server-launch
+            // flag independent of the OpenAI-compat request body (which exposes no cache_prompt/n_keep field).
+            if (chatCacheReuse > 0)
+            {
+                args.Add("--cache-reuse");
+                args.Add(chatCacheReuse.ToString(CultureInfo.InvariantCulture));
+            }
         }
         else
         {
@@ -825,6 +913,10 @@ public sealed class LlamaServerProcessSupervisor : ILlamaServerProcessSupervisor
     private sealed class RunningProcess(ILlamaServerProcessHandle handle, LlamaServerEndpoint endpoint, int port, DateTimeOffset startedUtc)
     {
         private long _lastUsedTicks = startedUtc.UtcTicks;
+
+        // Seeded to the spawn time so a freshly-ready process is not re-probed until one full interval has passed.
+        private long _lastLivenessProbeTicks = startedUtc.UtcTicks;
+        private int _consecutiveLivenessFailures;
         private int _profilingPinned;
 
         public ILlamaServerProcessHandle Handle { get; } = handle;
@@ -844,6 +936,40 @@ public sealed class LlamaServerProcessSupervisor : ILlamaServerProcessSupervisor
         public void MarkUsed(DateTimeOffset now)
         {
             Interlocked.Exchange(ref _lastUsedTicks, now.UtcTicks);
+        }
+
+        /// <summary>
+        ///     Atomically claims the right to run the reuse-path liveness probe: succeeds (advancing the probe clock to
+        ///     <paramref name="now" />) only when at least <paramref name="interval" /> has elapsed since the last claim.
+        ///     Serializes probes across concurrent reuses so at most one HTTP probe runs per process per interval.
+        /// </summary>
+        public bool TryClaimLivenessProbe(DateTimeOffset now, TimeSpan interval)
+        {
+            while (true)
+            {
+                var last = Interlocked.Read(ref _lastLivenessProbeTicks);
+                if (now.UtcTicks - last < interval.Ticks)
+                {
+                    return false;
+                }
+
+                if (Interlocked.CompareExchange(ref _lastLivenessProbeTicks, now.UtcTicks, last) == last)
+                {
+                    return true;
+                }
+            }
+        }
+
+        /// <summary>Resets the consecutive-failure count after a successful liveness probe.</summary>
+        public void ResetLivenessFailures()
+        {
+            Interlocked.Exchange(ref _consecutiveLivenessFailures, value: 0);
+        }
+
+        /// <summary>Records a failed liveness probe and returns the new consecutive-failure count.</summary>
+        public int RecordLivenessFailure()
+        {
+            return Interlocked.Increment(ref _consecutiveLivenessFailures);
         }
 
         /// <summary>Reserves this process for a profiling benchmark, exempting it from idle eviction.</summary>

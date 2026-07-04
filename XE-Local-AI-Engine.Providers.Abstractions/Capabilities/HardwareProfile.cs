@@ -22,6 +22,16 @@ public sealed record HardwareProfile
     public long? VramBytes { get; init; }
 
     /// <summary>
+    ///     Free (currently-unallocated) GPU VRAM in bytes, or <see langword="null" /> when it could not be measured.
+    ///     This nets out VRAM already resident in loaded processes (the main chat model and any warm sub-agent
+    ///     servers), so it is the GPU-mode fit budget — the direct analogue of <see cref="AvailableRamBytes" /> for
+    ///     CPU mode. Only measured for NVIDIA (via <c>nvidia-smi memory.free</c>); <see langword="null" /> for every
+    ///     other vendor even when <see cref="VramBytes" /> (total) is known, which forces the capacity gate onto its
+    ///     total-VRAM fallback.
+    /// </summary>
+    public long? AvailableVramBytes { get; init; }
+
+    /// <summary>
     ///     <see langword="true" /> only when <see cref="VramBytes" /> was actually measured. <see langword="false" />
     ///     forces the CPU-mode degrade rule (<see cref="GpuAccelAvailable" /> is then always <see langword="false" />).
     /// </summary>

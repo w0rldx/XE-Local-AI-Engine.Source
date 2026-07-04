@@ -202,7 +202,6 @@ public sealed class KnowledgeEmbeddingModelIdentityTests : IDisposable
             CreateEmbedder(options),
             new KnowledgeIndexWriter(context, TimeProvider.System),
             Substitute.For<IKnowledgeIndexingNotifier>(),
-            options,
             TimeProvider.System,
             NullLogger<KnowledgeIngestionService>.Instance);
     }

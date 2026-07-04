@@ -26,6 +26,34 @@ public sealed class StableDiffusionRuntimeOptions
     public TimeSpan IdleTimeToLive { get; set; } = TimeSpan.FromMinutes(15);
 
     /// <summary>
+    ///     Max number of concurrently-resident <c>sd-server</c> daemons before a spawn for a new model is rejected (an
+    ///     idle least-recently-used daemon is evicted first to make room when possible). sd-server is VRAM-heavy and
+    ///     typically co-resident with a chat model, so the default is a single daemon. Mirrors the llama.cpp loaded cap.
+    /// </summary>
+    public int MaxLoadedProcesses { get; set; } = 1;
+
+    /// <summary>
+    ///     Minimum interval between reuse-path liveness probes for a single daemon. A reuse is handed out immediately
+    ///     (no HTTP) unless at least this long has passed since the last probe of that daemon, so the hot path stays
+    ///     cheap: at most one capabilities probe per daemon per interval, not one per request. Mirrors the llama.cpp path.
+    /// </summary>
+    public TimeSpan ReuseLivenessProbeInterval { get; set; } = TimeSpan.FromSeconds(5);
+
+    /// <summary>
+    ///     Number of <em>consecutive</em> failed reuse-path liveness probes after which a still-alive-but-unresponsive
+    ///     (wedged) daemon is torn down and respawned instead of being handed out again. A single transient failure never
+    ///     evicts a busy daemon; one successful probe resets the count.
+    /// </summary>
+    public int MaxReuseLivenessFailures { get; set; } = 3;
+
+    /// <summary>
+    ///     Bounds a single reuse-path liveness probe so a hung daemon (accepts the connection but never answers) cannot
+    ///     stall the hot path for the whole <see cref="System.Net.Http.HttpClient" /> timeout; exceeding it counts as a
+    ///     failed probe.
+    /// </summary>
+    public TimeSpan ReuseLivenessProbeTimeout { get; set; } = TimeSpan.FromSeconds(2);
+
+    /// <summary>
     ///     Readiness budget: the maximum time the supervisor waits for a freshly-spawned daemon's socket to open (the
     ///     daemon binds only after synchronous model load completes; §4A). Exceeding it is a load failure.
     /// </summary>

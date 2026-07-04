@@ -115,7 +115,8 @@ public sealed class OverrideSelectorAndOptionsTests
             "/fake/models/model.gguf",
             port: 8080,
             GpuVariant.Cuda,
-            ResolvedLaunchArguments.Explore());
+            ResolvedLaunchArguments.Explore(),
+            chatCacheReuse: 256);
 
         AssertEx.Contains(spec.Arguments, "--fit");
         AssertEx.Contains(spec.Arguments, "--metrics");
@@ -129,7 +130,8 @@ public sealed class OverrideSelectorAndOptionsTests
             "/fake/models/model.gguf",
             port: 8080,
             GpuVariant.Cpu,
-            ResolvedLaunchArguments.Explore());
+            ResolvedLaunchArguments.Explore(),
+            chatCacheReuse: 256);
 
         AssertEx.False(spec.Arguments.Contains("--fit"), "CPU must not emit --fit.");
         AssertEx.False(spec.Arguments.Contains("--metrics"), "CPU must not emit --metrics.");

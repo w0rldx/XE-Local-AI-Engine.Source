@@ -2,7 +2,6 @@ namespace XE_Local_AI_Engine.Client.Services.Knowledge;
 
 using System.Data.Common;
 using Microsoft.EntityFrameworkCore;
-using Microsoft.Extensions.Options;
 using XE_Local_AI_Engine.Client.Persistence;
 using XE_Local_AI_Engine.Client.Services.DocumentIngestion;
 using static Chat.Implementation.NodeChatPersistenceSql;
@@ -29,7 +28,6 @@ public sealed class KnowledgeIngestionService : IKnowledgeIngestionService
     private readonly IKnowledgeChunkEmbedder _embedder;
     private readonly IKnowledgeIndexWriter _indexWriter;
     private readonly IKnowledgeIndexingNotifier _notifier;
-    private readonly KnowledgeBaseOptions _options;
     private readonly TimeProvider _timeProvider;
     private readonly ILogger<KnowledgeIngestionService> _logger;
 
@@ -40,7 +38,6 @@ public sealed class KnowledgeIngestionService : IKnowledgeIngestionService
         IKnowledgeChunkEmbedder embedder,
         IKnowledgeIndexWriter indexWriter,
         IKnowledgeIndexingNotifier notifier,
-        IOptions<KnowledgeBaseOptions> options,
         TimeProvider timeProvider,
         ILogger<KnowledgeIngestionService> logger)
     {
@@ -51,8 +48,6 @@ public sealed class KnowledgeIngestionService : IKnowledgeIngestionService
         _embedder = embedder ?? throw new ArgumentNullException(nameof(embedder));
         _indexWriter = indexWriter ?? throw new ArgumentNullException(nameof(indexWriter));
         _notifier = notifier ?? throw new ArgumentNullException(nameof(notifier));
-        ArgumentNullException.ThrowIfNull(options);
-        _options = options.Value;
         _timeProvider = timeProvider ?? throw new ArgumentNullException(nameof(timeProvider));
         _logger = logger ?? throw new ArgumentNullException(nameof(logger));
     }
@@ -139,7 +134,7 @@ public sealed class KnowledgeIngestionService : IKnowledgeIngestionService
             return;
         }
 
-        var indexChunks = BuildIndexChunks(chunking.Chunks, embeddingResult.Vectors);
+        var indexChunks = BuildIndexChunks(chunking.Chunks, embeddingResult.Vectors, embeddingResult.Dimension);
 
         // Stamp the RESOLVED model that actually produced the vectors (not the configured name) as both the document row's
         // embedding_model and every chunk-vector scope key, so a later same-dimension model swap makes stored-name differ
@@ -156,7 +151,7 @@ public sealed class KnowledgeIngestionService : IKnowledgeIngestionService
         }
     }
 
-    private List<KnowledgeIndexChunk> BuildIndexChunks(IReadOnlyList<KnowledgeChunk> chunks, IReadOnlyList<byte[]> embeddings)
+    private static List<KnowledgeIndexChunk> BuildIndexChunks(IReadOnlyList<KnowledgeChunk> chunks, IReadOnlyList<byte[]> embeddings, int dimension)
     {
         var indexChunks = new List<KnowledgeIndexChunk>(chunks.Count);
         for (var index = 0; index < chunks.Count; index++)
@@ -169,7 +164,7 @@ public sealed class KnowledgeIngestionService : IKnowledgeIngestionService
                 chunk.HeadingPath,
                 chunk.TokenCount,
                 embeddings[index],
-                _options.EmbeddingDimension));
+                dimension));
         }
 
         return indexChunks;

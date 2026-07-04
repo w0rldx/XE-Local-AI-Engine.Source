@@ -279,7 +279,7 @@ public sealed class McpServerConnectionManagerTests
 
     private static McpServerConnectionManager CreateManager(McpToolRegistry registry, FakeMcpClientFactory factory, IMcpServerStore store)
     {
-        return new McpServerConnectionManager(BuildScopeFactory(store), registry, factory, Options(), NullLogger<McpServerConnectionManager>.Instance);
+        return new McpServerConnectionManager(BuildScopeFactory(store), registry, factory, Options(), Microsoft.Extensions.Options.Options.Create(new XE_Local_AI_Engine.AI.Agent.Configuration.AgentToolPipelineOptions()), NullLogger<McpServerConnectionManager>.Instance);
     }
 
     // The manager resolves the (Scoped) store through a scope, so the test wraps the fake store in a real service

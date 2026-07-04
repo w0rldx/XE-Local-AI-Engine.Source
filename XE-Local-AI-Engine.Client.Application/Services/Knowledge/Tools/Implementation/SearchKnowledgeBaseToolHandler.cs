@@ -20,6 +20,13 @@ internal sealed class SearchKnowledgeBaseToolHandler : IClientLocalToolHandler
     private const int MinLimit = 1;
     private const int MaxLimit = 20;
 
+    /// <summary>
+    ///     Upper bound on the total hit-content characters serialized into one response, so a wide search (up to
+    ///     <see cref="MaxLimit" /> neighbor-expanded hits) cannot dump an unbounded payload into the model context.
+    ///     Mirrors <c>ReadDocumentToolHandler.MaxContentChars</c>; truncation is flagged in the payload.
+    /// </summary>
+    private const int MaxContentChars = 50_000;
+
     private readonly IServiceScopeFactory _scopeFactory;
     private readonly bool _toolsEnabled;
 
@@ -93,9 +100,21 @@ internal sealed class SearchKnowledgeBaseToolHandler : IClientLocalToolHandler
                 SerializerOptions);
         }
 
-        var payload = new
+        // Results arrive ordered by descending fused score. Serialize hits while a running content-character budget
+        // holds, so the lowest-scored (least relevant) hits are trimmed first and one wide search cannot flood context.
+        var hits = new List<object>(result.Results.Count);
+        var usedChars = 0;
+        var truncated = false;
+        foreach (var hit in result.Results)
         {
-            results = result.Results.Select(static hit => new
+            if (hits.Count > 0 && usedChars + hit.Content.Length > MaxContentChars)
+            {
+                truncated = true;
+                break;
+            }
+
+            usedChars += hit.Content.Length;
+            hits.Add(new
             {
                 documentId = hit.DocumentId,
                 chunkId = hit.ChunkId,
@@ -105,7 +124,15 @@ internal sealed class SearchKnowledgeBaseToolHandler : IClientLocalToolHandler
                 source = hit.Source,
                 score = hit.Score,
                 chunkIndex = hit.ChunkIndex
-            })
+            });
+        }
+
+        var payload = new
+        {
+            results = hits,
+            returnedResults = hits.Count,
+            totalResults = result.Results.Count,
+            truncated
         };
 
         return JsonSerializer.Serialize(payload, SerializerOptions);
