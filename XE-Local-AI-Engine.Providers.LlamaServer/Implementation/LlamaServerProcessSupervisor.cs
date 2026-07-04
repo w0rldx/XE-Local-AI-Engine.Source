@@ -761,9 +761,11 @@ public sealed class LlamaServerProcessSupervisor : ILlamaServerProcessSupervisor
     ///     Appends the chat-role speculative-decoding flags. Disabled/default (<c>none</c>) emits nothing. A configured
     ///     mode is validated first (unknown mode, or a <c>draft-*</c> mode with no draft path, is a deterministic
     ///     misconfiguration surfaced as a NON-RETRYABLE error rather than a server that dies cryptically on launch).
-    ///     <c>draft-*</c> modes emit <c>--spec-draft-model</c> (the drafter's VRAM is NOT visible to <c>CapacityService</c>;
-    ///     an operator enabling a draft model must size for it themselves) plus <c>--spec-draft-n-max</c>/<c>-ngl</c> when
-    ///     set; <c>ngram-*</c> modes self-speculate and emit only <c>--spec-type</c>.
+    ///     <c>draft-*</c> modes emit <c>--spec-draft-model</c> (the drafter loads inside the chat process and is never
+    ///     separately ledgered or footprint-estimated; on the primary NVIDIA path its resident VRAM is still reflected in
+    ///     <c>CapacityService</c>'s free-VRAM baseline — <c>nvidia-smi memory.free</c> — so a later sub-agent admission
+    ///     accounts for it, but on the non-NVIDIA total-minus-ledger fallback it stays invisible) plus
+    ///     <c>--spec-draft-n-max</c>/<c>-ngl</c> when set; <c>ngram-*</c> modes self-speculate and emit only <c>--spec-type</c>.
     /// </summary>
     private static void AppendSpeculativeArgs(List<string> args, in SpeculativeDecodingSettings speculative)
     {

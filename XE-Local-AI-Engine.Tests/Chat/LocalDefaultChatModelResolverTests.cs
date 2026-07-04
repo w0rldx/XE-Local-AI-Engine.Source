@@ -181,6 +181,55 @@ public sealed class LocalDefaultChatModelResolverTests
     }
 
     [Test]
+    public async Task ResolveAsync_ExcludesGgufWithPersistedDetectedRerankerKind()
+    {
+        // A Reranker-classified GGUF (cross-encoder, no completion head) is not a chat model and must be excluded.
+        ModelClassificationRecord[] classifications =
+        [
+            Classification("rerank-model:Q4_K_M", ModelKind.Reranker, overrideKind: null),
+            Classification("chat-model:Q4_K_M", ModelKind.Chat, overrideKind: null)
+        ];
+        LocalModelDescriptor[] installed =
+        [
+            Gguf("rerank-model:Q4_K_M", DateTimeOffset.UnixEpoch.AddDays(9)),
+            Gguf("chat-model:Q4_K_M", DateTimeOffset.UnixEpoch.AddDays(1))
+        ];
+        var resolver = CreateResolver(classifications, installed);
+
+        var resolved = await resolver.ResolveAsync(persistedDefault: null).ConfigureAwait(false);
+
+        AssertEx.Equal("chat-model:Q4_K_M", resolved);
+    }
+
+    [Test]
+    public async Task ResolveAsync_ExcludesRerankerNamedGgufWithNoPersistedRow()
+    {
+        // Belt-and-suspenders: a freshly-installed reranker GGUF has NO classification row. Its NAME (bge-reranker) must
+        // exclude it even though it also matches the BGE- embedding prefix, leaving the chat GGUF as the default.
+        LocalModelDescriptor[] installed =
+        [
+            Gguf("bge-reranker-v2-m3:Q4_K_M", DateTimeOffset.UnixEpoch.AddDays(9)),
+            Gguf("qwen2.5:Q4_K_M", DateTimeOffset.UnixEpoch.AddDays(1))
+        ];
+        var resolver = CreateResolver([], installed);
+
+        var resolved = await resolver.ResolveAsync(persistedDefault: null).ConfigureAwait(false);
+
+        AssertEx.Equal("qwen2.5:Q4_K_M", resolved);
+    }
+
+    [Test]
+    public async Task ResolveAsync_WhenOnlyInstalledGgufIsRerankerNamedWithNoRow_ReturnsNull()
+    {
+        LocalModelDescriptor[] installed = [Gguf("bge-reranker-large:Q8_0", DateTimeOffset.UnixEpoch)];
+        var resolver = CreateResolver([], installed);
+
+        var resolved = await resolver.ResolveAsync(persistedDefault: null).ConfigureAwait(false);
+
+        AssertEx.Null(resolved);
+    }
+
+    [Test]
     public async Task ResolveAsync_IncludesEmbeddingNamedGgufWhenChatOverride()
     {
         // An explicit operator override to Chat wins over the name heuristic — the corrected model stays eligible.

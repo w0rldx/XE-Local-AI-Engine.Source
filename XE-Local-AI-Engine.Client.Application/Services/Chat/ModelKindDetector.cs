@@ -33,11 +33,31 @@ public static class ModelKindDetector
     ];
 
     /// <summary>
+    ///     Upper-cased name fragments that identify a reranker (cross-encoder) model. Rerankers score a
+    ///     query/document pair rather than generate text, so they have no completion head and must never reach the chat
+    ///     picker. Ollama advertises no distinct reranker capability token, so the NAME is the only reliable signal —
+    ///     which is why the reranker check runs BEFORE the embedding check (a name such as <c>bge-reranker-v2-m3</c>
+    ///     matches the <c>BGE-</c> embedding prefix too, and the reranker classification is the correct one).
+    /// </summary>
+    private static readonly string[] RerankerNameFragments =
+    [
+        "RERANK"
+    ];
+
+    /// <summary>
     ///     Resolves the detected <see cref="ModelKind" /> from reported capabilities, falling back to a
     ///     conservative name heuristic when capabilities are unavailable.
     /// </summary>
     public static ModelKind FromCapabilities(IReadOnlyList<string>? capabilities, string modelName)
     {
+        // A reranker exposes no distinct Ollama capability token, so its NAME is the only reliable signal even when
+        // capabilities ARE reported (a cross-encoder can advertise an embedding capability). Check it first so a
+        // reranker is never misclassified as Embedding or Chat.
+        if (IsRerankerName(modelName))
+        {
+            return ModelKind.Reranker;
+        }
+
         if (capabilities is { Count: > 0 })
         {
             var hasCompletion = ContainsCapability(capabilities, CompletionCapability);
@@ -71,6 +91,18 @@ public static class ModelKindDetector
     }
 
     /// <summary>
+    ///     True when the model NAME alone identifies a reranker (cross-encoder) model (case-insensitive fragment match),
+    ///     independent of any reported capabilities. Used where only a name is available (an installed GGUF descriptor
+    ///     <c>&lt;repo&gt;:&lt;quant&gt;</c> carries no capability probe) to keep a reranker out of the chat surfaces and
+    ///     tag it correctly in the model list. Takes precedence over <see cref="IsEmbeddingName" /> — a reranker name
+    ///     that also matches an embedding prefix (for example <c>bge-reranker-…</c>) is a reranker, not an embedding.
+    /// </summary>
+    public static bool IsRerankerName(string modelName)
+    {
+        return FromNameHeuristic(modelName) == ModelKind.Reranker;
+    }
+
+    /// <summary>
     ///     True when the supplied Ollama capabilities advertise the <c>thinking</c> capability (case-insensitive). A
     ///     model without it returns HTTP 400 for any <c>think</c> request field, so the loopback path gates the field on
     ///     this. Null/empty capabilities (older daemon or offline) are treated as NOT thinking-capable — the safe choice
@@ -99,6 +131,13 @@ public static class ModelKindDetector
         }
 
         var normalized = modelName.ToUpperInvariant();
+
+        // Reranker wins over embedding: a name like BGE-RERANKER-… matches the BGE- embedding prefix too, and the
+        // reranker classification is the correct one.
+        if (RerankerNameFragments.Any(fragment => normalized.Contains(fragment, StringComparison.Ordinal)))
+        {
+            return ModelKind.Reranker;
+        }
 
         var matchesEmbeddingName =
             EmbeddingNamePrefixes.Any(prefix => normalized.StartsWith(prefix, StringComparison.Ordinal))

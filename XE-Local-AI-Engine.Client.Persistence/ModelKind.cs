@@ -10,7 +10,8 @@ public enum ModelKind
 {
     Unknown = 0,
     Chat = 1,
-    Embedding = 2
+    Embedding = 2,
+    Reranker = 3
 
-    // Reserved for future growth (append only, do NOT renumber): Vision, Reranker, CodeCompletion, Moderation.
+    // Reserved for future growth (append only, do NOT renumber): Vision, CodeCompletion, Moderation.
 }

@@ -4,15 +4,16 @@ import type { XeLocalAiEngineClientEndpointsLocalModelsV1LocalModelResponse as L
 import type { ChatConversationModel } from "@/features/chat/models/ChatModels";
 import { nodeChatQueryKeys } from "@/features/chat/queries/NodeChatQueryKeys";
 
-// A model is usable as the chat default unless it is an embedding-only model. Embedding is the one kind the chat
-// picker excludes; "Chat" and "Unknown" are both selectable (the runtime default resolver accepts any installed named
-// non-embedding model). Deriving from the same list the chat picker uses keeps the tour's notion of "installed chat
-// model" in lockstep with what the user can actually select.
+// A model counts as chat-capable only when its kind is exactly "Chat" — a whitelist matching the chat picker
+// (toChatModelOptions), which likewise offers `kind === "Chat"` and excludes every non-chat kind (Embedding, Reranker,
+// Unknown, and any future kind). A blacklist such as `!== "Embedding"` would silently treat a reranker-only or
+// future-kind install as chat-capable and falsely advance the tour. Deriving from the same list and rule the picker
+// uses keeps the tour's notion of "installed chat model" in lockstep with what the user can actually select.
 function isChatCapable(model: LocalModelResponse | undefined): boolean {
 	if (!model?.modelName) {
 		return false;
 	}
-	return model.kind !== "Embedding";
+	return model.kind === "Chat";
 }
 
 // True once at least one chat-capable model is actually installed/selectable. Drives the install step's advance —

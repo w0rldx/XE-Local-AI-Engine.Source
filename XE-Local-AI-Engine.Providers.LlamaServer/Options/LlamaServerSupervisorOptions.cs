@@ -55,8 +55,10 @@ public sealed class LlamaServerSupervisorOptions
     /// <summary>
     ///     Explicit path to the draft GGUF for <c>draft-*</c> speculative modes (must share the target model's tokenizer
     ///     family). An escape hatch that takes precedence over <see cref="SpeculativeDraftModelName" /> when set; normally
-    ///     left unset so the name is resolved on the spawn path. Ignored by <c>ngram-*</c> modes. The draft model consumes
-    ///     VRAM the <c>CapacityService</c> does not account for (see supervisor spawn path).
+    ///     left unset so the name is resolved on the spawn path. Ignored by <c>ngram-*</c> modes. The draft model loads
+    ///     inside the chat process and is never separately ledgered or footprint-estimated; on the primary NVIDIA path its
+    ///     resident VRAM is still reflected in <c>CapacityService</c>'s free-VRAM baseline (<c>nvidia-smi memory.free</c>),
+    ///     but on the non-NVIDIA total-minus-ledger fallback it stays uncounted (see supervisor spawn path).
     /// </summary>
     public string? SpeculativeDraftModelPath { get; init; }
 

@@ -1308,6 +1308,7 @@
 				"kind": {
 					"chat": "Chat",
 					"embedding": "Embedding",
+					"reranker": "Reranker",
 					"unknown": "Unbekannt"
 				},
 				"capability": {
