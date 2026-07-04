@@ -132,8 +132,12 @@ public sealed partial class WorkerEventDispatcher
 
     private void PublishStateChanged(InvocationState state)
     {
+        // Every caller already hands us a fresh Clone of the live invocation (never the mutable CurrentInvocation),
+        // and nothing downstream mutates the snapshot — the history buffer only stores it and the event consumers only
+        // read it. So the recorder and the event share this one immutable snapshot instead of cloning a second time
+        // (which also re-copied PendingToolCalls) on every streamed chunk.
         _invocationHistory.Record(state);
-        Volatile.Read(ref InvocationStateChanged)?.Invoke(this, new InvocationStateChangedEventArgs(Clone(state)));
+        Volatile.Read(ref InvocationStateChanged)?.Invoke(this, new InvocationStateChangedEventArgs(state));
     }
 
     /// <summary>

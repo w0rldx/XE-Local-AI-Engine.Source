@@ -118,7 +118,12 @@ internal sealed class NodeChatMessageCommands(NodeChatPersistenceWriter writer)
             totalTokens: null,
             reasoningTokens: null,
             request.ReplaceContent,
-            cancellationToken);
+            cancellationToken,
+            // A partial flush is a mid-stream content advance, not a conversation-level event: it fires per debounce
+            // window and would otherwise run a second UPDATE (conversation touch) every time. The conversation was
+            // already touched when the turn started (placeholder/queued/streaming) and is touched again at terminalize,
+            // so skipping it here drops a redundant write from the hot streaming path without changing recency order.
+            touchConversation: false);
     }
 
     public Task<NodeChatPersistedMessageDto> TerminalizeAssistantMessageAsync(NodeChatTerminalizeMessageRequest request, CancellationToken cancellationToken = default)
@@ -241,7 +246,8 @@ internal sealed class NodeChatMessageCommands(NodeChatPersistenceWriter writer)
         bool replaceContent,
         CancellationToken cancellationToken,
         IReadOnlyList<NodeChatMessagePart>? parts = null,
-        long? generationDurationMs = null)
+        long? generationDurationMs = null,
+        bool touchConversation = true)
     {
         ValidateCorrelation(correlation);
 
@@ -295,7 +301,10 @@ internal sealed class NodeChatMessageCommands(NodeChatPersistenceWriter writer)
                 await OpenIfNeededAsync(command.Connection, token).ConfigureAwait(false);
                 await command.ExecuteNonQueryAsync(token).ConfigureAwait(false);
 
-                await TouchConversationAsync(dbContext, correlation.ConversationId, updatedAtUtc, token).ConfigureAwait(false);
+                if (touchConversation)
+                {
+                    await TouchConversationAsync(dbContext, correlation.ConversationId, updatedAtUtc, token).ConfigureAwait(false);
+                }
 
                 return current with
                 {

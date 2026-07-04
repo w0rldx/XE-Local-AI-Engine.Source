@@ -51,6 +51,12 @@ public sealed class NodeChatStreamService(
 {
     private const int AgentDefinitionVersion = 1;
 
+    // Mid-stream partial flushes (the per-chunk DB read-modify-write + AssistantDelta SSE) are debounced to at most one
+    // per this window so a fast local model does not drive one persistence round-trip per token. Terminal/error states
+    // always flush immediately, so the final content is never delayed; a crash mid-stream therefore loses at most one
+    // window of streamed tokens, which is the same crash-consistency bound the per-chunk flush already accepted.
+    private static readonly TimeSpan PartialFlushDebounceInterval = TimeSpan.FromMilliseconds(100);
+
     // The tools whose presence in a turn's offer means the selected agent can read files through the AgentHome sandbox
     // (the read-only coder tools plus the run_in_agent_home gateway). When any is offered AND the conversation has
     // uploaded attachments, the sandbox is re-staged with this conversation's attachments before the tool loop runs.
@@ -391,51 +397,97 @@ public sealed class NodeChatStreamService(
         // streaming-transition event emitted from RunInvocationAsync so all events stay monotonically ordered.
         var cursor = NodeChatPumpCursor.Empty;
         var terminalPersisted = false;
+        var hasFlushedPartial = false;
+        var lastPartialFlushTimestamp = 0L;
+        // The freshest content-bearing snapshot the debounce deferred without persisting. Retained so a graceful
+        // end-of-stream that never delivers a terminal still writes the tail rather than a stale cursor.
+        InvocationState? pendingPartialState = null;
+
+        // Persists one snapshot's content/reasoning delta and fans it out as an AssistantDelta. Returns whether a
+        // delta advanced. Each InvocationState carries the FULL accumulated content/reasoning, so flushing only the
+        // latest snapshot after coalescing still captures everything between the cursor and that snapshot.
+        async Task<bool> PersistPartialAsync(InvocationState snapshotToFlush)
+        {
+            var flush = await invocationPump.FlushDeltaAsync(correlation, snapshotToFlush, cursor, cancellationToken).ConfigureAwait(false);
+            cursor = flush.Cursor;
+
+            if (flush.Persisted is null)
+            {
+                return false;
+            }
+
+            lastPartialFlushTimestamp = timeProvider.GetTimestamp();
+            hasFlushedPartial = true;
+            var deltaSequence = sequence.Next();
+            // The reasoning delta and its SSE event share this flush-time sequence. Tool parts stamp their own
+            // sequence synchronously when the tool lifecycle fires on the separate event channel, so debouncing the
+            // reasoning flush can push a reasoning segment behind a tool part that streamed just after it — widening
+            // the pre-existing reasoning<->tool interleave skew to at most one debounce window. This is display-only:
+            // the reasoning text and the tool parts are all retained; only their relative order at a tool boundary can
+            // shift within that window.
+            parts.AppendReasoning(flush.ReasoningDelta, deltaSequence);
+
+            await eventWriter.WriteAsync(ToMessageEvent(ChatStreamEventTypes.AssistantDelta,
+                    correlation,
+                    flush.Persisted,
+                    deltaSequence,
+                    flush.ContentDelta,
+                    flush.ReasoningDelta),
+                cancellationToken).ConfigureAwait(false);
+            return true;
+        }
 
         try
         {
             await foreach (var state in stateReader.ReadAllAsync(cancellationToken).ConfigureAwait(false))
             {
-                var flush = await invocationPump.FlushDeltaAsync(correlation, state, cursor, cancellationToken).ConfigureAwait(false);
-                cursor = flush.Cursor;
-
-                if (flush.Persisted is not null)
+                // Coalesce a burst: when the runner produces states faster than we persist, they queue on the
+                // channel. Drain the backlog and keep only the newest snapshot (never draining past a terminal), so
+                // a burst of per-token states collapses into a single flush without losing content.
+                var latest = state;
+                while (!NodeChatInvocationPump.IsTerminal(latest.Status) && stateReader.TryRead(out var queued))
                 {
-                    var deltaSequence = sequence.Next();
-                    // Feed the reasoning delta into the interleave under the SAME sequence as its SSE event so the
-                    // accumulated reasoning segments order correctly against the concurrently-stamped tool parts.
-                    parts.AppendReasoning(flush.ReasoningDelta, deltaSequence);
-
-                    await eventWriter.WriteAsync(ToMessageEvent(ChatStreamEventTypes.AssistantDelta,
-                            correlation,
-                            flush.Persisted,
-                            deltaSequence,
-                            flush.ContentDelta,
-                            flush.ReasoningDelta),
-                        cancellationToken).ConfigureAwait(false);
+                    latest = queued;
                 }
 
-                if (NodeChatInvocationPump.IsTerminal(state.Status))
+                var isTerminal = NodeChatInvocationPump.IsTerminal(latest.Status);
+
+                // Terminal/error flushes immediately (the final delta + reasoning tail must not be delayed); the first
+                // partial also flushes immediately so the first token is visible without waiting a window. Between
+                // windows the snapshot is deferred so it is not lost if the stream ends without a terminal.
+                if (isTerminal
+                    || !hasFlushedPartial
+                    || timeProvider.GetElapsedTime(lastPartialFlushTimestamp) >= PartialFlushDebounceInterval)
+                {
+                    pendingPartialState = null;
+                    await PersistPartialAsync(latest).ConfigureAwait(false);
+                }
+                else
+                {
+                    pendingPartialState = latest;
+                }
+
+                if (isTerminal)
                 {
                     // An empty snapshot (a plain-text turn with no reasoning/tools) is passed as null so the persisted
                     // parts are left untouched rather than overwritten with an empty interleave.
                     var snapshot = parts.HasParts ? parts.Snapshot() : null;
-                    var terminal = await invocationPump.TerminalizeAsync(correlation, state, requestedModel, snapshot).ConfigureAwait(false);
+                    var terminal = await invocationPump.TerminalizeAsync(correlation, latest, requestedModel, snapshot).ConfigureAwait(false);
                     terminalPersisted = true;
 
                     // Post-run adaptive memory: hand the just-persisted terminal to the (background, fire-and-forget)
                     // extraction hook before the SSE write so the run context is captured immediately. The hook never
                     // blocks or throws into the pump (it only schedules work on its own scope).
-                    onTerminal?.Invoke(state, terminal);
+                    onTerminal?.Invoke(latest, terminal);
 
                     await eventWriter.WriteAsync(ToMessageEvent(terminal.EventType,
                             correlation,
                             terminal.Persisted,
                             sequence.Next(),
-                            inputTokens: state.InputTokens,
-                            outputTokens: state.OutputTokens,
-                            totalTokens: state.TotalTokens,
-                            reasoningTokens: state.ReasoningTokens),
+                            inputTokens: latest.InputTokens,
+                            outputTokens: latest.OutputTokens,
+                            totalTokens: latest.TotalTokens,
+                            reasoningTokens: latest.ReasoningTokens),
                         CancellationToken.None).ConfigureAwait(false);
                     break;
                 }
@@ -443,6 +495,13 @@ public sealed class NodeChatStreamService(
 
             if (!terminalPersisted)
             {
+                // Flush any tail the debounce deferred so the interrupted terminal is written from the freshest
+                // content rather than a stale cursor.
+                if (pendingPartialState is not null)
+                {
+                    await PersistPartialAsync(pendingPartialState).ConfigureAwait(false);
+                }
+
                 await TerminalizeInterruptedStreamAsync(eventWriter,
                     correlation,
                     sequence.Next(),
@@ -452,6 +511,11 @@ public sealed class NodeChatStreamService(
         }
         catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested && !terminalPersisted)
         {
+            // Deliberate trade-off: the cancelled message is terminalized from the last-persisted cursor, NOT from a
+            // debounce-deferred pendingPartialState, so a user cancel can drop up to one debounce window of tail
+            // tokens off the cancelled turn. Re-flushing here is not an option — the cancellation token is already
+            // tripped, so FlushDeltaAsync/WriteAsync would just throw again. Accepted because a cancelled turn is
+            // discarded output anyway, and this stays within the same one-window crash-consistency bound.
             await TerminalizeInterruptedStreamAsync(eventWriter,
                 correlation,
                 sequence.Next(),

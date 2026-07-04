@@ -1,7 +1,7 @@
 import { Badge, Collapse, Group, Stack, Text, ThemeIcon } from "@mantine/core";
 import { IconChevronDown, IconShieldHalf, IconTool } from "@tabler/icons-react";
 import { m, useReducedMotion } from "framer-motion";
-import { useState } from "react";
+import { memo, useState } from "react";
 import { useTranslation } from "react-i18next";
 
 import { CodeBlock } from "@/core/ui/components/CodeBlock/CodeBlock";
@@ -58,7 +58,7 @@ function formatStructured(value?: string): string | undefined {
  * name + at-a-glance state badge; expanding reveals the args/result body. `requesting`/`waiting` show a live badge,
  * `received` carries the result, `failed` surfaces the error. Args/result JSON is pretty-printed when parseable.
  */
-export function ToolCallCard({ part }: ToolCallCardProps) {
+export const ToolCallCard = memo(function ToolCallCard({ part }: ToolCallCardProps) {
 	const { t } = useTranslation();
 	const reduced = useReducedMotion();
 	const [expanded, setExpanded] = useState(() => expandedByToolId.get(part.id) ?? false);
@@ -165,4 +165,4 @@ export function ToolCallCard({ part }: ToolCallCardProps) {
 			</div>
 		</div>
 	);
-}
+});

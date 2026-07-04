@@ -1,4 +1,5 @@
 import { Text } from "@mantine/core";
+import { memo, useMemo } from "react";
 import type { Components } from "react-markdown";
 import ReactMarkdown from "react-markdown";
 
@@ -34,10 +35,15 @@ interface ChatMarkdownProps {
 	withCaret?: boolean;
 }
 
-export function ChatMarkdown({ content, withCaret = false }: ChatMarkdownProps) {
+export const ChatMarkdown = memo(function ChatMarkdown({ content, withCaret = false }: ChatMarkdownProps) {
+	// Memoize the component map so a re-render that changes neither content nor withCaret reuses it. With
+	// withCaret false this is the shared stable markdownComponents; the caret variant depends on content (the
+	// caret rides the last paragraph), so it rebuilds only when the streaming text actually grows — not on
+	// unrelated parent re-renders that React.memo above already screens out.
+	const components = useMemo(() => buildComponents(content, withCaret), [content, withCaret]);
 	return (
-		<ReactMarkdown components={buildComponents(content, withCaret)} remarkPlugins={[remarkGfm]}>
+		<ReactMarkdown components={components} remarkPlugins={[remarkGfm]}>
 			{content}
 		</ReactMarkdown>
 	);
-}
+});
