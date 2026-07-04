@@ -24,9 +24,6 @@ public sealed class KnowledgeChunkEmbedder : IKnowledgeChunkEmbedder
     private const string EmbeddingIncompleteReason =
         "The embedding model returned an incomplete result. Ensure the configured embedding model is loaded and retry.";
 
-    private const string DimensionMismatchReason =
-        "The embedding model produced vectors of an unexpected dimension. Reindex with a matching embedding model.";
-
     private readonly KnowledgeBaseOptions _options;
     private readonly ILocalModelProviderResolver _providerResolver;
     private readonly IEmbeddingModelResolver _embeddingModelResolver;
@@ -57,7 +54,7 @@ public sealed class KnowledgeChunkEmbedder : IKnowledgeChunkEmbedder
             // caller (KnowledgeIngestionService) only reaches EmbedAsync with chunking.Chunks, and RunAsync marks a
             // zero-chunk document Failed before it ever calls EmbedAsync — so a document stamped via this branch can
             // never reach Indexed, and this placeholder name is never compared as a vector identity.
-            return new KnowledgeEmbeddingResult([], _options.EmbeddingModelName);
+            return new KnowledgeEmbeddingResult([], _options.EmbeddingModelName, Dimension: 0);
         }
 
         var provider = ResolveProvider();
@@ -75,6 +72,11 @@ public sealed class KnowledgeChunkEmbedder : IKnowledgeChunkEmbedder
 
         var batchSize = Math.Max(1, _options.MaxEmbeddingBatchSize);
         var blobs = new List<byte[]>(chunkContents.Count);
+
+        // The vector width is derived from the first embedding this run produces (not a static config constant), so any
+        // embedding model's native dimension is honored. Every subsequent vector is checked against that first width: a
+        // well-behaved model is dimension-stable, so a mismatch is a genuinely broken/mixed model and fails the document.
+        var dimension = -1;
 
         for (var offset = 0; offset < chunkContents.Count; offset += batchSize)
         {
@@ -103,20 +105,24 @@ public sealed class KnowledgeChunkEmbedder : IKnowledgeChunkEmbedder
                 throw new KnowledgeIngestionException(EmbeddingIncompleteReason);
             }
 
-            blobs.AddRange(generated.Select(embedding => ToEmbeddingBlob(embedding.Vector)));
+            foreach (var vector in generated.Select(embedding => embedding.Vector))
+            {
+                if (dimension < 0)
+                {
+                    dimension = vector.Length;
+                }
+                else if (vector.Length != dimension)
+                {
+                    // Content-free reason (only integer widths) so it is safe to persist and surface to the operator.
+                    throw new KnowledgeIngestionException(
+                        $"The embedding model returned inconsistent vector dimensions (expected {dimension}, got {vector.Length}). Reindex with a single embedding model.");
+                }
+
+                blobs.Add(MemoryMarshal.AsBytes(vector.Span).ToArray());
+            }
         }
 
-        return new KnowledgeEmbeddingResult(blobs, embeddingModelName);
-    }
-
-    private byte[] ToEmbeddingBlob(ReadOnlyMemory<float> vector)
-    {
-        if (vector.Length != _options.EmbeddingDimension)
-        {
-            throw new KnowledgeIngestionException(DimensionMismatchReason);
-        }
-
-        return MemoryMarshal.AsBytes(vector.Span).ToArray();
+        return new KnowledgeEmbeddingResult(blobs, embeddingModelName, dimension);
     }
 
     private ILocalModelProvider ResolveProvider()

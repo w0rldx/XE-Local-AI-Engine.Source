@@ -52,10 +52,4 @@ public sealed class KnowledgeBaseOptions
     ///     across a chunk boundary stays retrievable. Must be smaller than <see cref="MaxChunkChars" />.
     /// </summary>
     public int ChunkOverlapChars { get; set; } = 200;
-
-    /// <summary>
-    ///     Expected embedding vector dimensionality (e.g. 768 for <c>nomic-embed-text</c>). A generated vector whose
-    ///     length differs marks the document <c>Failed</c> (model mismatch) rather than storing an incomparable vector.
-    /// </summary>
-    public int EmbeddingDimension { get; set; } = 768;
 }

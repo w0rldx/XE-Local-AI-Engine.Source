@@ -54,9 +54,15 @@ public static class AgentServiceCollectionExtensions
                     .ValidateDataAnnotations()
                     .ValidateOnStart();
 
+        _ = services.AddOptions<AgentToolPipelineOptions>()
+                    .Bind(configuration.GetSection(AgentToolPipelineOptions.Section))
+                    .ValidateDataAnnotations()
+                    .ValidateOnStart();
+
         _ = services.AddSingleton<IValidateOptions<LocalChatAgentOptions>, LocalChatAgentOptionsValidator>();
         _ = services.AddSingleton<IValidateOptions<InvocationAgentOptions>, InvocationAgentOptionsValidator>();
         _ = services.AddSingleton<IValidateOptions<OrchestrationAgentOptions>, OrchestrationAgentOptionsValidator>();
+        _ = services.AddSingleton<IValidateOptions<AgentToolPipelineOptions>, AgentToolPipelineOptionsValidator>();
 
         // Requires a prior IChatClient registration in the host composition root.
         services.DecorateChatClientPipeline();
@@ -97,10 +103,18 @@ public static class AgentServiceCollectionExtensions
         ArgumentNullException.ThrowIfNull(services);
 
         _ = services.Decorate<IChatClient>((inner, serviceProvider) =>
-            inner.AsBuilder()
-                 .Use(chatClient => new ToolInvocationObservabilityChatClient(chatClient, serviceProvider.GetRequiredService<ILogger<ToolInvocationObservabilityChatClient>>()))
-                 .UseFunctionInvocation(serviceProvider.GetRequiredService<ILoggerFactory>())
-                 .Build());
+        {
+            // Resolve defensively: this method is re-entrant (test harnesses re-apply the pipeline after swapping the
+            // base client), and the decoration factory runs lazily at IChatClient resolution. A missing registration
+            // falls back to the pinned defaults rather than throwing during a partial re-decoration.
+            var pipelineOptions = serviceProvider.GetService<IOptions<AgentToolPipelineOptions>>()?.Value ?? new AgentToolPipelineOptions();
+
+            return inner.AsBuilder()
+                        .Use(chatClient => new ToolInvocationObservabilityChatClient(chatClient, serviceProvider.GetRequiredService<ILogger<ToolInvocationObservabilityChatClient>>()))
+                        .UseFunctionInvocation(serviceProvider.GetRequiredService<ILoggerFactory>(),
+                            functionInvokingChatClient => functionInvokingChatClient.MaximumIterationsPerRequest = pipelineOptions.MaximumToolIterationsPerRequest)
+                        .Build();
+        });
 
         return services;
     }

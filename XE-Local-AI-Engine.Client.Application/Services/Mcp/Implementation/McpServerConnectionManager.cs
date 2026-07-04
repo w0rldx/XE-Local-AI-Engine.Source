@@ -10,7 +10,9 @@ using Microsoft.Extensions.AI;
 using Microsoft.Extensions.Options;
 using ModelContextProtocol;
 using ModelContextProtocol.Client;
+using XE_Local_AI_Engine.AI.Agent.Configuration;
 using XE_Local_AI_Engine.AI.Agent.Tools;
+using XE_Local_AI_Engine.AI.Agent.Tools.Implementation;
 using XE_Local_AI_Engine.Client.Persistence;
 using XE_Local_AI_Engine.Client.Persistence.Stores;
 
@@ -26,6 +28,7 @@ internal sealed class McpServerConnectionManager : IMcpServerConnectionManager, 
     private readonly IMcpClientFactory _clientFactory;
     private readonly Dictionary<Guid, ConnectedServer> _connections = [];
     private readonly ILogger<McpServerConnectionManager> _logger;
+    private readonly int _maxToolResultCharacters;
     private readonly McpOptions _options;
     private readonly SemaphoreSlim _refreshGate = new(initialCount: 1, maxCount: 1);
     private readonly IMcpToolRegistry _registry;
@@ -45,13 +48,16 @@ internal sealed class McpServerConnectionManager : IMcpServerConnectionManager, 
         IMcpToolRegistry registry,
         IMcpClientFactory clientFactory,
         IOptions<McpOptions> options,
+        IOptions<AgentToolPipelineOptions> pipelineOptions,
         ILogger<McpServerConnectionManager> logger)
     {
         _scopeFactory = scopeFactory ?? throw new ArgumentNullException(nameof(scopeFactory));
         _registry = registry ?? throw new ArgumentNullException(nameof(registry));
         _clientFactory = clientFactory ?? throw new ArgumentNullException(nameof(clientFactory));
         ArgumentNullException.ThrowIfNull(options);
+        ArgumentNullException.ThrowIfNull(pipelineOptions);
         _options = options.Value;
+        _maxToolResultCharacters = pipelineOptions.Value.MaxToolResultCharacters;
         _logger = logger ?? throw new ArgumentNullException(nameof(logger));
     }
 
@@ -185,7 +191,7 @@ internal sealed class McpServerConnectionManager : IMcpServerConnectionManager, 
             client = await _clientFactory.CreateAsync(record, timeoutCts.Token).ConfigureAwait(false);
             var discovered = await client.ListToolsAsync(cancellationToken: timeoutCts.Token).ConfigureAwait(false);
 
-            var tools = BuildRegisteredTools(discovered, slug);
+            var tools = BuildRegisteredTools(discovered, slug, _maxToolResultCharacters);
             return new ConnectResult(new ConnectedServer(client, record.Version, slug, tools), Error: null);
         }
         catch (Exception ex) when (ex is McpException
@@ -228,9 +234,10 @@ internal sealed class McpServerConnectionManager : IMcpServerConnectionManager, 
 
     /// <summary>
     ///     Renames each discovered tool to a collision-free qualified name (<c>mcp__{slug}__{tool}</c>), builds its
-    ///     offer descriptor (approval ON by default), and wraps the executable in an approval gate.
+    ///     offer descriptor (approval ON by default), bounds its result with the shared tool-result budget, and wraps the
+    ///     executable in an approval gate.
     /// </summary>
-    private static IReadOnlyList<McpRegisteredTool> BuildRegisteredTools(IList<McpClientTool> discovered, string slug)
+    private static IReadOnlyList<McpRegisteredTool> BuildRegisteredTools(IList<McpClientTool> discovered, string slug, int maxToolResultCharacters)
     {
         var registered = new List<McpRegisteredTool>(discovered.Count);
         foreach (var tool in discovered)
@@ -246,7 +253,10 @@ internal sealed class McpServerConnectionManager : IMcpServerConnectionManager, 
                 named.JsonSchema.GetRawText(),
                 requiresApproval);
 
-            AITool executable = new ApprovalRequiredAIFunction(named);
+            // Backstop the (verbatim) MCP result with the shared budget UNDER the approval gate, so a server can't
+            // flood chat history and ApprovalRequiredAIFunction stays the outermost type the approval pipeline detects.
+            AIFunction budgeted = new BudgetedToolResultAIFunction(named, maxToolResultCharacters);
+            AITool executable = new ApprovalRequiredAIFunction(budgeted);
             registered.Add(new McpRegisteredTool(qualifiedName, executable, descriptor));
         }
 
