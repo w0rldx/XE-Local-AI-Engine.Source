@@ -1,15 +1,18 @@
 import "./MobileNavigationBar.css";
 
-import { ActionIcon, Divider, Drawer } from "@mantine/core";
-import { IconX } from "@tabler/icons-react";
+import { ActionIcon, Divider, Drawer, Text } from "@mantine/core";
+import { IconLogout, IconX } from "@tabler/icons-react";
 import { useNavigate, useRouterState } from "@tanstack/react-router";
 import { useTranslation } from "react-i18next";
 
 import { LogoCombined } from "@/components/Logo/LogoCombined";
-import { MobileNavigationLanguageMenu } from "@/core/layout/components/MobileNavigationLanguageMenu/MobileNavigationLanguageMenu";
+import { useNodeLogout } from "@/core/auth/hooks/useNodeLogout";
 import type { IMobileNavigationBarProperties } from "@/core/layout/components/MobileNavigationBar/MobileNavigationBar.types";
+import { MobileNavigationLanguageMenu } from "@/core/layout/components/MobileNavigationLanguageMenu/MobileNavigationLanguageMenu";
 import { MobileNavigationMenu } from "@/core/layout/components/MobileNavigationMenu/MobileNavigationMenu";
 import { MobileNavigationThemeMenu } from "@/core/layout/components/MobileNavigationThemeMenu/MobileNavigationThemeMenu";
+import { SidebarMenu } from "@/core/layout/components/Sidebar/SidebarMenu";
+import { SidebarMenuItem } from "@/core/layout/components/Sidebar/SidebarMenuItem";
 import useWindowDimensions from "@/core/layout/hooks/useWindowDimensions";
 import type { MenuItemStyles } from "@/core/layout/models/Sidebar";
 import { useAppTheme as useTheme } from "@/core/theme/hooks/useAppTheme";
@@ -21,6 +24,7 @@ export function MobileNavigationBar({ drawerOpen, setDrawerOpen }: IMobileNaviga
 	const { t } = useTranslation();
 	const navigate = useNavigate();
 	const pathname = useRouterState({ select: (state) => state.location.pathname });
+	const { logout, logoutPending } = useNodeLogout();
 
 	const menuItemStyle: MenuItemStyles = {
 		root: {
@@ -127,6 +131,25 @@ export function MobileNavigationBar({ drawerOpen, setDrawerOpen }: IMobileNaviga
 				<MobileNavigationThemeMenu theme={theme} menuItemStyle={menuItemStyle} setDrawerOpen={setDrawerOpen} width={width} />
 
 				<MobileNavigationLanguageMenu theme={theme} menuItemStyle={menuItemStyle} setDrawerOpen={setDrawerOpen} width={width} />
+
+				{/* Logout lives in the desktop HeaderBar; on mobile the drawer is the only chrome, so it must offer it too. */}
+				<SidebarMenu menuItemStyles={menuItemStyle}>
+					<div className="h-17 flex items-center justify-center">
+						<SidebarMenuItem
+							icon={<IconLogout />}
+							disabled={logoutPending}
+							onClick={() => {
+								setDrawerOpen(false);
+								logout().catch(() => undefined);
+							}}
+							isMobile={true}
+						>
+							<Text size="sm" fw={500} lh="1.5">
+								{t("components.headerBar.logout")}
+							</Text>
+						</SidebarMenuItem>
+					</div>
+				</SidebarMenu>
 			</div>
 		</Drawer>
 	);

@@ -6,8 +6,7 @@ import { useNavigate } from "@tanstack/react-router";
 import { useState } from "react";
 import { useTranslation } from "react-i18next";
 
-import { logoutNodeAuth } from "@/core/auth/api/NodeAuthApi";
-import { useNodeAuthStore } from "@/core/auth/stores/NodeAuthStore";
+import { useNodeLogout } from "@/core/auth/hooks/useNodeLogout";
 import { MobileNavigationBar } from "@/core/layout/components/MobileNavigationBar/MobileNavigationBar";
 import { LanguageMenu } from "@/core/locales/components/LanguageMenu/LanguageMenu";
 import { ThemeModeToggle } from "@/core/theme/components/ThemeModeToggle/ThemeModeToggle";
@@ -19,21 +18,9 @@ import { ThemeConfiguratorDialogButton } from "@/modules/theme-configurator/Inde
 export function HeaderBar() {
 	const { t } = useTranslation();
 	const [drawerOpen, setDrawerOpen] = useState(false);
-	const [logoutPending, setLogoutPending] = useState(false);
 	const navigate = useNavigate();
-	const clearAuth = useNodeAuthStore((state) => state.actions.clear);
+	const { logout: handleLogout, logoutPending } = useNodeLogout();
 	const theme = useTheme();
-
-	const handleLogout = async (): Promise<void> => {
-		setLogoutPending(true);
-		try {
-			await logoutNodeAuth();
-		} finally {
-			clearAuth();
-			setLogoutPending(false);
-			await navigate({ to: "/login" });
-		}
-	};
 
 	return (
 		<>

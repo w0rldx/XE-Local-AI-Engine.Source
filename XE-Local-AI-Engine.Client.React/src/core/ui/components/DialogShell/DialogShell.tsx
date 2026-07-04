@@ -3,6 +3,7 @@ import { Group, Modal, ScrollArea } from "@mantine/core";
 import { type ReactNode, use, useCallback, useState } from "react";
 import { useTranslation } from "react-i18next";
 
+import useWindowDimensions from "@/core/layout/hooks/useWindowDimensions";
 import { DialogTextTitleBar } from "@/core/ui/components/DialogTextTitleBar/DialogTextTitleBar";
 import { ConfirmContext } from "@/core/ui/context/ConfirmContext";
 
@@ -61,6 +62,12 @@ export function DialogShell({
 	// directly rather than via the throwing useConfirm() hook. Only used when confirmCloseWhen.
 	const confirmContext = use(ConfirmContext);
 	const [isFullScreen, setIsFullScreen] = useState(false);
+	// Below the app shell's 768px cutoff (Layout.tsx / MobileNavigationBar) dialogs go full-screen
+	// automatically: a floating card on a phone wastes gutter space and traps nested scroll areas.
+	// The user-facing toggle is hidden in that state since leaving full-screen isn't meaningful there.
+	const { width } = useWindowDimensions();
+	const isMobileViewport = width < 768;
+	const effectiveFullScreen = isFullScreen || isMobileViewport;
 
 	const toggleFullScreen = useCallback(() => {
 		setIsFullScreen((previous) => !previous);
@@ -100,11 +107,11 @@ export function DialogShell({
 		<Modal
 			centered={true}
 			withCloseButton={false}
-			fullScreen={isFullScreen}
+			fullScreen={effectiveFullScreen}
 			size={size}
-			radius={isFullScreen ? 0 : radius}
+			radius={effectiveFullScreen ? 0 : radius}
 			scrollAreaComponent={scrollAreaComponent}
-			transitionProps={isFullScreen ? { transition: "fade" } : transitionProps}
+			transitionProps={effectiveFullScreen ? { transition: "fade" } : transitionProps}
 			closeOnClickOutside={confirmCloseWhen ? false : closeOnClickOutside}
 			closeOnEscape={confirmCloseWhen ? false : closeOnEscape}
 			overlayProps={{
@@ -120,8 +127,8 @@ export function DialogShell({
 				title={title}
 				handleClose={handleClose}
 				showCloseButton={showCloseButton}
-				showFullScreenToggle={enableFullScreenToggle}
-				isFullScreen={isFullScreen}
+				showFullScreenToggle={enableFullScreenToggle && !isMobileViewport}
+				isFullScreen={effectiveFullScreen}
 				onToggleFullScreen={toggleFullScreen}
 			/>
 			{children}
