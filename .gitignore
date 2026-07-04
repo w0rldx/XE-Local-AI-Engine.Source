@@ -416,3 +416,6 @@ RELEASE_NOTES.md
 
 # DataProtection key-ring (runtime; per-user data dir in prod, content-root fallback in dev/test)
 dp-keys/
+
+# Dev-runtime knowledge-base document store (encrypted uploads land here when running from the repo)
+XE-Local-AI-Engine.Client/knowledge-base/
