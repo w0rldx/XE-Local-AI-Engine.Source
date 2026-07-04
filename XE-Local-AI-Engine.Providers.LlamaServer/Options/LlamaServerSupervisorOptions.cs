@@ -23,6 +23,18 @@ public sealed class LlamaServerSupervisorOptions
     public int MaxRestartAttempts { get; init; } = 3;
 
     /// <summary>
+    ///     llama-server chat-role prompt-cache prefix-reuse window in tokens (<c>--cache-reuse N</c>). Lets the server
+    ///     reuse an unchanged prompt prefix via KV cache shifting even when a later part of the prompt changes, so a
+    ///     multi-turn chat/agent conversation — which resends the full selected-path history every turn — skips
+    ///     reprocessing the prefix and returns the first token sooner. Applies to the chat role only; an embedding
+    ///     server does one-shot forward passes with no shared prefix to reuse. <c>0</c> disables it (upstream default);
+    ///     <c>256</c> is the recommended chat/agent value. The flag is emitted regardless of profile source (explore or
+    ///     frozen replay) and is not part of any frozen-profile identity, so changing it never invalidates a stored
+    ///     profile — it only takes effect on the next natural (re)spawn of the process.
+    /// </summary>
+    public int ChatCacheReuse { get; init; } = 256;
+
+    /// <summary>
     ///     Minimum interval between reuse-path liveness probes for a single process. A reuse is handed out immediately
     ///     (no HTTP) unless at least this long has passed since the last probe of that process, so the hot path stays
     ///     cheap: at most one <c>/health</c> probe per process per interval, not one per request.

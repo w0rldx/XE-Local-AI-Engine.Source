@@ -16,6 +16,7 @@ using XE_Local_AI_Engine.Tests.Testing;
 public sealed class SupervisorLaunchSpecProfileTests
 {
     private static readonly LlamaServerProcessSupervisor.ProcessKey ChatKey = new("llama3", ModelRole.Chat);
+    private static readonly LlamaServerProcessSupervisor.ProcessKey EmbeddingKey = new("nomic-embed", ModelRole.Embedding);
 
     [Test]
     public void LaunchSpec_WhenExploreMode_EmitsFitOnAndMetrics_NoExplicitFitArgs()
@@ -103,7 +104,8 @@ public sealed class SupervisorLaunchSpecProfileTests
             "/fake/models/model.gguf",
             port: 8080,
             GpuVariant.Cpu,
-            ResolvedLaunchArguments.Explore());
+            ResolvedLaunchArguments.Explore(),
+            chatCacheReuse: 256);
         AssertEx.Equal("1", cpu.Arguments[IndexOf(cpu.Arguments, "--parallel") + 1]);
         AssertEx.Contains(cpu.Arguments, "--no-warmup");
     }
@@ -118,13 +120,52 @@ public sealed class SupervisorLaunchSpecProfileTests
             "/fake/models/model.gguf",
             port: 8080,
             GpuVariant.Cpu,
-            resolved);
+            resolved,
+            chatCacheReuse: 256);
 
         AssertEx.False(spec.Arguments.Contains("--fit"), "CPU must not emit --fit.");
         AssertEx.False(spec.Arguments.Contains("--metrics"), "CPU must not emit --metrics.");
         AssertEx.False(spec.Arguments.Contains("--n-gpu-layers"), "CPU must not emit -ngl.");
         AssertEx.False(spec.Arguments.Contains("-c"), "CPU must not emit the replay -c (gpu/fit block is GPU-only).");
         AssertEx.Contains(spec.Arguments, "--jinja"); // mandatory chat flag stays
+    }
+
+    [Test]
+    public void LaunchSpec_WhenChatRole_EmitsCacheReuse_WithConfiguredWindow()
+    {
+        // Chat gets --cache-reuse N (prompt-prefix KV reuse) regardless of profile source; emitted in both explore
+        // and replay modes so a frozen profile still benefits from prefix reuse without being part of its identity.
+        var explore = BuildGpuSpec(ResolvedLaunchArguments.Explore(), chatCacheReuse: 256);
+        AssertEx.Equal("256", explore.Arguments[IndexOf(explore.Arguments, "--cache-reuse") + 1]);
+
+        var replay = BuildGpuSpec(ResolvedLaunchArguments.Replay(ctxSize: 8192, nGpuLayers: 24), chatCacheReuse: 256);
+        AssertEx.Equal("256", replay.Arguments[IndexOf(replay.Arguments, "--cache-reuse") + 1]);
+    }
+
+    [Test]
+    public void LaunchSpec_WhenChatCacheReuseZero_OmitsCacheReuse()
+    {
+        // 0 is the upstream default (disabled): the flag must be absent entirely, not "--cache-reuse 0".
+        var spec = BuildGpuSpec(ResolvedLaunchArguments.Explore(), chatCacheReuse: 0);
+        AssertEx.False(spec.Arguments.Contains("--cache-reuse"), "chatCacheReuse=0 must omit --cache-reuse entirely.");
+    }
+
+    [Test]
+    public void LaunchSpec_WhenEmbeddingRole_NeverEmitsCacheReuse()
+    {
+        // Embedding servers do one-shot forward passes with no shared conversational prefix — cache-reuse is
+        // meaningless there and must never be emitted, even with a positive window configured.
+        var spec = LlamaServerProcessSupervisor.BuildLaunchSpec(EmbeddingKey,
+            "/fake/bin/llama-server",
+            "/fake/models/embed.gguf",
+            port: 8080,
+            GpuVariant.Cuda,
+            ResolvedLaunchArguments.Explore(),
+            chatCacheReuse: 256);
+
+        AssertEx.False(spec.Arguments.Contains("--cache-reuse"), "Embedding role must never emit --cache-reuse.");
+        AssertEx.False(spec.Arguments.Contains("--jinja"), "Embedding role must not emit --jinja.");
+        AssertEx.Contains(spec.Arguments, "--embeddings");
     }
 
     [Test]
@@ -152,14 +193,15 @@ public sealed class SupervisorLaunchSpecProfileTests
         AssertEx.False(spec.Arguments.Contains("999"), "Replay spawn must not carry the old forced -ngl 999.");
     }
 
-    private static LlamaServerLaunchSpec BuildGpuSpec(ResolvedLaunchArguments resolved)
+    private static LlamaServerLaunchSpec BuildGpuSpec(ResolvedLaunchArguments resolved, int chatCacheReuse = 256)
     {
         return LlamaServerProcessSupervisor.BuildLaunchSpec(ChatKey,
             "/fake/bin/llama-server",
             "/fake/models/model.gguf",
             port: 8080,
             GpuVariant.Cuda,
-            resolved);
+            resolved,
+            chatCacheReuse);
     }
 
     private static int IndexOf(IReadOnlyList<string> args, string flag)
