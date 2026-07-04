@@ -674,12 +674,31 @@ public sealed class LlamaServerProcessSupervisor : ILlamaServerProcessSupervisor
 
             AppendSpeculativeArgs(args, speculative);
         }
-        else
+        else if (key.Role == ModelRole.Embedding)
         {
             // /v1/embeddings is exposed only with --embeddings + a non-`none` pooling type.
             args.Add("--embeddings");
             args.Add("--pooling");
             args.Add("mean");
+        }
+        else if (key.Role == ModelRole.Reranker)
+        {
+            // Reranker role. POST /v1/rerank is exposed only with --rerank (alias --reranking) + `--pooling rank`
+            // (verified against llama.cpp release b9692). This is MUTUALLY EXCLUSIVE with the embedding branch above —
+            // a rerank server scores (query, document) pairs and never gets --embeddings — and carries none of the
+            // chat-only flags (--jinja, --cache-reuse, speculative). Because each role is its own branch, a single
+            // process can only ever receive one role's flags, so --embeddings and --rerank never coexist.
+            args.Add("--rerank");
+            args.Add("--pooling");
+            args.Add("rank");
+        }
+        else
+        {
+            // Explicit guard: a ModelRole added later must not silently inherit the reranker flags. Fail loudly so the
+            // new role's launch args are a deliberate decision here rather than an accident of the branch order.
+            throw new ArgumentOutOfRangeException(nameof(key),
+                key.Role,
+                $"No llama-server launch arguments are defined for model role '{key.Role}'.");
         }
 
         var workingDirectory = Path.GetDirectoryName(Path.GetFullPath(executablePath)) ?? Environment.CurrentDirectory;

@@ -149,6 +149,8 @@ export interface NodeSettingsFieldsForm {
 	speculativeDraftModelName: string;
 	speculativeDraftMaxTokens: number | string;
 	chatCacheReuse: number | string;
+	// Knowledge-base reranker (empty = reranking off)
+	rerankerModelName: string;
 	// Developer-only
 	orchestrationIdleTimeoutSeconds: number | string;
 	agentHomePrepareTimeoutSeconds: number | string;
@@ -174,6 +176,7 @@ export const nodeSettingsFieldDefaults: NodeSettingsFieldsForm = {
 	speculativeDraftModelName: "",
 	speculativeDraftMaxTokens: 3,
 	chatCacheReuse: 256,
+	rerankerModelName: "",
 	orchestrationIdleTimeoutSeconds: 120,
 	agentHomePrepareTimeoutSeconds: 900,
 	agentHomeCommandTimeoutSeconds: 300,
@@ -210,6 +213,7 @@ export function toNodeSettingsFieldsForm(response: NodeSettingsResponse | undefi
 		speculativeDraftModelName: response.speculativeDraftModelName ?? "",
 		speculativeDraftMaxTokens: numberOr(response.speculativeDraftMaxTokens, nodeSettingsFieldDefaults.speculativeDraftMaxTokens),
 		chatCacheReuse: numberOr(response.chatCacheReuse, nodeSettingsFieldDefaults.chatCacheReuse),
+		rerankerModelName: response.rerankerModelName ?? "",
 		orchestrationIdleTimeoutSeconds: numberOr(
 			response.orchestrationIdleTimeoutSeconds,
 			nodeSettingsFieldDefaults.orchestrationIdleTimeoutSeconds,
@@ -442,6 +446,12 @@ export function buildNodeSettingsRequest(
 			body.chatCacheReuse = v;
 		},
 	);
+
+	// Knowledge-base reranker model — free model name; empty string is the "Off" signal (backend Normalize maps blank to
+	// null = reranking disabled). Sent whenever it differs from the baseline, including a switch back to "Off".
+	if (form.rerankerModelName !== baseline.rerankerModelName) {
+		body.rerankerModelName = form.rerankerModelName.trim();
+	}
 
 	if (includeDeveloperFields) {
 		collectBoundedInt(

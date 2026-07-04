@@ -23,7 +23,7 @@ public sealed record KnowledgeSearchResult(IReadOnlyList<KnowledgeSearchHit> Res
 /// <param name="Section">The chunk's heading trail (<c>heading_path</c>), or <see langword="null" /> when there is none.</param>
 /// <param name="Content">The matched chunk content, optionally joined with neighbor chunks when expansion was requested.</param>
 /// <param name="Source">Constant provenance tag for this retrieval surface.</param>
-/// <param name="Score">The fused Reciprocal Rank Fusion score (higher is more relevant).</param>
+/// <param name="Score">Relevance score, higher is more relevant: the fused Reciprocal Rank Fusion score, or — when the reranker is enabled and succeeds — the cross-encoder relevance score the hit was reordered by.</param>
 /// <param name="ChunkIndex">Global order of the matched chunk within the document.</param>
 public sealed record KnowledgeSearchHit(
     Guid DocumentId,

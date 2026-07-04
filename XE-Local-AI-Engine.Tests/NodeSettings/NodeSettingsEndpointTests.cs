@@ -330,6 +330,31 @@ public sealed class NodeSettingsEndpointTests
         AssertEx.NotNull(merged.AllowedVoiceModels);
     }
 
+    [Test]
+    public void NodeSettings_RerankerModelName_RoundTripsThroughMapper()
+    {
+        // A supplied (trimmed) value is stored and surfaced; omitting it on a later save keeps the current value; an
+        // empty string is the "Off" signal that clears it (the store's Normalize later maps blank to null = disabled).
+        var request = new SaveNodeSettingsRequest
+        {
+            RerankerModelName = "  bge-reranker-v2-m3  "
+        };
+
+        var stored = request.ToStoredSettings(new StoredNodeSettings());
+        AssertEx.Equal("bge-reranker-v2-m3", stored.RerankerModelName);
+
+        var response = stored.ToResponse();
+        AssertEx.Equal("bge-reranker-v2-m3", response.RerankerModelName);
+
+        // Omitting the field on a later save keeps the current stored value (additive merge).
+        var merged = new SaveNodeSettingsRequest().ToStoredSettings(stored);
+        AssertEx.Equal("bge-reranker-v2-m3", merged.RerankerModelName);
+
+        // The "Off" option sends an empty string, which clears the reranker model name.
+        var cleared = new SaveNodeSettingsRequest { RerankerModelName = string.Empty }.ToStoredSettings(stored);
+        AssertEx.Equal(string.Empty, cleared.RerankerModelName);
+    }
+
     private static TestingWebAppFactory CreateFactory(INodeSettingsStore nodeSettingsStore, ICapabilityReporter? capabilityReporter = null)
     {
         return new TestingWebAppFactory

@@ -30,6 +30,9 @@ export interface NodeSettingsFieldsCardProps {
 	readonly showDeveloperFields: boolean;
 	// Installed chat-capable models offered as the draft model for draft-* speculative modes.
 	readonly draftModelOptions: readonly DraftModelOption[];
+	// All installed models offered as the knowledge-base reranker (reranker GGUFs are not a chat kind, so this list is
+	// not filtered to chat-capable models).
+	readonly rerankerModelOptions: readonly DraftModelOption[];
 }
 
 function fieldError(
@@ -51,6 +54,7 @@ export function NodeSettingsFieldsCard({
 	onChange,
 	showDeveloperFields,
 	draftModelOptions,
+	rerankerModelOptions,
 }: NodeSettingsFieldsCardProps) {
 	const { t } = useTranslation();
 
@@ -68,6 +72,20 @@ export function NodeSettingsFieldsCard({
 	);
 
 	const isDraftMode = isDraftSpeculativeMode(form.speculativeMode);
+
+	// Reranker options: an explicit "Off" entry (empty value = reranking disabled) followed by every installed model.
+	// If a reranker model is stored but no longer installed (or not in the returned list), keep it selectable so the
+	// operator sees their current value instead of a blank control.
+	const rerankerOptions = useMemo(() => {
+		const options = [
+			{ value: "", label: t("pages.nodeSettings.fields.rerankerModel.off", "Off") },
+			...rerankerModelOptions.map((option) => ({ value: option.value, label: option.label })),
+		];
+		if (form.rerankerModelName !== "" && !options.some((option) => option.value === form.rerankerModelName)) {
+			options.push({ value: form.rerankerModelName, label: form.rerankerModelName });
+		}
+		return options;
+	}, [rerankerModelOptions, form.rerankerModelName, t]);
 
 	return (
 		<>
@@ -215,6 +233,21 @@ export function NodeSettingsFieldsCard({
 						onChange={(value) => onChange("chatCacheReuse", value)}
 						error={fieldError(t, errors, "chatCacheReuse")}
 						data-testid="node-settings-chat-cache-reuse"
+					/>
+					<Select
+						label={t("pages.nodeSettings.fields.rerankerModel.label", "Reranker model")}
+						description={t(
+							"pages.nodeSettings.fields.rerankerModel.description",
+							"Cross-encoder reranker that reorders knowledge-base search results for relevance. Leave off if no reranker model is installed. Applies after the node restarts. Uses additional VRAM not counted by capacity checks.",
+						)}
+						data={rerankerOptions}
+						value={form.rerankerModelName}
+						onChange={(value) => onChange("rerankerModelName", value ?? "")}
+						allowDeselect={false}
+						searchable={true}
+						nothingFoundMessage={t("pages.nodeSettings.fields.rerankerModel.empty", "No installed models")}
+						error={fieldError(t, errors, "rerankerModelName")}
+						data-testid="node-settings-reranker-model"
 					/>
 				</Stack>
 			</Card>

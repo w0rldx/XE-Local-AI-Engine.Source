@@ -1203,6 +1203,12 @@
 				"chatCacheReuse": {
 					"label": "Prompt-Cache-Wiederverwendung",
 					"description": "Unveränderten Prompt-Präfix über Turns hinweg wiederverwenden (Token). 0 deaktiviert. Wird nach einem Neustart des Knotens wirksam."
+				},
+				"rerankerModel": {
+					"label": "Reranker-Modell",
+					"description": "Cross-Encoder-Reranker, der die Suchergebnisse der Wissensdatenbank nach Relevanz neu ordnet. Deaktiviert lassen, wenn kein Reranker-Modell installiert ist. Wird nach einem Neustart des Knotens wirksam. Verbraucht zusätzlichen VRAM, der von Kapazitätsprüfungen nicht berücksichtigt wird.",
+					"off": "Aus",
+					"empty": "Keine installierten Modelle"
 				}
 			}
 		},

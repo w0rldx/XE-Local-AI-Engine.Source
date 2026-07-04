@@ -230,6 +230,7 @@ public sealed class KnowledgeEmbeddingModelIdentityTests : IDisposable
             ftsSearch,
             vectorSearchFactory,
             new ReciprocalRankFusion(),
+            Substitute.For<IRerankerClient>(),
             Substitute.For<IContextExpansionService>(),
             options,
             NullLogger<KnowledgeSearchService>.Instance);

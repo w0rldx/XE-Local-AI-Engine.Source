@@ -82,6 +82,16 @@ export function NodeSettings() {
 		[localModels],
 	);
 
+	// Installed models offered as the knowledge-base reranker. Reranker GGUFs are not a chat kind, so this list is NOT
+	// filtered to chat-capable models (value = model name, resolved server-side).
+	const rerankerModelOptions = useMemo(
+		() =>
+			(localModels?.items ?? [])
+				.map((model) => ({ value: model.modelName ?? "", label: model.modelName ?? "" }))
+				.filter((option) => option.value.length > 0),
+		[localModels],
+	);
+
 	useEffect(() => {
 		if (settings?.maxMessageRequestTimeoutSeconds !== undefined) {
 			setTimeoutSeconds(settings.maxMessageRequestTimeoutSeconds);
@@ -261,6 +271,7 @@ export function NodeSettings() {
 					onChange={handleFieldChange}
 					showDeveloperFields={developerMode}
 					draftModelOptions={draftModelOptions}
+					rerankerModelOptions={rerankerModelOptions}
 				/>
 
 				<Group>

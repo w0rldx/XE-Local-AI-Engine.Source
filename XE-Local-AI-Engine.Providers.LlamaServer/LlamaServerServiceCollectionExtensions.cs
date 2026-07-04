@@ -5,6 +5,7 @@ using Microsoft.Extensions.DependencyInjection.Extensions;
 using Microsoft.Extensions.Logging;
 using XE_Local_AI_Engine.Providers.Abstractions;
 using XE_Local_AI_Engine.Providers.Abstractions.Capabilities;
+using XE_Local_AI_Engine.Providers.Abstractions.Contracts;
 using XE_Local_AI_Engine.Providers.Abstractions.Gguf;
 using XE_Local_AI_Engine.Providers.LlamaServer.Configuration;
 using XE_Local_AI_Engine.Providers.LlamaServer.Contracts;
@@ -123,6 +124,15 @@ public static class LlamaServerServiceCollectionExtensions
             sp.GetService<TimeProvider>()));
         services.TryAddSingleton<ILlamaServerProcessSupervisor>(static sp =>
             sp.GetRequiredService<LlamaServerProcessSupervisor>());
+
+        // Local cross-encoder reranker: spawns/reuses a rerank-role llama-server (--rerank + --pooling rank) for the
+        // resolved reranker model and POSTs /v1/rerank. Uses the caller-supplied HttpClient (AddHttpClient) — the same
+        // plain-client seam the health probe uses — since /v1/rerank has no OpenAI-SDK method. Singleton (stateless); the
+        // supervisor owns the underlying process. Any failure degrades to null so knowledge search keeps its fusion order.
+        services.TryAddSingleton<IRerankerClient>(static sp =>
+            new LlamaServerRerankerClient(sp.GetRequiredService<ILlamaServerProcessSupervisor>(),
+                sp.GetRequiredService<HttpClient>(),
+                sp.GetRequiredService<ILogger<LlamaServerRerankerClient>>()));
 
         // SEAM: the llamacpp ILocalModelProvider. Registered over the supervisor + the caller-supplied
         // IGgufModelStore (the Hugging Face GGUF store). Added to the

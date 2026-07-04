@@ -72,6 +72,12 @@ public sealed record NodeSettingsResponse
 
     public int MaxAllowedSpeculativeDraftGpuLayers { get; init; }
 
+    /// <summary>
+    ///     Installed cross-encoder reranker model name for the knowledge-base search rerank stage.
+    ///     <see langword="null" />/blank leaves reranking OFF.
+    /// </summary>
+    public string? RerankerModelName { get; init; }
+
     // ── Advanced / developer-only ──
     public long? HuggingFaceDiskMarginBytes { get; init; }
 
@@ -153,6 +159,9 @@ public sealed record SaveNodeSettingsRequest
 
     public int? SpeculativeDraftGpuLayers { get; init; }
 
+    /// <summary>Installed cross-encoder reranker model name for knowledge-base search rerank. Empty/blank disables reranking.</summary>
+    public string? RerankerModelName { get; init; }
+
     // ── Advanced / developer-only ──
     public long? HuggingFaceDiskMarginBytes { get; init; }
 
@@ -215,6 +224,7 @@ internal static class NodeSettingsEndpointDtoMapper
             SpeculativeDraftGpuLayers = settings.SpeculativeDraftGpuLayers,
             MinSpeculativeDraftGpuLayers = StoredNodeSettings.MinSpeculativeDraftGpuLayers,
             MaxAllowedSpeculativeDraftGpuLayers = StoredNodeSettings.MaxSpeculativeDraftGpuLayers,
+            RerankerModelName = settings.RerankerModelName,
             HuggingFaceDiskMarginBytes = settings.HuggingFaceDiskMarginBytes,
             OrchestrationIdleTimeoutSeconds = settings.OrchestrationIdleTimeoutSeconds,
             MinOrchestrationIdleTimeoutSeconds = StoredNodeSettings.MinOrchestrationIdleTimeoutSeconds,
@@ -276,6 +286,12 @@ internal static class NodeSettingsEndpointDtoMapper
                 : request.SpeculativeDraftModelName.Trim(),
             SpeculativeDraftMaxTokens = request.SpeculativeDraftMaxTokens ?? currentSettings.SpeculativeDraftMaxTokens,
             SpeculativeDraftGpuLayers = request.SpeculativeDraftGpuLayers ?? currentSettings.SpeculativeDraftGpuLayers,
+            // Optional string, mirroring OllamaEndpoint/DefaultModelName: a null request field keeps the current value; a
+            // supplied value (including an empty string from the "Off" option) is trimmed, and the store's Normalize maps
+            // blank to null (reranking disabled).
+            RerankerModelName = request.RerankerModelName is null
+                ? currentSettings.RerankerModelName
+                : request.RerankerModelName.Trim(),
             OrchestrationIdleTimeoutSeconds = request.OrchestrationIdleTimeoutSeconds ?? currentSettings.OrchestrationIdleTimeoutSeconds,
             AgentHomePrepareTimeoutSeconds = request.AgentHomePrepareTimeoutSeconds ?? currentSettings.AgentHomePrepareTimeoutSeconds,
             AgentHomeCommandTimeoutSeconds = request.AgentHomeCommandTimeoutSeconds ?? currentSettings.AgentHomeCommandTimeoutSeconds,

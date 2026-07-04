@@ -82,6 +82,9 @@ public interface INodeRuntimeSettings
     /// <summary>The draft-model GPU layers <c>--spec-draft-ngl</c>, or <see langword="null" /> when unset (flag omitted).</summary>
     Task<int?> GetSpeculativeDraftGpuLayersAsync(CancellationToken cancellationToken = default);
 
+    /// <summary>The knowledge-base reranker model name (stored &gt; off), or <see langword="null" /> when reranking is disabled.</summary>
+    Task<string?> GetRerankerModelNameAsync(CancellationToken cancellationToken = default);
+
     // Synchronous twins for the composition/startup path only (DI factory seeds + singleton constructors). These read
     // the stored settings synchronously to avoid blocking on async file I/O during host startup, which starves the
     // thread pool. Request-time consumers must use the async getters above.
@@ -130,4 +133,7 @@ public interface INodeRuntimeSettings
 
     /// <inheritdoc cref="GetSpeculativeDraftGpuLayersAsync" />
     int? GetSpeculativeDraftGpuLayers();
+
+    /// <inheritdoc cref="GetRerankerModelNameAsync" />
+    string? GetRerankerModelName();
 }

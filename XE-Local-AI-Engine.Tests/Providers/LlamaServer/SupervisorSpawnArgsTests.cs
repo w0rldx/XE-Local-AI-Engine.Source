@@ -51,6 +51,26 @@ public sealed class SupervisorSpawnArgsTests
     }
 
     [Test]
+    public async Task EnsureRunning_RerankerRole_LaunchArgsContainRerankAndPoolingRank_NotEmbeddings()
+    {
+        var launcher = new FakeProcessLauncher();
+        await using var supervisor = NewSupervisor(launcher);
+
+        await supervisor.EnsureRunningAsync("bge-reranker-v2-m3", ModelRole.Reranker, CancellationToken.None);
+
+        AssertEx.True(launcher.Launches.TryDequeue(out var spec));
+        AssertEx.Contains(spec!.Arguments, "--rerank");
+        AssertEx.Contains(spec.Arguments, "--pooling");
+
+        var poolingIndex = IndexOf(spec.Arguments, "--pooling");
+        AssertEx.Equal("rank", spec.Arguments[poolingIndex + 1]);
+
+        // --rerank is mutually exclusive with --embeddings, and carries none of the chat-only flags.
+        AssertEx.False(spec.Arguments.Contains("--embeddings"), "A rerank process must not enable embeddings.");
+        AssertEx.False(spec.Arguments.Contains("--jinja"), "A rerank process must not enable jinja chat templating.");
+    }
+
+    [Test]
     public async Task EnsureRunning_GpuVariant_NoProfile_LaunchArgsEmitFitOnAndMetrics()
     {
         var launcher = new FakeProcessLauncher();

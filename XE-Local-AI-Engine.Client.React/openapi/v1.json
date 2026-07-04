@@ -8296,6 +8296,10 @@
             "type": "integer",
             "format": "int32"
           },
+          "rerankerModelName": {
+            "type": "string",
+            "nullable": true
+          },
           "huggingFaceDiskMarginBytes": {
             "type": "integer",
             "format": "int64",
@@ -8520,6 +8524,10 @@
           "speculativeDraftGpuLayers": {
             "type": "integer",
             "format": "int32",
+            "nullable": true
+          },
+          "rerankerModelName": {
+            "type": "string",
             "nullable": true
           },
           "huggingFaceDiskMarginBytes": {

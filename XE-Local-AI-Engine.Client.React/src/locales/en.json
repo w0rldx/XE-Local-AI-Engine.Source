@@ -1203,6 +1203,12 @@
 				"chatCacheReuse": {
 					"label": "Prompt cache reuse",
 					"description": "Reuse an unchanged prompt prefix across turns (tokens). 0 disables. Applies after the node restarts."
+				},
+				"rerankerModel": {
+					"label": "Reranker model",
+					"description": "Cross-encoder reranker that reorders knowledge-base search results for relevance. Leave off if no reranker model is installed. Applies after the node restarts. Uses additional VRAM not counted by capacity checks.",
+					"off": "Off",
+					"empty": "No installed models"
 				}
 			}
 		},
