@@ -3035,7 +3035,9 @@
 			"operatorDefaultProfileLabel": "Default voice",
 			"operatorDefaultProfileDescription": "The voice new users start with on this node.",
 			"operatorSaveError": "Could not save the node voice setting.",
-			"previewLabel": "Preview voice"
+			"previewLabel": "Preview voice",
+			"builtInVoicesGroupLabel": "Built-in voices",
+			"systemVoiceGroupLabel": "System voices ({{language}})"
 		}
 	}
 }
