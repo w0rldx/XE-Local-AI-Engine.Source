@@ -402,6 +402,14 @@
 			"source": "backend"
 		},
 		{
+			"id": "backend:Microsoft.NET.ILLink.Tasks@10.0.9",
+			"name": "Microsoft.NET.ILLink.Tasks",
+			"version": "10.0.9",
+			"license": "MIT",
+			"homepageUrl": "https://dot.net/",
+			"source": "backend"
+		},
+		{
 			"id": "backend:ModelContextProtocol@1.4.0",
 			"name": "ModelContextProtocol",
 			"version": "1.4.0",
