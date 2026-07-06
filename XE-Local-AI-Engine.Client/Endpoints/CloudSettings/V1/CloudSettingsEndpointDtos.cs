@@ -24,7 +24,7 @@ public sealed record AzureFoundrySettingsResponse
 {
     public string? Endpoint { get; init; }
 
-    /// <summary>The persisted auth mode as the <see cref="AzureFoundryAuthMode" /> enum name (ApiKey | ManagedIdentity).</summary>
+    /// <summary>The persisted auth mode as the <see cref="AzureFoundryAuthMode" /> enum name (ApiKey | ManagedIdentity | EntraId).</summary>
     public required string AuthMode { get; init; }
 
     /// <summary>True when an API key is stored. The key itself is never returned to the client.</summary>
@@ -87,7 +87,7 @@ public sealed record SaveCloudSettingsRequest
 
     public string? Endpoint { get; init; }
 
-    /// <summary>The requested auth mode (ApiKey | ManagedIdentity). Case-insensitive enum name.</summary>
+    /// <summary>The requested auth mode (ApiKey | ManagedIdentity | EntraId). Case-insensitive enum name.</summary>
     public string AuthMode { get; init; } = nameof(AzureFoundryAuthMode.ApiKey);
 
     /// <summary>Required only when <see cref="AuthMode" /> is <c>ApiKey</c>; ignored for managed identity.</summary>
