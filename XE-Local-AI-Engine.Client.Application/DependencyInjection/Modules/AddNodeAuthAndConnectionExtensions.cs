@@ -4,6 +4,7 @@ using Microsoft.Extensions.Caching.Memory;
 using XE_Local_AI_Engine.Client.Services.Auth;
 using XE_Local_AI_Engine.Client.Services.Auth.Implementation;
 using XE_Local_AI_Engine.Client.Services.CloudProviders;
+using XE_Local_AI_Engine.Client.Services.CloudProviders.Auth;
 using XE_Local_AI_Engine.Client.Services.CloudProviders.Implementation;
 using XE_Local_AI_Engine.Client.Services.Connection;
 using XE_Local_AI_Engine.Client.Services.Connection.Implementation;
@@ -69,8 +70,21 @@ internal static class AddNodeAuthAndConnectionExtensions
 
         // Voice manifest: config-only composition over the node settings store + the static Kokoro catalog (no audio).
         builder.Services.AddSingleton<IVoiceManifestService, VoiceManifestService>();
+        // Encrypted at-rest store for the Entra ID public-client authentication record (device-code / interactive-
+        // browser silent-auth resume), read by AzureFoundryChatClientFactory and written by the sign-in coordinator.
+        builder.Services.AddSingleton<IEntraTokenCacheStore, EntraTokenCacheStore>();
         builder.Services.AddSingleton<IAzureFoundryChatClientFactory, AzureFoundryChatClientFactory>();
         builder.AddCodexOAuthProvider(configuration);
+
+        // Singleton: owns the cross-request pending Entra ID device-code sign-in state the Operator status endpoint
+        // polls, mirroring ICodexLoginCoordinator. The onSignInSucceeded callback invalidates the active-cloud
+        // selection snapshot so a sign-in takes effect on the very next send.
+        builder.Services.AddSingleton<IEntraDeviceCodeSignInCoordinator>(serviceProvider => new EntraDeviceCodeSignInCoordinator(
+            serviceProvider.GetRequiredService<ICloudCredentialStore>(),
+            serviceProvider.GetRequiredService<IEntraTokenCacheStore>(),
+            serviceProvider.GetRequiredService<ILogger<EntraDeviceCodeSignInCoordinator>>(),
+            () => serviceProvider.GetRequiredService<IActiveCloudChatClientFactory>().InvalidateSelectionCache()));
+
         builder.Services.AddSingleton<INodeKeyRegistry, NodeKeyRegistry>();
         builder.Services.AddSingleton<IPairingService, PairingService>();
         builder.Services.AddSingleton<IWorkerTokenRefreshService, WorkerTokenRefreshService>();

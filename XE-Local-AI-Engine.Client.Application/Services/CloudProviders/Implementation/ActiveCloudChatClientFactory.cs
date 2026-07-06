@@ -229,8 +229,13 @@ public sealed class ActiveCloudChatClientFactory : IActiveCloudChatClientFactory
 
             if (!string.IsNullOrWhiteSpace(matchedDeployment))
             {
+                // Folds every Entra ID field too (tenant/client/secret-length/scope/sign-in method) so an operator
+                // edit to any of them — including a fresh device-code sign-in that changes nothing here but is
+                // followed by a settings save — rebuilds the cached client rather than reusing a stale credential.
                 var fingerprint = string.Create(CultureInfo.InvariantCulture,
-                    $"{AzureFingerprintPrefix}|{connection.Endpoint}|{connection.AuthMode}|{matchedDeployment}|{connection.ApiKey?.Length ?? 0}");
+                    $"{AzureFingerprintPrefix}|{connection.Endpoint}|{connection.AuthMode}|{matchedDeployment}|{connection.ApiKey?.Length ?? 0}" +
+                    $"|{connection.EntraTenantId}|{connection.EntraClientId}|{connection.EntraClientSecret?.Length ?? 0}" +
+                    $"|{connection.EntraTokenScope}|{connection.EntraSignInMethod}");
                 return new CloudSelection(fingerprint, () => _azureFactory.Create(connection, matchedDeployment));
             }
         }

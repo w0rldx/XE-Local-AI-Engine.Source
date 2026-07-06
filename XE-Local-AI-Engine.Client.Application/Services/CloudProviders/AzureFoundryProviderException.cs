@@ -16,7 +16,13 @@ public enum AzureFoundryProviderErrorKind
     ContentFiltered,
 
     /// <summary>A transport / backend error reaching the Azure endpoint.</summary>
-    Transport
+    Transport,
+
+    /// <summary>
+    ///     No usable Entra ID sign-in is available yet (device-code / interactive-browser silent auth has no
+    ///     persisted session for this connection). The operator must complete sign-in first.
+    /// </summary>
+    AuthRequired
 }
 
 /// <summary>
