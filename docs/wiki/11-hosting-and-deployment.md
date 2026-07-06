@@ -2,7 +2,7 @@
 
 > Last reviewed: 2026-06-27 · Code-grounded.
 
-This page covers how the XE Local AI Engine node process is **hosted and shipped**: the Aspire AppHost used for local dev/integration, the shared `ServiceDefaults`, the configuration layers (`appsettings` + the user-editable `node-settings.json` + the encrypted `hf-token.enc`), the background hosted services that run inside the node, the self-contained single-file **desktop launcher** (`XE_LAUNCH_MODE=desktop`), the publish profiles + launchers used to produce a double-click distribution, and the (currently deferred) cross-platform uninstaller.
+This page covers how the XE Local AI Engine node process is **hosted and shipped**: the Aspire AppHost used for local dev/integration, the shared `ServiceDefaults`, the configuration layers (`appsettings` + the user-editable `node-settings.json` + the encrypted `hf-token.enc`), the background hosted services that run inside the node, the self-contained single-file **desktop launcher** (`XE_LAUNCH_MODE=desktop`), the publish profiles + launchers used to produce a double-click distribution, and the RC-shipped cross-platform uninstaller scripts.
 
 There are **two distinct ways the node runs**:
 
@@ -162,7 +162,7 @@ Both scripts carry an explicit **single-instance caveat**: only one instance per
 
 ### RC bundle packaging
 
-`publish/package-rc.sh` builds the distributable per-RID zip a tester downloads: the single-file binary + `wwwroot` SPA assets + a prominently named launcher (that sets `XE_LAUNCH_MODE=desktop`) + a `READ-ME-FIRST.txt`, plus a `.sha256` sidecar. It cross-compiles both RIDs from Linux, with `--rid` and `--skip-web` flags. The Windows bundle is built on Linux but **must be smoke-tested on real Windows 11** before tagging (`publish/TESTER-QUICKSTART.md`). The React SPA is built and copied into `wwwroot`, served by ASP.NET Core via `UseStaticFiles` + `MapFallbackToFile("index.html")` (the "C0re static-files" pattern) — see [React Client](10-react-client.md).
+`publish/package-rc.sh` builds the distributable per-RID zip a tester downloads: the single-file binary + `wwwroot` SPA assets + a prominently named launcher (that sets `XE_LAUNCH_MODE=desktop`) + the matching **uninstaller script** (§7) + a `READ-ME-FIRST.txt`, plus a `.sha256` sidecar. It cross-compiles both RIDs from Linux, with `--rid` and `--skip-web` flags. The Windows bundle is built on Linux but **must be smoke-tested on real Windows 11** before tagging (`publish/TESTER-QUICKSTART.md`). The React SPA is built and copied into `wwwroot`, served by ASP.NET Core via `UseStaticFiles` + `MapFallbackToFile("index.html")` (the "C0re static-files" pattern) — see [React Client](10-react-client.md).
 
 > **Packaging fails if the SPA build is missing.** `package-rc.sh` hard-errors (`exit 1`) when `<react>/dist/index.html` is absent — both when `--skip-web` is passed without an existing dist and when a fresh build produced none (`package-rc.sh:55,61`) — so an RC zip can never ship without its frontend (a blank-page regression). The script also scans the staged bundle for leaked runtime/state files (`node-settings.json`, any `*.enc` credential, any `*.pin`) and aborts if one is found, so per-user secrets never ride along in a distributable.
 
@@ -180,11 +180,25 @@ The desktop app can update itself: `AddAppUpdateExtensions.cs` wires a Velopack 
 
 ---
 
-## 7. Installers & uninstaller (deferred)
+## 7. Installers & uninstaller
 
 **OS-native installers (MSI / deb / rpm) are deferred.** The shipped distribution vehicle is the self-contained single-file desktop build + launcher script + RC zip. The runtime is **self-provisioning** (it downloads its own llama.cpp binary and GGUF models on demand into the per-user data dir), so a heavyweight installer is not required to get a working node.
 
-A **cross-platform uninstaller** is *planned* (install-type-aware teardown: Windows PowerShell + Linux shell, dry-run inventory + typed confirmation, `--keep-models`/`--keep-data` opt-outs). **Caveat for maintainers:** any prior teardown design predates the runtime re-architecture and is partially **stale** — it references a WSL managed distro (`wsl --unregister xe-engine-runtime`), Docker containers/volumes/network, and `HostAgent.Windows`, **all of which were removed** when Docker/HostAgent were torn down (see [Architecture Overview](01-architecture-overview.md)). No uninstaller script is present in the tree on this branch (`feature/agent-mode-foundation`); a teardown for the current shape would target only the per-user data dir (`node.sqlite`, `node.key`, `node-settings.json`, `hf-token.enc`, `models/`, the AgentHome workspace) plus the binary and launcher.
+### Uninstaller scripts (RC-shipped)
+
+A pair of **lightweight uninstaller scripts** ships in the RC zip next to the launchers, built for the *current* app shape (Velopack desktop + portable zip):
+
+- `publish/windows/uninstall-xe-local-ai-engine.ps1` (packaged as `Uninstall-XE-Local-AI-Engine.ps1`) — PowerShell 5.1-compatible.
+- `publish/linux/uninstall-xe-local-ai-engine.sh` (packaged as `uninstall-xe-local-ai-engine.sh`) — plain POSIX `sh`.
+
+Both always **stop** the running node process and the `llama-server` / `sd-server` child runtimes it spawned — matched **strictly** by executable path under the app's own per-user data dir, mirroring `StaleLlamaServerReaper`'s own-binaries-root discrimination so an unrelated `llama-server` (e.g. Ollama's) is never touched. They then branch:
+
+- **Velopack-managed install detected** (a `current/` dir or `Update`/`Update.exe` helper at the data-dir root — on the default Windows layout the managed install root *is* the data dir): the script **does not delete** the tree. It delegates to Velopack (on Windows it can best-effort invoke `Update.exe --uninstall`; otherwise it points at the OS "Apps & features" uninstall) and stops. This is the safety valve that prevents brute-force-deleting a live managed install.
+- **Portable / manual install** (what the RC zip actually ships — no Velopack tree present): after an **explicit confirmation** (typed `y`; `--yes`/`-Yes` skips it for automation), it deletes **only** the per-user data dir (`%LOCALAPPDATA%\XE-Local-AI-Engine` / `$XDG_DATA_HOME/XE-Local-AI-Engine`) — `node.sqlite`, `node.key`, `node-settings.json`, `hf-token.enc`, the downloaded `llama.cpp`/`stable-diffusion.cpp` binaries, `models/`, and the AgentHome workspace.
+
+Both refuse to run elevated/as-root (a per-user data dir would resolve to the wrong profile), support `--dry-run` and `--keep-data`, and never delete anything outside that exact directory. Portable-zip users delete the unzipped app folder by hand afterward.
+
+> **Do not resurrect the old HostAgent-era uninstaller.** A prior install-type-aware teardown existed but predates the runtime re-architecture — it referenced a WSL managed distro (`wsl --unregister xe-engine-runtime`), Docker containers/volumes/network, and `HostAgent.Windows`, **all removed** when Docker/HostAgent were torn down (see [Architecture Overview](01-architecture-overview.md)). The current scripts deliberately target **only** the per-user data dir + child runtimes.
 
 ---
 

@@ -118,3 +118,37 @@ Workflow: `.github/workflows/release.yml`
 
 The `release` GitHub environment must be created and at least one required reviewer added
 before any non-tester rollout (see supply-chain hardening note in the workflow file).
+
+---
+
+## 6. Rolling back a bad update
+
+If an in-app update produces a broken build, you can go back to a known-good version. Your
+data is safe either way: the per-user **data directory** (`%LOCALAPPDATA%\XE-Local-AI-Engine`
+on Windows, `~/.local/share/XE-Local-AI-Engine` on Linux) holds the database, keys, settings,
+and downloaded models, and it lives **outside** the app-binary install tree — rolling the app
+binaries back does not touch it.
+
+**Option A — previous version already on disk (Velopack-managed installs).**
+Velopack installs each version into its own versioned folder under the managed install root
+(`%LOCALAPPDATA%\XE-Local-AI-Engine\app-<version>\` on Windows) and points a `current`
+reference at the active one; the immediately previous version's folder is normally still
+present after an update. To roll back, close the app and launch the previous
+`app-<version>`'s executable directly. (This is a manual pin — the updater may re-offer the
+newer version on the next check.)
+
+**Option B — re-install an older release asset.**
+Download the older version's artifact from the release repo (the previous `Setup.exe` /
+`.AppImage`, or the portable `.zip`) and run it. Velopack treats it as an install of that
+version; because the data dir is separate, your chats and models carry over.
+
+**Option C — portable zip / tester zip.**
+There is no self-update to undo — just run the older unzipped build again (or unzip the
+previous tester zip). Point it at the same data dir to keep your state.
+
+**Caveat — database schema is forward-only.** EF Core migrations are **additive** and applied
+on first launch of a newer build; they are **not** auto-reverted when you run an older build.
+Additive columns/tables an older app doesn't know about are harmless, but if a rollback build
+misbehaves against a migrated database, reset it (stop the app, delete `node.sqlite`; you keep
+your downloaded models) — see [troubleshooting.md](troubleshooting.md). Do not hand-edit the
+database.

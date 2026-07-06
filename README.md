@@ -14,8 +14,15 @@ The repository is being prepared for an RC release. Release documentation and va
 - **React management UI** (`XE-Local-AI-Engine.Client.React`) — node-local browser UI for chat, settings, runtime status, logs, and models.
 - **Providers and agents** — local provider abstractions, llama.cpp in-app runtime (primary/default), Ollama provider (opt-in secondary), and shared agent execution loop.
 - **Scheduler** — Quartz.NET-backed job scheduler with job definitions, run history, cancellation, and live run updates over a local SignalR hub (`Services/Scheduler`, `src/features/scheduler`).
-- **Model-fit** — on-demand model recommendation and benchmark runs against a digest-pinned, approved utility image, exposed as cache-only reads plus a scheduler-driven refresh (`Services/ModelFit`,
-  `src/features/model-fit`).
+- **Model-fit / Model Advisor** — box-aware GGUF recommendation: profiles the local hardware (RAM / VRAM / GPU vendor), discovers candidate GGUF repos on Hugging Face, estimates each model's memory footprint with a
+  pure, in-process (I/O-free) formula, and ranks the ones that fit. Exposed as cache-only reads plus a scheduler-driven refresh — there is no container or benchmark image (Docker was removed in the 2026-06-17
+  runtime re-architecture) (`Services/ModelFit`, `src/features/model-fit`). See [docs/wiki/07-model-fit.md](docs/wiki/07-model-fit.md).
+- **Image generation** — local text-to-image via **stable-diffusion.cpp**: the node supervises a resident `sd-server` child process (one daemon per model, readiness-gated, idle-evicted on its own loopback port
+  range), serializes generation to one job at a time with queue/cancel, and persists produced images encrypted-at-rest. Ships **enabled by default** (`Services/Images`, `Providers.StableDiffusionCpp`,
+  `src/features/images`). See [docs/wiki/14-image-generation.md](docs/wiki/14-image-generation.md).
+- **Knowledge Base / RAG** — fully offline document knowledge base: upload documents (`.txt`/`.md`/`.pdf`/`.docx` and other plaintext types), which are chunked, embedded with a local embedding model, and indexed
+  into encrypted SQLite. Retrieval is a **hybrid search** — lexical FTS5 + semantic vector arms fused with Reciprocal Rank Fusion, with an optional local cross-encoder reranker — surfaced to agents as a tool
+  (`Services/Knowledge`, `Endpoints/Knowledge/V1`, `src/features/knowledge`). See [docs/wiki/15-knowledge-base.md](docs/wiki/15-knowledge-base.md).
 - **Agent mode** — per-agent definitions plus a governed playbook: manual and analysis-proposed actions, an offline eval gate over golden conversations, relevance-gated action retrieval, and cohort
   monitoring (`Services/{Agents,Eval,Insights,Monitoring}`, `XE-Local-AI-Engine.AI.Agent`, `src/features/agents`).
 - **MCP tool extensibility** — registered MCP servers whose live tool snapshots are offered to agents through the local tool registry (`Services/Mcp`, `src/features/mcp`).
