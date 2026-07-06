@@ -42,6 +42,10 @@ explore → freeze → replay tuning; the supervisor no longer forces `--n-gpu-l
 [Model-fit / Advisor](07-model-fit.md)), **chat file upload → agent attachments** (encrypted store — see
 [Chat](05-chat.md)), a browser **client voice runtime** (Kokoro TTS), and an **onboarding first-response tour**.
 
+**Shipped flagship features (now documented):** local **image generation** via stable-diffusion.cpp (see
+[Image Generation](14-image-generation.md)) and an offline **Knowledge Base / RAG** with hybrid FTS+vector
+search and a local reranker (see [Knowledge Base / RAG](15-knowledge-base.md)).
+
 ## Page index
 
 | # | Page | Covers |
@@ -59,6 +63,8 @@ explore → freeze → replay tuning; the supervisor no longer forces `--n-gpu-l
 | 11 | [Hosting & Deployment](11-hosting-and-deployment.md) | Aspire AppHost, desktop launcher, publish profiles, uninstaller |
 | 12 | [Security & Privacy](12-security-and-privacy.md) | Egress boundary, secret handling, loopback/Host-Origin, redaction, node-local AI ops |
 | 13 | [Testing & Validation](13-testing-and-validation.md) | Test topology, validation commands, E2E, RC evidence |
+| 14 | [Image Generation](14-image-generation.md) | Local stable-diffusion.cpp: `sd-server` supervisor, serialized job coordinator, encrypted image store |
+| 15 | [Knowledge Base / RAG](15-knowledge-base.md) | Offline document KB: ingestion pipeline, hybrid FTS+vector search, reranker, agent tools |
 
 ## Conventions in this wiki
 

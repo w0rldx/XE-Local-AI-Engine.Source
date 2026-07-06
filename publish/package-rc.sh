@@ -5,6 +5,8 @@
 #   - the single-file self-contained binary (dotnet publish output) + wwwroot SPA assets
 #   - a prominently named launcher (Start-XE-Local-AI-Engine.cmd / start-xe-local-ai-engine.sh)
 #     that sets XE_LAUNCH_MODE=desktop (the bare binary does NOT enter desktop mode)
+#   - an uninstaller (Uninstall-XE-Local-AI-Engine.ps1 / uninstall-xe-local-ai-engine.sh)
+#     that stops the app + its runtime children and removes the per-user data dir
 #   - READ-ME-FIRST.txt — the one-screen tester quickstart
 # plus a .sha256 sidecar for each zip.
 #
@@ -73,7 +75,10 @@ XE Local AI Engine — tester quickstart (Windows)
 2. Double-click  Start-XE-Local-AI-Engine.cmd
    (Do NOT double-click XE-Local-AI-Engine.Client.exe directly — it will not
     open the app correctly. Always use the Start launcher.)
-3. A console window opens with live logs and your default browser opens the app.
+3. Windows SmartScreen may warn "Windows protected your PC" because this build
+   is unsigned (unknown publisher). This is expected for a tester build: click
+   "More info", then "Run anyway".
+4. A console window opens with live logs and your default browser opens the app.
 
 First run downloads a llama.cpp runtime and a ~400 MB starter model from the
 internet — this can take a few minutes and looks quiet; watch the console.
@@ -85,8 +90,14 @@ Your data lives under: %LOCALAPPDATA%\XE-Local-AI-Engine
 
 Run only ONE instance at a time.
 
-Found a problem? Note what you did, the console log lines, and any browser
-error, and send them back.
+To fully remove the app: close it, then run  Uninstall-XE-Local-AI-Engine.ps1
+(right-click > Run with PowerShell). It stops the app + model engine and, after
+you confirm, deletes your data dir (%LOCALAPPDATA%\XE-Local-AI-Engine). Then
+delete this unzipped folder. To delete the data by hand instead, remove that
+folder yourself.
+
+Found a problem? In the app, use "Report a problem" (Diagnostics) to export a
+snapshot, and send it back along with what you did and any console log lines.
 TXT
   else
     cat >"${out}" <<'TXT'
@@ -109,8 +120,14 @@ Your data lives under: $HOME/.local/share/XE-Local-AI-Engine
 
 Run only ONE instance at a time.
 
-Found a problem? Note what you did, the terminal log lines, and any browser
-error, and send them back.
+To fully remove the app: stop it, then from a terminal in this folder run
+  ./uninstall-xe-local-ai-engine.sh
+It stops the app + model engine and, after you confirm, deletes your data dir
+($HOME/.local/share/XE-Local-AI-Engine). Then delete this unzipped folder. To
+delete the data by hand instead, remove that folder yourself.
+
+Found a problem? In the app, use "Report a problem" (Diagnostics) to export a
+snapshot, and send it back along with what you did and any terminal log lines.
 TXT
   fi
 }
@@ -171,9 +188,11 @@ package_rid() {
 
   if [[ "${os}" == "windows" ]]; then
     cp "${SCRIPT_DIR}/windows/run-xe-local-ai-engine.cmd" "${stage}/Start-XE-Local-AI-Engine.cmd"
+    cp "${SCRIPT_DIR}/windows/uninstall-xe-local-ai-engine.ps1" "${stage}/Uninstall-XE-Local-AI-Engine.ps1"
   else
     cp "${SCRIPT_DIR}/linux/run-xe-local-ai-engine.sh" "${stage}/start-xe-local-ai-engine.sh"
-    chmod +x "${stage}/start-xe-local-ai-engine.sh" "${stage}/${exe}"
+    cp "${SCRIPT_DIR}/linux/uninstall-xe-local-ai-engine.sh" "${stage}/uninstall-xe-local-ai-engine.sh"
+    chmod +x "${stage}/start-xe-local-ai-engine.sh" "${stage}/uninstall-xe-local-ai-engine.sh" "${stage}/${exe}"
   fi
   write_readme "${os}" "${stage}/READ-ME-FIRST.txt"
 
