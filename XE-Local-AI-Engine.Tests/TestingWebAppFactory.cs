@@ -28,10 +28,22 @@ public class TestingWebAppFactory : WebApplicationFactory<Program>, IAsyncInitia
 {
     private static readonly SemaphoreSlim HostStartupLock = new(initialCount: 1, maxCount: 1);
 
+    // Minimal React-shell fixture served for the SPA fallback (MapFallbackToFile("index.html")). wwwroot/** is
+    // gitignored, so a clean checkout / CI host has no built SPA and the fallback would 404 — pointing the test host's
+    // web root at this fixture makes route-coexistence assertions (shell served at "/" and deep links, JSON at API/health
+    // paths, 404 for missing /assets/*) hermetic without requiring a real `pnpm build`. It carries the markers the tests
+    // assert on (a #root div + an /assets/ reference) and deliberately omits the Blazor shell script and the /app prefix.
+    private const string ReactShellFixtureHtml =
+        "<!doctype html>\n<html lang=\"en\">\n<head><meta charset=\"utf-8\"><title>XE Local AI Engine</title></head>\n" +
+        "<body><div id=\"root\"></div><script type=\"module\" src=\"/assets/index.js\"></script></body>\n</html>\n";
+
     private readonly FakeOllamaServer? _fakeOllamaServer;
+    private readonly string _fixtureWebRoot;
 
     public TestingWebAppFactory(FakeOllamaOptions? fakeOllamaOptions = null)
     {
+        _fixtureWebRoot = CreateShellFixtureWebRoot();
+
         if (!RunLocalIntegration)
         {
             _fakeOllamaServer = FakeOllamaServer.StartAsync(fakeOllamaOptions ?? new FakeOllamaOptions
@@ -39,6 +51,15 @@ public class TestingWebAppFactory : WebApplicationFactory<Program>, IAsyncInitia
                 Models = ["qwen3.5:0.8b", "qwen3-embedding:0.6b"]
             }).GetAwaiter().GetResult();
         }
+    }
+
+    // Writes the React-shell fixture into a fresh temp directory used as the test host's web root.
+    private static string CreateShellFixtureWebRoot()
+    {
+        var root = Path.Combine(Path.GetTempPath(), $"xe-local-ai-engine-tests-wwwroot-{Guid.NewGuid():N}");
+        Directory.CreateDirectory(root);
+        File.WriteAllText(Path.Combine(root, "index.html"), ReactShellFixtureHtml);
+        return root;
     }
 
     public bool SkipDefaultBaseUrlOverride { get; init; }
@@ -58,6 +79,19 @@ public class TestingWebAppFactory : WebApplicationFactory<Program>, IAsyncInitia
         }
 
         await base.DisposeAsync();
+
+        try
+        {
+            if (Directory.Exists(_fixtureWebRoot))
+            {
+                Directory.Delete(_fixtureWebRoot, recursive: true);
+            }
+        }
+        catch (IOException)
+        {
+            // Best-effort cleanup of the fixture web root; ignore.
+        }
+
         GC.SuppressFinalize(this);
     }
 
@@ -101,6 +135,9 @@ public class TestingWebAppFactory : WebApplicationFactory<Program>, IAsyncInitia
     protected override void ConfigureWebHost(IWebHostBuilder builder)
     {
         builder.UseEnvironment("Testing");
+        // Serve the SPA fallback (index.html) from the fixture web root so route-coexistence tests are hermetic on a
+        // clean checkout where the real wwwroot has no built SPA (see ReactShellFixtureHtml).
+        builder.UseWebRoot(_fixtureWebRoot);
         builder.ConfigureAppConfiguration((_, configurationBuilder) =>
         {
             configurationBuilder.AddInMemoryCollection(new Dictionary<string, string?>

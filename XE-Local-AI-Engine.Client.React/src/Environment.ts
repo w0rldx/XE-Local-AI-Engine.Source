@@ -5,7 +5,9 @@ import { z } from "zod";
 export const environment = createEnv({
 	clientPrefix: "VITE_",
 	client: {
-		VITE_APP_TITLE: z.string().min(1),
+		// Falls back to the product name when the build did not set it (e.g. an isolated unit-test run with no .env,
+		// or a clean-checkout `vite build`). A real .env / CI value still overrides it. Mirrors VITE_APP_VERSION below.
+		VITE_APP_TITLE: z.string().min(1).default("XE Local AI Engine"),
 		VITE_API_VERSION: z
 			.string()
 			.regex(/^v\d+$/, "VITE_API_VERSION must follow the pattern v<number>.")
