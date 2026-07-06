@@ -90,7 +90,7 @@ internal sealed class LlamaServerProcessLauncher : ILlamaServerProcessLauncher
         // Run llama-server under `setsid` so it leads a new process group; tree-kill = kill(-pgid). The server inherits
         // setsid's redirected stdout/stderr, so the forwarding wired in StartProcess still captures the server's output.
         var serverPath = startInfo.FileName;
-        startInfo.FileName = "setsid";
+        startInfo.FileName = SetsidLocator.ResolveAbsolutePath();
         startInfo.ArgumentList.Insert(index: 0, serverPath);
 
 #pragma warning disable CA2000 // The returned handle takes ownership of the process and disposes it on tree-kill; Wrap disposes on a construction failure.

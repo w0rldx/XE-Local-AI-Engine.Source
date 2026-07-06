@@ -46,7 +46,7 @@ internal static class StreamingProcessRunner
             // build tree. setsid execs the program in place — it only forks when this process is already a group
             // leader — and -w makes it wait for and propagate the program's exit status in that edge case. Behavior
             // is otherwise unchanged.
-            FileName = "setsid",
+            FileName = SetsidLocator.ResolveAbsolutePath(),
             WorkingDirectory = workingDirectory,
             RedirectStandardOutput = true,
             RedirectStandardError = true,

@@ -193,7 +193,9 @@ internal sealed class InvocationAgentFactory : IInvocationAgentFactory
             inlineSkills[index] = new AgentInlineSkill(skill.Name, skill.Description, skill.Body);
         }
 
+#pragma warning disable CA2000 // Ownership transfers to the ChatClientAgent below via AIContextProviders; the agent disposes its context providers with itself.
         var skillsProvider = new AgentSkillsProvider(inlineSkills);
+#pragma warning restore CA2000
 #pragma warning restore MAAI001
 
         return new ChatClientAgent(_chatClient,
