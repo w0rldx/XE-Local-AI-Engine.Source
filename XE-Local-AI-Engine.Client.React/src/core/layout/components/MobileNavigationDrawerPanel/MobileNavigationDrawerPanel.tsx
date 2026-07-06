@@ -1,6 +1,7 @@
 import { ActionIcon, Divider, Portal, Title } from "@mantine/core";
 import { IconX } from "@tabler/icons-react";
 import { AnimatePresence, m } from "framer-motion";
+import { useTranslation } from "react-i18next";
 import type { MobileNavigationDrawerPanelProperties } from "@/core/layout/components/MobileNavigationDrawerPanel/MobileNavigationDrawerPanel.types";
 
 import "./MobileNavigationDrawerPanel.css";
@@ -14,6 +15,7 @@ export function MobileNavigationDrawerPanel({
 	drawerReference,
 	children,
 }: MobileNavigationDrawerPanelProperties) {
+	const { t } = useTranslation();
 	const panelWidth = width < 420 ? "100%" : "min(400px, 100vw)";
 
 	return (
@@ -53,7 +55,7 @@ export function MobileNavigationDrawerPanel({
 										{title}
 									</Title>
 
-									<ActionIcon onClick={onClose} variant="subtle">
+									<ActionIcon onClick={onClose} variant="subtle" aria-label={t("common.close")}>
 										<IconX size={24} />
 									</ActionIcon>
 								</div>

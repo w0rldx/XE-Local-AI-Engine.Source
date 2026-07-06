@@ -203,6 +203,58 @@ jobs:
           global-json-file: global.json
 
       # ------------------------------------------------------------------
+      # Build the React SPA BEFORE dotnet publish. wwwroot/** is gitignored,
+      # so a fresh checkout has an empty wwwroot and the publish guard
+      # (GuardNodeReactBuildPresentOnPublish, Client.csproj) hard-fails unless
+      # XE-Local-AI-Engine.Client.React/dist/index.html exists. Mirrors the
+      # client-react job in build-and-test.yml (same pnpm/node versions + cache).
+      # Vite env: .env is gitignored, so the checkout has none — seed it from
+      # .env.template, exactly like the documented manual tester-build flow, so
+      # automated and manual builds ship identical values (VITE_APP_TITLE etc.).
+      # The Environment.ts schema also carries defaults as a safety net (the env
+      # check runs at app startup in the browser, not during `vite build` — a
+      # wrong/missing value used to surface only as a blank page).
+      # VITE_APP_VERSION is injected from Directory.Build.props by vite.config.ts.
+      # ------------------------------------------------------------------
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+          cache-dependency-path: XE-Local-AI-Engine.Client.React/pnpm-lock.yaml
+
+      - name: Seed SPA env from template
+        working-directory: XE-Local-AI-Engine.Client.React
+        shell: bash
+        run: |
+          if [[ ! -f .env ]]; then
+            cp .env.template .env
+            echo "Seeded .env from .env.template"
+          fi
+
+      - name: Install SPA dependencies
+        working-directory: XE-Local-AI-Engine.Client.React
+        run: pnpm install --frozen-lockfile
+
+      - name: Build SPA
+        working-directory: XE-Local-AI-Engine.Client.React
+        run: pnpm run build
+
+      # Fail fast with a clear message if the build produced no shell, rather than
+      # letting the MSBuild guard fail later with a less obvious CI signal.
+      - name: Assert SPA build output present
+        shell: bash
+        run: |
+          if [[ ! -f XE-Local-AI-Engine.Client.React/dist/index.html ]]; then
+            echo "ERROR: SPA build did not produce dist/index.html — the publish guard will fail." >&2
+            exit 1
+          fi
+          echo "SPA build present: XE-Local-AI-Engine.Client.React/dist/index.html"
+
+      # ------------------------------------------------------------------
       # Flavor -> repo + token mapping.
       #
       # main   flavor: GH_RELEASE_REPO_MAIN   + GH_RELEASE_TOKEN_MAIN

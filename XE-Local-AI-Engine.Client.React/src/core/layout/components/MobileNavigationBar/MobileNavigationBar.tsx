@@ -119,7 +119,7 @@ export function MobileNavigationBar({ drawerOpen, setDrawerOpen }: IMobileNaviga
 					<div className="h-12 pt-2">
 						<LogoCombined />
 					</div>
-					<ActionIcon onClick={() => setDrawerOpen(false)} variant="subtle">
+					<ActionIcon onClick={() => setDrawerOpen(false)} variant="subtle" aria-label={t("common.close")}>
 						<IconX size={24} />
 					</ActionIcon>
 				</div>

@@ -18,7 +18,10 @@ import { useCancelImageJob, useCreateImageJob, useImageJobs, useImageModels } fr
 export function ImagesPage() {
 	const { t } = useTranslation();
 
-	const modelsQuery = useImageModels();
+	// While a detached model download is in flight (the manager owns that state), poll listImageModels so the freshly
+	// downloaded model surfaces on completion — the backend exposes no download-progress hub yet (plan §8).
+	const [modelDownloadPending, setModelDownloadPending] = useState(false);
+	const modelsQuery = useImageModels(modelDownloadPending);
 	const jobsQuery = useImageJobs();
 	const createMutation = useCreateImageJob();
 	const cancelMutation = useCancelImageJob();
@@ -108,7 +111,11 @@ export function ImagesPage() {
 						/>
 					</Card>
 					<Card withBorder={true} padding="lg" radius="md">
-						<ImageModelManager models={models} isLoading={modelsQuery.isLoading} />
+						<ImageModelManager
+							models={models}
+							isLoading={modelsQuery.isLoading}
+							onPendingDownloadChange={setModelDownloadPending}
+						/>
 					</Card>
 				</Stack>
 				<Stack gap="sm">

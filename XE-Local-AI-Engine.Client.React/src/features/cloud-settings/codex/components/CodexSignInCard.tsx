@@ -173,7 +173,12 @@ export function CodexSignInCard({ onSignedInChange }: CodexSignInCardProps) {
 									<CopyButton value={authorizeUrl} timeout={1500}>
 										{({ copied, copy }) => (
 											<Tooltip label={copied ? t("pages.cloudSettings.codex.copied") : t("pages.cloudSettings.codex.copy")}>
-												<ActionIcon variant="subtle" color={copied ? "teal" : "gray"} onClick={copy}>
+												<ActionIcon
+												variant="subtle"
+												color={copied ? "teal" : "gray"}
+												onClick={copy}
+												aria-label={copied ? t("pages.cloudSettings.codex.copied") : t("pages.cloudSettings.codex.copy")}
+											>
 													{copied ? <IconCheck size={14} /> : <IconCopy size={14} />}
 												</ActionIcon>
 											</Tooltip>
@@ -187,6 +192,7 @@ export function CodexSignInCard({ onSignedInChange }: CodexSignInCardProps) {
 											href={authorizeUrl}
 											target="_blank"
 											rel="noreferrer noopener"
+											aria-label={t("pages.cloudSettings.codex.openLink")}
 										>
 											<IconExternalLink size={14} />
 										</ActionIcon>

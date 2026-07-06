@@ -1319,6 +1319,10 @@
 				"overrideLabel": "Typ überschreiben",
 				"reset": "Auf erkannt zurücksetzen"
 			},
+			"local": {
+				"setDefaultSuccess": "Standard-Lokalmodell auf {{name}} gesetzt.",
+				"deleteSuccess": "Modell {{name}} gelöscht."
+			},
 			"gguf": {
 				"browse": {
 					"title": "Hugging Face GGUF durchsuchen",
@@ -2089,6 +2093,10 @@
 			"hardware": {
 				"title": "Hardware-Profil",
 				"cpuMode": "CPU-Modus",
+				"cpuFallback": {
+					"message": "Keine unterstützte GPU erkannt — Ausführung auf der CPU. Antworten sind langsamer.",
+					"dismiss": "Schließen"
+				},
 				"refresh": "Hardware aktualisieren",
 				"loading": "Hardware wird erkannt…",
 				"error": "Hardware konnte nicht erkannt werden.",
@@ -2340,6 +2348,7 @@
 				"download": {
 					"title": "Modell herunterladen",
 					"started": "Download gestartet. Das Modell erscheint, sobald es bereit ist.",
+					"inFlight": "Der Download läuft im Hintergrund; das Modell erscheint, sobald es bereit ist. Große Dateien können mehrere Minuten dauern.",
 					"error": "Der Modell-Download konnte nicht gestartet werden.",
 					"hint": "Nur Einzeldatei-Gewichte (SD1.5-Stil). Mehrteilige Modelle folgen später.",
 					"submit": "Herunterladen",
@@ -2876,6 +2885,18 @@
 			"agentMode": {
 				"title": "Spezialisierte Agenten",
 				"content": "Wechsle vom Standard-Assistenten zu einem spezialisierten Agenten – jeder ist mit einem anderen System-Prompt und eigenen Fähigkeiten für bestimmte Aufgaben ausgestattet."
+			},
+			"knowledgeBase": {
+				"title": "Wissensdatenbank",
+				"content": "Lade eigene Dokumente hoch und lass das Modell daraus antworten. Die Wissensdatenbank verarbeitet Dateien lokal und stützt Chat-Antworten auf deine Inhalte."
+			},
+			"imageGeneration": {
+				"title": "Bildgenerierung",
+				"content": "Erzeuge Bilder lokal aus einem Text-Prompt mit stable-diffusion.cpp – ohne Cloud, ohne Konto. Zu finden in der Navigation unter Bildgenerierung."
+			},
+			"agents": {
+				"title": "Agenten",
+				"content": "Erstelle und verwalte wiederverwendbare Agenten – jeder mit eigenen Anweisungen, Modell und Fähigkeiten – auf der Agenten-Seite und wähle sie dann pro Nachricht im Chat."
 			}
 		},
 		"notes": {
@@ -2905,6 +2926,18 @@
 				"defaultAssistant": "Standard-Assistent",
 				"sampleAgent": "Code-Reviewer",
 				"description": "Wähle in der Chat-Toolbar einen spezialisierten Agenten aus, um Fokus und Anweisungen des Modells anzupassen."
+			},
+			"knowledgeBase": {
+				"label": "Wissensdatenbank",
+				"description": "Lade Dokumente hoch und das Modell antwortet daraus – die Suche läuft lokal auf deinem Node."
+			},
+			"imageGeneration": {
+				"label": "Bildgenerierung",
+				"description": "Erzeuge Bilder lokal aus einem Text-Prompt mit stable-diffusion.cpp – ohne Cloud."
+			},
+			"agents": {
+				"label": "Agenten",
+				"description": "Erstelle wiederverwendbare Agenten mit eigenen Anweisungen, Modell und Fähigkeiten – und nutze sie im Chat."
 			}
 		}
 	},

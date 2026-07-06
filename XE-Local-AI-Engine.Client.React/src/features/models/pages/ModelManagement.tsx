@@ -103,7 +103,7 @@ export function ModelManagement() {
 	const selectMutation = useMutation({
 		...withResponseValidation(selectLocalModelMutation()),
 		onSuccess: async (selection) => {
-			toast.success(`Default local model set to ${selection.selectedModelName ?? ""}.`);
+			toast.success(t("pages.models.local.setDefaultSuccess", { name: selection.selectedModelName ?? "" }));
 			await invalidateListAndDetails();
 		},
 		onError: (error) => toast.error(errorMessage(error)),
@@ -112,7 +112,7 @@ export function ModelManagement() {
 	const deleteMutation = useMutation({
 		...withResponseValidation(deleteLocalModelMutation()),
 		onSuccess: async (response) => {
-			toast.success(`Model ${response.modelName ?? ""} deleted.`);
+			toast.success(t("pages.models.local.deleteSuccess", { name: response.modelName ?? "" }));
 			closeDetailsModal();
 			setDetailsModelName(undefined);
 			await invalidateListAndDetails();

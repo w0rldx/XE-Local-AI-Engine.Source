@@ -117,11 +117,10 @@ public sealed class SubAgentSpawnServiceTests
         using var root = SpawnContext.BeginRoot(fanOutCap: 3, cloudSpawnCap: 3);
 
         var spawnTask = service.SpawnAsync(ModelRequest("slow task"), cts.Token);
-        // Poll until the spawn task is confirmed in-flight before cancelling.
-        for (var i = 0; i < 20 && !spawnTask.IsCompleted; i++)
-        {
-            await Task.Delay(5);
-        }
+        // Wait deterministically until the inner run has actually started before cancelling. A timed poll races under a
+        // parallel test load: if cancellation fires before the inner ChatClient run begins, the run never observes the
+        // token and InnerObservedCancellation stays false. WaitUntilRunningAsync completes the moment the run body starts.
+        await harness.ChatClient.WaitUntilRunningAsync();
 
         await cts.CancelAsync();
 
