@@ -1,6 +1,13 @@
 // Auth modes accepted by the Azure Foundry connection. Mirrors the backend `authMode` string
-// ("ApiKey" | "ManagedIdentity"); managed identity uses DefaultAzureCredential and needs no key.
-export type CloudAuthMode = "ApiKey" | "ManagedIdentity";
+// ("ApiKey" | "ManagedIdentity" | "EntraId"); managed identity uses DefaultAzureCredential and needs no key.
+// EntraId requests its own bearer token (app-only client-credentials when a secret is configured, otherwise
+// interactive user sign-in) and is aimed at gateways — e.g. an Azure APIM AI gateway — that validate an Entra
+// ID token rather than an Azure-native credential.
+export type CloudAuthMode = "ApiKey" | "ManagedIdentity" | "EntraId";
+
+// Interactive sign-in method for an EntraId connection with no configured client secret. Mirrors the backend
+// `EntraSignInMethod` enum name; ignored — and coerced to `ClientSecret` server-side — once a secret is present.
+export type EntraSignInMethod = "ClientSecret" | "DeviceCode" | "InteractiveBrowser";
 
 // One editable deployment row in the models list. `deploymentName` is the Foundry portal deployment
 // name (not the model family); `displayLabel` is an optional friendly label shown in the picker.
@@ -26,6 +33,13 @@ export interface CloudSettingsFormValues {
 	models: CloudFoundryModelDraft[];
 	headers: CloudHeaderDraft[];
 	hostSuffixes: string[];
+	entraTenantId: string;
+	entraClientId: string;
+	// Write-only, like apiKey: blank on an existing EntraId connection keeps the stored secret; blank with no
+	// stored secret selects interactive user sign-in instead of app-only client-credentials.
+	entraClientSecret: string;
+	entraTokenScope: string;
+	entraSignInMethod: EntraSignInMethod;
 }
 
 // Built-in Azure host suffixes that are always allowed for a managed-identity connection. A host that
@@ -161,6 +175,27 @@ function validateHeaders(headers: CloudHeaderDraft[]): string | undefined {
 	return undefined;
 }
 
+// Validates the EntraId-only fields. Tenant, client id, and token scope are always required in this mode; the
+// client secret is intentionally optional (blank keeps a stored secret, or selects interactive sign-in when
+// none is stored — both are valid states, so the secret itself carries no error).
+function validateEntraFields(values: CloudSettingsFormValues): Partial<Record<keyof CloudSettingsFormValues, string>> {
+	if (values.authMode !== "EntraId") {
+		return {};
+	}
+
+	const errors: Partial<Record<keyof CloudSettingsFormValues, string>> = {};
+	if (values.entraTenantId.trim().length === 0) {
+		errors.entraTenantId = "Enter the Entra ID tenant id.";
+	}
+	if (values.entraClientId.trim().length === 0) {
+		errors.entraClientId = "Enter the Entra ID application (client) id.";
+	}
+	if (values.entraTokenScope.trim().length === 0) {
+		errors.entraTokenScope = "Enter the token scope, e.g. api://<backend-app-id>/.default.";
+	}
+	return errors;
+}
+
 // Validates the operator-added allowed host suffixes. Blank rows are dropped on save.
 function validateHostSuffixes(hostSuffixes: string[]): string | undefined {
 	if (hostSuffixes.length > MAX_HOST_SUFFIXES) {
@@ -195,10 +230,12 @@ function hostMatchesSuffix(host: string, suffix: string): boolean {
 	return host === normalized.slice(1) || host.endsWith(normalized);
 }
 
-// True when managed identity is selected and the endpoint host is non-Azure (matched only by an
-// operator-added suffix). Drives the orange Entra-token egress warning (Locked #14 / §10).
+// True when managed identity or EntraId is selected and the endpoint host is non-Azure (matched only by an
+// operator-added suffix). Drives the orange Entra-token egress warning (Locked #14 / §10). Both modes send a
+// bearer token obtained from Entra ID to the endpoint host, so the same non-Microsoft-host reminder applies to
+// EntraId connections (commonly an APIM gateway) as well as managed identity.
 export function shouldWarnManagedIdentityEgress(values: CloudSettingsFormValues): boolean {
-	if (values.authMode !== "ManagedIdentity") {
+	if (values.authMode !== "ManagedIdentity" && values.authMode !== "EntraId") {
 		return false;
 	}
 	const host = endpointHost(values.endpoint.trim());
@@ -229,6 +266,8 @@ export function validateCloudSettingsForm(
 	if (!hasAtLeastOneModel(values.models)) {
 		errors.models = "Add at least one deployment name.";
 	}
+
+	Object.assign(errors, validateEntraFields(values));
 
 	const headerError = validateHeaders(values.headers);
 	if (headerError !== undefined) {
