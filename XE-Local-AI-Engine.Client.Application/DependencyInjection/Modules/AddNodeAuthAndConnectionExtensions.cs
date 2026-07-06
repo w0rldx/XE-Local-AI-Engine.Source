@@ -73,6 +73,11 @@ internal static class AddNodeAuthAndConnectionExtensions
         // Encrypted at-rest store for the Entra ID public-client authentication record (device-code / interactive-
         // browser silent-auth resume), read by AzureFoundryChatClientFactory and written by the sign-in coordinator.
         builder.Services.AddSingleton<IEntraTokenCacheStore, EntraTokenCacheStore>();
+
+        // Keeps the live, already-authenticated device-code credential alive for the process lifetime — the sign-in
+        // coordinator writes it on success, AzureFoundryChatClientFactory reads it on every send, so a chat send
+        // never depends solely on OS-native encrypted persistence (which may be unavailable, Locked build contract §9).
+        builder.Services.AddSingleton<IEntraLiveCredentialCache, EntraLiveCredentialCache>();
         builder.Services.AddSingleton<IAzureFoundryChatClientFactory, AzureFoundryChatClientFactory>();
         builder.AddCodexOAuthProvider(configuration);
 
@@ -82,6 +87,7 @@ internal static class AddNodeAuthAndConnectionExtensions
         builder.Services.AddSingleton<IEntraDeviceCodeSignInCoordinator>(serviceProvider => new EntraDeviceCodeSignInCoordinator(
             serviceProvider.GetRequiredService<ICloudCredentialStore>(),
             serviceProvider.GetRequiredService<IEntraTokenCacheStore>(),
+            serviceProvider.GetRequiredService<IEntraLiveCredentialCache>(),
             serviceProvider.GetRequiredService<ILogger<EntraDeviceCodeSignInCoordinator>>(),
             () => serviceProvider.GetRequiredService<IActiveCloudChatClientFactory>().InvalidateSelectionCache()));
 
