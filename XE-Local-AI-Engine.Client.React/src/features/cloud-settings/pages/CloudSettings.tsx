@@ -37,6 +37,7 @@ import {
 	type CloudFoundryModelDraft,
 	type CloudSettingsFormValues,
 	type EntraSignInMethod,
+	parseEntraSignInMethod,
 	shouldWarnManagedIdentityEgress,
 	validateCloudSettingsForm,
 } from "@/features/cloud-settings/models/CloudSettingsModel";
@@ -82,7 +83,7 @@ function settingsToFormValues(settings: CloudSettings): CloudSettingsFormValues 
 		// Write-only, like apiKey: always loads blank; a "stored" hint is driven by hasStoredEntraClientSecret.
 		entraClientSecret: "",
 		entraTokenScope: azure?.entraTokenScope ?? "",
-		entraSignInMethod: (azure?.entraSignInMethod as EntraSignInMethod) ?? "DeviceCode",
+		entraSignInMethod: parseEntraSignInMethod(azure?.entraSignInMethod),
 	};
 }
 

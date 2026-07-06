@@ -9,6 +9,19 @@ export type CloudAuthMode = "ApiKey" | "ManagedIdentity" | "EntraId";
 // `EntraSignInMethod` enum name; ignored — and coerced to `ClientSecret` server-side — once a secret is present.
 export type EntraSignInMethod = "ClientSecret" | "DeviceCode" | "InteractiveBrowser";
 
+const ENTRA_SIGN_IN_METHODS: readonly EntraSignInMethod[] = ["ClientSecret", "DeviceCode", "InteractiveBrowser"];
+
+function isEntraSignInMethod(value: string): value is EntraSignInMethod {
+	return (ENTRA_SIGN_IN_METHODS as readonly string[]).includes(value);
+}
+
+// Narrows an arbitrary string (a saved settings response, or a SegmentedControl's onChange value) to a known
+// `EntraSignInMethod`, falling back to "DeviceCode" for anything unrecognized — e.g. a future backend enum value
+// this build doesn't know about yet — instead of an unchecked cast that would let bad data flow into form state.
+export function parseEntraSignInMethod(value: string | null | undefined): EntraSignInMethod {
+	return value !== null && value !== undefined && isEntraSignInMethod(value) ? value : "DeviceCode";
+}
+
 // One editable deployment row in the models list. `deploymentName` is the Foundry portal deployment
 // name (not the model family); `displayLabel` is an optional friendly label shown in the picker.
 export interface CloudFoundryModelDraft {

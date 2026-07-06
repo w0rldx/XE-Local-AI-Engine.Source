@@ -6,7 +6,11 @@ import { PasswordInput, SegmentedControl, Stack, Text, TextInput } from "@mantin
 import { useTranslation } from "react-i18next";
 
 import { EntraDeviceCodeSignInCard } from "@/features/cloud-settings/entra/components/EntraDeviceCodeSignInCard";
-import type { CloudSettingsFormValues, EntraSignInMethod } from "@/features/cloud-settings/models/CloudSettingsModel";
+import {
+	type CloudSettingsFormValues,
+	type EntraSignInMethod,
+	parseEntraSignInMethod,
+} from "@/features/cloud-settings/models/CloudSettingsModel";
 
 type EntraTextField = "entraTenantId" | "entraClientId" | "entraClientSecret" | "entraTokenScope";
 
@@ -89,7 +93,7 @@ export function EntraConnectionFields({
 					<SegmentedControl
 						data-testid="cloud-settings-entra-sign-in-method"
 						value={values.entraSignInMethod}
-						onChange={(value) => onSignInMethodChange(value as EntraSignInMethod)}
+						onChange={(value) => onSignInMethodChange(parseEntraSignInMethod(value))}
 						data={[
 							{ value: "DeviceCode", label: t("pages.cloudSettings.entra.signInMethodDeviceCode", "Device code") },
 							{
