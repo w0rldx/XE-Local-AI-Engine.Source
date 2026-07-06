@@ -88,7 +88,7 @@ function settingsToFormValues(settings: CloudSettings): CloudSettingsFormValues 
 
 function toastSettingsResult(settings: CloudSettings): void {
 	toast.success(
-		settings.azureFoundry?.hasStoredApiKey
+		settings.azureFoundry
 			? "Cloud settings saved. Capability reporting was requested."
 			: "Cloud settings cleared.",
 	);
