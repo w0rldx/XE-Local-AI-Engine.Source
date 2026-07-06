@@ -184,6 +184,12 @@ describe("CloudSettings — Azure Foundry connection form (generated hey-api dat
 					models: [{ deploymentName: "gpt-4o" }],
 					headers: [],
 					additionalAllowedHostSuffixes: [],
+					// Always sent; the backend ignores these outside EntraId mode.
+					entraTenantId: "",
+					entraClientId: "",
+					entraClientSecret: undefined,
+					entraTokenScope: "",
+					entraSignInMethod: "DeviceCode",
 				},
 			});
 		});
@@ -274,5 +280,116 @@ describe("CloudSettings — Azure Foundry connection form (generated hey-api dat
 			expect(body.body["authMode"]).toBe("ManagedIdentity");
 			expect(body.body["apiKey"]).toBeUndefined();
 		});
+	});
+
+	it("shows the EntraId fields (and hides the API key field) once EntraId is selected", async () => {
+		renderCloudSettings();
+		await waitFor(() => expect(screen.queryByText(/Loading cloud settings/i)).toBeNull());
+
+		fireEvent.click(screen.getByTestId("cloud-settings-auth-mode").querySelector('input[value="EntraId"]') as HTMLElement);
+
+		expect(screen.getByLabelText("Tenant ID")).toBeTruthy();
+		expect(screen.getByLabelText("Client ID")).toBeTruthy();
+		expect(screen.getByLabelText("Token scope")).toBeTruthy();
+		// "API key" also names the SegmentedControl's ApiKey option (each segment is itself a <label>), so scope
+		// the query to the password-style API key field specifically.
+		expect(screen.queryByLabelText("API key", { selector: 'input[type="password"]' })).toBeNull();
+		// No stored secret yet, so the sign-in method picker is shown.
+		expect(screen.getByTestId("cloud-settings-entra-sign-in-method")).toBeTruthy();
+	});
+
+	it("requires tenant, client id, and token scope before saving in EntraId mode", async () => {
+		renderCloudSettings();
+		await waitFor(() => expect(screen.queryByText(/Loading cloud settings/i)).toBeNull());
+
+		fireEvent.click(screen.getByTestId("cloud-settings-auth-mode").querySelector('input[value="EntraId"]') as HTMLElement);
+		const saveButton = screen.getByRole("button", { name: /save cloud settings/i }) as HTMLButtonElement;
+		expect(saveButton.disabled).toBe(true);
+
+		fireEvent.click(saveButton);
+		expect(generatedMock.saveFn).not.toHaveBeenCalled();
+	});
+
+	it("saves the EntraId connection fields in the save body", async () => {
+		// Pre-load a valid endpoint + model in EntraId mode so only the EntraId fields need filling — mirrors the
+		// "omits the API key..." managed-identity test's approach of loading the target auth mode directly.
+		generatedMock.getFn.mockResolvedValue(
+			makeSettings({
+				azureFoundry: {
+					endpoint: "https://gw.azure-api.net/",
+					authMode: "EntraId",
+					hasStoredApiKey: false,
+					models: [{ deploymentName: "gpt-4o", displayLabel: null }],
+				},
+			}),
+		);
+		renderCloudSettings();
+		await waitFor(() => expect(screen.queryByText(/Loading cloud settings/i)).toBeNull());
+
+		fireEvent.change(screen.getByLabelText("Tenant ID"), { target: { value: "tenant-id" } });
+		fireEvent.change(screen.getByLabelText("Client ID"), { target: { value: "client-id" } });
+		fireEvent.change(screen.getByLabelText("Token scope"), { target: { value: "api://backend-app-id/.default" } });
+
+		fireEvent.click(screen.getByRole("button", { name: /save cloud settings/i }));
+
+		await waitFor(() => {
+			const body = generatedMock.saveFn.mock.calls[0]?.[0] as { body: Record<string, unknown> };
+			expect(body.body["authMode"]).toBe("EntraId");
+			expect(body.body["entraTenantId"]).toBe("tenant-id");
+			expect(body.body["entraClientId"]).toBe("client-id");
+			expect(body.body["entraTokenScope"]).toBe("api://backend-app-id/.default");
+			expect(body.body["entraSignInMethod"]).toBe("DeviceCode");
+		});
+	});
+
+	it("hides the sign-in method picker once a client secret is present", async () => {
+		renderCloudSettings();
+		await waitFor(() => expect(screen.queryByText(/Loading cloud settings/i)).toBeNull());
+
+		fireEvent.click(screen.getByTestId("cloud-settings-auth-mode").querySelector('input[value="EntraId"]') as HTMLElement);
+		expect(screen.getByTestId("cloud-settings-entra-sign-in-method")).toBeTruthy();
+
+		fireEvent.change(screen.getByLabelText("Client secret"), { target: { value: "a-secret" } });
+		expect(screen.queryByTestId("cloud-settings-entra-sign-in-method")).toBeNull();
+	});
+
+	it("shows the device-code sign-in card only for a saved EntraId+DeviceCode connection", async () => {
+		generatedMock.getFn.mockResolvedValue(
+			makeSettings({
+				azureFoundry: {
+					endpoint: "https://gw.azure-api.net/",
+					authMode: "EntraId",
+					hasStoredApiKey: false,
+					models: [{ deploymentName: "gpt-4o", displayLabel: null }],
+					entraTenantId: "tenant-id",
+					entraClientId: "client-id",
+					entraSignInMethod: "DeviceCode",
+				},
+			}),
+		);
+		renderCloudSettings();
+		await waitFor(() => expect(screen.queryByText(/Loading cloud settings/i)).toBeNull());
+
+		expect(screen.getByTestId("entra-device-code-sign-in-card")).toBeTruthy();
+	});
+
+	it("does not show the device-code sign-in card when the sign-in method is InteractiveBrowser", async () => {
+		generatedMock.getFn.mockResolvedValue(
+			makeSettings({
+				azureFoundry: {
+					endpoint: "https://gw.azure-api.net/",
+					authMode: "EntraId",
+					hasStoredApiKey: false,
+					models: [{ deploymentName: "gpt-4o", displayLabel: null }],
+					entraTenantId: "tenant-id",
+					entraClientId: "client-id",
+					entraSignInMethod: "InteractiveBrowser",
+				},
+			}),
+		);
+		renderCloudSettings();
+		await waitFor(() => expect(screen.queryByText(/Loading cloud settings/i)).toBeNull());
+
+		expect(screen.queryByTestId("entra-device-code-sign-in-card")).toBeNull();
 	});
 });
