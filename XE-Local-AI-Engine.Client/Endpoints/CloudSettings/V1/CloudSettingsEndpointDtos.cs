@@ -40,6 +40,25 @@ public sealed record AzureFoundrySettingsResponse
 
     /// <summary>Operator-added extra allowed host suffixes (Locked #14). Not secret — round-trips for inline editing.</summary>
     public IReadOnlyList<string> AdditionalAllowedHostSuffixes { get; init; } = [];
+
+    /// <summary>The Entra ID tenant id. Populated only when <see cref="AuthMode" /> is <c>EntraId</c>.</summary>
+    public string? EntraTenantId { get; init; }
+
+    /// <summary>The Entra ID application (client) id. Populated only when <see cref="AuthMode" /> is <c>EntraId</c>.</summary>
+    public string? EntraClientId { get; init; }
+
+    /// <summary>True when an Entra ID client secret is stored. The secret itself is never returned.</summary>
+    public bool HasStoredEntraClientSecret { get; init; }
+
+    /// <summary>The requested Entra ID token scope (e.g. <c>api://&lt;backend-app-id&gt;/.default</c>).</summary>
+    public string? EntraTokenScope { get; init; }
+
+    /// <summary>
+    ///     The interactive sign-in method used when no client secret is stored, as the
+    ///     <see cref="XE_Local_AI_Engine.Client.Services.CloudProviders.EntraSignInMethod" /> enum name.
+    /// </summary>
+    public string EntraSignInMethod { get; init; } =
+        nameof(XE_Local_AI_Engine.Client.Services.CloudProviders.EntraSignInMethod.ClientSecret);
 }
 
 public sealed record AzureFoundryModelDto
@@ -84,6 +103,31 @@ public sealed record SaveCloudSettingsRequest
 
     /// <summary>Operator-added extra allowed host suffixes (Locked #14). Shape-validated on save.</summary>
     public IReadOnlyList<string> AdditionalAllowedHostSuffixes { get; init; } = [];
+
+    /// <summary>Required only when <see cref="AuthMode" /> is <c>EntraId</c>; ignored otherwise.</summary>
+    public string? EntraTenantId { get; init; }
+
+    /// <summary>Required only when <see cref="AuthMode" /> is <c>EntraId</c>; ignored otherwise.</summary>
+    public string? EntraClientId { get; init; }
+
+    /// <summary>
+    ///     Write-only Entra ID client secret. A blank value on an existing EntraId connection keeps the previously
+    ///     stored secret (merge happens in the endpoint, mirroring the custom-header secret merge, Locked #10/#12
+    ///     pattern); a blank value with no stored secret selects interactive user sign-in instead of app-only
+    ///     client-credentials.
+    /// </summary>
+    public string? EntraClientSecret { get; init; }
+
+    /// <summary>Required only when <see cref="AuthMode" /> is <c>EntraId</c>; ignored otherwise.</summary>
+    public string? EntraTokenScope { get; init; }
+
+    /// <summary>
+    ///     The interactive sign-in method when no client secret is configured (case-insensitive
+    ///     <see cref="XE_Local_AI_Engine.Client.Services.CloudProviders.EntraSignInMethod" /> enum name). Ignored — and
+    ///     coerced to <c>ClientSecret</c> — when a client secret is present.
+    /// </summary>
+    public string EntraSignInMethod { get; init; } =
+        nameof(XE_Local_AI_Engine.Client.Services.CloudProviders.EntraSignInMethod.DeviceCode);
 }
 
 public sealed record SaveAzureFoundryHeaderRequest
@@ -132,22 +176,32 @@ internal static class CloudSettingsEndpointDtoMapper
                         HasStoredValue = !string.IsNullOrWhiteSpace(header.Value)
                     })
                 ],
-                AdditionalAllowedHostSuffixes = [.. connection.AdditionalAllowedHostSuffixes]
+                AdditionalAllowedHostSuffixes = [.. connection.AdditionalAllowedHostSuffixes],
+                EntraTenantId = NullIfBlank(connection.EntraTenantId),
+                EntraClientId = NullIfBlank(connection.EntraClientId),
+                // Never emit the stored secret — presence only.
+                HasStoredEntraClientSecret = !string.IsNullOrWhiteSpace(connection.EntraClientSecret),
+                EntraTokenScope = NullIfBlank(connection.EntraTokenScope),
+                EntraSignInMethod = connection.EntraSignInMethod.ToString()
             }
         };
     }
 
     /// <summary>
-    ///     Maps a save request to the stored config. Pure: the secret-header merge that needs prior state runs in the
-    ///     endpoint and is passed in via <paramref name="mergedHeaders" /> (Locked #12).
+    ///     Maps a save request to the stored config. Pure: the secret merges that need prior state run in the
+    ///     endpoint and are passed in via <paramref name="mergedHeaders" /> and <paramref name="mergedEntraClientSecret" />
+    ///     (Locked #12 pattern).
     /// </summary>
     public static StoredCloudProviderConfig ToStoredConfig(this SaveCloudSettingsRequest request,
-        IReadOnlyList<StoredAzureFoundryHeader> mergedHeaders)
+        IReadOnlyList<StoredAzureFoundryHeader> mergedHeaders,
+        string? mergedEntraClientSecret)
     {
         ArgumentNullException.ThrowIfNull(request);
         ArgumentNullException.ThrowIfNull(mergedHeaders);
 
         var authMode = ParseAuthMode(request.AuthMode);
+        var isEntraId = authMode == AzureFoundryAuthMode.EntraId;
+        var entraClientSecret = isEntraId ? mergedEntraClientSecret : null;
 
         return new StoredCloudProviderConfig
         {
@@ -157,7 +211,7 @@ internal static class CloudSettingsEndpointDtoMapper
             {
                 Endpoint = request.Endpoint?.Trim() ?? string.Empty,
                 AuthMode = authMode,
-                // Managed identity carries no key; drop anything supplied so it is never persisted.
+                // Managed identity / Entra ID carry no key; drop anything supplied so it is never persisted.
                 ApiKey = authMode == AzureFoundryAuthMode.ApiKey
                     ? NormalizeApiKey(request.ApiKey)
                     : null,
@@ -175,7 +229,12 @@ internal static class CloudSettingsEndpointDtoMapper
                     .. request.AdditionalAllowedHostSuffixes
                               .Select(static suffix => suffix?.Trim() ?? string.Empty)
                               .Where(static suffix => suffix.Length > 0)
-                ]
+                ],
+                EntraTenantId = isEntraId ? NullIfBlank(request.EntraTenantId) : null,
+                EntraClientId = isEntraId ? NullIfBlank(request.EntraClientId) : null,
+                EntraClientSecret = entraClientSecret,
+                EntraTokenScope = isEntraId ? NullIfBlank(request.EntraTokenScope) : null,
+                EntraSignInMethod = ParseEntraSignInMethod(request.EntraSignInMethod, hasSecret: !string.IsNullOrWhiteSpace(entraClientSecret))
             }
         };
     }
@@ -187,8 +246,28 @@ internal static class CloudSettingsEndpointDtoMapper
             : AzureFoundryAuthMode.ApiKey;
     }
 
+    // A configured client secret always selects app-only client-credentials (Locked build contract §8: "derive
+    // default: secret present -> ClientSecret"), regardless of what the UI last had selected for interactive sign-in.
+    private static EntraSignInMethod ParseEntraSignInMethod(string? signInMethod, bool hasSecret)
+    {
+        if (hasSecret)
+        {
+            return EntraSignInMethod.ClientSecret;
+        }
+
+        return Enum.TryParse<EntraSignInMethod>(signInMethod?.Trim(), ignoreCase: true, out var parsed)
+               && parsed != EntraSignInMethod.ClientSecret
+            ? parsed
+            : EntraSignInMethod.DeviceCode;
+    }
+
     private static string? NormalizeApiKey(string? apiKey)
     {
         return string.IsNullOrWhiteSpace(apiKey) ? null : apiKey.Trim();
+    }
+
+    private static string? NullIfBlank(string? value)
+    {
+        return string.IsNullOrWhiteSpace(value) ? null : value.Trim();
     }
 }
