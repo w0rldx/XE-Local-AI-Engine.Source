@@ -289,6 +289,282 @@ public sealed class CloudSettingsEndpointTests
     }
 
     [Test]
+    public async Task GetCloudSettings_WhenEntraIdConnectionExists_ReturnsSecretSafeMetadata()
+    {
+        var cloudCredentialStore = Substitute.For<ICloudCredentialStore>();
+        cloudCredentialStore.LoadConfigAsync(Arg.Any<CancellationToken>()).Returns(CreateEntraIdConfig());
+        await using var factory = CreateFactory(cloudCredentialStore);
+        using var client = factory.CreateClient();
+
+        using var request = CreateRequest(factory, HttpMethod.Get, "/api/local/v1/cloud-settings");
+        using var response = await client.SendAsync(request).ConfigureAwait(false);
+        var body = await response.Content.ReadAsStringAsync().ConfigureAwait(false);
+        var settings = Deserialize<CloudSettingsResponse>(body);
+
+        AssertEx.Equal(HttpStatusCode.OK, response.StatusCode);
+        AssertEx.Equal("EntraId", settings.AzureFoundry!.AuthMode);
+        AssertEx.Equal("tenant-id", settings.AzureFoundry.EntraTenantId);
+        AssertEx.Equal("client-id", settings.AzureFoundry.EntraClientId);
+        AssertEx.Equal("api://backend/.default", settings.AzureFoundry.EntraTokenScope);
+        AssertEx.Equal("ClientSecret", settings.AzureFoundry.EntraSignInMethod);
+        AssertEx.True(settings.AzureFoundry.HasStoredEntraClientSecret);
+        AssertEx.False(body.Contains("entra-client-secret-value", StringComparison.Ordinal));
+    }
+
+    [Test]
+    public async Task SaveCloudSettings_WhenAuthModeEntraId_PersistsEntraFieldsAndDoesNotReturnSecret()
+    {
+        var cloudCredentialStore = Substitute.For<ICloudCredentialStore>();
+        var capabilityReporter = Substitute.For<ICapabilityReporter>();
+        capabilityReporter.ReportToApiAsync(Arg.Any<CancellationToken>()).Returns(Task.CompletedTask);
+        await using var factory = CreateFactory(cloudCredentialStore, capabilityReporter);
+        using var client = factory.CreateClient();
+
+        using var request = CreateRequest(factory, HttpMethod.Put, "/api/local/v1/cloud-settings");
+        request.Content = JsonContent.Create(new SaveCloudSettingsRequest
+        {
+            ProviderName = "AzureFoundry",
+            Endpoint = "https://example.openai.azure.com/",
+            AuthMode = "EntraId",
+            EntraTenantId = "tenant-id",
+            EntraClientId = "client-id",
+            EntraClientSecret = "new-entra-secret",
+            EntraTokenScope = "api://backend/.default",
+            Models =
+            [
+                new AzureFoundryModelDto
+                {
+                    DeploymentName = "gpt-4o"
+                }
+            ]
+        });
+        using var response = await client.SendAsync(request).ConfigureAwait(false);
+        var body = await response.Content.ReadAsStringAsync().ConfigureAwait(false);
+        var settings = Deserialize<CloudSettingsResponse>(body);
+
+        AssertEx.Equal(HttpStatusCode.OK, response.StatusCode);
+        AssertEx.Equal("EntraId", settings.AzureFoundry!.AuthMode);
+        AssertEx.True(settings.AzureFoundry.HasStoredEntraClientSecret);
+        // A client secret was supplied, so the sign-in method is coerced to ClientSecret regardless of the request's
+        // default (DeviceCode) — the Locked build contract's "derive default: secret present -> ClientSecret".
+        AssertEx.Equal("ClientSecret", settings.AzureFoundry.EntraSignInMethod);
+        AssertEx.False(body.Contains("new-entra-secret", StringComparison.Ordinal));
+        await cloudCredentialStore.Received(1).SaveConfigAsync(Arg.Is<StoredCloudProviderConfig>(config =>
+                config.AzureFoundry != null
+                && config.AzureFoundry.AuthMode == AzureFoundryAuthMode.EntraId
+                && config.AzureFoundry.EntraTenantId == "tenant-id"
+                && config.AzureFoundry.EntraClientId == "client-id"
+                && config.AzureFoundry.EntraClientSecret == "new-entra-secret"
+                && config.AzureFoundry.EntraTokenScope == "api://backend/.default"
+                && config.AzureFoundry.EntraSignInMethod == EntraSignInMethod.ClientSecret
+                // Managed identity / Entra ID carry no API key.
+                && config.AzureFoundry.ApiKey == null),
+            Arg.Any<CancellationToken>());
+    }
+
+    [Test]
+    public async Task SaveCloudSettings_WhenEntraIdRequestsDeviceCodeSignIn_PersistsDeviceCodeMethod()
+    {
+        var cloudCredentialStore = Substitute.For<ICloudCredentialStore>();
+        var capabilityReporter = Substitute.For<ICapabilityReporter>();
+        capabilityReporter.ReportToApiAsync(Arg.Any<CancellationToken>()).Returns(Task.CompletedTask);
+        await using var factory = CreateFactory(cloudCredentialStore, capabilityReporter);
+        using var client = factory.CreateClient();
+
+        using var request = CreateRequest(factory, HttpMethod.Put, "/api/local/v1/cloud-settings");
+        request.Content = JsonContent.Create(new SaveCloudSettingsRequest
+        {
+            ProviderName = "AzureFoundry",
+            Endpoint = "https://example.openai.azure.com/",
+            AuthMode = "EntraId",
+            EntraTenantId = "tenant-id",
+            EntraClientId = "client-id",
+            EntraTokenScope = "api://backend/.default",
+            EntraSignInMethod = "InteractiveBrowser",
+            Models =
+            [
+                new AzureFoundryModelDto
+                {
+                    DeploymentName = "gpt-4o"
+                }
+            ]
+        });
+        using var response = await client.SendAsync(request).ConfigureAwait(false);
+
+        AssertEx.Equal(HttpStatusCode.OK, response.StatusCode);
+        await cloudCredentialStore.Received(1).SaveConfigAsync(Arg.Is<StoredCloudProviderConfig>(config =>
+                config.AzureFoundry!.EntraClientSecret == null
+                && config.AzureFoundry.EntraSignInMethod == EntraSignInMethod.InteractiveBrowser),
+            Arg.Any<CancellationToken>());
+    }
+
+    [Test]
+    public async Task SaveCloudSettings_WhenEntraIdSecretBlankOnExistingEntraIdConnection_KeepsStoredSecret()
+    {
+        var cloudCredentialStore = Substitute.For<ICloudCredentialStore>();
+        cloudCredentialStore.LoadConfigAsync(Arg.Any<CancellationToken>()).Returns(CreateEntraIdConfig());
+        var capabilityReporter = Substitute.For<ICapabilityReporter>();
+        capabilityReporter.ReportToApiAsync(Arg.Any<CancellationToken>()).Returns(Task.CompletedTask);
+        await using var factory = CreateFactory(cloudCredentialStore, capabilityReporter);
+        using var client = factory.CreateClient();
+
+        using var request = CreateRequest(factory, HttpMethod.Put, "/api/local/v1/cloud-settings");
+        request.Content = JsonContent.Create(new SaveCloudSettingsRequest
+        {
+            ProviderName = "AzureFoundry",
+            Endpoint = "https://example.openai.azure.com/",
+            AuthMode = "EntraId",
+            EntraTenantId = "tenant-id",
+            EntraClientId = "client-id",
+            EntraClientSecret = null,
+            EntraTokenScope = "api://backend/.default",
+            Models =
+            [
+                new AzureFoundryModelDto
+                {
+                    DeploymentName = "gpt-4o"
+                }
+            ]
+        });
+        using var response = await client.SendAsync(request).ConfigureAwait(false);
+        var body = await response.Content.ReadAsStringAsync().ConfigureAwait(false);
+
+        AssertEx.Equal(HttpStatusCode.OK, response.StatusCode);
+        AssertEx.False(body.Contains("entra-client-secret-value", StringComparison.Ordinal));
+        await cloudCredentialStore.Received(1).SaveConfigAsync(Arg.Is<StoredCloudProviderConfig>(config =>
+                config.AzureFoundry!.EntraClientSecret == "entra-client-secret-value"
+                && config.AzureFoundry.EntraSignInMethod == EntraSignInMethod.ClientSecret),
+            Arg.Any<CancellationToken>());
+    }
+
+    [Test]
+    public async Task SaveCloudSettings_WhenEntraIdSecretBlankAndSwitchingFromApiKeyMode_DoesNotResurrectSecret()
+    {
+        // The prior connection was ApiKey-mode (no Entra secret ever stored); switching to EntraId with a blank
+        // secret must never inherit anything, and must fall back to interactive sign-in.
+        var cloudCredentialStore = Substitute.For<ICloudCredentialStore>();
+        cloudCredentialStore.LoadConfigAsync(Arg.Any<CancellationToken>()).Returns(CreateConfig());
+        var capabilityReporter = Substitute.For<ICapabilityReporter>();
+        capabilityReporter.ReportToApiAsync(Arg.Any<CancellationToken>()).Returns(Task.CompletedTask);
+        await using var factory = CreateFactory(cloudCredentialStore, capabilityReporter);
+        using var client = factory.CreateClient();
+
+        using var request = CreateRequest(factory, HttpMethod.Put, "/api/local/v1/cloud-settings");
+        request.Content = JsonContent.Create(new SaveCloudSettingsRequest
+        {
+            ProviderName = "AzureFoundry",
+            Endpoint = "https://example.openai.azure.com/",
+            AuthMode = "EntraId",
+            EntraTenantId = "tenant-id",
+            EntraClientId = "client-id",
+            EntraClientSecret = null,
+            EntraTokenScope = "api://backend/.default",
+            Models =
+            [
+                new AzureFoundryModelDto
+                {
+                    DeploymentName = "gpt-4o"
+                }
+            ]
+        });
+        using var response = await client.SendAsync(request).ConfigureAwait(false);
+
+        AssertEx.Equal(HttpStatusCode.OK, response.StatusCode);
+        await cloudCredentialStore.Received(1).SaveConfigAsync(Arg.Is<StoredCloudProviderConfig>(config =>
+                config.AzureFoundry!.EntraClientSecret == null
+                && config.AzureFoundry.EntraSignInMethod == EntraSignInMethod.DeviceCode),
+            Arg.Any<CancellationToken>());
+    }
+
+    [Test]
+    public async Task SaveCloudSettings_WhenAuthModeIsUnrecognized_ReturnsValidationProblem()
+    {
+        // The request-level validator rejects an unparseable AuthMode outright (before the endpoint ever runs), so
+        // CloudSettingsEndpointDtoMapper.ParseAuthMode's ApiKey fallback is unreachable via this route in practice —
+        // it exists only as a defensive default for direct mapper use.
+        var cloudCredentialStore = Substitute.For<ICloudCredentialStore>();
+        var capabilityReporter = Substitute.For<ICapabilityReporter>();
+        await using var factory = CreateFactory(cloudCredentialStore, capabilityReporter);
+        using var client = factory.CreateClient();
+
+        using var request = CreateRequest(factory, HttpMethod.Put, "/api/local/v1/cloud-settings");
+        request.Content = JsonContent.Create(new SaveCloudSettingsRequest
+        {
+            ProviderName = "AzureFoundry",
+            Endpoint = "https://example.openai.azure.com/",
+            AuthMode = "NotARealAuthMode",
+            ApiKey = "some-api-key",
+            Models =
+            [
+                new AzureFoundryModelDto
+                {
+                    DeploymentName = "gpt-4o"
+                }
+            ]
+        });
+        using var response = await client.SendAsync(request).ConfigureAwait(false);
+
+        AssertEx.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+        await cloudCredentialStore.DidNotReceiveWithAnyArgs().SaveConfigAsync(Arg.Any<StoredCloudProviderConfig>(), Arg.Any<CancellationToken>());
+    }
+
+    [Test]
+    public async Task SaveCloudSettings_WhenEntraIdMissingTenantId_ReturnsValidationProblem()
+    {
+        var cloudCredentialStore = Substitute.For<ICloudCredentialStore>();
+        var capabilityReporter = Substitute.For<ICapabilityReporter>();
+        await using var factory = CreateFactory(cloudCredentialStore, capabilityReporter);
+        using var client = factory.CreateClient();
+
+        using var request = CreateRequest(factory, HttpMethod.Put, "/api/local/v1/cloud-settings");
+        request.Content = JsonContent.Create(new SaveCloudSettingsRequest
+        {
+            ProviderName = "AzureFoundry",
+            Endpoint = "https://example.openai.azure.com/",
+            AuthMode = "EntraId",
+            EntraClientId = "client-id",
+            EntraTokenScope = "api://backend/.default",
+            Models =
+            [
+                new AzureFoundryModelDto
+                {
+                    DeploymentName = "gpt-4o"
+                }
+            ]
+        });
+        using var response = await client.SendAsync(request).ConfigureAwait(false);
+
+        AssertEx.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+        await cloudCredentialStore.DidNotReceiveWithAnyArgs().SaveConfigAsync(Arg.Any<StoredCloudProviderConfig>(), Arg.Any<CancellationToken>());
+    }
+
+    private static StoredCloudProviderConfig CreateEntraIdConfig()
+    {
+        return new StoredCloudProviderConfig
+        {
+            ProviderName = "AzureFoundry",
+            AzureFoundry = new StoredAzureFoundryConnection
+            {
+                Endpoint = "https://example.openai.azure.com/",
+                AuthMode = AzureFoundryAuthMode.EntraId,
+                EntraTenantId = "tenant-id",
+                EntraClientId = "client-id",
+                EntraClientSecret = "entra-client-secret-value",
+                EntraTokenScope = "api://backend/.default",
+                EntraSignInMethod = EntraSignInMethod.ClientSecret,
+                Models =
+                [
+                    new StoredAzureFoundryModel
+                    {
+                        DeploymentName = "gpt-4o",
+                        DisplayLabel = "gpt-4o"
+                    }
+                ]
+            }
+        };
+    }
+
+    [Test]
     public async Task SaveCloudSettings_WhenFreshSecretHeaderIsBlank_ReturnsValidationProblem()
     {
         // No stored config at all: a brand-new secret header sent with a blank value has nothing to merge against and

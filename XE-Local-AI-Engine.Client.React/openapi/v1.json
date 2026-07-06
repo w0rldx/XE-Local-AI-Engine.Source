@@ -5228,6 +5228,74 @@
         ]
       }
     },
+    "/api/local/v1/cloud-settings/entra/device-code/start": {
+      "post": {
+        "tags": [
+          "Cloud-Settings"
+        ],
+        "operationId": "entraDeviceCodeSignIn",
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/XE_Local_AI_EngineClientEndpointsCloudSettingsV1EntraDeviceCodeSignInResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "403": {
+            "description": "Forbidden"
+          }
+        },
+        "security": [
+          {
+            "JWTBearerAuth": []
+          },
+          {
+            "Bearer": []
+          }
+        ]
+      }
+    },
+    "/api/local/v1/cloud-settings/entra/device-code/status": {
+      "get": {
+        "tags": [
+          "Cloud-Settings"
+        ],
+        "operationId": "entraDeviceCodeStatus",
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/XE_Local_AI_EngineClientEndpointsCloudSettingsV1EntraDeviceCodeSignInStatusResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "403": {
+            "description": "Forbidden"
+          }
+        },
+        "security": [
+          {
+            "JWTBearerAuth": []
+          },
+          {
+            "Bearer": []
+          }
+        ]
+      }
+    },
     "/api/local/v1/cloud/codex/login": {
       "post": {
         "tags": [
@@ -11967,6 +12035,24 @@
             "items": {
               "type": "string"
             }
+          },
+          "entraTenantId": {
+            "type": "string",
+            "nullable": true
+          },
+          "entraClientId": {
+            "type": "string",
+            "nullable": true
+          },
+          "hasStoredEntraClientSecret": {
+            "type": "boolean"
+          },
+          "entraTokenScope": {
+            "type": "string",
+            "nullable": true
+          },
+          "entraSignInMethod": {
+            "type": "string"
           }
         }
       },
@@ -12005,6 +12091,52 @@
           },
           "hasStoredValue": {
             "type": "boolean"
+          }
+        }
+      },
+      "XE_Local_AI_EngineClientEndpointsCloudSettingsV1EntraDeviceCodeSignInResponse": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "userCode",
+          "verificationUri",
+          "expiresAtUtc"
+        ],
+        "properties": {
+          "userCode": {
+            "type": "string"
+          },
+          "verificationUri": {
+            "type": "string"
+          },
+          "expiresAtUtc": {
+            "type": "string",
+            "format": "date-time"
+          }
+        }
+      },
+      "XE_Local_AI_EngineClientEndpointsCloudSettingsV1EntraDeviceCodeSignInStatusResponse": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "state"
+        ],
+        "properties": {
+          "state": {
+            "type": "string"
+          },
+          "userCode": {
+            "type": "string",
+            "nullable": true
+          },
+          "verificationUri": {
+            "type": "string",
+            "nullable": true
+          },
+          "expiresAtUtc": {
+            "type": "string",
+            "format": "date-time",
+            "nullable": true
           }
         }
       },
@@ -12047,6 +12179,25 @@
             "items": {
               "type": "string"
             }
+          },
+          "entraTenantId": {
+            "type": "string",
+            "nullable": true
+          },
+          "entraClientId": {
+            "type": "string",
+            "nullable": true
+          },
+          "entraClientSecret": {
+            "type": "string",
+            "nullable": true
+          },
+          "entraTokenScope": {
+            "type": "string",
+            "nullable": true
+          },
+          "entraSignInMethod": {
+            "type": "string"
           }
         }
       },

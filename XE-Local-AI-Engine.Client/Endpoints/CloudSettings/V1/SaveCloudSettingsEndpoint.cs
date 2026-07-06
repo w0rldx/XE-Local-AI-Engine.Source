@@ -36,8 +36,9 @@ public sealed class SaveCloudSettingsEndpoint(
         }
 
         var mergedHeaders = CloudSettingsHeaderMerge.Merge(existingHeaders, req.Headers);
+        var mergedEntraClientSecret = CloudSettingsEntraSecretMerge.Merge(existing?.AzureFoundry, req.EntraClientSecret);
 
-        var config = req.ToStoredConfig(mergedHeaders);
+        var config = req.ToStoredConfig(mergedHeaders, mergedEntraClientSecret);
         await _cloudCredentialStore.SaveConfigAsync(config, ct).ConfigureAwait(false);
         await TryReportCapabilitiesAsync(ct).ConfigureAwait(false);
         await Send.OkAsync(config.ToResponse(), ct).ConfigureAwait(false);
