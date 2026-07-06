@@ -87,8 +87,8 @@ public sealed class AzureFoundryChatClientFactory : IAzureFoundryChatClientFacto
         return
         [
             .. headers
-                .Where(static header => !string.IsNullOrWhiteSpace(header.Name))
-                .Select(static header => (header.Name.Trim(), header.Value ?? string.Empty))
+               .Where(static header => !string.IsNullOrWhiteSpace(header.Name))
+               .Select(static header => (header.Name.Trim(), header.Value ?? string.Empty))
         ];
     }
 

@@ -88,8 +88,7 @@ public sealed class UploadKnowledgeDocumentEndpoint(
         var bytes = await ReadAllBytesAsync(file, ct).ConfigureAwait(false);
         var contentHash = Convert.ToHexString(SHA256.HashData(bytes));
 
-        var input = new KnowledgeDocumentInput(
-            Guid.NewGuid(),
+        var input = new KnowledgeDocumentInput(Guid.NewGuid(),
             originalName,
             string.IsNullOrWhiteSpace(file.ContentType) ? DefaultMimeType : file.ContentType,
             extension,

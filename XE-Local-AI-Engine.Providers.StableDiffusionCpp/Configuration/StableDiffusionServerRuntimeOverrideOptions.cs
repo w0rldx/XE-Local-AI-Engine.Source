@@ -94,6 +94,7 @@ public sealed class StableDiffusionServerRuntimeOverrideOptions
             return SdGpuBackend.Cpu;
         }
 
-        throw new InvalidOperationException($"The environment variable '{BackendEnvironmentVariable}' is set to an unrecognized stable-diffusion.cpp acceleration backend. Use one of: cpu, cuda, vulkan.");
+        throw new InvalidOperationException(
+            $"The environment variable '{BackendEnvironmentVariable}' is set to an unrecognized stable-diffusion.cpp acceleration backend. Use one of: cpu, cuda, vulkan.");
     }
 }

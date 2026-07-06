@@ -79,7 +79,15 @@ public sealed class AzureFoundryChatClientFactoryTests
         var factory = new AzureFoundryChatClientFactory();
         var connection = CreateConnection() with
         {
-            Headers = [new StoredAzureFoundryHeader { Name = "Ocp-Apim-Subscription-Key", Value = "sub", IsSecret = true }]
+            Headers =
+            [
+                new StoredAzureFoundryHeader
+                {
+                    Name = "Ocp-Apim-Subscription-Key",
+                    Value = "sub",
+                    IsSecret = true
+                }
+            ]
         };
 
         var chatClient = factory.Create(connection, "gpt-4o");
@@ -96,8 +104,22 @@ public sealed class AzureFoundryChatClientFactoryTests
         {
             Endpoint = "https://example.services.ai.azure.com/",
             AuthMode = AzureFoundryAuthMode.ManagedIdentity,
-            Models = [new StoredAzureFoundryModel { DeploymentName = "gpt-4o" }],
-            Headers = [new StoredAzureFoundryHeader { Name = "X-Tenant", Value = "tenant-a", IsSecret = false }]
+            Models =
+            [
+                new StoredAzureFoundryModel
+                {
+                    DeploymentName = "gpt-4o"
+                }
+            ],
+            Headers =
+            [
+                new StoredAzureFoundryHeader
+                {
+                    Name = "X-Tenant",
+                    Value = "tenant-a",
+                    IsSecret = false
+                }
+            ]
         };
 
         var chatClient = factory.Create(connection, "gpt-4o");
@@ -114,7 +136,13 @@ public sealed class AzureFoundryChatClientFactoryTests
         {
             Endpoint = "https://gateway.azure-api.net/",
             AuthMode = AzureFoundryAuthMode.ManagedIdentity,
-            Models = [new StoredAzureFoundryModel { DeploymentName = "gpt-4o" }],
+            Models =
+            [
+                new StoredAzureFoundryModel
+                {
+                    DeploymentName = "gpt-4o"
+                }
+            ],
             AdditionalAllowedHostSuffixes = [".azure-api.net"]
         };
 

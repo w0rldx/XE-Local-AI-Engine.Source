@@ -33,7 +33,18 @@ public sealed class StableDiffusionCppRuntimeTests
     [Test]
     public async Task Generate_SubmitPollCompleted_DecodesBase64Image()
     {
-        var pngBytes = new byte[] { 9, 8, 7, 6, 5, 4, 3, 2, 1 };
+        var pngBytes = new byte[]
+        {
+            9,
+            8,
+            7,
+            6,
+            5,
+            4,
+            3,
+            2,
+            1
+        };
         var base64 = Convert.ToBase64String(pngBytes);
         using var handler = new RuntimeHandler((_, route) => route switch
         {
@@ -125,8 +136,7 @@ public sealed class StableDiffusionCppRuntimeTests
         using var http = new HttpClient(handler, disposeHandler: false);
         var runtime = new StableDiffusionCppRuntime(new FakeImageServerSupervisor(BaseAddress), new SdServerJobClient(http));
 
-        var exception = await AssertEx.ThrowsAsync<StableDiffusionRuntimeException>(
-            () => runtime.GenerateAsync(Request(), new RecordingProgress(), CancellationToken.None));
+        var exception = await AssertEx.ThrowsAsync<StableDiffusionRuntimeException>(() => runtime.GenerateAsync(Request(), new RecordingProgress(), CancellationToken.None));
 
         AssertEx.False(exception.Message.Contains("0xdeadbeef", StringComparison.Ordinal), "The failure message must be sanitized (no internal detail).");
     }
@@ -142,8 +152,7 @@ public sealed class StableDiffusionCppRuntimeTests
         using var http = new HttpClient(handler, disposeHandler: false);
         var runtime = new StableDiffusionCppRuntime(new FakeImageServerSupervisor(BaseAddress), new SdServerJobClient(http));
 
-        await AssertEx.ThrowsAsync<StableDiffusionRuntimeException>(
-            () => runtime.GenerateAsync(Request(), new RecordingProgress(), CancellationToken.None));
+        await AssertEx.ThrowsAsync<StableDiffusionRuntimeException>(() => runtime.GenerateAsync(Request(), new RecordingProgress(), CancellationToken.None));
     }
 
     private static HttpResponseMessage Json(HttpStatusCode code, string json)

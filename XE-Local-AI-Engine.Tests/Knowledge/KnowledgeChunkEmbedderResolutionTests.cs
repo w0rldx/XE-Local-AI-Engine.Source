@@ -41,7 +41,10 @@ public sealed class KnowledgeChunkEmbedderResolutionTests
     {
         // Regression: a 1024-wide model (bge-m3/mxbai) previously failed every chunk against the static 768 constant.
         const int width = 1024;
-        var provider = new CapturingProvider(Descriptor(ConfiguredName)) { VectorDimensions = [width] };
+        var provider = new CapturingProvider(Descriptor(ConfiguredName))
+        {
+            VectorDimensions = [width]
+        };
         var embedder = CreateEmbedder(provider);
 
         var result = await embedder.EmbedAsync(["chunk one", "chunk two"], CancellationToken.None).ConfigureAwait(false);
@@ -56,11 +59,13 @@ public sealed class KnowledgeChunkEmbedderResolutionTests
     public async Task EmbedAsync_WhenModelReturnsInconsistentWidths_ThrowsContentFreeFailure()
     {
         // A dimension-stable model never does this; an inconsistent width within one run is a genuinely broken model.
-        var provider = new CapturingProvider(Descriptor(ConfiguredName)) { VectorDimensions = [1024, 512] };
+        var provider = new CapturingProvider(Descriptor(ConfiguredName))
+        {
+            VectorDimensions = [1024, 512]
+        };
         var embedder = CreateEmbedder(provider);
 
-        var exception = await AssertEx.ThrowsAsync<KnowledgeIngestionException>(
-            () => embedder.EmbedAsync(["chunk one", "chunk two"], CancellationToken.None)).ConfigureAwait(false);
+        var exception = await AssertEx.ThrowsAsync<KnowledgeIngestionException>(() => embedder.EmbedAsync(["chunk one", "chunk two"], CancellationToken.None)).ConfigureAwait(false);
 
         // Reason names the mismatch (integers only, content-free) so an operator can act.
         AssertEx.True(exception.Reason.Contains("1024", StringComparison.Ordinal), "Reason should name the expected width.");
@@ -84,11 +89,13 @@ public sealed class KnowledgeChunkEmbedderResolutionTests
     [Test]
     public async Task EmbedAsync_WhenNothingInstalledAndGeneratorFails_UsesConfiguredNameAndSurfacesGracefulFailure()
     {
-        var provider = new CapturingProvider { ThrowOnGenerate = true };
+        var provider = new CapturingProvider
+        {
+            ThrowOnGenerate = true
+        };
         var embedder = CreateEmbedder(provider);
 
-        _ = await AssertEx.ThrowsAsync<KnowledgeIngestionException>(
-            () => embedder.EmbedAsync(["chunk one"], CancellationToken.None)).ConfigureAwait(false);
+        _ = await AssertEx.ThrowsAsync<KnowledgeIngestionException>(() => embedder.EmbedAsync(["chunk one"], CancellationToken.None)).ConfigureAwait(false);
 
         AssertEx.Equal(ConfiguredName, provider.LastSelectedModelName);
     }
@@ -149,17 +156,23 @@ public sealed class KnowledgeChunkEmbedderResolutionTests
             return Task.FromResult<IReadOnlyList<LocalModelDescriptor>>(models);
         }
 
-        public IChatClient CreateChatClient(LocalModelSelection selection) => throw new NotSupportedException();
+        public IChatClient CreateChatClient(LocalModelSelection selection) =>
+            throw new NotSupportedException();
 
-        public Task<ModelProviderHealth> CheckHealthAsync(CancellationToken ct) => throw new NotSupportedException();
+        public Task<ModelProviderHealth> CheckHealthAsync(CancellationToken ct) =>
+            throw new NotSupportedException();
 
-        public Task PullModelAsync(string modelName, IProgress<PullProgress>? progress, CancellationToken ct) => throw new NotSupportedException();
+        public Task PullModelAsync(string modelName, IProgress<PullProgress>? progress, CancellationToken ct) =>
+            throw new NotSupportedException();
 
-        public Task DeleteModelAsync(string modelName, CancellationToken ct) => throw new NotSupportedException();
+        public Task DeleteModelAsync(string modelName, CancellationToken ct) =>
+            throw new NotSupportedException();
 
-        public Task WarmModelAsync(string modelName, CancellationToken ct) => throw new NotSupportedException();
+        public Task WarmModelAsync(string modelName, CancellationToken ct) =>
+            throw new NotSupportedException();
 
-        public Task UnloadModelAsync(string modelName, CancellationToken ct) => throw new NotSupportedException();
+        public Task UnloadModelAsync(string modelName, CancellationToken ct) =>
+            throw new NotSupportedException();
 
         private sealed class FixedEmbeddingGenerator(bool throwOnGenerate, IReadOnlyList<int> dimensions) : IEmbeddingGenerator<string, Embedding<float>>
         {
@@ -177,7 +190,8 @@ public sealed class KnowledgeChunkEmbedderResolutionTests
                 return Task.FromResult(new GeneratedEmbeddings<Embedding<float>>(embeddings));
             }
 
-            public object? GetService(Type serviceType, object? serviceKey = null) => null;
+            public object? GetService(Type serviceType, object? serviceKey = null) =>
+                null;
 
             public void Dispose()
             {

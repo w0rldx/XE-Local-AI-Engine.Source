@@ -17,11 +17,27 @@ public sealed class StoredAzureFoundryConnectionToStringTests
             Endpoint = "https://example.openai.azure.com/",
             AuthMode = AzureFoundryAuthMode.ApiKey,
             ApiKey = "super-secret-api-key",
-            Models = [new StoredAzureFoundryModel { DeploymentName = "gpt-4o" }],
+            Models =
+            [
+                new StoredAzureFoundryModel
+                {
+                    DeploymentName = "gpt-4o"
+                }
+            ],
             Headers =
             [
-                new StoredAzureFoundryHeader { Name = "Ocp-Apim-Subscription-Key", Value = "secret-header-value", IsSecret = true },
-                new StoredAzureFoundryHeader { Name = "X-Tenant", Value = "tenant-a", IsSecret = false }
+                new StoredAzureFoundryHeader
+                {
+                    Name = "Ocp-Apim-Subscription-Key",
+                    Value = "secret-header-value",
+                    IsSecret = true
+                },
+                new StoredAzureFoundryHeader
+                {
+                    Name = "X-Tenant",
+                    Value = "tenant-a",
+                    IsSecret = false
+                }
             ]
         };
 
@@ -36,7 +52,12 @@ public sealed class StoredAzureFoundryConnectionToStringTests
     [Test]
     public void HeaderToString_RedactsSecretValue()
     {
-        var header = new StoredAzureFoundryHeader { Name = "X-Secret", Value = "do-not-leak", IsSecret = true };
+        var header = new StoredAzureFoundryHeader
+        {
+            Name = "X-Secret",
+            Value = "do-not-leak",
+            IsSecret = true
+        };
 
         var text = header.ToString();
 

@@ -35,6 +35,10 @@ internal sealed class KnowledgeDocumentSectionConfiguration : IEntityTypeConfigu
                .HasForeignKey(entity => entity.DocumentId)
                .OnDelete(DeleteBehavior.Cascade);
 
-        builder.HasIndex(entity => new { entity.DocumentId, entity.Ordinal });
+        builder.HasIndex(entity => new
+        {
+            entity.DocumentId,
+            entity.Ordinal
+        });
     }
 }

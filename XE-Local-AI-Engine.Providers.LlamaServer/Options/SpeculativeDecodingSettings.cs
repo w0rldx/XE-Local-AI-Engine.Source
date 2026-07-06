@@ -115,8 +115,7 @@ public readonly record struct SpeculativeDecodingSettings(
     ///     True only for the known draft-model modes (<c>draft-*</c>), which require a draft GGUF; <c>ngram-*</c> and
     ///     unknown modes are false, so a missing-draft check never fires for a self-speculating or invalid mode.
     /// </summary>
-    public bool IsDraftMode =>
-        AllowedModes.Contains(NormalizedMode) && NormalizedMode.StartsWith("draft-", StringComparison.Ordinal);
+    public bool IsDraftMode => AllowedModes.Contains(NormalizedMode) && NormalizedMode.StartsWith("draft-", StringComparison.Ordinal);
 
     /// <summary>
     ///     Validates the config for an emittable combination: a known <c>--spec-type</c>, and a non-empty

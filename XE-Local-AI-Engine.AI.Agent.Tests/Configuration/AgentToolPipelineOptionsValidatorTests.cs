@@ -28,7 +28,10 @@ public sealed class AgentToolPipelineOptionsValidatorTests
     [Test]
     public void Validate_WhenIterationCapNotPositive_ReturnsFailure()
     {
-        var result = _validator.Validate(name: null, new AgentToolPipelineOptions { MaximumToolIterationsPerRequest = 0 });
+        var result = _validator.Validate(name: null, new AgentToolPipelineOptions
+        {
+            MaximumToolIterationsPerRequest = 0
+        });
 
         AssertEx.False(result.Succeeded);
         AssertEx.Contains(result.Failures, failure => failure.Contains("MaximumToolIterationsPerRequest", StringComparison.Ordinal));
@@ -37,7 +40,10 @@ public sealed class AgentToolPipelineOptionsValidatorTests
     [Test]
     public void Validate_WhenResultBudgetBelowFloor_ReturnsFailure()
     {
-        var result = _validator.Validate(name: null, new AgentToolPipelineOptions { MaxToolResultCharacters = 512 });
+        var result = _validator.Validate(name: null, new AgentToolPipelineOptions
+        {
+            MaxToolResultCharacters = 512
+        });
 
         AssertEx.False(result.Succeeded);
         AssertEx.Contains(result.Failures, failure => failure.Contains("MaxToolResultCharacters", StringComparison.Ordinal));

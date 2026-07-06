@@ -1,5 +1,7 @@
 namespace XE_Local_AI_Engine.Client.Persistence.Tests;
 
+using System.Data;
+using System.Data.Common;
 using Microsoft.Data.Sqlite;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DataIngestion;
@@ -68,7 +70,12 @@ public sealed class KnowledgeIngestionServiceFailureTests : IDisposable
 
         var blobStore = Substitute.For<IKnowledgeDocumentBlobStore>();
         blobStore.ReadBytesAsync(Arg.Any<Guid>(), Arg.Any<CancellationToken>())
-                 .Returns(Task.FromResult<byte[]?>(new byte[] { 1, 2, 3 }));
+                 .Returns(Task.FromResult<byte[]?>(new byte[]
+                 {
+                     1,
+                     2,
+                     3
+                 }));
 
         var extractor = Substitute.For<IDocumentTextExtractor>();
         extractor.ExtractStructuredAsync(Arg.Any<Stream>(), Arg.Any<string>(), Arg.Any<string>(), Arg.Any<CancellationToken>())
@@ -125,7 +132,12 @@ public sealed class KnowledgeIngestionServiceFailureTests : IDisposable
             VALUES ($id, $name, 'text/plain', '.txt', 10, $hash, $path, 'Pending', 0, 'nomic-embed-text', 1, 1);
             """;
         command.Parameters.AddWithValue("$id", documentId);
-        command.Parameters.AddWithValue("$name", new byte[] { 1, 2, 3 });
+        command.Parameters.AddWithValue("$name", new byte[]
+        {
+            1,
+            2,
+            3
+        });
         command.Parameters.AddWithValue("$hash", "hash-" + documentId.ToString("N"));
         command.Parameters.AddWithValue("$path", documentId.ToString("D") + ".txt");
         _ = await command.ExecuteNonQueryAsync().ConfigureAwait(false);
@@ -147,9 +159,9 @@ public sealed class KnowledgeIngestionServiceFailureTests : IDisposable
 
     // Microsoft.Data.Sqlite enables foreign-key enforcement by default; the node-sqlite runtime connection does not,
     // so every KB test connection is aligned to that runtime mode.
-    private static async Task EnsureForeignKeysOffAsync(System.Data.Common.DbConnection connection)
+    private static async Task EnsureForeignKeysOffAsync(DbConnection connection)
     {
-        if (connection.State != System.Data.ConnectionState.Open)
+        if (connection.State != ConnectionState.Open)
         {
             await connection.OpenAsync().ConfigureAwait(false);
         }

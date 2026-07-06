@@ -68,8 +68,8 @@ public sealed class SdGpuBackendSelector : ISdGpuBackendSelector
         // probe is skipped there. A confirmed Vulkan device is required on Linux because a Vulkan pick with no enumerable
         // Vulkan device makes sd-server hard-fail (e.g. WSL2), whereas CPU always works.
         var vulkanDeviceAvailable = !_isWindows
-            && vendor is GpuVendor.Nvidia or GpuVendor.Amd or GpuVendor.Intel
-            && _vulkanDeviceProbe.HasEnumerableVulkanDevice();
+                                    && vendor is GpuVendor.Nvidia or GpuVendor.Amd or GpuVendor.Intel
+                                    && _vulkanDeviceProbe.HasEnumerableVulkanDevice();
 
         return SelectForVendor(vendor, _isWindows, vulkanDeviceAvailable);
     }

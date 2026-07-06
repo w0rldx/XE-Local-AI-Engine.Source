@@ -1,7 +1,5 @@
 namespace XE_Local_AI_Engine.Providers.StableDiffusionCpp.Contracts;
 
-using XE_Local_AI_Engine.Providers.StableDiffusionCpp;
-
 /// <summary>
 ///     Thin process-launch seam isolating the OS-specific <c>Process.Start</c> + tree-kill mechanics from the
 ///     supervisor's lifecycle logic. Faked in unit tests so the supervisor is exercised with no real child processes;

@@ -33,10 +33,10 @@ internal static class ToolResultBudget
                     ? textContent
                     : new TextContent(Truncate(textContent.Text, maxCharacters));
             case JsonElement json:
-            {
-                var raw = json.GetRawText();
-                return raw.Length <= maxCharacters ? result : Truncate(raw, maxCharacters);
-            }
+                {
+                    var raw = json.GetRawText();
+                    return raw.Length <= maxCharacters ? result : Truncate(raw, maxCharacters);
+                }
             case AIContent[] parts:
                 return TruncateContentParts(parts, maxCharacters);
             default:

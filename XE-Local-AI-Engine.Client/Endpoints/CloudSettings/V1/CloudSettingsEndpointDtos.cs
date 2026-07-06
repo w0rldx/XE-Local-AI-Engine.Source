@@ -173,8 +173,8 @@ internal static class CloudSettingsEndpointDtoMapper
                 AdditionalAllowedHostSuffixes =
                 [
                     .. request.AdditionalAllowedHostSuffixes
-                        .Select(static suffix => suffix?.Trim() ?? string.Empty)
-                        .Where(static suffix => suffix.Length > 0)
+                              .Select(static suffix => suffix?.Trim() ?? string.Empty)
+                              .Where(static suffix => suffix.Length > 0)
                 ]
             }
         };

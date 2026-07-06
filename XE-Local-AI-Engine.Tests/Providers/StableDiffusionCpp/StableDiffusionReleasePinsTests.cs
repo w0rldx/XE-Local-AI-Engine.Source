@@ -51,8 +51,7 @@ public sealed class StableDiffusionReleasePinsTests
     {
         var uri = StableDiffusionReleasePins.DownloadUri(StableDiffusionReleasePins.PinnedTag, "sd-master-1a13107-bin-win-cpu-x64.zip");
 
-        AssertEx.Equal(
-            "https://github.com/leejet/stable-diffusion.cpp/releases/download/master-742-1a13107/sd-master-1a13107-bin-win-cpu-x64.zip",
+        AssertEx.Equal("https://github.com/leejet/stable-diffusion.cpp/releases/download/master-742-1a13107/sd-master-1a13107-bin-win-cpu-x64.zip",
             uri.ToString());
     }
 }

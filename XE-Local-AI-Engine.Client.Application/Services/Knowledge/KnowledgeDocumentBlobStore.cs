@@ -1,5 +1,6 @@
 namespace XE_Local_AI_Engine.Client.Services.Knowledge;
 
+using System.Data.Common;
 using System.Diagnostics.CodeAnalysis;
 using Microsoft.EntityFrameworkCore;
 using XE_Local_AI_Engine.Client.Persistence;
@@ -145,7 +146,7 @@ public sealed class KnowledgeDocumentBlobStore : IKnowledgeDocumentBlobStore
         return Task.CompletedTask;
     }
 
-    private static async Task<Guid> SelectDocumentIdByHashAsync(System.Data.Common.DbConnection connection, string contentHash, CancellationToken cancellationToken)
+    private static async Task<Guid> SelectDocumentIdByHashAsync(DbConnection connection, string contentHash, CancellationToken cancellationToken)
     {
         await using var command = connection.CreateCommand();
         command.CommandText = "SELECT document_id FROM knowledge_documents WHERE content_hash = $content_hash;";
@@ -154,7 +155,7 @@ public sealed class KnowledgeDocumentBlobStore : IKnowledgeDocumentBlobStore
         return result is string id ? Guid.Parse(id) : Guid.Empty;
     }
 
-    private static async Task<string?> SelectExtensionAsync(System.Data.Common.DbConnection connection, Guid documentId, CancellationToken cancellationToken)
+    private static async Task<string?> SelectExtensionAsync(DbConnection connection, Guid documentId, CancellationToken cancellationToken)
     {
         await using var command = connection.CreateCommand();
         command.CommandText = "SELECT extension FROM knowledge_documents WHERE document_id = $document_id;";
@@ -163,7 +164,7 @@ public sealed class KnowledgeDocumentBlobStore : IKnowledgeDocumentBlobStore
         return result is null or DBNull ? null : result as string ?? string.Empty;
     }
 
-    private static async Task DeleteRowAsync(System.Data.Common.DbConnection connection, Guid documentId, CancellationToken cancellationToken)
+    private static async Task DeleteRowAsync(DbConnection connection, Guid documentId, CancellationToken cancellationToken)
     {
         await using var command = connection.CreateCommand();
         command.CommandText = "DELETE FROM knowledge_documents WHERE document_id = $document_id;";

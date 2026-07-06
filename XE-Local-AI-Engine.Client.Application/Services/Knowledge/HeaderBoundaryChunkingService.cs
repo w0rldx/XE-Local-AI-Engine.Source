@@ -54,8 +54,7 @@ public sealed class HeaderBoundaryChunkingService : IChunkingService
                     ? window
                     : string.Concat(build.HeadingPath, "\n\n", window);
 
-                chunks.Add(new KnowledgeChunk(
-                    chunkIndex,
+                chunks.Add(new KnowledgeChunk(chunkIndex,
                     ordinal,
                     window,
                     contextual,

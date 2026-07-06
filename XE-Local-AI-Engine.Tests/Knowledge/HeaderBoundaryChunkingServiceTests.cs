@@ -16,8 +16,7 @@ public sealed class HeaderBoundaryChunkingServiceTests
     [Test]
     public void Chunk_WhenHeadersNest_BuildsHeadingPathTrailAndPopsShallowerHeadings()
     {
-        var document = BuildDocument(
-            Header("Alpha", level: 1),
+        var document = BuildDocument(Header("Alpha", level: 1),
             Paragraph("alpha body"),
             Header("Beta", level: 2),
             Paragraph("beta body"),
@@ -83,8 +82,7 @@ public sealed class HeaderBoundaryChunkingServiceTests
     public void Chunk_WhenGivenTheSameDocumentTwice_ProducesIdenticalOutput()
     {
         var service = CreateService(maxChars: 40, overlap: 8);
-        var document = BuildDocument(
-            Header("Alpha", level: 1),
+        var document = BuildDocument(Header("Alpha", level: 1),
             Paragraph(string.Join(" ", Enumerable.Repeat("word", count: 40))),
             Header("Beta", level: 2),
             Paragraph("beta body"));

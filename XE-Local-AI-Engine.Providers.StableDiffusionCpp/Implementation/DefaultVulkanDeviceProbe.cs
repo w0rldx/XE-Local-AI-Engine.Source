@@ -114,13 +114,13 @@ public sealed class DefaultVulkanDeviceProbe : IVulkanDeviceProbe
 
         var contents = File.ReadAllText(path);
         return contents.Contains("microsoft", StringComparison.OrdinalIgnoreCase)
-            || contents.Contains("WSL", StringComparison.OrdinalIgnoreCase);
+               || contents.Contains("WSL", StringComparison.OrdinalIgnoreCase);
     }
 
     private static bool DetectIcdManifestFromHost()
     {
         return IcdManifestDirectories
-            .Where(Directory.Exists)
-            .Any(directory => Directory.EnumerateFiles(directory, "*.json").Any());
+               .Where(Directory.Exists)
+               .Any(directory => Directory.EnumerateFiles(directory, "*.json").Any());
     }
 }

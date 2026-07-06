@@ -81,12 +81,15 @@ internal static class ImageMapper
             Kind = entry.Kind.ToString(),
             SizeBytes = entry.SizeBytes,
             // LocalPath / Sha256 are deliberately omitted — never leak a filesystem path.
-            Parts = [.. entry.Parts.Select(static p => new ImageModelPartResponse
-            {
-                Role = p.Role.ToString(),
-                FileName = p.FileName,
-                SizeBytes = p.SizeBytes
-            })],
+            Parts =
+            [
+                .. entry.Parts.Select(static p => new ImageModelPartResponse
+                {
+                    Role = p.Role.ToString(),
+                    FileName = p.FileName,
+                    SizeBytes = p.SizeBytes
+                })
+            ],
             DownloadedAtUtc = entry.DownloadedAtUtc.ToUnixTimeMilliseconds()
         };
     }

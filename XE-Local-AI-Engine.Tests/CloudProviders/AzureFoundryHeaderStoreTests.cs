@@ -37,11 +37,27 @@ public sealed class AzureFoundryHeaderStoreTests : IDisposable
                 Endpoint = "https://gateway.azure-api.net/",
                 AuthMode = AzureFoundryAuthMode.ApiKey,
                 ApiKey = "k",
-                Models = [new StoredAzureFoundryModel { DeploymentName = "gpt-4o" }],
+                Models =
+                [
+                    new StoredAzureFoundryModel
+                    {
+                        DeploymentName = "gpt-4o"
+                    }
+                ],
                 Headers =
                 [
-                    new StoredAzureFoundryHeader { Name = "Ocp-Apim-Subscription-Key", Value = "sub-secret", IsSecret = true },
-                    new StoredAzureFoundryHeader { Name = "X-Tenant", Value = "tenant-a", IsSecret = false }
+                    new StoredAzureFoundryHeader
+                    {
+                        Name = "Ocp-Apim-Subscription-Key",
+                        Value = "sub-secret",
+                        IsSecret = true
+                    },
+                    new StoredAzureFoundryHeader
+                    {
+                        Name = "X-Tenant",
+                        Value = "tenant-a",
+                        IsSecret = false
+                    }
                 ],
                 AdditionalAllowedHostSuffixes = [".azure-api.net"]
             }
@@ -71,7 +87,13 @@ public sealed class AzureFoundryHeaderStoreTests : IDisposable
                     endpoint = "https://example.openai.azure.com/",
                     authMode = (int)AzureFoundryAuthMode.ApiKey,
                     apiKey = "k",
-                    models = new[] { new { deploymentName = "gpt-4o" } }
+                    models = new[]
+                    {
+                        new
+                        {
+                            deploymentName = "gpt-4o"
+                        }
+                    }
                 }
             },
             JsonOptions);
@@ -104,7 +126,15 @@ public sealed class AzureFoundryHeaderStoreTests : IDisposable
         using var store = CreateStore();
         var config = CreateConfig(connection => connection with
         {
-            Headers = [new StoredAzureFoundryHeader { Name = "authorization", Value = "x", IsSecret = false }]
+            Headers =
+            [
+                new StoredAzureFoundryHeader
+                {
+                    Name = "authorization",
+                    Value = "x",
+                    IsSecret = false
+                }
+            ]
         });
 
         await AssertEx.ThrowsAsync<ArgumentException>(() => store.SaveConfigAsync(config));
@@ -116,7 +146,15 @@ public sealed class AzureFoundryHeaderStoreTests : IDisposable
         using var store = CreateStore();
         var config = CreateConfig(connection => connection with
         {
-            Headers = [new StoredAzureFoundryHeader { Name = "X-Inject", Value = "a\r\nEvil: 1", IsSecret = false }]
+            Headers =
+            [
+                new StoredAzureFoundryHeader
+                {
+                    Name = "X-Inject",
+                    Value = "a\r\nEvil: 1",
+                    IsSecret = false
+                }
+            ]
         });
 
         await AssertEx.ThrowsAsync<ArgumentException>(() => store.SaveConfigAsync(config));
@@ -128,7 +166,15 @@ public sealed class AzureFoundryHeaderStoreTests : IDisposable
         using var store = CreateStore();
         var config = CreateConfig(connection => connection with
         {
-            Headers = [new StoredAzureFoundryHeader { Name = "X-Secret", Value = null, IsSecret = true }]
+            Headers =
+            [
+                new StoredAzureFoundryHeader
+                {
+                    Name = "X-Secret",
+                    Value = null,
+                    IsSecret = true
+                }
+            ]
         });
 
         await AssertEx.ThrowsAsync<ArgumentException>(() => store.SaveConfigAsync(config));
@@ -139,9 +185,17 @@ public sealed class AzureFoundryHeaderStoreTests : IDisposable
     {
         using var store = CreateStore();
         var headers = Enumerable.Range(0, AzureFoundryHeaderRules.MaxHeaderCount + 1)
-            .Select(index => new StoredAzureFoundryHeader { Name = $"X-H{index}", Value = "v", IsSecret = false })
-            .ToArray();
-        var config = CreateConfig(connection => connection with { Headers = headers });
+                                .Select(index => new StoredAzureFoundryHeader
+                                {
+                                    Name = $"X-H{index}",
+                                    Value = "v",
+                                    IsSecret = false
+                                })
+                                .ToArray();
+        var config = CreateConfig(connection => connection with
+        {
+            Headers = headers
+        });
 
         await AssertEx.ThrowsAsync<ArgumentException>(() => store.SaveConfigAsync(config));
     }
@@ -165,7 +219,13 @@ public sealed class AzureFoundryHeaderStoreTests : IDisposable
             Endpoint = "https://example.openai.azure.com/",
             AuthMode = AzureFoundryAuthMode.ApiKey,
             ApiKey = "k",
-            Models = [new StoredAzureFoundryModel { DeploymentName = "gpt-4o" }]
+            Models =
+            [
+                new StoredAzureFoundryModel
+                {
+                    DeploymentName = "gpt-4o"
+                }
+            ]
         };
 
         return new StoredCloudProviderConfig

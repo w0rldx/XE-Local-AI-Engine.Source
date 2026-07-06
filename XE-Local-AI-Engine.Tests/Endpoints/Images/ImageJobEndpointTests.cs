@@ -164,6 +164,7 @@ public sealed class ImageJobEndpointTests
         public Task<IReadOnlyList<ImageJobView>> ListAsync(CancellationToken cancellationToken) =>
             Task.FromResult<IReadOnlyList<ImageJobView>>([.. _jobs.Values]);
 
-        public IReadOnlyList<ImageJobBufferedEvent> SnapshotBufferedEvents(Guid jobId) => [];
+        public IReadOnlyList<ImageJobBufferedEvent> SnapshotBufferedEvents(Guid jobId) =>
+            [];
     }
 }

@@ -110,8 +110,7 @@ public sealed class EmbeddingModelResolverTests
                 .Returns<Task<IReadOnlyList<LocalModelDescriptor>>>(_ => throw new OperationCanceledException(cts.Token));
         var resolver = CreateResolver();
 
-        _ = await AssertEx.ThrowsAsync<OperationCanceledException>(
-            () => resolver.ResolveAsync(provider, cts.Token)).ConfigureAwait(false);
+        _ = await AssertEx.ThrowsAsync<OperationCanceledException>(() => resolver.ResolveAsync(provider, cts.Token)).ConfigureAwait(false);
     }
 
     [Test]
@@ -135,7 +134,10 @@ public sealed class EmbeddingModelResolverTests
 
     private static EmbeddingModelResolver CreateResolver()
     {
-        return new EmbeddingModelResolver(Options.Create(new KnowledgeBaseOptions { EmbeddingModelName = ConfiguredName }));
+        return new EmbeddingModelResolver(Options.Create(new KnowledgeBaseOptions
+        {
+            EmbeddingModelName = ConfiguredName
+        }));
     }
 
     private static ILocalModelProvider ProviderWithModels(params LocalModelDescriptor[] models)

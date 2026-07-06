@@ -21,8 +21,7 @@ internal sealed class KnowledgeIndexingNotifier(
 
     public async Task NotifyDocumentChangedAsync(Guid documentId, KnowledgeDocumentStatus status, CancellationToken cancellationToken = default)
     {
-        var payload = new KnowledgeDocumentChangedHubEvent(
-            KnowledgeBaseHubEvents.DocumentChanged,
+        var payload = new KnowledgeDocumentChangedHubEvent(KnowledgeBaseHubEvents.DocumentChanged,
             documentId,
             status,
             _timeProvider.GetUtcNow().ToUnixTimeMilliseconds());

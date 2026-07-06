@@ -1,6 +1,7 @@
 namespace XE_Local_AI_Engine.Client.Services.Knowledge;
 
 using System.Runtime.InteropServices;
+using Microsoft.Extensions.AI;
 using Microsoft.Extensions.Options;
 using OllamaSharp.Models.Exceptions;
 using XE_Local_AI_Engine.Client.Services.CloudProviders;
@@ -88,7 +89,7 @@ public sealed class KnowledgeChunkEmbedder : IKnowledgeChunkEmbedder
                 batch.Add(_prefixer.ForDocument(chunkContents[offset + index]));
             }
 
-            IReadOnlyList<Microsoft.Extensions.AI.Embedding<float>> generated;
+            IReadOnlyList<Embedding<float>> generated;
             try
             {
                 generated = await generator.GenerateAsync(batch, options: null, cancellationToken).ConfigureAwait(false);

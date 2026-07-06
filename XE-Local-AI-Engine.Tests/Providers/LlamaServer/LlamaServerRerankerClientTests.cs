@@ -24,8 +24,7 @@ public sealed class LlamaServerRerankerClientTests
     public async Task RerankAsync_ProjectsScoreSortedResultsBackIntoInputOrder_AndTargetsRerankRoute()
     {
         // Server returns results sorted by relevance (index 2 best), so the `index` field must realign to input order.
-        using var handler = new CapturingHandler(_ => JsonOk(
-            """{"results":[{"index":2,"relevance_score":0.9},{"index":0,"relevance_score":0.5},{"index":1,"relevance_score":0.1}]}"""));
+        using var handler = new CapturingHandler(_ => JsonOk("""{"results":[{"index":2,"relevance_score":0.9},{"index":0,"relevance_score":0.5},{"index":1,"relevance_score":0.1}]}"""));
         using var http = new HttpClient(handler, disposeHandler: false);
         var client = new LlamaServerRerankerClient(ReadySupervisor(), http, NullLogger<LlamaServerRerankerClient>.Instance);
 

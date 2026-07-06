@@ -1,5 +1,7 @@
 namespace XE_Local_AI_Engine.Client.Persistence.Tests;
 
+using System.Data;
+using System.Data.Common;
 using Microsoft.Data.Sqlite;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.AI;
@@ -189,7 +191,12 @@ public sealed class KnowledgeEmbeddingModelIdentityTests : IDisposable
 
         var blobStore = Substitute.For<IKnowledgeDocumentBlobStore>();
         blobStore.ReadBytesAsync(Arg.Any<Guid>(), Arg.Any<CancellationToken>())
-                 .Returns(Task.FromResult<byte[]?>(new byte[] { 1, 2, 3 }));
+                 .Returns(Task.FromResult<byte[]?>(new byte[]
+                 {
+                     1,
+                     2,
+                     3
+                 }));
 
         var extractor = Substitute.For<IDocumentTextExtractor>();
         extractor.ExtractStructuredAsync(Arg.Any<Stream>(), Arg.Any<string>(), Arg.Any<string>(), Arg.Any<CancellationToken>())
@@ -372,9 +379,9 @@ public sealed class KnowledgeEmbeddingModelIdentityTests : IDisposable
     }
 
     // Microsoft.Data.Sqlite enables foreign-key enforcement by default; the node-sqlite runtime connection does not.
-    private static async Task EnsureForeignKeysOffAsync(System.Data.Common.DbConnection connection)
+    private static async Task EnsureForeignKeysOffAsync(DbConnection connection)
     {
-        if (connection.State != System.Data.ConnectionState.Open)
+        if (connection.State != ConnectionState.Open)
         {
             await connection.OpenAsync().ConfigureAwait(false);
         }
@@ -396,22 +403,29 @@ public sealed class KnowledgeEmbeddingModelIdentityTests : IDisposable
     {
         public string ProviderName => "llamacpp";
 
-        public IEmbeddingGenerator<string, Embedding<float>> CreateEmbeddingGenerator(LocalModelSelection selection) => new FixedGenerator();
+        public IEmbeddingGenerator<string, Embedding<float>> CreateEmbeddingGenerator(LocalModelSelection selection) =>
+            new FixedGenerator();
 
         public Task<IReadOnlyList<LocalModelDescriptor>> ListModelsAsync(CancellationToken ct) =>
             Task.FromResult<IReadOnlyList<LocalModelDescriptor>>(models);
 
-        public IChatClient CreateChatClient(LocalModelSelection selection) => throw new NotSupportedException();
+        public IChatClient CreateChatClient(LocalModelSelection selection) =>
+            throw new NotSupportedException();
 
-        public Task<ModelProviderHealth> CheckHealthAsync(CancellationToken ct) => throw new NotSupportedException();
+        public Task<ModelProviderHealth> CheckHealthAsync(CancellationToken ct) =>
+            throw new NotSupportedException();
 
-        public Task PullModelAsync(string modelName, IProgress<PullProgress>? progress, CancellationToken ct) => throw new NotSupportedException();
+        public Task PullModelAsync(string modelName, IProgress<PullProgress>? progress, CancellationToken ct) =>
+            throw new NotSupportedException();
 
-        public Task DeleteModelAsync(string modelName, CancellationToken ct) => throw new NotSupportedException();
+        public Task DeleteModelAsync(string modelName, CancellationToken ct) =>
+            throw new NotSupportedException();
 
-        public Task WarmModelAsync(string modelName, CancellationToken ct) => throw new NotSupportedException();
+        public Task WarmModelAsync(string modelName, CancellationToken ct) =>
+            throw new NotSupportedException();
 
-        public Task UnloadModelAsync(string modelName, CancellationToken ct) => throw new NotSupportedException();
+        public Task UnloadModelAsync(string modelName, CancellationToken ct) =>
+            throw new NotSupportedException();
 
         private sealed class FixedGenerator : IEmbeddingGenerator<string, Embedding<float>>
         {
@@ -428,7 +442,8 @@ public sealed class KnowledgeEmbeddingModelIdentityTests : IDisposable
                 return Task.FromResult(new GeneratedEmbeddings<Embedding<float>>(embeddings));
             }
 
-            public object? GetService(Type serviceType, object? serviceKey = null) => null;
+            public object? GetService(Type serviceType, object? serviceKey = null) =>
+                null;
 
             public void Dispose()
             {

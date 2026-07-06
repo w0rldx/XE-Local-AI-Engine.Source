@@ -1,5 +1,7 @@
 namespace XE_Local_AI_Engine.Client.Persistence.Tests;
 
+using System.Data;
+using System.Data.Common;
 using Microsoft.Data.Sqlite;
 using Microsoft.EntityFrameworkCore;
 using NSubstitute;
@@ -118,7 +120,12 @@ public sealed class KnowledgeDocumentPurgeServiceTests : IDisposable
             VALUES ($id, $name, 'text/plain', '.txt', 10, $hash, $path, 'Indexed', 2, 'nomic-embed-text', 1, 1);
             """,
             ("$id", documentId),
-            ("$name", new byte[] { 1, 2, 3 }),
+            ("$name", new byte[]
+            {
+                1,
+                2,
+                3
+            }),
             ("$hash", "hash-" + documentId.ToString("N")),
             ("$path", documentId.ToString("D") + ".txt")).ConfigureAwait(false);
 
@@ -189,9 +196,9 @@ public sealed class KnowledgeDocumentPurgeServiceTests : IDisposable
     // Microsoft.Data.Sqlite enables foreign-key enforcement by default; the node-sqlite runtime connection does not
     // enable it (C1's explicit child-to-parent delete design assumes FK enforcement is off), so every connection this
     // suite touches must match that runtime mode rather than let FK cascade produce a false pass.
-    private static async Task EnsureForeignKeysOffAsync(System.Data.Common.DbConnection connection)
+    private static async Task EnsureForeignKeysOffAsync(DbConnection connection)
     {
-        if (connection.State != System.Data.ConnectionState.Open)
+        if (connection.State != ConnectionState.Open)
         {
             await connection.OpenAsync().ConfigureAwait(false);
         }
