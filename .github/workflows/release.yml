@@ -203,6 +203,45 @@ jobs:
           global-json-file: global.json
 
       # ------------------------------------------------------------------
+      # Build the React SPA BEFORE dotnet publish. wwwroot/** is gitignored,
+      # so a fresh checkout has an empty wwwroot and the publish guard
+      # (GuardNodeReactBuildPresentOnPublish, Client.csproj) hard-fails unless
+      # XE-Local-AI-Engine.Client.React/dist/index.html exists. Mirrors the
+      # client-react job in build-and-test.yml (same pnpm/node versions + cache).
+      # `vite build` needs no VITE_ env here: VITE_PROXY_TARGET is serve-only,
+      # VITE_APP_VERSION is read from Directory.Build.props by vite.config.ts,
+      # and VITE_APP_TITLE / VITE_API_VERSION carry schema defaults.
+      # ------------------------------------------------------------------
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+          cache-dependency-path: XE-Local-AI-Engine.Client.React/pnpm-lock.yaml
+
+      - name: Install SPA dependencies
+        working-directory: XE-Local-AI-Engine.Client.React
+        run: pnpm install --frozen-lockfile
+
+      - name: Build SPA
+        working-directory: XE-Local-AI-Engine.Client.React
+        run: pnpm run build
+
+      # Fail fast with a clear message if the build produced no shell, rather than
+      # letting the MSBuild guard fail later with a less obvious CI signal.
+      - name: Assert SPA build output present
+        shell: bash
+        run: |
+          if [[ ! -f XE-Local-AI-Engine.Client.React/dist/index.html ]]; then
+            echo "ERROR: SPA build did not produce dist/index.html — the publish guard will fail." >&2
+            exit 1
+          fi
+          echo "SPA build present: XE-Local-AI-Engine.Client.React/dist/index.html"
+
+      # ------------------------------------------------------------------
       # Flavor -> repo + token mapping.
       #
       # main   flavor: GH_RELEASE_REPO_MAIN   + GH_RELEASE_TOKEN_MAIN
