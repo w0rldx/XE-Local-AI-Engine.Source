@@ -82,6 +82,24 @@ describe("TourShowcasePanel", () => {
 		expect(document.querySelector('[data-tour="showcase-agent-mode"]')).not.toBeNull();
 	});
 
+	it("renders the knowledge-base section with its data-tour anchor", () => {
+		renderPanel();
+		screen.getByTestId("showcase-knowledge-base");
+		expect(document.querySelector('[data-tour="showcase-knowledge-base"]')).not.toBeNull();
+	});
+
+	it("renders the image-generation section with its data-tour anchor", () => {
+		renderPanel();
+		screen.getByTestId("showcase-image-generation");
+		expect(document.querySelector('[data-tour="showcase-image-generation"]')).not.toBeNull();
+	});
+
+	it("renders the agents section with its data-tour anchor", () => {
+		renderPanel();
+		screen.getByTestId("showcase-agents");
+		expect(document.querySelector('[data-tour="showcase-agents"]')).not.toBeNull();
+	});
+
 	it("keeps every showcase target in the DOM when inactive so Joyride can still anchor", () => {
 		// Regression guard: conditionally unmounting the panel left Joyride unable to find the showcase targets,
 		// dead-ending the tour (screen dimmed, no tooltip). Inactive must still render the anchors (hidden, not removed).

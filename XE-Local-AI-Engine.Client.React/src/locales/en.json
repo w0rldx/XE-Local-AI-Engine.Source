@@ -1319,6 +1319,10 @@
 				"overrideLabel": "Override type",
 				"reset": "Reset to detected"
 			},
+			"local": {
+				"setDefaultSuccess": "Default local model set to {{name}}.",
+				"deleteSuccess": "Model {{name}} deleted."
+			},
 			"gguf": {
 				"browse": {
 					"title": "Browse Hugging Face GGUF",
@@ -2089,6 +2093,10 @@
 			"hardware": {
 				"title": "Hardware profile",
 				"cpuMode": "CPU mode",
+				"cpuFallback": {
+					"message": "No supported GPU detected — running on CPU. Responses will be slower.",
+					"dismiss": "Dismiss"
+				},
 				"refresh": "Refresh hardware",
 				"loading": "Detecting hardware…",
 				"error": "Could not detect hardware.",
@@ -2340,6 +2348,7 @@
 				"download": {
 					"title": "Download a model",
 					"started": "Download started. The model will appear once ready.",
+					"inFlight": "Download runs in the background; the model appears when ready. Large files can take several minutes.",
 					"error": "Could not start the model download.",
 					"hint": "Single-file (SD1.5-style) weights only. Multi-part models are a follow-up.",
 					"submit": "Download",
@@ -2876,6 +2885,18 @@
 			"agentMode": {
 				"title": "Specialized agents",
 				"content": "Switch from Default Assistant to a specialized agent persona — each one is tuned with a different system prompt and skill set for specific tasks."
+			},
+			"knowledgeBase": {
+				"title": "Knowledge Base",
+				"content": "Upload your own documents and let the model answer from them. The Knowledge Base ingests files locally and grounds chat responses in what you added."
+			},
+			"imageGeneration": {
+				"title": "Image Generation",
+				"content": "Generate images locally from a text prompt with stable-diffusion.cpp — no cloud, no account. Find it in the navigation under Image Generation."
+			},
+			"agents": {
+				"title": "Agents",
+				"content": "Build and manage reusable agent personas — each with its own instructions, model, and skills — from the Agents page, then pick them per message in chat."
 			}
 		},
 		"notes": {
@@ -2905,6 +2926,18 @@
 				"defaultAssistant": "Default Assistant",
 				"sampleAgent": "Code Reviewer",
 				"description": "Pick a specialized agent persona from the selector in the chat toolbar to change the model's focus and instructions."
+			},
+			"knowledgeBase": {
+				"label": "Knowledge Base",
+				"description": "Upload documents and the model answers from them — retrieval runs locally on your node."
+			},
+			"imageGeneration": {
+				"label": "Image Generation",
+				"description": "Create images locally from a text prompt with stable-diffusion.cpp — no cloud required."
+			},
+			"agents": {
+				"label": "Agents",
+				"description": "Create reusable agent personas with their own instructions, model, and skills — then use them in chat."
 			}
 		}
 	},

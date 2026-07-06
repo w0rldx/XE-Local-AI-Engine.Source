@@ -40,12 +40,15 @@ function invalidate(queryClient: ReturnType<typeof useQueryClient>, operationId:
 
 // Installed image models backing the generation form's model picker + the minimal model manager. staleTime keeps a
 // remount within the session from refetching; the download mutation invalidates this key so a freshly downloaded
-// model appears without a manual refresh.
-export function useImageModels() {
+// model appears without a manual refresh. The detached weight download exposes no progress/cancel yet (plan §8), so
+// while one is in flight the caller passes `pollWhilePending` to enable a modest interval refetch — that is how the
+// freshly-downloaded model surfaces on completion without a manual refresh.
+export function useImageModels(pollWhilePending = false) {
 	return useQuery({
 		...withResponseValidation(listImageModelsOptions()),
 		select: (data) => (data.items ?? []).map(toImageModelView),
 		staleTime: 30_000,
+		refetchInterval: pollWhilePending ? 5_000 : false,
 	});
 }
 
