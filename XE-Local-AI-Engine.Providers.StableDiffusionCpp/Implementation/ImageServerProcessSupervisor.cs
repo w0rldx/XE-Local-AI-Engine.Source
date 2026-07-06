@@ -3,6 +3,8 @@ namespace XE_Local_AI_Engine.Providers.StableDiffusionCpp.Implementation;
 using System.Collections.Concurrent;
 using System.Net;
 using System.Net.Sockets;
+using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Logging.Abstractions;
 using XE_Local_AI_Engine.Providers.Abstractions.Image;
 using XE_Local_AI_Engine.Providers.StableDiffusionCpp.Contracts;
 using XE_Local_AI_Engine.Providers.StableDiffusionCpp.Options;
@@ -28,6 +30,7 @@ internal sealed class ImageServerProcessSupervisor : IImageServerSupervisor, IAs
     // Single-flight ensure gate, one semaphore per model key.
     private readonly ConcurrentDictionary<string, SemaphoreSlim> _ensureGates = new(StringComparer.OrdinalIgnoreCase);
     private readonly IImageServerProcessLauncher _launcher;
+    private readonly ILogger<ImageServerProcessSupervisor> _logger;
     private readonly IImageModelStore _modelStore;
     private readonly StableDiffusionRuntimeOptions _options;
 
@@ -46,7 +49,8 @@ internal sealed class ImageServerProcessSupervisor : IImageServerSupervisor, IAs
         IImageServerProcessLauncher launcher,
         IImageServerReadinessProbe readinessProbe,
         StableDiffusionRuntimeOptions options,
-        TimeProvider? timeProvider = null)
+        TimeProvider? timeProvider = null,
+        ILogger<ImageServerProcessSupervisor>? logger = null)
     {
         _modelStore = modelStore ?? throw new ArgumentNullException(nameof(modelStore));
         _backendSelector = backendSelector ?? throw new ArgumentNullException(nameof(backendSelector));
@@ -55,6 +59,7 @@ internal sealed class ImageServerProcessSupervisor : IImageServerSupervisor, IAs
         _readinessProbe = readinessProbe ?? throw new ArgumentNullException(nameof(readinessProbe));
         _options = options ?? throw new ArgumentNullException(nameof(options));
         _timeProvider = timeProvider ?? TimeProvider.System;
+        _logger = logger ?? NullLogger<ImageServerProcessSupervisor>.Instance;
 
         _reaperLoop = Task.Run(() => ReapIdleLoopAsync(_shutdownCts.Token));
     }
@@ -170,6 +175,8 @@ internal sealed class ImageServerProcessSupervisor : IImageServerSupervisor, IAs
         // Wedged: the daemon is alive but has failed the liveness probe N consecutive times, so every reuse refreshes
         // LastUsedUtc and the idle reaper never sees it. Tear it down here so the caller respawns a fresh daemon instead
         // of being handed the hung endpoint forever.
+        _logger.LogWarning("sd-server for model {ModelName} is wedged ({Failures} consecutive failed liveness probes); tree-killing to respawn.",
+            modelName, failures);
         await RemoveProcessAsync(modelName, existing).ConfigureAwait(false);
         return null;
     }
@@ -254,16 +261,28 @@ internal sealed class ImageServerProcessSupervisor : IImageServerSupervisor, IAs
                 Environment.ProcessorCount);
 
             handle = _launcher.Launch(spec);
+            _logger.LogInformation("sd-server spawned for model {ModelName} (pid {ProcessId}, port {Port}).",
+                modelName, handle.ProcessId, port);
 
+            var readyStartedUtc = _timeProvider.GetUtcNow();
             await WaitForReadyOrExitAsync(handle, spec.BaseAddress, ct).ConfigureAwait(false);
+            _logger.LogInformation("sd-server ready for model {ModelName} (pid {ProcessId}) after {ElapsedMs:F0} ms.",
+                modelName, handle.ProcessId, (_timeProvider.GetUtcNow() - readyStartedUtc).TotalMilliseconds);
 
             var endpoint = new ImageServerEndpoint(modelName, spec.BaseAddress);
             var running = new RunningServer(handle, endpoint, port, _timeProvider.GetUtcNow());
             _processes[modelName] = running;
             return running;
         }
-        catch
+        catch (Exception ex)
         {
+            if (ex is not OperationCanceledException)
+            {
+                // Image spawn has no restart loop, so a readiness timeout / exit-while-loading / not-installed surfaces
+                // straight to the caller — log the cause here (Error) before the sanitized message bubbles up.
+                _logger.LogError(ex, "sd-server start failed for model {ModelName}.", modelName);
+            }
+
             handle?.TreeKill();
             handle?.Dispose();
             await ReleaseReservedPortAsync(port).ConfigureAwait(false);
@@ -351,6 +370,12 @@ internal sealed class ImageServerProcessSupervisor : IImageServerSupervisor, IAs
         {
             if (running.Handle.HasExited || now - running.LastUsedUtc >= _options.IdleTimeToLive)
             {
+                if (!running.Handle.HasExited)
+                {
+                    _logger.LogInformation("Evicting idle sd-server for model {ModelName} (idle {IdleSeconds:F0}s past TTL {TtlSeconds:F0}s).",
+                        key, (now - running.LastUsedUtc).TotalSeconds, _options.IdleTimeToLive.TotalSeconds);
+                }
+
                 await RemoveProcessAsync(key, running).ConfigureAwait(false);
             }
         }
@@ -406,6 +431,9 @@ internal sealed class ImageServerProcessSupervisor : IImageServerSupervisor, IAs
         {
             return false;
         }
+
+        _logger.LogWarning("Loaded-model cap ({Cap}) reached; evicting idle sd-server for model {ModelName} to admit a new one.",
+            _options.MaxLoadedProcesses, victimKey);
 
         // Synchronous teardown under the admission gate: free the slot/port before the new admission proceeds.
         TeardownProcess(victimKey, victim);

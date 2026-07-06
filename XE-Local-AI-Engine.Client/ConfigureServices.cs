@@ -17,6 +17,7 @@ using Serilog;
 using Serilog.Sinks.SystemConsole.Themes;
 using XE_Local_AI_Engine.Client.BackgroundServices;
 using XE_Local_AI_Engine.Client.Common;
+using XE_Local_AI_Engine.Client.Common.Extensions;
 using XE_Local_AI_Engine.Client.Configuration;
 using XE_Local_AI_Engine.Client.DependencyInjection;
 using XE_Local_AI_Engine.Client.Endpoints.Common;
@@ -46,12 +47,22 @@ public static class ConfigureServices
 
     public static void AddServices(this IHostApplicationBuilder builder, IConfiguration configuration)
     {
-        // Serilog
-        _ = builder.Services.AddSerilog((serviceCollection, lc) => lc
-                                                                   .ReadFrom.Configuration(configuration)
-                                                                   .ReadFrom.Services(serviceCollection)
-                                                                   .Enrich.FromLogContext()
-                                                                   .WriteTo.Console(theme: ConsoleTheme.None, outputTemplate: ConsoleOutputTemplate));
+        // Serilog. Console is always on; a date-rolled file sink is added under the per-user data dir (same resolution as
+        // the Data Protection key-ring below) so desktop/dev logs survive the console window closing and a tester bug
+        // report has on-disk history. Disabled in Testing (many parallel hosts would contend for the exclusive file).
+        var logFileDirectory = Common.Extensions.LoggerExtensions.ResolveLogFileDirectory(builder.Environment, configuration);
+        _ = builder.Services.AddSerilog((serviceCollection, lc) =>
+        {
+            _ = lc.ReadFrom.Configuration(configuration)
+                  .ReadFrom.Services(serviceCollection)
+                  .Enrich.FromLogContext()
+                  .WriteTo.Console(theme: ConsoleTheme.None, outputTemplate: ConsoleOutputTemplate);
+
+            if (logFileDirectory is not null)
+            {
+                _ = lc.WriteToRollingFile(logFileDirectory);
+            }
+        });
 
         // Explicit, stable Data Protection key-ring. The framework already auto-registers Data Protection (so the
         // encrypted token stores — CloudCredentialStore, CodexTokenStore, HfTokenStore, GitHubTokenStore, the auth

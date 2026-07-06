@@ -4,6 +4,8 @@ using System.Collections.Concurrent;
 using System.Globalization;
 using System.Net;
 using System.Net.Sockets;
+using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Logging.Abstractions;
 using XE_Local_AI_Engine.Providers.Abstractions.Gguf;
 using XE_Local_AI_Engine.Providers.LlamaServer.Contracts;
 using XE_Local_AI_Engine.Providers.LlamaServer.Options;
@@ -45,6 +47,7 @@ public sealed class LlamaServerProcessSupervisor : ILlamaServerProcessSupervisor
     private readonly ConcurrentDictionary<ProcessKey, SemaphoreSlim> _ensureGates = new();
     private readonly LlamaServerExternalEndpointOptions _externalEndpoints;
     private readonly ILlamaServerHealthProbe _healthProbe;
+    private readonly ILogger<LlamaServerProcessSupervisor> _logger;
     private readonly ILlamaServerProcessLauncher _launcher;
     private readonly IGgufModelStore _modelStore;
     private readonly LlamaServerSupervisorOptions _options;
@@ -71,7 +74,8 @@ public sealed class LlamaServerProcessSupervisor : ILlamaServerProcessSupervisor
         LlamaServerSupervisorOptions options,
         IInferenceProfileResolver profileResolver,
         LlamaServerExternalEndpointOptions? externalEndpoints = null,
-        TimeProvider? timeProvider = null)
+        TimeProvider? timeProvider = null,
+        ILogger<LlamaServerProcessSupervisor>? logger = null)
     {
         _binaryManager = binaryManager ?? throw new ArgumentNullException(nameof(binaryManager));
         _variantSelector = variantSelector ?? throw new ArgumentNullException(nameof(variantSelector));
@@ -82,6 +86,7 @@ public sealed class LlamaServerProcessSupervisor : ILlamaServerProcessSupervisor
         _profileResolver = profileResolver ?? throw new ArgumentNullException(nameof(profileResolver));
         _externalEndpoints = externalEndpoints ?? new LlamaServerExternalEndpointOptions();
         _timeProvider = timeProvider ?? TimeProvider.System;
+        _logger = logger ?? NullLogger<LlamaServerProcessSupervisor>.Instance;
 
         _reaperLoop = Task.Run(() => ReapIdleLoopAsync(_shutdownCts.Token));
     }
@@ -214,6 +219,8 @@ public sealed class LlamaServerProcessSupervisor : ILlamaServerProcessSupervisor
         // Wedged: the process is alive but has failed the liveness probe N consecutive times, so every reuse refreshes
         // LastUsedUtc and the idle reaper never sees it. Tear it down here so the caller respawns a fresh server instead
         // of being handed the hung endpoint forever.
+        _logger.LogWarning("llama-server for model {ModelName} role {Role} is wedged ({Failures} consecutive failed liveness probes); tree-killing to respawn.",
+            key.ModelName, key.Role, failures);
         await RemoveProcessAsync(key, existing).ConfigureAwait(false);
         return null;
     }
@@ -318,6 +325,8 @@ public sealed class LlamaServerProcessSupervisor : ILlamaServerProcessSupervisor
             {
                 // Deterministic failures (cap reached, model not installed, no free port) are policy outcomes, not
                 // transient crashes — surface them as-is instead of burning retries on a guaranteed re-failure.
+                _logger.LogError(ex, "llama-server start failed for model {ModelName} role {Role}: {Reason}",
+                    key.ModelName, key.Role, ex.Message);
                 throw;
             }
             catch (OperationCanceledException) when (ct.IsCancellationRequested)
@@ -330,6 +339,9 @@ public sealed class LlamaServerProcessSupervisor : ILlamaServerProcessSupervisor
             }
         }
 
+        // Retries exhausted: surface (and now log) the LAST underlying cause, which the sanitized wrapper otherwise hides.
+        _logger.LogError(lastError, "llama-server failed to start for model {ModelName} role {Role} after {Attempts} attempt(s).",
+            key.ModelName, key.Role, _options.MaxRestartAttempts);
         throw new LlamaRuntimeException("The local model runtime failed to start after several attempts. Check available memory and try again.",
             lastError ?? new InvalidOperationException("Spawn failed."));
     }
@@ -432,8 +444,13 @@ public sealed class LlamaServerProcessSupervisor : ILlamaServerProcessSupervisor
             }
 
             handle = _launcher.Launch(spec);
+            _logger.LogInformation("llama-server spawned for model {ModelName} role {Role} (pid {ProcessId}, port {Port}).",
+                key.ModelName, key.Role, handle.ProcessId, port);
 
+            var readyStartedUtc = _timeProvider.GetUtcNow();
             await WaitForReadyOrExitAsync(handle, spec.BaseAddress, ct).ConfigureAwait(false);
+            _logger.LogInformation("llama-server ready for model {ModelName} role {Role} (pid {ProcessId}) after {ElapsedMs:F0} ms.",
+                key.ModelName, key.Role, handle.ProcessId, (_timeProvider.GetUtcNow() - readyStartedUtc).TotalMilliseconds);
 
             var endpoint = new LlamaServerEndpoint(key.ModelName, key.Role, spec.BaseAddress);
             var running = new RunningProcess(handle, endpoint, port, _timeProvider.GetUtcNow());
@@ -486,6 +503,8 @@ public sealed class LlamaServerProcessSupervisor : ILlamaServerProcessSupervisor
 
         if (!await readyTask.ConfigureAwait(false))
         {
+            _logger.LogWarning("llama-server (pid {ProcessId}) did not become ready within {TimeoutSeconds:F0}s.",
+                handle.ProcessId, ReadinessTimeout.TotalSeconds);
             throw new LlamaRuntimeException("The local model runtime did not become ready in time.");
         }
     }
@@ -837,6 +856,12 @@ public sealed class LlamaServerProcessSupervisor : ILlamaServerProcessSupervisor
 
             if (running.Handle.HasExited || now - running.LastUsedUtc >= _options.IdleTimeToLive)
             {
+                if (!running.Handle.HasExited)
+                {
+                    _logger.LogInformation("Evicting idle llama-server for model {ModelName} role {Role} (idle {IdleSeconds:F0}s past TTL {TtlSeconds:F0}s).",
+                        key.ModelName, key.Role, (now - running.LastUsedUtc).TotalSeconds, _options.IdleTimeToLive.TotalSeconds);
+                }
+
                 await RemoveProcessAsync(key, running).ConfigureAwait(false);
             }
         }
@@ -873,6 +898,9 @@ public sealed class LlamaServerProcessSupervisor : ILlamaServerProcessSupervisor
         {
             return false;
         }
+
+        _logger.LogWarning("Loaded-model cap ({Cap}) reached; evicting idle llama-server for model {ModelName} role {Role} to admit a new one.",
+            _options.MaxLoadedProcesses, victimKey.Value.ModelName, victimKey.Value.Role);
 
         // Synchronous teardown under the admission gate: free the slot/port before the new admission proceeds.
         TeardownProcess(victimKey.Value, victim);
