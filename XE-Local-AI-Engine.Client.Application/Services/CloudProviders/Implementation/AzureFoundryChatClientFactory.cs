@@ -26,13 +26,16 @@ public sealed class AzureFoundryChatClientFactory : IAzureFoundryChatClientFacto
     private const string EntraPlaceholderApiKey = "unused-entra-id-auth";
     private const string EntraTokenCachePersistenceName = "XE-Local-AI-Engine.Client.AzureFoundry.EntraId";
 
+    private readonly IEntraLiveCredentialCache? _entraLiveCredentialCache;
     private readonly IEntraTokenCacheStore? _entraTokenCacheStore;
     private readonly ILogger<AzureFoundryChatClientFactory> _logger;
 
     public AzureFoundryChatClientFactory(IEntraTokenCacheStore? entraTokenCacheStore = null,
+        IEntraLiveCredentialCache? entraLiveCredentialCache = null,
         ILogger<AzureFoundryChatClientFactory>? logger = null)
     {
         _entraTokenCacheStore = entraTokenCacheStore;
+        _entraLiveCredentialCache = entraLiveCredentialCache;
         _logger = logger ?? NullLogger<AzureFoundryChatClientFactory>.Instance;
     }
 
@@ -162,6 +165,17 @@ public sealed class AzureFoundryChatClientFactory : IAzureFoundryChatClientFacto
     // to a live device-code prompt.
     private TokenCredential BuildSilentDeviceCodeCredential(StoredAzureFoundryConnection connection)
     {
+        // Reuse the live, already-authenticated credential the sign-in coordinator cached on success: its MSAL
+        // token cache (in-memory always, plus OS-native encrypted disk when available) is what actually holds the
+        // refresh token, whereas a credential rebuilt from only the persisted record has nothing to silently
+        // refresh from when encrypted persistence was unavailable on this platform (Locked build contract §9).
+        var cacheKey = EntraDeviceCodeCredentialCacheKey.Create(connection.EntraTenantId, connection.EntraClientId, connection.EntraTokenScope);
+        var liveCredential = _entraLiveCredentialCache?.TryGet(cacheKey);
+        if (liveCredential is not null)
+        {
+            return liveCredential;
+        }
+
         var record = LoadCachedAuthenticationRecord();
         if (record is null)
         {

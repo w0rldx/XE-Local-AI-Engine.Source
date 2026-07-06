@@ -121,18 +121,25 @@ public sealed class ActiveCloudChatClientFactory : IActiveCloudChatClientFactory
                 client = _cachedClient;
                 return true;
             }
+        }
 
-            // Selection changed (sign-in / sign-out / refresh / Azure settings change): build the new client first
-            // so a failed build (e.g. typed Codex re-auth error) propagates WITHOUT discarding the previous cache.
-            var built = selection.Build();
+        // Build OUTSIDE the lock. A build can block for a long time (e.g. Entra ID InteractiveBrowserCredential's
+        // synchronous first-use sign-in opens a browser and waits on the operator) — holding _cacheGate across that
+        // call would serialize every other concurrent send behind it. A failed build propagates here WITHOUT
+        // touching the cache, so the previous cached client survives. Double-checked: a concurrent caller may build
+        // and publish a client for the same fingerprint in the meantime; that duplicate build is wasted work but
+        // harmless (last write below wins, both clients are behaviorally equivalent for the same selection).
+        var built = selection.Build();
 
+        lock (_cacheGate)
+        {
             // Swap WITHOUT disposing the old wrapper — see the class remarks (concurrency-safe; GC reclaims it).
             _cachedClient = built;
             _cachedFingerprint = selection.Fingerprint;
-
-            client = built;
-            return true;
         }
+
+        client = built;
+        return true;
     }
 
     /// <inheritdoc />

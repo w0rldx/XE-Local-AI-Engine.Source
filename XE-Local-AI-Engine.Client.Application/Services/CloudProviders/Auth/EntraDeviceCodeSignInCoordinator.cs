@@ -14,6 +14,7 @@ public sealed class EntraDeviceCodeSignInCoordinator : IEntraDeviceCodeSignInCoo
     private const string TokenCachePersistenceName = "XE-Local-AI-Engine.Client.AzureFoundry.EntraId";
 
     private readonly ICloudCredentialStore _credentialStore;
+    private readonly IEntraLiveCredentialCache _liveCredentialCache;
     private readonly Lock _gate = new();
     private readonly ILogger<EntraDeviceCodeSignInCoordinator> _logger;
     private readonly Action? _onSignInSucceeded;
@@ -24,6 +25,11 @@ public sealed class EntraDeviceCodeSignInCoordinator : IEntraDeviceCodeSignInCoo
 
     /// <param name="credentialStore">Reads the stored Azure Foundry connection's tenant / client / scope.</param>
     /// <param name="tokenCacheStore">Persists the authentication record on success.</param>
+    /// <param name="liveCredentialCache">
+    ///     Keeps the successfully-authenticated credential instance alive for the process lifetime so the chat-client
+    ///     factory reuses it — its MSAL token cache is what actually holds the refresh token, which a credential
+    ///     rebuilt later from only the persisted record has no access to when OS-native persistence is unavailable.
+    /// </param>
     /// <param name="logger">Never receives token material.</param>
     /// <param name="onSignInSucceeded">
     ///     Optional callback invoked once a sign-in completes and a record is persisted. The host wires this to
@@ -31,15 +37,18 @@ public sealed class EntraDeviceCodeSignInCoordinator : IEntraDeviceCodeSignInCoo
     /// </param>
     public EntraDeviceCodeSignInCoordinator(ICloudCredentialStore credentialStore,
         IEntraTokenCacheStore tokenCacheStore,
+        IEntraLiveCredentialCache liveCredentialCache,
         ILogger<EntraDeviceCodeSignInCoordinator> logger,
         Action? onSignInSucceeded = null)
     {
         ArgumentNullException.ThrowIfNull(credentialStore);
         ArgumentNullException.ThrowIfNull(tokenCacheStore);
+        ArgumentNullException.ThrowIfNull(liveCredentialCache);
         ArgumentNullException.ThrowIfNull(logger);
 
         _credentialStore = credentialStore;
         _tokenCacheStore = tokenCacheStore;
+        _liveCredentialCache = liveCredentialCache;
         _logger = logger;
         _onSignInSucceeded = onSignInSucceeded;
     }
@@ -64,7 +73,7 @@ public sealed class EntraDeviceCodeSignInCoordinator : IEntraDeviceCodeSignInCoo
             CancelPending(superseded);
         }
 
-        var (deviceCodeInfo, completion) = await BeginDeviceCodeFlowAsync(connection, allowPersistence: true, newCts.Token).ConfigureAwait(false);
+        var (deviceCodeInfo, credential, completion) = await BeginDeviceCodeFlowAsync(connection, allowPersistence: true, newCts.Token).ConfigureAwait(false);
 
         lock (_gate)
         {
@@ -74,7 +83,8 @@ public sealed class EntraDeviceCodeSignInCoordinator : IEntraDeviceCodeSignInCoo
             }
         }
 
-        _ = TrackCompletionAsync(completion, newCts);
+        var cacheKey = EntraDeviceCodeCredentialCacheKey.Create(connection.EntraTenantId, connection.EntraClientId, connection.EntraTokenScope);
+        _ = TrackCompletionAsync(completion, credential, cacheKey, newCts);
 
         return new EntraDeviceCodeSignInHandle(deviceCodeInfo.UserCode, deviceCodeInfo.VerificationUri.ToString(), deviceCodeInfo.ExpiresOn);
     }
@@ -107,7 +117,7 @@ public sealed class EntraDeviceCodeSignInCoordinator : IEntraDeviceCodeSignInCoo
     // encrypted token-cache persistence is unavailable, that surfaces as CredentialUnavailableException before (or
     // instead of) the device-code callback firing, in which case a single retry rebuilds the credential without
     // persistence (in-memory only, logged) — never unencrypted-on-disk.
-    private async Task<(DeviceCodeInfo Info, Task<AuthenticationRecord> Completion)> BeginDeviceCodeFlowAsync(
+    private async Task<(DeviceCodeInfo Info, DeviceCodeCredential Credential, Task<AuthenticationRecord> Completion)> BeginDeviceCodeFlowAsync(
         StoredAzureFoundryConnection connection,
         bool allowPersistence,
         CancellationToken cancellationToken)
@@ -139,7 +149,7 @@ public sealed class EntraDeviceCodeSignInCoordinator : IEntraDeviceCodeSignInCoo
         try
         {
             var info = await deviceCodeReady.Task.ConfigureAwait(false);
-            return (info, authenticateTask);
+            return (info, credential, authenticateTask);
         }
         catch (CredentialUnavailableException) when (allowPersistence)
         {
@@ -149,11 +159,17 @@ public sealed class EntraDeviceCodeSignInCoordinator : IEntraDeviceCodeSignInCoo
         }
     }
 
-    private async Task TrackCompletionAsync(Task<AuthenticationRecord> completion, CancellationTokenSource cts)
+    private async Task TrackCompletionAsync(Task<AuthenticationRecord> completion, DeviceCodeCredential credential, string cacheKey, CancellationTokenSource cts)
     {
         try
         {
             var record = await completion.ConfigureAwait(false);
+
+            // Keep the live, already-authenticated credential alive for the chat-client factory to reuse: its MSAL
+            // token cache (in-memory always, plus OS-native encrypted disk when available) is what actually holds
+            // the refresh token — a credential rebuilt later from only the persisted record has nothing to silently
+            // refresh from when encrypted persistence is unavailable on this platform (Locked build contract §9).
+            _liveCredentialCache.Store(cacheKey, credential);
 
             // Persist with a fresh token: a superseded/cancelled attempt must not abort this save mid-flight.
             await _tokenCacheStore.SaveRecordAsync(record, CancellationToken.None).ConfigureAwait(false);
