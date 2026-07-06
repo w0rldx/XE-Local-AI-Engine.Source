@@ -11,7 +11,7 @@
 # Usage (from the repo root):
 #   $env:VPK_TOKEN = "<token>"
 #   .\publish\package-tester-win.ps1                     # version read from Directory.Build.props
-#   .\publish\package-tester-win.ps1 -Version 0.1.0-rc.3.0   # explicit override
+#   .\publish\package-tester-win.ps1 -Version 0.1.0-rc.4.0   # explicit override
 #   .\publish\package-tester-win.ps1 -SkipUpload         # pack only, no GitHub upload
 #
 # Gotchas encoded here (learned the hard way):
@@ -28,7 +28,7 @@
 
 [CmdletBinding()]
 param(
-    # Pack version WITHOUT the leading 'v' (e.g. 0.1.0-rc.3.0). Defaults to
+    # Pack version WITHOUT the leading 'v' (e.g. 0.1.0-rc.4.0). Defaults to
     # VersionPrefix-VersionSuffix from Directory.Build.props so the package can
     # never disagree with the assembly/self-update version.
     [string]$Version,
