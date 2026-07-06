@@ -84,8 +84,7 @@ internal static class AddNodeAuthAndConnectionExtensions
         // Singleton: owns the cross-request pending Entra ID device-code sign-in state the Operator status endpoint
         // polls, mirroring ICodexLoginCoordinator. The onSignInSucceeded callback invalidates the active-cloud
         // selection snapshot so a sign-in takes effect on the very next send.
-        builder.Services.AddSingleton<IEntraDeviceCodeSignInCoordinator>(serviceProvider => new EntraDeviceCodeSignInCoordinator(
-            serviceProvider.GetRequiredService<ICloudCredentialStore>(),
+        builder.Services.AddSingleton<IEntraDeviceCodeSignInCoordinator>(serviceProvider => new EntraDeviceCodeSignInCoordinator(serviceProvider.GetRequiredService<ICloudCredentialStore>(),
             serviceProvider.GetRequiredService<IEntraTokenCacheStore>(),
             serviceProvider.GetRequiredService<IEntraLiveCredentialCache>(),
             serviceProvider.GetRequiredService<ILogger<EntraDeviceCodeSignInCoordinator>>(),

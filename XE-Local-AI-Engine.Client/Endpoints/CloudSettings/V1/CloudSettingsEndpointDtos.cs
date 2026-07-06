@@ -58,7 +58,7 @@ public sealed record AzureFoundrySettingsResponse
     ///     <see cref="XE_Local_AI_Engine.Client.Services.CloudProviders.EntraSignInMethod" /> enum name.
     /// </summary>
     public string EntraSignInMethod { get; init; } =
-        nameof(XE_Local_AI_Engine.Client.Services.CloudProviders.EntraSignInMethod.ClientSecret);
+        nameof(Services.CloudProviders.EntraSignInMethod.ClientSecret);
 }
 
 public sealed record AzureFoundryModelDto
@@ -127,7 +127,7 @@ public sealed record SaveCloudSettingsRequest
     ///     coerced to <c>ClientSecret</c> — when a client secret is present.
     /// </summary>
     public string EntraSignInMethod { get; init; } =
-        nameof(XE_Local_AI_Engine.Client.Services.CloudProviders.EntraSignInMethod.DeviceCode);
+        nameof(Services.CloudProviders.EntraSignInMethod.DeviceCode);
 }
 
 public sealed record SaveAzureFoundryHeaderRequest

@@ -1,5 +1,6 @@
 namespace XE_Local_AI_Engine.Tests.CloudProviders;
 
+using System.Text;
 using Azure.Core;
 using Azure.Identity;
 using Microsoft.Extensions.AI;
@@ -178,7 +179,10 @@ public sealed class AzureFoundryChatClientFactoryTests
     {
         var factory = new AzureFoundryChatClientFactory();
 
-        ThrowsConfig(() => factory.Create(CreateEntraConnection(clientSecret: "secret") with { EntraTenantId = " " }, "gpt-4o"));
+        ThrowsConfig(() => factory.Create(CreateEntraConnection(clientSecret: "secret") with
+        {
+            EntraTenantId = " "
+        }, "gpt-4o"));
     }
 
     [Test]
@@ -186,7 +190,10 @@ public sealed class AzureFoundryChatClientFactoryTests
     {
         var factory = new AzureFoundryChatClientFactory();
 
-        ThrowsConfig(() => factory.Create(CreateEntraConnection(clientSecret: "secret") with { EntraTokenScope = " " }, "gpt-4o"));
+        ThrowsConfig(() => factory.Create(CreateEntraConnection(clientSecret: "secret") with
+        {
+            EntraTokenScope = " "
+        }, "gpt-4o"));
     }
 
     [Test]
@@ -327,9 +334,9 @@ public sealed class AzureFoundryChatClientFactoryTests
     private static AuthenticationRecord CreateAuthenticationRecord()
     {
         const string json = """
-                             {"username":"user@contoso.com","authority":"https://login.microsoftonline.com/tenant-id","homeAccountId":"home-account-id","tenantId":"tenant-id","clientId":"client-id","version":"1.0"}
-                             """;
-        using var stream = new MemoryStream(System.Text.Encoding.UTF8.GetBytes(json));
+                            {"username":"user@contoso.com","authority":"https://login.microsoftonline.com/tenant-id","homeAccountId":"home-account-id","tenantId":"tenant-id","clientId":"client-id","version":"1.0"}
+                            """;
+        using var stream = new MemoryStream(Encoding.UTF8.GetBytes(json));
         return AuthenticationRecord.Deserialize(stream);
     }
 

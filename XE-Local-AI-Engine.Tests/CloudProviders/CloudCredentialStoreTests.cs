@@ -131,7 +131,10 @@ public sealed class CloudCredentialStoreTests : IDisposable
         using var store = CreateStore();
         var config = CreateEntraIdConfig() with
         {
-            AzureFoundry = CreateEntraIdConfig().AzureFoundry! with { EntraTenantId = " " }
+            AzureFoundry = CreateEntraIdConfig().AzureFoundry! with
+            {
+                EntraTenantId = " "
+            }
         };
 
         await AssertEx.ThrowsAsync<ArgumentException>(() => store.SaveConfigAsync(config));
@@ -143,7 +146,10 @@ public sealed class CloudCredentialStoreTests : IDisposable
         using var store = CreateStore();
         var config = CreateEntraIdConfig() with
         {
-            AzureFoundry = CreateEntraIdConfig().AzureFoundry! with { EntraTokenScope = null }
+            AzureFoundry = CreateEntraIdConfig().AzureFoundry! with
+            {
+                EntraTokenScope = null
+            }
         };
 
         await AssertEx.ThrowsAsync<ArgumentException>(() => store.SaveConfigAsync(config));
@@ -155,7 +161,10 @@ public sealed class CloudCredentialStoreTests : IDisposable
         using var store = CreateStore();
         var config = CreateEntraIdConfig() with
         {
-            AzureFoundry = CreateEntraIdConfig().AzureFoundry! with { EntraSignInMethod = (EntraSignInMethod)99 }
+            AzureFoundry = CreateEntraIdConfig().AzureFoundry! with
+            {
+                EntraSignInMethod = (EntraSignInMethod)99
+            }
         };
 
         await AssertEx.ThrowsAsync<ArgumentException>(() => store.SaveConfigAsync(config));

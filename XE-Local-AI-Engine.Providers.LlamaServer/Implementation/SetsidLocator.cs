@@ -12,7 +12,6 @@ internal static class SetsidLocator
     internal static string ResolveAbsolutePath()
     {
         return Array.Find(CandidatePaths, File.Exists)
-               ?? throw new InvalidOperationException(
-                   "The 'setsid' utility was not found at /usr/bin/setsid or /bin/setsid; it is required to launch the local runtime in its own process group.");
+               ?? throw new InvalidOperationException("The 'setsid' utility was not found at /usr/bin/setsid or /bin/setsid; it is required to launch the local runtime in its own process group.");
     }
 }

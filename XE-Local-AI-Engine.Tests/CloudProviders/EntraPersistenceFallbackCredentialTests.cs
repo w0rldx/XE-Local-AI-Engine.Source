@@ -17,14 +17,16 @@ public sealed class EntraPersistenceFallbackCredentialTests
     public void GetToken_WhenInnerCredentialSucceeds_ReturnsItsTokenWithoutFallingBack()
     {
         var buildCallCount = 0;
-        var credential = new EntraPersistenceFallbackCredential(
-            options =>
+        var credential = new EntraPersistenceFallbackCredential(options =>
             {
                 buildCallCount++;
                 AssertEx.NotNull(options);
                 return new StubTokenCredential("primary-token");
             },
-            new TokenCachePersistenceOptions { Name = "test-cache" },
+            new TokenCachePersistenceOptions
+            {
+                Name = "test-cache"
+            },
             NullLogger.Instance);
 
         var token = credential.GetToken(new TokenRequestContext(["scope"]), CancellationToken.None);
@@ -37,15 +39,17 @@ public sealed class EntraPersistenceFallbackCredentialTests
     public void GetToken_WhenInnerCredentialThrowsCredentialUnavailable_FallsBackToInMemoryCredential()
     {
         var receivedOptions = new List<TokenCachePersistenceOptions?>();
-        var credential = new EntraPersistenceFallbackCredential(
-            options =>
+        var credential = new EntraPersistenceFallbackCredential(options =>
             {
                 receivedOptions.Add(options);
                 return options is null
                     ? new StubTokenCredential("fallback-token")
                     : new ThrowingTokenCredential();
             },
-            new TokenCachePersistenceOptions { Name = "test-cache" },
+            new TokenCachePersistenceOptions
+            {
+                Name = "test-cache"
+            },
             NullLogger.Instance);
 
         var token = credential.GetToken(new TokenRequestContext(["scope"]), CancellationToken.None);
@@ -60,13 +64,15 @@ public sealed class EntraPersistenceFallbackCredentialTests
     public void GetToken_AfterFallingBackOnce_DoesNotRebuildOnSubsequentCalls()
     {
         var buildCallCount = 0;
-        var credential = new EntraPersistenceFallbackCredential(
-            options =>
+        var credential = new EntraPersistenceFallbackCredential(options =>
             {
                 buildCallCount++;
                 return buildCallCount == 1 ? new ThrowingTokenCredential() : new StubTokenCredential("fallback-token");
             },
-            new TokenCachePersistenceOptions { Name = "test-cache" },
+            new TokenCachePersistenceOptions
+            {
+                Name = "test-cache"
+            },
             NullLogger.Instance);
 
         credential.GetToken(new TokenRequestContext(["scope"]), CancellationToken.None);
@@ -79,9 +85,11 @@ public sealed class EntraPersistenceFallbackCredentialTests
     [Test]
     public async Task GetTokenAsync_WhenInnerCredentialThrowsCredentialUnavailable_FallsBackToInMemoryCredential()
     {
-        var credential = new EntraPersistenceFallbackCredential(
-            options => options is null ? new StubTokenCredential("fallback-token") : new ThrowingTokenCredential(),
-            new TokenCachePersistenceOptions { Name = "test-cache" },
+        var credential = new EntraPersistenceFallbackCredential(options => options is null ? new StubTokenCredential("fallback-token") : new ThrowingTokenCredential(),
+            new TokenCachePersistenceOptions
+            {
+                Name = "test-cache"
+            },
             NullLogger.Instance);
 
         var token = await credential.GetTokenAsync(new TokenRequestContext(["scope"]), CancellationToken.None);
