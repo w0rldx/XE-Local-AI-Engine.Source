@@ -20,7 +20,7 @@
 # by exe path.  SIGTERM all; wait 3 s; SIGKILL survivors.
 #
 # Usage:
-#   scripts/dev-stop.sh [--dry-run] [--help]
+#   scripts/dev-stop.sh [--all] [--dry-run] [--help]
 
 set -euo pipefail
 
@@ -28,18 +28,23 @@ readonly APP_NAME="XE-Local-AI-Engine"
 readonly LLAMA_DIR="${HOME}/.local/share/XE-Local-AI-Engine/llama.cpp"
 
 DRY_RUN=false
+ALL=false
 
 for _arg in "$@"; do
   case "$_arg" in
     --dry-run) DRY_RUN=true ;;
+    --all) ALL=true ;;
     --help|-h)
       cat <<'USAGE'
-Usage: dev-stop.sh [--dry-run] [--help]
+Usage: dev-stop.sh [--all] [--dry-run] [--help]
 
 Reliably stops the XE-Local-AI-Engine Aspire dev stack on WSL/Linux.
 'aspire stop' returns "stopped successfully" in ~0.1 s but kills nothing.
 
 Options:
+  --all       Stop EVERY running XE AppHost stack (any session/worktree),
+              not just the first one found. Use when the main checkout and
+              a worktree each have an AppHost up.
   --dry-run   Print the kill list without sending any signals.
   --help      Show this help and exit.
 USAGE
@@ -128,7 +133,37 @@ is_protected() {
   return 1
 }
 
-# ── Step 1: Locate the AppHost ────────────────────────────────────────────────
+# ── Step 1: Locate the AppHost(s) ─────────────────────────────────────────────
+
+# Scan /proc cmdlines for every running AppHost (no aspire dependency).
+all_apphost_pids() {
+  local cf pid
+  for cf in /proc/[0-9]*/cmdline; do
+    [[ -f "$cf" ]] || continue
+    if grep -qF "${APP_NAME}.AppHost" "$cf" 2>/dev/null; then
+      pid="${cf%/cmdline}"; pid="${pid##*/proc/}"
+      # Only the actual AppHost binary/dll run — not e.g. an editor with the
+      # path in argv: require the comm to be on the allowlist.
+      is_our_process "$pid" && echo "$pid"
+    fi
+  done
+}
+
+APPHOST_PIDS=()
+
+if $ALL; then
+  log "Scanning /proc for ALL running ${APP_NAME} AppHosts (--all)..."
+  while IFS= read -r _apid; do
+    [[ "$_apid" =~ ^[0-9]+$ ]] && APPHOST_PIDS+=("$_apid")
+  done < <(all_apphost_pids | sort -un)
+  unset _apid
+  if [[ ${#APPHOST_PIDS[@]} -eq 0 ]]; then
+    log "No running ${APP_NAME} AppHost found — nothing to stop."
+    exit 0
+  fi
+  log "Found ${#APPHOST_PIDS[@]} AppHost(s): ${APPHOST_PIDS[*]}"
+else
+
 log "Querying 'aspire ps' for a running ${APP_NAME} AppHost..."
 
 APPHOST_PID=""
@@ -182,10 +217,8 @@ if [[ -z "$APPHOST_PID" ]] || ! pid_exists "$APPHOST_PID"; then
   exit 0
 fi
 
-APPHOST_SID=$(sid_of "$APPHOST_PID")
-log "AppHost: PID=${APPHOST_PID}  SID=${APPHOST_SID}  comm=$(comm_of "$APPHOST_PID")"
-[[ -n "$APPHOST_SID" ]] \
-  || warn "Could not read AppHost session ID; session-based scan will be skipped."
+APPHOST_PIDS=("$APPHOST_PID")
+fi  # $ALL
 
 # ── Step 2: Build the kill list ───────────────────────────────────────────────
 declare -A KILL_LIST   # [pid]=reason
@@ -201,27 +234,36 @@ add_pid() {
   KILL_LIST["$pid"]="$reason"
 }
 
-# a) AppHost itself and every PPID-descendant that matches the allowlist.
-add_pid "$APPHOST_PID" "AppHost"
-for _dpid in $(descendants_of "$APPHOST_PID"); do
-  if is_our_process "$_dpid"; then
-    add_pid "$_dpid" "AppHost-descendant"
-  else
-    warn "PID ${_dpid} ($(comm_of "$_dpid")) is AppHost descendant but not on allowlist — skipping."
+# (a) + (b) run once per located AppHost; the KILL_LIST map dedupes overlap.
+for _apppid in "${APPHOST_PIDS[@]}"; do
+  _appsid=$(sid_of "$_apppid")
+  log "AppHost: PID=${_apppid}  SID=${_appsid}  comm=$(comm_of "$_apppid")"
+  [[ -n "$_appsid" ]] \
+    || warn "Could not read AppHost ${_apppid} session ID; session-based scan skipped for it."
+
+  # a) AppHost itself and every PPID-descendant that matches the allowlist.
+  add_pid "$_apppid" "AppHost"
+  for _dpid in $(descendants_of "$_apppid"); do
+    if is_our_process "$_dpid"; then
+      add_pid "$_dpid" "AppHost-descendant"
+    else
+      warn "PID ${_dpid} ($(comm_of "$_dpid")) is AppHost descendant but not on allowlist — skipping."
+    fi
+  done
+  unset _dpid
+
+  # b) Same-session processes that match the allowlist.
+  #    Catches dcp + its subtree, which is a session sibling of AppHost,
+  #    not a PPID-descendant — so it isn't covered by (a).
+  if [[ -n "$_appsid" ]]; then
+    while IFS=' ' read -r _spid _ssid; do
+      [[ "$_spid" =~ ^[0-9]+$ && "$_ssid" == "$_appsid" ]] || continue
+      is_our_process "$_spid" || continue
+      add_pid "$_spid" "same-session(sid=${_appsid})"
+    done < <(ps -e -o pid=,sid= 2>/dev/null || true)
   fi
 done
-unset _dpid
-
-# b) Same-session processes that match the allowlist.
-#    Catches dcp + its subtree, which is a session sibling of AppHost,
-#    not a PPID-descendant — so it isn't covered by (a).
-if [[ -n "$APPHOST_SID" ]]; then
-  while IFS=' ' read -r _spid _ssid; do
-    [[ "$_spid" =~ ^[0-9]+$ && "$_ssid" == "$APPHOST_SID" ]] || continue
-    is_our_process "$_spid" || continue
-    add_pid "$_spid" "same-session(sid=${APPHOST_SID})"
-  done < <(ps -e -o pid=,sid= 2>/dev/null || true)
-fi
+unset _apppid _appsid
 
 # c) Our llama-server instances — matched strictly by exe path under LLAMA_DIR
 #    so Ollama's /usr/lib/ollama/llama-server is never touched.
