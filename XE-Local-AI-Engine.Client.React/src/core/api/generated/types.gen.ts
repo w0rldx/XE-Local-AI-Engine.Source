@@ -1414,6 +1414,11 @@ export type XeLocalAiEngineClientEndpointsCloudSettingsV1AzureFoundrySettingsRes
 	models?: Array<XeLocalAiEngineClientEndpointsCloudSettingsV1AzureFoundryModelDto>;
 	headers?: Array<XeLocalAiEngineClientEndpointsCloudSettingsV1AzureFoundryHeaderDto>;
 	additionalAllowedHostSuffixes?: Array<string>;
+	entraTenantId?: string | null;
+	entraClientId?: string | null;
+	hasStoredEntraClientSecret?: boolean;
+	entraTokenScope?: string | null;
+	entraSignInMethod?: string;
 };
 
 export type XeLocalAiEngineClientEndpointsCloudSettingsV1AzureFoundryModelDto = {
@@ -1428,6 +1433,19 @@ export type XeLocalAiEngineClientEndpointsCloudSettingsV1AzureFoundryHeaderDto =
 	hasStoredValue?: boolean;
 };
 
+export type XeLocalAiEngineClientEndpointsCloudSettingsV1EntraDeviceCodeSignInResponse = {
+	userCode: string;
+	verificationUri: string;
+	expiresAtUtc: string;
+};
+
+export type XeLocalAiEngineClientEndpointsCloudSettingsV1EntraDeviceCodeSignInStatusResponse = {
+	state: string;
+	userCode?: string | null;
+	verificationUri?: string | null;
+	expiresAtUtc?: string | null;
+};
+
 export type XeLocalAiEngineClientEndpointsCloudSettingsV1SaveCloudSettingsRequest = {
 	providerName?: string;
 	endpoint: string;
@@ -1436,6 +1454,11 @@ export type XeLocalAiEngineClientEndpointsCloudSettingsV1SaveCloudSettingsReques
 	models?: Array<XeLocalAiEngineClientEndpointsCloudSettingsV1AzureFoundryModelDto>;
 	headers?: Array<XeLocalAiEngineClientEndpointsCloudSettingsV1SaveAzureFoundryHeaderRequest>;
 	additionalAllowedHostSuffixes?: Array<string>;
+	entraTenantId?: string | null;
+	entraClientId?: string | null;
+	entraClientSecret?: string | null;
+	entraTokenScope?: string | null;
+	entraSignInMethod?: string;
 };
 
 export type XeLocalAiEngineClientEndpointsCloudSettingsV1SaveAzureFoundryHeaderRequest = {
@@ -1483,42 +1506,6 @@ export type XeLocalAiEngineClientEndpointsAuthV1NodeChangePasswordRequest = {
 export type XeLocalAiEngineClientEndpointsAuthV1NodeMeResponse = {
 	userName: string;
 	roles: Array<string>;
-};
-
-export type XeLocalAiEngineClientEndpointsAppUpdateV1ApplyAppUpdateResponse = {
-	applying: boolean;
-};
-
-export type XeLocalAiEngineClientEndpointsAppUpdateV1AppUpdateStatusResponse = {
-	currentVersion: string;
-	availableVersion?: string | null;
-	updateAvailable: boolean;
-	authState: string;
-	login?: string | null;
-	isDesktop: boolean;
-	isOffline: boolean;
-	lastCheckedUtc?: number | null;
-};
-
-export type XeLocalAiEngineClientEndpointsAppUpdateV1GetAppUpdateStatusRequest = {
-	[key: string]: never;
-};
-
-export type XeLocalAiEngineClientEndpointsAppUpdateV1GitHubAuthStatusResponse = {
-	authState: string;
-	login?: string | null;
-};
-
-export type XeLocalAiEngineClientEndpointsAppUpdateV1GitHubAuthPollResponse = {
-	state: string;
-	login?: string | null;
-};
-
-export type XeLocalAiEngineClientEndpointsAppUpdateV1GitHubAuthStartResponse = {
-	userCode: string;
-	verificationUri: string;
-	expiresInSeconds: number;
-	intervalSeconds: number;
 };
 
 export type XeLocalAiEngineClientEndpointsApiFoundationV1ValidationProblemProbeResponse = {
@@ -5233,6 +5220,60 @@ export type SaveCloudSettingsResponses = {
 
 export type SaveCloudSettingsResponse = SaveCloudSettingsResponses[keyof SaveCloudSettingsResponses];
 
+export type EntraDeviceCodeSignInData = {
+	body?: never;
+	path?: never;
+	query?: never;
+	url: "/api/local/v1/cloud-settings/entra/device-code/start";
+};
+
+export type EntraDeviceCodeSignInErrors = {
+	/**
+	 * Unauthorized
+	 */
+	401: unknown;
+	/**
+	 * Forbidden
+	 */
+	403: unknown;
+};
+
+export type EntraDeviceCodeSignInResponses = {
+	/**
+	 * Success
+	 */
+	200: XeLocalAiEngineClientEndpointsCloudSettingsV1EntraDeviceCodeSignInResponse;
+};
+
+export type EntraDeviceCodeSignInResponse = EntraDeviceCodeSignInResponses[keyof EntraDeviceCodeSignInResponses];
+
+export type EntraDeviceCodeStatusData = {
+	body?: never;
+	path?: never;
+	query?: never;
+	url: "/api/local/v1/cloud-settings/entra/device-code/status";
+};
+
+export type EntraDeviceCodeStatusErrors = {
+	/**
+	 * Unauthorized
+	 */
+	401: unknown;
+	/**
+	 * Forbidden
+	 */
+	403: unknown;
+};
+
+export type EntraDeviceCodeStatusResponses = {
+	/**
+	 * Success
+	 */
+	200: XeLocalAiEngineClientEndpointsCloudSettingsV1EntraDeviceCodeSignInStatusResponse;
+};
+
+export type EntraDeviceCodeStatusResponse = EntraDeviceCodeStatusResponses[keyof EntraDeviceCodeStatusResponses];
+
 export type CodexLoginData = {
 	body?: never;
 	path?: never;
@@ -5482,170 +5523,6 @@ export type NodeMeResponses = {
 };
 
 export type NodeMeResponse = NodeMeResponses[keyof NodeMeResponses];
-
-export type ApplyAppUpdateData = {
-	body?: never;
-	path?: never;
-	query?: never;
-	url: "/api/local/v1/app-update/apply";
-};
-
-export type ApplyAppUpdateErrors = {
-	/**
-	 * Unauthorized
-	 */
-	401: unknown;
-	/**
-	 * Forbidden
-	 */
-	403: unknown;
-};
-
-export type ApplyAppUpdateResponses = {
-	/**
-	 * Success
-	 */
-	200: XeLocalAiEngineClientEndpointsAppUpdateV1ApplyAppUpdateResponse;
-};
-
-export type ApplyAppUpdateResponse = ApplyAppUpdateResponses[keyof ApplyAppUpdateResponses];
-
-export type GetAppUpdateStatusData = {
-	body?: never;
-	path?: never;
-	query?: {
-		refresh?: boolean | null;
-	};
-	url: "/api/local/v1/app-update/status";
-};
-
-export type GetAppUpdateStatusErrors = {
-	/**
-	 * Unauthorized
-	 */
-	401: unknown;
-	/**
-	 * Forbidden
-	 */
-	403: unknown;
-};
-
-export type GetAppUpdateStatusResponses = {
-	/**
-	 * Success
-	 */
-	200: XeLocalAiEngineClientEndpointsAppUpdateV1AppUpdateStatusResponse;
-};
-
-export type GetAppUpdateStatusResponse = GetAppUpdateStatusResponses[keyof GetAppUpdateStatusResponses];
-
-export type GetGitHubAuthStatusData = {
-	body?: never;
-	path?: never;
-	query?: never;
-	url: "/api/local/v1/github-auth/status";
-};
-
-export type GetGitHubAuthStatusErrors = {
-	/**
-	 * Unauthorized
-	 */
-	401: unknown;
-	/**
-	 * Forbidden
-	 */
-	403: unknown;
-};
-
-export type GetGitHubAuthStatusResponses = {
-	/**
-	 * Success
-	 */
-	200: XeLocalAiEngineClientEndpointsAppUpdateV1GitHubAuthStatusResponse;
-};
-
-export type GetGitHubAuthStatusResponse = GetGitHubAuthStatusResponses[keyof GetGitHubAuthStatusResponses];
-
-export type PollGitHubAuthData = {
-	body?: never;
-	path?: never;
-	query?: never;
-	url: "/api/local/v1/github-auth/poll";
-};
-
-export type PollGitHubAuthErrors = {
-	/**
-	 * Unauthorized
-	 */
-	401: unknown;
-	/**
-	 * Forbidden
-	 */
-	403: unknown;
-};
-
-export type PollGitHubAuthResponses = {
-	/**
-	 * Success
-	 */
-	200: XeLocalAiEngineClientEndpointsAppUpdateV1GitHubAuthPollResponse;
-};
-
-export type PollGitHubAuthResponse = PollGitHubAuthResponses[keyof PollGitHubAuthResponses];
-
-export type SignOutGitHubAuthData = {
-	body?: never;
-	path?: never;
-	query?: never;
-	url: "/api/local/v1/github-auth/sign-out";
-};
-
-export type SignOutGitHubAuthErrors = {
-	/**
-	 * Unauthorized
-	 */
-	401: unknown;
-	/**
-	 * Forbidden
-	 */
-	403: unknown;
-};
-
-export type SignOutGitHubAuthResponses = {
-	/**
-	 * Success
-	 */
-	200: XeLocalAiEngineClientEndpointsAppUpdateV1GitHubAuthStatusResponse;
-};
-
-export type SignOutGitHubAuthResponse = SignOutGitHubAuthResponses[keyof SignOutGitHubAuthResponses];
-
-export type StartGitHubAuthData = {
-	body?: never;
-	path?: never;
-	query?: never;
-	url: "/api/local/v1/github-auth/start";
-};
-
-export type StartGitHubAuthErrors = {
-	/**
-	 * Unauthorized
-	 */
-	401: unknown;
-	/**
-	 * Forbidden
-	 */
-	403: unknown;
-};
-
-export type StartGitHubAuthResponses = {
-	/**
-	 * Success
-	 */
-	200: XeLocalAiEngineClientEndpointsAppUpdateV1GitHubAuthStartResponse;
-};
-
-export type StartGitHubAuthResponse = StartGitHubAuthResponses[keyof StartGitHubAuthResponses];
 
 export type UnhandledExceptionProbeData = {
 	body?: never;

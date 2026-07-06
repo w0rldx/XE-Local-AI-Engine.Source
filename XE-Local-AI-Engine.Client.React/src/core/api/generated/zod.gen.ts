@@ -2025,11 +2025,29 @@ export const zXeLocalAiEngineClientEndpointsCloudSettingsV1AzureFoundrySettingsR
 	models: z.array(zXeLocalAiEngineClientEndpointsCloudSettingsV1AzureFoundryModelDto).optional(),
 	headers: z.array(zXeLocalAiEngineClientEndpointsCloudSettingsV1AzureFoundryHeaderDto).optional(),
 	additionalAllowedHostSuffixes: z.array(z.string()).optional(),
+	entraTenantId: z.string().nullish(),
+	entraClientId: z.string().nullish(),
+	hasStoredEntraClientSecret: z.boolean().optional(),
+	entraTokenScope: z.string().nullish(),
+	entraSignInMethod: z.string().optional(),
 });
 
 export const zXeLocalAiEngineClientEndpointsCloudSettingsV1CloudSettingsResponse = z.object({
 	providerName: z.string(),
 	azureFoundry: zXeLocalAiEngineClientEndpointsCloudSettingsV1AzureFoundrySettingsResponse.nullish(),
+});
+
+export const zXeLocalAiEngineClientEndpointsCloudSettingsV1EntraDeviceCodeSignInResponse = z.object({
+	userCode: z.string(),
+	verificationUri: z.string(),
+	expiresAtUtc: z.iso.datetime({ offset: true }),
+});
+
+export const zXeLocalAiEngineClientEndpointsCloudSettingsV1EntraDeviceCodeSignInStatusResponse = z.object({
+	state: z.string(),
+	userCode: z.string().nullish(),
+	verificationUri: z.string().nullish(),
+	expiresAtUtc: z.iso.datetime({ offset: true }).nullish(),
 });
 
 export const zXeLocalAiEngineClientEndpointsCloudSettingsV1SaveAzureFoundryHeaderRequest = z.object({
@@ -2046,6 +2064,11 @@ export const zXeLocalAiEngineClientEndpointsCloudSettingsV1SaveCloudSettingsRequ
 	models: z.array(zXeLocalAiEngineClientEndpointsCloudSettingsV1AzureFoundryModelDto).optional(),
 	headers: z.array(zXeLocalAiEngineClientEndpointsCloudSettingsV1SaveAzureFoundryHeaderRequest).optional(),
 	additionalAllowedHostSuffixes: z.array(z.string()).optional(),
+	entraTenantId: z.string().nullish(),
+	entraClientId: z.string().nullish(),
+	entraClientSecret: z.string().nullish(),
+	entraTokenScope: z.string().nullish(),
+	entraSignInMethod: z.string().optional(),
 });
 
 export const zXeLocalAiEngineClientEndpointsCloudCodexV1CodexLoginResponse = z.object({
@@ -2096,50 +2119,6 @@ export const zXeLocalAiEngineClientEndpointsAuthV1NodeChangePasswordRequest = z.
 export const zXeLocalAiEngineClientEndpointsAuthV1NodeMeResponse = z.object({
 	userName: z.string(),
 	roles: z.array(z.string()),
-});
-
-export const zXeLocalAiEngineClientEndpointsAppUpdateV1ApplyAppUpdateResponse = z.object({
-	applying: z.boolean(),
-});
-
-export const zXeLocalAiEngineClientEndpointsAppUpdateV1AppUpdateStatusResponse = z.object({
-	currentVersion: z.string(),
-	availableVersion: z.string().nullish(),
-	updateAvailable: z.boolean(),
-	authState: z.string(),
-	login: z.string().nullish(),
-	isDesktop: z.boolean(),
-	isOffline: z.boolean(),
-	lastCheckedUtc: z.coerce
-		.bigint()
-		.min(BigInt("-9223372036854775808"), { error: "Invalid value: Expected int64 to be >= -9223372036854775808" })
-		.max(BigInt("9223372036854775807"), { error: "Invalid value: Expected int64 to be <= 9223372036854775807" })
-		.nullish(),
-});
-
-export const zXeLocalAiEngineClientEndpointsAppUpdateV1GetAppUpdateStatusRequest = z.record(z.string(), z.never());
-
-export const zXeLocalAiEngineClientEndpointsAppUpdateV1GitHubAuthStatusResponse = z.object({
-	authState: z.string(),
-	login: z.string().nullish(),
-});
-
-export const zXeLocalAiEngineClientEndpointsAppUpdateV1GitHubAuthPollResponse = z.object({
-	state: z.string(),
-	login: z.string().nullish(),
-});
-
-export const zXeLocalAiEngineClientEndpointsAppUpdateV1GitHubAuthStartResponse = z.object({
-	userCode: z.string(),
-	verificationUri: z.string(),
-	expiresInSeconds: z
-		.int()
-		.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })
-		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" }),
-	intervalSeconds: z
-		.int()
-		.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })
-		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" }),
 });
 
 export const zXeLocalAiEngineClientEndpointsApiFoundationV1ValidationProblemProbeResponse = z.object({
@@ -3539,6 +3518,16 @@ export const zSaveCloudSettingsResponse = zXeLocalAiEngineClientEndpointsCloudSe
 /**
  * Success
  */
+export const zEntraDeviceCodeSignInResponse = zXeLocalAiEngineClientEndpointsCloudSettingsV1EntraDeviceCodeSignInResponse;
+
+/**
+ * Success
+ */
+export const zEntraDeviceCodeStatusResponse = zXeLocalAiEngineClientEndpointsCloudSettingsV1EntraDeviceCodeSignInStatusResponse;
+
+/**
+ * Success
+ */
 export const zCodexLoginResponse = zXeLocalAiEngineClientEndpointsCloudCodexV1CodexLoginResponse;
 
 /**
@@ -3591,40 +3580,6 @@ export const zNodeChangePasswordResponse = z.void();
  * Success
  */
 export const zNodeMeResponse = zXeLocalAiEngineClientEndpointsAuthV1NodeMeResponse;
-
-/**
- * Success
- */
-export const zApplyAppUpdateResponse = zXeLocalAiEngineClientEndpointsAppUpdateV1ApplyAppUpdateResponse;
-
-export const zGetAppUpdateStatusQuery = z.object({
-	refresh: z.boolean().nullish(),
-});
-
-/**
- * Success
- */
-export const zGetAppUpdateStatusResponse = zXeLocalAiEngineClientEndpointsAppUpdateV1AppUpdateStatusResponse;
-
-/**
- * Success
- */
-export const zGetGitHubAuthStatusResponse = zXeLocalAiEngineClientEndpointsAppUpdateV1GitHubAuthStatusResponse;
-
-/**
- * Success
- */
-export const zPollGitHubAuthResponse = zXeLocalAiEngineClientEndpointsAppUpdateV1GitHubAuthPollResponse;
-
-/**
- * Success
- */
-export const zSignOutGitHubAuthResponse = zXeLocalAiEngineClientEndpointsAppUpdateV1GitHubAuthStatusResponse;
-
-/**
- * Success
- */
-export const zStartGitHubAuthResponse = zXeLocalAiEngineClientEndpointsAppUpdateV1GitHubAuthStartResponse;
 
 /**
  * No Content

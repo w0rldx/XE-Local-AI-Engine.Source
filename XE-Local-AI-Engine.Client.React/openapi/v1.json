@@ -5228,6 +5228,74 @@
         ]
       }
     },
+    "/api/local/v1/cloud-settings/entra/device-code/start": {
+      "post": {
+        "tags": [
+          "Cloud-Settings"
+        ],
+        "operationId": "entraDeviceCodeSignIn",
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/XE_Local_AI_EngineClientEndpointsCloudSettingsV1EntraDeviceCodeSignInResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "403": {
+            "description": "Forbidden"
+          }
+        },
+        "security": [
+          {
+            "JWTBearerAuth": []
+          },
+          {
+            "Bearer": []
+          }
+        ]
+      }
+    },
+    "/api/local/v1/cloud-settings/entra/device-code/status": {
+      "get": {
+        "tags": [
+          "Cloud-Settings"
+        ],
+        "operationId": "entraDeviceCodeStatus",
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/XE_Local_AI_EngineClientEndpointsCloudSettingsV1EntraDeviceCodeSignInStatusResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "403": {
+            "description": "Forbidden"
+          }
+        },
+        "security": [
+          {
+            "JWTBearerAuth": []
+          },
+          {
+            "Bearer": []
+          }
+        ]
+      }
+    },
     "/api/local/v1/cloud/codex/login": {
       "post": {
         "tags": [
@@ -5539,220 +5607,6 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/XE_Local_AI_EngineClientEndpointsAuthV1NodeMeResponse"
-                }
-              }
-            }
-          },
-          "401": {
-            "description": "Unauthorized"
-          },
-          "403": {
-            "description": "Forbidden"
-          }
-        },
-        "security": [
-          {
-            "JWTBearerAuth": []
-          },
-          {
-            "Bearer": []
-          }
-        ]
-      }
-    },
-    "/api/local/v1/app-update/apply": {
-      "post": {
-        "tags": [
-          "App-Update"
-        ],
-        "operationId": "applyAppUpdate",
-        "responses": {
-          "200": {
-            "description": "Success",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/XE_Local_AI_EngineClientEndpointsAppUpdateV1ApplyAppUpdateResponse"
-                }
-              }
-            }
-          },
-          "401": {
-            "description": "Unauthorized"
-          },
-          "403": {
-            "description": "Forbidden"
-          }
-        },
-        "security": [
-          {
-            "JWTBearerAuth": []
-          },
-          {
-            "Bearer": []
-          }
-        ]
-      }
-    },
-    "/api/local/v1/app-update/status": {
-      "get": {
-        "tags": [
-          "App-Update"
-        ],
-        "operationId": "getAppUpdateStatus",
-        "parameters": [
-          {
-            "name": "refresh",
-            "in": "query",
-            "schema": {
-              "type": "boolean",
-              "nullable": true
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "Success",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/XE_Local_AI_EngineClientEndpointsAppUpdateV1AppUpdateStatusResponse"
-                }
-              }
-            }
-          },
-          "401": {
-            "description": "Unauthorized"
-          },
-          "403": {
-            "description": "Forbidden"
-          }
-        },
-        "security": [
-          {
-            "JWTBearerAuth": []
-          },
-          {
-            "Bearer": []
-          }
-        ]
-      }
-    },
-    "/api/local/v1/github-auth/status": {
-      "get": {
-        "tags": [
-          "Github-Auth"
-        ],
-        "operationId": "getGitHubAuthStatus",
-        "responses": {
-          "200": {
-            "description": "Success",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/XE_Local_AI_EngineClientEndpointsAppUpdateV1GitHubAuthStatusResponse"
-                }
-              }
-            }
-          },
-          "401": {
-            "description": "Unauthorized"
-          },
-          "403": {
-            "description": "Forbidden"
-          }
-        },
-        "security": [
-          {
-            "JWTBearerAuth": []
-          },
-          {
-            "Bearer": []
-          }
-        ]
-      }
-    },
-    "/api/local/v1/github-auth/poll": {
-      "post": {
-        "tags": [
-          "Github-Auth"
-        ],
-        "operationId": "pollGitHubAuth",
-        "responses": {
-          "200": {
-            "description": "Success",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/XE_Local_AI_EngineClientEndpointsAppUpdateV1GitHubAuthPollResponse"
-                }
-              }
-            }
-          },
-          "401": {
-            "description": "Unauthorized"
-          },
-          "403": {
-            "description": "Forbidden"
-          }
-        },
-        "security": [
-          {
-            "JWTBearerAuth": []
-          },
-          {
-            "Bearer": []
-          }
-        ]
-      }
-    },
-    "/api/local/v1/github-auth/sign-out": {
-      "post": {
-        "tags": [
-          "Github-Auth"
-        ],
-        "operationId": "signOutGitHubAuth",
-        "responses": {
-          "200": {
-            "description": "Success",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/XE_Local_AI_EngineClientEndpointsAppUpdateV1GitHubAuthStatusResponse"
-                }
-              }
-            }
-          },
-          "401": {
-            "description": "Unauthorized"
-          },
-          "403": {
-            "description": "Forbidden"
-          }
-        },
-        "security": [
-          {
-            "JWTBearerAuth": []
-          },
-          {
-            "Bearer": []
-          }
-        ]
-      }
-    },
-    "/api/local/v1/github-auth/start": {
-      "post": {
-        "tags": [
-          "Github-Auth"
-        ],
-        "operationId": "startGitHubAuth",
-        "responses": {
-          "200": {
-            "description": "Success",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/XE_Local_AI_EngineClientEndpointsAppUpdateV1GitHubAuthStartResponse"
                 }
               }
             }
@@ -11967,6 +11821,24 @@
             "items": {
               "type": "string"
             }
+          },
+          "entraTenantId": {
+            "type": "string",
+            "nullable": true
+          },
+          "entraClientId": {
+            "type": "string",
+            "nullable": true
+          },
+          "hasStoredEntraClientSecret": {
+            "type": "boolean"
+          },
+          "entraTokenScope": {
+            "type": "string",
+            "nullable": true
+          },
+          "entraSignInMethod": {
+            "type": "string"
           }
         }
       },
@@ -12005,6 +11877,52 @@
           },
           "hasStoredValue": {
             "type": "boolean"
+          }
+        }
+      },
+      "XE_Local_AI_EngineClientEndpointsCloudSettingsV1EntraDeviceCodeSignInResponse": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "userCode",
+          "verificationUri",
+          "expiresAtUtc"
+        ],
+        "properties": {
+          "userCode": {
+            "type": "string"
+          },
+          "verificationUri": {
+            "type": "string"
+          },
+          "expiresAtUtc": {
+            "type": "string",
+            "format": "date-time"
+          }
+        }
+      },
+      "XE_Local_AI_EngineClientEndpointsCloudSettingsV1EntraDeviceCodeSignInStatusResponse": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "state"
+        ],
+        "properties": {
+          "state": {
+            "type": "string"
+          },
+          "userCode": {
+            "type": "string",
+            "nullable": true
+          },
+          "verificationUri": {
+            "type": "string",
+            "nullable": true
+          },
+          "expiresAtUtc": {
+            "type": "string",
+            "format": "date-time",
+            "nullable": true
           }
         }
       },
@@ -12047,6 +11965,25 @@
             "items": {
               "type": "string"
             }
+          },
+          "entraTenantId": {
+            "type": "string",
+            "nullable": true
+          },
+          "entraClientId": {
+            "type": "string",
+            "nullable": true
+          },
+          "entraClientSecret": {
+            "type": "string",
+            "nullable": true
+          },
+          "entraTokenScope": {
+            "type": "string",
+            "nullable": true
+          },
+          "entraSignInMethod": {
+            "type": "string"
           }
         }
       },
@@ -12221,121 +12158,6 @@
             "items": {
               "type": "string"
             }
-          }
-        }
-      },
-      "XE_Local_AI_EngineClientEndpointsAppUpdateV1ApplyAppUpdateResponse": {
-        "type": "object",
-        "additionalProperties": false,
-        "required": [
-          "applying"
-        ],
-        "properties": {
-          "applying": {
-            "type": "boolean"
-          }
-        }
-      },
-      "XE_Local_AI_EngineClientEndpointsAppUpdateV1AppUpdateStatusResponse": {
-        "type": "object",
-        "additionalProperties": false,
-        "required": [
-          "currentVersion",
-          "updateAvailable",
-          "authState",
-          "isDesktop",
-          "isOffline"
-        ],
-        "properties": {
-          "currentVersion": {
-            "type": "string"
-          },
-          "availableVersion": {
-            "type": "string",
-            "nullable": true
-          },
-          "updateAvailable": {
-            "type": "boolean"
-          },
-          "authState": {
-            "type": "string"
-          },
-          "login": {
-            "type": "string",
-            "nullable": true
-          },
-          "isDesktop": {
-            "type": "boolean"
-          },
-          "isOffline": {
-            "type": "boolean"
-          },
-          "lastCheckedUtc": {
-            "type": "integer",
-            "format": "int64",
-            "nullable": true
-          }
-        }
-      },
-      "XE_Local_AI_EngineClientEndpointsAppUpdateV1GetAppUpdateStatusRequest": {
-        "type": "object",
-        "additionalProperties": false
-      },
-      "XE_Local_AI_EngineClientEndpointsAppUpdateV1GitHubAuthStatusResponse": {
-        "type": "object",
-        "additionalProperties": false,
-        "required": [
-          "authState"
-        ],
-        "properties": {
-          "authState": {
-            "type": "string"
-          },
-          "login": {
-            "type": "string",
-            "nullable": true
-          }
-        }
-      },
-      "XE_Local_AI_EngineClientEndpointsAppUpdateV1GitHubAuthPollResponse": {
-        "type": "object",
-        "additionalProperties": false,
-        "required": [
-          "state"
-        ],
-        "properties": {
-          "state": {
-            "type": "string"
-          },
-          "login": {
-            "type": "string",
-            "nullable": true
-          }
-        }
-      },
-      "XE_Local_AI_EngineClientEndpointsAppUpdateV1GitHubAuthStartResponse": {
-        "type": "object",
-        "additionalProperties": false,
-        "required": [
-          "userCode",
-          "verificationUri",
-          "expiresInSeconds",
-          "intervalSeconds"
-        ],
-        "properties": {
-          "userCode": {
-            "type": "string"
-          },
-          "verificationUri": {
-            "type": "string"
-          },
-          "expiresInSeconds": {
-            "type": "integer",
-            "format": "int32"
-          },
-          "intervalSeconds": {
-            "type": "integer",
-            "format": "int32"
           }
         }
       },
