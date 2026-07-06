@@ -15,11 +15,16 @@ export const tourStepIds = [
 	"chatSend",
 	"firstResponse",
 	// Showcase steps: static illustrative overlay (non-route-bound, non-async-real-state). Always shown regardless of
-	// model capabilities — they illustrate features the user may encounter, not gates on a live model capability.
+	// model capabilities — they illustrate features the user may encounter, not gates on a live model capability. The
+	// trailing three are feature-discovery cards (Knowledge Base, Image Generation, Agents) so new testers learn those
+	// surfaces exist without leaving the tour.
 	"reasoningEffort",
 	"reasoningTrace",
 	"toolCall",
 	"agentMode",
+	"knowledgeBase",
+	"imageGeneration",
+	"agents",
 ] as const;
 
 export type TourStepId = (typeof tourStepIds)[number];
@@ -44,6 +49,9 @@ const stepTargets: Record<TourStepId, string> = {
 	reasoningTrace: '[data-tour="showcase-reasoning-trace"]',
 	toolCall: '[data-tour="showcase-tool-call"]',
 	agentMode: '[data-tour="showcase-agent-mode"]',
+	knowledgeBase: '[data-tour="showcase-knowledge-base"]',
+	imageGeneration: '[data-tour="showcase-image-generation"]',
+	agents: '[data-tour="showcase-agents"]',
 };
 
 // Builds the controlled Joyride steps from i18n keys. Every title/content resolves to an `onboarding.steps.<id>.*`

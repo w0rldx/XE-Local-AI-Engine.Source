@@ -4,10 +4,12 @@ import { Outlet } from "@tanstack/react-router";
 import { m } from "framer-motion";
 import { lazy, Suspense } from "react";
 
+import { nodeCapabilities } from "@/capabilities/NodeCapabilities";
 import { DesktopNavigationBar } from "@/core/layout/components/DesktopNavigationBar/DesktopNavigationBar";
 import { HeaderBar } from "@/core/layout/components/HeaderBar/HeaderBar";
 import useWindowDimensions from "@/core/layout/hooks/useWindowDimensions";
 import { useDesktopNavigationBarStore } from "@/core/layout/stores/DesktopNavigationBarStore";
+import { CpuFallbackBanner } from "@/features/model-fit/components/CpuFallbackBanner";
 import { LlamaCppUpdateBanner } from "@/features/node-settings/components/LlamaCppUpdateBanner";
 
 const DevelopmentUi = import.meta.env.DEV
@@ -59,6 +61,7 @@ export function Layout() {
 				>
 					<div className="flex-shrink-0">
 						<HeaderBar />
+						{nodeCapabilities.modelFit ? <CpuFallbackBanner /> : null}
 						<LlamaCppUpdateBanner />
 					</div>
 

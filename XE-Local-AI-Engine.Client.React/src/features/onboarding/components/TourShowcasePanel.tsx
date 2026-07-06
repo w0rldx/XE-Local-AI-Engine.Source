@@ -1,6 +1,6 @@
 import type { CSSProperties } from "react";
 import { Badge, Box, Card, Code, Group, Stack, Text, UnstyledButton } from "@mantine/core";
-import { IconBrain, IconChevronDown, IconRobot, IconTool } from "@tabler/icons-react";
+import { IconBrain, IconChevronDown, IconDatabase, IconPhoto, IconRobot, IconTool, IconUsersGroup } from "@tabler/icons-react";
 import { useTranslation } from "react-i18next";
 
 // Z-index sits between app chrome (< 400) and the Joyride overlay (TOUR_Z_INDEX = 1000) so the spotlight and tooltip
@@ -138,6 +138,43 @@ export function TourShowcasePanel({ active }: { active: boolean }) {
 						</Group>
 						<Text size="xs" c="dimmed">
 							{t("onboarding.showcase.agentMode.description")}
+						</Text>
+					</Stack>
+
+					{/* Feature-discovery cards — point new testers at surfaces beyond chat. Purely illustrative. */}
+					<Stack gap={4} data-tour="showcase-knowledge-base" data-testid="showcase-knowledge-base">
+						<Group gap={6} align="center">
+							<IconDatabase size={14} color="var(--mantine-color-blue-6)" />
+							<Text size="xs" fw={600} c="blue">
+								{t("onboarding.showcase.knowledgeBase.label")}
+							</Text>
+						</Group>
+						<Text size="xs" c="dimmed">
+							{t("onboarding.showcase.knowledgeBase.description")}
+						</Text>
+					</Stack>
+
+					<Stack gap={4} data-tour="showcase-image-generation" data-testid="showcase-image-generation">
+						<Group gap={6} align="center">
+							<IconPhoto size={14} color="var(--mantine-color-grape-6)" />
+							<Text size="xs" fw={600} c="grape">
+								{t("onboarding.showcase.imageGeneration.label")}
+							</Text>
+						</Group>
+						<Text size="xs" c="dimmed">
+							{t("onboarding.showcase.imageGeneration.description")}
+						</Text>
+					</Stack>
+
+					<Stack gap={4} data-tour="showcase-agents" data-testid="showcase-agents">
+						<Group gap={6} align="center">
+							<IconUsersGroup size={14} color="var(--mantine-color-orange-6)" />
+							<Text size="xs" fw={600} c="orange">
+								{t("onboarding.showcase.agents.label")}
+							</Text>
+						</Group>
+						<Text size="xs" c="dimmed">
+							{t("onboarding.showcase.agents.description")}
 						</Text>
 					</Stack>
 				</Stack>
