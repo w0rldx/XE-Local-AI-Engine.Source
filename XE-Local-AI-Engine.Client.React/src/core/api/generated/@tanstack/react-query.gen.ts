@@ -12,7 +12,6 @@ import type { AxiosError } from "axios";
 import { client } from "../client.gen";
 import {
 	analyzePlaybook,
-	applyAppUpdate,
 	approveGoldenConversation,
 	archiveNodeChatConversation,
 	benchmarkInferenceProfile,
@@ -60,6 +59,8 @@ import {
 	enableAutoConnect,
 	enableScheduledJob,
 	ensureLlamaCppBinary,
+	entraDeviceCodeSignIn,
+	entraDeviceCodeStatus,
 	executeSavedPreviewWorkflow,
 	executeUnsavedPreviewWorkflow,
 	exploreInferenceProfile,
@@ -67,14 +68,12 @@ import {
 	getAgentDefinition,
 	getAgentFeedbackInsights,
 	getAgentPlaybookMonitor,
-	getAppUpdateStatus,
 	getCloudSettings,
 	getConnectionStatus,
 	getCudaBuildPrerequisites,
 	getCudaBuildStatus,
 	getGgufDownloads,
 	getGgufDownloadStatus,
-	getGitHubAuthStatus,
 	getHardwareProfile,
 	getHfTokenStatus,
 	getImageJob,
@@ -130,7 +129,6 @@ import {
 	nodeSetup,
 	type Options,
 	pinNodeChatConversation,
-	pollGitHubAuth,
 	pollNodeBinding,
 	promoteSuggestedPlaybookAction,
 	putModelKind,
@@ -152,10 +150,8 @@ import {
 	setNodeChatConversationMemoryExcluded,
 	setNodeChatMessageFeedback,
 	setNodeChatSelectedPath,
-	signOutGitHubAuth,
 	startCudaBuild,
 	startGgufDownload,
-	startGitHubAuth,
 	startImageModelDownload,
 	startNodeBinding,
 	triggerScheduledJob,
@@ -176,8 +172,6 @@ import {
 import type {
 	AnalyzePlaybookData,
 	AnalyzePlaybookResponse,
-	ApplyAppUpdateData,
-	ApplyAppUpdateResponse,
 	ApproveGoldenConversationData,
 	ApproveGoldenConversationResponse,
 	ArchiveNodeChatConversationData,
@@ -276,6 +270,10 @@ import type {
 	EnableScheduledJobResponse,
 	EnsureLlamaCppBinaryData,
 	EnsureLlamaCppBinaryResponse,
+	EntraDeviceCodeSignInData,
+	EntraDeviceCodeSignInResponse,
+	EntraDeviceCodeStatusData,
+	EntraDeviceCodeStatusResponse,
 	ExecuteSavedPreviewWorkflowData,
 	ExecuteSavedPreviewWorkflowResponse,
 	ExecuteUnsavedPreviewWorkflowData,
@@ -290,8 +288,6 @@ import type {
 	GetAgentFeedbackInsightsResponse,
 	GetAgentPlaybookMonitorData,
 	GetAgentPlaybookMonitorResponse,
-	GetAppUpdateStatusData,
-	GetAppUpdateStatusResponse,
 	GetCloudSettingsData,
 	GetCloudSettingsResponse,
 	GetConnectionStatusData,
@@ -304,8 +300,6 @@ import type {
 	GetGgufDownloadsResponse,
 	GetGgufDownloadStatusData,
 	GetGgufDownloadStatusResponse,
-	GetGitHubAuthStatusData,
-	GetGitHubAuthStatusResponse,
 	GetHardwareProfileData,
 	GetHardwareProfileResponse,
 	GetHfTokenStatusData,
@@ -420,8 +414,6 @@ import type {
 	NodeSetupResponse,
 	PinNodeChatConversationData,
 	PinNodeChatConversationResponse,
-	PollGitHubAuthData,
-	PollGitHubAuthResponse,
 	PollNodeBindingData,
 	PollNodeBindingResponse,
 	PromoteSuggestedPlaybookActionData,
@@ -468,14 +460,10 @@ import type {
 	SetNodeChatSelectedPathData,
 	SetNodeChatSelectedPathError,
 	SetNodeChatSelectedPathResponse,
-	SignOutGitHubAuthData,
-	SignOutGitHubAuthResponse,
 	StartCudaBuildData,
 	StartCudaBuildResponse,
 	StartGgufDownloadData,
 	StartGgufDownloadResponse,
-	StartGitHubAuthData,
-	StartGitHubAuthResponse,
 	StartImageModelDownloadData,
 	StartImageModelDownloadResponse,
 	StartNodeBindingData,
@@ -2894,6 +2882,48 @@ export const saveCloudSettingsMutation = (
 	return mutationOptions;
 };
 
+export const entraDeviceCodeSignInMutation = (
+	options?: Partial<Options<EntraDeviceCodeSignInData>>,
+): UseMutationOptions<EntraDeviceCodeSignInResponse, AxiosError<DefaultError>, Options<EntraDeviceCodeSignInData>> => {
+	const mutationOptions: UseMutationOptions<
+		EntraDeviceCodeSignInResponse,
+		AxiosError<DefaultError>,
+		Options<EntraDeviceCodeSignInData>
+	> = {
+		mutationFn: async (fnOptions) => {
+			const { data } = await entraDeviceCodeSignIn({
+				...options,
+				...fnOptions,
+				throwOnError: true,
+			});
+			return data;
+		},
+	};
+	return mutationOptions;
+};
+
+export const entraDeviceCodeStatusQueryKey = (options?: Options<EntraDeviceCodeStatusData>) =>
+	createQueryKey("entraDeviceCodeStatus", options);
+
+export const entraDeviceCodeStatusOptions = (options?: Options<EntraDeviceCodeStatusData>) =>
+	queryOptions<
+		EntraDeviceCodeStatusResponse,
+		AxiosError<DefaultError>,
+		EntraDeviceCodeStatusResponse,
+		ReturnType<typeof entraDeviceCodeStatusQueryKey>
+	>({
+		queryFn: async ({ queryKey, signal }) => {
+			const { data } = await entraDeviceCodeStatus({
+				...options,
+				...queryKey[0],
+				signal,
+				throwOnError: true,
+			});
+			return data;
+		},
+		queryKey: entraDeviceCodeStatusQueryKey(options),
+	});
+
 export const codexLoginMutation = (
 	options?: Partial<Options<CodexLoginData>>,
 ): UseMutationOptions<CodexLoginResponse, AxiosError<DefaultError>, Options<CodexLoginData>> => {
@@ -3062,118 +3092,6 @@ export const nodeMeOptions = (options?: Options<NodeMeData>) =>
 		},
 		queryKey: nodeMeQueryKey(options),
 	});
-
-export const applyAppUpdateMutation = (
-	options?: Partial<Options<ApplyAppUpdateData>>,
-): UseMutationOptions<ApplyAppUpdateResponse, AxiosError<DefaultError>, Options<ApplyAppUpdateData>> => {
-	const mutationOptions: UseMutationOptions<ApplyAppUpdateResponse, AxiosError<DefaultError>, Options<ApplyAppUpdateData>> = {
-		mutationFn: async (fnOptions) => {
-			const { data } = await applyAppUpdate({
-				...options,
-				...fnOptions,
-				throwOnError: true,
-			});
-			return data;
-		},
-	};
-	return mutationOptions;
-};
-
-export const getAppUpdateStatusQueryKey = (options?: Options<GetAppUpdateStatusData>) =>
-	createQueryKey("getAppUpdateStatus", options);
-
-export const getAppUpdateStatusOptions = (options?: Options<GetAppUpdateStatusData>) =>
-	queryOptions<
-		GetAppUpdateStatusResponse,
-		AxiosError<DefaultError>,
-		GetAppUpdateStatusResponse,
-		ReturnType<typeof getAppUpdateStatusQueryKey>
-	>({
-		queryFn: async ({ queryKey, signal }) => {
-			const { data } = await getAppUpdateStatus({
-				...options,
-				...queryKey[0],
-				signal,
-				throwOnError: true,
-			});
-			return data;
-		},
-		queryKey: getAppUpdateStatusQueryKey(options),
-	});
-
-export const getGitHubAuthStatusQueryKey = (options?: Options<GetGitHubAuthStatusData>) =>
-	createQueryKey("getGitHubAuthStatus", options);
-
-export const getGitHubAuthStatusOptions = (options?: Options<GetGitHubAuthStatusData>) =>
-	queryOptions<
-		GetGitHubAuthStatusResponse,
-		AxiosError<DefaultError>,
-		GetGitHubAuthStatusResponse,
-		ReturnType<typeof getGitHubAuthStatusQueryKey>
-	>({
-		queryFn: async ({ queryKey, signal }) => {
-			const { data } = await getGitHubAuthStatus({
-				...options,
-				...queryKey[0],
-				signal,
-				throwOnError: true,
-			});
-			return data;
-		},
-		queryKey: getGitHubAuthStatusQueryKey(options),
-	});
-
-export const pollGitHubAuthMutation = (
-	options?: Partial<Options<PollGitHubAuthData>>,
-): UseMutationOptions<PollGitHubAuthResponse, AxiosError<DefaultError>, Options<PollGitHubAuthData>> => {
-	const mutationOptions: UseMutationOptions<PollGitHubAuthResponse, AxiosError<DefaultError>, Options<PollGitHubAuthData>> = {
-		mutationFn: async (fnOptions) => {
-			const { data } = await pollGitHubAuth({
-				...options,
-				...fnOptions,
-				throwOnError: true,
-			});
-			return data;
-		},
-	};
-	return mutationOptions;
-};
-
-export const signOutGitHubAuthMutation = (
-	options?: Partial<Options<SignOutGitHubAuthData>>,
-): UseMutationOptions<SignOutGitHubAuthResponse, AxiosError<DefaultError>, Options<SignOutGitHubAuthData>> => {
-	const mutationOptions: UseMutationOptions<
-		SignOutGitHubAuthResponse,
-		AxiosError<DefaultError>,
-		Options<SignOutGitHubAuthData>
-	> = {
-		mutationFn: async (fnOptions) => {
-			const { data } = await signOutGitHubAuth({
-				...options,
-				...fnOptions,
-				throwOnError: true,
-			});
-			return data;
-		},
-	};
-	return mutationOptions;
-};
-
-export const startGitHubAuthMutation = (
-	options?: Partial<Options<StartGitHubAuthData>>,
-): UseMutationOptions<StartGitHubAuthResponse, AxiosError<DefaultError>, Options<StartGitHubAuthData>> => {
-	const mutationOptions: UseMutationOptions<StartGitHubAuthResponse, AxiosError<DefaultError>, Options<StartGitHubAuthData>> = {
-		mutationFn: async (fnOptions) => {
-			const { data } = await startGitHubAuth({
-				...options,
-				...fnOptions,
-				throwOnError: true,
-			});
-			return data;
-		},
-	};
-	return mutationOptions;
-};
 
 export const unhandledExceptionProbeMutation = (
 	options?: Partial<Options<UnhandledExceptionProbeData>>,

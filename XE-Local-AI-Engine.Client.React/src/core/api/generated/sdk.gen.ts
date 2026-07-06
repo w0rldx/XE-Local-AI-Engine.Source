@@ -8,9 +8,6 @@ import type {
 	AnalyzePlaybookData,
 	AnalyzePlaybookErrors,
 	AnalyzePlaybookResponses,
-	ApplyAppUpdateData,
-	ApplyAppUpdateErrors,
-	ApplyAppUpdateResponses,
 	ApproveGoldenConversationData,
 	ApproveGoldenConversationErrors,
 	ApproveGoldenConversationResponses,
@@ -152,6 +149,12 @@ import type {
 	EnsureLlamaCppBinaryData,
 	EnsureLlamaCppBinaryErrors,
 	EnsureLlamaCppBinaryResponses,
+	EntraDeviceCodeSignInData,
+	EntraDeviceCodeSignInErrors,
+	EntraDeviceCodeSignInResponses,
+	EntraDeviceCodeStatusData,
+	EntraDeviceCodeStatusErrors,
+	EntraDeviceCodeStatusResponses,
 	ExecuteSavedPreviewWorkflowData,
 	ExecuteSavedPreviewWorkflowErrors,
 	ExecuteSavedPreviewWorkflowResponses,
@@ -173,9 +176,6 @@ import type {
 	GetAgentPlaybookMonitorData,
 	GetAgentPlaybookMonitorErrors,
 	GetAgentPlaybookMonitorResponses,
-	GetAppUpdateStatusData,
-	GetAppUpdateStatusErrors,
-	GetAppUpdateStatusResponses,
 	GetCloudSettingsData,
 	GetCloudSettingsErrors,
 	GetCloudSettingsResponses,
@@ -194,9 +194,6 @@ import type {
 	GetGgufDownloadStatusData,
 	GetGgufDownloadStatusErrors,
 	GetGgufDownloadStatusResponses,
-	GetGitHubAuthStatusData,
-	GetGitHubAuthStatusErrors,
-	GetGitHubAuthStatusResponses,
 	GetHardwareProfileData,
 	GetHardwareProfileErrors,
 	GetHardwareProfileResponses,
@@ -357,9 +354,6 @@ import type {
 	PinNodeChatConversationData,
 	PinNodeChatConversationErrors,
 	PinNodeChatConversationResponses,
-	PollGitHubAuthData,
-	PollGitHubAuthErrors,
-	PollGitHubAuthResponses,
 	PollNodeBindingData,
 	PollNodeBindingErrors,
 	PollNodeBindingResponses,
@@ -423,18 +417,12 @@ import type {
 	SetNodeChatSelectedPathData,
 	SetNodeChatSelectedPathErrors,
 	SetNodeChatSelectedPathResponses,
-	SignOutGitHubAuthData,
-	SignOutGitHubAuthErrors,
-	SignOutGitHubAuthResponses,
 	StartCudaBuildData,
 	StartCudaBuildErrors,
 	StartCudaBuildResponses,
 	StartGgufDownloadData,
 	StartGgufDownloadErrors,
 	StartGgufDownloadResponses,
-	StartGitHubAuthData,
-	StartGitHubAuthErrors,
-	StartGitHubAuthResponses,
 	StartImageModelDownloadData,
 	StartImageModelDownloadErrors,
 	StartImageModelDownloadResponses,
@@ -487,7 +475,6 @@ import type {
 import {
 	zAnalyzePlaybookPath,
 	zAnalyzePlaybookResponse,
-	zApplyAppUpdateResponse,
 	zApproveGoldenConversationPath,
 	zApproveGoldenConversationResponse,
 	zArchiveNodeChatConversationBody,
@@ -576,6 +563,8 @@ import {
 	zEnableScheduledJobResponse,
 	zEnsureLlamaCppBinaryBody,
 	zEnsureLlamaCppBinaryResponse,
+	zEntraDeviceCodeSignInResponse,
+	zEntraDeviceCodeStatusResponse,
 	zExecuteSavedPreviewWorkflowPath,
 	zExecuteSavedPreviewWorkflowResponse,
 	zExecuteUnsavedPreviewWorkflowBody,
@@ -590,8 +579,6 @@ import {
 	zGetAgentFeedbackInsightsResponse,
 	zGetAgentPlaybookMonitorPath,
 	zGetAgentPlaybookMonitorResponse,
-	zGetAppUpdateStatusQuery,
-	zGetAppUpdateStatusResponse,
 	zGetCloudSettingsResponse,
 	zGetConnectionStatusResponse,
 	zGetCudaBuildPrerequisitesResponse,
@@ -599,7 +586,6 @@ import {
 	zGetGgufDownloadsResponse,
 	zGetGgufDownloadStatusPath,
 	zGetGgufDownloadStatusResponse,
-	zGetGitHubAuthStatusResponse,
 	zGetHardwareProfileQuery,
 	zGetHardwareProfileResponse,
 	zGetHfTokenStatusResponse,
@@ -687,7 +673,6 @@ import {
 	zPinNodeChatConversationBody,
 	zPinNodeChatConversationPath,
 	zPinNodeChatConversationResponse,
-	zPollGitHubAuthResponse,
 	zPollNodeBindingBody,
 	zPollNodeBindingResponse,
 	zPromoteSuggestedPlaybookActionPath,
@@ -734,11 +719,9 @@ import {
 	zSetNodeChatSelectedPathBody,
 	zSetNodeChatSelectedPathPath,
 	zSetNodeChatSelectedPathResponse,
-	zSignOutGitHubAuthResponse,
 	zStartCudaBuildResponse,
 	zStartGgufDownloadBody,
 	zStartGgufDownloadResponse,
-	zStartGitHubAuthResponse,
 	zStartImageModelDownloadBody,
 	zStartImageModelDownloadResponse,
 	zStartNodeBindingResponse,
@@ -3428,6 +3411,50 @@ export const saveCloudSettings = <ThrowOnError extends boolean = false>(options:
 		},
 	});
 
+export const entraDeviceCodeSignIn = <ThrowOnError extends boolean = false>(
+	options?: Options<EntraDeviceCodeSignInData, ThrowOnError>,
+) =>
+	(options?.client ?? client).post<EntraDeviceCodeSignInResponses, EntraDeviceCodeSignInErrors, ThrowOnError>({
+		requestValidator: async (data) =>
+			await z
+				.object({
+					body: z.never().optional(),
+					path: z.never().optional(),
+					query: z.never().optional(),
+				})
+				.parseAsync(data),
+		responseType: "json",
+		responseValidator: async (data) => await zEntraDeviceCodeSignInResponse.parseAsync(data),
+		security: [
+			{ scheme: "bearer", type: "http" },
+			{ scheme: "bearer", type: "http" },
+		],
+		url: "/api/local/v1/cloud-settings/entra/device-code/start",
+		...options,
+	});
+
+export const entraDeviceCodeStatus = <ThrowOnError extends boolean = false>(
+	options?: Options<EntraDeviceCodeStatusData, ThrowOnError>,
+) =>
+	(options?.client ?? client).get<EntraDeviceCodeStatusResponses, EntraDeviceCodeStatusErrors, ThrowOnError>({
+		requestValidator: async (data) =>
+			await z
+				.object({
+					body: z.never().optional(),
+					path: z.never().optional(),
+					query: z.never().optional(),
+				})
+				.parseAsync(data),
+		responseType: "json",
+		responseValidator: async (data) => await zEntraDeviceCodeStatusResponse.parseAsync(data),
+		security: [
+			{ scheme: "bearer", type: "http" },
+			{ scheme: "bearer", type: "http" },
+		],
+		url: "/api/local/v1/cloud-settings/entra/device-code/status",
+		...options,
+	});
+
 export const codexLogin = <ThrowOnError extends boolean = false>(options?: Options<CodexLoginData, ThrowOnError>) =>
 	(options?.client ?? client).post<CodexLoginResponses, CodexLoginErrors, ThrowOnError>({
 		requestValidator: async (data) =>
@@ -3620,130 +3647,6 @@ export const nodeMe = <ThrowOnError extends boolean = false>(options?: Options<N
 			{ scheme: "bearer", type: "http" },
 		],
 		url: "/api/local/v1/auth/me",
-		...options,
-	});
-
-export const applyAppUpdate = <ThrowOnError extends boolean = false>(options?: Options<ApplyAppUpdateData, ThrowOnError>) =>
-	(options?.client ?? client).post<ApplyAppUpdateResponses, ApplyAppUpdateErrors, ThrowOnError>({
-		requestValidator: async (data) =>
-			await z
-				.object({
-					body: z.never().optional(),
-					path: z.never().optional(),
-					query: z.never().optional(),
-				})
-				.parseAsync(data),
-		responseType: "json",
-		responseValidator: async (data) => await zApplyAppUpdateResponse.parseAsync(data),
-		security: [
-			{ scheme: "bearer", type: "http" },
-			{ scheme: "bearer", type: "http" },
-		],
-		url: "/api/local/v1/app-update/apply",
-		...options,
-	});
-
-export const getAppUpdateStatus = <ThrowOnError extends boolean = false>(
-	options?: Options<GetAppUpdateStatusData, ThrowOnError>,
-) =>
-	(options?.client ?? client).get<GetAppUpdateStatusResponses, GetAppUpdateStatusErrors, ThrowOnError>({
-		requestValidator: async (data) =>
-			await z
-				.object({
-					body: z.never().optional(),
-					path: z.never().optional(),
-					query: zGetAppUpdateStatusQuery.optional(),
-				})
-				.parseAsync(data),
-		responseType: "json",
-		responseValidator: async (data) => await zGetAppUpdateStatusResponse.parseAsync(data),
-		security: [
-			{ scheme: "bearer", type: "http" },
-			{ scheme: "bearer", type: "http" },
-		],
-		url: "/api/local/v1/app-update/status",
-		...options,
-	});
-
-export const getGitHubAuthStatus = <ThrowOnError extends boolean = false>(
-	options?: Options<GetGitHubAuthStatusData, ThrowOnError>,
-) =>
-	(options?.client ?? client).get<GetGitHubAuthStatusResponses, GetGitHubAuthStatusErrors, ThrowOnError>({
-		requestValidator: async (data) =>
-			await z
-				.object({
-					body: z.never().optional(),
-					path: z.never().optional(),
-					query: z.never().optional(),
-				})
-				.parseAsync(data),
-		responseType: "json",
-		responseValidator: async (data) => await zGetGitHubAuthStatusResponse.parseAsync(data),
-		security: [
-			{ scheme: "bearer", type: "http" },
-			{ scheme: "bearer", type: "http" },
-		],
-		url: "/api/local/v1/github-auth/status",
-		...options,
-	});
-
-export const pollGitHubAuth = <ThrowOnError extends boolean = false>(options?: Options<PollGitHubAuthData, ThrowOnError>) =>
-	(options?.client ?? client).post<PollGitHubAuthResponses, PollGitHubAuthErrors, ThrowOnError>({
-		requestValidator: async (data) =>
-			await z
-				.object({
-					body: z.never().optional(),
-					path: z.never().optional(),
-					query: z.never().optional(),
-				})
-				.parseAsync(data),
-		responseType: "json",
-		responseValidator: async (data) => await zPollGitHubAuthResponse.parseAsync(data),
-		security: [
-			{ scheme: "bearer", type: "http" },
-			{ scheme: "bearer", type: "http" },
-		],
-		url: "/api/local/v1/github-auth/poll",
-		...options,
-	});
-
-export const signOutGitHubAuth = <ThrowOnError extends boolean = false>(options?: Options<SignOutGitHubAuthData, ThrowOnError>) =>
-	(options?.client ?? client).post<SignOutGitHubAuthResponses, SignOutGitHubAuthErrors, ThrowOnError>({
-		requestValidator: async (data) =>
-			await z
-				.object({
-					body: z.never().optional(),
-					path: z.never().optional(),
-					query: z.never().optional(),
-				})
-				.parseAsync(data),
-		responseType: "json",
-		responseValidator: async (data) => await zSignOutGitHubAuthResponse.parseAsync(data),
-		security: [
-			{ scheme: "bearer", type: "http" },
-			{ scheme: "bearer", type: "http" },
-		],
-		url: "/api/local/v1/github-auth/sign-out",
-		...options,
-	});
-
-export const startGitHubAuth = <ThrowOnError extends boolean = false>(options?: Options<StartGitHubAuthData, ThrowOnError>) =>
-	(options?.client ?? client).post<StartGitHubAuthResponses, StartGitHubAuthErrors, ThrowOnError>({
-		requestValidator: async (data) =>
-			await z
-				.object({
-					body: z.never().optional(),
-					path: z.never().optional(),
-					query: z.never().optional(),
-				})
-				.parseAsync(data),
-		responseType: "json",
-		responseValidator: async (data) => await zStartGitHubAuthResponse.parseAsync(data),
-		security: [
-			{ scheme: "bearer", type: "http" },
-			{ scheme: "bearer", type: "http" },
-		],
-		url: "/api/local/v1/github-auth/start",
 		...options,
 	});
 
