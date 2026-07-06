@@ -425,8 +425,10 @@ public sealed class ProcessSandboxRuntimeProviderTests : IDisposable
         AssertEx.True(capabilities.HasFlag(SandboxProviderCapabilities.SupportsCommandCancellation));
         AssertEx.True(capabilities.HasFlag(SandboxProviderCapabilities.SupportsAttach));
         AssertEx.True(capabilities.HasFlag(SandboxProviderCapabilities.SupportsKill));
-        AssertEx.True(capabilities.HasFlag(SandboxProviderCapabilities.SupportsResourceLimits));
-        // v1 process model: no read-only mounts and no network isolation mechanism (decision D-1).
+        // v1 process model: no read-only mounts, no network isolation mechanism (decision D-1), and no resource-limit
+        // enforcement — the CPU/mem/PID ceilings in SandboxResourceLimits are ignored (rlimit enforcement is a post-RC
+        // follow-up), so the provider must not advertise SupportsResourceLimits.
+        AssertEx.False(capabilities.HasFlag(SandboxProviderCapabilities.SupportsResourceLimits));
         AssertEx.False(capabilities.HasFlag(SandboxProviderCapabilities.SupportsReadOnlyMounts));
         AssertEx.False(capabilities.HasFlag(SandboxProviderCapabilities.SupportsNetworkPolicy));
     }

@@ -74,7 +74,7 @@ try
         options.ValidateOnBuild = isDevelopment;
     });
 
-    Log.Logger = builder.Environment.CreateStartupLogger();
+    Log.Logger = builder.Environment.CreateStartupLogger(builder.Configuration);
 
     // Aspire services
     builder.AddServiceDefaults();
@@ -115,8 +115,20 @@ try
 
     var app = builder.Build();
 
-    await ApplyNodeChatMigrationsAsync(app.Services).ConfigureAwait(false);
-    await ApplyNodeIdentityMigrationsAsync(app.Services).ConfigureAwait(false);
+    try
+    {
+        await ApplyNodeChatMigrationsAsync(app.Services).ConfigureAwait(false);
+        await ApplyNodeIdentityMigrationsAsync(app.Services).ConfigureAwait(false);
+        Log.Information("Database migrations applied.");
+    }
+    catch (Exception migrationException)
+    {
+        // Fail-loud is unchanged (the migration services already run transactionally and rethrow); this only adds a
+        // targeted error line with the cause before the top-level catch logs the generic fatal + rethrows.
+        Log.Error(migrationException, "Database migrations failed to apply.");
+        throw;
+    }
+
     await RecoverInterruptedNodeChatMessagesAsync(app.Services).ConfigureAwait(false);
     await ReconcileStaleScheduledRunsAsync(app.Services).ConfigureAwait(false);
     ActivateInvocationResumeRegistry(app.Services);

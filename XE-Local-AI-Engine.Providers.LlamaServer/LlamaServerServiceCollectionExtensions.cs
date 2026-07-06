@@ -121,7 +121,8 @@ public static class LlamaServerServiceCollectionExtensions
             sp.GetRequiredService<LlamaServerSupervisorOptions>(),
             sp.GetRequiredService<IInferenceProfileResolver>(),
             sp.GetRequiredService<LlamaServerExternalEndpointOptions>(),
-            sp.GetService<TimeProvider>()));
+            sp.GetService<TimeProvider>(),
+            sp.GetRequiredService<ILogger<LlamaServerProcessSupervisor>>()));
         services.TryAddSingleton<ILlamaServerProcessSupervisor>(static sp =>
             sp.GetRequiredService<LlamaServerProcessSupervisor>());
 
