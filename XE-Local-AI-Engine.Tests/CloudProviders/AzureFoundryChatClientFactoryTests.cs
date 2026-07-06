@@ -1,5 +1,6 @@
 namespace XE_Local_AI_Engine.Tests.CloudProviders;
 
+using Azure.Core;
 using Azure.Identity;
 using Microsoft.Extensions.AI;
 using XE_Local_AI_Engine.Client.Services.CloudProviders;
@@ -218,6 +219,48 @@ public sealed class AzureFoundryChatClientFactoryTests
     }
 
     [Test]
+    public void Create_WhenEntraIdDeviceCodeWithLiveCachedCredential_ReturnsChatClientAdapter_EvenWithoutPersistedRecord()
+    {
+        // Regression guard: on a platform where OS-native encrypted token-cache persistence is unavailable, the
+        // persisted AuthenticationRecord alone has nothing to silently refresh from. The sign-in coordinator's live
+        // credential cache is the fix — a matching cache entry must let Create() succeed even when the persisted
+        // record store is empty (proving the factory does not depend solely on IEntraTokenCacheStore).
+        var connection = CreateEntraConnection(signInMethod: EntraSignInMethod.DeviceCode);
+        var liveCredentialCache = new EntraLiveCredentialCache();
+        var cacheKey = EntraDeviceCodeCredentialCacheKey.Create(connection.EntraTenantId, connection.EntraClientId, connection.EntraTokenScope);
+        liveCredentialCache.Store(cacheKey, new StubTokenCredential());
+        var factory = new AzureFoundryChatClientFactory(new FakeEntraTokenCacheStore(record: null), liveCredentialCache);
+
+        var chatClient = factory.Create(connection, "gpt-4o");
+
+        AssertEx.NotNull(chatClient);
+        AssertEx.True(chatClient is IChatClient);
+    }
+
+    [Test]
+    public void Create_WhenEntraIdDeviceCodeWithLiveCachedCredentialUnderADifferentKey_ThrowsAuthRequired()
+    {
+        // The live-cache hit must be key-scoped: a cached credential for a DIFFERENT tenant/client/scope must never
+        // be handed out for this connection.
+        var liveCredentialCache = new EntraLiveCredentialCache();
+        liveCredentialCache.Store(EntraDeviceCodeCredentialCacheKey.Create("other-tenant", "other-client", "other-scope"),
+            new StubTokenCredential());
+        var factory = new AzureFoundryChatClientFactory(new FakeEntraTokenCacheStore(record: null), liveCredentialCache);
+
+        try
+        {
+            factory.Create(CreateEntraConnection(signInMethod: EntraSignInMethod.DeviceCode), "gpt-4o");
+        }
+        catch (AzureFoundryProviderException exception)
+        {
+            AssertEx.True(exception.Kind == AzureFoundryProviderErrorKind.AuthRequired);
+            return;
+        }
+
+        throw new AssertionException($"Expected {nameof(AzureFoundryProviderException)} of kind {nameof(AzureFoundryProviderErrorKind.AuthRequired)}.");
+    }
+
+    [Test]
     public void Create_WhenEntraIdWithHeaders_BuildsClient()
     {
         var factory = new AzureFoundryChatClientFactory();
@@ -288,6 +331,19 @@ public sealed class AzureFoundryChatClientFactoryTests
                              """;
         using var stream = new MemoryStream(System.Text.Encoding.UTF8.GetBytes(json));
         return AuthenticationRecord.Deserialize(stream);
+    }
+
+    private sealed class StubTokenCredential : TokenCredential
+    {
+        public override AccessToken GetToken(TokenRequestContext requestContext, CancellationToken cancellationToken)
+        {
+            return new AccessToken("stub-token", DateTimeOffset.UtcNow.AddHours(1));
+        }
+
+        public override ValueTask<AccessToken> GetTokenAsync(TokenRequestContext requestContext, CancellationToken cancellationToken)
+        {
+            return ValueTask.FromResult(GetToken(requestContext, cancellationToken));
+        }
     }
 
     private sealed class FakeEntraTokenCacheStore(AuthenticationRecord? record) : IEntraTokenCacheStore

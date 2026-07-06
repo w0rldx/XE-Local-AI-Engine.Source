@@ -300,6 +300,46 @@ public sealed class ActiveCloudChatClientFactoryTests
     }
 
     [Test]
+    public async Task TryCreate_WhenBuildIsSlow_DoesNotSerializeConcurrentCalls()
+    {
+        // Regression guard: Build() must run OUTSIDE the cache lock so a slow build (e.g. Entra ID
+        // InteractiveBrowserCredential's synchronous first-use browser sign-in) never blocks an unrelated concurrent
+        // send waiting on the lock. Proven by two concurrent calls both entering the factory before either returns —
+        // under the pre-fix code (Build() called while holding _cacheGate) this deadlocks and the test times out.
+        using var stubClient = new StubChatClient();
+        var harness = new Harness();
+        harness.CodexTokenStore.LoadAsync(Arg.Any<CancellationToken>()).Returns((CodexTokens?)null);
+        harness.CredentialStore.LoadConfigAsync(Arg.Any<CancellationToken>()).Returns(CreateAzureConfig());
+        harness.NodeSettingsStore.LoadAsync(Arg.Any<CancellationToken>())
+               .Returns(new StoredNodeSettings
+               {
+                   DefaultModelName = "gpt-4o"
+               });
+
+        var bothEntered = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var concurrentEntries = 0;
+        harness.AzureFactory.Create(Arg.Any<StoredAzureFoundryConnection>(), "gpt-4o").Returns(_ =>
+        {
+            if (Interlocked.Increment(ref concurrentEntries) >= 2)
+            {
+                bothEntered.TrySetResult();
+            }
+
+            // Blocks until BOTH concurrent calls have entered Create(), proving neither call is serialized behind
+            // the other's cache-gate lock while its build is in flight.
+            bothEntered.Task.Wait(TimeSpan.FromSeconds(5));
+            return stubClient;
+        });
+        using var factory = harness.Factory;
+
+        var task1 = Task.Run(() => factory.TryCreateActiveCloudChatClient(out _));
+        var task2 = Task.Run(() => factory.TryCreateActiveCloudChatClient(out _));
+        await Task.WhenAll(task1, task2).WaitAsync(TimeSpan.FromSeconds(10));
+
+        AssertEx.Equal(2, concurrentEntries);
+    }
+
+    [Test]
     public async Task ConcurrentSends_WhileSelectionFlips_NeverThrowObjectDisposed()
     {
         // Broad stress companion to the deterministic test above: many parallel sends while the fingerprint flips.
