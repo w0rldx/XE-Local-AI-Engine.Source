@@ -208,9 +208,13 @@ jobs:
       # (GuardNodeReactBuildPresentOnPublish, Client.csproj) hard-fails unless
       # XE-Local-AI-Engine.Client.React/dist/index.html exists. Mirrors the
       # client-react job in build-and-test.yml (same pnpm/node versions + cache).
-      # `vite build` needs no VITE_ env here: VITE_PROXY_TARGET is serve-only,
-      # VITE_APP_VERSION is read from Directory.Build.props by vite.config.ts,
-      # and VITE_APP_TITLE / VITE_API_VERSION carry schema defaults.
+      # Vite env: .env is gitignored, so the checkout has none — seed it from
+      # .env.template, exactly like the documented manual tester-build flow, so
+      # automated and manual builds ship identical values (VITE_APP_TITLE etc.).
+      # The Environment.ts schema also carries defaults as a safety net (the env
+      # check runs at app startup in the browser, not during `vite build` — a
+      # wrong/missing value used to surface only as a blank page).
+      # VITE_APP_VERSION is injected from Directory.Build.props by vite.config.ts.
       # ------------------------------------------------------------------
       - name: Setup pnpm
         uses: pnpm/action-setup@v4
@@ -221,6 +225,15 @@ jobs:
           node-version: 22
           cache: pnpm
           cache-dependency-path: XE-Local-AI-Engine.Client.React/pnpm-lock.yaml
+
+      - name: Seed SPA env from template
+        working-directory: XE-Local-AI-Engine.Client.React
+        shell: bash
+        run: |
+          if [[ ! -f .env ]]; then
+            cp .env.template .env
+            echo "Seeded .env from .env.template"
+          fi
 
       - name: Install SPA dependencies
         working-directory: XE-Local-AI-Engine.Client.React
