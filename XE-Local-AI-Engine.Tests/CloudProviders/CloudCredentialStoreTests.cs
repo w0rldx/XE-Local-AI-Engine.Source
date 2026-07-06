@@ -110,6 +110,82 @@ public sealed class CloudCredentialStoreTests : IDisposable
         AssertEx.False(File.Exists(GetCredentialsPath()));
     }
 
+    [Test]
+    public async Task SaveConfigAsync_WhenEntraIdConnectionIsValid_PersistsAndLoadsConfig()
+    {
+        using var store = CreateStore();
+
+        await store.SaveConfigAsync(CreateEntraIdConfig());
+        var loaded = await store.LoadConfigAsync();
+
+        var connection = AssertEx.NotNull(AssertEx.NotNull(loaded).AzureFoundry);
+        AssertEx.Equal(AzureFoundryAuthMode.EntraId, connection.AuthMode);
+        AssertEx.Equal("tenant-id", connection.EntraTenantId);
+        AssertEx.Equal("client-id", connection.EntraClientId);
+        AssertEx.Equal("api://backend/.default", connection.EntraTokenScope);
+    }
+
+    [Test]
+    public async Task SaveConfigAsync_WhenEntraIdMissingTenantId_ThrowsArgumentException()
+    {
+        using var store = CreateStore();
+        var config = CreateEntraIdConfig() with
+        {
+            AzureFoundry = CreateEntraIdConfig().AzureFoundry! with { EntraTenantId = " " }
+        };
+
+        await AssertEx.ThrowsAsync<ArgumentException>(() => store.SaveConfigAsync(config));
+    }
+
+    [Test]
+    public async Task SaveConfigAsync_WhenEntraIdMissingTokenScope_ThrowsArgumentException()
+    {
+        using var store = CreateStore();
+        var config = CreateEntraIdConfig() with
+        {
+            AzureFoundry = CreateEntraIdConfig().AzureFoundry! with { EntraTokenScope = null }
+        };
+
+        await AssertEx.ThrowsAsync<ArgumentException>(() => store.SaveConfigAsync(config));
+    }
+
+    [Test]
+    public async Task SaveConfigAsync_WhenEntraIdSignInMethodIsUndefined_ThrowsArgumentException()
+    {
+        using var store = CreateStore();
+        var config = CreateEntraIdConfig() with
+        {
+            AzureFoundry = CreateEntraIdConfig().AzureFoundry! with { EntraSignInMethod = (EntraSignInMethod)99 }
+        };
+
+        await AssertEx.ThrowsAsync<ArgumentException>(() => store.SaveConfigAsync(config));
+    }
+
+    private static StoredCloudProviderConfig CreateEntraIdConfig()
+    {
+        return new StoredCloudProviderConfig
+        {
+            ProviderName = "AzureFoundry",
+            AzureFoundry = new StoredAzureFoundryConnection
+            {
+                Endpoint = "https://example.openai.azure.com/",
+                AuthMode = AzureFoundryAuthMode.EntraId,
+                EntraTenantId = "tenant-id",
+                EntraClientId = "client-id",
+                EntraClientSecret = "client-secret",
+                EntraTokenScope = "api://backend/.default",
+                EntraSignInMethod = EntraSignInMethod.ClientSecret,
+                Models =
+                [
+                    new StoredAzureFoundryModel
+                    {
+                        DeploymentName = "gpt-4o"
+                    }
+                ]
+            }
+        };
+    }
+
     private CloudCredentialStore CreateStore(IDataProtectionProvider? dataProtectionProvider = null)
     {
         Directory.CreateDirectory(_contentRootPath);

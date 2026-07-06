@@ -1,5 +1,6 @@
 namespace XE_Local_AI_Engine.Tests.CloudProviders;
 
+using Azure.Identity;
 using Microsoft.Extensions.AI;
 using XE_Local_AI_Engine.Client.Services.CloudProviders;
 using XE_Local_AI_Engine.Client.Services.CloudProviders.Implementation;
@@ -160,6 +161,85 @@ public sealed class AzureFoundryChatClientFactoryTests
         ThrowsConfig(() => factory.Create(CreateConnection(endpoint: "https://gateway.azure-api.net/"), "gpt-4o"));
     }
 
+    [Test]
+    public void Create_WhenEntraIdClientSecretMode_ReturnsChatClientAdapter()
+    {
+        var factory = new AzureFoundryChatClientFactory();
+
+        var chatClient = factory.Create(CreateEntraConnection(clientSecret: "test-client-secret"), "gpt-4o");
+
+        AssertEx.NotNull(chatClient);
+        AssertEx.True(chatClient is IChatClient);
+    }
+
+    [Test]
+    public void Create_WhenEntraIdMissingTenantId_ThrowsConfigError()
+    {
+        var factory = new AzureFoundryChatClientFactory();
+
+        ThrowsConfig(() => factory.Create(CreateEntraConnection(clientSecret: "secret") with { EntraTenantId = " " }, "gpt-4o"));
+    }
+
+    [Test]
+    public void Create_WhenEntraIdMissingTokenScope_ThrowsConfigError()
+    {
+        var factory = new AzureFoundryChatClientFactory();
+
+        ThrowsConfig(() => factory.Create(CreateEntraConnection(clientSecret: "secret") with { EntraTokenScope = " " }, "gpt-4o"));
+    }
+
+    [Test]
+    public void Create_WhenEntraIdDeviceCodeWithNoCachedRecord_ThrowsAuthRequired()
+    {
+        var factory = new AzureFoundryChatClientFactory(new FakeEntraTokenCacheStore(record: null));
+
+        try
+        {
+            factory.Create(CreateEntraConnection(signInMethod: EntraSignInMethod.DeviceCode), "gpt-4o");
+        }
+        catch (AzureFoundryProviderException exception)
+        {
+            AssertEx.True(exception.Kind == AzureFoundryProviderErrorKind.AuthRequired);
+            return;
+        }
+
+        throw new AssertionException($"Expected {nameof(AzureFoundryProviderException)} of kind {nameof(AzureFoundryProviderErrorKind.AuthRequired)}.");
+    }
+
+    [Test]
+    public void Create_WhenEntraIdDeviceCodeWithCachedRecord_ReturnsChatClientAdapter()
+    {
+        var factory = new AzureFoundryChatClientFactory(new FakeEntraTokenCacheStore(CreateAuthenticationRecord()));
+
+        var chatClient = factory.Create(CreateEntraConnection(signInMethod: EntraSignInMethod.DeviceCode), "gpt-4o");
+
+        AssertEx.NotNull(chatClient);
+        AssertEx.True(chatClient is IChatClient);
+    }
+
+    [Test]
+    public void Create_WhenEntraIdWithHeaders_BuildsClient()
+    {
+        var factory = new AzureFoundryChatClientFactory();
+        var connection = CreateEntraConnection(clientSecret: "secret") with
+        {
+            Headers =
+            [
+                new StoredAzureFoundryHeader
+                {
+                    Name = "X-Tenant",
+                    Value = "tenant-a",
+                    IsSecret = false
+                }
+            ]
+        };
+
+        var chatClient = factory.Create(connection, "gpt-4o");
+
+        AssertEx.NotNull(chatClient);
+        AssertEx.True(chatClient is IChatClient);
+    }
+
     private static void ThrowsConfig(Action action)
     {
         try
@@ -173,6 +253,59 @@ public sealed class AzureFoundryChatClientFactoryTests
         }
 
         throw new AssertionException($"Expected {nameof(AzureFoundryProviderException)} of kind {nameof(AzureFoundryProviderErrorKind.Configuration)}.");
+    }
+
+    private static StoredAzureFoundryConnection CreateEntraConnection(string endpoint = "https://example.openai.azure.com/",
+        string? clientSecret = null,
+        EntraSignInMethod signInMethod = EntraSignInMethod.ClientSecret)
+    {
+        return new StoredAzureFoundryConnection
+        {
+            Endpoint = endpoint,
+            AuthMode = AzureFoundryAuthMode.EntraId,
+            EntraTenantId = "tenant-id",
+            EntraClientId = "client-id",
+            EntraClientSecret = clientSecret,
+            EntraTokenScope = "api://backend-app/.default",
+            EntraSignInMethod = signInMethod,
+            Models =
+            [
+                new StoredAzureFoundryModel
+                {
+                    DeploymentName = "gpt-4o"
+                }
+            ]
+        };
+    }
+
+    // AuthenticationRecord has no public constructor (Azure.Identity builds it internally from a live sign-in or
+    // MSAL AuthenticationResult) — deserializing a hand-crafted payload matching its own documented Serialize()
+    // schema is the supported way to obtain one for tests without a live interactive/device-code sign-in.
+    private static AuthenticationRecord CreateAuthenticationRecord()
+    {
+        const string json = """
+                             {"username":"user@contoso.com","authority":"https://login.microsoftonline.com/tenant-id","homeAccountId":"home-account-id","tenantId":"tenant-id","clientId":"client-id","version":"1.0"}
+                             """;
+        using var stream = new MemoryStream(System.Text.Encoding.UTF8.GetBytes(json));
+        return AuthenticationRecord.Deserialize(stream);
+    }
+
+    private sealed class FakeEntraTokenCacheStore(AuthenticationRecord? record) : IEntraTokenCacheStore
+    {
+        public Task<AuthenticationRecord?> LoadRecordAsync(CancellationToken cancellationToken = default)
+        {
+            return Task.FromResult(record);
+        }
+
+        public Task SaveRecordAsync(AuthenticationRecord record, CancellationToken cancellationToken = default)
+        {
+            return Task.CompletedTask;
+        }
+
+        public Task ClearAsync(CancellationToken cancellationToken = default)
+        {
+            return Task.CompletedTask;
+        }
     }
 
     private static StoredAzureFoundryConnection CreateConnection(string endpoint = "https://example.openai.azure.com/",
