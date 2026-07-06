@@ -114,15 +114,17 @@ public sealed class ProcessSandboxRuntimeProvider : ISandboxRuntimeProvider, IDi
 
     public SandboxProviderCapabilities Capabilities =>
         // Serves: copy-into / copy-out (local FS within the jail), per-command cancellation (tree-kill), attach
-        // (reattach by key), kill (tree-kill + invalidate). Resource limits (timeouts / byte budgets) are advertised as
-        // SupportsResourceLimits. NOT served: read-only mounts (no mount layer) and network policy (no isolation
-        // mechanism in v1 — see the class doc and decision D-1).
+        // (reattach by key), kill (tree-kill + invalidate). NOT served: read-only mounts (no mount layer), network
+        // policy (no isolation mechanism in v1 — see the class doc and decision D-1), and resource limits — the
+        // SandboxResourceLimits record (CPU/memory/PID ceilings) is ignored by CreateOrAttachAsync, so this provider
+        // does NOT advertise SupportsResourceLimits. (The per-command timeout and the output byte cap ARE enforced, but
+        // those are not what that flag covers.) follow-up: enforce CPU/mem/PID via pre-exec rlimit
+        // (RLIMIT_AS/CPU/NPROC) post-RC.
         SandboxProviderCapabilities.SupportsCopyInto
         | SandboxProviderCapabilities.SupportsCopyOut
         | SandboxProviderCapabilities.SupportsCommandCancellation
         | SandboxProviderCapabilities.SupportsAttach
-        | SandboxProviderCapabilities.SupportsKill
-        | SandboxProviderCapabilities.SupportsResourceLimits;
+        | SandboxProviderCapabilities.SupportsKill;
 
     public Task<SandboxHandle> CreateOrAttachAsync(SandboxCreateRequest request, CancellationToken cancellationToken = default)
     {
