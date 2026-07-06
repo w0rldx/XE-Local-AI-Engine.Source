@@ -36,9 +36,11 @@ internal sealed class HostGitRunner
     {
         ArgumentNullException.ThrowIfNull(arguments);
 
+#pragma warning disable S4036 // git deliberately resolves via PATH: its install location varies per OS/distro (and per-user on Windows), invocations pin core.hooksPath and a sandboxed working directory, and a missing/hijacked binary surfaces as a captured non-zero exit — never an escalation.
         var startInfo = new ProcessStartInfo
         {
             FileName = AgentHomeGit.Executable,
+#pragma warning restore S4036
             RedirectStandardOutput = true,
             RedirectStandardError = true,
             UseShellExecute = false,

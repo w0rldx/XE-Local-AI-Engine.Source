@@ -269,10 +269,22 @@ internal sealed class CapabilityReportComposer
         return null;
     }
 
+    // nvidia-smi is probed at its two absolute install locations (no PATH lookup, S4036): the driver package's
+    // /usr/bin on native Linux, and the WSL GPU passthrough layer's /usr/lib/wsl/lib — WSL has NO /usr/bin copy,
+    // so dropping the second candidate silently kills GPU detection on WSL boxes.
+    private static readonly string[] NvidiaSmiCandidatePaths = ["/usr/bin/nvidia-smi", "/usr/lib/wsl/lib/nvidia-smi"];
+
     private async Task<GpuInfo?> TryDetectGpuInfoAsync(CancellationToken cancellationToken)
     {
         if (!OperatingSystem.IsLinux())
         {
+            return null;
+        }
+
+        var nvidiaSmiPath = Array.Find(NvidiaSmiCandidatePaths, File.Exists);
+        if (nvidiaSmiPath is null)
+        {
+            // No NVIDIA driver installed — same outcome as nvidia-smi failing to start.
             return null;
         }
 
@@ -282,7 +294,7 @@ internal sealed class CapabilityReportComposer
             {
                 StartInfo = new ProcessStartInfo
                 {
-                    FileName = "nvidia-smi",
+                    FileName = nvidiaSmiPath,
                     Arguments = "--query-gpu=name,memory.total --format=csv,noheader,nounits",
                     RedirectStandardOutput = true,
                     RedirectStandardError = true,
