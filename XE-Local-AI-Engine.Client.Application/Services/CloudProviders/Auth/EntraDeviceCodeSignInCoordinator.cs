@@ -1,7 +1,6 @@
 namespace XE_Local_AI_Engine.Client.Services.CloudProviders.Auth;
 
 using Azure.Identity;
-using XE_Local_AI_Engine.Client.Services.CloudProviders;
 
 /// <summary>
 ///     Owns the pending Entra ID device-code sign-in lifecycle so the Operator endpoints can start a device-code
@@ -117,8 +116,7 @@ public sealed class EntraDeviceCodeSignInCoordinator : IEntraDeviceCodeSignInCoo
     // encrypted token-cache persistence is unavailable, that surfaces as CredentialUnavailableException before (or
     // instead of) the device-code callback firing, in which case a single retry rebuilds the credential without
     // persistence (in-memory only, logged) — never unencrypted-on-disk.
-    private async Task<(DeviceCodeInfo Info, DeviceCodeCredential Credential, Task<AuthenticationRecord> Completion)> BeginDeviceCodeFlowAsync(
-        StoredAzureFoundryConnection connection,
+    private async Task<(DeviceCodeInfo Info, DeviceCodeCredential Credential, Task<AuthenticationRecord> Completion)> BeginDeviceCodeFlowAsync(StoredAzureFoundryConnection connection,
         bool allowPersistence,
         CancellationToken cancellationToken)
     {
@@ -128,7 +126,12 @@ public sealed class EntraDeviceCodeSignInCoordinator : IEntraDeviceCodeSignInCoo
         {
             TenantId = connection.EntraTenantId,
             ClientId = connection.EntraClientId,
-            TokenCachePersistenceOptions = allowPersistence ? new TokenCachePersistenceOptions { Name = TokenCachePersistenceName } : null,
+            TokenCachePersistenceOptions = allowPersistence
+                ? new TokenCachePersistenceOptions
+                {
+                    Name = TokenCachePersistenceName
+                }
+                : null,
             DeviceCodeCallback = (info, _) =>
             {
                 deviceCodeReady.TrySetResult(info);
@@ -140,8 +143,7 @@ public sealed class EntraDeviceCodeSignInCoordinator : IEntraDeviceCodeSignInCoo
 
         // Propagate a fault (e.g. bad tenant/client, or persistence unavailable before the callback ever fired) to
         // the awaiter below instead of leaving it to hang forever.
-        _ = authenticateTask.ContinueWith(
-            task => deviceCodeReady.TrySetException(task.Exception!.GetBaseException()),
+        _ = authenticateTask.ContinueWith(task => deviceCodeReady.TrySetException(task.Exception!.GetBaseException()),
             cancellationToken,
             TaskContinuationOptions.OnlyOnFaulted | TaskContinuationOptions.ExecuteSynchronously,
             TaskScheduler.Default);
@@ -153,8 +155,7 @@ public sealed class EntraDeviceCodeSignInCoordinator : IEntraDeviceCodeSignInCoo
         }
         catch (CredentialUnavailableException) when (allowPersistence)
         {
-            _logger.LogWarning(
-                "Encrypted Entra ID token-cache persistence is unavailable on this platform; retrying device-code sign-in with an in-memory (non-persisted) token cache.");
+            _logger.LogWarning("Encrypted Entra ID token-cache persistence is unavailable on this platform; retrying device-code sign-in with an in-memory (non-persisted) token cache.");
             return await BeginDeviceCodeFlowAsync(connection, allowPersistence: false, cancellationToken).ConfigureAwait(false);
         }
     }
@@ -218,8 +219,7 @@ public sealed class EntraDeviceCodeSignInCoordinator : IEntraDeviceCodeSignInCoo
             || string.IsNullOrWhiteSpace(connection.EntraTenantId)
             || string.IsNullOrWhiteSpace(connection.EntraClientId))
         {
-            throw new InvalidOperationException(
-                "No Entra ID connection with a tenant id and client id is stored. Save Cloud Settings with auth mode EntraId first.");
+            throw new InvalidOperationException("No Entra ID connection with a tenant id and client id is stored. Save Cloud Settings with auth mode EntraId first.");
         }
 
         return connection;

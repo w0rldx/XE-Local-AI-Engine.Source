@@ -183,17 +183,18 @@ public sealed class AzureFoundryChatClientFactory : IAzureFoundryChatClientFacto
                 "Entra ID device-code sign-in has not completed for this connection. Sign in via Cloud Settings first.");
         }
 
-        return new EntraPersistenceFallbackCredential(
-            cacheOptions => new DeviceCodeCredential(new DeviceCodeCredentialOptions
+        return new EntraPersistenceFallbackCredential(cacheOptions => new DeviceCodeCredential(new DeviceCodeCredentialOptions
             {
                 TenantId = connection.EntraTenantId,
                 ClientId = connection.EntraClientId,
                 AuthenticationRecord = record,
                 TokenCachePersistenceOptions = cacheOptions,
-                DeviceCodeCallback = (_, _) => throw new CredentialUnavailableException(
-                    "Entra ID silent authentication expired for this connection; sign in again via Cloud Settings.")
+                DeviceCodeCallback = (_, _) => throw new CredentialUnavailableException("Entra ID silent authentication expired for this connection; sign in again via Cloud Settings.")
             }),
-            new TokenCachePersistenceOptions { Name = EntraTokenCachePersistenceName },
+            new TokenCachePersistenceOptions
+            {
+                Name = EntraTokenCachePersistenceName
+            },
             _logger);
     }
 
@@ -238,7 +239,12 @@ public sealed class AzureFoundryChatClientFactory : IAzureFoundryChatClientFacto
             TenantId = connection.EntraTenantId,
             ClientId = connection.EntraClientId,
             AuthenticationRecord = record,
-            TokenCachePersistenceOptions = allowPersistence ? new TokenCachePersistenceOptions { Name = EntraTokenCachePersistenceName } : null
+            TokenCachePersistenceOptions = allowPersistence
+                ? new TokenCachePersistenceOptions
+                {
+                    Name = EntraTokenCachePersistenceName
+                }
+                : null
         };
     }
 

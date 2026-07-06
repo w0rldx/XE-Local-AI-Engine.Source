@@ -18,7 +18,11 @@ public sealed class EntraBearerTokenPipelinePolicyTests
         var credential = new RecordingTokenCredential("token-value");
         var policy = new EntraBearerTokenPipelinePolicy(credential, "api://backend/.default");
         using var message = CreateMessage();
-        var pipeline = new PipelinePolicy[] { policy, new TerminalPolicy() };
+        var pipeline = new PipelinePolicy[]
+        {
+            policy,
+            new TerminalPolicy()
+        };
 
         policy.Process(message, pipeline, currentIndex: 0);
 
@@ -32,7 +36,11 @@ public sealed class EntraBearerTokenPipelinePolicyTests
         var credential = new RecordingTokenCredential("async-token-value");
         var policy = new EntraBearerTokenPipelinePolicy(credential, "api://backend/.default");
         using var message = CreateMessage();
-        var pipeline = new PipelinePolicy[] { policy, new TerminalPolicy() };
+        var pipeline = new PipelinePolicy[]
+        {
+            policy,
+            new TerminalPolicy()
+        };
 
         await policy.ProcessAsync(message, pipeline, currentIndex: 0);
 
@@ -46,7 +54,11 @@ public sealed class EntraBearerTokenPipelinePolicyTests
         var credential = new RecordingTokenCredential("token-value");
         var policy = new EntraBearerTokenPipelinePolicy(credential, "api://backend/.default");
         using var message = CreateMessage();
-        var pipeline = new PipelinePolicy[] { policy, new TerminalPolicy() };
+        var pipeline = new PipelinePolicy[]
+        {
+            policy,
+            new TerminalPolicy()
+        };
 
         policy.Process(message, pipeline, currentIndex: 0);
 
@@ -60,7 +72,11 @@ public sealed class EntraBearerTokenPipelinePolicyTests
     {
         var credential = new RecordingTokenCredential("token-value");
         var policy = new EntraBearerTokenPipelinePolicy(credential, "api://backend/.default");
-        var pipeline = new PipelinePolicy[] { policy, new TerminalPolicy() };
+        var pipeline = new PipelinePolicy[]
+        {
+            policy,
+            new TerminalPolicy()
+        };
 
         using (var first = CreateMessage())
         {
@@ -82,7 +98,12 @@ public sealed class EntraBearerTokenPipelinePolicyTests
         var bearerPolicy = new EntraBearerTokenPipelinePolicy(credential, "api://backend/.default");
         var headerPolicy = new CustomHeaderPipelinePolicy([("X-Tenant", "tenant-a")]);
         using var message = CreateMessage();
-        var pipeline = new PipelinePolicy[] { headerPolicy, bearerPolicy, new TerminalPolicy() };
+        var pipeline = new PipelinePolicy[]
+        {
+            headerPolicy,
+            bearerPolicy,
+            new TerminalPolicy()
+        };
 
         headerPolicy.Process(message, pipeline, currentIndex: 0);
 

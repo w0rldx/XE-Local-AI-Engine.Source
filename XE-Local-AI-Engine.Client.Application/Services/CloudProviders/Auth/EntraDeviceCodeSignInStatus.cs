@@ -20,7 +20,8 @@ public enum EntraDeviceCodeSignInState
 ///     An immutable snapshot of the current Entra ID device-code sign-in state for the status endpoint. Carries no
 ///     token material.
 /// </summary>
-public sealed record EntraDeviceCodeSignInStatus(EntraDeviceCodeSignInState State,
+public sealed record EntraDeviceCodeSignInStatus(
+    EntraDeviceCodeSignInState State,
     string? UserCode,
     string? VerificationUri,
     DateTimeOffset? ExpiresAtUtc)

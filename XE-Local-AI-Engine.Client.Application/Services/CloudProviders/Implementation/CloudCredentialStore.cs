@@ -310,8 +310,7 @@ public sealed class CloudCredentialStore : ICloudCredentialStore, IDisposable
             || string.IsNullOrWhiteSpace(connection.EntraClientId)
             || string.IsNullOrWhiteSpace(connection.EntraTokenScope))
         {
-            throw new ArgumentException(
-                "Stored cloud provider Entra ID connection requires a tenant id, client id, and token scope.", paramName);
+            throw new ArgumentException("Stored cloud provider Entra ID connection requires a tenant id, client id, and token scope.", paramName);
         }
 
         if (!Enum.IsDefined(connection.EntraSignInMethod))
