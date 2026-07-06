@@ -47,8 +47,7 @@ public static class StableDiffusionCppRuntimeServiceCollectionExtensions
 
         // The supervisor owns every resident sd-server child process for the node — strictly one singleton. Built via an
         // explicit factory because its ctor is internal (it takes the internal launcher/readiness seams).
-        services.TryAddSingleton(static sp => new ImageServerProcessSupervisor(
-            sp.GetRequiredService<IImageModelStore>(),
+        services.TryAddSingleton(static sp => new ImageServerProcessSupervisor(sp.GetRequiredService<IImageModelStore>(),
             sp.GetRequiredService<ISdGpuBackendSelector>(),
             sp.GetRequiredService<IStableDiffusionBinaryManager>(),
             sp.GetRequiredService<IImageServerProcessLauncher>(),

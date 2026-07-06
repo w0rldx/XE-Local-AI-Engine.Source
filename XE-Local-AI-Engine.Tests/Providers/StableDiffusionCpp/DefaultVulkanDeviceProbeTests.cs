@@ -47,8 +47,7 @@ public sealed class DefaultVulkanDeviceProbeTests
     [Test]
     public void HasEnumerableVulkanDevice_WhenManifestCheckThrowsIoError_FailsSafeToFalse()
     {
-        var probe = new DefaultVulkanDeviceProbe(
-            hasExplicitIcdEnvironment: () => false,
+        var probe = new DefaultVulkanDeviceProbe(hasExplicitIcdEnvironment: () => false,
             isWsl: () => false,
             hasIcdManifest: () => throw new IOException("simulated filesystem failure"));
 
@@ -59,8 +58,7 @@ public sealed class DefaultVulkanDeviceProbeTests
     public void HasEnumerableVulkanDevice_ComputesVerdictOnceAndCaches()
     {
         var manifestChecks = 0;
-        var probe = new DefaultVulkanDeviceProbe(
-            hasExplicitIcdEnvironment: () => false,
+        var probe = new DefaultVulkanDeviceProbe(hasExplicitIcdEnvironment: () => false,
             isWsl: () => false,
             hasIcdManifest: () =>
             {

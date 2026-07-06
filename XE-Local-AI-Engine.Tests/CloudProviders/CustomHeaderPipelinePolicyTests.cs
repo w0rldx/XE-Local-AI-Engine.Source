@@ -15,7 +15,11 @@ public sealed class CustomHeaderPipelinePolicyTests
     {
         var policy = new CustomHeaderPipelinePolicy([("X-Alpha", "one"), ("X-Beta", "two")]);
         using var message = CreateMessage();
-        var pipeline = new PipelinePolicy[] { policy, new TerminalPolicy() };
+        var pipeline = new PipelinePolicy[]
+        {
+            policy,
+            new TerminalPolicy()
+        };
 
         policy.Process(message, pipeline, currentIndex: 0);
 
@@ -29,7 +33,11 @@ public sealed class CustomHeaderPipelinePolicyTests
         // "authorization" is reserved (case-insensitive) and must never be overridden by an operator header.
         var policy = new CustomHeaderPipelinePolicy([("authorization", "attacker"), ("X-Ok", "ok")]);
         using var message = CreateMessage();
-        var pipeline = new PipelinePolicy[] { policy, new TerminalPolicy() };
+        var pipeline = new PipelinePolicy[]
+        {
+            policy,
+            new TerminalPolicy()
+        };
 
         policy.Process(message, pipeline, currentIndex: 0);
 

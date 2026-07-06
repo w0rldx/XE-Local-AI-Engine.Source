@@ -57,7 +57,8 @@ public sealed class PreviewWorkflowHubTests
         await connection.InvokeAsync("Subscribe", runId).ConfigureAwait(false);
 
         var publisher = factory.Services.GetRequiredService<IPreviewWorkflowEventPublisher>();
-        await publisher.PublishRunAsync(new PreviewWorkflowRunHubEvent(PreviewWorkflowHubEvents.RunStarted, runId, NodeId: null, Output: null, Error: null, RequestId: null, OccurredAtUtc: 123L, Seq: 0L))
+        await publisher.PublishRunAsync(new PreviewWorkflowRunHubEvent(PreviewWorkflowHubEvents.RunStarted, runId, NodeId: null, Output: null, Error: null, RequestId: null, OccurredAtUtc: 123L,
+                           Seq: 0L))
                        .ConfigureAwait(false);
 
         var evt = await received.Task.WaitAsync(TimeSpan.FromSeconds(10)).ConfigureAwait(false);
@@ -80,11 +81,10 @@ public sealed class PreviewWorkflowHubTests
 
         var executionService = Substitute.For<IPreviewWorkflowExecutionService>();
         executionService.SnapshotBufferedEvents(runId)
-                         .Returns(
-                         [
-                             new PreviewWorkflowBufferedEvent(PreviewWorkflowHubEvents.NodeOutput, nodeEvent),
-                             new PreviewWorkflowBufferedEvent(PreviewWorkflowHubEvents.RunCompleted, runEvent)
-                         ]);
+                        .Returns([
+                            new PreviewWorkflowBufferedEvent(PreviewWorkflowHubEvents.NodeOutput, nodeEvent),
+                            new PreviewWorkflowBufferedEvent(PreviewWorkflowHubEvents.RunCompleted, runEvent)
+                        ]);
 
         await using var factory = new TestingWebAppFactory
         {

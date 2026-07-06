@@ -10,8 +10,7 @@ using XE_Local_AI_Engine.Client.Services.CloudProviders;
 /// </summary>
 internal static class CloudSettingsHeaderMerge
 {
-    public static IReadOnlyList<StoredAzureFoundryHeader> Merge(
-        IReadOnlyList<StoredAzureFoundryHeader> existing,
+    public static IReadOnlyList<StoredAzureFoundryHeader> Merge(IReadOnlyList<StoredAzureFoundryHeader> existing,
         IReadOnlyList<SaveAzureFoundryHeaderRequest> incoming)
     {
         ArgumentNullException.ThrowIfNull(existing);

@@ -377,8 +377,7 @@ public sealed class PreviewWorkflowExecutionServiceTests
         var provider = new FakeLocalModelProvider();
         var publisher = new RecordingPreviewEventPublisher();
         var runner = new FakePreviewWorkflowRunner((_, _) =>
-            new ScriptedPreviewRunSession(
-            [
+            new ScriptedPreviewRunSession([
                 PreviewWorkflowUpdate.NodeStarted("agent"),
                 PreviewWorkflowUpdate.NodeOutput("agent", "hello"),
                 PreviewWorkflowUpdate.RunCompleted("done")
@@ -439,8 +438,7 @@ public sealed class PreviewWorkflowExecutionServiceTests
 
         // A run that emits several node debug events then completes — many published events, one small buffer.
         var runner = new FakePreviewWorkflowRunner((_, _) =>
-            new ScriptedPreviewRunSession(
-            [
+            new ScriptedPreviewRunSession([
                 PreviewWorkflowUpdate.NodeStarted("agent"),
                 PreviewWorkflowUpdate.NodeDebug("agent", "d1"),
                 PreviewWorkflowUpdate.NodeDebug("agent", "d2"),

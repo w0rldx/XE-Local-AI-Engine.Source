@@ -66,8 +66,7 @@ public sealed class KnowledgeDocumentCatalogService : IKnowledgeDocumentCatalogS
             var displayName = await DecryptNameAsync(reader, ordinal: 1, documentId, cancellationToken).ConfigureAwait(false);
             var status = ParseStatus(reader.GetString(2));
             var embeddingModel = reader.GetString(5);
-            documents.Add(new KnowledgeDocumentSummary(
-                documentId,
+            documents.Add(new KnowledgeDocumentSummary(documentId,
                 displayName,
                 status,
                 await reader.IsDBNullAsync(ordinal: 3, cancellationToken).ConfigureAwait(false) ? null : reader.GetString(3),
@@ -107,8 +106,7 @@ public sealed class KnowledgeDocumentCatalogService : IKnowledgeDocumentCatalogS
             var displayName = await DecryptNameAsync(reader, ordinal: 1, documentId, cancellationToken).ConfigureAwait(false);
             var status = ParseStatus(reader.GetString(2));
             var embeddingModel = reader.GetString(5);
-            detail = new KnowledgeDocumentDetail(
-                documentId,
+            detail = new KnowledgeDocumentDetail(documentId,
                 displayName,
                 status,
                 await reader.IsDBNullAsync(ordinal: 3, cancellationToken).ConfigureAwait(false) ? null : reader.GetString(3),
@@ -122,7 +120,10 @@ public sealed class KnowledgeDocumentCatalogService : IKnowledgeDocumentCatalogS
         }
 
         var chunks = await ReadChunksAsync(connection, documentId, cancellationToken).ConfigureAwait(false);
-        return detail with { Chunks = chunks };
+        return detail with
+        {
+            Chunks = chunks
+        };
     }
 
     public async Task<KnowledgeDocumentStatus?> GetStatusAsync(Guid documentId, CancellationToken cancellationToken)
@@ -228,8 +229,7 @@ public sealed class KnowledgeDocumentCatalogService : IKnowledgeDocumentCatalogS
         var chunks = new List<KnowledgeDocumentChunkView>();
         while (await reader.ReadAsync(cancellationToken).ConfigureAwait(false))
         {
-            chunks.Add(new KnowledgeDocumentChunkView(
-                reader.GetInt32(0),
+            chunks.Add(new KnowledgeDocumentChunkView(reader.GetInt32(0),
                 await reader.IsDBNullAsync(ordinal: 1, cancellationToken).ConfigureAwait(false) ? null : reader.GetString(1),
                 reader.GetString(2)));
         }

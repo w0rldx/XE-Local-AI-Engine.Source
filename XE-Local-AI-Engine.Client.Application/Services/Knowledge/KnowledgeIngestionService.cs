@@ -157,8 +157,7 @@ public sealed class KnowledgeIngestionService : IKnowledgeIngestionService
         for (var index = 0; index < chunks.Count; index++)
         {
             var chunk = chunks[index];
-            indexChunks.Add(new KnowledgeIndexChunk(
-                chunk.ChunkIndex,
+            indexChunks.Add(new KnowledgeIndexChunk(chunk.ChunkIndex,
                 chunk.SectionOrdinal,
                 chunk.Content,
                 chunk.HeadingPath,

@@ -1,5 +1,7 @@
 namespace XE_Local_AI_Engine.Client.Persistence.Tests;
 
+using System.Data;
+using System.Data.Common;
 using System.Runtime.InteropServices;
 using Microsoft.Data.Sqlite;
 using Microsoft.EntityFrameworkCore;
@@ -47,7 +49,13 @@ public sealed class ManagedCosineVectorSearchTests : IDisposable
         await EnsureForeignKeysOffAsync(context.Database.GetDbConnection()).ConfigureAwait(false);
         var search = new ManagedCosineVectorSearch(context);
 
-        var hits = await search.SearchAsync(new float[] { 1f, 0f, 0f, 0f }, EmbeddingModel, limit: 10, documentId: null, CancellationToken.None)
+        var hits = await search.SearchAsync(new float[]
+                               {
+                                   1f,
+                                   0f,
+                                   0f,
+                                   0f
+                               }, EmbeddingModel, limit: 10, documentId: null, CancellationToken.None)
                                .ConfigureAwait(false);
 
         AssertEx.Equal(expected: 1, hits.Count);
@@ -72,7 +80,13 @@ public sealed class ManagedCosineVectorSearchTests : IDisposable
         await EnsureForeignKeysOffAsync(context.Database.GetDbConnection()).ConfigureAwait(false);
         var search = new ManagedCosineVectorSearch(context);
 
-        var hits = await search.SearchAsync(new float[] { 1f, 0f, 0f, 0f }, EmbeddingModel, limit: 10, documentId: null, CancellationToken.None)
+        var hits = await search.SearchAsync(new float[]
+                               {
+                                   1f,
+                                   0f,
+                                   0f,
+                                   0f
+                               }, EmbeddingModel, limit: 10, documentId: null, CancellationToken.None)
                                .ConfigureAwait(false);
 
         AssertEx.Empty(hits);
@@ -112,9 +126,9 @@ public sealed class ManagedCosineVectorSearchTests : IDisposable
 
     // Microsoft.Data.Sqlite enables foreign-key enforcement by default; the node-sqlite runtime connection does not,
     // and an orphan vector row (no parent document/chunk) is a valid minimal fixture only under that runtime mode.
-    private static async Task EnsureForeignKeysOffAsync(System.Data.Common.DbConnection connection)
+    private static async Task EnsureForeignKeysOffAsync(DbConnection connection)
     {
-        if (connection.State != System.Data.ConnectionState.Open)
+        if (connection.State != ConnectionState.Open)
         {
             await connection.OpenAsync().ConfigureAwait(false);
         }

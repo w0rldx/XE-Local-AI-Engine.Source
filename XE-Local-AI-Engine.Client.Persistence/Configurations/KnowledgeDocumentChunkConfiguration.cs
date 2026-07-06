@@ -57,7 +57,11 @@ internal sealed class KnowledgeDocumentChunkConfiguration : IEntityTypeConfigura
                .HasForeignKey(entity => entity.SectionId)
                .OnDelete(DeleteBehavior.SetNull);
 
-        builder.HasIndex(entity => new { entity.DocumentId, entity.ChunkIndex });
+        builder.HasIndex(entity => new
+        {
+            entity.DocumentId,
+            entity.ChunkIndex
+        });
         builder.HasIndex(entity => entity.SectionId);
     }
 }

@@ -94,8 +94,7 @@ public sealed class FtsSearch : IFtsSearch
             return "\"\"";
         }
 
-        return string.Join(
-            " OR ",
+        return string.Join(" OR ",
             tokens.Select(static token => string.Concat("\"", token.Replace("\"", "\"\"", StringComparison.Ordinal), "\"")));
     }
 }

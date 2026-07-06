@@ -90,9 +90,9 @@ public sealed class KnowledgeIndexWriter : IKnowledgeIndexWriter
             await using var command = connection.CreateCommand();
             command.Transaction = transaction;
             command.CommandText = """
-                                   INSERT INTO knowledge_document_sections (section_id, document_id, ordinal, heading, level)
-                                   VALUES ($section_id, $document_id, $ordinal, $heading, $level);
-                                   """;
+                                  INSERT INTO knowledge_document_sections (section_id, document_id, ordinal, heading, level)
+                                  VALUES ($section_id, $document_id, $ordinal, $heading, $level);
+                                  """;
             AddParameter(command, "$section_id", sectionId);
             AddParameter(command, "$document_id", input.DocumentId);
             AddParameter(command, "$ordinal", section.Ordinal);
@@ -123,9 +123,9 @@ public sealed class KnowledgeIndexWriter : IKnowledgeIndexWriter
             {
                 chunkCommand.Transaction = transaction;
                 chunkCommand.CommandText = """
-                                            INSERT INTO knowledge_document_chunks (chunk_id, document_id, section_id, chunk_index, content, token_count, heading_path)
-                                            VALUES ($chunk_id, $document_id, $section_id, $chunk_index, $content, $token_count, $heading_path);
-                                            """;
+                                           INSERT INTO knowledge_document_chunks (chunk_id, document_id, section_id, chunk_index, content, token_count, heading_path)
+                                           VALUES ($chunk_id, $document_id, $section_id, $chunk_index, $content, $token_count, $heading_path);
+                                           """;
                 AddParameter(chunkCommand, "$chunk_id", chunkId);
                 AddParameter(chunkCommand, "$document_id", input.DocumentId);
                 AddParameter(chunkCommand, "$section_id", sectionId);
@@ -140,9 +140,9 @@ public sealed class KnowledgeIndexWriter : IKnowledgeIndexWriter
             {
                 vectorCommand.Transaction = transaction;
                 vectorCommand.CommandText = """
-                                             INSERT INTO knowledge_chunk_vectors (chunk_id, document_id, dim, embedding, embedding_model)
-                                             VALUES ($chunk_id, $document_id, $dim, $embedding, $embedding_model);
-                                             """;
+                                            INSERT INTO knowledge_chunk_vectors (chunk_id, document_id, dim, embedding, embedding_model)
+                                            VALUES ($chunk_id, $document_id, $dim, $embedding, $embedding_model);
+                                            """;
                 AddParameter(vectorCommand, "$chunk_id", chunkId);
                 AddParameter(vectorCommand, "$document_id", input.DocumentId);
                 AddParameter(vectorCommand, "$dim", chunk.Dim);
@@ -159,10 +159,10 @@ public sealed class KnowledgeIndexWriter : IKnowledgeIndexWriter
         await using var command = connection.CreateCommand();
         command.Transaction = transaction;
         command.CommandText = """
-                               UPDATE knowledge_documents
-                               SET status = $status, failure_reason = NULL, chunk_count = $chunk_count, embedding_model = $embedding_model, updated_at_utc = $updated_at_utc
-                               WHERE document_id = $document_id;
-                               """;
+                              UPDATE knowledge_documents
+                              SET status = $status, failure_reason = NULL, chunk_count = $chunk_count, embedding_model = $embedding_model, updated_at_utc = $updated_at_utc
+                              WHERE document_id = $document_id;
+                              """;
         AddParameter(command, "$status", KnowledgeDocumentStatus.Indexed.ToString());
         AddParameter(command, "$chunk_count", input.Chunks.Count);
         AddParameter(command, "$embedding_model", input.EmbeddingModel);

@@ -12,8 +12,7 @@ public sealed class ClientLocalToolRegistryTests
     [Test]
     public void TryResolve_KnownHandler_ReturnsToolWithSchemaAndDescription()
     {
-        var registry = new ClientLocalToolRegistry(
-            [new FakeHandler("run_in_agent_home", "Runs.", parameterSchema: """{"type":"object"}""", requiresApproval: false)],
+        var registry = new ClientLocalToolRegistry([new FakeHandler("run_in_agent_home", "Runs.", parameterSchema: """{"type":"object"}""", requiresApproval: false)],
             PipelineOptions());
 
         var found = registry.TryResolve("run_in_agent_home", out var tool);
@@ -28,8 +27,7 @@ public sealed class ClientLocalToolRegistryTests
     [Test]
     public void TryResolve_HighRiskHandler_WrapsInApprovalRequiredFunction()
     {
-        var registry = new ClientLocalToolRegistry(
-            [new FakeHandler("run_in_agent_home", "Runs.", parameterSchema: """{"type":"object"}""", requiresApproval: true)],
+        var registry = new ClientLocalToolRegistry([new FakeHandler("run_in_agent_home", "Runs.", parameterSchema: """{"type":"object"}""", requiresApproval: true)],
             PipelineOptions());
 
         _ = registry.TryResolve("run_in_agent_home", out var tool);
@@ -54,8 +52,7 @@ public sealed class ClientLocalToolRegistryTests
         // The coder read tools are RequiresApproval=false, so they must resolve to a plain (non-approval) executable.
         // The executable is now the shared BudgetedToolResultAIFunction backstop (which delegates name/schema to the
         // inner MetadataToolFunction), never an ApprovalRequiredAIFunction. This mirrors how the coder handlers resolve.
-        var registry = new ClientLocalToolRegistry(
-            [new FakeHandler("read_file", "Reads a file.", parameterSchema: """{"type":"object"}""", requiresApproval: false)],
+        var registry = new ClientLocalToolRegistry([new FakeHandler("read_file", "Reads a file.", parameterSchema: """{"type":"object"}""", requiresApproval: false)],
             PipelineOptions());
 
         var found = registry.TryResolve("read_file", out var tool);
@@ -69,8 +66,7 @@ public sealed class ClientLocalToolRegistryTests
     public async Task InvokeAsync_OverBudgetResult_TruncatesWithMarker()
     {
         // A tool whose output exceeds the budget must be clipped with an explicit marker before it enters chat history.
-        var registry = new ClientLocalToolRegistry(
-            [new FakeHandler("read_file", "Reads a file.", parameterSchema: """{"type":"object"}""", requiresApproval: false, output: new string('x', 5_000))],
+        var registry = new ClientLocalToolRegistry([new FakeHandler("read_file", "Reads a file.", parameterSchema: """{"type":"object"}""", requiresApproval: false, output: new string('x', 5_000))],
             PipelineOptions(maxToolResultCharacters: 1024));
 
         _ = registry.TryResolve("read_file", out var tool);
@@ -86,8 +82,7 @@ public sealed class ClientLocalToolRegistryTests
     [Test]
     public async Task InvokeAsync_WithinBudgetResult_ReturnsUnchanged()
     {
-        var registry = new ClientLocalToolRegistry(
-            [new FakeHandler("read_file", "Reads a file.", parameterSchema: """{"type":"object"}""", requiresApproval: false, output: "small")],
+        var registry = new ClientLocalToolRegistry([new FakeHandler("read_file", "Reads a file.", parameterSchema: """{"type":"object"}""", requiresApproval: false, output: "small")],
             PipelineOptions());
 
         _ = registry.TryResolve("read_file", out var tool);

@@ -305,7 +305,8 @@ public sealed class InvocationAgentFactoryTests
         // resolved against the REAL ClientLocalToolRegistry, which wraps a RequiresApproval=true handler in an
         // ApprovalRequiredAIFunction. Prove the wrapped handler flows through the offer→resolve path without being
         // dropped, so the agent builds with tools enabled.
-        var registry = new ClientLocalToolRegistry([new ApprovalRequiredFakeHandler("run_in_agent_home", "Runs an agent task.", parameterSchema: """{"type":"object"}""")], Options.Create(new AgentToolPipelineOptions()));
+        var registry = new ClientLocalToolRegistry([new ApprovalRequiredFakeHandler("run_in_agent_home", "Runs an agent task.", parameterSchema: """{"type":"object"}""")],
+            Options.Create(new AgentToolPipelineOptions()));
         var resolved = registry.TryResolve("run_in_agent_home", out var wrapped);
         AssertEx.True(resolved);
         AssertEx.True(wrapped is ApprovalRequiredAIFunction, "the high-risk handler must resolve approval-wrapped");

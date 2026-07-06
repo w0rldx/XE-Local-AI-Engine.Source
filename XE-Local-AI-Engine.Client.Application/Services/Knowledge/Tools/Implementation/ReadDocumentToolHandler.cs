@@ -68,8 +68,10 @@ internal sealed class ReadDocumentToolHandler : IClientLocalToolHandler
         var detail = await catalog.GetAsync(documentId, cancellationToken).ConfigureAwait(false);
         if (detail is null)
         {
-            return JsonSerializer.Serialize(
-                new { note = "No knowledge-base document exists with that documentId." },
+            return JsonSerializer.Serialize(new
+                {
+                    note = "No knowledge-base document exists with that documentId."
+                },
                 SerializerOptions);
         }
 

@@ -193,11 +193,15 @@ public sealed class ImageJobCoordinator : IImageJobCoordinator, IDisposable
             // Persist the image encrypted-at-rest BEFORE marking the job succeeded.
             var imageId = Guid.NewGuid();
             await _imageStore.AddAsync(jobId,
-                    imageId,
-                    result.ImageBytes,
-                    new GeneratedImageMetadata { Width = result.Width, Height = result.Height },
-                    CancellationToken.None)
-                .ConfigureAwait(false);
+                                 imageId,
+                                 result.ImageBytes,
+                                 new GeneratedImageMetadata
+                                 {
+                                     Width = result.Width,
+                                     Height = result.Height
+                                 },
+                                 CancellationToken.None)
+                             .ConfigureAwait(false);
 
             var durationMs = (long)result.Duration.TotalMilliseconds;
             await RunStoreAsync(store => store.MarkSucceededAsync(jobId, imageId, NowUnixMs(), durationMs, CancellationToken.None), jobId, "mark succeeded").ConfigureAwait(false);
@@ -254,20 +258,20 @@ public sealed class ImageJobCoordinator : IImageJobCoordinator, IDisposable
         await using var scope = _scopeFactory.CreateAsyncScope();
         var store = scope.ServiceProvider.GetRequiredService<IImageJobStore>();
         await store.CreateQueuedAsync(new ImageJobCreate
-            {
-                Id = jobId,
-                ModelName = input.ModelName,
-                Prompt = input.Prompt,
-                NegativePrompt = input.NegativePrompt,
-                Seed = input.Seed,
-                Width = input.Width,
-                Height = input.Height,
-                Steps = input.Steps,
-                Sampler = input.Sampler ?? string.Empty,
-                CfgScale = input.CfgScale,
-                CreatedAtUtc = createdAtUtc
-            }, cancellationToken)
-            .ConfigureAwait(false);
+                   {
+                       Id = jobId,
+                       ModelName = input.ModelName,
+                       Prompt = input.Prompt,
+                       NegativePrompt = input.NegativePrompt,
+                       Seed = input.Seed,
+                       Width = input.Width,
+                       Height = input.Height,
+                       Steps = input.Steps,
+                       Sampler = input.Sampler ?? string.Empty,
+                       CfgScale = input.CfgScale,
+                       CreatedAtUtc = createdAtUtc
+                   }, cancellationToken)
+                   .ConfigureAwait(false);
     }
 
     // Runs a persistence action in a fresh scope, swallowing failures with a warning so a detached run task never faults
@@ -333,8 +337,7 @@ public sealed class ImageJobCoordinator : IImageJobCoordinator, IDisposable
         var nowUnixMs = _timeProvider.GetUtcNow().ToUnixTimeMilliseconds();
         var isTerminal = IsTerminalStatus(status);
 
-        var payload = (ImageJobStatusHubEvent)log.Append(
-            ImageJobHubEvents.StatusChanged,
+        var payload = (ImageJobStatusHubEvent)log.Append(ImageJobHubEvents.StatusChanged,
             seq => new ImageJobStatusHubEvent(jobId, status.ToString(), queuePosition, elapsedMs, imageId, sanitizedError, nowUnixMs, seq),
             isTerminal,
             nowUnixMs,

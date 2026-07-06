@@ -223,19 +223,21 @@ public sealed class KnowledgeSearchRerankTests : IDisposable
     }
 
     // Score maps keyed by the chunk content prefix, kept as named methods so the reranker stubs avoid nested ternaries.
-    private static double ScoreGammaBestBetaMidAlphaLow(string content) => content switch
-    {
-        _ when content.StartsWith("gamma", StringComparison.Ordinal) => 0.9,
-        _ when content.StartsWith("beta", StringComparison.Ordinal) => 0.5,
-        _ => 0.1
-    };
+    private static double ScoreGammaBestBetaMidAlphaLow(string content) =>
+        content switch
+        {
+            _ when content.StartsWith("gamma", StringComparison.Ordinal) => 0.9,
+            _ when content.StartsWith("beta", StringComparison.Ordinal) => 0.5,
+            _ => 0.1
+        };
 
-    private static double ScoreGammaBestAlphaMidBetaLow(string content) => content switch
-    {
-        _ when content.StartsWith("gamma", StringComparison.Ordinal) => 0.9,
-        _ when content.StartsWith("alpha", StringComparison.Ordinal) => 0.6,
-        _ => 0.2
-    };
+    private static double ScoreGammaBestAlphaMidBetaLow(string content) =>
+        content switch
+        {
+            _ when content.StartsWith("gamma", StringComparison.Ordinal) => 0.9,
+            _ when content.StartsWith("alpha", StringComparison.Ordinal) => 0.6,
+            _ => 0.2
+        };
 
     private static IRerankerClient RerankerScoringBy(Func<string, double> scorer)
     {

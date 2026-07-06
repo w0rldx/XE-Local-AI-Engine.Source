@@ -399,13 +399,15 @@ public sealed class LlamaServerProcessSupervisor : ILlamaServerProcessSupervisor
             if (string.IsNullOrWhiteSpace(draftModelPath) && !string.IsNullOrWhiteSpace(_options.SpeculativeDraftModelName))
             {
                 draftModelPath = await _modelStore.ResolveModelFilePathAsync(_options.SpeculativeDraftModelName, ct).ConfigureAwait(false);
-                speculative = speculative with { DraftModelPath = draftModelPath };
+                speculative = speculative with
+                {
+                    DraftModelPath = draftModelPath
+                };
             }
 
             if (string.IsNullOrWhiteSpace(draftModelPath) || !File.Exists(draftModelPath))
             {
-                throw NonRetryable(
-                    "Speculative decoding is set to a draft model, but the configured draft model file was not found. Check the draft model or disable speculative decoding.");
+                throw NonRetryable("Speculative decoding is set to a draft model, but the configured draft model file was not found. Check the draft model or disable speculative decoding.");
             }
         }
 
@@ -492,8 +494,7 @@ public sealed class LlamaServerProcessSupervisor : ILlamaServerProcessSupervisor
             // poll and surface a sanitized, non-retryable error (no file paths) so the caller fails fast.
             await linkedCts.CancelAsync().ConfigureAwait(false);
             await SwallowCancellationAsync(readyTask).ConfigureAwait(false);
-            throw NonRetryable(
-                "The local model runtime exited while loading the model. The model may be incompatible with this runtime or too large for the available memory.");
+            throw NonRetryable("The local model runtime exited while loading the model. The model may be incompatible with this runtime or too large for the available memory.");
         }
 
         // Readiness settled first: stop the exit-watcher and honor the existing outcome — a genuine timeout (process

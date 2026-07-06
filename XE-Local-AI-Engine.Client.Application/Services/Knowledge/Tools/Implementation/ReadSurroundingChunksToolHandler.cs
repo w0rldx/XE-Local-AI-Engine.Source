@@ -84,14 +84,14 @@ internal sealed class ReadSurroundingChunksToolHandler : IClientLocalToolHandler
             documentId,
             chunkIndex,
             chunks = neighbors
-                .Where(neighbor => neighbor.ChunkIndex >= lowerBound && neighbor.ChunkIndex <= upperBound)
-                .Select(static neighbor => new
-                {
-                    chunkId = neighbor.ChunkId,
-                    chunkIndex = neighbor.ChunkIndex,
-                    section = neighbor.HeadingPath,
-                    content = neighbor.Content
-                })
+                     .Where(neighbor => neighbor.ChunkIndex >= lowerBound && neighbor.ChunkIndex <= upperBound)
+                     .Select(static neighbor => new
+                     {
+                         chunkId = neighbor.ChunkId,
+                         chunkIndex = neighbor.ChunkIndex,
+                         section = neighbor.HeadingPath,
+                         content = neighbor.Content
+                     })
         };
 
         return JsonSerializer.Serialize(payload, SerializerOptions);

@@ -308,8 +308,7 @@ internal sealed class ImageServerProcessSupervisor : IImageServerSupervisor, IAs
         {
             await linkedCts.CancelAsync().ConfigureAwait(false);
             await SwallowCancellationAsync(readyTask).ConfigureAwait(false);
-            throw new StableDiffusionRuntimeException(
-                "The image runtime exited while loading the model. The model may be incompatible with this runtime or too large for the available memory.");
+            throw new StableDiffusionRuntimeException("The image runtime exited while loading the model. The model may be incompatible with this runtime or too large for the available memory.");
         }
 
         await linkedCts.CancelAsync().ConfigureAwait(false);
@@ -442,8 +441,7 @@ internal sealed class ImageServerProcessSupervisor : IImageServerSupervisor, IAs
 
     private static StableDiffusionRuntimeException CapReached()
     {
-        return new StableDiffusionRuntimeException(
-            "The maximum number of local image models are already loaded. Unload a model or raise the limit, then try again.");
+        return new StableDiffusionRuntimeException("The maximum number of local image models are already loaded. Unload a model or raise the limit, then try again.");
     }
 
     private void PruneExitedProcesses()

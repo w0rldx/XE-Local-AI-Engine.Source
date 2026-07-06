@@ -231,7 +231,11 @@ public sealed class ImageJobCoordinatorTests
             Prompts.Add(request.Prompt);
             _ = _started.TrySetResult();
 
-            progress.Report(new ImageGenProgress { Phase = ImageGenPhase.Generating, Elapsed = TimeSpan.Zero });
+            progress.Report(new ImageGenProgress
+            {
+                Phase = ImageGenPhase.Generating,
+                Elapsed = TimeSpan.Zero
+            });
 
             try
             {
@@ -250,7 +254,13 @@ public sealed class ImageJobCoordinatorTests
 
             return new ImageGenerationResult
             {
-                ImageBytes = new byte[] { 1, 2, 3, 4 },
+                ImageBytes = new byte[]
+                {
+                    1,
+                    2,
+                    3,
+                    4
+                },
                 Width = request.Width,
                 Height = request.Height,
                 Seed = 42,
@@ -300,31 +310,53 @@ public sealed class ImageJobCoordinatorTests
 
         public Task MarkGeneratingAsync(Guid jobId, long startedAtUtc, CancellationToken cancellationToken)
         {
-            Update(jobId, view => view with { Status = ImageJobStatus.Generating, StartedAtUtc = startedAtUtc });
+            Update(jobId, view => view with
+            {
+                Status = ImageJobStatus.Generating,
+                StartedAtUtc = startedAtUtc
+            });
             return Task.CompletedTask;
         }
 
         public Task MarkSucceededAsync(Guid jobId, Guid imageId, long completedAtUtc, long durationMs, CancellationToken cancellationToken)
         {
-            Update(jobId, view => view with { Status = ImageJobStatus.Succeeded, ImageId = imageId, CompletedAtUtc = completedAtUtc, DurationMs = durationMs });
+            Update(jobId, view => view with
+            {
+                Status = ImageJobStatus.Succeeded,
+                ImageId = imageId,
+                CompletedAtUtc = completedAtUtc,
+                DurationMs = durationMs
+            });
             return Task.CompletedTask;
         }
 
         public Task MarkFailedAsync(Guid jobId, string sanitizedError, long completedAtUtc, CancellationToken cancellationToken)
         {
-            Update(jobId, view => view with { Status = ImageJobStatus.Failed, SanitizedError = sanitizedError, CompletedAtUtc = completedAtUtc });
+            Update(jobId, view => view with
+            {
+                Status = ImageJobStatus.Failed,
+                SanitizedError = sanitizedError,
+                CompletedAtUtc = completedAtUtc
+            });
             return Task.CompletedTask;
         }
 
         public Task MarkCancelledAsync(Guid jobId, long completedAtUtc, CancellationToken cancellationToken)
         {
-            Update(jobId, view => view with { Status = ImageJobStatus.Cancelled, CompletedAtUtc = completedAtUtc });
+            Update(jobId, view => view with
+            {
+                Status = ImageJobStatus.Cancelled,
+                CompletedAtUtc = completedAtUtc
+            });
             return Task.CompletedTask;
         }
 
         public Task MarkCancellationRequestedAsync(Guid jobId, long requestedAtUtc, CancellationToken cancellationToken)
         {
-            Update(jobId, view => view with { CancellationRequestedAtUtc = requestedAtUtc });
+            Update(jobId, view => view with
+            {
+                CancellationRequestedAtUtc = requestedAtUtc
+            });
             return Task.CompletedTask;
         }
 

@@ -1,8 +1,6 @@
 namespace XE_Local_AI_Engine.Client.Endpoints.Images.V1;
 
 using FastEndpoints;
-using Microsoft.AspNetCore.Http;
-using Microsoft.Extensions.Logging;
 using XE_Local_AI_Engine.Client.Endpoints.Common;
 using XE_Local_AI_Engine.Client.Services.Auth;
 using XE_Local_AI_Engine.Providers.Abstractions.Image;

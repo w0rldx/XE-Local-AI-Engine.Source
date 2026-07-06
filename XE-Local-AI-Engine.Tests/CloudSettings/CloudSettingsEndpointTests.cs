@@ -132,9 +132,18 @@ public sealed class CloudSettingsEndpointTests
     public async Task GetCloudSettings_NeverEmitsSecretHeaderValue()
     {
         var cloudCredentialStore = Substitute.For<ICloudCredentialStore>();
-        cloudCredentialStore.LoadConfigAsync(Arg.Any<CancellationToken>()).Returns(CreateConfigWithHeaders(
-            new StoredAzureFoundryHeader { Name = "Ocp-Apim-Subscription-Key", Value = "top-secret-value", IsSecret = true },
-            new StoredAzureFoundryHeader { Name = "X-Tenant", Value = "tenant-a", IsSecret = false }));
+        cloudCredentialStore.LoadConfigAsync(Arg.Any<CancellationToken>()).Returns(CreateConfigWithHeaders(new StoredAzureFoundryHeader
+            {
+                Name = "Ocp-Apim-Subscription-Key",
+                Value = "top-secret-value",
+                IsSecret = true
+            },
+            new StoredAzureFoundryHeader
+            {
+                Name = "X-Tenant",
+                Value = "tenant-a",
+                IsSecret = false
+            }));
         await using var factory = CreateFactory(cloudCredentialStore);
         using var client = factory.CreateClient();
 
@@ -155,23 +164,36 @@ public sealed class CloudSettingsEndpointTests
     [Test]
     public async Task SaveCloudSettings_WhenReservedHeaderName_ReturnsValidationProblem()
     {
-        await AssertSaveRejectedAsync(
-            new SaveAzureFoundryHeaderRequest { Name = "Authorization", Value = "attacker", IsSecret = false });
+        await AssertSaveRejectedAsync(new SaveAzureFoundryHeaderRequest
+        {
+            Name = "Authorization",
+            Value = "attacker",
+            IsSecret = false
+        });
     }
 
     [Test]
     public async Task SaveCloudSettings_WhenValueHasCrlf_ReturnsValidationProblem()
     {
-        await AssertSaveRejectedAsync(
-            new SaveAzureFoundryHeaderRequest { Name = "X-Inject", Value = "a\r\nEvil: 1", IsSecret = false });
+        await AssertSaveRejectedAsync(new SaveAzureFoundryHeaderRequest
+        {
+            Name = "X-Inject",
+            Value = "a\r\nEvil: 1",
+            IsSecret = false
+        });
     }
 
     [Test]
     public async Task SaveCloudSettings_WhenOverCaps_ReturnsValidationProblem()
     {
         var headers = Enumerable.Range(0, AzureFoundryHeaderRules.MaxHeaderCount + 1)
-            .Select(index => new SaveAzureFoundryHeaderRequest { Name = $"X-H{index}", Value = "v", IsSecret = false })
-            .ToArray();
+                                .Select(index => new SaveAzureFoundryHeaderRequest
+                                {
+                                    Name = $"X-H{index}",
+                                    Value = "v",
+                                    IsSecret = false
+                                })
+                                .ToArray();
         await AssertSaveRejectedAsync(headers);
     }
 
@@ -179,13 +201,22 @@ public sealed class CloudSettingsEndpointTests
     public async Task SaveCloudSettings_WhenSecretHeaderBlankOnEdit_KeepsStoredValue()
     {
         var cloudCredentialStore = Substitute.For<ICloudCredentialStore>();
-        cloudCredentialStore.LoadConfigAsync(Arg.Any<CancellationToken>()).Returns(CreateConfigWithHeaders(
-            new StoredAzureFoundryHeader { Name = "X-Api-Token", Value = "stored-secret", IsSecret = true }));
+        cloudCredentialStore.LoadConfigAsync(Arg.Any<CancellationToken>()).Returns(CreateConfigWithHeaders(new StoredAzureFoundryHeader
+        {
+            Name = "X-Api-Token",
+            Value = "stored-secret",
+            IsSecret = true
+        }));
         var capabilityReporter = Substitute.For<ICapabilityReporter>();
         capabilityReporter.ReportToApiAsync(Arg.Any<CancellationToken>()).Returns(Task.CompletedTask);
 
         var body = await SendSaveAsync(cloudCredentialStore, capabilityReporter,
-            new SaveAzureFoundryHeaderRequest { Name = "X-Api-Token", Value = null, IsSecret = true });
+            new SaveAzureFoundryHeaderRequest
+            {
+                Name = "X-Api-Token",
+                Value = null,
+                IsSecret = true
+            });
 
         AssertEx.False(body.Contains("stored-secret", StringComparison.Ordinal));
         await cloudCredentialStore.Received(1).SaveConfigAsync(Arg.Is<StoredCloudProviderConfig>(config =>
@@ -198,13 +229,22 @@ public sealed class CloudSettingsEndpointTests
     public async Task SaveCloudSettings_WhenSecretToggledOffWithBlankValue_DoesNotResurrectStoredSecret()
     {
         var cloudCredentialStore = Substitute.For<ICloudCredentialStore>();
-        cloudCredentialStore.LoadConfigAsync(Arg.Any<CancellationToken>()).Returns(CreateConfigWithHeaders(
-            new StoredAzureFoundryHeader { Name = "X-Api-Token", Value = "stored-secret", IsSecret = true }));
+        cloudCredentialStore.LoadConfigAsync(Arg.Any<CancellationToken>()).Returns(CreateConfigWithHeaders(new StoredAzureFoundryHeader
+        {
+            Name = "X-Api-Token",
+            Value = "stored-secret",
+            IsSecret = true
+        }));
         var capabilityReporter = Substitute.For<ICapabilityReporter>();
         capabilityReporter.ReportToApiAsync(Arg.Any<CancellationToken>()).Returns(Task.CompletedTask);
 
         var body = await SendSaveAsync(cloudCredentialStore, capabilityReporter,
-            new SaveAzureFoundryHeaderRequest { Name = "X-Api-Token", Value = null, IsSecret = false });
+            new SaveAzureFoundryHeaderRequest
+            {
+                Name = "X-Api-Token",
+                Value = null,
+                IsSecret = false
+            });
 
         AssertEx.False(body.Contains("stored-secret", StringComparison.Ordinal));
         await cloudCredentialStore.Received(1).SaveConfigAsync(Arg.Is<StoredCloudProviderConfig>(config =>
@@ -220,16 +260,24 @@ public sealed class CloudSettingsEndpointTests
         // A renamed secret header has no stored secret of the same name to merge against, so it must be rejected as a
         // clean 400 instead of saving an unresolved secret that later throws in CloudCredentialStore.ValidateConfig.
         var cloudCredentialStore = Substitute.For<ICloudCredentialStore>();
-        cloudCredentialStore.LoadConfigAsync(Arg.Any<CancellationToken>()).Returns(CreateConfigWithHeaders(
-            new StoredAzureFoundryHeader { Name = "X-Old-Name", Value = "stored-secret", IsSecret = true }));
+        cloudCredentialStore.LoadConfigAsync(Arg.Any<CancellationToken>()).Returns(CreateConfigWithHeaders(new StoredAzureFoundryHeader
+        {
+            Name = "X-Old-Name",
+            Value = "stored-secret",
+            IsSecret = true
+        }));
         var capabilityReporter = Substitute.For<ICapabilityReporter>();
         await using var factory = CreateFactory(cloudCredentialStore, capabilityReporter);
         using var client = factory.CreateClient();
 
         using var request = CreateRequest(factory, HttpMethod.Put, "/api/local/v1/cloud-settings");
-        request.Content = JsonContent.Create(CreateSaveRequest(
-        [
-            new SaveAzureFoundryHeaderRequest { Name = "X-New-Name", Value = null, IsSecret = true }
+        request.Content = JsonContent.Create(CreateSaveRequest([
+            new SaveAzureFoundryHeaderRequest
+            {
+                Name = "X-New-Name",
+                Value = null,
+                IsSecret = true
+            }
         ]));
         using var response = await client.SendAsync(request).ConfigureAwait(false);
         var body = await response.Content.ReadAsStringAsync().ConfigureAwait(false);
@@ -245,8 +293,12 @@ public sealed class CloudSettingsEndpointTests
     {
         // No stored config at all: a brand-new secret header sent with a blank value has nothing to merge against and
         // must be rejected as a 400 (previously threw ArgumentException in CloudCredentialStore.ValidateConfig -> 500).
-        await AssertSaveRejectedAsync(
-            new SaveAzureFoundryHeaderRequest { Name = "X-Api-Token", Value = null, IsSecret = true });
+        await AssertSaveRejectedAsync(new SaveAzureFoundryHeaderRequest
+        {
+            Name = "X-Api-Token",
+            Value = null,
+            IsSecret = true
+        });
     }
 
     private static async Task AssertSaveRejectedAsync(params SaveAzureFoundryHeaderRequest[] headers)
@@ -287,7 +339,13 @@ public sealed class CloudSettingsEndpointTests
             Endpoint = "https://example.openai.azure.com/",
             AuthMode = "ApiKey",
             ApiKey = "new-secret-api-key",
-            Models = [new AzureFoundryModelDto { DeploymentName = "gpt-4o" }],
+            Models =
+            [
+                new AzureFoundryModelDto
+                {
+                    DeploymentName = "gpt-4o"
+                }
+            ],
             Headers = headers
         };
     }
@@ -302,7 +360,14 @@ public sealed class CloudSettingsEndpointTests
                 Endpoint = "https://example.openai.azure.com/",
                 AuthMode = AzureFoundryAuthMode.ApiKey,
                 ApiKey = "test-api-key",
-                Models = [new StoredAzureFoundryModel { DeploymentName = "gpt-4o", DisplayLabel = "gpt-4o" }],
+                Models =
+                [
+                    new StoredAzureFoundryModel
+                    {
+                        DeploymentName = "gpt-4o",
+                        DisplayLabel = "gpt-4o"
+                    }
+                ],
                 Headers = headers
             }
         };

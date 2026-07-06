@@ -1,7 +1,5 @@
 namespace XE_Local_AI_Engine.Providers.StableDiffusionCpp.Contracts;
 
-using XE_Local_AI_Engine.Providers.StableDiffusionCpp;
-
 /// <summary>
 ///     Owns the resident <c>sd-server</c> daemon(s): reuse-or-spawn one process per model, readiness-gate it, and
 ///     tree-kill + restart it on demand. Mirrors <c>ILlamaServerProcessSupervisor</c> for the image runtime; consumed

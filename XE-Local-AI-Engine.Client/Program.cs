@@ -332,8 +332,8 @@ static LogEventLevel GetRequestCompletionLogLevel(HttpContext httpContext, Excep
     }
 
     return httpContext.Response.StatusCode is >= StatusCodes.Status400BadRequest
-               and not StatusCodes.Status401Unauthorized
-               and not StatusCodes.Status404NotFound
+        and not StatusCodes.Status401Unauthorized
+        and not StatusCodes.Status404NotFound
         ? LogEventLevel.Warning
         : LogEventLevel.Debug;
 }

@@ -3,7 +3,7 @@ namespace XE_Local_AI_Engine.Client.Services.Images;
 using Microsoft.EntityFrameworkCore;
 using XE_Local_AI_Engine.Client.Persistence;
 using XE_Local_AI_Engine.Providers.Abstractions;
-using static XE_Local_AI_Engine.Client.Services.Chat.Implementation.NodeChatPersistenceSql;
+using static Chat.Implementation.NodeChatPersistenceSql;
 
 /// <summary>
 ///     Durable encrypted-at-rest <see cref="IGeneratedImageStore" />. The image bytes are encrypted on disk by

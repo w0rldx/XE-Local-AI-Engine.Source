@@ -20,7 +20,10 @@ internal sealed class ImageModelRegistry : IImageModelRegistry, IDisposable
     {
         WriteIndented = true,
         DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull,
-        Converters = { new JsonStringEnumConverter() }
+        Converters =
+        {
+            new JsonStringEnumConverter()
+        }
     };
 
     private readonly SemaphoreSlim _lock = new(initialCount: 1, maxCount: 1);

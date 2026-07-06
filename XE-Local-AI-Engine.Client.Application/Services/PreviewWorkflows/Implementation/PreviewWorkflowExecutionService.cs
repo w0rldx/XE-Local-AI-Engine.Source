@@ -577,8 +577,7 @@ internal sealed class PreviewWorkflowExecutionService : IPreviewWorkflowExecutio
 
         // Assign the next seq, stamp the event with it, and append to the replay log atomically — then publish the
         // seq-stamped event as before. A terminal run event marks the log for later eviction.
-        var runEvent = (PreviewWorkflowRunHubEvent)log.Append(
-            eventType,
+        var runEvent = (PreviewWorkflowRunHubEvent)log.Append(eventType,
             seq => new PreviewWorkflowRunHubEvent(eventType, runId, nodeId, output, error, requestId, nowUnixMs, seq),
             isTerminal,
             nowUnixMs,
@@ -603,8 +602,7 @@ internal sealed class PreviewWorkflowExecutionService : IPreviewWorkflowExecutio
         var log = GetOrCreateEventLog(runId);
         var nowUnixMs = _timeProvider.GetUtcNow().ToUnixTimeMilliseconds();
 
-        var nodeEvent = (PreviewWorkflowNodeHubEvent)log.Append(
-            eventType,
+        var nodeEvent = (PreviewWorkflowNodeHubEvent)log.Append(eventType,
             seq => new PreviewWorkflowNodeHubEvent(eventType, runId, nodeId, output, error, nowUnixMs, seq),
             isTerminal: false,
             terminalAtUnixMs: null,

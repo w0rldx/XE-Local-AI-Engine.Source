@@ -15,8 +15,7 @@ public sealed class SearchKnowledgeBaseToolHandlerBudgetTests
         // Five hits of ~20K chars each = ~100K, well over the 50K aggregate budget. Results arrive score-descending, so
         // the handler must keep the top hits until the budget is spent and drop the rest, flagging truncation.
         var hits = Enumerable.Range(0, 5)
-                             .Select(index => new KnowledgeSearchHit(
-                                 DocumentId: Guid.NewGuid(),
+                             .Select(index => new KnowledgeSearchHit(DocumentId: Guid.NewGuid(),
                                  ChunkId: Guid.NewGuid(),
                                  Title: $"doc-{index}",
                                  Section: null,
@@ -65,7 +64,10 @@ public sealed class SearchKnowledgeBaseToolHandlerBudgetTests
         services.AddScoped<IKnowledgeSearchService>(_ => new FakeKnowledgeSearchService(result));
         var scopeFactory = services.BuildServiceProvider().GetRequiredService<IServiceScopeFactory>();
 
-        return new SearchKnowledgeBaseToolHandler(scopeFactory, Options.Create(new KnowledgeBaseOptions { AgentToolsEnabled = true }));
+        return new SearchKnowledgeBaseToolHandler(scopeFactory, Options.Create(new KnowledgeBaseOptions
+        {
+            AgentToolsEnabled = true
+        }));
     }
 
     private sealed class FakeKnowledgeSearchService(KnowledgeSearchResult result) : IKnowledgeSearchService

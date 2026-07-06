@@ -129,12 +129,18 @@ internal sealed class SdServerJobClient
 
         if (response.StatusCode == HttpStatusCode.Gone)
         {
-            return new SdJobState { Status = SdJobStatus.Expired };
+            return new SdJobState
+            {
+                Status = SdJobStatus.Expired
+            };
         }
 
         if (response.StatusCode == HttpStatusCode.NotFound)
         {
-            return new SdJobState { Status = SdJobStatus.Unknown };
+            return new SdJobState
+            {
+                Status = SdJobStatus.Unknown
+            };
         }
 
         if (!response.IsSuccessStatusCode)

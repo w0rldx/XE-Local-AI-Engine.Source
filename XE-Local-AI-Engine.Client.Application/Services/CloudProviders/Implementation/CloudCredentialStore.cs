@@ -302,8 +302,7 @@ public sealed class CloudCredentialStore : ICloudCredentialStore, IDisposable
     {
         if (connection.Headers.Count > AzureFoundryHeaderRules.MaxHeaderCount)
         {
-            throw new ArgumentException(
-                $"Stored cloud provider connection has more than {AzureFoundryHeaderRules.MaxHeaderCount} custom headers.",
+            throw new ArgumentException($"Stored cloud provider connection has more than {AzureFoundryHeaderRules.MaxHeaderCount} custom headers.",
                 paramName);
         }
 
@@ -345,8 +344,7 @@ public sealed class CloudCredentialStore : ICloudCredentialStore, IDisposable
     {
         if (connection.AdditionalAllowedHostSuffixes.Count > AzureFoundryHeaderRules.MaxHostSuffixCount)
         {
-            throw new ArgumentException(
-                $"Stored cloud provider connection has more than {AzureFoundryHeaderRules.MaxHostSuffixCount} allowed host suffixes.",
+            throw new ArgumentException($"Stored cloud provider connection has more than {AzureFoundryHeaderRules.MaxHostSuffixCount} allowed host suffixes.",
                 paramName);
         }
 

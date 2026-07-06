@@ -173,7 +173,11 @@ internal sealed class HuggingFaceImageModelStore : IImageModelStore
         var entry = await _registry.FindAsync(modelName, ct).ConfigureAwait(false);
         if (entry is not null)
         {
-            var paths = entry.Parts.SelectMany(part => new[] { part.LocalPath, part.LocalPath + ".part" });
+            var paths = entry.Parts.SelectMany(part => new[]
+            {
+                part.LocalPath,
+                part.LocalPath + ".part"
+            });
             foreach (var path in paths)
             {
                 TryDeleteFile(path);

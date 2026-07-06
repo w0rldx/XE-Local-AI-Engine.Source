@@ -268,8 +268,7 @@ public sealed class NodeSettingsEndpointTests
         using var response = await client.SendAsync(request).ConfigureAwait(false);
 
         AssertEx.Equal(HttpStatusCode.OK, response.StatusCode);
-        await nodeSettingsStore.Received(1).SaveAsync(
-            Arg.Is<StoredNodeSettings>(stored => stored.SpeculativeMode == "draft-simple" && stored.SpeculativeDraftModelName == "my-draft"),
+        await nodeSettingsStore.Received(1).SaveAsync(Arg.Is<StoredNodeSettings>(stored => stored.SpeculativeMode == "draft-simple" && stored.SpeculativeDraftModelName == "my-draft"),
             Arg.Any<CancellationToken>());
     }
 
@@ -351,7 +350,10 @@ public sealed class NodeSettingsEndpointTests
         AssertEx.Equal("bge-reranker-v2-m3", merged.RerankerModelName);
 
         // The "Off" option sends an empty string, which clears the reranker model name.
-        var cleared = new SaveNodeSettingsRequest { RerankerModelName = string.Empty }.ToStoredSettings(stored);
+        var cleared = new SaveNodeSettingsRequest
+        {
+            RerankerModelName = string.Empty
+        }.ToStoredSettings(stored);
         AssertEx.Equal(string.Empty, cleared.RerankerModelName);
     }
 

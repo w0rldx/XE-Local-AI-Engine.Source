@@ -67,10 +67,9 @@ public sealed class SaveCloudSettingsEndpoint(
 
         // Names of stored headers that are secret, so a fresh/renamed blank secret header (no stored secret to merge
         // against) is rejected here instead of throwing later in CloudCredentialStore.ValidateConfig (500 -> 400).
-        var storedSecretNames = new HashSet<string>(
-            existingHeaders
-                .Where(static header => header.IsSecret && !string.IsNullOrWhiteSpace(header.Name))
-                .Select(static header => header.Name.Trim()),
+        var storedSecretNames = new HashSet<string>(existingHeaders
+                                                    .Where(static header => header.IsSecret && !string.IsNullOrWhiteSpace(header.Name))
+                                                    .Select(static header => header.Name.Trim()),
             StringComparer.OrdinalIgnoreCase);
 
         var seenNames = new HashSet<string>(StringComparer.OrdinalIgnoreCase);

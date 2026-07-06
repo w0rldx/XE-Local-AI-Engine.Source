@@ -6,7 +6,6 @@ using Microsoft.Extensions.Options;
 using OllamaSharp.Models.Exceptions;
 using XE_Local_AI_Engine.Client.Persistence;
 using XE_Local_AI_Engine.Client.Services.CloudProviders;
-using XE_Local_AI_Engine.Providers.Abstractions;
 using XE_Local_AI_Engine.Providers.Abstractions.Contracts;
 using static Chat.Implementation.NodeChatPersistenceSql;
 
@@ -94,8 +93,8 @@ public sealed class KnowledgeSearchService : IKnowledgeSearchService
         if (!queryVector.IsEmpty)
         {
             var vectorHits = await _vectorSearchFactory.Create()
-                .SearchAsync(queryVector, resolvedModel, candidatePool, request.DocumentId, cancellationToken)
-                .ConfigureAwait(false);
+                                                       .SearchAsync(queryVector, resolvedModel, candidatePool, request.DocumentId, cancellationToken)
+                                                       .ConfigureAwait(false);
             vectorRanked = vectorHits.Select(hit => hit.ChunkId).ToList();
         }
 
@@ -198,7 +197,10 @@ public sealed class KnowledgeSearchService : IKnowledgeSearchService
         // Reorder the pool by descending rerank relevance, stamping the rerank score onto each surviving hit, then cut to
         // `limit`. OrderByDescending is a stable sort, so equal scores preserve the RRF tie-break order.
         return pool
-               .Select((candidate, index) => candidate with { Score = scores[index] })
+               .Select((candidate, index) => candidate with
+               {
+                   Score = scores[index]
+               })
                .OrderByDescending(static candidate => candidate.Score)
                .Take(limit)
                .ToList();

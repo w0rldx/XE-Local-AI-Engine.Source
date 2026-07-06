@@ -37,6 +37,7 @@ using XE_Local_AI_Engine.Client.Services.Persistence.Implementation;
 using XE_Local_AI_Engine.Client.Services.PreviewWorkflows;
 using XE_Local_AI_Engine.Client.Services.Scheduler;
 using XE_Local_AI_Engine.Providers.LlamaServer.Contracts;
+using LoggerExtensions = XE_Local_AI_Engine.Client.Common.Extensions.LoggerExtensions;
 
 /// <summary>
 ///     Represents configure services.
@@ -50,7 +51,7 @@ public static class ConfigureServices
         // Serilog. Console is always on; a date-rolled file sink is added under the per-user data dir (same resolution as
         // the Data Protection key-ring below) so desktop/dev logs survive the console window closing and a tester bug
         // report has on-disk history. Disabled in Testing (many parallel hosts would contend for the exclusive file).
-        var logFileDirectory = Common.Extensions.LoggerExtensions.ResolveLogFileDirectory(builder.Environment, configuration);
+        var logFileDirectory = LoggerExtensions.ResolveLogFileDirectory(builder.Environment, configuration);
         _ = builder.Services.AddSerilog((serviceCollection, lc) =>
         {
             _ = lc.ReadFrom.Configuration(configuration)

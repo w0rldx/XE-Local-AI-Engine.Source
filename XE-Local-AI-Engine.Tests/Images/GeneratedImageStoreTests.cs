@@ -60,7 +60,11 @@ public sealed class GeneratedImageStoreTests : IDisposable
             keyHolder,
             TimeProvider.System);
 
-        var info = await store.AddAsync(jobId, imageId, pngBytes, new GeneratedImageMetadata { Width = 512, Height = 512 }, CancellationToken.None).ConfigureAwait(false);
+        var info = await store.AddAsync(jobId, imageId, pngBytes, new GeneratedImageMetadata
+        {
+            Width = 512,
+            Height = 512
+        }, CancellationToken.None).ConfigureAwait(false);
         AssertEx.Equal(imageId, info.ImageId);
         AssertEx.Equal("image/png", info.MimeType);
 

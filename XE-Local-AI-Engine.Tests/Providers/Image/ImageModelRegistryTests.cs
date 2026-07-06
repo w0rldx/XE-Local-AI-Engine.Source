@@ -56,7 +56,13 @@ public sealed class ImageModelRegistryTests
             File.WriteAllText(localPath, $"weights-of-{fileName}");
             var size = new FileInfo(localPath).Length;
             total += size;
-            parts.Add(new ImageModelPart { Role = role, FileName = fileName, LocalPath = localPath, SizeBytes = size });
+            parts.Add(new ImageModelPart
+            {
+                Role = role,
+                FileName = fileName,
+                LocalPath = localPath,
+                SizeBytes = size
+            });
         }
 
         return new ImageModelRegistryEntry
@@ -74,7 +80,10 @@ public sealed class ImageModelRegistryTests
 
     private static ImageModelStoreOptions Options(string path)
     {
-        return new ImageModelStoreOptions { ModelsDirectory = path };
+        return new ImageModelStoreOptions
+        {
+            ModelsDirectory = path
+        };
     }
 
     private sealed class TempDir : IDisposable

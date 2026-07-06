@@ -46,12 +46,15 @@ public sealed class GetKnowledgeDocumentEndpoint(IKnowledgeDocumentCatalogServic
             SizeBytes = detail.SizeBytes,
             CreatedAtUtc = detail.CreatedAtUtc,
             UpdatedAtUtc = detail.UpdatedAtUtc,
-            Chunks = [.. detail.Chunks.Select(static chunk => new KnowledgeDocumentChunkResponse
-            {
-                ChunkIndex = chunk.ChunkIndex,
-                HeadingPath = chunk.HeadingPath,
-                Content = chunk.Content
-            })]
+            Chunks =
+            [
+                .. detail.Chunks.Select(static chunk => new KnowledgeDocumentChunkResponse
+                {
+                    ChunkIndex = chunk.ChunkIndex,
+                    HeadingPath = chunk.HeadingPath,
+                    Content = chunk.Content
+                })
+            ]
         };
     }
 }

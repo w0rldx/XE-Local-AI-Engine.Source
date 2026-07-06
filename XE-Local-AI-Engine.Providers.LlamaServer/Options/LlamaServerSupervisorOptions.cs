@@ -75,8 +75,7 @@ public sealed class LlamaServerSupervisorOptions
     public int? SpeculativeDraftGpuLayers { get; init; }
 
     /// <summary>Validated speculative-decoding bundle assembled from the four <c>Speculative*</c> keys for the launch path.</summary>
-    public SpeculativeDecodingSettings Speculative =>
-        new(SpeculativeMode, SpeculativeDraftModelPath, SpeculativeDraftMaxTokens, SpeculativeDraftGpuLayers);
+    public SpeculativeDecodingSettings Speculative => new(SpeculativeMode, SpeculativeDraftModelPath, SpeculativeDraftMaxTokens, SpeculativeDraftGpuLayers);
 
     /// <summary>
     ///     Minimum interval between reuse-path liveness probes for a single process. A reuse is handed out immediately

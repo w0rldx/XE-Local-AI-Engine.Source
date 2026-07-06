@@ -91,8 +91,7 @@ internal sealed class SearchKnowledgeBaseToolHandler : IClientLocalToolHandler
 
         if (result.Results.Count == 0)
         {
-            return JsonSerializer.Serialize(
-                new
+            return JsonSerializer.Serialize(new
                 {
                     results = Array.Empty<object>(),
                     note = "The knowledge base has no information matching this query."
