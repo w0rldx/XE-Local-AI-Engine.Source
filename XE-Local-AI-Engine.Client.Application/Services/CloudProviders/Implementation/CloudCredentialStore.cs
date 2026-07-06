@@ -293,7 +293,31 @@ public sealed class CloudCredentialStore : ICloudCredentialStore, IDisposable
             throw new ArgumentException("Stored cloud provider API key must be provided when the auth mode is API key.", nameof(config));
         }
 
+        if (connection.AuthMode == AzureFoundryAuthMode.EntraId)
+        {
+            ValidateEntraId(connection, nameof(config));
+        }
+
         ValidateHeaders(connection, nameof(config));
+    }
+
+    // Entra ID requires a tenant, client id, and token scope regardless of sign-in shape (Locked build contract §8) —
+    // the client secret is optional, and its absence selects interactive user sign-in. Defense-in-depth against an
+    // out-of-range sign-in-method value slipping in via a partial or hand-edited JSON blob.
+    private static void ValidateEntraId(StoredAzureFoundryConnection connection, string paramName)
+    {
+        if (string.IsNullOrWhiteSpace(connection.EntraTenantId)
+            || string.IsNullOrWhiteSpace(connection.EntraClientId)
+            || string.IsNullOrWhiteSpace(connection.EntraTokenScope))
+        {
+            throw new ArgumentException(
+                "Stored cloud provider Entra ID connection requires a tenant id, client id, and token scope.", paramName);
+        }
+
+        if (!Enum.IsDefined(connection.EntraSignInMethod))
+        {
+            throw new ArgumentException("Stored cloud provider Entra ID connection has an unsupported sign-in method.", paramName);
+        }
     }
 
     // Defense-in-depth behind the endpoint: reserved names, non-token names, non-field-value values, duplicates, caps

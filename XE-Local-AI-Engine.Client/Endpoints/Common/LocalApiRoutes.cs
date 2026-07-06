@@ -94,6 +94,14 @@ public static class LocalApiRoutes
     public static class CloudSettings
     {
         public const string Settings = "cloud-settings";
+
+        // Entra ID device-code sign-in lifecycle for the stored Azure Foundry connection (interactive user sign-in
+        // with no client secret configured). Kept under the CloudSettings surface rather than CloudCodex since it
+        // authenticates the existing Azure Foundry connection, not a separate cloud provider. Never exposes token
+        // material — start returns only the user code + verification URL; status reports state + those same
+        // non-secret fields.
+        public const string EntraDeviceCodeStart = "cloud-settings/entra/device-code/start";
+        public const string EntraDeviceCodeStatus = "cloud-settings/entra/device-code/status";
     }
 
     /// <summary>

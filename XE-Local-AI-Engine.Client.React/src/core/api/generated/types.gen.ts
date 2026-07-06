@@ -1414,6 +1414,11 @@ export type XeLocalAiEngineClientEndpointsCloudSettingsV1AzureFoundrySettingsRes
 	models?: Array<XeLocalAiEngineClientEndpointsCloudSettingsV1AzureFoundryModelDto>;
 	headers?: Array<XeLocalAiEngineClientEndpointsCloudSettingsV1AzureFoundryHeaderDto>;
 	additionalAllowedHostSuffixes?: Array<string>;
+	entraTenantId?: string | null;
+	entraClientId?: string | null;
+	hasStoredEntraClientSecret?: boolean;
+	entraTokenScope?: string | null;
+	entraSignInMethod?: string;
 };
 
 export type XeLocalAiEngineClientEndpointsCloudSettingsV1AzureFoundryModelDto = {
@@ -1428,6 +1433,19 @@ export type XeLocalAiEngineClientEndpointsCloudSettingsV1AzureFoundryHeaderDto =
 	hasStoredValue?: boolean;
 };
 
+export type XeLocalAiEngineClientEndpointsCloudSettingsV1EntraDeviceCodeSignInResponse = {
+	userCode: string;
+	verificationUri: string;
+	expiresAtUtc: string;
+};
+
+export type XeLocalAiEngineClientEndpointsCloudSettingsV1EntraDeviceCodeSignInStatusResponse = {
+	state: string;
+	userCode?: string | null;
+	verificationUri?: string | null;
+	expiresAtUtc?: string | null;
+};
+
 export type XeLocalAiEngineClientEndpointsCloudSettingsV1SaveCloudSettingsRequest = {
 	providerName?: string;
 	endpoint: string;
@@ -1436,6 +1454,11 @@ export type XeLocalAiEngineClientEndpointsCloudSettingsV1SaveCloudSettingsReques
 	models?: Array<XeLocalAiEngineClientEndpointsCloudSettingsV1AzureFoundryModelDto>;
 	headers?: Array<XeLocalAiEngineClientEndpointsCloudSettingsV1SaveAzureFoundryHeaderRequest>;
 	additionalAllowedHostSuffixes?: Array<string>;
+	entraTenantId?: string | null;
+	entraClientId?: string | null;
+	entraClientSecret?: string | null;
+	entraTokenScope?: string | null;
+	entraSignInMethod?: string;
 };
 
 export type XeLocalAiEngineClientEndpointsCloudSettingsV1SaveAzureFoundryHeaderRequest = {
@@ -5232,6 +5255,60 @@ export type SaveCloudSettingsResponses = {
 };
 
 export type SaveCloudSettingsResponse = SaveCloudSettingsResponses[keyof SaveCloudSettingsResponses];
+
+export type EntraDeviceCodeSignInData = {
+	body?: never;
+	path?: never;
+	query?: never;
+	url: "/api/local/v1/cloud-settings/entra/device-code/start";
+};
+
+export type EntraDeviceCodeSignInErrors = {
+	/**
+	 * Unauthorized
+	 */
+	401: unknown;
+	/**
+	 * Forbidden
+	 */
+	403: unknown;
+};
+
+export type EntraDeviceCodeSignInResponses = {
+	/**
+	 * Success
+	 */
+	200: XeLocalAiEngineClientEndpointsCloudSettingsV1EntraDeviceCodeSignInResponse;
+};
+
+export type EntraDeviceCodeSignInResponse = EntraDeviceCodeSignInResponses[keyof EntraDeviceCodeSignInResponses];
+
+export type EntraDeviceCodeStatusData = {
+	body?: never;
+	path?: never;
+	query?: never;
+	url: "/api/local/v1/cloud-settings/entra/device-code/status";
+};
+
+export type EntraDeviceCodeStatusErrors = {
+	/**
+	 * Unauthorized
+	 */
+	401: unknown;
+	/**
+	 * Forbidden
+	 */
+	403: unknown;
+};
+
+export type EntraDeviceCodeStatusResponses = {
+	/**
+	 * Success
+	 */
+	200: XeLocalAiEngineClientEndpointsCloudSettingsV1EntraDeviceCodeSignInStatusResponse;
+};
+
+export type EntraDeviceCodeStatusResponse = EntraDeviceCodeStatusResponses[keyof EntraDeviceCodeStatusResponses];
 
 export type CodexLoginData = {
 	body?: never;

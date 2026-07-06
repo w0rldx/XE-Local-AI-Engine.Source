@@ -60,6 +60,8 @@ import {
 	enableAutoConnect,
 	enableScheduledJob,
 	ensureLlamaCppBinary,
+	entraDeviceCodeSignIn,
+	entraDeviceCodeStatus,
 	executeSavedPreviewWorkflow,
 	executeUnsavedPreviewWorkflow,
 	exploreInferenceProfile,
@@ -276,6 +278,10 @@ import type {
 	EnableScheduledJobResponse,
 	EnsureLlamaCppBinaryData,
 	EnsureLlamaCppBinaryResponse,
+	EntraDeviceCodeSignInData,
+	EntraDeviceCodeSignInResponse,
+	EntraDeviceCodeStatusData,
+	EntraDeviceCodeStatusResponse,
 	ExecuteSavedPreviewWorkflowData,
 	ExecuteSavedPreviewWorkflowResponse,
 	ExecuteUnsavedPreviewWorkflowData,
@@ -2893,6 +2899,48 @@ export const saveCloudSettingsMutation = (
 	};
 	return mutationOptions;
 };
+
+export const entraDeviceCodeSignInMutation = (
+	options?: Partial<Options<EntraDeviceCodeSignInData>>,
+): UseMutationOptions<EntraDeviceCodeSignInResponse, AxiosError<DefaultError>, Options<EntraDeviceCodeSignInData>> => {
+	const mutationOptions: UseMutationOptions<
+		EntraDeviceCodeSignInResponse,
+		AxiosError<DefaultError>,
+		Options<EntraDeviceCodeSignInData>
+	> = {
+		mutationFn: async (fnOptions) => {
+			const { data } = await entraDeviceCodeSignIn({
+				...options,
+				...fnOptions,
+				throwOnError: true,
+			});
+			return data;
+		},
+	};
+	return mutationOptions;
+};
+
+export const entraDeviceCodeStatusQueryKey = (options?: Options<EntraDeviceCodeStatusData>) =>
+	createQueryKey("entraDeviceCodeStatus", options);
+
+export const entraDeviceCodeStatusOptions = (options?: Options<EntraDeviceCodeStatusData>) =>
+	queryOptions<
+		EntraDeviceCodeStatusResponse,
+		AxiosError<DefaultError>,
+		EntraDeviceCodeStatusResponse,
+		ReturnType<typeof entraDeviceCodeStatusQueryKey>
+	>({
+		queryFn: async ({ queryKey, signal }) => {
+			const { data } = await entraDeviceCodeStatus({
+				...options,
+				...queryKey[0],
+				signal,
+				throwOnError: true,
+			});
+			return data;
+		},
+		queryKey: entraDeviceCodeStatusQueryKey(options),
+	});
 
 export const codexLoginMutation = (
 	options?: Partial<Options<CodexLoginData>>,

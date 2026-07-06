@@ -44,8 +44,30 @@ public sealed record StoredAzureFoundryConnection
     /// </summary>
     public IReadOnlyList<string> AdditionalAllowedHostSuffixes { get; init; } = [];
 
-    // Sealed-record PrintMembers signature is private (Locked #11). Redacts the API key and delegates per-header secret
-    // redaction (each header's own ToString redacts) so no secret value or key ever leaks via ToString (HIGH-2).
+    /// <summary>The Entra ID tenant id. Required when <see cref="AuthMode" /> is <see cref="AzureFoundryAuthMode.EntraId" />.</summary>
+    public string? EntraTenantId { get; init; }
+
+    /// <summary>The Entra ID application (client) id. Required when <see cref="AuthMode" /> is <see cref="AzureFoundryAuthMode.EntraId" />.</summary>
+    public string? EntraClientId { get; init; }
+
+    /// <summary>
+    ///     The encrypted Entra ID client secret for app-only client-credentials. Null selects interactive user
+    ///     sign-in via <see cref="EntraSignInMethod" /> instead.
+    /// </summary>
+    public string? EntraClientSecret { get; init; }
+
+    /// <summary>
+    ///     The OAuth2 token scope requested for the Entra ID token (e.g. <c>api://&lt;backend-app-id&gt;/.default</c>).
+    ///     Required when <see cref="AuthMode" /> is <see cref="AzureFoundryAuthMode.EntraId" />.
+    /// </summary>
+    public string? EntraTokenScope { get; init; }
+
+    /// <summary>The interactive sign-in method used when no <see cref="EntraClientSecret" /> is configured.</summary>
+    public EntraSignInMethod EntraSignInMethod { get; init; }
+
+    // Sealed-record PrintMembers signature is private (Locked #11). Redacts the API key and Entra client secret and
+    // delegates per-header secret redaction (each header's own ToString redacts) so no secret value or key ever
+    // leaks via ToString (HIGH-2).
     private bool PrintMembers(StringBuilder builder)
     {
         ArgumentNullException.ThrowIfNull(builder);
@@ -56,6 +78,11 @@ public sealed record StoredAzureFoundryConnection
         builder.Append(", Models = [").AppendJoin(", ", Models).Append(']');
         builder.Append(", Headers = [").AppendJoin(", ", Headers).Append(']');
         builder.Append(", AdditionalAllowedHostSuffixes = [").AppendJoin(", ", AdditionalAllowedHostSuffixes).Append(']');
+        builder.Append(", EntraTenantId = ").Append(EntraTenantId);
+        builder.Append(", EntraClientId = ").Append(EntraClientId);
+        builder.Append(", EntraClientSecret = ").Append(EntraClientSecret is null ? "null" : "[REDACTED]");
+        builder.Append(", EntraTokenScope = ").Append(EntraTokenScope);
+        builder.Append(", EntraSignInMethod = ").Append(EntraSignInMethod);
         return true;
     }
 }

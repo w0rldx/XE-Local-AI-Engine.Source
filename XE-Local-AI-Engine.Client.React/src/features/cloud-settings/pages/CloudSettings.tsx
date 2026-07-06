@@ -31,10 +31,13 @@ import {
 import { withResponseValidation } from "@/core/api/ResponseValidation";
 import { toast } from "@/core/ui/notifications/Toast";
 import { CodexSignInCard } from "@/features/cloud-settings/codex/components/CodexSignInCard";
+import { EntraConnectionFields } from "@/features/cloud-settings/entra/components/EntraConnectionFields";
 import {
 	type CloudAuthMode,
 	type CloudFoundryModelDraft,
 	type CloudSettingsFormValues,
+	type EntraSignInMethod,
+	parseEntraSignInMethod,
 	shouldWarnManagedIdentityEgress,
 	validateCloudSettingsForm,
 } from "@/features/cloud-settings/models/CloudSettingsModel";
@@ -75,12 +78,18 @@ function settingsToFormValues(settings: CloudSettings): CloudSettingsFormValues 
 			hasStoredValue: header.hasStoredValue ?? false,
 		})),
 		hostSuffixes: azure?.additionalAllowedHostSuffixes ?? [],
+		entraTenantId: azure?.entraTenantId ?? "",
+		entraClientId: azure?.entraClientId ?? "",
+		// Write-only, like apiKey: always loads blank; a "stored" hint is driven by hasStoredEntraClientSecret.
+		entraClientSecret: "",
+		entraTokenScope: azure?.entraTokenScope ?? "",
+		entraSignInMethod: parseEntraSignInMethod(azure?.entraSignInMethod),
 	};
 }
 
 function toastSettingsResult(settings: CloudSettings): void {
 	toast.success(
-		settings.azureFoundry?.hasStoredApiKey
+		settings.azureFoundry
 			? "Cloud settings saved. Capability reporting was requested."
 			: "Cloud settings cleared.",
 	);
@@ -93,6 +102,11 @@ const emptyFormValues: CloudSettingsFormValues = {
 	models: [{ deploymentName: "", displayLabel: "" }],
 	headers: [],
 	hostSuffixes: [],
+	entraTenantId: "",
+	entraClientId: "",
+	entraClientSecret: "",
+	entraTokenScope: "",
+	entraSignInMethod: "DeviceCode",
 };
 
 // The form values, the per-field "touched" map, and the submit flag always reset together when the
@@ -108,8 +122,13 @@ interface FormState {
 type FormAction =
 	| { type: "reset"; values: CloudSettingsFormValues }
 	| { type: "setValues"; values: CloudSettingsFormValues }
-	| { type: "setField"; field: "endpoint" | "apiKey"; value: string }
+	| {
+			type: "setField";
+			field: "endpoint" | "apiKey" | "entraTenantId" | "entraClientId" | "entraClientSecret" | "entraTokenScope";
+			value: string;
+	  }
 	| { type: "setAuthMode"; value: CloudAuthMode }
+	| { type: "setEntraSignInMethod"; value: EntraSignInMethod }
 	| { type: "addModel" }
 	| { type: "removeModel"; index: number }
 	| { type: "setModelField"; index: number; field: keyof CloudFoundryModelDraft; value: string }
@@ -143,6 +162,8 @@ function formReducer(state: FormState, action: FormAction): FormState {
 			return { ...state, values: { ...state.values, [action.field]: action.value } };
 		case "setAuthMode":
 			return { ...state, values: { ...state.values, authMode: action.value } };
+		case "setEntraSignInMethod":
+			return { ...state, values: { ...state.values, entraSignInMethod: action.value } };
 		case "addModel":
 			return {
 				...state,
@@ -278,6 +299,12 @@ export function CloudSettings() {
 	// no key, so hasStoredApiKey alone is insufficient).
 	const hasStoredConnection = Boolean(azure?.endpoint) || (azure?.hasStoredApiKey ?? false) || (azure?.models?.length ?? 0) > 0;
 	const isManagedIdentity = formValues.authMode === "ManagedIdentity";
+	const isEntraId = formValues.authMode === "EntraId";
+	const showEntraDeviceCodeSignIn =
+		azure?.authMode === "EntraId" &&
+		azure.entraSignInMethod === "DeviceCode" &&
+		Boolean(azure.entraTenantId) &&
+		Boolean(azure.entraClientId);
 	const showManagedIdentityEgressWarning = useMemo(() => shouldWarnManagedIdentityEgress(formValues), [formValues]);
 
 	const handleSave = (): void => {
@@ -311,6 +338,13 @@ export function CloudSettings() {
 				additionalAllowedHostSuffixes: formValues.hostSuffixes
 					.map((suffix) => suffix.trim())
 					.filter((suffix) => suffix.length > 0),
+				// Ignored by the backend outside EntraId mode. A blank secret keeps the stored secret (or selects
+				// interactive sign-in when none is stored) — same write-only semantics as a secret header value.
+				entraTenantId: formValues.entraTenantId.trim(),
+				entraClientId: formValues.entraClientId.trim(),
+				entraClientSecret: formValues.entraClientSecret.trim().length > 0 ? formValues.entraClientSecret : undefined,
+				entraTokenScope: formValues.entraTokenScope.trim(),
+				entraSignInMethod: formValues.entraSignInMethod,
 			},
 		});
 	};
@@ -418,6 +452,7 @@ export function CloudSettings() {
 										value: "ManagedIdentity",
 										label: t("pages.cloudSettings.azure.authModeManagedIdentity", "Managed identity"),
 									},
+										{ value: "EntraId", label: t("pages.cloudSettings.azure.authModeEntraId", "Entra ID") },
 								]}
 							/>
 						</Stack>
@@ -426,6 +461,16 @@ export function CloudSettings() {
 							<Text size="sm" c="dimmed">
 								{t("pages.cloudSettings.azure.managedIdentityHint")}
 							</Text>
+						) : isEntraId ? (
+							<EntraConnectionFields
+								values={formValues}
+								errors={visibleErrors}
+								hasStoredClientSecret={azure?.hasStoredEntraClientSecret ?? false}
+								showDeviceCodeSignIn={showEntraDeviceCodeSignIn}
+								onFieldChange={(field, value) => dispatch({ type: "setField", field, value })}
+								onFieldBlur={(field) => dispatch({ type: "touchField", field })}
+								onSignInMethodChange={(value) => dispatch({ type: "setEntraSignInMethod", value })}
+							/>
 						) : (
 							<PasswordInput
 								label={t("pages.cloudSettings.azure.apiKeyLabel", "API key")}
