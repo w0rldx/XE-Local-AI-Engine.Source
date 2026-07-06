@@ -2121,6 +2121,50 @@ export const zXeLocalAiEngineClientEndpointsAuthV1NodeMeResponse = z.object({
 	roles: z.array(z.string()),
 });
 
+export const zXeLocalAiEngineClientEndpointsAppUpdateV1ApplyAppUpdateResponse = z.object({
+	applying: z.boolean(),
+});
+
+export const zXeLocalAiEngineClientEndpointsAppUpdateV1AppUpdateStatusResponse = z.object({
+	currentVersion: z.string(),
+	availableVersion: z.string().nullish(),
+	updateAvailable: z.boolean(),
+	authState: z.string(),
+	login: z.string().nullish(),
+	isDesktop: z.boolean(),
+	isOffline: z.boolean(),
+	lastCheckedUtc: z.coerce
+		.bigint()
+		.min(BigInt("-9223372036854775808"), { error: "Invalid value: Expected int64 to be >= -9223372036854775808" })
+		.max(BigInt("9223372036854775807"), { error: "Invalid value: Expected int64 to be <= 9223372036854775807" })
+		.nullish(),
+});
+
+export const zXeLocalAiEngineClientEndpointsAppUpdateV1GetAppUpdateStatusRequest = z.record(z.string(), z.never());
+
+export const zXeLocalAiEngineClientEndpointsAppUpdateV1GitHubAuthStatusResponse = z.object({
+	authState: z.string(),
+	login: z.string().nullish(),
+});
+
+export const zXeLocalAiEngineClientEndpointsAppUpdateV1GitHubAuthPollResponse = z.object({
+	state: z.string(),
+	login: z.string().nullish(),
+});
+
+export const zXeLocalAiEngineClientEndpointsAppUpdateV1GitHubAuthStartResponse = z.object({
+	userCode: z.string(),
+	verificationUri: z.string(),
+	expiresInSeconds: z
+		.int()
+		.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })
+		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" }),
+	intervalSeconds: z
+		.int()
+		.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })
+		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" }),
+});
+
 export const zXeLocalAiEngineClientEndpointsApiFoundationV1ValidationProblemProbeResponse = z.object({
 	name: z.string(),
 });
@@ -3580,6 +3624,40 @@ export const zNodeChangePasswordResponse = z.void();
  * Success
  */
 export const zNodeMeResponse = zXeLocalAiEngineClientEndpointsAuthV1NodeMeResponse;
+
+/**
+ * Success
+ */
+export const zApplyAppUpdateResponse = zXeLocalAiEngineClientEndpointsAppUpdateV1ApplyAppUpdateResponse;
+
+export const zGetAppUpdateStatusQuery = z.object({
+	refresh: z.boolean().nullish(),
+});
+
+/**
+ * Success
+ */
+export const zGetAppUpdateStatusResponse = zXeLocalAiEngineClientEndpointsAppUpdateV1AppUpdateStatusResponse;
+
+/**
+ * Success
+ */
+export const zGetGitHubAuthStatusResponse = zXeLocalAiEngineClientEndpointsAppUpdateV1GitHubAuthStatusResponse;
+
+/**
+ * Success
+ */
+export const zPollGitHubAuthResponse = zXeLocalAiEngineClientEndpointsAppUpdateV1GitHubAuthPollResponse;
+
+/**
+ * Success
+ */
+export const zSignOutGitHubAuthResponse = zXeLocalAiEngineClientEndpointsAppUpdateV1GitHubAuthStatusResponse;
+
+/**
+ * Success
+ */
+export const zStartGitHubAuthResponse = zXeLocalAiEngineClientEndpointsAppUpdateV1GitHubAuthStartResponse;
 
 /**
  * No Content
