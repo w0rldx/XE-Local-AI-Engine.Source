@@ -268,6 +268,58 @@ public sealed class AzureFoundryChatClientFactoryTests
     }
 
     [Test]
+    public void Create_WhenEntraIdClientSecretWithDelegatedScope_ThrowsConfigError_WithoutSecret()
+    {
+        var factory = new AzureFoundryChatClientFactory();
+        const string secret = "super-secret-value";
+
+        try
+        {
+            factory.Create(CreateEntraConnection(clientSecret: secret) with
+            {
+                EntraTokenScope = "api://backend-app/access_as_user"
+            }, "gpt-4o");
+        }
+        catch (AzureFoundryProviderException exception)
+        {
+            AssertEx.True(exception.Kind == AzureFoundryProviderErrorKind.Configuration);
+            AssertEx.True(exception.Message.Contains("/.default", StringComparison.Ordinal));
+            AssertEx.False(exception.Message.Contains(secret, StringComparison.Ordinal));
+            return;
+        }
+
+        throw new AssertionException($"Expected {nameof(AzureFoundryProviderException)} of kind {nameof(AzureFoundryProviderErrorKind.Configuration)}.");
+    }
+
+    [Test]
+    public void Create_WhenEntraIdClientSecretWithDefaultScope_ReturnsChatClientAdapter()
+    {
+        var factory = new AzureFoundryChatClientFactory();
+
+        var chatClient = factory.Create(CreateEntraConnection(clientSecret: "secret") with
+        {
+            EntraTokenScope = "api://backend-app/.default"
+        }, "gpt-4o");
+
+        AssertEx.NotNull(chatClient);
+        AssertEx.True(chatClient is IChatClient);
+    }
+
+    [Test]
+    public void Create_WhenEntraIdClientSecretWithDefaultScope_UppercaseSuffix_ReturnsChatClientAdapter()
+    {
+        var factory = new AzureFoundryChatClientFactory();
+
+        var chatClient = factory.Create(CreateEntraConnection(clientSecret: "secret") with
+        {
+            EntraTokenScope = "api://backend-app/.DEFAULT"
+        }, "gpt-4o");
+
+        AssertEx.NotNull(chatClient);
+        AssertEx.True(chatClient is IChatClient);
+    }
+
+    [Test]
     public void Create_WhenEntraIdWithHeaders_BuildsClient()
     {
         var factory = new AzureFoundryChatClientFactory();

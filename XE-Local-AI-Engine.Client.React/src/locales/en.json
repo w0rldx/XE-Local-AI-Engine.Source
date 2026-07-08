@@ -1309,6 +1309,8 @@
 				"clientSecretStoredHint": "A secret is stored. Enter a new value to replace it, or leave blank to keep it.",
 				"tokenScopeLabel": "Token scope",
 				"tokenScopePlaceholder": "api://<backend-app-id>/.default",
+				"tokenScopeHintClientCredentials": "With a client secret, use the app-only scope ending in /.default, e.g. api://<app-id-uri>/.default.",
+				"tokenScopeHintDelegated": "Without a client secret (device-code or browser sign-in), use a delegated scope, e.g. api://<app-id-uri>/access_as_user.",
 				"signInMethodLabel": "Sign-in method",
 				"signInMethodDeviceCode": "Device code",
 				"signInMethodInteractiveBrowser": "Interactive browser",
