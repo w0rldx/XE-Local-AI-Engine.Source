@@ -2031,11 +2031,22 @@ export const zXeLocalAiEngineClientEndpointsCloudSettingsV1AzureFoundrySettingsR
 	hasStoredEntraClientSecret: z.boolean().optional(),
 	entraTokenScope: z.string().nullish(),
 	entraSignInMethod: z.string().optional(),
+	entraAuthCodeRedirectUri: z.string().nullish(),
 });
 
 export const zXeLocalAiEngineClientEndpointsCloudSettingsV1CloudSettingsResponse = z.object({
 	providerName: z.string(),
 	azureFoundry: zXeLocalAiEngineClientEndpointsCloudSettingsV1AzureFoundrySettingsResponse.nullish(),
+});
+
+export const zXeLocalAiEngineClientEndpointsCloudSettingsV1EntraAuthCodeSignInResponse = z.object({
+	authorizeUrl: z.string(),
+	expiresAtUtc: z.iso.datetime({ offset: true }),
+});
+
+export const zXeLocalAiEngineClientEndpointsCloudSettingsV1EntraAuthCodeSignInStatusResponse = z.object({
+	state: z.string(),
+	expiresAtUtc: z.iso.datetime({ offset: true }).nullish(),
 });
 
 export const zXeLocalAiEngineClientEndpointsCloudSettingsV1EntraDeviceCodeSignInResponse = z.object({
@@ -2071,6 +2082,7 @@ export const zXeLocalAiEngineClientEndpointsCloudSettingsV1SaveCloudSettingsRequ
 	entraClientSecret: z.string().nullish(),
 	entraTokenScope: z.string().nullish(),
 	entraSignInMethod: z.string().optional(),
+	entraAuthCodeRedirectUri: z.string().nullish(),
 });
 
 export const zXeLocalAiEngineClientEndpointsCloudCodexV1CodexLoginResponse = z.object({
@@ -3560,6 +3572,16 @@ export const zSaveCloudSettingsBody = zXeLocalAiEngineClientEndpointsCloudSettin
  * Success
  */
 export const zSaveCloudSettingsResponse = zXeLocalAiEngineClientEndpointsCloudSettingsV1CloudSettingsResponse;
+
+/**
+ * Success
+ */
+export const zEntraAuthCodeSignInResponse = zXeLocalAiEngineClientEndpointsCloudSettingsV1EntraAuthCodeSignInResponse;
+
+/**
+ * Success
+ */
+export const zEntraAuthCodeStatusResponse = zXeLocalAiEngineClientEndpointsCloudSettingsV1EntraAuthCodeSignInStatusResponse;
 
 /**
  * Success

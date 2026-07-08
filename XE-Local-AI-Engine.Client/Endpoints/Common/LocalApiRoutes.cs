@@ -102,6 +102,12 @@ public static class LocalApiRoutes
         // non-secret fields.
         public const string EntraDeviceCodeStart = "cloud-settings/entra/device-code/start";
         public const string EntraDeviceCodeStatus = "cloud-settings/entra/device-code/status";
+
+        // Entra ID authorization-code sign-in lifecycle (confidential client + PKCE, Postman parity): browser
+        // sign-in yields a delegated token while the stored client secret authenticates the code redemption. Start
+        // returns only the authorize URL to open; status reports lifecycle state. Never exposes token material.
+        public const string EntraAuthCodeStart = "cloud-settings/entra/auth-code/start";
+        public const string EntraAuthCodeStatus = "cloud-settings/entra/auth-code/status";
     }
 
     /// <summary>

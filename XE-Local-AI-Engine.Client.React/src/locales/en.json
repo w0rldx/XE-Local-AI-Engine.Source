@@ -1318,6 +1318,8 @@
 				"signInMethodLabel": "Sign-in method",
 				"signInMethodDeviceCode": "Device code",
 				"signInMethodInteractiveBrowser": "Interactive browser",
+				"signInMethodClientSecret": "App-only (client credentials)",
+				"signInMethodAuthorizationCode": "Authorization code (browser + client secret)",
 				"title": "Sign in with Entra ID",
 				"subtitle": "Complete interactive sign-in for this Entra ID connection using the device-code flow.",
 				"signIn": "Sign in",
@@ -1335,7 +1337,23 @@
 				"signInError": "Failed to start sign-in. Please try again.",
 				"statusError": "Failed to check sign-in status.",
 				"signInSucceeded": "Signed in with Entra ID.",
-				"signInFailed": "Entra ID sign-in failed."
+				"signInFailed": "Entra ID sign-in failed.",
+				"authCode": {
+					"title": "Sign in with Entra ID",
+					"subtitle": "Complete interactive sign-in for this Entra ID connection in a browser tab.",
+					"redirectUriLabel": "Redirect URI",
+					"redirectUriPlaceholder": "http://localhost:53682/signin-oidc",
+					"redirectUriHint": "Leave blank to use the default. Must be a loopback address (localhost or 127.0.0.1) registered on the app registration.",
+					"signIn": "Sign in",
+					"pendingHint": "A browser tab opened to complete sign-in. Waiting for it to finish…",
+					"reopen": "Reopen sign-in tab",
+					"timeout": "Sign-in timed out.",
+					"retry": "Try again",
+					"signInError": "Failed to start sign-in. Please try again.",
+					"statusError": "Failed to check sign-in status.",
+					"signInSucceeded": "Signed in with Entra ID.",
+					"signInFailed": "Entra ID sign-in failed."
+				}
 			}
 		},
 		"models": {

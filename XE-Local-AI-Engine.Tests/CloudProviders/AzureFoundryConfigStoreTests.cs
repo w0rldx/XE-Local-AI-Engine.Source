@@ -84,6 +84,38 @@ public sealed class AzureFoundryConfigStoreTests : IDisposable
     }
 
     [Test]
+    public async Task LoadConfigAsync_WhenV2PayloadHasNoAuthCodeRedirectUriField_DefaultsToNull()
+    {
+        // A pre-authorization-code v2 blob has no "entraAuthCodeRedirectUri" field at all; it must deserialize to
+        // null (the coordinator's default-redirect-URI fallback) rather than fail.
+        Directory.CreateDirectory(_contentRootPath);
+        var legacyV2 = JsonSerializer.SerializeToUtf8Bytes(new
+            {
+                schemaVersion = 2,
+                providerName = "AzureFoundry",
+                azureFoundry = new
+                {
+                    endpoint = "https://example.openai.azure.com/",
+                    authMode = 2, // AzureFoundryAuthMode.EntraId
+                    entraTenantId = "tenant-id",
+                    entraClientId = "client-id",
+                    entraClientSecret = "client-secret",
+                    entraTokenScope = "api://backend/.default",
+                    entraSignInMethod = 0, // EntraSignInMethod.ClientSecret
+                    models = new[] { new { deploymentName = "gpt-4o" } }
+                }
+            },
+            JsonOptions);
+        await File.WriteAllBytesAsync(GetCredentialsPath(), legacyV2);
+        using var store = CreateStore();
+
+        var config = await store.LoadConfigAsync();
+
+        var connection = AssertEx.NotNull(config?.AzureFoundry);
+        AssertEx.Null(connection.EntraAuthCodeRedirectUri);
+    }
+
+    [Test]
     public async Task SaveConfigAsync_ThenLoadConfigAsync_RoundTripsOpenAiV1ApiSurface()
     {
         using var store = CreateStore();

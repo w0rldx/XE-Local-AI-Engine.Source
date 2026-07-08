@@ -10,11 +10,18 @@ export type CloudAuthMode = "ApiKey" | "ManagedIdentity" | "EntraId";
 // (model name in the request body) for a gateway that only routes /openai/v1/*.
 export type CloudApiSurface = "AzureDeployments" | "OpenAiV1";
 
-// Interactive sign-in method for an EntraId connection with no configured client secret. Mirrors the backend
-// `EntraSignInMethod` enum name; ignored — and coerced to `ClientSecret` server-side — once a secret is present.
-export type EntraSignInMethod = "ClientSecret" | "DeviceCode" | "InteractiveBrowser";
+// Interactive sign-in method for an EntraId connection. Mirrors the backend `EntraSignInMethod` enum name.
+// `DeviceCode` / `InteractiveBrowser` apply with no configured client secret; `AuthorizationCode` is the one method
+// that both REQUIRES a secret (to authenticate code redemption) and uses a delegated scope — every other value with
+// a secret present is coerced to `ClientSecret` server-side.
+export type EntraSignInMethod = "ClientSecret" | "DeviceCode" | "InteractiveBrowser" | "AuthorizationCode";
 
-const ENTRA_SIGN_IN_METHODS: readonly EntraSignInMethod[] = ["ClientSecret", "DeviceCode", "InteractiveBrowser"];
+const ENTRA_SIGN_IN_METHODS: readonly EntraSignInMethod[] = [
+	"ClientSecret",
+	"DeviceCode",
+	"InteractiveBrowser",
+	"AuthorizationCode",
+];
 
 function isEntraSignInMethod(value: string): value is EntraSignInMethod {
 	return (ENTRA_SIGN_IN_METHODS as readonly string[]).includes(value);
@@ -72,6 +79,9 @@ export interface CloudSettingsFormValues {
 	entraClientSecret: string;
 	entraTokenScope: string;
 	entraSignInMethod: EntraSignInMethod;
+	// Loopback redirect URI for `AuthorizationCode` sign-in. Blank selects the default. Ignored for every other
+	// sign-in method.
+	entraAuthCodeRedirectUri: string;
 }
 
 // Built-in Azure host suffixes that are always allowed for a managed-identity connection. A host that
@@ -209,12 +219,38 @@ function validateHeaders(headers: CloudHeaderDraft[]): string | undefined {
 
 // Client-credentials (app-only) token requests are rejected by Entra ID (AADSTS1002012) unless the scope ends in
 // "/.default" — mirrors the backend's AzureFoundryChatClientFactory.ValidateClientCredentialsScope fail-fast so the
-// operator sees the problem before saving rather than on the next chat send.
+// operator sees the problem before saving rather than on the next chat send. Does NOT apply to AuthorizationCode
+// sign-in: that method also carries a secret, but authenticates code redemption rather than requesting an app-only
+// token, so a delegated (non-/.default) scope is the EXPECTED shape there.
 const CLIENT_CREDENTIALS_SCOPE_SUFFIX = "/.default";
+
+// Mirrors the backend's EntraAuthCodeDefaults.TryValidateRedirectUri: absolute http(s) on a loopback host. A blank
+// value is valid (it resolves to the default redirect URI server-side).
+export function isValidLoopbackRedirectUri(value: string): boolean {
+	const trimmed = value.trim();
+	if (trimmed.length === 0) {
+		return true;
+	}
+
+	let url: URL;
+	try {
+		url = new URL(trimmed);
+	} catch {
+		return false;
+	}
+
+	if (url.protocol !== "http:" && url.protocol !== "https:") {
+		return false;
+	}
+
+	const host = url.hostname.toLowerCase();
+	return host === "localhost" || host === "127.0.0.1" || host === "::1";
+}
 
 // Validates the EntraId-only fields. Tenant, client id, and token scope are always required in this mode; the
 // client secret is intentionally optional (blank keeps a stored secret, or selects interactive sign-in when
-// none is stored — both are valid states, so the secret itself carries no error).
+// none is stored — both are valid states, so the secret itself carries no error) EXCEPT for AuthorizationCode,
+// which requires one (see below).
 //
 // `hasStoredClientSecret` mirrors the same "hasSecret" check EntraConnectionFields.tsx makes for its sign-in-method
 // picker: `entraClientSecret` is write-only (blank on load never means "no secret" — it can mean "keep the stored
@@ -237,12 +273,24 @@ function validateEntraFields(
 	}
 	const tokenScope = values.entraTokenScope.trim();
 	const hasSecret = values.entraClientSecret.trim().length > 0 || hasStoredClientSecret;
+	const isAuthorizationCode = values.entraSignInMethod === "AuthorizationCode";
 	if (tokenScope.length === 0) {
 		errors.entraTokenScope = "Enter the token scope, e.g. api://<backend-app-id>/.default.";
-	} else if (hasSecret && !tokenScope.toLowerCase().endsWith(CLIENT_CREDENTIALS_SCOPE_SUFFIX)) {
+	} else if (hasSecret && !isAuthorizationCode && !tokenScope.toLowerCase().endsWith(CLIENT_CREDENTIALS_SCOPE_SUFFIX)) {
 		errors.entraTokenScope =
-			"A client secret uses the app-only client-credentials flow, which requires a token scope ending in /.default (e.g. api://<backend-app-id>/.default) — or remove the secret to use a delegated scope.";
+			"A client secret uses the app-only client-credentials flow, which requires a token scope ending in /.default (e.g. api://<backend-app-id>/.default) — or remove the secret to use a delegated scope, or choose the Authorization code sign-in method to use the secret with a delegated scope.";
 	}
+
+	if (isAuthorizationCode) {
+		if (!hasSecret) {
+			errors.entraClientSecret = "Authorization code sign-in requires a client secret.";
+		}
+		if (!isValidLoopbackRedirectUri(values.entraAuthCodeRedirectUri)) {
+			errors.entraAuthCodeRedirectUri =
+				"The redirect URI must be an absolute http(s) URL on a loopback host (localhost or 127.0.0.1), or blank to use the default.";
+		}
+	}
+
 	return errors;
 }
 

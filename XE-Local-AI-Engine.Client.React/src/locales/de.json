@@ -1318,6 +1318,8 @@
 				"signInMethodLabel": "Anmeldemethode",
 				"signInMethodDeviceCode": "Gerätecode",
 				"signInMethodInteractiveBrowser": "Interaktiver Browser",
+				"signInMethodClientSecret": "Anwendungsseitig (Client-Credentials)",
+				"signInMethodAuthorizationCode": "Autorisierungscode (Browser + Client-Geheimnis)",
 				"title": "Mit Entra ID anmelden",
 				"subtitle": "Schließe die interaktive Anmeldung für diese Entra-ID-Verbindung mit dem Gerätecode-Verfahren ab.",
 				"signIn": "Anmelden",
@@ -1335,7 +1337,23 @@
 				"signInError": "Anmeldung konnte nicht gestartet werden. Bitte versuche es erneut.",
 				"statusError": "Anmeldestatus konnte nicht geprüft werden.",
 				"signInSucceeded": "Mit Entra ID angemeldet.",
-				"signInFailed": "Entra-ID-Anmeldung fehlgeschlagen."
+				"signInFailed": "Entra-ID-Anmeldung fehlgeschlagen.",
+				"authCode": {
+					"title": "Mit Entra ID anmelden",
+					"subtitle": "Schließe die interaktive Anmeldung für diese Entra-ID-Verbindung in einem Browser-Tab ab.",
+					"redirectUriLabel": "Weiterleitungs-URI",
+					"redirectUriPlaceholder": "http://localhost:53682/signin-oidc",
+					"redirectUriHint": "Leer lassen, um die Standardeinstellung zu verwenden. Muss eine Loopback-Adresse (localhost oder 127.0.0.1) sein, die in der App-Registrierung eingetragen ist.",
+					"signIn": "Anmelden",
+					"pendingHint": "Ein Browser-Tab wurde geöffnet, um die Anmeldung abzuschließen. Warte auf Abschluss…",
+					"reopen": "Anmelde-Tab erneut öffnen",
+					"timeout": "Zeitüberschreitung bei der Anmeldung.",
+					"retry": "Erneut versuchen",
+					"signInError": "Anmeldung konnte nicht gestartet werden. Bitte versuche es erneut.",
+					"statusError": "Anmeldestatus konnte nicht geprüft werden.",
+					"signInSucceeded": "Mit Entra ID angemeldet.",
+					"signInFailed": "Entra-ID-Anmeldung fehlgeschlagen."
+				}
 			}
 		},
 		"models": {
