@@ -7,6 +7,7 @@ using Azure.Core;
 using Azure.Identity;
 using Microsoft.Extensions.AI;
 using Microsoft.Extensions.Logging.Abstractions;
+using OpenAI;
 
 /// <summary>
 ///     Azure Foundry chat-client factory backed by the Azure OpenAI .NET client.
@@ -19,12 +20,23 @@ using Microsoft.Extensions.Logging.Abstractions;
 /// </remarks>
 public sealed class AzureFoundryChatClientFactory : IAzureFoundryChatClientFactory
 {
-    // Placeholder key material: the AzureOpenAIClient ctor requires an ApiKeyCredential even when auth is Entra ID.
-    // The value is never sent as the real bearer — EntraBearerTokenPipelinePolicy overwrites Authorization on every
-    // call — and the SDK's own "api-key" header carrying this placeholder is harmless noise to an APIM gateway that
-    // validates the bearer token instead.
-    private const string EntraPlaceholderApiKey = "unused-entra-id-auth";
+    // Placeholder key material: both AzureOpenAIClient and OpenAIClient ctors require an ApiKeyCredential even when
+    // the real auth is elsewhere. For Entra ID (either surface) the value is never sent as the real bearer —
+    // EntraBearerTokenPipelinePolicy overwrites Authorization on every call. For the v1 surface's ApiKey mode the
+    // real key instead rides the "api-key" header via ApiKeyHeaderPipelinePolicy. Either way, the SDK's own
+    // Authorization/api-key header carrying this placeholder is harmless noise to a gateway that validates the real
+    // credential the policy sets.
+    private const string PlaceholderApiKey = "unused-entra-id-auth";
     private const string EntraTokenCachePersistenceName = "XE-Local-AI-Engine.Client.AzureFoundry.EntraId";
+
+    // The v1 surface path segment appended to the connection endpoint (Locked v1 surface contract: no api-version
+    // query param, trailing slash so the OpenAI SDK's own relative-path joining lands on .../openai/v1/chat/completions).
+    private const string OpenAiV1PathSegment = "/openai/v1/";
+
+    // Documented Entra ID scope for the v1 surface under managed-identity auth (Microsoft Learn, 2026-06). The
+    // ApiKey/EntraId auth modes carry their own scope (the API key itself, or the operator-configured
+    // EntraTokenScope) so this constant applies to ManagedIdentity only.
+    private const string ManagedIdentityV1Scope = "https://ai.azure.com/.default";
 
     // Client-credentials (app-only) token requests are rejected by Entra ID (AADSTS1002012) unless the scope ends
     // in "/.default" — a delegated scope like "api://<app-id-uri>/access_as_user" only works with a user-delegated
@@ -58,9 +70,19 @@ public sealed class AzureFoundryChatClientFactory : IAzureFoundryChatClientFacto
 
         var endpoint = ResolveEndpoint(connection.Endpoint, connection.AdditionalAllowedHostSuffixes);
 
+        var innerClient = connection.ApiSurface == AzureFoundryApiSurface.OpenAiV1
+            ? BuildOpenAiV1Client(endpoint, connection).GetChatClient(deploymentName).AsIChatClient()
+            : BuildAzureDeploymentsClient(endpoint, connection).GetChatClient(deploymentName).AsIChatClient();
+
+        return new AzureFoundryErrorTranslatingChatClient(innerClient);
+    }
+
+    // The classic Azure deployments surface (default, ApiSurface.AzureDeployments): {endpoint}/openai/deployments/{deployment}/....
+    private AzureOpenAIClient BuildAzureDeploymentsClient(Uri endpoint, StoredAzureFoundryConnection connection)
+    {
         var options = BuildClientOptions(connection.Headers);
 
-        var azureClient = connection.AuthMode switch
+        return connection.AuthMode switch
         {
             AzureFoundryAuthMode.ApiKey => BuildKeyCredentialClient(endpoint, connection.ApiKey, options),
             AzureFoundryAuthMode.ManagedIdentity => new AzureOpenAIClient(endpoint, new DefaultAzureCredential(), options),
@@ -68,9 +90,66 @@ public sealed class AzureFoundryChatClientFactory : IAzureFoundryChatClientFacto
             _ => throw new AzureFoundryProviderException(AzureFoundryProviderErrorKind.Configuration,
                 "The Azure Foundry connection has an unsupported authentication mode.")
         };
+    }
 
-        var innerClient = azureClient.GetChatClient(deploymentName).AsIChatClient();
-        return new AzureFoundryErrorTranslatingChatClient(innerClient);
+    // The OpenAI-compatible v1 surface (ApiSurface.OpenAiV1): {endpoint}/openai/v1/chat/completions, deployment name
+    // in the request body's "model" field. Built via the plain OpenAI SDK client — see BuildOpenAiV1KeyCredentialClient
+    // / BuildOpenAiV1EntraClient for why the same ResolveEndpoint validation and credential shapes as the Azure
+    // deployments surface still apply, just wired through OpenAIClientOptions instead of AzureOpenAIClientOptions.
+    private OpenAIClient BuildOpenAiV1Client(Uri endpoint, StoredAzureFoundryConnection connection)
+    {
+        var v1Endpoint = new Uri(endpoint.AbsoluteUri.TrimEnd('/') + OpenAiV1PathSegment);
+        var options = new OpenAIClientOptions
+        {
+            Endpoint = v1Endpoint
+        };
+        AddCustomHeaderPolicy(options, connection.Headers);
+
+        return connection.AuthMode switch
+        {
+            AzureFoundryAuthMode.ApiKey => BuildOpenAiV1KeyCredentialClient(connection.ApiKey, options),
+            AzureFoundryAuthMode.ManagedIdentity => BuildOpenAiV1EntraClient(new DefaultAzureCredential(), ManagedIdentityV1Scope, options),
+            AzureFoundryAuthMode.EntraId => BuildOpenAiV1EntraIdClient(connection, options),
+            _ => throw new AzureFoundryProviderException(AzureFoundryProviderErrorKind.Configuration,
+                "The Azure Foundry connection has an unsupported authentication mode.")
+        };
+    }
+
+    // The v1 surface validates a real "api-key" header, not the SDK's default "Authorization: Bearer <key>" —
+    // ApiKeyHeaderPipelinePolicy carries the real key; the ctor gets a placeholder so the SDK's own Authorization
+    // header is harmless noise (mirrors the Entra placeholder-key reasoning above).
+    private static OpenAIClient BuildOpenAiV1KeyCredentialClient(string? apiKey, OpenAIClientOptions options)
+    {
+        if (string.IsNullOrWhiteSpace(apiKey))
+        {
+            throw new AzureFoundryProviderException(AzureFoundryProviderErrorKind.Configuration,
+                "An API key is required when the Azure Foundry connection uses API-key authentication.");
+        }
+
+        options.AddPolicy(new ApiKeyHeaderPipelinePolicy(apiKey), PipelinePosition.PerCall);
+        return new OpenAIClient(new ApiKeyCredential(PlaceholderApiKey), options);
+    }
+
+    // Shared by both v1 Entra shapes (managed identity with a fixed scope, and EntraId with an operator-configured
+    // scope) — same EntraBearerTokenPipelinePolicy as the Azure deployments surface, just attached to OpenAIClientOptions.
+    private static OpenAIClient BuildOpenAiV1EntraClient(TokenCredential credential, string scope, OpenAIClientOptions options)
+    {
+        options.AddPolicy(new EntraBearerTokenPipelinePolicy(credential, scope), PipelinePosition.PerCall);
+        return new OpenAIClient(new ApiKeyCredential(PlaceholderApiKey), options);
+    }
+
+    private OpenAIClient BuildOpenAiV1EntraIdClient(StoredAzureFoundryConnection connection, OpenAIClientOptions options)
+    {
+        if (string.IsNullOrWhiteSpace(connection.EntraTenantId)
+            || string.IsNullOrWhiteSpace(connection.EntraClientId)
+            || string.IsNullOrWhiteSpace(connection.EntraTokenScope))
+        {
+            throw new AzureFoundryProviderException(AzureFoundryProviderErrorKind.Configuration,
+                "An Entra ID connection requires a tenant id, client id, and token scope.");
+        }
+
+        var credential = BuildEntraCredential(connection);
+        return BuildOpenAiV1EntraClient(credential, connection.EntraTokenScope, options);
     }
 
     // Validates the endpoint is absolute-HTTPS AND ends with a known Azure host suffix before it is ever handed to the
@@ -101,14 +180,19 @@ public sealed class AzureFoundryChatClientFactory : IAzureFoundryChatClientFacto
     private static AzureOpenAIClientOptions BuildClientOptions(IReadOnlyList<StoredAzureFoundryHeader> headers)
     {
         var options = new AzureOpenAIClientOptions();
+        AddCustomHeaderPolicy(options, headers);
+        return options;
+    }
 
+    // Shared by both wire surfaces: AzureOpenAIClientOptions and OpenAIClientOptions both derive from the same
+    // System.ClientModel ClientPipelineOptions base, so the one custom-header policy attaches identically to either.
+    private static void AddCustomHeaderPolicy(ClientPipelineOptions options, IReadOnlyList<StoredAzureFoundryHeader> headers)
+    {
         var resolved = ResolveHeaders(headers);
         if (resolved.Count > 0)
         {
             options.AddPolicy(new CustomHeaderPipelinePolicy(resolved), PipelinePosition.PerCall);
         }
-
-        return options;
     }
 
     private static IReadOnlyList<(string Name, string Value)> ResolveHeaders(IReadOnlyList<StoredAzureFoundryHeader> headers)
@@ -147,7 +231,7 @@ public sealed class AzureFoundryChatClientFactory : IAzureFoundryChatClientFacto
         var credential = BuildEntraCredential(connection);
         options.AddPolicy(new EntraBearerTokenPipelinePolicy(credential, connection.EntraTokenScope), PipelinePosition.PerCall);
 
-        return new AzureOpenAIClient(endpoint, new ApiKeyCredential(EntraPlaceholderApiKey), options);
+        return new AzureOpenAIClient(endpoint, new ApiKeyCredential(PlaceholderApiKey), options);
     }
 
     // Selects the credential shape per the frozen contract: a configured client secret always wins (app-only

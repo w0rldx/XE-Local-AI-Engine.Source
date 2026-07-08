@@ -180,6 +180,7 @@ describe("CloudSettings — Azure Foundry connection form (generated hey-api dat
 					providerName: "AzureFoundry",
 					endpoint: "https://example.openai.azure.com/",
 					authMode: "ApiKey",
+					apiSurface: "AzureDeployments",
 					apiKey: "secret-key",
 					models: [{ deploymentName: "gpt-4o" }],
 					headers: [],

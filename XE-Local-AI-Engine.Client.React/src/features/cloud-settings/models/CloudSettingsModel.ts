@@ -5,6 +5,11 @@
 // ID token rather than an Azure-native credential.
 export type CloudAuthMode = "ApiKey" | "ManagedIdentity" | "EntraId";
 
+// The wire surface an Azure Foundry connection targets. Mirrors the backend `AzureFoundryApiSurface` enum name.
+// "AzureDeployments" is the classic Azure OpenAI deployments path; "OpenAiV1" is the OpenAI-compatible v1 surface
+// (model name in the request body) for a gateway that only routes /openai/v1/*.
+export type CloudApiSurface = "AzureDeployments" | "OpenAiV1";
+
 // Interactive sign-in method for an EntraId connection with no configured client secret. Mirrors the backend
 // `EntraSignInMethod` enum name; ignored — and coerced to `ClientSecret` server-side — once a secret is present.
 export type EntraSignInMethod = "ClientSecret" | "DeviceCode" | "InteractiveBrowser";
@@ -20,6 +25,19 @@ function isEntraSignInMethod(value: string): value is EntraSignInMethod {
 // this build doesn't know about yet — instead of an unchecked cast that would let bad data flow into form state.
 export function parseEntraSignInMethod(value: string | null | undefined): EntraSignInMethod {
 	return value !== null && value !== undefined && isEntraSignInMethod(value) ? value : "DeviceCode";
+}
+
+const CLOUD_API_SURFACES: readonly CloudApiSurface[] = ["AzureDeployments", "OpenAiV1"];
+
+function isCloudApiSurface(value: string): value is CloudApiSurface {
+	return (CLOUD_API_SURFACES as readonly string[]).includes(value);
+}
+
+// Narrows an arbitrary string (a saved settings response, or a SegmentedControl's onChange value) to a known
+// `CloudApiSurface`, falling back to "AzureDeployments" for anything unrecognized — mirrors the backend mapper's
+// same fallback (CloudSettingsEndpointDtoMapper.ParseApiSurface).
+export function parseApiSurface(value: string | null | undefined): CloudApiSurface {
+	return value !== null && value !== undefined && isCloudApiSurface(value) ? value : "AzureDeployments";
 }
 
 // One editable deployment row in the models list. `deploymentName` is the Foundry portal deployment
@@ -42,6 +60,7 @@ export interface CloudHeaderDraft {
 export interface CloudSettingsFormValues {
 	endpoint: string;
 	authMode: CloudAuthMode;
+	apiSurface: CloudApiSurface;
 	apiKey: string;
 	models: CloudFoundryModelDraft[];
 	headers: CloudHeaderDraft[];
