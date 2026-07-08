@@ -342,6 +342,123 @@ public sealed class AzureFoundryChatClientFactoryTests
         AssertEx.True(chatClient is IChatClient);
     }
 
+    [Test]
+    public void Create_WhenOpenAiV1ApiKeyMode_ReturnsChatClientAdapter()
+    {
+        var factory = new AzureFoundryChatClientFactory();
+
+        var chatClient = factory.Create(CreateConnection() with { ApiSurface = AzureFoundryApiSurface.OpenAiV1 }, "gpt-4o");
+
+        AssertEx.NotNull(chatClient);
+        AssertEx.True(chatClient is IChatClient);
+    }
+
+    [Test]
+    public void Create_WhenOpenAiV1ApiKeyModeMissingKey_ThrowsConfigError()
+    {
+        var factory = new AzureFoundryChatClientFactory();
+
+        ThrowsConfig(() => factory.Create(CreateConnection(apiKey: " ") with { ApiSurface = AzureFoundryApiSurface.OpenAiV1 }, "gpt-4o"));
+    }
+
+    [Test]
+    public void Create_WhenOpenAiV1ManagedIdentityMode_ReturnsChatClientAdapter()
+    {
+        var factory = new AzureFoundryChatClientFactory();
+
+        var chatClient = factory.Create(new StoredAzureFoundryConnection
+        {
+            Endpoint = "https://example.openai.azure.com/",
+            AuthMode = AzureFoundryAuthMode.ManagedIdentity,
+            ApiSurface = AzureFoundryApiSurface.OpenAiV1,
+            ApiKey = null,
+            Models =
+            [
+                new StoredAzureFoundryModel
+                {
+                    DeploymentName = "gpt-4o"
+                }
+            ]
+        }, "gpt-4o");
+
+        AssertEx.NotNull(chatClient);
+        AssertEx.True(chatClient is IChatClient);
+    }
+
+    [Test]
+    public void Create_WhenOpenAiV1EntraIdClientSecretWithDefaultScope_ReturnsChatClientAdapter()
+    {
+        var factory = new AzureFoundryChatClientFactory();
+
+        var chatClient = factory.Create(CreateEntraConnection(clientSecret: "secret") with
+        {
+            ApiSurface = AzureFoundryApiSurface.OpenAiV1,
+            EntraTokenScope = "api://backend-app/.default"
+        }, "gpt-4o");
+
+        AssertEx.NotNull(chatClient);
+        AssertEx.True(chatClient is IChatClient);
+    }
+
+    [Test]
+    public void Create_WhenOpenAiV1EntraIdClientSecretWithDelegatedScope_ThrowsConfigError_WithoutSecret()
+    {
+        var factory = new AzureFoundryChatClientFactory();
+        const string secret = "super-secret-value";
+
+        try
+        {
+            factory.Create(CreateEntraConnection(clientSecret: secret) with
+            {
+                ApiSurface = AzureFoundryApiSurface.OpenAiV1,
+                EntraTokenScope = "api://backend-app/access_as_user"
+            }, "gpt-4o");
+        }
+        catch (AzureFoundryProviderException exception)
+        {
+            AssertEx.True(exception.Kind == AzureFoundryProviderErrorKind.Configuration);
+            AssertEx.True(exception.Message.Contains("/.default", StringComparison.Ordinal));
+            AssertEx.False(exception.Message.Contains(secret, StringComparison.Ordinal));
+            return;
+        }
+
+        throw new AssertionException($"Expected {nameof(AzureFoundryProviderException)} of kind {nameof(AzureFoundryProviderErrorKind.Configuration)}.");
+    }
+
+    [Test]
+    public void Create_WhenOpenAiV1WithHeaders_BuildsClient()
+    {
+        var factory = new AzureFoundryChatClientFactory();
+        var connection = CreateConnection() with
+        {
+            ApiSurface = AzureFoundryApiSurface.OpenAiV1,
+            Headers =
+            [
+                new StoredAzureFoundryHeader
+                {
+                    Name = "X-Tenant",
+                    Value = "tenant-a",
+                    IsSecret = false
+                }
+            ]
+        };
+
+        var chatClient = factory.Create(connection, "gpt-4o");
+
+        AssertEx.NotNull(chatClient);
+        AssertEx.True(chatClient is IChatClient);
+    }
+
+    [Test]
+    public void Create_WhenOpenAiV1HostNotAllowlisted_ThrowsConfigError()
+    {
+        var factory = new AzureFoundryChatClientFactory();
+
+        ThrowsConfig(() => factory.Create(
+            CreateConnection(endpoint: "https://evil.example.com/") with { ApiSurface = AzureFoundryApiSurface.OpenAiV1 },
+            "gpt-4o"));
+    }
+
     private static void ThrowsConfig(Action action)
     {
         try

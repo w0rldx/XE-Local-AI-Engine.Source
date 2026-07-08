@@ -27,6 +27,12 @@ public sealed record AzureFoundrySettingsResponse
     /// <summary>The persisted auth mode as the <see cref="AzureFoundryAuthMode" /> enum name (ApiKey | ManagedIdentity | EntraId).</summary>
     public required string AuthMode { get; init; }
 
+    /// <summary>
+    ///     The persisted wire surface as the <see cref="AzureFoundryApiSurface" /> enum name (AzureDeployments |
+    ///     OpenAiV1). Defaults to <c>AzureDeployments</c> for a legacy connection with no stored surface.
+    /// </summary>
+    public string ApiSurface { get; init; } = nameof(Services.CloudProviders.AzureFoundryApiSurface.AzureDeployments);
+
     /// <summary>True when an API key is stored. The key itself is never returned to the client.</summary>
     public bool HasStoredApiKey { get; init; }
 
@@ -93,6 +99,12 @@ public sealed record SaveCloudSettingsRequest
     /// <summary>Required only when <see cref="AuthMode" /> is <c>ApiKey</c>; ignored for managed identity.</summary>
     public string? ApiKey { get; init; }
 
+    /// <summary>
+    ///     The requested wire surface (AzureDeployments | OpenAiV1). Case-insensitive enum name; unrecognized values
+    ///     fall back to <c>AzureDeployments</c> (see <c>CloudSettingsEndpointDtoMapper.ParseApiSurface</c>).
+    /// </summary>
+    public string ApiSurface { get; init; } = nameof(Services.CloudProviders.AzureFoundryApiSurface.AzureDeployments);
+
     public IReadOnlyList<AzureFoundryModelDto> Models { get; init; } = [];
 
     /// <summary>
@@ -155,6 +167,7 @@ internal static class CloudSettingsEndpointDtoMapper
             {
                 Endpoint = string.IsNullOrWhiteSpace(connection.Endpoint) ? null : connection.Endpoint,
                 AuthMode = connection.AuthMode.ToString(),
+                ApiSurface = connection.ApiSurface.ToString(),
                 // Never emit the stored key — presence only.
                 HasStoredApiKey = !string.IsNullOrWhiteSpace(connection.ApiKey),
                 Models =
@@ -211,6 +224,7 @@ internal static class CloudSettingsEndpointDtoMapper
             {
                 Endpoint = request.Endpoint?.Trim() ?? string.Empty,
                 AuthMode = authMode,
+                ApiSurface = ParseApiSurface(request.ApiSurface),
                 // Managed identity / Entra ID carry no key; drop anything supplied so it is never persisted.
                 ApiKey = authMode == AzureFoundryAuthMode.ApiKey
                     ? NormalizeApiKey(request.ApiKey)
@@ -244,6 +258,13 @@ internal static class CloudSettingsEndpointDtoMapper
         return Enum.TryParse<AzureFoundryAuthMode>(authMode?.Trim(), ignoreCase: true, out var parsed)
             ? parsed
             : AzureFoundryAuthMode.ApiKey;
+    }
+
+    private static AzureFoundryApiSurface ParseApiSurface(string? apiSurface)
+    {
+        return Enum.TryParse<AzureFoundryApiSurface>(apiSurface?.Trim(), ignoreCase: true, out var parsed)
+            ? parsed
+            : AzureFoundryApiSurface.AzureDeployments;
     }
 
     // A configured client secret always selects app-only client-credentials (Locked build contract §8: "derive

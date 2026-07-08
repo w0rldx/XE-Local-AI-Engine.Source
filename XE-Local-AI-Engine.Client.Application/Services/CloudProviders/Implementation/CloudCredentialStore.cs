@@ -274,6 +274,11 @@ public sealed class CloudCredentialStore : ICloudCredentialStore, IDisposable
             throw new ArgumentException("Stored cloud provider endpoint must be an absolute HTTPS URL.", nameof(config));
         }
 
+        if (!Enum.IsDefined(connection.ApiSurface))
+        {
+            throw new ArgumentException("Stored cloud provider connection has an unsupported API surface.", nameof(config));
+        }
+
         ValidateHostSuffixes(connection, nameof(config));
 
         // Enforce the endpoint host is within the effective allowlist (built-in Azure suffixes ∪ operator suffixes) so an

@@ -2021,6 +2021,7 @@ export const zXeLocalAiEngineClientEndpointsCloudSettingsV1AzureFoundryHeaderDto
 export const zXeLocalAiEngineClientEndpointsCloudSettingsV1AzureFoundrySettingsResponse = z.object({
 	endpoint: z.string().nullish(),
 	authMode: z.string(),
+	apiSurface: z.string().optional(),
 	hasStoredApiKey: z.boolean().optional(),
 	models: z.array(zXeLocalAiEngineClientEndpointsCloudSettingsV1AzureFoundryModelDto).optional(),
 	headers: z.array(zXeLocalAiEngineClientEndpointsCloudSettingsV1AzureFoundryHeaderDto).optional(),
@@ -2061,6 +2062,7 @@ export const zXeLocalAiEngineClientEndpointsCloudSettingsV1SaveCloudSettingsRequ
 	endpoint: z.string().min(1),
 	authMode: z.string().optional(),
 	apiKey: z.string().nullish(),
+	apiSurface: z.string().optional(),
 	models: z.array(zXeLocalAiEngineClientEndpointsCloudSettingsV1AzureFoundryModelDto).optional(),
 	headers: z.array(zXeLocalAiEngineClientEndpointsCloudSettingsV1SaveAzureFoundryHeaderRequest).optional(),
 	additionalAllowedHostSuffixes: z.array(z.string()).optional(),
