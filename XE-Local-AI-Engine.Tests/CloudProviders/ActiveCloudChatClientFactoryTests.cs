@@ -422,6 +422,42 @@ public sealed class ActiveCloudChatClientFactoryTests
     }
 
     [Test]
+    public void TryCreate_WhenRequestedModelIsAzureDeploymentNameThatIsAlsoACodexModelId_RoutesAzure_NotCodex()
+    {
+        // Collision guard: the stored Azure deployment name happens to equal a Codex catalog model id, and a Codex
+        // session is active. Rule 1 (explicit Azure deployment match) is checked before rule 2 (Codex catalog
+        // membership), so the send must still land on Azure, not silently resolve to the same-named Codex model.
+        using var azureClient = new StubChatClient();
+        var harness = new Harness();
+        harness.CodexTokenStore.LoadAsync(Arg.Any<CancellationToken>()).Returns(NonExpiredSession());
+        harness.CredentialStore.LoadConfigAsync(Arg.Any<CancellationToken>())
+               .Returns(new StoredCloudProviderConfig
+               {
+                   ProviderName = CloudProviderOptions.ProviderAzureFoundry,
+                   AzureFoundry = new StoredAzureFoundryConnection
+                   {
+                       Endpoint = "https://example.openai.azure.com/",
+                       AuthMode = AzureFoundryAuthMode.ApiKey,
+                       ApiKey = "test-api-key",
+                       Models =
+                       [
+                           new StoredAzureFoundryModel
+                           {
+                               DeploymentName = "gpt-5.4-mini"
+                           }
+                       ]
+                   }
+               });
+        harness.AzureFactory.Create(Arg.Any<StoredAzureFoundryConnection>(), "gpt-5.4-mini").Returns(azureClient);
+
+        var produced = harness.Factory.TryCreateActiveCloudChatClient("gpt-5.4-mini", out var client);
+
+        AssertEx.True(produced);
+        AssertEx.True(ReferenceEquals(azureClient, client));
+        harness.CodexFactory.DidNotReceive().Create(Arg.Any<string?>());
+    }
+
+    [Test]
     public void TryCreate_WhenRequestedModelIsLocal_RoutesLocal_EvenThoughAzureConnectionExists()
     {
         // The inverse regression guard: an explicit LOCAL model pick must route local even while an Azure connection
@@ -461,6 +497,31 @@ public sealed class ActiveCloudChatClientFactoryTests
 
         AssertEx.True(produced);
         AssertEx.True(ReferenceEquals(azureClient, client));
+    }
+
+    [Test]
+    public void TryCreate_WhenRequestedModelIdIsWhitespaceOnly_KeepsNodeDefaultBehavior()
+    {
+        // A whitespace-only ModelId is not a "concrete" per-request pick — it must be treated the same as null and
+        // fall back to the node-default selection, not be matched (and fail to match) as a literal deployment/Codex id.
+        using var azureClient = new StubChatClient();
+        var harness = new Harness();
+        harness.CodexTokenStore.LoadAsync(Arg.Any<CancellationToken>()).Returns((CodexTokens?)null);
+        harness.CredentialStore.LoadConfigAsync(Arg.Any<CancellationToken>()).Returns(CreateAzureConfig());
+        harness.NodeSettingsStore.LoadAsync(Arg.Any<CancellationToken>())
+               .Returns(new StoredNodeSettings
+               {
+                   DefaultModelName = "gpt-4o"
+               });
+        harness.AzureFactory.Create(Arg.Any<StoredAzureFoundryConnection>(), "gpt-4o").Returns(azureClient);
+
+        var producedNull = harness.Factory.TryCreateActiveCloudChatClient(requestedModelId: null, out var clientForNull);
+        var producedWhitespace = harness.Factory.TryCreateActiveCloudChatClient("   ", out var clientForWhitespace);
+
+        AssertEx.True(producedNull);
+        AssertEx.True(producedWhitespace);
+        AssertEx.True(ReferenceEquals(azureClient, clientForNull));
+        AssertEx.True(ReferenceEquals(azureClient, clientForWhitespace));
     }
 
     [Test]
