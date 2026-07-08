@@ -14,4 +14,12 @@ public enum EntraSignInMethod
 
     /// <summary>Interactive user sign-in via a browser window opened on the node machine.</summary>
     InteractiveBrowser = 2,
+
+    /// <summary>
+    ///     Confidential-client authorization-code sign-in ("Postman parity"): browser sign-in yields a DELEGATED
+    ///     token (scp claim) while the stored client secret authenticates the code redemption via MSAL
+    ///     <c>ConfidentialClientApplication</c>. Unlike <see cref="ClientSecret" />, this mode requires a client
+    ///     secret AND uses a delegated token scope — the app-only <c>/.default</c> fail-fast does not apply.
+    /// </summary>
+    AuthorizationCode = 3,
 }

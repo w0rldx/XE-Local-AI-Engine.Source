@@ -60,6 +60,8 @@ import {
 	enableAutoConnect,
 	enableScheduledJob,
 	ensureLlamaCppBinary,
+	entraAuthCodeSignIn,
+	entraAuthCodeStatus,
 	entraDeviceCodeSignIn,
 	entraDeviceCodeStatus,
 	executeSavedPreviewWorkflow,
@@ -278,6 +280,10 @@ import type {
 	EnableScheduledJobResponse,
 	EnsureLlamaCppBinaryData,
 	EnsureLlamaCppBinaryResponse,
+	EntraAuthCodeSignInData,
+	EntraAuthCodeSignInResponse,
+	EntraAuthCodeStatusData,
+	EntraAuthCodeStatusResponse,
 	EntraDeviceCodeSignInData,
 	EntraDeviceCodeSignInResponse,
 	EntraDeviceCodeStatusData,
@@ -2899,6 +2905,48 @@ export const saveCloudSettingsMutation = (
 	};
 	return mutationOptions;
 };
+
+export const entraAuthCodeSignInMutation = (
+	options?: Partial<Options<EntraAuthCodeSignInData>>,
+): UseMutationOptions<EntraAuthCodeSignInResponse, AxiosError<DefaultError>, Options<EntraAuthCodeSignInData>> => {
+	const mutationOptions: UseMutationOptions<
+		EntraAuthCodeSignInResponse,
+		AxiosError<DefaultError>,
+		Options<EntraAuthCodeSignInData>
+	> = {
+		mutationFn: async (fnOptions) => {
+			const { data } = await entraAuthCodeSignIn({
+				...options,
+				...fnOptions,
+				throwOnError: true,
+			});
+			return data;
+		},
+	};
+	return mutationOptions;
+};
+
+export const entraAuthCodeStatusQueryKey = (options?: Options<EntraAuthCodeStatusData>) =>
+	createQueryKey("entraAuthCodeStatus", options);
+
+export const entraAuthCodeStatusOptions = (options?: Options<EntraAuthCodeStatusData>) =>
+	queryOptions<
+		EntraAuthCodeStatusResponse,
+		AxiosError<DefaultError>,
+		EntraAuthCodeStatusResponse,
+		ReturnType<typeof entraAuthCodeStatusQueryKey>
+	>({
+		queryFn: async ({ queryKey, signal }) => {
+			const { data } = await entraAuthCodeStatus({
+				...options,
+				...queryKey[0],
+				signal,
+				throwOnError: true,
+			});
+			return data;
+		},
+		queryKey: entraAuthCodeStatusQueryKey(options),
+	});
 
 export const entraDeviceCodeSignInMutation = (
 	options?: Partial<Options<EntraDeviceCodeSignInData>>,

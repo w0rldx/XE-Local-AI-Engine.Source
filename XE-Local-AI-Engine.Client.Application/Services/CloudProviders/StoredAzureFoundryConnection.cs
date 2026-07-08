@@ -71,6 +71,14 @@ public sealed record StoredAzureFoundryConnection
     /// <summary>The interactive sign-in method used when no <see cref="EntraClientSecret" /> is configured.</summary>
     public EntraSignInMethod EntraSignInMethod { get; init; }
 
+    /// <summary>
+    ///     The loopback redirect URI for <see cref="CloudProviders.EntraSignInMethod.AuthorizationCode" /> sign-in
+    ///     (e.g. <c>http://localhost:53682/signin-oidc</c>). Not secret — round-trips to the UI. Null or blank
+    ///     selects the default <see cref="EntraAuthCodeDefaults.RedirectUri" />. Ignored for every other sign-in
+    ///     method.
+    /// </summary>
+    public string? EntraAuthCodeRedirectUri { get; init; }
+
     // Sealed-record PrintMembers signature is private (Locked #11). Redacts the API key and Entra client secret and
     // delegates per-header secret redaction (each header's own ToString redacts) so no secret value or key ever
     // leaks via ToString (HIGH-2).
@@ -90,6 +98,7 @@ public sealed record StoredAzureFoundryConnection
         builder.Append(", EntraClientSecret = ").Append(EntraClientSecret is null ? "null" : "[REDACTED]");
         builder.Append(", EntraTokenScope = ").Append(EntraTokenScope);
         builder.Append(", EntraSignInMethod = ").Append(EntraSignInMethod);
+        builder.Append(", EntraAuthCodeRedirectUri = ").Append(EntraAuthCodeRedirectUri);
         return true;
     }
 }

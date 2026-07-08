@@ -153,9 +153,14 @@ public sealed class EntraDeviceCodeSignInCoordinator : IEntraDeviceCodeSignInCoo
             var info = await deviceCodeReady.Task.ConfigureAwait(false);
             return (info, credential, authenticateTask);
         }
-        catch (CredentialUnavailableException) when (allowPersistence)
+        // A persistence failure does not always surface as CredentialUnavailableException — on a platform with no
+        // org.freedesktop.secrets provider (e.g. WSL2 without gnome-keyring/kwallet) it can arrive as
+        // AuthenticationFailedException wrapping MsalCachePersistenceException several levels deep instead (live-
+        // confirmed on WSL2; see EntraCachePersistenceFailure's remarks). Checking both is what makes the retry
+        // actually fire instead of the failure escaping as an unhandled error from the sign-in endpoint.
+        catch (Exception exception) when (allowPersistence && (exception is CredentialUnavailableException || EntraCachePersistenceFailure.IsPersistenceUnavailable(exception)))
         {
-            _logger.LogWarning("Encrypted Entra ID token-cache persistence is unavailable on this platform; retrying device-code sign-in with an in-memory (non-persisted) token cache.");
+            _logger.LogWarning(exception, "Encrypted Entra ID token-cache persistence is unavailable on this platform; retrying device-code sign-in with an in-memory (non-persisted) token cache.");
             return await BeginDeviceCodeFlowAsync(connection, allowPersistence: false, cancellationToken).ConfigureAwait(false);
         }
     }

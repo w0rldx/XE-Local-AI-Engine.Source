@@ -5,6 +5,7 @@
 import { PasswordInput, SegmentedControl, Stack, Text, TextInput } from "@mantine/core";
 import { useTranslation } from "react-i18next";
 
+import { EntraAuthCodeSignInCard } from "@/features/cloud-settings/entra/components/EntraAuthCodeSignInCard";
 import { EntraDeviceCodeSignInCard } from "@/features/cloud-settings/entra/components/EntraDeviceCodeSignInCard";
 import {
 	type CloudSettingsFormValues,
@@ -12,7 +13,12 @@ import {
 	parseEntraSignInMethod,
 } from "@/features/cloud-settings/models/CloudSettingsModel";
 
-type EntraTextField = "entraTenantId" | "entraClientId" | "entraClientSecret" | "entraTokenScope";
+type EntraTextField =
+	| "entraTenantId"
+	| "entraClientId"
+	| "entraClientSecret"
+	| "entraTokenScope"
+	| "entraAuthCodeRedirectUri";
 
 interface EntraConnectionFieldsProps {
 	values: CloudSettingsFormValues;
@@ -21,6 +27,8 @@ interface EntraConnectionFieldsProps {
 	hasStoredClientSecret: boolean;
 	/** True for a saved EntraId+DeviceCode connection — gates the inline device-code sign-in card. */
 	showDeviceCodeSignIn: boolean;
+	/** True for a saved EntraId+AuthorizationCode connection — gates the inline authorization-code sign-in card. */
+	showAuthCodeSignIn: boolean;
 	onFieldChange: (field: EntraTextField, value: string) => void;
 	onFieldBlur: (field: EntraTextField) => void;
 	onSignInMethodChange: (value: EntraSignInMethod) => void;
@@ -31,16 +39,19 @@ export function EntraConnectionFields({
 	errors,
 	hasStoredClientSecret,
 	showDeviceCodeSignIn,
+	showAuthCodeSignIn,
 	onFieldChange,
 	onFieldBlur,
 	onSignInMethodChange,
 }: EntraConnectionFieldsProps) {
 	const { t } = useTranslation();
 
-	// The sign-in method picker (and the device-code sign-in card) only matter once no client secret will be in
-	// play — a typed value or a previously stored one both coerce the connection to ClientSecret mode
-	// server-side (mirrors CloudSettingsEndpointDtoMapper.ParseEntraSignInMethod's `hasSecret` check).
+	// A typed value or a previously stored one both put a secret "in play" — mirrors
+	// CloudSettingsEndpointDtoMapper.ParseEntraSignInMethod's `hasSecret` check. With a secret present, the operator
+	// chooses between app-only client-credentials (the implicit ClientSecret default) and authorization-code
+	// (delegated, Postman parity); without one, between the two public-client interactive flows.
 	const hasSecret = values.entraClientSecret.trim().length > 0 || hasStoredClientSecret;
+	const isAuthorizationCode = values.entraSignInMethod === "AuthorizationCode";
 
 	return (
 		<Stack gap="sm">
@@ -76,12 +87,13 @@ export function EntraConnectionFields({
 				value={values.entraClientSecret}
 				onChange={(event) => onFieldChange("entraClientSecret", event.currentTarget.value)}
 				onBlur={() => onFieldBlur("entraClientSecret")}
+				error={errors.entraClientSecret}
 			/>
 			<TextInput
 				label={t("pages.cloudSettings.entra.tokenScopeLabel", "Token scope")}
 				placeholder={t("pages.cloudSettings.entra.tokenScopePlaceholder", "api://<backend-app-id>/.default")}
 				description={
-					hasSecret
+					hasSecret && !isAuthorizationCode
 						? t(
 								"pages.cloudSettings.entra.tokenScopeHintClientCredentials",
 								"With a client secret, use the app-only scope ending in /.default, e.g. api://<app-id-uri>/.default.",
@@ -96,11 +108,27 @@ export function EntraConnectionFields({
 				onBlur={() => onFieldBlur("entraTokenScope")}
 				error={errors.entraTokenScope}
 			/>
-			{!hasSecret ? (
-				<Stack gap={4}>
-					<Text size="sm" fw={500}>
-						{t("pages.cloudSettings.entra.signInMethodLabel", "Sign-in method")}
-					</Text>
+			<Stack gap={4}>
+				<Text size="sm" fw={500}>
+					{t("pages.cloudSettings.entra.signInMethodLabel", "Sign-in method")}
+				</Text>
+				{hasSecret ? (
+					<SegmentedControl
+						data-testid="cloud-settings-entra-sign-in-method-secret"
+						value={isAuthorizationCode ? "AuthorizationCode" : "ClientSecret"}
+						onChange={(value) => onSignInMethodChange(parseEntraSignInMethod(value))}
+						data={[
+							{
+								value: "ClientSecret",
+								label: t("pages.cloudSettings.entra.signInMethodClientSecret", "App-only (client credentials)"),
+							},
+							{
+								value: "AuthorizationCode",
+								label: t("pages.cloudSettings.entra.signInMethodAuthorizationCode", "Authorization code (browser + client secret)"),
+							},
+						]}
+					/>
+				) : (
 					<SegmentedControl
 						data-testid="cloud-settings-entra-sign-in-method"
 						value={values.entraSignInMethod}
@@ -113,9 +141,24 @@ export function EntraConnectionFields({
 							},
 						]}
 					/>
-				</Stack>
+				)}
+			</Stack>
+			{isAuthorizationCode ? (
+				<TextInput
+					label={t("pages.cloudSettings.entra.authCode.redirectUriLabel", "Redirect URI")}
+					placeholder={t("pages.cloudSettings.entra.authCode.redirectUriPlaceholder", "http://localhost:53682/signin-oidc")}
+					description={t(
+						"pages.cloudSettings.entra.authCode.redirectUriHint",
+						"Leave blank to use the default. Must be a loopback address (localhost or 127.0.0.1) registered on the app registration.",
+					)}
+					value={values.entraAuthCodeRedirectUri}
+					onChange={(event) => onFieldChange("entraAuthCodeRedirectUri", event.currentTarget.value)}
+					onBlur={() => onFieldBlur("entraAuthCodeRedirectUri")}
+					error={errors.entraAuthCodeRedirectUri}
+				/>
 			) : null}
 			{showDeviceCodeSignIn ? <EntraDeviceCodeSignInCard /> : null}
+			{showAuthCodeSignIn ? <EntraAuthCodeSignInCard /> : null}
 		</Stack>
 	);
 }

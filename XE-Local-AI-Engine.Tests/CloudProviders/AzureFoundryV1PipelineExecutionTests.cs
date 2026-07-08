@@ -47,6 +47,33 @@ public sealed class AzureFoundryV1PipelineExecutionTests
     }
 
     [Test]
+    public async Task EntraId_AuthorizationCodeMode_SendsRealDelegatedBearerToken_NotPlaceholder()
+    {
+        // Proves the new AuthorizationCode branch (client secret + EntraSignInMethod.AuthorizationCode -> delegated
+        // MSAL credential, see AzureFoundryChatClientFactory.BuildEntraCredential's truth table) feeds the SAME
+        // EntraBearerTokenPipelinePolicy as every other Entra ID shape — a live-cache hit is enough; the coordinator
+        // and MSAL redemption itself are exercised separately (see EntraAuthCodeSignInCoordinatorTests's remarks).
+        var connection = CreateEntraConnection() with
+        {
+            EntraClientSecret = "client-secret",
+            EntraSignInMethod = EntraSignInMethod.AuthorizationCode
+        };
+        var liveCredentialCache = new EntraLiveCredentialCache();
+        var cacheKey = EntraDeviceCodeCredentialCacheKey.Create(connection.EntraTenantId, connection.EntraClientId, connection.EntraTokenScope);
+        liveCredentialCache.Store(cacheKey, new StubTokenCredential(FakeJwt));
+        var factory = new AzureFoundryChatClientFactory(entraLiveCredentialCache: liveCredentialCache);
+        using var capture = new RequestCapturingHandler();
+        using var httpClient = new HttpClient(capture);
+
+        var openAiClient = factory.CreateOpenAiV1ClientForTesting(connection, httpClient);
+        await SendCannedChatRequestAsync(openAiClient);
+
+        var request = AssertEx.NotNull(capture.LastRequest, "the chat request must have reached the fake transport");
+        AssertEx.True(request.Headers.TryGetValues("Authorization", out var authValues), "Authorization header must be present");
+        AssertEx.Equal($"Bearer {FakeJwt}", authValues!.Single());
+    }
+
+    [Test]
     public async Task EntraId_ComposesWithCustomHeaders_WithoutEitherClobberingTheOther()
     {
         var connection = CreateEntraConnection(headers: [new StoredAzureFoundryHeader { Name = "X-Tenant", Value = "tenant-a", IsSecret = false }]);
