@@ -80,6 +80,17 @@ export function EntraConnectionFields({
 			<TextInput
 				label={t("pages.cloudSettings.entra.tokenScopeLabel", "Token scope")}
 				placeholder={t("pages.cloudSettings.entra.tokenScopePlaceholder", "api://<backend-app-id>/.default")}
+				description={
+					hasSecret
+						? t(
+								"pages.cloudSettings.entra.tokenScopeHintClientCredentials",
+								"With a client secret, use the app-only scope ending in /.default, e.g. api://<app-id-uri>/.default.",
+							)
+						: t(
+								"pages.cloudSettings.entra.tokenScopeHintDelegated",
+								"Without a client secret (device-code or browser sign-in), use a delegated scope, e.g. api://<app-id-uri>/access_as_user.",
+							)
+				}
 				value={values.entraTokenScope}
 				onChange={(event) => onFieldChange("entraTokenScope", event.currentTarget.value)}
 				onBlur={() => onFieldBlur("entraTokenScope")}
