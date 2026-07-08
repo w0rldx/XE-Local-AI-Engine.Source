@@ -49,6 +49,13 @@
     <PackageVersion Include="Microsoft.Extensions.AI" Version="10.7.0" />
     <PackageVersion Include="Microsoft.Extensions.AI.Abstractions" Version="10.7.0" />
     <PackageVersion Include="Microsoft.Extensions.AI.OpenAI" Version="10.7.0" />
+    <!-- Transitive only (pulled in by Microsoft.Extensions.AI.OpenAI / Microsoft.Agents.AI.Hosting.OpenAI): pinned
+         explicitly, matching the version CentralPackageTransitivePinningEnabled currently resolves, so the plain
+         OpenAI SDK's OPENAI001-experimental OpenAIClient(AuthenticationPolicy, OpenAIClientOptions) ctor that
+         AzureFoundryChatClientFactory's v1-surface builders depend on is a visible, greppable dependency, and a
+         future Microsoft.Extensions.AI.OpenAI bump becomes a conscious version change here rather than a silent
+         transitive drift. -->
+    <PackageVersion Include="OpenAI" Version="2.11.0" />
     <PackageVersion Include="Microsoft.Extensions.Configuration.Abstractions" Version="10.0.9" />
     <PackageVersion Include="Microsoft.Extensions.DependencyInjection.Abstractions" Version="10.0.9" />
     <PackageVersion Include="Microsoft.Extensions.Logging.Abstractions" Version="10.0.9" />

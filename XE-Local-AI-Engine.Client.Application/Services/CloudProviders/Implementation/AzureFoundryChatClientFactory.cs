@@ -20,12 +20,18 @@ using OpenAI;
 /// </remarks>
 public sealed class AzureFoundryChatClientFactory : IAzureFoundryChatClientFactory
 {
-    // Placeholder key material: both AzureOpenAIClient and OpenAIClient ctors require an ApiKeyCredential even when
-    // the real auth is elsewhere. For Entra ID (either surface) the value is never sent as the real bearer —
-    // EntraBearerTokenPipelinePolicy overwrites Authorization on every call. For the v1 surface's ApiKey mode the
-    // real key instead rides the "api-key" header via ApiKeyHeaderPipelinePolicy. Either way, the SDK's own
-    // Authorization/api-key header carrying this placeholder is harmless noise to a gateway that validates the real
-    // credential the policy sets.
+    // Placeholder key material for the Azure-deployments surface ONLY (AzureOpenAIClient's ctor requires an
+    // ApiKeyCredential even when the real auth is Entra ID). EntraBearerTokenPipelinePolicy is registered at
+    // PipelinePosition.PerCall on that surface and overwrites Authorization on every call, so the SDK's own
+    // Authorization header carrying this placeholder is harmless noise.
+    //
+    // The v1 surface (plain OpenAIClient) does NOT use this placeholder for either auth mode: its SDK-internal
+    // authentication policy runs in a FIXED pipeline slot that sits AFTER every PerCall policy (see
+    // EntraBearerTokenPipelinePolicy's remarks), so a placeholder credential there would silently overwrite whatever
+    // a PerCall policy set — that was the root cause of a live gateway rejecting Entra ID sends with "JWT must have
+    // three segments" (the placeholder string, not a real token, reached the wire). The v1 builders below instead
+    // construct the OpenAIClient with a real AuthenticationPolicy directly (OpenAIClient(AuthenticationPolicy,
+    // OpenAIClientOptions), OPENAI001-experimental) so there is no placeholder in that FIXED slot to begin with.
     private const string PlaceholderApiKey = "unused-entra-id-auth";
     private const string EntraTokenCachePersistenceName = "XE-Local-AI-Engine.Client.AzureFoundry.EntraId";
 
@@ -96,7 +102,13 @@ public sealed class AzureFoundryChatClientFactory : IAzureFoundryChatClientFacto
     // in the request body's "model" field. Built via the plain OpenAI SDK client — see BuildOpenAiV1KeyCredentialClient
     // / BuildOpenAiV1EntraClient for why the same ResolveEndpoint validation and credential shapes as the Azure
     // deployments surface still apply, just wired through OpenAIClientOptions instead of AzureOpenAIClientOptions.
-    private OpenAIClient BuildOpenAiV1Client(Uri endpoint, StoredAzureFoundryConnection connection)
+    //
+    // transportHttpClient is a test-only seam (default null in the production Create() path): it lets
+    // CreateOpenAiV1ClientForTesting point the assembled client's transport at a capturing fake HttpClient instead of
+    // the network, so a pipeline-EXECUTION test can assert on the actual outbound request headers/URI rather than
+    // just the wiring code that produced them — the class of bug this factory shipped (see PlaceholderApiKey's
+    // remarks) was invisible to construction-only tests.
+    private OpenAIClient BuildOpenAiV1Client(Uri endpoint, StoredAzureFoundryConnection connection, HttpClient? transportHttpClient = null)
     {
         var v1Endpoint = new Uri(endpoint.AbsoluteUri.TrimEnd('/') + OpenAiV1PathSegment);
         var options = new OpenAIClientOptions
@@ -104,6 +116,10 @@ public sealed class AzureFoundryChatClientFactory : IAzureFoundryChatClientFacto
             Endpoint = v1Endpoint
         };
         AddCustomHeaderPolicy(options, connection.Headers);
+        if (transportHttpClient is not null)
+        {
+            options.Transport = new HttpClientPipelineTransport(transportHttpClient);
+        }
 
         return connection.AuthMode switch
         {
@@ -115,9 +131,26 @@ public sealed class AzureFoundryChatClientFactory : IAzureFoundryChatClientFacto
         };
     }
 
-    // The v1 surface validates a real "api-key" header, not the SDK's default "Authorization: Bearer <key>" —
-    // ApiKeyHeaderPipelinePolicy carries the real key; the ctor gets a placeholder so the SDK's own Authorization
-    // header is harmless noise (mirrors the Entra placeholder-key reasoning above).
+    // Test-only seam (Locked pipeline-order regression coverage, see BuildOpenAiV1Client's transportHttpClient
+    // remarks): assembles the SAME v1 client construction path Create() uses, with an injected transport so a
+    // request can be fired through the real assembled pipeline without live network I/O. Internal +
+    // InternalsVisibleTo("XE-Local-AI-Engine.Tests") — not part of the public contract.
+    internal OpenAIClient CreateOpenAiV1ClientForTesting(StoredAzureFoundryConnection connection, HttpClient transportHttpClient)
+    {
+        ArgumentNullException.ThrowIfNull(connection);
+        ArgumentNullException.ThrowIfNull(transportHttpClient);
+
+        var endpoint = ResolveEndpoint(connection.Endpoint, connection.AdditionalAllowedHostSuffixes);
+        return BuildOpenAiV1Client(endpoint, connection, transportHttpClient);
+    }
+
+    // The v1 surface validates a real "api-key" header, not the SDK's default "Authorization: Bearer <key>".
+    // ApiKeyAuthenticationPolicy.CreateHeaderApiKeyPolicy is a stable (non-experimental) System.ClientModel factory
+    // that can target ANY header name, not just Authorization — passing it directly as the ctor's AuthenticationPolicy
+    // sets the real key on "api-key" with no prefix and writes nothing to Authorization at all, so there is no
+    // placeholder value left for a gateway to reject (mirrors the Entra fix: see PlaceholderApiKey's remarks and
+    // EntraBearerTokenPipelinePolicy's FIXED-slot documentation for why this must be the ctor policy, not a PerCall one).
+#pragma warning disable OPENAI001 // OpenAIClient(AuthenticationPolicy, OpenAIClientOptions) is experimental.
     private static OpenAIClient BuildOpenAiV1KeyCredentialClient(string? apiKey, OpenAIClientOptions options)
     {
         if (string.IsNullOrWhiteSpace(apiKey))
@@ -126,17 +159,19 @@ public sealed class AzureFoundryChatClientFactory : IAzureFoundryChatClientFacto
                 "An API key is required when the Azure Foundry connection uses API-key authentication.");
         }
 
-        options.AddPolicy(new ApiKeyHeaderPipelinePolicy(apiKey), PipelinePosition.PerCall);
-        return new OpenAIClient(new ApiKeyCredential(PlaceholderApiKey), options);
+        var authenticationPolicy = ApiKeyAuthenticationPolicy.CreateHeaderApiKeyPolicy(new ApiKeyCredential(apiKey), "api-key");
+        return new OpenAIClient(authenticationPolicy, options);
     }
 
     // Shared by both v1 Entra shapes (managed identity with a fixed scope, and EntraId with an operator-configured
-    // scope) — same EntraBearerTokenPipelinePolicy as the Azure deployments surface, just attached to OpenAIClientOptions.
+    // scope). Passed as the ctor's AuthenticationPolicy (not PipelinePosition.PerCall) — see
+    // EntraBearerTokenPipelinePolicy's remarks for why PerCall registration on this surface is silently overwritten.
     private static OpenAIClient BuildOpenAiV1EntraClient(TokenCredential credential, string scope, OpenAIClientOptions options)
     {
-        options.AddPolicy(new EntraBearerTokenPipelinePolicy(credential, scope), PipelinePosition.PerCall);
-        return new OpenAIClient(new ApiKeyCredential(PlaceholderApiKey), options);
+        var authenticationPolicy = new EntraBearerTokenPipelinePolicy(credential, scope);
+        return new OpenAIClient(authenticationPolicy, options);
     }
+#pragma warning restore OPENAI001
 
     private OpenAIClient BuildOpenAiV1EntraIdClient(StoredAzureFoundryConnection connection, OpenAIClientOptions options)
     {
