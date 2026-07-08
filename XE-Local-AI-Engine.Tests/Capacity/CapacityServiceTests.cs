@@ -348,7 +348,7 @@ public sealed class CapacityServiceTests
         public CapacityService Build()
         {
             var cloud = Substitute.For<IActiveCloudChatClientFactory>();
-            cloud.IsCloudProviderSelected().Returns(CloudSelected);
+            cloud.IsCloudProviderSelected(Arg.Any<string?>()).Returns(CloudSelected);
 
             var resolver = Substitute.For<ILocalModelProviderResolver>();
             resolver.ResolveProviderNameForModelAsync(Arg.Any<string>(), Arg.Any<CancellationToken>())

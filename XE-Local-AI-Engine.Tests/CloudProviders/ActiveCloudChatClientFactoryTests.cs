@@ -19,6 +19,9 @@ using XE_Local_AI_Engine.Tests.Testing;
 ///     presence, Azure off the persisted credential, the typed re-auth error surfaces (not a 500) when Codex is selected
 ///     but unusable, the fingerprint client-cache rebuilds only on selection change, swapped-out clients are NOT
 ///     disposed (concurrency-safety), and the selection snapshot keeps the token-store read off the per-send hot path.
+///     A second block of tests covers per-request routing: an explicit <c>requestedModelId</c> (the caller's
+///     <c>ChatOptions.ModelId</c>) picks its OWN provider independent of — and, for an Azure deployment match, even
+///     ahead of — the node-default selection.
 /// </summary>
 [SuppressMessage("Reliability", "CA2000:Dispose objects before losing scope",
     Justification = "The out client aliases a test-owned StubChatClient already disposed via 'using'.")]
@@ -35,7 +38,7 @@ public sealed class ActiveCloudChatClientFactoryTests
                .Returns(NonExpiredSession());
         harness.CodexFactory.Create(Arg.Any<string?>()).Returns(codexClient);
 
-        var produced = harness.Factory.TryCreateActiveCloudChatClient(out var client);
+        var produced = harness.Factory.TryCreateActiveCloudChatClient(null, out var client);
 
         AssertEx.True(produced);
         AssertEx.True(ReferenceEquals(codexClient, client));
@@ -54,7 +57,7 @@ public sealed class ActiveCloudChatClientFactoryTests
                });
         harness.CodexFactory.Create(Arg.Any<string?>()).Returns(codexClient);
 
-        harness.Factory.TryCreateActiveCloudChatClient(out _);
+        harness.Factory.TryCreateActiveCloudChatClient(null, out _);
 
         // The selected Codex model id must reach the Codex factory — never always-default.
         harness.CodexFactory.Received().Create("gpt-5.4");
@@ -74,7 +77,7 @@ public sealed class ActiveCloudChatClientFactoryTests
                });
         harness.CodexFactory.Create(Arg.Any<string?>()).Returns(codexClient);
 
-        harness.Factory.TryCreateActiveCloudChatClient(out _);
+        harness.Factory.TryCreateActiveCloudChatClient(null, out _);
 
         harness.CodexFactory.Received().Create(harness.CodexOptions.DefaultModel);
         harness.CodexFactory.DidNotReceive().Create("qwen3:8b");
@@ -96,7 +99,7 @@ public sealed class ActiveCloudChatClientFactoryTests
                });
         harness.AzureFactory.Create(Arg.Any<StoredAzureFoundryConnection>(), "gpt-4o").Returns(azureClient);
 
-        var produced = harness.Factory.TryCreateActiveCloudChatClient(out var client);
+        var produced = harness.Factory.TryCreateActiveCloudChatClient(null, out var client);
 
         AssertEx.True(produced);
         AssertEx.True(ReferenceEquals(azureClient, client));
@@ -116,7 +119,7 @@ public sealed class ActiveCloudChatClientFactoryTests
                    DefaultModelName = "qwen3:8b"
                });
 
-        var produced = harness.Factory.TryCreateActiveCloudChatClient(out var client);
+        var produced = harness.Factory.TryCreateActiveCloudChatClient(null, out var client);
 
         AssertEx.False(produced);
         AssertEx.Null(client);
@@ -129,7 +132,7 @@ public sealed class ActiveCloudChatClientFactoryTests
         harness.CodexTokenStore.LoadAsync(Arg.Any<CancellationToken>()).Returns((CodexTokens?)null);
         harness.CredentialStore.LoadAsync(Arg.Any<CancellationToken>()).Returns((StoredCloudCredentials?)null);
 
-        var produced = harness.Factory.TryCreateActiveCloudChatClient(out var client);
+        var produced = harness.Factory.TryCreateActiveCloudChatClient(null, out var client);
 
         AssertEx.False(produced);
         AssertEx.Null(client);
@@ -145,7 +148,7 @@ public sealed class ActiveCloudChatClientFactoryTests
         harness.CodexFactory.Create(Arg.Any<string?>())
                .Returns(_ => throw new CodexProviderException(CodexProviderErrorKind.AuthRequired, "sign in required"));
 
-        var error = Throws<CodexProviderException>(() => harness.Factory.TryCreateActiveCloudChatClient(out _));
+        var error = Throws<CodexProviderException>(() => harness.Factory.TryCreateActiveCloudChatClient(null, out _));
 
         AssertEx.Equal(CodexProviderErrorKind.AuthRequired, error.Kind);
     }
@@ -170,9 +173,9 @@ public sealed class ActiveCloudChatClientFactoryTests
         harness.CodexFactory.Create(Arg.Any<string?>()).Returns(codexClient);
         using var factory = harness.Factory;
 
-        factory.TryCreateActiveCloudChatClient(out var first);
-        factory.TryCreateActiveCloudChatClient(out var second);
-        factory.TryCreateActiveCloudChatClient(out var third);
+        factory.TryCreateActiveCloudChatClient(null, out var first);
+        factory.TryCreateActiveCloudChatClient(null, out var second);
+        factory.TryCreateActiveCloudChatClient(null, out var third);
 
         AssertEx.True(ReferenceEquals(first, second));
         AssertEx.True(ReferenceEquals(second, third));
@@ -194,9 +197,9 @@ public sealed class ActiveCloudChatClientFactoryTests
         harness.CodexFactory.Create(Arg.Any<string?>()).Returns(firstClient, secondClient);
         using var factory = harness.Factory;
 
-        factory.TryCreateActiveCloudChatClient(out var before);
+        factory.TryCreateActiveCloudChatClient(null, out var before);
         harness.Time.Advance(PastTtl); // lapse the selection snapshot so the refreshed session is re-read
-        factory.TryCreateActiveCloudChatClient(out var after);
+        factory.TryCreateActiveCloudChatClient(null, out var after);
 
         AssertEx.True(ReferenceEquals(firstClient, before));
         AssertEx.True(ReferenceEquals(secondClient, after));
@@ -217,9 +220,9 @@ public sealed class ActiveCloudChatClientFactoryTests
         harness.CodexFactory.Create(Arg.Any<string?>()).Returns(codexClient);
         using var factory = harness.Factory;
 
-        factory.TryCreateActiveCloudChatClient(out _); // signed in → cached
+        factory.TryCreateActiveCloudChatClient(null, out _); // signed in → cached
         factory.InvalidateSelectionCache(); // logout pokes the selector
-        var produced = factory.TryCreateActiveCloudChatClient(out var afterLogout); // signed out → local
+        var produced = factory.TryCreateActiveCloudChatClient(null, out var afterLogout); // signed out → local
 
         AssertEx.False(produced);
         AssertEx.Null(afterLogout);
@@ -234,9 +237,9 @@ public sealed class ActiveCloudChatClientFactoryTests
         harness.CodexTokenStore.LoadAsync(Arg.Any<CancellationToken>()).Returns((CodexTokens?)null);
         using var factory = harness.Factory;
 
-        factory.TryCreateActiveCloudChatClient(out _);
+        factory.TryCreateActiveCloudChatClient(null, out _);
         factory.InvalidateSelectionCache();
-        factory.TryCreateActiveCloudChatClient(out _);
+        factory.TryCreateActiveCloudChatClient(null, out _);
 
         // Without invalidation the 3s snapshot would have served the second call from cache (1 read); the explicit
         // invalidation forces a second read.
@@ -268,7 +271,7 @@ public sealed class ActiveCloudChatClientFactoryTests
                .Returns(_ => Interlocked.Increment(ref createdCount) == 1 ? firstClient : new StubChatClient());
         using var factory = harness.Factory;
 
-        factory.TryCreateActiveCloudChatClient(out var client);
+        factory.TryCreateActiveCloudChatClient(null, out var client);
         var inFlight = AssertEx.NotNull(client);
 
         // Start draining the stream on a background task; it will park at the mid-stream gate.
@@ -290,7 +293,7 @@ public sealed class ActiveCloudChatClientFactoryTests
 
         await swapHappened.WaitAsync(); // the stream is now provably parked mid-enumeration
         harness.Time.Advance(PastTtl); // lapse the snapshot so the refreshed session is re-read
-        factory.TryCreateActiveCloudChatClient(out var afterSwap); // swaps the cache → would dispose firstClient pre-fix
+        factory.TryCreateActiveCloudChatClient(null, out var afterSwap); // swaps the cache → would dispose firstClient pre-fix
         resumeStream.Release(); // let the held stream finish
         await streamTask;
 
@@ -332,8 +335,8 @@ public sealed class ActiveCloudChatClientFactoryTests
         });
         using var factory = harness.Factory;
 
-        var task1 = Task.Run(() => factory.TryCreateActiveCloudChatClient(out _));
-        var task2 = Task.Run(() => factory.TryCreateActiveCloudChatClient(out _));
+        var task1 = Task.Run(() => factory.TryCreateActiveCloudChatClient(null, out _));
+        var task2 = Task.Run(() => factory.TryCreateActiveCloudChatClient(null, out _));
         await Task.WhenAll(task1, task2).WaitAsync(TimeSpan.FromSeconds(10));
 
         AssertEx.Equal(2, concurrentEntries);
@@ -358,7 +361,7 @@ public sealed class ActiveCloudChatClientFactoryTests
                 for (var i = 0; i < 25; i++)
                 {
                     factory.InvalidateSelectionCache(); // force re-read so fingerprints keep flipping
-                    if (factory.TryCreateActiveCloudChatClient(out var client) && client is not null)
+                    if (factory.TryCreateActiveCloudChatClient(null, out var client) && client is not null)
                     {
                         await foreach (var _ in client.GetStreamingResponseAsync([new ChatMessage(ChatRole.User, "hi")]))
                         {
@@ -376,6 +379,165 @@ public sealed class ActiveCloudChatClientFactoryTests
         await Task.WhenAll(tasks);
 
         AssertEx.Equal(expected: 0, failures);
+    }
+
+    [Test]
+    public void TryCreate_WhenRequestedModelIsAzureDeployment_RoutesAzure_EvenThoughNodeDefaultIsLocal()
+    {
+        // The regression this whole change fixes: the chat model dropdown picks an Azure deployment while the node
+        // default still names a local model — the send must route Azure, not fall through to llama-server.
+        using var azureClient = new StubChatClient();
+        var harness = new Harness();
+        harness.CodexTokenStore.LoadAsync(Arg.Any<CancellationToken>()).Returns((CodexTokens?)null);
+        harness.CredentialStore.LoadConfigAsync(Arg.Any<CancellationToken>()).Returns(CreateAzureConfig());
+        harness.NodeSettingsStore.LoadAsync(Arg.Any<CancellationToken>())
+               .Returns(new StoredNodeSettings
+               {
+                   DefaultModelName = "qwen3:8b"
+               });
+        harness.AzureFactory.Create(Arg.Any<StoredAzureFoundryConnection>(), "gpt-4o").Returns(azureClient);
+
+        var produced = harness.Factory.TryCreateActiveCloudChatClient("gpt-4o", out var client);
+
+        AssertEx.True(produced);
+        AssertEx.True(ReferenceEquals(azureClient, client));
+    }
+
+    [Test]
+    public void TryCreate_WhenRequestedModelIsAzureDeployment_RoutesAzure_EvenWithAnActiveCodexSession()
+    {
+        // Precedence rule: an explicit Azure deployment pick wins even over a live Codex session — switching the
+        // model dropdown to Azure must not require signing out of Codex first.
+        using var azureClient = new StubChatClient();
+        var harness = new Harness();
+        harness.CodexTokenStore.LoadAsync(Arg.Any<CancellationToken>()).Returns(NonExpiredSession());
+        harness.CredentialStore.LoadConfigAsync(Arg.Any<CancellationToken>()).Returns(CreateAzureConfig());
+        harness.AzureFactory.Create(Arg.Any<StoredAzureFoundryConnection>(), "gpt-4o").Returns(azureClient);
+
+        var produced = harness.Factory.TryCreateActiveCloudChatClient("gpt-4o", out var client);
+
+        AssertEx.True(produced);
+        AssertEx.True(ReferenceEquals(azureClient, client));
+        harness.CodexFactory.DidNotReceive().Create(Arg.Any<string?>());
+    }
+
+    [Test]
+    public void TryCreate_WhenRequestedModelIsLocal_RoutesLocal_EvenThoughAzureConnectionExists()
+    {
+        // The inverse regression guard: an explicit LOCAL model pick must route local even while an Azure connection
+        // is saved and would otherwise be picked up by the node-default fallback.
+        var harness = new Harness();
+        harness.CodexTokenStore.LoadAsync(Arg.Any<CancellationToken>()).Returns((CodexTokens?)null);
+        harness.CredentialStore.LoadConfigAsync(Arg.Any<CancellationToken>()).Returns(CreateAzureConfig());
+        harness.NodeSettingsStore.LoadAsync(Arg.Any<CancellationToken>())
+               .Returns(new StoredNodeSettings
+               {
+                   DefaultModelName = "gpt-4o"
+               });
+
+        var produced = harness.Factory.TryCreateActiveCloudChatClient("qwen3:8b", out var client);
+
+        AssertEx.False(produced);
+        AssertEx.Null(client);
+    }
+
+    [Test]
+    public void TryCreate_WhenNoRequestedModelId_KeepsNodeDefaultBehavior()
+    {
+        // A caller that omits ModelId (an agent/flow participant with no pinned model) still gets the pre-existing
+        // node-default-driven selection, byte-identical to the old no-argument overload.
+        using var azureClient = new StubChatClient();
+        var harness = new Harness();
+        harness.CodexTokenStore.LoadAsync(Arg.Any<CancellationToken>()).Returns((CodexTokens?)null);
+        harness.CredentialStore.LoadConfigAsync(Arg.Any<CancellationToken>()).Returns(CreateAzureConfig());
+        harness.NodeSettingsStore.LoadAsync(Arg.Any<CancellationToken>())
+               .Returns(new StoredNodeSettings
+               {
+                   DefaultModelName = "gpt-4o"
+               });
+        harness.AzureFactory.Create(Arg.Any<StoredAzureFoundryConnection>(), "gpt-4o").Returns(azureClient);
+
+        var produced = harness.Factory.TryCreateActiveCloudChatClient(requestedModelId: null, out var client);
+
+        AssertEx.True(produced);
+        AssertEx.True(ReferenceEquals(azureClient, client));
+    }
+
+    [Test]
+    public void TryCreate_WhenRequestedModelIsACodexModel_RoutesCodexWithThatModel_RegardlessOfNodeDefault()
+    {
+        using var codexClient = new StubChatClient();
+        var harness = new Harness();
+        harness.CodexTokenStore.LoadAsync(Arg.Any<CancellationToken>()).Returns(NonExpiredSession());
+        harness.NodeSettingsStore.LoadAsync(Arg.Any<CancellationToken>())
+               .Returns(new StoredNodeSettings
+               {
+                   DefaultModelName = "qwen3:8b"
+               });
+        harness.CodexFactory.Create("gpt-5.4-mini").Returns(codexClient);
+
+        var produced = harness.Factory.TryCreateActiveCloudChatClient("gpt-5.4-mini", out var client);
+
+        AssertEx.True(produced);
+        AssertEx.True(ReferenceEquals(codexClient, client));
+    }
+
+    [Test]
+    public void TryCreate_WhenRequestedModelIsAzureDeployment_MatchIsCaseInsensitive()
+    {
+        using var azureClient = new StubChatClient();
+        var harness = new Harness();
+        harness.CodexTokenStore.LoadAsync(Arg.Any<CancellationToken>()).Returns((CodexTokens?)null);
+        harness.CredentialStore.LoadConfigAsync(Arg.Any<CancellationToken>()).Returns(CreateAzureConfig());
+        harness.AzureFactory.Create(Arg.Any<StoredAzureFoundryConnection>(), "gpt-4o").Returns(azureClient);
+
+        var produced = harness.Factory.TryCreateActiveCloudChatClient("GPT-4O", out var client);
+
+        AssertEx.True(produced);
+        AssertEx.True(ReferenceEquals(azureClient, client));
+    }
+
+    [Test]
+    public void TryCreate_WhenRequestedModelIsAnOrphanedId_RoutesLocal()
+    {
+        // Orphan guard: a stale id that matches neither a stored Azure deployment nor the Codex catalog (e.g. an
+        // Azure deployment removed after it was selected) routes local rather than throwing or silently picking
+        // some other cloud provider.
+        var harness = new Harness();
+        harness.CodexTokenStore.LoadAsync(Arg.Any<CancellationToken>()).Returns((CodexTokens?)null);
+        harness.CredentialStore.LoadConfigAsync(Arg.Any<CancellationToken>()).Returns(CreateAzureConfig());
+
+        var produced = harness.Factory.TryCreateActiveCloudChatClient("gpt-4o-removed", out var client);
+
+        AssertEx.False(produced);
+        AssertEx.Null(client);
+    }
+
+    [Test]
+    public void TryCreate_AlternatingBetweenTwoRequestedModels_CachesBothWithoutRebuildingEitherOnAlternation()
+    {
+        // Cache-shape regression guard: with the per-request model varying send to send, the client cache must be
+        // keyed per selection identity (not a single slot) so alternating between two known models does not thrash —
+        // each identity's build runs exactly once despite repeated alternation.
+        using var azureClient = new StubChatClient();
+        using var codexClient = new StubChatClient();
+        var harness = new Harness();
+        harness.CodexTokenStore.LoadAsync(Arg.Any<CancellationToken>()).Returns(NonExpiredSession());
+        harness.CredentialStore.LoadConfigAsync(Arg.Any<CancellationToken>()).Returns(CreateAzureConfig());
+        harness.AzureFactory.Create(Arg.Any<StoredAzureFoundryConnection>(), "gpt-4o").Returns(azureClient);
+        harness.CodexFactory.Create("gpt-5.4-mini").Returns(codexClient);
+        using var factory = harness.Factory;
+
+        for (var i = 0; i < 3; i++)
+        {
+            factory.TryCreateActiveCloudChatClient("gpt-4o", out var azureResult);
+            factory.TryCreateActiveCloudChatClient("gpt-5.4-mini", out var codexResult);
+            AssertEx.True(ReferenceEquals(azureClient, azureResult));
+            AssertEx.True(ReferenceEquals(codexClient, codexResult));
+        }
+
+        harness.AzureFactory.Received(1).Create(Arg.Any<StoredAzureFoundryConnection>(), "gpt-4o");
+        harness.CodexFactory.Received(1).Create("gpt-5.4-mini");
     }
 
     private static StoredCloudProviderConfig CreateAzureConfig()
