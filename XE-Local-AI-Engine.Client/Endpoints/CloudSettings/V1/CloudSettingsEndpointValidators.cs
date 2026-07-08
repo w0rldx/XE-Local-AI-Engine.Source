@@ -4,6 +4,7 @@ using FastEndpoints;
 using FluentValidation;
 using XE_Local_AI_Engine.Client.Configuration;
 using XE_Local_AI_Engine.Client.Services.CloudProviders;
+using XE_Local_AI_Engine.Client.Services.CloudProviders.Auth;
 
 public sealed class SaveCloudSettingsRequestValidator : Validator<SaveCloudSettingsRequest>
 {
@@ -49,6 +50,13 @@ public sealed class SaveCloudSettingsRequestValidator : Validator<SaveCloudSetti
         RuleFor(static request => request.EntraTokenScope)
             .NotEmpty()
             .WithMessage($"EntraTokenScope is required when AuthMode is '{nameof(AzureFoundryAuthMode.EntraId)}'.")
+            .When(static request => IsEntraIdMode(request.AuthMode));
+
+        // Shape-only: the one-shot callback listener only ever binds to a loopback host, so an operator-overridden
+        // redirect URI must stay loopback (RFC 8252 §7.3). Blank is valid — it selects the default.
+        RuleFor(static request => request.EntraAuthCodeRedirectUri)
+            .Must(static redirectUri => EntraAuthCodeDefaults.TryValidateRedirectUri(redirectUri, out _))
+            .WithMessage("EntraAuthCodeRedirectUri must be an absolute http(s) URI on a loopback host (localhost or 127.0.0.1), or blank to use the default.")
             .When(static request => IsEntraIdMode(request.AuthMode));
 
         RuleFor(static request => request.Models)

@@ -7,6 +7,7 @@ using System.Security.Principal;
 using System.Text.Json;
 using Microsoft.AspNetCore.DataProtection;
 using XE_Local_AI_Engine.Client.Configuration;
+using XE_Local_AI_Engine.Client.Services.CloudProviders.Auth;
 using XE_Local_AI_Engine.Providers.Abstractions;
 
 /// <summary>
@@ -321,6 +322,30 @@ public sealed class CloudCredentialStore : ICloudCredentialStore, IDisposable
         if (!Enum.IsDefined(connection.EntraSignInMethod))
         {
             throw new ArgumentException("Stored cloud provider Entra ID connection has an unsupported sign-in method.", paramName);
+        }
+
+        if (connection.EntraSignInMethod == EntraSignInMethod.AuthorizationCode)
+        {
+            ValidateAuthorizationCode(connection, paramName);
+        }
+    }
+
+    // Authorization-code sign-in redeems the code with the stored client secret (confidential client), so a secret
+    // is required — unlike the other interactive sign-in methods. The redirect URI, when the operator overrides the
+    // default, must stay a loopback URI: the one-shot callback listener only ever binds to localhost/127.0.0.1.
+    private static void ValidateAuthorizationCode(StoredAzureFoundryConnection connection, string paramName)
+    {
+        if (string.IsNullOrWhiteSpace(connection.EntraClientSecret))
+        {
+            throw new ArgumentException(
+                "Stored cloud provider Entra ID connection uses authorization-code sign-in, which requires a client secret.", paramName);
+        }
+
+        if (!EntraAuthCodeDefaults.TryValidateRedirectUri(connection.EntraAuthCodeRedirectUri, out _))
+        {
+            throw new ArgumentException(
+                "Stored cloud provider Entra ID authorization-code redirect URI must be an absolute http(s) URI on a loopback host (localhost or 127.0.0.1).",
+                paramName);
         }
     }
 

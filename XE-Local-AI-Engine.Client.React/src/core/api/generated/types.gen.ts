@@ -1420,6 +1420,7 @@ export type XeLocalAiEngineClientEndpointsCloudSettingsV1AzureFoundrySettingsRes
 	hasStoredEntraClientSecret?: boolean;
 	entraTokenScope?: string | null;
 	entraSignInMethod?: string;
+	entraAuthCodeRedirectUri?: string | null;
 };
 
 export type XeLocalAiEngineClientEndpointsCloudSettingsV1AzureFoundryModelDto = {
@@ -1432,6 +1433,16 @@ export type XeLocalAiEngineClientEndpointsCloudSettingsV1AzureFoundryHeaderDto =
 	value?: string | null;
 	isSecret?: boolean;
 	hasStoredValue?: boolean;
+};
+
+export type XeLocalAiEngineClientEndpointsCloudSettingsV1EntraAuthCodeSignInResponse = {
+	authorizeUrl: string;
+	expiresAtUtc: string;
+};
+
+export type XeLocalAiEngineClientEndpointsCloudSettingsV1EntraAuthCodeSignInStatusResponse = {
+	state: string;
+	expiresAtUtc?: string | null;
 };
 
 export type XeLocalAiEngineClientEndpointsCloudSettingsV1EntraDeviceCodeSignInResponse = {
@@ -1461,6 +1472,7 @@ export type XeLocalAiEngineClientEndpointsCloudSettingsV1SaveCloudSettingsReques
 	entraClientSecret?: string | null;
 	entraTokenScope?: string | null;
 	entraSignInMethod?: string;
+	entraAuthCodeRedirectUri?: string | null;
 };
 
 export type XeLocalAiEngineClientEndpointsCloudSettingsV1SaveAzureFoundryHeaderRequest = {
@@ -5257,6 +5269,60 @@ export type SaveCloudSettingsResponses = {
 };
 
 export type SaveCloudSettingsResponse = SaveCloudSettingsResponses[keyof SaveCloudSettingsResponses];
+
+export type EntraAuthCodeSignInData = {
+	body?: never;
+	path?: never;
+	query?: never;
+	url: "/api/local/v1/cloud-settings/entra/auth-code/start";
+};
+
+export type EntraAuthCodeSignInErrors = {
+	/**
+	 * Unauthorized
+	 */
+	401: unknown;
+	/**
+	 * Forbidden
+	 */
+	403: unknown;
+};
+
+export type EntraAuthCodeSignInResponses = {
+	/**
+	 * Success
+	 */
+	200: XeLocalAiEngineClientEndpointsCloudSettingsV1EntraAuthCodeSignInResponse;
+};
+
+export type EntraAuthCodeSignInResponse = EntraAuthCodeSignInResponses[keyof EntraAuthCodeSignInResponses];
+
+export type EntraAuthCodeStatusData = {
+	body?: never;
+	path?: never;
+	query?: never;
+	url: "/api/local/v1/cloud-settings/entra/auth-code/status";
+};
+
+export type EntraAuthCodeStatusErrors = {
+	/**
+	 * Unauthorized
+	 */
+	401: unknown;
+	/**
+	 * Forbidden
+	 */
+	403: unknown;
+};
+
+export type EntraAuthCodeStatusResponses = {
+	/**
+	 * Success
+	 */
+	200: XeLocalAiEngineClientEndpointsCloudSettingsV1EntraAuthCodeSignInStatusResponse;
+};
+
+export type EntraAuthCodeStatusResponse = EntraAuthCodeStatusResponses[keyof EntraAuthCodeStatusResponses];
 
 export type EntraDeviceCodeSignInData = {
 	body?: never;

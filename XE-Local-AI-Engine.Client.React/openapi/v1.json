@@ -5228,6 +5228,74 @@
         ]
       }
     },
+    "/api/local/v1/cloud-settings/entra/auth-code/start": {
+      "post": {
+        "tags": [
+          "Cloud-Settings"
+        ],
+        "operationId": "entraAuthCodeSignIn",
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/XE_Local_AI_EngineClientEndpointsCloudSettingsV1EntraAuthCodeSignInResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "403": {
+            "description": "Forbidden"
+          }
+        },
+        "security": [
+          {
+            "JWTBearerAuth": []
+          },
+          {
+            "Bearer": []
+          }
+        ]
+      }
+    },
+    "/api/local/v1/cloud-settings/entra/auth-code/status": {
+      "get": {
+        "tags": [
+          "Cloud-Settings"
+        ],
+        "operationId": "entraAuthCodeStatus",
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/XE_Local_AI_EngineClientEndpointsCloudSettingsV1EntraAuthCodeSignInStatusResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "403": {
+            "description": "Forbidden"
+          }
+        },
+        "security": [
+          {
+            "JWTBearerAuth": []
+          },
+          {
+            "Bearer": []
+          }
+        ]
+      }
+    },
     "/api/local/v1/cloud-settings/entra/device-code/start": {
       "post": {
         "tags": [
@@ -12056,6 +12124,10 @@
           },
           "entraSignInMethod": {
             "type": "string"
+          },
+          "entraAuthCodeRedirectUri": {
+            "type": "string",
+            "nullable": true
           }
         }
       },
@@ -12094,6 +12166,40 @@
           },
           "hasStoredValue": {
             "type": "boolean"
+          }
+        }
+      },
+      "XE_Local_AI_EngineClientEndpointsCloudSettingsV1EntraAuthCodeSignInResponse": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "authorizeUrl",
+          "expiresAtUtc"
+        ],
+        "properties": {
+          "authorizeUrl": {
+            "type": "string"
+          },
+          "expiresAtUtc": {
+            "type": "string",
+            "format": "date-time"
+          }
+        }
+      },
+      "XE_Local_AI_EngineClientEndpointsCloudSettingsV1EntraAuthCodeSignInStatusResponse": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "state"
+        ],
+        "properties": {
+          "state": {
+            "type": "string"
+          },
+          "expiresAtUtc": {
+            "type": "string",
+            "format": "date-time",
+            "nullable": true
           }
         }
       },
@@ -12204,6 +12310,10 @@
           },
           "entraSignInMethod": {
             "type": "string"
+          },
+          "entraAuthCodeRedirectUri": {
+            "type": "string",
+            "nullable": true
           }
         }
       },

@@ -8,6 +8,8 @@ using Azure.Identity;
 using Microsoft.Extensions.AI;
 using Microsoft.Extensions.Logging.Abstractions;
 using OpenAI;
+using XE_Local_AI_Engine.Client.Services.CloudProviders.Auth;
+using XE_Local_AI_Engine.Providers.Abstractions;
 
 /// <summary>
 ///     Azure Foundry chat-client factory backed by the Azure OpenAI .NET client.
@@ -50,16 +52,22 @@ public sealed class AzureFoundryChatClientFactory : IAzureFoundryChatClientFacto
     // general rule for a multi-segment App-ID-URI or a trailing-slash host, so a mismatch fails fast instead.
     private const string ClientCredentialsScopeSuffix = "/.default";
 
+    private readonly IEntraAuthCodeAccountStore? _entraAuthCodeAccountStore;
     private readonly IEntraLiveCredentialCache? _entraLiveCredentialCache;
     private readonly IEntraTokenCacheStore? _entraTokenCacheStore;
     private readonly ILogger<AzureFoundryChatClientFactory> _logger;
+    private readonly INodeDataDirectory? _nodeDataDirectory;
 
     public AzureFoundryChatClientFactory(IEntraTokenCacheStore? entraTokenCacheStore = null,
         IEntraLiveCredentialCache? entraLiveCredentialCache = null,
+        IEntraAuthCodeAccountStore? entraAuthCodeAccountStore = null,
+        INodeDataDirectory? nodeDataDirectory = null,
         ILogger<AzureFoundryChatClientFactory>? logger = null)
     {
         _entraTokenCacheStore = entraTokenCacheStore;
         _entraLiveCredentialCache = entraLiveCredentialCache;
+        _entraAuthCodeAccountStore = entraAuthCodeAccountStore;
+        _nodeDataDirectory = nodeDataDirectory;
         _logger = logger ?? NullLogger<AzureFoundryChatClientFactory>.Instance;
     }
 
@@ -269,12 +277,21 @@ public sealed class AzureFoundryChatClientFactory : IAzureFoundryChatClientFacto
         return new AzureOpenAIClient(endpoint, new ApiKeyCredential(PlaceholderApiKey), options);
     }
 
-    // Selects the credential shape per the frozen contract: a configured client secret always wins (app-only
-    // client-credentials); otherwise the connection's chosen interactive sign-in method applies.
+    // Selects the credential shape per the frozen contract:
+    //  - secret + AuthorizationCode sign-in method -> delegated MSAL confidential-client flow (Postman parity): the
+    //    secret authenticates the code redemption, but the resulting token is user-delegated, so the app-only
+    //    /.default fail-fast below does NOT apply to this branch.
+    //  - secret + any other sign-in method -> app-only client-credentials (existing behavior + fail-fast).
+    //  - no secret -> the connection's chosen interactive sign-in method (device-code / browser), unchanged.
     private TokenCredential BuildEntraCredential(StoredAzureFoundryConnection connection)
     {
         if (!string.IsNullOrWhiteSpace(connection.EntraClientSecret))
         {
+            if (connection.EntraSignInMethod == EntraSignInMethod.AuthorizationCode)
+            {
+                return BuildDelegatedAuthCodeCredential(connection);
+            }
+
             ValidateClientCredentialsScope(connection.EntraTokenScope);
             return new ClientSecretCredential(connection.EntraTenantId, connection.EntraClientId, connection.EntraClientSecret);
         }
@@ -284,11 +301,11 @@ public sealed class AzureFoundryChatClientFactory : IAzureFoundryChatClientFacto
             : BuildSilentDeviceCodeCredential(connection);
     }
 
-    // A configured client secret always selects the app-only client-credentials flow (see BuildEntraCredential),
-    // and Entra ID rejects that flow's token request with AADSTS1002012 unless the scope ends in "/.default". The
-    // scope round-trips to the UI and is not secret, so it is safe to echo back in the error message. The caller
-    // (BuildEntraIdClient) already rejects a null/blank scope before this runs; the null-conditional here is
-    // defense in depth, not the primary guard.
+    // A configured client secret with any sign-in method OTHER than AuthorizationCode selects the app-only
+    // client-credentials flow (see BuildEntraCredential), and Entra ID rejects that flow's token request with
+    // AADSTS1002012 unless the scope ends in "/.default". The scope round-trips to the UI and is not secret, so it
+    // is safe to echo back in the error message. The caller (BuildEntraIdClient) already rejects a null/blank scope
+    // before this runs; the null-conditional here is defense in depth, not the primary guard.
     private static void ValidateClientCredentialsScope(string? tokenScope)
     {
         var trimmedScope = tokenScope?.Trim() ?? string.Empty;
@@ -301,8 +318,59 @@ public sealed class AzureFoundryChatClientFactory : IAzureFoundryChatClientFacto
             "The Entra ID connection has a client secret, which uses the app-only client-credentials flow. That " +
             $"flow requires a token scope ending in '{ClientCredentialsScopeSuffix}' (e.g. " +
             $"api://<application-id-uri>{ClientCredentialsScopeSuffix}). The configured scope '{trimmedScope}' is " +
-            "a delegated scope — either change the scope to the application's '/.default' scope, or remove the " +
-            "client secret and use device-code or browser sign-in for delegated access.");
+            "a delegated scope — either change the scope to the application's '/.default' scope, remove the " +
+            "client secret and use device-code or browser sign-in for delegated access, or choose the " +
+            "Authorization code sign-in method to use the secret with a delegated scope.");
+    }
+
+    // Delegated MSAL confidential-client flow selected by a client secret + AuthorizationCode sign-in method
+    // (Postman parity): the browser sign-in in Cloud Settings produced a delegated token (scp claim) while the
+    // stored secret authenticated the code redemption. Like BuildSilentDeviceCodeCredential, this never prompts
+    // interactively from Create() — a missing persisted account surfaces as a typed AuthRequired error.
+    private TokenCredential BuildDelegatedAuthCodeCredential(StoredAzureFoundryConnection connection)
+    {
+        var cacheKey = EntraDeviceCodeCredentialCacheKey.Create(connection.EntraTenantId, connection.EntraClientId, connection.EntraTokenScope);
+        var liveCredential = _entraLiveCredentialCache?.TryGet(cacheKey);
+        if (liveCredential is not null)
+        {
+            return liveCredential;
+        }
+
+        var homeAccountId = _entraAuthCodeAccountStore?.LoadHomeAccountIdAsync().GetAwaiter().GetResult();
+        if (string.IsNullOrWhiteSpace(homeAccountId))
+        {
+            throw AuthCodeAuthRequired();
+        }
+
+        var redirectUri = EntraAuthCodeDefaults.ResolveRedirectUri(connection.EntraAuthCodeRedirectUri);
+        var app = EntraAuthCodeConfidentialClientFactory.Build(connection.EntraTenantId!, connection.EntraClientId!, connection.EntraClientSecret!, redirectUri);
+
+        if (_nodeDataDirectory is not null)
+        {
+            EntraAuthCodeConfidentialClientFactory.TryRegisterPersistentCacheAsync(app, _nodeDataDirectory, _logger).GetAwaiter().GetResult();
+        }
+
+        // GetAccountAsync(identifier) looks the account up directly by the persisted home-account-id, rather than
+        // the obsolete GetAccountsAsync() + linear scan (MSAL guidance: better perf with a token-cache serializer).
+        var account = app.GetAccountAsync(homeAccountId).GetAwaiter().GetResult();
+        if (account is null)
+        {
+            throw AuthCodeAuthRequired();
+        }
+
+        var credential = new MsalDelegatedTokenCredential(app, account, connection.EntraTokenScope!);
+
+        // Cache the rebuilt credential so the next send hits the live-cache fast path above instead of rebuilding
+        // the confidential app + re-resolving the account on every single call after a process restart.
+        _entraLiveCredentialCache?.Store(cacheKey, credential);
+
+        return credential;
+    }
+
+    private static AzureFoundryProviderException AuthCodeAuthRequired()
+    {
+        return new AzureFoundryProviderException(AzureFoundryProviderErrorKind.AuthRequired,
+            "Authorization-code sign-in has not completed for this connection. Sign in via Cloud Settings first.");
     }
 
     // Device-code mode never prompts from inside Create() because a fresh interactive prompt mid-chat-send would
@@ -361,7 +429,12 @@ public sealed class AzureFoundryChatClientFactory : IAzureFoundryChatClientFacto
         {
             return AuthenticateInteractiveBrowser(connection, allowPersistence: true);
         }
-        catch (CredentialUnavailableException exception)
+        // A persistence failure does not always surface as CredentialUnavailableException — on a platform with no
+        // org.freedesktop.secrets provider (e.g. WSL2 without gnome-keyring/kwallet) it can arrive as
+        // AuthenticationFailedException wrapping MsalCachePersistenceException several levels deep instead (see
+        // EntraCachePersistenceFailure's remarks). Checking both is what makes the retry actually fire instead of
+        // the sign-in failing outright.
+        catch (Exception exception) when (exception is CredentialUnavailableException || EntraCachePersistenceFailure.IsPersistenceUnavailable(exception))
         {
             _logger.LogWarning(exception,
                 "Encrypted Entra ID token-cache persistence is unavailable on this platform; retrying interactive sign-in with an in-memory (non-persisted) token cache.");

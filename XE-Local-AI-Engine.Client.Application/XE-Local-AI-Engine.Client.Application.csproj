@@ -21,6 +21,9 @@
     <PackageReference Include="Microsoft.Extensions.DataIngestion.Abstractions"/>
     <PackageReference Include="Microsoft.Extensions.Http.Resilience"/>
     <PackageReference Include="Microsoft.IdentityModel.JsonWebTokens"/>
+    <!-- MSAL confidential-client for the Entra ID authorization-code sign-in flow (see Directory.Packages.props). -->
+    <PackageReference Include="Microsoft.Identity.Client"/>
+    <PackageReference Include="Microsoft.Identity.Client.Extensions.Msal"/>
     <PackageReference Include="ModelContextProtocol"/>
     <PackageReference Include="NSec.Cryptography"/>
     <PackageReference Include="OllamaSharp"/>

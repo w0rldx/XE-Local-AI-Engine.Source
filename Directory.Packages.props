@@ -13,6 +13,13 @@
     <PackageVersion Include="Azure.AI.OpenAI" Version="2.1.0" />
     <!-- DefaultAzureCredential for Azure Foundry managed-identity auth (consumed by the Application factory, lane B). -->
     <PackageVersion Include="Azure.Identity" Version="1.21.0" />
+    <!-- MSAL ConfidentialClientApplication for the Entra ID authorization-code sign-in flow (Postman-parity delegated
+         token via a confidential client + PKCE). Not pulled in transitively by Azure.Identity 1.21.0 (which depends
+         only on Azure.Core), so both packages are direct references, version-locked to the same MSAL release. -->
+    <PackageVersion Include="Microsoft.Identity.Client" Version="4.85.2" />
+    <!-- OS-native encrypted MSAL token-cache persistence (DPAPI/Keychain/libsecret), mirroring the
+         TokenCachePersistenceOptions Azure.Identity provides for its own credential types. -->
+    <PackageVersion Include="Microsoft.Identity.Client.Extensions.Msal" Version="4.85.2" />
     <!-- Pure-.NET document text extraction for chat file-upload attachments (single-file-publish safe; no Python/Docker/native deps). -->
     <PackageVersion Include="Microsoft.Extensions.DataIngestion.Abstractions" Version="10.7.0-preview.1.26309.5" />
     <!-- Genuine PdfPig (Apache-2.0, github.com/UglyToad/PdfPig). NOTE: the package id is `PdfPig`, NOT `UglyToad.PdfPig`
