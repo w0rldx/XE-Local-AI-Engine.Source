@@ -45,7 +45,7 @@ public sealed class RuntimeChatClient : IChatClient
         ChatOptions? options = null,
         CancellationToken cancellationToken = default)
     {
-        return ResolveActiveClient().GetResponseAsync(messages, options, cancellationToken);
+        return ResolveActiveClient(options?.ModelId).GetResponseAsync(messages, options, cancellationToken);
     }
 
     [SuppressMessage("Reliability", "CA2000:Dispose objects before losing scope", Justification = ActiveClientOwnershipNote)]
@@ -53,7 +53,7 @@ public sealed class RuntimeChatClient : IChatClient
         ChatOptions? options = null,
         CancellationToken cancellationToken = default)
     {
-        return ResolveActiveClient().GetStreamingResponseAsync(messages, options, cancellationToken);
+        return ResolveActiveClient(options?.ModelId).GetStreamingResponseAsync(messages, options, cancellationToken);
     }
 
     [SuppressMessage("Reliability", "CA2000:Dispose objects before losing scope", Justification = ActiveClientOwnershipNote)]
@@ -66,8 +66,9 @@ public sealed class RuntimeChatClient : IChatClient
             return this;
         }
 
-        // Delegate metadata/service lookups to the active client so callers see the real provider's services.
-        return ResolveActiveClient().GetService(serviceType, serviceKey);
+        // Delegate metadata/service lookups to the active client so callers see the real provider's services. There
+        // is no per-request model id available at this boundary, so this resolves the node-default provider.
+        return ResolveActiveClient(requestedModelId: null).GetService(serviceType, serviceKey);
     }
 
     public void Dispose()
@@ -80,9 +81,9 @@ public sealed class RuntimeChatClient : IChatClient
         }
     }
 
-    private IChatClient ResolveActiveClient()
+    private IChatClient ResolveActiveClient(string? requestedModelId)
     {
-        return _activeCloudFactory.TryCreateActiveCloudChatClient(out var cloudClient) && cloudClient is not null
+        return _activeCloudFactory.TryCreateActiveCloudChatClient(requestedModelId, out var cloudClient) && cloudClient is not null
             ? cloudClient
             : _localClient.Value;
     }
