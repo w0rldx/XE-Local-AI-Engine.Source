@@ -33,10 +33,12 @@ import { toast } from "@/core/ui/notifications/Toast";
 import { CodexSignInCard } from "@/features/cloud-settings/codex/components/CodexSignInCard";
 import { EntraConnectionFields } from "@/features/cloud-settings/entra/components/EntraConnectionFields";
 import {
+	type CloudApiSurface,
 	type CloudAuthMode,
 	type CloudFoundryModelDraft,
 	type CloudSettingsFormValues,
 	type EntraSignInMethod,
+	parseApiSurface,
 	parseEntraSignInMethod,
 	shouldWarnManagedIdentityEgress,
 	validateCloudSettingsForm,
@@ -62,6 +64,7 @@ function settingsToFormValues(settings: CloudSettings): CloudSettingsFormValues 
 	return {
 		endpoint: azure?.endpoint ?? "",
 		authMode: (azure?.authMode as CloudAuthMode) ?? "ApiKey",
+		apiSurface: parseApiSurface(azure?.apiSurface),
 		apiKey: "",
 		models: withAtLeastOneRow(
 			(azure?.models ?? []).map((model) => ({
@@ -98,6 +101,7 @@ function toastSettingsResult(settings: CloudSettings): void {
 const emptyFormValues: CloudSettingsFormValues = {
 	endpoint: "",
 	authMode: "ApiKey",
+	apiSurface: "AzureDeployments",
 	apiKey: "",
 	models: [{ deploymentName: "", displayLabel: "" }],
 	headers: [],
@@ -128,6 +132,7 @@ type FormAction =
 			value: string;
 	  }
 	| { type: "setAuthMode"; value: CloudAuthMode }
+	| { type: "setApiSurface"; value: CloudApiSurface }
 	| { type: "setEntraSignInMethod"; value: EntraSignInMethod }
 	| { type: "addModel" }
 	| { type: "removeModel"; index: number }
@@ -162,6 +167,8 @@ function formReducer(state: FormState, action: FormAction): FormState {
 			return { ...state, values: { ...state.values, [action.field]: action.value } };
 		case "setAuthMode":
 			return { ...state, values: { ...state.values, authMode: action.value } };
+		case "setApiSurface":
+			return { ...state, values: { ...state.values, apiSurface: action.value } };
 		case "setEntraSignInMethod":
 			return { ...state, values: { ...state.values, entraSignInMethod: action.value } };
 		case "addModel":
@@ -325,6 +332,7 @@ export function CloudSettings() {
 				providerName: "AzureFoundry",
 				endpoint: formValues.endpoint.trim(),
 				authMode: formValues.authMode,
+				apiSurface: formValues.apiSurface,
 				apiKey: isManagedIdentity ? undefined : formValues.apiKey.trim(),
 				models: formValues.models
 					.map((model) => ({
@@ -461,6 +469,30 @@ export function CloudSettings() {
 										{ value: "EntraId", label: t("pages.cloudSettings.azure.authModeEntraId", "Entra ID") },
 								]}
 							/>
+						</Stack>
+
+						<Stack gap={4}>
+							<Text size="sm" fw={500}>
+								{t("pages.cloudSettings.azure.apiSurfaceLabel", "API surface")}
+							</Text>
+							<SegmentedControl
+								data-testid="cloud-settings-api-surface"
+								value={formValues.apiSurface}
+								onChange={(value) => dispatch({ type: "setApiSurface", value: value as CloudApiSurface })}
+								data={[
+									{
+										value: "AzureDeployments",
+										label: t("pages.cloudSettings.azure.apiSurfaceAzureDeployments", "Azure deployments (default)"),
+									},
+									{
+										value: "OpenAiV1",
+										label: t("pages.cloudSettings.azure.apiSurfaceOpenAiV1", "OpenAI v1 (Foundry / gateway)"),
+									},
+								]}
+							/>
+							<Text size="xs" c="dimmed">
+								{t("pages.cloudSettings.azure.apiSurfaceHint")}
+							</Text>
 						</Stack>
 
 						{isManagedIdentity ? (

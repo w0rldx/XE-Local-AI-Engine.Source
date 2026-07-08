@@ -509,6 +509,72 @@ public sealed class CloudSettingsEndpointTests
     }
 
     [Test]
+    public async Task SaveCloudSettings_WhenApiSurfaceIsOpenAiV1_PersistsAndReturnsIt()
+    {
+        var cloudCredentialStore = Substitute.For<ICloudCredentialStore>();
+        var capabilityReporter = Substitute.For<ICapabilityReporter>();
+        capabilityReporter.ReportToApiAsync(Arg.Any<CancellationToken>()).Returns(Task.CompletedTask);
+        await using var factory = CreateFactory(cloudCredentialStore, capabilityReporter);
+        using var client = factory.CreateClient();
+
+        using var request = CreateRequest(factory, HttpMethod.Put, "/api/local/v1/cloud-settings");
+        request.Content = JsonContent.Create(new SaveCloudSettingsRequest
+        {
+            ProviderName = "AzureFoundry",
+            Endpoint = "https://example.openai.azure.com/",
+            AuthMode = "ApiKey",
+            ApiSurface = "OpenAiV1",
+            ApiKey = "new-secret-api-key",
+            Models =
+            [
+                new AzureFoundryModelDto
+                {
+                    DeploymentName = "gpt-4o"
+                }
+            ]
+        });
+        using var response = await client.SendAsync(request).ConfigureAwait(false);
+        var body = await response.Content.ReadAsStringAsync().ConfigureAwait(false);
+        var settings = Deserialize<CloudSettingsResponse>(body);
+
+        AssertEx.Equal(HttpStatusCode.OK, response.StatusCode);
+        AssertEx.Equal("OpenAiV1", settings.AzureFoundry!.ApiSurface);
+        await cloudCredentialStore.Received(1).SaveConfigAsync(
+            Arg.Is<StoredCloudProviderConfig>(config => config.AzureFoundry!.ApiSurface == AzureFoundryApiSurface.OpenAiV1),
+            Arg.Any<CancellationToken>());
+    }
+
+    [Test]
+    public async Task SaveCloudSettings_WhenApiSurfaceIsUnrecognized_ReturnsValidationProblem()
+    {
+        var cloudCredentialStore = Substitute.For<ICloudCredentialStore>();
+        var capabilityReporter = Substitute.For<ICapabilityReporter>();
+        await using var factory = CreateFactory(cloudCredentialStore, capabilityReporter);
+        using var client = factory.CreateClient();
+
+        using var request = CreateRequest(factory, HttpMethod.Put, "/api/local/v1/cloud-settings");
+        request.Content = JsonContent.Create(new SaveCloudSettingsRequest
+        {
+            ProviderName = "AzureFoundry",
+            Endpoint = "https://example.openai.azure.com/",
+            AuthMode = "ApiKey",
+            ApiSurface = "NotARealApiSurface",
+            ApiKey = "some-api-key",
+            Models =
+            [
+                new AzureFoundryModelDto
+                {
+                    DeploymentName = "gpt-4o"
+                }
+            ]
+        });
+        using var response = await client.SendAsync(request).ConfigureAwait(false);
+
+        AssertEx.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+        await cloudCredentialStore.DidNotReceiveWithAnyArgs().SaveConfigAsync(Arg.Any<StoredCloudProviderConfig>(), Arg.Any<CancellationToken>());
+    }
+
+    [Test]
     public async Task SaveCloudSettings_WhenEntraIdMissingTenantId_ReturnsValidationProblem()
     {
         var cloudCredentialStore = Substitute.For<ICloudCredentialStore>();

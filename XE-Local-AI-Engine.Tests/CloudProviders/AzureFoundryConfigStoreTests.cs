@@ -49,7 +49,74 @@ public sealed class AzureFoundryConfigStoreTests : IDisposable
         AssertEx.Equal(AzureFoundryAuthMode.ApiKey, connection.AuthMode);
         AssertEx.Equal("legacy-key", connection.ApiKey);
         AssertEx.Equal("gpt-4o", connection.Models.Single().DeploymentName);
+        AssertEx.Equal(AzureFoundryApiSurface.AzureDeployments, connection.ApiSurface);
         AssertEx.True(File.Exists(GetCredentialsPath()), "a liftable legacy payload must NOT be deleted");
+    }
+
+    [Test]
+    public async Task LoadConfigAsync_WhenV2PayloadHasNoApiSurfaceField_DefaultsToAzureDeployments()
+    {
+        // A pre-v1-surface v2 blob (saved before this feature shipped) has no "apiSurface" field at all; it must
+        // deserialize to the default AzureDeployments value rather than fail or null out the connection.
+        Directory.CreateDirectory(_contentRootPath);
+        // AuthMode round-trips as the enum's raw numeric value (no JsonStringEnumConverter is registered on
+        // CloudCredentialStore's SerializerOptions) — 0 is AzureFoundryAuthMode.ApiKey.
+        var legacyV2 = JsonSerializer.SerializeToUtf8Bytes(new
+            {
+                schemaVersion = 2,
+                providerName = "AzureFoundry",
+                azureFoundry = new
+                {
+                    endpoint = "https://example.openai.azure.com/",
+                    authMode = 0,
+                    apiKey = "legacy-v2-key",
+                    models = new[] { new { deploymentName = "gpt-4o" } }
+                }
+            },
+            JsonOptions);
+        await File.WriteAllBytesAsync(GetCredentialsPath(), legacyV2);
+        using var store = CreateStore();
+
+        var config = await store.LoadConfigAsync();
+
+        var connection = AssertEx.NotNull(config?.AzureFoundry);
+        AssertEx.Equal(AzureFoundryApiSurface.AzureDeployments, connection.ApiSurface);
+    }
+
+    [Test]
+    public async Task SaveConfigAsync_ThenLoadConfigAsync_RoundTripsOpenAiV1ApiSurface()
+    {
+        using var store = CreateStore();
+        var config = CreateConfig(AzureFoundryAuthMode.ApiKey, apiKey: "k") with
+        {
+            AzureFoundry = CreateConfig(AzureFoundryAuthMode.ApiKey, apiKey: "k").AzureFoundry! with
+            {
+                ApiSurface = AzureFoundryApiSurface.OpenAiV1
+            }
+        };
+
+        await store.SaveConfigAsync(config);
+        var loaded = await store.LoadConfigAsync();
+
+        var connection = AssertEx.NotNull(loaded?.AzureFoundry);
+        AssertEx.Equal(AzureFoundryApiSurface.OpenAiV1, connection.ApiSurface);
+    }
+
+    [Test]
+    public async Task SaveConfigAsync_WhenApiSurfaceIsOutOfRange_ThrowsArgumentException()
+    {
+        // Defense-in-depth against an out-of-range ApiSurface value slipping in via a partial or hand-edited JSON blob.
+        using var store = CreateStore();
+        var baseConfig = CreateConfig(AzureFoundryAuthMode.ApiKey, apiKey: "k");
+        var config = baseConfig with
+        {
+            AzureFoundry = baseConfig.AzureFoundry! with
+            {
+                ApiSurface = (AzureFoundryApiSurface)99
+            }
+        };
+
+        await AssertEx.ThrowsAsync<ArgumentException>(() => store.SaveConfigAsync(config));
     }
 
     [Test]

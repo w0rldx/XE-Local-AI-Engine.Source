@@ -7,7 +7,7 @@
   },
   "servers": [
     {
-      "url": "https://localhost:50722"
+      "url": "http://127.0.0.1:33477"
     }
   ],
   "paths": {
@@ -12015,6 +12015,9 @@
           "authMode": {
             "type": "string"
           },
+          "apiSurface": {
+            "type": "string"
+          },
           "hasStoredApiKey": {
             "type": "boolean"
           },
@@ -12161,6 +12164,9 @@
           "apiKey": {
             "type": "string",
             "nullable": true
+          },
+          "apiSurface": {
+            "type": "string"
           },
           "models": {
             "type": "array",

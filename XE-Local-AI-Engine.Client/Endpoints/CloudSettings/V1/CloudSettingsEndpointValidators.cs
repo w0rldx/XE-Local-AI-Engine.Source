@@ -24,6 +24,10 @@ public sealed class SaveCloudSettingsRequestValidator : Validator<SaveCloudSetti
             .WithMessage($"AuthMode must be '{nameof(AzureFoundryAuthMode.ApiKey)}', '{nameof(AzureFoundryAuthMode.ManagedIdentity)}', " +
                          $"or '{nameof(AzureFoundryAuthMode.EntraId)}'.");
 
+        RuleFor(static request => request.ApiSurface)
+            .Must(static apiSurface => Enum.TryParse<AzureFoundryApiSurface>(apiSurface?.Trim(), ignoreCase: true, out _))
+            .WithMessage($"ApiSurface must be '{nameof(AzureFoundryApiSurface.AzureDeployments)}' or '{nameof(AzureFoundryApiSurface.OpenAiV1)}'.");
+
         // API key is required only for ApiKey mode; managed identity / Entra ID ignore any supplied key (the mapper drops it).
         RuleFor(static request => request.ApiKey)
             .NotEmpty()
