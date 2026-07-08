@@ -65,6 +65,12 @@ public sealed record AzureFoundrySettingsResponse
     /// </summary>
     public string EntraSignInMethod { get; init; } =
         nameof(Services.CloudProviders.EntraSignInMethod.ClientSecret);
+
+    /// <summary>
+    ///     The loopback redirect URI for <c>AuthorizationCode</c> sign-in. Null when not configured (the coordinator
+    ///     falls back to the default). Not secret — round-trips for inline editing.
+    /// </summary>
+    public string? EntraAuthCodeRedirectUri { get; init; }
 }
 
 public sealed record AzureFoundryModelDto
@@ -140,6 +146,12 @@ public sealed record SaveCloudSettingsRequest
     /// </summary>
     public string EntraSignInMethod { get; init; } =
         nameof(Services.CloudProviders.EntraSignInMethod.DeviceCode);
+
+    /// <summary>
+    ///     The loopback redirect URI for <c>AuthorizationCode</c> sign-in (e.g. <c>http://localhost:53682/signin-oidc</c>).
+    ///     Blank selects the default. Ignored for every other sign-in method.
+    /// </summary>
+    public string? EntraAuthCodeRedirectUri { get; init; }
 }
 
 public sealed record SaveAzureFoundryHeaderRequest
@@ -195,7 +207,8 @@ internal static class CloudSettingsEndpointDtoMapper
                 // Never emit the stored secret — presence only.
                 HasStoredEntraClientSecret = !string.IsNullOrWhiteSpace(connection.EntraClientSecret),
                 EntraTokenScope = NullIfBlank(connection.EntraTokenScope),
-                EntraSignInMethod = connection.EntraSignInMethod.ToString()
+                EntraSignInMethod = connection.EntraSignInMethod.ToString(),
+                EntraAuthCodeRedirectUri = NullIfBlank(connection.EntraAuthCodeRedirectUri)
             }
         };
     }
@@ -248,7 +261,8 @@ internal static class CloudSettingsEndpointDtoMapper
                 EntraClientId = isEntraId ? NullIfBlank(request.EntraClientId) : null,
                 EntraClientSecret = entraClientSecret,
                 EntraTokenScope = isEntraId ? NullIfBlank(request.EntraTokenScope) : null,
-                EntraSignInMethod = ParseEntraSignInMethod(request.EntraSignInMethod, hasSecret: !string.IsNullOrWhiteSpace(entraClientSecret))
+                EntraSignInMethod = ParseEntraSignInMethod(request.EntraSignInMethod, hasSecret: !string.IsNullOrWhiteSpace(entraClientSecret)),
+                EntraAuthCodeRedirectUri = isEntraId ? NullIfBlank(request.EntraAuthCodeRedirectUri) : null
             }
         };
     }
@@ -267,17 +281,22 @@ internal static class CloudSettingsEndpointDtoMapper
             : AzureFoundryApiSurface.AzureDeployments;
     }
 
-    // A configured client secret always selects app-only client-credentials (Locked build contract §8: "derive
-    // default: secret present -> ClientSecret"), regardless of what the UI last had selected for interactive sign-in.
+    // A configured client secret selects app-only client-credentials by default (Locked build contract §8: "derive
+    // default: secret present -> ClientSecret"), carved out for AuthorizationCode — the one sign-in method that
+    // legitimately wants both a secret (to authenticate code redemption) and a delegated scope. Any other requested
+    // value with a secret present still coerces to ClientSecret, regardless of what the UI last had selected.
     private static EntraSignInMethod ParseEntraSignInMethod(string? signInMethod, bool hasSecret)
     {
+        var parsedOk = Enum.TryParse<EntraSignInMethod>(signInMethod?.Trim(), ignoreCase: true, out var parsed);
+
         if (hasSecret)
         {
-            return EntraSignInMethod.ClientSecret;
+            return parsedOk && parsed == EntraSignInMethod.AuthorizationCode
+                ? EntraSignInMethod.AuthorizationCode
+                : EntraSignInMethod.ClientSecret;
         }
 
-        return Enum.TryParse<EntraSignInMethod>(signInMethod?.Trim(), ignoreCase: true, out var parsed)
-               && parsed != EntraSignInMethod.ClientSecret
+        return parsedOk && parsed is not (EntraSignInMethod.ClientSecret or EntraSignInMethod.AuthorizationCode)
             ? parsed
             : EntraSignInMethod.DeviceCode;
     }

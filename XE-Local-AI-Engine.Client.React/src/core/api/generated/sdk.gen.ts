@@ -152,6 +152,12 @@ import type {
 	EnsureLlamaCppBinaryData,
 	EnsureLlamaCppBinaryErrors,
 	EnsureLlamaCppBinaryResponses,
+	EntraAuthCodeSignInData,
+	EntraAuthCodeSignInErrors,
+	EntraAuthCodeSignInResponses,
+	EntraAuthCodeStatusData,
+	EntraAuthCodeStatusErrors,
+	EntraAuthCodeStatusResponses,
 	EntraDeviceCodeSignInData,
 	EntraDeviceCodeSignInErrors,
 	EntraDeviceCodeSignInResponses,
@@ -582,6 +588,8 @@ import {
 	zEnableScheduledJobResponse,
 	zEnsureLlamaCppBinaryBody,
 	zEnsureLlamaCppBinaryResponse,
+	zEntraAuthCodeSignInResponse,
+	zEntraAuthCodeStatusResponse,
 	zEntraDeviceCodeSignInResponse,
 	zEntraDeviceCodeStatusResponse,
 	zExecuteSavedPreviewWorkflowPath,
@@ -3434,6 +3442,50 @@ export const saveCloudSettings = <ThrowOnError extends boolean = false>(options:
 			"Content-Type": "application/json",
 			...options.headers,
 		},
+	});
+
+export const entraAuthCodeSignIn = <ThrowOnError extends boolean = false>(
+	options?: Options<EntraAuthCodeSignInData, ThrowOnError>,
+) =>
+	(options?.client ?? client).post<EntraAuthCodeSignInResponses, EntraAuthCodeSignInErrors, ThrowOnError>({
+		requestValidator: async (data) =>
+			await z
+				.object({
+					body: z.never().optional(),
+					path: z.never().optional(),
+					query: z.never().optional(),
+				})
+				.parseAsync(data),
+		responseType: "json",
+		responseValidator: async (data) => await zEntraAuthCodeSignInResponse.parseAsync(data),
+		security: [
+			{ scheme: "bearer", type: "http" },
+			{ scheme: "bearer", type: "http" },
+		],
+		url: "/api/local/v1/cloud-settings/entra/auth-code/start",
+		...options,
+	});
+
+export const entraAuthCodeStatus = <ThrowOnError extends boolean = false>(
+	options?: Options<EntraAuthCodeStatusData, ThrowOnError>,
+) =>
+	(options?.client ?? client).get<EntraAuthCodeStatusResponses, EntraAuthCodeStatusErrors, ThrowOnError>({
+		requestValidator: async (data) =>
+			await z
+				.object({
+					body: z.never().optional(),
+					path: z.never().optional(),
+					query: z.never().optional(),
+				})
+				.parseAsync(data),
+		responseType: "json",
+		responseValidator: async (data) => await zEntraAuthCodeStatusResponse.parseAsync(data),
+		security: [
+			{ scheme: "bearer", type: "http" },
+			{ scheme: "bearer", type: "http" },
+		],
+		url: "/api/local/v1/cloud-settings/entra/auth-code/status",
+		...options,
 	});
 
 export const entraDeviceCodeSignIn = <ThrowOnError extends boolean = false>(

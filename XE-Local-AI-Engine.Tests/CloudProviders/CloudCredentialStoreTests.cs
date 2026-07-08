@@ -170,6 +170,95 @@ public sealed class CloudCredentialStoreTests : IDisposable
         await AssertEx.ThrowsAsync<ArgumentException>(() => store.SaveConfigAsync(config));
     }
 
+    [Test]
+    public async Task SaveConfigAsync_WhenAuthorizationCodeMissingSecret_ThrowsArgumentException()
+    {
+        using var store = CreateStore();
+        var config = CreateEntraIdConfig() with
+        {
+            AzureFoundry = CreateEntraIdConfig().AzureFoundry! with
+            {
+                EntraClientSecret = null,
+                EntraSignInMethod = EntraSignInMethod.AuthorizationCode
+            }
+        };
+
+        await AssertEx.ThrowsAsync<ArgumentException>(() => store.SaveConfigAsync(config));
+    }
+
+    [Test]
+    public async Task SaveConfigAsync_WhenAuthorizationCodeRedirectUriIsNotLoopback_ThrowsArgumentException()
+    {
+        using var store = CreateStore();
+        var config = CreateEntraIdConfig() with
+        {
+            AzureFoundry = CreateEntraIdConfig().AzureFoundry! with
+            {
+                EntraSignInMethod = EntraSignInMethod.AuthorizationCode,
+                EntraAuthCodeRedirectUri = "http://example.com/signin-oidc"
+            }
+        };
+
+        await AssertEx.ThrowsAsync<ArgumentException>(() => store.SaveConfigAsync(config));
+    }
+
+    [Test]
+    public async Task SaveConfigAsync_WhenAuthorizationCodeRedirectUriIsNotAbsolute_ThrowsArgumentException()
+    {
+        using var store = CreateStore();
+        var config = CreateEntraIdConfig() with
+        {
+            AzureFoundry = CreateEntraIdConfig().AzureFoundry! with
+            {
+                EntraSignInMethod = EntraSignInMethod.AuthorizationCode,
+                EntraAuthCodeRedirectUri = "not-a-uri"
+            }
+        };
+
+        await AssertEx.ThrowsAsync<ArgumentException>(() => store.SaveConfigAsync(config));
+    }
+
+    [Test]
+    public async Task SaveConfigAsync_WhenAuthorizationCodeRedirectUriIsBlank_PersistsConfig()
+    {
+        using var store = CreateStore();
+        var config = CreateEntraIdConfig() with
+        {
+            AzureFoundry = CreateEntraIdConfig().AzureFoundry! with
+            {
+                EntraSignInMethod = EntraSignInMethod.AuthorizationCode,
+                EntraAuthCodeRedirectUri = null
+            }
+        };
+
+        await store.SaveConfigAsync(config);
+        var loaded = await store.LoadConfigAsync();
+
+        var connection = AssertEx.NotNull(AssertEx.NotNull(loaded).AzureFoundry);
+        AssertEx.Equal(EntraSignInMethod.AuthorizationCode, connection.EntraSignInMethod);
+        AssertEx.Null(connection.EntraAuthCodeRedirectUri);
+    }
+
+    [Test]
+    public async Task SaveConfigAsync_WhenAuthorizationCodeRedirectUriIsLoopback_PersistsConfig()
+    {
+        using var store = CreateStore();
+        var config = CreateEntraIdConfig() with
+        {
+            AzureFoundry = CreateEntraIdConfig().AzureFoundry! with
+            {
+                EntraSignInMethod = EntraSignInMethod.AuthorizationCode,
+                EntraAuthCodeRedirectUri = "http://127.0.0.1:53682/signin-oidc"
+            }
+        };
+
+        await store.SaveConfigAsync(config);
+        var loaded = await store.LoadConfigAsync();
+
+        var connection = AssertEx.NotNull(AssertEx.NotNull(loaded).AzureFoundry);
+        AssertEx.Equal("http://127.0.0.1:53682/signin-oidc", connection.EntraAuthCodeRedirectUri);
+    }
+
     private static StoredCloudProviderConfig CreateEntraIdConfig()
     {
         return new StoredCloudProviderConfig

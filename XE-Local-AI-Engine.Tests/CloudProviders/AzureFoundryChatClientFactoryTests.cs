@@ -320,6 +320,110 @@ public sealed class AzureFoundryChatClientFactoryTests
     }
 
     [Test]
+    public void Create_WhenEntraIdClientSecretWithDelegatedScope_ErrorMessage_MentionsAuthorizationCodeOption()
+    {
+        var factory = new AzureFoundryChatClientFactory();
+
+        try
+        {
+            factory.Create(CreateEntraConnection(clientSecret: "secret") with
+            {
+                EntraTokenScope = "api://backend-app/access_as_user"
+            }, "gpt-4o");
+        }
+        catch (AzureFoundryProviderException exception)
+        {
+            AssertEx.True(exception.Message.Contains("Authorization code", StringComparison.Ordinal));
+            return;
+        }
+
+        throw new AssertionException($"Expected {nameof(AzureFoundryProviderException)}.");
+    }
+
+    [Test]
+    public void Create_WhenEntraIdAuthorizationCodeWithDelegatedScope_DoesNotHitTheAppOnlyFailFast()
+    {
+        // The /.default fail-fast in ValidateClientCredentialsScope must not apply to the AuthorizationCode branch:
+        // a delegated (non-/.default) scope with a client secret is the EXPECTED shape for this sign-in method. With
+        // nothing else configured, the request still fails — but with AuthRequired (no persisted account), never
+        // Configuration (which is what the fail-fast would throw).
+        var factory = new AzureFoundryChatClientFactory();
+
+        try
+        {
+            factory.Create(CreateEntraConnection(clientSecret: "secret", signInMethod: EntraSignInMethod.AuthorizationCode) with
+            {
+                EntraTokenScope = "api://backend-app/access_as_user"
+            }, "gpt-4o");
+        }
+        catch (AzureFoundryProviderException exception)
+        {
+            AssertEx.True(exception.Kind == AzureFoundryProviderErrorKind.AuthRequired);
+            return;
+        }
+
+        throw new AssertionException($"Expected {nameof(AzureFoundryProviderException)} of kind {nameof(AzureFoundryProviderErrorKind.AuthRequired)}.");
+    }
+
+    [Test]
+    public void Create_WhenEntraIdAuthorizationCodeWithNoPersistedAccount_ThrowsAuthRequired()
+    {
+        var factory = new AzureFoundryChatClientFactory(entraAuthCodeAccountStore: new FakeEntraAuthCodeAccountStore(homeAccountId: null));
+
+        try
+        {
+            factory.Create(CreateEntraConnection(clientSecret: "secret", signInMethod: EntraSignInMethod.AuthorizationCode), "gpt-4o");
+        }
+        catch (AzureFoundryProviderException exception)
+        {
+            AssertEx.True(exception.Kind == AzureFoundryProviderErrorKind.AuthRequired);
+            return;
+        }
+
+        throw new AssertionException($"Expected {nameof(AzureFoundryProviderException)} of kind {nameof(AzureFoundryProviderErrorKind.AuthRequired)}.");
+    }
+
+    [Test]
+    public void Create_WhenEntraIdAuthorizationCodeWithLiveCachedCredential_ReturnsChatClientAdapter_EvenWithoutPersistedAccount()
+    {
+        // Regression guard mirroring the device-code equivalent: the live credential cache alone must be enough —
+        // the factory must not require IEntraAuthCodeAccountStore to be populated when a matching live entry exists.
+        var connection = CreateEntraConnection(clientSecret: "secret", signInMethod: EntraSignInMethod.AuthorizationCode);
+        var liveCredentialCache = new EntraLiveCredentialCache();
+        var cacheKey = EntraDeviceCodeCredentialCacheKey.Create(connection.EntraTenantId, connection.EntraClientId, connection.EntraTokenScope);
+        liveCredentialCache.Store(cacheKey, new StubTokenCredential());
+        var factory = new AzureFoundryChatClientFactory(entraLiveCredentialCache: liveCredentialCache,
+            entraAuthCodeAccountStore: new FakeEntraAuthCodeAccountStore(homeAccountId: null));
+
+        var chatClient = factory.Create(connection, "gpt-4o");
+
+        AssertEx.NotNull(chatClient);
+        AssertEx.True(chatClient is IChatClient);
+    }
+
+    [Test]
+    public void Create_WhenEntraIdAuthorizationCodeWithLiveCachedCredentialUnderADifferentKey_ThrowsAuthRequired()
+    {
+        var liveCredentialCache = new EntraLiveCredentialCache();
+        liveCredentialCache.Store(EntraDeviceCodeCredentialCacheKey.Create("other-tenant", "other-client", "other-scope"),
+            new StubTokenCredential());
+        var factory = new AzureFoundryChatClientFactory(entraLiveCredentialCache: liveCredentialCache,
+            entraAuthCodeAccountStore: new FakeEntraAuthCodeAccountStore(homeAccountId: null));
+
+        try
+        {
+            factory.Create(CreateEntraConnection(clientSecret: "secret", signInMethod: EntraSignInMethod.AuthorizationCode), "gpt-4o");
+        }
+        catch (AzureFoundryProviderException exception)
+        {
+            AssertEx.True(exception.Kind == AzureFoundryProviderErrorKind.AuthRequired);
+            return;
+        }
+
+        throw new AssertionException($"Expected {nameof(AzureFoundryProviderException)} of kind {nameof(AzureFoundryProviderErrorKind.AuthRequired)}.");
+    }
+
+    [Test]
     public void Create_WhenEntraIdWithHeaders_BuildsClient()
     {
         var factory = new AzureFoundryChatClientFactory();
@@ -530,6 +634,24 @@ public sealed class AzureFoundryChatClientFactoryTests
         }
 
         public Task SaveRecordAsync(AuthenticationRecord record, CancellationToken cancellationToken = default)
+        {
+            return Task.CompletedTask;
+        }
+
+        public Task ClearAsync(CancellationToken cancellationToken = default)
+        {
+            return Task.CompletedTask;
+        }
+    }
+
+    private sealed class FakeEntraAuthCodeAccountStore(string? homeAccountId) : IEntraAuthCodeAccountStore
+    {
+        public Task<string?> LoadHomeAccountIdAsync(CancellationToken cancellationToken = default)
+        {
+            return Task.FromResult(homeAccountId);
+        }
+
+        public Task SaveHomeAccountIdAsync(string homeAccountId, CancellationToken cancellationToken = default)
         {
             return Task.CompletedTask;
         }

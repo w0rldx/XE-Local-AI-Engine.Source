@@ -87,6 +87,7 @@ function settingsToFormValues(settings: CloudSettings): CloudSettingsFormValues 
 		entraClientSecret: "",
 		entraTokenScope: azure?.entraTokenScope ?? "",
 		entraSignInMethod: parseEntraSignInMethod(azure?.entraSignInMethod),
+		entraAuthCodeRedirectUri: azure?.entraAuthCodeRedirectUri ?? "",
 	};
 }
 
@@ -111,6 +112,7 @@ const emptyFormValues: CloudSettingsFormValues = {
 	entraClientSecret: "",
 	entraTokenScope: "",
 	entraSignInMethod: "DeviceCode",
+	entraAuthCodeRedirectUri: "",
 };
 
 // The form values, the per-field "touched" map, and the submit flag always reset together when the
@@ -128,7 +130,14 @@ type FormAction =
 	| { type: "setValues"; values: CloudSettingsFormValues }
 	| {
 			type: "setField";
-			field: "endpoint" | "apiKey" | "entraTenantId" | "entraClientId" | "entraClientSecret" | "entraTokenScope";
+			field:
+				| "endpoint"
+				| "apiKey"
+				| "entraTenantId"
+				| "entraClientId"
+				| "entraClientSecret"
+				| "entraTokenScope"
+				| "entraAuthCodeRedirectUri";
 			value: string;
 	  }
 	| { type: "setAuthMode"; value: CloudAuthMode }
@@ -318,6 +327,12 @@ export function CloudSettings() {
 		azure.entraSignInMethod === "DeviceCode" &&
 		Boolean(azure.entraTenantId) &&
 		Boolean(azure.entraClientId);
+	const showEntraAuthCodeSignIn =
+		azure?.authMode === "EntraId" &&
+		azure.entraSignInMethod === "AuthorizationCode" &&
+		Boolean(azure.entraTenantId) &&
+		Boolean(azure.entraClientId) &&
+		Boolean(azure.hasStoredEntraClientSecret);
 	const showManagedIdentityEgressWarning = useMemo(() => shouldWarnManagedIdentityEgress(formValues), [formValues]);
 
 	const handleSave = (): void => {
@@ -359,6 +374,8 @@ export function CloudSettings() {
 				entraClientSecret: formValues.entraClientSecret.trim().length > 0 ? formValues.entraClientSecret : undefined,
 				entraTokenScope: formValues.entraTokenScope.trim(),
 				entraSignInMethod: formValues.entraSignInMethod,
+				entraAuthCodeRedirectUri:
+					formValues.entraAuthCodeRedirectUri.trim().length > 0 ? formValues.entraAuthCodeRedirectUri.trim() : undefined,
 			},
 		});
 	};
@@ -505,6 +522,7 @@ export function CloudSettings() {
 								errors={visibleErrors}
 								hasStoredClientSecret={azure?.hasStoredEntraClientSecret ?? false}
 								showDeviceCodeSignIn={showEntraDeviceCodeSignIn}
+								showAuthCodeSignIn={showEntraAuthCodeSignIn}
 								onFieldChange={(field, value) => dispatch({ type: "setField", field, value })}
 								onFieldBlur={(field) => dispatch({ type: "touchField", field })}
 								onSignInMethodChange={(value) => dispatch({ type: "setEntraSignInMethod", value })}

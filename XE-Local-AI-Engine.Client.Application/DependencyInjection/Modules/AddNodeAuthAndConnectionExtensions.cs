@@ -78,6 +78,12 @@ internal static class AddNodeAuthAndConnectionExtensions
         // coordinator writes it on success, AzureFoundryChatClientFactory reads it on every send, so a chat send
         // never depends solely on OS-native encrypted persistence (which may be unavailable, Locked build contract §9).
         builder.Services.AddSingleton<IEntraLiveCredentialCache, EntraLiveCredentialCache>();
+
+        // Encrypted at-rest store for the authorization-code flow's MSAL home-account-id, read by
+        // AzureFoundryChatClientFactory and written by the auth-code sign-in coordinator (parallel to
+        // IEntraTokenCacheStore, which is shaped around Azure.Identity's device-code/browser AuthenticationRecord).
+        builder.Services.AddSingleton<IEntraAuthCodeAccountStore, EntraAuthCodeAccountStore>();
+        builder.Services.AddSingleton<IEntraAuthCodeRedeemer, EntraAuthCodeRedeemer>();
         builder.Services.AddSingleton<IAzureFoundryChatClientFactory, AzureFoundryChatClientFactory>();
         builder.AddCodexOAuthProvider(configuration);
 
@@ -88,6 +94,15 @@ internal static class AddNodeAuthAndConnectionExtensions
             serviceProvider.GetRequiredService<IEntraTokenCacheStore>(),
             serviceProvider.GetRequiredService<IEntraLiveCredentialCache>(),
             serviceProvider.GetRequiredService<ILogger<EntraDeviceCodeSignInCoordinator>>(),
+            () => serviceProvider.GetRequiredService<IActiveCloudChatClientFactory>().InvalidateSelectionCache()));
+
+        // Singleton: owns the cross-request pending Entra ID authorization-code sign-in state the Operator status
+        // endpoint polls, mirroring the device-code coordinator above.
+        builder.Services.AddSingleton<IEntraAuthCodeSignInCoordinator>(serviceProvider => new EntraAuthCodeSignInCoordinator(serviceProvider.GetRequiredService<ICloudCredentialStore>(),
+            serviceProvider.GetRequiredService<IEntraAuthCodeAccountStore>(),
+            serviceProvider.GetRequiredService<IEntraLiveCredentialCache>(),
+            serviceProvider.GetRequiredService<IEntraAuthCodeRedeemer>(),
+            serviceProvider.GetRequiredService<ILogger<EntraAuthCodeSignInCoordinator>>(),
             () => serviceProvider.GetRequiredService<IActiveCloudChatClientFactory>().InvalidateSelectionCache()));
 
         builder.Services.AddSingleton<INodeKeyRegistry, NodeKeyRegistry>();
