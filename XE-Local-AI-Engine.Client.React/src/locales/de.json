@@ -1309,6 +1309,8 @@
 				"clientSecretStoredHint": "Ein Geheimnis ist gespeichert. Gib einen neuen Wert ein, um es zu ersetzen, oder lasse das Feld leer, um es zu behalten.",
 				"tokenScopeLabel": "Token-Bereich",
 				"tokenScopePlaceholder": "api://<backend-app-id>/.default",
+				"tokenScopeHintClientCredentials": "Mit einem Client-Geheimnis den anwendungsseitigen Bereich verwenden, der auf /.default endet, z. B. api://<app-id-uri>/.default.",
+				"tokenScopeHintDelegated": "Ohne Client-Geheimnis (Gerätecode- oder Browser-Anmeldung) einen delegierten Bereich verwenden, z. B. api://<app-id-uri>/access_as_user.",
 				"signInMethodLabel": "Anmeldemethode",
 				"signInMethodDeviceCode": "Gerätecode",
 				"signInMethodInteractiveBrowser": "Interaktiver Browser",

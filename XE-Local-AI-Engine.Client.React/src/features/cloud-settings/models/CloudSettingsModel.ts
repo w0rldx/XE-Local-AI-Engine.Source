@@ -188,10 +188,23 @@ function validateHeaders(headers: CloudHeaderDraft[]): string | undefined {
 	return undefined;
 }
 
+// Client-credentials (app-only) token requests are rejected by Entra ID (AADSTS1002012) unless the scope ends in
+// "/.default" — mirrors the backend's AzureFoundryChatClientFactory.ValidateClientCredentialsScope fail-fast so the
+// operator sees the problem before saving rather than on the next chat send.
+const CLIENT_CREDENTIALS_SCOPE_SUFFIX = "/.default";
+
 // Validates the EntraId-only fields. Tenant, client id, and token scope are always required in this mode; the
 // client secret is intentionally optional (blank keeps a stored secret, or selects interactive sign-in when
 // none is stored — both are valid states, so the secret itself carries no error).
-function validateEntraFields(values: CloudSettingsFormValues): Partial<Record<keyof CloudSettingsFormValues, string>> {
+//
+// `hasStoredClientSecret` mirrors the same "hasSecret" check EntraConnectionFields.tsx makes for its sign-in-method
+// picker: `entraClientSecret` is write-only (blank on load never means "no secret" — it can mean "keep the stored
+// one"), so a blank field with a stored secret still resolves to the app-only client-credentials flow server-side
+// and must be validated against the same /.default requirement.
+function validateEntraFields(
+	values: CloudSettingsFormValues,
+	hasStoredClientSecret: boolean,
+): Partial<Record<keyof CloudSettingsFormValues, string>> {
 	if (values.authMode !== "EntraId") {
 		return {};
 	}
@@ -203,8 +216,13 @@ function validateEntraFields(values: CloudSettingsFormValues): Partial<Record<ke
 	if (values.entraClientId.trim().length === 0) {
 		errors.entraClientId = "Enter the Entra ID application (client) id.";
 	}
-	if (values.entraTokenScope.trim().length === 0) {
+	const tokenScope = values.entraTokenScope.trim();
+	const hasSecret = values.entraClientSecret.trim().length > 0 || hasStoredClientSecret;
+	if (tokenScope.length === 0) {
 		errors.entraTokenScope = "Enter the token scope, e.g. api://<backend-app-id>/.default.";
+	} else if (hasSecret && !tokenScope.toLowerCase().endsWith(CLIENT_CREDENTIALS_SCOPE_SUFFIX)) {
+		errors.entraTokenScope =
+			"A client secret uses the app-only client-credentials flow, which requires a token scope ending in /.default (e.g. api://<backend-app-id>/.default) — or remove the secret to use a delegated scope.";
 	}
 	return errors;
 }
@@ -264,6 +282,9 @@ export function shouldWarnManagedIdentityEgress(values: CloudSettingsFormValues)
 
 export function validateCloudSettingsForm(
 	values: CloudSettingsFormValues,
+	// True when the backend has a stored Entra client secret for this connection — see validateEntraFields for why
+	// this can't be derived from `values` alone (the field is write-only).
+	hasStoredEntraClientSecret = false,
 ): Partial<Record<keyof CloudSettingsFormValues, string>> {
 	const errors: Partial<Record<keyof CloudSettingsFormValues, string>> = {};
 
@@ -280,7 +301,7 @@ export function validateCloudSettingsForm(
 		errors.models = "Add at least one deployment name.";
 	}
 
-	Object.assign(errors, validateEntraFields(values));
+	Object.assign(errors, validateEntraFields(values, hasStoredEntraClientSecret));
 
 	const headerError = validateHeaders(values.headers);
 	if (headerError !== undefined) {
