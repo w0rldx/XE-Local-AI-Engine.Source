@@ -26,6 +26,12 @@ public sealed class AzureFoundryChatClientFactory : IAzureFoundryChatClientFacto
     private const string EntraPlaceholderApiKey = "unused-entra-id-auth";
     private const string EntraTokenCachePersistenceName = "XE-Local-AI-Engine.Client.AzureFoundry.EntraId";
 
+    // Client-credentials (app-only) token requests are rejected by Entra ID (AADSTS1002012) unless the scope ends
+    // in "/.default" — a delegated scope like "api://<app-id-uri>/access_as_user" only works with a user-delegated
+    // flow (device-code / interactive browser). The scope is intentionally never auto-rewritten: there is no safe
+    // general rule for a multi-segment App-ID-URI or a trailing-slash host, so a mismatch fails fast instead.
+    private const string ClientCredentialsScopeSuffix = "/.default";
+
     private readonly IEntraLiveCredentialCache? _entraLiveCredentialCache;
     private readonly IEntraTokenCacheStore? _entraTokenCacheStore;
     private readonly ILogger<AzureFoundryChatClientFactory> _logger;
@@ -150,12 +156,34 @@ public sealed class AzureFoundryChatClientFactory : IAzureFoundryChatClientFacto
     {
         if (!string.IsNullOrWhiteSpace(connection.EntraClientSecret))
         {
+            ValidateClientCredentialsScope(connection.EntraTokenScope);
             return new ClientSecretCredential(connection.EntraTenantId, connection.EntraClientId, connection.EntraClientSecret);
         }
 
         return connection.EntraSignInMethod == EntraSignInMethod.InteractiveBrowser
             ? BuildInteractiveBrowserCredential(connection)
             : BuildSilentDeviceCodeCredential(connection);
+    }
+
+    // A configured client secret always selects the app-only client-credentials flow (see BuildEntraCredential),
+    // and Entra ID rejects that flow's token request with AADSTS1002012 unless the scope ends in "/.default". The
+    // scope round-trips to the UI and is not secret, so it is safe to echo back in the error message. The caller
+    // (BuildEntraIdClient) already rejects a null/blank scope before this runs; the null-conditional here is
+    // defense in depth, not the primary guard.
+    private static void ValidateClientCredentialsScope(string? tokenScope)
+    {
+        var trimmedScope = tokenScope?.Trim() ?? string.Empty;
+        if (trimmedScope.EndsWith(ClientCredentialsScopeSuffix, StringComparison.OrdinalIgnoreCase))
+        {
+            return;
+        }
+
+        throw new AzureFoundryProviderException(AzureFoundryProviderErrorKind.Configuration,
+            "The Entra ID connection has a client secret, which uses the app-only client-credentials flow. That " +
+            $"flow requires a token scope ending in '{ClientCredentialsScopeSuffix}' (e.g. " +
+            $"api://<application-id-uri>{ClientCredentialsScopeSuffix}). The configured scope '{trimmedScope}' is " +
+            "a delegated scope — either change the scope to the application's '/.default' scope, or remove the " +
+            "client secret and use device-code or browser sign-in for delegated access.");
     }
 
     // Device-code mode never prompts from inside Create() because a fresh interactive prompt mid-chat-send would

@@ -254,7 +254,13 @@ export function CloudSettings() {
 		}
 	}, [settingsData]);
 
-	const errors = useMemo(() => validateCloudSettingsForm(formValues), [formValues]);
+	// Write-only field: a stored secret must still be validated against the client-credentials scope requirement
+	// even when the form's `entraClientSecret` is blank (blank keeps the stored value server-side).
+	const hasStoredEntraClientSecret = settingsData?.azureFoundry?.hasStoredEntraClientSecret ?? false;
+	const errors = useMemo(
+		() => validateCloudSettingsForm(formValues, hasStoredEntraClientSecret),
+		[formValues, hasStoredEntraClientSecret],
+	);
 	const hasErrors = Object.keys(errors).length > 0;
 
 	// Only expose an error for a field when the user has interacted with it or after a save attempt.
