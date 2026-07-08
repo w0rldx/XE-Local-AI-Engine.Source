@@ -64,13 +64,13 @@ public sealed class RuntimeChatClientTests
 
         public bool CloudActive { get; set; }
 
-        public bool TryCreateActiveCloudChatClient(out IChatClient? client)
+        public bool TryCreateActiveCloudChatClient(string? requestedModelId, out IChatClient? client)
         {
             client = CloudActive ? _cloudClient : null;
             return CloudActive;
         }
 
-        public bool IsCloudProviderSelected()
+        public bool IsCloudProviderSelected(string? requestedModelId = null)
         {
             return CloudActive;
         }
@@ -83,12 +83,12 @@ public sealed class RuntimeChatClientTests
     /// <summary>A selector that is "selected" but throws on build (the unauthenticated-Codex re-auth case).</summary>
     private sealed class ThrowingCloudFactory : IActiveCloudChatClientFactory
     {
-        public bool TryCreateActiveCloudChatClient(out IChatClient? client)
+        public bool TryCreateActiveCloudChatClient(string? requestedModelId, out IChatClient? client)
         {
             throw new InvalidOperationException("cloud not authenticated");
         }
 
-        public bool IsCloudProviderSelected()
+        public bool IsCloudProviderSelected(string? requestedModelId = null)
         {
             return true;
         }

@@ -53,9 +53,12 @@ public sealed class CapacityService : ICapacityService
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(modelName);
 
-        // Cloud short-circuit: when the node's active cloud provider is selected the child's sends route to cloud (the
-        // RuntimeChatClient re-selects per send), so there is no local byte/process cost — admit without any probe.
-        if (_cloudFactory.IsCloudProviderSelected())
+        // Cloud short-circuit: when THIS model routes to cloud (the RuntimeChatClient re-selects per send by the same
+        // per-request model id), the child's sends have no local byte/process cost — admit without any probe. Passing
+        // modelName (rather than checking only the node-default selection) matters when the two diverge: an active
+        // Codex session must not exempt a spawn that explicitly names a local model from the local capacity check,
+        // and a local model must still be admitted on its own footprint even while Codex is signed in.
+        if (_cloudFactory.IsCloudProviderSelected(modelName))
         {
             return new CapacityDecision(CapacityVerdict.Allow, ReasonAllowCloud, OllamaEvictionWarning: false);
         }
