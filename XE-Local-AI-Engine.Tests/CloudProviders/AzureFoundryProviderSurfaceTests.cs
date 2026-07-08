@@ -1,7 +1,10 @@
 namespace XE_Local_AI_Engine.Tests.CloudProviders;
 
+using System.ClientModel;
+using System.ClientModel.Primitives;
 using System.Runtime.CompilerServices;
 using Azure;
+using Azure.Core;
 using Azure.Identity;
 using Microsoft.Extensions.AI;
 using XE_Local_AI_Engine.Client.Endpoints.LocalModels.V1;
@@ -139,6 +142,104 @@ public sealed class AzureFoundryProviderSurfaceTests
         AssertEx.False(error.Message.Contains("super-secret-client-secret-value", StringComparison.Ordinal));
     }
 
+    [Test]
+    public async Task ErrorTranslatingChatClient_WhenTransportErrorHasJsonBody_AppendsSanitizedDetail()
+    {
+        using var response = new FakeAzureResponse(500, BinaryData.FromString("""{"error":{"code":"PolicyFailed","message":"APIM policy blocked the request."}}"""));
+        var requestFailed = new RequestFailedException(response);
+        using var inner = new ThrowingChatClient(requestFailed);
+        using var client = new AzureFoundryErrorTranslatingChatClient(inner);
+
+        var error = await ThrowsAsync<AzureFoundryProviderException>(() =>
+            client.GetResponseAsync([new ChatMessage(ChatRole.User, "hi")]));
+
+        AssertEx.Equal(AzureFoundryProviderErrorKind.Transport, error.Kind);
+        AssertEx.True(error.Message.Contains("APIM policy blocked the request.", StringComparison.Ordinal));
+    }
+
+    [Test]
+    public async Task ErrorTranslatingChatClient_WhenTransportErrorHasNoBody_DoesNotAppendDetail()
+    {
+        var requestFailed = new RequestFailedException(status: 500, message: "boom", errorCode: null, innerException: null);
+        using var inner = new ThrowingChatClient(requestFailed);
+        using var client = new AzureFoundryErrorTranslatingChatClient(inner);
+
+        var error = await ThrowsAsync<AzureFoundryProviderException>(() =>
+            client.GetResponseAsync([new ChatMessage(ChatRole.User, "hi")]));
+
+        AssertEx.Equal(AzureFoundryProviderErrorKind.Transport, error.Kind);
+        AssertEx.Equal("The Azure Foundry endpoint returned an error (HTTP 500).", error.Message);
+    }
+
+    [Test]
+    public async Task ErrorTranslatingChatClient_WhenOpenAiV1TransportErrorHasJsonBody_ThrowsTransport_WithSanitizedDetail()
+    {
+        using var response = new FakePipelineResponse(500, BinaryData.FromString("""{"error":{"code":"PolicyFailed","message":"Gateway rejected the request."}}"""));
+        var clientResultException = new ClientResultException(response, innerException: null);
+        using var inner = new ThrowingChatClient(clientResultException);
+        using var client = new AzureFoundryErrorTranslatingChatClient(inner);
+
+        var error = await ThrowsAsync<AzureFoundryProviderException>(() =>
+            client.GetResponseAsync([new ChatMessage(ChatRole.User, "hi")]));
+
+        AssertEx.Equal(AzureFoundryProviderErrorKind.Transport, error.Kind);
+        AssertEx.True(error.Message.Contains("Gateway rejected the request.", StringComparison.Ordinal));
+    }
+
+    [Test]
+    public async Task ErrorTranslatingChatClient_WhenOpenAiV1TransportErrorHasJsonBodyDuringStreaming_ThrowsTransport_WithSanitizedDetail()
+    {
+        // Streaming parity for ErrorTranslatingChatClient_WhenOpenAiV1TransportErrorHasJsonBody_ThrowsTransport_WithSanitizedDetail
+        // above — the ClientResultException catch inside GetStreamingResponseAsync's per-MoveNextAsync try/catch must
+        // extract and cap the same body detail as the non-streaming path.
+        var longMessage = new string('x', 400);
+        var body = """{"error":{"code":"PolicyFailed","message":"REPLACE_ME"}}""".Replace("REPLACE_ME", longMessage, StringComparison.Ordinal);
+        using var response = new FakePipelineResponse(500, BinaryData.FromString(body));
+        var clientResultException = new ClientResultException(response, innerException: null);
+        using var inner = new ThrowingChatClient(clientResultException);
+        using var client = new AzureFoundryErrorTranslatingChatClient(inner);
+
+        var error = await ThrowsAsync<AzureFoundryProviderException>(async () =>
+        {
+            await foreach (var _ in client.GetStreamingResponseAsync([new ChatMessage(ChatRole.User, "hi")]).ConfigureAwait(false))
+            {
+                // The exception is thrown before any update is yielded (see ThrowingChatClient); nothing to do here.
+            }
+        });
+
+        AssertEx.Equal(AzureFoundryProviderErrorKind.Transport, error.Kind);
+        AssertEx.True(error.Message.Contains(new string('x', 300), StringComparison.Ordinal));
+        AssertEx.False(error.Message.Contains(longMessage, StringComparison.Ordinal));
+    }
+
+    [Test]
+    public async Task ErrorTranslatingChatClient_WhenOpenAiV1ContentFilter400_ThrowsContentFiltered()
+    {
+        using var response = new FakePipelineResponse(400, BinaryData.FromString("""{"error":{"code":"content_filter","message":"The response was filtered."}}"""));
+        var clientResultException = new ClientResultException(response, innerException: null);
+        using var inner = new ThrowingChatClient(clientResultException);
+        using var client = new AzureFoundryErrorTranslatingChatClient(inner);
+
+        var error = await ThrowsAsync<AzureFoundryProviderException>(() =>
+            client.GetResponseAsync([new ChatMessage(ChatRole.User, "hi")]));
+
+        AssertEx.Equal(AzureFoundryProviderErrorKind.ContentFiltered, error.Kind);
+    }
+
+    [Test]
+    public async Task ErrorTranslatingChatClient_WhenOpenAiV1Auth401_ThrowsAuthFailed()
+    {
+        using var response = new FakePipelineResponse(401, content: null);
+        var clientResultException = new ClientResultException(response, innerException: null);
+        using var inner = new ThrowingChatClient(clientResultException);
+        using var client = new AzureFoundryErrorTranslatingChatClient(inner);
+
+        var error = await ThrowsAsync<AzureFoundryProviderException>(() =>
+            client.GetResponseAsync([new ChatMessage(ChatRole.User, "hi")]));
+
+        AssertEx.Equal(AzureFoundryProviderErrorKind.AuthFailed, error.Kind);
+    }
+
     private static async Task<TException> ThrowsAsync<TException>(Func<Task> action)
         where TException : Exception
     {
@@ -181,6 +282,79 @@ public sealed class AzureFoundryProviderSurfaceTests
         }
 
         public void Dispose()
+        {
+        }
+    }
+
+    // Minimal Azure.Response test double carrying a fixed status + JSON body, so RequestFailedException(Response)
+    // exercises the real GetRawResponse().Content path the translator reads (Locked body-detail extraction).
+    private sealed class FakeAzureResponse(int status, BinaryData content) : Response
+    {
+        public override int Status { get; } = status;
+
+        public override string ReasonPhrase => string.Empty;
+
+        public override Stream? ContentStream { get; set; }
+
+        public override BinaryData Content { get; } = content;
+
+        public override string ClientRequestId { get; set; } = string.Empty;
+
+        public override void Dispose()
+        {
+        }
+
+        protected override bool ContainsHeader(string name)
+        {
+            return false;
+        }
+
+        protected override IEnumerable<HttpHeader> EnumerateHeaders()
+        {
+            return [];
+        }
+
+        protected override bool TryGetHeader(string name, out string value)
+        {
+            value = null!;
+            return false;
+        }
+
+        protected override bool TryGetHeaderValues(string name, out IEnumerable<string> values)
+        {
+            values = null!;
+            return false;
+        }
+    }
+
+    // Minimal System.ClientModel.Primitives.PipelineResponse test double, the v1-surface analogue of FakeAzureResponse
+    // above — carries a fixed status + optional JSON body so ClientResultException(PipelineResponse, Exception)
+    // exercises the real GetRawResponse().Content path.
+    private sealed class FakePipelineResponse(int status, BinaryData? content) : PipelineResponse
+    {
+        private static readonly BinaryData EmptyContent = BinaryData.FromBytes(ReadOnlyMemory<byte>.Empty);
+
+        public override int Status { get; } = status;
+
+        public override string ReasonPhrase => string.Empty;
+
+        public override Stream? ContentStream { get; set; }
+
+        public override BinaryData Content { get; } = content ?? EmptyContent;
+
+        protected override PipelineResponseHeaders HeadersCore => throw new NotSupportedException();
+
+        public override BinaryData BufferContent(CancellationToken cancellationToken = default)
+        {
+            return Content;
+        }
+
+        public override ValueTask<BinaryData> BufferContentAsync(CancellationToken cancellationToken = default)
+        {
+            return ValueTask.FromResult(Content);
+        }
+
+        public override void Dispose()
         {
         }
     }

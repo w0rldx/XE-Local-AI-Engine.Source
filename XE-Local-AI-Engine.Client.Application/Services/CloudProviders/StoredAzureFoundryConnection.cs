@@ -22,6 +22,12 @@ public sealed record StoredAzureFoundryConnection
     public AzureFoundryAuthMode AuthMode { get; init; }
 
     /// <summary>
+    ///     The wire surface this connection targets. Default <see cref="AzureFoundryApiSurface.AzureDeployments" /> so
+    ///     a legacy stored connection with no <c>ApiSurface</c> field deserializes to the pre-existing behavior.
+    /// </summary>
+    public AzureFoundryApiSurface ApiSurface { get; init; }
+
+    /// <summary>
     ///     The encrypted API key. Null when <see cref="AuthMode" /> is
     ///     <see cref="AzureFoundryAuthMode.ManagedIdentity" />.
     /// </summary>
@@ -74,6 +80,7 @@ public sealed record StoredAzureFoundryConnection
 
         builder.Append("Endpoint = ").Append(Endpoint);
         builder.Append(", AuthMode = ").Append(AuthMode);
+        builder.Append(", ApiSurface = ").Append(ApiSurface);
         builder.Append(", ApiKey = ").Append(ApiKey is null ? "null" : "[REDACTED]");
         builder.Append(", Models = [").AppendJoin(", ", Models).Append(']');
         builder.Append(", Headers = [").AppendJoin(", ", Headers).Append(']');

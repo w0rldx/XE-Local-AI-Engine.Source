@@ -14,6 +14,9 @@
     <PackageReference Include="Microsoft.AspNetCore.SignalR.Client"/>
     <PackageReference Include="Microsoft.EntityFrameworkCore.Sqlite"/>
     <PackageReference Include="Microsoft.Extensions.AI"/>
+    <!-- Microsoft.Extensions.AI.OpenAI brings the OpenAI SDK in transitively (pinned via CentralPackageTransitivePinningEnabled,
+         same as Providers.CodexOAuth): the plain OpenAI.OpenAIClient used by AzureFoundryChatClientFactory's v1 API
+         surface needs no direct PackageReference of its own. -->
     <PackageReference Include="Microsoft.Extensions.AI.OpenAI"/>
     <PackageReference Include="Microsoft.Extensions.DataIngestion.Abstractions"/>
     <PackageReference Include="Microsoft.Extensions.Http.Resilience"/>
