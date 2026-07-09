@@ -2,6 +2,9 @@ namespace XE_Local_AI_Engine.AI.Agent.Tests.Chat;
 
 using System.Diagnostics;
 using System.Runtime.CompilerServices;
+using System.Security.Cryptography;
+using System.Text;
+using System.Text.Json;
 using Microsoft.Extensions.AI;
 using Microsoft.Extensions.Logging;
 using XE_Local_AI_Engine.AI.Agent.Chat;
@@ -24,6 +27,46 @@ public sealed class ToolInvocationObservabilityChatClientTests
 
         AssertEx.ContainsSingle(logger.Messages, message => message.Contains("AgentRunToolInvoked", StringComparison.Ordinal)
                                                             && message.Contains("approve-job", StringComparison.Ordinal));
+    }
+
+    [Test]
+    public async Task GetStreamingResponseAsync_WithFunctionCallContent_NeverLogsRawArgumentValues()
+    {
+        var callId = $"call-{Guid.NewGuid():N}";
+        const string secretArgumentValue = "super-secret-file-contents";
+        using var innerClient = new FakeChatClient(callId, "approve-job", secretArgumentValue);
+        var logger = new ListLogger<ToolInvocationObservabilityChatClient>();
+        using var sut = new ToolInvocationObservabilityChatClient(innerClient, logger);
+
+        await foreach (var _ in sut.GetStreamingResponseAsync([new ChatMessage(ChatRole.User, "hello")]))
+        {
+            GC.KeepAlive(_);
+        }
+
+        AssertEx.True(logger.Messages.Count > 0, "Expected at least one log message.");
+        AssertEx.True(logger.Messages.TrueForAll(message => !message.Contains(secretArgumentValue, StringComparison.Ordinal)),
+            "Raw tool argument value leaked into a log message.");
+    }
+
+    [Test]
+    public async Task GetStreamingResponseAsync_WithFunctionCallContent_LogsArgumentsLengthAndHashPrefix()
+    {
+        var callId = $"call-{Guid.NewGuid():N}";
+        const string argumentValue = "some-arg-value";
+        using var innerClient = new FakeChatClient(callId, "approve-job", argumentValue);
+        var logger = new ListLogger<ToolInvocationObservabilityChatClient>();
+        using var sut = new ToolInvocationObservabilityChatClient(innerClient, logger);
+
+        await foreach (var _ in sut.GetStreamingResponseAsync([new ChatMessage(ChatRole.User, "hello")]))
+        {
+            GC.KeepAlive(_);
+        }
+
+        var serializedArguments = JsonSerializer.Serialize(new Dictionary<string, object?> { ["decision"] = argumentValue });
+        var expectedHashPrefix = Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(serializedArguments)))[..12];
+
+        AssertEx.ContainsSingle(logger.Messages, message => message.Contains("ArgsLength=", StringComparison.Ordinal)
+                                                            && message.Contains($"ArgsHash={expectedHashPrefix}", StringComparison.Ordinal));
     }
 
     [Test]
@@ -70,11 +113,13 @@ public sealed class ToolInvocationObservabilityChatClientTests
     {
         private readonly string _callId;
         private readonly string _toolName;
+        private readonly object? _argumentValue;
 
-        public FakeChatClient(string callId, string toolName)
+        public FakeChatClient(string callId, string toolName, object? argumentValue = null)
         {
             _callId = callId ?? throw new ArgumentNullException(nameof(callId));
             _toolName = toolName ?? throw new ArgumentNullException(nameof(toolName));
+            _argumentValue = argumentValue ?? true;
         }
 
         public Task<ChatResponse> GetResponseAsync(IEnumerable<ChatMessage> messages, ChatOptions? options = null, CancellationToken cancellationToken = default)
@@ -95,7 +140,7 @@ public sealed class ToolInvocationObservabilityChatClientTests
                 [
                     new FunctionCallContent(_callId, _toolName, new Dictionary<string, object?>
                     {
-                        ["decision"] = true
+                        ["decision"] = _argumentValue
                     })
                 ]
             };
