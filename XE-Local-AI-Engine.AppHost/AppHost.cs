@@ -3,7 +3,9 @@ using Projects;
 
 var builder = DistributedApplication.CreateBuilder(args);
 
-var nodeSqliteKey = builder.AddParameter("node-sqlite-key", secret: true);
+var apiAdminPassword = builder.AddParameter("api-admin-password", true);
+var nodeSqliteKey = builder.AddParameter("node-sqlite-key", true);
+
 var nodeSqlitePath = Path.Combine(builder.AppHostDirectory, ".data", "node-sqlite");
 
 var nodeSqlite = builder.AddSqlite("node-sqlite", nodeSqlitePath, "node-chat.db");
@@ -26,6 +28,7 @@ var app = builder.AddProject<XE_Local_AI_Engine_Client>("app", "https")
                  .WithEnvironment("XE_NODE_SQLITE_KEY", nodeSqliteKey)
                  .WithEnvironment("NodeAuth__Jwt__Issuer", "xe-local-ai-engine")
                  .WithEnvironment("NodeAuth__Jwt__Audience", "xe-local-ai-engine")
+                 .WithEnvironment("GeneralSettings__InitialAdminUserPassword", apiAdminPassword)
                  .WithReference(nodeSqlite)
                  .WaitFor(nodeSqlite)
                  .WithHttpHealthCheck("/health/live")
