@@ -1,6 +1,8 @@
 namespace XE_Local_AI_Engine.AI.Agent.Chat;
 
 using System.Runtime.CompilerServices;
+using System.Security.Cryptography;
+using System.Text;
 using System.Text.Json;
 using Microsoft.Extensions.AI;
 using Microsoft.Extensions.Logging;
@@ -53,10 +55,25 @@ internal sealed class ToolInvocationObservabilityChatClient : DelegatingChatClie
             activity?.SetTag("tool.call_id", functionCall.CallId);
             activity?.SetTag("tool.name", functionCall.Name);
 
-            var serializedArguments = JsonSerializer.Serialize(functionCall.Arguments);
-            activity?.SetTag("tool.arguments", serializedArguments);
+            var (argumentsLength, argumentsHash) = SummarizeArguments(functionCall.Arguments);
+            activity?.SetTag("tool.arguments_length", argumentsLength);
+            activity?.SetTag("tool.arguments_hash", argumentsHash);
 
-            _logger.LogInformation("AgentRunToolInvoked {ToolName} {CallId} {Arguments}", functionCall.Name, functionCall.CallId, serializedArguments);
+            _logger.LogInformation("AgentRunToolInvoked {ToolName} {CallId} ArgsLength={ArgumentsLength} ArgsHash={ArgumentsHash}",
+                functionCall.Name, functionCall.CallId, argumentsLength, argumentsHash);
         }
+    }
+
+    /// <summary>
+    ///     Reduces tool-call arguments (potentially raw model-supplied PII/file contents) to a safe correlation
+    ///     summary: the serialized byte length plus a truncated SHA-256 hash prefix. Never returns or logs the
+    ///     argument values themselves.
+    /// </summary>
+    private static (int Length, string HashPrefix) SummarizeArguments(IDictionary<string, object?>? arguments)
+    {
+        var serializedArguments = JsonSerializer.Serialize(arguments);
+        var hash = Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(serializedArguments)));
+
+        return (serializedArguments.Length, hash[..12]);
     }
 }
