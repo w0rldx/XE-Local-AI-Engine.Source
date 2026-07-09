@@ -42,6 +42,48 @@ public sealed class ToolArgumentRepairAIFunctionTests
     }
 
     [Test]
+    public async Task InvokeAsync_StrictMode_UndeclaredArgument_ReturnsRepairResult_AndSkipsHandler()
+    {
+        var handlerCalled = false;
+        var function = Build(_ => handlerCalled = true); // strict is the default (app-owned schema)
+
+        var result = await function.InvokeAsync(Args(("path", "a.txt"), ("undeclared", "x")));
+
+        AssertEx.False(handlerCalled, "an undeclared key is a hallucination the app's own tools must reject");
+        using var document = JsonDocument.Parse(AsText(result));
+        AssertEx.Equal("invalid_arguments", document.RootElement.GetProperty("error").GetString());
+        AssertEx.Contains(document.RootElement.GetProperty("reason").GetString(), "undeclared");
+    }
+
+    [Test]
+    public async Task InvokeAsync_NonStrictMode_UndeclaredArgument_ReachesTheHandler()
+    {
+        string? captured = null;
+        var function = Build(json => captured = json, rejectUnknownProperties: false); // third-party MCP tool
+
+        var result = await function.InvokeAsync(Args(("path", "a.txt"), ("undeclared", "x")));
+
+        AssertEx.Equal("ok", result as string);
+        AssertEx.NotNull(captured);
+        AssertEx.Contains(captured!, "undeclared");
+    }
+
+    [Test]
+    public async Task InvokeAsync_NonStrictMode_MissingRequiredArgument_StillReturnsRepairResult()
+    {
+        var handlerCalled = false;
+        var function = Build(_ => handlerCalled = true, rejectUnknownProperties: false);
+
+        // Non-strict relaxes only the unknown-property check; the required check still bounces this call.
+        var result = await function.InvokeAsync(Args(("undeclared", "x")));
+
+        AssertEx.False(handlerCalled);
+        using var document = JsonDocument.Parse(AsText(result));
+        AssertEx.Equal("invalid_arguments", document.RootElement.GetProperty("error").GetString());
+        AssertEx.Contains(document.RootElement.GetProperty("reason").GetString(), "path");
+    }
+
+    [Test]
     public async Task InvokeAsync_CoercibleArguments_AreRepairedThenReachTheHandler()
     {
         string? captured = null;
@@ -143,7 +185,10 @@ public sealed class ToolArgumentRepairAIFunctionTests
         return result as string ?? throw new AssertionException("Expected a string result.");
     }
 
-    private static ToolArgumentRepairAIFunction Build(Action<string> onInvoke, int maxInvalidCalls = 3, string output = "ok")
+    private static ToolArgumentRepairAIFunction Build(Action<string> onInvoke,
+        int maxInvalidCalls = 3,
+        string output = "ok",
+        bool rejectUnknownProperties = true)
     {
         var inner = new MetadataToolFunction("read_file",
             "Reads a file.",
@@ -154,7 +199,7 @@ public sealed class ToolArgumentRepairAIFunctionTests
                 return Task.FromResult(output);
             });
 
-        return new ToolArgumentRepairAIFunction(inner, maxInvalidCalls);
+        return new ToolArgumentRepairAIFunction(inner, maxInvalidCalls, rejectUnknownProperties);
     }
 
     private static AIFunctionArguments Args(params (string Key, object? Value)[] pairs)

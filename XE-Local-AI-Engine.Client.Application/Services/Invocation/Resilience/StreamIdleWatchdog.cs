@@ -62,24 +62,32 @@ internal static class StreamIdleWatchdog
             yield break;
         }
 
-        // The idle clock is a linked CTS whose token is handed to the provider stream as its cancellation argument, then
-        // reset immediately before each MoveNext and suspended while the consumer holds a yielded item, so only the
-        // provider's inter-chunk gap counts against the budget.
-        using var idleCts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
-        await using var enumerator = streamFactory(idleCts.Token).GetAsyncEnumerator(idleCts.Token);
+        // The provider stream binds cancellation via the token handed to the factory, so a single stable linked CTS is
+        // handed to it up front; cancelling this is what unblocks a hung MoveNextAsync. Each wait then arms its OWN
+        // short-lived idle CTS that, on expiry, cancels the provider CTS. A fresh idle CTS per wait (rather than one
+        // reused CTS toggled with CancelAfter) is essential: a reused CTS could be permanently cancelled by its timer
+        // firing in the gap between a successful MoveNextAsync and the disarm, poisoning the next wait into a false
+        // idle-timeout. The per-wait CTS is created and disposed around the MoveNextAsync only, so neither the consumer's
+        // processing time after the yield nor a stale timer from the previous chunk can count against the next wait.
+        using var providerCts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+        await using var enumerator = streamFactory(providerCts.Token).GetAsyncEnumerator(providerCts.Token);
 
         while (true)
         {
-            idleCts.CancelAfter(idleTimeout);
-
             bool moved;
-            try
+            using (var idleCts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken))
             {
-                moved = await enumerator.MoveNextAsync().ConfigureAwait(false);
-            }
-            catch (OperationCanceledException) when (idleCts.IsCancellationRequested && !cancellationToken.IsCancellationRequested)
-            {
-                throw new StreamIdleTimeoutException(timeoutMessage);
+                using var registration = idleCts.Token.Register(static state => ((CancellationTokenSource)state!).Cancel(), providerCts);
+                idleCts.CancelAfter(idleTimeout);
+
+                try
+                {
+                    moved = await enumerator.MoveNextAsync().ConfigureAwait(false);
+                }
+                catch (OperationCanceledException) when (idleCts.IsCancellationRequested && !cancellationToken.IsCancellationRequested)
+                {
+                    throw new StreamIdleTimeoutException(timeoutMessage);
+                }
             }
 
             if (!moved)
@@ -87,9 +95,6 @@ internal static class StreamIdleWatchdog
                 yield break;
             }
 
-            // Suspend the clock while the consumer processes/streams this item; a slow transport send must not count as
-            // provider idle. It is re-armed at the top of the next iteration before we wait on the provider again.
-            idleCts.CancelAfter(Timeout.InfiniteTimeSpan);
             yield return enumerator.Current;
         }
     }

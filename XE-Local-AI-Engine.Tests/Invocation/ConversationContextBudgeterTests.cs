@@ -53,19 +53,22 @@ public sealed class ConversationContextBudgeterTests
     [Test]
     public void Budget_WhenDroppingTurns_NeverOrphansAToolCallFromItsResult()
     {
-        // Turn 0 carries a tool-call + its result; it must be dropped whole, leaving no lone result behind.
+        // Turn 0 carries a tool-call + its result; it must be dropped whole, leaving no lone result behind. Turns 1 and
+        // 2 are the protected recent window (the keep floor is 2), so the droppable region is turn 0 alone.
         var messages = new List<ChatMessage>
         {
             User("u0"), AssistantToolCall("call-1", "search"), ToolResult("call-1", "old result"),
-            User("u1"), Assistant("a1")
+            User("u1"), Assistant("a1"),
+            User("u2"), Assistant("a2")
         };
-        var sut = CreateSut(FixedEstimator(perMessage: 10), recentTurnKeepCount: 1);
+        var sut = CreateSut(FixedEstimator(perMessage: 10), recentTurnKeepCount: 2);
 
-        var result = sut.Budget(messages, contextTokenCapacity: 25, reservedOutputTokens: 0);
+        // 70 tokens total; budget 45 forces turn 0 (3 messages = 30) to drop, leaving turns 1 and 2 (40 <= 45).
+        var result = sut.Budget(messages, contextTokenCapacity: 45, reservedOutputTokens: 0);
 
         AssertEx.True(result.Trimmed);
-        // Turn 0 (3 messages) dropped; turn 1 (2 messages) protected.
-        AssertEx.Equal(expected: 2, result.Messages.Count);
+        // Turn 0 (3 messages) dropped; turns 1 and 2 (4 messages) protected.
+        AssertEx.Equal(expected: 4, result.Messages.Count);
         AssertEx.Empty(ResultCallIds(result.Messages));
         AssertEx.Empty(CallCallIds(result.Messages));
         AssertNoOrphanedToolResults(result.Messages);
@@ -75,12 +78,14 @@ public sealed class ConversationContextBudgeterTests
     public void Budget_TruncatesOversizedHistoricalToolResult_BeforeDroppingTurns()
     {
         var bigResult = new string('x', 1000);
+        // Turn 0 holds the oversized historical result; turns 1 and 2 are the protected recent window (keep floor 2).
         var messages = new List<ChatMessage>
         {
             User("u0"), AssistantToolCall("call-1", "search"), ToolResult("call-1", bigResult),
-            User("u1")
+            User("u1"), Assistant("a1"),
+            User("u2")
         };
-        var sut = CreateSut(CharCountEstimator(), recentTurnKeepCount: 1, historicalToolResultExcerptChars: 50);
+        var sut = CreateSut(CharCountEstimator(), recentTurnKeepCount: 2, historicalToolResultExcerptChars: 50);
 
         // Budget 200 chars: truncating the 1000-char result to a ~50-char excerpt fits without dropping turn 0.
         var result = sut.Budget(messages, contextTokenCapacity: 200, reservedOutputTokens: 0);
@@ -89,7 +94,7 @@ public sealed class ConversationContextBudgeterTests
         AssertEx.Equal(expected: 0, result.MessagesDropped);
         AssertEx.Equal(expected: 1, result.ToolResultsTruncated);
         AssertEx.Equal(expected: 950, result.CharsTruncated);
-        AssertEx.Equal(expected: 4, result.Messages.Count);
+        AssertEx.Equal(expected: 6, result.Messages.Count);
         AssertEx.True(ContainsText(result.Messages, "u0"), "the truncated turn must NOT be dropped");
         var truncatedText = FindToolResultText(result.Messages, "call-1");
         AssertEx.Contains(truncatedText, "[truncated: 950 chars omitted]");
@@ -118,6 +123,30 @@ public sealed class ConversationContextBudgeterTests
     }
 
     [Test]
+    public void Budget_HonorsRecentTurnKeepCountFloor_ApprovalTwoTurnTailSurvivesWhole()
+    {
+        // The approval-replay path splits one in-flight round across two turns: the assistant tool-call (turn 1) and the
+        // replayed User approval-decision (turn 2). A requested keep-count of 1 must be clamped up to the floor of 2 so
+        // BOTH turns are protected — dropping the tool-call turn while keeping the approval decision would orphan it.
+        var messages = new List<ChatMessage>
+        {
+            User("u0"), Assistant("a0"),
+            User("do X"), AssistantToolCall("call-1", "search"),
+            User("approved")
+        };
+        var sut = CreateSut(FixedEstimator(perMessage: 10), recentTurnKeepCount: 1);
+
+        // 50 tokens total; budget 35 forces the oldest turn (turn 0 = 20) to drop, leaving the two-turn approval tail.
+        var result = sut.Budget(messages, contextTokenCapacity: 35, reservedOutputTokens: 0);
+
+        AssertEx.True(result.Trimmed);
+        AssertEx.False(ContainsText(result.Messages, "u0"), "the oldest droppable turn is trimmed");
+        AssertEx.True(ContainsText(result.Messages, "do X"), "the tool-call turn is protected by the keep-count floor of 2");
+        AssertEx.True(ContainsText(result.Messages, "approved"), "the approval-decision turn stays with its tool-call");
+        AssertEx.Contains(CallCallIds(result.Messages), "call-1", "the tool-call must survive alongside its approval turn");
+    }
+
+    [Test]
     public void Budget_WhenAlwaysKeepSetExceedsBudget_KeepsItAndFlagsOverflow()
     {
         // Two turns, keep-count 4 -> every turn is protected; nothing is droppable.
@@ -143,12 +172,14 @@ public sealed class ConversationContextBudgeterTests
         {
             System("system prompt"),
             User("u0"), Assistant("a0"),
-            User("u1"), Assistant("a1")
+            User("u1"), Assistant("a1"),
+            User("u2"), Assistant("a2")
         };
-        var sut = CreateSut(FixedEstimator(perMessage: 10), recentTurnKeepCount: 1);
+        var sut = CreateSut(FixedEstimator(perMessage: 10), recentTurnKeepCount: 2);
 
-        // Force dropping the first turn; the system message shares that turn but must stay pinned.
-        var result = sut.Budget(messages, contextTokenCapacity: 35, reservedOutputTokens: 0);
+        // Force dropping the first turn (turns 1 and 2 are the protected window); the system message shares that turn
+        // but must stay pinned. 70 total; budget 55 drops turn 0's user/assistant (20) leaving the pinned system (50).
+        var result = sut.Budget(messages, contextTokenCapacity: 55, reservedOutputTokens: 0);
 
         AssertEx.True(result.Trimmed);
         AssertEx.True(ContainsText(result.Messages, "system prompt"), "system messages are always kept");
@@ -159,21 +190,23 @@ public sealed class ConversationContextBudgeterTests
     [Test]
     public void Budget_UsesTheInjectedEstimator_NotItsOwnHeuristic()
     {
-        // Tiny messages a character heuristic would never trim; the injected estimator inflates each to 1000 tokens,
-        // proving the budgeter honors the abstraction rather than measuring content itself.
+        // Tiny messages a character heuristic would never trim, but the injected estimator inflates each to 1000
+        // tokens, proving the budgeter honors the abstraction rather than measuring content itself. Of the four
+        // single-message turns the last two form the protected recent window, so only the two oldest turns can drop.
         var messages = new List<ChatMessage>
         {
             User("a"),
             User("b"),
-            User("c")
+            User("c"),
+            User("d")
         };
-        var sut = CreateSut(FixedEstimator(perMessage: 1000), recentTurnKeepCount: 1);
+        var sut = CreateSut(FixedEstimator(perMessage: 1000), recentTurnKeepCount: 2);
 
-        var result = sut.Budget(messages, contextTokenCapacity: 1500, reservedOutputTokens: 0);
+        var result = sut.Budget(messages, contextTokenCapacity: 2500, reservedOutputTokens: 0);
 
         AssertEx.True(result.Trimmed);
         AssertEx.Equal(expected: 2, result.MessagesDropped);
-        AssertEx.Equal(expected: 1, result.Messages.Count);
+        AssertEx.Equal(expected: 2, result.Messages.Count);
         AssertEx.True(ContainsText(result.Messages, "c"));
     }
 

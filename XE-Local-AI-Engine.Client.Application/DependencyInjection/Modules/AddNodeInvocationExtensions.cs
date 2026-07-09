@@ -52,7 +52,7 @@ internal static class AddNodeInvocationExtensions
         builder.Services.AddOptions<ConversationContextBudgetOptions>()
                .Bind(configuration.GetSection(ConversationContextBudgetOptions.SectionName))
                .Validate(static options => options.ReservedOutputTokenFloor >= 0
-                                           && options.RecentTurnKeepCount >= 1
+                                           && options.RecentTurnKeepCount >= 2
                                            && options.HistoricalToolResultExcerptChars >= 0
                                            && options.DefaultContextTokens >= 1,
                    "Invalid ConversationContextBudgetOptions configuration.")

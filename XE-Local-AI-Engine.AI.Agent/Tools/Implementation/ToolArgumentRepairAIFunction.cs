@@ -12,17 +12,22 @@ using Microsoft.Extensions.AI;
 ///     (<see cref="ToolArgumentRepairScope" />) stops a looping model: after the configured number of consecutive invalid
 ///     calls the tool returns a terminal "disabled for this run" result so it cannot burn the whole iteration budget.
 ///     The wrapper is transparent to name/description/schema (delegated to the inner function), so it composes beneath the
-///     result-budget and approval wrappers without changing what the model is offered.
+///     result-budget and approval wrappers without changing what the model is offered. The <c>rejectUnknownProperties</c>
+///     constructor flag selects the validator's strictness: the app's own tools pass <c>true</c> (undeclared keys are hallucinations to
+///     reject); third-party MCP tools pass <c>false</c> so an under-declared server schema never bounces a key the tool
+///     actually needs (required/type checks still apply).
 /// </summary>
 internal sealed class ToolArgumentRepairAIFunction : DelegatingAIFunction
 {
     private readonly int _maxConsecutiveInvalidCalls;
+    private readonly bool _rejectUnknownProperties;
 
-    public ToolArgumentRepairAIFunction(AIFunction innerFunction, int maxConsecutiveInvalidCalls)
+    public ToolArgumentRepairAIFunction(AIFunction innerFunction, int maxConsecutiveInvalidCalls, bool rejectUnknownProperties = true)
         : base(innerFunction)
     {
         ArgumentOutOfRangeException.ThrowIfNegativeOrZero(maxConsecutiveInvalidCalls);
         _maxConsecutiveInvalidCalls = maxConsecutiveInvalidCalls;
+        _rejectUnknownProperties = rejectUnknownProperties;
     }
 
     protected override async ValueTask<object?> InvokeCoreAsync(AIFunctionArguments arguments, CancellationToken cancellationToken)
@@ -37,7 +42,7 @@ internal sealed class ToolArgumentRepairAIFunction : DelegatingAIFunction
             return ToolArgumentRepairResult.ToolDisabled(Name);
         }
 
-        var validation = ToolArgumentValidator.CoerceAndValidate(JsonSchema, arguments);
+        var validation = ToolArgumentValidator.CoerceAndValidate(JsonSchema, arguments, _rejectUnknownProperties);
         if (!validation.IsValid)
         {
             return RecordInvalidAndBuildResult(scope, validation.Reason!);

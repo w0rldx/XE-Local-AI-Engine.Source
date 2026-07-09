@@ -66,14 +66,27 @@ internal sealed class ToolInvocationObservabilityChatClient : DelegatingChatClie
 
     /// <summary>
     ///     Reduces tool-call arguments (potentially raw model-supplied PII/file contents) to a safe correlation
-    ///     summary: the serialized byte length plus a truncated SHA-256 hash prefix. Never returns or logs the
-    ///     argument values themselves.
+    ///     summary: the serialized UTF-8 byte length plus a truncated SHA-256 hash prefix. Never returns or logs the
+    ///     argument values themselves. A non-serializable argument graph yields the sentinel <c>(-1,
+    ///     "unserializable")</c> rather than faulting the response stream.
     /// </summary>
     private static (int Length, string HashPrefix) SummarizeArguments(IDictionary<string, object?>? arguments)
     {
-        var serializedArguments = JsonSerializer.Serialize(arguments);
-        var hash = Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(serializedArguments)));
+        string serializedArguments;
+        try
+        {
+            serializedArguments = JsonSerializer.Serialize(arguments);
+        }
+        catch (Exception exception) when (exception is JsonException or NotSupportedException)
+        {
+            // Observability is best-effort: a non-serializable argument graph (e.g. a reference cycle) must never fault
+            // the response stream. Report a sentinel length and a fixed marker instead of a real length/hash.
+            return (-1, "unserializable");
+        }
 
-        return (serializedArguments.Length, hash[..12]);
+        var bytes = Encoding.UTF8.GetBytes(serializedArguments);
+        var hash = Convert.ToHexString(SHA256.HashData(bytes));
+
+        return (bytes.Length, hash[..12]);
     }
 }

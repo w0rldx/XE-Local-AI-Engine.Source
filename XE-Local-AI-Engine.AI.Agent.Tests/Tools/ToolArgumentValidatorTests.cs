@@ -66,6 +66,42 @@ public sealed class ToolArgumentValidatorTests
     }
 
     [Test]
+    public void CoerceAndValidate_UnknownProperty_AllowedWhenRejectUnknownPropertiesFalse()
+    {
+        // Non-strict mode (third-party MCP tools): an undeclared key passes through rather than being rejected.
+        var arguments = Args(("path", "a.txt"), ("undeclared", "x"));
+
+        var result = ToolArgumentValidator.CoerceAndValidate(Schema(ObjectSchema), arguments, rejectUnknownProperties: false);
+
+        AssertEx.True(result.IsValid, result.Reason);
+    }
+
+    [Test]
+    public void CoerceAndValidate_NonStrict_StillEnforcesRequiredProperties()
+    {
+        // Relaxing the unknown-property check must not relax the required check.
+        var arguments = Args(("count", 3L), ("undeclared", "x"));
+
+        var result = ToolArgumentValidator.CoerceAndValidate(Schema(ObjectSchema), arguments, rejectUnknownProperties: false);
+
+        AssertEx.False(result.IsValid);
+        AssertEx.Contains(result.Reason, "path");
+        AssertEx.Contains(result.Reason, "missing");
+    }
+
+    [Test]
+    public void CoerceAndValidate_NonStrict_StillEnforcesDeclaredTypes()
+    {
+        // A declared property with the wrong type is still rejected in non-strict mode.
+        var arguments = Args(("path", "a.txt"), ("count", new Dictionary<string, object?>()), ("undeclared", "x"));
+
+        var result = ToolArgumentValidator.CoerceAndValidate(Schema(ObjectSchema), arguments, rejectUnknownProperties: false);
+
+        AssertEx.False(result.IsValid);
+        AssertEx.Contains(result.Reason, "count");
+    }
+
+    [Test]
     public void CoerceAndValidate_TypeMismatch_ReturnsInvalidNamingProperty()
     {
         // "count" is an integer; an object cannot be coerced and must be reported.
