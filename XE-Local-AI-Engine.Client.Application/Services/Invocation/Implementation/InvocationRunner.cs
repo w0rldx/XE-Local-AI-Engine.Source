@@ -51,6 +51,10 @@ public sealed partial class InvocationRunner : IInvocationRunner
     // "Provider unreachable." so the operator gets an actionable next step (pull a GGUF model) rather than a dead-end.
     private const string NoChatModelInstalledMessage = "No chat model installed. Pull a GGUF model to start chatting.";
 
+    // A generic (non-inter-chunk) timeout: the invocation-level cancel-after or an HTTP client timeout. Its framework
+    // message can name hosts/paths and is unbounded, so a fixed, path-free constant is surfaced in its place.
+    private const string TimedOutMessage = "The operation timed out.";
+
     private static readonly Regex FrameworkExceptionNamePattern =
         new(@"\b(?:Microsoft|System)(?:\.[A-Za-z_][A-Za-z0-9_]*)*\.[A-Za-z_][A-Za-z0-9_]*Exception\b|\b(?:AgentException|ChatClientAgentException)\b", RegexOptions.CultureInvariant,
             TimeSpan.FromSeconds(2));

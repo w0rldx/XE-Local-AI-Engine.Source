@@ -64,7 +64,12 @@ public sealed class ConversationContextBudgeter : IConversationContextBudgeter
         }
 
         var maxTurn = turn;
-        var keepCount = Math.Max(1, _options.RecentTurnKeepCount);
+
+        // Floor of 2, even against a mis-set config: the approval-replay path splits one in-flight round across two
+        // turns — the assistant tool-call (and its approval request) land in turn M, and the User approval-decision
+        // that FunctionInvokingChatClient replays lands in turn M+1. Protecting only one turn could drop turn M and
+        // orphan the approval response. Options validation also enforces >= 2; this clamp is the defence in depth.
+        var keepCount = Math.Max(2, _options.RecentTurnKeepCount);
 
         // Turns with an index at or above this threshold are the protected recent window: always kept, never modified.
         // A non-positive threshold means every turn is within the keep window (nothing is droppable).

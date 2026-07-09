@@ -257,8 +257,10 @@ internal sealed class McpServerConnectionManager : IMcpServerConnectionManager, 
 
             // Coerce + validate the model's arguments against the MCP tool's schema and run the per-request repair loop
             // before the server ever sees them — same innermost guard the ClientLocal registry applies — so a malformed
-            // call returns actionable guidance instead of a failed round-trip.
-            AIFunction validated = new ToolArgumentRepairAIFunction(named, maxInvalidToolCalls);
+            // call returns actionable guidance instead of a failed round-trip. Unknown-property rejection is OFF for
+            // third-party servers: an under-declared server schema must not bounce a key the tool actually needs
+            // (required/type checks still apply).
+            AIFunction validated = new ToolArgumentRepairAIFunction(named, maxInvalidToolCalls, rejectUnknownProperties: false);
 
             // Backstop the (verbatim) MCP result with the shared budget UNDER the approval gate, so a server can't
             // flood chat history and ApprovalRequiredAIFunction stays the outermost type the approval pipeline detects.

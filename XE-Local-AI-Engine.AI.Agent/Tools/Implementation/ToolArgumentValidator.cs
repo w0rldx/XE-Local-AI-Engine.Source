@@ -20,18 +20,26 @@ internal readonly record struct ToolArgumentValidation(bool IsValid, string? Rea
 ///     often — a number sent as a string, a boolean sent as <c>"true"</c>/<c>"false"</c>, or a lone value where an array
 ///     is expected — by rewriting the argument in place so a well-intentioned call is not bounced on a formatting nit.
 ///     Validation then checks the request is answerable at all: required properties present, declared property types
-///     roughly matched, and no unknown properties the schema does not describe. The check is deliberately permissive
-///     where the schema is loose (no declared properties, or <c>additionalProperties</c> allowed) so it never rejects a
-///     call a correct handler would have accepted.
+///     roughly matched, and — for the app's own tools — no unknown properties the schema does not describe. The check is
+///     deliberately permissive where the schema is loose (no declared properties, or <c>additionalProperties</c>
+///     allowed) so it never rejects a call a correct handler would have accepted; the undeclared-property check is
+///     opt-out (see the <c>rejectUnknownProperties</c> switch) so a third-party MCP tool with an under-declared schema
+///     is never bounced on a key it actually needs.
 /// </summary>
 internal static class ToolArgumentValidator
 {
     /// <summary>
     ///     Coerces common small-model argument mistakes in <paramref name="arguments" /> in place, then validates the
     ///     (post-coercion) arguments against <paramref name="schema" />. Returns the first structural problem found, or
-    ///     <see cref="ToolArgumentValidation.Valid" /> when the arguments are acceptable.
+    ///     <see cref="ToolArgumentValidation.Valid" /> when the arguments are acceptable. When
+    ///     <paramref name="rejectUnknownProperties" /> is false the undeclared-property check is skipped (extra keys pass
+    ///     through) — used for third-party MCP tools whose published schemas may under-declare their inputs; the required
+    ///     and type checks still apply. When true (the app's own tools, whose schemas fully enumerate their inputs) an
+    ///     undeclared key is treated as a hallucinated property and rejected.
     /// </summary>
-    public static ToolArgumentValidation CoerceAndValidate(JsonElement schema, IDictionary<string, object?> arguments)
+    public static ToolArgumentValidation CoerceAndValidate(JsonElement schema,
+        IDictionary<string, object?> arguments,
+        bool rejectUnknownProperties = true)
     {
         ArgumentNullException.ThrowIfNull(arguments);
 
@@ -65,7 +73,7 @@ internal static class ToolArgumentValidator
             return ToolArgumentValidation.Invalid(typeReason);
         }
 
-        if (TryFindUnknownPropertyViolation(schema, properties, arguments, out var unknownReason))
+        if (rejectUnknownProperties && TryFindUnknownPropertyViolation(schema, properties, arguments, out var unknownReason))
         {
             return ToolArgumentValidation.Invalid(unknownReason);
         }
@@ -200,9 +208,10 @@ internal static class ToolArgumentValidator
     {
         reason = string.Empty;
 
-        // Honor an explicit opt-in to extra properties; otherwise, because these are the app's own and MCP tool schemas
-        // that enumerate their inputs, an argument the schema does not describe is treated as a hallucinated key and
-        // rejected so the model gets told to drop it. (Stricter than JSON Schema's additionalProperties-defaults-true.)
+        // Reached only when the caller opted into strict validation (the app's own tools, whose schemas fully enumerate
+        // their inputs). Honor an explicit opt-in to extra properties; otherwise an argument the schema does not describe
+        // is treated as a hallucinated key and rejected so the model gets told to drop it. (Stricter than JSON Schema's
+        // additionalProperties-defaults-true.)
         if (schema.TryGetProperty("additionalProperties", out var additional)
             && additional.ValueKind is JsonValueKind.True or JsonValueKind.Object)
         {

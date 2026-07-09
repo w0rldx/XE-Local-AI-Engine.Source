@@ -70,6 +70,48 @@ public sealed class ToolInvocationObservabilityChatClientTests
     }
 
     [Test]
+    public async Task GetStreamingResponseAsync_LogsArgumentsLengthAsUtf8ByteCount()
+    {
+        var callId = $"call-{Guid.NewGuid():N}";
+        const string argumentValue = "some-arg-value";
+        using var innerClient = new FakeChatClient(callId, "approve-job", argumentValue);
+        var logger = new ListLogger<ToolInvocationObservabilityChatClient>();
+        using var sut = new ToolInvocationObservabilityChatClient(innerClient, logger);
+
+        await foreach (var _ in sut.GetStreamingResponseAsync([new ChatMessage(ChatRole.User, "hello")]))
+        {
+            GC.KeepAlive(_);
+        }
+
+        var serializedArguments = JsonSerializer.Serialize(new Dictionary<string, object?> { ["decision"] = argumentValue });
+        var expectedByteCount = Encoding.UTF8.GetByteCount(serializedArguments);
+        AssertEx.ContainsSingle(logger.Messages, message => message.Contains($"ArgsLength={expectedByteCount}", StringComparison.Ordinal));
+    }
+
+    [Test]
+    public async Task GetStreamingResponseAsync_WhenArgumentsAreNotSerializable_LogsSentinelWithoutFaultingTheStream()
+    {
+        var callId = $"call-{Guid.NewGuid():N}";
+        // A reference cycle cannot be serialized; summarizing must fall back to the sentinel rather than throw.
+        var cyclic = new List<object?>();
+        cyclic.Add(cyclic);
+        using var innerClient = new FakeChatClient(callId, "approve-job", cyclic);
+        var logger = new ListLogger<ToolInvocationObservabilityChatClient>();
+        using var sut = new ToolInvocationObservabilityChatClient(innerClient, logger);
+
+        var updateCount = 0;
+        await foreach (var update in sut.GetStreamingResponseAsync([new ChatMessage(ChatRole.User, "hello")]))
+        {
+            GC.KeepAlive(update);
+            updateCount++;
+        }
+
+        AssertEx.True(updateCount > 0, "the response stream must still flow through when summarizing fails");
+        AssertEx.ContainsSingle(logger.Messages, message => message.Contains("ArgsLength=-1", StringComparison.Ordinal)
+                                                            && message.Contains("ArgsHash=unserializable", StringComparison.Ordinal));
+    }
+
+    [Test]
     public async Task GetStreamingResponseAsync_WithFunctionCallContent_CreatesToolInvocationActivity()
     {
         var callId = $"call-{Guid.NewGuid():N}";

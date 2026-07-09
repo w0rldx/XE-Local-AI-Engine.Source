@@ -49,8 +49,9 @@ internal sealed class ClientLocalToolRegistry : IClientLocalToolRegistry
 
         // Innermost guard: coerce + validate the model's arguments against this tool's schema and run the per-request
         // repair loop before the handler ever sees them, so a malformed call returns actionable guidance instead of a
-        // throw. Sits under the budget and approval wrappers, which stay transparent to it.
-        function = new ToolArgumentRepairAIFunction(function, maxInvalidCalls);
+        // throw. Sits under the budget and approval wrappers, which stay transparent to it. Strict unknown-property
+        // rejection is safe here: these are the app's own tools, whose schemas fully enumerate their inputs.
+        function = new ToolArgumentRepairAIFunction(function, maxInvalidCalls, rejectUnknownProperties: true);
 
         // Backstop the handler's output with the shared result budget. This wraps the executable UNDER the approval
         // gate so ApprovalRequiredAIFunction stays the outermost type (the pipeline's approval detection and the

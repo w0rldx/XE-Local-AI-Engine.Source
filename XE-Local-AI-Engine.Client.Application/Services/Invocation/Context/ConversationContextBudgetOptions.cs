@@ -21,7 +21,10 @@ public sealed class ConversationContextBudgetOptions
     /// <summary>
     ///     How many of the most recent turns (a user message plus every assistant/tool message that follows it up to the
     ///     next user message) are always kept and never trimmed. Guarantees the latest user message and the in-flight
-    ///     tool-calling round survive budgeting. Must be at least 1.
+    ///     tool-calling round survive budgeting. Must be at least 2: the approval-replay path spans two turns — the
+    ///     assistant tool-call and its approval request land in one turn, and the replayed User approval-decision lands
+    ///     in the next — so protecting a single turn could drop the tool-call turn and orphan the approval response. The
+    ///     budgeter clamps to this floor as well, so even a mis-set config cannot orphan an approval round.
     /// </summary>
     public int RecentTurnKeepCount { get; set; } = 4;
 

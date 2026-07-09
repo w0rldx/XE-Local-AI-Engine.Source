@@ -25,7 +25,10 @@ public sealed class ProviderCircuitOpenException : Exception
 ///     A minimal internal implementation rather than a Polly/HTTP-resilience pipeline: the "retry only before the first
 ///     chunk has been streamed to our transport" gate is application-level state that an HTTP-handler resilience
 ///     pipeline cannot express (it would also retry mid-stream and duplicate tokens), so the resilience must live at
-///     this seam. Failures and the breaker window are tracked per endpoint key.
+///     this seam. Failures and the breaker window are tracked per key; the runner supplies the resolved model as the
+///     key, so the breaker is effectively per resolved model. The open window is time-based rather than a strict
+///     single half-open trial — once it elapses every caller is admitted, so concurrent probes are possible; the runner's
+///     single-invocation guard is what bounds real concurrency.
 /// </remarks>
 internal sealed class ProviderStreamResilience : IProviderStreamResilience
 {
@@ -273,7 +276,8 @@ internal sealed class ProviderStreamResilience : IProviderStreamResilience
 
         lock (breaker.Gate)
         {
-            // A failure during a half-open trial (the break window has elapsed) re-opens the breaker immediately.
+            // A failure by any caller admitted after the break window elapsed re-opens the breaker immediately for a
+            // fresh window (the window is time-based, so more than one probe may be in flight).
             if (breaker.OpenUntil is { } openUntil && now >= openUntil)
             {
                 breaker.OpenUntil = now + breakDuration;
