@@ -22,10 +22,11 @@ internal sealed class ClientLocalToolRegistry : IClientLocalToolRegistry
         ArgumentNullException.ThrowIfNull(pipelineOptions);
 
         var maxResultCharacters = pipelineOptions.Value.MaxToolResultCharacters;
+        var maxInvalidCalls = pipelineOptions.Value.MaxConsecutiveInvalidToolCallsPerTool;
         var tools = new Dictionary<string, AITool>(StringComparer.Ordinal);
         foreach (var handler in handlers)
         {
-            tools[handler.ToolName] = BuildTool(handler, maxResultCharacters);
+            tools[handler.ToolName] = BuildTool(handler, maxResultCharacters, maxInvalidCalls);
         }
 
         _tools = tools;
@@ -38,13 +39,18 @@ internal sealed class ClientLocalToolRegistry : IClientLocalToolRegistry
         return _tools.TryGetValue(toolName, out tool);
     }
 
-    private static AITool BuildTool(IClientLocalToolHandler handler, int maxResultCharacters)
+    private static AITool BuildTool(IClientLocalToolHandler handler, int maxResultCharacters, int maxInvalidCalls)
     {
         var schema = MetadataToolFunction.ParseSchema(handler.ParameterSchema);
         AIFunction function = new MetadataToolFunction(handler.ToolName,
             handler.Description,
             schema,
             handler.ExecuteAsync);
+
+        // Innermost guard: coerce + validate the model's arguments against this tool's schema and run the per-request
+        // repair loop before the handler ever sees them, so a malformed call returns actionable guidance instead of a
+        // throw. Sits under the budget and approval wrappers, which stay transparent to it.
+        function = new ToolArgumentRepairAIFunction(function, maxInvalidCalls);
 
         // Backstop the handler's output with the shared result budget. This wraps the executable UNDER the approval
         // gate so ApprovalRequiredAIFunction stays the outermost type (the pipeline's approval detection and the
