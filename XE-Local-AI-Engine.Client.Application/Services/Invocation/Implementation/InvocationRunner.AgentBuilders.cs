@@ -6,6 +6,7 @@ using XE_Local_AI_Engine.AI.Agent.Invocation.Orchestration;
 using XE_Local_AI_Engine.AI.Agent.Tools;
 using XE_Local_AI_Engine.Client.Models;
 using XE_Local_AI_Engine.Client.Models.Enums;
+using XE_Local_AI_Engine.Client.Services.Invocation.Context;
 using XE_Local_AI_Engine.Providers.Ollama.Implementation;
 
 public sealed partial class InvocationRunner
@@ -125,10 +126,10 @@ public sealed partial class InvocationRunner
         return _defaultModel;
     }
 
-    private InvocationAgentDefinition BuildInvocationDefinition(RuntimePackage package, string resolvedModel)
+    private InvocationAgentDefinition BuildInvocationDefinition(RuntimePackage package,
+        string resolvedModel,
+        IReadOnlyList<ChatMessage> messages)
     {
-        var messages = BuildChatMessages(package);
-
         return new InvocationAgentDefinition(resolvedModel,
             package.ResolvedSystemPrompt,
             BuildInvocationTools(package),
@@ -137,6 +138,60 @@ public sealed partial class InvocationRunner
             package.SupportsThinking,
             MapSamplingOptions(package.SamplingOptions),
             MapSkills(package.Skills));
+    }
+
+    /// <summary>
+    ///     Resolves the deterministic input-context budget for a package: the effective context-window capacity (the
+    ///     per-send <c>num_ctx</c> override the factory would apply, else the configured default) and the tokens held
+    ///     back for the model's response (the larger of the configured floor and any explicit max-output-tokens
+    ///     override). Kept in lockstep with the factory's num_ctx / output-clamp source so the history sent never
+    ///     overruns the window the model is launched with.
+    /// </summary>
+    private (int Capacity, int Reserved) ResolveContextBudget(RuntimePackage package)
+    {
+        var capacity = package.SamplingOptions?.NumCtx is { } numCtx && numCtx > 0
+            ? numCtx
+            : _contextBudgetOptions.DefaultContextTokens;
+
+        var requestedOutput = package.SamplingOptions?.MaxOutputTokens is { } maxOutput && maxOutput > 0
+            ? maxOutput
+            : 0;
+        var reserved = Math.Max(_contextBudgetOptions.ReservedOutputTokenFloor, requestedOutput);
+
+        return (capacity, reserved);
+    }
+
+    /// <summary>
+    ///     Applies the conversation-context budget to a message list and, the FIRST time a trim (or an always-keep
+    ///     overflow) occurs in an invocation, emits a single sanitized warning carrying counts only — never content.
+    ///     Returns the input unchanged (reference-equal) when nothing was trimmed.
+    /// </summary>
+    private IReadOnlyList<ChatMessage> ApplyContextBudget(IReadOnlyList<ChatMessage> messages,
+        RuntimePackage package,
+        string stage,
+        ref bool trimLogged)
+    {
+        var (capacity, reserved) = ResolveContextBudget(package);
+        var result = _contextBudgeter.Budget(messages, capacity, reserved);
+
+        if ((result.Trimmed || result.ExceedsBudget) && !trimLogged)
+        {
+            trimLogged = true;
+            _logger.LogWarning(
+                "Conversation context budgeted for invocation {InvocationId} ({Stage}): dropped {Dropped} message(s), truncated {Truncated} tool result(s) ({Chars} chars), estimated tokens {Before} -> {After}, capacity {Capacity} reserving {Reserved} (still over budget: {Overflow}).",
+                package.InvocationId,
+                stage,
+                result.MessagesDropped,
+                result.ToolResultsTruncated,
+                result.CharsTruncated,
+                result.EstimatedTokensBefore,
+                result.EstimatedTokensAfter,
+                capacity,
+                reserved,
+                result.ExceedsBudget);
+        }
+
+        return result.Messages;
     }
 
     /// <summary>

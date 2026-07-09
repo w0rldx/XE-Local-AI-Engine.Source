@@ -12,6 +12,7 @@ using XE_Local_AI_Engine.Client.Services.DeadLetter.Implementation;
 using XE_Local_AI_Engine.Client.Services.Events;
 using XE_Local_AI_Engine.Client.Services.Events.Implementation;
 using XE_Local_AI_Engine.Client.Services.Invocation;
+using XE_Local_AI_Engine.Client.Services.Invocation.Context;
 using XE_Local_AI_Engine.Client.Services.Invocation.Envelope;
 using XE_Local_AI_Engine.Client.Services.Invocation.Envelope.Implementation;
 using Microsoft.Extensions.DependencyInjection.Extensions;
@@ -48,6 +49,16 @@ internal static class AddNodeInvocationExtensions
                    "Invalid ProviderResilienceOptions configuration.")
                .ValidateOnStart();
         builder.Services.AddSingleton<IProviderStreamResilience, ProviderStreamResilience>();
+        builder.Services.AddOptions<ConversationContextBudgetOptions>()
+               .Bind(configuration.GetSection(ConversationContextBudgetOptions.SectionName))
+               .Validate(static options => options.ReservedOutputTokenFloor >= 0
+                                           && options.RecentTurnKeepCount >= 1
+                                           && options.HistoricalToolResultExcerptChars >= 0
+                                           && options.DefaultContextTokens >= 1,
+                   "Invalid ConversationContextBudgetOptions configuration.")
+               .ValidateOnStart();
+        builder.Services.AddSingleton<ITokenEstimator, HeuristicTokenEstimator>();
+        builder.Services.AddSingleton<IConversationContextBudgeter, ConversationContextBudgeter>();
         builder.Services.AddSingleton<IInvocationRunner, InvocationRunner>();
         builder.Services.AddSingleton<IInvocationHistory, InvocationHistory>();
         builder.Services.AddSingleton<IWorkerEventDispatcher, WorkerEventDispatcher>();

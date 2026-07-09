@@ -20,6 +20,7 @@ using XE_Local_AI_Engine.Client.Services.CloudProviders;
 using XE_Local_AI_Engine.Client.Services.Connection;
 using XE_Local_AI_Engine.Client.Services.DeadLetter;
 using XE_Local_AI_Engine.Client.Services.Events;
+using XE_Local_AI_Engine.Client.Services.Invocation.Context;
 using XE_Local_AI_Engine.Client.Services.Invocation.Envelope;
 using XE_Local_AI_Engine.Client.Services.Invocation.Resilience;
 using XE_Local_AI_Engine.Client.Services.NodeSettings;
@@ -57,6 +58,8 @@ public sealed partial class InvocationRunner : IInvocationRunner
     private readonly ConcurrentDictionary<Guid, TaskCompletionSource> _activeInvocationCompletions = new();
 
     private readonly ICapabilityReporter _capabilityReporter;
+    private readonly IConversationContextBudgeter _contextBudgeter;
+    private readonly ConversationContextBudgetOptions _contextBudgetOptions;
     private readonly IDeadLetterStore _deadLetterStore;
     private readonly string _defaultModel;
     private readonly IEnvelopeCryptoService _envelopeCryptoService;
@@ -96,6 +99,8 @@ public sealed partial class InvocationRunner : IInvocationRunner
         ILocalModelProviderResolver providerResolver,
         IDeadLetterStore deadLetterStore,
         IProviderStreamResilience providerStreamResilience,
+        IConversationContextBudgeter contextBudgeter,
+        IOptions<ConversationContextBudgetOptions> contextBudgetOptions,
         IConfiguration configuration,
         INodeRuntimeSettings runtimeSettings,
         IOptions<SpawnOptions> spawnOptions,
@@ -111,6 +116,9 @@ public sealed partial class InvocationRunner : IInvocationRunner
         _providerResolver = providerResolver ?? throw new ArgumentNullException(nameof(providerResolver));
         _deadLetterStore = deadLetterStore ?? throw new ArgumentNullException(nameof(deadLetterStore));
         _providerStreamResilience = providerStreamResilience ?? throw new ArgumentNullException(nameof(providerStreamResilience));
+        _contextBudgeter = contextBudgeter ?? throw new ArgumentNullException(nameof(contextBudgeter));
+        ArgumentNullException.ThrowIfNull(contextBudgetOptions);
+        _contextBudgetOptions = contextBudgetOptions.Value;
         ArgumentNullException.ThrowIfNull(configuration);
         ArgumentNullException.ThrowIfNull(runtimeSettings);
         ArgumentNullException.ThrowIfNull(spawnOptions);
@@ -396,7 +404,13 @@ public sealed partial class InvocationRunner : IInvocationRunner
         StreamState stream,
         CancellationToken invocationToken)
     {
-        var definition = BuildInvocationDefinition(package, resolvedModel);
+        // Deterministic input-context budgeting is applied at BOTH history growth points so a long conversation (or a
+        // long tool-calling loop) never overruns the window the provider is launched with. The single trim warning is
+        // gated by this flag so an invocation logs at most once regardless of how many rounds trim.
+        var budgetTrimLogged = false;
+        var seededMessages = ApplyContextBudget(BuildChatMessages(package), package, "initial-assembly", ref budgetTrimLogged);
+
+        var definition = BuildInvocationDefinition(package, resolvedModel, seededMessages);
         await using var agentContext = await _invocationAgentFactory.CreateAsync(definition, invocationToken).ConfigureAwait(false);
 
         // Maps callId → toolName so FunctionResultContent (which has no Name) can resolve the tool name
@@ -425,6 +439,16 @@ public sealed partial class InvocationRunner : IInvocationRunner
 
         do
         {
+            // Growth point (b): before each provider round, re-budget the (approval-)grown message list. On the first
+            // iteration this is a cheap passthrough (the seed was already budgeted); on an approval resume it bounds the
+            // folded tool-call + approval history. The protected recent turns — which carry the in-flight round — are
+            // never trimmed, so a budgeted list is still valid to send.
+            var budgetedMessages = ApplyContextBudget(currentMessages, package, "tool-loop", ref budgetTrimLogged);
+            if (!ReferenceEquals(budgetedMessages, currentMessages))
+            {
+                currentMessages = budgetedMessages as List<ChatMessage> ?? [.. budgetedMessages];
+            }
+
             pendingApproval = null;
             var segmentUpdates = new List<AgentResponseUpdate>();
 

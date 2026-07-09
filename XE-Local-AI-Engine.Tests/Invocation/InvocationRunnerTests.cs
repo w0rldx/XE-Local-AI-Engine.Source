@@ -28,6 +28,7 @@ using XE_Local_AI_Engine.Client.Services.Connection;
 using XE_Local_AI_Engine.Client.Services.DeadLetter;
 using XE_Local_AI_Engine.Client.Services.Events;
 using XE_Local_AI_Engine.Client.Services.Invocation;
+using XE_Local_AI_Engine.Client.Services.Invocation.Context;
 using XE_Local_AI_Engine.Client.Services.Invocation.Envelope.Implementation;
 using XE_Local_AI_Engine.Client.Services.Invocation.Implementation;
 using XE_Local_AI_Engine.Client.Services.Invocation.Resilience;
@@ -1211,6 +1212,8 @@ public sealed class InvocationRunnerTests
             resolvedProviderResolver,
             Substitute.For<IDeadLetterStore>(),
             resolvedProviderStreamResilience,
+            new ConversationContextBudgeter(new HeuristicTokenEstimator(), Options.Create(new ConversationContextBudgetOptions())),
+            Options.Create(new ConversationContextBudgetOptions()),
             configuration,
             runtimeSettings,
             Options.Create(new SpawnOptions()),
