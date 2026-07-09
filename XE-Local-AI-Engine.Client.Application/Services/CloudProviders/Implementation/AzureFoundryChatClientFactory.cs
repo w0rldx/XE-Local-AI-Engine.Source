@@ -52,11 +52,20 @@ public sealed class AzureFoundryChatClientFactory : IAzureFoundryChatClientFacto
     // general rule for a multi-segment App-ID-URI or a trailing-slash host, so a mismatch fails fast instead.
     private const string ClientCredentialsScopeSuffix = "/.default";
 
+    // Upper bound on how long a live interactive-browser sign-in may block the send that triggered it. MSAL's
+    // system-browser flow waits on a localhost redirect that never arrives when the operator closes the browser
+    // window without completing sign-in, so an uncapped Authenticate() blocks that send forever. Five minutes leaves
+    // room for MFA while still guaranteeing the send eventually fails with a typed, retryable error.
+    private static readonly TimeSpan InteractiveBrowserSignInTimeout = TimeSpan.FromMinutes(5);
+
     private readonly IEntraAuthCodeAccountStore? _entraAuthCodeAccountStore;
     private readonly IEntraLiveCredentialCache? _entraLiveCredentialCache;
     private readonly IEntraTokenCacheStore? _entraTokenCacheStore;
     private readonly ILogger<AzureFoundryChatClientFactory> _logger;
     private readonly INodeDataDirectory? _nodeDataDirectory;
+
+    // 1 while a live interactive-browser prompt is in flight (single-flight gate; this factory is a DI singleton).
+    private int _interactiveBrowserSignInInFlight;
 
     public AzureFoundryChatClientFactory(IEntraTokenCacheStore? entraTokenCacheStore = null,
         IEntraLiveCredentialCache? entraLiveCredentialCache = null,
@@ -425,29 +434,83 @@ public sealed class AzureFoundryChatClientFactory : IAzureFoundryChatClientFacto
             return new InteractiveBrowserCredential(BuildInteractiveBrowserOptions(connection, record, allowPersistence: true));
         }
 
+        // Single-flight gate: only one live browser prompt at a time. Without it, every send arriving while the
+        // operator has an unfinished (or abandoned) sign-in open would miss the client cache, re-enter this path,
+        // and open yet another browser window — each blocking its own send for the full sign-in timeout. Concurrent
+        // callers fail fast with a typed, retryable error instead of queuing behind the prompt.
+        if (Interlocked.CompareExchange(ref _interactiveBrowserSignInInFlight, 1, 0) != 0)
+        {
+            throw new AzureFoundryProviderException(AzureFoundryProviderErrorKind.AuthRequired,
+                "An interactive browser sign-in is already in progress. Complete it in the opened browser window, then send again.");
+        }
+
         try
         {
-            return AuthenticateInteractiveBrowser(connection, allowPersistence: true);
+            try
+            {
+                return AuthenticateInteractiveBrowser(connection, allowPersistence: true);
+            }
+            // A persistence failure does not always surface as CredentialUnavailableException — on a platform with no
+            // org.freedesktop.secrets provider (e.g. WSL2 without gnome-keyring/kwallet) it can arrive as
+            // AuthenticationFailedException wrapping MsalCachePersistenceException several levels deep instead (see
+            // EntraCachePersistenceFailure's remarks). Checking both is what makes the retry actually fire instead of
+            // the sign-in failing outright.
+            catch (Exception exception) when (exception is CredentialUnavailableException || EntraCachePersistenceFailure.IsPersistenceUnavailable(exception))
+            {
+                _logger.LogWarning(exception,
+                    "Encrypted Entra ID token-cache persistence is unavailable on this platform; retrying interactive sign-in with an in-memory (non-persisted) token cache.");
+                return AuthenticateInteractiveBrowser(connection, allowPersistence: false);
+            }
         }
-        // A persistence failure does not always surface as CredentialUnavailableException — on a platform with no
-        // org.freedesktop.secrets provider (e.g. WSL2 without gnome-keyring/kwallet) it can arrive as
-        // AuthenticationFailedException wrapping MsalCachePersistenceException several levels deep instead (see
-        // EntraCachePersistenceFailure's remarks). Checking both is what makes the retry actually fire instead of
-        // the sign-in failing outright.
-        catch (Exception exception) when (exception is CredentialUnavailableException || EntraCachePersistenceFailure.IsPersistenceUnavailable(exception))
+        finally
         {
-            _logger.LogWarning(exception,
-                "Encrypted Entra ID token-cache persistence is unavailable on this platform; retrying interactive sign-in with an in-memory (non-persisted) token cache.");
-            return AuthenticateInteractiveBrowser(connection, allowPersistence: false);
+            Interlocked.Exchange(ref _interactiveBrowserSignInInFlight, 0);
         }
     }
 
     private InteractiveBrowserCredential AuthenticateInteractiveBrowser(StoredAzureFoundryConnection connection, bool allowPersistence)
     {
         var credential = new InteractiveBrowserCredential(BuildInteractiveBrowserOptions(connection, record: null, allowPersistence));
-        var record = credential.Authenticate();
+
+        // Authenticate() without a token waits forever on MSAL's localhost redirect listener when the operator
+        // closes the browser window without completing sign-in — the redirect never arrives. The timeout token
+        // bounds that wait; cancellation can surface either as OperationCanceledException directly or wrapped by
+        // Azure.Identity's diagnostic scope in AuthenticationFailedException, so both are translated to the same
+        // typed, retryable error. The persistence-unavailable retry in BuildInteractiveBrowserCredential is NOT
+        // affected: its exception filter matches neither translation.
+        using var timeout = new CancellationTokenSource(InteractiveBrowserSignInTimeout);
+        AuthenticationRecord record;
+        try
+        {
+            record = credential.Authenticate(timeout.Token);
+        }
+        catch (OperationCanceledException exception)
+        {
+            throw InteractiveSignInIncomplete(exception);
+        }
+        catch (AuthenticationFailedException exception) when (timeout.IsCancellationRequested)
+        {
+            throw InteractiveSignInIncomplete(exception);
+        }
+
         PersistAuthenticationRecord(record);
         return credential;
+    }
+
+    // Test-only seam (internal + InternalsVisibleTo, mirrors CreateOpenAiV1ClientForTesting): marks the
+    // interactive-browser single-flight gate as held so the concurrent-caller fail-fast path can be exercised
+    // without a live browser prompt blocking the first caller. Not part of the public contract.
+    internal void MarkInteractiveBrowserSignInInFlightForTesting()
+    {
+        Interlocked.Exchange(ref _interactiveBrowserSignInInFlight, 1);
+    }
+
+    private static AzureFoundryProviderException InteractiveSignInIncomplete(Exception exception)
+    {
+        return new AzureFoundryProviderException(AzureFoundryProviderErrorKind.AuthRequired,
+            $"Interactive browser sign-in was not completed within {InteractiveBrowserSignInTimeout.TotalMinutes:0} " +
+            "minutes (the browser window was closed or the prompt was abandoned). Send again to retry the sign-in.",
+            exception);
     }
 
     private static InteractiveBrowserCredentialOptions BuildInteractiveBrowserOptions(StoredAzureFoundryConnection connection,

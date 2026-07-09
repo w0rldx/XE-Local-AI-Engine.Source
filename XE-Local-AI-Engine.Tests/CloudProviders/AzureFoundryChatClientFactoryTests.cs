@@ -215,6 +215,43 @@ public sealed class AzureFoundryChatClientFactoryTests
     }
 
     [Test]
+    public void Create_WhenEntraIdInteractiveBrowserSignInAlreadyInFlight_ThrowsAuthRequired_WithoutPrompting()
+    {
+        // Single-flight gate: while one send holds the live browser prompt, a concurrent send with no cached record
+        // must fail fast with a typed, retryable error instead of opening a second browser window and blocking for
+        // the full sign-in timeout.
+        var factory = new AzureFoundryChatClientFactory(new FakeEntraTokenCacheStore(record: null));
+        factory.MarkInteractiveBrowserSignInInFlightForTesting();
+
+        try
+        {
+            factory.Create(CreateEntraConnection(signInMethod: EntraSignInMethod.InteractiveBrowser), "gpt-4o");
+        }
+        catch (AzureFoundryProviderException exception)
+        {
+            AssertEx.True(exception.Kind == AzureFoundryProviderErrorKind.AuthRequired);
+            AssertEx.True(exception.Message.Contains("already in progress", StringComparison.Ordinal));
+            return;
+        }
+
+        throw new AssertionException($"Expected {nameof(AzureFoundryProviderException)} of kind {nameof(AzureFoundryProviderErrorKind.AuthRequired)}.");
+    }
+
+    [Test]
+    public void Create_WhenEntraIdInteractiveBrowserWithCachedRecord_ReturnsChatClientAdapter_WithoutPrompting()
+    {
+        // A cached AuthenticationRecord resumes silently — the single-flight gate and the live prompt are never
+        // reached, even while another sign-in is marked in flight.
+        var factory = new AzureFoundryChatClientFactory(new FakeEntraTokenCacheStore(CreateAuthenticationRecord()));
+        factory.MarkInteractiveBrowserSignInInFlightForTesting();
+
+        var chatClient = factory.Create(CreateEntraConnection(signInMethod: EntraSignInMethod.InteractiveBrowser), "gpt-4o");
+
+        AssertEx.NotNull(chatClient);
+        AssertEx.True(chatClient is IChatClient);
+    }
+
+    [Test]
     public void Create_WhenEntraIdDeviceCodeWithCachedRecord_ReturnsChatClientAdapter()
     {
         var factory = new AzureFoundryChatClientFactory(new FakeEntraTokenCacheStore(CreateAuthenticationRecord()));
