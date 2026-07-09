@@ -28,6 +28,7 @@ internal sealed class McpServerConnectionManager : IMcpServerConnectionManager, 
     private readonly IMcpClientFactory _clientFactory;
     private readonly Dictionary<Guid, ConnectedServer> _connections = [];
     private readonly ILogger<McpServerConnectionManager> _logger;
+    private readonly int _maxInvalidToolCalls;
     private readonly int _maxToolResultCharacters;
     private readonly McpOptions _options;
     private readonly SemaphoreSlim _refreshGate = new(initialCount: 1, maxCount: 1);
@@ -58,6 +59,7 @@ internal sealed class McpServerConnectionManager : IMcpServerConnectionManager, 
         ArgumentNullException.ThrowIfNull(pipelineOptions);
         _options = options.Value;
         _maxToolResultCharacters = pipelineOptions.Value.MaxToolResultCharacters;
+        _maxInvalidToolCalls = pipelineOptions.Value.MaxConsecutiveInvalidToolCallsPerTool;
         _logger = logger ?? throw new ArgumentNullException(nameof(logger));
     }
 
@@ -191,7 +193,7 @@ internal sealed class McpServerConnectionManager : IMcpServerConnectionManager, 
             client = await _clientFactory.CreateAsync(record, timeoutCts.Token).ConfigureAwait(false);
             var discovered = await client.ListToolsAsync(cancellationToken: timeoutCts.Token).ConfigureAwait(false);
 
-            var tools = BuildRegisteredTools(discovered, slug, _maxToolResultCharacters);
+            var tools = BuildRegisteredTools(discovered, slug, _maxToolResultCharacters, _maxInvalidToolCalls);
             return new ConnectResult(new ConnectedServer(client, record.Version, slug, tools), Error: null);
         }
         catch (Exception ex) when (ex is McpException
@@ -237,13 +239,13 @@ internal sealed class McpServerConnectionManager : IMcpServerConnectionManager, 
     ///     offer descriptor (approval ON by default), bounds its result with the shared tool-result budget, and wraps the
     ///     executable in an approval gate.
     /// </summary>
-    private static IReadOnlyList<McpRegisteredTool> BuildRegisteredTools(IList<McpClientTool> discovered, string slug, int maxToolResultCharacters)
+    private static IReadOnlyList<McpRegisteredTool> BuildRegisteredTools(IList<McpClientTool> discovered, string slug, int maxToolResultCharacters, int maxInvalidToolCalls)
     {
         var registered = new List<McpRegisteredTool>(discovered.Count);
         foreach (var tool in discovered)
         {
             var qualifiedName = $"mcp__{slug}__{tool.Name}";
-            var named = tool.WithName(qualifiedName);
+            AIFunction named = tool.WithName(qualifiedName);
 
             // Every MCP tool defaults to requiring approval; the per-tool auto-execute opt-in lives in a bound agent
             // definition's ToolApprovals override, applied at projection — never in the catalog.
@@ -253,9 +255,14 @@ internal sealed class McpServerConnectionManager : IMcpServerConnectionManager, 
                 named.JsonSchema.GetRawText(),
                 requiresApproval);
 
+            // Coerce + validate the model's arguments against the MCP tool's schema and run the per-request repair loop
+            // before the server ever sees them — same innermost guard the ClientLocal registry applies — so a malformed
+            // call returns actionable guidance instead of a failed round-trip.
+            AIFunction validated = new ToolArgumentRepairAIFunction(named, maxInvalidToolCalls);
+
             // Backstop the (verbatim) MCP result with the shared budget UNDER the approval gate, so a server can't
             // flood chat history and ApprovalRequiredAIFunction stays the outermost type the approval pipeline detects.
-            AIFunction budgeted = new BudgetedToolResultAIFunction(named, maxToolResultCharacters);
+            AIFunction budgeted = new BudgetedToolResultAIFunction(validated, maxToolResultCharacters);
             AITool executable = new ApprovalRequiredAIFunction(budgeted);
             registered.Add(new McpRegisteredTool(qualifiedName, executable, descriptor));
         }
