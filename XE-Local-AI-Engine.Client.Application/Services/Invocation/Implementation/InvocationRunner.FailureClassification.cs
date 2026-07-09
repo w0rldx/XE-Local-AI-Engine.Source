@@ -5,6 +5,7 @@ using System.Text.RegularExpressions;
 using XE_Local_AI_Engine.Client.Models;
 using XE_Local_AI_Engine.Client.Models.Enums;
 using XE_Local_AI_Engine.Client.Services.Chat;
+using XE_Local_AI_Engine.Client.Services.Invocation.Resilience;
 
 public sealed partial class InvocationRunner
 {
@@ -15,6 +16,12 @@ public sealed partial class InvocationRunner
             // Matches BEFORE the generic InvalidOperationException arms below (it derives from InvalidOperationException):
             // a local-default send with no installed GGUF chat model surfaces ModelNotInstalled, not ProviderUnreachable.
             NoChatModelInstalledException => (FailureCategory.ModelNotInstalled, NoChatModelInstalledMessage),
+            // A tripped circuit breaker: surface a fixed, retry-soon message rather than the generic ProviderUnreachable
+            // (the endpoint is likely recovering, not permanently down). Matches before the StreamIdle/TimeoutException
+            // arm because it is not a TimeoutException.
+            ProviderCircuitOpenException => (FailureCategory.ProviderUnreachable, ProviderTemporarilyUnavailableMessage),
+            // StreamIdleTimeoutException derives from TimeoutException, so the inter-chunk stall is classified here as a
+            // Timeout with the watchdog's sanitized message that names which timeout fired.
             TimeoutException timeoutException => (FailureCategory.Timeout, timeoutException.Message),
             WorkerToolCallException => (FailureCategory.AgentToolCall, AgentToolCallFailureMessage),
             NotSupportedException notSupportedException => (FailureCategory.AgentRuntime, RedactAgentRuntimeMessage(notSupportedException.Message)),

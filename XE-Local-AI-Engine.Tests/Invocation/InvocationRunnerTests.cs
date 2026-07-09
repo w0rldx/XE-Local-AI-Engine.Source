@@ -30,6 +30,7 @@ using XE_Local_AI_Engine.Client.Services.Events;
 using XE_Local_AI_Engine.Client.Services.Invocation;
 using XE_Local_AI_Engine.Client.Services.Invocation.Envelope.Implementation;
 using XE_Local_AI_Engine.Client.Services.Invocation.Implementation;
+using XE_Local_AI_Engine.Client.Services.Invocation.Resilience;
 using XE_Local_AI_Engine.Providers.Ollama.Implementation;
 using XE_Local_AI_Engine.Tests.Testing;
 using XE_Local_AI_Engine.Tests.Testing.Builders;
@@ -1082,6 +1083,64 @@ public sealed class InvocationRunnerTests
         AssertEx.Contains(exception.Message, "timed out during cleanup", StringComparison.OrdinalIgnoreCase);
     }
 
+    [Test]
+    public async Task RunAsync_WhenStreamStallsBeyondIdleTimeout_MapsTimeoutFailure()
+    {
+        var sender = new MockHubMessageSender();
+        var started = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        // Retry disabled so the single stalled attempt trips the 1s inter-chunk idle watchdog promptly (with retry on,
+        // the same stall would be retried before finally surfacing as a timeout).
+        var resilience = new ProviderStreamResilience(Options.Create(new ProviderResilienceOptions
+            {
+                RetryEnabled = false,
+                CircuitBreakerEnabled = false
+            }),
+            TimeProvider.System,
+            NullLogger<ProviderStreamResilience>.Instance);
+        var runner = CreateRunner(sender,
+            CreateFactory(cancellationToken => WaitForCancellation(started, cancellationToken)),
+            providerStreamResilience: resilience);
+        var package = RuntimePackageBuilder.Valid().WithTimeout(invocationSeconds: 300, toolCallSeconds: 30, streamIdleSeconds: 1).Build();
+
+        await RunAsync(runner, package).WaitAsync(TimeSpan.FromSeconds(15));
+
+        AssertEx.ContainsSingle(sender.SentEncryptedFailures, failure => failure.ConversationId == package.ConversationId && failure.FailureCategory == nameof(FailureCategory.Timeout));
+    }
+
+    [Test]
+    public async Task ExecuteApiToolCallAsync_DuringActiveInvocation_UsesPackageToolCallTimeoutOverNodeAge()
+    {
+        var sender = new MockHubMessageSender();
+        var gate = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var started = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        // Node-global pending age is 5 minutes; only the package's 1s ToolCallTimeoutSeconds keeps the result wait short.
+        var runner = CreateRunner(sender,
+            workerOptions: new WorkerNodeOptions
+            {
+                NodeName = "worker",
+                MaxResponseSizeMb = 10,
+                MaxPendingToolCallAgeMinutes = 5
+            },
+            agentUpdates: BlockingUpdates(gate.Task, started));
+        var invocationId = Guid.NewGuid();
+        var package = RuntimePackageBuilder.Valid()
+                                           .WithInvocationId(invocationId)
+                                           .WithTimeout(invocationSeconds: 300, toolCallSeconds: 1, streamIdleSeconds: 60)
+                                           .Build();
+
+        var runTask = RunAsync(runner, package);
+        await started.Task;
+
+        // If the result wait honoured the 5-minute node age instead of the 1s package timeout, this would not fault
+        // within 15s and the WaitAsync would surface a TimeoutException (failing the expected WorkerToolCallException).
+        var toolCall = runner.ExecuteApiToolCallAsync(invocationId, "test-tool", "{}", requiresApproval: false);
+        var exception = await AssertEx.ThrowsAsync<InvocationRunner.WorkerToolCallException>(() => toolCall.WaitAsync(TimeSpan.FromSeconds(15)));
+        AssertEx.Contains(exception.Message, "timed out waiting for a result", StringComparison.OrdinalIgnoreCase);
+
+        gate.TrySetResult();
+        await runTask.WaitAsync(TimeSpan.FromSeconds(5));
+    }
+
     private static InvocationRunner CreateRunner(MockHubMessageSender sender,
         IInvocationAgentFactory? invocationAgentFactory = null,
         IRuntimePackageValidator? validator = null,
@@ -1090,7 +1149,8 @@ public sealed class InvocationRunnerTests
         IWorkerEventDispatcher? eventDispatcher = null,
         IAsyncEnumerable<AgentResponseUpdate>? agentUpdates = null,
         IOrchestrationAgentFactory? orchestrationAgentFactory = null,
-        ILocalModelProviderResolver? providerResolver = null)
+        ILocalModelProviderResolver? providerResolver = null,
+        IProviderStreamResilience? providerStreamResilience = null)
     {
         var resolvedFactory = invocationAgentFactory ?? CreateFactory(agentUpdates ?? CreateUpdates("ok"));
         var resolvedOrchestrationFactory = orchestrationAgentFactory ?? Substitute.For<IOrchestrationAgentFactory>();
@@ -1114,6 +1174,14 @@ public sealed class InvocationRunnerTests
         }
 
         var resolvedEventDispatcher = eventDispatcher ?? Substitute.For<IWorkerEventDispatcher>();
+
+        // Default to a real resilience with retry/backoff/breaker at defaults: success-path tests establish the stream
+        // on the first attempt, so the wrapper is transparent. Resilience-specific behaviour is covered directly in
+        // ProviderStreamResilienceTests; a test can still inject its own to exercise the wired path.
+        var resolvedProviderStreamResilience = providerStreamResilience
+                                               ?? new ProviderStreamResilience(Options.Create(new ProviderResilienceOptions()),
+                                                   TimeProvider.System,
+                                                   NullLogger<ProviderStreamResilience>.Instance);
 
         var configuration = new ConfigurationBuilder()
                             .AddInMemoryCollection(new Dictionary<string, string?>
@@ -1142,6 +1210,7 @@ public sealed class InvocationRunnerTests
             resolvedCapabilityReporter,
             resolvedProviderResolver,
             Substitute.For<IDeadLetterStore>(),
+            resolvedProviderStreamResilience,
             configuration,
             runtimeSettings,
             Options.Create(new SpawnOptions()),
