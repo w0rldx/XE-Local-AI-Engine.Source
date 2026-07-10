@@ -1,0 +1,232 @@
+namespace XE_Local_AI_Engine.Client.Services.ModelFit.Catalog.Implementation;
+
+using System.Text.Json;
+using XE_Local_AI_Engine.Client.Services.ModelFit.Fit;
+using XE_Local_AI_Engine.Providers.Abstractions.Capabilities;
+using XE_Local_AI_Engine.Providers.Abstractions.Gguf;
+using XE_Local_AI_Engine.Providers.LlamaServer;
+using XE_Local_AI_Engine.Providers.LlamaServer.Contracts;
+
+/// <summary>
+///     Default <see cref="ICatalogRecommendationService" />. For each catalog entry surviving the use-case + arch-tag
+///     filter, inspects its GGUF repo (<see cref="IHuggingFaceGgufDiscovery.InspectRepoAsync" />, R1-cached), walks the
+///     quant ladder with <see cref="MemoryFitEstimator" /> — passing <see cref="MoeFacts" /> built from the entry's
+///     curated <c>activeParamsB</c> (preferred over the header's expert fields, which are not always present on every
+///     quantized file) — and keeps the highest-quality quant at or below the requested ceiling that fits. Bounded
+///     concurrency + per-repo timeout + fault isolation mirror <c>ModelFitRefreshService</c>'s explore-lane inspection
+///     so one slow/broken repo never fails the whole recommendation build.
+/// </summary>
+internal sealed class CatalogRecommendationService : ICatalogRecommendationService
+{
+    /// <summary>Max concurrent HF repo inspections — bounded so a refresh stays fast yet polite to Hugging Face.</summary>
+    private const int MaxConcurrentInspections = 5;
+
+    /// <summary>Per-repo inspection timeout; a stalled repo is skipped rather than blocking the whole build.</summary>
+    private static readonly TimeSpan PerRepoTimeout = TimeSpan.FromSeconds(seconds: 20);
+
+    private readonly IModelCatalogProvider _catalogProvider;
+    private readonly IHuggingFaceGgufDiscovery _discovery;
+    private readonly MemoryFitEstimator _estimator;
+    private readonly ILogger<CatalogRecommendationService> _logger;
+    private readonly ILlamaCppUpdateState _updateState;
+
+    public CatalogRecommendationService(IModelCatalogProvider catalogProvider,
+        IHuggingFaceGgufDiscovery discovery,
+        MemoryFitEstimator estimator,
+        ILlamaCppUpdateState updateState,
+        ILogger<CatalogRecommendationService> logger)
+    {
+        _catalogProvider = catalogProvider ?? throw new ArgumentNullException(nameof(catalogProvider));
+        _discovery = discovery ?? throw new ArgumentNullException(nameof(discovery));
+        _estimator = estimator ?? throw new ArgumentNullException(nameof(estimator));
+        _updateState = updateState ?? throw new ArgumentNullException(nameof(updateState));
+        _logger = logger ?? throw new ArgumentNullException(nameof(logger));
+    }
+
+    public async Task<CatalogRecommendationResult> BuildRecommendationsAsync(string? useCase,
+        string quantCeiling,
+        int ctxTarget,
+        HardwareProfile profile,
+        IReadOnlySet<string> installedKeys,
+        CancellationToken cancellationToken)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(quantCeiling);
+        ArgumentNullException.ThrowIfNull(profile);
+        ArgumentNullException.ThrowIfNull(installedKeys);
+
+        var snapshot = await _catalogProvider.GetCatalogAsync(cancellationToken).ConfigureAwait(false);
+
+        // Installed-else-pinned: the node's actual runtime when known, else the compiled-in pin — the same effective
+        // tag the runtime-status endpoint reports as "recommended".
+        var installedOrPinnedTag = _updateState.Current.InstalledTag ?? LlamaCppReleasePins.PinnedTag;
+
+        var eligible = snapshot.Document.Models
+                               .Where(entry => useCase is null || entry.UseCases.Contains(useCase, StringComparer.Ordinal))
+                               .Where(entry => ModelCatalogArchGate.Supports(installedOrPinnedTag, entry.MinLlamaCppTag))
+                               .ToList();
+
+        var gate = new SemaphoreSlim(MaxConcurrentInspections, MaxConcurrentInspections);
+        CatalogRecommendationCandidate?[] candidates;
+        try
+        {
+            var evaluations = eligible
+                              .Select(entry => EvaluateEntryWithGuardAsync(entry, quantCeiling, ctxTarget, profile, installedKeys, gate, cancellationToken))
+                              .ToList();
+            candidates = await Task.WhenAll(evaluations).ConfigureAwait(false);
+        }
+        finally
+        {
+            gate.Dispose();
+        }
+
+        var ordered = candidates
+                      .Where(candidate => candidate is not null)
+                      .Select(candidate => candidate!)
+                      .OrderBy(candidate => TierRank(candidate.Entry.Tier))
+                      .ThenBy(candidate => candidate.Estimate.MoeVerdict == MoeFitVerdict.FitsWithExpertOffload ? 1 : 0)
+                      .ThenBy(candidate => QuantLadder.QualityRank(candidate.File.Quant))
+                      .ThenByDescending(candidate => candidate.Entry.ReleaseDate, StringComparer.Ordinal)
+                      .ThenBy(candidate => candidate.Entry.Id, StringComparer.Ordinal)
+                      .ToList();
+
+        var recommended = ordered.Where(IsRecommended).ToList();
+        var canRun = ordered.Where(candidate => !IsRecommended(candidate)).ToList();
+
+        return new CatalogRecommendationResult(recommended, canRun, snapshot);
+    }
+
+    /// <summary>Recommended = fits at/above Q4_K_M quality with real headroom (resident or offload-labeled) — plan §7.</summary>
+    private static bool IsRecommended(CatalogRecommendationCandidate candidate)
+    {
+        return QuantLadder.QualityRank(candidate.File.Quant) <= QuantLadder.QualityRank(MemoryFitEstimator.DefaultQuant)
+               && candidate.Estimate.HeadroomBytes > 0;
+    }
+
+    private static int TierRank(string tier)
+    {
+        return tier switch
+        {
+            "S" => 0,
+            "A" => 1,
+            "B" => 2,
+            _ => 3
+        };
+    }
+
+    private async Task<CatalogRecommendationCandidate?> EvaluateEntryWithGuardAsync(ModelCatalogEntry entry,
+        string quantCeiling,
+        int ctxTarget,
+        HardwareProfile profile,
+        IReadOnlySet<string> installedKeys,
+        SemaphoreSlim gate,
+        CancellationToken cancellationToken)
+    {
+        await gate.WaitAsync(cancellationToken).ConfigureAwait(false);
+        try
+        {
+            using var repoCts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+            repoCts.CancelAfter(PerRepoTimeout);
+
+            return await EvaluateEntryAsync(entry, quantCeiling, ctxTarget, profile, installedKeys, repoCts.Token).ConfigureAwait(false);
+        }
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+        {
+            // Node shutdown / caller cancellation: propagate so the build itself is cancelled, not silently truncated.
+            throw;
+        }
+        catch (Exception exception) when (exception is HttpRequestException or IOException or TimeoutException
+                                              or OperationCanceledException or JsonException or FormatException or InvalidOperationException)
+        {
+            _logger.LogDebug(exception, "Skipping catalog entry {EntryId} (repo inspection failed or timed out).", entry.Id);
+            return null;
+        }
+        finally
+        {
+            gate.Release();
+        }
+    }
+
+    private async Task<CatalogRecommendationCandidate?> EvaluateEntryAsync(ModelCatalogEntry entry,
+        string quantCeiling,
+        int ctxTarget,
+        HardwareProfile profile,
+        IReadOnlySet<string> installedKeys,
+        CancellationToken cancellationToken)
+    {
+        var detail = await _discovery.InspectRepoAsync(entry.GgufRepo, cancellationToken).ConfigureAwait(false);
+
+        var selected = SelectBestFittingFile(entry, detail.Files, quantCeiling, ctxTarget, profile);
+        if (selected is null)
+        {
+            return null;
+        }
+
+        var (file, estimate) = selected.Value;
+        var modelName = GgufModelName.Format(entry.GgufRepo, file.Quant);
+        return new CatalogRecommendationCandidate(entry, file, estimate, modelName, installedKeys.Contains(modelName));
+    }
+
+    /// <summary>
+    ///     Walks <paramref name="files" /> against the <see cref="QuantLadder" /> exactly like the explore lane's
+    ///     <c>ModelFitRefreshService.SelectBestFittingFile</c>, but passing <see cref="MoeFacts" /> built from the
+    ///     catalog entry so an MoE entry can resolve to <see cref="MoeFitVerdict.FitsWithExpertOffload" /> even when a
+    ///     given quantized file's header omits the expert-count keys.
+    /// </summary>
+    private (GgufRepoFile File, MemoryFitEstimate Estimate)? SelectBestFittingFile(ModelCatalogEntry entry,
+        IReadOnlyList<GgufRepoFile> files,
+        string quant,
+        int ctxTarget,
+        HardwareProfile profile)
+    {
+        var ceilingRank = QuantLadder.QualityRank(quant);
+        var floorRank = QuantLadder.FloorRank;
+
+        var fitting = files
+                      .Select(file => (file, estimate: _estimator.Estimate(file.Quant,
+                          file.ParamCount,
+                          file.SizeBytes,
+                          file.BlockCount ?? 0,
+                          file.AttentionHeadCountKV ?? 0,
+                          file.EmbeddingLength ?? 0,
+                          file.AttentionHeadCount ?? 0,
+                          ctxTarget,
+                          profile,
+                          kvCacheQuantized: false,
+                          BuildMoeFacts(entry, file)), rank: QuantLadder.QualityRank(file.Quant)))
+                      .Where(candidate => candidate.estimate.EstimatedBytes > _estimator.OverheadBytes
+                                          && candidate.estimate.Fits
+                                          && candidate.rank <= floorRank)
+                      .ToList();
+
+        if (fitting.Count == 0)
+        {
+            return null;
+        }
+
+        var atOrBelowCeiling = fitting.Where(candidate => candidate.rank >= ceilingRank).ToList();
+        var chosen = atOrBelowCeiling.Count > 0
+            ? atOrBelowCeiling.OrderBy(candidate => candidate.rank).ThenBy(candidate => candidate.estimate.EstimatedBytes).First()
+            : fitting.OrderByDescending(candidate => candidate.rank).ThenBy(candidate => candidate.estimate.EstimatedBytes).First();
+
+        return (chosen.file, chosen.estimate);
+    }
+
+    /// <summary>
+    ///     Prefers the catalog's curated <c>activeParamsB</c> over the file header's expert fields (not every quantized
+    ///     file preserves <c>expert_count</c>/<c>expert_used_count</c> metadata) — a positive sentinel expert count is
+    ///     supplied when the header omits it purely to flag MoE-ness for <see cref="MoeFacts.IsMoe" />; the actual
+    ///     expert-weight-share math in <see cref="MemoryFitEstimator" /> is driven by <c>ActiveParamCount</c>, not by
+    ///     the sentinel.
+    /// </summary>
+    private static MoeFacts? BuildMoeFacts(ModelCatalogEntry entry, GgufRepoFile file)
+    {
+        if (!entry.Moe)
+        {
+            return null;
+        }
+
+        var activeParamCount = entry.ActiveParamsB is { } activeB ? (long?)(activeB * 1_000_000_000d) : null;
+        var expertCount = file.ExpertCount is > 0 ? file.ExpertCount : 1;
+        return new MoeFacts(activeParamCount, expertCount, file.ExpertUsedCount);
+    }
+}

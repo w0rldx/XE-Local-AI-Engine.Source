@@ -28,8 +28,10 @@ internal sealed class HfHubClient
     private readonly HttpClient _httpClient;
     private readonly ILogger<HfHubClient> _logger;
     private readonly HuggingFaceOptions _options;
+    private readonly TtlCache<IReadOnlyList<HubModelSummary>> _searchCache;
+    private readonly TtlCache<HubModelDetail?> _repoDetailCache;
 
-    public HfHubClient(HttpClient httpClient, HuggingFaceOptions options, ILogger<HfHubClient> logger)
+    public HfHubClient(HttpClient httpClient, HuggingFaceOptions options, ILogger<HfHubClient> logger, TimeProvider? timeProvider = null)
     {
         ArgumentNullException.ThrowIfNull(httpClient);
         ArgumentNullException.ThrowIfNull(options);
@@ -38,17 +40,26 @@ internal sealed class HfHubClient
         _httpClient = httpClient;
         _options = options;
         _logger = logger;
+        _searchCache = new TtlCache<IReadOnlyList<HubModelSummary>>(timeProvider);
+        _repoDetailCache = new TtlCache<HubModelDetail?>(timeProvider);
     }
 
     /// <summary>
     ///     Lists GGUF repos (<c>?filter=gguf</c>) sorted by popularity. Returns the raw summaries the Hub exposes in the
-    ///     listing; per-file inspection (sizes, header metadata) happens later via <see cref="GetRepoAsync" />.
+    ///     listing; per-file inspection (sizes, header metadata) happens later via <see cref="GetRepoAsync" />. Cached for
+    ///     <see cref="HuggingFaceOptions.HubMetadataCacheTtl" />, keyed by the fully-built listing URL (sort/limit/search
+    ///     all included), so repeated advisor refreshes with the same query reuse one fetch.
     /// </summary>
-    public async Task<IReadOnlyList<HubModelSummary>> ListGgufModelsAsync(GgufSearchQuery query, CancellationToken ct)
+    public Task<IReadOnlyList<HubModelSummary>> ListGgufModelsAsync(GgufSearchQuery query, CancellationToken ct)
     {
         ArgumentNullException.ThrowIfNull(query);
 
         var url = BuildListUrl(query);
+        return _searchCache.GetOrAddAsync(url, _options.HubMetadataCacheTtl, token => FetchGgufModelsAsync(url, token), ct);
+    }
+
+    private async Task<IReadOnlyList<HubModelSummary>> FetchGgufModelsAsync(string url, CancellationToken ct)
+    {
         using var document = await GetJsonAsync(url, "GGUF listing", ct).ConfigureAwait(false);
         if (document is null)
         {
@@ -91,12 +102,18 @@ internal sealed class HfHubClient
     /// <summary>
     ///     Fetches one repo's detail with per-file blob metadata (<c>?blobs=true</c>): resolved commit <c>sha</c>, gating,
     ///     license, and each sibling's filename/size/LFS sha256. Returns <see langword="null" /> on a non-success status.
+    ///     Cached for <see cref="HuggingFaceOptions.HubMetadataCacheTtl" />, keyed by repo id.
     /// </summary>
-    public async Task<HubModelDetail?> GetRepoAsync(string repoId, CancellationToken ct)
+    public Task<HubModelDetail?> GetRepoAsync(string repoId, CancellationToken ct)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(repoId);
 
         var url = $"{TrimBase(_options.HubBaseUrl)}/api/models/{repoId}?blobs=true";
+        return _repoDetailCache.GetOrAddAsync(repoId, _options.HubMetadataCacheTtl, token => FetchRepoAsync(url, repoId, token), ct);
+    }
+
+    private async Task<HubModelDetail?> FetchRepoAsync(string url, string repoId, CancellationToken ct)
+    {
         using var document = await GetJsonAsync(url, "repo inspection", ct).ConfigureAwait(false);
         if (document is null)
         {

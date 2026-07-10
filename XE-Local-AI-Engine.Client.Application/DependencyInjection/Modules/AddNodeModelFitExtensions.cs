@@ -4,6 +4,8 @@ using XE_Local_AI_Engine.Client.Persistence.Implementation;
 using XE_Local_AI_Engine.Client.Persistence.Stores;
 using XE_Local_AI_Engine.Client.Services.Inference;
 using XE_Local_AI_Engine.Client.Services.ModelFit;
+using XE_Local_AI_Engine.Client.Services.ModelFit.Catalog;
+using XE_Local_AI_Engine.Client.Services.ModelFit.Catalog.Implementation;
 using XE_Local_AI_Engine.Client.Services.ModelFit.Fit;
 using XE_Local_AI_Engine.Client.Services.ModelFit.Gguf;
 using XE_Local_AI_Engine.Client.Services.ModelFit.Implementation;
@@ -48,6 +50,20 @@ internal static class AddNodeModelFitExtensions
         builder.Services.AddScoped<IInferenceProfileService, InferenceProfileService>();
         // The request validator allowlists the recommend intent params (use-case + limit bounds). Stateless → singleton.
         builder.Services.AddSingleton<ModelFitRequestValidator>();
+
+        // Curated model catalog (locked decision D1): bundled JSON + optional operator-configured remote refresh.
+        // The options section binds ModelCatalog:RefreshUrl/RefreshTtl/FetchTimeout (empty RefreshUrl = bundled-only,
+        // never a network call). The named HttpClient is resolved via IHttpClientFactory, never injected as a bare
+        // HttpClient — this keeps every FastEndpoints ctor (instantiated at startup) test-factory-safe by construction.
+        builder.Services.Configure<ModelCatalogOptions>(configuration.GetSection(ModelCatalogOptions.SectionName));
+        builder.Services.AddHttpClient(ModelCatalogOptions.HttpClientName);
+        // The cache store persists a tiny node-local JSON file, mirroring NodeSettingsStore. The provider owns the
+        // in-memory bundled/remote/last-good snapshot plus TTL-gated refresh serialization. Both singletons.
+        builder.Services.AddSingleton<IModelCatalogCacheStore, ModelCatalogCacheStore>();
+        builder.Services.AddSingleton<IModelCatalogProvider, ModelCatalogProvider>();
+        // The catalog ranking lane composes only singleton seams (catalog provider, HF discovery, estimator, llama.cpp
+        // update state) → singleton.
+        builder.Services.AddSingleton<ICatalogRecommendationService, CatalogRecommendationService>();
         // The memory-fit estimator is a pure, stateless function over GGUF header metadata + the hardware
         // profile → singleton. Consumed by the advisor to score each candidate GGUF file's fit.
         builder.Services.AddSingleton<MemoryFitEstimator>();
