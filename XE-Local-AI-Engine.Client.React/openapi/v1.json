@@ -2208,6 +2208,40 @@
         ]
       }
     },
+    "/api/local/v1/model-fit/catalog": {
+      "get": {
+        "tags": [
+          "Model-Fit"
+        ],
+        "operationId": "getModelCatalogInfo",
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/XE_Local_AI_EngineClientEndpointsModelFitV1ModelCatalogInfoResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "403": {
+            "description": "Forbidden"
+          }
+        },
+        "security": [
+          {
+            "JWTBearerAuth": []
+          },
+          {
+            "Bearer": []
+          }
+        ]
+      }
+    },
     "/api/local/v1/model-fit/gguf/inspect": {
       "get": {
         "tags": [
@@ -2346,6 +2380,40 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/XE_Local_AI_EngineClientEndpointsModelFitV1ListRunningModelsResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "403": {
+            "description": "Forbidden"
+          }
+        },
+        "security": [
+          {
+            "JWTBearerAuth": []
+          },
+          {
+            "Bearer": []
+          }
+        ]
+      }
+    },
+    "/api/local/v1/model-fit/catalog/refresh": {
+      "post": {
+        "tags": [
+          "Model-Fit"
+        ],
+        "operationId": "refreshModelCatalog",
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/XE_Local_AI_EngineClientEndpointsModelFitV1ModelCatalogInfoResponse"
                 }
               }
             }
@@ -9508,7 +9576,8 @@
           "rank",
           "modelName",
           "score",
-          "isInstalled"
+          "isInstalled",
+          "section"
         ],
         "properties": {
           "rank": {
@@ -9571,6 +9640,38 @@
           },
           "isTrustedPublisher": {
             "type": "boolean"
+          },
+          "section": {
+            "type": "string"
+          },
+          "tier": {
+            "type": "string",
+            "nullable": true
+          },
+          "catalogId": {
+            "type": "string",
+            "nullable": true
+          },
+          "catalogDisplayName": {
+            "type": "string",
+            "nullable": true
+          },
+          "catalogNotes": {
+            "type": "string",
+            "nullable": true
+          },
+          "expertsOffloaded": {
+            "type": "boolean"
+          },
+          "gpuGb": {
+            "type": "number",
+            "format": "double",
+            "nullable": true
+          },
+          "cpuGb": {
+            "type": "number",
+            "format": "double",
+            "nullable": true
           }
         }
       },
@@ -9655,6 +9756,40 @@
       "XE_Local_AI_EngineClientEndpointsModelFitV1GetLlamaCppRuntimeRequest": {
         "type": "object",
         "additionalProperties": false
+      },
+      "XE_Local_AI_EngineClientEndpointsModelFitV1ModelCatalogInfoResponse": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "catalogVersion",
+          "source",
+          "modelCount"
+        ],
+        "properties": {
+          "catalogVersion": {
+            "type": "string"
+          },
+          "updatedAt": {
+            "type": "string",
+            "nullable": true
+          },
+          "source": {
+            "type": "string"
+          },
+          "fetchedAtUtc": {
+            "type": "integer",
+            "format": "int64",
+            "nullable": true
+          },
+          "sourceUrl": {
+            "type": "string",
+            "nullable": true
+          },
+          "modelCount": {
+            "type": "integer",
+            "format": "int32"
+          }
+        }
       },
       "XE_Local_AI_EngineClientEndpointsModelFitV1InspectGgufRepositoryResponse": {
         "type": "object",
@@ -11612,7 +11747,8 @@
           "ModelUnavailable",
           "ModelCapabilityUnsupported",
           "ModelLoadFailed",
-          "ModelNotInstalled"
+          "ModelNotInstalled",
+          "ContextWindowExceeded"
         ],
         "enum": [
           "Cancelled",
@@ -11625,7 +11761,8 @@
           "ModelUnavailable",
           "ModelCapabilityUnsupported",
           "ModelLoadFailed",
-          "ModelNotInstalled"
+          "ModelNotInstalled",
+          "ContextWindowExceeded"
         ]
       },
       "XE_Local_AI_EngineClientEndpointsInvocationsV1InvocationHistoryResponse": {
@@ -12973,6 +13110,7 @@
           "playbookEnabled",
           "defaultTemporaryChat",
           "memoryExtractionEnabled",
+          "disableBaseScaffold",
           "allowedSkillIds",
           "version",
           "createdAtUtc",
@@ -13027,6 +13165,9 @@
             "type": "boolean"
           },
           "memoryExtractionEnabled": {
+            "type": "boolean"
+          },
+          "disableBaseScaffold": {
             "type": "boolean"
           },
           "allowedSkillIds": {
@@ -13114,6 +13255,9 @@
             "type": "boolean"
           },
           "memoryExtractionEnabled": {
+            "type": "boolean"
+          },
+          "disableBaseScaffold": {
             "type": "boolean"
           },
           "allowedSkillIds": {
@@ -13757,6 +13901,9 @@
             "type": "boolean"
           },
           "memoryExtractionEnabled": {
+            "type": "boolean"
+          },
+          "disableBaseScaffold": {
             "type": "boolean"
           },
           "allowedSkillIds": {

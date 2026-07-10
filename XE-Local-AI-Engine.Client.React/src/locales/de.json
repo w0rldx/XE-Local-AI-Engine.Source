@@ -91,6 +91,11 @@
 			"errorLabel": "Fehler",
 			"noOutput": "(keine Ausgabe)"
 		},
+		"notices": {
+			"modelSubstituted": "Modell ersetzt",
+			"toolDisabled": "Tool deaktiviert",
+			"historyTruncated": "Verlauf gekürzt"
+		},
 		"reasoningBypassNote": "Dieses Modell gibt möglicherweise unabhängig von der Einstellung 'Keine' Reasoning aus."
 	},
 	"pages": {
@@ -1584,6 +1589,13 @@
 				"memoryExtractionEnabled": {
 					"label": "Neues Gedächtnis aus Läufen lernen",
 					"description": "Lässt diesen Agenten neues Gedächtnis aus seinen Läufen lernen. Aus = nur vorhandenes Gedächtnis nutzen (kein neues Gedächtnis wird gewonnen)."
+				},
+				"advanced": {
+					"label": "Erweitert"
+				},
+				"disableBaseScaffold": {
+					"label": "Basis-Anweisungsgerüst deaktivieren",
+					"description": "Überspringt die vom Knoten normalerweise vorangestellten Basis-Anweisungen für jeden Agenten – es werden nur die oben geschriebenen Anweisungen unverändert verwendet."
 				}
 			},
 			"playbook": {
@@ -2146,7 +2158,36 @@
 				"downloading": "Wird heruntergeladen…",
 				"cpuMode": "CPU-Modus",
 				"untrustedPublisher": "Nicht verifizierter Anbieter",
-				"untrustedPublisherHint": "Dieser Anbieter ist kein bekannter GGUF-Packager – prüfe das Repository vor dem Download."
+				"untrustedPublisherHint": "Dieser Anbieter ist kein bekannter GGUF-Packager – prüfe das Repository vor dem Download.",
+				"sections": {
+					"recommended": "Empfohlen für Ihre Hardware",
+					"canRun": "Lauffähig (reduzierte Qualität)",
+					"canRunCount": "Lauffähig ({{count}})",
+					"explore": "Trends auf Hugging Face entdecken"
+				},
+				"tier": {
+					"s": "S",
+					"a": "A",
+					"b": "B"
+				},
+				"moeOffload": {
+					"badge": "Experten auf CPU – langsamer, höhere Qualität",
+					"breakdown": "GPU {{gpuGb}} GB + RAM {{cpuGb}} GB"
+				},
+				"catalog": {
+					"version": "Katalog v{{version}}",
+					"source": {
+						"bundled": "Gebündelt",
+						"remote": "Live",
+						"remoteLastGood": "Zwischengespeichert (letzter bekannter Stand)"
+					},
+					"updatedAt": "Aktualisiert {{time}}",
+					"refreshButton": "Katalog aktualisieren",
+					"toasts": {
+						"refreshed": "Der Modellkatalog wurde aktualisiert.",
+						"refreshError": "Der Modellkatalog konnte nicht aktualisiert werden."
+					}
+				}
 			},
 			"hardware": {
 				"title": "Hardware-Profil",

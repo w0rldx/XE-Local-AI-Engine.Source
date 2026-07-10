@@ -100,6 +100,7 @@ const sampleDefinition: AgentDefinition = {
 	playbookEnabled: false,
 	defaultTemporaryChat: false,
 	memoryExtractionEnabled: true,
+	disableBaseScaffold: false,
 	version: 1,
 	createdAtUtc: 1000,
 	updatedAtUtc: 2000,

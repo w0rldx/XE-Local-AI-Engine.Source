@@ -19,6 +19,8 @@ vi.mock("@/core/api/generated/@tanstack/react-query.gen", () => ({
 	getLatestRecommendationsOptions: vi.fn(),
 	getHardwareProfileOptions: vi.fn(),
 	startGgufDownloadMutation: vi.fn(),
+	getModelCatalogInfoOptions: vi.fn(),
+	refreshModelCatalogMutation: vi.fn(() => ({ mutationFn: mutationMock.mutationFn })),
 }));
 
 import { modelFitInvalidationKey, modelFitQueryIds, useRefreshRecommendations } from "@/features/model-fit/queries/useModelFit";

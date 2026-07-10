@@ -602,6 +602,88 @@ describe("node chat stream state", () => {
 		expect(parts.map((part) => part.kind)).toEqual(["text", "reasoning"]);
 	});
 
+	it("appends a notice part without disturbing existing reasoning/tool parts and keeps the turn live", () => {
+		const optimistic = appendOptimisticNodeChatSend(
+			conversation,
+			{ userMessageId: "user-1", assistantMessageId: "assistant-1", requestId: "request-1" },
+			"hi",
+			"2026-05-24T00:00:01.000Z",
+		);
+
+		const reasoning = applyNodeChatStreamEvent(
+			optimistic,
+			streamEvent({ sequence: 3, content: null, delta: null, reasoningDelta: "thinking" }),
+		);
+		const toolRequested = applyNodeChatStreamEvent(
+			reasoning.conversation,
+			streamEvent({
+				type: nodeChatStreamEventTypes.toolCallRequested,
+				sequence: 4,
+				toolCallId: "call-1",
+				toolName: "get_time",
+				content: null,
+				delta: null,
+			}),
+		);
+		const noticed = applyNodeChatStreamEvent(
+			toolRequested.conversation,
+			streamEvent({
+				type: nodeChatStreamEventTypes.assistantNotice,
+				sequence: 5,
+				noticeKind: "ModelSubstituted",
+				noticeMessage: "Switched to a smaller model to fit available memory.",
+				content: null,
+				delta: null,
+			}),
+		);
+
+		expect(noticed.isTerminal).toBe(false);
+		expect(noticed.timelineEntry).toBeUndefined();
+		expect(noticed.streamingMessage).toMatchObject({ messageId: "assistant-1", isActive: true });
+
+		const parts = noticed.streamingMessage.parts ?? [];
+		expect(parts.map((part) => part.kind)).toEqual(["reasoning", "tool", "notice"]);
+		expect(parts[2]).toMatchObject({
+			kind: "notice",
+			noticeKind: "ModelSubstituted",
+			text: "Switched to a smaller model to fit available memory.",
+		});
+		// The turn's status/content must stay untouched by the notice event.
+		expect(noticed.conversation.messages.find((message) => message.id === "assistant-1")).toMatchObject({
+			status: "streaming",
+			content: "",
+		});
+	});
+
+	it("preserves a prior notice part when a later reasoning delta arrives on the same turn", () => {
+		const optimistic = appendOptimisticNodeChatSend(
+			conversation,
+			{ userMessageId: "user-1", assistantMessageId: "assistant-1", requestId: "request-1" },
+			"hi",
+			"2026-05-24T00:00:01.000Z",
+		);
+
+		const noticed = applyNodeChatStreamEvent(
+			optimistic,
+			streamEvent({
+				type: nodeChatStreamEventTypes.assistantNotice,
+				sequence: 3,
+				noticeKind: "HistoryTruncated",
+				noticeMessage: "Older messages were trimmed to fit the context window.",
+				content: null,
+				delta: null,
+			}),
+		);
+		const reasoning = applyNodeChatStreamEvent(
+			noticed.conversation,
+			streamEvent({ sequence: 4, content: null, delta: null, reasoningDelta: "continuing" }),
+		);
+
+		const parts = reasoning.streamingMessage.parts ?? [];
+		expect(parts.map((part) => part.kind)).toEqual(["notice", "reasoning"]);
+		expect(parts[0]).toMatchObject({ kind: "notice", noticeKind: "HistoryTruncated" });
+	});
+
 	it("marks only the active assistant message as cancelled during local cancellation", () => {
 		const optimistic = appendOptimisticNodeChatSend(
 			conversation,

@@ -57,4 +57,21 @@ describe("buildMessageParts", () => {
 	it("returns an empty array when there is nothing to render", () => {
 		expect(buildMessageParts([], [])).toEqual([]);
 	});
+
+	it("interleaves a notice entry by sequence alongside reasoning, tool, and text parts", () => {
+		const parts = buildMessageParts(
+			[{ id: "m:0", sequence: 0, text: "reason" }],
+			[{ id: "call-1", sequence: 1, name: "t", state: "received" }],
+			[{ id: "m:3", sequence: 3, text: "narration" }],
+			[{ id: "m:2", sequence: 2, noticeKind: "ModelSubstituted", text: "Switched to a smaller model." }],
+		);
+
+		expect(parts.map((part) => [part.kind, part.sequence])).toEqual([
+			["reasoning", 0],
+			["tool", 1],
+			["notice", 2],
+			["text", 3],
+		]);
+		expect(parts[2]).toMatchObject({ kind: "notice", noticeKind: "ModelSubstituted", text: "Switched to a smaller model." });
+	});
 });

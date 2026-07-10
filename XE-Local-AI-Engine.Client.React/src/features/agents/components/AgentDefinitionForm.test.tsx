@@ -57,6 +57,7 @@ function makeDefinition(overrides: Partial<AgentDefinition> = {}): AgentDefiniti
 		playbookEnabled: false,
 		defaultTemporaryChat: false,
 		memoryExtractionEnabled: true,
+		disableBaseScaffold: false,
 		version: 1,
 		createdAtUtc: 0,
 		updatedAtUtc: 0,
@@ -125,6 +126,7 @@ const baseValues: AgentDefinitionFormValues = {
 	playbookEnabled: false,
 	defaultTemporaryChat: false,
 	memoryExtractionEnabled: true,
+	disableBaseScaffold: false,
 };
 
 function renderForm(overrides: {
@@ -324,6 +326,19 @@ describe("AgentDefinitionForm", () => {
 		fireEvent.click(screen.getByTestId("agent-form-submit"));
 
 		expect(onSubmit).toHaveBeenCalledWith(expect.objectContaining({ memoryExtractionEnabled: false }));
+	});
+
+	it("submits disableBaseScaffold true when the advanced toggle is switched on", () => {
+		const { onSubmit } = renderForm({
+			initialValues: { name: "Helper", instructions: "Be helpful" },
+		});
+
+		const toggle = screen.getByTestId("agent-form-disable-base-scaffold") as HTMLInputElement;
+		expect(toggle.checked).toBe(false);
+		fireEvent.click(toggle);
+		fireEvent.click(screen.getByTestId("agent-form-submit"));
+
+		expect(onSubmit).toHaveBeenCalledWith(expect.objectContaining({ disableBaseScaffold: true }));
 	});
 
 	it("hides the orchestration section for a Single definition", () => {
