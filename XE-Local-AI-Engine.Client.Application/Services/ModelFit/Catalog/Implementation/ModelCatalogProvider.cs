@@ -61,24 +61,32 @@ internal sealed class ModelCatalogProvider : IModelCatalogProvider, IDisposable
         var now = _timeProvider.GetUtcNow();
         return now - _lastAttemptUtc < options.RefreshTtl
             ? Task.FromResult(_current)
-            : RefreshCoreAsync(options.RefreshUrl, options, now, cancellationToken);
+            : RefreshCoreAsync(options.RefreshUrl, options, now, force: false, cancellationToken);
     }
 
     public Task<ModelCatalogSnapshot> RefreshAsync(CancellationToken cancellationToken = default)
     {
         var options = _options.Value;
+        // force: true — an operator-triggered refresh must always attempt a fetch, never a silent TTL no-op just
+        // because a previous refresh (scheduled or another operator click) already succeeded within the TTL window.
         return string.IsNullOrWhiteSpace(options.RefreshUrl)
             ? Task.FromResult(_current)
-            : RefreshCoreAsync(options.RefreshUrl, options, _timeProvider.GetUtcNow(), cancellationToken);
+            : RefreshCoreAsync(options.RefreshUrl, options, _timeProvider.GetUtcNow(), force: true, cancellationToken);
     }
 
-    private async Task<ModelCatalogSnapshot> RefreshCoreAsync(string refreshUrl, ModelCatalogOptions options, DateTimeOffset attemptAtUtc, CancellationToken cancellationToken)
+    private async Task<ModelCatalogSnapshot> RefreshCoreAsync(string refreshUrl,
+        ModelCatalogOptions options,
+        DateTimeOffset attemptAtUtc,
+        bool force,
+        CancellationToken cancellationToken)
     {
         await _refreshGate.WaitAsync(cancellationToken).ConfigureAwait(false);
         try
         {
-            // Re-check under the lock: a concurrent caller may already have refreshed while this one waited.
-            if (attemptAtUtc - _lastAttemptUtc < options.RefreshTtl && _current.Source != ModelCatalogSource.Bundled)
+            // Re-check under the lock: a concurrent (TTL-triggered) caller may already have refreshed while this one
+            // waited. This debounce is skipped entirely when force is set (RefreshAsync) — an operator-triggered
+            // refresh must always attempt a fetch, even seconds after the last one succeeded.
+            if (!force && attemptAtUtc - _lastAttemptUtc < options.RefreshTtl && _current.Source != ModelCatalogSource.Bundled)
             {
                 return _current;
             }

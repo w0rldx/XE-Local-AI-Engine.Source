@@ -56,7 +56,10 @@ internal static class AddNodeModelFitExtensions
         // never a network call). The named HttpClient is resolved via IHttpClientFactory, never injected as a bare
         // HttpClient — this keeps every FastEndpoints ctor (instantiated at startup) test-factory-safe by construction.
         builder.Services.Configure<ModelCatalogOptions>(configuration.GetSection(ModelCatalogOptions.SectionName));
-        builder.Services.AddHttpClient(ModelCatalogOptions.HttpClientName);
+        // The catalog document is a few KB; cap the response buffer well above that (5 MB) so a misconfigured or
+        // compromised RefreshUrl can never make the node buffer an unbounded response body in memory.
+        builder.Services.AddHttpClient(ModelCatalogOptions.HttpClientName)
+               .ConfigureHttpClient(static client => client.MaxResponseContentBufferSize = 5 * 1024 * 1024);
         // The cache store persists a tiny node-local JSON file, mirroring NodeSettingsStore. The provider owns the
         // in-memory bundled/remote/last-good snapshot plus TTL-gated refresh serialization. Both singletons.
         builder.Services.AddSingleton<IModelCatalogCacheStore, ModelCatalogCacheStore>();
