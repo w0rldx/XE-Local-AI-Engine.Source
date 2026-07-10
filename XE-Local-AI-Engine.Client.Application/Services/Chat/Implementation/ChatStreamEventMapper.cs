@@ -80,4 +80,27 @@ internal static class ChatStreamEventMapper
 
         parts.CompleteToolCall(payload.ToolCallId, payload.ToolName, payload.Result, payload.IsError, sequence);
     }
+
+    public static ChatStreamEvent NoticeEvent(Guid conversationId,
+        Guid messageId,
+        Guid requestId,
+        TurnNoticePayload payload,
+        long timestampMs,
+        long sequence)
+    {
+        return new ChatStreamEvent(ChatStreamEventTypes.AssistantNotice,
+            conversationId,
+            messageId,
+            requestId,
+            NodeChatMessageStatusValues.Streaming,
+            sequence,
+            timestampMs,
+            NoticeKind: payload.Kind.ToString(),
+            NoticeMessage: payload.Message);
+    }
+
+    public static void AccumulateNotice(NodeChatPartAccumulator parts, TurnNoticePayload payload, long sequence)
+    {
+        parts.AppendNotice(payload.Kind.ToString(), payload.Message, sequence);
+    }
 }

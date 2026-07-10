@@ -5,6 +5,7 @@ using System.Text.RegularExpressions;
 using XE_Local_AI_Engine.Client.Models;
 using XE_Local_AI_Engine.Client.Models.Enums;
 using XE_Local_AI_Engine.Client.Services.Chat;
+using XE_Local_AI_Engine.Client.Services.Invocation.Context;
 using XE_Local_AI_Engine.Client.Services.Invocation.Resilience;
 
 public sealed partial class InvocationRunner
@@ -13,9 +14,13 @@ public sealed partial class InvocationRunner
     {
         return exception switch
         {
-            // Matches BEFORE the generic InvalidOperationException arms below (it derives from InvalidOperationException):
+            // Matches BEFORE the generic InvalidOperationException arms below (both derive from InvalidOperationException):
             // a local-default send with no installed GGUF chat model surfaces ModelNotInstalled, not ProviderUnreachable.
             NoChatModelInstalledException => (FailureCategory.ModelNotInstalled, NoChatModelInstalledMessage),
+            // The budgeter's hard-stop (history still over budget after truncation): a clean, classified pre-inference
+            // failure. The exception's own message IS the fixed, path-free constant (ContextBudgetExceededMessage), so
+            // it is surfaced verbatim, same treatment as StreamIdleTimeoutException below.
+            ContextBudgetExceededException contextBudgetExceeded => (FailureCategory.ContextWindowExceeded, contextBudgetExceeded.Message),
             // A tripped circuit breaker: surface a fixed, retry-soon message rather than the generic ProviderUnreachable
             // (the endpoint is likely recovering, not permanently down). Matches before the StreamIdle/TimeoutException
             // arm because it is not a TimeoutException.

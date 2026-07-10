@@ -31,6 +31,13 @@ public interface IWorkerEventDispatcher
     /// </summary>
     event EventHandler<ToolCallLifecycleChangedEventArgs>? ToolCallLifecycleChanged;
 
+    /// <summary>
+    ///     Raised once per non-fatal turn notice (model substitution, tool disabled, history truncated). The local
+    ///     chat stream subscribes to surface these as <c>assistant-notice</c> stream events alongside the content
+    ///     deltas and tool-call lifecycle; the platform-served path does not consume it.
+    /// </summary>
+    event EventHandler<TurnNoticeChangedEventArgs>? TurnNoticeChanged;
+
     void StopAcceptingRemoteInvocations();
 
     Task DispatchInvocationAssignedAsync(EncryptedRuntimePackageDto package);
@@ -70,4 +77,10 @@ public interface IWorkerEventDispatcher
     ///     <see cref="ToolCallLifecycleChanged" /> so a subscribed local chat stream can fan it out.
     /// </summary>
     Task ReportToolCallLifecycleAsync(ToolCallLifecyclePayload payload);
+
+    /// <summary>
+    ///     Reports a non-fatal turn notice for the in-flight invocation, raising <see cref="TurnNoticeChanged" /> so a
+    ///     subscribed local chat stream can fan it out.
+    /// </summary>
+    Task ReportTurnNoticeAsync(TurnNoticePayload payload);
 }

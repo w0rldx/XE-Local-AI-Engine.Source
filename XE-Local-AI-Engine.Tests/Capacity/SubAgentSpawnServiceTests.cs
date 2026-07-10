@@ -14,6 +14,7 @@ using XE_Local_AI_Engine.Client.Services.Agents;
 using XE_Local_AI_Engine.Client.Services.Capacity;
 using XE_Local_AI_Engine.Providers.LlamaServer;
 using XE_Local_AI_Engine.Tests.Testing;
+using XE_Local_AI_Engine.Tests.Testing.Mocks;
 
 /// <summary>
 ///     <see cref="SubAgentSpawnService" /> tests: the spawn dispatcher. An admitted local spawn builds a
@@ -85,6 +86,50 @@ public sealed class SubAgentSpawnServiceTests
         AssertEx.Equal("sub-agent-result", result);
         // A model-id-only spawn has no agent profile, so no AllowedToolNames → the child runs tool-less.
         AssertEx.Empty(harness.ChatClient.LastToolNames);
+    }
+
+    [Test]
+    public async Task Spawn_WhenModelIdOnlyWithNoCustomInstructions_ComposesScaffoldAheadOfDefaultPersona()
+    {
+        // A model-id-only child has no persisted definition to opt out with, so it always gets the same scaffold
+        // coverage as a resolved agent — composed ahead of the short default sub-agent persona text.
+        const string scaffoldText = "You are a locally-run agent. Ground every claim; use tools when they help.";
+        using var harness = new Harness();
+        harness.AllowLocal();
+        harness.WithScaffold(scaffoldText);
+        var service = harness.Build();
+
+        using var root = SpawnContext.BeginRoot(fanOutCap: 3, cloudSpawnCap: 3);
+        var result = await service.SpawnAsync(ModelRequest("ad-hoc"), CancellationToken.None);
+
+        AssertEx.Equal("sub-agent-result", result);
+        AssertEx.NotNull(harness.ChatClient.LastInstructions);
+        AssertEx.True(harness.ChatClient.LastInstructions!.StartsWith(scaffoldText, StringComparison.Ordinal),
+            "the default sub-agent instructions must be prefixed with the base scaffold.");
+        AssertEx.Contains(harness.ChatClient.LastInstructions, "focused sub-agent");
+    }
+
+    [Test]
+    public async Task Spawn_WhenModelIdOnlyWithCustomInstructions_UsesCustomInstructionsVerbatim_NoScaffold()
+    {
+        // An explicit request-supplied Instructions override bypasses the default persona AND the scaffold entirely —
+        // the caller's exact text is used unchanged.
+        const string scaffoldText = "You are a locally-run agent. Ground every claim; use tools when they help.";
+        using var harness = new Harness();
+        harness.AllowLocal();
+        harness.WithScaffold(scaffoldText);
+        var service = harness.Build();
+
+        using var root = SpawnContext.BeginRoot(fanOutCap: 3, cloudSpawnCap: 3);
+        var result = await service.SpawnAsync(new SubAgentSpawnRequest
+        {
+            ModelId = Model,
+            Task = "ad-hoc",
+            Instructions = "Only answer in French."
+        }, CancellationToken.None);
+
+        AssertEx.Equal("sub-agent-result", result);
+        AssertEx.Equal("Only answer in French.", harness.ChatClient.LastInstructions);
     }
 
     [Test]
@@ -263,6 +308,7 @@ public sealed class SubAgentSpawnServiceTests
         private readonly ICapacityService _capacity = Substitute.For<ICapacityService>();
         private readonly IAgentDefinitionResolver _resolver = Substitute.For<IAgentDefinitionResolver>();
         private readonly IAgentDefinitionStore _definitionStore = Substitute.For<IAgentDefinitionStore>();
+        private readonly FakeAgentInstructionProvider _instructionProvider = new();
         private readonly IAgentToolRegistry _toolRegistry = new FakeAgentToolRegistry();
         private bool _reservationDisposed;
 
@@ -340,6 +386,13 @@ public sealed class SubAgentSpawnServiceTests
                      .Returns(_ => new CapacityDecision(CapacityVerdict.RejectInsufficient, "Insufficient capacity: not enough free memory for another model.", OllamaEvictionWarning: false));
         }
 
+        // Configures the base scaffold text the default sub-agent instructions are composed with. Unconfigured
+        // (the default) returns null/empty, which BaseInstructionComposer treats as a no-op.
+        public void WithScaffold(string scaffoldText)
+        {
+            _instructionProvider.BaseScaffold = scaffoldText;
+        }
+
         public SubAgentSpawnService Build()
         {
             return new SubAgentSpawnService(_capacity,
@@ -354,6 +407,7 @@ public sealed class SubAgentSpawnServiceTests
                 {
                     QueueWaitSeconds = 5
                 }),
+                _instructionProvider,
                 NullLoggerFactory.Instance,
                 NullLogger<SubAgentSpawnService>.Instance);
         }

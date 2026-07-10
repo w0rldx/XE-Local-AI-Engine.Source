@@ -1,12 +1,15 @@
 namespace XE_Local_AI_Engine.Client.Services.Invocation.Implementation;
 
+using System.Text.Json;
 using Microsoft.Extensions.AI;
 using XE_Local_AI_Engine.AI.Agent.Invocation;
 using XE_Local_AI_Engine.AI.Agent.Invocation.Orchestration;
 using XE_Local_AI_Engine.AI.Agent.Tools;
 using XE_Local_AI_Engine.Client.Models;
 using XE_Local_AI_Engine.Client.Models.Enums;
+using XE_Local_AI_Engine.Client.Services.Events;
 using XE_Local_AI_Engine.Client.Services.Invocation.Context;
+using XE_Local_AI_Engine.Client.Services.Invocation.Policy;
 using XE_Local_AI_Engine.Providers.Ollama.Implementation;
 
 public sealed partial class InvocationRunner
@@ -19,19 +22,27 @@ public sealed partial class InvocationRunner
     private async Task<OrchestrationAgentDefinition> BuildOrchestrationDefinitionAsync(RuntimePackage package,
         OrchestrationSpec spec,
         string resolvedModel,
+        StreamTransport transport,
         CancellationToken invocationToken)
     {
         var participants = new List<OrchestrationParticipant>(spec.Participants.Count);
         foreach (var participant in spec.Participants)
         {
-            var participantModel = await ResolveModelAsync(participant.ModelId ?? resolvedModel, invocationToken).ConfigureAwait(false);
+            var participantResolution = await ResolveModelAsync(participant.ModelId ?? resolvedModel, invocationToken).ConfigureAwait(false);
+            if (participantResolution.Substituted)
+            {
+                await transport.EmitNoticeAsync(TurnNoticeKind.ModelSubstituted,
+                    BuildModelSubstitutedNoticeMessage(participantResolution.RequestedModel, participantResolution.Model),
+                    participant.Key).ConfigureAwait(false);
+            }
+
             participants.Add(new OrchestrationParticipant
             {
                 Key = participant.Key,
                 Name = participant.Name,
                 Description = participant.Description,
                 Instructions = participant.Instructions,
-                ModelId = participantModel,
+                ModelId = participantResolution.Model,
                 ReasoningEffort = participant.ReasoningEffort,
                 Tools = BuildParticipantTools(package, participant.Tools)
             });
@@ -89,7 +100,14 @@ public sealed partial class InvocationRunner
         return string.IsNullOrWhiteSpace(update.ToolName) ? "tool" : update.ToolName;
     }
 
-    private async Task<string> ResolveModelAsync(string? requestedModel, CancellationToken cancellationToken)
+    /// <summary>
+    ///     The outcome of <see cref="ResolveModelAsync" />: the model that will actually serve the turn, and (when it
+    ///     differs from what was requested) the original request so the caller can surface a model-substitution
+    ///     notice once the transport exists.
+    /// </summary>
+    private readonly record struct ModelResolution(string Model, bool Substituted, string? RequestedModel);
+
+    private async Task<ModelResolution> ResolveModelAsync(string? requestedModel, CancellationToken cancellationToken)
     {
         var trimmedModel = requestedModel?.Trim();
 
@@ -105,13 +123,14 @@ public sealed partial class InvocationRunner
             var providerName = await _providerResolver.ResolveProviderNameForModelAsync(trimmedModel, cancellationToken).ConfigureAwait(false);
             if (!string.Equals(providerName, OllamaLocalModelProvider.OllamaProviderName, StringComparison.OrdinalIgnoreCase))
             {
-                return trimmedModel;
+                return new ModelResolution(trimmedModel, Substituted: false, RequestedModel: trimmedModel);
             }
         }
 
         if (await _capabilityReporter.VerifyOllamaAndModelAsync(trimmedModel, cancellationToken).ConfigureAwait(false))
         {
-            return string.IsNullOrWhiteSpace(trimmedModel) ? _defaultModel : trimmedModel;
+            var verifiedModel = string.IsNullOrWhiteSpace(trimmedModel) ? _defaultModel : trimmedModel;
+            return new ModelResolution(verifiedModel, Substituted: false, RequestedModel: trimmedModel);
         }
 
         if (string.IsNullOrWhiteSpace(trimmedModel))
@@ -123,7 +142,48 @@ public sealed partial class InvocationRunner
             trimmedModel,
             _defaultModel);
 
-        return _defaultModel;
+        return new ModelResolution(_defaultModel, Substituted: true, RequestedModel: trimmedModel);
+    }
+
+    /// <summary>Sanitized, user-facing text for a <see cref="TurnNoticeKind.ModelSubstituted" /> notice.</summary>
+    private static string BuildModelSubstitutedNoticeMessage(string? requestedModel, string fallbackModel)
+    {
+        return string.IsNullOrWhiteSpace(requestedModel)
+            ? $"The requested model could not be verified; this turn ran on the node's default model '{fallbackModel}' instead."
+            : $"Model '{requestedModel}' could not be verified; this turn ran on the node's default model '{fallbackModel}' instead.";
+    }
+
+    /// <summary>Sanitized, user-facing text for a <see cref="TurnNoticeKind.ToolDisabled" /> notice.</summary>
+    private static string BuildToolDisabledNoticeMessage(string toolName)
+    {
+        return $"Tool '{toolName}' was disabled for the rest of this turn after repeated invalid-argument calls.";
+    }
+
+    /// <summary>
+    ///     True when a tool's <see cref="Microsoft.Extensions.AI.FunctionResultContent.Result" /> is the structured
+    ///     <c>{"error":"tool_disabled",...}</c> marker <c>ToolArgumentRepairResult.ToolDisabled</c> (AI.Agent) returns
+    ///     instead of throwing once a tool is cut off after repeated invalid-argument calls. Parses defensively (a
+    ///     normal tool result is rarely JSON and never fails this check) rather than substring-matching the JSON text.
+    /// </summary>
+    private static bool IsToolDisabledResult(string? result)
+    {
+        if (string.IsNullOrEmpty(result))
+        {
+            return false;
+        }
+
+        try
+        {
+            using var document = JsonDocument.Parse(result);
+            return document.RootElement.ValueKind == JsonValueKind.Object
+                   && document.RootElement.TryGetProperty("error", out var errorProperty)
+                   && errorProperty.ValueKind == JsonValueKind.String
+                   && string.Equals(errorProperty.GetString(), "tool_disabled", StringComparison.Ordinal);
+        }
+        catch (JsonException)
+        {
+            return false;
+        }
     }
 
     private InvocationAgentDefinition BuildInvocationDefinition(RuntimePackage package,
@@ -141,42 +201,32 @@ public sealed partial class InvocationRunner
     }
 
     /// <summary>
-    ///     Resolves the deterministic input-context budget for a package: the effective context-window capacity (the
-    ///     per-send <c>num_ctx</c> override the factory would apply, else the configured default) and the tokens held
-    ///     back for the model's response (the larger of the configured floor and any explicit max-output-tokens
-    ///     override). Kept in lockstep with the factory's num_ctx / output-clamp source so the history sent never
-    ///     overruns the window the model is launched with.
+    ///     Applies the conversation-context budget (using the turn's already-resolved <see cref="TurnPolicy.ContextCapacityTokens" />/
+    ///     <see cref="TurnPolicy.ReservedOutputTokens" />, kept in lockstep with the factory's num_ctx / output-clamp
+    ///     source) to a message list. The FIRST time a trim occurs in an invocation this logs once (unchanged) AND
+    ///     emits a single sanitized <see cref="TurnNoticeKind.HistoryTruncated" /> chat notice carrying counts only —
+    ///     never content. When the budgeter still reports <c>ExceedsBudget</c> after its two-pass truncation, this is a
+    ///     HARD STOP: it throws <see cref="ContextBudgetExceededException" /> (a classified, pre-inference failure —
+    ///     see <see cref="MapFailure" />) instead of proceeding with an over-budget send. Returns the input unchanged
+    ///     (reference-equal) when nothing was trimmed.
     /// </summary>
-    private (int Capacity, int Reserved) ResolveContextBudget(RuntimePackage package)
-    {
-        var capacity = package.SamplingOptions?.NumCtx is { } numCtx && numCtx > 0
-            ? numCtx
-            : _contextBudgetOptions.DefaultContextTokens;
-
-        var requestedOutput = package.SamplingOptions?.MaxOutputTokens is { } maxOutput && maxOutput > 0
-            ? maxOutput
-            : 0;
-        var reserved = Math.Max(_contextBudgetOptions.ReservedOutputTokenFloor, requestedOutput);
-
-        return (capacity, reserved);
-    }
-
-    /// <summary>
-    ///     Applies the conversation-context budget to a message list and, the FIRST time a trim (or an always-keep
-    ///     overflow) occurs in an invocation, emits a single sanitized warning carrying counts only — never content.
-    ///     Returns the input unchanged (reference-equal) when nothing was trimmed.
-    /// </summary>
-    private IReadOnlyList<ChatMessage> ApplyContextBudget(IReadOnlyList<ChatMessage> messages,
+    private async Task<IReadOnlyList<ChatMessage>> ApplyContextBudgetAsync(IReadOnlyList<ChatMessage> messages,
         RuntimePackage package,
         string stage,
-        ref bool trimLogged)
+        TurnPolicy turnPolicy,
+        StreamTransport transport,
+        ContextBudgetNoticeGate gate)
     {
-        var (capacity, reserved) = ResolveContextBudget(package);
-        var result = _contextBudgeter.Budget(messages, capacity, reserved);
+        var result = _contextBudgeter.Budget(messages, turnPolicy.ContextCapacityTokens, turnPolicy.ReservedOutputTokens);
 
-        if ((result.Trimmed || result.ExceedsBudget) && !trimLogged)
+        if (!result.Trimmed && !result.ExceedsBudget)
         {
-            trimLogged = true;
+            return result.Messages;
+        }
+
+        if (!gate.Logged)
+        {
+            gate.Logged = true;
             _logger.LogWarning(
                 "Conversation context budgeted for invocation {InvocationId} ({Stage}): dropped {Dropped} message(s), truncated {Truncated} tool result(s) ({Chars} chars), estimated tokens {Before} -> {After}, capacity {Capacity} reserving {Reserved} (still over budget: {Overflow}).",
                 package.InvocationId,
@@ -186,12 +236,42 @@ public sealed partial class InvocationRunner
                 result.CharsTruncated,
                 result.EstimatedTokensBefore,
                 result.EstimatedTokensAfter,
-                capacity,
-                reserved,
+                turnPolicy.ContextCapacityTokens,
+                turnPolicy.ReservedOutputTokens,
                 result.ExceedsBudget);
         }
 
+        if (result.ExceedsBudget)
+        {
+            throw new ContextBudgetExceededException(ContextBudgetExceededMessage);
+        }
+
+        if (!gate.NoticeEmitted)
+        {
+            gate.NoticeEmitted = true;
+            await transport.EmitNoticeAsync(TurnNoticeKind.HistoryTruncated,
+                BuildHistoryTruncatedNoticeMessage(result)).ConfigureAwait(false);
+        }
+
         return result.Messages;
+    }
+
+    /// <summary>Sanitized, user-facing text for a <see cref="TurnNoticeKind.HistoryTruncated" /> notice — counts only, never content.</summary>
+    private static string BuildHistoryTruncatedNoticeMessage(ConversationBudgetResult result)
+    {
+        return $"Conversation history was trimmed to fit the model's context window ({result.MessagesDropped} older message(s) dropped, {result.ToolResultsTruncated} tool result(s) shortened).";
+    }
+
+    /// <summary>
+    ///     Mutable "logged/notified once" gate threaded through the (possibly several) <see cref="ApplyContextBudgetAsync" />
+    ///     calls of one invocation. A plain class (not a <c>ref bool</c>) because <c>ref</c> locals cannot cross an
+    ///     <c>await</c>/be captured by an async method.
+    /// </summary>
+    private sealed class ContextBudgetNoticeGate
+    {
+        public bool Logged { get; set; }
+
+        public bool NoticeEmitted { get; set; }
     }
 
     /// <summary>

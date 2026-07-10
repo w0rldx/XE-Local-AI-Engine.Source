@@ -18,6 +18,7 @@ public sealed class RuntimePackageBuilder
     private string? _modelProfile = "qwen3.5:0.8b";
     private OrchestrationSpec? _orchestrationSpec;
     private string _resolvedSystemPrompt = "You are helpful.";
+    private SamplingOptions? _samplingOptions;
     private TimeoutSettings _timeouts = new();
 
     private RuntimePackageBuilder()
@@ -169,6 +170,13 @@ public sealed class RuntimePackageBuilder
         return this;
     }
 
+    public RuntimePackageBuilder WithSamplingOptions(SamplingOptions samplingOptions)
+    {
+        ArgumentNullException.ThrowIfNull(samplingOptions);
+        _samplingOptions = samplingOptions;
+        return this;
+    }
+
     public RuntimePackage Build()
     {
         return new RuntimePackage
@@ -185,6 +193,7 @@ public sealed class RuntimePackageBuilder
             RequestedCapabilities = _requestedCapabilities.Count == 0 ? null : [.. _requestedCapabilities],
             Timeouts = _timeouts,
             OrchestrationSpec = _orchestrationSpec,
+            SamplingOptions = _samplingOptions,
             ConfigHash = _configHash
         };
     }

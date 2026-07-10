@@ -53,6 +53,15 @@ internal sealed record class AgentDefinition
     public bool PlaybookEnabled { get; set; }
 
     /// <summary>
+    ///     Opt-out for the versioned, app-owned base instruction scaffold (identity/grounding/tool/output discipline)
+    ///     normally prepended ahead of this definition's <see cref="Instructions" /> when composing the resolved
+    ///     prompt. Plaintext (structural). Default <c>false</c> (scaffold ON). Non-config-affecting for this
+    ///     definition's own <see cref="Version" /> bump — like <see cref="PlaybookEnabled" /> — because toggling it
+    ///     changes the resolved prompt directly, which already drives the runtime package config hash.
+    /// </summary>
+    public bool DisableBaseScaffold { get; set; }
+
+    /// <summary>
     ///     Per-agent default for the temporary-chat (memory write-only-suppression) flag a new conversation inherits.
     ///     Plaintext (structural). Non-config-affecting (exactly like <see cref="PlaybookEnabled" />): it gates post-run
     ///     memory extraction only and must NOT enter the runtime package config hash or bump the agent's own version.
