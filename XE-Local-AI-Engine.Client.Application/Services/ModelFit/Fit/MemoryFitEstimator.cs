@@ -33,6 +33,16 @@ public sealed class MemoryFitEstimator
     /// </summary>
     public const double DefaultSafetyMarginFraction = 0.12d;
 
+    /// <summary>
+    ///     Conservative default fraction of total weight bytes assumed to live in expert (MoE FFN) tensors when the
+    ///     caller supplies <see cref="MoeFacts.ExpertCount" />/<see cref="MoeFacts.ExpertUsedCount" /> but no published
+    ///     active-parameter count. Expert FFN tensors dominate the parameter count in typical llama.cpp MoE
+    ///     architectures (Mixtral/Qwen-MoE/DeepSeek-MoE style), so 85% is a deliberately conservative (i.e. it
+    ///     over-estimates the CPU-offloaded share and under-estimates the GPU-resident share) placeholder used only when
+    ///     a more precise <see cref="MoeFacts.ActiveParamCount" /> figure is unavailable.
+    /// </summary>
+    public const double DefaultExpertWeightShareFraction = 0.85d;
+
     private readonly double _safetyMarginFraction;
 
     /// <summary>Creates an estimator with the default ~0.75 GB overhead and 12% safety margin.</summary>
@@ -56,7 +66,9 @@ public sealed class MemoryFitEstimator
     /// <summary>
     ///     Estimates the memory footprint of a model with the given GGUF header metadata at <paramref name="ctxTarget" />
     ///     tokens against <paramref name="profile" />. <paramref name="kvCacheQuantized" /> selects an 8-bit KV cache
-    ///     (1 byte/element) instead of the default fp16 (2 bytes/element), lowering the KV term so a larger model can fit.
+    ///     (1 byte/element) instead of the default fp16 (2 bytes/element), lowering the KV term so a larger model can fit;
+    ///     pass <paramref name="kvCacheQuant" /> instead for a 3-way choice (F16/Q8_0/Q4_0) — when non-null it overrides
+    ///     <paramref name="kvCacheQuantized" />.
     /// </summary>
     /// <param name="quant">The chosen quant label (e.g. <c>Q4_K_M</c>) — drives bytes-per-weight when a param count is present.</param>
     /// <param name="paramCount">GGUF param count (n_params), or <see langword="null" /> to fall back to <paramref name="fileSizeBytes" />.</param>
@@ -67,7 +79,19 @@ public sealed class MemoryFitEstimator
     /// <param name="attentionHeadCount">n_heads (<c>AttentionHeadCount</c>) — the divisor for head_dim.</param>
     /// <param name="ctxTarget">Target context window in tokens for the KV-cache sizing.</param>
     /// <param name="profile">The hardware profile supplying the fit budget.</param>
-    /// <param name="kvCacheQuantized">When <see langword="true" />, KV cache is 8-bit (1 byte/element) instead of fp16.</param>
+    /// <param name="kvCacheQuantized">When <see langword="true" />, KV cache is 8-bit (1 byte/element) instead of fp16. Ignored when <paramref name="kvCacheQuant" /> is supplied.</param>
+    /// <param name="moeFacts">
+    ///     Optional Mixture-of-Experts facts. When <see langword="null" /> (the default) behavior is unchanged from the
+    ///     dense-model estimate. When supplied and <see cref="MoeFacts.IsMoe" />, a resident estimate that exceeds the
+    ///     budget is retried as an expert-offload split (GPU: non-expert weights + KV + overhead; CPU: expert weights) —
+    ///     see <see cref="MoeFitVerdict.FitsWithExpertOffload" />.
+    /// </param>
+    /// <param name="kvCacheQuant">
+    ///     Optional explicit KV-cache quantization (<see cref="KvCacheQuant.F16" />/<see cref="KvCacheQuant.Q8_0" />/
+    ///     <see cref="KvCacheQuant.Q4_0" />). When <see langword="null" /> (the default) the legacy
+    ///     <paramref name="kvCacheQuantized" /> bool decides between F16 and Q8_0 — fully behavior-preserving for
+    ///     existing callers.
+    /// </param>
     public MemoryFitEstimate Estimate(string quant,
         long? paramCount,
         long fileSizeBytes,
@@ -77,26 +101,55 @@ public sealed class MemoryFitEstimator
         long attentionHeadCount,
         long ctxTarget,
         HardwareProfile profile,
-        bool kvCacheQuantized)
+        bool kvCacheQuantized,
+        MoeFacts? moeFacts = null,
+        KvCacheQuant? kvCacheQuant = null)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(quant);
         ArgumentNullException.ThrowIfNull(profile);
 
         var weightsBytes = EstimateWeightsBytes(quant, paramCount, fileSizeBytes);
-        var kvBytes = EstimateKvCacheBytes(blockCount, attentionHeadCountKV, embeddingLength, attentionHeadCount, ctxTarget, kvCacheQuantized);
-
-        // Apply the safety margin to the model-driven terms (weights + KV) only, then add the fixed runtime overhead.
-        var marginBytes = (long)((weightsBytes + kvBytes) * _safetyMarginFraction);
-        var estimatedBytes = weightsBytes + kvBytes + marginBytes + OverheadBytes;
+        var bytesPerKvElement = ResolveKvBytesPerElement(kvCacheQuantized, kvCacheQuant);
+        var kvBytes = EstimateKvCacheBytes(blockCount, attentionHeadCountKV, embeddingLength, attentionHeadCount, ctxTarget, bytesPerKvElement);
 
         var useGpu = profile is { GpuAccelAvailable: true, VramKnown: true } && profile.VramBytes is > 0;
         var budgetBytes = useGpu ? profile.VramBytes!.Value : profile.AvailableRamBytes;
         var mode = useGpu ? FitMode.Gpu : FitMode.Cpu;
 
-        var headroomBytes = budgetBytes - estimatedBytes;
-        var fits = estimatedBytes <= budgetBytes;
+        // Apply the safety margin to the model-driven terms (weights + KV) only, then add the fixed runtime overhead.
+        var marginBytes = (long)((weightsBytes + kvBytes) * _safetyMarginFraction);
+        var residentEstimatedBytes = weightsBytes + kvBytes + marginBytes + OverheadBytes;
+        var residentHeadroomBytes = budgetBytes - residentEstimatedBytes;
 
-        return new MemoryFitEstimate(fits, estimatedBytes, headroomBytes, mode);
+        if (residentEstimatedBytes <= budgetBytes)
+        {
+            return new MemoryFitEstimate(Fits: true, residentEstimatedBytes, residentHeadroomBytes, mode, MoeFitVerdict.FitsResident, GpuBytes: null, CpuBytes: null, ExpertsOffloaded: false);
+        }
+
+        // Resident estimate exceeds the budget — only MoE models on a GPU node can retry via expert offload
+        // (llama.cpp --n-cpu-moe keeps attention/shared/router tensors on GPU and moves expert tensors to system RAM).
+        if (moeFacts is { IsMoe: true } && useGpu)
+        {
+            var expertWeightsBytes = EstimateExpertWeightsBytes(weightsBytes, paramCount, moeFacts);
+            var nonExpertWeightsBytes = Math.Max(val1: 0L, weightsBytes - expertWeightsBytes);
+            var gpuMarginBytes = (long)((nonExpertWeightsBytes + kvBytes) * _safetyMarginFraction);
+            var gpuBytes = nonExpertWeightsBytes + kvBytes + gpuMarginBytes + OverheadBytes;
+            var cpuBytes = expertWeightsBytes;
+
+            if (gpuBytes <= budgetBytes && cpuBytes <= profile.AvailableRamBytes)
+            {
+                return new MemoryFitEstimate(Fits: true,
+                    EstimatedBytes: gpuBytes + cpuBytes,
+                    HeadroomBytes: budgetBytes - gpuBytes,
+                    mode,
+                    MoeFitVerdict.FitsWithExpertOffload,
+                    gpuBytes,
+                    cpuBytes,
+                    ExpertsOffloaded: true);
+            }
+        }
+
+        return new MemoryFitEstimate(Fits: false, residentEstimatedBytes, residentHeadroomBytes, mode, MoeFitVerdict.DoesNotFit, GpuBytes: null, CpuBytes: null, ExpertsOffloaded: false);
     }
 
     /// <summary>
@@ -149,12 +202,46 @@ public sealed class MemoryFitEstimator
         return fileSizeBytes > 0 ? fileSizeBytes : 0;
     }
 
+    /// <summary>
+    ///     Approximates the byte share of <paramref name="weightsBytes" /> that lives in expert (MoE FFN) tensors and
+    ///     would be offloaded to system RAM under <c>--n-cpu-moe</c>. Prefers <see cref="MoeFacts.ActiveParamCount" />
+    ///     when both it and <paramref name="totalParamCount" /> are known: <c>expertParams ≈ totalParams − activeParams</c>
+    ///     (a conservative approximation — "active" params include the currently-routed experts' share, so this slightly
+    ///     over-counts the expert-only portion, which biases the split toward the more spacious CPU/RAM side rather than
+    ///     GPU/VRAM). Falls back to <see cref="DefaultExpertWeightShareFraction" /> of <paramref name="weightsBytes" />
+    ///     when no active-param figure is available (only <see cref="MoeFacts.ExpertCount" />/
+    ///     <see cref="MoeFacts.ExpertUsedCount" /> known). Assumes uniform quant density across expert and non-expert
+    ///     tensors.
+    /// </summary>
+    private static long EstimateExpertWeightsBytes(long weightsBytes, long? totalParamCount, MoeFacts moeFacts)
+    {
+        if (moeFacts.ActiveParamCount is { } active && totalParamCount is { } total && total > active && active > 0)
+        {
+            var expertParamFraction = (total - active) / (double)total;
+            return (long)(weightsBytes * expertParamFraction);
+        }
+
+        return (long)(weightsBytes * DefaultExpertWeightShareFraction);
+    }
+
+    private static double ResolveKvBytesPerElement(bool kvCacheQuantized, KvCacheQuant? kvCacheQuant)
+    {
+        return kvCacheQuant switch
+        {
+            KvCacheQuant.F16 => 2d,
+            KvCacheQuant.Q8_0 => 1d,
+            KvCacheQuant.Q4_0 => 0.5d,
+            null => kvCacheQuantized ? 1d : 2d,
+            _ => 2d
+        };
+    }
+
     private static long EstimateKvCacheBytes(long blockCount,
         long attentionHeadCountKV,
         long embeddingLength,
         long attentionHeadCount,
         long ctxTarget,
-        bool kvCacheQuantized)
+        double bytesPerElement)
     {
         if (blockCount <= 0 || attentionHeadCountKV <= 0 || embeddingLength <= 0 || attentionHeadCount <= 0 || ctxTarget <= 0)
         {
@@ -163,7 +250,6 @@ public sealed class MemoryFitEstimator
 
         // head_dim = embedding_length / n_heads. KV cache stores key AND value (the leading factor 2).
         var headDim = embeddingLength / (double)attentionHeadCount;
-        var bytesPerElement = kvCacheQuantized ? 1d : 2d;
 
         return (long)(2d * blockCount * attentionHeadCountKV * headDim * ctxTarget * bytesPerElement);
     }
@@ -179,12 +265,66 @@ public enum FitMode
     Cpu = 1
 }
 
+/// <summary>KV-cache element quantization for the KV-cache sizing term.</summary>
+public enum KvCacheQuant
+{
+    /// <summary>fp16 KV cache — 2 bytes/element (today's default).</summary>
+    F16 = 0,
+
+    /// <summary>8-bit KV cache — 1 byte/element.</summary>
+    Q8_0 = 1,
+
+    /// <summary>4-bit KV cache — 0.5 bytes/element.</summary>
+    Q4_0 = 2
+}
+
+/// <summary>
+///     Which fit path an estimate resolved to. <see cref="FitsResident" /> is the historical (dense-model or
+///     entirely-VRAM-resident) outcome; <see cref="FitsWithExpertOffload" /> is only reachable for a Mixture-of-Experts
+///     model on a GPU-accelerated node whose non-expert weights + KV fit VRAM while its expert weights fit available RAM.
+/// </summary>
+public enum MoeFitVerdict
+{
+    /// <summary>All weights are resident in the scored budget (VRAM or RAM) — today's behavior.</summary>
+    FitsResident = 0,
+
+    /// <summary>Non-expert weights + KV + overhead fit VRAM; expert weights fit available RAM (llama.cpp <c>--n-cpu-moe</c>).</summary>
+    FitsWithExpertOffload = 1,
+
+    /// <summary>Neither the resident nor (when applicable) the expert-offload budget fits.</summary>
+    DoesNotFit = 2
+}
+
+/// <summary>
+///     Optional Mixture-of-Experts facts for a GGUF model. All fields are additive/optional — omitting this record
+///     (passing <see langword="null" /> to <see cref="MemoryFitEstimator.Estimate" />) preserves the pre-existing
+///     dense-model estimate exactly.
+/// </summary>
+/// <param name="ActiveParamCount">
+///     Published/known active parameters per token (e.g. the "A3B" in "Qwen3.5-35B-A3B"), when available. Enables the
+///     precise expert-share approximation; when <see langword="null" /> a conservative default share is used instead.
+/// </param>
+/// <param name="ExpertCount">Total experts (GGUF <c>{arch}.expert_count</c>). A positive value marks the model as MoE.</param>
+/// <param name="ExpertUsedCount">Experts routed per token (GGUF <c>{arch}.expert_used_count</c>), e.g. 2 of 8 for a top-2 gate.</param>
+public sealed record MoeFacts(long? ActiveParamCount, long? ExpertCount, long? ExpertUsedCount)
+{
+    /// <summary>True when <see cref="ExpertCount" /> is known and positive — a Mixture-of-Experts model.</summary>
+    public bool IsMoe => ExpertCount is > 0;
+}
+
 /// <summary>
 ///     The result of a single memory-fit estimate. <see cref="HeadroomBytes" /> is <c>budget − estimated</c> (negative
-///     when the model does not fit), and <see cref="Mode" /> records which budget was used.
+///     when the model does not fit; for <see cref="MoeFitVerdict.FitsWithExpertOffload" /> it is the GPU/VRAM headroom
+///     specifically, the binding constraint of that path), and <see cref="Mode" /> records which budget was used.
+///     <see cref="GpuBytes" />/<see cref="CpuBytes" /> are only populated when <see cref="MoeVerdict" /> is
+///     <see cref="MoeFitVerdict.FitsWithExpertOffload" />; otherwise both are <see langword="null" />.
 /// </summary>
 public sealed record MemoryFitEstimate(
     bool Fits,
     long EstimatedBytes,
     long HeadroomBytes,
-    FitMode Mode);
+    FitMode Mode,
+    MoeFitVerdict MoeVerdict,
+    long? GpuBytes,
+    long? CpuBytes,
+    bool ExpertsOffloaded);

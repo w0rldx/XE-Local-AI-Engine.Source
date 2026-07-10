@@ -55,6 +55,38 @@ public sealed class ModelFitRecommendationResponse
     ///     first-party org. Never an exclusion gate — when <c>false</c> the UI shows a "review before downloading" warning.
     /// </summary>
     public bool IsTrustedPublisher { get; init; }
+
+    /// <summary>
+    ///     Which recommendation section this row belongs to: <c>recommended</c> / <c>canRun</c> (the curated catalog
+    ///     lane, primary — locked decision D1/D2) or <c>explore</c> (the live Hugging Face discovery lane, secondary).
+    ///     A pre-existing snapshot row predating the catalog lane defaults to <c>explore</c>.
+    /// </summary>
+    public required string Section { get; init; }
+
+    /// <summary>The catalog entry's editorial tier (<c>S</c>/<c>A</c>/<c>B</c>), or <c>null</c> for an <c>explore</c> row.</summary>
+    public string? Tier { get; init; }
+
+    /// <summary>The catalog entry id, or <c>null</c> for an <c>explore</c> row.</summary>
+    public string? CatalogId { get; init; }
+
+    /// <summary>The catalog entry's curated display name, or <c>null</c> for an <c>explore</c> row.</summary>
+    public string? CatalogDisplayName { get; init; }
+
+    /// <summary>The catalog entry's optional user-facing note, or <c>null</c> when absent / not a catalog row.</summary>
+    public string? CatalogNotes { get; init; }
+
+    /// <summary>
+    ///     <c>true</c> when this Mixture-of-Experts model was fitted with experts offloaded to system RAM
+    ///     (llama.cpp <c>--n-cpu-moe</c>, locked decision D3) — the UI must label this honestly ("experts on CPU —
+    ///     slower, higher quality"), never as a plain resident fit.
+    /// </summary>
+    public bool ExpertsOffloaded { get; init; }
+
+    /// <summary>GPU-resident memory (GB) when <see cref="ExpertsOffloaded" />; <c>null</c> otherwise.</summary>
+    public double? GpuGb { get; init; }
+
+    /// <summary>CPU/system-RAM memory (GB) for the offloaded experts when <see cref="ExpertsOffloaded" />; <c>null</c> otherwise.</summary>
+    public double? CpuGb { get; init; }
 }
 
 /// <summary>

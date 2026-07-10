@@ -166,6 +166,7 @@ public sealed class ModelRecommendationCheckSchedulerPathTests
             new ModelFitRequestValidator(new ModelNameValidator(securityOptions)),
             snapshotStore,
             new InMemoryModelFitRecommendationStore(),
+            new EmptyCatalogRecommendationService(),
             TimeProvider.System,
             NullLogger<ModelFitRefreshService>.Instance);
     }

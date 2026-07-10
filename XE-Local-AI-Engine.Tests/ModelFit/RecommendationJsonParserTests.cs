@@ -134,4 +134,52 @@ public sealed class RecommendationJsonParserTests
         AssertEx.Contains(diagnostics, "release_date");
         AssertEx.Contains(diagnostics, "is_trusted_publisher");
     }
+
+    [Test]
+    public void Parse_WhenCatalogFieldsPresent_RoundTripsThemIntoDiagnostics()
+    {
+        // Catalog-lane fields (section/tier/catalog metadata/MoE-offload split) ride the same diagnostics extensibility
+        // seam as release_date/is_trusted_publisher — additive, no new columns.
+        const string json = """
+                            {
+                              "models": [
+                                {
+                                  "name": "org/moe-model:Q4_K_M",
+                                  "section": "recommended",
+                                  "tier": "S",
+                                  "catalog_id": "moe-model",
+                                  "catalog_display_name": "MoE Model 30B-A3B",
+                                  "catalog_notes": "Runs with experts offloaded to system RAM.",
+                                  "expert_offload": true,
+                                  "gpu_gb": 10.5,
+                                  "cpu_gb": 6.25
+                                }
+                              ]
+                            }
+                            """;
+
+        var result = RecommendationJsonParser.Parse(json);
+
+        AssertEx.True(result.IsSuccess);
+        var diagnostics = AssertEx.NotNull(result.Recommendations[0].DiagnosticsJson);
+        AssertEx.Contains(diagnostics, "\"section\":\"recommended\"");
+        AssertEx.Contains(diagnostics, "\"tier\":\"S\"");
+        AssertEx.Contains(diagnostics, "\"catalog_id\":\"moe-model\"");
+        AssertEx.Contains(diagnostics, "\"expert_offload\":true");
+        AssertEx.Contains(diagnostics, "\"gpu_gb\":10.5");
+        AssertEx.Contains(diagnostics, "\"cpu_gb\":6.25");
+    }
+
+    [Test]
+    public void Parse_WhenSectionAbsent_RowStillParsesSuccessfully()
+    {
+        // A pre-existing (pre-catalog-lane) snapshot row has no "section" key — the parser must not require it (the
+        // read mapper, not the parser, supplies the "explore" default).
+        const string json = """{ "models": [ { "name": "org/model:Q4_K_M" } ] }""";
+
+        var result = RecommendationJsonParser.Parse(json);
+
+        AssertEx.True(result.IsSuccess);
+        AssertEx.Equal(expected: 1, result.Recommendations.Count);
+    }
 }
