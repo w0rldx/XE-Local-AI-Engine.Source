@@ -23,14 +23,13 @@ public sealed class AgentInstructionProviderTests
     }
 
     [Test]
-    public void GetBaseScaffold_ReturnsNonBlankVersionedScaffold()
+    public void GetBaseScaffold_ReturnsNonBlankScaffold()
     {
         var provider = CreateProvider();
 
         var scaffold = provider.GetBaseScaffold();
 
         AssertEx.True(!string.IsNullOrWhiteSpace(scaffold), "the embedded base scaffold resource must not be blank.");
-        AssertEx.True(provider.ScaffoldVersion >= 1, "the scaffold version must be a positive, incrementable counter.");
     }
 
     [Test]

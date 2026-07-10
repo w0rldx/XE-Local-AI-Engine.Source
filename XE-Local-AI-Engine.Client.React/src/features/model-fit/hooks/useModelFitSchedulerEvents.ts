@@ -28,8 +28,18 @@ import { fetchScheduledJobRuns } from "@/features/scheduler/queries/useScheduler
 // analogue of the old latestRoot() prefix invalidation.
 //
 // Terminal events only: RunCompleted/RunFailed/RunCancelled change the stored snapshot (or its diagnostics).
-// RunStarted/RunProgress carry no new cache state, so reacting to them would refetch needlessly.
+// RunStarted/RunProgress carry no new cache state, so reacting to them would refetch needlessly — but they are still
+// bound as documented no-ops (IGNORED_RUN_EVENTS below) to silence the SignalR "No client method" warning.
 const TERMINAL_RUN_EVENTS = ["scheduler.runCompleted", "scheduler.runFailed", "scheduler.runCancelled"] as const;
+
+// The SAME scheduler hub broadcasts these non-terminal events to EVERY connected client. This hook intentionally
+// ignores RunStarted/RunProgress (they carry no cache state — see TERMINAL_RUN_EVENTS above), but leaving them unbound
+// makes the @microsoft/signalr client log `No client method with the name 'scheduler.runstarted' found.` (it lowercases
+// target names) every time a run starts or progresses while a model-fit page is mounted — noisy and alarming though not
+// an app defect. Binding no-op handlers marks the methods as handled so the client stays silent. This is NOT blind log
+// suppression: the events are genuinely irrelevant here, we just tell the client so explicitly. Registered and torn
+// down alongside the terminal handlers (see the connection effect) so the subscription symmetry is preserved.
+const IGNORED_RUN_EVENTS = ["scheduler.runStarted", "scheduler.runProgress"] as const;
 
 // Tolerance when comparing the client-side "started watching" timestamp against the server-stamped run fire time,
 // to absorb client/server clock skew in the on-connect catch-up.
@@ -129,11 +139,7 @@ export function useModelFitSchedulerEvents(scheduledJobId?: string): void {
 			// Single pass tracking the running max instead of sorting the whole array just to read its first element.
 			let terminalRun: (typeof runs)[number] | undefined;
 			for (const run of runs) {
-				if (
-					run.actualFireTimeUtc === null ||
-					run.actualFireTimeUtc < sinceUtc ||
-					!isTerminalRefreshRunStatus(run.status)
-				) {
+				if (run.actualFireTimeUtc === null || run.actualFireTimeUtc < sinceUtc || !isTerminalRefreshRunStatus(run.status)) {
 					continue;
 				}
 				if (terminalRun === undefined || (run.actualFireTimeUtc ?? 0) > (terminalRun.actualFireTimeUtc ?? 0)) {
@@ -176,11 +182,22 @@ export function useModelFitSchedulerEvents(scheduledJobId?: string): void {
 			notifyModelFitRefreshEvent(eventName, { errorMessage, runId }, tRef.current);
 		};
 
-		const handlers = TERMINAL_RUN_EVENTS.map((eventName) => {
+		// Every event name we bind on this connection, paired with its registered handler, so cleanup can unregister the
+		// full set uniformly (terminal handlers AND the ignored-event no-ops below — see the return statement).
+		const handlers: (readonly [string, (payload: unknown) => void])[] = TERMINAL_RUN_EVENTS.map((eventName) => {
 			const handler = (payload: unknown): void => handleTerminalRun(eventName, payload);
 			connection.on(eventName, handler);
 			return [eventName, handler] as const;
 		});
+
+		// Documented no-ops for the non-terminal events this hook deliberately ignores (see IGNORED_RUN_EVENTS): binding
+		// them keeps the SignalR client from logging "No client method with the name '...' found." Pushed into the SAME
+		// handlers array so the cleanup below unregisters them exactly like the terminal handlers (symmetry preserved).
+		for (const eventName of IGNORED_RUN_EVENTS) {
+			const handler = (): void => undefined;
+			connection.on(eventName, handler);
+			handlers.push([eventName, handler]);
+		}
 
 		connection.onreconnected(() => {
 			connectionEstablishedRef.current = true;

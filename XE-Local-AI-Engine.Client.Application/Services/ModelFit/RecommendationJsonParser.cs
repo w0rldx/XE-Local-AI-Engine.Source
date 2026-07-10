@@ -127,6 +127,14 @@ public static class RecommendationJsonParser
             wroteAny |= CopyProperty(model, "expert_offload", writer);
             wroteAny |= CopyProperty(model, "gpu_gb", writer);
             wroteAny |= CopyProperty(model, "cpu_gb", writer);
+            // Advisory-only quantized-KV estimate (catalog lane) rides the same additive diagnostics seam. Advisory only:
+            // the default chat launch uses an fp16 KV cache, so these fields never drive fit/ranking — they let the UI hint
+            // at the headroom a flash-attention runtime could unlock. Absent for explore-lane / insufficient-metadata rows.
+            wroteAny |= CopyProperty(model, "kv_quant", writer);
+            wroteAny |= CopyProperty(model, "kv_quant_estimated_gb", writer);
+            wroteAny |= CopyProperty(model, "kv_quant_headroom_gb", writer);
+            wroteAny |= CopyProperty(model, "kv_quant_fits", writer);
+            wroteAny |= CopyProperty(model, "kv_quant_requires_flash_attention", writer);
             writer.WriteEndObject();
 
             if (!wroteAny)

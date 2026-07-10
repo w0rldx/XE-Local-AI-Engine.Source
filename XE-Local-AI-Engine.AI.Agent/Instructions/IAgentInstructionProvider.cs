@@ -5,18 +5,12 @@ internal interface IAgentInstructionProvider
     string GetLocalChatInstructions();
 
     /// <summary>
-    ///     The versioned, app-owned base instruction scaffold (identity/grounding/tool/output discipline) prepended
-    ///     ahead of a persona's own Instructions when composing a resolved prompt, unless the definition opts out. See
-    ///     <see cref="ScaffoldVersion" />.
+    ///     The app-owned base instruction scaffold (identity/grounding/tool/output discipline) prepended ahead of a
+    ///     persona's own Instructions when composing a resolved prompt, unless the definition opts out. A scaffold text
+    ///     edit needs no explicit version marker: the runtime package config hash covers the final composed resolved
+    ///     prompt, so changing the scaffold changes the hash on its own.
     /// </summary>
     string GetBaseScaffold();
-
-    /// <summary>
-    ///     Version of the text returned by <see cref="GetBaseScaffold" />; bumped whenever its content changes. NOT
-    ///     itself folded into the runtime package config hash — the hash already covers the final composed resolved
-    ///     prompt, so a scaffold text edit changes the hash on its own. Exposed for diagnostics only.
-    /// </summary>
-    int ScaffoldVersion { get; }
 
     /// <summary>
     ///     The scaffold-composed default chat system prompt (<see cref="GetBaseScaffold" /> ahead of

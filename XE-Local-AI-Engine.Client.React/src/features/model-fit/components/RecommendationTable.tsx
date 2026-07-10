@@ -9,6 +9,7 @@ import {
 	formatContextTokens,
 	formatMemoryMb,
 	formatModelFitMetric,
+	formatModelFitReleaseDate,
 } from "@/features/model-fit/components/ModelFitFormatters";
 import type { ModelFitRecommendation } from "@/features/model-fit/models/ModelFitModels";
 
@@ -214,7 +215,10 @@ export function RecommendationTable({ recommendations, onDownload, downloadingMo
 								<Table.Td>{recommendation.quantization ?? "—"}</Table.Td>
 								<Table.Td>{formatMemoryMb(recommendation.requiredRamMb)}</Table.Td>
 								<Table.Td>{formatMemoryMb(recommendation.requiredVramMb)}</Table.Td>
-								<Table.Td>{recommendation.releaseDate ?? "—"}</Table.Td>
+								{/* Date-only, locale-formatted; the raw ISO value stays available as the cell's tooltip. */}
+								<Table.Td title={recommendation.releaseDate ?? undefined}>
+									{formatModelFitReleaseDate(recommendation.releaseDate)}
+								</Table.Td>
 								<Table.Td>
 									{recommendation.isInstalled ? (
 										<Badge color="green" variant="light" leftSection={<IconCheck size={12} />}>

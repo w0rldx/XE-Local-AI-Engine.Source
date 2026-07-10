@@ -134,6 +134,61 @@ public sealed class CatalogRecommendationServiceTests
         AssertEx.True(result.Recommended.Single(c => c.Entry.Id == "installed-model").IsInstalled);
     }
 
+    [Test]
+    public async Task BuildRecommendationsAsync_CompleteMetadata_ProducesQ8KvQuantAdvisoryBelowFp16()
+    {
+        // Complete header metadata + a model that fits at fp16: the advisory is present, computed at Q8_0, needs flash
+        // attention, and its estimate is strictly below the fp16 estimate (the quantized KV cache is the only difference).
+        var entries = new[] { Entry("fits-model", useCases: ["general"], tier: "S") };
+        var discovery = DiscoveryReturning(entries, paramCountB: 1);
+        var service = BuildService(entries, discovery, installedTag: "b9692");
+
+        var result = await service.BuildRecommendationsAsync(useCase: null, "Q4_K_M", ctxTarget: 8192, GpuProfile(64 * Gb), Empty, CancellationToken.None);
+
+        var candidate = result.Recommended.Single(c => c.Entry.Id == "fits-model");
+        var advisory = AssertEx.NotNull(candidate.KvQuantAdvisory);
+        AssertEx.Equal(KvCacheQuant.Q8_0, advisory.Quant);
+        AssertEx.True(advisory.RequiresFlashAttention, "a quantized KV cache always requires flash attention.");
+        AssertEx.True(advisory.Fits, "the advisory should still fit when the fp16 estimate fits with headroom.");
+        AssertEx.True(advisory.EstimatedBytes < candidate.Estimate.EstimatedBytes,
+            "the Q8_0 KV cache must lower the estimate below the fp16 estimate.");
+    }
+
+    [Test]
+    public async Task BuildRecommendationsAsync_IncompleteMetadata_OmitsKvQuantAdvisory()
+    {
+        // A file whose header lacks BlockCount (so the KV term is 0): the candidate still surfaces (param-count drives the
+        // weights term and it fits), but the KV-quant advisory is suppressed because the "savings" would be nil/misleading.
+        var entries = new[] { Entry("no-blocks-model", useCases: ["general"], tier: "S") };
+        var discovery = Substitute.For<IHuggingFaceGgufDiscovery>();
+        discovery.InspectRepoAsync("org/no-blocks-model-GGUF", Arg.Any<CancellationToken>())
+                 .Returns(Task.FromResult(Detail("org/no-blocks-model-GGUF", File("Q4_K_M", paramCountB: 1, blockCount: null))));
+        var service = BuildService(entries, discovery, installedTag: "b9692");
+
+        var result = await service.BuildRecommendationsAsync(useCase: null, "Q4_K_M", ctxTarget: 8192, GpuProfile(64 * Gb), Empty, CancellationToken.None);
+
+        var candidate = result.Recommended.Concat(result.CanRun).Single(c => c.Entry.Id == "no-blocks-model");
+        AssertEx.Null(candidate.KvQuantAdvisory, "an incomplete-metadata file must not carry a KV-quant advisory.");
+    }
+
+    [Test]
+    public async Task BuildRecommendationsAsync_DoesNotFitAtFp16_ProducesNoCandidate_EvenIfQ8WouldFit()
+    {
+        // A large-KV dense model that overflows a 4.5GB budget at fp16 (~5.8GB) but would fit with a Q8_0 KV cache
+        // (~3.6GB). Membership is fp16-only, so the candidate must still be excluded — the advisory never rescues it.
+        var entries = new[] { Entry("big-kv-model", useCases: ["general"], tier: "S") };
+        var discovery = Substitute.For<IHuggingFaceGgufDiscovery>();
+        discovery.InspectRepoAsync("org/big-kv-model-GGUF", Arg.Any<CancellationToken>())
+                 .Returns(Task.FromResult(Detail("org/big-kv-model-GGUF",
+                     File("Q4_K_M", paramCountB: 1, blockCount: 32, attentionHeadCount: 32, attentionHeadCountKV: 8, embeddingLength: 4096))));
+        var service = BuildService(entries, discovery, installedTag: "b9692");
+
+        var result = await service.BuildRecommendationsAsync(useCase: null, "Q4_K_M", ctxTarget: 32768, GpuProfile((long)(4.5 * Gb)), Empty, CancellationToken.None);
+
+        AssertEx.Empty(result.Recommended);
+        AssertEx.Empty(result.CanRun);
+    }
+
     private static IReadOnlySet<string> Empty { get; } = new HashSet<string>(StringComparer.Ordinal);
 
     private static ModelCatalogEntry Entry(string id,
@@ -192,9 +247,16 @@ public sealed class CatalogRecommendationServiceTests
         return new GgufRepoDetail(repoId, IsGated: false, "mit", files);
     }
 
-    private static GgufRepoFile File(string quant, double paramCountB)
+    private static GgufRepoFile File(string quant,
+        double paramCountB,
+        long? blockCount = 4,
+        long? attentionHeadCount = 4,
+        long? attentionHeadCountKV = 2,
+        long? embeddingLength = 16)
     {
-        // A small, fits-anywhere geometry (4 layers, 2 kv-heads, embedding 16 over 4 heads) so only param-count drives weights.
+        // Default: a small, fits-anywhere geometry (4 layers, 2 kv-heads, embedding 16 over 4 heads) so only param-count
+        // drives weights. Callers override the geometry to force a large KV term or to null a header field (insufficient
+        // metadata), which drives the KV-quant-advisory tests.
         var paramCount = (long)(paramCountB * 1_000_000_000d);
         return new GgufRepoFile($"model.{quant}.gguf",
             quant,
@@ -204,10 +266,10 @@ public sealed class CatalogRecommendationServiceTests
             "llama",
             quant,
             paramCount,
-            BlockCount: 4,
-            AttentionHeadCount: 4,
-            AttentionHeadCountKV: 2,
-            EmbeddingLength: 16,
+            blockCount,
+            attentionHeadCount,
+            attentionHeadCountKV,
+            embeddingLength,
             ContextLength: 8192);
     }
 

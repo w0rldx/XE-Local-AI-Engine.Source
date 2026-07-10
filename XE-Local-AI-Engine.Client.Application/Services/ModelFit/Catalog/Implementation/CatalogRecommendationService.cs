@@ -163,7 +163,47 @@ internal sealed class CatalogRecommendationService : ICatalogRecommendationServi
 
         var (file, estimate) = selected.Value;
         var modelName = GgufModelName.Format(entry.GgufRepo, file.Quant);
-        return new CatalogRecommendationCandidate(entry, file, estimate, modelName, installedKeys.Contains(modelName));
+        var kvQuantAdvisory = BuildKvQuantAdvisory(entry, file, ctxTarget, profile);
+        return new CatalogRecommendationCandidate(entry, file, estimate, modelName, installedKeys.Contains(modelName), kvQuantAdvisory);
+    }
+
+    /// <summary>
+    ///     Computes the advisory-only <see cref="KvQuantAdvisory" /> for the already-chosen <paramref name="file" />: the
+    ///     same fit estimate re-run with an 8-bit (<see cref="KvCacheQuant.Q8_0" />) KV cache. This never affects
+    ///     membership or ranking — the Recommended/CanRun split is always computed from the fp16 estimate — it only
+    ///     surfaces the headroom a flash-attention runtime could unlock. Returns <see langword="null" /> when any KV-sizing
+    ///     header field is missing/non-positive, because <see cref="MemoryFitEstimator" /> would then compute a zero KV term
+    ///     and the "savings" would be identical to fp16, making the advisory meaningless.
+    /// </summary>
+    private KvQuantAdvisory? BuildKvQuantAdvisory(ModelCatalogEntry entry, GgufRepoFile file, int ctxTarget, HardwareProfile profile)
+    {
+        if (file.BlockCount is not > 0
+            || file.AttentionHeadCountKV is not > 0
+            || file.EmbeddingLength is not > 0
+            || file.AttentionHeadCount is not > 0)
+        {
+            return null;
+        }
+
+        var quantizedEstimate = _estimator.Estimate(file.Quant,
+            file.ParamCount,
+            file.SizeBytes,
+            file.BlockCount.Value,
+            file.AttentionHeadCountKV.Value,
+            file.EmbeddingLength.Value,
+            file.AttentionHeadCount.Value,
+            ctxTarget,
+            profile,
+            kvCacheQuantized: false,
+            BuildMoeFacts(entry, file),
+            KvCacheQuant.Q8_0);
+
+        // Quantized KV always requires flash attention per the ResolvedLaunchArguments contract (KV types force FlashAttn).
+        return new KvQuantAdvisory(KvCacheQuant.Q8_0,
+            quantizedEstimate.EstimatedBytes,
+            quantizedEstimate.HeadroomBytes,
+            quantizedEstimate.Fits,
+            RequiresFlashAttention: true);
     }
 
     /// <summary>
