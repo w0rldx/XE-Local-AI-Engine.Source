@@ -194,26 +194,15 @@ public sealed class InvocationResumeRegistry : IInvocationResumeRegistry
         ToolCallLifecyclePayload payload,
         long sequence)
     {
-        // Mirrors the pump's tool-call event shape: the requested phase carries the arguments and approval flag,
-        // the completed phase carries the result and error flag. Resume events stamp the invocation id as the
-        // message id; the client remaps it to the assistant message id at the reconnect boundary.
-        var type = payload.Phase == ToolCallLifecyclePhase.Requested
-            ? ChatStreamEventTypes.ToolCallRequested
-            : ChatStreamEventTypes.ToolCallCompleted;
-
-        return new ChatStreamEvent(type,
-            state.ConversationId,
+        // Route through the same mapper the live send/regenerate paths use so a resumed stream's tool-call events are
+        // wire-identical to the ones the original stream emitted. Resume events stamp the invocation id as BOTH the
+        // message id and the request id; the client remaps them to the assistant message id at the reconnect boundary.
+        return ChatStreamEventMapper.ToolCallEvent(state.ConversationId,
             state.InvocationId,
             state.InvocationId,
-            NodeChatMessageStatusValues.Streaming,
-            sequence,
+            payload,
             _timeProvider.GetUtcNow().ToUnixTimeMilliseconds(),
-            ToolCallId: payload.ToolCallId,
-            ToolName: payload.ToolName,
-            Arguments: payload.Phase == ToolCallLifecyclePhase.Requested ? payload.Arguments : null,
-            RequiresApproval: payload.Phase == ToolCallLifecyclePhase.Requested ? payload.RequiresApproval : null,
-            Result: payload.Phase == ToolCallLifecyclePhase.Completed ? payload.Result : null,
-            IsError: payload.Phase == ToolCallLifecyclePhase.Completed ? payload.IsError : null);
+            sequence);
     }
 
     private static bool TryMapTerminal(InvocationStatus status,
@@ -325,17 +314,22 @@ public sealed class InvocationResumeRegistry : IInvocationResumeRegistry
         private readonly List<Channel<ResumeItem>> _subscribers = [];
         private readonly Lock _syncRoot = new();
 
-        public InvocationState LatestState { get; private set; } = Clone(initialState);
+        // The dispatcher hands every InvocationStateChanged subscriber a fresh, never-subsequently-mutated snapshot
+        // (see WorkerEventDispatcher.PublishStateChanged), so a published state is effectively immutable: it can be
+        // stored and fanned out by reference without a defensive copy. LatestState stays correct for a late resumer
+        // because each publish swaps in the newest snapshot, and a zero-subscriber publish (the common case) does no
+        // copying at all.
+        public InvocationState LatestState { get; private set; } = initialState;
 
         public void Publish(InvocationState state)
         {
             lock (_syncRoot)
             {
-                LatestState = Clone(state);
+                LatestState = state;
 
                 foreach (var subscriber in _subscribers)
                 {
-                    _ = subscriber.Writer.TryWrite(ResumeItem.FromState(Clone(state)));
+                    _ = subscriber.Writer.TryWrite(ResumeItem.FromState(state));
                 }
             }
         }

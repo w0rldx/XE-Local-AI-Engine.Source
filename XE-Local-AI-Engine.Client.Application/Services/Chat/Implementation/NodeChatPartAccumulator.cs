@@ -1,5 +1,7 @@
 namespace XE_Local_AI_Engine.Client.Services.Chat.Implementation;
 
+using System.Text;
+
 /// <summary>
 ///     Accumulates the ordered interleave of reasoning segments and tool cards for a single assistant turn so the
 ///     terminal persist can write a <see cref="NodeChatMessagePart" /> list (the render source of truth on reload).
@@ -49,16 +51,15 @@ public sealed class NodeChatPartAccumulator
             var trailing = _parts.Count > 0 ? _parts[^1] : null;
             if (trailing is { Kind: NodeChatMessagePartKinds.Reasoning })
             {
-                trailing.Text += delta;
+                trailing.AppendText(delta);
                 return;
             }
 
             // Parts are appended in insertion order (concurrent feed), but Snapshot() reconciles global order via
             // OrderBy(Sequence), so the "preserves global order" guarantee holds even under concurrent producers.
-            _parts.Add(new MutablePart(NodeChatMessagePartKinds.Reasoning, sequence)
-            {
-                Text = delta
-            });
+            var part = new MutablePart(NodeChatMessagePartKinds.Reasoning, sequence);
+            part.AppendText(delta);
+            _parts.Add(part);
         }
     }
 
@@ -137,11 +138,14 @@ public sealed class NodeChatPartAccumulator
 
     private sealed class MutablePart(string kind, long sequence)
     {
+        // Reasoning deltas append delta-by-delta; a StringBuilder keeps the whole segment O(n) to build instead of
+        // the O(n^2) a repeated string concat costs. Tool parts never append text, so the builder stays null for them
+        // and Text materializes once at Snapshot().
+        private StringBuilder? _text;
+
         public string Kind { get; } = kind;
 
         public long Sequence { get; } = sequence;
-
-        public string? Text { get; set; }
 
         public string? ToolCallId { get; init; }
 
@@ -155,12 +159,17 @@ public sealed class NodeChatPartAccumulator
 
         public bool? RequiresApproval { get; init; }
 
+        public void AppendText(string delta)
+        {
+            (_text ??= new StringBuilder()).Append(delta);
+        }
+
         public NodeChatMessagePart ToPart()
         {
             // Sequence is bounded by the per-turn stream counter (int range in practice); cast keeps the wire shape int.
             return new NodeChatMessagePart(Kind,
                 (int)Sequence,
-                Text,
+                _text?.ToString(),
                 ToolCallId,
                 Name,
                 State,

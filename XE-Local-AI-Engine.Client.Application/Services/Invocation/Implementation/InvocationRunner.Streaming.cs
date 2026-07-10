@@ -71,7 +71,11 @@ public sealed partial class InvocationRunner
 
         public async Task EmitReasoningAsync(StreamState stream, string thinkingChunk, CancellationToken cancellationToken)
         {
-            stream.TotalReasoningBytes += Encoding.UTF8.GetByteCount(thinkingChunk);
+            // Encode once: the encrypted transport needs the bytes and the size cap needs their length, so a single
+            // GetBytes there feeds both. The plain and loopback paths need only the length, so they take the cheaper
+            // allocation-free GetByteCount.
+            var thinkingBytes = _sendEncrypted ? Encoding.UTF8.GetBytes(thinkingChunk) : null;
+            stream.TotalReasoningBytes += thinkingBytes?.Length ?? Encoding.UTF8.GetByteCount(thinkingChunk);
             if (stream.TotalReasoningBytes > _runner._maxResponseSizeBytes)
             {
                 throw new InvalidOperationException($"Reasoning size exceeded maximum of {_runner._maxResponseSizeBytes / (1024 * 1024)}MB");
@@ -88,7 +92,7 @@ public sealed partial class InvocationRunner
                         _context.MessageId,
                         _context.EpochVersion,
                         _context.EpochKey.Span,
-                        Encoding.UTF8.GetBytes(thinkingChunk),
+                        thinkingBytes!,
                         stream.ReasoningSequence,
                         EncryptedChunkEnvelopeV1.ReasoningKind),
                     cancellationToken).ConfigureAwait(false);
@@ -106,7 +110,12 @@ public sealed partial class InvocationRunner
         public async Task EmitTextAsync(StreamState stream, string textChunk, CancellationToken cancellationToken)
         {
             stream.Sequence++;
-            stream.TotalResponseBytes += Encoding.UTF8.GetByteCount(textChunk);
+
+            // Encode once: the encrypted transport needs the bytes and the size cap needs their length, so a single
+            // GetBytes there feeds both. The plain and loopback paths need only the length, so they take the cheaper
+            // allocation-free GetByteCount.
+            var textBytes = _sendEncrypted ? Encoding.UTF8.GetBytes(textChunk) : null;
+            stream.TotalResponseBytes += textBytes?.Length ?? Encoding.UTF8.GetByteCount(textChunk);
 
             if (stream.TotalResponseBytes > _runner._maxResponseSizeBytes)
             {
@@ -123,7 +132,7 @@ public sealed partial class InvocationRunner
                         _context.MessageId,
                         _context.EpochVersion,
                         _context.EpochKey.Span,
-                        Encoding.UTF8.GetBytes(textChunk),
+                        textBytes!,
                         stream.Sequence),
                     cancellationToken).ConfigureAwait(false);
             }
@@ -178,7 +187,14 @@ public sealed partial class InvocationRunner
 
         private static int? ToNullableInt(long? value)
         {
-            return value is null ? null : checked((int)value.Value);
+            if (value is null)
+            {
+                return null;
+            }
+
+            // Token counts are non-negative and effectively always in int range, but a provider reporting a count past
+            // int.MaxValue must not fault the whole stream mid-flight: saturate at int.MaxValue instead of throwing.
+            return value.Value > int.MaxValue ? int.MaxValue : (int)value.Value;
         }
     }
 

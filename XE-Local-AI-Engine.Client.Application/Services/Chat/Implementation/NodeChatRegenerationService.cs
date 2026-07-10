@@ -7,15 +7,12 @@ using XE_Local_AI_Engine.AI.Agent.Configuration;
 using XE_Local_AI_Engine.Client.Models;
 using XE_Local_AI_Engine.Client.Models.Enums;
 using XE_Local_AI_Engine.Client.Persistence;
-using XE_Local_AI_Engine.Client.Persistence.Stores;
 using XE_Local_AI_Engine.Client.Services.Agents;
 using XE_Local_AI_Engine.Client.Services.CloudProviders;
 using XE_Local_AI_Engine.Client.Services.Events;
 using XE_Local_AI_Engine.Client.Services.Invocation;
 using XE_Local_AI_Engine.Client.Services.Memory;
 using XE_Local_AI_Engine.Client.Services.NodeSettings;
-using XE_Local_AI_Engine.Providers.CodexOAuth;
-using XE_Local_AI_Engine.Providers.CodexOAuth.Implementation;
 
 /// <summary>
 ///     Default <see cref="INodeChatRegenerationService" />. Reuses the shared runner/pump/dispatcher the local send
@@ -26,7 +23,8 @@ using XE_Local_AI_Engine.Providers.CodexOAuth.Implementation;
 /// </summary>
 public sealed class NodeChatRegenerationService(
     INodeChatPersistenceService persistence,
-    INodeChatInvocationPump invocationPump,
+    ChatInvocationStatePump invocationStatePump,
+    ChatTurnResolver turnResolver,
     INodeChatMutationGuard mutationGuard,
     ILocalChatRuntimePackageBuilder runtimePackageBuilder,
     IInvocationRunner invocationRunner,
@@ -35,15 +33,9 @@ public sealed class NodeChatRegenerationService(
     INodeRuntimeSettings runtimeSettings,
     INodeChatStreamCancellationRegistry cancellationRegistry,
     ILocalToolOfferProvider localToolOfferProvider,
-    IAgentDefinitionResolver agentDefinitionResolver,
-    IAgentDefinitionStore agentDefinitionStore,
     IDefaultAgentProvider defaultAgentProvider,
-    IOrchestrationResolver orchestrationResolver,
     INodeSettingsStore nodeSettingsStore,
-    IModelClassificationService modelClassificationService,
-    IGgufModelCapabilityResolver ggufModelCapabilityResolver,
     ILocalDefaultChatModelResolver localDefaultChatModelResolver,
-    ICloudCredentialStore cloudCredentialStore,
     IMemoryExtractionDispatcher memoryExtractionDispatcher,
     TimeProvider timeProvider,
     ILogger<NodeChatRegenerationService> logger) : INodeChatRegenerationService
@@ -144,7 +136,7 @@ public sealed class NodeChatRegenerationService(
         {
             SingleReader = true,
             // Three producers write this channel concurrently: the streaming-transition emit in RunInvocationAsync,
-            // the delta/terminal emits in PumpInvocationStatesAsync, and the tool-call lifecycle emits in
+            // the delta/terminal emits in the invocation-state pump, and the tool-call lifecycle emits in
             // OnToolCallLifecycleChanged. SingleWriter must be false.
             SingleWriter = false
         });
@@ -166,8 +158,8 @@ public sealed class NodeChatRegenerationService(
             if (args.Payload.InvocationId == requestId)
             {
                 var toolSequence = sequence.Next();
-                AccumulateToolPart(parts, args.Payload, toolSequence);
-                eventChannel.Writer.TryWrite(ToToolCallEvent(correlation, args.Payload, toolSequence));
+                ChatStreamEventMapper.AccumulateToolPart(parts, args.Payload, toolSequence);
+                eventChannel.Writer.TryWrite(ChatStreamEventMapper.ToolCallEvent(correlation.ConversationId, correlation.MessageId, correlation.RequestId, args.Payload, NowUnixMilliseconds(), toolSequence));
             }
         }
 
@@ -212,10 +204,16 @@ public sealed class NodeChatRegenerationService(
         // (extraction off) still uses its memory while mining no new candidates. Built here so it closes over the run
         // context this service holds.
         var onTerminal = resolution.Resolved is { PlaybookEnabled: true, MemoryExtractionEnabled: true } memoryAgent
-            ? BuildMemoryExtractionHook(memoryAgent, conversation, original, selectedPath, package, resolution.EffectiveModel)
+            ? ChatMemoryExtractionHook.Build(memoryExtractionDispatcher,
+                memoryAgent,
+                conversation.ConversationId,
+                conversation.MemoryExcluded,
+                package,
+                resolution.EffectiveModel,
+                () => CollectUserTurns(conversation, original, selectedPath))
             : null;
 
-        var pumpTask = PumpInvocationStatesAsync(stateChannel.Reader,
+        var pumpTask = invocationStatePump.PumpAsync(stateChannel.Reader,
             eventChannel.Writer,
             correlation,
             // Stamp the FINAL persisted variant model from the effective model (the pump terminalizes from this
@@ -323,102 +321,6 @@ public sealed class NodeChatRegenerationService(
         }
     }
 
-    private async Task PumpInvocationStatesAsync(ChannelReader<InvocationState> stateReader,
-        ChannelWriter<ChatStreamEvent> eventWriter,
-        NodeChatMessageCorrelation correlation,
-        string? requestedModel,
-        NodeChatStreamSequence sequence,
-        NodeChatPartAccumulator parts,
-        Action<InvocationState, NodeChatPumpTerminalResult>? onTerminal,
-        CancellationToken cancellationToken)
-    {
-        // The shared pump owns all persistence (INTO the variant row, by correlation); this only fans the
-        // persisted results out as SSE events. The sequence is shared with the streaming-transition event from
-        // RunInvocationAsync so all events stay monotonically ordered.
-        var cursor = NodeChatPumpCursor.Empty;
-        var terminalPersisted = false;
-
-        try
-        {
-            await foreach (var state in stateReader.ReadAllAsync(cancellationToken).ConfigureAwait(false))
-            {
-                var flush = await invocationPump.FlushDeltaAsync(correlation, state, cursor, cancellationToken).ConfigureAwait(false);
-                cursor = flush.Cursor;
-
-                if (flush.Persisted is not null)
-                {
-                    var deltaSequence = sequence.Next();
-                    // Feed the reasoning delta into the interleave under the SAME sequence as its SSE event so the
-                    // accumulated reasoning segments order correctly against the concurrently-stamped tool parts.
-                    parts.AppendReasoning(flush.ReasoningDelta, deltaSequence);
-
-                    await eventWriter.WriteAsync(ToMessageEvent(ChatStreamEventTypes.AssistantDelta,
-                            correlation,
-                            flush.Persisted,
-                            deltaSequence,
-                            flush.ContentDelta,
-                            flush.ReasoningDelta),
-                        cancellationToken).ConfigureAwait(false);
-                }
-
-                if (NodeChatInvocationPump.IsTerminal(state.Status))
-                {
-                    // Empty snapshot -> null so the persisted parts are left untouched rather than overwritten empty.
-                    var snapshot = parts.HasParts ? parts.Snapshot() : null;
-                    var terminal = await invocationPump.TerminalizeAsync(correlation, state, requestedModel, snapshot).ConfigureAwait(false);
-                    terminalPersisted = true;
-
-                    // Post-run adaptive memory: hand the just-persisted terminal to the background extraction hook before
-                    // the SSE write. The hook only schedules work on its own scope — it never blocks or throws here.
-                    onTerminal?.Invoke(state, terminal);
-
-                    await eventWriter.WriteAsync(ToMessageEvent(terminal.EventType,
-                            correlation,
-                            terminal.Persisted,
-                            sequence.Next(),
-                            inputTokens: state.InputTokens,
-                            outputTokens: state.OutputTokens,
-                            totalTokens: state.TotalTokens,
-                            reasoningTokens: state.ReasoningTokens),
-                        CancellationToken.None).ConfigureAwait(false);
-                    break;
-                }
-            }
-
-            if (!terminalPersisted)
-            {
-                await TerminalizeInterruptedStreamAsync(eventWriter,
-                    correlation,
-                    sequence.Next(),
-                    cursor,
-                    cancellationToken.IsCancellationRequested).ConfigureAwait(false);
-            }
-        }
-        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested && !terminalPersisted)
-        {
-            await TerminalizeInterruptedStreamAsync(eventWriter,
-                correlation,
-                sequence.Next(),
-                cursor,
-                wasCancelled: true).ConfigureAwait(false);
-        }
-        finally
-        {
-            eventWriter.TryComplete();
-        }
-    }
-
-    private async Task TerminalizeInterruptedStreamAsync(ChannelWriter<ChatStreamEvent> eventWriter,
-        NodeChatMessageCorrelation correlation,
-        long sequence,
-        NodeChatPumpCursor cursor,
-        bool wasCancelled)
-    {
-        var terminal = await invocationPump.TerminalizeInterruptedAsync(correlation, cursor, wasCancelled).ConfigureAwait(false);
-
-        await eventWriter.WriteAsync(ToMessageEvent(terminal.EventType, correlation, terminal.Persisted, sequence), CancellationToken.None).ConfigureAwait(false);
-    }
-
     /// <summary>
     ///     Builds the regeneration context: every completed message UP TO AND INCLUDING the USER turn that precedes
     ///     the turn being regenerated, excluding the original assistant answer and any sibling variants. Assistant
@@ -486,53 +388,6 @@ public sealed class NodeChatRegenerationService(
     }
 
     /// <summary>
-    ///     Builds the post-run memory-extraction hook for a regenerated turn (symmetric with the send path). It closes
-    ///     over the resolved agent, the loaded conversation (temp-chat flag + pre-cutoff user turns), the original turn,
-    ///     and the runtime package (config hash). On a Completed/Failed terminal it assembles the metadata-only
-    ///     execution-log telemetry plus the content-bearing run input and hands both to the background dispatcher.
-    /// </summary>
-    private Action<InvocationState, NodeChatPumpTerminalResult> BuildMemoryExtractionHook(ResolvedAgentRuntime resolved,
-        NodeChatConversationDto conversation,
-        NodeChatPersistedMessageDto original,
-        IReadOnlyDictionary<Guid, Guid>? selectedPath,
-        RuntimePackage package,
-        string? requestedModel)
-    {
-        return (state, terminal) =>
-        {
-            var failed = state.Status == InvocationStatus.Failed;
-            if (state.Status != InvocationStatus.Completed && !failed)
-            {
-                return;
-            }
-
-            var modelName = state.ModelUsed ?? requestedModel ?? package.ModelProfile ?? string.Empty;
-            var telemetry = new MemoryExtractionDispatchContext(resolved.AgentDefinitionId,
-                conversation.ConversationId,
-                terminal.Persisted.MessageId,
-                modelName,
-                package.ConfigHash,
-                state.GenerationDurationMs ?? 0,
-                !failed,
-                state.InputTokens,
-                state.OutputTokens,
-                // Exception TYPE NAME only when present — never the sanitized message text.
-                failed ? state.FailureCategory?.ToString() : null);
-
-            var run = new MemoryExtractionRunInput(resolved.AgentDefinitionId,
-                conversation.ConversationId,
-                terminal.Persisted.MessageId,
-                CollectUserTurns(conversation, original, selectedPath),
-                state.StreamedContent,
-                failed,
-                state.Error,
-                conversation.MemoryExcluded);
-
-            memoryExtractionDispatcher.Dispatch(telemetry, run);
-        };
-    }
-
-    /// <summary>
     ///     Collects the user turns for extraction from the regeneration context (pre-cutoff, selected-path collapsed,
     ///     excluding the original answer and its sibling variants), filtered to user-role turns. The agent's regenerated
     ///     answer is supplied separately as the run's <c>AssistantResponse</c>. Content is held only for the in-scope
@@ -564,15 +419,15 @@ public sealed class NodeChatRegenerationService(
     }
 
     /// <summary>
-    ///     Computes the offer-time active model and resolves the effective per-turn agent (definition + orchestration)
-    ///     up front so the regenerated variant can be stamped with the resolved agent's attribution. The effective-agent
+    ///     Derives the offer-time active model and the effective agent head for a regenerate, then defers to the shared
+    ///     <see cref="ChatTurnResolver" /> for capability/definition/orchestration resolution. The effective-agent
     ///     precedence reuses the ORIGINAL turn's recorded agent so a rerun stays on the same persona:
     ///     <c>original.AgentDefinitionId ?? conversation.AgentDefinitionId ?? (memoized) Default Assistant id</c>. The
     ///     attribution name is re-resolved (picks up a rename); when the agent was deleted the resolver returns null and
     ///     the variant falls back to the original's stored name. The relevance-retrieval query is the user turn that
     ///     precedes the regenerated turn (same cutoff anchor as the regeneration context).
     /// </summary>
-    private async Task<ResolvedTurn> ResolveTurnAsync(NodeChatConversationDto conversation,
+    private async Task<ChatTurnResolution> ResolveTurnAsync(NodeChatConversationDto conversation,
         NodeChatPersistedMessageDto original,
         CancellationToken cancellationToken)
     {
@@ -606,127 +461,7 @@ public sealed class NodeChatRegenerationService(
 
         var retrievalQuery = ResolvePrecedingUserTurnContent(conversation, original);
 
-        // Resolve the active model's advertised capabilities once (cache-first) so the think field and tool offer are
-        // gated symmetrically with the send path: a non-thinking model never receives the think field (avoiding the
-        // Ollama 400) and a non-tools model is offered no tools. Unknown/offline resolves to NOT-capable (safe default).
-        var (supportsThinking, supportsTools) = await ResolveModelCapabilitiesAsync(activeModel, cancellationToken).ConfigureAwait(false);
-
-        var resolved = await agentDefinitionResolver.ResolveAsync(effectiveAgentId, activeModel, retrievalQuery, supportsTools, honorModelProfile: !userPickedConcreteModel, cancellationToken)
-                                                    .ConfigureAwait(false);
-        var orchestration = await ResolveOrchestrationAsync(effectiveAgentId, activeModel, retrievalQuery, supportsTools, cancellationToken).ConfigureAwait(false);
-
-        // The single source of truth for the model that actually reruns this turn (agent pin when honored, else the
-        // active model). Stamped into the variant placeholder, the runtime package, and the persisted attribution so
-        // the variant's label can never disagree with what ran — symmetric with the send path.
-        var effectiveModel = resolved?.ModelProfile ?? activeModel;
-
-        return new ResolvedTurn(activeModel, effectiveModel, resolved, orchestration, supportsThinking, supportsTools, requiresInstalledChatModel);
-    }
-
-    /// <summary>
-    ///     Resolves the active model's advertised <c>thinking</c>/<c>tools</c> capabilities via the shared classification
-    ///     service (cache-first; no <c>/api/show</c> call on a cache hit). A null/blank model or any detection miss
-    ///     resolves to NOT-capable for both — the safe default that omits the think field (avoiding the Ollama 400) and
-    ///     withholds the tool offer while still allowing a plain chat.
-    /// </summary>
-    private async Task<(bool SupportsThinking, bool SupportsTools)> ResolveModelCapabilitiesAsync(string? activeModel, CancellationToken cancellationToken)
-    {
-        if (string.IsNullOrWhiteSpace(activeModel))
-        {
-            return (false, false);
-        }
-
-        // A Codex cloud model is NOT an Ollama model: classifying it against the local runtime's /api/show would
-        // mis-detect it (the runtime has never seen it). Use the Codex provider's declared capability matrix
-        // instead. Codex models reason by default, so thinking is on; tool calling tracks the V0 matrix, which now
-        // ENABLES tools for all Codex ids (de-risk verified — encrypted reasoning round-trips through the stateless
-        // tool loop). Mirrors NodeChatStreamService.ResolveModelCapabilitiesAsync so regenerate matches the send path.
-        if (CodexModelCatalog.IsCodexModel(activeModel))
-        {
-            return (SupportsThinking: true, CodexProviderCapabilities.V0.SupportsToolCalling);
-        }
-
-        // An Azure Foundry deployment id is NOT an Ollama model: advertise the Azure provider's declared capability
-        // matrix instead of an Ollama /api/show classification so an Azure id never hits the local probe. Mirrors
-        // NodeChatStreamService.ResolveModelCapabilitiesAsync so regenerate matches the send path.
-        if (await IsAzureFoundryModelAsync(activeModel, cancellationToken).ConfigureAwait(false))
-        {
-            return (SupportsThinking: false, SupportsTools: AzureFoundryProviderCapabilities.V0.SupportsToolCalling);
-        }
-
-        // A llama.cpp (GGUF) model has no Ollama entry — and in desktop mode there is no Ollama daemon — so an
-        // /api/show classification would fail or stall. When the active model is an installed GGUF, read the
-        // capabilities detected offline from its chat template (cheap, cached) instead of probing Ollama, mirroring the
-        // send path (NodeChatStreamService.ResolveModelCapabilitiesAsync). A non-GGUF model returns null here and falls
-        // through to the Ollama classification below.
-        var ggufCapabilities = await ggufModelCapabilityResolver
-                                     .TryResolveAsync(activeModel, cancellationToken)
-                                     .ConfigureAwait(false);
-        if (ggufCapabilities is { } caps)
-        {
-            return (caps.SupportsThinking, caps.SupportsTools);
-        }
-
-        var classifications = await modelClassificationService
-                                    .ClassifyAsync([(activeModel, null)], cancellationToken)
-                                    .ConfigureAwait(false);
-        if (!classifications.TryGetValue(activeModel, out var classification))
-        {
-            return (false, false);
-        }
-
-        return (ModelKindDetector.SupportsThinking(classification.Capabilities),
-            ModelKindDetector.SupportsTools(classification.Capabilities));
-    }
-
-    /// <summary>
-    ///     True when <paramref name="activeModel" /> matches one of the stored Azure Foundry connection's deployment
-    ///     names (ordinal, case-insensitive). Mirrors <c>NodeChatStreamService.IsAzureFoundryModelAsync</c>; any failure
-    ///     resolving the encrypted config is treated as "not Azure" so the gate falls through safely.
-    /// </summary>
-    private async Task<bool> IsAzureFoundryModelAsync(string activeModel, CancellationToken cancellationToken)
-    {
-        try
-        {
-            var config = await cloudCredentialStore.LoadConfigAsync(cancellationToken).ConfigureAwait(false);
-            var connection = config?.AzureFoundry;
-            return connection is { Models.Count: > 0 }
-                   && connection.Models.Any(model => string.Equals(model.DeploymentName, activeModel, StringComparison.OrdinalIgnoreCase));
-        }
-        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
-        {
-            throw;
-        }
-        catch (Exception exception)
-        {
-            logger.LogDebug(exception, "Azure Foundry deployment match could not be resolved for '{Model}'.", activeModel);
-            return false;
-        }
-    }
-
-    /// <summary>
-    ///     Mirrors <c>NodeChatStreamService.ResolveOrchestrationAsync</c>: resolves a compiled orchestration spec for a
-    ///     bound orchestrator definition (orchestration), or <c>null</c> to rerun single-agent. Only a bound conversation
-    ///     triggers the extra record fetch, so the single-agent path stays byte-identical.
-    /// </summary>
-    private async Task<ResolvedOrchestration?> ResolveOrchestrationAsync(Guid? agentDefinitionId,
-        string? activeModel,
-        string? retrievalQuery,
-        bool supportsTools,
-        CancellationToken cancellationToken)
-    {
-        if (agentDefinitionId is not { } definitionId)
-        {
-            return null;
-        }
-
-        var definition = await agentDefinitionStore.GetByIdAsync(definitionId, cancellationToken).ConfigureAwait(false);
-        if (definition is null || definition.Kind != AgentDefinitionKind.Orchestrator)
-        {
-            return null;
-        }
-
-        return await orchestrationResolver.ResolveAsync(definition, activeModel, retrievalQuery, supportsTools, cancellationToken).ConfigureAwait(false);
+        return await turnResolver.ResolveAsync(activeModel, requiresInstalledChatModel, effectiveAgentId, retrievalQuery, userPickedConcreteModel, cancellationToken).ConfigureAwait(false);
     }
 
     /// <summary>
@@ -764,71 +499,11 @@ public sealed class NodeChatRegenerationService(
         int? totalTokens = null,
         int? reasoningTokens = null)
     {
-        return new ChatStreamEvent(type,
-            correlation.ConversationId,
-            correlation.MessageId,
-            correlation.RequestId,
-            message.Status,
-            sequence,
-            NowUnixMilliseconds(),
-            delta,
-            reasoningDelta,
-            message.Content,
-            message.Reasoning,
-            message.Error,
-            message.Model,
-            inputTokens ?? message.InputCount,
-            outputTokens ?? message.OutputCount,
-            totalTokens ?? message.TotalCount,
-            reasoningTokens ?? message.ReasoningCount);
-    }
-
-    private static void AccumulateToolPart(NodeChatPartAccumulator parts, ToolCallLifecyclePayload payload, long sequence)
-    {
-        if (payload.Phase == ToolCallLifecyclePhase.Requested)
-        {
-            parts.AppendToolRequested(payload.ToolCallId, payload.ToolName, payload.Arguments, payload.RequiresApproval, sequence);
-            return;
-        }
-
-        parts.CompleteToolCall(payload.ToolCallId, payload.ToolName, payload.Result, payload.IsError, sequence);
-    }
-
-    private ChatStreamEvent ToToolCallEvent(NodeChatMessageCorrelation correlation,
-        ToolCallLifecyclePayload payload,
-        long sequence)
-    {
-        var type = payload.Phase == ToolCallLifecyclePhase.Requested
-            ? ChatStreamEventTypes.ToolCallRequested
-            : ChatStreamEventTypes.ToolCallCompleted;
-
-        return new ChatStreamEvent(type,
-            correlation.ConversationId,
-            correlation.MessageId,
-            correlation.RequestId,
-            NodeChatMessageStatusValues.Streaming,
-            sequence,
-            NowUnixMilliseconds(),
-            ToolCallId: payload.ToolCallId,
-            ToolName: payload.ToolName,
-            Arguments: payload.Phase == ToolCallLifecyclePhase.Requested ? payload.Arguments : null,
-            RequiresApproval: payload.Phase == ToolCallLifecyclePhase.Requested ? payload.RequiresApproval : null,
-            Result: payload.Phase == ToolCallLifecyclePhase.Completed ? payload.Result : null,
-            IsError: payload.Phase == ToolCallLifecyclePhase.Completed ? payload.IsError : null);
+        return ChatStreamEventMapper.MessageEvent(type, correlation, message, NowUnixMilliseconds(), sequence, delta, reasoningDelta, inputTokens, outputTokens, totalTokens, reasoningTokens);
     }
 
     private long NowUnixMilliseconds()
     {
         return timeProvider.GetUtcNow().ToUnixTimeMilliseconds();
     }
-
-    /// <summary>The up-front per-turn resolution shared by variant stamping and runtime-package construction.</summary>
-    private sealed record ResolvedTurn(
-        string? ActiveModel,
-        string? EffectiveModel,
-        ResolvedAgentRuntime? Resolved,
-        ResolvedOrchestration? Orchestration,
-        bool SupportsThinking,
-        bool SupportsTools,
-        bool RequiresInstalledChatModel);
 }

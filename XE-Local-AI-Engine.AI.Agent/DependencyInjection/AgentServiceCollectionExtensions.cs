@@ -109,10 +109,15 @@ public static class AgentServiceCollectionExtensions
             // falls back to the pinned defaults rather than throwing during a partial re-decoration.
             var pipelineOptions = serviceProvider.GetService<IOptions<AgentToolPipelineOptions>>()?.Value ?? new AgentToolPipelineOptions();
 
+            // First .Use is outermost. OpenTelemetry sits INNERMOST (below function invocation) so each provider round
+            // in a tool-calling loop emits its own gen_ai span — the documented MEAI ordering. The source name is pinned
+            // explicitly because MEAI's default ("Experimental.Microsoft.Extensions.AI") does NOT match the ServiceDefaults
+            // wildcard AddSource/AddMeter("Microsoft.Extensions.AI*"). Sensitive data (prompts/completions) is left OFF.
             return inner.AsBuilder()
                         .Use(chatClient => new ToolInvocationObservabilityChatClient(chatClient, serviceProvider.GetRequiredService<ILogger<ToolInvocationObservabilityChatClient>>()))
                         .UseFunctionInvocation(serviceProvider.GetRequiredService<ILoggerFactory>(),
                             functionInvokingChatClient => functionInvokingChatClient.MaximumIterationsPerRequest = pipelineOptions.MaximumToolIterationsPerRequest)
+                        .UseOpenTelemetry(serviceProvider.GetRequiredService<ILoggerFactory>(), sourceName: "Microsoft.Extensions.AI")
                         .Build();
         });
 

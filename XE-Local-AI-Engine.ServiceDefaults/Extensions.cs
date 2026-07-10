@@ -55,7 +55,10 @@ public static class Extensions
                               .AddRuntimeInstrumentation()
                               // Literal must match XE_Local_AI_Engine.Client.Common.Telemetry.NodeMetrics.MeterName
                               // ("XE.Node"); ServiceDefaults cannot reference the Client project.
-                              .AddMeter("XE.Node");
+                              .AddMeter("XE.Node")
+                              // Flows the OpenTelemetryChatClient's gen_ai token/duration metrics (MEAI meter
+                              // "Microsoft.Extensions.AI"); wildcard mirrors the tracing AddSource below.
+                              .AddMeter("Microsoft.Extensions.AI*");
                    })
                    .WithTracing(tracing =>
                    {

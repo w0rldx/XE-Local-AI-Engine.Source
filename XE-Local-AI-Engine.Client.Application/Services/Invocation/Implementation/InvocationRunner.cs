@@ -441,6 +441,12 @@ public sealed partial class InvocationRunner : IInvocationRunner
         // duplicate output, so subsequent segments run the provider send directly.
         var isFirstSegment = true;
 
+        // The per-segment update list below is retained ONLY to replay a folded segment when a tool-approval request
+        // surfaces. That can happen only when the package offered tools: InvocationToolResolver yields no executable
+        // tools for an empty offer list, so a tool-less turn can never wrap a tool in ApprovalRequiredAIFunction and
+        // thus never surfaces a ToolApprovalRequestContent. Skip retaining every streamed update of a plain answer.
+        var approvalPossible = package.AllowedTools.Count > 0;
+
         do
         {
             // Growth point (b): before each provider round, re-budget the (approval-)grown message list. On the first
@@ -475,7 +481,11 @@ public sealed partial class InvocationRunner : IInvocationRunner
 
             await foreach (var update in segmentStream.ConfigureAwait(false))
             {
-                segmentUpdates.Add(update);
+                if (approvalPossible)
+                {
+                    segmentUpdates.Add(update);
+                }
+
                 var textChunk = update.Text;
 
                 // Reasoning text and the terminal usage snapshot are pulled in the SAME pass that fires the tool-call
