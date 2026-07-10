@@ -121,7 +121,8 @@ public sealed class ModelCatalogProviderTests : IDisposable
     public async Task GetCatalogAsync_WhenAlreadyRemoteAndNextFetchFails_KeepsServingWorkingCache()
     {
         // First call succeeds (Remote); the handler is then reconfigured to fail. A subsequent forced refresh must not
-        // regress the already-working remote snapshot back to bundled.
+        // regress the already-working remote snapshot back to bundled — and it must have actually attempted the
+        // second fetch (CallCount == 2), not silently no-op'd on the still-warm TTL.
         var handler = new CountingStubHandler(HttpStatusCode.OK, ValidRemoteJson);
         var provider = BuildProvider(handler, refreshUrl: "https://example.test/catalog.json", out _);
         var first = await provider.RefreshAsync(CancellationToken.None);
@@ -132,6 +133,38 @@ public sealed class ModelCatalogProviderTests : IDisposable
 
         AssertEx.Equal(ModelCatalogSource.Remote, second.Source);
         AssertEx.Equal("remote-1.0.0", second.Document.CatalogVersion);
+        AssertEx.Equal(expected: 2, handler.CallCount);
+    }
+
+    [Test]
+    public async Task RefreshAsync_CalledTwiceInSuccession_AlwaysFetchesEvenWithinTtl()
+    {
+        // The operator-forced refresh must never be a silent TTL no-op: two RefreshAsync calls back-to-back — both
+        // well within the 24h RefreshTtl — must each perform a real fetch (proven by CallCount == 2), unlike
+        // GetCatalogAsync's TTL-gated fast path.
+        var handler = new CountingStubHandler(HttpStatusCode.OK, ValidRemoteJson);
+        var provider = BuildProvider(handler, refreshUrl: "https://example.test/catalog.json", out _);
+
+        var first = await provider.RefreshAsync(CancellationToken.None);
+        var second = await provider.RefreshAsync(CancellationToken.None);
+
+        AssertEx.Equal(ModelCatalogSource.Remote, first.Source);
+        AssertEx.Equal(ModelCatalogSource.Remote, second.Source);
+        AssertEx.Equal(expected: 2, handler.CallCount);
+    }
+
+    [Test]
+    public async Task GetCatalogAsync_WithinTtlAfterRefresh_DoesNotRefetch()
+    {
+        // The TTL-gated fast path (GetCatalogAsync) must still debounce: a read immediately after a successful
+        // refresh must NOT trigger another fetch. This is the behavior RefreshAsync's force-refresh must NOT disturb.
+        var handler = new CountingStubHandler(HttpStatusCode.OK, ValidRemoteJson);
+        var provider = BuildProvider(handler, refreshUrl: "https://example.test/catalog.json", out _);
+
+        await provider.RefreshAsync(CancellationToken.None);
+        await provider.GetCatalogAsync(CancellationToken.None);
+
+        AssertEx.Equal(expected: 1, handler.CallCount);
     }
 
     private ModelCatalogProvider BuildProvider(HttpMessageHandler handler, string? refreshUrl, out InMemoryCatalogCacheStore cacheStore)
