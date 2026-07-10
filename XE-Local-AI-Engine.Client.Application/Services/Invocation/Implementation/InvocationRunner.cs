@@ -20,7 +20,9 @@ using XE_Local_AI_Engine.Client.Services.CloudProviders;
 using XE_Local_AI_Engine.Client.Services.Connection;
 using XE_Local_AI_Engine.Client.Services.DeadLetter;
 using XE_Local_AI_Engine.Client.Services.Events;
+using XE_Local_AI_Engine.Client.Services.Invocation.Context;
 using XE_Local_AI_Engine.Client.Services.Invocation.Envelope;
+using XE_Local_AI_Engine.Client.Services.Invocation.Resilience;
 using XE_Local_AI_Engine.Client.Services.NodeSettings;
 
 /// <summary>
@@ -31,6 +33,10 @@ public sealed partial class InvocationRunner : IInvocationRunner
     private const string AgentToolCallFailureMessage = "Worker tool execution failed.";
     private const string ModelUnavailableMessage = "Selected model is not installed on this node.";
     private const string ProviderUnavailableMessage = "Provider unreachable.";
+
+    // Surfaced when an endpoint's circuit breaker is open (recent consecutive transient failures): a fixed, path-free
+    // message that tells the operator to retry shortly rather than reporting a hard provider outage.
+    private const string ProviderTemporarilyUnavailableMessage = "Provider temporarily unavailable. Please retry shortly.";
     private const string OrchestrationFailureMessage = "Orchestration run failed.";
     private const string ModelDoesNotSupportThinkingMessage = "This model does not support reasoning.";
 
@@ -45,6 +51,10 @@ public sealed partial class InvocationRunner : IInvocationRunner
     // "Provider unreachable." so the operator gets an actionable next step (pull a GGUF model) rather than a dead-end.
     private const string NoChatModelInstalledMessage = "No chat model installed. Pull a GGUF model to start chatting.";
 
+    // A generic (non-inter-chunk) timeout: the invocation-level cancel-after or an HTTP client timeout. Its framework
+    // message can name hosts/paths and is unbounded, so a fixed, path-free constant is surfaced in its place.
+    private const string TimedOutMessage = "The operation timed out.";
+
     private static readonly Regex FrameworkExceptionNamePattern =
         new(@"\b(?:Microsoft|System)(?:\.[A-Za-z_][A-Za-z0-9_]*)*\.[A-Za-z_][A-Za-z0-9_]*Exception\b|\b(?:AgentException|ChatClientAgentException)\b", RegexOptions.CultureInvariant,
             TimeSpan.FromSeconds(2));
@@ -52,6 +62,8 @@ public sealed partial class InvocationRunner : IInvocationRunner
     private readonly ConcurrentDictionary<Guid, TaskCompletionSource> _activeInvocationCompletions = new();
 
     private readonly ICapabilityReporter _capabilityReporter;
+    private readonly IConversationContextBudgeter _contextBudgeter;
+    private readonly ConversationContextBudgetOptions _contextBudgetOptions;
     private readonly IDeadLetterStore _deadLetterStore;
     private readonly string _defaultModel;
     private readonly IEnvelopeCryptoService _envelopeCryptoService;
@@ -63,10 +75,17 @@ public sealed partial class InvocationRunner : IInvocationRunner
     private readonly int _maxResponseSizeBytes;
     private readonly IOrchestrationAgentFactory _orchestrationAgentFactory;
     private readonly ConcurrentDictionary<string, PendingToolCall> _pendingToolCalls = new(StringComparer.Ordinal);
+    private readonly IProviderStreamResilience _providerStreamResilience;
     private readonly ILocalModelProviderResolver _providerResolver;
     private readonly IRuntimePackageValidator _runtimePackageValidator;
     private readonly SpawnOptions _spawnOptions;
     private readonly Lock _syncRoot = new();
+
+    // The effective tool-result wait budget for each active invocation, seeded from the package's
+    // ToolCallTimeoutSeconds when RunAsync starts. ExecuteApiToolCallAsync (which only carries the invocation id) reads
+    // it here so a package-scoped tool timeout wins over the node-global _maxPendingToolCallAge; absent an entry (a
+    // tool call outside an active invocation) it falls back to the node-global age.
+    private readonly ConcurrentDictionary<Guid, TimeSpan> _toolResultTimeoutsByInvocation = new();
 
     private Guid? _currentInvocationId;
 
@@ -83,6 +102,9 @@ public sealed partial class InvocationRunner : IInvocationRunner
         ICapabilityReporter capabilityReporter,
         ILocalModelProviderResolver providerResolver,
         IDeadLetterStore deadLetterStore,
+        IProviderStreamResilience providerStreamResilience,
+        IConversationContextBudgeter contextBudgeter,
+        IOptions<ConversationContextBudgetOptions> contextBudgetOptions,
         IConfiguration configuration,
         INodeRuntimeSettings runtimeSettings,
         IOptions<SpawnOptions> spawnOptions,
@@ -97,6 +119,10 @@ public sealed partial class InvocationRunner : IInvocationRunner
         _capabilityReporter = capabilityReporter ?? throw new ArgumentNullException(nameof(capabilityReporter));
         _providerResolver = providerResolver ?? throw new ArgumentNullException(nameof(providerResolver));
         _deadLetterStore = deadLetterStore ?? throw new ArgumentNullException(nameof(deadLetterStore));
+        _providerStreamResilience = providerStreamResilience ?? throw new ArgumentNullException(nameof(providerStreamResilience));
+        _contextBudgeter = contextBudgeter ?? throw new ArgumentNullException(nameof(contextBudgeter));
+        ArgumentNullException.ThrowIfNull(contextBudgetOptions);
+        _contextBudgetOptions = contextBudgetOptions.Value;
         ArgumentNullException.ThrowIfNull(configuration);
         ArgumentNullException.ThrowIfNull(runtimeSettings);
         ArgumentNullException.ThrowIfNull(spawnOptions);
@@ -136,6 +162,7 @@ public sealed partial class InvocationRunner : IInvocationRunner
 
         RegisterActiveInvocation(package.InvocationId, package.Timeouts.InvocationTimeoutSeconds, cancellationToken);
         var activeInvocationCompletion = RegisterActiveInvocationCompletion(package.InvocationId);
+        _toolResultTimeoutsByInvocation[package.InvocationId] = ResolveConfiguredToolResultTimeout(package.Timeouts);
 
         try
         {
@@ -259,6 +286,7 @@ public sealed partial class InvocationRunner : IInvocationRunner
         finally
         {
             CleanupStaleToolCalls(_maxPendingToolCallAge);
+            _toolResultTimeoutsByInvocation.TryRemove(package.InvocationId, out _);
             ClearActiveInvocation(package.InvocationId);
             CompleteActiveInvocation(package.InvocationId, activeInvocationCompletion);
             await TryReportCapabilitiesAfterInvocationAsync(package.InvocationId).ConfigureAwait(false);
@@ -380,7 +408,13 @@ public sealed partial class InvocationRunner : IInvocationRunner
         StreamState stream,
         CancellationToken invocationToken)
     {
-        var definition = BuildInvocationDefinition(package, resolvedModel);
+        // Deterministic input-context budgeting is applied at BOTH history growth points so a long conversation (or a
+        // long tool-calling loop) never overruns the window the provider is launched with. The single trim warning is
+        // gated by this flag so an invocation logs at most once regardless of how many rounds trim.
+        var budgetTrimLogged = false;
+        var seededMessages = ApplyContextBudget(BuildChatMessages(package), package, "initial-assembly", ref budgetTrimLogged);
+
+        var definition = BuildInvocationDefinition(package, resolvedModel, seededMessages);
         await using var agentContext = await _invocationAgentFactory.CreateAsync(definition, invocationToken).ConfigureAwait(false);
 
         // Maps callId → toolName so FunctionResultContent (which has no Name) can resolve the tool name
@@ -395,12 +429,51 @@ public sealed partial class InvocationRunner : IInvocationRunner
         var currentMessages = new List<ChatMessage>(agentContext.SeedMessages);
         ToolApprovalRequestContent? pendingApproval;
 
+        // Inter-chunk idle bound for every segment: if the provider stalls between streamed chunks for longer than the
+        // package's StreamIdleTimeoutSeconds the watchdog cancels the send and surfaces a distinct (Timeout-category)
+        // failure. A non-positive value disables it (the validator already rejects one for a real package).
+        var streamIdleTimeout = TimeSpan.FromSeconds(package.Timeouts.StreamIdleTimeoutSeconds);
+        var streamIdleTimeoutMessage =
+            $"Streaming stalled: no output received for {package.Timeouts.StreamIdleTimeoutSeconds}s (stream idle timeout).";
+
+        // The pre-first-token retry + circuit breaker only guards the FIRST segment's send: once any chunk has streamed
+        // (or a later approval-resume segment begins, which by definition follows earlier output) a retry could
+        // duplicate output, so subsequent segments run the provider send directly.
+        var isFirstSegment = true;
+
         do
         {
+            // Growth point (b): before each provider round, re-budget the (approval-)grown message list. On the first
+            // iteration this is a cheap passthrough (the seed was already budgeted); on an approval resume it bounds the
+            // folded tool-call + approval history. The protected recent turns — which carry the in-flight round — are
+            // never trimmed, so a budgeted list is still valid to send.
+            var budgetedMessages = ApplyContextBudget(currentMessages, package, "tool-loop", ref budgetTrimLogged);
+            if (!ReferenceEquals(budgetedMessages, currentMessages))
+            {
+                currentMessages = budgetedMessages as List<ChatMessage> ?? [.. budgetedMessages];
+            }
+
             pendingApproval = null;
             var segmentUpdates = new List<AgentResponseUpdate>();
 
-            await foreach (var update in agentContext.Agent.RunStreamingAsync(currentMessages, session: null, agentContext.RunOptions, invocationToken).ConfigureAwait(false))
+            // Each provider send is guarded by the inter-chunk idle watchdog (the watchdog owns the token the provider
+            // call binds cancellation to, so an idle expiry actually cancels the send). The first segment additionally
+            // runs through the pre-first-token retry + circuit breaker; the retry re-invokes this whole factory, so a
+            // fresh idle watchdog guards every attempt.
+            IAsyncEnumerable<AgentResponseUpdate> ProviderSend(CancellationToken sendToken)
+            {
+                return StreamIdleWatchdog.WithIdleTimeout(
+                    innerToken => agentContext.Agent.RunStreamingAsync(currentMessages, session: null, agentContext.RunOptions, innerToken),
+                    streamIdleTimeout,
+                    streamIdleTimeoutMessage,
+                    sendToken);
+            }
+
+            var segmentStream = isFirstSegment
+                ? _providerStreamResilience.ExecuteStreamingAsync(resolvedModel, ProviderSend, invocationToken)
+                : ProviderSend(invocationToken);
+
+            await foreach (var update in segmentStream.ConfigureAwait(false))
             {
                 segmentUpdates.Add(update);
                 var textChunk = update.Text;
@@ -496,6 +569,10 @@ public sealed partial class InvocationRunner : IInvocationRunner
 
                 await transport.EmitTextAsync(stream, textChunk, invocationToken).ConfigureAwait(false);
             }
+
+            // The first segment has drained; any resume segment past this point follows earlier output and must not be
+            // retried (a retry there would replay already-streamed chunks).
+            isFirstSegment = false;
 
             if (pendingApproval is not null)
             {
@@ -653,8 +730,12 @@ public sealed partial class InvocationRunner : IInvocationRunner
             }).ConfigureAwait(false);
             requestedLifecycleEmitted = true;
 
+            // The tool-RESULT wait honours the active package's ToolCallTimeoutSeconds (falling back to the node-global
+            // age when the call is not tied to an active invocation). The approval wait above intentionally keeps the
+            // node-global age: it bounds a human decision, not tool execution, so it must not shrink to the short
+            // per-tool budget.
             using var timeoutCancellationTokenSource = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
-            timeoutCancellationTokenSource.CancelAfter(_maxPendingToolCallAge);
+            timeoutCancellationTokenSource.CancelAfter(ResolveToolResultTimeout(invocationId));
 
             var result = await resultCompletion.Task.WaitAsync(timeoutCancellationTokenSource.Token).ConfigureAwait(false);
             var isError = !string.IsNullOrWhiteSpace(result.Error);
@@ -843,6 +924,22 @@ public sealed partial class InvocationRunner : IInvocationRunner
                 FailureCategory = failureCategory.ToString()
             }, CancellationToken.None).ConfigureAwait(false);
         }
+    }
+
+    // The tool-result wait budget for a package: its ToolCallTimeoutSeconds when set, else the node-global age. Read
+    // once when the invocation starts and stashed per invocation id so ExecuteApiToolCallAsync can resolve it.
+    private TimeSpan ResolveConfiguredToolResultTimeout(TimeoutSettings timeouts)
+    {
+        return timeouts.ToolCallTimeoutSeconds > 0
+            ? TimeSpan.FromSeconds(timeouts.ToolCallTimeoutSeconds)
+            : _maxPendingToolCallAge;
+    }
+
+    private TimeSpan ResolveToolResultTimeout(Guid invocationId)
+    {
+        return _toolResultTimeoutsByInvocation.TryGetValue(invocationId, out var timeout)
+            ? timeout
+            : _maxPendingToolCallAge;
     }
 
     private FailureCategory ClassifyCancellation()
