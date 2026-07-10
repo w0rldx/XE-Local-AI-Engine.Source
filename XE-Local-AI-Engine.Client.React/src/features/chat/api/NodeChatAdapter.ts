@@ -194,6 +194,12 @@ function signalRStream(opening: StreamOpening, signal: AbortSignal): AsyncIterab
 				wake = undefined;
 			};
 
+			// The highest sequence forwarded downstream. A resumed stream restarts its numbering at zero on the
+			// server (the resume registry cannot see the original stream's counter), so its events are rebased
+			// past this mark before they reach the sequence-deduping guard — otherwise the guard drops every
+			// resumed event (terminal included) as a stale duplicate and the message sticks with no error.
+			let lastPushedSequence = Number.NEGATIVE_INFINITY;
+
 			const pushEvent = (event: NodeChatStreamEventDto): void => {
 				// Latch ids from the first event when not known up front, so a reconnect can resume the run.
 				invocationId ??= event.requestId || undefined;
@@ -201,6 +207,7 @@ function signalRStream(opening: StreamOpening, signal: AbortSignal): AsyncIterab
 				if (isTerminalStreamEvent(event)) {
 					reachedTerminal = true;
 				}
+				lastPushedSequence = Math.max(lastPushedSequence, event.sequence);
 				values.push(event);
 				notify();
 			};
@@ -215,36 +222,53 @@ function signalRStream(opening: StreamOpening, signal: AbortSignal): AsyncIterab
 					return;
 				}
 
+				// Captured once per subscription: resumed events 0,1,2,… map to base, base+1, base+2,… directly
+				// after the last sequence the original stream delivered. SignalR delivers in order within one
+				// subscription, so the rebased stream stays contiguous for the guard. On a direct resume opening
+				// (nothing pushed yet) the base is 0 and the rebase is the identity.
+				const resumeSequenceBase = isResume && Number.isFinite(lastPushedSequence) ? lastPushedSequence + 1 : 0;
+
 				activeSubscription = connection.stream<NodeChatStreamEventDto>(methodName, ...args).subscribe({
 					next: (value) => {
+						if (!isResume) {
+							pushEvent(value);
+							return;
+						}
 						// Resume events stamp the invocation id as the message id; remap to the assistant id
 						// so the caller updates the same message instead of spawning a new one.
-						pushEvent(isResume && assistantMessageId ? { ...value, messageId: assistantMessageId } : value);
+						pushEvent({
+							...value,
+							sequence: resumeSequenceBase + value.sequence,
+							messageId: assistantMessageId ?? value.messageId,
+						});
 					},
 					error: (error) => {
 						activeSubscription = undefined;
-						// A ResumeMessage stream throws when the invocation is unknown/terminal — the response already
-						// finished server-side. Complete cleanly so the caller refetches the persisted conversation
-						// instead of showing a spurious failure.
-						if (isResume) {
-							completed = true;
-							notify();
-							return;
-						}
 						// Only a transport interruption is recoverable via resume: the run keeps going server-side
-						// and onReconnected will re-subscribe. A subscription error while the connection is stably
-						// connected is a genuine hub/application failure (the invocation threw during turn setup
-						// before any terminal event) — fail fast so the caller surfaces it instead of waiting for a
-						// resume that will never come.
+						// and onReconnected will re-subscribe. This applies to a resumed stream too — a second drop
+						// resumes again (each resume rebases its restarted sequences past the new high-water mark).
 						const recoverable =
 							!signal.aborted &&
 							!reachedTerminal &&
 							!!invocationId &&
 							(nodeChatConnection.status === "reconnecting" || nodeChatConnection.status === "connecting");
-						if (!recoverable) {
-							failure = error;
-							completed = true;
+						if (recoverable) {
+							notify();
+							return;
 						}
+						// A ResumeMessage stream that errors while the connection is stable means the invocation is
+						// unknown/terminal — the response already finished server-side. Complete cleanly so the caller
+						// refetches the persisted conversation instead of showing a spurious failure.
+						if (isResume) {
+							completed = true;
+							notify();
+							return;
+						}
+						// A subscription error while the connection is stably connected is a genuine hub/application
+						// failure (the invocation threw during turn setup before any terminal event) — fail fast so
+						// the caller surfaces it instead of waiting for a resume that will never come.
+						failure = error;
+						completed = true;
 						notify();
 					},
 					complete: () => {

@@ -1,7 +1,9 @@
 using System.Diagnostics;
 using FastEndpoints;
 using FastEndpoints.Swagger;
+#if DEBUG
 using Microsoft.Agents.AI.DevUI;
+#endif
 using Microsoft.AspNetCore.Diagnostics.HealthChecks;
 using Microsoft.AspNetCore.Hosting.Server;
 using Scalar.AspNetCore;
@@ -90,6 +92,10 @@ try
 
     // Agent Framework DevUI (development only): a representative named agent plus the
     // OpenAI-compatible Responses/Conversations services the DevUI dashboard requires.
+    // Compiled out of Release entirely so the preview/alpha DevUI + Hosting packages
+    // never ship in the published desktop build; the IsDevelopment() gate stays as
+    // defense in depth for Debug builds run against a non-Development environment.
+#if DEBUG
     if (builder.Environment.IsDevelopment())
     {
         builder.AddLocalAiAgentDevUi();
@@ -97,6 +103,7 @@ try
         builder.AddOpenAIConversations();
         builder.AddDevUI();
     }
+#endif
 
     // W3C trace correlation that works with Aspire/OpenTelemetry OFF (the desktop/RC default). Forcing the W3C
     // Activity id format and registering a no-op ActivityListener makes ASP.NET create a request Activity from an
@@ -286,13 +293,16 @@ try
     }
 
     // Agent Framework DevUI dashboard (development only) at /devui. The OpenAI-compatible
-    // Responses + Conversations endpoints must be mapped before MapDevUI.
+    // Responses + Conversations endpoints must be mapped before MapDevUI. Compiled out of
+    // Release (see the registration block above).
+#if DEBUG
     if (app.Environment.IsDevelopment())
     {
         app.MapOpenAIResponses();
         app.MapOpenAIConversations();
         app.MapDevUI();
     }
+#endif
 
     app.MapFallbackToFile("index.html");
 
