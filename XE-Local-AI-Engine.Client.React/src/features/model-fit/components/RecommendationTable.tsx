@@ -92,6 +92,35 @@ function MoeOffloadBadge({ recommendation }: { recommendation: ModelFitRecommend
 	);
 }
 
+// Advisory-only quantized-KV hint under the Req. VRAM figure: when the advisor computed a Q8_0-KV estimate for a
+// catalog row AND that estimate fits the budget, show the smaller footprint as a dimmed secondary line. The row's
+// primary figures are ALWAYS the fp16-KV estimate (the default launch uses fp16 KV), so this never claims the model
+// fits — the tooltip spells out the assumptions (advisory, needs flash attention, savings are estimates). An advisory
+// that still would not fit is withheld: "would not fit either way" is noise, not guidance.
+function KvQuantHint({ recommendation }: { recommendation: ModelFitRecommendation }) {
+	const { t } = useTranslation();
+	if (recommendation.kvQuant === null || recommendation.kvQuantFits !== true || recommendation.kvQuantEstimatedGb === null) {
+		return null;
+	}
+	return (
+		<Tooltip
+			label={t(
+				"pages.modelFit.recommendations.kvQuant.tooltip",
+				"Advisory estimate only — the fit shown uses the default fp16 KV cache. A quantized KV cache requires flash attention and matching launch flags; the savings are an estimate, not guaranteed compatibility.",
+			)}
+			multiline={true}
+			maw={280}
+		>
+			<Text size="xs" c="dimmed" data-testid={`model-fit-kv-quant-hint-${recommendation.rank}`}>
+				{t("pages.modelFit.recommendations.kvQuant.hint", "≈ {{gb}} GB with {{quant}} KV cache", {
+					gb: recommendation.kvQuantEstimatedGb.toFixed(1),
+					quant: recommendation.kvQuant,
+				})}
+			</Text>
+		</Tooltip>
+	);
+}
+
 // The Fit cell renders the advisor's run-mode fit level ("GPU"/"CPU") as a colored badge plus a CPU-mode badge for a
 // CPU run. The "CPU" fit level duplicates the dedicated CPU-mode badge, so a CPU row shows only the CPU-mode badge;
 // a non-CPU fit level renders its own colored badge. When neither applies, the cell shows a dash.
@@ -214,7 +243,10 @@ export function RecommendationTable({ recommendations, onDownload, downloadingMo
 								<Table.Td>{formatContextTokens(recommendation.contextTokens)}</Table.Td>
 								<Table.Td>{recommendation.quantization ?? "—"}</Table.Td>
 								<Table.Td>{formatMemoryMb(recommendation.requiredRamMb)}</Table.Td>
-								<Table.Td>{formatMemoryMb(recommendation.requiredVramMb)}</Table.Td>
+								<Table.Td>
+									{formatMemoryMb(recommendation.requiredVramMb)}
+									<KvQuantHint recommendation={recommendation} />
+								</Table.Td>
 								{/* Date-only, locale-formatted; the raw ISO value stays available as the cell's tooltip. */}
 								<Table.Td title={recommendation.releaseDate ?? undefined}>
 									{formatModelFitReleaseDate(recommendation.releaseDate)}

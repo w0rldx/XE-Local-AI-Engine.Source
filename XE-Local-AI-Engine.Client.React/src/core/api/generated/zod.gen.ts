@@ -1089,6 +1089,11 @@ export const zXeLocalAiEngineClientEndpointsModelFitV1ModelFitRecommendationResp
 	expertsOffloaded: z.boolean().optional(),
 	gpuGb: z.number().nullish(),
 	cpuGb: z.number().nullish(),
+	kvQuant: z.string().nullish(),
+	kvQuantEstimatedGb: z.number().nullish(),
+	kvQuantHeadroomGb: z.number().nullish(),
+	kvQuantFits: z.boolean().nullish(),
+	kvQuantRequiresFlashAttention: z.boolean().nullish(),
 });
 
 export const zXeLocalAiEngineClientEndpointsModelFitV1GetLatestRecommendationsResponse = z.object({

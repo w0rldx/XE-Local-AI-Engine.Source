@@ -71,6 +71,11 @@ function toModelFitRecommendation(
 		expertsOffloaded: dto.expertsOffloaded ?? false,
 		gpuGb: dto.gpuGb ?? null,
 		cpuGb: dto.cpuGb ?? null,
+		kvQuant: dto.kvQuant ?? null,
+		kvQuantEstimatedGb: dto.kvQuantEstimatedGb ?? null,
+		kvQuantHeadroomGb: dto.kvQuantHeadroomGb ?? null,
+		kvQuantFits: dto.kvQuantFits ?? null,
+		kvQuantRequiresFlashAttention: dto.kvQuantRequiresFlashAttention ?? null,
 	};
 }
 

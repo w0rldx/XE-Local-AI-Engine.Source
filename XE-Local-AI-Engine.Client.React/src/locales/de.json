@@ -2174,6 +2174,10 @@
 					"badge": "Experten auf CPU – langsamer, höhere Qualität",
 					"breakdown": "GPU {{gpuGb}} GB + RAM {{cpuGb}} GB"
 				},
+				"kvQuant": {
+					"hint": "≈ {{gb}} GB mit {{quant}} KV-Cache",
+					"tooltip": "Nur eine Schätzung – die angezeigte Passung nutzt den Standard-fp16-KV-Cache. Ein quantisierter KV-Cache erfordert Flash Attention und passende Startparameter; die Ersparnis ist eine Schätzung, keine garantierte Kompatibilität."
+				},
 				"catalog": {
 					"version": "Katalog v{{version}}",
 					"source": {

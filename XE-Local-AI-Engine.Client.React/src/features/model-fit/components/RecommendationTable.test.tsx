@@ -50,6 +50,11 @@ function makeRecommendation(overrides: Partial<ModelFitRecommendation>): ModelFi
 		expertsOffloaded: false,
 		gpuGb: null,
 		cpuGb: null,
+		kvQuant: null,
+		kvQuantEstimatedGb: null,
+		kvQuantHeadroomGb: null,
+		kvQuantFits: null,
+		kvQuantRequiresFlashAttention: null,
 		...overrides,
 	};
 }
@@ -302,6 +307,46 @@ describe("RecommendationTable", () => {
 		renderTable(<RecommendationTable recommendations={[gpuOnly]} />);
 
 		expect(screen.queryByTestId("model-fit-moe-offload-badge-1")).toBeNull();
+	});
+
+	it("shows the advisory quantized-KV hint when the advisor computed a fitting Q8_0 estimate", () => {
+		const withAdvisory = makeRecommendation({
+			rank: 1,
+			kvQuant: "Q8_0",
+			kvQuantEstimatedGb: 10.965,
+			kvQuantHeadroomGb: 3.1,
+			kvQuantFits: true,
+			kvQuantRequiresFlashAttention: true,
+		});
+
+		renderTable(<RecommendationTable recommendations={[withAdvisory]} />);
+
+		// The test i18n stub returns the raw default string (no interpolation), so assert presence only —
+		// the same convention as the MoE-offload badge tests above.
+		expect(screen.getByTestId("model-fit-kv-quant-hint-1")).toBeTruthy();
+	});
+
+	it("withholds the quantized-KV hint when the advisory estimate still would not fit", () => {
+		const stillTooBig = makeRecommendation({
+			rank: 1,
+			kvQuant: "Q8_0",
+			kvQuantEstimatedGb: 22.4,
+			kvQuantHeadroomGb: -4.2,
+			kvQuantFits: false,
+			kvQuantRequiresFlashAttention: true,
+		});
+
+		renderTable(<RecommendationTable recommendations={[stillTooBig]} />);
+
+		expect(screen.queryByTestId("model-fit-kv-quant-hint-1")).toBeNull();
+	});
+
+	it("renders no quantized-KV hint for a row without an advisory", () => {
+		const noAdvisory = makeRecommendation({ rank: 1 });
+
+		renderTable(<RecommendationTable recommendations={[noAdvisory]} />);
+
+		expect(screen.queryByTestId("model-fit-kv-quant-hint-1")).toBeNull();
 	});
 
 	it("renders an explore-section row (all new fields null/false) without crashing", () => {
