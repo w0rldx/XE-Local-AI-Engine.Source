@@ -1,5 +1,13 @@
-import { Alert, Anchor, Badge, Button, Card, Container, Group, Loader, Select, Stack, Text, Title } from "@mantine/core";
-import { IconAlertTriangle, IconCpu, IconExternalLink, IconInfoCircle, IconRefresh } from "@tabler/icons-react";
+import { Alert, Anchor, Badge, Button, Card, Collapse, Container, Group, Loader, Select, Stack, Text, Title } from "@mantine/core";
+import {
+	IconAlertTriangle,
+	IconChevronDown,
+	IconChevronUp,
+	IconCpu,
+	IconExternalLink,
+	IconInfoCircle,
+	IconRefresh,
+} from "@tabler/icons-react";
 import { useNavigate } from "@tanstack/react-router";
 import { useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
@@ -22,6 +30,8 @@ import {
 import {
 	useHardwareProfile,
 	useLatestRecommendations,
+	useModelFitCatalog,
+	useRefreshModelFitCatalog,
 	useRefreshRecommendations,
 } from "@/features/model-fit/queries/useModelFit";
 import { useModelFitManagementStore } from "@/features/model-fit/stores/ModelFitManagementStore";
@@ -44,11 +54,15 @@ export function ModelRecommendationsPage() {
 
 	// Forced hardware re-probe flag — flipped on by the refresh action so the next profile query re-detects the box.
 	const [hardwareRefresh, setHardwareRefresh] = useState(false);
+	// "Can run (reduced quality)" is collapsed by default — it's the noisier, lower-confidence group.
+	const [canRunOpen, setCanRunOpen] = useState(false);
 
 	const filters = useMemo(() => ({ useCase }), [useCase]);
 	const latestQuery = useLatestRecommendations(filters);
 	const jobsQuery = useScheduledJobs();
 	const refreshMutation = useRefreshRecommendations();
+	const catalogQuery = useModelFitCatalog();
+	const refreshCatalogMutation = useRefreshModelFitCatalog();
 
 	const hardwareQuery = useHardwareProfile(hardwareRefresh);
 	const startDownload = useStartGgufDownload();
@@ -136,6 +150,17 @@ export function ModelRecommendationsPage() {
 		);
 	};
 
+	const handleRefreshCatalog = (): void => {
+		refreshCatalogMutation.mutate(undefined, {
+			onSuccess: () =>
+				toast.success(t("pages.modelFit.recommendations.catalog.toasts.refreshed", "The model catalog was refreshed.")),
+			onError: (error) =>
+				toast.error(
+					errorMessage(error, t("pages.modelFit.recommendations.catalog.toasts.refreshError", "Could not refresh the model catalog.")),
+				),
+		});
+	};
+
 	const useCaseData = modelFitUseCases.map((value) => ({
 		value,
 		label: t(`pages.modelFit.recommendations.useCases.${value}`, value),
@@ -143,6 +168,12 @@ export function ModelRecommendationsPage() {
 
 	const hasCache = latest?.hasCache ?? false;
 	const downloadingModelName = startDownload.isPending ? (startDownload.variables?.repoId ?? null) : null;
+
+	// Split the one flat ranked list into the three sections the backend now returns: hardware-confident picks,
+	// reduced-quality-but-runnable picks, and trending catalog entries to explore.
+	const recommendedRows = latest?.recommendations.filter((row) => row.section === "recommended") ?? [];
+	const canRunRows = latest?.recommendations.filter((row) => row.section === "canRun") ?? [];
+	const exploreRows = latest?.recommendations.filter((row) => row.section === "explore") ?? [];
 
 	return (
 		<Container fluid={true} py="lg">
@@ -277,11 +308,58 @@ export function ModelRecommendationsPage() {
 								</Group>
 
 								{latest.recommendations.length > 0 ? (
-									<RecommendationTable
-										recommendations={latest.recommendations}
-										onDownload={handleRecommendationDownload}
-										downloadingModelName={downloadingModelName}
-									/>
+									<Stack gap="lg">
+										{recommendedRows.length > 0 ? (
+											<Stack gap="xs" data-testid="model-fit-section-recommended">
+												<Title order={4}>
+													{t("pages.modelFit.recommendations.sections.recommended", "Recommended for your hardware")}
+												</Title>
+												<RecommendationTable
+													recommendations={recommendedRows}
+													onDownload={handleRecommendationDownload}
+													downloadingModelName={downloadingModelName}
+												/>
+											</Stack>
+										) : null}
+
+										{canRunRows.length > 0 ? (
+											<Stack gap="xs" data-testid="model-fit-section-can-run">
+												<Button
+													variant="subtle"
+													color="gray"
+													size="sm"
+													px={0}
+													leftSection={canRunOpen ? <IconChevronUp size={14} /> : <IconChevronDown size={14} />}
+													onClick={() => setCanRunOpen((current) => !current)}
+													data-testid="model-fit-section-can-run-toggle"
+												>
+													{t("pages.modelFit.recommendations.sections.canRunCount", "Can run ({{count}})", {
+														count: canRunRows.length,
+													})}
+												</Button>
+												<Collapse expanded={canRunOpen}>
+													<RecommendationTable
+														recommendations={canRunRows}
+														onDownload={handleRecommendationDownload}
+														downloadingModelName={downloadingModelName}
+													/>
+												</Collapse>
+											</Stack>
+										) : null}
+
+										{exploreRows.length > 0 ? (
+											<Stack gap="xs" data-testid="model-fit-section-explore">
+												<Title order={4}>
+													{t("pages.modelFit.recommendations.sections.explore", "Explore trending on Hugging Face")}
+												</Title>
+												<RecommendationTable
+													recommendations={exploreRows}
+													onDownload={handleRecommendationDownload}
+													downloadingModelName={downloadingModelName}
+												/>
+											</Stack>
+										) : null}
+									</Stack>
 								) : (
 									<Text c="dimmed" data-testid="model-fit-recommendations-empty-list">
 										{t("pages.modelFit.recommendations.emptyList", "The latest snapshot returned no recommendations.")}
@@ -300,6 +378,41 @@ export function ModelRecommendationsPage() {
 						) : null}
 					</Stack>
 				</Card>
+
+				{catalogQuery.data ? (
+					<Card withBorder={true} radius="md" p="md" data-testid="model-fit-catalog-info">
+						<Group justify="space-between" align="center" wrap="wrap">
+							<Group gap="md" wrap="wrap">
+								<Text size="sm" c="dimmed" data-testid="model-fit-catalog-version">
+									{t("pages.modelFit.recommendations.catalog.version", "Catalog v{{version}}", {
+										version: catalogQuery.data.catalogVersion,
+									})}
+								</Text>
+								<Badge variant="light" data-testid="model-fit-catalog-source">
+									{t(`pages.modelFit.recommendations.catalog.source.${catalogQuery.data.source}`, catalogQuery.data.source)}
+								</Badge>
+								{catalogQuery.data.updatedAt ? (
+									<Text size="sm" c="dimmed" data-testid="model-fit-catalog-updated-at">
+										{t("pages.modelFit.recommendations.catalog.updatedAt", "Updated {{time}}", {
+											time: new Date(catalogQuery.data.updatedAt).toLocaleString(),
+										})}
+									</Text>
+								) : null}
+							</Group>
+							<Button
+								variant="default"
+								size="xs"
+								leftSection={<IconRefresh size={14} />}
+								loading={refreshCatalogMutation.isPending}
+								disabled={refreshCatalogMutation.isPending}
+								onClick={handleRefreshCatalog}
+								data-testid="model-fit-catalog-refresh-button"
+							>
+								{t("pages.modelFit.recommendations.catalog.refreshButton", "Refresh catalog")}
+							</Button>
+						</Group>
+					</Card>
+				) : null}
 
 				{/* Inference Optimizer (Lane C3): tuned llama.cpp launch profiles for this node. A distinct, unobtrusive
 				    section below the recommendations — outcomes only (status + tok/s + VRAM), never raw launch flags. */}

@@ -1,5 +1,6 @@
 namespace XE_Local_AI_Engine.Providers.HuggingFace.Implementation;
 
+using System.Text.RegularExpressions;
 using Microsoft.Extensions.Logging;
 using XE_Local_AI_Engine.Providers.Abstractions.Gguf;
 using XE_Local_AI_Engine.Providers.HuggingFace.Options;
@@ -10,13 +11,25 @@ using XE_Local_AI_Engine.Providers.HuggingFace.Options;
 ///     and inspects a single repo's actual files, populating per-file quant/size/integrity + GGUF header metadata. Each
 ///     summary is tagged with a soft <see cref="GgufPublisherTrust" /> publisher-trust flag (never an exclusion gate).
 /// </summary>
-internal sealed class HuggingFaceGgufDiscovery : IHuggingFaceGgufDiscovery
+/// <remarks>
+///     Considered-and-deferred perf idea (follow-up: revisit if inspection latency is still a problem after bounded
+///     concurrency + caching): the model-fit advisor's quant-ladder walk (<c>ModelFitRefreshService.SelectBestFittingFile</c>)
+///     only needs each file's name + size to rank candidates, and reads only the winner's full GGUF header — in principle
+///     <see cref="InspectRepoAsync" /> could defer ALL header reads until after ranking. Not implemented: the KV-cache term
+///     in <c>MemoryFitEstimator.Estimate</c> depends on header-only fields (block/head counts, embedding length), so a
+///     candidate's fits-the-budget verdict is header-dependent — deferring headers for non-winning candidates would change
+///     which file the ladder walk picks in edge cases, not just how fast it gets there. Bounded concurrency (this file) +
+///     TTL caching (<see cref="HfHubClient" />, <see cref="GgufHeaderReader" />) deliver the same latency win without that
+///     behavior change.
+/// </remarks>
+internal sealed partial class HuggingFaceGgufDiscovery : IHuggingFaceGgufDiscovery
 {
     private const string GgufExtension = ".gguf";
     private readonly GgufHeaderReader _headerReader;
 
     private readonly HfHubClient _hubClient;
     private readonly ILogger<HuggingFaceGgufDiscovery> _logger;
+    private readonly HuggingFaceOptions _options;
 
     public HuggingFaceGgufDiscovery(HfHubClient hubClient,
         GgufHeaderReader headerReader,
@@ -30,6 +43,7 @@ internal sealed class HuggingFaceGgufDiscovery : IHuggingFaceGgufDiscovery
 
         _hubClient = hubClient;
         _headerReader = headerReader;
+        _options = options;
         _logger = logger;
     }
 
@@ -77,7 +91,9 @@ internal sealed class HuggingFaceGgufDiscovery : IHuggingFaceGgufDiscovery
 
     // Shared enumeration: lists a repo's usable, non-projector .gguf files; reads each file's GGUF header (a per-file
     // HTTP range request) only when includeHeaderMetadata is set. The header-free path backs interactive surfaces
-    // (the quant picker) that need only quant + size, avoiding N sequential range reads.
+    // (the quant picker) that need only quant + size, avoiding N range reads. When headers ARE requested, they are
+    // fetched with bounded concurrency (ReadHeadersAsync) rather than one at a time — a repo can ship 10-25 quant
+    // variants, and the header reads are independent per-file range requests with no ordering dependency.
     private async Task<GgufRepoDetail> InspectCoreAsync(string repoId, bool includeHeaderMetadata, CancellationToken ct)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(repoId);
@@ -88,7 +104,7 @@ internal sealed class HuggingFaceGgufDiscovery : IHuggingFaceGgufDiscovery
             return new GgufRepoDetail(repoId, IsGated: false, License: null, []);
         }
 
-        var files = new List<GgufRepoFile>();
+        var usable = new List<(HfHubClient.HubRepoFile File, string Quant)>();
         foreach (var file in detail.Files)
         {
             // Single source of truth for "selectable model file": a real .gguf, not an mmproj projector companion, with
@@ -101,11 +117,20 @@ internal sealed class HuggingFaceGgufDiscovery : IHuggingFaceGgufDiscovery
             }
 
             // Non-null by IsUsableGgufFile (which requires a parseable quant); re-parsed here to capture the token.
-            var quant = GgufQuantParser.TryParse(file.FileName)!;
+            usable.Add((file, GgufQuantParser.TryParse(file.FileName)!));
+        }
 
-            var header = includeHeaderMetadata
-                ? await _headerReader.ReadHeaderAsync(detail.RepoId, file.FileName, detail.Revision, ct).ConfigureAwait(false)
-                : null;
+        usable = GroupShards(usable);
+
+        var headers = includeHeaderMetadata
+            ? await ReadHeadersAsync(detail.RepoId, detail.Revision, usable, ct).ConfigureAwait(false)
+            : null;
+
+        var files = new List<GgufRepoFile>(usable.Count);
+        for (var i = 0; i < usable.Count; i++)
+        {
+            var (file, quant) = usable[i];
+            var header = headers?[i];
 
             files.Add(new GgufRepoFile(file.FileName,
                 quant,
@@ -119,10 +144,108 @@ internal sealed class HuggingFaceGgufDiscovery : IHuggingFaceGgufDiscovery
                 header?.AttentionHeadCount,
                 header?.AttentionHeadCountKV,
                 header?.EmbeddingLength,
-                header?.ContextLength));
+                header?.ContextLength,
+                header?.ExpertCount,
+                header?.ExpertUsedCount));
         }
 
         return new GgufRepoDetail(detail.RepoId, detail.IsGated, detail.License, files);
+    }
+
+    // Reads every usable file's GGUF header with at most HeaderReadConcurrency in flight at once, preserving the
+    // input order in the returned array (index i is usable[i]'s header) so the caller can zip them back together.
+    private async Task<GgufHeaderMetadata[]> ReadHeadersAsync(string repoId,
+        string revision,
+        IReadOnlyList<(HfHubClient.HubRepoFile File, string Quant)> usable,
+        CancellationToken ct)
+    {
+        var results = new GgufHeaderMetadata[usable.Count];
+        var concurrency = Math.Max(val1: 1, _options.HeaderReadConcurrency);
+        using var gate = new SemaphoreSlim(concurrency, concurrency);
+
+        var reads = usable.Select(async (entry, index) =>
+        {
+            await gate.WaitAsync(ct).ConfigureAwait(false);
+            try
+            {
+                results[index] = await _headerReader.ReadHeaderAsync(repoId, entry.File.FileName, revision, ct).ConfigureAwait(false);
+            }
+            finally
+            {
+                gate.Release();
+            }
+        });
+
+        await Task.WhenAll(reads).ConfigureAwait(false);
+        return results;
+    }
+
+    // llama.cpp's split-GGUF naming convention for a model too large for one file: "<base>-00001-of-00003.gguf".
+    // Only the FIRST split carries the full GGUF metadata header (architecture, context length, etc.); later
+    // splits are raw tensor-data continuations with no header of their own and are never independently loadable.
+    // Verified live 2026-07-10: Qwen/Qwen2.5-Coder-14B-Instruct-GGUF ships Q4_K_M as two splits (8.0GB + 0.99GB) —
+    // treating them as independent candidates let the advisor pick the 0.99GB second split alone and under-estimate
+    // a 14B model's footprint at ~1.8GB.
+    [GeneratedRegex(@"^(?<base>.+)-(?<part>\d{5})-of-(?<total>\d{5})\.gguf$",
+        RegexOptions.IgnoreCase | RegexOptions.CultureInvariant,
+        matchTimeoutMilliseconds: 2000)]
+    private static partial Regex ShardSuffixRegex();
+
+    // Collapses each split-GGUF group into ONE candidate (representative = the lowest-numbered split, size = the
+    // sum of every split in the group) and drops a split group entirely when a merged single-file variant of the
+    // same quant is also present (dedupe by quant, prefer the non-sharded file). Non-split files pass through
+    // untouched. Applied once, right after usability filtering, so every consumer of GgufRepoFile
+    // (ListRepoFilesAsync, InspectRepoAsync, and — through them — the advisor and the model catalog) sees one
+    // candidate per logical model+quant, never a bare, unloadable split fragment.
+    private static List<(HfHubClient.HubRepoFile File, string Quant)> GroupShards(List<(HfHubClient.HubRepoFile File, string Quant)> usable)
+    {
+        var plain = new List<(HfHubClient.HubRepoFile File, string Quant)>();
+        var shardGroups = new Dictionary<string, List<(HfHubClient.HubRepoFile File, string Quant, string Part)>>(StringComparer.OrdinalIgnoreCase);
+
+        foreach (var entry in usable)
+        {
+            var match = ShardSuffixRegex().Match(entry.File.FileName);
+            if (!match.Success)
+            {
+                plain.Add(entry);
+                continue;
+            }
+
+            var baseName = match.Groups["base"].Value;
+            if (!shardGroups.TryGetValue(baseName, out var group))
+            {
+                group = [];
+                shardGroups[baseName] = group;
+            }
+
+            group.Add((entry.File, entry.Quant, match.Groups["part"].Value));
+        }
+
+        if (shardGroups.Count == 0)
+        {
+            return usable;
+        }
+
+        // Fixed-width (5-digit) zero-padded part numbers sort correctly under ordinal string comparison, so no
+        // int.Parse is needed to find the lowest-numbered (first) split.
+        var plainQuants = plain.Select(static p => p.Quant).ToHashSet(StringComparer.Ordinal);
+        var result = new List<(HfHubClient.HubRepoFile File, string Quant)>(plain.Count + shardGroups.Count);
+        result.AddRange(plain);
+
+        foreach (var group in shardGroups.Values)
+        {
+            var representative = group.OrderBy(static g => g.Part, StringComparer.Ordinal).First();
+            if (plainQuants.Contains(representative.Quant))
+            {
+                // A merged single-file variant of the same quant already exists — prefer it, drop the split group.
+                continue;
+            }
+
+            var totalSize = group.Sum(static g => g.File.SizeBytes);
+            result.Add((representative.File with { SizeBytes = totalSize }, representative.Quant));
+        }
+
+        return result;
     }
 
     private static bool IsUsableGgufFile(string fileName)

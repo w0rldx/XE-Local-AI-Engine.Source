@@ -60,11 +60,13 @@ public static class HuggingFaceServiceCollectionExtensions
 
         services.TryAddSingleton(static sp => new HfHubClient(sp.GetRequiredService<IHttpClientFactory>().CreateClient(HubHttpClientName),
             sp.GetRequiredService<HuggingFaceOptions>(),
-            sp.GetRequiredService<ILogger<HfHubClient>>()));
+            sp.GetRequiredService<ILogger<HfHubClient>>(),
+            sp.GetService<TimeProvider>()));
 
         services.TryAddSingleton(static sp => new GgufHeaderReader(sp.GetRequiredService<IHttpClientFactory>().CreateClient(DownloadHttpClientName),
             sp.GetRequiredService<HuggingFaceOptions>(),
-            sp.GetRequiredService<ILogger<GgufHeaderReader>>()));
+            sp.GetRequiredService<ILogger<GgufHeaderReader>>(),
+            sp.GetService<TimeProvider>()));
 
         services.TryAddSingleton<IHuggingFaceGgufDiscovery>(static sp => new HuggingFaceGgufDiscovery(sp.GetRequiredService<HfHubClient>(),
             sp.GetRequiredService<GgufHeaderReader>(),

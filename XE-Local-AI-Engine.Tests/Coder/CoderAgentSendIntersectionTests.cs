@@ -11,6 +11,7 @@ using XE_Local_AI_Engine.Client.Services.Agents.Implementation;
 using XE_Local_AI_Engine.Client.Services.Chat.Implementation;
 using XE_Local_AI_Engine.Client.Services.Coder.Tools;
 using XE_Local_AI_Engine.Tests.Testing;
+using XE_Local_AI_Engine.Tests.Testing.Mocks;
 
 /// <summary>
 ///     The HIGH-1 intersection gate. End-to-end across the REAL <see cref="LocalToolOfferProvider" /> (real
@@ -120,6 +121,7 @@ public sealed class CoderAgentSendIntersectionTests
             offerProvider,
             new LexicalPlaybookRetrievalRanker(),
             Options.Create(new PlaybookRetrievalOptions()),
+            new FakeAgentInstructionProvider(),
             NullLogger<AgentDefinitionResolver>.Instance);
     }
 }

@@ -18,7 +18,7 @@ export type ReasoningEffort = "none" | "on" | "minimal" | "low" | "medium" | "hi
 
 export type ToolCallState = "requesting" | "waiting" | "received" | "failed";
 
-export type ChatMessagePartKind = "reasoning" | "tool" | "text";
+export type ChatMessagePartKind = "reasoning" | "tool" | "text" | "notice";
 
 /** A folded "Thoughts" run. Each reasoning segment renders as its own block (Option A interleave). */
 export interface ChatReasoningPart {
@@ -55,7 +55,22 @@ export interface ChatTextPart {
 	text: string;
 }
 
-export type ChatMessagePart = ChatReasoningPart | ChatToolPart | ChatTextPart;
+/**
+ * A non-fatal "turn notice" (model substitution, tool disabled, history truncated) surfaced by the backend as its
+ * own stream event / persisted part kind. Rendered as a small muted system-style row — distinct from an error and
+ * from the plain answer text — never a fatal state for the turn.
+ */
+export interface ChatNoticePart {
+	kind: "notice";
+	id: string;
+	sequence: number;
+	// One of "ModelSubstituted" | "ToolDisabled" | "HistoryTruncated" (server enum name, used to pick an icon).
+	noticeKind: string;
+	// Sanitized, user-facing sentence from the backend — displayed verbatim, never re-translated.
+	text: string;
+}
+
+export type ChatMessagePart = ChatReasoningPart | ChatToolPart | ChatTextPart | ChatNoticePart;
 
 export type TimelineEventType =
 	| "ToolCall"

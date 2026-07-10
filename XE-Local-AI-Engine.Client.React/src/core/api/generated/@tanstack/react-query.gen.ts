@@ -89,6 +89,7 @@ import {
 	getLocalModelDetails,
 	getMcpServer,
 	getMcpServerTools,
+	getModelCatalogInfo,
 	getNodeChatConversation,
 	getNodeChatMessageFeedback,
 	getNodeSettings,
@@ -138,6 +139,7 @@ import {
 	pollNodeBinding,
 	promoteSuggestedPlaybookAction,
 	putModelKind,
+	refreshModelCatalog,
 	refreshRecommendations,
 	reindexCorpus,
 	reindexKnowledgeDocument,
@@ -339,6 +341,8 @@ import type {
 	GetMcpServerResponse,
 	GetMcpServerToolsData,
 	GetMcpServerToolsResponse,
+	GetModelCatalogInfoData,
+	GetModelCatalogInfoResponse,
 	GetNodeChatConversationData,
 	GetNodeChatConversationError,
 	GetNodeChatConversationResponse,
@@ -440,6 +444,8 @@ import type {
 	PromoteSuggestedPlaybookActionResponse,
 	PutModelKindData,
 	PutModelKindResponse,
+	RefreshModelCatalogData,
+	RefreshModelCatalogResponse,
 	RefreshRecommendationsData,
 	RefreshRecommendationsResponse,
 	ReindexCorpusData,
@@ -1583,6 +1589,28 @@ export const getLlamaCppRuntimeOptions = (options?: Options<GetLlamaCppRuntimeDa
 		queryKey: getLlamaCppRuntimeQueryKey(options),
 	});
 
+export const getModelCatalogInfoQueryKey = (options?: Options<GetModelCatalogInfoData>) =>
+	createQueryKey("getModelCatalogInfo", options);
+
+export const getModelCatalogInfoOptions = (options?: Options<GetModelCatalogInfoData>) =>
+	queryOptions<
+		GetModelCatalogInfoResponse,
+		AxiosError<DefaultError>,
+		GetModelCatalogInfoResponse,
+		ReturnType<typeof getModelCatalogInfoQueryKey>
+	>({
+		queryFn: async ({ queryKey, signal }) => {
+			const { data } = await getModelCatalogInfo({
+				...options,
+				...queryKey[0],
+				signal,
+				throwOnError: true,
+			});
+			return data;
+		},
+		queryKey: getModelCatalogInfoQueryKey(options),
+	});
+
 export const inspectGgufRepositoryQueryKey = (options?: Options<InspectGgufRepositoryData>) =>
 	createQueryKey("inspectGgufRepository", options);
 
@@ -1668,6 +1696,26 @@ export const listRunningModelsOptions = (options?: Options<ListRunningModelsData
 		},
 		queryKey: listRunningModelsQueryKey(options),
 	});
+
+export const refreshModelCatalogMutation = (
+	options?: Partial<Options<RefreshModelCatalogData>>,
+): UseMutationOptions<RefreshModelCatalogResponse, AxiosError<DefaultError>, Options<RefreshModelCatalogData>> => {
+	const mutationOptions: UseMutationOptions<
+		RefreshModelCatalogResponse,
+		AxiosError<DefaultError>,
+		Options<RefreshModelCatalogData>
+	> = {
+		mutationFn: async (fnOptions) => {
+			const { data } = await refreshModelCatalog({
+				...options,
+				...fnOptions,
+				throwOnError: true,
+			});
+			return data;
+		},
+	};
+	return mutationOptions;
+};
 
 export const refreshRecommendationsMutation = (
 	options?: Partial<Options<RefreshRecommendationsData>>,

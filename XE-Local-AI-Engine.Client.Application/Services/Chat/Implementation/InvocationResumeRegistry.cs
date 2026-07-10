@@ -35,6 +35,7 @@ public sealed class InvocationResumeRegistry : IInvocationResumeRegistry
         // so there is no unsubscribe path (mirrors WorkerEventDispatcher's CA1001 suppression rationale).
         eventDispatcher.InvocationStateChanged += OnInvocationStateChanged;
         eventDispatcher.ToolCallLifecycleChanged += OnToolCallLifecycleChanged;
+        eventDispatcher.TurnNoticeChanged += OnTurnNoticeChanged;
     }
 
     public InvocationState? TryGetLiveInvocation(Guid invocationId)
@@ -59,19 +60,24 @@ public sealed class InvocationResumeRegistry : IInvocationResumeRegistry
         [EnumeratorCancellation]
         CancellationToken cancellationToken)
     {
-        var reader = live.Subscribe(out var snapshot, out var toolHistory);
+        var reader = live.Subscribe(out var snapshot, out var toolHistory, out var noticeHistory);
         var lastContent = snapshot.StreamedContent;
         var lastReasoning = snapshot.StreamedThinkingContent;
         var sequence = 0L;
 
-        // Replay the tool-call timeline accumulated so far, then the content accumulated so far, so the
-        // reconnecting client renders the in-flight assistant message (tool cards included) immediately before
-        // live items continue in order. The content replay is a pure SNAPSHOT event (full Content/Reasoning, no
-        // delta fields): the client applies Content as a replacement, and a delta here would be appended to
-        // whatever the client already rendered before the reconnect, duplicating it.
+        // Replay the tool-call timeline, then the notice timeline, accumulated so far, then the content accumulated
+        // so far, so the reconnecting client renders the in-flight assistant message (tool cards and notices
+        // included) immediately before live items continue in order. The content replay is a pure SNAPSHOT event
+        // (full Content/Reasoning, no delta fields): the client applies Content as a replacement, and a delta here
+        // would be appended to whatever the client already rendered before the reconnect, duplicating it.
         foreach (var toolCall in toolHistory)
         {
             yield return ToToolCallEvent(snapshot, toolCall, sequence++);
+        }
+
+        foreach (var notice in noticeHistory)
+        {
+            yield return ToNoticeEvent(snapshot, notice, sequence++);
         }
 
         yield return ToEvent(ChatStreamEventTypes.AssistantDelta, snapshot, sequence++);
@@ -83,6 +89,12 @@ public sealed class InvocationResumeRegistry : IInvocationResumeRegistry
                 if (item.ToolCall is { } toolCall)
                 {
                     yield return ToToolCallEvent(live.LatestState, toolCall, sequence++);
+                    continue;
+                }
+
+                if (item.Notice is { } notice)
+                {
+                    yield return ToNoticeEvent(live.LatestState, notice, sequence++);
                     continue;
                 }
 
@@ -160,6 +172,16 @@ public sealed class InvocationResumeRegistry : IInvocationResumeRegistry
         }
     }
 
+    private void OnTurnNoticeChanged(object? sender, TurnNoticeChangedEventArgs args)
+    {
+        // Mirrors OnToolCallLifecycleChanged: a notice without a tracked live invocation has nothing to fan out or
+        // record — the persisted parts[] remain the source of truth on reload.
+        if (_live.TryGetValue(args.Payload.InvocationId, out var live))
+        {
+            live.PublishNotice(args.Payload);
+        }
+    }
+
     private ChatStreamEvent ToEvent(string type,
         InvocationState state,
         long sequence,
@@ -198,6 +220,20 @@ public sealed class InvocationResumeRegistry : IInvocationResumeRegistry
         // wire-identical to the ones the original stream emitted. Resume events stamp the invocation id as BOTH the
         // message id and the request id; the client remaps them to the assistant message id at the reconnect boundary.
         return ChatStreamEventMapper.ToolCallEvent(state.ConversationId,
+            state.InvocationId,
+            state.InvocationId,
+            payload,
+            _timeProvider.GetUtcNow().ToUnixTimeMilliseconds(),
+            sequence);
+    }
+
+    private ChatStreamEvent ToNoticeEvent(InvocationState state,
+        TurnNoticePayload payload,
+        long sequence)
+    {
+        // Mirrors ToToolCallEvent: routes through the same mapper the live send/regenerate paths use so a resumed
+        // stream's notice events are wire-identical to the ones the original stream emitted.
+        return ChatStreamEventMapper.NoticeEvent(state.ConversationId,
             state.InvocationId,
             state.InvocationId,
             payload,
@@ -281,19 +317,24 @@ public sealed class InvocationResumeRegistry : IInvocationResumeRegistry
     }
 
     /// <summary>
-    ///     One item on a resume consumer's channel: exactly one of a state snapshot or a tool-call lifecycle
-    ///     transition, in dispatcher order.
+    ///     One item on a resume consumer's channel: exactly one of a state snapshot, a tool-call lifecycle
+    ///     transition, or a turn notice, in dispatcher order.
     /// </summary>
-    private readonly record struct ResumeItem(InvocationState? State, ToolCallLifecyclePayload? ToolCall)
+    private readonly record struct ResumeItem(InvocationState? State, ToolCallLifecyclePayload? ToolCall, TurnNoticePayload? Notice)
     {
         public static ResumeItem FromState(InvocationState state)
         {
-            return new ResumeItem(state, null);
+            return new ResumeItem(state, null, null);
         }
 
         public static ResumeItem FromToolCall(ToolCallLifecyclePayload toolCall)
         {
-            return new ResumeItem(null, toolCall);
+            return new ResumeItem(null, toolCall, null);
+        }
+
+        public static ResumeItem FromNotice(TurnNoticePayload notice)
+        {
+            return new ResumeItem(null, null, notice);
         }
     }
 
@@ -310,7 +351,12 @@ public sealed class InvocationResumeRegistry : IInvocationResumeRegistry
         // timeline anyway.
         private const int MaxRecordedToolEvents = 256;
 
+        // A turn notice fires at most a handful of times (one model substitution, a few distinct tools disabled,
+        // one truncation warning); this cap is generous headroom, not a real bound.
+        private const int MaxRecordedNoticeEvents = 64;
+
         private readonly List<ToolCallLifecyclePayload> _toolHistory = [];
+        private readonly List<TurnNoticePayload> _noticeHistory = [];
         private readonly List<Channel<ResumeItem>> _subscribers = [];
         private readonly Lock _syncRoot = new();
 
@@ -351,8 +397,26 @@ public sealed class InvocationResumeRegistry : IInvocationResumeRegistry
             }
         }
 
+        public void PublishNotice(TurnNoticePayload notice)
+        {
+            lock (_syncRoot)
+            {
+                _noticeHistory.Add(notice);
+                if (_noticeHistory.Count > MaxRecordedNoticeEvents)
+                {
+                    _noticeHistory.RemoveAt(0);
+                }
+
+                foreach (var subscriber in _subscribers)
+                {
+                    _ = subscriber.Writer.TryWrite(ResumeItem.FromNotice(notice));
+                }
+            }
+        }
+
         public ChannelReader<ResumeItem> Subscribe(out InvocationState snapshot,
-            out IReadOnlyList<ToolCallLifecyclePayload> toolHistory)
+            out IReadOnlyList<ToolCallLifecyclePayload> toolHistory,
+            out IReadOnlyList<TurnNoticePayload> noticeHistory)
         {
             var channel = Channel.CreateUnbounded<ResumeItem>(new UnboundedChannelOptions
             {
@@ -364,6 +428,7 @@ public sealed class InvocationResumeRegistry : IInvocationResumeRegistry
             {
                 snapshot = Clone(LatestState);
                 toolHistory = [.. _toolHistory];
+                noticeHistory = [.. _noticeHistory];
                 _subscribers.Add(channel);
             }
 

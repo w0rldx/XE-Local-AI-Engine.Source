@@ -45,6 +45,9 @@ export interface AgentDefinition {
 	// retrieval-only: existing enabled memory is still injected (gated on playbookEnabled), but no new memory is
 	// learned and no per-run extraction round-trip happens. Not a config-affecting field (mirrors playbookEnabled).
 	readonly memoryExtractionEnabled: boolean;
+	// When true this agent opts OUT of the layered base instruction scaffold the runtime normally prepends — only the
+	// instructions written above are sent, unmodified. Defaults to false (scaffold applied).
+	readonly disableBaseScaffold: boolean;
 	readonly version: number;
 	readonly createdAtUtc: number;
 	readonly updatedAtUtc: number;
@@ -73,6 +76,8 @@ export interface AgentDefinitionFormValues {
 	defaultTemporaryChat: boolean;
 	// When false the agent uses existing memory only (retrieval-only): it mines no new memory from its runs.
 	memoryExtractionEnabled: boolean;
+	// Opts this agent out of the layered base instruction scaffold normally prepended at resolve time.
+	disableBaseScaffold: boolean;
 }
 
 const reasoningEffortSchema = z.enum(["none", "low", "medium", "high"]);
@@ -97,6 +102,7 @@ export const agentDefinitionFormSchema = z
 		playbookEnabled: z.boolean(),
 		defaultTemporaryChat: z.boolean(),
 		memoryExtractionEnabled: z.boolean(),
+		disableBaseScaffold: z.boolean(),
 	})
 	.refine((value) => Object.keys(value.toolApprovals).every((toolName) => value.allowedToolNames.includes(toolName)), {
 		message: "toolApprovals keys must be a subset of allowedToolNames",

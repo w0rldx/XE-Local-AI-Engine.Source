@@ -1081,6 +1081,14 @@ export const zXeLocalAiEngineClientEndpointsModelFitV1ModelFitRecommendationResp
 	pullModelName: z.string().nullish(),
 	releaseDate: z.string().nullish(),
 	isTrustedPublisher: z.boolean().optional(),
+	section: z.string(),
+	tier: z.string().nullish(),
+	catalogId: z.string().nullish(),
+	catalogDisplayName: z.string().nullish(),
+	catalogNotes: z.string().nullish(),
+	expertsOffloaded: z.boolean().optional(),
+	gpuGb: z.number().nullish(),
+	cpuGb: z.number().nullish(),
 });
 
 export const zXeLocalAiEngineClientEndpointsModelFitV1GetLatestRecommendationsResponse = z.object({
@@ -1124,6 +1132,22 @@ export const zXeLocalAiEngineClientEndpointsModelFitV1LlamaCppRuntimeStatusRespo
 });
 
 export const zXeLocalAiEngineClientEndpointsModelFitV1GetLlamaCppRuntimeRequest = z.record(z.string(), z.never());
+
+export const zXeLocalAiEngineClientEndpointsModelFitV1ModelCatalogInfoResponse = z.object({
+	catalogVersion: z.string(),
+	updatedAt: z.string().nullish(),
+	source: z.string(),
+	fetchedAtUtc: z.coerce
+		.bigint()
+		.min(BigInt("-9223372036854775808"), { error: "Invalid value: Expected int64 to be >= -9223372036854775808" })
+		.max(BigInt("9223372036854775807"), { error: "Invalid value: Expected int64 to be <= 9223372036854775807" })
+		.nullish(),
+	sourceUrl: z.string().nullish(),
+	modelCount: z
+		.int()
+		.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })
+		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" }),
+});
 
 export const zXeLocalAiEngineClientEndpointsModelFitV1GgufRepositoryFileResponse = z.object({
 	fileName: z.string(),
@@ -1795,6 +1819,7 @@ export const zXeLocalAiEngineClientModelsEnumsFailureCategory = z.enum([
 	"ModelCapabilityUnsupported",
 	"ModelLoadFailed",
 	"ModelNotInstalled",
+	"ContextWindowExceeded",
 ]);
 
 export const zXeLocalAiEngineClientEndpointsInvocationsV1InvocationCurrentResponse = z.object({
@@ -2332,6 +2357,7 @@ export const zXeLocalAiEngineClientEndpointsAgentsV1AgentDefinitionResponse = z.
 	playbookEnabled: z.boolean(),
 	defaultTemporaryChat: z.boolean(),
 	memoryExtractionEnabled: z.boolean(),
+	disableBaseScaffold: z.boolean(),
 	allowedSkillIds: z.array(z.guid()),
 	version: z
 		.int()
@@ -2360,6 +2386,7 @@ export const zXeLocalAiEngineClientEndpointsAgentsV1CreateAgentDefinitionRequest
 	playbookEnabled: z.boolean().optional(),
 	defaultTemporaryChat: z.boolean().optional(),
 	memoryExtractionEnabled: z.boolean().optional(),
+	disableBaseScaffold: z.boolean().optional(),
 	allowedSkillIds: z.array(z.guid()).nullish(),
 });
 
@@ -2622,6 +2649,7 @@ export const zXeLocalAiEngineClientEndpointsAgentsV1UpdateAgentDefinitionRequest
 	playbookEnabled: z.boolean().optional(),
 	defaultTemporaryChat: z.boolean().optional(),
 	memoryExtractionEnabled: z.boolean().optional(),
+	disableBaseScaffold: z.boolean().optional(),
 	allowedSkillIds: z.array(z.guid()).nullish(),
 });
 
@@ -3050,6 +3078,11 @@ export const zGetLlamaCppRuntimeQuery = z.object({
  */
 export const zGetLlamaCppRuntimeResponse = zXeLocalAiEngineClientEndpointsModelFitV1LlamaCppRuntimeStatusResponse;
 
+/**
+ * Success
+ */
+export const zGetModelCatalogInfoResponse = zXeLocalAiEngineClientEndpointsModelFitV1ModelCatalogInfoResponse;
+
 export const zInspectGgufRepositoryQuery = z.object({
 	repoId: z.string().nullish(),
 });
@@ -3075,6 +3108,11 @@ export const zListInferenceProfilesResponse = zXeLocalAiEngineClientEndpointsMod
  * Success
  */
 export const zListRunningModelsResponse = zXeLocalAiEngineClientEndpointsModelFitV1ListRunningModelsResponse;
+
+/**
+ * Success
+ */
+export const zRefreshModelCatalogResponse = zXeLocalAiEngineClientEndpointsModelFitV1ModelCatalogInfoResponse;
 
 export const zRefreshRecommendationsBody = zXeLocalAiEngineClientEndpointsModelFitV1RefreshRecommendationsRequest;
 

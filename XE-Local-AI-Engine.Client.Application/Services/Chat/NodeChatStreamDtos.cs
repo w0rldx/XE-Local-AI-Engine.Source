@@ -18,6 +18,12 @@ public static class ChatStreamEventTypes
     public const string AssistantInterrupted = "assistant-interrupted";
     public const string ToolCallRequested = "tool-call-requested";
     public const string ToolCallCompleted = "tool-call-completed";
+
+    /// <summary>
+    ///     A non-fatal turn notice (model substitution, tool disabled, history truncated) surfaced alongside the
+    ///     content stream. See <see cref="XE_Local_AI_Engine.Client.Services.Events.TurnNoticePayload" />.
+    /// </summary>
+    public const string AssistantNotice = "assistant-notice";
 }
 
 public sealed record NodeChatStreamRequest(
@@ -66,4 +72,9 @@ public sealed record ChatStreamEvent(
     string? Arguments = null,
     bool? RequiresApproval = null,
     string? Result = null,
-    bool? IsError = null);
+    bool? IsError = null,
+    // Non-fatal turn notice fields (AssistantNotice events only). NoticeKind is the TurnNoticeKind enum name (e.g.
+    // "ModelSubstituted", "ToolDisabled", "HistoryTruncated"); NoticeMessage is the sanitized, user-facing text.
+    // Trailing optional so every existing event type's wire shape is unchanged.
+    string? NoticeKind = null,
+    string? NoticeMessage = null);

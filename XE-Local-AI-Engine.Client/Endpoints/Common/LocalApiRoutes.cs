@@ -305,6 +305,12 @@ public static class LocalApiRoutes
         public const string Running = "model-fit/running";
         public const string RunningEject = "model-fit/running/eject";
 
+        // Curated model catalog (locked decision D1): read-only metadata (version/source/fetchedAt) and an operator
+        // forced-refresh trigger. The catalog content itself rides the existing recommendations/latest response
+        // (section/tier fields on each row) — these two routes are catalog-provenance only.
+        public const string CatalogInfo = "model-fit/catalog";
+        public const string CatalogRefresh = "model-fit/catalog/refresh";
+
         // Resolved/pinned llama.cpp binary version (ILlamaCppBinaryManager). GET reads the pinned-tag + resolved
         // variant; POST ensures the binary for a chosen variant is present (download + hash-verify).
         public const string LlamaCppVersion = "model-fit/llamacpp/version";

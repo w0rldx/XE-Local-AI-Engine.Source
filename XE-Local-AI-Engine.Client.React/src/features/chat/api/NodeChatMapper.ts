@@ -82,6 +82,14 @@ function mapParts(messageId: string, parts: NodeChatMessagePartDto[] | null | un
 				sequence,
 				text: part.text ?? "",
 			});
+		} else if (kind === "notice") {
+			accumulator.push({
+				kind: "notice",
+				id: `${messageId}:${sequence}`,
+				sequence,
+				noticeKind: part.name ?? "",
+				text: part.text ?? "",
+			});
 		}
 
 		return accumulator;

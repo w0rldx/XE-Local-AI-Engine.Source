@@ -284,6 +284,20 @@ describe("node chat mapper", () => {
 		expect(message.parts?.[0]).toMatchObject({ kind: "tool", id: "message-1:4", name: "noop" });
 	});
 
+	it("maps a persisted notice part into the message's interleave (Name -> noticeKind, Text -> text)", () => {
+		const message = mapSingleMessage({
+			parts: [
+				{ kind: "reasoning", sequence: 0, text: "thoughts" },
+				{ kind: "notice", sequence: 1, name: "ModelSubstituted", text: "Switched to a smaller model." },
+			],
+		});
+
+		expect(message.parts).toEqual([
+			{ kind: "reasoning", id: "message-1:0", sequence: 0, text: "thoughts" },
+			{ kind: "notice", id: "message-1:1", sequence: 1, noticeKind: "ModelSubstituted", text: "Switched to a smaller model." },
+		]);
+	});
+
 	it("skips an unknown part kind so a forward-compat backend addition never breaks rendering", () => {
 		const message = mapSingleMessage({
 			parts: [

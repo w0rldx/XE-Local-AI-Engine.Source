@@ -2,6 +2,8 @@ namespace XE_Local_AI_Engine.Tests.ModelFit.Fakes;
 
 using XE_Local_AI_Engine.Client.Persistence;
 using XE_Local_AI_Engine.Client.Persistence.Stores;
+using XE_Local_AI_Engine.Client.Services.ModelFit.Catalog;
+using XE_Local_AI_Engine.Providers.Abstractions.Capabilities;
 
 /// <summary>
 ///     In-memory <see cref="IModelFitSnapshotStore" /> for refresh tests. Mirrors the production store's
@@ -169,5 +171,25 @@ internal sealed class InMemoryModelFitRecommendationStore : IModelFitRecommendat
     public IReadOnlyList<ModelFitRecommendationRecord> RowsFor(Guid snapshotId)
     {
         return _rows.TryGetValue(snapshotId, out var rows) ? rows.OrderBy(r => r.Rank).ToArray() : [];
+    }
+}
+
+/// <summary>
+///     No-op <see cref="ICatalogRecommendationService" /> for tests that exercise only the explore (live-HF) lane: the
+///     empty bundled catalog is a valid, always-available <see cref="ModelCatalogDocument" />, so the catalog lane
+///     contributes zero rows and every pre-existing explore-lane assertion is unaffected.
+/// </summary>
+internal sealed class EmptyCatalogRecommendationService : ICatalogRecommendationService
+{
+    public Task<CatalogRecommendationResult> BuildRecommendationsAsync(string? useCase,
+        string quantCeiling,
+        int ctxTarget,
+        HardwareProfile profile,
+        IReadOnlySet<string> installedKeys,
+        CancellationToken cancellationToken)
+    {
+        var emptyDocument = new ModelCatalogDocument(SchemaVersion: 1, "test-empty", UpdatedAt: null, Models: []);
+        var snapshot = new ModelCatalogSnapshot(emptyDocument, ModelCatalogSource.Bundled, FetchedAtUtc: null, SourceUrl: null);
+        return Task.FromResult(new CatalogRecommendationResult([], [], snapshot));
     }
 }

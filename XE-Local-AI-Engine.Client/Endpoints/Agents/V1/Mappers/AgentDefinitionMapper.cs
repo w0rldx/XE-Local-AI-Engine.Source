@@ -24,6 +24,7 @@ internal static class AgentDefinitionMapper
             PlaybookEnabled = record.PlaybookEnabled,
             DefaultTemporaryChat = record.DefaultTemporaryChat,
             MemoryExtractionEnabled = record.MemoryExtractionEnabled,
+            DisableBaseScaffold = record.DisableBaseScaffold,
             AllowedSkillIds = record.AllowedSkillIds ?? [],
             Version = record.Version,
             CreatedAtUtc = record.CreatedAtUtc,
@@ -47,7 +48,8 @@ internal static class AgentDefinitionMapper
             request.PlaybookEnabled,
             request.AllowedSkillIds ?? [],
             request.DefaultTemporaryChat,
-            request.MemoryExtractionEnabled);
+            request.MemoryExtractionEnabled,
+            request.DisableBaseScaffold);
     }
 
     public static AgentDefinitionInput ToInput(this UpdateAgentDefinitionRequest request)
@@ -66,6 +68,7 @@ internal static class AgentDefinitionMapper
             request.PlaybookEnabled,
             request.AllowedSkillIds ?? [],
             request.DefaultTemporaryChat,
-            request.MemoryExtractionEnabled);
+            request.MemoryExtractionEnabled,
+            request.DisableBaseScaffold);
     }
 }

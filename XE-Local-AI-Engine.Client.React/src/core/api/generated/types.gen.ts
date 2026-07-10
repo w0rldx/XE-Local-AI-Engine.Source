@@ -666,6 +666,14 @@ export type XeLocalAiEngineClientEndpointsModelFitV1ModelFitRecommendationRespon
 	pullModelName?: string | null;
 	releaseDate?: string | null;
 	isTrustedPublisher?: boolean;
+	section: string;
+	tier?: string | null;
+	catalogId?: string | null;
+	catalogDisplayName?: string | null;
+	catalogNotes?: string | null;
+	expertsOffloaded?: boolean;
+	gpuGb?: number | null;
+	cpuGb?: number | null;
 };
 
 export type XeLocalAiEngineClientEndpointsModelFitV1GetLatestRecommendationsRequest = {
@@ -693,6 +701,15 @@ export type XeLocalAiEngineClientEndpointsModelFitV1LlamaCppInstalledRuntimeResp
 
 export type XeLocalAiEngineClientEndpointsModelFitV1GetLlamaCppRuntimeRequest = {
 	[key: string]: never;
+};
+
+export type XeLocalAiEngineClientEndpointsModelFitV1ModelCatalogInfoResponse = {
+	catalogVersion: string;
+	updatedAt?: string | null;
+	source: string;
+	fetchedAtUtc?: number | null;
+	sourceUrl?: string | null;
+	modelCount: number;
 };
 
 export type XeLocalAiEngineClientEndpointsModelFitV1InspectGgufRepositoryResponse = {
@@ -1286,7 +1303,8 @@ export type XeLocalAiEngineClientModelsEnumsFailureCategory =
 	| "ModelUnavailable"
 	| "ModelCapabilityUnsupported"
 	| "ModelLoadFailed"
-	| "ModelNotInstalled";
+	| "ModelNotInstalled"
+	| "ContextWindowExceeded";
 
 export type XeLocalAiEngineClientEndpointsInvocationsV1InvocationHistoryResponse = {
 	invocationId: string;
@@ -1665,6 +1683,7 @@ export type XeLocalAiEngineClientEndpointsAgentsV1AgentDefinitionResponse = {
 	playbookEnabled: boolean;
 	defaultTemporaryChat: boolean;
 	memoryExtractionEnabled: boolean;
+	disableBaseScaffold: boolean;
 	allowedSkillIds: Array<string>;
 	version: number;
 	createdAtUtc: number;
@@ -1688,6 +1707,7 @@ export type XeLocalAiEngineClientEndpointsAgentsV1CreateAgentDefinitionRequest =
 	playbookEnabled?: boolean;
 	defaultTemporaryChat?: boolean;
 	memoryExtractionEnabled?: boolean;
+	disableBaseScaffold?: boolean;
 	allowedSkillIds?: Array<string> | null;
 };
 
@@ -1889,6 +1909,7 @@ export type XeLocalAiEngineClientEndpointsAgentsV1UpdateAgentDefinitionRequest =
 	playbookEnabled?: boolean;
 	defaultTemporaryChat?: boolean;
 	memoryExtractionEnabled?: boolean;
+	disableBaseScaffold?: boolean;
 	allowedSkillIds?: Array<string> | null;
 };
 
@@ -3345,6 +3366,33 @@ export type GetLlamaCppRuntimeResponses = {
 
 export type GetLlamaCppRuntimeResponse = GetLlamaCppRuntimeResponses[keyof GetLlamaCppRuntimeResponses];
 
+export type GetModelCatalogInfoData = {
+	body?: never;
+	path?: never;
+	query?: never;
+	url: "/api/local/v1/model-fit/catalog";
+};
+
+export type GetModelCatalogInfoErrors = {
+	/**
+	 * Unauthorized
+	 */
+	401: unknown;
+	/**
+	 * Forbidden
+	 */
+	403: unknown;
+};
+
+export type GetModelCatalogInfoResponses = {
+	/**
+	 * Success
+	 */
+	200: XeLocalAiEngineClientEndpointsModelFitV1ModelCatalogInfoResponse;
+};
+
+export type GetModelCatalogInfoResponse = GetModelCatalogInfoResponses[keyof GetModelCatalogInfoResponses];
+
 export type InspectGgufRepositoryData = {
 	body?: never;
 	path?: never;
@@ -3454,6 +3502,33 @@ export type ListRunningModelsResponses = {
 };
 
 export type ListRunningModelsResponse = ListRunningModelsResponses[keyof ListRunningModelsResponses];
+
+export type RefreshModelCatalogData = {
+	body?: never;
+	path?: never;
+	query?: never;
+	url: "/api/local/v1/model-fit/catalog/refresh";
+};
+
+export type RefreshModelCatalogErrors = {
+	/**
+	 * Unauthorized
+	 */
+	401: unknown;
+	/**
+	 * Forbidden
+	 */
+	403: unknown;
+};
+
+export type RefreshModelCatalogResponses = {
+	/**
+	 * Success
+	 */
+	200: XeLocalAiEngineClientEndpointsModelFitV1ModelCatalogInfoResponse;
+};
+
+export type RefreshModelCatalogResponse = RefreshModelCatalogResponses[keyof RefreshModelCatalogResponses];
 
 export type RefreshRecommendationsData = {
 	body: XeLocalAiEngineClientEndpointsModelFitV1RefreshRecommendationsRequest;

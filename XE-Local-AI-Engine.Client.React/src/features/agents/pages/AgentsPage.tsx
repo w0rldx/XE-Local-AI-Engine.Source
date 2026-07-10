@@ -56,6 +56,7 @@ const emptyFormValues: AgentDefinitionFormValues = {
 	defaultTemporaryChat: false,
 	// Extraction defaults ON (matches the backend default) so opting into memory learns from runs unless turned off.
 	memoryExtractionEnabled: true,
+	disableBaseScaffold: false,
 };
 
 function toFormValues(definition: AgentDefinition): AgentDefinitionFormValues {
@@ -74,6 +75,7 @@ function toFormValues(definition: AgentDefinition): AgentDefinitionFormValues {
 		playbookEnabled: definition.playbookEnabled,
 		defaultTemporaryChat: definition.defaultTemporaryChat,
 		memoryExtractionEnabled: definition.memoryExtractionEnabled,
+		disableBaseScaffold: definition.disableBaseScaffold,
 	};
 }
 

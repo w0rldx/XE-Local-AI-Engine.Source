@@ -1,4 +1,11 @@
-import type { ChatMessagePart, ChatReasoningPart, ChatTextPart, ChatToolPart, ToolCallState } from "@/features/chat/models/ChatModels";
+import type {
+	ChatMessagePart,
+	ChatNoticePart,
+	ChatReasoningPart,
+	ChatTextPart,
+	ChatToolPart,
+	ToolCallState,
+} from "@/features/chat/models/ChatModels";
 
 /**
  * Single source of truth for the ordered interleave (`reasoning → tool → reasoning → …`). Both the streaming
@@ -31,6 +38,14 @@ export interface TextSegmentInput {
 	text: string;
 }
 
+/** A single fire-and-forget non-fatal turn notice (model substitution, tool disabled, history truncated). */
+export interface NoticeEntryInput {
+	id: string;
+	sequence: number;
+	noticeKind: string;
+	text: string;
+}
+
 function toReasoningPart(segment: ReasoningSegmentInput): ChatReasoningPart {
 	return { kind: "reasoning", id: segment.id, sequence: segment.sequence, text: segment.text };
 }
@@ -52,16 +67,21 @@ function toTextPart(segment: TextSegmentInput): ChatTextPart {
 	return { kind: "text", id: segment.id, sequence: segment.sequence, text: segment.text };
 }
 
+function toNoticePart(entry: NoticeEntryInput): ChatNoticePart {
+	return { kind: "notice", id: entry.id, sequence: entry.sequence, noticeKind: entry.noticeKind, text: entry.text };
+}
+
 /**
- * Merges ordered reasoning segments, tool entries and (optional) text segments into one `ChatMessagePart[]`
- * sorted by wire `sequence`. Empty reasoning/text segments are dropped so a freshly opened-but-not-yet-filled
- * segment never renders an empty Thoughts block. Ties on `sequence` keep input order (reasoning, then tool,
- * then text) so an unlikely collision stays deterministic.
+ * Merges ordered reasoning segments, tool entries, (optional) text segments and (optional) notice entries into one
+ * `ChatMessagePart[]` sorted by wire `sequence`. Empty reasoning/text segments are dropped so a freshly
+ * opened-but-not-yet-filled segment never renders an empty Thoughts block. Ties on `sequence` keep input order
+ * (reasoning, then tool, then notice, then text) so an unlikely collision stays deterministic.
  */
 export function buildMessageParts(
 	reasoningSegments: readonly ReasoningSegmentInput[],
 	toolEntries: readonly ToolEntryInput[],
 	textSegments: readonly TextSegmentInput[] = [],
+	noticeEntries: readonly NoticeEntryInput[] = [],
 ): ChatMessagePart[] {
 	const parts: ChatMessagePart[] = [];
 
@@ -75,6 +95,10 @@ export function buildMessageParts(
 		parts.push(toToolPart(entry));
 	}
 
+	for (const entry of noticeEntries) {
+		parts.push(toNoticePart(entry));
+	}
+
 	for (const segment of textSegments) {
 		if (segment.text.trim().length > 0) {
 			parts.push(toTextPart(segment));
@@ -82,6 +106,6 @@ export function buildMessageParts(
 	}
 
 	// Stable sort by sequence: Array.prototype.sort is stable in every supported engine, so equal sequences keep
-	// the push order above (reasoning < tool < text).
+	// the push order above (reasoning < tool < notice < text).
 	return parts.sort((left, right) => left.sequence - right.sequence);
 }

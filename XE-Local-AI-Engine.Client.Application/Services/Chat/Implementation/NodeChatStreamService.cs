@@ -145,9 +145,10 @@ public sealed class NodeChatStreamService(
         var eventChannel = Channel.CreateUnbounded<ChatStreamEvent>(new UnboundedChannelOptions
         {
             SingleReader = true,
-            // Three producers write this channel concurrently: the delta/terminal emits in the invocation-state pump,
-            // the streaming-transition emit in RunInvocationAsync (the run-transition), and the tool-call lifecycle
-            // emits in OnToolCallLifecycleChanged. SingleWriter must be false.
+            // Four producers write this channel concurrently: the delta/terminal emits in the invocation-state pump,
+            // the streaming-transition emit in RunInvocationAsync (the run-transition), the tool-call lifecycle emits
+            // in OnToolCallLifecycleChanged, and the turn-notice emits in OnTurnNoticeChanged. SingleWriter must be
+            // false.
             SingleWriter = false
         });
 
@@ -173,8 +174,19 @@ public sealed class NodeChatStreamService(
             }
         }
 
+        void OnTurnNoticeChanged(object? _, TurnNoticeChangedEventArgs args)
+        {
+            if (args.Payload.InvocationId == requestId)
+            {
+                var noticeSequence = sequence.Next();
+                ChatStreamEventMapper.AccumulateNotice(parts, args.Payload, noticeSequence);
+                eventChannel.Writer.TryWrite(ChatStreamEventMapper.NoticeEvent(correlation.ConversationId, correlation.MessageId, correlation.RequestId, args.Payload, NowUnixMilliseconds(), noticeSequence));
+            }
+        }
+
         eventDispatcher.InvocationStateChanged += OnInvocationStateChanged;
         eventDispatcher.ToolCallLifecycleChanged += OnToolCallLifecycleChanged;
+        eventDispatcher.TurnNoticeChanged += OnTurnNoticeChanged;
 
         // The active-model precedence, the effective-agent resolution, and the orchestration spec were all computed up
         // front (ResolveTurnAsync) so the placeholder could be stamped with the resolved agent's attribution; reuse
@@ -301,6 +313,7 @@ public sealed class NodeChatStreamService(
             {
                 eventDispatcher.InvocationStateChanged -= OnInvocationStateChanged;
                 eventDispatcher.ToolCallLifecycleChanged -= OnToolCallLifecycleChanged;
+                eventDispatcher.TurnNoticeChanged -= OnTurnNoticeChanged;
             }
         }
     }
@@ -526,6 +539,16 @@ public sealed class NodeChatStreamService(
         };
     }
 
+    // Same resource name AgentInstructionProvider.GetBaseScaffold uses (AI.Agent/Instructions/BaseScaffold.txt); kept
+    // as a local literal here to avoid taking a DI dependency on IAgentInstructionProvider in this already-large
+    // constructor, mirroring how InstructionsResource is already read directly rather than through the provider.
+    private const string BaseScaffoldResourceName = "XE_Local_AI_Engine.AI.Agent.Instructions.BaseScaffold.txt";
+
+    /// <summary>
+    ///     Reads the embedded chat prompt for the true null-definition fallback (no bound agent at all) and prepends
+    ///     the same versioned base scaffold a resolved, non-opted-out agent definition gets, so an unbound send is
+    ///     covered identically to a bound one.
+    /// </summary>
     private static string LoadResolvedSystemPrompt(LocalChatAgentOptions options)
     {
         ArgumentNullException.ThrowIfNull(options);
@@ -534,9 +557,16 @@ public sealed class NodeChatStreamService(
             throw new ArgumentException("Instructions resource must be provided.", nameof(options));
         }
 
+        var persona = LoadEmbeddedResource(options.InstructionsResource);
+        var scaffold = LoadEmbeddedResource(BaseScaffoldResourceName);
+        return string.IsNullOrWhiteSpace(scaffold) ? persona : $"{scaffold.TrimEnd()}\n\n{persona}";
+    }
+
+    private static string LoadEmbeddedResource(string resourceName)
+    {
         var assembly = typeof(LocalChatAgentOptions).Assembly;
-        using var stream = assembly.GetManifestResourceStream(options.InstructionsResource)
-                           ?? throw new InvalidOperationException($"Embedded instructions resource '{options.InstructionsResource}' was not found.");
+        using var stream = assembly.GetManifestResourceStream(resourceName)
+                           ?? throw new InvalidOperationException($"Embedded instructions resource '{resourceName}' was not found.");
         using var reader = new StreamReader(stream);
         return reader.ReadToEnd();
     }

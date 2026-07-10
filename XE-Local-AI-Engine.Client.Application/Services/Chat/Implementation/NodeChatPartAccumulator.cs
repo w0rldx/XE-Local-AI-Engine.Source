@@ -122,6 +122,26 @@ public sealed class NodeChatPartAccumulator
     }
 
     /// <summary>
+    ///     Appends a non-fatal turn notice as its own part (kind <see cref="NodeChatMessagePartKinds.Notice" />,
+    ///     unconditionally — notices are fire-once events, not a requested/completed pair, so there is nothing to
+    ///     collapse by id). <paramref name="kind" /> is the <c>TurnNoticeKind</c> enum name, stored in
+    ///     <see cref="NodeChatMessagePart.Name" />; <paramref name="message" /> is the sanitized text, stored in
+    ///     <see cref="NodeChatMessagePart.Text" />.
+    /// </summary>
+    public void AppendNotice(string kind, string message, long sequence)
+    {
+        ArgumentException.ThrowIfNullOrEmpty(kind);
+        ArgumentException.ThrowIfNullOrEmpty(message);
+
+        lock (_syncRoot)
+        {
+            var part = new MutablePart(NodeChatMessagePartKinds.Notice, sequence) { Name = kind };
+            part.AppendText(message);
+            _parts.Add(part);
+        }
+    }
+
+    /// <summary>
     ///     Returns an immutable snapshot of the accumulated parts ordered by their opening sequence. Safe to call from
     ///     the terminal persist while producers may still race; the lock and the copy make it a consistent view.
     /// </summary>

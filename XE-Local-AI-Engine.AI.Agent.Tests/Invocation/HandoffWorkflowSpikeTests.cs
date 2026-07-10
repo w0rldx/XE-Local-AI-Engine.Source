@@ -1,5 +1,6 @@
-// Handoff + workflow-approval probe (Microsoft.Agents.AI.Workflows 1.8.0). Fully deterministic — a
-// scripted IChatClient stands in for the model (NO Ollama, NO network). Proves the exact API shapes the
+// Handoff + workflow-approval probe (verified against Microsoft.Agents.AI.Workflows 1.8.0; pinned version is now
+// 1.13.0, not re-verified). Fully deterministic — a scripted IChatClient stands in for the model (NO Ollama, NO
+// network). Proves the exact API shapes the
 // production handoff orchestration + IOrchestrationRunSession.RespondToApprovalAsync will copy:
 //   (A) 2-agent handoff routing via AgentWorkflowBuilder.CreateHandoffBuilderWith + InProcessExecution.
 //   (B) tool-approval pause/resume INSIDE a workflow run (surfacing event + resume mechanism).
@@ -19,7 +20,8 @@ using Microsoft.Extensions.Logging.Abstractions;
 using XE_Local_AI_Engine.Tests.Testing;
 
 /// <summary>
-///     Deterministic probe for the MAF 1.8.0 handoff workflow + in-workflow tool approval.
+///     Deterministic probe for the MAF handoff workflow + in-workflow tool approval (verified at 1.8.0; pinned version
+///     is now 1.13.0, not re-verified).
 /// </summary>
 /// <remarks>
 ///     Marked <c>[NotInParallel]</c> because the MAF workflow engine uses process-wide static

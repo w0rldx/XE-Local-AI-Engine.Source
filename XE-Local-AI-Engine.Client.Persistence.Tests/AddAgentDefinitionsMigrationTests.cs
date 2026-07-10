@@ -72,7 +72,9 @@ public sealed class AddAgentDefinitionsMigrationTests : IDisposable
             // Added by the later AddAdaptiveAgentMemory migration; a full MigrateAsync() applies it, so they are part of
             // the expected set here.
             "default_temporary_chat",
-            "memory_extraction_enabled"
+            "memory_extraction_enabled",
+            // Added by the later AddAgentDefinitionBaseScaffoldOptOut migration.
+            "disable_base_scaffold"
         }), "agent_definitions should expose the mapped columns.");
 
         var conversationColumns = await GetConversationColumnsAsync(connection).ConfigureAwait(false);

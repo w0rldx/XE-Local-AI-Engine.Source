@@ -42,6 +42,10 @@
     <!-- Curated starter-pack templates, transformed once at build time from the vendored agency-agents source. The
          catalog loads this by manifest-resource-name suffix at runtime, so no network egress occurs. -->
     <EmbeddedResource Include="Services\Agents\Templates\agent-templates.seed.json"/>
+    <!-- Bundled model-recommendation catalog (schema v1) — every ggufRepo id is live-verified against the Hugging
+         Face API before being added. Loaded by manifest-resource-name suffix; the provider optionally replaces this
+         in-memory with a remote refresh, but the app always has a working catalog with zero configuration. -->
+    <EmbeddedResource Include="Services\ModelFit\Catalog\model-catalog.seed.json"/>
   </ItemGroup>
 
   <ItemGroup>
