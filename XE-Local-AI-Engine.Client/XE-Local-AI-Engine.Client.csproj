@@ -48,8 +48,11 @@
     <PackageReference Include="Microsoft.Extensions.Http.Resilience"/>
     <PackageReference Include="Microsoft.Extensions.AI"/>
     <PackageReference Include="Microsoft.Extensions.AI.OpenAI"/>
-    <PackageReference Include="Microsoft.Agents.AI.Hosting.OpenAI"/>
-    <PackageReference Include="Microsoft.Agents.AI.DevUI"/>
+    <!-- Debug-only: DevUI dashboard dependencies only ship as preview/alpha packages; the Release
+         (published desktop) build compiles the DevUI wiring out (#if DEBUG in Program.cs) and must
+         not carry these assemblies. -->
+    <PackageReference Include="Microsoft.Agents.AI.Hosting.OpenAI" Condition="'$(Configuration)' == 'Debug'"/>
+    <PackageReference Include="Microsoft.Agents.AI.DevUI" Condition="'$(Configuration)' == 'Debug'"/>
     <PackageReference Include="NSec.Cryptography"/>
     <PackageReference Include="OllamaSharp"/>
     <PackageReference Include="Scalar.AspNetCore"/>
