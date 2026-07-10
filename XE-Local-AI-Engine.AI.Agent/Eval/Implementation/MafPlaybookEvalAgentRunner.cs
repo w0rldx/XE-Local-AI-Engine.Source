@@ -54,8 +54,9 @@ internal sealed class MafPlaybookEvalAgentRunner : IPlaybookEvalAgentRunner
             .. inputTurns
         ];
 
-        // Threadless run (no AgentSession, no run options): per the verified Microsoft.Agents.AI 1.8.0 API the second
-        // argument is the session and a null value runs without persisted state.
+        // Threadless run (no AgentSession, no run options): per the Microsoft.Agents.AI API (verified at 1.8.0; pinned
+        // version is now 1.13.0, not re-verified) the second argument is the session and a null value runs without
+        // persisted state.
         var response = await agent.RunAsync(seed, session: null, options: null, cancellationToken).ConfigureAwait(false);
 
         return response.Text ?? string.Empty;

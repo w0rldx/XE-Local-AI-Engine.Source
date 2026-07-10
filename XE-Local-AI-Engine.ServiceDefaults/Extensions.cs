@@ -77,6 +77,12 @@ public static class Extensions
             return builder;
         }
 
+        // In Aspire-orchestrated dev runs, the AppHost auto-injects OTEL_EXPORTER_OTLP_ENDPOINT into this project's
+        // environment (standard AddProject behavior), so the meters/sources wired above (XE.Node, Microsoft.Agents.AI*,
+        // Microsoft.Extensions.AI*) already flow to the Aspire dashboard with no extra config here. In desktop mode
+        // (XE_LAUNCH_MODE=desktop, no Aspire orchestration) that env var is unset, so this branch is skipped: telemetry
+        // is still recorded in-process but never exported. That is intentional until an operator configures an OTLP
+        // endpoint for desktop builds.
         private void AddOpenTelemetryExporters()
         {
             var useOtlpExporter = !string.IsNullOrWhiteSpace(builder.Configuration["OTEL_EXPORTER_OTLP_ENDPOINT"]);

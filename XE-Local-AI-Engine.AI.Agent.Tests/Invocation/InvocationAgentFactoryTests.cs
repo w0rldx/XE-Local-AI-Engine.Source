@@ -597,9 +597,9 @@ public sealed class InvocationAgentFactoryTests
         AssertEx.Equal(expected: -1L, chatOptions.Seed);
     }
 
-    // MAAI001: AgentSkillsProvider/AgentInlineSkill are [Experimental] in Microsoft.Agents.AI 1.8.0; the factory adopts
-    // them deliberately for progressive disclosure of agent skills, so this test references them under the same
-    // scoped suppression the production code uses.
+    // MAAI001: AgentSkillsProvider/AgentInlineSkill were [Experimental] in Microsoft.Agents.AI 1.8.0 (pinned version is
+    // now 1.13.0, not re-verified); the factory adopts them deliberately for progressive disclosure of agent skills, so
+    // this test references them under the same scoped suppression the production code uses.
 #pragma warning disable MAAI001
     [Test]
     public async Task Factory_WithSkills_AttachesSkillsProvider_EmptyKeepsPositionalCtor()
@@ -617,8 +617,9 @@ public sealed class InvocationAgentFactoryTests
             "A no-skills agent must attach no context providers.");
 
         // With skills: the agent is built via the options constructor with an AgentSkillsProvider attached, and the
-        // instructions/name still flow through (proving the options path wires them, since MAF 1.8.0 has no Instructions
-        // property on ChatClientAgentOptions — they ride ChatOptions.Instructions).
+        // instructions/name still flow through (proving the options path wires them, since MAF has no Instructions
+        // property on ChatClientAgentOptions — verified at 1.8.0, pinned version is now 1.13.0, not re-verified — they
+        // ride ChatOptions.Instructions).
         var withSkills = new InvocationAgentDefinition("qwen3.5:0.8b",
             "Be helpful.",
             [],

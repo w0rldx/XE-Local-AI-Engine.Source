@@ -29,9 +29,10 @@ using XE_Local_AI_Engine.Providers.LlamaServer;
 internal sealed class SubAgentSpawnService : ISubAgentSpawnService
 {
     // The inner agent-as-tool exposes a single "query" input parameter (verified against MAF 1.10.0
-    // AIAgentExtensions.AsAIFunction); the spawn task is passed under that key. AsAIFunction forwards the outer
-    // CancellationToken into the inner run (verified by Spawn_PropagatesCancellationToInnerRun), so no linked CTS is
-    // needed — the parent ct flows straight through InvokeAsync.
+    // AIAgentExtensions.AsAIFunction; pinned version is now 1.13.0, not re-verified); the spawn task is passed under
+    // that key. AsAIFunction forwards the outer CancellationToken into the inner run (verified by
+    // Spawn_PropagatesCancellationToInnerRun), so no linked CTS is needed — the parent ct flows straight through
+    // InvokeAsync.
     private const string InnerAgentInputKey = "query";
     private const string SubAgentName = "sub-agent";
     private const string SubAgentDescription = "A spawned sub-agent that answers a delegated task.";

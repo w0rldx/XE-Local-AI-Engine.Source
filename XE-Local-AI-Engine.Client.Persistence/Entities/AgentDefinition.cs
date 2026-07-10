@@ -42,7 +42,7 @@ internal sealed record class AgentDefinition
     /// <summary>JSON map of tool name to required-approval flag. Plaintext (structural).</summary>
     public string ToolApprovalsJson { get; set; } = "{}";
 
-    /// <summary>Orchestration topology JSON. Persisted but ignored by the current single-agent runtime (orchestration execution is not wired yet). Plaintext.</summary>
+    /// <summary>Orchestration topology JSON for a <c>Kind=Orchestrator</c> definition, compiled by the application-layer orchestration resolver into the loopback runtime graph. Plaintext.</summary>
     public string? OrchestrationTopologyJson { get; set; }
 
     /// <summary>
