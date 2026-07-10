@@ -7,7 +7,7 @@
   },
   "servers": [
     {
-      "url": "http://127.0.0.1:33477"
+      "url": "http://127.0.0.1:45581"
     }
   ],
   "paths": {
@@ -9671,6 +9671,28 @@
           "cpuGb": {
             "type": "number",
             "format": "double",
+            "nullable": true
+          },
+          "kvQuant": {
+            "type": "string",
+            "nullable": true
+          },
+          "kvQuantEstimatedGb": {
+            "type": "number",
+            "format": "double",
+            "nullable": true
+          },
+          "kvQuantHeadroomGb": {
+            "type": "number",
+            "format": "double",
+            "nullable": true
+          },
+          "kvQuantFits": {
+            "type": "boolean",
+            "nullable": true
+          },
+          "kvQuantRequiresFlashAttention": {
+            "type": "boolean",
             "nullable": true
           }
         }

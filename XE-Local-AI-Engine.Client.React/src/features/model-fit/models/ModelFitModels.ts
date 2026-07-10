@@ -74,6 +74,18 @@ export interface ModelFitRecommendation {
 	// CPU/RAM memory (GB) portion of an experts-offloaded fit split; null unless expertsOffloaded is true and the
 	// advisor reported a split.
 	readonly cpuGb: number | null;
+	// ADVISORY-ONLY quantized-KV-cache estimate (catalog rows with complete GGUF metadata): the KV quant label the
+	// advisory was computed at (currently "Q8_0"), or null when no advisory exists. The row's fit/required-memory
+	// figures are ALWAYS the fp16-KV estimate — this only hints at the headroom a quantized KV cache could unlock.
+	readonly kvQuant: string | null;
+	// Estimated total footprint (GB) with the quantized KV cache; null when kvQuant is null.
+	readonly kvQuantEstimatedGb: number | null;
+	// Scored-budget headroom (GB) with the quantized KV cache (negative = still would not fit); null when kvQuant is null.
+	readonly kvQuantHeadroomGb: number | null;
+	// Whether the model would fit its scored budget with the quantized KV cache; null when kvQuant is null.
+	readonly kvQuantFits: boolean | null;
+	// Always true when an advisory is present — a quantized KV cache requires flash attention; null when kvQuant is null.
+	readonly kvQuantRequiresFlashAttention: boolean | null;
 }
 
 // Domain view-model for the latest cached recommendation snapshot. hasCache:false is the explicit empty /

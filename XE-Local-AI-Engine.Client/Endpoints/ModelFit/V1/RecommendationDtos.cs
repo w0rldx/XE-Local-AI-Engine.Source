@@ -87,6 +87,27 @@ public sealed class ModelFitRecommendationResponse
 
     /// <summary>CPU/system-RAM memory (GB) for the offloaded experts when <see cref="ExpertsOffloaded" />; <c>null</c> otherwise.</summary>
     public double? CpuGb { get; init; }
+
+    /// <summary>
+    ///     ADVISORY-ONLY quantized-KV-cache estimate for a catalog-lane row: the KV quant label the advisory was computed
+    ///     at (currently always <c>Q8_0</c>), or <c>null</c> when no advisory exists (explore row, incomplete GGUF
+    ///     metadata, or a snapshot predating the advisory). The row's fit/ranking/required-memory fields are ALWAYS the
+    ///     fp16-KV estimate — the default chat launch uses an fp16 KV cache, so this never claims the model fits; it only
+    ///     hints at the headroom a quantized KV cache could unlock on a flash-attention-capable runtime.
+    /// </summary>
+    public string? KvQuant { get; init; }
+
+    /// <summary>Estimated total footprint (GB) with the quantized KV cache; <c>null</c> when <see cref="KvQuant" /> is null.</summary>
+    public double? KvQuantEstimatedGb { get; init; }
+
+    /// <summary>Scored-budget headroom (GB) with the quantized KV cache (negative = still would not fit); <c>null</c> when <see cref="KvQuant" /> is null.</summary>
+    public double? KvQuantHeadroomGb { get; init; }
+
+    /// <summary>Whether the model would fit its scored budget with the quantized KV cache; <c>null</c> when <see cref="KvQuant" /> is null.</summary>
+    public bool? KvQuantFits { get; init; }
+
+    /// <summary>Always <c>true</c> when an advisory is present — llama.cpp requires flash attention for a quantized KV cache; <c>null</c> when <see cref="KvQuant" /> is null.</summary>
+    public bool? KvQuantRequiresFlashAttention { get; init; }
 }
 
 /// <summary>
