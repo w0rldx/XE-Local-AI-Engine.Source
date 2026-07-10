@@ -27,13 +27,41 @@ public interface ICatalogRecommendationService
         CancellationToken cancellationToken);
 }
 
-/// <summary>One catalog entry that fits the node at some quant, with the chosen file and its memory-fit estimate.</summary>
+/// <summary>
+///     One catalog entry that fits the node at some quant, with the chosen file and its (fp16-KV) memory-fit estimate.
+///     <see cref="KvQuantAdvisory" /> is a purely advisory second estimate — see its own docs; it never influences
+///     whether this candidate appears (that is always the fp16 <see cref="Estimate" />).
+/// </summary>
 public sealed record CatalogRecommendationCandidate(
     ModelCatalogEntry Entry,
     GgufRepoFile File,
     MemoryFitEstimate Estimate,
     string ModelName,
-    bool IsInstalled);
+    bool IsInstalled,
+    KvQuantAdvisory? KvQuantAdvisory = null);
+
+/// <summary>
+///     Advisory-only estimate of the memory a candidate would need with an 8-bit (<see cref="KvCacheQuant.Q8_0" />)
+///     KV cache instead of the default fp16 — surfaced so future UI can hint at the headroom a quantized KV cache
+///     could unlock. It is NOT used for membership or ranking: the Recommended/CanRun decision is always computed from
+///     the fp16 <see cref="CatalogRecommendationCandidate.Estimate" />, because the default chat launch path uses an
+///     fp16 KV cache and only the optimizer replay path ever sets a quantized KV type. The savings are an ESTIMATE, not
+///     a guarantee of runtime compatibility: a quantized KV cache requires a flash-attention-capable llama.cpp runtime
+///     and model architecture (<see cref="RequiresFlashAttention" /> is therefore always <see langword="true" />). It is
+///     emitted only when the GGUF header carries every field the KV term needs; with incomplete metadata the KV term is
+///     zero, the "savings" would be nil, and no advisory is produced.
+/// </summary>
+/// <param name="Quant">The KV-cache quantization the advisory was computed at (always <see cref="KvCacheQuant.Q8_0" />).</param>
+/// <param name="EstimatedBytes">Total estimated footprint with the quantized KV cache (lower than the fp16 estimate).</param>
+/// <param name="HeadroomBytes">Scored budget minus <see cref="EstimatedBytes" /> (negative when it still would not fit).</param>
+/// <param name="Fits">Whether the candidate would fit its scored budget with the quantized KV cache.</param>
+/// <param name="RequiresFlashAttention">Always <see langword="true" /> — llama.cpp requires flash attention for a quantized KV cache.</param>
+public sealed record KvQuantAdvisory(
+    KvCacheQuant Quant,
+    long EstimatedBytes,
+    long HeadroomBytes,
+    bool Fits,
+    bool RequiresFlashAttention);
 
 /// <summary>
 ///     The catalog lane's ranked output: <see cref="Recommended" /> (fits at/above Q4_K_M with headroom) and
