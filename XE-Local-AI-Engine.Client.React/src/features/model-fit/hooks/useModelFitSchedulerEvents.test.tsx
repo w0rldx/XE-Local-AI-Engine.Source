@@ -60,6 +60,12 @@ import { fetchScheduledJobRuns } from "@/features/scheduler/queries/useScheduler
 
 const TERMINAL_RUN_EVENTS = ["scheduler.runCompleted", "scheduler.runFailed", "scheduler.runCancelled"];
 
+// The hub also broadcasts these non-terminal events to every client; the hook binds them as documented no-ops so the
+// SignalR client does not log "No client method with the name '...' found." (see IGNORED_RUN_EVENTS in the hook).
+const IGNORED_RUN_EVENTS = ["scheduler.runStarted", "scheduler.runProgress"];
+
+const ALL_RUN_EVENTS = [...TERMINAL_RUN_EVENTS, ...IGNORED_RUN_EVENTS];
+
 const MODEL_FIT_TEMPLATE_ID = "model-recommendation-check";
 
 // The hub invalidates the generated latest-recommendations key, a single-element array
@@ -136,14 +142,26 @@ describe("useModelFitSchedulerEvents", () => {
 		expect(signalRMock.connection.start).toHaveBeenCalled();
 	});
 
-	it("subscribes to only the three terminal run events (not started/progress)", () => {
+	it("subscribes to all five run events: the three terminal handlers plus the two ignored no-ops", () => {
+		// The three terminal events drive cache invalidation + toasts; the two non-terminal events are bound as no-ops
+		// purely so the SignalR client considers the methods handled and stays silent (no "No client method" warning).
 		renderHub();
 
-		for (const eventName of TERMINAL_RUN_EVENTS) {
+		for (const eventName of ALL_RUN_EVENTS) {
 			expect(signalRMock.connection.on).toHaveBeenCalledWith(eventName, expect.any(Function));
 		}
-		expect(signalRMock.connection.on).not.toHaveBeenCalledWith("scheduler.runStarted", expect.any(Function));
-		expect(signalRMock.connection.on).not.toHaveBeenCalledWith("scheduler.runProgress", expect.any(Function));
+	});
+
+	it("binds the ignored events as inert no-ops (no invalidation, no toast)", () => {
+		renderHub();
+
+		handlers.get("scheduler.runStarted")?.({ templateId: MODEL_FIT_TEMPLATE_ID });
+		handlers.get("scheduler.runProgress")?.({ templateId: MODEL_FIT_TEMPLATE_ID });
+
+		expect(invalidatedKeys).not.toContainEqual(LATEST_KEY);
+		expect(toast.error).not.toHaveBeenCalled();
+		expect(toast.success).not.toHaveBeenCalled();
+		expect(toast.warn).not.toHaveBeenCalled();
 	});
 
 	it("invalidates the generated latest key on a terminal model-recommendation-check run", () => {
@@ -240,7 +258,8 @@ describe("useModelFitSchedulerEvents", () => {
 
 		unmount();
 
-		for (const eventName of TERMINAL_RUN_EVENTS) {
+		// Symmetry: every event bound with connection.on (terminal handlers AND ignored no-ops) is unbound with off.
+		for (const eventName of ALL_RUN_EVENTS) {
 			expect(signalRMock.connection.off).toHaveBeenCalledWith(eventName, expect.any(Function));
 		}
 		// stop() is deferred until start() settles (so cleanup never aborts an in-flight negotiation), so it runs on a
@@ -274,10 +293,7 @@ describe("useModelFitSchedulerEvents", () => {
 
 		// start() resolving = the hub connected; the hook runs ONE catch-up fetch (no interval) and toasts the result.
 		await vi.waitFor(() =>
-			expect(toast.error).toHaveBeenCalledWith(
-				"The approved image is disabled.",
-				expect.objectContaining({ autoClose: false }),
-			),
+			expect(toast.error).toHaveBeenCalledWith("The approved image is disabled.", expect.objectContaining({ autoClose: false })),
 		);
 		expect(vi.mocked(fetchScheduledJobRuns)).toHaveBeenCalledTimes(1);
 		expect(vi.mocked(fetchScheduledJobRuns)).toHaveBeenCalledWith(
