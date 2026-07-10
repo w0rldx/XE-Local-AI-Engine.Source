@@ -24,6 +24,7 @@ using XE_Local_AI_Engine.Client.Services.NodeSettings;
 using XE_Local_AI_Engine.Providers.Ollama.Implementation;
 using XE_Local_AI_Engine.Tests.Testing;
 using XE_Local_AI_Engine.Tests.Testing.Builders;
+using XE_Local_AI_Engine.Tests.Testing.Mocks;
 
 public sealed class NodeChatStreamServiceTests
 {
@@ -1627,6 +1628,7 @@ public sealed class NodeChatStreamServiceTests
             offerProvider,
             new LexicalPlaybookRetrievalRanker(),
             Options.Create(new PlaybookRetrievalOptions()),
+            new FakeAgentInstructionProvider(),
             NullLogger<AgentDefinitionResolver>.Instance);
 
         var persistence = CreatePersistence(conversationId, assistantMessageId, requestId, _ => { });
@@ -1728,6 +1730,7 @@ public sealed class NodeChatStreamServiceTests
             offerProvider,
             new LexicalPlaybookRetrievalRanker(),
             Options.Create(new PlaybookRetrievalOptions()),
+            new FakeAgentInstructionProvider(),
             NullLogger<AgentDefinitionResolver>.Instance);
 
         var persistence = CreatePersistence(conversationId, assistantMessageId, requestId, _ => { });
@@ -2932,6 +2935,8 @@ public sealed class NodeChatStreamServiceTests
 
         public event EventHandler<ToolCallLifecycleChangedEventArgs>? ToolCallLifecycleChanged;
 
+        public event EventHandler<TurnNoticeChangedEventArgs>? TurnNoticeChanged;
+
         public InvocationState? CurrentInvocation { get; private set; }
 
         public bool IsAcceptingRemoteInvocations => true;
@@ -3059,6 +3064,12 @@ public sealed class NodeChatStreamServiceTests
         public Task ReportToolCallLifecycleAsync(ToolCallLifecyclePayload payload)
         {
             ToolCallLifecycleChanged?.Invoke(this, new ToolCallLifecycleChangedEventArgs(payload));
+            return Task.CompletedTask;
+        }
+
+        public Task ReportTurnNoticeAsync(TurnNoticePayload payload)
+        {
+            TurnNoticeChanged?.Invoke(this, new TurnNoticeChangedEventArgs(payload));
             return Task.CompletedTask;
         }
 

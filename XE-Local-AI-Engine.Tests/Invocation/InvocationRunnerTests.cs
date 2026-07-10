@@ -11,6 +11,7 @@ using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Options;
 using NSubstitute;
+using XE_Local_AI_Engine.AI.Agent.Configuration;
 using XE_Local_AI_Engine.AI.Agent.Invocation;
 using XE_Local_AI_Engine.AI.Agent.Invocation.Implementation;
 using XE_Local_AI_Engine.AI.Agent.Invocation.Orchestration;
@@ -1201,6 +1202,101 @@ public sealed class InvocationRunnerTests
         await runTask.WaitAsync(TimeSpan.FromSeconds(5));
     }
 
+    [Test]
+    public async Task RunAsync_WhenHistoryStillExceedsBudgetAfterTruncation_FailsCleanlyBeforeAnyProviderCall()
+    {
+        var sender = new MockHubMessageSender();
+        var dispatcher = Substitute.For<IWorkerEventDispatcher>();
+        // A capacity this tiny cannot be satisfied by ANY history (even a single protected turn), so the budgeter's
+        // two-pass truncation cannot bring the estimate under budget: ExceedsBudget stays true and the runner must
+        // hard-stop BEFORE ever touching the agent factory (no agentUpdates are ever consumed).
+        var runner = CreateRunner(sender,
+            eventDispatcher: dispatcher,
+            contextBudgetOptions: new ConversationContextBudgetOptions { DefaultContextTokens = 1, ReservedOutputTokenFloor = 0 });
+        var package = RuntimePackageBuilder.Valid().Build();
+
+        await RunAsync(runner, package);
+
+        await dispatcher.Received(1).ReportInvocationFailedAsync(package.InvocationId,
+            "Conversation exceeds the model's context window even after truncation — start a new chat or switch to a larger-context model.",
+            FailureCategory.ContextWindowExceeded);
+    }
+
+    [Test]
+    public async Task RunAsync_WhenRequestedModelCannotBeVerified_SurfacesAModelSubstitutedNotice()
+    {
+        var sender = new MockHubMessageSender();
+        var dispatcher = Substitute.For<IWorkerEventDispatcher>();
+        var capabilityReporter = Substitute.For<ICapabilityReporter>();
+        // Force the fallback branch: the requested model never verifies against Ollama, so ResolveModelAsync falls
+        // back to the node's default model (Ollama:ChatModel = "qwen3.5:0.8b", wired in CreateRunner) and reports the
+        // substitution.
+        capabilityReporter.VerifyOllamaAndModelAsync(Arg.Any<string?>(), Arg.Any<CancellationToken>()).Returns(Task.FromResult(false));
+        var runner = CreateRunner(sender, eventDispatcher: dispatcher, capabilityReporter: capabilityReporter, agentUpdates: CreateUpdates("ok"));
+        var package = RuntimePackageBuilder.Valid().WithModel("some-unverifiable-model").Build();
+
+        await RunAsync(runner, package);
+
+        await dispatcher.Received(1).ReportTurnNoticeAsync(Arg.Is<TurnNoticePayload>(payload =>
+            payload.InvocationId == package.InvocationId
+            && payload.Kind == TurnNoticeKind.ModelSubstituted
+            && payload.Message.Contains("some-unverifiable-model", StringComparison.Ordinal)
+            && payload.Message.Contains("qwen3.5:0.8b", StringComparison.Ordinal)));
+    }
+
+    [Test]
+    public async Task RunAsync_WhenAToolReturnsTheDisabledMarker_SurfacesAToolDisabledNoticeOncePerTool()
+    {
+        var sender = new MockHubMessageSender();
+        var dispatcher = Substitute.For<IWorkerEventDispatcher>();
+        var runner = CreateRunner(sender, eventDispatcher: dispatcher, agentUpdates: ToolDisabledUpdates());
+        var package = RuntimePackageBuilder.Valid().WithAllowedTool("test-tool").Build();
+
+        await RunAsync(runner, package);
+
+        await dispatcher.Received(1).ReportTurnNoticeAsync(Arg.Is<TurnNoticePayload>(payload =>
+            payload.InvocationId == package.InvocationId
+            && payload.Kind == TurnNoticeKind.ToolDisabled
+            && payload.Detail == "test-tool"
+            && payload.Message.Contains("test-tool", StringComparison.Ordinal)));
+    }
+
+    // Two rounds of the SAME tool (matching call ids) both returning ToolArgumentRepairAIFunction's structured
+    // "tool_disabled" marker — the real trigger is 3 consecutive invalid calls inside AI.Agent, but the runner's
+    // notice logic only inspects the wire shape of the result, so a hand-built marker exercises it without depending
+    // on AI.Agent internals.
+    private static async IAsyncEnumerable<AgentResponseUpdate> ToolDisabledUpdates()
+    {
+        const string disabledMarker = "{\"error\":\"tool_disabled\",\"reason\":\"Tool 'test-tool' was disabled for this run after repeated invalid-argument calls.\",\"hint\":\"Do not call this tool again during this run; continue without it.\"}";
+
+        yield return new AgentResponseUpdate(ChatRole.Assistant, new List<AIContent>
+        {
+            new FunctionCallContent("call-1", "test-tool")
+        });
+        await Task.Yield();
+
+        yield return new AgentResponseUpdate(ChatRole.Assistant, new List<AIContent>
+        {
+            new FunctionResultContent("call-1", disabledMarker)
+        });
+        await Task.Yield();
+
+        // A second call to the now-disabled tool returns the identical marker; the notice must fire only once.
+        yield return new AgentResponseUpdate(ChatRole.Assistant, new List<AIContent>
+        {
+            new FunctionCallContent("call-2", "test-tool")
+        });
+        await Task.Yield();
+
+        yield return new AgentResponseUpdate(ChatRole.Assistant, new List<AIContent>
+        {
+            new FunctionResultContent("call-2", disabledMarker)
+        });
+        await Task.Yield();
+
+        yield return new AgentResponseUpdate(ChatRole.Assistant, "done");
+    }
+
     private static InvocationRunner CreateRunner(MockHubMessageSender sender,
         IInvocationAgentFactory? invocationAgentFactory = null,
         IRuntimePackageValidator? validator = null,
@@ -1210,8 +1306,10 @@ public sealed class InvocationRunnerTests
         IAsyncEnumerable<AgentResponseUpdate>? agentUpdates = null,
         IOrchestrationAgentFactory? orchestrationAgentFactory = null,
         ILocalModelProviderResolver? providerResolver = null,
-        IProviderStreamResilience? providerStreamResilience = null)
+        IProviderStreamResilience? providerStreamResilience = null,
+        ConversationContextBudgetOptions? contextBudgetOptions = null)
     {
+        var resolvedContextBudgetOptions = contextBudgetOptions ?? new ConversationContextBudgetOptions();
         var resolvedFactory = invocationAgentFactory ?? CreateFactory(agentUpdates ?? CreateUpdates("ok"));
         var resolvedOrchestrationFactory = orchestrationAgentFactory ?? Substitute.For<IOrchestrationAgentFactory>();
 
@@ -1222,7 +1320,10 @@ public sealed class InvocationRunnerTests
         }
 
         var resolvedCapabilityReporter = capabilityReporter ?? Substitute.For<ICapabilityReporter>();
-        resolvedCapabilityReporter.VerifyOllamaAndModelAsync(Arg.Any<string?>(), Arg.Any<CancellationToken>()).Returns(Task.FromResult(true));
+        if (capabilityReporter is null)
+        {
+            resolvedCapabilityReporter.VerifyOllamaAndModelAsync(Arg.Any<string?>(), Arg.Any<CancellationToken>()).Returns(Task.FromResult(true));
+        }
 
         // Default to the Ollama provider so the existing tests keep exercising the VerifyOllamaAndModelAsync preflight
         // path (a non-Ollama provider intentionally bypasses it). Tests can pass their own resolver to cover routing.
@@ -1271,8 +1372,10 @@ public sealed class InvocationRunnerTests
             resolvedProviderResolver,
             Substitute.For<IDeadLetterStore>(),
             resolvedProviderStreamResilience,
-            new ConversationContextBudgeter(new HeuristicTokenEstimator(), Options.Create(new ConversationContextBudgetOptions())),
-            Options.Create(new ConversationContextBudgetOptions()),
+            new ConversationContextBudgeter(new HeuristicTokenEstimator(), Options.Create(resolvedContextBudgetOptions)),
+            Options.Create(resolvedContextBudgetOptions),
+            Options.Create(new ProviderResilienceOptions()),
+            Options.Create(new AgentToolPipelineOptions()),
             configuration,
             runtimeSettings,
             Options.Create(new SpawnOptions()),

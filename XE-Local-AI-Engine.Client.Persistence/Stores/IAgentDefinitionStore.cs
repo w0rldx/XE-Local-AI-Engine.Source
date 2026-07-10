@@ -73,4 +73,5 @@ public sealed record AgentDefinitionInput(
     bool PlaybookEnabled = false,
     IReadOnlyList<Guid>? AllowedSkillIds = null,
     bool DefaultTemporaryChat = false,
-    bool MemoryExtractionEnabled = true);
+    bool MemoryExtractionEnabled = true,
+    bool DisableBaseScaffold = false);

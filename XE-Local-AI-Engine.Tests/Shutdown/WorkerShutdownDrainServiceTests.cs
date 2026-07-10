@@ -229,6 +229,12 @@ public sealed class WorkerShutdownDrainServiceTests
             remove => _ = value;
         }
 
+        event EventHandler<TurnNoticeChangedEventArgs>? IWorkerEventDispatcher.TurnNoticeChanged
+        {
+            add => _ = value;
+            remove => _ = value;
+        }
+
         public void StopAcceptingRemoteInvocations()
         {
             IsAcceptingRemoteInvocations = false;
@@ -302,6 +308,11 @@ public sealed class WorkerShutdownDrainServiceTests
         }
 
         public Task ReportToolCallLifecycleAsync(ToolCallLifecyclePayload payload)
+        {
+            return Task.CompletedTask;
+        }
+
+        public Task ReportTurnNoticeAsync(TurnNoticePayload payload)
         {
             return Task.CompletedTask;
         }

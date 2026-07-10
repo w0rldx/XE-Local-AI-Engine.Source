@@ -10,6 +10,7 @@ using XE_Local_AI_Engine.Client.Services.Agents.Implementation;
 using XE_Local_AI_Engine.Client.Services.Chat;
 using XE_Local_AI_Engine.Client.Services.Chat.Implementation;
 using XE_Local_AI_Engine.Tests.Testing;
+using XE_Local_AI_Engine.Tests.Testing.Mocks;
 
 /// <summary>
 ///     Proves the adaptive-memory metadata fields are non-config-affecting: the per-agent <c>DefaultTemporaryChat</c>
@@ -148,6 +149,7 @@ public sealed class AdaptiveMemoryConfigHashTests
             offerProvider,
             new LexicalPlaybookRetrievalRanker(),
             Options.Create(new PlaybookRetrievalOptions()),
+            new FakeAgentInstructionProvider(),
             NullLogger<AgentDefinitionResolver>.Instance);
     }
 

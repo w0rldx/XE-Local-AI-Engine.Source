@@ -191,6 +191,13 @@ public static class NodeChatMessagePartKinds
     public const string Reasoning = "reasoning";
     public const string Tool = "tool";
     public const string Text = "text";
+
+    /// <summary>
+    ///     A non-fatal turn notice (model substitution, tool disabled, history truncated). Reuses the generic
+    ///     <see cref="NodeChatMessagePart.Text" /> for the sanitized message and <see cref="NodeChatMessagePart.Name" />
+    ///     for the <c>TurnNoticeKind</c> enum name, rather than adding dedicated fields.
+    /// </summary>
+    public const string Notice = "notice";
 }
 
 /// <summary>

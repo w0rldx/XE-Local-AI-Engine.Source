@@ -6,6 +6,11 @@ using XE_Local_AI_Engine.AI.Agent.Configuration;
 
 internal sealed class AgentInstructionProvider : IAgentInstructionProvider
 {
+    // App-owned, not tenant-configurable (unlike LocalChatAgentOptions.InstructionsResource): the scaffold is the
+    // same versioned boilerplate for every node, so it is not surfaced as a settable option.
+    private const string BaseScaffoldResourceName = "XE_Local_AI_Engine.AI.Agent.Instructions.BaseScaffold.txt";
+    private const int BaseScaffoldVersion = 1;
+
     private readonly IOptions<LocalChatAgentOptions> _localChatOptions;
 
     public AgentInstructionProvider(IOptions<LocalChatAgentOptions> localChatOptions)
@@ -13,9 +18,25 @@ internal sealed class AgentInstructionProvider : IAgentInstructionProvider
         _localChatOptions = localChatOptions ?? throw new ArgumentNullException(nameof(localChatOptions));
     }
 
+    public int ScaffoldVersion => BaseScaffoldVersion;
+
     public string GetLocalChatInstructions()
     {
-        var resourceName = _localChatOptions.Value.InstructionsResource;
+        return LoadEmbeddedResource(_localChatOptions.Value.InstructionsResource);
+    }
+
+    public string GetBaseScaffold()
+    {
+        return LoadEmbeddedResource(BaseScaffoldResourceName);
+    }
+
+    public string GetDefaultChatSystemPrompt()
+    {
+        return BaseInstructionComposer.Compose(GetBaseScaffold(), GetLocalChatInstructions());
+    }
+
+    private static string LoadEmbeddedResource(string resourceName)
+    {
         var assembly = Assembly.GetExecutingAssembly();
         using var stream = assembly.GetManifestResourceStream(resourceName);
 

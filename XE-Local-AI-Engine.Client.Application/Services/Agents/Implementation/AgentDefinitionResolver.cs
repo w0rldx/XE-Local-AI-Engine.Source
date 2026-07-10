@@ -1,6 +1,7 @@
 namespace XE_Local_AI_Engine.Client.Services.Agents.Implementation;
 
 using Microsoft.Extensions.Options;
+using XE_Local_AI_Engine.AI.Agent.Instructions;
 using XE_Local_AI_Engine.Client.Models;
 using XE_Local_AI_Engine.Client.Persistence;
 using XE_Local_AI_Engine.Client.Persistence.Stores;
@@ -9,6 +10,7 @@ using XE_Local_AI_Engine.Client.Services.Chat;
 internal sealed class AgentDefinitionResolver : IAgentDefinitionResolver
 {
     private readonly IAgentSkillStore _agentSkillStore;
+    private readonly IAgentInstructionProvider _instructionProvider;
     private readonly ILocalToolOfferProvider _localToolOfferProvider;
     private readonly ILogger<AgentDefinitionResolver> _logger;
     private readonly IPlaybookActionStore _playbookActionStore;
@@ -22,6 +24,7 @@ internal sealed class AgentDefinitionResolver : IAgentDefinitionResolver
         ILocalToolOfferProvider localToolOfferProvider,
         IPlaybookRetrievalRanker retrievalRanker,
         IOptions<PlaybookRetrievalOptions> retrievalOptions,
+        IAgentInstructionProvider instructionProvider,
         ILogger<AgentDefinitionResolver> logger)
     {
         _store = store ?? throw new ArgumentNullException(nameof(store));
@@ -31,6 +34,7 @@ internal sealed class AgentDefinitionResolver : IAgentDefinitionResolver
         _retrievalRanker = retrievalRanker ?? throw new ArgumentNullException(nameof(retrievalRanker));
         ArgumentNullException.ThrowIfNull(retrievalOptions);
         _retrievalOptions = retrievalOptions.Value;
+        _instructionProvider = instructionProvider ?? throw new ArgumentNullException(nameof(instructionProvider));
         _logger = logger ?? throw new ArgumentNullException(nameof(logger));
     }
 
@@ -110,6 +114,22 @@ internal sealed class AgentDefinitionResolver : IAgentDefinitionResolver
     }
 
     /// <summary>
+    ///     Composes the definition's final resolved prompt: the versioned base instruction scaffold (identity/
+    ///     grounding/tool/output discipline), a blank line, then the persona prompt (Instructions, with playbook
+    ///     memories folded in per <see cref="ComposePersonaPromptAsync" />). A definition with
+    ///     <see cref="AgentDefinitionRecord.DisableBaseScaffold" /> set — or the defensive case of a blank scaffold
+    ///     resource — skips the prepend entirely, keeping the resolved prompt byte-identical to the pre-scaffold
+    ///     persona-only path (preserving that definition's config hash across the scaffold's introduction).
+    /// </summary>
+    private async Task<string> ComposePromptAsync(AgentDefinitionRecord definition, string? retrievalQuery, CancellationToken cancellationToken)
+    {
+        var personaPrompt = await ComposePersonaPromptAsync(definition, retrievalQuery, cancellationToken).ConfigureAwait(false);
+        return definition.DisableBaseScaffold
+            ? personaPrompt
+            : BaseInstructionComposer.Compose(_instructionProvider.GetBaseScaffold(), personaPrompt);
+    }
+
+    /// <summary>
     ///     Folds the definition's enabled playbook actions into its prompt when the playbook is enabled. When it is
     ///     disabled the query is skipped entirely and the base Instructions flow through unchanged — keeping the
     ///     resolved prompt (and thus the runtime config hash) byte-identical to the no-playbook path. When the enabled set
@@ -117,7 +137,7 @@ internal sealed class AgentDefinitionResolver : IAgentDefinitionResolver
     ///     top-k most relevant actions are injected (relevance retrieval and cohort monitoring, the relevance-retrieval gate); at or below the threshold — or with a blank
     ///     query — the full static prepend is used, so the resolved prompt stays byte-identical to the pre-retrieval path.
     /// </summary>
-    private async Task<string> ComposePromptAsync(AgentDefinitionRecord definition, string? retrievalQuery, CancellationToken cancellationToken)
+    private async Task<string> ComposePersonaPromptAsync(AgentDefinitionRecord definition, string? retrievalQuery, CancellationToken cancellationToken)
     {
         if (!definition.PlaybookEnabled)
         {
