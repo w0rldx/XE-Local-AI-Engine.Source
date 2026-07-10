@@ -5,6 +5,7 @@ using System.Text.RegularExpressions;
 using XE_Local_AI_Engine.Client.Models;
 using XE_Local_AI_Engine.Client.Models.Enums;
 using XE_Local_AI_Engine.Client.Services.Chat;
+using XE_Local_AI_Engine.Client.Services.Invocation.Resilience;
 
 public sealed partial class InvocationRunner
 {
@@ -15,7 +16,18 @@ public sealed partial class InvocationRunner
             // Matches BEFORE the generic InvalidOperationException arms below (it derives from InvalidOperationException):
             // a local-default send with no installed GGUF chat model surfaces ModelNotInstalled, not ProviderUnreachable.
             NoChatModelInstalledException => (FailureCategory.ModelNotInstalled, NoChatModelInstalledMessage),
-            TimeoutException timeoutException => (FailureCategory.Timeout, timeoutException.Message),
+            // A tripped circuit breaker: surface a fixed, retry-soon message rather than the generic ProviderUnreachable
+            // (the endpoint is likely recovering, not permanently down). Matches before the StreamIdle/TimeoutException
+            // arm because it is not a TimeoutException.
+            ProviderCircuitOpenException => (FailureCategory.ProviderUnreachable, ProviderTemporarilyUnavailableMessage),
+            // The inter-chunk stall carries the watchdog's own message, which is already a fixed, path-free constant
+            // that names which timeout fired — so it is surfaced verbatim. Matches BEFORE the generic TimeoutException
+            // arm because it derives from it.
+            StreamIdleTimeoutException streamIdleTimeout => (FailureCategory.Timeout, streamIdleTimeout.Message),
+            // Any other TimeoutException (the invocation-level cancel-after, or an HTTP client timeout surfacing as a
+            // bare TimeoutException) carries a framework message that can name hosts/paths/internals and is unbounded, so
+            // it is collapsed to a fixed, path-free constant rather than forwarded.
+            TimeoutException => (FailureCategory.Timeout, TimedOutMessage),
             WorkerToolCallException => (FailureCategory.AgentToolCall, AgentToolCallFailureMessage),
             NotSupportedException notSupportedException => (FailureCategory.AgentRuntime, RedactAgentRuntimeMessage(notSupportedException.Message)),
             InvalidOperationException invalidOperationException when invalidOperationException.Message.Contains("Response size exceeded", StringComparison.Ordinal) =>
