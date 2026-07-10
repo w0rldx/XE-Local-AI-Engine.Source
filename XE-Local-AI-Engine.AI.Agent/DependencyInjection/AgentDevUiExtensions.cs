@@ -1,3 +1,8 @@
+// Debug-only: the Microsoft.Agents.AI.Hosting package this depends on only ships as a
+// preview; compiling the DevUI registration out of Release keeps that preview package
+// out of the published desktop build entirely (the csproj reference carries the same
+// Debug condition).
+#if DEBUG
 namespace XE_Local_AI_Engine.AI.Agent.DependencyInjection;
 
 using Microsoft.Agents.AI;
@@ -47,3 +52,4 @@ public static class AgentDevUiExtensions
         return builder;
     }
 }
+#endif

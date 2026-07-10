@@ -8,9 +8,14 @@ using XE_Local_AI_Engine.Client.Services.Events;
 /// <summary>
 ///     Live-invocation tracker backing reconnect/resume. It mirrors the dispatcher's
 ///     <see cref="IWorkerEventDispatcher.InvocationStateChanged" /> stream into a per-invocation snapshot + state
-///     fan-out so a reconnecting client can re-attach with a fresh consumer. It owns no agent logic — it only
-///     translates <see cref="InvocationState" /> snapshots into <see cref="ChatStreamEvent" />s the same way the
-///     local pump does.
+///     fan-out so a reconnecting client can re-attach with a fresh consumer, and mirrors
+///     <see cref="IWorkerEventDispatcher.ToolCallLifecycleChanged" /> so the resumed stream carries the same
+///     tool-call timeline the original stream did. It owns no agent logic — it only translates
+///     <see cref="InvocationState" /> snapshots and <see cref="ToolCallLifecyclePayload" />s into
+///     <see cref="ChatStreamEvent" />s the same way the local pump does.
+///     Resume streams number their events from zero with their own counter; the client rebases them onto the
+///     original stream's sequence space at the reconnect boundary (NodeChatAdapter), so the registry must only
+///     guarantee that its own events are contiguous and ascending.
 /// </summary>
 public sealed class InvocationResumeRegistry : IInvocationResumeRegistry
 {
@@ -29,6 +34,7 @@ public sealed class InvocationResumeRegistry : IInvocationResumeRegistry
         // Subscribe for the process lifetime; the registry singleton lives as long as the dispatcher singleton,
         // so there is no unsubscribe path (mirrors WorkerEventDispatcher's CA1001 suppression rationale).
         eventDispatcher.InvocationStateChanged += OnInvocationStateChanged;
+        eventDispatcher.ToolCallLifecycleChanged += OnToolCallLifecycleChanged;
     }
 
     public InvocationState? TryGetLiveInvocation(Guid invocationId)
@@ -53,23 +59,38 @@ public sealed class InvocationResumeRegistry : IInvocationResumeRegistry
         [EnumeratorCancellation]
         CancellationToken cancellationToken)
     {
-        var reader = live.Subscribe(out var snapshot);
+        var reader = live.Subscribe(out var snapshot, out var toolHistory);
         var lastContent = snapshot.StreamedContent;
         var lastReasoning = snapshot.StreamedThinkingContent;
         var sequence = 0L;
 
-        // Replay the content accumulated so far as a single snapshot delta so the reconnecting client renders
-        // the in-flight assistant message immediately, then continues with live deltas in order.
-        yield return ToEvent(ChatStreamEventTypes.AssistantDelta,
-            snapshot,
-            sequence++,
-            lastContent.Length == 0 ? null : lastContent,
-            lastReasoning.Length == 0 ? null : lastReasoning);
+        // Replay the tool-call timeline accumulated so far, then the content accumulated so far, so the
+        // reconnecting client renders the in-flight assistant message (tool cards included) immediately before
+        // live items continue in order. The content replay is a pure SNAPSHOT event (full Content/Reasoning, no
+        // delta fields): the client applies Content as a replacement, and a delta here would be appended to
+        // whatever the client already rendered before the reconnect, duplicating it.
+        foreach (var toolCall in toolHistory)
+        {
+            yield return ToToolCallEvent(snapshot, toolCall, sequence++);
+        }
+
+        yield return ToEvent(ChatStreamEventTypes.AssistantDelta, snapshot, sequence++);
 
         try
         {
-            await foreach (var state in reader.ReadAllAsync(cancellationToken).ConfigureAwait(false))
+            await foreach (var item in reader.ReadAllAsync(cancellationToken).ConfigureAwait(false))
             {
+                if (item.ToolCall is { } toolCall)
+                {
+                    yield return ToToolCallEvent(live.LatestState, toolCall, sequence++);
+                    continue;
+                }
+
+                if (item.State is not { } state)
+                {
+                    continue;
+                }
+
                 var hasContentDelta = state.StreamedContent.Length > lastContent.Length;
                 var hasReasoningDelta = state.StreamedThinkingContent.Length > lastReasoning.Length;
 
@@ -128,6 +149,17 @@ public sealed class InvocationResumeRegistry : IInvocationResumeRegistry
         }
     }
 
+    private void OnToolCallLifecycleChanged(object? sender, ToolCallLifecycleChangedEventArgs args)
+    {
+        // Tool lifecycle without a tracked live invocation means the run never reported Assigned/Running (or is
+        // already terminal); there is nothing to fan out and nothing to record — the persisted parts[] remain the
+        // source of truth on reload.
+        if (_live.TryGetValue(args.Payload.InvocationId, out var live))
+        {
+            live.PublishToolCall(args.Payload);
+        }
+    }
+
     private ChatStreamEvent ToEvent(string type,
         InvocationState state,
         long sequence,
@@ -156,6 +188,32 @@ public sealed class InvocationResumeRegistry : IInvocationResumeRegistry
             outputTokens,
             totalTokens,
             reasoningTokens);
+    }
+
+    private ChatStreamEvent ToToolCallEvent(InvocationState state,
+        ToolCallLifecyclePayload payload,
+        long sequence)
+    {
+        // Mirrors the pump's tool-call event shape: the requested phase carries the arguments and approval flag,
+        // the completed phase carries the result and error flag. Resume events stamp the invocation id as the
+        // message id; the client remaps it to the assistant message id at the reconnect boundary.
+        var type = payload.Phase == ToolCallLifecyclePhase.Requested
+            ? ChatStreamEventTypes.ToolCallRequested
+            : ChatStreamEventTypes.ToolCallCompleted;
+
+        return new ChatStreamEvent(type,
+            state.ConversationId,
+            state.InvocationId,
+            state.InvocationId,
+            NodeChatMessageStatusValues.Streaming,
+            sequence,
+            _timeProvider.GetUtcNow().ToUnixTimeMilliseconds(),
+            ToolCallId: payload.ToolCallId,
+            ToolName: payload.ToolName,
+            Arguments: payload.Phase == ToolCallLifecyclePhase.Requested ? payload.Arguments : null,
+            RequiresApproval: payload.Phase == ToolCallLifecyclePhase.Requested ? payload.RequiresApproval : null,
+            Result: payload.Phase == ToolCallLifecyclePhase.Completed ? payload.Result : null,
+            IsError: payload.Phase == ToolCallLifecyclePhase.Completed ? payload.IsError : null);
     }
 
     private static bool TryMapTerminal(InvocationStatus status,
@@ -234,12 +292,37 @@ public sealed class InvocationResumeRegistry : IInvocationResumeRegistry
     }
 
     /// <summary>
-    ///     One live invocation: the latest snapshot plus the set of attached resume consumers. Each consumer gets
-    ///     its own unbounded channel so a slow reader never blocks the dispatcher's publish path.
+    ///     One item on a resume consumer's channel: exactly one of a state snapshot or a tool-call lifecycle
+    ///     transition, in dispatcher order.
+    /// </summary>
+    private readonly record struct ResumeItem(InvocationState? State, ToolCallLifecyclePayload? ToolCall)
+    {
+        public static ResumeItem FromState(InvocationState state)
+        {
+            return new ResumeItem(state, null);
+        }
+
+        public static ResumeItem FromToolCall(ToolCallLifecyclePayload toolCall)
+        {
+            return new ResumeItem(null, toolCall);
+        }
+    }
+
+    /// <summary>
+    ///     One live invocation: the latest snapshot, the tool-call timeline so far, and the set of attached resume
+    ///     consumers. Each consumer gets its own unbounded channel so a slow reader never blocks the dispatcher's
+    ///     publish path. History append and subscriber registration share one lock, so every tool event lands in a
+    ///     consumer's replayed history XOR on its channel — never both, never neither.
     /// </summary>
     private sealed class LiveInvocation(InvocationState initialState)
     {
-        private readonly List<Channel<InvocationState>> _subscribers = [];
+        // Caps the replayed tool timeline for pathological turns; the iteration cap bounds real turns far below
+        // this. When exceeded the oldest entries drop — the terminal-gated refetch restores the full persisted
+        // timeline anyway.
+        private const int MaxRecordedToolEvents = 256;
+
+        private readonly List<ToolCallLifecyclePayload> _toolHistory = [];
+        private readonly List<Channel<ResumeItem>> _subscribers = [];
         private readonly Lock _syncRoot = new();
 
         public InvocationState LatestState { get; private set; } = Clone(initialState);
@@ -252,14 +335,32 @@ public sealed class InvocationResumeRegistry : IInvocationResumeRegistry
 
                 foreach (var subscriber in _subscribers)
                 {
-                    _ = subscriber.Writer.TryWrite(Clone(state));
+                    _ = subscriber.Writer.TryWrite(ResumeItem.FromState(Clone(state)));
                 }
             }
         }
 
-        public ChannelReader<InvocationState> Subscribe(out InvocationState snapshot)
+        public void PublishToolCall(ToolCallLifecyclePayload toolCall)
         {
-            var channel = Channel.CreateUnbounded<InvocationState>(new UnboundedChannelOptions
+            lock (_syncRoot)
+            {
+                _toolHistory.Add(toolCall);
+                if (_toolHistory.Count > MaxRecordedToolEvents)
+                {
+                    _toolHistory.RemoveAt(0);
+                }
+
+                foreach (var subscriber in _subscribers)
+                {
+                    _ = subscriber.Writer.TryWrite(ResumeItem.FromToolCall(toolCall));
+                }
+            }
+        }
+
+        public ChannelReader<ResumeItem> Subscribe(out InvocationState snapshot,
+            out IReadOnlyList<ToolCallLifecyclePayload> toolHistory)
+        {
+            var channel = Channel.CreateUnbounded<ResumeItem>(new UnboundedChannelOptions
             {
                 SingleReader = true,
                 SingleWriter = false
@@ -268,13 +369,14 @@ public sealed class InvocationResumeRegistry : IInvocationResumeRegistry
             lock (_syncRoot)
             {
                 snapshot = Clone(LatestState);
+                toolHistory = [.. _toolHistory];
                 _subscribers.Add(channel);
             }
 
             return channel.Reader;
         }
 
-        public void Unsubscribe(ChannelReader<InvocationState> reader)
+        public void Unsubscribe(ChannelReader<ResumeItem> reader)
         {
             lock (_syncRoot)
             {

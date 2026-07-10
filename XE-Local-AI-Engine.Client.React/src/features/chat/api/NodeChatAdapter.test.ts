@@ -192,20 +192,76 @@ describe("nodeChatAdapter SignalR streaming", () => {
 		expect(connectionMock.state.lastMethod).toBe("ResumeMessage");
 		expect(connectionMock.state.lastPayload).toBe("request-1");
 
-		// The resume registry stamps the invocation id as the message id; the adapter remaps it back.
+		// The resume registry stamps the invocation id as the message id AND restarts its sequence numbering at
+		// zero (it cannot see the original stream's counter). The adapter remaps the message id back and rebases
+		// the sequences past the delivered high-water mark — without the rebase the dedupe guard drops every
+		// resumed event (terminal included) as a stale duplicate and the message sticks with no error.
 		const resumed = iterator.next();
 		connectionMock.state.currentSubscriber?.next(
-			streamEvent({ messageId: "request-1", sequence: 2, content: "hi there", delta: " there" }),
+			streamEvent({ messageId: "request-1", sequence: 0, content: "hi there", delta: undefined }),
 		);
-		await expect(resumed).resolves.toMatchObject({ value: { messageId: "assistant-1", content: "hi there" }, done: false });
+		await expect(resumed).resolves.toMatchObject({
+			value: { messageId: "assistant-1", content: "hi there", sequence: 2 },
+			done: false,
+		});
 
 		const done = iterator.next();
 		connectionMock.state.currentSubscriber?.next(
-			streamEvent({ type: "assistant-completed", messageId: "request-1", sequence: 3, status: "completed", content: "hi there" }),
+			streamEvent({ type: "assistant-completed", messageId: "request-1", sequence: 1, status: "completed", content: "hi there" }),
 		);
 		await settle();
 		connectionMock.state.currentSubscriber?.complete();
-		await expect(done).resolves.toMatchObject({ value: { type: "assistant-completed", messageId: "assistant-1" } });
+		await expect(done).resolves.toMatchObject({
+			value: { type: "assistant-completed", messageId: "assistant-1", sequence: 3 },
+		});
+	});
+
+	it("delivers a second resume after another reconnect with sequences rebased again", async () => {
+		const iterator = nodeChatAdapter.sendMessage(streamRequest, new AbortController().signal)[Symbol.asyncIterator]();
+		const first = iterator.next();
+		await settle();
+
+		connectionMock.state.currentSubscriber?.next(streamEvent({ sequence: 0, content: "a", delta: "a" }));
+		await expect(first).resolves.toMatchObject({ value: { sequence: 0 }, done: false });
+
+		// First drop: resume delivers its zero-based events rebased to 1, 2, ...
+		connectionMock.state.status = "reconnecting";
+		connectionMock.state.currentSubscriber?.error(new Error("connection lost"));
+		connectionMock.state.status = "connected";
+		for (const listener of connectionMock.state.listeners) {
+			listener.onReconnected?.("connection-2");
+		}
+		await settle();
+		expect(connectionMock.state.lastMethod).toBe("ResumeMessage");
+
+		const second = iterator.next();
+		connectionMock.state.currentSubscriber?.next(
+			streamEvent({ messageId: "request-1", sequence: 0, content: "ab", delta: undefined }),
+		);
+		await expect(second).resolves.toMatchObject({ value: { sequence: 1, content: "ab" }, done: false });
+
+		// Second drop: the next resume restarts at zero again and must rebase past the new high-water mark.
+		connectionMock.state.status = "reconnecting";
+		connectionMock.state.currentSubscriber?.error(new Error("connection lost again"));
+		connectionMock.state.status = "connected";
+		for (const listener of connectionMock.state.listeners) {
+			listener.onReconnected?.("connection-3");
+		}
+		await settle();
+
+		const third = iterator.next();
+		connectionMock.state.currentSubscriber?.next(
+			streamEvent({ messageId: "request-1", sequence: 0, content: "abc", delta: undefined }),
+		);
+		await expect(third).resolves.toMatchObject({ value: { sequence: 2, content: "abc" }, done: false });
+
+		const done = iterator.next();
+		connectionMock.state.currentSubscriber?.next(
+			streamEvent({ type: "assistant-completed", messageId: "request-1", sequence: 1, status: "completed", content: "abc" }),
+		);
+		await settle();
+		connectionMock.state.currentSubscriber?.complete();
+		await expect(done).resolves.toMatchObject({ value: { type: "assistant-completed", sequence: 3 } });
 	});
 
 	it("completes cleanly (no error) when ResumeMessage throws an unknown/terminal invocation", async () => {
@@ -305,12 +361,16 @@ describe("nodeChatAdapter SignalR streaming", () => {
 		expect(connectionMock.state.lastMethod).toBe("ResumeMessage");
 		expect(connectionMock.state.lastPayload).toBe("request-9");
 
-		// Resume events stamp the invocation id as the message id; the adapter remaps to the latched variant id.
+		// Resume events stamp the invocation id as the message id and restart their numbering at zero; the
+		// adapter remaps to the latched variant id and rebases the sequence past the delivered high-water mark.
 		const resumed = iterator.next();
 		connectionMock.state.currentSubscriber?.next(
-			streamEvent({ messageId: "request-9", sequence: 2, content: "draft done", delta: " done" }),
+			streamEvent({ messageId: "request-9", sequence: 0, content: "draft done", delta: undefined }),
 		);
-		await expect(resumed).resolves.toMatchObject({ value: { messageId: "variant-9", content: "draft done" }, done: false });
+		await expect(resumed).resolves.toMatchObject({
+			value: { messageId: "variant-9", content: "draft done", sequence: 2 },
+			done: false,
+		});
 	});
 
 	it("disposes the SignalR subscription when the send aborts", async () => {
