@@ -2,6 +2,7 @@ import { Stack } from "@mantine/core";
 import { memo } from "react";
 
 import { ChatMarkdown } from "@/features/chat/components/ChatMarkdown";
+import { ChatNoticeRow } from "@/features/chat/components/ChatNoticeRow";
 import { ThoughtsSection } from "@/features/chat/components/ThoughtsSection";
 import { ToolCallCard } from "@/features/chat/components/ToolCallCard";
 import type { ChatMessagePart } from "@/features/chat/models/ChatModels";
@@ -70,6 +71,10 @@ export const MessageParts = memo(function MessageParts({
 
 				if (part.kind === "tool") {
 					return <ToolCallCard key={part.id} part={part} />;
+				}
+
+				if (part.kind === "notice") {
+					return <ChatNoticeRow key={part.id} part={part} />;
 				}
 
 				return <ChatMarkdown key={part.id} content={part.text} />;

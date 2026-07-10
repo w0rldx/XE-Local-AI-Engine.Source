@@ -42,6 +42,14 @@ function makeRecommendation(overrides: Partial<ModelFitRecommendation>): ModelFi
 		pullModelName: null,
 		releaseDate: null,
 		isTrustedPublisher: true,
+		section: "recommended",
+		tier: null,
+		catalogId: null,
+		catalogDisplayName: null,
+		catalogNotes: null,
+		expertsOffloaded: false,
+		gpuGb: null,
+		cpuGb: null,
 		...overrides,
 	};
 }
@@ -221,5 +229,75 @@ describe("RecommendationTable", () => {
 		renderTable(<RecommendationTable recommendations={[dated]} />);
 
 		expect(screen.getByText("2026-01-15")).toBeTruthy();
+	});
+
+	it("shows a tier badge for a row with a catalog tier and none for a row without one", () => {
+		const tiered = makeRecommendation({ rank: 1, tier: "S" });
+		const untiered = makeRecommendation({ rank: 2, tier: null });
+
+		renderTable(<RecommendationTable recommendations={[tiered, untiered]} />);
+
+		expect(screen.getByTestId("model-fit-tier-badge-1")).toBeTruthy();
+		expect(screen.queryByTestId("model-fit-tier-badge-2")).toBeNull();
+	});
+
+	it("prefers the catalog display name as the primary label and shows the raw model name as secondary text", () => {
+		const catalogBacked = makeRecommendation({
+			rank: 1,
+			modelName: "unsloth/qwen2.5-coder-32b-gguf",
+			catalogDisplayName: "Qwen2.5 Coder 32B",
+			catalogNotes: "Strong coding model for 24GB+ VRAM.",
+		});
+
+		renderTable(<RecommendationTable recommendations={[catalogBacked]} />);
+
+		expect(screen.getByText("Qwen2.5 Coder 32B")).toBeTruthy();
+		expect(screen.getByText("unsloth/qwen2.5-coder-32b-gguf")).toBeTruthy();
+		expect(screen.getByTestId("model-fit-catalog-notes-1").textContent).toBe("Strong coding model for 24GB+ VRAM.");
+	});
+
+	it("shows the MoE-offload badge with a GPU/RAM breakdown tooltip when the advisor reports a split", () => {
+		const offloaded = makeRecommendation({ rank: 1, expertsOffloaded: true, gpuGb: 8, cpuGb: 16 });
+
+		renderTable(<RecommendationTable recommendations={[offloaded]} />);
+
+		expect(screen.getByTestId("model-fit-moe-offload-badge-1")).toBeTruthy();
+	});
+
+	it("shows the MoE-offload badge without a breakdown when the GPU/RAM split is unavailable", () => {
+		const offloaded = makeRecommendation({ rank: 1, expertsOffloaded: true, gpuGb: null, cpuGb: null });
+
+		renderTable(<RecommendationTable recommendations={[offloaded]} />);
+
+		expect(screen.getByTestId("model-fit-moe-offload-badge-1")).toBeTruthy();
+	});
+
+	it("renders no MoE-offload badge for a row that does not offload experts", () => {
+		const gpuOnly = makeRecommendation({ rank: 1, expertsOffloaded: false });
+
+		renderTable(<RecommendationTable recommendations={[gpuOnly]} />);
+
+		expect(screen.queryByTestId("model-fit-moe-offload-badge-1")).toBeNull();
+	});
+
+	it("renders an explore-section row (all new fields null/false) without crashing", () => {
+		const exploreRow = makeRecommendation({
+			rank: 1,
+			section: "explore",
+			tier: null,
+			catalogId: null,
+			catalogDisplayName: null,
+			catalogNotes: null,
+			expertsOffloaded: false,
+			gpuGb: null,
+			cpuGb: null,
+		});
+
+		renderTable(<RecommendationTable recommendations={[exploreRow]} />);
+
+		expect(screen.getByTestId("model-fit-recommendation-row-1")).toBeTruthy();
+		expect(screen.queryByTestId("model-fit-tier-badge-1")).toBeNull();
+		expect(screen.queryByTestId("model-fit-moe-offload-badge-1")).toBeNull();
+		expect(screen.queryByTestId("model-fit-catalog-notes-1")).toBeNull();
 	});
 });

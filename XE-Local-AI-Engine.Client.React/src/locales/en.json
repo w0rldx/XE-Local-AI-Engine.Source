@@ -91,6 +91,11 @@
 			"errorLabel": "Error",
 			"noOutput": "(no output)"
 		},
+		"notices": {
+			"modelSubstituted": "Model substituted",
+			"toolDisabled": "Tool disabled",
+			"historyTruncated": "History truncated"
+		},
 		"reasoningBypassNote": "This model may emit reasoning regardless of the 'none' setting."
 	},
 	"pages": {
@@ -1584,6 +1589,13 @@
 				"memoryExtractionEnabled": {
 					"label": "Learn new memory from runs",
 					"description": "Let this agent learn new memory from its runs. Off = use existing memory only (no new memory is mined)."
+				},
+				"advanced": {
+					"label": "Advanced"
+				},
+				"disableBaseScaffold": {
+					"label": "Disable base instructions scaffold",
+					"description": "Skip the layered base instructions this node normally prepends to every agent — use only the instructions written above, unmodified."
 				}
 			},
 			"playbook": {
@@ -2146,7 +2158,36 @@
 				"downloading": "Downloading…",
 				"cpuMode": "CPU mode",
 				"untrustedPublisher": "Unverified publisher",
-				"untrustedPublisherHint": "This publisher is not a known GGUF packager — review the repo before downloading."
+				"untrustedPublisherHint": "This publisher is not a known GGUF packager — review the repo before downloading.",
+				"sections": {
+					"recommended": "Recommended for your hardware",
+					"canRun": "Can run (reduced quality)",
+					"canRunCount": "Can run ({{count}})",
+					"explore": "Explore trending on Hugging Face"
+				},
+				"tier": {
+					"s": "S",
+					"a": "A",
+					"b": "B"
+				},
+				"moeOffload": {
+					"badge": "Experts on CPU — slower, higher quality",
+					"breakdown": "GPU {{gpuGb}} GB + RAM {{cpuGb}} GB"
+				},
+				"catalog": {
+					"version": "Catalog v{{version}}",
+					"source": {
+						"bundled": "Bundled",
+						"remote": "Live",
+						"remoteLastGood": "Cached (last known good)"
+					},
+					"updatedAt": "Updated {{time}}",
+					"refreshButton": "Refresh catalog",
+					"toasts": {
+						"refreshed": "The model catalog was refreshed.",
+						"refreshError": "Could not refresh the model catalog."
+					}
+				}
 			},
 			"hardware": {
 				"title": "Hardware profile",

@@ -239,6 +239,9 @@ import type {
 	GetMcpServerToolsData,
 	GetMcpServerToolsErrors,
 	GetMcpServerToolsResponses,
+	GetModelCatalogInfoData,
+	GetModelCatalogInfoErrors,
+	GetModelCatalogInfoResponses,
 	GetNodeChatConversationData,
 	GetNodeChatConversationErrors,
 	GetNodeChatConversationResponses,
@@ -381,6 +384,9 @@ import type {
 	PutModelKindData,
 	PutModelKindErrors,
 	PutModelKindResponses,
+	RefreshModelCatalogData,
+	RefreshModelCatalogErrors,
+	RefreshModelCatalogResponses,
 	RefreshRecommendationsData,
 	RefreshRecommendationsErrors,
 	RefreshRecommendationsResponses,
@@ -634,6 +640,7 @@ import {
 	zGetMcpServerResponse,
 	zGetMcpServerToolsPath,
 	zGetMcpServerToolsResponse,
+	zGetModelCatalogInfoResponse,
 	zGetNodeChatConversationPath,
 	zGetNodeChatConversationResponse,
 	zGetNodeChatMessageFeedbackPath,
@@ -711,6 +718,7 @@ import {
 	zPutModelKindBody,
 	zPutModelKindPath,
 	zPutModelKindResponse,
+	zRefreshModelCatalogResponse,
 	zRefreshRecommendationsBody,
 	zRefreshRecommendationsResponse,
 	zReindexCorpusResponse,
@@ -1954,6 +1962,28 @@ export const getLlamaCppRuntime = <ThrowOnError extends boolean = false>(
 		...options,
 	});
 
+export const getModelCatalogInfo = <ThrowOnError extends boolean = false>(
+	options?: Options<GetModelCatalogInfoData, ThrowOnError>,
+) =>
+	(options?.client ?? client).get<GetModelCatalogInfoResponses, GetModelCatalogInfoErrors, ThrowOnError>({
+		requestValidator: async (data) =>
+			await z
+				.object({
+					body: z.never().optional(),
+					path: z.never().optional(),
+					query: z.never().optional(),
+				})
+				.parseAsync(data),
+		responseType: "json",
+		responseValidator: async (data) => await zGetModelCatalogInfoResponse.parseAsync(data),
+		security: [
+			{ scheme: "bearer", type: "http" },
+			{ scheme: "bearer", type: "http" },
+		],
+		url: "/api/local/v1/model-fit/catalog",
+		...options,
+	});
+
 export const inspectGgufRepository = <ThrowOnError extends boolean = false>(
 	options?: Options<InspectGgufRepositoryData, ThrowOnError>,
 ) =>
@@ -2041,6 +2071,28 @@ export const listRunningModels = <ThrowOnError extends boolean = false>(options?
 			{ scheme: "bearer", type: "http" },
 		],
 		url: "/api/local/v1/model-fit/running",
+		...options,
+	});
+
+export const refreshModelCatalog = <ThrowOnError extends boolean = false>(
+	options?: Options<RefreshModelCatalogData, ThrowOnError>,
+) =>
+	(options?.client ?? client).post<RefreshModelCatalogResponses, RefreshModelCatalogErrors, ThrowOnError>({
+		requestValidator: async (data) =>
+			await z
+				.object({
+					body: z.never().optional(),
+					path: z.never().optional(),
+					query: z.never().optional(),
+				})
+				.parseAsync(data),
+		responseType: "json",
+		responseValidator: async (data) => await zRefreshModelCatalogResponse.parseAsync(data),
+		security: [
+			{ scheme: "bearer", type: "http" },
+			{ scheme: "bearer", type: "http" },
+		],
+		url: "/api/local/v1/model-fit/catalog/refresh",
 		...options,
 	});
 

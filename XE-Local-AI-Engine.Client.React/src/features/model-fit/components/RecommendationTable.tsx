@@ -1,5 +1,5 @@
 import { Badge, Button, Group, Stack, Table, Text, Tooltip } from "@mantine/core";
-import { IconAlertTriangle, IconCheck, IconCloudDownload, IconCpu, IconDownload } from "@tabler/icons-react";
+import { IconAlertTriangle, IconCheck, IconCloudDownload, IconCpu, IconDownload, IconServer2 } from "@tabler/icons-react";
 import { useTranslation } from "react-i18next";
 
 import { TablePaginationFooter } from "@/core/ui/components/TablePagination/TablePaginationFooter";
@@ -25,6 +25,70 @@ interface RecommendationTableProps {
 // badge so the operator sees the fit was estimated against the RAM budget, not VRAM.
 function isCpuMode(runMode: string | null): boolean {
 	return runMode?.toLowerCase() === "cpu";
+}
+
+// Badge color for a curated-catalog quality tier: S (gold) is the top pick, A (blue) is a strong pick, B (gray) is a
+// solid pick. A row without a catalog match carries no tier and renders no badge.
+function tierColor(tier: ModelFitRecommendation["tier"]): string {
+	switch (tier) {
+		case "S":
+			return "yellow";
+		case "A":
+			return "blue";
+		case "B":
+			return "gray";
+		default:
+			return "gray";
+	}
+}
+
+// The tier badge sits next to the model name when the advisor matched this row to a curated-catalog entry with a
+// quality tier. Absent for a row with no catalog match (tier === null).
+function TierBadge({ tier, rank }: { tier: ModelFitRecommendation["tier"]; rank: number }) {
+	const { t } = useTranslation();
+	if (tier === null) {
+		return null;
+	}
+	return (
+		<Badge color={tierColor(tier)} variant="filled" size="sm" data-testid={`model-fit-tier-badge-${rank}`}>
+			{t(`pages.modelFit.recommendations.tier.${tier.toLowerCase()}`, tier)}
+		</Badge>
+	);
+}
+
+// The MoE-offload badge is an honesty signal: when the advisor's fit estimate offloads some Mixture-of-Experts
+// layers to CPU/RAM instead of running the whole model on GPU, the row is slower than a plain GPU fit but preserves
+// more quality than dropping to a smaller quant. The tooltip breaks down the GPU/RAM split when the advisor reported
+// both figures; otherwise it shows the badge alone.
+function MoeOffloadBadge({ recommendation }: { recommendation: ModelFitRecommendation }) {
+	const { t } = useTranslation();
+	if (!recommendation.expertsOffloaded) {
+		return null;
+	}
+	const badge = (
+		<Badge
+			color="grape"
+			variant="light"
+			size="sm"
+			leftSection={<IconServer2 size={12} />}
+			data-testid={`model-fit-moe-offload-badge-${recommendation.rank}`}
+		>
+			{t("pages.modelFit.recommendations.moeOffload.badge", "Experts on CPU — slower, higher quality")}
+		</Badge>
+	);
+	if (recommendation.gpuGb === null || recommendation.cpuGb === null) {
+		return badge;
+	}
+	return (
+		<Tooltip
+			label={t("pages.modelFit.recommendations.moeOffload.breakdown", "GPU {{gpuGb}} GB + RAM {{cpuGb}} GB", {
+				gpuGb: recommendation.gpuGb,
+				cpuGb: recommendation.cpuGb,
+			})}
+		>
+			{badge}
+		</Tooltip>
+	);
 }
 
 // The Fit cell renders the advisor's run-mode fit level ("GPU"/"CPU") as a colored badge plus a CPU-mode badge for a
@@ -96,12 +160,24 @@ export function RecommendationTable({ recommendations, onDownload, downloadingMo
 							>
 								<Table.Td>{recommendation.rank}</Table.Td>
 								<Table.Td>
-									<Text size="sm" fw={500}>
-										{recommendation.modelName}
-									</Text>
-									{recommendation.providerModelName ? (
+									<Group gap={4} wrap="wrap" align="center">
+										<Text size="sm" fw={500}>
+											{recommendation.catalogDisplayName ?? recommendation.modelName}
+										</Text>
+										<TierBadge tier={recommendation.tier} rank={recommendation.rank} />
+									</Group>
+									{recommendation.catalogDisplayName ? (
+										<Text size="xs" c="dimmed">
+											{recommendation.modelName}
+										</Text>
+									) : recommendation.providerModelName ? (
 										<Text size="xs" c="dimmed">
 											{recommendation.providerModelName}
+										</Text>
+									) : null}
+									{recommendation.catalogNotes ? (
+										<Text size="xs" c="dimmed" data-testid={`model-fit-catalog-notes-${recommendation.rank}`}>
+											{recommendation.catalogNotes}
 										</Text>
 									) : null}
 									{!recommendation.isTrustedPublisher ? (
@@ -128,7 +204,10 @@ export function RecommendationTable({ recommendations, onDownload, downloadingMo
 								</Table.Td>
 								<Table.Td>{formatModelFitMetric(recommendation.score, "", 1)}</Table.Td>
 								<Table.Td>
-									<FitCell recommendation={recommendation} />
+									<Stack gap={4}>
+										<FitCell recommendation={recommendation} />
+										<MoeOffloadBadge recommendation={recommendation} />
+									</Stack>
 								</Table.Td>
 								<Table.Td>{formatModelFitMetric(recommendation.estimatedTokensPerSecond, "", 1)}</Table.Td>
 								<Table.Td>{formatContextTokens(recommendation.contextTokens)}</Table.Td>

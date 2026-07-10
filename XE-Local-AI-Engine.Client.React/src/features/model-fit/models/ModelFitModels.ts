@@ -20,6 +20,17 @@ export const recommendationRefreshLimit = 50;
 // the GGUF download flow can default the requested quant without re-deriving it from a recommendation row.
 export const defaultGgufQuant = "Q4_K_M";
 
+// The three sections the backend now splits a use-case's ranked recommendations into: hardware-confident picks,
+// reduced-quality-but-runnable picks, and trending catalog entries to explore. Stored as a string literal union
+// (mirrors the modelFitUseCases pattern) so the page's section split and the i18n key lookup stay type-safe.
+export type ModelFitRecommendationSection = "recommended" | "canRun" | "explore";
+
+export const modelFitRecommendationSections: readonly ModelFitRecommendationSection[] = ["recommended", "canRun", "explore"];
+
+// The curated-catalog quality tier the advisor attaches to a row, when the row is backed by a catalog entry
+// (S = best-in-class, A = strong, B = solid). Null for rows the advisor ranked without a catalog match.
+export type ModelFitCatalogTier = "S" | "A" | "B" | null;
+
 // Domain view-model for one ranked recommendation row. Sanitized projection of the normalized
 // model_fit_recommendations row — it never carries raw advisor JSON. Numeric fit metrics are nullable because the
 // advisor may omit them (e.g. no separate VRAM figure when running CPU-only). The advisor now fills file + quant +
@@ -43,6 +54,26 @@ export interface ModelFitRecommendation {
 	// True when the model's publisher is a known reputable GGUF packager / first-party org; false for an unknown or
 	// community publisher. Never a filter — untrusted rows still render, but the table flags them with a warning badge.
 	readonly isTrustedPublisher: boolean;
+	// Which of the three ranked groups this row belongs to (recommended for this hardware / can run at reduced
+	// quality / explore-trending). The page uses this to split one flat list into three grouped tables.
+	readonly section: ModelFitRecommendationSection;
+	// Curated-catalog quality tier (S/A/B), or null when the row has no catalog match.
+	readonly tier: ModelFitCatalogTier;
+	// Stable curated-catalog entry id backing this row, or null when the row has no catalog match.
+	readonly catalogId: string | null;
+	// Human-friendly catalog display name (e.g. "Qwen2.5 Coder 32B"), preferred over the raw modelName when present.
+	readonly catalogDisplayName: string | null;
+	// Short curated-catalog editorial note about the model, or null when there is none.
+	readonly catalogNotes: string | null;
+	// True when the advisor's fit estimate offloads some Mixture-of-Experts layers to CPU/RAM (slower, higher
+	// quality than a smaller quant) rather than running the whole model on GPU.
+	readonly expertsOffloaded: boolean;
+	// GPU memory (GB) portion of an experts-offloaded fit split; null unless expertsOffloaded is true and the
+	// advisor reported a split.
+	readonly gpuGb: number | null;
+	// CPU/RAM memory (GB) portion of an experts-offloaded fit split; null unless expertsOffloaded is true and the
+	// advisor reported a split.
+	readonly cpuGb: number | null;
 }
 
 // Domain view-model for the latest cached recommendation snapshot. hasCache:false is the explicit empty /
@@ -88,5 +119,23 @@ export interface HardwareProfile {
 // model-recommendation-check job (it does not create one), so the page filters the scheduler job list by this
 // template id to decide whether "Refresh now" is enabled.
 export const modelRecommendationCheckTemplateId = "model-recommendation-check";
+
+// Known catalog-source values the backend reports for the curated model catalog snapshot the advisor is ranking
+// against: "bundled" ships with the app, "remote" was fetched live, "remoteLastGood" is a stale cached fetch served
+// because the live fetch failed. Anything outside this set (a future source) maps to "bundled" (the safe baseline).
+export type ModelFitCatalogSource = "bundled" | "remote" | "remoteLastGood";
+
+export const modelFitCatalogSources: readonly ModelFitCatalogSource[] = ["bundled", "remote", "remoteLastGood"];
+
+// Domain view-model for the curated model catalog metadata (version, source, freshness). Read-only; the operator can
+// trigger a refresh but the catalog itself is not editable from this page.
+export interface ModelFitCatalogInfo {
+	readonly catalogVersion: string;
+	readonly updatedAt: string | null;
+	readonly source: ModelFitCatalogSource;
+	readonly fetchedAtUtc: number | null;
+	readonly sourceUrl: string | null;
+	readonly modelCount: number;
+}
 
 export { modelFitUseCaseSchema };

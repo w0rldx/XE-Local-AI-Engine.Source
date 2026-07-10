@@ -65,6 +65,10 @@ export interface NodeChatStreamEventDto {
 	requiresApproval?: boolean | null;
 	result?: string | null;
 	isError?: boolean | null;
+	// Notice fields: present on the `assistant-notice` event only. `noticeKind` is one of "ModelSubstituted" |
+	// "ToolDisabled" | "HistoryTruncated"; `noticeMessage` is the sanitized, user-facing sentence to display verbatim.
+	noticeKind?: string | null;
+	noticeMessage?: string | null;
 }
 
 export const nodeChatToolStreamEventTypes = {
