@@ -202,6 +202,19 @@ describe("ChatMessage actions", () => {
 		expect(attribution.textContent).toContain("·");
 	});
 
+	it("lets the attribution row wrap on narrow widths instead of overlaying the action icons", () => {
+		renderWithProviders(
+			<ChatMessage message={assistantMessage({ agentName: "My Custom Agent", model: "a-very-long-model-identifier-Q4_K_M" })} />,
+		);
+
+		const attribution = screen.getByTestId("chat-message-agent-assistant-1");
+		const row = attribution.parentElement as HTMLElement;
+		// Regression guard: nowrap + flexShrink:0 previously forced the metadata string across the icon row.
+		expect(row.style.getPropertyValue("--group-wrap")).not.toBe("nowrap");
+		expect(attribution.style.flexShrink).not.toBe("0");
+		expect(attribution.style.marginLeft).toBe("auto");
+	});
+
 	it("falls back to Default Assistant label when agentName is absent on an assistant turn", () => {
 		renderWithProviders(<ChatMessage message={assistantMessage({ agentName: undefined })} />);
 

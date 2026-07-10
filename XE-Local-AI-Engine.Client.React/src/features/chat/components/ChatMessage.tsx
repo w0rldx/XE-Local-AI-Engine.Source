@@ -320,10 +320,16 @@ export const ChatMessage = memo(function ChatMessage({
 					// Attribution row: left side holds action icons (real empty Box when null, so space-between pins
 					// right side even during streaming when actions is null). Right side = agentName · Model: X ·
 					// Reasoning: X · [NN tok/s ·] time. The tps segment sits before time (when the toggle is on) so the
-					// clock stays right-most.
-					<Group justify="space-between" align="center" wrap="nowrap" gap={4}>
+					// clock stays right-most. The row wraps on narrow widths: the metadata text drops below the icons
+					// (marginLeft auto keeps it right-pinned) instead of overflowing across them.
+					<Group justify="space-between" align="center" wrap="wrap" gap={4}>
 						<Box>{actions}</Box>
-						<Text size="xs" c="dimmed" data-testid={`chat-message-agent-${message.id}`} style={{ flexShrink: 0 }}>
+						<Text
+							size="xs"
+							c="dimmed"
+							data-testid={`chat-message-agent-${message.id}`}
+							style={{ minWidth: 0, marginLeft: "auto", textAlign: "right" }}
+						>
 							{[agentDisplayName, modelLabel, reasoningLabel, showTokensPerSecond ? tpsLabel : undefined, time]
 								.filter(Boolean)
 								.join(" · ")}
