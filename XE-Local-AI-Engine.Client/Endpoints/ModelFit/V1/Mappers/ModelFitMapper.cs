@@ -82,7 +82,14 @@ internal static class ModelFitMapper
             CatalogNotes = ExtractString(record.DiagnosticsJson, "catalog_notes"),
             ExpertsOffloaded = ExtractBool(record.DiagnosticsJson, "expert_offload") ?? false,
             GpuGb = ExtractDouble(record.DiagnosticsJson, "gpu_gb"),
-            CpuGb = ExtractDouble(record.DiagnosticsJson, "cpu_gb")
+            CpuGb = ExtractDouble(record.DiagnosticsJson, "cpu_gb"),
+            // Advisory-only quantized-KV estimate (catalog lane; absent for explore rows / incomplete metadata /
+            // pre-advisory snapshots). Extracted from the same diagnostics blob; never drives fit or ranking.
+            KvQuant = ExtractString(record.DiagnosticsJson, "kv_quant"),
+            KvQuantEstimatedGb = ExtractDouble(record.DiagnosticsJson, "kv_quant_estimated_gb"),
+            KvQuantHeadroomGb = ExtractDouble(record.DiagnosticsJson, "kv_quant_headroom_gb"),
+            KvQuantFits = ExtractBool(record.DiagnosticsJson, "kv_quant_fits"),
+            KvQuantRequiresFlashAttention = ExtractBool(record.DiagnosticsJson, "kv_quant_requires_flash_attention")
         };
     }
 
