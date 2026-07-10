@@ -91,10 +91,14 @@ public sealed class InvocationResumeRegistryTests
 
         await consumer;
 
-        // Snapshot delta replays the accumulated content.
+        // The replay is a pure SNAPSHOT event: full Content, NO delta fields. The reconnecting client applies
+        // Content as a replacement; a delta here would be appended to whatever it already rendered before the
+        // reconnect, duplicating it.
         var snapshot = events[0];
         AssertEx.Equal(ChatStreamEventTypes.AssistantDelta, snapshot.Type);
-        AssertEx.Equal("Hello", snapshot.Delta);
+        AssertEx.Null(snapshot.Delta);
+        AssertEx.Null(snapshot.ReasoningDelta);
+        AssertEx.Equal("Hello", snapshot.Content);
         AssertEx.Equal(conversationId, snapshot.ConversationId);
         AssertEx.Equal(invocationId, snapshot.RequestId);
 
@@ -107,6 +111,106 @@ public sealed class InvocationResumeRegistryTests
         var terminal = events[^1];
         AssertEx.Equal(ChatStreamEventTypes.AssistantCompleted, terminal.Type);
         AssertEx.Equal(NodeChatMessageStatusValues.Completed, terminal.Status);
+
+        // Resume streams number from zero, contiguous and ascending — the client rebases them onto the original
+        // stream's sequence space at the reconnect boundary.
+        AssertEx.Equal(expected: 0L, events[0].Sequence);
+        for (var index = 1; index < events.Count; index++)
+        {
+            AssertEx.Equal(events[index - 1].Sequence + 1, events[index].Sequence);
+        }
+    }
+
+    [Test]
+    public async Task ResumeAsync_ReplaysToolTimelineBeforeSnapshotThenForwardsLiveToolEvents()
+    {
+        var dispatcher = Substitute.For<IWorkerEventDispatcher>();
+        var registry = CreateRegistry(dispatcher);
+        var invocationId = Guid.NewGuid();
+        var conversationId = Guid.NewGuid();
+
+        // Mid-stream with one completed tool call before the client reconnects.
+        RaiseState(dispatcher, NewState(invocationId, conversationId, InvocationStatus.Running, "Hello"));
+        RaiseToolCall(dispatcher, NewToolCall(invocationId, "call-1", "calculate", ToolCallLifecyclePhase.Requested, arguments: "{\"a\":1}"));
+        RaiseToolCall(dispatcher, NewToolCall(invocationId, "call-1", "calculate", ToolCallLifecyclePhase.Completed, result: "2"));
+
+        var events = new List<ChatStreamEvent>();
+        var consumer = Task.Run(async () =>
+        {
+            await foreach (var streamEvent in registry.ResumeAsync(invocationId, CancellationToken.None))
+            {
+                events.Add(streamEvent);
+            }
+        });
+
+        // Tool timeline replays first, then the content snapshot.
+        await AssertEx.EventuallyAsync(() => events.Count >= 3, TimeSpan.FromSeconds(5));
+
+        var requested = events[0];
+        AssertEx.Equal(ChatStreamEventTypes.ToolCallRequested, requested.Type);
+        AssertEx.Equal("call-1", requested.ToolCallId);
+        AssertEx.Equal("calculate", requested.ToolName);
+        AssertEx.Equal("{\"a\":1}", requested.Arguments);
+        AssertEx.Equal(conversationId, requested.ConversationId);
+
+        var completed = events[1];
+        AssertEx.Equal(ChatStreamEventTypes.ToolCallCompleted, completed.Type);
+        AssertEx.Equal("call-1", completed.ToolCallId);
+        AssertEx.Equal("2", completed.Result);
+
+        var snapshot = events[2];
+        AssertEx.Equal(ChatStreamEventTypes.AssistantDelta, snapshot.Type);
+        AssertEx.Equal("Hello", snapshot.Content);
+        AssertEx.Null(snapshot.Delta);
+
+        // A tool call fired while the resume consumer is attached streams through live, then the terminal closes.
+        RaiseToolCall(dispatcher, NewToolCall(invocationId, "call-2", "search_knowledge_base", ToolCallLifecyclePhase.Requested));
+        await AssertEx.EventuallyAsync(() => events.Count >= 4, TimeSpan.FromSeconds(5));
+        RaiseState(dispatcher, NewState(invocationId, conversationId, InvocationStatus.Completed, "Hello"));
+        await consumer;
+
+        var liveTool = events[3];
+        AssertEx.Equal(ChatStreamEventTypes.ToolCallRequested, liveTool.Type);
+        AssertEx.Equal("call-2", liveTool.ToolCallId);
+
+        AssertEx.Equal(ChatStreamEventTypes.AssistantCompleted, events[^1].Type);
+
+        // Contiguous ascending from zero across tool replays, snapshot, live tool events, and terminal.
+        AssertEx.Equal(expected: 0L, events[0].Sequence);
+        for (var index = 1; index < events.Count; index++)
+        {
+            AssertEx.Equal(events[index - 1].Sequence + 1, events[index].Sequence);
+        }
+    }
+
+    [Test]
+    public async Task ResumeAsync_ReplaysReasoningAsSnapshotWithoutDelta()
+    {
+        var dispatcher = Substitute.For<IWorkerEventDispatcher>();
+        var registry = CreateRegistry(dispatcher);
+        var invocationId = Guid.NewGuid();
+        var conversationId = Guid.NewGuid();
+
+        RaiseState(dispatcher, NewState(invocationId, conversationId, InvocationStatus.Running, "Hi", thinking: "Let me think"));
+
+        var events = new List<ChatStreamEvent>();
+        var consumer = Task.Run(async () =>
+        {
+            await foreach (var streamEvent in registry.ResumeAsync(invocationId, CancellationToken.None))
+            {
+                events.Add(streamEvent);
+            }
+        });
+
+        await AssertEx.EventuallyAsync(() => events.Count >= 1, TimeSpan.FromSeconds(5));
+        RaiseState(dispatcher, NewState(invocationId, conversationId, InvocationStatus.Completed, "Hi", thinking: "Let me think"));
+        await consumer;
+
+        var snapshot = events[0];
+        AssertEx.Null(snapshot.Delta);
+        AssertEx.Null(snapshot.ReasoningDelta);
+        AssertEx.Equal("Hi", snapshot.Content);
+        AssertEx.Equal("Let me think", snapshot.Reasoning);
     }
 
     [Test]
@@ -154,7 +258,8 @@ public sealed class InvocationResumeRegistryTests
         Guid conversationId,
         InvocationStatus status,
         string content = "",
-        long? generationDurationMs = null)
+        long? generationDurationMs = null,
+        string thinking = "")
     {
         return new InvocationState
         {
@@ -162,14 +267,38 @@ public sealed class InvocationResumeRegistryTests
             ConversationId = conversationId,
             Status = status,
             StreamedContent = content,
+            StreamedThinkingContent = thinking,
             GenerationDurationMs = generationDurationMs,
             StartedAt = DateTimeOffset.UtcNow,
             LastUpdatedAt = DateTimeOffset.UtcNow
         };
     }
 
+    private static ToolCallLifecyclePayload NewToolCall(Guid invocationId,
+        string toolCallId,
+        string toolName,
+        ToolCallLifecyclePhase phase,
+        string? arguments = null,
+        string? result = null)
+    {
+        return new ToolCallLifecyclePayload
+        {
+            InvocationId = invocationId,
+            ToolCallId = toolCallId,
+            ToolName = toolName,
+            Phase = phase,
+            Arguments = arguments,
+            Result = result
+        };
+    }
+
     private static void RaiseState(IWorkerEventDispatcher dispatcher, InvocationState state)
     {
         dispatcher.InvocationStateChanged += Raise.EventWith(dispatcher, new InvocationStateChangedEventArgs(state));
+    }
+
+    private static void RaiseToolCall(IWorkerEventDispatcher dispatcher, ToolCallLifecyclePayload payload)
+    {
+        dispatcher.ToolCallLifecycleChanged += Raise.EventWith(dispatcher, new ToolCallLifecycleChangedEventArgs(payload));
     }
 }
