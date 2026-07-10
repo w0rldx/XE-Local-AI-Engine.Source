@@ -11,20 +11,17 @@ using XE_Local_AI_Engine.Client.Persistence.Stores;
 using XE_Local_AI_Engine.Client.Services.AgentHome;
 using XE_Local_AI_Engine.Client.Services.AgentHome.Tools;
 using XE_Local_AI_Engine.Client.Services.Agents;
-using XE_Local_AI_Engine.Client.Services.CloudProviders;
 using XE_Local_AI_Engine.Client.Services.Coder.Tools;
 using XE_Local_AI_Engine.Client.Services.DocumentIngestion;
 using XE_Local_AI_Engine.Client.Services.Events;
 using XE_Local_AI_Engine.Client.Services.Invocation;
 using XE_Local_AI_Engine.Client.Services.Memory;
 using XE_Local_AI_Engine.Client.Services.NodeSettings;
-using XE_Local_AI_Engine.Providers.CodexOAuth;
-using XE_Local_AI_Engine.Providers.CodexOAuth.Implementation;
-using XE_Local_AI_Engine.Providers.Ollama.Implementation;
 
 public sealed class NodeChatStreamService(
     INodeChatPersistenceService persistence,
-    INodeChatInvocationPump invocationPump,
+    ChatInvocationStatePump invocationStatePump,
+    ChatTurnResolver turnResolver,
     INodeChatMutationGuard mutationGuard,
     ILocalChatRuntimePackageBuilder runtimePackageBuilder,
     IInvocationRunner invocationRunner,
@@ -33,16 +30,9 @@ public sealed class NodeChatStreamService(
     INodeRuntimeSettings runtimeSettings,
     INodeChatStreamCancellationRegistry cancellationRegistry,
     ILocalToolOfferProvider localToolOfferProvider,
-    IAgentDefinitionResolver agentDefinitionResolver,
-    IAgentDefinitionStore agentDefinitionStore,
     IDefaultAgentProvider defaultAgentProvider,
-    IOrchestrationResolver orchestrationResolver,
     INodeSettingsStore nodeSettingsStore,
-    IModelClassificationService modelClassificationService,
-    ILocalModelProviderResolver localModelProviderResolver,
-    IGgufModelCapabilityResolver ggufModelCapabilityResolver,
     ILocalDefaultChatModelResolver localDefaultChatModelResolver,
-    ICloudCredentialStore cloudCredentialStore,
     IMemoryExtractionDispatcher memoryExtractionDispatcher,
     IConversationUploadedFileStore uploadedFileStore,
     IConversationSandboxStager conversationSandboxStager,
@@ -50,12 +40,6 @@ public sealed class NodeChatStreamService(
     ILogger<NodeChatStreamService> logger) : INodeChatStreamService
 {
     private const int AgentDefinitionVersion = 1;
-
-    // Mid-stream partial flushes (the per-chunk DB read-modify-write + AssistantDelta SSE) are debounced to at most one
-    // per this window so a fast local model does not drive one persistence round-trip per token. Terminal/error states
-    // always flush immediately, so the final content is never delayed; a crash mid-stream therefore loses at most one
-    // window of streamed tokens, which is the same crash-consistency bound the per-chunk flush already accepted.
-    private static readonly TimeSpan PartialFlushDebounceInterval = TimeSpan.FromMilliseconds(100);
 
     // The tools whose presence in a turn's offer means the selected agent can read files through the AgentHome sandbox
     // (the read-only coder tools plus the run_in_agent_home gateway). When any is offered AND the conversation has
@@ -161,9 +145,9 @@ public sealed class NodeChatStreamService(
         var eventChannel = Channel.CreateUnbounded<ChatStreamEvent>(new UnboundedChannelOptions
         {
             SingleReader = true,
-            // Three producers write this channel concurrently: the delta/terminal emits in PumpInvocationStatesAsync
-            // (the invocation-state pump), the streaming-transition emit in RunInvocationAsync (the run-transition),
-            // and the tool-call lifecycle emits in OnToolCallLifecycleChanged. SingleWriter must be false.
+            // Three producers write this channel concurrently: the delta/terminal emits in the invocation-state pump,
+            // the streaming-transition emit in RunInvocationAsync (the run-transition), and the tool-call lifecycle
+            // emits in OnToolCallLifecycleChanged. SingleWriter must be false.
             SingleWriter = false
         });
 
@@ -184,8 +168,8 @@ public sealed class NodeChatStreamService(
             if (args.Payload.InvocationId == requestId)
             {
                 var toolSequence = sequence.Next();
-                AccumulateToolPart(parts, args.Payload, toolSequence);
-                eventChannel.Writer.TryWrite(ToToolCallEvent(correlation, args.Payload, toolSequence));
+                ChatStreamEventMapper.AccumulateToolPart(parts, args.Payload, toolSequence);
+                eventChannel.Writer.TryWrite(ChatStreamEventMapper.ToolCallEvent(correlation.ConversationId, correlation.MessageId, correlation.RequestId, args.Payload, NowUnixMilliseconds(), toolSequence));
             }
         }
 
@@ -250,10 +234,16 @@ public sealed class NodeChatStreamService(
         // hash); the pump stays content-free. The dispatch is fire-and-forget (its own scope + fresh CT) so it never
         // delays the SSE.
         var onTerminal = resolution.Resolved is { PlaybookEnabled: true, MemoryExtractionEnabled: true } memoryAgent
-            ? BuildMemoryExtractionHook(memoryAgent, conversation, userMessage, selectedPath, package, resolution.EffectiveModel)
+            ? ChatMemoryExtractionHook.Build(memoryExtractionDispatcher,
+                memoryAgent,
+                conversation.ConversationId,
+                conversation.MemoryExcluded,
+                package,
+                resolution.EffectiveModel,
+                () => CollectUserTurns(conversation, userMessage, selectedPath))
             : null;
 
-        var pumpTask = PumpInvocationStatesAsync(stateChannel.Reader,
+        var pumpTask = invocationStatePump.PumpAsync(stateChannel.Reader,
             eventChannel.Writer,
             correlation,
             // Stamp the FINAL persisted assistant-message model from the effective model (the pump terminalizes from
@@ -381,213 +371,6 @@ public sealed class NodeChatStreamService(
 
             stateWriter.TryComplete();
         }
-    }
-
-    private async Task PumpInvocationStatesAsync(ChannelReader<InvocationState> stateReader,
-        ChannelWriter<ChatStreamEvent> eventWriter,
-        NodeChatMessageCorrelation correlation,
-        string? requestedModel,
-        NodeChatStreamSequence sequence,
-        NodeChatPartAccumulator parts,
-        Action<InvocationState, NodeChatPumpTerminalResult>? onTerminal,
-        CancellationToken cancellationToken)
-    {
-        // The shared pump (invocationPump) owns all persistence; this front door only fans the persisted
-        // results out as SSE ChatStreamEvents for the local response. The sequence counter is shared with the
-        // streaming-transition event emitted from RunInvocationAsync so all events stay monotonically ordered.
-        var cursor = NodeChatPumpCursor.Empty;
-        var terminalPersisted = false;
-        var hasFlushedPartial = false;
-        var lastPartialFlushTimestamp = 0L;
-        // The freshest content-bearing snapshot the debounce deferred without persisting. Retained so a graceful
-        // end-of-stream that never delivers a terminal still writes the tail rather than a stale cursor.
-        InvocationState? pendingPartialState = null;
-
-        // Persists one snapshot's content/reasoning delta and fans it out as an AssistantDelta. Returns whether a
-        // delta advanced. Each InvocationState carries the FULL accumulated content/reasoning, so flushing only the
-        // latest snapshot after coalescing still captures everything between the cursor and that snapshot.
-        async Task<bool> PersistPartialAsync(InvocationState snapshotToFlush)
-        {
-            var flush = await invocationPump.FlushDeltaAsync(correlation, snapshotToFlush, cursor, cancellationToken).ConfigureAwait(false);
-            cursor = flush.Cursor;
-
-            if (flush.Persisted is null)
-            {
-                return false;
-            }
-
-            lastPartialFlushTimestamp = timeProvider.GetTimestamp();
-            hasFlushedPartial = true;
-            var deltaSequence = sequence.Next();
-            // The reasoning delta and its SSE event share this flush-time sequence. Tool parts stamp their own
-            // sequence synchronously when the tool lifecycle fires on the separate event channel, so debouncing the
-            // reasoning flush can push a reasoning segment behind a tool part that streamed just after it — widening
-            // the pre-existing reasoning<->tool interleave skew to at most one debounce window. This is display-only:
-            // the reasoning text and the tool parts are all retained; only their relative order at a tool boundary can
-            // shift within that window.
-            parts.AppendReasoning(flush.ReasoningDelta, deltaSequence);
-
-            await eventWriter.WriteAsync(ToMessageEvent(ChatStreamEventTypes.AssistantDelta,
-                    correlation,
-                    flush.Persisted,
-                    deltaSequence,
-                    flush.ContentDelta,
-                    flush.ReasoningDelta),
-                cancellationToken).ConfigureAwait(false);
-            return true;
-        }
-
-        try
-        {
-            await foreach (var state in stateReader.ReadAllAsync(cancellationToken).ConfigureAwait(false))
-            {
-                // Coalesce a burst: when the runner produces states faster than we persist, they queue on the
-                // channel. Drain the backlog and keep only the newest snapshot (never draining past a terminal), so
-                // a burst of per-token states collapses into a single flush without losing content.
-                var latest = state;
-                while (!NodeChatInvocationPump.IsTerminal(latest.Status) && stateReader.TryRead(out var queued))
-                {
-                    latest = queued;
-                }
-
-                var isTerminal = NodeChatInvocationPump.IsTerminal(latest.Status);
-
-                // Terminal/error flushes immediately (the final delta + reasoning tail must not be delayed); the first
-                // partial also flushes immediately so the first token is visible without waiting a window. Between
-                // windows the snapshot is deferred so it is not lost if the stream ends without a terminal.
-                if (isTerminal
-                    || !hasFlushedPartial
-                    || timeProvider.GetElapsedTime(lastPartialFlushTimestamp) >= PartialFlushDebounceInterval)
-                {
-                    pendingPartialState = null;
-                    await PersistPartialAsync(latest).ConfigureAwait(false);
-                }
-                else
-                {
-                    pendingPartialState = latest;
-                }
-
-                if (isTerminal)
-                {
-                    // An empty snapshot (a plain-text turn with no reasoning/tools) is passed as null so the persisted
-                    // parts are left untouched rather than overwritten with an empty interleave.
-                    var snapshot = parts.HasParts ? parts.Snapshot() : null;
-                    var terminal = await invocationPump.TerminalizeAsync(correlation, latest, requestedModel, snapshot).ConfigureAwait(false);
-                    terminalPersisted = true;
-
-                    // Post-run adaptive memory: hand the just-persisted terminal to the (background, fire-and-forget)
-                    // extraction hook before the SSE write so the run context is captured immediately. The hook never
-                    // blocks or throws into the pump (it only schedules work on its own scope).
-                    onTerminal?.Invoke(latest, terminal);
-
-                    await eventWriter.WriteAsync(ToMessageEvent(terminal.EventType,
-                            correlation,
-                            terminal.Persisted,
-                            sequence.Next(),
-                            inputTokens: latest.InputTokens,
-                            outputTokens: latest.OutputTokens,
-                            totalTokens: latest.TotalTokens,
-                            reasoningTokens: latest.ReasoningTokens),
-                        CancellationToken.None).ConfigureAwait(false);
-                    break;
-                }
-            }
-
-            if (!terminalPersisted)
-            {
-                // Flush any tail the debounce deferred so the interrupted terminal is written from the freshest
-                // content rather than a stale cursor.
-                if (pendingPartialState is not null)
-                {
-                    await PersistPartialAsync(pendingPartialState).ConfigureAwait(false);
-                }
-
-                await TerminalizeInterruptedStreamAsync(eventWriter,
-                    correlation,
-                    sequence.Next(),
-                    cursor,
-                    cancellationToken.IsCancellationRequested).ConfigureAwait(false);
-            }
-        }
-        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested && !terminalPersisted)
-        {
-            // Deliberate trade-off: the cancelled message is terminalized from the last-persisted cursor, NOT from a
-            // debounce-deferred pendingPartialState, so a user cancel can drop up to one debounce window of tail
-            // tokens off the cancelled turn. Re-flushing here is not an option — the cancellation token is already
-            // tripped, so FlushDeltaAsync/WriteAsync would just throw again. Accepted because a cancelled turn is
-            // discarded output anyway, and this stays within the same one-window crash-consistency bound.
-            await TerminalizeInterruptedStreamAsync(eventWriter,
-                correlation,
-                sequence.Next(),
-                cursor,
-                wasCancelled: true).ConfigureAwait(false);
-        }
-        finally
-        {
-            eventWriter.TryComplete();
-        }
-    }
-
-    private async Task TerminalizeInterruptedStreamAsync(ChannelWriter<ChatStreamEvent> eventWriter,
-        NodeChatMessageCorrelation correlation,
-        long sequence,
-        NodeChatPumpCursor cursor,
-        bool wasCancelled)
-    {
-        var terminal = await invocationPump.TerminalizeInterruptedAsync(correlation, cursor, wasCancelled).ConfigureAwait(false);
-
-        await eventWriter.WriteAsync(ToMessageEvent(terminal.EventType, correlation, terminal.Persisted, sequence), CancellationToken.None).ConfigureAwait(false);
-    }
-
-    /// <summary>
-    ///     Builds the post-run memory-extraction hook fired by the pump on a Completed/Failed terminal. It closes over the
-    ///     resolved agent (provenance + config-hash inputs), the loaded conversation (temp-chat flag + prior user turns),
-    ///     the just-sent user turn, and the runtime package (config hash). On invoke it assembles the metadata-only
-    ///     execution-log telemetry plus the content-bearing run input and hands both to the background dispatcher; the
-    ///     dispatcher owns scope/CT/error isolation, so this delegate never blocks or throws into the pump.
-    /// </summary>
-    private Action<InvocationState, NodeChatPumpTerminalResult> BuildMemoryExtractionHook(ResolvedAgentRuntime resolved,
-        NodeChatConversationDto conversation,
-        NodeChatPersistedMessageDto userMessage,
-        IReadOnlyDictionary<Guid, Guid>? selectedPath,
-        RuntimePackage package,
-        string? requestedModel)
-    {
-        return (state, terminal) =>
-        {
-            // Only Completed/Failed terminals carry a real run to learn from; a Cancelled/Interrupted terminal is not a
-            // finished answer, so skip it (no exec-log either — nothing meaningful ran).
-            var failed = state.Status == InvocationStatus.Failed;
-            if (state.Status != InvocationStatus.Completed && !failed)
-            {
-                return;
-            }
-
-            var modelName = state.ModelUsed ?? requestedModel ?? package.ModelProfile ?? string.Empty;
-            var telemetry = new MemoryExtractionDispatchContext(resolved.AgentDefinitionId,
-                conversation.ConversationId,
-                terminal.Persisted.MessageId,
-                modelName,
-                package.ConfigHash,
-                state.GenerationDurationMs ?? 0,
-                !failed,
-                state.InputTokens,
-                state.OutputTokens,
-                // Exception TYPE NAME only when present — never the sanitized message text. FailureCategory is the only
-                // type-shaped signal at this seam; the sanitized state.Error string is NOT logged.
-                failed ? state.FailureCategory?.ToString() : null);
-
-            var run = new MemoryExtractionRunInput(resolved.AgentDefinitionId,
-                conversation.ConversationId,
-                terminal.Persisted.MessageId,
-                CollectUserTurns(conversation, userMessage, selectedPath),
-                state.StreamedContent,
-                failed,
-                state.Error,
-                conversation.MemoryExcluded);
-
-            memoryExtractionDispatcher.Dispatch(telemetry, run);
-        };
     }
 
     /// <summary>
@@ -759,18 +542,15 @@ public sealed class NodeChatStreamService(
     }
 
     /// <summary>
-    ///     Computes the offer-time active model and resolves the effective per-turn agent (definition + orchestration)
-    ///     up front so the assistant placeholder can be stamped with the resolved agent's attribution. The effective-agent
-    ///     precedence is
-    ///     <c>
-    ///         request.AgentDefinitionId ?? conversation.AgentDefinitionId ?? (memoized) Default Assistant
-    ///         id
-    ///     </c>
-    ///     ; resolving the Default Assistant on a cold conversation must NOT throw — a missing seed yields a null id,
-    ///     the resolver returns null, and the caller keeps the embedded default persona + full offer + the client
+    ///     Derives the offer-time active model and the effective agent head, then defers to the shared
+    ///     <see cref="ChatTurnResolver" /> for capability/definition/orchestration resolution so the assistant
+    ///     placeholder can be stamped with the resolved agent's attribution. The effective-agent precedence is
+    ///     <c>request.AgentDefinitionId ?? conversation.AgentDefinitionId ?? (memoized) Default Assistant id</c>;
+    ///     resolving the Default Assistant on a cold conversation must NOT throw — a missing seed yields a null id, the
+    ///     resolver returns null, and the caller keeps the embedded default persona + full offer + the client
     ///     "Default Assistant" label.
     /// </summary>
-    private async Task<ResolvedTurn> ResolveTurnAsync(NodeChatStreamRequest request,
+    private async Task<ChatTurnResolution> ResolveTurnAsync(NodeChatStreamRequest request,
         NodeChatConversationDto conversation,
         string? activeModelOverride,
         string trimmedContent,
@@ -817,148 +597,11 @@ public sealed class NodeChatStreamService(
                                ?? conversation.AgentDefinitionId
                                ?? await defaultAgentProvider.GetDefaultAgentIdAsync(cancellationToken).ConfigureAwait(false);
 
-        // Resolve the active model's advertised Ollama capabilities ONCE so the think field and the tool offer are both
-        // gated by what the model can actually do. A non-thinking model returns HTTP 400 for any think value; a
-        // non-tools model cannot drive tool calls. Unknown/offline capabilities resolve to NOT-capable (the safe
-        // default) so a plain chat still works without tripping the 400. Cache hit issues no /api/show call.
-        var (supportsThinking, supportsTools) = await ResolveModelCapabilitiesAsync(activeModel, cancellationToken).ConfigureAwait(false);
-
-        // Resolve the effective agent definition. A null result — no effective id (the seed is missing), or an id whose
-        // definition was deleted — keeps the default persona: the embedded system prompt, the full capability-gated
-        // offer, and agent version 1. When resolved, the definition supplies the system prompt, the tool offer (full for
-        // the Default Assistant, intersected otherwise), the pinned model profile, the reasoning effort, the version
-        // that feeds the config hash, AND the attribution snapshot (id + display name). The just-sent user turn is the
-        // relevance-retrieval query (inert below the threshold / unbound, so the prompt stays byte-identical).
-        var resolved = await agentDefinitionResolver.ResolveAsync(effectiveAgentId, activeModel, trimmedContent, supportsTools, honorModelProfile: !userPickedConcreteModel, cancellationToken)
-                                                    .ConfigureAwait(false);
-
-        // When the effective definition is a tool-capable orchestrator, resolve a compiled orchestration spec to carry
-        // on the package — the runner branches to the handoff workflow. A null result (not an orchestrator, an
-        // empty/invalid topology, an incapable model, or too few capable participants) leaves the package single-agent,
-        // keeping the unbound/single-agent path byte-identical. The same user turn drives per-participant retrieval.
-        var orchestration = await ResolveOrchestrationAsync(effectiveAgentId, activeModel, trimmedContent, supportsTools, cancellationToken).ConfigureAwait(false);
-
-        // The single source of truth for the model that actually runs this turn: the resolved pin when honored (the
-        // resolver returned null for ModelProfile when the user's explicit pick suppressed it), otherwise the active
-        // model. Both the runtime package AND the persisted assistant-message attribution are stamped from this so the
-        // label can never disagree with what ran.
-        var effectiveModel = resolved?.ModelProfile ?? activeModel;
-
-        return new ResolvedTurn(activeModel, effectiveModel, resolved, orchestration, supportsThinking, supportsTools, requiresInstalledChatModel);
-    }
-
-    /// <summary>
-    ///     Resolves the active model's advertised <c>thinking</c>/<c>tools</c> capabilities via the shared classification
-    ///     service (cache-first; no <c>/api/show</c> call on a cache hit). A null/blank model or any detection miss
-    ///     resolves to NOT-capable for both — the safe default that omits the think field (avoiding the Ollama 400) and
-    ///     withholds the tool offer while still allowing a plain chat.
-    /// </summary>
-    private async Task<(bool SupportsThinking, bool SupportsTools)> ResolveModelCapabilitiesAsync(string? activeModel, CancellationToken cancellationToken)
-    {
-        if (string.IsNullOrWhiteSpace(activeModel))
-        {
-            return (false, false);
-        }
-
-        // A Codex cloud model is NOT an Ollama model: classifying it against the local runtime's /api/show would
-        // mis-detect it (the runtime has never seen it). Use the Codex provider's declared capability matrix
-        // instead. Codex models reason by default, so thinking is on; tool calling tracks the V0 matrix, which now
-        // ENABLES tools for all Codex ids (de-risk verified — encrypted reasoning round-trips through the stateless
-        // tool loop). Cloud providers ignore the unknown think property, so the reasoning gate stays inert on the wire.
-        if (CodexModelCatalog.IsCodexModel(activeModel))
-        {
-            return (SupportsThinking: true, CodexProviderCapabilities.V0.SupportsToolCalling);
-        }
-
-        // An Azure Foundry deployment id is NOT an Ollama model either: probing /api/show for it would 500/stall.
-        // When the active model matches a stored Azure deployment name, advertise the Azure provider's declared
-        // capability matrix instead of an Ollama classification, so an Azure id never falls through to the local probe.
-        if (await IsAzureFoundryModelAsync(activeModel, cancellationToken).ConfigureAwait(false))
-        {
-            return (SupportsThinking: false, SupportsTools: AzureFoundryProviderCapabilities.V0.SupportsToolCalling);
-        }
-
-        // /api/show classification only makes sense for an Ollama-routed model. A llama.cpp (GGUF) model has no Ollama
-        // entry, so probing the local runtime would always fail — and in desktop mode there is no Ollama daemon at all,
-        // so the probe would stall (up to the connect timeout) on every send. Instead, read the GGUF's capabilities
-        // detected offline from its chat template (cheap, cached per file — no Ollama probe, no network), matching the
-        // model-list classification (LocalModelsMapper.ToLlamaCppModelResponses). Skip the doomed probe for any
-        // non-Ollama provider; for a llama.cpp model the GGUF detection supplies thinking/tools, otherwise the safe
-        // default applies.
-        var providerName = await localModelProviderResolver
-                                 .ResolveProviderNameForModelAsync(activeModel, cancellationToken)
-                                 .ConfigureAwait(false);
-        if (!string.Equals(providerName, OllamaLocalModelProvider.OllamaProviderName, StringComparison.OrdinalIgnoreCase))
-        {
-            var ggufCapabilities = await ggufModelCapabilityResolver
-                                         .TryResolveAsync(activeModel, cancellationToken)
-                                         .ConfigureAwait(false);
-            return ggufCapabilities is { } caps
-                ? (caps.SupportsThinking, caps.SupportsTools)
-                : (SupportsThinking: false, SupportsTools: false);
-        }
-
-        var classifications = await modelClassificationService
-                                    .ClassifyAsync([(activeModel, null)], cancellationToken)
-                                    .ConfigureAwait(false);
-        if (!classifications.TryGetValue(activeModel, out var classification))
-        {
-            return (false, false);
-        }
-
-        return (ModelKindDetector.SupportsThinking(classification.Capabilities),
-            ModelKindDetector.SupportsTools(classification.Capabilities));
-    }
-
-    /// <summary>
-    ///     True when <paramref name="activeModel" /> matches one of the stored Azure Foundry connection's deployment
-    ///     names (ordinal, case-insensitive). A best-effort read: any failure resolving the encrypted config is treated
-    ///     as "not Azure" so the capability gate falls through to its existing (safe) classification rather than failing
-    ///     the send.
-    /// </summary>
-    private async Task<bool> IsAzureFoundryModelAsync(string activeModel, CancellationToken cancellationToken)
-    {
-        try
-        {
-            var config = await cloudCredentialStore.LoadConfigAsync(cancellationToken).ConfigureAwait(false);
-            var connection = config?.AzureFoundry;
-            return connection is { Models.Count: > 0 }
-                   && connection.Models.Any(model => string.Equals(model.DeploymentName, activeModel, StringComparison.OrdinalIgnoreCase));
-        }
-        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
-        {
-            throw;
-        }
-        catch (Exception exception)
-        {
-            logger.LogDebug(exception, "Azure Foundry deployment match could not be resolved for '{Model}'.", activeModel);
-            return false;
-        }
-    }
-
-    /// <summary>
-    ///     Resolves a compiled orchestration spec for a bound orchestrator definition (orchestration), or <c>null</c> to run
-    ///     the turn single-agent. Only a bound conversation triggers the extra record fetch; an unbound conversation or
-    ///     a non-orchestrator definition returns <c>null</c> without resolving, so the single-agent path is byte-identical.
-    /// </summary>
-    private async Task<ResolvedOrchestration?> ResolveOrchestrationAsync(Guid? agentDefinitionId,
-        string? activeModel,
-        string? retrievalQuery,
-        bool supportsTools,
-        CancellationToken cancellationToken)
-    {
-        if (agentDefinitionId is not { } definitionId)
-        {
-            return null;
-        }
-
-        var definition = await agentDefinitionStore.GetByIdAsync(definitionId, cancellationToken).ConfigureAwait(false);
-        if (definition is null || definition.Kind != AgentDefinitionKind.Orchestrator)
-        {
-            return null;
-        }
-
-        return await orchestrationResolver.ResolveAsync(definition, activeModel, retrievalQuery, supportsTools, cancellationToken).ConfigureAwait(false);
+        // The just-sent user turn is the relevance-retrieval query (inert below the threshold / unbound, so the prompt
+        // stays byte-identical). The shared resolver gates thinking/tools by the model's advertised capabilities and
+        // resolves the definition + any orchestration spec, returning the effective model both the package and the
+        // persisted attribution stamp from.
+        return await turnResolver.ResolveAsync(activeModel, requiresInstalledChatModel, effectiveAgentId, trimmedContent, userPickedConcreteModel, cancellationToken).ConfigureAwait(false);
     }
 
     private ChatStreamEvent ToMessageEvent(string type,
@@ -972,71 +615,11 @@ public sealed class NodeChatStreamService(
         int? totalTokens = null,
         int? reasoningTokens = null)
     {
-        return new ChatStreamEvent(type,
-            correlation.ConversationId,
-            correlation.MessageId,
-            correlation.RequestId,
-            message.Status,
-            sequence,
-            NowUnixMilliseconds(),
-            delta,
-            reasoningDelta,
-            message.Content,
-            message.Reasoning,
-            message.Error,
-            message.Model,
-            inputTokens ?? message.InputCount,
-            outputTokens ?? message.OutputCount,
-            totalTokens ?? message.TotalCount,
-            reasoningTokens ?? message.ReasoningCount);
-    }
-
-    private static void AccumulateToolPart(NodeChatPartAccumulator parts, ToolCallLifecyclePayload payload, long sequence)
-    {
-        if (payload.Phase == ToolCallLifecyclePhase.Requested)
-        {
-            parts.AppendToolRequested(payload.ToolCallId, payload.ToolName, payload.Arguments, payload.RequiresApproval, sequence);
-            return;
-        }
-
-        parts.CompleteToolCall(payload.ToolCallId, payload.ToolName, payload.Result, payload.IsError, sequence);
-    }
-
-    private ChatStreamEvent ToToolCallEvent(NodeChatMessageCorrelation correlation,
-        ToolCallLifecyclePayload payload,
-        long sequence)
-    {
-        var type = payload.Phase == ToolCallLifecyclePhase.Requested
-            ? ChatStreamEventTypes.ToolCallRequested
-            : ChatStreamEventTypes.ToolCallCompleted;
-
-        return new ChatStreamEvent(type,
-            correlation.ConversationId,
-            correlation.MessageId,
-            correlation.RequestId,
-            NodeChatMessageStatusValues.Streaming,
-            sequence,
-            NowUnixMilliseconds(),
-            ToolCallId: payload.ToolCallId,
-            ToolName: payload.ToolName,
-            Arguments: payload.Phase == ToolCallLifecyclePhase.Requested ? payload.Arguments : null,
-            RequiresApproval: payload.Phase == ToolCallLifecyclePhase.Requested ? payload.RequiresApproval : null,
-            Result: payload.Phase == ToolCallLifecyclePhase.Completed ? payload.Result : null,
-            IsError: payload.Phase == ToolCallLifecyclePhase.Completed ? payload.IsError : null);
+        return ChatStreamEventMapper.MessageEvent(type, correlation, message, NowUnixMilliseconds(), sequence, delta, reasoningDelta, inputTokens, outputTokens, totalTokens, reasoningTokens);
     }
 
     private long NowUnixMilliseconds()
     {
         return timeProvider.GetUtcNow().ToUnixTimeMilliseconds();
     }
-
-    /// <summary>The up-front per-turn resolution shared by placeholder stamping and runtime-package construction.</summary>
-    private sealed record ResolvedTurn(
-        string? ActiveModel,
-        string? EffectiveModel,
-        ResolvedAgentRuntime? Resolved,
-        ResolvedOrchestration? Orchestration,
-        bool SupportsThinking,
-        bool SupportsTools,
-        bool RequiresInstalledChatModel);
 }
