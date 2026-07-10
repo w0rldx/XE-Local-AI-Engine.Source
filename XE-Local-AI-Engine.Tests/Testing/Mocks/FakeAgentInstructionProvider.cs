@@ -18,8 +18,6 @@ internal sealed class FakeAgentInstructionProvider : IAgentInstructionProvider
 
     public string BaseScaffold { get; set; } = string.Empty;
 
-    public int ScaffoldVersion { get; set; } = 1;
-
     public string GetLocalChatInstructions()
     {
         return LocalChatInstructions;

@@ -340,7 +340,8 @@ public sealed class ModelFitRefreshService : IModelFitRefreshService
             entry.Tier,
             entry.Id,
             entry.DisplayName,
-            entry.Notes);
+            entry.Notes,
+            candidate.KvQuantAdvisory);
     }
 
     /// <summary>
@@ -729,6 +730,19 @@ public sealed class ModelFitRefreshService : IModelFitRefreshService
                     writer.WriteNumber("gpu_gb", Math.Round(estimate.GpuBytes.Value / (double)(1024 * 1024 * 1024), digits: 3));
                     writer.WriteNumber("cpu_gb", Math.Round(estimate.CpuBytes.Value / (double)(1024 * 1024 * 1024), digits: 3));
                 }
+
+                // Advisory-only quantized-KV estimate (catalog lane). NOT part of membership/ranking — those use the
+                // fp16 estimate above because the default chat launch uses an fp16 KV cache. Rides the diagnostics blob
+                // (no new column/DTO, mirroring the catalog/expert-offload fields) so future UI can hint at the headroom a
+                // flash-attention runtime could unlock. Absent for explore-lane rows and insufficient-metadata files.
+                if (recommendation.KvQuantAdvisory is { } kvAdvisory)
+                {
+                    writer.WriteString("kv_quant", kvAdvisory.Quant.ToString());
+                    writer.WriteNumber("kv_quant_estimated_gb", Math.Round(kvAdvisory.EstimatedBytes / (double)(1024 * 1024 * 1024), digits: 3));
+                    writer.WriteNumber("kv_quant_headroom_gb", Math.Round(kvAdvisory.HeadroomBytes / (double)(1024 * 1024 * 1024), digits: 3));
+                    writer.WriteBoolean("kv_quant_fits", kvAdvisory.Fits);
+                    writer.WriteBoolean("kv_quant_requires_flash_attention", kvAdvisory.RequiresFlashAttention);
+                }
                 // Recency + trust boosts surfaced to the UI. release_date carries the repo's last-modified timestamp (a
                 // "newer model" signal); the parser preserves both in the recommendation diagnostics blob (no new column).
                 // Only emit a date when HF actually supplied one — a default(DateTimeOffset) would surface as a year-0001
@@ -776,6 +790,10 @@ public sealed class ModelFitRefreshService : IModelFitRefreshService
     /// <param name="CatalogId">The catalog entry id, or <see langword="null" /> for an explore-lane row.</param>
     /// <param name="CatalogDisplayName">The catalog entry's curated display name, or <see langword="null" /> for an explore-lane row.</param>
     /// <param name="CatalogNotes">The catalog entry's optional user-facing note, or <see langword="null" /> when absent/not-catalog.</param>
+    /// <param name="KvQuantAdvisory">
+    ///     Advisory-only quantized-KV estimate for a catalog-lane row (<see langword="null" /> for an explore-lane row or
+    ///     when the header lacks the KV-sizing metadata). Never used for membership/ranking — see <see cref="KvQuantAdvisory" />.
+    /// </param>
     private sealed record AdvisorRecommendation(
         string RepoId,
         string ModelName,
@@ -790,5 +808,6 @@ public sealed class ModelFitRefreshService : IModelFitRefreshService
         string? Tier = null,
         string? CatalogId = null,
         string? CatalogDisplayName = null,
-        string? CatalogNotes = null);
+        string? CatalogNotes = null,
+        KvQuantAdvisory? KvQuantAdvisory = null);
 }
