@@ -35,6 +35,7 @@ public sealed class AgentDefinitionStore(NodeChatDbContext dbContext, TimeProvid
             ToolApprovalsJson = SerializeApprovals(input.ToolApprovals),
             OrchestrationTopologyJson = input.OrchestrationTopologyJson,
             PlaybookEnabled = input.PlaybookEnabled,
+            DisableBaseScaffold = input.DisableBaseScaffold,
             DefaultTemporaryChat = input.DefaultTemporaryChat,
             MemoryExtractionEnabled = input.MemoryExtractionEnabled,
             Version = 1,
@@ -68,6 +69,7 @@ public sealed class AgentDefinitionStore(NodeChatDbContext dbContext, TimeProvid
             ToolApprovalsJson = SerializeApprovals(input.ToolApprovals),
             OrchestrationTopologyJson = input.OrchestrationTopologyJson,
             PlaybookEnabled = input.PlaybookEnabled,
+            DisableBaseScaffold = input.DisableBaseScaffold,
             DefaultTemporaryChat = input.DefaultTemporaryChat,
             MemoryExtractionEnabled = input.MemoryExtractionEnabled,
             // The only place a seeded provenance is stamped — the manual AddAsync leaves Source at the entity default
@@ -135,6 +137,9 @@ public sealed class AgentDefinitionStore(NodeChatDbContext dbContext, TimeProvid
         // PlaybookEnabled only gates injection; the injected playbook content drives the config hash directly, so it is
         // deliberately excluded from the configChanged comparison above and never bumps the agent's own Version.
         entity.PlaybookEnabled = input.PlaybookEnabled;
+        // DisableBaseScaffold toggles whether the scaffold is folded into the resolved prompt; like PlaybookEnabled the
+        // prompt change drives the config hash directly, so it is excluded from configChanged and never bumps Version.
+        entity.DisableBaseScaffold = input.DisableBaseScaffold;
         // DefaultTemporaryChat gates post-run memory extraction only (not the prompt), so like PlaybookEnabled it is
         // excluded from configChanged and never bumps Version.
         entity.DefaultTemporaryChat = input.DefaultTemporaryChat;
@@ -237,7 +242,8 @@ public sealed class AgentDefinitionStore(NodeChatDbContext dbContext, TimeProvid
             entity.SeedSlug,
             DeserializeSkillIds(entity.AllowedSkillIdsJson),
             entity.DefaultTemporaryChat,
-            entity.MemoryExtractionEnabled);
+            entity.MemoryExtractionEnabled,
+            entity.DisableBaseScaffold);
     }
 
     private static byte[]? EncodeOptional(string? value)

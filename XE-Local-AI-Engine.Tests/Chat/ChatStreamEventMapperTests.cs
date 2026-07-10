@@ -104,6 +104,57 @@ public sealed class ChatStreamEventMapperTests
         AssertEx.Equal(expected: 22, overridden.OutputTokens);
     }
 
+    [Test]
+    public void NoticeEvent_MapsKindAndMessageOntoTheAssistantNoticeType()
+    {
+        var conversationId = Guid.NewGuid();
+        var messageId = Guid.NewGuid();
+        var requestId = Guid.NewGuid();
+        var payload = new TurnNoticePayload
+        {
+            InvocationId = Guid.NewGuid(),
+            Kind = TurnNoticeKind.ModelSubstituted,
+            Message = "Model 'x' could not be verified; fell back to 'y'.",
+            Detail = "y"
+        };
+
+        var mapped = ChatStreamEventMapper.NoticeEvent(conversationId, messageId, requestId, payload, Timestamp, sequence: 4);
+
+        AssertEx.Equal(ChatStreamEventTypes.AssistantNotice, mapped.Type);
+        AssertEx.Equal(conversationId, mapped.ConversationId);
+        AssertEx.Equal(messageId, mapped.MessageId);
+        AssertEx.Equal(requestId, mapped.RequestId);
+        AssertEx.Equal(NodeChatMessageStatusValues.Streaming, mapped.Status);
+        AssertEx.Equal(expected: 4L, mapped.Sequence);
+        AssertEx.Equal(nameof(TurnNoticeKind.ModelSubstituted), mapped.NoticeKind);
+        AssertEx.Equal(payload.Message, mapped.NoticeMessage);
+        // A notice is not a tool-call event: none of the tool-specific fields are populated.
+        AssertEx.Null(mapped.ToolCallId);
+        AssertEx.Null(mapped.Result);
+    }
+
+    [Test]
+    public void AccumulateNotice_AppendsANoticePartCarryingKindAndMessage()
+    {
+        var parts = new NodeChatPartAccumulator();
+        var payload = new TurnNoticePayload
+        {
+            InvocationId = Guid.NewGuid(),
+            Kind = TurnNoticeKind.HistoryTruncated,
+            Message = "Conversation history was trimmed to fit the model's context window (2 older message(s) dropped, 0 tool result(s) shortened)."
+        };
+
+        ChatStreamEventMapper.AccumulateNotice(parts, payload, sequence: 9);
+
+        var snapshot = parts.Snapshot();
+        AssertEx.Equal(expected: 1, snapshot.Count);
+        var part = snapshot[0];
+        AssertEx.Equal(NodeChatMessagePartKinds.Notice, part.Kind);
+        AssertEx.Equal(nameof(TurnNoticeKind.HistoryTruncated), part.Name);
+        AssertEx.Equal(payload.Message, part.Text);
+        AssertEx.Equal(expected: 9, part.Sequence);
+    }
+
     private static ToolCallLifecyclePayload NewPayload(string toolCallId,
         string toolName,
         ToolCallLifecyclePhase phase,

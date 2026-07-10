@@ -159,10 +159,10 @@ internal sealed class InvocationAgentFactory : IInvocationAgentFactory
     ///     <see cref="ChatClientAgentOptions" /> constructor with that provider attached via
     ///     <see cref="ChatClientAgentOptions.AIContextProviders" />. The provider serves each skill's body on demand
     ///     (progressive disclosure); its skill-discovery tools are serviced by the same FunctionInvokingChatClient that
-    ///     already services the agent's own tools. Note: MAF 1.8.0 has NO <c>Instructions</c> property on
+    ///     already services the agent's own tools. Note: MAF has NO <c>Instructions</c> property on
     ///     <see cref="ChatClientAgentOptions" /> — the system instructions live on <see cref="ChatOptions.Instructions" />
-    ///     (verified against Microsoft.Agents.AI.xml 1.8.0), which is where the positional constructor's
-    ///     <c>instructions</c> argument also lands.
+    ///     (verified against Microsoft.Agents.AI.xml 1.8.0; pinned version is now 1.13.0, not re-verified), which is
+    ///     where the positional constructor's <c>instructions</c> argument also lands.
     /// </summary>
     private ChatClientAgent BuildAgent(InvocationAgentDefinition definition, IList<AITool> tools)
     {
@@ -181,10 +181,11 @@ internal sealed class InvocationAgentFactory : IInvocationAgentFactory
                 _serviceProvider);
         }
 
-        // MAAI001: Agent Skills (AgentSkillsProvider/AgentInlineSkill) ship as [Experimental] in Microsoft.Agents.AI
-        // 1.8.0. The surface (3-arg AgentInlineSkill + AgentSkill[] provider ctor) is verified against the 1.8.0 .xml
-        // and is the documented progressive-disclosure path; the no-skills path above stays on the stable ctor, so the
-        // experimental surface is reached only when an agent has assigned skills. Suppress is scoped to this block.
+        // MAAI001: Agent Skills (AgentSkillsProvider/AgentInlineSkill) shipped as [Experimental] in Microsoft.Agents.AI
+        // 1.8.0 (verified against the 1.8.0 .xml; pinned version is now 1.13.0, not re-verified). The surface (3-arg
+        // AgentInlineSkill + AgentSkill[] provider ctor) is the documented progressive-disclosure path; the no-skills
+        // path above stays on the stable ctor, so the experimental surface is reached only when an agent has assigned
+        // skills. Suppress is scoped to this block.
 #pragma warning disable MAAI001
         var inlineSkills = new AgentInlineSkill[skills.Count];
         for (var index = 0; index < skills.Count; index++)

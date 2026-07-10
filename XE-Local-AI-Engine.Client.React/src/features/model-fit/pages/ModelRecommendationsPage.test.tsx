@@ -40,6 +40,8 @@ const { hooksMock, ggufMock, schedulerMock, hubMock, toastMock } = vi.hoisted(()
 		useLatestRecommendations: vi.fn(),
 		useRefreshRecommendations: vi.fn(),
 		useHardwareProfile: vi.fn(),
+		useModelFitCatalog: vi.fn(),
+		useRefreshModelFitCatalog: vi.fn(),
 	},
 	ggufMock: {
 		useStartGgufDownload: vi.fn(),
@@ -154,31 +156,66 @@ const noCacheView = {
 	recommendations: [],
 };
 
+function makeRecommendationFixture(overrides: Record<string, unknown> = {}) {
+	return {
+		rank: 1,
+		modelName: "llama3.1:8b",
+		providerModelName: "llama3.1:8b",
+		score: 90,
+		fitLevel: "GPU",
+		runMode: "GPU",
+		quantization: "Q5_K_M",
+		estimatedTokensPerSecond: 42,
+		requiredRamMb: 8192,
+		requiredVramMb: 6144,
+		contextTokens: 8192,
+		isInstalled: false,
+		pullModelName: "unsloth/llama-3.1-8b-gguf",
+		releaseDate: null,
+		isTrustedPublisher: true,
+		section: "recommended",
+		tier: null,
+		catalogId: null,
+		catalogDisplayName: null,
+		catalogNotes: null,
+		expertsOffloaded: false,
+		gpuGb: null,
+		cpuGb: null,
+		...overrides,
+	};
+}
+
 const populatedView = {
 	hasCache: true,
 	snapshotId: "snap-1",
 	status: "Succeeded",
 	useCase: "coding",
 	lastRefreshedAtUtc: 1_700_000_000_000,
+	recommendations: [makeRecommendationFixture()],
+};
+
+// A snapshot with all three sections represented, used by the section-split tests.
+const sectionedView = {
+	hasCache: true,
+	snapshotId: "snap-2",
+	status: "Succeeded",
+	useCase: "coding",
+	lastRefreshedAtUtc: 1_700_000_000_000,
 	recommendations: [
-		{
-			rank: 1,
-			modelName: "llama3.1:8b",
-			providerModelName: "llama3.1:8b",
-			score: 90,
-			fitLevel: "GPU",
-			runMode: "GPU",
-			quantization: "Q5_K_M",
-			estimatedTokensPerSecond: 42,
-			requiredRamMb: 8192,
-			requiredVramMb: 6144,
-			contextTokens: 8192,
-			isInstalled: false,
-			pullModelName: "unsloth/llama-3.1-8b-gguf",
-			releaseDate: null,
-			isTrustedPublisher: true,
-		},
+		makeRecommendationFixture({ rank: 1, modelName: "recommended-model", section: "recommended" }),
+		makeRecommendationFixture({ rank: 2, modelName: "can-run-model-1", section: "canRun", pullModelName: "can-run-1:latest" }),
+		makeRecommendationFixture({ rank: 3, modelName: "can-run-model-2", section: "canRun", pullModelName: "can-run-2:latest" }),
+		makeRecommendationFixture({ rank: 4, modelName: "explore-model", section: "explore", pullModelName: "explore:latest" }),
 	],
+};
+
+const catalogInfo = {
+	catalogVersion: "2026.07.01",
+	updatedAt: "2026-07-01T00:00:00.000Z",
+	source: "remote" as const,
+	fetchedAtUtc: 1_700_000_000_000,
+	sourceUrl: "https://example.test/catalog.json",
+	modelCount: 42,
 };
 
 const hardwareProfile = {
@@ -201,6 +238,8 @@ describe("ModelRecommendationsPage", () => {
 		hooksMock.useLatestRecommendations.mockReturnValue(makeQuery(noCacheView));
 		hooksMock.useRefreshRecommendations.mockReturnValue(makeMutation());
 		hooksMock.useHardwareProfile.mockReturnValue(makeQuery(hardwareProfile));
+		hooksMock.useModelFitCatalog.mockReturnValue(makeQuery(undefined));
+		hooksMock.useRefreshModelFitCatalog.mockReturnValue(makeMutation());
 		ggufMock.useStartGgufDownload.mockReturnValue(makeMutation());
 		schedulerMock.useScheduledJobs.mockReturnValue(makeQuery([modelFitJob()]));
 	});
@@ -366,5 +405,110 @@ describe("ModelRecommendationsPage", () => {
 		expect(screen.queryByTestId("model-fit-running-card")).toBeNull();
 		expect(screen.queryByTestId("model-fit-llamacpp-card")).toBeNull();
 		expect(screen.queryByTestId("model-fit-hf-token-card")).toBeNull();
+	});
+
+	describe("section split", () => {
+		it("renders the recommended and explore groups, and shows a count on the can-run group's collapsed toggle", () => {
+			hooksMock.useLatestRecommendations.mockReturnValue(makeQuery(sectionedView));
+
+			renderPage();
+
+			expect(screen.getByTestId("model-fit-section-recommended")).toBeTruthy();
+			expect(screen.getByTestId("model-fit-recommendation-row-1")).toBeTruthy();
+
+			expect(screen.getByTestId("model-fit-section-explore")).toBeTruthy();
+			expect(screen.getByTestId("model-fit-recommendation-row-4")).toBeTruthy();
+
+			// The can-run group's toggle carries the count and starts collapsed (Mantine's Collapse keeps the content
+			// mounted by default and hides it visually, so the row count on the toggle is the collapsed-state signal).
+			const toggle = screen.getByTestId("model-fit-section-can-run-toggle");
+			expect(toggle.textContent).toContain("2");
+		});
+
+		it("expands the can-run group's table when its toggle is clicked", () => {
+			hooksMock.useLatestRecommendations.mockReturnValue(makeQuery(sectionedView));
+
+			renderPage();
+
+			fireEvent.click(screen.getByTestId("model-fit-section-can-run-toggle"));
+
+			expect(screen.getByTestId("model-fit-recommendation-row-2")).toBeTruthy();
+			expect(screen.getByTestId("model-fit-recommendation-row-3")).toBeTruthy();
+		});
+
+		it("hides a section entirely when it has no rows", () => {
+			hooksMock.useLatestRecommendations.mockReturnValue(makeQuery(populatedView));
+
+			renderPage();
+
+			// populatedView has only a "recommended" row — the can-run and explore sections should not render at all.
+			expect(screen.getByTestId("model-fit-section-recommended")).toBeTruthy();
+			expect(screen.queryByTestId("model-fit-section-can-run")).toBeNull();
+			expect(screen.queryByTestId("model-fit-section-explore")).toBeNull();
+		});
+
+		it("shows a MoE-offloaded row's honest badge with the GPU/RAM split", () => {
+			const moeView = {
+				...populatedView,
+				recommendations: [
+					makeRecommendationFixture({ rank: 1, expertsOffloaded: true, gpuGb: 8, cpuGb: 16 }),
+				],
+			};
+			hooksMock.useLatestRecommendations.mockReturnValue(makeQuery(moeView));
+
+			renderPage();
+
+			expect(screen.getByTestId("model-fit-moe-offload-badge-1")).toBeTruthy();
+		});
+	});
+
+	describe("catalog info footer", () => {
+		it("renders the catalog version, source, and updated-at, and hides when no catalog data is loaded", () => {
+			hooksMock.useModelFitCatalog.mockReturnValue(makeQuery(undefined));
+
+			renderPage();
+
+			expect(screen.queryByTestId("model-fit-catalog-info")).toBeNull();
+		});
+
+		it("shows the catalog footer with version/source/updatedAt once catalog data loads", () => {
+			hooksMock.useModelFitCatalog.mockReturnValue(makeQuery(catalogInfo));
+
+			renderPage();
+
+			expect(screen.getByTestId("model-fit-catalog-info")).toBeTruthy();
+			expect(screen.getByTestId("model-fit-catalog-version").textContent).toContain("2026.07.01");
+			expect(screen.getByTestId("model-fit-catalog-source")).toBeTruthy();
+			expect(screen.getByTestId("model-fit-catalog-updated-at")).toBeTruthy();
+		});
+
+		it("fires the refresh-catalog mutation when the Refresh catalog button is clicked", () => {
+			const refreshCatalog = makeMutation();
+			hooksMock.useModelFitCatalog.mockReturnValue(makeQuery(catalogInfo));
+			hooksMock.useRefreshModelFitCatalog.mockReturnValue(refreshCatalog);
+
+			renderPage();
+
+			fireEvent.click(screen.getByTestId("model-fit-catalog-refresh-button"));
+
+			expect(refreshCatalog.mutate).toHaveBeenCalledWith(
+				undefined,
+				expect.objectContaining({ onSuccess: expect.any(Function), onError: expect.any(Function) }),
+			);
+		});
+
+		it("shows a success toast when the catalog refresh mutation succeeds", () => {
+			const refreshCatalog = makeMutation({
+				mutate: vi.fn((_variables, options?: { onSuccess?: () => void }) => options?.onSuccess?.()),
+			});
+			hooksMock.useModelFitCatalog.mockReturnValue(makeQuery(catalogInfo));
+			hooksMock.useRefreshModelFitCatalog.mockReturnValue(refreshCatalog);
+
+			renderPage();
+
+			fireEvent.click(screen.getByTestId("model-fit-catalog-refresh-button"));
+
+			expect(toastMock.success).toHaveBeenCalledWith(expect.stringContaining("catalog"));
+		});
 	});
 });

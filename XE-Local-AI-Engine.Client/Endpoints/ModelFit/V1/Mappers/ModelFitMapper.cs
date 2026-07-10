@@ -72,7 +72,17 @@ internal static class ModelFitMapper
             // Soft publisher-trust signal extracted from the persisted diagnostics blob. The advisor emits
             // is_trusted_publisher per model; when the blob predates that emit we derive it from the model name so
             // pre-existing snapshots still flag trust until the next refresh.
-            IsTrustedPublisher = ExtractIsTrustedPublisher(record.DiagnosticsJson, record.ModelName)
+            IsTrustedPublisher = ExtractIsTrustedPublisher(record.DiagnosticsJson, record.ModelName),
+            // Catalog-lane fields (locked decision D1/D2/D3), extracted from the same diagnostics blob. A pre-existing
+            // snapshot row (predating the catalog lane) has none of these keys and defaults to the "explore" section.
+            Section = ExtractString(record.DiagnosticsJson, "section") ?? "explore",
+            Tier = ExtractString(record.DiagnosticsJson, "tier"),
+            CatalogId = ExtractString(record.DiagnosticsJson, "catalog_id"),
+            CatalogDisplayName = ExtractString(record.DiagnosticsJson, "catalog_display_name"),
+            CatalogNotes = ExtractString(record.DiagnosticsJson, "catalog_notes"),
+            ExpertsOffloaded = ExtractBool(record.DiagnosticsJson, "expert_offload") ?? false,
+            GpuGb = ExtractDouble(record.DiagnosticsJson, "gpu_gb"),
+            CpuGb = ExtractDouble(record.DiagnosticsJson, "cpu_gb")
         };
     }
 
@@ -456,5 +466,75 @@ internal static class ModelFitMapper
         }
 
         return GgufPublisherTrust.IsTrustedPublisher(modelName);
+    }
+
+    /// <summary>Pulls a single string property out of the persisted diagnostics blob; tolerant of a null/malformed blob or a missing/non-string property.</summary>
+    private static string? ExtractString(string? diagnosticsJson, string propertyName)
+    {
+        if (string.IsNullOrWhiteSpace(diagnosticsJson))
+        {
+            return null;
+        }
+
+        try
+        {
+            using var document = JsonDocument.Parse(diagnosticsJson);
+            return document.RootElement.ValueKind == JsonValueKind.Object
+                   && document.RootElement.TryGetProperty(propertyName, out var value)
+                   && value.ValueKind == JsonValueKind.String
+                ? value.GetString()
+                : null;
+        }
+        catch (JsonException)
+        {
+            return null;
+        }
+    }
+
+    /// <summary>Pulls a single boolean property out of the persisted diagnostics blob; tolerant of a null/malformed blob or a missing/non-boolean property.</summary>
+    private static bool? ExtractBool(string? diagnosticsJson, string propertyName)
+    {
+        if (string.IsNullOrWhiteSpace(diagnosticsJson))
+        {
+            return null;
+        }
+
+        try
+        {
+            using var document = JsonDocument.Parse(diagnosticsJson);
+            return document.RootElement.ValueKind == JsonValueKind.Object
+                   && document.RootElement.TryGetProperty(propertyName, out var value)
+                   && value.ValueKind is JsonValueKind.True or JsonValueKind.False
+                ? value.ValueKind == JsonValueKind.True
+                : null;
+        }
+        catch (JsonException)
+        {
+            return null;
+        }
+    }
+
+    /// <summary>Pulls a single numeric property out of the persisted diagnostics blob; tolerant of a null/malformed blob or a missing/non-numeric property.</summary>
+    private static double? ExtractDouble(string? diagnosticsJson, string propertyName)
+    {
+        if (string.IsNullOrWhiteSpace(diagnosticsJson))
+        {
+            return null;
+        }
+
+        try
+        {
+            using var document = JsonDocument.Parse(diagnosticsJson);
+            return document.RootElement.ValueKind == JsonValueKind.Object
+                   && document.RootElement.TryGetProperty(propertyName, out var value)
+                   && value.ValueKind == JsonValueKind.Number
+                   && value.TryGetDouble(out var number)
+                ? number
+                : null;
+        }
+        catch (JsonException)
+        {
+            return null;
+        }
     }
 }

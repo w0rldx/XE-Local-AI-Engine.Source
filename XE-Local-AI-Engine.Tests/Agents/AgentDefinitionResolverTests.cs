@@ -3,6 +3,7 @@ namespace XE_Local_AI_Engine.Tests.Agents;
 using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Options;
 using NSubstitute;
+using XE_Local_AI_Engine.AI.Agent.Instructions;
 using XE_Local_AI_Engine.Client.Models;
 using XE_Local_AI_Engine.Client.Models.Enums;
 using XE_Local_AI_Engine.Client.Persistence;
@@ -12,6 +13,7 @@ using XE_Local_AI_Engine.Client.Services.Agents.Implementation;
 using XE_Local_AI_Engine.Client.Services.Chat;
 using XE_Local_AI_Engine.Client.Services.Chat.Implementation;
 using XE_Local_AI_Engine.Tests.Testing;
+using XE_Local_AI_Engine.Tests.Testing.Mocks;
 
 public sealed class AgentDefinitionResolverTests
 {
@@ -741,6 +743,101 @@ public sealed class AgentDefinitionResolverTests
         AssertEx.Equal(expected: 0, ranker.CallCount);
     }
 
+    private const string ScaffoldText = "You are a locally-run agent. Ground every claim; use tools when they help.";
+
+    [Test]
+    public async Task ResolveAsync_PrependsScaffoldAheadOfPersonaByDefault()
+    {
+        var resolver = CreateResolverWithScaffold(out var store, ScaffoldText, OfferTool("GetCurrentTime"));
+        var definition = CreateDefinition(allowedTools: ["GetCurrentTime"]);
+        store.GetByIdAsync(definition.Id, Arg.Any<CancellationToken>()).Returns(definition);
+
+        var resolved = await resolver.ResolveAsync(definition.Id, "qwen3:8b").ConfigureAwait(false);
+
+        AssertEx.NotNull(resolved);
+        AssertEx.Equal($"{ScaffoldText}\n\n{SystemPrompt}", resolved!.ResolvedSystemPrompt);
+    }
+
+    [Test]
+    public async Task ResolveAsync_WhenDisableBaseScaffold_KeepsPersonaOnlyByteIdentical()
+    {
+        // Opt-out: the resolved prompt must be exactly the persona Instructions, with no scaffold prepended — the
+        // config-hash-stability guarantee for a definition that opts out.
+        var resolver = CreateResolverWithScaffold(out var store, ScaffoldText, OfferTool("GetCurrentTime"));
+        var definition = CreateDefinition(allowedTools: ["GetCurrentTime"], disableBaseScaffold: true);
+        store.GetByIdAsync(definition.Id, Arg.Any<CancellationToken>()).Returns(definition);
+
+        var resolved = await resolver.ResolveAsync(definition.Id, "qwen3:8b").ConfigureAwait(false);
+
+        AssertEx.NotNull(resolved);
+        AssertEx.Equal(SystemPrompt, resolved!.ResolvedSystemPrompt);
+    }
+
+    [Test]
+    public async Task ResolveAsync_ScaffoldPrependsAheadOfPlaybookComposedPersona()
+    {
+        // Composition order: scaffold, blank line, then the FULL persona prompt (Instructions + folded-in playbook
+        // memories) — the existing playbook injection order is preserved underneath the scaffold.
+        var resolver = CreateResolverWithScaffoldAndPlaybook(out var store, out var playbookStore, ScaffoldText, OfferTool("GetCurrentTime"));
+        var definition = CreateDefinition(allowedTools: ["GetCurrentTime"], playbookEnabled: true);
+        store.GetByIdAsync(definition.Id, Arg.Any<CancellationToken>()).Returns(definition);
+        playbookStore.ListEnabledByAgentAsync(definition.Id, Arg.Any<CancellationToken>())
+                     .Returns(Task.FromResult<IReadOnlyList<PlaybookActionRecord>>([
+                         EnabledAction(definition.Id, "Run the tests first.", priority: 1)
+                     ]));
+
+        var resolved = await resolver.ResolveAsync(definition.Id, "qwen3:8b").ConfigureAwait(false);
+
+        AssertEx.NotNull(resolved);
+        var expected = $"{ScaffoldText}\n\n{SystemPrompt}\n\n## Operating Playbook\n- Run the tests first.";
+        AssertEx.Equal(expected, resolved!.ResolvedSystemPrompt);
+    }
+
+    [Test]
+    public async Task ResolveAsync_TogglingDisableBaseScaffold_ChangesConfigHash()
+    {
+        // The scaffold rides ResolvedSystemPrompt like any other prompt text, so toggling the opt-out flag alone must
+        // move the runtime package config hash — even though DisableBaseScaffold never bumps the definition's own
+        // Version (mirrors PlaybookEnabled's non-config-affecting-for-Version class).
+        var builder = new LocalChatRuntimePackageBuilder();
+        var resolver = CreateResolverWithScaffold(out var store, ScaffoldText, OfferTool("GetCurrentTime"));
+
+        var withScaffold = CreateDefinition(allowedTools: ["GetCurrentTime"], version: 1);
+        var optedOut = withScaffold with
+        {
+            DisableBaseScaffold = true
+        };
+
+        var withScaffoldHash = await ResolveAndHashAsync(resolver, store, builder, withScaffold).ConfigureAwait(false);
+        var optedOutHash = await ResolveAndHashAsync(resolver, store, builder, optedOut).ConfigureAwait(false);
+
+        AssertEx.True(withScaffoldHash != optedOutHash, "Toggling DisableBaseScaffold must change the config hash.");
+    }
+
+    // Builds a resolver whose instruction provider returns a REAL (non-blank) scaffold, for the dedicated composition
+    // tests above. Every other factory in this file passes an unconfigured stub (empty/null scaffold), which
+    // BaseInstructionComposer treats as a no-op — that is what keeps the tool/playbook/hash tests above byte-identical.
+    private static AgentDefinitionResolver CreateResolverWithScaffold(out IAgentDefinitionStore store, string scaffoldText, params AllowedToolDto[] offeredTools)
+    {
+        var instructionProvider = new FakeAgentInstructionProvider
+        {
+            BaseScaffold = scaffoldText
+        };
+        return BuildResolver(out store, out _, onGetOffered: null, offeredTools, instructionProvider);
+    }
+
+    private static AgentDefinitionResolver CreateResolverWithScaffoldAndPlaybook(out IAgentDefinitionStore store,
+        out IPlaybookActionStore playbookStore,
+        string scaffoldText,
+        params AllowedToolDto[] offeredTools)
+    {
+        var instructionProvider = new FakeAgentInstructionProvider
+        {
+            BaseScaffold = scaffoldText
+        };
+        return BuildResolver(out store, out playbookStore, onGetOffered: null, offeredTools, instructionProvider);
+    }
+
     private static async Task<string> ResolveAndHashAsync(IAgentDefinitionResolver resolver,
         IAgentDefinitionStore store,
         LocalChatRuntimePackageBuilder builder,
@@ -807,6 +904,7 @@ public sealed class AgentDefinitionResolverTests
             offerProvider,
             new LexicalPlaybookRetrievalRanker(),
             Options.Create(new PlaybookRetrievalOptions()),
+            new FakeAgentInstructionProvider(),
             NullLogger<AgentDefinitionResolver>.Instance);
     }
 
@@ -818,7 +916,8 @@ public sealed class AgentDefinitionResolverTests
     private static AgentDefinitionResolver BuildResolver(out IAgentDefinitionStore store,
         out IPlaybookActionStore playbookStore,
         Action<string?>? onGetOffered,
-        AllowedToolDto[] offeredTools)
+        AllowedToolDto[] offeredTools,
+        IAgentInstructionProvider? instructionProvider = null)
     {
         store = Substitute.For<IAgentDefinitionStore>();
         playbookStore = Substitute.For<IPlaybookActionStore>();
@@ -848,6 +947,10 @@ public sealed class AgentDefinitionResolverTests
             offerProvider,
             new LexicalPlaybookRetrievalRanker(),
             Options.Create(new PlaybookRetrievalOptions()),
+            // Unconfigured (null) returns null/empty from GetBaseScaffold, which BaseInstructionComposer treats as
+            // "no scaffold" — so every pre-existing tool/playbook/hash test above keeps asserting the bare persona
+            // prompt unchanged. Scaffold composition itself is covered by the dedicated tests below.
+            instructionProvider ?? new FakeAgentInstructionProvider(),
             NullLogger<AgentDefinitionResolver>.Instance);
     }
 
@@ -911,7 +1014,14 @@ public sealed class AgentDefinitionResolverTests
             RetrievalThreshold = threshold,
             TopK = topK
         });
-        return new AgentDefinitionResolver(store, playbookStore, CreateEmptySkillStore(), offerProvider, ranker, retrievalOptions, NullLogger<AgentDefinitionResolver>.Instance);
+        return new AgentDefinitionResolver(store,
+            playbookStore,
+            CreateEmptySkillStore(),
+            offerProvider,
+            ranker,
+            retrievalOptions,
+            new FakeAgentInstructionProvider(),
+            NullLogger<AgentDefinitionResolver>.Instance);
     }
 
     private static AgentDefinitionRecord CreateDefinition(string name = "Agent",
@@ -922,7 +1032,8 @@ public sealed class AgentDefinitionResolverTests
         string? modelProfile = "qwen3:8b",
         string? reasoningEffort = null,
         bool playbookEnabled = false,
-        IReadOnlyList<Guid>? allowedSkillIds = null)
+        IReadOnlyList<Guid>? allowedSkillIds = null,
+        bool disableBaseScaffold = false)
     {
         return new AgentDefinitionRecord(Guid.NewGuid(),
             name,
@@ -938,7 +1049,8 @@ public sealed class AgentDefinitionResolverTests
             CreatedAtUtc: 10,
             UpdatedAtUtc: 10,
             playbookEnabled,
-            AllowedSkillIds: allowedSkillIds);
+            AllowedSkillIds: allowedSkillIds,
+            DisableBaseScaffold: disableBaseScaffold);
     }
 
     private static PlaybookActionRecord EnabledAction(Guid agentDefinitionId, string behavior, int priority)

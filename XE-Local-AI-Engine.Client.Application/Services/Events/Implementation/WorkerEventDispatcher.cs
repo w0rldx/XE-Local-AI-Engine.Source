@@ -57,6 +57,8 @@ public sealed partial class WorkerEventDispatcher : IWorkerEventDispatcher
 
     public event EventHandler<ToolCallLifecycleChangedEventArgs>? ToolCallLifecycleChanged;
 
+    public event EventHandler<TurnNoticeChangedEventArgs>? TurnNoticeChanged;
+
     // The live invocation, mutated in place only under _syncRoot. Off-lock consumers must not read its
     // StreamedContent/StreamedThinkingContent (those getters materialize a StringBuilder that is unsafe against the
     // concurrent streaming appends) — see IWorkerEventDispatcher.CurrentInvocation. Internal callers already hold
@@ -520,6 +522,15 @@ public sealed partial class WorkerEventDispatcher : IWorkerEventDispatcher
         ArgumentNullException.ThrowIfNull(payload);
 
         ToolCallLifecycleChanged?.Invoke(this, new ToolCallLifecycleChangedEventArgs(payload));
+
+        return Task.CompletedTask;
+    }
+
+    public Task ReportTurnNoticeAsync(TurnNoticePayload payload)
+    {
+        ArgumentNullException.ThrowIfNull(payload);
+
+        TurnNoticeChanged?.Invoke(this, new TurnNoticeChangedEventArgs(payload));
 
         return Task.CompletedTask;
     }

@@ -69,6 +69,24 @@ public sealed partial class InvocationRunner
 
         public IWorkerEventDispatcher Dispatcher { get; }
 
+        /// <summary>
+        ///     Reports a non-fatal turn notice (model substitution, tool disabled, history truncated) for this
+        ///     invocation. Unlike <see cref="EmitReasoningAsync" />/<see cref="EmitTextAsync" /> this does not touch
+        ///     <see cref="StreamState" /> or the byte-size caps — a notice is metadata about the turn, not streamed
+        ///     model output — and reports through the SAME dispatcher every notice-emitting caller already holds, so
+        ///     it needs no separate wiring.
+        /// </summary>
+        public Task EmitNoticeAsync(TurnNoticeKind kind, string message, string? detail = null)
+        {
+            return Dispatcher.ReportTurnNoticeAsync(new TurnNoticePayload
+            {
+                InvocationId = _package.InvocationId,
+                Kind = kind,
+                Message = message,
+                Detail = detail
+            });
+        }
+
         public async Task EmitReasoningAsync(StreamState stream, string thinkingChunk, CancellationToken cancellationToken)
         {
             // Encode once: the encrypted transport needs the bytes and the size cap needs their length, so a single

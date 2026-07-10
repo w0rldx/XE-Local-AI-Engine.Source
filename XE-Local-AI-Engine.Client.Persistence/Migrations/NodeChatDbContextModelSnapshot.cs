@@ -50,6 +50,12 @@ namespace XE_Local_AI_Engine.Client.Persistence.Migrations
                         .HasColumnType("BLOB")
                         .HasColumnName("description");
 
+                    b.Property<bool>("DisableBaseScaffold")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("INTEGER")
+                        .HasDefaultValue(false)
+                        .HasColumnName("disable_base_scaffold");
+
                     b.Property<byte[]>("Instructions")
                         .IsRequired()
                         .HasColumnType("BLOB")

@@ -3,6 +3,7 @@ namespace XE_Local_AI_Engine.Client.Services.Capacity;
 using Microsoft.Agents.AI;
 using Microsoft.Extensions.AI;
 using Microsoft.Extensions.Options;
+using XE_Local_AI_Engine.AI.Agent.Instructions;
 using XE_Local_AI_Engine.AI.Agent.Tools;
 using XE_Local_AI_Engine.Client.Models;
 using XE_Local_AI_Engine.Client.Models.Enums;
@@ -29,13 +30,19 @@ using XE_Local_AI_Engine.Providers.LlamaServer;
 internal sealed class SubAgentSpawnService : ISubAgentSpawnService
 {
     // The inner agent-as-tool exposes a single "query" input parameter (verified against MAF 1.10.0
-    // AIAgentExtensions.AsAIFunction); the spawn task is passed under that key. AsAIFunction forwards the outer
-    // CancellationToken into the inner run (verified by Spawn_PropagatesCancellationToInnerRun), so no linked CTS is
-    // needed — the parent ct flows straight through InvokeAsync.
+    // AIAgentExtensions.AsAIFunction; pinned version is now 1.13.0, not re-verified); the spawn task is passed under
+    // that key. AsAIFunction forwards the outer CancellationToken into the inner run (verified by
+    // Spawn_PropagatesCancellationToInnerRun), so no linked CTS is needed — the parent ct flows straight through
+    // InvokeAsync.
     private const string InnerAgentInputKey = "query";
     private const string SubAgentName = "sub-agent";
     private const string SubAgentDescription = "A spawned sub-agent that answers a delegated task.";
-    private const string DefaultSubAgentInstructions = "You are a focused sub-agent. Complete the delegated task and return a concise result.";
+
+    // The persona half only; BaseInstructionComposer prepends the same versioned scaffold every other resolved
+    // agent gets, so a model-id-only child (no persisted definition to opt out) gets the same grounding/tool/output
+    // discipline as a bound one.
+    private const string DefaultSubAgentPersonaInstructions =
+        "You are a focused sub-agent. Complete the delegated task and return a concise result.";
 
     // Sanitized, caller-facing constants — never interpolate a model id, path, definition name, or budget figure into a
     // reason handed back to the calling agent (its transcript is not a trusted sink for node-internal detail).
@@ -51,6 +58,7 @@ internal sealed class SubAgentSpawnService : ISubAgentSpawnService
     private readonly IChatClient _chatClient;
     private readonly IClientLocalToolRegistry _clientLocalToolRegistry;
     private readonly IAgentDefinitionStore _definitionStore;
+    private readonly IAgentInstructionProvider _instructionProvider;
     private readonly ILogger<SubAgentSpawnService> _logger;
     private readonly ILoggerFactory _loggerFactory;
     private readonly IMcpToolRegistry _mcpToolRegistry;
@@ -67,6 +75,7 @@ internal sealed class SubAgentSpawnService : ISubAgentSpawnService
         IMcpToolRegistry mcpToolRegistry,
         IChatClient chatClient,
         IOptions<SpawnOptions> options,
+        IAgentInstructionProvider instructionProvider,
         ILoggerFactory loggerFactory,
         ILogger<SubAgentSpawnService> logger)
     {
@@ -80,6 +89,7 @@ internal sealed class SubAgentSpawnService : ISubAgentSpawnService
         _chatClient = chatClient ?? throw new ArgumentNullException(nameof(chatClient));
         ArgumentNullException.ThrowIfNull(options);
         _options = options.Value;
+        _instructionProvider = instructionProvider ?? throw new ArgumentNullException(nameof(instructionProvider));
         _loggerFactory = loggerFactory ?? throw new ArgumentNullException(nameof(loggerFactory));
         _logger = logger ?? throw new ArgumentNullException(nameof(logger));
     }
@@ -213,7 +223,7 @@ internal sealed class SubAgentSpawnService : ISubAgentSpawnService
         if (!string.IsNullOrWhiteSpace(request.ModelId))
         {
             var instructions = string.IsNullOrWhiteSpace(request.Instructions)
-                ? DefaultSubAgentInstructions
+                ? BaseInstructionComposer.Compose(_instructionProvider.GetBaseScaffold(), DefaultSubAgentPersonaInstructions)
                 : request.Instructions!;
             return new ResolvedBinding(request.ModelId!, instructions, Tools: null);
         }

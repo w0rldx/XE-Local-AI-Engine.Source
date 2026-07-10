@@ -7,6 +7,7 @@ using System.Text.RegularExpressions;
 using Microsoft.Agents.AI;
 using Microsoft.Extensions.AI;
 using Microsoft.Extensions.Options;
+using XE_Local_AI_Engine.AI.Agent.Configuration;
 using XE_Local_AI_Engine.AI.Agent.Invocation;
 using XE_Local_AI_Engine.AI.Agent.Invocation.Orchestration;
 using XE_Local_AI_Engine.Client.Models;
@@ -22,6 +23,7 @@ using XE_Local_AI_Engine.Client.Services.DeadLetter;
 using XE_Local_AI_Engine.Client.Services.Events;
 using XE_Local_AI_Engine.Client.Services.Invocation.Context;
 using XE_Local_AI_Engine.Client.Services.Invocation.Envelope;
+using XE_Local_AI_Engine.Client.Services.Invocation.Policy;
 using XE_Local_AI_Engine.Client.Services.Invocation.Resilience;
 using XE_Local_AI_Engine.Client.Services.NodeSettings;
 
@@ -55,6 +57,11 @@ public sealed partial class InvocationRunner : IInvocationRunner
     // message can name hosts/paths and is unbounded, so a fixed, path-free constant is surfaced in its place.
     private const string TimedOutMessage = "The operation timed out.";
 
+    // The budgeter's hard-stop (see ApplyContextBudgetAsync): history still exceeds the resolved context budget after
+    // the two-pass truncation. A fixed, path-free constant carrying no token counts, model names, or content.
+    private const string ContextBudgetExceededMessage =
+        "Conversation exceeds the model's context window even after truncation — start a new chat or switch to a larger-context model.";
+
     private static readonly Regex FrameworkExceptionNamePattern =
         new(@"\b(?:Microsoft|System)(?:\.[A-Za-z_][A-Za-z0-9_]*)*\.[A-Za-z_][A-Za-z0-9_]*Exception\b|\b(?:AgentException|ChatClientAgentException)\b", RegexOptions.CultureInvariant,
             TimeSpan.FromSeconds(2));
@@ -77,9 +84,11 @@ public sealed partial class InvocationRunner : IInvocationRunner
     private readonly ConcurrentDictionary<string, PendingToolCall> _pendingToolCalls = new(StringComparer.Ordinal);
     private readonly IProviderStreamResilience _providerStreamResilience;
     private readonly ILocalModelProviderResolver _providerResolver;
+    private readonly ProviderResilienceOptions _resilienceOptions;
     private readonly IRuntimePackageValidator _runtimePackageValidator;
     private readonly SpawnOptions _spawnOptions;
     private readonly Lock _syncRoot = new();
+    private readonly AgentToolPipelineOptions _toolPipelineOptions;
 
     // The effective tool-result wait budget for each active invocation, seeded from the package's
     // ToolCallTimeoutSeconds when RunAsync starts. ExecuteApiToolCallAsync (which only carries the invocation id) reads
@@ -105,6 +114,8 @@ public sealed partial class InvocationRunner : IInvocationRunner
         IProviderStreamResilience providerStreamResilience,
         IConversationContextBudgeter contextBudgeter,
         IOptions<ConversationContextBudgetOptions> contextBudgetOptions,
+        IOptions<ProviderResilienceOptions> resilienceOptions,
+        IOptions<AgentToolPipelineOptions> toolPipelineOptions,
         IConfiguration configuration,
         INodeRuntimeSettings runtimeSettings,
         IOptions<SpawnOptions> spawnOptions,
@@ -123,6 +134,10 @@ public sealed partial class InvocationRunner : IInvocationRunner
         _contextBudgeter = contextBudgeter ?? throw new ArgumentNullException(nameof(contextBudgeter));
         ArgumentNullException.ThrowIfNull(contextBudgetOptions);
         _contextBudgetOptions = contextBudgetOptions.Value;
+        ArgumentNullException.ThrowIfNull(resilienceOptions);
+        _resilienceOptions = resilienceOptions.Value;
+        ArgumentNullException.ThrowIfNull(toolPipelineOptions);
+        _toolPipelineOptions = toolPipelineOptions.Value;
         ArgumentNullException.ThrowIfNull(configuration);
         ArgumentNullException.ThrowIfNull(runtimeSettings);
         ArgumentNullException.ThrowIfNull(spawnOptions);
@@ -160,14 +175,20 @@ public sealed partial class InvocationRunner : IInvocationRunner
         var sendEncrypted = shouldSendHubMessages && context.IsEncrypted;
         var sendPlain = shouldSendHubMessages && !context.IsEncrypted;
 
-        RegisterActiveInvocation(package.InvocationId, package.Timeouts.InvocationTimeoutSeconds, cancellationToken);
+        // Resolved ONCE per turn from the package's TimeoutSettings plus the node-level operational options, then
+        // flowed unchanged through both the single-agent and orchestration paths so the two enforce identical policy.
+        // See TurnPolicy's XML doc for the composite budget (which timeout fires when).
+        var turnPolicy = TurnPolicy.Resolve(package, _contextBudgetOptions, _resilienceOptions, _toolPipelineOptions, _maxPendingToolCallAge);
+
+        RegisterActiveInvocation(package.InvocationId, turnPolicy.InvocationTimeout, cancellationToken);
         var activeInvocationCompletion = RegisterActiveInvocationCompletion(package.InvocationId);
-        _toolResultTimeoutsByInvocation[package.InvocationId] = ResolveConfiguredToolResultTimeout(package.Timeouts);
+        _toolResultTimeoutsByInvocation[package.InvocationId] = turnPolicy.ToolResultTimeout;
 
         try
         {
             var invocationToken = GetInvocationCancellationToken();
-            var resolvedModel = await ResolveModelAsync(package.ModelProfile, invocationToken).ConfigureAwait(false);
+            var modelResolution = await ResolveModelAsync(package.ModelProfile, invocationToken).ConfigureAwait(false);
+            var resolvedModel = modelResolution.Model;
 
             // Shared streaming state for both the single-agent and orchestration paths: the response/reasoning
             // accumulators, the byte caps, the monotonic sequence counters, and the terminal usage snapshot. Both
@@ -181,6 +202,14 @@ public sealed partial class InvocationRunner : IInvocationRunner
             }
 
             var transport = new StreamTransport(this, sender, dispatcher, context, package, sendEncrypted, sendPlain);
+
+            // Surface the silent model-substitution fallback (previously LogWarning-only) as a visible, non-fatal
+            // chat notice now that the transport (and therefore the dispatcher) exists.
+            if (modelResolution.Substituted)
+            {
+                await transport.EmitNoticeAsync(TurnNoticeKind.ModelSubstituted,
+                    BuildModelSubstitutedNoticeMessage(modelResolution.RequestedModel, resolvedModel)).ConfigureAwait(false);
+            }
 
             // Seed the per-root-invocation spawn context (Depth 0) for this turn so the spawn_subagent tool (when the
             // agent calls it) enforces the fan-out and cloud-spawn caps against ONE shared root. The context flows as an
@@ -197,11 +226,11 @@ public sealed partial class InvocationRunner : IInvocationRunner
             // the unchanged single-agent loop. Both accumulate into `stream`, then share the completion block below.
             if (package.OrchestrationSpec is { } orchestrationSpec)
             {
-                await RunOrchestrationAsync(package, orchestrationSpec, resolvedModel, transport, stream, invocationToken).ConfigureAwait(false);
+                await RunOrchestrationAsync(package, orchestrationSpec, resolvedModel, transport, stream, turnPolicy, invocationToken).ConfigureAwait(false);
             }
             else
             {
-                await RunSingleAgentAsync(package, resolvedModel, transport, stream, invocationToken).ConfigureAwait(false);
+                await RunSingleAgentAsync(package, resolvedModel, transport, stream, turnPolicy, invocationToken).ConfigureAwait(false);
             }
 
             // Read the whole-turn wall-clock duration once. The same value rides every completion transport (encrypted
@@ -406,13 +435,16 @@ public sealed partial class InvocationRunner : IInvocationRunner
         string resolvedModel,
         StreamTransport transport,
         StreamState stream,
+        TurnPolicy turnPolicy,
         CancellationToken invocationToken)
     {
         // Deterministic input-context budgeting is applied at BOTH history growth points so a long conversation (or a
-        // long tool-calling loop) never overruns the window the provider is launched with. The single trim warning is
-        // gated by this flag so an invocation logs at most once regardless of how many rounds trim.
-        var budgetTrimLogged = false;
-        var seededMessages = ApplyContextBudget(BuildChatMessages(package), package, "initial-assembly", ref budgetTrimLogged);
+        // long tool-calling loop) never overruns the window the provider is launched with. The gate gets both the
+        // "logged once" and "notice emitted once" flags so an invocation logs/notifies at most once regardless of how
+        // many rounds trim, and throws (see ApplyContextBudgetAsync) the first time truncation still leaves history
+        // over budget.
+        var budgetGate = new ContextBudgetNoticeGate();
+        var seededMessages = await ApplyContextBudgetAsync(BuildChatMessages(package), package, "initial-assembly", turnPolicy, transport, budgetGate).ConfigureAwait(false);
 
         var definition = BuildInvocationDefinition(package, resolvedModel, seededMessages);
         await using var agentContext = await _invocationAgentFactory.CreateAsync(definition, invocationToken).ConfigureAwait(false);
@@ -420,6 +452,11 @@ public sealed partial class InvocationRunner : IInvocationRunner
         // Maps callId → toolName so FunctionResultContent (which has no Name) can resolve the tool name
         // from the earlier FunctionCallContent with the matching CallId.
         var pendingLocalToolCallNames = new Dictionary<string, string>(StringComparer.Ordinal);
+
+        // Tracks which tools this turn has already surfaced a ToolDisabled notice for, so a model that keeps calling a
+        // disabled tool (each further call short-circuits to the same "tool_disabled" result — see
+        // ToolArgumentRepairAIFunction) is reported to the chat exactly once per tool, not once per call.
+        var notifiedDisabledTools = new HashSet<string>(StringComparer.Ordinal);
 
         // The conversation grows across approval-gated segments. A high-risk ClientLocal tool wrapped in
         // ApprovalRequiredAIFunction makes FunctionInvokingChatClient surface a ToolApprovalRequestContent and
@@ -430,11 +467,10 @@ public sealed partial class InvocationRunner : IInvocationRunner
         ToolApprovalRequestContent? pendingApproval;
 
         // Inter-chunk idle bound for every segment: if the provider stalls between streamed chunks for longer than the
-        // package's StreamIdleTimeoutSeconds the watchdog cancels the send and surfaces a distinct (Timeout-category)
+        // resolved policy's stream-idle timeout the watchdog cancels the send and surfaces a distinct (Timeout-category)
         // failure. A non-positive value disables it (the validator already rejects one for a real package).
-        var streamIdleTimeout = TimeSpan.FromSeconds(package.Timeouts.StreamIdleTimeoutSeconds);
-        var streamIdleTimeoutMessage =
-            $"Streaming stalled: no output received for {package.Timeouts.StreamIdleTimeoutSeconds}s (stream idle timeout).";
+        var streamIdleTimeout = turnPolicy.StreamIdleTimeout;
+        var streamIdleTimeoutMessage = turnPolicy.StreamIdleTimeoutMessage;
 
         // The pre-first-token retry + circuit breaker only guards the FIRST segment's send: once any chunk has streamed
         // (or a later approval-resume segment begins, which by definition follows earlier output) a retry could
@@ -453,7 +489,7 @@ public sealed partial class InvocationRunner : IInvocationRunner
             // iteration this is a cheap passthrough (the seed was already budgeted); on an approval resume it bounds the
             // folded tool-call + approval history. The protected recent turns — which carry the in-flight round — are
             // never trimmed, so a budgeted list is still valid to send.
-            var budgetedMessages = ApplyContextBudget(currentMessages, package, "tool-loop", ref budgetTrimLogged);
+            var budgetedMessages = await ApplyContextBudgetAsync(currentMessages, package, "tool-loop", turnPolicy, transport, budgetGate).ConfigureAwait(false);
             if (!ReferenceEquals(budgetedMessages, currentMessages))
             {
                 currentMessages = budgetedMessages as List<ChatMessage> ?? [.. budgetedMessages];
@@ -534,6 +570,7 @@ public sealed partial class InvocationRunner : IInvocationRunner
                                 var toolName = pendingLocalToolCallNames.TryGetValue(resultCallId, out var name)
                                     ? name
                                     : resultCallId;
+                                var toolResultText = functionResult.Result?.ToString();
 
                                 await transport.Dispatcher.ReportToolCallLifecycleAsync(new ToolCallLifecyclePayload
                                 {
@@ -541,9 +578,22 @@ public sealed partial class InvocationRunner : IInvocationRunner
                                     ToolCallId = resultCallId,
                                     ToolName = toolName,
                                     Phase = ToolCallLifecyclePhase.Completed,
-                                    Result = functionResult.Result?.ToString(),
+                                    Result = toolResultText,
                                     IsError = functionResult.Exception is not null
                                 }).ConfigureAwait(false);
+
+                                // ToolArgumentRepairAIFunction returns this structured result (rather than throwing)
+                                // once a tool is disabled for the rest of the run after repeated invalid-argument
+                                // calls — a silent behavior previously visible only in the tool-result JSON the model
+                                // sees. Surface it to the chat once per tool (further calls to the same disabled tool
+                                // return the identical marker every time).
+                                if (IsToolDisabledResult(toolResultText) && notifiedDisabledTools.Add(toolName))
+                                {
+                                    await transport.EmitNoticeAsync(TurnNoticeKind.ToolDisabled,
+                                        BuildToolDisabledNoticeMessage(toolName),
+                                        toolName).ConfigureAwait(false);
+                                }
+
                                 break;
 
                             case ToolApprovalRequestContent approvalRequest:
@@ -608,10 +658,17 @@ public sealed partial class InvocationRunner : IInvocationRunner
         string resolvedModel,
         StreamTransport transport,
         StreamState stream,
+        TurnPolicy turnPolicy,
         CancellationToken invocationToken)
     {
-        var definition = await BuildOrchestrationDefinitionAsync(package, spec, resolvedModel, invocationToken).ConfigureAwait(false);
-        var seed = BuildChatMessages(package);
+        var definition = await BuildOrchestrationDefinitionAsync(package, spec, resolvedModel, transport, invocationToken).ConfigureAwait(false);
+
+        // Unify with the single-agent path (see TurnPolicy): the workflow seed is budgeted the same way the
+        // single-agent path budgets its initial assembly, so a long conversation cannot silently overrun the window
+        // any participant is launched with. Previously unbudgeted — the workflow ran on the raw seed regardless of
+        // length.
+        var budgetGate = new ContextBudgetNoticeGate();
+        var seed = await ApplyContextBudgetAsync(BuildChatMessages(package), package, "orchestration-seed", turnPolicy, transport, budgetGate).ConfigureAwait(false);
 
         await using var session = await _orchestrationAgentFactory.CreateAsync(definition, seed, invocationToken).ConfigureAwait(false);
 
@@ -936,15 +993,6 @@ public sealed partial class InvocationRunner : IInvocationRunner
         }
     }
 
-    // The tool-result wait budget for a package: its ToolCallTimeoutSeconds when set, else the node-global age. Read
-    // once when the invocation starts and stashed per invocation id so ExecuteApiToolCallAsync can resolve it.
-    private TimeSpan ResolveConfiguredToolResultTimeout(TimeoutSettings timeouts)
-    {
-        return timeouts.ToolCallTimeoutSeconds > 0
-            ? TimeSpan.FromSeconds(timeouts.ToolCallTimeoutSeconds)
-            : _maxPendingToolCallAge;
-    }
-
     private TimeSpan ResolveToolResultTimeout(Guid invocationId)
     {
         return _toolResultTimeoutsByInvocation.TryGetValue(invocationId, out var timeout)
@@ -982,7 +1030,7 @@ public sealed partial class InvocationRunner : IInvocationRunner
         }
     }
 
-    private void RegisterActiveInvocation(Guid invocationId, int timeoutSeconds, CancellationToken cancellationToken)
+    private void RegisterActiveInvocation(Guid invocationId, TimeSpan invocationTimeout, CancellationToken cancellationToken)
     {
         CancellationTokenSource? invocationCancellationTokenSource = null;
 
@@ -999,7 +1047,7 @@ public sealed partial class InvocationRunner : IInvocationRunner
                     }
                 }
             });
-            invocationCancellationTokenSource.CancelAfter(TimeSpan.FromSeconds(timeoutSeconds));
+            invocationCancellationTokenSource.CancelAfter(invocationTimeout);
 
             lock (_syncRoot)
             {

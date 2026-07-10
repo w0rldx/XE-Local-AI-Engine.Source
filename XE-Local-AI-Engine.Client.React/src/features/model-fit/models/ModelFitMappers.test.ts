@@ -11,7 +11,7 @@ import { toLatestRecommendations } from "@/features/model-fit/models/ModelFitMap
 function makeRecDto(
 	overrides: Partial<XeLocalAiEngineClientEndpointsModelFitV1ModelFitRecommendationResponse> = {},
 ): XeLocalAiEngineClientEndpointsModelFitV1ModelFitRecommendationResponse {
-	return { rank: 1, modelName: "qwen3-coder", score: 80, isInstalled: false, ...overrides };
+	return { rank: 1, modelName: "qwen3-coder", score: 80, isInstalled: false, section: "recommended", ...overrides };
 }
 
 function wrapInResponse(

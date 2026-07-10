@@ -29,4 +29,24 @@ public sealed class HuggingFaceOptions
 
     /// <summary>Maximum transient-failure retry attempts for a download before surfacing a network failure.</summary>
     public int MaxDownloadRetries { get; set; } = 4;
+
+    /// <summary>
+    ///     Maximum concurrent GGUF header range reads during a single repo inspection. A repo can ship 10-25 quant
+    ///     variants; bounding concurrency keeps inspection fast without opening unlimited simultaneous HTTP requests.
+    /// </summary>
+    public int HeaderReadConcurrency { get; set; } = 6;
+
+    /// <summary>
+    ///     TTL for cached Hugging Face Hub search listings and per-repo blob listings. Both drift slowly (download/like
+    ///     counts, occasional new commits), so a multi-hour TTL avoids re-fetching on every advisor refresh. A value
+    ///     <c>&lt;= 0</c> disables this cache.
+    /// </summary>
+    public TimeSpan HubMetadataCacheTtl { get; set; } = TimeSpan.FromHours(6);
+
+    /// <summary>
+    ///     TTL for cached GGUF header reads, keyed by repo + filename + resolved revision. A header is immutable for a
+    ///     given resolved revision, so a long TTL is safe; the default effectively never expires within a session. A
+    ///     value <c>&lt;= 0</c> disables this cache.
+    /// </summary>
+    public TimeSpan HeaderCacheTtl { get; set; } = TimeSpan.FromDays(30);
 }

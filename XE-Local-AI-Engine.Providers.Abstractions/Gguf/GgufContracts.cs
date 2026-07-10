@@ -128,6 +128,15 @@ public sealed record GgufRepoSummary(
 ///     Header fields absent from a file are <see langword="null" />. <see cref="Sha256" /> is <see langword="null" />
 ///     when the LFS OID was not exposed (treat as "unavailable, revision-pin only").
 /// </summary>
+/// <param name="ExpertCount">
+///     Total experts (GGUF <c>{arch}.expert_count</c>), when the header was read. A positive value marks the file as
+///     Mixture-of-Experts; <see langword="null" /> for a dense model or when headers were not requested
+///     (<c>ListRepoFilesAsync</c>). Feeds <c>MoeFacts.ExpertCount</c> for the memory-fit estimator's expert-offload split.
+/// </param>
+/// <param name="ExpertUsedCount">
+///     Experts routed per token (GGUF <c>{arch}.expert_used_count</c>), when the header was read; <see langword="null" />
+///     for a dense model or when headers were not requested.
+/// </param>
 public sealed record GgufRepoFile(
     string FileName,
     string Quant,
@@ -141,7 +150,9 @@ public sealed record GgufRepoFile(
     long? AttentionHeadCount,
     long? AttentionHeadCountKV,
     long? EmbeddingLength,
-    long? ContextLength);
+    long? ContextLength,
+    long? ExpertCount = null,
+    long? ExpertUsedCount = null);
 
 /// <summary>One repo's inspected detail: gating, license, and its usable <c>.gguf</c> files.</summary>
 public sealed record GgufRepoDetail(

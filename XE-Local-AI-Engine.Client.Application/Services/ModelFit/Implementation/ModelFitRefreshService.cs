@@ -5,6 +5,7 @@ using System.Text;
 using System.Text.Json;
 using XE_Local_AI_Engine.Client.Persistence;
 using XE_Local_AI_Engine.Client.Persistence.Stores;
+using XE_Local_AI_Engine.Client.Services.ModelFit.Catalog;
 using XE_Local_AI_Engine.Client.Services.ModelFit.Fit;
 using XE_Local_AI_Engine.Client.Services.ModelFit.Validation;
 using XE_Local_AI_Engine.Providers.Abstractions.Capabilities;
@@ -65,6 +66,7 @@ public sealed class ModelFitRefreshService : IModelFitRefreshService
     /// </summary>
     private static readonly TimeSpan PerHuggingFaceCallTimeout = TimeSpan.FromSeconds(20);
 
+    private readonly ICatalogRecommendationService _catalogRecommendationService;
     private readonly IHuggingFaceGgufDiscovery _discovery;
     private readonly MemoryFitEstimator _estimator;
 
@@ -87,6 +89,7 @@ public sealed class ModelFitRefreshService : IModelFitRefreshService
         ModelFitRequestValidator requestValidator,
         IModelFitSnapshotStore snapshotStore,
         IModelFitRecommendationStore recommendationStore,
+        ICatalogRecommendationService catalogRecommendationService,
         TimeProvider timeProvider,
         ILogger<ModelFitRefreshService> logger)
     {
@@ -99,6 +102,7 @@ public sealed class ModelFitRefreshService : IModelFitRefreshService
         _requestValidator = requestValidator ?? throw new ArgumentNullException(nameof(requestValidator));
         _snapshotStore = snapshotStore ?? throw new ArgumentNullException(nameof(snapshotStore));
         _recommendationStore = recommendationStore ?? throw new ArgumentNullException(nameof(recommendationStore));
+        _catalogRecommendationService = catalogRecommendationService ?? throw new ArgumentNullException(nameof(catalogRecommendationService));
         _timeProvider = timeProvider ?? throw new ArgumentNullException(nameof(timeProvider));
         _logger = logger ?? throw new ArgumentNullException(nameof(logger));
     }
@@ -260,9 +264,10 @@ public sealed class ModelFitRefreshService : IModelFitRefreshService
     }
 
     /// <summary>
-    ///     Discovers candidate GGUF repos, inspects their files, estimates each file's fit at the chosen quant, drops the
-    ///     non-fitting / insufficient-metadata files, and ranks the survivors by descending headroom (best fit first),
-    ///     capped at the request limit.
+    ///     Builds the merged recommendation set: the curated catalog lane (PRIMARY — "recommended" / "canRun" sections,
+    ///     locked decision D1/D2) followed by the existing live Hugging Face discovery lane, now demoted to a secondary
+    ///     "explore" section. A catalog-lane failure never fails the whole refresh — the explore lane still succeeds on
+    ///     its own (see <see cref="BuildCatalogRecommendationsAsync" />).
     /// </summary>
     private async Task<IReadOnlyList<AdvisorRecommendation>> BuildRecommendationsAsync(ModelFitRefreshRequest request,
         string quant,
@@ -270,12 +275,90 @@ public sealed class ModelFitRefreshService : IModelFitRefreshService
         HardwareProfile profile,
         CancellationToken cancellationToken)
     {
+        // Which models are already downloaded (best-effort: a registry failure just marks all as not-installed).
+        var installedKeys = await ListInstalledKeysAsync(cancellationToken).ConfigureAwait(false);
+
+        var catalogRecommendations = await BuildCatalogRecommendationsAsync(request, quant, ctxTarget, profile, installedKeys, cancellationToken)
+                                          .ConfigureAwait(false);
+        var exploreRecommendations = await BuildExploreRecommendationsAsync(request, quant, ctxTarget, profile, installedKeys, cancellationToken)
+                                          .ConfigureAwait(false);
+
+        return [.. catalogRecommendations, .. exploreRecommendations];
+    }
+
+    /// <summary>
+    ///     Runs the catalog ranking lane and maps its "Recommended" / "Can run" sections (each already ordered per plan
+    ///     §7) to <see cref="AdvisorRecommendation" /> rows, each capped at the request limit. Any failure (catalog
+    ///     provider / discovery / estimator) is caught and logged — the catalog lane degrading to empty must never fail
+    ///     the run, since the explore lane alone is still a useful recommendation set.
+    /// </summary>
+    private async Task<IReadOnlyList<AdvisorRecommendation>> BuildCatalogRecommendationsAsync(ModelFitRefreshRequest request,
+        string quant,
+        int ctxTarget,
+        HardwareProfile profile,
+        HashSet<string> installedKeys,
+        CancellationToken cancellationToken)
+    {
+        try
+        {
+            var result = await _catalogRecommendationService
+                               .BuildRecommendationsAsync(request.UseCase, quant, ctxTarget, profile, installedKeys, cancellationToken)
+                               .ConfigureAwait(false);
+
+            var recommended = result.Recommended.Take(request.Limit).Select(candidate => ToAdvisorRecommendation(candidate, "recommended"));
+            var canRun = result.CanRun.Take(request.Limit).Select(candidate => ToAdvisorRecommendation(candidate, "canRun"));
+            return [.. recommended, .. canRun];
+        }
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+        {
+            throw;
+        }
+        catch (Exception exception) when (exception is HttpRequestException or IOException or TimeoutException or InvalidOperationException)
+        {
+            _logger.LogWarning(exception, "Catalog recommendation lane failed; the run continues with the explore lane only.");
+            return [];
+        }
+    }
+
+    private static AdvisorRecommendation ToAdvisorRecommendation(CatalogRecommendationCandidate candidate, string section)
+    {
+        var entry = candidate.Entry;
+        var releaseDate = DateOnly.TryParse(entry.ReleaseDate, CultureInfo.InvariantCulture, out var parsed)
+            ? new DateTimeOffset(parsed.ToDateTime(TimeOnly.MinValue), TimeSpan.Zero)
+            : default;
+
+        return new AdvisorRecommendation(entry.GgufRepo,
+            candidate.ModelName,
+            candidate.File.FileName,
+            candidate.File.Quant,
+            candidate.Estimate,
+            candidate.IsInstalled,
+            GgufPublisherTrust.IsTrustedPublisher(entry.GgufRepo),
+            Downloads: 0,
+            releaseDate,
+            section,
+            entry.Tier,
+            entry.Id,
+            entry.DisplayName,
+            entry.Notes);
+    }
+
+    /// <summary>
+    ///     Discovers candidate GGUF repos, inspects their files, estimates each file's fit at the chosen quant, drops the
+    ///     non-fitting / insufficient-metadata files, and ranks the survivors by descending headroom (best fit first),
+    ///     capped at the request limit. This is the secondary "explore" section (locked decision D2) — the catalog lane
+    ///     is now the primary recommendation source.
+    /// </summary>
+    private async Task<IReadOnlyList<AdvisorRecommendation>> BuildExploreRecommendationsAsync(ModelFitRefreshRequest request,
+        string quant,
+        int ctxTarget,
+        HardwareProfile profile,
+        HashSet<string> installedKeys,
+        CancellationToken cancellationToken)
+    {
         // Discover candidate repos by the use-case's mapped search terms (see ModelFitUseCaseSearch — the literal
         // use-case word under-matches the Hub), merged + de-duped and capped to the inspection budget.
         var repos = await SearchCandidateReposAsync(request.UseCase, cancellationToken).ConfigureAwait(false);
-
-        // Which models are already downloaded (best-effort: a registry failure just marks all as not-installed).
-        var installedKeys = await ListInstalledKeysAsync(cancellationToken).ConfigureAwait(false);
 
         // Inspect the repos in parallel with bounded concurrency. Each inspection is independent; a stalled or failing
         // repo is skipped (null candidate) inside the body so it never reaches the caller's outer catch and never fails
@@ -500,7 +583,8 @@ public sealed class ModelFitRefreshService : IModelFitRefreshService
             installedKeys.Contains(modelName),
             summary.IsTrustedPublisher,
             summary.Downloads,
-            summary.LastModified);
+            summary.LastModified,
+            Section: "explore");
     }
 
     /// <summary>
@@ -612,6 +696,39 @@ public sealed class ModelFitRefreshService : IModelFitRefreshService
                 writer.WriteString("repo_id", recommendation.RepoId);
                 writer.WriteString("file_name", recommendation.FileName);
                 writer.WriteBoolean("installed", recommendation.IsInstalled);
+
+                // Catalog-lane fields (locked decision D1/D2): section splits the response into the primary
+                // recommended/canRun catalog rows vs. the secondary explore (live-HF) rows; tier/catalog metadata are
+                // null for an explore row. expert_offload/gpu_gb/cpu_gb surface the MoE expert-offload split (D3) so
+                // the UI can label a model honestly ("experts on CPU — slower, higher quality") instead of showing a
+                // bare fit verdict.
+                writer.WriteString("section", recommendation.Section);
+                if (recommendation.Tier is not null)
+                {
+                    writer.WriteString("tier", recommendation.Tier);
+                }
+
+                if (recommendation.CatalogId is not null)
+                {
+                    writer.WriteString("catalog_id", recommendation.CatalogId);
+                }
+
+                if (recommendation.CatalogDisplayName is not null)
+                {
+                    writer.WriteString("catalog_display_name", recommendation.CatalogDisplayName);
+                }
+
+                if (recommendation.CatalogNotes is not null)
+                {
+                    writer.WriteString("catalog_notes", recommendation.CatalogNotes);
+                }
+
+                writer.WriteBoolean("expert_offload", estimate.ExpertsOffloaded);
+                if (estimate is { ExpertsOffloaded: true, GpuBytes: not null, CpuBytes: not null })
+                {
+                    writer.WriteNumber("gpu_gb", Math.Round(estimate.GpuBytes.Value / (double)(1024 * 1024 * 1024), digits: 3));
+                    writer.WriteNumber("cpu_gb", Math.Round(estimate.CpuBytes.Value / (double)(1024 * 1024 * 1024), digits: 3));
+                }
                 // Recency + trust boosts surfaced to the UI. release_date carries the repo's last-modified timestamp (a
                 // "newer model" signal); the parser preserves both in the recommendation diagnostics blob (no new column).
                 // Only emit a date when HF actually supplied one — a default(DateTimeOffset) would surface as a year-0001
@@ -650,6 +767,15 @@ public sealed class ModelFitRefreshService : IModelFitRefreshService
     ///     "newer model" recency signal). Downloads / trust / recency are ranking boosts carried from the search summary —
     ///     none excludes a candidate.
     /// </summary>
+    /// <param name="Section">
+    ///     Which recommendation section this row belongs to: <c>"recommended"</c> / <c>"canRun"</c> (catalog lane,
+    ///     primary) or <c>"explore"</c> (live Hugging Face discovery lane, secondary — the default for the pre-existing
+    ///     construction sites).
+    /// </param>
+    /// <param name="Tier">The catalog entry's editorial tier (S/A/B), or <see langword="null" /> for an explore-lane row.</param>
+    /// <param name="CatalogId">The catalog entry id, or <see langword="null" /> for an explore-lane row.</param>
+    /// <param name="CatalogDisplayName">The catalog entry's curated display name, or <see langword="null" /> for an explore-lane row.</param>
+    /// <param name="CatalogNotes">The catalog entry's optional user-facing note, or <see langword="null" /> when absent/not-catalog.</param>
     private sealed record AdvisorRecommendation(
         string RepoId,
         string ModelName,
@@ -659,5 +785,10 @@ public sealed class ModelFitRefreshService : IModelFitRefreshService
         bool IsInstalled,
         bool IsTrustedPublisher,
         long Downloads,
-        DateTimeOffset LastModified);
+        DateTimeOffset LastModified,
+        string Section = "explore",
+        string? Tier = null,
+        string? CatalogId = null,
+        string? CatalogDisplayName = null,
+        string? CatalogNotes = null);
 }

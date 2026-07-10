@@ -42,7 +42,7 @@ internal sealed record class AgentDefinition
     /// <summary>JSON map of tool name to required-approval flag. Plaintext (structural).</summary>
     public string ToolApprovalsJson { get; set; } = "{}";
 
-    /// <summary>Orchestration topology JSON. Persisted but ignored by the current single-agent runtime (orchestration execution is not wired yet). Plaintext.</summary>
+    /// <summary>Orchestration topology JSON for a <c>Kind=Orchestrator</c> definition, compiled by the application-layer orchestration resolver into the loopback runtime graph. Plaintext.</summary>
     public string? OrchestrationTopologyJson { get; set; }
 
     /// <summary>
@@ -51,6 +51,15 @@ internal sealed record class AgentDefinition
     ///     because the injected playbook content drives the runtime package config hash directly.
     /// </summary>
     public bool PlaybookEnabled { get; set; }
+
+    /// <summary>
+    ///     Opt-out for the versioned, app-owned base instruction scaffold (identity/grounding/tool/output discipline)
+    ///     normally prepended ahead of this definition's <see cref="Instructions" /> when composing the resolved
+    ///     prompt. Plaintext (structural). Default <c>false</c> (scaffold ON). Non-config-affecting for this
+    ///     definition's own <see cref="Version" /> bump — like <see cref="PlaybookEnabled" /> — because toggling it
+    ///     changes the resolved prompt directly, which already drives the runtime package config hash.
+    /// </summary>
+    public bool DisableBaseScaffold { get; set; }
 
     /// <summary>
     ///     Per-agent default for the temporary-chat (memory write-only-suppression) flag a new conversation inherits.

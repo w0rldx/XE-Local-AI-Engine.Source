@@ -38,6 +38,14 @@ public sealed class CreateAgentDefinitionRequest
     /// </summary>
     public bool MemoryExtractionEnabled { get; init; } = true;
 
+    /// <summary>
+    ///     Opts this definition OUT of the versioned base instruction scaffold normally prepended ahead of
+    ///     <see cref="Instructions" /> when composing the resolved prompt. Defaults to <c>false</c> (scaffold ON).
+    ///     Additive; changing it is NOT config-affecting for this definition's own version — the resulting prompt
+    ///     change already drives the runtime config hash directly.
+    /// </summary>
+    public bool DisableBaseScaffold { get; init; }
+
     /// <summary>The per-agent skill picklist — skill ids (Guids) selected into this agent for MAF progressive disclosure.</summary>
     public IReadOnlyList<Guid>? AllowedSkillIds { get; init; }
 }
@@ -79,6 +87,14 @@ public sealed class UpdateAgentDefinitionRequest
     ///     Additive and non-config-affecting — like <see cref="PlaybookEnabled" />, it never enters the runtime config hash.
     /// </summary>
     public bool MemoryExtractionEnabled { get; init; } = true;
+
+    /// <summary>
+    ///     Opts this definition OUT of the versioned base instruction scaffold normally prepended ahead of
+    ///     <see cref="Instructions" /> when composing the resolved prompt. Defaults to <c>false</c> (scaffold ON).
+    ///     Additive; changing it is NOT config-affecting for this definition's own version — the resulting prompt
+    ///     change already drives the runtime config hash directly.
+    /// </summary>
+    public bool DisableBaseScaffold { get; init; }
 
     /// <summary>The per-agent skill picklist — skill ids (Guids) selected into this agent for MAF progressive disclosure.</summary>
     public IReadOnlyList<Guid>? AllowedSkillIds { get; init; }
@@ -127,6 +143,9 @@ public sealed class AgentDefinitionResponse
 
     /// <summary>Whether this agent mines its completed runs into new candidate memories; false = retrieval-only (adaptive memory).</summary>
     public required bool MemoryExtractionEnabled { get; init; }
+
+    /// <summary>Whether this definition opts out of the versioned base instruction scaffold. False (the default) means the scaffold is prepended.</summary>
+    public required bool DisableBaseScaffold { get; init; }
 
     /// <summary>The per-agent skill picklist (skill ids). Always present; empty when no skills are assigned.</summary>
     public required IReadOnlyList<Guid> AllowedSkillIds { get; init; }

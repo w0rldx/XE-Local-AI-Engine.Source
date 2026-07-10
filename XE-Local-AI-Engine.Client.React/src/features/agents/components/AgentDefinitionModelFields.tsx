@@ -1,4 +1,4 @@
-import { Group, Select, Stack, Switch } from "@mantine/core";
+import { Divider, Group, Select, Stack, Switch } from "@mantine/core";
 import { useCallback, useMemo } from "react";
 import { useTranslation } from "react-i18next";
 
@@ -152,6 +152,20 @@ export function AgentDefinitionModelFields({ values, modelOptions, onFieldChange
 					data-testid="agent-form-memory-extraction-enabled"
 				/>
 			) : null}
+			<Divider label={t("pages.agents.form.advanced.label", "Advanced")} labelPosition="left" mt="sm" />
+			<Switch
+				label={t("pages.agents.form.disableBaseScaffold.label", "Disable base instructions scaffold")}
+				description={t(
+					"pages.agents.form.disableBaseScaffold.description",
+					"Skip the layered base instructions this node normally prepends to every agent — use only the instructions written above, unmodified.",
+				)}
+				checked={values.disableBaseScaffold}
+				onChange={(event) => {
+					const checked = event.currentTarget.checked;
+					onFieldChange((current) => ({ ...current, disableBaseScaffold: checked }));
+				}}
+				data-testid="agent-form-disable-base-scaffold"
+			/>
 		</Stack>
 	);
 }

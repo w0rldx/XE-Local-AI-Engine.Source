@@ -26,8 +26,9 @@ internal sealed class GgufHeaderReader
     private readonly HttpClient _httpClient;
     private readonly ILogger<GgufHeaderReader> _logger;
     private readonly HuggingFaceOptions _options;
+    private readonly TtlCache<GgufHeaderMetadata> _headerCache;
 
-    public GgufHeaderReader(HttpClient httpClient, HuggingFaceOptions options, ILogger<GgufHeaderReader> logger)
+    public GgufHeaderReader(HttpClient httpClient, HuggingFaceOptions options, ILogger<GgufHeaderReader> logger, TimeProvider? timeProvider = null)
     {
         ArgumentNullException.ThrowIfNull(httpClient);
         ArgumentNullException.ThrowIfNull(options);
@@ -36,19 +37,29 @@ internal sealed class GgufHeaderReader
         _httpClient = httpClient;
         _options = options;
         _logger = logger;
+        _headerCache = new TtlCache<GgufHeaderMetadata>(timeProvider);
     }
 
     /// <summary>
     ///     Range-reads the GGUF header from <paramref name="repoId" />/<paramref name="fileName" /> at
     ///     <paramref name="revision" /> and extracts the standardized metadata. Never throws on a missing optional key,
-    ///     a short read, or a non-GGUF file — returns an all-null <see cref="GgufHeaderMetadata" /> instead.
+    ///     a short read, or a non-GGUF file — returns an all-null <see cref="GgufHeaderMetadata" /> instead. Cached for
+    ///     <see cref="HuggingFaceOptions.HeaderCacheTtl" />, keyed by repo + filename + resolved revision — a header is
+    ///     immutable for a given resolved revision, so once read it never needs a second range request.
     /// </summary>
-    public async Task<GgufHeaderMetadata> ReadHeaderAsync(string repoId, string fileName, string revision, CancellationToken ct)
+    public Task<GgufHeaderMetadata> ReadHeaderAsync(string repoId, string fileName, string revision, CancellationToken ct)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(repoId);
         ArgumentException.ThrowIfNullOrWhiteSpace(fileName);
 
         var rev = string.IsNullOrWhiteSpace(revision) ? "main" : revision;
+        var cacheKey = $"{repoId}::{fileName}::{rev}";
+
+        return _headerCache.GetOrAddAsync(cacheKey, _options.HeaderCacheTtl, token => FetchHeaderAsync(repoId, fileName, rev, token), ct);
+    }
+
+    private async Task<GgufHeaderMetadata> FetchHeaderAsync(string repoId, string fileName, string rev, CancellationToken ct)
+    {
         var url = $"{_options.DownloadBaseUrl.TrimEnd('/')}/{repoId}/resolve/{rev}/{fileName}";
 
         var probe = _options.HeaderProbeBytes > 0 ? _options.HeaderProbeBytes : 4L * 1024 * 1024;
@@ -258,6 +269,10 @@ internal sealed class GgufHeaderReader
         // so the optimizer measures MoE throughput empirically rather than predicting it.
         var expertCount = TryGetLong(values, Arch("expert_count"));
 
+        // Active experts routed per token (e.g. <arch>.expert_used_count = 2 of 8 for a top-2 MoE gate). Combined with
+        // expert_count this drives the memory-fit estimator's expert-offload split; null for dense models.
+        var expertUsedCount = TryGetLong(values, Arch("expert_used_count"));
+
         // The Jinja chat template (when present) reveals the model's real tool / reasoning surface for capability
         // detection. Architecture-independent key; null when the GGUF was written without one (a raw base model).
         var chatTemplate = GetString(values, "tokenizer.chat_template");
@@ -271,7 +286,8 @@ internal sealed class GgufHeaderReader
             embeddingLength,
             contextLength,
             chatTemplate,
-            expertCount);
+            expertCount,
+            expertUsedCount);
     }
 
     private static string? GetString(IReadOnlyDictionary<string, object> values, string key)
@@ -588,10 +604,11 @@ internal sealed record GgufHeaderMetadata(
     long? EmbeddingLength,
     long? ContextLength,
     string? ChatTemplate,
-    long? ExpertCount)
+    long? ExpertCount,
+    long? ExpertUsedCount)
 {
     public static GgufHeaderMetadata Empty { get; } = new(Architecture: null, QuantType: null, ParamCount: null, BlockCount: null, AttentionHeadCount: null, AttentionHeadCountKV: null,
-        EmbeddingLength: null, ContextLength: null, ChatTemplate: null, ExpertCount: null);
+        EmbeddingLength: null, ContextLength: null, ChatTemplate: null, ExpertCount: null, ExpertUsedCount: null);
 
     /// <summary>True when the GGUF declares a positive expert count — a Mixture-of-Experts model (dense models omit it).</summary>
     public bool IsMoe => ExpertCount is > 0;

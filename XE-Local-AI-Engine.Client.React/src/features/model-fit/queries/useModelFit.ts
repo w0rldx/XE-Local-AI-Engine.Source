@@ -3,10 +3,12 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
 	getHardwareProfileOptions,
 	getLatestRecommendationsOptions,
+	getModelCatalogInfoOptions,
+	refreshModelCatalogMutation,
 	refreshRecommendationsMutation,
 } from "@/core/api/generated/@tanstack/react-query.gen";
 import { withResponseValidation } from "@/core/api/ResponseValidation";
-import { toHardwareProfile, toLatestRecommendations } from "@/features/model-fit/models/ModelFitMappers";
+import { toHardwareProfile, toLatestRecommendations, toModelFitCatalogInfo } from "@/features/model-fit/models/ModelFitMappers";
 import type { ModelFitRecommendationFilters, ModelFitUseCase } from "@/features/model-fit/models/ModelFitModels";
 
 // Server state for the model-fit advisor surface. Reads use the generated hey-api `*Options()` (which wire the
@@ -27,6 +29,7 @@ import type { ModelFitRecommendationFilters, ModelFitUseCase } from "@/features/
 // literal `_id` key — which trips biome's naming-convention rule — is constructed in exactly one place.
 export const modelFitQueryIds = {
 	latest: "getLatestRecommendations",
+	catalog: "getModelCatalogInfo",
 } as const;
 
 /** Builds the partial generated-query-key filter that matches every cached variant of one model-fit endpoint. */
@@ -78,5 +81,28 @@ export function useRefreshRecommendations() {
 			await options.mutationFn?.({ body: { ...variables } }, undefined as never);
 		},
 		onSuccess: () => queryClient.invalidateQueries({ queryKey: modelFitInvalidationKey(modelFitQueryIds.latest) }),
+	});
+}
+
+// The curated model catalog's metadata (version, source, freshness). Read-only; cache-only like the other model-fit
+// reads above.
+export function useModelFitCatalog() {
+	return useQuery({
+		...withResponseValidation(getModelCatalogInfoOptions()),
+		select: toModelFitCatalogInfo,
+	});
+}
+
+// Triggers a live re-fetch of the curated model catalog (no request body). On success it invalidates the catalog
+// query so the page re-reads the refreshed version/source/freshness.
+export function useRefreshModelFitCatalog() {
+	const queryClient = useQueryClient();
+
+	return useMutation({
+		mutationFn: async () => {
+			const options = withResponseValidation(refreshModelCatalogMutation());
+			return await options.mutationFn?.({}, undefined as never);
+		},
+		onSuccess: () => queryClient.invalidateQueries({ queryKey: modelFitInvalidationKey(modelFitQueryIds.catalog) }),
 	});
 }

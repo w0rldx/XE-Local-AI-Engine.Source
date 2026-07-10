@@ -27,4 +27,5 @@ public sealed record AgentDefinitionRecord(
     string? SeedSlug = null,
     IReadOnlyList<Guid>? AllowedSkillIds = null,
     bool DefaultTemporaryChat = false,
-    bool MemoryExtractionEnabled = true);
+    bool MemoryExtractionEnabled = true,
+    bool DisableBaseScaffold = false);
