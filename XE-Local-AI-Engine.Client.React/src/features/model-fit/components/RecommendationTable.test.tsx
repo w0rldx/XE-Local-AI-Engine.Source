@@ -223,12 +223,36 @@ describe("RecommendationTable", () => {
 		expect(screen.getByTestId("model-fit-recommendations-pagination")).toBeTruthy();
 	});
 
-	it("renders the release date for a row that has one", () => {
+	it("renders the release date as a locale-formatted, date-only value with the raw ISO string as the cell tooltip", () => {
 		const dated = makeRecommendation({ rank: 1, isInstalled: true, pullModelName: "dated:latest", releaseDate: "2026-01-15" });
 
 		renderTable(<RecommendationTable recommendations={[dated]} />);
 
-		expect(screen.getByText("2026-01-15")).toBeTruthy();
+		// Formatted (not the raw ISO string), and the raw value is preserved on the cell's title/tooltip attribute.
+		const cell = screen.getByText("Jan 15, 2026");
+		expect(cell).toBeTruthy();
+		expect(screen.queryByText("2026-01-15")).toBeNull();
+		expect(cell.closest("td")?.getAttribute("title")).toBe("2026-01-15");
+	});
+
+	it("renders a date-only ISO release date without shifting a day for the local time zone", () => {
+		// "2025-03-12" must render as March 12 regardless of the viewer's offset — parsing it via `new Date("2025-03-12")`
+		// (UTC midnight) would show March 11 in negative-offset zones. The formatter parses the calendar parts instead.
+		const dated = makeRecommendation({ rank: 1, isInstalled: true, pullModelName: "dated:latest", releaseDate: "2025-03-12" });
+
+		renderTable(<RecommendationTable recommendations={[dated]} />);
+
+		expect(screen.getByText("Mar 12, 2025")).toBeTruthy();
+	});
+
+	it("falls back to the empty placeholder for an unparsable release date instead of 'Invalid Date'", () => {
+		const bad = makeRecommendation({ rank: 1, isInstalled: true, pullModelName: "bad:latest", releaseDate: "not-a-date" });
+
+		renderTable(<RecommendationTable recommendations={[bad]} />);
+
+		expect(screen.queryByText("Invalid Date")).toBeNull();
+		// The Released cell shows the same em-dash placeholder the table uses for absent values.
+		expect(screen.getByTestId("model-fit-recommendation-row-1").textContent).toContain("—");
 	});
 
 	it("shows a tier badge for a row with a catalog tier and none for a row without one", () => {
