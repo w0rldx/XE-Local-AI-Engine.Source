@@ -35,14 +35,19 @@ internal sealed class ToolInvocationObservabilityChatClient : DelegatingChatClie
         [EnumeratorCancellation]
         CancellationToken cancellationToken = default)
     {
+        // One logical tool call streams across many updates (its argument fragments share a single CallId). Track the
+        // CallIds already logged for THIS streaming request so each call yields exactly one log line and one span,
+        // instead of a near-zero-duration span and a repeated log per streamed fragment.
+        var loggedCallIds = new HashSet<string>(StringComparer.Ordinal);
+
         await foreach (var update in base.GetStreamingResponseAsync(messages, options, cancellationToken).ConfigureAwait(false))
         {
-            LogToolInvocations(update.Contents);
+            LogToolInvocations(update.Contents, loggedCallIds);
             yield return update;
         }
     }
 
-    private void LogToolInvocations(IList<AIContent>? contents)
+    private void LogToolInvocations(IList<AIContent>? contents, HashSet<string>? loggedCallIds = null)
     {
         if (contents is null || contents.Count == 0)
         {
@@ -51,6 +56,13 @@ internal sealed class ToolInvocationObservabilityChatClient : DelegatingChatClie
 
         foreach (var functionCall in contents.OfType<FunctionCallContent>())
         {
+            // Streaming path only: skip a CallId already logged for this request so one call is not spanned per
+            // fragment. The non-streaming path passes no set (each call appears once in a complete response).
+            if (loggedCallIds is not null && !loggedCallIds.Add(functionCall.CallId))
+            {
+                continue;
+            }
+
             using var activity = AgentActivitySource.Instance.StartActivity("AgentRun.ToolInvocation");
             activity?.SetTag("tool.call_id", functionCall.CallId);
             activity?.SetTag("tool.name", functionCall.Name);

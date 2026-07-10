@@ -19,6 +19,8 @@ internal static class AddNodeChatExtensions
         builder.Services.AddSingleton<IInvocationResumeRegistry, InvocationResumeRegistry>();
         builder.Services.AddSingleton<IGgufModelCapabilityResolver, GgufModelCapabilityResolver>();
         builder.Services.AddScoped<ILocalDefaultChatModelResolver, LocalDefaultChatModelResolver>();
+        builder.Services.AddScoped<ChatTurnResolver>();
+        builder.Services.AddScoped<ChatInvocationStatePump>();
         builder.Services.AddScoped<INodeChatStreamService, NodeChatStreamService>();
         builder.Services.AddScoped<INodeChatRegenerationService, NodeChatRegenerationService>();
         builder.Services.AddSingleton<NodeChatRestartRecoveryService>();
