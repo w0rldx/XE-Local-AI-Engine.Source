@@ -225,6 +225,28 @@ public sealed class InvocationRunnerTests
     }
 
     [Test]
+    public async Task RunAsync_WhenUsageTokenCountExceedsInt32_SaturatesInsteadOfFaulting()
+    {
+        var sender = new MockHubMessageSender();
+        var runner = CreateRunner(sender, agentUpdates: CreateUpdatesWithUsage((Text: "Hello", Usage: new UsageDetails
+        {
+            // A provider reporting a count past int.MaxValue must clamp, not throw mid-stream and fail the invocation.
+            InputTokenCount = (long)int.MaxValue + 100,
+            OutputTokenCount = 5,
+            TotalTokenCount = (long)int.MaxValue + 105
+        })));
+        var package = RuntimePackageBuilder.Valid().Build();
+
+        await RunPlainAsync(runner, package);
+
+        AssertEx.Empty(sender.SentFailures);
+        AssertEx.Equal(expected: 1, sender.SentCompletions.Count);
+        AssertEx.Equal(expected: int.MaxValue, sender.SentCompletions[0].InputTokens);
+        AssertEx.Equal(expected: 5, sender.SentCompletions[0].OutputTokens);
+        AssertEx.Equal(expected: int.MaxValue, sender.SentCompletions[0].TokensUsed);
+    }
+
+    [Test]
     public async Task RunAsync_WhenPlainContextAndAgentRuntimeThrows_SendsPlainInvocationFailed()
     {
         var sender = new MockHubMessageSender();
@@ -744,7 +766,9 @@ public sealed class InvocationRunnerTests
         var runner = CreateRunner(sender, factory, eventDispatcher: dispatcher);
         var invocationId = Guid.NewGuid();
 
-        var runTask = RunAsync(runner, RuntimePackageBuilder.Valid().WithInvocationId(invocationId).Build());
+        // The package must offer a tool: an approval request can only surface for a tool-bearing turn, and the runner
+        // only retains the segment updates it folds on resume when the offer list is non-empty (see approvalPossible).
+        var runTask = RunAsync(runner, RuntimePackageBuilder.Valid().WithInvocationId(invocationId).WithAllowedTool("run_in_agent_home").Build());
         await AssertEx.EventuallyAsync(() => sender.SentApprovals.Count == 1, TimeSpan.FromSeconds(5));
 
         var requestId = sender.SentApprovals.Single().RequestId;
