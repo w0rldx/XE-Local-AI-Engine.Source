@@ -7,9 +7,8 @@ using XE_Local_AI_Engine.AI.Agent.Configuration;
 internal sealed class AgentInstructionProvider : IAgentInstructionProvider
 {
     // App-owned, not tenant-configurable (unlike LocalChatAgentOptions.InstructionsResource): the scaffold is the
-    // same versioned boilerplate for every node, so it is not surfaced as a settable option.
+    // same boilerplate for every node, so it is not surfaced as a settable option.
     private const string BaseScaffoldResourceName = "XE_Local_AI_Engine.AI.Agent.Instructions.BaseScaffold.txt";
-    private const int BaseScaffoldVersion = 1;
 
     private readonly IOptions<LocalChatAgentOptions> _localChatOptions;
 
@@ -17,8 +16,6 @@ internal sealed class AgentInstructionProvider : IAgentInstructionProvider
     {
         _localChatOptions = localChatOptions ?? throw new ArgumentNullException(nameof(localChatOptions));
     }
-
-    public int ScaffoldVersion => BaseScaffoldVersion;
 
     public string GetLocalChatInstructions()
     {
