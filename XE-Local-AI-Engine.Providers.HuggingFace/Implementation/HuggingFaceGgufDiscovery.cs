@@ -1,5 +1,6 @@
 namespace XE_Local_AI_Engine.Providers.HuggingFace.Implementation;
 
+using System.Text.RegularExpressions;
 using Microsoft.Extensions.Logging;
 using XE_Local_AI_Engine.Providers.Abstractions.Gguf;
 using XE_Local_AI_Engine.Providers.HuggingFace.Options;
@@ -21,7 +22,7 @@ using XE_Local_AI_Engine.Providers.HuggingFace.Options;
 ///     TTL caching (<see cref="HfHubClient" />, <see cref="GgufHeaderReader" />) deliver the same latency win without that
 ///     behavior change.
 /// </remarks>
-internal sealed class HuggingFaceGgufDiscovery : IHuggingFaceGgufDiscovery
+internal sealed partial class HuggingFaceGgufDiscovery : IHuggingFaceGgufDiscovery
 {
     private const string GgufExtension = ".gguf";
     private readonly GgufHeaderReader _headerReader;
@@ -119,6 +120,8 @@ internal sealed class HuggingFaceGgufDiscovery : IHuggingFaceGgufDiscovery
             usable.Add((file, GgufQuantParser.TryParse(file.FileName)!));
         }
 
+        usable = GroupShards(usable);
+
         var headers = includeHeaderMetadata
             ? await ReadHeadersAsync(detail.RepoId, detail.Revision, usable, ct).ConfigureAwait(false)
             : null;
@@ -175,6 +178,74 @@ internal sealed class HuggingFaceGgufDiscovery : IHuggingFaceGgufDiscovery
 
         await Task.WhenAll(reads).ConfigureAwait(false);
         return results;
+    }
+
+    // llama.cpp's split-GGUF naming convention for a model too large for one file: "<base>-00001-of-00003.gguf".
+    // Only the FIRST split carries the full GGUF metadata header (architecture, context length, etc.); later
+    // splits are raw tensor-data continuations with no header of their own and are never independently loadable.
+    // Verified live 2026-07-10: Qwen/Qwen2.5-Coder-14B-Instruct-GGUF ships Q4_K_M as two splits (8.0GB + 0.99GB) —
+    // treating them as independent candidates let the advisor pick the 0.99GB second split alone and under-estimate
+    // a 14B model's footprint at ~1.8GB.
+    [GeneratedRegex(@"^(?<base>.+)-(?<part>\d{5})-of-(?<total>\d{5})\.gguf$",
+        RegexOptions.IgnoreCase | RegexOptions.CultureInvariant,
+        matchTimeoutMilliseconds: 2000)]
+    private static partial Regex ShardSuffixRegex();
+
+    // Collapses each split-GGUF group into ONE candidate (representative = the lowest-numbered split, size = the
+    // sum of every split in the group) and drops a split group entirely when a merged single-file variant of the
+    // same quant is also present (dedupe by quant, prefer the non-sharded file). Non-split files pass through
+    // untouched. Applied once, right after usability filtering, so every consumer of GgufRepoFile
+    // (ListRepoFilesAsync, InspectRepoAsync, and — through them — the advisor and the model catalog) sees one
+    // candidate per logical model+quant, never a bare, unloadable split fragment.
+    private static List<(HfHubClient.HubRepoFile File, string Quant)> GroupShards(List<(HfHubClient.HubRepoFile File, string Quant)> usable)
+    {
+        var plain = new List<(HfHubClient.HubRepoFile File, string Quant)>();
+        var shardGroups = new Dictionary<string, List<(HfHubClient.HubRepoFile File, string Quant, string Part)>>(StringComparer.OrdinalIgnoreCase);
+
+        foreach (var entry in usable)
+        {
+            var match = ShardSuffixRegex().Match(entry.File.FileName);
+            if (!match.Success)
+            {
+                plain.Add(entry);
+                continue;
+            }
+
+            var baseName = match.Groups["base"].Value;
+            if (!shardGroups.TryGetValue(baseName, out var group))
+            {
+                group = [];
+                shardGroups[baseName] = group;
+            }
+
+            group.Add((entry.File, entry.Quant, match.Groups["part"].Value));
+        }
+
+        if (shardGroups.Count == 0)
+        {
+            return usable;
+        }
+
+        // Fixed-width (5-digit) zero-padded part numbers sort correctly under ordinal string comparison, so no
+        // int.Parse is needed to find the lowest-numbered (first) split.
+        var plainQuants = plain.Select(static p => p.Quant).ToHashSet(StringComparer.Ordinal);
+        var result = new List<(HfHubClient.HubRepoFile File, string Quant)>(plain.Count + shardGroups.Count);
+        result.AddRange(plain);
+
+        foreach (var group in shardGroups.Values)
+        {
+            var representative = group.OrderBy(static g => g.Part, StringComparer.Ordinal).First();
+            if (plainQuants.Contains(representative.Quant))
+            {
+                // A merged single-file variant of the same quant already exists — prefer it, drop the split group.
+                continue;
+            }
+
+            var totalSize = group.Sum(static g => g.File.SizeBytes);
+            result.Add((representative.File with { SizeBytes = totalSize }, representative.Quant));
+        }
+
+        return result;
     }
 
     private static bool IsUsableGgufFile(string fileName)
