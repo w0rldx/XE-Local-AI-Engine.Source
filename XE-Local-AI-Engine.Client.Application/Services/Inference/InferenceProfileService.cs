@@ -218,22 +218,27 @@ public sealed class InferenceProfileService : IInferenceProfileService
             return ProfileActionResult.Fail($"Profile {profileId} is {profile.Status}; only an Explored profile can be frozen.");
         }
 
-        // The freeze gate: a successful benchmark is the only justification.
-        var benchmark = await _snapshotStore.GetLatestSuccessfulSummaryAsync(ModelFitOperation.Benchmark,
-                                                useCase: null,
-                                                providerName: ProviderName,
-                                                modelName: profile.ModelName,
-                                                ct)
-                                            .ConfigureAwait(false);
+        // The freeze gate binds to the EXACT profile revision: only a successful benchmark taken for THIS profile whose
+        // recorded launch args still match the profile's current args justifies a freeze. Re-exploring a profile
+        // (changing quant/ctx/gpu-layers/kv-types/flash-attn/…) rewrites its args and clears its benchmark
+        // justification, so a benchmark captured before the change must NOT freeze the new configuration — the user is
+        // told to re-benchmark. NOTE: this stricter gate applies to FUTURE freezes only; already-frozen profiles are
+        // deliberately left untouched (no retroactive invalidation).
+        var benchmark = await _benchmarkStore.GetLatestSuccessfulForProfileAsync(profile.Id, ct).ConfigureAwait(false);
         if (benchmark is null)
         {
-            return ProfileActionResult.Fail($"Profile {profileId} has no successful benchmark; freeze is gated on a passing benchmark.");
+            return ProfileActionResult.Fail($"Profile {profileId} has no successful benchmark for its current configuration; re-benchmark before freezing.");
+        }
+
+        if (!BenchmarkMatchesProfile(benchmark, profile))
+        {
+            return ProfileActionResult.Fail($"Profile {profileId} was re-explored after its last benchmark (launch arguments changed); re-benchmark before freezing.");
         }
 
         // Re-probe free VRAM at freeze time as the invalidation baseline.
         var freeVramAtFreeze = await _vramProbe.TryGetFreeVramBytesAsync(profile.Backend, ct).ConfigureAwait(false);
 
-        var frozen = await _profileStore.MarkFrozenAsync(profileId, benchmark.Id, freeVramAtFreeze, ct).ConfigureAwait(false);
+        var frozen = await _profileStore.MarkFrozenAsync(profileId, benchmark.SnapshotId, freeVramAtFreeze, ct).ConfigureAwait(false);
         if (frozen is null)
         {
             // The store gate rejected the transition (not Explored at write time) — surface as a failed result, do not throw.
@@ -325,7 +330,28 @@ public sealed class InferenceProfileService : IInferenceProfileService
             MachineKey: profile.MachineKey,
             NGpuLayers: profile.NGpuLayers,
             TensorSplit: profile.TensorSplit,
-            OverrideTensor: profile.OverrideTensor);
+            OverrideTensor: profile.OverrideTensor,
+            KvTypeV: profile.KvTypeV,
+            FlashAttn: profile.FlashAttn,
+            ProfileId: profile.Id);
+    }
+
+    // A benchmark justifies a freeze only when every launch-affecting arg it recorded still matches the profile's
+    // current args. The profile-scoped store read already guarantees the row belongs to this ProfileId; this guards the
+    // re-explore case, where the profile kept its id and benchmark row but had its args overwritten in place.
+    private static bool BenchmarkMatchesProfile(ModelFitBenchmarkRecord benchmark, InferenceProfileRecord profile)
+    {
+        return benchmark.LlamacppBuild == profile.LlamacppBuild
+               && benchmark.Quant == profile.Quant
+               && benchmark.CtxSize == profile.CtxSize
+               && benchmark.KvType == profile.KvTypeK
+               && benchmark.KvTypeV == profile.KvTypeV
+               && (benchmark.FlashAttn ?? false) == profile.FlashAttn
+               && benchmark.NGpuLayers == profile.NGpuLayers
+               && benchmark.TensorSplit == profile.TensorSplit
+               && benchmark.OverrideTensor == profile.OverrideTensor
+               && benchmark.Backend == profile.Backend
+               && benchmark.MachineKey == profile.MachineKey;
     }
 
     private static InferenceProfileView ToView(InferenceProfileRecord record)

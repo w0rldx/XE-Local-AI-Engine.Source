@@ -19,6 +19,14 @@ public interface IModelFitBenchmarkStore
 
     /// <summary>Returns the benchmark rows for <paramref name="snapshotId" />, ordered by <c>ModelName</c>.</summary>
     Task<IReadOnlyList<ModelFitBenchmarkRecord>> ListForSnapshotAsync(Guid snapshotId, CancellationToken cancellationToken = default);
+
+    /// <summary>
+    ///     Returns the most recent SUCCESSFUL benchmark row bound to <paramref name="profileId" /> (its parent snapshot is
+    ///     <c>Succeeded</c>), newest first by the snapshot's creation instant, or <c>null</c> when the profile has no
+    ///     successful benchmark. Legacy rows with a null <c>ProfileId</c> never match. Backs the freeze gate's revision
+    ///     binding, so a benchmark taken for a different profile revision is never returned here.
+    /// </summary>
+    Task<ModelFitBenchmarkRecord?> GetLatestSuccessfulForProfileAsync(Guid profileId, CancellationToken cancellationToken = default);
 }
 
 /// <summary>
@@ -49,7 +57,10 @@ public sealed record ModelFitBenchmarkRecord(
     string? MachineKey = null,
     int? NGpuLayers = null,
     string? TensorSplit = null,
-    string? OverrideTensor = null);
+    string? OverrideTensor = null,
+    string? KvTypeV = null,
+    bool? FlashAttn = null,
+    Guid? ProfileId = null);
 
 /// <summary>
 ///     Mutable fields of a benchmark row supplied on replace. <c>RawJson</c> and <c>DiagnosticsJson</c> are passed as
@@ -78,4 +89,7 @@ public sealed record ModelFitBenchmarkInput(
     string? MachineKey = null,
     int? NGpuLayers = null,
     string? TensorSplit = null,
-    string? OverrideTensor = null);
+    string? OverrideTensor = null,
+    string? KvTypeV = null,
+    bool? FlashAttn = null,
+    Guid? ProfileId = null);
