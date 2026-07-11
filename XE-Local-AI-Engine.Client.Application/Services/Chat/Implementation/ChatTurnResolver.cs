@@ -1,6 +1,5 @@
 namespace XE_Local_AI_Engine.Client.Services.Chat.Implementation;
 
-using XE_Local_AI_Engine.AI.Agent.Configuration;
 using XE_Local_AI_Engine.Client.Persistence;
 using XE_Local_AI_Engine.Client.Persistence.Stores;
 using XE_Local_AI_Engine.Client.Services.Agents;

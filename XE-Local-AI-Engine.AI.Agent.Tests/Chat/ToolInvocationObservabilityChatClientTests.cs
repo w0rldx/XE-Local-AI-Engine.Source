@@ -62,7 +62,10 @@ public sealed class ToolInvocationObservabilityChatClientTests
             GC.KeepAlive(_);
         }
 
-        var serializedArguments = JsonSerializer.Serialize(new Dictionary<string, object?> { ["decision"] = argumentValue });
+        var serializedArguments = JsonSerializer.Serialize(new Dictionary<string, object?>
+        {
+            ["decision"] = argumentValue
+        });
         var expectedHashPrefix = Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(serializedArguments)))[..12];
 
         AssertEx.ContainsSingle(logger.Messages, message => message.Contains("ArgsLength=", StringComparison.Ordinal)
@@ -83,7 +86,10 @@ public sealed class ToolInvocationObservabilityChatClientTests
             GC.KeepAlive(_);
         }
 
-        var serializedArguments = JsonSerializer.Serialize(new Dictionary<string, object?> { ["decision"] = argumentValue });
+        var serializedArguments = JsonSerializer.Serialize(new Dictionary<string, object?>
+        {
+            ["decision"] = argumentValue
+        });
         var expectedByteCount = Encoding.UTF8.GetByteCount(serializedArguments);
         AssertEx.ContainsSingle(logger.Messages, message => message.Contains($"ArgsLength={expectedByteCount}", StringComparison.Ordinal));
     }

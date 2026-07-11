@@ -31,7 +31,7 @@ public sealed record AzureFoundrySettingsResponse
     ///     The persisted wire surface as the <see cref="AzureFoundryApiSurface" /> enum name (AzureDeployments |
     ///     OpenAiV1). Defaults to <c>AzureDeployments</c> for a legacy connection with no stored surface.
     /// </summary>
-    public string ApiSurface { get; init; } = nameof(Services.CloudProviders.AzureFoundryApiSurface.AzureDeployments);
+    public string ApiSurface { get; init; } = nameof(AzureFoundryApiSurface.AzureDeployments);
 
     /// <summary>True when an API key is stored. The key itself is never returned to the client.</summary>
     public bool HasStoredApiKey { get; init; }
@@ -109,7 +109,7 @@ public sealed record SaveCloudSettingsRequest
     ///     The requested wire surface (AzureDeployments | OpenAiV1). Case-insensitive enum name; unrecognized values
     ///     fall back to <c>AzureDeployments</c> (see <c>CloudSettingsEndpointDtoMapper.ParseApiSurface</c>).
     /// </summary>
-    public string ApiSurface { get; init; } = nameof(Services.CloudProviders.AzureFoundryApiSurface.AzureDeployments);
+    public string ApiSurface { get; init; } = nameof(AzureFoundryApiSurface.AzureDeployments);
 
     public IReadOnlyList<AzureFoundryModelDto> Models { get; init; } = [];
 

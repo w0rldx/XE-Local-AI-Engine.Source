@@ -242,7 +242,10 @@ internal sealed partial class HuggingFaceGgufDiscovery : IHuggingFaceGgufDiscove
             }
 
             var totalSize = group.Sum(static g => g.File.SizeBytes);
-            result.Add((representative.File with { SizeBytes = totalSize }, representative.Quant));
+            result.Add((representative.File with
+            {
+                SizeBytes = totalSize
+            }, representative.Quant));
         }
 
         return result;

@@ -51,7 +51,11 @@ public sealed class ImageJobStartupReconcilerTests : IDisposable
         await reconciler.StartAsync(CancellationToken.None).ConfigureAwait(false);
 
         // Queued + Generating are terminalized with the content-free interrupted reason and a completion timestamp.
-        foreach (var interruptedId in new[] { queuedId, generatingId })
+        foreach (var interruptedId in new[]
+                 {
+                     queuedId,
+                     generatingId
+                 })
         {
             var view = AssertEx.NotNull(await GetAsync(scopeFactory, interruptedId).ConfigureAwait(false));
             AssertEx.Equal(ImageJobStatus.Failed, view.Status);
@@ -69,11 +73,15 @@ public sealed class ImageJobStartupReconcilerTests : IDisposable
 
         // Exactly one Failed event per interrupted job was pushed, carrying the interrupted reason (and never a prompt).
         AssertEx.Equal(expected: 2, publisher.Published.Count);
-        foreach (var interruptedId in new[] { queuedId, generatingId })
+        foreach (var interruptedId in new[]
+                 {
+                     queuedId,
+                     generatingId
+                 })
         {
             AssertEx.ContainsSingle(publisher.Published, statusEvent => statusEvent.JobId == interruptedId
-                && statusEvent.Phase == ImageJobStatus.Failed.ToString()
-                && statusEvent.SanitizedError == ImageJobStartupReconciler.InterruptedReason);
+                                                                        && statusEvent.Phase == ImageJobStatus.Failed.ToString()
+                                                                        && statusEvent.SanitizedError == ImageJobStartupReconciler.InterruptedReason);
         }
     }
 

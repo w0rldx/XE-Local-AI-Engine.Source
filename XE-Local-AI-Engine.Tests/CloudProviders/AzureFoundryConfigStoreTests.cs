@@ -70,7 +70,13 @@ public sealed class AzureFoundryConfigStoreTests : IDisposable
                     endpoint = "https://example.openai.azure.com/",
                     authMode = 0,
                     apiKey = "legacy-v2-key",
-                    models = new[] { new { deploymentName = "gpt-4o" } }
+                    models = new[]
+                    {
+                        new
+                        {
+                            deploymentName = "gpt-4o"
+                        }
+                    }
                 }
             },
             JsonOptions);
@@ -102,7 +108,13 @@ public sealed class AzureFoundryConfigStoreTests : IDisposable
                     entraClientSecret = "client-secret",
                     entraTokenScope = "api://backend/.default",
                     entraSignInMethod = 0, // EntraSignInMethod.ClientSecret
-                    models = new[] { new { deploymentName = "gpt-4o" } }
+                    models = new[]
+                    {
+                        new
+                        {
+                            deploymentName = "gpt-4o"
+                        }
+                    }
                 }
             },
             JsonOptions);

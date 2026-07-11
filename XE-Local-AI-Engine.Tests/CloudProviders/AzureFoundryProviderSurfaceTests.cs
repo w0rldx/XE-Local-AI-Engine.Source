@@ -95,11 +95,10 @@ public sealed class AzureFoundryProviderSurfaceTests
         // A real run has an MSAL MsalServiceException here; InvalidOperationException stands in as a stub inner
         // exception (CA2201 forbids constructing the base System.Exception type directly) — only the Message
         // matters for this test, not the concrete type.
-        var inner = new InvalidOperationException(
-            "Microsoft.Identity.Client.MsalServiceException: AADSTS1002012: The provided value for scope " +
-            "'api://backend-app/access_as_user' is not valid. Client credential flows must have a scope value " +
-            "with /.default suffix.\n" +
-            "Trace: client_secret=super-secret-client-secret-value at Msal.Internal.Foo()");
+        var inner = new InvalidOperationException("Microsoft.Identity.Client.MsalServiceException: AADSTS1002012: The provided value for scope " +
+                                                  "'api://backend-app/access_as_user' is not valid. Client credential flows must have a scope value " +
+                                                  "with /.default suffix.\n" +
+                                                  "Trace: client_secret=super-secret-client-secret-value at Msal.Internal.Foo()");
         return new AuthenticationFailedException("ClientSecretCredential authentication failed: ", inner);
     }
 

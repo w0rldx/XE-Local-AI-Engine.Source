@@ -158,7 +158,8 @@ public sealed class MemoryFitEstimatorTests
         var profile = GpuProfile(64 * Gb);
         var estimator = new MemoryFitEstimator();
 
-        var estimate = estimator.Estimate("Q4_K_M", ParamCount, fileSizeBytes: 0, BlockCount, KvHeads, EmbeddingLength, HeadCount, CtxTarget, profile, kvCacheQuantized: false, kvCacheQuant: KvCacheQuant.Q8_0);
+        var estimate = estimator.Estimate("Q4_K_M", ParamCount, fileSizeBytes: 0, BlockCount, KvHeads, EmbeddingLength, HeadCount, CtxTarget, profile, kvCacheQuantized: false,
+            kvCacheQuant: KvCacheQuant.Q8_0);
 
         var weights = (long)(ParamCount * MemoryFitEstimator.BytesPerWeight("Q4_K_M"));
         var kv = (long)(2d * BlockCount * KvHeads * (EmbeddingLength / (double)HeadCount) * CtxTarget * 1d);
@@ -174,7 +175,8 @@ public sealed class MemoryFitEstimatorTests
         var profile = GpuProfile(64 * Gb);
         var estimator = new MemoryFitEstimator();
 
-        var estimate = estimator.Estimate("Q4_K_M", ParamCount, fileSizeBytes: 0, BlockCount, KvHeads, EmbeddingLength, HeadCount, CtxTarget, profile, kvCacheQuantized: false, kvCacheQuant: KvCacheQuant.Q4_0);
+        var estimate = estimator.Estimate("Q4_K_M", ParamCount, fileSizeBytes: 0, BlockCount, KvHeads, EmbeddingLength, HeadCount, CtxTarget, profile, kvCacheQuantized: false,
+            kvCacheQuant: KvCacheQuant.Q4_0);
 
         var weights = (long)(ParamCount * MemoryFitEstimator.BytesPerWeight("Q4_K_M"));
         var kv = (long)(2d * BlockCount * KvHeads * (EmbeddingLength / (double)HeadCount) * CtxTarget * 0.5d);
@@ -191,7 +193,8 @@ public sealed class MemoryFitEstimatorTests
         var estimator = new MemoryFitEstimator();
 
         // Legacy bool asks for the quantized (1 byte/elem) path, but the explicit override says F16 — override wins.
-        var overridden = estimator.Estimate("Q4_K_M", ParamCount, fileSizeBytes: 0, BlockCount, KvHeads, EmbeddingLength, HeadCount, CtxTarget, profile, kvCacheQuantized: true, kvCacheQuant: KvCacheQuant.F16);
+        var overridden = estimator.Estimate("Q4_K_M", ParamCount, fileSizeBytes: 0, BlockCount, KvHeads, EmbeddingLength, HeadCount, CtxTarget, profile, kvCacheQuantized: true,
+            kvCacheQuant: KvCacheQuant.F16);
         var fp16Baseline = estimator.Estimate("Q4_K_M", ParamCount, fileSizeBytes: 0, BlockCount, KvHeads, EmbeddingLength, HeadCount, CtxTarget, profile, kvCacheQuantized: false);
 
         AssertEx.Equal(fp16Baseline.EstimatedBytes, overridden.EstimatedBytes);

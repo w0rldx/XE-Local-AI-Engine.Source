@@ -40,14 +40,13 @@ internal sealed class MsalDelegatedTokenCredential : TokenCredential
         try
         {
             var result = await _confidentialClientApplication.AcquireTokenSilent(_scopes, _account)
-                                                               .ExecuteAsync(cancellationToken)
-                                                               .ConfigureAwait(false);
+                                                             .ExecuteAsync(cancellationToken)
+                                                             .ConfigureAwait(false);
             return new AccessToken(result.AccessToken, result.ExpiresOn);
         }
         catch (MsalUiRequiredException exception)
         {
-            throw new CredentialUnavailableException(
-                "Authorization-code sign-in has expired or requires re-consent for this connection; sign in again via Cloud Settings.", exception);
+            throw new CredentialUnavailableException("Authorization-code sign-in has expired or requires re-consent for this connection; sign in again via Cloud Settings.", exception);
         }
     }
 }

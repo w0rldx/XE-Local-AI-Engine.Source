@@ -239,9 +239,9 @@ public sealed class GgufDiscoveryPerfTests
         private static byte[] HeaderBytesFor(int index)
         {
             return new GgufHeaderBytesBuilder()
-                  .WithString("general.architecture", "llama")
-                  .WithUint32("llama.block_count", value: (uint)(100 + index))
-                  .Build();
+                   .WithString("general.architecture", "llama")
+                   .WithUint32("llama.block_count", value: (uint)(100 + index))
+                   .Build();
         }
 
         private static void InterlockedMax(ref int target, int candidate)

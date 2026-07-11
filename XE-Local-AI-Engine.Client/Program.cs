@@ -1,9 +1,6 @@
 using System.Diagnostics;
 using FastEndpoints;
 using FastEndpoints.Swagger;
-#if DEBUG
-using Microsoft.Agents.AI.DevUI;
-#endif
 using Microsoft.AspNetCore.Diagnostics.HealthChecks;
 using Microsoft.AspNetCore.Hosting.Server;
 using Scalar.AspNetCore;
@@ -24,6 +21,9 @@ using XE_Local_AI_Engine.Client.Services.Chat;
 using XE_Local_AI_Engine.Client.Services.Chat.Implementation;
 using XE_Local_AI_Engine.Client.Services.Persistence.Implementation;
 using XE_Local_AI_Engine.Client.Services.Shutdown;
+#if DEBUG
+using Microsoft.Agents.AI.DevUI;
+#endif
 
 // Velopack install, update, and uninstall hook dispatch. This MUST be the FIRST executable statement and is
 // intentionally placed BEFORE the try/catch. When Velopack is invoked for an install, update, or uninstall hook it runs

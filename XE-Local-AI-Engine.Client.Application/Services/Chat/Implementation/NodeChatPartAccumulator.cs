@@ -135,7 +135,10 @@ public sealed class NodeChatPartAccumulator
 
         lock (_syncRoot)
         {
-            var part = new MutablePart(NodeChatMessagePartKinds.Notice, sequence) { Name = kind };
+            var part = new MutablePart(NodeChatMessagePartKinds.Notice, sequence)
+            {
+                Name = kind
+            };
             part.AppendText(message);
             _parts.Add(part);
         }

@@ -39,8 +39,7 @@ internal static class ModelCatalogBundledLoader
         var validation = ModelCatalogValidator.Validate(raw);
         if (!validation.IsValid)
         {
-            logger.LogError(
-                "Bundled model catalog failed validation ({ErrorCount} error(s)); serving an empty catalog. First error: {FirstError}",
+            logger.LogError("Bundled model catalog failed validation ({ErrorCount} error(s)); serving an empty catalog. First error: {FirstError}",
                 validation.Errors.Count,
                 validation.Errors.Count > 0 ? validation.Errors[0] : "(none)");
             return EmptyDocument();

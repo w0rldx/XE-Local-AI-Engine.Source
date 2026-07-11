@@ -73,7 +73,11 @@ public sealed class ChatStreamEventMapperTests
             // Rebasing the live event's identity fields onto the resume identity must yield the resume event byte-for-byte
             // (ChatStreamEvent is a record, so this is a full value comparison of every wire field at once). If any
             // non-identity field diverged, the records would not be equal.
-            AssertEx.Equal(live with { MessageId = invocationId, RequestId = invocationId }, resume);
+            AssertEx.Equal(live with
+            {
+                MessageId = invocationId,
+                RequestId = invocationId
+            }, resume);
             AssertEx.Equal(invocationId, resume.MessageId);
             AssertEx.Equal(invocationId, resume.RequestId);
         }

@@ -6,7 +6,6 @@ using NSubstitute;
 using XE_Local_AI_Engine.Client.Configuration;
 using XE_Local_AI_Engine.Client.Persistence;
 using XE_Local_AI_Engine.Client.Services.ModelFit;
-using XE_Local_AI_Engine.Client.Services.ModelFit.Catalog;
 using XE_Local_AI_Engine.Client.Services.ModelFit.Fit;
 using XE_Local_AI_Engine.Client.Services.ModelFit.Implementation;
 using XE_Local_AI_Engine.Client.Services.ModelFit.Validation;

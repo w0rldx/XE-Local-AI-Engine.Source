@@ -8,8 +8,8 @@ using XE_Local_AI_Engine.Tests.Testing;
 public sealed class ToolArgumentRepairAIFunctionTests
 {
     private const string Schema = """
-        {"type":"object","properties":{"path":{"type":"string"},"count":{"type":"integer"}},"required":["path"]}
-        """;
+                                  {"type":"object","properties":{"path":{"type":"string"},"count":{"type":"integer"}},"required":["path"]}
+                                  """;
 
     [Test]
     public async Task InvokeAsync_ValidArguments_PassThroughToHandlerUnchanged()

@@ -1,7 +1,6 @@
 namespace XE_Local_AI_Engine.Tests.ModelFit.Catalog;
 
 using Microsoft.Extensions.Logging.Abstractions;
-using XE_Local_AI_Engine.Client.Services.ModelFit.Catalog;
 using XE_Local_AI_Engine.Client.Services.ModelFit.Catalog.Implementation;
 using XE_Local_AI_Engine.Tests.Testing;
 
@@ -42,7 +41,15 @@ public sealed class ModelCatalogBundledLoaderTests
         var document = ModelCatalogBundledLoader.Load(NullLogger.Instance);
         var coveredUseCases = document.Models.SelectMany(m => m.UseCases).ToHashSet(StringComparer.Ordinal);
 
-        foreach (var useCase in new[] { "general", "coding", "reasoning", "chat", "multimodal", "embedding" })
+        foreach (var useCase in new[]
+                 {
+                     "general",
+                     "coding",
+                     "reasoning",
+                     "chat",
+                     "multimodal",
+                     "embedding"
+                 })
         {
             AssertEx.True(coveredUseCases.Contains(useCase), $"no seed entry covers use-case '{useCase}'.");
         }

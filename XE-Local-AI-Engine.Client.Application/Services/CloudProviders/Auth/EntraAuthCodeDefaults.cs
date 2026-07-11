@@ -1,5 +1,8 @@
 namespace XE_Local_AI_Engine.Client.Services.CloudProviders.Auth;
 
+using System.Diagnostics.CodeAnalysis;
+using System.Net;
+
 /// <summary>
 ///     Shared constants for the Entra ID confidential-client authorization-code sign-in flow, referenced by the
 ///     stored-connection validator, the sign-in coordinator, and the loopback listener.
@@ -33,7 +36,7 @@ public static class EntraAuthCodeDefaults
         }
 
         return string.Equals(host, "localhost", StringComparison.OrdinalIgnoreCase)
-               || (System.Net.IPAddress.TryParse(host, out var address) && System.Net.IPAddress.IsLoopback(address));
+               || (IPAddress.TryParse(host, out var address) && IPAddress.IsLoopback(address));
     }
 
     /// <summary>
@@ -41,7 +44,7 @@ public static class EntraAuthCodeDefaults
     ///     valid-shaped, otherwise <see cref="RedirectUri" />. Does not validate — see
     ///     <see cref="TryValidateRedirectUri" /> for shape enforcement.
     /// </summary>
-    [System.Diagnostics.CodeAnalysis.SuppressMessage("Design", "CA1055:Uri return values should not be strings",
+    [SuppressMessage("Design", "CA1055:Uri return values should not be strings",
         Justification = "The result flows straight into stored-config fields, DTOs, and MSAL's string-typed WithRedirectUri — every caller wants the string form.")]
     public static string ResolveRedirectUri(string? configuredRedirectUri)
     {

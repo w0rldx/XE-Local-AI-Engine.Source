@@ -1212,7 +1212,11 @@ public sealed class InvocationRunnerTests
         // hard-stop BEFORE ever touching the agent factory (no agentUpdates are ever consumed).
         var runner = CreateRunner(sender,
             eventDispatcher: dispatcher,
-            contextBudgetOptions: new ConversationContextBudgetOptions { DefaultContextTokens = 1, ReservedOutputTokenFloor = 0 });
+            contextBudgetOptions: new ConversationContextBudgetOptions
+            {
+                DefaultContextTokens = 1,
+                ReservedOutputTokenFloor = 0
+            });
         var package = RuntimePackageBuilder.Valid().Build();
 
         await RunAsync(runner, package);
@@ -1267,7 +1271,8 @@ public sealed class InvocationRunnerTests
     // on AI.Agent internals.
     private static async IAsyncEnumerable<AgentResponseUpdate> ToolDisabledUpdates()
     {
-        const string disabledMarker = "{\"error\":\"tool_disabled\",\"reason\":\"Tool 'test-tool' was disabled for this run after repeated invalid-argument calls.\",\"hint\":\"Do not call this tool again during this run; continue without it.\"}";
+        const string disabledMarker =
+            "{\"error\":\"tool_disabled\",\"reason\":\"Tool 'test-tool' was disabled for this run after repeated invalid-argument calls.\",\"hint\":\"Do not call this tool again during this run; continue without it.\"}";
 
         yield return new AgentResponseUpdate(ChatRole.Assistant, new List<AIContent>
         {

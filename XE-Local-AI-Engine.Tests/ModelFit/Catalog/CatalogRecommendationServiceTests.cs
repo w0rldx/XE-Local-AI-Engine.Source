@@ -39,7 +39,10 @@ public sealed class CatalogRecommendationServiceTests
     [Test]
     public async Task BuildRecommendationsAsync_ExcludesEntry_WhenArchGateFails()
     {
-        var entries = new[] { Entry("too-new", useCases: ["general"], tier: "S", minLlamaCppTag: "b9999") };
+        var entries = new[]
+        {
+            Entry("too-new", useCases: ["general"], tier: "S", minLlamaCppTag: "b9999")
+        };
         var discovery = DiscoveryReturning(entries, paramCountB: 1);
         var service = BuildService(entries, discovery, installedTag: "b9000");
 
@@ -100,7 +103,10 @@ public sealed class CatalogRecommendationServiceTests
     public async Task BuildRecommendationsAsync_MoeEntry_ResolvesToExpertOffload_WhenResidentDoesNotFit()
     {
         // A 30B-A3B MoE model that does NOT fit resident in a 16GB budget but DOES fit with experts offloaded to RAM.
-        var entries = new[] { Entry("moe-model", useCases: ["general"], tier: "S", totalParamsB: 30, activeParamsB: 3, moe: true) };
+        var entries = new[]
+        {
+            Entry("moe-model", useCases: ["general"], tier: "S", totalParamsB: 30, activeParamsB: 3, moe: true)
+        };
         var discovery = Substitute.For<IHuggingFaceGgufDiscovery>();
         discovery.InspectRepoAsync("org/moe-model-GGUF", Arg.Any<CancellationToken>())
                  .Returns(Task.FromResult(Detail("org/moe-model-GGUF", File("Q4_K_M", paramCountB: 30))));
@@ -124,10 +130,16 @@ public sealed class CatalogRecommendationServiceTests
     [Test]
     public async Task BuildRecommendationsAsync_MarksInstalledFromInstalledKeys()
     {
-        var entries = new[] { Entry("installed-model", useCases: ["general"], tier: "S") };
+        var entries = new[]
+        {
+            Entry("installed-model", useCases: ["general"], tier: "S")
+        };
         var discovery = DiscoveryReturning(entries, paramCountB: 1);
         var service = BuildService(entries, discovery, installedTag: "b9692");
-        var installed = new HashSet<string>(StringComparer.Ordinal) { "org/installed-model-GGUF:Q4_K_M" };
+        var installed = new HashSet<string>(StringComparer.Ordinal)
+        {
+            "org/installed-model-GGUF:Q4_K_M"
+        };
 
         var result = await service.BuildRecommendationsAsync(useCase: null, "Q4_K_M", ctxTarget: 8192, GpuProfile(64 * Gb), installed, CancellationToken.None);
 
@@ -139,7 +151,10 @@ public sealed class CatalogRecommendationServiceTests
     {
         // Complete header metadata + a model that fits at fp16: the advisory is present, computed at Q8_0, needs flash
         // attention, and its estimate is strictly below the fp16 estimate (the quantized KV cache is the only difference).
-        var entries = new[] { Entry("fits-model", useCases: ["general"], tier: "S") };
+        var entries = new[]
+        {
+            Entry("fits-model", useCases: ["general"], tier: "S")
+        };
         var discovery = DiscoveryReturning(entries, paramCountB: 1);
         var service = BuildService(entries, discovery, installedTag: "b9692");
 
@@ -159,7 +174,10 @@ public sealed class CatalogRecommendationServiceTests
     {
         // A file whose header lacks BlockCount (so the KV term is 0): the candidate still surfaces (param-count drives the
         // weights term and it fits), but the KV-quant advisory is suppressed because the "savings" would be nil/misleading.
-        var entries = new[] { Entry("no-blocks-model", useCases: ["general"], tier: "S") };
+        var entries = new[]
+        {
+            Entry("no-blocks-model", useCases: ["general"], tier: "S")
+        };
         var discovery = Substitute.For<IHuggingFaceGgufDiscovery>();
         discovery.InspectRepoAsync("org/no-blocks-model-GGUF", Arg.Any<CancellationToken>())
                  .Returns(Task.FromResult(Detail("org/no-blocks-model-GGUF", File("Q4_K_M", paramCountB: 1, blockCount: null))));
@@ -176,7 +194,10 @@ public sealed class CatalogRecommendationServiceTests
     {
         // A large-KV dense model that overflows a 4.5GB budget at fp16 (~5.8GB) but would fit with a Q8_0 KV cache
         // (~3.6GB). Membership is fp16-only, so the candidate must still be excluded — the advisory never rescues it.
-        var entries = new[] { Entry("big-kv-model", useCases: ["general"], tier: "S") };
+        var entries = new[]
+        {
+            Entry("big-kv-model", useCases: ["general"], tier: "S")
+        };
         var discovery = Substitute.For<IHuggingFaceGgufDiscovery>();
         discovery.InspectRepoAsync("org/big-kv-model-GGUF", Arg.Any<CancellationToken>())
                  .Returns(Task.FromResult(Detail("org/big-kv-model-GGUF",

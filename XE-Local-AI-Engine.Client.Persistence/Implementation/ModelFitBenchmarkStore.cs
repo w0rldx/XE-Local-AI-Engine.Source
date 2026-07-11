@@ -87,11 +87,11 @@ public sealed class ModelFitBenchmarkStore(NodeChatDbContext dbContext) : IModel
         // Join to the parent snapshot so only Succeeded runs qualify, newest first. Legacy rows have a null ProfileId
         // and are excluded by the equality filter, so they can never justify a freeze.
         var entity = await (from benchmark in _dbContext.ModelFitBenchmarks.AsNoTracking()
-                            join snapshot in _dbContext.ModelFitSnapshots.AsNoTracking()
-                                on benchmark.SnapshotId equals snapshot.Id
-                            where benchmark.ProfileId == profileId && snapshot.Status == ModelFitRunStatus.Succeeded
-                            orderby snapshot.CreatedAtUtc descending
-                            select benchmark)
+                               join snapshot in _dbContext.ModelFitSnapshots.AsNoTracking()
+                                   on benchmark.SnapshotId equals snapshot.Id
+                               where benchmark.ProfileId == profileId && snapshot.Status == ModelFitRunStatus.Succeeded
+                               orderby snapshot.CreatedAtUtc descending
+                               select benchmark)
                            .FirstOrDefaultAsync(cancellationToken)
                            .ConfigureAwait(false);
 

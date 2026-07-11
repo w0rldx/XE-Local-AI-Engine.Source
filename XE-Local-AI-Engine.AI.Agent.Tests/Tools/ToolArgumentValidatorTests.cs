@@ -7,8 +7,8 @@ using XE_Local_AI_Engine.Tests.Testing;
 public sealed class ToolArgumentValidatorTests
 {
     private const string ObjectSchema = """
-        {"type":"object","properties":{"path":{"type":"string"},"count":{"type":"integer"},"ratio":{"type":"number"},"enabled":{"type":"boolean"},"tags":{"type":"array"}},"required":["path"]}
-        """;
+                                        {"type":"object","properties":{"path":{"type":"string"},"count":{"type":"integer"},"ratio":{"type":"number"},"enabled":{"type":"boolean"},"tags":{"type":"array"}},"required":["path"]}
+                                        """;
 
     [Test]
     public void CoerceAndValidate_AllValid_ReturnsValid()

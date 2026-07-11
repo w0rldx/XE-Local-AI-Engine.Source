@@ -19,10 +19,10 @@ internal static class EntraAuthCodeConfidentialClientFactory
     public static IConfidentialClientApplication Build(string tenantId, string clientId, string clientSecret, string redirectUri)
     {
         return ConfidentialClientApplicationBuilder.Create(clientId)
-                                                    .WithClientSecret(clientSecret)
-                                                    .WithTenantId(tenantId)
-                                                    .WithRedirectUri(redirectUri)
-                                                    .Build();
+                                                   .WithClientSecret(clientSecret)
+                                                   .WithTenantId(tenantId)
+                                                   .WithRedirectUri(redirectUri)
+                                                   .Build();
     }
 
     /// <summary>
@@ -41,13 +41,13 @@ internal static class EntraAuthCodeConfidentialClientFactory
         try
         {
             var storageProperties = new StorageCreationPropertiesBuilder(CacheFileName, dataDirectory.Root)
-                                     .WithLinuxKeyring(KeyringSchemaName,
-                                         "default",
-                                         "MSAL token cache for XE-Local-AI-Engine",
-                                         new KeyValuePair<string, string>("Version", "1"),
-                                         new KeyValuePair<string, string>("ProductGroup", "XE-Local-AI-Engine"))
-                                     .WithMacKeyChain(KeyChainServiceName, KeyChainAccountName)
-                                     .Build();
+                                    .WithLinuxKeyring(KeyringSchemaName,
+                                        "default",
+                                        "MSAL token cache for XE-Local-AI-Engine",
+                                        new KeyValuePair<string, string>("Version", "1"),
+                                        new KeyValuePair<string, string>("ProductGroup", "XE-Local-AI-Engine"))
+                                    .WithMacKeyChain(KeyChainServiceName, KeyChainAccountName)
+                                    .Build();
 
             var cacheHelper = await MsalCacheHelper.CreateAsync(storageProperties).ConfigureAwait(false);
 
