@@ -218,6 +218,121 @@ public sealed class OrchestrationAgentFactoryTests
         AssertEx.NotEmpty(fake.OfferedHandoffTools, "the framework must inject a handoff tool into the triage agent under mesh wiring");
     }
 
+    [Test]
+    public async Task CreateAsync_ParticipantsBoundToDifferentModelsAndReasoning_EachRequestCarriesItsOwn()
+    {
+        // The confirmed defect: a participant's resolved model + reasoning were dropped at agent-build time, so every
+        // participant ran on the shared default. This proves the construction-time ChatOptions (ModelId + the think /
+        // codex reasoning contract) actually reach each participant's OUTBOUND request — the outer runner's RunOptions
+        // never reach workflow participants, so this is the only channel that can carry them.
+        using var fake = new RecordingHandoffChatClient(SpecialistAnswer);
+        var factory = CreateFactory(fake);
+
+        var triage = Triage() with
+        {
+            ModelId = "triage-model:32b",
+            ReasoningEffort = "high",
+            SupportsThinking = true
+        };
+        var specialist = Specialist() with
+        {
+            ModelId = "specialist-model:8b",
+            ReasoningEffort = "none",
+            SupportsThinking = true
+        };
+        var definition = new OrchestrationAgentDefinition
+        {
+            Triage = triage,
+            Participants = [triage, specialist],
+            Edges =
+            [
+                new OrchestrationEdge
+                {
+                    FromKey = "triage",
+                    ToKey = "specialist",
+                    Reason = "Route domain questions to the specialist."
+                }
+            ]
+        };
+        var seed = new List<ChatMessage>
+        {
+            new(ChatRole.User, "Did the database migration complete?")
+        };
+
+        await using var session = await factory.CreateAsync(definition, seed);
+        await foreach (var _ in session.WatchAsync())
+        {
+            // Drain the run to completion so both participants have issued their requests.
+        }
+
+        var triageRequest = fake.RequestFor(TriageInstructions);
+        var specialistRequest = fake.RequestFor(SpecialistInstructions);
+
+        AssertEx.NotNull(triageRequest, "the triage participant must have issued a request");
+        AssertEx.NotNull(specialistRequest, "the specialist participant must have issued a request");
+
+        // Each participant routes the shared IChatClient to ITS OWN resolved model.
+        AssertEx.Equal("triage-model:32b", triageRequest!.ModelId, "the triage request must carry the triage's resolved model");
+        AssertEx.Equal("specialist-model:8b", specialistRequest!.ModelId, "the specialist request must carry the specialist's resolved model");
+
+        // Reasoning is honored per participant: graded "high" on the thinking-capable triage; explicit off on the specialist.
+        AssertEx.Equal("high", triageRequest.Think as string, "a graded 'high' effort on a thinking-capable participant maps to think:\"high\"");
+        AssertEx.Equal("high", triageRequest.CodexReasoningEffort, "a graded effort must also ride the Codex side channel");
+        AssertEx.True(specialistRequest.Think is false, "reasoning 'none' maps to think:false");
+        AssertEx.Equal("none", specialistRequest.CodexReasoningEffort, "explicit 'none' rides the Codex side channel as \"none\" (mirrors the single-agent contract)");
+    }
+
+    [Test]
+    public async Task CreateAsync_NonThinkingParticipantWithReasoning_OmitsTheThinkField()
+    {
+        // Non-thinking model + a reasoning effort carried onto it: the think field must be OMITTED (Ollama 400s on
+        // think:true/level for a model without the thinking capability). Mirrors the single-agent contract's
+        // !SupportsThinking branch, proven here through the participant's actual outbound request.
+        using var fake = new RecordingHandoffChatClient(SpecialistAnswer);
+        var factory = CreateFactory(fake);
+
+        var triage = Triage() with
+        {
+            ModelId = "tool-only-model:7b",
+            ReasoningEffort = "high",
+            SupportsThinking = false
+        };
+        var specialist = Specialist() with
+        {
+            SupportsThinking = false
+        };
+        var definition = new OrchestrationAgentDefinition
+        {
+            Triage = triage,
+            Participants = [triage, specialist],
+            Edges =
+            [
+                new OrchestrationEdge
+                {
+                    FromKey = "triage",
+                    ToKey = "specialist",
+                    Reason = "Route domain questions to the specialist."
+                }
+            ]
+        };
+        var seed = new List<ChatMessage>
+        {
+            new(ChatRole.User, "Did the database migration complete?")
+        };
+
+        await using var session = await factory.CreateAsync(definition, seed);
+        await foreach (var _ in session.WatchAsync())
+        {
+            // Drain the run to completion.
+        }
+
+        var triageRequest = fake.RequestFor(TriageInstructions);
+        AssertEx.NotNull(triageRequest, "the triage participant must have issued a request");
+        AssertEx.Equal("tool-only-model:7b", triageRequest!.ModelId, "routing must still carry the participant's resolved model");
+        AssertEx.False(triageRequest.HasThinkKey, "a non-thinking participant with a reasoning effort must OMIT the think field");
+        AssertEx.Null(triageRequest.CodexReasoningEffort, "the Codex side channel is only set for a thinking-capable participant");
+    }
+
     private static async Task RunApprovalAcrossHandoff(bool approve, bool decorateClient)
     {
         const string ownToolName = "lookup_customer";
@@ -438,6 +553,89 @@ public sealed class OrchestrationAgentFactoryTests
             }));
         }
     }
+
+    /// <summary>
+    ///     A handoff-routing scripted model (same triage→specialist behavior as <see cref="HandoffScriptedChatClient" />)
+    ///     that additionally RECORDS the actual outbound <see cref="ChatOptions" /> each participant sent: its
+    ///     <see cref="ChatOptions.ModelId" /> and the reasoning <c>think</c> / <c>codex_reasoning_effort</c> entries.
+    ///     Used to prove the construction-time ChatOptions (the only channel available to workflow participants) carry
+    ///     each participant's own resolved model + reasoning through to its request.
+    /// </summary>
+    private sealed class RecordingHandoffChatClient : IChatClient
+    {
+        private readonly List<RecordedRequest> _requests = [];
+        private readonly string _specialistAnswer;
+
+        public RecordingHandoffChatClient(string specialistAnswer)
+        {
+            _specialistAnswer = specialistAnswer;
+        }
+
+        public RecordedRequest? RequestFor(string instructions)
+        {
+            return _requests.FirstOrDefault(request =>
+                request.SystemText?.Contains(instructions, StringComparison.Ordinal) ?? false);
+        }
+
+        public Task<ChatResponse> GetResponseAsync(IEnumerable<ChatMessage> messages, ChatOptions? options = null, CancellationToken cancellationToken = default)
+        {
+            return Task.FromResult(Build(messages.ToList(), options));
+        }
+
+        public IAsyncEnumerable<ChatResponseUpdate> GetStreamingResponseAsync(IEnumerable<ChatMessage> messages, ChatOptions? options = null, CancellationToken cancellationToken = default)
+        {
+            return ToUpdates(Build(messages.ToList(), options), cancellationToken);
+        }
+
+        public object? GetService(Type serviceType, object? serviceKey = null)
+        {
+            return serviceType == typeof(IChatClient) ? this : null;
+        }
+
+        public void Dispose()
+        {
+            GC.SuppressFinalize(this);
+        }
+
+        private ChatResponse Build(List<ChatMessage> list, ChatOptions? options)
+        {
+            // The participant's instructions arrive on ChatOptions.Instructions (the ChatClientAgentOptions build
+            // path); fall back to a leading System message for robustness across MAF delivery mechanics.
+            var systemText = list.FirstOrDefault(message => message.Role == ChatRole.System)?.Text
+                             ?? options?.Instructions;
+            Record(systemText, options);
+
+            var isSpecialist = systemText?.Contains("SPECIALIST agent", StringComparison.Ordinal) ?? false;
+            var handoffTool = options?.Tools?.FirstOrDefault(tool => tool.Name.StartsWith("handoff_to_", StringComparison.Ordinal));
+
+            if (isSpecialist || handoffTool is null)
+            {
+                return new ChatResponse(new ChatMessage(ChatRole.Assistant, _specialistAnswer));
+            }
+
+            var call = new FunctionCallContent($"call-{handoffTool.Name}", handoffTool.Name, new Dictionary<string, object?>());
+            return new ChatResponse(new ChatMessage(ChatRole.Assistant, new List<AIContent>
+            {
+                call
+            }));
+        }
+
+        private void Record(string? systemText, ChatOptions? options)
+        {
+            var properties = options?.AdditionalProperties;
+            var hasThinkKey = properties?.ContainsKey("think") ?? false;
+            var think = hasThinkKey ? properties!["think"] : null;
+            var codexEffort = properties is not null
+                              && properties.TryGetValue(ParticipantReasoningOptions.CodexReasoningEffortKey, out var raw)
+                ? raw as string
+                : null;
+
+            _requests.Add(new RecordedRequest(systemText, options?.ModelId, hasThinkKey, think, codexEffort));
+        }
+    }
+
+    /// <summary>One participant's captured outbound request: the system text it saw plus its resolved model + reasoning.</summary>
+    private sealed record RecordedRequest(string? SystemText, string? ModelId, bool HasThinkKey, object? Think, string? CodexReasoningEffort);
 
     /// <summary>
     ///     Scripted model for the combined approval+handoff scenario. Triage (identified by the handoff tool in
