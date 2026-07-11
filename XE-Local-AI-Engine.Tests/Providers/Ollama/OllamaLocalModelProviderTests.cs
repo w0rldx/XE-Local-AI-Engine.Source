@@ -1,5 +1,6 @@
 namespace XE_Local_AI_Engine.Tests.Providers.Ollama;
 
+using System.Security.Cryptography;
 using Microsoft.Extensions.AI;
 using OllamaSharp;
 using XE_Local_AI_Engine.Providers.Abstractions.Contracts;
@@ -77,7 +78,40 @@ public sealed class OllamaLocalModelProviderTests
         await context.Provider.UnloadModelAsync("qwen3:8b", CancellationToken.None);
 
         AssertEx.ContainsSingle(context.Server.RecordedRequests,
+            request => request.Path == "/api/generate" && request.ModelName == "qwen3:8b" && request.KeepAlive == "0");
+    }
+
+    [Test]
+    public async Task WarmModelAsync_WhenInvoked_PostsEmptyGenerateWithoutKeepAliveOverride()
+    {
+        await using var context = await CreateContextAsync("chat", "qwen3:8b");
+
+        await context.Provider.WarmModelAsync("qwen3:8b", CancellationToken.None);
+
+        // Warm-up must actually load weights via /api/generate — /api/show only reads metadata and never loads.
+        AssertEx.False(context.Server.RecordedRequests.Any(request => request.Path == "/api/show"),
+            "Warm-up must not fall back to the metadata-only /api/show request.");
+        AssertEx.ContainsSingle(context.Server.RecordedRequests,
             request => request.Path == "/api/generate" && request.ModelName == "qwen3:8b");
+
+        var generate = context.Server.RecordedRequests.Single(request => request.Path == "/api/generate");
+        // Empty prompt = Ollama's documented preload shape: the model loads, nothing is generated.
+        AssertEx.Equal(Convert.ToHexString(SHA256.HashData(ReadOnlySpan<byte>.Empty)), generate.PromptHash);
+        // No keep_alive override: residency follows Ollama's keep_alive default (no pinning, unlike unload's "0").
+        AssertEx.Null(generate.KeepAlive);
+    }
+
+    [Test]
+    public async Task WarmModelAsync_WhenTokenAlreadyCancelled_ThrowsWithoutIssuingRequest()
+    {
+        await using var context = await CreateContextAsync("chat");
+        using var cts = new CancellationTokenSource();
+        await cts.CancelAsync();
+
+        await AssertEx.ThrowsAsync<OperationCanceledException>(() => context.Provider.WarmModelAsync("chat", cts.Token));
+
+        AssertEx.False(context.Server.RecordedRequests.Any(request => request.Path == "/api/generate"),
+            "A cancelled warm-up must not dispatch a generate request.");
     }
 
     [Test]

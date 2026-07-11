@@ -52,6 +52,15 @@ public sealed class KnowledgeBaseOptions
     public int MaxConcurrentIngestions { get; set; } = 1;
 
     /// <summary>
+    ///     Maximum time (seconds) the background worker waits at host shutdown for the documents it is currently ingesting
+    ///     to reach a terminal state before abandoning them. During the window each in-flight document runs uncancelled so
+    ///     a near-complete index write still lands; once the window elapses the shared drain token is cancelled so a hung
+    ///     document cannot block shutdown, and any document not finished is left non-terminal and re-queued on the next
+    ///     start. Default 30s. Clamped to at least 1s.
+    /// </summary>
+    public int ShutdownDrainTimeoutSeconds { get; set; } = 30;
+
+    /// <summary>
     ///     Maximum number of chunk texts sent to the embedding generator in a single <c>GenerateAsync</c> call. A large
     ///     document yields thousands of chunks; batching bounds each round-trip instead of one unbounded call.
     /// </summary>

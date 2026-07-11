@@ -21,7 +21,7 @@ internal static class GenerateEndpoint
         var response = $"[fake-ollama] {prompt}";
         var tokens = SplitTokens(response);
 
-        FakeOllamaEndpointMapper.Record(context, state, model, messageCount: 0, prompt);
+        FakeOllamaEndpointMapper.Record(context, state, model, messageCount: 0, prompt, FakeOllamaEndpointMapper.GetKeepAlive(root));
 
         if (await FakeOllamaEndpointMapper.TryApplyFailureAsync(context, state, model).ConfigureAwait(false))
         {

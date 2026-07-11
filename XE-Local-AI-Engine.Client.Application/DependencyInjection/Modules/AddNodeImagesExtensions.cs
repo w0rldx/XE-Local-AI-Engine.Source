@@ -41,6 +41,13 @@ internal static class AddNodeImagesExtensions
         // job (generation runs detached), and it composes the singleton runtime + blob store + IHubContext-safe publisher.
         builder.Services.AddSingleton<IImageJobCoordinator, ImageJobCoordinator>();
 
+        // Startup reconciliation: a previous process may have died with jobs still Queued/Generating; the coordinator's
+        // in-memory registry is gone after a restart, so those rows would otherwise stay stuck forever. Interrupted jobs
+        // are NOT auto-retried (image generation is expensive/nondeterministic) — they are marked Failed with a
+        // content-free reason and a status event is pushed. Runs before Kestrel accepts requests (hosted services start
+        // before the web host), so it cannot race a newly enqueued job.
+        builder.Services.AddHostedService<ImageJobStartupReconciler>();
+
         return builder;
     }
 }

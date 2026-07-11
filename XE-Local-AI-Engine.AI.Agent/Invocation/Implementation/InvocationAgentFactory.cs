@@ -152,17 +152,21 @@ internal sealed class InvocationAgentFactory : IInvocationAgentFactory
     }
 
     /// <summary>
-    ///     Builds the turn's <see cref="ChatClientAgent" />. With NO resolved skills this keeps the existing positional
-    ///     constructor verbatim, so the no-skills agent build is byte-identical to the pre-skills path. With one or more
-    ///     resolved skills it builds a MAF <see cref="AgentSkillsProvider" /> from <see cref="AgentInlineSkill" /> records
-    ///     (name + description + body-as-instructions; no scripts/resources in v1) and constructs the agent through the
-    ///     <see cref="ChatClientAgentOptions" /> constructor with that provider attached via
+    ///     Builds the turn's <see cref="ChatClientAgent" />. The agent is built with NO instructions on either path:
+    ///     the system instructions are delivered exactly once per request as the leading <see cref="ChatRole.System" />
+    ///     seed message (<see cref="BuildSeedMessages" />, replayed by the invocation runner). Passing them to the
+    ///     ctor's <c>instructions</c> parameter (or to <see cref="ChatOptions.Instructions" />) as well would
+    ///     double-send them — MAF forwards ctor/options instructions to the <see cref="IChatClient" /> on every
+    ///     invocation, alongside the seed system message. The agent's <c>name</c>/<c>description</c> carry identity
+    ///     only (not sent to the model as content). With NO resolved skills this uses the 7-arg constructor; with one
+    ///     or more resolved skills it builds a MAF <see cref="AgentSkillsProvider" /> from <see cref="AgentInlineSkill" />
+    ///     records (name + description + body-as-instructions; no scripts/resources in v1) and constructs the agent
+    ///     through the <see cref="ChatClientAgentOptions" /> constructor with that provider attached via
     ///     <see cref="ChatClientAgentOptions.AIContextProviders" />. The provider serves each skill's body on demand
     ///     (progressive disclosure); its skill-discovery tools are serviced by the same FunctionInvokingChatClient that
-    ///     already services the agent's own tools. Note: MAF has NO <c>Instructions</c> property on
-    ///     <see cref="ChatClientAgentOptions" /> — the system instructions live on <see cref="ChatOptions.Instructions" />
-    ///     (verified against Microsoft.Agents.AI.xml 1.8.0; pinned version is now 1.13.0, not re-verified), which is
-    ///     where the positional constructor's <c>instructions</c> argument also lands.
+    ///     already services the agent's own tools. Constructor argument order is
+    ///     (chatClient, instructions, name, description, tools, loggerFactory, services) — verified against
+    ///     Microsoft.Agents.AI 1.13.0; named arguments pin it.
     /// </summary>
     private ChatClientAgent BuildAgent(InvocationAgentDefinition definition, IList<AITool> tools)
     {
@@ -171,14 +175,16 @@ internal sealed class InvocationAgentFactory : IInvocationAgentFactory
 
         if (definition.Skills is not { Count: > 0 } skills)
         {
-            // No-skills path: unchanged positional constructor (byte-identical to the pre-skills build).
+            // No-skills path: instructions are NULL on the agent — they are carried once by the seed system message
+            // (see BuildSeedMessages). Named arguments pin the 1.13.0 ctor order so name/description land as identity
+            // and the model receives the instructions exactly once.
             return new ChatClientAgent(_chatClient,
-                agentName,
-                definition.Instructions,
-                agentDescription,
-                tools,
-                _loggerFactory,
-                _serviceProvider);
+                instructions: null,
+                name: agentName,
+                description: agentDescription,
+                tools: tools,
+                loggerFactory: _loggerFactory,
+                services: _serviceProvider);
         }
 
         // MAAI001: Agent Skills (AgentSkillsProvider/AgentInlineSkill) shipped as [Experimental] in Microsoft.Agents.AI
@@ -204,11 +210,12 @@ internal sealed class InvocationAgentFactory : IInvocationAgentFactory
             {
                 Name = agentName,
                 Description = agentDescription,
-                // Instructions + the agent's own tools ride ChatOptions (MAF moves them here under the hood on the
-                // positional path too); the per-turn RunOptions.ChatOptions still carries model id / think / sampling.
+                // Instructions are NOT set here (Instructions null) — they are carried once by the seed system message,
+                // exactly as on the no-skills path, so the two paths deliver instructions identically. Only the agent's
+                // own tools ride these ChatOptions; the per-turn RunOptions.ChatOptions still carries model id / think /
+                // sampling.
                 ChatOptions = new ChatOptions
                 {
-                    Instructions = definition.Instructions,
                     Tools = tools
                 },
                 AIContextProviders = [skillsProvider]

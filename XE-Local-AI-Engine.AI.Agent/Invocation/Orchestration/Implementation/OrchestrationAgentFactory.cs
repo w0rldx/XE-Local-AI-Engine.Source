@@ -102,13 +102,30 @@ internal sealed class OrchestrationAgentFactory : IOrchestrationAgentFactory
     {
         var tools = InvocationToolResolver.Resolve(participant.Tools, _toolRegistry, _clientLocalToolRegistry, _mcpToolRegistry, _logger);
 
-        // ChatClientAgent ctor order is (chatClient, instructions, name, description, tools, loggerFactory, sp) —
-        // instructions precede name. Named arguments keep that unambiguous.
+        // A handoff workflow drives its participant agents itself, so the outer runner's per-turn RunOptions.ChatOptions
+        // (which carries model id + reasoning on the single-agent path) NEVER reaches them. The participant's resolved
+        // model + reasoning must therefore be baked into the agent at CONSTRUCTION time, via ChatClientAgentOptions.
+        // ChatOptions — the same channel the single-agent factory's skills path uses. ModelId routes the shared
+        // (production-decorated) IChatClient to this participant's resolved model; the reasoning AdditionalProperties
+        // mirror the single-agent think contract (see ParticipantReasoningOptions), gated on the participant's own
+        // thinking capability. Instructions + the agent's own tools ride ChatOptions exactly as the positional ctor
+        // moves them under the hood, so ChatClientAgent still detects the pre-decorated FICC and treats the agent tools
+        // as AdditionalTools while handoff_to_* flows through (proven by the approval-across-handoff tests).
+        var chatOptions = new ChatOptions
+        {
+            Instructions = participant.Instructions,
+            Tools = tools,
+            ModelId = participant.ModelId,
+            AdditionalProperties = ParticipantReasoningOptions.Build(participant.ReasoningEffort, participant.SupportsThinking)
+        };
+
         return new ChatClientAgent(_chatClient,
-            participant.Instructions,
-            participant.Name,
-            participant.Description,
-            tools,
+            new ChatClientAgentOptions
+            {
+                Name = participant.Name,
+                Description = participant.Description,
+                ChatOptions = chatOptions
+            },
             _loggerFactory,
             _serviceProvider);
     }

@@ -131,6 +131,32 @@ public sealed class ImageJobStore(NodeChatDbContext dbContext) : IImageJobStore
         _ = await _dbContext.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
     }
 
+    public async Task<IReadOnlyList<Guid>> MarkInterruptedFailedAsync(string sanitizedError, long completedAtUtc, CancellationToken cancellationToken)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(sanitizedError);
+
+        // Tracked load (like the single-job Mark* methods) so the status-only mutation leaves the prompt property
+        // unmodified and the stored ciphertext is preserved.
+        var entities = await _dbContext.ImageJobs
+                                       .Where(job => job.Status == ImageJobStatus.Queued || job.Status == ImageJobStatus.Generating)
+                                       .ToListAsync(cancellationToken)
+                                       .ConfigureAwait(false);
+        if (entities.Count == 0)
+        {
+            return [];
+        }
+
+        foreach (var entity in entities)
+        {
+            entity.Status = ImageJobStatus.Failed;
+            entity.SanitizedError = sanitizedError;
+            entity.CompletedAtUtc = completedAtUtc;
+        }
+
+        _ = await _dbContext.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
+        return entities.Select(entity => entity.Id).ToArray();
+    }
+
     // Loads a tracked entity so a status-only mutation leaves the prompt property unmodified (the SaveChanges interceptor
     // skips re-encrypting an unmodified required column, preserving the stored ciphertext).
     private Task<ImageJob?> LoadTrackedAsync(Guid jobId, CancellationToken cancellationToken)

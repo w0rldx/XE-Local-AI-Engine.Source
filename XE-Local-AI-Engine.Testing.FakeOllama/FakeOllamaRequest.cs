@@ -9,4 +9,5 @@ public sealed record FakeOllamaRequest(
     string? ModelName,
     int MessageCount,
     string? PromptHash,
-    DateTimeOffset CapturedAtUtc);
+    DateTimeOffset CapturedAtUtc,
+    string? KeepAlive = null);

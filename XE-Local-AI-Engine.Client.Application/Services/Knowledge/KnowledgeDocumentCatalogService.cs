@@ -214,6 +214,56 @@ public sealed class KnowledgeDocumentCatalogService : IKnowledgeDocumentCatalogS
         return staleIds;
     }
 
+    public async Task<IReadOnlyList<Guid>> ResetNonTerminalToPendingAsync(CancellationToken cancellationToken)
+    {
+        // Startup recovery: a document left in ANY non-terminal status (Pending/Extracting/Chunking/Embedding) by a crash
+        // or hard stop only existed in the lost in-memory ingestion queue. Reset it to Pending (clearing any partial
+        // failure reason) and return its id so the worker re-dispatches it. Terminal rows (Indexed/Failed) are untouched.
+        // Re-running is safe: the state machine restarts from the top and the index writer purges any partial rows before
+        // re-inserting, so a document reset mid-state never duplicates or corrupts its projections.
+        var connection = _dbContext.Database.GetDbConnection();
+        await OpenIfNeededAsync(connection, cancellationToken).ConfigureAwait(false);
+
+        await using var transaction = await connection.BeginTransactionAsync(cancellationToken).ConfigureAwait(false);
+
+        var indexedStatus = KnowledgeDocumentStatus.Indexed.ToString();
+        var failedStatus = KnowledgeDocumentStatus.Failed.ToString();
+
+        var interruptedIds = new List<Guid>();
+        await using (var selectCommand = connection.CreateCommand())
+        {
+            selectCommand.Transaction = transaction;
+            selectCommand.CommandText = "SELECT document_id FROM knowledge_documents WHERE status <> $indexed AND status <> $failed;";
+            AddParameter(selectCommand, "$indexed", indexedStatus);
+            AddParameter(selectCommand, "$failed", failedStatus);
+
+            await using var reader = await selectCommand.ExecuteReaderAsync(cancellationToken).ConfigureAwait(false);
+            while (await reader.ReadAsync(cancellationToken).ConfigureAwait(false))
+            {
+                interruptedIds.Add(Guid.Parse(reader.GetString(0)));
+            }
+        }
+
+        if (interruptedIds.Count > 0)
+        {
+            await using var updateCommand = connection.CreateCommand();
+            updateCommand.Transaction = transaction;
+            updateCommand.CommandText = """
+                                        UPDATE knowledge_documents
+                                        SET status = $status, failure_reason = NULL, updated_at_utc = $updated_at_utc
+                                        WHERE status <> $indexed AND status <> $failed;
+                                        """;
+            AddParameter(updateCommand, "$status", KnowledgeDocumentStatus.Pending.ToString());
+            AddParameter(updateCommand, "$updated_at_utc", _timeProvider.GetUtcNow().ToUnixTimeMilliseconds());
+            AddParameter(updateCommand, "$indexed", indexedStatus);
+            AddParameter(updateCommand, "$failed", failedStatus);
+            _ = await updateCommand.ExecuteNonQueryAsync(cancellationToken).ConfigureAwait(false);
+        }
+
+        await transaction.CommitAsync(cancellationToken).ConfigureAwait(false);
+        return interruptedIds;
+    }
+
     private static async Task<IReadOnlyList<KnowledgeDocumentChunkView>> ReadChunksAsync(DbConnection connection, Guid documentId, CancellationToken cancellationToken)
     {
         await using var command = connection.CreateCommand();
