@@ -131,14 +131,29 @@ internal static class FakeOllamaEndpointMapper
         }
     }
 
-    internal static void Record(HttpContext context, FakeOllamaState state, string? model, int messageCount, string? prompt)
+    internal static void Record(HttpContext context, FakeOllamaState state, string? model, int messageCount, string? prompt, string? keepAlive = null)
     {
         state.Record(new FakeOllamaRequest(context.Request.Method,
             context.Request.Path.Value ?? string.Empty,
             model,
             messageCount,
             prompt is null ? null : ComputePromptHash(prompt),
-            DateTimeOffset.UtcNow));
+            DateTimeOffset.UtcNow,
+            keepAlive));
+    }
+
+    /// <summary>
+    ///     Reads the request's <c>keep_alive</c> field as a normalized string, or <c>null</c> when the field is absent.
+    ///     Ollama accepts both string durations ("5m", "0") and bare numbers, so both JSON kinds are captured.
+    /// </summary>
+    internal static string? GetKeepAlive(JsonElement element)
+    {
+        if (!element.TryGetProperty("keep_alive", out var keepAlive))
+        {
+            return null;
+        }
+
+        return keepAlive.ValueKind == JsonValueKind.String ? keepAlive.GetString() : keepAlive.GetRawText();
     }
 
     internal static IReadOnlyList<double> Embed(string input, int dimensions)

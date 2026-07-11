@@ -137,10 +137,30 @@ public sealed class OllamaLocalModelProvider : ILocalModelProvider, IDisposable
     }
 
     /// <inheritdoc />
-    public Task WarmModelAsync(string modelName, CancellationToken ct)
+    /// <remarks>
+    ///     Preloads the model via Ollama's documented warm-up mechanism: an empty <c>/api/generate</c> request, which
+    ///     loads the weights and returns immediately without generating tokens (there is no prompt to complete).
+    ///     <c>keep_alive</c> is deliberately omitted, so residency follows Ollama's keep_alive default instead of
+    ///     pinning the model. Note <c>/api/show</c> is NOT a warm-up — it only reads metadata and never loads weights.
+    /// </remarks>
+    public async Task WarmModelAsync(string modelName, CancellationToken ct)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(modelName);
-        return _ollamaClient.ShowModelAsync(modelName, ct);
+
+        var request = new GenerateRequest
+        {
+            Model = modelName,
+            Prompt = string.Empty,
+            Stream = false
+        };
+
+        // Fully enumerate the (single, non-stream) response so the request is actually dispatched — GenerateAsync is a
+        // streaming method and sends no HTTP call until the enumerator is drained. Mirrors OllamaModelUnloader, which
+        // uses the same request shape with keep_alive=0 for the inverse (eviction) side effect.
+        await foreach (var chunk in _ollamaClient.GenerateAsync(request, ct).ConfigureAwait(false))
+        {
+            _ = chunk;
+        }
     }
 
     /// <inheritdoc />
