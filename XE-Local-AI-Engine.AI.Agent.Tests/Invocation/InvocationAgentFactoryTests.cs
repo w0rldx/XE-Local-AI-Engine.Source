@@ -616,10 +616,10 @@ public sealed class InvocationAgentFactoryTests
         AssertEx.True(noSkillsAgent.AIContextProviders is null or { Count: 0 },
             "A no-skills agent must attach no context providers.");
 
-        // With skills: the agent is built via the options constructor with an AgentSkillsProvider attached, and the
-        // instructions/name still flow through (proving the options path wires them, since MAF has no Instructions
-        // property on ChatClientAgentOptions — verified at 1.8.0, pinned version is now 1.13.0, not re-verified — they
-        // ride ChatOptions.Instructions).
+        // With skills: the agent is built via the options constructor with an AgentSkillsProvider attached. The agent
+        // carries NO instructions on either path — the system instructions are delivered once by the seed system
+        // message (see the InstructionsDeliveredOnce wire tests), so the skills path must match the no-skills path and
+        // leave the agent's Instructions null. Only the agent's name/identity flows through the options ctor.
         var withSkills = new InvocationAgentDefinition("qwen3.5:0.8b",
             "Be helpful.",
             [],
@@ -635,10 +635,98 @@ public sealed class InvocationAgentFactoryTests
         var providers = AssertEx.NotNull(withSkillsAgent.AIContextProviders, "A skills agent must attach a context provider.");
         AssertEx.Equal(expected: 1, providers.Count);
         AssertEx.True(providers[0] is AgentSkillsProvider, "The attached provider must be an AgentSkillsProvider.");
-        AssertEx.Equal("Be helpful.", withSkillsAgent.Instructions);
+        AssertEx.True(string.IsNullOrEmpty(withSkillsAgent.Instructions),
+            "A skills agent must carry no instructions (delivered once via the seed system message).");
         AssertEx.Equal("XeInvocation-qwen3.5:0.8b", withSkillsAgent.Name);
     }
 #pragma warning restore MAAI001
+
+    [Test]
+    public async Task RunStreamingAsync_NoSkills_InstructionsDeliveredOnce_AndAgentNameNeverLeaksToTheWire()
+    {
+        const string instructions = "You are the worker. Follow the playbook exactly.";
+        var definition = new InvocationAgentDefinition("qwen3.5:0.8b",
+            instructions,
+            [],
+            [new ChatMessage(ChatRole.User, "Summarise the deployment status.")]);
+
+        using var chatClient = new CapturingChatClient();
+        var sut = CreateSut(chatClient);
+
+        await using var context = await sut.CreateAsync(definition);
+        var agent = context.Agent as ChatClientAgent ?? throw new AssertionException("Expected a ChatClientAgent.");
+
+        await DriveAsync(agent, context);
+
+        AssertOutboundInstructionContract(chatClient, instructions, expectedAgentName: "XeInvocation-qwen3.5:0.8b", agent);
+    }
+
+    // MAAI001: the skills definition drives the AgentSkillsProvider options ctor inside the factory; the wire assertion
+    // below is provider-boundary only, so this test does not reference the experimental types directly.
+    [Test]
+    public async Task RunStreamingAsync_WithSkills_InstructionsDeliveredOnce_AndAgentNameNeverLeaksToTheWire()
+    {
+        const string instructions = "You are the worker. Follow the playbook exactly.";
+        var definition = new InvocationAgentDefinition("qwen3.5:0.8b",
+            instructions,
+            [],
+            [new ChatMessage(ChatRole.User, "Summarise the deployment status.")],
+            Skills:
+            [
+                new InvocationSkill("kubernetes-debug", "Debug k8s issues", "## Body"),
+                new InvocationSkill("log-triage", "Triage logs", "## Logs")
+            ]);
+
+        using var chatClient = new CapturingChatClient();
+        var sut = CreateSut(chatClient);
+
+        await using var context = await sut.CreateAsync(definition);
+        var agent = context.Agent as ChatClientAgent ?? throw new AssertionException("Expected a ChatClientAgent.");
+
+        await DriveAsync(agent, context);
+
+        AssertOutboundInstructionContract(chatClient, instructions, expectedAgentName: "XeInvocation-qwen3.5:0.8b", agent);
+    }
+
+    // Mirrors the production run loop (InvocationRunner): replay the seed messages through the agent with the per-turn
+    // run options, threadless, so the capturing client observes exactly what the model would receive.
+    private static async Task DriveAsync(ChatClientAgent agent, InvocationAgentContext context)
+    {
+        await foreach (var _ in agent.RunStreamingAsync(context.SeedMessages, session: null, context.RunOptions, CancellationToken.None))
+        {
+            // Drain the stream so the inner chat client is actually invoked.
+        }
+    }
+
+    // Verifies the instructions-delivery contract on the ACTUAL outbound GetStreamingResponseAsync call: the system
+    // instructions appear exactly once (as a single System message, never also on ChatOptions.Instructions), and the
+    // synthetic agent name is identity-only — it never appears as message content or as instructions, and the real
+    // instructions never become the agent name.
+    private static void AssertOutboundInstructionContract(CapturingChatClient chatClient,
+        string instructions,
+        string expectedAgentName,
+        ChatClientAgent agent)
+    {
+        AssertEx.True(chatClient.CallCount > 0, "the inner chat client must have been invoked at least once");
+        var messages = AssertEx.NotNull(chatClient.CapturedMessages, "the chat client must have captured the outbound messages");
+
+        var systemInstructionMessages = messages.Count(message =>
+            message.Role == ChatRole.System && string.Equals(message.Text, instructions, StringComparison.Ordinal));
+        AssertEx.Equal(expected: 1, systemInstructionMessages);
+
+        // The AgentSkillsProvider legitimately contributes its own skill-discovery preamble via
+        // ChatOptions.Instructions on the skills path; the contract is that the DEFINITION instructions are never
+        // duplicated there (the seed System message is their single delivery channel).
+        var outboundInstructions = chatClient.CapturedOptions?.Instructions ?? string.Empty;
+        AssertEx.False(outboundInstructions.Contains(instructions, StringComparison.Ordinal),
+            "the definition instructions must not also ride ChatOptions.Instructions (that would double-send them)");
+
+        AssertEx.False(messages.Any(message => (message.Text ?? string.Empty).Contains(expectedAgentName, StringComparison.Ordinal)),
+            "the synthetic agent name must never appear as message content");
+
+        AssertEx.Equal(expectedAgentName, agent.Name);
+        AssertEx.NotEqual(instructions, agent.Name);
+    }
 
     private static ChatOptions ResolveChatOptions(InvocationAgentContext context)
     {
@@ -648,7 +736,7 @@ public sealed class InvocationAgentFactoryTests
                ?? throw new AssertionException("Expected ChatOptions to be populated.");
     }
 
-    private static InvocationAgentFactory CreateSut(FakeChatClient chatClient,
+    private static InvocationAgentFactory CreateSut(IChatClient chatClient,
         IAgentToolRegistry? toolRegistry = null,
         IClientLocalToolRegistry? clientLocalToolRegistry = null,
         IMcpToolRegistry? mcpToolRegistry = null)
@@ -792,6 +880,53 @@ public sealed class InvocationAgentFactoryTests
         public void Dispose()
         {
             GC.SuppressFinalize(this);
+        }
+    }
+
+    /// <summary>
+    ///     Records the exact outbound <see cref="ChatMessage" /> list and <see cref="ChatOptions" /> the agent hands to
+    ///     the model on the streaming (and non-streaming) path, so a test can assert the provider-wire instruction
+    ///     contract rather than the agent's in-memory shape.
+    /// </summary>
+    private sealed class CapturingChatClient : IChatClient
+    {
+        public IReadOnlyList<ChatMessage>? CapturedMessages { get; private set; }
+
+        public ChatOptions? CapturedOptions { get; private set; }
+
+        public int CallCount { get; private set; }
+
+        public Task<ChatResponse> GetResponseAsync(IEnumerable<ChatMessage> messages, ChatOptions? options = null, CancellationToken cancellationToken = default)
+        {
+            Capture(messages, options);
+            return Task.FromResult(new ChatResponse(new ChatMessage(ChatRole.Assistant, "ok")));
+        }
+
+        public async IAsyncEnumerable<ChatResponseUpdate> GetStreamingResponseAsync(IEnumerable<ChatMessage> messages,
+            ChatOptions? options = null,
+            [EnumeratorCancellation]
+            CancellationToken cancellationToken = default)
+        {
+            Capture(messages, options);
+            await Task.Yield();
+            yield return new ChatResponseUpdate(ChatRole.Assistant, "ok");
+        }
+
+        public object? GetService(Type serviceType, object? serviceKey = null)
+        {
+            return serviceType == typeof(IChatClient) ? this : null;
+        }
+
+        public void Dispose()
+        {
+            GC.SuppressFinalize(this);
+        }
+
+        private void Capture(IEnumerable<ChatMessage> messages, ChatOptions? options)
+        {
+            CapturedMessages = messages.ToList();
+            CapturedOptions = options;
+            CallCount++;
         }
     }
 }

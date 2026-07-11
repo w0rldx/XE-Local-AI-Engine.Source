@@ -8,8 +8,9 @@ using Microsoft.Extensions.Logging;
 ///     Microsoft Agent Framework (MAF) implementation of <see cref="IPlaybookEvalAgentRunner" />. Builds a
 ///     <see cref="ChatClientAgent" /> over the supplied (node-local) chat client with an empty tool set and runs
 ///     it threadless — mirroring the verified worker loop's prompt assembly
-///     (<c>InvocationAgentFactory.BuildSeedMessages</c>): instructions are passed to the agent constructor AND
-///     prepended as a leading <see cref="ChatRole.System" /> seed message so the eval reproduces the real loop.
+///     (<c>InvocationAgentFactory.BuildSeedMessages</c>): the agent carries NO instructions and the system
+///     instructions are delivered exactly once as the leading <see cref="ChatRole.System" /> seed message, so the
+///     eval reproduces the real loop's outbound prompt.
 /// </summary>
 internal sealed class MafPlaybookEvalAgentRunner : IPlaybookEvalAgentRunner
 {
@@ -37,17 +38,20 @@ internal sealed class MafPlaybookEvalAgentRunner : IPlaybookEvalAgentRunner
 
         // Empty tool set: the eval gate measures the injected prompt's effect, not tool behaviour, so the loop runs
         // with no executable tools (no real side effects, no approval pauses). The chatClient is owned by the caller
-        // (a node-local client) and is intentionally NOT disposed here.
+        // (a node-local client) and is intentionally NOT disposed here. Instructions are NULL on the agent — like the
+        // production loop, they are delivered once by the seed system message below. The ctor argument order is
+        // (chatClient, instructions, name, description, tools, loggerFactory, services) — verified against
+        // Microsoft.Agents.AI 1.13.0; named arguments pin it.
         var agent = new ChatClientAgent(chatClient,
-            AgentName,
-            systemInstructions,
-            AgentDescription,
-            new List<AITool>(),
-            _loggerFactory,
-            _serviceProvider);
+            instructions: null,
+            name: AgentName,
+            description: AgentDescription,
+            tools: new List<AITool>(),
+            loggerFactory: _loggerFactory,
+            services: _serviceProvider);
 
         // Mirror InvocationAgentFactory.BuildSeedMessages: a leading System(instructions) message followed by the
-        // input turns. Instructions flow through both the agent constructor and this seed message for fidelity.
+        // input turns. The system instructions are delivered exactly once — via this seed message, not the ctor.
         List<ChatMessage> seed =
         [
             new(ChatRole.System, systemInstructions),
