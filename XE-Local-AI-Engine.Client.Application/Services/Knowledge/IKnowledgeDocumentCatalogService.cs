@@ -31,6 +31,15 @@ public interface IKnowledgeDocumentCatalogService
     ///     Non-indexed rows carry only the upload-time placeholder model name and are never treated as stale.
     /// </summary>
     Task<IReadOnlyList<Guid>> ResetStaleDocumentsToPendingAsync(CancellationToken cancellationToken);
+
+    /// <summary>
+    ///     Startup-recovery reset: moves every document left in a NON-terminal status (anything other than
+    ///     <see cref="KnowledgeDocumentStatus.Indexed" /> or <see cref="KnowledgeDocumentStatus.Failed" />) back to
+    ///     <see cref="KnowledgeDocumentStatus.Pending" /> (clearing any partial failure reason) and returns their ids, so
+    ///     the background worker can re-dispatch documents whose in-memory queue entry was lost to a crash or hard stop.
+    ///     Terminal rows are left untouched.
+    /// </summary>
+    Task<IReadOnlyList<Guid>> ResetNonTerminalToPendingAsync(CancellationToken cancellationToken);
 }
 
 /// <summary>
