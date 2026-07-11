@@ -153,12 +153,8 @@ public sealed class InferenceProfileServiceTests
         var profile = ExploredRecord();
         fixture.WithProfiles(profile);
         var snapshotId = Guid.NewGuid();
-        fixture.SnapshotStore.GetLatestSuccessfulSummaryAsync(ModelFitOperation.Benchmark,
-                   useCase: null,
-                   providerName: "llamacpp",
-                   modelName: Model,
-                   Arg.Any<CancellationToken>())
-               .Returns(Task.FromResult<ModelFitSnapshotSummaryRecord?>(Summary(snapshotId, ModelFitRunStatus.Succeeded)));
+        fixture.BenchmarkStore.GetLatestSuccessfulForProfileAsync(profile.Id, Arg.Any<CancellationToken>())
+               .Returns(Task.FromResult<ModelFitBenchmarkRecord?>(BenchmarkRowFor(profile, snapshotId)));
         fixture.VramProbe.TryGetFreeVramBytesAsync("cuda", Arg.Any<CancellationToken>()).Returns(Task.FromResult<long?>(2000));
         fixture.ProfileStore.MarkFrozenAsync(profile.Id, snapshotId, 2000, Arg.Any<CancellationToken>())
                .Returns(Task.FromResult<InferenceProfileRecord?>(profile with
@@ -183,18 +179,38 @@ public sealed class InferenceProfileServiceTests
         var fixture = new ServiceFixture();
         var profile = ExploredRecord();
         fixture.WithProfiles(profile);
-        fixture.SnapshotStore.GetLatestSuccessfulSummaryAsync(Arg.Any<ModelFitOperation>(),
-                   Arg.Any<string?>(),
-                   Arg.Any<string>(),
-                   Arg.Any<string?>(),
-                   Arg.Any<CancellationToken>())
-               .Returns(Task.FromResult<ModelFitSnapshotSummaryRecord?>(null));
+        fixture.BenchmarkStore.GetLatestSuccessfulForProfileAsync(Arg.Any<Guid>(), Arg.Any<CancellationToken>())
+               .Returns(Task.FromResult<ModelFitBenchmarkRecord?>(null));
 
         var result = await fixture.CreateService().FreezeAsync(profile.Id, CancellationToken.None);
 
         AssertEx.False(result.Success);
         AssertEx.NotNullOrEmpty(result.FailureReason);
         // The Explored profile is never transitioned.
+        await fixture.ProfileStore.DidNotReceive().MarkFrozenAsync(Arg.Any<Guid>(), Arg.Any<Guid>(), Arg.Any<long?>(), Arg.Any<CancellationToken>());
+    }
+
+    [Test]
+    public async Task Freeze_WhenBenchmarkArgsChangedByReExplore_ReturnsFailed_NoFreeze()
+    {
+        var fixture = new ServiceFixture();
+        var profile = ExploredRecord(); // current ctx = 8192
+        fixture.WithProfiles(profile);
+        var snapshotId = Guid.NewGuid();
+        // The profile's latest successful benchmark was taken at a different ctx (a prior explore); a re-explore then
+        // overwrote the profile's args in place (same id, new args), so the benchmark no longer matches the current
+        // configuration and must NOT justify a freeze.
+        var staleBenchmark = BenchmarkRowFor(profile, snapshotId) with
+        {
+            CtxSize = 4096
+        };
+        fixture.BenchmarkStore.GetLatestSuccessfulForProfileAsync(profile.Id, Arg.Any<CancellationToken>())
+               .Returns(Task.FromResult<ModelFitBenchmarkRecord?>(staleBenchmark));
+
+        var result = await fixture.CreateService().FreezeAsync(profile.Id, CancellationToken.None);
+
+        AssertEx.False(result.Success);
+        AssertEx.NotNullOrEmpty(result.FailureReason);
         await fixture.ProfileStore.DidNotReceive().MarkFrozenAsync(Arg.Any<Guid>(), Arg.Any<Guid>(), Arg.Any<long?>(), Arg.Any<CancellationToken>());
     }
 
@@ -240,27 +256,55 @@ public sealed class InferenceProfileServiceTests
             RawJson: "raw-metrics");
     }
 
-    private static ModelFitSnapshotSummaryRecord Summary(Guid id, ModelFitRunStatus status)
+    // A benchmark row whose recorded launch args match the profile exactly, bound to the profile's id — the shape the
+    // profile-scoped store read returns for a benchmark that justifies a freeze.
+    private static ModelFitBenchmarkRecord BenchmarkRowFor(InferenceProfileRecord profile, Guid snapshotId)
     {
-        return new ModelFitSnapshotSummaryRecord(Id: id,
-            ApprovedImageId: Model,
-            Operation: ModelFitOperation.Benchmark,
-            UseCase: null,
+        return new ModelFitBenchmarkRecord(Id: Guid.NewGuid(),
+            SnapshotId: snapshotId,
+            ModelName: profile.ModelName,
             ProviderName: "llamacpp",
-            ModelName: Model,
-            Status: status,
-            StartedAtUtc: 0,
-            CompletedAtUtc: 1,
-            DurationMs: 1,
-            ExitCode: 0,
-            IsLatestSuccessful: status == ModelFitRunStatus.Succeeded,
-            CreatedByRunId: null,
-            CreatedAtUtc: 0);
+            TokensPerSecond: 42d,
+            TtftMs: 50d,
+            TotalLatencyMs: 500d,
+            Runs: 1,
+            RawJson: null,
+            DiagnosticsJson: null,
+            LlamacppBuild: profile.LlamacppBuild,
+            Quant: profile.Quant,
+            CtxSize: profile.CtxSize,
+            KvType: profile.KvTypeK,
+            Backend: profile.Backend,
+            MachineKey: profile.MachineKey,
+            NGpuLayers: profile.NGpuLayers,
+            TensorSplit: profile.TensorSplit,
+            OverrideTensor: profile.OverrideTensor,
+            KvTypeV: profile.KvTypeV,
+            FlashAttn: profile.FlashAttn,
+            ProfileId: profile.Id);
     }
 
     // Wires the substituted seams the orchestrator composes, with safe defaults, and exposes the doubles the tests assert on.
     private sealed class ServiceFixture
     {
+        private static ModelFitSnapshotSummaryRecord Summary(Guid id, ModelFitRunStatus status)
+        {
+            return new ModelFitSnapshotSummaryRecord(Id: id,
+                ApprovedImageId: Model,
+                Operation: ModelFitOperation.Benchmark,
+                UseCase: null,
+                ProviderName: "llamacpp",
+                ModelName: Model,
+                Status: status,
+                StartedAtUtc: 0,
+                CompletedAtUtc: 1,
+                DurationMs: 1,
+                ExitCode: 0,
+                IsLatestSuccessful: status == ModelFitRunStatus.Succeeded,
+                CreatedByRunId: null,
+                CreatedAtUtc: 0);
+        }
+
         public ILlamaServerProcessSupervisor Supervisor { get; } = Substitute.For<ILlamaServerProcessSupervisor>();
 
         public IInferenceProfileStore ProfileStore { get; } = Substitute.For<IInferenceProfileStore>();

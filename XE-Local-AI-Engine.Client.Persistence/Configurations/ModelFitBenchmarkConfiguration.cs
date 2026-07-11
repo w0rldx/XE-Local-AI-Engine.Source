@@ -88,7 +88,22 @@ internal sealed class ModelFitBenchmarkConfiguration : IEntityTypeConfiguration<
         builder.Property(entity => entity.OverrideTensor)
                .HasColumnName("override_tensor");
 
+        builder.Property(entity => entity.KvTypeV)
+               .HasColumnName("kv_type_v");
+
+        builder.Property(entity => entity.FlashAttn)
+               .HasColumnName("flash_attn");
+
+        // Profile revision binding (additive, nullable — legacy rows predate it).
+        builder.Property(entity => entity.ProfileId)
+               .HasColumnName("profile_id");
+
         builder.HasIndex(entity => entity.SnapshotId);
+
+        // Backs the freeze gate's per-profile lookup of the latest successful benchmark. No enforced FK to
+        // inference_profiles: a profile is re-explored (overwriting args) or deleted while its benchmark rows persist,
+        // the same intentional no-FK precedent as inference_profiles -> model_fit_snapshots.
+        builder.HasIndex(entity => entity.ProfileId);
 
         // A benchmark row is meaningless without its parent snapshot, so the FK cascades: deleting a snapshot removes
         // its benchmark rows.

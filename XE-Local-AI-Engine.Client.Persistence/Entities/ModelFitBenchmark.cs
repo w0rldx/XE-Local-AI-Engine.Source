@@ -100,4 +100,19 @@ internal sealed record class ModelFitBenchmark
 
     /// <summary>Expert/tensor placement (<c>-ot</c>) the bench ran with, or null. Plaintext.</summary>
     public string? OverrideTensor { get; set; }
+
+    /// <summary>KV cache value type (<c>-ctv</c>) the bench ran with, or null. Pairs with <c>KvType</c> (=<c>-ctk</c>). Plaintext.</summary>
+    public string? KvTypeV { get; set; }
+
+    /// <summary>Whether flash-attention (<c>-fa</c>) was enabled for the bench, or null for legacy rows. Plaintext.</summary>
+    public bool? FlashAttn { get; set; }
+
+    // -------------------------------------------------------------------------
+    // Profile revision binding (additive, nullable — legacy rows predate it). The freeze gate qualifies a benchmark
+    // only when this matches the profile being frozen AND the row's launch args still match the profile's current
+    // args, so a benchmark taken before a re-explore can never freeze the changed configuration.
+    // -------------------------------------------------------------------------
+
+    /// <summary>The inference profile revision this benchmark measured, or null for legacy rows. Plaintext (structural).</summary>
+    public Guid? ProfileId { get; set; }
 }
