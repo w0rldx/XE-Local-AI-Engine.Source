@@ -17,12 +17,21 @@ using XE_Local_AI_Engine.Providers.Abstractions.Image;
 ///         encrypted-at-rest BEFORE the job is marked succeeded. Progress is coarse status only — never the prompt, a
 ///         path, or step/percent (§4A/§10).
 ///     </para>
+///     <para>
+///         <b>Shutdown/restart.</b> <see cref="DisposeAsync" /> cancels every in-flight job and drains the run tasks for
+///         a short bound so terminal states can be persisted; any job that still dies non-terminal (hard crash, drain
+///         timeout) is terminalized by <see cref="ImageJobStartupReconciler" /> on the next boot (no auto-retry).
+///     </para>
 /// </summary>
-public sealed class ImageJobCoordinator : IImageJobCoordinator, IDisposable
+public sealed class ImageJobCoordinator : IImageJobCoordinator, IDisposable, IAsyncDisposable
 {
     // Minimum gap between two pushed non-terminal progress updates for the same job — protects the socket from a
     // high-frequency runtime callback. The initial Queued/Generating push and every terminal push bypass the throttle.
     private static readonly TimeSpan ProgressPushInterval = TimeSpan.FromSeconds(1);
+
+    // How long DisposeAsync waits for cancelled run tasks to persist their terminal state before letting go. Anything
+    // that outlives the drain is terminalized by ImageJobStartupReconciler on the next boot.
+    private static readonly TimeSpan ShutdownDrainTimeout = TimeSpan.FromSeconds(3);
 
     // Per-job replay buffer cap and how long a terminal job's log lingers for a late subscriber before eviction.
     private const int MaxBufferedEventsPerJob = 128;
@@ -40,6 +49,10 @@ public sealed class ImageJobCoordinator : IImageJobCoordinator, IDisposable
 
     // Keyed by job id. An in-flight job owns a live CTS; Cancel signals it via the registry.
     private readonly ConcurrentDictionary<Guid, CancellationTokenSource> _inFlight = new();
+
+    // Detached run tasks by job id so DisposeAsync can drain them (bounded) after cancelling — giving each run task a
+    // chance to persist its terminal state before the process exits.
+    private readonly ConcurrentDictionary<Guid, Task> _runTasks = new();
 
     // Last instant a non-terminal progress push went out per job, so runtime callbacks are throttled.
     private readonly ConcurrentDictionary<Guid, long> _lastProgressPushTicks = new();
@@ -86,7 +99,16 @@ public sealed class ImageJobCoordinator : IImageJobCoordinator, IDisposable
         // registry in Cleanup — so no IDisposable instance is passed into an un-awaited task (CA2025), while Cancel can
         // still signal it via the registry until then.
         var request = ToRequest(input);
-        _ = RunJobAsync(jobId, request, cts.Token);
+        var runTask = RunJobAsync(jobId, request, cts.Token);
+
+        // Track the run task for the shutdown drain. If the task already completed (its Cleanup ran before this add),
+        // remove it again so a finished job never lingers in the registry.
+        _runTasks[jobId] = runTask;
+        if (runTask.IsCompleted)
+        {
+            _ = _runTasks.TryRemove(jobId, out _);
+        }
+
         return jobId;
     }
 
@@ -134,7 +156,35 @@ public sealed class ImageJobCoordinator : IImageJobCoordinator, IDisposable
 
     public void Dispose()
     {
-        // Cancel every in-flight job so any run task waiting on the generation slot unwinds, then dispose the slot.
+        // Synchronous teardown: cancel and release without blocking on the run tasks (never sync-over-async). Any job
+        // that dies before persisting a terminal state is terminalized by ImageJobStartupReconciler on the next boot.
+        CancelAllInFlight();
+        ReleaseDisposables();
+    }
+
+    public async ValueTask DisposeAsync()
+    {
+        // Graceful shutdown (the DI container prefers this path): cancel every in-flight job, then drain the run tasks
+        // for a short bound so they can persist their terminal state (Cancelled) before the process exits. Anything that
+        // outlives the drain is terminalized by ImageJobStartupReconciler on the next boot.
+        CancelAllInFlight();
+
+        try
+        {
+            await Task.WhenAll(_runTasks.Values.ToArray()).WaitAsync(ShutdownDrainTimeout).ConfigureAwait(false);
+        }
+        catch (TimeoutException)
+        {
+            // A wedged runtime call outlived the drain window; startup reconciliation catches the job on the next boot.
+        }
+
+        ReleaseDisposables();
+    }
+
+    // Signals every in-flight job so any run task waiting on the generation slot or inside the runtime unwinds.
+    // Disposal of each CTS belongs to ReleaseDisposables (or the run task's own Cleanup, whichever gets there first).
+    private void CancelAllInFlight()
+    {
         foreach (var cts in _inFlight.Values)
         {
             try
@@ -145,11 +195,18 @@ public sealed class ImageJobCoordinator : IImageJobCoordinator, IDisposable
             {
                 // Already disposed by its own run task; nothing to cancel.
             }
+        }
+    }
 
+    private void ReleaseDisposables()
+    {
+        foreach (var cts in _inFlight.Values)
+        {
             cts.Dispose();
         }
 
         _inFlight.Clear();
+        _runTasks.Clear();
         _generationSlot.Dispose();
     }
 
@@ -370,6 +427,7 @@ public sealed class ImageJobCoordinator : IImageJobCoordinator, IDisposable
             registeredCts.Dispose();
         }
 
+        _ = _runTasks.TryRemove(jobId, out _);
         _lastProgressPushTicks.TryRemove(jobId, out _);
     }
 

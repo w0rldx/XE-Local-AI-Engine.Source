@@ -35,6 +35,14 @@ public interface IImageJobStore
 
     /// <summary>Records that a cancel was requested for a job (does not itself transition the status).</summary>
     Task MarkCancellationRequestedAsync(Guid jobId, long requestedAtUtc, CancellationToken cancellationToken);
+
+    /// <summary>
+    ///     Marks every non-terminal job (<see cref="ImageJobStatus.Queued" /> / <see cref="ImageJobStatus.Generating" />)
+    ///     as <see cref="ImageJobStatus.Failed" /> with the given display-safe reason and returns the affected job ids.
+    ///     Used by startup reconciliation: after a process restart the in-memory job registry is gone, so nothing would
+    ///     ever transition those rows again.
+    /// </summary>
+    Task<IReadOnlyList<Guid>> MarkInterruptedFailedAsync(string sanitizedError, long completedAtUtc, CancellationToken cancellationToken);
 }
 
 /// <summary>
