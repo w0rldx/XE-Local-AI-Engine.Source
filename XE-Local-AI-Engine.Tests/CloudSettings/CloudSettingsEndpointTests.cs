@@ -539,8 +539,7 @@ public sealed class CloudSettingsEndpointTests
 
         AssertEx.Equal(HttpStatusCode.OK, response.StatusCode);
         AssertEx.Equal("OpenAiV1", settings.AzureFoundry!.ApiSurface);
-        await cloudCredentialStore.Received(1).SaveConfigAsync(
-            Arg.Is<StoredCloudProviderConfig>(config => config.AzureFoundry!.ApiSurface == AzureFoundryApiSurface.OpenAiV1),
+        await cloudCredentialStore.Received(1).SaveConfigAsync(Arg.Is<StoredCloudProviderConfig>(config => config.AzureFoundry!.ApiSurface == AzureFoundryApiSurface.OpenAiV1),
             Arg.Any<CancellationToken>());
     }
 

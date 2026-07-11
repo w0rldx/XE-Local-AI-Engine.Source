@@ -1,5 +1,6 @@
 namespace XE_Local_AI_Engine.AI.Agent.Tools.Implementation;
 
+using System.Collections;
 using System.Globalization;
 using System.Text.Json;
 
@@ -102,7 +103,10 @@ internal static class ToolArgumentValidator
             // Single value where an array is expected → wrap it as an array of one.
             if (targets.Contains("array", StringComparer.Ordinal) && kind is not JsonKind.Array and not JsonKind.Null)
             {
-                arguments[key] = new List<object?> { value };
+                arguments[key] = new List<object?>
+                {
+                    value
+                };
                 continue;
             }
 
@@ -344,7 +348,7 @@ internal static class ToolArgumentValidator
                 return JsonKind.Integer;
             case float or double or decimal:
                 return JsonKind.Number;
-            case System.Collections.IEnumerable:
+            case IEnumerable:
                 return JsonKind.Array;
             default:
                 return JsonKind.Object;

@@ -105,22 +105,22 @@ public sealed class InferenceBenchmarkHarness : IInferenceBenchmarkHarness
 
             double? toolLoopMs;
             using (var toolInnerClient = _chatClientFactory.CreateChatClient(endpoint.BaseAddress, endpoint.ModelName))
-            using (var toolInvokingClient = toolInnerClient.AsBuilder().UseFunctionInvocation().Build())
-            {
-                var toolStopwatch = Stopwatch.StartNew();
-                _ = await toolInvokingClient.GetResponseAsync(toolMessages, toolOptions, ct).ConfigureAwait(false);
-                toolStopwatch.Stop();
+                using (var toolInvokingClient = toolInnerClient.AsBuilder().UseFunctionInvocation().Build())
+                {
+                    var toolStopwatch = Stopwatch.StartNew();
+                    _ = await toolInvokingClient.GetResponseAsync(toolMessages, toolOptions, ct).ConfigureAwait(false);
+                    toolStopwatch.Stop();
 
-                if (Volatile.Read(ref toolInvocations) > 0)
-                {
-                    toolLoopMs = toolStopwatch.Elapsed.TotalMilliseconds;
+                    if (Volatile.Read(ref toolInvocations) > 0)
+                    {
+                        toolLoopMs = toolStopwatch.Elapsed.TotalMilliseconds;
+                    }
+                    else
+                    {
+                        toolLoopMs = null;
+                        _logger.LogDebug("Benchmark tool-loop stage: the model did not invoke the offered tool; recording ToolLoopMs as null.");
+                    }
                 }
-                else
-                {
-                    toolLoopMs = null;
-                    _logger.LogDebug("Benchmark tool-loop stage: the model did not invoke the offered tool; recording ToolLoopMs as null.");
-                }
-            }
 
             // Stage 4 — long-context injection sized near the profile's context window.
             var longMessages = new List<ChatMessage>

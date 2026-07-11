@@ -216,7 +216,13 @@ public sealed class EntraAuthCodeSignInCoordinatorTests
                 EntraTokenScope = "api://backend-app/access_as_user",
                 EntraSignInMethod = signInMethod,
                 EntraAuthCodeRedirectUri = redirectUri,
-                Models = [new StoredAzureFoundryModel { DeploymentName = "gpt-4o" }]
+                Models =
+                [
+                    new StoredAzureFoundryModel
+                    {
+                        DeploymentName = "gpt-4o"
+                    }
+                ]
             }
         };
     }

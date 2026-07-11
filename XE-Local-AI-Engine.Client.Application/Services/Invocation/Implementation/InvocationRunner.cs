@@ -504,8 +504,7 @@ public sealed partial class InvocationRunner : IInvocationRunner
             // fresh idle watchdog guards every attempt.
             IAsyncEnumerable<AgentResponseUpdate> ProviderSend(CancellationToken sendToken)
             {
-                return StreamIdleWatchdog.WithIdleTimeout(
-                    innerToken => agentContext.Agent.RunStreamingAsync(currentMessages, session: null, agentContext.RunOptions, innerToken),
+                return StreamIdleWatchdog.WithIdleTimeout(innerToken => agentContext.Agent.RunStreamingAsync(currentMessages, session: null, agentContext.RunOptions, innerToken),
                     streamIdleTimeout,
                     streamIdleTimeoutMessage,
                     sendToken);

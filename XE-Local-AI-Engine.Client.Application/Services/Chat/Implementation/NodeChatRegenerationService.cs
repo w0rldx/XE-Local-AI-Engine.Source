@@ -6,9 +6,7 @@ using Microsoft.Extensions.Options;
 using XE_Local_AI_Engine.AI.Agent.Configuration;
 using XE_Local_AI_Engine.Client.Models;
 using XE_Local_AI_Engine.Client.Models.Enums;
-using XE_Local_AI_Engine.Client.Persistence;
 using XE_Local_AI_Engine.Client.Services.Agents;
-using XE_Local_AI_Engine.Client.Services.CloudProviders;
 using XE_Local_AI_Engine.Client.Services.Events;
 using XE_Local_AI_Engine.Client.Services.Invocation;
 using XE_Local_AI_Engine.Client.Services.Memory;
@@ -159,7 +157,8 @@ public sealed class NodeChatRegenerationService(
             {
                 var toolSequence = sequence.Next();
                 ChatStreamEventMapper.AccumulateToolPart(parts, args.Payload, toolSequence);
-                eventChannel.Writer.TryWrite(ChatStreamEventMapper.ToolCallEvent(correlation.ConversationId, correlation.MessageId, correlation.RequestId, args.Payload, NowUnixMilliseconds(), toolSequence));
+                eventChannel.Writer.TryWrite(ChatStreamEventMapper.ToolCallEvent(correlation.ConversationId, correlation.MessageId, correlation.RequestId, args.Payload, NowUnixMilliseconds(),
+                    toolSequence));
             }
         }
 
@@ -169,7 +168,8 @@ public sealed class NodeChatRegenerationService(
             {
                 var noticeSequence = sequence.Next();
                 ChatStreamEventMapper.AccumulateNotice(parts, args.Payload, noticeSequence);
-                eventChannel.Writer.TryWrite(ChatStreamEventMapper.NoticeEvent(correlation.ConversationId, correlation.MessageId, correlation.RequestId, args.Payload, NowUnixMilliseconds(), noticeSequence));
+                eventChannel.Writer.TryWrite(ChatStreamEventMapper.NoticeEvent(correlation.ConversationId, correlation.MessageId, correlation.RequestId, args.Payload, NowUnixMilliseconds(),
+                    noticeSequence));
             }
         }
 

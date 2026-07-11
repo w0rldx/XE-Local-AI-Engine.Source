@@ -31,10 +31,14 @@ public sealed class ConversationContextBudgeterTests
         // Four single-token turns (each message 10 tokens under the stub); keep only the last turn.
         var messages = new List<ChatMessage>
         {
-            User("u0"), Assistant("a0"),
-            User("u1"), Assistant("a1"),
-            User("u2"), Assistant("a2"),
-            User("u3"), Assistant("a3")
+            User("u0"),
+            Assistant("a0"),
+            User("u1"),
+            Assistant("a1"),
+            User("u2"),
+            Assistant("a2"),
+            User("u3"),
+            Assistant("a3")
         };
         var sut = CreateSut(FixedEstimator(perMessage: 10), recentTurnKeepCount: 1);
 
@@ -57,9 +61,13 @@ public sealed class ConversationContextBudgeterTests
         // 2 are the protected recent window (the keep floor is 2), so the droppable region is turn 0 alone.
         var messages = new List<ChatMessage>
         {
-            User("u0"), AssistantToolCall("call-1", "search"), ToolResult("call-1", "old result"),
-            User("u1"), Assistant("a1"),
-            User("u2"), Assistant("a2")
+            User("u0"),
+            AssistantToolCall("call-1", "search"),
+            ToolResult("call-1", "old result"),
+            User("u1"),
+            Assistant("a1"),
+            User("u2"),
+            Assistant("a2")
         };
         var sut = CreateSut(FixedEstimator(perMessage: 10), recentTurnKeepCount: 2);
 
@@ -81,8 +89,11 @@ public sealed class ConversationContextBudgeterTests
         // Turn 0 holds the oversized historical result; turns 1 and 2 are the protected recent window (keep floor 2).
         var messages = new List<ChatMessage>
         {
-            User("u0"), AssistantToolCall("call-1", "search"), ToolResult("call-1", bigResult),
-            User("u1"), Assistant("a1"),
+            User("u0"),
+            AssistantToolCall("call-1", "search"),
+            ToolResult("call-1", bigResult),
+            User("u1"),
+            Assistant("a1"),
             User("u2")
         };
         var sut = CreateSut(CharCountEstimator(), recentTurnKeepCount: 2, historicalToolResultExcerptChars: 50);
@@ -106,10 +117,14 @@ public sealed class ConversationContextBudgeterTests
         var protectedResult = new string('y', 1000);
         var messages = new List<ChatMessage>
         {
-            User("u0"), Assistant("a0"),
-            User("u1"), Assistant("a1"),
+            User("u0"),
+            Assistant("a0"),
+            User("u1"),
+            Assistant("a1"),
             // Most recent turn carries a large tool result — it belongs to the in-flight round and must be preserved.
-            User("u2"), AssistantToolCall("call-9", "run"), ToolResult("call-9", protectedResult)
+            User("u2"),
+            AssistantToolCall("call-9", "run"),
+            ToolResult("call-9", protectedResult)
         };
         var sut = CreateSut(CharCountEstimator(), recentTurnKeepCount: 1, historicalToolResultExcerptChars: 50);
 
@@ -130,8 +145,10 @@ public sealed class ConversationContextBudgeterTests
         // BOTH turns are protected — dropping the tool-call turn while keeping the approval decision would orphan it.
         var messages = new List<ChatMessage>
         {
-            User("u0"), Assistant("a0"),
-            User("do X"), AssistantToolCall("call-1", "search"),
+            User("u0"),
+            Assistant("a0"),
+            User("do X"),
+            AssistantToolCall("call-1", "search"),
             User("approved")
         };
         var sut = CreateSut(FixedEstimator(perMessage: 10), recentTurnKeepCount: 1);
@@ -152,8 +169,10 @@ public sealed class ConversationContextBudgeterTests
         // Two turns, keep-count 4 -> every turn is protected; nothing is droppable.
         var messages = new List<ChatMessage>
         {
-            User("u0"), Assistant("a0"),
-            User("u1"), Assistant("a1")
+            User("u0"),
+            Assistant("a0"),
+            User("u1"),
+            Assistant("a1")
         };
         var sut = CreateSut(FixedEstimator(perMessage: 100), recentTurnKeepCount: 4);
 
@@ -171,9 +190,12 @@ public sealed class ConversationContextBudgeterTests
         var messages = new List<ChatMessage>
         {
             System("system prompt"),
-            User("u0"), Assistant("a0"),
-            User("u1"), Assistant("a1"),
-            User("u2"), Assistant("a2")
+            User("u0"),
+            Assistant("a0"),
+            User("u1"),
+            Assistant("a1"),
+            User("u2"),
+            Assistant("a2")
         };
         var sut = CreateSut(FixedEstimator(perMessage: 10), recentTurnKeepCount: 2);
 

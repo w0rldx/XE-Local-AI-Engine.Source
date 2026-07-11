@@ -3,7 +3,6 @@ namespace XE_Local_AI_Engine.Tests.Providers.HuggingFace;
 using System.Net;
 using System.Text;
 using Microsoft.Extensions.Logging.Abstractions;
-using XE_Local_AI_Engine.Providers.Abstractions.Gguf;
 using XE_Local_AI_Engine.Providers.HuggingFace.Implementation;
 using XE_Local_AI_Engine.Providers.HuggingFace.Options;
 using XE_Local_AI_Engine.Tests.Testing;
@@ -38,7 +37,10 @@ public sealed class GgufDiscoveryShardTests
                      .WithUint32("qwen2.block_count", value: 48)
                      .Build();
 
-        using var harness = new ShardHarness(detail, new Dictionary<string, byte[]> { [first] = header });
+        using var harness = new ShardHarness(detail, new Dictionary<string, byte[]>
+        {
+            [first] = header
+        });
 
         var result = await harness.Discovery.InspectRepoAsync(RepoId, CancellationToken.None);
 

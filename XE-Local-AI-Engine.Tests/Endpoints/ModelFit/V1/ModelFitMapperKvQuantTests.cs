@@ -16,8 +16,7 @@ public sealed class ModelFitMapperKvQuantTests
 {
     private static ModelFitRecommendationRecord CreateRecord(string? diagnosticsJson)
     {
-        return new ModelFitRecommendationRecord(
-            Guid.NewGuid(),
+        return new ModelFitRecommendationRecord(Guid.NewGuid(),
             Guid.NewGuid(),
             Rank: 1,
             ModelName: "repo/model:Q4_K_M",
@@ -37,8 +36,7 @@ public sealed class ModelFitMapperKvQuantTests
 
     private static ModelFitLatestRecommendationsView CreateView(ModelFitRecommendationRecord record)
     {
-        return new ModelFitLatestRecommendationsView(
-            Guid.NewGuid(),
+        return new ModelFitLatestRecommendationsView(Guid.NewGuid(),
             ModelFitRunStatus.Succeeded,
             ApprovedImageId: "advisor",
             UseCase: "coding",

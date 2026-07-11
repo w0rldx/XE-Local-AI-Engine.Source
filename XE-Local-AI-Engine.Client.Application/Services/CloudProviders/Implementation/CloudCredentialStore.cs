@@ -337,14 +337,12 @@ public sealed class CloudCredentialStore : ICloudCredentialStore, IDisposable
     {
         if (string.IsNullOrWhiteSpace(connection.EntraClientSecret))
         {
-            throw new ArgumentException(
-                "Stored cloud provider Entra ID connection uses authorization-code sign-in, which requires a client secret.", paramName);
+            throw new ArgumentException("Stored cloud provider Entra ID connection uses authorization-code sign-in, which requires a client secret.", paramName);
         }
 
         if (!EntraAuthCodeDefaults.TryValidateRedirectUri(connection.EntraAuthCodeRedirectUri, out _))
         {
-            throw new ArgumentException(
-                "Stored cloud provider Entra ID authorization-code redirect URI must be an absolute http(s) URI on a loopback host (localhost or 127.0.0.1).",
+            throw new ArgumentException("Stored cloud provider Entra ID authorization-code redirect URI must be an absolute http(s) URI on a loopback host (localhost or 127.0.0.1).",
                 paramName);
         }
     }

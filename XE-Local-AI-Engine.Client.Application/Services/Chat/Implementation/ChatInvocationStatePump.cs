@@ -170,7 +170,8 @@ public sealed class ChatInvocationStatePump(INodeChatInvocationPump invocationPu
     {
         var terminal = await invocationPump.TerminalizeInterruptedAsync(correlation, cursor, wasCancelled).ConfigureAwait(false);
 
-        await eventWriter.WriteAsync(ChatStreamEventMapper.MessageEvent(terminal.EventType, correlation, terminal.Persisted, NowUnixMilliseconds(), sequence), CancellationToken.None).ConfigureAwait(false);
+        await eventWriter.WriteAsync(ChatStreamEventMapper.MessageEvent(terminal.EventType, correlation, terminal.Persisted, NowUnixMilliseconds(), sequence), CancellationToken.None)
+                         .ConfigureAwait(false);
     }
 
     private long NowUnixMilliseconds()

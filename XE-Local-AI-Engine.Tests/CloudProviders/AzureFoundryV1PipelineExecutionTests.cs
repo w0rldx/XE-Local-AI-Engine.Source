@@ -4,6 +4,7 @@ using System.Net;
 using System.Text;
 using Azure.Core;
 using Microsoft.Extensions.AI;
+using OpenAI;
 using XE_Local_AI_Engine.Client.Services.CloudProviders;
 using XE_Local_AI_Engine.Client.Services.CloudProviders.Implementation;
 using XE_Local_AI_Engine.Tests.Testing;
@@ -76,7 +77,15 @@ public sealed class AzureFoundryV1PipelineExecutionTests
     [Test]
     public async Task EntraId_ComposesWithCustomHeaders_WithoutEitherClobberingTheOther()
     {
-        var connection = CreateEntraConnection(headers: [new StoredAzureFoundryHeader { Name = "X-Tenant", Value = "tenant-a", IsSecret = false }]);
+        var connection = CreateEntraConnection(headers:
+        [
+            new StoredAzureFoundryHeader
+            {
+                Name = "X-Tenant",
+                Value = "tenant-a",
+                IsSecret = false
+            }
+        ]);
         var liveCredentialCache = new EntraLiveCredentialCache();
         var cacheKey = EntraDeviceCodeCredentialCacheKey.Create(connection.EntraTenantId, connection.EntraClientId, connection.EntraTokenScope);
         liveCredentialCache.Store(cacheKey, new StubTokenCredential(FakeJwt));
@@ -121,7 +130,15 @@ public sealed class AzureFoundryV1PipelineExecutionTests
     public async Task ApiKey_ComposesWithCustomHeaders_WithoutEitherClobberingTheOther()
     {
         var connection = CreateApiKeyConnection("real-secret-key",
-            headers: [new StoredAzureFoundryHeader { Name = "X-Tenant", Value = "tenant-a", IsSecret = false }]);
+            headers:
+            [
+                new StoredAzureFoundryHeader
+                {
+                    Name = "X-Tenant",
+                    Value = "tenant-a",
+                    IsSecret = false
+                }
+            ]);
         var factory = new AzureFoundryChatClientFactory();
         using var capture = new RequestCapturingHandler();
         using var httpClient = new HttpClient(capture);
@@ -136,7 +153,7 @@ public sealed class AzureFoundryV1PipelineExecutionTests
         AssertEx.Equal("tenant-a", tenantValues!.Single());
     }
 
-    private static async Task SendCannedChatRequestAsync(OpenAI.OpenAIClient openAiClient)
+    private static async Task SendCannedChatRequestAsync(OpenAIClient openAiClient)
     {
         var chatClient = openAiClient.GetChatClient("gpt-4o").AsIChatClient();
 
@@ -160,7 +177,13 @@ public sealed class AzureFoundryV1PipelineExecutionTests
             ApiSurface = AzureFoundryApiSurface.OpenAiV1,
             ApiKey = apiKey,
             Headers = headers ?? [],
-            Models = [new StoredAzureFoundryModel { DeploymentName = "gpt-4o" }]
+            Models =
+            [
+                new StoredAzureFoundryModel
+                {
+                    DeploymentName = "gpt-4o"
+                }
+            ]
         };
     }
 
@@ -177,7 +200,13 @@ public sealed class AzureFoundryV1PipelineExecutionTests
             EntraTokenScope = "api://backend-app/.default",
             EntraSignInMethod = EntraSignInMethod.DeviceCode,
             Headers = headers ?? [],
-            Models = [new StoredAzureFoundryModel { DeploymentName = "gpt-4o" }]
+            Models =
+            [
+                new StoredAzureFoundryModel
+                {
+                    DeploymentName = "gpt-4o"
+                }
+            ]
         };
     }
 

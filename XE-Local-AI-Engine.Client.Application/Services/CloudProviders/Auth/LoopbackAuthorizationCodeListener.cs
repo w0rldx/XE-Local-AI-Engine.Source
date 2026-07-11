@@ -1,5 +1,6 @@
 namespace XE_Local_AI_Engine.Client.Services.CloudProviders.Auth;
 
+using System.Diagnostics.CodeAnalysis;
 using System.Net;
 using System.Text;
 
@@ -95,7 +96,7 @@ internal sealed class LoopbackAuthorizationCodeListener : IDisposable
     // HttpListener requires a root-path ("/") prefix ending in "/" — that trailing slash is the listener's URI
     // shape requirement, not a filesystem path, so the analyzer's hardcoded-path-delimiter flag (S1075) is a false
     // positive here (mirrors FakeOllamaServer's loopback-bind suppression).
-    [System.Diagnostics.CodeAnalysis.SuppressMessage("Major Code Smell", "S1075:URIs should not be hardcoded",
+    [SuppressMessage("Major Code Smell", "S1075:URIs should not be hardcoded",
         Justification = "The trailing '/' is HttpListener's required prefix shape, not a filesystem or network path.")]
     private static string BuildListenerPrefix(Uri redirectUri)
     {

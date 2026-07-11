@@ -111,8 +111,7 @@ internal sealed class ModelCatalogProvider : IModelCatalogProvider, IDisposable
             var validation = ModelCatalogValidator.Validate(raw);
             if (!validation.IsValid)
             {
-                _logger.LogWarning(
-                    "Remote model catalog failed validation ({ErrorCount} error(s)); falling back to last-good/bundled. First error: {FirstError}",
+                _logger.LogWarning("Remote model catalog failed validation ({ErrorCount} error(s)); falling back to last-good/bundled. First error: {FirstError}",
                     validation.Errors.Count,
                     validation.Errors.Count > 0 ? validation.Errors[0] : "(none)");
                 return await FallbackToLastGoodAsync(cancellationToken).ConfigureAwait(false);

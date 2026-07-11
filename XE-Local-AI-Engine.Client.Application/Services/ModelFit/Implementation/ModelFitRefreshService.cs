@@ -279,9 +279,9 @@ public sealed class ModelFitRefreshService : IModelFitRefreshService
         var installedKeys = await ListInstalledKeysAsync(cancellationToken).ConfigureAwait(false);
 
         var catalogRecommendations = await BuildCatalogRecommendationsAsync(request, quant, ctxTarget, profile, installedKeys, cancellationToken)
-                                          .ConfigureAwait(false);
+            .ConfigureAwait(false);
         var exploreRecommendations = await BuildExploreRecommendationsAsync(request, quant, ctxTarget, profile, installedKeys, cancellationToken)
-                                          .ConfigureAwait(false);
+            .ConfigureAwait(false);
 
         return [.. catalogRecommendations, .. exploreRecommendations];
     }
@@ -743,6 +743,7 @@ public sealed class ModelFitRefreshService : IModelFitRefreshService
                     writer.WriteBoolean("kv_quant_fits", kvAdvisory.Fits);
                     writer.WriteBoolean("kv_quant_requires_flash_attention", kvAdvisory.RequiresFlashAttention);
                 }
+
                 // Recency + trust boosts surfaced to the UI. release_date carries the repo's last-modified timestamp (a
                 // "newer model" signal); the parser preserves both in the recommendation diagnostics blob (no new column).
                 // Only emit a date when HF actually supplied one — a default(DateTimeOffset) would surface as a year-0001

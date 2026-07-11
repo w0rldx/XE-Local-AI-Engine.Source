@@ -488,7 +488,10 @@ public sealed class AzureFoundryChatClientFactoryTests
     {
         var factory = new AzureFoundryChatClientFactory();
 
-        var chatClient = factory.Create(CreateConnection() with { ApiSurface = AzureFoundryApiSurface.OpenAiV1 }, "gpt-4o");
+        var chatClient = factory.Create(CreateConnection() with
+        {
+            ApiSurface = AzureFoundryApiSurface.OpenAiV1
+        }, "gpt-4o");
 
         AssertEx.NotNull(chatClient);
         AssertEx.True(chatClient is IChatClient);
@@ -499,7 +502,10 @@ public sealed class AzureFoundryChatClientFactoryTests
     {
         var factory = new AzureFoundryChatClientFactory();
 
-        ThrowsConfig(() => factory.Create(CreateConnection(apiKey: " ") with { ApiSurface = AzureFoundryApiSurface.OpenAiV1 }, "gpt-4o"));
+        ThrowsConfig(() => factory.Create(CreateConnection(apiKey: " ") with
+        {
+            ApiSurface = AzureFoundryApiSurface.OpenAiV1
+        }, "gpt-4o"));
     }
 
     [Test]
@@ -595,8 +601,10 @@ public sealed class AzureFoundryChatClientFactoryTests
     {
         var factory = new AzureFoundryChatClientFactory();
 
-        ThrowsConfig(() => factory.Create(
-            CreateConnection(endpoint: "https://evil.example.com/") with { ApiSurface = AzureFoundryApiSurface.OpenAiV1 },
+        ThrowsConfig(() => factory.Create(CreateConnection(endpoint: "https://evil.example.com/") with
+            {
+                ApiSurface = AzureFoundryApiSurface.OpenAiV1
+            },
             "gpt-4o"));
     }
 

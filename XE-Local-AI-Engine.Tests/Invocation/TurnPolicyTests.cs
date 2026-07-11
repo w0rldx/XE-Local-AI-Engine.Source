@@ -14,8 +14,8 @@ public sealed class TurnPolicyTests
     public void Resolve_WithDefaultOptions_CopiesEveryValueFromItsConfiguredSource()
     {
         var package = RuntimePackageBuilder.Valid()
-                                            .WithTimeout(invocationSeconds: 120, toolCallSeconds: 15, streamIdleSeconds: 45)
-                                            .Build();
+                                           .WithTimeout(invocationSeconds: 120, toolCallSeconds: 15, streamIdleSeconds: 45)
+                                           .Build();
 
         var policy = TurnPolicy.Resolve(package,
             new ConversationContextBudgetOptions(),
@@ -41,8 +41,8 @@ public sealed class TurnPolicyTests
     public void Resolve_WhenToolCallTimeoutSecondsIsZero_FallsBackToNodeGlobalAge()
     {
         var package = RuntimePackageBuilder.Valid()
-                                            .WithTimeout(toolCallSeconds: 0)
-                                            .Build();
+                                           .WithTimeout(toolCallSeconds: 0)
+                                           .Build();
         var fallback = TimeSpan.FromMinutes(7);
 
         var policy = TurnPolicy.Resolve(package,
@@ -58,9 +58,17 @@ public sealed class TurnPolicyTests
     public void Resolve_WhenPackageHasNumCtxOverride_UsesItAsCapacity()
     {
         var package = RuntimePackageBuilder.Valid()
-                                            .WithSamplingOptions(new SamplingOptions { NumCtx = 4096, MaxOutputTokens = 2048 })
-                                            .Build();
-        var budgetOptions = new ConversationContextBudgetOptions { DefaultContextTokens = 8192, ReservedOutputTokenFloor = 1024 };
+                                           .WithSamplingOptions(new SamplingOptions
+                                           {
+                                               NumCtx = 4096,
+                                               MaxOutputTokens = 2048
+                                           })
+                                           .Build();
+        var budgetOptions = new ConversationContextBudgetOptions
+        {
+            DefaultContextTokens = 8192,
+            ReservedOutputTokenFloor = 1024
+        };
 
         var policy = TurnPolicy.Resolve(package,
             budgetOptions,
@@ -77,7 +85,11 @@ public sealed class TurnPolicyTests
     public void Resolve_WhenNoNumCtxOverride_FallsBackToConfiguredDefaultContextTokens()
     {
         var package = RuntimePackageBuilder.Valid().Build();
-        var budgetOptions = new ConversationContextBudgetOptions { DefaultContextTokens = 6000, ReservedOutputTokenFloor = 500 };
+        var budgetOptions = new ConversationContextBudgetOptions
+        {
+            DefaultContextTokens = 6000,
+            ReservedOutputTokenFloor = 500
+        };
 
         var policy = TurnPolicy.Resolve(package,
             budgetOptions,

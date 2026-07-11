@@ -32,9 +32,9 @@ public sealed class EntraAuthCodeRedeemer : IEntraAuthCodeRedeemer
         await EntraAuthCodeConfidentialClientFactory.TryRegisterPersistentCacheAsync(app, _dataDirectory, _logger).ConfigureAwait(false);
 
         var result = await app.AcquireTokenByAuthorizationCode([connection.EntraTokenScope!], authorizationCode)
-                               .WithPkceCodeVerifier(codeVerifier)
-                               .ExecuteAsync(cancellationToken)
-                               .ConfigureAwait(false);
+                              .WithPkceCodeVerifier(codeVerifier)
+                              .ExecuteAsync(cancellationToken)
+                              .ConfigureAwait(false);
 
         return new EntraAuthCodeRedemptionResult(app, result.Account);
     }

@@ -1,6 +1,7 @@
 namespace XE_Local_AI_Engine.Tests.Knowledge;
 
 using System.Collections.Concurrent;
+using System.Diagnostics;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Options;
@@ -91,7 +92,7 @@ public sealed class KnowledgeIngestionWorkerTests
 
         // The document ignores cancellation and would run for 10s; StopAsync must return within the ~1s drain window and
         // must not throw, abandoning the hung document (it stays non-terminal and recovers on the next start).
-        var stopwatch = System.Diagnostics.Stopwatch.StartNew();
+        var stopwatch = Stopwatch.StartNew();
         await worker.StopAsync(CancellationToken.None).ConfigureAwait(false);
         stopwatch.Stop();
 

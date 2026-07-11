@@ -259,9 +259,9 @@ internal sealed class AzureFoundryErrorTranslatingChatClient : DelegatingChatCli
         for (var current = exception; current is not null; current = current.InnerException)
         {
             lines.AddRange(current.Message
-                .Split('\n')
-                .Select(static line => line.TrimEnd('\r').Trim())
-                .Where(static line => line.Length > 0));
+                                  .Split('\n')
+                                  .Select(static line => line.TrimEnd('\r').Trim())
+                                  .Where(static line => line.Length > 0));
         }
 
         if (lines.Count == 0)

@@ -2,6 +2,7 @@
 // preview; compiling the DevUI registration out of Release keeps that preview package
 // out of the published desktop build entirely (the csproj reference carries the same
 // Debug condition).
+
 #if DEBUG
 namespace XE_Local_AI_Engine.AI.Agent.DependencyInjection;
 

@@ -1,5 +1,6 @@
 namespace XE_Local_AI_Engine.Client.DependencyInjection.Modules;
 
+using Microsoft.Extensions.DependencyInjection.Extensions;
 using XE_Local_AI_Engine.Client.Persistence;
 using XE_Local_AI_Engine.Client.Persistence.Cryptography;
 using XE_Local_AI_Engine.Client.Persistence.Implementation;
@@ -15,7 +16,6 @@ using XE_Local_AI_Engine.Client.Services.Invocation;
 using XE_Local_AI_Engine.Client.Services.Invocation.Context;
 using XE_Local_AI_Engine.Client.Services.Invocation.Envelope;
 using XE_Local_AI_Engine.Client.Services.Invocation.Envelope.Implementation;
-using Microsoft.Extensions.DependencyInjection.Extensions;
 using XE_Local_AI_Engine.Client.Services.Invocation.Implementation;
 using XE_Local_AI_Engine.Client.Services.Invocation.Resilience;
 using XE_Local_AI_Engine.Client.Services.Invocation.RuntimePackage;
