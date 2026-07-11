@@ -68,6 +68,30 @@ public sealed class MafPlaybookEvalAgentRunnerTests
         AssertEx.NotNullOrEmpty(result);
     }
 
+    [Test]
+    public async Task RunAsync_InstructionsDeliveredOnce_AndAgentNameNeverLeaksToTheWire()
+    {
+        using var capturing = new CapturingEvalChatClient();
+        var runner = new MafPlaybookEvalAgentRunner(NullLoggerFactory.Instance, EmptyServiceProvider.Instance);
+
+        _ = await runner.RunAsync(capturing, BaselineInstructions, BuildTurns(), CancellationToken.None);
+
+        var messages = AssertEx.NotNull(capturing.CapturedMessages, "the chat client must have captured the outbound messages");
+
+        var systemInstructionMessages = messages.Count(message =>
+            message.Role == ChatRole.System && string.Equals(message.Text, BaselineInstructions, StringComparison.Ordinal));
+        AssertEx.Equal(expected: 1, systemInstructionMessages);
+
+        var outboundInstructions = capturing.CapturedOptions?.Instructions;
+        AssertEx.True(string.IsNullOrEmpty(outboundInstructions),
+            "instructions must not also ride ChatOptions.Instructions (that would double-send them)");
+
+        AssertEx.False(messages.Any(message => (message.Text ?? string.Empty).Contains("playbook-eval", StringComparison.Ordinal)),
+            "the eval agent name must never appear as message content");
+        AssertEx.True(string.IsNullOrEmpty(outboundInstructions) || !outboundInstructions.Contains("playbook-eval", StringComparison.Ordinal),
+            "the eval agent name must never be sent as instructions");
+    }
+
     private static List<ChatMessage> BuildTurns()
     {
         return
@@ -113,6 +137,44 @@ public sealed class MafPlaybookEvalAgentRunnerTests
 
             var reply = hasCandidateMarker ? CandidateReply : BaselineReply;
             return Task.FromResult(new ChatResponse(new ChatMessage(ChatRole.Assistant, reply)));
+        }
+
+        public IAsyncEnumerable<ChatResponseUpdate> GetStreamingResponseAsync(IEnumerable<ChatMessage> messages,
+            ChatOptions? options = null,
+            CancellationToken cancellationToken = default)
+        {
+            throw new NotSupportedException("The eval runner exercises the non-streaming RunAsync path only.");
+        }
+
+        public object? GetService(Type serviceType, object? serviceKey = null)
+        {
+            return serviceType == typeof(IChatClient) ? this : null;
+        }
+
+        public void Dispose()
+        {
+            GC.SuppressFinalize(this);
+        }
+    }
+
+    /// <summary>
+    ///     Records the exact outbound <see cref="ChatMessage" /> list and <see cref="ChatOptions" /> the eval runner
+    ///     hands to the model on the non-streaming <c>GetResponseAsync</c> path, so a test can assert the provider-wire
+    ///     instruction contract (instructions delivered once, agent name never leaked).
+    /// </summary>
+    private sealed class CapturingEvalChatClient : IChatClient
+    {
+        public IReadOnlyList<ChatMessage>? CapturedMessages { get; private set; }
+
+        public ChatOptions? CapturedOptions { get; private set; }
+
+        public Task<ChatResponse> GetResponseAsync(IEnumerable<ChatMessage> messages,
+            ChatOptions? options = null,
+            CancellationToken cancellationToken = default)
+        {
+            CapturedMessages = messages.ToList();
+            CapturedOptions = options;
+            return Task.FromResult(new ChatResponse(new ChatMessage(ChatRole.Assistant, "ok")));
         }
 
         public IAsyncEnumerable<ChatResponseUpdate> GetStreamingResponseAsync(IEnumerable<ChatMessage> messages,

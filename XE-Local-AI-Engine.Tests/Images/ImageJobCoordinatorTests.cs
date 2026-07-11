@@ -117,6 +117,22 @@ public sealed class ImageJobCoordinatorTests
     }
 
     [Test]
+    public async Task DisposeAsync_WhenAJobIsGenerating_PersistsCancelledBeforeReturning()
+    {
+        using var harness = Harness.Create(blockRuntime: true);
+
+        var jobId = await harness.Coordinator.EnqueueAsync(NewInput("interrupted-by-shutdown"), CancellationToken.None).ConfigureAwait(false);
+        await harness.Runtime.Started.WaitAsync(Timeout).ConfigureAwait(false);
+
+        // Graceful shutdown: DisposeAsync cancels the in-flight job and drains its run task, so the terminal Cancelled
+        // state is persisted BEFORE DisposeAsync returns (no reliance on the startup reconciler for a clean shutdown).
+        await harness.Coordinator.DisposeAsync().ConfigureAwait(false);
+
+        AssertEx.Equal(ImageJobStatus.Cancelled, harness.Store.StatusOf(jobId));
+        AssertEx.True(harness.Runtime.ObservedCancellation, "The runtime's cancellation token must have been signalled.");
+    }
+
+    [Test]
     public async Task ImageJobHub_WhenLateSubscriber_ReplaysBufferedEventsInSeqOrder()
     {
         var jobId = Guid.NewGuid();
@@ -358,6 +374,25 @@ public sealed class ImageJobCoordinatorTests
                 CancellationRequestedAtUtc = requestedAtUtc
             });
             return Task.CompletedTask;
+        }
+
+        public Task<IReadOnlyList<Guid>> MarkInterruptedFailedAsync(string sanitizedError, long completedAtUtc, CancellationToken cancellationToken)
+        {
+            var interrupted = _jobs.Values
+                                   .Where(view => view.Status is ImageJobStatus.Queued or ImageJobStatus.Generating)
+                                   .Select(view => view.Id)
+                                   .ToArray();
+            foreach (var jobId in interrupted)
+            {
+                Update(jobId, view => view with
+                {
+                    Status = ImageJobStatus.Failed,
+                    SanitizedError = sanitizedError,
+                    CompletedAtUtc = completedAtUtc
+                });
+            }
+
+            return Task.FromResult<IReadOnlyList<Guid>>(interrupted);
         }
 
         private void Update(Guid jobId, Func<ImageJobView, ImageJobView> mutate)

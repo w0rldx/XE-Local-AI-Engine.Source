@@ -52,7 +52,10 @@ public sealed class ModelFitBenchmarkStore(NodeChatDbContext dbContext) : IModel
                            MachineKey = input.MachineKey,
                            NGpuLayers = input.NGpuLayers,
                            TensorSplit = input.TensorSplit,
-                           OverrideTensor = input.OverrideTensor
+                           OverrideTensor = input.OverrideTensor,
+                           KvTypeV = input.KvTypeV,
+                           FlashAttn = input.FlashAttn,
+                           ProfileId = input.ProfileId
                        })
                        .ToArray();
 
@@ -77,6 +80,22 @@ public sealed class ModelFitBenchmarkStore(NodeChatDbContext dbContext) : IModel
                                        .ConfigureAwait(false);
 
         return entities.Select(ToRecord).ToArray();
+    }
+
+    public async Task<ModelFitBenchmarkRecord?> GetLatestSuccessfulForProfileAsync(Guid profileId, CancellationToken cancellationToken = default)
+    {
+        // Join to the parent snapshot so only Succeeded runs qualify, newest first. Legacy rows have a null ProfileId
+        // and are excluded by the equality filter, so they can never justify a freeze.
+        var entity = await (from benchmark in _dbContext.ModelFitBenchmarks.AsNoTracking()
+                            join snapshot in _dbContext.ModelFitSnapshots.AsNoTracking()
+                                on benchmark.SnapshotId equals snapshot.Id
+                            where benchmark.ProfileId == profileId && snapshot.Status == ModelFitRunStatus.Succeeded
+                            orderby snapshot.CreatedAtUtc descending
+                            select benchmark)
+                           .FirstOrDefaultAsync(cancellationToken)
+                           .ConfigureAwait(false);
+
+        return entity is null ? null : ToRecord(entity);
     }
 
     private static ModelFitBenchmarkRecord ToRecord(ModelFitBenchmark entity)
@@ -104,7 +123,10 @@ public sealed class ModelFitBenchmarkStore(NodeChatDbContext dbContext) : IModel
             entity.MachineKey,
             entity.NGpuLayers,
             entity.TensorSplit,
-            entity.OverrideTensor);
+            entity.OverrideTensor,
+            entity.KvTypeV,
+            entity.FlashAttn,
+            entity.ProfileId);
     }
 
     private static byte[]? EncodeOptional(string? value)

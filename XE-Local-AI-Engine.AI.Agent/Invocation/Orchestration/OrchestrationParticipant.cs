@@ -33,6 +33,16 @@ public sealed record OrchestrationParticipant
     public string? ReasoningEffort { get; init; }
 
     /// <summary>
+    ///     Whether this participant's resolved <see cref="ModelId" /> advertises the Ollama <c>thinking</c> capability.
+    ///     Gates how <see cref="ReasoningEffort" /> is translated onto the participant agent's construction-time
+    ///     <c>ChatOptions</c> (see <see cref="ParticipantReasoningOptions" />), mirroring the single-agent
+    ///     think contract: a model without the capability returns HTTP 400 for any <c>think</c> field. Defaults to
+    ///     <see langword="true" /> — cloud providers ignore the unknown property, so <see langword="true" /> is the safe
+    ///     default that never suppresses a capable model's reasoning.
+    /// </summary>
+    public bool SupportsThinking { get; init; } = true;
+
+    /// <summary>
     ///     The participant's projected, approval-flagged offer list as bridged tools (see the type remarks). Empty
     ///     when the participant offers no tools.
     /// </summary>

@@ -44,6 +44,11 @@ public sealed partial class InvocationRunner
                 Instructions = participant.Instructions,
                 ModelId = participantResolution.Model,
                 ReasoningEffort = participant.ReasoningEffort,
+                // The turn's resolved thinking capability. Exactly correct for a participant running the turn's model
+                // (no pinned model of its own — the common case, incl. triage); a participant that pins a DIFFERENT
+                // model inherits this as a safe approximation (follow-up: resolve per-pinned-model capability in the
+                // resolver so a graded effort on a pinned non-thinking model can never reach the think wire).
+                SupportsThinking = package.SupportsThinking,
                 Tools = BuildParticipantTools(package, participant.Tools)
             });
         }

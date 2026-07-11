@@ -81,17 +81,46 @@ public sealed class InferenceBenchmarkHarness : IInferenceBenchmarkHarness
             _ = await StreamStageAsync(chatClient, warmMessages, chatOptions, ct).ConfigureAwait(false);
             var afterWarm = await ScrapeMetricsAsync(metricsUri, ct).ConfigureAwait(false);
 
-            // Stage 3 — one deterministic mock tool round; the loop wall-clock is the tool-loop metric.
-            var toolFunction = AIFunctionFactory.Create(() => spec.Tool.DeterministicResult, spec.Tool.Name, spec.Tool.Description);
+            // Stage 3 — one deterministic tool round. The client MUST be decorated with function invocation
+            // (UseFunctionInvocation): without it the offered tool delegate is never called and no second model turn
+            // happens, so the elapsed time would measure a single plain completion, not a tool loop. A dedicated inner
+            // client is wrapped so disposing the FICC wrapper (which cascades to its own inner) never tears down the
+            // shared streaming client the other stages use. The measurement is valid ONLY when the model actually
+            // invoked the tool AND the second model turn completed; a small local model that refuses the tool yields no
+            // tool loop, so ToolLoopMs is recorded as null (a failed measurement) rather than a bogus single-turn time.
+            var toolInvocations = 0;
+            var toolFunction = AIFunctionFactory.Create(() =>
+                {
+                    _ = Interlocked.Increment(ref toolInvocations);
+                    return spec.Tool.DeterministicResult;
+                },
+                spec.Tool.Name,
+                spec.Tool.Description);
             var toolOptions = BuildOptions(endpoint.ModelName, spec, tools: [toolFunction]);
             var toolMessages = new List<ChatMessage>
             {
                 new(ChatRole.System, spec.SystemPersona),
                 new(ChatRole.User, spec.ToolUserTurn)
             };
-            var toolStopwatch = Stopwatch.StartNew();
-            _ = await chatClient.GetResponseAsync(toolMessages, toolOptions, ct).ConfigureAwait(false);
-            toolStopwatch.Stop();
+
+            double? toolLoopMs;
+            using (var toolInnerClient = _chatClientFactory.CreateChatClient(endpoint.BaseAddress, endpoint.ModelName))
+            using (var toolInvokingClient = toolInnerClient.AsBuilder().UseFunctionInvocation().Build())
+            {
+                var toolStopwatch = Stopwatch.StartNew();
+                _ = await toolInvokingClient.GetResponseAsync(toolMessages, toolOptions, ct).ConfigureAwait(false);
+                toolStopwatch.Stop();
+
+                if (Volatile.Read(ref toolInvocations) > 0)
+                {
+                    toolLoopMs = toolStopwatch.Elapsed.TotalMilliseconds;
+                }
+                else
+                {
+                    toolLoopMs = null;
+                    _logger.LogDebug("Benchmark tool-loop stage: the model did not invoke the offered tool; recording ToolLoopMs as null.");
+                }
+            }
 
             // Stage 4 — long-context injection sized near the profile's context window.
             var longMessages = new List<ChatMessage>
@@ -116,7 +145,7 @@ public sealed class InferenceBenchmarkHarness : IInferenceBenchmarkHarness
                 TtftMs: ttftMs,
                 TotalLatencyMs: totalStopwatch.Elapsed.TotalMilliseconds,
                 CacheHitRate: cacheHitRate,
-                ToolLoopMs: toolStopwatch.Elapsed.TotalMilliseconds,
+                ToolLoopMs: toolLoopMs,
                 VramLoadBytes: vramLoad,
                 VramAfterBytes: vramAfter,
                 Runs: 1,
