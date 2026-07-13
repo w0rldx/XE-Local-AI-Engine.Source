@@ -78,17 +78,28 @@ internal sealed class PlaybookEvalService(
         var goldenCases = await _goldenConversationStore.ListEnabledByAgentAsync(agentId, cancellationToken).ConfigureAwait(false);
         var goldenCaseTotal = goldenCases.Count;
 
+        // Fingerprint the behaviour-affecting inputs over the FULL enabled golden set (before any per-run cap) so the
+        // promote gate can detect a base-instruction / sibling-action / golden-set / model change after this eval ran.
+        var fingerprint = PlaybookEvalFingerprint.Compute(suggested.Id,
+            suggested.Version,
+            agent.Instructions,
+            enabled,
+            goldenCases,
+            _options.ModelName);
+
         // Empty golden set never passes (no-regression is unprovable with zero cases) — persist a failing result so the
         // gap is visible (promote stays blocked) rather than silently waved through.
         if (goldenCases.Count == 0)
         {
             _logger.LogWarning("Eval for agent {AgentId} action {ActionId} has no golden cases; recording a failing result (needs golden cases).", agentId, actionId);
-            return await PersistAsync(agentId, actionId, BuildEmptyResult(suggested.Version), cancellationToken).ConfigureAwait(false);
+            return await PersistAsync(agentId, actionId, BuildEmptyResult(suggested.Version, fingerprint), cancellationToken).ConfigureAwait(false);
         }
 
         if (goldenCases.Count > _options.MaxGoldenCases)
         {
-            _logger.LogWarning("Eval for agent {AgentId} has {Count} golden cases; truncating to {Max}.", agentId, goldenCases.Count, _options.MaxGoldenCases);
+            // Cap is a cost guard, NOT a pass shortcut: the run stays INCOMPLETE (GoldenCaseCount < GoldenCaseTotal) and
+            // the promote gate refuses to authorize it. An operator raises MaxGoldenCases to run a complete eval.
+            _logger.LogWarning("Eval for agent {AgentId} has {Count} golden cases; evaluating only {Max} (the run will be marked incomplete and cannot authorize promotion).", agentId, goldenCases.Count, _options.MaxGoldenCases);
             goldenCases = [.. goldenCases.Take(_options.MaxGoldenCases)];
         }
 
@@ -111,7 +122,7 @@ internal sealed class PlaybookEvalService(
             caseResults.Add(await ScoreCaseAsync(goldenCase, baselinePrompt, candidatePrompt, chatClient, cancellationToken).ConfigureAwait(false));
         }
 
-        var result = BuildResult(suggested.Version, goldenCaseTotal, caseResults);
+        var result = BuildResult(suggested.Version, goldenCaseTotal, caseResults, fingerprint);
         return await PersistAsync(agentId, actionId, result, cancellationToken).ConfigureAwait(false);
     }
 
@@ -165,7 +176,7 @@ internal sealed class PlaybookEvalService(
         return string.Equals(role, "assistant", StringComparison.OrdinalIgnoreCase) ? ChatRole.Assistant : ChatRole.User;
     }
 
-    private PlaybookEvalResult BuildResult(int actionVersion, int goldenCaseTotal, IReadOnlyList<PlaybookEvalCaseResult> caseResults)
+    private PlaybookEvalResult BuildResult(int actionVersion, int goldenCaseTotal, IReadOnlyList<PlaybookEvalCaseResult> caseResults, string fingerprint)
     {
         var baselinePass = caseResults.Count(static caseResult => caseResult.BaselinePass);
         var candidatePass = caseResults.Count(static caseResult => caseResult.CandidatePass);
@@ -173,6 +184,8 @@ internal sealed class PlaybookEvalService(
         var improved = caseResults.Count(static caseResult => !caseResult.BaselinePass && caseResult.CandidatePass);
 
         // Passed requires at least one golden case AND zero regressions (no-regression is unprovable with zero cases).
+        // Note: Passed is a subset property; completeness (GoldenCaseCount == GoldenCaseTotal) is enforced separately by
+        // the promote gate, so a subset "pass" of a truncated run still cannot authorize promotion.
         var passed = caseResults.Count > 0 && regressed == 0;
 
         return new PlaybookEvalResult(passed,
@@ -185,10 +198,11 @@ internal sealed class PlaybookEvalService(
             candidatePass,
             regressed,
             improved,
-            caseResults);
+            caseResults,
+            fingerprint);
     }
 
-    private PlaybookEvalResult BuildEmptyResult(int actionVersion)
+    private PlaybookEvalResult BuildEmptyResult(int actionVersion, string fingerprint)
     {
         return new PlaybookEvalResult(Passed: false,
             _timeProvider.GetUtcNow().ToUnixTimeMilliseconds(),
@@ -200,7 +214,8 @@ internal sealed class PlaybookEvalService(
             CandidatePassCount: 0,
             RegressedCaseCount: 0,
             ImprovedCaseCount: 0,
-            []);
+            [],
+            fingerprint);
     }
 
     private async Task<PlaybookEvalOutcome> PersistAsync(Guid agentId, Guid actionId, PlaybookEvalResult result, CancellationToken cancellationToken)
