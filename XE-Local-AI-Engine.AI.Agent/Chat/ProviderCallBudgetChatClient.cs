@@ -79,7 +79,11 @@ internal sealed class ProviderCallBudgetChatClient : DelegatingChatClient
         var window = ResolveContextWindow(options, budgetOptions);
         var reserved = ResolveReservedOutputTokens(options, budgetOptions);
         var effectiveWindow = Math.Max(window - reserved, 0);
-        var instructionsTokens = ProviderMessageTokenEstimator.EstimateTokens(options?.Instructions);
+        // Instructions AND the tool definitions (name + description + JSON schema) are fixed per-round input the model
+        // never sees as a droppable message but which still counts against the window — folding both into the overhead
+        // stops a tool-heavy agent from under-estimating and rounding an over-window request through.
+        var instructionsTokens = ProviderMessageTokenEstimator.EstimateTokens(options?.Instructions)
+                                 + ProviderMessageTokenEstimator.EstimateTools(options?.Tools);
 
         var result = ProviderCallBudgeter.Budget(materialized, instructionsTokens, effectiveWindow, budgetOptions);
 

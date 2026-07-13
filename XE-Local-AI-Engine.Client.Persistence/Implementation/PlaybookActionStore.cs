@@ -114,6 +114,58 @@ public sealed class PlaybookActionStore(NodeChatDbContext dbContext, TimeProvide
         return ToRecord(entity);
     }
 
+    public async Task<PlaybookPromotionCommit> PromoteSuggestedIfCurrentAsync(Guid id,
+        int expectedVersion,
+        int maxEnabledActions,
+        string? evalResult,
+        CancellationToken cancellationToken = default)
+    {
+        // Serialize the version/state guard, the cap re-check and the Enabled write into one transaction so a concurrent
+        // edit/promote cannot slip between the checks and the write. Any early return disposes the transaction, rolling
+        // back with nothing written.
+        await using var transaction = await _dbContext.Database.BeginTransactionAsync(cancellationToken).ConfigureAwait(false);
+
+        var entity = await _dbContext.PlaybookActions
+                                     .FirstOrDefaultAsync(action => action.Id == id, cancellationToken)
+                                     .ConfigureAwait(false);
+        if (entity is null)
+        {
+            return new PlaybookPromotionCommit(PlaybookPromotionCommitStatus.NotFound, Record: null);
+        }
+
+        // Optimistic-concurrency guard: the row must still be the exact snapshot the caller validated. A concurrent
+        // UpdateSuggestedAsync bumps Version (and clears the eval); a concurrent promote moves State off Suggested —
+        // either way the recorded eval evidence no longer proves this content, so refuse rather than enable on it.
+        if (entity.Version != expectedVersion || entity.State != (int)PlaybookActionState.Suggested)
+        {
+            return new PlaybookPromotionCommit(PlaybookPromotionCommitStatus.VersionConflict, Record: null);
+        }
+
+        // Cap re-check adjacent to the write, in the same transaction: two concurrent promotes cannot both read a
+        // below-cap count and both enable, because the count read and the Enabled write commit atomically.
+        var enabled = (int)PlaybookActionState.Enabled;
+        var enabledCount = await _dbContext.PlaybookActions
+                                           .CountAsync(action => action.AgentDefinitionId == entity.AgentDefinitionId && action.State == enabled, cancellationToken)
+                                           .ConfigureAwait(false);
+        if (enabledCount >= maxEnabledActions)
+        {
+            return new PlaybookPromotionCommit(PlaybookPromotionCommitStatus.CapReached, Record: null);
+        }
+
+        var now = _timeProvider.GetUtcNow().ToUnixTimeMilliseconds();
+        entity.State = enabled;
+        entity.EvalResult = evalResult;
+        entity.EnabledAtUtc = now;
+        entity.UpdatedAtUtc = now;
+        // State transition (Suggested -> Enabled) is config-affecting, so Version bumps — mirrors UpdateAsync's rule.
+        entity.Version++;
+
+        _ = await _dbContext.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
+        await transaction.CommitAsync(cancellationToken).ConfigureAwait(false);
+
+        return new PlaybookPromotionCommit(PlaybookPromotionCommitStatus.Committed, ToRecord(entity));
+    }
+
     public async Task<bool> DeleteAsync(Guid id, CancellationToken cancellationToken = default)
     {
         var entity = await _dbContext.PlaybookActions
