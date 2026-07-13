@@ -34,17 +34,12 @@ public sealed class NodeChatContentEncryptionBackfillService(
                                               LIMIT {0}
                                               """;
 
-    // Durable node-local state lives in a tiny key/value table in the chat DB itself (created idempotently, outside EF's
-    // model — no migration), so the "reclamation still owed" fact survives a restart and is consistent with the data it
-    // guards. It is a plain table (not PRAGMA user_version) so VACUUM preserves it deterministically.
+    // Durable node-local state lives in the modeled `chat_maintenance_state` key/value table (entity
+    // ChatMaintenanceState + migration AddChatMaintenanceState), so the "reclamation still owed" fact survives a restart
+    // and is consistent with the data it guards. It is a plain table (not PRAGMA user_version) so VACUUM preserves it
+    // deterministically. Reads/writes stay raw-SQL to match this service's raw-connection style; the table is guaranteed
+    // to exist because chat migrations are applied at startup before any hosted service runs (Program.cs).
     private const string MaintenanceStateName = "content_encryption_reclaim_pending";
-
-    private const string CreateMaintenanceTableSql = """
-                                                     CREATE TABLE IF NOT EXISTS chat_maintenance_state (
-                                                         name TEXT NOT NULL PRIMARY KEY,
-                                                         value TEXT NOT NULL
-                                                     ) WITHOUT ROWID;
-                                                     """;
 
     private const string SetMarkerSql = "INSERT INTO chat_maintenance_state (name, value) VALUES ($name, '1') ON CONFLICT(name) DO UPDATE SET value = '1';";
 
@@ -78,7 +73,6 @@ public sealed class NodeChatContentEncryptionBackfillService(
     {
         try
         {
-            await EnsureMaintenanceStateTableAsync(cancellationToken).ConfigureAwait(false);
             var reclamationPendingFromPreviousRun = await IsReclamationPendingAsync(cancellationToken).ConfigureAwait(false);
             var hasLegacyCandidates = await HasLegacyCandidatesAsync(cancellationToken).ConfigureAwait(false);
 
@@ -194,9 +188,25 @@ public sealed class NodeChatContentEncryptionBackfillService(
             var connection = dbContext.Database.GetDbConnection();
             await OpenIfNeededAsync(connection, cancellationToken).ConfigureAwait(false);
 
-            await ExecuteRawAsync(connection, "PRAGMA wal_checkpoint(TRUNCATE);", cancellationToken).ConfigureAwait(false);
+            // A checkpoint that reports busy or leaves frames behind must NOT be treated as success: proceeding to
+            // VACUUM and clearing the marker on an incomplete truncate could leave plaintext-bearing WAL frames on disk
+            // with the marker permanently cleared. Bail out (keep the marker) so the next startup retries.
+            if (!await CheckpointTruncatedFullyAsync(connection, cancellationToken).ConfigureAwait(false))
+            {
+                LogIncompleteCheckpoint("before VACUUM");
+                return false;
+            }
+
             await ExecuteRawAsync(connection, "VACUUM;", cancellationToken).ConfigureAwait(false);
-            await ExecuteRawAsync(connection, "PRAGMA wal_checkpoint(TRUNCATE);", cancellationToken).ConfigureAwait(false);
+
+            // The second checkpoint flushes VACUUM's own rebuild into the main file; if it does not fully truncate, the
+            // rebuilt (residue-free) pages may still be sitting in the WAL, so the reclamation is not yet complete.
+            if (!await CheckpointTruncatedFullyAsync(connection, cancellationToken).ConfigureAwait(false))
+            {
+                LogIncompleteCheckpoint("after VACUUM");
+                return false;
+            }
+
             return true;
         }
         catch (OperationCanceledException)
@@ -213,14 +223,31 @@ public sealed class NodeChatContentEncryptionBackfillService(
         }
     }
 
-    // Creates the durable maintenance-state table if it does not exist. Runs outside EF's model (no migration); safe on
-    // both migrated databases and EnsureCreated test databases.
-    private async Task EnsureMaintenanceStateTableAsync(CancellationToken cancellationToken)
+    // Runs PRAGMA wal_checkpoint(TRUNCATE) and inspects its result row (busy, log, checkpointed). The pragma does NOT
+    // reliably throw when it cannot complete: busy != 0 means SQLITE_BUSY (a concurrent reader blocked the truncate) and
+    // log > 0 with checkpointed < log means WAL frames were left behind — both are cleanup failures. In a non-WAL
+    // journal (the app default is DELETE) the pragma is a no-op that returns (0, -1, -1), which is success.
+    private static async Task<bool> CheckpointTruncatedFullyAsync(System.Data.Common.DbConnection connection, CancellationToken cancellationToken)
     {
-        await using var scope = scopeFactory.CreateAsyncScope();
-        var connection = scope.ServiceProvider.GetRequiredService<NodeChatDbContext>().Database.GetDbConnection();
-        await OpenIfNeededAsync(connection, cancellationToken).ConfigureAwait(false);
-        await ExecuteRawAsync(connection, CreateMaintenanceTableSql, cancellationToken).ConfigureAwait(false);
+        await using var command = connection.CreateCommand();
+        command.CommandText = "PRAGMA wal_checkpoint(TRUNCATE);";
+        await using var reader = await command.ExecuteReaderAsync(cancellationToken).ConfigureAwait(false);
+        if (!await reader.ReadAsync(cancellationToken).ConfigureAwait(false))
+        {
+            return true;
+        }
+
+        var busy = reader.GetInt64(0);
+        var log = reader.GetInt64(1);
+        var checkpointed = reader.GetInt64(2);
+        return busy == 0 && !(log > 0 && checkpointed < log);
+    }
+
+    private void LogIncompleteCheckpoint(string phase)
+    {
+        logger.LogWarning(
+            "NodeChatContentEncryptionBackfillService: WAL checkpoint {Phase} did not fully truncate (busy or frames remaining); the reclamation-pending marker remains set and reclamation will be retried on the next startup.",
+            phase);
     }
 
     private Task<bool> HasLegacyCandidatesAsync(CancellationToken cancellationToken)
