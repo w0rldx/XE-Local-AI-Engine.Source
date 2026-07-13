@@ -820,13 +820,27 @@ public sealed class NodeChatPersistenceServiceTests : IDisposable
             await service.PersistUserMessageAsync(new NodeChatPersistUserMessageRequest(conversation.ConversationId, messageId, "placeholder", CreatedAtUtc: 2)).ConfigureAwait(false);
             await WriteRawMessageContentAsync(provider, messageId, Encoding.UTF8.GetBytes(legacyText)).ConfigureAwait(false);
 
-            using var failingBackfill = new NodeChatContentEncryptionBackfillService(provider.GetRequiredService<IServiceScopeFactory>(),
-                NullLogger<NodeChatContentEncryptionBackfillService>.Instance);
+            // Capture the service's logs so the test can prove the failure was specifically a busy/incomplete checkpoint
+            // (RunOnceAsync swallows migration AND cleanup errors, so marker-set alone would not distinguish them).
+            var capturingLogger = new XE_Local_AI_Engine.Tests.CodexOAuth.CapturingLogger<NodeChatContentEncryptionBackfillService>();
+            using var failingBackfill = new NodeChatContentEncryptionBackfillService(provider.GetRequiredService<IServiceScopeFactory>(), capturingLogger);
 
             await using (await OpenBlockingReaderAsync(databasePath).ConfigureAwait(false))
             {
                 // Migration succeeds and the marker is set, but the blocked checkpoint reports busy -> cleanup fails.
                 await failingBackfill.RunOnceAsync(CancellationToken.None).ConfigureAwait(false);
+
+                // (a) Migration itself succeeded: the row now carries the encrypted envelope, so ZERO plaintext
+                // candidates remain — the restart retry below therefore exercises marker-only recovery, not a
+                // re-migration that would happen to clean up as a side effect.
+                var rawContent = await ReadRawMessageContentAsync(provider, messageId).ConfigureAwait(false);
+                AssertEx.True(rawContent.Length >= 2 && rawContent[0] == 0xFE && rawContent[1] == 0x01,
+                    "After the first run the legacy row must be encrypted (migration succeeded; only the cleanup failed).");
+
+                // (b) The cleanup failed for the RIGHT reason: the WAL checkpoint reported busy/incomplete.
+                AssertEx.Contains(capturingLogger.AllText, "did not fully truncate", StringComparison.Ordinal,
+                    "The first run's cleanup must fail specifically because the WAL checkpoint reported busy/incomplete.");
+
                 AssertEx.True(await IsReclamationMarkerSetRawAsync(provider).ConfigureAwait(false),
                     "A checkpoint blocked by a concurrent reader (busy) must leave the reclamation-pending marker set.");
             }
@@ -836,8 +850,15 @@ public sealed class NodeChatPersistenceServiceTests : IDisposable
             await provider.DisposeAsync().ConfigureAwait(false);
         }
 
-        // Genuine restart: a new provider + service instance against the same on-disk DB, blocker released, zero
-        // candidates remaining. (No process-global pool clear — that would disrupt other tests running in parallel.)
+        // Genuine restart: fresh connections against the same on-disk DB, blocker released, zero candidates remaining.
+        // Clear only THIS database's pooled connections (scoped by connection string — NOT the process-global
+        // ClearAllPools, which would disrupt other tests running in parallel) so the restart truly reconnects and no idle
+        // pooled reader left over from the failed run contends with the retry's VACUUM.
+        using (var poolKey = new Microsoft.Data.Sqlite.SqliteConnection($"Data Source={databasePath}"))
+        {
+            Microsoft.Data.Sqlite.SqliteConnection.ClearPool(poolKey);
+        }
+
         await using var restarted = await BuildProviderAsync(fileName, resetDatabase: false).ConfigureAwait(false);
         var restartedService = CreateService(restarted);
         using var retryBackfill = new NodeChatContentEncryptionBackfillService(restarted.GetRequiredService<IServiceScopeFactory>(),
