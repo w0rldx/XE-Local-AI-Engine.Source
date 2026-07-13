@@ -129,6 +129,33 @@ function collectFrontendPackages() {
 }
 
 /**
+ * Restores the solution pinned to the Release configuration so the license scan is deterministic.
+ *
+ * nuget-license reads each project's restore assets (`project.assets.json`), which reflect the LAST
+ * restore's `$(Configuration)`. A Debug restore pulls in Debug-only conditional packages
+ * (Microsoft.Agents.AI.DevUI / Hosting / Hosting.OpenAI — see the `'$(Configuration)' == 'Debug'`
+ * PackageReferences in XE-Local-AI-Engine.Client.csproj and XE-Local-AI-Engine.AI.Agent.csproj) that
+ * are compiled out of Release and never ship. Forcing a Release restore here pins the assets so the
+ * generated list only ever reflects the shipped (Release) package set, regardless of what a prior
+ * build/IDE left restored.
+ */
+function restoreSolutionForRelease() {
+	const result = spawnSync("dotnet", ["restore", solutionPath, "-p:Configuration=Release", "--verbosity", "quiet"], {
+		cwd: repoRoot,
+		encoding: "utf8",
+		maxBuffer: 64 * 1024 * 1024,
+	});
+
+	if (result.error) {
+		throw new Error(`dotnet not available: ${result.error.message}`);
+	}
+
+	if (result.status !== 0) {
+		throw new Error(`dotnet restore (Release) failed (exit ${result.status}): ${result.stderr || "no output"}`);
+	}
+}
+
+/**
  * Collects shipped backend NuGet packages via the nuget-license dotnet tool.
  * @returns {ThirdPartyPackage[]}
  */
@@ -136,6 +163,9 @@ function collectBackendPackages() {
 	if (!existsSync(solutionPath)) {
 		throw new Error(`solution not found: ${solutionPath}`);
 	}
+
+	// Pin the restore to Release before scanning so Debug-only packages never leak into the shipped list.
+	restoreSolutionForRelease();
 
 	const args = [
 		"nuget-license",
