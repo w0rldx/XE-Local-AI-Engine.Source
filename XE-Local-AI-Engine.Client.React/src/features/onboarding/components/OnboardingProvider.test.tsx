@@ -16,6 +16,7 @@ const {
 	clearTourProgressMock,
 	modelsDataRef,
 	conversationsRef,
+	lastModelsQueryOptionsRef,
 } = vi.hoisted(() => ({
 		joyrideProps: { current: null as null | { run: boolean; stepIndex: number } },
 		markDoneMock: vi.fn(),
@@ -39,6 +40,9 @@ const {
 		conversationsRef: {
 			current: [] as [readonly unknown[], { messages?: { role: string; content: string }[] }][],
 		},
+		// Captures the options the provider passes to useQuery for the installed-models query, so the auth-gate test can
+		// assert `enabled` tracks the auth store.
+		lastModelsQueryOptionsRef: { current: null as null | { enabled?: boolean } },
 	}));
 
 // Replace only the Joyride component (rendering the real overlay needs live DOM targets + portals); keep the real
@@ -72,7 +76,10 @@ vi.mock("@/features/onboarding/hooks/useTourState", () => ({
 // The provider reads the installed-models query — stub it so the component renders without the real
 // generated client / a live QueryClient.
 vi.mock("@tanstack/react-query", () => ({
-	useQuery: () => ({ data: modelsDataRef.current }),
+	useQuery: (options?: { enabled?: boolean }) => {
+		lastModelsQueryOptionsRef.current = options ?? null;
+		return { data: modelsDataRef.current };
+	},
 	useQueryClient: () => ({
 		getQueriesData: () => conversationsRef.current,
 		getQueryCache: () => ({
@@ -111,6 +118,7 @@ vi.mock("@/features/onboarding/components/TourShowcasePanel", () => ({
 }));
 
 import { ACTIONS, EVENTS, STATUS } from "react-joyride";
+import { useNodeAuthStore } from "@/core/auth/stores/NodeAuthStore";
 import { OnboardingProvider } from "@/features/onboarding/components/OnboardingProvider";
 import { FIRST_SHOWCASE_STEP_INDEX, tourStepIds } from "@/features/onboarding/data/MainAppTourSteps";
 
@@ -203,6 +211,9 @@ beforeEach(() => {
 	tourProgressRef.current = null;
 	modelsDataRef.current = undefined;
 	conversationsRef.current = [];
+	lastModelsQueryOptionsRef.current = null;
+	// Start each test unauthenticated so the auth-gate assertion is deterministic (real Zustand store).
+	useNodeAuthStore.getState().actions.clear();
 });
 
 afterEach(() => {
@@ -241,6 +252,26 @@ describe("OnboardingProvider welcome gate", () => {
 
 		expect(screen.queryByTestId("onboarding-welcome-skip")).toBeNull();
 		expect(joyrideProps.current?.run).toBe(false);
+	});
+});
+
+describe("OnboardingProvider protected-query auth gate (LOW-003)", () => {
+	it("disables the installed-models query until auth state is present", () => {
+		// This provider mounts above the RouterProvider (outside route-level session restore). Without the gate the
+		// installed-models query fires before the token is restored on every authenticated hard navigation → 401.
+		useNodeAuthStore.getState().actions.clear();
+
+		renderWithProviders(<OnboardingProvider>app</OnboardingProvider>);
+
+		expect(lastModelsQueryOptionsRef.current?.enabled).toBe(false);
+	});
+
+	it("enables the installed-models query once an access token is present", () => {
+		useNodeAuthStore.getState().actions.setToken({ accessToken: "token", expiresAtUtc: "2026-05-25T12:00:00Z" });
+
+		renderWithProviders(<OnboardingProvider>app</OnboardingProvider>);
+
+		expect(lastModelsQueryOptionsRef.current?.enabled).toBe(true);
 	});
 });
 
