@@ -8,6 +8,7 @@ import { ACTIONS, EVENTS, Joyride, STATUS } from "react-joyride";
 import type { EventData } from "react-joyride";
 
 import { listLocalModelsOptions } from "@/core/api/generated/@tanstack/react-query.gen";
+import { useNodeAuthStore } from "@/core/auth/stores/NodeAuthStore";
 import { router } from "@/core/integrations/tanstack-router/Router";
 import { OnboardingContext } from "@/features/onboarding/context/OnboardingContext";
 import { buildMainAppTourSteps, FIRST_SHOWCASE_STEP_INDEX, stepRoutes, tourStepIds } from "@/features/onboarding/data/MainAppTourSteps";
@@ -237,9 +238,13 @@ export function OnboardingProvider({ children }: { children: ReactNode }) {
 	);
 
 	// Real chat-model state (derived, never authoritative). The list query is the same one ModelManagement
-	// and Chat consume; reading it here only observes already-authorized state. Always enabled (not gated on `run`) so
-	// the install/default effects fire as soon as server state changes — even if the tour was momentarily paused.
-	const { data: modelsData } = useQuery(listLocalModelsOptions());
+	// and Chat consume; reading it here only observes already-authorized state. Not gated on `run` so the
+	// install/default effects fire as soon as server state changes — even if the tour was momentarily paused. It IS
+	// gated on auth: this provider mounts above the RouterProvider (outside route-level session restore), so without
+	// the gate every authenticated hard navigation fires this before the token is restored → a guaranteed 401 →
+	// refresh → retry. Mirrors useTourState / GgufDownloadPoller.
+	const isAuthenticated = useNodeAuthStore((state) => Boolean(state.accessToken));
+	const { data: modelsData } = useQuery({ ...listLocalModelsOptions(), enabled: isAuthenticated });
 	const modelItems = modelsData?.items;
 	const selectedModelName = modelsData?.selectedModelName;
 
