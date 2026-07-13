@@ -1,5 +1,6 @@
 namespace XE_Local_AI_Engine.Tests.Providers.HuggingFace;
 
+using System.Text.Json;
 using XE_Local_AI_Engine.Providers.Abstractions.Gguf;
 using XE_Local_AI_Engine.Tests.Testing;
 using Infra = GgufStoreTestInfrastructure;
@@ -10,6 +11,8 @@ using Infra = GgufStoreTestInfrastructure;
 /// </summary>
 public sealed class GgufRegistryTests
 {
+    private static readonly JsonSerializerOptions RawManifestOptions = new() { WriteIndented = true };
+
     [Test]
     public async Task GgufRegistry_ListsPresentModels_AndResolvesPathByModelName()
     {
@@ -132,5 +135,132 @@ public sealed class GgufRegistryTests
         File.Delete(filePath);
 
         AssertEx.Null(await registry.FindAsync(Infra.ModelName, CancellationToken.None));
+    }
+
+    [Test]
+    public async Task GgufRegistry_FirstDownloadIntoEmptyDirectory_YieldsExactlyOneCanonicalEntry()
+    {
+        // Reproduces the first-download double-registration: the .gguf lands on disk with NO manifest, so the upsert's
+        // load self-heals via a rescan that registers a filename-alias entry — the canonical upsert must then collapse
+        // the alias rather than append a second entry sharing the one file.
+        using var dir = new Infra.TempModelsDir();
+        var options = Infra.Options(dir.Path);
+        using var registry = Infra.Registry(options);
+
+        var filePath = dir.FilePath(Infra.FileName);
+        await File.WriteAllTextAsync(filePath, "fake-gguf");
+
+        await registry.UpsertAsync(CanonicalEntry(filePath), CancellationToken.None);
+
+        var listed = await registry.ListAsync(CancellationToken.None);
+        AssertEx.Equal(expected: 1, listed.Count);
+        AssertEx.Equal(Infra.ModelName, listed[0].ModelName);
+
+        // The self-healing filename alias must NOT survive as a second entry.
+        AssertEx.Null(await registry.FindAsync(FilenameAliasName, CancellationToken.None));
+        AssertEx.NotNull(await registry.FindAsync(Infra.ModelName, CancellationToken.None));
+    }
+
+    [Test]
+    public async Task GgufRegistry_ExistingDuplicatePathManifest_CollapsesOnLoad_PreferringCanonical()
+    {
+        // An already-affected user's manifest carries two entries (legacy alias + canonical) for one file. Listing must
+        // collapse them to the canonical entry without touching the file (migration for affected installs).
+        using var dir = new Infra.TempModelsDir();
+        var options = Infra.Options(dir.Path);
+        var filePath = dir.FilePath(Infra.FileName);
+        await File.WriteAllTextAsync(filePath, "fake-gguf");
+        await WriteRawManifestAsync(dir.Path, AliasEntry(filePath), CanonicalEntry(filePath));
+
+        using var registry = Infra.Registry(options);
+        var listed = await registry.ListAsync(CancellationToken.None);
+
+        AssertEx.Equal(expected: 1, listed.Count);
+        AssertEx.Equal(Infra.ModelName, listed[0].ModelName);
+        AssertEx.True(File.Exists(filePath), "collapsing the view must never delete the backing file");
+    }
+
+    [Test]
+    public async Task GgufStore_DeleteThroughLegacyAlias_RemovesFileAndBothEntries()
+    {
+        await AssertDeleteRemovesBothEntriesAsync(deleteThroughAlias: true);
+    }
+
+    [Test]
+    public async Task GgufStore_DeleteThroughCanonicalName_RemovesFileAndBothEntries()
+    {
+        await AssertDeleteRemovesBothEntriesAsync(deleteThroughAlias: false);
+    }
+
+    // Sets up a duplicate-path manifest (legacy alias + canonical for one file), deletes through the chosen identity via
+    // the store, and asserts the file is gone and NEITHER identity remains — deleting one alias must not orphan the other.
+    private static async Task AssertDeleteRemovesBothEntriesAsync(bool deleteThroughAlias)
+    {
+        using var dir = new Infra.TempModelsDir();
+        var options = Infra.Options(dir.Path);
+        var filePath = dir.FilePath(Infra.FileName);
+        await File.WriteAllTextAsync(filePath, "fake-gguf");
+        await WriteRawManifestAsync(dir.Path, AliasEntry(filePath), CanonicalEntry(filePath));
+
+        using var registry = Infra.Registry(options);
+#pragma warning disable CA2000 // The in-memory fake handler holds no unmanaged resource; the client lives for the test.
+        using var http = new HttpClient(new Infra.ScriptedHandler(static (_, _) => new HttpResponseMessage()));
+#pragma warning restore CA2000
+        var downloadClient = Infra.DownloadClient(http, Infra.NoTokenStore(), Infra.AbundantSpace(), options);
+        var store = Infra.Store(downloadClient, Infra.DiscoveryWith(), registry, options);
+
+        await store.DeleteModelAsync(deleteThroughAlias ? FilenameAliasName : Infra.ModelName, CancellationToken.None);
+
+        AssertEx.False(File.Exists(filePath), "the shared backing file must be deleted");
+        AssertEx.Equal(expected: 0, (await registry.ListAsync(CancellationToken.None)).Count);
+        AssertEx.Null(await registry.FindAsync(FilenameAliasName, CancellationToken.None));
+        AssertEx.Null(await registry.FindAsync(Infra.ModelName, CancellationToken.None));
+    }
+
+    // The filename-derived identity a manifest-absent rescan assigns to the downloaded file (stem + quant).
+    private static string FilenameAliasName =>
+        GgufModelName.Format(Path.GetFileNameWithoutExtension(Infra.FileName), Infra.Quant);
+
+    // A canonically-registered download: real repo id (org/name), verified hash + revision, known role.
+    private static GgufModelRegistryEntry CanonicalEntry(string filePath)
+    {
+        return new GgufModelRegistryEntry
+        {
+            ModelName = Infra.ModelName,
+            RepoId = Infra.RepoId,
+            FileName = Infra.FileName,
+            Quant = Infra.Quant,
+            LocalPath = filePath,
+            SizeBytes = 9,
+            Sha256 = "verified-sha256",
+            SourceRevision = "abc123",
+            DownloadedAtUtc = DateTimeOffset.UtcNow,
+            Role = GgufRole.Chat
+        };
+    }
+
+    // A legacy rescan-derived alias for the same file: filename-stem repo id (no '/'), empty revision, null hash, Unknown role.
+    private static GgufModelRegistryEntry AliasEntry(string filePath)
+    {
+        return new GgufModelRegistryEntry
+        {
+            ModelName = FilenameAliasName,
+            RepoId = Path.GetFileNameWithoutExtension(Infra.FileName),
+            FileName = Infra.FileName,
+            Quant = Infra.Quant,
+            LocalPath = filePath,
+            SizeBytes = 9,
+            Sha256 = null,
+            SourceRevision = string.Empty,
+            DownloadedAtUtc = DateTimeOffset.UtcNow,
+            Role = GgufRole.Unknown
+        };
+    }
+
+    // Writes the manifest verbatim (bypassing the collapsing upsert) so a pre-migration duplicate-path state can be seeded.
+    private static async Task WriteRawManifestAsync(string modelsDirectory, params GgufModelRegistryEntry[] entries)
+    {
+        var json = JsonSerializer.Serialize(new { Models = entries }, RawManifestOptions);
+        await File.WriteAllTextAsync(Path.Combine(modelsDirectory, "index.json"), json);
     }
 }

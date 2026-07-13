@@ -63,7 +63,19 @@ builder.AddViteApp("client-react", "../XE-Local-AI-Engine.Client.React")
        .WithEnvironment("VITE_APP_TITLE", "XE Local AI Engine")
        .WithEnvironment("VITE_API_VERSION", "v1")
        .WithEnvironment("VITE_CROSS_COOKIE_ENABLED", "false")
-       .WithHttpsEndpoint(env: "VITE_PORT", port: 5175)
+       // AddViteApp already provisions ONE endpoint named "http" that the Vite dev server binds to (it passes the
+       // endpoint's port to Vite via --port). Adding a second endpoint (the old WithHttpsEndpoint) leaves that original
+       // "http" endpoint claimed by the DCP proxy but never served by Vite — Vite only ever listens on a single port —
+       // so it accepts TCP and never responds. Configure the framework's own endpoint to serve https on the fixed dev
+       // port instead, keeping exactly one endpoint. (AddViteApp itself upgrades this same "http" endpoint to https when
+       // its cert mechanism is used, so this reuses the intended endpoint rather than piling a redundant one on top.)
+       // Vite receives this endpoint's port through AddViteApp's --port argument, so the endpoint's own target-port env
+       // var name is irrelevant (nothing in vite.config reads it) — only the scheme and fixed host port matter.
+       .WithEndpoint("http", endpoint =>
+       {
+           endpoint.UriScheme = "https";
+           endpoint.Port = 5175;
+       })
        .WithReference(app)
        .WaitFor(app)
        .WithEnvironment("VITE_PROXY_TARGET", $"{app.GetEndpoint("https")}")
