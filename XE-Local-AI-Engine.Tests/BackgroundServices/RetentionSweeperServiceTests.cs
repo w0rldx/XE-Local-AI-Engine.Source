@@ -75,6 +75,29 @@ public sealed class RetentionSweeperServiceTests : IDisposable
         await StartHostWithRetentionAsync(enabled: false, retentionDays: null, sweepInterval: null).ConfigureAwait(false);
     }
 
+    [Test]
+    public async Task OrphanResweep_WhenDisabled_RemovesOrphansButKeepsValidConversation()
+    {
+        await using var provider = await BuildProviderAsync("disabled-orphan.sqlite").ConfigureAwait(false);
+        var service = CreateService(provider);
+
+        // A valid conversation with a real row + upload directory: it must survive because inactivity-based deletion
+        // stays gated on Enabled.
+        var keptConversationId = await SeedConversationWithFootprintAsync(provider, service).ConfigureAwait(false);
+
+        // A stranded upload directory whose conversation row is gone: it must be reconciled even with retention off.
+        var orphanConversationId = Guid.NewGuid();
+        Directory.CreateDirectory(UploadDirectory(orphanConversationId));
+        await File.WriteAllTextAsync(Path.Combine(UploadDirectory(orphanConversationId), "leftover.bin"), "x").ConfigureAwait(false);
+
+        using var sweeper = CreateSweeper(provider, enabled: false);
+        await sweeper.RunOrphanResweepOnceAsync(CancellationToken.None).ConfigureAwait(false);
+
+        AssertEx.False(Directory.Exists(UploadDirectory(orphanConversationId)), "A disabled sweeper must still reconcile orphaned upload directories.");
+        AssertEx.NotNull(await service.GetConversationAsync(keptConversationId).ConfigureAwait(false));
+        AssertEx.True(Directory.Exists(UploadDirectory(keptConversationId)), "The valid conversation's upload directory must survive when retention is disabled.");
+    }
+
     // Builds a host that registers ChatRetentionOptions exactly as production does (bind + ValidateDataAnnotations +
     // ValidateOnStart) and starts it, so a bad window surfaces as an OptionsValidationException during StartAsync.
     private static async Task StartHostWithRetentionAsync(bool enabled, string? retentionDays, string? sweepInterval)

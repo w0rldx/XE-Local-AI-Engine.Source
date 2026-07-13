@@ -39,12 +39,21 @@ public sealed class RetentionSweeperService : BackgroundService
         if (!_options.Enabled)
         {
             _logger.LogInformation("Chat retention is disabled; conversations are never auto-deleted. Set {Section}:Enabled=true to enable it.", ChatRetentionOptions.Section);
+
+            // Inactivity-based conversation deletion stays gated on Enabled, but the orphaned-upload resweep must run
+            // regardless: a failed interactive purge can strand an upload directory whose conversation row is already
+            // gone, and with retention disabled (the default) nothing else would ever reconcile it.
+            await RunOrphanResweepOnceAsync(stoppingToken).ConfigureAwait(false);
             return;
         }
 
         _logger.LogInformation("Chat retention is enabled; conversations older than {RetentionDays} day(s) are auto-deleted every {SweepInterval}.",
             _options.RetentionDays,
             _options.SweepInterval);
+
+        // Reconcile any stranded upload directory at startup, before the first timer tick (each subsequent full sweep
+        // also runs the orphan resweep).
+        await RunOrphanResweepOnceAsync(stoppingToken).ConfigureAwait(false);
 
         using var timer = new PeriodicTimer(_options.SweepInterval, _timeProvider);
 
@@ -100,6 +109,31 @@ public sealed class RetentionSweeperService : BackgroundService
             _logger.LogInformation("Retention sweep deleted {DeletedConversationCount} conversation(s) and {OrphanCount} orphaned upload director(ies).",
                 deletedConversationIds.Count,
                 orphanCount);
+        }
+    }
+
+    // Runs the orphaned-upload resweep on its own scope, independent of the inactivity-based conversation deletion.
+    // Used at startup in both enabled and disabled modes; failure-tolerant so a resweep error never crashes the host.
+    // Internal so a test can drive it deterministically with retention disabled.
+    internal async Task RunOrphanResweepOnceAsync(CancellationToken cancellationToken)
+    {
+        try
+        {
+            await using var scope = _serviceScopeFactory.CreateAsyncScope();
+            var uploadedFileStore = scope.ServiceProvider.GetRequiredService<IConversationUploadedFileStore>();
+            var orphanCount = await PurgeOrphanedUploadDirectoriesAsync(scope, uploadedFileStore, cancellationToken).ConfigureAwait(false);
+            if (orphanCount > 0)
+            {
+                _logger.LogInformation("Retention orphan resweep removed {OrphanCount} orphaned upload director(ies).", orphanCount);
+            }
+        }
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+        {
+            // Shutdown mid-resweep; nothing durable is left inconsistent — it retries on the next start.
+        }
+        catch (Exception exception)
+        {
+            _logger.LogWarning(exception, "Retention orphan resweep failed.");
         }
     }
 
