@@ -384,4 +384,28 @@ describe("nodeChatAdapter SignalR streaming", () => {
 		await expect(pending).resolves.toMatchObject({ done: true });
 		expect(connectionMock.subscription.dispose).toHaveBeenCalled();
 	});
+
+	it("does not subscribe when the send aborts while the connection is still being established", async () => {
+		// ensureConnection resolves AFTER the abort fires: the adapter must re-check the aborted state and skip
+		// subscribe(), or it opens a subscription (and a server run) the caller has already given up on.
+		const abortController = new AbortController();
+		let resolveConnection!: () => void;
+		connectionMock.nodeChatConnection.ensureConnection.mockReturnValueOnce(
+			new Promise<typeof connectionMock.connection>((resolve) => {
+				resolveConnection = () => resolve(connectionMock.connection);
+			}),
+		);
+
+		const iterator = nodeChatAdapter.sendMessage(streamRequest, abortController.signal)[Symbol.asyncIterator]();
+		const pending = iterator.next();
+		await settle();
+
+		// Abort while ensureConnection is still pending, then let it resolve.
+		abortController.abort();
+		resolveConnection();
+		await settle();
+
+		await expect(pending).resolves.toMatchObject({ done: true });
+		expect(connectionMock.connection.stream).not.toHaveBeenCalled();
+	});
 });

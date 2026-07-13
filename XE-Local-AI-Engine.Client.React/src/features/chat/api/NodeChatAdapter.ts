@@ -306,7 +306,16 @@ function signalRStream(opening: StreamOpening, signal: AbortSignal): AsyncIterab
 			signal.addEventListener("abort", abort, { once: true });
 
 			await nodeChatConnection.ensureConnection();
-			subscribe(opening.method, opening.args, opening.isResumeOpening ?? false);
+			// The await above can resolve after an abort (or a close) already fired: re-check before subscribing so we
+			// never open a subscription that abort()/the finally will not tear down, which would leak the subscription
+			// and start a server run the caller has already given up on. Dispose any stray subscription and stop.
+			if (signal.aborted || completed) {
+				activeSubscription?.dispose();
+				activeSubscription = undefined;
+				completed = true;
+			} else {
+				subscribe(opening.method, opening.args, opening.isResumeOpening ?? false);
+			}
 
 			try {
 				while (!completed || values.length > 0) {
