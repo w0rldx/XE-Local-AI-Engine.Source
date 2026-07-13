@@ -207,8 +207,13 @@ internal sealed class HuggingFaceGgufStore : IGgufModelStore
         {
             TryDeleteFile(entry.LocalPath);
             TryDeleteFile(entry.LocalPath + ".part");
+            // A legacy first-download alias may share this file under a second name — remove EVERY entry pointing at it,
+            // so deleting through either identity leaves no manifest entry dangling on the now-removed file.
+            await _registry.RemoveByLocalPathAsync(entry.LocalPath, ct).ConfigureAwait(false);
+            return;
         }
 
+        // No entry resolves this name (already gone); the name-based removal keeps delete idempotent.
         await _registry.RemoveAsync(modelName, ct).ConfigureAwait(false);
     }
 
