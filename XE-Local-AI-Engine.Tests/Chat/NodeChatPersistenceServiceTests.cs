@@ -799,6 +799,63 @@ public sealed class NodeChatPersistenceServiceTests : IDisposable
     }
 
     [Test]
+    public async Task ContentEncryptionBackfill_RealCleanupFailureThenRestart_RetriesUntilResidueReclaimed()
+    {
+        // End-to-end failure injection: a first run migrates the legacy row but its checkpoint fails FOR REAL (a
+        // concurrent WAL reader makes wal_checkpoint(TRUNCATE) report busy), leaving the marker set. A genuine restart
+        // (new provider + service, fresh connections) with the blocker gone and zero candidates must retry and finish.
+        const string fileName = "backfill-real-failure-restart.sqlite";
+        const string legacyText = "zzq-real-failure-restart-marker-6621";
+        var databasePath = GetDatabasePath(fileName);
+
+        var provider = await BuildProviderAsync(fileName).ConfigureAwait(false);
+        try
+        {
+            // WAL mode is required for a reader to be able to block the truncate.
+            await SetJournalModeWalAsync(provider).ConfigureAwait(false);
+
+            var service = CreateService(provider);
+            var conversation = await service.CreateConversationAsync(new NodeChatCreateConversationRequest("Chat", "node", CreatedAtUtc: 1)).ConfigureAwait(false);
+            var messageId = Guid.NewGuid();
+            await service.PersistUserMessageAsync(new NodeChatPersistUserMessageRequest(conversation.ConversationId, messageId, "placeholder", CreatedAtUtc: 2)).ConfigureAwait(false);
+            await WriteRawMessageContentAsync(provider, messageId, Encoding.UTF8.GetBytes(legacyText)).ConfigureAwait(false);
+
+            using var failingBackfill = new NodeChatContentEncryptionBackfillService(provider.GetRequiredService<IServiceScopeFactory>(),
+                NullLogger<NodeChatContentEncryptionBackfillService>.Instance);
+
+            await using (await OpenBlockingReaderAsync(databasePath).ConfigureAwait(false))
+            {
+                // Migration succeeds and the marker is set, but the blocked checkpoint reports busy -> cleanup fails.
+                await failingBackfill.RunOnceAsync(CancellationToken.None).ConfigureAwait(false);
+                AssertEx.True(await IsReclamationMarkerSetRawAsync(provider).ConfigureAwait(false),
+                    "A checkpoint blocked by a concurrent reader (busy) must leave the reclamation-pending marker set.");
+            }
+        }
+        finally
+        {
+            await provider.DisposeAsync().ConfigureAwait(false);
+        }
+
+        // Genuine restart: a new provider + service instance against the same on-disk DB, blocker released, zero
+        // candidates remaining. (No process-global pool clear — that would disrupt other tests running in parallel.)
+        await using var restarted = await BuildProviderAsync(fileName, resetDatabase: false).ConfigureAwait(false);
+        var restartedService = CreateService(restarted);
+        using var retryBackfill = new NodeChatContentEncryptionBackfillService(restarted.GetRequiredService<IServiceScopeFactory>(),
+            NullLogger<NodeChatContentEncryptionBackfillService>.Instance);
+
+        await retryBackfill.RunOnceAsync(CancellationToken.None).ConfigureAwait(false);
+
+        AssertEx.False(await IsReclamationMarkerSetRawAsync(restarted).ConfigureAwait(false),
+            "The restart retry must complete the reclamation and clear the marker.");
+        AssertEx.False(ContainsSubsequence(await File.ReadAllBytesAsync(databasePath).ConfigureAwait(false), Encoding.UTF8.GetBytes(legacyText)),
+            "After the restart retry reclaims, no migrated plaintext may remain in the main DB file.");
+        // The migrated row still round-trips through the read path after the reclamation.
+        var loaded = AssertEx.NotNull(await restartedService.GetConversationAsync(
+            (await restartedService.ListConversationsAsync(new NodeChatListConversationsRequest()).ConfigureAwait(false)).Single().ConversationId).ConfigureAwait(false));
+        AssertEx.Equal(legacyText, loaded.Messages.Single().Content);
+    }
+
+    [Test]
     public async Task RenamePinArchive_PersistMappedColumnsAndArchivedConversationsAreHiddenUnlessRequested()
     {
         await using var provider = await BuildProviderAsync("rename-pin-archive.sqlite").ConfigureAwait(false);
@@ -1171,7 +1228,9 @@ public sealed class NodeChatPersistenceServiceTests : IDisposable
         AssertEx.Null(await service.GetSelectedPathAsync(Guid.NewGuid()).ConfigureAwait(false));
     }
 
-    private async Task<ServiceProvider> BuildProviderAsync(string fileName)
+    // resetDatabase:false reopens an existing DB file with fresh connections without wiping it — used to model a genuine
+    // process restart against a database left behind by a previous provider/service instance.
+    private async Task<ServiceProvider> BuildProviderAsync(string fileName, bool resetDatabase = true)
     {
         var databasePath = GetDatabasePath(fileName);
         var services = new ServiceCollection();
@@ -1180,10 +1239,13 @@ public sealed class NodeChatPersistenceServiceTests : IDisposable
         services.AddSingleton<NodeChatPersistenceWriter>();
 
         var provider = services.BuildServiceProvider(true);
-        await using var scope = provider.CreateAsyncScope();
-        var dbContext = scope.ServiceProvider.GetRequiredService<NodeChatDbContext>();
-        await dbContext.Database.EnsureDeletedAsync().ConfigureAwait(false);
-        await dbContext.Database.EnsureCreatedAsync().ConfigureAwait(false);
+        if (resetDatabase)
+        {
+            await using var scope = provider.CreateAsyncScope();
+            var dbContext = scope.ServiceProvider.GetRequiredService<NodeChatDbContext>();
+            await dbContext.Database.EnsureDeletedAsync().ConfigureAwait(false);
+            await dbContext.Database.EnsureCreatedAsync().ConfigureAwait(false);
+        }
 
         return provider;
     }
@@ -1310,20 +1372,16 @@ public sealed class NodeChatPersistenceServiceTests : IDisposable
         return Convert.ToInt32(result, System.Globalization.CultureInfo.InvariantCulture);
     }
 
-    // The backfill service's durable reclamation marker lives in a raw (non-EF) key/value table. These helpers poke it
-    // directly by its stable on-disk contract (table + marker name), independent of the service's private members.
+    // The backfill service's durable reclamation marker lives in the modeled chat_maintenance_state table (created by
+    // EnsureCreated here / by migration in prod). These helpers poke it directly by its stable contract (table + marker
+    // name), independent of the service's private members.
     private const string ReclamationMarkerName = "content_encryption_reclaim_pending";
-
-    private const string EnsureMaintenanceTableSql = "CREATE TABLE IF NOT EXISTS chat_maintenance_state (name TEXT NOT NULL PRIMARY KEY, value TEXT NOT NULL) WITHOUT ROWID;";
 
     private static async Task SetReclamationMarkerRawAsync(ServiceProvider provider)
     {
         await using var scope = provider.CreateAsyncScope();
         var connection = scope.ServiceProvider.GetRequiredService<NodeChatDbContext>().Database.GetDbConnection();
         await connection.OpenAsync().ConfigureAwait(false);
-        await using var ensure = connection.CreateCommand();
-        ensure.CommandText = EnsureMaintenanceTableSql;
-        await ensure.ExecuteNonQueryAsync().ConfigureAwait(false);
         await using var command = connection.CreateCommand();
         command.CommandText = "INSERT INTO chat_maintenance_state (name, value) VALUES ($name, '1') ON CONFLICT(name) DO UPDATE SET value = '1';";
         var parameter = command.CreateParameter();
@@ -1338,9 +1396,6 @@ public sealed class NodeChatPersistenceServiceTests : IDisposable
         await using var scope = provider.CreateAsyncScope();
         var connection = scope.ServiceProvider.GetRequiredService<NodeChatDbContext>().Database.GetDbConnection();
         await connection.OpenAsync().ConfigureAwait(false);
-        await using var ensure = connection.CreateCommand();
-        ensure.CommandText = EnsureMaintenanceTableSql;
-        await ensure.ExecuteNonQueryAsync().ConfigureAwait(false);
         await using var command = connection.CreateCommand();
         command.CommandText = "SELECT EXISTS(SELECT 1 FROM chat_maintenance_state WHERE name = $name);";
         var parameter = command.CreateParameter();
@@ -1349,6 +1404,30 @@ public sealed class NodeChatPersistenceServiceTests : IDisposable
         command.Parameters.Add(parameter);
         var result = await command.ExecuteScalarAsync().ConfigureAwait(false);
         return Convert.ToInt64(result, System.Globalization.CultureInfo.InvariantCulture) != 0;
+    }
+
+    // Switches the DB to WAL journal mode (persisted in the file header), so a concurrent reader can hold a snapshot
+    // that makes wal_checkpoint(TRUNCATE) report busy.
+    private static async Task SetJournalModeWalAsync(ServiceProvider provider)
+    {
+        await using var scope = provider.CreateAsyncScope();
+        var connection = scope.ServiceProvider.GetRequiredService<NodeChatDbContext>().Database.GetDbConnection();
+        await connection.OpenAsync().ConfigureAwait(false);
+        await using var command = connection.CreateCommand();
+        command.CommandText = "PRAGMA journal_mode=WAL;";
+        await command.ExecuteNonQueryAsync().ConfigureAwait(false);
+    }
+
+    // Opens a dedicated connection holding an open read transaction. In WAL mode this pins a read snapshot, so a
+    // wal_checkpoint(TRUNCATE) on another connection cannot truncate the log and returns busy. Dispose to release it.
+    private static async Task<Microsoft.Data.Sqlite.SqliteConnection> OpenBlockingReaderAsync(string databasePath)
+    {
+        var connection = new Microsoft.Data.Sqlite.SqliteConnection($"Data Source={databasePath}");
+        await connection.OpenAsync().ConfigureAwait(false);
+        await using var command = connection.CreateCommand();
+        command.CommandText = "BEGIN; SELECT COUNT(*) FROM messages;";
+        await command.ExecuteNonQueryAsync().ConfigureAwait(false);
+        return connection;
     }
 
     private static bool ContainsSubsequence(byte[] haystack, byte[] needle)
