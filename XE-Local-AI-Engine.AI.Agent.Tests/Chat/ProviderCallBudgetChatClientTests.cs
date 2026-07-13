@@ -78,6 +78,64 @@ public sealed class ProviderCallBudgetChatClientTests
         }
     }
 
+    [Test]
+    public async Task ApplyBudget_WithLargeToolSet_ReducesMessageBudgetAndTrims()
+    {
+        // The exact same messages fit the window with no tools, but a large tool set's serialized schemas count against
+        // the same input window and push the round over — forcing a history drop that would not otherwise happen. This is
+        // the under-count the tool-schema estimate fixes: ignoring options.Tools rounds a tool-heavy agent through.
+        var messages = new List<ChatMessage>
+        {
+            new(ChatRole.System, "system prompt"),
+            new(ChatRole.User, new string('a', 200)),
+            new(ChatRole.User, new string('b', 200)),
+            new(ChatRole.User, new string('c', 200))
+        };
+
+        var budgetOptions = new ProviderCallBudgetOptions
+        {
+            DefaultContextTokens = 180,
+            ReservedOutputTokenFloor = 0,
+            RecentMessagesToKeep = 2,
+            OversizedToolResultExcerptChars = 100_000
+        };
+
+        int withoutToolsCount;
+        using (var inner = new CapturingChatClient())
+        using (var sut = new ProviderCallBudgetChatClient(inner, NullLogger<ProviderCallBudgetChatClient>.Instance))
+        using (ProviderCallBudget.BeginScope(budgetOptions))
+        {
+            _ = await sut.GetResponseAsync(messages, new ChatOptions()).ConfigureAwait(false);
+            withoutToolsCount = inner.ReceivedMessageSets.Single().Count;
+        }
+
+        int withToolsCount;
+        using (var inner = new CapturingChatClient())
+        using (var sut = new ProviderCallBudgetChatClient(inner, NullLogger<ProviderCallBudgetChatClient>.Instance))
+        using (ProviderCallBudget.BeginScope(budgetOptions))
+        {
+            _ = await sut.GetResponseAsync(messages, new ChatOptions { Tools = ManyTools(5) }).ConfigureAwait(false);
+            withToolsCount = inner.ReceivedMessageSets.Single().Count;
+        }
+
+        AssertEx.Equal(messages.Count, withoutToolsCount);
+        AssertEx.True(withToolsCount < withoutToolsCount, "counting the tool schemas must shrink the message budget and drop history the tool-less round kept");
+    }
+
+    private static IList<AITool> ManyTools(int count)
+    {
+        var tools = new List<AITool>(count);
+        for (var index = 0; index < count; index++)
+        {
+            tools.Add(AIFunctionFactory.Create(
+                (string query) => query,
+                name: $"search_documents_{index}",
+                description: "Searches the indexed knowledge base and returns the most relevant passages for the supplied query string."));
+        }
+
+        return tools;
+    }
+
     private static ChatOptions SmallWindowOptions()
     {
         return new ChatOptions

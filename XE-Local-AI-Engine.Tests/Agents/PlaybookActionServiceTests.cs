@@ -321,22 +321,19 @@ public sealed class PlaybookActionServiceTests
             EvalResult = PassingEvalResultJson(1, MatchingFingerprint(actionId, 1))
         };
         store.GetByIdAsync(actionId, Arg.Any<CancellationToken>()).Returns(pending);
-        store.UpdateAsync(actionId, Arg.Any<PlaybookActionInput>(), Arg.Any<CancellationToken>())
-             .Returns(pending with
+        // The gated promote now writes through the atomic CAS, threading the validated snapshot's Version and the cap.
+        store.PromoteSuggestedIfCurrentAsync(actionId, pending.Version, Arg.Any<int>(), pending.EvalResult, Arg.Any<CancellationToken>())
+             .Returns(new PlaybookPromotionCommit(PlaybookPromotionCommitStatus.Committed, pending with
              {
                  State = PlaybookActionState.Enabled
-             });
+             }));
 
         var result = await service.PromoteSuggestedAsync(agentId, actionId).ConfigureAwait(false);
 
         AssertEx.Equal(PlaybookPromotionStatus.Promoted, result.Status);
         AssertEx.NotNull(result.Record, "A passing eval should promote the action and return the updated record.");
-        await store.Received(1).UpdateAsync(actionId,
-            Arg.Is<PlaybookActionInput>(stored =>
-                stored.State == PlaybookActionState.Enabled
-                && stored.Source == PlaybookActionSource.Analysis
-                && stored.EvalResult == pending.EvalResult),
-            Arg.Any<CancellationToken>()).ConfigureAwait(false);
+        // The write is conditioned on the exact validated Version (optimistic concurrency), carrying the eval for audit.
+        await store.Received(1).PromoteSuggestedIfCurrentAsync(actionId, pending.Version, Arg.Any<int>(), pending.EvalResult, Arg.Any<CancellationToken>()).ConfigureAwait(false);
     }
 
     [Test]
@@ -354,6 +351,9 @@ public sealed class PlaybookActionServiceTests
         store.GetByIdAsync(actionId, Arg.Any<CancellationToken>()).Returns(pending);
         store.ListEnabledByAgentAsync(agentId, Arg.Any<CancellationToken>())
              .Returns(Task.FromResult<IReadOnlyList<PlaybookActionRecord>>(enabled));
+        // The cap is now enforced atomically inside the store CAS; a full-cap agent yields CapReached with no write.
+        store.PromoteSuggestedIfCurrentAsync(actionId, Arg.Any<int>(), Arg.Any<int>(), Arg.Any<string?>(), Arg.Any<CancellationToken>())
+             .Returns(new PlaybookPromotionCommit(PlaybookPromotionCommitStatus.CapReached, Record: null));
 
         var result = await service.PromoteSuggestedAsync(agentId, actionId).ConfigureAwait(false);
 
@@ -377,16 +377,42 @@ public sealed class PlaybookActionServiceTests
         store.GetByIdAsync(actionId, Arg.Any<CancellationToken>()).Returns(pending);
         store.ListEnabledByAgentAsync(agentId, Arg.Any<CancellationToken>())
              .Returns(Task.FromResult<IReadOnlyList<PlaybookActionRecord>>(enabled));
-        store.UpdateAsync(actionId, Arg.Any<PlaybookActionInput>(), Arg.Any<CancellationToken>())
-             .Returns(pending with
+        store.PromoteSuggestedIfCurrentAsync(actionId, pending.Version, Arg.Any<int>(), Arg.Any<string?>(), Arg.Any<CancellationToken>())
+             .Returns(new PlaybookPromotionCommit(PlaybookPromotionCommitStatus.Committed, pending with
              {
                  State = PlaybookActionState.Enabled
-             });
+             }));
 
         var result = await service.PromoteSuggestedAsync(agentId, actionId).ConfigureAwait(false);
 
         AssertEx.Equal(PlaybookPromotionStatus.Promoted, result.Status);
-        await store.Received(1).UpdateAsync(actionId, Arg.Any<PlaybookActionInput>(), Arg.Any<CancellationToken>()).ConfigureAwait(false);
+        await store.Received(1).PromoteSuggestedIfCurrentAsync(actionId, pending.Version, Arg.Any<int>(), Arg.Any<string?>(), Arg.Any<CancellationToken>()).ConfigureAwait(false);
+    }
+
+    [Test]
+    public async Task PromoteSuggestedAsync_WhenConcurrentEditChangesVersion_ReturnsEvalStaleAndDoesNotPromote()
+    {
+        var agentId = Guid.NewGuid();
+        var service = CreateService(out var store, out _, agentExists: true);
+        var actionId = Guid.NewGuid();
+        // The eval gate passes on the snapshot the service read (Version 1, matching fingerprint), but between that read
+        // and the write a concurrent edit lands: the store CAS finds the row is no longer at the validated Version and
+        // rejects the write. The service must surface that as the existing stale-eval conflict, never promoting on
+        // evidence that no longer describes the current content.
+        var pending = CreateSuggestedRecord(agentId, actionId) with
+        {
+            EvalResult = PassingEvalResultJson(1, MatchingFingerprint(actionId, 1))
+        };
+        store.GetByIdAsync(actionId, Arg.Any<CancellationToken>()).Returns(pending);
+        store.PromoteSuggestedIfCurrentAsync(actionId, pending.Version, Arg.Any<int>(), Arg.Any<string?>(), Arg.Any<CancellationToken>())
+             .Returns(new PlaybookPromotionCommit(PlaybookPromotionCommitStatus.VersionConflict, Record: null));
+
+        var result = await service.PromoteSuggestedAsync(agentId, actionId).ConfigureAwait(false);
+
+        AssertEx.Equal(PlaybookPromotionStatus.EvalStale, result.Status);
+        AssertEx.Null(result.Record, "A version-conflicted promote returns no record.");
+        // The CAS must have been asked to write only against the validated snapshot's Version.
+        await store.Received(1).PromoteSuggestedIfCurrentAsync(actionId, pending.Version, Arg.Any<int>(), Arg.Any<string?>(), Arg.Any<CancellationToken>()).ConfigureAwait(false);
     }
 
     [Test]

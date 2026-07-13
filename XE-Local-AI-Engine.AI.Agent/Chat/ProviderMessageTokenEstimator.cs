@@ -55,6 +55,34 @@ internal static class ProviderMessageTokenEstimator
         return string.IsNullOrEmpty(text) ? 0 : (WeightedLength(text) / CharsPerToken) + PerMessageOverheadTokens;
     }
 
+    /// <summary>
+    ///     Conservative token estimate for the tool definitions serialized into the request: each tool's name,
+    ///     description and JSON schema all count against the input window, so a tool-heavy agent must reserve room for
+    ///     them. Ignored entirely, they under-count the round and let an over-window request through. Uses the same
+    ///     weighted-char divisor and per-item framing overhead as message content.
+    /// </summary>
+    public static int EstimateTools(IEnumerable<AITool>? tools)
+    {
+        if (tools is null)
+        {
+            return 0;
+        }
+
+        var total = 0;
+        foreach (var tool in tools)
+        {
+            var weighted = WeightedLength(tool.Name) + WeightedLength(tool.Description);
+            if (tool is AIFunction function && function.JsonSchema.ValueKind != System.Text.Json.JsonValueKind.Undefined)
+            {
+                weighted += WeightedLength(function.JsonSchema.GetRawText());
+            }
+
+            total += (weighted / CharsPerToken) + PerMessageOverheadTokens;
+        }
+
+        return total;
+    }
+
     private static int EstimateContentWeightedChars(AIContent content)
     {
         return content switch
