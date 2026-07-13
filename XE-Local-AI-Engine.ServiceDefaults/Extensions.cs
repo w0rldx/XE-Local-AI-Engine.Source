@@ -18,12 +18,21 @@ public static class Extensions
     {
         public TBuilder AddServiceDefaults()
         {
-            var aspireEnvironment = Environment.GetEnvironmentVariable("ASPIRE_ENABLED");
+            // OpenTelemetry instrumentation is registered unconditionally so telemetry works in every hosting mode,
+            // not only under Aspire. In desktop/RC hosting an operator can set the standard OTEL_EXPORTER_OTLP_ENDPOINT
+            // variable and have traces/metrics/logs exported; with no endpoint configured the SDK records in-process
+            // only and attaches no exporter or export loop, so it stays lean (see AddOpenTelemetryExporters below).
+            builder.ConfigureOpenTelemetry();
 
-            if (string.Equals(aspireEnvironment, "true", StringComparison.OrdinalIgnoreCase))
+            // Service discovery and the global HTTP resilience/discovery defaults are Aspire-specific: they resolve the
+            // "scheme://service-name" addresses the AppHost injects, which only exist inside an Aspire-orchestrated run.
+            // They stay gated on ASPIRE_ENABLED (set by the AppHost via WithEnvironment). Read from configuration rather
+            // than the raw environment so the flag is unit-testable; configuration includes environment variables, so
+            // real Aspire runs are unaffected.
+            var aspireEnabled = string.Equals(builder.Configuration["ASPIRE_ENABLED"], "true", StringComparison.OrdinalIgnoreCase);
+
+            if (aspireEnabled)
             {
-                // Aspire specific services
-                builder.ConfigureOpenTelemetry();
                 builder.Services.AddServiceDiscovery();
 
                 builder.Services.ConfigureHttpClientDefaults(http =>
@@ -77,12 +86,12 @@ public static class Extensions
             return builder;
         }
 
-        // In Aspire-orchestrated dev runs, the AppHost auto-injects OTEL_EXPORTER_OTLP_ENDPOINT into this project's
-        // environment (standard AddProject behavior), so the meters/sources wired above (XE.Node, Microsoft.Agents.AI*,
-        // Microsoft.Extensions.AI*) already flow to the Aspire dashboard with no extra config here. In desktop mode
-        // (XE_LAUNCH_MODE=desktop, no Aspire orchestration) that env var is unset, so this branch is skipped: telemetry
-        // is still recorded in-process but never exported. That is intentional until an operator configures an OTLP
-        // endpoint for desktop builds.
+        // The OTLP exporter is added whenever OTEL_EXPORTER_OTLP_ENDPOINT is configured — the standard OpenTelemetry
+        // variable — regardless of hosting mode. In Aspire-orchestrated runs the AppHost auto-injects that variable
+        // (standard AddProject behavior), so the meters/sources wired above (XE.Node, Microsoft.Agents.AI*,
+        // Microsoft.Extensions.AI*) flow to the Aspire dashboard with no extra config. In desktop mode an operator who
+        // points the variable at a collector gets the same export path; when it is unset (the desktop/RC default) no
+        // exporter is registered, so telemetry is recorded in-process only and there is no export loop or overhead.
         private void AddOpenTelemetryExporters()
         {
             var useOtlpExporter = !string.IsNullOrWhiteSpace(builder.Configuration["OTEL_EXPORTER_OTLP_ENDPOINT"]);
