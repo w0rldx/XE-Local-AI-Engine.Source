@@ -207,14 +207,10 @@ internal sealed class NodeChatConversationCommands(NodeChatPersistenceWriter wri
 
                 if (request.PurgeImmediately)
                 {
-                    // ON DELETE CASCADE is NOT enforced on the node-sqlite connection (no PRAGMA foreign_keys=ON),
-                    // so every child table must be purged explicitly or plaintext rows orphan (privacy gap).
-                    await dbContext.Database.ExecuteSqlRawAsync("DELETE FROM message_feedback WHERE conversation_id = {0};", [request.ConversationId], token).ConfigureAwait(false);
-                    await dbContext.Database.ExecuteSqlRawAsync("DELETE FROM messages WHERE conversation_id = {0};", [request.ConversationId], token).ConfigureAwait(false);
-                    await dbContext.Database.ExecuteSqlRawAsync("DELETE FROM tool_events WHERE conversation_id = {0};", [request.ConversationId], token).ConfigureAwait(false);
-                    await dbContext.Database.ExecuteSqlRawAsync("DELETE FROM conversation_uploaded_files WHERE conversation_id = {0};", [request.ConversationId], token).ConfigureAwait(false);
-                    await dbContext.Database.ExecuteSqlRawAsync("DELETE FROM purged_tombstones WHERE conversation_id = {0};", [request.ConversationId], token).ConfigureAwait(false);
-                    await dbContext.Database.ExecuteSqlRawAsync("DELETE FROM conversations WHERE conversation_id = {0};", [request.ConversationId], token).ConfigureAwait(false);
+                    // Delete the complete DB footprint through the shared helper so this path and the retention sweeper
+                    // never drift on which child tables constitute a conversation. On-disk upload blobs are torn down
+                    // after commit below.
+                    await ConversationFootprintPurge.DeleteAsync(dbContext, request.ConversationId, token).ConfigureAwait(false);
                 }
                 else
                 {
