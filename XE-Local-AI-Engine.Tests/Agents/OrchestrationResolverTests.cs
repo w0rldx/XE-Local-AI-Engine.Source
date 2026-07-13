@@ -125,6 +125,51 @@ public sealed class OrchestrationResolverTests
     }
 
     [Test]
+    public async Task ResolveAsync_ResolvesEachParticipantThinkingFromItsOwnEffectiveModel()
+    {
+        // Two tool-capable participants pinned to DIFFERENT models: one thinking-capable, one not. Each participant's
+        // SupportsThinking must come from its OWN effective model, not the turn model's — so a graded reasoning effort
+        // on a pinned non-thinking model can never reach the think wire.
+        const string thinkingModel = "qwen3:8b";
+        const string nonThinkingModel = "gemma:9b";
+        var triage = CreateDefinition("Triage", modelProfile: thinkingModel, allowedTools: ["GetCurrentTime"]);
+        var specialist = CreateDefinition("Specialist", modelProfile: nonThinkingModel, allowedTools: ["GetCurrentTime"]);
+        var orchestrator = CreateOrchestrator(thinkingModel, triage, [triage, specialist]);
+
+        var store = Substitute.For<IAgentDefinitionStore>();
+        var playbookStore = Substitute.For<IPlaybookActionStore>();
+        playbookStore.ListEnabledByAgentAsync(Arg.Any<Guid>(), Arg.Any<CancellationToken>())
+                     .Returns(Task.FromResult<IReadOnlyList<PlaybookActionRecord>>([]));
+        var offerProvider = Substitute.For<ILocalToolOfferProvider>();
+        offerProvider.GetOfferedTools(Arg.Any<string?>()).Returns(new[] { OfferTool("GetCurrentTime") });
+        var runtimeSettings = StubNodeRuntimeSettings.Create().WithToolCapableModels(thinkingModel, nonThinkingModel).Build();
+
+        var capabilityResolver = Substitute.For<IModelCapabilityResolver>();
+        capabilityResolver.ResolveAsync(thinkingModel, Arg.Any<CancellationToken>())
+                          .Returns(Task.FromResult((SupportsThinking: true, SupportsTools: true)));
+        capabilityResolver.ResolveAsync(nonThinkingModel, Arg.Any<CancellationToken>())
+                          .Returns(Task.FromResult((SupportsThinking: false, SupportsTools: true)));
+
+        var resolver = new OrchestrationResolver(store,
+            playbookStore,
+            offerProvider,
+            new LexicalPlaybookRetrievalRanker(),
+            Options.Create(new PlaybookRetrievalOptions()),
+            runtimeSettings,
+            capabilityResolver,
+            NullLogger<OrchestrationResolver>.Instance);
+        SeedParticipants(store, triage, specialist);
+
+        var resolved = await resolver.ResolveAsync(orchestrator, thinkingModel).ConfigureAwait(false);
+
+        AssertEx.NotNull(resolved);
+        var triageSpec = resolved!.Spec.Participants.Single(participant => participant.Key == triage.Id.ToString("D"));
+        var specialistSpec = resolved.Spec.Participants.Single(participant => participant.Key == specialist.Id.ToString("D"));
+        AssertEx.True(triageSpec.SupportsThinking, "a participant pinned to a thinking-capable model must resolve SupportsThinking=true");
+        AssertEx.False(specialistSpec.SupportsThinking, "a participant pinned to a non-thinking model must resolve SupportsThinking=false even when the turn model can think");
+    }
+
+    [Test]
     public async Task ResolveAsync_ProjectsParticipantToolsLikeP3()
     {
         // Each participant's tools are projected with the same contract as single-agent resolution: offer ∩ AllowedToolNames, approval override.
@@ -287,6 +332,14 @@ public sealed class OrchestrationResolverTests
         out IPlaybookActionStore playbookStore,
         params AllowedToolDto[] offeredTools)
     {
+        return CreateResolver(out store, out playbookStore, capabilityResolver: null, offeredTools);
+    }
+
+    private static OrchestrationResolver CreateResolver(out IAgentDefinitionStore store,
+        out IPlaybookActionStore playbookStore,
+        IModelCapabilityResolver? capabilityResolver,
+        params AllowedToolDto[] offeredTools)
+    {
         store = Substitute.For<IAgentDefinitionStore>();
         playbookStore = Substitute.For<IPlaybookActionStore>();
         // Default: no enabled playbook actions, so each participant's composed prompt stays byte-identical.
@@ -310,7 +363,18 @@ public sealed class OrchestrationResolverTests
             new LexicalPlaybookRetrievalRanker(),
             retrievalOptions,
             runtimeSettings,
+            capabilityResolver ?? NonThinkingCapabilityResolver(),
             NullLogger<OrchestrationResolver>.Instance);
+    }
+
+    // Default capability stub: every model resolves NOT thinking (the safe default). Tests that assert per-participant
+    // thinking pass their own configured resolver.
+    private static IModelCapabilityResolver NonThinkingCapabilityResolver()
+    {
+        var resolver = Substitute.For<IModelCapabilityResolver>();
+        resolver.ResolveAsync(Arg.Any<string?>(), Arg.Any<CancellationToken>())
+                .Returns(Task.FromResult((SupportsThinking: false, SupportsTools: true)));
+        return resolver;
     }
 
     // Builds a resolver with a caller-supplied ranker + explicit retrieval threshold/top-k, mirroring the single-agent
@@ -342,7 +406,7 @@ public sealed class OrchestrationResolverTests
             RetrievalThreshold = threshold,
             TopK = topK
         });
-        return new OrchestrationResolver(store, playbookStore, offerProvider, ranker, retrievalOptions, runtimeSettings, NullLogger<OrchestrationResolver>.Instance);
+        return new OrchestrationResolver(store, playbookStore, offerProvider, ranker, retrievalOptions, runtimeSettings, NonThinkingCapabilityResolver(), NullLogger<OrchestrationResolver>.Instance);
     }
 
     private static void SeedParticipants(IAgentDefinitionStore store, params AgentDefinitionRecord[] participants)

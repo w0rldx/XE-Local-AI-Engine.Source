@@ -21,6 +21,7 @@ internal sealed class OrchestrationResolver : IOrchestrationResolver
     private const int DefaultMaxTurnsPerAgent = 8;
     private readonly ILocalToolOfferProvider _localToolOfferProvider;
     private readonly ILogger<OrchestrationResolver> _logger;
+    private readonly IModelCapabilityResolver _modelCapabilityResolver;
     private readonly IPlaybookActionStore _playbookActionStore;
     private readonly PlaybookRetrievalOptions _retrievalOptions;
     private readonly IPlaybookRetrievalRanker _retrievalRanker;
@@ -34,6 +35,7 @@ internal sealed class OrchestrationResolver : IOrchestrationResolver
         IPlaybookRetrievalRanker retrievalRanker,
         IOptions<PlaybookRetrievalOptions> retrievalOptions,
         INodeRuntimeSettings runtimeSettings,
+        IModelCapabilityResolver modelCapabilityResolver,
         ILogger<OrchestrationResolver> logger)
     {
         _store = store ?? throw new ArgumentNullException(nameof(store));
@@ -43,6 +45,7 @@ internal sealed class OrchestrationResolver : IOrchestrationResolver
         ArgumentNullException.ThrowIfNull(retrievalOptions);
         _retrievalOptions = retrievalOptions.Value;
         _runtimeSettings = runtimeSettings ?? throw new ArgumentNullException(nameof(runtimeSettings));
+        _modelCapabilityResolver = modelCapabilityResolver ?? throw new ArgumentNullException(nameof(modelCapabilityResolver));
         _logger = logger ?? throw new ArgumentNullException(nameof(logger));
     }
 
@@ -110,7 +113,13 @@ internal sealed class OrchestrationResolver : IOrchestrationResolver
         }
 
         var edges = BuildEdges(orchestrator, topology, participants);
-        var maxTurnsPerAgent = topology.MaxTurnsPerAgent > 0 ? topology.MaxTurnsPerAgent : DefaultMaxTurnsPerAgent;
+
+        // The parser already fails an over-ceiling per-agent turn cap closed, degrading the whole turn to single agent.
+        // This clamp is defense in depth for a topology ever built without going through the parser. A non-positive turn
+        // cap keeps falling back to the resolver default.
+        var maxTurnsPerAgent = topology.MaxTurnsPerAgent > 0
+            ? Math.Min(topology.MaxTurnsPerAgent, OrchestrationTopologyJson.MaxTurnsPerAgentCeiling)
+            : DefaultMaxTurnsPerAgent;
 
         var spec = new OrchestrationSpec
         {
@@ -172,7 +181,12 @@ internal sealed class OrchestrationResolver : IOrchestrationResolver
             // Resolve the participant's prompt here (in the async load) so ToSpecParticipant stays synchronous: fold in
             // its own enabled playbook when its playbook is enabled, else keep its base Instructions byte-identical.
             var resolvedInstructions = await ComposeParticipantInstructionsAsync(participant, retrievalQuery, cancellationToken).ConfigureAwait(false);
-            capable[participant.Id] = new ResolvedParticipant(participant, resolvedInstructions);
+
+            // Resolve THIS participant's thinking capability from its OWN effective model (not the turn model's), so a
+            // participant pinned to a non-thinking model never has a reasoning level sent to the think wire. Tools are
+            // gated separately by the ToolCapableModels allow-list above, so only the thinking bit is taken here.
+            var (supportsThinking, _) = await _modelCapabilityResolver.ResolveAsync(participantEffectiveModel, cancellationToken).ConfigureAwait(false);
+            capable[participant.Id] = new ResolvedParticipant(participant, resolvedInstructions, supportsThinking);
         }
 
         return capable;
@@ -246,6 +260,7 @@ internal sealed class OrchestrationResolver : IOrchestrationResolver
             Instructions = participant.ResolvedInstructions,
             ModelId = definition.ModelProfile,
             ReasoningEffort = definition.ReasoningEffort,
+            SupportsThinking = participant.SupportsThinking,
             Tools = ProjectAllowedTools(definition, activeModelId)
         };
     }
@@ -302,9 +317,9 @@ internal sealed class OrchestrationResolver : IOrchestrationResolver
     }
 
     /// <summary>
-    ///     A capable participant paired with the system prompt to emit for it: its base Instructions, or its
-    ///     playbook-composed prompt when its own playbook is enabled. The composition is resolved during the async
-    ///     participant load so the synchronous <see cref="ToSpecParticipant" /> can stay query-free.
+    ///     A capable participant paired with the system prompt to emit for it (its base Instructions, or its
+    ///     playbook-composed prompt when its own playbook is enabled) and its effective model's thinking capability. Both
+    ///     are resolved during the async participant load so the synchronous <see cref="ToSpecParticipant" /> stays query-free.
     /// </summary>
-    private sealed record ResolvedParticipant(AgentDefinitionRecord Definition, string ResolvedInstructions);
+    private sealed record ResolvedParticipant(AgentDefinitionRecord Definition, string ResolvedInstructions, bool SupportsThinking);
 }
