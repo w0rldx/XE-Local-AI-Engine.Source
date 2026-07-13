@@ -705,7 +705,8 @@ public sealed class NodeChatPersistenceServiceTests : IDisposable
         AssertEx.True(migrated >= 1, "The legacy plaintext row must be migrated.");
 
         // The row is now encrypted, but the old plaintext still lingers in freed pages / the journal until reclaimed.
-        await backfill.CheckpointAndVacuumAsync(CancellationToken.None).ConfigureAwait(false);
+        AssertEx.True(await backfill.CheckpointAndVacuumAsync(CancellationToken.None).ConfigureAwait(false),
+            "A successful checkpoint/vacuum must report success so the caller can clear the reclamation marker.");
 
         // The whole main DB file — not just the row's current bytes — must be free of the migrated plaintext.
         var fileBytes = await File.ReadAllBytesAsync(GetDatabasePath(fileName)).ConfigureAwait(false);
@@ -715,6 +716,86 @@ public sealed class NodeChatPersistenceServiceTests : IDisposable
         // And the encrypted row still round-trips back to plaintext through the read path.
         var loaded = AssertEx.NotNull(await service.GetConversationAsync(conversation.ConversationId).ConfigureAwait(false));
         AssertEx.Equal(legacyText, loaded.Messages.Single(message => message.MessageId == messageId).Content);
+    }
+
+    [Test]
+    public async Task ContentEncryptionBackfill_ReclamationRetriedOnRestart_WhenMarkerSetButNoCandidatesRemain()
+    {
+        // Reproduce the state a failed/interrupted reclamation leaves behind: rows already encrypted (so no candidates
+        // remain to re-trigger cleanup), plaintext residue still on disk, and the durable "reclamation pending" marker
+        // set from the previous run. A restart must honour the marker and retry the reclamation to completion.
+        const string fileName = "backfill-reclaim-retry.sqlite";
+        const string legacyText = "zzq-reclaim-retry-marker-4460";
+        await using var provider = await BuildProviderAsync(fileName).ConfigureAwait(false);
+        var service = CreateService(provider);
+
+        var conversation = await service.CreateConversationAsync(new NodeChatCreateConversationRequest("Chat", "node", CreatedAtUtc: 1)).ConfigureAwait(false);
+        var messageId = Guid.NewGuid();
+        await service.PersistUserMessageAsync(new NodeChatPersistUserMessageRequest(conversation.ConversationId, messageId, "placeholder", CreatedAtUtc: 2)).ConfigureAwait(false);
+        await WriteRawMessageContentAsync(provider, messageId, Encoding.UTF8.GetBytes(legacyText)).ConfigureAwait(false);
+
+        using var backfill = new NodeChatContentEncryptionBackfillService(provider.GetRequiredService<IServiceScopeFactory>(),
+            NullLogger<NodeChatContentEncryptionBackfillService>.Instance);
+
+        // Encrypt the row WITHOUT reclaiming, then set the durable marker by hand to stand in for a previous run whose
+        // reclamation never completed. There are now zero migration candidates left.
+        AssertEx.True(await backfill.MigrateAllAsync(batchSize: 50, CancellationToken.None).ConfigureAwait(false) >= 1, "The legacy row must migrate.");
+        await SetReclamationMarkerRawAsync(provider).ConfigureAwait(false);
+
+        // Restart: no candidates remain, but the marker forces the reclamation to be retried. The marker is cleared only
+        // if the checkpoint/VACUUM pass actually ran — so a cleared marker is the deterministic proof the retry fired
+        // (the pre-fix behaviour skipped reclamation entirely when no candidates remained, leaving the marker set).
+        await backfill.RunOnceAsync(CancellationToken.None).ConfigureAwait(false);
+
+        AssertEx.False(await IsReclamationMarkerSetRawAsync(provider).ConfigureAwait(false), "A successful retry must clear the reclamation-pending marker.");
+        AssertEx.False(ContainsSubsequence(await File.ReadAllBytesAsync(GetDatabasePath(fileName)).ConfigureAwait(false), Encoding.UTF8.GetBytes(legacyText)),
+            "After the retried reclamation, no migrated plaintext may remain in the main DB file.");
+    }
+
+    [Test]
+    public async Task ContentEncryptionBackfill_MarkerClearedAfterSuccess_NoRedundantReclamationNextStartup()
+    {
+        const string fileName = "backfill-marker-cleared.sqlite";
+        const string legacyText = "zzq-marker-cleared-marker-9013";
+        await using var provider = await BuildProviderAsync(fileName).ConfigureAwait(false);
+        var service = CreateService(provider);
+
+        var conversation = await service.CreateConversationAsync(new NodeChatCreateConversationRequest("Chat", "node", CreatedAtUtc: 1)).ConfigureAwait(false);
+        var messageId = Guid.NewGuid();
+        await service.PersistUserMessageAsync(new NodeChatPersistUserMessageRequest(conversation.ConversationId, messageId, "placeholder", CreatedAtUtc: 2)).ConfigureAwait(false);
+        await WriteRawMessageContentAsync(provider, messageId, Encoding.UTF8.GetBytes(legacyText)).ConfigureAwait(false);
+
+        using var backfill = new NodeChatContentEncryptionBackfillService(provider.GetRequiredService<IServiceScopeFactory>(),
+            NullLogger<NodeChatContentEncryptionBackfillService>.Instance);
+
+        // First startup: migrate + reclaim in one pass; the marker (set before migrating) must be cleared on success.
+        await backfill.RunOnceAsync(CancellationToken.None).ConfigureAwait(false);
+        AssertEx.False(ContainsSubsequence(await File.ReadAllBytesAsync(GetDatabasePath(fileName)).ConfigureAwait(false), Encoding.UTF8.GetBytes(legacyText)),
+            "The plaintext residue must be reclaimed on the first startup.");
+        AssertEx.False(await IsReclamationMarkerSetRawAsync(provider).ConfigureAwait(false), "A successful reclamation must clear the marker.");
+
+        // Second startup: no candidates and no marker → reclamation is skipped and the marker stays clear.
+        await backfill.RunOnceAsync(CancellationToken.None).ConfigureAwait(false);
+        AssertEx.False(await IsReclamationMarkerSetRawAsync(provider).ConfigureAwait(false),
+            "With nothing to migrate and the marker cleared, the next startup must not re-arm or run reclamation.");
+    }
+
+    [Test]
+    public async Task ContentEncryptionBackfill_CancellationDuringCleanup_LeavesMarkerSet()
+    {
+        await using var provider = await BuildProviderAsync("backfill-cancel-cleanup.sqlite").ConfigureAwait(false);
+
+        // Arrange the durable marker as if a run had just set it before reclaiming.
+        await SetReclamationMarkerRawAsync(provider).ConfigureAwait(false);
+
+        using var backfill = new NodeChatContentEncryptionBackfillService(provider.GetRequiredService<IServiceScopeFactory>(),
+            NullLogger<NodeChatContentEncryptionBackfillService>.Instance);
+
+        // A cancelled cleanup is swallowed and reports failure, so the caller never clears the marker.
+        AssertEx.False(await backfill.CheckpointAndVacuumAsync(new CancellationToken(canceled: true)).ConfigureAwait(false),
+            "A cancelled checkpoint/vacuum must report failure so the marker is left set.");
+        AssertEx.True(await IsReclamationMarkerSetRawAsync(provider).ConfigureAwait(false),
+            "Cancellation mid-cleanup must leave the reclamation-pending marker set for the next startup to retry.");
     }
 
     [Test]
@@ -1227,6 +1308,47 @@ public sealed class NodeChatPersistenceServiceTests : IDisposable
         command.Parameters.Add(parameter);
         var result = await command.ExecuteScalarAsync().ConfigureAwait(false);
         return Convert.ToInt32(result, System.Globalization.CultureInfo.InvariantCulture);
+    }
+
+    // The backfill service's durable reclamation marker lives in a raw (non-EF) key/value table. These helpers poke it
+    // directly by its stable on-disk contract (table + marker name), independent of the service's private members.
+    private const string ReclamationMarkerName = "content_encryption_reclaim_pending";
+
+    private const string EnsureMaintenanceTableSql = "CREATE TABLE IF NOT EXISTS chat_maintenance_state (name TEXT NOT NULL PRIMARY KEY, value TEXT NOT NULL) WITHOUT ROWID;";
+
+    private static async Task SetReclamationMarkerRawAsync(ServiceProvider provider)
+    {
+        await using var scope = provider.CreateAsyncScope();
+        var connection = scope.ServiceProvider.GetRequiredService<NodeChatDbContext>().Database.GetDbConnection();
+        await connection.OpenAsync().ConfigureAwait(false);
+        await using var ensure = connection.CreateCommand();
+        ensure.CommandText = EnsureMaintenanceTableSql;
+        await ensure.ExecuteNonQueryAsync().ConfigureAwait(false);
+        await using var command = connection.CreateCommand();
+        command.CommandText = "INSERT INTO chat_maintenance_state (name, value) VALUES ($name, '1') ON CONFLICT(name) DO UPDATE SET value = '1';";
+        var parameter = command.CreateParameter();
+        parameter.ParameterName = "$name";
+        parameter.Value = ReclamationMarkerName;
+        command.Parameters.Add(parameter);
+        await command.ExecuteNonQueryAsync().ConfigureAwait(false);
+    }
+
+    private static async Task<bool> IsReclamationMarkerSetRawAsync(ServiceProvider provider)
+    {
+        await using var scope = provider.CreateAsyncScope();
+        var connection = scope.ServiceProvider.GetRequiredService<NodeChatDbContext>().Database.GetDbConnection();
+        await connection.OpenAsync().ConfigureAwait(false);
+        await using var ensure = connection.CreateCommand();
+        ensure.CommandText = EnsureMaintenanceTableSql;
+        await ensure.ExecuteNonQueryAsync().ConfigureAwait(false);
+        await using var command = connection.CreateCommand();
+        command.CommandText = "SELECT EXISTS(SELECT 1 FROM chat_maintenance_state WHERE name = $name);";
+        var parameter = command.CreateParameter();
+        parameter.ParameterName = "$name";
+        parameter.Value = ReclamationMarkerName;
+        command.Parameters.Add(parameter);
+        var result = await command.ExecuteScalarAsync().ConfigureAwait(false);
+        return Convert.ToInt64(result, System.Globalization.CultureInfo.InvariantCulture) != 0;
     }
 
     private static bool ContainsSubsequence(byte[] haystack, byte[] needle)

@@ -25,6 +25,7 @@ public sealed class NodeChatContentEncryptionBackfillService(
 
     // A row still needs migrating when its content OR its (present) metadata blob lacks the 0xFE 0x01 envelope header.
     // A blob shorter than two bytes (e.g. an empty placeholder) is treated as unencrypted. x'FE01' is the header bytes.
+    // The same WHERE predicate is mirrored in HasCandidatesSql (an EXISTS probe) below — keep the two in sync.
     private const string CandidateSelectSql = """
                                               SELECT message_id AS MessageId, conversation_id AS ConversationId, content AS Content, metadata_json AS MetadataJson
                                               FROM messages
@@ -33,26 +34,81 @@ public sealed class NodeChatContentEncryptionBackfillService(
                                               LIMIT {0}
                                               """;
 
-    protected override async Task ExecuteAsync(CancellationToken stoppingToken)
+    // Durable node-local state lives in a tiny key/value table in the chat DB itself (created idempotently, outside EF's
+    // model — no migration), so the "reclamation still owed" fact survives a restart and is consistent with the data it
+    // guards. It is a plain table (not PRAGMA user_version) so VACUUM preserves it deterministically.
+    private const string MaintenanceStateName = "content_encryption_reclaim_pending";
+
+    private const string CreateMaintenanceTableSql = """
+                                                     CREATE TABLE IF NOT EXISTS chat_maintenance_state (
+                                                         name TEXT NOT NULL PRIMARY KEY,
+                                                         value TEXT NOT NULL
+                                                     ) WITHOUT ROWID;
+                                                     """;
+
+    private const string SetMarkerSql = "INSERT INTO chat_maintenance_state (name, value) VALUES ($name, '1') ON CONFLICT(name) DO UPDATE SET value = '1';";
+
+    private const string ClearMarkerSql = "DELETE FROM chat_maintenance_state WHERE name = $name;";
+
+    private const string IsMarkerSetSql = "SELECT EXISTS(SELECT 1 FROM chat_maintenance_state WHERE name = $name);";
+
+    // EXISTS probe using the same predicate as CandidateSelectSql (kept in sync deliberately): are there legacy rows to
+    // migrate? Drives whether the reclamation marker is set this run.
+    private const string HasCandidatesSql = """
+                                            SELECT EXISTS(
+                                                SELECT 1 FROM messages
+                                                WHERE (length(content) < 2 OR substr(content, 1, 2) <> x'FE01')
+                                                   OR (metadata_json IS NOT NULL AND (length(metadata_json) < 2 OR substr(metadata_json, 1, 2) <> x'FE01'))
+                                            );
+                                            """;
+
+    protected override Task ExecuteAsync(CancellationToken stoppingToken)
+    {
+        return RunOnceAsync(stoppingToken);
+    }
+
+    /// <summary>
+    ///     Runs one startup pass: migrate any legacy plaintext rows, then reclaim the on-disk plaintext residue those
+    ///     rewrites leave behind. Reclamation is guarded by a durable "reclamation pending" marker so a failed or
+    ///     interrupted cleanup is retried on every subsequent startup until it succeeds — not silently abandoned once the
+    ///     rows are encrypted and there are no candidates left to trigger it. Internal so a test can drive one
+    ///     deterministic pass. Never throws: shutdown and unexpected errors are logged and swallowed.
+    /// </summary>
+    internal async Task RunOnceAsync(CancellationToken cancellationToken)
     {
         try
         {
-            var total = await MigrateAllAsync(DefaultBatchSize, stoppingToken).ConfigureAwait(false);
+            await EnsureMaintenanceStateTableAsync(cancellationToken).ConfigureAwait(false);
+            var reclamationPendingFromPreviousRun = await IsReclamationPendingAsync(cancellationToken).ConfigureAwait(false);
+            var hasLegacyCandidates = await HasLegacyCandidatesAsync(cancellationToken).ConfigureAwait(false);
+
+            // Set the durable marker BEFORE any legacy row is re-encrypted, so a failure or shutdown during the single
+            // reclamation pass below cannot lose the fact that plaintext residue still has to be reclaimed. It is
+            // committed on its own connection, so it is durable independently of (and prior to) the migration commits.
+            if (hasLegacyCandidates)
+            {
+                await SetReclamationPendingAsync(cancellationToken).ConfigureAwait(false);
+            }
+
+            var total = await MigrateAllAsync(DefaultBatchSize, cancellationToken).ConfigureAwait(false);
             if (total > 0)
             {
                 logger.LogInformation("NodeChatContentEncryptionBackfillService: encrypted {Count} legacy plaintext message row(s).", total);
+            }
 
-                // Rewriting a row in place leaves the old plaintext bytes lingering in the SQLite journal/WAL and in
-                // freed pages of the main file. Reclaim that residue once, only when this run actually migrated rows:
-                // a WAL checkpoint-truncate collapses the log back into the main DB, then VACUUM rebuilds the file so
-                // the freed pages holding plaintext are physically dropped, then a final checkpoint flushes VACUUM's
-                // own writes to the main file. If retention leaves nothing to migrate on a later start, this is skipped.
-                await CheckpointAndVacuumAsync(stoppingToken).ConfigureAwait(false);
+            // Reclaim residue whenever this run migrated rows OR a previous run's reclamation never completed (marker
+            // still set) — an idempotent retry until the checkpoint/VACUUM pass finally succeeds. Clear the marker only
+            // on success; a failure/cancellation leaves it set so the next startup retries.
+            if ((hasLegacyCandidates || reclamationPendingFromPreviousRun)
+                && await CheckpointAndVacuumAsync(cancellationToken).ConfigureAwait(false))
+            {
+                await ClearReclamationPendingAsync(cancellationToken).ConfigureAwait(false);
             }
         }
         catch (OperationCanceledException)
         {
-            // Normal shutdown — committed batches persist; the rest resume on the next startup.
+            // Normal shutdown — committed batches and the durable marker persist; migration and reclamation resume on
+            // the next startup.
         }
         catch (Exception ex)
         {
@@ -124,11 +180,12 @@ public sealed class NodeChatContentEncryptionBackfillService(
     /// <summary>
     ///     Reclaims on-disk plaintext residue left behind by the in-place row rewrites: checkpoint-truncate the WAL,
     ///     VACUUM the database (which cannot run inside a transaction, so it uses the raw connection with no ambient
-    ///     transaction), then checkpoint again so VACUUM's rebuild lands in the main file. A failure here must never
-    ///     crash the background service — the rows are already encrypted; only the residue cleanup is skipped, and it is
-    ///     retried on the next startup that migrates at least one row. Internal so a test can drive it deterministically.
+    ///     transaction), then checkpoint again so VACUUM's rebuild lands in the main file. Returns <see langword="true" />
+    ///     only when the whole pass succeeded; on any failure or cancellation it logs and returns <see langword="false" />
+    ///     so the caller leaves the durable "reclamation pending" marker set and retries next startup. A failure here
+    ///     must never crash the background service — the rows are already encrypted. Internal so a test can drive it.
     /// </summary>
-    internal async Task CheckpointAndVacuumAsync(CancellationToken cancellationToken)
+    internal async Task<bool> CheckpointAndVacuumAsync(CancellationToken cancellationToken)
     {
         try
         {
@@ -140,16 +197,81 @@ public sealed class NodeChatContentEncryptionBackfillService(
             await ExecuteRawAsync(connection, "PRAGMA wal_checkpoint(TRUNCATE);", cancellationToken).ConfigureAwait(false);
             await ExecuteRawAsync(connection, "VACUUM;", cancellationToken).ConfigureAwait(false);
             await ExecuteRawAsync(connection, "PRAGMA wal_checkpoint(TRUNCATE);", cancellationToken).ConfigureAwait(false);
+            return true;
         }
         catch (OperationCanceledException)
         {
-            // Normal shutdown — the encrypted rows are durable; residue reclamation retries on the next qualifying start.
+            // Normal shutdown — the encrypted rows are durable and the marker stays set, so reclamation retries on the
+            // next startup.
+            return false;
         }
         catch (Exception ex)
         {
             logger.LogWarning(ex,
-                "NodeChatContentEncryptionBackfillService: post-backfill checkpoint/vacuum failed; encrypted rows are durable but plaintext residue reclamation was skipped and will retry on the next startup that migrates rows.");
+                "NodeChatContentEncryptionBackfillService: post-backfill checkpoint/vacuum failed; encrypted rows are durable, the reclamation-pending marker remains set, and reclamation will be retried on the next startup.");
+            return false;
         }
+    }
+
+    // Creates the durable maintenance-state table if it does not exist. Runs outside EF's model (no migration); safe on
+    // both migrated databases and EnsureCreated test databases.
+    private async Task EnsureMaintenanceStateTableAsync(CancellationToken cancellationToken)
+    {
+        await using var scope = scopeFactory.CreateAsyncScope();
+        var connection = scope.ServiceProvider.GetRequiredService<NodeChatDbContext>().Database.GetDbConnection();
+        await OpenIfNeededAsync(connection, cancellationToken).ConfigureAwait(false);
+        await ExecuteRawAsync(connection, CreateMaintenanceTableSql, cancellationToken).ConfigureAwait(false);
+    }
+
+    private Task<bool> HasLegacyCandidatesAsync(CancellationToken cancellationToken)
+    {
+        return ExistsAsync(HasCandidatesSql, addMarkerName: false, cancellationToken);
+    }
+
+    private Task<bool> IsReclamationPendingAsync(CancellationToken cancellationToken)
+    {
+        return ExistsAsync(IsMarkerSetSql, addMarkerName: true, cancellationToken);
+    }
+
+    private Task SetReclamationPendingAsync(CancellationToken cancellationToken)
+    {
+        return ExecuteMarkerNonQueryAsync(SetMarkerSql, cancellationToken);
+    }
+
+    private Task ClearReclamationPendingAsync(CancellationToken cancellationToken)
+    {
+        return ExecuteMarkerNonQueryAsync(ClearMarkerSql, cancellationToken);
+    }
+
+    [System.Diagnostics.CodeAnalysis.SuppressMessage("Security", "CA2100:Review SQL queries for security vulnerabilities",
+        Justification = "Every call site passes a fixed internal maintenance query constant — never user input.")]
+    private async Task<bool> ExistsAsync(string sql, bool addMarkerName, CancellationToken cancellationToken)
+    {
+        await using var scope = scopeFactory.CreateAsyncScope();
+        var connection = scope.ServiceProvider.GetRequiredService<NodeChatDbContext>().Database.GetDbConnection();
+        await OpenIfNeededAsync(connection, cancellationToken).ConfigureAwait(false);
+        await using var command = connection.CreateCommand();
+        command.CommandText = sql;
+        if (addMarkerName)
+        {
+            AddParameter(command, "$name", MaintenanceStateName);
+        }
+
+        var result = await command.ExecuteScalarAsync(cancellationToken).ConfigureAwait(false);
+        return Convert.ToInt64(result, System.Globalization.CultureInfo.InvariantCulture) != 0;
+    }
+
+    [System.Diagnostics.CodeAnalysis.SuppressMessage("Security", "CA2100:Review SQL queries for security vulnerabilities",
+        Justification = "Every call site passes a fixed internal maintenance statement constant — never user input.")]
+    private async Task ExecuteMarkerNonQueryAsync(string sql, CancellationToken cancellationToken)
+    {
+        await using var scope = scopeFactory.CreateAsyncScope();
+        var connection = scope.ServiceProvider.GetRequiredService<NodeChatDbContext>().Database.GetDbConnection();
+        await OpenIfNeededAsync(connection, cancellationToken).ConfigureAwait(false);
+        await using var command = connection.CreateCommand();
+        command.CommandText = sql;
+        AddParameter(command, "$name", MaintenanceStateName);
+        await command.ExecuteNonQueryAsync(cancellationToken).ConfigureAwait(false);
     }
 
     [System.Diagnostics.CodeAnalysis.SuppressMessage("Security", "CA2100:Review SQL queries for security vulnerabilities",
