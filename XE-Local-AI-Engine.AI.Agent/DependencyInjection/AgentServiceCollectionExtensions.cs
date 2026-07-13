@@ -59,6 +59,13 @@ public static class AgentServiceCollectionExtensions
                     .ValidateDataAnnotations()
                     .ValidateOnStart();
 
+        // Code-owned gen_ai telemetry policy (MED-010): CaptureSensitiveContent defaults false and is set EXPLICITLY on
+        // the OpenTelemetry chat client below, so the ambient OTEL_INSTRUMENTATION_GENAI_CAPTURE_MESSAGE_CONTENT that
+        // Aspire injects cannot silently turn prompt/completion capture on.
+        _ = services.AddOptions<AgentTelemetryOptions>()
+                    .Bind(configuration.GetSection(AgentTelemetryOptions.Section))
+                    .ValidateOnStart();
+
         _ = services.AddSingleton<IValidateOptions<LocalChatAgentOptions>, LocalChatAgentOptionsValidator>();
         _ = services.AddSingleton<IValidateOptions<InvocationAgentOptions>, InvocationAgentOptionsValidator>();
         _ = services.AddSingleton<IValidateOptions<OrchestrationAgentOptions>, OrchestrationAgentOptionsValidator>();
@@ -108,16 +115,33 @@ public static class AgentServiceCollectionExtensions
             // base client), and the decoration factory runs lazily at IChatClient resolution. A missing registration
             // falls back to the pinned defaults rather than throwing during a partial re-decoration.
             var pipelineOptions = serviceProvider.GetService<IOptions<AgentToolPipelineOptions>>()?.Value ?? new AgentToolPipelineOptions();
+            var telemetryOptions = serviceProvider.GetService<IOptions<AgentTelemetryOptions>>()?.Value ?? new AgentTelemetryOptions();
+
+            // Enabling sensitive-content capture is a privacy-sensitive, deliberate opt-in — surface it loudly once so an
+            // operator can never leave full prompts/reasoning/completions flowing into telemetry unnoticed.
+            if (telemetryOptions.CaptureSensitiveContent)
+            {
+                serviceProvider.GetRequiredService<ILogger<OpenTelemetryChatClient>>()
+                               .LogWarning("Agent gen_ai telemetry is capturing SENSITIVE message content (prompts, reasoning, completions, tool arguments) into spans because "
+                                           + "{Section}:{Setting} is enabled. Disable it for any environment where telemetry is exported off-box.",
+                                   AgentTelemetryOptions.Section,
+                                   nameof(AgentTelemetryOptions.CaptureSensitiveContent));
+            }
 
             // First .Use is outermost. OpenTelemetry sits INNERMOST (below function invocation) so each provider round
             // in a tool-calling loop emits its own gen_ai span — the documented MEAI ordering. The source name is pinned
             // explicitly because MEAI's default ("Experimental.Microsoft.Extensions.AI") does NOT match the ServiceDefaults
-            // wildcard AddSource/AddMeter("Microsoft.Extensions.AI*"). Sensitive data (prompts/completions) is left OFF.
+            // wildcard AddSource/AddMeter("Microsoft.Extensions.AI*"). EnableSensitiveData is set EXPLICITLY from the
+            // code-owned AgentTelemetryOptions (default false) rather than left unset: an unset value defers to the
+            // ambient OTEL_INSTRUMENTATION_GENAI_CAPTURE_MESSAGE_CONTENT, which Aspire injects as true — so leaving it
+            // unset silently emits full prompts/completions. Setting it here makes the code the single source of truth.
             return inner.AsBuilder()
                         .Use(chatClient => new ToolInvocationObservabilityChatClient(chatClient, serviceProvider.GetRequiredService<ILogger<ToolInvocationObservabilityChatClient>>()))
                         .UseFunctionInvocation(serviceProvider.GetRequiredService<ILoggerFactory>(),
                             functionInvokingChatClient => functionInvokingChatClient.MaximumIterationsPerRequest = pipelineOptions.MaximumToolIterationsPerRequest)
-                        .UseOpenTelemetry(serviceProvider.GetRequiredService<ILoggerFactory>(), sourceName: "Microsoft.Extensions.AI")
+                        .UseOpenTelemetry(serviceProvider.GetRequiredService<ILoggerFactory>(),
+                            sourceName: "Microsoft.Extensions.AI",
+                            configure: openTelemetryChatClient => openTelemetryChatClient.EnableSensitiveData = telemetryOptions.CaptureSensitiveContent)
                         .Build();
         });
 
