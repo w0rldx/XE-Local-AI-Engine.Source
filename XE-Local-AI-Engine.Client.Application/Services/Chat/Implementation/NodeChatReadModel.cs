@@ -24,7 +24,7 @@ internal sealed class NodeChatReadModel(NodeChatPersistenceWriter writer)
 
     public async Task<NodeChatConversationDto?> GetConversationAsync(Guid conversationId, CancellationToken cancellationToken = default)
     {
-        return await _writer.ExecuteAsync(NodeChatPersistenceWriteKey.ForConversation(conversationId),
+        return await _writer.ExecuteConversationSharedAsync(conversationId,
             async (dbContext, token) =>
             {
                 await using var conversationCommand = dbContext.Database.GetDbConnection().CreateCommand();
@@ -70,13 +70,13 @@ internal sealed class NodeChatReadModel(NodeChatPersistenceWriter writer)
 
     private async Task<IReadOnlyList<NodeChatConversationSummaryDto>> ListActiveConversationsAsync(NodeChatListConversationsRequest request, CancellationToken cancellationToken)
     {
-        return await _writer.ExecuteAsync(NodeChatPersistenceWriteKey.ForConversation(Guid.Empty),
+        return await _writer.ExecuteConversationSharedAsync(Guid.Empty,
             async (dbContext, token) =>
             {
                 await using var command = dbContext.Database.GetDbConnection().CreateCommand();
                 command.CommandText = """
                                       SELECT c.conversation_id, c.title, c.created_at_utc, c.last_seen_utc, c.purged,
-                                             m.content, m.status, c.origin, c.is_pinned, c.archived
+                                             m.content, m.status, c.origin, c.is_pinned, c.archived, m.message_id
                                       FROM conversations c
                                       LEFT JOIN messages m ON m.message_id = (
                                           SELECT mi.message_id FROM messages mi
@@ -93,13 +93,13 @@ internal sealed class NodeChatReadModel(NodeChatPersistenceWriter writer)
 
     private async Task<IReadOnlyList<NodeChatConversationSummaryDto>> ListAllConversationsAsync(NodeChatListConversationsRequest request, CancellationToken cancellationToken)
     {
-        return await _writer.ExecuteAsync(NodeChatPersistenceWriteKey.ForConversation(Guid.Empty),
+        return await _writer.ExecuteConversationSharedAsync(Guid.Empty,
             async (dbContext, token) =>
             {
                 await using var command = dbContext.Database.GetDbConnection().CreateCommand();
                 command.CommandText = """
                                       SELECT c.conversation_id, c.title, c.created_at_utc, c.last_seen_utc, c.purged,
-                                             m.content, m.status, c.origin, c.is_pinned, c.archived
+                                             m.content, m.status, c.origin, c.is_pinned, c.archived, m.message_id
                                       FROM conversations c
                                       LEFT JOIN messages m ON m.message_id = (
                                           SELECT mi.message_id FROM messages mi

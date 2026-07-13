@@ -46,6 +46,14 @@ public sealed record OrchestrationSpecParticipant
 
     public string? ReasoningEffort { get; init; }
 
+    /// <summary>
+    ///     Whether this participant's EFFECTIVE model (its pinned profile, else the turn's active model) advertises the
+    ///     thinking capability. Resolved per participant so a participant pinned to a non-thinking model never has a
+    ///     reasoning level sent to the think wire (and vice versa) — it is NOT the turn model's capability copied to all.
+    ///     Not folded into the config hash: it is derived from <see cref="ModelId" />, which already participates.
+    /// </summary>
+    public bool SupportsThinking { get; init; }
+
     /// <summary>The participant's projected tool offer (capability-gated ∩ AllowedToolNames, approval-overridden).</summary>
     public required IReadOnlyList<AllowedToolDto> Tools { get; init; }
 }

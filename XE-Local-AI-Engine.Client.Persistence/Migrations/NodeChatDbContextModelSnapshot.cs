@@ -345,6 +345,22 @@ namespace XE_Local_AI_Engine.Client.Persistence.Migrations.NodeChatDb
                     b.ToTable("canvas_workflows", (string)null);
                 });
 
+            modelBuilder.Entity("XE_Local_AI_Engine.Client.Persistence.Entities.ChatMaintenanceState", b =>
+                {
+                    b.Property<string>("Name")
+                        .HasColumnType("TEXT")
+                        .HasColumnName("name");
+
+                    b.Property<string>("Value")
+                        .IsRequired()
+                        .HasColumnType("TEXT")
+                        .HasColumnName("value");
+
+                    b.HasKey("Name");
+
+                    b.ToTable("chat_maintenance_state", (string)null);
+                });
+
             modelBuilder.Entity("XE_Local_AI_Engine.Client.Persistence.Entities.ConversationUploadedFile", b =>
                 {
                     b.Property<Guid>("FileId")
@@ -1489,13 +1505,14 @@ namespace XE_Local_AI_Engine.Client.Persistence.Migrations.NodeChatDb
 
                     b.HasIndex("AgentDefinitionId");
 
-                    b.HasIndex("ConversationId");
-
                     b.HasIndex("ParentMessageId");
 
                     b.HasIndex("RequestId");
 
                     b.HasIndex("VariantGroupId");
+
+                    b.HasIndex("ConversationId", "Sequence")
+                        .IsUnique();
 
                     b.ToTable("messages", (string)null);
                 });

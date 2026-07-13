@@ -6,7 +6,9 @@ using XE_Local_AI_Engine.Client.Services.DocumentIngestion;
 ///     Facade over the node chat persistence path. Implements <see cref="INodeChatPersistenceService" /> by delegating
 ///     to focused collaborators (conversation commands, read model, message commands, variant/branch, feedback), all
 ///     composed from the single <see cref="NodeChatPersistenceWriter" /> so the per-conversation/per-message write-key
-///     serialization and the at-rest plaintext posture are unchanged.
+///     serialization is unchanged. Message content and metadata are AES-encrypted at rest on both the raw-ADO and EF
+///     paths (versioned read-both envelope via <c>NodeChatContentProtection</c>); the collaborators exchange plaintext
+///     in memory.
 /// </summary>
 public sealed class NodeChatPersistenceService : INodeChatPersistenceService
 {

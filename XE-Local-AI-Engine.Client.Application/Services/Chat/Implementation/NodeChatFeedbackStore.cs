@@ -21,7 +21,8 @@ internal sealed class NodeChatFeedbackStore(NodeChatPersistenceWriter writer)
 
         var comment = string.IsNullOrWhiteSpace(request.Comment) ? null : request.Comment.Trim();
 
-        return await _writer.ExecuteAsync(NodeChatPersistenceWriteKey.ForMessage(request.ConversationId, request.MessageId),
+        return await _writer.ExecuteMessageUpdateAsync(request.ConversationId,
+            request.MessageId,
             async (dbContext, token) =>
             {
                 // Upsert keyed on the message id: re-submitting feedback overwrites rating/comment but preserves the
@@ -53,7 +54,7 @@ internal sealed class NodeChatFeedbackStore(NodeChatPersistenceWriter writer)
 
     public async Task<NodeChatMessageFeedbackDto?> GetMessageFeedbackAsync(Guid conversationId, Guid messageId, CancellationToken cancellationToken = default)
     {
-        return await _writer.ExecuteAsync(NodeChatPersistenceWriteKey.ForMessage(conversationId, messageId),
+        return await _writer.ExecuteConversationSharedAsync(conversationId,
             (dbContext, token) => ReadFeedbackAsync(dbContext, conversationId, messageId, token),
             cancellationToken).ConfigureAwait(false);
     }

@@ -69,6 +69,14 @@ public static class OrchestrationTopologyJson
 
     public const int MaxHandoffs = 512;
 
+    /// <summary>
+    ///     Server-side ceiling on <see cref="OrchestrationTopology.MaxTurnsPerAgent" /> (the per-agent autonomous-turn
+    ///     depth/loop guard), matching the authoring UI's cap. A stored value above this fans an agent out into an
+    ///     arbitrarily long autonomous loop per turn, so it fails closed the same way an oversized participant/handoff
+    ///     list does. A non-positive value is NOT over the cap — it means "use the resolver default".
+    /// </summary>
+    public const int MaxTurnsPerAgentCeiling = 64;
+
     private static readonly JsonSerializerOptions Options = new(JsonSerializerDefaults.Web)
     {
         // Match the authoring/round-trip contract: camelCase property names, tolerant of trailing commas/comments the
@@ -107,8 +115,11 @@ public static class OrchestrationTopologyJson
         }
 
         // Fail closed on an oversized topology: an unbounded participant list would fan out into one DB lookup per id
-        // per turn, and an unbounded handoff list into an arbitrarily large graph. Treat either as malformed (null).
-        if (topology.ParticipantAgentDefinitionIds.Count > MaxParticipants || topology.Handoffs.Count > MaxHandoffs)
+        // per turn, an unbounded handoff list into an arbitrarily large graph, and an unbounded per-agent turn cap into
+        // an arbitrarily long autonomous loop per turn. Treat any of them as malformed (null).
+        if (topology.ParticipantAgentDefinitionIds.Count > MaxParticipants
+            || topology.Handoffs.Count > MaxHandoffs
+            || topology.MaxTurnsPerAgent > MaxTurnsPerAgentCeiling)
         {
             return null;
         }

@@ -360,13 +360,22 @@ export function Chat() {
 	}, [localModelsData?.configuredDefaultModelName, localModelsData?.selectedModelName, selectedModel]);
 
 	// Only poll model-details when the selection can actually return them: a non-empty local (non-cloud) name whose
-	// list option, if known, is available. Cloud (Codex) ids have no LOCAL details (the endpoint 404s for them) and an
-	// unavailable model just retries a guaranteed failure. GGUF (llamacpp) selections ARE polled — CL-4 serves their
-	// details as a 200 carrying maxContextTokens, which the context meter needs.
+	// list option, if known, is available AND whose concrete name is actually installed. Cloud (Codex) ids have no
+	// LOCAL details (the endpoint 404s for them), an unavailable model just retries a guaranteed failure, and a
+	// configured-but-not-installed default (its GGUF never downloaded) 404s forever until the install lands. GGUF
+	// (llamacpp) selections that are installed ARE polled — CL-4 serves their details as a 200 carrying
+	// maxContextTokens, which the context meter needs.
+	const concreteModelInstalled = useMemo(
+		() =>
+			selectedConcreteModelName.length > 0 &&
+			modelOptions.some((option) => option.value === selectedConcreteModelName),
+		[modelOptions, selectedConcreteModelName],
+	);
 	const selectedModelDetailsEnabled = shouldFetchLocalModelDetails(
 		selectedConcreteModelName,
 		selectedModelOption,
 		selectedModelIsCloud,
+		concreteModelInstalled,
 	);
 	const { data: selectedModelDetails } = useQuery({
 		...withResponseValidation(getLocalModelDetailsOptions({ path: { modelName: selectedConcreteModelName } })),
@@ -958,7 +967,24 @@ export function Chat() {
 			return;
 		}
 
+		// Abort and dispose the local stream FIRST so the UI stops immediately and the SignalR subscription is torn down
+		// before we round-trip to the server. The awaited server cancel must never gate the local stop: if it is slow or
+		// fails, the user's stop has still taken effect.
+		active.abortController.abort();
+		// Barge-in: cancelling generation halts voice playback immediately (acceptance: stop = halt playback).
+		onVoiceTurnStart();
+		const currentConversation = queryClient.getQueryData<ChatConversationModel>(
+			nodeChatQueryKeys.conversation(active.conversationId),
+		);
+		if (currentConversation) {
+			const cancelled = markNodeChatStreamTerminated(currentConversation, active.messageId, "cancelled");
+			cacheConversation(cancelled.conversation);
+			setStreamingMessage(cancelled.streamingMessage);
+		}
+
 		try {
+			// Best-effort server cancel: the local stream is already stopped, so a failure here only affects server-side
+			// reconciliation, surfaced as a non-blocking error.
 			await nodeChatAdapter.cancelMessage({
 				conversationId: active.conversationId,
 				messageId: active.messageId,
@@ -967,17 +993,7 @@ export function Chat() {
 		} catch (error) {
 			setStreamError(errorMessage(error));
 		} finally {
-			active.abortController.abort();
-			// Barge-in: cancelling generation halts voice playback immediately (acceptance: stop = halt playback).
-			onVoiceTurnStart();
-			const currentConversation = queryClient.getQueryData<ChatConversationModel>(
-				nodeChatQueryKeys.conversation(active.conversationId),
-			);
-			if (currentConversation) {
-				const cancelled = markNodeChatStreamTerminated(currentConversation, active.messageId, "cancelled");
-				cacheConversation(cancelled.conversation);
-				setStreamingMessage(cancelled.streamingMessage);
-			}
+			// Reconcile from the server's authoritative terminal state.
 			await refreshConversation(active.conversationId);
 		}
 	}, [cacheConversation, queryClient, refreshConversation, onVoiceTurnStart]);

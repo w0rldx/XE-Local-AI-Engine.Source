@@ -3,10 +3,12 @@ namespace XE_Local_AI_Engine.Tests.Chat;
 using System.Text;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Logging.Abstractions;
 using XE_Local_AI_Engine.Client.Persistence;
 using XE_Local_AI_Engine.Client.Persistence.Implementation;
 using XE_Local_AI_Engine.Client.Services.Chat;
 using XE_Local_AI_Engine.Client.Services.Chat.Implementation;
+using XE_Local_AI_Engine.Client.Services.Persistence.Implementation;
 using XE_Local_AI_Engine.Tests.Testing;
 
 public sealed class NodeChatPersistenceServiceTests : IDisposable
@@ -531,27 +533,347 @@ public sealed class NodeChatPersistenceServiceTests : IDisposable
     }
 
     [Test]
-    public async Task RemoteMessageContent_IsStoredAsPlaintextUtf8AtRest()
+    public async Task RemoteMessageContent_IsEncryptedAtRest()
     {
-        await using var provider = await BuildProviderAsync("remote-plaintext.sqlite").ConfigureAwait(false);
+        await using var provider = await BuildProviderAsync("remote-encrypted.sqlite").ConfigureAwait(false);
         var service = CreateService(provider);
-        const string plaintext = "remote at-rest plaintext content";
+        const string plaintext = "remote at-rest encrypted content";
 
         // Persist an Origin=Remote message via the raw-SQL persistence path (PersistUserMessageAsync issues a
-        // direct ADO.NET INSERT, never EF SaveChanges, so no EF interceptor touches the content column).
+        // direct ADO.NET INSERT). The content column must be written as the versioned encrypted envelope.
         var remoteConversationId = Guid.NewGuid();
         await service.EnsureConversationAsync(new NodeChatEnsureConversationRequest(remoteConversationId, "Remote", "node", CreatedAtUtc: 10, NodeChatOriginValues.Remote)).ConfigureAwait(false);
         var remoteMessageId = Guid.NewGuid();
         await service.PersistUserMessageAsync(new NodeChatPersistUserMessageRequest(remoteConversationId, remoteMessageId, plaintext, CreatedAtUtc: 11, Origin: NodeChatOriginValues.Remote))
                      .ConfigureAwait(false);
 
-        // Read the raw content column with a direct SQL command (bypassing the service's Decode path and any
-        // interceptor) and assert it is the original UTF-8 plaintext. This DELIBERATELY documents the
-        // plaintext-at-rest posture for remote-origin rows (F8 / schema sheet): it is intentional, not a bug.
+        // Read the raw content column with a direct SQL command (bypassing the service's decrypt path): it must carry
+        // the 0xFE 0x01 envelope header and must NOT contain the recognizable plaintext bytes.
         var rawContent = await ReadRawMessageContentAsync(provider, remoteMessageId).ConfigureAwait(false);
+        AssertEx.True(rawContent.Length >= 2 && rawContent[0] == 0xFE && rawContent[1] == 0x01, "Content must carry the encrypted-envelope header at rest.");
+        AssertEx.False(ContainsSubsequence(rawContent, Encoding.UTF8.GetBytes(plaintext)), "Encrypted content must not contain recognizable plaintext at rest.");
 
-        AssertEx.True(rawContent.SequenceEqual(Encoding.UTF8.GetBytes(plaintext)), "Remote-origin content is stored as plaintext UTF-8 at rest by design.");
-        AssertEx.Equal(plaintext, Encoding.UTF8.GetString(rawContent));
+        // The service round-trips it back to plaintext through the read path.
+        var loaded = AssertEx.NotNull(await service.GetConversationAsync(remoteConversationId).ConfigureAwait(false));
+        AssertEx.Equal(plaintext, loaded.Messages.Single(message => message.MessageId == remoteMessageId).Content);
+    }
+
+    [Test]
+    public async Task StreamingLifecycle_ContentAndMetadataAreEncryptedAtRestAndRoundTrip()
+    {
+        await using var provider = await BuildProviderAsync("streaming-encrypted.sqlite").ConfigureAwait(false);
+        var service = CreateService(provider);
+        const string secret = "supercalifragilistic-secret-token";
+
+        var conversation = await service.CreateConversationAsync(new NodeChatCreateConversationRequest("Chat", "node", CreatedAtUtc: 1)).ConfigureAwait(false);
+        var assistantMessageId = Guid.NewGuid();
+        var requestId = Guid.NewGuid();
+        var correlation = new NodeChatMessageCorrelation(conversation.ConversationId, assistantMessageId, requestId);
+
+        await service.CreateAssistantPlaceholderAsync(new NodeChatCreateAssistantPlaceholderRequest(conversation.ConversationId, assistantMessageId, requestId, CreatedAtUtc: 2, "llama"))
+                     .ConfigureAwait(false);
+        await service.MarkAssistantStreamingAsync(correlation, updatedAtUtc: 3).ConfigureAwait(false);
+
+        // Partial streaming flush: content column stays encrypted mid-stream.
+        await service.FlushAssistantPartialAsync(new NodeChatPartialFlushRequest(correlation, secret, "thinking", UpdatedAtUtc: 4)).ConfigureAwait(false);
+        var partialRaw = await ReadRawMessageContentAsync(provider, assistantMessageId).ConfigureAwait(false);
+        AssertEx.True(partialRaw.Length >= 2 && partialRaw[0] == 0xFE && partialRaw[1] == 0x01, "Partial-flush content must be encrypted at rest.");
+        AssertEx.False(ContainsSubsequence(partialRaw, Encoding.UTF8.GetBytes(secret)), "Partial-flush content must not leak plaintext.");
+
+        // Terminalize: content + metadata still encrypted, and the whole turn round-trips through the read path.
+        await service.TerminalizeAssistantMessageAsync(new NodeChatTerminalizeMessageRequest(correlation,
+                         NodeChatMessageStatusValues.Completed,
+                         UpdatedAtUtc: 5,
+                         secret,
+                         Model: "llama",
+                         InputCount: 1,
+                         OutputCount: 2,
+                         TotalCount: 3,
+                         ReasoningCount: 1))
+                     .ConfigureAwait(false);
+
+        var terminalRaw = await ReadRawMessageContentAsync(provider, assistantMessageId).ConfigureAwait(false);
+        AssertEx.True(terminalRaw.Length >= 2 && terminalRaw[0] == 0xFE && terminalRaw[1] == 0x01, "Terminalized content must be encrypted at rest.");
+        AssertEx.False(ContainsSubsequence(terminalRaw, Encoding.UTF8.GetBytes(secret)), "Terminalized content must not leak plaintext.");
+
+        var loaded = AssertEx.NotNull(await service.GetConversationAsync(conversation.ConversationId).ConfigureAwait(false));
+        var assistant = loaded.Messages.Single(message => message.MessageId == assistantMessageId);
+        AssertEx.Equal(secret, assistant.Content);
+        AssertEx.Equal("thinking", assistant.Reasoning);
+        AssertEx.Equal(expected: 3, assistant.TotalCount);
+    }
+
+    [Test]
+    public async Task RawDiskFile_ContainsNoRecognizablePromptText()
+    {
+        var fileName = "raw-disk-absence.sqlite";
+        const string prompt = "zzq-unique-user-prompt-marker-9182";
+        await using (var provider = await BuildProviderAsync(fileName).ConfigureAwait(false))
+        {
+            var service = CreateService(provider);
+            var conversation = await service.CreateConversationAsync(new NodeChatCreateConversationRequest("Chat", "node", CreatedAtUtc: 1)).ConfigureAwait(false);
+            await service.PersistUserMessageAsync(new NodeChatPersistUserMessageRequest(conversation.ConversationId, Guid.NewGuid(), prompt, CreatedAtUtc: 2)).ConfigureAwait(false);
+        }
+
+        // Open the closed SQLite file bytes directly and assert the prompt text is absent from the entire file.
+        var fileBytes = await File.ReadAllBytesAsync(GetDatabasePath(fileName)).ConfigureAwait(false);
+        AssertEx.False(ContainsSubsequence(fileBytes, Encoding.UTF8.GetBytes(prompt)), "The SQLite file must not contain recognizable prompt plaintext.");
+    }
+
+    [Test]
+    public async Task LegacyPlaintextContentRow_RemainsReadableAndMigratesToCiphertext()
+    {
+        await using var provider = await BuildProviderAsync("legacy-plaintext.sqlite").ConfigureAwait(false);
+        var service = CreateService(provider);
+        const string legacyText = "legacy plaintext user question";
+
+        var conversation = await service.CreateConversationAsync(new NodeChatCreateConversationRequest("Chat", "node", CreatedAtUtc: 1)).ConfigureAwait(false);
+        var messageId = Guid.NewGuid();
+        await service.PersistUserMessageAsync(new NodeChatPersistUserMessageRequest(conversation.ConversationId, messageId, "placeholder", CreatedAtUtc: 2)).ConfigureAwait(false);
+
+        // Simulate a pre-encryption row: overwrite the content column with raw plaintext UTF-8 (no envelope header).
+        await WriteRawMessageContentAsync(provider, messageId, Encoding.UTF8.GetBytes(legacyText)).ConfigureAwait(false);
+
+        // Read-both: the service still returns the plaintext for the legacy row.
+        var loadedBefore = AssertEx.NotNull(await service.GetConversationAsync(conversation.ConversationId).ConfigureAwait(false));
+        AssertEx.Equal(legacyText, loadedBefore.Messages.Single(message => message.MessageId == messageId).Content);
+
+        // The migration upgrades it to the encrypted envelope, and it still round-trips.
+        using var migrationService = new NodeChatContentEncryptionBackfillService(provider.GetRequiredService<IServiceScopeFactory>(),
+            NullLogger<NodeChatContentEncryptionBackfillService>.Instance);
+        var migrated = await migrationService.MigrateAllAsync(batchSize: 50, CancellationToken.None).ConfigureAwait(false);
+        AssertEx.True(migrated >= 1, "The legacy plaintext row must be migrated.");
+
+        var rawAfter = await ReadRawMessageContentAsync(provider, messageId).ConfigureAwait(false);
+        AssertEx.True(rawAfter.Length >= 2 && rawAfter[0] == 0xFE && rawAfter[1] == 0x01, "Migrated content must carry the envelope header.");
+        AssertEx.False(ContainsSubsequence(rawAfter, Encoding.UTF8.GetBytes(legacyText)), "Migrated content must not contain plaintext.");
+
+        var loadedAfter = AssertEx.NotNull(await service.GetConversationAsync(conversation.ConversationId).ConfigureAwait(false));
+        AssertEx.Equal(legacyText, loadedAfter.Messages.Single(message => message.MessageId == messageId).Content);
+    }
+
+    [Test]
+    public async Task ContentEncryptionMigration_IsIdempotentAndResumable()
+    {
+        await using var provider = await BuildProviderAsync("migration-idempotent.sqlite").ConfigureAwait(false);
+        var service = CreateService(provider);
+        var conversation = await service.CreateConversationAsync(new NodeChatCreateConversationRequest("Chat", "node", CreatedAtUtc: 1)).ConfigureAwait(false);
+
+        var firstId = Guid.NewGuid();
+        var secondId = Guid.NewGuid();
+        await service.PersistUserMessageAsync(new NodeChatPersistUserMessageRequest(conversation.ConversationId, firstId, "one", CreatedAtUtc: 2)).ConfigureAwait(false);
+        await service.PersistUserMessageAsync(new NodeChatPersistUserMessageRequest(conversation.ConversationId, secondId, "two", CreatedAtUtc: 3)).ConfigureAwait(false);
+        await WriteRawMessageContentAsync(provider, firstId, Encoding.UTF8.GetBytes("legacy one")).ConfigureAwait(false);
+        await WriteRawMessageContentAsync(provider, secondId, Encoding.UTF8.GetBytes("legacy two")).ConfigureAwait(false);
+
+        using var migration = new NodeChatContentEncryptionBackfillService(provider.GetRequiredService<IServiceScopeFactory>(),
+            NullLogger<NodeChatContentEncryptionBackfillService>.Instance);
+
+        // Resumable: process one row per batch, and a re-run migrates only the rows still remaining.
+        var firstBatch = await migration.MigrateBatchAsync(batchSize: 1, CancellationToken.None).ConfigureAwait(false);
+        AssertEx.Equal(expected: 1, firstBatch);
+        var remainder = await migration.MigrateAllAsync(batchSize: 50, CancellationToken.None).ConfigureAwait(false);
+        AssertEx.Equal(expected: 1, remainder);
+
+        // Idempotent: everything is now encrypted, so a further run migrates nothing.
+        var rerun = await migration.MigrateAllAsync(batchSize: 50, CancellationToken.None).ConfigureAwait(false);
+        AssertEx.Equal(expected: 0, rerun);
+
+        var loaded = AssertEx.NotNull(await service.GetConversationAsync(conversation.ConversationId).ConfigureAwait(false));
+        AssertEx.Equal("legacy one", loaded.Messages.Single(message => message.MessageId == firstId).Content);
+        AssertEx.Equal("legacy two", loaded.Messages.Single(message => message.MessageId == secondId).Content);
+    }
+
+    [Test]
+    public async Task ContentEncryptionMigration_CheckpointAndVacuum_ReclaimsPlaintextResidueFromFile()
+    {
+        const string fileName = "backfill-vacuum-residue.sqlite";
+        const string legacyText = "zzq-legacy-plaintext-residue-marker-7731";
+        await using var provider = await BuildProviderAsync(fileName).ConfigureAwait(false);
+        var service = CreateService(provider);
+
+        var conversation = await service.CreateConversationAsync(new NodeChatCreateConversationRequest("Chat", "node", CreatedAtUtc: 1)).ConfigureAwait(false);
+        var messageId = Guid.NewGuid();
+        await service.PersistUserMessageAsync(new NodeChatPersistUserMessageRequest(conversation.ConversationId, messageId, "placeholder", CreatedAtUtc: 2)).ConfigureAwait(false);
+
+        // Simulate a pre-encryption row: raw plaintext UTF-8 in the content column (no envelope header).
+        await WriteRawMessageContentAsync(provider, messageId, Encoding.UTF8.GetBytes(legacyText)).ConfigureAwait(false);
+
+        using var backfill = new NodeChatContentEncryptionBackfillService(provider.GetRequiredService<IServiceScopeFactory>(),
+            NullLogger<NodeChatContentEncryptionBackfillService>.Instance);
+        var migrated = await backfill.MigrateAllAsync(batchSize: 50, CancellationToken.None).ConfigureAwait(false);
+        AssertEx.True(migrated >= 1, "The legacy plaintext row must be migrated.");
+
+        // The row is now encrypted, but the old plaintext still lingers in freed pages / the journal until reclaimed.
+        AssertEx.True(await backfill.CheckpointAndVacuumAsync(CancellationToken.None).ConfigureAwait(false),
+            "A successful checkpoint/vacuum must report success so the caller can clear the reclamation marker.");
+
+        // The whole main DB file — not just the row's current bytes — must be free of the migrated plaintext.
+        var fileBytes = await File.ReadAllBytesAsync(GetDatabasePath(fileName)).ConfigureAwait(false);
+        AssertEx.False(ContainsSubsequence(fileBytes, Encoding.UTF8.GetBytes(legacyText)),
+            "After the post-backfill checkpoint/vacuum, no migrated plaintext may remain anywhere in the main DB file.");
+
+        // And the encrypted row still round-trips back to plaintext through the read path.
+        var loaded = AssertEx.NotNull(await service.GetConversationAsync(conversation.ConversationId).ConfigureAwait(false));
+        AssertEx.Equal(legacyText, loaded.Messages.Single(message => message.MessageId == messageId).Content);
+    }
+
+    [Test]
+    public async Task ContentEncryptionBackfill_ReclamationRetriedOnRestart_WhenMarkerSetButNoCandidatesRemain()
+    {
+        // Reproduce the state a failed/interrupted reclamation leaves behind: rows already encrypted (so no candidates
+        // remain to re-trigger cleanup), plaintext residue still on disk, and the durable "reclamation pending" marker
+        // set from the previous run. A restart must honour the marker and retry the reclamation to completion.
+        const string fileName = "backfill-reclaim-retry.sqlite";
+        const string legacyText = "zzq-reclaim-retry-marker-4460";
+        await using var provider = await BuildProviderAsync(fileName).ConfigureAwait(false);
+        var service = CreateService(provider);
+
+        var conversation = await service.CreateConversationAsync(new NodeChatCreateConversationRequest("Chat", "node", CreatedAtUtc: 1)).ConfigureAwait(false);
+        var messageId = Guid.NewGuid();
+        await service.PersistUserMessageAsync(new NodeChatPersistUserMessageRequest(conversation.ConversationId, messageId, "placeholder", CreatedAtUtc: 2)).ConfigureAwait(false);
+        await WriteRawMessageContentAsync(provider, messageId, Encoding.UTF8.GetBytes(legacyText)).ConfigureAwait(false);
+
+        using var backfill = new NodeChatContentEncryptionBackfillService(provider.GetRequiredService<IServiceScopeFactory>(),
+            NullLogger<NodeChatContentEncryptionBackfillService>.Instance);
+
+        // Encrypt the row WITHOUT reclaiming, then set the durable marker by hand to stand in for a previous run whose
+        // reclamation never completed. There are now zero migration candidates left.
+        AssertEx.True(await backfill.MigrateAllAsync(batchSize: 50, CancellationToken.None).ConfigureAwait(false) >= 1, "The legacy row must migrate.");
+        await SetReclamationMarkerRawAsync(provider).ConfigureAwait(false);
+
+        // Restart: no candidates remain, but the marker forces the reclamation to be retried. The marker is cleared only
+        // if the checkpoint/VACUUM pass actually ran — so a cleared marker is the deterministic proof the retry fired
+        // (the pre-fix behaviour skipped reclamation entirely when no candidates remained, leaving the marker set).
+        await backfill.RunOnceAsync(CancellationToken.None).ConfigureAwait(false);
+
+        AssertEx.False(await IsReclamationMarkerSetRawAsync(provider).ConfigureAwait(false), "A successful retry must clear the reclamation-pending marker.");
+        AssertEx.False(ContainsSubsequence(await File.ReadAllBytesAsync(GetDatabasePath(fileName)).ConfigureAwait(false), Encoding.UTF8.GetBytes(legacyText)),
+            "After the retried reclamation, no migrated plaintext may remain in the main DB file.");
+    }
+
+    [Test]
+    public async Task ContentEncryptionBackfill_MarkerClearedAfterSuccess_NoRedundantReclamationNextStartup()
+    {
+        const string fileName = "backfill-marker-cleared.sqlite";
+        const string legacyText = "zzq-marker-cleared-marker-9013";
+        await using var provider = await BuildProviderAsync(fileName).ConfigureAwait(false);
+        var service = CreateService(provider);
+
+        var conversation = await service.CreateConversationAsync(new NodeChatCreateConversationRequest("Chat", "node", CreatedAtUtc: 1)).ConfigureAwait(false);
+        var messageId = Guid.NewGuid();
+        await service.PersistUserMessageAsync(new NodeChatPersistUserMessageRequest(conversation.ConversationId, messageId, "placeholder", CreatedAtUtc: 2)).ConfigureAwait(false);
+        await WriteRawMessageContentAsync(provider, messageId, Encoding.UTF8.GetBytes(legacyText)).ConfigureAwait(false);
+
+        using var backfill = new NodeChatContentEncryptionBackfillService(provider.GetRequiredService<IServiceScopeFactory>(),
+            NullLogger<NodeChatContentEncryptionBackfillService>.Instance);
+
+        // First startup: migrate + reclaim in one pass; the marker (set before migrating) must be cleared on success.
+        await backfill.RunOnceAsync(CancellationToken.None).ConfigureAwait(false);
+        AssertEx.False(ContainsSubsequence(await File.ReadAllBytesAsync(GetDatabasePath(fileName)).ConfigureAwait(false), Encoding.UTF8.GetBytes(legacyText)),
+            "The plaintext residue must be reclaimed on the first startup.");
+        AssertEx.False(await IsReclamationMarkerSetRawAsync(provider).ConfigureAwait(false), "A successful reclamation must clear the marker.");
+
+        // Second startup: no candidates and no marker → reclamation is skipped and the marker stays clear.
+        await backfill.RunOnceAsync(CancellationToken.None).ConfigureAwait(false);
+        AssertEx.False(await IsReclamationMarkerSetRawAsync(provider).ConfigureAwait(false),
+            "With nothing to migrate and the marker cleared, the next startup must not re-arm or run reclamation.");
+    }
+
+    [Test]
+    public async Task ContentEncryptionBackfill_CancellationDuringCleanup_LeavesMarkerSet()
+    {
+        await using var provider = await BuildProviderAsync("backfill-cancel-cleanup.sqlite").ConfigureAwait(false);
+
+        // Arrange the durable marker as if a run had just set it before reclaiming.
+        await SetReclamationMarkerRawAsync(provider).ConfigureAwait(false);
+
+        using var backfill = new NodeChatContentEncryptionBackfillService(provider.GetRequiredService<IServiceScopeFactory>(),
+            NullLogger<NodeChatContentEncryptionBackfillService>.Instance);
+
+        // A cancelled cleanup is swallowed and reports failure, so the caller never clears the marker.
+        AssertEx.False(await backfill.CheckpointAndVacuumAsync(new CancellationToken(canceled: true)).ConfigureAwait(false),
+            "A cancelled checkpoint/vacuum must report failure so the marker is left set.");
+        AssertEx.True(await IsReclamationMarkerSetRawAsync(provider).ConfigureAwait(false),
+            "Cancellation mid-cleanup must leave the reclamation-pending marker set for the next startup to retry.");
+    }
+
+    [Test]
+    public async Task ContentEncryptionBackfill_RealCleanupFailureThenRestart_RetriesUntilResidueReclaimed()
+    {
+        // End-to-end failure injection: a first run migrates the legacy row but its checkpoint fails FOR REAL (a
+        // concurrent WAL reader makes wal_checkpoint(TRUNCATE) report busy), leaving the marker set. A genuine restart
+        // (new provider + service, fresh connections) with the blocker gone and zero candidates must retry and finish.
+        const string fileName = "backfill-real-failure-restart.sqlite";
+        const string legacyText = "zzq-real-failure-restart-marker-6621";
+        var databasePath = GetDatabasePath(fileName);
+
+        var provider = await BuildProviderAsync(fileName).ConfigureAwait(false);
+        try
+        {
+            // WAL mode is required for a reader to be able to block the truncate.
+            await SetJournalModeWalAsync(provider).ConfigureAwait(false);
+
+            var service = CreateService(provider);
+            var conversation = await service.CreateConversationAsync(new NodeChatCreateConversationRequest("Chat", "node", CreatedAtUtc: 1)).ConfigureAwait(false);
+            var messageId = Guid.NewGuid();
+            await service.PersistUserMessageAsync(new NodeChatPersistUserMessageRequest(conversation.ConversationId, messageId, "placeholder", CreatedAtUtc: 2)).ConfigureAwait(false);
+            await WriteRawMessageContentAsync(provider, messageId, Encoding.UTF8.GetBytes(legacyText)).ConfigureAwait(false);
+
+            // Capture the service's logs so the test can prove the failure was specifically a busy/incomplete checkpoint
+            // (RunOnceAsync swallows migration AND cleanup errors, so marker-set alone would not distinguish them).
+            var capturingLogger = new XE_Local_AI_Engine.Tests.CodexOAuth.CapturingLogger<NodeChatContentEncryptionBackfillService>();
+            using var failingBackfill = new NodeChatContentEncryptionBackfillService(provider.GetRequiredService<IServiceScopeFactory>(), capturingLogger);
+
+            await using (await OpenBlockingReaderAsync(databasePath).ConfigureAwait(false))
+            {
+                // Migration succeeds and the marker is set, but the blocked checkpoint reports busy -> cleanup fails.
+                await failingBackfill.RunOnceAsync(CancellationToken.None).ConfigureAwait(false);
+
+                // (a) Migration itself succeeded: the row now carries the encrypted envelope, so ZERO plaintext
+                // candidates remain — the restart retry below therefore exercises marker-only recovery, not a
+                // re-migration that would happen to clean up as a side effect.
+                var rawContent = await ReadRawMessageContentAsync(provider, messageId).ConfigureAwait(false);
+                AssertEx.True(rawContent.Length >= 2 && rawContent[0] == 0xFE && rawContent[1] == 0x01,
+                    "After the first run the legacy row must be encrypted (migration succeeded; only the cleanup failed).");
+
+                // (b) The cleanup failed for the RIGHT reason: the WAL checkpoint reported busy/incomplete.
+                AssertEx.Contains(capturingLogger.AllText, "did not fully truncate", StringComparison.Ordinal,
+                    "The first run's cleanup must fail specifically because the WAL checkpoint reported busy/incomplete.");
+
+                AssertEx.True(await IsReclamationMarkerSetRawAsync(provider).ConfigureAwait(false),
+                    "A checkpoint blocked by a concurrent reader (busy) must leave the reclamation-pending marker set.");
+            }
+        }
+        finally
+        {
+            await provider.DisposeAsync().ConfigureAwait(false);
+        }
+
+        // Genuine restart: fresh connections against the same on-disk DB, blocker released, zero candidates remaining.
+        // Clear only THIS database's pooled connections (scoped by connection string — NOT the process-global
+        // ClearAllPools, which would disrupt other tests running in parallel) so the restart truly reconnects and no idle
+        // pooled reader left over from the failed run contends with the retry's VACUUM.
+        using (var poolKey = new Microsoft.Data.Sqlite.SqliteConnection($"Data Source={databasePath}"))
+        {
+            Microsoft.Data.Sqlite.SqliteConnection.ClearPool(poolKey);
+        }
+
+        await using var restarted = await BuildProviderAsync(fileName, resetDatabase: false).ConfigureAwait(false);
+        var restartedService = CreateService(restarted);
+        using var retryBackfill = new NodeChatContentEncryptionBackfillService(restarted.GetRequiredService<IServiceScopeFactory>(),
+            NullLogger<NodeChatContentEncryptionBackfillService>.Instance);
+
+        await retryBackfill.RunOnceAsync(CancellationToken.None).ConfigureAwait(false);
+
+        AssertEx.False(await IsReclamationMarkerSetRawAsync(restarted).ConfigureAwait(false),
+            "The restart retry must complete the reclamation and clear the marker.");
+        AssertEx.False(ContainsSubsequence(await File.ReadAllBytesAsync(databasePath).ConfigureAwait(false), Encoding.UTF8.GetBytes(legacyText)),
+            "After the restart retry reclaims, no migrated plaintext may remain in the main DB file.");
+        // The migrated row still round-trips through the read path after the reclamation.
+        var loaded = AssertEx.NotNull(await restartedService.GetConversationAsync(
+            (await restartedService.ListConversationsAsync(new NodeChatListConversationsRequest()).ConfigureAwait(false)).Single().ConversationId).ConfigureAwait(false));
+        AssertEx.Equal(legacyText, loaded.Messages.Single().Content);
     }
 
     [Test]
@@ -695,6 +1017,47 @@ public sealed class NodeChatPersistenceServiceTests : IDisposable
 
         AssertEx.Null(await service.BranchConversationAsync(new NodeChatBranchConversationRequest(source.ConversationId, Guid.NewGuid(), CreatedAtUtc: 821)).ConfigureAwait(false));
         AssertEx.Null(await service.BranchConversationAsync(new NodeChatBranchConversationRequest(Guid.NewGuid(), Guid.NewGuid(), CreatedAtUtc: 822)).ConfigureAwait(false));
+    }
+
+    [Test]
+    public async Task BranchConversationAsync_WhenCancelledMidCopy_LeavesNoPartialBranch()
+    {
+        await using var provider = await BuildProviderAsync("branch-cancel.sqlite").ConfigureAwait(false);
+        var service = CreateService(provider);
+        var source = await service.CreateConversationAsync(new NodeChatCreateConversationRequest("Source", "node", CreatedAtUtc: 900)).ConfigureAwait(false);
+
+        // Enough copies that a short-fused cancellation can land partway through the copy loop, where — without a
+        // wrapping transaction — the conversation row plus a prefix of its messages would already be autocommitted.
+        const int messageCount = 150;
+        var cutoffId = Guid.Empty;
+        for (var index = 0; index < messageCount; index++)
+        {
+            var id = Guid.NewGuid();
+            await service.PersistUserMessageAsync(new NodeChatPersistUserMessageRequest(source.ConversationId, id, $"message {index}", CreatedAtUtc: 901 + index))
+                         .ConfigureAwait(false);
+            cutoffId = id;
+        }
+
+        using var cts = new CancellationTokenSource();
+        cts.CancelAfter(TimeSpan.FromMilliseconds(2));
+        try
+        {
+            await service.BranchConversationAsync(new NodeChatBranchConversationRequest(source.ConversationId, cutoffId, CreatedAtUtc: 2000), cts.Token).ConfigureAwait(false);
+        }
+        catch (OperationCanceledException)
+        {
+            // Expected when the cancellation lands before the branch commits.
+        }
+
+        // Atomicity invariant: either the branch fully committed (all copies present) or nothing was written — never a
+        // partial branch conversation carrying only a prefix of its messages.
+        var branchedConversationIds = await ListBranchedConversationIdsAsync(provider, source.ConversationId).ConfigureAwait(false);
+        foreach (var branchedId in branchedConversationIds)
+        {
+            var copiedCount = await CountMessagesAsync(provider, branchedId).ConfigureAwait(false);
+            AssertEx.Equal(messageCount, copiedCount,
+                "A surviving branch conversation must carry every copied message: a partial branch means the copy loop is not atomic.");
+        }
     }
 
     [Test]
@@ -886,7 +1249,9 @@ public sealed class NodeChatPersistenceServiceTests : IDisposable
         AssertEx.Null(await service.GetSelectedPathAsync(Guid.NewGuid()).ConfigureAwait(false));
     }
 
-    private async Task<ServiceProvider> BuildProviderAsync(string fileName)
+    // resetDatabase:false reopens an existing DB file with fresh connections without wiping it — used to model a genuine
+    // process restart against a database left behind by a previous provider/service instance.
+    private async Task<ServiceProvider> BuildProviderAsync(string fileName, bool resetDatabase = true)
     {
         var databasePath = GetDatabasePath(fileName);
         var services = new ServiceCollection();
@@ -895,10 +1260,13 @@ public sealed class NodeChatPersistenceServiceTests : IDisposable
         services.AddSingleton<NodeChatPersistenceWriter>();
 
         var provider = services.BuildServiceProvider(true);
-        await using var scope = provider.CreateAsyncScope();
-        var dbContext = scope.ServiceProvider.GetRequiredService<NodeChatDbContext>();
-        await dbContext.Database.EnsureDeletedAsync().ConfigureAwait(false);
-        await dbContext.Database.EnsureCreatedAsync().ConfigureAwait(false);
+        if (resetDatabase)
+        {
+            await using var scope = provider.CreateAsyncScope();
+            var dbContext = scope.ServiceProvider.GetRequiredService<NodeChatDbContext>();
+            await dbContext.Database.EnsureDeletedAsync().ConfigureAwait(false);
+            await dbContext.Database.EnsureCreatedAsync().ConfigureAwait(false);
+        }
 
         return provider;
     }
@@ -965,5 +1333,149 @@ public sealed class NodeChatPersistenceServiceTests : IDisposable
         command.Parameters.Add(parameter);
         var content = await command.ExecuteScalarAsync().ConfigureAwait(false);
         return (byte[])content!;
+    }
+
+    private static async Task WriteRawMessageContentAsync(ServiceProvider provider, Guid messageId, byte[] content)
+    {
+        await using var scope = provider.CreateAsyncScope();
+        var dbContext = scope.ServiceProvider.GetRequiredService<NodeChatDbContext>();
+        var connection = dbContext.Database.GetDbConnection();
+        await connection.OpenAsync().ConfigureAwait(false);
+        await using var command = connection.CreateCommand();
+        command.CommandText = "UPDATE messages SET content = $content WHERE message_id = $message_id;";
+        var contentParameter = command.CreateParameter();
+        contentParameter.ParameterName = "$content";
+        contentParameter.Value = content;
+        command.Parameters.Add(contentParameter);
+        var idParameter = command.CreateParameter();
+        idParameter.ParameterName = "$message_id";
+        idParameter.Value = messageId;
+        command.Parameters.Add(idParameter);
+        await command.ExecuteNonQueryAsync().ConfigureAwait(false);
+    }
+
+    private static async Task<IReadOnlyList<Guid>> ListBranchedConversationIdsAsync(ServiceProvider provider, Guid sourceConversationId)
+    {
+        await using var scope = provider.CreateAsyncScope();
+        var dbContext = scope.ServiceProvider.GetRequiredService<NodeChatDbContext>();
+        var connection = dbContext.Database.GetDbConnection();
+        await connection.OpenAsync().ConfigureAwait(false);
+        await using var command = connection.CreateCommand();
+        command.CommandText = "SELECT conversation_id FROM conversations WHERE branch_of_conversation_id = $source_id;";
+        var parameter = command.CreateParameter();
+        parameter.ParameterName = "$source_id";
+        parameter.Value = sourceConversationId;
+        command.Parameters.Add(parameter);
+
+        var ids = new List<Guid>();
+        await using var reader = await command.ExecuteReaderAsync().ConfigureAwait(false);
+        while (await reader.ReadAsync().ConfigureAwait(false))
+        {
+            ids.Add(reader.GetGuid(0));
+        }
+
+        return ids;
+    }
+
+    private static async Task<int> CountMessagesAsync(ServiceProvider provider, Guid conversationId)
+    {
+        await using var scope = provider.CreateAsyncScope();
+        var dbContext = scope.ServiceProvider.GetRequiredService<NodeChatDbContext>();
+        var connection = dbContext.Database.GetDbConnection();
+        await connection.OpenAsync().ConfigureAwait(false);
+        await using var command = connection.CreateCommand();
+        command.CommandText = "SELECT COUNT(*) FROM messages WHERE conversation_id = $conversation_id;";
+        var parameter = command.CreateParameter();
+        parameter.ParameterName = "$conversation_id";
+        parameter.Value = conversationId;
+        command.Parameters.Add(parameter);
+        var result = await command.ExecuteScalarAsync().ConfigureAwait(false);
+        return Convert.ToInt32(result, System.Globalization.CultureInfo.InvariantCulture);
+    }
+
+    // The backfill service's durable reclamation marker lives in the modeled chat_maintenance_state table (created by
+    // EnsureCreated here / by migration in prod). These helpers poke it directly by its stable contract (table + marker
+    // name), independent of the service's private members.
+    private const string ReclamationMarkerName = "content_encryption_reclaim_pending";
+
+    private static async Task SetReclamationMarkerRawAsync(ServiceProvider provider)
+    {
+        await using var scope = provider.CreateAsyncScope();
+        var connection = scope.ServiceProvider.GetRequiredService<NodeChatDbContext>().Database.GetDbConnection();
+        await connection.OpenAsync().ConfigureAwait(false);
+        await using var command = connection.CreateCommand();
+        command.CommandText = "INSERT INTO chat_maintenance_state (name, value) VALUES ($name, '1') ON CONFLICT(name) DO UPDATE SET value = '1';";
+        var parameter = command.CreateParameter();
+        parameter.ParameterName = "$name";
+        parameter.Value = ReclamationMarkerName;
+        command.Parameters.Add(parameter);
+        await command.ExecuteNonQueryAsync().ConfigureAwait(false);
+    }
+
+    private static async Task<bool> IsReclamationMarkerSetRawAsync(ServiceProvider provider)
+    {
+        await using var scope = provider.CreateAsyncScope();
+        var connection = scope.ServiceProvider.GetRequiredService<NodeChatDbContext>().Database.GetDbConnection();
+        await connection.OpenAsync().ConfigureAwait(false);
+        await using var command = connection.CreateCommand();
+        command.CommandText = "SELECT EXISTS(SELECT 1 FROM chat_maintenance_state WHERE name = $name);";
+        var parameter = command.CreateParameter();
+        parameter.ParameterName = "$name";
+        parameter.Value = ReclamationMarkerName;
+        command.Parameters.Add(parameter);
+        var result = await command.ExecuteScalarAsync().ConfigureAwait(false);
+        return Convert.ToInt64(result, System.Globalization.CultureInfo.InvariantCulture) != 0;
+    }
+
+    // Switches the DB to WAL journal mode (persisted in the file header), so a concurrent reader can hold a snapshot
+    // that makes wal_checkpoint(TRUNCATE) report busy.
+    private static async Task SetJournalModeWalAsync(ServiceProvider provider)
+    {
+        await using var scope = provider.CreateAsyncScope();
+        var connection = scope.ServiceProvider.GetRequiredService<NodeChatDbContext>().Database.GetDbConnection();
+        await connection.OpenAsync().ConfigureAwait(false);
+        await using var command = connection.CreateCommand();
+        command.CommandText = "PRAGMA journal_mode=WAL;";
+        await command.ExecuteNonQueryAsync().ConfigureAwait(false);
+    }
+
+    // Opens a dedicated connection holding an open read transaction. In WAL mode this pins a read snapshot, so a
+    // wal_checkpoint(TRUNCATE) on another connection cannot truncate the log and returns busy. Dispose to release it.
+    private static async Task<Microsoft.Data.Sqlite.SqliteConnection> OpenBlockingReaderAsync(string databasePath)
+    {
+        var connection = new Microsoft.Data.Sqlite.SqliteConnection($"Data Source={databasePath}");
+        await connection.OpenAsync().ConfigureAwait(false);
+        await using var command = connection.CreateCommand();
+        command.CommandText = "BEGIN; SELECT COUNT(*) FROM messages;";
+        await command.ExecuteNonQueryAsync().ConfigureAwait(false);
+        return connection;
+    }
+
+    private static bool ContainsSubsequence(byte[] haystack, byte[] needle)
+    {
+        if (needle.Length == 0 || haystack.Length < needle.Length)
+        {
+            return false;
+        }
+
+        for (var start = 0; start <= haystack.Length - needle.Length; start++)
+        {
+            var match = true;
+            for (var offset = 0; offset < needle.Length; offset++)
+            {
+                if (haystack[start + offset] != needle[offset])
+                {
+                    match = false;
+                    break;
+                }
+            }
+
+            if (match)
+            {
+                return true;
+            }
+        }
+
+        return false;
     }
 }

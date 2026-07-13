@@ -26,7 +26,7 @@ internal sealed class NodeChatConversationCommands(NodeChatPersistenceWriter wri
         var conversationId = Guid.NewGuid();
         var createdAtUtc = request.CreatedAtUtc;
 
-        return await _writer.ExecuteAsync(NodeChatPersistenceWriteKey.ForConversation(conversationId),
+        return await _writer.ExecuteConversationExclusiveAsync(conversationId,
             async (dbContext, token) =>
             {
                 // A new conversation inherits the bound agent's default-temporary-chat flag (adaptive-memory write-only
@@ -87,7 +87,7 @@ internal sealed class NodeChatConversationCommands(NodeChatPersistenceWriter wri
             throw new ArgumentException("EnsureConversationAsync requires a non-empty conversation id.", nameof(request));
         }
 
-        return await _writer.ExecuteAsync(NodeChatPersistenceWriteKey.ForConversation(request.ConversationId),
+        return await _writer.ExecuteConversationExclusiveAsync(request.ConversationId,
             async (dbContext, token) =>
             {
                 // Read the existing row regardless of purged state: an already-purged row still occupies the id,
@@ -129,7 +129,7 @@ internal sealed class NodeChatConversationCommands(NodeChatPersistenceWriter wri
 
     public async Task<string?> GetConversationOriginAsync(Guid conversationId, CancellationToken cancellationToken = default)
     {
-        return await _writer.ExecuteAsync(NodeChatPersistenceWriteKey.ForConversation(conversationId),
+        return await _writer.ExecuteConversationSharedAsync(conversationId,
             async (dbContext, token) =>
             {
                 await using var command = dbContext.Database.GetDbConnection().CreateCommand();
@@ -145,7 +145,7 @@ internal sealed class NodeChatConversationCommands(NodeChatPersistenceWriter wri
 
     public async Task<IReadOnlyDictionary<Guid, Guid>?> GetSelectedPathAsync(Guid conversationId, CancellationToken cancellationToken = default)
     {
-        return await _writer.ExecuteAsync(NodeChatPersistenceWriteKey.ForConversation(conversationId),
+        return await _writer.ExecuteConversationSharedAsync(conversationId,
             async (dbContext, token) =>
             {
                 await using var command = dbContext.Database.GetDbConnection().CreateCommand();
@@ -165,7 +165,7 @@ internal sealed class NodeChatConversationCommands(NodeChatPersistenceWriter wri
 
         var selectedPath = request.SelectedPath ?? new Dictionary<Guid, Guid>();
 
-        return await _writer.ExecuteAsync(NodeChatPersistenceWriteKey.ForConversation(request.ConversationId),
+        return await _writer.ExecuteConversationExclusiveAsync(request.ConversationId,
             async (dbContext, token) =>
             {
                 // Raw ADO.NET (not ExecuteSqlRawAsync): a cleared selection writes a NULL column, and EF's raw-SQL
@@ -188,7 +188,7 @@ internal sealed class NodeChatConversationCommands(NodeChatPersistenceWriter wri
     {
         ArgumentNullException.ThrowIfNull(request);
 
-        var result = await _writer.ExecuteAsync(NodeChatPersistenceWriteKey.ForConversation(request.ConversationId),
+        var result = await _writer.ExecuteConversationExclusiveAsync(request.ConversationId,
             async (dbContext, token) =>
             {
                 await using var transaction = await dbContext.Database.BeginTransactionAsync(token).ConfigureAwait(false);
@@ -207,14 +207,10 @@ internal sealed class NodeChatConversationCommands(NodeChatPersistenceWriter wri
 
                 if (request.PurgeImmediately)
                 {
-                    // ON DELETE CASCADE is NOT enforced on the node-sqlite connection (no PRAGMA foreign_keys=ON),
-                    // so every child table must be purged explicitly or plaintext rows orphan (privacy gap).
-                    await dbContext.Database.ExecuteSqlRawAsync("DELETE FROM message_feedback WHERE conversation_id = {0};", [request.ConversationId], token).ConfigureAwait(false);
-                    await dbContext.Database.ExecuteSqlRawAsync("DELETE FROM messages WHERE conversation_id = {0};", [request.ConversationId], token).ConfigureAwait(false);
-                    await dbContext.Database.ExecuteSqlRawAsync("DELETE FROM tool_events WHERE conversation_id = {0};", [request.ConversationId], token).ConfigureAwait(false);
-                    await dbContext.Database.ExecuteSqlRawAsync("DELETE FROM conversation_uploaded_files WHERE conversation_id = {0};", [request.ConversationId], token).ConfigureAwait(false);
-                    await dbContext.Database.ExecuteSqlRawAsync("DELETE FROM purged_tombstones WHERE conversation_id = {0};", [request.ConversationId], token).ConfigureAwait(false);
-                    await dbContext.Database.ExecuteSqlRawAsync("DELETE FROM conversations WHERE conversation_id = {0};", [request.ConversationId], token).ConfigureAwait(false);
+                    // Delete the complete DB footprint through the shared helper so this path and the retention sweeper
+                    // never drift on which child tables constitute a conversation. On-disk upload blobs are torn down
+                    // after commit below.
+                    await ConversationFootprintPurge.DeleteAsync(dbContext, request.ConversationId, token).ConfigureAwait(false);
                 }
                 else
                 {
@@ -244,7 +240,7 @@ internal sealed class NodeChatConversationCommands(NodeChatPersistenceWriter wri
 
         var title = string.IsNullOrWhiteSpace(request.Title) ? null : request.Title.Trim();
 
-        return await _writer.ExecuteAsync(NodeChatPersistenceWriteKey.ForConversation(request.ConversationId),
+        return await _writer.ExecuteConversationExclusiveAsync(request.ConversationId,
             async (dbContext, token) =>
             {
                 // Raw ADO.NET (not ExecuteSqlRawAsync): a cleared title writes a NULL column, and EF's raw-SQL
@@ -267,7 +263,7 @@ internal sealed class NodeChatConversationCommands(NodeChatPersistenceWriter wri
     {
         ArgumentNullException.ThrowIfNull(request);
 
-        return await _writer.ExecuteAsync(NodeChatPersistenceWriteKey.ForConversation(request.ConversationId),
+        return await _writer.ExecuteConversationExclusiveAsync(request.ConversationId,
             async (dbContext, token) =>
             {
                 var updated = await dbContext.Database.ExecuteSqlRawAsync("UPDATE conversations SET is_pinned = {0}, last_seen_utc = {1} WHERE conversation_id = {2} AND purged = 0;",
@@ -283,7 +279,7 @@ internal sealed class NodeChatConversationCommands(NodeChatPersistenceWriter wri
     {
         ArgumentNullException.ThrowIfNull(request);
 
-        return await _writer.ExecuteAsync(NodeChatPersistenceWriteKey.ForConversation(request.ConversationId),
+        return await _writer.ExecuteConversationExclusiveAsync(request.ConversationId,
             async (dbContext, token) =>
             {
                 var updated = await dbContext.Database.ExecuteSqlRawAsync("UPDATE conversations SET archived = {0}, last_seen_utc = {1} WHERE conversation_id = {2} AND purged = 0;",
@@ -299,7 +295,7 @@ internal sealed class NodeChatConversationCommands(NodeChatPersistenceWriter wri
     {
         ArgumentNullException.ThrowIfNull(request);
 
-        return await _writer.ExecuteAsync(NodeChatPersistenceWriteKey.ForConversation(request.ConversationId),
+        return await _writer.ExecuteConversationExclusiveAsync(request.ConversationId,
             async (dbContext, token) =>
             {
                 // Plaintext non-nullable bool column → ExecuteSqlRawAsync is sufficient (mirrors SetConversationPinnedAsync).

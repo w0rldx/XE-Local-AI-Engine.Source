@@ -23,6 +23,23 @@ public interface IPlaybookActionStore
     /// </summary>
     Task<PlaybookActionRecord?> UpdateAsync(Guid id, PlaybookActionInput input, CancellationToken cancellationToken = default);
 
+    /// <summary>
+    ///     Compare-and-swap promotion of a <c>Suggested</c> action to <c>Enabled</c>, guarded against the promote-time
+    ///     TOCTOU. In a single transaction it (1) confirms the row still exists, is still <c>Suggested</c>, and still has
+    ///     <c>Version == <paramref name="expectedVersion" /></c> — so a concurrent edit (which bumps Version and clears
+    ///     the eval) or a concurrent promote (which moves it off <c>Suggested</c>) after the caller validated its snapshot
+    ///     makes the write fail rather than enabling on stale evidence; (2) re-checks the enabled-action count against
+    ///     <paramref name="maxEnabledActions" /> adjacent to the write, so two concurrent promotes cannot both observe a
+    ///     below-cap count and both enable; and only then (3) sets <c>Enabled</c>, records
+    ///     <paramref name="evalResult" />, stamps <c>EnabledAtUtc</c> and bumps <c>Version</c>. The returned
+    ///     <see cref="PlaybookPromotionCommit.Status" /> discriminates success from each guard failure.
+    /// </summary>
+    Task<PlaybookPromotionCommit> PromoteSuggestedIfCurrentAsync(Guid id,
+        int expectedVersion,
+        int maxEnabledActions,
+        string? evalResult,
+        CancellationToken cancellationToken = default);
+
     /// <summary>Removes the action with <paramref name="id" />. Returns <c>true</c> when a row was deleted.</summary>
     Task<bool> DeleteAsync(Guid id, CancellationToken cancellationToken = default);
 
@@ -61,6 +78,25 @@ public sealed record PlaybookActionRecord(
     string? EvalResult = null,
     long? EnabledAtUtc = null,
     MemoryScope? MemoryScope = null);
+
+/// <summary>Outcome of <see cref="IPlaybookActionStore.PromoteSuggestedIfCurrentAsync" />: the guard that blocked, or a committed promotion.</summary>
+public enum PlaybookPromotionCommitStatus
+{
+    /// <summary>The row was current and under the cap; it is now <c>Enabled</c> and <see cref="PlaybookPromotionCommit.Record" /> carries it.</summary>
+    Committed,
+
+    /// <summary>No row has that id.</summary>
+    NotFound,
+
+    /// <summary>The row changed under the caller (Version no longer matches, or it is no longer <c>Suggested</c>) — a concurrent edit/promote.</summary>
+    VersionConflict,
+
+    /// <summary>The agent was already at <c>maxEnabledActions</c> when the write was attempted; nothing was written.</summary>
+    CapReached
+}
+
+/// <summary>Result of a CAS promotion: <see cref="Record" /> is non-null only when <see cref="Status" /> is <c>Committed</c>.</summary>
+public sealed record PlaybookPromotionCommit(PlaybookPromotionCommitStatus Status, PlaybookActionRecord? Record);
 
 /// <summary>
 ///     Mutable fields of a playbook action supplied on create/update. Free text is passed as plaintext strings; the

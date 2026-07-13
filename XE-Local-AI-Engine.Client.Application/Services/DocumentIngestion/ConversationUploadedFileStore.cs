@@ -212,6 +212,27 @@ public sealed class ConversationUploadedFileStore : IConversationUploadedFileSto
         return Task.CompletedTask;
     }
 
+    public IReadOnlyList<Guid> ListConversationDirectoryIds()
+    {
+        var conversationsRoot = Path.Combine(_dataDirectory.Root, RootFolderName, ConversationsFolderName);
+        if (!Directory.Exists(conversationsRoot))
+        {
+            return [];
+        }
+
+        var ids = new List<Guid>();
+        foreach (var directory in Directory.EnumerateDirectories(conversationsRoot))
+        {
+            // Directory leaves are conversation ids ("D" form). Ignore any stray directory that is not a valid id.
+            if (Guid.TryParse(Path.GetFileName(directory), out var conversationId))
+            {
+                ids.Add(conversationId);
+            }
+        }
+
+        return ids;
+    }
+
     public async Task<IConversationStagingSnapshot> CreateStagingSnapshotAsync(Guid conversationId, CancellationToken cancellationToken)
     {
         var files = await ListAsync(conversationId, cancellationToken).ConfigureAwait(false);

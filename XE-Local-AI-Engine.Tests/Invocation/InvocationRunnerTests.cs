@@ -1381,6 +1381,7 @@ public sealed class InvocationRunnerTests
             Options.Create(resolvedContextBudgetOptions),
             Options.Create(new ProviderResilienceOptions()),
             Options.Create(new AgentToolPipelineOptions()),
+            Options.Create(new ProviderCallBudgetOptions()),
             configuration,
             runtimeSettings,
             Options.Create(new SpawnOptions()),

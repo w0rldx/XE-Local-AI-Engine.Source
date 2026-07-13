@@ -10,7 +10,7 @@ public sealed class NodeRetentionStore(NodeChatDbContext dbContext) : INodeReten
 {
     private readonly NodeChatDbContext _dbContext = dbContext ?? throw new ArgumentNullException(nameof(dbContext));
 
-    public async Task<int> SweepExpiredConversationsAsync(long cutoffUtc, CancellationToken cancellationToken = default)
+    public async Task<IReadOnlyList<Guid>> SweepExpiredConversationsAsync(long cutoffUtc, CancellationToken cancellationToken = default)
     {
         var candidateConversationIds = await _dbContext.Conversations
                                                        .Where(conversation => conversation.Purged || conversation.LastSeenUtc <= cutoffUtc)
@@ -20,33 +20,21 @@ public sealed class NodeRetentionStore(NodeChatDbContext dbContext) : INodeReten
 
         if (candidateConversationIds.Count == 0)
         {
-            return 0;
+            return [];
         }
 
         await using var transaction = await _dbContext.Database.BeginTransactionAsync(cancellationToken).ConfigureAwait(false);
 
-        _ = await _dbContext.Messages
-                            .Where(message => candidateConversationIds.Contains(message.ConversationId))
-                            .ExecuteDeleteAsync(cancellationToken)
-                            .ConfigureAwait(false);
-
-        _ = await _dbContext.ToolEvents
-                            .Where(toolEvent => candidateConversationIds.Contains(toolEvent.ConversationId))
-                            .ExecuteDeleteAsync(cancellationToken)
-                            .ConfigureAwait(false);
-
-        _ = await _dbContext.PurgedTombstones
-                            .Where(tombstone => candidateConversationIds.Contains(tombstone.ConversationId))
-                            .ExecuteDeleteAsync(cancellationToken)
-                            .ConfigureAwait(false);
-
-        var deletedConversationCount = await _dbContext.Conversations
-                                                       .Where(conversation => candidateConversationIds.Contains(conversation.ConversationId))
-                                                       .ExecuteDeleteAsync(cancellationToken)
-                                                       .ConfigureAwait(false);
+        // Delete each conversation's complete DB footprint through the shared helper so retention deletes exactly what
+        // the interactive immediate-purge path deletes (feedback + uploaded-file rows included), not just messages.
+        foreach (var conversationId in candidateConversationIds)
+        {
+            await ConversationFootprintPurge.DeleteAsync(_dbContext, conversationId, cancellationToken).ConfigureAwait(false);
+        }
 
         await transaction.CommitAsync(cancellationToken).ConfigureAwait(false);
 
-        return deletedConversationCount;
+        // The ids are returned so the caller can tear down each conversation's on-disk upload blobs after the DB commit.
+        return candidateConversationIds;
     }
 }
