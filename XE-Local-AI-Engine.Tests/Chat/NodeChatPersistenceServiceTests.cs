@@ -861,6 +861,47 @@ public sealed class NodeChatPersistenceServiceTests : IDisposable
     }
 
     [Test]
+    public async Task BranchConversationAsync_WhenCancelledMidCopy_LeavesNoPartialBranch()
+    {
+        await using var provider = await BuildProviderAsync("branch-cancel.sqlite").ConfigureAwait(false);
+        var service = CreateService(provider);
+        var source = await service.CreateConversationAsync(new NodeChatCreateConversationRequest("Source", "node", CreatedAtUtc: 900)).ConfigureAwait(false);
+
+        // Enough copies that a short-fused cancellation can land partway through the copy loop, where — without a
+        // wrapping transaction — the conversation row plus a prefix of its messages would already be autocommitted.
+        const int messageCount = 150;
+        var cutoffId = Guid.Empty;
+        for (var index = 0; index < messageCount; index++)
+        {
+            var id = Guid.NewGuid();
+            await service.PersistUserMessageAsync(new NodeChatPersistUserMessageRequest(source.ConversationId, id, $"message {index}", CreatedAtUtc: 901 + index))
+                         .ConfigureAwait(false);
+            cutoffId = id;
+        }
+
+        using var cts = new CancellationTokenSource();
+        cts.CancelAfter(TimeSpan.FromMilliseconds(2));
+        try
+        {
+            await service.BranchConversationAsync(new NodeChatBranchConversationRequest(source.ConversationId, cutoffId, CreatedAtUtc: 2000), cts.Token).ConfigureAwait(false);
+        }
+        catch (OperationCanceledException)
+        {
+            // Expected when the cancellation lands before the branch commits.
+        }
+
+        // Atomicity invariant: either the branch fully committed (all copies present) or nothing was written — never a
+        // partial branch conversation carrying only a prefix of its messages.
+        var branchedConversationIds = await ListBranchedConversationIdsAsync(provider, source.ConversationId).ConfigureAwait(false);
+        foreach (var branchedId in branchedConversationIds)
+        {
+            var copiedCount = await CountMessagesAsync(provider, branchedId).ConfigureAwait(false);
+            AssertEx.Equal(messageCount, copiedCount,
+                "A surviving branch conversation must carry every copied message: a partial branch means the copy loop is not atomic.");
+        }
+    }
+
+    [Test]
     public async Task CreateMessageVariantAsync_CreatesSiblingSharingVariantGroupAndBackstampsOriginal()
     {
         await using var provider = await BuildProviderAsync("variant.sqlite").ConfigureAwait(false);
@@ -1147,6 +1188,45 @@ public sealed class NodeChatPersistenceServiceTests : IDisposable
         idParameter.Value = messageId;
         command.Parameters.Add(idParameter);
         await command.ExecuteNonQueryAsync().ConfigureAwait(false);
+    }
+
+    private static async Task<IReadOnlyList<Guid>> ListBranchedConversationIdsAsync(ServiceProvider provider, Guid sourceConversationId)
+    {
+        await using var scope = provider.CreateAsyncScope();
+        var dbContext = scope.ServiceProvider.GetRequiredService<NodeChatDbContext>();
+        var connection = dbContext.Database.GetDbConnection();
+        await connection.OpenAsync().ConfigureAwait(false);
+        await using var command = connection.CreateCommand();
+        command.CommandText = "SELECT conversation_id FROM conversations WHERE branch_of_conversation_id = $source_id;";
+        var parameter = command.CreateParameter();
+        parameter.ParameterName = "$source_id";
+        parameter.Value = sourceConversationId;
+        command.Parameters.Add(parameter);
+
+        var ids = new List<Guid>();
+        await using var reader = await command.ExecuteReaderAsync().ConfigureAwait(false);
+        while (await reader.ReadAsync().ConfigureAwait(false))
+        {
+            ids.Add(reader.GetGuid(0));
+        }
+
+        return ids;
+    }
+
+    private static async Task<int> CountMessagesAsync(ServiceProvider provider, Guid conversationId)
+    {
+        await using var scope = provider.CreateAsyncScope();
+        var dbContext = scope.ServiceProvider.GetRequiredService<NodeChatDbContext>();
+        var connection = dbContext.Database.GetDbConnection();
+        await connection.OpenAsync().ConfigureAwait(false);
+        await using var command = connection.CreateCommand();
+        command.CommandText = "SELECT COUNT(*) FROM messages WHERE conversation_id = $conversation_id;";
+        var parameter = command.CreateParameter();
+        parameter.ParameterName = "$conversation_id";
+        parameter.Value = conversationId;
+        command.Parameters.Add(parameter);
+        var result = await command.ExecuteScalarAsync().ConfigureAwait(false);
+        return Convert.ToInt32(result, System.Globalization.CultureInfo.InvariantCulture);
     }
 
     private static bool ContainsSubsequence(byte[] haystack, byte[] needle)
