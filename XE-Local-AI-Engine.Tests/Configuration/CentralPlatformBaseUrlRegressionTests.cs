@@ -96,22 +96,7 @@ public sealed class CentralPlatformBaseUrlRegressionTests
 
     private static string GetClientAppSettingsPath(string appSettingsFileName)
     {
-        return Path.Combine(GetRepositoryRoot(),
-            "Apps",
-            "XE-Local-AI-Engine",
-            "XE-Local-AI-Engine.Client",
-            appSettingsFileName);
-    }
-
-    private static string GetRepositoryRoot()
-    {
-        var directory = new DirectoryInfo(AppContext.BaseDirectory);
-        while (directory is not null && !File.Exists(Path.Combine(directory.FullName, "C0re.slnx")))
-        {
-            directory = directory.Parent;
-        }
-
-        return directory?.FullName ?? throw new InvalidOperationException("Unable to locate repository root.");
+        return RepositoryPaths.ClientProject(appSettingsFileName);
     }
 
     private static CentralPlatformOptions CreateValidOptions()
