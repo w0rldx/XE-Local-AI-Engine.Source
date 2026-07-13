@@ -90,6 +90,13 @@ jobs:
       - name: Check generated OpenAPI client is up to date
         run: pnpm run openapi:check
 
+      # License-drift gate (LOW-001): fail the build if a production dependency's license is not on
+      # the allowlist, or if the committed license manifest is stale. Same deterministic, host-free
+      # pattern as the OpenAPI drift gate above. `pnpm run licenses:check` (not `pnpm licenses`,
+      # which is the built-in report command) so the repo script is what runs.
+      - name: Check dependency licenses
+        run: pnpm run licenses:check
+
       - name: Lint
         run: pnpm run lint
 
