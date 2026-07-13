@@ -208,8 +208,8 @@ internal sealed class NodeChatMessageCommands(NodeChatPersistenceWriter writer)
                 AddParameter(command, "$conversation_id", conversationId);
                 AddParameter(command, "$sequence", sequence);
                 AddParameter(command, "$role", role);
-                AddParameter(command, "$content", Encode(content));
-                AddParameter(command, "$metadata_json", metadata);
+                AddParameter(command, "$content", dbContext.EncryptMessageContent(content, conversationId, messageId));
+                AddParameter(command, "$metadata_json", dbContext.EncryptMessageMetadata(metadata, conversationId, messageId));
                 AddParameter(command, "$created_at_utc", createdAtUtc);
                 AddParameter(command, "$updated_at_utc", updatedAtUtc);
                 AddParameter(command, "$status", status);
@@ -290,8 +290,8 @@ internal sealed class NodeChatMessageCommands(NodeChatPersistenceWriter writer)
                                         AND message_id = $message_id
                                         AND request_id = $request_id;
                                       """;
-                AddParameter(command, "$content", Encode(nextContent));
-                AddParameter(command, "$metadata_json", metadata);
+                AddParameter(command, "$content", dbContext.EncryptMessageContent(nextContent, correlation.ConversationId, correlation.MessageId));
+                AddParameter(command, "$metadata_json", dbContext.EncryptMessageMetadata(metadata, correlation.ConversationId, correlation.MessageId));
                 AddParameter(command, "$updated_at_utc", updatedAtUtc);
                 AddParameter(command, "$status", nextStatus);
                 AddParameter(command, "$error", nextError);

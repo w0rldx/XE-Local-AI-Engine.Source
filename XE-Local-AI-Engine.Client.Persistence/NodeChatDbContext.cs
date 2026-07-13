@@ -114,14 +114,87 @@ public sealed class NodeChatDbContext : DbContext
     }
 
     /// <summary>
-    ///     Decrypts a raw message content blob back to a string. Used by the title backfill service to re-derive titles
-    ///     from the first user message after the EncryptConversationTitle migration. AAD = conversationId + messageId +
-    ///     "content", matching the interceptor.
+    ///     Encrypts a message content string into the versioned at-rest envelope for the raw-ADO persistence path. AAD =
+    ///     conversationId + messageId + "content", matching the interceptors and <see cref="DecryptMessageContent" />.
     /// </summary>
-    public string DecryptMessageContent(byte[] encrypted, Guid conversationId, Guid messageId)
+    public byte[] EncryptMessageContent(string content, Guid conversationId, Guid messageId)
     {
-        var plaintext = NodePayloadProtector.Decrypt(encrypted, NodeEncryptionKey.Span, conversationId, messageId, "content");
+        ArgumentNullException.ThrowIfNull(content);
+
+        return NodeChatContentProtection.Protect(Encoding.UTF8.GetBytes(content), NodeEncryptionKey.Span, conversationId, messageId, "content");
+    }
+
+    /// <summary>
+    ///     Decrypts a raw message content blob back to a string. Read-both: an enveloped blob is decrypted; a legacy
+    ///     plaintext blob (written before content encryption shipped) is returned verbatim. AAD = conversationId +
+    ///     messageId + "content", matching the interceptors.
+    /// </summary>
+    public string DecryptMessageContent(byte[] stored, Guid conversationId, Guid messageId)
+    {
+        ArgumentNullException.ThrowIfNull(stored);
+
+        var plaintext = NodeChatContentProtection.Unprotect(stored, NodeEncryptionKey.Span, conversationId, messageId, "content");
         return Encoding.UTF8.GetString(plaintext);
+    }
+
+    /// <summary>
+    ///     Encrypts a serialized <c>metadata_json</c> UTF-8 blob into the versioned at-rest envelope for the raw-ADO
+    ///     persistence path. Returns null when the blob is null so the column writes NULL. AAD = conversationId +
+    ///     messageId + "metadata_json".
+    /// </summary>
+    public byte[]? EncryptMessageMetadata(byte[]? metadataJsonUtf8, Guid conversationId, Guid messageId)
+    {
+        if (metadataJsonUtf8 is null)
+        {
+            return null;
+        }
+
+        return NodeChatContentProtection.Protect(metadataJsonUtf8, NodeEncryptionKey.Span, conversationId, messageId, "metadata_json");
+    }
+
+    /// <summary>
+    ///     Decrypts a raw <c>metadata_json</c> blob back to its UTF-8 JSON string. Read-both, mirroring
+    ///     <see cref="DecryptMessageContent" />; returns null when the blob is null.
+    /// </summary>
+    public string? DecryptMessageMetadata(byte[]? stored, Guid conversationId, Guid messageId)
+    {
+        if (stored is null)
+        {
+            return null;
+        }
+
+        var plaintext = NodeChatContentProtection.Unprotect(stored, NodeEncryptionKey.Span, conversationId, messageId, "metadata_json");
+        return Encoding.UTF8.GetString(plaintext);
+    }
+
+    /// <summary>
+    ///     Idempotently upgrades a stored message content blob to the encrypted envelope: an already-enveloped blob is
+    ///     returned unchanged, and a legacy plaintext blob (the bytes themselves are the plaintext) is encrypted. Used by
+    ///     the content-encryption migration so a re-run never re-encrypts an already-migrated row.
+    /// </summary>
+    public byte[] EnsureMessageContentEncrypted(byte[] stored, Guid conversationId, Guid messageId)
+    {
+        ArgumentNullException.ThrowIfNull(stored);
+
+        return NodeChatContentProtection.IsProtected(stored)
+            ? stored
+            : NodeChatContentProtection.Protect(stored, NodeEncryptionKey.Span, conversationId, messageId, "content");
+    }
+
+    /// <summary>
+    ///     Idempotently upgrades a stored <c>metadata_json</c> blob to the encrypted envelope, mirroring
+    ///     <see cref="EnsureMessageContentEncrypted" />. Null (no metadata) stays null.
+    /// </summary>
+    public byte[]? EnsureMessageMetadataEncrypted(byte[]? stored, Guid conversationId, Guid messageId)
+    {
+        if (stored is null)
+        {
+            return null;
+        }
+
+        return NodeChatContentProtection.IsProtected(stored)
+            ? stored
+            : NodeChatContentProtection.Protect(stored, NodeEncryptionKey.Span, conversationId, messageId, "metadata_json");
     }
 
     /// <summary>

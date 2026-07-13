@@ -82,14 +82,21 @@ internal sealed class NodeChatVariantBranchService(NodeChatPersistenceWriter wri
                                                  INSERT INTO messages (message_id, conversation_id, sequence, role, content, metadata_json, created_at_utc, updated_at_utc, status, request_id, error, origin, parent_message_id, variant_group_id)
                                                  VALUES ($message_id, $conversation_id, $sequence, $role, $content, $metadata_json, $created_at_utc, $updated_at_utc, $status, $request_id, $error, $origin, $parent_message_id, $variant_group_id);
                                                  """;
-                    AddParameter(messageCommand, "$message_id", Guid.NewGuid());
+                    // A branch copy is a new row with a fresh message id, so its content/metadata envelope AAD binds the
+                    // new (branchedConversationId, copyMessageId) pair. message.Content arrives already decrypted from
+                    // the read model, so it is re-encrypted here under the copy's identity.
+                    var copyMessageId = Guid.NewGuid();
+                    AddParameter(messageCommand, "$message_id", copyMessageId);
                     AddParameter(messageCommand, "$conversation_id", branchedConversationId);
                     AddParameter(messageCommand, "$sequence", message.Sequence);
                     AddParameter(messageCommand, "$role", message.Role);
-                    AddParameter(messageCommand, "$content", Encode(message.Content));
+                    AddParameter(messageCommand, "$content", dbContext.EncryptMessageContent(message.Content, branchedConversationId, copyMessageId));
                     AddParameter(messageCommand, "$metadata_json",
-                        SerializeMetadata(message.MetadataJson, message.Reasoning, message.Model, message.InputCount, message.OutputCount, message.TotalCount, message.ReasoningCount, message.Parts,
-                            message.AgentDefinitionId, message.AgentName, message.ReasoningEffort));
+                        dbContext.EncryptMessageMetadata(
+                            SerializeMetadata(message.MetadataJson, message.Reasoning, message.Model, message.InputCount, message.OutputCount, message.TotalCount, message.ReasoningCount,
+                                message.Parts, message.AgentDefinitionId, message.AgentName, message.ReasoningEffort),
+                            branchedConversationId,
+                            copyMessageId));
                     AddParameter(messageCommand, "$created_at_utc", message.CreatedAtUtc);
                     AddParameter(messageCommand, "$updated_at_utc", message.UpdatedAtUtc);
                     AddParameter(messageCommand, "$status", message.Status);
@@ -142,8 +149,11 @@ internal sealed class NodeChatVariantBranchService(NodeChatPersistenceWriter wri
                 // per-response agent attribution is stamped at mint time so the pending variant already carries the
                 // agent name (symmetric with the send placeholder).
                 var sequence = await NextSequenceAsync(dbContext, request.ConversationId, token).ConfigureAwait(false);
-                var metadata = SerializeMetadata(request.MetadataJson, reasoning: null, request.Model, inputTokens: null, outputTokens: null, totalTokens: null, reasoningTokens: null, parts: null,
-                    request.AgentDefinitionId, request.AgentName, request.ReasoningEffort);
+                var metadata = dbContext.EncryptMessageMetadata(
+                    SerializeMetadata(request.MetadataJson, reasoning: null, request.Model, inputTokens: null, outputTokens: null, totalTokens: null, reasoningTokens: null, parts: null,
+                        request.AgentDefinitionId, request.AgentName, request.ReasoningEffort),
+                    request.ConversationId,
+                    request.NewMessageId);
 
                 await using var insertCommand = dbContext.Database.GetDbConnection().CreateCommand();
                 insertCommand.CommandText = """

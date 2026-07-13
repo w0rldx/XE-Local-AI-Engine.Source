@@ -143,16 +143,19 @@ internal static class NodeChatPersistenceSql
         var messages = new List<NodeChatPersistedMessageDto>();
         while (await reader.ReadAsync(cancellationToken).ConfigureAwait(false))
         {
+            var messageId = Guid.Parse(reader.GetString(0));
+            var messageConversationId = Guid.Parse(reader.GetString(1));
             var metadataJson = await reader.IsDBNullAsync(ordinal: 6, cancellationToken).ConfigureAwait(false)
                 ? null
-                : Decode(await reader.GetFieldValueAsync<byte[]>(ordinal: 6, cancellationToken).ConfigureAwait(false));
+                : dbContext.DecryptMessageMetadata(await reader.GetFieldValueAsync<byte[]>(ordinal: 6, cancellationToken).ConfigureAwait(false), messageConversationId, messageId);
             var metadata = DeserializeMetadata(metadataJson);
-            messages.Add(new NodeChatPersistedMessageDto(Guid.Parse(reader.GetString(0)),
-                Guid.Parse(reader.GetString(1)),
+            var content = dbContext.DecryptMessageContent(await reader.GetFieldValueAsync<byte[]>(ordinal: 5, cancellationToken).ConfigureAwait(false), messageConversationId, messageId);
+            messages.Add(new NodeChatPersistedMessageDto(messageId,
+                messageConversationId,
                 await reader.IsDBNullAsync(ordinal: 2, cancellationToken).ConfigureAwait(false) ? null : Guid.Parse(reader.GetString(2)),
                 reader.GetInt32(3),
                 reader.GetString(4),
-                Decode(await reader.GetFieldValueAsync<byte[]>(ordinal: 5, cancellationToken).ConfigureAwait(false)),
+                content,
                 metadata.Reasoning,
                 reader.GetString(7),
                 reader.GetInt64(8),
@@ -193,9 +196,13 @@ internal static class NodeChatPersistenceSql
             var titleBytes = await reader.IsDBNullAsync(ordinal: 1, cancellationToken).ConfigureAwait(false)
                 ? null
                 : await reader.GetFieldValueAsync<byte[]>(ordinal: 1, cancellationToken).ConfigureAwait(false);
+            // The preview content column (ordinal 5) is decrypted read-both against the previewed message's id
+            // (ordinal 10); a LEFT JOIN with no message leaves both NULL.
             var content = await reader.IsDBNullAsync(ordinal: 5, cancellationToken).ConfigureAwait(false)
                 ? null
-                : Decode(await reader.GetFieldValueAsync<byte[]>(ordinal: 5, cancellationToken).ConfigureAwait(false));
+                : dbContext.DecryptMessageContent(await reader.GetFieldValueAsync<byte[]>(ordinal: 5, cancellationToken).ConfigureAwait(false),
+                    convId,
+                    Guid.Parse(reader.GetString(10)));
             conversations.Add(new NodeChatConversationSummaryDto(convId,
                 DecryptTitle(titleBytes, dbContext, convId),
                 reader.GetInt64(2),

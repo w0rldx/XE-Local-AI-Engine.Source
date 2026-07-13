@@ -76,7 +76,7 @@ internal sealed class NodeChatReadModel(NodeChatPersistenceWriter writer)
                 await using var command = dbContext.Database.GetDbConnection().CreateCommand();
                 command.CommandText = """
                                       SELECT c.conversation_id, c.title, c.created_at_utc, c.last_seen_utc, c.purged,
-                                             m.content, m.status, c.origin, c.is_pinned, c.archived
+                                             m.content, m.status, c.origin, c.is_pinned, c.archived, m.message_id
                                       FROM conversations c
                                       LEFT JOIN messages m ON m.message_id = (
                                           SELECT mi.message_id FROM messages mi
@@ -99,7 +99,7 @@ internal sealed class NodeChatReadModel(NodeChatPersistenceWriter writer)
                 await using var command = dbContext.Database.GetDbConnection().CreateCommand();
                 command.CommandText = """
                                       SELECT c.conversation_id, c.title, c.created_at_utc, c.last_seen_utc, c.purged,
-                                             m.content, m.status, c.origin, c.is_pinned, c.archived
+                                             m.content, m.status, c.origin, c.is_pinned, c.archived, m.message_id
                                       FROM conversations c
                                       LEFT JOIN messages m ON m.message_id = (
                                           SELECT mi.message_id FROM messages mi
