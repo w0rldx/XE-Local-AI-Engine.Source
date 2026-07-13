@@ -44,11 +44,25 @@ on:
 #   repo -> Settings -> Environments -> release -> Required reviewers
 # Add at least one required reviewer before any non-tester rollout.
 #
-# signing follow-up: hard gate before non-tester rollout.
+# Validation binding (ENFORCED, HIGH-006): the `validate` job below calls the
+# build-and-test workflow via `uses: ./.github/workflows/build-and-test.yml`.
+# Because it is a local reusable workflow, its `actions/checkout` runs against
+# the exact commit this release was tagged at, so the full build + backend and
+# frontend test gates re-run on the released code — not on a possibly-stale
+# status check from an earlier commit. `version` and `release` both `needs`
+# it, so nothing is packed or uploaded unless the tagged commit passes.
+#
+# Action pinning (ENFORCED, HIGH-006): every action in this workflow (and in
+# build-and-test.yml) is pinned to a full commit SHA with the tag in a trailing
+# comment, so a moved tag cannot swap the action out from under a release build.
+#
+# signing follow-up: DEFERRED per "bind + pin now, sign later" decision. This
+# is the remaining hard gate before non-tester rollout; artifacts ship unsigned
+# until it lands.
 #   win-x64:   codesign with an EV or OV cert; pass --signParams to vpk pack.
 #   linux-x64: sign with a GPG key; pass --signEntitlements to vpk pack.
-#   Until signing is wired, the unsigned window is mitigated by the
-#   environment protection rules + token scoping above.
+#   Until signing is wired, the unsigned window is mitigated by the validation
+#   binding, action pinning, environment protection rules, and token scoping.
 # ---------------------------------------------------------------------------
 permissions:
   contents: write   # required: vpk upload github creates a GH release
@@ -60,11 +74,25 @@ env:
 
 jobs:
   # ---------------------------------------------------------------------------
+  # Gate: re-run the full build + test suite on the exact tagged commit before
+  # anything is packed or published (HIGH-006). This is a local reusable
+  # workflow call, so build-and-test.yml runs from — and checks out — this same
+  # commit. It defines its own `permissions: contents: read` and needs no
+  # secrets, so no `secrets: inherit` is required here. If it fails, `version`
+  # and `release` never start (fail-closed).
+  # ---------------------------------------------------------------------------
+  validate:
+    uses: ./.github/workflows/build-and-test.yml
+    permissions:
+      contents: read
+
+  # ---------------------------------------------------------------------------
   # Compose the Velopack pack-version once and share it across all matrix legs.
   # Source of truth: Directory.Build.props VersionPrefix + VersionSuffix.
   # (version is read dynamically from Directory.Build.props at build time)
   # ---------------------------------------------------------------------------
   version:
+    needs: validate
     runs-on: ubuntu-latest
     outputs:
       pack-version: ${{ steps.compose.outputs.pack-version }}
@@ -72,7 +100,7 @@ jobs:
       update-channel: ${{ steps.channel.outputs.update-channel }}
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
         with:
           # Full history + tags are required so git-cliff can compute the
           # commit range since the previous release tag for the changelog.
@@ -154,7 +182,7 @@ jobs:
           scripts/generate-release-notes.sh "${{ steps.compose.outputs.pack-version }}" RELEASE_NOTES.md
 
       - name: Upload release notes artifact
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
           name: release-notes
           path: RELEASE_NOTES.md
@@ -168,7 +196,7 @@ jobs:
   # per repo; do not split by artifact type.
   # ---------------------------------------------------------------------------
   release:
-    needs: version
+    needs: [validate, version]
     strategy:
       fail-fast: false
       matrix:
@@ -195,10 +223,10 @@ jobs:
 
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
 
       - name: Setup .NET SDK
-        uses: actions/setup-dotnet@v4
+        uses: actions/setup-dotnet@67a3573c9a986a3f9c594539f4ab511d57bb3ce9 # v4.3.1
         with:
           global-json-file: global.json
 
@@ -217,10 +245,10 @@ jobs:
       # VITE_APP_VERSION is injected from Directory.Build.props by vite.config.ts.
       # ------------------------------------------------------------------
       - name: Setup pnpm
-        uses: pnpm/action-setup@v4
+        uses: pnpm/action-setup@b906affcce14559ad1aafd4ab0e942779e9f58b1 # v4.3.0
 
       - name: Setup Node.js
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
         with:
           node-version: 22
           cache: pnpm
@@ -309,7 +337,7 @@ jobs:
       # Auto-generated changelog from the version job; embedded into the package
       # by vpk pack --releaseNotes and published as the GitHub release body.
       - name: Download release notes artifact
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
         with:
           name: release-notes
 
