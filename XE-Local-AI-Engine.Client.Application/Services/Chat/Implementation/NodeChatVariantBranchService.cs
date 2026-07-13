@@ -60,7 +60,15 @@ internal sealed class NodeChatVariantBranchService(NodeChatPersistenceWriter wri
         return await _writer.ExecuteConversationExclusiveAsync(branchedConversationId,
             async (dbContext, token) =>
             {
+                // One transaction around the whole branch (conversation insert + every message copy): the copies are
+                // separate INSERT statements, so without this a cancellation/failure mid-loop would autocommit the
+                // conversation row plus a prefix of its messages, leaving a visible half-copied branch. Mirrors
+                // CreateMessageVariantAsync's transactional insert.
+                await using var transaction = await dbContext.Database.BeginTransactionAsync(token).ConfigureAwait(false);
+                var dbTransaction = transaction.GetDbTransaction();
+
                 await using var conversationCommand = dbContext.Database.GetDbConnection().CreateCommand();
+                conversationCommand.Transaction = dbTransaction;
                 conversationCommand.CommandText = """
                                                   INSERT INTO conversations (conversation_id, title, user_id, created_at_utc, last_seen_utc, purged, origin, is_pinned, archived, branch_of_conversation_id)
                                                   VALUES ($conversation_id, $title, $user_id, $created_at_utc, $last_seen_utc, 0, $origin, 0, 0, $branch_of_conversation_id);
@@ -79,6 +87,7 @@ internal sealed class NodeChatVariantBranchService(NodeChatPersistenceWriter wri
                 foreach (var message in copies)
                 {
                     await using var messageCommand = dbContext.Database.GetDbConnection().CreateCommand();
+                    messageCommand.Transaction = dbTransaction;
                     messageCommand.CommandText = """
                                                  INSERT INTO messages (message_id, conversation_id, sequence, role, content, metadata_json, created_at_utc, updated_at_utc, status, request_id, error, origin, parent_message_id, variant_group_id)
                                                  VALUES ($message_id, $conversation_id, $sequence, $role, $content, $metadata_json, $created_at_utc, $updated_at_utc, $status, $request_id, $error, $origin, $parent_message_id, $variant_group_id);
@@ -111,6 +120,7 @@ internal sealed class NodeChatVariantBranchService(NodeChatPersistenceWriter wri
                     await messageCommand.ExecuteNonQueryAsync(token).ConfigureAwait(false);
                 }
 
+                await transaction.CommitAsync(token).ConfigureAwait(false);
                 return new NodeChatBranchResultDto(request.ConversationId, branchedConversationId, copies.Length);
             },
             cancellationToken).ConfigureAwait(false);

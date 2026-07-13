@@ -2,7 +2,9 @@ namespace XE_Local_AI_Engine.Tests.BackgroundServices;
 
 using System.Text;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Options;
 using XE_Local_AI_Engine.Client.BackgroundServices;
@@ -33,6 +35,97 @@ public sealed class RetentionSweeperServiceTests : IDisposable
         var options = new ChatRetentionOptions();
         AssertEx.False(options.Enabled, "Chat retention must be disabled by default.");
         AssertEx.Equal(expected: 30, options.RetentionDays);
+    }
+
+    [Test]
+    public async Task RetentionOptions_ZeroRetentionDays_FailStartupValidation()
+    {
+        // A zero-day window makes the sweep cutoff equal to now, deleting every conversation the instant retention is
+        // enabled; ValidateOnStart must reject it at startup rather than silently purging everything.
+        await AssertEx.ThrowsAsync<OptionsValidationException>(() => StartHostWithRetentionAsync(enabled: true, retentionDays: "0", sweepInterval: null))
+                      .ConfigureAwait(false);
+    }
+
+    [Test]
+    public async Task RetentionOptions_NegativeRetentionDays_FailStartupValidation()
+    {
+        // A negative window pushes the cutoff into the future, which would also delete everything.
+        await AssertEx.ThrowsAsync<OptionsValidationException>(() => StartHostWithRetentionAsync(enabled: true, retentionDays: "-5", sweepInterval: null))
+                      .ConfigureAwait(false);
+    }
+
+    [Test]
+    public async Task RetentionOptions_ZeroSweepInterval_FailStartupValidation()
+    {
+        // A zero sweep interval would busy-spin the PeriodicTimer; the interval bounds must reject it at startup.
+        await AssertEx.ThrowsAsync<OptionsValidationException>(() => StartHostWithRetentionAsync(enabled: true, retentionDays: "30", sweepInterval: "00:00:00"))
+                      .ConfigureAwait(false);
+    }
+
+    [Test]
+    public async Task RetentionOptions_ValidConfig_PassesStartupValidation()
+    {
+        await StartHostWithRetentionAsync(enabled: true, retentionDays: "30", sweepInterval: "00:10:00").ConfigureAwait(false);
+    }
+
+    [Test]
+    public async Task RetentionOptions_DisabledWithDefaults_PassesStartupValidation()
+    {
+        // The default-off configuration (no overrides) must never fail startup validation.
+        await StartHostWithRetentionAsync(enabled: false, retentionDays: null, sweepInterval: null).ConfigureAwait(false);
+    }
+
+    [Test]
+    public async Task OrphanResweep_WhenDisabled_RemovesOrphansButKeepsValidConversation()
+    {
+        await using var provider = await BuildProviderAsync("disabled-orphan.sqlite").ConfigureAwait(false);
+        var service = CreateService(provider);
+
+        // A valid conversation with a real row + upload directory: it must survive because inactivity-based deletion
+        // stays gated on Enabled.
+        var keptConversationId = await SeedConversationWithFootprintAsync(provider, service).ConfigureAwait(false);
+
+        // A stranded upload directory whose conversation row is gone: it must be reconciled even with retention off.
+        var orphanConversationId = Guid.NewGuid();
+        Directory.CreateDirectory(UploadDirectory(orphanConversationId));
+        await File.WriteAllTextAsync(Path.Combine(UploadDirectory(orphanConversationId), "leftover.bin"), "x").ConfigureAwait(false);
+
+        using var sweeper = CreateSweeper(provider, enabled: false);
+        await sweeper.RunOrphanResweepOnceAsync(CancellationToken.None).ConfigureAwait(false);
+
+        AssertEx.False(Directory.Exists(UploadDirectory(orphanConversationId)), "A disabled sweeper must still reconcile orphaned upload directories.");
+        AssertEx.NotNull(await service.GetConversationAsync(keptConversationId).ConfigureAwait(false));
+        AssertEx.True(Directory.Exists(UploadDirectory(keptConversationId)), "The valid conversation's upload directory must survive when retention is disabled.");
+    }
+
+    // Builds a host that registers ChatRetentionOptions exactly as production does (bind + ValidateDataAnnotations +
+    // ValidateOnStart) and starts it, so a bad window surfaces as an OptionsValidationException during StartAsync.
+    private static async Task StartHostWithRetentionAsync(bool enabled, string? retentionDays, string? sweepInterval)
+    {
+        var settings = new Dictionary<string, string?>
+        {
+            [$"{ChatRetentionOptions.Section}:Enabled"] = enabled ? "true" : "false"
+        };
+        if (retentionDays is not null)
+        {
+            settings[$"{ChatRetentionOptions.Section}:RetentionDays"] = retentionDays;
+        }
+
+        if (sweepInterval is not null)
+        {
+            settings[$"{ChatRetentionOptions.Section}:SweepInterval"] = sweepInterval;
+        }
+
+        var builder = Host.CreateApplicationBuilder();
+        builder.Configuration.AddInMemoryCollection(settings);
+        builder.Services.AddOptions<ChatRetentionOptions>()
+               .Bind(builder.Configuration.GetSection(ChatRetentionOptions.Section))
+               .ValidateDataAnnotations()
+               .ValidateOnStart();
+
+        using var host = builder.Build();
+        await host.StartAsync().ConfigureAwait(false);
+        await host.StopAsync().ConfigureAwait(false);
     }
 
     [Test]

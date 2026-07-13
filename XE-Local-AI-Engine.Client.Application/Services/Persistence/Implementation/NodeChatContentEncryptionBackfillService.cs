@@ -41,6 +41,13 @@ public sealed class NodeChatContentEncryptionBackfillService(
             if (total > 0)
             {
                 logger.LogInformation("NodeChatContentEncryptionBackfillService: encrypted {Count} legacy plaintext message row(s).", total);
+
+                // Rewriting a row in place leaves the old plaintext bytes lingering in the SQLite journal/WAL and in
+                // freed pages of the main file. Reclaim that residue once, only when this run actually migrated rows:
+                // a WAL checkpoint-truncate collapses the log back into the main DB, then VACUUM rebuilds the file so
+                // the freed pages holding plaintext are physically dropped, then a final checkpoint flushes VACUUM's
+                // own writes to the main file. If retention leaves nothing to migrate on a later start, this is skipped.
+                await CheckpointAndVacuumAsync(stoppingToken).ConfigureAwait(false);
             }
         }
         catch (OperationCanceledException)
@@ -112,6 +119,46 @@ public sealed class NodeChatContentEncryptionBackfillService(
 
         await transaction.CommitAsync(cancellationToken).ConfigureAwait(false);
         return rows.Count;
+    }
+
+    /// <summary>
+    ///     Reclaims on-disk plaintext residue left behind by the in-place row rewrites: checkpoint-truncate the WAL,
+    ///     VACUUM the database (which cannot run inside a transaction, so it uses the raw connection with no ambient
+    ///     transaction), then checkpoint again so VACUUM's rebuild lands in the main file. A failure here must never
+    ///     crash the background service — the rows are already encrypted; only the residue cleanup is skipped, and it is
+    ///     retried on the next startup that migrates at least one row. Internal so a test can drive it deterministically.
+    /// </summary>
+    internal async Task CheckpointAndVacuumAsync(CancellationToken cancellationToken)
+    {
+        try
+        {
+            await using var scope = scopeFactory.CreateAsyncScope();
+            var dbContext = scope.ServiceProvider.GetRequiredService<NodeChatDbContext>();
+            var connection = dbContext.Database.GetDbConnection();
+            await OpenIfNeededAsync(connection, cancellationToken).ConfigureAwait(false);
+
+            await ExecuteRawAsync(connection, "PRAGMA wal_checkpoint(TRUNCATE);", cancellationToken).ConfigureAwait(false);
+            await ExecuteRawAsync(connection, "VACUUM;", cancellationToken).ConfigureAwait(false);
+            await ExecuteRawAsync(connection, "PRAGMA wal_checkpoint(TRUNCATE);", cancellationToken).ConfigureAwait(false);
+        }
+        catch (OperationCanceledException)
+        {
+            // Normal shutdown — the encrypted rows are durable; residue reclamation retries on the next qualifying start.
+        }
+        catch (Exception ex)
+        {
+            logger.LogWarning(ex,
+                "NodeChatContentEncryptionBackfillService: post-backfill checkpoint/vacuum failed; encrypted rows are durable but plaintext residue reclamation was skipped and will retry on the next startup that migrates rows.");
+        }
+    }
+
+    [System.Diagnostics.CodeAnalysis.SuppressMessage("Security", "CA2100:Review SQL queries for security vulnerabilities",
+        Justification = "Every call site passes a fixed internal maintenance statement (PRAGMA/VACUUM) — never user input.")]
+    private static async Task ExecuteRawAsync(System.Data.Common.DbConnection connection, string sql, CancellationToken cancellationToken)
+    {
+        await using var command = connection.CreateCommand();
+        command.CommandText = sql;
+        await command.ExecuteNonQueryAsync(cancellationToken).ConfigureAwait(false);
     }
 
     // Minimal projection for the raw candidate query. Content is NOT NULL; metadata_json is nullable.
