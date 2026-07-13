@@ -31,23 +31,32 @@ Do not edit files, run mutating commands, perform infrastructure changes, or cle
 
 For failures, stop and report the failing command/output before attempting fixes.
 
+## Hard-won knowledge
+
+Read `docs/agent-knowledge.md` before your first non-trivial change. It records the rules, invariants, and traps that are not derivable from the code — each one encodes a bug that was already paid for once (build-breaking `TODO` comments, the OpenAPI regen that silently drops endpoints, `aspire stop` being a no-op, sandbox symlink guards, MAF constructor pitfalls). It also lists beliefs that are now false, so a half-remembered old rule can be corrected.
+
+`docs/wiki/` is the code-grounded architecture reference.
+
 ## Validation
 
 Backend:
 
-- `dotnet restore C0re.slnx`
-- `dotnet build C0re.slnx --configuration Release --no-restore`
-- `dotnet test --project C0re.Tests.IntegrationTests --configuration Release`
+- `dotnet restore XE-Local-AI-Engine.slnx`
+- `dotnet build XE-Local-AI-Engine.slnx --configuration Release --no-restore`
+- `dotnet test XE-Local-AI-Engine.slnx --configuration Release --no-build --max-parallel-test-modules 1`
 
-Frontend:
+Backend tests are TUnit on Microsoft.Testing.Platform. To scope a run, use `--treenode-filter` (not `--filter`), one class or method at a time — filter alternation `(A|B)` silently matches zero tests.
 
-- `cd C0re.Client.React.Web`
-- `pnpm ci`
+Frontend (from `XE-Local-AI-Engine.Client.React/`):
+
+- `pnpm install`
 - `pnpm run lint`
 - `pnpm test`
 - `pnpm run build`
 
-E2E is ask-gated unless the task specifically targets E2E behavior.
+After any backend contract change, run `pnpm openapi:check` — it regenerates the hey-api client and fails on drift. Commit regenerated output with the change; never hand-edit generated files.
+
+E2E is ask-gated unless the task specifically targets E2E behavior; it runs in its own lane and is excluded from solution-wide `dotnet test`.
 
 OpenCode setup changes must run the OpenCode setup validator and the legacy-path validator.
 

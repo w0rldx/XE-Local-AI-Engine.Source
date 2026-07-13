@@ -1,3 +1,17 @@
+## Hard-won knowledge
+
+Read `docs/agent-knowledge.md` before your first non-trivial change in this repo. It records the rules, invariants, and traps that reading the code will not tell you — each entry encodes a bug that was already paid for once. Highlights an agent will otherwise hit:
+
+- A bare `TODO`/`FIXME` in a C# comment **fails the build** (Sonar S1135 + warnings-as-errors). Write "follow-up:" instead.
+- OpenAPI regen without `XE_LAUNCH_MODE=desktop` **silently drops** desktop-only endpoints from the generated client.
+- `aspire stop` is a **no-op** on this stack — use `scripts/dev-stop.sh`, or you leave an orphaned `llama-server` holding a port and VRAM.
+- Docker and HostAgent were **deliberately removed**. Don't reintroduce them. Ollama was **not** removed — it's a gated secondary provider; llama.cpp is the default runtime.
+- This WSL box **has** an RTX 4080 + CUDA. Older notes claiming otherwise are wrong.
+
+The doc's "Stale beliefs corrected" table lists rules that were true once and are false now — check it before acting on a remembered convention.
+
+`docs/wiki/` is the code-grounded architecture reference; `AGENTS.md` has the validation commands.
+
 <!-- CODEGRAPH_START -->
 ## CodeGraph
 
