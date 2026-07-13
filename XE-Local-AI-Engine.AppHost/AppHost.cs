@@ -70,7 +70,7 @@ builder.AddViteApp("client-react", "../XE-Local-AI-Engine.Client.React")
        .WithRunScript("dev")
        .WithBuildScript("build")
        .WithPnpm()
-       .WithBrowserLogs("/usr/bin/chromium-browser",
+       .WithBrowserLogs("/usr/bin/google-chrome",
            userDataMode: BrowserUserDataMode.Isolated);
 
 await builder.Build().RunAsync();
