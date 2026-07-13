@@ -15,7 +15,9 @@ interface SafeMarkdownImageProps {
 // dangerous scheme that markdownImageUrlTransform stripped to "") renders nothing.
 export function SafeMarkdownImage({ src, alt }: SafeMarkdownImageProps) {
 	const { t } = useTranslation();
-	const [consented, setConsented] = useState(false);
+	// Bind consent to the exact source it was granted for. If React reuses this element position and the
+	// src prop changes to a new remote origin, the stale consent must not carry over to that new origin.
+	const [consentedSrc, setConsentedSrc] = useState<string | null>(null);
 
 	const source = typeof src === "string" ? src : "";
 	const altText = typeof alt === "string" ? alt : "";
@@ -24,13 +26,14 @@ export function SafeMarkdownImage({ src, alt }: SafeMarkdownImageProps) {
 	}
 
 	const remote = isRemoteImageSrc(source);
+	const consented = consentedSrc === source;
 
 	if (remote && !consented) {
 		const origin = remoteImageOrigin(source);
 		return (
 			<UnstyledButton
 				type="button"
-				onClick={() => setConsented(true)}
+				onClick={() => setConsentedSrc(source)}
 				data-testid="remote-image-consent"
 				style={{
 					display: "inline-flex",
