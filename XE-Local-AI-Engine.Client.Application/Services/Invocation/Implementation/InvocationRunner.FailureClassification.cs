@@ -2,6 +2,7 @@ namespace XE_Local_AI_Engine.Client.Services.Invocation.Implementation;
 
 using System.Net;
 using System.Text.RegularExpressions;
+using XE_Local_AI_Engine.AI.Agent.Invocation;
 using XE_Local_AI_Engine.Client.Models;
 using XE_Local_AI_Engine.Client.Models.Enums;
 using XE_Local_AI_Engine.Client.Services.Chat;
@@ -21,6 +22,11 @@ public sealed partial class InvocationRunner
             // failure. The exception's own message IS the fixed, path-free constant (ContextBudgetExceededMessage), so
             // it is surfaced verbatim, same treatment as StreamIdleTimeoutException below.
             ContextBudgetExceededException contextBudgetExceeded => (FailureCategory.ContextWindowExceeded, contextBudgetExceeded.Message),
+            // The provider-boundary cumulative-ceiling backstop (a runaway tool/hand-off loop). Reuses the
+            // ContextWindowExceeded category (adding a new FailureCategory value would drift the generated OpenAPI/zod
+            // client) but carries its own fixed, path-free runaway-loop message. Matches before the generic
+            // InvalidOperationException/agent-runtime arms below (it derives from InvalidOperationException).
+            ProviderCallBudgetExceededException providerCallBudgetExceeded => (FailureCategory.ContextWindowExceeded, providerCallBudgetExceeded.Message),
             // A tripped circuit breaker: surface a fixed, retry-soon message rather than the generic ProviderUnreachable
             // (the endpoint is likely recovering, not permanently down). Matches before the StreamIdle/TimeoutException
             // arm because it is not a TimeoutException.
