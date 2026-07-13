@@ -10,7 +10,7 @@
 		"dev": "vite --port 5173",
 		"start": "vite --port 3000",
 		"licenses:generate": "node scripts/GenerateLicenses.mjs",
-		"prebuild": "pnpm run licenses:generate",
+		"licenses:check": "pnpm run licenses:generate && git diff --exit-code -- src/features/about/data/third-party-licenses.generated.json",
 		"build": "tsc --noEmit && node scripts/CheckEventCurrentTargetInUpdaters.mjs && biome lint && stylelint \"src/**/*.css\" && vite build",
 		"build:e2e": "vite build",
 		"serve": "vite preview",

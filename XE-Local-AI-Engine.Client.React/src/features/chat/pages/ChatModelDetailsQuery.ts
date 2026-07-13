@@ -7,16 +7,22 @@ import type { ModelOption } from "@/features/chat/models/ChatModels";
 //   - a non-empty concrete model name is resolved, AND
 //   - the selection is not a cloud (Codex) model — cloud ids have no LOCAL details (the endpoint 404s for them), AND
 //   - when the selection maps to a known list option, that option is available — an unavailable model can't return
-//     details, so polling it just retries a guaranteed failure. When no option is found (e.g. the local-default
-//     sentinel resolving to a concrete name) we still fetch: the backend routes the name to its provider and returns
-//     200 for an installed Ollama OR GGUF model (the GGUF branch was added in CL-4).
+//     details, so polling it just retries a guaranteed failure, AND
+//   - the resolved concrete name is actually present in the installed-model list.
 //
-// Note: GGUF (llamacpp) selections ARE polled — CL-4 makes those a 200 carrying maxContextTokens, which the context
-// usage meter needs. Only cloud and unavailable selections are suppressed.
+// The installed-list gate is the terminal domain state that fixes the configured-but-not-installed starter model: the
+// local-default sentinel resolves to `configuredDefaultModelName`, which may name a model whose GGUF was never
+// downloaded. That name is not in the installed list, so GET details 404s — and polling it forever surfaces as a
+// stuck, noisy error. A SignalR invalidation on download completion refreshes the installed list, so the moment the
+// model IS installed this flips true and the poll begins on its own.
+//
+// Note: GGUF (llamacpp) selections that ARE installed get polled — CL-4 makes those a 200 carrying maxContextTokens,
+// which the context usage meter needs. Only cloud, unavailable, and not-installed selections are suppressed.
 export function shouldFetchLocalModelDetails(
 	concreteModelName: string,
 	selectedOption: ModelOption | undefined,
 	selectedModelIsCloud: boolean,
+	concreteModelInstalled: boolean,
 ): boolean {
 	if (concreteModelName.length === 0) {
 		return false;
@@ -31,5 +37,6 @@ export function shouldFetchLocalModelDetails(
 		return false;
 	}
 
-	return true;
+	// A concrete name that is not in the installed list can only 404 — treat it as a terminal state, not a retry loop.
+	return concreteModelInstalled;
 }
