@@ -72,7 +72,8 @@ public sealed class ChatTurnResolver(
     ///     Resolves the active model's advertised <c>thinking</c>/<c>tools</c> capabilities via the shared classification
     ///     service (cache-first; no <c>/api/show</c> call on a cache hit). A null/blank model or any detection miss
     ///     resolves to NOT-capable for both — the safe default that omits the think field (avoiding the Ollama 400) and
-    ///     withholds the tool offer while still allowing a plain chat.
+    ///     withholds the tool offer while still allowing a plain chat. The same provider-routing decision lives in
+    ///     <see cref="ModelCapabilityResolver" /> for the per-participant orchestration path — change both together.
     /// </summary>
     private async Task<(bool SupportsThinking, bool SupportsTools)> ResolveModelCapabilitiesAsync(string? activeModel, CancellationToken cancellationToken)
     {
