@@ -206,20 +206,22 @@ internal sealed class PlaybookActionService(
             return new PlaybookPromotionResult(PlaybookPromotionStatus.EvalRegressed, Record: null);
         }
 
-        // Hard cap on enabled actions: the eval may pass, but if the agent is already at MaxEnabledActions the
-        // promote is blocked with no store write — the operator archives/disables an Enabled action first. The pending
-        // suggestion is not yet Enabled, so the count needs no exclusion here.
-        var enabledCount = await CountEnabledAsync(agentDefinitionId, cancellationToken).ConfigureAwait(false);
-        if (enabledCount >= _actionOptions.MaxEnabledActions)
+        // Atomic promote under optimistic-concurrency + cap guards. The validated snapshot's Version is threaded so the
+        // Enabled write lands only if no concurrent edit/promote changed the row since it was read for the eval gate
+        // above — closing the TOCTOU where a concurrent UpdateSuggestedAsync (which bumps Version and clears the eval)
+        // could otherwise be promoted on stale evidence. The hard cap on enabled actions is re-checked inside the same
+        // store transaction, so two concurrent promotes cannot both exceed MaxEnabledActions. Version bumps because
+        // State changes; the EvalResult is carried through for audit.
+        var commit = await _store.PromoteSuggestedIfCurrentAsync(id, pending.Version, _actionOptions.MaxEnabledActions, pending.EvalResult, cancellationToken).ConfigureAwait(false);
+        return commit.Status switch
         {
-            return new PlaybookPromotionResult(PlaybookPromotionStatus.CapReached, Record: null);
-        }
-
-        // Version bumps because State changes; carry the EvalResult through the transition for audit.
-        var promoted = await TransitionSuggestedAsync(agentDefinitionId, id, PlaybookActionState.Enabled, pending.EvalResult, cancellationToken).ConfigureAwait(false);
-        return promoted is null
-            ? new PlaybookPromotionResult(PlaybookPromotionStatus.NotFound, Record: null)
-            : new PlaybookPromotionResult(PlaybookPromotionStatus.Promoted, promoted);
+            PlaybookPromotionCommitStatus.Committed => new PlaybookPromotionResult(PlaybookPromotionStatus.Promoted, commit.Record),
+            PlaybookPromotionCommitStatus.CapReached => new PlaybookPromotionResult(PlaybookPromotionStatus.CapReached, Record: null),
+            // A version/state mismatch means a concurrent edit/promote changed the row after the eval evidence was
+            // validated; surface the existing stale-eval conflict so the operator re-runs the eval on the current snapshot.
+            PlaybookPromotionCommitStatus.VersionConflict => new PlaybookPromotionResult(PlaybookPromotionStatus.EvalStale, Record: null),
+            _ => new PlaybookPromotionResult(PlaybookPromotionStatus.NotFound, Record: null)
+        };
     }
 
     public async Task<PlaybookActionRecord?> RecordEvalResultAsync(Guid agentDefinitionId, Guid id, string evalResultJson, CancellationToken cancellationToken = default)
@@ -358,12 +360,6 @@ internal sealed class PlaybookActionService(
             throw new PlaybookActionValidationException(
                 $"This agent already has the maximum of {_actionOptions.MaxEnabledActions} enabled playbook actions; archive or disable one before enabling another.");
         }
-    }
-
-    private async Task<int> CountEnabledAsync(Guid agentDefinitionId, CancellationToken cancellationToken)
-    {
-        var enabled = await _store.ListEnabledByAgentAsync(agentDefinitionId, cancellationToken).ConfigureAwait(false);
-        return enabled.Count;
     }
 
     private async Task ValidateAsync(PlaybookActionInput input, CancellationToken cancellationToken)
