@@ -66,6 +66,14 @@ public static class AgentServiceCollectionExtensions
                     .Bind(configuration.GetSection(AgentTelemetryOptions.Section))
                     .ValidateOnStart();
 
+        // Provider-boundary budgeting (HIGH-005): per-round input budgeting + cumulative provider-call ceilings applied
+        // by the innermost pipeline hop so the inner tool loop and MAF participant rounds are bounded, not just the two
+        // outer history-growth points.
+        _ = services.AddOptions<ProviderCallBudgetOptions>()
+                    .Bind(configuration.GetSection(ProviderCallBudgetOptions.Section))
+                    .ValidateDataAnnotations()
+                    .ValidateOnStart();
+
         _ = services.AddSingleton<IValidateOptions<LocalChatAgentOptions>, LocalChatAgentOptionsValidator>();
         _ = services.AddSingleton<IValidateOptions<InvocationAgentOptions>, InvocationAgentOptionsValidator>();
         _ = services.AddSingleton<IValidateOptions<OrchestrationAgentOptions>, OrchestrationAgentOptionsValidator>();
@@ -139,6 +147,10 @@ public static class AgentServiceCollectionExtensions
                         .Use(chatClient => new ToolInvocationObservabilityChatClient(chatClient, serviceProvider.GetRequiredService<ILogger<ToolInvocationObservabilityChatClient>>()))
                         .UseFunctionInvocation(serviceProvider.GetRequiredService<ILoggerFactory>(),
                             functionInvokingChatClient => functionInvokingChatClient.MaximumIterationsPerRequest = pipelineOptions.MaximumToolIterationsPerRequest)
+                        // Below UseFunctionInvocation so it re-budgets EVERY inner tool-loop round (and MAF participant
+                        // round), and above UseOpenTelemetry so the recorded gen_ai span reflects the budgeted message
+                        // set actually sent. Gated on an ambient ProviderCallBudget scope the invocation runner seeds.
+                        .Use(chatClient => new ProviderCallBudgetChatClient(chatClient, serviceProvider.GetRequiredService<ILogger<ProviderCallBudgetChatClient>>()))
                         .UseOpenTelemetry(serviceProvider.GetRequiredService<ILoggerFactory>(),
                             sourceName: "Microsoft.Extensions.AI",
                             configure: openTelemetryChatClient => openTelemetryChatClient.EnableSensitiveData = telemetryOptions.CaptureSensitiveContent)
