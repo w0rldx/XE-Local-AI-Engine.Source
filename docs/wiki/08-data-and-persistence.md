@@ -153,7 +153,7 @@ Migrations live in `Migrations/`. The convention is **additive**: new migrations
 | `20260626234754_AddInferenceProfilesAndBenchmarkMetrics` | `inference_profiles` table (per-machine launch profiles) + benchmark metric columns on the model-fit snapshot (`pp_tokens_per_second`, `tool_loop_ms`, `cache_hit_rate`, `vram_load_bytes`, `vram_after_bytes`, …) |
 | `20260713204544_AddChatMaintenanceState` | `chat_maintenance_state` (unencrypted key/value durable flags for one-shot DB maintenance; see the content-encryption reclamation marker below) |
 
-(Counted on disk: **28 migration files** — 26 timestamped (including the identity-context migration `20260525075351_InitialNodeIdentitySchema`) plus 2 untimestamped chat-schema migrations — and **2 model snapshots** = 30 `.cs` files excluding the per-migration `.Designer.cs`. This is the artifact total, not 30 distinct schema changes.)
+(Counted on disk: **34 migration files** — 32 timestamped (including the two NodeIdentity-context migrations `20260525075351_InitialNodeIdentitySchema` and `20260624184036_AddTutorialState`) plus 2 untimestamped chat-schema migrations — and **2 model snapshots** = 36 `.cs` files excluding the per-migration `.Designer.cs`. This is the artifact total, not 36 distinct schema changes.)
 
 ### Notable migration mechanics
 
