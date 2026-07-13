@@ -19,10 +19,12 @@ public sealed class WorkerHealthCheck : IHealthCheck
         _workerHubConnection = workerHubConnection ?? throw new ArgumentNullException(nameof(workerHubConnection));
     }
 
-    // Readiness reflects worker pairing + hub-connection state only. The local model runtime (llama.cpp /
-    // llama-server) is an on-demand host process, not a persistent daemon, so it does not gate readiness — and
-    // Ollama is now an opt-in external provider that must never block /health/ready. CheckHealthAsync stays async
-    // because IHealthCheck mandates the Task-returning signature.
+    // Pairing with the Central Platform is OPTIONAL: a node runs standalone (local inference) with no pairing, so an
+    // unpaired node must be reported Healthy — it must never fail /health/ready. Only a node that IS paired but whose
+    // pairing is failing (expired token / errored hub connection) degrades. The local model runtime (llama.cpp /
+    // llama-server) is an on-demand host process, not a persistent daemon, so it does not gate readiness — and Ollama is
+    // an opt-in external provider that must never block readiness either. CheckHealthAsync stays async because
+    // IHealthCheck mandates the Task-returning signature.
     public Task<HealthCheckResult> CheckHealthAsync(HealthCheckContext context, CancellationToken cancellationToken = default)
     {
         cancellationToken.ThrowIfCancellationRequested();
@@ -36,7 +38,8 @@ public sealed class WorkerHealthCheck : IHealthCheck
 
         if (!_tokenStore.IsPaired)
         {
-            return Task.FromResult(HealthCheckResult.Degraded("Worker is not paired with the Central Platform.", data: data));
+            // Local-only operation — pairing is not configured, so the node is fully ready.
+            return Task.FromResult(HealthCheckResult.Healthy("Worker is operating locally (not paired with the Central Platform).", data));
         }
 
         if (_tokenStore.IsTokenExpired)
