@@ -44,17 +44,6 @@ public sealed class ClientHostCleanupTests
 
     private static string GetClientPath(params string[] segments)
     {
-        var root = AppContext.BaseDirectory;
-        while (!string.IsNullOrEmpty(root) && !Directory.Exists(Path.Combine(root, "Apps")))
-        {
-            root = Directory.GetParent(root)?.FullName ?? string.Empty;
-        }
-
-        if (string.IsNullOrEmpty(root))
-        {
-            throw new DirectoryNotFoundException("Could not locate repository root from test output directory.");
-        }
-
-        return Path.Combine([root, "Apps", "XE-Local-AI-Engine", "XE-Local-AI-Engine.Client", .. segments]);
+        return RepositoryPaths.ClientProject(segments);
     }
 }
