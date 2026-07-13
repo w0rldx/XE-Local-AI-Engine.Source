@@ -315,10 +315,10 @@ public sealed class PlaybookActionServiceTests
         var agentId = Guid.NewGuid();
         var service = CreateService(out var store, out _, agentExists: true);
         var actionId = Guid.NewGuid();
-        // The gate now requires a passing eval matching the action's current Version before promotion is allowed.
+        // The gate now requires a passing, complete eval whose fingerprint matches the current context before promotion.
         var pending = CreateSuggestedRecord(agentId, actionId) with
         {
-            EvalResult = PassingEvalResultJson(1)
+            EvalResult = PassingEvalResultJson(1, MatchingFingerprint(actionId, 1))
         };
         store.GetByIdAsync(actionId, Arg.Any<CancellationToken>()).Returns(pending);
         store.UpdateAsync(actionId, Arg.Any<PlaybookActionInput>(), Arg.Any<CancellationToken>())
@@ -346,13 +346,14 @@ public sealed class PlaybookActionServiceTests
         // Cap of 2 with two already-Enabled actions: the eval passes, but the hard cap blocks the promote with no write.
         var service = CreateService(out var store, out _, agentExists: true, maxEnabledActions: 2);
         var actionId = Guid.NewGuid();
+        var enabled = new[] { EnabledRecord(agentId), EnabledRecord(agentId) };
         var pending = CreateSuggestedRecord(agentId, actionId) with
         {
-            EvalResult = PassingEvalResultJson(1)
+            EvalResult = PassingEvalResultJson(1, MatchingFingerprint(actionId, 1, enabled))
         };
         store.GetByIdAsync(actionId, Arg.Any<CancellationToken>()).Returns(pending);
         store.ListEnabledByAgentAsync(agentId, Arg.Any<CancellationToken>())
-             .Returns(Task.FromResult<IReadOnlyList<PlaybookActionRecord>>([EnabledRecord(agentId), EnabledRecord(agentId)]));
+             .Returns(Task.FromResult<IReadOnlyList<PlaybookActionRecord>>(enabled));
 
         var result = await service.PromoteSuggestedAsync(agentId, actionId).ConfigureAwait(false);
 
@@ -368,13 +369,14 @@ public sealed class PlaybookActionServiceTests
         // Cap of 2 with one already-Enabled action: under the cap, the passing eval promotes normally.
         var service = CreateService(out var store, out _, agentExists: true, maxEnabledActions: 2);
         var actionId = Guid.NewGuid();
+        var enabled = new[] { EnabledRecord(agentId) };
         var pending = CreateSuggestedRecord(agentId, actionId) with
         {
-            EvalResult = PassingEvalResultJson(1)
+            EvalResult = PassingEvalResultJson(1, MatchingFingerprint(actionId, 1, enabled))
         };
         store.GetByIdAsync(actionId, Arg.Any<CancellationToken>()).Returns(pending);
         store.ListEnabledByAgentAsync(agentId, Arg.Any<CancellationToken>())
-             .Returns(Task.FromResult<IReadOnlyList<PlaybookActionRecord>>([EnabledRecord(agentId)]));
+             .Returns(Task.FromResult<IReadOnlyList<PlaybookActionRecord>>(enabled));
         store.UpdateAsync(actionId, Arg.Any<PlaybookActionInput>(), Arg.Any<CancellationToken>())
              .Returns(pending with
              {
@@ -553,11 +555,12 @@ public sealed class PlaybookActionServiceTests
         var agentId = Guid.NewGuid();
         var service = CreateService(out var store, out _, agentExists: true);
         var actionId = Guid.NewGuid();
-        // A recorded eval for the current Version but Passed == false — the gate blocks with EvalRegressed.
+        // A recorded eval for the current Version, complete, fingerprint-current, but Passed == false — the gate blocks
+        // with EvalRegressed.
         store.GetByIdAsync(actionId, Arg.Any<CancellationToken>())
              .Returns(CreateSuggestedRecord(agentId, actionId) with
              {
-                 EvalResult = FailingEvalResultJson(1)
+                 EvalResult = FailingEvalResultJson(1, MatchingFingerprint(actionId, 1))
              });
 
         var result = await service.PromoteSuggestedAsync(agentId, actionId).ConfigureAwait(false);
@@ -579,6 +582,93 @@ public sealed class PlaybookActionServiceTests
                  Version = 2,
                  EvalResult = PassingEvalResultJson(1)
              });
+
+        var result = await service.PromoteSuggestedAsync(agentId, actionId).ConfigureAwait(false);
+
+        AssertEx.Equal(PlaybookPromotionStatus.EvalStale, result.Status);
+        await store.DidNotReceive().UpdateAsync(Arg.Any<Guid>(), Arg.Any<PlaybookActionInput>(), Arg.Any<CancellationToken>()).ConfigureAwait(false);
+    }
+
+    [Test]
+    public async Task PromoteSuggestedAsync_WhenEvalIncomplete_ReturnsEvalIncompleteAndDoesNotUpdate()
+    {
+        var agentId = Guid.NewGuid();
+        var service = CreateService(out var store, out _, agentExists: true);
+        var actionId = Guid.NewGuid();
+        // A passing SUBSET run: only 1 of 3 enabled golden cases was scored (the per-run cap truncated the set), so the
+        // subset pass cannot prove no-regression and must not authorize promotion — even with a current fingerprint.
+        var incompleteJson = EvalResultJson(passed: true, version: 1, goldenCaseCount: 1, goldenCaseTotal: 3, MatchingFingerprint(actionId, 1));
+        store.GetByIdAsync(actionId, Arg.Any<CancellationToken>())
+             .Returns(CreateSuggestedRecord(agentId, actionId) with { EvalResult = incompleteJson });
+
+        var result = await service.PromoteSuggestedAsync(agentId, actionId).ConfigureAwait(false);
+
+        AssertEx.Equal(PlaybookPromotionStatus.EvalIncomplete, result.Status);
+        await store.DidNotReceive().UpdateAsync(Arg.Any<Guid>(), Arg.Any<PlaybookActionInput>(), Arg.Any<CancellationToken>()).ConfigureAwait(false);
+    }
+
+    [Test]
+    public async Task PromoteSuggestedAsync_WhenFingerprintStaleAfterBaseInstructionChange_ReturnsEvalStale()
+    {
+        var agentId = Guid.NewGuid();
+        var service = CreateService(out var store, out _, agentExists: true);
+        var actionId = Guid.NewGuid();
+        // The eval was recorded when the agent's base instructions differed; recompute against the current instructions
+        // no longer matches, so promotion is blocked.
+        var staleFingerprint = PlaybookEvalFingerprint.Compute(actionId, 1, "Older base instructions.", [], [], EvalModelName);
+        store.GetByIdAsync(actionId, Arg.Any<CancellationToken>())
+             .Returns(CreateSuggestedRecord(agentId, actionId) with { EvalResult = PassingEvalResultJson(1, staleFingerprint) });
+
+        var result = await service.PromoteSuggestedAsync(agentId, actionId).ConfigureAwait(false);
+
+        AssertEx.Equal(PlaybookPromotionStatus.EvalStale, result.Status);
+        await store.DidNotReceive().UpdateAsync(Arg.Any<Guid>(), Arg.Any<PlaybookActionInput>(), Arg.Any<CancellationToken>()).ConfigureAwait(false);
+    }
+
+    [Test]
+    public async Task PromoteSuggestedAsync_WhenFingerprintStaleAfterGoldenSetChange_ReturnsEvalStale()
+    {
+        var agentId = Guid.NewGuid();
+        var service = CreateService(out var store, out _, agentExists: true);
+        var actionId = Guid.NewGuid();
+        // The eval was recorded over a golden set that has since changed (the current enabled golden set is empty).
+        var staleFingerprint = PlaybookEvalFingerprint.Compute(actionId, 1, AgentInstructions, [], [GoldenCase(agentId)], EvalModelName);
+        store.GetByIdAsync(actionId, Arg.Any<CancellationToken>())
+             .Returns(CreateSuggestedRecord(agentId, actionId) with { EvalResult = PassingEvalResultJson(1, staleFingerprint) });
+
+        var result = await service.PromoteSuggestedAsync(agentId, actionId).ConfigureAwait(false);
+
+        AssertEx.Equal(PlaybookPromotionStatus.EvalStale, result.Status);
+        await store.DidNotReceive().UpdateAsync(Arg.Any<Guid>(), Arg.Any<PlaybookActionInput>(), Arg.Any<CancellationToken>()).ConfigureAwait(false);
+    }
+
+    [Test]
+    public async Task PromoteSuggestedAsync_WhenFingerprintStaleAfterSiblingActionChange_ReturnsEvalStale()
+    {
+        var agentId = Guid.NewGuid();
+        var service = CreateService(out var store, out _, agentExists: true);
+        var actionId = Guid.NewGuid();
+        // The eval was recorded when a sibling enabled action existed; the current enabled set no longer contains it.
+        var staleFingerprint = PlaybookEvalFingerprint.Compute(actionId, 1, AgentInstructions, [EnabledRecord(agentId)], [], EvalModelName);
+        store.GetByIdAsync(actionId, Arg.Any<CancellationToken>())
+             .Returns(CreateSuggestedRecord(agentId, actionId) with { EvalResult = PassingEvalResultJson(1, staleFingerprint) });
+
+        var result = await service.PromoteSuggestedAsync(agentId, actionId).ConfigureAwait(false);
+
+        AssertEx.Equal(PlaybookPromotionStatus.EvalStale, result.Status);
+        await store.DidNotReceive().UpdateAsync(Arg.Any<Guid>(), Arg.Any<PlaybookActionInput>(), Arg.Any<CancellationToken>()).ConfigureAwait(false);
+    }
+
+    [Test]
+    public async Task PromoteSuggestedAsync_WhenFingerprintStaleAfterModelChange_ReturnsEvalStale()
+    {
+        var agentId = Guid.NewGuid();
+        var service = CreateService(out var store, out _, agentExists: true);
+        var actionId = Guid.NewGuid();
+        // The eval was recorded against a different eval model than the one configured now.
+        var staleFingerprint = PlaybookEvalFingerprint.Compute(actionId, 1, AgentInstructions, [], [], "some-other-model");
+        store.GetByIdAsync(actionId, Arg.Any<CancellationToken>())
+             .Returns(CreateSuggestedRecord(agentId, actionId) with { EvalResult = PassingEvalResultJson(1, staleFingerprint) });
 
         var result = await service.PromoteSuggestedAsync(agentId, actionId).ConfigureAwait(false);
 
@@ -768,29 +858,42 @@ public sealed class PlaybookActionServiceTests
             Confidence: 0.6d);
     }
 
-    private static string PassingEvalResultJson(int version)
+    // Fixed inputs the fingerprint gate hashes, so a test can build an eval result whose fingerprint matches what the
+    // promote gate recomputes (agent instructions + eval model are held constant by CreateService).
+    private const string AgentInstructions = "Instructions.";
+    private const string EvalModelName = "test-model";
+
+    // The fingerprint the promote gate recomputes for the default CreateService context (fixed agent instructions +
+    // model, an empty enabled golden set). Enabled sibling actions vary per test, so they are passed in.
+    private static string MatchingFingerprint(Guid actionId, int version, IReadOnlyList<PlaybookActionRecord>? enabledActions = null)
     {
-        return EvalResultJson(passed: true, version);
+        return PlaybookEvalFingerprint.Compute(actionId, version, AgentInstructions, enabledActions ?? [], [], EvalModelName);
     }
 
-    private static string FailingEvalResultJson(int version)
+    private static string PassingEvalResultJson(int version, string fingerprint = "")
     {
-        return EvalResultJson(passed: false, version);
+        return EvalResultJson(passed: true, version, goldenCaseCount: 1, goldenCaseTotal: 1, fingerprint);
     }
 
-    private static string EvalResultJson(bool passed, int version)
+    private static string FailingEvalResultJson(int version, string fingerprint = "")
+    {
+        return EvalResultJson(passed: false, version, goldenCaseCount: 1, goldenCaseTotal: 1, fingerprint);
+    }
+
+    private static string EvalResultJson(bool passed, int version, int goldenCaseCount, int goldenCaseTotal, string fingerprint)
     {
         var result = new PlaybookEvalResult(passed,
             EvaluatedAtUtc: 1_000,
             version,
-            "test-model",
-            GoldenCaseCount: 1,
-            GoldenCaseTotal: 1,
+            EvalModelName,
+            goldenCaseCount,
+            goldenCaseTotal,
             BaselinePassCount: 1,
             passed ? 1 : 0,
             passed ? 0 : 1,
             ImprovedCaseCount: 0,
-            []);
+            [],
+            fingerprint);
         return JsonSerializer.Serialize(result, PlaybookEvalResult.SerializerOptions);
     }
 
@@ -806,11 +909,20 @@ public sealed class PlaybookActionServiceTests
         // Default: no enabled actions, so the cap gate is inert unless a test seeds ListEnabledByAgentAsync.
         store.ListEnabledByAgentAsync(Arg.Any<Guid>(), Arg.Any<CancellationToken>())
              .Returns(Task.FromResult<IReadOnlyList<PlaybookActionRecord>>([]));
+        // The fingerprint gate reads the enabled golden set; default to empty (tests that assert a golden-set change
+        // seed their own).
+        var goldenStore = Substitute.For<IGoldenConversationStore>();
+        goldenStore.ListEnabledByAgentAsync(Arg.Any<Guid>(), Arg.Any<CancellationToken>())
+                   .Returns(Task.FromResult<IReadOnlyList<GoldenConversationRecord>>([]));
         var actionOptions = Options.Create(new PlaybookActionOptions
         {
             MaxEnabledActions = maxEnabledActions
         });
-        return new PlaybookActionService(store, agentStore, actionOptions);
+        var evalOptions = Options.Create(new PlaybookEvalOptions
+        {
+            ModelName = EvalModelName
+        });
+        return new PlaybookActionService(store, agentStore, goldenStore, actionOptions, evalOptions);
     }
 
     private static PlaybookActionInput CreateInput(Guid? agentDefinitionId = null,
@@ -838,6 +950,19 @@ public sealed class PlaybookActionServiceTests
             input.Scope,
             input.Priority,
             Version: 1,
+            CreatedAtUtc: 10,
+            UpdatedAtUtc: 10);
+    }
+
+    private static GoldenConversationRecord GoldenCase(Guid agentDefinitionId)
+    {
+        return new GoldenConversationRecord(Guid.NewGuid(),
+            agentDefinitionId,
+            "A golden case",
+            "[]",
+            Assertion: "expected",
+            Rubric: null,
+            Enabled: true,
             CreatedAtUtc: 10,
             UpdatedAtUtc: 10);
     }

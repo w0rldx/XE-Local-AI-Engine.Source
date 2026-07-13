@@ -49,10 +49,12 @@ public interface IPlaybookActionService
     ///     <c>Enabled</c> (human review — staging ≠ active), gated by the golden conversation eval result. Returns a
     ///     <see cref="PlaybookPromotionResult" /> whose <see cref="PlaybookPromotionResult.Status" /> is
     ///     <c>NotFound</c> when the action is missing/cross-agent/not a pending suggestion, <c>EvalRequired</c> when no
-    ///     eval has run since authoring/edit, <c>EvalStale</c> when the recorded eval is for an older content snapshot,
+    ///     eval has run since authoring/edit, <c>EvalStale</c> when the recorded eval is for an older content snapshot OR
+    ///     its behaviour-affecting context (base instructions, sibling actions, golden set, model) changed since it ran,
+    ///     <c>EvalIncomplete</c> when the recorded eval scored only a subset of the enabled golden cases,
     ///     <c>EvalRegressed</c> when the latest eval failed, <c>CapReached</c> when the agent is already at the
     ///     enabled-action cap, and <c>Promoted</c> (with the updated record) only when the latest eval passed, is
-    ///     current, and the cap is not reached.
+    ///     complete, its fingerprint matches, is current, and the cap is not reached.
     /// </summary>
     Task<PlaybookPromotionResult> PromoteSuggestedAsync(Guid agentDefinitionId, Guid id, CancellationToken cancellationToken = default);
 
@@ -96,6 +98,13 @@ public enum PlaybookPromotionStatus
     EvalRequired,
     EvalRegressed,
     EvalStale,
+
+    /// <summary>
+    ///     The recorded eval evaluated only a SUBSET of the enabled golden cases (the per-run <c>MaxGoldenCases</c> cap
+    ///     truncated the set), so a subset "pass" cannot prove no-regression across the whole suite. The operator must
+    ///     raise the cap and re-run a complete eval before promoting. Maps to 409.
+    /// </summary>
+    EvalIncomplete,
 
     /// <summary>
     ///     The agent is already at <c>MaxEnabledActions</c>. The promote is blocked with no store write; the operator

@@ -9,10 +9,14 @@ using XE_Local_AI_Engine.Client.Services.Eval;
 internal sealed class PlaybookActionService(
     IPlaybookActionStore store,
     IAgentDefinitionStore agentDefinitionStore,
-    IOptions<PlaybookActionOptions> actionOptions) : IPlaybookActionService
+    IGoldenConversationStore goldenConversationStore,
+    IOptions<PlaybookActionOptions> actionOptions,
+    IOptions<PlaybookEvalOptions> evalOptions) : IPlaybookActionService
 {
     private readonly PlaybookActionOptions _actionOptions = (actionOptions ?? throw new ArgumentNullException(nameof(actionOptions))).Value;
     private readonly IAgentDefinitionStore _agentDefinitionStore = agentDefinitionStore ?? throw new ArgumentNullException(nameof(agentDefinitionStore));
+    private readonly PlaybookEvalOptions _evalOptions = (evalOptions ?? throw new ArgumentNullException(nameof(evalOptions))).Value;
+    private readonly IGoldenConversationStore _goldenConversationStore = goldenConversationStore ?? throw new ArgumentNullException(nameof(goldenConversationStore));
     private readonly IPlaybookActionStore _store = store ?? throw new ArgumentNullException(nameof(store));
 
     public async Task<PlaybookActionRecord> CreateAsync(PlaybookActionInput input, CancellationToken cancellationToken = default)
@@ -162,6 +166,37 @@ internal sealed class PlaybookActionService(
 
         // Staleness backstop behind clear-on-edit: the recorded pass must be for the action's current content snapshot.
         if (evalResult.ActionVersionAtEval != pending.Version)
+        {
+            return new PlaybookPromotionResult(PlaybookPromotionStatus.EvalStale, Record: null);
+        }
+
+        // Completeness: a run that evaluated only a subset of the enabled golden cases (the per-run cap truncated the
+        // set) cannot prove no-regression across the whole suite, so a subset pass never authorizes promotion.
+        if (evalResult.GoldenCaseCount < evalResult.GoldenCaseTotal)
+        {
+            return new PlaybookPromotionResult(PlaybookPromotionStatus.EvalIncomplete, Record: null);
+        }
+
+        // Fingerprint: the recorded eval must reflect the CURRENT behaviour-affecting context. Recompute the fingerprint
+        // over the agent's base instructions, sibling enabled actions, the enabled golden set, and the eval model, and
+        // require it to match — so a base-instruction / golden-set / sibling-action / model change after the eval ran
+        // (which does not bump the action's own version) blocks the promote. A legacy result with no recorded
+        // fingerprint fails this match and is treated as stale (re-run), which is the safe direction.
+        var owningAgent = await _agentDefinitionStore.GetByIdAsync(agentDefinitionId, cancellationToken).ConfigureAwait(false);
+        if (owningAgent is null)
+        {
+            return new PlaybookPromotionResult(PlaybookPromotionStatus.NotFound, Record: null);
+        }
+
+        var enabledActions = await _store.ListEnabledByAgentAsync(agentDefinitionId, cancellationToken).ConfigureAwait(false);
+        var enabledGoldenCases = await _goldenConversationStore.ListEnabledByAgentAsync(agentDefinitionId, cancellationToken).ConfigureAwait(false);
+        var currentFingerprint = PlaybookEvalFingerprint.Compute(pending.Id,
+            pending.Version,
+            owningAgent.Instructions,
+            enabledActions,
+            enabledGoldenCases,
+            _evalOptions.ModelName);
+        if (!string.Equals(currentFingerprint, evalResult.EvaluationFingerprint, StringComparison.Ordinal))
         {
             return new PlaybookPromotionResult(PlaybookPromotionStatus.EvalStale, Record: null);
         }
