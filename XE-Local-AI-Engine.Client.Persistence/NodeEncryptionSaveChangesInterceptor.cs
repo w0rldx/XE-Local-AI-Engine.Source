@@ -75,8 +75,13 @@ public sealed class NodeEncryptionSaveChangesInterceptor : SaveChangesIntercepto
 
         foreach (var entry in nodeContext.ChangeTracker.Entries<NodeMessage>())
         {
-            EncryptRequiredProperty(entry, entry.Property(entity => entity.Content), entry.Entity.ConversationId, entry.Entity.MessageId, "content", trackedProperties);
-            EncryptOptionalProperty(entry, entry.Property(entity => entity.MetadataJson), entry.Entity.ConversationId, entry.Entity.MessageId, "metadata_json", trackedProperties);
+            // Content and metadata are the only encrypted columns with legacy plaintext rows on disk, so they carry the
+            // versioned read-both envelope (NodeChatContentProtection) instead of the bare protector. This keeps an
+            // EF-tracked save byte-compatible with the raw-ADO persistence path.
+            EncryptRequiredProperty(entry, entry.Property(entity => entity.Content), entry.Entity.ConversationId, entry.Entity.MessageId, "content", trackedProperties,
+                NodeChatContentProtection.Protect);
+            EncryptOptionalProperty(entry, entry.Property(entity => entity.MetadataJson), entry.Entity.ConversationId, entry.Entity.MessageId, "metadata_json", trackedProperties,
+                NodeChatContentProtection.Protect);
         }
 
         foreach (var entry in nodeContext.ChangeTracker.Entries<NodeToolEvent>())
@@ -230,12 +235,29 @@ public sealed class NodeEncryptionSaveChangesInterceptor : SaveChangesIntercepto
         }
     }
 
+    // The at-rest transform for one column. Both the bare protector (NodePayloadProtector.Encrypt, the default for
+    // every column that shipped encrypted from creation) and the versioned read-both envelope
+    // (NodeChatContentProtection.Protect, used for message content/metadata) match this shape.
+    private delegate byte[] PayloadProtector(ReadOnlySpan<byte> plaintext, ReadOnlySpan<byte> key, Guid conversationId, Guid recordId, string columnName);
+
     private static void EncryptRequiredProperty<TEntity>(EntityEntry<TEntity> entry,
         PropertyEntry<TEntity, byte[]> propertyEntry,
         Guid conversationId,
         Guid recordId,
         string columnName,
         ICollection<TrackedEncryptedProperty> trackedProperties)
+        where TEntity : class
+    {
+        EncryptRequiredProperty(entry, propertyEntry, conversationId, recordId, columnName, trackedProperties, NodePayloadProtector.Encrypt);
+    }
+
+    private static void EncryptRequiredProperty<TEntity>(EntityEntry<TEntity> entry,
+        PropertyEntry<TEntity, byte[]> propertyEntry,
+        Guid conversationId,
+        Guid recordId,
+        string columnName,
+        ICollection<TrackedEncryptedProperty> trackedProperties,
+        PayloadProtector protect)
         where TEntity : class
     {
         if (entry.State is not EntityState.Added and not EntityState.Modified)
@@ -252,7 +274,7 @@ public sealed class NodeEncryptionSaveChangesInterceptor : SaveChangesIntercepto
         var context = (NodeChatDbContext)entry.Context;
         var plaintextCopy = plaintext.ToArray();
 
-        propertyEntry.CurrentValue = NodePayloadProtector.Encrypt(plaintextCopy,
+        propertyEntry.CurrentValue = protect(plaintextCopy,
             context.NodeEncryptionKey.Span,
             conversationId,
             recordId,
@@ -267,6 +289,18 @@ public sealed class NodeEncryptionSaveChangesInterceptor : SaveChangesIntercepto
         Guid recordId,
         string columnName,
         ICollection<TrackedEncryptedProperty> trackedProperties)
+        where TEntity : class
+    {
+        EncryptOptionalProperty(entry, propertyEntry, conversationId, recordId, columnName, trackedProperties, NodePayloadProtector.Encrypt);
+    }
+
+    private static void EncryptOptionalProperty<TEntity>(EntityEntry<TEntity> entry,
+        PropertyEntry<TEntity, byte[]?> propertyEntry,
+        Guid conversationId,
+        Guid recordId,
+        string columnName,
+        ICollection<TrackedEncryptedProperty> trackedProperties,
+        PayloadProtector protect)
         where TEntity : class
     {
         if (entry.State is not EntityState.Added and not EntityState.Modified)
@@ -288,7 +322,7 @@ public sealed class NodeEncryptionSaveChangesInterceptor : SaveChangesIntercepto
         var context = (NodeChatDbContext)entry.Context;
         var plaintextCopy = plaintext.ToArray();
 
-        propertyEntry.CurrentValue = NodePayloadProtector.Encrypt(plaintextCopy,
+        propertyEntry.CurrentValue = protect(plaintextCopy,
             context.NodeEncryptionKey.Span,
             conversationId,
             recordId,

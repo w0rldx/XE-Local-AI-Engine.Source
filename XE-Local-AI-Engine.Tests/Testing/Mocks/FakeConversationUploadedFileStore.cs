@@ -68,6 +68,11 @@ public sealed class FakeConversationUploadedFileStore : IConversationUploadedFil
         throw new NotSupportedException();
     }
 
+    public IReadOnlyList<Guid> ListConversationDirectoryIds()
+    {
+        throw new NotSupportedException();
+    }
+
     public async Task<IConversationStagingSnapshot> CreateStagingSnapshotAsync(Guid conversationId, CancellationToken cancellationToken)
     {
         var hostPath = Path.Combine(Path.GetTempPath(), "fake-attachments-" + Guid.NewGuid().ToString("N"));

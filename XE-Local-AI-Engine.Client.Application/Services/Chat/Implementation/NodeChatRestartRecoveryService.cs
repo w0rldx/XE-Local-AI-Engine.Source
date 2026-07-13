@@ -12,7 +12,9 @@ public sealed class NodeChatRestartRecoveryService(NodeChatPersistenceWriter wri
 
     public async Task<int> RecoverInterruptedMessagesAsync(long recoveredAtUtc, CancellationToken cancellationToken = default)
     {
-        return await _writer.ExecuteAsync(NodeChatPersistenceWriteKey.ForConversation(Guid.Empty),
+        // Startup-only reconciliation across every conversation; runs before the app serves traffic. Uses the shared
+        // Guid.Empty gate exclusively, mirroring the list read model that keys global queries on the same id.
+        return await _writer.ExecuteConversationExclusiveAsync(Guid.Empty,
             async (dbContext, token) =>
             {
                 await using var transaction = await dbContext.Database.BeginTransactionAsync(token).ConfigureAwait(false);

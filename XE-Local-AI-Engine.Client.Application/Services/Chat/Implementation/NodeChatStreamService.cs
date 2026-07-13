@@ -39,6 +39,10 @@ public sealed class NodeChatStreamService(
 {
     private const int AgentDefinitionVersion = 1;
 
+    // Terminal error stamped when a turn is torn down (client disconnect/cancel) before run ownership was established.
+    // Mirrors the Interrupted terminal the restart recovery service assigns to rows orphaned by a crash.
+    private const string PreOwnershipInterruptedError = "Interrupted before the response started.";
+
     // The tools whose presence in a turn's offer means the selected agent can read files through the AgentHome sandbox
     // (the read-only coder tools plus the run_in_agent_home gateway). When any is offered AND the conversation has
     // uploaded attachments, the sandbox is re-staged with this conversation's attachments before the tool loop runs.
@@ -113,6 +117,13 @@ public sealed class NodeChatStreamService(
                 // selection (same precedence as the runtime package built below). Survives reload off the metadata blob.
                 ReasoningEffort: resolution.Resolved?.ReasoningEffort ?? request.ReasoningEffort),
             cancellationToken).ConfigureAwait(false);
+
+        // The assistant row now exists as Pending, but run ownership (the pump + runner + their protective finally) is
+        // not wired until further below. If the client disconnects in this window — including during the awaited
+        // GetEnableToolsAsync / attachment staging before the tasks are created — the iterator is disposed and the row
+        // would otherwise sit Pending/Queued until the restart reaper. This guard terminalizes it to Interrupted on any
+        // pre-ownership teardown; once ownership is established it becomes a no-op and the pump owns the terminal.
+        await using var preOwnershipGuard = new PreOwnershipTerminalizationGuard(persistence, correlation, timeProvider, logger);
         yield return ToMessageEvent(ChatStreamEventTypes.AssistantPending, correlation, assistantPlaceholder, sequence.Next());
 
         // The turn is Queued until the collision-queue lease is acquired in RunInvocationAsync; it transitions to
@@ -274,6 +285,11 @@ public sealed class NodeChatStreamService(
             sequence,
             resolution.RequiresInstalledChatModel,
             runCancellation.Token);
+
+        // Ownership is now established: the pump + runner are running and the finally below drives every row to the
+        // runner's true terminal, so the pre-ownership guard must stand down (a client disconnect from here on must NOT
+        // terminalize — the run keeps going and the pump persists its real terminal).
+        preOwnershipGuard.OwnershipEstablished();
 
         try
         {
@@ -651,5 +667,51 @@ public sealed class NodeChatStreamService(
     private long NowUnixMilliseconds()
     {
         return timeProvider.GetUtcNow().ToUnixTimeMilliseconds();
+    }
+
+    /// <summary>
+    ///     Terminalizes a just-created assistant row if the turn is torn down before run ownership is established. Armed
+    ///     immediately after the placeholder is persisted and disarmed by <see cref="OwnershipEstablished" /> once the
+    ///     pump + runner (and their protective finally) exist. Disposal runs on any exit — normal fall-through, an
+    ///     exception, or async-iterator disposal on client disconnect — so a pre-ownership disconnect never strands the
+    ///     row Pending/Queued until the restart reaper.
+    /// </summary>
+    private sealed class PreOwnershipTerminalizationGuard(
+        INodeChatPersistenceService persistence,
+        NodeChatMessageCorrelation correlation,
+        TimeProvider timeProvider,
+        ILogger logger) : IAsyncDisposable
+    {
+        private bool _ownershipEstablished;
+
+        public void OwnershipEstablished()
+        {
+            _ownershipEstablished = true;
+        }
+
+        public async ValueTask DisposeAsync()
+        {
+            if (_ownershipEstablished)
+            {
+                return;
+            }
+
+            // Best-effort, on a fresh token: the client token that triggered this teardown is already cancelled, and the
+            // row must still be terminalized. A missing/mismatched row (placeholder already terminalized elsewhere) just
+            // logs — this path must never throw out of an iterator disposal.
+            try
+            {
+                await persistence.TerminalizeAssistantMessageAsync(
+                    new NodeChatTerminalizeMessageRequest(correlation,
+                        NodeChatMessageStatusValues.Interrupted,
+                        timeProvider.GetUtcNow().ToUnixTimeMilliseconds(),
+                        Error: PreOwnershipInterruptedError),
+                    CancellationToken.None).ConfigureAwait(false);
+            }
+            catch (Exception exception)
+            {
+                logger.LogWarning(exception, "Failed to terminalize a chat turn interrupted before run ownership. RequestId={RequestId}", correlation.RequestId);
+            }
+        }
     }
 }

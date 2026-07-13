@@ -24,6 +24,13 @@ public interface IConversationUploadedFileStore
     Task DeleteAllForConversationAsync(Guid conversationId, CancellationToken cancellationToken);
 
     /// <summary>
+    ///     Lists the conversation ids that currently have an on-disk upload directory. Used by the retention sweeper to
+    ///     find orphaned directories (a conversation whose rows were deleted but whose blob teardown did not complete —
+    ///     e.g. a crash between the DB commit and the file delete) and remove them.
+    /// </summary>
+    IReadOnlyList<Guid> ListConversationDirectoryIds();
+
+    /// <summary>
     ///     Decrypts each cached <c>.md</c> for the conversation into a fresh temp directory and returns a snapshot whose
     ///     disposal removes that directory. Used by the AgentHome staging step to copy attachments into the sandbox.
     /// </summary>
