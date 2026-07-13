@@ -22,8 +22,12 @@ public sealed class NodeEncryptionMaterializationInterceptor : IMaterializationI
                 conversation.Title = DecryptIfPresent(conversation.Title, context.NodeEncryptionKey.Span, conversation.ConversationId, conversation.ConversationId, "title");
                 break;
             case NodeMessage message:
-                message.Content = NodePayloadProtector.Decrypt(message.Content, context.NodeEncryptionKey.Span, message.ConversationId, message.MessageId, "content");
-                message.MetadataJson = DecryptIfPresent(message.MetadataJson, context.NodeEncryptionKey.Span, message.ConversationId, message.MessageId, "metadata_json");
+                // Content and metadata use the read-both envelope (they have legacy plaintext rows on disk), so an EF
+                // read of a raw-path-written or legacy row decrypts identically to the raw read path.
+                message.Content = NodeChatContentProtection.Unprotect(message.Content, context.NodeEncryptionKey.Span, message.ConversationId, message.MessageId, "content");
+                message.MetadataJson = message.MetadataJson is null
+                    ? null
+                    : NodeChatContentProtection.Unprotect(message.MetadataJson, context.NodeEncryptionKey.Span, message.ConversationId, message.MessageId, "metadata_json");
                 break;
             case NodeToolEvent toolEvent:
                 toolEvent.PlaintextArgs = DecryptIfPresent(toolEvent.PlaintextArgs, context.NodeEncryptionKey.Span, toolEvent.ConversationId, toolEvent.ToolCallId, "plaintext_args");
