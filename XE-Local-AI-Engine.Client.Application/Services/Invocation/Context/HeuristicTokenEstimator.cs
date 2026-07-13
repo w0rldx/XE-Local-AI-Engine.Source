@@ -21,6 +21,13 @@ public sealed class HeuristicTokenEstimator : ITokenEstimator
     // near-empty message (e.g. a bare tool acknowledgement) from being counted as zero-cost.
     private const int PerMessageOverheadTokens = 4;
 
+    // A non-ASCII character counts as this many weighted characters. Byte-pair tokenizers emit far more tokens per
+    // character for CJK / structured / emoji content than the chars/4 English heuristic assumes, so the plain divisor
+    // badly UNDER-counts there; weighting non-ASCII up biases the estimate upward (conservative), keeping the budgeter
+    // trimming early rather than overrunning the window on non-Latin conversations. Mirrored in the AI.Agent-layer
+    // ProviderMessageTokenEstimator (separate assembly by the layer arrow) — change both together.
+    private const int NonAsciiCharWeight = 2;
+
     public int EstimateTokens(ChatMessage message)
     {
         ArgumentNullException.ThrowIfNull(message);
@@ -51,25 +58,42 @@ public sealed class HeuristicTokenEstimator : ITokenEstimator
     {
         return content switch
         {
-            TextContent text => text.Text?.Length ?? 0,
-            TextReasoningContent reasoning => reasoning.Text?.Length ?? 0,
+            TextContent text => WeightedLength(text.Text),
+            TextReasoningContent reasoning => WeightedLength(reasoning.Text),
             FunctionCallContent call => EstimateCallCharacters(call),
-            FunctionResultContent result => result.Result?.ToString()?.Length ?? 0,
-            _ => content.ToString()?.Length ?? 0
+            FunctionResultContent result => WeightedLength(result.Result?.ToString()),
+            _ => WeightedLength(content.ToString())
         };
     }
 
     private static int EstimateCallCharacters(FunctionCallContent call)
     {
-        var characters = call.Name.Length;
+        var characters = WeightedLength(call.Name);
         if (call.Arguments is { } arguments)
         {
             foreach (var argument in arguments)
             {
-                characters += argument.Key.Length + (argument.Value?.ToString()?.Length ?? 0);
+                characters += WeightedLength(argument.Key) + WeightedLength(argument.Value?.ToString());
             }
         }
 
         return characters;
+    }
+
+    // Character count with each non-ASCII code unit weighted NonAsciiCharWeight× (see the field comment).
+    private static int WeightedLength(string? value)
+    {
+        if (string.IsNullOrEmpty(value))
+        {
+            return 0;
+        }
+
+        var weighted = 0;
+        foreach (var character in value)
+        {
+            weighted += character < 128 ? 1 : NonAsciiCharWeight;
+        }
+
+        return weighted;
     }
 }

@@ -36,9 +36,9 @@ public sealed class NodeChatServiceRegistrationTests : IDisposable
         var persistence = provider.GetRequiredService<INodeChatPersistenceService>();
         var restartRecovery = provider.GetRequiredService<NodeChatRestartRecoveryService>();
         var timeProvider = provider.GetRequiredService<TimeProvider>();
-        var firstContextId = await writer.ExecuteAsync(NodeChatPersistenceWriteKey.ForConversation(Guid.NewGuid()),
+        var firstContextId = await writer.ExecuteConversationExclusiveAsync(Guid.NewGuid(),
             (dbContext, _) => Task.FromResult(dbContext.ContextId.InstanceId)).ConfigureAwait(false);
-        var secondContextId = await writer.ExecuteAsync(NodeChatPersistenceWriteKey.ForConversation(Guid.NewGuid()),
+        var secondContextId = await writer.ExecuteConversationExclusiveAsync(Guid.NewGuid(),
             (dbContext, _) => Task.FromResult(dbContext.ContextId.InstanceId)).ConfigureAwait(false);
 
         AssertEx.NotNull(persistence);

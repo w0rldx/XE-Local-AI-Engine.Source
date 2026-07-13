@@ -44,8 +44,9 @@ public sealed class NodeChatTitleEncryptionBackfillService(
             {
                 stoppingToken.ThrowIfCancellationRequested();
 
-                // Read the first user-role message id + encrypted content blob so we can decrypt using the
-                // correct AAD (content AAD = conversationId + messageId + "content").
+                // Read the first user-role message id + content blob. DecryptMessageContent is read-both, so this
+                // recovers the plaintext whether the row is a legacy plaintext blob or an encrypted envelope
+                // (content AAD = conversationId + messageId + "content").
                 var row = await dbContext.Database
                                          .SqlQueryRaw<MessageIdAndContent>(
                                              "SELECT message_id AS MessageId, content AS Content FROM messages WHERE conversation_id = {0} AND role = 'user' ORDER BY sequence ASC LIMIT 1",
@@ -66,6 +67,8 @@ public sealed class NodeChatTitleEncryptionBackfillService(
                 }
                 catch (Exception ex)
                 {
+                    // Read-both means a plaintext row can no longer land here; a throw now indicates a genuinely
+                    // undecryptable envelope (e.g. ciphertext written under a previous node key). Skip that row only.
                     logger.LogWarning(
                         "NodeChatTitleEncryptionBackfillService: could not decrypt message content for conversation {ConversationId}; skipping (row likely encrypted under a previous node key). [{ErrorType}]",
                         conversationId,

@@ -226,30 +226,6 @@
 			"source": "backend"
 		},
 		{
-			"id": "backend:Microsoft.Agents.AI.DevUI@1.13.0-preview.260703.1",
-			"name": "Microsoft.Agents.AI.DevUI",
-			"version": "1.13.0-preview.260703.1",
-			"license": "MIT",
-			"homepageUrl": "https://learn.microsoft.com/agent-framework/",
-			"source": "backend"
-		},
-		{
-			"id": "backend:Microsoft.Agents.AI.Hosting@1.13.0-preview.260703.1",
-			"name": "Microsoft.Agents.AI.Hosting",
-			"version": "1.13.0-preview.260703.1",
-			"license": "MIT",
-			"homepageUrl": "https://learn.microsoft.com/agent-framework/",
-			"source": "backend"
-		},
-		{
-			"id": "backend:Microsoft.Agents.AI.Hosting.OpenAI@1.13.0-alpha.260703.1",
-			"name": "Microsoft.Agents.AI.Hosting.OpenAI",
-			"version": "1.13.0-alpha.260703.1",
-			"license": "MIT",
-			"homepageUrl": "https://learn.microsoft.com/agent-framework/",
-			"source": "backend"
-		},
-		{
 			"id": "backend:Microsoft.Agents.AI.Workflows@1.13.0",
 			"name": "Microsoft.Agents.AI.Workflows",
 			"version": "1.13.0",
@@ -391,6 +367,22 @@
 			"version": "10.7.0",
 			"license": "MIT",
 			"homepageUrl": "https://dot.net/",
+			"source": "backend"
+		},
+		{
+			"id": "backend:Microsoft.Identity.Client@4.85.2",
+			"name": "Microsoft.Identity.Client",
+			"version": "4.85.2",
+			"license": "MIT",
+			"homepageUrl": "https://go.microsoft.com/fwlink/?linkid=844761",
+			"source": "backend"
+		},
+		{
+			"id": "backend:Microsoft.Identity.Client.Extensions.Msal@4.85.2",
+			"name": "Microsoft.Identity.Client.Extensions.Msal",
+			"version": "4.85.2",
+			"license": "MIT",
+			"homepageUrl": "https://go.microsoft.com/fwlink/?linkid=844761",
 			"source": "backend"
 		},
 		{

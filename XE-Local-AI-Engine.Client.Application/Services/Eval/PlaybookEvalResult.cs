@@ -9,7 +9,11 @@ using System.Text.Json;
 ///     (<see cref="ActionVersionAtEval" /> ties the pass to the action's content snapshot — see the gate's staleness
 ///     check). Positional record so System.Text.Json binds JSON properties to the constructor parameters by name.
 ///     <see cref="GoldenCaseCount" /> is the number of cases actually evaluated; <see cref="GoldenCaseTotal" /> is the
-///     full enabled golden-set size BEFORE the per-run cap, so the operator can see when a run only evaluated a subset.
+///     full enabled golden-set size BEFORE the per-run cap, so the operator can see when a run only evaluated a subset
+///     (an INCOMPLETE run, <c>GoldenCaseCount &lt; GoldenCaseTotal</c>, which the promote gate refuses to authorize).
+///     <see cref="EvaluationFingerprint" /> is a stable hash of the behaviour-affecting inputs (base instructions,
+///     sibling enabled actions, golden set, model, evaluator version); the promote gate recomputes it and requires a
+///     match, so a context change after the eval blocks promotion even when the action's own version is unchanged.
 /// </summary>
 public sealed record PlaybookEvalResult(
     bool Passed,
@@ -22,7 +26,8 @@ public sealed record PlaybookEvalResult(
     int CandidatePassCount,
     int RegressedCaseCount,
     int ImprovedCaseCount,
-    IReadOnlyList<PlaybookEvalCaseResult> Cases)
+    IReadOnlyList<PlaybookEvalCaseResult> Cases,
+    string EvaluationFingerprint = "")
 {
     /// <summary>
     ///     Cached (de)serialization options for the persisted eval result (CA1869). Web defaults so the JSON keys are

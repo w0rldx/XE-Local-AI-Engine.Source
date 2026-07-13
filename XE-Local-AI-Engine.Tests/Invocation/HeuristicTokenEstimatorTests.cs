@@ -33,6 +33,24 @@ public sealed class HeuristicTokenEstimatorTests
     }
 
     [Test]
+    public void EstimateTokens_WeightsNonAsciiHigherThanAscii()
+    {
+        // chars/4 badly under-counts CJK/structured text (those tokenize to more tokens per char). Non-ASCII chars are
+        // weighted 2x, so 40 CJK chars estimate higher than 40 ASCII chars of the same length.
+        var estimator = new HeuristicTokenEstimator();
+        var asciiMessage = new ChatMessage(ChatRole.User, [new TextContent(new string('x', 40))]);
+        var cjkMessage = new ChatMessage(ChatRole.User, [new TextContent(new string('中', 40))]);
+
+        var asciiEstimate = estimator.EstimateTokens(asciiMessage);
+        var cjkEstimate = estimator.EstimateTokens(cjkMessage);
+
+        // ascii: 40/4 + 4 = 14; cjk: (40*2)/4 + 4 = 24.
+        AssertEx.Equal(expected: (40 / 4) + OverheadTokens, asciiEstimate);
+        AssertEx.Equal(expected: ((40 * 2) / 4) + OverheadTokens, cjkEstimate);
+        AssertEx.True(cjkEstimate > asciiEstimate, "non-ASCII content must estimate conservatively higher than ASCII of equal length");
+    }
+
+    [Test]
     public void EstimateTokens_ForList_SumsPerMessageEstimates()
     {
         var estimator = new HeuristicTokenEstimator();

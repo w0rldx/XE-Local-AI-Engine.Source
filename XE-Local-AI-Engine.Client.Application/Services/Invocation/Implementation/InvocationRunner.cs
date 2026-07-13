@@ -82,6 +82,7 @@ public sealed partial class InvocationRunner : IInvocationRunner
     private readonly int _maxResponseSizeBytes;
     private readonly IOrchestrationAgentFactory _orchestrationAgentFactory;
     private readonly ConcurrentDictionary<string, PendingToolCall> _pendingToolCalls = new(StringComparer.Ordinal);
+    private readonly ProviderCallBudgetOptions _providerCallBudgetOptions;
     private readonly IProviderStreamResilience _providerStreamResilience;
     private readonly ILocalModelProviderResolver _providerResolver;
     private readonly ProviderResilienceOptions _resilienceOptions;
@@ -116,6 +117,7 @@ public sealed partial class InvocationRunner : IInvocationRunner
         IOptions<ConversationContextBudgetOptions> contextBudgetOptions,
         IOptions<ProviderResilienceOptions> resilienceOptions,
         IOptions<AgentToolPipelineOptions> toolPipelineOptions,
+        IOptions<ProviderCallBudgetOptions> providerCallBudgetOptions,
         IConfiguration configuration,
         INodeRuntimeSettings runtimeSettings,
         IOptions<SpawnOptions> spawnOptions,
@@ -138,6 +140,8 @@ public sealed partial class InvocationRunner : IInvocationRunner
         _resilienceOptions = resilienceOptions.Value;
         ArgumentNullException.ThrowIfNull(toolPipelineOptions);
         _toolPipelineOptions = toolPipelineOptions.Value;
+        ArgumentNullException.ThrowIfNull(providerCallBudgetOptions);
+        _providerCallBudgetOptions = providerCallBudgetOptions.Value;
         ArgumentNullException.ThrowIfNull(configuration);
         ArgumentNullException.ThrowIfNull(runtimeSettings);
         ArgumentNullException.ThrowIfNull(spawnOptions);
@@ -221,6 +225,12 @@ public sealed partial class InvocationRunner : IInvocationRunner
             // this conversation's uploaded attachments into the sandbox. Like the spawn context it flows as an
             // AsyncLocal through the function-invocation pipeline; disposal restores the prior ambient value.
             using var conversationScope = AgentRunConversationContext.BeginScope(package.ConversationId);
+
+            // Seed the per-invocation provider-budget scope (HIGH-005) into the same root tool-loop flow. The innermost
+            // pipeline hop reads it as an AsyncLocal to re-budget every inner tool-loop round and MAF participant round
+            // and to enforce the cumulative provider-call ceilings; disposal restores the prior ambient value. A turn
+            // that never loops pays only one pass-through budget check.
+            using var providerBudgetScope = ProviderCallBudget.BeginScope(_providerCallBudgetOptions);
 
             // Branch: a package carrying a compiled orchestration spec drives the handoff workflow; everything else is
             // the unchanged single-agent loop. Both accumulate into `stream`, then share the completion block below.

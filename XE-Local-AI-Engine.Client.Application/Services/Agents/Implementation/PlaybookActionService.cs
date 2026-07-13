@@ -9,10 +9,14 @@ using XE_Local_AI_Engine.Client.Services.Eval;
 internal sealed class PlaybookActionService(
     IPlaybookActionStore store,
     IAgentDefinitionStore agentDefinitionStore,
-    IOptions<PlaybookActionOptions> actionOptions) : IPlaybookActionService
+    IGoldenConversationStore goldenConversationStore,
+    IOptions<PlaybookActionOptions> actionOptions,
+    IOptions<PlaybookEvalOptions> evalOptions) : IPlaybookActionService
 {
     private readonly PlaybookActionOptions _actionOptions = (actionOptions ?? throw new ArgumentNullException(nameof(actionOptions))).Value;
     private readonly IAgentDefinitionStore _agentDefinitionStore = agentDefinitionStore ?? throw new ArgumentNullException(nameof(agentDefinitionStore));
+    private readonly PlaybookEvalOptions _evalOptions = (evalOptions ?? throw new ArgumentNullException(nameof(evalOptions))).Value;
+    private readonly IGoldenConversationStore _goldenConversationStore = goldenConversationStore ?? throw new ArgumentNullException(nameof(goldenConversationStore));
     private readonly IPlaybookActionStore _store = store ?? throw new ArgumentNullException(nameof(store));
 
     public async Task<PlaybookActionRecord> CreateAsync(PlaybookActionInput input, CancellationToken cancellationToken = default)
@@ -166,25 +170,58 @@ internal sealed class PlaybookActionService(
             return new PlaybookPromotionResult(PlaybookPromotionStatus.EvalStale, Record: null);
         }
 
+        // Completeness: a run that evaluated only a subset of the enabled golden cases (the per-run cap truncated the
+        // set) cannot prove no-regression across the whole suite, so a subset pass never authorizes promotion.
+        if (evalResult.GoldenCaseCount < evalResult.GoldenCaseTotal)
+        {
+            return new PlaybookPromotionResult(PlaybookPromotionStatus.EvalIncomplete, Record: null);
+        }
+
+        // Fingerprint: the recorded eval must reflect the CURRENT behaviour-affecting context. Recompute the fingerprint
+        // over the agent's base instructions, sibling enabled actions, the enabled golden set, and the eval model, and
+        // require it to match — so a base-instruction / golden-set / sibling-action / model change after the eval ran
+        // (which does not bump the action's own version) blocks the promote. A legacy result with no recorded
+        // fingerprint fails this match and is treated as stale (re-run), which is the safe direction.
+        var owningAgent = await _agentDefinitionStore.GetByIdAsync(agentDefinitionId, cancellationToken).ConfigureAwait(false);
+        if (owningAgent is null)
+        {
+            return new PlaybookPromotionResult(PlaybookPromotionStatus.NotFound, Record: null);
+        }
+
+        var enabledActions = await _store.ListEnabledByAgentAsync(agentDefinitionId, cancellationToken).ConfigureAwait(false);
+        var enabledGoldenCases = await _goldenConversationStore.ListEnabledByAgentAsync(agentDefinitionId, cancellationToken).ConfigureAwait(false);
+        var currentFingerprint = PlaybookEvalFingerprint.Compute(pending.Id,
+            pending.Version,
+            owningAgent.Instructions,
+            enabledActions,
+            enabledGoldenCases,
+            _evalOptions.ModelName);
+        if (!string.Equals(currentFingerprint, evalResult.EvaluationFingerprint, StringComparison.Ordinal))
+        {
+            return new PlaybookPromotionResult(PlaybookPromotionStatus.EvalStale, Record: null);
+        }
+
         if (!evalResult.Passed)
         {
             return new PlaybookPromotionResult(PlaybookPromotionStatus.EvalRegressed, Record: null);
         }
 
-        // Hard cap on enabled actions: the eval may pass, but if the agent is already at MaxEnabledActions the
-        // promote is blocked with no store write — the operator archives/disables an Enabled action first. The pending
-        // suggestion is not yet Enabled, so the count needs no exclusion here.
-        var enabledCount = await CountEnabledAsync(agentDefinitionId, cancellationToken).ConfigureAwait(false);
-        if (enabledCount >= _actionOptions.MaxEnabledActions)
+        // Atomic promote under optimistic-concurrency + cap guards. The validated snapshot's Version is threaded so the
+        // Enabled write lands only if no concurrent edit/promote changed the row since it was read for the eval gate
+        // above — closing the TOCTOU where a concurrent UpdateSuggestedAsync (which bumps Version and clears the eval)
+        // could otherwise be promoted on stale evidence. The hard cap on enabled actions is re-checked inside the same
+        // store transaction, so two concurrent promotes cannot both exceed MaxEnabledActions. Version bumps because
+        // State changes; the EvalResult is carried through for audit.
+        var commit = await _store.PromoteSuggestedIfCurrentAsync(id, pending.Version, _actionOptions.MaxEnabledActions, pending.EvalResult, cancellationToken).ConfigureAwait(false);
+        return commit.Status switch
         {
-            return new PlaybookPromotionResult(PlaybookPromotionStatus.CapReached, Record: null);
-        }
-
-        // Version bumps because State changes; carry the EvalResult through the transition for audit.
-        var promoted = await TransitionSuggestedAsync(agentDefinitionId, id, PlaybookActionState.Enabled, pending.EvalResult, cancellationToken).ConfigureAwait(false);
-        return promoted is null
-            ? new PlaybookPromotionResult(PlaybookPromotionStatus.NotFound, Record: null)
-            : new PlaybookPromotionResult(PlaybookPromotionStatus.Promoted, promoted);
+            PlaybookPromotionCommitStatus.Committed => new PlaybookPromotionResult(PlaybookPromotionStatus.Promoted, commit.Record),
+            PlaybookPromotionCommitStatus.CapReached => new PlaybookPromotionResult(PlaybookPromotionStatus.CapReached, Record: null),
+            // A version/state mismatch means a concurrent edit/promote changed the row after the eval evidence was
+            // validated; surface the existing stale-eval conflict so the operator re-runs the eval on the current snapshot.
+            PlaybookPromotionCommitStatus.VersionConflict => new PlaybookPromotionResult(PlaybookPromotionStatus.EvalStale, Record: null),
+            _ => new PlaybookPromotionResult(PlaybookPromotionStatus.NotFound, Record: null)
+        };
     }
 
     public async Task<PlaybookActionRecord?> RecordEvalResultAsync(Guid agentDefinitionId, Guid id, string evalResultJson, CancellationToken cancellationToken = default)
@@ -323,12 +360,6 @@ internal sealed class PlaybookActionService(
             throw new PlaybookActionValidationException(
                 $"This agent already has the maximum of {_actionOptions.MaxEnabledActions} enabled playbook actions; archive or disable one before enabling another.");
         }
-    }
-
-    private async Task<int> CountEnabledAsync(Guid agentDefinitionId, CancellationToken cancellationToken)
-    {
-        var enabled = await _store.ListEnabledByAgentAsync(agentDefinitionId, cancellationToken).ConfigureAwait(false);
-        return enabled.Count;
     }
 
     private async Task ValidateAsync(PlaybookActionInput input, CancellationToken cancellationToken)

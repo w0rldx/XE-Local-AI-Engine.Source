@@ -264,6 +264,14 @@ public static class ConfigureServices
 
         builder.Services.AddHostedService<HeartbeatBackgroundService>();
         builder.Services.AddHostedService<AutoConnectBackgroundService>();
+        // Chat retention is disabled by default (ChatRetentionOptions.Enabled = false): it permanently deletes user
+        // chat history, so it must be explicitly opted into via the ChatRetention config section. Validated on start so
+        // a bad window (RetentionDays <= 0 sets the sweep cutoff at/after "now" and would purge everything) fails fast
+        // instead of silently deleting all conversations the moment retention is enabled.
+        builder.Services.AddOptions<ChatRetentionOptions>()
+               .Bind(builder.Configuration.GetSection(ChatRetentionOptions.Section))
+               .ValidateDataAnnotations()
+               .ValidateOnStart();
         builder.Services.AddHostedService<RetentionSweeperService>();
         builder.Services.AddHostedService<SchedulerHistoryRetentionService>();
         // Ages out the append-only agent_execution_logs telemetry (adaptive-memory diagnostics) so it cannot grow
@@ -286,6 +294,11 @@ public static class ConfigureServices
         // Default Assistant seeder above.
         builder.Services.AddHostedService<CoderAgentSeeder>();
         builder.Services.AddHostedService<ToolCallCleanupService>();
+        // Encrypts any legacy plaintext message rows (content + metadata_json written before content encryption
+        // shipped) into the read-both at-rest envelope. Batched, transactional, resumable, and idempotent — a
+        // re-run over an already-encrypted table is a no-op. Registered before the title backfill so titles are
+        // re-derived from rows that are already migrated when possible (both are read-both, so order is not required).
+        builder.Services.AddHostedService<NodeChatContentEncryptionBackfillService>();
         // Re-derives and re-encrypts conversation titles that were NULLed by the EncryptConversationTitle migration
         // (migrations cannot access the node key; this service runs once per startup and is idempotent).
         builder.Services.AddHostedService<NodeChatTitleEncryptionBackfillService>();

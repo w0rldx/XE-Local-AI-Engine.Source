@@ -177,9 +177,11 @@ public sealed class PlaybookMonitorStoreTests : IDisposable
     private static async Task InsertMessageAsync(DbConnection connection, Guid messageId, Guid conversationId, long createdAtUtc)
     {
         await using var command = connection.CreateCommand();
+        // Allocate the next per-conversation sequence rather than a hardcoded 0, so seeding multiple messages in one
+        // conversation does not collide on the unique (conversation_id, sequence) index.
         command.CommandText = """
                               INSERT INTO messages (message_id, conversation_id, sequence, role, content, created_at_utc, updated_at_utc)
-                              VALUES ($message_id, $conversation_id, 0, 'assistant', 'answer', $created_at_utc, $created_at_utc);
+                              VALUES ($message_id, $conversation_id, (SELECT COALESCE(MAX(sequence), -1) + 1 FROM messages WHERE conversation_id = $conversation_id), 'assistant', 'answer', $created_at_utc, $created_at_utc);
                               """;
         AddParameter(command, "$message_id", messageId);
         AddParameter(command, "$conversation_id", conversationId);

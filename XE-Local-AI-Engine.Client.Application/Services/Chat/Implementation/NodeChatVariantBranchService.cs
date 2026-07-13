@@ -1,6 +1,7 @@
 namespace XE_Local_AI_Engine.Client.Services.Chat.Implementation;
 
 using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.Storage;
 using static NodeChatMetadataSerializer;
 using static NodeChatPersistenceSql;
 
@@ -56,10 +57,18 @@ internal sealed class NodeChatVariantBranchService(NodeChatPersistenceWriter wri
                      .ToArray();
         var branchedConversationId = Guid.NewGuid();
 
-        return await _writer.ExecuteAsync(NodeChatPersistenceWriteKey.ForConversation(branchedConversationId),
+        return await _writer.ExecuteConversationExclusiveAsync(branchedConversationId,
             async (dbContext, token) =>
             {
+                // One transaction around the whole branch (conversation insert + every message copy): the copies are
+                // separate INSERT statements, so without this a cancellation/failure mid-loop would autocommit the
+                // conversation row plus a prefix of its messages, leaving a visible half-copied branch. Mirrors
+                // CreateMessageVariantAsync's transactional insert.
+                await using var transaction = await dbContext.Database.BeginTransactionAsync(token).ConfigureAwait(false);
+                var dbTransaction = transaction.GetDbTransaction();
+
                 await using var conversationCommand = dbContext.Database.GetDbConnection().CreateCommand();
+                conversationCommand.Transaction = dbTransaction;
                 conversationCommand.CommandText = """
                                                   INSERT INTO conversations (conversation_id, title, user_id, created_at_utc, last_seen_utc, purged, origin, is_pinned, archived, branch_of_conversation_id)
                                                   VALUES ($conversation_id, $title, $user_id, $created_at_utc, $last_seen_utc, 0, $origin, 0, 0, $branch_of_conversation_id);
@@ -78,18 +87,26 @@ internal sealed class NodeChatVariantBranchService(NodeChatPersistenceWriter wri
                 foreach (var message in copies)
                 {
                     await using var messageCommand = dbContext.Database.GetDbConnection().CreateCommand();
+                    messageCommand.Transaction = dbTransaction;
                     messageCommand.CommandText = """
                                                  INSERT INTO messages (message_id, conversation_id, sequence, role, content, metadata_json, created_at_utc, updated_at_utc, status, request_id, error, origin, parent_message_id, variant_group_id)
                                                  VALUES ($message_id, $conversation_id, $sequence, $role, $content, $metadata_json, $created_at_utc, $updated_at_utc, $status, $request_id, $error, $origin, $parent_message_id, $variant_group_id);
                                                  """;
-                    AddParameter(messageCommand, "$message_id", Guid.NewGuid());
+                    // A branch copy is a new row with a fresh message id, so its content/metadata envelope AAD binds the
+                    // new (branchedConversationId, copyMessageId) pair. message.Content arrives already decrypted from
+                    // the read model, so it is re-encrypted here under the copy's identity.
+                    var copyMessageId = Guid.NewGuid();
+                    AddParameter(messageCommand, "$message_id", copyMessageId);
                     AddParameter(messageCommand, "$conversation_id", branchedConversationId);
                     AddParameter(messageCommand, "$sequence", message.Sequence);
                     AddParameter(messageCommand, "$role", message.Role);
-                    AddParameter(messageCommand, "$content", Encode(message.Content));
+                    AddParameter(messageCommand, "$content", dbContext.EncryptMessageContent(message.Content, branchedConversationId, copyMessageId));
                     AddParameter(messageCommand, "$metadata_json",
-                        SerializeMetadata(message.MetadataJson, message.Reasoning, message.Model, message.InputCount, message.OutputCount, message.TotalCount, message.ReasoningCount, message.Parts,
-                            message.AgentDefinitionId, message.AgentName, message.ReasoningEffort));
+                        dbContext.EncryptMessageMetadata(
+                            SerializeMetadata(message.MetadataJson, message.Reasoning, message.Model, message.InputCount, message.OutputCount, message.TotalCount, message.ReasoningCount,
+                                message.Parts, message.AgentDefinitionId, message.AgentName, message.ReasoningEffort),
+                            branchedConversationId,
+                            copyMessageId));
                     AddParameter(messageCommand, "$created_at_utc", message.CreatedAtUtc);
                     AddParameter(messageCommand, "$updated_at_utc", message.UpdatedAtUtc);
                     AddParameter(messageCommand, "$status", message.Status);
@@ -103,6 +120,7 @@ internal sealed class NodeChatVariantBranchService(NodeChatPersistenceWriter wri
                     await messageCommand.ExecuteNonQueryAsync(token).ConfigureAwait(false);
                 }
 
+                await transaction.CommitAsync(token).ConfigureAwait(false);
                 return new NodeChatBranchResultDto(request.ConversationId, branchedConversationId, copies.Length);
             },
             cancellationToken).ConfigureAwait(false);
@@ -116,9 +134,13 @@ internal sealed class NodeChatVariantBranchService(NodeChatPersistenceWriter wri
             throw new ArgumentException("Variant messages require non-empty message and request ids.", nameof(request));
         }
 
-        return await _writer.ExecuteAsync(NodeChatPersistenceWriteKey.ForMessage(request.ConversationId, request.NewMessageId),
+        // Conversation-exclusive: minting a sibling variant allocates a new sequence, so it must serialize with every
+        // other allocate/delete on the conversation exactly like the send placeholder insert.
+        return await _writer.ExecuteConversationExclusiveAsync(request.ConversationId,
             async (dbContext, token) =>
             {
+                // Read the original outside the write transaction (a raw read command cannot run under a Sqlite pending
+                // transaction). The conversation-exclusive lock guarantees the row cannot change before the insert below.
                 var original = await ReadMessageAsync(dbContext, request.ConversationId, request.OriginalMessageId, token).ConfigureAwait(false);
                 if (original is null)
                 {
@@ -127,77 +149,98 @@ internal sealed class NodeChatVariantBranchService(NodeChatPersistenceWriter wri
 
                 // The whole turn shares a variant group; mint one and back-stamp the original when it has none.
                 var variantGroupId = original.VariantGroupId ?? Guid.NewGuid();
-                if (original.VariantGroupId is null)
-                {
-                    await using var stampCommand = dbContext.Database.GetDbConnection().CreateCommand();
-                    stampCommand.CommandText = "UPDATE messages SET variant_group_id = $variant_group_id WHERE conversation_id = $conversation_id AND message_id = $message_id;";
-                    AddParameter(stampCommand, "$variant_group_id", variantGroupId);
-                    AddParameter(stampCommand, "$conversation_id", request.ConversationId);
-                    AddParameter(stampCommand, "$message_id", request.OriginalMessageId);
-                    await OpenIfNeededAsync(stampCommand.Connection, token).ConfigureAwait(false);
-                    await stampCommand.ExecuteNonQueryAsync(token).ConfigureAwait(false);
-                }
-
-                // The new sibling variant is an assistant placeholder: same parent (the user turn), shared group. The
-                // per-response agent attribution is stamped at mint time so the pending variant already carries the
-                // agent name (symmetric with the send placeholder).
-                var sequence = await NextSequenceAsync(dbContext, request.ConversationId, token).ConfigureAwait(false);
-                var metadata = SerializeMetadata(request.MetadataJson, reasoning: null, request.Model, inputTokens: null, outputTokens: null, totalTokens: null, reasoningTokens: null, parts: null,
-                    request.AgentDefinitionId, request.AgentName, request.ReasoningEffort);
-
-                await using var insertCommand = dbContext.Database.GetDbConnection().CreateCommand();
-                insertCommand.CommandText = """
-                                            INSERT INTO messages (message_id, conversation_id, sequence, role, content, metadata_json, created_at_utc, updated_at_utc, status, request_id, error, origin, parent_message_id, variant_group_id, agent_definition_id)
-                                            VALUES ($message_id, $conversation_id, $sequence, $role, '', $metadata_json, $created_at_utc, $updated_at_utc, $status, $request_id, NULL, $origin, $parent_message_id, $variant_group_id, $agent_definition_id);
-                                            """;
-                AddParameter(insertCommand, "$message_id", request.NewMessageId);
-                AddParameter(insertCommand, "$conversation_id", request.ConversationId);
-                AddParameter(insertCommand, "$sequence", sequence);
-                AddParameter(insertCommand, "$role", AssistantRole);
-                AddParameter(insertCommand, "$metadata_json", metadata);
-                AddParameter(insertCommand, "$created_at_utc", request.CreatedAtUtc);
-                AddParameter(insertCommand, "$updated_at_utc", request.CreatedAtUtc);
-                AddParameter(insertCommand, "$status", NodeChatMessageStatusValues.Pending);
-                AddParameter(insertCommand, "$request_id", request.RequestId);
-                AddParameter(insertCommand, "$origin", NodeChatOriginValues.Local);
-                AddParameter(insertCommand, "$parent_message_id", request.OriginalMessageId);
-                AddParameter(insertCommand, "$variant_group_id", variantGroupId);
-                // Plaintext per-message agent attribution (regenerate + branch siblings): mirrors the send-placeholder
-                // insert so per-variant feedback aggregates by the resolved agent without decrypting metadata.
-                AddParameter(insertCommand, "$agent_definition_id", request.AgentDefinitionId);
-                await OpenIfNeededAsync(insertCommand.Connection, token).ConfigureAwait(false);
-                await insertCommand.ExecuteNonQueryAsync(token).ConfigureAwait(false);
-
-                await TouchConversationAsync(dbContext, request.ConversationId, request.CreatedAtUtc, token).ConfigureAwait(false);
-
-                var variant = new NodeChatPersistedMessageDto(request.NewMessageId,
+                var stampOriginal = original.VariantGroupId is null;
+                var metadata = dbContext.EncryptMessageMetadata(
+                    SerializeMetadata(request.MetadataJson, reasoning: null, request.Model, inputTokens: null, outputTokens: null, totalTokens: null, reasoningTokens: null, parts: null,
+                        request.AgentDefinitionId, request.AgentName, request.ReasoningEffort),
                     request.ConversationId,
-                    request.RequestId,
-                    sequence,
-                    AssistantRole,
-                    string.Empty,
-                    Reasoning: null,
-                    NodeChatMessageStatusValues.Pending,
-                    request.CreatedAtUtc,
-                    request.CreatedAtUtc,
-                    request.Model,
-                    Error: null,
-                    request.MetadataJson,
-                    Origin: NodeChatOriginValues.Local,
-                    ParentMessageId: request.OriginalMessageId,
-                    VariantGroupId: variantGroupId,
-                    AgentDefinitionId: request.AgentDefinitionId,
-                    AgentName: request.AgentName,
-                    ReasoningEffort: request.ReasoningEffort);
+                    request.NewMessageId);
 
-                return new NodeChatMessageVariantDto(variantGroupId, request.OriginalMessageId, variant);
+                var attempt = 0;
+                while (true)
+                {
+                    attempt++;
+                    await using var transaction = await dbContext.Database.BeginTransactionAsync(token).ConfigureAwait(false);
+                    var dbTransaction = transaction.GetDbTransaction();
+                    var sequence = await NextSequenceAsync(dbContext, request.ConversationId, dbTransaction, token).ConfigureAwait(false);
+                    try
+                    {
+                        if (stampOriginal)
+                        {
+                            await using var stampCommand = dbContext.Database.GetDbConnection().CreateCommand();
+                            stampCommand.Transaction = dbTransaction;
+                            stampCommand.CommandText = "UPDATE messages SET variant_group_id = $variant_group_id WHERE conversation_id = $conversation_id AND message_id = $message_id;";
+                            AddParameter(stampCommand, "$variant_group_id", variantGroupId);
+                            AddParameter(stampCommand, "$conversation_id", request.ConversationId);
+                            AddParameter(stampCommand, "$message_id", request.OriginalMessageId);
+                            await OpenIfNeededAsync(stampCommand.Connection, token).ConfigureAwait(false);
+                            await stampCommand.ExecuteNonQueryAsync(token).ConfigureAwait(false);
+                        }
+
+                        // The new sibling variant is an assistant placeholder: same parent (the user turn), shared group.
+                        // The per-response agent attribution is stamped at mint time so the pending variant already
+                        // carries the agent name (symmetric with the send placeholder).
+                        await using var insertCommand = dbContext.Database.GetDbConnection().CreateCommand();
+                        insertCommand.Transaction = dbTransaction;
+                        insertCommand.CommandText = """
+                                                    INSERT INTO messages (message_id, conversation_id, sequence, role, content, metadata_json, created_at_utc, updated_at_utc, status, request_id, error, origin, parent_message_id, variant_group_id, agent_definition_id)
+                                                    VALUES ($message_id, $conversation_id, $sequence, $role, '', $metadata_json, $created_at_utc, $updated_at_utc, $status, $request_id, NULL, $origin, $parent_message_id, $variant_group_id, $agent_definition_id);
+                                                    """;
+                        AddParameter(insertCommand, "$message_id", request.NewMessageId);
+                        AddParameter(insertCommand, "$conversation_id", request.ConversationId);
+                        AddParameter(insertCommand, "$sequence", sequence);
+                        AddParameter(insertCommand, "$role", AssistantRole);
+                        AddParameter(insertCommand, "$metadata_json", metadata);
+                        AddParameter(insertCommand, "$created_at_utc", request.CreatedAtUtc);
+                        AddParameter(insertCommand, "$updated_at_utc", request.CreatedAtUtc);
+                        AddParameter(insertCommand, "$status", NodeChatMessageStatusValues.Pending);
+                        AddParameter(insertCommand, "$request_id", request.RequestId);
+                        AddParameter(insertCommand, "$origin", NodeChatOriginValues.Local);
+                        AddParameter(insertCommand, "$parent_message_id", request.OriginalMessageId);
+                        AddParameter(insertCommand, "$variant_group_id", variantGroupId);
+                        // Plaintext per-message agent attribution (regenerate + branch siblings): mirrors the send-placeholder
+                        // insert so per-variant feedback aggregates by the resolved agent without decrypting metadata.
+                        AddParameter(insertCommand, "$agent_definition_id", request.AgentDefinitionId);
+                        await OpenIfNeededAsync(insertCommand.Connection, token).ConfigureAwait(false);
+                        await insertCommand.ExecuteNonQueryAsync(token).ConfigureAwait(false);
+
+                        await TouchConversationAsync(dbContext, request.ConversationId, request.CreatedAtUtc, token).ConfigureAwait(false);
+                        await transaction.CommitAsync(token).ConfigureAwait(false);
+
+                        var variant = new NodeChatPersistedMessageDto(request.NewMessageId,
+                            request.ConversationId,
+                            request.RequestId,
+                            sequence,
+                            AssistantRole,
+                            string.Empty,
+                            Reasoning: null,
+                            NodeChatMessageStatusValues.Pending,
+                            request.CreatedAtUtc,
+                            request.CreatedAtUtc,
+                            request.Model,
+                            Error: null,
+                            request.MetadataJson,
+                            Origin: NodeChatOriginValues.Local,
+                            ParentMessageId: request.OriginalMessageId,
+                            VariantGroupId: variantGroupId,
+                            AgentDefinitionId: request.AgentDefinitionId,
+                            AgentName: request.AgentName,
+                            ReasoningEffort: request.ReasoningEffort);
+
+                        return new NodeChatMessageVariantDto(variantGroupId, request.OriginalMessageId, variant);
+                    }
+                    catch (Exception exception) when (IsUniqueConstraintViolation(exception) && attempt < MaxSequenceAllocationAttempts)
+                    {
+                        await transaction.RollbackAsync(token).ConfigureAwait(false);
+                    }
+                }
             },
             cancellationToken).ConfigureAwait(false);
     }
 
     public async Task<IReadOnlyList<NodeChatPersistedMessageDto>> ListMessageVariantsAsync(Guid conversationId, Guid messageId, CancellationToken cancellationToken = default)
     {
-        return await _writer.ExecuteAsync(NodeChatPersistenceWriteKey.ForConversation(conversationId),
+        return await _writer.ExecuteConversationSharedAsync(conversationId,
             async (dbContext, token) =>
             {
                 var messages = await ReadMessagesAsync(dbContext, conversationId, token).ConfigureAwait(false);

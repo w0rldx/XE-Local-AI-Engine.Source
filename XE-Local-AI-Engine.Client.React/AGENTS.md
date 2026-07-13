@@ -8,7 +8,7 @@ Before implementation work:
 
 1. Load `.opencode/context/navigation.md`.
 2. For coding tasks, load:
-   - `.opencode/context/project-intelligence/technical-domain.md`
+   - `.opencode/context/project-intelligence/technical-domain/navigation.md`
    - `.opencode/context/project-intelligence/validation-matrix.md`
    - `.opencode/context/core/standards/code.md`
    - relevant stack standards from `.opencode/context/core/standards/`

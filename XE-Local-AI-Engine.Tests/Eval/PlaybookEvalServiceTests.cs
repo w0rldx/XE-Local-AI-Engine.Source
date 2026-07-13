@@ -161,12 +161,13 @@ public sealed class PlaybookEvalServiceTests
     }
 
     [Test]
-    public async Task RunEvalAsync_WhenGoldenSetExceedsCap_RecordsTotalBeforeTruncation()
+    public async Task RunEvalAsync_WhenGoldenSetExceedsCap_RecordsTotalBeforeTruncationAndMarksIncomplete()
     {
         var agentId = Guid.NewGuid();
         var actionId = Guid.NewGuid();
 
-        // Seed more golden cases than the per-run cap; the run evaluates the cap but records the full enabled total.
+        // Seed more golden cases than the per-run cap; the run evaluates the cap but records the full enabled total, so
+        // the result is INCOMPLETE (GoldenCaseCount < GoldenCaseTotal) — which the promote gate refuses to authorize.
         var goldenCases = Enumerable.Range(start: 0, count: 5).Select(_ => JudgeCase(agentId)).ToList();
         var service = CreateService(agentId, actionId, goldenCases, new FakePlaybookEvalJudge((_, _) => true), out _, out _, maxGoldenCases: 3);
 
@@ -174,6 +175,8 @@ public sealed class PlaybookEvalServiceTests
 
         AssertEx.Equal(expected: 3, outcome.Result!.GoldenCaseCount);
         AssertEx.Equal(expected: 5, outcome.Result.GoldenCaseTotal);
+        AssertEx.True(outcome.Result.GoldenCaseCount < outcome.Result.GoldenCaseTotal, "a truncated run must be incomplete");
+        AssertEx.NotNullOrEmpty(outcome.Result.EvaluationFingerprint, "the run must record a fingerprint of its behaviour-affecting inputs");
     }
 
     [Test]

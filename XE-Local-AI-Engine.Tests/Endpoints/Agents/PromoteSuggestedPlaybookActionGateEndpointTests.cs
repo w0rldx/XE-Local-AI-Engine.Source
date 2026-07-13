@@ -4,6 +4,7 @@ using System.Net;
 using System.Net.Http.Json;
 using System.Text.Json;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Options;
 using XE_Local_AI_Engine.Client.Persistence;
 using XE_Local_AI_Engine.Client.Persistence.Stores;
 using XE_Local_AI_Engine.Client.Services.Agents;
@@ -190,21 +191,32 @@ public sealed class PromoteSuggestedPlaybookActionGateEndpointTests
     private static async Task RecordPassingEvalAsync(TestingWebAppFactory factory, Guid agentDefinitionId, Guid actionId)
     {
         using var scope = factory.Services.CreateScope();
-        var service = scope.ServiceProvider.GetRequiredService<IPlaybookActionService>();
+        var serviceProvider = scope.ServiceProvider;
+        var service = serviceProvider.GetRequiredService<IPlaybookActionService>();
         var current = AssertEx.NotNull(await service.GetByIdAsync(actionId).ConfigureAwait(false));
+
+        // The eval gate recomputes the fingerprint over the current behaviour-affecting context, so a fabricated
+        // passing eval must carry a matching fingerprint (computed from the SAME services/model the gate reads) to reach
+        // the cap check rather than being blocked as stale.
+        var agent = AssertEx.NotNull(await serviceProvider.GetRequiredService<IAgentDefinitionStore>().GetByIdAsync(agentDefinitionId).ConfigureAwait(false));
+        var enabledActions = await serviceProvider.GetRequiredService<IPlaybookActionStore>().ListEnabledByAgentAsync(agentDefinitionId).ConfigureAwait(false);
+        var enabledGolden = await serviceProvider.GetRequiredService<IGoldenConversationStore>().ListEnabledByAgentAsync(agentDefinitionId).ConfigureAwait(false);
+        var modelName = serviceProvider.GetRequiredService<IOptions<PlaybookEvalOptions>>().Value.ModelName;
+        var fingerprint = PlaybookEvalFingerprint.Compute(current.Id, current.Version, agent.Instructions, enabledActions, enabledGolden, modelName);
 
         // A passing eval pinned to the action's current Version so the eval gate lets the promote through to the cap check.
         var eval = new PlaybookEvalResult(Passed: true,
             EvaluatedAtUtc: 1_000,
             current.Version,
-            "test-model",
+            modelName,
             GoldenCaseCount: 1,
             GoldenCaseTotal: 1,
             BaselinePassCount: 1,
             CandidatePassCount: 1,
             RegressedCaseCount: 0,
             ImprovedCaseCount: 0,
-            []);
+            [],
+            fingerprint);
         var json = JsonSerializer.Serialize(eval, PlaybookEvalResult.SerializerOptions);
         _ = AssertEx.NotNull(await service.RecordEvalResultAsync(agentDefinitionId, actionId, json).ConfigureAwait(false));
     }

@@ -57,6 +57,44 @@ public sealed class OrchestrationTopologyTests
     }
 
     [Test]
+    public void TryParse_WhenMaxTurnsPerAgentExceedsCeiling_ReturnsNull()
+    {
+        // Fail-closed cap (MED-004): an over-ceiling per-agent turn count fans an agent out into an arbitrarily long
+        // autonomous loop per turn, so any API path (including direct CRUD) is rejected server-side.
+        var triage = Guid.NewGuid();
+        var specialist = Guid.NewGuid();
+        var topology = new OrchestrationTopology
+        {
+            Version = 1,
+            TriageAgentDefinitionId = triage,
+            ParticipantAgentDefinitionIds = [triage, specialist],
+            MaxTurnsPerAgent = OrchestrationTopologyJson.MaxTurnsPerAgentCeiling + 1
+        };
+
+        AssertEx.True(OrchestrationTopologyJson.TryParse(OrchestrationTopologyJson.Serialize(topology)) is null,
+            "A per-agent turn cap over the ceiling must parse to null (fail-closed).");
+    }
+
+    [Test]
+    public void TryParse_WhenMaxTurnsPerAgentAtCeiling_Parses()
+    {
+        var triage = Guid.NewGuid();
+        var specialist = Guid.NewGuid();
+        var topology = new OrchestrationTopology
+        {
+            Version = 1,
+            TriageAgentDefinitionId = triage,
+            ParticipantAgentDefinitionIds = [triage, specialist],
+            MaxTurnsPerAgent = OrchestrationTopologyJson.MaxTurnsPerAgentCeiling
+        };
+
+        var parsed = OrchestrationTopologyJson.TryParse(OrchestrationTopologyJson.Serialize(topology));
+
+        AssertEx.NotNull(parsed);
+        AssertEx.Equal(OrchestrationTopologyJson.MaxTurnsPerAgentCeiling, parsed!.MaxTurnsPerAgent);
+    }
+
+    [Test]
     public void TryParse_WhenHandoffsExceedCap_ReturnsNull()
     {
         var triage = Guid.NewGuid();

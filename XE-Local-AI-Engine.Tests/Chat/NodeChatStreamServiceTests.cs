@@ -977,6 +977,79 @@ public sealed class NodeChatStreamServiceTests
     }
 
     [Test]
+    public async Task SendMessageAsync_WhenClientDisconnectsBeforeRunOwnership_TerminalizesAssistantAsInterrupted()
+    {
+        // MED-003: a disconnect AFTER the assistant row is persisted (Pending/Queued) but BEFORE the pump + runner take
+        // ownership must terminalize the row (Interrupted) rather than leave it dangling until the restart reaper.
+        var conversationId = Guid.NewGuid();
+        var assistantMessageId = Guid.NewGuid();
+        var requestId = Guid.NewGuid();
+        var terminalRequest = default(NodeChatTerminalizeMessageRequest);
+        var persistence = CreatePersistence(conversationId, assistantMessageId, requestId, request => terminalRequest = request);
+        var dispatcher = new RecordingWorkerEventDispatcher();
+        var runner = new CompletingInvocationRunner(dispatcher);
+
+        // Block the pre-ownership GetEnableToolsAsync until the client disconnects, so the teardown lands squarely in the
+        // pre-ownership window (before the run/pump tasks are created).
+        var enableToolsGate = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
+        var runtimeSettings = Substitute.For<INodeRuntimeSettings>();
+        runtimeSettings.GetEnableToolsAsync(Arg.Any<CancellationToken>()).Returns(enableToolsGate.Task);
+
+        var service = new NodeChatStreamService(persistence,
+            new ChatInvocationStatePump(new NodeChatInvocationPump(persistence, TimeProvider.System), TimeProvider.System),
+            new ChatTurnResolver(CreateAgentDefinitionResolver(), CreateAgentDefinitionStore(), CreateOrchestrationResolver(), CreateModelClassificationService(), CreateLocalModelProviderResolver(),
+                CreateGgufModelCapabilityResolver(), Substitute.For<ICloudCredentialStore>(), NullLogger<ChatTurnResolver>.Instance),
+            new NodeChatMutationGuard(persistence),
+            new LocalChatRuntimePackageBuilder(),
+            runner,
+            dispatcher,
+            Options.Create(new LocalChatAgentOptions()),
+            runtimeSettings,
+            new NodeChatStreamCancellationRegistry(),
+            CreateOfferProvider(),
+            CreateDefaultAgentProvider(),
+            CreateNodeSettingsStore(),
+            CreateLocalDefaultChatModelResolver(),
+            CreateMemoryExtractionDispatcher(),
+            Substitute.For<IConversationUploadedFileStore>(),
+            Substitute.For<IConversationSandboxStager>(),
+            TimeProvider.System,
+            NullLogger<NodeChatStreamService>.Instance);
+        using var clientCancellation = new CancellationTokenSource();
+        // The blocked GetEnableToolsAsync is released as a cancellation when the client disconnects.
+        await using var gateRegistration = clientCancellation.Token.Register(() => enableToolsGate.TrySetCanceled()).ConfigureAwait(false);
+        var reachedQueued = false;
+
+        try
+        {
+            await foreach (var streamEvent in service.SendMessageAsync(new NodeChatStreamRequest(conversationId,
+                                   "hello",
+                                   MessageId: assistantMessageId,
+                                   RequestId: requestId),
+                               clientCancellation.Token).ConfigureAwait(false))
+            {
+                if (streamEvent.Type == ChatStreamEventTypes.AssistantQueued)
+                {
+                    // The row is now persisted Queued; the next MoveNextAsync blocks at GetEnableToolsAsync. Disconnect
+                    // now so the teardown happens before run ownership is established.
+                    reachedQueued = true;
+                    await clientCancellation.CancelAsync().ConfigureAwait(false);
+                }
+            }
+        }
+        catch (OperationCanceledException)
+        {
+            // Expected: the client disconnected before run ownership; the enumeration aborts.
+        }
+
+        AssertEx.True(reachedQueued, "Expected the stream to reach the queued state before the disconnect.");
+        AssertEx.NotNull(terminalRequest, "A disconnect before run ownership must terminalize the stranded assistant row.");
+        AssertEx.Equal(NodeChatMessageStatusValues.Interrupted, terminalRequest!.Status);
+        AssertEx.Equal(assistantMessageId, terminalRequest.Correlation.MessageId);
+        AssertEx.Equal(requestId, terminalRequest.Correlation.RequestId);
+    }
+
+    [Test]
     public async Task SendMessageAsync_WhenConversationBound_StreamsWithDefinitionPromptToolsAndVersion()
     {
         var conversationId = Guid.NewGuid();
