@@ -35,9 +35,13 @@ public sealed class NodeChatSequenceMigrationTests : IDisposable
         await using var scope = provider.CreateAsyncScope();
         var dbContext = scope.ServiceProvider.GetRequiredService<NodeChatDbContext>();
 
+        // Target the repair migration by name (not by position): later migrations may be added after it, so it is not
+        // necessarily the last one. "previous" is whatever migration immediately precedes it in the ordered list.
         var migrations = dbContext.Database.GetMigrations().ToList();
-        var repairMigration = migrations[^1];
-        var previousMigration = migrations[^2];
+        var repairIndex = migrations.FindIndex(id => id.EndsWith("RepairAndUniqueMessageSequence", StringComparison.Ordinal));
+        AssertEx.True(repairIndex > 0, "The RepairAndUniqueMessageSequence migration must exist and have a predecessor.");
+        var repairMigration = migrations[repairIndex];
+        var previousMigration = migrations[repairIndex - 1];
         var migrator = dbContext.GetInfrastructure().GetRequiredService<IMigrator>();
 
         // Apply every migration up to (but not including) the repair — the schema has the messages table WITHOUT the
