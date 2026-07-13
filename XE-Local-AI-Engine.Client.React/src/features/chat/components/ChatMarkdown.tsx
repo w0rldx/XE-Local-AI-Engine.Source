@@ -5,6 +5,8 @@ import ReactMarkdown from "react-markdown";
 
 import { CodeBlock } from "@/core/ui/components/CodeBlock/CodeBlock";
 import { markdownComponents, remarkGfm } from "@/core/ui/components/MarkdownView/MarkdownComponents";
+import { markdownImageUrlTransform } from "@/features/chat/components/MarkdownImagePolicy";
+import { SafeMarkdownImage } from "@/features/chat/components/SafeMarkdownImage";
 import { StreamCaret } from "@/features/chat/components/StreamCaret";
 
 // Chat bubbles are width-constrained (see ChatMessage's flex bubbles), unlike the shared MarkdownView's usual
@@ -13,6 +15,8 @@ import { StreamCaret } from "@/features/chat/components/StreamCaret";
 // shared renderers rather than changing MarkdownView for every consumer.
 function chatWordBreakOverrides(): Partial<Components> {
 	return {
+		// Model output is untrusted: remote images load only after explicit consent (see SafeMarkdownImage).
+		img: SafeMarkdownImage,
 		code({ children, className, ...properties }) {
 			const language = className?.match(/language-([a-z0-9]+)/i)?.[1]?.toLowerCase();
 			const code = String(children).replace(/\n$/, "");
@@ -89,7 +93,7 @@ export const ChatMarkdown = memo(function ChatMarkdown({ content, withCaret = fa
 		// minWidth: 0 lets this shrink inside its flex-item bubble instead of forcing the bubble wider; overflowWrap
 		// is a fallback for elements without their own word-breaking style (headings, blockquotes, strong/em).
 		<div style={{ minWidth: 0, overflowWrap: "anywhere" }}>
-			<ReactMarkdown components={components} remarkPlugins={[remarkGfm]}>
+			<ReactMarkdown components={components} remarkPlugins={[remarkGfm]} urlTransform={markdownImageUrlTransform}>
 				{content}
 			</ReactMarkdown>
 		</div>
