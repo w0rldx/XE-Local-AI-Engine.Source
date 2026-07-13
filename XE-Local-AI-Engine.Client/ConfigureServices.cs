@@ -265,8 +265,13 @@ public static class ConfigureServices
         builder.Services.AddHostedService<HeartbeatBackgroundService>();
         builder.Services.AddHostedService<AutoConnectBackgroundService>();
         // Chat retention is disabled by default (ChatRetentionOptions.Enabled = false): it permanently deletes user
-        // chat history, so it must be explicitly opted into via the ChatRetention config section.
-        builder.Services.Configure<ChatRetentionOptions>(builder.Configuration.GetSection(ChatRetentionOptions.Section));
+        // chat history, so it must be explicitly opted into via the ChatRetention config section. Validated on start so
+        // a bad window (RetentionDays <= 0 sets the sweep cutoff at/after "now" and would purge everything) fails fast
+        // instead of silently deleting all conversations the moment retention is enabled.
+        builder.Services.AddOptions<ChatRetentionOptions>()
+               .Bind(builder.Configuration.GetSection(ChatRetentionOptions.Section))
+               .ValidateDataAnnotations()
+               .ValidateOnStart();
         builder.Services.AddHostedService<RetentionSweeperService>();
         builder.Services.AddHostedService<SchedulerHistoryRetentionService>();
         // Ages out the append-only agent_execution_logs telemetry (adaptive-memory diagnostics) so it cannot grow
