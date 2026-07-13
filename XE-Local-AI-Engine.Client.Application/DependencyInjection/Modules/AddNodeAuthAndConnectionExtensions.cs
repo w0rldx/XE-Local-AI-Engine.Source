@@ -1,6 +1,7 @@
 namespace XE_Local_AI_Engine.Client.DependencyInjection.Modules;
 
 using Microsoft.Extensions.Caching.Memory;
+using Microsoft.Extensions.Http.Resilience;
 using XE_Local_AI_Engine.Client.Services.Auth;
 using XE_Local_AI_Engine.Client.Services.Auth.Implementation;
 using XE_Local_AI_Engine.Client.Services.CloudProviders;
@@ -47,7 +48,7 @@ internal static class AddNodeAuthAndConnectionExtensions
             builder.Services.AddHttpClient("CentralPlatformApi", client =>
             {
                 client.BaseAddress = new Uri(centralPlatformBaseUrl, UriKind.Absolute);
-            }).AddStandardResilienceHandler();
+            }).AddCentralPlatformResilience();
         }
 
         builder.Services.AddSingleton<ITokenStore, TokenStore>();
@@ -111,6 +112,31 @@ internal static class AddNodeAuthAndConnectionExtensions
         builder.Services.AddSingleton<INodeBindingService, NodeBindingService>();
         builder.Services.AddSingleton<ConnectionState>();
         builder.Services.AddSingleton<IConnectionControlService, ConnectionControlService>();
+
+        return builder;
+    }
+
+    // Gives the external central-platform client exactly one explicitly-owned resilience pipeline.
+    //
+    // Retry contract: the state-changing POSTs that go through this client (device-binding start/token in
+    // NodeBindingService, pairing in PairingService, worker-token refresh in WorkerTokenRefreshService) carry no
+    // idempotency key and target an external server whose retry semantics are unknown, so retrying a failed POST risks
+    // a duplicate side effect. The standard handler retries every method by default; DisableForUnsafeHttpMethods narrows
+    // retries to safe methods (GET/HEAD/OPTIONS/TRACE) while keeping the attempt/total timeout and circuit breaker for
+    // every method.
+    //
+    // No double-stacking: under Aspire, ServiceDefaults' ConfigureHttpClientDefaults adds a global standard handler to
+    // every client, which would wrap this client in a second, POST-retrying pipeline. RemoveAllResilienceHandlers strips
+    // any resilience handler added earlier (the global one) so the single pipeline added here is the only one. Outside
+    // Aspire there is no global handler, so the removal is a no-op and this client still gets its own pipeline.
+    internal static IHttpClientBuilder AddCentralPlatformResilience(this IHttpClientBuilder builder)
+    {
+        ArgumentNullException.ThrowIfNull(builder);
+
+#pragma warning disable EXTEXP0001 // RemoveAllResilienceHandlers / DisableForUnsafeHttpMethods are experimental; used deliberately to own a single, POST-safe pipeline.
+        builder.RemoveAllResilienceHandlers();
+        builder.AddStandardResilienceHandler().Configure(static options => options.Retry.DisableForUnsafeHttpMethods());
+#pragma warning restore EXTEXP0001
 
         return builder;
     }
