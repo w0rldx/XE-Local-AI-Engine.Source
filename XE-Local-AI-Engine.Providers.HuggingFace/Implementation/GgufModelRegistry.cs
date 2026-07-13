@@ -16,6 +16,11 @@ internal sealed class GgufModelRegistry : IGgufModelRegistry, IDisposable
 {
     private const string ManifestFileName = "index.json";
 
+    // Backing files are compared by their canonicalized absolute path; case-insensitively on Windows (its file system is),
+    // ordinally elsewhere. Used to collapse two registry entries that resolve to the SAME .gguf file on disk.
+    private static readonly StringComparer PathComparer =
+        OperatingSystem.IsWindows() ? StringComparer.OrdinalIgnoreCase : StringComparer.Ordinal;
+
     private static readonly JsonSerializerOptions SerializerOptions = new()
     {
         WriteIndented = true,
@@ -49,7 +54,11 @@ internal sealed class GgufModelRegistry : IGgufModelRegistry, IDisposable
         await _lock.WaitAsync(ct).ConfigureAwait(false);
         try
         {
-            return await LoadEntriesAsync(ct).ConfigureAwait(false);
+            // Public view: collapse any duplicate-path entries (a legacy first-download alias sharing one file) so a
+            // single .gguf is listed once. This is the load-time migration for manifests written before the upsert fix —
+            // it never touches the file, only the in-memory view; a later write persists the collapse.
+            var entries = await LoadEntriesAsync(ct).ConfigureAwait(false);
+            return CollapseDuplicatePaths(entries);
         }
         finally
         {
@@ -74,7 +83,13 @@ internal sealed class GgufModelRegistry : IGgufModelRegistry, IDisposable
         }
     }
 
-    /// <summary>Inserts or replaces the entry keyed by <see cref="GgufModelRegistryEntry.ModelName" />.</summary>
+    /// <summary>
+    ///     Inserts or replaces the entry keyed by <see cref="GgufModelRegistryEntry.ModelName" />, and also removes any
+    ///     prior entry that resolves to the SAME backing file. The self-healing rescan (triggered when the manifest is
+    ///     absent, e.g. the very first download) registers the just-written .gguf under a filename-derived name; without
+    ///     the same-path removal the canonical upsert that follows would append a second entry to one file. The incoming
+    ///     entry carries canonical repo metadata (verified hash/revision), so it is preferred over the alias.
+    /// </summary>
     public async Task UpsertAsync(GgufModelRegistryEntry entry, CancellationToken ct)
     {
         ArgumentNullException.ThrowIfNull(entry);
@@ -83,7 +98,10 @@ internal sealed class GgufModelRegistry : IGgufModelRegistry, IDisposable
         try
         {
             var entries = (await LoadEntriesAsync(ct).ConfigureAwait(false)).ToList();
-            entries.RemoveAll(existing => string.Equals(existing.ModelName, entry.ModelName, StringComparison.Ordinal));
+            var normalizedPath = NormalizeLocalPath(entry.LocalPath);
+            entries.RemoveAll(existing =>
+                string.Equals(existing.ModelName, entry.ModelName, StringComparison.Ordinal)
+                || PathComparer.Equals(NormalizeLocalPath(existing.LocalPath), normalizedPath));
             entries.Add(entry);
             await WriteManifestAsync(entries, ct).ConfigureAwait(false);
         }
@@ -107,6 +125,35 @@ internal sealed class GgufModelRegistry : IGgufModelRegistry, IDisposable
             {
                 await WriteManifestAsync(entries, ct).ConfigureAwait(false);
             }
+        }
+        finally
+        {
+            _lock.Release();
+        }
+    }
+
+    /// <summary>
+    ///     Removes EVERY entry whose backing file resolves to <paramref name="localPath" />, atomically. A legacy first
+    ///     download registered one file under two names (a filename alias plus the canonical repo id); deleting through
+    ///     either identity must leave no manifest entry pointing at the now-removed file. Returns the count removed;
+    ///     idempotent (no match is a no-op).
+    /// </summary>
+    public async Task<int> RemoveByLocalPathAsync(string localPath, CancellationToken ct)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(localPath);
+
+        var normalizedPath = NormalizeLocalPath(localPath);
+        await _lock.WaitAsync(ct).ConfigureAwait(false);
+        try
+        {
+            var entries = (await LoadEntriesAsync(ct).ConfigureAwait(false)).ToList();
+            var removed = entries.RemoveAll(existing => PathComparer.Equals(NormalizeLocalPath(existing.LocalPath), normalizedPath));
+            if (removed > 0)
+            {
+                await WriteManifestAsync(entries, ct).ConfigureAwait(false);
+            }
+
+            return removed;
         }
         finally
         {
@@ -217,6 +264,76 @@ internal sealed class GgufModelRegistry : IGgufModelRegistry, IDisposable
 
         // Atomic replace so a crash mid-write never leaves a half-written manifest.
         File.Move(tempPath, _manifestPath, overwrite: true);
+    }
+
+    // Collapses entries that resolve to the same backing file into one, keeping the most canonical (verified hash/
+    // revision, real repo id, known role). Order is otherwise preserved. Never touches disk.
+    private static IReadOnlyList<GgufModelRegistryEntry> CollapseDuplicatePaths(IReadOnlyList<GgufModelRegistryEntry> entries)
+    {
+        var indexByPath = new Dictionary<string, int>(PathComparer);
+        var result = new List<GgufModelRegistryEntry>(entries.Count);
+        foreach (var entry in entries)
+        {
+            var key = NormalizeLocalPath(entry.LocalPath);
+            if (indexByPath.TryGetValue(key, out var existingIndex))
+            {
+                result[existingIndex] = PreferCanonical(result[existingIndex], entry);
+            }
+            else
+            {
+                indexByPath[key] = result.Count;
+                result.Add(entry);
+            }
+        }
+
+        return result;
+    }
+
+    // Prefers the entry carrying more canonical provenance. A rescan-derived alias has a filename stem repo id, an empty
+    // revision, a null hash, and an Unknown role; a canonically-registered download has the opposite.
+    private static GgufModelRegistryEntry PreferCanonical(GgufModelRegistryEntry left, GgufModelRegistryEntry right)
+    {
+        return CanonicalScore(right) > CanonicalScore(left) ? right : left;
+    }
+
+    private static int CanonicalScore(GgufModelRegistryEntry entry)
+    {
+        var score = 0;
+        if (entry.RepoId.Contains('/', StringComparison.Ordinal))
+        {
+            score++;
+        }
+
+        if (!string.IsNullOrEmpty(entry.SourceRevision))
+        {
+            score++;
+        }
+
+        if (!string.IsNullOrEmpty(entry.Sha256))
+        {
+            score++;
+        }
+
+        if (entry.Role != GgufRole.Unknown)
+        {
+            score++;
+        }
+
+        return score;
+    }
+
+    // Canonicalizes a stored path for identity comparison (collapses '.'/'..' and relative forms). A file that cannot be
+    // canonicalized falls back to its original string so a malformed path never throws on a list/upsert.
+    private static string NormalizeLocalPath(string localPath)
+    {
+        try
+        {
+            return Path.GetFullPath(localPath);
+        }
+        catch (Exception exception) when (exception is ArgumentException or NotSupportedException or PathTooLongException)
+        {
+            return localPath;
+        }
     }
 
     private sealed class ManifestDocument
