@@ -3,6 +3,7 @@ namespace XE_Local_AI_Engine.Providers.CodexOAuth.Auth;
 using System.Net;
 using System.Net.Http.Headers;
 using System.Text;
+using System.Text.RegularExpressions;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using XE_Local_AI_Engine.Providers.CodexOAuth.Options;
@@ -138,7 +139,7 @@ public sealed class CodexAuthHandler : DelegatingHandler
             stream.Position = 0; // Rewind so the SDK's own read of the buffered content is undisturbed.
 
             truncated = totalBytes > read;
-            sanitizedExcerpt = SanitizeForLog(Encoding.UTF8.GetString(buffer, 0, read));
+            sanitizedExcerpt = RedactSensitive(SanitizeForLog(Encoding.UTF8.GetString(buffer, 0, read)));
         }
         catch (Exception exception) when (exception is HttpRequestException or InvalidOperationException or IOException)
         {
@@ -189,6 +190,51 @@ public sealed class CodexAuthHandler : DelegatingHandler
         }
 
         return builder.ToString();
+    }
+
+    private const string RedactedEmail = "[redacted-email]";
+    private const string RedactedToken = "[redacted-token]";
+    private static readonly TimeSpan RedactTimeout = TimeSpan.FromMilliseconds(200);
+
+    // An email address anywhere in the body.
+    private static readonly Regex EmailPattern = new(
+        @"[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}",
+        RegexOptions.Compiled | RegexOptions.CultureInvariant,
+        RedactTimeout);
+
+    // A JWT-shaped triple of base64url segments (header.payload.signature) — collapsed as one token.
+    private static readonly Regex JwtPattern = new(
+        @"[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]{10,}",
+        RegexOptions.Compiled | RegexOptions.CultureInvariant,
+        RedactTimeout);
+
+    // A long, high-entropy token-like run (base64/hex/key material): 20+ chars from the token alphabet carrying BOTH a
+    // letter and a digit, so readable identifiers like "invalid_request_error" are left intact.
+    private static readonly Regex TokenPattern = new(
+        @"(?=[A-Za-z0-9+/=_-]*[A-Za-z])(?=[A-Za-z0-9+/=_-]*[0-9])[A-Za-z0-9+/=_-]{20,}",
+        RegexOptions.Compiled | RegexOptions.CultureInvariant,
+        RedactTimeout);
+
+    // Masks secrets the server may echo back into an error body (user emails, leaked bearer/JWT/key material) before it
+    // reaches the log. Applied after control-char sanitization; a pathological body that stalls a pattern is dropped
+    // wholesale rather than logged unredacted.
+    private static string RedactSensitive(string value)
+    {
+        if (string.IsNullOrEmpty(value))
+        {
+            return value;
+        }
+
+        try
+        {
+            var redacted = EmailPattern.Replace(value, RedactedEmail);
+            redacted = JwtPattern.Replace(redacted, RedactedToken);
+            return TokenPattern.Replace(redacted, RedactedToken);
+        }
+        catch (RegexMatchTimeoutException)
+        {
+            return RedactedToken;
+        }
     }
 
     /// <summary>
