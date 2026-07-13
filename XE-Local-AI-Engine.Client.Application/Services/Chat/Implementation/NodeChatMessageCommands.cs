@@ -1,6 +1,7 @@
 namespace XE_Local_AI_Engine.Client.Services.Chat.Implementation;
 
 using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.Storage;
 using static NodeChatMetadataSerializer;
 using static NodeChatPersistenceSql;
 
@@ -192,42 +193,62 @@ internal sealed class NodeChatMessageCommands(NodeChatPersistenceWriter writer)
         string? agentName = null,
         string? reasoningEffort = null)
     {
-        return await _writer.ExecuteAsync(NodeChatPersistenceWriteKey.ForMessage(conversationId, messageId),
+        var metadata = SerializeMetadata(metadataJson, reasoning, model, inputTokens: null, outputTokens: null, totalTokens: null, reasoningTokens: null, parts: null, agentDefinitionId,
+            agentName, reasoningEffort);
+
+        // Conversation-exclusive: sequence allocation + insert must not interleave with another insert or a delete on
+        // the same conversation. The allocate + insert + conversation-touch run in ONE transaction so a failed insert
+        // rolls the allocation back cleanly and the retry re-reads a fresh MAX(sequence).
+        return await _writer.ExecuteConversationExclusiveAsync(conversationId,
             async (dbContext, token) =>
             {
-                var sequence = await NextSequenceAsync(dbContext, conversationId, token).ConfigureAwait(false);
-                var metadata = SerializeMetadata(metadataJson, reasoning, model, inputTokens: null, outputTokens: null, totalTokens: null, reasoningTokens: null, parts: null, agentDefinitionId,
-                    agentName, reasoningEffort);
+                var attempt = 0;
+                while (true)
+                {
+                    attempt++;
+                    await using var transaction = await dbContext.Database.BeginTransactionAsync(token).ConfigureAwait(false);
+                    var dbTransaction = transaction.GetDbTransaction();
+                    var sequence = await NextSequenceAsync(dbContext, conversationId, dbTransaction, token).ConfigureAwait(false);
+                    try
+                    {
+                        await using var command = dbContext.Database.GetDbConnection().CreateCommand();
+                        command.Transaction = dbTransaction;
+                        command.CommandText = """
+                                              INSERT INTO messages (message_id, conversation_id, sequence, role, content, metadata_json, created_at_utc, updated_at_utc, status, request_id, error, origin, parent_message_id, variant_group_id, agent_definition_id)
+                                              VALUES ($message_id, $conversation_id, $sequence, $role, $content, $metadata_json, $created_at_utc, $updated_at_utc, $status, $request_id, $error, $origin, $parent_message_id, $variant_group_id, $agent_definition_id);
+                                              """;
+                        AddParameter(command, "$message_id", messageId);
+                        AddParameter(command, "$conversation_id", conversationId);
+                        AddParameter(command, "$sequence", sequence);
+                        AddParameter(command, "$role", role);
+                        AddParameter(command, "$content", dbContext.EncryptMessageContent(content, conversationId, messageId));
+                        AddParameter(command, "$metadata_json", dbContext.EncryptMessageMetadata(metadata, conversationId, messageId));
+                        AddParameter(command, "$created_at_utc", createdAtUtc);
+                        AddParameter(command, "$updated_at_utc", updatedAtUtc);
+                        AddParameter(command, "$status", status);
+                        AddParameter(command, "$request_id", requestId);
+                        AddParameter(command, "$error", error);
+                        AddParameter(command, "$origin", origin);
+                        AddParameter(command, "$parent_message_id", parentMessageId);
+                        AddParameter(command, "$variant_group_id", variantGroupId);
+                        // Plaintext per-message agent attribution: lets feedback aggregate by the resolved agent without
+                        // decrypting the metadata blob. Stamped once at insert; later flush/terminalize never touch it.
+                        AddParameter(command, "$agent_definition_id", agentDefinitionId);
+                        await OpenIfNeededAsync(command.Connection, token).ConfigureAwait(false);
+                        await command.ExecuteNonQueryAsync(token).ConfigureAwait(false);
 
-                await using var command = dbContext.Database.GetDbConnection().CreateCommand();
-                command.CommandText = """
-                                      INSERT INTO messages (message_id, conversation_id, sequence, role, content, metadata_json, created_at_utc, updated_at_utc, status, request_id, error, origin, parent_message_id, variant_group_id, agent_definition_id)
-                                      VALUES ($message_id, $conversation_id, $sequence, $role, $content, $metadata_json, $created_at_utc, $updated_at_utc, $status, $request_id, $error, $origin, $parent_message_id, $variant_group_id, $agent_definition_id);
-                                      """;
-                AddParameter(command, "$message_id", messageId);
-                AddParameter(command, "$conversation_id", conversationId);
-                AddParameter(command, "$sequence", sequence);
-                AddParameter(command, "$role", role);
-                AddParameter(command, "$content", dbContext.EncryptMessageContent(content, conversationId, messageId));
-                AddParameter(command, "$metadata_json", dbContext.EncryptMessageMetadata(metadata, conversationId, messageId));
-                AddParameter(command, "$created_at_utc", createdAtUtc);
-                AddParameter(command, "$updated_at_utc", updatedAtUtc);
-                AddParameter(command, "$status", status);
-                AddParameter(command, "$request_id", requestId);
-                AddParameter(command, "$error", error);
-                AddParameter(command, "$origin", origin);
-                AddParameter(command, "$parent_message_id", parentMessageId);
-                AddParameter(command, "$variant_group_id", variantGroupId);
-                // Plaintext per-message agent attribution: lets feedback aggregate by the resolved agent without
-                // decrypting the metadata blob. Stamped once at insert; later flush/terminalize never touch it.
-                AddParameter(command, "$agent_definition_id", agentDefinitionId);
-                await OpenIfNeededAsync(command.Connection, token).ConfigureAwait(false);
-                await command.ExecuteNonQueryAsync(token).ConfigureAwait(false);
+                        await TouchConversationAsync(dbContext, conversationId, updatedAtUtc, token).ConfigureAwait(false);
+                        await transaction.CommitAsync(token).ConfigureAwait(false);
 
-                await TouchConversationAsync(dbContext, conversationId, updatedAtUtc, token).ConfigureAwait(false);
-
-                return new NodeChatPersistedMessageDto(messageId, conversationId, requestId, sequence, role, content, reasoning, status, createdAtUtc, updatedAtUtc, model, error, metadataJson,
-                    Origin: origin, ParentMessageId: parentMessageId, VariantGroupId: variantGroupId, AgentDefinitionId: agentDefinitionId, AgentName: agentName, ReasoningEffort: reasoningEffort);
+                        return new NodeChatPersistedMessageDto(messageId, conversationId, requestId, sequence, role, content, reasoning, status, createdAtUtc, updatedAtUtc, model, error,
+                            metadataJson, Origin: origin, ParentMessageId: parentMessageId, VariantGroupId: variantGroupId, AgentDefinitionId: agentDefinitionId, AgentName: agentName,
+                            ReasoningEffort: reasoningEffort);
+                    }
+                    catch (Exception exception) when (IsUniqueConstraintViolation(exception) && attempt < MaxSequenceAllocationAttempts)
+                    {
+                        await transaction.RollbackAsync(token).ConfigureAwait(false);
+                    }
+                }
             },
             cancellationToken).ConfigureAwait(false);
     }
@@ -251,7 +272,10 @@ internal sealed class NodeChatMessageCommands(NodeChatPersistenceWriter writer)
     {
         ValidateCorrelation(correlation);
 
-        return await _writer.ExecuteAsync(NodeChatPersistenceWriteKey.ForMessage(correlation.ConversationId, correlation.MessageId),
+        // Message-payload update to an already-allocated row: parallel with updates to OTHER messages, serialized per
+        // message, and excluded against a conversation delete via the shared/exclusive hierarchy.
+        return await _writer.ExecuteMessageUpdateAsync(correlation.ConversationId,
+            correlation.MessageId,
             async (dbContext, token) =>
             {
                 var current = await ReadMessageAsync(dbContext, correlation.ConversationId, correlation.MessageId, token).ConfigureAwait(false)
