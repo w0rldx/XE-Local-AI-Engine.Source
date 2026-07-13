@@ -685,6 +685,39 @@ public sealed class NodeChatPersistenceServiceTests : IDisposable
     }
 
     [Test]
+    public async Task ContentEncryptionMigration_CheckpointAndVacuum_ReclaimsPlaintextResidueFromFile()
+    {
+        const string fileName = "backfill-vacuum-residue.sqlite";
+        const string legacyText = "zzq-legacy-plaintext-residue-marker-7731";
+        await using var provider = await BuildProviderAsync(fileName).ConfigureAwait(false);
+        var service = CreateService(provider);
+
+        var conversation = await service.CreateConversationAsync(new NodeChatCreateConversationRequest("Chat", "node", CreatedAtUtc: 1)).ConfigureAwait(false);
+        var messageId = Guid.NewGuid();
+        await service.PersistUserMessageAsync(new NodeChatPersistUserMessageRequest(conversation.ConversationId, messageId, "placeholder", CreatedAtUtc: 2)).ConfigureAwait(false);
+
+        // Simulate a pre-encryption row: raw plaintext UTF-8 in the content column (no envelope header).
+        await WriteRawMessageContentAsync(provider, messageId, Encoding.UTF8.GetBytes(legacyText)).ConfigureAwait(false);
+
+        using var backfill = new NodeChatContentEncryptionBackfillService(provider.GetRequiredService<IServiceScopeFactory>(),
+            NullLogger<NodeChatContentEncryptionBackfillService>.Instance);
+        var migrated = await backfill.MigrateAllAsync(batchSize: 50, CancellationToken.None).ConfigureAwait(false);
+        AssertEx.True(migrated >= 1, "The legacy plaintext row must be migrated.");
+
+        // The row is now encrypted, but the old plaintext still lingers in freed pages / the journal until reclaimed.
+        await backfill.CheckpointAndVacuumAsync(CancellationToken.None).ConfigureAwait(false);
+
+        // The whole main DB file — not just the row's current bytes — must be free of the migrated plaintext.
+        var fileBytes = await File.ReadAllBytesAsync(GetDatabasePath(fileName)).ConfigureAwait(false);
+        AssertEx.False(ContainsSubsequence(fileBytes, Encoding.UTF8.GetBytes(legacyText)),
+            "After the post-backfill checkpoint/vacuum, no migrated plaintext may remain anywhere in the main DB file.");
+
+        // And the encrypted row still round-trips back to plaintext through the read path.
+        var loaded = AssertEx.NotNull(await service.GetConversationAsync(conversation.ConversationId).ConfigureAwait(false));
+        AssertEx.Equal(legacyText, loaded.Messages.Single(message => message.MessageId == messageId).Content);
+    }
+
+    [Test]
     public async Task RenamePinArchive_PersistMappedColumnsAndArchivedConversationsAreHiddenUnlessRequested()
     {
         await using var provider = await BuildProviderAsync("rename-pin-archive.sqlite").ConfigureAwait(false);
