@@ -132,6 +132,30 @@ describe("SafeMarkdownImage consent flow", () => {
 		expect(screen.queryByTestId("remote-image-consent")).toBeNull();
 	});
 
+	it("does not carry consent to a new source when the same element's src changes", () => {
+		const { rerender } = renderWithProviders(
+			<SafeMarkdownImage src="https://a.example.com/one.png" alt="one" />,
+		);
+
+		// Consent to source A: the image loads.
+		fireEvent.click(screen.getByTestId("remote-image-consent"));
+		expect(screen.getByRole("img").getAttribute("src")).toBe("https://a.example.com/one.png");
+
+		// Same component position, new remote source B: prior consent must not leak — the placeholder returns.
+		rerender(
+			<MantineProvider>
+				<SafeMarkdownImage src="https://b.example.com/two.png" alt="two" />
+			</MantineProvider>,
+		);
+		expect(screen.queryByRole("img")).toBeNull();
+		const consent = screen.getByTestId("remote-image-consent");
+		expect(screen.getByText("https://b.example.com")).toBeTruthy();
+
+		// Consenting again loads source B.
+		fireEvent.click(consent);
+		expect(screen.getByRole("img").getAttribute("src")).toBe("https://b.example.com/two.png");
+	});
+
 	it("renders a data: image directly without a consent placeholder", () => {
 		renderWithProviders(<SafeMarkdownImage src={DATA_IMAGE} alt="inline" />);
 

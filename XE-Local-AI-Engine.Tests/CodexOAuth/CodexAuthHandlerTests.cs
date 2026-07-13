@@ -181,6 +181,44 @@ public sealed class CodexAuthHandlerTests
         AssertEx.True(message.Contains("truncated=True", StringComparison.Ordinal), $"truncation not reported: {message}");
     }
 
+    [Test]
+    public async Task SendAsync_OnFailure_RedactsEmailsAndTokenLikeSecretsFromTheExcerpt()
+    {
+        // A server error body can echo sensitive material back (a user email, a leaked bearer/JWT). Both must be masked
+        // in the excerpt before it reaches the log, while the surrounding error text stays readable.
+        const string jwt = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiIxMjM0NTY3ODkwIn0.dozjgNryP4J3jVmNHl0w5N";
+        const string body = "{\"error\":{\"message\":\"auth failed for user alice@example.com with token " + jwt + "\"}}";
+        var logger = new CapturingLogger();
+
+        using var response = await SendFailureAndCapture(HttpStatusCode.Forbidden, body, logger);
+
+        AssertEx.Equal(HttpStatusCode.Forbidden, response.StatusCode);
+        var message = AssertSingleWarning(logger);
+        AssertEx.False(message.Contains("alice@example.com", StringComparison.Ordinal), "email must be redacted");
+        AssertEx.False(message.Contains(jwt, StringComparison.Ordinal), "JWT-like token must be redacted");
+        AssertEx.True(message.Contains("[redacted-email]", StringComparison.Ordinal), $"email placeholder expected: {message}");
+        AssertEx.True(message.Contains("[redacted-token]", StringComparison.Ordinal), $"token placeholder expected: {message}");
+        // The readable surrounding text survives the redaction.
+        AssertEx.True(message.Contains("auth failed for user", StringComparison.Ordinal), $"readable text lost: {message}");
+    }
+
+    [Test]
+    public async Task SendAsync_OnFailure_LeavesOrdinaryErrorJsonReadable()
+    {
+        // A normal error body carrying no secrets must pass through the redactor unchanged — including identifiers like
+        // "invalid_request_error" that are long but not high-entropy tokens.
+        const string body = "{\"error\":{\"message\":\"System messages are not allowed\",\"type\":\"invalid_request_error\",\"param\":\"model\"}}";
+        var logger = new CapturingLogger();
+
+        using var response = await SendFailureAndCapture(HttpStatusCode.BadRequest, body, logger);
+
+        AssertEx.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+        var message = AssertSingleWarning(logger);
+        AssertEx.True(message.Contains("System messages are not allowed", StringComparison.Ordinal), $"readable text lost: {message}");
+        AssertEx.True(message.Contains("invalid_request_error", StringComparison.Ordinal), $"identifier wrongly redacted: {message}");
+        AssertEx.False(message.Contains("[redacted", StringComparison.Ordinal), $"nothing should be redacted: {message}");
+    }
+
     // Drives one non-401 failure response carrying the given body through the handler with a capturing logger. A 4xx/5xx
     // that is NOT 401 exercises the diagnostic-logging path directly without the refresh/retry branch.
     private static async Task<HttpResponseMessage> SendFailureAndCapture(HttpStatusCode status, string body, ILogger<CodexAuthHandler> logger)
