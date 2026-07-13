@@ -18,6 +18,10 @@ internal static class AddNodeChatExtensions
         builder.Services.AddSingleton<INodeChatStreamCancellationRegistry, NodeChatStreamCancellationRegistry>();
         builder.Services.AddSingleton<IInvocationResumeRegistry, InvocationResumeRegistry>();
         builder.Services.AddSingleton<IGgufModelCapabilityResolver, GgufModelCapabilityResolver>();
+        // Provider-routed (thinking/tools) capability resolution used by OrchestrationResolver to resolve each
+        // participant's thinking capability from its own effective model (mirrors ChatTurnResolver's active-model
+        // resolution). Scoped to match IModelClassificationService's lifetime.
+        builder.Services.AddScoped<IModelCapabilityResolver, ModelCapabilityResolver>();
         builder.Services.AddScoped<ILocalDefaultChatModelResolver, LocalDefaultChatModelResolver>();
         builder.Services.AddScoped<ChatTurnResolver>();
         builder.Services.AddScoped<ChatInvocationStatePump>();
