@@ -685,6 +685,39 @@ public sealed class NodeChatPersistenceServiceTests : IDisposable
     }
 
     [Test]
+    public async Task ContentEncryptionMigration_CheckpointAndVacuum_ReclaimsPlaintextResidueFromFile()
+    {
+        const string fileName = "backfill-vacuum-residue.sqlite";
+        const string legacyText = "zzq-legacy-plaintext-residue-marker-7731";
+        await using var provider = await BuildProviderAsync(fileName).ConfigureAwait(false);
+        var service = CreateService(provider);
+
+        var conversation = await service.CreateConversationAsync(new NodeChatCreateConversationRequest("Chat", "node", CreatedAtUtc: 1)).ConfigureAwait(false);
+        var messageId = Guid.NewGuid();
+        await service.PersistUserMessageAsync(new NodeChatPersistUserMessageRequest(conversation.ConversationId, messageId, "placeholder", CreatedAtUtc: 2)).ConfigureAwait(false);
+
+        // Simulate a pre-encryption row: raw plaintext UTF-8 in the content column (no envelope header).
+        await WriteRawMessageContentAsync(provider, messageId, Encoding.UTF8.GetBytes(legacyText)).ConfigureAwait(false);
+
+        using var backfill = new NodeChatContentEncryptionBackfillService(provider.GetRequiredService<IServiceScopeFactory>(),
+            NullLogger<NodeChatContentEncryptionBackfillService>.Instance);
+        var migrated = await backfill.MigrateAllAsync(batchSize: 50, CancellationToken.None).ConfigureAwait(false);
+        AssertEx.True(migrated >= 1, "The legacy plaintext row must be migrated.");
+
+        // The row is now encrypted, but the old plaintext still lingers in freed pages / the journal until reclaimed.
+        await backfill.CheckpointAndVacuumAsync(CancellationToken.None).ConfigureAwait(false);
+
+        // The whole main DB file — not just the row's current bytes — must be free of the migrated plaintext.
+        var fileBytes = await File.ReadAllBytesAsync(GetDatabasePath(fileName)).ConfigureAwait(false);
+        AssertEx.False(ContainsSubsequence(fileBytes, Encoding.UTF8.GetBytes(legacyText)),
+            "After the post-backfill checkpoint/vacuum, no migrated plaintext may remain anywhere in the main DB file.");
+
+        // And the encrypted row still round-trips back to plaintext through the read path.
+        var loaded = AssertEx.NotNull(await service.GetConversationAsync(conversation.ConversationId).ConfigureAwait(false));
+        AssertEx.Equal(legacyText, loaded.Messages.Single(message => message.MessageId == messageId).Content);
+    }
+
+    [Test]
     public async Task RenamePinArchive_PersistMappedColumnsAndArchivedConversationsAreHiddenUnlessRequested()
     {
         await using var provider = await BuildProviderAsync("rename-pin-archive.sqlite").ConfigureAwait(false);
@@ -825,6 +858,47 @@ public sealed class NodeChatPersistenceServiceTests : IDisposable
 
         AssertEx.Null(await service.BranchConversationAsync(new NodeChatBranchConversationRequest(source.ConversationId, Guid.NewGuid(), CreatedAtUtc: 821)).ConfigureAwait(false));
         AssertEx.Null(await service.BranchConversationAsync(new NodeChatBranchConversationRequest(Guid.NewGuid(), Guid.NewGuid(), CreatedAtUtc: 822)).ConfigureAwait(false));
+    }
+
+    [Test]
+    public async Task BranchConversationAsync_WhenCancelledMidCopy_LeavesNoPartialBranch()
+    {
+        await using var provider = await BuildProviderAsync("branch-cancel.sqlite").ConfigureAwait(false);
+        var service = CreateService(provider);
+        var source = await service.CreateConversationAsync(new NodeChatCreateConversationRequest("Source", "node", CreatedAtUtc: 900)).ConfigureAwait(false);
+
+        // Enough copies that a short-fused cancellation can land partway through the copy loop, where — without a
+        // wrapping transaction — the conversation row plus a prefix of its messages would already be autocommitted.
+        const int messageCount = 150;
+        var cutoffId = Guid.Empty;
+        for (var index = 0; index < messageCount; index++)
+        {
+            var id = Guid.NewGuid();
+            await service.PersistUserMessageAsync(new NodeChatPersistUserMessageRequest(source.ConversationId, id, $"message {index}", CreatedAtUtc: 901 + index))
+                         .ConfigureAwait(false);
+            cutoffId = id;
+        }
+
+        using var cts = new CancellationTokenSource();
+        cts.CancelAfter(TimeSpan.FromMilliseconds(2));
+        try
+        {
+            await service.BranchConversationAsync(new NodeChatBranchConversationRequest(source.ConversationId, cutoffId, CreatedAtUtc: 2000), cts.Token).ConfigureAwait(false);
+        }
+        catch (OperationCanceledException)
+        {
+            // Expected when the cancellation lands before the branch commits.
+        }
+
+        // Atomicity invariant: either the branch fully committed (all copies present) or nothing was written — never a
+        // partial branch conversation carrying only a prefix of its messages.
+        var branchedConversationIds = await ListBranchedConversationIdsAsync(provider, source.ConversationId).ConfigureAwait(false);
+        foreach (var branchedId in branchedConversationIds)
+        {
+            var copiedCount = await CountMessagesAsync(provider, branchedId).ConfigureAwait(false);
+            AssertEx.Equal(messageCount, copiedCount,
+                "A surviving branch conversation must carry every copied message: a partial branch means the copy loop is not atomic.");
+        }
     }
 
     [Test]
@@ -1114,6 +1188,45 @@ public sealed class NodeChatPersistenceServiceTests : IDisposable
         idParameter.Value = messageId;
         command.Parameters.Add(idParameter);
         await command.ExecuteNonQueryAsync().ConfigureAwait(false);
+    }
+
+    private static async Task<IReadOnlyList<Guid>> ListBranchedConversationIdsAsync(ServiceProvider provider, Guid sourceConversationId)
+    {
+        await using var scope = provider.CreateAsyncScope();
+        var dbContext = scope.ServiceProvider.GetRequiredService<NodeChatDbContext>();
+        var connection = dbContext.Database.GetDbConnection();
+        await connection.OpenAsync().ConfigureAwait(false);
+        await using var command = connection.CreateCommand();
+        command.CommandText = "SELECT conversation_id FROM conversations WHERE branch_of_conversation_id = $source_id;";
+        var parameter = command.CreateParameter();
+        parameter.ParameterName = "$source_id";
+        parameter.Value = sourceConversationId;
+        command.Parameters.Add(parameter);
+
+        var ids = new List<Guid>();
+        await using var reader = await command.ExecuteReaderAsync().ConfigureAwait(false);
+        while (await reader.ReadAsync().ConfigureAwait(false))
+        {
+            ids.Add(reader.GetGuid(0));
+        }
+
+        return ids;
+    }
+
+    private static async Task<int> CountMessagesAsync(ServiceProvider provider, Guid conversationId)
+    {
+        await using var scope = provider.CreateAsyncScope();
+        var dbContext = scope.ServiceProvider.GetRequiredService<NodeChatDbContext>();
+        var connection = dbContext.Database.GetDbConnection();
+        await connection.OpenAsync().ConfigureAwait(false);
+        await using var command = connection.CreateCommand();
+        command.CommandText = "SELECT COUNT(*) FROM messages WHERE conversation_id = $conversation_id;";
+        var parameter = command.CreateParameter();
+        parameter.ParameterName = "$conversation_id";
+        parameter.Value = conversationId;
+        command.Parameters.Add(parameter);
+        var result = await command.ExecuteScalarAsync().ConfigureAwait(false);
+        return Convert.ToInt32(result, System.Globalization.CultureInfo.InvariantCulture);
     }
 
     private static bool ContainsSubsequence(byte[] haystack, byte[] needle)
