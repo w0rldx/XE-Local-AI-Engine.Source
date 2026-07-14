@@ -293,7 +293,10 @@ internal sealed class AgentHomeManifestService : IAgentHomeManifestService, IDis
         var policyJson = JsonSerializer.Serialize(new AgentHomePolicy
             {
                 Version = AgentHomePolicy.CurrentVersion,
-                NetworkPolicy = "disabled",
+                // Honest posture: the live process provider supervises but does not isolate the network, so the sandbox
+                // child shares the host network. Claiming "disabled" here would overstate the boundary. A future
+                // OS-isolated provider can write "disabled"/"restricted" once it actually enforces egress confinement.
+                NetworkPolicy = "unrestricted",
                 AllowReadOnlyMounts = false,
                 WritableMounts = false
             },

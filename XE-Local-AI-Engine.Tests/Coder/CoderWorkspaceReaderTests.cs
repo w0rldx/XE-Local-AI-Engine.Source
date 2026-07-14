@@ -382,7 +382,9 @@ public sealed class CoderWorkspaceReaderTests : IDisposable
         return await provider.CreateOrAttachAsync(new SandboxCreateRequest
         {
             AttachKey = AttachKey(provider.ProviderName),
-            RuntimeProfile = "dotnet-agent-home"
+            RuntimeProfile = "dotnet-agent-home",
+            // The real ProcessSandboxRuntimeProvider fails closed on any network posture it cannot enforce.
+            NetworkPolicy = SandboxNetworkPolicy.Unrestricted
         });
     }
 

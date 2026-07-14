@@ -169,7 +169,11 @@ internal sealed class AgentHomeService : IAgentHomeService, IConversationSandbox
         {
             AttachKey = attachKey,
             RuntimeProfile = effectiveProfile,
-            NetworkPolicy = SandboxNetworkPolicy.None
+            // The live ProcessSandboxRuntimeProvider supervises but does not isolate the network, so it fails closed on
+            // any request for network confinement. Request Unrestricted honestly rather than asking for a No-network
+            // guarantee it cannot deliver; the sandbox's protection is the working-dir jail + approval gate, not egress
+            // isolation. A future OS-isolated provider that advertises SupportsNetworkPolicy can request None instead.
+            NetworkPolicy = SandboxNetworkPolicy.Unrestricted
         };
         var handle = await _provider.CreateOrAttachAsync(createRequest, prepareToken).ConfigureAwait(false);
 
