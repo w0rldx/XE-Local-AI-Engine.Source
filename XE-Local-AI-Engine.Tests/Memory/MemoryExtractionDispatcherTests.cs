@@ -375,6 +375,80 @@ public sealed class MemoryExtractionDispatcherTests : IDisposable
             "Releasing the abandoned job after Dispose must be swallowed silently — no ObjectDisposedException may surface.");
     }
 
+    [Test]
+    public async Task StopAsync_WhenSecondJobAwaitsConcurrencySlotAtShutdown_AccountsItAndDropsNothingSilently()
+    {
+        var agentId = Guid.NewGuid();
+
+        // Regression guard for the dequeue-then-await-slot accounting gap. MaxConcurrentExtractions=1: job #1 takes the one
+        // slot and job #2 is then buffered while the read loop blocks awaiting that (held) slot to start it. When the drain
+        // window elapses, the read loop's slot-wait is cancelled while #2 is still pending — the exact moment that, under the
+        // old ReadAllAsync ordering, had already pulled #2 off the channel (so the queued-drain missed it) yet never reached
+        // TrackInFlight (so _inFlight missed it), letting it escape BOTH the dropped and abandoned counters. #1 deliberately
+        // IGNORES cancellation so the read loop's ONLY exit is cancellation (nothing frees the slot to race it into starting
+        // #2) — this pins #2 on the channel deterministically. Shutdown must then account for BOTH: #1 as an abandoned
+        // in-flight job, #2 as a dropped queued job. Total dropped + abandoned covers both; nothing silently vanishes.
+        var firstEntered = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var release = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var resumed = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var calls = 0;
+        var extraction = Substitute.For<IMemoryExtractionService>();
+        extraction.ExtractAsync(Arg.Any<MemoryExtractionRunInput>(), Arg.Any<CancellationToken>())
+                  .Returns(async _ =>
+                  {
+                      if (Interlocked.Increment(ref calls) == 1)
+                      {
+                          firstEntered.TrySetResult();
+                          try
+                          {
+                              // Does NOT observe the passed token: only the explicit release ends it, so #1 stays in-flight
+                              // (never freeing the slot) through the drain window and grace — it is the abandoned straggler.
+                              await release.Task.ConfigureAwait(false);
+                          }
+                          finally
+                          {
+                              resumed.TrySetResult();
+                          }
+                      }
+
+                      return MemoryExtractionOutcome.NoModelConfigured();
+                  });
+
+        await using var provider = await BuildProviderAsync("exec-log-pending-slot.sqlite", extraction).ConfigureAwait(false);
+        var logger = new CapturingLogger<MemoryExtractionWorker>();
+        var optionsAccessor = Options.Create(new MemoryExtractionOptions { MaxConcurrentExtractions = 1, ShutdownDrainTimeoutSeconds = 1 });
+        var dispatcher = new MemoryExtractionDispatcher(optionsAccessor, NullLogger<MemoryExtractionDispatcher>.Instance);
+        var worker = new MemoryExtractionWorker(provider.GetRequiredService<IServiceScopeFactory>(),
+            dispatcher,
+            optionsAccessor,
+            logger);
+        await worker.StartAsync(CancellationToken.None).ConfigureAwait(false);
+
+        // #1 takes the one slot and parks; only after it is confirmed running do we buffer #2, so #2 is guaranteed to be the
+        // job left pending on the channel with the read loop blocked awaiting the slot when StopAsync fires.
+        dispatcher.Dispatch(Telemetry(agentId), Run(agentId, Guid.NewGuid(), Guid.NewGuid()));
+        await firstEntered.Task.WaitAsync(TimeSpan.FromSeconds(5)).ConfigureAwait(false);
+        dispatcher.Dispatch(Telemetry(agentId), Run(agentId, Guid.NewGuid(), Guid.NewGuid()));
+
+        // The 1s window elapses with #2 still pending; StopAsync cancels the drain token, abandons the cancellation-ignoring
+        // #1, and drains #2 as a dropped queued job — returning within bounds (1s window + 2s grace + slack).
+        await worker.StopAsync(CancellationToken.None).WaitAsync(TimeSpan.FromSeconds(15)).ConfigureAwait(false);
+        worker.Dispose();
+
+        // Both jobs are accounted, not silently lost: the content-free drain-exceeded warning reports #1 abandoned and #2
+        // dropped in one line. The pre-fix worker reported "abandoned 1 ... dropped 0" here — #2 had vanished from both.
+        var log = logger.AllText;
+        AssertEx.True(log.Contains("abandoned 1 in-flight and dropped 1 queued extraction(s)", StringComparison.Ordinal),
+            "The pending job awaiting the concurrency slot at shutdown must be accounted as a dropped queued extraction, never silently lost from both counters.");
+        AssertEx.False(log.Contains("ObjectDisposed", StringComparison.Ordinal),
+            "Abandonment is expected and swallowed — no ObjectDisposedException should surface in the log.");
+
+        // Release the abandoned job AFTER Dispose so it runs to completion cleanly (its finally hits the disposed-semaphore
+        // swallow path) and the test process is not left with a parked background task.
+        release.TrySetResult();
+        await resumed.Task.WaitAsync(TimeSpan.FromSeconds(5)).ConfigureAwait(false);
+    }
+
     private static MemoryExtractionDispatchContext Telemetry(Guid agentId)
     {
         return new MemoryExtractionDispatchContext(agentId,
