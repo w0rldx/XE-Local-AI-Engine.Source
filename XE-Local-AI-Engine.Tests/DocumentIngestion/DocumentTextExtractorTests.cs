@@ -107,6 +107,56 @@ public sealed class DocumentTextExtractorTests
     }
 
     [Test]
+    public async Task Extractor_WhenStructuredOutputExceedsCap_ReturnsFailedWithoutContent()
+    {
+        // The structured path returns the document verbatim; bound its aggregate size so a huge document cannot reach
+        // chunking/persistence unbounded. A 1000-char body against a 10-char cap must fail cleanly.
+        var extractor = new DocumentTextExtractor(NullLogger<DocumentTextExtractor>.Instance,
+            maxOutputChars: 5_000_000,
+            maxStructuredOutputChars: 10,
+            maxExpansionRatio: 200,
+            minCharsForExpansionGuard: 1_000_000);
+        using var stream = new MemoryStream(Encoding.UTF8.GetBytes(new string('a', 1000)));
+
+        var result = await extractor.ExtractStructuredAsync(stream, "big.md", ".md", CancellationToken.None);
+
+        AssertEx.Equal(DocumentExtractionStatus.Failed, result.Status);
+        AssertEx.Null(result.Document);
+        AssertEx.Contains(AssertEx.NotNull(result.Error), "maximum extractable size");
+    }
+
+    [Test]
+    public async Task Extractor_WhenOutputExpandsBeyondRatio_ReturnsFailedWithoutContent()
+    {
+        // Expansion-ratio guard: any output above the floor whose char count exceeds inputBytes * ratio is a bomb
+        // signature. A ratio of 0 makes every above-floor output trip it, isolating the guard from the absolute cap.
+        var extractor = new DocumentTextExtractor(NullLogger<DocumentTextExtractor>.Instance,
+            maxOutputChars: 5_000_000,
+            maxStructuredOutputChars: 20_000_000,
+            maxExpansionRatio: 0,
+            minCharsForExpansionGuard: 10);
+        using var stream = new MemoryStream(Encoding.UTF8.GetBytes(new string('a', 100)));
+
+        var result = await extractor.ExtractAsync(stream, "expands.md", ".md", CancellationToken.None);
+
+        AssertEx.Equal(DocumentExtractionStatus.Failed, result.Status);
+        AssertEx.Null(result.Markdown);
+        AssertEx.Contains(AssertEx.NotNull(result.Error), "size ratio");
+    }
+
+    [Test]
+    public async Task Extractor_WhenStructuredWithinBounds_ExtractsDocument()
+    {
+        using var stream = new MemoryStream(Encoding.UTF8.GetBytes("# Title\n\nA short paragraph."));
+
+        var result = await CreateExtractor().ExtractStructuredAsync(stream, "notes.md", ".md", CancellationToken.None);
+
+        AssertEx.Equal(DocumentExtractionStatus.Extracted, result.Status);
+        AssertEx.NotNull(result.Document);
+        AssertEx.Null(result.Error);
+    }
+
+    [Test]
     public void IsSupported_NormalizesCaseAndLeadingDot()
     {
         var extractor = CreateExtractor();
