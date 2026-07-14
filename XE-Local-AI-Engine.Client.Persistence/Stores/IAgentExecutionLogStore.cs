@@ -14,12 +14,22 @@ public interface IAgentExecutionLogStore
     Task<AgentExecutionLogRecord> AddAsync(AgentExecutionLogInput input, CancellationToken cancellationToken = default);
 
     /// <summary>
-    ///     Appends ONE content-free durable run-envelope row (<see cref="AgentExecutionLogRecordKind.ChatRunEnvelope" />)
-    ///     for a terminalized chat invocation. The store assigns <c>Id</c>/<c>CreatedAtUtc</c>, stamps the current
-    ///     envelope schema version, and records <c>AgentDefinitionId</c> as <see cref="System.Guid.Empty" /> (the bound
-    ///     agent id is not available at the terminalization seam). Metadata only — supply NO message content.
+    ///     Idempotent upsert of ONE content-free durable run-envelope row
+    ///     (<see cref="AgentExecutionLogRecordKind.ChatRunEnvelope" />) for a terminalized chat invocation, keyed on the
+    ///     assistant <c>MessageId</c> (a filtered unique index enforces one envelope per message). A retry or a
+    ///     crash-recovery backfill for the same message is a no-op — the first write wins — so it can never duplicate.
+    ///     The store assigns <c>Id</c>/<c>CreatedAtUtc</c>, stamps the current envelope schema version, and records
+    ///     <c>AgentDefinitionId</c> as <see cref="System.Guid.Empty" /> (the bound agent id is not available at the
+    ///     terminalization seam). Metadata only — supply NO message content.
     /// </summary>
     Task AddRunEnvelopeAsync(AgentRunEnvelopeInput input, CancellationToken cancellationToken = default);
+
+    /// <summary>
+    ///     Queryable read path for the versioned durable run envelopes (<see cref="AgentExecutionLogRecordKind.ChatRunEnvelope" />),
+    ///     newest first, optionally scoped to one conversation. Each row carries its <c>SchemaVersion</c> so a reader can
+    ///     tell shapes apart. Metadata only — no message content.
+    /// </summary>
+    Task<IReadOnlyList<AgentRunEnvelopeRecord>> ListRunEnvelopesAsync(Guid? conversationId, int limit, int offset = 0, CancellationToken cancellationToken = default);
 
     /// <summary>
     ///     Returns a page of execution logs for <paramref name="agentDefinitionId" />, newest first, capped to
@@ -40,6 +50,20 @@ public interface IAgentExecutionLogStore
     ///     number of rows deleted.
     /// </summary>
     Task<int> TrimToMaxPerAgentAsync(int maxPerAgent, CancellationToken cancellationToken = default);
+}
+
+/// <summary>
+///     Shared constants for the durable run-envelope record so the store writer and the startup recovery backfill stamp
+///     the same schema version (single source of truth).
+/// </summary>
+public static class AgentRunEnvelope
+{
+    /// <summary>
+    ///     Current run-envelope shape version. Bump when the envelope's field set changes so a reader can tell old rows
+    ///     apart. v2 (R4): added reasoning/total tokens + started_at_utc lifecycle fields and the deterministic
+    ///     message-id upsert key.
+    /// </summary>
+    public const int CurrentSchemaVersion = 2;
 }
 
 /// <summary>
@@ -75,7 +99,38 @@ public sealed record AgentRunEnvelopeInput(
     int? CompletionTokens = null,
     int? ContentChunkCount = null,
     int? ReasoningChunkCount = null,
-    string? TraceId = null);
+    string? TraceId = null,
+    int? ReasoningTokens = null,
+    int? TotalTokens = null,
+    long? StartedAtUtc = null);
+
+/// <summary>
+///     Versioned read projection of a durable run-envelope row (always
+///     <see cref="AgentExecutionLogRecordKind.ChatRunEnvelope" />). Metadata only — no message content;
+///     <see cref="FailureCategory" /> is a category enum name only. <see cref="SchemaVersion" /> lets a reader tell
+///     envelope shapes apart as the field set evolves.
+/// </summary>
+public sealed record AgentRunEnvelopeRecord(
+    Guid Id,
+    int SchemaVersion,
+    Guid? ConversationId,
+    Guid? MessageId,
+    Guid? InvocationId,
+    Guid? RequestId,
+    string ModelName,
+    string TerminalStatus,
+    bool Success,
+    string? FailureCategory,
+    long DurationMs,
+    int? PromptTokens,
+    int? CompletionTokens,
+    int? ReasoningTokens,
+    int? TotalTokens,
+    int? ContentChunkCount,
+    int? ReasoningChunkCount,
+    string? TraceId,
+    long? StartedAtUtc,
+    long CreatedAtUtc);
 
 /// <summary>
 ///     Typed projection of a persisted execution-log row. Metadata only — no message content. <see cref="ErrorClass" />

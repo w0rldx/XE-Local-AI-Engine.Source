@@ -1,9 +1,11 @@
 namespace XE_Local_AI_Engine.Tests.Chat;
 
+using System.Diagnostics.Metrics;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging.Abstractions;
 using NSubstitute;
 using XE_Local_AI_Engine.AI.Contracts.Enums;
+using XE_Local_AI_Engine.Client.Common.Telemetry;
 using XE_Local_AI_Engine.Client.Models.Enums;
 using XE_Local_AI_Engine.Client.Persistence.Stores;
 using XE_Local_AI_Engine.Client.Services.Chat;
@@ -37,9 +39,12 @@ public sealed class NodeChatInvocationPumpRunEnvelopeTests
             ModelUsed = "llama-3.1",
             InputTokens = 100,
             OutputTokens = 25,
+            ReasoningTokens = 5,
+            TotalTokens = 130,
             StreamedChunkCount = 8,
             StreamedThinkingChunkCount = 3,
-            GenerationDurationMs = 1500
+            GenerationDurationMs = 1500,
+            StartedAt = DateTimeOffset.FromUnixTimeMilliseconds(7000)
         };
 
         _ = await pump.TerminalizeAsync(correlation, state, "requested-model");
@@ -56,6 +61,9 @@ public sealed class NodeChatInvocationPumpRunEnvelopeTests
                 && input.DurationMs == 1500L
                 && input.PromptTokens == 100
                 && input.CompletionTokens == 25
+                && input.ReasoningTokens == 5
+                && input.TotalTokens == 130
+                && input.StartedAtUtc == 7000L
                 && input.ContentChunkCount == 8
                 && input.ReasoningChunkCount == 3
                 && input.FailureCategory == null),
@@ -154,12 +162,27 @@ public sealed class NodeChatInvocationPumpRunEnvelopeTests
     }
 
     [Test]
-    public async Task TerminalizeAsync_WhenLedgerWriteThrows_DoesNotFailTheInvocation()
+    public async Task TerminalizeAsync_WhenLedgerWriteThrows_DoesNotFailTheInvocationAndCountsTheFailure()
     {
         var store = Substitute.For<IAgentExecutionLogStore>();
         store.When(s => s.AddRunEnvelopeAsync(Arg.Any<AgentRunEnvelopeInput>(), Arg.Any<CancellationToken>()))
              .Do(_ => throw new InvalidOperationException("ledger unavailable"));
         var pump = CreatePump(store);
+
+        // Touch the counter so its instrument is published before the listener starts, then record every measurement on
+        // it. A forced failure guarantees at least one increment; parallel tests can only add, never remove, so >= 1 is safe.
+        _ = NodeMetrics.RunEnvelopeWriteFailedTotal;
+        var failuresCounted = 0L;
+        using var listener = new MeterListener();
+        listener.InstrumentPublished = (instrument, meterListener) =>
+        {
+            if (instrument.Meter.Name == NodeMetrics.MeterName && instrument.Name == "run_envelope_write_failed_total")
+            {
+                meterListener.EnableMeasurementEvents(instrument);
+            }
+        };
+        listener.SetMeasurementEventCallback<long>((_, measurement, _, _) => Interlocked.Add(ref failuresCounted, measurement));
+        listener.Start();
 
         var correlation = new NodeChatMessageCorrelation(Guid.NewGuid(), Guid.NewGuid(), Guid.NewGuid());
         var state = new InvocationState
@@ -174,6 +197,7 @@ public sealed class NodeChatInvocationPumpRunEnvelopeTests
         var result = await pump.TerminalizeAsync(correlation, state, requestedModel: null);
 
         AssertEx.Equal("completed", result.TerminalStatus);
+        AssertEx.True(Interlocked.Read(ref failuresCounted) >= 1, "The ledger-write failure must increment the failure counter.");
     }
 
     [Test]

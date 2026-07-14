@@ -10,8 +10,7 @@ using XE_Local_AI_Engine.Client.Persistence.Stores;
 /// </summary>
 public sealed class AgentExecutionLogStore(NodeChatDbContext dbContext, TimeProvider timeProvider) : IAgentExecutionLogStore
 {
-    // Current run-envelope shape version. Bump when the envelope's field set changes so a reader can tell old rows apart.
-    private const int CurrentRunEnvelopeSchemaVersion = 1;
+    private const int ChatRunEnvelopeKind = (int)AgentExecutionLogRecordKind.ChatRunEnvelope;
 
     private readonly NodeChatDbContext _dbContext = dbContext ?? throw new ArgumentNullException(nameof(dbContext));
     private readonly TimeProvider _timeProvider = timeProvider ?? throw new ArgumentNullException(nameof(timeProvider));
@@ -48,11 +47,77 @@ public sealed class AgentExecutionLogStore(NodeChatDbContext dbContext, TimeProv
     {
         ArgumentNullException.ThrowIfNull(input);
 
-        var entity = new AgentExecutionLog
+        // Idempotent on the assistant message id: exactly one envelope per terminalized turn. A retry or a crash-recovery
+        // backfill for a message that already has an envelope is a no-op (first write wins), mirroring the scheduler's
+        // fire-instance upsert. When no message id is available (should not occur at the terminalization seam) the row is
+        // inserted unconditionally — there is no key to dedupe on.
+        if (input.MessageId is { } messageId
+            && await FindEnvelopeByMessageAsync(messageId, cancellationToken).ConfigureAwait(false) is not null)
+        {
+            return;
+        }
+
+        var entity = BuildEnvelopeEntity(input);
+        _ = _dbContext.AgentExecutionLogs.Add(entity);
+
+        try
+        {
+            _ = await _dbContext.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
+        }
+        catch (DbUpdateException) when (input.MessageId is { } retryMessageId)
+        {
+            // A concurrent writer won the race on the same message id (the filtered unique index rejected this insert).
+            // Detach our losing entity and confirm the winner exists so the upsert stays idempotent; only rethrow if the
+            // failure was not the expected uniqueness collision (winner truly absent).
+            _dbContext.Entry(entity).State = EntityState.Detached;
+
+            if (await FindEnvelopeByMessageAsync(retryMessageId, cancellationToken).ConfigureAwait(false) is null)
+            {
+                throw;
+            }
+        }
+    }
+
+    public async Task<IReadOnlyList<AgentRunEnvelopeRecord>> ListRunEnvelopesAsync(Guid? conversationId, int limit, int offset = 0, CancellationToken cancellationToken = default)
+    {
+        // Floor the page bounds so a caller passing 0/negative still returns a sane (empty) page rather than throwing.
+        var take = Math.Max(val1: 0, limit);
+        var skip = Math.Max(val1: 0, offset);
+
+        var query = _dbContext.AgentExecutionLogs
+                              .AsNoTracking()
+                              .Where(log => log.RecordKind == ChatRunEnvelopeKind);
+
+        if (conversationId is { } id)
+        {
+            query = query.Where(log => log.ConversationId == id);
+        }
+
+        var entities = await query
+                             .OrderByDescending(log => log.CreatedAtUtc)
+                             .ThenByDescending(log => log.Id)
+                             .Skip(skip)
+                             .Take(take)
+                             .ToListAsync(cancellationToken)
+                             .ConfigureAwait(false);
+
+        return entities.Select(ToEnvelopeRecord).ToArray();
+    }
+
+    private Task<AgentExecutionLog?> FindEnvelopeByMessageAsync(Guid messageId, CancellationToken cancellationToken)
+    {
+        return _dbContext.AgentExecutionLogs
+                         .AsNoTracking()
+                         .FirstOrDefaultAsync(log => log.RecordKind == ChatRunEnvelopeKind && log.MessageId == messageId, cancellationToken);
+    }
+
+    private AgentExecutionLog BuildEnvelopeEntity(AgentRunEnvelopeInput input)
+    {
+        return new AgentExecutionLog
         {
             Id = Guid.NewGuid(),
-            RecordKind = (int)AgentExecutionLogRecordKind.ChatRunEnvelope,
-            SchemaVersion = CurrentRunEnvelopeSchemaVersion,
+            RecordKind = ChatRunEnvelopeKind,
+            SchemaVersion = AgentRunEnvelope.CurrentSchemaVersion,
             // The bound agent id is not available at the terminalization seam (it lives only in the message metadata
             // blob); recorded as Guid.Empty so every envelope row shares one retention bucket and never collides with a
             // real agent's diagnostics view.
@@ -67,17 +132,17 @@ public sealed class AgentExecutionLogStore(NodeChatDbContext dbContext, TimeProv
             LatencyMs = input.DurationMs,
             PromptTokens = input.PromptTokens,
             CompletionTokens = input.CompletionTokens,
+            ReasoningTokens = input.ReasoningTokens,
+            TotalTokens = input.TotalTokens,
             ContentChunkCount = input.ContentChunkCount,
             ReasoningChunkCount = input.ReasoningChunkCount,
             TraceId = input.TraceId,
+            StartedAtUtc = input.StartedAtUtc,
             Success = input.Success,
             // Reuses the ErrorClass column for the failure-category enum name (text-free, same redaction discipline).
             ErrorClass = input.FailureCategory,
             CreatedAtUtc = _timeProvider.GetUtcNow().ToUnixTimeMilliseconds()
         };
-
-        _ = _dbContext.AgentExecutionLogs.Add(entity);
-        _ = await _dbContext.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
     }
 
     public async Task<IReadOnlyList<AgentExecutionLogRecord>> ListByAgentAsync(Guid agentDefinitionId, int limit, int offset = 0, CancellationToken cancellationToken = default)
@@ -143,6 +208,30 @@ public sealed class AgentExecutionLogStore(NodeChatDbContext dbContext, TimeProv
             entity.CompletionTokens,
             entity.Success,
             entity.ErrorClass,
+            entity.CreatedAtUtc);
+    }
+
+    private static AgentRunEnvelopeRecord ToEnvelopeRecord(AgentExecutionLog entity)
+    {
+        return new AgentRunEnvelopeRecord(entity.Id,
+            entity.SchemaVersion,
+            entity.ConversationId,
+            entity.MessageId,
+            entity.InvocationId,
+            entity.RequestId,
+            entity.ModelName,
+            entity.TerminalStatus ?? string.Empty,
+            entity.Success,
+            entity.ErrorClass,
+            entity.LatencyMs,
+            entity.PromptTokens,
+            entity.CompletionTokens,
+            entity.ReasoningTokens,
+            entity.TotalTokens,
+            entity.ContentChunkCount,
+            entity.ReasoningChunkCount,
+            entity.TraceId,
+            entity.StartedAtUtc,
             entity.CreatedAtUtc);
     }
 }

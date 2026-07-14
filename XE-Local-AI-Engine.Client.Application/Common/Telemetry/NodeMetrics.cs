@@ -46,6 +46,15 @@ public static class NodeMetrics
             description: "Number of failed invocations by failure source.");
 
     /// <summary>
+    ///     Incremented when a best-effort durable run-envelope ledger write fails at the terminalization seam (MED-007 /
+    ///     R4). Content-free (a count only) — the write is deliberately non-fatal so a ledger failure never fails the
+    ///     invocation, but the counter makes the otherwise-silent failure observable.
+    /// </summary>
+    public static readonly Counter<long> RunEnvelopeWriteFailedTotal =
+        Meter.CreateCounter<long>("run_envelope_write_failed_total",
+            description: "Number of durable run-envelope ledger writes that failed (non-fatal).");
+
+    /// <summary>
     ///     Incremented (by the abandoned count) when the memory-extraction worker abandons in-flight extraction job(s) at
     ///     shutdown because they ignored cooperative cancellation past the drain deadline plus the fixed grace. Content-free
     ///     (a count only) — the deliberate cost of a bounded shutdown that never waits indefinitely.
