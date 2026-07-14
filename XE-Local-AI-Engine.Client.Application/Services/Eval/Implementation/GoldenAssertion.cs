@@ -3,6 +3,26 @@ namespace XE_Local_AI_Engine.Client.Services.Eval.Implementation;
 using System.Text.Json;
 
 /// <summary>
+///     Distinguishes the four states a stored assertion string can be in, so the judge can treat a corrupt constraint
+///     differently from a genuinely-absent one. Authoring rejects <see cref="Malformed" /> outright; the judge, which
+///     also runs over legacy/corrupt stored rows, must FAIL such a case rather than silently score it on the rubric.
+/// </summary>
+internal enum AssertionParseState
+{
+    /// <summary>Blank (null/whitespace) string: no deterministic signal was supplied for this case.</summary>
+    Absent,
+
+    /// <summary>Parsed cleanly but carries no meaningful (non-blank) phrase — it gates nothing and proves nothing.</summary>
+    ValidNoSignal,
+
+    /// <summary>Parsed cleanly and carries at least one meaningful required/forbidden phrase — a usable deterministic gate.</summary>
+    ValidWithSignal,
+
+    /// <summary>A non-blank string that failed to parse as assertion JSON — a corrupt/dropped scoring constraint.</summary>
+    Malformed
+}
+
+/// <summary>
 ///     Parsed golden assertion (the deterministic phrase-check scoring signal). Null/blank phrases are filtered on parse
 ///     so an empty or whitespace phrase can never gate a case — an empty required phrase would "pass" any output
 ///     (<c>"".Contains("")</c> is true, and an empty <c>.All</c> is vacuously true), an empty forbidden phrase would fail
@@ -39,6 +59,31 @@ internal sealed record GoldenAssertion(IReadOnlyList<string> RequiredPhrases, IR
         }
 
         return new GoldenAssertion(Filter(raw.RequiredPhrases), Filter(raw.ForbiddenPhrases));
+    }
+
+    /// <summary>
+    ///     Classifies a stored assertion string into one of the four <see cref="AssertionParseState" /> values, so a
+    ///     caller can distinguish a blank string (<see cref="AssertionParseState.Absent" />) from a non-blank string that
+    ///     fails to parse (<see cref="AssertionParseState.Malformed" />) — a distinction <see cref="TryParse" /> collapses
+    ///     (both return <see langword="null" />). <paramref name="assertion" /> is populated only for the two Valid states.
+    /// </summary>
+    public static AssertionParseState Classify(string? assertionJson, out GoldenAssertion? assertion)
+    {
+        assertion = null;
+
+        if (string.IsNullOrWhiteSpace(assertionJson))
+        {
+            return AssertionParseState.Absent;
+        }
+
+        var parsed = TryParse(assertionJson);
+        if (parsed is null)
+        {
+            return AssertionParseState.Malformed;
+        }
+
+        assertion = parsed;
+        return parsed.HasMeaningfulSignal ? AssertionParseState.ValidWithSignal : AssertionParseState.ValidNoSignal;
     }
 
     private static IReadOnlyList<string> Filter(IReadOnlyList<string?>? phrases)
