@@ -38,6 +38,10 @@ public sealed class KnowledgeIngestionWorker : BackgroundService
     // window is cancelled so it stops and disposal can proceed.
     private readonly CancellationTokenSource _drainDeadline = new();
 
+    // Set once shutdown begins so the drain-sweep stops re-admitting stranded documents that the (now-stopped) queue reader
+    // would never process; they stay Pending and recover on the next start.
+    private volatile bool _stopping;
+
     public KnowledgeIngestionWorker(IServiceScopeFactory scopeFactory,
         KnowledgeIngestionDispatcher dispatcher,
         IOptions<KnowledgeBaseOptions> options,
@@ -76,6 +80,10 @@ public sealed class KnowledgeIngestionWorker : BackgroundService
 
     public override async Task StopAsync(CancellationToken cancellationToken)
     {
+        // Signal shutdown first so an in-flight document's completion sweep does not re-admit stranded work the stopped
+        // queue reader would never drain.
+        _stopping = true;
+
         // base.StopAsync cancels the stopping token and awaits ExecuteAsync's return, so the queue read stops and no new
         // documents are launched. Only then do we drain the documents already in flight.
         await base.StopAsync(cancellationToken).ConfigureAwait(false);
@@ -152,7 +160,50 @@ public sealed class KnowledgeIngestionWorker : BackgroundService
         }
         finally
         {
+            // Release the document from the admitted set so a later reindex/re-upload can re-admit it, free the concurrency
+            // slot, then sweep any stranded Pending documents now that a queue slot may have freed.
+            _dispatcher.MarkCompleted(documentId);
             ReleaseConcurrency();
+            await SweepStrandedPendingAsync().ConfigureAwait(false);
+        }
+    }
+
+    // Drain path for stranded Pending documents: once a document completes and the admission queue has drained to empty,
+    // re-admit any documents still Pending (never ingested) — for example ones a full queue rejected at upload or during
+    // startup recovery. Gating on an empty queue makes this run only as capacity frees and prevents a busy loop: a sweep
+    // that finds no stranded work enqueues nothing, so no further completion fires it again. Admission is idempotent, so a
+    // document already queued or in flight is never re-enqueued (no double ingestion), and enqueue stops the moment the
+    // queue fills again so the remainder are swept on a later completion.
+    private async Task SweepStrandedPendingAsync()
+    {
+        if (_stopping || _drainDeadline.IsCancellationRequested || _dispatcher.PendingCount > 0)
+        {
+            return;
+        }
+
+        try
+        {
+            await using var scope = _scopeFactory.CreateAsyncScope();
+            var catalog = scope.ServiceProvider.GetRequiredService<IKnowledgeDocumentCatalogService>();
+            var pending = await catalog.ListPendingDocumentIdsAsync(_drainDeadline.Token).ConfigureAwait(false);
+            foreach (var documentId in pending)
+            {
+                var admission = await _dispatcher.EnqueueAsync(documentId, _drainDeadline.Token).ConfigureAwait(false);
+                if (admission == KnowledgeIngestionEnqueueResult.QueueFull)
+                {
+                    break;
+                }
+            }
+        }
+        catch (OperationCanceledException) when (_drainDeadline.IsCancellationRequested)
+        {
+            // Shutting down — stranded documents stay Pending and recover on the next start.
+        }
+        catch (Exception exception)
+        {
+            // A sweep failure (for example a transient database open) must never fault the background task; the stranded
+            // documents are re-swept on a later completion or recovered on the next start. Log the exception type only.
+            _logger.LogWarning("Knowledge ingestion drain-sweep failed ({ErrorClass}); stranded documents remain for a later sweep.", exception.GetType().Name);
         }
     }
 

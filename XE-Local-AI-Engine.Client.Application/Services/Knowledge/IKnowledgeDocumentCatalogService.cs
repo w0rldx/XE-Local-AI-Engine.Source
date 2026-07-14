@@ -40,6 +40,15 @@ public interface IKnowledgeDocumentCatalogService
     ///     Terminal rows are left untouched.
     /// </summary>
     Task<IReadOnlyList<Guid>> ResetNonTerminalToPendingAsync(CancellationToken cancellationToken);
+
+    /// <summary>
+    ///     Lists the ids of every document currently in <see cref="KnowledgeDocumentStatus.Pending" /> WITHOUT mutating any
+    ///     row. Because the ingestion pipeline flips a document out of Pending the instant it starts, a Pending row is one
+    ///     that has not begun ingestion — either freshly uploaded or stranded when a full queue rejected its admission. The
+    ///     background worker uses this as its drain-sweep source to re-admit stranded documents as queue capacity frees,
+    ///     without the reset semantics (and in-progress clobbering) of <see cref="ResetNonTerminalToPendingAsync" />.
+    /// </summary>
+    Task<IReadOnlyList<Guid>> ListPendingDocumentIdsAsync(CancellationToken cancellationToken);
 }
 
 /// <summary>
