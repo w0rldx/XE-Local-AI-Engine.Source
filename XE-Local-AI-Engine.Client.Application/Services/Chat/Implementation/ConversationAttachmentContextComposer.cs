@@ -32,14 +32,22 @@ internal static class ConversationAttachmentContextComposer
 
     /// <summary>
     ///     Returns the composed context block, or <see langword="null"/> when there is nothing to inline (no parts, or
-    ///     every part's text is empty).
+    ///     every part's text is empty). <paramref name="conversationId" /> seeds the untrusted-content fence nonce so the
+    ///     fenced attachment block is BYTE-STABLE across the sends of one conversation (preserving llama.cpp prompt/KV-
+    ///     cache prefix reuse for multi-turn conversations with attachments) while staying un-forgeable — the conversation
+    ///     id is a random GUID a document author never sees, so they cannot reproduce the derived nonce. (Knowledge-tool
+    ///     results, by contrast, are query-dynamic and keep a fresh random nonce per call.)
     /// </summary>
-    public static string? Compose(IReadOnlyList<AttachmentTextPart> parts, int charBudget)
+    public static string? Compose(IReadOnlyList<AttachmentTextPart> parts, int charBudget, Guid conversationId)
     {
         ArgumentNullException.ThrowIfNull(parts);
 
         var builder = new StringBuilder();
         builder.Append(Preamble).Append(UntrustedDataNotice);
+
+        // Stable per-conversation fence seed: the same conversation + same attachments compose byte-identically across
+        // sends, so the attachment prefix does not bust the prompt cache each turn.
+        var nonceSeed = conversationId.ToString("N");
 
         var remaining = charBudget;
         var truncated = false;
@@ -57,7 +65,7 @@ internal static class ConversationAttachmentContextComposer
             // (markers + metadata, deterministic since the nonce length is fixed) plus the body length, so budgeting
             // against the empty-body wrap keeps the closing marker from ever being truncated away.
             var metadata = new KeyValuePair<string, string?>[] { new("file", part.FileName) };
-            var fenceOverhead = UntrustedContentFraming.WrapDocument(string.Empty, metadata).Length;
+            var fenceOverhead = UntrustedContentFraming.WrapDocument(string.Empty, metadata, nonceSeed).Length;
 
             // Reserve the separator plus the fence overhead plus at least one body char. If they cannot fit, stop.
             if (PartSeparator.Length + fenceOverhead + 1 > remaining)
@@ -69,13 +77,13 @@ internal static class ConversationAttachmentContextComposer
             var bodyBudget = remaining - PartSeparator.Length - fenceOverhead;
             if (part.Markdown.Length > bodyBudget)
             {
-                builder.Append(PartSeparator).Append(UntrustedContentFraming.WrapDocument(part.Markdown[..bodyBudget], metadata));
+                builder.Append(PartSeparator).Append(UntrustedContentFraming.WrapDocument(part.Markdown[..bodyBudget], metadata, nonceSeed));
                 appendedAny = true;
                 truncated = true;
                 break;
             }
 
-            builder.Append(PartSeparator).Append(UntrustedContentFraming.WrapDocument(part.Markdown, metadata));
+            builder.Append(PartSeparator).Append(UntrustedContentFraming.WrapDocument(part.Markdown, metadata, nonceSeed));
             remaining -= PartSeparator.Length + fenceOverhead + part.Markdown.Length;
             appendedAny = true;
         }
