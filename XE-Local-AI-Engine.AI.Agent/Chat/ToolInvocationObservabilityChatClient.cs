@@ -63,7 +63,10 @@ internal sealed class ToolInvocationObservabilityChatClient : DelegatingChatClie
                 continue;
             }
 
-            using var activity = AgentActivitySource.Instance.StartActivity("AgentRun.ToolInvocation");
+            // Names the model's REQUEST to call a tool (a FunctionCallContent observed on the response), NOT the tool's
+            // execution: this hop sits above UseFunctionInvocation, so the delegate has not run yet and this span's
+            // duration measures call DISCOVERY, not run time. Named accordingly for honesty (MED-007).
+            using var activity = AgentActivitySource.Instance.StartActivity("AgentRun.ToolCallRequested");
             activity?.SetTag("tool.call_id", functionCall.CallId);
             activity?.SetTag("tool.name", functionCall.Name);
 

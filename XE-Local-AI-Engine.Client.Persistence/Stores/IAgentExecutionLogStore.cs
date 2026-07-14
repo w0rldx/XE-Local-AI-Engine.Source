@@ -8,9 +8,18 @@ namespace XE_Local_AI_Engine.Client.Persistence.Stores;
 public interface IAgentExecutionLogStore
 {
     /// <summary>
-    ///     Appends a new execution-log row (assigning <c>Id</c> and <c>CreatedAtUtc</c>) and returns the stored record.
+    ///     Appends a new adaptive-memory diagnostics row (<see cref="AgentExecutionLogRecordKind.AdaptiveMemoryDiagnostics" />),
+    ///     assigning <c>Id</c> and <c>CreatedAtUtc</c>, and returns the stored record.
     /// </summary>
     Task<AgentExecutionLogRecord> AddAsync(AgentExecutionLogInput input, CancellationToken cancellationToken = default);
+
+    /// <summary>
+    ///     Appends ONE content-free durable run-envelope row (<see cref="AgentExecutionLogRecordKind.ChatRunEnvelope" />)
+    ///     for a terminalized chat invocation. The store assigns <c>Id</c>/<c>CreatedAtUtc</c>, stamps the current
+    ///     envelope schema version, and records <c>AgentDefinitionId</c> as <see cref="System.Guid.Empty" /> (the bound
+    ///     agent id is not available at the terminalization seam). Metadata only — supply NO message content.
+    /// </summary>
+    Task AddRunEnvelopeAsync(AgentRunEnvelopeInput input, CancellationToken cancellationToken = default);
 
     /// <summary>
     ///     Returns a page of execution logs for <paramref name="agentDefinitionId" />, newest first, capped to
@@ -32,6 +41,41 @@ public interface IAgentExecutionLogStore
     /// </summary>
     Task<int> TrimToMaxPerAgentAsync(int maxPerAgent, CancellationToken cancellationToken = default);
 }
+
+/// <summary>
+///     Discriminates the producer of an <c>agent_execution_logs</c> row. Retention operates on the whole table, so both
+///     kinds are pruned by the same sweep; the discriminator only separates the diagnostics read view from the run ledger.
+/// </summary>
+public enum AgentExecutionLogRecordKind
+{
+    /// <summary>Adaptive-memory diagnostics row: one per memory-enabled run, written by the memory extraction worker.</summary>
+    AdaptiveMemoryDiagnostics = 0,
+
+    /// <summary>Durable per-invocation run envelope: one content-free row per ordinary chat invocation at terminalization (MED-007).</summary>
+    ChatRunEnvelope = 1
+}
+
+/// <summary>
+///     Fields for a durable run-envelope row (<see cref="AgentExecutionLogRecordKind.ChatRunEnvelope" />). Bounded and
+///     content-free: correlation ids, terminal status, usage/timing counters and a trace id only — NEVER prompt, model
+///     output, or tool arguments. <see cref="FailureCategory" /> is a category enum name (e.g. <c>ProviderUnreachable</c>),
+///     never an exception message or transcript text. Nullable fields are omitted when not reachable at the seam.
+/// </summary>
+public sealed record AgentRunEnvelopeInput(
+    Guid? ConversationId,
+    Guid? MessageId,
+    Guid? InvocationId,
+    Guid? RequestId,
+    string ModelName,
+    string TerminalStatus,
+    bool Success,
+    long DurationMs,
+    string? FailureCategory = null,
+    int? PromptTokens = null,
+    int? CompletionTokens = null,
+    int? ContentChunkCount = null,
+    int? ReasoningChunkCount = null,
+    string? TraceId = null);
 
 /// <summary>
 ///     Typed projection of a persisted execution-log row. Metadata only — no message content. <see cref="ErrorClass" />

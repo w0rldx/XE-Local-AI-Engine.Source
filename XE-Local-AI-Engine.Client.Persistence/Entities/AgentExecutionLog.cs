@@ -1,16 +1,33 @@
 namespace XE_Local_AI_Engine.Client.Persistence.Entities;
 
 /// <summary>
-///     Append-only metadata log of a single agent run (adaptive memory diagnostics). Holds NO message content — only
-///     latency/token/success telemetry plus ids that link back to the already-encrypted chat tables. The whole row is
-///     plaintext (structural) and is NEVER encrypted; <see cref="ErrorClass" /> is an exception type name only, never the
-///     exception message or any transcript text.
+///     Append-only metadata log of a single agent run. Two producers share this table, distinguished by
+///     <see cref="RecordKind" />: adaptive-memory diagnostics (kind 0, one row per memory-enabled run) and the durable
+///     per-invocation run envelope (kind 1, one content-free row per ordinary chat invocation at terminalization,
+///     MED-007). Holds NO message content — only latency/token/status telemetry plus ids that link back to the
+///     already-encrypted chat tables. The whole row is plaintext (structural) and is NEVER encrypted;
+///     <see cref="ErrorClass" /> is an exception type name (memory rows) or a <c>FailureCategory</c> enum name (envelope
+///     rows) only, never the exception message or any transcript text.
 /// </summary>
 internal sealed record class AgentExecutionLog
 {
     public Guid Id { get; set; }
 
-    /// <summary>Agent definition the run executed under. Indexed (with <see cref="CreatedAtUtc" />). Plaintext (structural).</summary>
+    /// <summary>
+    ///     Discriminates the row's producer: 0 = adaptive-memory diagnostics, 1 = chat run envelope. Mirrors
+    ///     <c>AgentExecutionLogRecordKind</c>. Existing rows backfill to 0. Plaintext (structural).
+    /// </summary>
+    public int RecordKind { get; set; }
+
+    /// <summary>Envelope shape version so the run-envelope fields can evolve without a discriminator change. 0 for memory rows. Plaintext (structural).</summary>
+    public int SchemaVersion { get; set; }
+
+    /// <summary>
+    ///     Agent definition the run executed under. For memory rows this is the real agent id. For envelope rows it is
+    ///     <see cref="System.Guid.Empty" />: the bound agent id is not cheaply available at the terminalization seam
+    ///     (it lives only in the message metadata blob), so it is omitted this round. Indexed (with
+    ///     <see cref="CreatedAtUtc" />). Plaintext (structural).
+    /// </summary>
     public Guid AgentDefinitionId { get; set; }
 
     /// <summary>Conversation the run belonged to, or <c>null</c> when not run inside a conversation. Plaintext (structural).</summary>
@@ -45,4 +62,26 @@ internal sealed record class AgentExecutionLog
 
     /// <summary>Unix-ms timestamp when the log row was written. Indexed (with <see cref="AgentDefinitionId" />). Plaintext (structural).</summary>
     public long CreatedAtUtc { get; set; }
+
+    /// <summary>Invocation the run envelope belongs to; <c>null</c> for memory rows and interrupted envelopes with no run state. Plaintext (structural).</summary>
+    public Guid? InvocationId { get; set; }
+
+    /// <summary>Request that drove the run (correlation id); <c>null</c> for memory rows. Plaintext (structural).</summary>
+    public Guid? RequestId { get; set; }
+
+    /// <summary>
+    ///     Terminal outcome of an envelope run (<c>completed</c> / <c>failed</c> / <c>cancelled</c> / <c>interrupted</c>).
+    ///     Carries the granular outcome that <see cref="Success" /> alone cannot (cancelled vs failed vs interrupted).
+    ///     <c>null</c> for memory rows. Plaintext (structural).
+    /// </summary>
+    public string? TerminalStatus { get; set; }
+
+    /// <summary>W3C trace id of the run's ambient activity when one was present at terminalization, for cross-correlation with exported traces; else <c>null</c>. Plaintext (structural).</summary>
+    public string? TraceId { get; set; }
+
+    /// <summary>Number of streamed content chunks observed for the run; <c>null</c> when not known at the seam. Plaintext (structural).</summary>
+    public int? ContentChunkCount { get; set; }
+
+    /// <summary>Number of streamed reasoning chunks observed for the run; <c>null</c> when not known at the seam. Plaintext (structural).</summary>
+    public int? ReasoningChunkCount { get; set; }
 }

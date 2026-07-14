@@ -65,6 +65,11 @@ public static class Extensions
                               // Literal must match XE_Local_AI_Engine.Client.Common.Telemetry.NodeMetrics.MeterName
                               // ("XE.Node"); ServiceDefaults cannot reference the Client project.
                               .AddMeter("XE.Node")
+                              // Literal must match the Meter name used by the ProviderCallBudgetChatClient in the
+                              // AI.Agent project, which is XE.LocalAiEngine.AI.Agent; ServiceDefaults cannot reference
+                              // that project. Mirrors the identically named tracing AddSource below so the agent's
+                              // provider-round and budget counters are exported, not just recorded in-process. MED-007.
+                              .AddMeter("XE.LocalAiEngine.AI.Agent")
                               // Flows the OpenTelemetryChatClient's gen_ai token/duration metrics (MEAI meter
                               // "Microsoft.Extensions.AI"); wildcard mirrors the tracing AddSource below.
                               .AddMeter("Microsoft.Extensions.AI*");
