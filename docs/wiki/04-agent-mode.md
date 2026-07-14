@@ -276,10 +276,13 @@ enabled, `PlaybookRetrievalSelector.SelectAsync` chooses what to inject:
   agent/profile pin), classified through the shared `IModelCapabilityResolver` — so a cloud-pinned
   agent, orchestration participant, or spawned sub-agent is withheld the knowledge tools even on a
   local-active turn, closing the pin-bypass. Node-local document/chunk/query content is therefore not
-  handed to a cloud provider through a tool call. Attachments and the workspace file tools
-  (`list_files`/`read_file`/`search_text`) are treated as per-conversation user consent and are NOT
-  locality-gated (the user attached them to a conversation whose model they chose); they are still fenced
-  as untrusted data. See [Knowledge Base](15-knowledge-base.md) and [Security & Privacy](12-security-and-privacy.md).
+  handed to a cloud provider through a tool call. The coder workspace file tools
+  (`list_files`/`read_file`/`search_text`) and conversation attachments are gated the **same way**: for a
+  cloud effective model without the opt-in, the file tools are withheld from the offer, attachments are
+  neither staged nor inlined, and the user gets a visible turn notice naming the effective model. The
+  single opt-in `KnowledgeBase:AllowCloudModelAccess` covers knowledge tools, file tools, and attachments.
+  Attachment content that does reach a model is fenced as untrusted data with a server-secret-derived
+  nonce (client cannot forge the fence). See [Knowledge Base](15-knowledge-base.md) and [Security & Privacy](12-security-and-privacy.md).
 - **Privacy-sensitive ops are node-local only.** Playbook analysis (P3), the eval gate (P4), and memory
   extraction all run on node-local models — never cloud. See [Security & Privacy](12-security-and-privacy.md).
 - **Spawn is bounded.** Depth cap (child omits the tool), per-root fan-out lease, and a cloud-spawn

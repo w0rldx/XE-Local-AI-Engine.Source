@@ -14,6 +14,7 @@ using XE_Local_AI_Engine.Client.Services.Coder.Tools;
 using XE_Local_AI_Engine.Client.Services.DocumentIngestion;
 using XE_Local_AI_Engine.Client.Services.Events;
 using XE_Local_AI_Engine.Client.Services.Invocation;
+using XE_Local_AI_Engine.Client.Services.Knowledge;
 using XE_Local_AI_Engine.Client.Services.Memory;
 using XE_Local_AI_Engine.Client.Services.NodeSettings;
 
@@ -36,6 +37,7 @@ public sealed class NodeChatStreamService(
     IConversationUploadedFileStore uploadedFileStore,
     IConversationSandboxStager conversationSandboxStager,
     IUntrustedContentFenceSeedProvider fenceSeedProvider,
+    IOptions<KnowledgeBaseOptions> knowledgeOptions,
     TimeProvider timeProvider,
     ILogger<NodeChatStreamService> logger) : INodeChatStreamService
 {
@@ -219,21 +221,45 @@ public sealed class NodeChatStreamService(
             ? resolved?.AllowedTools ?? localToolOfferProvider.GetOfferedTools(activeModel, resolution.ActiveModelIsCloud)
             : null;
 
+        // Cloud-egress consent: node-local conversation attachments are private data. When the EFFECTIVE model that runs
+        // this turn is cloud-hosted (including via an agent/profile pin, not just the user's active pick) and the operator
+        // has NOT opted in (KnowledgeBase:AllowCloudModelAccess), attachments are withheld — neither staged for the file
+        // tools nor inlined into the prompt — and the user gets a visible notice naming the effective model. This is the
+        // load-bearing egress gate; the offer provider additionally withholds the file/knowledge tools for a cloud model.
+        var attachmentsAllowed = !resolution.EffectiveModelIsCloud || knowledgeOptions.Value.AllowCloudModelAccess;
+        if (!attachmentsAllowed)
+        {
+            await ReportAttachmentsWithheldIfPresentAsync(request, resolution.EffectiveModel, requestId, cancellationToken).ConfigureAwait(false);
+        }
+
         // Agent mode: when the selected agent can read files through the AgentHome sandbox (its offer includes the
         // read-only coder tools or run_in_agent_home), re-stage the sandbox with THIS conversation's uploaded attachments
         // BEFORE building the turn context, so list_files/read_file/search_text see them under attachments/. The stager
-        // returns the exact staged paths (empty when Agent Mode is off or there are no extracted files).
+        // returns the exact staged paths (empty when Agent Mode is off, there are no extracted files, OR attachments are
+        // withheld from a cloud effective model).
         var isAgentHomeTurn = offerTools && OffersAgentHomeTools(allowedTools);
-        var stagedAttachmentPaths = isAgentHomeTurn
+        var stagedAttachmentPaths = isAgentHomeTurn && attachmentsAllowed
             ? await PrepareConversationAttachmentsSafelyAsync(request.ConversationId, runCancellation.Token).ConfigureAwait(false)
             : [];
 
         // The synthetic prepended context differs by mode: plain chat inlines the extracted text directly; agent mode
         // injects only a short pointer naming the staged files (the agent reads their content through its tools, so the
-        // text is not double-fed). The pointer is what stops a weak model from guessing a wrong file name.
-        var attachmentContext = offerTools
-            ? BuildAgentAttachmentHint(stagedAttachmentPaths, fenceSeedProvider.DeriveSeed(request.ConversationId))
-            : await BuildAttachmentContextMessageAsync(request.ConversationId, request.AttachmentFileIds, cancellationToken).ConfigureAwait(false);
+        // text is not double-fed). The pointer is what stops a weak model from guessing a wrong file name. When
+        // attachments are withheld from a cloud effective model, neither path composes anything (staged paths are empty
+        // and the plain-chat inline is skipped).
+        ConversationMessageDto? attachmentContext;
+        if (offerTools)
+        {
+            attachmentContext = BuildAgentAttachmentHint(stagedAttachmentPaths, fenceSeedProvider.DeriveSeed(request.ConversationId));
+        }
+        else if (attachmentsAllowed)
+        {
+            attachmentContext = await BuildAttachmentContextMessageAsync(request.ConversationId, request.AttachmentFileIds, cancellationToken).ConfigureAwait(false);
+        }
+        else
+        {
+            attachmentContext = null;
+        }
 
         var package = runtimePackageBuilder.Build(new LocalChatRuntimePackageRequest(requestId,
             request.ConversationId,
@@ -455,6 +481,40 @@ public sealed class NodeChatStreamService(
                       });
 
         return attachmentContext is null ? history.ToList() : history.Prepend(attachmentContext).ToList();
+    }
+
+    // Emits the AttachmentsWithheld notice when a cloud effective model would otherwise have received attachment content
+    // but the operator has not opted in — but ONLY when the conversation actually has attachments to withhold, so a
+    // plain cloud chat with no attachments stays silent. Reuses the same turn-notice fan-out as the runner's notices.
+    private async Task ReportAttachmentsWithheldIfPresentAsync(NodeChatStreamRequest request,
+        string? effectiveModel,
+        Guid requestId,
+        CancellationToken cancellationToken)
+    {
+        bool hasAttachments;
+        if (request.AttachmentFileIds is { Count: > 0 })
+        {
+            hasAttachments = true;
+        }
+        else
+        {
+            var available = await uploadedFileStore.ListAsync(request.ConversationId, cancellationToken).ConfigureAwait(false);
+            hasAttachments = available.Any(file => file.ExtractionStatus == DocumentExtractionStatus.Extracted);
+        }
+
+        if (!hasAttachments)
+        {
+            return;
+        }
+
+        await eventDispatcher.ReportTurnNoticeAsync(new TurnNoticePayload
+            {
+                InvocationId = requestId,
+                Kind = TurnNoticeKind.AttachmentsWithheld,
+                Message = "Your uploaded files were not shared with the cloud model handling this message. Enable cloud data access for this node to allow attachments and file tools to reach a cloud model.",
+                Detail = effectiveModel
+            })
+            .ConfigureAwait(false);
     }
 
     // Builds the synthetic plain-chat context message from the conversation's uploaded attachments named in the send.

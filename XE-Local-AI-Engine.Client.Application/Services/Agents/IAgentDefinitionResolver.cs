@@ -76,4 +76,5 @@ public sealed record ResolvedAgentRuntime(
     string AgentName = "",
     IReadOnlyList<ResolvedSkill>? Skills = null,
     bool PlaybookEnabled = false,
-    bool MemoryExtractionEnabled = true);
+    bool MemoryExtractionEnabled = true,
+    bool EffectiveModelIsCloud = false);
