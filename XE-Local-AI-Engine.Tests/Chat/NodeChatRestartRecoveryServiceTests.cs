@@ -252,6 +252,126 @@ public sealed class NodeChatRestartRecoveryServiceTests : IDisposable
     }
 
     [Test]
+    public async Task CancelMessageAsync_WhenTransitions_WritesThinEnvelopeAtomically()
+    {
+        await using var provider = await BuildProviderAsync("cancel-writes-thin-envelope.sqlite").ConfigureAwait(false);
+        var persistence = CreatePersistenceService(provider);
+        var agentId = Guid.NewGuid();
+        var conversation = await persistence.CreateConversationAsync(new NodeChatCreateConversationRequest("CancelEnvelope", "node", CreatedAtUtc: 10)).ConfigureAwait(false);
+        var correlation = await CreateAssistantPlaceholderAsync(persistence, conversation.ConversationId, createdAtUtc: 11, agentDefinitionId: agentId).ConfigureAwait(false);
+        await persistence.MarkAssistantStreamingAsync(correlation, updatedAtUtc: 12).ConfigureAwait(false);
+
+        // A cancel that transitions the row writes its (thin) envelope in the same guarded UPDATE. No InvocationState exists
+        // at cancel time, so tokens/invocation id/duration are absent, but the envelope is present immediately.
+        var cancel = await persistence.CancelMessageAsync(new NodeChatCancelRequest(correlation, CancelledAtUtc: 13)).ConfigureAwait(false);
+        AssertEx.True(cancel.Cancelled);
+
+        var envelopes = await ReadEnvelopesAsync(provider, conversation.ConversationId).ConfigureAwait(false);
+        AssertEx.Equal(expected: 1, envelopes.Count);
+        var envelope = envelopes[0];
+        AssertEx.Equal(correlation.MessageId, envelope.MessageId);
+        AssertEx.Equal(NodeChatMessageStatusValues.Cancelled, envelope.TerminalStatus);
+        AssertEx.False(envelope.Success);
+        // The bound agent id and correlation are carried from the winning row; run detail (invocation id/tokens) is absent.
+        AssertEx.Equal(agentId, envelope.AgentDefinitionId);
+        AssertEx.Equal(correlation.RequestId, envelope.RequestId);
+        AssertEx.Null(envelope.InvocationId);
+    }
+
+    [Test]
+    public async Task CancelThenAuthoritativeCompletion_EnrichesThinEnvelopeToWinningStatus()
+    {
+        await using var provider = await BuildProviderAsync("cancel-then-complete-envelope.sqlite").ConfigureAwait(false);
+        var persistence = CreatePersistenceService(provider);
+        var conversation = await persistence.CreateConversationAsync(new NodeChatCreateConversationRequest("MidRunCancel", "node", CreatedAtUtc: 10)).ConfigureAwait(false);
+        var correlation = await CreateAssistantPlaceholderAsync(persistence, conversation.ConversationId, createdAtUtc: 11).ConfigureAwait(false);
+        await persistence.MarkAssistantStreamingAsync(correlation, updatedAtUtc: 12).ConfigureAwait(false);
+
+        // Mid-run cancel wins the row first, writing a thin Cancelled envelope.
+        await persistence.CancelMessageAsync(new NodeChatCancelRequest(correlation, CancelledAtUtc: 13)).ConfigureAwait(false);
+        var afterCancel = await ReadEnvelopesAsync(provider, conversation.ConversationId).ConfigureAwait(false);
+        AssertEx.Equal(expected: 1, afterCancel.Count);
+        AssertEx.Equal(NodeChatMessageStatusValues.Cancelled, afterCancel[0].TerminalStatus);
+
+        // The run actually completes: the pump's authoritative terminalize supersedes the Cancelled row AND (option b)
+        // UPSERTs the envelope in place, so the single envelope now reflects the real completed outcome — never a stale thin
+        // Cancelled envelope over a Completed row. The envelope terminal status equals the row's final status (the invariant).
+        var invocationId = Guid.NewGuid();
+        var completed = await persistence.TerminalizeAssistantMessageAsync(new NodeChatTerminalizeMessageRequest(correlation,
+                NodeChatMessageStatusValues.Completed,
+                UpdatedAtUtc: 14,
+                "the real answer",
+                Model: "llama-3.1",
+                InputCount: 100,
+                OutputCount: 25,
+                Envelope: new AgentRunEnvelopeMetadata(invocationId, DurationMs: 1500L, ContentChunkCount: 8)))
+            .ConfigureAwait(false);
+        AssertEx.Equal(NodeChatMessageStatusValues.Completed, completed.Status);
+
+        var envelopes = await ReadEnvelopesAsync(provider, conversation.ConversationId).ConfigureAwait(false);
+        AssertEx.Equal(expected: 1, envelopes.Count);
+        var envelope = envelopes[0];
+        AssertEx.Equal(NodeChatMessageStatusValues.Completed, envelope.TerminalStatus);
+        AssertEx.True(envelope.Success);
+        AssertEx.Equal(invocationId, envelope.InvocationId);
+        AssertEx.Equal(expected: 1500L, envelope.DurationMs);
+        AssertEx.Equal(expected: 100, envelope.PromptTokens);
+        AssertEx.Equal(expected: 25, envelope.CompletionTokens);
+        AssertEx.Equal(expected: 8, envelope.ContentChunkCount);
+    }
+
+    [Test]
+    public async Task CancelThenInterrupted_LeavesCancelledEnvelope_PreservingTheInvariant()
+    {
+        await using var provider = await BuildProviderAsync("cancel-then-interrupt-envelope.sqlite").ConfigureAwait(false);
+        var persistence = CreatePersistenceService(provider);
+        var conversation = await persistence.CreateConversationAsync(new NodeChatCreateConversationRequest("CancelThenInterrupt", "node", CreatedAtUtc: 10)).ConfigureAwait(false);
+        var correlation = await CreateAssistantPlaceholderAsync(persistence, conversation.ConversationId, createdAtUtc: 11).ConfigureAwait(false);
+        await persistence.MarkAssistantStreamingAsync(correlation, updatedAtUtc: 12).ConfigureAwait(false);
+        await persistence.CancelMessageAsync(new NodeChatCancelRequest(correlation, CancelledAtUtc: 13)).ConfigureAwait(false);
+
+        // Interrupted is NOT whitelisted to supersede Cancelled, so the terminalize message UPDATE is a guard-rejected no-op
+        // and its envelope write never runs. The row stays Cancelled and the envelope stays Cancelled: status equality holds.
+        var interrupted = await persistence.TerminalizeAssistantMessageAsync(new NodeChatTerminalizeMessageRequest(correlation,
+                NodeChatMessageStatusValues.Interrupted,
+                UpdatedAtUtc: 14,
+                Error: "stream lost",
+                Envelope: new AgentRunEnvelopeMetadata(Guid.NewGuid(), DurationMs: 0L)))
+            .ConfigureAwait(false);
+        AssertEx.Equal(NodeChatMessageStatusValues.Cancelled, interrupted.Status);
+
+        var envelopes = await ReadEnvelopesAsync(provider, conversation.ConversationId).ConfigureAwait(false);
+        AssertEx.Equal(expected: 1, envelopes.Count);
+        AssertEx.Equal(NodeChatMessageStatusValues.Cancelled, envelopes[0].TerminalStatus);
+        AssertEx.Null(envelopes[0].InvocationId);
+    }
+
+    [Test]
+    public async Task CancelMessageAsync_WhenAlreadyTerminal_WritesNoEnvelope()
+    {
+        await using var provider = await BuildProviderAsync("cancel-after-terminal-envelope.sqlite").ConfigureAwait(false);
+        var persistence = CreatePersistenceService(provider);
+        var conversation = await persistence.CreateConversationAsync(new NodeChatCreateConversationRequest("CancelAfterTerminal", "node", CreatedAtUtc: 10)).ConfigureAwait(false);
+        var correlation = await CreateAssistantPlaceholderAsync(persistence, conversation.ConversationId, createdAtUtc: 11).ConfigureAwait(false);
+        await persistence.MarkAssistantStreamingAsync(correlation, updatedAtUtc: 12).ConfigureAwait(false);
+        var completionInvocationId = Guid.NewGuid();
+        await persistence.TerminalizeAssistantMessageAsync(new NodeChatTerminalizeMessageRequest(correlation, NodeChatMessageStatusValues.Completed, UpdatedAtUtc: 13, "done",
+                Envelope: new AgentRunEnvelopeMetadata(completionInvocationId, DurationMs: 42L)))
+            .ConfigureAwait(false);
+
+        // A cancel that races a completed terminalize is guard-rejected (the row already left the cancellable set), so it
+        // writes no envelope: the completed envelope stands unchanged and is never clobbered by a thin cancel one.
+        var cancel = await persistence.CancelMessageAsync(new NodeChatCancelRequest(correlation, CancelledAtUtc: 14)).ConfigureAwait(false);
+        AssertEx.False(cancel.Cancelled);
+        AssertEx.Equal(NodeChatMessageStatusValues.Completed, cancel.Status);
+
+        var envelopes = await ReadEnvelopesAsync(provider, conversation.ConversationId).ConfigureAwait(false);
+        AssertEx.Equal(expected: 1, envelopes.Count);
+        AssertEx.Equal(NodeChatMessageStatusValues.Completed, envelopes[0].TerminalStatus);
+        AssertEx.Equal(completionInvocationId, envelopes[0].InvocationId);
+    }
+
+    [Test]
     public async Task ConversationPurge_ThenRecovery_LeavesNoOrphanEnvelope()
     {
         await using var provider = await BuildProviderAsync("purge-race-no-orphan.sqlite").ConfigureAwait(false);
