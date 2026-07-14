@@ -310,6 +310,71 @@ public sealed class MemoryExtractionDispatcherTests : IDisposable
             "The straggler must unwind via cancellation before Dispose — no ObjectDisposedException should surface.");
     }
 
+    [Test]
+    public async Task StopAsync_WhenJobIgnoresCancellation_AbandonsWithinBoundsLogsCountAndSurvivesRelease()
+    {
+        var agentId = Guid.NewGuid();
+
+        // A job that IGNORES cooperative cancellation entirely: it blocks on a TCS that is NOT tied to the drain token, so
+        // cancelling that token cannot unblock it (unlike the cooperative straggler in the sibling test, which parks on
+        // Task.Delay(Timeout.Infinite, token)). With the minimum 1s window plus the fixed 2s grace, StopAsync must STILL
+        // return promptly, count the one abandoned job, log it content-free, and Dispose without throwing — the bounded,
+        // honest shutdown contract. Releasing the job AFTER Dispose must not crash the process (the disposed-semaphore /
+        // catch-all swallow paths hold).
+        var entered = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var release = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var resumed = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var extraction = Substitute.For<IMemoryExtractionService>();
+        extraction.ExtractAsync(Arg.Any<MemoryExtractionRunInput>(), Arg.Any<CancellationToken>())
+                  .Returns(async _ =>
+                  {
+                      entered.TrySetResult();
+                      try
+                      {
+                          // Deliberately does NOT observe the passed cancellation token: only the explicit release ends it.
+                          await release.Task.ConfigureAwait(false);
+                      }
+                      finally
+                      {
+                          resumed.TrySetResult();
+                      }
+
+                      return MemoryExtractionOutcome.NoModelConfigured();
+                  });
+
+        await using var provider = await BuildProviderAsync("exec-log-abandon.sqlite", extraction).ConfigureAwait(false);
+        var logger = new CapturingLogger<MemoryExtractionWorker>();
+        var optionsAccessor = Options.Create(new MemoryExtractionOptions { MaxConcurrentExtractions = 1, ShutdownDrainTimeoutSeconds = 1 });
+        var dispatcher = new MemoryExtractionDispatcher(optionsAccessor, NullLogger<MemoryExtractionDispatcher>.Instance);
+        var worker = new MemoryExtractionWorker(provider.GetRequiredService<IServiceScopeFactory>(),
+            dispatcher,
+            optionsAccessor,
+            logger);
+        await worker.StartAsync(CancellationToken.None).ConfigureAwait(false);
+
+        dispatcher.Dispatch(Telemetry(agentId), Run(agentId, Guid.NewGuid(), Guid.NewGuid()));
+        await entered.Task.WaitAsync(TimeSpan.FromSeconds(5)).ConfigureAwait(false);
+
+        // Even though the job never observes cancellation, StopAsync completes within bounds (1s window + 2s grace + slack)
+        // and Dispose does not throw despite the still-running straggler.
+        await worker.StopAsync(CancellationToken.None).WaitAsync(TimeSpan.FromSeconds(15)).ConfigureAwait(false);
+        worker.Dispose();
+
+        var log = logger.AllText;
+        AssertEx.True(log.Contains("Abandoned 1 memory-extraction job(s) that ignored cancellation", StringComparison.Ordinal),
+            "The abandoned path must log the explicit content-free abandoned-count warning.");
+        AssertEx.False(log.Contains("ObjectDisposed", StringComparison.Ordinal),
+            "Abandonment is expected and swallowed — no ObjectDisposedException should surface in the log.");
+
+        // Release the abandoned job AFTER Dispose: on resume its finally hits ReleaseConcurrency against the disposed
+        // semaphore (ObjectDisposedException, swallowed) and the catch-all contains any fault. Nothing may crash the
+        // process — the job simply runs to completion and its self-removing continuation drops it from the set.
+        release.TrySetResult();
+        await resumed.Task.WaitAsync(TimeSpan.FromSeconds(5)).ConfigureAwait(false);
+        AssertEx.False(logger.AllText.Contains("ObjectDisposed", StringComparison.Ordinal),
+            "Releasing the abandoned job after Dispose must be swallowed silently — no ObjectDisposedException may surface.");
+    }
+
     private static MemoryExtractionDispatchContext Telemetry(Guid agentId)
     {
         return new MemoryExtractionDispatchContext(agentId,

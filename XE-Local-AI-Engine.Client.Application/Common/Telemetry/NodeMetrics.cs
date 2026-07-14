@@ -34,4 +34,13 @@ public static class NodeMetrics
     public static readonly Counter<long> InvocationFailedTotal =
         Meter.CreateCounter<long>("invocation_failed_total",
             description: "Number of failed invocations by failure source.");
+
+    /// <summary>
+    ///     Incremented (by the abandoned count) when the memory-extraction worker abandons in-flight extraction job(s) at
+    ///     shutdown because they ignored cooperative cancellation past the drain deadline plus the fixed grace. Content-free
+    ///     (a count only) — the deliberate cost of a bounded shutdown that never waits indefinitely.
+    /// </summary>
+    public static readonly Counter<long> MemoryExtractionAbandonedTotal =
+        Meter.CreateCounter<long>("memory_extraction_abandoned_total",
+            description: "Number of memory-extraction jobs abandoned at shutdown after ignoring cancellation within the grace.");
 }
