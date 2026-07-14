@@ -103,7 +103,19 @@ public sealed class UploadKnowledgeDocumentEndpoint(
         // re-running the pipeline would be wasted work.
         if (result.WasInserted)
         {
-            await _ingestionDispatcher.EnqueueAsync(result.DocumentId, ct).ConfigureAwait(false);
+            var admission = await _ingestionDispatcher.EnqueueAsync(result.DocumentId, ct).ConfigureAwait(false);
+            if (admission == KnowledgeIngestionEnqueueResult.QueueFull)
+            {
+                // The bounded ingestion queue is full: the blob is persisted (so a retry dedupes to it) but background
+                // indexing was not admitted. Fail with the same busy status + Retry-After the conversation upload uses so
+                // the client retries shortly rather than the server growing an unbounded backlog. A later reindex (or a
+                // retry once the queue drains) picks the document up.
+                HttpContext.Response.Headers.RetryAfter = "5";
+                await Send.StringAsync("The server is busy indexing documents. Please retry shortly.",
+                    StatusCodes.Status503ServiceUnavailable,
+                    cancellation: ct).ConfigureAwait(false);
+                return;
+            }
         }
 
         var status = await _catalogService.GetStatusAsync(result.DocumentId, ct).ConfigureAwait(false)
