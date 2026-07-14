@@ -37,6 +37,11 @@ internal static class ChatPumpTestFactory
             return Task.CompletedTask;
         }
 
+        public Task<IReadOnlyList<AgentRunEnvelopeRecord>> ListRunEnvelopesAsync(Guid? conversationId, int limit, int offset = 0, CancellationToken cancellationToken = default)
+        {
+            return Task.FromResult<IReadOnlyList<AgentRunEnvelopeRecord>>([]);
+        }
+
         public Task<IReadOnlyList<AgentExecutionLogRecord>> ListByAgentAsync(Guid agentDefinitionId, int limit, int offset = 0, CancellationToken cancellationToken = default)
         {
             return Task.FromResult<IReadOnlyList<AgentExecutionLogRecord>>([]);

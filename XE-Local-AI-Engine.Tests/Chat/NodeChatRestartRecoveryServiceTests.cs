@@ -4,6 +4,7 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using XE_Local_AI_Engine.Client.Persistence;
 using XE_Local_AI_Engine.Client.Persistence.Implementation;
+using XE_Local_AI_Engine.Client.Persistence.Stores;
 using XE_Local_AI_Engine.Client.Services.Chat;
 using XE_Local_AI_Engine.Client.Services.Chat.Implementation;
 using XE_Local_AI_Engine.Tests.Testing;
@@ -133,6 +134,64 @@ public sealed class NodeChatRestartRecoveryServiceTests : IDisposable
         AssertEx.Equal(expected: 0, recoveredCount);
         AssertEx.Equal(NodeChatMessageStatusValues.Completed, loadedUserMessage.Status);
         AssertEx.Equal(expected: 31L, loadedUserMessage.UpdatedAtUtc);
+    }
+
+    [Test]
+    public async Task RecoverInterruptedMessagesAsync_BackfillsRunEnvelopesForInterruptedMessages()
+    {
+        await using var provider = await BuildProviderAsync("restart-recovery-envelope-backfill.sqlite").ConfigureAwait(false);
+        var persistence = CreatePersistenceService(provider);
+        var recovery = CreateRecoveryService(provider);
+        var conversation = await persistence.CreateConversationAsync(new NodeChatCreateConversationRequest("Backfill", "node", CreatedAtUtc: 10)).ConfigureAwait(false);
+
+        // Two non-terminal assistant rows (a crash between message commit and the best-effort envelope write) and one
+        // completed row that recovery must not touch.
+        var pendingCorrelation = await CreateAssistantPlaceholderAsync(persistence, conversation.ConversationId, createdAtUtc: 11).ConfigureAwait(false);
+        var streamingCorrelation = await CreateAssistantPlaceholderAsync(persistence, conversation.ConversationId, createdAtUtc: 12).ConfigureAwait(false);
+        var completedCorrelation = await CreateAssistantPlaceholderAsync(persistence, conversation.ConversationId, createdAtUtc: 13).ConfigureAwait(false);
+        await persistence.MarkAssistantStreamingAsync(streamingCorrelation, updatedAtUtc: 20).ConfigureAwait(false);
+        await persistence.TerminalizeAssistantMessageAsync(new NodeChatTerminalizeMessageRequest(completedCorrelation, NodeChatMessageStatusValues.Completed, UpdatedAtUtc: 21, "done"))
+                         .ConfigureAwait(false);
+
+        _ = await recovery.RecoverInterruptedMessagesAsync(99).ConfigureAwait(false);
+
+        var envelopes = await ReadEnvelopesAsync(provider, conversation.ConversationId).ConfigureAwait(false);
+
+        // Exactly the two interrupted messages get a thin interrupted envelope; the completed message gets none (recovery
+        // only touches non-terminal rows).
+        AssertEx.Equal(expected: 2, envelopes.Count);
+        AssertEx.True(envelopes.All(envelope => envelope.TerminalStatus == NodeChatMessageStatusValues.Interrupted), "Backfilled envelopes must record the interrupted lifecycle.");
+        AssertEx.ContainsSingle(envelopes, envelope => envelope.MessageId == pendingCorrelation.MessageId);
+        AssertEx.ContainsSingle(envelopes, envelope => envelope.MessageId == streamingCorrelation.MessageId);
+        AssertEx.True(envelopes.All(envelope => envelope.MessageId != completedCorrelation.MessageId), "A completed message must not be backfilled.");
+        // Correlation carried through from the message row.
+        AssertEx.ContainsSingle(envelopes, envelope => envelope.RequestId == pendingCorrelation.RequestId);
+    }
+
+    [Test]
+    public async Task RecoverInterruptedMessagesAsync_BackfillIsIdempotent_NoDuplicateEnvelopes()
+    {
+        await using var provider = await BuildProviderAsync("restart-recovery-envelope-idempotent.sqlite").ConfigureAwait(false);
+        var persistence = CreatePersistenceService(provider);
+        var recovery = CreateRecoveryService(provider);
+        var conversation = await persistence.CreateConversationAsync(new NodeChatCreateConversationRequest("Backfill twice", "node", CreatedAtUtc: 10)).ConfigureAwait(false);
+        _ = await CreateAssistantPlaceholderAsync(persistence, conversation.ConversationId, createdAtUtc: 11).ConfigureAwait(false);
+
+        // Running recovery twice (two restarts) must never duplicate an envelope: the NOT EXISTS guard plus the filtered
+        // unique index keep the backfill idempotent.
+        _ = await recovery.RecoverInterruptedMessagesAsync(99).ConfigureAwait(false);
+        _ = await recovery.RecoverInterruptedMessagesAsync(100).ConfigureAwait(false);
+
+        var envelopes = await ReadEnvelopesAsync(provider, conversation.ConversationId).ConfigureAwait(false);
+        AssertEx.Equal(expected: 1, envelopes.Count);
+    }
+
+    private static async Task<IReadOnlyList<AgentRunEnvelopeRecord>> ReadEnvelopesAsync(ServiceProvider provider, Guid conversationId)
+    {
+        await using var scope = provider.CreateAsyncScope();
+        var dbContext = scope.ServiceProvider.GetRequiredService<NodeChatDbContext>();
+        var store = new AgentExecutionLogStore(dbContext, TimeProvider.System);
+        return await store.ListRunEnvelopesAsync(conversationId, limit: 100).ConfigureAwait(false);
     }
 
     private async Task<ServiceProvider> BuildProviderAsync(string fileName)
