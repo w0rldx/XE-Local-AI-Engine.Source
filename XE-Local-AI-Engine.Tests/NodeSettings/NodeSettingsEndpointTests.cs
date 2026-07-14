@@ -7,6 +7,7 @@ using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 using NSubstitute;
 using XE_Local_AI_Engine.Client.Endpoints.NodeSettings.V1;
+using XE_Local_AI_Engine.Client.Models;
 using XE_Local_AI_Engine.Client.Services.Capabilities;
 using XE_Local_AI_Engine.Client.Services.NodeSettings;
 using XE_Local_AI_Engine.Tests.Testing;
@@ -173,6 +174,50 @@ public sealed class NodeSettingsEndpointTests
 
         AssertEx.Equal(HttpStatusCode.BadRequest, response.StatusCode);
         await nodeSettingsStore.DidNotReceiveWithAnyArgs().SaveAsync(Arg.Any<StoredNodeSettings>(), Arg.Any<CancellationToken>());
+    }
+
+    [Test]
+    public async Task SaveNodeSettings_WhenSamplingSeedNotAnInteger_ReturnsValidationProblem()
+    {
+        // Blocker 3: the default-sampling seed rides the wire as a string; a non-integer value is rejected at the boundary.
+        var nodeSettingsStore = Substitute.For<INodeSettingsStore>();
+        await using var factory = CreateFactory(nodeSettingsStore);
+        using var client = factory.CreateClient();
+
+        using var request = CreateRequest(factory, HttpMethod.Put, "/api/local/v1/node-settings");
+        request.Content = JsonContent.Create(new SaveNodeSettingsRequest
+        {
+            SamplingDefaults = new SamplingOptions { Seed = "not-a-number" }
+        });
+        using var response = await client.SendAsync(request).ConfigureAwait(false);
+
+        AssertEx.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+        await nodeSettingsStore.DidNotReceiveWithAnyArgs().SaveAsync(Arg.Any<StoredNodeSettings>(), Arg.Any<CancellationToken>());
+    }
+
+    [Test]
+    public async Task SaveNodeSettings_WhenSamplingSeedIsLargeInteger_SavesExactString()
+    {
+        // A 64-bit seed above 2^53 is accepted and persisted verbatim — the string wire form loses no precision.
+        const string largeSeed = "9007199254740993";
+        var nodeSettingsStore = Substitute.For<INodeSettingsStore>();
+        var capabilityReporter = Substitute.For<ICapabilityReporter>();
+        capabilityReporter.ReportToApiAsync(Arg.Any<CancellationToken>()).Returns(Task.CompletedTask);
+        await using var factory = CreateFactory(nodeSettingsStore, capabilityReporter);
+        using var client = factory.CreateClient();
+
+        using var request = CreateRequest(factory, HttpMethod.Put, "/api/local/v1/node-settings");
+        request.Content = JsonContent.Create(new SaveNodeSettingsRequest
+        {
+            MaxMessageRequestTimeoutSeconds = 600,
+            SamplingDefaults = new SamplingOptions { Seed = largeSeed }
+        });
+        using var response = await client.SendAsync(request).ConfigureAwait(false);
+
+        AssertEx.Equal(HttpStatusCode.OK, response.StatusCode);
+        await nodeSettingsStore.Received(1).SaveAsync(
+            Arg.Is<StoredNodeSettings>(stored => stored.SamplingDefaults != null && stored.SamplingDefaults.Seed == largeSeed),
+            Arg.Any<CancellationToken>());
     }
 
     [Test]

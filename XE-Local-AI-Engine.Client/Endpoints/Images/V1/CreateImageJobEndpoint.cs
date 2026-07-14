@@ -3,6 +3,7 @@ namespace XE_Local_AI_Engine.Client.Endpoints.Images.V1;
 using FastEndpoints;
 using XE_Local_AI_Engine.Client.Endpoints.Common;
 using XE_Local_AI_Engine.Client.Endpoints.Images.V1.Mappers;
+using XE_Local_AI_Engine.Client.Models;
 using XE_Local_AI_Engine.Client.Services.Auth;
 using XE_Local_AI_Engine.Client.Services.Images;
 
@@ -35,6 +36,14 @@ public sealed class CreateImageJobEndpoint(IImageJobCoordinator coordinator)
         if (string.IsNullOrWhiteSpace(req.Prompt))
         {
             AddError("A prompt is required.");
+            await Send.ErrorsAsync(cancellation: ct).ConfigureAwait(false);
+            return;
+        }
+
+        // The seed rides the wire as a precision-safe string; reject a non-integer value with a 400 before enqueue.
+        if (!SeedValue.TryParse(req.Seed, out _, out var seedError))
+        {
+            AddError(seedError!);
             await Send.ErrorsAsync(cancellation: ct).ConfigureAwait(false);
             return;
         }

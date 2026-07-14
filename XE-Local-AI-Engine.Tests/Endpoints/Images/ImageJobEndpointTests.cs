@@ -102,6 +102,98 @@ public sealed class ImageJobEndpointTests
     }
 
     [Test]
+    public async Task CreateImageJob_WithLargeSeed_RoundTripsExactlyAsString()
+    {
+        // Blocker 3: a 64-bit seed above 2^53 (9007199254740992) must survive the wire exactly. Carried as a JSON string,
+        // it reaches the coordinator as the exact long and comes back as the exact string — a JSON number would round it.
+        const string largeSeed = "9007199254740993";
+        var coordinator = new StubImageJobCoordinator();
+        await using var factory = new TestingWebAppFactory
+        {
+            ConfigureAdditionalTestServices = services =>
+            {
+                services.RemoveAll<IImageJobCoordinator>();
+                services.AddSingleton<IImageJobCoordinator>(coordinator);
+            }
+        };
+        using var client = factory.CreateClient();
+
+        using var createRequest = new HttpRequestMessage(HttpMethod.Post, $"{ApiPrefix}/images/jobs")
+        {
+            Content = JsonContent.Create(new
+            {
+                modelName = "stable-diffusion-1.5",
+                prompt = "a watercolor fox",
+                seed = largeSeed
+            })
+        };
+        factory.AddNodeBearerToken(createRequest);
+
+        using var createResponse = await client.SendAsync(createRequest).ConfigureAwait(false);
+        AssertEx.Equal(HttpStatusCode.OK, createResponse.StatusCode);
+
+        var created = await createResponse.Content.ReadFromJsonAsync<JsonElement>(JsonOptions).ConfigureAwait(false);
+        // The response seed is a JSON string equal to the exact value sent — never a rounded number.
+        AssertEx.Equal(JsonValueKind.String, created.GetProperty("seed").ValueKind);
+        AssertEx.Equal(largeSeed, created.GetProperty("seed").GetString());
+        // The coordinator received the exact long, proving no precision was lost crossing the DTO boundary.
+        AssertEx.Equal(9007199254740993L, coordinator.LastInput!.Seed);
+    }
+
+    [Test]
+    public async Task CreateImageJob_WithBlankSeed_DefaultsToRandomSentinel()
+    {
+        // A null/omitted seed requests a runtime-chosen seed — the coordinator's -1 sentinel.
+        var coordinator = new StubImageJobCoordinator();
+        await using var factory = new TestingWebAppFactory
+        {
+            ConfigureAdditionalTestServices = services =>
+            {
+                services.RemoveAll<IImageJobCoordinator>();
+                services.AddSingleton<IImageJobCoordinator>(coordinator);
+            }
+        };
+        using var client = factory.CreateClient();
+
+        using var createRequest = new HttpRequestMessage(HttpMethod.Post, $"{ApiPrefix}/images/jobs")
+        {
+            Content = JsonContent.Create(new { modelName = "stable-diffusion-1.5", prompt = "a watercolor fox" })
+        };
+        factory.AddNodeBearerToken(createRequest);
+
+        using var createResponse = await client.SendAsync(createRequest).ConfigureAwait(false);
+
+        AssertEx.Equal(HttpStatusCode.OK, createResponse.StatusCode);
+        AssertEx.Equal(expected: -1L, coordinator.LastInput!.Seed);
+    }
+
+    [Test]
+    public async Task CreateImageJob_WithNonIntegerSeed_Returns400()
+    {
+        var coordinator = new StubImageJobCoordinator();
+        await using var factory = new TestingWebAppFactory
+        {
+            ConfigureAdditionalTestServices = services =>
+            {
+                services.RemoveAll<IImageJobCoordinator>();
+                services.AddSingleton<IImageJobCoordinator>(coordinator);
+            }
+        };
+        using var client = factory.CreateClient();
+
+        using var createRequest = new HttpRequestMessage(HttpMethod.Post, $"{ApiPrefix}/images/jobs")
+        {
+            Content = JsonContent.Create(new { modelName = "stable-diffusion-1.5", prompt = "a watercolor fox", seed = "not-a-number" })
+        };
+        factory.AddNodeBearerToken(createRequest);
+
+        using var createResponse = await client.SendAsync(createRequest).ConfigureAwait(false);
+
+        AssertEx.Equal(HttpStatusCode.BadRequest, createResponse.StatusCode);
+        AssertEx.Null(coordinator.LastInput);
+    }
+
+    [Test]
     public async Task CancelImageJob_BodyLessPost_IsAcceptedNot415()
     {
         // Route-only POST binds the job id from the route, so a well-behaved client sends no body (no Content-Type). The
@@ -132,10 +224,14 @@ public sealed class ImageJobEndpointTests
     {
         private readonly ConcurrentDictionary<Guid, ImageJobView> _jobs = new();
 
+        /// <summary>The most recent input handed to <see cref="EnqueueAsync" />; null until the first enqueue.</summary>
+        public CreateImageJobInput? LastInput { get; private set; }
+
         public Task<Guid> EnqueueAsync(CreateImageJobInput input, CancellationToken cancellationToken)
         {
             ArgumentNullException.ThrowIfNull(input);
 
+            LastInput = input;
             var id = Guid.NewGuid();
             _jobs[id] = new ImageJobView
             {
