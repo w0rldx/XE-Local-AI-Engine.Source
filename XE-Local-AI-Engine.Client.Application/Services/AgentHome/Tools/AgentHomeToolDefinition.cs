@@ -11,7 +11,7 @@ internal static class AgentHomeToolDefinition
     public const string ToolName = "run_in_agent_home";
 
     public const string Description =
-        "Run an agent task inside the node-scoped AgentHome sandbox over selected folders.";
+        "Run an agent task inside the node-scoped, supervised AgentHome workspace over selected folders.";
 
     /// <summary>The AgentHome tool parameter schema. Kept byte-for-byte aligned with the server seed.</summary>
     public const string ParameterSchema = """

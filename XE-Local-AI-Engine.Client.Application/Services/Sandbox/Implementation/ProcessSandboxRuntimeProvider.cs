@@ -20,11 +20,15 @@ using Microsoft.Win32.SafeHandles;
 ///     lives INSIDE this class; a future hardware-isolated (MXC) provider replaces the whole provider, not the
 ///     contract.
 ///     <para>
-///         Security posture (v1): there is NO network isolation for sandbox processes. The single-user local-node
-///         threat model accepts this — risky execution is approval-gated upstream and soft-guarded here (jail,
-///         timeout, byte budgets); hardware isolation and a no-network mechanism are deferred to a future MXC provider
-///         behind this same seam. The provider does NOT claim best-effort no-network because it implements no
-///         mechanism for it.
+///         Security posture (v1): this is supervised execution, NOT an OS isolation boundary. There is NO network
+///         isolation and NO CPU/memory/PID enforcement for sandbox processes; a request that asks for either is
+///         rejected fail-closed (<see cref="SandboxCapabilityNotSupportedException" />) rather than silently ignored.
+///         What IS enforced: the working-directory jail, path/symlink guards, a scrubbed child environment (the
+///         worker's secret-bearing environment is NOT inherited — only a fixed system/toolchain allow-list is
+///         forwarded), the per-command timeout, tree-kill, and captured-output byte caps. The single-user local-node
+///         threat model accepts the absent isolation — risky execution is approval-gated upstream — and hardware
+///         isolation plus a no-network mechanism are deferred to a future MXC provider behind this same seam. The
+///         provider does NOT claim best-effort no-network because it implements no mechanism for it.
 ///     </para>
 /// </summary>
 public sealed class ProcessSandboxRuntimeProvider : ISandboxRuntimeProvider, IDisposable
@@ -46,6 +50,44 @@ public sealed class ProcessSandboxRuntimeProvider : ISandboxRuntimeProvider, IDi
     // redirected through a planted leaf symlink. 0o644 mode for the created file.
     private const int WriteCreateNoFollowCloseOnExecFlags = 0x1 | 0x40 | 0x200 | 0x20000 | 0x80000;
     private const int DefaultCreateFileMode = 0b110_100_100;
+
+    // SECURITY INVARIANT: a sandboxed child NEVER inherits the worker process environment. The worker holds secrets
+    // (cloud API keys, OAuth tokens, the node SQLite key, connection strings) as environment variables; forwarding the
+    // whole environment would hand every one of them to arbitrary sandbox commands. Instead the child starts from an
+    // EMPTY environment and is repopulated only from this fixed allow-list of system/toolchain variables — the minimum
+    // the fixed production executables (`dotnet --version`, `git`, `find`, `grep`) need to run on Linux and Windows —
+    // after which the caller's explicit request.Environment is layered on top. No secret-bearing variable appears here.
+    // Names absent on the current OS are simply skipped; lookup is OS-correct (case-insensitive on Windows).
+    private static readonly string[] InheritableEnvironmentAllowlist =
+    [
+        // Executable resolution + user/home + temp — needed on both platforms.
+        "PATH",
+        "HOME",
+        "TMPDIR",
+        "TMP",
+        "TEMP",
+        // Locale so tool output text is well-formed.
+        "LANG",
+        "LC_ALL",
+        // .NET host location + telemetry/logo suppression (no network, no prompt). DOTNET_ROOT lets the muxer find the
+        // runtime when dotnet is installed off a default path (e.g. a version manager).
+        "DOTNET_ROOT",
+        "DOTNET_CLI_TELEMETRY_OPTOUT",
+        "DOTNET_NOLOGO",
+        // Windows essentials: most Win32 processes fail to start without SystemRoot/ComSpec; PATHEXT resolves
+        // executable extensions; the profile/AppData vars carry the git and NuGet/.NET per-user config the tools read.
+        "SystemRoot",
+        "windir",
+        "SystemDrive",
+        "ComSpec",
+        "PATHEXT",
+        "USERPROFILE",
+        "HOMEDRIVE",
+        "HOMEPATH",
+        "APPDATA",
+        "LOCALAPPDATA"
+    ];
+
     private readonly string _jailRoot;
     private readonly ILogger<ProcessSandboxRuntimeProvider> _logger;
 
@@ -116,10 +158,11 @@ public sealed class ProcessSandboxRuntimeProvider : ISandboxRuntimeProvider, IDi
         // Serves: copy-into / copy-out (local FS within the jail), per-command cancellation (tree-kill), attach
         // (reattach by key), kill (tree-kill + invalidate). NOT served: read-only mounts (no mount layer), network
         // policy (no isolation mechanism in v1 — see the class doc and decision D-1), and resource limits — the
-        // SandboxResourceLimits record (CPU/memory/PID ceilings) is ignored by CreateOrAttachAsync, so this provider
-        // does NOT advertise SupportsResourceLimits. (The per-command timeout and the output byte cap ARE enforced, but
-        // those are not what that flag covers.) follow-up: enforce CPU/mem/PID via pre-exec rlimit
-        // (RLIMIT_AS/CPU/NPROC) post-RC.
+        // SandboxResourceLimits record (CPU/memory/PID ceilings) cannot be enforced, so this provider does NOT advertise
+        // SupportsResourceLimits. Because those two guarantees are unenforceable, CreateOrAttachAsync now REJECTS a
+        // request that asks for them (fail-closed) rather than ignoring them. (The per-command timeout and the output
+        // byte cap ARE enforced, but those are not what that flag covers.) follow-up: enforce CPU/mem/PID via pre-exec
+        // rlimit (RLIMIT_AS/CPU/NPROC) post-RC.
         SandboxProviderCapabilities.SupportsCopyInto
         | SandboxProviderCapabilities.SupportsCopyOut
         | SandboxProviderCapabilities.SupportsCommandCancellation
@@ -130,6 +173,13 @@ public sealed class ProcessSandboxRuntimeProvider : ISandboxRuntimeProvider, IDi
     {
         ArgumentNullException.ThrowIfNull(request);
         cancellationToken.ThrowIfCancellationRequested();
+
+        // Fail-closed capability contract: this provider supervises but does not ISOLATE. It cannot confine network
+        // egress and cannot enforce a CPU/memory/PID ceiling. Rather than silently accept such a request and return a
+        // sandbox weaker than the caller asked for, reject it up front so a caller can never believe it received an
+        // isolation guarantee the provider does not implement. The only network posture it can honestly serve is
+        // Unrestricted (the child shares the host network); any resource limit is unenforceable and likewise rejected.
+        RejectUnenforceableGuarantees(request);
 
         lock (_sync)
         {
@@ -196,6 +246,21 @@ public sealed class ProcessSandboxRuntimeProvider : ISandboxRuntimeProvider, IDi
             startInfo.ArgumentList.Add(argument);
         }
 
+        // Start the child from a scrubbed environment: ProcessStartInfo pre-seeds Environment with the FULL parent
+        // (worker) environment, so clear it and repopulate only the allow-listed system/toolchain variables. This is the
+        // load-bearing anti-leak control — a sandbox command must never observe the worker's secret-bearing variables.
+        startInfo.Environment.Clear();
+        foreach (var name in InheritableEnvironmentAllowlist)
+        {
+            var value = Environment.GetEnvironmentVariable(name);
+            if (value is not null)
+            {
+                startInfo.Environment[name] = value;
+            }
+        }
+
+        // Layer the caller's explicit request environment on top of the allow-list (it may override or add keys the
+        // command genuinely needs). The caller is trusted node code composing a fixed command, not the sandboxed child.
         if (request.Environment is not null)
         {
             foreach (var pair in request.Environment)
@@ -447,6 +512,26 @@ public sealed class ProcessSandboxRuntimeProvider : ISandboxRuntimeProvider, IDi
     }
 
     // ---- jail / state helpers ----
+
+    private static void RejectUnenforceableGuarantees(SandboxCreateRequest request)
+    {
+        // Network: this provider isolates nothing, so the child shares the host network. Unrestricted is the only
+        // honest posture; None (no network) and Restricted (egress allow-list) demand isolation it cannot deliver.
+        if (request.NetworkPolicy != SandboxNetworkPolicy.Unrestricted)
+        {
+            throw new SandboxCapabilityNotSupportedException(string.Create(CultureInfo.InvariantCulture,
+                $"The '{Name}' sandbox provider does not isolate network egress and cannot honor NetworkPolicy '{request.NetworkPolicy}'. It supervises but does not isolate; only NetworkPolicy.Unrestricted is supported. Use an OS-isolated provider to enforce a network policy."));
+        }
+
+        // Resource limits: no cgroup / job-object ceiling is applied, so any requested CPU/memory/PID cap is
+        // unenforceable. Reject rather than silently run without the ceiling the caller asked for.
+        var limits = request.ResourceLimits;
+        if (limits is not null && (limits.CpuCount.HasValue || limits.MemoryMb.HasValue || limits.PidsLimit.HasValue))
+        {
+            throw new SandboxCapabilityNotSupportedException(string.Create(CultureInfo.InvariantCulture,
+                $"The '{Name}' sandbox provider does not enforce resource limits (CPU/memory/PID). Remove SandboxResourceLimits or use an OS-isolated provider that advertises SupportsResourceLimits."));
+        }
+    }
 
     private JailState? FindAliveByKey(SandboxAttachKey attachKey)
     {

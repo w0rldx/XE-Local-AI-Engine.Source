@@ -214,7 +214,7 @@ public sealed class NodeChatStreamService(
         var enableTools = await runtimeSettings.GetEnableToolsAsync(cancellationToken).ConfigureAwait(false);
         var offerTools = request.UseLocalTools && enableTools && resolution.SupportsTools;
         var allowedTools = offerTools
-            ? resolved?.AllowedTools ?? localToolOfferProvider.GetOfferedTools(activeModel)
+            ? resolved?.AllowedTools ?? localToolOfferProvider.GetOfferedTools(activeModel, resolution.ActiveModelIsCloud)
             : null;
 
         // Agent mode: when the selected agent can read files through the AgentHome sandbox (its offer includes the

@@ -39,7 +39,7 @@ internal sealed class AgentDefinitionResolver : IAgentDefinitionResolver
     }
 
     public async Task<ResolvedAgentRuntime?> ResolveAsync(Guid? agentDefinitionId, string? activeModelId, string? retrievalQuery = null, bool supportsTools = true,
-        bool honorModelProfile = true, CancellationToken cancellationToken = default)
+        bool honorModelProfile = true, bool activeModelIsCloud = false, CancellationToken cancellationToken = default)
     {
         if (agentDefinitionId is not { } definitionId)
         {
@@ -64,7 +64,7 @@ internal sealed class AgentDefinitionResolver : IAgentDefinitionResolver
         // pins no profile (or the pin is suppressed) the turn keeps the caller's active model.
         var pinnedModel = honorModelProfile ? definition.ModelProfile : null;
         var effectiveModel = pinnedModel ?? activeModelId;
-        var allowedTools = ProjectAllowedTools(definition, effectiveModel, supportsTools);
+        var allowedTools = ProjectAllowedTools(definition, effectiveModel, supportsTools, activeModelIsCloud);
         var resolvedPrompt = await ComposePromptAsync(definition, retrievalQuery, cancellationToken).ConfigureAwait(false);
         var skills = await ResolveSkillsAsync(definition, cancellationToken).ConfigureAwait(false);
 
@@ -157,7 +157,7 @@ internal sealed class AgentDefinitionResolver : IAgentDefinitionResolver
         return PlaybookPromptComposer.Compose(definition.Instructions, selected);
     }
 
-    private IReadOnlyList<AllowedToolDto> ProjectAllowedTools(AgentDefinitionRecord definition, string? effectiveModelId, bool supportsTools)
+    private IReadOnlyList<AllowedToolDto> ProjectAllowedTools(AgentDefinitionRecord definition, string? effectiveModelId, bool supportsTools, bool activeModelIsCloud)
     {
         // A model that does not advertise the Ollama "tools" capability cannot drive ANY tool call, so withhold the
         // entire offer (empty) before the per-tool name gating below. This is the capability gate; the offer provider's
@@ -175,7 +175,7 @@ internal sealed class AgentDefinitionResolver : IAgentDefinitionResolver
         if (definition.Source == AgentDefinitionSource.Seeded
             && string.Equals(definition.SeedSlug, AgentDefaults.DefaultAgentSeedSlug, StringComparison.Ordinal))
         {
-            return _localToolOfferProvider.GetOfferedTools(effectiveModelId);
+            return _localToolOfferProvider.GetOfferedTools(effectiveModelId, activeModelIsCloud);
         }
 
         // Start from the PROFILE offer pool for the effective model (the whole capability-gated offer PLUS the
@@ -183,7 +183,7 @@ internal sealed class AgentDefinitionResolver : IAgentDefinitionResolver
         // flag per the definition. Using the profile pool — not the whole offer — is what lets a profile that lists
         // spawn_subagent resolve it while the default/mode-off path never does. Tools the definition names but the pool
         // does not contain (uninstalled or not capability-eligible) are dropped and logged — never fabricated.
-        var offered = _localToolOfferProvider.GetOfferedToolsForProfile(effectiveModelId);
+        var offered = _localToolOfferProvider.GetOfferedToolsForProfile(effectiveModelId, activeModelIsCloud);
         var allowedNames = new HashSet<string>(definition.AllowedToolNames, StringComparer.Ordinal);
 
         var projected = offered

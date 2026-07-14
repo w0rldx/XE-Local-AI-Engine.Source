@@ -1062,7 +1062,7 @@ public sealed class NodeChatStreamServiceTests
 
         var boundTool = CreateLocalToolDto("Calculate", "{\"type\":\"object\"}");
         var resolver = Substitute.For<IAgentDefinitionResolver>();
-        resolver.ResolveAsync(agentDefinitionId, Arg.Any<string?>(), Arg.Any<string?>(), Arg.Any<bool>(), Arg.Any<bool>(), Arg.Any<CancellationToken>())
+        resolver.ResolveAsync(agentDefinitionId, Arg.Any<string?>(), Arg.Any<string?>(), Arg.Any<bool>(), Arg.Any<bool>(), Arg.Any<bool>(), Arg.Any<CancellationToken>())
                 .Returns(new ResolvedAgentRuntime("Bound persona prompt.", [boundTool], "qwen3:8b", "high", AgentDefinitionVersion: 9));
 
         var service = new NodeChatStreamService(persistence,
@@ -1108,7 +1108,7 @@ public sealed class NodeChatStreamServiceTests
         AssertEx.True(runner.LastOrchestrationSpec is null, "A single-agent binding must carry no orchestration spec.");
         // The just-sent user turn ("hello") is threaded to the resolver as the relevance-retrieval query —
         // not just any string, the actual turn content drives which playbook actions are injected.
-        await resolver.Received().ResolveAsync(agentDefinitionId, Arg.Any<string?>(), Arg.Is<string?>(query => query == "hello"), Arg.Any<bool>(), Arg.Any<bool>(), Arg.Any<CancellationToken>())
+        await resolver.Received().ResolveAsync(agentDefinitionId, Arg.Any<string?>(), Arg.Is<string?>(query => query == "hello"), Arg.Any<bool>(), Arg.Any<bool>(), Arg.Any<bool>(), Arg.Any<CancellationToken>())
                       .ConfigureAwait(false);
     }
 
@@ -1126,7 +1126,7 @@ public sealed class NodeChatStreamServiceTests
         var runner = new CompletingInvocationRunner(dispatcher);
 
         var resolver = Substitute.For<IAgentDefinitionResolver>();
-        resolver.ResolveAsync(agentDefinitionId, Arg.Any<string?>(), Arg.Any<string?>(), Arg.Any<bool>(), Arg.Any<bool>(), Arg.Any<CancellationToken>())
+        resolver.ResolveAsync(agentDefinitionId, Arg.Any<string?>(), Arg.Any<string?>(), Arg.Any<bool>(), Arg.Any<bool>(), Arg.Any<bool>(), Arg.Any<CancellationToken>())
                 .Returns(new ResolvedAgentRuntime("Bound persona prompt.", [], "qwen3:8b", ReasoningEffort: null, AgentDefinitionVersion: 9, agentDefinitionId, "Memory Agent", PlaybookEnabled: true,
                     MemoryExtractionEnabled: true));
         var extractionDispatcher = Substitute.For<IMemoryExtractionDispatcher>();
@@ -1180,7 +1180,7 @@ public sealed class NodeChatStreamServiceTests
         var runner = new CompletingInvocationRunner(dispatcher);
 
         var resolver = Substitute.For<IAgentDefinitionResolver>();
-        resolver.ResolveAsync(agentDefinitionId, Arg.Any<string?>(), Arg.Any<string?>(), Arg.Any<bool>(), Arg.Any<bool>(), Arg.Any<CancellationToken>())
+        resolver.ResolveAsync(agentDefinitionId, Arg.Any<string?>(), Arg.Any<string?>(), Arg.Any<bool>(), Arg.Any<bool>(), Arg.Any<bool>(), Arg.Any<CancellationToken>())
                 .Returns(new ResolvedAgentRuntime("Bound persona prompt.", [], "qwen3:8b", ReasoningEffort: null, AgentDefinitionVersion: 9, agentDefinitionId, "Retrieval Only", PlaybookEnabled: true,
                     MemoryExtractionEnabled: false));
         var extractionDispatcher = Substitute.For<IMemoryExtractionDispatcher>();
@@ -1218,7 +1218,7 @@ public sealed class NodeChatStreamServiceTests
         AssertEx.True(drained > 0, "Expected the send to stream events.");
         // Retrieval still happens — the definition was resolved with the user turn as the relevance query, so existing
         // memory rides the resolved prompt.
-        await resolver.Received().ResolveAsync(agentDefinitionId, Arg.Any<string?>(), Arg.Is<string?>(query => query == "hello"), Arg.Any<bool>(), Arg.Any<bool>(), Arg.Any<CancellationToken>())
+        await resolver.Received().ResolveAsync(agentDefinitionId, Arg.Any<string?>(), Arg.Is<string?>(query => query == "hello"), Arg.Any<bool>(), Arg.Any<bool>(), Arg.Any<bool>(), Arg.Any<CancellationToken>())
                       .ConfigureAwait(false);
         // …but no NEW candidates are mined: extraction is never dispatched.
         extractionDispatcher.DidNotReceive().Dispatch(Arg.Any<MemoryExtractionDispatchContext>(), Arg.Any<MemoryExtractionRunInput>());
@@ -1241,7 +1241,7 @@ public sealed class NodeChatStreamServiceTests
         store.GetByIdAsync(agentDefinitionId, Arg.Any<CancellationToken>()).Returns(CreateOrchestratorRecord(agentDefinitionId));
         var orchestrationResolver = Substitute.For<IOrchestrationResolver>();
         var spec = CreateSampleSpec();
-        orchestrationResolver.ResolveAsync(Arg.Any<AgentDefinitionRecord>(), Arg.Any<string?>(), Arg.Any<string?>(), Arg.Any<bool>(), Arg.Any<CancellationToken>())
+        orchestrationResolver.ResolveAsync(Arg.Any<AgentDefinitionRecord>(), Arg.Any<string?>(), Arg.Any<string?>(), Arg.Any<bool>(), Arg.Any<bool>(), Arg.Any<CancellationToken>())
                              .Returns(new ResolvedOrchestration(spec, "Orchestrator prompt.", "qwen3:8b", ReasoningEffort: null, AgentDefinitionVersion: 4));
 
         var service = new NodeChatStreamService(persistence,
@@ -1326,7 +1326,7 @@ public sealed class NodeChatStreamServiceTests
         AssertEx.True(drained > 0, "Expected the send to stream events.");
         AssertEx.Equal(expected: 1, runner.LastAgentDefinitionVersion);
         AssertEx.NotNullOrEmpty(runner.LastSystemPrompt);
-        await resolver.Received().ResolveAsync(agentDefinitionId: null, Arg.Any<string?>(), Arg.Any<string?>(), Arg.Any<bool>(), Arg.Any<bool>(), Arg.Any<CancellationToken>()).ConfigureAwait(false);
+        await resolver.Received().ResolveAsync(agentDefinitionId: null, Arg.Any<string?>(), Arg.Any<string?>(), Arg.Any<bool>(), Arg.Any<bool>(), Arg.Any<bool>(), Arg.Any<CancellationToken>()).ConfigureAwait(false);
     }
 
     [Test]
@@ -1343,7 +1343,7 @@ public sealed class NodeChatStreamServiceTests
         var dispatcher = new RecordingWorkerEventDispatcher();
         var runner = new CompletingInvocationRunner(dispatcher);
         var resolver = Substitute.For<IAgentDefinitionResolver>();
-        resolver.ResolveAsync(Arg.Any<Guid?>(), Arg.Any<string?>(), Arg.Any<string?>(), Arg.Any<bool>(), Arg.Any<bool>(), Arg.Any<CancellationToken>())
+        resolver.ResolveAsync(Arg.Any<Guid?>(), Arg.Any<string?>(), Arg.Any<string?>(), Arg.Any<bool>(), Arg.Any<bool>(), Arg.Any<bool>(), Arg.Any<CancellationToken>())
                 .Returns(new ResolvedAgentRuntime("Selected persona.", [], "qwen3:8b", ReasoningEffort: null, AgentDefinitionVersion: 3, requestAgentId, "Selected Agent"));
 
         var service = new NodeChatStreamService(persistence,
@@ -1378,8 +1378,8 @@ public sealed class NodeChatStreamServiceTests
         }
 
         AssertEx.True(drained > 0, "Expected the send to stream events.");
-        await resolver.Received().ResolveAsync(requestAgentId, Arg.Any<string?>(), Arg.Any<string?>(), Arg.Any<bool>(), Arg.Any<bool>(), Arg.Any<CancellationToken>()).ConfigureAwait(false);
-        await resolver.DidNotReceive().ResolveAsync(conversationAgentId, Arg.Any<string?>(), Arg.Any<string?>(), Arg.Any<bool>(), Arg.Any<bool>(), Arg.Any<CancellationToken>()).ConfigureAwait(false);
+        await resolver.Received().ResolveAsync(requestAgentId, Arg.Any<string?>(), Arg.Any<string?>(), Arg.Any<bool>(), Arg.Any<bool>(), Arg.Any<bool>(), Arg.Any<CancellationToken>()).ConfigureAwait(false);
+        await resolver.DidNotReceive().ResolveAsync(conversationAgentId, Arg.Any<string?>(), Arg.Any<string?>(), Arg.Any<bool>(), Arg.Any<bool>(), Arg.Any<bool>(), Arg.Any<CancellationToken>()).ConfigureAwait(false);
     }
 
     [Test]
@@ -1395,7 +1395,7 @@ public sealed class NodeChatStreamServiceTests
         var dispatcher = new RecordingWorkerEventDispatcher();
         var runner = new CompletingInvocationRunner(dispatcher);
         var resolver = Substitute.For<IAgentDefinitionResolver>();
-        resolver.ResolveAsync(Arg.Any<Guid?>(), Arg.Any<string?>(), Arg.Any<string?>(), Arg.Any<bool>(), Arg.Any<bool>(), Arg.Any<CancellationToken>())
+        resolver.ResolveAsync(Arg.Any<Guid?>(), Arg.Any<string?>(), Arg.Any<string?>(), Arg.Any<bool>(), Arg.Any<bool>(), Arg.Any<bool>(), Arg.Any<CancellationToken>())
                 .Returns(new ResolvedAgentRuntime("Default persona.", [], ModelProfile: null, ReasoningEffort: null, AgentDefinitionVersion: 1, defaultAssistantId, "Default Assistant"));
 
         var service = new NodeChatStreamService(persistence,
@@ -1429,7 +1429,7 @@ public sealed class NodeChatStreamServiceTests
         }
 
         AssertEx.True(drained > 0, "Expected the send to stream events.");
-        await resolver.Received().ResolveAsync(defaultAssistantId, Arg.Any<string?>(), Arg.Any<string?>(), Arg.Any<bool>(), Arg.Any<bool>(), Arg.Any<CancellationToken>()).ConfigureAwait(false);
+        await resolver.Received().ResolveAsync(defaultAssistantId, Arg.Any<string?>(), Arg.Any<string?>(), Arg.Any<bool>(), Arg.Any<bool>(), Arg.Any<bool>(), Arg.Any<CancellationToken>()).ConfigureAwait(false);
     }
 
     [Test]
@@ -1446,7 +1446,7 @@ public sealed class NodeChatStreamServiceTests
         var dispatcher = new RecordingWorkerEventDispatcher();
         var runner = new CompletingInvocationRunner(dispatcher);
         var resolver = Substitute.For<IAgentDefinitionResolver>();
-        resolver.ResolveAsync(Arg.Any<Guid?>(), Arg.Any<string?>(), Arg.Any<string?>(), Arg.Any<bool>(), Arg.Any<bool>(), Arg.Any<CancellationToken>())
+        resolver.ResolveAsync(Arg.Any<Guid?>(), Arg.Any<string?>(), Arg.Any<string?>(), Arg.Any<bool>(), Arg.Any<bool>(), Arg.Any<bool>(), Arg.Any<CancellationToken>())
                 .Returns(new ResolvedAgentRuntime("Persona.", [], ModelProfile: null, ReasoningEffort: null, AgentDefinitionVersion: 1, agentId, "Backend Buddy"));
 
         var service = new NodeChatStreamService(persistence,
@@ -1500,7 +1500,7 @@ public sealed class NodeChatStreamServiceTests
         var dispatcher = new RecordingWorkerEventDispatcher();
         var runner = new CompletingInvocationRunner(dispatcher);
         var resolver = Substitute.For<IAgentDefinitionResolver>();
-        resolver.ResolveAsync(Arg.Any<Guid?>(), Arg.Any<string?>(), Arg.Any<string?>(), Arg.Any<bool>(), Arg.Any<bool>(), Arg.Any<CancellationToken>())
+        resolver.ResolveAsync(Arg.Any<Guid?>(), Arg.Any<string?>(), Arg.Any<string?>(), Arg.Any<bool>(), Arg.Any<bool>(), Arg.Any<bool>(), Arg.Any<CancellationToken>())
                 .Returns(new ResolvedAgentRuntime("Persona.", [], ModelProfile: null, ReasoningEffort: null, AgentDefinitionVersion: 1, agentId, "Pending Persona"));
 
         var service = new NodeChatStreamService(persistence,
@@ -1564,7 +1564,7 @@ public sealed class NodeChatStreamServiceTests
         var dispatcher = new RecordingWorkerEventDispatcher();
         var runner = new PackageCapturingInvocationRunner(dispatcher);
         var resolver = Substitute.For<IAgentDefinitionResolver>();
-        resolver.ResolveAsync(agentDefinitionId, Arg.Any<string?>(), Arg.Any<string?>(), Arg.Any<bool>(), Arg.Any<bool>(), Arg.Any<CancellationToken>())
+        resolver.ResolveAsync(agentDefinitionId, Arg.Any<string?>(), Arg.Any<string?>(), Arg.Any<bool>(), Arg.Any<bool>(), Arg.Any<bool>(), Arg.Any<CancellationToken>())
                 .Returns(callInfo =>
                 {
                     var honorModelProfile = callInfo.ArgAt<bool>(4);
@@ -1617,6 +1617,7 @@ public sealed class NodeChatStreamServiceTests
                           Arg.Any<string?>(),
                           Arg.Any<bool>(),
                           Arg.Is<bool>(honor => !honor),
+                          Arg.Any<bool>(),
                           Arg.Any<CancellationToken>())
                       .ConfigureAwait(false);
     }
@@ -1639,7 +1640,7 @@ public sealed class NodeChatStreamServiceTests
         var dispatcher = new RecordingWorkerEventDispatcher();
         var runner = new PackageCapturingInvocationRunner(dispatcher);
         var resolver = Substitute.For<IAgentDefinitionResolver>();
-        resolver.ResolveAsync(agentDefinitionId, Arg.Any<string?>(), Arg.Any<string?>(), Arg.Any<bool>(), Arg.Any<bool>(), Arg.Any<CancellationToken>())
+        resolver.ResolveAsync(agentDefinitionId, Arg.Any<string?>(), Arg.Any<string?>(), Arg.Any<bool>(), Arg.Any<bool>(), Arg.Any<bool>(), Arg.Any<CancellationToken>())
                 .Returns(callInfo =>
                 {
                     var honorModelProfile = callInfo.ArgAt<bool>(4);
@@ -1688,6 +1689,7 @@ public sealed class NodeChatStreamServiceTests
                           Arg.Any<string?>(),
                           Arg.Any<bool>(),
                           Arg.Is<bool>(honor => honor),
+                          Arg.Any<bool>(),
                           Arg.Any<CancellationToken>())
                       .ConfigureAwait(false);
     }
@@ -2140,14 +2142,15 @@ public sealed class NodeChatStreamServiceTests
                                        Arg.Any<CancellationToken>());
 
         // Tool calling is enabled for ALL Codex ids, so the requested local tool offer (UseLocalTools: true) is
-        // honored for the Codex model — capabilities still come from the Codex matrix, not the Ollama classifier.
-        offerProvider.Received().GetOfferedTools("gpt-5.5");
+        // honored for the Codex model — capabilities still come from the Codex matrix, not the Ollama classifier. The
+        // offer is requested with isCloudModel: true so the knowledge-tool provider-locality gate applies (MED-004).
+        offerProvider.Received().GetOfferedTools("gpt-5.5", true);
     }
 
     private static ILocalToolOfferProvider CreateOfferProvider(params AllowedToolDto[] tools)
     {
         var provider = Substitute.For<ILocalToolOfferProvider>();
-        provider.GetOfferedTools(Arg.Any<string?>()).Returns(tools);
+        provider.GetOfferedTools(Arg.Any<string?>(), Arg.Any<bool>()).Returns(tools);
         return provider;
     }
 
@@ -2242,7 +2245,7 @@ public sealed class NodeChatStreamServiceTests
     private static IAgentDefinitionResolver CreateAgentDefinitionResolver()
     {
         var resolver = Substitute.For<IAgentDefinitionResolver>();
-        resolver.ResolveAsync(Arg.Any<Guid?>(), Arg.Any<string?>(), Arg.Any<string?>(), Arg.Any<bool>(), Arg.Any<bool>(), Arg.Any<CancellationToken>()).Returns((ResolvedAgentRuntime?)null);
+        resolver.ResolveAsync(Arg.Any<Guid?>(), Arg.Any<string?>(), Arg.Any<string?>(), Arg.Any<bool>(), Arg.Any<bool>(), Arg.Any<bool>(), Arg.Any<CancellationToken>()).Returns((ResolvedAgentRuntime?)null);
         return resolver;
     }
 
@@ -2268,7 +2271,7 @@ public sealed class NodeChatStreamServiceTests
     private static IOrchestrationResolver CreateOrchestrationResolver()
     {
         var resolver = Substitute.For<IOrchestrationResolver>();
-        resolver.ResolveAsync(Arg.Any<AgentDefinitionRecord>(), Arg.Any<string?>(), Arg.Any<string?>(), Arg.Any<bool>(), Arg.Any<CancellationToken>()).Returns((ResolvedOrchestration?)null);
+        resolver.ResolveAsync(Arg.Any<AgentDefinitionRecord>(), Arg.Any<string?>(), Arg.Any<string?>(), Arg.Any<bool>(), Arg.Any<bool>(), Arg.Any<CancellationToken>()).Returns((ResolvedOrchestration?)null);
         return resolver;
     }
 

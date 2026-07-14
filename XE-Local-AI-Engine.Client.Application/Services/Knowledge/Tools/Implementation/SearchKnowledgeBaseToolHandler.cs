@@ -124,7 +124,10 @@ internal sealed class SearchKnowledgeBaseToolHandler : IClientLocalToolHandler
                 chunkId = hit.ChunkId,
                 title = hit.Title,
                 section = hit.Section,
-                content = hit.Content,
+                // Retrieved chunk text is DATA, not instructions: flag it and fence it so an injection sentence inside a
+                // document cannot read as a system directive. The budget above still measures raw hit.Content length.
+                contentTrust = UntrustedContentFraming.UntrustedTrustLabel,
+                content = UntrustedContentFraming.Wrap(hit.Content),
                 source = hit.Source,
                 score = hit.Score,
                 chunkIndex = hit.ChunkIndex,

@@ -115,6 +115,6 @@ public sealed class CoderOfferSeamTests
         // through the merge inside LocalToolOfferProvider, never through the registry.
         var registry = new LocalAgentToolRegistry();
         var mcpRegistry = new McpToolRegistry(NullLogger<McpToolRegistry>.Instance);
-        return new LocalToolOfferProvider(registry, mcpRegistry, toolCapableModels);
+        return new LocalToolOfferProvider(registry, mcpRegistry, toolCapableModels, allowCloudKnowledgeAccess: false);
     }
 }
