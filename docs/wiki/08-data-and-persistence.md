@@ -92,7 +92,7 @@ Entities live in `Entities/` (POCO, one type per file) with mapping in the match
 | `NodePurgedTombstone` | tombstones | Chat | records purges for the platform sync |
 | `NodeSelectedFolder` | selected folders | Agent Mode ([04](04-agent-mode.md)) | encrypted `host_path` |
 | `AgentDefinition` | `agent_definitions` | Agent Mode | encrypted instructions/description; `seed_slug` unique-filtered; memory/playbook flags |
-| `AgentExecutionLog` | execution logs | Agent Mode | latency/token/error telemetry |
+| `AgentExecutionLog` | `agent_execution_logs` | Agent Mode | **not encrypted** (content-free telemetry). Dual producer via `record_kind`: 0 = adaptive-memory diagnostics, 1 = durable per-invocation run envelope (terminal status, usage/timing counters, correlation + trace ids). `error_class`/failure category is a type/enum name only — never a message or transcript text |
 | `AgentSkill` | skills | Agent Mode | encrypted description + SKILL.md body |
 | `CanvasWorkflow` | workflows | Open Canvas | encrypted `graph_json` (carries agent instructions) |
 | `PlaybookAction` | playbook actions | Agent Mode | encrypted behavior; analysis/eval staging + `enabled_at_utc` |
@@ -152,13 +152,16 @@ Migrations live in `Migrations/`. The convention is **additive**: new migrations
 | `20260626104651_AddConversationUploadedFiles` | `conversation_uploaded_files` (chat upload attachments; encrypted display name, cascade FK) |
 | `20260626234754_AddInferenceProfilesAndBenchmarkMetrics` | `inference_profiles` table (per-machine launch profiles) + benchmark metric columns on the model-fit snapshot (`pp_tokens_per_second`, `tool_loop_ms`, `cache_hit_rate`, `vram_load_bytes`, `vram_after_bytes`, …) |
 | `20260713204544_AddChatMaintenanceState` | `chat_maintenance_state` (unencrypted key/value durable flags for one-shot DB maintenance; see the content-encryption reclamation marker below) |
+| `20260714144229_AddAgentRunEnvelopeColumns` | Run-envelope columns on `agent_execution_logs` (`record_kind`, `schema_version`, `invocation_id`, `request_id`, `terminal_status`, `trace_id`, `content_chunk_count`, `reasoning_chunk_count`) — the durable per-invocation run envelope shares the table with adaptive-memory diagnostics (MED-007 / R4) |
+| `20260714161306_AddRunEnvelopeDurabilityColumns` | Envelope durability columns (`reasoning_tokens`, `started_at_utc`, `total_tokens`) + a **unique filtered** index `ix_agent_execution_logs_envelope_message_id` on `message_id` (`WHERE record_kind = 1`), so there is at most one envelope row per assistant message |
 
-(Counted on disk: **34 migration files** — 32 timestamped (including the two NodeIdentity-context migrations `20260525075351_InitialNodeIdentitySchema` and `20260624184036_AddTutorialState`) plus 2 untimestamped chat-schema migrations — and **2 model snapshots** = 36 `.cs` files excluding the per-migration `.Designer.cs`. This is the artifact total, not 36 distinct schema changes.)
+(Counted on disk: **36 migration files** — 34 timestamped (including the two NodeIdentity-context migrations `20260525075351_InitialNodeIdentitySchema` and `20260624184036_AddTutorialState`) plus 2 untimestamped chat-schema migrations — and **2 model snapshots** = 38 `.cs` files excluding the per-migration `.Designer.cs`. This is the artifact total, not 38 distinct schema changes.)
 
 ### Notable migration mechanics
 
 - **`EncryptConversationTitle` (`20260610165152`)** is the one migration that changes a column from plaintext to ciphertext. `NodeChatDbContext.DecryptMessageContent` exists specifically so a backfill service can re-derive each conversation's title from the (already-encrypted) first user message after this migration. The AAD layout for `title` deliberately uses `conversationId` as **both** the conversation and record component so the column is self-consistent across raw-SQL and change-tracker writes.
 - **`ModelProviderMap`** is the canonical example of an **un-encrypted** table — its configuration documents the `NOCASE` collation on the `model_name` primary key so provider routing is case-insensitive without a LINQ comparer (`ModelProviderMapConfiguration.cs:18`).
+- **Run envelope shares `agent_execution_logs`.** Rather than a new table, the durable per-invocation run envelope (a content-free lifecycle record written when a chat invocation terminalizes) reuses `agent_execution_logs` with a `record_kind` discriminator (`1` = envelope, `0` = adaptive-memory diagnostics). `AddAgentRunEnvelopeColumns` adds the envelope fields and `AddRunEnvelopeDurabilityColumns` adds usage/timing columns plus the `record_kind = 1`-filtered unique index on `message_id`. The whole row is plaintext structural telemetry (never encrypted, no message content), and it is covered by the conversation footprint purge (see [Security & Privacy](12-security-and-privacy.md)). The read-only `GET agents/run-envelopes` endpoint projects these rows (see [API & Hubs](09-api-and-hubs.md)).
 
 ## The persistence test project
 

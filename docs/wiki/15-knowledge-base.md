@@ -31,7 +31,7 @@ The gate keys on the **EFFECTIVE model** — the one that actually runs the turn
 
 ## Ingestion pipeline
 
-`KnowledgeIngestionService` drives one document through the pipeline, advancing `knowledge_documents.status` at each transition and setting a **content-free** `failure_reason` on any step failure. Uploads are processed asynchronously by `KnowledgeIngestionWorker` so the upload endpoint returns immediately and the operator watches status over the hub.
+`KnowledgeIngestionService` drives one document through the pipeline, advancing `knowledge_documents.status` at each transition and setting a **content-free** `failure_reason` on any step failure. Uploads are processed asynchronously by `KnowledgeIngestionWorker` so the upload endpoint returns as soon as the document is admitted to the queue and the operator watches status over the hub.
 
 ```
 Upload ──▶ Uploaded ──▶ Extracting ──▶ Chunking ──▶ Embedding ──▶ Indexed
@@ -45,6 +45,7 @@ Upload ──▶ Uploaded ──▶ Extracting ──▶ Chunking ──▶ Embe
 - **Chunking** — `HeaderBoundaryChunkingService` is an **offline, deterministic** chunker with no tokenizer or external package. It walks the document's ordered element stream: each header opens a new section (maintaining an `H1 > H2` heading trail via a level stack); paragraphs and tables accumulate into their section body, which is split into character-bounded, overlapping chunks (`MaxChunkChars` / `ChunkOverlapChars`). The same document always yields the same sections and chunks.
 - **Embedding** — `KnowledgeChunkEmbedder` reuses the node-local embedding resolution path: it resolves the configured embedding provider/model (`KnowledgeBaseOptions.EmbeddingProviderName` / `EmbeddingModelName`) and generates in batches (`MaxEmbeddingBatchSize`). Vectors are only ever compared within one model/dimension, so a count/dimension mismatch — or any transport/model error — surfaces as a content-free `KnowledgeIngestionException` and the document is recorded `Failed` (with an actionable "pull the configured embedding model and retry" reason).
 - **Indexing** — the final `Indexed` transition is performed **atomically** by `IKnowledgeIndexWriter` so a document is never half-visible. All failure logging is **exception-type-only** — no chunk or document text reaches a log.
+- **Admission control (backpressure)** — the async queue is bounded (`KnowledgeIngestionDispatcher`: a single-reader channel, capacity 256; the worker further caps concurrency with a `SemaphoreSlim`). Admission is **non-blocking**: when the queue is full, the upload/reindex endpoint returns **503 with `Retry-After: 5`** instead of holding the request or growing the backlog, and admission is **idempotent** (a document already queued or in flight is not re-enqueued, so it is never processed twice concurrently). A 503 is a *retryable busy* signal, not data loss — the blob is already persisted, so a document whose ingestion a full queue previously rejected (persisted-but-unindexed) is re-enqueued on a later re-upload of the same file. Accept/reject counts and live queue depth are published on the `XE.Node` meter. The synchronous **chat**-attachment path has its own equivalent gate (`DocumentExtractionAdmissionGate`), also 503 + `Retry-After` when at capacity — see the busy-admission note in [API & Hubs](09-api-and-hubs.md).
 
 ## Hybrid retrieval
 
