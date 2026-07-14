@@ -6,6 +6,7 @@ using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging.Abstractions;
 using XE_Local_AI_Engine.Client.Persistence;
 using XE_Local_AI_Engine.Client.Persistence.Implementation;
+using XE_Local_AI_Engine.Client.Persistence.Stores;
 using XE_Local_AI_Engine.Client.Services.Chat;
 using XE_Local_AI_Engine.Client.Services.Chat.Implementation;
 using XE_Local_AI_Engine.Client.Services.Persistence.Implementation;
@@ -637,6 +638,14 @@ public sealed class NodeChatPersistenceServiceTests : IDisposable
         var assistant = loaded.Messages.Single(message => message.MessageId == assistantMessageId);
         AssertEx.Equal(NodeChatMessageStatusValues.Cancelled, assistant.Status);
         AssertEx.Equal(expected: 132L, assistant.UpdatedAtUtc);
+
+        // The cancel wrote its run envelope atomically, so a terminal Cancelled row is enveloped IMMEDIATELY — no restart
+        // reconcile needed. Its terminal status equals the row's final status (the envelope/row invariant).
+        var envelopes = await ReadRunEnvelopesAsync(provider, conversation.ConversationId).ConfigureAwait(false);
+        AssertEx.Equal(expected: 1, envelopes.Count);
+        AssertEx.Equal(assistantMessageId, envelopes[0].MessageId);
+        AssertEx.Equal(NodeChatMessageStatusValues.Cancelled, envelopes[0].TerminalStatus);
+        AssertEx.False(envelopes[0].Success);
     }
 
     [Test]
@@ -660,6 +669,14 @@ public sealed class NodeChatPersistenceServiceTests : IDisposable
         var assistant = loaded.Messages.Single(message => message.MessageId == assistantMessageId);
         AssertEx.Equal(NodeChatMessageStatusValues.Cancelled, assistant.Status);
         AssertEx.Equal(expected: 143L, assistant.UpdatedAtUtc);
+
+        // A cancel that transitions a queued row terminalizes it AND writes the run envelope in the same guarded UPDATE, so
+        // the row is enveloped immediately with a matching Cancelled terminal status.
+        var envelopes = await ReadRunEnvelopesAsync(provider, conversation.ConversationId).ConfigureAwait(false);
+        AssertEx.Equal(expected: 1, envelopes.Count);
+        AssertEx.Equal(assistantMessageId, envelopes[0].MessageId);
+        AssertEx.Equal(NodeChatMessageStatusValues.Cancelled, envelopes[0].TerminalStatus);
+        AssertEx.False(envelopes[0].Success);
     }
 
     [Test]
@@ -1905,6 +1922,14 @@ public sealed class NodeChatPersistenceServiceTests : IDisposable
     private static NodeChatPersistenceService CreateService(ServiceProvider provider)
     {
         return new NodeChatPersistenceService(provider.GetRequiredService<NodeChatPersistenceWriter>());
+    }
+
+    private static async Task<IReadOnlyList<AgentRunEnvelopeRecord>> ReadRunEnvelopesAsync(ServiceProvider provider, Guid conversationId)
+    {
+        await using var scope = provider.CreateAsyncScope();
+        var dbContext = scope.ServiceProvider.GetRequiredService<NodeChatDbContext>();
+        var store = new AgentExecutionLogStore(dbContext, TimeProvider.System);
+        return await store.ListRunEnvelopesAsync(conversationId, limit: 100).ConfigureAwait(false);
     }
 
     private string GetDatabasePath(string fileName)
