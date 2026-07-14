@@ -674,6 +674,27 @@ public sealed class InvocationRunnerTests
     }
 
     [Test]
+    public async Task RunAsync_WhenProviderRoundIrreduciblyExceedsWindow_ClassifiesContextWindowExceeded()
+    {
+        var sender = new MockHubMessageSender();
+        var factory = Substitute.For<IInvocationAgentFactory>();
+        // The provider-boundary budgeter rejects a single irreducible over-window round with this typed exception; the
+        // runner must classify it as ContextWindowExceeded and surface its fixed, path-free message verbatim (the bounded
+        // token/window diagnostics it also carries are never surfaced).
+        factory.CreateAsync(Arg.Any<InvocationAgentDefinition>(), Arg.Any<CancellationToken>())
+               .Returns(_ => Task.FromException<InvocationAgentContext>(new ProviderContextWindowExceededException(estimatedTokens: 9000, windowTokens: 4096)));
+
+        var runner = CreateRunner(sender, factory);
+
+        await RunAsync(runner, RuntimePackageBuilder.Valid().Build());
+
+        AssertEx.ContainsSingle(sender.SentEncryptedFailures, failure => failure.FailureCategory == nameof(FailureCategory.ContextWindowExceeded)
+                                                                         && failure.Error == ProviderContextWindowExceededException.RoundExceedsWindowMessage
+                                                                         && !failure.Error.Contains("9000", StringComparison.Ordinal)
+                                                                         && !failure.Error.Contains("4096", StringComparison.Ordinal));
+    }
+
+    [Test]
     public async Task RunAsync_WhenUnexpected_MapsFailureCategory()
     {
         var sender = new MockHubMessageSender();
