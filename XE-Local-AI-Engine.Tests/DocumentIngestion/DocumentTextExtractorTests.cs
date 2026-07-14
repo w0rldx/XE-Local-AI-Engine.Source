@@ -1,5 +1,6 @@
 namespace XE_Local_AI_Engine.Tests.DocumentIngestion;
 
+using System.Buffers.Binary;
 using System.Globalization;
 using System.IO.Compression;
 using System.Text;
@@ -240,6 +241,57 @@ public sealed class DocumentTextExtractorTests
     }
 
     [Test]
+    public async Task Extractor_WhenZipDeclaresZip64OverEntryCount_RejectsWithoutMaterializing()
+    {
+        // The classic EOCD total-entries field is saturated to 0xFFFF and a Zip64 EOCD record declares millions of
+        // entries. The declared count is read straight from the EOCD/Zip64 records with ZERO ZipArchiveEntry
+        // allocations, so this rejects up front at the shipped 10,000-entry ceiling. The crafted bytes are NOT an
+        // openable ZipArchive, so had the count NOT been read from the EOCD the code would have fallen through to the
+        // DOCX reader and failed with a generic "Extraction failed (...)". Asserting the "entries" reason proves the
+        // rejection happened at the EOCD count check, before any entry object was materialized.
+        using var stream = new MemoryStream(BuildZip64EntryCountBomb(declaredTotalEntries: 5_000_000));
+
+        var result = await CreateExtractor().ExtractAsync(stream, "bomb.docx", ".docx", CancellationToken.None);
+
+        AssertEx.Equal(DocumentExtractionStatus.Failed, result.Status);
+        AssertEx.Null(result.Markdown);
+        AssertEx.Contains(AssertEx.NotNull(result.Error), "entries");
+    }
+
+    [Test]
+    public void EvaluateDeclaredZipSizes_WhenAggregateOverflows_Rejects()
+    {
+        // Two individually-valid Zip64 uncompressed sizes that sum past long.MaxValue. Unchecked addition would wrap the
+        // running total to a small (or negative) number and slip an oversize archive past the absolute ceiling; the
+        // saturating aggregation must clamp at long.MaxValue and REJECT instead.
+        (long Length, long CompressedLength)[] entries =
+        [
+            (long.MaxValue - 10, 100),
+            (long.MaxValue - 10, 100)
+        ];
+
+        var reason = DocumentTextExtractor.EvaluateDeclaredZipSizes(entries,
+            maxDeclaredUncompressedBytes: 512L * 1024 * 1024,
+            maxCompressionRatio: 200);
+
+        AssertEx.Contains(AssertEx.NotNull(reason), "uncompressed");
+    }
+
+    [Test]
+    public void EvaluateDeclaredZipSizes_WhenEntrySizeNegative_Rejects()
+    {
+        // A high-bit-set Zip64 size reads back as a negative long. A negative term would drag the running total down and
+        // mask an oversize archive, so hostile negative sizes must reject outright.
+        (long Length, long CompressedLength)[] entries = [(-1, 100)];
+
+        var reason = DocumentTextExtractor.EvaluateDeclaredZipSizes(entries,
+            maxDeclaredUncompressedBytes: 512L * 1024 * 1024,
+            maxCompressionRatio: 200);
+
+        AssertEx.Contains(AssertEx.NotNull(reason), "invalid entry size");
+    }
+
+    [Test]
     public async Task Extractor_WhenStructuredWithinBounds_ExtractsDocument()
     {
         using var stream = new MemoryStream(Encoding.UTF8.GetBytes("# Title\n\nA short paragraph."));
@@ -324,6 +376,41 @@ public sealed class DocumentTextExtractorTests
         }
 
         return buffer.ToArray();
+    }
+
+    // A hand-built binary trailer that models an entry-count zip bomb whose true count lives in the Zip64 records:
+    // a Zip64 EOCD record (declaring `declaredTotalEntries`), the Zip64 EOCD locator pointing at it, then a classic
+    // EOCD whose total-entries field is saturated to 0xFFFF. Only the signatures and the entry-count fields the
+    // preflight reads are populated; the bytes are deliberately NOT an openable ZipArchive, so a passing test proves the
+    // count was read from the EOCD records rather than by materializing entries.
+    private static byte[] BuildZip64EntryCountBomb(long declaredTotalEntries)
+    {
+        const int Zip64EocdSize = 56;
+        const int Zip64LocatorSize = 20;
+        const int EocdSize = 22;
+
+        var bytes = new byte[Zip64EocdSize + Zip64LocatorSize + EocdSize];
+        var span = bytes.AsSpan();
+
+        // Zip64 EOCD record at offset 0.
+        BinaryPrimitives.WriteUInt32LittleEndian(span[..4], 0x06064b50);
+        BinaryPrimitives.WriteUInt64LittleEndian(span.Slice(4, 8), Zip64EocdSize - 12); // size of the record remainder
+        BinaryPrimitives.WriteInt64LittleEndian(span.Slice(24, 8), declaredTotalEntries); // entries on this disk
+        BinaryPrimitives.WriteInt64LittleEndian(span.Slice(32, 8), declaredTotalEntries); // total entries
+
+        // Zip64 EOCD locator at offset 56, pointing back at the record at offset 0.
+        BinaryPrimitives.WriteUInt32LittleEndian(span.Slice(Zip64EocdSize, 4), 0x07064b50);
+        BinaryPrimitives.WriteInt64LittleEndian(span.Slice(Zip64EocdSize + 8, 8), 0); // relative offset of the record
+        BinaryPrimitives.WriteUInt32LittleEndian(span.Slice(Zip64EocdSize + 16, 4), 1); // total number of disks
+
+        // Classic EOCD at offset 76 with the total-entries field saturated to 0xFFFF (defers to the Zip64 record).
+        var eocd = Zip64EocdSize + Zip64LocatorSize;
+        BinaryPrimitives.WriteUInt32LittleEndian(span.Slice(eocd, 4), 0x06054b50);
+        BinaryPrimitives.WriteUInt16LittleEndian(span.Slice(eocd + 8, 2), 0xFFFF); // entries on this disk
+        BinaryPrimitives.WriteUInt16LittleEndian(span.Slice(eocd + 10, 2), 0xFFFF); // total entries
+        // Comment length (offset eocd + 20) stays 0, so the record ends exactly at the stream end.
+
+        return bytes;
     }
 
     // A minimal hand-authored multi-page PDF with correct xref byte offsets: catalog (obj 1), the pages tree (obj 2),
