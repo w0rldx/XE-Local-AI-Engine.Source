@@ -145,6 +145,41 @@ public sealed class DesktopBootstrapTests
     }
 
     [Test]
+    public async Task EnsureLocalDataConfiguration_ConcurrentFirstLaunches_AllAdoptTheSameOnDiskSecret()
+    {
+        // Simulate a double first-launch: many workers race to create the operator key against one fresh data dir. The
+        // atomic create-new persist means exactly one wins and every other process must adopt the winner's on-disk
+        // secret rather than keep its own freshly-generated one — otherwise concurrent starts would split the
+        // DB-encryption key. All resolved secrets must therefore be identical, and must round-trip through the provider.
+        using var temp = new TempDirectory();
+        const int workers = 24;
+
+        using var barrier = new Barrier(workers);
+        var tasks = Enumerable.Range(0, workers).Select(_ => Task.Run(() =>
+        {
+            using var configuration = new ConfigurationManager();
+            // Release all workers together so several genuinely contend on the create.
+            barrier.SignalAndWait();
+            DesktopBootstrap.EnsureLocalDataConfiguration(configuration, temp.ResolveFolder);
+            return configuration[NodeOperatorSecretProvider.EnvVarName];
+        })).ToArray();
+
+        var secrets = await Task.WhenAll(tasks).ConfigureAwait(false);
+
+        var distinct = secrets.Distinct(StringComparer.Ordinal).ToArray();
+        AssertEx.Equal(1, distinct.Length);
+        AssertEx.NotNullOrEmpty(distinct[0]);
+
+        // The single agreed secret must be the one persisted on disk and resolvable by the provider (encrypted round-trip
+        // guarantee: any DB encryption keyed on this secret decrypts across every concurrent launch).
+        using var resolveConfiguration = new ConfigurationManager();
+        DesktopBootstrap.EnsureLocalDataConfiguration(resolveConfiguration, temp.ResolveFolder);
+        var provider = new NodeOperatorSecretProvider(resolveConfiguration);
+        var resolved = Convert.ToBase64String(provider.GetOperatorSecret());
+        AssertEx.Equal(distinct[0]!, resolved);
+    }
+
+    [Test]
     public void EnsureLocalDataConfiguration_OnNonWindows_PersistsKeyFileWithOwnerOnlyPermissions()
     {
         // The key file protects the DB-encryption secret, so on non-Windows it must be 0600 (owner read/write only).
