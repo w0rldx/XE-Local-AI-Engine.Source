@@ -39,7 +39,7 @@ public sealed class NodeChatStreamServiceTests
         var dispatcher = new RecordingWorkerEventDispatcher();
         var runner = new CompletingInvocationRunner(dispatcher);
         var service = new NodeChatStreamService(persistence,
-            new ChatInvocationStatePump(new NodeChatInvocationPump(persistence, TimeProvider.System), TimeProvider.System),
+            new ChatInvocationStatePump(ChatPumpTestFactory.Create(persistence), TimeProvider.System),
             new ChatTurnResolver(CreateAgentDefinitionResolver(), CreateAgentDefinitionStore(), CreateOrchestrationResolver(), CreateModelClassificationService(), CreateLocalModelProviderResolver(),
                 CreateGgufModelCapabilityResolver(), Substitute.For<ICloudCredentialStore>(), NullLogger<ChatTurnResolver>.Instance),
             new NodeChatMutationGuard(persistence),
@@ -87,7 +87,7 @@ public sealed class NodeChatStreamServiceTests
         var dispatcher = new RecordingWorkerEventDispatcher();
         var runner = new CompletingInvocationRunner(dispatcher);
         var service = new NodeChatStreamService(persistence,
-            new ChatInvocationStatePump(new NodeChatInvocationPump(persistence, TimeProvider.System), TimeProvider.System),
+            new ChatInvocationStatePump(ChatPumpTestFactory.Create(persistence), TimeProvider.System),
             new ChatTurnResolver(CreateAgentDefinitionResolver(), CreateAgentDefinitionStore(), CreateOrchestrationResolver(), CreateModelClassificationService(), CreateLocalModelProviderResolver(),
                 CreateGgufModelCapabilityResolver(), Substitute.For<ICloudCredentialStore>(), NullLogger<ChatTurnResolver>.Instance),
             new NodeChatMutationGuard(persistence),
@@ -138,7 +138,7 @@ public sealed class NodeChatStreamServiceTests
         var dispatcher = new RecordingWorkerEventDispatcher();
         var runner = new ToolEmittingInvocationRunner(dispatcher);
         var service = new NodeChatStreamService(persistence,
-            new ChatInvocationStatePump(new NodeChatInvocationPump(persistence, TimeProvider.System), TimeProvider.System),
+            new ChatInvocationStatePump(ChatPumpTestFactory.Create(persistence), TimeProvider.System),
             new ChatTurnResolver(CreateAgentDefinitionResolver(), CreateAgentDefinitionStore(), CreateOrchestrationResolver(), CreateModelClassificationService(), CreateLocalModelProviderResolver(),
                 CreateGgufModelCapabilityResolver(), Substitute.For<ICloudCredentialStore>(), NullLogger<ChatTurnResolver>.Instance),
             new NodeChatMutationGuard(persistence),
@@ -197,7 +197,7 @@ public sealed class NodeChatStreamServiceTests
         var dispatcher = new RecordingWorkerEventDispatcher();
         var runner = new ReasoningCapturingInvocationRunner(dispatcher);
         var service = new NodeChatStreamService(persistence,
-            new ChatInvocationStatePump(new NodeChatInvocationPump(persistence, TimeProvider.System), TimeProvider.System),
+            new ChatInvocationStatePump(ChatPumpTestFactory.Create(persistence), TimeProvider.System),
             new ChatTurnResolver(CreateAgentDefinitionResolver(), CreateAgentDefinitionStore(), CreateOrchestrationResolver(), CreateModelClassificationService(), CreateLocalModelProviderResolver(),
                 CreateGgufModelCapabilityResolver(), Substitute.For<ICloudCredentialStore>(), NullLogger<ChatTurnResolver>.Instance),
             new NodeChatMutationGuard(persistence),
@@ -241,7 +241,7 @@ public sealed class NodeChatStreamServiceTests
         var dispatcher = new RecordingWorkerEventDispatcher();
         var runner = new ReasoningCapturingInvocationRunner(dispatcher);
         var service = new NodeChatStreamService(persistence,
-            new ChatInvocationStatePump(new NodeChatInvocationPump(persistence, TimeProvider.System), TimeProvider.System),
+            new ChatInvocationStatePump(ChatPumpTestFactory.Create(persistence), TimeProvider.System),
             new ChatTurnResolver(CreateAgentDefinitionResolver(), CreateAgentDefinitionStore(), CreateOrchestrationResolver(), CreateModelClassificationService(), CreateLocalModelProviderResolver(),
                 CreateGgufModelCapabilityResolver(), Substitute.For<ICloudCredentialStore>(), NullLogger<ChatTurnResolver>.Instance),
             new NodeChatMutationGuard(persistence),
@@ -285,7 +285,7 @@ public sealed class NodeChatStreamServiceTests
         var dispatcher = new RecordingWorkerEventDispatcher();
         var runner = new ReasoningCapturingInvocationRunner(dispatcher);
         var service = new NodeChatStreamService(persistence,
-            new ChatInvocationStatePump(new NodeChatInvocationPump(persistence, TimeProvider.System), TimeProvider.System),
+            new ChatInvocationStatePump(ChatPumpTestFactory.Create(persistence), TimeProvider.System),
             new ChatTurnResolver(CreateAgentDefinitionResolver(), CreateAgentDefinitionStore(), CreateOrchestrationResolver(), CreateModelClassificationService(), CreateLocalModelProviderResolver(),
                 CreateGgufModelCapabilityResolver(), Substitute.For<ICloudCredentialStore>(), NullLogger<ChatTurnResolver>.Instance),
             new NodeChatMutationGuard(persistence),
@@ -339,7 +339,7 @@ public sealed class NodeChatStreamServiceTests
         var dispatcher = new RecordingWorkerEventDispatcher();
         var runner = new ReasoningCapturingInvocationRunner(dispatcher);
         var service = new NodeChatStreamService(persistence,
-            new ChatInvocationStatePump(new NodeChatInvocationPump(persistence, TimeProvider.System), TimeProvider.System),
+            new ChatInvocationStatePump(ChatPumpTestFactory.Create(persistence), TimeProvider.System),
             new ChatTurnResolver(CreateAgentDefinitionResolver(), CreateAgentDefinitionStore(), CreateOrchestrationResolver(), CreateModelClassificationService(), CreateLocalModelProviderResolver(),
                 CreateGgufModelCapabilityResolver(), Substitute.For<ICloudCredentialStore>(), NullLogger<ChatTurnResolver>.Instance),
             new NodeChatMutationGuard(persistence),
@@ -385,7 +385,7 @@ public sealed class NodeChatStreamServiceTests
         var offerProvider = CreateOfferProvider(CreateLocalToolDto("GetCurrentTime", "{\"type\":\"object\"}"),
             CreateLocalToolDto("Calculate", "{\"type\":\"object\"}"));
         var service = new NodeChatStreamService(persistence,
-            new ChatInvocationStatePump(new NodeChatInvocationPump(persistence, TimeProvider.System), TimeProvider.System),
+            new ChatInvocationStatePump(ChatPumpTestFactory.Create(persistence), TimeProvider.System),
             new ChatTurnResolver(CreateAgentDefinitionResolver(), CreateAgentDefinitionStore(), CreateOrchestrationResolver(), CreateModelClassificationService(), CreateLocalModelProviderResolver(),
                 CreateGgufModelCapabilityResolver(), Substitute.For<ICloudCredentialStore>(), NullLogger<ChatTurnResolver>.Instance),
             new NodeChatMutationGuard(persistence),
@@ -443,7 +443,7 @@ public sealed class NodeChatStreamServiceTests
         var offerProvider = CreateOfferProvider(CreateLocalToolDto("read_file", "{\"type\":\"object\"}"));
         var stager = Substitute.For<IConversationSandboxStager>();
         var service = new NodeChatStreamService(persistence,
-            new ChatInvocationStatePump(new NodeChatInvocationPump(persistence, TimeProvider.System), TimeProvider.System),
+            new ChatInvocationStatePump(ChatPumpTestFactory.Create(persistence), TimeProvider.System),
             new ChatTurnResolver(CreateAgentDefinitionResolver(), CreateAgentDefinitionStore(), CreateOrchestrationResolver(), CreateModelClassificationService(), CreateLocalModelProviderResolver(),
                 CreateGgufModelCapabilityResolver(), Substitute.For<ICloudCredentialStore>(), NullLogger<ChatTurnResolver>.Instance),
             new NodeChatMutationGuard(persistence),
@@ -493,7 +493,7 @@ public sealed class NodeChatStreamServiceTests
             CreateLocalToolDto("Calculate", "{\"type\":\"object\"}"));
         var stager = Substitute.For<IConversationSandboxStager>();
         var service = new NodeChatStreamService(persistence,
-            new ChatInvocationStatePump(new NodeChatInvocationPump(persistence, TimeProvider.System), TimeProvider.System),
+            new ChatInvocationStatePump(ChatPumpTestFactory.Create(persistence), TimeProvider.System),
             new ChatTurnResolver(CreateAgentDefinitionResolver(), CreateAgentDefinitionStore(), CreateOrchestrationResolver(), CreateModelClassificationService(), CreateLocalModelProviderResolver(),
                 CreateGgufModelCapabilityResolver(), Substitute.For<ICloudCredentialStore>(), NullLogger<ChatTurnResolver>.Instance),
             new NodeChatMutationGuard(persistence),
@@ -543,7 +543,7 @@ public sealed class NodeChatStreamServiceTests
         stager.PrepareConversationAttachmentsAsync(conversationId, Arg.Any<CancellationToken>()).Returns(stagedPaths);
 
         var service = new NodeChatStreamService(persistence,
-            new ChatInvocationStatePump(new NodeChatInvocationPump(persistence, TimeProvider.System), TimeProvider.System),
+            new ChatInvocationStatePump(ChatPumpTestFactory.Create(persistence), TimeProvider.System),
             new ChatTurnResolver(CreateAgentDefinitionResolver(), CreateAgentDefinitionStore(), CreateOrchestrationResolver(), CreateModelClassificationService(), CreateLocalModelProviderResolver(),
                 CreateGgufModelCapabilityResolver(), Substitute.For<ICloudCredentialStore>(), NullLogger<ChatTurnResolver>.Instance),
             new NodeChatMutationGuard(persistence),
@@ -601,7 +601,7 @@ public sealed class NodeChatStreamServiceTests
         uploadedFileStore.ReadExtractedMarkdownAsync(conversationId, fileId, Arg.Any<CancellationToken>()).Returns("The launch code is alpha-zero.");
 
         var service = new NodeChatStreamService(persistence,
-            new ChatInvocationStatePump(new NodeChatInvocationPump(persistence, TimeProvider.System), TimeProvider.System),
+            new ChatInvocationStatePump(ChatPumpTestFactory.Create(persistence), TimeProvider.System),
             new ChatTurnResolver(CreateAgentDefinitionResolver(), CreateAgentDefinitionStore(), CreateOrchestrationResolver(), CreateModelClassificationService(), CreateLocalModelProviderResolver(),
                 CreateGgufModelCapabilityResolver(), Substitute.For<ICloudCredentialStore>(), NullLogger<ChatTurnResolver>.Instance),
             new NodeChatMutationGuard(persistence),
@@ -651,7 +651,7 @@ public sealed class NodeChatStreamServiceTests
         var uploadedFileStore = Substitute.For<IConversationUploadedFileStore>();
 
         var service = new NodeChatStreamService(persistence,
-            new ChatInvocationStatePump(new NodeChatInvocationPump(persistence, TimeProvider.System), TimeProvider.System),
+            new ChatInvocationStatePump(ChatPumpTestFactory.Create(persistence), TimeProvider.System),
             new ChatTurnResolver(CreateAgentDefinitionResolver(), CreateAgentDefinitionStore(), CreateOrchestrationResolver(), CreateModelClassificationService(), CreateLocalModelProviderResolver(),
                 CreateGgufModelCapabilityResolver(), Substitute.For<ICloudCredentialStore>(), NullLogger<ChatTurnResolver>.Instance),
             new NodeChatMutationGuard(persistence),
@@ -704,7 +704,7 @@ public sealed class NodeChatStreamServiceTests
         var offerProvider = CreateOfferProvider(CreateLocalToolDto("GetCurrentTime", "{\"type\":\"object\"}"),
             CreateLocalToolDto("Calculate", "{\"type\":\"object\"}"));
         var service = new NodeChatStreamService(persistence,
-            new ChatInvocationStatePump(new NodeChatInvocationPump(persistence, TimeProvider.System), TimeProvider.System),
+            new ChatInvocationStatePump(ChatPumpTestFactory.Create(persistence), TimeProvider.System),
             new ChatTurnResolver(CreateAgentDefinitionResolver(), CreateAgentDefinitionStore(), CreateOrchestrationResolver(), CreateModelClassificationService(), CreateLocalModelProviderResolver(),
                 CreateGgufModelCapabilityResolver(), Substitute.For<ICloudCredentialStore>(), NullLogger<ChatTurnResolver>.Instance),
             new NodeChatMutationGuard(persistence),
@@ -757,7 +757,7 @@ public sealed class NodeChatStreamServiceTests
         providerResolver.ResolveProviderNameForModelAsync(Arg.Any<string>(), Arg.Any<CancellationToken>())
                         .Returns("llamacpp");
         var service = new NodeChatStreamService(persistence,
-            new ChatInvocationStatePump(new NodeChatInvocationPump(persistence, TimeProvider.System), TimeProvider.System),
+            new ChatInvocationStatePump(ChatPumpTestFactory.Create(persistence), TimeProvider.System),
             new ChatTurnResolver(CreateAgentDefinitionResolver(), CreateAgentDefinitionStore(), CreateOrchestrationResolver(), CreateModelClassificationService(), providerResolver,
                 CreateGgufModelCapabilityResolver(new GgufModelCapabilities(SupportsThinking: true, SupportsTools: true)), Substitute.For<ICloudCredentialStore>(),
                 NullLogger<ChatTurnResolver>.Instance),
@@ -812,7 +812,7 @@ public sealed class NodeChatStreamServiceTests
         providerResolver.ResolveProviderNameForModelAsync(Arg.Any<string>(), Arg.Any<CancellationToken>())
                         .Returns("llamacpp");
         var service = new NodeChatStreamService(persistence,
-            new ChatInvocationStatePump(new NodeChatInvocationPump(persistence, TimeProvider.System), TimeProvider.System),
+            new ChatInvocationStatePump(ChatPumpTestFactory.Create(persistence), TimeProvider.System),
             new ChatTurnResolver(CreateAgentDefinitionResolver(), CreateAgentDefinitionStore(), CreateOrchestrationResolver(), CreateModelClassificationService(), providerResolver,
                 CreateGgufModelCapabilityResolver(new GgufModelCapabilities(SupportsThinking: false, SupportsTools: false)), Substitute.For<ICloudCredentialStore>(),
                 NullLogger<ChatTurnResolver>.Instance),
@@ -862,7 +862,7 @@ public sealed class NodeChatStreamServiceTests
         var runner = new StreamingUntilCancelledInvocationRunner(dispatcher);
         var cancellationRegistry = new NodeChatStreamCancellationRegistry();
         var service = new NodeChatStreamService(persistence,
-            new ChatInvocationStatePump(new NodeChatInvocationPump(persistence, TimeProvider.System), TimeProvider.System),
+            new ChatInvocationStatePump(ChatPumpTestFactory.Create(persistence), TimeProvider.System),
             new ChatTurnResolver(CreateAgentDefinitionResolver(), CreateAgentDefinitionStore(), CreateOrchestrationResolver(), CreateModelClassificationService(), CreateLocalModelProviderResolver(),
                 CreateGgufModelCapabilityResolver(), Substitute.For<ICloudCredentialStore>(), NullLogger<ChatTurnResolver>.Instance),
             new NodeChatMutationGuard(persistence),
@@ -920,7 +920,7 @@ public sealed class NodeChatStreamServiceTests
         var releaseRunner = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
         var runner = new GatedCompletingInvocationRunner(dispatcher, releaseRunner.Task);
         var service = new NodeChatStreamService(persistence,
-            new ChatInvocationStatePump(new NodeChatInvocationPump(persistence, TimeProvider.System), TimeProvider.System),
+            new ChatInvocationStatePump(ChatPumpTestFactory.Create(persistence), TimeProvider.System),
             new ChatTurnResolver(CreateAgentDefinitionResolver(), CreateAgentDefinitionStore(), CreateOrchestrationResolver(), CreateModelClassificationService(), CreateLocalModelProviderResolver(),
                 CreateGgufModelCapabilityResolver(), Substitute.For<ICloudCredentialStore>(), NullLogger<ChatTurnResolver>.Instance),
             new NodeChatMutationGuard(persistence),
@@ -996,7 +996,7 @@ public sealed class NodeChatStreamServiceTests
         runtimeSettings.GetEnableToolsAsync(Arg.Any<CancellationToken>()).Returns(enableToolsGate.Task);
 
         var service = new NodeChatStreamService(persistence,
-            new ChatInvocationStatePump(new NodeChatInvocationPump(persistence, TimeProvider.System), TimeProvider.System),
+            new ChatInvocationStatePump(ChatPumpTestFactory.Create(persistence), TimeProvider.System),
             new ChatTurnResolver(CreateAgentDefinitionResolver(), CreateAgentDefinitionStore(), CreateOrchestrationResolver(), CreateModelClassificationService(), CreateLocalModelProviderResolver(),
                 CreateGgufModelCapabilityResolver(), Substitute.For<ICloudCredentialStore>(), NullLogger<ChatTurnResolver>.Instance),
             new NodeChatMutationGuard(persistence),
@@ -1066,7 +1066,7 @@ public sealed class NodeChatStreamServiceTests
                 .Returns(new ResolvedAgentRuntime("Bound persona prompt.", [boundTool], "qwen3:8b", "high", AgentDefinitionVersion: 9));
 
         var service = new NodeChatStreamService(persistence,
-            new ChatInvocationStatePump(new NodeChatInvocationPump(persistence, TimeProvider.System), TimeProvider.System),
+            new ChatInvocationStatePump(ChatPumpTestFactory.Create(persistence), TimeProvider.System),
             new ChatTurnResolver(resolver, CreateAgentDefinitionStore(), CreateOrchestrationResolver(), CreateModelClassificationService(), CreateLocalModelProviderResolver(),
                 CreateGgufModelCapabilityResolver(), Substitute.For<ICloudCredentialStore>(), NullLogger<ChatTurnResolver>.Instance),
             new NodeChatMutationGuard(persistence),
@@ -1132,7 +1132,7 @@ public sealed class NodeChatStreamServiceTests
         var extractionDispatcher = Substitute.For<IMemoryExtractionDispatcher>();
 
         var service = new NodeChatStreamService(persistence,
-            new ChatInvocationStatePump(new NodeChatInvocationPump(persistence, TimeProvider.System), TimeProvider.System),
+            new ChatInvocationStatePump(ChatPumpTestFactory.Create(persistence), TimeProvider.System),
             new ChatTurnResolver(resolver, CreateAgentDefinitionStore(), CreateOrchestrationResolver(), CreateModelClassificationService(), CreateLocalModelProviderResolver(),
                 CreateGgufModelCapabilityResolver(), Substitute.For<ICloudCredentialStore>(), NullLogger<ChatTurnResolver>.Instance),
             new NodeChatMutationGuard(persistence),
@@ -1186,7 +1186,7 @@ public sealed class NodeChatStreamServiceTests
         var extractionDispatcher = Substitute.For<IMemoryExtractionDispatcher>();
 
         var service = new NodeChatStreamService(persistence,
-            new ChatInvocationStatePump(new NodeChatInvocationPump(persistence, TimeProvider.System), TimeProvider.System),
+            new ChatInvocationStatePump(ChatPumpTestFactory.Create(persistence), TimeProvider.System),
             new ChatTurnResolver(resolver, CreateAgentDefinitionStore(), CreateOrchestrationResolver(), CreateModelClassificationService(), CreateLocalModelProviderResolver(),
                 CreateGgufModelCapabilityResolver(), Substitute.For<ICloudCredentialStore>(), NullLogger<ChatTurnResolver>.Instance),
             new NodeChatMutationGuard(persistence),
@@ -1245,7 +1245,7 @@ public sealed class NodeChatStreamServiceTests
                              .Returns(new ResolvedOrchestration(spec, "Orchestrator prompt.", "qwen3:8b", ReasoningEffort: null, AgentDefinitionVersion: 4));
 
         var service = new NodeChatStreamService(persistence,
-            new ChatInvocationStatePump(new NodeChatInvocationPump(persistence, TimeProvider.System), TimeProvider.System),
+            new ChatInvocationStatePump(ChatPumpTestFactory.Create(persistence), TimeProvider.System),
             new ChatTurnResolver(CreateAgentDefinitionResolver(), store, orchestrationResolver, CreateModelClassificationService(), CreateLocalModelProviderResolver(),
                 CreateGgufModelCapabilityResolver(), Substitute.For<ICloudCredentialStore>(), NullLogger<ChatTurnResolver>.Instance),
             new NodeChatMutationGuard(persistence),
@@ -1294,7 +1294,7 @@ public sealed class NodeChatStreamServiceTests
         var resolver = CreateAgentDefinitionResolver();
 
         var service = new NodeChatStreamService(persistence,
-            new ChatInvocationStatePump(new NodeChatInvocationPump(persistence, TimeProvider.System), TimeProvider.System),
+            new ChatInvocationStatePump(ChatPumpTestFactory.Create(persistence), TimeProvider.System),
             new ChatTurnResolver(resolver, CreateAgentDefinitionStore(), CreateOrchestrationResolver(), CreateModelClassificationService(), CreateLocalModelProviderResolver(),
                 CreateGgufModelCapabilityResolver(), Substitute.For<ICloudCredentialStore>(), NullLogger<ChatTurnResolver>.Instance),
             new NodeChatMutationGuard(persistence),
@@ -1347,7 +1347,7 @@ public sealed class NodeChatStreamServiceTests
                 .Returns(new ResolvedAgentRuntime("Selected persona.", [], "qwen3:8b", ReasoningEffort: null, AgentDefinitionVersion: 3, requestAgentId, "Selected Agent"));
 
         var service = new NodeChatStreamService(persistence,
-            new ChatInvocationStatePump(new NodeChatInvocationPump(persistence, TimeProvider.System), TimeProvider.System),
+            new ChatInvocationStatePump(ChatPumpTestFactory.Create(persistence), TimeProvider.System),
             new ChatTurnResolver(resolver, CreateAgentDefinitionStore(), CreateOrchestrationResolver(), CreateModelClassificationService(), CreateLocalModelProviderResolver(),
                 CreateGgufModelCapabilityResolver(), Substitute.For<ICloudCredentialStore>(), NullLogger<ChatTurnResolver>.Instance),
             new NodeChatMutationGuard(persistence),
@@ -1399,7 +1399,7 @@ public sealed class NodeChatStreamServiceTests
                 .Returns(new ResolvedAgentRuntime("Default persona.", [], ModelProfile: null, ReasoningEffort: null, AgentDefinitionVersion: 1, defaultAssistantId, "Default Assistant"));
 
         var service = new NodeChatStreamService(persistence,
-            new ChatInvocationStatePump(new NodeChatInvocationPump(persistence, TimeProvider.System), TimeProvider.System),
+            new ChatInvocationStatePump(ChatPumpTestFactory.Create(persistence), TimeProvider.System),
             new ChatTurnResolver(resolver, CreateAgentDefinitionStore(), CreateOrchestrationResolver(), CreateModelClassificationService(), CreateLocalModelProviderResolver(),
                 CreateGgufModelCapabilityResolver(), Substitute.For<ICloudCredentialStore>(), NullLogger<ChatTurnResolver>.Instance),
             new NodeChatMutationGuard(persistence),
@@ -1450,7 +1450,7 @@ public sealed class NodeChatStreamServiceTests
                 .Returns(new ResolvedAgentRuntime("Persona.", [], ModelProfile: null, ReasoningEffort: null, AgentDefinitionVersion: 1, agentId, "Backend Buddy"));
 
         var service = new NodeChatStreamService(persistence,
-            new ChatInvocationStatePump(new NodeChatInvocationPump(persistence, TimeProvider.System), TimeProvider.System),
+            new ChatInvocationStatePump(ChatPumpTestFactory.Create(persistence), TimeProvider.System),
             new ChatTurnResolver(resolver, CreateAgentDefinitionStore(), CreateOrchestrationResolver(), CreateModelClassificationService(), CreateLocalModelProviderResolver(),
                 CreateGgufModelCapabilityResolver(), Substitute.For<ICloudCredentialStore>(), NullLogger<ChatTurnResolver>.Instance),
             new NodeChatMutationGuard(persistence),
@@ -1504,7 +1504,7 @@ public sealed class NodeChatStreamServiceTests
                 .Returns(new ResolvedAgentRuntime("Persona.", [], ModelProfile: null, ReasoningEffort: null, AgentDefinitionVersion: 1, agentId, "Pending Persona"));
 
         var service = new NodeChatStreamService(persistence,
-            new ChatInvocationStatePump(new NodeChatInvocationPump(persistence, TimeProvider.System), TimeProvider.System),
+            new ChatInvocationStatePump(ChatPumpTestFactory.Create(persistence), TimeProvider.System),
             new ChatTurnResolver(resolver, CreateAgentDefinitionStore(), CreateOrchestrationResolver(), CreateModelClassificationService(), CreateLocalModelProviderResolver(),
                 CreateGgufModelCapabilityResolver(), Substitute.For<ICloudCredentialStore>(), NullLogger<ChatTurnResolver>.Instance),
             new NodeChatMutationGuard(persistence),
@@ -1573,7 +1573,7 @@ public sealed class NodeChatStreamServiceTests
                 });
 
         var service = new NodeChatStreamService(persistence,
-            new ChatInvocationStatePump(new NodeChatInvocationPump(persistence, TimeProvider.System), TimeProvider.System),
+            new ChatInvocationStatePump(ChatPumpTestFactory.Create(persistence), TimeProvider.System),
             new ChatTurnResolver(resolver, CreateAgentDefinitionStore(), CreateOrchestrationResolver(), CreateModelClassificationService(), CreateLocalModelProviderResolver(),
                 CreateGgufModelCapabilityResolver(), Substitute.For<ICloudCredentialStore>(), NullLogger<ChatTurnResolver>.Instance),
             new NodeChatMutationGuard(persistence),
@@ -1647,7 +1647,7 @@ public sealed class NodeChatStreamServiceTests
                 });
 
         var service = new NodeChatStreamService(persistence,
-            new ChatInvocationStatePump(new NodeChatInvocationPump(persistence, TimeProvider.System), TimeProvider.System),
+            new ChatInvocationStatePump(ChatPumpTestFactory.Create(persistence), TimeProvider.System),
             new ChatTurnResolver(resolver, CreateAgentDefinitionStore(), CreateOrchestrationResolver(), CreateModelClassificationService(), CreateLocalModelProviderResolver(),
                 CreateGgufModelCapabilityResolver(), Substitute.For<ICloudCredentialStore>(), NullLogger<ChatTurnResolver>.Instance),
             new NodeChatMutationGuard(persistence),
@@ -1739,7 +1739,7 @@ public sealed class NodeChatStreamServiceTests
         var dispatcher = new RecordingWorkerEventDispatcher();
         var runner = new PackageCapturingInvocationRunner(dispatcher);
         var service = new NodeChatStreamService(persistence,
-            new ChatInvocationStatePump(new NodeChatInvocationPump(persistence, TimeProvider.System), TimeProvider.System),
+            new ChatInvocationStatePump(ChatPumpTestFactory.Create(persistence), TimeProvider.System),
             new ChatTurnResolver(resolver, store, CreateOrchestrationResolver(), CreateModelClassificationService(), CreateLocalModelProviderResolver(), CreateGgufModelCapabilityResolver(),
                 Substitute.For<ICloudCredentialStore>(), NullLogger<ChatTurnResolver>.Instance),
             new NodeChatMutationGuard(persistence),
@@ -1842,7 +1842,7 @@ public sealed class NodeChatStreamServiceTests
         var dispatcher = new RecordingWorkerEventDispatcher();
         var runner = new PackageCapturingInvocationRunner(dispatcher);
         var service = new NodeChatStreamService(persistence,
-            new ChatInvocationStatePump(new NodeChatInvocationPump(persistence, TimeProvider.System), TimeProvider.System),
+            new ChatInvocationStatePump(ChatPumpTestFactory.Create(persistence), TimeProvider.System),
             new ChatTurnResolver(resolver, store, CreateOrchestrationResolver(), CreateModelClassificationService(), CreateLocalModelProviderResolver(), CreateGgufModelCapabilityResolver(),
                 Substitute.For<ICloudCredentialStore>(), NullLogger<ChatTurnResolver>.Instance),
             new NodeChatMutationGuard(persistence),
@@ -1938,7 +1938,7 @@ public sealed class NodeChatStreamServiceTests
         var offerProvider = CreateOfferProvider();
 
         var service = new NodeChatStreamService(persistence,
-            new ChatInvocationStatePump(new NodeChatInvocationPump(persistence, TimeProvider.System), TimeProvider.System),
+            new ChatInvocationStatePump(ChatPumpTestFactory.Create(persistence), TimeProvider.System),
             new ChatTurnResolver(CreateAgentDefinitionResolver(), CreateAgentDefinitionStore(), CreateOrchestrationResolver(), CreateModelClassificationService(), CreateLocalModelProviderResolver(),
                 CreateGgufModelCapabilityResolver(), Substitute.For<ICloudCredentialStore>(), NullLogger<ChatTurnResolver>.Instance),
             new NodeChatMutationGuard(persistence),
@@ -1990,7 +1990,7 @@ public sealed class NodeChatStreamServiceTests
         var runner = new CompletingInvocationRunner(dispatcher);
 
         var service = new NodeChatStreamService(persistence,
-            new ChatInvocationStatePump(new NodeChatInvocationPump(persistence, TimeProvider.System), TimeProvider.System),
+            new ChatInvocationStatePump(ChatPumpTestFactory.Create(persistence), TimeProvider.System),
             new ChatTurnResolver(CreateAgentDefinitionResolver(), CreateAgentDefinitionStore(), CreateOrchestrationResolver(), CreateModelClassificationService(), CreateLocalModelProviderResolver(),
                 CreateGgufModelCapabilityResolver(), Substitute.For<ICloudCredentialStore>(), NullLogger<ChatTurnResolver>.Instance),
             new NodeChatMutationGuard(persistence),
@@ -2041,7 +2041,7 @@ public sealed class NodeChatStreamServiceTests
         var offerProvider = CreateOfferProvider();
 
         var service = new NodeChatStreamService(persistence,
-            new ChatInvocationStatePump(new NodeChatInvocationPump(persistence, TimeProvider.System), TimeProvider.System),
+            new ChatInvocationStatePump(ChatPumpTestFactory.Create(persistence), TimeProvider.System),
             new ChatTurnResolver(CreateAgentDefinitionResolver(), CreateAgentDefinitionStore(), CreateOrchestrationResolver(), CreateModelClassificationService(), CreateLocalModelProviderResolver(),
                 CreateGgufModelCapabilityResolver(), Substitute.For<ICloudCredentialStore>(), NullLogger<ChatTurnResolver>.Instance),
             new NodeChatMutationGuard(persistence),
@@ -2097,7 +2097,7 @@ public sealed class NodeChatStreamServiceTests
         var classificationService = CreateModelClassificationService();
 
         var service = new NodeChatStreamService(persistence,
-            new ChatInvocationStatePump(new NodeChatInvocationPump(persistence, TimeProvider.System), TimeProvider.System),
+            new ChatInvocationStatePump(ChatPumpTestFactory.Create(persistence), TimeProvider.System),
             new ChatTurnResolver(CreateAgentDefinitionResolver(), CreateAgentDefinitionStore(), CreateOrchestrationResolver(), classificationService, CreateLocalModelProviderResolver(),
                 CreateGgufModelCapabilityResolver(), Substitute.For<ICloudCredentialStore>(), NullLogger<ChatTurnResolver>.Instance),
             new NodeChatMutationGuard(persistence),
@@ -2437,7 +2437,7 @@ public sealed class NodeChatStreamServiceTests
         var dispatcher = new RecordingWorkerEventDispatcher();
         var runner = new ContextCapturingInvocationRunner(dispatcher);
         var service = new NodeChatStreamService(persistence,
-            new ChatInvocationStatePump(new NodeChatInvocationPump(persistence, TimeProvider.System), TimeProvider.System),
+            new ChatInvocationStatePump(ChatPumpTestFactory.Create(persistence), TimeProvider.System),
             new ChatTurnResolver(CreateAgentDefinitionResolver(), CreateAgentDefinitionStore(), CreateOrchestrationResolver(), CreateModelClassificationService(), CreateLocalModelProviderResolver(),
                 CreateGgufModelCapabilityResolver(), Substitute.For<ICloudCredentialStore>(), NullLogger<ChatTurnResolver>.Instance),
             new NodeChatMutationGuard(persistence),

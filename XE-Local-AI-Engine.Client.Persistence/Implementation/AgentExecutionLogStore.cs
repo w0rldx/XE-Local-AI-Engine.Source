@@ -10,6 +10,9 @@ using XE_Local_AI_Engine.Client.Persistence.Stores;
 /// </summary>
 public sealed class AgentExecutionLogStore(NodeChatDbContext dbContext, TimeProvider timeProvider) : IAgentExecutionLogStore
 {
+    // Current run-envelope shape version. Bump when the envelope's field set changes so a reader can tell old rows apart.
+    private const int CurrentRunEnvelopeSchemaVersion = 1;
+
     private readonly NodeChatDbContext _dbContext = dbContext ?? throw new ArgumentNullException(nameof(dbContext));
     private readonly TimeProvider _timeProvider = timeProvider ?? throw new ArgumentNullException(nameof(timeProvider));
 
@@ -20,6 +23,8 @@ public sealed class AgentExecutionLogStore(NodeChatDbContext dbContext, TimeProv
         var entity = new AgentExecutionLog
         {
             Id = Guid.NewGuid(),
+            RecordKind = (int)AgentExecutionLogRecordKind.AdaptiveMemoryDiagnostics,
+            SchemaVersion = 0,
             AgentDefinitionId = input.AgentDefinitionId,
             ConversationId = input.ConversationId,
             MessageId = input.MessageId,
@@ -39,6 +44,42 @@ public sealed class AgentExecutionLogStore(NodeChatDbContext dbContext, TimeProv
         return ToRecord(entity);
     }
 
+    public async Task AddRunEnvelopeAsync(AgentRunEnvelopeInput input, CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(input);
+
+        var entity = new AgentExecutionLog
+        {
+            Id = Guid.NewGuid(),
+            RecordKind = (int)AgentExecutionLogRecordKind.ChatRunEnvelope,
+            SchemaVersion = CurrentRunEnvelopeSchemaVersion,
+            // The bound agent id is not available at the terminalization seam (it lives only in the message metadata
+            // blob); recorded as Guid.Empty so every envelope row shares one retention bucket and never collides with a
+            // real agent's diagnostics view.
+            AgentDefinitionId = Guid.Empty,
+            ConversationId = input.ConversationId,
+            MessageId = input.MessageId,
+            InvocationId = input.InvocationId,
+            RequestId = input.RequestId,
+            ModelName = input.ModelName,
+            ConfigHash = string.Empty,
+            TerminalStatus = input.TerminalStatus,
+            LatencyMs = input.DurationMs,
+            PromptTokens = input.PromptTokens,
+            CompletionTokens = input.CompletionTokens,
+            ContentChunkCount = input.ContentChunkCount,
+            ReasoningChunkCount = input.ReasoningChunkCount,
+            TraceId = input.TraceId,
+            Success = input.Success,
+            // Reuses the ErrorClass column for the failure-category enum name (text-free, same redaction discipline).
+            ErrorClass = input.FailureCategory,
+            CreatedAtUtc = _timeProvider.GetUtcNow().ToUnixTimeMilliseconds()
+        };
+
+        _ = _dbContext.AgentExecutionLogs.Add(entity);
+        _ = await _dbContext.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
+    }
+
     public async Task<IReadOnlyList<AgentExecutionLogRecord>> ListByAgentAsync(Guid agentDefinitionId, int limit, int offset = 0, CancellationToken cancellationToken = default)
     {
         // Floor the page bounds so a caller passing 0/negative still returns a sane (empty) page rather than throwing.
@@ -47,6 +88,9 @@ public sealed class AgentExecutionLogStore(NodeChatDbContext dbContext, TimeProv
 
         var entities = await _dbContext.AgentExecutionLogs
                                        .AsNoTracking()
+                                       // Diagnostics view is adaptive-memory rows only; run-envelope rows (kind 1, always
+                                       // Guid.Empty agent) are a separate ledger and must never surface here.
+                                       .Where(log => log.RecordKind == (int)AgentExecutionLogRecordKind.AdaptiveMemoryDiagnostics)
                                        .Where(log => log.AgentDefinitionId == agentDefinitionId)
                                        .OrderByDescending(log => log.CreatedAtUtc)
                                        .ThenByDescending(log => log.Id)
