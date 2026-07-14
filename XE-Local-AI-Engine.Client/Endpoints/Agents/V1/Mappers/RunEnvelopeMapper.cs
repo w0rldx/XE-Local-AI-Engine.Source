@@ -14,6 +14,7 @@ internal static class RunEnvelopeMapper
         {
             Id = record.Id,
             SchemaVersion = record.SchemaVersion,
+            AgentDefinitionId = record.AgentDefinitionId,
             ConversationId = record.ConversationId,
             MessageId = record.MessageId,
             InvocationId = record.InvocationId,
