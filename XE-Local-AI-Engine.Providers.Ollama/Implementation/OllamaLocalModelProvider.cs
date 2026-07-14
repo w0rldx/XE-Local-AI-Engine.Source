@@ -20,12 +20,17 @@ public sealed class OllamaLocalModelProvider : ILocalModelProvider, IDisposable
     public const string OllamaProviderName = "ollama";
 
     private readonly IOllamaApiClient _ollamaClient;
+    private readonly OllamaApiClientFactory _clientFactory;
     private readonly SemaphoreSlim _pullSemaphore = new(initialCount: 1, maxCount: 1);
 
-    /// <summary>Creates a provider wrapper around the configured Ollama API client.</summary>
-    public OllamaLocalModelProvider(IOllamaApiClient ollamaClient)
+    /// <summary>
+    ///     Creates a provider wrapper around the configured Ollama management client and the client factory that mints
+    ///     per-model chat/embedding clients over the same hardened transport.
+    /// </summary>
+    internal OllamaLocalModelProvider(IOllamaApiClient ollamaClient, OllamaApiClientFactory clientFactory)
     {
         _ollamaClient = ollamaClient ?? throw new ArgumentNullException(nameof(ollamaClient));
+        _clientFactory = clientFactory ?? throw new ArgumentNullException(nameof(clientFactory));
     }
 
     /// <summary>Releases the pull gate semaphore held by this provider instance.</summary>
@@ -189,7 +194,9 @@ public sealed class OllamaLocalModelProvider : ILocalModelProvider, IDisposable
             throw new ArgumentException($"Provider selection '{selection.ProviderName}' does not match '{ProviderName}'.", nameof(selection));
         }
 
-        return new OllamaApiClient(_ollamaClient.Uri, selection.ModelName);
+        // Mint over the shared hardened transport so routed sends inherit the fail-fast connect bound and
+        // unreachable-daemon normalization, rather than a raw default OllamaApiClient(uri, model) transport.
+        return _clientFactory.CreateClient(selection.ModelName);
     }
 
     /// <inheritdoc />
@@ -211,7 +218,9 @@ public sealed class OllamaLocalModelProvider : ILocalModelProvider, IDisposable
             throw new ArgumentException($"Provider selection '{selection.ProviderName}' does not match '{ProviderName}'.", nameof(selection));
         }
 
-        return new OllamaApiClient(_ollamaClient.Uri, selection.ModelName);
+        // Mint over the shared hardened transport (see CreateChatClient) so embedding calls fail fast against an absent
+        // daemon instead of hanging on the default connect timeout.
+        return _clientFactory.CreateClient(selection.ModelName);
     }
 
     private async Task<int?> TryReadContextLengthAsync(string modelName, CancellationToken ct)
