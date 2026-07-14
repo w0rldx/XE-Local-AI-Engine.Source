@@ -266,6 +266,56 @@ public sealed class PlaybookEvalServiceTests
         AssertEx.Equal(expected: 1, outcome.Result.CandidatePassCount);
     }
 
+    [Test]
+    public async Task RunEvalAsync_WhenStoredAssertionIsMalformed_RecordsExplicitFailedCase()
+    {
+        var agentId = Guid.NewGuid();
+        var actionId = Guid.NewGuid();
+        var goldenCase = MalformedAssertionCase(agentId);
+
+        // The REAL judge scores this: a stored, non-blank assertion that fails to parse is a corrupt scoring constraint.
+        // Despite the case also carrying a rubric, the judge must record an explicit failed case (malformed-assertion),
+        // never silently fall back to the rubric — so the run cannot pass on a candidate whose deterministic gate is lost.
+        var service = CreateService(agentId, actionId, [goldenCase], new DefaultPlaybookEvalJudge(NullLogger<DefaultPlaybookEvalJudge>.Instance), out _, out _);
+
+        var outcome = await service.RunEvalAsync(agentId, actionId).ConfigureAwait(false);
+
+        AssertEx.False(outcome.Result!.Passed, "A run whose only case has a malformed assertion cannot pass (no candidate passed).");
+        AssertEx.Equal(expected: 0, outcome.Result.CandidatePassCount);
+        AssertEx.Equal(DefaultPlaybookEvalJudge.MalformedAssertionScoredBy, outcome.Result.Cases[0].ScoredBy);
+        AssertEx.False(outcome.Result.Cases[0].CandidatePass, "The malformed-assertion case counts as a candidate failure.");
+    }
+
+    [Test]
+    public async Task RunEvalAsync_WhenAMalformedAssertionRowIsPresent_StillRunsTheRemainingCases()
+    {
+        var agentId = Guid.NewGuid();
+        var actionId = Guid.NewGuid();
+
+        // A malformed-assertion row must degrade to an explicit failed case while a valid case is still evaluated. The
+        // valid case here is a deterministic assertion (required phrase "output" is present in the runner's output), so
+        // the REAL judge scores it without a model call.
+        var malformedCase = MalformedAssertionCase(agentId);
+        var validAssertion = JsonSerializer.Serialize(new
+        {
+            requiredPhrases = new[]
+            {
+                "output"
+            },
+            forbiddenPhrases = Array.Empty<string>()
+        });
+        var validCase = AssertionCase(agentId, validAssertion);
+        var service = CreateService(agentId, actionId, [malformedCase, validCase], new DefaultPlaybookEvalJudge(NullLogger<DefaultPlaybookEvalJudge>.Instance), out _, out _);
+
+        var outcome = await service.RunEvalAsync(agentId, actionId).ConfigureAwait(false);
+
+        AssertEx.NotNull(outcome.Result, "The run must complete despite a malformed-assertion row.");
+        AssertEx.Equal(expected: 2, outcome.Result!.Cases.Count);
+        AssertEx.ContainsSingle(outcome.Result.Cases, caseResult => caseResult.ScoredBy == DefaultPlaybookEvalJudge.MalformedAssertionScoredBy && !caseResult.CandidatePass);
+        AssertEx.ContainsSingle(outcome.Result.Cases, caseResult => caseResult.ScoredBy == "assertion" && caseResult.CandidatePass);
+        AssertEx.Equal(expected: 1, outcome.Result.CandidatePassCount);
+    }
+
     private static async Task AssertInvalidTurnsRecordFailedCase(string inputTurns)
     {
         var agentId = Guid.NewGuid();
@@ -415,6 +465,22 @@ public sealed class PlaybookEvalServiceTests
             InputTurns: """[{"role":"user","text":"hello"}]""",
             assertion,
             Rubric: null,
+            Enabled: true,
+            CreatedAtUtc: 10,
+            UpdatedAtUtc: 10);
+    }
+
+    private static GoldenConversationRecord MalformedAssertionCase(Guid agentId)
+    {
+        // Valid input turns (so the case is evaluated, not short-circuited as invalid-input) but a non-blank assertion
+        // that is NOT valid JSON — a corrupt/legacy stored scoring constraint. A rubric is present to prove the judge
+        // never silently falls back to it: the malformed assertion must fail the case outright.
+        return new GoldenConversationRecord(Guid.NewGuid(),
+            agentId,
+            "Malformed assertion case",
+            InputTurns: """[{"role":"user","text":"hello"}]""",
+            Assertion: "{ not valid json",
+            "The answer must be helpful.",
             Enabled: true,
             CreatedAtUtc: 10,
             UpdatedAtUtc: 10);
