@@ -365,6 +365,98 @@ public sealed class NodeChatPersistenceServiceTests : IDisposable
     }
 
     [Test]
+    [Arguments(NodeChatMessageStatusValues.Completed)]
+    [Arguments(NodeChatMessageStatusValues.Failed)]
+    [Arguments(NodeChatMessageStatusValues.Interrupted)]
+    public async Task CancelMessageAsync_WhenAlreadyTerminal_LeavesStatusUnchangedAndReportsNotCancelled(string terminalStatus)
+    {
+        await using var provider = await BuildProviderAsync($"cancel-terminal-{terminalStatus}.sqlite").ConfigureAwait(false);
+        var service = CreateService(provider);
+        var conversation = await service.CreateConversationAsync(new NodeChatCreateConversationRequest("Cancel terminal", UserId: null, CreatedAtUtc: 50)).ConfigureAwait(false);
+        var assistantMessageId = Guid.NewGuid();
+        var correlation = new NodeChatMessageCorrelation(conversation.ConversationId, assistantMessageId, Guid.NewGuid());
+
+        await service.CreateAssistantPlaceholderAsync(new NodeChatCreateAssistantPlaceholderRequest(conversation.ConversationId, assistantMessageId, correlation.RequestId, CreatedAtUtc: 51))
+                     .ConfigureAwait(false);
+        await service.MarkAssistantStreamingAsync(correlation, updatedAtUtc: 52).ConfigureAwait(false);
+        await service.TerminalizeAssistantMessageAsync(new NodeChatTerminalizeMessageRequest(correlation,
+                         terminalStatus,
+                         UpdatedAtUtc: 53,
+                         "final answer",
+                         Error: terminalStatus == NodeChatMessageStatusValues.Failed ? "local-chat-stream-failed" : null))
+                     .ConfigureAwait(false);
+
+        // A late cancel arrives after the message already reached a terminal status: the transition guard must reject it
+        // without a rewrite, so the persisted status, content, and updated timestamp are all unchanged.
+        var cancel = await service.CancelMessageAsync(new NodeChatCancelRequest(correlation, CancelledAtUtc: 99)).ConfigureAwait(false);
+
+        AssertEx.False(cancel.Cancelled);
+        AssertEx.Equal(terminalStatus, cancel.Status);
+
+        var loaded = AssertEx.NotNull(await service.GetConversationAsync(conversation.ConversationId).ConfigureAwait(false));
+        var assistant = loaded.Messages.Single(message => message.MessageId == assistantMessageId);
+        AssertEx.Equal(terminalStatus, assistant.Status);
+        AssertEx.Equal("final answer", assistant.Content);
+        AssertEx.Equal(expected: 53L, assistant.UpdatedAtUtc);
+    }
+
+    [Test]
+    public async Task CancelMessageAsync_WhenStreaming_CancelsAndPreservesPartialContent()
+    {
+        await using var provider = await BuildProviderAsync("cancel-streaming.sqlite").ConfigureAwait(false);
+        var service = CreateService(provider);
+        var conversation = await service.CreateConversationAsync(new NodeChatCreateConversationRequest("Cancel streaming", UserId: null, CreatedAtUtc: 60)).ConfigureAwait(false);
+        var assistantMessageId = Guid.NewGuid();
+        var correlation = new NodeChatMessageCorrelation(conversation.ConversationId, assistantMessageId, Guid.NewGuid());
+
+        await service.CreateAssistantPlaceholderAsync(new NodeChatCreateAssistantPlaceholderRequest(conversation.ConversationId, assistantMessageId, correlation.RequestId, CreatedAtUtc: 61))
+                     .ConfigureAwait(false);
+        await service.MarkAssistantStreamingAsync(correlation, updatedAtUtc: 62).ConfigureAwait(false);
+        await service.FlushAssistantPartialAsync(new NodeChatPartialFlushRequest(correlation, "partial so far", Reasoning: null, UpdatedAtUtc: 63)).ConfigureAwait(false);
+
+        var cancel = await service.CancelMessageAsync(new NodeChatCancelRequest(correlation, CancelledAtUtc: 64)).ConfigureAwait(false);
+
+        AssertEx.True(cancel.Cancelled);
+        AssertEx.Equal(NodeChatMessageStatusValues.Cancelled, cancel.Status);
+
+        var loaded = AssertEx.NotNull(await service.GetConversationAsync(conversation.ConversationId).ConfigureAwait(false));
+        var assistant = loaded.Messages.Single(message => message.MessageId == assistantMessageId);
+        AssertEx.Equal(NodeChatMessageStatusValues.Cancelled, assistant.Status);
+        AssertEx.Equal("partial so far", assistant.Content);
+        AssertEx.Equal(expected: 64L, assistant.UpdatedAtUtc);
+    }
+
+    [Test]
+    public async Task CancelMessageAsync_WhenRepeated_IsIdempotentWithoutRewrite()
+    {
+        await using var provider = await BuildProviderAsync("cancel-idempotent.sqlite").ConfigureAwait(false);
+        var service = CreateService(provider);
+        var conversation = await service.CreateConversationAsync(new NodeChatCreateConversationRequest("Cancel idempotent", UserId: null, CreatedAtUtc: 70)).ConfigureAwait(false);
+        var assistantMessageId = Guid.NewGuid();
+        var correlation = new NodeChatMessageCorrelation(conversation.ConversationId, assistantMessageId, Guid.NewGuid());
+
+        await service.CreateAssistantPlaceholderAsync(new NodeChatCreateAssistantPlaceholderRequest(conversation.ConversationId, assistantMessageId, correlation.RequestId, CreatedAtUtc: 71))
+                     .ConfigureAwait(false);
+        await service.MarkAssistantStreamingAsync(correlation, updatedAtUtc: 72).ConfigureAwait(false);
+
+        var first = await service.CancelMessageAsync(new NodeChatCancelRequest(correlation, CancelledAtUtc: 73)).ConfigureAwait(false);
+        // The second cancel targets an already-cancelled (terminal) row, so the guard skips the rewrite: the status stays
+        // Cancelled and the updated timestamp remains the first cancel's 73 rather than the repeat's 88.
+        var second = await service.CancelMessageAsync(new NodeChatCancelRequest(correlation, CancelledAtUtc: 88)).ConfigureAwait(false);
+
+        AssertEx.True(first.Cancelled);
+        AssertEx.Equal(NodeChatMessageStatusValues.Cancelled, first.Status);
+        // The message is (still) cancelled, so a repeat honestly reports the cancelled state even though no write ran.
+        AssertEx.True(second.Cancelled);
+        AssertEx.Equal(NodeChatMessageStatusValues.Cancelled, second.Status);
+
+        var loaded = AssertEx.NotNull(await service.GetConversationAsync(conversation.ConversationId).ConfigureAwait(false));
+        var assistant = loaded.Messages.Single(message => message.MessageId == assistantMessageId);
+        AssertEx.Equal(NodeChatMessageStatusValues.Cancelled, assistant.Status);
+        AssertEx.Equal(expected: 73L, assistant.UpdatedAtUtc);
+    }
+
+    [Test]
     public async Task TerminalizeAssistantMessageAsync_WhenFailed_PersistsPartialContentAndRedactedError()
     {
         await using var provider = await BuildProviderAsync("failed-terminal.sqlite").ConfigureAwait(false);
