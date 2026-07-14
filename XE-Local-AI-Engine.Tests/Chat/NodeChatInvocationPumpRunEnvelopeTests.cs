@@ -1,0 +1,208 @@
+namespace XE_Local_AI_Engine.Tests.Chat;
+
+using NSubstitute;
+using XE_Local_AI_Engine.AI.Contracts.Enums;
+using XE_Local_AI_Engine.Client.Models.Enums;
+using XE_Local_AI_Engine.Client.Services.Chat;
+using XE_Local_AI_Engine.Client.Services.Chat.Implementation;
+using XE_Local_AI_Engine.Client.Services.Events;
+using XE_Local_AI_Engine.Tests.Testing;
+
+// The durable run ledger (MED-007 / R4): NodeChatInvocationPump no longer writes the envelope itself — it hands the
+// content-free envelope metadata INTO the terminalize persistence request so the row is written atomically with the
+// terminal message row. These tests pin the pump's field mapping onto that request and that the result reflects the
+// persisted winning status; the atomic write itself (agent id, winning status, idempotency) is covered by the
+// persistence/recovery integration tests.
+public sealed class NodeChatInvocationPumpRunEnvelopeTests
+{
+    [Test]
+    public async Task TerminalizeAsync_CompletedRun_PassesBoundedEnvelopeMetadataIntoTerminalize()
+    {
+        var persistence = CreatePersistence();
+        var pump = new NodeChatInvocationPump(persistence, TimeProvider.System);
+
+        var conversationId = Guid.NewGuid();
+        var messageId = Guid.NewGuid();
+        var requestId = Guid.NewGuid();
+        var invocationId = Guid.NewGuid();
+        var correlation = new NodeChatMessageCorrelation(conversationId, messageId, requestId);
+
+        var state = new InvocationState
+        {
+            InvocationId = invocationId,
+            ConversationId = conversationId,
+            Status = InvocationStatus.Completed,
+            ModelUsed = "llama-3.1",
+            InputTokens = 100,
+            OutputTokens = 25,
+            ReasoningTokens = 5,
+            TotalTokens = 130,
+            StreamedChunkCount = 8,
+            StreamedThinkingChunkCount = 3,
+            GenerationDurationMs = 1500,
+            StartedAt = DateTimeOffset.FromUnixTimeMilliseconds(7000)
+        };
+
+        _ = await pump.TerminalizeAsync(correlation, state, "requested-model");
+
+        await persistence.Received(1).TerminalizeAssistantMessageAsync(
+            Arg.Is<NodeChatTerminalizeMessageRequest>(request =>
+                request.Status == "completed"
+                && request.Model == "llama-3.1"
+                && request.InputCount == 100
+                && request.OutputCount == 25
+                && request.Envelope != null
+                && request.Envelope.InvocationId == invocationId
+                && request.Envelope.DurationMs == 1500L
+                && request.Envelope.ContentChunkCount == 8
+                && request.Envelope.ReasoningChunkCount == 3
+                && request.Envelope.StartedAtUtc == 7000L
+                && request.Envelope.FailureCategory == null),
+            Arg.Any<CancellationToken>());
+    }
+
+    [Test]
+    public async Task TerminalizeAsync_FailedRun_PassesFailureCategoryInEnvelopeMetadata()
+    {
+        var persistence = CreatePersistence();
+        var pump = new NodeChatInvocationPump(persistence, TimeProvider.System);
+
+        var correlation = new NodeChatMessageCorrelation(Guid.NewGuid(), Guid.NewGuid(), Guid.NewGuid());
+        var state = new InvocationState
+        {
+            InvocationId = Guid.NewGuid(),
+            ConversationId = correlation.ConversationId,
+            Status = InvocationStatus.Failed,
+            ModelUsed = "llama-3.1",
+            FailureCategory = FailureCategory.ProviderUnreachable,
+            GenerationDurationMs = 42
+        };
+
+        _ = await pump.TerminalizeAsync(correlation, state, requestedModel: null);
+
+        await persistence.Received(1).TerminalizeAssistantMessageAsync(
+            Arg.Is<NodeChatTerminalizeMessageRequest>(request =>
+                request.Status == "failed"
+                && request.Envelope != null
+                && request.Envelope.FailureCategory == "ProviderUnreachable"
+                && request.Envelope.DurationMs == 42L),
+            Arg.Any<CancellationToken>());
+    }
+
+    [Test]
+    public async Task TerminalizeAsync_WhenNoRunnerDuration_FallsBackToStartToCompleteElapsed()
+    {
+        var persistence = CreatePersistence();
+        var pump = new NodeChatInvocationPump(persistence, TimeProvider.System);
+
+        var correlation = new NodeChatMessageCorrelation(Guid.NewGuid(), Guid.NewGuid(), Guid.NewGuid());
+        var state = new InvocationState
+        {
+            InvocationId = Guid.NewGuid(),
+            ConversationId = correlation.ConversationId,
+            Status = InvocationStatus.Completed,
+            ModelUsed = "llama-3.1",
+            StartedAt = DateTimeOffset.UnixEpoch,
+            CompletedAt = DateTimeOffset.UnixEpoch.AddMilliseconds(750)
+            // GenerationDurationMs deliberately left null (legacy/platform turn).
+        };
+
+        _ = await pump.TerminalizeAsync(correlation, state, requestedModel: null);
+
+        await persistence.Received(1).TerminalizeAssistantMessageAsync(
+            Arg.Is<NodeChatTerminalizeMessageRequest>(request => request.Envelope != null && request.Envelope.DurationMs == 750L),
+            Arg.Any<CancellationToken>());
+    }
+
+    [Test]
+    public async Task TerminalizeInterruptedAsync_PassesThinEnvelopeMetadataIntoTerminalize()
+    {
+        var persistence = CreatePersistence();
+        var pump = new NodeChatInvocationPump(persistence, TimeProvider.System);
+
+        var correlation = new NodeChatMessageCorrelation(Guid.NewGuid(), Guid.NewGuid(), Guid.NewGuid());
+        var cursor = new NodeChatPumpCursor("partial", string.Empty);
+
+        _ = await pump.TerminalizeInterruptedAsync(correlation, cursor, wasCancelled: false);
+
+        await persistence.Received(1).TerminalizeAssistantMessageAsync(
+            Arg.Is<NodeChatTerminalizeMessageRequest>(request =>
+                request.Status == "interrupted"
+                && request.Envelope != null
+                && request.Envelope.InvocationId == null
+                && request.Envelope.DurationMs == 0L),
+            Arg.Any<CancellationToken>());
+    }
+
+    [Test]
+    public async Task TerminalizeInterruptedAsync_WhenCancelled_PassesCancelledStatus()
+    {
+        var persistence = CreatePersistence();
+        var pump = new NodeChatInvocationPump(persistence, TimeProvider.System);
+
+        var correlation = new NodeChatMessageCorrelation(Guid.NewGuid(), Guid.NewGuid(), Guid.NewGuid());
+
+        _ = await pump.TerminalizeInterruptedAsync(correlation, new NodeChatPumpCursor(string.Empty, string.Empty), wasCancelled: true);
+
+        await persistence.Received(1).TerminalizeAssistantMessageAsync(
+            Arg.Is<NodeChatTerminalizeMessageRequest>(request => request.Status == "cancelled" && request.Envelope != null),
+            Arg.Any<CancellationToken>());
+    }
+
+    [Test]
+    public async Task TerminalizeInterruptedAsync_WhenPersistedStatusWins_ResultReflectsPersisted()
+    {
+        // Simulate the transition guard rejecting an Interrupted write against an already-Cancelled row: the persistence
+        // seam returns the Cancelled winning row. The returned status and event type must reflect that persisted state
+        // rather than the requested Interrupted (the envelope's own status is derived inside the terminalize command).
+        var correlation = new NodeChatMessageCorrelation(Guid.NewGuid(), Guid.NewGuid(), Guid.NewGuid());
+        var persistence = Substitute.For<INodeChatPersistenceService>();
+        persistence.TerminalizeAssistantMessageAsync(Arg.Any<NodeChatTerminalizeMessageRequest>(), Arg.Any<CancellationToken>())
+                   .Returns(new NodeChatPersistedMessageDto(correlation.MessageId,
+                       correlation.ConversationId,
+                       correlation.RequestId,
+                       Sequence: 0,
+                       "assistant",
+                       "partial",
+                       Reasoning: null,
+                       NodeChatMessageStatusValues.Cancelled,
+                       CreatedAtUtc: 0,
+                       UpdatedAtUtc: 5,
+                       Model: null,
+                       Error: null,
+                       MetadataJson: null));
+        var pump = new NodeChatInvocationPump(persistence, TimeProvider.System);
+
+        var result = await pump.TerminalizeInterruptedAsync(correlation, new NodeChatPumpCursor("partial", string.Empty), wasCancelled: false);
+
+        AssertEx.Equal(NodeChatMessageStatusValues.Cancelled, result.TerminalStatus);
+        AssertEx.Equal(ChatStreamEventTypes.AssistantCancelled, result.EventType);
+    }
+
+    private static INodeChatPersistenceService CreatePersistence()
+    {
+        var persistence = Substitute.For<INodeChatPersistenceService>();
+        // The pump derives its result from the PERSISTED winning row, so the terminalize seam must return a message. Echo
+        // the requested terminal (the happy-path winning status); the transition-table rejection path is covered directly
+        // in the persistence/recovery integration tests.
+        persistence.TerminalizeAssistantMessageAsync(Arg.Any<NodeChatTerminalizeMessageRequest>(), Arg.Any<CancellationToken>())
+                   .Returns(callInfo =>
+                   {
+                       var request = callInfo.Arg<NodeChatTerminalizeMessageRequest>();
+                       return new NodeChatPersistedMessageDto(request.Correlation.MessageId,
+                           request.Correlation.ConversationId,
+                           request.Correlation.RequestId,
+                           Sequence: 0,
+                           "assistant",
+                           request.Content ?? string.Empty,
+                           request.Reasoning,
+                           request.Status,
+                           CreatedAtUtc: 0,
+                           request.UpdatedAtUtc,
+                           request.Model,
+                           request.Error,
+                           MetadataJson: null);
+                   });
+        return persistence;
+    }
+}

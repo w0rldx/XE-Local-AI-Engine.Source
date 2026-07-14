@@ -10,4 +10,6 @@ internal sealed record ChatTurnResolution(
     ResolvedOrchestration? Orchestration,
     bool SupportsThinking,
     bool SupportsTools,
-    bool RequiresInstalledChatModel);
+    bool RequiresInstalledChatModel,
+    bool ActiveModelIsCloud,
+    bool EffectiveModelIsCloud);

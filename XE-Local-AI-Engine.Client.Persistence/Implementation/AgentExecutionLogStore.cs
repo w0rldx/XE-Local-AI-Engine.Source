@@ -10,6 +10,8 @@ using XE_Local_AI_Engine.Client.Persistence.Stores;
 /// </summary>
 public sealed class AgentExecutionLogStore(NodeChatDbContext dbContext, TimeProvider timeProvider) : IAgentExecutionLogStore
 {
+    private const int ChatRunEnvelopeKind = (int)AgentExecutionLogRecordKind.ChatRunEnvelope;
+
     private readonly NodeChatDbContext _dbContext = dbContext ?? throw new ArgumentNullException(nameof(dbContext));
     private readonly TimeProvider _timeProvider = timeProvider ?? throw new ArgumentNullException(nameof(timeProvider));
 
@@ -20,6 +22,8 @@ public sealed class AgentExecutionLogStore(NodeChatDbContext dbContext, TimeProv
         var entity = new AgentExecutionLog
         {
             Id = Guid.NewGuid(),
+            RecordKind = (int)AgentExecutionLogRecordKind.AdaptiveMemoryDiagnostics,
+            SchemaVersion = 0,
             AgentDefinitionId = input.AgentDefinitionId,
             ConversationId = input.ConversationId,
             MessageId = input.MessageId,
@@ -39,6 +43,32 @@ public sealed class AgentExecutionLogStore(NodeChatDbContext dbContext, TimeProv
         return ToRecord(entity);
     }
 
+    public async Task<IReadOnlyList<AgentRunEnvelopeRecord>> ListRunEnvelopesAsync(Guid? conversationId, int limit, int offset = 0, CancellationToken cancellationToken = default)
+    {
+        // Floor the page bounds so a caller passing 0/negative still returns a sane (empty) page rather than throwing.
+        var take = Math.Max(val1: 0, limit);
+        var skip = Math.Max(val1: 0, offset);
+
+        var query = _dbContext.AgentExecutionLogs
+                              .AsNoTracking()
+                              .Where(log => log.RecordKind == ChatRunEnvelopeKind);
+
+        if (conversationId is { } id)
+        {
+            query = query.Where(log => log.ConversationId == id);
+        }
+
+        var entities = await query
+                             .OrderByDescending(log => log.CreatedAtUtc)
+                             .ThenByDescending(log => log.Id)
+                             .Skip(skip)
+                             .Take(take)
+                             .ToListAsync(cancellationToken)
+                             .ConfigureAwait(false);
+
+        return entities.Select(ToEnvelopeRecord).ToArray();
+    }
+
     public async Task<IReadOnlyList<AgentExecutionLogRecord>> ListByAgentAsync(Guid agentDefinitionId, int limit, int offset = 0, CancellationToken cancellationToken = default)
     {
         // Floor the page bounds so a caller passing 0/negative still returns a sane (empty) page rather than throwing.
@@ -47,6 +77,9 @@ public sealed class AgentExecutionLogStore(NodeChatDbContext dbContext, TimeProv
 
         var entities = await _dbContext.AgentExecutionLogs
                                        .AsNoTracking()
+                                       // Diagnostics view is adaptive-memory rows only; run-envelope rows (kind 1) are a
+                                       // separate ledger and must never surface here, regardless of their bound agent id.
+                                       .Where(log => log.RecordKind == (int)AgentExecutionLogRecordKind.AdaptiveMemoryDiagnostics)
                                        .Where(log => log.AgentDefinitionId == agentDefinitionId)
                                        .OrderByDescending(log => log.CreatedAtUtc)
                                        .ThenByDescending(log => log.Id)
@@ -99,6 +132,31 @@ public sealed class AgentExecutionLogStore(NodeChatDbContext dbContext, TimeProv
             entity.CompletionTokens,
             entity.Success,
             entity.ErrorClass,
+            entity.CreatedAtUtc);
+    }
+
+    private static AgentRunEnvelopeRecord ToEnvelopeRecord(AgentExecutionLog entity)
+    {
+        return new AgentRunEnvelopeRecord(entity.Id,
+            entity.SchemaVersion,
+            entity.AgentDefinitionId,
+            entity.ConversationId,
+            entity.MessageId,
+            entity.InvocationId,
+            entity.RequestId,
+            entity.ModelName,
+            entity.TerminalStatus ?? string.Empty,
+            entity.Success,
+            entity.ErrorClass,
+            entity.LatencyMs,
+            entity.PromptTokens,
+            entity.CompletionTokens,
+            entity.ReasoningTokens,
+            entity.TotalTokens,
+            entity.ContentChunkCount,
+            entity.ReasoningChunkCount,
+            entity.TraceId,
+            entity.StartedAtUtc,
             entity.CreatedAtUtc);
     }
 }

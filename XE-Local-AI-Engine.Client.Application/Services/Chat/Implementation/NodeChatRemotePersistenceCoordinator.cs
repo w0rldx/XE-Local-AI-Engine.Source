@@ -18,7 +18,7 @@ public sealed class NodeChatRemotePersistenceCoordinator(
     private readonly INodeChatPersistenceService _persistence = persistence ?? throw new ArgumentNullException(nameof(persistence));
     private readonly TimeProvider _timeProvider = timeProvider ?? throw new ArgumentNullException(nameof(timeProvider));
 
-    public async Task<NodeChatRemotePersistenceSession> BeginAsync(RuntimePackage package,
+    public async Task<NodeChatRemotePersistenceSession?> BeginAsync(RuntimePackage package,
         CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(package);
@@ -65,7 +65,16 @@ public sealed class NodeChatRemotePersistenceCoordinator(
                 Origin: NodeChatOriginValues.Remote),
             cancellationToken).ConfigureAwait(false);
 
-        await _persistence.MarkAssistantStreamingAsync(correlation, NowUnixMilliseconds(), cancellationToken).ConfigureAwait(false);
+        // The streaming mark is guarded (StreamingSources): it is an atomic no-op if the row already left the
+        // Pending/Queued set — e.g. a cancel terminalized the placeholder before we got here. In that case the returned
+        // row carries the true terminal status, NOT Streaming; opening a persistence session then would drive the pump
+        // against an already-terminal row (every later flush/terminalize is guard-rejected, so the work is pointless).
+        // Abort honestly by returning null so the dispatcher runs the invocation without a node-local mirror.
+        var streaming = await _persistence.MarkAssistantStreamingAsync(correlation, NowUnixMilliseconds(), cancellationToken).ConfigureAwait(false);
+        if (!string.Equals(streaming.Status, NodeChatMessageStatusValues.Streaming, StringComparison.Ordinal))
+        {
+            return null;
+        }
 
         return new NodeChatRemotePersistenceSession(_invocationPump, correlation, package.ModelProfile);
     }

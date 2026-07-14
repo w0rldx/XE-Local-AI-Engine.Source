@@ -165,7 +165,11 @@ public sealed class OrchestrationAgentFactoryTests
             {
                 sawApproval = true;
 
-                // Wait beyond the 1s idle timeout before responding; the suspended-while-pending clock must keep the run alive.
+                // Real-timer integration: this sleep is deliberately retained. The idle clock is a linked
+                // CancellationTokenSource.CancelAfter (no TimeProvider seam), and the timeout is configured only in whole
+                // seconds (OrchestrationAgentOptions.IdleTimeoutSeconds, minimum 1s), so the wait must exceed 1s in real
+                // wall-clock time to prove the suspended-while-pending clock keeps the run alive. Shrinking it would need
+                // an invasive sub-second/injected-clock change to the orchestration session and its options contract.
                 await Task.Delay(TimeSpan.FromMilliseconds(1100));
                 await session.RespondToApprovalAsync(update.RequestId!, approved: true, reason: null);
             }

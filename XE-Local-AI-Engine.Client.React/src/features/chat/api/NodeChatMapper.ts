@@ -177,9 +177,10 @@ function mapMessage(dto: NodeChatMessageResponseDto): ChatMessageModel {
 			dto.reasoningEffort != null && persistableReasoningEfforts.includes(dto.reasoningEffort as ReasoningEffort)
 				? (dto.reasoningEffort as ReasoningEffort)
 				: undefined,
-		// Backend-exact generation duration. The wire field is a C# int64 → the generated zod coerces it to a
-		// bigint at runtime (despite the TS type reading `number`), so it must be Number()-converted here, or the
-		// downstream tps math (outputTokens / durationMs) would throw "Cannot mix BigInt and other types".
+		// Backend-exact generation duration. The int64 wire contract is pinned to a JSON number (the generated zod
+		// validates it as `z.int()`, matching the TS `number` type), so this is already a number; the Number() cast is
+		// now a defensive no-op that also normalizes any stray bigint before the downstream tps math (outputTokens /
+		// durationMs) — which would otherwise throw "Cannot mix BigInt and other types".
 		generationDurationMs: dto.generationDurationMs != null ? Number(dto.generationDurationMs) : undefined,
 	};
 }

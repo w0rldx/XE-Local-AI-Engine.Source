@@ -22,7 +22,7 @@ public sealed class ChatTurnResolver(
     IModelClassificationService modelClassificationService,
     ILocalModelProviderResolver localModelProviderResolver,
     IGgufModelCapabilityResolver ggufModelCapabilityResolver,
-    ICloudCredentialStore cloudCredentialStore,
+    IActiveCloudChatClientFactory activeCloudChatClientFactory,
     ILogger<ChatTurnResolver> logger)
 {
     /// <summary>
@@ -41,8 +41,10 @@ public sealed class ChatTurnResolver(
         // Resolve the active model's advertised Ollama capabilities ONCE so the think field and the tool offer are both
         // gated by what the model can actually do. A non-thinking model returns HTTP 400 for any think value; a
         // non-tools model cannot drive tool calls. Unknown/offline capabilities resolve to NOT-capable (the safe
-        // default) so a plain chat still works without tripping the 400. Cache hit issues no /api/show call.
-        var (supportsThinking, supportsTools) = await ResolveModelCapabilitiesAsync(activeModel, cancellationToken).ConfigureAwait(false);
+        // default) so a plain chat still works without tripping the 400. Cache hit issues no /api/show call. The same
+        // pass classifies provider LOCALITY (Codex / Azure Foundry = cloud) so the knowledge-tool provider-locality gate
+        // reuses this per-turn resolution instead of adding its own hot-path lookup.
+        var (supportsThinking, supportsTools, activeModelIsCloud) = await ResolveModelCapabilitiesAsync(activeModel, cancellationToken).ConfigureAwait(false);
 
         // Resolve the effective agent definition. A null result — no effective id (the seed is missing), or an id whose
         // definition was deleted — keeps the default persona: the embedded system prompt, the full capability-gated
@@ -50,7 +52,7 @@ public sealed class ChatTurnResolver(
         // the Default Assistant, intersected otherwise), the pinned model profile, the reasoning effort, the version
         // that feeds the config hash, AND the attribution snapshot (id + display name). The retrieval query is the
         // relevance-retrieval query (inert below the threshold / unbound, so the prompt stays byte-identical).
-        var resolved = await agentDefinitionResolver.ResolveAsync(effectiveAgentId, activeModel, retrievalQuery, supportsTools, honorModelProfile: !userPickedConcreteModel, cancellationToken)
+        var resolved = await agentDefinitionResolver.ResolveAsync(effectiveAgentId, activeModel, retrievalQuery, supportsTools, honorModelProfile: !userPickedConcreteModel, activeModelIsCloud, cancellationToken)
                                                     .ConfigureAwait(false);
 
         // When the effective definition is a tool-capable orchestrator, resolve a compiled orchestration spec to carry
@@ -65,7 +67,12 @@ public sealed class ChatTurnResolver(
         // label can never disagree with what ran.
         var effectiveModel = resolved?.ModelProfile ?? activeModel;
 
-        return new ChatTurnResolution(activeModel, effectiveModel, resolved, orchestration, supportsThinking, supportsTools, requiresInstalledChatModel);
+        // The EFFECTIVE model's provider locality (used to gate node-local private-data exposure — knowledge/file tools
+        // and conversation attachments). The resolver classified the pinned effective model; with no bound agent (or no
+        // pin) the effective model IS the active model, so reuse the active-model flag.
+        var effectiveModelIsCloud = resolved?.EffectiveModelIsCloud ?? activeModelIsCloud;
+
+        return new ChatTurnResolution(activeModel, effectiveModel, resolved, orchestration, supportsThinking, supportsTools, requiresInstalledChatModel, activeModelIsCloud, effectiveModelIsCloud);
     }
 
     /// <summary>
@@ -75,11 +82,11 @@ public sealed class ChatTurnResolver(
     ///     withholds the tool offer while still allowing a plain chat. The same provider-routing decision lives in
     ///     <see cref="ModelCapabilityResolver" /> for the per-participant orchestration path — change both together.
     /// </summary>
-    private async Task<(bool SupportsThinking, bool SupportsTools)> ResolveModelCapabilitiesAsync(string? activeModel, CancellationToken cancellationToken)
+    private async Task<(bool SupportsThinking, bool SupportsTools, bool IsCloud)> ResolveModelCapabilitiesAsync(string? activeModel, CancellationToken cancellationToken)
     {
         if (string.IsNullOrWhiteSpace(activeModel))
         {
-            return (false, false);
+            return (false, false, IsCloud: false);
         }
 
         // A Codex cloud model is NOT an Ollama model: classifying it against the local runtime's /api/show would
@@ -89,15 +96,25 @@ public sealed class ChatTurnResolver(
         // tool loop). Cloud providers ignore the unknown think property, so the reasoning gate stays inert on the wire.
         if (CodexModelCatalog.IsCodexModel(activeModel))
         {
-            return (SupportsThinking: true, CodexProviderCapabilities.V0.SupportsToolCalling);
+            return (SupportsThinking: true, CodexProviderCapabilities.V0.SupportsToolCalling, IsCloud: true);
         }
 
-        // An Azure Foundry deployment id is NOT an Ollama model either: probing /api/show for it would 500/stall.
-        // When the active model matches a stored Azure deployment name, advertise the Azure provider's declared
-        // capability matrix instead of an Ollama classification, so an Azure id never falls through to the local probe.
-        if (await IsAzureFoundryModelAsync(activeModel, cancellationToken).ConfigureAwait(false))
+        // Azure/cloud LOCALITY is resolved from the SAME short-TTL routing snapshot the cloud factory routes from — the
+        // single source of truth — never an independent credential-store read. An independent read could FAIL while the
+        // factory still routes the deployment to Azure from its cached snapshot, classifying the request local while it
+        // egresses to the cloud (the private-data gate would then leak). Sharing the snapshot removes that divergence,
+        // and a genuine snapshot read failure FAILS CLOSED to cloud so the private-data gate withholds rather than leaks.
+        // A non-Codex model that routes to a cloud provider is an Azure Foundry deployment (the only other cloud route),
+        // so advertise Azure's capability matrix; on a fail-closed fault keep the conservative non-thinking/non-tools
+        // default rather than asserting a matrix for a model that could not be classified. IsCloud feeds ONLY the
+        // node-local private-data gates here (attachments + knowledge/file tools) — thinking/tools are the separate first
+        // two tuple slots — so failing IsCloud closed does not disturb reasoning or tool-capability detection.
+        var (routesToCloud, routingFaulted) = ClassifyCloudRouting(activeModel);
+        if (routesToCloud)
         {
-            return (SupportsThinking: false, SupportsTools: AzureFoundryProviderCapabilities.V0.SupportsToolCalling);
+            return routingFaulted
+                ? (SupportsThinking: false, SupportsTools: false, IsCloud: true)
+                : (SupportsThinking: false, SupportsTools: AzureFoundryProviderCapabilities.V0.SupportsToolCalling, IsCloud: true);
         }
 
         // /api/show classification only makes sense for an Ollama-routed model. A llama.cpp (GGUF) model has no Ollama
@@ -115,9 +132,10 @@ public sealed class ChatTurnResolver(
             var ggufCapabilities = await ggufModelCapabilityResolver
                                          .TryResolveAsync(activeModel, cancellationToken)
                                          .ConfigureAwait(false);
+            // A llama.cpp (GGUF) or other non-Ollama-but-node-local model is LOCAL.
             return ggufCapabilities is { } caps
-                ? (caps.SupportsThinking, caps.SupportsTools)
-                : (SupportsThinking: false, SupportsTools: false);
+                ? (caps.SupportsThinking, caps.SupportsTools, IsCloud: false)
+                : (SupportsThinking: false, SupportsTools: false, IsCloud: false);
         }
 
         var classifications = await modelClassificationService
@@ -125,36 +143,32 @@ public sealed class ChatTurnResolver(
                                     .ConfigureAwait(false);
         if (!classifications.TryGetValue(activeModel, out var classification))
         {
-            return (false, false);
+            return (false, false, IsCloud: false);
         }
 
+        // An Ollama-routed model runs on the node — local.
         return (ModelKindDetector.SupportsThinking(classification.Capabilities),
-            ModelKindDetector.SupportsTools(classification.Capabilities));
+            ModelKindDetector.SupportsTools(classification.Capabilities),
+            IsCloud: false);
     }
 
     /// <summary>
-    ///     True when <paramref name="activeModel" /> matches one of the stored Azure Foundry connection's deployment
-    ///     names (ordinal, case-insensitive). A best-effort read: any failure resolving the encrypted config is treated
-    ///     as "not Azure" so the capability gate falls through to its existing (safe) classification rather than failing
-    ///     the send.
+    ///     Classifies whether <paramref name="activeModel" /> would ROUTE to a cloud provider, reading the cloud factory's
+    ///     shared short-TTL routing snapshot (the same source the send path routes from) so classification and routing
+    ///     cannot diverge. Returns <c>RoutesToCloud</c> plus a <c>Faulted</c> flag: on any snapshot read failure the
+    ///     result FAILS CLOSED (<c>RoutesToCloud: true, Faulted: true</c>) so the private-data gates withhold rather than
+    ///     leak, mirroring <see cref="ModelCapabilityResolver" /> — change both together.
     /// </summary>
-    private async Task<bool> IsAzureFoundryModelAsync(string activeModel, CancellationToken cancellationToken)
+    private (bool RoutesToCloud, bool Faulted) ClassifyCloudRouting(string activeModel)
     {
         try
         {
-            var config = await cloudCredentialStore.LoadConfigAsync(cancellationToken).ConfigureAwait(false);
-            var connection = config?.AzureFoundry;
-            return connection is { Models.Count: > 0 }
-                   && connection.Models.Any(model => string.Equals(model.DeploymentName, activeModel, StringComparison.OrdinalIgnoreCase));
-        }
-        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
-        {
-            throw;
+            return (activeCloudChatClientFactory.IsCloudProviderSelected(activeModel), Faulted: false);
         }
         catch (Exception exception)
         {
-            logger.LogDebug(exception, "Azure Foundry deployment match could not be resolved for '{Model}'.", activeModel);
-            return false;
+            logger.LogWarning(exception, "Cloud routing for '{Model}' could not be resolved; failing closed to cloud for the private-data gate.", activeModel);
+            return (RoutesToCloud: true, Faulted: true);
         }
     }
 
@@ -180,6 +194,8 @@ public sealed class ChatTurnResolver(
             return null;
         }
 
+        // Orchestration resolves each participant's knowledge-tool locality from its own effective model internally, so
+        // no turn-level cloud flag is threaded here.
         return await orchestrationResolver.ResolveAsync(definition, activeModel, retrievalQuery, supportsTools, cancellationToken).ConfigureAwait(false);
     }
 }

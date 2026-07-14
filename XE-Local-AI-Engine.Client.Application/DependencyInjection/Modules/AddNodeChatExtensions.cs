@@ -22,6 +22,10 @@ internal static class AddNodeChatExtensions
         // participant's thinking capability from its own effective model (mirrors ChatTurnResolver's active-model
         // resolution). Scoped to match IModelClassificationService's lifetime.
         builder.Services.AddScoped<IModelCapabilityResolver, ModelCapabilityResolver>();
+        // Derives the server-secret per-conversation seed that nonces the untrusted-content fence around attachment
+        // context (keeps the fence un-forgeable by a client that knows only the public conversation id). Singleton: it
+        // holds no per-request state and reads the process-lifetime node key.
+        builder.Services.AddSingleton<IUntrustedContentFenceSeedProvider, UntrustedContentFenceSeedProvider>();
         builder.Services.AddScoped<ILocalDefaultChatModelResolver, LocalDefaultChatModelResolver>();
         builder.Services.AddScoped<ChatTurnResolver>();
         builder.Services.AddScoped<ChatInvocationStatePump>();

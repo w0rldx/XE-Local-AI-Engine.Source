@@ -600,7 +600,7 @@ public sealed partial class WorkerEventDispatcher : IWorkerEventDispatcher
     /// </summary>
     private async Task RunInvocationWithRemotePersistenceAsync(InvocationExecutionContext context, RuntimePackage runtimePackage)
     {
-        NodeChatRemotePersistenceSession session;
+        NodeChatRemotePersistenceSession? session;
 
         try
         {
@@ -611,6 +611,17 @@ public sealed partial class WorkerEventDispatcher : IWorkerEventDispatcher
             // Persistence is best-effort relative to the agent run: never block/fail a platform invocation
             // because the node-local mirror could not be written. Run without persistence in that case.
             _logger.LogError(exception, "Failed to begin remote persistence for invocation {InvocationId}; running without node-local persistence.", runtimePackage.InvocationId);
+            await RunInvocationAsync(context).ConfigureAwait(false);
+            return;
+        }
+
+        if (session is null)
+        {
+            // The assistant row reached a terminal status before it could be marked streaming (e.g. an early cancel), so
+            // there is nothing to persist into. Run the invocation without the node-local mirror rather than driving the
+            // pump against a terminal row.
+            _logger.LogInformation("Remote persistence session not opened for invocation {InvocationId} (assistant row already terminal); running without node-local persistence.",
+                runtimePackage.InvocationId);
             await RunInvocationAsync(context).ConfigureAwait(false);
             return;
         }

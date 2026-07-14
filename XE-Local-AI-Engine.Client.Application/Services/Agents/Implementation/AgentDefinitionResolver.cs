@@ -13,6 +13,7 @@ internal sealed class AgentDefinitionResolver : IAgentDefinitionResolver
     private readonly IAgentInstructionProvider _instructionProvider;
     private readonly ILocalToolOfferProvider _localToolOfferProvider;
     private readonly ILogger<AgentDefinitionResolver> _logger;
+    private readonly IModelCapabilityResolver _modelCapabilityResolver;
     private readonly IPlaybookActionStore _playbookActionStore;
     private readonly PlaybookRetrievalOptions _retrievalOptions;
     private readonly IPlaybookRetrievalRanker _retrievalRanker;
@@ -25,6 +26,7 @@ internal sealed class AgentDefinitionResolver : IAgentDefinitionResolver
         IPlaybookRetrievalRanker retrievalRanker,
         IOptions<PlaybookRetrievalOptions> retrievalOptions,
         IAgentInstructionProvider instructionProvider,
+        IModelCapabilityResolver modelCapabilityResolver,
         ILogger<AgentDefinitionResolver> logger)
     {
         _store = store ?? throw new ArgumentNullException(nameof(store));
@@ -35,11 +37,12 @@ internal sealed class AgentDefinitionResolver : IAgentDefinitionResolver
         ArgumentNullException.ThrowIfNull(retrievalOptions);
         _retrievalOptions = retrievalOptions.Value;
         _instructionProvider = instructionProvider ?? throw new ArgumentNullException(nameof(instructionProvider));
+        _modelCapabilityResolver = modelCapabilityResolver ?? throw new ArgumentNullException(nameof(modelCapabilityResolver));
         _logger = logger ?? throw new ArgumentNullException(nameof(logger));
     }
 
     public async Task<ResolvedAgentRuntime?> ResolveAsync(Guid? agentDefinitionId, string? activeModelId, string? retrievalQuery = null, bool supportsTools = true,
-        bool honorModelProfile = true, CancellationToken cancellationToken = default)
+        bool honorModelProfile = true, bool activeModelIsCloud = false, CancellationToken cancellationToken = default)
     {
         if (agentDefinitionId is not { } definitionId)
         {
@@ -64,7 +67,16 @@ internal sealed class AgentDefinitionResolver : IAgentDefinitionResolver
         // pins no profile (or the pin is suppressed) the turn keeps the caller's active model.
         var pinnedModel = honorModelProfile ? definition.ModelProfile : null;
         var effectiveModel = pinnedModel ?? activeModelId;
-        var allowedTools = ProjectAllowedTools(definition, effectiveModel, supportsTools);
+
+        // Gate the knowledge tools on the EFFECTIVE model's provider locality, not the turn's active model. When the
+        // definition pins a model (including a spawned sub-agent, whose child model IS the pin) the offer keys on that
+        // pinned model, so its locality must too — otherwise a cloud-pinned agent on a local-active turn would keep the
+        // knowledge tools. The pin is classified through the shared capability resolver (one cache-first lookup); with no
+        // pin the effective model IS the active model, so reuse the flag the caller already resolved (no extra lookup).
+        var effectiveModelIsCloud = pinnedModel is null
+            ? activeModelIsCloud
+            : (await _modelCapabilityResolver.ResolveAsync(pinnedModel, cancellationToken).ConfigureAwait(false)).IsCloud;
+        var allowedTools = ProjectAllowedTools(definition, effectiveModel, supportsTools, effectiveModelIsCloud);
         var resolvedPrompt = await ComposePromptAsync(definition, retrievalQuery, cancellationToken).ConfigureAwait(false);
         var skills = await ResolveSkillsAsync(definition, cancellationToken).ConfigureAwait(false);
 
@@ -77,7 +89,8 @@ internal sealed class AgentDefinitionResolver : IAgentDefinitionResolver
             definition.Name,
             skills,
             definition.PlaybookEnabled,
-            definition.MemoryExtractionEnabled);
+            definition.MemoryExtractionEnabled,
+            effectiveModelIsCloud);
     }
 
     /// <summary>
@@ -157,7 +170,7 @@ internal sealed class AgentDefinitionResolver : IAgentDefinitionResolver
         return PlaybookPromptComposer.Compose(definition.Instructions, selected);
     }
 
-    private IReadOnlyList<AllowedToolDto> ProjectAllowedTools(AgentDefinitionRecord definition, string? effectiveModelId, bool supportsTools)
+    private IReadOnlyList<AllowedToolDto> ProjectAllowedTools(AgentDefinitionRecord definition, string? effectiveModelId, bool supportsTools, bool effectiveModelIsCloud)
     {
         // A model that does not advertise the Ollama "tools" capability cannot drive ANY tool call, so withhold the
         // entire offer (empty) before the per-tool name gating below. This is the capability gate; the offer provider's
@@ -175,7 +188,7 @@ internal sealed class AgentDefinitionResolver : IAgentDefinitionResolver
         if (definition.Source == AgentDefinitionSource.Seeded
             && string.Equals(definition.SeedSlug, AgentDefaults.DefaultAgentSeedSlug, StringComparison.Ordinal))
         {
-            return _localToolOfferProvider.GetOfferedTools(effectiveModelId);
+            return _localToolOfferProvider.GetOfferedTools(effectiveModelId, effectiveModelIsCloud);
         }
 
         // Start from the PROFILE offer pool for the effective model (the whole capability-gated offer PLUS the
@@ -183,7 +196,7 @@ internal sealed class AgentDefinitionResolver : IAgentDefinitionResolver
         // flag per the definition. Using the profile pool — not the whole offer — is what lets a profile that lists
         // spawn_subagent resolve it while the default/mode-off path never does. Tools the definition names but the pool
         // does not contain (uninstalled or not capability-eligible) are dropped and logged — never fabricated.
-        var offered = _localToolOfferProvider.GetOfferedToolsForProfile(effectiveModelId);
+        var offered = _localToolOfferProvider.GetOfferedToolsForProfile(effectiveModelId, effectiveModelIsCloud);
         var allowedNames = new HashSet<string>(definition.AllowedToolNames, StringComparer.Ordinal);
 
         var projected = offered

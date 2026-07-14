@@ -1,9 +1,13 @@
 namespace XE_Local_AI_Engine.Client.Services.Knowledge;
 
 using System.Data.Common;
+using System.Diagnostics;
+using System.Diagnostics.CodeAnalysis;
+using System.Globalization;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Options;
 using OllamaSharp.Models.Exceptions;
+using XE_Local_AI_Engine.Client.Common.Telemetry;
 using XE_Local_AI_Engine.Client.Persistence;
 using XE_Local_AI_Engine.Client.Services.CloudProviders;
 using XE_Local_AI_Engine.Providers.Abstractions.Contracts;
@@ -81,20 +85,29 @@ public sealed class KnowledgeSearchService : IKnowledgeSearchService
         var limit = Math.Max(1, request.Limit);
         var candidatePool = Math.Max(MinimumCandidatePool, limit * CandidatePoolMultiplier);
 
-        // Lexical arm: the document scope is pushed into the FTS MATCH query itself, matching the vector arm below.
-        var ftsHits = await _ftsSearch.SearchAsync(request.Query, candidatePool, request.DocumentId, cancellationToken).ConfigureAwait(false);
-        var ftsRanked = ftsHits.Select(hit => hit.ChunkId).ToList();
+        // The two retrieval arms are launched together. The lexical FTS arm reads the request-scoped DB connection; the
+        // query-embedding arm calls only the embedding provider process and never touches that connection — so overlapping
+        // them can never run two commands on the non-thread-safe SQLite connection at once. Every DB-bound read that
+        // CONSUMES the embedding (the vector scan, hydration, expansion) runs sequentially after this point, still on the
+        // one shared connection. Overlapping the embedding round trip (typically the dominant latency) with the FTS query
+        // is the win here; truly concurrent execution of BOTH DB arms would need a second connection/scope and is
+        // deliberately not taken. The vector arm is filtered by the SAME resolved model name the query was embedded with,
+        // so query vectors are only ever compared against chunk vectors built by that identical model.
+        var ftsArm = RunFtsArmAsync(request.Query, candidatePool, request.DocumentId, cancellationToken);
+        var embedArm = RunEmbedArmAsync(request.Query, cancellationToken);
+        await Task.WhenAll(ftsArm, embedArm).ConfigureAwait(false);
 
-        // Semantic arm: only runs when the query vector is available; otherwise the search degrades to lexical-only. The
-        // vector arm is filtered by the SAME resolved model name the query was embedded with, so query vectors are only
-        // ever compared against chunk vectors built by that identical model (the ingestion lane stamps the same key).
-        var (queryVector, resolvedModel) = await TryEmbedQueryAsync(request.Query, cancellationToken).ConfigureAwait(false);
+        var ftsRanked = (await ftsArm.ConfigureAwait(false)).Select(hit => hit.ChunkId).ToList();
+        var (queryVector, resolvedModel) = await embedArm.ConfigureAwait(false);
+
         var vectorRanked = new List<Guid>();
         if (!queryVector.IsEmpty)
         {
+            var vectorStart = Stopwatch.GetTimestamp();
             var vectorHits = await _vectorSearchFactory.Create()
                                                        .SearchAsync(queryVector, resolvedModel, candidatePool, request.DocumentId, cancellationToken)
                                                        .ConfigureAwait(false);
+            RecordStage("vector", vectorStart);
             vectorRanked = vectorHits.Select(hit => hit.ChunkId).ToList();
         }
 
@@ -116,12 +129,14 @@ public sealed class KnowledgeSearchService : IKnowledgeSearchService
             ? await SelectByFusionOrderAsync(connection, fused, limit, cancellationToken).ConfigureAwait(false)
             : await SelectByRerankAsync(connection, request.Query, fused, candidatePool, limit, cancellationToken).ConfigureAwait(false);
 
+        // Neighbor expansion (when requested) is resolved for the whole final top-k in one batched call rather than one
+        // round trip per hit; the content ordering and fallback are identical to expanding each hit individually.
+        var contents = await ResolveContentsAsync(selections, request.ExpandNeighbors, cancellationToken).ConfigureAwait(false);
+
         var hits = new List<KnowledgeSearchHit>(selections.Count);
-        foreach (var selection in selections)
+        for (var index = 0; index < selections.Count; index++)
         {
-            var content = request.ExpandNeighbors
-                ? await ExpandContentAsync(selection.Row.DocumentId, selection.Row.ChunkIndex, selection.Row.Content, cancellationToken).ConfigureAwait(false)
-                : selection.Row.Content;
+            var selection = selections[index];
 
             // A hit only exists because the document has queryable chunks; when its catalog status is not Indexed
             // those chunks are the last-known-good projection served during a pending/failed re-index. Disclose it.
@@ -131,7 +146,7 @@ public sealed class KnowledgeSearchService : IKnowledgeSearchService
                 selection.ChunkId,
                 DeriveTitle(selection.Row.HeadingPath, selection.Row.StoragePath),
                 selection.Row.HeadingPath,
-                content,
+                contents[index],
                 SourceTag,
                 selection.Score,
                 selection.Row.ChunkIndex,
@@ -142,32 +157,98 @@ public sealed class KnowledgeSearchService : IKnowledgeSearchService
         return new KnowledgeSearchResult(hits);
     }
 
+    // Lexical arm wrapper: times the FTS round trip. Reads the request-scoped DB connection (so it never overlaps another
+    // DB command — the embedding arm it runs beside touches only the provider process).
+    private async Task<IReadOnlyList<FtsSearchHit>> RunFtsArmAsync(string query, int candidatePool, Guid? documentId, CancellationToken cancellationToken)
+    {
+        var start = Stopwatch.GetTimestamp();
+        try
+        {
+            return await _ftsSearch.SearchAsync(query, candidatePool, documentId, cancellationToken).ConfigureAwait(false);
+        }
+        finally
+        {
+            RecordStage("fts", start);
+        }
+    }
+
+    // Semantic arm wrapper: times the query-embedding round trip. Only calls the embedding provider — never the DB — so it
+    // is safe to overlap with the lexical arm above.
+    private async Task<(ReadOnlyMemory<float> Vector, string ResolvedModel)> RunEmbedArmAsync(string query, CancellationToken cancellationToken)
+    {
+        var start = Stopwatch.GetTimestamp();
+        try
+        {
+            return await TryEmbedQueryAsync(query, cancellationToken).ConfigureAwait(false);
+        }
+        finally
+        {
+            RecordStage("embed", start);
+        }
+    }
+
+    // Resolves the display content for each selected hit. Without expansion this is the hydrated base content; with
+    // expansion the whole top-k is expanded in one batched call and each hit's neighbors are joined in chunk order (an
+    // empty neighbor set — e.g. the chunk vanished between selection and expansion — falls back to the base content, the
+    // same behavior as expanding a single hit).
+    private async Task<IReadOnlyList<string>> ResolveContentsAsync(IReadOnlyList<ChunkSelection> selections, bool expandNeighbors, CancellationToken cancellationToken)
+    {
+        if (!expandNeighbors || selections.Count == 0)
+        {
+            return selections.Select(static selection => selection.Row.Content).ToList();
+        }
+
+        var expandStart = Stopwatch.GetTimestamp();
+        var anchors = selections.Select(static selection => new KnowledgeNeighborAnchor(selection.Row.DocumentId, selection.Row.ChunkIndex)).ToList();
+        var expanded = await _contextExpansion.ExpandBatchAsync(anchors, NeighborWindow, cancellationToken).ConfigureAwait(false);
+        RecordStage("expand", expandStart);
+
+        var contents = new List<string>(selections.Count);
+        for (var index = 0; index < selections.Count; index++)
+        {
+            var neighbors = expanded[index];
+            contents.Add(neighbors.Count == 0
+                ? selections[index].Row.Content
+                : string.Join(Environment.NewLine, neighbors.Select(neighbor => neighbor.Content)));
+        }
+
+        return contents;
+    }
+
+    private static void RecordStage(string stage, long startTimestamp)
+    {
+        NodeMetrics.KnowledgeSearchStageDurationMs.Record(Stopwatch.GetElapsedTime(startTimestamp).TotalMilliseconds,
+            new KeyValuePair<string, object?>("stage", stage));
+    }
+
     // Disabled-rerank path (the original behavior): hydrate the top-`limit` fused entries in RRF order, stamping the RRF
-    // score. A chunk that disappeared between retrieval and hydration (concurrent delete/reindex) is skipped.
+    // score. Hydration is one batched query for the whole set (not a round trip per chunk); a chunk that disappeared
+    // between retrieval and hydration (concurrent delete/reindex) is simply absent from the batch and skipped, and the
+    // surviving entries keep their fused order.
     private static async Task<IReadOnlyList<ChunkSelection>> SelectByFusionOrderAsync(DbConnection connection,
         IReadOnlyList<RankFusionEntry> fused,
         int limit,
         CancellationToken cancellationToken)
     {
-        var selections = new List<ChunkSelection>(Math.Min(limit, fused.Count));
-        foreach (var entry in fused.Take(limit))
-        {
-            var row = await HydrateChunkAsync(connection, entry.ChunkId, cancellationToken).ConfigureAwait(false);
-            if (row is null)
-            {
-                continue;
-            }
+        var ordered = fused.Take(limit).ToList();
+        var hydrated = await HydrateChunksAsync(connection, ordered.Select(static entry => entry.ChunkId).ToList(), cancellationToken).ConfigureAwait(false);
 
-            selections.Add(new ChunkSelection(entry.ChunkId, row, entry.Score));
+        var selections = new List<ChunkSelection>(ordered.Count);
+        foreach (var entry in ordered)
+        {
+            if (hydrated.TryGetValue(entry.ChunkId, out var row))
+            {
+                selections.Add(new ChunkSelection(entry.ChunkId, row, entry.Score));
+            }
         }
 
         return selections;
     }
 
-    // Enabled-rerank path: hydrate the fused candidate POOL (bounded to candidatePool — NOT the whole fused list), send
-    // the base chunk contents to the local reranker, and reorder by descending relevance before taking `limit`. On any
-    // rerank failure (null / count mismatch) the pool is kept in its original RRF order with the RRF score, so the result
-    // is never worse than the disabled path. Hydration is bounded to candidatePool, capping the extra pre-cut cost.
+    // Enabled-rerank path: hydrate the fused candidate POOL (bounded to candidatePool — NOT the whole fused list) in one
+    // batched query, send the base chunk contents to the local reranker, and reorder by descending relevance before taking
+    // `limit`. On any rerank failure (null / count mismatch) the pool is kept in its original RRF order with the RRF score,
+    // so the result is never worse than the disabled path. Hydration is bounded to candidatePool, capping the pre-cut cost.
     private async Task<IReadOnlyList<ChunkSelection>> SelectByRerankAsync(DbConnection connection,
         string query,
         IReadOnlyList<RankFusionEntry> fused,
@@ -175,16 +256,16 @@ public sealed class KnowledgeSearchService : IKnowledgeSearchService
         int limit,
         CancellationToken cancellationToken)
     {
-        var pool = new List<ChunkSelection>(Math.Min(candidatePool, fused.Count));
-        foreach (var entry in fused.Take(candidatePool))
-        {
-            var row = await HydrateChunkAsync(connection, entry.ChunkId, cancellationToken).ConfigureAwait(false);
-            if (row is null)
-            {
-                continue;
-            }
+        var pooled = fused.Take(candidatePool).ToList();
+        var hydrated = await HydrateChunksAsync(connection, pooled.Select(static entry => entry.ChunkId).ToList(), cancellationToken).ConfigureAwait(false);
 
-            pool.Add(new ChunkSelection(entry.ChunkId, row, entry.Score));
+        var pool = new List<ChunkSelection>(pooled.Count);
+        foreach (var entry in pooled)
+        {
+            if (hydrated.TryGetValue(entry.ChunkId, out var row))
+            {
+                pool.Add(new ChunkSelection(entry.ChunkId, row, entry.Score));
+            }
         }
 
         if (pool.Count == 0)
@@ -193,7 +274,9 @@ public sealed class KnowledgeSearchService : IKnowledgeSearchService
         }
 
         var documents = pool.Select(static candidate => candidate.Row.Content).ToList();
+        var rerankStart = Stopwatch.GetTimestamp();
         var scores = await _reranker.RerankAsync(_options.RerankerModelName, query, documents, cancellationToken).ConfigureAwait(false);
+        RecordStage("rerank", rerankStart);
         if (scores is null || scores.Count != pool.Count)
         {
             // Reranker unavailable or malformed response: keep the RRF order + score, take the top-`limit`.
@@ -210,17 +293,6 @@ public sealed class KnowledgeSearchService : IKnowledgeSearchService
                .OrderByDescending(static candidate => candidate.Score)
                .Take(limit)
                .ToList();
-    }
-
-    private async Task<string> ExpandContentAsync(Guid documentId, int chunkIndex, string matchedContent, CancellationToken cancellationToken)
-    {
-        var neighbors = await _contextExpansion.ExpandAsync(documentId, chunkIndex, NeighborWindow, cancellationToken).ConfigureAwait(false);
-        if (neighbors.Count == 0)
-        {
-            return matchedContent;
-        }
-
-        return string.Join(Environment.NewLine, neighbors.Select(neighbor => neighbor.Content));
     }
 
     // Returns the query vector plus the resolved model name it was embedded with (the vector-search scope key). On the
@@ -266,32 +338,65 @@ public sealed class KnowledgeSearchService : IKnowledgeSearchService
         }
     }
 
-    private static async Task<HydratedChunk?> HydrateChunkAsync(DbConnection connection, Guid chunkId, CancellationToken cancellationToken)
+    // Hydrates a set of chunk ids in one query per batch (keyed by chunk id) instead of one round trip per chunk, so a
+    // large candidate pool no longer fans out into N SELECTs. Missing ids (concurrent delete/reindex) are simply absent
+    // from the returned map; the caller re-imposes the fused/rerank order and skips absentees.
+    [SuppressMessage("Security", "CA2100:Review SQL queries for security vulnerabilities",
+        Justification = "The IN-clause is a fixed count of $idN placeholders generated from an internal candidate count; every chunk id is bound as a parameter and no value is concatenated into the command text.")]
+    [SuppressMessage("Security Hotspot", "S2077:Formatting SQL queries is security-sensitive",
+        Justification = "Only internally-generated $idN placeholder names are interpolated; every chunk id is a bound parameter, so no user input reaches the command text.")]
+    private static async Task<IReadOnlyDictionary<Guid, HydratedChunk>> HydrateChunksAsync(DbConnection connection,
+        IReadOnlyList<Guid> chunkIds,
+        CancellationToken cancellationToken)
     {
-        await using var command = connection.CreateCommand();
-        command.CommandText = """
-                              SELECT c.document_id, c.chunk_index, c.content, c.heading_path, d.storage_path, d.status
-                              FROM knowledge_document_chunks c
-                              JOIN knowledge_documents d ON d.document_id = c.document_id
-                              WHERE c.chunk_id = $chunk_id;
-                              """;
-        AddParameter(command, "$chunk_id", chunkId);
-
-        await using var reader = await command.ExecuteReaderAsync(cancellationToken).ConfigureAwait(false);
-        if (!await reader.ReadAsync(cancellationToken).ConfigureAwait(false))
+        var start = Stopwatch.GetTimestamp();
+        var hydrated = new Dictionary<Guid, HydratedChunk>(chunkIds.Count);
+        if (chunkIds.Count == 0)
         {
-            return null;
+            RecordStage("hydrate", start);
+            return hydrated;
         }
 
-        var headingPath = await reader.IsDBNullAsync(ordinal: 3, cancellationToken).ConfigureAwait(false)
-            ? null
-            : reader.GetString(3);
-        return new HydratedChunk(Guid.Parse(reader.GetString(0)),
-            reader.GetInt32(1),
-            reader.GetString(2),
-            headingPath,
-            reader.GetString(4),
-            ParseDocumentStatus(reader.GetString(5)));
+        // SQLite caps host parameters per statement (at least 999 on every supported build); batch the IN-list well under
+        // that so even a large candidate pool hydrates in a bounded number of statements rather than one per chunk.
+        const int batchSize = 500;
+        for (var offset = 0; offset < chunkIds.Count; offset += batchSize)
+        {
+            var count = Math.Min(batchSize, chunkIds.Count - offset);
+            await using var command = connection.CreateCommand();
+            var placeholders = new string[count];
+            for (var i = 0; i < count; i++)
+            {
+                var name = string.Create(CultureInfo.InvariantCulture, $"$id{i}");
+                placeholders[i] = name;
+                AddParameter(command, name, chunkIds[offset + i]);
+            }
+
+            command.CommandText = $"""
+                                   SELECT c.chunk_id, c.document_id, c.chunk_index, c.content, c.heading_path, d.storage_path, d.status
+                                   FROM knowledge_document_chunks c
+                                   JOIN knowledge_documents d ON d.document_id = c.document_id
+                                   WHERE c.chunk_id IN ({string.Join(", ", placeholders)});
+                                   """;
+
+            await using var reader = await command.ExecuteReaderAsync(cancellationToken).ConfigureAwait(false);
+            while (await reader.ReadAsync(cancellationToken).ConfigureAwait(false))
+            {
+                var chunkId = Guid.Parse(reader.GetString(0));
+                var headingPath = await reader.IsDBNullAsync(ordinal: 4, cancellationToken).ConfigureAwait(false)
+                    ? null
+                    : reader.GetString(4);
+                hydrated[chunkId] = new HydratedChunk(Guid.Parse(reader.GetString(1)),
+                    reader.GetInt32(2),
+                    reader.GetString(3),
+                    headingPath,
+                    reader.GetString(5),
+                    ParseDocumentStatus(reader.GetString(6)));
+            }
+        }
+
+        RecordStage("hydrate", start);
+        return hydrated;
     }
 
     // The status column always holds a KnowledgeDocumentStatus name (written by the ingestion pipeline). If a row

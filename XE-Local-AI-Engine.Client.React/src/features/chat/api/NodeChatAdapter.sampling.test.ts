@@ -85,10 +85,17 @@ describe("toWireSamplingOptions", () => {
 			repeatLastN: 64,
 			presencePenalty: 0.1,
 			frequencyPenalty: 0.1,
-			seed: 1234,
+			// The seed is serialized as a precision-safe string on the wire (backend SamplingOptions.Seed contract).
+			seed: "1234",
 			stop: ["</s>"],
 			numCtx: 4096,
 		});
+	});
+
+	it("serializes the seed as a string so a large value never loses precision", () => {
+		const result = toWireSamplingOptions({ seed: 987654321 });
+		expect(result?.seed).toBe("987654321");
+		expect(typeof result?.seed).toBe("string");
 	});
 });
 

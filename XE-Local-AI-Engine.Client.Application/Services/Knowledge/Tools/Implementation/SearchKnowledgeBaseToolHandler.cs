@@ -66,9 +66,20 @@ internal sealed class SearchKnowledgeBaseToolHandler : IClientLocalToolHandler
             return $"search_knowledge_base arguments were not valid JSON: {exception.Message}";
         }
 
-        if (request is null || string.IsNullOrWhiteSpace(request.Query))
+        if (request is null)
         {
             return "search_knowledge_base requires a non-empty 'query'.";
+        }
+
+        var validation = KnowledgeQueryLimits.ValidateAndNormalize(request.Query, out var normalizedQuery);
+        if (validation == KnowledgeQueryValidation.Empty)
+        {
+            return "search_knowledge_base requires a non-empty 'query'.";
+        }
+
+        if (validation == KnowledgeQueryValidation.TooLong)
+        {
+            return $"search_knowledge_base 'query' must be {KnowledgeQueryLimits.MaxQueryLength} characters or fewer.";
         }
 
         Guid? documentId = null;
@@ -83,7 +94,7 @@ internal sealed class SearchKnowledgeBaseToolHandler : IClientLocalToolHandler
         }
 
         var limit = request.Limit is { } requested ? Math.Clamp(requested, MinLimit, MaxLimit) : DefaultLimit;
-        var searchRequest = new KnowledgeSearchRequest(request.Query, limit, documentId, request.ExpandNeighbors ?? false);
+        var searchRequest = new KnowledgeSearchRequest(normalizedQuery, limit, documentId, request.ExpandNeighbors ?? false);
 
         await using var scope = _scopeFactory.CreateAsyncScope();
         var searchService = scope.ServiceProvider.GetRequiredService<IKnowledgeSearchService>();
@@ -117,10 +128,17 @@ internal sealed class SearchKnowledgeBaseToolHandler : IClientLocalToolHandler
             {
                 documentId = hit.DocumentId,
                 chunkId = hit.ChunkId,
-                title = hit.Title,
-                section = hit.Section,
-                content = hit.Content,
-                source = hit.Source,
+                // The attacker-controlled document metadata (title, section, source) AND the chunk body are DATA, not
+                // instructions: fence them TOGETHER inside one nonce-delimited untrusted region so neither an injection
+                // sentence in the body nor a crafted title/section can read as a system directive or forge the fence.
+                // The budget above still measures raw hit.Content length.
+                contentTrust = UntrustedContentFraming.UntrustedTrustLabel,
+                content = UntrustedContentFraming.WrapDocument(hit.Content,
+                [
+                    new("title", hit.Title),
+                    new("section", hit.Section),
+                    new("source", hit.Source)
+                ]),
                 score = hit.Score,
                 chunkIndex = hit.ChunkIndex,
                 // Disclose staleness in the model-facing provenance: when the owning document is not currently

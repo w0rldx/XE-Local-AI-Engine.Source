@@ -3,6 +3,7 @@ namespace XE_Local_AI_Engine.AI.Agent.PreviewWorkflows.Implementation;
 using System.Runtime.CompilerServices;
 using Microsoft.Agents.AI.Workflows;
 using Microsoft.Extensions.Logging;
+using XE_Local_AI_Engine.AI.Agent.Invocation.Orchestration.Implementation;
 
 /// <summary>
 ///     Drains a single Preview workflow <see cref="StreamingRun" /> into provider-agnostic
@@ -12,6 +13,7 @@ using Microsoft.Extensions.Logging;
 /// </summary>
 internal sealed class PreviewWorkflowRunSession : IPreviewWorkflowRunSession
 {
+    private readonly TimeSpan _abandonmentGrace = IdleStreamGuard.DefaultAbandonmentGrace;
     private readonly IReadOnlyDictionary<string, string> _agentExecutorIdToNodeId;
     private readonly IReadOnlyDictionary<string, string> _debugExecutorIdToNodeId;
     private readonly ILogger _logger;
@@ -38,7 +40,22 @@ internal sealed class PreviewWorkflowRunSession : IPreviewWorkflowRunSession
 
     public async IAsyncEnumerable<PreviewWorkflowUpdate> WatchAsync([EnumeratorCancellation] CancellationToken cancellationToken = default)
     {
-        await foreach (var evt in _run.WatchStreamAsync(cancellationToken).ConfigureAwait(false))
+        // A bare await-foreach over WatchStreamAsync is only COOPERATIVELY cancellable: a workflow that ignores its token
+        // would never return from MoveNextAsync, so a cancelled/aborted run could hold the pipeline forever. IdleStreamGuard
+        // adds the wall-clock bound — it races each advancement against cancellation and, if the workflow ignores it,
+        // abandons the stuck pull (observed off-thread, bounded disposal) instead of awaiting it forever. Preview has no
+        // inter-event idle deadline (its only bound is the caller's token), so the guard's idle and outer tokens are the
+        // same and its idle-timeout path is unreachable here — only outer cancellation and abandonment apply.
+        var guarded = IdleStreamGuard.GuardAsync(
+            watchToken => _run.WatchStreamAsync(watchToken).GetAsyncEnumerator(watchToken),
+            new IdleGuardContext(
+                _abandonmentGrace,
+                static () => { },
+                static () => WorkflowWatchdogMetrics.RecordAbandoned(WorkflowWatchdogMetrics.PreviewSurface),
+                cancellationToken,
+                cancellationToken));
+
+        await foreach (var evt in guarded.ConfigureAwait(false))
         {
             var update = MapEvent(evt);
             if (update is null)
@@ -85,7 +102,14 @@ internal sealed class PreviewWorkflowRunSession : IPreviewWorkflowRunSession
     {
         try
         {
-            await _run.DisposeAsync().ConfigureAwait(false);
+            // Bound disposal the same way as the watch: a workflow that ignores cancellation could leave its DisposeAsync
+            // pending forever and hold up shutdown. If it does not complete within the grace, abandon it (observed
+            // off-thread) and record it rather than blocking indefinitely.
+            if (!await IdleStreamGuard.DisposeBoundedAsync(_run, _abandonmentGrace).ConfigureAwait(false))
+            {
+                WorkflowWatchdogMetrics.RecordAbandoned(WorkflowWatchdogMetrics.PreviewSurface);
+                _logger.LogWarning("Preview run disposal exceeded the {Grace} bound; abandoning it (its native resources may not be reclaimed until it returns).", _abandonmentGrace);
+            }
         }
         catch (Exception exception)
         {

@@ -150,6 +150,10 @@ namespace XE_Local_AI_Engine.Client.Persistence.Migrations.NodeChatDb
                         .HasColumnType("TEXT")
                         .HasColumnName("config_hash");
 
+                    b.Property<int?>("ContentChunkCount")
+                        .HasColumnType("INTEGER")
+                        .HasColumnName("content_chunk_count");
+
                     b.Property<Guid?>("ConversationId")
                         .HasColumnType("TEXT")
                         .HasColumnName("conversation_id");
@@ -161,6 +165,10 @@ namespace XE_Local_AI_Engine.Client.Persistence.Migrations.NodeChatDb
                     b.Property<string>("ErrorClass")
                         .HasColumnType("TEXT")
                         .HasColumnName("error_class");
+
+                    b.Property<Guid?>("InvocationId")
+                        .HasColumnType("TEXT")
+                        .HasColumnName("invocation_id");
 
                     b.Property<long>("LatencyMs")
                         .HasColumnType("INTEGER")
@@ -179,11 +187,56 @@ namespace XE_Local_AI_Engine.Client.Persistence.Migrations.NodeChatDb
                         .HasColumnType("INTEGER")
                         .HasColumnName("prompt_tokens");
 
+                    b.Property<int?>("ReasoningChunkCount")
+                        .HasColumnType("INTEGER")
+                        .HasColumnName("reasoning_chunk_count");
+
+                    b.Property<int?>("ReasoningTokens")
+                        .HasColumnType("INTEGER")
+                        .HasColumnName("reasoning_tokens");
+
+                    b.Property<int>("RecordKind")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("INTEGER")
+                        .HasDefaultValue(0)
+                        .HasColumnName("record_kind");
+
+                    b.Property<Guid?>("RequestId")
+                        .HasColumnType("TEXT")
+                        .HasColumnName("request_id");
+
+                    b.Property<int>("SchemaVersion")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("INTEGER")
+                        .HasDefaultValue(0)
+                        .HasColumnName("schema_version");
+
+                    b.Property<long?>("StartedAtUtc")
+                        .HasColumnType("INTEGER")
+                        .HasColumnName("started_at_utc");
+
                     b.Property<bool>("Success")
                         .HasColumnType("INTEGER")
                         .HasColumnName("success");
 
+                    b.Property<string>("TerminalStatus")
+                        .HasColumnType("TEXT")
+                        .HasColumnName("terminal_status");
+
+                    b.Property<int?>("TotalTokens")
+                        .HasColumnType("INTEGER")
+                        .HasColumnName("total_tokens");
+
+                    b.Property<string>("TraceId")
+                        .HasColumnType("TEXT")
+                        .HasColumnName("trace_id");
+
                     b.HasKey("Id");
+
+                    b.HasIndex("MessageId")
+                        .IsUnique()
+                        .HasDatabaseName("ix_agent_execution_logs_envelope_message_id")
+                        .HasFilter("record_kind = 1");
 
                     b.HasIndex("AgentDefinitionId", "CreatedAtUtc");
 

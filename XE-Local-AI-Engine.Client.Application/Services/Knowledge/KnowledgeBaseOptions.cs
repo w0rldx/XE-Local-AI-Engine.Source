@@ -46,6 +46,20 @@ public sealed class KnowledgeBaseOptions
     public bool AgentToolsEnabled { get; set; } = true;
 
     /// <summary>
+    ///     The single opt-in governing whether a CLOUD-hosted model (Codex OAuth, Azure Foundry) may receive ANY
+    ///     node-local private data: the read-only knowledge-base tools, the coder workspace file tools
+    ///     (<c>list_files</c> / <c>read_file</c> / <c>search_text</c>), AND conversation attachments (inlined text or
+    ///     staged files). Default <see langword="false" />: all of that is offered/composed ONLY for a node-local
+    ///     effective model (llama.cpp / Ollama); for a cloud effective model the tools are withheld from the offer and
+    ///     attachments are neither staged nor inlined (the user gets a visible turn notice). The gate keys on the
+    ///     EFFECTIVE model (after any agent/profile pin), so a cloud-pinned agent on a local-active turn is gated too.
+    ///     Setting this to <see langword="true" /> is an explicit acknowledgement that a third-party cloud provider may
+    ///     then receive that node-local content. Named under <c>KnowledgeBase</c> for continuity; its scope is broader.
+    ///     Independent of <see cref="AgentToolsEnabled" /> (which turns the knowledge tools off node-wide).
+    /// </summary>
+    public bool AllowCloudModelAccess { get; set; }
+
+    /// <summary>
     ///     Maximum number of documents ingested concurrently by the background worker. Bounded (default 1) so N uploads
     ///     do not spin up N unbounded embedding pipelines and contend for the provider's loaded-process budget.
     /// </summary>

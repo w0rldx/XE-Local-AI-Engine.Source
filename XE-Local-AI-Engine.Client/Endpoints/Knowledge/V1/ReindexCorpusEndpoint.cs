@@ -28,14 +28,24 @@ public sealed class ReindexCorpusEndpoint(
     public override async Task HandleAsync(CancellationToken ct)
     {
         var staleIds = await _catalogService.ResetStaleDocumentsToPendingAsync(ct).ConfigureAwait(false);
+        var enqueued = 0;
         foreach (var documentId in staleIds)
         {
-            await _ingestionDispatcher.EnqueueAsync(documentId, ct).ConfigureAwait(false);
+            var admission = await _ingestionDispatcher.EnqueueAsync(documentId, ct).ConfigureAwait(false);
+            if (admission == KnowledgeIngestionEnqueueResult.QueueFull)
+            {
+                // The bounded queue filled part-way through a corpus reindex. The documents already reset to Pending but
+                // not admitted are recovered by the worker on a later start (or a retry once the queue drains); report the
+                // count actually enqueued so the caller sees an honest number rather than the full stale total.
+                break;
+            }
+
+            enqueued++;
         }
 
         await Send.OkAsync(new ReindexCorpusResponse
             {
-                EnqueuedCount = staleIds.Count
+                EnqueuedCount = enqueued
             },
             ct).ConfigureAwait(false);
     }
