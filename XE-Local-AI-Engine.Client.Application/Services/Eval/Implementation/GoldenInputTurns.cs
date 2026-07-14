@@ -49,6 +49,15 @@ internal static class GoldenInputTurns
         var mapped = new List<ChatMessage>(raw.Length);
         foreach (var turn in raw)
         {
+            // A JSON `null` element (e.g. `[null]`) deserializes to a null record — treat it as malformed rather than
+            // dereferencing it (turn.Role) into a NullReferenceException that would escape the per-case eval loop and
+            // surface as an unhandled 500 at authoring time.
+            if (turn is null)
+            {
+                error = "InputTurns contains a null turn.";
+                return false;
+            }
+
             if (!TryMapRole(turn.Role, out var role))
             {
                 error = $"InputTurns contains an unknown role '{turn.Role}'. Allowed roles are '{UserRole}' and '{AssistantRole}'.";
