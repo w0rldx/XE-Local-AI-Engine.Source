@@ -335,6 +335,9 @@ import type {
 	ListPreviewWorkflowsData,
 	ListPreviewWorkflowsErrors,
 	ListPreviewWorkflowsResponses,
+	ListRunEnvelopesData,
+	ListRunEnvelopesErrors,
+	ListRunEnvelopesResponses,
 	ListRunningModelsData,
 	ListRunningModelsErrors,
 	ListRunningModelsResponses,
@@ -691,6 +694,8 @@ import {
 	zListNodeChatMessageRevisionsPath,
 	zListNodeChatMessageRevisionsResponse,
 	zListPreviewWorkflowsResponse,
+	zListRunEnvelopesQuery,
+	zListRunEnvelopesResponse,
 	zListRunningModelsResponse,
 	zListScheduledJobRunsQuery,
 	zListScheduledJobRunsResponse,
@@ -4433,6 +4438,26 @@ export const listAgentTemplates = <ThrowOnError extends boolean = false>(
 			{ scheme: "bearer", type: "http" },
 		],
 		url: "/api/local/v1/agents/templates",
+		...options,
+	});
+
+export const listRunEnvelopes = <ThrowOnError extends boolean = false>(options?: Options<ListRunEnvelopesData, ThrowOnError>) =>
+	(options?.client ?? client).get<ListRunEnvelopesResponses, ListRunEnvelopesErrors, ThrowOnError>({
+		requestValidator: async (data) =>
+			await z
+				.object({
+					body: z.never().optional(),
+					path: z.never().optional(),
+					query: zListRunEnvelopesQuery.optional(),
+				})
+				.parseAsync(data),
+		responseType: "json",
+		responseValidator: async (data) => await zListRunEnvelopesResponse.parseAsync(data),
+		security: [
+			{ scheme: "bearer", type: "http" },
+			{ scheme: "bearer", type: "http" },
+		],
+		url: "/api/local/v1/agents/run-envelopes",
 		...options,
 	});
 

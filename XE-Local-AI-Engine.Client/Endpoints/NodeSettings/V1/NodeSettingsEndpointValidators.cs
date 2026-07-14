@@ -2,6 +2,7 @@ namespace XE_Local_AI_Engine.Client.Endpoints.NodeSettings.V1;
 
 using FastEndpoints;
 using FluentValidation;
+using XE_Local_AI_Engine.Client.Models;
 using XE_Local_AI_Engine.Client.Services.NodeSettings;
 
 /// <summary>
@@ -101,6 +102,12 @@ public sealed class SaveNodeSettingsRequestValidator : Validator<SaveNodeSetting
         RuleFor(static request => request.MaxPendingToolCallAgeMinutes!.Value)
             .InclusiveBetween(StoredNodeSettings.MinMaxPendingToolCallAgeMinutes, StoredNodeSettings.MaxMaxPendingToolCallAgeMinutes)
             .When(static request => request.MaxPendingToolCallAgeMinutes is not null);
+
+        // The default-sampling seed rides the wire as a string (precision-safe); reject a non-integer value with a 400.
+        RuleFor(static request => request.SamplingDefaults!.Seed)
+            .Must(static seed => SeedValue.IsValid(seed))
+            .When(static request => request.SamplingDefaults is not null)
+            .WithMessage(SeedValue.ValidationMessage);
     }
 
     private static bool BeAbsoluteHttpUrl(string value)

@@ -38,6 +38,19 @@ public static class NodeChatMessageStatusValues
         Failed,
         Interrupted
     };
+
+    /// <summary>
+    ///     The non-terminal statuses from which a message may still be cancelled. Once a row reaches any terminal status
+    ///     (completed / cancelled / failed / interrupted) a late cancel is rejected without a rewrite, so it can never
+    ///     overwrite a message that has already finished. Mirrors the status filter a conversation delete uses when it
+    ///     cancels its still-active messages.
+    /// </summary>
+    public static readonly IReadOnlySet<string> Cancellable = new HashSet<string>(StringComparer.Ordinal)
+    {
+        Pending,
+        Queued,
+        Streaming
+    };
 }
 
 public sealed record NodeChatCreateConversationRequest(
@@ -146,7 +159,28 @@ public sealed record NodeChatTerminalizeMessageRequest(
     IReadOnlyList<NodeChatMessagePart>? Parts = null,
     // Whole-turn wall-clock generation duration in milliseconds (drives the optional tokens-per-second attribution).
     // Trailing optional so legacy callers and the platform path leave it null. Null preserves any existing value.
-    long? GenerationDurationMs = null);
+    long? GenerationDurationMs = null,
+    // Durable run-envelope payload (MED-007 / R4). When supplied, the terminalize persistence command writes the
+    // content-free envelope row in the SAME transaction as the terminal message row, so the two commit or roll back
+    // together (no swallowed best-effort write). Null on paths that write no envelope. The terminal status/success and
+    // the bound agent id are derived from the winning persisted message row inside the transaction, so they are NOT
+    // carried here.
+    AgentRunEnvelopeMetadata? Envelope = null);
+
+/// <summary>
+///     Non-derived fields of a durable run envelope supplied by the pump to the terminalize persistence command. Bounded
+///     and content-free: correlation/timing counters and a trace id only — NEVER prompt, model output, or tool arguments.
+///     <see cref="FailureCategory" /> is a category enum name only. Terminal status, success, tokens, model, and the
+///     bound agent id are derived from the persisted message row inside the terminalize transaction and are not repeated here.
+/// </summary>
+public sealed record AgentRunEnvelopeMetadata(
+    Guid? InvocationId,
+    long DurationMs,
+    string? FailureCategory = null,
+    int? ContentChunkCount = null,
+    int? ReasoningChunkCount = null,
+    string? TraceId = null,
+    long? StartedAtUtc = null);
 
 public sealed record NodeChatCancelRequest(
     NodeChatMessageCorrelation Correlation,

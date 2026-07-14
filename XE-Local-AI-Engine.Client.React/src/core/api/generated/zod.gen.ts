@@ -5,10 +5,7 @@ import * as z from "zod";
 export const zXeLocalAiEngineClientEndpointsVoiceV1VoiceManifestModelFileDto = z.object({
 	dtype: z.string(),
 	file: z.string(),
-	byteSize: z.coerce
-		.bigint()
-		.min(BigInt("-9223372036854775808"), { error: "Invalid value: Expected int64 to be >= -9223372036854775808" })
-		.max(BigInt("9223372036854775807"), { error: "Invalid value: Expected int64 to be <= 9223372036854775807" }),
+	byteSize: z.int(),
 	sha256: z.string(),
 	downloadUrl: z.string(),
 });
@@ -66,14 +63,8 @@ export const zXeLocalAiEngineClientEndpointsSkillsV1SkillResponse = z.object({
 		.int()
 		.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })
 		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" }),
-	createdAtUtc: z.coerce
-		.bigint()
-		.min(BigInt("-9223372036854775808"), { error: "Invalid value: Expected int64 to be >= -9223372036854775808" })
-		.max(BigInt("9223372036854775807"), { error: "Invalid value: Expected int64 to be <= 9223372036854775807" }),
-	updatedAtUtc: z.coerce
-		.bigint()
-		.min(BigInt("-9223372036854775808"), { error: "Invalid value: Expected int64 to be >= -9223372036854775808" })
-		.max(BigInt("9223372036854775807"), { error: "Invalid value: Expected int64 to be <= 9223372036854775807" }),
+	createdAtUtc: z.int(),
+	updatedAtUtc: z.int(),
 });
 
 export const zXeLocalAiEngineClientEndpointsSkillsV1CreateSkillRequest = z.object({
@@ -95,14 +86,8 @@ export const zXeLocalAiEngineClientEndpointsSkillsV1SkillSummaryResponse = z.obj
 		.int()
 		.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })
 		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" }),
-	createdAtUtc: z.coerce
-		.bigint()
-		.min(BigInt("-9223372036854775808"), { error: "Invalid value: Expected int64 to be >= -9223372036854775808" })
-		.max(BigInt("9223372036854775807"), { error: "Invalid value: Expected int64 to be <= 9223372036854775807" }),
-	updatedAtUtc: z.coerce
-		.bigint()
-		.min(BigInt("-9223372036854775808"), { error: "Invalid value: Expected int64 to be >= -9223372036854775808" })
-		.max(BigInt("9223372036854775807"), { error: "Invalid value: Expected int64 to be <= 9223372036854775807" }),
+	createdAtUtc: z.int(),
+	updatedAtUtc: z.int(),
 });
 
 export const zXeLocalAiEngineClientEndpointsSkillsV1ListSkillsResponse = z.object({
@@ -118,11 +103,7 @@ export const zXeLocalAiEngineClientEndpointsSkillsV1UpdateSkillRequest = z.objec
 
 export const zXeLocalAiEngineClientEndpointsSchedulerV1ScheduledJobRunCancelResponse = z.object({
 	outcome: z.string(),
-	cancellationRequestedAtUtc: z.coerce
-		.bigint()
-		.min(BigInt("-9223372036854775808"), { error: "Invalid value: Expected int64 to be >= -9223372036854775808" })
-		.max(BigInt("9223372036854775807"), { error: "Invalid value: Expected int64 to be <= 9223372036854775807" })
-		.nullish(),
+	cancellationRequestedAtUtc: z.int().nullish(),
 });
 
 export const zXeLocalAiEngineClientEndpointsSchedulerV1ScheduledJobRunRouteRequest = z.record(z.string(), z.never());
@@ -141,26 +122,14 @@ export const zXeLocalAiEngineClientEndpointsSchedulerV1ScheduledJobResponse = z.
 	enabled: z.boolean(),
 	scheduleKind: zXeLocalAiEngineClientEndpointsSchedulerV1ScheduleKind,
 	cronExpression: z.string().nullish(),
-	intervalSeconds: z.coerce
-		.bigint()
-		.min(BigInt("-9223372036854775808"), { error: "Invalid value: Expected int64 to be >= -9223372036854775808" })
-		.max(BigInt("9223372036854775807"), { error: "Invalid value: Expected int64 to be <= 9223372036854775807" })
-		.nullish(),
+	intervalSeconds: z.int().nullish(),
 	repeatCount: z
 		.int()
 		.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })
 		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" })
 		.nullish(),
-	startAtUtc: z.coerce
-		.bigint()
-		.min(BigInt("-9223372036854775808"), { error: "Invalid value: Expected int64 to be >= -9223372036854775808" })
-		.max(BigInt("9223372036854775807"), { error: "Invalid value: Expected int64 to be <= 9223372036854775807" })
-		.nullish(),
-	endAtUtc: z.coerce
-		.bigint()
-		.min(BigInt("-9223372036854775808"), { error: "Invalid value: Expected int64 to be >= -9223372036854775808" })
-		.max(BigInt("9223372036854775807"), { error: "Invalid value: Expected int64 to be <= 9223372036854775807" })
-		.nullish(),
+	startAtUtc: z.int().nullish(),
+	endAtUtc: z.int().nullish(),
 	timeZoneId: z.string(),
 	misfirePolicy: zXeLocalAiEngineClientEndpointsSchedulerV1SchedulerMisfirePolicy,
 	preventOverlap: z.boolean(),
@@ -171,24 +140,10 @@ export const zXeLocalAiEngineClientEndpointsSchedulerV1ScheduledJobResponse = z.
 		.nullish(),
 	hasParameters: z.boolean(),
 	createdBy: zXeLocalAiEngineClientEndpointsSchedulerV1ScheduledJobCreator,
-	createdAtUtc: z.coerce
-		.bigint()
-		.min(BigInt("-9223372036854775808"), { error: "Invalid value: Expected int64 to be >= -9223372036854775808" })
-		.max(BigInt("9223372036854775807"), { error: "Invalid value: Expected int64 to be <= 9223372036854775807" }),
-	updatedAtUtc: z.coerce
-		.bigint()
-		.min(BigInt("-9223372036854775808"), { error: "Invalid value: Expected int64 to be >= -9223372036854775808" })
-		.max(BigInt("9223372036854775807"), { error: "Invalid value: Expected int64 to be <= 9223372036854775807" }),
-	disabledAtUtc: z.coerce
-		.bigint()
-		.min(BigInt("-9223372036854775808"), { error: "Invalid value: Expected int64 to be >= -9223372036854775808" })
-		.max(BigInt("9223372036854775807"), { error: "Invalid value: Expected int64 to be <= 9223372036854775807" })
-		.nullish(),
-	deletedAtUtc: z.coerce
-		.bigint()
-		.min(BigInt("-9223372036854775808"), { error: "Invalid value: Expected int64 to be >= -9223372036854775808" })
-		.max(BigInt("9223372036854775807"), { error: "Invalid value: Expected int64 to be <= 9223372036854775807" })
-		.nullish(),
+	createdAtUtc: z.int(),
+	updatedAtUtc: z.int(),
+	disabledAtUtc: z.int().nullish(),
+	deletedAtUtc: z.int().nullish(),
 });
 
 export const zXeLocalAiEngineClientEndpointsSchedulerV1CreateScheduledJobRequest = z.object({
@@ -197,26 +152,14 @@ export const zXeLocalAiEngineClientEndpointsSchedulerV1CreateScheduledJobRequest
 	description: z.string().nullish(),
 	scheduleKind: zXeLocalAiEngineClientEndpointsSchedulerV1ScheduleKind,
 	cronExpression: z.string().nullish(),
-	intervalSeconds: z.coerce
-		.bigint()
-		.min(BigInt("-9223372036854775808"), { error: "Invalid value: Expected int64 to be >= -9223372036854775808" })
-		.max(BigInt("9223372036854775807"), { error: "Invalid value: Expected int64 to be <= 9223372036854775807" })
-		.nullish(),
+	intervalSeconds: z.int().nullish(),
 	repeatCount: z
 		.int()
 		.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })
 		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" })
 		.nullish(),
-	startAtUtc: z.coerce
-		.bigint()
-		.min(BigInt("-9223372036854775808"), { error: "Invalid value: Expected int64 to be >= -9223372036854775808" })
-		.max(BigInt("9223372036854775807"), { error: "Invalid value: Expected int64 to be <= 9223372036854775807" })
-		.nullish(),
-	endAtUtc: z.coerce
-		.bigint()
-		.min(BigInt("-9223372036854775808"), { error: "Invalid value: Expected int64 to be >= -9223372036854775808" })
-		.max(BigInt("9223372036854775807"), { error: "Invalid value: Expected int64 to be <= 9223372036854775807" })
-		.nullish(),
+	startAtUtc: z.int().nullish(),
+	endAtUtc: z.int().nullish(),
 	timeZoneId: z.string().optional(),
 	misfirePolicy: zXeLocalAiEngineClientEndpointsSchedulerV1SchedulerMisfirePolicy.optional(),
 	preventOverlap: z.boolean().optional(),
@@ -250,37 +193,14 @@ export const zXeLocalAiEngineClientEndpointsSchedulerV1ScheduledJobRunResponse =
 	templateId: z.string(),
 	triggeredBy: zXeLocalAiEngineClientEndpointsSchedulerV1ScheduledRunTrigger,
 	status: zXeLocalAiEngineClientEndpointsSchedulerV1ScheduledRunStatus,
-	scheduledFireTimeUtc: z.coerce
-		.bigint()
-		.min(BigInt("-9223372036854775808"), { error: "Invalid value: Expected int64 to be >= -9223372036854775808" })
-		.max(BigInt("9223372036854775807"), { error: "Invalid value: Expected int64 to be <= 9223372036854775807" })
-		.nullish(),
-	actualFireTimeUtc: z.coerce
-		.bigint()
-		.min(BigInt("-9223372036854775808"), { error: "Invalid value: Expected int64 to be >= -9223372036854775808" })
-		.max(BigInt("9223372036854775807"), { error: "Invalid value: Expected int64 to be <= 9223372036854775807" })
-		.nullish(),
-	completedAtUtc: z.coerce
-		.bigint()
-		.min(BigInt("-9223372036854775808"), { error: "Invalid value: Expected int64 to be >= -9223372036854775808" })
-		.max(BigInt("9223372036854775807"), { error: "Invalid value: Expected int64 to be <= 9223372036854775807" })
-		.nullish(),
-	durationMs: z.coerce
-		.bigint()
-		.min(BigInt("-9223372036854775808"), { error: "Invalid value: Expected int64 to be >= -9223372036854775808" })
-		.max(BigInt("9223372036854775807"), { error: "Invalid value: Expected int64 to be <= 9223372036854775807" })
-		.nullish(),
+	scheduledFireTimeUtc: z.int().nullish(),
+	actualFireTimeUtc: z.int().nullish(),
+	completedAtUtc: z.int().nullish(),
+	durationMs: z.int().nullish(),
 	summary: z.string().nullish(),
 	errorMessage: z.string().nullish(),
-	cancellationRequestedAtUtc: z.coerce
-		.bigint()
-		.min(BigInt("-9223372036854775808"), { error: "Invalid value: Expected int64 to be >= -9223372036854775808" })
-		.max(BigInt("9223372036854775807"), { error: "Invalid value: Expected int64 to be <= 9223372036854775807" })
-		.nullish(),
-	createdAtUtc: z.coerce
-		.bigint()
-		.min(BigInt("-9223372036854775808"), { error: "Invalid value: Expected int64 to be >= -9223372036854775808" })
-		.max(BigInt("9223372036854775807"), { error: "Invalid value: Expected int64 to be <= 9223372036854775807" }),
+	cancellationRequestedAtUtc: z.int().nullish(),
+	createdAtUtc: z.int(),
 });
 
 export const zXeLocalAiEngineClientEndpointsSchedulerV1ListScheduledJobRunsResponse = z.object({
@@ -324,26 +244,14 @@ export const zXeLocalAiEngineClientEndpointsSchedulerV1UpdateScheduledJobRequest
 	description: z.string().nullish(),
 	scheduleKind: zXeLocalAiEngineClientEndpointsSchedulerV1ScheduleKind,
 	cronExpression: z.string().nullish(),
-	intervalSeconds: z.coerce
-		.bigint()
-		.min(BigInt("-9223372036854775808"), { error: "Invalid value: Expected int64 to be >= -9223372036854775808" })
-		.max(BigInt("9223372036854775807"), { error: "Invalid value: Expected int64 to be <= 9223372036854775807" })
-		.nullish(),
+	intervalSeconds: z.int().nullish(),
 	repeatCount: z
 		.int()
 		.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })
 		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" })
 		.nullish(),
-	startAtUtc: z.coerce
-		.bigint()
-		.min(BigInt("-9223372036854775808"), { error: "Invalid value: Expected int64 to be >= -9223372036854775808" })
-		.max(BigInt("9223372036854775807"), { error: "Invalid value: Expected int64 to be <= 9223372036854775807" })
-		.nullish(),
-	endAtUtc: z.coerce
-		.bigint()
-		.min(BigInt("-9223372036854775808"), { error: "Invalid value: Expected int64 to be >= -9223372036854775808" })
-		.max(BigInt("9223372036854775807"), { error: "Invalid value: Expected int64 to be <= 9223372036854775807" })
-		.nullish(),
+	startAtUtc: z.int().nullish(),
+	endAtUtc: z.int().nullish(),
 	timeZoneId: z.string().optional(),
 	misfirePolicy: zXeLocalAiEngineClientEndpointsSchedulerV1SchedulerMisfirePolicy.optional(),
 	preventOverlap: z.boolean().optional(),
@@ -395,16 +303,8 @@ export const zXeLocalAiEngineClientEndpointsPreviewV1PreviewWorkflowResponse = z
 		.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })
 		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" })
 		.optional(),
-	createdAtUtc: z.coerce
-		.bigint()
-		.min(BigInt("-9223372036854775808"), { error: "Invalid value: Expected int64 to be >= -9223372036854775808" })
-		.max(BigInt("9223372036854775807"), { error: "Invalid value: Expected int64 to be <= 9223372036854775807" })
-		.optional(),
-	updatedAtUtc: z.coerce
-		.bigint()
-		.min(BigInt("-9223372036854775808"), { error: "Invalid value: Expected int64 to be >= -9223372036854775808" })
-		.max(BigInt("9223372036854775807"), { error: "Invalid value: Expected int64 to be <= 9223372036854775807" })
-		.optional(),
+	createdAtUtc: z.int().optional(),
+	updatedAtUtc: z.int().optional(),
 });
 
 export const zXeLocalAiEngineClientEndpointsPreviewV1CreatePreviewWorkflowRequest = z.object({
@@ -430,16 +330,8 @@ export const zXeLocalAiEngineClientEndpointsPreviewV1PreviewWorkflowSummaryRespo
 		.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })
 		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" })
 		.optional(),
-	createdAtUtc: z.coerce
-		.bigint()
-		.min(BigInt("-9223372036854775808"), { error: "Invalid value: Expected int64 to be >= -9223372036854775808" })
-		.max(BigInt("9223372036854775807"), { error: "Invalid value: Expected int64 to be <= 9223372036854775807" })
-		.optional(),
-	updatedAtUtc: z.coerce
-		.bigint()
-		.min(BigInt("-9223372036854775808"), { error: "Invalid value: Expected int64 to be >= -9223372036854775808" })
-		.max(BigInt("9223372036854775807"), { error: "Invalid value: Expected int64 to be <= 9223372036854775807" })
-		.optional(),
+	createdAtUtc: z.int().optional(),
+	updatedAtUtc: z.int().optional(),
 });
 
 export const zXeLocalAiEngineClientEndpointsPreviewV1ListPreviewWorkflowsResponse = z.object({
@@ -477,11 +369,7 @@ export const zXeLocalAiEngineClientModelsSamplingOptions = z.object({
 		.nullish(),
 	presencePenalty: z.number().nullish(),
 	frequencyPenalty: z.number().nullish(),
-	seed: z.coerce
-		.bigint()
-		.min(BigInt("-9223372036854775808"), { error: "Invalid value: Expected int64 to be >= -9223372036854775808" })
-		.max(BigInt("9223372036854775807"), { error: "Invalid value: Expected int64 to be <= 9223372036854775807" })
-		.nullish(),
+	seed: z.string().nullish(),
 	stop: z.array(z.string()).nullish(),
 	numCtx: z
 		.int()
@@ -605,11 +493,7 @@ export const zXeLocalAiEngineClientEndpointsNodeSettingsV1NodeSettingsResponse =
 		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" })
 		.optional(),
 	rerankerModelName: z.string().nullish(),
-	huggingFaceDiskMarginBytes: z.coerce
-		.bigint()
-		.min(BigInt("-9223372036854775808"), { error: "Invalid value: Expected int64 to be >= -9223372036854775808" })
-		.max(BigInt("9223372036854775807"), { error: "Invalid value: Expected int64 to be <= 9223372036854775807" })
-		.nullish(),
+	huggingFaceDiskMarginBytes: z.int().nullish(),
 	orchestrationIdleTimeoutSeconds: z
 		.int()
 		.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })
@@ -645,16 +529,8 @@ export const zXeLocalAiEngineClientEndpointsNodeSettingsV1NodeSettingsResponse =
 		.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })
 		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" })
 		.optional(),
-	agentHomeMaxSelectedFolderBytes: z.coerce
-		.bigint()
-		.min(BigInt("-9223372036854775808"), { error: "Invalid value: Expected int64 to be >= -9223372036854775808" })
-		.max(BigInt("9223372036854775807"), { error: "Invalid value: Expected int64 to be <= 9223372036854775807" })
-		.nullish(),
-	agentHomeMaxPatchBytes: z.coerce
-		.bigint()
-		.min(BigInt("-9223372036854775808"), { error: "Invalid value: Expected int64 to be >= -9223372036854775808" })
-		.max(BigInt("9223372036854775807"), { error: "Invalid value: Expected int64 to be <= 9223372036854775807" })
-		.nullish(),
+	agentHomeMaxSelectedFolderBytes: z.int().nullish(),
+	agentHomeMaxPatchBytes: z.int().nullish(),
 	maxPendingToolCallAgeMinutes: z
 		.int()
 		.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })
@@ -721,11 +597,7 @@ export const zXeLocalAiEngineClientEndpointsNodeSettingsV1SaveNodeSettingsReques
 		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" })
 		.nullish(),
 	rerankerModelName: z.string().nullish(),
-	huggingFaceDiskMarginBytes: z.coerce
-		.bigint()
-		.min(BigInt("-9223372036854775808"), { error: "Invalid value: Expected int64 to be >= -9223372036854775808" })
-		.max(BigInt("9223372036854775807"), { error: "Invalid value: Expected int64 to be <= 9223372036854775807" })
-		.nullish(),
+	huggingFaceDiskMarginBytes: z.int().nullish(),
 	orchestrationIdleTimeoutSeconds: z
 		.int()
 		.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })
@@ -741,16 +613,8 @@ export const zXeLocalAiEngineClientEndpointsNodeSettingsV1SaveNodeSettingsReques
 		.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })
 		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" })
 		.nullish(),
-	agentHomeMaxSelectedFolderBytes: z.coerce
-		.bigint()
-		.min(BigInt("-9223372036854775808"), { error: "Invalid value: Expected int64 to be >= -9223372036854775808" })
-		.max(BigInt("9223372036854775807"), { error: "Invalid value: Expected int64 to be <= 9223372036854775807" })
-		.nullish(),
-	agentHomeMaxPatchBytes: z.coerce
-		.bigint()
-		.min(BigInt("-9223372036854775808"), { error: "Invalid value: Expected int64 to be >= -9223372036854775808" })
-		.max(BigInt("9223372036854775807"), { error: "Invalid value: Expected int64 to be <= 9223372036854775807" })
-		.nullish(),
+	agentHomeMaxSelectedFolderBytes: z.int().nullish(),
+	agentHomeMaxPatchBytes: z.int().nullish(),
 	maxPendingToolCallAgeMinutes: z
 		.int()
 		.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })
@@ -839,16 +703,8 @@ export const zXeLocalAiEngineClientEndpointsModelFitV1InferenceBenchmarkMetricsD
 	totalLatencyMs: z.number().nullish(),
 	cacheHitRate: z.number().nullish(),
 	toolLoopMs: z.number().nullish(),
-	vramLoadBytes: z.coerce
-		.bigint()
-		.min(BigInt("-9223372036854775808"), { error: "Invalid value: Expected int64 to be >= -9223372036854775808" })
-		.max(BigInt("9223372036854775807"), { error: "Invalid value: Expected int64 to be <= 9223372036854775807" })
-		.nullish(),
-	vramAfterBytes: z.coerce
-		.bigint()
-		.min(BigInt("-9223372036854775808"), { error: "Invalid value: Expected int64 to be >= -9223372036854775808" })
-		.max(BigInt("9223372036854775807"), { error: "Invalid value: Expected int64 to be <= 9223372036854775807" })
-		.nullish(),
+	vramLoadBytes: z.int().nullish(),
+	vramAfterBytes: z.int().nullish(),
 	runs: z
 		.int()
 		.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })
@@ -876,32 +732,18 @@ export const zXeLocalAiEngineClientEndpointsModelFitV1InferenceProfileViewDto = 
 	kvTypeK: z.string().nullish(),
 	kvTypeV: z.string().nullish(),
 	flashAttn: z.boolean(),
-	nParams: z.coerce
-		.bigint()
-		.min(BigInt("-9223372036854775808"), { error: "Invalid value: Expected int64 to be >= -9223372036854775808" })
-		.max(BigInt("9223372036854775807"), { error: "Invalid value: Expected int64 to be <= 9223372036854775807" })
-		.nullish(),
+	nParams: z.int().nullish(),
 	isMoe: z.boolean(),
 	expertCount: z
 		.int()
 		.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })
 		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" })
 		.nullish(),
-	freeVramAtFreezeBytes: z.coerce
-		.bigint()
-		.min(BigInt("-9223372036854775808"), { error: "Invalid value: Expected int64 to be >= -9223372036854775808" })
-		.max(BigInt("9223372036854775807"), { error: "Invalid value: Expected int64 to be <= 9223372036854775807" })
-		.nullish(),
+	freeVramAtFreezeBytes: z.int().nullish(),
 	status: z.string(),
 	benchmarkSnapshotId: z.guid().nullish(),
-	createdAtUtc: z.coerce
-		.bigint()
-		.min(BigInt("-9223372036854775808"), { error: "Invalid value: Expected int64 to be >= -9223372036854775808" })
-		.max(BigInt("9223372036854775807"), { error: "Invalid value: Expected int64 to be <= 9223372036854775807" }),
-	updatedAtUtc: z.coerce
-		.bigint()
-		.min(BigInt("-9223372036854775808"), { error: "Invalid value: Expected int64 to be >= -9223372036854775808" })
-		.max(BigInt("9223372036854775807"), { error: "Invalid value: Expected int64 to be <= 9223372036854775807" }),
+	createdAtUtc: z.int(),
+	updatedAtUtc: z.int(),
 });
 
 export const zXeLocalAiEngineClientEndpointsModelFitV1BenchmarkInferenceProfileResponse = z.object({
@@ -917,18 +759,12 @@ export const zXeLocalAiEngineClientEndpointsModelFitV1BenchmarkInferenceProfileR
 export const zXeLocalAiEngineClientEndpointsModelFitV1GgufRepositoryResponse = z.object({
 	repoId: z.string(),
 	isGated: z.boolean(),
-	downloads: z.coerce
-		.bigint()
-		.min(BigInt("-9223372036854775808"), { error: "Invalid value: Expected int64 to be >= -9223372036854775808" })
-		.max(BigInt("9223372036854775807"), { error: "Invalid value: Expected int64 to be <= 9223372036854775807" }),
+	downloads: z.int(),
 	likes: z
 		.int()
 		.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })
 		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" }),
-	lastModifiedAtUtc: z.coerce
-		.bigint()
-		.min(BigInt("-9223372036854775808"), { error: "Invalid value: Expected int64 to be >= -9223372036854775808" })
-		.max(BigInt("9223372036854775807"), { error: "Invalid value: Expected int64 to be <= 9223372036854775807" }),
+	lastModifiedAtUtc: z.int(),
 	license: z.string().nullish(),
 	hasUsableGguf: z.boolean(),
 	isTrustedPublisher: z.boolean().optional(),
@@ -1006,16 +842,8 @@ export const zXeLocalAiEngineClientEndpointsModelFitV1CudaBuildPrerequisitesResp
 export const zXeLocalAiEngineClientEndpointsModelFitV1GgufDownloadStatusResponse = z.object({
 	modelName: z.string(),
 	phase: z.string(),
-	completedBytes: z.coerce
-		.bigint()
-		.min(BigInt("-9223372036854775808"), { error: "Invalid value: Expected int64 to be >= -9223372036854775808" })
-		.max(BigInt("9223372036854775807"), { error: "Invalid value: Expected int64 to be <= 9223372036854775807" })
-		.nullish(),
-	totalBytes: z.coerce
-		.bigint()
-		.min(BigInt("-9223372036854775808"), { error: "Invalid value: Expected int64 to be >= -9223372036854775808" })
-		.max(BigInt("9223372036854775807"), { error: "Invalid value: Expected int64 to be <= 9223372036854775807" })
-		.nullish(),
+	completedBytes: z.int().nullish(),
+	totalBytes: z.int().nullish(),
 	sanitizedError: z.string().nullish(),
 });
 
@@ -1026,19 +854,9 @@ export const zXeLocalAiEngineClientEndpointsModelFitV1ListGgufDownloadsResponse 
 export const zXeLocalAiEngineClientEndpointsModelFitV1GetGgufDownloadStatusRequest = z.record(z.string(), z.never());
 
 export const zXeLocalAiEngineClientEndpointsModelFitV1HardwareProfileResponse = z.object({
-	totalRamBytes: z.coerce
-		.bigint()
-		.min(BigInt("-9223372036854775808"), { error: "Invalid value: Expected int64 to be >= -9223372036854775808" })
-		.max(BigInt("9223372036854775807"), { error: "Invalid value: Expected int64 to be <= 9223372036854775807" }),
-	availableRamBytes: z.coerce
-		.bigint()
-		.min(BigInt("-9223372036854775808"), { error: "Invalid value: Expected int64 to be >= -9223372036854775808" })
-		.max(BigInt("9223372036854775807"), { error: "Invalid value: Expected int64 to be <= 9223372036854775807" }),
-	vramBytes: z.coerce
-		.bigint()
-		.min(BigInt("-9223372036854775808"), { error: "Invalid value: Expected int64 to be >= -9223372036854775808" })
-		.max(BigInt("9223372036854775807"), { error: "Invalid value: Expected int64 to be <= 9223372036854775807" })
-		.nullish(),
+	totalRamBytes: z.int(),
+	availableRamBytes: z.int(),
+	vramBytes: z.int().nullish(),
 	vramKnown: z.boolean(),
 	gpuVendor: z.string(),
 	gpuAccelAvailable: z.boolean(),
@@ -1046,10 +864,7 @@ export const zXeLocalAiEngineClientEndpointsModelFitV1HardwareProfileResponse = 
 		.int()
 		.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })
 		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" }),
-	freeDiskBytes: z.coerce
-		.bigint()
-		.min(BigInt("-9223372036854775808"), { error: "Invalid value: Expected int64 to be >= -9223372036854775808" })
-		.max(BigInt("9223372036854775807"), { error: "Invalid value: Expected int64 to be <= 9223372036854775807" }),
+	freeDiskBytes: z.int(),
 });
 
 export const zXeLocalAiEngineClientEndpointsModelFitV1GetHardwareProfileRequest = z.record(z.string(), z.never());
@@ -1101,11 +916,7 @@ export const zXeLocalAiEngineClientEndpointsModelFitV1GetLatestRecommendationsRe
 	snapshotId: z.guid().nullish(),
 	status: z.string().nullish(),
 	useCase: z.string().nullish(),
-	lastRefreshedAtUtc: z.coerce
-		.bigint()
-		.min(BigInt("-9223372036854775808"), { error: "Invalid value: Expected int64 to be >= -9223372036854775808" })
-		.max(BigInt("9223372036854775807"), { error: "Invalid value: Expected int64 to be <= 9223372036854775807" })
-		.nullish(),
+	lastRefreshedAtUtc: z.int().nullish(),
 	recommendations: z.array(zXeLocalAiEngineClientEndpointsModelFitV1ModelFitRecommendationResponse),
 });
 
@@ -1115,10 +926,7 @@ export const zXeLocalAiEngineClientEndpointsModelFitV1LlamaCppInstalledRuntimeRe
 	tag: z.string(),
 	variant: z.string(),
 	asset: z.string(),
-	installedAtUtc: z.coerce
-		.bigint()
-		.min(BigInt("-9223372036854775808"), { error: "Invalid value: Expected int64 to be >= -9223372036854775808" })
-		.max(BigInt("9223372036854775807"), { error: "Invalid value: Expected int64 to be <= 9223372036854775807" }),
+	installedAtUtc: z.int(),
 	isSourceBuild: z.boolean(),
 });
 
@@ -1142,11 +950,7 @@ export const zXeLocalAiEngineClientEndpointsModelFitV1ModelCatalogInfoResponse =
 	catalogVersion: z.string(),
 	updatedAt: z.string().nullish(),
 	source: z.string(),
-	fetchedAtUtc: z.coerce
-		.bigint()
-		.min(BigInt("-9223372036854775808"), { error: "Invalid value: Expected int64 to be >= -9223372036854775808" })
-		.max(BigInt("9223372036854775807"), { error: "Invalid value: Expected int64 to be <= 9223372036854775807" })
-		.nullish(),
+	fetchedAtUtc: z.int().nullish(),
 	sourceUrl: z.string().nullish(),
 	modelCount: z
 		.int()
@@ -1158,10 +962,7 @@ export const zXeLocalAiEngineClientEndpointsModelFitV1GgufRepositoryFileResponse
 	fileName: z.string(),
 	quant: z.string(),
 	isDynamic: z.boolean(),
-	sizeBytes: z.coerce
-		.bigint()
-		.min(BigInt("-9223372036854775808"), { error: "Invalid value: Expected int64 to be >= -9223372036854775808" })
-		.max(BigInt("9223372036854775807"), { error: "Invalid value: Expected int64 to be <= 9223372036854775807" }),
+	sizeBytes: z.int(),
 	qualityTier: z.string(),
 	fitVerdict: z.string(),
 	isRecommended: z.boolean(),
@@ -1256,14 +1057,8 @@ export const zXeLocalAiEngineClientEndpointsMcpV1McpServerResponse = z.object({
 		.int()
 		.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })
 		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" }),
-	createdAtUtc: z.coerce
-		.bigint()
-		.min(BigInt("-9223372036854775808"), { error: "Invalid value: Expected int64 to be >= -9223372036854775808" })
-		.max(BigInt("9223372036854775807"), { error: "Invalid value: Expected int64 to be <= 9223372036854775807" }),
-	updatedAtUtc: z.coerce
-		.bigint()
-		.min(BigInt("-9223372036854775808"), { error: "Invalid value: Expected int64 to be >= -9223372036854775808" })
-		.max(BigInt("9223372036854775807"), { error: "Invalid value: Expected int64 to be <= 9223372036854775807" }),
+	createdAtUtc: z.int(),
+	updatedAtUtc: z.int(),
 });
 
 export const zXeLocalAiEngineClientEndpointsMcpV1CreateMcpServerRequest = z.object({
@@ -1358,21 +1153,9 @@ export const zXeLocalAiEngineClientEndpointsLocalModelsV1GetLocalModelDetailsReq
 
 export const zXeLocalAiEngineClientEndpointsLocalModelsV1RunningLocalModelResponse = z.object({
 	modelName: z.string(),
-	sizeBytes: z.coerce
-		.bigint()
-		.min(BigInt("-9223372036854775808"), { error: "Invalid value: Expected int64 to be >= -9223372036854775808" })
-		.max(BigInt("9223372036854775807"), { error: "Invalid value: Expected int64 to be <= 9223372036854775807" })
-		.nullish(),
-	sizeVramBytes: z.coerce
-		.bigint()
-		.min(BigInt("-9223372036854775808"), { error: "Invalid value: Expected int64 to be >= -9223372036854775808" })
-		.max(BigInt("9223372036854775807"), { error: "Invalid value: Expected int64 to be <= 9223372036854775807" })
-		.nullish(),
-	expiresAtUtc: z.coerce
-		.bigint()
-		.min(BigInt("-9223372036854775808"), { error: "Invalid value: Expected int64 to be >= -9223372036854775808" })
-		.max(BigInt("9223372036854775807"), { error: "Invalid value: Expected int64 to be <= 9223372036854775807" })
-		.nullish(),
+	sizeBytes: z.int().nullish(),
+	sizeVramBytes: z.int().nullish(),
+	expiresAtUtc: z.int().nullish(),
 });
 
 export const zXeLocalAiEngineClientEndpointsLocalModelsV1RunningLocalModelsResponse = z.object({
@@ -1384,16 +1167,8 @@ export const zXeLocalAiEngineClientEndpointsLocalModelsV1RunningLocalModelsRespo
 export const zXeLocalAiEngineClientEndpointsLocalModelsV1LocalModelResponse = z.object({
 	modelName: z.string(),
 	provider: z.string().optional(),
-	sizeBytes: z.coerce
-		.bigint()
-		.min(BigInt("-9223372036854775808"), { error: "Invalid value: Expected int64 to be >= -9223372036854775808" })
-		.max(BigInt("9223372036854775807"), { error: "Invalid value: Expected int64 to be <= 9223372036854775807" })
-		.nullish(),
-	modifiedAtUtc: z.coerce
-		.bigint()
-		.min(BigInt("-9223372036854775808"), { error: "Invalid value: Expected int64 to be >= -9223372036854775808" })
-		.max(BigInt("9223372036854775807"), { error: "Invalid value: Expected int64 to be <= 9223372036854775807" })
-		.nullish(),
+	sizeBytes: z.int().nullish(),
+	modifiedAtUtc: z.int().nullish(),
 	family: z.string().nullish(),
 	parameterSize: z.string().nullish(),
 	quantizationLevel: z.string().nullish(),
@@ -1475,14 +1250,8 @@ export const zXeLocalAiEngineClientEndpointsLocalChatV1NodeChatMessageResponse =
 	content: z.string(),
 	reasoning: z.string().nullish(),
 	status: z.string(),
-	createdAtUtc: z.coerce
-		.bigint()
-		.min(BigInt("-9223372036854775808"), { error: "Invalid value: Expected int64 to be >= -9223372036854775808" })
-		.max(BigInt("9223372036854775807"), { error: "Invalid value: Expected int64 to be <= 9223372036854775807" }),
-	updatedAtUtc: z.coerce
-		.bigint()
-		.min(BigInt("-9223372036854775808"), { error: "Invalid value: Expected int64 to be >= -9223372036854775808" })
-		.max(BigInt("9223372036854775807"), { error: "Invalid value: Expected int64 to be <= 9223372036854775807" }),
+	createdAtUtc: z.int(),
+	updatedAtUtc: z.int(),
 	origin: z.string(),
 	model: z.string().nullish(),
 	error: z.string().nullish(),
@@ -1514,25 +1283,15 @@ export const zXeLocalAiEngineClientEndpointsLocalChatV1NodeChatMessageResponse =
 	agentDefinitionId: z.guid().nullish(),
 	agentName: z.string().nullish(),
 	reasoningEffort: z.string().nullish(),
-	generationDurationMs: z.coerce
-		.bigint()
-		.min(BigInt("-9223372036854775808"), { error: "Invalid value: Expected int64 to be >= -9223372036854775808" })
-		.max(BigInt("9223372036854775807"), { error: "Invalid value: Expected int64 to be <= 9223372036854775807" })
-		.nullish(),
+	generationDurationMs: z.int().nullish(),
 });
 
 export const zXeLocalAiEngineClientEndpointsLocalChatV1NodeChatConversationResponse = z.object({
 	conversationId: z.guid(),
 	title: z.string().nullish(),
 	userId: z.string().nullish(),
-	createdAtUtc: z.coerce
-		.bigint()
-		.min(BigInt("-9223372036854775808"), { error: "Invalid value: Expected int64 to be >= -9223372036854775808" })
-		.max(BigInt("9223372036854775807"), { error: "Invalid value: Expected int64 to be <= 9223372036854775807" }),
-	lastSeenUtc: z.coerce
-		.bigint()
-		.min(BigInt("-9223372036854775808"), { error: "Invalid value: Expected int64 to be >= -9223372036854775808" })
-		.max(BigInt("9223372036854775807"), { error: "Invalid value: Expected int64 to be <= 9223372036854775807" }),
+	createdAtUtc: z.int(),
+	lastSeenUtc: z.int(),
 	purged: z.boolean(),
 	origin: z.string(),
 	isPinned: z.boolean(),
@@ -1569,20 +1328,14 @@ export const zXeLocalAiEngineClientEndpointsLocalChatV1ConversationUploadedFileR
 	originalFileName: z.string(),
 	mimeType: z.string(),
 	extension: z.string(),
-	sizeBytes: z.coerce
-		.bigint()
-		.min(BigInt("-9223372036854775808"), { error: "Invalid value: Expected int64 to be >= -9223372036854775808" })
-		.max(BigInt("9223372036854775807"), { error: "Invalid value: Expected int64 to be <= 9223372036854775807" }),
+	sizeBytes: z.int(),
 	extractionStatus: z.string(),
 	extractedChars: z
 		.int()
 		.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })
 		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" })
 		.nullish(),
-	createdAtUtc: z.coerce
-		.bigint()
-		.min(BigInt("-9223372036854775808"), { error: "Invalid value: Expected int64 to be >= -9223372036854775808" })
-		.max(BigInt("9223372036854775807"), { error: "Invalid value: Expected int64 to be <= 9223372036854775807" }),
+	createdAtUtc: z.int(),
 });
 
 export const zXeLocalAiEngineClientEndpointsLocalChatV1ListConversationUploadsResponse = z.object({
@@ -1594,14 +1347,8 @@ export const zXeLocalAiEngineClientEndpointsLocalChatV1ListConversationUploadsRe
 export const zXeLocalAiEngineClientEndpointsLocalChatV1NodeChatConversationSummaryResponse = z.object({
 	conversationId: z.guid(),
 	title: z.string().nullish(),
-	createdAtUtc: z.coerce
-		.bigint()
-		.min(BigInt("-9223372036854775808"), { error: "Invalid value: Expected int64 to be >= -9223372036854775808" })
-		.max(BigInt("9223372036854775807"), { error: "Invalid value: Expected int64 to be <= 9223372036854775807" }),
-	lastSeenUtc: z.coerce
-		.bigint()
-		.min(BigInt("-9223372036854775808"), { error: "Invalid value: Expected int64 to be >= -9223372036854775808" })
-		.max(BigInt("9223372036854775807"), { error: "Invalid value: Expected int64 to be <= 9223372036854775807" }),
+	createdAtUtc: z.int(),
+	lastSeenUtc: z.int(),
 	lastMessagePreview: z.string().nullish(),
 	lastMessageStatus: z.string().nullish(),
 	purged: z.boolean(),
@@ -1658,14 +1405,8 @@ export const zXeLocalAiEngineClientEndpointsLocalChatV1NodeChatMessageFeedbackRe
 	conversationId: z.guid(),
 	rating: z.string(),
 	comment: z.string().nullish(),
-	createdAtUtc: z.coerce
-		.bigint()
-		.min(BigInt("-9223372036854775808"), { error: "Invalid value: Expected int64 to be >= -9223372036854775808" })
-		.max(BigInt("9223372036854775807"), { error: "Invalid value: Expected int64 to be <= 9223372036854775807" }),
-	updatedAtUtc: z.coerce
-		.bigint()
-		.min(BigInt("-9223372036854775808"), { error: "Invalid value: Expected int64 to be >= -9223372036854775808" })
-		.max(BigInt("9223372036854775807"), { error: "Invalid value: Expected int64 to be <= 9223372036854775807" }),
+	createdAtUtc: z.int(),
+	updatedAtUtc: z.int(),
 });
 
 export const zXeLocalAiEngineClientEndpointsLocalChatV1SetNodeChatMessageFeedbackRequest = z.object({
@@ -1719,18 +1460,9 @@ export const zXeLocalAiEngineClientEndpointsKnowledgeV1KnowledgeDocumentDetailRe
 		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" }),
 	embeddingModel: z.string(),
 	staleModel: z.boolean(),
-	sizeBytes: z.coerce
-		.bigint()
-		.min(BigInt("-9223372036854775808"), { error: "Invalid value: Expected int64 to be >= -9223372036854775808" })
-		.max(BigInt("9223372036854775807"), { error: "Invalid value: Expected int64 to be <= 9223372036854775807" }),
-	createdAtUtc: z.coerce
-		.bigint()
-		.min(BigInt("-9223372036854775808"), { error: "Invalid value: Expected int64 to be >= -9223372036854775808" })
-		.max(BigInt("9223372036854775807"), { error: "Invalid value: Expected int64 to be <= 9223372036854775807" }),
-	updatedAtUtc: z.coerce
-		.bigint()
-		.min(BigInt("-9223372036854775808"), { error: "Invalid value: Expected int64 to be >= -9223372036854775808" })
-		.max(BigInt("9223372036854775807"), { error: "Invalid value: Expected int64 to be <= 9223372036854775807" }),
+	sizeBytes: z.int(),
+	createdAtUtc: z.int(),
+	updatedAtUtc: z.int(),
 	chunks: z.array(zXeLocalAiEngineClientEndpointsKnowledgeV1KnowledgeDocumentChunkResponse),
 });
 
@@ -1745,14 +1477,8 @@ export const zXeLocalAiEngineClientEndpointsKnowledgeV1KnowledgeDocumentResponse
 		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" }),
 	embeddingModel: z.string(),
 	staleModel: z.boolean(),
-	sizeBytes: z.coerce
-		.bigint()
-		.min(BigInt("-9223372036854775808"), { error: "Invalid value: Expected int64 to be >= -9223372036854775808" })
-		.max(BigInt("9223372036854775807"), { error: "Invalid value: Expected int64 to be <= 9223372036854775807" }),
-	createdAtUtc: z.coerce
-		.bigint()
-		.min(BigInt("-9223372036854775808"), { error: "Invalid value: Expected int64 to be >= -9223372036854775808" })
-		.max(BigInt("9223372036854775807"), { error: "Invalid value: Expected int64 to be <= 9223372036854775807" }),
+	sizeBytes: z.int(),
+	createdAtUtc: z.int(),
 });
 
 export const zXeLocalAiEngineClientEndpointsKnowledgeV1ListKnowledgeDocumentsResponse = z.object({
@@ -1863,10 +1589,7 @@ export const zXeLocalAiEngineClientEndpointsInvocationsV1InvocationHistoryRespon
 	modelUsed: z.string().nullish(),
 	startedAt: z.iso.datetime({ offset: true }),
 	completedAt: z.iso.datetime({ offset: true }),
-	durationMs: z.coerce
-		.bigint()
-		.min(BigInt("-9223372036854775808"), { error: "Invalid value: Expected int64 to be >= -9223372036854775808" })
-		.max(BigInt("9223372036854775807"), { error: "Invalid value: Expected int64 to be <= 9223372036854775807" }),
+	durationMs: z.int(),
 	error: z.string().nullish(),
 	failureCategory: zXeLocalAiEngineClientModelsEnumsFailureCategory.nullish(),
 	streamedChunkCount: z
@@ -1895,10 +1618,7 @@ export const zXeLocalAiEngineClientEndpointsImagesV1ImageJobResponse = z.object(
 	modelName: z.string(),
 	prompt: z.string(),
 	negativePrompt: z.string().nullish(),
-	seed: z.coerce
-		.bigint()
-		.min(BigInt("-9223372036854775808"), { error: "Invalid value: Expected int64 to be >= -9223372036854775808" })
-		.max(BigInt("9223372036854775807"), { error: "Invalid value: Expected int64 to be <= 9223372036854775807" }),
+	seed: z.string(),
 	width: z
 		.int()
 		.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })
@@ -1914,43 +1634,20 @@ export const zXeLocalAiEngineClientEndpointsImagesV1ImageJobResponse = z.object(
 	sampler: z.string(),
 	cfgScale: z.number(),
 	status: z.string(),
-	createdAtUtc: z.coerce
-		.bigint()
-		.min(BigInt("-9223372036854775808"), { error: "Invalid value: Expected int64 to be >= -9223372036854775808" })
-		.max(BigInt("9223372036854775807"), { error: "Invalid value: Expected int64 to be <= 9223372036854775807" }),
-	startedAtUtc: z.coerce
-		.bigint()
-		.min(BigInt("-9223372036854775808"), { error: "Invalid value: Expected int64 to be >= -9223372036854775808" })
-		.max(BigInt("9223372036854775807"), { error: "Invalid value: Expected int64 to be <= 9223372036854775807" })
-		.nullish(),
-	completedAtUtc: z.coerce
-		.bigint()
-		.min(BigInt("-9223372036854775808"), { error: "Invalid value: Expected int64 to be >= -9223372036854775808" })
-		.max(BigInt("9223372036854775807"), { error: "Invalid value: Expected int64 to be <= 9223372036854775807" })
-		.nullish(),
-	durationMs: z.coerce
-		.bigint()
-		.min(BigInt("-9223372036854775808"), { error: "Invalid value: Expected int64 to be >= -9223372036854775808" })
-		.max(BigInt("9223372036854775807"), { error: "Invalid value: Expected int64 to be <= 9223372036854775807" })
-		.nullish(),
+	createdAtUtc: z.int(),
+	startedAtUtc: z.int().nullish(),
+	completedAtUtc: z.int().nullish(),
+	durationMs: z.int().nullish(),
 	imageId: z.guid().nullish(),
 	sanitizedError: z.string().nullish(),
-	cancellationRequestedAtUtc: z.coerce
-		.bigint()
-		.min(BigInt("-9223372036854775808"), { error: "Invalid value: Expected int64 to be >= -9223372036854775808" })
-		.max(BigInt("9223372036854775807"), { error: "Invalid value: Expected int64 to be <= 9223372036854775807" })
-		.nullish(),
+	cancellationRequestedAtUtc: z.int().nullish(),
 });
 
 export const zXeLocalAiEngineClientEndpointsImagesV1CreateImageJobRequest = z.object({
 	modelName: z.string(),
 	prompt: z.string(),
 	negativePrompt: z.string().nullish(),
-	seed: z.coerce
-		.bigint()
-		.min(BigInt("-9223372036854775808"), { error: "Invalid value: Expected int64 to be >= -9223372036854775808" })
-		.max(BigInt("9223372036854775807"), { error: "Invalid value: Expected int64 to be <= 9223372036854775807" })
-		.optional(),
+	seed: z.string().nullish(),
 	width: z
 		.int()
 		.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })
@@ -1977,10 +1674,7 @@ export const zXeLocalAiEngineClientEndpointsImagesV1ListImageJobsResponse = z.ob
 export const zXeLocalAiEngineClientEndpointsImagesV1ImageModelPartResponse = z.object({
 	role: z.string(),
 	fileName: z.string(),
-	sizeBytes: z.coerce
-		.bigint()
-		.min(BigInt("-9223372036854775808"), { error: "Invalid value: Expected int64 to be >= -9223372036854775808" })
-		.max(BigInt("9223372036854775807"), { error: "Invalid value: Expected int64 to be <= 9223372036854775807" }),
+	sizeBytes: z.int(),
 });
 
 export const zXeLocalAiEngineClientEndpointsImagesV1ImageModelResponse = z.object({
@@ -1988,15 +1682,9 @@ export const zXeLocalAiEngineClientEndpointsImagesV1ImageModelResponse = z.objec
 	repoId: z.string(),
 	family: z.string(),
 	kind: z.string(),
-	sizeBytes: z.coerce
-		.bigint()
-		.min(BigInt("-9223372036854775808"), { error: "Invalid value: Expected int64 to be >= -9223372036854775808" })
-		.max(BigInt("9223372036854775807"), { error: "Invalid value: Expected int64 to be <= 9223372036854775807" }),
+	sizeBytes: z.int(),
 	parts: z.array(zXeLocalAiEngineClientEndpointsImagesV1ImageModelPartResponse),
-	downloadedAtUtc: z.coerce
-		.bigint()
-		.min(BigInt("-9223372036854775808"), { error: "Invalid value: Expected int64 to be >= -9223372036854775808" })
-		.max(BigInt("9223372036854775807"), { error: "Invalid value: Expected int64 to be <= 9223372036854775807" }),
+	downloadedAtUtc: z.int(),
 });
 
 export const zXeLocalAiEngineClientEndpointsImagesV1ListImageModelsResponse = z.object({
@@ -2181,11 +1869,7 @@ export const zXeLocalAiEngineClientEndpointsAppUpdateV1AppUpdateStatusResponse =
 	login: z.string().nullish(),
 	isDesktop: z.boolean(),
 	isOffline: z.boolean(),
-	lastCheckedUtc: z.coerce
-		.bigint()
-		.min(BigInt("-9223372036854775808"), { error: "Invalid value: Expected int64 to be >= -9223372036854775808" })
-		.max(BigInt("9223372036854775807"), { error: "Invalid value: Expected int64 to be <= 9223372036854775807" })
-		.nullish(),
+	lastCheckedUtc: z.int().nullish(),
 });
 
 export const zXeLocalAiEngineClientEndpointsAppUpdateV1GetAppUpdateStatusRequest = z.record(z.string(), z.never());
@@ -2237,11 +1921,7 @@ export const zXeLocalAiEngineClientEndpointsAgentsV1PlaybookEvalCaseResultRespon
 
 export const zXeLocalAiEngineClientEndpointsAgentsV1PlaybookEvalResultResponse = z.object({
 	passed: z.boolean().optional(),
-	evaluatedAtUtc: z.coerce
-		.bigint()
-		.min(BigInt("-9223372036854775808"), { error: "Invalid value: Expected int64 to be >= -9223372036854775808" })
-		.max(BigInt("9223372036854775807"), { error: "Invalid value: Expected int64 to be <= 9223372036854775807" })
-		.optional(),
+	evaluatedAtUtc: z.int().optional(),
 	actionVersionAtEval: z
 		.int()
 		.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })
@@ -2298,14 +1978,8 @@ export const zXeLocalAiEngineClientEndpointsAgentsV1PlaybookActionResponse = z.o
 		.int()
 		.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })
 		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" }),
-	createdAtUtc: z.coerce
-		.bigint()
-		.min(BigInt("-9223372036854775808"), { error: "Invalid value: Expected int64 to be >= -9223372036854775808" })
-		.max(BigInt("9223372036854775807"), { error: "Invalid value: Expected int64 to be <= 9223372036854775807" }),
-	updatedAtUtc: z.coerce
-		.bigint()
-		.min(BigInt("-9223372036854775808"), { error: "Invalid value: Expected int64 to be >= -9223372036854775808" })
-		.max(BigInt("9223372036854775807"), { error: "Invalid value: Expected int64 to be <= 9223372036854775807" }),
+	createdAtUtc: z.int(),
+	updatedAtUtc: z.int(),
 	sourceFeedbackIds: z.array(z.guid()).nullish(),
 	confidence: z.number().nullish(),
 	evalResult: zXeLocalAiEngineClientEndpointsAgentsV1PlaybookEvalResultResponse.nullish(),
@@ -2338,14 +2012,8 @@ export const zXeLocalAiEngineClientEndpointsAgentsV1GoldenConversationResponse =
 	source: z.string(),
 	sourceMessageId: z.guid().nullish(),
 	sourceConversationId: z.guid().nullish(),
-	createdAtUtc: z.coerce
-		.bigint()
-		.min(BigInt("-9223372036854775808"), { error: "Invalid value: Expected int64 to be >= -9223372036854775808" })
-		.max(BigInt("9223372036854775807"), { error: "Invalid value: Expected int64 to be <= 9223372036854775807" }),
-	updatedAtUtc: z.coerce
-		.bigint()
-		.min(BigInt("-9223372036854775808"), { error: "Invalid value: Expected int64 to be >= -9223372036854775808" })
-		.max(BigInt("9223372036854775807"), { error: "Invalid value: Expected int64 to be <= 9223372036854775807" }),
+	createdAtUtc: z.int(),
+	updatedAtUtc: z.int(),
 });
 
 export const zXeLocalAiEngineClientEndpointsAgentsV1ApproveGoldenConversationRequest = z.record(z.string(), z.never());
@@ -2372,14 +2040,8 @@ export const zXeLocalAiEngineClientEndpointsAgentsV1AgentDefinitionResponse = z.
 		.int()
 		.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })
 		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" }),
-	createdAtUtc: z.coerce
-		.bigint()
-		.min(BigInt("-9223372036854775808"), { error: "Invalid value: Expected int64 to be >= -9223372036854775808" })
-		.max(BigInt("9223372036854775807"), { error: "Invalid value: Expected int64 to be <= 9223372036854775807" }),
-	updatedAtUtc: z.coerce
-		.bigint()
-		.min(BigInt("-9223372036854775808"), { error: "Invalid value: Expected int64 to be >= -9223372036854775808" })
-		.max(BigInt("9223372036854775807"), { error: "Invalid value: Expected int64 to be <= 9223372036854775807" }),
+	createdAtUtc: z.int(),
+	updatedAtUtc: z.int(),
 });
 
 export const zXeLocalAiEngineClientEndpointsAgentsV1CreateAgentDefinitionRequest = z.object({
@@ -2467,20 +2129,14 @@ export const zXeLocalAiEngineClientEndpointsAgentsV1FeedbackExemplarResponse = z
 	comment: z.string(),
 	messageId: z.guid(),
 	conversationId: z.guid(),
-	createdAtUtc: z.coerce
-		.bigint()
-		.min(BigInt("-9223372036854775808"), { error: "Invalid value: Expected int64 to be >= -9223372036854775808" })
-		.max(BigInt("9223372036854775807"), { error: "Invalid value: Expected int64 to be <= 9223372036854775807" }),
+	createdAtUtc: z.int(),
 	truncated: z.boolean(),
 });
 
 export const zXeLocalAiEngineClientEndpointsAgentsV1AgentFeedbackInsightsResponse = z.object({
 	agentDefinitionId: z.guid(),
 	agentName: z.string(),
-	generatedAtUtc: z.coerce
-		.bigint()
-		.min(BigInt("-9223372036854775808"), { error: "Invalid value: Expected int64 to be >= -9223372036854775808" })
-		.max(BigInt("9223372036854775807"), { error: "Invalid value: Expected int64 to be <= 9223372036854775807" }),
+	generatedAtUtc: z.int(),
 	minOccurrenceThreshold: z
 		.int()
 		.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })
@@ -2501,11 +2157,7 @@ export const zXeLocalAiEngineClientServicesMonitoringPlaybookMonitorStatus = z.e
 
 export const zXeLocalAiEngineClientEndpointsAgentsV1PlaybookActionMonitorItemResponse = z.object({
 	actionId: z.guid().optional(),
-	enabledAtUtc: z.coerce
-		.bigint()
-		.min(BigInt("-9223372036854775808"), { error: "Invalid value: Expected int64 to be >= -9223372036854775808" })
-		.max(BigInt("9223372036854775807"), { error: "Invalid value: Expected int64 to be <= 9223372036854775807" })
-		.optional(),
+	enabledAtUtc: z.int().optional(),
 	beforeDownRate: z.number().optional(),
 	afterDownRate: z.number().optional(),
 	afterSampleSize: z
@@ -2590,10 +2242,7 @@ export const zXeLocalAiEngineClientEndpointsAgentsV1AgentExecutionLogResponse = 
 	messageId: z.guid().nullish(),
 	modelName: z.string(),
 	configHash: z.string(),
-	latencyMs: z.coerce
-		.bigint()
-		.min(BigInt("-9223372036854775808"), { error: "Invalid value: Expected int64 to be >= -9223372036854775808" })
-		.max(BigInt("9223372036854775807"), { error: "Invalid value: Expected int64 to be <= 9223372036854775807" }),
+	latencyMs: z.int(),
 	promptTokens: z
 		.int()
 		.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })
@@ -2606,10 +2255,7 @@ export const zXeLocalAiEngineClientEndpointsAgentsV1AgentExecutionLogResponse = 
 		.nullish(),
 	success: z.boolean(),
 	errorClass: z.string().nullish(),
-	createdAtUtc: z.coerce
-		.bigint()
-		.min(BigInt("-9223372036854775808"), { error: "Invalid value: Expected int64 to be >= -9223372036854775808" })
-		.max(BigInt("9223372036854775807"), { error: "Invalid value: Expected int64 to be <= 9223372036854775807" }),
+	createdAtUtc: z.int(),
 });
 
 export const zXeLocalAiEngineClientEndpointsAgentsV1ListAgentExecutionLogsResponse = z.object({
@@ -2642,6 +2288,63 @@ export const zXeLocalAiEngineClientEndpointsAgentsV1ListGoldenConversationsRespo
 });
 
 export const zXeLocalAiEngineClientEndpointsAgentsV1ListGoldenConversationsRequest = z.record(z.string(), z.never());
+
+export const zXeLocalAiEngineClientEndpointsAgentsV1AgentRunEnvelopeResponse = z.object({
+	id: z.guid(),
+	schemaVersion: z
+		.int()
+		.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })
+		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" }),
+	agentDefinitionId: z.guid(),
+	conversationId: z.guid().nullish(),
+	messageId: z.guid().nullish(),
+	invocationId: z.guid().nullish(),
+	requestId: z.guid().nullish(),
+	modelName: z.string(),
+	terminalStatus: z.string(),
+	success: z.boolean(),
+	failureCategory: z.string().nullish(),
+	durationMs: z.int(),
+	promptTokens: z
+		.int()
+		.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })
+		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" })
+		.nullish(),
+	completionTokens: z
+		.int()
+		.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })
+		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" })
+		.nullish(),
+	reasoningTokens: z
+		.int()
+		.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })
+		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" })
+		.nullish(),
+	totalTokens: z
+		.int()
+		.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })
+		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" })
+		.nullish(),
+	contentChunkCount: z
+		.int()
+		.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })
+		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" })
+		.nullish(),
+	reasoningChunkCount: z
+		.int()
+		.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })
+		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" })
+		.nullish(),
+	traceId: z.string().nullish(),
+	startedAtUtc: z.int().nullish(),
+	createdAtUtc: z.int(),
+});
+
+export const zXeLocalAiEngineClientEndpointsAgentsV1ListRunEnvelopesResponse = z.object({
+	items: z.array(zXeLocalAiEngineClientEndpointsAgentsV1AgentRunEnvelopeResponse),
+});
+
+export const zXeLocalAiEngineClientEndpointsAgentsV1ListRunEnvelopesRequest = z.record(z.string(), z.never());
 
 export const zXeLocalAiEngineClientEndpointsAgentsV1SuggestedPlaybookActionRouteRequest = z.record(z.string(), z.never());
 
@@ -2826,16 +2529,8 @@ export const zGetScheduledJobRunResponse = zXeLocalAiEngineClientEndpointsSchedu
 
 export const zListScheduledJobRunsQuery = z.object({
 	status: zXeLocalAiEngineClientEndpointsSchedulerV1ScheduledRunStatus.nullish(),
-	fromUtc: z.coerce
-		.bigint()
-		.min(BigInt("-9223372036854775808"), { error: "Invalid value: Expected int64 to be >= -9223372036854775808" })
-		.max(BigInt("9223372036854775807"), { error: "Invalid value: Expected int64 to be <= 9223372036854775807" })
-		.nullish(),
-	toUtc: z.coerce
-		.bigint()
-		.min(BigInt("-9223372036854775808"), { error: "Invalid value: Expected int64 to be >= -9223372036854775808" })
-		.max(BigInt("9223372036854775807"), { error: "Invalid value: Expected int64 to be <= 9223372036854775807" })
-		.nullish(),
+	fromUtc: z.int().nullish(),
+	toUtc: z.int().nullish(),
 	scheduledJobId: z.guid().nullish(),
 });
 
@@ -3945,6 +3640,25 @@ export const zListAgentExecutionLogsResponse = zXeLocalAiEngineClientEndpointsAg
  * Success
  */
 export const zListAgentTemplatesResponse = zXeLocalAiEngineClientEndpointsAgentsV1ListAgentTemplatesResponse;
+
+export const zListRunEnvelopesQuery = z.object({
+	conversationId: z.guid().nullish(),
+	limit: z
+		.int()
+		.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })
+		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" })
+		.nullish(),
+	offset: z
+		.int()
+		.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })
+		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" })
+		.nullish(),
+});
+
+/**
+ * Success
+ */
+export const zListRunEnvelopesResponse = zXeLocalAiEngineClientEndpointsAgentsV1ListRunEnvelopesResponse;
 
 export const zPromoteSuggestedPlaybookActionPath = z.object({
 	agentDefinitionId: z.guid(),

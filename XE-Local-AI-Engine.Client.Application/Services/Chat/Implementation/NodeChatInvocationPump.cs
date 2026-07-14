@@ -1,5 +1,6 @@
 namespace XE_Local_AI_Engine.Client.Services.Chat.Implementation;
 
+using System.Diagnostics;
 using XE_Local_AI_Engine.Client.Services.Events;
 
 /// <summary>
@@ -76,6 +77,20 @@ public sealed class NodeChatInvocationPump(
             throw new ArgumentException($"Invocation status '{state.Status}' is not terminal.", nameof(state));
         }
 
+        // Durable run ledger (MED-007 / R4): the envelope payload rides INTO the terminalize command so its content-free
+        // row is written in the SAME transaction as the terminal message row (both commit or roll back together — no
+        // swallowed best-effort write). The terminal status/success and the bound agent id are derived from the winning
+        // persisted row inside that transaction, so they are not carried here.
+        var durationMs = state.GenerationDurationMs
+                         ?? (state.CompletedAt is { } completedAt ? Math.Max(val1: 0L, (long)(completedAt - state.StartedAt).TotalMilliseconds) : 0L);
+        var envelope = new AgentRunEnvelopeMetadata(state.InvocationId,
+            durationMs,
+            state.FailureCategory?.ToString(),
+            state.StreamedChunkCount,
+            state.StreamedThinkingChunkCount,
+            CurrentTraceId(),
+            state.StartedAt == default ? null : state.StartedAt.ToUnixTimeMilliseconds());
+
         var persisted = await _persistence.TerminalizeAssistantMessageAsync(new NodeChatTerminalizeMessageRequest(correlation,
                 terminalStatus,
                 NowUnixMilliseconds(),
@@ -91,10 +106,16 @@ public sealed class NodeChatInvocationPump(
                 // parts are then left untouched. The local front doors pass the accumulated ordered parts here.
                 parts,
                 // Whole-turn wall-clock duration from the runner; null for legacy/platform turns that did not report it.
-                state.GenerationDurationMs),
+                state.GenerationDurationMs,
+                envelope),
             CancellationToken.None).ConfigureAwait(false);
 
-        return new NodeChatPumpTerminalResult(persisted, terminalStatus, eventType);
+        // The transition guard may have rejected this terminalize (the row already reached a different terminal), so the
+        // persisted row is the authoritative winning state. The returned status and the single SSE terminal are built from
+        // it rather than the requested terminal.
+        var winningStatus = persisted.Status;
+
+        return new NodeChatPumpTerminalResult(persisted, winningStatus, MapTerminalEventType(winningStatus, eventType));
     }
 
     /// <summary>
@@ -112,15 +133,26 @@ public sealed class NodeChatInvocationPump(
             ? ChatStreamEventTypes.AssistantCancelled
             : ChatStreamEventTypes.AssistantInterrupted;
 
+        // Durable run ledger (MED-007 / R4): a stream that ended without a terminal invocation state still gets one
+        // envelope row, written atomically with the terminal message row. Thinner than the state-driven path — there is no
+        // InvocationState here, so invocation id / tokens / duration / chunk counts are unknown and omitted; the terminal
+        // status (derived from the winning row) carries the interrupted/cancelled outcome.
+        var envelope = new AgentRunEnvelopeMetadata(InvocationId: null, DurationMs: 0L, TraceId: CurrentTraceId());
+
         var persisted = await _persistence.TerminalizeAssistantMessageAsync(new NodeChatTerminalizeMessageRequest(correlation,
                 terminalStatus,
                 NowUnixMilliseconds(),
                 cursor.Content,
                 string.IsNullOrEmpty(cursor.Reasoning) ? null : cursor.Reasoning,
-                terminalStatus),
+                terminalStatus,
+                Envelope: envelope),
             CancellationToken.None).ConfigureAwait(false);
 
-        return new NodeChatPumpTerminalResult(persisted, terminalStatus, eventType);
+        // The persisted row is the winning state: the guard may have rejected an Interrupted write against an already
+        // terminal row (or a Cancelled write is idempotent over an HTTP-cancelled row). Build the result from it.
+        var winningStatus = persisted.Status;
+
+        return new NodeChatPumpTerminalResult(persisted, winningStatus, MapTerminalEventType(winningStatus, eventType));
     }
 
     /// <summary>Whether a state represents a terminal invocation outcome the pump should terminalize on.</summary>
@@ -152,8 +184,36 @@ public sealed class NodeChatInvocationPump(
         }
     }
 
+    // Maps a persisted terminal MESSAGE status back to its stream event type, so the emitted SSE terminal reflects the
+    // row that actually won rather than the requested terminal. Falls back to the requested event for any unexpected
+    // (non-terminal) status, which the terminalize path cannot produce.
+    private static string MapTerminalEventType(string terminalStatus, string requestedEventType)
+    {
+        return terminalStatus switch
+        {
+            NodeChatMessageStatusValues.Completed => ChatStreamEventTypes.AssistantCompleted,
+            NodeChatMessageStatusValues.Cancelled => ChatStreamEventTypes.AssistantCancelled,
+            NodeChatMessageStatusValues.Failed => ChatStreamEventTypes.AssistantFailed,
+            NodeChatMessageStatusValues.Interrupted => ChatStreamEventTypes.AssistantInterrupted,
+            _ => requestedEventType
+        };
+    }
+
     private long NowUnixMilliseconds()
     {
         return _timeProvider.GetUtcNow().ToUnixTimeMilliseconds();
+    }
+
+    // W3C trace id of the ambient activity at terminalization (for cross-correlation with exported traces), or null when
+    // no activity is in scope. A default (all-zero) id is treated as absent.
+    private static string? CurrentTraceId()
+    {
+        if (Activity.Current is not { } activity)
+        {
+            return null;
+        }
+
+        var traceId = activity.TraceId;
+        return traceId == default ? null : traceId.ToString();
     }
 }

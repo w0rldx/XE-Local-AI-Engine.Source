@@ -105,7 +105,8 @@ public sealed class CoderAgentSendIntersectionTests
         // merge, never via the registry.
         var offerProvider = new LocalToolOfferProvider(new LocalAgentToolRegistry(),
             new McpToolRegistry(NullLogger<McpToolRegistry>.Instance),
-            [capableModel]);
+            [capableModel],
+            allowCloudKnowledgeAccess: false);
 
         store = Substitute.For<IAgentDefinitionStore>();
         var playbookStore = Substitute.For<IPlaybookActionStore>();
@@ -122,6 +123,7 @@ public sealed class CoderAgentSendIntersectionTests
             new LexicalPlaybookRetrievalRanker(),
             Options.Create(new PlaybookRetrievalOptions()),
             new FakeAgentInstructionProvider(),
+            Substitute.For<XE_Local_AI_Engine.Client.Services.Chat.IModelCapabilityResolver>(),
             NullLogger<AgentDefinitionResolver>.Instance);
     }
 }

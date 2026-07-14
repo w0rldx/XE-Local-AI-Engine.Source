@@ -13,6 +13,22 @@ using XE_Local_AI_Engine.Client.Services.Events;
 /// </summary>
 internal static class ChatStreamEventMapper
 {
+    /// <summary>
+    ///     Maps a persisted terminal message status to its stream event type. Used when a lifecycle mark (queued /
+    ///     streaming) is rejected because the row already reached a terminal status (a cancel raced ahead of the run):
+    ///     the caller emits this terminal event instead of the queued/streaming event and aborts.
+    /// </summary>
+    public static string TerminalEventType(string status)
+    {
+        return status switch
+        {
+            NodeChatMessageStatusValues.Completed => ChatStreamEventTypes.AssistantCompleted,
+            NodeChatMessageStatusValues.Cancelled => ChatStreamEventTypes.AssistantCancelled,
+            NodeChatMessageStatusValues.Failed => ChatStreamEventTypes.AssistantFailed,
+            _ => ChatStreamEventTypes.AssistantInterrupted
+        };
+    }
+
     public static ChatStreamEvent MessageEvent(string type,
         NodeChatMessageCorrelation correlation,
         NodeChatPersistedMessageDto message,

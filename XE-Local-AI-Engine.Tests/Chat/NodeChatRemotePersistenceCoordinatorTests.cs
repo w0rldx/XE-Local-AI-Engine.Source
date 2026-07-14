@@ -61,7 +61,7 @@ public sealed class NodeChatRemotePersistenceCoordinatorTests
         var coordinator = new NodeChatRemotePersistenceCoordinator(persistence, pump, TimeProvider.System);
         var package = RuntimePackageBuilder.Valid().WithUserMessage("q").Build();
 
-        var session = await coordinator.BeginAsync(package);
+        var session = AssertEx.NotNull(await coordinator.BeginAsync(package));
 
         var terminal = new InvocationState
         {
@@ -88,10 +88,40 @@ public sealed class NodeChatRemotePersistenceCoordinatorTests
         var coordinator = new NodeChatRemotePersistenceCoordinator(persistence, pump, TimeProvider.System);
         var package = RuntimePackageBuilder.Valid().WithUserMessage("q").Build();
 
-        var session = await coordinator.BeginAsync(package);
+        var session = AssertEx.NotNull(await coordinator.BeginAsync(package));
         await session.TerminalizeInterruptedAsync(false);
 
         await pump.Received(1).TerminalizeInterruptedAsync(Arg.Any<NodeChatMessageCorrelation>(), Arg.Any<NodeChatPumpCursor>(), wasCancelled: false);
+    }
+
+    [Test]
+    public async Task BeginAsync_WhenStreamingMarkRejected_ReturnsNullWithoutOpeningSession()
+    {
+        var persistence = Substitute.For<INodeChatPersistenceService>();
+        StubPersistence(persistence);
+        // The assistant placeholder was terminalized (e.g. an early cancel) before the coordinator could mark it streaming,
+        // so the guarded streaming mark is a no-op and reports the true terminal status. BeginAsync must abort honestly.
+        var cancelledRow = new NodeChatPersistedMessageDto(Guid.NewGuid(),
+            Guid.NewGuid(),
+            RequestId: null,
+            Sequence: 1,
+            "assistant",
+            string.Empty,
+            Reasoning: null,
+            NodeChatMessageStatusValues.Cancelled,
+            CreatedAtUtc: 1,
+            UpdatedAtUtc: 1,
+            Model: null,
+            Error: null,
+            MetadataJson: null);
+        persistence.MarkAssistantStreamingAsync(Arg.Any<NodeChatMessageCorrelation>(), Arg.Any<long>(), Arg.Any<CancellationToken>()).Returns(cancelledRow);
+        var pump = Substitute.For<INodeChatInvocationPump>();
+        var coordinator = new NodeChatRemotePersistenceCoordinator(persistence, pump, TimeProvider.System);
+        var package = RuntimePackageBuilder.Valid().WithUserMessage("q").Build();
+
+        var session = await coordinator.BeginAsync(package);
+
+        AssertEx.Null(session, "A rejected streaming mark must abort BeginAsync with a null session (no persistence against a terminal row).");
     }
 
     private static void StubPersistence(INodeChatPersistenceService persistence)
@@ -114,6 +144,9 @@ public sealed class NodeChatRemotePersistenceCoordinatorTests
         persistence.EnsureConversationAsync(Arg.Any<NodeChatEnsureConversationRequest>(), Arg.Any<CancellationToken>()).Returns(conversation);
         persistence.PersistUserMessageAsync(Arg.Any<NodeChatPersistUserMessageRequest>(), Arg.Any<CancellationToken>()).Returns(message);
         persistence.CreateAssistantPlaceholderAsync(Arg.Any<NodeChatCreateAssistantPlaceholderRequest>(), Arg.Any<CancellationToken>()).Returns(message);
-        persistence.MarkAssistantStreamingAsync(Arg.Any<NodeChatMessageCorrelation>(), Arg.Any<long>(), Arg.Any<CancellationToken>()).Returns(message);
+        // The streaming mark must report the row landed in Streaming, otherwise BeginAsync aborts (returns null): the
+        // coordinator only opens a session against a row it successfully marked streaming.
+        persistence.MarkAssistantStreamingAsync(Arg.Any<NodeChatMessageCorrelation>(), Arg.Any<long>(), Arg.Any<CancellationToken>())
+                   .Returns(message with { Status = NodeChatMessageStatusValues.Streaming });
     }
 }

@@ -165,6 +165,39 @@ public sealed class KnowledgeIngestionWorkerTests
         }
     }
 
+    [Test]
+    public async Task DrainSweep_AdmitsAndIngestsStrandedPendingDocumentsOnceTheQueueEmpties()
+    {
+        var strandedA = Guid.NewGuid();
+        var strandedB = Guid.NewGuid();
+        var trigger = Guid.NewGuid();
+
+        var ingestion = new FakeIngestionService((_, _) => Task.CompletedTask);
+        var catalog = Substitute.For<IKnowledgeDocumentCatalogService>();
+        catalog.ResetNonTerminalToPendingAsync(Arg.Any<CancellationToken>()).Returns((IReadOnlyList<Guid>)[]);
+        // The two stranded documents (persisted but never admitted — the full-queue 503 path) stay Pending until ingestion
+        // starts, which flips them out of Pending; the sweep source stops returning a document once the worker begins it,
+        // mirroring the real status transition and letting the sweep terminate.
+        catalog.ListPendingDocumentIdsAsync(Arg.Any<CancellationToken>())
+               .Returns(_ => (IReadOnlyList<Guid>)new[] { strandedA, strandedB }.Where(id => !ingestion.Started.Contains(id)).ToList());
+
+        var dispatcher = new KnowledgeIngestionDispatcher();
+        await using var provider = BuildProvider(ingestion, catalog);
+        using var worker = CreateWorker(provider, dispatcher, drainTimeoutSeconds: 30);
+
+        await worker.StartAsync(CancellationToken.None).ConfigureAwait(false);
+        // One normal document primes the pump; its completion drains the queue to empty and fires the sweep that admits the
+        // two stranded documents the full-queue path never enqueued — the "drain → enqueued → ingested" recovery.
+        _ = await dispatcher.EnqueueAsync(trigger, CancellationToken.None).ConfigureAwait(false);
+
+        await AssertEx.EventuallyAsync(
+            () => ingestion.Completed.Contains(trigger) && ingestion.Completed.Contains(strandedA) && ingestion.Completed.Contains(strandedB),
+            PollTimeout,
+            "The drain-sweep should have admitted and ingested both stranded Pending documents.").ConfigureAwait(false);
+
+        await worker.StopAsync(CancellationToken.None).ConfigureAwait(false);
+    }
+
     private static IKnowledgeDocumentCatalogService NoRecovery()
     {
         var catalog = Substitute.For<IKnowledgeDocumentCatalogService>();

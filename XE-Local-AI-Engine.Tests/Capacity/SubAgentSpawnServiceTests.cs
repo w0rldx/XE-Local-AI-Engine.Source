@@ -12,6 +12,7 @@ using XE_Local_AI_Engine.Client.Persistence;
 using XE_Local_AI_Engine.Client.Persistence.Stores;
 using XE_Local_AI_Engine.Client.Services.Agents;
 using XE_Local_AI_Engine.Client.Services.Capacity;
+using XE_Local_AI_Engine.Client.Services.Chat;
 using XE_Local_AI_Engine.Providers.LlamaServer;
 using XE_Local_AI_Engine.Tests.Testing;
 using XE_Local_AI_Engine.Tests.Testing.Mocks;
@@ -71,6 +72,189 @@ public sealed class SubAgentSpawnServiceTests
         // …but spawn_subagent is UNCONDITIONALLY filtered out (structural depth cap), even though the profile listed it.
         AssertEx.False(harness.ChatClient.LastToolNames.Any(name => name == "spawn_subagent"),
             "the child tool set must never contain spawn_subagent");
+    }
+
+    [Test]
+    public async Task Spawn_WhenChildDefinitionPinnedToCloudModel_ResolvesToolOfferOnThatCloudModel()
+    {
+        // R1 (HIGH): a spawned sub-agent bound to a definition pinned to a CLOUD model must resolve its tool offer
+        // through the shared AgentDefinitionResolver keyed on the CHILD's effective (pinned) cloud model — the model the
+        // effective-model knowledge-tool locality gate keys on (the gate's withholding is proven end-to-end in
+        // AgentDefinitionResolverTests). This proves the spawn path threads the child's pinned model into that gate,
+        // not the parent turn's active model, so a cloud-pinned spawned profile cannot retain the knowledge tools.
+        using var harness = new Harness();
+        harness.AllowCloud();
+        const string cloudModel = "azure-foundry-deploy";
+        var id = harness.RegisterProfilePinnedTo("cloud-child", cloudModel, "read_file");
+        var service = harness.Build();
+
+        using var root = SpawnContext.BeginRoot(fanOutCap: 3, cloudSpawnCap: 3);
+        await service.SpawnAsync(new SubAgentSpawnRequest
+        {
+            SubAgentKey = id.ToString(),
+            Task = "do it"
+        }, CancellationToken.None);
+
+        await harness.Resolver.Received().ResolveAsync(id, cloudModel, Arg.Any<string?>(), Arg.Any<bool>(), Arg.Any<bool>(), Arg.Any<bool>(), Arg.Any<CancellationToken>());
+    }
+
+    [Test]
+    public async Task Spawn_WhenProfileBound_ChildConsumesResolvedSystemPrompt_NotRawInstructions()
+    {
+        // MED-002: a profile-bound child must run on the RESOLVED system prompt (scaffold + persona + injected playbook
+        // memory), NOT the raw definition.Instructions. Raw and resolved DIVERGE here so reading the wrong one is visible.
+        using var harness = new Harness();
+        harness.AllowLocal();
+        var id = harness.RegisterResolvedProfile("coder",
+            rawInstructions: "RAW persona only — no scaffold, no memory.",
+            resolvedPrompt: "SCAFFOLD + persona + injected playbook memory.",
+            reasoningEffort: null,
+            skills: [],
+            allowedToolNames: "read_file");
+        var service = harness.Build();
+
+        using var root = SpawnContext.BeginRoot(fanOutCap: 3, cloudSpawnCap: 3);
+        var result = await service.SpawnAsync(new SubAgentSpawnRequest
+        {
+            SubAgentKey = id.ToString(),
+            Task = "read it"
+        }, CancellationToken.None);
+
+        AssertEx.Equal("sub-agent-result", result);
+        AssertEx.Equal("SCAFFOLD + persona + injected playbook memory.", harness.ChatClient.LastInstructions);
+        AssertEx.False(harness.ChatClient.LastInstructions!.Contains("RAW persona only", StringComparison.Ordinal),
+            "the child must never run on the raw definition.Instructions — that is the MED-002 bypass.");
+    }
+
+    [Test]
+    public async Task Spawn_WhenProfileBound_ThreadsResolvedReasoningEffort_OnThinkingModel()
+    {
+        // The resolved reasoning effort must be baked into the child's construction-time ChatOptions (an agent-as-tool
+        // never receives per-run RunOptions), gated on the child model's thinking capability — mirroring the
+        // orchestration-participant path. A thinking-capable model honors the graded level on the Ollama think key.
+        using var harness = new Harness();
+        harness.AllowLocal();
+        harness.WithThinkingCapability(true);
+        var id = harness.RegisterResolvedProfile("coder",
+            rawInstructions: "raw",
+            resolvedPrompt: "resolved",
+            reasoningEffort: "medium",
+            skills: [],
+            allowedToolNames: "read_file");
+        var service = harness.Build();
+
+        using var root = SpawnContext.BeginRoot(fanOutCap: 3, cloudSpawnCap: 3);
+        var result = await service.SpawnAsync(new SubAgentSpawnRequest
+        {
+            SubAgentKey = id.ToString(),
+            Task = "reason about it"
+        }, CancellationToken.None);
+
+        AssertEx.Equal("sub-agent-result", result);
+        var additionalProperties = AssertEx.NotNull(harness.ChatClient.LastAdditionalProperties,
+            "a profile-bound child must carry reasoning AdditionalProperties");
+        AssertEx.True(additionalProperties.TryGetValue<string>("think", out var thinkValue));
+        AssertEx.Equal("medium", thinkValue);
+    }
+
+    [Test]
+    public async Task Spawn_WhenProfileBound_NonThinkingModel_OmitsThinkField()
+    {
+        // Same resolved effort, but the child model does NOT advertise the thinking capability: the think field must be
+        // OMITTED (Ollama 400s on think:true/level for such a model) so its built-in template reasoning runs — the exact
+        // capability gate ParticipantReasoningOptions applies on the direct/orchestration paths.
+        using var harness = new Harness();
+        harness.AllowLocal();
+        harness.WithThinkingCapability(false);
+        var id = harness.RegisterResolvedProfile("coder",
+            rawInstructions: "raw",
+            resolvedPrompt: "resolved",
+            reasoningEffort: "medium",
+            skills: [],
+            allowedToolNames: "read_file");
+        var service = harness.Build();
+
+        using var root = SpawnContext.BeginRoot(fanOutCap: 3, cloudSpawnCap: 3);
+        var result = await service.SpawnAsync(new SubAgentSpawnRequest
+        {
+            SubAgentKey = id.ToString(),
+            Task = "reason about it"
+        }, CancellationToken.None);
+
+        AssertEx.Equal("sub-agent-result", result);
+        var additionalProperties = AssertEx.NotNull(harness.ChatClient.LastAdditionalProperties);
+        AssertEx.False(additionalProperties.ContainsKey("think"),
+            "a non-thinking child model must omit the think field entirely.");
+    }
+
+    [Test]
+    public async Task Spawn_WhenProfileBound_AttachesResolvedSkills()
+    {
+        // The resolved skills must ride into the child as a MAF AgentSkillsProvider (progressive disclosure): the
+        // provider contributes its skill-discovery preamble via ChatOptions.Instructions at run time, naming each
+        // available skill — so the skill name reaches the wire alongside the resolved prompt.
+        using var harness = new Harness();
+        harness.AllowLocal();
+        var id = harness.RegisterResolvedProfile("coder",
+            rawInstructions: "raw",
+            resolvedPrompt: "resolved system prompt",
+            reasoningEffort: null,
+            skills: [new ResolvedSkill(Guid.NewGuid(), "kubernetes-debug", "Debug k8s issues", "## Body", 1)],
+            allowedToolNames: "read_file");
+        var service = harness.Build();
+
+        using var root = SpawnContext.BeginRoot(fanOutCap: 3, cloudSpawnCap: 3);
+        var result = await service.SpawnAsync(new SubAgentSpawnRequest
+        {
+            SubAgentKey = id.ToString(),
+            Task = "use the skill"
+        }, CancellationToken.None);
+
+        AssertEx.Equal("sub-agent-result", result);
+        var instructions = AssertEx.NotNull(harness.ChatClient.LastInstructions);
+        AssertEx.Contains(instructions, "resolved system prompt");
+        AssertEx.Contains(instructions, "kubernetes-debug");
+    }
+
+    [Test]
+    public async Task Spawn_WhenProfileBound_ConsumesSameRuntimeFieldsAsDirectPath()
+    {
+        // Parity, shaped as one assertion: a resolved runtime with a divergent prompt, a graded reasoning effort, and a
+        // skill must ALL reach the child — the same ResolvedAgentRuntime fields the direct chat path threads into its
+        // runtime package (resolved.ResolvedSystemPrompt / resolved.ReasoningEffort / resolved.Skills). Before MED-002
+        // the spawn path consumed only resolved.AllowedTools, so a saved sub-agent diverged from a direct send.
+        using var harness = new Harness();
+        harness.AllowLocal();
+        harness.WithThinkingCapability(true);
+        var id = harness.RegisterResolvedProfile("coder",
+            rawInstructions: "RAW instructions the spawn path must NOT read.",
+            resolvedPrompt: "RESOLVED prompt the direct path threads.",
+            reasoningEffort: "high",
+            skills: [new ResolvedSkill(Guid.NewGuid(), "log-triage", "Triage logs", "## Logs", 1)],
+            allowedToolNames: "read_file");
+        var service = harness.Build();
+
+        using var root = SpawnContext.BeginRoot(fanOutCap: 3, cloudSpawnCap: 3);
+        var result = await service.SpawnAsync(new SubAgentSpawnRequest
+        {
+            SubAgentKey = id.ToString(),
+            Task = "do it"
+        }, CancellationToken.None);
+
+        AssertEx.Equal("sub-agent-result", result);
+        var instructions = AssertEx.NotNull(harness.ChatClient.LastInstructions);
+        // Prompt: the resolved prompt, never the raw instructions.
+        AssertEx.Contains(instructions, "RESOLVED prompt the direct path threads.");
+        AssertEx.False(instructions.Contains("RAW instructions", StringComparison.Ordinal),
+            "the spawn path must consume the resolved prompt, not raw definition.Instructions.");
+        // Reasoning effort: threaded and honored on the think key.
+        var additionalProperties = AssertEx.NotNull(harness.ChatClient.LastAdditionalProperties);
+        AssertEx.True(additionalProperties.TryGetValue<string>("think", out var thinkValue));
+        AssertEx.Equal("high", thinkValue);
+        // Skills: attached (the discovery preamble names the skill on the wire).
+        AssertEx.Contains(instructions, "log-triage");
+        // Tools: the curated profile tool still rides through.
+        AssertEx.Contains(harness.ChatClient.LastToolNames, "read_file");
     }
 
     [Test]
@@ -308,6 +492,7 @@ public sealed class SubAgentSpawnServiceTests
         private readonly ICapacityService _capacity = Substitute.For<ICapacityService>();
         private readonly IAgentDefinitionResolver _resolver = Substitute.For<IAgentDefinitionResolver>();
         private readonly IAgentDefinitionStore _definitionStore = Substitute.For<IAgentDefinitionStore>();
+        private readonly IModelCapabilityResolver _modelCapabilityResolver = Substitute.For<IModelCapabilityResolver>();
         private readonly FakeAgentInstructionProvider _instructionProvider = new();
         private readonly IAgentToolRegistry _toolRegistry = new FakeAgentToolRegistry();
         private bool _reservationDisposed;
@@ -315,22 +500,37 @@ public sealed class SubAgentSpawnServiceTests
         public Harness(TimeSpan? delayBeforeResponse = null)
         {
             _chatClient = new GateableChatClient(delayBeforeResponse: delayBeforeResponse);
+            // Default: the child model advertises the thinking capability, so a resolved reasoning effort is honored on
+            // the Ollama think key. A test can flip this to prove a non-thinking model omits the field.
+            _modelCapabilityResolver.ResolveAsync(Arg.Any<string?>(), Arg.Any<CancellationToken>())
+                                    .Returns((SupportsThinking: true, SupportsTools: true, IsCloud: false));
+        }
+
+        // Overrides the child model's advertised thinking capability (default true), gating whether a resolved reasoning
+        // effort reaches the Ollama think key or is omitted (a non-thinking model 400s on think:true/level).
+        public void WithThinkingCapability(bool supportsThinking)
+        {
+            _modelCapabilityResolver.ResolveAsync(Arg.Any<string?>(), Arg.Any<CancellationToken>())
+                                    .Returns((SupportsThinking: supportsThinking, SupportsTools: true, IsCloud: false));
         }
 
         public GateableChatClient ChatClient => _chatClient;
 
+        public IAgentDefinitionResolver Resolver => _resolver;
+
         public bool ReservationDisposed => _reservationDisposed;
 
-        // Registers a profile (subAgentKey → definition) whose resolved AllowedTools are the supplied offer names, so the
-        // service curates the child tool set through the real InvocationToolResolver against the fake catalog.
-        public Guid RegisterProfile(string name, params string[] allowedToolNames)
+        // Registers a bound sub-agent profile pinned to a SPECIFIC model (e.g. a cloud deployment) so an R1 test can
+        // prove the spawn resolves the child's tool offer through the shared resolver keyed on that pinned model — the
+        // effective model the knowledge-tool locality gate keys on (the gate itself is proven in AgentDefinitionResolverTests).
+        public Guid RegisterProfilePinnedTo(string name, string modelProfile, params string[] allowedToolNames)
         {
             var id = Guid.NewGuid();
             var definition = new AgentDefinitionRecord(id,
                 name,
                 Description: null,
                 Instructions: "child instructions",
-                ModelProfile: Model,
+                ModelProfile: modelProfile,
                 ReasoningEffort: null,
                 Kind: AgentDefinitionKind.Single,
                 AllowedToolNames: allowedToolNames,
@@ -351,8 +551,64 @@ public sealed class SubAgentSpawnServiceTests
                               RequiresApproval = false
                           })
                           .ToArray();
-            _resolver.ResolveAsync(id, Arg.Any<string?>(), Arg.Any<string?>(), Arg.Any<bool>(), Arg.Any<bool>(), Arg.Any<CancellationToken>())
-                     .Returns(new ResolvedAgentRuntime("child instructions", offered, Model, null, 1, id, name));
+            _resolver.ResolveAsync(id, Arg.Any<string?>(), Arg.Any<string?>(), Arg.Any<bool>(), Arg.Any<bool>(), Arg.Any<bool>(), Arg.Any<CancellationToken>())
+                     .Returns(new ResolvedAgentRuntime("child instructions", offered, modelProfile, null, 1, id, name, []));
+            return id;
+        }
+
+        // Registers a profile (subAgentKey → definition) whose resolved AllowedTools are the supplied offer names, so the
+        // service curates the child tool set through the real InvocationToolResolver against the fake catalog. Raw and
+        // resolved prompts are identical here (tool-focused tests); the reasoning/skills-parity tests use
+        // RegisterResolvedProfile to make them DIVERGE.
+        public Guid RegisterProfile(string name, params string[] allowedToolNames)
+        {
+            return RegisterResolvedProfile(name,
+                rawInstructions: "child instructions",
+                resolvedPrompt: "child instructions",
+                reasoningEffort: null,
+                skills: [],
+                allowedToolNames: allowedToolNames);
+        }
+
+        // Registers a profile whose raw definition.Instructions and resolved system prompt DIVERGE, and that carries a
+        // reasoning effort + skills — so a test can prove the child consumes the RESOLVED runtime (prompt/reasoning/
+        // skills), not the raw definition fields. The definition's raw ReasoningEffort is set to a deliberately WRONG
+        // sentinel to prove the child reads the resolver's value, not the definition's.
+        public Guid RegisterResolvedProfile(string name,
+            string rawInstructions,
+            string resolvedPrompt,
+            string? reasoningEffort,
+            IReadOnlyList<ResolvedSkill> skills,
+            params string[] allowedToolNames)
+        {
+            var id = Guid.NewGuid();
+            var definition = new AgentDefinitionRecord(id,
+                name,
+                Description: null,
+                Instructions: rawInstructions,
+                ModelProfile: Model,
+                ReasoningEffort: "raw-definition-effort-should-not-be-read",
+                Kind: AgentDefinitionKind.Single,
+                AllowedToolNames: allowedToolNames,
+                ToolApprovals: new Dictionary<string, bool>(StringComparer.Ordinal),
+                OrchestrationTopologyJson: null,
+                Version: 1,
+                CreatedAtUtc: 0,
+                UpdatedAtUtc: 0);
+            _definitionStore.GetByIdAsync(id, Arg.Any<CancellationToken>()).Returns(definition);
+
+            var offered = allowedToolNames
+                          .Select(static toolName => new AllowedToolDto
+                          {
+                              Id = Guid.NewGuid(),
+                              Name = toolName,
+                              Location = ToolLocation.ClientLocal,
+                              ParameterSchema = "{\"type\":\"object\"}",
+                              RequiresApproval = false
+                          })
+                          .ToArray();
+            _resolver.ResolveAsync(id, Arg.Any<string?>(), Arg.Any<string?>(), Arg.Any<bool>(), Arg.Any<bool>(), Arg.Any<bool>(), Arg.Any<CancellationToken>())
+                     .Returns(new ResolvedAgentRuntime(resolvedPrompt, offered, Model, reasoningEffort, 1, id, name, skills));
             return id;
         }
 
@@ -408,6 +664,7 @@ public sealed class SubAgentSpawnServiceTests
                     QueueWaitSeconds = 5
                 }),
                 _instructionProvider,
+                _modelCapabilityResolver,
                 NullLoggerFactory.Instance,
                 NullLogger<SubAgentSpawnService>.Instance);
         }

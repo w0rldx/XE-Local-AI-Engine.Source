@@ -50,8 +50,9 @@ public sealed class ImageJobCoordinatorTests
 
         var second = await harness.Coordinator.EnqueueAsync(NewInput("second"), CancellationToken.None).ConfigureAwait(false);
 
-        // The single generation slot is held by the first job; the second must stay Queued and never reach the runtime.
-        await Task.Delay(millisecondsDelay: 150).ConfigureAwait(false);
+        // The single generation slot is held by the first (blocked) job, so the second job's detached run task is parked
+        // on _generationSlot.WaitAsync and cannot reach the runtime or flip to Generating until the first releases. That
+        // is a structural guarantee, not a timing one, so the second is observably still Queued with no wall-clock wait.
         var secondView = await harness.Coordinator.GetAsync(second, CancellationToken.None).ConfigureAwait(false);
         AssertEx.Equal(ImageJobStatus.Queued, AssertEx.NotNull(secondView).Status);
         AssertEx.Equal(expected: 1, harness.Runtime.CallCount);

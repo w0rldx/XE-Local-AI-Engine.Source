@@ -34,7 +34,8 @@ export interface NodeChatStreamRequestDto {
 		repeatLastN?: number;
 		presencePenalty?: number;
 		frequencyPenalty?: number;
-		seed?: number;
+		// Seed rides the wire as a precision-safe string (mirrors the backend SamplingOptions.Seed contract).
+		seed?: string;
 		stop?: string[];
 		numCtx?: number;
 	};
@@ -66,7 +67,8 @@ export interface NodeChatStreamEventDto {
 	result?: string | null;
 	isError?: boolean | null;
 	// Notice fields: present on the `assistant-notice` event only. `noticeKind` is one of "ModelSubstituted" |
-	// "ToolDisabled" | "HistoryTruncated"; `noticeMessage` is the sanitized, user-facing sentence to display verbatim.
+	// "ToolDisabled" | "HistoryTruncated" | "AttachmentsWithheld"; unknown kinds render via the generic fallback.
+	// `noticeMessage` is the sanitized, user-facing sentence to display verbatim.
 	noticeKind?: string | null;
 	noticeMessage?: string | null;
 }

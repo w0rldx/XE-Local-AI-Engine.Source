@@ -67,6 +67,38 @@ public sealed class AgentExecutionLogRetentionServiceTests : IDisposable
     }
 
     [Test]
+    public async Task ExecuteAsync_SweepsOnceAtStartup_BeforeTheFirstInterval()
+    {
+        var agentId = Guid.NewGuid();
+        await using var provider = await BuildProviderAsync("retention-startup-sweep.sqlite").ConfigureAwait(false);
+
+        await using (var seedScope = provider.CreateAsyncScope())
+        {
+            // An expired row present at startup.
+            _ = await SeedRowAsync(seedScope.ServiceProvider, agentId, createdAtUtc: 0L).ConfigureAwait(false);
+        }
+
+        // A one-hour interval the test never waits out: any deletion must come from the startup sweep, not a periodic tick.
+        using var service = CreateService(provider, new AgentExecutionLogRetentionOptions
+        {
+            Enabled = true,
+            RetentionDays = 30,
+            SweepInterval = TimeSpan.FromHours(1)
+        });
+
+        await service.StartAsync(CancellationToken.None).ConfigureAwait(false);
+        await AssertEx.EventuallyAsync(() =>
+            {
+                using var scope = provider.CreateScope();
+                var store = scope.ServiceProvider.GetRequiredService<IAgentExecutionLogStore>();
+                return store.ListByAgentAsync(agentId, limit: 10).GetAwaiter().GetResult().Count == 0;
+            },
+            TimeSpan.FromSeconds(5),
+            "The startup sweep should delete the expired row before the first periodic interval.").ConfigureAwait(false);
+        await service.StopAsync(CancellationToken.None).ConfigureAwait(false);
+    }
+
+    [Test]
     public async Task ExecuteAsync_WhenDisabled_DoesNotSweep()
     {
         var agentId = Guid.NewGuid();
@@ -85,10 +117,14 @@ public sealed class AgentExecutionLogRetentionServiceTests : IDisposable
         });
 
         await service.StartAsync(CancellationToken.None).ConfigureAwait(false);
-        // Wait three sweep intervals (3 × 50 ms) to give the disabled service ample time to
-        // accidentally sweep, then assert it did not. A disabled service won't start the timer
-        // at all, but this margin guards against implementation changes.
-        await Task.Delay(150).ConfigureAwait(false);
+        // A disabled sweeper returns from ExecuteAsync immediately without arming the timer. Await that completion
+        // signal deterministically (rather than sleeping) to prove the background loop ran to completion — so any
+        // regression that swept while disabled would have already run before the row-count assertion below.
+        if (service.ExecuteTask is { } executeTask)
+        {
+            await executeTask.WaitAsync(TimeSpan.FromSeconds(5)).ConfigureAwait(false);
+        }
+
         await service.StopAsync(CancellationToken.None).ConfigureAwait(false);
 
         using var scope = provider.CreateScope();

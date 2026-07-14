@@ -218,7 +218,7 @@ From `Client/Program.cs`, the host performs a deterministic startup before servi
    static files, health checks, `LocalApiSecurityMiddleware`, auth, FastEndpoints, hubs, (dev) Scalar +
    Agent DevUI, SPA fallback.
 
-Persistence specifics (encrypted SQLite, the ~28 EF migrations, recovery services) are covered in
+Persistence specifics (encrypted SQLite, the 36 EF migrations, recovery services) are covered in
 [Data & Persistence](08-data-and-persistence.md).
 
 ---

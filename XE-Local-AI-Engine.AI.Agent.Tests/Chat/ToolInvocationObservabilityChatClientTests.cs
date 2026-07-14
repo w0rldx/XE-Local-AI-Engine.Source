@@ -118,7 +118,7 @@ public sealed class ToolInvocationObservabilityChatClientTests
     }
 
     [Test]
-    public async Task GetStreamingResponseAsync_WithFunctionCallContent_CreatesToolInvocationActivity()
+    public async Task GetStreamingResponseAsync_WithFunctionCallContent_CreatesToolCallRequestedActivity()
     {
         var callId = $"call-{Guid.NewGuid():N}";
         using var innerClient = new FakeChatClient(callId, "approve-job");
@@ -152,7 +152,7 @@ public sealed class ToolInvocationObservabilityChatClientTests
         }
 
         AssertEx.ContainsSingle(stoppedActivities,
-            activity => string.Equals(activity.OperationName, "AgentRun.ToolInvocation", StringComparison.Ordinal)
+            activity => string.Equals(activity.OperationName, "AgentRun.ToolCallRequested", StringComparison.Ordinal)
                         && string.Equals(activity.CallId, callId, StringComparison.Ordinal)
                         && string.Equals(activity.ToolName, "approve-job", StringComparison.Ordinal));
     }
@@ -194,7 +194,7 @@ public sealed class ToolInvocationObservabilityChatClientTests
         AssertEx.ContainsSingle(logger.Messages, message => message.Contains("AgentRunToolInvoked", StringComparison.Ordinal)
                                                             && message.Contains(callId, StringComparison.Ordinal));
         AssertEx.ContainsSingle(stoppedActivities,
-            activity => string.Equals(activity.OperationName, "AgentRun.ToolInvocation", StringComparison.Ordinal)
+            activity => string.Equals(activity.OperationName, "AgentRun.ToolCallRequested", StringComparison.Ordinal)
                         && string.Equals(activity.CallId, callId, StringComparison.Ordinal));
     }
 

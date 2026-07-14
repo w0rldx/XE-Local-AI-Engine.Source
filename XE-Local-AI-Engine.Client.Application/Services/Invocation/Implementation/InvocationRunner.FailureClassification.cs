@@ -27,6 +27,12 @@ public sealed partial class InvocationRunner
             // client) but carries its own fixed, path-free runaway-loop message. Matches before the generic
             // InvalidOperationException/agent-runtime arms below (it derives from InvalidOperationException).
             ProviderCallBudgetExceededException providerCallBudgetExceeded => (FailureCategory.ContextWindowExceeded, providerCallBudgetExceeded.Message),
+            // A single irreducible provider round (its pinned set alone exceeds the context window): the per-round
+            // boundary fails it before the provider is called. Reuses ContextWindowExceeded (a new FailureCategory value
+            // would drift the generated OpenAPI/zod client) but carries its own fixed, path-free message; the bounded
+            // token/window diagnostics it also holds are logged server-side, never surfaced. Matches before the generic
+            // InvalidOperationException/agent-runtime arms below (it derives from InvalidOperationException).
+            ProviderContextWindowExceededException providerContextWindowExceeded => (FailureCategory.ContextWindowExceeded, providerContextWindowExceeded.Message),
             // A tripped circuit breaker: surface a fixed, retry-soon message rather than the generic ProviderUnreachable
             // (the endpoint is likely recovering, not permanently down). Matches before the StreamIdle/TimeoutException
             // arm because it is not a TimeoutException.

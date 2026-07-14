@@ -2,6 +2,8 @@ namespace XE_Local_AI_Engine.Client.Persistence.Tests;
 
 using System.Security.Cryptography;
 using Microsoft.Data.Sqlite;
+using Microsoft.EntityFrameworkCore;
+using XE_Local_AI_Engine.Client.Persistence;
 using XE_Local_AI_Engine.Client.Persistence.Implementation;
 using XE_Local_AI_Engine.Client.Persistence.Stores;
 using XE_Local_AI_Engine.Client.Persistence.Tests.Testing;
@@ -477,6 +479,177 @@ public sealed class AdaptiveAgentMemoryStoreTests : IDisposable
         AssertEx.Equal(expected: 0, await store.TrimToMaxPerAgentAsync(0));
         AssertEx.Equal(expected: 0, await store.TrimToMaxPerAgentAsync(-5));
         AssertEx.Equal(expected: 1, (await store.ListByAgentAsync(agentDefinitionId, limit: 10)).Count);
+    }
+
+    [Test]
+    public async Task RunEnvelopeRow_IsExcludedFromAdaptiveMemoryDiagnosticsView()
+    {
+        var databasePath = GetDatabasePath("run-envelope-excluded.sqlite");
+        using var keyHolder = new FixedNodeSqliteKeyHolder(CreateKeyMaterial());
+        var agentId = Guid.NewGuid();
+
+        await using var context = CreateContext(databasePath, keyHolder);
+        await context.Database.EnsureDeletedAsync();
+        await context.Database.EnsureCreatedAsync();
+        var store = new AgentExecutionLogStore(context, TimeProvider.System);
+
+        _ = await store.AddAsync(new AgentExecutionLogInput(agentId, ConversationId: null, MessageId: null, "llama", "h", LatencyMs: 5L, Success: true));
+        await AddEnvelopeRowAsync(context, conversationId: null, Guid.NewGuid(), "completed", success: true);
+
+        // The diagnostics read for the real agent returns only its memory row, never the envelope row.
+        var agentView = await store.ListByAgentAsync(agentId, limit: 10);
+        AssertEx.Equal(expected: 1, agentView.Count);
+        AssertEx.Equal(agentId, agentView[0].AgentDefinitionId);
+
+        // The envelope row is stored under Guid.Empty but the kind filter still excludes it, so the view is empty.
+        var emptyAgentView = await store.ListByAgentAsync(Guid.Empty, limit: 10);
+        AssertEx.Equal(expected: 0, emptyAgentView.Count);
+
+        // Both rows physically exist in the shared table.
+        var allRows = await context.AgentExecutionLogs.AsNoTracking().ToListAsync();
+        AssertEx.Equal(expected: 2, allRows.Count);
+    }
+
+    [Test]
+    public async Task DeleteOlderThanAsync_PrunesRunEnvelopeRowsByTable()
+    {
+        var databasePath = GetDatabasePath("run-envelope-retention.sqlite");
+        using var keyHolder = new FixedNodeSqliteKeyHolder(CreateKeyMaterial());
+        var agentId = Guid.NewGuid();
+        var clock = new MutableTimeProvider(1_000);
+
+        await using var context = CreateContext(databasePath, keyHolder);
+        await context.Database.EnsureDeletedAsync();
+        await context.Database.EnsureCreatedAsync();
+        var store = new AgentExecutionLogStore(context, clock);
+
+        // One memory row and one envelope row, both stamped old (1_000).
+        _ = await store.AddAsync(new AgentExecutionLogInput(agentId, ConversationId: null, MessageId: null, "llama", "h", LatencyMs: 1L, Success: true));
+        await AddEnvelopeRowAsync(context, conversationId: null, Guid.NewGuid(), "completed", success: true, createdAtUtc: 1_000L);
+
+        // Retention operates on the whole table, so the sweep prunes BOTH producers' rows regardless of kind.
+        var deleted = await store.DeleteOlderThanAsync(1_500);
+
+        AssertEx.Equal(expected: 2, deleted);
+        AssertEx.Empty(await context.AgentExecutionLogs.AsNoTracking().ToListAsync());
+    }
+
+    [Test]
+    public async Task RunEnvelopeUniqueIndex_RejectsDuplicateMessageIdAtDatabaseLevel()
+    {
+        var databasePath = GetDatabasePath("run-envelope-unique-index.sqlite");
+        using var keyHolder = new FixedNodeSqliteKeyHolder(CreateKeyMaterial());
+        var messageId = Guid.NewGuid();
+
+        await using var context = CreateContext(databasePath, keyHolder);
+        await context.Database.EnsureDeletedAsync();
+        await context.Database.EnsureCreatedAsync();
+
+        // Insert two envelope rows for the same message id directly (bypassing the store's find-check) to prove the
+        // filtered UNIQUE index — not just the app-level check — is the durability guard that can never duplicate.
+        context.AgentExecutionLogs.Add(NewEnvelope(messageId));
+        _ = await context.SaveChangesAsync();
+
+        context.AgentExecutionLogs.Add(NewEnvelope(messageId));
+        _ = await AssertEx.ThrowsAsync<DbUpdateException>(() => context.SaveChangesAsync());
+
+        static Entities.AgentExecutionLog NewEnvelope(Guid messageId)
+        {
+            return new Entities.AgentExecutionLog
+            {
+                Id = Guid.NewGuid(),
+                RecordKind = (int)AgentExecutionLogRecordKind.ChatRunEnvelope,
+                SchemaVersion = AgentRunEnvelope.CurrentSchemaVersion,
+                AgentDefinitionId = Guid.Empty,
+                MessageId = messageId,
+                ModelName = string.Empty,
+                ConfigHash = string.Empty,
+                TerminalStatus = "completed",
+                CreatedAtUtc = 1L
+            };
+        }
+    }
+
+    [Test]
+    public async Task ListRunEnvelopesAsync_FiltersByConversation_AndExcludesMemoryRows()
+    {
+        var databasePath = GetDatabasePath("run-envelope-list.sqlite");
+        using var keyHolder = new FixedNodeSqliteKeyHolder(CreateKeyMaterial());
+        var conversationA = Guid.NewGuid();
+        var conversationB = Guid.NewGuid();
+
+        await using var context = CreateContext(databasePath, keyHolder);
+        await context.Database.EnsureDeletedAsync();
+        await context.Database.EnsureCreatedAsync();
+        var store = new AgentExecutionLogStore(context, TimeProvider.System);
+
+        await AddEnvelopeRowAsync(context, conversationA, Guid.NewGuid(), "completed", success: true);
+        await AddEnvelopeRowAsync(context, conversationB, Guid.NewGuid(), "failed", success: false);
+        // A memory-diagnostics row for conversationA must never appear in the run-envelope read path.
+        _ = await store.AddAsync(new AgentExecutionLogInput(Guid.NewGuid(), conversationA, MessageId: null, "llama", "h", LatencyMs: 3L, Success: true));
+
+        var conversationAEnvelopes = await store.ListRunEnvelopesAsync(conversationA, limit: 10);
+        AssertEx.Equal(expected: 1, conversationAEnvelopes.Count);
+        AssertEx.Equal(conversationA, conversationAEnvelopes[0].ConversationId);
+        AssertEx.Equal("completed", conversationAEnvelopes[0].TerminalStatus);
+        AssertEx.Equal(AgentRunEnvelope.CurrentSchemaVersion, conversationAEnvelopes[0].SchemaVersion);
+
+        var allEnvelopes = await store.ListRunEnvelopesAsync(conversationId: null, limit: 10);
+        AssertEx.Equal(expected: 2, allEnvelopes.Count);
+    }
+
+    [Test]
+    public async Task ConversationFootprintPurge_DeletesEnvelopeAndMemoryExecutionLogs()
+    {
+        var databasePath = GetDatabasePath("run-envelope-purge.sqlite");
+        using var keyHolder = new FixedNodeSqliteKeyHolder(CreateKeyMaterial());
+        var purgedConversation = Guid.NewGuid();
+        var keptConversation = Guid.NewGuid();
+
+        await using var context = CreateContext(databasePath, keyHolder);
+        await context.Database.EnsureDeletedAsync();
+        await context.Database.EnsureCreatedAsync();
+        var store = new AgentExecutionLogStore(context, TimeProvider.System);
+
+        // Both producers write plaintext conversation correlations: a run envelope and a memory-diagnostics row.
+        await AddEnvelopeRowAsync(context, purgedConversation, Guid.NewGuid(), "completed", success: true);
+        _ = await store.AddAsync(new AgentExecutionLogInput(Guid.NewGuid(), purgedConversation, Guid.NewGuid(), "llama", "h", LatencyMs: 2L, Success: true));
+        // A different conversation's rows must survive the purge.
+        await AddEnvelopeRowAsync(context, keptConversation, Guid.NewGuid(), "completed", success: true);
+
+        await ConversationFootprintPurge.DeleteAsync(context, purgedConversation, CancellationToken.None);
+
+        var remaining = await context.AgentExecutionLogs.AsNoTracking().ToListAsync();
+        AssertEx.True(remaining.All(log => log.ConversationId != purgedConversation),
+            "No agent_execution_logs rows (envelope or memory) may remain for a purged conversation.");
+        AssertEx.Equal(expected: 1, remaining.Count(log => log.ConversationId == keptConversation));
+    }
+
+    // Inserts a run-envelope row directly through the internal DbSet to set up read / retention / purge scenarios; the
+    // production write path is the terminalize persistence command (covered by the chat/recovery integration tests).
+    private static async Task AddEnvelopeRowAsync(NodeChatDbContext context,
+        Guid? conversationId,
+        Guid? messageId,
+        string terminalStatus,
+        bool success,
+        long createdAtUtc = 1L)
+    {
+        _ = context.AgentExecutionLogs.Add(new Entities.AgentExecutionLog
+        {
+            Id = Guid.NewGuid(),
+            RecordKind = (int)AgentExecutionLogRecordKind.ChatRunEnvelope,
+            SchemaVersion = AgentRunEnvelope.CurrentSchemaVersion,
+            AgentDefinitionId = Guid.Empty,
+            ConversationId = conversationId,
+            MessageId = messageId,
+            ModelName = string.Empty,
+            ConfigHash = string.Empty,
+            TerminalStatus = terminalStatus,
+            Success = success,
+            CreatedAtUtc = createdAtUtc
+        });
+
+        _ = await context.SaveChangesAsync();
     }
 
     private static async Task<Guid> SeedAgentAsync(NodeChatDbContext context)

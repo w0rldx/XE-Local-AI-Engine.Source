@@ -1,8 +1,11 @@
 namespace XE_Local_AI_Engine.Tests.Configuration;
 
+using System.Diagnostics.Metrics;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
+using OpenTelemetry;
+using OpenTelemetry.Metrics;
 using XE_Local_AI_Engine.Tests.Testing;
 
 // Composition contract for AddServiceDefaults (ServiceDefaults/Extensions.cs), MED-005:
@@ -25,6 +28,43 @@ public sealed class ServiceDefaultsTelemetryTests
     // AddServiceDiscovery() registers types from this assembly; used here as the observable proxy for the whole
     // ASPIRE_ENABLED-gated block (service discovery + the global ConfigureHttpClientDefaults resilience/discovery).
     private const string ServiceDiscoveryAssembly = "Microsoft.Extensions.ServiceDiscovery";
+
+    // Must match the Meter name in XE_Local_AI_Engine.AI.Agent.Chat.ProviderCallBudgetChatClient. The MED-007 fix adds
+    // this name to the WithMetrics AddMeter list so the agent's provider-round / budget counters are actually exported.
+    private const string AgentBudgetMeterName = "XE.LocalAiEngine.AI.Agent";
+
+    [Test]
+    public void ConfigureOpenTelemetry_RegistersAgentBudgetMeter_SoItsInstrumentsAreExported()
+    {
+        var builder = Host.CreateEmptyApplicationBuilder(new HostApplicationBuilderSettings
+        {
+            ApplicationName = "ServiceDefaultsTelemetryTests",
+            EnvironmentName = "Development"
+        });
+        builder.Configuration.AddInMemoryCollection(new Dictionary<string, string?>());
+
+        // The exporter (owned by the reader, disposed with the MeterProvider on host disposal) writes exported meter
+        // names into this closure list so the assertion does not have to hold the exporter alive itself.
+        var exportedMeterNames = new List<string>();
+        builder.AddServiceDefaults();
+        // Compose an in-test reader onto the same MeterProvider AddServiceDefaults configured (WithMetrics is additive),
+        // so what gets exported reflects the production AddMeter set — not a reader we configured in isolation.
+        builder.Services.AddOpenTelemetry()
+               .WithMetrics(metrics => metrics.AddReader(new BaseExportingMetricReader(new RecordingMetricExporter(exportedMeterNames))));
+
+        using var host = builder.Build();
+        var meterProvider = host.Services.GetRequiredService<MeterProvider>();
+
+        // A counter on a Meter whose NAME matches the agent budget meter. OpenTelemetry collects an instrument only when
+        // its meter name was registered via AddMeter, so this measurement is exported iff the MED-007 registration is present.
+        using var meter = new Meter(AgentBudgetMeterName);
+        meter.CreateCounter<long>("xe.agent.provider_rounds.export_probe").Add(1);
+
+        meterProvider.ForceFlush();
+
+        AssertEx.True(exportedMeterNames.Contains(AgentBudgetMeterName),
+            $"The '{AgentBudgetMeterName}' meter must be exported; ConfigureOpenTelemetry must AddMeter it (MED-007).");
+    }
 
     [Test]
     public void DesktopMode_NoOtlpEndpoint_RegistersInstrumentationButNoExporterOrServiceDiscovery()
@@ -118,5 +158,22 @@ public sealed class ServiceDefaultsTelemetryTests
     private static bool MatchesAssembly(Type? type, string assemblyName)
     {
         return string.Equals(type?.Assembly.GetName().Name, assemblyName, StringComparison.Ordinal);
+    }
+
+    // Records the meter name of every exported metric into a caller-owned list so a test can assert a given meter's
+    // instruments flowed through the configured MeterProvider (i.e. were registered via AddMeter).
+    private sealed class RecordingMetricExporter(List<string> exportedMeterNames) : BaseExporter<Metric>
+    {
+        private readonly List<string> _exportedMeterNames = exportedMeterNames;
+
+        public override ExportResult Export(in Batch<Metric> batch)
+        {
+            foreach (var metric in batch)
+            {
+                _exportedMeterNames.Add(metric.MeterName);
+            }
+
+            return ExportResult.Success;
+        }
     }
 }
