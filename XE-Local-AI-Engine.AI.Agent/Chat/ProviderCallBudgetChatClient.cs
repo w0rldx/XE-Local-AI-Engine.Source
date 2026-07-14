@@ -27,6 +27,7 @@ internal sealed class ProviderCallBudgetChatClient : DelegatingChatClient
     private static readonly Counter<long> MessagesDroppedCounter = Meter.CreateCounter<long>("xe.agent.budget.messages_dropped", description: "History messages dropped by per-round budgeting.");
     private static readonly Counter<long> ToolResultsTruncatedCounter = Meter.CreateCounter<long>("xe.agent.budget.tool_results_truncated", description: "Oversized tool results excerpted by per-round budgeting.");
     private static readonly Counter<long> CeilingExceededCounter = Meter.CreateCounter<long>("xe.agent.budget.ceiling_exceeded", description: "Invocations terminated for exceeding a cumulative provider-call ceiling.");
+    private static readonly Counter<long> ContextWindowExceededCounter = Meter.CreateCounter<long>("xe.agent.budget.context_window_exceeded", description: "Provider rounds rejected because the irreducible message set still exceeded the context window.");
 
     // The Ollama num_ctx option key the invocation factory writes onto ChatOptions.AdditionalProperties when a per-send
     // context window is set; read here so the per-round window matches the window the provider is actually launched with.
@@ -102,6 +103,22 @@ internal sealed class ProviderCallBudgetChatClient : DelegatingChatClient
                 window,
                 reserved,
                 result.ExceedsWindow);
+        }
+
+        // A single round whose pinned set alone still exceeds the window is irreducible: no further trimming can shrink
+        // it (the budgeter already excerpted and dropped everything it may). Sending it would overrun the model's
+        // launched context window or be rejected deep inside the provider with an opaque error, so fail it HERE — before
+        // the inner client is called, in both the sync and streaming paths (both route through ApplyBudget) — with a
+        // classified, sanitized error. The cumulative-ceiling registration below is intentionally skipped: this round
+        // never reaches the provider.
+        if (result.ExceedsWindow)
+        {
+            ContextWindowExceededCounter.Add(1);
+            _logger.LogWarning(
+                "Provider round rejected: irreducible message set still exceeds the context window (~{Tokens} estimated input token(s) over an effective window of {Window}); failing the round before the provider is called.",
+                result.EstimatedTokensAfter,
+                effectiveWindow);
+            throw new ProviderContextWindowExceededException(result.EstimatedTokensAfter, effectiveWindow);
         }
 
         try
