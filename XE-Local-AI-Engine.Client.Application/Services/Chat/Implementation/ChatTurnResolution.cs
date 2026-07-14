@@ -11,4 +11,5 @@ internal sealed record ChatTurnResolution(
     bool SupportsThinking,
     bool SupportsTools,
     bool RequiresInstalledChatModel,
-    bool ActiveModelIsCloud);
+    bool ActiveModelIsCloud,
+    bool EffectiveModelIsCloud);

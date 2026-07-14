@@ -67,7 +67,12 @@ public sealed class ChatTurnResolver(
         // label can never disagree with what ran.
         var effectiveModel = resolved?.ModelProfile ?? activeModel;
 
-        return new ChatTurnResolution(activeModel, effectiveModel, resolved, orchestration, supportsThinking, supportsTools, requiresInstalledChatModel, activeModelIsCloud);
+        // The EFFECTIVE model's provider locality (used to gate node-local private-data exposure — knowledge/file tools
+        // and conversation attachments). The resolver classified the pinned effective model; with no bound agent (or no
+        // pin) the effective model IS the active model, so reuse the active-model flag.
+        var effectiveModelIsCloud = resolved?.EffectiveModelIsCloud ?? activeModelIsCloud;
+
+        return new ChatTurnResolution(activeModel, effectiveModel, resolved, orchestration, supportsThinking, supportsTools, requiresInstalledChatModel, activeModelIsCloud, effectiveModelIsCloud);
     }
 
     /// <summary>
