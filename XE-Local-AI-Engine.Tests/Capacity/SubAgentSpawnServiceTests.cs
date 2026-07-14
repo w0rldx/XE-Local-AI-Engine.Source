@@ -75,6 +75,30 @@ public sealed class SubAgentSpawnServiceTests
     }
 
     [Test]
+    public async Task Spawn_WhenChildDefinitionPinnedToCloudModel_ResolvesToolOfferOnThatCloudModel()
+    {
+        // R1 (HIGH): a spawned sub-agent bound to a definition pinned to a CLOUD model must resolve its tool offer
+        // through the shared AgentDefinitionResolver keyed on the CHILD's effective (pinned) cloud model — the model the
+        // effective-model knowledge-tool locality gate keys on (the gate's withholding is proven end-to-end in
+        // AgentDefinitionResolverTests). This proves the spawn path threads the child's pinned model into that gate,
+        // not the parent turn's active model, so a cloud-pinned spawned profile cannot retain the knowledge tools.
+        using var harness = new Harness();
+        harness.AllowCloud();
+        const string cloudModel = "azure-foundry-deploy";
+        var id = harness.RegisterProfilePinnedTo("cloud-child", cloudModel, "read_file");
+        var service = harness.Build();
+
+        using var root = SpawnContext.BeginRoot(fanOutCap: 3, cloudSpawnCap: 3);
+        await service.SpawnAsync(new SubAgentSpawnRequest
+        {
+            SubAgentKey = id.ToString(),
+            Task = "do it"
+        }, CancellationToken.None);
+
+        await harness.Resolver.Received().ResolveAsync(id, cloudModel, Arg.Any<string?>(), Arg.Any<bool>(), Arg.Any<bool>(), Arg.Any<bool>(), Arg.Any<CancellationToken>());
+    }
+
+    [Test]
     public async Task Spawn_WhenProfileBound_ChildConsumesResolvedSystemPrompt_NotRawInstructions()
     {
         // MED-002: a profile-bound child must run on the RESOLVED system prompt (scaffold + persona + injected playbook
@@ -479,7 +503,7 @@ public sealed class SubAgentSpawnServiceTests
             // Default: the child model advertises the thinking capability, so a resolved reasoning effort is honored on
             // the Ollama think key. A test can flip this to prove a non-thinking model omits the field.
             _modelCapabilityResolver.ResolveAsync(Arg.Any<string?>(), Arg.Any<CancellationToken>())
-                                    .Returns((SupportsThinking: true, SupportsTools: true));
+                                    .Returns((SupportsThinking: true, SupportsTools: true, IsCloud: false));
         }
 
         // Overrides the child model's advertised thinking capability (default true), gating whether a resolved reasoning
@@ -487,12 +511,50 @@ public sealed class SubAgentSpawnServiceTests
         public void WithThinkingCapability(bool supportsThinking)
         {
             _modelCapabilityResolver.ResolveAsync(Arg.Any<string?>(), Arg.Any<CancellationToken>())
-                                    .Returns((SupportsThinking: supportsThinking, SupportsTools: true));
+                                    .Returns((SupportsThinking: supportsThinking, SupportsTools: true, IsCloud: false));
         }
 
         public GateableChatClient ChatClient => _chatClient;
 
+        public IAgentDefinitionResolver Resolver => _resolver;
+
         public bool ReservationDisposed => _reservationDisposed;
+
+        // Registers a bound sub-agent profile pinned to a SPECIFIC model (e.g. a cloud deployment) so an R1 test can
+        // prove the spawn resolves the child's tool offer through the shared resolver keyed on that pinned model — the
+        // effective model the knowledge-tool locality gate keys on (the gate itself is proven in AgentDefinitionResolverTests).
+        public Guid RegisterProfilePinnedTo(string name, string modelProfile, params string[] allowedToolNames)
+        {
+            var id = Guid.NewGuid();
+            var definition = new AgentDefinitionRecord(id,
+                name,
+                Description: null,
+                Instructions: "child instructions",
+                ModelProfile: modelProfile,
+                ReasoningEffort: null,
+                Kind: AgentDefinitionKind.Single,
+                AllowedToolNames: allowedToolNames,
+                ToolApprovals: new Dictionary<string, bool>(StringComparer.Ordinal),
+                OrchestrationTopologyJson: null,
+                Version: 1,
+                CreatedAtUtc: 0,
+                UpdatedAtUtc: 0);
+            _definitionStore.GetByIdAsync(id, Arg.Any<CancellationToken>()).Returns(definition);
+
+            var offered = allowedToolNames
+                          .Select(static toolName => new AllowedToolDto
+                          {
+                              Id = Guid.NewGuid(),
+                              Name = toolName,
+                              Location = ToolLocation.ClientLocal,
+                              ParameterSchema = "{\"type\":\"object\"}",
+                              RequiresApproval = false
+                          })
+                          .ToArray();
+            _resolver.ResolveAsync(id, Arg.Any<string?>(), Arg.Any<string?>(), Arg.Any<bool>(), Arg.Any<bool>(), Arg.Any<bool>(), Arg.Any<CancellationToken>())
+                     .Returns(new ResolvedAgentRuntime("child instructions", offered, modelProfile, null, 1, id, name, []));
+            return id;
+        }
 
         // Registers a profile (subAgentKey → definition) whose resolved AllowedTools are the supplied offer names, so the
         // service curates the child tool set through the real InvocationToolResolver against the fake catalog. Raw and

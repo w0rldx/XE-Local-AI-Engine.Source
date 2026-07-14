@@ -3,6 +3,7 @@ namespace XE_Local_AI_Engine.Tests.Agents;
 using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Options;
 using NSubstitute;
+using XE_Local_AI_Engine.AI.Agent.Tools.Implementation;
 using XE_Local_AI_Engine.Client.Models;
 using XE_Local_AI_Engine.Client.Models.Enums;
 using XE_Local_AI_Engine.Client.Persistence;
@@ -10,6 +11,7 @@ using XE_Local_AI_Engine.Client.Persistence.Stores;
 using XE_Local_AI_Engine.Client.Services.Agents;
 using XE_Local_AI_Engine.Client.Services.Agents.Implementation;
 using XE_Local_AI_Engine.Client.Services.Chat;
+using XE_Local_AI_Engine.Client.Services.Chat.Implementation;
 using XE_Local_AI_Engine.Tests.Testing;
 using XE_Local_AI_Engine.Tests.Testing.Builders;
 
@@ -146,9 +148,9 @@ public sealed class OrchestrationResolverTests
 
         var capabilityResolver = Substitute.For<IModelCapabilityResolver>();
         capabilityResolver.ResolveAsync(thinkingModel, Arg.Any<CancellationToken>())
-                          .Returns(Task.FromResult((SupportsThinking: true, SupportsTools: true)));
+                          .Returns(Task.FromResult((SupportsThinking: true, SupportsTools: true, IsCloud: false)));
         capabilityResolver.ResolveAsync(nonThinkingModel, Arg.Any<CancellationToken>())
-                          .Returns(Task.FromResult((SupportsThinking: false, SupportsTools: true)));
+                          .Returns(Task.FromResult((SupportsThinking: false, SupportsTools: true, IsCloud: false)));
 
         var resolver = new OrchestrationResolver(store,
             playbookStore,
@@ -167,6 +169,73 @@ public sealed class OrchestrationResolverTests
         var specialistSpec = resolved.Spec.Participants.Single(participant => participant.Key == specialist.Id.ToString("D"));
         AssertEx.True(triageSpec.SupportsThinking, "a participant pinned to a thinking-capable model must resolve SupportsThinking=true");
         AssertEx.False(specialistSpec.SupportsThinking, "a participant pinned to a non-thinking model must resolve SupportsThinking=false even when the turn model can think");
+    }
+
+    [Test]
+    public async Task ResolveAsync_WhenParticipantPinnedToCloudModel_OnLocalActiveTurn_WithholdsKnowledgeTools()
+    {
+        // R1 (HIGH): the turn's active model is LOCAL, but a participant pins a CLOUD model. That participant's
+        // knowledge tools must be gated on ITS OWN effective model's locality, resolved per participant.
+        var resolved = await ResolveWithCloudPinnedParticipantAsync(allowCloudKnowledgeAccess: false).ConfigureAwait(false);
+
+        AssertEx.NotNull(resolved);
+        var localTriage = resolved!.Spec.Participants.Single(participant => participant.Name == "Triage");
+        var cloudSpecialist = resolved.Spec.Participants.Single(participant => participant.Name == "Specialist");
+        AssertEx.Contains(localTriage.Tools, tool => tool.Name == KnowledgeSearchToolName);
+        AssertEx.False(cloudSpecialist.Tools.Any(tool => tool.Name == KnowledgeSearchToolName),
+            "a cloud-pinned participant must not be offered the knowledge tools even on a local-active turn");
+    }
+
+    [Test]
+    public async Task ResolveAsync_WhenParticipantPinnedToCloudModel_AndOperatorOptedIn_OffersKnowledgeTools()
+    {
+        var resolved = await ResolveWithCloudPinnedParticipantAsync(allowCloudKnowledgeAccess: true).ConfigureAwait(false);
+
+        AssertEx.NotNull(resolved);
+        var cloudSpecialist = resolved!.Spec.Participants.Single(participant => participant.Name == "Specialist");
+        AssertEx.Contains(cloudSpecialist.Tools, tool => tool.Name == KnowledgeSearchToolName);
+    }
+
+    private const string KnowledgeSearchToolName = "search_knowledge_base";
+    private const string CloudParticipantModel = "azure-foundry-deploy";
+
+    private static async Task<ResolvedOrchestration?> ResolveWithCloudPinnedParticipantAsync(bool allowCloudKnowledgeAccess)
+    {
+        var triage = CreateDefinition("Triage", modelProfile: ToolCapableModel, allowedTools: [KnowledgeSearchToolName]);
+        var specialist = CreateDefinition("Specialist", modelProfile: CloudParticipantModel, allowedTools: [KnowledgeSearchToolName]);
+        var orchestrator = CreateOrchestrator(ToolCapableModel, triage, [triage, specialist]);
+
+        var store = Substitute.For<IAgentDefinitionStore>();
+        var playbookStore = Substitute.For<IPlaybookActionStore>();
+        playbookStore.ListEnabledByAgentAsync(Arg.Any<Guid>(), Arg.Any<CancellationToken>())
+                     .Returns(Task.FromResult<IReadOnlyList<PlaybookActionRecord>>([]));
+
+        // REAL offer provider so the actual withholding is observed. BOTH participant models are tool-capable, so the
+        // knowledge tools WOULD be offered but for the per-participant locality gate.
+        var offerProvider = new LocalToolOfferProvider(new LocalAgentToolRegistry(),
+            new McpToolRegistry(NullLogger<McpToolRegistry>.Instance),
+            [ToolCapableModel, CloudParticipantModel],
+            allowCloudKnowledgeAccess);
+        var runtimeSettings = StubNodeRuntimeSettings.Create().WithToolCapableModels(ToolCapableModel, CloudParticipantModel).Build();
+
+        var capabilityResolver = Substitute.For<IModelCapabilityResolver>();
+        capabilityResolver.ResolveAsync(ToolCapableModel, Arg.Any<CancellationToken>())
+                          .Returns(Task.FromResult((SupportsThinking: true, SupportsTools: true, IsCloud: false)));
+        capabilityResolver.ResolveAsync(CloudParticipantModel, Arg.Any<CancellationToken>())
+                          .Returns(Task.FromResult((SupportsThinking: false, SupportsTools: true, IsCloud: true)));
+
+        var resolver = new OrchestrationResolver(store,
+            playbookStore,
+            offerProvider,
+            new LexicalPlaybookRetrievalRanker(),
+            Options.Create(new PlaybookRetrievalOptions()),
+            runtimeSettings,
+            capabilityResolver,
+            NullLogger<OrchestrationResolver>.Instance);
+        SeedParticipants(store, triage, specialist);
+
+        // Active turn model is LOCAL (ToolCapableModel).
+        return await resolver.ResolveAsync(orchestrator, ToolCapableModel).ConfigureAwait(false);
     }
 
     [Test]
@@ -373,7 +442,7 @@ public sealed class OrchestrationResolverTests
     {
         var resolver = Substitute.For<IModelCapabilityResolver>();
         resolver.ResolveAsync(Arg.Any<string?>(), Arg.Any<CancellationToken>())
-                .Returns(Task.FromResult((SupportsThinking: false, SupportsTools: true)));
+                .Returns(Task.FromResult((SupportsThinking: false, SupportsTools: true, IsCloud: false)));
         return resolver;
     }
 

@@ -30,13 +30,13 @@ public interface IOrchestrationResolver
     ///     tool offer is withheld (the model cannot drive tool calls), independent of the existing per-tool
     ///     <c>ToolCapableModels</c> name allow-list. Defaults to <c>true</c> so callers that do not gate keep today's behaviour.
     /// </param>
-    /// <param name="activeModelIsCloud">
-    ///     Whether the turn's active model is cloud-hosted (Codex OAuth / Azure Foundry). Gates each participant's
-    ///     knowledge-base tools off the offer for a cloud model unless the operator opted in via
-    ///     <c>KnowledgeBase:AllowCloudModelAccess</c>. Defaults to <c>false</c> (local).
-    /// </param>
+    /// <remarks>
+    ///     Provider locality for the knowledge-tool gate is resolved PER PARTICIPANT from each participant's own
+    ///     effective (post-pin) model, not from the turn's active model, so a cloud-pinned participant is withheld the
+    ///     knowledge tools even when the active model is local. There is therefore no turn-level cloud flag here.
+    /// </remarks>
     Task<ResolvedOrchestration?> ResolveAsync(AgentDefinitionRecord orchestrator, string? activeModelId, string? retrievalQuery = null, bool supportsTools = true,
-        bool activeModelIsCloud = false, CancellationToken cancellationToken = default);
+        CancellationToken cancellationToken = default);
 }
 
 /// <summary>

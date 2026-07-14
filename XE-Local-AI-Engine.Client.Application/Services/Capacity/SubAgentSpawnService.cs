@@ -291,9 +291,12 @@ internal sealed class SubAgentSpawnService : ISubAgentSpawnService
         // (resolution.SupportsThinking) and the orchestration-participant path (participant.SupportsThinking) gate
         // theirs: a non-thinking Ollama model 400s on think:true/level, so ParticipantReasoningOptions omits the field
         // for it. Cache-first; no probe on a cache hit.
-        var (supportsThinking, _) = await _modelCapabilityResolver
-                                          .ResolveAsync(definition.ModelProfile, ct)
-                                          .ConfigureAwait(false);
+        // The child's knowledge-tool locality gate is applied inside AgentDefinitionResolver above (it classifies the
+        // pinned effective model, which for a spawned child IS definition.ModelProfile), so only the thinking bit is
+        // taken here; the locality element is ignored.
+        var (supportsThinking, _, _) = await _modelCapabilityResolver
+                                             .ResolveAsync(definition.ModelProfile, ct)
+                                             .ConfigureAwait(false);
 
         return new ResolvedBinding(definition.ModelProfile!,
             resolved.ResolvedSystemPrompt,

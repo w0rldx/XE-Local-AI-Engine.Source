@@ -4,6 +4,7 @@ using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Options;
 using NSubstitute;
 using XE_Local_AI_Engine.AI.Agent.Instructions;
+using XE_Local_AI_Engine.AI.Agent.Tools.Implementation;
 using XE_Local_AI_Engine.Client.Models;
 using XE_Local_AI_Engine.Client.Models.Enums;
 using XE_Local_AI_Engine.Client.Persistence;
@@ -231,6 +232,52 @@ public sealed class AgentDefinitionResolverTests
         AssertEx.NotNull(resolved);
         AssertEx.Equal(expected: 1, resolved!.AllowedTools.Count);
         AssertEx.Equal("Calculate", resolved.AllowedTools[0].Name);
+    }
+
+    // ---- R1: knowledge-tool locality gates on the EFFECTIVE (post-pin) model, not the turn's active model ----
+
+    private const string KnowledgeSearchToolName = "search_knowledge_base";
+    private const string CloudPinnedModel = "azure-foundry-deploy";
+
+    [Test]
+    public async Task ResolveAsync_WhenAgentPinnedToCloudModel_OnLocalActiveTurn_WithholdsKnowledgeToolsByDefault()
+    {
+        // R1 (HIGH): the turn's active model is LOCAL, but the agent pins a CLOUD model. The knowledge tools must be
+        // gated on the pinned effective model's locality — otherwise a cloud-pinned agent leaks node-local documents.
+        var capabilityResolver = Substitute.For<IModelCapabilityResolver>();
+        capabilityResolver.ResolveAsync(CloudPinnedModel, Arg.Any<CancellationToken>())
+                          .Returns(Task.FromResult((SupportsThinking: false, SupportsTools: true, IsCloud: true)));
+
+        var resolver = BuildRealOfferResolver(out var store, allowCloudKnowledgeAccess: false, capabilityResolver);
+        var definition = CreateDefinition(allowedTools: [KnowledgeSearchToolName, "GetCurrentTime"], modelProfile: CloudPinnedModel);
+        store.GetByIdAsync(definition.Id, Arg.Any<CancellationToken>()).Returns(definition);
+
+        // Active model local (activeModelIsCloud: false); pin is cloud.
+        var resolved = await resolver.ResolveAsync(definition.Id, "qwen3:8b", retrievalQuery: null, supportsTools: true, honorModelProfile: true, activeModelIsCloud: false)
+                                     .ConfigureAwait(false);
+
+        AssertEx.NotNull(resolved);
+        AssertEx.False(resolved!.AllowedTools.Any(tool => tool.Name == KnowledgeSearchToolName),
+            "a cloud-PINNED agent must not be offered the knowledge tools even when the turn's active model is local");
+    }
+
+    [Test]
+    public async Task ResolveAsync_WhenAgentPinnedToCloudModel_AndOperatorOptedIn_OffersKnowledgeTools()
+    {
+        var capabilityResolver = Substitute.For<IModelCapabilityResolver>();
+        capabilityResolver.ResolveAsync(CloudPinnedModel, Arg.Any<CancellationToken>())
+                          .Returns(Task.FromResult((SupportsThinking: false, SupportsTools: true, IsCloud: true)));
+
+        var resolver = BuildRealOfferResolver(out var store, allowCloudKnowledgeAccess: true, capabilityResolver);
+        var definition = CreateDefinition(allowedTools: [KnowledgeSearchToolName, "GetCurrentTime"], modelProfile: CloudPinnedModel);
+        store.GetByIdAsync(definition.Id, Arg.Any<CancellationToken>()).Returns(definition);
+
+        var resolved = await resolver.ResolveAsync(definition.Id, "qwen3:8b", retrievalQuery: null, supportsTools: true, honorModelProfile: true, activeModelIsCloud: false)
+                                     .ConfigureAwait(false);
+
+        AssertEx.NotNull(resolved);
+        AssertEx.True(resolved!.AllowedTools.Any(tool => tool.Name == KnowledgeSearchToolName),
+            "the opt-in (KnowledgeBase:AllowCloudModelAccess=true) restores knowledge tools for a cloud-pinned agent");
     }
 
     [Test]
@@ -905,12 +952,39 @@ public sealed class AgentDefinitionResolverTests
             new LexicalPlaybookRetrievalRanker(),
             Options.Create(new PlaybookRetrievalOptions()),
             new FakeAgentInstructionProvider(),
+            Substitute.For<XE_Local_AI_Engine.Client.Services.Chat.IModelCapabilityResolver>(),
             NullLogger<AgentDefinitionResolver>.Instance);
     }
 
     private static AgentSkillRecord SkillRecord(Guid id, string name, string description, string body, int version = 1)
     {
         return new AgentSkillRecord(id, name, description, body, Enabled: true, version, CreatedAtUtc: 10, UpdatedAtUtc: 10);
+    }
+
+    // Builds a resolver over the REAL LocalToolOfferProvider so the R1 tests observe the actual knowledge-tool
+    // withholding (not a mock). CloudPinnedModel is in the tool-capable allow-list, so the knowledge tools WOULD be
+    // offered to it but for the provider-locality gate the resolver now applies to the effective (pinned) model.
+    private static AgentDefinitionResolver BuildRealOfferResolver(out IAgentDefinitionStore store,
+        bool allowCloudKnowledgeAccess,
+        IModelCapabilityResolver capabilityResolver)
+    {
+        store = Substitute.For<IAgentDefinitionStore>();
+        var playbookStore = Substitute.For<IPlaybookActionStore>();
+        playbookStore.ListEnabledByAgentAsync(Arg.Any<Guid>(), Arg.Any<CancellationToken>())
+                     .Returns(Task.FromResult<IReadOnlyList<PlaybookActionRecord>>([]));
+        var offerProvider = new LocalToolOfferProvider(new LocalAgentToolRegistry(),
+            new McpToolRegistry(NullLogger<McpToolRegistry>.Instance),
+            [CloudPinnedModel],
+            allowCloudKnowledgeAccess);
+        return new AgentDefinitionResolver(store,
+            playbookStore,
+            CreateEmptySkillStore(),
+            offerProvider,
+            new LexicalPlaybookRetrievalRanker(),
+            Options.Create(new PlaybookRetrievalOptions()),
+            new FakeAgentInstructionProvider(),
+            capabilityResolver,
+            NullLogger<AgentDefinitionResolver>.Instance);
     }
 
     private static AgentDefinitionResolver BuildResolver(out IAgentDefinitionStore store,
@@ -951,6 +1025,7 @@ public sealed class AgentDefinitionResolverTests
             // "no scaffold" — so every pre-existing tool/playbook/hash test above keeps asserting the bare persona
             // prompt unchanged. Scaffold composition itself is covered by the dedicated tests below.
             instructionProvider ?? new FakeAgentInstructionProvider(),
+            Substitute.For<XE_Local_AI_Engine.Client.Services.Chat.IModelCapabilityResolver>(),
             NullLogger<AgentDefinitionResolver>.Instance);
     }
 
@@ -1021,6 +1096,7 @@ public sealed class AgentDefinitionResolverTests
             ranker,
             retrievalOptions,
             new FakeAgentInstructionProvider(),
+            Substitute.For<XE_Local_AI_Engine.Client.Services.Chat.IModelCapabilityResolver>(),
             NullLogger<AgentDefinitionResolver>.Instance);
     }
 
