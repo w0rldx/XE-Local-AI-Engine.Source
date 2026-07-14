@@ -1,10 +1,13 @@
 namespace XE_Local_AI_Engine.Client.Services.DocumentIngestion;
 
 using System.Buffers;
+using System.Buffers.Binary;
 using System.Globalization;
 using System.IO.Compression;
 using Microsoft.Extensions.DataIngestion;
 using UglyToad.PdfPig;
+using UglyToad.PdfPig.Core;
+using UglyToad.PdfPig.Exceptions;
 using XE_Local_AI_Engine.Client.Services.DocumentIngestion.Extraction;
 
 /// <summary>
@@ -218,53 +221,50 @@ public sealed class DocumentTextExtractor : IDocumentTextExtractor
         };
     }
 
-    // Reads the ZIP central directory (no decompression) and rejects an archive whose declared entry count, summed
-    // declared-uncompressed size, or declared expansion ratio exceeds the ceilings. A stream that is not a readable zip
-    // is NOT rejected here: it falls through so the reader surfaces its own error, rather than duplicating error
-    // semantics. Only a successfully-read central directory that violates a ceiling is rejected.
+    // Two-stage ZIP preflight, both stages reading only the central directory with no decompression. The first stage
+    // reads the declared total-entry count straight from the End Of Central Directory record, WITHOUT constructing a
+    // ZipArchive, and rejects an over-count archive before .NET materializes a ZipArchiveEntry for every member.
+    // Touching ZipArchive.Entries reads the whole central directory and allocates one entry object per member up front,
+    // so a metadata-heavy archive would otherwise allocate hundreds of MB before an in-loop counter could run; the EOCD
+    // check bounds that with zero entry allocations. Only once the declared count is within the ceiling, so
+    // materialization is bounded, does the second stage open ZipArchive and sum the declared sizes with overflow-safe
+    // arithmetic to reject an oversize or oversized-ratio archive. A stream that is not a readable zip is NOT rejected
+    // here: it falls through (return null) so the reader surfaces its own error, rather than duplicating error semantics.
     private string? EvaluateZipPreflight(MemoryStream buffer)
     {
-        // Declared before the try / disposed in the finally so the archive is released on every path (CA2000). A stream
-        // that is not a readable zip throws InvalidDataException from the ctor or the central-directory read; we swallow
-        // it and return null so the reader surfaces its own error instead of us duplicating the failure semantics.
+        // Stage 1: declared entry count from the EOCD record — zero ZipArchiveEntry allocations. A null result means no
+        // well-formed EOCD was found in the bounded search window (a malformed/non-zip stream): fall through so the
+        // reader surfaces its own error, matching the old InvalidDataException path.
+        var declaredEntryCount = TryReadDeclaredZipEntryCount(buffer);
+        if (declaredEntryCount is null)
+        {
+            return null;
+        }
+
+        // A negative Zip64 count is hostile metadata (high bit set when read as signed); reject it like an over-count.
+        if (declaredEntryCount < 0 || declaredEntryCount > _maxCompressedEntries)
+        {
+            return string.Create(CultureInfo.InvariantCulture,
+                $"Compressed document declares more than {_maxCompressedEntries} entries, which exceeds the extraction limit.");
+        }
+
+        // Stage 2: size/ratio pass. Entry materialization is now bounded by the count check above (at most ceiling-count
+        // entry metadata objects). Declared before the try / disposed in the finally so the archive is released on every
+        // path (CA2000). A stream that passed the EOCD check but is not otherwise a readable zip throws
+        // InvalidDataException; we swallow it and return null so the reader surfaces its own error.
         ZipArchive? archive = null;
         try
         {
             // leaveOpen: the reader re-parses this same buffer afterward. Read mode reads only the central directory.
             archive = new ZipArchive(buffer, ZipArchiveMode.Read, leaveOpen: true);
 
-            long declaredUncompressed = 0;
-            long compressed = 0;
-            var entryCount = 0;
-
-            foreach (var entry in archive.Entries)
-            {
-                entryCount++;
-                if (entryCount > _maxCompressedEntries)
-                {
-                    return string.Create(CultureInfo.InvariantCulture,
-                        $"Compressed document declares more than {_maxCompressedEntries} entries, which exceeds the extraction limit.");
-                }
-
-                // Length is the declared uncompressed size from the central directory (cheap, and may be a lie — the
-                // post-parse guards are the backstop). CompressedLength is the on-disk size of the same entry.
-                declaredUncompressed += entry.Length;
-                compressed += entry.CompressedLength;
-            }
-
-            if (declaredUncompressed > _maxDeclaredUncompressedBytes)
-            {
-                return string.Create(CultureInfo.InvariantCulture,
-                    $"Compressed document declares {declaredUncompressed / (1024 * 1024)} MB uncompressed, which exceeds the {_maxDeclaredUncompressedBytes / (1024 * 1024)} MB extraction limit.");
-            }
-
-            if (compressed > 0 && declaredUncompressed > compressed * (long)_maxCompressionRatio)
-            {
-                return string.Create(CultureInfo.InvariantCulture,
-                    $"Compressed document declares a {declaredUncompressed / compressed}x expansion ratio, which exceeds the allowed {_maxCompressionRatio}x extraction limit.");
-            }
-
-            return null;
+            // Length is the declared uncompressed size from the central directory (cheap, and may be a lie — the
+            // post-parse guards are the backstop). CompressedLength is the on-disk size of the same entry. Both are
+            // aggregated overflow-safely in the seam below.
+            return EvaluateDeclaredZipSizes(
+                archive.Entries.Select(static entry => (entry.Length, entry.CompressedLength)),
+                _maxDeclaredUncompressedBytes,
+                _maxCompressionRatio);
         }
         catch (InvalidDataException)
         {
@@ -276,11 +276,159 @@ public sealed class DocumentTextExtractor : IDocumentTextExtractor
         }
     }
 
+    // Overflow- and hostile-metadata-safe aggregation of a ZIP's declared central-directory sizes. Kept as a static
+    // seam (internal + InternalsVisibleTo) so the Zip64 overflow/negative-size rejection paths can be exercised without
+    // forging a binary archive that a real ZipArchive would parse. Returns a content-free rejection reason, or null when
+    // the declared totals are within bounds.
+    internal static string? EvaluateDeclaredZipSizes(IEnumerable<(long Length, long CompressedLength)> entries,
+        long maxDeclaredUncompressedBytes,
+        int maxCompressionRatio)
+    {
+        long declaredUncompressed = 0;
+        long compressed = 0;
+
+        foreach (var (length, compressedLength) in entries)
+        {
+            // Hostile Zip64 central-directory values can be negative (high bit set when read as signed); a negative term
+            // would pull the running total down and slip an oversize archive past the absolute ceiling. Reject instead.
+            if (length < 0 || compressedLength < 0)
+            {
+                return "Compressed document declares an invalid entry size, which exceeds the extraction limit.";
+            }
+
+            // Saturating adds: many individually-valid Zip64 sizes can sum past long.MaxValue and wrap to a small or
+            // negative total that would bypass the ceilings below. Clamp at long.MaxValue so an overflowing total
+            // always REJECTS rather than wrapping.
+            declaredUncompressed = SaturatingAdd(declaredUncompressed, length);
+            compressed = SaturatingAdd(compressed, compressedLength);
+        }
+
+        if (declaredUncompressed > maxDeclaredUncompressedBytes)
+        {
+            return string.Create(CultureInfo.InvariantCulture,
+                $"Compressed document declares {declaredUncompressed / (1024 * 1024)} MB uncompressed, which exceeds the {maxDeclaredUncompressedBytes / (1024 * 1024)} MB extraction limit.");
+        }
+
+        // Ratio guard, overflow-safe: reject when declared > compressed * ratio, but never evaluate the product when it
+        // would overflow long. When it would overflow, the threshold exceeds any representable declared total, so the
+        // ratio cannot be exceeded — the absolute ceiling above is the operative guard for such extreme compressed sizes
+        // (physically impossible within the bounded input buffer, reachable only via lying metadata that the absolute
+        // ceiling already caught).
+        if (compressed > 0 && maxCompressionRatio > 0 && compressed <= long.MaxValue / maxCompressionRatio)
+        {
+            var threshold = compressed * maxCompressionRatio;
+            if (declaredUncompressed > threshold)
+            {
+                return string.Create(CultureInfo.InvariantCulture,
+                    $"Compressed document declares a {declaredUncompressed / compressed}x expansion ratio, which exceeds the allowed {maxCompressionRatio}x extraction limit.");
+            }
+        }
+
+        return null;
+    }
+
+    // Saturating add for non-negative addends: returns long.MaxValue instead of wrapping on overflow.
+    private static long SaturatingAdd(long current, long addend)
+    {
+        return current > long.MaxValue - addend ? long.MaxValue : current + addend;
+    }
+
+    // Reads the declared total-entry count from a ZIP's End Of Central Directory record — and, when that classic field
+    // is saturated (0xFFFF), from the Zip64 EOCD locator + record it points to — over the already-buffered bytes and
+    // WITHOUT constructing a ZipArchive (so no ZipArchiveEntry is allocated). Returns the declared count, or null when
+    // no well-formed EOCD is found within the bounded search window (a malformed/non-zip stream), so the caller falls
+    // through to the reader's own error handling. Strictly bounded: never scans outside the trailing window, and any
+    // structural inconsistency yields null rather than a throw.
+    private static long? TryReadDeclaredZipEntryCount(MemoryStream buffer)
+    {
+        const uint EocdSignature = 0x06054b50;
+        const uint Zip64LocatorSignature = 0x07064b50;
+        const uint Zip64EocdSignature = 0x06064b50;
+        const int EocdMinSize = 22;          // fixed EOCD record size, excluding the trailing comment
+        const int MaxCommentSize = 0xFFFF;   // the EOCD comment length is a ushort, so the comment is at most 65,535 bytes
+        const int Zip64LocatorSize = 20;
+
+        var data = buffer.GetBuffer().AsSpan(0, (int)buffer.Length);
+        if (data.Length < EocdMinSize)
+        {
+            return null;
+        }
+
+        // The EOCD lies within the last (EocdMinSize + max-comment) bytes; scan backward for its signature, bounded to
+        // that window so a hostile stream can never make us scan the whole buffer.
+        var searchFloor = Math.Max(0, data.Length - (EocdMinSize + MaxCommentSize));
+        var eocd = -1;
+        for (var i = data.Length - EocdMinSize; i >= searchFloor; i--)
+        {
+            if (BinaryPrimitives.ReadUInt32LittleEndian(data.Slice(i, 4)) != EocdSignature)
+            {
+                continue;
+            }
+
+            // Confirm the record's declared comment length lands exactly at the stream end, so we do not latch onto
+            // EOCD-signature-looking bytes inside the archive payload.
+            var commentLength = BinaryPrimitives.ReadUInt16LittleEndian(data.Slice(i + 20, 2));
+            if (i + EocdMinSize + commentLength == data.Length)
+            {
+                eocd = i;
+                break;
+            }
+        }
+
+        if (eocd < 0)
+        {
+            return null;
+        }
+
+        // Total entries: 2-byte field at offset 10. 0xFFFF signals the real count lives in the Zip64 records.
+        var totalEntries = BinaryPrimitives.ReadUInt16LittleEndian(data.Slice(eocd + 10, 2));
+        if (totalEntries != 0xFFFF)
+        {
+            return totalEntries;
+        }
+
+        // The Zip64 EOCD locator sits immediately before the EOCD.
+        var locator = eocd - Zip64LocatorSize;
+        if (locator < 0 || BinaryPrimitives.ReadUInt32LittleEndian(data.Slice(locator, 4)) != Zip64LocatorSignature)
+        {
+            return null;
+        }
+
+        // Locator offset 8: 8-byte relative offset of the Zip64 EOCD record. Bounds-check before reading the record's
+        // 8-byte total-entries field at record offset 32 (so we touch bytes [offset, offset + 40)).
+        var zip64EocdOffset = BinaryPrimitives.ReadInt64LittleEndian(data.Slice(locator + 8, 8));
+        if (zip64EocdOffset < 0 || zip64EocdOffset + 40 > data.Length)
+        {
+            return null;
+        }
+
+        var recordStart = (int)zip64EocdOffset;
+        if (BinaryPrimitives.ReadUInt32LittleEndian(data.Slice(recordStart, 4)) != Zip64EocdSignature)
+        {
+            return null;
+        }
+
+        // Zip64 EOCD record offset 32: 8-byte total number of central-directory entries. A negative value here is
+        // hostile metadata; the caller rejects it the same as an over-count.
+        return BinaryPrimitives.ReadInt64LittleEndian(data.Slice(recordStart + 32, 8));
+    }
+
+    // Content-free reason surfaced when the PDF preflight's own PdfDocument.Open fails to parse the document. It stands
+    // in for the reader's generic failure so a malformed PDF is NOT handed to the reader for a second full parse.
+    private const string PdfUnparseableReason = "The document could not be parsed.";
+
     // Opens the PDF far enough to read its declared page count (PdfPig reads the xref/catalog, not the per-page content
-    // streams) and rejects when it exceeds the page ceiling — before the expensive per-page text extraction runs. A
-    // malformed PDF is NOT rejected here: it falls through so the reader surfaces its own error. The open runs against a
-    // non-owning VIEW over the buffered bytes (no copy) so PdfPig seeking/closing its stream never disturbs the shared
-    // buffer the reader re-parses afterward.
+    // streams) and rejects when it exceeds the page ceiling — before the expensive per-page text extraction runs. The
+    // open runs against a non-owning VIEW over the buffered bytes (no copy) so PdfPig seeking/closing its stream never
+    // disturbs the shared buffer the reader re-parses afterward.
+    //
+    // Honest residual: PdfDocument.Open itself IS parser work (it reads the cross-reference/catalog), so the open cost
+    // precedes the page cap — the cap bounds per-page text EXTRACTION, not the document-open cost. Contract is
+    // "narrow + no-reparse": we catch ONLY PdfPig's own format/document exceptions (a malformed document), never
+    // resource failures such as OutOfMemoryException, which must propagate. On a format failure we do NOT return null
+    // (which would let the reader re-open the same bytes for a wasted second parse); instead we return a content-free
+    // reason so the caller fails the document up front. On success — a healthy, within-cap document — we return null and
+    // the reader performs its own parse; that second parse is the accepted cost of a healthy document.
     private string? EvaluatePdfPreflight(MemoryStream buffer)
     {
         int pageCount;
@@ -291,9 +439,11 @@ public sealed class DocumentTextExtractor : IDocumentTextExtractor
                 using var pdf = PdfDocument.Open(view);
                 pageCount = pdf.NumberOfPages;
             }
-            catch (Exception)
+            catch (Exception exception) when (exception is PdfDocumentFormatException
+                or PdfDocumentEncryptedException
+                or PdfDocumentStackDepthException)
             {
-                return null;
+                return PdfUnparseableReason;
             }
         }
 

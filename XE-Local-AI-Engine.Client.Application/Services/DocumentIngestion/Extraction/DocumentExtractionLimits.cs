@@ -64,10 +64,16 @@ internal static class DocumentExtractionLimits
     public const int DefaultMaxConcurrentExtractions = 4;
 
     /// <summary>
-    ///     Pre-parse ceiling on the number of entries a ZIP-based container (e.g. <c>.docx</c>) may declare in its
-    ///     central directory. Read cheaply from the central directory BEFORE the parser decompresses anything, so an
-    ///     archive padded with an absurd number of members (an entry-count zip bomb) is rejected without materializing
-    ///     any of them. A legitimate Office document has at most a few dozen parts, so this is deliberately generous.
+    ///     Pre-parse ceiling on the number of entries a ZIP-based container (e.g. <c>.docx</c>) may declare. Read
+    ///     straight from the archive's End Of Central Directory record (and the Zip64 EOCD record when the classic
+    ///     count field is saturated) BEFORE any <see cref="System.IO.Compression.ZipArchive"/> is constructed — so an
+    ///     archive padded with an absurd number of members (an entry-count zip bomb) is rejected while allocating ZERO
+    ///     entry objects. This matters because reading <c>ZipArchive.Entries</c> materializes the WHOLE central
+    ///     directory (an entry object per member) up front, so a metadata-heavy archive would otherwise allocate before
+    ///     an in-loop counter could run. Only after the declared count clears this ceiling is the archive opened for the
+    ///     size/ratio pass, which then materializes at most ceiling-count entry METADATA (never the decompressed bytes);
+    ///     the post-parse actual-output checks remain the backstop. A legitimate Office document has at most a few dozen
+    ///     parts, so this is deliberately generous.
     /// </summary>
     public const int DefaultMaxCompressedEntryCount = 10_000;
 
