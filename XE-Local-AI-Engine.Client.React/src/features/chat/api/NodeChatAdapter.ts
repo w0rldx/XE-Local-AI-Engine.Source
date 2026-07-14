@@ -91,6 +91,7 @@ export interface NodeChatAdapter {
 	branchConversation(
 		conversationId: string,
 		messageId: string,
+		selectedRevisions: Record<string, string> | undefined,
 		options?: RequestOptions,
 	): Promise<XeLocalAiEngineClientEndpointsLocalChatV1NodeChatBranchConversationResponse>;
 	listMessageRevisions(conversationId: string, messageId: string, options?: RequestOptions): Promise<ChatMessageRevisions | null>;
@@ -411,21 +412,15 @@ export const nodeChatAdapter: NodeChatAdapter = {
 		);
 		return mapConversation(data);
 	},
-	async branchConversation(conversationId, messageId, options) {
-		// The ids bind from the route; the OpenAPI spec types this body as `never` (no schema), but the body MUST be
-		// an empty JSON object at runtime — FastEndpoints rejects an empty-body POST with 415 at model-binding
-		// (before the route guard runs), and the generated client omits the request data when `body === undefined`.
-		// Cast `{}` past the `never` body type so the runtime payload is the required empty object.
-		//
-		// The generated request validator (`body: z.never().optional()`) would REJECT that `{}` before the call is
-		// ever sent — the two constraints are irreconcilable through the generated schema, so override it to a no-op.
-		// The empty body carries no data to validate; the server still enforces the route + guard. Without this the
-		// branch action silently no-ops for every user (the ZodError surfaces only as "unexpected response shape").
+	async branchConversation(conversationId, messageId, selectedRevisions, options) {
+		// The ids bind from the route; the body carries the optional selected-revision map so the branched thread
+		// matches the revisions the user was viewing (variantGroupId -> selectedMessageId). Omitting it (undefined)
+		// serializes to `{}`, which keeps the server's newest-per-group default. A non-empty body also documents a
+		// request content-type, so FastEndpoints no longer 415s the (formerly body-less) POST at model-binding.
 		const { data } = await callWithResponseValidation(
 			branchNodeChatConversation({
 				path: { conversationId, messageId },
-				body: {} as unknown as never,
-				requestValidator: undefined,
+				body: { selectedRevisions },
 				signal: options?.signal,
 				throwOnError: true,
 			}),

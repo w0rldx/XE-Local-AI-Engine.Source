@@ -4,6 +4,7 @@ import { useTranslation } from "react-i18next";
 
 import { TablePaginationFooter } from "@/core/ui/components/TablePagination/TablePaginationFooter";
 import { useTablePagination } from "@/core/ui/components/TablePagination/useTablePagination";
+import { KnowledgeLastKnownGoodBadge } from "@/features/knowledge/components/KnowledgeLastKnownGoodBadge";
 import { KnowledgeStatusBadge } from "@/features/knowledge/components/KnowledgeStatusBadge";
 import { type KnowledgeDocument, formatKnowledgeBytes, formatKnowledgeTimestamp } from "@/features/knowledge/models/KnowledgeModels";
 
@@ -65,7 +66,10 @@ export function KnowledgeDocumentsTable({
 									</Stack>
 								</Table.Td>
 								<Table.Td>
-									<KnowledgeStatusBadge status={document.status} />
+									<Group gap={6} wrap="nowrap">
+										<KnowledgeStatusBadge status={document.status} />
+										{document.status !== "Indexed" && document.chunkCount > 0 ? <KnowledgeLastKnownGoodBadge /> : null}
+									</Group>
 								</Table.Td>
 								<Table.Td>{document.chunkCount}</Table.Td>
 								<Table.Td>

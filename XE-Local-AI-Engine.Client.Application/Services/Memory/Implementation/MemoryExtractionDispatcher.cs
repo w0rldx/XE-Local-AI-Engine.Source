@@ -1,84 +1,67 @@
 namespace XE_Local_AI_Engine.Client.Services.Memory.Implementation;
 
-using XE_Local_AI_Engine.Client.Persistence.Stores;
+using System.Threading.Channels;
+using Microsoft.Extensions.Options;
 
 /// <summary>
-///     Default <see cref="IMemoryExtractionDispatcher" />. Singleton: it owns the <see cref="IServiceScopeFactory" /> and
-///     spins each post-run job onto its OWN async DI scope (fresh <c>NodeChatDbContext</c> + scoped stores/services) with
-///     a FRESH cancellation token, mirroring the scheduler dispatch executor's per-run-scope pattern. Fire-and-forget:
-///     <see cref="Dispatch" /> returns immediately and never throws into the chat path; the background job's catch-all
-///     logs text-free (mirroring the embedding ranker's fallback logging) so no conversation content can leak through a
-///     log, and a genuine cancellation on the fresh token is allowed to pass.
+///     Default <see cref="IMemoryExtractionDispatcher" />. Owns the post-run extraction queue as a BOUNDED single-reader
+///     <see cref="Channel{T}" /> of <see cref="MemoryExtractionJob" />s. Singleton: the queue outlives any request scope.
+///     <para>
+///         <see cref="Dispatch" /> is non-blocking (it must never delay the chat pump), so it TRY-writes and, when the
+///         queue is at capacity, DROPS the newest job with a text-free warning rather than blocking or growing without
+///         limit — each job carries conversation content, so an unbounded backlog would retain that content in memory
+///         indefinitely. The <see cref="MemoryExtractionWorker" /> drains this queue under a bounded concurrency gate.
+///     </para>
 /// </summary>
-internal sealed class MemoryExtractionDispatcher(
-    IServiceScopeFactory scopeFactory,
-    ILogger<MemoryExtractionDispatcher> logger) : IMemoryExtractionDispatcher
+internal sealed class MemoryExtractionDispatcher : IMemoryExtractionDispatcher
 {
-    private readonly ILogger<MemoryExtractionDispatcher> _logger = logger ?? throw new ArgumentNullException(nameof(logger));
-    private readonly IServiceScopeFactory _scopeFactory = scopeFactory ?? throw new ArgumentNullException(nameof(scopeFactory));
+    private readonly Channel<MemoryExtractionJob> _queue;
+    private readonly ILogger<MemoryExtractionDispatcher> _logger;
+
+    public MemoryExtractionDispatcher(IOptions<MemoryExtractionOptions> options, ILogger<MemoryExtractionDispatcher> logger)
+    {
+        ArgumentNullException.ThrowIfNull(options);
+        _logger = logger ?? throw new ArgumentNullException(nameof(logger));
+
+        var capacity = Math.Max(1, options.Value.QueueCapacity);
+        _queue = Channel.CreateBounded<MemoryExtractionJob>(new BoundedChannelOptions(capacity)
+        {
+            // FullMode.Wait so a full-queue TryWrite returns false (rather than silently dropping the OLDEST); we then
+            // log the dropped newest job explicitly. SingleReader — the one background worker drains it.
+            FullMode = BoundedChannelFullMode.Wait,
+            SingleReader = true,
+            SingleWriter = false
+        });
+    }
+
+    /// <summary>The queue reader the background worker drains.</summary>
+    public ChannelReader<MemoryExtractionJob> Reader => _queue.Reader;
+
+    /// <summary>
+    ///     Completes the queue writer so no further jobs are accepted. After this, <see cref="Dispatch" /> takes the
+    ///     dropped-job path (its TryWrite returns false), and the worker's read loop drains whatever is buffered and then
+    ///     ends on its own rather than being abandoned. Idempotent — safe to call more than once (the worker completes it
+    ///     at shutdown and also via a stop-token callback), so it uses <c>TryComplete</c> rather than <c>Complete</c>.
+    /// </summary>
+    public void CompleteWriter()
+    {
+        _ = _queue.Writer.TryComplete();
+    }
 
     public void Dispatch(MemoryExtractionDispatchContext telemetry, MemoryExtractionRunInput run)
     {
         ArgumentNullException.ThrowIfNull(telemetry);
         ArgumentNullException.ThrowIfNull(run);
 
-        // Fire-and-forget on a detached task. We deliberately do NOT await or observe this from the chat path; the
-        // background job owns its own scope, DbContext, and cancellation, so the terminal SSE event is never delayed and
-        // a client disconnect/cancel after completion never loses a completed run's memory.
-        _ = Task.Run(() => RunBackgroundAsync(telemetry, run));
-    }
-
-    private async Task RunBackgroundAsync(MemoryExtractionDispatchContext telemetry, MemoryExtractionRunInput run)
-    {
-        // Fresh token: a cancellation of the original send must not lose a completed run's memory. The background job is
-        // bounded by its own work, not the client connection.
-        var cancellationToken = CancellationToken.None;
-
-        try
+        // Non-blocking enqueue: never block or throw into the chat pump. A full queue drops this job (the run simply
+        // does not contribute a memory) with a content-free warning so the backlog stays bounded.
+        if (!_queue.Writer.TryWrite(new MemoryExtractionJob(telemetry, run)))
         {
-            // Own scope + own DbContext: the request/pump scope that produced the terminal may already be disposed, so
-            // resolving the scoped stores/services from a fresh scope avoids an ObjectDisposedException on the context.
-            await using var scope = _scopeFactory.CreateAsyncScope();
-
-            // Execution-log row FIRST (metadata only — no message content): it is the diagnostic record of the run and
-            // must be written even if extraction is a no-op (temp chat / no model / no lesson).
-            await WriteExecutionLogAsync(scope.ServiceProvider, telemetry, cancellationToken).ConfigureAwait(false);
-
-            var extractionService = scope.ServiceProvider.GetRequiredService<IMemoryExtractionService>();
-            _ = await extractionService.ExtractAsync(run, cancellationToken).ConfigureAwait(false);
-        }
-        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
-        {
-            // Genuine cancellation on our own token — let it pass without an error log (there is no caller to surface to).
-        }
-        catch (Exception exception)
-        {
-            // Catch-all: a background memory job must NEVER affect the run path, and must NEVER log conversation content.
-            // Log the exception TYPE NAME only — never the exception object, whose Message/stack could carry conversation
-            // text or model output from the extraction round-trip (same text-free discipline as the exec-log ErrorClass
-            // field and the embedding ranker's fallback logging).
-            _logger.LogWarning("Background memory extraction failed ({ErrorClass}) for agent {AgentId}; the chat run is unaffected.",
-                exception.GetType().Name,
+            _logger.LogWarning("Adaptive memory extraction queue is full; dropped a job for agent {AgentId}. The chat run is unaffected.",
                 telemetry.AgentDefinitionId);
         }
     }
-
-    private static async Task WriteExecutionLogAsync(IServiceProvider serviceProvider,
-        MemoryExtractionDispatchContext telemetry,
-        CancellationToken cancellationToken)
-    {
-        var executionLogStore = serviceProvider.GetRequiredService<IAgentExecutionLogStore>();
-
-        _ = await executionLogStore.AddAsync(new AgentExecutionLogInput(telemetry.AgentDefinitionId,
-                telemetry.ConversationId,
-                telemetry.MessageId,
-                telemetry.ModelName,
-                telemetry.ConfigHash,
-                telemetry.LatencyMs,
-                telemetry.Success,
-                telemetry.PromptTokens,
-                telemetry.CompletionTokens,
-                telemetry.ErrorClass),
-            cancellationToken).ConfigureAwait(false);
-    }
 }
+
+/// <summary>A queued extraction job: the metadata-only exec-log telemetry plus the content-bearing run input.</summary>
+internal sealed record MemoryExtractionJob(MemoryExtractionDispatchContext Telemetry, MemoryExtractionRunInput Run);

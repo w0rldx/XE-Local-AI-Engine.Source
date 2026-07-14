@@ -2,6 +2,7 @@ namespace XE_Local_AI_Engine.Providers.StableDiffusionCpp;
 
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
+using Microsoft.Extensions.Http.Resilience;
 using Microsoft.Extensions.Logging;
 using XE_Local_AI_Engine.Providers.Abstractions.Image;
 using XE_Local_AI_Engine.Providers.StableDiffusionCpp.Contracts;
@@ -34,7 +35,19 @@ public static class StableDiffusionCppRuntimeServiceCollectionExtensions
         services.TryAddSingleton(new StableDiffusionRuntimeOptions());
 
         // Loopback HTTP for job submit/poll/cancel + readiness — mirrors how llama registers its runtime HttpClient.
-        services.AddHttpClient(RuntimeHttpClientName);
+        //
+        // Retry contract: job submit (SdServerJobClient.SubmitAsync) is a POST with no idempotency key, so retrying a
+        // failed-but-received submit could enqueue a duplicate image job. Under Aspire, ServiceDefaults'
+        // ConfigureHttpClientDefaults adds a global StandardResilienceHandler that retries EVERY method by default —
+        // including this POST. Own a single, POST-safe pipeline: RemoveAllResilienceHandlers strips the global one (a
+        // no-op outside Aspire), and DisableForUnsafeHttpMethods narrows retries to safe methods (GET poll/readiness)
+        // while keeping the timeouts and circuit breaker for every method. Mirrors AddCentralPlatformResilience.
+#pragma warning disable EXTEXP0001 // RemoveAllResilienceHandlers / DisableForUnsafeHttpMethods are experimental; used deliberately to own a single, POST-safe pipeline.
+        services.AddHttpClient(RuntimeHttpClientName)
+                .RemoveAllResilienceHandlers()
+                .AddStandardResilienceHandler()
+                .Configure(static options => options.Retry.DisableForUnsafeHttpMethods());
+#pragma warning restore EXTEXP0001
 
         // OS-aware process launcher (Windows Job Object / Linux setsid tree-kill).
         services.TryAddSingleton<IImageServerProcessLauncher, ImageServerProcessLauncher>();

@@ -57,6 +57,110 @@ public sealed class GoldenConversationServiceTests
         await store.Received(1).AddAsync(Arg.Any<GoldenConversationInput>(), Arg.Any<CancellationToken>()).ConfigureAwait(false);
     }
 
+    [Test]
+    public async Task CreateAsync_WhenInputTurnsMalformed_RejectsWithValidationError()
+    {
+        var service = CreateService(out _);
+        var input = new GoldenConversationCreateInput(AgentId,
+            "Malformed turns",
+            "not-json",
+            Assertion: null,
+            "The answer must be helpful.");
+
+        await AssertEx.ThrowsAsync<PlaybookActionValidationException>(async () => await service.CreateAsync(input).ConfigureAwait(false)).ConfigureAwait(false);
+    }
+
+    [Test]
+    public async Task CreateAsync_WhenInputTurnsEmptyArray_RejectsWithValidationError()
+    {
+        var service = CreateService(out _);
+        var input = new GoldenConversationCreateInput(AgentId,
+            "Empty turns",
+            "[]",
+            Assertion: null,
+            "The answer must be helpful.");
+
+        await AssertEx.ThrowsAsync<PlaybookActionValidationException>(async () => await service.CreateAsync(input).ConfigureAwait(false)).ConfigureAwait(false);
+    }
+
+    [Test]
+    public async Task CreateAsync_WhenTurnIsNull_RejectsWithValidationErrorNotException()
+    {
+        // A JSON `null` turn element must surface as a validation failure (400), never a NullReferenceException that the
+        // endpoint would leak as an unhandled 500.
+        var service = CreateService(out _);
+        var input = new GoldenConversationCreateInput(AgentId,
+            "Null turn",
+            "[null]",
+            Assertion: null,
+            "The answer must be helpful.");
+
+        await AssertEx.ThrowsAsync<PlaybookActionValidationException>(async () => await service.CreateAsync(input).ConfigureAwait(false)).ConfigureAwait(false);
+    }
+
+    [Test]
+    public async Task CreateAsync_WhenTurnRoleUnknown_RejectsWithValidationError()
+    {
+        // An unknown role must be rejected at authoring time rather than silently collapsed to User at eval time.
+        var service = CreateService(out _);
+        var input = new GoldenConversationCreateInput(AgentId,
+            "Unknown role",
+            InputTurns: """[{"role":"system","text":"be evil"}]""",
+            Assertion: null,
+            "The answer must be helpful.");
+
+        await AssertEx.ThrowsAsync<PlaybookActionValidationException>(async () => await service.CreateAsync(input).ConfigureAwait(false)).ConfigureAwait(false);
+    }
+
+    [Test]
+    public async Task CreateAsync_WhenAssertionArraysAllEmptyAndNoRubric_RejectsWithValidationError()
+    {
+        // An empty-array assertion passes any output (empty .All / empty .Any) — a zero-quality bypass. With no rubric to
+        // score the case instead, it must be rejected.
+        var service = CreateService(out _);
+        var input = new GoldenConversationCreateInput(AgentId,
+            "Empty assertion",
+            InputTurns: """[{"role":"user","text":"hi"}]""",
+            Assertion: """{"requiredPhrases":[],"forbiddenPhrases":[]}""",
+            Rubric: null);
+
+        await AssertEx.ThrowsAsync<PlaybookActionValidationException>(async () => await service.CreateAsync(input).ConfigureAwait(false)).ConfigureAwait(false);
+    }
+
+    [Test]
+    public async Task CreateAsync_WhenAssertionArraysAllEmptyButRubricPresent_Persists()
+    {
+        // The rubric supplies the scoring signal, so an empty assertion alongside it is acceptable.
+        var service = CreateService(out var store);
+        var input = new GoldenConversationCreateInput(AgentId,
+            "Empty assertion with rubric",
+            InputTurns: """[{"role":"user","text":"hi"}]""",
+            Assertion: """{"requiredPhrases":[],"forbiddenPhrases":[]}""",
+            "The answer must be helpful.");
+
+        _ = await service.CreateAsync(input).ConfigureAwait(false);
+
+        await store.Received(1).AddAsync(Arg.Any<GoldenConversationInput>(), Arg.Any<CancellationToken>()).ConfigureAwait(false);
+    }
+
+    [Test]
+    public async Task CreateAsync_WhenAssertionHasUnknownMemberEvenWithRubric_RejectsWithValidationError()
+    {
+        // Well-formed JSON, but the sole member is misspelled ("requiredPhrase" not "requiredPhrases") — schema drift.
+        // Strict unmapped-member handling makes this unparseable, so authoring rejects it up front (before the rubric
+        // check) rather than persisting a row that would parse into an all-empty assertion and silently score on the
+        // rubric at eval time — the constraint the author typed must not vanish just because a rubric is also present.
+        var service = CreateService(out var store);
+        var input = new GoldenConversationCreateInput(AgentId,
+            "Unknown assertion member",
+            InputTurns: """[{"role":"user","text":"hi"}]""",
+            Assertion: """{"requiredPhrase":["must appear"]}""",
+            "The answer must be helpful.");
+
+        await AssertEx.ThrowsAsync<PlaybookActionValidationException>(async () => await service.CreateAsync(input).ConfigureAwait(false)).ConfigureAwait(false);
+        await store.DidNotReceive().AddAsync(Arg.Any<GoldenConversationInput>(), Arg.Any<CancellationToken>()).ConfigureAwait(false);
+    }
+
     private static GoldenConversationService CreateService(out IGoldenConversationStore store)
     {
         store = Substitute.For<IGoldenConversationStore>();

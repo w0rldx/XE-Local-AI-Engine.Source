@@ -4,6 +4,7 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Options;
 using XE_Local_AI_Engine.Client.Persistence;
 using XE_Local_AI_Engine.Client.Persistence.Stores;
+using XE_Local_AI_Engine.Client.Services.Chat;
 using XE_Local_AI_Engine.Client.Services.DocumentIngestion;
 
 /// <summary>
@@ -21,14 +22,17 @@ public sealed class RetentionSweeperService : BackgroundService
     private readonly ChatRetentionOptions _options;
     private readonly IServiceScopeFactory _serviceScopeFactory;
     private readonly TimeProvider _timeProvider;
+    private readonly NodeChatPersistenceWriter _writer;
 
     public RetentionSweeperService(IServiceScopeFactory serviceScopeFactory,
         TimeProvider timeProvider,
+        NodeChatPersistenceWriter writer,
         IOptions<ChatRetentionOptions> options,
         ILogger<RetentionSweeperService> logger)
     {
         _serviceScopeFactory = serviceScopeFactory ?? throw new ArgumentNullException(nameof(serviceScopeFactory));
         _timeProvider = timeProvider ?? throw new ArgumentNullException(nameof(timeProvider));
+        _writer = writer ?? throw new ArgumentNullException(nameof(writer));
         ArgumentNullException.ThrowIfNull(options);
         _options = options.Value ?? throw new ArgumentNullException(nameof(options));
         _logger = logger ?? throw new ArgumentNullException(nameof(logger));
@@ -93,10 +97,31 @@ public sealed class RetentionSweeperService : BackgroundService
         await using var scope = _serviceScopeFactory.CreateAsyncScope();
         var retentionStore = scope.ServiceProvider.GetRequiredService<INodeRetentionStore>();
         var uploadedFileStore = scope.ServiceProvider.GetRequiredService<IConversationUploadedFileStore>();
-        var cutoffUtc = _timeProvider.GetUtcNow().Subtract(TimeSpan.FromDays(_options.RetentionDays)).ToUnixTimeSeconds();
 
-        // DB rows first (committed inside the store), then the on-disk upload blobs for exactly the deleted ids.
-        var deletedConversationIds = await retentionStore.SweepExpiredConversationsAsync(cutoffUtc, cancellationToken).ConfigureAwait(false);
+        // Production timestamps are Unix MILLISECONDS (created/last-seen are written with ToUnixTimeMilliseconds), so the
+        // cutoff must be milliseconds too — a seconds cutoff is ~1000x smaller than any real last_seen and the age
+        // predicate would never fire.
+        var cutoffUtc = _timeProvider.GetUtcNow().Subtract(TimeSpan.FromDays(_options.RetentionDays)).ToUnixTimeMilliseconds();
+
+        // Select candidates lock-free, then delete each one under the conversation's exclusive write lock, re-checking
+        // eligibility inside the deletion transaction. This coordinates with the interactive send/touch/purge paths (all
+        // of which run under the same per-conversation lock), so retention can neither delete a conversation touched
+        // after selection nor let a concurrent send strand an orphan after a blind delete. Only conversations actually
+        // deleted get their on-disk upload blobs torn down.
+        var candidateConversationIds = await retentionStore.ListExpiredConversationCandidatesAsync(cutoffUtc, cancellationToken).ConfigureAwait(false);
+
+        var deletedConversationIds = new List<Guid>(candidateConversationIds.Count);
+        foreach (var conversationId in candidateConversationIds)
+        {
+            var deleted = await _writer.ExecuteConversationExclusiveAsync(conversationId,
+                (dbContext, token) => ConversationRetentionPurge.TryPurgeIfExpiredAsync(dbContext, conversationId, cutoffUtc, token),
+                cancellationToken).ConfigureAwait(false);
+            if (deleted)
+            {
+                deletedConversationIds.Add(conversationId);
+            }
+        }
+
         foreach (var conversationId in deletedConversationIds)
         {
             await uploadedFileStore.DeleteAllForConversationAsync(conversationId, cancellationToken).ConfigureAwait(false);

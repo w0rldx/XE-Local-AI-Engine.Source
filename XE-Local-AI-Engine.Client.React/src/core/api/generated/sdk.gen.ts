@@ -513,6 +513,7 @@ import {
 	zArchiveNodeChatConversationResponse,
 	zBenchmarkInferenceProfileBody,
 	zBenchmarkInferenceProfileResponse,
+	zBranchNodeChatConversationBody,
 	zBranchNodeChatConversationPath,
 	zBranchNodeChatConversationResponse,
 	zBrowseGgufRepositoriesQuery,
@@ -2864,7 +2865,7 @@ export const branchNodeChatConversation = <ThrowOnError extends boolean = false>
 		requestValidator: async (data) =>
 			await z
 				.object({
-					body: z.never().optional(),
+					body: zBranchNodeChatConversationBody,
 					path: zBranchNodeChatConversationPath,
 					query: z.never().optional(),
 				})
@@ -2877,6 +2878,10 @@ export const branchNodeChatConversation = <ThrowOnError extends boolean = false>
 		],
 		url: "/api/local/v1/chat/conversations/{conversationId}/branch/{messageId}",
 		...options,
+		headers: {
+			"Content-Type": "application/json",
+			...options.headers,
+		},
 	});
 
 export const listNodeChatMessageRevisions = <ThrowOnError extends boolean = false>(

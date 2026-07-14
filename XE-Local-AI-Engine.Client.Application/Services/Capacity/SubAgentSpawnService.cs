@@ -274,7 +274,7 @@ internal sealed class SubAgentSpawnService : ISubAgentSpawnService
         [
             .. offered
                .Where(static tool => tool.Location == ToolLocation.ClientLocal)
-               .Select(static tool => InvocationToolBridge.CreateOfferPlaceholder(tool.Name))
+               .Select(static tool => InvocationToolBridge.CreateOfferPlaceholder(tool.Name, tool.RequiresApproval))
         ];
     }
 

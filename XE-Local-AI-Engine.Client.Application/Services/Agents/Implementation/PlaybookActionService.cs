@@ -206,6 +206,15 @@ internal sealed class PlaybookActionService(
             return new PlaybookPromotionResult(PlaybookPromotionStatus.EvalRegressed, Record: null);
         }
 
+        // Absolute quality floor (defense in depth for MED-005). The eval writer already folds this into Passed, but a
+        // legacy/hand-crafted result could carry Passed == true with zero candidate passes (a run where every case
+        // failed proves nothing). Independently require at least one candidate pass so a zero-quality result can never
+        // authorize a promotion even if Passed was recorded true.
+        if (evalResult.CandidatePassCount <= 0)
+        {
+            return new PlaybookPromotionResult(PlaybookPromotionStatus.EvalRegressed, Record: null);
+        }
+
         // Atomic promote under optimistic-concurrency + cap guards. The validated snapshot's Version is threaded so the
         // Enabled write lands only if no concurrent edit/promote changed the row since it was read for the eval gate
         // above — closing the TOCTOU where a concurrent UpdateSuggestedAsync (which bumps Version and clears the eval)
