@@ -34,6 +34,38 @@ public sealed class KnowledgeIngestionDispatcherTests
     }
 
     [Test]
+    public async Task EnqueueAsync_SameDocumentTwice_IsIdempotent_AndDoesNotDoubleQueue()
+    {
+        var dispatcher = new KnowledgeIngestionDispatcher();
+        var documentId = Guid.NewGuid();
+
+        // A retry (or drain-sweep) of a document already queued must be a no-op accept, not a second queue entry, so the
+        // document is never processed twice concurrently.
+        AssertEx.Equal(KnowledgeIngestionEnqueueResult.Accepted,
+            await dispatcher.EnqueueAsync(documentId, CancellationToken.None).ConfigureAwait(false));
+        AssertEx.Equal(KnowledgeIngestionEnqueueResult.Accepted,
+            await dispatcher.EnqueueAsync(documentId, CancellationToken.None).ConfigureAwait(false));
+
+        AssertEx.Equal(1, (int)dispatcher.PendingCount);
+    }
+
+    [Test]
+    public async Task EnqueueAsync_AfterMarkCompleted_ReAdmitsSameDocument()
+    {
+        var dispatcher = new KnowledgeIngestionDispatcher();
+        var documentId = Guid.NewGuid();
+
+        _ = await dispatcher.EnqueueAsync(documentId, CancellationToken.None).ConfigureAwait(false);
+        // Worker drains it, then reports completion — the id leaves the admitted set so a later reindex can re-queue it.
+        AssertEx.True(dispatcher.Reader.TryRead(out _));
+        dispatcher.MarkCompleted(documentId);
+
+        AssertEx.Equal(KnowledgeIngestionEnqueueResult.Accepted,
+            await dispatcher.EnqueueAsync(documentId, CancellationToken.None).ConfigureAwait(false));
+        AssertEx.Equal(1, (int)dispatcher.PendingCount);
+    }
+
+    [Test]
     public async Task EnqueueAsync_WhenDrained_AdmitsAgain()
     {
         var dispatcher = new KnowledgeIngestionDispatcher();
