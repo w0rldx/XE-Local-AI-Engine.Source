@@ -292,6 +292,14 @@ This is load-bearing anywhere a hub streams run/tool events. The concrete bug: a
 
 **Related:** if "cancel" only cancels the CTS and relies on the normal drain path to publish the terminal event, a model call that never unwinds leaves the UI stuck "running" forever. **Publish the terminal event directly from the cancel handler**; the drain path should just dispose.
 
+### Chat message status is a table-enforced state machine
+
+Two independent writers race one assistant row: the HTTP cancel endpoint and the pump's terminalize/flush. The allowed source statuses per writer intent live in **one** table, `NodeChatMessageTransitions` (`Services/Chat/NodeChatMessageTransitions.cs`), and every correlated UPDATE enforces its set **atomically** via an `AND status IN (...)` predicate — never a read-then-write (`NodeChatMessageCommands.UpdateCorrelatedMessageAsync`). Terminal rows are otherwise immutable, with **one deliberate whitelist**: the pump's true-outcome terminalize (completed/failed/cancelled) may fire from a `Cancelled` source, so an authoritative completion supersedes an optimistic HTTP-cancel marker and a cancel-terminalize over a cancelled row is the idempotent final-content write. `Interrupted` is **not** whitelisted — it can never downgrade a user `Cancelled`. Rules:
+
+- **Cancel / flush / recovery** may fire only from the non-terminal set (`pending`/`queued`/`streaming`). A late flush or cancel against a terminal row is an atomic no-op, not a rewrite.
+- **Terminalize** derives its allowed sources from the *target* status: non-terminal for `Interrupted`, non-terminal **plus** `Cancelled` for completed/failed/cancelled. `completed`/`failed`/`interrupted` are never a legal source, so a second terminalize is a no-op.
+- **The run envelope + the single SSE terminal are built from the PERSISTED winning status** (`persisted.Status`), never the requested one — because the guard may have rejected the write. The ledger can therefore never disagree with the row. Don't "simplify" the pump back to using the requested `terminalStatus`.
+
 ---
 
 ## 5. Frontend, chat UX, API boundary

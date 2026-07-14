@@ -16,9 +16,14 @@ internal sealed class NodeChatMessageCommands(NodeChatPersistenceWriter writer)
     private const string UserRole = "user";
     private const string AssistantRole = "assistant";
 
+    // Upper bound on distinct source statuses a guarded transition can enumerate — the largest allowed-source set in
+    // NodeChatMessageTransitions (the terminalize set: pending / queued / streaming / cancelled). Smaller sets bind the
+    // spare slots by repeating a real member, so the IN clause stays a fixed constant statement.
+    private const int MaxSourceStatusSlots = 4;
+
     // Correlated message update, keyed on (conversation, message, request). The guarded variant additionally requires the
-    // current status to be one of the three source statuses bound below, so a guarded transition (the cancel path) is
-    // rejected atomically at the SQLite layer once the row has reached a terminal status.
+    // current status to be one of the source statuses bound below, so a guarded transition (cancel / flush / terminalize)
+    // is rejected atomically at the SQLite layer once the row has left the permitted set.
     private const string CorrelatedUpdateSql = """
                                                UPDATE messages
                                                SET content = $content, metadata_json = $metadata_json, updated_at_utc = $updated_at_utc, status = $status, error = $error
@@ -33,7 +38,7 @@ internal sealed class NodeChatMessageCommands(NodeChatPersistenceWriter writer)
                                                                     WHERE conversation_id = $conversation_id
                                                                       AND message_id = $message_id
                                                                       AND request_id = $request_id
-                                                                      AND status IN ($required_status_0, $required_status_1, $required_status_2);
+                                                                      AND status IN ($required_status_0, $required_status_1, $required_status_2, $required_status_3);
                                                                     """;
 
     private readonly NodeChatPersistenceWriter _writer = writer ?? throw new ArgumentNullException(nameof(writer));
@@ -144,7 +149,10 @@ internal sealed class NodeChatMessageCommands(NodeChatPersistenceWriter writer)
             // window and would otherwise run a second UPDATE (conversation touch) every time. The conversation was
             // already touched when the turn started (placeholder/queued/streaming) and is touched again at terminalize,
             // so skipping it here drops a redundant write from the hot streaming path without changing recency order.
-            touchConversation: false);
+            touchConversation: false,
+            // A late flush must never mutate a row that already terminalized (or was cancelled): guard to the non-terminal
+            // source set so a debounced tail arriving after the terminal is an atomic no-op.
+            requiredCurrentStatuses: NodeChatMessageTransitions.FlushSources);
     }
 
     public Task<NodeChatPersistedMessageDto> TerminalizeAssistantMessageAsync(NodeChatTerminalizeMessageRequest request, CancellationToken cancellationToken = default)
@@ -169,7 +177,8 @@ internal sealed class NodeChatMessageCommands(NodeChatPersistenceWriter writer)
             replaceContent: true,
             cancellationToken,
             request.Parts,
-            request.GenerationDurationMs);
+            request.GenerationDurationMs,
+            requiredCurrentStatuses: NodeChatMessageTransitions.TerminalizeSources(request.Status));
     }
 
     public async Task<NodeChatCancelResultDto> CancelMessageAsync(NodeChatCancelRequest request, CancellationToken cancellationToken = default)
@@ -189,7 +198,7 @@ internal sealed class NodeChatMessageCommands(NodeChatPersistenceWriter writer)
             reasoningTokens: null,
             replaceContent: true,
             cancellationToken,
-            requiredCurrentStatuses: NodeChatMessageStatusValues.Cancellable).ConfigureAwait(false);
+            requiredCurrentStatuses: NodeChatMessageTransitions.CancelSources).ConfigureAwait(false);
 
         // The guard leaves an already-terminal message untouched, so report the true persisted status and only claim a
         // cancellation when the message actually landed in the Cancelled state. This is idempotent: a repeat cancel of an
@@ -298,6 +307,10 @@ internal sealed class NodeChatMessageCommands(NodeChatPersistenceWriter writer)
         IReadOnlySet<string>? requiredCurrentStatuses = null)
     {
         ValidateCorrelation(correlation);
+        if (requiredCurrentStatuses is { Count: 0 or > MaxSourceStatusSlots })
+        {
+            throw new ArgumentException($"A transition guard must name between 1 and {MaxSourceStatusSlots} source statuses.", nameof(requiredCurrentStatuses));
+        }
 
         // Message-payload update to an already-allocated row: parallel with updates to OTHER messages, serialized per
         // message, and excluded against a conversation delete via the shared/exclusive hierarchy.
@@ -312,11 +325,11 @@ internal sealed class NodeChatMessageCommands(NodeChatPersistenceWriter writer)
                     throw new InvalidOperationException("The correlated node chat request id did not match the persisted message.");
                 }
 
-                // Transition guard (currently the cancel path): a status change is only allowed from one of the source
-                // statuses supplied by the caller. Once the row has left that set — e.g. a completed / failed / interrupted
-                // terminalize already ran — the update is skipped and the true current state is returned unchanged, so a
-                // late cancel can never rewrite a finished message. The per-message write lock makes this read
-                // authoritative; the AND status IN (...) predicate below re-enforces it atomically at the SQLite layer.
+                // Transition guard (cancel / flush / terminalize): a write is only allowed from one of the source statuses
+                // the caller declared via NodeChatMessageTransitions. Once the row has left that set — e.g. a terminalize
+                // already ran, or a cancel/flush arrives after a terminal — the update is skipped and the true current
+                // state is returned unchanged. The per-message write lock makes this read authoritative; the
+                // AND status IN (...) predicate below re-enforces it atomically at the SQLite layer.
                 if (requiredCurrentStatuses is not null && !requiredCurrentStatuses.Contains(current.Status))
                 {
                     return current;
@@ -366,11 +379,12 @@ internal sealed class NodeChatMessageCommands(NodeChatPersistenceWriter writer)
                 AddParameter(command, "$request_id", correlation.RequestId);
                 if (requiredCurrentStatuses is not null)
                 {
-                    var statusIndex = 0;
-                    foreach (var requiredStatus in requiredCurrentStatuses)
+                    // Bind every one of the fixed IN slots. Spare slots (a set smaller than MaxSourceStatusSlots) repeat a
+                    // real member rather than binding NULL, so the IN predicate stays exact without NULL-comparison subtlety.
+                    var sourceStatuses = new List<string>(requiredCurrentStatuses);
+                    for (var slot = 0; slot < MaxSourceStatusSlots; slot++)
                     {
-                        AddParameter(command, $"$required_status_{statusIndex}", requiredStatus);
-                        statusIndex++;
+                        AddParameter(command, $"$required_status_{slot}", sourceStatuses[slot < sourceStatuses.Count ? slot : sourceStatuses.Count - 1]);
                     }
                 }
 
