@@ -313,10 +313,18 @@ public static class NodeChatFeedbackRatingValues
 ///     into a NEW conversation. The new conversation is Origin=Local and records
 ///     <c>branch_of_conversation_id</c> = source for provenance.
 /// </summary>
+/// <param name="SelectedRevisions">
+///     Optional caller-supplied selected-revision map (<c>variantGroupId -&gt; selectedMessageId</c>), mirroring the
+///     persisted selected-path shape. It pins which upstream variant each group contributes to the branched linear
+///     thread, so the branch matches the path the user was actually viewing rather than always copying the newest
+///     revision. Null or empty ⇒ every group falls back to its newest eligible revision (the legacy behavior). The
+///     branch-point turn always contributes exactly <see cref="MessageId" />, overriding any entry for its group.
+/// </param>
 public sealed record NodeChatBranchConversationRequest(
     Guid ConversationId,
     Guid MessageId,
-    long CreatedAtUtc);
+    long CreatedAtUtc,
+    IReadOnlyDictionary<Guid, Guid>? SelectedRevisions = null);
 
 /// <summary>
 ///     Transport DTO for node chat branch result data.
@@ -325,6 +333,24 @@ public sealed record NodeChatBranchResultDto(
     Guid SourceConversationId,
     Guid BranchedConversationId,
     int CopiedMessageCount);
+
+/// <summary>
+///     Thrown when a branch request carries a selected-revision entry that fails integrity validation — the
+///     referenced message is not part of the conversation, or it is keyed under a variant group it does not belong
+///     to. The branch endpoint maps this to HTTP 400. Fail-closed: the branch is rejected rather than silently
+///     falling back to a default revision.
+/// </summary>
+public sealed class NodeChatInvalidBranchSelectionException(Guid conversationId, Guid variantGroupId, Guid messageId)
+    : InvalidOperationException($"Branch selection for conversation {conversationId} referenced message {messageId} which is not a valid member of variant group {variantGroupId}.")
+{
+    public const string Code = "invalid-branch-selection";
+
+    public Guid ConversationId { get; } = conversationId;
+
+    public Guid VariantGroupId { get; } = variantGroupId;
+
+    public Guid MessageId { get; } = messageId;
+}
 
 /// <summary>
 ///     Assistant revision: records a regenerated assistant turn as a SIBLING VARIANT (never an in-place

@@ -123,6 +123,10 @@ public sealed class KnowledgeSearchService : IKnowledgeSearchService
                 ? await ExpandContentAsync(selection.Row.DocumentId, selection.Row.ChunkIndex, selection.Row.Content, cancellationToken).ConfigureAwait(false)
                 : selection.Row.Content;
 
+            // A hit only exists because the document has queryable chunks; when its catalog status is not Indexed
+            // those chunks are the last-known-good projection served during a pending/failed re-index. Disclose it.
+            var servingLastKnownGood = selection.Row.DocumentStatus != KnowledgeDocumentStatus.Indexed;
+
             hits.Add(new KnowledgeSearchHit(selection.Row.DocumentId,
                 selection.ChunkId,
                 DeriveTitle(selection.Row.HeadingPath, selection.Row.StoragePath),
@@ -130,7 +134,9 @@ public sealed class KnowledgeSearchService : IKnowledgeSearchService
                 content,
                 SourceTag,
                 selection.Score,
-                selection.Row.ChunkIndex));
+                selection.Row.ChunkIndex,
+                selection.Row.DocumentStatus,
+                servingLastKnownGood));
         }
 
         return new KnowledgeSearchResult(hits);
@@ -264,7 +270,7 @@ public sealed class KnowledgeSearchService : IKnowledgeSearchService
     {
         await using var command = connection.CreateCommand();
         command.CommandText = """
-                              SELECT c.document_id, c.chunk_index, c.content, c.heading_path, d.storage_path
+                              SELECT c.document_id, c.chunk_index, c.content, c.heading_path, d.storage_path, d.status
                               FROM knowledge_document_chunks c
                               JOIN knowledge_documents d ON d.document_id = c.document_id
                               WHERE c.chunk_id = $chunk_id;
@@ -284,7 +290,17 @@ public sealed class KnowledgeSearchService : IKnowledgeSearchService
             reader.GetInt32(1),
             reader.GetString(2),
             headingPath,
-            reader.GetString(4));
+            reader.GetString(4),
+            ParseDocumentStatus(reader.GetString(5)));
+    }
+
+    // The status column always holds a KnowledgeDocumentStatus name (written by the ingestion pipeline). If a row
+    // somehow carries an unrecognized value, fail SAFE toward disclosure by treating it as a non-Indexed state.
+    private static KnowledgeDocumentStatus ParseDocumentStatus(string status)
+    {
+        return Enum.TryParse<KnowledgeDocumentStatus>(status, out var parsed)
+            ? parsed
+            : KnowledgeDocumentStatus.Pending;
     }
 
     // Non-sensitive display title. The original file name is encrypted and must never leak into a search result, so the
@@ -301,7 +317,7 @@ public sealed class KnowledgeSearchService : IKnowledgeSearchService
         return root.Length > 0 ? root[0] : storagePath;
     }
 
-    private sealed record HydratedChunk(Guid DocumentId, int ChunkIndex, string Content, string? HeadingPath, string StoragePath);
+    private sealed record HydratedChunk(Guid DocumentId, int ChunkIndex, string Content, string? HeadingPath, string StoragePath, KnowledgeDocumentStatus DocumentStatus);
 
     // One selected candidate carried from ranking to hit-building: the chunk id, its hydrated row, and the score to
     // stamp on the hit (the RRF score on the fusion/degrade paths, the rerank relevance on the reranked path).

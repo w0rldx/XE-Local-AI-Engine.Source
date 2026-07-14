@@ -127,6 +127,10 @@
 				"indexed": "Indexed",
 				"failed": "Failed"
 			},
+			"lastKnownGood": {
+				"label": "Last-known-good",
+				"tooltip": "This document is being re-indexed or its last re-index failed. Results are served from the previously indexed version and may be out of date."
+			},
 			"table": {
 				"name": "Name",
 				"status": "Status",

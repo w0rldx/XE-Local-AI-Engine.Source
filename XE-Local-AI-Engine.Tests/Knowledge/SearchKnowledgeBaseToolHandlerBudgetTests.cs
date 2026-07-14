@@ -22,7 +22,9 @@ public sealed class SearchKnowledgeBaseToolHandlerBudgetTests
                                  Content: new string('x', 20_000),
                                  Source: "knowledge-base",
                                  Score: 1.0 - (index * 0.1),
-                                 ChunkIndex: index))
+                                 ChunkIndex: index,
+                                 DocumentStatus: KnowledgeDocumentStatus.Indexed,
+                                 ServingLastKnownGood: false))
                              .ToList();
 
         var handler = CreateHandler(new KnowledgeSearchResult(hits));
@@ -44,7 +46,8 @@ public sealed class SearchKnowledgeBaseToolHandlerBudgetTests
     {
         var hits = new List<KnowledgeSearchHit>
         {
-            new(Guid.NewGuid(), Guid.NewGuid(), "doc", Section: null, Content: "small", Source: "knowledge-base", Score: 1.0, ChunkIndex: 0)
+            new(Guid.NewGuid(), Guid.NewGuid(), "doc", Section: null, Content: "small", Source: "knowledge-base", Score: 1.0, ChunkIndex: 0,
+                DocumentStatus: KnowledgeDocumentStatus.Indexed, ServingLastKnownGood: false)
         };
 
         var handler = CreateHandler(new KnowledgeSearchResult(hits));
