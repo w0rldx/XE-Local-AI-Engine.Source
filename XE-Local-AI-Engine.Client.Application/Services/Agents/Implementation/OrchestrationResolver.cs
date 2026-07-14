@@ -53,7 +53,6 @@ internal sealed class OrchestrationResolver : IOrchestrationResolver
         string? activeModelId,
         string? retrievalQuery = null,
         bool supportsTools = true,
-        bool activeModelIsCloud = false,
         CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(orchestrator);
@@ -128,7 +127,7 @@ internal sealed class OrchestrationResolver : IOrchestrationResolver
             Participants =
             [
                 .. participants.Values
-                               .Select(participant => ToSpecParticipant(participant, activeModelId, activeModelIsCloud))
+                               .Select(participant => ToSpecParticipant(participant, activeModelId))
                                .OrderBy(static participant => participant.Key, StringComparer.Ordinal)
             ],
             Edges = edges,
@@ -183,11 +182,13 @@ internal sealed class OrchestrationResolver : IOrchestrationResolver
             // its own enabled playbook when its playbook is enabled, else keep its base Instructions byte-identical.
             var resolvedInstructions = await ComposeParticipantInstructionsAsync(participant, retrievalQuery, cancellationToken).ConfigureAwait(false);
 
-            // Resolve THIS participant's thinking capability from its OWN effective model (not the turn model's), so a
-            // participant pinned to a non-thinking model never has a reasoning level sent to the think wire. Tools are
-            // gated separately by the ToolCapableModels allow-list above, so only the thinking bit is taken here.
-            var (supportsThinking, _) = await _modelCapabilityResolver.ResolveAsync(participantEffectiveModel, cancellationToken).ConfigureAwait(false);
-            capable[participant.Id] = new ResolvedParticipant(participant, resolvedInstructions, supportsThinking);
+            // Resolve THIS participant's thinking capability AND provider locality from its OWN effective model (not the
+            // turn model's), so a participant pinned to a non-thinking model never has a reasoning level sent to the
+            // think wire, and a participant pinned to a CLOUD model has the knowledge tools gated off its offer even when
+            // the turn's active model is local. Tools' tool-capability is gated separately by the ToolCapableModels
+            // allow-list above; this call supplies the thinking bit and the cloud-locality bit from one lookup.
+            var (supportsThinking, _, participantIsCloud) = await _modelCapabilityResolver.ResolveAsync(participantEffectiveModel, cancellationToken).ConfigureAwait(false);
+            capable[participant.Id] = new ResolvedParticipant(participant, resolvedInstructions, supportsThinking, participantIsCloud);
         }
 
         return capable;
@@ -248,7 +249,7 @@ internal sealed class OrchestrationResolver : IOrchestrationResolver
         return edges;
     }
 
-    private OrchestrationSpecParticipant ToSpecParticipant(ResolvedParticipant participant, string? activeModelId, bool activeModelIsCloud)
+    private OrchestrationSpecParticipant ToSpecParticipant(ResolvedParticipant participant, string? activeModelId)
     {
         var definition = participant.Definition;
         return new OrchestrationSpecParticipant
@@ -262,7 +263,9 @@ internal sealed class OrchestrationResolver : IOrchestrationResolver
             ModelId = definition.ModelProfile,
             ReasoningEffort = definition.ReasoningEffort,
             SupportsThinking = participant.SupportsThinking,
-            Tools = ProjectAllowedTools(definition, activeModelId, activeModelIsCloud)
+            // Gate on the participant's OWN effective-model locality (resolved during the async load), not the turn's
+            // active model — so a cloud-pinned participant is withheld the knowledge tools even on a local-active turn.
+            Tools = ProjectAllowedTools(definition, activeModelId, participant.IsCloud)
         };
     }
 
@@ -273,10 +276,10 @@ internal sealed class OrchestrationResolver : IOrchestrationResolver
     ///     definition. Names the definition allows but the offer does not contain are dropped and logged — never
     ///     fabricated, so a participant is never handed a tool the node cannot execute.
     /// </summary>
-    private IReadOnlyList<AllowedToolDto> ProjectAllowedTools(AgentDefinitionRecord definition, string? activeModelId, bool activeModelIsCloud)
+    private IReadOnlyList<AllowedToolDto> ProjectAllowedTools(AgentDefinitionRecord definition, string? activeModelId, bool effectiveModelIsCloud)
     {
         var effectiveModel = definition.ModelProfile ?? activeModelId;
-        var offered = _localToolOfferProvider.GetOfferedTools(effectiveModel, activeModelIsCloud);
+        var offered = _localToolOfferProvider.GetOfferedTools(effectiveModel, effectiveModelIsCloud);
         var allowedNames = new HashSet<string>(definition.AllowedToolNames, StringComparer.Ordinal);
 
         var projected = offered
@@ -319,8 +322,9 @@ internal sealed class OrchestrationResolver : IOrchestrationResolver
 
     /// <summary>
     ///     A capable participant paired with the system prompt to emit for it (its base Instructions, or its
-    ///     playbook-composed prompt when its own playbook is enabled) and its effective model's thinking capability. Both
-    ///     are resolved during the async participant load so the synchronous <see cref="ToSpecParticipant" /> stays query-free.
+    ///     playbook-composed prompt when its own playbook is enabled), its effective model's thinking capability, and its
+    ///     effective model's provider locality (<see cref="IsCloud" />). All are resolved during the async participant
+    ///     load so the synchronous <see cref="ToSpecParticipant" /> stays query-free.
     /// </summary>
-    private sealed record ResolvedParticipant(AgentDefinitionRecord Definition, string ResolvedInstructions, bool SupportsThinking);
+    private sealed record ResolvedParticipant(AgentDefinitionRecord Definition, string ResolvedInstructions, bool SupportsThinking, bool IsCloud);
 }

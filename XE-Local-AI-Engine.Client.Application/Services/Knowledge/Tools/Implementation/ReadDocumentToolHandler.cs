@@ -90,17 +90,22 @@ internal sealed class ReadDocumentToolHandler : IClientLocalToolHandler
             chunks.Add(new
             {
                 chunkIndex = chunk.ChunkIndex,
-                section = chunk.HeadingPath,
-                // Document text is DATA, not instructions: flag and fence it (budget still measures raw chunk length).
+                // The attacker-controlled document title + section heading AND the chunk body are DATA, not
+                // instructions: fence them together inside one nonce-delimited untrusted region (budget still measures
+                // raw chunk length). The title rides inside each chunk's fence so no attacker-controlled string is
+                // emitted outside the boundary.
                 contentTrust = UntrustedContentFraming.UntrustedTrustLabel,
-                content = UntrustedContentFraming.Wrap(chunk.Content)
+                content = UntrustedContentFraming.WrapDocument(chunk.Content,
+                [
+                    new("title", detail.DisplayName),
+                    new("section", chunk.HeadingPath)
+                ])
             });
         }
 
         var payload = new
         {
             documentId = detail.DocumentId,
-            title = detail.DisplayName,
             status = detail.Status.ToString(),
             chunkCount = detail.ChunkCount,
             returnedChunks = chunks.Count,

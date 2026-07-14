@@ -1241,7 +1241,7 @@ public sealed class NodeChatStreamServiceTests
         store.GetByIdAsync(agentDefinitionId, Arg.Any<CancellationToken>()).Returns(CreateOrchestratorRecord(agentDefinitionId));
         var orchestrationResolver = Substitute.For<IOrchestrationResolver>();
         var spec = CreateSampleSpec();
-        orchestrationResolver.ResolveAsync(Arg.Any<AgentDefinitionRecord>(), Arg.Any<string?>(), Arg.Any<string?>(), Arg.Any<bool>(), Arg.Any<bool>(), Arg.Any<CancellationToken>())
+        orchestrationResolver.ResolveAsync(Arg.Any<AgentDefinitionRecord>(), Arg.Any<string?>(), Arg.Any<string?>(), Arg.Any<bool>(), Arg.Any<CancellationToken>())
                              .Returns(new ResolvedOrchestration(spec, "Orchestrator prompt.", "qwen3:8b", ReasoningEffort: null, AgentDefinitionVersion: 4));
 
         var service = new NodeChatStreamService(persistence,
@@ -1735,6 +1735,7 @@ public sealed class NodeChatStreamServiceTests
             new LexicalPlaybookRetrievalRanker(),
             Options.Create(new PlaybookRetrievalOptions()),
             new FakeAgentInstructionProvider(),
+            Substitute.For<XE_Local_AI_Engine.Client.Services.Chat.IModelCapabilityResolver>(),
             NullLogger<AgentDefinitionResolver>.Instance);
 
         var persistence = CreatePersistence(conversationId, assistantMessageId, requestId, _ => { });
@@ -1838,6 +1839,7 @@ public sealed class NodeChatStreamServiceTests
             new LexicalPlaybookRetrievalRanker(),
             Options.Create(new PlaybookRetrievalOptions()),
             new FakeAgentInstructionProvider(),
+            Substitute.For<XE_Local_AI_Engine.Client.Services.Chat.IModelCapabilityResolver>(),
             NullLogger<AgentDefinitionResolver>.Instance);
 
         var persistence = CreatePersistence(conversationId, assistantMessageId, requestId, _ => { });
@@ -2271,7 +2273,7 @@ public sealed class NodeChatStreamServiceTests
     private static IOrchestrationResolver CreateOrchestrationResolver()
     {
         var resolver = Substitute.For<IOrchestrationResolver>();
-        resolver.ResolveAsync(Arg.Any<AgentDefinitionRecord>(), Arg.Any<string?>(), Arg.Any<string?>(), Arg.Any<bool>(), Arg.Any<bool>(), Arg.Any<CancellationToken>()).Returns((ResolvedOrchestration?)null);
+        resolver.ResolveAsync(Arg.Any<AgentDefinitionRecord>(), Arg.Any<string?>(), Arg.Any<string?>(), Arg.Any<bool>(), Arg.Any<CancellationToken>()).Returns((ResolvedOrchestration?)null);
         return resolver;
     }
 

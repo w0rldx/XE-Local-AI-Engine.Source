@@ -10,6 +10,11 @@ namespace XE_Local_AI_Engine.Client.Services.Chat;
 /// </summary>
 public interface IModelCapabilityResolver
 {
-    /// <summary>Resolves <paramref name="model" />'s advertised thinking/tools capabilities. Cache-first; no probe on a cache hit.</summary>
-    Task<(bool SupportsThinking, bool SupportsTools)> ResolveAsync(string? model, CancellationToken cancellationToken);
+    /// <summary>
+    ///     Resolves <paramref name="model" />'s advertised thinking/tools capabilities AND its provider locality
+    ///     (<c>IsCloud</c> = Codex OAuth / Azure Foundry; local otherwise). Cache-first; no probe on a cache hit. The
+    ///     locality is resolved from the SAME provider-routing decision, so a caller gating on the EFFECTIVE (post-pin)
+    ///     model gets both capability and locality from one lookup.
+    /// </summary>
+    Task<(bool SupportsThinking, bool SupportsTools, bool IsCloud)> ResolveAsync(string? model, CancellationToken cancellationToken);
 }
