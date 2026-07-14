@@ -89,10 +89,14 @@ internal sealed class ReadSurroundingChunksToolHandler : IClientLocalToolHandler
                      {
                          chunkId = neighbor.ChunkId,
                          chunkIndex = neighbor.ChunkIndex,
-                         section = neighbor.HeadingPath,
-                         // Neighbor chunk text is DATA, not instructions: flag and fence it.
+                         // The attacker-controlled section heading AND the neighbor chunk body are DATA, not
+                         // instructions: fence them together inside one nonce-delimited untrusted region so no
+                         // attacker-controlled string is emitted outside the boundary.
                          contentTrust = UntrustedContentFraming.UntrustedTrustLabel,
-                         content = UntrustedContentFraming.Wrap(neighbor.Content)
+                         content = UntrustedContentFraming.WrapDocument(neighbor.Content,
+                         [
+                             new("section", neighbor.HeadingPath)
+                         ])
                      })
         };
 

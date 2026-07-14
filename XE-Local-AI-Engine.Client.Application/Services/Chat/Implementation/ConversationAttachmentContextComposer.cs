@@ -27,8 +27,8 @@ internal static class ConversationAttachmentContextComposer
 
     public const string TruncationNotice = "[Attachment content was truncated to fit the context budget.]";
 
-    // Fixed character overhead the untrusted-content fence adds around one document body (both markers + two newlines).
-    private static readonly int FenceOverhead = UntrustedContentFraming.BeginMarker.Length + UntrustedContentFraming.EndMarker.Length + 2;
+    // Separator emitted before each fenced attachment block.
+    private const string PartSeparator = "\n\n";
 
     /// <summary>
     ///     Returns the composed context block, or <see langword="null"/> when there is nothing to inline (no parts, or
@@ -52,31 +52,31 @@ internal static class ConversationAttachmentContextComposer
                 continue;
             }
 
-            var header = $"\n\n[Attached document: {part.FileName}]\n";
+            // The file NAME is attacker-controlled, so it rides INSIDE the fence as metadata — nothing attacker-
+            // controlled is emitted outside the untrusted boundary. WrapDocument's length is a fixed per-part overhead
+            // (markers + metadata, deterministic since the nonce length is fixed) plus the body length, so budgeting
+            // against the empty-body wrap keeps the closing marker from ever being truncated away.
+            var metadata = new KeyValuePair<string, string?>[] { new("file", part.FileName) };
+            var fenceOverhead = UntrustedContentFraming.WrapDocument(string.Empty, metadata).Length;
 
-            // Reserve the header plus the fence overhead (and at least one body char). If they cannot fit, stop — never
-            // emit a header or an unclosed fence with no room for content.
-            if (header.Length + FenceOverhead + 1 > remaining)
+            // Reserve the separator plus the fence overhead plus at least one body char. If they cannot fit, stop.
+            if (PartSeparator.Length + fenceOverhead + 1 > remaining)
             {
                 truncated = true;
                 break;
             }
 
-            builder.Append(header);
-            remaining -= header.Length;
-
-            // Body budget is what is left after the fence markers, so the closing marker is never truncated away.
-            var bodyBudget = remaining - FenceOverhead;
+            var bodyBudget = remaining - PartSeparator.Length - fenceOverhead;
             if (part.Markdown.Length > bodyBudget)
             {
-                builder.Append(UntrustedContentFraming.Wrap(part.Markdown[..bodyBudget]));
+                builder.Append(PartSeparator).Append(UntrustedContentFraming.WrapDocument(part.Markdown[..bodyBudget], metadata));
                 appendedAny = true;
                 truncated = true;
                 break;
             }
 
-            builder.Append(UntrustedContentFraming.Wrap(part.Markdown));
-            remaining -= FenceOverhead + part.Markdown.Length;
+            builder.Append(PartSeparator).Append(UntrustedContentFraming.WrapDocument(part.Markdown, metadata));
+            remaining -= PartSeparator.Length + fenceOverhead + part.Markdown.Length;
             appendedAny = true;
         }
 
