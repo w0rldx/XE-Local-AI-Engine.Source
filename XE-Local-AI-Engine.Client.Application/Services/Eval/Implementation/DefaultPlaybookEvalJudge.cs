@@ -38,16 +38,36 @@ internal sealed class DefaultPlaybookEvalJudge(ILogger<DefaultPlaybookEvalJudge>
         ArgumentNullException.ThrowIfNull(goldenCase);
         ArgumentNullException.ThrowIfNull(nodeLocalClient);
 
-        // Deterministic path: an assertion scores in plain code, no model call → the gate is deterministic for it.
+        var hasRubric = !string.IsNullOrWhiteSpace(goldenCase.Rubric);
+
+        // Deterministic path: an assertion carrying at least one meaningful (non-blank) required/forbidden phrase scores
+        // in plain code, no model call → the gate is deterministic for it.
         if (!string.IsNullOrWhiteSpace(goldenCase.Assertion))
         {
-            return new EvalScore(ScoreByAssertion(goldenCase.Assertion, candidateText ?? string.Empty), AssertionScoredBy);
+            // An assertion string that is malformed or carries no meaningful signal proves nothing on its own. Treat it
+            // as ABSENT and fall through to the rubric when the author supplied one — a rubric-backed case must not be
+            // deterministically failed just because its assertion is an empty-phrase placeholder. (Create/update
+            // validation already requires a real signal OR a rubric; this reaches the same case for legacy rows.)
+            var assertion = GoldenAssertion.TryParse(goldenCase.Assertion);
+            if (assertion is { HasMeaningfulSignal: true })
+            {
+                return new EvalScore(ScoreByAssertion(assertion, candidateText ?? string.Empty), AssertionScoredBy);
+            }
+
+            // No usable assertion and no rubric to fall back on → fail closed on the assertion path rather than wave the
+            // case through (an empty-phrase assertion would otherwise pass any output).
+            if (!hasRubric)
+            {
+                _logger.LogWarning("Golden case {GoldenCaseId} has an assertion with no meaningful phrase and no rubric; scoring as a fail.", goldenCase.Id);
+                return new EvalScore(Pass: false, AssertionScoredBy);
+            }
         }
 
-        // Judge path: a rubric is required when there is no assertion. Defend against an invalid case (neither present).
-        if (string.IsNullOrWhiteSpace(goldenCase.Rubric))
+        // Judge path: a rubric scores the case when there is no usable assertion. Defend against an invalid case (neither
+        // a meaningful assertion nor a rubric present).
+        if (!hasRubric)
         {
-            _logger.LogWarning("Golden case {GoldenCaseId} has neither assertion nor rubric; scoring as a fail.", goldenCase.Id);
+            _logger.LogWarning("Golden case {GoldenCaseId} has neither a meaningful assertion nor a rubric; scoring as a fail.", goldenCase.Id);
             return new EvalScore(Pass: false, JudgeScoredBy);
         }
 
@@ -55,27 +75,10 @@ internal sealed class DefaultPlaybookEvalJudge(ILogger<DefaultPlaybookEvalJudge>
             JudgeScoredBy);
     }
 
-    private bool ScoreByAssertion(string assertionJson, string candidateText)
+    // The caller has already parsed the assertion and confirmed HasMeaningfulSignal, so an empty required-check
+    // (vacuously true) and an empty forbidden-check (trivially absent) cannot reach here to pass any output.
+    private static bool ScoreByAssertion(GoldenAssertion assertion, string candidateText)
     {
-        // GoldenAssertion.TryParse filters null/blank phrases (a blank required phrase would always "pass", a blank
-        // forbidden phrase would force-fail any candidate) and returns null on malformed JSON.
-        var assertion = GoldenAssertion.TryParse(assertionJson);
-        if (assertion is null)
-        {
-            // A malformed assertion cannot prove the candidate is good — fail closed rather than wave it through.
-            _logger.LogWarning("Failed to parse golden assertion JSON; scoring the case as a fail.");
-            return false;
-        }
-
-        // An assertion with no meaningful (non-blank) phrase in EITHER array proves nothing — an empty required-check is
-        // vacuously true and an empty forbidden-check trivially absent, so it would otherwise pass any output. Fail
-        // closed instead. This closes the empty-array bypass for legacy golden rows that predate create-time validation.
-        if (!assertion.HasMeaningfulSignal)
-        {
-            _logger.LogWarning("Golden assertion has no non-blank required or forbidden phrase; scoring the case as a fail.");
-            return false;
-        }
-
         var requiredPresent = assertion.RequiredPhrases.All(phrase => candidateText.Contains(phrase, StringComparison.Ordinal));
         var forbiddenAbsent = !assertion.ForbiddenPhrases.Any(phrase => candidateText.Contains(phrase, StringComparison.Ordinal));
 
