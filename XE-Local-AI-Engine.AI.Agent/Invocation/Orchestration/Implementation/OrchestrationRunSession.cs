@@ -70,8 +70,8 @@ internal sealed class OrchestrationRunSession : IOrchestrationRunSession
                 watchToken => _run.WatchStreamAsync(watchToken).GetAsyncEnumerator(watchToken),
                 new IdleGuardContext(
                     _abandonmentGrace,
-                    OrchestrationMetrics.RecordWatchdogTimeout,
-                    OrchestrationMetrics.RecordAbandoned,
+                    static () => WorkflowWatchdogMetrics.RecordWatchdogTimeout(WorkflowWatchdogMetrics.OrchestrationSurface),
+                    static () => WorkflowWatchdogMetrics.RecordAbandoned(WorkflowWatchdogMetrics.OrchestrationSurface),
                     idleCts.Token,
                     cancellationToken));
 
@@ -139,7 +139,7 @@ internal sealed class OrchestrationRunSession : IOrchestrationRunSession
             // (observed off-thread) and record it rather than blocking indefinitely.
             if (!await IdleStreamGuard.DisposeBoundedAsync(_run, _abandonmentGrace).ConfigureAwait(false))
             {
-                OrchestrationMetrics.RecordAbandoned();
+                WorkflowWatchdogMetrics.RecordAbandoned(WorkflowWatchdogMetrics.OrchestrationSurface);
                 _logger.LogWarning("Orchestration run disposal exceeded the {Grace} bound; abandoning it (its native resources may not be reclaimed until it returns).", _abandonmentGrace);
             }
         }
