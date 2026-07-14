@@ -93,11 +93,27 @@ public sealed class MemoryExtractionWorker : BackgroundService
 
         try
         {
-            await foreach (var job in _dispatcher.Reader.ReadAllAsync(_drainDeadline.Token).ConfigureAwait(false))
+            // Acquire the concurrency slot BEFORE the destructive read, never after. The dispatcher is SingleReader, so a
+            // WaitToReadAsync/TryRead pair is a safe stand-in for the absent multi-reader peek: a job is never removed from
+            // the channel until a slot is in hand. This closes the accounting gap of a dequeue-then-await-slot ordering,
+            // where a job cancelled while awaiting the slot had already left the channel (so the queued-drain misses it) yet
+            // never reached TrackInFlight (so _inFlight misses it) — escaping BOTH the dropped and abandoned counters. Now a
+            // job the drain window cancels stays buffered and is accounted as dropped in StopAsync.
+            while (await _dispatcher.Reader.WaitToReadAsync(_drainDeadline.Token).ConfigureAwait(false))
             {
                 // Gate on the concurrency budget before starting the next job so at most MaxConcurrentExtractions run.
                 await _concurrency.WaitAsync(_drainDeadline.Token).ConfigureAwait(false);
-                TrackInFlight(ProcessJobAsync(job));
+
+                if (_dispatcher.Reader.TryRead(out var job))
+                {
+                    TrackInFlight(ProcessJobAsync(job));
+                }
+                else
+                {
+                    // The reader signalled readiness but nothing was there (the writer completed between the wait and the
+                    // read). Release the slot just taken so it is not leaked, then loop to re-observe writer completion.
+                    ReleaseConcurrency();
+                }
             }
         }
         catch (OperationCanceledException) when (_drainDeadline.IsCancellationRequested)
