@@ -95,6 +95,20 @@ public sealed class DefaultPlaybookEvalJudgeTests
         AssertEx.False(score.Pass, "A case with neither assertion nor rubric is invalid and must score as a fail.");
     }
 
+    [Test]
+    public async Task ScoreAsync_WhenAssertionHasNoMeaningfulPhrase_FailsClosed()
+    {
+        var judge = new DefaultPlaybookEvalJudge(NullLogger<DefaultPlaybookEvalJudge>.Instance);
+        // Both arrays empty (or all-blank) → the assertion gates nothing and would otherwise pass ANY output. It must
+        // fail closed instead — this closes the empty-array bypass for legacy golden rows.
+        var goldenCase = AssertionCase([], []);
+
+        var score = await judge.ScoreAsync(goldenCase, "literally anything", Substitute.For<IChatClient>()).ConfigureAwait(false);
+
+        AssertEx.False(score.Pass, "An assertion with no meaningful phrase proves nothing and must not auto-pass.");
+        AssertEx.Equal("assertion", score.ScoredBy);
+    }
+
     private static GoldenConversationRecord AssertionCase(string[] required, string[] forbidden)
     {
         var assertion = JsonSerializer.Serialize(new

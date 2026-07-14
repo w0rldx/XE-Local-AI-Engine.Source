@@ -39,19 +39,16 @@ internal static class InvocationToolBridge
     }
 
     /// <summary>
-    ///     Creates a name-only offer placeholder for a tool whose executable lives in <c>IAgentToolRegistry</c>. The
-    ///     runtime package only carries the offer list (name + schema); the executable is resolved by the invocation
-    ///     factory, which substitutes this placeholder for the matching registry function before the agent runs. The
-    ///     placeholder throws if it is ever invoked, because an offered local tool with no registry match must be
-    ///     dropped rather than executed.
+    ///     Creates a name-only offer placeholder for a tool whose executable lives in a resolution registry. The runtime
+    ///     package only carries the offer list (name + schema + approval flag); the executable is resolved by the
+    ///     invocation factory, which substitutes this placeholder for the matching registry function before the agent
+    ///     runs. The placeholder throws if it is ever invoked, because an offered local tool with no registry match must
+    ///     be dropped rather than executed. <paramref name="requiresApproval" /> carries the resolved per-agent approval
+    ///     policy through to <see cref="InvocationToolResolver" /> so a tightening override is honored (tighten-only) —
+    ///     see <see cref="OfferPlaceholderAIFunction" />.
     /// </summary>
-    public static AITool CreateOfferPlaceholder(string toolName)
+    public static AITool CreateOfferPlaceholder(string toolName, bool requiresApproval = false)
     {
-        ArgumentException.ThrowIfNullOrWhiteSpace(toolName);
-
-        Func<string, string> placeholder = _ =>
-            throw new InvalidOperationException($"Offered local tool '{toolName}' has no registered executable.");
-
-        return AIFunctionFactory.Create(placeholder, toolName);
+        return new OfferPlaceholderAIFunction(toolName, requiresApproval);
     }
 }

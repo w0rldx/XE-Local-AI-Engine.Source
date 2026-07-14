@@ -57,35 +57,27 @@ internal sealed class DefaultPlaybookEvalJudge(ILogger<DefaultPlaybookEvalJudge>
 
     private bool ScoreByAssertion(string assertionJson, string candidateText)
     {
-        Assertion? assertion;
-        try
-        {
-            assertion = JsonSerializer.Deserialize<Assertion>(assertionJson, SerializerOptions);
-        }
-        catch (JsonException exception)
-        {
-            // A malformed assertion cannot prove the candidate is good — fail closed rather than wave it through.
-            _logger.LogWarning(exception, "Failed to parse golden assertion JSON; scoring the case as a fail.");
-            return false;
-        }
-
+        // GoldenAssertion.TryParse filters null/blank phrases (a blank required phrase would always "pass", a blank
+        // forbidden phrase would force-fail any candidate) and returns null on malformed JSON.
+        var assertion = GoldenAssertion.TryParse(assertionJson);
         if (assertion is null)
         {
+            // A malformed assertion cannot prove the candidate is good — fail closed rather than wave it through.
+            _logger.LogWarning("Failed to parse golden assertion JSON; scoring the case as a fail.");
             return false;
         }
 
-        // Filter out null/empty entries before the Ordinal checks: an empty phrase is degenerate ("".Contains("") is
-        // true), so a stray blank required phrase would always "pass" and a blank forbidden phrase would force-fail any
-        // candidate. Ignore them so only meaningful phrases gate the case.
-        var requiredPresent = assertion.RequiredPhrases is null
-                              || assertion.RequiredPhrases
-                                          .Where(static phrase => !string.IsNullOrEmpty(phrase))
-                                          .All(phrase => candidateText.Contains(phrase, StringComparison.Ordinal));
+        // An assertion with no meaningful (non-blank) phrase in EITHER array proves nothing — an empty required-check is
+        // vacuously true and an empty forbidden-check trivially absent, so it would otherwise pass any output. Fail
+        // closed instead. This closes the empty-array bypass for legacy golden rows that predate create-time validation.
+        if (!assertion.HasMeaningfulSignal)
+        {
+            _logger.LogWarning("Golden assertion has no non-blank required or forbidden phrase; scoring the case as a fail.");
+            return false;
+        }
 
-        var forbiddenAbsent = assertion.ForbiddenPhrases is null
-                              || !assertion.ForbiddenPhrases
-                                           .Where(static phrase => !string.IsNullOrEmpty(phrase))
-                                           .Any(phrase => candidateText.Contains(phrase, StringComparison.Ordinal));
+        var requiredPresent = assertion.RequiredPhrases.All(phrase => candidateText.Contains(phrase, StringComparison.Ordinal));
+        var forbiddenAbsent = !assertion.ForbiddenPhrases.Any(phrase => candidateText.Contains(phrase, StringComparison.Ordinal));
 
         return requiredPresent && forbiddenAbsent;
     }
@@ -123,9 +115,7 @@ internal sealed class DefaultPlaybookEvalJudge(ILogger<DefaultPlaybookEvalJudge>
         return verdict.Pass;
     }
 
-    // Positional records: System.Text.Json binds JSON properties to the constructor parameters by name (Web defaults),
+    // Positional record: System.Text.Json binds JSON properties to the constructor parameters by name (Web defaults),
     // and the constructor counts as the assignment so the unassigned-auto-property analyzer stays quiet.
-    private sealed record Assertion(List<string>? RequiredPhrases, List<string>? ForbiddenPhrases);
-
     private sealed record JudgeVerdict(bool Pass, string? Reason);
 }
