@@ -195,6 +195,109 @@ public sealed class RetentionSweeperServiceTests : IDisposable
         AssertEx.False(Directory.Exists(UploadDirectory(conversationId)), "Interactive purge must also delete the on-disk upload directory.");
     }
 
+    [Test]
+    public async Task Sweep_WithMillisecondTimestamps_DeletesJustInsideCutoffButNotJustOutside()
+    {
+        // Production timestamps are Unix MILLISECONDS. The cutoff must be milliseconds too: seeding 13-digit last_seen
+        // values and asserting the boundary proves the fix. Under the old seconds cutoff the ~10-digit cutoff is always
+        // smaller than any real 13-digit last_seen, so nothing would ever be deleted and this test would fail.
+        const long fixedNowMs = 2_000_000_000_000; // ~2033, a realistic 13-digit millisecond clock.
+        var fixedClock = new FixedTimeProvider(DateTimeOffset.FromUnixTimeMilliseconds(fixedNowMs));
+        var cutoffMs = fixedNowMs - (long)TimeSpan.FromDays(30).TotalMilliseconds;
+
+        await using var provider = await BuildProviderAsync("ms-boundary.sqlite").ConfigureAwait(false);
+        var service = CreateService(provider);
+
+        // last_seen exactly at the cutoff is eligible (predicate is last_seen <= cutoff); one millisecond newer is not.
+        var justInsideId = await SeedConversationAtAsync(service, cutoffMs).ConfigureAwait(false);
+        var justOutsideId = await SeedConversationAtAsync(service, cutoffMs + 1).ConfigureAwait(false);
+
+        using var sweeper = CreateSweeper(provider, enabled: true, timeProvider: fixedClock);
+        await sweeper.RunSweepOnceAsync(CancellationToken.None).ConfigureAwait(false);
+
+        AssertEx.True(await service.GetConversationAsync(justInsideId).ConfigureAwait(false) is null,
+            "A conversation whose last_seen is exactly at the millisecond cutoff must be deleted.");
+        AssertEx.NotNull(await service.GetConversationAsync(justOutsideId).ConfigureAwait(false));
+    }
+
+    [Test]
+    public async Task Sweep_ConversationTouchedAfterCandidateSelection_SurvivesWhilePeerIsDeleted()
+    {
+        const long fixedNowMs = 2_000_000_000_000;
+        var fixedClock = new FixedTimeProvider(DateTimeOffset.FromUnixTimeMilliseconds(fixedNowMs));
+        var cutoffMs = fixedNowMs - (long)TimeSpan.FromDays(30).TotalMilliseconds;
+
+        var touchedId = Guid.Empty;
+        INodeChatPersistenceService? service = null;
+
+        // Deterministic interleave (no sleeps): the fake store wraps the real one and, the instant after candidate
+        // selection returns, touches one candidate — bumping its last_seen to "now" exactly as a racing send/touch
+        // would, in the window between selection and deletion. The per-candidate delete then re-checks eligibility under
+        // the conversation-exclusive lock and must spare it.
+        await using var provider = await BuildProviderAsync("touch-race.sqlite",
+            services => services.AddScoped<INodeRetentionStore>(sp => new TouchInjectingRetentionStore(
+                new NodeRetentionStore(sp.GetRequiredService<NodeChatDbContext>()),
+                async () =>
+                {
+                    if (service is not null && touchedId != Guid.Empty)
+                    {
+                        await service.SetConversationPinnedAsync(new NodeChatSetConversationPinnedRequest(touchedId, IsPinned: false, UpdatedAtUtc: fixedNowMs)).ConfigureAwait(false);
+                    }
+                }))).ConfigureAwait(false);
+
+        service = CreateService(provider);
+
+        // Two conversations, both expired at selection time, each with a full footprint incl. an on-disk upload dir.
+        touchedId = await SeedExpiredConversationWithFootprintAsync(provider, service, cutoffMs - 5_000).ConfigureAwait(false);
+        var deletedId = await SeedExpiredConversationWithFootprintAsync(provider, service, cutoffMs - 5_000).ConfigureAwait(false);
+
+        using var sweeper = CreateSweeper(provider, enabled: true, timeProvider: fixedClock);
+        await sweeper.RunSweepOnceAsync(CancellationToken.None).ConfigureAwait(false);
+
+        // Touched after selection: the in-transaction re-check saw the fresh last_seen and spared it — the row and its
+        // upload directory both survive, proving retention cannot delete a just-touched conversation.
+        AssertEx.NotNull(await service.GetConversationAsync(touchedId).ConfigureAwait(false));
+        AssertEx.True(Directory.Exists(UploadDirectory(touchedId)), "A conversation touched after selection must keep its upload directory.");
+        AssertEx.Equal(expected: 1, await CountRowsAsync(provider, "conversation_uploaded_files", touchedId).ConfigureAwait(false));
+
+        // Still-expired peer: deleted, and only its blobs are torn down — blob teardown targets actually-deleted ids.
+        AssertEx.True(await service.GetConversationAsync(deletedId).ConfigureAwait(false) is null, "The still-expired conversation must be deleted.");
+        AssertEx.False(Directory.Exists(UploadDirectory(deletedId)), "The deleted conversation's upload directory must be removed.");
+    }
+
+    // Creates a conversation with no messages, so its last_seen_utc is exactly the supplied millisecond value.
+    private static async Task<Guid> SeedConversationAtAsync(INodeChatPersistenceService service, long lastSeenMs)
+    {
+        var conversation = await service.CreateConversationAsync(new NodeChatCreateConversationRequest("Chat", "node", CreatedAtUtc: lastSeenMs)).ConfigureAwait(false);
+        return conversation.ConversationId;
+    }
+
+    // Creates a full-footprint conversation (message + feedback + upload dir) whose last_seen_utc is pinned to the
+    // supplied millisecond value (message/feedback touches all use the same value, and the final pin makes it explicit).
+    private static async Task<Guid> SeedExpiredConversationWithFootprintAsync(ServiceProvider provider, INodeChatPersistenceService service, long lastSeenMs)
+    {
+        var conversation = await service.CreateConversationAsync(new NodeChatCreateConversationRequest("Chat", "node", CreatedAtUtc: lastSeenMs)).ConfigureAwait(false);
+        var messageId = Guid.NewGuid();
+        await service.PersistUserMessageAsync(new NodeChatPersistUserMessageRequest(conversation.ConversationId, messageId, "question", CreatedAtUtc: lastSeenMs)).ConfigureAwait(false);
+        await service.SetMessageFeedbackAsync(new NodeChatSetMessageFeedbackRequest(conversation.ConversationId, messageId, "up", Comment: null, UpdatedAtUtc: lastSeenMs)).ConfigureAwait(false);
+
+        var uploadedFileStore = provider.GetRequiredService<IConversationUploadedFileStore>();
+        await uploadedFileStore.AddAsync(new ConversationUploadedFileInput(conversation.ConversationId,
+                Guid.NewGuid(),
+                "doc.txt",
+                "text/plain",
+                ".txt",
+                SizeBytes: 4,
+                new ReadOnlyMemory<byte>(Encoding.UTF8.GetBytes("data")),
+                DocumentExtractionStatus.Extracted,
+                ExtractedMarkdown: "data",
+                ExtractedChars: 4),
+            CancellationToken.None).ConfigureAwait(false);
+
+        await service.SetConversationPinnedAsync(new NodeChatSetConversationPinnedRequest(conversation.ConversationId, IsPinned: false, UpdatedAtUtc: lastSeenMs)).ConfigureAwait(false);
+        return conversation.ConversationId;
+    }
+
     private static async Task<Guid> SeedConversationWithFootprintAsync(ServiceProvider provider, INodeChatPersistenceService service)
     {
         // Small timestamps put last_seen far in the past, so the conversation is always expired against a real-now
@@ -220,7 +323,7 @@ public sealed class RetentionSweeperServiceTests : IDisposable
         return conversation.ConversationId;
     }
 
-    private async Task<ServiceProvider> BuildProviderAsync(string fileName)
+    private async Task<ServiceProvider> BuildProviderAsync(string fileName, Action<ServiceCollection>? customize = null)
     {
         Directory.CreateDirectory(_rootPath);
         var databasePath = Path.Combine(_rootPath, fileName);
@@ -233,6 +336,10 @@ public sealed class RetentionSweeperServiceTests : IDisposable
         services.AddSingleton(TimeProvider.System);
         services.AddSingleton<IConversationUploadedFileStore, ConversationUploadedFileStore>();
         services.AddScoped<INodeRetentionStore, NodeRetentionStore>();
+
+        // Lets an individual test replace a registration (e.g. wrap INodeRetentionStore to inject a deterministic touch
+        // between candidate selection and deletion). Last registration wins, so the override supersedes the default.
+        customize?.Invoke(services);
 
         var provider = services.BuildServiceProvider(true);
         await using var scope = provider.CreateAsyncScope();
@@ -249,10 +356,11 @@ public sealed class RetentionSweeperServiceTests : IDisposable
             provider.GetRequiredService<IConversationUploadedFileStore>());
     }
 
-    private static RetentionSweeperService CreateSweeper(ServiceProvider provider, bool enabled)
+    private static RetentionSweeperService CreateSweeper(ServiceProvider provider, bool enabled, TimeProvider? timeProvider = null)
     {
         return new RetentionSweeperService(provider.GetRequiredService<IServiceScopeFactory>(),
-            TimeProvider.System,
+            timeProvider ?? TimeProvider.System,
+            provider.GetRequiredService<NodeChatPersistenceWriter>(),
             Options.Create(new ChatRetentionOptions { Enabled = enabled, RetentionDays = 30, SweepInterval = TimeSpan.FromMinutes(10) }),
             NullLogger<RetentionSweeperService>.Instance);
     }
@@ -278,5 +386,26 @@ public sealed class RetentionSweeperServiceTests : IDisposable
         command.Parameters.Add(parameter);
         var result = await command.ExecuteScalarAsync().ConfigureAwait(false);
         return Convert.ToInt32(result, System.Globalization.CultureInfo.InvariantCulture);
+    }
+
+    // A clock frozen at a fixed instant so the retention cutoff (now - RetentionDays) is deterministic.
+    private sealed class FixedTimeProvider(DateTimeOffset now) : TimeProvider
+    {
+        public override DateTimeOffset GetUtcNow()
+        {
+            return now;
+        }
+    }
+
+    // Wraps the real retention store and runs a callback immediately after candidate selection, deterministically
+    // reproducing a send/touch that races in the window between candidate selection and per-candidate deletion.
+    private sealed class TouchInjectingRetentionStore(INodeRetentionStore inner, Func<Task> afterSelection) : INodeRetentionStore
+    {
+        public async Task<IReadOnlyList<Guid>> ListExpiredConversationCandidatesAsync(long cutoffUtc, CancellationToken cancellationToken = default)
+        {
+            var candidates = await inner.ListExpiredConversationCandidatesAsync(cutoffUtc, cancellationToken).ConfigureAwait(false);
+            await afterSelection().ConfigureAwait(false);
+            return candidates;
+        }
     }
 }
