@@ -203,6 +203,7 @@ public sealed class LocalToolOfferProviderTests
     // ---- MED-004: knowledge-tool provider-locality gate ----
 
     private const string KnowledgeSearchToolName = "search_knowledge_base";
+    private const string CoderReadFileToolName = "read_file";
 
     [Test]
     public void GetOfferedTools_WhenModelIsLocal_OffersKnowledgeTools()
@@ -212,6 +213,31 @@ public sealed class LocalToolOfferProviderTests
         var offered = provider.GetOfferedTools("qwen3:8b", isCloudModel: false);
 
         AssertEx.Contains(offered, tool => tool.Name == KnowledgeSearchToolName);
+    }
+
+    [Test]
+    public void GetOfferedTools_WhenModelIsCloud_WithholdsCoderFileToolsByDefault()
+    {
+        // RR3-4 Part C: the coder workspace file tools read node-local attachment/workspace content, so they are gated
+        // off a cloud model by default alongside the knowledge tools.
+        var provider = CreateProvider("qwen3:8b");
+
+        var localOffer = provider.GetOfferedTools("qwen3:8b", isCloudModel: false);
+        var cloudOffer = provider.GetOfferedTools("qwen3:8b", isCloudModel: true);
+
+        AssertEx.Contains(localOffer, tool => tool.Name == CoderReadFileToolName);
+        AssertEx.False(cloudOffer.Any(tool => tool.Name == CoderReadFileToolName),
+            "a cloud model must not be offered the coder workspace file tools by default");
+    }
+
+    [Test]
+    public void GetOfferedTools_WhenModelIsCloud_AndOperatorOptedIn_OffersCoderFileTools()
+    {
+        var provider = CreateProvider(new McpToolRegistry(NullLogger<McpToolRegistry>.Instance), allowCloudKnowledgeAccess: true, "qwen3:8b");
+
+        var offered = provider.GetOfferedTools("qwen3:8b", isCloudModel: true);
+
+        AssertEx.Contains(offered, tool => tool.Name == CoderReadFileToolName);
     }
 
     [Test]

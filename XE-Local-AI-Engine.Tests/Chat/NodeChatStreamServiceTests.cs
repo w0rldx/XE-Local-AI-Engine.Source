@@ -20,6 +20,7 @@ using XE_Local_AI_Engine.Client.Services.CloudProviders;
 using XE_Local_AI_Engine.Client.Services.DocumentIngestion;
 using XE_Local_AI_Engine.Client.Services.Events;
 using XE_Local_AI_Engine.Client.Services.Invocation;
+using XE_Local_AI_Engine.Client.Services.Knowledge;
 using XE_Local_AI_Engine.Client.Services.Memory;
 using XE_Local_AI_Engine.Client.Services.NodeSettings;
 using XE_Local_AI_Engine.Providers.Ollama.Implementation;
@@ -58,6 +59,7 @@ public sealed class NodeChatStreamServiceTests
             Substitute.For<IConversationUploadedFileStore>(),
             Substitute.For<IConversationSandboxStager>(),
             CreateFenceSeedProvider(),
+            Options.Create(new KnowledgeBaseOptions()),
             TimeProvider.System,
             NullLogger<NodeChatStreamService>.Instance);
         var events = new List<ChatStreamEvent>();
@@ -107,6 +109,7 @@ public sealed class NodeChatStreamServiceTests
             Substitute.For<IConversationUploadedFileStore>(),
             Substitute.For<IConversationSandboxStager>(),
             CreateFenceSeedProvider(),
+            Options.Create(new KnowledgeBaseOptions()),
             TimeProvider.System,
             NullLogger<NodeChatStreamService>.Instance);
         var events = new List<ChatStreamEvent>();
@@ -159,6 +162,7 @@ public sealed class NodeChatStreamServiceTests
             Substitute.For<IConversationUploadedFileStore>(),
             Substitute.For<IConversationSandboxStager>(),
             CreateFenceSeedProvider(),
+            Options.Create(new KnowledgeBaseOptions()),
             TimeProvider.System,
             NullLogger<NodeChatStreamService>.Instance);
         var events = new List<ChatStreamEvent>();
@@ -219,6 +223,7 @@ public sealed class NodeChatStreamServiceTests
             Substitute.For<IConversationUploadedFileStore>(),
             Substitute.For<IConversationSandboxStager>(),
             CreateFenceSeedProvider(),
+            Options.Create(new KnowledgeBaseOptions()),
             TimeProvider.System,
             NullLogger<NodeChatStreamService>.Instance);
 
@@ -264,6 +269,7 @@ public sealed class NodeChatStreamServiceTests
             Substitute.For<IConversationUploadedFileStore>(),
             Substitute.For<IConversationSandboxStager>(),
             CreateFenceSeedProvider(),
+            Options.Create(new KnowledgeBaseOptions()),
             TimeProvider.System,
             NullLogger<NodeChatStreamService>.Instance);
 
@@ -309,6 +315,7 @@ public sealed class NodeChatStreamServiceTests
             Substitute.For<IConversationUploadedFileStore>(),
             Substitute.For<IConversationSandboxStager>(),
             CreateFenceSeedProvider(),
+            Options.Create(new KnowledgeBaseOptions()),
             TimeProvider.System,
             NullLogger<NodeChatStreamService>.Instance);
 
@@ -364,6 +371,7 @@ public sealed class NodeChatStreamServiceTests
             Substitute.For<IConversationUploadedFileStore>(),
             Substitute.For<IConversationSandboxStager>(),
             CreateFenceSeedProvider(),
+            Options.Create(new KnowledgeBaseOptions()),
             TimeProvider.System,
             NullLogger<NodeChatStreamService>.Instance);
 
@@ -414,6 +422,7 @@ public sealed class NodeChatStreamServiceTests
             Substitute.For<IConversationUploadedFileStore>(),
             Substitute.For<IConversationSandboxStager>(),
             CreateFenceSeedProvider(),
+            Options.Create(new KnowledgeBaseOptions()),
             TimeProvider.System,
             NullLogger<NodeChatStreamService>.Instance);
 
@@ -473,6 +482,7 @@ public sealed class NodeChatStreamServiceTests
             Substitute.For<IConversationUploadedFileStore>(),
             stager,
             CreateFenceSeedProvider(),
+            Options.Create(new KnowledgeBaseOptions()),
             TimeProvider.System,
             NullLogger<NodeChatStreamService>.Instance);
 
@@ -524,6 +534,7 @@ public sealed class NodeChatStreamServiceTests
             Substitute.For<IConversationUploadedFileStore>(),
             stager,
             CreateFenceSeedProvider(),
+            Options.Create(new KnowledgeBaseOptions()),
             TimeProvider.System,
             NullLogger<NodeChatStreamService>.Instance);
 
@@ -575,6 +586,7 @@ public sealed class NodeChatStreamServiceTests
             Substitute.For<IConversationUploadedFileStore>(),
             stager,
             CreateFenceSeedProvider(),
+            Options.Create(new KnowledgeBaseOptions()),
             TimeProvider.System,
             NullLogger<NodeChatStreamService>.Instance);
 
@@ -631,6 +643,7 @@ public sealed class NodeChatStreamServiceTests
             uploadedFileStore,
             Substitute.For<IConversationSandboxStager>(),
             CreateFenceSeedProvider(),
+            Options.Create(new KnowledgeBaseOptions()),
             TimeProvider.System,
             NullLogger<NodeChatStreamService>.Instance);
 
@@ -648,6 +661,93 @@ public sealed class NodeChatStreamServiceTests
         AssertEx.True(runner.CaptureObserved, "Expected the runner to observe the package.");
         AssertEx.Contains(runner.CapturedContext, message => message.Content.Contains("The launch code is alpha-zero.", StringComparison.Ordinal));
         AssertEx.Contains(runner.CapturedContext, message => message.Content.Contains(ConversationAttachmentContextComposer.Preamble, StringComparison.Ordinal));
+    }
+
+    [Test]
+    public async Task SendMessageAsync_WhenCloudEffectiveModelWithAttachment_WithholdsAndNotifiesByDefault()
+    {
+        // RR3-4 Part C: a cloud effective model (Codex here) must NOT receive node-local attachment content without the
+        // operator opt-in — the content is withheld from the prompt and the user gets a visible notice.
+        var (events, capturedContext) = await RunAttachmentEgressAsync(cloudModel: "gpt-5.5", allowCloudModelAccess: false);
+
+        AssertEx.False(capturedContext.Any(message => message.Content.Contains("The launch code is alpha-zero.", StringComparison.Ordinal)),
+            "a cloud model must not receive the attachment content without opt-in");
+        AssertEx.False(capturedContext.Any(message => message.Content.Contains(ConversationAttachmentContextComposer.Preamble, StringComparison.Ordinal)),
+            "the attachment context block must not be composed for a cloud model without opt-in");
+        AssertEx.Contains(events, streamEvent => streamEvent.Type == ChatStreamEventTypes.AssistantNotice
+                                                 && streamEvent.NoticeKind == nameof(TurnNoticeKind.AttachmentsWithheld));
+    }
+
+    [Test]
+    public async Task SendMessageAsync_WhenCloudEffectiveModelWithAttachment_AndOperatorOptedIn_ComposesAttachment()
+    {
+        var (_, capturedContext) = await RunAttachmentEgressAsync(cloudModel: "gpt-5.5", allowCloudModelAccess: true);
+
+        AssertEx.Contains(capturedContext, message => message.Content.Contains("The launch code is alpha-zero.", StringComparison.Ordinal));
+    }
+
+    [Test]
+    public async Task SendMessageAsync_WhenLocalModelWithAttachment_ComposesAttachmentAndDoesNotNotify()
+    {
+        var (events, capturedContext) = await RunAttachmentEgressAsync(cloudModel: null, allowCloudModelAccess: false);
+
+        AssertEx.Contains(capturedContext, message => message.Content.Contains("The launch code is alpha-zero.", StringComparison.Ordinal));
+        AssertEx.False(events.Any(streamEvent => streamEvent.NoticeKind == nameof(TurnNoticeKind.AttachmentsWithheld)),
+            "a local model must not trigger the attachments-withheld notice");
+    }
+
+    private static async Task<(List<ChatStreamEvent> Events, IReadOnlyList<ConversationMessageDto> CapturedContext)> RunAttachmentEgressAsync(string? cloudModel, bool allowCloudModelAccess)
+    {
+        var conversationId = Guid.NewGuid();
+        var assistantMessageId = Guid.NewGuid();
+        var requestId = Guid.NewGuid();
+        var fileId = Guid.NewGuid();
+        var persistence = CreatePersistence(conversationId, assistantMessageId, requestId, _ => { });
+        var dispatcher = new RecordingWorkerEventDispatcher();
+        var runner = new ContextCapturingInvocationRunner(dispatcher);
+
+        IReadOnlyList<ConversationUploadedFileInfo> files =
+            [new ConversationUploadedFileInfo(fileId, conversationId, "spec.txt", "text/plain", ".txt", SizeBytes: 128, DocumentExtractionStatus.Extracted, ExtractedChars: 24, CreatedAtUtc: 0)];
+        var uploadedFileStore = Substitute.For<IConversationUploadedFileStore>();
+        uploadedFileStore.ListAsync(conversationId, Arg.Any<CancellationToken>()).Returns(files);
+        uploadedFileStore.ReadExtractedMarkdownAsync(conversationId, fileId, Arg.Any<CancellationToken>()).Returns("The launch code is alpha-zero.");
+
+        var service = new NodeChatStreamService(persistence,
+            new ChatInvocationStatePump(ChatPumpTestFactory.Create(persistence), TimeProvider.System),
+            new ChatTurnResolver(CreateAgentDefinitionResolver(), CreateAgentDefinitionStore(), CreateOrchestrationResolver(), CreateModelClassificationService(), CreateLocalModelProviderResolver(),
+                CreateGgufModelCapabilityResolver(), Substitute.For<ICloudCredentialStore>(), NullLogger<ChatTurnResolver>.Instance),
+            new NodeChatMutationGuard(persistence),
+            new LocalChatRuntimePackageBuilder(),
+            runner,
+            dispatcher,
+            Options.Create(new LocalChatAgentOptions()),
+            StubNodeRuntimeSettings.Create().Build(),
+            new NodeChatStreamCancellationRegistry(),
+            CreateOfferProvider(),
+            CreateDefaultAgentProvider(),
+            CreateNodeSettingsStore(),
+            CreateLocalDefaultChatModelResolver(),
+            CreateMemoryExtractionDispatcher(),
+            uploadedFileStore,
+            Substitute.For<IConversationSandboxStager>(),
+            CreateFenceSeedProvider(),
+            Options.Create(new KnowledgeBaseOptions { AllowCloudModelAccess = allowCloudModelAccess }),
+            TimeProvider.System,
+            NullLogger<NodeChatStreamService>.Instance);
+
+        var events = new List<ChatStreamEvent>();
+        await foreach (var streamEvent in service.SendMessageAsync(new NodeChatStreamRequest(conversationId,
+                           "what is the launch code?",
+                           MessageId: assistantMessageId,
+                           RequestId: requestId,
+                           Model: cloudModel,
+                           AttachmentFileIds: [fileId])).ConfigureAwait(false))
+        {
+            events.Add(streamEvent);
+        }
+
+        AssertEx.True(runner.CaptureObserved, "Expected the runner to observe the package.");
+        return (events, runner.CapturedContext);
     }
 
     [Test]
@@ -685,6 +785,7 @@ public sealed class NodeChatStreamServiceTests
             uploadedFileStore,
             Substitute.For<IConversationSandboxStager>(),
             CreateFenceSeedProvider(),
+            Options.Create(new KnowledgeBaseOptions()),
             TimeProvider.System,
             NullLogger<NodeChatStreamService>.Instance);
 
@@ -739,6 +840,7 @@ public sealed class NodeChatStreamServiceTests
             Substitute.For<IConversationUploadedFileStore>(),
             Substitute.For<IConversationSandboxStager>(),
             CreateFenceSeedProvider(),
+            Options.Create(new KnowledgeBaseOptions()),
             TimeProvider.System,
             NullLogger<NodeChatStreamService>.Instance);
 
@@ -794,6 +896,7 @@ public sealed class NodeChatStreamServiceTests
             Substitute.For<IConversationUploadedFileStore>(),
             Substitute.For<IConversationSandboxStager>(),
             CreateFenceSeedProvider(),
+            Options.Create(new KnowledgeBaseOptions()),
             TimeProvider.System,
             NullLogger<NodeChatStreamService>.Instance);
 
@@ -850,6 +953,7 @@ public sealed class NodeChatStreamServiceTests
             Substitute.For<IConversationUploadedFileStore>(),
             Substitute.For<IConversationSandboxStager>(),
             CreateFenceSeedProvider(),
+            Options.Create(new KnowledgeBaseOptions()),
             TimeProvider.System,
             NullLogger<NodeChatStreamService>.Instance);
 
@@ -897,6 +1001,7 @@ public sealed class NodeChatStreamServiceTests
             Substitute.For<IConversationUploadedFileStore>(),
             Substitute.For<IConversationSandboxStager>(),
             CreateFenceSeedProvider(),
+            Options.Create(new KnowledgeBaseOptions()),
             TimeProvider.System,
             NullLogger<NodeChatStreamService>.Instance);
 
@@ -956,6 +1061,7 @@ public sealed class NodeChatStreamServiceTests
             Substitute.For<IConversationUploadedFileStore>(),
             Substitute.For<IConversationSandboxStager>(),
             CreateFenceSeedProvider(),
+            Options.Create(new KnowledgeBaseOptions()),
             TimeProvider.System,
             NullLogger<NodeChatStreamService>.Instance);
         using var clientCancellation = new CancellationTokenSource();
@@ -1033,6 +1139,7 @@ public sealed class NodeChatStreamServiceTests
             Substitute.For<IConversationUploadedFileStore>(),
             Substitute.For<IConversationSandboxStager>(),
             CreateFenceSeedProvider(),
+            Options.Create(new KnowledgeBaseOptions()),
             TimeProvider.System,
             NullLogger<NodeChatStreamService>.Instance);
         using var clientCancellation = new CancellationTokenSource();
@@ -1107,6 +1214,7 @@ public sealed class NodeChatStreamServiceTests
             Substitute.For<IConversationUploadedFileStore>(),
             Substitute.For<IConversationSandboxStager>(),
             CreateFenceSeedProvider(),
+            Options.Create(new KnowledgeBaseOptions()),
             TimeProvider.System,
             NullLogger<NodeChatStreamService>.Instance);
 
@@ -1171,6 +1279,7 @@ public sealed class NodeChatStreamServiceTests
             Substitute.For<IConversationUploadedFileStore>(),
             Substitute.For<IConversationSandboxStager>(),
             CreateFenceSeedProvider(),
+            Options.Create(new KnowledgeBaseOptions()),
             TimeProvider.System,
             NullLogger<NodeChatStreamService>.Instance);
 
@@ -1226,6 +1335,7 @@ public sealed class NodeChatStreamServiceTests
             Substitute.For<IConversationUploadedFileStore>(),
             Substitute.For<IConversationSandboxStager>(),
             CreateFenceSeedProvider(),
+            Options.Create(new KnowledgeBaseOptions()),
             TimeProvider.System,
             NullLogger<NodeChatStreamService>.Instance);
 
@@ -1286,6 +1396,7 @@ public sealed class NodeChatStreamServiceTests
             Substitute.For<IConversationUploadedFileStore>(),
             Substitute.For<IConversationSandboxStager>(),
             CreateFenceSeedProvider(),
+            Options.Create(new KnowledgeBaseOptions()),
             TimeProvider.System,
             NullLogger<NodeChatStreamService>.Instance);
 
@@ -1336,6 +1447,7 @@ public sealed class NodeChatStreamServiceTests
             Substitute.For<IConversationUploadedFileStore>(),
             Substitute.For<IConversationSandboxStager>(),
             CreateFenceSeedProvider(),
+            Options.Create(new KnowledgeBaseOptions()),
             TimeProvider.System,
             NullLogger<NodeChatStreamService>.Instance);
 
@@ -1390,6 +1502,7 @@ public sealed class NodeChatStreamServiceTests
             Substitute.For<IConversationUploadedFileStore>(),
             Substitute.For<IConversationSandboxStager>(),
             CreateFenceSeedProvider(),
+            Options.Create(new KnowledgeBaseOptions()),
             TimeProvider.System,
             NullLogger<NodeChatStreamService>.Instance);
 
@@ -1443,6 +1556,7 @@ public sealed class NodeChatStreamServiceTests
             Substitute.For<IConversationUploadedFileStore>(),
             Substitute.For<IConversationSandboxStager>(),
             CreateFenceSeedProvider(),
+            Options.Create(new KnowledgeBaseOptions()),
             TimeProvider.System,
             NullLogger<NodeChatStreamService>.Instance);
 
@@ -1495,6 +1609,7 @@ public sealed class NodeChatStreamServiceTests
             Substitute.For<IConversationUploadedFileStore>(),
             Substitute.For<IConversationSandboxStager>(),
             CreateFenceSeedProvider(),
+            Options.Create(new KnowledgeBaseOptions()),
             TimeProvider.System,
             NullLogger<NodeChatStreamService>.Instance);
 
@@ -1550,6 +1665,7 @@ public sealed class NodeChatStreamServiceTests
             Substitute.For<IConversationUploadedFileStore>(),
             Substitute.For<IConversationSandboxStager>(),
             CreateFenceSeedProvider(),
+            Options.Create(new KnowledgeBaseOptions()),
             TimeProvider.System,
             NullLogger<NodeChatStreamService>.Instance);
 
@@ -1620,6 +1736,7 @@ public sealed class NodeChatStreamServiceTests
             Substitute.For<IConversationUploadedFileStore>(),
             Substitute.For<IConversationSandboxStager>(),
             CreateFenceSeedProvider(),
+            Options.Create(new KnowledgeBaseOptions()),
             TimeProvider.System,
             NullLogger<NodeChatStreamService>.Instance);
 
@@ -1697,6 +1814,7 @@ public sealed class NodeChatStreamServiceTests
             Substitute.For<IConversationUploadedFileStore>(),
             Substitute.For<IConversationSandboxStager>(),
             CreateFenceSeedProvider(),
+            Options.Create(new KnowledgeBaseOptions()),
             TimeProvider.System,
             NullLogger<NodeChatStreamService>.Instance);
 
@@ -1794,6 +1912,7 @@ public sealed class NodeChatStreamServiceTests
             Substitute.For<IConversationUploadedFileStore>(),
             Substitute.For<IConversationSandboxStager>(),
             CreateFenceSeedProvider(),
+            Options.Create(new KnowledgeBaseOptions()),
             TimeProvider.System,
             NullLogger<NodeChatStreamService>.Instance);
 
@@ -1899,6 +2018,7 @@ public sealed class NodeChatStreamServiceTests
             Substitute.For<IConversationUploadedFileStore>(),
             Substitute.For<IConversationSandboxStager>(),
             CreateFenceSeedProvider(),
+            Options.Create(new KnowledgeBaseOptions()),
             TimeProvider.System,
             NullLogger<NodeChatStreamService>.Instance);
 
@@ -1996,6 +2116,7 @@ public sealed class NodeChatStreamServiceTests
             Substitute.For<IConversationUploadedFileStore>(),
             Substitute.For<IConversationSandboxStager>(),
             CreateFenceSeedProvider(),
+            Options.Create(new KnowledgeBaseOptions()),
             TimeProvider.System,
             NullLogger<NodeChatStreamService>.Instance);
 
@@ -2047,6 +2168,7 @@ public sealed class NodeChatStreamServiceTests
             Substitute.For<IConversationUploadedFileStore>(),
             Substitute.For<IConversationSandboxStager>(),
             CreateFenceSeedProvider(),
+            Options.Create(new KnowledgeBaseOptions()),
             TimeProvider.System,
             NullLogger<NodeChatStreamService>.Instance);
 
@@ -2101,6 +2223,7 @@ public sealed class NodeChatStreamServiceTests
             Substitute.For<IConversationUploadedFileStore>(),
             Substitute.For<IConversationSandboxStager>(),
             CreateFenceSeedProvider(),
+            Options.Create(new KnowledgeBaseOptions()),
             TimeProvider.System,
             NullLogger<NodeChatStreamService>.Instance);
 
@@ -2158,6 +2281,7 @@ public sealed class NodeChatStreamServiceTests
             Substitute.For<IConversationUploadedFileStore>(),
             Substitute.For<IConversationSandboxStager>(),
             CreateFenceSeedProvider(),
+            Options.Create(new KnowledgeBaseOptions()),
             TimeProvider.System,
             NullLogger<NodeChatStreamService>.Instance);
 
@@ -2541,6 +2665,7 @@ public sealed class NodeChatStreamServiceTests
             Substitute.For<IConversationUploadedFileStore>(),
             Substitute.For<IConversationSandboxStager>(),
             CreateFenceSeedProvider(),
+            Options.Create(new KnowledgeBaseOptions()),
             TimeProvider.System,
             NullLogger<NodeChatStreamService>.Instance);
 

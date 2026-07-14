@@ -23,7 +23,7 @@ internal sealed class LocalToolOfferProvider : ILocalToolOfferProvider
 
     // The whole capable offer with the knowledge-base tools removed. Returned to a cloud model (unless the operator
     // opted in) so node-local document/chunk/query text is never handed to a third-party provider through a tool call.
-    private readonly IReadOnlyList<AllowedToolDto> _builtinAllToolsNoKnowledge;
+    private readonly IReadOnlyList<AllowedToolDto> _builtinAllToolsNoLocalData;
     private readonly bool _allowCloudKnowledgeAccess;
     private readonly IReadOnlyList<LocalToolCatalogEntry> _builtinCatalogEntries;
     private readonly IReadOnlyList<string> _builtinNames;
@@ -70,15 +70,17 @@ internal sealed class LocalToolOfferProvider : ILocalToolOfferProvider
             .. knowledgeDescriptors.Select(static descriptor => ToOfferDto(descriptor.Name, descriptor.ParameterSchema, descriptor.RequiresApproval))
         ];
 
-        // The provider-locality-gated variant of the whole capable offer: the knowledge-base read tools removed. Offered
-        // to a cloud-hosted model (Codex / Azure Foundry) unless the operator opted in via AllowCloudModelAccess, so
-        // retrieved document text / chunks / the query never reach a third-party provider through a tool result. The
-        // coder file tools stay (they act on the sandboxed workspace, not the private knowledge base). Precomputed so the
-        // gated offer is byte-identical across sends (stable config hash).
-        var knowledgeToolNames = knowledgeDescriptors.Select(static descriptor => descriptor.Name).ToHashSet(StringComparer.Ordinal);
-        _builtinAllToolsNoKnowledge =
+        // The provider-locality-gated variant of the whole capable offer: BOTH the knowledge-base read tools AND the
+        // coder workspace file tools (list_files / read_file / search_text) removed. Offered to a cloud-hosted model
+        // (Codex / Azure Foundry) unless the operator opted in via AllowCloudModelAccess, so neither retrieved
+        // knowledge-base content NOR node-local workspace/attachment file content reaches a third-party provider through
+        // a tool result. Precomputed so the gated offer is byte-identical across sends (stable config hash).
+        var localDataToolNames = knowledgeDescriptors.Select(static descriptor => descriptor.Name)
+                                                      .Concat(coderDescriptors.Select(static descriptor => descriptor.Name))
+                                                      .ToHashSet(StringComparer.Ordinal);
+        _builtinAllToolsNoLocalData =
         [
-            .. _builtinAllTools.Where(tool => !knowledgeToolNames.Contains(tool.Name))
+            .. _builtinAllTools.Where(tool => !localDataToolNames.Contains(tool.Name))
         ];
 
         // spawn_subagent is offered ONLY to an explicit agent profile that opts in via AllowedToolNames — never to the
@@ -160,11 +162,12 @@ internal sealed class LocalToolOfferProvider : ILocalToolOfferProvider
             return _builtinWithoutAgentHome;
         }
 
-        // Provider-locality gate: withhold the knowledge-base tools from a cloud-hosted model unless the operator opted
-        // in. The threaded per-turn flag covers the Azure case; the synchronous Codex-catalog check also catches a
-        // model pinned to a Codex id even when the turn's active model was local.
-        var gateKnowledge = !_allowCloudKnowledgeAccess && (isCloudModel || CodexModelCatalog.IsCodexModel(activeModelId));
-        var baseOffer = gateKnowledge ? _builtinAllToolsNoKnowledge : _builtinAllTools;
+        // Provider-locality gate: withhold the node-local-data tools (knowledge-base read tools AND coder workspace file
+        // tools) from a cloud-hosted model unless the operator opted in. The threaded per-turn flag covers the Azure
+        // case; the synchronous Codex-catalog check also catches a model pinned to a Codex id even when the turn's active
+        // model was local.
+        var gateLocalDataTools = !_allowCloudKnowledgeAccess && (isCloudModel || CodexModelCatalog.IsCodexModel(activeModelId));
+        var baseOffer = gateLocalDataTools ? _builtinAllToolsNoLocalData : _builtinAllTools;
 
         var mcpDescriptors = _mcpToolRegistry.GetDescriptors();
         if (mcpDescriptors.Count == 0)

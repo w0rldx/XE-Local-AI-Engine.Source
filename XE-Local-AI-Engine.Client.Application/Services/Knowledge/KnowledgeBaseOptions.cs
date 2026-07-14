@@ -46,13 +46,16 @@ public sealed class KnowledgeBaseOptions
     public bool AgentToolsEnabled { get; set; } = true;
 
     /// <summary>
-    ///     Whether the read-only knowledge-base tools may be offered to a CLOUD-hosted model (Codex OAuth, Azure
-    ///     Foundry). Default <see langword="false" />: knowledge tools are offered ONLY to node-local models
-    ///     (llama.cpp / Ollama), so retrieved document text, chunks, and the query never leave the node by way of a
-    ///     cloud model's tool call. A local-node privacy default the operator can waive by setting this to
-    ///     <see langword="true" /> — an explicit acknowledgement that enabling it lets a third-party cloud provider
-    ///     receive knowledge-base content through tool results. Independent of <see cref="AgentToolsEnabled" /> (which
-    ///     turns the tools off node-wide); this only governs whether a cloud model is in scope to be offered them.
+    ///     The single opt-in governing whether a CLOUD-hosted model (Codex OAuth, Azure Foundry) may receive ANY
+    ///     node-local private data: the read-only knowledge-base tools, the coder workspace file tools
+    ///     (<c>list_files</c> / <c>read_file</c> / <c>search_text</c>), AND conversation attachments (inlined text or
+    ///     staged files). Default <see langword="false" />: all of that is offered/composed ONLY for a node-local
+    ///     effective model (llama.cpp / Ollama); for a cloud effective model the tools are withheld from the offer and
+    ///     attachments are neither staged nor inlined (the user gets a visible turn notice). The gate keys on the
+    ///     EFFECTIVE model (after any agent/profile pin), so a cloud-pinned agent on a local-active turn is gated too.
+    ///     Setting this to <see langword="true" /> is an explicit acknowledgement that a third-party cloud provider may
+    ///     then receive that node-local content. Named under <c>KnowledgeBase</c> for continuity; its scope is broader.
+    ///     Independent of <see cref="AgentToolsEnabled" /> (which turns the knowledge tools off node-wide).
     /// </summary>
     public bool AllowCloudModelAccess { get; set; }
 
