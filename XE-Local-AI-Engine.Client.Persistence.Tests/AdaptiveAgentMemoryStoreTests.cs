@@ -2,6 +2,7 @@ namespace XE_Local_AI_Engine.Client.Persistence.Tests;
 
 using System.Security.Cryptography;
 using Microsoft.Data.Sqlite;
+using Microsoft.EntityFrameworkCore;
 using XE_Local_AI_Engine.Client.Persistence.Implementation;
 using XE_Local_AI_Engine.Client.Persistence.Stores;
 using XE_Local_AI_Engine.Client.Persistence.Tests.Testing;
@@ -477,6 +478,146 @@ public sealed class AdaptiveAgentMemoryStoreTests : IDisposable
         AssertEx.Equal(expected: 0, await store.TrimToMaxPerAgentAsync(0));
         AssertEx.Equal(expected: 0, await store.TrimToMaxPerAgentAsync(-5));
         AssertEx.Equal(expected: 1, (await store.ListByAgentAsync(agentDefinitionId, limit: 10)).Count);
+    }
+
+    [Test]
+    public async Task AddRunEnvelopeAsync_CompletedRun_PersistsBoundedFieldsAndDiscriminator()
+    {
+        var databasePath = GetDatabasePath("run-envelope-completed.sqlite");
+        using var keyHolder = new FixedNodeSqliteKeyHolder(CreateKeyMaterial());
+        var conversationId = Guid.NewGuid();
+        var messageId = Guid.NewGuid();
+        var invocationId = Guid.NewGuid();
+        var requestId = Guid.NewGuid();
+
+        await using var context = CreateContext(databasePath, keyHolder);
+        await context.Database.EnsureDeletedAsync();
+        await context.Database.EnsureCreatedAsync();
+        var store = new AgentExecutionLogStore(context, new MutableTimeProvider(4_242));
+
+        await store.AddRunEnvelopeAsync(new AgentRunEnvelopeInput(conversationId,
+            messageId,
+            invocationId,
+            requestId,
+            "llama-3.1",
+            "completed",
+            Success: true,
+            DurationMs: 4321L,
+            FailureCategory: null,
+            PromptTokens: 120,
+            CompletionTokens: 30,
+            ContentChunkCount: 12,
+            ReasoningChunkCount: 4,
+            TraceId: "0af7651916cd43dd8448eb211c80319c"));
+
+        var envelopeRows = await context.AgentExecutionLogs
+                                        .AsNoTracking()
+                                        .Where(log => log.RecordKind == (int)AgentExecutionLogRecordKind.ChatRunEnvelope)
+                                        .ToListAsync();
+
+        AssertEx.Equal(expected: 1, envelopeRows.Count);
+        var row = envelopeRows[0];
+        AssertEx.Equal(expected: 1, row.SchemaVersion);
+        // The bound agent id is not available at the terminalization seam, so envelope rows record Guid.Empty.
+        AssertEx.Equal(Guid.Empty, row.AgentDefinitionId);
+        AssertEx.Equal(conversationId, row.ConversationId);
+        AssertEx.Equal(messageId, row.MessageId);
+        AssertEx.Equal(invocationId, row.InvocationId);
+        AssertEx.Equal(requestId, row.RequestId);
+        AssertEx.Equal("llama-3.1", row.ModelName);
+        AssertEx.Equal("completed", row.TerminalStatus);
+        AssertEx.True(row.Success);
+        AssertEx.Null(row.ErrorClass, "A completed run carries no failure category.");
+        AssertEx.Equal(expected: 4321L, row.LatencyMs);
+        AssertEx.Equal(expected: 120, row.PromptTokens);
+        AssertEx.Equal(expected: 30, row.CompletionTokens);
+        AssertEx.Equal(expected: 12, row.ContentChunkCount);
+        AssertEx.Equal(expected: 4, row.ReasoningChunkCount);
+        AssertEx.Equal("0af7651916cd43dd8448eb211c80319c", row.TraceId);
+        AssertEx.Equal(expected: 4_242L, row.CreatedAtUtc);
+    }
+
+    [Test]
+    public async Task AddRunEnvelopeAsync_FailedRun_StoresFailureCategoryInErrorClassColumn()
+    {
+        var databasePath = GetDatabasePath("run-envelope-failed.sqlite");
+        using var keyHolder = new FixedNodeSqliteKeyHolder(CreateKeyMaterial());
+
+        await using var context = CreateContext(databasePath, keyHolder);
+        await context.Database.EnsureDeletedAsync();
+        await context.Database.EnsureCreatedAsync();
+        var store = new AgentExecutionLogStore(context, TimeProvider.System);
+
+        await store.AddRunEnvelopeAsync(new AgentRunEnvelopeInput(ConversationId: null,
+            MessageId: null,
+            InvocationId: null,
+            RequestId: null,
+            "llama",
+            "failed",
+            Success: false,
+            DurationMs: 7L,
+            FailureCategory: "ProviderUnreachable"));
+
+        var row = (await context.AgentExecutionLogs.AsNoTracking().ToListAsync()).Single();
+        AssertEx.Equal("failed", row.TerminalStatus);
+        AssertEx.False(row.Success);
+        // The failure-category enum name reuses the text-free ErrorClass column.
+        AssertEx.Equal("ProviderUnreachable", row.ErrorClass);
+        AssertEx.Null(row.PromptTokens, "A failed run reports no usage.");
+        AssertEx.Null(row.CompletionTokens, "A failed run reports no usage.");
+    }
+
+    [Test]
+    public async Task AddRunEnvelopeAsync_RowIsExcludedFromAdaptiveMemoryDiagnosticsView()
+    {
+        var databasePath = GetDatabasePath("run-envelope-excluded.sqlite");
+        using var keyHolder = new FixedNodeSqliteKeyHolder(CreateKeyMaterial());
+        var agentId = Guid.NewGuid();
+
+        await using var context = CreateContext(databasePath, keyHolder);
+        await context.Database.EnsureDeletedAsync();
+        await context.Database.EnsureCreatedAsync();
+        var store = new AgentExecutionLogStore(context, TimeProvider.System);
+
+        _ = await store.AddAsync(new AgentExecutionLogInput(agentId, ConversationId: null, MessageId: null, "llama", "h", LatencyMs: 5L, Success: true));
+        await store.AddRunEnvelopeAsync(new AgentRunEnvelopeInput(ConversationId: null, MessageId: null, InvocationId: null, RequestId: null, "llama", "completed", Success: true, DurationMs: 1L));
+
+        // The diagnostics read for the real agent returns only its memory row, never the envelope row.
+        var agentView = await store.ListByAgentAsync(agentId, limit: 10);
+        AssertEx.Equal(expected: 1, agentView.Count);
+        AssertEx.Equal(agentId, agentView[0].AgentDefinitionId);
+
+        // The envelope row is stored under Guid.Empty but the kind filter still excludes it, so the view is empty.
+        var emptyAgentView = await store.ListByAgentAsync(Guid.Empty, limit: 10);
+        AssertEx.Equal(expected: 0, emptyAgentView.Count);
+
+        // Both rows physically exist in the shared table.
+        var allRows = await context.AgentExecutionLogs.AsNoTracking().ToListAsync();
+        AssertEx.Equal(expected: 2, allRows.Count);
+    }
+
+    [Test]
+    public async Task DeleteOlderThanAsync_PrunesRunEnvelopeRowsByTable()
+    {
+        var databasePath = GetDatabasePath("run-envelope-retention.sqlite");
+        using var keyHolder = new FixedNodeSqliteKeyHolder(CreateKeyMaterial());
+        var agentId = Guid.NewGuid();
+        var clock = new MutableTimeProvider(1_000);
+
+        await using var context = CreateContext(databasePath, keyHolder);
+        await context.Database.EnsureDeletedAsync();
+        await context.Database.EnsureCreatedAsync();
+        var store = new AgentExecutionLogStore(context, clock);
+
+        // One memory row and one envelope row, both stamped old (1_000).
+        _ = await store.AddAsync(new AgentExecutionLogInput(agentId, ConversationId: null, MessageId: null, "llama", "h", LatencyMs: 1L, Success: true));
+        await store.AddRunEnvelopeAsync(new AgentRunEnvelopeInput(ConversationId: null, MessageId: null, InvocationId: null, RequestId: null, "llama", "completed", Success: true, DurationMs: 1L));
+
+        // Retention operates on the whole table, so the sweep prunes BOTH producers' rows regardless of kind.
+        var deleted = await store.DeleteOlderThanAsync(1_500);
+
+        AssertEx.Equal(expected: 2, deleted);
+        AssertEx.Empty(await context.AgentExecutionLogs.AsNoTracking().ToListAsync());
     }
 
     private static async Task<Guid> SeedAgentAsync(NodeChatDbContext context)
