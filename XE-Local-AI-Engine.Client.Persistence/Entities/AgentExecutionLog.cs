@@ -24,9 +24,9 @@ internal sealed record class AgentExecutionLog
 
     /// <summary>
     ///     Agent definition the run executed under. For memory rows this is the real agent id. For envelope rows it is
-    ///     <see cref="System.Guid.Empty" />: the bound agent id is not cheaply available at the terminalization seam
-    ///     (it lives only in the message metadata blob), so it is omitted this round. Indexed (with
-    ///     <see cref="CreatedAtUtc" />). Plaintext (structural).
+    ///     the bound agent id copied from the winning assistant-message write when an agent was bound (so the envelope
+    ///     can never disagree with the row), or <see cref="System.Guid.Empty" /> when the run had no bound agent.
+    ///     Indexed (with <see cref="CreatedAtUtc" />). Plaintext (structural).
     /// </summary>
     public Guid AgentDefinitionId { get; set; }
 

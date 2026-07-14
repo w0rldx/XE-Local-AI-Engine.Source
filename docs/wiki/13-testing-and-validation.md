@@ -14,7 +14,7 @@ Test stack at a glance: **TUnit 1.58.0** on **Microsoft.Testing.Platform (MTP)**
 |---|---|---|---|---|
 | `XE-Local-AI-Engine.Tests` | Backend integration (in-process host via `WebApplicationFactory<Program>`) | TUnit + NSubstitute | The whole node host: endpoints, hubs, auth, chat, agents, scheduler, model-fit, capacity, MCP, providers, memory, shutdown, etc. (~233 `*Tests.cs` across ~40 area folders) | [Architecture](01-architecture-overview.md), [API & Hubs](09-api-and-hubs.md) |
 | `XE-Local-AI-Engine.AI.Agent.Tests` | Unit/component for the agent runtime | TUnit + NSubstitute | MAF/MEAI wiring: `Chat/`, `Eval/`, `Invocation/`, `Tools/`, `PreviewWorkflows/`, plus `AgentRuntimeProjectSmokeTests` (~15 files) | [Agent Mode](04-agent-mode.md), [Chat](05-chat.md) |
-| `XE-Local-AI-Engine.Client.Persistence.Tests` | Persistence + EF migration tests | TUnit | Encrypted SQLite stores, AEAD cipher, every migration (one `Add*MigrationTests.cs` per migration), and the `NegativeFence/` compile-fence (~40 files) | [Data & Persistence](08-data-and-persistence.md) |
+| `XE-Local-AI-Engine.Client.Persistence.Tests` | Persistence + EF migration tests | TUnit | Encrypted SQLite stores, AEAD cipher, per-migration schema tests (a `*MigrationTests.cs` for most migrations — 21 today vs 36 migrations on disk, not strictly 1:1 and not all `Add*`-prefixed), and the `NegativeFence/` compile-fence (~40 files) | [Data & Persistence](08-data-and-persistence.md) |
 | `XE-Local-AI-Engine.Tests.E2ETests` | Browser E2E | Playwright + TUnit.Playwright | Real Chromium against the in-process host serving the real built React SPA (19 `*E2ETests.cs`: Chat, Agents, Scheduler, Models, NodeSettings, Dashboard, smoke, viewport, …) | [React Client](10-react-client.md), [Hosting](11-hosting-and-deployment.md) |
 | `XE-Local-AI-Engine.Testing.FakeOllama` | Support library (not a test suite) | — | In-memory fake Ollama HTTP server + deterministic embeddings, so backend tests never need a real model runtime | [Local Runtime & Providers](03-local-runtime-and-providers.md) |
 | `XE-Local-AI-Engine.Client.Testing` | Support library | — | Outbound-event recorders + `RecordingHubMessageSender` to assert what the node *would* send over WorkerHub without a real platform | [API & Hubs](09-api-and-hubs.md), [Security & Privacy](12-security-and-privacy.md) |
@@ -48,7 +48,7 @@ This is the heaviest suite and the heart of validation. `TestingWebAppFactory.cs
 
 ### `XE-Local-AI-Engine.Client.Persistence.Tests` — migrations & the negative fence
 
-Every EF migration has a dedicated `Add*MigrationTests.cs` that applies the migration to a fresh encrypted SQLite DB and asserts the resulting schema. `NodeAeadCipher` and `PersistenceEncryption` are tested directly. The `NegativeFence/` folder is a separate **compile-only** project (`XE-Local-AI-Engine.Client.Persistence.NegativeFence`) whose `Program.cs` is a single statement constructing a `NodeMessage` — it exists to assert that persistence entities stay constructible/visible exactly as the fence expects (a compile-time contract guard, not a runtime test). See [Data & Persistence](08-data-and-persistence.md).
+Most EF migrations have a dedicated `*MigrationTests.cs` that applies the migration to a fresh encrypted SQLite DB and asserts the resulting schema — 21 such files today for 36 migrations on disk, so coverage is not strictly 1:1 (schema-shape and data-backfill migrations are prioritised), and the file follows the migration name rather than always taking an `Add*` prefix (e.g. `NodeChatOriginMigrationTests.cs`, `NodeMessageLifecycleMigrationTests.cs`). `NodeAeadCipher` and `PersistenceEncryption` are tested directly. The `NegativeFence/` folder is a separate **compile-only** project (`XE-Local-AI-Engine.Client.Persistence.NegativeFence`) whose `Program.cs` is a single statement constructing a `NodeMessage` — it exists to assert that persistence entities stay constructible/visible exactly as the fence expects (a compile-time contract guard, not a runtime test). See [Data & Persistence](08-data-and-persistence.md).
 
 ### `XE-Local-AI-Engine.Tests.E2ETests` — Playwright
 
@@ -94,7 +94,7 @@ The wrapper mirrors the raw commands and parallelises independent trees. Invoke 
 |---|---|
 | `backend` | restore + `build -c Release` + `test` on `XE-Local-AI-Engine.slnx` |
 | `frontend` | `pnpm install --frozen-lockfile` + `lint` + `test` + `build` |
-| `e2e` | **ask-gated**: pre-gate backend+frontend, then `dotnet test` the E2E project. Refuses to run without `--confirm-e2e` |
+| `e2e` | **ask-gated**: pre-gate backend+frontend, then build + `dotnet test` the E2E project **with `-p:RunE2ETests=true`** (required — without it the csproj is a plain library and zero tests are discovered; the runner also fails the lane if zero tests run). Refuses to run without `--confirm-e2e` |
 | `smoke` | fast backend+frontend subset; adds E2E smoke only with `--confirm-e2e` |
 | `coverage` | backend `--collect:"XPlat Code Coverage"` + frontend `test:coverage:check` (threshold gate) |
 | `changed` | auto-detects backend/frontend from `git diff` vs `--base` (default `main`); `*.cs/*.csproj/*.slnx/Directory.*/global.json` → backend, frontend dir → frontend |
@@ -107,20 +107,17 @@ The everyday loop is `--scope changed --serial`; E2E is deliberately behind `--c
 
 ## Continuous integration
 
-CI lives in `.github/workflows/build-and-test.yml`. It is **`workflow_dispatch`-only** (manual trigger — there is no automatic push/PR trigger wired). Two jobs:
+CI lives in `.github/workflows/build-and-test.yml`. It runs automatically on **`pull_request`** and **`push`** to `develop`/`main`, plus **`workflow_dispatch`**, and is also **`workflow_call`**-reusable (the release workflow calls it so the exact tagged commit re-runs these gates before packaging). Two jobs:
 
-**`build-and-test` (ubuntu-latest)** — SDK from `global.json`, then restore + `build -c Release --no-restore`, then runs the three .NET suites **sequentially, each as a separate step**:
-1. `XE-Local-AI-Engine.Client.Persistence.Tests` (fences included)
-2. `XE-Local-AI-Engine.Tests` (worker node)
-3. `XE-Local-AI-Engine.AI.Agent.Tests`
+**`build-and-test` (ubuntu-latest)** — SDK from `global.json`, then restore + `build -c Release --no-restore`, then a **single auto-enrolled solution-wide test step**: `dotnet test XE-Local-AI-Engine.slnx -c Release --no-build --max-parallel-test-modules 1`. `dotnet test` on the solution runs every MTP test project (name ends `.Tests` / contains `.Tests.`), so a new suite needs no workflow edit; the step pipes output through `tee` and a **hollow-gate guard** greps for a `Passed!`/`Failed!` summary and fails if none is found (catching a silent green where zero suites enrolled).
 
 Two deliberate CI choices a maintainer must preserve:
-- **Sequential, not solution-wide `dotnet test`** — the comment notes concurrent suite runs cause timeout failures on shared runners.
-- **`TZ=Europe/Berlin`** on each test step — a non-UTC zone deliberately exposes time-zone bugs (the comment cites `CapabilityReporterTests`). Don't "simplify" this to UTC.
+- **Solution-wide `dotnet test` with `--max-parallel-test-modules 1`** — modules run serially (concurrent runs time out / exhaust the WSL `inotify` watch limit on shared runners); do not raise the parallelism or split back into per-project steps.
+- **`TZ=Europe/Berlin`** on the test step — a non-UTC zone deliberately exposes time-zone bugs (the comment cites `CapabilityReporterTests`). Don't "simplify" this to UTC.
 
-CI does **not** run E2E (Playwright/browser builds are too heavy for the shared runner; E2E stays a local ask-gated path).
+The main gate does **not** run E2E — the E2E csproj demotes itself to a library unless `-p:RunE2ETests=true`, so the MTP runner skips it. E2E instead runs in its own **`.github/workflows/e2e.yml`** (nightly cron + manual dispatch + PRs labelled `run-e2e`), which builds the SPA and installs Playwright browsers; it is non-blocking and not a PR merge gate.
 
-**`client-react` (ubuntu-latest)** — pnpm + Node 22, `install --frozen-lockfile`, then in order: **`openapi:check`** (regenerate the hey-api client from the committed OpenAPI spec and `git diff --exit-code` — fails if generated output drifts from what's committed; deterministic, no running host needed), `lint`, `test`, `build`, and `pnpm audit --prod`. The `openapi:check` drift gate is the mechanism that keeps "OpenAPI → hey-api as single source of truth for all React REST" honest (see [API & Hubs](09-api-and-hubs.md), [React Client](10-react-client.md)).
+**`client-react` (ubuntu-latest)** — pnpm + Node 22, `install --frozen-lockfile`, then in order: **`openapi:check`** (regenerate the hey-api client from the committed OpenAPI spec and `git diff --exit-code` — fails if generated output drifts from what's committed; deterministic, no running host needed), **`licenses:check`** (production-dependency license allowlist / manifest drift gate), `lint`, **`test:coverage:check`** (Vitest with coverage thresholds enforced), `build`, and `pnpm audit --prod --audit-level=high` (only high/critical block; moderate/low are advisory). The `openapi:check` drift gate is the mechanism that keeps "OpenAPI → hey-api as single source of truth for all React REST" honest (see [API & Hubs](09-api-and-hubs.md), [React Client](10-react-client.md)).
 
 ### Release pipeline gates (separate workflow)
 
@@ -150,7 +147,7 @@ The RC branch is `feature/agent-mode-foundation` (RC1 branch, decision D4, locke
 ## Maintainer checklist
 
 - Use `--treenode-filter`, never `--filter`, when targeting individual MTP tests.
-- New EF migration → add an `Add<Name>MigrationTests.cs` in `Client.Persistence.Tests` (the suite expects one per migration).
+- New EF migration → add a `<Name>MigrationTests.cs` in `Client.Persistence.Tests`. This is the strong convention for schema-shape changes; coverage is not strictly 1:1 today (21 test files for 36 migrations), but any migration that changes table/column/index shape should ship its test.
 - New persistence entity surface change → re-check the `NegativeFence` compile fence still builds.
 - New WorkerHub outbound call → assert it through `RecordingHubMessageSender` and confirm no secret crosses the boundary ([Security & Privacy](12-security-and-privacy.md)).
 - New backend behavior that touches a model → drive it through `FakeOllama` (script the response) rather than a live runtime; only flip `RUN_LOCAL_INTEGRATION=true` for fidelity runs.
