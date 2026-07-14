@@ -37,6 +37,13 @@ internal static class IdleStreamGuard
     ///     the idle deadline, and — because the caller links it to <paramref name="outerToken" /> — on outer cancellation
     ///     too). On idle expiry <paramref name="onIdleTimeout" /> is invoked and an <see cref="OperationCanceledException" />
     ///     is thrown; on outer cancellation a plain <see cref="OperationCanceledException" /> is thrown with no idle signal.
+    ///     <para>
+    ///         Stop semantics are strict: outer cancellation and idle-deadline expiry are observed BEFORE every
+    ///         advancement AND again BEFORE every yield — including for items a pre-buffered enumerator produces
+    ///         synchronously (which never reach the async race). An observed stop halts the stream before the pending
+    ///         item is yielded (it is never emitted), so a stream that completes synchronously forever cannot outrun a
+    ///         cancel or an expired deadline; a not-yet-cancelled stream never has an item dropped.
+    ///     </para>
     /// </summary>
     public static IAsyncEnumerable<T> GuardAsync<T>(Func<CancellationToken, IAsyncEnumerator<T>> enumeratorFactory, IdleGuardContext context)
     {
@@ -62,6 +69,11 @@ internal static class IdleStreamGuard
         {
             while (true)
             {
+                // Observe cancellation / idle expiry BEFORE advancing: a stream whose MoveNextAsync always completes
+                // synchronously (a pre-buffered enumerator) never reaches the async race below, so without this it could
+                // emit past a cancel or an expired deadline forever.
+                ThrowIfStopped(context);
+
                 var moveNext = enumerator.MoveNextAsync();
 
                 // Fast path: a buffered event completes synchronously and successfully — take it without a Task/timer.
@@ -72,6 +84,9 @@ internal static class IdleStreamGuard
                         yield break;
                     }
 
+                    // Re-observe AFTER the synchronous advancement: a stop seen here halts the stream BEFORE this item is
+                    // yielded (an observed stop never emits the pending item).
+                    ThrowIfStopped(context);
                     yield return enumerator.Current;
                     continue;
                 }
@@ -92,6 +107,9 @@ internal static class IdleStreamGuard
                     case AdvanceStatus.OuterCancelled:
                         throw new OperationCanceledException(context.OuterToken);
                     default:
+                        // Symmetry with the fast path: a stop that fired in the window between the race resolving and the
+                        // yield halts before this item is emitted.
+                        ThrowIfStopped(context);
                         yield return enumerator.Current;
                         break;
                 }
@@ -132,6 +150,23 @@ internal static class IdleStreamGuard
 
         Observe(disposeTask);
         return false;
+    }
+
+    /// <summary>
+    ///     Throws if a stop has already been observed, so the synchronous fast path cannot emit past it. Outer
+    ///     cancellation takes precedence over an idle deadline (the caller links the idle token to the outer token, so
+    ///     both are set on cancellation) and surfaces as a plain <see cref="OperationCanceledException" />; an idle
+    ///     deadline fires <see cref="IdleGuardContext.OnIdleTimeout" /> exactly as the async race path does.
+    /// </summary>
+    private static void ThrowIfStopped(IdleGuardContext context)
+    {
+        context.OuterToken.ThrowIfCancellationRequested();
+
+        if (context.IdleToken.IsCancellationRequested)
+        {
+            context.OnIdleTimeout();
+            throw new OperationCanceledException(context.IdleToken);
+        }
     }
 
     private static async Task<AdvanceOutcome> RaceAsync<T>(IAsyncEnumerator<T> enumerator,
