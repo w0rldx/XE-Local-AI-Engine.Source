@@ -122,13 +122,17 @@ internal sealed class SearchKnowledgeBaseToolHandler : IClientLocalToolHandler
             {
                 documentId = hit.DocumentId,
                 chunkId = hit.ChunkId,
-                title = hit.Title,
-                section = hit.Section,
-                // Retrieved chunk text is DATA, not instructions: flag it and fence it so an injection sentence inside a
-                // document cannot read as a system directive. The budget above still measures raw hit.Content length.
+                // The attacker-controlled document metadata (title, section, source) AND the chunk body are DATA, not
+                // instructions: fence them TOGETHER inside one nonce-delimited untrusted region so neither an injection
+                // sentence in the body nor a crafted title/section can read as a system directive or forge the fence.
+                // The budget above still measures raw hit.Content length.
                 contentTrust = UntrustedContentFraming.UntrustedTrustLabel,
-                content = UntrustedContentFraming.Wrap(hit.Content),
-                source = hit.Source,
+                content = UntrustedContentFraming.WrapDocument(hit.Content,
+                [
+                    new("title", hit.Title),
+                    new("section", hit.Section),
+                    new("source", hit.Source)
+                ]),
                 score = hit.Score,
                 chunkIndex = hit.ChunkIndex,
                 // Disclose staleness in the model-facing provenance: when the owning document is not currently
