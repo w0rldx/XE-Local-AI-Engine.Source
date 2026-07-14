@@ -412,7 +412,8 @@ public sealed class NodeChatRegenerationServiceTests : IDisposable
         var orchestrationResolver = Substitute.For<IOrchestrationResolver>();
         var spec = CreateSampleSpec();
         orchestrationResolver.ResolveAsync(Arg.Any<AgentDefinitionRecord>(), Arg.Any<string?>(), Arg.Any<string?>(), Arg.Any<bool>(), Arg.Any<CancellationToken>())
-                             .Returns(new ResolvedOrchestration(spec, "Orchestrator prompt.", "qwen3:8b", ReasoningEffort: null, AgentDefinitionVersion: 4));
+                             .Returns(new ResolvedOrchestration(spec, "Orchestrator prompt.", "qwen3:8b", ReasoningEffort: null, AgentDefinitionVersion: 4,
+                                 AnyParticipantIsCloud: false, FirstCloudParticipantModel: null));
 
         var service = new NodeChatRegenerationService(persistence,
             new ChatInvocationStatePump(ChatPumpTestFactory.Create(persistence), TimeProvider.System),

@@ -231,15 +231,25 @@ public sealed class NodeChatStreamService(
             ? resolved?.AllowedTools ?? localToolOfferProvider.GetOfferedTools(activeModel, resolution.EffectiveModelIsCloud)
             : null;
 
-        // Cloud-egress consent: node-local conversation attachments are private data. When the EFFECTIVE model that runs
-        // this turn is cloud-hosted (including via an agent/profile pin, not just the user's active pick) and the operator
-        // has NOT opted in (KnowledgeBase:AllowCloudModelAccess), attachments are withheld — neither staged for the file
-        // tools nor inlined into the prompt — and the user gets a visible notice naming the effective model. This is the
-        // load-bearing egress gate; the offer provider additionally withholds the file/knowledge tools for a cloud model.
-        var attachmentsAllowed = !resolution.EffectiveModelIsCloud || knowledgeOptions.Value.AllowCloudModelAccess;
+        // Cloud-egress consent: node-local conversation attachments are private data. When a cloud model would receive
+        // this turn's attachment context and the operator has NOT opted in (KnowledgeBase:AllowCloudModelAccess),
+        // attachments are withheld — neither staged for the file tools nor inlined into the prompt — and the user gets a
+        // visible notice naming the cloud model. "A cloud model would receive it" is not only the orchestrator's own
+        // effective model: an ORCHESTRATION broadcasts ONE shared seed to every participant (per-participant tool
+        // stripping cannot redact content already in the seed), so a single cloud PARTICIPANT — even under a local root —
+        // must withhold the shared attachment context too. This is the load-bearing egress gate; the offer provider
+        // additionally withholds the file/knowledge tools for a cloud model.
+        var anyCloudParticipant = resolution.Orchestration?.AnyParticipantIsCloud ?? false;
+        var turnReachesCloud = resolution.EffectiveModelIsCloud || anyCloudParticipant;
+        var attachmentsAllowed = !turnReachesCloud || knowledgeOptions.Value.AllowCloudModelAccess;
         if (!attachmentsAllowed)
         {
-            await ReportAttachmentsWithheldIfPresentAsync(request, resolution.EffectiveModel, requestId, cancellationToken).ConfigureAwait(false);
+            // Name the model the notice is about: the orchestrator's own cloud model when that is what reaches the
+            // cloud, otherwise the cloud participant whose presence forced the withhold on an otherwise-local root.
+            var cloudModelForNotice = resolution.EffectiveModelIsCloud
+                ? resolution.EffectiveModel
+                : resolution.Orchestration?.FirstCloudParticipantModel ?? resolution.EffectiveModel;
+            await ReportAttachmentsWithheldIfPresentAsync(request, cloudModelForNotice, requestId, cancellationToken).ConfigureAwait(false);
         }
 
         // Agent mode: when the selected agent can read files through the AgentHome sandbox (its offer includes the
