@@ -37,6 +37,17 @@ internal sealed class MemoryExtractionDispatcher : IMemoryExtractionDispatcher
     /// <summary>The queue reader the background worker drains.</summary>
     public ChannelReader<MemoryExtractionJob> Reader => _queue.Reader;
 
+    /// <summary>
+    ///     Completes the queue writer so no further jobs are accepted. After this, <see cref="Dispatch" /> takes the
+    ///     dropped-job path (its TryWrite returns false), and the worker's read loop drains whatever is buffered and then
+    ///     ends on its own rather than being abandoned. Idempotent — safe to call more than once (the worker completes it
+    ///     at shutdown and also via a stop-token callback), so it uses <c>TryComplete</c> rather than <c>Complete</c>.
+    /// </summary>
+    public void CompleteWriter()
+    {
+        _ = _queue.Writer.TryComplete();
+    }
+
     public void Dispatch(MemoryExtractionDispatchContext telemetry, MemoryExtractionRunInput run)
     {
         ArgumentNullException.ThrowIfNull(telemetry);

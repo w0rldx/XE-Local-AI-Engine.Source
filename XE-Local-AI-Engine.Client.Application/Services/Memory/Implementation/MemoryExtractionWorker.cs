@@ -13,11 +13,19 @@ using XE_Local_AI_Engine.Client.Persistence.Stores;
 ///     fault extraction with an <see cref="ObjectDisposedException" />. Replaces the prior unbounded fire-and-forget
 ///     <c>Task.Run</c> dispatch; mirrors <c>KnowledgeIngestionWorker</c>.
 ///     <para>
-///         Shutdown awareness: in-flight job tasks are tracked; <see cref="StopAsync" /> stops reading the queue and then
-///         awaits them within a bounded drain window (<see cref="MemoryExtractionOptions.ShutdownDrainTimeoutSeconds" />)
-///         before disposal, so the scope factory and semaphore are never disposed under a running job. Per-job work runs
-///         on <see cref="_drainDeadline" />, cancelled ONLY when that window elapses, so ordinary operation never cancels
-///         a job mid-write yet a hung job cannot block shutdown forever.
+///         Shutdown awareness. Each job carries conversation content and the queue is purely in-memory (no persistence
+///         recovery), so a job dropped at shutdown is lost for good — shutdown therefore drains QUEUED work as well as
+///         in-flight work. <see cref="StopAsync" /> (1) completes the dispatcher's writer FIRST, so no new job is accepted
+///         (<see cref="MemoryExtractionDispatcher.Dispatch" /> then takes its content-free dropped-job path) and the read
+///         loop can drain the buffered jobs and end on its own; (2) drains the read loop (which launches every remaining
+///         buffered job) AND the in-flight jobs under a single bounded window
+///         (<see cref="MemoryExtractionOptions.ShutdownDrainTimeoutSeconds" />); (3) if that window elapses, cancels
+///         <see cref="_drainDeadline" /> so the read loop stops launching and every straggler observes cancellation, then
+///         awaits their unwinding under a brief grace and accounts for any still-queued jobs as dropped (content-free)
+///         before returning — so the scope factory and semaphore are never disposed under a running job. The read loop
+///         reads on <see cref="_drainDeadline" /> (NOT the host stopping token), so a stop cannot abandon jobs already
+///         buffered on the channel; that token is cancelled ONLY when the drain window elapses, so ordinary operation
+///         never cancels a job mid-write yet a hung job cannot block shutdown forever.
 ///     </para>
 ///     All failures are handled inside the job's catch-all, which logs the exception TYPE NAME only — never conversation
 ///     content, mirroring the extraction service's text-free discipline.
@@ -34,10 +42,15 @@ public sealed class MemoryExtractionWorker : BackgroundService
     // disposed. Each task removes itself on completion via a synchronous continuation, so the set only holds running work.
     private readonly ConcurrentDictionary<Task, byte> _inFlight = new();
 
-    // Cancelled ONLY when the shutdown drain window elapses. Per-job work runs on this token: during normal operation it
-    // is never cancelled (a completed run's memory write is never lost), but a job that outlives the drain window is
-    // cancelled so it stops and disposal can proceed.
+    // Cancelled ONLY when the shutdown drain window elapses. Per-job work AND the read loop run on this token: during
+    // normal operation it is never cancelled (a completed run's memory write is never lost, and the read loop blocks on an
+    // empty queue), but a job or read that outlives the drain window is cancelled so it stops and disposal can proceed.
     private readonly CancellationTokenSource _drainDeadline = new();
+
+    // After the drain window elapses and the drain token is cancelled, this brief grace bounds how long StopAsync waits
+    // for the read loop and the (now-cancelled) stragglers to unwind before it returns and Dispose runs. Cancellation is
+    // cooperative, so a job that observes the token finishes well inside this; it caps a job that ignores the token.
+    private static readonly TimeSpan PostDeadlineGrace = TimeSpan.FromSeconds(2);
 
     internal MemoryExtractionWorker(IServiceScopeFactory scopeFactory,
         MemoryExtractionDispatcher dispatcher,
@@ -56,27 +69,64 @@ public sealed class MemoryExtractionWorker : BackgroundService
 
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {
+        // Respond to a host stop by completing the writer so the read loop below drains the buffered jobs and then exits
+        // on its own. StopAsync also completes the writer (idempotently) and bounds the drain; this registration is the
+        // safety net for a stop that trips the token before StopAsync runs. The loop deliberately reads on the drain token,
+        // NOT the stopping token, so a stop can never abandon jobs already buffered on the channel — they are drained.
+        using var stopRegistration = stoppingToken.Register(
+            static state => ((MemoryExtractionDispatcher)state!).CompleteWriter(),
+            _dispatcher);
+
         try
         {
-            await foreach (var job in _dispatcher.Reader.ReadAllAsync(stoppingToken).ConfigureAwait(false))
+            await foreach (var job in _dispatcher.Reader.ReadAllAsync(_drainDeadline.Token).ConfigureAwait(false))
             {
                 // Gate on the concurrency budget before starting the next job so at most MaxConcurrentExtractions run.
-                await _concurrency.WaitAsync(stoppingToken).ConfigureAwait(false);
+                await _concurrency.WaitAsync(_drainDeadline.Token).ConfigureAwait(false);
                 TrackInFlight(ProcessJobAsync(job));
             }
         }
-        catch (OperationCanceledException) when (stoppingToken.IsCancellationRequested)
+        catch (OperationCanceledException) when (_drainDeadline.IsCancellationRequested)
         {
-            // Host shutdown requested: stop reading the queue. StopAsync awaits the in-flight jobs before disposal.
+            // The shutdown drain window elapsed: stop launching. Jobs still buffered are accounted as dropped in StopAsync.
         }
     }
 
     public override async Task StopAsync(CancellationToken cancellationToken)
     {
-        // base.StopAsync cancels the stopping token and awaits ExecuteAsync's return, so the queue read stops and no new
-        // jobs are launched. Only then do we drain the jobs already in flight.
+        // 1. Complete the writer FIRST. No work is accepted after this: Dispatch's TryWrite returns false and takes its
+        //    content-free dropped-job path, and the read loop drains the buffered jobs then returns on its own.
+        _dispatcher.CompleteWriter();
+
+        // 2. Drain the read loop (which launches every remaining buffered job) AND the in-flight jobs under a SINGLE
+        //    bounded window. Nothing is cancelled inside the window, so a near-complete memory write still lands.
+        using var window = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+        window.CancelAfter(_drainTimeout);
+
+        try
+        {
+            var readLoop = ExecuteTask;
+            if (readLoop is not null)
+            {
+                await readLoop.WaitAsync(window.Token).ConfigureAwait(false);
+            }
+
+            var pending = _inFlight.Keys.ToArray();
+            if (pending.Length > 0)
+            {
+                _logger.LogInformation("Memory extraction worker draining {InFlightCount} in-flight extraction(s) before shutdown.", pending.Length);
+                await Task.WhenAll(pending).WaitAsync(window.Token).ConfigureAwait(false);
+            }
+        }
+        catch (OperationCanceledException)
+        {
+            // 3. The window (or the host's own shutdown deadline) elapsed before the drain finished. Cancel the drain
+            //    token, wait briefly for the read loop and stragglers to unwind, and account for the rest as dropped.
+            await AbandonAfterDeadlineAsync().ConfigureAwait(false);
+        }
+
+        // 4. Let the base observe ExecuteAsync's completion (it has already returned) and signal the stopping token.
         await base.StopAsync(cancellationToken).ConfigureAwait(false);
-        await DrainInFlightAsync(cancellationToken).ConfigureAwait(false);
     }
 
     private async Task ProcessJobAsync(MemoryExtractionJob job)
@@ -136,30 +186,47 @@ public sealed class MemoryExtractionWorker : BackgroundService
             cancellationToken).ConfigureAwait(false);
     }
 
-    private async Task DrainInFlightAsync(CancellationToken cancellationToken)
+    private async Task AbandonAfterDeadlineAsync()
     {
-        var pending = _inFlight.Keys.ToArray();
-        if (pending.Length == 0)
+        // Cancel the shared drain token: the read loop's ReadAllAsync/WaitAsync throw so it returns, and every in-flight
+        // job observes cancellation and unwinds. Awaiting this BEFORE returning is what keeps Dispose from tearing down the
+        // CTS/semaphore under a still-running job.
+        await _drainDeadline.CancelAsync().ConfigureAwait(false);
+
+        // Give the read loop and the stragglers a brief, bounded grace to unwind. Cancellation is cooperative, so a job
+        // that observes the token finishes well inside this; the cap only matters for one that ignores it (for which the
+        // ObjectDisposedException net in ReleaseConcurrency remains the last-resort guard).
+        var toAwait = new List<Task>(_inFlight.Keys);
+        if (ExecuteTask is { } readLoop)
         {
-            return;
+            toAwait.Add(readLoop);
         }
 
-        _logger.LogInformation("Memory extraction worker draining {InFlightCount} in-flight extraction(s) before shutdown.", pending.Length);
-
-        // Bound the wait. During the window jobs keep running uncancelled so a near-complete write still lands; if the
-        // window (or the host's own shutdown deadline) elapses first, cancel the shared drain token so stragglers stop.
-        using var window = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
-        window.CancelAfter(_drainTimeout);
-
-        try
+        if (toAwait.Count > 0)
         {
-            await Task.WhenAll(pending).WaitAsync(window.Token).ConfigureAwait(false);
+            using var grace = new CancellationTokenSource(PostDeadlineGrace);
+            try
+            {
+                await Task.WhenAll(toAwait).WaitAsync(grace.Token).ConfigureAwait(false);
+            }
+            catch (OperationCanceledException)
+            {
+                // Even the brief grace elapsed for a job that ignores cancellation; this path should be vanishingly rare.
+            }
         }
-        catch (OperationCanceledException)
+
+        // The read loop has stopped reading, so account for whatever it never got to as dropped rather than losing it
+        // silently — content-free, mirroring the dispatcher's full-queue drop. Count in-flight jobs still not unwound.
+        var dropped = 0;
+        while (_dispatcher.Reader.TryRead(out _))
         {
-            await _drainDeadline.CancelAsync().ConfigureAwait(false);
-            _logger.LogWarning("Memory extraction worker abandoned in-flight extraction(s) not drained within {DrainSeconds:F0}s.", _drainTimeout.TotalSeconds);
+            dropped++;
         }
+
+        _logger.LogWarning("Memory extraction worker shutdown drain exceeded {DrainSeconds:F0}s; abandoned {Abandoned} in-flight and dropped {Dropped} queued extraction(s).",
+            _drainTimeout.TotalSeconds,
+            _inFlight.Count,
+            dropped);
     }
 
     private void TrackInFlight(Task task)
