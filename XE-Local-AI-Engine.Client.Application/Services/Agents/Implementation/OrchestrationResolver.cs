@@ -135,11 +135,25 @@ internal sealed class OrchestrationResolver : IOrchestrationResolver
             ReturnToPrevious = topology.ReturnToPrevious
         };
 
+        // Aggregate participant locality: the shared seed reaches EVERY participant, so a single cloud participant makes
+        // the whole turn cloud-reaching for the attachment gate. Pick the first cloud participant deterministically (by
+        // definition id) so the withheld-notice names a stable model. The gate itself lives in the caller
+        // (NodeChatStreamService) because attachments are staged/inlined there, not here.
+        var firstCloudParticipant = participants.Values
+                                                .Where(participant => participant.IsCloud)
+                                                .OrderBy(participant => participant.Definition.Id)
+                                                .FirstOrDefault();
+        var firstCloudParticipantModel = firstCloudParticipant is null
+            ? null
+            : firstCloudParticipant.Definition.ModelProfile ?? activeModelId;
+
         return new ResolvedOrchestration(spec,
             orchestrator.Instructions,
             orchestrator.ModelProfile,
             orchestrator.ReasoningEffort,
-            orchestrator.Version);
+            orchestrator.Version,
+            AnyParticipantIsCloud: firstCloudParticipant is not null,
+            firstCloudParticipantModel);
     }
 
     /// <summary>

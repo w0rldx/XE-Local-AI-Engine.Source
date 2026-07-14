@@ -196,6 +196,34 @@ public sealed class OrchestrationResolverTests
         AssertEx.Contains(cloudSpecialist.Tools, tool => tool.Name == KnowledgeSearchToolName);
     }
 
+    [Test]
+    public async Task ResolveAsync_WhenAnyParticipantIsCloud_SurfacesAggregateAndNamesCloudModel()
+    {
+        // Blocker 1: the caller gates the SHARED orchestration seed's attachment content on this aggregate (a cloud
+        // participant taints the whole shared seed), and names the cloud model in the withheld notice.
+        var resolved = await ResolveWithCloudPinnedParticipantAsync(allowCloudKnowledgeAccess: false).ConfigureAwait(false);
+
+        AssertEx.NotNull(resolved);
+        AssertEx.True(resolved!.AnyParticipantIsCloud, "a cloud-pinned participant must make the aggregate cloud-reaching");
+        AssertEx.Equal(CloudParticipantModel, resolved.FirstCloudParticipantModel);
+    }
+
+    [Test]
+    public async Task ResolveAsync_WhenAllParticipantsLocal_AggregateIsNotCloud()
+    {
+        var triage = CreateDefinition("Triage", modelProfile: ToolCapableModel, allowedTools: ["GetCurrentTime"]);
+        var specialist = CreateDefinition("Specialist", modelProfile: ToolCapableModel, allowedTools: ["GetCurrentTime"]);
+        var orchestrator = CreateOrchestrator(ToolCapableModel, triage, [triage, specialist]);
+        var resolver = CreateResolver(out var store, OfferTool("GetCurrentTime"));
+        SeedParticipants(store, triage, specialist);
+
+        var resolved = await resolver.ResolveAsync(orchestrator, ToolCapableModel).ConfigureAwait(false);
+
+        AssertEx.NotNull(resolved);
+        AssertEx.False(resolved!.AnyParticipantIsCloud, "an all-local orchestration must not be flagged cloud-reaching");
+        AssertEx.Null(resolved.FirstCloudParticipantModel);
+    }
+
     private const string KnowledgeSearchToolName = "search_knowledge_base";
     private const string CloudParticipantModel = "azure-foundry-deploy";
 
