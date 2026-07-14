@@ -228,7 +228,7 @@ public sealed class NodeChatStreamService(
         var enableTools = await runtimeSettings.GetEnableToolsAsync(cancellationToken).ConfigureAwait(false);
         var offerTools = request.UseLocalTools && enableTools && resolution.SupportsTools;
         var allowedTools = offerTools
-            ? resolved?.AllowedTools ?? localToolOfferProvider.GetOfferedTools(activeModel, resolution.ActiveModelIsCloud)
+            ? resolved?.AllowedTools ?? localToolOfferProvider.GetOfferedTools(activeModel, resolution.EffectiveModelIsCloud)
             : null;
 
         // Cloud-egress consent: node-local conversation attachments are private data. When the EFFECTIVE model that runs
@@ -795,17 +795,36 @@ public sealed class NodeChatStreamService(
             // logs — this path must never throw out of an iterator disposal.
             try
             {
+                // Carry a thin run envelope so this terminal row gets its durable envelope in the SAME transaction as the
+                // message row (MED-007 / R4), like the pump's interrupted path — otherwise this pre-ownership teardown is
+                // the one live path that writes a terminal without an atomic envelope, self-healing only at the next
+                // restart's reconcile. There is no InvocationState here, so invocation id / tokens / duration / model are
+                // unknown and omitted; the terminal status (derived from the winning row) carries the interrupted outcome.
                 await persistence.TerminalizeAssistantMessageAsync(
                     new NodeChatTerminalizeMessageRequest(correlation,
                         NodeChatMessageStatusValues.Interrupted,
                         timeProvider.GetUtcNow().ToUnixTimeMilliseconds(),
-                        Error: PreOwnershipInterruptedError),
+                        Error: PreOwnershipInterruptedError,
+                        Envelope: new AgentRunEnvelopeMetadata(InvocationId: null, DurationMs: 0L, TraceId: CurrentTraceId())),
                     CancellationToken.None).ConfigureAwait(false);
             }
             catch (Exception exception)
             {
                 logger.LogWarning(exception, "Failed to terminalize a chat turn interrupted before run ownership. RequestId={RequestId}", correlation.RequestId);
             }
+        }
+
+        // W3C trace id of the ambient activity at teardown (for cross-correlation with exported traces), or null when none
+        // is in scope. A default (all-zero) id is treated as absent. Mirrors the pump's interrupted-path trace capture.
+        private static string? CurrentTraceId()
+        {
+            if (System.Diagnostics.Activity.Current is not { } activity)
+            {
+                return null;
+            }
+
+            var traceId = activity.TraceId;
+            return traceId == default ? null : traceId.ToString();
         }
     }
 }
