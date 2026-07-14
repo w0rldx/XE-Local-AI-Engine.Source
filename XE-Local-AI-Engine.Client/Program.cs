@@ -127,16 +127,19 @@ try
 #endif
 
     // W3C trace correlation that works with Aspire/OpenTelemetry OFF (the desktop/RC default). Forcing the W3C
-    // Activity id format and registering a no-op ActivityListener makes ASP.NET create a request Activity from an
-    // inbound `traceparent` header even when no OTel listener is present; otherwise Activity.Current would be null in
-    // the request pipeline and the emitted trace id would regress to the Kestrel connection id (TraceIdentifier).
-    // When Aspire is ON, the OTel listener coexists with this one. Process-global, so set once before Build().
+    // Activity id format and registering a listener for the ASP.NET Core hosting source makes ASP.NET create a request
+    // Activity from an inbound `traceparent` header even when no OTel listener is present; otherwise Activity.Current
+    // would be null in the request pipeline and the emitted trace id would regress to the Kestrel connection id
+    // (TraceIdentifier). The listener is scoped to "Microsoft.AspNetCore" — the only source that produces the request
+    // activities this correlation needs — rather than every source in the process; AllData keeps the W3C ids populated
+    // and the activity recorded so the trace/span ids are real. When Aspire is ON, the OTel listeners coexist with this
+    // one. Process-global, so set once before Build().
     Activity.DefaultIdFormat = ActivityIdFormat.W3C;
     Activity.ForceDefaultIdFormat = true;
-#pragma warning disable CA2000 // The no-op listener is owned by the static ActivitySource registry for the app's lifetime.
+#pragma warning disable CA2000 // The listener is owned by the static ActivitySource registry for the app's lifetime.
     ActivitySource.AddActivityListener(new ActivityListener
     {
-        ShouldListenTo = static _ => true,
+        ShouldListenTo = static source => source.Name == "Microsoft.AspNetCore",
         Sample = static (ref ActivityCreationOptions<ActivityContext> _) => ActivitySamplingResult.AllData,
         SampleUsingParentId = static (ref ActivityCreationOptions<string> _) => ActivitySamplingResult.AllData
     });
@@ -209,7 +212,10 @@ try
             {
                 if (!context.Response.Headers.ContainsKey("traceresponse"))
                 {
-                    context.Response.Headers["traceresponse"] = $"00-{activity.TraceId}-{activity.SpanId}-01";
+                    // Trace-flags byte reflects the activity's actual recorded state rather than a hardcoded "01", so a
+                    // downstream reader is not told the span was sampled when it was not.
+                    var flags = (activity.ActivityTraceFlags & ActivityTraceFlags.Recorded) != ActivityTraceFlags.None ? "01" : "00";
+                    context.Response.Headers["traceresponse"] = $"00-{activity.TraceId}-{activity.SpanId}-{flags}";
                 }
 
                 return Task.CompletedTask;
@@ -365,7 +371,9 @@ finally
     await Log.CloseAndFlushAsync();
 }
 
-return 0;
+// Honor any non-zero exit code set during startup/shutdown (e.g. the loopback-bind guard's guarded shutdown), rather
+// than always reporting success on a graceful stop.
+return Environment.ExitCode;
 
 // Request-completion level for UseSerilogRequestLogging: failures stay loud (5xx/exception = Error, unexpected 4xx =
 // Warning) while routine traffic (2xx/3xx, the 401 token-refresh dance, SPA-fallback 404s) drops to Debug so the SPA's
