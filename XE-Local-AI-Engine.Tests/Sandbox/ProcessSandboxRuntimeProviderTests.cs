@@ -433,6 +433,88 @@ public sealed class ProcessSandboxRuntimeProviderTests : IDisposable
         AssertEx.False(capabilities.HasFlag(SandboxProviderCapabilities.SupportsNetworkPolicy));
     }
 
+    [Test]
+    public async Task ProcessSandboxProvider_Execute_DoesNotLeakWorkerEnvironment_ButAllowlistedAndRequestVarsAppear()
+    {
+        // Linux-only: uses `printenv` and /bin/sh. Windows env behavior is covered by the same allow-list logic.
+        if (!OperatingSystem.IsLinux())
+        {
+            return;
+        }
+
+        // A canary secret placed in the WORKER (parent) environment must never reach the sandbox child.
+        var canaryName = "XE_SANDBOX_CANARY_" + Guid.NewGuid().ToString("N");
+        const string canaryValue = "worker-secret-must-not-leak";
+        Environment.SetEnvironmentVariable(canaryName, canaryValue);
+        try
+        {
+            using var provider = CreateProvider();
+            var handle = await provider.CreateOrAttachAsync(CreateRequest(Key()));
+
+            var result = await provider.ExecuteAsync(handle, new SandboxCommandRequest
+            {
+                ExecutionId = "env-1",
+                Executable = "/bin/sh",
+                Arguments = ["-c", "printenv"],
+                // A caller-supplied variable is layered on top of the allow-list and MUST be visible to the child.
+                Environment = new Dictionary<string, string> { ["XE_REQUEST_VAR"] = "request-value" },
+                Timeout = TimeSpan.FromSeconds(15)
+            });
+
+            AssertEx.True(result.Completed, $"printenv must complete: {result.StandardError}");
+            AssertEx.Equal(expected: 0, result.ExitCode);
+
+            var output = result.StandardOutput ?? string.Empty;
+            // The worker's secret canary is absent — neither its name nor its value crossed into the child.
+            AssertEx.False(output.Contains(canaryName, StringComparison.Ordinal), "the canary variable name must not leak to the sandbox child");
+            AssertEx.False(output.Contains(canaryValue, StringComparison.Ordinal), "the canary variable value must not leak to the sandbox child");
+            // An allow-listed toolchain variable is forwarded so the fixed executables still run.
+            AssertEx.True(output.Contains("PATH=", StringComparison.Ordinal), "the allow-listed PATH must be forwarded to the child");
+            // The caller's explicit request variable is layered on top and visible.
+            AssertEx.True(output.Contains("XE_REQUEST_VAR=request-value", StringComparison.Ordinal), "a request-supplied variable must be visible to the child");
+        }
+        finally
+        {
+            Environment.SetEnvironmentVariable(canaryName, value: null);
+        }
+    }
+
+    [Test]
+    public async Task ProcessSandboxProvider_CreateOrAttach_RejectsUnenforceableNetworkPolicy()
+    {
+        using var provider = CreateProvider();
+
+        // None (no network) demands egress isolation the provider cannot enforce → fail closed.
+        await AssertEx.ThrowsAsync<SandboxCapabilityNotSupportedException>(() => provider.CreateOrAttachAsync(new SandboxCreateRequest
+        {
+            AttachKey = Key(),
+            RuntimeProfile = "dotnet-agent-home",
+            NetworkPolicy = SandboxNetworkPolicy.None
+        }));
+
+        // Restricted (egress allow-list) is likewise unenforceable → fail closed.
+        await AssertEx.ThrowsAsync<SandboxCapabilityNotSupportedException>(() => provider.CreateOrAttachAsync(new SandboxCreateRequest
+        {
+            AttachKey = Key(),
+            RuntimeProfile = "dotnet-agent-home",
+            NetworkPolicy = SandboxNetworkPolicy.Restricted
+        }));
+    }
+
+    [Test]
+    public async Task ProcessSandboxProvider_CreateOrAttach_RejectsUnenforceableResourceLimits()
+    {
+        using var provider = CreateProvider();
+
+        await AssertEx.ThrowsAsync<SandboxCapabilityNotSupportedException>(() => provider.CreateOrAttachAsync(new SandboxCreateRequest
+        {
+            AttachKey = Key(),
+            RuntimeProfile = "dotnet-agent-home",
+            NetworkPolicy = SandboxNetworkPolicy.Unrestricted,
+            ResourceLimits = new SandboxResourceLimits { MemoryMb = 512 }
+        }));
+    }
+
     private static async Task SwallowAsync(Task task)
     {
         try
@@ -492,7 +574,10 @@ public sealed class ProcessSandboxRuntimeProviderTests : IDisposable
         return new SandboxCreateRequest
         {
             AttachKey = attachKey,
-            RuntimeProfile = "dotnet-agent-home"
+            RuntimeProfile = "dotnet-agent-home",
+            // The process provider fails closed on any network posture it cannot enforce; Unrestricted is the only one
+            // it honestly serves (the child shares the host network), so the happy-path helper requests it.
+            NetworkPolicy = SandboxNetworkPolicy.Unrestricted
         };
     }
 
