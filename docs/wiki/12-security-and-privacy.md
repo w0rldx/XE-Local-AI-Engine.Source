@@ -88,25 +88,30 @@ The marker used across redactors is the literal `[REDACTED]` (and `[REDACTED:…
 
 ## 3. Local admin API: loopback-only, Host/Origin-strict, authenticated, fail-closed
 
-Local management/admin endpoints live under `/api/local/v1` and are reachable only from the same machine. Three layers enforce this.
+Local management/admin endpoints live under `/api/local/v1` and are reachable only from the same machine. Several layers enforce this: a request-time peer + Host + Origin gate, authentication/authorization, and a startup bind guard.
 
-### 3.1 Host + Origin middleware (`LocalApiSecurityMiddleware`)
+### 3.1 Loopback peer + Host + Origin middleware (`LocalApiSecurityMiddleware`)
 
-`LocalApiSecurityMiddleware` (`XE-Local-AI-Engine.Client/Endpoints/Common/LocalApiSecurityMiddleware.cs`, registered in `Program.cs:134` via `app.UseMiddleware<LocalApiSecurityMiddleware>()`) rejects any `/api/local/v1` request whose `Host` or `Origin` is not loopback, returning **403** before routing:
+`LocalApiSecurityMiddleware` (`XE-Local-AI-Engine.Client/Endpoints/Common/LocalApiSecurityMiddleware.cs`, registered in `Program.cs` via `app.UseMiddleware<LocalApiSecurityMiddleware>()`) rejects any `/api/local/v1` request whose transport peer is non-loopback **or** whose `Host`/`Origin` is not loopback, returning **403** before routing:
 
 ```csharp
-// LocalApiSecurityMiddleware.cs:26
+// LocalApiSecurityMiddleware.cs:40
 if (IsLocalApiRequest(context.Request.Path)
-    && (!IsAllowedHost(context.Request.Host.Host) || !IsAllowedOrigin(context.Request)))
+    && (!IsLoopbackPeer(context.Connection.RemoteIpAddress)
+        || !IsAllowedHost(context.Request.Host.Host)
+        || !IsAllowedOrigin(context.Request)))
 {
     context.Response.StatusCode = StatusCodes.Status403Forbidden;
     return;
 }
 ```
 
+- **Loopback peer check** is the authoritative transport-level gate: `context.Connection.RemoteIpAddress` is the address of the socket peer — the machine that opened the TCP connection to Kestrel — so a routable caller is rejected even if it forges a loopback `Host`/`Origin`. A **null** peer address means the request never traversed the network stack (the in-process/in-memory test host and in-process health probes present no peer) and is treated as loopback-equivalent; only a concrete non-loopback address is rejected (`LocalApiSecurityMiddleware.cs:52`).
 - **Allowed hosts** are exactly `localhost`, `127.0.0.1`, `::1` (case-insensitive; IPv6 brackets normalized off).
 - **Origin check** is fail-closed: an absent `Origin` is permitted (same-origin navigation), but any *present* `Origin` must parse, be a loopback host, and match the request's scheme + host + port exactly. A non-loopback or mismatched origin is rejected.
 - Ordering matters: the middleware runs *before* `UseRouting`/`UseAuthentication`/`UseAuthorization` in `Program.cs`, so a non-local caller is rejected before it can reach an endpoint at all.
+
+> **Reverse proxies / headless deployment are unsupported.** The peer check reads the socket peer, and no forwarded-headers middleware is registered, so `X-Forwarded-For` is never honoured. A reverse proxy on the **same host** would appear as a loopback peer on every forwarded request and defeat the peer gate — this is by design: the app is single-user, same-machine only. Putting `/api/local/v1` behind a proxy or exposing it beyond the local machine is out of scope and not a supported configuration.
 
 ### 3.2 Authentication & authorization
 
@@ -114,12 +119,21 @@ Local endpoints are still authenticated and policy-gated; loopback is necessary 
 
 ### 3.3 Desktop / loopback hosting
 
-In desktop mode the node binds plain HTTP on loopback only and the HTTPS-redirect/HSTS branch is bypassed by design (`Program.cs:96`, `if (!isDesktop)` guard); `LoopbackUrlResolver` / `DesktopLifecycle` (`XE-Local-AI-Engine.Client/Hosting/`) pick an auto-port loopback URL. See [Hosting & Deployment](11-hosting-and-deployment.md). The loopback bind plus the Host/Origin middleware together keep the admin surface off the network.
+In desktop mode the node binds plain HTTP on loopback only and the HTTPS-redirect/HSTS branch is bypassed by design (`if (!isDesktop)` guard in `Program.cs`); `LoopbackUrlResolver` / `DesktopLifecycle` (`XE-Local-AI-Engine.Client/Hosting/`) pick an auto-port loopback URL. See [Hosting & Deployment](11-hosting-and-deployment.md). The loopback bind plus the peer + Host/Origin middleware together keep the admin surface off the network.
+
+### 3.4 Startup bind guard (`LoopbackBindGuard`)
+
+`LoopbackBindGuard` (`XE-Local-AI-Engine.Client/Hosting/LoopbackBindGuard.cs`, wired via `LoopbackBindGuard.Guard(app)` in `Program.cs`) is defense-in-depth behind the request-time middleware: instead of trusting the configured URLs, it inspects the addresses Kestrel *actually* bound (post `ApplicationStarted`, so an OS-assigned port and wildcard expansion are already resolved) and, if any is non-loopback, logs a **critical** line naming the offending address(es) and shuts the app down.
+
+- The shutdown sets `Environment.ExitCode = 1` before calling `StopApplication()`, so a supervisor/CI treats the guarded stop as an **error** (exit code 1) rather than a clean shutdown (`LoopbackBindGuard.cs:81`).
+- Wildcard binds (`*`, `+`, `0.0.0.0`, `::`) are treated as non-loopback and trigger the guard; `localhost` and any loopback IP literal pass.
+- **Opt-out:** setting `Security:AllowNonLoopbackBind=true` skips the guard entirely — for an operator who has secured the surface themselves. It defaults to `false`, and no supported launch needs it (desktop binds `127.0.0.1`; Aspire dev binds `localhost` and exposes externally via the DCP proxy, not the app process), so the guard is a no-op on every supported launch and only fires on a deliberately overridden routable bind.
 
 **Maintainer rules:**
 - Mount any new local-admin route under `/api/local/v1` so the middleware covers it; routes outside that prefix are *not* loopback-gated by this middleware.
 - Keep the Origin check fail-closed — never widen `AllowedHosts` to a public address.
 - Apply an authorization policy in addition to the loopback gate; do not rely on loopback alone.
+- Do not add forwarded-headers middleware or a reverse proxy in front of this surface, and do not set `Security:AllowNonLoopbackBind` to enable a routable/headless deployment — those configurations are unsupported (§3.1).
 
 ---
 
