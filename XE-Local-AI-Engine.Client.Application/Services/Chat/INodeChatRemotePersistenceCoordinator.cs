@@ -19,7 +19,10 @@ public interface INodeChatRemotePersistenceCoordinator
 {
     /// <summary>
     ///     Ensures the conversation, persists the synthesized user turn, and creates the assistant placeholder for a
-    ///     remote run. Returns a session whose correlation drives subsequent pump flushes/terminalization.
+    ///     remote run. Returns a session whose correlation drives subsequent pump flushes/terminalization, or
+    ///     <see langword="null" /> when the assistant row reached a terminal status before it could be marked streaming
+    ///     (e.g. an early cancel): there is nothing to persist into, so the caller runs the invocation without a
+    ///     node-local mirror rather than opening a session against a terminal row.
     /// </summary>
-    Task<NodeChatRemotePersistenceSession> BeginAsync(RuntimePackage package, CancellationToken cancellationToken = default);
+    Task<NodeChatRemotePersistenceSession?> BeginAsync(RuntimePackage package, CancellationToken cancellationToken = default);
 }
