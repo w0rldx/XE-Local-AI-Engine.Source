@@ -1,6 +1,7 @@
 namespace XE_Local_AI_Engine.Tests.HealthChecks;
 
 using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.Diagnostics;
 using Microsoft.Extensions.Diagnostics.HealthChecks;
 using XE_Local_AI_Engine.Client.HealthChecks;
 using XE_Local_AI_Engine.Client.Persistence;
@@ -19,6 +20,10 @@ public sealed class NodeSqliteHealthCheckTests
     {
         var options = new DbContextOptionsBuilder<NodeChatDbContext>()
             .UseSqlite("Data Source=:memory:")
+            // Mirror the production NodeChatDbContext registration: building distinct options per test would otherwise
+            // push EF's internal service-provider cache over its cap once the whole module runs, and EF throws for that
+            // event by default (full-suite-only failure).
+            .ConfigureWarnings(warnings => warnings.Ignore(CoreEventId.ManyServiceProvidersCreatedWarning))
             .Options;
         using var keyHolder = new NullNodeSqliteKeyHolder();
         await using var dbContext = new NodeChatDbContext(options, keyHolder);
@@ -37,6 +42,7 @@ public sealed class NodeSqliteHealthCheckTests
         var unreachablePath = Path.Combine(Path.GetTempPath(), $"xe-missing-{Guid.NewGuid():N}", "node.db");
         var options = new DbContextOptionsBuilder<NodeChatDbContext>()
             .UseSqlite($"Data Source={unreachablePath}")
+            .ConfigureWarnings(warnings => warnings.Ignore(CoreEventId.ManyServiceProvidersCreatedWarning))
             .Options;
         using var keyHolder = new NullNodeSqliteKeyHolder();
         await using var dbContext = new NodeChatDbContext(options, keyHolder);
