@@ -36,25 +36,15 @@ internal sealed class NodeChatVariantBranchService(NodeChatPersistenceWriter wri
             return null;
         }
 
-        // Collapse variant groups so the branch is a LINEAR thread: the branched-from turn contributes only the
-        // chosen revision (the cutoff message), and every other variant group contributes only its newest member
-        // (matching the client's default-active = newest revision). Non-variant messages always pass through.
-        // Without this, branching from a revision copies the sibling variants too, and since variant_group_id is
-        // dropped on copy (below) they render as duplicate stacked assistant turns instead of one. (RC fix.)
+        // Collapse variant groups so the branch is a LINEAR thread: exactly one revision per group, ordered by
+        // sequence, with all non-variant messages passing through. The selected revision per group comes from the
+        // caller-supplied map (the path the user was actually viewing); a group with no valid selection falls back
+        // to its newest eligible revision. The branch-point turn always contributes exactly the cutoff message,
+        // overriding any caller entry for its group. Without this collapse the copied siblings would render as
+        // duplicate stacked assistant turns (variant_group_id is dropped on copy below). (RC fix + MED-008.)
         var eligible = source.Messages.Where(message => message.Sequence <= cutoff.Sequence).ToArray();
-        var newestSequenceByGroup = eligible
-                                    .Where(message => message.VariantGroupId is not null && message.VariantGroupId != cutoff.VariantGroupId)
-                                    .GroupBy(message => message.VariantGroupId!.Value)
-                                    .ToDictionary(group => group.Key, group => group.Max(message => message.Sequence));
-
-        var copies = eligible
-                     .Where(message => message.VariantGroupId is null
-                                       || message.MessageId == cutoff.MessageId
-                                       || (message.VariantGroupId != cutoff.VariantGroupId
-                                           && newestSequenceByGroup.TryGetValue(message.VariantGroupId.Value, out var newestSequence)
-                                           && message.Sequence == newestSequence))
-                     .OrderBy(message => message.Sequence)
-                     .ToArray();
+        var selection = BuildValidatedSelection(request.SelectedRevisions, source.Messages, cutoff);
+        var copies = SelectedPathResolver.Resolve(eligible, selection);
         var branchedConversationId = Guid.NewGuid();
 
         return await _writer.ExecuteConversationExclusiveAsync(branchedConversationId,
@@ -121,9 +111,53 @@ internal sealed class NodeChatVariantBranchService(NodeChatPersistenceWriter wri
                 }
 
                 await transaction.CommitAsync(token).ConfigureAwait(false);
-                return new NodeChatBranchResultDto(request.ConversationId, branchedConversationId, copies.Length);
+                return new NodeChatBranchResultDto(request.ConversationId, branchedConversationId, copies.Count);
             },
             cancellationToken).ConfigureAwait(false);
+    }
+
+    // Validates the caller-supplied selected-revision map against the source conversation and reduces it to the
+    // entries that actually bear on the branch (upstream of the cutoff). Fails CLOSED on an integrity violation —
+    // an entry whose message does not belong to the conversation, or that is keyed under a variant group it is not
+    // a member of — because such an entry can only come from a stale/tampered client and must not silently pick a
+    // fallback revision. An otherwise-valid entry whose message sits AFTER the cutoff (a group the user navigated
+    // downstream of the branch point) is simply dropped: it plays no part in this branch's linear thread, so the
+    // group resolves to its newest ELIGIBLE revision via the resolver. Returns null when there is nothing to pin,
+    // which drives the legacy newest-per-group behavior.
+    private static IReadOnlyDictionary<Guid, Guid>? BuildValidatedSelection(IReadOnlyDictionary<Guid, Guid>? requested,
+        IReadOnlyList<NodeChatPersistedMessageDto> allMessages,
+        NodeChatPersistedMessageDto cutoff)
+    {
+        var selection = new Dictionary<Guid, Guid>();
+        if (requested is not null && requested.Count > 0)
+        {
+            var byId = allMessages.ToDictionary(message => message.MessageId);
+            foreach (var (groupId, messageId) in requested)
+            {
+                if (!byId.TryGetValue(messageId, out var message) || message.VariantGroupId != groupId)
+                {
+                    // The message is not in this conversation, or it is not a member of the group it is keyed under.
+                    throw new NodeChatInvalidBranchSelectionException(cutoff.ConversationId, groupId, messageId);
+                }
+
+                if (message.Sequence > cutoff.Sequence)
+                {
+                    // Valid, but downstream of the branch point — not part of this branch. Drop it.
+                    continue;
+                }
+
+                selection[groupId] = messageId;
+            }
+        }
+
+        // The branch-point turn is authoritative for its own group: the user branched from THIS exact revision,
+        // so it wins over any caller-supplied entry for the same group.
+        if (cutoff.VariantGroupId is { } cutoffGroup)
+        {
+            selection[cutoffGroup] = cutoff.MessageId;
+        }
+
+        return selection.Count > 0 ? selection : null;
     }
 
     public async Task<NodeChatMessageVariantDto?> CreateMessageVariantAsync(NodeChatCreateMessageVariantRequest request, CancellationToken cancellationToken = default)

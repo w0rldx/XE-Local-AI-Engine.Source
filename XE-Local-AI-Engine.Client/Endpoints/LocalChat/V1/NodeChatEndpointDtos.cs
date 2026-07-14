@@ -85,6 +85,14 @@ public sealed class BranchNodeChatConversationRequest
     public Guid ConversationId { get; init; }
 
     public Guid MessageId { get; init; }
+
+    /// <summary>
+    ///     Optional selected-revision map (<c>variantGroupId -&gt; selectedMessageId</c>, mirroring the persisted
+    ///     selected-path shape) sent from the client's active-revision state so the branched thread matches the path
+    ///     the user was viewing rather than always copying the newest revision. Null/empty ⇒ newest-per-group
+    ///     (legacy). Validated server-side; an entry referencing a non-member message rejects the branch (400).
+    /// </summary>
+    public IReadOnlyDictionary<Guid, Guid>? SelectedRevisions { get; init; }
 }
 
 public sealed class ListNodeChatMessageRevisionsRequest

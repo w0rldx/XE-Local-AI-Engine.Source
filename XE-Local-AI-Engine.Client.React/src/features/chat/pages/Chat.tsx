@@ -1152,7 +1152,10 @@ export function Chat() {
 		async (messageId: string): Promise<void> => {
 			setStreamError(undefined);
 			try {
-				const result = await nodeChatAdapter.branchConversation(selectedConversationId, messageId);
+				// Send the visible active-revision selection so the branched thread copies the revisions the user was
+				// viewing upstream, not always the newest sibling. Empty ⇒ server keeps its newest-per-group default.
+				const selectedRevisions = Object.keys(activeRevisionByGroup).length > 0 ? activeRevisionByGroup : undefined;
+				const result = await nodeChatAdapter.branchConversation(selectedConversationId, messageId, selectedRevisions);
 				// Surface the branched Origin=Local conversation: refresh history and open it.
 				await queryClient.invalidateQueries({ queryKey: nodeChatQueryKeys.conversations() });
 				setRequestedConversationId(result.branchedConversationId ?? "");
@@ -1166,7 +1169,7 @@ export function Chat() {
 				setStreamError(errorMessage(error));
 			}
 		},
-		[queryClient, selectedConversationId, setRequestedConversationId, t],
+		[activeRevisionByGroup, queryClient, selectedConversationId, setRequestedConversationId, t],
 	);
 
 	const handleBranch = useCallback(

@@ -147,6 +147,15 @@ public sealed class KnowledgeSearchHitResponse
     public required double Score { get; init; }
 
     public required int ChunkIndex { get; init; }
+
+    /// <summary>The owning document's catalog status at retrieval time (enum name via the global converter).</summary>
+    public required KnowledgeDocumentStatus DocumentStatus { get; init; }
+
+    /// <summary>
+    ///     True when the hit is a last-known-good projection served while the document is mid-reindex or its latest
+    ///     re-ingest failed (i.e. <see cref="DocumentStatus" /> is not <c>Indexed</c>). The UI badges these hits.
+    /// </summary>
+    public required bool ServingLastKnownGood { get; init; }
 }
 
 /// <summary>Response envelope for <c>POST knowledge-base/search</c>.</summary>
