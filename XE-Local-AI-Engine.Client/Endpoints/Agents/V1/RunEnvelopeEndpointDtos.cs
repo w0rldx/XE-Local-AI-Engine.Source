@@ -27,6 +27,9 @@ public sealed class AgentRunEnvelopeResponse
 
     public required int SchemaVersion { get; init; }
 
+    /// <summary>Bound agent definition id when the run executed under one; <see cref="System.Guid.Empty" /> otherwise.</summary>
+    public required Guid AgentDefinitionId { get; init; }
+
     public Guid? ConversationId { get; init; }
 
     public Guid? MessageId { get; init; }

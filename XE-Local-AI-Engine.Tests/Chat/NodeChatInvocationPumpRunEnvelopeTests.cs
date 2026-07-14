@@ -1,29 +1,25 @@
 namespace XE_Local_AI_Engine.Tests.Chat;
 
-using System.Diagnostics.Metrics;
-using Microsoft.Extensions.DependencyInjection;
-using Microsoft.Extensions.Logging.Abstractions;
 using NSubstitute;
 using XE_Local_AI_Engine.AI.Contracts.Enums;
-using XE_Local_AI_Engine.Client.Common.Telemetry;
 using XE_Local_AI_Engine.Client.Models.Enums;
-using XE_Local_AI_Engine.Client.Persistence.Stores;
 using XE_Local_AI_Engine.Client.Services.Chat;
 using XE_Local_AI_Engine.Client.Services.Chat.Implementation;
 using XE_Local_AI_Engine.Client.Services.Events;
 using XE_Local_AI_Engine.Tests.Testing;
 
-// The durable run ledger (MED-007): NodeChatInvocationPump appends exactly one content-free run-envelope row per
-// terminalized invocation through IAgentExecutionLogStore, for every terminal outcome (completed / failed / cancelled /
-// interrupted). These tests pin the seam wiring and the field mapping; the store round-trip / schema / retention are
-// covered in AdaptiveAgentMemoryStoreTests.
+// The durable run ledger (MED-007 / R4): NodeChatInvocationPump no longer writes the envelope itself — it hands the
+// content-free envelope metadata INTO the terminalize persistence request so the row is written atomically with the
+// terminal message row. These tests pin the pump's field mapping onto that request and that the result reflects the
+// persisted winning status; the atomic write itself (agent id, winning status, idempotency) is covered by the
+// persistence/recovery integration tests.
 public sealed class NodeChatInvocationPumpRunEnvelopeTests
 {
     [Test]
-    public async Task TerminalizeAsync_CompletedRun_WritesExactlyOneRunEnvelopeWithBoundedFields()
+    public async Task TerminalizeAsync_CompletedRun_PassesBoundedEnvelopeMetadataIntoTerminalize()
     {
-        var store = Substitute.For<IAgentExecutionLogStore>();
-        var pump = CreatePump(store);
+        var persistence = CreatePersistence();
+        var pump = new NodeChatInvocationPump(persistence, TimeProvider.System);
 
         var conversationId = Guid.NewGuid();
         var messageId = Guid.NewGuid();
@@ -49,32 +45,27 @@ public sealed class NodeChatInvocationPumpRunEnvelopeTests
 
         _ = await pump.TerminalizeAsync(correlation, state, "requested-model");
 
-        await store.Received(1).AddRunEnvelopeAsync(
-            Arg.Is<AgentRunEnvelopeInput>(input =>
-                input.TerminalStatus == "completed"
-                && input.Success
-                && input.ConversationId == conversationId
-                && input.MessageId == messageId
-                && input.RequestId == requestId
-                && input.InvocationId == invocationId
-                && input.ModelName == "llama-3.1"
-                && input.DurationMs == 1500L
-                && input.PromptTokens == 100
-                && input.CompletionTokens == 25
-                && input.ReasoningTokens == 5
-                && input.TotalTokens == 130
-                && input.StartedAtUtc == 7000L
-                && input.ContentChunkCount == 8
-                && input.ReasoningChunkCount == 3
-                && input.FailureCategory == null),
+        await persistence.Received(1).TerminalizeAssistantMessageAsync(
+            Arg.Is<NodeChatTerminalizeMessageRequest>(request =>
+                request.Status == "completed"
+                && request.Model == "llama-3.1"
+                && request.InputCount == 100
+                && request.OutputCount == 25
+                && request.Envelope != null
+                && request.Envelope.InvocationId == invocationId
+                && request.Envelope.DurationMs == 1500L
+                && request.Envelope.ContentChunkCount == 8
+                && request.Envelope.ReasoningChunkCount == 3
+                && request.Envelope.StartedAtUtc == 7000L
+                && request.Envelope.FailureCategory == null),
             Arg.Any<CancellationToken>());
     }
 
     [Test]
-    public async Task TerminalizeAsync_FailedRun_WritesExactlyOneRunEnvelopeWithFailureCategory()
+    public async Task TerminalizeAsync_FailedRun_PassesFailureCategoryInEnvelopeMetadata()
     {
-        var store = Substitute.For<IAgentExecutionLogStore>();
-        var pump = CreatePump(store);
+        var persistence = CreatePersistence();
+        var pump = new NodeChatInvocationPump(persistence, TimeProvider.System);
 
         var correlation = new NodeChatMessageCorrelation(Guid.NewGuid(), Guid.NewGuid(), Guid.NewGuid());
         var state = new InvocationState
@@ -89,22 +80,20 @@ public sealed class NodeChatInvocationPumpRunEnvelopeTests
 
         _ = await pump.TerminalizeAsync(correlation, state, requestedModel: null);
 
-        await store.Received(1).AddRunEnvelopeAsync(
-            Arg.Is<AgentRunEnvelopeInput>(input =>
-                input.TerminalStatus == "failed"
-                && !input.Success
-                && input.FailureCategory == "ProviderUnreachable"
-                && input.DurationMs == 42L
-                && input.PromptTokens == null
-                && input.CompletionTokens == null),
+        await persistence.Received(1).TerminalizeAssistantMessageAsync(
+            Arg.Is<NodeChatTerminalizeMessageRequest>(request =>
+                request.Status == "failed"
+                && request.Envelope != null
+                && request.Envelope.FailureCategory == "ProviderUnreachable"
+                && request.Envelope.DurationMs == 42L),
             Arg.Any<CancellationToken>());
     }
 
     [Test]
     public async Task TerminalizeAsync_WhenNoRunnerDuration_FallsBackToStartToCompleteElapsed()
     {
-        var store = Substitute.For<IAgentExecutionLogStore>();
-        var pump = CreatePump(store);
+        var persistence = CreatePersistence();
+        var pump = new NodeChatInvocationPump(persistence, TimeProvider.System);
 
         var correlation = new NodeChatMessageCorrelation(Guid.NewGuid(), Guid.NewGuid(), Guid.NewGuid());
         var state = new InvocationState
@@ -120,95 +109,54 @@ public sealed class NodeChatInvocationPumpRunEnvelopeTests
 
         _ = await pump.TerminalizeAsync(correlation, state, requestedModel: null);
 
-        await store.Received(1).AddRunEnvelopeAsync(
-            Arg.Is<AgentRunEnvelopeInput>(input => input.DurationMs == 750L),
+        await persistence.Received(1).TerminalizeAssistantMessageAsync(
+            Arg.Is<NodeChatTerminalizeMessageRequest>(request => request.Envelope != null && request.Envelope.DurationMs == 750L),
             Arg.Any<CancellationToken>());
     }
 
     [Test]
-    public async Task TerminalizeInterruptedAsync_WritesExactlyOneRunEnvelope()
+    public async Task TerminalizeInterruptedAsync_PassesThinEnvelopeMetadataIntoTerminalize()
     {
-        var store = Substitute.For<IAgentExecutionLogStore>();
-        var pump = CreatePump(store);
+        var persistence = CreatePersistence();
+        var pump = new NodeChatInvocationPump(persistence, TimeProvider.System);
 
         var correlation = new NodeChatMessageCorrelation(Guid.NewGuid(), Guid.NewGuid(), Guid.NewGuid());
         var cursor = new NodeChatPumpCursor("partial", string.Empty);
 
         _ = await pump.TerminalizeInterruptedAsync(correlation, cursor, wasCancelled: false);
 
-        await store.Received(1).AddRunEnvelopeAsync(
-            Arg.Is<AgentRunEnvelopeInput>(input =>
-                input.TerminalStatus == "interrupted"
-                && !input.Success
-                && input.InvocationId == null
-                && input.RequestId == correlation.RequestId
-                && input.DurationMs == 0L),
+        await persistence.Received(1).TerminalizeAssistantMessageAsync(
+            Arg.Is<NodeChatTerminalizeMessageRequest>(request =>
+                request.Status == "interrupted"
+                && request.Envelope != null
+                && request.Envelope.InvocationId == null
+                && request.Envelope.DurationMs == 0L),
             Arg.Any<CancellationToken>());
     }
 
     [Test]
-    public async Task TerminalizeInterruptedAsync_WhenCancelled_WritesCancelledEnvelope()
+    public async Task TerminalizeInterruptedAsync_WhenCancelled_PassesCancelledStatus()
     {
-        var store = Substitute.For<IAgentExecutionLogStore>();
-        var pump = CreatePump(store);
+        var persistence = CreatePersistence();
+        var pump = new NodeChatInvocationPump(persistence, TimeProvider.System);
 
         var correlation = new NodeChatMessageCorrelation(Guid.NewGuid(), Guid.NewGuid(), Guid.NewGuid());
 
         _ = await pump.TerminalizeInterruptedAsync(correlation, new NodeChatPumpCursor(string.Empty, string.Empty), wasCancelled: true);
 
-        await store.Received(1).AddRunEnvelopeAsync(
-            Arg.Is<AgentRunEnvelopeInput>(input => input.TerminalStatus == "cancelled" && !input.Success),
+        await persistence.Received(1).TerminalizeAssistantMessageAsync(
+            Arg.Is<NodeChatTerminalizeMessageRequest>(request => request.Status == "cancelled" && request.Envelope != null),
             Arg.Any<CancellationToken>());
     }
 
     [Test]
-    public async Task TerminalizeAsync_WhenLedgerWriteThrows_DoesNotFailTheInvocationAndCountsTheFailure()
-    {
-        var store = Substitute.For<IAgentExecutionLogStore>();
-        store.When(s => s.AddRunEnvelopeAsync(Arg.Any<AgentRunEnvelopeInput>(), Arg.Any<CancellationToken>()))
-             .Do(_ => throw new InvalidOperationException("ledger unavailable"));
-        var pump = CreatePump(store);
-
-        // Touch the counter so its instrument is published before the listener starts, then record every measurement on
-        // it. A forced failure guarantees at least one increment; parallel tests can only add, never remove, so >= 1 is safe.
-        _ = NodeMetrics.RunEnvelopeWriteFailedTotal;
-        var failuresCounted = 0L;
-        using var listener = new MeterListener();
-        listener.InstrumentPublished = (instrument, meterListener) =>
-        {
-            if (instrument.Meter.Name == NodeMetrics.MeterName && instrument.Name == "run_envelope_write_failed_total")
-            {
-                meterListener.EnableMeasurementEvents(instrument);
-            }
-        };
-        listener.SetMeasurementEventCallback<long>((_, measurement, _, _) => Interlocked.Add(ref failuresCounted, measurement));
-        listener.Start();
-
-        var correlation = new NodeChatMessageCorrelation(Guid.NewGuid(), Guid.NewGuid(), Guid.NewGuid());
-        var state = new InvocationState
-        {
-            InvocationId = Guid.NewGuid(),
-            ConversationId = correlation.ConversationId,
-            Status = InvocationStatus.Completed,
-            ModelUsed = "llama-3.1"
-        };
-
-        // The terminalization must complete normally even though the best-effort ledger write threw.
-        var result = await pump.TerminalizeAsync(correlation, state, requestedModel: null);
-
-        AssertEx.Equal("completed", result.TerminalStatus);
-        AssertEx.True(Interlocked.Read(ref failuresCounted) >= 1, "The ledger-write failure must increment the failure counter.");
-    }
-
-    [Test]
-    public async Task TerminalizeInterruptedAsync_WhenPersistedStatusWins_EnvelopeAndResultReflectPersisted()
+    public async Task TerminalizeInterruptedAsync_WhenPersistedStatusWins_ResultReflectsPersisted()
     {
         // Simulate the transition guard rejecting an Interrupted write against an already-Cancelled row: the persistence
-        // seam returns the Cancelled winning row. The envelope, the returned status, and the event type must all reflect
-        // that persisted state rather than the requested Interrupted, so the ledger can never disagree with the row.
-        var store = Substitute.For<IAgentExecutionLogStore>();
-        var persistence = Substitute.For<INodeChatPersistenceService>();
+        // seam returns the Cancelled winning row. The returned status and event type must reflect that persisted state
+        // rather than the requested Interrupted (the envelope's own status is derived inside the terminalize command).
         var correlation = new NodeChatMessageCorrelation(Guid.NewGuid(), Guid.NewGuid(), Guid.NewGuid());
+        var persistence = Substitute.For<INodeChatPersistenceService>();
         persistence.TerminalizeAssistantMessageAsync(Arg.Any<NodeChatTerminalizeMessageRequest>(), Arg.Any<CancellationToken>())
                    .Returns(new NodeChatPersistedMessageDto(correlation.MessageId,
                        correlation.ConversationId,
@@ -223,24 +171,20 @@ public sealed class NodeChatInvocationPumpRunEnvelopeTests
                        Model: null,
                        Error: null,
                        MetadataJson: null));
-        var provider = new ServiceCollection().AddSingleton(store).BuildServiceProvider();
-        var pump = new NodeChatInvocationPump(persistence, TimeProvider.System, provider.GetRequiredService<IServiceScopeFactory>(), NullLogger<NodeChatInvocationPump>.Instance);
+        var pump = new NodeChatInvocationPump(persistence, TimeProvider.System);
 
         var result = await pump.TerminalizeInterruptedAsync(correlation, new NodeChatPumpCursor("partial", string.Empty), wasCancelled: false);
 
         AssertEx.Equal(NodeChatMessageStatusValues.Cancelled, result.TerminalStatus);
         AssertEx.Equal(ChatStreamEventTypes.AssistantCancelled, result.EventType);
-        await store.Received(1).AddRunEnvelopeAsync(
-            Arg.Is<AgentRunEnvelopeInput>(input => input.TerminalStatus == NodeChatMessageStatusValues.Cancelled && !input.Success),
-            Arg.Any<CancellationToken>());
     }
 
-    private static NodeChatInvocationPump CreatePump(IAgentExecutionLogStore store)
+    private static INodeChatPersistenceService CreatePersistence()
     {
         var persistence = Substitute.For<INodeChatPersistenceService>();
-        // The pump now derives the envelope + result from the PERSISTED winning row, so the terminalize seam must return
-        // a message. Echo the requested terminal (the happy-path winning status) so the envelope reflects a successful
-        // terminalize; the transition-table rejection path is covered directly in NodeChatPersistenceServiceTests.
+        // The pump derives its result from the PERSISTED winning row, so the terminalize seam must return a message. Echo
+        // the requested terminal (the happy-path winning status); the transition-table rejection path is covered directly
+        // in the persistence/recovery integration tests.
         persistence.TerminalizeAssistantMessageAsync(Arg.Any<NodeChatTerminalizeMessageRequest>(), Arg.Any<CancellationToken>())
                    .Returns(callInfo =>
                    {
@@ -259,13 +203,6 @@ public sealed class NodeChatInvocationPumpRunEnvelopeTests
                            request.Error,
                            MetadataJson: null);
                    });
-        var provider = new ServiceCollection()
-                       .AddSingleton(store)
-                       .BuildServiceProvider();
-
-        return new NodeChatInvocationPump(persistence,
-            TimeProvider.System,
-            provider.GetRequiredService<IServiceScopeFactory>(),
-            NullLogger<NodeChatInvocationPump>.Instance);
+        return persistence;
     }
 }

@@ -137,35 +137,42 @@ public sealed class NodeChatRestartRecoveryServiceTests : IDisposable
     }
 
     [Test]
-    public async Task RecoverInterruptedMessagesAsync_BackfillsRunEnvelopesForInterruptedMessages()
+    public async Task RecoverInterruptedMessagesAsync_ReconcilesEnvelopesForEveryTerminalStateLackingOne()
     {
-        await using var provider = await BuildProviderAsync("restart-recovery-envelope-backfill.sqlite").ConfigureAwait(false);
+        await using var provider = await BuildProviderAsync("restart-recovery-envelope-reconcile.sqlite").ConfigureAwait(false);
         var persistence = CreatePersistenceService(provider);
         var recovery = CreateRecoveryService(provider);
-        var conversation = await persistence.CreateConversationAsync(new NodeChatCreateConversationRequest("Backfill", "node", CreatedAtUtc: 10)).ConfigureAwait(false);
+        var conversation = await persistence.CreateConversationAsync(new NodeChatCreateConversationRequest("Reconcile", "node", CreatedAtUtc: 10)).ConfigureAwait(false);
 
-        // Two non-terminal assistant rows (a crash between message commit and the best-effort envelope write) and one
-        // completed row that recovery must not touch.
+        // Two non-terminal rows (crash before terminal) plus three rows terminalized WITHOUT an envelope (a crash / write
+        // failure after the terminal commit). Recovery must reconcile ALL FIVE, preserving each row's persisted status.
         var pendingCorrelation = await CreateAssistantPlaceholderAsync(persistence, conversation.ConversationId, createdAtUtc: 11).ConfigureAwait(false);
         var streamingCorrelation = await CreateAssistantPlaceholderAsync(persistence, conversation.ConversationId, createdAtUtc: 12).ConfigureAwait(false);
         var completedCorrelation = await CreateAssistantPlaceholderAsync(persistence, conversation.ConversationId, createdAtUtc: 13).ConfigureAwait(false);
+        var failedCorrelation = await CreateAssistantPlaceholderAsync(persistence, conversation.ConversationId, createdAtUtc: 14).ConfigureAwait(false);
+        var cancelledCorrelation = await CreateAssistantPlaceholderAsync(persistence, conversation.ConversationId, createdAtUtc: 15).ConfigureAwait(false);
         await persistence.MarkAssistantStreamingAsync(streamingCorrelation, updatedAtUtc: 20).ConfigureAwait(false);
-        await persistence.TerminalizeAssistantMessageAsync(new NodeChatTerminalizeMessageRequest(completedCorrelation, NodeChatMessageStatusValues.Completed, UpdatedAtUtc: 21, "done"))
-                         .ConfigureAwait(false);
+        // No Envelope on these terminalize calls → the atomic write does not run, mimicking the crash gap the reconcile closes.
+        await persistence.TerminalizeAssistantMessageAsync(new NodeChatTerminalizeMessageRequest(completedCorrelation, NodeChatMessageStatusValues.Completed, UpdatedAtUtc: 21, "done")).ConfigureAwait(false);
+        await persistence.TerminalizeAssistantMessageAsync(new NodeChatTerminalizeMessageRequest(failedCorrelation, NodeChatMessageStatusValues.Failed, UpdatedAtUtc: 22, Error: "boom")).ConfigureAwait(false);
+        await persistence.TerminalizeAssistantMessageAsync(new NodeChatTerminalizeMessageRequest(cancelledCorrelation, NodeChatMessageStatusValues.Cancelled, UpdatedAtUtc: 23)).ConfigureAwait(false);
 
         _ = await recovery.RecoverInterruptedMessagesAsync(99).ConfigureAwait(false);
 
         var envelopes = await ReadEnvelopesAsync(provider, conversation.ConversationId).ConfigureAwait(false);
+        AssertEx.Equal(expected: 5, envelopes.Count);
 
-        // Exactly the two interrupted messages get a thin interrupted envelope; the completed message gets none (recovery
-        // only touches non-terminal rows).
-        AssertEx.Equal(expected: 2, envelopes.Count);
-        AssertEx.True(envelopes.All(envelope => envelope.TerminalStatus == NodeChatMessageStatusValues.Interrupted), "Backfilled envelopes must record the interrupted lifecycle.");
-        AssertEx.ContainsSingle(envelopes, envelope => envelope.MessageId == pendingCorrelation.MessageId);
-        AssertEx.ContainsSingle(envelopes, envelope => envelope.MessageId == streamingCorrelation.MessageId);
-        AssertEx.True(envelopes.All(envelope => envelope.MessageId != completedCorrelation.MessageId), "A completed message must not be backfilled.");
+        // Each backfilled envelope's terminal status mirrors the message's persisted status, and success only for completed.
+        AssertEx.Equal(NodeChatMessageStatusValues.Interrupted, EnvelopeFor(envelopes, pendingCorrelation).TerminalStatus);
+        AssertEx.Equal(NodeChatMessageStatusValues.Interrupted, EnvelopeFor(envelopes, streamingCorrelation).TerminalStatus);
+        AssertEx.Equal(NodeChatMessageStatusValues.Completed, EnvelopeFor(envelopes, completedCorrelation).TerminalStatus);
+        AssertEx.True(EnvelopeFor(envelopes, completedCorrelation).Success, "A reconciled completed envelope must be marked successful.");
+        AssertEx.Equal(NodeChatMessageStatusValues.Failed, EnvelopeFor(envelopes, failedCorrelation).TerminalStatus);
+        AssertEx.False(EnvelopeFor(envelopes, failedCorrelation).Success);
+        AssertEx.Equal(NodeChatMessageStatusValues.Cancelled, EnvelopeFor(envelopes, cancelledCorrelation).TerminalStatus);
+        AssertEx.False(EnvelopeFor(envelopes, cancelledCorrelation).Success);
         // Correlation carried through from the message row.
-        AssertEx.ContainsSingle(envelopes, envelope => envelope.RequestId == pendingCorrelation.RequestId);
+        AssertEx.Equal(pendingCorrelation.RequestId, EnvelopeFor(envelopes, pendingCorrelation).RequestId);
     }
 
     [Test]
@@ -184,6 +191,95 @@ public sealed class NodeChatRestartRecoveryServiceTests : IDisposable
 
         var envelopes = await ReadEnvelopesAsync(provider, conversation.ConversationId).ConfigureAwait(false);
         AssertEx.Equal(expected: 1, envelopes.Count);
+    }
+
+    [Test]
+    public async Task TerminalizeAssistantMessageAsync_WithEnvelope_WritesEnvelopeAtomicallyWithBoundAgentId()
+    {
+        await using var provider = await BuildProviderAsync("terminalize-atomic-envelope.sqlite").ConfigureAwait(false);
+        var persistence = CreatePersistenceService(provider);
+        var agentId = Guid.NewGuid();
+        var conversation = await persistence.CreateConversationAsync(new NodeChatCreateConversationRequest("Atomic", "node", CreatedAtUtc: 10)).ConfigureAwait(false);
+        var correlation = await CreateAssistantPlaceholderAsync(persistence, conversation.ConversationId, createdAtUtc: 11, agentDefinitionId: agentId).ConfigureAwait(false);
+        var invocationId = Guid.NewGuid();
+
+        var persisted = await persistence.TerminalizeAssistantMessageAsync(new NodeChatTerminalizeMessageRequest(correlation,
+                NodeChatMessageStatusValues.Completed,
+                UpdatedAtUtc: 20,
+                "answer",
+                Model: "llama-3.1",
+                InputCount: 100,
+                OutputCount: 25,
+                Envelope: new AgentRunEnvelopeMetadata(invocationId, DurationMs: 1500L, ContentChunkCount: 8)))
+            .ConfigureAwait(false);
+
+        AssertEx.Equal(NodeChatMessageStatusValues.Completed, persisted.Status);
+
+        var envelopes = await ReadEnvelopesAsync(provider, conversation.ConversationId).ConfigureAwait(false);
+        AssertEx.Equal(expected: 1, envelopes.Count);
+        var envelope = envelopes[0];
+        // Envelope written in the same operation as the terminal row, with the winning status and the bound agent id.
+        AssertEx.Equal(NodeChatMessageStatusValues.Completed, envelope.TerminalStatus);
+        AssertEx.True(envelope.Success);
+        AssertEx.Equal(agentId, envelope.AgentDefinitionId);
+        AssertEx.Equal(correlation.MessageId, envelope.MessageId);
+        AssertEx.Equal(invocationId, envelope.InvocationId);
+        AssertEx.Equal(expected: 1500L, envelope.DurationMs);
+        AssertEx.Equal(expected: 100, envelope.PromptTokens);
+        AssertEx.Equal(expected: 25, envelope.CompletionTokens);
+        AssertEx.Equal(expected: 8, envelope.ContentChunkCount);
+    }
+
+    [Test]
+    public async Task TerminalizeAssistantMessageAsync_WhenAlreadyTerminal_DoesNotWriteASecondEnvelope()
+    {
+        await using var provider = await BuildProviderAsync("terminalize-idempotent-envelope.sqlite").ConfigureAwait(false);
+        var persistence = CreatePersistenceService(provider);
+        var conversation = await persistence.CreateConversationAsync(new NodeChatCreateConversationRequest("Idempotent", "node", CreatedAtUtc: 10)).ConfigureAwait(false);
+        var correlation = await CreateAssistantPlaceholderAsync(persistence, conversation.ConversationId, createdAtUtc: 11).ConfigureAwait(false);
+
+        await persistence.TerminalizeAssistantMessageAsync(new NodeChatTerminalizeMessageRequest(correlation, NodeChatMessageStatusValues.Completed, UpdatedAtUtc: 20, "answer",
+                Envelope: new AgentRunEnvelopeMetadata(Guid.NewGuid(), DurationMs: 10L)))
+            .ConfigureAwait(false);
+        // A second terminalize is guard-rejected by the transition table, so it must not write a second envelope.
+        await persistence.TerminalizeAssistantMessageAsync(new NodeChatTerminalizeMessageRequest(correlation, NodeChatMessageStatusValues.Failed, UpdatedAtUtc: 21, Error: "late",
+                Envelope: new AgentRunEnvelopeMetadata(Guid.NewGuid(), DurationMs: 0L)))
+            .ConfigureAwait(false);
+
+        var envelopes = await ReadEnvelopesAsync(provider, conversation.ConversationId).ConfigureAwait(false);
+        AssertEx.Equal(expected: 1, envelopes.Count);
+        AssertEx.Equal(NodeChatMessageStatusValues.Completed, envelopes[0].TerminalStatus);
+    }
+
+    [Test]
+    public async Task ConversationPurge_ThenRecovery_LeavesNoOrphanEnvelope()
+    {
+        await using var provider = await BuildProviderAsync("purge-race-no-orphan.sqlite").ConfigureAwait(false);
+        var persistence = CreatePersistenceService(provider);
+        var recovery = CreateRecoveryService(provider);
+        var conversation = await persistence.CreateConversationAsync(new NodeChatCreateConversationRequest("PurgeRace", "node", CreatedAtUtc: 10)).ConfigureAwait(false);
+        var correlation = await CreateAssistantPlaceholderAsync(persistence, conversation.ConversationId, createdAtUtc: 11).ConfigureAwait(false);
+        await persistence.TerminalizeAssistantMessageAsync(new NodeChatTerminalizeMessageRequest(correlation, NodeChatMessageStatusValues.Completed, UpdatedAtUtc: 20, "answer",
+                Envelope: new AgentRunEnvelopeMetadata(Guid.NewGuid(), DurationMs: 5L)))
+            .ConfigureAwait(false);
+
+        // Purge deletes the message row AND its envelope. A subsequent reconcile selects FROM messages, so with the row
+        // gone it inserts nothing — a late envelope can never orphan the conversation's plaintext correlation.
+        await using (var scope = provider.CreateAsyncScope())
+        {
+            var dbContext = scope.ServiceProvider.GetRequiredService<NodeChatDbContext>();
+            await ConversationFootprintPurge.DeleteAsync(dbContext, conversation.ConversationId, CancellationToken.None).ConfigureAwait(false);
+        }
+
+        _ = await recovery.RecoverInterruptedMessagesAsync(99).ConfigureAwait(false);
+
+        var envelopes = await ReadEnvelopesAsync(provider, conversation.ConversationId).ConfigureAwait(false);
+        AssertEx.Empty(envelopes);
+    }
+
+    private static AgentRunEnvelopeRecord EnvelopeFor(IReadOnlyList<AgentRunEnvelopeRecord> envelopes, NodeChatMessageCorrelation correlation)
+    {
+        return envelopes.Single(envelope => envelope.MessageId == correlation.MessageId);
     }
 
     private static async Task<IReadOnlyList<AgentRunEnvelopeRecord>> ReadEnvelopesAsync(ServiceProvider provider, Guid conversationId)
@@ -223,11 +319,13 @@ public sealed class NodeChatRestartRecoveryServiceTests : IDisposable
 
     private static async Task<NodeChatMessageCorrelation> CreateAssistantPlaceholderAsync(NodeChatPersistenceService persistence,
         Guid conversationId,
-        long createdAtUtc)
+        long createdAtUtc,
+        Guid? agentDefinitionId = null)
     {
         var messageId = Guid.NewGuid();
         var requestId = Guid.NewGuid();
-        await persistence.CreateAssistantPlaceholderAsync(new NodeChatCreateAssistantPlaceholderRequest(conversationId, messageId, requestId, createdAtUtc)).ConfigureAwait(false);
+        await persistence.CreateAssistantPlaceholderAsync(new NodeChatCreateAssistantPlaceholderRequest(conversationId, messageId, requestId, createdAtUtc, AgentDefinitionId: agentDefinitionId))
+                         .ConfigureAwait(false);
         return new NodeChatMessageCorrelation(conversationId, messageId, requestId);
     }
 
