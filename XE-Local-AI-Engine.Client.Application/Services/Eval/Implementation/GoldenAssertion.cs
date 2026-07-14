@@ -1,6 +1,7 @@
 namespace XE_Local_AI_Engine.Client.Services.Eval.Implementation;
 
 using System.Text.Json;
+using System.Text.Json.Serialization;
 
 /// <summary>
 ///     Distinguishes the four states a stored assertion string can be in, so the judge can treat a corrupt constraint
@@ -32,7 +33,18 @@ internal enum AssertionParseState
 /// </summary>
 internal sealed record GoldenAssertion(IReadOnlyList<string> RequiredPhrases, IReadOnlyList<string> ForbiddenPhrases)
 {
-    private static readonly JsonSerializerOptions SerializerOptions = new(JsonSerializerDefaults.Web);
+    // Web defaults keep camelCase naming + case-insensitive matching so a correctly-spelled wire payload still binds,
+    // but System.Text.Json otherwise IGNORES members it cannot map — so {"requiredPhrase":[...]} (a typo / schema drift)
+    // would parse into an all-empty assertion, be classified ValidNoSignal, and silently drop the intended deterministic
+    // gate to the rubric judge. Disallow makes an unmapped member throw JsonException, which TryParse turns into null →
+    // Classify returns Malformed → the judge records an explicit failed case and authoring rejects the input. Likewise a
+    // duplicate property is a corrupt payload where the silently-kept last value could differ from the author's intent, so
+    // reject it too (.NET 10 JsonException on duplicates).
+    private static readonly JsonSerializerOptions SerializerOptions = new(JsonSerializerDefaults.Web)
+    {
+        UnmappedMemberHandling = JsonUnmappedMemberHandling.Disallow,
+        AllowDuplicateProperties = false
+    };
 
     /// <summary>True when at least one non-blank required or forbidden phrase gates the case.</summary>
     public bool HasMeaningfulSignal => RequiredPhrases.Count > 0 || ForbiddenPhrases.Count > 0;

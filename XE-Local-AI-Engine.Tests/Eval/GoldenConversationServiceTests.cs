@@ -143,6 +143,24 @@ public sealed class GoldenConversationServiceTests
         await store.Received(1).AddAsync(Arg.Any<GoldenConversationInput>(), Arg.Any<CancellationToken>()).ConfigureAwait(false);
     }
 
+    [Test]
+    public async Task CreateAsync_WhenAssertionHasUnknownMemberEvenWithRubric_RejectsWithValidationError()
+    {
+        // Well-formed JSON, but the sole member is misspelled ("requiredPhrase" not "requiredPhrases") — schema drift.
+        // Strict unmapped-member handling makes this unparseable, so authoring rejects it up front (before the rubric
+        // check) rather than persisting a row that would parse into an all-empty assertion and silently score on the
+        // rubric at eval time — the constraint the author typed must not vanish just because a rubric is also present.
+        var service = CreateService(out var store);
+        var input = new GoldenConversationCreateInput(AgentId,
+            "Unknown assertion member",
+            InputTurns: """[{"role":"user","text":"hi"}]""",
+            Assertion: """{"requiredPhrase":["must appear"]}""",
+            "The answer must be helpful.");
+
+        await AssertEx.ThrowsAsync<PlaybookActionValidationException>(async () => await service.CreateAsync(input).ConfigureAwait(false)).ConfigureAwait(false);
+        await store.DidNotReceive().AddAsync(Arg.Any<GoldenConversationInput>(), Arg.Any<CancellationToken>()).ConfigureAwait(false);
+    }
+
     private static GoldenConversationService CreateService(out IGoldenConversationStore store)
     {
         store = Substitute.For<IGoldenConversationStore>();
