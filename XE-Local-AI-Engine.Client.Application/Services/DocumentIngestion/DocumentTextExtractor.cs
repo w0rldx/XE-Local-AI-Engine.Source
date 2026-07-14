@@ -154,14 +154,14 @@ public sealed class DocumentTextExtractor : IDocumentTextExtractor
         CancellationToken cancellationToken)
     {
         // Buffer to a seekable stream: PdfPig and the Open XML SDK both seek, and an upload stream may be
-        // forward-only. The endpoint caps the upload size, but a container format (.docx zip / .pdf) can expand well
-        // beyond its on-disk size, so buffering is bounded here by MaxDecompressedBytes as a decompression-bomb ceiling:
-        // exceeding it throws (surfaced as a content-free Failed result by the caller) instead of risking OOM.
-        // Residual risk: this bounds the bytes we materialize into the buffer; the reader still decompresses the zip/pdf
-        // internally, so a container that stays under the ceiling but expands hugely inside the SDK is not fully bounded
-        // by this guard alone — the caller's output expansion-ratio guard catches that on the way out.
+        // forward-only. The endpoint caps the upload size; as a second bound the RAW bytes copied here are capped at
+        // MaxBufferedInputBytes, and exceeding it throws (surfaced as a content-free Failed result by the caller) instead
+        // of risking OOM. This bounds only the raw bytes we materialize into the buffer. Parser-internal expansion is NOT
+        // bounded here — the reader still decompresses the zip/pdf internally, so a container that stays under this
+        // ceiling but expands hugely inside the SDK is caught only AFTER materialization, by the caller's output char cap
+        // and expansion-ratio guard. Peak resident memory is therefore per-file-cap x parser-expansion x concurrency.
         using var buffer = new MemoryStream();
-        var inputBytes = await CopyWithCeilingAsync(content, buffer, DocumentExtractionLimits.MaxDecompressedBytes, cancellationToken).ConfigureAwait(false);
+        var inputBytes = await CopyWithCeilingAsync(content, buffer, DocumentExtractionLimits.MaxBufferedInputBytes, cancellationToken).ConfigureAwait(false);
         buffer.Position = 0;
 
         var document = await reader.ReadAsync(buffer, fileName, normalizedExtension, cancellationToken).ConfigureAwait(false);
@@ -183,7 +183,7 @@ public sealed class DocumentTextExtractor : IDocumentTextExtractor
                 total += read;
                 if (total > maxBytes)
                 {
-                    throw new InvalidDataException("Document exceeds the maximum decompressed size allowed for extraction.");
+                    throw new InvalidDataException("Document exceeds the maximum buffered input size allowed for extraction.");
                 }
 
                 await destination.WriteAsync(rented.AsMemory(0, read), cancellationToken).ConfigureAwait(false);
