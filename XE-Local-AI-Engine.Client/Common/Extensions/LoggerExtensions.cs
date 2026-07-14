@@ -13,6 +13,14 @@ public static class LoggerExtensions
 {
     private const string OutputTemplate = "[{Timestamp:yyyy-MM-dd HH:mm:ss.fff zzz} {Level:u3}] {Message:lj}{NewLine}{Exception}";
 
+    /// <summary>
+    ///     Rolling-file template: as <see cref="OutputTemplate" /> but with the W3C <c>TraceId</c>/<c>SpanId</c> that
+    ///     Serilog attaches from the ambient <see cref="System.Diagnostics.Activity" />, so a file log line correlates
+    ///     with the trace id surfaced to the client in <c>ProblemDetails</c> and with distributed traces. Both render
+    ///     empty for logs raised outside a request (e.g. startup) that have no active Activity.
+    /// </summary>
+    private const string FileOutputTemplate = "[{Timestamp:yyyy-MM-dd HH:mm:ss.fff zzz} {Level:u3}] [trace:{TraceId} span:{SpanId}] {Message:lj}{NewLine}{Exception}";
+
     /// <summary>Rolled-file cap (50 MB) — a wedged component cannot fill the disk before the size roll + retention kick in.</summary>
     private const long LogFileSizeLimitBytes = 50L * 1024 * 1024;
 
@@ -94,6 +102,6 @@ public static class LoggerExtensions
             fileSizeLimitBytes: LogFileSizeLimitBytes,
             rollOnFileSizeLimit: true,
             shared: false,
-            outputTemplate: OutputTemplate);
+            outputTemplate: FileOutputTemplate);
     }
 }
