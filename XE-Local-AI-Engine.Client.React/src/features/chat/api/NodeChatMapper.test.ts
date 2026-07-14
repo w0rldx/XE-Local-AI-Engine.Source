@@ -227,10 +227,10 @@ describe("node chat mapper", () => {
 		expect(mapSingleMessage({ generationDurationMs: 2480 }).generationDurationMs).toBe(2480);
 	});
 
-	it("converts a runtime bigint generationDurationMs (int64 from coerced zod) to a number", () => {
-		// The wire field is a C# int64; the generated zod is z.coerce.bigint() with validator:true, so at runtime
-		// dto.generationDurationMs is a bigint even though the TS type reads `number`. The mapper must Number()-convert
-		// it, or the downstream tps math would throw "Cannot mix BigInt and other types".
+	it("normalizes a stray bigint generationDurationMs to a number (defensive safety net)", () => {
+		// The int64 wire contract is now pinned to a JSON number (the generated zod validates it as `z.int()`), so the
+		// mapper normally receives a number. This case still feeds a bigint to prove the Number() cast remains a working
+		// safety net, so the downstream tps math never throws "Cannot mix BigInt and other types".
 		const message = mapSingleMessage({ generationDurationMs: 2480n as unknown as number });
 
 		expect(message.generationDurationMs).toBe(2480);
