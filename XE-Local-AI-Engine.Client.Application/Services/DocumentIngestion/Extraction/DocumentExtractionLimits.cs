@@ -62,4 +62,49 @@ internal static class DocumentExtractionLimits
     ///     not gated here.
     /// </summary>
     public const int DefaultMaxConcurrentExtractions = 4;
+
+    /// <summary>
+    ///     Pre-parse ceiling on the number of entries a ZIP-based container (e.g. <c>.docx</c>) may declare in its
+    ///     central directory. Read cheaply from the central directory BEFORE the parser decompresses anything, so an
+    ///     archive padded with an absurd number of members (an entry-count zip bomb) is rejected without materializing
+    ///     any of them. A legitimate Office document has at most a few dozen parts, so this is deliberately generous.
+    /// </summary>
+    public const int DefaultMaxCompressedEntryCount = 10_000;
+
+    /// <summary>
+    ///     Pre-parse ceiling on the SUM of the declared uncompressed lengths of a ZIP container's entries
+    ///     (<c>ZipArchiveEntry.Length</c>, read from the central directory — no decompression). Rejecting here bounds the
+    ///     memory the parser would otherwise allocate expanding a small compressed container into a huge one. Deliberately
+    ///     generous (512 MiB) so no realistic Office document is rejected; the true bomb shape (tens of MB compressed
+    ///     declaring gigabytes uncompressed) sits far above it.
+    ///     <para>
+    ///         A hostile archive can LIE in its central directory (declare a small size, then expand hugely), so this
+    ///         header-trusting check is NOT the only guard: the post-parse output-char cap and expansion-ratio guard in
+    ///         <see cref="DocumentTextExtractor"/> remain the backstop that measures the ACTUAL expanded output. The two
+    ///         layers together are the defense in depth — cheap honest-header rejection up front, real-output rejection
+    ///         behind it.
+    ///     </para>
+    /// </summary>
+    public const long DefaultMaxDeclaredUncompressedBytes = 512L * 1024 * 1024;
+
+    /// <summary>
+    ///     Pre-parse ceiling on a ZIP container's declared expansion ratio: the SUM of declared uncompressed entry
+    ///     lengths divided by the SUM of their compressed lengths, both read from the central directory. A classic zip
+    ///     bomb declares a ratio in the thousands; ordinary Office XML compresses well under 20x, so this generous 200x
+    ///     ceiling (matching <see cref="DefaultMaxExpansionRatio"/>) flags only pathological archives. As with
+    ///     <see cref="DefaultMaxDeclaredUncompressedBytes"/>, a lying central directory is caught behind this by the
+    ///     post-parse guards.
+    /// </summary>
+    public const int DefaultMaxCompressionRatio = 200;
+
+    /// <summary>
+    ///     Pre-parse ceiling on the page count a PDF declares. PdfPig exposes <c>NumberOfPages</c> as soon as the
+    ///     document is opened (it reads the cross-reference/catalog, not the per-page content streams), so a PDF that
+    ///     declares an outrageous page count is rejected before its pages' text is extracted — the expensive step.
+    ///     Deliberately generous: a large legitimate book runs a few thousand pages, so 10_000 rejects only abusive
+    ///     inputs. PDF preflight is limited to this cheap page-count signal the library exposes; the post-parse output
+    ///     char cap and expansion-ratio guard remain the backstop for a PDF that declares few pages but expands each into
+    ///     an enormous text body.
+    /// </summary>
+    public const int DefaultMaxPdfPageCount = 10_000;
 }
