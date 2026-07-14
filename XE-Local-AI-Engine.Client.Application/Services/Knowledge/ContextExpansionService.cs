@@ -32,11 +32,17 @@ public sealed class ContextExpansionService : IContextExpansionService
         return await ReadRangeAsync(connection, documentId, chunkIndex - safeWindow, chunkIndex + safeWindow, cancellationToken).ConfigureAwait(false);
     }
 
+    // Total chunk rows the last ExpandBatchAsync call actually hydrated from the database. Test-only seam
+    // (internal + InternalsVisibleTo) that lets a test assert hydration is bounded to the union of the anchors' windows
+    // rather than the min-to-max span across distant hits; not part of the public contract.
+    internal int LastBatchRowsHydrated { get; private set; }
+
     public async Task<IReadOnlyList<IReadOnlyList<KnowledgeNeighborChunk>>> ExpandBatchAsync(IReadOnlyList<KnowledgeNeighborAnchor> anchors,
         int window,
         CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(anchors);
+        LastBatchRowsHydrated = 0;
         if (anchors.Count == 0)
         {
             return [];
@@ -47,23 +53,23 @@ public sealed class ContextExpansionService : IContextExpansionService
         var connection = _dbContext.Database.GetDbConnection();
         await OpenIfNeededAsync(connection, cancellationToken).ConfigureAwait(false);
 
-        // One range read per DISTINCT document (spanning the merged window of every anchor in that document), then each
-        // anchor is sliced from its document's rows in memory. This yields the exact rows-and-order ExpandAsync would per
-        // anchor, but collapses per-hit round trips to per-document ones.
-        var documentRanges = new Dictionary<Guid, (int Lower, int Upper)>();
-        foreach (var anchor in anchors)
+        // Per document, merge only OVERLAPPING or ADJACENT anchor windows into DISJOINT ranges and read each range with its
+        // own bounded query — never a single min-to-max span, so two far-apart hits in one document never drag in the
+        // intervening chunks. Each anchor is then sliced from the one merged range that fully contains its window, so the
+        // per-anchor output is byte-for-byte what ExpandAsync(anchor) returns.
+        var rangesByDocument = new Dictionary<Guid, List<HydratedRange>>();
+        foreach (var group in anchors.GroupBy(static anchor => anchor.DocumentId))
         {
-            var lower = anchor.ChunkIndex - safeWindow;
-            var upper = anchor.ChunkIndex + safeWindow;
-            documentRanges[anchor.DocumentId] = documentRanges.TryGetValue(anchor.DocumentId, out var existing)
-                ? (Math.Min(existing.Lower, lower), Math.Max(existing.Upper, upper))
-                : (lower, upper);
-        }
+            var merged = MergeWindows(group.Select(anchor => (Lower: anchor.ChunkIndex - safeWindow, Upper: anchor.ChunkIndex + safeWindow)));
+            var hydrated = new List<HydratedRange>(merged.Count);
+            foreach (var (lower, upper) in merged)
+            {
+                var rows = await ReadRangeAsync(connection, group.Key, lower, upper, cancellationToken).ConfigureAwait(false);
+                LastBatchRowsHydrated += rows.Count;
+                hydrated.Add(new HydratedRange(lower, upper, rows));
+            }
 
-        var rowsByDocument = new Dictionary<Guid, IReadOnlyList<KnowledgeNeighborChunk>>(documentRanges.Count);
-        foreach (var (documentId, range) in documentRanges)
-        {
-            rowsByDocument[documentId] = await ReadRangeAsync(connection, documentId, range.Lower, range.Upper, cancellationToken).ConfigureAwait(false);
+            rangesByDocument[group.Key] = hydrated;
         }
 
         var results = new List<IReadOnlyList<KnowledgeNeighborChunk>>(anchors.Count);
@@ -71,16 +77,40 @@ public sealed class ContextExpansionService : IContextExpansionService
         {
             var lower = anchor.ChunkIndex - safeWindow;
             var upper = anchor.ChunkIndex + safeWindow;
-            // The document's rows are already ascending by chunk_index; slice this anchor's window out of them so the
-            // result is byte-for-byte what ExpandAsync(anchor) returns.
-            var anchorWindow = rowsByDocument[anchor.DocumentId]
-                               .Where(chunk => chunk.ChunkIndex >= lower && chunk.ChunkIndex <= upper)
-                               .ToList();
+            // Exactly one merged range fully contains this anchor's window (by construction); slice it out. Its rows are
+            // already ascending by chunk_index.
+            var owningRange = rangesByDocument[anchor.DocumentId].First(range => lower >= range.Lower && upper <= range.Upper);
+            var anchorWindow = owningRange.Rows
+                                          .Where(chunk => chunk.ChunkIndex >= lower && chunk.ChunkIndex <= upper)
+                                          .ToList();
             results.Add(anchorWindow);
         }
 
         return results;
     }
+
+    // Merges overlapping or adjacent (touching, i.e. no unindexed gap) windows into disjoint ascending ranges. A window
+    // separated from the previous one by even a single unindexed position starts a new range, so a distant anchor never
+    // widens an earlier range across the gap between them.
+    private static List<(int Lower, int Upper)> MergeWindows(IEnumerable<(int Lower, int Upper)> windows)
+    {
+        var merged = new List<(int Lower, int Upper)>();
+        foreach (var (lower, upper) in windows.OrderBy(static window => window.Lower))
+        {
+            if (merged.Count > 0 && lower <= merged[^1].Upper + 1)
+            {
+                merged[^1] = (merged[^1].Lower, Math.Max(merged[^1].Upper, upper));
+            }
+            else
+            {
+                merged.Add((lower, upper));
+            }
+        }
+
+        return merged;
+    }
+
+    private sealed record HydratedRange(int Lower, int Upper, IReadOnlyList<KnowledgeNeighborChunk> Rows);
 
     private static async Task<IReadOnlyList<KnowledgeNeighborChunk>> ReadRangeAsync(DbConnection connection,
         Guid documentId,

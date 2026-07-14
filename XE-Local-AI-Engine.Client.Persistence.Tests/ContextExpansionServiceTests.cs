@@ -73,6 +73,45 @@ public sealed class ContextExpansionServiceTests : IDisposable
     }
 
     [Test]
+    public async Task ExpandBatchAsync_TwoFarApartAnchors_ReturnsExactWindowsWithoutHydratingTheInterveningRange()
+    {
+        var databasePath = GetDatabasePath("expand-sparse.sqlite");
+        var documentId = Guid.NewGuid();
+        const int chunkCount = 200;
+        const int nearAnchor = 10;
+        const int farAnchor = 190;
+
+        await MigrateAsync(databasePath).ConfigureAwait(false);
+        await SeedDocumentAsync(databasePath, documentId).ConfigureAwait(false);
+        for (var index = 0; index < chunkCount; index++)
+        {
+            await SeedChunkAsync(databasePath, documentId, Guid.NewGuid(), index, $"chunk-{index}").ConfigureAwait(false);
+        }
+
+        var anchors = new List<KnowledgeNeighborAnchor>
+        {
+            new(documentId, nearAnchor),
+            new(documentId, farAnchor)
+        };
+
+        await using var context = AgentDefinitionTestContextFactory.CreateForMigration(databasePath, _keyHolder);
+        var service = new ContextExpansionService(context);
+
+        var batched = await service.ExpandBatchAsync(anchors, Window, CancellationToken.None).ConfigureAwait(false);
+
+        // Content is unchanged: each anchor's window matches per-anchor expansion exactly.
+        AssertEx.Equal(2, batched.Count);
+        var nearExpected = await service.ExpandAsync(documentId, nearAnchor, Window, CancellationToken.None).ConfigureAwait(false);
+        var farExpected = await service.ExpandAsync(documentId, farAnchor, Window, CancellationToken.None).ConfigureAwait(false);
+        AssertNeighborsEqual(nearExpected, batched[0]);
+        AssertNeighborsEqual(farExpected, batched[1]);
+
+        // Hydration is bounded to the union of the two 3-chunk windows (6 rows), NOT the ~181-chunk span between them.
+        var expectedWindowRows = ((2 * Window) + 1) * 2;
+        AssertEx.Equal(expectedWindowRows, service.LastBatchRowsHydrated);
+    }
+
+    [Test]
     public async Task ExpandBatchAsync_EmptyAnchors_ReturnsEmpty()
     {
         var databasePath = GetDatabasePath("expand-empty.sqlite");
