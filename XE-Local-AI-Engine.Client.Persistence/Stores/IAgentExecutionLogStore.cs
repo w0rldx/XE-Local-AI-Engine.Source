@@ -14,17 +14,6 @@ public interface IAgentExecutionLogStore
     Task<AgentExecutionLogRecord> AddAsync(AgentExecutionLogInput input, CancellationToken cancellationToken = default);
 
     /// <summary>
-    ///     Idempotent upsert of ONE content-free durable run-envelope row
-    ///     (<see cref="AgentExecutionLogRecordKind.ChatRunEnvelope" />) for a terminalized chat invocation, keyed on the
-    ///     assistant <c>MessageId</c> (a filtered unique index enforces one envelope per message). A retry or a
-    ///     crash-recovery backfill for the same message is a no-op — the first write wins — so it can never duplicate.
-    ///     The store assigns <c>Id</c>/<c>CreatedAtUtc</c>, stamps the current envelope schema version, and records
-    ///     <c>AgentDefinitionId</c> as <see cref="System.Guid.Empty" /> (the bound agent id is not available at the
-    ///     terminalization seam). Metadata only — supply NO message content.
-    /// </summary>
-    Task AddRunEnvelopeAsync(AgentRunEnvelopeInput input, CancellationToken cancellationToken = default);
-
-    /// <summary>
     ///     Queryable read path for the versioned durable run envelopes (<see cref="AgentExecutionLogRecordKind.ChatRunEnvelope" />),
     ///     newest first, optionally scoped to one conversation. Each row carries its <c>SchemaVersion</c> so a reader can
     ///     tell shapes apart. Metadata only — no message content.
@@ -61,9 +50,10 @@ public static class AgentRunEnvelope
     /// <summary>
     ///     Current run-envelope shape version. Bump when the envelope's field set changes so a reader can tell old rows
     ///     apart. v2 (R4): added reasoning/total tokens + started_at_utc lifecycle fields and the deterministic
-    ///     message-id upsert key.
+    ///     message-id upsert key. v3 (R4 round 3): written atomically inside the terminalize transaction with the bound
+    ///     agent id populated from the winning message row.
     /// </summary>
-    public const int CurrentSchemaVersion = 2;
+    public const int CurrentSchemaVersion = 3;
 }
 
 /// <summary>
@@ -80,31 +70,6 @@ public enum AgentExecutionLogRecordKind
 }
 
 /// <summary>
-///     Fields for a durable run-envelope row (<see cref="AgentExecutionLogRecordKind.ChatRunEnvelope" />). Bounded and
-///     content-free: correlation ids, terminal status, usage/timing counters and a trace id only — NEVER prompt, model
-///     output, or tool arguments. <see cref="FailureCategory" /> is a category enum name (e.g. <c>ProviderUnreachable</c>),
-///     never an exception message or transcript text. Nullable fields are omitted when not reachable at the seam.
-/// </summary>
-public sealed record AgentRunEnvelopeInput(
-    Guid? ConversationId,
-    Guid? MessageId,
-    Guid? InvocationId,
-    Guid? RequestId,
-    string ModelName,
-    string TerminalStatus,
-    bool Success,
-    long DurationMs,
-    string? FailureCategory = null,
-    int? PromptTokens = null,
-    int? CompletionTokens = null,
-    int? ContentChunkCount = null,
-    int? ReasoningChunkCount = null,
-    string? TraceId = null,
-    int? ReasoningTokens = null,
-    int? TotalTokens = null,
-    long? StartedAtUtc = null);
-
-/// <summary>
 ///     Versioned read projection of a durable run-envelope row (always
 ///     <see cref="AgentExecutionLogRecordKind.ChatRunEnvelope" />). Metadata only — no message content;
 ///     <see cref="FailureCategory" /> is a category enum name only. <see cref="SchemaVersion" /> lets a reader tell
@@ -113,6 +78,7 @@ public sealed record AgentRunEnvelopeInput(
 public sealed record AgentRunEnvelopeRecord(
     Guid Id,
     int SchemaVersion,
+    Guid AgentDefinitionId,
     Guid? ConversationId,
     Guid? MessageId,
     Guid? InvocationId,

@@ -1,10 +1,6 @@
 namespace XE_Local_AI_Engine.Client.Services.Chat.Implementation;
 
 using System.Diagnostics;
-using Microsoft.Extensions.DependencyInjection;
-using Microsoft.Extensions.Logging;
-using XE_Local_AI_Engine.Client.Common.Telemetry;
-using XE_Local_AI_Engine.Client.Persistence.Stores;
 using XE_Local_AI_Engine.Client.Services.Events;
 
 /// <summary>
@@ -25,16 +21,10 @@ using XE_Local_AI_Engine.Client.Services.Events;
 /// </summary>
 public sealed class NodeChatInvocationPump(
     INodeChatPersistenceService persistence,
-    TimeProvider timeProvider,
-    IServiceScopeFactory serviceScopeFactory,
-    ILogger<NodeChatInvocationPump> logger) : INodeChatInvocationPump
+    TimeProvider timeProvider) : INodeChatInvocationPump
 {
     private readonly INodeChatPersistenceService _persistence = persistence ?? throw new ArgumentNullException(nameof(persistence));
     private readonly TimeProvider _timeProvider = timeProvider ?? throw new ArgumentNullException(nameof(timeProvider));
-    // The pump is a singleton but the run-envelope store (IAgentExecutionLogStore) is scoped over the per-scope
-    // NodeChatDbContext, so each ledger write gets its own DI scope (mirrors the memory extraction worker).
-    private readonly IServiceScopeFactory _serviceScopeFactory = serviceScopeFactory ?? throw new ArgumentNullException(nameof(serviceScopeFactory));
-    private readonly ILogger<NodeChatInvocationPump> _logger = logger ?? throw new ArgumentNullException(nameof(logger));
 
     /// <summary>
     ///     Persists a streamed content/reasoning delta if the incoming state has advanced past
@@ -87,6 +77,20 @@ public sealed class NodeChatInvocationPump(
             throw new ArgumentException($"Invocation status '{state.Status}' is not terminal.", nameof(state));
         }
 
+        // Durable run ledger (MED-007 / R4): the envelope payload rides INTO the terminalize command so its content-free
+        // row is written in the SAME transaction as the terminal message row (both commit or roll back together — no
+        // swallowed best-effort write). The terminal status/success and the bound agent id are derived from the winning
+        // persisted row inside that transaction, so they are not carried here.
+        var durationMs = state.GenerationDurationMs
+                         ?? (state.CompletedAt is { } completedAt ? Math.Max(val1: 0L, (long)(completedAt - state.StartedAt).TotalMilliseconds) : 0L);
+        var envelope = new AgentRunEnvelopeMetadata(state.InvocationId,
+            durationMs,
+            state.FailureCategory?.ToString(),
+            state.StreamedChunkCount,
+            state.StreamedThinkingChunkCount,
+            CurrentTraceId(),
+            state.StartedAt == default ? null : state.StartedAt.ToUnixTimeMilliseconds());
+
         var persisted = await _persistence.TerminalizeAssistantMessageAsync(new NodeChatTerminalizeMessageRequest(correlation,
                 terminalStatus,
                 NowUnixMilliseconds(),
@@ -102,36 +106,14 @@ public sealed class NodeChatInvocationPump(
                 // parts are then left untouched. The local front doors pass the accumulated ordered parts here.
                 parts,
                 // Whole-turn wall-clock duration from the runner; null for legacy/platform turns that did not report it.
-                state.GenerationDurationMs),
+                state.GenerationDurationMs,
+                envelope),
             CancellationToken.None).ConfigureAwait(false);
 
         // The transition guard may have rejected this terminalize (the row already reached a different terminal), so the
-        // persisted row is the authoritative winning state. The run envelope, the returned status, and the single SSE
-        // terminal are all built from it rather than the requested terminal, so the ledger can never disagree with the row.
+        // persisted row is the authoritative winning state. The returned status and the single SSE terminal are built from
+        // it rather than the requested terminal.
         var winningStatus = persisted.Status;
-
-        // Durable run ledger (MED-007): one content-free envelope row per terminalized invocation. Best-effort — a
-        // ledger failure is swallowed inside the helper so it can never fail or corrupt the terminalized turn.
-        var durationMs = state.GenerationDurationMs
-                         ?? (state.CompletedAt is { } completedAt ? Math.Max(val1: 0L, (long)(completedAt - state.StartedAt).TotalMilliseconds) : 0L);
-        await WriteRunEnvelopeAsync(new AgentRunEnvelopeInput(correlation.ConversationId,
-                correlation.MessageId,
-                state.InvocationId,
-                correlation.RequestId,
-                state.ModelUsed ?? requestedModel ?? string.Empty,
-                winningStatus,
-                string.Equals(winningStatus, NodeChatMessageStatusValues.Completed, StringComparison.Ordinal),
-                durationMs,
-                state.FailureCategory?.ToString(),
-                state.InputTokens,
-                state.OutputTokens,
-                state.StreamedChunkCount,
-                state.StreamedThinkingChunkCount,
-                CurrentTraceId(),
-                state.ReasoningTokens,
-                state.TotalTokens,
-                state.StartedAt == default ? null : state.StartedAt.ToUnixTimeMilliseconds()))
-            .ConfigureAwait(false);
 
         return new NodeChatPumpTerminalResult(persisted, winningStatus, MapTerminalEventType(winningStatus, eventType));
     }
@@ -151,36 +133,24 @@ public sealed class NodeChatInvocationPump(
             ? ChatStreamEventTypes.AssistantCancelled
             : ChatStreamEventTypes.AssistantInterrupted;
 
+        // Durable run ledger (MED-007 / R4): a stream that ended without a terminal invocation state still gets one
+        // envelope row, written atomically with the terminal message row. Thinner than the state-driven path — there is no
+        // InvocationState here, so invocation id / tokens / duration / chunk counts are unknown and omitted; the terminal
+        // status (derived from the winning row) carries the interrupted/cancelled outcome.
+        var envelope = new AgentRunEnvelopeMetadata(InvocationId: null, DurationMs: 0L, TraceId: CurrentTraceId());
+
         var persisted = await _persistence.TerminalizeAssistantMessageAsync(new NodeChatTerminalizeMessageRequest(correlation,
                 terminalStatus,
                 NowUnixMilliseconds(),
                 cursor.Content,
                 string.IsNullOrEmpty(cursor.Reasoning) ? null : cursor.Reasoning,
-                terminalStatus),
+                terminalStatus,
+                Envelope: envelope),
             CancellationToken.None).ConfigureAwait(false);
 
         // The persisted row is the winning state: the guard may have rejected an Interrupted write against an already
-        // terminal row (or a Cancelled write is idempotent over an HTTP-cancelled row). Build the ledger + result from it.
+        // terminal row (or a Cancelled write is idempotent over an HTTP-cancelled row). Build the result from it.
         var winningStatus = persisted.Status;
-
-        // Durable run ledger (MED-007): a stream that ended without a terminal invocation state still gets one envelope
-        // row. Thinner than the state-driven path — there is no InvocationState here, so invocation id / tokens /
-        // duration / chunk counts are unknown and omitted; the terminal status carries the interrupted/cancelled outcome.
-        await WriteRunEnvelopeAsync(new AgentRunEnvelopeInput(correlation.ConversationId,
-                correlation.MessageId,
-                InvocationId: null,
-                correlation.RequestId,
-                ModelName: string.Empty,
-                winningStatus,
-                Success: string.Equals(winningStatus, NodeChatMessageStatusValues.Completed, StringComparison.Ordinal),
-                DurationMs: 0L,
-                FailureCategory: null,
-                PromptTokens: null,
-                CompletionTokens: null,
-                ContentChunkCount: null,
-                ReasoningChunkCount: null,
-                CurrentTraceId()))
-            .ConfigureAwait(false);
 
         return new NodeChatPumpTerminalResult(persisted, winningStatus, MapTerminalEventType(winningStatus, eventType));
     }
@@ -245,25 +215,5 @@ public sealed class NodeChatInvocationPump(
 
         var traceId = activity.TraceId;
         return traceId == default ? null : traceId.ToString();
-    }
-
-    private async Task WriteRunEnvelopeAsync(AgentRunEnvelopeInput input)
-    {
-        try
-        {
-            await using var scope = _serviceScopeFactory.CreateAsyncScope();
-            var executionLogStore = scope.ServiceProvider.GetRequiredService<IAgentExecutionLogStore>();
-            // Never the send token: the ledger row must be written even when the run was cancelled (mirrors the
-            // CancellationToken.None terminalize write above).
-            await executionLogStore.AddRunEnvelopeAsync(input, CancellationToken.None).ConfigureAwait(false);
-        }
-        catch (Exception exception)
-        {
-            // Best-effort observability: a ledger write failure must never fail or corrupt the invocation. Log the
-            // exception TYPE NAME only (the envelope itself carries no content), bump the failure counter so the
-            // otherwise-silent failure is observable, and continue.
-            NodeMetrics.RunEnvelopeWriteFailedTotal.Add(1);
-            _logger.LogWarning("Durable run-envelope ledger write failed ({ErrorClass}); the invocation is unaffected.", exception.GetType().Name);
-        }
     }
 }

@@ -45,23 +45,25 @@ public sealed class NodeChatRestartRecoveryService(NodeChatPersistenceWriter wri
                     ],
                     token).ConfigureAwait(false);
 
-                // Durable run-envelope backfill (R4): a crash between the terminal message commit and the best-effort
-                // envelope write leaves an interrupted assistant row with no envelope. Backfill one thin envelope per
-                // interrupted assistant message that lacks one, in the SAME transaction, deriving the correlation ids
-                // (and a deterministic id = message_id) from the message row. The NOT EXISTS guard plus the filtered
-                // unique index keep it idempotent: an already-enveloped message is skipped, so re-running never
-                // duplicates. Tokens/duration/model are unknown at recovery and left empty — the row records the
-                // interrupted lifecycle, not the (lost) generation detail.
+                // Durable run-envelope reconcile (R4 round 3): a crash or an envelope-write failure after ANY terminal
+                // message commit — completed, failed, cancelled, or interrupted — can leave that assistant row without an
+                // envelope. Backfill one envelope per terminal assistant message that lacks one, in the SAME transaction,
+                // deriving the terminal status and success FROM the persisted message row (so the envelope matches the row's
+                // actual outcome), the bound agent id from the row, and a deterministic id = message_id. Because it selects
+                // FROM messages it can never orphan (a purged message has no row to select), and the NOT EXISTS guard plus
+                // the filtered unique index keep it idempotent (already-enveloped rows are skipped, re-runs never
+                // duplicate). Tokens / duration / model are unknown at reconcile and left empty — the row records the
+                // terminal lifecycle, not the (lost) generation detail.
                 _ = await dbContext.Database.ExecuteSqlRawAsync(sql: """
                                                                     INSERT INTO agent_execution_logs
                                                                         (id, record_kind, schema_version, agent_definition_id, conversation_id, message_id, request_id,
                                                                          model_name, config_hash, terminal_status, latency_ms, success, created_at_utc)
                                                                     SELECT
-                                                                        m.message_id, {0}, {1}, {2}, m.conversation_id, m.message_id, m.request_id,
-                                                                        '', '', {3}, 0, 0, {4}
+                                                                        m.message_id, {0}, {1}, COALESCE(m.agent_definition_id, {2}), m.conversation_id, m.message_id, m.request_id,
+                                                                        '', '', m.status, 0, CASE WHEN m.status = {3} THEN 1 ELSE 0 END, {4}
                                                                     FROM messages m
                                                                     WHERE m.role = {5}
-                                                                      AND m.status = {3}
+                                                                      AND m.status IN ({3}, {6}, {7}, {8})
                                                                       AND NOT EXISTS (
                                                                           SELECT 1 FROM agent_execution_logs e
                                                                           WHERE e.record_kind = {0} AND e.message_id = m.message_id);
@@ -70,9 +72,12 @@ public sealed class NodeChatRestartRecoveryService(NodeChatPersistenceWriter wri
                         (int)AgentExecutionLogRecordKind.ChatRunEnvelope,
                         AgentRunEnvelope.CurrentSchemaVersion,
                         Guid.Empty,
-                        NodeChatMessageStatusValues.Interrupted,
+                        NodeChatMessageStatusValues.Completed,
                         recoveredAtUtc,
-                        AssistantRole
+                        AssistantRole,
+                        NodeChatMessageStatusValues.Failed,
+                        NodeChatMessageStatusValues.Cancelled,
+                        NodeChatMessageStatusValues.Interrupted
                     ],
                     token).ConfigureAwait(false);
 
