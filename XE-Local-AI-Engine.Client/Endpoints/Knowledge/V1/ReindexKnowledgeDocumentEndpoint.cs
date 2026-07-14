@@ -35,7 +35,19 @@ public sealed class ReindexKnowledgeDocumentEndpoint(
             return;
         }
 
-        await _ingestionDispatcher.EnqueueAsync(req.DocumentId, ct).ConfigureAwait(false);
+        var admission = await _ingestionDispatcher.EnqueueAsync(req.DocumentId, ct).ConfigureAwait(false);
+        if (admission == KnowledgeIngestionEnqueueResult.QueueFull)
+        {
+            // The document is reset to Pending but the bounded ingestion queue is full, so it was not admitted now; the
+            // background worker recovers Pending documents on a later start, and a retry once the queue drains re-enqueues
+            // it. Signal a retryable busy state rather than reporting success for work that was not queued.
+            HttpContext.Response.Headers.RetryAfter = "5";
+            await Send.StringAsync("The server is busy indexing documents. Please retry shortly.",
+                StatusCodes.Status503ServiceUnavailable,
+                cancellation: ct).ConfigureAwait(false);
+            return;
+        }
+
         await Send.NoContentAsync(ct).ConfigureAwait(false);
     }
 }

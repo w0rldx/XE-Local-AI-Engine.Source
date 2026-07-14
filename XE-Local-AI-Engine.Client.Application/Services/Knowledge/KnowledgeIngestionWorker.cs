@@ -94,9 +94,22 @@ public sealed class KnowledgeIngestionWorker : BackgroundService
                 return;
             }
 
+            var reQueued = 0;
             foreach (var documentId in interrupted)
             {
-                await _dispatcher.EnqueueAsync(documentId, cancellationToken).ConfigureAwait(false);
+                var admission = await _dispatcher.EnqueueAsync(documentId, cancellationToken).ConfigureAwait(false);
+                if (admission == KnowledgeIngestionEnqueueResult.QueueFull)
+                {
+                    // The bounded queue filled while re-dispatching a large backlog. The remaining documents are already
+                    // reset to Pending, so they recover on a later start once the queue drains — stop pushing rather than
+                    // spin against a full queue. Content-free count only.
+                    _logger.LogInformation("Ingestion queue full during startup recovery after re-queuing {ReQueuedCount} of {InterruptedCount}; the rest recover on a later start.",
+                        reQueued,
+                        interrupted.Count);
+                    return;
+                }
+
+                reQueued++;
             }
 
             // Content-free count only — never any document identity or name.
