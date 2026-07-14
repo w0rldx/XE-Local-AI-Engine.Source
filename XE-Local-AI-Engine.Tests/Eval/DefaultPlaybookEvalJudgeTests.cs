@@ -163,6 +163,33 @@ public sealed class DefaultPlaybookEvalJudgeTests
     }
 
     [Test]
+    public async Task ScoreAsync_WhenAssertionHasUnknownMemberAndRubricPresent_FailsClosedWithoutRubricFallback()
+    {
+        var judge = new DefaultPlaybookEvalJudge(NullLogger<DefaultPlaybookEvalJudge>.Instance);
+        // Well-formed JSON, but the sole member is misspelled ("requiredPhrase" not "requiredPhrases") — schema drift.
+        // Without strict unmapped-member handling this parses into an all-empty assertion (ValidNoSignal) and silently
+        // falls back to the rubric, dropping the author's intended deterministic gate. It must instead be treated as a
+        // corrupt constraint (Malformed) and fail the case outright, exactly like non-JSON garbage.
+        var goldenCase = new GoldenConversationRecord(Guid.NewGuid(),
+            Guid.NewGuid(),
+            "Unknown assertion member with rubric",
+            InputTurns: """[{"role":"user","text":"hello"}]""",
+            Assertion: """{"requiredPhrase":["must appear"]}""",
+            Rubric: "The answer must be helpful.",
+            Enabled: true,
+            CreatedAtUtc: 10,
+            UpdatedAtUtc: 10);
+        // If the judge wrongly fell back to the rubric, this client would be invoked and pass the case.
+        using var chatClient = new VerdictChatClient("""{"pass":true,"reason":"meets the rubric"}""");
+
+        var score = await judge.ScoreAsync(goldenCase, "A genuinely helpful answer.", chatClient).ConfigureAwait(false);
+
+        AssertEx.False(score.Pass, "An assertion with an unmapped member must fail the case outright, never silently pass on the rubric.");
+        AssertEx.Equal(DefaultPlaybookEvalJudge.MalformedAssertionScoredBy, score.ScoredBy);
+        AssertEx.False(chatClient.WasCalled, "An assertion with an unmapped member must NOT trigger a rubric (model) call.");
+    }
+
+    [Test]
     public async Task ScoreAsync_WhenAssertionIsMalformedAndNoRubric_FailsClosed()
     {
         var judge = new DefaultPlaybookEvalJudge(NullLogger<DefaultPlaybookEvalJudge>.Instance);
