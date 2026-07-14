@@ -16,7 +16,6 @@ public sealed class SearchKnowledgeEndpoint(IKnowledgeSearchService searchServic
     private const int MinLimit = 1;
     private const int MaxLimit = 50;
     private const int DefaultLimit = 10;
-    private const int MaxQueryLength = 1000;
 
     private readonly IKnowledgeSearchService _searchService = searchService ?? throw new ArgumentNullException(nameof(searchService));
 
@@ -35,9 +34,9 @@ public sealed class SearchKnowledgeEndpoint(IKnowledgeSearchService searchServic
             return;
         }
 
-        if (req.Query.Trim().Length > MaxQueryLength)
+        if (KnowledgeQueryLimits.ExceedsMaxLength(req.Query))
         {
-            AddError($"The search query must be {MaxQueryLength} characters or fewer.");
+            AddError($"The search query must be {KnowledgeQueryLimits.MaxQueryLength} characters or fewer.");
             await Send.ErrorsAsync(cancellation: ct).ConfigureAwait(false);
             return;
         }

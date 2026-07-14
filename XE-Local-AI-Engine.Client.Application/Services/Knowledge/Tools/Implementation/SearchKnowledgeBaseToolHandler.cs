@@ -71,6 +71,11 @@ internal sealed class SearchKnowledgeBaseToolHandler : IClientLocalToolHandler
             return "search_knowledge_base requires a non-empty 'query'.";
         }
 
+        if (KnowledgeQueryLimits.ExceedsMaxLength(request.Query))
+        {
+            return $"search_knowledge_base 'query' must be {KnowledgeQueryLimits.MaxQueryLength} characters or fewer.";
+        }
+
         Guid? documentId = null;
         if (!string.IsNullOrWhiteSpace(request.DocumentId))
         {
