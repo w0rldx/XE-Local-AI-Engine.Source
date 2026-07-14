@@ -102,6 +102,12 @@ internal static class StreamIdleWatchdog
             var awaitingFirstChunk = true;
             while (true)
             {
+                // Observe outer cancellation BEFORE advancing: a stream whose MoveNextAsync always completes
+                // synchronously (a pre-buffered enumerator) never reaches the wall-clock race below, so without this it
+                // could emit past a cancel forever. The idle bound is a per-wait timer, and a zero-wait synchronous chunk
+                // has no idle gap to exceed, so only cancellation is checked on this path.
+                cancellationToken.ThrowIfCancellationRequested();
+
                 var moveNext = enumerator.MoveNextAsync();
 
                 // Fast path: a buffered chunk completes synchronously and successfully — take it without allocating a
@@ -114,6 +120,9 @@ internal static class StreamIdleWatchdog
                         yield break;
                     }
 
+                    // Re-observe AFTER the synchronous advancement: a cancel seen here halts the stream before this chunk
+                    // is yielded (an observed cancel never emits the pending chunk).
+                    cancellationToken.ThrowIfCancellationRequested();
                     yield return enumerator.Current;
                     awaitingFirstChunk = false;
                     continue;
@@ -147,6 +156,9 @@ internal static class StreamIdleWatchdog
                         // runner classifies it as user/invocation cancellation rather than a stall.
                         throw new OperationCanceledException(cancellationToken);
                     default:
+                        // Symmetry with the fast path: a cancel that fired between the race resolving and the yield
+                        // halts before this chunk is emitted.
+                        cancellationToken.ThrowIfCancellationRequested();
                         yield return enumerator.Current;
                         awaitingFirstChunk = false;
                         break;

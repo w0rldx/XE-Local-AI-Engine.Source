@@ -173,6 +173,107 @@ public sealed class IdleStreamGuardTests
         AssertEx.True(disposable.Disposed, "the disposable must actually have been disposed");
     }
 
+    [Test]
+    public async Task GuardAsync_WhenBufferedStreamCompletesSynchronously_StopsEmittingAfterOuterCancellation()
+    {
+        var idleTimeouts = 0;
+        var abandonments = 0;
+        var collected = new List<int>();
+
+        using var outerCts = new CancellationTokenSource();
+        // Mirror the session: the idle CTS is linked to the outer token.
+        using var idleCts = CancellationTokenSource.CreateLinkedTokenSource(outerCts.Token);
+        var context = new IdleGuardContext(
+            TimeSpan.FromMilliseconds(100),
+            () => idleTimeouts++,
+            () => abandonments++,
+            idleCts.Token,
+            outerCts.Token);
+
+        async Task Consume()
+        {
+            // Every MoveNextAsync completes synchronously, so this stream never reaches the async race — the fast path's
+            // cancellation check is the only thing that can stop it.
+            await foreach (var evt in IdleStreamGuard.GuardAsync<int>(_ => new SynchronousBufferedEnumerator(500), context).ConfigureAwait(false))
+            {
+                collected.Add(evt);
+                if (collected.Count == 3)
+                {
+                    await outerCts.CancelAsync();
+                }
+            }
+        }
+
+        await AssertEx.ThrowsAsync<OperationCanceledException>(() => Consume().WaitAsync(TimeSpan.FromSeconds(10)));
+
+        // The item after cancellation must never be emitted, and outer cancellation is not an idle timeout.
+        AssertEx.Equal(expected: 3, collected.Count);
+        AssertEx.Equal(expected: 0, idleTimeouts);
+        AssertEx.Equal(expected: 0, abandonments);
+    }
+
+    [Test]
+    public async Task GuardAsync_WhenBufferedStreamCompletesSynchronously_StopsEmittingAfterIdleDeadline()
+    {
+        var idleTimeouts = 0;
+        var abandonments = 0;
+        var collected = new List<int>();
+
+        using var idleCts = new CancellationTokenSource();
+        var context = new IdleGuardContext(
+            TimeSpan.FromMilliseconds(100),
+            () => idleTimeouts++,
+            () => abandonments++,
+            idleCts.Token,
+            CancellationToken.None);
+
+        async Task Consume()
+        {
+            await foreach (var evt in IdleStreamGuard.GuardAsync<int>(_ => new SynchronousBufferedEnumerator(500), context).ConfigureAwait(false))
+            {
+                collected.Add(evt);
+                if (collected.Count == 3)
+                {
+                    // Fire the idle deadline directly (a synchronous stream never yields the thread for a timer to run).
+                    await idleCts.CancelAsync();
+                }
+            }
+        }
+
+        await AssertEx.ThrowsAsync<OperationCanceledException>(() => Consume().WaitAsync(TimeSpan.FromSeconds(10)));
+
+        // The deadline is observed in the fast path before the next item — no further emission, and it counts as a timeout.
+        AssertEx.Equal(expected: 3, collected.Count);
+        AssertEx.Equal(expected: 1, idleTimeouts);
+        AssertEx.Equal(expected: 0, abandonments);
+    }
+
+    // An enumerator whose MoveNextAsync ALWAYS completes synchronously (a pre-buffered stream, items 1..limit), ignoring
+    // any token — it never reaches the guard's async race, so it proves the fast-path cancellation/deadline check.
+    private sealed class SynchronousBufferedEnumerator(int limit) : IAsyncEnumerator<int>
+    {
+        private int _index;
+
+        public int Current { get; private set; }
+
+        public ValueTask<bool> MoveNextAsync()
+        {
+            if (_index >= limit)
+            {
+                return ValueTask.FromResult(false);
+            }
+
+            _index++;
+            Current = _index;
+            return ValueTask.FromResult(true);
+        }
+
+        public ValueTask DisposeAsync()
+        {
+            return ValueTask.CompletedTask;
+        }
+    }
+
     // Yields one event then blocks the next MoveNextAsync. A cooperative enumerator observes its bound token and unwinds
     // when the guard cancels it, whereas a non-cooperative one ignores the token so only the test release unblocks it.
     // The controller is non-disposable; the disposable enumerator it creates is owned by the guard.

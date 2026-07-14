@@ -78,6 +78,35 @@ public sealed class StreamIdleWatchdogTests
     }
 
     [Test]
+    public async Task WithIdleTimeout_WhenBufferedStreamCompletesSynchronously_StopsEmittingAfterOuterCancellation()
+    {
+        var collected = new List<int>();
+        using var cancellationTokenSource = new CancellationTokenSource();
+
+        // Every MoveNextAsync completes synchronously, so this stream never reaches the wall-clock race — the fast path's
+        // cancellation check is the only thing that can stop it emitting.
+        async Task Consume()
+        {
+            await foreach (var item in StreamIdleWatchdog.WithIdleTimeout<int>(_ => new SynchronousBufferedStream(500),
+                               TimeSpan.FromSeconds(30),
+                               "should not fire",
+                               cancellationTokenSource.Token))
+            {
+                collected.Add(item);
+                if (collected.Count == 3)
+                {
+                    await cancellationTokenSource.CancelAsync();
+                }
+            }
+        }
+
+        await AssertEx.ThrowsAsync<OperationCanceledException>(() => Consume().WaitAsync(TimeSpan.FromSeconds(10)));
+
+        // The chunk after cancellation must never be emitted.
+        AssertEx.Equal(expected: 3, collected.Count);
+    }
+
+    [Test]
     public async Task WithIdleTimeout_WhenChunksArriveWithinBudget_YieldsAll()
     {
         var items = await CollectAsync(StreamIdleWatchdog.WithIdleTimeout(Fast, TimeSpan.FromSeconds(2), "should not fire", CancellationToken.None));
@@ -198,6 +227,40 @@ public sealed class StreamIdleWatchdogTests
             public ValueTask DisposeAsync()
             {
                 disposed.TrySetResult();
+                return ValueTask.CompletedTask;
+            }
+        }
+    }
+
+    // Every MoveNextAsync completes synchronously (a pre-buffered stream, chunks 1..limit), ignoring the token — it never
+    // reaches the watchdog's wall-clock race, so it proves the fast-path cancellation check.
+    private sealed class SynchronousBufferedStream(int limit) : IAsyncEnumerable<int>
+    {
+        public IAsyncEnumerator<int> GetAsyncEnumerator(CancellationToken cancellationToken = default)
+        {
+            return new Enumerator(limit);
+        }
+
+        private sealed class Enumerator(int limit) : IAsyncEnumerator<int>
+        {
+            private int _index;
+
+            public int Current { get; private set; }
+
+            public ValueTask<bool> MoveNextAsync()
+            {
+                if (_index >= limit)
+                {
+                    return ValueTask.FromResult(false);
+                }
+
+                _index++;
+                Current = _index;
+                return ValueTask.FromResult(true);
+            }
+
+            public ValueTask DisposeAsync()
+            {
                 return ValueTask.CompletedTask;
             }
         }
