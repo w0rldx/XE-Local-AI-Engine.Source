@@ -17,6 +17,7 @@ using Microsoft.Extensions.Logging;
 /// </summary>
 internal sealed class OrchestrationRunSession : IOrchestrationRunSession
 {
+    private readonly TimeSpan _abandonmentGrace = IdleStreamGuard.DefaultAbandonmentGrace;
     private readonly Lock _idleClockGate = new();
     private readonly TimeSpan _idleTimeout;
     private readonly ILogger _logger;
@@ -59,7 +60,22 @@ internal sealed class OrchestrationRunSession : IOrchestrationRunSession
         {
             idleCts.CancelAfter(_idleTimeout);
 
-            await foreach (var evt in _run.WatchStreamAsync(idleCts.Token).ConfigureAwait(false))
+            // The idle CTS is only a COOPERATIVE deadline: a workflow that ignores its token would never return from
+            // MoveNextAsync, so neither the timer nor disposal could run. IdleStreamGuard adds the wall-clock bound —
+            // it races each advancement against idleCts.Token and, on expiry, abandons a non-cooperative workflow
+            // (observed off-thread, bounded disposal) instead of awaiting it forever. The guard binds the workflow's
+            // own cancellation to the OUTER token so cooperative cancellation still works, and surfaces idle expiry as
+            // an OperationCanceledException (as before), invoking the metric callbacks on timeout/abandonment.
+            var guarded = IdleStreamGuard.GuardAsync(
+                watchToken => _run.WatchStreamAsync(watchToken).GetAsyncEnumerator(watchToken),
+                new IdleGuardContext(
+                    _abandonmentGrace,
+                    OrchestrationMetrics.RecordWatchdogTimeout,
+                    OrchestrationMetrics.RecordAbandoned,
+                    idleCts.Token,
+                    cancellationToken));
+
+            await foreach (var evt in guarded.ConfigureAwait(false))
             {
                 var update = MapEvent(evt);
                 if (update is null)
@@ -118,7 +134,14 @@ internal sealed class OrchestrationRunSession : IOrchestrationRunSession
     {
         try
         {
-            await _run.DisposeAsync().ConfigureAwait(false);
+            // Bound disposal on the same discipline as the watch: a workflow that ignores cancellation could leave its
+            // DisposeAsync pending forever and hold up shutdown. If it does not complete within the grace, abandon it
+            // (observed off-thread) and record it rather than blocking indefinitely.
+            if (!await IdleStreamGuard.DisposeBoundedAsync(_run, _abandonmentGrace).ConfigureAwait(false))
+            {
+                OrchestrationMetrics.RecordAbandoned();
+                _logger.LogWarning("Orchestration run disposal exceeded the {Grace} bound; abandoning it (its native resources may not be reclaimed until it returns).", _abandonmentGrace);
+            }
         }
         catch (Exception exception)
         {
