@@ -1,5 +1,6 @@
 // Developer-mode per-send sampling overrides. All fields are optional; absent = use model default.
-// The wire shape (camelCase JSON field `samplingOptions`) matches the backend SamplingOptions record.
+// This is the in-app shape the dialog + store work with — seed is a number here for the NumberInput UX. The
+// serialized wire shape (`WireSamplingOptions`) matches the backend SamplingOptions record, where seed is a string.
 
 export interface ChatSamplingOptions {
 	temperature?: number;
@@ -15,6 +16,11 @@ export interface ChatSamplingOptions {
 	stop?: string[];
 	numCtx?: number;
 }
+
+// The serialized wire shape sent to the backend. Identical to ChatSamplingOptions except seed is a string: a seed is
+// an unconstrained 64-bit value, so it rides the wire as a string to avoid the precision loss a JSON number suffers
+// above 2^53 (mirrors the backend SamplingOptions.Seed / SeedValue contract).
+export type WireSamplingOptions = Omit<ChatSamplingOptions, "seed"> & { seed?: string };
 
 // Per-field range metadata drives the dialog inputs. labelKey is the i18n key for the field label.
 export interface SamplingFieldMeta {
@@ -188,11 +194,11 @@ function toFiniteNumber(raw: unknown): number | undefined {
 // undefined values and empty arrays. Returns undefined when nothing is set, signaling the caller to
 // omit the samplingOptions field entirely (the byte-identical invariant: when all fields are null the
 // wire payload must match the default non-developer path exactly).
-export function toWireSamplingOptions(opts: ChatSamplingOptions): ChatSamplingOptions | undefined {
-	const result: ChatSamplingOptions = {};
+export function toWireSamplingOptions(opts: ChatSamplingOptions): WireSamplingOptions | undefined {
+	const result: WireSamplingOptions = {};
 	let hasAny = false;
 
-	const setNum = <K extends keyof Omit<ChatSamplingOptions, "stop">>(key: K, raw: ChatSamplingOptions[K]): void => {
+	const setNum = <K extends keyof Omit<ChatSamplingOptions, "stop" | "seed">>(key: K, raw: ChatSamplingOptions[K]): void => {
 		const n = toFiniteNumber(raw);
 		if (n !== undefined) {
 			(result as Record<string, number>)[key] = n;
@@ -209,8 +215,15 @@ export function toWireSamplingOptions(opts: ChatSamplingOptions): ChatSamplingOp
 	setNum("repeatLastN", opts.repeatLastN);
 	setNum("presencePenalty", opts.presencePenalty);
 	setNum("frequencyPenalty", opts.frequencyPenalty);
-	setNum("seed", opts.seed);
 	setNum("numCtx", opts.numCtx);
+
+	// Seed rides the wire as a precision-safe string (see the backend SeedValue contract). The dialog bounds it to a
+	// finite integer, so serialize the finite value and drop a non-finite/blank entry — matching the numeric fields.
+	const seed = toFiniteNumber(opts.seed);
+	if (seed !== undefined) {
+		result.seed = String(seed);
+		hasAny = true;
+	}
 
 	if (opts.stop != null && opts.stop.length > 0) {
 		result.stop = opts.stop;
