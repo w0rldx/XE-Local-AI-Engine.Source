@@ -1,6 +1,7 @@
 namespace XE_Local_AI_Engine.Client.Services.Chat.Implementation;
 
 using System.Data.Common;
+using System.Diagnostics;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Storage;
 using XE_Local_AI_Engine.Client.Persistence;
@@ -24,6 +25,17 @@ internal sealed class NodeChatMessageCommands(NodeChatPersistenceWriter writer)
     // spare slots by repeating a real member, so the IN clause stays a fixed constant statement.
     private const int MaxSourceStatusSlots = 4;
 
+    // How a run-envelope write reconciles with an envelope the message may already have. InsertIfAbsent keeps the first
+    // write (a pre-run cancel's thin envelope, a startup reconcile backfill) — never clobbering a real one. Upsert lets
+    // the pump's authoritative terminalize ENRICH a thin cancel envelope in place: a mid-run cancel writes a thin
+    // Cancelled envelope, then the run's real completion supersedes the row (Cancelled is a whitelisted terminalize
+    // source) and must overwrite that envelope so its terminal_status/tokens match the winning row's final status.
+    private enum RunEnvelopeWriteMode
+    {
+        InsertIfAbsent,
+        Upsert
+    }
+
     // Correlated message update, keyed on (conversation, message, request). The guarded variant additionally requires the
     // current status to be one of the source statuses bound below, so a guarded transition (cancel / flush / terminalize)
     // is rejected atomically at the SQLite layer once the row has left the permitted set.
@@ -43,6 +55,65 @@ internal sealed class NodeChatMessageCommands(NodeChatPersistenceWriter writer)
                                                                       AND request_id = $request_id
                                                                       AND status IN ($required_status_0, $required_status_1, $required_status_2, $required_status_3);
                                                                     """;
+
+    // The run-envelope column list, shared by both write statements below so they stay in lockstep.
+    private const string EnvelopeColumns = """
+                                           (id, record_kind, schema_version, agent_definition_id, conversation_id, message_id, invocation_id, request_id,
+                                            model_name, config_hash, terminal_status, latency_ms, prompt_tokens, completion_tokens, reasoning_tokens, total_tokens,
+                                            content_chunk_count, reasoning_chunk_count, trace_id, started_at_utc, success, error_class, created_at_utc)
+                                           """;
+
+    private const string EnvelopeValues = """
+                                          $id, $record_kind, $schema_version, $agent_definition_id, $conversation_id, $message_id, $invocation_id, $request_id,
+                                          $model_name, $config_hash, $terminal_status, $latency_ms, $prompt_tokens, $completion_tokens, $reasoning_tokens, $total_tokens,
+                                          $content_chunk_count, $reasoning_chunk_count, $trace_id, $started_at_utc, $success, $error_class, $created_at_utc
+                                          """;
+
+    // InsertIfAbsent: the WHERE NOT EXISTS on (record_kind, message_id) makes the write a no-op when the message already
+    // has an envelope, so a startup-reconcile backfill or a cancel that lost the race never duplicates/clobbers one.
+    private const string EnvelopeInsertIfAbsentSql = $"""
+                                                     INSERT INTO agent_execution_logs
+                                                         {EnvelopeColumns}
+                                                     SELECT {EnvelopeValues}
+                                                     WHERE NOT EXISTS (SELECT 1 FROM agent_execution_logs WHERE record_kind = $record_kind AND message_id = $message_id);
+                                                     """;
+
+    // The ChatRunEnvelope record_kind as a SQL literal. It must equal (int)AgentExecutionLogRecordKind.ChatRunEnvelope so
+    // the upsert's ON CONFLICT WHERE matches the filtered unique index predicate; a const string (not the runtime cast) is
+    // required so EnvelopeUpsertSql stays a compile-time constant (CA2100). If it ever drifts from the enum the ON CONFLICT
+    // clause resolves against no index and SQLite throws, so the enrich-a-thin-cancel-envelope test fails loud.
+    private const string EnvelopeRecordKindLiteral = "1";
+
+    // Upsert: the pump's authoritative terminalize wins, so on a conflict with an existing envelope (a thin one a prior
+    // cancel wrote) it overwrites every run-outcome column in place — keeping envelope terminal_status/tokens == the row's
+    // final status. The conflict target's WHERE mirrors the filtered unique index so SQLite resolves it against that
+    // partial index; the id / record_kind / message_id conflict keys are left as first written.
+    private const string EnvelopeUpsertSql = $"""
+                                             INSERT INTO agent_execution_logs
+                                                 {EnvelopeColumns}
+                                             VALUES ({EnvelopeValues})
+                                             ON CONFLICT (message_id) WHERE record_kind = {EnvelopeRecordKindLiteral}
+                                             DO UPDATE SET
+                                                 schema_version = excluded.schema_version,
+                                                 agent_definition_id = excluded.agent_definition_id,
+                                                 invocation_id = excluded.invocation_id,
+                                                 request_id = excluded.request_id,
+                                                 model_name = excluded.model_name,
+                                                 config_hash = excluded.config_hash,
+                                                 terminal_status = excluded.terminal_status,
+                                                 latency_ms = excluded.latency_ms,
+                                                 prompt_tokens = excluded.prompt_tokens,
+                                                 completion_tokens = excluded.completion_tokens,
+                                                 reasoning_tokens = excluded.reasoning_tokens,
+                                                 total_tokens = excluded.total_tokens,
+                                                 content_chunk_count = excluded.content_chunk_count,
+                                                 reasoning_chunk_count = excluded.reasoning_chunk_count,
+                                                 trace_id = excluded.trace_id,
+                                                 started_at_utc = excluded.started_at_utc,
+                                                 success = excluded.success,
+                                                 error_class = excluded.error_class,
+                                                 created_at_utc = excluded.created_at_utc;
+                                             """;
 
     private readonly NodeChatPersistenceWriter _writer = writer ?? throw new ArgumentNullException(nameof(writer));
 
@@ -189,12 +260,25 @@ internal sealed class NodeChatMessageCommands(NodeChatPersistenceWriter writer)
             request.GenerationDurationMs,
             requiredCurrentStatuses: NodeChatMessageTransitions.TerminalizeSources(request.Status),
             // Durable run envelope written atomically with the terminal row (MED-007 / R4): both commit or roll back together.
-            envelope: request.Envelope);
+            // Upsert: the pump's authoritative terminalize is the winning outcome, so it enriches/overwrites any thin
+            // envelope a prior cancel wrote for this message (see RunEnvelopeWriteMode), keeping envelope status == row status.
+            envelope: request.Envelope,
+            envelopeWriteMode: RunEnvelopeWriteMode.Upsert);
     }
 
     public async Task<NodeChatCancelResultDto> CancelMessageAsync(NodeChatCancelRequest request, CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(request);
+
+        // A cancel is a terminal transition, so it writes its run envelope atomically in the same guarded UPDATE — the
+        // envelope block only fires when the cancel actually transitions the row (a rejected/idempotent cancel returns
+        // before it and writes nothing). This closes the gap where a cancel-before-queued/streaming left a terminal
+        // Cancelled row envelope-less until the next startup reconcile. The payload is thin: there is no InvocationState
+        // at cancel time, so invocation id / tokens / duration / chunk counts are unknown and omitted (mirrors the
+        // interrupted terminalize); the terminal status/success and bound agent id are derived from the winning row. It
+        // is InsertIfAbsent so a real envelope already present (e.g. a race where the run's terminalize committed first)
+        // is never clobbered by this thinner one.
+        var envelope = new AgentRunEnvelopeMetadata(InvocationId: null, DurationMs: 0L, TraceId: CurrentTraceId());
 
         var message = await UpdateCorrelatedMessageAsync(request.Correlation,
             request.CancelledAtUtc,
@@ -209,7 +293,9 @@ internal sealed class NodeChatMessageCommands(NodeChatPersistenceWriter writer)
             reasoningTokens: null,
             replaceContent: true,
             cancellationToken,
-            requiredCurrentStatuses: NodeChatMessageTransitions.CancelSources).ConfigureAwait(false);
+            requiredCurrentStatuses: NodeChatMessageTransitions.CancelSources,
+            envelope: envelope,
+            envelopeWriteMode: RunEnvelopeWriteMode.InsertIfAbsent).ConfigureAwait(false);
 
         // The guard leaves an already-terminal message untouched, so report the true persisted status and only claim a
         // cancellation when the message actually landed in the Cancelled state. This is idempotent: a repeat cancel of an
@@ -316,7 +402,8 @@ internal sealed class NodeChatMessageCommands(NodeChatPersistenceWriter writer)
         long? generationDurationMs = null,
         bool touchConversation = true,
         IReadOnlySet<string>? requiredCurrentStatuses = null,
-        AgentRunEnvelopeMetadata? envelope = null)
+        AgentRunEnvelopeMetadata? envelope = null,
+        RunEnvelopeWriteMode envelopeWriteMode = RunEnvelopeWriteMode.InsertIfAbsent)
     {
         ValidateCorrelation(correlation);
         if (requiredCurrentStatuses is { Count: 0 or > MaxSourceStatusSlots })
@@ -427,9 +514,10 @@ internal sealed class NodeChatMessageCommands(NodeChatPersistenceWriter writer)
 
                 if (writeEnvelope)
                 {
-                    // Idempotent (WHERE NOT EXISTS): a run envelope this message already has — e.g. a startup recovery
-                    // backfill wrote one first — is not duplicated; the first write wins. The terminal status/success and
-                    // the bound agent id are taken from THIS winning write, so the envelope can never disagree with the row.
+                    // The terminal status/success and the bound agent id are taken from THIS winning write, so the
+                    // envelope can never disagree with the row. The write mode governs reconciliation with any envelope the
+                    // message already has: InsertIfAbsent (cancel, backfill) keeps the first write; Upsert (the pump's
+                    // authoritative terminalize) enriches/overwrites a thin cancel envelope so its fields match the final row.
                     await WriteRunEnvelopeRowAsync(dbContext,
                         transaction?.GetDbTransaction(),
                         correlation,
@@ -442,6 +530,7 @@ internal sealed class NodeChatMessageCommands(NodeChatPersistenceWriter writer)
                         nextTotalTokens,
                         envelope!,
                         updatedAtUtc,
+                        envelopeWriteMode,
                         token).ConfigureAwait(false);
                 }
 
@@ -475,10 +564,17 @@ internal sealed class NodeChatMessageCommands(NodeChatPersistenceWriter writer)
     }
 
     // Writes the content-free durable run-envelope row for a terminalized message on the caller's raw connection, enlisted
-    // in the terminalize transaction, so the envelope commits atomically with the terminal row. Idempotent via WHERE NOT
-    // EXISTS on (record_kind, message_id) — a message already enveloped by a startup recovery backfill is never duplicated
-    // (first write wins). Metadata only: NO prompt / completion / tool-argument content is written. Uses AddParameter (the
-    // same helper as the message writes) so a null optional binds as SQL NULL.
+    // in the terminalize transaction, so the envelope commits atomically with the terminal row. Metadata only: NO prompt /
+    // completion / tool-argument content is written. Uses AddParameter (the same helper as the message writes) so a null
+    // optional binds as SQL NULL. Two constant statements, never string-built from input; the <paramref name="writeMode" />
+    // selects between them:
+    //   - InsertIfAbsent — INSERT ... WHERE NOT EXISTS on (record_kind, message_id): a message already enveloped (a startup
+    //     recovery backfill, or a race that terminalized first) is never duplicated or overwritten; the first write wins.
+    //   - Upsert — INSERT ... ON CONFLICT(message_id) WHERE record_kind = envelope DO UPDATE: the pump's authoritative
+    //     terminalize enriches/overwrites a thin cancel envelope in place so its terminal_status/tokens match the row's
+    //     final status. The conflict target's WHERE mirrors the filtered unique index (ix_agent_execution_logs_envelope_
+    //     message_id) so SQLite resolves it against that partial index; id / record_kind / message_id are conflict keys and
+    //     are not reassigned.
     private static async Task WriteRunEnvelopeRowAsync(NodeChatDbContext dbContext,
         DbTransaction? transaction,
         NodeChatMessageCorrelation correlation,
@@ -491,20 +587,21 @@ internal sealed class NodeChatMessageCommands(NodeChatPersistenceWriter writer)
         int? totalTokens,
         AgentRunEnvelopeMetadata envelope,
         long createdAtUtc,
+        RunEnvelopeWriteMode writeMode,
         CancellationToken cancellationToken)
     {
         await using var command = dbContext.Database.GetDbConnection().CreateCommand();
         command.Transaction = transaction;
-        command.CommandText = """
-                              INSERT INTO agent_execution_logs
-                                  (id, record_kind, schema_version, agent_definition_id, conversation_id, message_id, invocation_id, request_id,
-                                   model_name, config_hash, terminal_status, latency_ms, prompt_tokens, completion_tokens, reasoning_tokens, total_tokens,
-                                   content_chunk_count, reasoning_chunk_count, trace_id, started_at_utc, success, error_class, created_at_utc)
-                              SELECT $id, $record_kind, $schema_version, $agent_definition_id, $conversation_id, $message_id, $invocation_id, $request_id,
-                                     $model_name, $config_hash, $terminal_status, $latency_ms, $prompt_tokens, $completion_tokens, $reasoning_tokens, $total_tokens,
-                                     $content_chunk_count, $reasoning_chunk_count, $trace_id, $started_at_utc, $success, $error_class, $created_at_utc
-                              WHERE NOT EXISTS (SELECT 1 FROM agent_execution_logs WHERE record_kind = $record_kind AND message_id = $message_id);
-                              """;
+        // Two compile-time-constant statements (never string-built from input); assigned separately rather than via a
+        // conditional so each remains a constant CommandText (CA2100).
+        if (writeMode == RunEnvelopeWriteMode.Upsert)
+        {
+            command.CommandText = EnvelopeUpsertSql;
+        }
+        else
+        {
+            command.CommandText = EnvelopeInsertIfAbsentSql;
+        }
 
         AddParameter(command, "$id", Guid.NewGuid());
         AddParameter(command, "$record_kind", (int)AgentExecutionLogRecordKind.ChatRunEnvelope);
@@ -534,6 +631,20 @@ internal sealed class NodeChatMessageCommands(NodeChatPersistenceWriter writer)
 
         await OpenIfNeededAsync(command.Connection, cancellationToken).ConfigureAwait(false);
         _ = await command.ExecuteNonQueryAsync(cancellationToken).ConfigureAwait(false);
+    }
+
+    // W3C trace id of the ambient activity (for cross-correlation with exported traces), or null when no activity is in
+    // scope. A default (all-zero) id is treated as absent. Mirrors the pump's helper so a cancel-written thin envelope
+    // carries the same best-effort correlation the interrupted terminalize does.
+    private static string? CurrentTraceId()
+    {
+        if (Activity.Current is not { } activity)
+        {
+            return null;
+        }
+
+        var traceId = activity.TraceId;
+        return traceId == default ? null : traceId.ToString();
     }
 
 }
