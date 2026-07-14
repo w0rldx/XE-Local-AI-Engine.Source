@@ -41,26 +41,46 @@ internal static class LoopbackBindGuard
         {
             var server = app.Services.GetRequiredService<IServer>();
             var addresses = server.Features.Get<IServerAddressesFeature>()?.Addresses;
-
-            // No resolvable addresses (e.g. the in-memory TestServer) means there is no routable surface to guard.
-            if (addresses is null || addresses.Count == 0)
-            {
-                return;
-            }
-
-            var nonLoopback = FindNonLoopbackAddresses(addresses);
-            if (nonLoopback.Count == 0)
-            {
-                return;
-            }
-
             var logger = app.Services.GetRequiredService<ILoggerFactory>().CreateLogger(typeof(LoopbackBindGuard).FullName!);
-            logger.LogCritical(
-                "The local-only API bound to non-loopback address(es) {Addresses}, which would expose the anonymous setup surface beyond this machine. "
-                + "The local API supports loopback-only operation; set '{Flag}=true' only if you have secured the surface yourself. Shutting down.",
-                string.Join(", ", nonLoopback), AllowNonLoopbackBindKey);
-            lifetime.StopApplication();
+
+            ShutDownIfBindIsRoutable(addresses, lifetime, logger);
         });
+    }
+
+    /// <summary>
+    ///     Shuts the app down with a non-zero exit code when any of <paramref name="addresses" /> is a non-loopback bind.
+    ///     Returns <c>true</c> when a routable bind was detected (and shutdown was triggered), <c>false</c> when the bind
+    ///     is safe (including no resolvable addresses). Exposed for unit testing with a stub lifetime, so the exit-code
+    ///     and stop behavior can be asserted without a real routable listener.
+    /// </summary>
+    internal static bool ShutDownIfBindIsRoutable(IEnumerable<string>? addresses, IHostApplicationLifetime lifetime, ILogger logger)
+    {
+        ArgumentNullException.ThrowIfNull(lifetime);
+        ArgumentNullException.ThrowIfNull(logger);
+
+        // No resolvable addresses (e.g. the in-memory TestServer) means there is no routable surface to guard.
+        if (addresses is null)
+        {
+            return false;
+        }
+
+        var nonLoopback = FindNonLoopbackAddresses(addresses);
+        if (nonLoopback.Count == 0)
+        {
+            return false;
+        }
+
+        logger.LogCritical(
+            "The local-only API bound to non-loopback address(es) {Addresses}, which would expose the anonymous setup surface beyond this machine. "
+            + "The local API supports loopback-only operation; set '{Flag}=true' only if you have secured the surface yourself. Shutting down.",
+            string.Join(", ", nonLoopback), AllowNonLoopbackBindKey);
+
+        // Fail with a non-zero process exit so a supervisor/CI treats the guarded shutdown as an error rather than a
+        // clean stop. Program's final return reads Environment.ExitCode; set it before StopApplication so it is in place
+        // before the host begins tearing down.
+        Environment.ExitCode = 1;
+        lifetime.StopApplication();
+        return true;
     }
 
     /// <summary>
