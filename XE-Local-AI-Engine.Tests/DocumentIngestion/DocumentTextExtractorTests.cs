@@ -292,6 +292,22 @@ public sealed class DocumentTextExtractorTests
     }
 
     [Test]
+    public async Task Extractor_WhenMalformedPdf_RejectsAtPreflightWithoutReparsing()
+    {
+        // Bytes declared as a PDF but not a PDF: the preflight's own PdfDocument.Open throws a PdfPig format exception,
+        // so the document is failed up front with the content-free "could not be parsed" reason and is NOT handed to the
+        // reader for a wasted second parse. Asserting that reason — not the reader's generic "Extraction failed (...)" —
+        // proves the no-reparse preflight path handled it.
+        using var stream = new MemoryStream(Encoding.ASCII.GetBytes("this is not a pdf at all"));
+
+        var result = await CreateExtractor().ExtractAsync(stream, "broken.pdf", ".pdf", CancellationToken.None);
+
+        AssertEx.Equal(DocumentExtractionStatus.Failed, result.Status);
+        AssertEx.Null(result.Markdown);
+        AssertEx.Contains(AssertEx.NotNull(result.Error), "could not be parsed");
+    }
+
+    [Test]
     public async Task Extractor_WhenStructuredWithinBounds_ExtractsDocument()
     {
         using var stream = new MemoryStream(Encoding.UTF8.GetBytes("# Title\n\nA short paragraph."));
