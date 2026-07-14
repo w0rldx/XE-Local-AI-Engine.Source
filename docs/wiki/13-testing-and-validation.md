@@ -4,7 +4,7 @@
 
 This page is the contributor map of how XE Local AI Engine is tested and what counts as "validated". It covers the test-project topology (backend integration, AI/agent, persistence + migration, Playwright E2E, plus the FakeOllama and Client.Testing support libraries), the validation commands and the `project-validate.sh` scope runner, the GitHub Actions CI pipeline, and the RC evidence bar a maintainer must clear before claiming release/doc work is done. For *what each suite asserts about a subsystem*, follow the per-subsystem links — this page owns the harness, not the features.
 
-Test stack at a glance: **TUnit 1.56.18** on **Microsoft.Testing.Platform (MTP)** for all .NET suites, **NSubstitute 5.3.0** for mocks, **Microsoft.Playwright 1.60.0 + TUnit.Playwright** for browser E2E, and **Vitest (v8 coverage)** for the React client. `global.json` sets a `10.0.100` feature-band baseline (`rollForward: latestFeature`, so it rolls forward to the latest installed `10.0.1xx` SDK rather than pinning an exact version) and `"test": { "runner": "Microsoft.Testing.Platform" }`, so the whole repo runs under MTP, not VSTest.
+Test stack at a glance: **TUnit 1.58.0** on **Microsoft.Testing.Platform (MTP)** for all .NET suites, **NSubstitute 5.3.0** for mocks, **Microsoft.Playwright 1.61.0 + TUnit.Playwright** for browser E2E, and **Vitest (v8 coverage)** for the React client. `global.json` sets a `10.0.100` feature-band baseline (`rollForward: latestFeature`, so it rolls forward to the highest installed 10.0 feature band and patch at or above `10.0.100` rather than pinning an exact version) and `"test": { "runner": "Microsoft.Testing.Platform" }`, so the whole repo runs under MTP, not VSTest.
 
 > ⚠️ MTP gotcha (repo-wide): filter by `--treenode-filter`, NOT `--filter`. The legacy VSTest `--filter` silently matches nothing under MTP and gives a false "0 tests, all green" result.
 
@@ -21,7 +21,7 @@ Test stack at a glance: **TUnit 1.56.18** on **Microsoft.Testing.Platform (MTP)*
 
 React unit/component tests live **inside** the client tree (`XE-Local-AI-Engine.Client.React/src/**/*.test.{ts,tsx}`, ~121 files), colocated with source per the repo convention, and run under Vitest. See [React Client](10-react-client.md).
 
-> The file counts above (`~233`, `~40`, `~121`, etc.) are approximate and have grown since the last review — the subsystems shipped 2026-06-24…27 (inference optimizer, GGUF quant recommendation, chat file upload, client voice runtime, onboarding tour) each added suites. Treat any precise backend/frontend total as **operator re-run needed**: this is a TUnit/MTP backend, so `dotnet test` reports "Zero tests" under WSL and the precise total only comes from running the native test host (see the MTP gotcha above).
+> The file counts above (`~233`, `~40`, `~121`, etc.) are approximate and have grown since the last review — the subsystems shipped 2026-06-24…27 (inference optimizer, GGUF quant recommendation, chat file upload, client voice runtime, onboarding tour) each added suites. Treat any precise backend/frontend total as **operator re-run needed**: solution-level `dotnet test XE-Local-AI-Engine.slnx` now runs the suites under MTP (the `global.json` runner pin makes `dotnet test` work — add `--max-parallel-test-modules 1` on WSL / shared runners, which otherwise exhaust the `inotify` watch limit), and CI runs it that way; for a targeted run, invoke the native test-host executable with `--treenode-filter` (see the MTP gotcha above).
 
 ### Suites added since the last review
 
@@ -72,7 +72,7 @@ The E2E harness is the highest-fidelity path: a real browser drives the real SPA
 # Backend — restore, build Release, test (whole solution)
 dotnet restore XE-Local-AI-Engine.slnx
 dotnet build   XE-Local-AI-Engine.slnx --configuration Release --no-restore
-dotnet test    XE-Local-AI-Engine.slnx --configuration Release --no-build
+dotnet test    XE-Local-AI-Engine.slnx --configuration Release --no-build --max-parallel-test-modules 1  # serial modules: WSL inotify limit
 ```
 
 ```bash
