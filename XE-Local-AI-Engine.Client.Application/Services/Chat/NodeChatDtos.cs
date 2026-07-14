@@ -38,6 +38,19 @@ public static class NodeChatMessageStatusValues
         Failed,
         Interrupted
     };
+
+    /// <summary>
+    ///     The non-terminal statuses from which a message may still be cancelled. Once a row reaches any terminal status
+    ///     (completed / cancelled / failed / interrupted) a late cancel is rejected without a rewrite, so it can never
+    ///     overwrite a message that has already finished. Mirrors the status filter a conversation delete uses when it
+    ///     cancels its still-active messages.
+    /// </summary>
+    public static readonly IReadOnlySet<string> Cancellable = new HashSet<string>(StringComparer.Ordinal)
+    {
+        Pending,
+        Queued,
+        Streaming
+    };
 }
 
 public sealed record NodeChatCreateConversationRequest(
