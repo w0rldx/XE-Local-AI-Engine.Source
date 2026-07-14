@@ -36,4 +36,56 @@ public sealed class KnowledgeQueryLimitsTests
 
         AssertEx.False(KnowledgeQueryLimits.ExceedsMaxLength(padded));
     }
+
+    [Test]
+    [Arguments(null)]
+    [Arguments("")]
+    [Arguments("   ")]
+    public void ValidateAndNormalize_WhenEmptyOrWhitespace_ReportsEmpty(string? rawQuery)
+    {
+        var validation = KnowledgeQueryLimits.ValidateAndNormalize(rawQuery, out var normalized);
+
+        AssertEx.Equal(KnowledgeQueryValidation.Empty, validation);
+        AssertEx.Equal(string.Empty, normalized);
+    }
+
+    [Test]
+    public void ValidateAndNormalize_WhenPadded_ReturnsTrimmedNormalizedQuery()
+    {
+        var validation = KnowledgeQueryLimits.ValidateAndNormalize("   hello world   ", out var normalized);
+
+        AssertEx.Equal(KnowledgeQueryValidation.Valid, validation);
+        AssertEx.Equal("hello world", normalized);
+    }
+
+    [Test]
+    public void ValidateAndNormalize_AtExactContentBound_IsValid()
+    {
+        var validation = KnowledgeQueryLimits.ValidateAndNormalize(new string('x', KnowledgeQueryLimits.MaxQueryLength), out var normalized);
+
+        AssertEx.Equal(KnowledgeQueryValidation.Valid, validation);
+        AssertEx.Equal(KnowledgeQueryLimits.MaxQueryLength, normalized.Length);
+    }
+
+    [Test]
+    public void ValidateAndNormalize_WhenTrimmedContentOverBound_ReportsTooLong()
+    {
+        var validation = KnowledgeQueryLimits.ValidateAndNormalize(new string('x', KnowledgeQueryLimits.MaxQueryLength + 1), out var normalized);
+
+        AssertEx.Equal(KnowledgeQueryValidation.TooLong, validation);
+        AssertEx.Equal(string.Empty, normalized);
+    }
+
+    [Test]
+    public void ValidateAndNormalize_WhenRawPayloadOverRawCap_ReportsTooLongBeforeTrimming()
+    {
+        // A short trimmed core wrapped in a huge whitespace pad: the raw transport cap rejects it up front, so a padded
+        // giant can never slip past the trimmed content bound.
+        var padded = new string(' ', KnowledgeQueryLimits.MaxRawQueryLength) + "hi";
+
+        var validation = KnowledgeQueryLimits.ValidateAndNormalize(padded, out var normalized);
+
+        AssertEx.Equal(KnowledgeQueryValidation.TooLong, validation);
+        AssertEx.Equal(string.Empty, normalized);
+    }
 }
