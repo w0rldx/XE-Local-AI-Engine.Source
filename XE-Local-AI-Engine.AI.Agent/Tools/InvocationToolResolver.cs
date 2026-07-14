@@ -2,6 +2,7 @@ namespace XE_Local_AI_Engine.AI.Agent.Tools;
 
 using Microsoft.Extensions.AI;
 using Microsoft.Extensions.Logging;
+using XE_Local_AI_Engine.AI.Agent.Tools.Implementation;
 
 /// <summary>
 ///     Shared offer-list → executable resolution used by both the single-agent
@@ -12,6 +13,16 @@ using Microsoft.Extensions.Logging;
 ///     tools, returned already approval-wrapped when the handler opts in) and finally against
 ///     <see cref="IMcpToolRegistry" /> (MCP — node-local MCP tools). Names matched by none are skipped so a
 ///     stale or unhandled offer can never reach the agent.
+///     <para>
+///         Approval policy is TIGHTEN-ONLY, most-restrictive-wins, fail closed (MED-006). The effective policy for a
+///         resolved tool is <c>handler/registry policy OR per-agent offer policy</c>: when the offer
+///         (<see cref="OfferPlaceholderAIFunction" />) requires approval, the resolved executable is wrapped in
+///         <c>ApprovalRequiredAIFunction</c> unless it already is one — so a per-agent tightening of a ClientLocal,
+///         built-in (spawn_subagent), or MCP tool is honored. Because the wrap is only ever ADDED and never removed, a
+///         per-agent flag can never strip a handler- or MCP-enforced approval (an attempted loosen is a no-op). A
+///         resolved tool whose offer carries no policy metadata (a name collision or a non-placeholder offer) fails
+///         closed to requiring approval.
+///     </para>
 /// </summary>
 internal static class InvocationToolResolver
 {
@@ -37,6 +48,20 @@ internal static class InvocationToolResolver
                            .Where(static name => !string.IsNullOrWhiteSpace(name))
                            .ToHashSet(StringComparer.Ordinal);
 
+        // Per-agent approval policy carried on the offer placeholders, keyed by name. Most-restrictive-wins: if any
+        // offer for a name requires approval, the name requires approval (covers a duplicate-name collision by tightening
+        // rather than trusting the looser of the two).
+        var approvalByName = new Dictionary<string, bool>(StringComparer.Ordinal);
+        foreach (var offer in offeredTools)
+        {
+            if (offer is OfferPlaceholderAIFunction { Name: { Length: > 0 } name } placeholder)
+            {
+                approvalByName[name] = approvalByName.TryGetValue(name, out var existing)
+                    ? existing || placeholder.RequiresApproval
+                    : placeholder.RequiresApproval;
+            }
+        }
+
         var resolved = toolRegistry.GetLocalChatTools()
                                    .Where(tool => offeredNames.Contains(tool.Name))
                                    .ToList();
@@ -54,6 +79,18 @@ internal static class InvocationToolResolver
             // misconfiguration: the server or node advertised a tool this node cannot execute. Warn so it is
             // observable, then drop the offer rather than letting it reach the agent.
             logger.LogWarning("Skipped {SkippedCount} offered tool(s) with no registered executable (no catalog, client-local, or MCP match).", skipped);
+        }
+
+        // Apply the tighten-only approval override in place: wrap a resolved executable when the per-agent offer requires
+        // approval and it is not already approval-wrapped. Missing policy metadata fails closed (require approval).
+        for (var index = 0; index < resolved.Count; index++)
+        {
+            var tool = resolved[index];
+            var requiresApproval = !approvalByName.TryGetValue(tool.Name, out var policy) || policy;
+            if (requiresApproval && tool is not ApprovalRequiredAIFunction && tool is AIFunction executable)
+            {
+                resolved[index] = new ApprovalRequiredAIFunction(executable);
+            }
         }
 
         return resolved;
