@@ -3,6 +3,7 @@ namespace XE_Local_AI_Engine.Client.Services.Chat.Implementation;
 using System.Diagnostics;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
+using XE_Local_AI_Engine.Client.Common.Telemetry;
 using XE_Local_AI_Engine.Client.Persistence.Stores;
 using XE_Local_AI_Engine.Client.Services.Events;
 
@@ -121,7 +122,10 @@ public sealed class NodeChatInvocationPump(
                 state.OutputTokens,
                 state.StreamedChunkCount,
                 state.StreamedThinkingChunkCount,
-                CurrentTraceId()))
+                CurrentTraceId(),
+                state.ReasoningTokens,
+                state.TotalTokens,
+                state.StartedAt == default ? null : state.StartedAt.ToUnixTimeMilliseconds()))
             .ConfigureAwait(false);
 
         return new NodeChatPumpTerminalResult(persisted, terminalStatus, eventType);
@@ -232,7 +236,9 @@ public sealed class NodeChatInvocationPump(
         catch (Exception exception)
         {
             // Best-effort observability: a ledger write failure must never fail or corrupt the invocation. Log the
-            // exception TYPE NAME only (the envelope itself carries no content) and continue.
+            // exception TYPE NAME only (the envelope itself carries no content), bump the failure counter so the
+            // otherwise-silent failure is observable, and continue.
+            NodeMetrics.RunEnvelopeWriteFailedTotal.Add(1);
             _logger.LogWarning("Durable run-envelope ledger write failed ({ErrorClass}); the invocation is unaffected.", exception.GetType().Name);
         }
     }

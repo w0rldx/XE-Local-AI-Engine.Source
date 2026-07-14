@@ -40,6 +40,22 @@ public sealed class AgentExecutionLogRetentionService : BackgroundService
             return;
         }
 
+        // Sweep once at startup rather than waiting a full interval (R4): a node that ran, wrote plaintext-correlation
+        // execution logs, then stayed down past a row's retention window would otherwise keep those rows until the first
+        // post-restart tick. Best-effort — a startup-sweep failure is logged and the periodic loop still runs.
+        try
+        {
+            await SweepAsync(stoppingToken).ConfigureAwait(false);
+        }
+        catch (OperationCanceledException) when (stoppingToken.IsCancellationRequested)
+        {
+            return;
+        }
+        catch (Exception exception)
+        {
+            _logger.LogWarning(exception, "Agent execution-log retention startup sweep failed.");
+        }
+
         using var timer = new PeriodicTimer(_options.SweepInterval, _timeProvider);
 
         while (!stoppingToken.IsCancellationRequested)

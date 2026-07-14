@@ -84,4 +84,13 @@ internal sealed record class AgentExecutionLog
 
     /// <summary>Number of streamed reasoning chunks observed for the run; <c>null</c> when not known at the seam. Plaintext (structural).</summary>
     public int? ReasoningChunkCount { get; set; }
+
+    /// <summary>Reasoning/thinking tokens reported by the model, or <c>null</c> when not reported. Plaintext (structural).</summary>
+    public int? ReasoningTokens { get; set; }
+
+    /// <summary>Total tokens reported by the model (prompt + completion + reasoning), or <c>null</c> when not reported. Plaintext (structural).</summary>
+    public int? TotalTokens { get; set; }
+
+    /// <summary>Unix-ms timestamp when the run started (turn open), or <c>null</c> when not known at the seam (e.g. an interrupted stream with no run state). Plaintext (structural).</summary>
+    public long? StartedAtUtc { get; set; }
 }
