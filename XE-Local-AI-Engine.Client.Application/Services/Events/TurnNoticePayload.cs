@@ -33,5 +33,12 @@ public enum TurnNoticeKind
     ToolDisabled = 1,
 
     /// <summary>Conversation history was trimmed (messages dropped and/or tool results truncated) to fit the context budget.</summary>
-    HistoryTruncated = 2
+    HistoryTruncated = 2,
+
+    /// <summary>
+    ///     Conversation attachments (and node-local file tools) were withheld from a CLOUD-hosted effective model because
+    ///     the operator has not opted in to exposing node-local private data to cloud providers
+    ///     (<c>KnowledgeBase:AllowCloudModelAccess</c>). <see cref="TurnNoticePayload.Detail" /> names the effective model.
+    /// </summary>
+    AttachmentsWithheld = 3
 }

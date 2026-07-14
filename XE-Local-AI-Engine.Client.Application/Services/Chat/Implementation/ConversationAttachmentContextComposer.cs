@@ -32,22 +32,24 @@ internal static class ConversationAttachmentContextComposer
 
     /// <summary>
     ///     Returns the composed context block, or <see langword="null"/> when there is nothing to inline (no parts, or
-    ///     every part's text is empty). <paramref name="conversationId" /> seeds the untrusted-content fence nonce so the
-    ///     fenced attachment block is BYTE-STABLE across the sends of one conversation (preserving llama.cpp prompt/KV-
-    ///     cache prefix reuse for multi-turn conversations with attachments) while staying un-forgeable — the conversation
-    ///     id is a random GUID a document author never sees, so they cannot reproduce the derived nonce. (Knowledge-tool
-    ///     results, by contrast, are query-dynamic and keep a fresh random nonce per call.)
+    ///     every part's text is empty). <paramref name="fenceNonceSeed" /> is the SERVER-SECRET-derived, per-conversation
+    ///     seed for the untrusted-content fence (see <see cref="IUntrustedContentFenceSeedProvider" />): it makes the
+    ///     fenced attachment block BYTE-STABLE across the sends of one conversation (preserving llama.cpp prompt/KV-cache
+    ///     prefix reuse) while keeping the closing marker un-forgeable — a client that knows only the (public)
+    ///     conversation id cannot reproduce this seed. (Knowledge-tool results, by contrast, are query-dynamic and keep a
+    ///     fresh random nonce per call.)
     /// </summary>
-    public static string? Compose(IReadOnlyList<AttachmentTextPart> parts, int charBudget, Guid conversationId)
+    public static string? Compose(IReadOnlyList<AttachmentTextPart> parts, int charBudget, string fenceNonceSeed)
     {
         ArgumentNullException.ThrowIfNull(parts);
+        ArgumentNullException.ThrowIfNull(fenceNonceSeed);
 
         var builder = new StringBuilder();
         builder.Append(Preamble).Append(UntrustedDataNotice);
 
         // Stable per-conversation fence seed: the same conversation + same attachments compose byte-identically across
         // sends, so the attachment prefix does not bust the prompt cache each turn.
-        var nonceSeed = conversationId.ToString("N");
+        var nonceSeed = fenceNonceSeed;
 
         var remaining = charBudget;
         var truncated = false;
