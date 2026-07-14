@@ -4,6 +4,7 @@ using Microsoft.Agents.AI;
 using Microsoft.Extensions.AI;
 using Microsoft.Extensions.Options;
 using XE_Local_AI_Engine.AI.Agent.Instructions;
+using XE_Local_AI_Engine.AI.Agent.Invocation.Orchestration;
 using XE_Local_AI_Engine.AI.Agent.Tools;
 using XE_Local_AI_Engine.Client.Models;
 using XE_Local_AI_Engine.Client.Models.Enums;
@@ -11,6 +12,7 @@ using XE_Local_AI_Engine.Client.Persistence;
 using XE_Local_AI_Engine.Client.Persistence.Stores;
 using XE_Local_AI_Engine.Client.Services.Agents;
 using XE_Local_AI_Engine.Client.Services.Capacity.Tools;
+using XE_Local_AI_Engine.Client.Services.Chat;
 using XE_Local_AI_Engine.Providers.LlamaServer;
 
 /// <summary>
@@ -18,6 +20,17 @@ using XE_Local_AI_Engine.Providers.LlamaServer;
 ///     the depth/fan-out/cloud-spawn caps, calls the capacity gate, and dispatches per verdict. An admitted spawn runs a
 ///     <see cref="ChatClientAgent" /> as an <see cref="AIFunction" /> over the SAME production-decorated
 ///     <see cref="IChatClient" /> (cloud/local routed per send by the runtime client).
+///     <para>
+///         A profile-bound child consumes the SAME complete <see cref="ResolvedAgentRuntime" /> a direct agent send does
+///         — resolved once — so it inherits the resolved system prompt (scaffold + persona + injected playbook memory),
+///         reasoning effort (gated on the child model's own thinking capability, mirroring
+///         <see cref="ParticipantReasoningOptions" />), skills (MAF progressive disclosure), AND its curated tools, not
+///         just the tool set. This is structurally the orchestration-participant path: an agent-as-tool never receives
+///         the outer runner's per-run <c>RunOptions</c>, so reasoning + skills must be baked into the agent at
+///         construction. A model-id-only child (no profile) stays as-is: raw request instructions, tool-less, no
+///         reasoning/skills. Post-run adaptive-memory EXTRACTION stays disabled for a child — an intentional restriction
+///         (see <c>docs/agent-knowledge.md</c>).
+///     </para>
 ///     <para>
 ///         Depth cap (≤ 2) is enforced two ways: (1) PRIMARY, STRUCTURAL — the child's tool set has
 ///         <c>spawn_subagent</c> filtered out UNCONDITIONALLY, so a child can never spawn; (2) defense-in-depth —
@@ -62,6 +75,7 @@ internal sealed class SubAgentSpawnService : ISubAgentSpawnService
     private readonly ILogger<SubAgentSpawnService> _logger;
     private readonly ILoggerFactory _loggerFactory;
     private readonly IMcpToolRegistry _mcpToolRegistry;
+    private readonly IModelCapabilityResolver _modelCapabilityResolver;
     private readonly SpawnOptions _options;
     private readonly ISpawnSerializer _spawnSerializer;
     private readonly IAgentToolRegistry _toolRegistry;
@@ -76,6 +90,7 @@ internal sealed class SubAgentSpawnService : ISubAgentSpawnService
         IChatClient chatClient,
         IOptions<SpawnOptions> options,
         IAgentInstructionProvider instructionProvider,
+        IModelCapabilityResolver modelCapabilityResolver,
         ILoggerFactory loggerFactory,
         ILogger<SubAgentSpawnService> logger)
     {
@@ -90,6 +105,7 @@ internal sealed class SubAgentSpawnService : ISubAgentSpawnService
         ArgumentNullException.ThrowIfNull(options);
         _options = options.Value;
         _instructionProvider = instructionProvider ?? throw new ArgumentNullException(nameof(instructionProvider));
+        _modelCapabilityResolver = modelCapabilityResolver ?? throw new ArgumentNullException(nameof(modelCapabilityResolver));
         _loggerFactory = loggerFactory ?? throw new ArgumentNullException(nameof(loggerFactory));
         _logger = logger ?? throw new ArgumentNullException(nameof(logger));
     }
@@ -187,19 +203,36 @@ internal sealed class SubAgentSpawnService : ISubAgentSpawnService
         // default provider/model — e.g. a llama.cpp GGUF sub-agent would be sent to Ollama and fail. Instructions + the
         // curated tools also ride ChatOptions (the ChatClientAgentOptions ctor path; MAF lands the positional args there
         // too). AsAIFunction invokes the agent with no per-run options, so these construction-time defaults apply.
-        var agent = new ChatClientAgent(_chatClient,
-            new ChatClientAgentOptions
-            {
-                Name = SubAgentName,
-                Description = SubAgentDescription,
-                ChatOptions = new ChatOptions
-                {
-                    ModelId = binding.ModelName,
-                    Instructions = binding.Instructions,
-                    Tools = binding.Tools
-                }
-            },
-            _loggerFactory);
+        var chatOptions = new ChatOptions
+        {
+            ModelId = binding.ModelName,
+            Instructions = binding.Instructions,
+            Tools = binding.Tools
+        };
+
+        // Profile-bound child: bake the resolved reasoning effort into the construction-time ChatOptions, gated on the
+        // child model's own thinking capability — the SAME contract the orchestration-participant path uses
+        // (ParticipantReasoningOptions), because an agent-as-tool never receives per-run RunOptions (AsAIFunction invokes
+        // with no options), so RunOptions.ChatOptions — the single-agent path's reasoning channel — never reaches it.
+        // Null for a model-id-only spawn, which stays as-is (no reasoning field on the wire).
+        if (binding.Reasoning is { } reasoning)
+        {
+            chatOptions.AdditionalProperties = ParticipantReasoningOptions.Build(reasoning.ReasoningEffort, reasoning.SupportsThinking);
+        }
+
+        var agentOptions = new ChatClientAgentOptions
+        {
+            Name = SubAgentName,
+            Description = SubAgentDescription,
+            ChatOptions = chatOptions
+        };
+
+        // Attach the resolved skills as a MAF progressive-disclosure provider, mirroring InvocationAgentFactory's skills
+        // path so a saved sub-agent offers its own skills on demand. Empty/null leaves the construction byte-identical to
+        // a no-skills child (no context provider attached).
+        AttachSkillsProvider(agentOptions, binding.Skills);
+
+        var agent = new ChatClientAgent(_chatClient, agentOptions, _loggerFactory);
 
         var function = agent.AsAIFunction();
 
@@ -234,24 +267,51 @@ internal sealed class SubAgentSpawnService : ISubAgentSpawnService
             return null;
         }
 
-        // Resolve the sub-agent profile's OWN curated tool set through the same offer→resolve path a normal agent send
-        // uses (offer ∩ AllowedToolNames, then executable resolution), then UNCONDITIONALLY strip spawn_subagent so the
-        // child can never spawn (the structural depth cap), regardless of what its AllowedToolNames lists.
-        var tools = await ResolveChildToolsAsync(definition.Id, definition.ModelProfile, ct).ConfigureAwait(false);
-        return new ResolvedBinding(definition.ModelProfile!, definition.Instructions, tools);
+        // Resolve the FULL runtime for the bound child in ONE pass — the same ResolvedAgentRuntime a direct agent send
+        // consumes — so the child inherits the resolved system prompt (scaffold + persona + injected playbook memory),
+        // reasoning effort, and skills as one unit, not just its curated tool set. Reading only AllowedTools here was the
+        // MED-002 defect: a saved sub-agent silently ran on raw definition.Instructions with no scaffold, reasoning, or
+        // skills — LESS grounding than the anonymous model-id-only path, which already composes the base scaffold.
+        var resolved = await _agentDefinitionResolver
+                             .ResolveAsync(definition.Id, definition.ModelProfile, cancellationToken: ct)
+                             .ConfigureAwait(false);
+        if (resolved is null)
+        {
+            // TOCTOU: the definition was deleted between the fetch above and this resolve. Reject with the sanitized
+            // unresolved reason rather than degrade to raw instructions (the very bypass this fix closes).
+            return null;
+        }
+
+        // The profile's OWN curated tool set: offer ∩ AllowedToolNames (already capability-gated by the resolver),
+        // bridged to executables, then UNCONDITIONALLY strip spawn_subagent so the child can never spawn (the structural
+        // depth cap), regardless of what its AllowedToolNames lists.
+        var tools = CurateChildTools(resolved.AllowedTools);
+
+        // The child model's OWN thinking capability gates the reasoning field, exactly as the direct path
+        // (resolution.SupportsThinking) and the orchestration-participant path (participant.SupportsThinking) gate
+        // theirs: a non-thinking Ollama model 400s on think:true/level, so ParticipantReasoningOptions omits the field
+        // for it. Cache-first; no probe on a cache hit.
+        var (supportsThinking, _) = await _modelCapabilityResolver
+                                          .ResolveAsync(definition.ModelProfile, ct)
+                                          .ConfigureAwait(false);
+
+        return new ResolvedBinding(definition.ModelProfile!,
+            resolved.ResolvedSystemPrompt,
+            tools,
+            new ChildReasoning(resolved.ReasoningEffort, supportsThinking),
+            resolved.Skills);
     }
 
-    // Projects the sub-agent definition's AllowedToolNames through the resolver (capability-gated, profile-pool offer),
-    // bridges the offer DTOs to executables via the shared InvocationToolResolver, then filters spawn_subagent out.
-    private async Task<IList<AITool>?> ResolveChildToolsAsync(Guid definitionId, string? modelProfile, CancellationToken ct)
+    // Bridges the resolver's curated AllowedTools (capability-gated, profile-pool offer ∩ AllowedToolNames) to
+    // executables via the shared InvocationToolResolver, then filters spawn_subagent out (the structural depth cap).
+    private IList<AITool>? CurateChildTools(IReadOnlyList<AllowedToolDto> allowedTools)
     {
-        var resolved = await _agentDefinitionResolver.ResolveAsync(definitionId, modelProfile, cancellationToken: ct).ConfigureAwait(false);
-        if (resolved is null || resolved.AllowedTools.Count == 0)
+        if (allowedTools.Count == 0)
         {
             return null;
         }
 
-        var offeredExecutables = InvocationToolResolver.Resolve(ToOfferPlaceholders(resolved.AllowedTools),
+        var offeredExecutables = InvocationToolResolver.Resolve(ToOfferPlaceholders(allowedTools),
             _toolRegistry,
             _clientLocalToolRegistry,
             _mcpToolRegistry,
@@ -263,6 +323,33 @@ internal sealed class SubAgentSpawnService : ISubAgentSpawnService
                       .ToArray();
 
         return curated.Length > 0 ? curated : null;
+    }
+
+    // Builds a MAF AgentSkillsProvider from the resolved node skills and attaches it to the child agent's options,
+    // mirroring InvocationAgentFactory.BuildAgent's skills path (name + description + body-as-instructions; no
+    // scripts/resources in v1). Empty/null is a no-op so a no-skills child stays byte-identical.
+    private static void AttachSkillsProvider(ChatClientAgentOptions agentOptions, IReadOnlyList<ResolvedSkill>? skills)
+    {
+        if (skills is not { Count: > 0 } resolvedSkills)
+        {
+            return;
+        }
+
+        // MAAI001: Agent Skills (AgentSkillsProvider/AgentInlineSkill) shipped [Experimental] in Microsoft.Agents.AI
+        // (verified 1.8.0; pinned 1.13.0, not re-verified). Reached only when the child agent has assigned skills, the
+        // same scoped suppression InvocationAgentFactory uses.
+#pragma warning disable MAAI001
+        var inlineSkills = new AgentInlineSkill[resolvedSkills.Count];
+        for (var index = 0; index < resolvedSkills.Count; index++)
+        {
+            var skill = resolvedSkills[index];
+            inlineSkills[index] = new AgentInlineSkill(skill.Name, skill.Description, skill.Body);
+        }
+
+#pragma warning disable CA2000 // Ownership transfers to the ChatClientAgent via AIContextProviders; the agent disposes its context providers with itself.
+        agentOptions.AIContextProviders = [new AgentSkillsProvider(inlineSkills)];
+#pragma warning restore CA2000
+#pragma warning restore MAAI001
     }
 
     // Converts the profile's offer DTOs into the placeholder AITools InvocationToolResolver matches by name (mirrors the
@@ -304,5 +391,17 @@ internal sealed class SubAgentSpawnService : ISubAgentSpawnService
         return hasKey ^ hasModel;
     }
 
-    private sealed record ResolvedBinding(string ModelName, string Instructions, IList<AITool>? Tools);
+    // The child's fully-resolved run inputs. Instructions is the resolved system prompt for a profile-bound child (the
+    // scaffold + persona + injected playbook memory), or the raw request instructions for a model-id-only child.
+    // Reasoning + Skills are populated only for a profile-bound child (null for model-id-only, keeping that path as-is).
+    private sealed record ResolvedBinding(
+        string ModelName,
+        string Instructions,
+        IList<AITool>? Tools,
+        ChildReasoning? Reasoning = null,
+        IReadOnlyList<ResolvedSkill>? Skills = null);
+
+    // The child's reasoning inputs: the resolved effort plus the child model's OWN thinking capability, which together
+    // drive ParticipantReasoningOptions.Build exactly as the orchestration-participant path does.
+    private sealed record ChildReasoning(string? ReasoningEffort, bool SupportsThinking);
 }
