@@ -371,7 +371,9 @@ finally
     await Log.CloseAndFlushAsync();
 }
 
-return 0;
+// Honor any non-zero exit code set during startup/shutdown (e.g. the loopback-bind guard's guarded shutdown), rather
+// than always reporting success on a graceful stop.
+return Environment.ExitCode;
 
 // Request-completion level for UseSerilogRequestLogging: failures stay loud (5xx/exception = Error, unexpected 4xx =
 // Warning) while routine traffic (2xx/3xx, the 401 token-refresh dance, SPA-fallback 404s) drops to Debug so the SPA's
