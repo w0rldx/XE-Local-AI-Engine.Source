@@ -22,7 +22,7 @@ public sealed class ChatTurnResolver(
     IModelClassificationService modelClassificationService,
     ILocalModelProviderResolver localModelProviderResolver,
     IGgufModelCapabilityResolver ggufModelCapabilityResolver,
-    ICloudCredentialStore cloudCredentialStore,
+    IActiveCloudChatClientFactory activeCloudChatClientFactory,
     ILogger<ChatTurnResolver> logger)
 {
     /// <summary>
@@ -99,12 +99,22 @@ public sealed class ChatTurnResolver(
             return (SupportsThinking: true, CodexProviderCapabilities.V0.SupportsToolCalling, IsCloud: true);
         }
 
-        // An Azure Foundry deployment id is NOT an Ollama model either: probing /api/show for it would 500/stall.
-        // When the active model matches a stored Azure deployment name, advertise the Azure provider's declared
-        // capability matrix instead of an Ollama classification, so an Azure id never falls through to the local probe.
-        if (await IsAzureFoundryModelAsync(activeModel, cancellationToken).ConfigureAwait(false))
+        // Azure/cloud LOCALITY is resolved from the SAME short-TTL routing snapshot the cloud factory routes from — the
+        // single source of truth — never an independent credential-store read. An independent read could FAIL while the
+        // factory still routes the deployment to Azure from its cached snapshot, classifying the request local while it
+        // egresses to the cloud (the private-data gate would then leak). Sharing the snapshot removes that divergence,
+        // and a genuine snapshot read failure FAILS CLOSED to cloud so the private-data gate withholds rather than leaks.
+        // A non-Codex model that routes to a cloud provider is an Azure Foundry deployment (the only other cloud route),
+        // so advertise Azure's capability matrix; on a fail-closed fault keep the conservative non-thinking/non-tools
+        // default rather than asserting a matrix for a model that could not be classified. IsCloud feeds ONLY the
+        // node-local private-data gates here (attachments + knowledge/file tools) — thinking/tools are the separate first
+        // two tuple slots — so failing IsCloud closed does not disturb reasoning or tool-capability detection.
+        var (routesToCloud, routingFaulted) = ClassifyCloudRouting(activeModel);
+        if (routesToCloud)
         {
-            return (SupportsThinking: false, SupportsTools: AzureFoundryProviderCapabilities.V0.SupportsToolCalling, IsCloud: true);
+            return routingFaulted
+                ? (SupportsThinking: false, SupportsTools: false, IsCloud: true)
+                : (SupportsThinking: false, SupportsTools: AzureFoundryProviderCapabilities.V0.SupportsToolCalling, IsCloud: true);
         }
 
         // /api/show classification only makes sense for an Ollama-routed model. A llama.cpp (GGUF) model has no Ollama
@@ -143,28 +153,22 @@ public sealed class ChatTurnResolver(
     }
 
     /// <summary>
-    ///     True when <paramref name="activeModel" /> matches one of the stored Azure Foundry connection's deployment
-    ///     names (ordinal, case-insensitive). A best-effort read: any failure resolving the encrypted config is treated
-    ///     as "not Azure" so the capability gate falls through to its existing (safe) classification rather than failing
-    ///     the send.
+    ///     Classifies whether <paramref name="activeModel" /> would ROUTE to a cloud provider, reading the cloud factory's
+    ///     shared short-TTL routing snapshot (the same source the send path routes from) so classification and routing
+    ///     cannot diverge. Returns <c>RoutesToCloud</c> plus a <c>Faulted</c> flag: on any snapshot read failure the
+    ///     result FAILS CLOSED (<c>RoutesToCloud: true, Faulted: true</c>) so the private-data gates withhold rather than
+    ///     leak, mirroring <see cref="ModelCapabilityResolver" /> — change both together.
     /// </summary>
-    private async Task<bool> IsAzureFoundryModelAsync(string activeModel, CancellationToken cancellationToken)
+    private (bool RoutesToCloud, bool Faulted) ClassifyCloudRouting(string activeModel)
     {
         try
         {
-            var config = await cloudCredentialStore.LoadConfigAsync(cancellationToken).ConfigureAwait(false);
-            var connection = config?.AzureFoundry;
-            return connection is { Models.Count: > 0 }
-                   && connection.Models.Any(model => string.Equals(model.DeploymentName, activeModel, StringComparison.OrdinalIgnoreCase));
-        }
-        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
-        {
-            throw;
+            return (activeCloudChatClientFactory.IsCloudProviderSelected(activeModel), Faulted: false);
         }
         catch (Exception exception)
         {
-            logger.LogDebug(exception, "Azure Foundry deployment match could not be resolved for '{Model}'.", activeModel);
-            return false;
+            logger.LogWarning(exception, "Cloud routing for '{Model}' could not be resolved; failing closed to cloud for the private-data gate.", activeModel);
+            return (RoutesToCloud: true, Faulted: true);
         }
     }
 

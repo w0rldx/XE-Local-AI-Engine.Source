@@ -46,9 +46,22 @@ public interface IOrchestrationResolver
 ///     rides ALONGSIDE the existing single-agent fields, never replaces them — a runner that ignores the spec still
 ///     runs a valid single-agent turn).
 /// </summary>
+/// <param name="AnyParticipantIsCloud">
+///     True when ANY resolved participant's effective model is cloud-hosted. The orchestration seed is a SINGLE shared
+///     list broadcast to every participant (MAF has no per-participant seed), and per-participant TOOL stripping cannot
+///     redact content already embedded in that seed. So the caller must gate node-local private data (conversation
+///     attachments) on this aggregate — not only the orchestrator's own model locality — or an attachment inlined into
+///     the shared seed would reach a cloud participant. <see cref="FirstCloudParticipantModel" /> names one such model.
+/// </param>
+/// <param name="FirstCloudParticipantModel">
+///     The effective model id of the first cloud participant (ordinal by definition id, for determinism), or
+///     <see langword="null" /> when no participant is cloud. Used to name the cloud model in the attachments-withheld notice.
+/// </param>
 public sealed record ResolvedOrchestration(
     OrchestrationSpec Spec,
     string ResolvedSystemPrompt,
     string? ModelProfile,
     string? ReasoningEffort,
-    int AgentDefinitionVersion);
+    int AgentDefinitionVersion,
+    bool AnyParticipantIsCloud,
+    string? FirstCloudParticipantModel);
