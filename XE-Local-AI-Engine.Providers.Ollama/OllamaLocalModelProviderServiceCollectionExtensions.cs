@@ -75,9 +75,7 @@ public static class OllamaLocalModelProviderServiceCollectionExtensions
             return serviceProvider.GetRequiredService<OllamaApiClientFactory>().CreateClient(registration.Model);
         });
 
-        _ = services.AddSingleton<ILocalModelProvider>(serviceProvider => new OllamaLocalModelProvider(
-            serviceProvider.GetRequiredService<IOllamaApiClient>(),
-            serviceProvider.GetRequiredService<OllamaApiClientFactory>()));
+        _ = services.AddSingleton<ILocalModelProvider, OllamaLocalModelProvider>();
         _ = services.AddSingleton<IModelCapabilityClient, OllamaModelCapabilityClient>();
         return services;
     }

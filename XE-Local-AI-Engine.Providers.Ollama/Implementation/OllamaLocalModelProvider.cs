@@ -27,7 +27,7 @@ public sealed class OllamaLocalModelProvider : ILocalModelProvider, IDisposable
     ///     Creates a provider wrapper around the configured Ollama management client and the client factory that mints
     ///     per-model chat/embedding clients over the same hardened transport.
     /// </summary>
-    internal OllamaLocalModelProvider(IOllamaApiClient ollamaClient, OllamaApiClientFactory clientFactory)
+    public OllamaLocalModelProvider(IOllamaApiClient ollamaClient, OllamaApiClientFactory clientFactory)
     {
         _ollamaClient = ollamaClient ?? throw new ArgumentNullException(nameof(ollamaClient));
         _clientFactory = clientFactory ?? throw new ArgumentNullException(nameof(clientFactory));

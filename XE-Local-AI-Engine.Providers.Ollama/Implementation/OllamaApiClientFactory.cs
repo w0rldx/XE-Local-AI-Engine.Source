@@ -16,7 +16,7 @@ using OllamaSharp;
 ///     transport. The transport lives for the application lifetime and is released here when the DI container disposes
 ///     this singleton.
 /// </remarks>
-internal sealed class OllamaApiClientFactory : IDisposable
+public sealed class OllamaApiClientFactory : IDisposable
 {
     private readonly HttpClient _httpClient;
     private readonly bool _ownsHttpClient;
