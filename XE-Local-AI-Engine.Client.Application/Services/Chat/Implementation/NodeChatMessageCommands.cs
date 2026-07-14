@@ -108,7 +108,10 @@ internal sealed class NodeChatMessageCommands(NodeChatPersistenceWriter writer)
             totalTokens: null,
             reasoningTokens: null,
             replaceContent: true,
-            cancellationToken);
+            cancellationToken,
+            // Only from Pending: a cancel that raced ahead of run ownership (before the cancellation registration exists)
+            // must not be overwritten back to Queued. A rejected mark returns the true (terminal) row so the caller aborts.
+            requiredCurrentStatuses: NodeChatMessageTransitions.QueuedSources);
     }
 
     public Task<NodeChatPersistedMessageDto> MarkAssistantStreamingAsync(NodeChatMessageCorrelation correlation, long updatedAtUtc, CancellationToken cancellationToken = default)
@@ -125,7 +128,10 @@ internal sealed class NodeChatMessageCommands(NodeChatPersistenceWriter writer)
             totalTokens: null,
             reasoningTokens: null,
             replaceContent: true,
-            cancellationToken);
+            cancellationToken,
+            // Only from Pending (platform path) or Queued (local path): a stream can never resurrect a terminal row. A
+            // rejected mark returns the true (terminal) row so the caller aborts instead of streaming into it.
+            requiredCurrentStatuses: NodeChatMessageTransitions.StreamingSources);
     }
 
     public Task<NodeChatPersistedMessageDto> FlushAssistantPartialAsync(NodeChatPartialFlushRequest request, CancellationToken cancellationToken = default)
