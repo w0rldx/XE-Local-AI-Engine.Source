@@ -95,13 +95,23 @@ public sealed class WorkerEventDispatcherTests
         var gate = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
         var first = RuntimePackageBuilder.Valid().WithInvocationId(Guid.NewGuid()).Build();
         var second = RuntimePackageBuilder.Valid().WithInvocationId(Guid.NewGuid()).Build();
+        var firstEntered = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
         runner.RunAsync(Arg.Any<InvocationExecutionContext>(), Arg.Any<CancellationToken>())
-              .Returns(call => ((InvocationExecutionContext)call[0]).Package.InvocationId == first.InvocationId ? gate.Task : Task.CompletedTask);
+              .Returns(call =>
+              {
+                  if (((InvocationExecutionContext)call[0]).Package.InvocationId == first.InvocationId)
+                  {
+                      firstEntered.TrySetResult();
+                      return gate.Task;
+                  }
+
+                  return Task.CompletedTask;
+              });
 
         var dispatcher = CreateDispatcher(runner);
 
         var firstDispatch = dispatcher.DispatchInvocationAssignedAsync(CreateEncryptedPackage(first));
-        await Task.Delay(20);
+        await firstEntered.Task.WaitAsync(TimeSpan.FromSeconds(5));
         var secondDispatch = dispatcher.DispatchInvocationAssignedAsync(CreateEncryptedPackage(second));
 
         await runner.Received(1).RunAsync(Arg.Any<InvocationExecutionContext>(), Arg.Any<CancellationToken>());
@@ -134,17 +144,23 @@ public sealed class WorkerEventDispatcherTests
         var remoteGate = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
         var remote = RuntimePackageBuilder.Valid().WithInvocationId(Guid.NewGuid()).Build();
         var local = RuntimePackageBuilder.Valid().WithInvocationId(Guid.NewGuid()).Build();
-        runner.RunAsync(Arg.Any<InvocationExecutionContext>(), Arg.Any<CancellationToken>()).Returns(remoteGate.Task);
+        var remoteEntered = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        runner.RunAsync(Arg.Any<InvocationExecutionContext>(), Arg.Any<CancellationToken>())
+              .Returns(_ =>
+              {
+                  remoteEntered.TrySetResult();
+                  return remoteGate.Task;
+              });
 
         var dispatcher = CreateDispatcher(runner);
 
         // Remote invocation starts and holds the shared slot.
         var remoteDispatch = dispatcher.DispatchInvocationAssignedAsync(CreateEncryptedPackage(remote));
-        await Task.Delay(20);
+        await remoteEntered.Task.WaitAsync(TimeSpan.FromSeconds(5));
 
-        // Local assignment must QUEUE (not throw) while the remote holds the slot.
+        // Local assignment must QUEUE (not throw) while the remote holds the slot: the returned task cannot complete
+        // until the remote releases the slot, so it is observably incomplete with no wall-clock wait.
         var localAssign = dispatcher.ReportInvocationAssignedAsync(local);
-        await Task.Delay(20);
         AssertEx.False(localAssign.IsCompleted);
         AssertEx.Equal(remote.InvocationId, dispatcher.CurrentInvocation?.InvocationId ?? Guid.Empty);
 
@@ -185,9 +201,10 @@ public sealed class WorkerEventDispatcherTests
         // The local send must WAIT on the same gate before claiming the slot: its task does not complete and the
         // current invocation stays the remote one.
         var localAssign = dispatcher.ReportInvocationAssignedAsync(local);
-        var localAcquiredEarly = await Task.WhenAny(localAssign, Task.Delay(TimeSpan.FromMilliseconds(200))) == localAssign;
 
-        AssertEx.False(localAcquiredEarly, "The local send must queue behind the remote invocation and not acquire the slot while the remote holds it.");
+        // The local send queues behind the remote lease: its task cannot complete until the remote releases, so it is
+        // observably incomplete without a wall-clock race window.
+        AssertEx.False(localAssign.IsCompleted, "The local send must queue behind the remote invocation and not acquire the slot while the remote holds it.");
         AssertEx.Equal(remote.InvocationId, dispatcher.CurrentInvocation?.InvocationId ?? Guid.Empty);
 
         // No spurious failed/persisted noise while queued: the local turn never reached the runner and the tracked
@@ -213,15 +230,22 @@ public sealed class WorkerEventDispatcherTests
         var remoteGate = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
         var remote = RuntimePackageBuilder.Valid().WithInvocationId(Guid.NewGuid()).Build();
         var local = RuntimePackageBuilder.Valid().WithInvocationId(Guid.NewGuid()).Build();
-        runner.RunAsync(Arg.Any<InvocationExecutionContext>(), Arg.Any<CancellationToken>()).Returns(remoteGate.Task);
+        var remoteEntered = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        runner.RunAsync(Arg.Any<InvocationExecutionContext>(), Arg.Any<CancellationToken>())
+              .Returns(_ =>
+              {
+                  remoteEntered.TrySetResult();
+                  return remoteGate.Task;
+              });
 
         var dispatcher = CreateDispatcher(runner);
         var remoteDispatch = dispatcher.DispatchInvocationAssignedAsync(CreateEncryptedPackage(remote));
-        await Task.Delay(20);
+        await remoteEntered.Task.WaitAsync(TimeSpan.FromSeconds(5));
 
+        // The local assignment queues behind the remote lease; cancelling its token must abort the queued wait. The
+        // wait honours the token whenever the cancel lands, so no delay is needed to "arm" the wait first.
         using var localCancellation = new CancellationTokenSource();
         var localAssign = dispatcher.ReportInvocationAssignedAsync(local, localCancellation.Token);
-        await Task.Delay(20);
 
         await localCancellation.CancelAsync();
 
@@ -258,7 +282,13 @@ public sealed class WorkerEventDispatcherTests
     {
         var runner = Substitute.For<IInvocationRunner>();
         var gate = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
-        runner.RunAsync(Arg.Any<InvocationExecutionContext>(), Arg.Any<CancellationToken>()).Returns(gate.Task);
+        var runnerEntered = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        runner.RunAsync(Arg.Any<InvocationExecutionContext>(), Arg.Any<CancellationToken>())
+              .Returns(_ =>
+              {
+                  runnerEntered.TrySetResult();
+                  return gate.Task;
+              });
         var dispatcher = CreateDispatcher(runner);
         var package = RuntimePackageBuilder.Valid().Build();
 
@@ -269,7 +299,7 @@ public sealed class WorkerEventDispatcherTests
             Encrypted = null
         });
 
-        await Task.Delay(20);
+        await runnerEntered.Task.WaitAsync(TimeSpan.FromSeconds(5));
         dispatcher.StopAcceptingRemoteInvocations();
         gate.SetResult();
         await dispatch;
