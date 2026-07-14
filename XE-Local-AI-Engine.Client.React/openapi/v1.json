@@ -7,7 +7,7 @@
   },
   "servers": [
     {
-      "url": "http://127.0.0.1:40093"
+      "url": "http://127.0.0.1:36273"
     }
   ],
   "paths": {
@@ -763,7 +763,6 @@
             "in": "query",
             "schema": {
               "type": "integer",
-              "format": "int64",
               "nullable": true
             }
           },
@@ -772,7 +771,6 @@
             "in": "query",
             "schema": {
               "type": "integer",
-              "format": "int64",
               "nullable": true
             }
           },
@@ -7458,8 +7456,7 @@
             "type": "string"
           },
           "byteSize": {
-            "type": "integer",
-            "format": "int64"
+            "type": "integer"
           },
           "sha256": {
             "type": "string"
@@ -7592,12 +7589,10 @@
             "format": "int32"
           },
           "createdAtUtc": {
-            "type": "integer",
-            "format": "int64"
+            "type": "integer"
           },
           "updatedAtUtc": {
-            "type": "integer",
-            "format": "int64"
+            "type": "integer"
           }
         }
       },
@@ -7673,12 +7668,10 @@
             "format": "int32"
           },
           "createdAtUtc": {
-            "type": "integer",
-            "format": "int64"
+            "type": "integer"
           },
           "updatedAtUtc": {
-            "type": "integer",
-            "format": "int64"
+            "type": "integer"
           }
         }
       },
@@ -7715,7 +7708,6 @@
           },
           "cancellationRequestedAtUtc": {
             "type": "integer",
-            "format": "int64",
             "nullable": true
           }
         }
@@ -7768,7 +7760,6 @@
           },
           "intervalSeconds": {
             "type": "integer",
-            "format": "int64",
             "nullable": true
           },
           "repeatCount": {
@@ -7778,12 +7769,10 @@
           },
           "startAtUtc": {
             "type": "integer",
-            "format": "int64",
             "nullable": true
           },
           "endAtUtc": {
             "type": "integer",
-            "format": "int64",
             "nullable": true
           },
           "timeZoneId": {
@@ -7807,21 +7796,17 @@
             "$ref": "#/components/schemas/XE_Local_AI_EngineClientEndpointsSchedulerV1ScheduledJobCreator"
           },
           "createdAtUtc": {
-            "type": "integer",
-            "format": "int64"
+            "type": "integer"
           },
           "updatedAtUtc": {
-            "type": "integer",
-            "format": "int64"
+            "type": "integer"
           },
           "disabledAtUtc": {
             "type": "integer",
-            "format": "int64",
             "nullable": true
           },
           "deletedAtUtc": {
             "type": "integer",
-            "format": "int64",
             "nullable": true
           }
         }
@@ -7898,7 +7883,6 @@
           },
           "intervalSeconds": {
             "type": "integer",
-            "format": "int64",
             "nullable": true
           },
           "repeatCount": {
@@ -7908,12 +7892,10 @@
           },
           "startAtUtc": {
             "type": "integer",
-            "format": "int64",
             "nullable": true
           },
           "endAtUtc": {
             "type": "integer",
-            "format": "int64",
             "nullable": true
           },
           "timeZoneId": {
@@ -7975,22 +7957,18 @@
           },
           "scheduledFireTimeUtc": {
             "type": "integer",
-            "format": "int64",
             "nullable": true
           },
           "actualFireTimeUtc": {
             "type": "integer",
-            "format": "int64",
             "nullable": true
           },
           "completedAtUtc": {
             "type": "integer",
-            "format": "int64",
             "nullable": true
           },
           "durationMs": {
             "type": "integer",
-            "format": "int64",
             "nullable": true
           },
           "summary": {
@@ -8003,12 +7981,10 @@
           },
           "cancellationRequestedAtUtc": {
             "type": "integer",
-            "format": "int64",
             "nullable": true
           },
           "createdAtUtc": {
-            "type": "integer",
-            "format": "int64"
+            "type": "integer"
           }
         }
       },
@@ -8191,7 +8167,6 @@
           },
           "intervalSeconds": {
             "type": "integer",
-            "format": "int64",
             "nullable": true
           },
           "repeatCount": {
@@ -8201,12 +8176,10 @@
           },
           "startAtUtc": {
             "type": "integer",
-            "format": "int64",
             "nullable": true
           },
           "endAtUtc": {
             "type": "integer",
-            "format": "int64",
             "nullable": true
           },
           "timeZoneId": {
@@ -8252,12 +8225,10 @@
             "format": "int32"
           },
           "createdAtUtc": {
-            "type": "integer",
-            "format": "int64"
+            "type": "integer"
           },
           "updatedAtUtc": {
-            "type": "integer",
-            "format": "int64"
+            "type": "integer"
           }
         }
       },
@@ -8417,12 +8388,10 @@
             "format": "int32"
           },
           "createdAtUtc": {
-            "type": "integer",
-            "format": "int64"
+            "type": "integer"
           },
           "updatedAtUtc": {
-            "type": "integer",
-            "format": "int64"
+            "type": "integer"
           }
         }
       },
@@ -8582,7 +8551,6 @@
           },
           "huggingFaceDiskMarginBytes": {
             "type": "integer",
-            "format": "int64",
             "nullable": true
           },
           "orchestrationIdleTimeoutSeconds": {
@@ -8618,12 +8586,10 @@
           },
           "agentHomeMaxSelectedFolderBytes": {
             "type": "integer",
-            "format": "int64",
             "nullable": true
           },
           "agentHomeMaxPatchBytes": {
             "type": "integer",
-            "format": "int64",
             "nullable": true
           },
           "maxPendingToolCallAgeMinutes": {
@@ -8715,7 +8681,6 @@
           },
           "seed": {
             "type": "integer",
-            "format": "int64",
             "nullable": true
           },
           "stop": {
@@ -8812,7 +8777,6 @@
           },
           "huggingFaceDiskMarginBytes": {
             "type": "integer",
-            "format": "int64",
             "nullable": true
           },
           "orchestrationIdleTimeoutSeconds": {
@@ -8832,12 +8796,10 @@
           },
           "agentHomeMaxSelectedFolderBytes": {
             "type": "integer",
-            "format": "int64",
             "nullable": true
           },
           "agentHomeMaxPatchBytes": {
             "type": "integer",
-            "format": "int64",
             "nullable": true
           },
           "maxPendingToolCallAgeMinutes": {
@@ -9098,12 +9060,10 @@
           },
           "vramLoadBytes": {
             "type": "integer",
-            "format": "int64",
             "nullable": true
           },
           "vramAfterBytes": {
             "type": "integer",
-            "format": "int64",
             "nullable": true
           },
           "runs": {
@@ -9179,7 +9139,6 @@
           },
           "nParams": {
             "type": "integer",
-            "format": "int64",
             "nullable": true
           },
           "isMoe": {
@@ -9192,7 +9151,6 @@
           },
           "freeVramAtFreezeBytes": {
             "type": "integer",
-            "format": "int64",
             "nullable": true
           },
           "status": {
@@ -9204,12 +9162,10 @@
             "nullable": true
           },
           "createdAtUtc": {
-            "type": "integer",
-            "format": "int64"
+            "type": "integer"
           },
           "updatedAtUtc": {
-            "type": "integer",
-            "format": "int64"
+            "type": "integer"
           }
         }
       },
@@ -9260,16 +9216,14 @@
             "type": "boolean"
           },
           "downloads": {
-            "type": "integer",
-            "format": "int64"
+            "type": "integer"
           },
           "likes": {
             "type": "integer",
             "format": "int32"
           },
           "lastModifiedAtUtc": {
-            "type": "integer",
-            "format": "int64"
+            "type": "integer"
           },
           "license": {
             "type": "string",
@@ -9529,12 +9483,10 @@
           },
           "completedBytes": {
             "type": "integer",
-            "format": "int64",
             "nullable": true
           },
           "totalBytes": {
             "type": "integer",
-            "format": "int64",
             "nullable": true
           },
           "sanitizedError": {
@@ -9561,16 +9513,13 @@
         ],
         "properties": {
           "totalRamBytes": {
-            "type": "integer",
-            "format": "int64"
+            "type": "integer"
           },
           "availableRamBytes": {
-            "type": "integer",
-            "format": "int64"
+            "type": "integer"
           },
           "vramBytes": {
             "type": "integer",
-            "format": "int64",
             "nullable": true
           },
           "vramKnown": {
@@ -9587,8 +9536,7 @@
             "format": "int32"
           },
           "freeDiskBytes": {
-            "type": "integer",
-            "format": "int64"
+            "type": "integer"
           }
         }
       },
@@ -9634,7 +9582,6 @@
           },
           "lastRefreshedAtUtc": {
             "type": "integer",
-            "format": "int64",
             "nullable": true
           },
           "recommendations": {
@@ -9843,8 +9790,7 @@
             "type": "string"
           },
           "installedAtUtc": {
-            "type": "integer",
-            "format": "int64"
+            "type": "integer"
           },
           "isSourceBuild": {
             "type": "boolean"
@@ -9876,7 +9822,6 @@
           },
           "fetchedAtUtc": {
             "type": "integer",
-            "format": "int64",
             "nullable": true
           },
           "sourceUrl": {
@@ -9931,8 +9876,7 @@
             "type": "boolean"
           },
           "sizeBytes": {
-            "type": "integer",
-            "format": "int64"
+            "type": "integer"
           },
           "qualityTier": {
             "type": "string"
@@ -10200,12 +10144,10 @@
             "format": "int32"
           },
           "createdAtUtc": {
-            "type": "integer",
-            "format": "int64"
+            "type": "integer"
           },
           "updatedAtUtc": {
-            "type": "integer",
-            "format": "int64"
+            "type": "integer"
           }
         }
       },
@@ -10548,17 +10490,14 @@
           },
           "sizeBytes": {
             "type": "integer",
-            "format": "int64",
             "nullable": true
           },
           "sizeVramBytes": {
             "type": "integer",
-            "format": "int64",
             "nullable": true
           },
           "expiresAtUtc": {
             "type": "integer",
-            "format": "int64",
             "nullable": true
           }
         }
@@ -10616,12 +10555,10 @@
           },
           "sizeBytes": {
             "type": "integer",
-            "format": "int64",
             "nullable": true
           },
           "modifiedAtUtc": {
             "type": "integer",
-            "format": "int64",
             "nullable": true
           },
           "family": {
@@ -10807,12 +10744,10 @@
             "nullable": true
           },
           "createdAtUtc": {
-            "type": "integer",
-            "format": "int64"
+            "type": "integer"
           },
           "lastSeenUtc": {
-            "type": "integer",
-            "format": "int64"
+            "type": "integer"
           },
           "purged": {
             "type": "boolean"
@@ -10896,12 +10831,10 @@
             "type": "string"
           },
           "createdAtUtc": {
-            "type": "integer",
-            "format": "int64"
+            "type": "integer"
           },
           "updatedAtUtc": {
-            "type": "integer",
-            "format": "int64"
+            "type": "integer"
           },
           "origin": {
             "type": "string"
@@ -10974,7 +10907,6 @@
           },
           "generationDurationMs": {
             "type": "integer",
-            "format": "int64",
             "nullable": true
           }
         }
@@ -11128,8 +11060,7 @@
             "type": "string"
           },
           "sizeBytes": {
-            "type": "integer",
-            "format": "int64"
+            "type": "integer"
           },
           "extractionStatus": {
             "type": "string"
@@ -11140,8 +11071,7 @@
             "nullable": true
           },
           "createdAtUtc": {
-            "type": "integer",
-            "format": "int64"
+            "type": "integer"
           }
         }
       },
@@ -11186,12 +11116,10 @@
             "nullable": true
           },
           "createdAtUtc": {
-            "type": "integer",
-            "format": "int64"
+            "type": "integer"
           },
           "lastSeenUtc": {
-            "type": "integer",
-            "format": "int64"
+            "type": "integer"
           },
           "lastMessagePreview": {
             "type": "string",
@@ -11349,12 +11277,10 @@
             "nullable": true
           },
           "createdAtUtc": {
-            "type": "integer",
-            "format": "int64"
+            "type": "integer"
           },
           "updatedAtUtc": {
-            "type": "integer",
-            "format": "int64"
+            "type": "integer"
           }
         }
       },
@@ -11469,16 +11395,13 @@
             "type": "boolean"
           },
           "sizeBytes": {
-            "type": "integer",
-            "format": "int64"
+            "type": "integer"
           },
           "createdAtUtc": {
-            "type": "integer",
-            "format": "int64"
+            "type": "integer"
           },
           "updatedAtUtc": {
-            "type": "integer",
-            "format": "int64"
+            "type": "integer"
           },
           "chunks": {
             "type": "array",
@@ -11583,12 +11506,10 @@
             "type": "boolean"
           },
           "sizeBytes": {
-            "type": "integer",
-            "format": "int64"
+            "type": "integer"
           },
           "createdAtUtc": {
-            "type": "integer",
-            "format": "int64"
+            "type": "integer"
           }
         }
       },
@@ -11919,8 +11840,7 @@
             "format": "date-time"
           },
           "durationMs": {
-            "type": "integer",
-            "format": "int64"
+            "type": "integer"
           },
           "error": {
             "type": "string",
@@ -11980,8 +11900,7 @@
             "nullable": true
           },
           "seed": {
-            "type": "integer",
-            "format": "int64"
+            "type": "integer"
           },
           "width": {
             "type": "integer",
@@ -12006,22 +11925,18 @@
             "type": "string"
           },
           "createdAtUtc": {
-            "type": "integer",
-            "format": "int64"
+            "type": "integer"
           },
           "startedAtUtc": {
             "type": "integer",
-            "format": "int64",
             "nullable": true
           },
           "completedAtUtc": {
             "type": "integer",
-            "format": "int64",
             "nullable": true
           },
           "durationMs": {
             "type": "integer",
-            "format": "int64",
             "nullable": true
           },
           "imageId": {
@@ -12035,7 +11950,6 @@
           },
           "cancellationRequestedAtUtc": {
             "type": "integer",
-            "format": "int64",
             "nullable": true
           }
         }
@@ -12059,8 +11973,7 @@
             "nullable": true
           },
           "seed": {
-            "type": "integer",
-            "format": "int64"
+            "type": "integer"
           },
           "width": {
             "type": "integer",
@@ -12140,8 +12053,7 @@
             "type": "string"
           },
           "sizeBytes": {
-            "type": "integer",
-            "format": "int64"
+            "type": "integer"
           },
           "parts": {
             "type": "array",
@@ -12150,8 +12062,7 @@
             }
           },
           "downloadedAtUtc": {
-            "type": "integer",
-            "format": "int64"
+            "type": "integer"
           }
         }
       },
@@ -12171,8 +12082,7 @@
             "type": "string"
           },
           "sizeBytes": {
-            "type": "integer",
-            "format": "int64"
+            "type": "integer"
           }
         }
       },
@@ -12792,7 +12702,6 @@
           },
           "lastCheckedUtc": {
             "type": "integer",
-            "format": "int64",
             "nullable": true
           }
         }
@@ -12958,12 +12867,10 @@
             "format": "int32"
           },
           "createdAtUtc": {
-            "type": "integer",
-            "format": "int64"
+            "type": "integer"
           },
           "updatedAtUtc": {
-            "type": "integer",
-            "format": "int64"
+            "type": "integer"
           },
           "sourceFeedbackIds": {
             "type": "array",
@@ -13042,8 +12949,7 @@
             "type": "boolean"
           },
           "evaluatedAtUtc": {
-            "type": "integer",
-            "format": "int64"
+            "type": "integer"
           },
           "actionVersionAtEval": {
             "type": "integer",
@@ -13170,12 +13076,10 @@
             "nullable": true
           },
           "createdAtUtc": {
-            "type": "integer",
-            "format": "int64"
+            "type": "integer"
           },
           "updatedAtUtc": {
-            "type": "integer",
-            "format": "int64"
+            "type": "integer"
           }
         }
       },
@@ -13298,12 +13202,10 @@
             "format": "int32"
           },
           "createdAtUtc": {
-            "type": "integer",
-            "format": "int64"
+            "type": "integer"
           },
           "updatedAtUtc": {
-            "type": "integer",
-            "format": "int64"
+            "type": "integer"
           }
         }
       },
@@ -13482,8 +13384,7 @@
             "type": "string"
           },
           "generatedAtUtc": {
-            "type": "integer",
-            "format": "int64"
+            "type": "integer"
           },
           "minOccurrenceThreshold": {
             "type": "integer",
@@ -13601,8 +13502,7 @@
             "format": "guid"
           },
           "createdAtUtc": {
-            "type": "integer",
-            "format": "int64"
+            "type": "integer"
           },
           "truncated": {
             "type": "boolean"
@@ -13637,8 +13537,7 @@
             "format": "guid"
           },
           "enabledAtUtc": {
-            "type": "integer",
-            "format": "int64"
+            "type": "integer"
           },
           "beforeDownRate": {
             "type": "number",
@@ -13856,8 +13755,7 @@
             "type": "string"
           },
           "latencyMs": {
-            "type": "integer",
-            "format": "int64"
+            "type": "integer"
           },
           "promptTokens": {
             "type": "integer",
@@ -13877,8 +13775,7 @@
             "nullable": true
           },
           "createdAtUtc": {
-            "type": "integer",
-            "format": "int64"
+            "type": "integer"
           }
         }
       },
@@ -13982,6 +13879,7 @@
         "required": [
           "id",
           "schemaVersion",
+          "agentDefinitionId",
           "modelName",
           "terminalStatus",
           "success",
@@ -13996,6 +13894,10 @@
           "schemaVersion": {
             "type": "integer",
             "format": "int32"
+          },
+          "agentDefinitionId": {
+            "type": "string",
+            "format": "guid"
           },
           "conversationId": {
             "type": "string",
@@ -14031,8 +13933,7 @@
             "nullable": true
           },
           "durationMs": {
-            "type": "integer",
-            "format": "int64"
+            "type": "integer"
           },
           "promptTokens": {
             "type": "integer",
@@ -14070,12 +13971,10 @@
           },
           "startedAtUtc": {
             "type": "integer",
-            "format": "int64",
             "nullable": true
           },
           "createdAtUtc": {
-            "type": "integer",
-            "format": "int64"
+            "type": "integer"
           }
         }
       },
