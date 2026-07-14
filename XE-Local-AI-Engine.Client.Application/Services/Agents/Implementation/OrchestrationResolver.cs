@@ -53,6 +53,7 @@ internal sealed class OrchestrationResolver : IOrchestrationResolver
         string? activeModelId,
         string? retrievalQuery = null,
         bool supportsTools = true,
+        bool activeModelIsCloud = false,
         CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(orchestrator);
@@ -127,7 +128,7 @@ internal sealed class OrchestrationResolver : IOrchestrationResolver
             Participants =
             [
                 .. participants.Values
-                               .Select(participant => ToSpecParticipant(participant, activeModelId))
+                               .Select(participant => ToSpecParticipant(participant, activeModelId, activeModelIsCloud))
                                .OrderBy(static participant => participant.Key, StringComparer.Ordinal)
             ],
             Edges = edges,
@@ -247,7 +248,7 @@ internal sealed class OrchestrationResolver : IOrchestrationResolver
         return edges;
     }
 
-    private OrchestrationSpecParticipant ToSpecParticipant(ResolvedParticipant participant, string? activeModelId)
+    private OrchestrationSpecParticipant ToSpecParticipant(ResolvedParticipant participant, string? activeModelId, bool activeModelIsCloud)
     {
         var definition = participant.Definition;
         return new OrchestrationSpecParticipant
@@ -261,7 +262,7 @@ internal sealed class OrchestrationResolver : IOrchestrationResolver
             ModelId = definition.ModelProfile,
             ReasoningEffort = definition.ReasoningEffort,
             SupportsThinking = participant.SupportsThinking,
-            Tools = ProjectAllowedTools(definition, activeModelId)
+            Tools = ProjectAllowedTools(definition, activeModelId, activeModelIsCloud)
         };
     }
 
@@ -272,10 +273,10 @@ internal sealed class OrchestrationResolver : IOrchestrationResolver
     ///     definition. Names the definition allows but the offer does not contain are dropped and logged — never
     ///     fabricated, so a participant is never handed a tool the node cannot execute.
     /// </summary>
-    private IReadOnlyList<AllowedToolDto> ProjectAllowedTools(AgentDefinitionRecord definition, string? activeModelId)
+    private IReadOnlyList<AllowedToolDto> ProjectAllowedTools(AgentDefinitionRecord definition, string? activeModelId, bool activeModelIsCloud)
     {
         var effectiveModel = definition.ModelProfile ?? activeModelId;
-        var offered = _localToolOfferProvider.GetOfferedTools(effectiveModel);
+        var offered = _localToolOfferProvider.GetOfferedTools(effectiveModel, activeModelIsCloud);
         var allowedNames = new HashSet<string>(definition.AllowedToolNames, StringComparer.Ordinal);
 
         var projected = offered

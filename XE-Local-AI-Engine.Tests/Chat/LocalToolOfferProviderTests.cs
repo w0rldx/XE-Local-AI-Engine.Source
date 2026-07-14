@@ -200,6 +200,67 @@ public sealed class LocalToolOfferProviderTests
             "with no MCP snapshot the catalog is built-ins only");
     }
 
+    // ---- MED-004: knowledge-tool provider-locality gate ----
+
+    private const string KnowledgeSearchToolName = "search_knowledge_base";
+
+    [Test]
+    public void GetOfferedTools_WhenModelIsLocal_OffersKnowledgeTools()
+    {
+        var provider = CreateProvider("qwen3:8b");
+
+        var offered = provider.GetOfferedTools("qwen3:8b", isCloudModel: false);
+
+        AssertEx.Contains(offered, tool => tool.Name == KnowledgeSearchToolName);
+    }
+
+    [Test]
+    public void GetOfferedTools_WhenModelIsCloud_WithholdsKnowledgeToolsByDefault()
+    {
+        var provider = CreateProvider("qwen3:8b");
+
+        var offered = provider.GetOfferedTools("qwen3:8b", isCloudModel: true);
+
+        AssertEx.False(offered.Any(tool => tool.Name == KnowledgeSearchToolName),
+            "a cloud model must not be offered the knowledge tools by default (node-local content must not leave the node)");
+        // The rest of the capable offer is unaffected — only the knowledge tools are gated off.
+        AssertEx.Contains(offered, tool => tool.Name == AgentHomeToolDefinition.ToolName);
+    }
+
+    [Test]
+    public void GetOfferedTools_WhenModelIsCloud_AndOperatorOptedIn_OffersKnowledgeTools()
+    {
+        var provider = CreateProvider(new McpToolRegistry(NullLogger<McpToolRegistry>.Instance), allowCloudKnowledgeAccess: true, "qwen3:8b");
+
+        var offered = provider.GetOfferedTools("qwen3:8b", isCloudModel: true);
+
+        AssertEx.Contains(offered, tool => tool.Name == KnowledgeSearchToolName);
+    }
+
+    [Test]
+    public void GetOfferedTools_WhenModelIsCodex_WithholdsKnowledgeToolsEvenWithoutCloudFlag()
+    {
+        // A Codex id is detected as cloud synchronously, so the gate fires even if the caller passes isCloudModel: false
+        // (e.g. a custom agent pinned to a Codex model while the turn's active model was local).
+        var provider = CreateProvider("gpt-5.5");
+
+        var offered = provider.GetOfferedTools("gpt-5.5", isCloudModel: false);
+
+        AssertEx.False(offered.Any(tool => tool.Name == KnowledgeSearchToolName),
+            "a Codex model must not be offered the knowledge tools regardless of the threaded cloud flag");
+    }
+
+    [Test]
+    public void GetOfferedToolsForProfile_WhenModelIsCloud_WithholdsKnowledgeToolsByDefault()
+    {
+        var provider = CreateProvider("qwen3:8b");
+
+        var offered = provider.GetOfferedToolsForProfile("qwen3:8b", isCloudModel: true);
+
+        AssertEx.False(offered.Any(tool => tool.Name == KnowledgeSearchToolName),
+            "the profile-intersection pool applies the same knowledge-tool locality gate");
+    }
+
     private static McpRegisteredTool BuildMcpTool(string qualifiedName)
     {
         var executable = AIFunctionFactory.Create((string input) => input, qualifiedName);
@@ -209,17 +270,22 @@ public sealed class LocalToolOfferProviderTests
 
     private static LocalToolOfferProvider CreateProvider(params string[] toolCapableModels)
     {
-        return CreateProvider(new McpToolRegistry(NullLogger<McpToolRegistry>.Instance), toolCapableModels);
+        return CreateProvider(new McpToolRegistry(NullLogger<McpToolRegistry>.Instance), allowCloudKnowledgeAccess: false, toolCapableModels);
     }
 
     private static LocalToolOfferProvider CreateProvider(IMcpToolRegistry mcpToolRegistry, params string[] toolCapableModels)
+    {
+        return CreateProvider(mcpToolRegistry, allowCloudKnowledgeAccess: false, toolCapableModels);
+    }
+
+    private static LocalToolOfferProvider CreateProvider(IMcpToolRegistry mcpToolRegistry, bool allowCloudKnowledgeAccess, params string[] toolCapableModels)
     {
         var registry = new FakeAgentToolRegistry([
             new LocalChatToolDescriptor(AgentHomeToolDefinition.ToolName, "Runs an agent task.", "{\"type\":\"object\"}", RequiresApproval: true),
             new LocalChatToolDescriptor("open_url", "Opens a URL.", "{\"type\":\"object\"}", RequiresApproval: false)
         ]);
 
-        return new LocalToolOfferProvider(registry, mcpToolRegistry, toolCapableModels);
+        return new LocalToolOfferProvider(registry, mcpToolRegistry, toolCapableModels, allowCloudKnowledgeAccess);
     }
 
     private sealed class FakeAgentToolRegistry : IAgentToolRegistry

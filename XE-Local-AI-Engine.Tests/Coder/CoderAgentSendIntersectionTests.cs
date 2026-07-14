@@ -105,7 +105,8 @@ public sealed class CoderAgentSendIntersectionTests
         // merge, never via the registry.
         var offerProvider = new LocalToolOfferProvider(new LocalAgentToolRegistry(),
             new McpToolRegistry(NullLogger<McpToolRegistry>.Instance),
-            [capableModel]);
+            [capableModel],
+            allowCloudKnowledgeAccess: false);
 
         store = Substitute.For<IAgentDefinitionStore>();
         var playbookStore = Substitute.For<IPlaybookActionStore>();

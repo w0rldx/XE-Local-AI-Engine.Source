@@ -90,7 +90,9 @@ internal sealed class ReadSurroundingChunksToolHandler : IClientLocalToolHandler
                          chunkId = neighbor.ChunkId,
                          chunkIndex = neighbor.ChunkIndex,
                          section = neighbor.HeadingPath,
-                         content = neighbor.Content
+                         // Neighbor chunk text is DATA, not instructions: flag and fence it.
+                         contentTrust = UntrustedContentFraming.UntrustedTrustLabel,
+                         content = UntrustedContentFraming.Wrap(neighbor.Content)
                      })
         };
 
