@@ -130,6 +130,16 @@ public sealed class NodeChatStreamService(
         // Streaming only when the invocation actually starts. This keeps a turn waiting behind another invocation
         // visibly "queued" rather than prematurely "streaming".
         var queuedMessage = await persistence.MarkAssistantQueuedAsync(correlation, NowUnixMilliseconds(), cancellationToken).ConfigureAwait(false);
+        if (!string.Equals(queuedMessage.Status, NodeChatMessageStatusValues.Queued, StringComparison.Ordinal))
+        {
+            // The queued mark was rejected because the row already reached a terminal status — a cancel raced ahead of run
+            // ownership (before the cancellation registration below exists). Surface the terminal the row actually holds
+            // and abort: never wire a pump/runner for an already-finalized turn. The pre-ownership guard stands down as a
+            // no-op (its Interrupted terminalize cannot downgrade the terminal row).
+            yield return ToMessageEvent(ChatStreamEventMapper.TerminalEventType(queuedMessage.Status), correlation, queuedMessage, sequence.Next());
+            yield break;
+        }
+
         yield return ToMessageEvent(ChatStreamEventTypes.AssistantQueued, correlation, queuedMessage, sequence.Next());
 
         // The run/persistence lifecycle is owned by the shared runner, NOT by the client connection. When the
@@ -356,6 +366,13 @@ public sealed class NodeChatStreamService(
             // The lease is held => the invocation is actually starting. Transition Queued -> Streaming and emit
             // the streaming event so the client leaves the queued state.
             var streamingMessage = await persistence.MarkAssistantStreamingAsync(correlation, NowUnixMilliseconds(), cancellationToken).ConfigureAwait(false);
+            if (!string.Equals(streamingMessage.Status, NodeChatMessageStatusValues.Streaming, StringComparison.Ordinal))
+            {
+                // The row was finalized (cancelled) before streaming could start. Do not stream into a terminal message or
+                // run the model: return so the finally completes the state channel and the pump terminalizes from the row.
+                return;
+            }
+
             await eventWriter.WriteAsync(ToMessageEvent(ChatStreamEventTypes.AssistantStreaming, correlation, streamingMessage, sequence.Next()), cancellationToken).ConfigureAwait(false);
 
             // A "Local runtime default" send that resolved no installed GGUF chat model fails BEFORE any provider

@@ -906,6 +906,52 @@ public sealed class NodeChatStreamServiceTests
     }
 
     [Test]
+    public async Task SendMessageAsync_WhenQueuedMarkRejectedByCancel_EmitsTerminalAndDoesNotRun()
+    {
+        // The queued mark is rejected because a cancel already finalized the row (the reported cancel-before-queued race).
+        // The stream must surface the terminal the row holds and abort BEFORE wiring the runner — never stream into it.
+        var conversationId = Guid.NewGuid();
+        var assistantMessageId = Guid.NewGuid();
+        var requestId = Guid.NewGuid();
+        var persistence = CreatePersistence(conversationId, assistantMessageId, requestId, _ => { });
+        persistence.MarkAssistantQueuedAsync(Arg.Any<NodeChatMessageCorrelation>(), Arg.Any<long>(), Arg.Any<CancellationToken>())
+                   .Returns(CreateAssistantMessage(conversationId, assistantMessageId, requestId, NodeChatMessageStatusValues.Cancelled, string.Empty, reasoning: null));
+        var dispatcher = new RecordingWorkerEventDispatcher();
+        var runner = Substitute.For<IInvocationRunner>();
+        var service = new NodeChatStreamService(persistence,
+            new ChatInvocationStatePump(ChatPumpTestFactory.Create(persistence), TimeProvider.System),
+            new ChatTurnResolver(CreateAgentDefinitionResolver(), CreateAgentDefinitionStore(), CreateOrchestrationResolver(), CreateModelClassificationService(), CreateLocalModelProviderResolver(),
+                CreateGgufModelCapabilityResolver(), Substitute.For<ICloudCredentialStore>(), NullLogger<ChatTurnResolver>.Instance),
+            new NodeChatMutationGuard(persistence),
+            new LocalChatRuntimePackageBuilder(),
+            runner,
+            dispatcher,
+            Options.Create(new LocalChatAgentOptions()),
+            StubNodeRuntimeSettings.Create().Build(),
+            new NodeChatStreamCancellationRegistry(),
+            CreateOfferProvider(),
+            CreateDefaultAgentProvider(),
+            CreateNodeSettingsStore(),
+            CreateLocalDefaultChatModelResolver(),
+            CreateMemoryExtractionDispatcher(),
+            Substitute.For<IConversationUploadedFileStore>(),
+            Substitute.For<IConversationSandboxStager>(),
+            TimeProvider.System,
+            NullLogger<NodeChatStreamService>.Instance);
+
+        var events = new List<ChatStreamEvent>();
+        await foreach (var streamEvent in service.SendMessageAsync(new NodeChatStreamRequest(conversationId, "hello", MessageId: assistantMessageId, RequestId: requestId)).ConfigureAwait(false))
+        {
+            events.Add(streamEvent);
+        }
+
+        AssertEx.Contains(events, streamEvent => streamEvent.Type == ChatStreamEventTypes.AssistantCancelled);
+        AssertEx.False(events.Any(streamEvent => streamEvent.Type == ChatStreamEventTypes.AssistantQueued), "a rejected queued mark must not emit AssistantQueued");
+        AssertEx.False(events.Any(streamEvent => streamEvent.Type == ChatStreamEventTypes.AssistantStreaming), "an aborted turn must never reach streaming");
+        await runner.DidNotReceive().RunAsync(Arg.Any<InvocationExecutionContext>(), Arg.Any<CancellationToken>());
+    }
+
+    [Test]
     public async Task SendMessageAsync_WhenClientDisconnectsBeforeRunnerCompletes_PersistsCompletedNotInterrupted()
     {
         var conversationId = Guid.NewGuid();

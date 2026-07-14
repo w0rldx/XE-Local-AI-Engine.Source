@@ -615,6 +615,140 @@ public sealed class NodeChatPersistenceServiceTests : IDisposable
     }
 
     [Test]
+    public async Task MarkAssistantQueuedAsync_WhenCancelledBeforeQueued_DoesNotResurrect()
+    {
+        // The exact reported race: a cancel lands on the Pending placeholder before the run is queued (before the
+        // cancellation registration exists). The queued mark must NOT overwrite Cancelled back to Queued, and its result
+        // must report the true terminal so the stream service aborts.
+        await using var provider = await BuildProviderAsync("cancel-before-queued.sqlite").ConfigureAwait(false);
+        var service = CreateService(provider);
+        var conversation = await service.CreateConversationAsync(new NodeChatCreateConversationRequest("Cancel before queued", UserId: null, CreatedAtUtc: 130)).ConfigureAwait(false);
+        var assistantMessageId = Guid.NewGuid();
+        var correlation = new NodeChatMessageCorrelation(conversation.ConversationId, assistantMessageId, Guid.NewGuid());
+
+        await service.CreateAssistantPlaceholderAsync(new NodeChatCreateAssistantPlaceholderRequest(conversation.ConversationId, assistantMessageId, correlation.RequestId, CreatedAtUtc: 131))
+                     .ConfigureAwait(false);
+        await service.CancelMessageAsync(new NodeChatCancelRequest(correlation, CancelledAtUtc: 132)).ConfigureAwait(false);
+
+        var queued = await service.MarkAssistantQueuedAsync(correlation, updatedAtUtc: 133).ConfigureAwait(false);
+
+        AssertEx.Equal(NodeChatMessageStatusValues.Cancelled, queued.Status);
+        var loaded = AssertEx.NotNull(await service.GetConversationAsync(conversation.ConversationId).ConfigureAwait(false));
+        var assistant = loaded.Messages.Single(message => message.MessageId == assistantMessageId);
+        AssertEx.Equal(NodeChatMessageStatusValues.Cancelled, assistant.Status);
+        AssertEx.Equal(expected: 132L, assistant.UpdatedAtUtc);
+    }
+
+    [Test]
+    public async Task MarkAssistantStreamingAsync_WhenCancelledBeforeStreaming_DoesNotResurrect()
+    {
+        await using var provider = await BuildProviderAsync("cancel-before-streaming.sqlite").ConfigureAwait(false);
+        var service = CreateService(provider);
+        var conversation = await service.CreateConversationAsync(new NodeChatCreateConversationRequest("Cancel before streaming", UserId: null, CreatedAtUtc: 140)).ConfigureAwait(false);
+        var assistantMessageId = Guid.NewGuid();
+        var correlation = new NodeChatMessageCorrelation(conversation.ConversationId, assistantMessageId, Guid.NewGuid());
+
+        await service.CreateAssistantPlaceholderAsync(new NodeChatCreateAssistantPlaceholderRequest(conversation.ConversationId, assistantMessageId, correlation.RequestId, CreatedAtUtc: 141))
+                     .ConfigureAwait(false);
+        await service.MarkAssistantQueuedAsync(correlation, updatedAtUtc: 142).ConfigureAwait(false);
+        await service.CancelMessageAsync(new NodeChatCancelRequest(correlation, CancelledAtUtc: 143)).ConfigureAwait(false);
+
+        var streaming = await service.MarkAssistantStreamingAsync(correlation, updatedAtUtc: 144).ConfigureAwait(false);
+
+        AssertEx.Equal(NodeChatMessageStatusValues.Cancelled, streaming.Status);
+        var loaded = AssertEx.NotNull(await service.GetConversationAsync(conversation.ConversationId).ConfigureAwait(false));
+        var assistant = loaded.Messages.Single(message => message.MessageId == assistantMessageId);
+        AssertEx.Equal(NodeChatMessageStatusValues.Cancelled, assistant.Status);
+        AssertEx.Equal(expected: 143L, assistant.UpdatedAtUtc);
+    }
+
+    [Test]
+    [Arguments(NodeChatMessageStatusValues.Completed)]
+    [Arguments(NodeChatMessageStatusValues.Failed)]
+    [Arguments(NodeChatMessageStatusValues.Interrupted)]
+    public async Task MarkQueuedAndStreaming_WhenAlreadyTerminal_AreNoOps(string terminalStatus)
+    {
+        await using var provider = await BuildProviderAsync($"mark-after-terminal-{terminalStatus}.sqlite").ConfigureAwait(false);
+        var service = CreateService(provider);
+        var conversation = await service.CreateConversationAsync(new NodeChatCreateConversationRequest("Mark after terminal", UserId: null, CreatedAtUtc: 150)).ConfigureAwait(false);
+        var assistantMessageId = Guid.NewGuid();
+        var correlation = new NodeChatMessageCorrelation(conversation.ConversationId, assistantMessageId, Guid.NewGuid());
+
+        await service.CreateAssistantPlaceholderAsync(new NodeChatCreateAssistantPlaceholderRequest(conversation.ConversationId, assistantMessageId, correlation.RequestId, CreatedAtUtc: 151))
+                     .ConfigureAwait(false);
+        await service.MarkAssistantStreamingAsync(correlation, updatedAtUtc: 152).ConfigureAwait(false);
+        await service.TerminalizeAssistantMessageAsync(new NodeChatTerminalizeMessageRequest(correlation, terminalStatus, UpdatedAtUtc: 153, "final")).ConfigureAwait(false);
+
+        var queued = await service.MarkAssistantQueuedAsync(correlation, updatedAtUtc: 160).ConfigureAwait(false);
+        var streaming = await service.MarkAssistantStreamingAsync(correlation, updatedAtUtc: 161).ConfigureAwait(false);
+
+        AssertEx.Equal(terminalStatus, queued.Status);
+        AssertEx.Equal(terminalStatus, streaming.Status);
+        var loaded = AssertEx.NotNull(await service.GetConversationAsync(conversation.ConversationId).ConfigureAwait(false));
+        var assistant = loaded.Messages.Single(message => message.MessageId == assistantMessageId);
+        AssertEx.Equal(terminalStatus, assistant.Status);
+        AssertEx.Equal(expected: 153L, assistant.UpdatedAtUtc);
+    }
+
+    [Test]
+    public async Task MarkAssistantStreamingAsync_FromPending_SucceedsForPlatformPath()
+    {
+        // The platform coordinator marks streaming straight off the Pending placeholder (no queued step), so Pending must
+        // remain a legal streaming predecessor.
+        await using var provider = await BuildProviderAsync("streaming-from-pending.sqlite").ConfigureAwait(false);
+        var service = CreateService(provider);
+        var conversation = await service.CreateConversationAsync(new NodeChatCreateConversationRequest("Platform streaming", UserId: null, CreatedAtUtc: 170)).ConfigureAwait(false);
+        var assistantMessageId = Guid.NewGuid();
+        var correlation = new NodeChatMessageCorrelation(conversation.ConversationId, assistantMessageId, Guid.NewGuid());
+
+        await service.CreateAssistantPlaceholderAsync(new NodeChatCreateAssistantPlaceholderRequest(conversation.ConversationId, assistantMessageId, correlation.RequestId, CreatedAtUtc: 171))
+                     .ConfigureAwait(false);
+
+        var streaming = await service.MarkAssistantStreamingAsync(correlation, updatedAtUtc: 172).ConfigureAwait(false);
+
+        AssertEx.Equal(NodeChatMessageStatusValues.Streaming, streaming.Status);
+    }
+
+    [Test]
+    public async Task StreamingMarkAndCancel_RunConcurrently_ConvergeOnATerminalOrStreamingState()
+    {
+        // Real concurrency: fire the streaming mark and a cancel in parallel on each of many messages. Whatever the
+        // interleave, the row must converge on exactly one of the two allowed outcomes — Streaming (mark won) or Cancelled
+        // (cancel won) — never a torn state, and never a Cancelled row resurrected to Streaming.
+        await using var provider = await BuildProviderAsync("streaming-cancel-race.sqlite").ConfigureAwait(false);
+        var service = CreateService(provider);
+        var conversation = await service.CreateConversationAsync(new NodeChatCreateConversationRequest("Streaming race", UserId: null, CreatedAtUtc: 180)).ConfigureAwait(false);
+
+        const int iterations = 40;
+        var correlations = new List<NodeChatMessageCorrelation>(iterations);
+        for (var index = 0; index < iterations; index++)
+        {
+            var messageId = Guid.NewGuid();
+            var correlation = new NodeChatMessageCorrelation(conversation.ConversationId, messageId, Guid.NewGuid());
+            correlations.Add(correlation);
+            await service.CreateAssistantPlaceholderAsync(new NodeChatCreateAssistantPlaceholderRequest(conversation.ConversationId, messageId, correlation.RequestId, CreatedAtUtc: 181))
+                         .ConfigureAwait(false);
+            await service.MarkAssistantQueuedAsync(correlation, updatedAtUtc: 182).ConfigureAwait(false);
+        }
+
+        await Task.WhenAll(correlations.Select(async correlation =>
+        {
+            var markTask = Task.Run(() => service.MarkAssistantStreamingAsync(correlation, updatedAtUtc: 183));
+            var cancelTask = Task.Run(() => service.CancelMessageAsync(new NodeChatCancelRequest(correlation, CancelledAtUtc: 184)));
+            await Task.WhenAll(markTask, cancelTask).ConfigureAwait(false);
+        })).ConfigureAwait(false);
+
+        var loaded = AssertEx.NotNull(await service.GetConversationAsync(conversation.ConversationId).ConfigureAwait(false));
+        foreach (var correlation in correlations)
+        {
+            var assistant = loaded.Messages.Single(message => message.MessageId == correlation.MessageId);
+            AssertEx.True(
+                assistant.Status is NodeChatMessageStatusValues.Streaming or NodeChatMessageStatusValues.Cancelled,
+                $"expected streaming or cancelled, got '{assistant.Status}'");
+        }
+    }
+
+    [Test]
     public async Task TerminalizeAssistantMessageAsync_WhenFailed_PersistsPartialContentAndRedactedError()
     {
         await using var provider = await BuildProviderAsync("failed-terminal.sqlite").ConfigureAwait(false);
