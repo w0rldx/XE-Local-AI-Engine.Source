@@ -38,6 +38,12 @@ internal sealed class PreviewWorkflowExecutionService : IPreviewWorkflowExecutio
     private readonly CancellationTokenSource _shutdownCts = new();
     private readonly TimeProvider _timeProvider;
 
+    // Authoritative concurrent-run count: reserved-but-not-yet-added slots PLUS live runs in _runs. A slot is reserved
+    // atomically at the very top of StartAsync (before any await) and released either on a failure path or when the run
+    // leaves _runs, so a burst of concurrent starts can never exceed MaxConcurrentRuns the way a _runs.Count check
+    // followed by async setup and a late TryAdd could.
+    private int _reservedRunCount;
+
     public PreviewWorkflowExecutionService(ILocalModelProviderResolver providerResolver,
         IPreviewWorkflowRunner runner,
         IPreviewWorkflowEventPublisher eventPublisher,
@@ -86,100 +92,145 @@ internal sealed class PreviewWorkflowExecutionService : IPreviewWorkflowExecutio
             throw new PreviewWorkflowValidationException(validation);
         }
 
-        if (_runs.Count >= _options.MaxConcurrentRuns)
+        // Reserve a concurrency slot ATOMICALLY, before any async setup. The old sequence — a _runs.Count check, then
+        // an async provider-resolve + runner.StartAsync, then a late _runs.TryAdd — let several concurrent starts all
+        // observe an under-cap count and then all add, exceeding MaxConcurrentRuns. The reservation is released on every
+        // failure path below (finally) and, once the run is live in _runs, when it leaves (RemoveAndDisposeAsync /
+        // ShutdownAsync).
+        if (!TryReserveRunSlot())
         {
             throw new PreviewWorkflowCapReachedException(_options.MaxConcurrentRuns);
         }
 
-        var runId = Guid.NewGuid();
-
-        // Resolve the PROVIDER for each DISTINCT agent model up front (the model→provider map read is async; client/process
-        // creation stays lazy). This also enforces the loaded-cap reject-at-start: if the
-        // graph's distinct-model count exceeds the supervisor cap, throw NOW — before spawning any process — rather
-        // than evict-reload thrashing mid-run.
-        var providersByModel = await ResolveProvidersPerDistinctModelAsync(graph, cancellationToken).ConfigureAwait(false);
-
-        // One lazily-created NODE-LOCAL chat client per distinct model (privacy invariant — only the local provider; no path
-        // here to a shared/cloud client or an Azure Foundry factory). The client (and, for llama-server, its backing
-        // process) is created on FIRST use inside the drain loop, not up front: a deferred llama-server client spawns
-        // its process on the first model call; an Ollama client is cheap. Agents sharing a model share one client.
-        // CreateChatClient does NO health check — a model-down/not-installed failure surfaces on the first model call
-        // inside the drain loop and becomes preview.node.failed + preview.run.failed there.
-        var clientsByModel = new ConcurrentDictionary<string, IChatClient>(StringComparer.Ordinal);
-
-        PreviewWorkflowRunHandle handle;
+        var reservationCommitted = false;
         try
         {
-            var definition = PreviewWorkflowGraphMapper.ToDefinition(graph);
-            var session = await _runner.StartAsync(definition, ResolveClient, cancellationToken).ConfigureAwait(false);
-            handle = new PreviewWorkflowRunHandle(runId,
-                new LiveClientCollection(clientsByModel),
-                session,
-                connectionId,
-                _timeProvider,
-                _loggerFactory.CreateLogger<PreviewWorkflowRunHandle>());
-        }
-        catch
-        {
-            // The session never came up — dispose every client we lazily created so none leak.
-            foreach (var client in clientsByModel.Values)
+            var runId = Guid.NewGuid();
+
+            // Resolve the PROVIDER for each DISTINCT agent model up front (the model→provider map read is async; client/process
+            // creation stays lazy). This also enforces the loaded-cap reject-at-start: if the
+            // graph's distinct-model count exceeds the supervisor cap, throw NOW — before spawning any process — rather
+            // than evict-reload thrashing mid-run.
+            var providersByModel = await ResolveProvidersPerDistinctModelAsync(graph, cancellationToken).ConfigureAwait(false);
+
+            // One lazily-created NODE-LOCAL chat client per distinct model (privacy invariant — only the local provider; no path
+            // here to a shared/cloud client or an Azure Foundry factory). The client (and, for llama-server, its backing
+            // process) is created on FIRST use inside the drain loop, not up front: a deferred llama-server client spawns
+            // its process on the first model call; an Ollama client is cheap. Agents sharing a model share one client.
+            // CreateChatClient does NO health check — a model-down/not-installed failure surfaces on the first model call
+            // inside the drain loop and becomes preview.node.failed + preview.run.failed there.
+            var clientsByModel = new ConcurrentDictionary<string, IChatClient>(StringComparer.Ordinal);
+
+            PreviewWorkflowRunHandle handle;
+            try
             {
-                client.Dispose();
+                var definition = PreviewWorkflowGraphMapper.ToDefinition(graph);
+                var session = await _runner.StartAsync(definition, ResolveClient, cancellationToken).ConfigureAwait(false);
+                handle = new PreviewWorkflowRunHandle(runId,
+                    new LiveClientCollection(clientsByModel),
+                    session,
+                    connectionId,
+                    _timeProvider,
+                    _loggerFactory.CreateLogger<PreviewWorkflowRunHandle>());
+            }
+            catch
+            {
+                // The session never came up — dispose every client we lazily created so none leak.
+                foreach (var client in clientsByModel.Values)
+                {
+                    client.Dispose();
+                }
+
+                throw;
             }
 
-            throw;
-        }
-
-        IChatClient ResolveClient(string modelId)
-        {
-            // Lazy per-model resolution: build the client (and, for llama-server, ensure-run its process) on first use,
-            // then cache it for the run so agents sharing a model share one client. The provider was resolved up front
-            // within the cap; an unexpected model id (not in the validated graph) is a defensive error.
-            return clientsByModel.GetOrAdd(modelId, id =>
+            IChatClient ResolveClient(string modelId)
             {
-                if (!providersByModel.TryGetValue(id, out var provider))
+                // Lazy per-model resolution: build the client (and, for llama-server, ensure-run its process) on first use,
+                // then cache it for the run so agents sharing a model share one client. The provider was resolved up front
+                // within the cap; an unexpected model id (not in the validated graph) is a defensive error.
+                return clientsByModel.GetOrAdd(modelId, id =>
                 {
-                    throw new InvalidOperationException($"No node-local provider was resolved for model '{id}'.");
-                }
+                    if (!providersByModel.TryGetValue(id, out var provider))
+                    {
+                        throw new InvalidOperationException($"No node-local provider was resolved for model '{id}'.");
+                    }
 
-                return provider.CreateChatClient(new LocalModelSelection
-                {
-                    ModelName = id,
-                    ProviderName = provider.ProviderName
+                    return provider.CreateChatClient(new LocalModelSelection
+                    {
+                        ModelName = id,
+                        ProviderName = provider.ProviderName
+                    });
                 });
-            });
-        }
+            }
 
-        if (!_runs.TryAdd(runId, handle))
-        {
-            await handle.DisposeAsync().ConfigureAwait(false);
-            throw new InvalidOperationException($"A preview run with id '{runId}' already exists.");
-        }
-
-        // Create the replay log BEFORE the first publish so RunStarted is buffered as seq 0.
-        _ = GetOrCreateEventLog(runId);
-
-        await PublishRunAsync(PreviewWorkflowHubEvents.RunStarted, runId, cancellationToken).ConfigureAwait(false);
-
-        // Observe the drain task's faults (no swallowed UnobservedTaskException): the loop itself converts exceptions to
-        // preview.run.failed, and the continuation logs anything that still escapes.
-        var drainTask = Task.Run(() => DrainAsync(handle), CancellationToken.None);
-        _drainTasks[runId] = drainTask;
-        _ = drainTask.ContinueWith((t, state) =>
+            if (!_runs.TryAdd(runId, handle))
             {
-                var (svc, id) = ((PreviewWorkflowExecutionService Service, Guid RunId))state!;
-                svc._drainTasks.TryRemove(id, out _);
-                if (t.IsFaulted)
-                {
-                    svc._logger.LogError(t.Exception, "Preview run {RunId} drain task faulted unexpectedly.", id);
-                }
-            },
-            (Service: this, RunId: runId),
-            CancellationToken.None,
-            TaskContinuationOptions.ExecuteSynchronously,
-            TaskScheduler.Default);
+                await handle.DisposeAsync().ConfigureAwait(false);
+                throw new InvalidOperationException($"A preview run with id '{runId}' already exists.");
+            }
 
-        return runId;
+            // The reservation now belongs to the live run: it is released when the run leaves _runs, not by the finally.
+            reservationCommitted = true;
+
+            // Create the replay log BEFORE the first publish so RunStarted is buffered as seq 0.
+            _ = GetOrCreateEventLog(runId);
+
+            await PublishRunAsync(PreviewWorkflowHubEvents.RunStarted, runId, cancellationToken).ConfigureAwait(false);
+
+            // Observe the drain task's faults (no swallowed UnobservedTaskException): the loop itself converts exceptions to
+            // preview.run.failed, and the continuation logs anything that still escapes.
+            var drainTask = Task.Run(() => DrainAsync(handle), CancellationToken.None);
+            _drainTasks[runId] = drainTask;
+            _ = drainTask.ContinueWith((t, state) =>
+                {
+                    var (svc, id) = ((PreviewWorkflowExecutionService Service, Guid RunId))state!;
+                    svc._drainTasks.TryRemove(id, out _);
+                    if (t.IsFaulted)
+                    {
+                        svc._logger.LogError(t.Exception, "Preview run {RunId} drain task faulted unexpectedly.", id);
+                    }
+                },
+                (Service: this, RunId: runId),
+                CancellationToken.None,
+                TaskContinuationOptions.ExecuteSynchronously,
+                TaskScheduler.Default);
+
+            return runId;
+        }
+        finally
+        {
+            if (!reservationCommitted)
+            {
+                ReleaseRunSlot();
+            }
+        }
+    }
+
+    // Atomic compare-and-increment of the concurrent-run reservation against MaxConcurrentRuns. Returns false (the
+    // caller rejects with PreviewWorkflowCapReachedException) when the cap is already taken, so concurrent starts
+    // cannot both claim the last slot.
+    private bool TryReserveRunSlot()
+    {
+        var cap = _options.MaxConcurrentRuns;
+        while (true)
+        {
+            var current = Volatile.Read(ref _reservedRunCount);
+            if (current >= cap)
+            {
+                return false;
+            }
+
+            if (Interlocked.CompareExchange(ref _reservedRunCount, current + 1, current) == current)
+            {
+                return true;
+            }
+        }
+    }
+
+    private void ReleaseRunSlot()
+    {
+        Interlocked.Decrement(ref _reservedRunCount);
     }
 
     public async Task<PreviewRunCommandOutcome> ContinueAsync(Guid runId, CancellationToken cancellationToken = default)
@@ -500,6 +551,8 @@ internal sealed class PreviewWorkflowExecutionService : IPreviewWorkflowExecutio
     {
         if (_runs.TryRemove(handle.RunId, out _))
         {
+            // The run leaving _runs frees its reserved concurrency slot for the next start.
+            ReleaseRunSlot();
             await handle.DisposeAsync().ConfigureAwait(false);
         }
     }
@@ -661,6 +714,7 @@ internal sealed class PreviewWorkflowExecutionService : IPreviewWorkflowExecutio
         {
             if (_runs.TryRemove(runId, out var handle))
             {
+                ReleaseRunSlot();
                 await handle.DisposeAsync().ConfigureAwait(false);
             }
         }

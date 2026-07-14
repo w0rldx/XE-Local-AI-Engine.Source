@@ -38,14 +38,17 @@ public static class OllamaLocalModelProviderServiceCollectionExtensions
         ArgumentNullException.ThrowIfNull(services);
         ArgumentNullException.ThrowIfNull(resolveRegistration);
 
-        _ = services.AddSingleton<IOllamaApiClient>(serviceProvider =>
+        // The factory owns the ONE hardened transport. Every Ollama client — the singleton management client below and
+        // each per-model chat/embedding client the provider mints — is created through it, so a routed send inherits the
+        // same fail-fast connect bound and unreachable-daemon normalization instead of a raw default transport.
+        _ = services.AddSingleton(serviceProvider =>
         {
             var registration = resolveRegistration(serviceProvider);
 
-#pragma warning disable CA2000 // The handler and HttpClient lifetimes are owned by the registered singleton Ollama client.
+#pragma warning disable CA2000 // The handler and HttpClient lifetimes transfer to the returned factory singleton, which disposes them.
             // SocketsHttpHandler.ConnectTimeout bounds only TCP connection establishment, so a refused/absent endpoint
             // fails fast while the 5-minute HttpClient.Timeout still covers genuine long pulls once connected. The
-            // handler is owned by the HttpClient (disposeHandler: true), which the singleton OllamaApiClient owns.
+            // handler is owned by the HttpClient (disposeHandler: true), which the factory owns.
             var handler = new SocketsHttpHandler
             {
                 ConnectTimeout = OllamaConnectTimeout
@@ -62,11 +65,14 @@ public static class OllamaLocalModelProviderServiceCollectionExtensions
                 Timeout = TimeSpan.FromMinutes(5)
             };
 
-            return new OllamaApiClient(httpClient)
-            {
-                SelectedModel = registration.Model
-            };
+            return new OllamaApiClientFactory(httpClient, ownsHttpClient: true);
 #pragma warning restore CA2000
+        });
+
+        _ = services.AddSingleton<IOllamaApiClient>(serviceProvider =>
+        {
+            var registration = resolveRegistration(serviceProvider);
+            return serviceProvider.GetRequiredService<OllamaApiClientFactory>().CreateClient(registration.Model);
         });
 
         _ = services.AddSingleton<ILocalModelProvider, OllamaLocalModelProvider>();
