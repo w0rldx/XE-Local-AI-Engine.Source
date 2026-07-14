@@ -133,9 +133,12 @@ try
     // (TraceIdentifier). The listener is scoped to "Microsoft.AspNetCore" — the only source that produces the request
     // activities this correlation needs — rather than every source in the process. AllData makes the listener request
     // all data for activities that scoped source creates, so their W3C trace/span ids are populated; it does not by
-    // itself record activities (that would need AllDataAndRecorded) or populate anything for other sources, so on this
-    // path the emitted traceresponse trace-flags byte is "00" (not-recorded). When Aspire is ON, the OTel listeners
-    // coexist with this one. Process-global, so set once before Build().
+    // itself record them (that would need AllDataAndRecorded). The emitted traceresponse trace-flags byte follows the
+    // activity's actual recorded state: with only this listener attached (no started TracerProvider) activities are
+    // never recorded, so the byte is "00" regardless of the inbound sampled flag. In the normal host the OpenTelemetry
+    // TracerProvider is also running (AddServiceDefaults/ConfigureOpenTelemetry registers it in every mode), and its
+    // default ParentBased(AlwaysOn) sampler DOES record — a sampled inbound parent then yields "01", an unsampled
+    // parent stays "00". Process-global, so set once before Build().
     Activity.DefaultIdFormat = ActivityIdFormat.W3C;
     Activity.ForceDefaultIdFormat = true;
 #pragma warning disable CA2000 // The listener is owned by the static ActivitySource registry for the app's lifetime.
