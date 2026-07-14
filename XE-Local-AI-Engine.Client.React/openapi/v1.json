@@ -8680,7 +8680,7 @@
             "nullable": true
           },
           "seed": {
-            "type": "integer",
+            "type": "string",
             "nullable": true
           },
           "stop": {
@@ -11900,7 +11900,7 @@
             "nullable": true
           },
           "seed": {
-            "type": "integer"
+            "type": "string"
           },
           "width": {
             "type": "integer",
@@ -11973,7 +11973,8 @@
             "nullable": true
           },
           "seed": {
-            "type": "integer"
+            "type": "string",
+            "nullable": true
           },
           "width": {
             "type": "integer",

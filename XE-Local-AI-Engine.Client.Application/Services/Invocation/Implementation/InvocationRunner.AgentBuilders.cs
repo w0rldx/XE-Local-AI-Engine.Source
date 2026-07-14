@@ -318,7 +318,9 @@ public sealed partial class InvocationRunner
             RepeatLastN = sampling.RepeatLastN,
             PresencePenalty = sampling.PresencePenalty,
             FrequencyPenalty = sampling.FrequencyPenalty,
-            Seed = sampling.Seed,
+            // The wire seed is a string (precision-safe). It is validated at the send boundary, so parse leniently here:
+            // an unparseable value maps to no override rather than throwing on the invocation hot path.
+            Seed = SeedValue.TryParse(sampling.Seed, out var seed, out _) ? seed : null,
             Stop = sampling.Stop,
             NumCtx = sampling.NumCtx
         };

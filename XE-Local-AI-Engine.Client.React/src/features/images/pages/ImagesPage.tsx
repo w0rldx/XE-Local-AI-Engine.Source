@@ -44,7 +44,8 @@ export function ImagesPage() {
 					modelName: values.modelName,
 					prompt: values.prompt,
 					negativePrompt: values.negativePrompt ?? null,
-					seed: values.seed,
+					// The seed rides the wire as a precision-safe string (the form keeps it as a bounded number).
+					seed: String(values.seed),
 					width: values.width,
 					height: values.height,
 					steps: values.steps,

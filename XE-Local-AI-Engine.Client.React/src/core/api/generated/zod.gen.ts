@@ -369,7 +369,7 @@ export const zXeLocalAiEngineClientModelsSamplingOptions = z.object({
 		.nullish(),
 	presencePenalty: z.number().nullish(),
 	frequencyPenalty: z.number().nullish(),
-	seed: z.int().nullish(),
+	seed: z.string().nullish(),
 	stop: z.array(z.string()).nullish(),
 	numCtx: z
 		.int()
@@ -1618,7 +1618,7 @@ export const zXeLocalAiEngineClientEndpointsImagesV1ImageJobResponse = z.object(
 	modelName: z.string(),
 	prompt: z.string(),
 	negativePrompt: z.string().nullish(),
-	seed: z.int(),
+	seed: z.string(),
 	width: z
 		.int()
 		.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })
@@ -1647,7 +1647,7 @@ export const zXeLocalAiEngineClientEndpointsImagesV1CreateImageJobRequest = z.ob
 	modelName: z.string(),
 	prompt: z.string(),
 	negativePrompt: z.string().nullish(),
-	seed: z.int().optional(),
+	seed: z.string().nullish(),
 	width: z
 		.int()
 		.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })

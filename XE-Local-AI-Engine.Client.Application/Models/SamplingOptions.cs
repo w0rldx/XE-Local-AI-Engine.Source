@@ -27,7 +27,10 @@ public sealed record SamplingOptions
 
     public float? FrequencyPenalty { get; init; }
 
-    public long? Seed { get; init; }
+    // Carried as a string, not a number: a seed is an unconstrained 64-bit value, so a JSON number would lose precision
+    // above 2^53 on the wire (see SeedValue). Null means "no override"; a non-null value is validated/parsed to long via
+    // SeedValue at the ingress boundary (chat send + node-settings save) and again when mapped onto the invocation options.
+    public string? Seed { get; init; }
 
     public IReadOnlyList<string>? Stop { get; init; }
 

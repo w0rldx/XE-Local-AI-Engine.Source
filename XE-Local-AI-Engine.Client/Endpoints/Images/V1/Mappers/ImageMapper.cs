@@ -1,5 +1,6 @@
 namespace XE_Local_AI_Engine.Client.Endpoints.Images.V1.Mappers;
 
+using XE_Local_AI_Engine.Client.Models;
 using XE_Local_AI_Engine.Client.Persistence.Stores;
 using XE_Local_AI_Engine.Client.Services.Images;
 using XE_Local_AI_Engine.Providers.Abstractions.Image;
@@ -20,12 +21,16 @@ internal static class ImageMapper
     {
         ArgumentNullException.ThrowIfNull(request);
 
+        // The wire seed is a precision-safe string; the endpoint has already validated it. A blank seed maps to the
+        // coordinator's -1 random-seed sentinel; a parsed value carries through exactly.
+        _ = SeedValue.TryParse(request.Seed, out var seed, out _);
+
         return new CreateImageJobInput
         {
             ModelName = request.ModelName,
             Prompt = request.Prompt,
             NegativePrompt = request.NegativePrompt,
-            Seed = request.Seed,
+            Seed = seed ?? -1,
             Width = request.Width,
             Height = request.Height,
             Steps = request.Steps,
@@ -48,7 +53,7 @@ internal static class ImageMapper
             ModelName = view.ModelName,
             Prompt = view.Prompt,
             NegativePrompt = view.NegativePrompt,
-            Seed = view.Seed,
+            Seed = SeedValue.ToWire(view.Seed),
             Width = view.Width,
             Height = view.Height,
             Steps = view.Steps,
