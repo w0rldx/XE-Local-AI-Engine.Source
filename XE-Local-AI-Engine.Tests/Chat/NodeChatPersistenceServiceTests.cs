@@ -1140,6 +1140,130 @@ public sealed class NodeChatPersistenceServiceTests : IDisposable
     }
 
     [Test]
+    public async Task BranchConversationAsync_WithLateRegeneratedEarlyRevisionSelected_CopiesItAtTheEarlyPosition()
+    {
+        // Regression: an EARLY turn regenerated AFTER later turns exist mints a sibling whose raw sequence lands PAST
+        // the later turns. Group-anchored eligibility must still branch that sibling at the early turn's position.
+        await using var provider = await BuildProviderAsync("branch-late-early-selected.sqlite").ConfigureAwait(false);
+        var service = CreateService(provider);
+        var source = await service.CreateConversationAsync(new NodeChatCreateConversationRequest("Source", "node", CreatedAtUtc: 1500)).ConfigureAwait(false);
+
+        await service.PersistUserMessageAsync(new NodeChatPersistUserMessageRequest(source.ConversationId, Guid.NewGuid(), "q1", CreatedAtUtc: 1501)).ConfigureAwait(false);
+        var earlyAssistantId = Guid.NewGuid();
+        await SeedCompletedAssistantAsync(service, source.ConversationId, earlyAssistantId, Guid.NewGuid(), "EARLY-ORIGINAL", createdAtUtc: 1502).ConfigureAwait(false);
+        await service.PersistUserMessageAsync(new NodeChatPersistUserMessageRequest(source.ConversationId, Guid.NewGuid(), "q2", CreatedAtUtc: 1503)).ConfigureAwait(false);
+        var laterAssistantId = Guid.NewGuid();
+        await SeedCompletedAssistantAsync(service, source.ConversationId, laterAssistantId, Guid.NewGuid(), "LATER-ANSWER", createdAtUtc: 1504).ConfigureAwait(false);
+
+        // Regenerate the EARLY turn NOW: the sibling gets a sequence AFTER "LATER-ANSWER".
+        var lateSiblingId = Guid.NewGuid();
+        var lateSiblingRequestId = Guid.NewGuid();
+        var variant = AssertEx.NotNull(await service
+                                             .CreateMessageVariantAsync(new NodeChatCreateMessageVariantRequest(source.ConversationId, earlyAssistantId, lateSiblingId, lateSiblingRequestId,
+                                                 CreatedAtUtc: 1505))
+                                             .ConfigureAwait(false));
+        await service.TerminalizeAssistantMessageAsync(new NodeChatTerminalizeMessageRequest(
+                         new NodeChatMessageCorrelation(source.ConversationId, lateSiblingId, lateSiblingRequestId),
+                         NodeChatMessageStatusValues.Completed,
+                         UpdatedAtUtc: 1506,
+                         "EARLY-REGEN"))
+                     .ConfigureAwait(false);
+
+        // Branch from the LATER turn, pinning the early group to its late-created sibling (what the operator was viewing).
+        var selection = new Dictionary<Guid, Guid> { [variant.VariantGroupId] = lateSiblingId };
+        var branch = AssertEx.NotNull(await service
+                                            .BranchConversationAsync(new NodeChatBranchConversationRequest(source.ConversationId, laterAssistantId, CreatedAtUtc: 1510, selection))
+                                            .ConfigureAwait(false));
+
+        AssertEx.Equal(expected: 4, branch.CopiedMessageCount);
+        var branched = AssertEx.NotNull(await service.GetConversationAsync(branch.BranchedConversationId).ConfigureAwait(false));
+        var contents = branched.Messages.Select(message => message.Content).ToList();
+        // Ordered by anchor: the late-created sibling lands at the EARLY turn's slot, not at the tail.
+        AssertEx.Equal("q1|EARLY-REGEN|q2|LATER-ANSWER", string.Join("|", contents));
+        AssertEx.False(contents.Contains("EARLY-ORIGINAL"), "the unselected original of the early group must not be copied");
+    }
+
+    [Test]
+    public async Task BranchConversationAsync_WithLateRegeneratedEarlyRevisionAndNoSelection_KeepsNewestMember()
+    {
+        // Same shape as above but with NO explicit selection: the branch must carry the NEWEST member of the early
+        // group (what the UI displays by default), not the old original the pre-fix per-message filter would fall back to.
+        await using var provider = await BuildProviderAsync("branch-late-early-default.sqlite").ConfigureAwait(false);
+        var service = CreateService(provider);
+        var source = await service.CreateConversationAsync(new NodeChatCreateConversationRequest("Source", "node", CreatedAtUtc: 1600)).ConfigureAwait(false);
+
+        await service.PersistUserMessageAsync(new NodeChatPersistUserMessageRequest(source.ConversationId, Guid.NewGuid(), "q1", CreatedAtUtc: 1601)).ConfigureAwait(false);
+        var earlyAssistantId = Guid.NewGuid();
+        await SeedCompletedAssistantAsync(service, source.ConversationId, earlyAssistantId, Guid.NewGuid(), "EARLY-ORIGINAL", createdAtUtc: 1602).ConfigureAwait(false);
+        await service.PersistUserMessageAsync(new NodeChatPersistUserMessageRequest(source.ConversationId, Guid.NewGuid(), "q2", CreatedAtUtc: 1603)).ConfigureAwait(false);
+        var laterAssistantId = Guid.NewGuid();
+        await SeedCompletedAssistantAsync(service, source.ConversationId, laterAssistantId, Guid.NewGuid(), "LATER-ANSWER", createdAtUtc: 1604).ConfigureAwait(false);
+
+        var lateSiblingId = Guid.NewGuid();
+        var lateSiblingRequestId = Guid.NewGuid();
+        await service.CreateMessageVariantAsync(new NodeChatCreateMessageVariantRequest(source.ConversationId, earlyAssistantId, lateSiblingId, lateSiblingRequestId, CreatedAtUtc: 1605))
+                     .ConfigureAwait(false);
+        await service.TerminalizeAssistantMessageAsync(new NodeChatTerminalizeMessageRequest(
+                         new NodeChatMessageCorrelation(source.ConversationId, lateSiblingId, lateSiblingRequestId),
+                         NodeChatMessageStatusValues.Completed,
+                         UpdatedAtUtc: 1606,
+                         "EARLY-REGEN"))
+                     .ConfigureAwait(false);
+
+        var branch = AssertEx.NotNull(await service
+                                            .BranchConversationAsync(new NodeChatBranchConversationRequest(source.ConversationId, laterAssistantId, CreatedAtUtc: 1610))
+                                            .ConfigureAwait(false));
+
+        AssertEx.Equal(expected: 4, branch.CopiedMessageCount);
+        var branched = AssertEx.NotNull(await service.GetConversationAsync(branch.BranchedConversationId).ConfigureAwait(false));
+        var contents = branched.Messages.Select(message => message.Content).ToList();
+        AssertEx.Equal("q1|EARLY-REGEN|q2|LATER-ANSWER", string.Join("|", contents));
+        AssertEx.False(contents.Contains("EARLY-ORIGINAL"), "the default must be the newest member, not the pre-fix old original");
+    }
+
+    [Test]
+    public async Task BranchConversationAsync_ExcludesGroupAnchoredDownstreamOfCutoff()
+    {
+        // A variant group whose ANCHOR (earliest member) sits after the cutoff is genuinely downstream and must be
+        // excluded entirely, even when the caller supplies a selection for it (dropped, not thrown).
+        await using var provider = await BuildProviderAsync("branch-downstream-group.sqlite").ConfigureAwait(false);
+        var service = CreateService(provider);
+        var source = await service.CreateConversationAsync(new NodeChatCreateConversationRequest("Source", "node", CreatedAtUtc: 1700)).ConfigureAwait(false);
+
+        await service.PersistUserMessageAsync(new NodeChatPersistUserMessageRequest(source.ConversationId, Guid.NewGuid(), "q1", CreatedAtUtc: 1701)).ConfigureAwait(false);
+        var cutoffAssistantId = Guid.NewGuid();
+        await SeedCompletedAssistantAsync(service, source.ConversationId, cutoffAssistantId, Guid.NewGuid(), "ANSWER-1", createdAtUtc: 1702).ConfigureAwait(false);
+        await service.PersistUserMessageAsync(new NodeChatPersistUserMessageRequest(source.ConversationId, Guid.NewGuid(), "q2", CreatedAtUtc: 1703)).ConfigureAwait(false);
+        var downstreamAssistantId = Guid.NewGuid();
+        await SeedCompletedAssistantAsync(service, source.ConversationId, downstreamAssistantId, Guid.NewGuid(), "DOWN-ORIGINAL", createdAtUtc: 1704).ConfigureAwait(false);
+        var downSiblingId = Guid.NewGuid();
+        var downSiblingRequestId = Guid.NewGuid();
+        var downstreamVariant = AssertEx.NotNull(await service
+                                                       .CreateMessageVariantAsync(new NodeChatCreateMessageVariantRequest(source.ConversationId, downstreamAssistantId, downSiblingId,
+                                                           downSiblingRequestId, CreatedAtUtc: 1705))
+                                                       .ConfigureAwait(false));
+        await service.TerminalizeAssistantMessageAsync(new NodeChatTerminalizeMessageRequest(
+                         new NodeChatMessageCorrelation(source.ConversationId, downSiblingId, downSiblingRequestId),
+                         NodeChatMessageStatusValues.Completed,
+                         UpdatedAtUtc: 1706,
+                         "DOWN-REGEN"))
+                     .ConfigureAwait(false);
+
+        // Branch from the FIRST assistant with a selection for the downstream group: the group is anchored after the
+        // cutoff, so the entry is dropped and neither downstream revision is copied.
+        var selection = new Dictionary<Guid, Guid> { [downstreamVariant.VariantGroupId] = downSiblingId };
+        var branch = AssertEx.NotNull(await service
+                                            .BranchConversationAsync(new NodeChatBranchConversationRequest(source.ConversationId, cutoffAssistantId, CreatedAtUtc: 1710, selection))
+                                            .ConfigureAwait(false));
+
+        AssertEx.Equal(expected: 2, branch.CopiedMessageCount);
+        var branched = AssertEx.NotNull(await service.GetConversationAsync(branch.BranchedConversationId).ConfigureAwait(false));
+        var contents = branched.Messages.Select(message => message.Content).ToList();
+        AssertEx.Equal("q1|ANSWER-1", string.Join("|", contents));
+        AssertEx.False(contents.Contains("DOWN-ORIGINAL") || contents.Contains("DOWN-REGEN"), "a group anchored downstream of the cutoff must be excluded");
+    }
+
+    [Test]
     public async Task BranchConversationAsync_WithInvalidSelection_RejectsFailClosed()
     {
         await using var provider = await BuildProviderAsync("branch-selected-invalid.sqlite").ConfigureAwait(false);

@@ -36,15 +36,33 @@ internal sealed class NodeChatVariantBranchService(NodeChatPersistenceWriter wri
             return null;
         }
 
-        // Collapse variant groups so the branch is a LINEAR thread: exactly one revision per group, ordered by
-        // sequence, with all non-variant messages passing through. The selected revision per group comes from the
-        // caller-supplied map (the path the user was actually viewing); a group with no valid selection falls back
-        // to its newest eligible revision. The branch-point turn always contributes exactly the cutoff message,
-        // overriding any caller entry for its group. Without this collapse the copied siblings would render as
-        // duplicate stacked assistant turns (variant_group_id is dropped on copy below). (RC fix + MED-008.)
-        var eligible = source.Messages.Where(message => message.Sequence <= cutoff.Sequence).ToArray();
-        var selection = BuildValidatedSelection(request.SelectedRevisions, source.Messages, cutoff);
-        var copies = SelectedPathResolver.Resolve(eligible, selection);
+        // Collapse variant groups so the branch is a LINEAR thread: exactly one revision per group, positioned at the
+        // group's ANCHOR (its earliest member's sequence), mirroring the frontend, which renders a variant group at its
+        // oldest sibling and lets any sibling be the active revision (MessageRevisionGrouping.ts). Anchoring by group —
+        // rather than by each message's own sequence — is what makes late regenerations branch correctly: regenerating
+        // an EARLY turn AFTER later turns exist mints a sibling whose sequence lands PAST those later turns, yet that
+        // sibling still belongs to the early turn and must branch at the early position. The selected revision per group
+        // comes from the caller-supplied map (the path the user was viewing); a group with no valid selection falls back
+        // to its newest member. The branch-point turn always contributes exactly the cutoff message, overriding any
+        // caller entry for its group. Without this collapse the copied siblings would render as duplicate stacked
+        // assistant turns (variant_group_id is dropped on copy below). (RC fix + MED-008 + late-sibling anchoring.)
+        var anchorByGroup = source.Messages.Where(message => message.VariantGroupId is not null)
+                                  .GroupBy(message => message.VariantGroupId!.Value)
+                                  .ToDictionary(group => group.Key, group => group.Min(member => member.Sequence));
+
+        int AnchorSequence(NodeChatPersistedMessageDto message) =>
+            message.VariantGroupId is { } groupId ? anchorByGroup[groupId] : message.Sequence;
+
+        // The cutoff's anchored position defines how far the branch reaches: a group participates iff its own anchor is
+        // at/upstream of it. When the cutoff is itself a late-created sibling of an early turn, this resolves to the
+        // early position it renders at, not its late raw sequence.
+        var cutoffAnchor = AnchorSequence(cutoff);
+        var eligible = source.Messages.Where(message => AnchorSequence(message) <= cutoffAnchor).ToArray();
+        var selection = BuildValidatedSelection(request.SelectedRevisions, source.Messages, cutoff, anchorByGroup, cutoffAnchor);
+        // The resolver orders by each chosen sibling's own sequence; re-order by anchor so a late-created sibling lands
+        // at its group's position instead of the tail. Each copy is also stamped with the anchor sequence below.
+        IReadOnlyList<NodeChatPersistedMessageDto> copies =
+            SelectedPathResolver.Resolve(eligible, selection).OrderBy(AnchorSequence).ToArray();
         var branchedConversationId = Guid.NewGuid();
 
         return await _writer.ExecuteConversationExclusiveAsync(branchedConversationId,
@@ -88,7 +106,10 @@ internal sealed class NodeChatVariantBranchService(NodeChatPersistenceWriter wri
                     var copyMessageId = Guid.NewGuid();
                     AddParameter(messageCommand, "$message_id", copyMessageId);
                     AddParameter(messageCommand, "$conversation_id", branchedConversationId);
-                    AddParameter(messageCommand, "$sequence", message.Sequence);
+                    // Stamp the copy at its group's anchored position (not the chosen sibling's own sequence) so a
+                    // late-created sibling of an early turn lands where the turn renders, keeping the new linear thread
+                    // ordered exactly as the operator saw it. Anchor sequences are unique (each is a distinct source row).
+                    AddParameter(messageCommand, "$sequence", AnchorSequence(message));
                     AddParameter(messageCommand, "$role", message.Role);
                     AddParameter(messageCommand, "$content", dbContext.EncryptMessageContent(message.Content, branchedConversationId, copyMessageId));
                     AddParameter(messageCommand, "$metadata_json",
@@ -120,13 +141,16 @@ internal sealed class NodeChatVariantBranchService(NodeChatPersistenceWriter wri
     // entries that actually bear on the branch (upstream of the cutoff). Fails CLOSED on an integrity violation —
     // an entry whose message does not belong to the conversation, or that is keyed under a variant group it is not
     // a member of — because such an entry can only come from a stale/tampered client and must not silently pick a
-    // fallback revision. An otherwise-valid entry whose message sits AFTER the cutoff (a group the user navigated
-    // downstream of the branch point) is simply dropped: it plays no part in this branch's linear thread, so the
-    // group resolves to its newest ELIGIBLE revision via the resolver. Returns null when there is nothing to pin,
-    // which drives the legacy newest-per-group behavior.
+    // fallback revision. An otherwise-valid entry for a group whose ANCHOR sits after the cutoff (a group the user
+    // navigated downstream of the branch point) is simply dropped: it plays no part in this branch's linear thread.
+    // The comparison is on the group anchor, NOT the selected message's own sequence — a legitimately selected
+    // late-created sibling of an early (upstream) turn carries a sequence past the cutoff yet still belongs to the
+    // branch, and must be kept. Returns null when there is nothing to pin, driving the legacy newest-per-group default.
     private static IReadOnlyDictionary<Guid, Guid>? BuildValidatedSelection(IReadOnlyDictionary<Guid, Guid>? requested,
         IReadOnlyList<NodeChatPersistedMessageDto> allMessages,
-        NodeChatPersistedMessageDto cutoff)
+        NodeChatPersistedMessageDto cutoff,
+        IReadOnlyDictionary<Guid, int> anchorByGroup,
+        int cutoffAnchor)
     {
         var selection = new Dictionary<Guid, Guid>();
         if (requested is not null && requested.Count > 0)
@@ -140,9 +164,9 @@ internal sealed class NodeChatVariantBranchService(NodeChatPersistenceWriter wri
                     throw new NodeChatInvalidBranchSelectionException(cutoff.ConversationId, groupId, messageId);
                 }
 
-                if (message.Sequence > cutoff.Sequence)
+                if (anchorByGroup.GetValueOrDefault(groupId, message.Sequence) > cutoffAnchor)
                 {
-                    // Valid, but downstream of the branch point — not part of this branch. Drop it.
+                    // The group is anchored downstream of the branch point — not part of this branch. Drop it.
                     continue;
                 }
 
