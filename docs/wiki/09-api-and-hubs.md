@@ -19,7 +19,7 @@ If you are adding or changing an endpoint or hub, this is the page that tells yo
  │ Node Web Server  (XE-Local-AI-Engine.Client)                          │
  │  • UseExceptionHandler  → IExceptionHandler chain → RFC7807           │
  │  • MapHealthChecks /health/live  /health/ready                        │
- │  • LocalApiSecurityMiddleware (loopback Host/Origin guard)            │
+ │  • LocalApiSecurityMiddleware (loopback peer + Host/Origin guard)     │
  │  • UseAuthentication / UseAuthorization (JWT bearer, Operator policy) │
  │  • UseFastEndpoints (RoutePrefix = api/local/v1)                      │
  │  • MapHub<LocalChat|Scheduler|Preview|GgufDownload>                  │
@@ -160,7 +160,8 @@ Two endpoints, mapped **before** auth so an orchestrator/probe can reach them un
 
 ### Security middleware & auth ordering
 
-- `LocalApiSecurityMiddleware` (`Endpoints/Common/LocalApiSecurityMiddleware.cs`) runs before routing/auth. For any path under `/api/local/v1` it returns **403** unless the `Host` is in `{localhost, 127.0.0.1, ::1}` *and* the `Origin` (when present) is same-scheme/same-host/same-port and loopback. This enforces loopback-only access at the edge.
+- `LocalApiSecurityMiddleware` (`Endpoints/Common/LocalApiSecurityMiddleware.cs`) runs before routing/auth. For any path under `/api/local/v1` it returns **403** unless the transport **peer** is loopback (`context.Connection.RemoteIpAddress` — the socket peer, so a routable caller is rejected even if it forges a loopback `Host`/`Origin`; a null peer, e.g. the in-process test host or an in-process health probe, is treated as loopback-equivalent) *and* the `Host` is in `{localhost, 127.0.0.1, ::1}` *and* the `Origin` (when present) is same-scheme/same-host/same-port and loopback. This enforces loopback-only access at the edge. See [Security & Privacy](12-security-and-privacy.md) §3.1.
+- **Startup bind guard.** `LoopbackBindGuard` (`Hosting/LoopbackBindGuard.cs`, wired via `LoopbackBindGuard.Guard(app)`) is defense-in-depth behind the request-time middleware: after `ApplicationStarted` — so an OS-assigned port and wildcard expansion are already resolved — it inspects the addresses Kestrel *actually* bound and, if any is non-loopback (wildcards `*`/`+`/`0.0.0.0`/`::` count), logs a **critical** line naming the offending address and shuts the app down with exit code 1. The opt-out `Security:AllowNonLoopbackBind=true` defaults to `false` and no supported launch sets it. See [Security & Privacy](12-security-and-privacy.md) §3.4.
 - Then `UseRouting → UseRateLimiter → UseAuthentication → UseAuthorization` (`Program.cs:135-138`). Authn is JWT bearer; the `Operator` authorization policy gates both endpoints and hubs. Tests in `XE-Local-AI-Engine.Tests/ApiFoundation/LocalApiSecurityTests.cs` assert: missing/invalid token → 401, unsafe host → 400, unsafe origin → 403, valid token + same-origin → allowed.
 - Request logging redacts the access-token query param via `AccessTokenQueryRedactor` before anything is written (`Program.cs:81-86`).
 
