@@ -314,8 +314,12 @@ public static class ConfigureServices
         // the live release catalog and compares it to the installed runtime, recording an "update available" snapshot
         // (read by the runtime-status endpoint). Notify-only + offline-tolerant; never downloads a binary on its own.
         builder.Services.AddHostedService<LlamaCppUpdateCheckService>();
+        // Readiness = essential node-local persistence AND Central Platform worker coordination. Both are tagged "ready"
+        // so a failure of either alone flips /health/ready: a dead/unwritable SQLite store must fail readiness even when
+        // worker pairing is fine, and vice versa.
         builder.Services.AddHealthChecks()
-               .AddCheck<WorkerHealthCheck>("worker_health", tags: ["ready"]);
+               .AddCheck<WorkerHealthCheck>("worker_health", tags: ["ready"])
+               .AddCheck<NodeSqliteHealthCheck>("node_sqlite", tags: ["ready"]);
     }
 
     public static void ConfigureJsonSerializerOptions(JsonSerializerOptions options)

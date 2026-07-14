@@ -85,10 +85,14 @@ public sealed class AgentExecutionLogRetentionServiceTests : IDisposable
         });
 
         await service.StartAsync(CancellationToken.None).ConfigureAwait(false);
-        // Wait three sweep intervals (3 × 50 ms) to give the disabled service ample time to
-        // accidentally sweep, then assert it did not. A disabled service won't start the timer
-        // at all, but this margin guards against implementation changes.
-        await Task.Delay(150).ConfigureAwait(false);
+        // A disabled sweeper returns from ExecuteAsync immediately without arming the timer. Await that completion
+        // signal deterministically (rather than sleeping) to prove the background loop ran to completion — so any
+        // regression that swept while disabled would have already run before the row-count assertion below.
+        if (service.ExecuteTask is { } executeTask)
+        {
+            await executeTask.WaitAsync(TimeSpan.FromSeconds(5)).ConfigureAwait(false);
+        }
+
         await service.StopAsync(CancellationToken.None).ConfigureAwait(false);
 
         using var scope = provider.CreateScope();
