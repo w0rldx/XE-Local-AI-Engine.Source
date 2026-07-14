@@ -28,6 +28,16 @@ public static class NodeMetrics
             description: "Number of chat stream watchdog timeouts by reason.");
 
     /// <summary>
+    ///     Incremented when a stalled provider stream is abandoned because its <c>MoveNextAsync</c> or
+    ///     <c>DisposeAsync</c> ignored cooperative cancellation past the watchdog's bounded grace. Content-free (a count
+    ///     only) — the deliberate cost of a wall-clock bound that a non-cooperative provider cannot defeat; the abandoned
+    ///     enumerator's native resources may not be reclaimed until (if ever) it returns.
+    /// </summary>
+    public static readonly Counter<long> ChatStreamProviderAbandonedTotal =
+        Meter.CreateCounter<long>("chat_stream_provider_abandoned_total",
+            description: "Number of stalled provider streams abandoned after ignoring cancellation within the watchdog grace.");
+
+    /// <summary>
     ///     Incremented when an invocation fails before producing output.
     ///     Labels: source (failure category, e.g. timeout | agent_runtime | provider_unreachable | unexpected).
     /// </summary>
