@@ -6,6 +6,8 @@ using System.Globalization;
 using System.IO.Compression;
 using Microsoft.Extensions.DataIngestion;
 using UglyToad.PdfPig;
+using UglyToad.PdfPig.Core;
+using UglyToad.PdfPig.Exceptions;
 using XE_Local_AI_Engine.Client.Services.DocumentIngestion.Extraction;
 
 /// <summary>
@@ -411,11 +413,22 @@ public sealed class DocumentTextExtractor : IDocumentTextExtractor
         return BinaryPrimitives.ReadInt64LittleEndian(data.Slice(recordStart + 32, 8));
     }
 
+    // Content-free reason surfaced when the PDF preflight's own PdfDocument.Open fails to parse the document. It stands
+    // in for the reader's generic failure so a malformed PDF is NOT handed to the reader for a second full parse.
+    private const string PdfUnparseableReason = "The document could not be parsed.";
+
     // Opens the PDF far enough to read its declared page count (PdfPig reads the xref/catalog, not the per-page content
-    // streams) and rejects when it exceeds the page ceiling — before the expensive per-page text extraction runs. A
-    // malformed PDF is NOT rejected here: it falls through so the reader surfaces its own error. The open runs against a
-    // non-owning VIEW over the buffered bytes (no copy) so PdfPig seeking/closing its stream never disturbs the shared
-    // buffer the reader re-parses afterward.
+    // streams) and rejects when it exceeds the page ceiling — before the expensive per-page text extraction runs. The
+    // open runs against a non-owning VIEW over the buffered bytes (no copy) so PdfPig seeking/closing its stream never
+    // disturbs the shared buffer the reader re-parses afterward.
+    //
+    // Honest residual: PdfDocument.Open itself IS parser work (it reads the cross-reference/catalog), so the open cost
+    // precedes the page cap — the cap bounds per-page text EXTRACTION, not the document-open cost. Contract is
+    // "narrow + no-reparse": we catch ONLY PdfPig's own format/document exceptions (a malformed document), never
+    // resource failures such as OutOfMemoryException, which must propagate. On a format failure we do NOT return null
+    // (which would let the reader re-open the same bytes for a wasted second parse); instead we return a content-free
+    // reason so the caller fails the document up front. On success — a healthy, within-cap document — we return null and
+    // the reader performs its own parse; that second parse is the accepted cost of a healthy document.
     private string? EvaluatePdfPreflight(MemoryStream buffer)
     {
         int pageCount;
@@ -426,9 +439,11 @@ public sealed class DocumentTextExtractor : IDocumentTextExtractor
                 using var pdf = PdfDocument.Open(view);
                 pageCount = pdf.NumberOfPages;
             }
-            catch (Exception)
+            catch (Exception exception) when (exception is PdfDocumentFormatException
+                or PdfDocumentEncryptedException
+                or PdfDocumentStackDepthException)
             {
-                return null;
+                return PdfUnparseableReason;
             }
         }
 
