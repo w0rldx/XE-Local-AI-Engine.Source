@@ -1,5 +1,6 @@
 namespace XE_Local_AI_Engine.Tests.Eval;
 
+using System.Runtime.CompilerServices;
 using System.Text.Json;
 using Microsoft.Extensions.AI;
 using Microsoft.Extensions.Logging.Abstractions;
@@ -109,6 +110,32 @@ public sealed class DefaultPlaybookEvalJudgeTests
         AssertEx.Equal("assertion", score.ScoredBy);
     }
 
+    [Test]
+    public async Task ScoreAsync_WhenAssertionHasNoMeaningfulPhraseButRubricPresent_ScoresByRubric()
+    {
+        var judge = new DefaultPlaybookEvalJudge(NullLogger<DefaultPlaybookEvalJudge>.Instance);
+        // An empty-phrase assertion carries no deterministic signal, but the author backed the case with a rubric
+        // (create/update validation explicitly allows this). The judge must treat the empty assertion as ABSENT and
+        // score via the rubric (model) path — not deterministically fail on the assertion path, which would make the
+        // author-valid rubric case impossible to pass.
+        var goldenCase = new GoldenConversationRecord(Guid.NewGuid(),
+            Guid.NewGuid(),
+            "Empty assertion with rubric",
+            InputTurns: """[{"role":"user","text":"hello"}]""",
+            Assertion: """{"requiredPhrases":[],"forbiddenPhrases":[]}""",
+            Rubric: "The answer must be helpful.",
+            Enabled: true,
+            CreatedAtUtc: 10,
+            UpdatedAtUtc: 10);
+        using var chatClient = new VerdictChatClient("""{"pass":true,"reason":"meets the rubric"}""");
+
+        var score = await judge.ScoreAsync(goldenCase, "A genuinely helpful answer.", chatClient).ConfigureAwait(false);
+
+        AssertEx.True(score.Pass, "The empty assertion is treated as absent; the rubric (judge) path scores the case.");
+        AssertEx.Equal("judge", score.ScoredBy);
+        AssertEx.True(chatClient.WasCalled, "The rubric path must invoke the model, not short-circuit to a deterministic fail.");
+    }
+
     private static GoldenConversationRecord AssertionCase(string[] required, string[] forbidden)
     {
         var assertion = JsonSerializer.Serialize(new
@@ -125,5 +152,42 @@ public sealed class DefaultPlaybookEvalJudgeTests
             Enabled: true,
             CreatedAtUtc: 10,
             UpdatedAtUtc: 10);
+    }
+
+    /// <summary>
+    ///     Minimal node-local <see cref="IChatClient" /> stand-in returning a fixed JSON verdict so the judge's
+    ///     <c>GetResponseAsync&lt;JudgeVerdict&gt;</c> parses a structured result without a live model.
+    /// </summary>
+    private sealed class VerdictChatClient(string verdictJson) : IChatClient
+    {
+        public bool WasCalled { get; private set; }
+
+        public Task<ChatResponse> GetResponseAsync(IEnumerable<ChatMessage> messages,
+            ChatOptions? options = null,
+            CancellationToken cancellationToken = default)
+        {
+            WasCalled = true;
+            return Task.FromResult(new ChatResponse(new ChatMessage(ChatRole.Assistant, verdictJson)));
+        }
+
+        public async IAsyncEnumerable<ChatResponseUpdate> GetStreamingResponseAsync(IEnumerable<ChatMessage> messages,
+            ChatOptions? options = null,
+            [EnumeratorCancellation]
+            CancellationToken cancellationToken = default)
+        {
+            // The judge uses the non-streaming GetResponseAsync; an empty stream suffices.
+            await Task.CompletedTask.ConfigureAwait(false);
+            yield break;
+        }
+
+        public object? GetService(Type serviceType, object? serviceKey = null)
+        {
+            ArgumentNullException.ThrowIfNull(serviceType);
+            return serviceType.IsInstanceOfType(this) && serviceKey is null ? this : null;
+        }
+
+        public void Dispose()
+        {
+        }
     }
 }
