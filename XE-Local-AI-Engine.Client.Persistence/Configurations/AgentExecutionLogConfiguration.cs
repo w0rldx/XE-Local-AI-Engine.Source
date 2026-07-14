@@ -95,8 +95,9 @@ internal sealed class AgentExecutionLogConfiguration : IEntityTypeConfiguration<
         });
 
         // Deterministic identity for a run envelope: exactly one envelope row per terminalized assistant message. The
-        // filtered UNIQUE index makes AddRunEnvelopeAsync an idempotent upsert (a retry or a crash-recovery backfill can
-        // never duplicate) and gives a crash between the message commit and the envelope write a recoverable key. The
+        // filtered UNIQUE index is the DB-level guard behind the WHERE NOT EXISTS the atomic terminalize write and the
+        // startup reconcile both use (a retry or a crash-recovery backfill can never duplicate), and gives a crash
+        // between the message commit and the envelope write a recoverable key. The
         // filter scopes it to run-envelope rows so the memory-diagnostics rows, which may repeat a message id, are
         // unaffected. SQLite treats null message ids as distinct, so an envelope missing one (should not occur) never trips it.
         builder.HasIndex(entity => entity.MessageId)

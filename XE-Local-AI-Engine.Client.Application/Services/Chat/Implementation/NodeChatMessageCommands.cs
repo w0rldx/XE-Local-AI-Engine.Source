@@ -1,7 +1,10 @@
 namespace XE_Local_AI_Engine.Client.Services.Chat.Implementation;
 
+using System.Data.Common;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Storage;
+using XE_Local_AI_Engine.Client.Persistence;
+using XE_Local_AI_Engine.Client.Persistence.Stores;
 using static NodeChatMetadataSerializer;
 using static NodeChatPersistenceSql;
 
@@ -178,7 +181,9 @@ internal sealed class NodeChatMessageCommands(NodeChatPersistenceWriter writer)
             cancellationToken,
             request.Parts,
             request.GenerationDurationMs,
-            requiredCurrentStatuses: NodeChatMessageTransitions.TerminalizeSources(request.Status));
+            requiredCurrentStatuses: NodeChatMessageTransitions.TerminalizeSources(request.Status),
+            // Durable run envelope written atomically with the terminal row (MED-007 / R4): both commit or roll back together.
+            envelope: request.Envelope);
     }
 
     public async Task<NodeChatCancelResultDto> CancelMessageAsync(NodeChatCancelRequest request, CancellationToken cancellationToken = default)
@@ -304,7 +309,8 @@ internal sealed class NodeChatMessageCommands(NodeChatPersistenceWriter writer)
         IReadOnlyList<NodeChatMessagePart>? parts = null,
         long? generationDurationMs = null,
         bool touchConversation = true,
-        IReadOnlySet<string>? requiredCurrentStatuses = null)
+        IReadOnlySet<string>? requiredCurrentStatuses = null,
+        AgentRunEnvelopeMetadata? envelope = null)
     {
         ValidateCorrelation(correlation);
         if (requiredCurrentStatuses is { Count: 0 or > MaxSourceStatusSlots })
@@ -356,7 +362,22 @@ internal sealed class NodeChatMessageCommands(NodeChatPersistenceWriter writer)
                 var metadata = SerializeMetadata(current.MetadataJson, nextReasoning, nextModel, nextInputTokens, nextOutputTokens, nextTotalTokens, nextReasoningTokens, nextParts,
                     current.AgentDefinitionId, current.AgentName, current.ReasoningEffort, nextGenerationDurationMs);
 
+                // When a run envelope must be written, the message UPDATE, the envelope insert, and the conversation touch
+                // run in ONE transaction so the terminal row and its content-free envelope commit or roll back together
+                // (MED-007 / R4: no swallowed best-effort write — an envelope failure fails/retries the terminalize like
+                // any persistence failure). Non-terminal updates (flush / queued / streaming) keep the prior
+                // single-statement autocommit path unchanged, so the hot streaming path is untouched.
+                var writeEnvelope = envelope is not null && IsTerminalStatus(nextStatus);
+                await using var transaction = writeEnvelope
+                    ? await dbContext.Database.BeginTransactionAsync(token).ConfigureAwait(false)
+                    : null;
+
                 await using var command = dbContext.Database.GetDbConnection().CreateCommand();
+                if (transaction is not null)
+                {
+                    command.Transaction = transaction.GetDbTransaction();
+                }
+
                 // Two constant statements (never string-built from input): the guarded form appends the atomic
                 // 'AND status IN (...)' source-status predicate so the transition is rejected at the SQLite layer if the
                 // row is no longer in the permitted set. Its placeholder count matches the cancellable status set below.
@@ -393,13 +414,39 @@ internal sealed class NodeChatMessageCommands(NodeChatPersistenceWriter writer)
                 if (requiredCurrentStatuses is not null && affected == 0)
                 {
                     // The atomic predicate rejected the write because the row reached a terminal status; return the true
-                    // current state without a rewrite or a conversation touch.
+                    // current state without a rewrite, an envelope, or a conversation touch. An opened transaction simply
+                    // disposes without a commit — nothing was written.
                     return current;
+                }
+
+                if (writeEnvelope)
+                {
+                    // Idempotent (WHERE NOT EXISTS): a run envelope this message already has — e.g. a startup recovery
+                    // backfill wrote one first — is not duplicated; the first write wins. The terminal status/success and
+                    // the bound agent id are taken from THIS winning write, so the envelope can never disagree with the row.
+                    await WriteRunEnvelopeRowAsync(dbContext,
+                        transaction?.GetDbTransaction(),
+                        correlation,
+                        current.AgentDefinitionId,
+                        nextStatus,
+                        nextModel,
+                        nextInputTokens,
+                        nextOutputTokens,
+                        nextReasoningTokens,
+                        nextTotalTokens,
+                        envelope!,
+                        updatedAtUtc,
+                        token).ConfigureAwait(false);
                 }
 
                 if (touchConversation)
                 {
                     await TouchConversationAsync(dbContext, correlation.ConversationId, updatedAtUtc, token).ConfigureAwait(false);
+                }
+
+                if (transaction is not null)
+                {
+                    await transaction.CommitAsync(token).ConfigureAwait(false);
                 }
 
                 return current with
@@ -419,6 +466,68 @@ internal sealed class NodeChatMessageCommands(NodeChatPersistenceWriter writer)
                 };
             },
             cancellationToken).ConfigureAwait(false);
+    }
+
+    // Writes the content-free durable run-envelope row for a terminalized message on the caller's raw connection, enlisted
+    // in the terminalize transaction, so the envelope commits atomically with the terminal row. Idempotent via WHERE NOT
+    // EXISTS on (record_kind, message_id) — a message already enveloped by a startup recovery backfill is never duplicated
+    // (first write wins). Metadata only: NO prompt / completion / tool-argument content is written. Uses AddParameter (the
+    // same helper as the message writes) so a null optional binds as SQL NULL.
+    private static async Task WriteRunEnvelopeRowAsync(NodeChatDbContext dbContext,
+        DbTransaction? transaction,
+        NodeChatMessageCorrelation correlation,
+        Guid? agentDefinitionId,
+        string terminalStatus,
+        string? model,
+        int? promptTokens,
+        int? completionTokens,
+        int? reasoningTokens,
+        int? totalTokens,
+        AgentRunEnvelopeMetadata envelope,
+        long createdAtUtc,
+        CancellationToken cancellationToken)
+    {
+        await using var command = dbContext.Database.GetDbConnection().CreateCommand();
+        command.Transaction = transaction;
+        command.CommandText = """
+                              INSERT INTO agent_execution_logs
+                                  (id, record_kind, schema_version, agent_definition_id, conversation_id, message_id, invocation_id, request_id,
+                                   model_name, config_hash, terminal_status, latency_ms, prompt_tokens, completion_tokens, reasoning_tokens, total_tokens,
+                                   content_chunk_count, reasoning_chunk_count, trace_id, started_at_utc, success, error_class, created_at_utc)
+                              SELECT $id, $record_kind, $schema_version, $agent_definition_id, $conversation_id, $message_id, $invocation_id, $request_id,
+                                     $model_name, $config_hash, $terminal_status, $latency_ms, $prompt_tokens, $completion_tokens, $reasoning_tokens, $total_tokens,
+                                     $content_chunk_count, $reasoning_chunk_count, $trace_id, $started_at_utc, $success, $error_class, $created_at_utc
+                              WHERE NOT EXISTS (SELECT 1 FROM agent_execution_logs WHERE record_kind = $record_kind AND message_id = $message_id);
+                              """;
+
+        AddParameter(command, "$id", Guid.NewGuid());
+        AddParameter(command, "$record_kind", (int)AgentExecutionLogRecordKind.ChatRunEnvelope);
+        AddParameter(command, "$schema_version", AgentRunEnvelope.CurrentSchemaVersion);
+        // Bound agent id when the row carries one; Guid.Empty otherwise so agentless envelope rows share one retention
+        // bucket and never surface in the per-agent diagnostics view.
+        AddParameter(command, "$agent_definition_id", agentDefinitionId ?? Guid.Empty);
+        AddParameter(command, "$conversation_id", correlation.ConversationId);
+        AddParameter(command, "$message_id", correlation.MessageId);
+        AddParameter(command, "$invocation_id", envelope.InvocationId);
+        AddParameter(command, "$request_id", correlation.RequestId);
+        AddParameter(command, "$model_name", model ?? string.Empty);
+        AddParameter(command, "$config_hash", string.Empty);
+        AddParameter(command, "$terminal_status", terminalStatus);
+        AddParameter(command, "$latency_ms", envelope.DurationMs);
+        AddParameter(command, "$prompt_tokens", promptTokens);
+        AddParameter(command, "$completion_tokens", completionTokens);
+        AddParameter(command, "$reasoning_tokens", reasoningTokens);
+        AddParameter(command, "$total_tokens", totalTokens);
+        AddParameter(command, "$content_chunk_count", envelope.ContentChunkCount);
+        AddParameter(command, "$reasoning_chunk_count", envelope.ReasoningChunkCount);
+        AddParameter(command, "$trace_id", envelope.TraceId);
+        AddParameter(command, "$started_at_utc", envelope.StartedAtUtc);
+        AddParameter(command, "$success", string.Equals(terminalStatus, NodeChatMessageStatusValues.Completed, StringComparison.Ordinal) ? 1 : 0);
+        AddParameter(command, "$error_class", envelope.FailureCategory);
+        AddParameter(command, "$created_at_utc", createdAtUtc);
+
+        await OpenIfNeededAsync(command.Connection, cancellationToken).ConfigureAwait(false);
+        _ = await command.ExecuteNonQueryAsync(cancellationToken).ConfigureAwait(false);
     }
 
 }
