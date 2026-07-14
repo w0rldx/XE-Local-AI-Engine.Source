@@ -151,6 +151,11 @@ try
         app.Lifetime.ApplicationStopped.Register(instanceLease.Dispose);
     }
 
+    // Loopback-only bind guard (defense-in-depth behind LocalApiSecurityMiddleware): shut down if the server bound a
+    // routable address without the Security:AllowNonLoopbackBind opt-out. A no-op on every supported launch (desktop
+    // binds 127.0.0.1; Aspire binds localhost and exposes externally via the DCP proxy).
+    LoopbackBindGuard.Guard(app);
+
     try
     {
         await ApplyNodeChatMigrationsAsync(app.Services).ConfigureAwait(false);
