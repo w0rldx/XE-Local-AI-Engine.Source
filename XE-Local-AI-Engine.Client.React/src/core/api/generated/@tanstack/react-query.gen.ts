@@ -121,6 +121,7 @@ import {
 	listNodeChatConversations,
 	listNodeChatMessageRevisions,
 	listPreviewWorkflows,
+	listRunEnvelopes,
 	listRunningModels,
 	listScheduledJobRuns,
 	listScheduledJobs,
@@ -407,6 +408,8 @@ import type {
 	ListNodeChatMessageRevisionsResponse,
 	ListPreviewWorkflowsData,
 	ListPreviewWorkflowsResponse,
+	ListRunEnvelopesData,
+	ListRunEnvelopesResponse,
 	ListRunningModelsData,
 	ListRunningModelsResponse,
 	ListScheduledJobRunsData,
@@ -3865,6 +3868,64 @@ export const listAgentTemplatesOptions = (options?: Options<ListAgentTemplatesDa
 		},
 		queryKey: listAgentTemplatesQueryKey(options),
 	});
+
+export const listRunEnvelopesQueryKey = (options?: Options<ListRunEnvelopesData>) => createQueryKey("listRunEnvelopes", options);
+
+export const listRunEnvelopesOptions = (options?: Options<ListRunEnvelopesData>) =>
+	queryOptions<
+		ListRunEnvelopesResponse,
+		AxiosError<DefaultError>,
+		ListRunEnvelopesResponse,
+		ReturnType<typeof listRunEnvelopesQueryKey>
+	>({
+		queryFn: async ({ queryKey, signal }) => {
+			const { data } = await listRunEnvelopes({
+				...options,
+				...queryKey[0],
+				signal,
+				throwOnError: true,
+			});
+			return data;
+		},
+		queryKey: listRunEnvelopesQueryKey(options),
+	});
+
+export const listRunEnvelopesInfiniteQueryKey = (
+	options?: Options<ListRunEnvelopesData>,
+): QueryKey<Options<ListRunEnvelopesData>> => createQueryKey("listRunEnvelopes", options, true);
+
+export const listRunEnvelopesInfiniteOptions = (options?: Options<ListRunEnvelopesData>) =>
+	infiniteQueryOptions<
+		ListRunEnvelopesResponse,
+		AxiosError<DefaultError>,
+		InfiniteData<ListRunEnvelopesResponse>,
+		QueryKey<Options<ListRunEnvelopesData>>,
+		number | null | Pick<QueryKey<Options<ListRunEnvelopesData>>[0], "body" | "headers" | "path" | "query">
+	>(
+		// @ts-ignore
+		{
+			queryFn: async ({ pageParam, queryKey, signal }) => {
+				// @ts-ignore
+				const page: Pick<QueryKey<Options<ListRunEnvelopesData>>[0], "body" | "headers" | "path" | "query"> =
+					typeof pageParam === "object"
+						? pageParam
+						: {
+								query: {
+									offset: pageParam,
+								},
+							};
+				const params = createInfiniteParams(queryKey, page);
+				const { data } = await listRunEnvelopes({
+					...options,
+					...params,
+					signal,
+					throwOnError: true,
+				});
+				return data;
+			},
+			queryKey: listRunEnvelopesInfiniteQueryKey(options),
+		},
+	);
 
 export const promoteSuggestedPlaybookActionMutation = (
 	options?: Partial<Options<PromoteSuggestedPlaybookActionData>>,

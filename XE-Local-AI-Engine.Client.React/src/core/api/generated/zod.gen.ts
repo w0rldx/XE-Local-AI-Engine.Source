@@ -2643,6 +2643,72 @@ export const zXeLocalAiEngineClientEndpointsAgentsV1ListGoldenConversationsRespo
 
 export const zXeLocalAiEngineClientEndpointsAgentsV1ListGoldenConversationsRequest = z.record(z.string(), z.never());
 
+export const zXeLocalAiEngineClientEndpointsAgentsV1AgentRunEnvelopeResponse = z.object({
+	id: z.guid(),
+	schemaVersion: z
+		.int()
+		.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })
+		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" }),
+	conversationId: z.guid().nullish(),
+	messageId: z.guid().nullish(),
+	invocationId: z.guid().nullish(),
+	requestId: z.guid().nullish(),
+	modelName: z.string(),
+	terminalStatus: z.string(),
+	success: z.boolean(),
+	failureCategory: z.string().nullish(),
+	durationMs: z.coerce
+		.bigint()
+		.min(BigInt("-9223372036854775808"), { error: "Invalid value: Expected int64 to be >= -9223372036854775808" })
+		.max(BigInt("9223372036854775807"), { error: "Invalid value: Expected int64 to be <= 9223372036854775807" }),
+	promptTokens: z
+		.int()
+		.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })
+		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" })
+		.nullish(),
+	completionTokens: z
+		.int()
+		.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })
+		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" })
+		.nullish(),
+	reasoningTokens: z
+		.int()
+		.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })
+		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" })
+		.nullish(),
+	totalTokens: z
+		.int()
+		.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })
+		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" })
+		.nullish(),
+	contentChunkCount: z
+		.int()
+		.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })
+		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" })
+		.nullish(),
+	reasoningChunkCount: z
+		.int()
+		.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })
+		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" })
+		.nullish(),
+	traceId: z.string().nullish(),
+	startedAtUtc: z.coerce
+		.bigint()
+		.min(BigInt("-9223372036854775808"), { error: "Invalid value: Expected int64 to be >= -9223372036854775808" })
+		.max(BigInt("9223372036854775807"), { error: "Invalid value: Expected int64 to be <= 9223372036854775807" })
+		.nullish(),
+	createdAtUtc: z.coerce
+		.bigint()
+		.min(BigInt("-9223372036854775808"), { error: "Invalid value: Expected int64 to be >= -9223372036854775808" })
+		.max(BigInt("9223372036854775807"), { error: "Invalid value: Expected int64 to be <= 9223372036854775807" }),
+});
+
+export const zXeLocalAiEngineClientEndpointsAgentsV1ListRunEnvelopesResponse = z.object({
+	items: z.array(zXeLocalAiEngineClientEndpointsAgentsV1AgentRunEnvelopeResponse),
+});
+
+export const zXeLocalAiEngineClientEndpointsAgentsV1ListRunEnvelopesRequest = z.record(z.string(), z.never());
+
 export const zXeLocalAiEngineClientEndpointsAgentsV1SuggestedPlaybookActionRouteRequest = z.record(z.string(), z.never());
 
 export const zXeLocalAiEngineClientEndpointsAgentsV1UpdateAgentDefinitionRequest = z.object({
@@ -3945,6 +4011,25 @@ export const zListAgentExecutionLogsResponse = zXeLocalAiEngineClientEndpointsAg
  * Success
  */
 export const zListAgentTemplatesResponse = zXeLocalAiEngineClientEndpointsAgentsV1ListAgentTemplatesResponse;
+
+export const zListRunEnvelopesQuery = z.object({
+	conversationId: z.guid().nullish(),
+	limit: z
+		.int()
+		.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })
+		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" })
+		.nullish(),
+	offset: z
+		.int()
+		.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })
+		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" })
+		.nullish(),
+});
+
+/**
+ * Success
+ */
+export const zListRunEnvelopesResponse = zXeLocalAiEngineClientEndpointsAgentsV1ListRunEnvelopesResponse;
 
 export const zPromoteSuggestedPlaybookActionPath = z.object({
 	agentDefinitionId: z.guid(),

@@ -7,7 +7,7 @@
   },
   "servers": [
     {
-      "url": "http://127.0.0.1:45581"
+      "url": "http://127.0.0.1:40093"
     }
   ],
   "paths": {
@@ -7076,6 +7076,69 @@
         ]
       }
     },
+    "/api/local/v1/agents/run-envelopes": {
+      "get": {
+        "tags": [
+          "Agents"
+        ],
+        "operationId": "listRunEnvelopes",
+        "parameters": [
+          {
+            "name": "conversationId",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "format": "guid",
+              "nullable": true
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "format": "int32",
+              "nullable": true
+            }
+          },
+          {
+            "name": "offset",
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "format": "int32",
+              "nullable": true
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/XE_Local_AI_EngineClientEndpointsAgentsV1ListRunEnvelopesResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "403": {
+            "description": "Forbidden"
+          }
+        },
+        "security": [
+          {
+            "JWTBearerAuth": []
+          },
+          {
+            "Bearer": []
+          }
+        ]
+      }
+    },
     "/api/local/v1/agents/{agentDefinitionId}/playbook/{actionId}/promote": {
       "post": {
         "tags": [
@@ -13895,6 +13958,128 @@
         }
       },
       "XE_Local_AI_EngineClientEndpointsAgentsV1ListGoldenConversationsRequest": {
+        "type": "object",
+        "additionalProperties": false
+      },
+      "XE_Local_AI_EngineClientEndpointsAgentsV1ListRunEnvelopesResponse": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "items"
+        ],
+        "properties": {
+          "items": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/XE_Local_AI_EngineClientEndpointsAgentsV1AgentRunEnvelopeResponse"
+            }
+          }
+        }
+      },
+      "XE_Local_AI_EngineClientEndpointsAgentsV1AgentRunEnvelopeResponse": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "id",
+          "schemaVersion",
+          "modelName",
+          "terminalStatus",
+          "success",
+          "durationMs",
+          "createdAtUtc"
+        ],
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "guid"
+          },
+          "schemaVersion": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "conversationId": {
+            "type": "string",
+            "format": "guid",
+            "nullable": true
+          },
+          "messageId": {
+            "type": "string",
+            "format": "guid",
+            "nullable": true
+          },
+          "invocationId": {
+            "type": "string",
+            "format": "guid",
+            "nullable": true
+          },
+          "requestId": {
+            "type": "string",
+            "format": "guid",
+            "nullable": true
+          },
+          "modelName": {
+            "type": "string"
+          },
+          "terminalStatus": {
+            "type": "string"
+          },
+          "success": {
+            "type": "boolean"
+          },
+          "failureCategory": {
+            "type": "string",
+            "nullable": true
+          },
+          "durationMs": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "promptTokens": {
+            "type": "integer",
+            "format": "int32",
+            "nullable": true
+          },
+          "completionTokens": {
+            "type": "integer",
+            "format": "int32",
+            "nullable": true
+          },
+          "reasoningTokens": {
+            "type": "integer",
+            "format": "int32",
+            "nullable": true
+          },
+          "totalTokens": {
+            "type": "integer",
+            "format": "int32",
+            "nullable": true
+          },
+          "contentChunkCount": {
+            "type": "integer",
+            "format": "int32",
+            "nullable": true
+          },
+          "reasoningChunkCount": {
+            "type": "integer",
+            "format": "int32",
+            "nullable": true
+          },
+          "traceId": {
+            "type": "string",
+            "nullable": true
+          },
+          "startedAtUtc": {
+            "type": "integer",
+            "format": "int64",
+            "nullable": true
+          },
+          "createdAtUtc": {
+            "type": "integer",
+            "format": "int64"
+          }
+        }
+      },
+      "XE_Local_AI_EngineClientEndpointsAgentsV1ListRunEnvelopesRequest": {
         "type": "object",
         "additionalProperties": false
       },
