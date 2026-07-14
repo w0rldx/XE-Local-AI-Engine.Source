@@ -31,7 +31,10 @@ public sealed class ProviderCallBudgetChatClientTests
         using var sut = new ProviderCallBudgetChatClient(inner, NullLogger<ProviderCallBudgetChatClient>.Instance);
 
         var messages = ManyMessagesWithHugeToolResult();
-        using (ProviderCallBudget.BeginScope(new ProviderCallBudgetOptions { OversizedToolResultExcerptChars = 40 }))
+        // ReservedOutputTokenFloor = 0 so the tiny 200-token test window is entirely available to the input; the
+        // excerpted round then fits and is delivered (this test exercises per-round excerpting, not the over-window
+        // rejection — that has its own test above).
+        using (ProviderCallBudget.BeginScope(new ProviderCallBudgetOptions { OversizedToolResultExcerptChars = 40, ReservedOutputTokenFloor = 0 }))
         {
             // Simulates an inner tool-loop round: FunctionInvokingChatClient appended a huge tool result and called the
             // provider again. The boundary must re-budget it (the outer runner never sees this round).
@@ -79,22 +82,68 @@ public sealed class ProviderCallBudgetChatClientTests
     }
 
     [Test]
+    public async Task GetResponseAsync_WhenRoundIrreduciblyExceedsWindow_ThrowsAndNeverCallsInner()
+    {
+        using var inner = new FailIfCalledChatClient();
+        using var sut = new ProviderCallBudgetChatClient(inner, NullLogger<ProviderCallBudgetChatClient>.Instance);
+
+        // A single oversized user message: not a tool result (cannot be excerpted) and the last/only message (cannot be
+        // dropped), so the budgeter reduces nothing and the round stays over a tiny window — irreducible.
+        var messages = new List<ChatMessage> { new(ChatRole.User, new string('x', 8000)) };
+        using (ProviderCallBudget.BeginScope(new ProviderCallBudgetOptions { DefaultContextTokens = 16, ReservedOutputTokenFloor = 0 }))
+        {
+            var exception = await AssertEx.ThrowsAsync<ProviderContextWindowExceededException>(async () => await sut.GetResponseAsync(messages, new ChatOptions()));
+
+            // Bounded diagnostics are carried for logging; the surfaced Message is the fixed, path-free constant.
+            AssertEx.True(exception.EstimatedTokens > exception.WindowTokens, "the estimate must exceed the window for an irreducible round");
+            AssertEx.Equal(ProviderContextWindowExceededException.RoundExceedsWindowMessage, exception.Message);
+        }
+
+        // The provider must NEVER be called with a guaranteed-over-window round.
+        AssertEx.False(inner.WasCalled, "the inner client must not be called when the round is irreducibly over the window");
+    }
+
+    [Test]
+    public async Task GetStreamingResponseAsync_WhenRoundIrreduciblyExceedsWindow_ThrowsAndNeverCallsInner()
+    {
+        using var inner = new FailIfCalledChatClient();
+        using var sut = new ProviderCallBudgetChatClient(inner, NullLogger<ProviderCallBudgetChatClient>.Instance);
+
+        var messages = new List<ChatMessage> { new(ChatRole.User, new string('x', 8000)) };
+        using (ProviderCallBudget.BeginScope(new ProviderCallBudgetOptions { DefaultContextTokens = 16, ReservedOutputTokenFloor = 0 }))
+        {
+            await AssertEx.ThrowsAsync<ProviderContextWindowExceededException>(async () =>
+            {
+                await foreach (var _ in sut.GetStreamingResponseAsync(messages, new ChatOptions()).ConfigureAwait(false))
+                {
+                    // The budget rejection fires before the first chunk is pulled, so no update is ever yielded.
+                }
+            });
+        }
+
+        AssertEx.False(inner.WasCalled, "the inner client must not be streamed when the round is irreducibly over the window");
+    }
+
+    [Test]
     public async Task ApplyBudget_WithLargeToolSet_ReducesMessageBudgetAndTrims()
     {
         // The exact same messages fit the window with no tools, but a large tool set's serialized schemas count against
         // the same input window and push the round over — forcing a history drop that would not otherwise happen. This is
-        // the under-count the tool-schema estimate fixes: ignoring options.Tools rounds a tool-heavy agent through.
+        // the under-count the tool-schema estimate fixes: ignoring options.Tools rounds a tool-heavy agent through. The
+        // droppable message is deliberately large and the window sits ABOVE the post-drop total, so trimming brings the
+        // round back under the window (a deliverable round) rather than leaving it irreducibly over — that over-window
+        // case has its own dedicated rejection test below.
         var messages = new List<ChatMessage>
         {
             new(ChatRole.System, "system prompt"),
-            new(ChatRole.User, new string('a', 200)),
+            new(ChatRole.User, new string('a', 2000)),
             new(ChatRole.User, new string('b', 200)),
             new(ChatRole.User, new string('c', 200))
         };
 
         var budgetOptions = new ProviderCallBudgetOptions
         {
-            DefaultContextTokens = 180,
+            DefaultContextTokens = 650,
             ReservedOutputTokenFloor = 0,
             RecentMessagesToKeep = 2,
             OversizedToolResultExcerptChars = 100_000
@@ -153,6 +202,37 @@ public sealed class ProviderCallBudgetChatClientTests
             new ChatMessage(ChatRole.Assistant, [new FunctionCallContent("big", "search", new Dictionary<string, object?>())]),
             new ChatMessage(ChatRole.Tool, [new FunctionResultContent("big", new string('y', 4000))])
         ];
+    }
+
+    // Fails the test if the provider boundary ever forwards a round to it. Used to prove the inner client is NEVER
+    // called for an irreducibly over-window round (both the sync and streaming paths reject before delegating).
+    private sealed class FailIfCalledChatClient : IChatClient
+    {
+        public bool WasCalled { get; private set; }
+
+        public Task<ChatResponse> GetResponseAsync(IEnumerable<ChatMessage> messages, ChatOptions? options = null, CancellationToken cancellationToken = default)
+        {
+            WasCalled = true;
+            throw new InvalidOperationException("The inner client must not be called for an over-window round.");
+        }
+
+        public IAsyncEnumerable<ChatResponseUpdate> GetStreamingResponseAsync(IEnumerable<ChatMessage> messages,
+            ChatOptions? options = null,
+            CancellationToken cancellationToken = default)
+        {
+            WasCalled = true;
+            throw new InvalidOperationException("The inner client must not be streamed for an over-window round.");
+        }
+
+        public object? GetService(Type serviceType, object? serviceKey = null)
+        {
+            return serviceType == typeof(IChatClient) ? this : null;
+        }
+
+        public void Dispose()
+        {
+            GC.SuppressFinalize(this);
+        }
     }
 
     private sealed class CapturingChatClient : IChatClient
