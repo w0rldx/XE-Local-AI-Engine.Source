@@ -1059,6 +1059,8 @@ public sealed class NodeChatStreamServiceTests
             CreateMemoryExtractionDispatcher(),
             Substitute.For<IConversationUploadedFileStore>(),
             Substitute.For<IConversationSandboxStager>(),
+            CreateFenceSeedProvider(),
+            Options.Create(new KnowledgeBaseOptions()),
             TimeProvider.System,
             NullLogger<NodeChatStreamService>.Instance);
 
