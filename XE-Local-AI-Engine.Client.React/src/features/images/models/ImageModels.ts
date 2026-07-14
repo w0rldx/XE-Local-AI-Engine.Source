@@ -85,7 +85,9 @@ export function toImageJobView(dto: ImageJobResponse): ImageJobView {
 		modelName: dto.modelName,
 		prompt: dto.prompt,
 		status: toImageJobStatus(dto.status),
-		seed: dto.seed,
+		// The wire seed is a precision-safe string; image seeds are bounded to uint32 (see the form schema), so parsing
+		// back to a number for display never loses precision.
+		seed: Number(dto.seed),
 		width: dto.width,
 		height: dto.height,
 		steps: dto.steps,

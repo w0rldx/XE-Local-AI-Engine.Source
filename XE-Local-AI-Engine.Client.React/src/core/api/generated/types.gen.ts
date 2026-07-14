@@ -375,7 +375,7 @@ export type XeLocalAiEngineClientModelsSamplingOptions = {
 	repeatLastN?: number | null;
 	presencePenalty?: number | null;
 	frequencyPenalty?: number | null;
-	seed?: number | null;
+	seed?: string | null;
 	stop?: Array<string> | null;
 	numCtx?: number | null;
 };
@@ -1338,7 +1338,7 @@ export type XeLocalAiEngineClientEndpointsImagesV1ImageJobResponse = {
 	modelName: string;
 	prompt: string;
 	negativePrompt?: string | null;
-	seed: number;
+	seed: string;
 	width: number;
 	height: number;
 	steps: number;
@@ -1358,7 +1358,7 @@ export type XeLocalAiEngineClientEndpointsImagesV1CreateImageJobRequest = {
 	modelName: string;
 	prompt: string;
 	negativePrompt?: string | null;
-	seed?: number;
+	seed?: string | null;
 	width?: number;
 	height?: number;
 	steps?: number;

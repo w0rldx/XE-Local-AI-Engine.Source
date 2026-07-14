@@ -20,8 +20,12 @@ public sealed class CreateImageJobRequest
     /// <summary>Optional negative prompt. Persisted encrypted at rest; never logged.</summary>
     public string? NegativePrompt { get; init; }
 
-    /// <summary>Random seed; <c>-1</c> requests a runtime-chosen random seed.</summary>
-    public long Seed { get; init; } = -1;
+    /// <summary>
+    ///     Random seed as a string (precision-safe on the wire — a 64-bit seed serialized as a JSON number would round
+    ///     above 2^53). <see langword="null" />/blank requests a runtime-chosen random seed (equivalent to <c>-1</c>);
+    ///     any non-blank value must be a base-10 64-bit integer (validated by <see cref="Models.SeedValue" />).
+    /// </summary>
+    public string? Seed { get; init; }
 
     /// <summary>Output width in pixels.</summary>
     public int Width { get; init; } = 512;
@@ -62,7 +66,8 @@ public sealed class ImageJobResponse
 
     public string? NegativePrompt { get; init; }
 
-    public required long Seed { get; init; }
+    /// <summary>The stored seed rendered as a string (precision-safe; see <see cref="CreateImageJobRequest.Seed" />).</summary>
+    public required string Seed { get; init; }
 
     public required int Width { get; init; }
 
