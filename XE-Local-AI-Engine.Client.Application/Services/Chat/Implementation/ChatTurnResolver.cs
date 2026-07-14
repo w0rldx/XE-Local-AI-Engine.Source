@@ -59,7 +59,7 @@ public sealed class ChatTurnResolver(
         // on the package — the runner branches to the handoff workflow. A null result (not an orchestrator, an
         // empty/invalid topology, an incapable model, or too few capable participants) leaves the package single-agent,
         // keeping the unbound/single-agent path byte-identical. The same retrieval query drives per-participant retrieval.
-        var orchestration = await ResolveOrchestrationAsync(effectiveAgentId, activeModel, retrievalQuery, supportsTools, activeModelIsCloud, cancellationToken).ConfigureAwait(false);
+        var orchestration = await ResolveOrchestrationAsync(effectiveAgentId, activeModel, retrievalQuery, supportsTools, cancellationToken).ConfigureAwait(false);
 
         // The single source of truth for the model that actually runs this turn: the resolved pin when honored (the
         // resolver returned null for ModelProfile when the user's explicit pick suppressed it), otherwise the active
@@ -172,7 +172,6 @@ public sealed class ChatTurnResolver(
         string? activeModel,
         string? retrievalQuery,
         bool supportsTools,
-        bool activeModelIsCloud,
         CancellationToken cancellationToken)
     {
         if (agentDefinitionId is not { } definitionId)
@@ -186,6 +185,8 @@ public sealed class ChatTurnResolver(
             return null;
         }
 
-        return await orchestrationResolver.ResolveAsync(definition, activeModel, retrievalQuery, supportsTools, activeModelIsCloud, cancellationToken).ConfigureAwait(false);
+        // Orchestration resolves each participant's knowledge-tool locality from its own effective model internally, so
+        // no turn-level cloud flag is threaded here.
+        return await orchestrationResolver.ResolveAsync(definition, activeModel, retrievalQuery, supportsTools, cancellationToken).ConfigureAwait(false);
     }
 }

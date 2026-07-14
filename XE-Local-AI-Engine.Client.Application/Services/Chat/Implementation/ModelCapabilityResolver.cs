@@ -24,11 +24,11 @@ public sealed class ModelCapabilityResolver(
     ICloudCredentialStore cloudCredentialStore,
     ILogger<ModelCapabilityResolver> logger) : IModelCapabilityResolver
 {
-    public async Task<(bool SupportsThinking, bool SupportsTools)> ResolveAsync(string? model, CancellationToken cancellationToken)
+    public async Task<(bool SupportsThinking, bool SupportsTools, bool IsCloud)> ResolveAsync(string? model, CancellationToken cancellationToken)
     {
         if (string.IsNullOrWhiteSpace(model))
         {
-            return (false, false);
+            return (false, false, IsCloud: false);
         }
 
         // A Codex cloud model is NOT an Ollama model: classifying it against the local runtime's /api/show would
@@ -38,7 +38,7 @@ public sealed class ModelCapabilityResolver(
         // tool loop). Cloud providers ignore the unknown think property, so the reasoning gate stays inert on the wire.
         if (CodexModelCatalog.IsCodexModel(model))
         {
-            return (SupportsThinking: true, CodexProviderCapabilities.V0.SupportsToolCalling);
+            return (SupportsThinking: true, CodexProviderCapabilities.V0.SupportsToolCalling, IsCloud: true);
         }
 
         // An Azure Foundry deployment id is NOT an Ollama model either: probing /api/show for it would 500/stall.
@@ -46,7 +46,7 @@ public sealed class ModelCapabilityResolver(
         // capability matrix instead of an Ollama classification, so an Azure id never falls through to the local probe.
         if (await IsAzureFoundryModelAsync(model, cancellationToken).ConfigureAwait(false))
         {
-            return (SupportsThinking: false, SupportsTools: AzureFoundryProviderCapabilities.V0.SupportsToolCalling);
+            return (SupportsThinking: false, SupportsTools: AzureFoundryProviderCapabilities.V0.SupportsToolCalling, IsCloud: true);
         }
 
         // /api/show classification only makes sense for an Ollama-routed model. A llama.cpp (GGUF) model has no Ollama
@@ -64,9 +64,10 @@ public sealed class ModelCapabilityResolver(
             var ggufCapabilities = await ggufModelCapabilityResolver
                                          .TryResolveAsync(model, cancellationToken)
                                          .ConfigureAwait(false);
+            // A llama.cpp (GGUF) or other non-Ollama-but-node-local model is LOCAL.
             return ggufCapabilities is { } caps
-                ? (caps.SupportsThinking, caps.SupportsTools)
-                : (SupportsThinking: false, SupportsTools: false);
+                ? (caps.SupportsThinking, caps.SupportsTools, IsCloud: false)
+                : (SupportsThinking: false, SupportsTools: false, IsCloud: false);
         }
 
         var classifications = await modelClassificationService
@@ -74,11 +75,13 @@ public sealed class ModelCapabilityResolver(
                                     .ConfigureAwait(false);
         if (!classifications.TryGetValue(model, out var classification))
         {
-            return (false, false);
+            return (false, false, IsCloud: false);
         }
 
+        // An Ollama-routed model runs on the node — local.
         return (ModelKindDetector.SupportsThinking(classification.Capabilities),
-            ModelKindDetector.SupportsTools(classification.Capabilities));
+            ModelKindDetector.SupportsTools(classification.Capabilities),
+            IsCloud: false);
     }
 
     /// <summary>

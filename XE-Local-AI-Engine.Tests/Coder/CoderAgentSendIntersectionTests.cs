@@ -123,6 +123,7 @@ public sealed class CoderAgentSendIntersectionTests
             new LexicalPlaybookRetrievalRanker(),
             Options.Create(new PlaybookRetrievalOptions()),
             new FakeAgentInstructionProvider(),
+            Substitute.For<XE_Local_AI_Engine.Client.Services.Chat.IModelCapabilityResolver>(),
             NullLogger<AgentDefinitionResolver>.Instance);
     }
 }
