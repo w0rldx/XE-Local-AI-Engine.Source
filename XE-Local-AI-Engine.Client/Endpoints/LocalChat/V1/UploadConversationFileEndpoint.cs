@@ -17,6 +17,7 @@ using SecurityOptions = XE_Local_AI_Engine.Client.Configuration.SecurityOptions;
 public sealed class UploadConversationFileEndpoint(
     IConversationUploadedFileStore fileStore,
     IDocumentTextExtractor extractor,
+    IDocumentExtractionAdmissionGate extractionGate,
     IOptions<SecurityOptions> securityOptions)
     : Endpoint<UploadConversationFileRequest, ConversationUploadedFileResponse>
 {
@@ -24,6 +25,7 @@ public sealed class UploadConversationFileEndpoint(
 
     private readonly IConversationUploadedFileStore _fileStore = fileStore ?? throw new ArgumentNullException(nameof(fileStore));
     private readonly IDocumentTextExtractor _extractor = extractor ?? throw new ArgumentNullException(nameof(extractor));
+    private readonly IDocumentExtractionAdmissionGate _extractionGate = extractionGate ?? throw new ArgumentNullException(nameof(extractionGate));
     private readonly long _maxUploadBytes = (securityOptions ?? throw new ArgumentNullException(nameof(securityOptions))).Value.MaxUploadFileSizeMb * 1024L * 1024L;
 
     public override void Configure()
@@ -75,7 +77,19 @@ public sealed class UploadConversationFileEndpoint(
 
         var bytes = await ReadAllBytesAsync(file, ct).ConfigureAwait(false);
 
+        // Aggregate admission: bound how many uploads extract concurrently so a burst cannot aggregate to OOM. When the
+        // gate is full, fail fast with a busy status + Retry-After rather than piling up in-flight extraction buffers.
+        if (!_extractionGate.TryAcquire(out var extractionLease))
+        {
+            HttpContext.Response.Headers.RetryAfter = "5";
+            await Send.StringAsync("The server is busy processing uploads. Please retry shortly.",
+                StatusCodes.Status503ServiceUnavailable,
+                cancellation: ct).ConfigureAwait(false);
+            return;
+        }
+
         DocumentExtractionResult extraction;
+        using (extractionLease)
         using (var extractionStream = new MemoryStream(bytes, writable: false))
         {
             extraction = await _extractor.ExtractAsync(extractionStream, originalName, extension, ct).ConfigureAwait(false);

@@ -3,6 +3,7 @@ using FastEndpoints;
 using FastEndpoints.Swagger;
 using Microsoft.AspNetCore.Diagnostics.HealthChecks;
 using Microsoft.AspNetCore.Hosting.Server;
+using Microsoft.Extensions.Options;
 using Scalar.AspNetCore;
 using Serilog;
 using Serilog.Events;
@@ -475,8 +476,25 @@ static void RegisterWorkerShutdownDrain(WebApplication app)
         try
         {
             var drainService = services.GetRequiredService<IWorkerShutdownDrainService>();
-            var result = drainService.DrainAsync(CancellationToken.None).GetAwaiter().GetResult();
+            var drainOptions = services.GetRequiredService<IOptions<WorkerShutdownDrainOptions>>().Value;
 
+            // The drain enforces its own end-to-end deadline internally. This is a hard outer ceiling so that a stage
+            // which fails to honor that token (a non-cancellable await) still cannot block process shutdown forever:
+            // wait at most the configured deadline plus a grace, then abandon the remaining steps.
+            var configuredTimeout = drainOptions.DrainTimeout > TimeSpan.Zero
+                ? drainOptions.DrainTimeout
+                : WorkerShutdownDrainOptions.DefaultDrainTimeout;
+            var hardCeiling = configuredTimeout + TimeSpan.FromSeconds(5);
+
+            var drainTask = drainService.DrainAsync(CancellationToken.None);
+            if (!drainTask.Wait(hardCeiling))
+            {
+                Log.Warning("Worker shutdown drain exceeded its hard ceiling of {HardCeilingSeconds}s; abandoning remaining steps.",
+                    hardCeiling.TotalSeconds);
+                return;
+            }
+
+            var result = drainTask.GetAwaiter().GetResult();
             if (!result.Succeeded)
             {
                 Log.Warning("Worker shutdown drain completed with incomplete steps. Diagnostics: {Diagnostics}.", result.Diagnostics);

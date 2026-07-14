@@ -1,6 +1,8 @@
 namespace XE_Local_AI_Engine.Client.DependencyInjection.Modules;
 
+using Microsoft.Extensions.Options;
 using XE_Local_AI_Engine.AI.Agent.Tools;
+using XE_Local_AI_Engine.Client.Configuration.Validation;
 using XE_Local_AI_Engine.Client.Services.Capacity;
 using XE_Local_AI_Engine.Client.Services.Capacity.Tools.Implementation;
 
@@ -30,7 +32,9 @@ internal static class AddNodeCapacityExtensions
         // captures the handler IEnumerable at construction, so a scoped handler would be a captive dependency); it
         // resolves the scoped spawn service from a fresh scope per invocation.
         builder.Services.AddOptions<SpawnOptions>()
-               .Bind(configuration.GetSection(SpawnOptions.SectionName));
+               .Bind(configuration.GetSection(SpawnOptions.SectionName))
+               .ValidateOnStart();
+        builder.Services.AddSingleton<IValidateOptions<SpawnOptions>, SpawnOptionsValidator>();
 
         builder.Services.AddSingleton<ISpawnSerializer, SpawnSerializer>();
         builder.Services.AddScoped<ISubAgentSpawnService, SubAgentSpawnService>();

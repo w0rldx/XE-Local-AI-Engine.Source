@@ -130,6 +130,33 @@ public sealed class OllamaLocalModelProviderTests
         AssertEx.True(chatClient is IChatClient);
     }
 
+    [Test]
+    public async Task CreateChatClient_RoutedClientUsesHardenedTransport_NormalizesConnectTimeout()
+    {
+        // A per-model client minted by the provider must share the hardened transport: a fired connect timeout (a
+        // TaskCanceledException with no caller cancellation) has to present as HttpRequestException — the shape every
+        // "Ollama unreachable" catch expects — not leak out as a raw OperationCanceledException from the default transport.
+        var connectTimeout = new TaskCanceledException("connect timed out", new TimeoutException());
+#pragma warning disable CA2000 // Ownership transfers to the factory, disposed at the end of the test.
+        var handler = new OllamaConnectFailureHandler(new ThrowingHandler(connectTimeout));
+        var httpClient = new HttpClient(handler, disposeHandler: true) { BaseAddress = new Uri("http://127.0.0.1:11434") };
+#pragma warning restore CA2000
+        using var factory = new OllamaApiClientFactory(httpClient, ownsHttpClient: true);
+        using var baseClient = factory.CreateClient(selectedModel: null);
+        using var provider = new OllamaLocalModelProvider(baseClient, factory);
+
+        var chatClient = provider.CreateChatClient(new LocalModelSelection
+        {
+            ModelName = "chat",
+            ProviderName = OllamaLocalModelProvider.OllamaProviderName
+        });
+
+        var thrown = await AssertEx.ThrowsAsync<HttpRequestException>(() =>
+            chatClient.GetResponseAsync([new ChatMessage(ChatRole.User, "ping")], cancellationToken: CancellationToken.None));
+
+        AssertEx.True(ReferenceEquals(connectTimeout, thrown.InnerException), "the connect-timeout should be the inner exception");
+    }
+
     private static async Task<ProviderTestContext> CreateContextAsync(params string[] models)
     {
         var server = await FakeOllamaServer.StartAsync(new FakeOllamaOptions
@@ -137,9 +164,23 @@ public sealed class OllamaLocalModelProviderTests
             Models = models.Length > 0 ? models : ["chat"]
         }, CancellationToken.None);
 
-        var ollamaClient = new OllamaApiClient(server.BaseAddress);
-        var provider = new OllamaLocalModelProvider(ollamaClient);
-        return new ProviderTestContext(server, ollamaClient, provider);
+        // Mirror production wiring: a single hardened transport (here a plain HttpClient pointed at the fake server) is
+        // shared by the base management client and every per-model client the factory mints.
+#pragma warning disable CA2000 // Ownership transfers to the factory, which the ProviderTestContext disposes.
+        var httpClient = new HttpClient { BaseAddress = server.BaseAddress };
+#pragma warning restore CA2000
+        var factory = new OllamaApiClientFactory(httpClient, ownsHttpClient: true);
+        var ollamaClient = factory.CreateClient(selectedModel: null);
+        var provider = new OllamaLocalModelProvider(ollamaClient, factory);
+        return new ProviderTestContext(server, ollamaClient, factory, provider);
+    }
+
+    private sealed class ThrowingHandler(Exception exception) : HttpMessageHandler
+    {
+        protected override Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken)
+        {
+            return Task.FromException<HttpResponseMessage>(exception);
+        }
     }
 
     private sealed class CapturingProgress<T> : IProgress<T>
@@ -159,10 +200,13 @@ public sealed class OllamaLocalModelProviderTests
 
     private sealed class ProviderTestContext : IAsyncDisposable
     {
-        public ProviderTestContext(FakeOllamaServer server, OllamaApiClient ollamaClient, OllamaLocalModelProvider provider)
+        private readonly OllamaApiClientFactory _factory;
+
+        public ProviderTestContext(FakeOllamaServer server, OllamaApiClient ollamaClient, OllamaApiClientFactory factory, OllamaLocalModelProvider provider)
         {
             Server = server;
             OllamaClient = ollamaClient;
+            _factory = factory;
             Provider = provider;
         }
 
@@ -176,6 +220,8 @@ public sealed class OllamaLocalModelProviderTests
         {
             Provider.Dispose();
             OllamaClient.Dispose();
+            // The factory owns the shared HttpClient; disposing the per-model/base clients above does not.
+            _factory.Dispose();
             await Server.DisposeAsync().ConfigureAwait(false);
         }
     }

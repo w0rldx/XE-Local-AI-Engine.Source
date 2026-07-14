@@ -64,6 +64,45 @@ public sealed class PreviewWorkflowExecutionServiceTests
     }
 
     [Test]
+    public async Task PreviewExec_ConcurrentStarts_NeverExceedConcurrencyCap()
+    {
+        var provider = new FakeLocalModelProvider();
+        var publisher = new RecordingPreviewEventPublisher();
+
+        // Each run gets a scripted session with NO queued updates, so WatchAsync blocks and the run stays live for the
+        // whole test — a started run never completes and frees its slot mid-test. This makes the cap outcome depend
+        // solely on the reservation, not on timing.
+        var runner = new FakePreviewWorkflowRunner((_, _) => new ScriptedPreviewRunSession([]));
+
+        var options = DefaultOptions();
+        options.MaxConcurrentRuns = 2;
+        await using var service = CreateService(runner, publisher, provider, options);
+
+        const int attempts = 8;
+        var starts = Enumerable.Range(0, attempts)
+                               .Select(attempt => Task.Run(async () =>
+                               {
+                                   try
+                                   {
+                                       _ = await service.StartAsync(PreviewGraphBuilder.Linear(), connectionId: null).ConfigureAwait(false);
+                                       return true;
+                                   }
+                                   catch (PreviewWorkflowCapReachedException)
+                                   {
+                                       return false;
+                                   }
+                               }))
+                               .ToArray();
+
+        var results = await Task.WhenAll(starts).ConfigureAwait(false);
+
+        // Exactly MaxConcurrentRuns starts win the reservation; every excess concurrent start is rejected with the cap
+        // exception — no TOCTOU window admits an over-cap run.
+        AssertEx.Equal(expected: 2, results.Count(started => started));
+        AssertEx.Equal(expected: attempts - 2, results.Count(started => !started));
+    }
+
+    [Test]
     public async Task PreviewExec_Cancel_WhilePaused_UnblocksAndDisposes()
     {
         var provider = new FakeLocalModelProvider();
