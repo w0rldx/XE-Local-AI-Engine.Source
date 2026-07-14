@@ -104,6 +104,11 @@ public sealed class NodeChatInvocationPump(
                 state.GenerationDurationMs),
             CancellationToken.None).ConfigureAwait(false);
 
+        // The transition guard may have rejected this terminalize (the row already reached a different terminal), so the
+        // persisted row is the authoritative winning state. The run envelope, the returned status, and the single SSE
+        // terminal are all built from it rather than the requested terminal, so the ledger can never disagree with the row.
+        var winningStatus = persisted.Status;
+
         // Durable run ledger (MED-007): one content-free envelope row per terminalized invocation. Best-effort — a
         // ledger failure is swallowed inside the helper so it can never fail or corrupt the terminalized turn.
         var durationMs = state.GenerationDurationMs
@@ -113,8 +118,8 @@ public sealed class NodeChatInvocationPump(
                 state.InvocationId,
                 correlation.RequestId,
                 state.ModelUsed ?? requestedModel ?? string.Empty,
-                terminalStatus,
-                state.Status == InvocationStatus.Completed,
+                winningStatus,
+                string.Equals(winningStatus, NodeChatMessageStatusValues.Completed, StringComparison.Ordinal),
                 durationMs,
                 state.FailureCategory?.ToString(),
                 state.InputTokens,
@@ -124,7 +129,7 @@ public sealed class NodeChatInvocationPump(
                 CurrentTraceId()))
             .ConfigureAwait(false);
 
-        return new NodeChatPumpTerminalResult(persisted, terminalStatus, eventType);
+        return new NodeChatPumpTerminalResult(persisted, winningStatus, MapTerminalEventType(winningStatus, eventType));
     }
 
     /// <summary>
@@ -150,6 +155,10 @@ public sealed class NodeChatInvocationPump(
                 terminalStatus),
             CancellationToken.None).ConfigureAwait(false);
 
+        // The persisted row is the winning state: the guard may have rejected an Interrupted write against an already
+        // terminal row (or a Cancelled write is idempotent over an HTTP-cancelled row). Build the ledger + result from it.
+        var winningStatus = persisted.Status;
+
         // Durable run ledger (MED-007): a stream that ended without a terminal invocation state still gets one envelope
         // row. Thinner than the state-driven path — there is no InvocationState here, so invocation id / tokens /
         // duration / chunk counts are unknown and omitted; the terminal status carries the interrupted/cancelled outcome.
@@ -158,8 +167,8 @@ public sealed class NodeChatInvocationPump(
                 InvocationId: null,
                 correlation.RequestId,
                 ModelName: string.Empty,
-                terminalStatus,
-                Success: false,
+                winningStatus,
+                Success: string.Equals(winningStatus, NodeChatMessageStatusValues.Completed, StringComparison.Ordinal),
                 DurationMs: 0L,
                 FailureCategory: null,
                 PromptTokens: null,
@@ -169,7 +178,7 @@ public sealed class NodeChatInvocationPump(
                 CurrentTraceId()))
             .ConfigureAwait(false);
 
-        return new NodeChatPumpTerminalResult(persisted, terminalStatus, eventType);
+        return new NodeChatPumpTerminalResult(persisted, winningStatus, MapTerminalEventType(winningStatus, eventType));
     }
 
     /// <summary>Whether a state represents a terminal invocation outcome the pump should terminalize on.</summary>
@@ -199,6 +208,21 @@ public sealed class NodeChatInvocationPump(
                 eventType = string.Empty;
                 return false;
         }
+    }
+
+    // Maps a persisted terminal MESSAGE status back to its stream event type, so the emitted SSE terminal reflects the
+    // row that actually won rather than the requested terminal. Falls back to the requested event for any unexpected
+    // (non-terminal) status, which the terminalize path cannot produce.
+    private static string MapTerminalEventType(string terminalStatus, string requestedEventType)
+    {
+        return terminalStatus switch
+        {
+            NodeChatMessageStatusValues.Completed => ChatStreamEventTypes.AssistantCompleted,
+            NodeChatMessageStatusValues.Cancelled => ChatStreamEventTypes.AssistantCancelled,
+            NodeChatMessageStatusValues.Failed => ChatStreamEventTypes.AssistantFailed,
+            NodeChatMessageStatusValues.Interrupted => ChatStreamEventTypes.AssistantInterrupted,
+            _ => requestedEventType
+        };
     }
 
     private long NowUnixMilliseconds()

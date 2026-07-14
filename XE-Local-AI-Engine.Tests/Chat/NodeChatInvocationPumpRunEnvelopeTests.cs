@@ -176,9 +176,65 @@ public sealed class NodeChatInvocationPumpRunEnvelopeTests
         AssertEx.Equal("completed", result.TerminalStatus);
     }
 
+    [Test]
+    public async Task TerminalizeInterruptedAsync_WhenPersistedStatusWins_EnvelopeAndResultReflectPersisted()
+    {
+        // Simulate the transition guard rejecting an Interrupted write against an already-Cancelled row: the persistence
+        // seam returns the Cancelled winning row. The envelope, the returned status, and the event type must all reflect
+        // that persisted state rather than the requested Interrupted, so the ledger can never disagree with the row.
+        var store = Substitute.For<IAgentExecutionLogStore>();
+        var persistence = Substitute.For<INodeChatPersistenceService>();
+        var correlation = new NodeChatMessageCorrelation(Guid.NewGuid(), Guid.NewGuid(), Guid.NewGuid());
+        persistence.TerminalizeAssistantMessageAsync(Arg.Any<NodeChatTerminalizeMessageRequest>(), Arg.Any<CancellationToken>())
+                   .Returns(new NodeChatPersistedMessageDto(correlation.MessageId,
+                       correlation.ConversationId,
+                       correlation.RequestId,
+                       Sequence: 0,
+                       "assistant",
+                       "partial",
+                       Reasoning: null,
+                       NodeChatMessageStatusValues.Cancelled,
+                       CreatedAtUtc: 0,
+                       UpdatedAtUtc: 5,
+                       Model: null,
+                       Error: null,
+                       MetadataJson: null));
+        var provider = new ServiceCollection().AddSingleton(store).BuildServiceProvider();
+        var pump = new NodeChatInvocationPump(persistence, TimeProvider.System, provider.GetRequiredService<IServiceScopeFactory>(), NullLogger<NodeChatInvocationPump>.Instance);
+
+        var result = await pump.TerminalizeInterruptedAsync(correlation, new NodeChatPumpCursor("partial", string.Empty), wasCancelled: false);
+
+        AssertEx.Equal(NodeChatMessageStatusValues.Cancelled, result.TerminalStatus);
+        AssertEx.Equal(ChatStreamEventTypes.AssistantCancelled, result.EventType);
+        await store.Received(1).AddRunEnvelopeAsync(
+            Arg.Is<AgentRunEnvelopeInput>(input => input.TerminalStatus == NodeChatMessageStatusValues.Cancelled && !input.Success),
+            Arg.Any<CancellationToken>());
+    }
+
     private static NodeChatInvocationPump CreatePump(IAgentExecutionLogStore store)
     {
         var persistence = Substitute.For<INodeChatPersistenceService>();
+        // The pump now derives the envelope + result from the PERSISTED winning row, so the terminalize seam must return
+        // a message. Echo the requested terminal (the happy-path winning status) so the envelope reflects a successful
+        // terminalize; the transition-table rejection path is covered directly in NodeChatPersistenceServiceTests.
+        persistence.TerminalizeAssistantMessageAsync(Arg.Any<NodeChatTerminalizeMessageRequest>(), Arg.Any<CancellationToken>())
+                   .Returns(callInfo =>
+                   {
+                       var request = callInfo.Arg<NodeChatTerminalizeMessageRequest>();
+                       return new NodeChatPersistedMessageDto(request.Correlation.MessageId,
+                           request.Correlation.ConversationId,
+                           request.Correlation.RequestId,
+                           Sequence: 0,
+                           "assistant",
+                           request.Content ?? string.Empty,
+                           request.Reasoning,
+                           request.Status,
+                           CreatedAtUtc: 0,
+                           request.UpdatedAtUtc,
+                           request.Model,
+                           request.Error,
+                           MetadataJson: null);
+                   });
         var provider = new ServiceCollection()
                        .AddSingleton(store)
                        .BuildServiceProvider();
