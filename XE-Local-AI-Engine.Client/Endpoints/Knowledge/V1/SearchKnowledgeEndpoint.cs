@@ -27,14 +27,15 @@ public sealed class SearchKnowledgeEndpoint(IKnowledgeSearchService searchServic
 
     public override async Task HandleAsync(SearchKnowledgeRequest req, CancellationToken ct)
     {
-        if (string.IsNullOrWhiteSpace(req.Query))
+        var validation = KnowledgeQueryLimits.ValidateAndNormalize(req.Query, out var normalizedQuery);
+        if (validation == KnowledgeQueryValidation.Empty)
         {
             AddError("A search query is required.");
             await Send.ErrorsAsync(cancellation: ct).ConfigureAwait(false);
             return;
         }
 
-        if (KnowledgeQueryLimits.ExceedsMaxLength(req.Query))
+        if (validation == KnowledgeQueryValidation.TooLong)
         {
             AddError($"The search query must be {KnowledgeQueryLimits.MaxQueryLength} characters or fewer.");
             await Send.ErrorsAsync(cancellation: ct).ConfigureAwait(false);
@@ -42,7 +43,7 @@ public sealed class SearchKnowledgeEndpoint(IKnowledgeSearchService searchServic
         }
 
         var limit = req.Limit <= 0 ? DefaultLimit : Math.Clamp(req.Limit, MinLimit, MaxLimit);
-        var request = new KnowledgeSearchRequest(req.Query, limit, req.DocumentId, req.ExpandNeighbors);
+        var request = new KnowledgeSearchRequest(normalizedQuery, limit, req.DocumentId, req.ExpandNeighbors);
         var result = await _searchService.SearchAsync(request, ct).ConfigureAwait(false);
 
         await Send.OkAsync(new SearchKnowledgeResponse

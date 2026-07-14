@@ -66,12 +66,18 @@ internal sealed class SearchKnowledgeBaseToolHandler : IClientLocalToolHandler
             return $"search_knowledge_base arguments were not valid JSON: {exception.Message}";
         }
 
-        if (request is null || string.IsNullOrWhiteSpace(request.Query))
+        if (request is null)
         {
             return "search_knowledge_base requires a non-empty 'query'.";
         }
 
-        if (KnowledgeQueryLimits.ExceedsMaxLength(request.Query))
+        var validation = KnowledgeQueryLimits.ValidateAndNormalize(request.Query, out var normalizedQuery);
+        if (validation == KnowledgeQueryValidation.Empty)
+        {
+            return "search_knowledge_base requires a non-empty 'query'.";
+        }
+
+        if (validation == KnowledgeQueryValidation.TooLong)
         {
             return $"search_knowledge_base 'query' must be {KnowledgeQueryLimits.MaxQueryLength} characters or fewer.";
         }
@@ -88,7 +94,7 @@ internal sealed class SearchKnowledgeBaseToolHandler : IClientLocalToolHandler
         }
 
         var limit = request.Limit is { } requested ? Math.Clamp(requested, MinLimit, MaxLimit) : DefaultLimit;
-        var searchRequest = new KnowledgeSearchRequest(request.Query, limit, documentId, request.ExpandNeighbors ?? false);
+        var searchRequest = new KnowledgeSearchRequest(normalizedQuery, limit, documentId, request.ExpandNeighbors ?? false);
 
         await using var scope = _scopeFactory.CreateAsyncScope();
         var searchService = scope.ServiceProvider.GetRequiredService<IKnowledgeSearchService>();
