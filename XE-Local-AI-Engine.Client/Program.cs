@@ -34,6 +34,9 @@ VelopackApp.Build().Run();
 
 try
 {
+    // Held for the process lifetime once acquired in the desktop branch below; disposed after the host is built.
+    SingleInstanceLease? instanceLease = null;
+
     var builder = WebApplication.CreateBuilder(args);
 
     // App self-update build flavor: layer the baked, channel-specific update config (repo URL +
@@ -55,6 +58,23 @@ try
     {
         // Resolve (and create) the per-user data dir up front so both the bind below and the config layer share it.
         var desktopDataDirectory = DesktopBootstrap.ResolveDataDirectory();
+
+        // Acquire the exclusive per-data-root lease BEFORE any key/DB initialization (the operator key is generated in
+        // EnsureLocalDataConfiguration just below). A second concurrent instance sharing this data directory would each
+        // generate its own encryption key and split the DB, so fail fast here with a clear message and a non-zero exit
+        // rather than proceeding. Held for the process lifetime; disposed on shutdown after the host is built. Off the
+        // desktop flag this is never reached — headless/Aspire/CI do not share this per-user data root.
+#pragma warning disable CA2000 // Ownership is transferred to the host lifetime (disposed via ApplicationStopped below).
+        instanceLease = SingleInstanceLease.TryAcquire(desktopDataDirectory);
+#pragma warning restore CA2000
+        if (instanceLease is null)
+        {
+            Log.Logger = builder.Environment.CreateStartupLogger(builder.Configuration);
+            Log.Fatal("Another instance of XE Local AI Engine is already running for the data directory '{DataDirectory}'. "
+                      + "Close the other instance before starting a new one.", desktopDataDirectory);
+            await Log.CloseAndFlushAsync().ConfigureAwait(false);
+            return 1;
+        }
 
         // Re-bind the loopback port remembered from the last launch when it is still free, so the browser origin
         // (scheme+host+port) stays stable and localStorage-backed user prefs survive between runs; otherwise fall back to
@@ -122,6 +142,14 @@ try
 #pragma warning restore CA2000
 
     var app = builder.Build();
+
+    // Transfer the single-instance lease to the host lifetime: it lives until shutdown and releases the exclusive lock
+    // on ApplicationStopped. The OS also releases it on a crash, so this is graceful cleanup rather than a correctness
+    // requirement. Null off the desktop flag (no lease is acquired there).
+    if (instanceLease is not null)
+    {
+        app.Lifetime.ApplicationStopped.Register(instanceLease.Dispose);
+    }
 
     try
     {
@@ -330,6 +358,8 @@ finally
     Log.Information("Application Stopping");
     await Log.CloseAndFlushAsync();
 }
+
+return 0;
 
 // Request-completion level for UseSerilogRequestLogging: failures stay loud (5xx/exception = Error, unexpected 4xx =
 // Warning) while routine traffic (2xx/3xx, the 401 token-refresh dance, SPA-fallback 404s) drops to Debug so the SPA's
