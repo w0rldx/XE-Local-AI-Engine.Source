@@ -1,6 +1,7 @@
 namespace XE_Local_AI_Engine.Tests.DocumentIngestion;
 
 using System.Globalization;
+using System.IO.Compression;
 using System.Text;
 using DocumentFormat.OpenXml;
 using DocumentFormat.OpenXml.Packaging;
@@ -145,6 +146,100 @@ public sealed class DocumentTextExtractorTests
     }
 
     [Test]
+    public async Task Extractor_WhenZipDeclaresOversizeUncompressed_RejectsBeforeParsing()
+    {
+        // A real, well-formed zip whose single entry declares ~3 MiB uncompressed (highly compressible zero bytes, so the
+        // stored bytes are tiny). It is a valid zip but NOT a valid .docx, so if the preflight let it through the DOCX
+        // reader would fail with a generic "Extraction failed (...)". Asserting the declared-size preflight reason instead
+        // proves rejection happened up front, from the central directory, before the reader ever parsed the container.
+        var extractor = new DocumentTextExtractor(NullLogger<DocumentTextExtractor>.Instance,
+            maxOutputChars: 5_000_000,
+            maxStructuredOutputChars: 20_000_000,
+            maxExpansionRatio: 200,
+            minCharsForExpansionGuard: 1_000_000,
+            maxDeclaredUncompressedBytes: 1024 * 1024,
+            maxCompressionRatio: 1_000_000);
+        using var stream = new MemoryStream(BuildZip(entryCount: 1, bytesPerEntry: 3 * 1024 * 1024));
+
+        var result = await extractor.ExtractAsync(stream, "bomb.docx", ".docx", CancellationToken.None);
+
+        AssertEx.Equal(DocumentExtractionStatus.Failed, result.Status);
+        AssertEx.Null(result.Markdown);
+        AssertEx.Contains(AssertEx.NotNull(result.Error), "uncompressed");
+    }
+
+    [Test]
+    public async Task Extractor_WhenZipDeclaresTooManyEntries_RejectsBeforeParsing()
+    {
+        // 50 tiny entries against a 10-entry ceiling: the entry-count guard fires while summing the central directory,
+        // before any entry is decompressed.
+        var extractor = new DocumentTextExtractor(NullLogger<DocumentTextExtractor>.Instance,
+            maxOutputChars: 5_000_000,
+            maxStructuredOutputChars: 20_000_000,
+            maxExpansionRatio: 200,
+            minCharsForExpansionGuard: 1_000_000,
+            maxCompressedEntries: 10);
+        using var stream = new MemoryStream(BuildZip(entryCount: 50, bytesPerEntry: 16));
+
+        var result = await extractor.ExtractAsync(stream, "many.docx", ".docx", CancellationToken.None);
+
+        AssertEx.Equal(DocumentExtractionStatus.Failed, result.Status);
+        AssertEx.Contains(AssertEx.NotNull(result.Error), "entries");
+    }
+
+    [Test]
+    public async Task Extractor_WhenZipDeclaresOversizeRatio_RejectsBeforeParsing()
+    {
+        // A ~256 KiB zero-byte entry compresses to a few hundred bytes — a several-hundred-x declared ratio. A ceiling of
+        // 1x makes any real archive trip the ratio guard, isolating it from the entry-count and absolute-size checks.
+        var extractor = new DocumentTextExtractor(NullLogger<DocumentTextExtractor>.Instance,
+            maxOutputChars: 5_000_000,
+            maxStructuredOutputChars: 20_000_000,
+            maxExpansionRatio: 200,
+            minCharsForExpansionGuard: 1_000_000,
+            maxCompressionRatio: 1);
+        using var stream = new MemoryStream(BuildZip(entryCount: 1, bytesPerEntry: 256 * 1024));
+
+        var result = await extractor.ExtractAsync(stream, "ratio.docx", ".docx", CancellationToken.None);
+
+        AssertEx.Equal(DocumentExtractionStatus.Failed, result.Status);
+        AssertEx.Contains(AssertEx.NotNull(result.Error), "expansion ratio");
+    }
+
+    [Test]
+    public async Task Extractor_WhenHealthyDocx_PassesPreflight()
+    {
+        // A genuine small .docx must clear the preflight at the shipped default ceilings and extract normally — the guard
+        // rejects only pathological archives, never ordinary documents.
+        using var stream = new MemoryStream(BuildDocx());
+
+        var result = await CreateExtractor().ExtractAsync(stream, "report.docx", ".docx", CancellationToken.None);
+
+        AssertEx.Equal(DocumentExtractionStatus.Extracted, result.Status);
+        AssertEx.Contains(AssertEx.NotNull(result.Markdown), "Project Overview");
+    }
+
+    [Test]
+    public async Task Extractor_WhenPdfExceedsPageCap_RejectsBeforeExtractingText()
+    {
+        // A valid 3-page PDF against a 2-page ceiling. The page count is read from the catalog on open, before per-page
+        // text extraction, so the cap fires without materializing the pages' text.
+        var extractor = new DocumentTextExtractor(NullLogger<DocumentTextExtractor>.Instance,
+            maxOutputChars: 5_000_000,
+            maxStructuredOutputChars: 20_000_000,
+            maxExpansionRatio: 200,
+            minCharsForExpansionGuard: 1_000_000,
+            maxPdfPageCount: 2);
+        using var stream = new MemoryStream(BuildMultiPagePdf(pageCount: 3));
+
+        var result = await extractor.ExtractAsync(stream, "long.pdf", ".pdf", CancellationToken.None);
+
+        AssertEx.Equal(DocumentExtractionStatus.Failed, result.Status);
+        AssertEx.Null(result.Markdown);
+        AssertEx.Contains(AssertEx.NotNull(result.Error), "pages");
+    }
+
+    [Test]
     public async Task Extractor_WhenStructuredWithinBounds_ExtractsDocument()
     {
         using var stream = new MemoryStream(Encoding.UTF8.GetBytes("# Title\n\nA short paragraph."));
@@ -207,6 +302,85 @@ public sealed class DocumentTextExtractorTests
         }
 
         return buffer.ToArray();
+    }
+
+    // A real, well-formed zip built in-process. Each entry is `bytesPerEntry` zero bytes — highly compressible, so the
+    // stored size is tiny while the central directory declares the full uncompressed length. This is the honest shape a
+    // preflight rejects on declared metadata (entry count / declared size / declared ratio) without decompressing.
+    private static byte[] BuildZip(int entryCount, int bytesPerEntry)
+    {
+        var payload = new byte[bytesPerEntry];
+        using var buffer = new MemoryStream();
+        using (var archive = new ZipArchive(buffer, ZipArchiveMode.Create, leaveOpen: true))
+        {
+            for (var i = 0; i < entryCount; i++)
+            {
+                var entry = archive.CreateEntry(
+                    string.Create(CultureInfo.InvariantCulture, $"part{i}.xml"),
+                    CompressionLevel.Optimal);
+                using var entryStream = entry.Open();
+                entryStream.Write(payload, 0, payload.Length);
+            }
+        }
+
+        return buffer.ToArray();
+    }
+
+    // A minimal hand-authored multi-page PDF with correct xref byte offsets: catalog (obj 1), the pages tree (obj 2),
+    // then a Page + Contents object pair per page, and a shared font as the final object. Mirrors the single-page
+    // fixture's structure so PdfPig parses it and reports NumberOfPages == pageCount.
+    private static byte[] BuildMultiPagePdf(int pageCount)
+    {
+        var fontObject = (2 * pageCount) + 3;
+
+        var bodies = new List<string>
+        {
+            "<< /Type /Catalog /Pages 2 0 R >>"
+        };
+
+        var kids = new StringBuilder();
+        for (var i = 0; i < pageCount; i++)
+        {
+            kids.Append(3 + (2 * i)).Append(" 0 R ");
+        }
+
+        bodies.Add(string.Create(CultureInfo.InvariantCulture,
+            $"<< /Type /Pages /Kids [{kids.ToString().TrimEnd()}] /Count {pageCount} >>"));
+
+        for (var i = 0; i < pageCount; i++)
+        {
+            var contentsObject = 4 + (2 * i);
+            bodies.Add(string.Create(CultureInfo.InvariantCulture,
+                $"<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] /Resources << /Font << /F1 {fontObject} 0 R >> >> /Contents {contentsObject} 0 R >>"));
+
+            var content = string.Create(CultureInfo.InvariantCulture, $"BT /F1 24 Tf 72 700 Td (Page {i + 1}) Tj ET");
+            bodies.Add("<< /Length " + content.Length + " >>\nstream\n" + content + "\nendstream");
+        }
+
+        bodies.Add("<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>");
+
+        var builder = new StringBuilder();
+        builder.Append("%PDF-1.4\n");
+
+        var offsets = new int[bodies.Count + 1];
+        for (var i = 0; i < bodies.Count; i++)
+        {
+            offsets[i + 1] = Encoding.ASCII.GetByteCount(builder.ToString());
+            builder.Append(i + 1).Append(" 0 obj\n").Append(bodies[i]).Append("\nendobj\n");
+        }
+
+        var startxref = Encoding.ASCII.GetByteCount(builder.ToString());
+        var size = bodies.Count + 1;
+        builder.Append("xref\n0 ").Append(size).Append('\n');
+        builder.Append("0000000000 65535 f \n");
+        for (var i = 1; i < size; i++)
+        {
+            builder.Append(offsets[i].ToString("D10", CultureInfo.InvariantCulture)).Append(" 00000 n \n");
+        }
+
+        builder.Append("trailer\n<< /Size ").Append(size).Append(" /Root 1 0 R >>\nstartxref\n").Append(startxref).Append("\n%%EOF");
+
+        return Encoding.ASCII.GetBytes(builder.ToString());
     }
 
     // PdfPig is read-only, so the fixture is a minimal hand-authored single-page PDF with correct xref byte offsets
