@@ -264,6 +264,25 @@ public sealed class KnowledgeDocumentCatalogService : IKnowledgeDocumentCatalogS
         return interruptedIds;
     }
 
+    public async Task<IReadOnlyList<Guid>> ListPendingDocumentIdsAsync(CancellationToken cancellationToken)
+    {
+        var connection = _dbContext.Database.GetDbConnection();
+        await OpenIfNeededAsync(connection, cancellationToken).ConfigureAwait(false);
+
+        await using var command = connection.CreateCommand();
+        command.CommandText = "SELECT document_id FROM knowledge_documents WHERE status = $pending;";
+        AddParameter(command, "$pending", KnowledgeDocumentStatus.Pending.ToString());
+
+        await using var reader = await command.ExecuteReaderAsync(cancellationToken).ConfigureAwait(false);
+        var pendingIds = new List<Guid>();
+        while (await reader.ReadAsync(cancellationToken).ConfigureAwait(false))
+        {
+            pendingIds.Add(Guid.Parse(reader.GetString(0)));
+        }
+
+        return pendingIds;
+    }
+
     private static async Task<IReadOnlyList<KnowledgeDocumentChunkView>> ReadChunksAsync(DbConnection connection, Guid documentId, CancellationToken cancellationToken)
     {
         await using var command = connection.CreateCommand();

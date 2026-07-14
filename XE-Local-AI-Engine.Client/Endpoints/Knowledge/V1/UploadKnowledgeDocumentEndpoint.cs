@@ -99,17 +99,24 @@ public sealed class UploadKnowledgeDocumentEndpoint(
 
         var result = await _blobStore.AddAsync(input, ct).ConfigureAwait(false);
 
-        // Only enqueue a freshly inserted document; a dedupe hit already exists (and may already be indexed), so
-        // re-running the pipeline would be wasted work.
-        if (result.WasInserted)
+        // Resolve the current status once. Ingestion flips a document out of Pending the instant it starts, so a Pending
+        // row is one that has NOT been ingested — either freshly inserted or a prior upload whose admission a full queue
+        // rejected (503), leaving the persisted blob stranded. Enqueue when the document was freshly inserted OR is a
+        // dedupe hit that is still Pending, so retrying a stranded upload actually recovers instead of returning success
+        // for work that was never queued. A dedupe hit already Indexed (or mid-ingestion) is left alone. Admission is
+        // idempotent, so retrying a document already queued is a harmless no-op rather than a duplicate ingestion.
+        var status = await _catalogService.GetStatusAsync(result.DocumentId, ct).ConfigureAwait(false)
+                     ?? KnowledgeDocumentStatus.Pending;
+
+        if (result.WasInserted || status == KnowledgeDocumentStatus.Pending)
         {
             var admission = await _ingestionDispatcher.EnqueueAsync(result.DocumentId, ct).ConfigureAwait(false);
             if (admission == KnowledgeIngestionEnqueueResult.QueueFull)
             {
                 // The bounded ingestion queue is full: the blob is persisted (so a retry dedupes to it) but background
                 // indexing was not admitted. Fail with the same busy status + Retry-After the conversation upload uses so
-                // the client retries shortly rather than the server growing an unbounded backlog. A later reindex (or a
-                // retry once the queue drains) picks the document up.
+                // the client retries shortly rather than the server growing an unbounded backlog. The worker's drain-sweep
+                // (or a retry once the queue drains) picks the stranded document up.
                 HttpContext.Response.Headers.RetryAfter = "5";
                 await Send.StringAsync("The server is busy indexing documents. Please retry shortly.",
                     StatusCodes.Status503ServiceUnavailable,
@@ -117,9 +124,6 @@ public sealed class UploadKnowledgeDocumentEndpoint(
                 return;
             }
         }
-
-        var status = await _catalogService.GetStatusAsync(result.DocumentId, ct).ConfigureAwait(false)
-                     ?? KnowledgeDocumentStatus.Pending;
 
         await Send.OkAsync(new UploadKnowledgeDocumentResponse
             {
