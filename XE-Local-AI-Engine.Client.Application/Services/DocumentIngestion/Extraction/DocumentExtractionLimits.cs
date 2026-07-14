@@ -13,12 +13,21 @@ internal static class DocumentExtractionLimits
     public const int DefaultMaxOutputChars = 5_000_000;
 
     /// <summary>
-    ///     Ceiling on the bytes materialized into memory while buffering an upload for extraction. A container format
-    ///     such as a .docx (zip) or a .pdf can expand well beyond its on-disk size, so a hostile "decompression bomb"
-    ///     upload could otherwise exhaust memory before the char-count truncation runs. Buffering past this ceiling fails
-    ///     extraction cleanly (<see cref="DocumentExtractionStatus.Failed"/>) instead of risking an out-of-memory crash.
+    ///     Hard ceiling on the RAW upload bytes copied into the seekable buffer that feeds extraction (PdfPig and the
+    ///     Open XML SDK both seek, so a forward-only upload stream must be materialized first). This caps the raw input
+    ///     copy — not any decompressed or parser-expanded output — so it is simply a second bound on the in-memory buffer,
+    ///     independent of the per-file upload cap. Copying past this ceiling fails extraction cleanly
+    ///     (<see cref="DocumentExtractionStatus.Failed"/>) instead of risking an out-of-memory crash.
+    ///     <para>
+    ///         The per-file upload cap (<c>Security:MaxUploadFileSizeMb</c>, default 25 MiB, operator-configurable up to
+    ///         512 MiB) is the primary bound and is stricter than this ceiling under the default, so this guard can never
+    ///         fire out of the box. The headroom above the default is deliberate: this ceiling only bites when an operator
+    ///         raises the upload cap above 200 MiB, keeping the extraction buffer bounded even then. Parser-internal
+    ///         expansion is NOT bounded here — the reader still decompresses the container internally; that is caught after
+    ///         materialization by the output char cap and the expansion-ratio guard.
+    ///     </para>
     /// </summary>
-    public const long MaxDecompressedBytes = 200L * 1024 * 1024;
+    public const long MaxBufferedInputBytes = 200L * 1024 * 1024;
 
     /// <summary>
     ///     Upper bound on the total characters a STRUCTURED extraction (<c>ExtractStructuredAsync</c>) may yield. Unlike
