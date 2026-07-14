@@ -13,11 +13,12 @@ using System.Text;
 ///     concatenated into the prompt where it reads like a system directive. The BaseScaffold instructs the model to
 ///     treat everything between the markers as data.
 ///     <para>
-///         The begin/end markers carry a per-wrap random NONCE (a fresh <see cref="System.Guid" /> each call). Because
-///         the document body cannot predict the nonce, embedded text — even a verbatim copy of the marker prefix — can
-///         never forge the closing marker and break out of the fence. This closes the fixed-marker forgery gap. Callers
-///         MUST place every attacker-controlled field (body AND metadata) inside one fence via
-///         <see cref="WrapDocument" />; nothing attacker-controlled should be emitted outside it.
+///         The begin/end markers carry a per-wrap NONCE that is either random each call, or deterministically derived
+///         from a server-side per-conversation seed for prompt-cache stability (the prefix-stable attachment path). In
+///         both cases the value is unpredictable to whoever authored the document content, so embedded text — even a
+///         verbatim copy of the marker prefix — can never forge the closing marker and break out of the fence. This
+///         closes the fixed-marker forgery gap. Callers MUST place every attacker-controlled field (body AND metadata)
+///         inside one fence via <see cref="WrapDocument" />; nothing attacker-controlled should be emitted outside it.
 ///     </para>
 /// </summary>
 public static class UntrustedContentFraming
