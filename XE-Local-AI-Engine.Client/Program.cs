@@ -131,9 +131,11 @@ try
     // Activity from an inbound `traceparent` header even when no OTel listener is present; otherwise Activity.Current
     // would be null in the request pipeline and the emitted trace id would regress to the Kestrel connection id
     // (TraceIdentifier). The listener is scoped to "Microsoft.AspNetCore" — the only source that produces the request
-    // activities this correlation needs — rather than every source in the process; AllData keeps the W3C ids populated
-    // and the activity recorded so the trace/span ids are real. When Aspire is ON, the OTel listeners coexist with this
-    // one. Process-global, so set once before Build().
+    // activities this correlation needs — rather than every source in the process. AllData makes the listener request
+    // all data for activities that scoped source creates, so their W3C trace/span ids are populated; it does not by
+    // itself record activities (that would need AllDataAndRecorded) or populate anything for other sources, so on this
+    // path the emitted traceresponse trace-flags byte is "00" (not-recorded). When Aspire is ON, the OTel listeners
+    // coexist with this one. Process-global, so set once before Build().
     Activity.DefaultIdFormat = ActivityIdFormat.W3C;
     Activity.ForceDefaultIdFormat = true;
 #pragma warning disable CA2000 // The listener is owned by the static ActivitySource registry for the app's lifetime.
@@ -210,12 +212,11 @@ try
         {
             context.Response.OnStarting(() =>
             {
-                if (!context.Response.Headers.ContainsKey("traceresponse"))
+                // The trace-flags byte reflects the activity's actual recorded state rather than a hardcoded "01"
+                // (see TraceResponseHeader.Build), so a downstream reader is not told the span was sampled when it was not.
+                if (!context.Response.Headers.ContainsKey(TraceResponseHeader.HeaderName))
                 {
-                    // Trace-flags byte reflects the activity's actual recorded state rather than a hardcoded "01", so a
-                    // downstream reader is not told the span was sampled when it was not.
-                    var flags = (activity.ActivityTraceFlags & ActivityTraceFlags.Recorded) != ActivityTraceFlags.None ? "01" : "00";
-                    context.Response.Headers["traceresponse"] = $"00-{activity.TraceId}-{activity.SpanId}-{flags}";
+                    context.Response.Headers[TraceResponseHeader.HeaderName] = TraceResponseHeader.Build(activity);
                 }
 
                 return Task.CompletedTask;
