@@ -1135,7 +1135,9 @@ export type XeLocalAiEngineClientEndpointsLocalChatV1NodeChatBranchConversationR
 };
 
 export type XeLocalAiEngineClientEndpointsLocalChatV1BranchNodeChatConversationRequest = {
-	[key: string]: never;
+	selectedRevisions?: {
+		[key: string]: string;
+	} | null;
 };
 
 export type XeLocalAiEngineClientEndpointsLocalChatV1NodeChatMessageRevisionsResponse = {
@@ -1248,6 +1250,8 @@ export type XeLocalAiEngineClientEndpointsKnowledgeV1KnowledgeSearchHitResponse 
 	source: string;
 	score: number;
 	chunkIndex: number;
+	documentStatus: XeLocalAiEngineClientServicesKnowledgeKnowledgeDocumentStatus;
+	servingLastKnownGood: boolean;
 };
 
 export type XeLocalAiEngineClientEndpointsKnowledgeV1SearchKnowledgeRequest = {
@@ -4525,7 +4529,7 @@ export type SetNodeChatConversationMemoryExcludedResponse =
 	SetNodeChatConversationMemoryExcludedResponses[keyof SetNodeChatConversationMemoryExcludedResponses];
 
 export type BranchNodeChatConversationData = {
-	body?: never;
+	body: XeLocalAiEngineClientEndpointsLocalChatV1BranchNodeChatConversationRequest;
 	path: {
 		conversationId: string;
 		messageId: string;

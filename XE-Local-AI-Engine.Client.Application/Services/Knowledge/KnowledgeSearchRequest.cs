@@ -25,6 +25,17 @@ public sealed record KnowledgeSearchResult(IReadOnlyList<KnowledgeSearchHit> Res
 /// <param name="Source">Constant provenance tag for this retrieval surface.</param>
 /// <param name="Score">Relevance score, higher is more relevant: the fused Reciprocal Rank Fusion score, or — when the reranker is enabled and succeeds — the cross-encoder relevance score the hit was reordered by.</param>
 /// <param name="ChunkIndex">Global order of the matched chunk within the document.</param>
+/// <param name="DocumentStatus">
+///     The owning document's current catalog/pipeline status at retrieval time. A hit only ever exists because the
+///     document has queryable chunks, so a non-<see cref="KnowledgeDocumentStatus.Indexed" /> status means those
+///     chunks are the last successfully-indexed projection while a re-index is pending/running/failed.
+/// </param>
+/// <param name="ServingLastKnownGood">
+///     True when <see cref="DocumentStatus" /> is not <see cref="KnowledgeDocumentStatus.Indexed" /> — i.e. the
+///     content is a last-known-good projection served while the document is mid-reindex or its latest re-ingest
+///     failed. The retrieval surfaces (agent tool output, REST/citation payloads, UI) disclose this so a consumer
+///     never treats potentially-stale content as freshly indexed.
+/// </param>
 public sealed record KnowledgeSearchHit(
     Guid DocumentId,
     Guid ChunkId,
@@ -33,4 +44,6 @@ public sealed record KnowledgeSearchHit(
     string Content,
     string Source,
     double Score,
-    int ChunkIndex);
+    int ChunkIndex,
+    KnowledgeDocumentStatus DocumentStatus,
+    bool ServingLastKnownGood);

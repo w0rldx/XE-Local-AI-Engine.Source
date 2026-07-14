@@ -127,6 +127,10 @@
 				"indexed": "Indexiert",
 				"failed": "Fehlgeschlagen"
 			},
+			"lastKnownGood": {
+				"label": "Letzter gültiger Stand",
+				"tooltip": "Dieses Dokument wird neu indexiert oder die letzte Neuindexierung ist fehlgeschlagen. Die Ergebnisse stammen aus der zuvor indexierten Version und können veraltet sein."
+			},
 			"table": {
 				"name": "Name",
 				"status": "Status",
