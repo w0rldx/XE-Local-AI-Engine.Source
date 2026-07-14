@@ -28,9 +28,14 @@ public sealed class DeadLetterFlushService
 
         _logger.LogInformation("Flushing {PendingEntryCount} dead letter entries.", pendingEntries.Count);
 
+        var flushed = 0;
         foreach (var pendingEntry in pendingEntries)
         {
-            cancellationToken.ThrowIfCancellationRequested();
+            if (cancellationToken.IsCancellationRequested)
+            {
+                LogDeadlineDrop(flushed, pendingEntries.Count);
+                cancellationToken.ThrowIfCancellationRequested();
+            }
 
             try
             {
@@ -39,6 +44,14 @@ public sealed class DeadLetterFlushService
                                        .ConfigureAwait(false);
 
                 await _deadLetterStore.RemoveAsync(pendingEntry.InvocationId, cancellationToken).ConfigureAwait(false);
+                flushed++;
+            }
+            catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+            {
+                // The shutdown deadline fired mid-send. Record how many entries stay queued (they are never removed
+                // until resent) and propagate so the drain records the stage as deadline-exceeded rather than complete.
+                LogDeadlineDrop(flushed, pendingEntries.Count);
+                throw;
             }
             catch (Exception exception)
             {
@@ -51,5 +64,12 @@ public sealed class DeadLetterFlushService
         }
 
         _logger.LogInformation("Dead letter flush completed successfully.");
+    }
+
+    private void LogDeadlineDrop(int flushed, int total)
+    {
+        _logger.LogWarning("Dead letter flush stopped at the shutdown deadline: {FlushedCount} flushed, {DroppedCount} left pending for a later run.",
+            flushed,
+            total - flushed);
     }
 }

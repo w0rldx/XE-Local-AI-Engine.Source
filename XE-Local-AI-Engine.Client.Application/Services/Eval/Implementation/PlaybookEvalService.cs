@@ -30,7 +30,13 @@ internal sealed class PlaybookEvalService(
     IOptions<PlaybookEvalOptions> options,
     ILogger<PlaybookEvalService> logger) : IPlaybookEvalService
 {
-    private static readonly JsonSerializerOptions InputTurnsSerializerOptions = new(JsonSerializerDefaults.Web);
+    /// <summary>
+    ///     <see cref="PlaybookEvalCaseResult.ScoredBy" /> value for a golden case whose stored input turns are unusable
+    ///     (malformed/empty/unknown-role): the case is recorded as an explicit failed result with no model call, so it
+    ///     never silently evaluates the system prompt alone and passes.
+    /// </summary>
+    internal const string InvalidInputScoredBy = "invalid-input";
+
     private readonly IAgentDefinitionStore _agentDefinitionStore = agentDefinitionStore ?? throw new ArgumentNullException(nameof(agentDefinitionStore));
     private readonly IPlaybookEvalAgentRunner _evalAgentRunner = evalAgentRunner ?? throw new ArgumentNullException(nameof(evalAgentRunner));
     private readonly IPlaybookEvalJudge _evalJudge = evalJudge ?? throw new ArgumentNullException(nameof(evalJudge));
@@ -132,7 +138,14 @@ internal sealed class PlaybookEvalService(
         IChatClient chatClient,
         CancellationToken cancellationToken)
     {
-        var turns = ParseInputTurns(goldenCase);
+        // Unusable stored turns (malformed JSON, no turns, an unknown role, or a blank-text turn) cannot demonstrate
+        // quality — record an EXPLICIT failed case (no model call) rather than silently evaluating the system prompt
+        // alone, which would let a broken case pass. Validation blocks these at create/update; this covers legacy rows.
+        if (!GoldenInputTurns.TryParse(goldenCase.InputTurns, out var turns, out var turnsError))
+        {
+            _logger.LogWarning("Golden case {GoldenCaseId} has unusable input turns ({Reason}); recording an explicit failed case.", goldenCase.Id, turnsError);
+            return new PlaybookEvalCaseResult(goldenCase.Id, InvalidInputScoredBy, BaselinePass: false, CandidatePass: false, Regressed: false);
+        }
 
         var baselineText = await _evalAgentRunner.RunAsync(chatClient, baselinePrompt, turns, cancellationToken).ConfigureAwait(false);
         var candidateText = await _evalAgentRunner.RunAsync(chatClient, candidatePrompt, turns, cancellationToken).ConfigureAwait(false);
@@ -148,34 +161,6 @@ internal sealed class PlaybookEvalService(
         return new PlaybookEvalCaseResult(goldenCase.Id, candidateScore.ScoredBy, baselineScore.Pass, candidateScore.Pass, regressed);
     }
 
-    private IReadOnlyList<ChatMessage> ParseInputTurns(GoldenConversationRecord goldenCase)
-    {
-        InputTurn[]? turns;
-        try
-        {
-            turns = JsonSerializer.Deserialize<InputTurn[]>(goldenCase.InputTurns, InputTurnsSerializerOptions);
-        }
-        catch (JsonException exception)
-        {
-            // A golden case whose turns cannot be parsed is unusable; log and treat it as an empty conversation so the
-            // run still completes (the case will score as a fail, never silently pass).
-            _logger.LogWarning(exception, "Failed to parse golden case {GoldenCaseId} input turns; treating as empty.", goldenCase.Id);
-            return [];
-        }
-
-        if (turns is null)
-        {
-            return [];
-        }
-
-        return [.. turns.Select(static turn => new ChatMessage(MapRole(turn.Role), turn.Text ?? string.Empty))];
-    }
-
-    private static ChatRole MapRole(string? role)
-    {
-        return string.Equals(role, "assistant", StringComparison.OrdinalIgnoreCase) ? ChatRole.Assistant : ChatRole.User;
-    }
-
     private PlaybookEvalResult BuildResult(int actionVersion, int goldenCaseTotal, IReadOnlyList<PlaybookEvalCaseResult> caseResults, string fingerprint)
     {
         var baselinePass = caseResults.Count(static caseResult => caseResult.BaselinePass);
@@ -183,10 +168,15 @@ internal sealed class PlaybookEvalService(
         var regressed = caseResults.Count(static caseResult => caseResult.Regressed);
         var improved = caseResults.Count(static caseResult => !caseResult.BaselinePass && caseResult.CandidatePass);
 
-        // Passed requires at least one golden case AND zero regressions (no-regression is unprovable with zero cases).
-        // Note: Passed is a subset property; completeness (GoldenCaseCount == GoldenCaseTotal) is enforced separately by
-        // the promote gate, so a subset "pass" of a truncated run still cannot authorize promotion.
-        var passed = caseResults.Count > 0 && regressed == 0;
+        // Passed requires two independent signals, BOTH surfaced honestly via the counts below:
+        //   1. No-regression   (RegressedCaseCount == 0)      — no prior-good case broke.
+        //   2. Absolute floor  (CandidatePassCount  > 0)      — at least one case actually passed.
+        // The absolute floor closes MED-005: a run where EVERY baseline and candidate case fails has zero regressions but
+        // proves nothing, and must NOT pass on the no-regression signal alone. Also requires at least one evaluated case
+        // (no-regression is unprovable with zero cases). Passed is a subset property; completeness
+        // (GoldenCaseCount == GoldenCaseTotal) is enforced separately by the promote gate, so a subset "pass" of a
+        // truncated run still cannot authorize promotion.
+        var passed = caseResults.Count > 0 && regressed == 0 && candidatePass > 0;
 
         return new PlaybookEvalResult(passed,
             _timeProvider.GetUtcNow().ToUnixTimeMilliseconds(),
@@ -227,7 +217,4 @@ internal sealed class PlaybookEvalService(
         var updated = await _playbookActionService.RecordEvalResultAsync(agentId, actionId, json, cancellationToken).ConfigureAwait(false);
         return new PlaybookEvalOutcome(ActionFound: true, result, updated);
     }
-
-    // Positional record: System.Text.Json binds JSON properties to the constructor parameters by name (Web defaults).
-    private sealed record InputTurn(string? Role, string? Text);
 }

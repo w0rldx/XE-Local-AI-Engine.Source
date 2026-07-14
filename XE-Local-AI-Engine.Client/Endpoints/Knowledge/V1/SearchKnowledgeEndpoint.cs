@@ -64,7 +64,9 @@ public sealed class SearchKnowledgeEndpoint(IKnowledgeSearchService searchServic
             Content = hit.Content,
             Source = hit.Source,
             Score = hit.Score,
-            ChunkIndex = hit.ChunkIndex
+            ChunkIndex = hit.ChunkIndex,
+            DocumentStatus = hit.DocumentStatus,
+            ServingLastKnownGood = hit.ServingLastKnownGood
         };
     }
 }

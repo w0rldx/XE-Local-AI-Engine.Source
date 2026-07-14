@@ -1,6 +1,7 @@
 namespace XE_Local_AI_Engine.Client.DependencyInjection.Modules;
 
 using Microsoft.Extensions.Options;
+using XE_Local_AI_Engine.Client.Configuration.Validation;
 using XE_Local_AI_Engine.Client.Services.PreviewWorkflows;
 using XE_Local_AI_Engine.Client.Services.PreviewWorkflows.Implementation;
 
@@ -20,6 +21,7 @@ internal static class AddNodePreviewWorkflowsExtensions
         _ = builder.Services.AddOptions<PreviewWorkflowExecutionOptions>()
                    .Bind(configuration.GetSection(PreviewWorkflowExecutionOptions.Section))
                    .ValidateOnStart();
+        builder.Services.AddSingleton<IValidateOptions<PreviewWorkflowExecutionOptions>, PreviewWorkflowExecutionOptionsValidator>();
 
         // CRUD + validation over the encrypted canvas store.
         builder.Services.AddScoped<IPreviewWorkflowService, PreviewWorkflowService>();

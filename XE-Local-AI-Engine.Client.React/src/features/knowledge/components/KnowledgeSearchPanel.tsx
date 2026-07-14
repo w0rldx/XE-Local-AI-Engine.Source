@@ -3,6 +3,7 @@ import { IconAlertTriangle, IconSearch } from "@tabler/icons-react";
 import { type FormEvent, useCallback, useState } from "react";
 import { useTranslation } from "react-i18next";
 
+import { KnowledgeLastKnownGoodBadge } from "@/features/knowledge/components/KnowledgeLastKnownGoodBadge";
 import { knowledgeErrorMessage } from "@/features/knowledge/queries/KnowledgeErrorMessage";
 import type { UseKnowledgeSearchResult } from "@/features/knowledge/queries/useKnowledgeSearch";
 
@@ -74,9 +75,12 @@ export function KnowledgeSearchPanel({ search }: KnowledgeSearchPanelProps) {
 											</Text>
 										) : null}
 									</Stack>
-									<Badge variant="light" color="primary" style={{ flexShrink: 0 }}>
-										{t("pages.knowledgeBase.search.score", "Score {{score}}", { score: hit.score.toFixed(2) })}
-									</Badge>
+									<Group gap="xs" wrap="nowrap" style={{ flexShrink: 0 }}>
+										{hit.servingLastKnownGood ? <KnowledgeLastKnownGoodBadge /> : null}
+										<Badge variant="light" color="primary" style={{ flexShrink: 0 }}>
+											{t("pages.knowledgeBase.search.score", "Score {{score}}", { score: hit.score.toFixed(2) })}
+										</Badge>
+									</Group>
 								</Group>
 								<Text size="sm" c="dimmed" lineClamp={3}>
 									{hit.content}

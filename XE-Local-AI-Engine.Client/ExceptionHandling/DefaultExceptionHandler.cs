@@ -1,5 +1,6 @@
 namespace XE_Local_AI_Engine.Client.ExceptionHandling;
 
+using System.Diagnostics;
 using Microsoft.AspNetCore.Diagnostics;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.IdentityModel.JsonWebTokens;
@@ -20,11 +21,16 @@ public class DefaultExceptionHandler(ILogger<DefaultExceptionHandler> logger, IH
                             || hostEnvironment.IsEnvironment("IntegrationTests");
         var detail = isDevelopment ? exception.Message : "An unexpected error occurred";
 
+        // Log the same W3C trace id the client receives in the ProblemDetails response (via ResolveTraceId), plus the
+        // current span id, so a client-reported trace id joins straight to this log line and to distributed traces. The
+        // Kestrel connection id is kept separately as RequestId — it identifies the connection, not the W3C trace.
         logger.LogError(exception,
-            "Unhandled exception while processing {Method} {Path}. StatusCode: {StatusCode}. TraceId: {TraceId}. UserId: {UserId}. ExceptionType: {ExceptionType}",
+            "Unhandled exception while processing {Method} {Path}. StatusCode: {StatusCode}. TraceId: {TraceId}. SpanId: {SpanId}. RequestId: {RequestId}. UserId: {UserId}. ExceptionType: {ExceptionType}",
             httpContext.Request.Method,
             httpContext.Request.Path,
             StatusCodes.Status500InternalServerError,
+            ProblemDetailsExtensions.ResolveTraceId(httpContext),
+            Activity.Current?.SpanId.ToString(),
             httpContext.TraceIdentifier,
             httpContext.User.FindFirst(JwtRegisteredClaimNames.Sub)?.Value ?? "anonymous",
             exception.GetType().Name);

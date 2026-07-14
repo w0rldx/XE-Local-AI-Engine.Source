@@ -4090,6 +4090,19 @@
             }
           }
         ],
+        "requestBody": {
+          "x-name": "BranchNodeChatConversationRequest",
+          "description": "",
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/XE_Local_AI_EngineClientEndpointsLocalChatV1BranchNodeChatConversationRequest"
+              }
+            }
+          },
+          "required": true,
+          "x-position": 1
+        },
         "responses": {
           "200": {
             "description": "Success",
@@ -11205,7 +11218,17 @@
       },
       "XE_Local_AI_EngineClientEndpointsLocalChatV1BranchNodeChatConversationRequest": {
         "type": "object",
-        "additionalProperties": false
+        "additionalProperties": false,
+        "properties": {
+          "selectedRevisions": {
+            "type": "object",
+            "nullable": true,
+            "additionalProperties": {
+              "type": "string",
+              "format": "guid"
+            }
+          }
+        }
       },
       "XE_Local_AI_EngineClientEndpointsLocalChatV1NodeChatMessageRevisionsResponse": {
         "type": "object",
@@ -11544,7 +11567,9 @@
           "content",
           "source",
           "score",
-          "chunkIndex"
+          "chunkIndex",
+          "documentStatus",
+          "servingLastKnownGood"
         ],
         "properties": {
           "documentId": {
@@ -11575,6 +11600,12 @@
           "chunkIndex": {
             "type": "integer",
             "format": "int32"
+          },
+          "documentStatus": {
+            "$ref": "#/components/schemas/XE_Local_AI_EngineClientServicesKnowledgeKnowledgeDocumentStatus"
+          },
+          "servingLastKnownGood": {
+            "type": "boolean"
           }
         }
       },

@@ -86,7 +86,7 @@ public sealed partial class InvocationRunner
                     tool.Description,
                     tool.ParameterSchema,
                     (arguments, cancellationToken) => ExecuteApiToolCallAsync(package.InvocationId, tool.Name, arguments, tool.RequiresApproval, cancellationToken)),
-                ToolLocation.ClientLocal => InvocationToolBridge.CreateOfferPlaceholder(tool.Name),
+                ToolLocation.ClientLocal => InvocationToolBridge.CreateOfferPlaceholder(tool.Name, tool.RequiresApproval),
                 _ => throw new InvalidOperationException($"Unsupported tool location: {tool.Location}")
             })
         ];
@@ -355,7 +355,7 @@ public sealed partial class InvocationRunner
                     tool.Description,
                     tool.ParameterSchema,
                     (arguments, cancellationToken) => ExecuteApiToolCallAsync(package.InvocationId, tool.Name, arguments, tool.RequiresApproval, cancellationToken)),
-                ToolLocation.ClientLocal => InvocationToolBridge.CreateOfferPlaceholder(tool.Name),
+                ToolLocation.ClientLocal => InvocationToolBridge.CreateOfferPlaceholder(tool.Name, tool.RequiresApproval),
                 _ => throw new InvalidOperationException($"Unsupported tool location: {tool.Location}")
             })
         ];

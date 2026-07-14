@@ -207,7 +207,10 @@ internal static class DesktopBootstrap
     {
         if (File.Exists(keyPath))
         {
-            return ReadAndValidateExistingSecret(keyPath);
+            // The exists-check can observe a concurrent first launch's just-created key BEFORE its (tiny) content has
+            // been written, so this read must tolerate a transiently torn file exactly like the lost-create-race path.
+            // A genuinely corrupt persisted key still fails loudly — after the short retry budget instead of instantly.
+            return ReadWinnerSecretWithRetry(keyPath);
         }
 
         return GenerateAndPersistSecret(keyPath);
@@ -268,8 +271,133 @@ internal static class DesktopBootstrap
     private static string GenerateAndPersistSecret(string keyPath)
     {
         var secret = RandomNumberGenerator.GetBytes(NodeOperatorSecretProvider.ExpectedSecretLength);
-        WriteSecretFile(keyPath, secret);
-        return Convert.ToBase64String(secret);
+
+        // Atomic create — independent of the single-instance lease. Two concurrent first launches must NOT each keep
+        // their own freshly-generated secret in memory: one process's encrypted writes would then be unreadable under
+        // the other's key. Create the key file with create-new semantics; when another process won the race, discard the
+        // just-generated candidate and adopt the winner's on-disk secret. A secret is never returned unless it is the one
+        // persisted to disk.
+        if (TryCreateNewSecretFile(keyPath, secret))
+        {
+            return Convert.ToBase64String(secret);
+        }
+
+        return ReadWinnerSecretWithRetry(keyPath);
+    }
+
+    /// <summary>
+    ///     Reads the winning process's key after this process lost the atomic create race, or after the exists-check saw
+    ///     a concurrently-created key. Because the winner may still be holding its exclusive create handle or may not yet
+    ///     have flushed its (tiny) content, a read can transiently fail; retry within a short budget before surfacing the
+    ///     error. A genuinely corrupt persisted key still fails loudly via the final unretried read below.
+    /// </summary>
+    private static string ReadWinnerSecretWithRetry(string keyPath)
+    {
+        string? secret = null;
+
+        // SpinWait yields/back-offs internally (no banned Thread.Sleep). The 2s budget dwarfs the winner's tiny write.
+        SpinWait.SpinUntil(() => TryReadExistingSecret(keyPath, out secret), TimeSpan.FromSeconds(2));
+
+        // Budget elapsed without a successful read (or it just succeeded): a final direct read returns the winner's
+        // secret or throws the real, non-transient error loudly.
+        return secret ?? ReadAndValidateExistingSecret(keyPath);
+    }
+
+    private static bool TryReadExistingSecret(string keyPath, out string? secret)
+    {
+        try
+        {
+            secret = ReadAndValidateExistingSecret(keyPath);
+            return true;
+        }
+        catch (InvalidOperationException)
+        {
+            // Present-but-locked or not-yet-flushed winner key; the caller retries within its budget.
+            secret = null;
+            return false;
+        }
+    }
+
+    /// <summary>
+    ///     Persists <paramref name="secret" /> to <paramref name="keyPath" /> with create-new semantics, returning
+    ///     <c>false</c> when a concurrent process already created the key (the caller then adopts the winner). The
+    ///     election is a single atomic <see cref="FileMode.CreateNew" /> open — <c>O_CREAT|O_EXCL</c> on *nix,
+    ///     <c>CREATE_NEW</c> on Windows — so exactly one of any number of concurrent first launches wins. Deliberately NOT
+    ///     a temp-file + <c>File.Move(overwrite:false)</c>: on *nix that move is a non-atomic exists-check-then-rename,
+    ///     under which two racing launches can both "win" and split the DB-encryption key. On *nix the file is created
+    ///     0600 atomically via <see cref="FileStreamOptions.UnixCreateMode" /> so the secret is never written to a
+    ///     world-readable handle. The content is a single small write; a crash mid-write is caught loudly by the length /
+    ///     base64 validation on the next launch (never a silent brick).
+    /// </summary>
+    private static bool TryCreateNewSecretFile(string keyPath, byte[] secret)
+    {
+        var fileContent = Convert.ToBase64String(ProtectSecretForAtRest(secret));
+
+        var options = new FileStreamOptions
+        {
+            Mode = FileMode.CreateNew,
+            Access = FileAccess.Write,
+            // Deliberately NOT FileShare.None: the atomic election is O_CREAT|O_EXCL (FileMode.CreateNew), not the share
+            // mode. FileShare.None takes an exclusive flock on *nix, which livelocks against the losers' concurrent
+            // read-backs (and can even fail the winner's own create). FileShare.Read keeps a compatible shared lock, so a
+            // loser that reads before the winner's tiny content lands simply fails validation and retries.
+            Share = FileShare.Read
+        };
+
+        // Create 0600 atomically on *nix (owner read/write only). On Windows the key is DPAPI-wrapped at rest on top of
+        // the per-user %LOCALAPPDATA% ACL, and UnixCreateMode is unsupported there.
+        if (!OperatingSystem.IsWindows())
+        {
+            options.UnixCreateMode = UnixFileMode.UserRead | UnixFileMode.UserWrite;
+        }
+
+        FileStream stream;
+        try
+        {
+#pragma warning disable CA2000 // Disposed via the 'using' in the write block below; kept separate so a create-collision (another process's file) is distinguished from a write failure (our torn file).
+            stream = new FileStream(keyPath, options);
+#pragma warning restore CA2000
+        }
+        catch (IOException) when (File.Exists(keyPath))
+        {
+            // Lost the atomic create race: the winner's key is already on disk; the caller re-reads and adopts it.
+            return false;
+        }
+        catch (Exception exception) when (exception is IOException or UnauthorizedAccessException)
+        {
+            throw new InvalidOperationException($"The desktop operator key file '{keyPath}' could not be written. Check filesystem permissions.",
+                exception);
+        }
+
+        try
+        {
+            using (stream)
+            {
+                stream.Write(System.Text.Encoding.ASCII.GetBytes(fileContent));
+                stream.Flush();
+            }
+
+            return true;
+        }
+        catch (Exception exception) when (exception is IOException or UnauthorizedAccessException)
+        {
+            // A write failure after winning the create left a torn/empty key; remove it so the next launch regenerates
+            // cleanly rather than failing validation against a partial file.
+            TryDeleteTemp(keyPath);
+            throw new InvalidOperationException($"The desktop operator key file '{keyPath}' could not be written. Check filesystem permissions.",
+                exception);
+        }
+    }
+
+    /// <summary>
+    ///     Wraps the raw secret for at-rest storage: DPAPI (CurrentUser) on Windows, raw bytes on *nix (guarded by 0600
+    ///     owner-only perms — libsecret/Keychain integration is future work, full-disk encryption is the assumed posture).
+    /// </summary>
+    private static byte[] ProtectSecretForAtRest(byte[] secret)
+    {
+        return OperatingSystem.IsWindows()
+            ? ProtectedData.Protect(secret, optionalEntropy: null, DataProtectionScope.CurrentUser)
+            : secret;
     }
 
     /// <summary>
@@ -297,24 +425,15 @@ internal static class DesktopBootstrap
     }
 
     /// <summary>
-    ///     Persists the raw operator secret to the key file. On Windows the secret is DPAPI-wrapped (CurrentUser) before
-    ///     encoding so it is encrypted at rest; on *nix the raw secret is written and protected by 0600 owner-only perms
-    ///     (libsecret/Keychain integration is future work — full-disk encryption is the assumed *nix at-rest posture).
-    ///     Always written atomically (temp file + move) so a crash mid-write can never leave a torn key that bricks the DB.
+    ///     Overwrites the key file in place, used only by the legacy plaintext -> DPAPI at-rest upgrade (the key already
+    ///     exists, so this deliberately overwrites rather than create-new; fresh-key creation goes through
+    ///     <see cref="TryCreateNewSecretFile" />). On Windows the secret is DPAPI-wrapped (CurrentUser) before encoding so
+    ///     it is encrypted at rest; on *nix the raw secret is written and protected by 0600 owner-only perms. Written
+    ///     atomically (temp file + move) so a crash mid-write can never leave a torn key that bricks the DB.
     /// </summary>
     private static void WriteSecretFile(string keyPath, byte[] secret)
     {
-        byte[] fileBytes;
-        if (OperatingSystem.IsWindows())
-        {
-            fileBytes = ProtectedData.Protect(secret, optionalEntropy: null, DataProtectionScope.CurrentUser);
-        }
-        else
-        {
-            fileBytes = secret;
-        }
-
-        var fileContent = Convert.ToBase64String(fileBytes);
+        var fileContent = Convert.ToBase64String(ProtectSecretForAtRest(secret));
 
         var tempPath = keyPath + ".tmp";
         try

@@ -17,6 +17,7 @@ using SecurityOptions = XE_Local_AI_Engine.Client.Configuration.SecurityOptions;
 public sealed class UploadConversationFileEndpoint(
     IConversationUploadedFileStore fileStore,
     IDocumentTextExtractor extractor,
+    IDocumentExtractionAdmissionGate extractionGate,
     IOptions<SecurityOptions> securityOptions)
     : Endpoint<UploadConversationFileRequest, ConversationUploadedFileResponse>
 {
@@ -24,6 +25,7 @@ public sealed class UploadConversationFileEndpoint(
 
     private readonly IConversationUploadedFileStore _fileStore = fileStore ?? throw new ArgumentNullException(nameof(fileStore));
     private readonly IDocumentTextExtractor _extractor = extractor ?? throw new ArgumentNullException(nameof(extractor));
+    private readonly IDocumentExtractionAdmissionGate _extractionGate = extractionGate ?? throw new ArgumentNullException(nameof(extractionGate));
     private readonly long _maxUploadBytes = (securityOptions ?? throw new ArgumentNullException(nameof(securityOptions))).Value.MaxUploadFileSizeMb * 1024L * 1024L;
 
     public override void Configure()
@@ -73,27 +75,44 @@ public sealed class UploadConversationFileEndpoint(
             return;
         }
 
-        var bytes = await ReadAllBytesAsync(file, ct).ConfigureAwait(false);
-
-        DocumentExtractionResult extraction;
-        using (var extractionStream = new MemoryStream(bytes, writable: false))
+        // Aggregate admission: bound how many uploads buffer + extract + persist concurrently so a burst cannot
+        // aggregate to OOM. By the time this handler runs ASP.NET has already buffered the multipart body (largely
+        // disk-spooled), so the gate does not bound that framework buffer; it bounds the memory-heavy phase this handler
+        // owns — the in-memory byte[] copy of the file, the extraction, and the encrypted persistence write. Holding the
+        // lease through persistence keeps the raw-bytes + encrypted-copy phase inside the admitted count. When the gate
+        // is full, fail fast with a busy status + Retry-After rather than piling up in-flight byte[] copies.
+        if (!_extractionGate.TryAcquire(out var extractionLease))
         {
-            extraction = await _extractor.ExtractAsync(extractionStream, originalName, extension, ct).ConfigureAwait(false);
+            HttpContext.Response.Headers.RetryAfter = "5";
+            await Send.StringAsync("The server is busy processing uploads. Please retry shortly.",
+                StatusCodes.Status503ServiceUnavailable,
+                cancellation: ct).ConfigureAwait(false);
+            return;
         }
 
-        var input = new ConversationUploadedFileInput(req.ConversationId,
-            Guid.NewGuid(),
-            originalName,
-            string.IsNullOrWhiteSpace(file.ContentType) ? DefaultMimeType : file.ContentType,
-            extension,
-            bytes.Length,
-            bytes,
-            extraction.Status,
-            extraction.Markdown,
-            extraction.ExtractedChars);
+        using (extractionLease)
+        {
+            var bytes = await ReadAllBytesAsync(file, ct).ConfigureAwait(false);
+            DocumentExtractionResult extraction;
+            using (var extractionStream = new MemoryStream(bytes, writable: false))
+            {
+                extraction = await _extractor.ExtractAsync(extractionStream, originalName, extension, ct).ConfigureAwait(false);
+            }
 
-        var info = await _fileStore.AddAsync(input, ct).ConfigureAwait(false);
-        await Send.OkAsync(info.ToResponse(), ct).ConfigureAwait(false);
+            var input = new ConversationUploadedFileInput(req.ConversationId,
+                Guid.NewGuid(),
+                originalName,
+                string.IsNullOrWhiteSpace(file.ContentType) ? DefaultMimeType : file.ContentType,
+                extension,
+                bytes.Length,
+                bytes,
+                extraction.Status,
+                extraction.Markdown,
+                extraction.ExtractedChars);
+
+            var info = await _fileStore.AddAsync(input, ct).ConfigureAwait(false);
+            await Send.OkAsync(info.ToResponse(), ct).ConfigureAwait(false);
+        }
     }
 
     private static async Task<byte[]> ReadAllBytesAsync(IFormFile file, CancellationToken ct)

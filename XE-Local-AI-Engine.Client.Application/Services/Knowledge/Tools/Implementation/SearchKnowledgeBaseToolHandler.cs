@@ -122,7 +122,11 @@ internal sealed class SearchKnowledgeBaseToolHandler : IClientLocalToolHandler
                 content = hit.Content,
                 source = hit.Source,
                 score = hit.Score,
-                chunkIndex = hit.ChunkIndex
+                chunkIndex = hit.ChunkIndex,
+                // Disclose staleness in the model-facing provenance: when the owning document is not currently
+                // Indexed, this chunk is a last-known-good projection served during a pending/failed re-index.
+                documentStatus = hit.DocumentStatus.ToString(),
+                servingLastKnownGood = hit.ServingLastKnownGood
             });
         }
 

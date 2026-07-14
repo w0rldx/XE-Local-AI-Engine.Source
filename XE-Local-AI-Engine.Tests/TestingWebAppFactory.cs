@@ -173,6 +173,13 @@ public class TestingWebAppFactory : WebApplicationFactory<Program>, IAsyncInitia
                 services.RemoveAll<IOllamaApiClient>();
                 services.RemoveAll<IChatClient>();
                 services.RemoveAll<ILocalModelProvider>();
+                // Repoint the shared Ollama transport factory (production registered one at the real endpoint) at the
+                // fake server, so the provider's per-model CreateChatClient — which now mints clients through this
+                // factory — hits FakeOllama, not a real daemon.
+                services.RemoveAll<OllamaApiClientFactory>();
+#pragma warning disable CA2000 // The factory singleton owns and disposes this HttpClient for the test host lifetime.
+                services.AddSingleton(_ => new OllamaApiClientFactory(new HttpClient { BaseAddress = _fakeOllamaServer!.BaseAddress }, ownsHttpClient: true));
+#pragma warning restore CA2000
                 services.AddSingleton<IOllamaApiClient>(_ => new OllamaApiClient(_fakeOllamaServer!.BaseAddress));
                 services.AddSingleton<ILocalModelProvider, OllamaLocalModelProvider>();
                 // The provider resolver's default for unmapped models is now "llamacpp" (the shipped default model is a

@@ -41,7 +41,17 @@ public sealed class WorkerShutdownDrainService : IWorkerShutdownDrainService
         var workerHubDisconnected = false;
         var drainTimeout = GetDrainTimeout();
 
-        _logger.LogInformation("Worker shutdown drain starting. Sequence: {DrainSequence}. Active invocation ceiling: {DrainTimeoutSeconds}s.",
+        // ONE end-to-end deadline for the WHOLE drain. Every stage below nests under this token, so the total —
+        // active-invocation wait + dead-letter flush + hub disconnect — is bounded by drainTimeout even when the caller
+        // passes CancellationToken.None (the ApplicationStopping path does). Before this, only the active-invocation
+        // wait honored the timeout; a never-completing flush or hub disconnect ran unbounded and could hang shutdown
+        // forever. Past the deadline, each remaining stage runs best-effort under an already-cancelled token and logs
+        // what it dropped rather than blocking.
+        using var drainCts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+        drainCts.CancelAfter(drainTimeout);
+        var drainToken = drainCts.Token;
+
+        _logger.LogInformation("Worker shutdown drain starting. Sequence: {DrainSequence}. End-to-end deadline: {DrainTimeoutSeconds}s.",
             WorkerShutdownDrainOptions.DrainSequence,
             drainTimeout.TotalSeconds);
 
@@ -63,7 +73,7 @@ public sealed class WorkerShutdownDrainService : IWorkerShutdownDrainService
         {
             var activeCountAtStart = _invocationRunner.ActiveInvocationCount;
             activeInvocationsDrained = await _invocationRunner
-                                             .DrainActiveInvocationsAsync(drainTimeout, cancellationToken)
+                                             .DrainActiveInvocationsAsync(drainTimeout, drainToken)
                                              .ConfigureAwait(false);
 
             diagnostics.Add(activeInvocationsDrained
@@ -84,10 +94,11 @@ public sealed class WorkerShutdownDrainService : IWorkerShutdownDrainService
                     _invocationRunner.ActiveInvocationCount);
             }
         }
-        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+        catch (OperationCanceledException) when (drainToken.IsCancellationRequested)
         {
-            diagnostics.Add("await-active-invocations:cancelled");
-            _logger.LogWarning("Worker shutdown drain active invocation wait was cancelled.");
+            diagnostics.Add("await-active-invocations:deadline-exceeded");
+            _logger.LogWarning("Worker shutdown drain active invocation wait hit the end-to-end deadline. Remaining invocations: {RemainingInvocationCount}.",
+                _invocationRunner.ActiveInvocationCount);
         }
         catch (Exception exception)
         {
@@ -98,15 +109,15 @@ public sealed class WorkerShutdownDrainService : IWorkerShutdownDrainService
 
         try
         {
-            await _deadLetterFlushService.FlushAsync(cancellationToken).ConfigureAwait(false);
+            await _deadLetterFlushService.FlushAsync(drainToken).ConfigureAwait(false);
             deadLetterFlushCompleted = true;
             diagnostics.Add("flush-dead-letter-outbox:completed");
             _logger.LogInformation("Worker shutdown drain flushed the dead-letter outbox path.");
         }
-        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+        catch (OperationCanceledException) when (drainToken.IsCancellationRequested)
         {
-            diagnostics.Add("flush-dead-letter-outbox:cancelled");
-            _logger.LogWarning("Worker shutdown drain dead-letter flush was cancelled.");
+            diagnostics.Add("flush-dead-letter-outbox:deadline-exceeded");
+            _logger.LogWarning("Worker shutdown drain dead-letter flush hit the end-to-end deadline; unflushed entries stay queued for a later run.");
         }
         catch (Exception exception)
         {
@@ -117,15 +128,15 @@ public sealed class WorkerShutdownDrainService : IWorkerShutdownDrainService
 
         try
         {
-            await _workerHubConnection.DisconnectAsync(cancellationToken).ConfigureAwait(false);
+            await _workerHubConnection.DisconnectAsync(drainToken).ConfigureAwait(false);
             workerHubDisconnected = true;
             diagnostics.Add("disconnect-worker-hub:completed");
             _logger.LogInformation("Worker shutdown drain disconnected WorkerHub.");
         }
-        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+        catch (OperationCanceledException) when (drainToken.IsCancellationRequested)
         {
-            diagnostics.Add("disconnect-worker-hub:cancelled");
-            _logger.LogWarning("Worker shutdown drain WorkerHub disconnect was cancelled.");
+            diagnostics.Add("disconnect-worker-hub:deadline-exceeded");
+            _logger.LogWarning("Worker shutdown drain WorkerHub disconnect hit the end-to-end deadline.");
         }
         catch (Exception exception)
         {

@@ -39,7 +39,21 @@ public sealed class BranchNodeChatConversationEndpoint(
         }
 
         var createdAtUtc = _timeProvider.GetUtcNow().ToUnixTimeMilliseconds();
-        var branched = await _chatPersistence.BranchConversationAsync(new NodeChatBranchConversationRequest(req.ConversationId, req.MessageId, createdAtUtc), ct).ConfigureAwait(false);
+        NodeChatBranchResultDto? branched;
+        try
+        {
+            branched = await _chatPersistence.BranchConversationAsync(
+                new NodeChatBranchConversationRequest(req.ConversationId, req.MessageId, createdAtUtc, req.SelectedRevisions),
+                ct).ConfigureAwait(false);
+        }
+        catch (NodeChatInvalidBranchSelectionException exception)
+        {
+            // A selected-revision entry failed integrity validation (not a conversation member / wrong group).
+            // Fail closed with 400 rather than branching a path the caller did not actually specify.
+            AddError(exception.Message);
+            await Send.ErrorsAsync(cancellation: ct).ConfigureAwait(false);
+            return;
+        }
 
         if (branched is null)
         {

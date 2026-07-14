@@ -596,6 +596,27 @@ public sealed class PlaybookActionServiceTests
     }
 
     [Test]
+    public async Task PromoteSuggestedAsync_WhenEvalPassedButZeroCandidatePasses_ReturnsEvalRegressedAndDoesNotUpdate()
+    {
+        var agentId = Guid.NewGuid();
+        var service = CreateService(out var store, out _, agentExists: true);
+        var actionId = Guid.NewGuid();
+        // MED-005 defense in depth: a recorded eval that is current, complete and fingerprint-matching, with Passed ==
+        // true but ZERO candidate passes (a run where every case failed proves nothing). The gate must block it
+        // independently of the recorded Passed flag.
+        store.GetByIdAsync(actionId, Arg.Any<CancellationToken>())
+             .Returns(CreateSuggestedRecord(agentId, actionId) with
+             {
+                 EvalResult = PassingButZeroCandidateEvalResultJson(1, MatchingFingerprint(actionId, 1))
+             });
+
+        var result = await service.PromoteSuggestedAsync(agentId, actionId).ConfigureAwait(false);
+
+        AssertEx.Equal(PlaybookPromotionStatus.EvalRegressed, result.Status);
+        await store.DidNotReceive().UpdateAsync(Arg.Any<Guid>(), Arg.Any<PlaybookActionInput>(), Arg.Any<CancellationToken>()).ConfigureAwait(false);
+    }
+
+    [Test]
     public async Task PromoteSuggestedAsync_WhenEvalForOlderVersion_ReturnsEvalStaleAndDoesNotUpdate()
     {
         var agentId = Guid.NewGuid();
@@ -904,6 +925,25 @@ public sealed class PlaybookActionServiceTests
     private static string FailingEvalResultJson(int version, string fingerprint = "")
     {
         return EvalResultJson(passed: false, version, goldenCaseCount: 1, goldenCaseTotal: 1, fingerprint);
+    }
+
+    private static string PassingButZeroCandidateEvalResultJson(int version, string fingerprint)
+    {
+        // Passed == true is recorded, but CandidatePassCount == 0 and RegressedCaseCount == 0 (every case failed the
+        // baseline too). Models a legacy/hand-crafted result the absolute-quality gate must still reject.
+        var result = new PlaybookEvalResult(Passed: true,
+            EvaluatedAtUtc: 1_000,
+            version,
+            EvalModelName,
+            GoldenCaseCount: 1,
+            GoldenCaseTotal: 1,
+            BaselinePassCount: 0,
+            CandidatePassCount: 0,
+            RegressedCaseCount: 0,
+            ImprovedCaseCount: 0,
+            [],
+            fingerprint);
+        return JsonSerializer.Serialize(result, PlaybookEvalResult.SerializerOptions);
     }
 
     private static string EvalResultJson(bool passed, int version, int goldenCaseCount, int goldenCaseTotal, string fingerprint)

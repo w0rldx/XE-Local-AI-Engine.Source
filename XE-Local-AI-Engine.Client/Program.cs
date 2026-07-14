@@ -3,6 +3,7 @@ using FastEndpoints;
 using FastEndpoints.Swagger;
 using Microsoft.AspNetCore.Diagnostics.HealthChecks;
 using Microsoft.AspNetCore.Hosting.Server;
+using Microsoft.Extensions.Options;
 using Scalar.AspNetCore;
 using Serilog;
 using Serilog.Events;
@@ -34,6 +35,9 @@ VelopackApp.Build().Run();
 
 try
 {
+    // Held for the process lifetime once acquired in the desktop branch below; disposed after the host is built.
+    SingleInstanceLease? instanceLease = null;
+
     var builder = WebApplication.CreateBuilder(args);
 
     // App self-update build flavor: layer the baked, channel-specific update config (repo URL +
@@ -55,6 +59,23 @@ try
     {
         // Resolve (and create) the per-user data dir up front so both the bind below and the config layer share it.
         var desktopDataDirectory = DesktopBootstrap.ResolveDataDirectory();
+
+        // Acquire the exclusive per-data-root lease BEFORE any key/DB initialization (the operator key is generated in
+        // EnsureLocalDataConfiguration just below). A second concurrent instance sharing this data directory would each
+        // generate its own encryption key and split the DB, so fail fast here with a clear message and a non-zero exit
+        // rather than proceeding. Held for the process lifetime; disposed on shutdown after the host is built. Off the
+        // desktop flag this is never reached — headless/Aspire/CI do not share this per-user data root.
+#pragma warning disable CA2000 // Ownership is transferred to the host lifetime (disposed via ApplicationStopped below).
+        instanceLease = SingleInstanceLease.TryAcquire(desktopDataDirectory);
+#pragma warning restore CA2000
+        if (instanceLease is null)
+        {
+            Log.Logger = builder.Environment.CreateStartupLogger(builder.Configuration);
+            Log.Fatal("Another instance of XE Local AI Engine is already running for the data directory '{DataDirectory}'. "
+                      + "Close the other instance before starting a new one.", desktopDataDirectory);
+            await Log.CloseAndFlushAsync().ConfigureAwait(false);
+            return 1;
+        }
 
         // Re-bind the loopback port remembered from the last launch when it is still free, so the browser origin
         // (scheme+host+port) stays stable and localStorage-backed user prefs survive between runs; otherwise fall back to
@@ -106,22 +127,43 @@ try
 #endif
 
     // W3C trace correlation that works with Aspire/OpenTelemetry OFF (the desktop/RC default). Forcing the W3C
-    // Activity id format and registering a no-op ActivityListener makes ASP.NET create a request Activity from an
-    // inbound `traceparent` header even when no OTel listener is present; otherwise Activity.Current would be null in
-    // the request pipeline and the emitted trace id would regress to the Kestrel connection id (TraceIdentifier).
-    // When Aspire is ON, the OTel listener coexists with this one. Process-global, so set once before Build().
+    // Activity id format and registering a listener for the ASP.NET Core hosting source makes ASP.NET create a request
+    // Activity from an inbound `traceparent` header even when no OTel listener is present; otherwise Activity.Current
+    // would be null in the request pipeline and the emitted trace id would regress to the Kestrel connection id
+    // (TraceIdentifier). The listener is scoped to "Microsoft.AspNetCore" — the only source that produces the request
+    // activities this correlation needs — rather than every source in the process. AllData makes the listener request
+    // all data for activities that scoped source creates, so their W3C trace/span ids are populated; it does not by
+    // itself record them (that would need AllDataAndRecorded). The emitted traceresponse trace-flags byte follows the
+    // activity's actual recorded state: with only this listener attached (no started TracerProvider) activities are
+    // never recorded, so the byte is "00" regardless of the inbound sampled flag. In the normal host the OpenTelemetry
+    // TracerProvider is also running (AddServiceDefaults/ConfigureOpenTelemetry registers it in every mode), and its
+    // default ParentBased(AlwaysOn) sampler DOES record — a sampled inbound parent then yields "01", an unsampled
+    // parent stays "00". Process-global, so set once before Build().
     Activity.DefaultIdFormat = ActivityIdFormat.W3C;
     Activity.ForceDefaultIdFormat = true;
-#pragma warning disable CA2000 // The no-op listener is owned by the static ActivitySource registry for the app's lifetime.
+#pragma warning disable CA2000 // The listener is owned by the static ActivitySource registry for the app's lifetime.
     ActivitySource.AddActivityListener(new ActivityListener
     {
-        ShouldListenTo = static _ => true,
+        ShouldListenTo = static source => source.Name == "Microsoft.AspNetCore",
         Sample = static (ref ActivityCreationOptions<ActivityContext> _) => ActivitySamplingResult.AllData,
         SampleUsingParentId = static (ref ActivityCreationOptions<string> _) => ActivitySamplingResult.AllData
     });
 #pragma warning restore CA2000
 
     var app = builder.Build();
+
+    // Transfer the single-instance lease to the host lifetime: it lives until shutdown and releases the exclusive lock
+    // on ApplicationStopped. The OS also releases it on a crash, so this is graceful cleanup rather than a correctness
+    // requirement. Null off the desktop flag (no lease is acquired there).
+    if (instanceLease is not null)
+    {
+        app.Lifetime.ApplicationStopped.Register(instanceLease.Dispose);
+    }
+
+    // Loopback-only bind guard (defense-in-depth behind LocalApiSecurityMiddleware): shut down if the server bound a
+    // routable address without the Security:AllowNonLoopbackBind opt-out. A no-op on every supported launch (desktop
+    // binds 127.0.0.1; Aspire binds localhost and exposes externally via the DCP proxy).
+    LoopbackBindGuard.Guard(app);
 
     try
     {
@@ -173,9 +215,11 @@ try
         {
             context.Response.OnStarting(() =>
             {
-                if (!context.Response.Headers.ContainsKey("traceresponse"))
+                // The trace-flags byte reflects the activity's actual recorded state rather than a hardcoded "01"
+                // (see TraceResponseHeader.Build), so a downstream reader is not told the span was sampled when it was not.
+                if (!context.Response.Headers.ContainsKey(TraceResponseHeader.HeaderName))
                 {
-                    context.Response.Headers["traceresponse"] = $"00-{activity.TraceId}-{activity.SpanId}-01";
+                    context.Response.Headers[TraceResponseHeader.HeaderName] = TraceResponseHeader.Build(activity);
                 }
 
                 return Task.CompletedTask;
@@ -331,6 +375,10 @@ finally
     await Log.CloseAndFlushAsync();
 }
 
+// Honor any non-zero exit code set during startup/shutdown (e.g. the loopback-bind guard's guarded shutdown), rather
+// than always reporting success on a graceful stop.
+return Environment.ExitCode;
+
 // Request-completion level for UseSerilogRequestLogging: failures stay loud (5xx/exception = Error, unexpected 4xx =
 // Warning) while routine traffic (2xx/3xx, the 401 token-refresh dance, SPA-fallback 404s) drops to Debug so the SPA's
 // polling does not dominate the rolling log file.
@@ -440,8 +488,25 @@ static void RegisterWorkerShutdownDrain(WebApplication app)
         try
         {
             var drainService = services.GetRequiredService<IWorkerShutdownDrainService>();
-            var result = drainService.DrainAsync(CancellationToken.None).GetAwaiter().GetResult();
+            var drainOptions = services.GetRequiredService<IOptions<WorkerShutdownDrainOptions>>().Value;
 
+            // The drain enforces its own end-to-end deadline internally. This is a hard outer ceiling so that a stage
+            // which fails to honor that token (a non-cancellable await) still cannot block process shutdown forever:
+            // wait at most the configured deadline plus a grace, then abandon the remaining steps.
+            var configuredTimeout = drainOptions.DrainTimeout > TimeSpan.Zero
+                ? drainOptions.DrainTimeout
+                : WorkerShutdownDrainOptions.DefaultDrainTimeout;
+            var hardCeiling = configuredTimeout + TimeSpan.FromSeconds(5);
+
+            var drainTask = drainService.DrainAsync(CancellationToken.None);
+            if (!drainTask.Wait(hardCeiling))
+            {
+                Log.Warning("Worker shutdown drain exceeded its hard ceiling of {HardCeilingSeconds}s; abandoning remaining steps.",
+                    hardCeiling.TotalSeconds);
+                return;
+            }
+
+            var result = drainTask.GetAwaiter().GetResult();
             if (!result.Succeeded)
             {
                 Log.Warning("Worker shutdown drain completed with incomplete steps. Diagnostics: {Diagnostics}.", result.Diagnostics);

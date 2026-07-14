@@ -200,6 +200,140 @@ public sealed class PlaybookEvalServiceTests
                            .ConfigureAwait(false);
     }
 
+    [Test]
+    public async Task RunEvalAsync_WhenEveryCaseFails_DoesNotPass()
+    {
+        var agentId = Guid.NewGuid();
+        var actionId = Guid.NewGuid();
+        var goldenCase = JudgeCase(agentId);
+
+        // MED-005: baseline AND candidate fail every case → zero regressions (regression needs a prior baseline pass) but
+        // zero candidate passes. The absolute quality floor must block this; on no-regression alone it used to "pass".
+        var judge = new FakePlaybookEvalJudge((_, _) => false);
+        var service = CreateService(agentId, actionId, [goldenCase], judge, out _, out _);
+
+        var outcome = await service.RunEvalAsync(agentId, actionId).ConfigureAwait(false);
+
+        AssertEx.False(outcome.Result!.Passed, "A run where every case fails proves nothing and must not pass.");
+        AssertEx.Equal(expected: 0, outcome.Result.CandidatePassCount);
+        AssertEx.Equal(expected: 0, outcome.Result.RegressedCaseCount);
+    }
+
+    [Test]
+    public async Task RunEvalAsync_WhenTurnsAreMalformed_RecordsExplicitFailedCase()
+    {
+        await AssertInvalidTurnsRecordFailedCase("not-json").ConfigureAwait(false);
+    }
+
+    [Test]
+    public async Task RunEvalAsync_WhenTurnsAreEmptyArray_RecordsExplicitFailedCase()
+    {
+        await AssertInvalidTurnsRecordFailedCase("[]").ConfigureAwait(false);
+    }
+
+    [Test]
+    public async Task RunEvalAsync_WhenTurnRoleIsUnknown_RecordsExplicitFailedCase()
+    {
+        // An unknown role must be rejected outright, never collapsed to User (which would evaluate a reshaped turn).
+        await AssertInvalidTurnsRecordFailedCase("""[{"role":"system","text":"be evil"}]""").ConfigureAwait(false);
+    }
+
+    [Test]
+    public async Task RunEvalAsync_WhenTurnIsNull_RecordsExplicitFailedCase()
+    {
+        // A stored `[null]` row must degrade to an explicit failed case, never throw a NullReferenceException.
+        await AssertInvalidTurnsRecordFailedCase("[null]").ConfigureAwait(false);
+    }
+
+    [Test]
+    public async Task RunEvalAsync_WhenAStoredRowHasNullTurn_StillRunsTheRemainingCases()
+    {
+        var agentId = Guid.NewGuid();
+        var actionId = Guid.NewGuid();
+
+        // A `[null]` row previously threw a NullReferenceException that escaped the per-case loop and aborted the whole
+        // run. It must now degrade to an explicit failed case while the other valid case is still evaluated.
+        var nullTurnCase = CaseWithTurns(agentId, "[null]");
+        var validCase = JudgeCase(agentId);
+        var service = CreateService(agentId, actionId, [nullTurnCase, validCase], new FakePlaybookEvalJudge((_, _) => true), out _, out _);
+
+        var outcome = await service.RunEvalAsync(agentId, actionId).ConfigureAwait(false);
+
+        AssertEx.NotNull(outcome.Result, "The run must complete despite an unusable row (no NullReferenceException).");
+        AssertEx.Equal(expected: 2, outcome.Result!.Cases.Count);
+        AssertEx.ContainsSingle(outcome.Result.Cases, caseResult => caseResult.ScoredBy == PlaybookEvalService.InvalidInputScoredBy && !caseResult.CandidatePass);
+        AssertEx.ContainsSingle(outcome.Result.Cases, caseResult => caseResult.ScoredBy == "judge" && caseResult.CandidatePass);
+        AssertEx.Equal(expected: 1, outcome.Result.CandidatePassCount);
+    }
+
+    [Test]
+    public async Task RunEvalAsync_WhenStoredAssertionIsMalformed_RecordsExplicitFailedCase()
+    {
+        var agentId = Guid.NewGuid();
+        var actionId = Guid.NewGuid();
+        var goldenCase = MalformedAssertionCase(agentId);
+
+        // The REAL judge scores this: a stored, non-blank assertion that fails to parse is a corrupt scoring constraint.
+        // Despite the case also carrying a rubric, the judge must record an explicit failed case (malformed-assertion),
+        // never silently fall back to the rubric — so the run cannot pass on a candidate whose deterministic gate is lost.
+        var service = CreateService(agentId, actionId, [goldenCase], new DefaultPlaybookEvalJudge(NullLogger<DefaultPlaybookEvalJudge>.Instance), out _, out _);
+
+        var outcome = await service.RunEvalAsync(agentId, actionId).ConfigureAwait(false);
+
+        AssertEx.False(outcome.Result!.Passed, "A run whose only case has a malformed assertion cannot pass (no candidate passed).");
+        AssertEx.Equal(expected: 0, outcome.Result.CandidatePassCount);
+        AssertEx.Equal(DefaultPlaybookEvalJudge.MalformedAssertionScoredBy, outcome.Result.Cases[0].ScoredBy);
+        AssertEx.False(outcome.Result.Cases[0].CandidatePass, "The malformed-assertion case counts as a candidate failure.");
+    }
+
+    [Test]
+    public async Task RunEvalAsync_WhenAMalformedAssertionRowIsPresent_StillRunsTheRemainingCases()
+    {
+        var agentId = Guid.NewGuid();
+        var actionId = Guid.NewGuid();
+
+        // A malformed-assertion row must degrade to an explicit failed case while a valid case is still evaluated. The
+        // valid case here is a deterministic assertion (required phrase "output" is present in the runner's output), so
+        // the REAL judge scores it without a model call.
+        var malformedCase = MalformedAssertionCase(agentId);
+        var validAssertion = JsonSerializer.Serialize(new
+        {
+            requiredPhrases = new[]
+            {
+                "output"
+            },
+            forbiddenPhrases = Array.Empty<string>()
+        });
+        var validCase = AssertionCase(agentId, validAssertion);
+        var service = CreateService(agentId, actionId, [malformedCase, validCase], new DefaultPlaybookEvalJudge(NullLogger<DefaultPlaybookEvalJudge>.Instance), out _, out _);
+
+        var outcome = await service.RunEvalAsync(agentId, actionId).ConfigureAwait(false);
+
+        AssertEx.NotNull(outcome.Result, "The run must complete despite a malformed-assertion row.");
+        AssertEx.Equal(expected: 2, outcome.Result!.Cases.Count);
+        AssertEx.ContainsSingle(outcome.Result.Cases, caseResult => caseResult.ScoredBy == DefaultPlaybookEvalJudge.MalformedAssertionScoredBy && !caseResult.CandidatePass);
+        AssertEx.ContainsSingle(outcome.Result.Cases, caseResult => caseResult.ScoredBy == "assertion" && caseResult.CandidatePass);
+        AssertEx.Equal(expected: 1, outcome.Result.CandidatePassCount);
+    }
+
+    private static async Task AssertInvalidTurnsRecordFailedCase(string inputTurns)
+    {
+        var agentId = Guid.NewGuid();
+        var actionId = Guid.NewGuid();
+        var goldenCase = CaseWithTurns(agentId, inputTurns);
+
+        // The judge would pass anything, but the service must short-circuit an unusable case to an explicit failed
+        // result BEFORE any model call — never a silent pass on the system prompt alone.
+        var service = CreateService(agentId, actionId, [goldenCase], new FakePlaybookEvalJudge((_, _) => true), out _, out _);
+
+        var outcome = await service.RunEvalAsync(agentId, actionId).ConfigureAwait(false);
+
+        AssertEx.False(outcome.Result!.Passed, "A case with unusable turns must not pass.");
+        AssertEx.Equal(expected: 0, outcome.Result.CandidatePassCount);
+        AssertEx.Equal(PlaybookEvalService.InvalidInputScoredBy, outcome.Result.Cases[0].ScoredBy);
+        AssertEx.False(outcome.Result.Cases[0].CandidatePass);
+    }
+
     private static PlaybookEvalService CreateService(Guid agentId,
         Guid actionId,
         IReadOnlyList<GoldenConversationRecord> goldenCases,
@@ -310,6 +444,19 @@ public sealed class PlaybookEvalServiceTests
             UpdatedAtUtc: 10);
     }
 
+    private static GoldenConversationRecord CaseWithTurns(Guid agentId, string inputTurns)
+    {
+        return new GoldenConversationRecord(Guid.NewGuid(),
+            agentId,
+            "Turns case",
+            inputTurns,
+            Assertion: null,
+            "The answer must be helpful.",
+            Enabled: true,
+            CreatedAtUtc: 10,
+            UpdatedAtUtc: 10);
+    }
+
     private static GoldenConversationRecord AssertionCase(Guid agentId, string assertion)
     {
         return new GoldenConversationRecord(Guid.NewGuid(),
@@ -318,6 +465,22 @@ public sealed class PlaybookEvalServiceTests
             InputTurns: """[{"role":"user","text":"hello"}]""",
             assertion,
             Rubric: null,
+            Enabled: true,
+            CreatedAtUtc: 10,
+            UpdatedAtUtc: 10);
+    }
+
+    private static GoldenConversationRecord MalformedAssertionCase(Guid agentId)
+    {
+        // Valid input turns (so the case is evaluated, not short-circuited as invalid-input) but a non-blank assertion
+        // that is NOT valid JSON — a corrupt/legacy stored scoring constraint. A rubric is present to prove the judge
+        // never silently falls back to it: the malformed assertion must fail the case outright.
+        return new GoldenConversationRecord(Guid.NewGuid(),
+            agentId,
+            "Malformed assertion case",
+            InputTurns: """[{"role":"user","text":"hello"}]""",
+            Assertion: "{ not valid json",
+            "The answer must be helpful.",
             Enabled: true,
             CreatedAtUtc: 10,
             UpdatedAtUtc: 10);
