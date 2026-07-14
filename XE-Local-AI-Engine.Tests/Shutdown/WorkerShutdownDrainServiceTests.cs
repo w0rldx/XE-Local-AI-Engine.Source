@@ -102,6 +102,27 @@ public sealed class WorkerShutdownDrainServiceTests
         AssertEx.Equal(expected: 1, components.WorkerHubConnection.DisconnectAsyncCallCount);
     }
 
+    [Test]
+    public async Task DrainAsync_WhenFlushAndDisconnectNeverComplete_CompletesWithinDeadlineAndLogsDrops()
+    {
+        var components = RecordingShutdownComponents.Create(hasPendingDeadLetter: true);
+        components.HubMessageSender.BlockUntilCancelled = true;    // dead-letter flush never completes on its own
+        components.WorkerHubConnection.BlockUntilCancelled = true; // hub disconnect never completes on its own
+
+        var service = components.CreateService(TimeSpan.FromMilliseconds(200));
+
+        // If the whole-drain deadline is honored, DrainAsync returns near the 200ms deadline. If it were unbounded (the
+        // pre-fix behavior), the blocking fakes would hang and this WaitAsync would throw — the test would fail.
+        var result = await service.DrainAsync().WaitAsync(TimeSpan.FromSeconds(5));
+
+        AssertEx.False(result.Succeeded);
+        AssertEx.Contains(result.Diagnostics, entry => entry == "flush-dead-letter-outbox:deadline-exceeded");
+        AssertEx.Contains(result.Diagnostics, entry => entry == "disconnect-worker-hub:deadline-exceeded");
+        // The unflushed dead-letter entry was never removed — it stays queued for a later run.
+        AssertEx.NotEmpty(components.DeadLetterStore.Pending);
+        AssertEx.Empty(components.DeadLetterStore.Removed);
+    }
+
     private static void ReplaceShutdownComponents(IServiceCollection services, RecordingShutdownComponents components)
     {
         services.RemoveAll<IWorkerEventDispatcher>();
@@ -165,17 +186,21 @@ public sealed class WorkerShutdownDrainServiceTests
 #pragma warning restore CA2000
         }
 
-        public WorkerShutdownDrainService CreateService()
+        public WorkerShutdownDrainService CreateService(TimeSpan? drainTimeout = null)
         {
             var deadLetterFlushService = new DeadLetterFlushService(DeadLetterStore,
                 new Lazy<IHubMessageSender>(() => HubMessageSender),
                 NullLogger<DeadLetterFlushService>.Instance);
 
+            var options = drainTimeout is { } timeout
+                ? new WorkerShutdownDrainOptions { DrainTimeout = timeout }
+                : new WorkerShutdownDrainOptions();
+
             return new WorkerShutdownDrainService(Dispatcher,
                 InvocationRunner,
                 deadLetterFlushService,
                 WorkerHubConnection,
-                Options.Create(new WorkerShutdownDrainOptions()),
+                Options.Create(options),
                 NullLogger<WorkerShutdownDrainService>.Instance);
         }
 
@@ -432,6 +457,8 @@ public sealed class WorkerShutdownDrainServiceTests
     {
         public int DisconnectAsyncCallCount { get; private set; }
 
+        public bool BlockUntilCancelled { get; set; }
+
         public WorkerConnectionState State => WorkerConnectionState.Disconnected;
 
         event EventHandler<WorkerConnectionStateChangedEventArgs>? IWorkerHubConnection.StateChanged
@@ -481,11 +508,15 @@ public sealed class WorkerShutdownDrainServiceTests
             return Task.CompletedTask;
         }
 
-        public Task DisconnectAsync(CancellationToken cancellationToken = default)
+        public async Task DisconnectAsync(CancellationToken cancellationToken = default)
         {
             DisconnectAsyncCallCount++;
             operations.Add("disconnect-worker-hub");
-            return Task.CompletedTask;
+            if (BlockUntilCancelled)
+            {
+                // Model a hub disconnect that never completes on its own — only the drain's end-to-end deadline unblocks it.
+                await Task.Delay(Timeout.Infinite, cancellationToken).ConfigureAwait(false);
+            }
         }
 
         public Task SendWorkerHelloAsync(Guid clientNodeId, CancellationToken cancellationToken = default)
@@ -578,7 +609,9 @@ public sealed class WorkerShutdownDrainServiceTests
     {
         public bool ThrowOnFailedSend { get; set; }
 
-        public Task SendInvocationFailedAsync(InvocationFailedPayload payload, CancellationToken cancellationToken = default)
+        public bool BlockUntilCancelled { get; set; }
+
+        public async Task SendInvocationFailedAsync(InvocationFailedPayload payload, CancellationToken cancellationToken = default)
         {
             operations.Add("flush-dead-letter");
             if (ThrowOnFailedSend)
@@ -586,7 +619,11 @@ public sealed class WorkerShutdownDrainServiceTests
                 throw new InvalidOperationException("Simulated dead-letter send failure.");
             }
 
-            return Task.CompletedTask;
+            if (BlockUntilCancelled)
+            {
+                // Model a dead-letter resend that never completes on its own — only the drain deadline unblocks it.
+                await Task.Delay(Timeout.Infinite, cancellationToken).ConfigureAwait(false);
+            }
         }
 
         public Task SendPurgeConversationAsync(Guid conversationId, CancellationToken cancellationToken = default)
