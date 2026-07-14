@@ -48,7 +48,9 @@ internal static class ConversationAttachmentContextComposer
         builder.Append(Preamble).Append(UntrustedDataNotice);
 
         // Stable per-conversation fence seed: the same conversation + same attachments compose byte-identically across
-        // sends, so the attachment prefix does not bust the prompt cache each turn.
+        // sends, so the attachment prefix does not bust the prompt cache each turn. The seed KEYS a content-bound marker
+        // (WrapDocument HMACs the fenced payload under it), so each part below gets a marker tied to its own content —
+        // one part's closing marker cannot close another part's fence even in the same conversation.
         var nonceSeed = fenceNonceSeed;
 
         var remaining = charBudget;
