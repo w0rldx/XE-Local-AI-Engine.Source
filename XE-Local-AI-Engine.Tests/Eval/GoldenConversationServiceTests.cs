@@ -84,6 +84,21 @@ public sealed class GoldenConversationServiceTests
     }
 
     [Test]
+    public async Task CreateAsync_WhenTurnIsNull_RejectsWithValidationErrorNotException()
+    {
+        // A JSON `null` turn element must surface as a validation failure (400), never a NullReferenceException that the
+        // endpoint would leak as an unhandled 500.
+        var service = CreateService(out _);
+        var input = new GoldenConversationCreateInput(AgentId,
+            "Null turn",
+            "[null]",
+            Assertion: null,
+            "The answer must be helpful.");
+
+        await AssertEx.ThrowsAsync<PlaybookActionValidationException>(async () => await service.CreateAsync(input).ConfigureAwait(false)).ConfigureAwait(false);
+    }
+
+    [Test]
     public async Task CreateAsync_WhenTurnRoleUnknown_RejectsWithValidationError()
     {
         // An unknown role must be rejected at authoring time rather than silently collapsed to User at eval time.

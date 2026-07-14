@@ -238,6 +238,34 @@ public sealed class PlaybookEvalServiceTests
         await AssertInvalidTurnsRecordFailedCase("""[{"role":"system","text":"be evil"}]""").ConfigureAwait(false);
     }
 
+    [Test]
+    public async Task RunEvalAsync_WhenTurnIsNull_RecordsExplicitFailedCase()
+    {
+        // A stored `[null]` row must degrade to an explicit failed case, never throw a NullReferenceException.
+        await AssertInvalidTurnsRecordFailedCase("[null]").ConfigureAwait(false);
+    }
+
+    [Test]
+    public async Task RunEvalAsync_WhenAStoredRowHasNullTurn_StillRunsTheRemainingCases()
+    {
+        var agentId = Guid.NewGuid();
+        var actionId = Guid.NewGuid();
+
+        // A `[null]` row previously threw a NullReferenceException that escaped the per-case loop and aborted the whole
+        // run. It must now degrade to an explicit failed case while the other valid case is still evaluated.
+        var nullTurnCase = CaseWithTurns(agentId, "[null]");
+        var validCase = JudgeCase(agentId);
+        var service = CreateService(agentId, actionId, [nullTurnCase, validCase], new FakePlaybookEvalJudge((_, _) => true), out _, out _);
+
+        var outcome = await service.RunEvalAsync(agentId, actionId).ConfigureAwait(false);
+
+        AssertEx.NotNull(outcome.Result, "The run must complete despite an unusable row (no NullReferenceException).");
+        AssertEx.Equal(expected: 2, outcome.Result!.Cases.Count);
+        AssertEx.ContainsSingle(outcome.Result.Cases, caseResult => caseResult.ScoredBy == PlaybookEvalService.InvalidInputScoredBy && !caseResult.CandidatePass);
+        AssertEx.ContainsSingle(outcome.Result.Cases, caseResult => caseResult.ScoredBy == "judge" && caseResult.CandidatePass);
+        AssertEx.Equal(expected: 1, outcome.Result.CandidatePassCount);
+    }
+
     private static async Task AssertInvalidTurnsRecordFailedCase(string inputTurns)
     {
         var agentId = Guid.NewGuid();
