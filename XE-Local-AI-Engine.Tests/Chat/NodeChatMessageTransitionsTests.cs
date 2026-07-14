@@ -20,6 +20,21 @@ public sealed class NodeChatMessageTransitionsTests
     }
 
     [Test]
+    public void QueuedMark_AllowsOnlyPending()
+    {
+        AssertSameSet([NodeChatMessageStatusValues.Pending], NodeChatMessageTransitions.QueuedSources);
+    }
+
+    [Test]
+    public void StreamingMark_AllowsPendingOrQueuedOnly()
+    {
+        AssertSameSet(
+            [NodeChatMessageStatusValues.Pending, NodeChatMessageStatusValues.Queued],
+            NodeChatMessageTransitions.StreamingSources);
+        AssertEx.False(NodeChatMessageTransitions.StreamingSources.Contains(NodeChatMessageStatusValues.Cancelled), "streaming must never resurrect a cancelled row");
+    }
+
+    [Test]
     [Arguments(NodeChatMessageStatusValues.Completed)]
     [Arguments(NodeChatMessageStatusValues.Failed)]
     [Arguments(NodeChatMessageStatusValues.Cancelled)]

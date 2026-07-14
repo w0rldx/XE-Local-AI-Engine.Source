@@ -116,6 +116,14 @@ public sealed class NodeChatRegenerationService(
         // Queued until the collision-queue lease is acquired in RunInvocationAsync; transitions to Streaming only
         // when the invocation actually starts, so a turn waiting behind another invocation reads "queued".
         var queuedMessage = await persistence.MarkAssistantQueuedAsync(correlation, NowUnixMilliseconds(), cancellationToken).ConfigureAwait(false);
+        if (!string.Equals(queuedMessage.Status, NodeChatMessageStatusValues.Queued, StringComparison.Ordinal))
+        {
+            // A cancel raced ahead of run ownership and finalized this variant before it could be queued. Emit the terminal
+            // the row actually holds and abort — never run an already-finalized regenerate.
+            yield return ToMessageEvent(ChatStreamEventMapper.TerminalEventType(queuedMessage.Status), correlation, queuedMessage, sequence.Next());
+            yield break;
+        }
+
         yield return ToMessageEvent(ChatStreamEventTypes.AssistantQueued, correlation, queuedMessage, sequence.Next());
 
         using var linkedCancellation = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
@@ -289,6 +297,13 @@ public sealed class NodeChatRegenerationService(
             lease = await eventDispatcher.ReportInvocationAssignedAsync(package, cancellationToken).ConfigureAwait(false);
 
             var streamingMessage = await persistence.MarkAssistantStreamingAsync(correlation, NowUnixMilliseconds(), cancellationToken).ConfigureAwait(false);
+            if (!string.Equals(streamingMessage.Status, NodeChatMessageStatusValues.Streaming, StringComparison.Ordinal))
+            {
+                // The variant was finalized (cancelled) before streaming could start. Do not stream into a terminal
+                // message or run the model: return so the finally completes the state channel and the pump terminalizes.
+                return;
+            }
+
             await eventWriter.WriteAsync(ToMessageEvent(ChatStreamEventTypes.AssistantStreaming, correlation, streamingMessage, sequence.Next()), cancellationToken).ConfigureAwait(false);
 
             // Symmetric with the send path: a regenerate of a "Local runtime default" turn that resolved no installed
