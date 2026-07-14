@@ -46,6 +46,17 @@ public sealed class KnowledgeBaseOptions
     public bool AgentToolsEnabled { get; set; } = true;
 
     /// <summary>
+    ///     Whether the read-only knowledge-base tools may be offered to a CLOUD-hosted model (Codex OAuth, Azure
+    ///     Foundry). Default <see langword="false" />: knowledge tools are offered ONLY to node-local models
+    ///     (llama.cpp / Ollama), so retrieved document text, chunks, and the query never leave the node by way of a
+    ///     cloud model's tool call. A local-node privacy default the operator can waive by setting this to
+    ///     <see langword="true" /> — an explicit acknowledgement that enabling it lets a third-party cloud provider
+    ///     receive knowledge-base content through tool results. Independent of <see cref="AgentToolsEnabled" /> (which
+    ///     turns the tools off node-wide); this only governs whether a cloud model is in scope to be offered them.
+    /// </summary>
+    public bool AllowCloudModelAccess { get; set; }
+
+    /// <summary>
     ///     Maximum number of documents ingested concurrently by the background worker. Bounded (default 1) so N uploads
     ///     do not spin up N unbounded embedding pipelines and contend for the provider's loaded-process budget.
     /// </summary>

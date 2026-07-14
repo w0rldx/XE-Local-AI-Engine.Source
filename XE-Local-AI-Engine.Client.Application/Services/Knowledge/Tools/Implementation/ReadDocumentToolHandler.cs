@@ -91,7 +91,9 @@ internal sealed class ReadDocumentToolHandler : IClientLocalToolHandler
             {
                 chunkIndex = chunk.ChunkIndex,
                 section = chunk.HeadingPath,
-                content = chunk.Content
+                // Document text is DATA, not instructions: flag and fence it (budget still measures raw chunk length).
+                contentTrust = UntrustedContentFraming.UntrustedTrustLabel,
+                content = UntrustedContentFraming.Wrap(chunk.Content)
             });
         }
 

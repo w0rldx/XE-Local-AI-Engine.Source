@@ -20,17 +20,27 @@ public interface ILocalToolOfferProvider
     ///     NOT in this whole offer — it is offered ONLY to an explicit agent profile that
     ///     opts in via its <c>AllowedToolNames</c> (see <see cref="GetOfferedToolsForProfile" />), never to a plain chat
     ///     turn. The encrypted path stays server-gated and does not call this seam.
+    ///     <para>
+    ///         Provider-locality gate: the read-only knowledge-base tools (<c>search_knowledge_base</c>,
+    ///         <c>read_document</c>, <c>read_surrounding_chunks</c>) are withheld when
+    ///         <paramref name="isCloudModel" /> is <see langword="true" /> (or the model id is a Codex model) unless the
+    ///         operator opted in via <c>KnowledgeBase:AllowCloudModelAccess</c>, so node-local document/chunk/query text
+    ///         is never handed to a cloud model through a tool call by default. <paramref name="isCloudModel" /> is the
+    ///         per-turn locality already resolved by the caller (Codex / Azure Foundry = cloud) — this seam does not
+    ///         perform its own lookup.
+    ///     </para>
     /// </summary>
-    IReadOnlyList<AllowedToolDto> GetOfferedTools(string? activeModelId);
+    IReadOnlyList<AllowedToolDto> GetOfferedTools(string? activeModelId, bool isCloudModel = false);
 
     /// <summary>
     ///     The offer pool an EXPLICIT agent profile may intersect against (<c>offered ∩ AllowedToolNames</c>). Identical
     ///     to <see cref="GetOfferedTools" /> EXCEPT it also includes <c>spawn_subagent</c> (still capability-gated), so a
     ///     profile that lists <c>spawn_subagent</c> in its <c>AllowedToolNames</c> on a tool-capable model resolves it,
     ///     while the default/mode-off path (which uses <see cref="GetOfferedTools" />) never does. This is the
-    ///     opt-in-only seam for the spawn tool.
+    ///     opt-in-only seam for the spawn tool. The same knowledge-tool provider-locality gate as
+    ///     <see cref="GetOfferedTools" /> applies.
     /// </summary>
-    IReadOnlyList<AllowedToolDto> GetOfferedToolsForProfile(string? activeModelId);
+    IReadOnlyList<AllowedToolDto> GetOfferedToolsForProfile(string? activeModelId, bool isCloudModel = false);
 
     /// <summary>
     ///     The names of every catalog tool, independent of model capability gating. This is the canonical set of tool

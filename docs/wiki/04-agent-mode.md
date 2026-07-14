@@ -269,6 +269,13 @@ enabled, `PlaybookRetrievalSelector.SelectAsync` chooses what to inject:
   invocation must wrap every send. Re-apply it after swapping the base client in tests.
 - **Offer is never widened.** Only the seeded Default Assistant gets the full offer; all other agents
   are intersected to `AllowedToolNames`; `spawn_subagent` is opt-in via profile only.
+- **Knowledge tools are node-local by default.** The read-only knowledge-base tools
+  (`search_knowledge_base`, `read_document`, `read_surrounding_chunks`) are offered only to node-local
+  models; a cloud model (Codex / Azure Foundry) is withheld them unless the operator sets
+  `KnowledgeBase:AllowCloudModelAccess=true`. The per-turn cloud-locality flag is resolved once in
+  `ChatTurnResolver` and threaded to the offer provider, so node-local document/chunk/query content is
+  not handed to a cloud provider through a tool call. See [Knowledge Base](15-knowledge-base.md) and
+  [Security & Privacy](12-security-and-privacy.md).
 - **Privacy-sensitive ops are node-local only.** Playbook analysis (P3), the eval gate (P4), and memory
   extraction all run on node-local models — never cloud. See [Security & Privacy](12-security-and-privacy.md).
 - **Spawn is bounded.** Depth cap (child omits the tool), per-root fan-out lease, and a cloud-spawn

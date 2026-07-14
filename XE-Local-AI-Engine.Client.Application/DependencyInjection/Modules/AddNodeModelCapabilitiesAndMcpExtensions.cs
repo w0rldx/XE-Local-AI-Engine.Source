@@ -5,6 +5,7 @@ using XE_Local_AI_Engine.AI.Agent.Tools;
 using XE_Local_AI_Engine.Client.Configuration.Validation;
 using XE_Local_AI_Engine.Client.Services.Chat;
 using XE_Local_AI_Engine.Client.Services.Chat.Implementation;
+using XE_Local_AI_Engine.Client.Services.Knowledge;
 using XE_Local_AI_Engine.Client.Services.Mcp;
 using XE_Local_AI_Engine.Client.Services.Mcp.Implementation;
 using XE_Local_AI_Engine.Client.Services.NodeSettings;
@@ -26,9 +27,13 @@ internal static class AddNodeModelCapabilitiesAndMcpExtensions
         {
             var runtimeSettings = sp.GetRequiredService<INodeRuntimeSettings>();
             var toolCapableModels = runtimeSettings.GetToolCapableModels();
+            // Seed the knowledge-tool cloud-locality gate from KnowledgeBase:AllowCloudModelAccess (default false):
+            // knowledge tools are offered only to node-local models unless the operator explicitly opts a cloud model in.
+            var knowledgeOptions = sp.GetRequiredService<IOptions<KnowledgeBaseOptions>>().Value;
             return new LocalToolOfferProvider(sp.GetRequiredService<IAgentToolRegistry>(),
                 sp.GetRequiredService<IMcpToolRegistry>(),
-                toolCapableModels);
+                toolCapableModels,
+                knowledgeOptions.AllowCloudModelAccess);
         });
         // MCP tool extensibility. The connection manager owns the MCP client lifecycle and republishes the dynamic
         // tool snapshot into the registry consumed by offered-tool resolution. The startup connector triggers an

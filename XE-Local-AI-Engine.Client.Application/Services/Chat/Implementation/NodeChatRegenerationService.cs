@@ -192,7 +192,7 @@ public sealed class NodeChatRegenerationService(
         var enableTools = await runtimeSettings.GetEnableToolsAsync(cancellationToken).ConfigureAwait(false);
         var offerTools = useLocalTools && enableTools && resolution.SupportsTools;
         var allowedTools = offerTools
-            ? resolved?.AllowedTools ?? localToolOfferProvider.GetOfferedTools(activeModel)
+            ? resolved?.AllowedTools ?? localToolOfferProvider.GetOfferedTools(activeModel, resolution.ActiveModelIsCloud)
             : null;
 
         var package = runtimePackageBuilder.Build(new LocalChatRuntimePackageRequest(requestId,
