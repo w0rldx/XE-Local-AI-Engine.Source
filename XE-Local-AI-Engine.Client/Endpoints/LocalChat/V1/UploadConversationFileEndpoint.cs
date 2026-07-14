@@ -75,10 +75,9 @@ public sealed class UploadConversationFileEndpoint(
             return;
         }
 
-        var bytes = await ReadAllBytesAsync(file, ct).ConfigureAwait(false);
-
-        // Aggregate admission: bound how many uploads extract concurrently so a burst cannot aggregate to OOM. When the
-        // gate is full, fail fast with a busy status + Retry-After rather than piling up in-flight extraction buffers.
+        // Aggregate admission: bound how many uploads buffer + extract concurrently so a burst cannot aggregate to OOM.
+        // Acquired BEFORE the request body is materialized so a rejected request never holds an upload buffer; when the
+        // gate is full, fail fast with a busy status + Retry-After rather than piling up in-flight buffers.
         if (!_extractionGate.TryAcquire(out var extractionLease))
         {
             HttpContext.Response.Headers.RetryAfter = "5";
@@ -88,10 +87,12 @@ public sealed class UploadConversationFileEndpoint(
             return;
         }
 
+        byte[] bytes;
         DocumentExtractionResult extraction;
         using (extractionLease)
-        using (var extractionStream = new MemoryStream(bytes, writable: false))
         {
+            bytes = await ReadAllBytesAsync(file, ct).ConfigureAwait(false);
+            using var extractionStream = new MemoryStream(bytes, writable: false);
             extraction = await _extractor.ExtractAsync(extractionStream, originalName, extension, ct).ConfigureAwait(false);
         }
 
