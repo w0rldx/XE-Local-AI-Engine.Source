@@ -62,6 +62,8 @@ public sealed class ContextExpansionServiceTests : IDisposable
         var service = new ContextExpansionService(context);
 
         var batched = await service.ExpandBatchAsync(anchors, Window, CancellationToken.None).ConfigureAwait(false);
+        // Two documents → exactly two DB commands (one per document), regardless of how many anchors/ranges each holds.
+        var batchQueryCount = service.LastBatchQueryCount;
 
         AssertEx.Equal(anchors.Count, batched.Count);
         for (var index = 0; index < anchors.Count; index++)
@@ -70,6 +72,8 @@ public sealed class ContextExpansionServiceTests : IDisposable
             var perAnchor = await service.ExpandAsync(anchor.DocumentId, anchor.ChunkIndex, Window, CancellationToken.None).ConfigureAwait(false);
             AssertNeighborsEqual(perAnchor, batched[index]);
         }
+
+        AssertEx.Equal(2, batchQueryCount);
     }
 
     [Test]
@@ -98,6 +102,10 @@ public sealed class ContextExpansionServiceTests : IDisposable
         var service = new ContextExpansionService(context);
 
         var batched = await service.ExpandBatchAsync(anchors, Window, CancellationToken.None).ConfigureAwait(false);
+        // Capture the seams immediately: the two disjoint ranges of this one document must be read by a SINGLE DB command
+        // (the one-query-per-document contract), and hydration must be bounded to the union of the two windows.
+        var batchQueryCount = service.LastBatchQueryCount;
+        var batchRowsHydrated = service.LastBatchRowsHydrated;
 
         // Content is unchanged: each anchor's window matches per-anchor expansion exactly.
         AssertEx.Equal(2, batched.Count);
@@ -106,9 +114,11 @@ public sealed class ContextExpansionServiceTests : IDisposable
         AssertNeighborsEqual(nearExpected, batched[0]);
         AssertNeighborsEqual(farExpected, batched[1]);
 
+        // One document, two disjoint ranges → exactly one query (not one-per-range, not a min-to-max span).
+        AssertEx.Equal(1, batchQueryCount);
         // Hydration is bounded to the union of the two 3-chunk windows (6 rows), NOT the ~181-chunk span between them.
         var expectedWindowRows = ((2 * Window) + 1) * 2;
-        AssertEx.Equal(expectedWindowRows, service.LastBatchRowsHydrated);
+        AssertEx.Equal(expectedWindowRows, batchRowsHydrated);
     }
 
     [Test]
