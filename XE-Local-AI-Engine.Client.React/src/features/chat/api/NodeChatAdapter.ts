@@ -1,5 +1,5 @@
 import { ApiError } from "@/core/api/errors/ApiError";
-import type { ChatSamplingOptions } from "@/features/chat/models/ChatSamplingOptions";
+import type { WireSamplingOptions } from "@/features/chat/models/ChatSamplingOptions";
 import {
 	archiveNodeChatConversation,
 	branchNodeChatConversation,
@@ -72,7 +72,7 @@ export interface SendMessageRequest {
 	// ground plain chat (inline extracted text) and stage files into AgentHome for agent mode. Absent/empty → none.
 	attachmentFileIds?: string[];
 	// Developer-mode per-send sampling overrides. Omitted entirely when developer mode is off or all fields null.
-	samplingOptions?: ChatSamplingOptions;
+	samplingOptions?: WireSamplingOptions;
 }
 
 export interface NodeChatAdapter {

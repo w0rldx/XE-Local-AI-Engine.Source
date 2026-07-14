@@ -34,7 +34,8 @@ export interface NodeChatStreamRequestDto {
 		repeatLastN?: number;
 		presencePenalty?: number;
 		frequencyPenalty?: number;
-		seed?: number;
+		// Seed rides the wire as a precision-safe string (mirrors the backend SamplingOptions.Seed contract).
+		seed?: string;
 		stop?: string[];
 		numCtx?: number;
 	};
