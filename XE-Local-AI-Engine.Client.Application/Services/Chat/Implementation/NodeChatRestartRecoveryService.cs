@@ -20,9 +20,11 @@ public sealed class NodeChatRestartRecoveryService(NodeChatPersistenceWriter wri
                 await using var transaction = await dbContext.Database.BeginTransactionAsync(token).ConfigureAwait(false);
 
                 // Terminalize every non-terminal assistant row regardless of Origin (Local loopback AND
-                // Origin=Remote platform mirrors): a restart orphans both the same way. The status list must
-                // cover the full non-terminal set — pending, queued (held before the collision lease is
-                // acquired), and streaming — so a crash mid-queue does not leave a row dangling forever.
+                // Origin=Remote platform mirrors): a restart orphans both the same way. The status list is the
+                // recovery source set from NodeChatMessageTransitions.RecoverySources — pending, queued (held before
+                // the collision lease is acquired), and streaming — so a crash mid-queue does not leave a row dangling
+                // forever, and a terminal row (including a user Cancelled) is never downgraded to Interrupted. A unit
+                // test pins this literal to that table set so the two cannot drift.
                 var recoveredCount = await dbContext.Database.ExecuteSqlRawAsync(sql: """
                                                                                       UPDATE messages
                                                                                       SET status = {0},

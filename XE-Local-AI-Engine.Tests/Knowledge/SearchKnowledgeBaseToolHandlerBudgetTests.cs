@@ -143,10 +143,43 @@ public sealed class SearchKnowledgeBaseToolHandlerBudgetTests
             "the injected content must close with the untrusted-content marker");
     }
 
+    [Test]
+    public async Task ExecuteAsync_WhenQueryPaddedWithWhitespace_ForwardsTrimmedQuery()
+    {
+        // The handler must forward the NORMALIZED (trimmed) query to search, not the raw padded string.
+        var capturing = new CapturingKnowledgeSearchService(new KnowledgeSearchResult(new List<KnowledgeSearchHit>()));
+        var handler = CreateHandler(capturing);
+        var arguments = JsonSerializer.Serialize(new { query = "   spaced query   " });
+
+        await handler.ExecuteAsync(arguments);
+
+        AssertEx.Equal("spaced query", AssertEx.NotNull(capturing.LastRequest).Query);
+    }
+
+    [Test]
+    public async Task ExecuteAsync_WhenRawQueryOversizedWithPadding_RejectsWithoutSearching()
+    {
+        // 100k spaces around a short query: the trimmed content is tiny, but the raw transport is far over the raw cap,
+        // so it must be rejected up front and never reach the search service.
+        var capturing = new CapturingKnowledgeSearchService(new KnowledgeSearchResult(new List<KnowledgeSearchHit>()));
+        var handler = CreateHandler(capturing);
+        var arguments = JsonSerializer.Serialize(new { query = new string(' ', 100_000) + "hi" + new string(' ', 100_000) });
+
+        var result = await handler.ExecuteAsync(arguments);
+
+        AssertEx.Contains(result, $"{KnowledgeQueryLimits.MaxQueryLength} characters or fewer");
+        AssertEx.Null(capturing.LastRequest);
+    }
+
     private static SearchKnowledgeBaseToolHandler CreateHandler(KnowledgeSearchResult result)
     {
+        return CreateHandler(new FakeKnowledgeSearchService(result));
+    }
+
+    private static SearchKnowledgeBaseToolHandler CreateHandler(IKnowledgeSearchService searchService)
+    {
         var services = new ServiceCollection();
-        services.AddScoped<IKnowledgeSearchService>(_ => new FakeKnowledgeSearchService(result));
+        services.AddScoped(_ => searchService);
         var scopeFactory = services.BuildServiceProvider().GetRequiredService<IServiceScopeFactory>();
 
         return new SearchKnowledgeBaseToolHandler(scopeFactory, Options.Create(new KnowledgeBaseOptions
@@ -159,6 +192,17 @@ public sealed class SearchKnowledgeBaseToolHandlerBudgetTests
     {
         public Task<KnowledgeSearchResult> SearchAsync(KnowledgeSearchRequest request, CancellationToken cancellationToken)
         {
+            return Task.FromResult(result);
+        }
+    }
+
+    private sealed class CapturingKnowledgeSearchService(KnowledgeSearchResult result) : IKnowledgeSearchService
+    {
+        public KnowledgeSearchRequest? LastRequest { get; private set; }
+
+        public Task<KnowledgeSearchResult> SearchAsync(KnowledgeSearchRequest request, CancellationToken cancellationToken)
+        {
+            LastRequest = request;
             return Task.FromResult(result);
         }
     }
