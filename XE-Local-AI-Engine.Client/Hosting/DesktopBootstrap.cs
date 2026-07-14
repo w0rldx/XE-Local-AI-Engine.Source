@@ -207,7 +207,10 @@ internal static class DesktopBootstrap
     {
         if (File.Exists(keyPath))
         {
-            return ReadAndValidateExistingSecret(keyPath);
+            // The exists-check can observe a concurrent first launch's just-created key BEFORE its (tiny) content has
+            // been written, so this read must tolerate a transiently torn file exactly like the lost-create-race path.
+            // A genuinely corrupt persisted key still fails loudly — after the short retry budget instead of instantly.
+            return ReadWinnerSecretWithRetry(keyPath);
         }
 
         return GenerateAndPersistSecret(keyPath);
@@ -283,10 +286,10 @@ internal static class DesktopBootstrap
     }
 
     /// <summary>
-    ///     Reads the winning process's key after this process lost the atomic create race. Because the winner may still be
-    ///     holding its exclusive create handle or may not yet have flushed its (tiny) content, a read can transiently fail;
-    ///     retry within a short budget before surfacing the error. Only reached on the race path — a sequential launch
-    ///     reads the already-complete key directly, so a genuinely corrupt persisted key still fails loudly there.
+    ///     Reads the winning process's key after this process lost the atomic create race, or after the exists-check saw
+    ///     a concurrently-created key. Because the winner may still be holding its exclusive create handle or may not yet
+    ///     have flushed its (tiny) content, a read can transiently fail; retry within a short budget before surfacing the
+    ///     error. A genuinely corrupt persisted key still fails loudly via the final unretried read below.
     /// </summary>
     private static string ReadWinnerSecretWithRetry(string keyPath)
     {
