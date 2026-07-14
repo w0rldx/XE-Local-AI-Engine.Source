@@ -16,6 +16,13 @@ internal sealed class DefaultPlaybookEvalJudge(ILogger<DefaultPlaybookEvalJudge>
     internal const string AssertionScoredBy = "assertion";
     internal const string JudgeScoredBy = "judge";
 
+    /// <summary>
+    ///     <see cref="EvalScore.ScoredBy" /> value for a golden case whose stored assertion is a non-blank string that
+    ///     fails to parse. Such a corrupt constraint is recorded as an EXPLICIT failed case (no model call) — it is never
+    ///     silently scored on the rubric, which would drop the intended deterministic gate. Content-free by design.
+    /// </summary>
+    internal const string MalformedAssertionScoredBy = "malformed-assertion";
+
     private const string JudgeSystemPrompt = """
                                              You judge whether an AI agent's answer satisfies a rubric. You are given a JSON object with a "rubric"
                                              (the criteria the answer must meet) and a "candidateText" (the agent's answer). Decide whether the answer
@@ -40,27 +47,40 @@ internal sealed class DefaultPlaybookEvalJudge(ILogger<DefaultPlaybookEvalJudge>
 
         var hasRubric = !string.IsNullOrWhiteSpace(goldenCase.Rubric);
 
-        // Deterministic path: an assertion carrying at least one meaningful (non-blank) required/forbidden phrase scores
-        // in plain code, no model call → the gate is deterministic for it.
-        if (!string.IsNullOrWhiteSpace(goldenCase.Assertion))
+        // Classify the stored assertion into one of four states so a corrupt constraint is handled differently from a
+        // genuinely-absent one — the previous null-parse collapse let a MALFORMED assertion masquerade as ABSENT and pass
+        // solely on the rubric, silently dropping the intended deterministic gate.
+        var assertionState = GoldenAssertion.Classify(goldenCase.Assertion, out var assertion);
+        switch (assertionState)
         {
-            // An assertion string that is malformed or carries no meaningful signal proves nothing on its own. Treat it
-            // as ABSENT and fall through to the rubric when the author supplied one — a rubric-backed case must not be
-            // deterministically failed just because its assertion is an empty-phrase placeholder. (Create/update
-            // validation already requires a real signal OR a rubric; this reaches the same case for legacy rows.)
-            var assertion = GoldenAssertion.TryParse(goldenCase.Assertion);
-            if (assertion is { HasMeaningfulSignal: true })
-            {
-                return new EvalScore(ScoreByAssertion(assertion, candidateText ?? string.Empty), AssertionScoredBy);
-            }
+            case AssertionParseState.Malformed:
+                // A stored, non-blank assertion we cannot read is a corrupt scoring constraint. Fail the case outright
+                // with a content-free diagnostic — NEVER fall through to the rubric (that would drop the intended
+                // deterministic gate), mirroring how malformed input turns already become explicit failed cases.
+                _logger.LogWarning("Golden case {GoldenCaseId} has a malformed assertion that could not be parsed; recording an explicit failed case (never silently rubric-scored).", goldenCase.Id);
+                return new EvalScore(Pass: false, MalformedAssertionScoredBy);
 
-            // No usable assertion and no rubric to fall back on → fail closed on the assertion path rather than wave the
-            // case through (an empty-phrase assertion would otherwise pass any output).
-            if (!hasRubric)
-            {
-                _logger.LogWarning("Golden case {GoldenCaseId} has an assertion with no meaningful phrase and no rubric; scoring as a fail.", goldenCase.Id);
-                return new EvalScore(Pass: false, AssertionScoredBy);
-            }
+            case AssertionParseState.ValidWithSignal:
+                // Deterministic path: an assertion carrying at least one meaningful (non-blank) required/forbidden phrase
+                // scores in plain code, no model call → the gate is deterministic for it.
+                return new EvalScore(ScoreByAssertion(assertion!, candidateText ?? string.Empty), AssertionScoredBy);
+
+            case AssertionParseState.ValidNoSignal:
+                // An empty-phrase assertion gates nothing. Treat it as ABSENT and fall through to the rubric when the
+                // author supplied one — a rubric-backed case must not be deterministically failed just because its
+                // assertion is an empty-phrase placeholder. With no rubric, fail closed on the assertion path rather than
+                // wave the case through (an empty-phrase assertion would otherwise pass any output).
+                if (!hasRubric)
+                {
+                    _logger.LogWarning("Golden case {GoldenCaseId} has an assertion with no meaningful phrase and no rubric; scoring as a fail.", goldenCase.Id);
+                    return new EvalScore(Pass: false, AssertionScoredBy);
+                }
+
+                break;
+
+            case AssertionParseState.Absent:
+            default:
+                break;
         }
 
         // Judge path: a rubric scores the case when there is no usable assertion. Defend against an invalid case (neither

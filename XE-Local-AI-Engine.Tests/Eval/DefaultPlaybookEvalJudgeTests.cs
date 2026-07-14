@@ -136,6 +136,52 @@ public sealed class DefaultPlaybookEvalJudgeTests
         AssertEx.True(chatClient.WasCalled, "The rubric path must invoke the model, not short-circuit to a deterministic fail.");
     }
 
+    [Test]
+    public async Task ScoreAsync_WhenAssertionIsMalformedAndRubricPresent_FailsClosedWithoutRubricFallback()
+    {
+        var judge = new DefaultPlaybookEvalJudge(NullLogger<DefaultPlaybookEvalJudge>.Instance);
+        // A non-blank assertion string that is not valid JSON — a corrupt/legacy stored scoring constraint. A rubric is
+        // present, but a malformed assertion must FAIL the case outright, never silently fall back to the rubric (which
+        // would drop the intended deterministic gate). This differs from an empty-phrase assertion, which IS absent.
+        var goldenCase = new GoldenConversationRecord(Guid.NewGuid(),
+            Guid.NewGuid(),
+            "Malformed assertion with rubric",
+            InputTurns: """[{"role":"user","text":"hello"}]""",
+            Assertion: "{ not valid json",
+            Rubric: "The answer must be helpful.",
+            Enabled: true,
+            CreatedAtUtc: 10,
+            UpdatedAtUtc: 10);
+        // If the judge wrongly fell back to the rubric, this client would be invoked and pass the case.
+        using var chatClient = new VerdictChatClient("""{"pass":true,"reason":"meets the rubric"}""");
+
+        var score = await judge.ScoreAsync(goldenCase, "A genuinely helpful answer.", chatClient).ConfigureAwait(false);
+
+        AssertEx.False(score.Pass, "A malformed assertion must fail the case outright, never silently pass on the rubric.");
+        AssertEx.Equal(DefaultPlaybookEvalJudge.MalformedAssertionScoredBy, score.ScoredBy);
+        AssertEx.False(chatClient.WasCalled, "A malformed assertion must NOT trigger a rubric (model) call.");
+    }
+
+    [Test]
+    public async Task ScoreAsync_WhenAssertionIsMalformedAndNoRubric_FailsClosed()
+    {
+        var judge = new DefaultPlaybookEvalJudge(NullLogger<DefaultPlaybookEvalJudge>.Instance);
+        var goldenCase = new GoldenConversationRecord(Guid.NewGuid(),
+            Guid.NewGuid(),
+            "Malformed assertion, no rubric",
+            InputTurns: """[{"role":"user","text":"hello"}]""",
+            Assertion: "{ not valid json",
+            Rubric: null,
+            Enabled: true,
+            CreatedAtUtc: 10,
+            UpdatedAtUtc: 10);
+
+        var score = await judge.ScoreAsync(goldenCase, "anything", Substitute.For<IChatClient>()).ConfigureAwait(false);
+
+        AssertEx.False(score.Pass, "A malformed assertion with no rubric must fail closed.");
+        AssertEx.Equal(DefaultPlaybookEvalJudge.MalformedAssertionScoredBy, score.ScoredBy);
+    }
+
     private static GoldenConversationRecord AssertionCase(string[] required, string[] forbidden)
     {
         var assertion = JsonSerializer.Serialize(new
