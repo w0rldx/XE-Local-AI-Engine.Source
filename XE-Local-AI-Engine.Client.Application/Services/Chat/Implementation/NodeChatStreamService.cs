@@ -489,7 +489,7 @@ public sealed class NodeChatStreamService(
             }
         }
 
-        var content = ConversationAttachmentContextComposer.Compose(parts, localChatOptions.Value.MaxInlinedAttachmentChars);
+        var content = ConversationAttachmentContextComposer.Compose(parts, localChatOptions.Value.MaxInlinedAttachmentChars, conversationId);
         if (content is null)
         {
             return null;

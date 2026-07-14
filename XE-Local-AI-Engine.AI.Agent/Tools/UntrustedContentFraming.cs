@@ -1,6 +1,7 @@
 namespace XE_Local_AI_Engine.AI.Agent.Tools;
 
 using System.Globalization;
+using System.Security.Cryptography;
 using System.Text;
 
 /// <summary>
@@ -44,15 +45,36 @@ public static class UntrustedContentFraming
 
     /// <summary>
     ///     Fences untrusted DOCUMENT data — the attacker-controlled <paramref name="metadata" /> labels (e.g. title,
-    ///     section, source, file name) AND the <paramref name="body" /> — inside ONE nonce fence, so every
-    ///     attacker-controlled field sits inside the untrusted boundary. Null/blank metadata values are skipped. The
-    ///     metadata lines precede a blank line and then the body.
+    ///     section, source, file name) AND the <paramref name="body" /> — inside ONE fence delimited by a fresh RANDOM
+    ///     nonce, so every attacker-controlled field sits inside the untrusted boundary. Use this for query-dynamic
+    ///     results (knowledge tools) whose output is not prompt-cache-sensitive.
     /// </summary>
     public static string WrapDocument(string? body, IReadOnlyList<KeyValuePair<string, string?>> metadata)
     {
         ArgumentNullException.ThrowIfNull(metadata);
 
-        var nonce = NewNonce();
+        return WrapDocumentWithNonce(body, metadata, NewNonce());
+    }
+
+    /// <summary>
+    ///     Same as <see cref="WrapDocument(string?, IReadOnlyList{KeyValuePair{string, string?}})" /> but the nonce is
+    ///     DERIVED deterministically from <paramref name="nonceSeed" /> (SHA-256, hex-truncated to the nonce length)
+    ///     instead of random. This makes the fenced output BYTE-STABLE for a given seed across calls — required where the
+    ///     fenced block is a stable prefix of a multi-turn prompt (attachment context) so llama.cpp prompt/KV-cache
+    ///     prefix reuse is preserved. Forgery-resistance is retained as long as the seed is unpredictable to whoever
+    ///     authored the document content (e.g. a random conversation id the document author never sees) — the derived
+    ///     nonce, and therefore the closing marker, still cannot be forged from inside the body.
+    /// </summary>
+    public static string WrapDocument(string? body, IReadOnlyList<KeyValuePair<string, string?>> metadata, string nonceSeed)
+    {
+        ArgumentNullException.ThrowIfNull(metadata);
+        ArgumentNullException.ThrowIfNull(nonceSeed);
+
+        return WrapDocumentWithNonce(body, metadata, DeriveNonce(nonceSeed));
+    }
+
+    private static string WrapDocumentWithNonce(string? body, IReadOnlyList<KeyValuePair<string, string?>> metadata, string nonce)
+    {
         var builder = new StringBuilder();
         builder.Append(BeginMarker(nonce)).Append('\n');
         var wroteMetadata = false;
@@ -76,9 +98,22 @@ public static class UntrustedContentFraming
         return builder.ToString();
     }
 
+    // The nonce length: 32 lowercase hex chars, matching a Guid's "N" format so random and derived nonces are the same
+    // width (keeps the fence's fixed overhead identical whichever factory produced it).
+    private const int NonceHexLength = 32;
+
     private static string NewNonce()
     {
         return Guid.NewGuid().ToString("N");
+    }
+
+    // Deterministic nonce from an unpredictable seed: SHA-256 of the seed, hex-lower, truncated to the nonce length.
+    // A cryptographic digest means the seed cannot be recovered from the nonce, and a body author who does not know the
+    // seed cannot reproduce it — so the fence stays un-forgeable while being byte-stable for a fixed seed.
+    private static string DeriveNonce(string seed)
+    {
+        var digest = SHA256.HashData(Encoding.UTF8.GetBytes(seed));
+        return Convert.ToHexStringLower(digest)[..NonceHexLength];
     }
 
     private static string BeginMarker(string nonce)
