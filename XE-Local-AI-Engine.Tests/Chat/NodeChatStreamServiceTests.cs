@@ -56,6 +56,7 @@ public sealed class NodeChatStreamServiceTests
             CreateMemoryExtractionDispatcher(),
             Substitute.For<IConversationUploadedFileStore>(),
             Substitute.For<IConversationSandboxStager>(),
+            CreateFenceSeedProvider(),
             TimeProvider.System,
             NullLogger<NodeChatStreamService>.Instance);
         var events = new List<ChatStreamEvent>();
@@ -104,6 +105,7 @@ public sealed class NodeChatStreamServiceTests
             CreateMemoryExtractionDispatcher(),
             Substitute.For<IConversationUploadedFileStore>(),
             Substitute.For<IConversationSandboxStager>(),
+            CreateFenceSeedProvider(),
             TimeProvider.System,
             NullLogger<NodeChatStreamService>.Instance);
         var events = new List<ChatStreamEvent>();
@@ -155,6 +157,7 @@ public sealed class NodeChatStreamServiceTests
             CreateMemoryExtractionDispatcher(),
             Substitute.For<IConversationUploadedFileStore>(),
             Substitute.For<IConversationSandboxStager>(),
+            CreateFenceSeedProvider(),
             TimeProvider.System,
             NullLogger<NodeChatStreamService>.Instance);
         var events = new List<ChatStreamEvent>();
@@ -214,6 +217,7 @@ public sealed class NodeChatStreamServiceTests
             CreateMemoryExtractionDispatcher(),
             Substitute.For<IConversationUploadedFileStore>(),
             Substitute.For<IConversationSandboxStager>(),
+            CreateFenceSeedProvider(),
             TimeProvider.System,
             NullLogger<NodeChatStreamService>.Instance);
 
@@ -258,6 +262,7 @@ public sealed class NodeChatStreamServiceTests
             CreateMemoryExtractionDispatcher(),
             Substitute.For<IConversationUploadedFileStore>(),
             Substitute.For<IConversationSandboxStager>(),
+            CreateFenceSeedProvider(),
             TimeProvider.System,
             NullLogger<NodeChatStreamService>.Instance);
 
@@ -302,6 +307,7 @@ public sealed class NodeChatStreamServiceTests
             CreateMemoryExtractionDispatcher(),
             Substitute.For<IConversationUploadedFileStore>(),
             Substitute.For<IConversationSandboxStager>(),
+            CreateFenceSeedProvider(),
             TimeProvider.System,
             NullLogger<NodeChatStreamService>.Instance);
 
@@ -356,6 +362,7 @@ public sealed class NodeChatStreamServiceTests
             CreateMemoryExtractionDispatcher(),
             Substitute.For<IConversationUploadedFileStore>(),
             Substitute.For<IConversationSandboxStager>(),
+            CreateFenceSeedProvider(),
             TimeProvider.System,
             NullLogger<NodeChatStreamService>.Instance);
 
@@ -405,6 +412,7 @@ public sealed class NodeChatStreamServiceTests
             CreateMemoryExtractionDispatcher(),
             Substitute.For<IConversationUploadedFileStore>(),
             Substitute.For<IConversationSandboxStager>(),
+            CreateFenceSeedProvider(),
             TimeProvider.System,
             NullLogger<NodeChatStreamService>.Instance);
 
@@ -463,6 +471,7 @@ public sealed class NodeChatStreamServiceTests
             CreateMemoryExtractionDispatcher(),
             Substitute.For<IConversationUploadedFileStore>(),
             stager,
+            CreateFenceSeedProvider(),
             TimeProvider.System,
             NullLogger<NodeChatStreamService>.Instance);
 
@@ -513,6 +522,7 @@ public sealed class NodeChatStreamServiceTests
             CreateMemoryExtractionDispatcher(),
             Substitute.For<IConversationUploadedFileStore>(),
             stager,
+            CreateFenceSeedProvider(),
             TimeProvider.System,
             NullLogger<NodeChatStreamService>.Instance);
 
@@ -563,6 +573,7 @@ public sealed class NodeChatStreamServiceTests
             CreateMemoryExtractionDispatcher(),
             Substitute.For<IConversationUploadedFileStore>(),
             stager,
+            CreateFenceSeedProvider(),
             TimeProvider.System,
             NullLogger<NodeChatStreamService>.Instance);
 
@@ -618,6 +629,7 @@ public sealed class NodeChatStreamServiceTests
             CreateMemoryExtractionDispatcher(),
             uploadedFileStore,
             Substitute.For<IConversationSandboxStager>(),
+            CreateFenceSeedProvider(),
             TimeProvider.System,
             NullLogger<NodeChatStreamService>.Instance);
 
@@ -671,6 +683,7 @@ public sealed class NodeChatStreamServiceTests
             CreateMemoryExtractionDispatcher(),
             uploadedFileStore,
             Substitute.For<IConversationSandboxStager>(),
+            CreateFenceSeedProvider(),
             TimeProvider.System,
             NullLogger<NodeChatStreamService>.Instance);
 
@@ -724,6 +737,7 @@ public sealed class NodeChatStreamServiceTests
             CreateMemoryExtractionDispatcher(),
             Substitute.For<IConversationUploadedFileStore>(),
             Substitute.For<IConversationSandboxStager>(),
+            CreateFenceSeedProvider(),
             TimeProvider.System,
             NullLogger<NodeChatStreamService>.Instance);
 
@@ -778,6 +792,7 @@ public sealed class NodeChatStreamServiceTests
             CreateMemoryExtractionDispatcher(),
             Substitute.For<IConversationUploadedFileStore>(),
             Substitute.For<IConversationSandboxStager>(),
+            CreateFenceSeedProvider(),
             TimeProvider.System,
             NullLogger<NodeChatStreamService>.Instance);
 
@@ -833,6 +848,7 @@ public sealed class NodeChatStreamServiceTests
             CreateMemoryExtractionDispatcher(),
             Substitute.For<IConversationUploadedFileStore>(),
             Substitute.For<IConversationSandboxStager>(),
+            CreateFenceSeedProvider(),
             TimeProvider.System,
             NullLogger<NodeChatStreamService>.Instance);
 
@@ -879,6 +895,7 @@ public sealed class NodeChatStreamServiceTests
             CreateMemoryExtractionDispatcher(),
             Substitute.For<IConversationUploadedFileStore>(),
             Substitute.For<IConversationSandboxStager>(),
+            CreateFenceSeedProvider(),
             TimeProvider.System,
             NullLogger<NodeChatStreamService>.Instance);
 
@@ -937,6 +954,7 @@ public sealed class NodeChatStreamServiceTests
             CreateMemoryExtractionDispatcher(),
             Substitute.For<IConversationUploadedFileStore>(),
             Substitute.For<IConversationSandboxStager>(),
+            CreateFenceSeedProvider(),
             TimeProvider.System,
             NullLogger<NodeChatStreamService>.Instance);
         using var clientCancellation = new CancellationTokenSource();
@@ -1013,6 +1031,7 @@ public sealed class NodeChatStreamServiceTests
             CreateMemoryExtractionDispatcher(),
             Substitute.For<IConversationUploadedFileStore>(),
             Substitute.For<IConversationSandboxStager>(),
+            CreateFenceSeedProvider(),
             TimeProvider.System,
             NullLogger<NodeChatStreamService>.Instance);
         using var clientCancellation = new CancellationTokenSource();
@@ -1086,6 +1105,7 @@ public sealed class NodeChatStreamServiceTests
             CreateMemoryExtractionDispatcher(),
             Substitute.For<IConversationUploadedFileStore>(),
             Substitute.For<IConversationSandboxStager>(),
+            CreateFenceSeedProvider(),
             TimeProvider.System,
             NullLogger<NodeChatStreamService>.Instance);
 
@@ -1149,6 +1169,7 @@ public sealed class NodeChatStreamServiceTests
             extractionDispatcher,
             Substitute.For<IConversationUploadedFileStore>(),
             Substitute.For<IConversationSandboxStager>(),
+            CreateFenceSeedProvider(),
             TimeProvider.System,
             NullLogger<NodeChatStreamService>.Instance);
 
@@ -1203,6 +1224,7 @@ public sealed class NodeChatStreamServiceTests
             extractionDispatcher,
             Substitute.For<IConversationUploadedFileStore>(),
             Substitute.For<IConversationSandboxStager>(),
+            CreateFenceSeedProvider(),
             TimeProvider.System,
             NullLogger<NodeChatStreamService>.Instance);
 
@@ -1262,6 +1284,7 @@ public sealed class NodeChatStreamServiceTests
             CreateMemoryExtractionDispatcher(),
             Substitute.For<IConversationUploadedFileStore>(),
             Substitute.For<IConversationSandboxStager>(),
+            CreateFenceSeedProvider(),
             TimeProvider.System,
             NullLogger<NodeChatStreamService>.Instance);
 
@@ -1311,6 +1334,7 @@ public sealed class NodeChatStreamServiceTests
             CreateMemoryExtractionDispatcher(),
             Substitute.For<IConversationUploadedFileStore>(),
             Substitute.For<IConversationSandboxStager>(),
+            CreateFenceSeedProvider(),
             TimeProvider.System,
             NullLogger<NodeChatStreamService>.Instance);
 
@@ -1364,6 +1388,7 @@ public sealed class NodeChatStreamServiceTests
             CreateMemoryExtractionDispatcher(),
             Substitute.For<IConversationUploadedFileStore>(),
             Substitute.For<IConversationSandboxStager>(),
+            CreateFenceSeedProvider(),
             TimeProvider.System,
             NullLogger<NodeChatStreamService>.Instance);
 
@@ -1416,6 +1441,7 @@ public sealed class NodeChatStreamServiceTests
             CreateMemoryExtractionDispatcher(),
             Substitute.For<IConversationUploadedFileStore>(),
             Substitute.For<IConversationSandboxStager>(),
+            CreateFenceSeedProvider(),
             TimeProvider.System,
             NullLogger<NodeChatStreamService>.Instance);
 
@@ -1467,6 +1493,7 @@ public sealed class NodeChatStreamServiceTests
             CreateMemoryExtractionDispatcher(),
             Substitute.For<IConversationUploadedFileStore>(),
             Substitute.For<IConversationSandboxStager>(),
+            CreateFenceSeedProvider(),
             TimeProvider.System,
             NullLogger<NodeChatStreamService>.Instance);
 
@@ -1521,6 +1548,7 @@ public sealed class NodeChatStreamServiceTests
             CreateMemoryExtractionDispatcher(),
             Substitute.For<IConversationUploadedFileStore>(),
             Substitute.For<IConversationSandboxStager>(),
+            CreateFenceSeedProvider(),
             TimeProvider.System,
             NullLogger<NodeChatStreamService>.Instance);
 
@@ -1590,6 +1618,7 @@ public sealed class NodeChatStreamServiceTests
             CreateMemoryExtractionDispatcher(),
             Substitute.For<IConversationUploadedFileStore>(),
             Substitute.For<IConversationSandboxStager>(),
+            CreateFenceSeedProvider(),
             TimeProvider.System,
             NullLogger<NodeChatStreamService>.Instance);
 
@@ -1666,6 +1695,7 @@ public sealed class NodeChatStreamServiceTests
             CreateMemoryExtractionDispatcher(),
             Substitute.For<IConversationUploadedFileStore>(),
             Substitute.For<IConversationSandboxStager>(),
+            CreateFenceSeedProvider(),
             TimeProvider.System,
             NullLogger<NodeChatStreamService>.Instance);
 
@@ -1762,6 +1792,7 @@ public sealed class NodeChatStreamServiceTests
             CreateMemoryExtractionDispatcher(),
             Substitute.For<IConversationUploadedFileStore>(),
             Substitute.For<IConversationSandboxStager>(),
+            CreateFenceSeedProvider(),
             TimeProvider.System,
             NullLogger<NodeChatStreamService>.Instance);
 
@@ -1866,6 +1897,7 @@ public sealed class NodeChatStreamServiceTests
             CreateMemoryExtractionDispatcher(),
             Substitute.For<IConversationUploadedFileStore>(),
             Substitute.For<IConversationSandboxStager>(),
+            CreateFenceSeedProvider(),
             TimeProvider.System,
             NullLogger<NodeChatStreamService>.Instance);
 
@@ -1962,6 +1994,7 @@ public sealed class NodeChatStreamServiceTests
             CreateMemoryExtractionDispatcher(),
             Substitute.For<IConversationUploadedFileStore>(),
             Substitute.For<IConversationSandboxStager>(),
+            CreateFenceSeedProvider(),
             TimeProvider.System,
             NullLogger<NodeChatStreamService>.Instance);
 
@@ -2012,6 +2045,7 @@ public sealed class NodeChatStreamServiceTests
             CreateMemoryExtractionDispatcher(),
             Substitute.For<IConversationUploadedFileStore>(),
             Substitute.For<IConversationSandboxStager>(),
+            CreateFenceSeedProvider(),
             TimeProvider.System,
             NullLogger<NodeChatStreamService>.Instance);
 
@@ -2065,6 +2099,7 @@ public sealed class NodeChatStreamServiceTests
             CreateMemoryExtractionDispatcher(),
             Substitute.For<IConversationUploadedFileStore>(),
             Substitute.For<IConversationSandboxStager>(),
+            CreateFenceSeedProvider(),
             TimeProvider.System,
             NullLogger<NodeChatStreamService>.Instance);
 
@@ -2121,6 +2156,7 @@ public sealed class NodeChatStreamServiceTests
             CreateMemoryExtractionDispatcher(),
             Substitute.For<IConversationUploadedFileStore>(),
             Substitute.For<IConversationSandboxStager>(),
+            CreateFenceSeedProvider(),
             TimeProvider.System,
             NullLogger<NodeChatStreamService>.Instance);
 
@@ -2154,6 +2190,27 @@ public sealed class NodeChatStreamServiceTests
         var provider = Substitute.For<ILocalToolOfferProvider>();
         provider.GetOfferedTools(Arg.Any<string?>(), Arg.Any<bool>()).Returns(tools);
         return provider;
+    }
+
+    // A real fence-seed provider over a fixed test key so any attachment-composing test gets a valid (non-null) seed.
+    // The holder owns no unmanaged resource (its Dispose is a no-op over a fixed byte array), so a process-lifetime
+    // static instance needs no cleanup method.
+#pragma warning disable TUnit0023
+    private static readonly INodeSqliteKeyHolder FenceKeyHolder = new StaticFenceKeyHolder();
+#pragma warning restore TUnit0023
+
+    private static IUntrustedContentFenceSeedProvider CreateFenceSeedProvider()
+    {
+        return new UntrustedContentFenceSeedProvider(FenceKeyHolder);
+    }
+
+    private sealed class StaticFenceKeyHolder : INodeSqliteKeyHolder
+    {
+        public ReadOnlyMemory<byte> Key { get; } = new byte[32];
+
+        public void Dispose()
+        {
+        }
     }
 
     // The default node-settings store: no operator-selected node default, so model resolution falls through to the
@@ -2459,6 +2516,7 @@ public sealed class NodeChatStreamServiceTests
             CreateMemoryExtractionDispatcher(),
             Substitute.For<IConversationUploadedFileStore>(),
             Substitute.For<IConversationSandboxStager>(),
+            CreateFenceSeedProvider(),
             TimeProvider.System,
             NullLogger<NodeChatStreamService>.Instance);
 

@@ -34,6 +34,7 @@ public sealed class NodeChatStreamService(
     IMemoryExtractionDispatcher memoryExtractionDispatcher,
     IConversationUploadedFileStore uploadedFileStore,
     IConversationSandboxStager conversationSandboxStager,
+    IUntrustedContentFenceSeedProvider fenceSeedProvider,
     TimeProvider timeProvider,
     ILogger<NodeChatStreamService> logger) : INodeChatStreamService
 {
@@ -489,7 +490,7 @@ public sealed class NodeChatStreamService(
             }
         }
 
-        var content = ConversationAttachmentContextComposer.Compose(parts, localChatOptions.Value.MaxInlinedAttachmentChars, conversationId);
+        var content = ConversationAttachmentContextComposer.Compose(parts, localChatOptions.Value.MaxInlinedAttachmentChars, fenceSeedProvider.DeriveSeed(conversationId));
         if (content is null)
         {
             return null;
