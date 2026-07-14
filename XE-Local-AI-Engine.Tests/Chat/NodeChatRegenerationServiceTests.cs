@@ -58,7 +58,7 @@ public sealed class NodeChatRegenerationServiceTests : IDisposable
         var dispatcher = new RegenRecordingDispatcher();
         var runner = new RegenCompletingRunner(dispatcher);
         var service = new NodeChatRegenerationService(persistence,
-            new ChatInvocationStatePump(new NodeChatInvocationPump(persistence, TimeProvider.System), TimeProvider.System),
+            new ChatInvocationStatePump(ChatPumpTestFactory.Create(persistence), TimeProvider.System),
             new ChatTurnResolver(CreateAgentDefinitionResolver(), CreateAgentDefinitionStore(), CreateOrchestrationResolver(), CreateModelClassificationService(), CreateLocalModelProviderResolver(),
                 CreateGgufModelCapabilityResolver(), Substitute.For<ICloudCredentialStore>(), NullLogger<ChatTurnResolver>.Instance),
             new NodeChatMutationGuard(persistence),
@@ -129,7 +129,7 @@ public sealed class NodeChatRegenerationServiceTests : IDisposable
         var dispatcher = new RegenRecordingDispatcher();
         var runner = new RegenCompletingRunner(dispatcher);
         var service = new NodeChatRegenerationService(persistence,
-            new ChatInvocationStatePump(new NodeChatInvocationPump(persistence, TimeProvider.System), TimeProvider.System),
+            new ChatInvocationStatePump(ChatPumpTestFactory.Create(persistence), TimeProvider.System),
             new ChatTurnResolver(CreateAgentDefinitionResolver(), CreateAgentDefinitionStore(), CreateOrchestrationResolver(), CreateModelClassificationService(), CreateLocalModelProviderResolver(),
                 CreateGgufModelCapabilityResolver(), Substitute.For<ICloudCredentialStore>(), NullLogger<ChatTurnResolver>.Instance),
             new NodeChatMutationGuard(persistence),
@@ -192,7 +192,7 @@ public sealed class NodeChatRegenerationServiceTests : IDisposable
                 .Returns(new ResolvedAgentRuntime("Bound persona prompt.", [boundTool], "qwen3:8b", "high", AgentDefinitionVersion: 9));
 
         var service = new NodeChatRegenerationService(persistence,
-            new ChatInvocationStatePump(new NodeChatInvocationPump(persistence, TimeProvider.System), TimeProvider.System),
+            new ChatInvocationStatePump(ChatPumpTestFactory.Create(persistence), TimeProvider.System),
             new ChatTurnResolver(resolver, CreateAgentDefinitionStore(), CreateOrchestrationResolver(), CreateModelClassificationService(), CreateLocalModelProviderResolver(),
                 CreateGgufModelCapabilityResolver(), Substitute.For<ICloudCredentialStore>(), NullLogger<ChatTurnResolver>.Instance),
             new NodeChatMutationGuard(persistence),
@@ -269,7 +269,7 @@ public sealed class NodeChatRegenerationServiceTests : IDisposable
                 });
 
         var service = new NodeChatRegenerationService(persistence,
-            new ChatInvocationStatePump(new NodeChatInvocationPump(persistence, TimeProvider.System), TimeProvider.System),
+            new ChatInvocationStatePump(ChatPumpTestFactory.Create(persistence), TimeProvider.System),
             new ChatTurnResolver(resolver, CreateAgentDefinitionStore(), CreateOrchestrationResolver(), CreateModelClassificationService(), CreateLocalModelProviderResolver(),
                 CreateGgufModelCapabilityResolver(), Substitute.For<ICloudCredentialStore>(), NullLogger<ChatTurnResolver>.Instance),
             new NodeChatMutationGuard(persistence),
@@ -345,7 +345,7 @@ public sealed class NodeChatRegenerationServiceTests : IDisposable
                 .Returns(new ResolvedAgentRuntime("Original persona.", [], "model-x", ReasoningEffort: null, AgentDefinitionVersion: 5, originalTurnAgentId, "Renamed Original Agent"));
 
         var service = new NodeChatRegenerationService(persistence,
-            new ChatInvocationStatePump(new NodeChatInvocationPump(persistence, TimeProvider.System), TimeProvider.System),
+            new ChatInvocationStatePump(ChatPumpTestFactory.Create(persistence), TimeProvider.System),
             new ChatTurnResolver(resolver, CreateAgentDefinitionStore(), CreateOrchestrationResolver(), CreateModelClassificationService(), CreateLocalModelProviderResolver(),
                 CreateGgufModelCapabilityResolver(), Substitute.For<ICloudCredentialStore>(), NullLogger<ChatTurnResolver>.Instance),
             new NodeChatMutationGuard(persistence),
@@ -415,7 +415,7 @@ public sealed class NodeChatRegenerationServiceTests : IDisposable
                              .Returns(new ResolvedOrchestration(spec, "Orchestrator prompt.", "qwen3:8b", ReasoningEffort: null, AgentDefinitionVersion: 4));
 
         var service = new NodeChatRegenerationService(persistence,
-            new ChatInvocationStatePump(new NodeChatInvocationPump(persistence, TimeProvider.System), TimeProvider.System),
+            new ChatInvocationStatePump(ChatPumpTestFactory.Create(persistence), TimeProvider.System),
             new ChatTurnResolver(CreateAgentDefinitionResolver(), store, orchestrationResolver, CreateModelClassificationService(), CreateLocalModelProviderResolver(),
                 CreateGgufModelCapabilityResolver(), Substitute.For<ICloudCredentialStore>(), NullLogger<ChatTurnResolver>.Instance),
             new NodeChatMutationGuard(persistence),
@@ -472,7 +472,7 @@ public sealed class NodeChatRegenerationServiceTests : IDisposable
         var resolver = CreateAgentDefinitionResolver();
 
         var service = new NodeChatRegenerationService(persistence,
-            new ChatInvocationStatePump(new NodeChatInvocationPump(persistence, TimeProvider.System), TimeProvider.System),
+            new ChatInvocationStatePump(ChatPumpTestFactory.Create(persistence), TimeProvider.System),
             new ChatTurnResolver(resolver, CreateAgentDefinitionStore(), CreateOrchestrationResolver(), CreateModelClassificationService(), CreateLocalModelProviderResolver(),
                 CreateGgufModelCapabilityResolver(), Substitute.For<ICloudCredentialStore>(), NullLogger<ChatTurnResolver>.Instance),
             new NodeChatMutationGuard(persistence),
@@ -523,7 +523,7 @@ public sealed class NodeChatRegenerationServiceTests : IDisposable
         var dispatcher = new RegenRecordingDispatcher();
         var runner = new RegenToolEmittingRunner(dispatcher);
         var service = new NodeChatRegenerationService(persistence,
-            new ChatInvocationStatePump(new NodeChatInvocationPump(persistence, TimeProvider.System), TimeProvider.System),
+            new ChatInvocationStatePump(ChatPumpTestFactory.Create(persistence), TimeProvider.System),
             new ChatTurnResolver(CreateAgentDefinitionResolver(), CreateAgentDefinitionStore(), CreateOrchestrationResolver(), CreateModelClassificationService(), CreateLocalModelProviderResolver(),
                 CreateGgufModelCapabilityResolver(), Substitute.For<ICloudCredentialStore>(), NullLogger<ChatTurnResolver>.Instance),
             new NodeChatMutationGuard(persistence),
@@ -589,7 +589,7 @@ public sealed class NodeChatRegenerationServiceTests : IDisposable
         var offerProvider = CreateOfferProvider(CreateLocalToolDto("GetCurrentTime", "{\"type\":\"object\"}"),
             CreateLocalToolDto("Calculate", "{\"type\":\"object\"}"));
         var service = new NodeChatRegenerationService(persistence,
-            new ChatInvocationStatePump(new NodeChatInvocationPump(persistence, TimeProvider.System), TimeProvider.System),
+            new ChatInvocationStatePump(ChatPumpTestFactory.Create(persistence), TimeProvider.System),
             new ChatTurnResolver(CreateAgentDefinitionResolver(), CreateAgentDefinitionStore(), CreateOrchestrationResolver(), CreateModelClassificationService(), CreateLocalModelProviderResolver(),
                 CreateGgufModelCapabilityResolver(), Substitute.For<ICloudCredentialStore>(), NullLogger<ChatTurnResolver>.Instance),
             new NodeChatMutationGuard(persistence),
@@ -649,7 +649,7 @@ public sealed class NodeChatRegenerationServiceTests : IDisposable
         var offerProvider = CreateOfferProvider(CreateLocalToolDto("GetCurrentTime", "{\"type\":\"object\"}"),
             CreateLocalToolDto("Calculate", "{\"type\":\"object\"}"));
         var service = new NodeChatRegenerationService(persistence,
-            new ChatInvocationStatePump(new NodeChatInvocationPump(persistence, TimeProvider.System), TimeProvider.System),
+            new ChatInvocationStatePump(ChatPumpTestFactory.Create(persistence), TimeProvider.System),
             new ChatTurnResolver(CreateAgentDefinitionResolver(), CreateAgentDefinitionStore(), CreateOrchestrationResolver(), CreateModelClassificationService(), CreateLocalModelProviderResolver(),
                 CreateGgufModelCapabilityResolver(), Substitute.For<ICloudCredentialStore>(), NullLogger<ChatTurnResolver>.Instance),
             new NodeChatMutationGuard(persistence),
@@ -703,7 +703,7 @@ public sealed class NodeChatRegenerationServiceTests : IDisposable
         var dispatcher = new RegenRecordingDispatcher();
         var capturingRunner = new RegenContextCapturingRunner(dispatcher);
         var service = new NodeChatRegenerationService(persistence,
-            new ChatInvocationStatePump(new NodeChatInvocationPump(persistence, TimeProvider.System), TimeProvider.System),
+            new ChatInvocationStatePump(ChatPumpTestFactory.Create(persistence), TimeProvider.System),
             new ChatTurnResolver(CreateAgentDefinitionResolver(), CreateAgentDefinitionStore(), CreateOrchestrationResolver(), CreateModelClassificationService(), CreateLocalModelProviderResolver(),
                 CreateGgufModelCapabilityResolver(), Substitute.For<ICloudCredentialStore>(), NullLogger<ChatTurnResolver>.Instance),
             new NodeChatMutationGuard(persistence),
@@ -772,7 +772,7 @@ public sealed class NodeChatRegenerationServiceTests : IDisposable
         var dispatcher = new RegenRecordingDispatcher();
         var capturingRunner = new RegenContextCapturingRunner(dispatcher);
         var service = new NodeChatRegenerationService(persistence,
-            new ChatInvocationStatePump(new NodeChatInvocationPump(persistence, TimeProvider.System), TimeProvider.System),
+            new ChatInvocationStatePump(ChatPumpTestFactory.Create(persistence), TimeProvider.System),
             new ChatTurnResolver(CreateAgentDefinitionResolver(), CreateAgentDefinitionStore(), CreateOrchestrationResolver(), CreateModelClassificationService(), CreateLocalModelProviderResolver(),
                 CreateGgufModelCapabilityResolver(), Substitute.For<ICloudCredentialStore>(), NullLogger<ChatTurnResolver>.Instance),
             new NodeChatMutationGuard(persistence),
@@ -820,7 +820,7 @@ public sealed class NodeChatRegenerationServiceTests : IDisposable
         var dispatcher = new RegenRecordingDispatcher();
         var capturingRunner = new RegenContextCapturingRunner(dispatcher);
         var service = new NodeChatRegenerationService(persistence,
-            new ChatInvocationStatePump(new NodeChatInvocationPump(persistence, TimeProvider.System), TimeProvider.System),
+            new ChatInvocationStatePump(ChatPumpTestFactory.Create(persistence), TimeProvider.System),
             new ChatTurnResolver(CreateAgentDefinitionResolver(), CreateAgentDefinitionStore(), CreateOrchestrationResolver(), CreateModelClassificationService(), CreateLocalModelProviderResolver(),
                 CreateGgufModelCapabilityResolver(), Substitute.For<ICloudCredentialStore>(), NullLogger<ChatTurnResolver>.Instance),
             new NodeChatMutationGuard(persistence),
@@ -860,7 +860,7 @@ public sealed class NodeChatRegenerationServiceTests : IDisposable
 
         var dispatcher = new RegenRecordingDispatcher();
         var service = new NodeChatRegenerationService(persistence,
-            new ChatInvocationStatePump(new NodeChatInvocationPump(persistence, TimeProvider.System), TimeProvider.System),
+            new ChatInvocationStatePump(ChatPumpTestFactory.Create(persistence), TimeProvider.System),
             new ChatTurnResolver(CreateAgentDefinitionResolver(), CreateAgentDefinitionStore(), CreateOrchestrationResolver(), CreateModelClassificationService(), CreateLocalModelProviderResolver(),
                 CreateGgufModelCapabilityResolver(), Substitute.For<ICloudCredentialStore>(), NullLogger<ChatTurnResolver>.Instance),
             new NodeChatMutationGuard(persistence),
@@ -918,7 +918,7 @@ public sealed class NodeChatRegenerationServiceTests : IDisposable
         var offerProvider = CreateOfferProvider();
         var classificationService = CreateModelClassificationService();
         var service = new NodeChatRegenerationService(persistence,
-            new ChatInvocationStatePump(new NodeChatInvocationPump(persistence, TimeProvider.System), TimeProvider.System),
+            new ChatInvocationStatePump(ChatPumpTestFactory.Create(persistence), TimeProvider.System),
             new ChatTurnResolver(CreateAgentDefinitionResolver(), CreateAgentDefinitionStore(), CreateOrchestrationResolver(), classificationService, CreateLocalModelProviderResolver(),
                 CreateGgufModelCapabilityResolver(), Substitute.For<ICloudCredentialStore>(), NullLogger<ChatTurnResolver>.Instance),
             new NodeChatMutationGuard(persistence),
