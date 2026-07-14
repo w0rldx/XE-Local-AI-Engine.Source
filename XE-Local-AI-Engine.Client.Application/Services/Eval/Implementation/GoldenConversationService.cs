@@ -153,5 +153,31 @@ internal sealed class GoldenConversationService(
         {
             throw new PlaybookActionValidationException($"Agent definition '{input.AgentDefinitionId}' does not exist.");
         }
+
+        // Semantic InputTurns validation: at least one turn, each carrying a known role (user/assistant) and non-blank
+        // text. An unknown role is rejected here rather than silently collapsed to User at eval time (which would
+        // reshape the evaluated conversation), and a case with no valid turns cannot be evaluated.
+        if (!GoldenInputTurns.TryParse(input.InputTurns, out _, out var turnsError))
+        {
+            throw new PlaybookActionValidationException(turnsError ?? "InputTurns is invalid.");
+        }
+
+        // Semantic Assertion validation: an assertion must carry at least one meaningful (non-blank) required or
+        // forbidden phrase — otherwise it passes any output (empty .All is vacuously true, empty .Any trivially absent),
+        // a zero-quality bypass. When it does not, a Rubric must be present to score the case instead. This closes the
+        // empty-array-assertion bypass at authoring time (the judge fails such cases closed for legacy rows).
+        if (!string.IsNullOrWhiteSpace(input.Assertion))
+        {
+            var assertion = GoldenAssertion.TryParse(input.Assertion);
+            if (assertion is null)
+            {
+                throw new PlaybookActionValidationException("Assertion is not valid JSON.");
+            }
+
+            if (!assertion.HasMeaningfulSignal && string.IsNullOrWhiteSpace(input.Rubric))
+            {
+                throw new PlaybookActionValidationException("An Assertion must contain at least one non-blank required or forbidden phrase, or the case must supply a Rubric.");
+            }
+        }
     }
 }
