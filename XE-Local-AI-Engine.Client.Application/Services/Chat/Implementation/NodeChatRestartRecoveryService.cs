@@ -1,6 +1,7 @@
 namespace XE_Local_AI_Engine.Client.Services.Chat.Implementation;
 
 using Microsoft.EntityFrameworkCore;
+using XE_Local_AI_Engine.Client.Persistence.Stores;
 
 public sealed class NodeChatRestartRecoveryService(NodeChatPersistenceWriter writer)
 {
@@ -39,6 +40,37 @@ public sealed class NodeChatRestartRecoveryService(NodeChatPersistenceWriter wri
                         NodeChatMessageStatusValues.Pending,
                         NodeChatMessageStatusValues.Queued,
                         NodeChatMessageStatusValues.Streaming
+                    ],
+                    token).ConfigureAwait(false);
+
+                // Durable run-envelope backfill (R4): a crash between the terminal message commit and the best-effort
+                // envelope write leaves an interrupted assistant row with no envelope. Backfill one thin envelope per
+                // interrupted assistant message that lacks one, in the SAME transaction, deriving the correlation ids
+                // (and a deterministic id = message_id) from the message row. The NOT EXISTS guard plus the filtered
+                // unique index keep it idempotent: an already-enveloped message is skipped, so re-running never
+                // duplicates. Tokens/duration/model are unknown at recovery and left empty — the row records the
+                // interrupted lifecycle, not the (lost) generation detail.
+                _ = await dbContext.Database.ExecuteSqlRawAsync(sql: """
+                                                                    INSERT INTO agent_execution_logs
+                                                                        (id, record_kind, schema_version, agent_definition_id, conversation_id, message_id, request_id,
+                                                                         model_name, config_hash, terminal_status, latency_ms, success, created_at_utc)
+                                                                    SELECT
+                                                                        m.message_id, {0}, {1}, {2}, m.conversation_id, m.message_id, m.request_id,
+                                                                        '', '', {3}, 0, 0, {4}
+                                                                    FROM messages m
+                                                                    WHERE m.role = {5}
+                                                                      AND m.status = {3}
+                                                                      AND NOT EXISTS (
+                                                                          SELECT 1 FROM agent_execution_logs e
+                                                                          WHERE e.record_kind = {0} AND e.message_id = m.message_id);
+                                                                    """,
+                    [
+                        (int)AgentExecutionLogRecordKind.ChatRunEnvelope,
+                        AgentRunEnvelope.CurrentSchemaVersion,
+                        Guid.Empty,
+                        NodeChatMessageStatusValues.Interrupted,
+                        recoveredAtUtc,
+                        AssistantRole
                     ],
                     token).ConfigureAwait(false);
 

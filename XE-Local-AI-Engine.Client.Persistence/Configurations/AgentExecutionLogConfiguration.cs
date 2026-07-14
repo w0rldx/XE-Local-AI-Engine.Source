@@ -3,6 +3,7 @@ namespace XE_Local_AI_Engine.Client.Persistence.Configurations;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Metadata.Builders;
 using XE_Local_AI_Engine.Client.Persistence.Entities;
+using XE_Local_AI_Engine.Client.Persistence.Stores;
 
 internal sealed class AgentExecutionLogConfiguration : IEntityTypeConfiguration<AgentExecutionLog>
 {
@@ -75,6 +76,15 @@ internal sealed class AgentExecutionLogConfiguration : IEntityTypeConfiguration<
         builder.Property(entity => entity.ReasoningChunkCount)
                .HasColumnName("reasoning_chunk_count");
 
+        builder.Property(entity => entity.ReasoningTokens)
+               .HasColumnName("reasoning_tokens");
+
+        builder.Property(entity => entity.TotalTokens)
+               .HasColumnName("total_tokens");
+
+        builder.Property(entity => entity.StartedAtUtc)
+               .HasColumnName("started_at_utc");
+
         // The paged list-by-agent read filters by agent and orders newest-first, so index the pair. No FK to
         // agent_definitions: a run log is diagnostic telemetry that should outlive the definition (mirrors the no-FK
         // conversation->definition choice), so deleting an agent must not cascade-delete its execution history.
@@ -83,5 +93,15 @@ internal sealed class AgentExecutionLogConfiguration : IEntityTypeConfiguration<
             entity.AgentDefinitionId,
             entity.CreatedAtUtc
         });
+
+        // Deterministic identity for a run envelope: exactly one envelope row per terminalized assistant message. The
+        // filtered UNIQUE index makes AddRunEnvelopeAsync an idempotent upsert (a retry or a crash-recovery backfill can
+        // never duplicate) and gives a crash between the message commit and the envelope write a recoverable key. The
+        // filter scopes it to run-envelope rows so the memory-diagnostics rows, which may repeat a message id, are
+        // unaffected. SQLite treats null message ids as distinct, so an envelope missing one (should not occur) never trips it.
+        builder.HasIndex(entity => entity.MessageId)
+               .IsUnique()
+               .HasFilter($"record_kind = {(int)AgentExecutionLogRecordKind.ChatRunEnvelope}")
+               .HasDatabaseName("ix_agent_execution_logs_envelope_message_id");
     }
 }

@@ -215,6 +215,10 @@ public static class LocalApiRoutes
         // Read-only adaptive-memory execution-log diagnostics (metadata only — no message content). Literal
         // "execution-logs" segment keeps it distinct from the {agentDefinitionId} route param.
         public const string ExecutionLogs = "agents/{agentDefinitionId}/execution-logs";
+
+        // Read-only, versioned durable run-envelope lifecycle records (metadata only — no message content), optionally
+        // filtered by conversationId. Literal "run-envelopes" segment keeps it distinct from the {agentDefinitionId} param.
+        public const string RunEnvelopes = "agents/run-envelopes";
     }
 
     /// <summary>
