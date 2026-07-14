@@ -10,31 +10,15 @@ public sealed class NodeRetentionStore(NodeChatDbContext dbContext) : INodeReten
 {
     private readonly NodeChatDbContext _dbContext = dbContext ?? throw new ArgumentNullException(nameof(dbContext));
 
-    public async Task<IReadOnlyList<Guid>> SweepExpiredConversationsAsync(long cutoffUtc, CancellationToken cancellationToken = default)
+    public async Task<IReadOnlyList<Guid>> ListExpiredConversationCandidatesAsync(long cutoffUtc, CancellationToken cancellationToken = default)
     {
-        var candidateConversationIds = await _dbContext.Conversations
-                                                       .Where(conversation => conversation.Purged || conversation.LastSeenUtc <= cutoffUtc)
-                                                       .Select(conversation => conversation.ConversationId)
-                                                       .ToListAsync(cancellationToken)
-                                                       .ConfigureAwait(false);
-
-        if (candidateConversationIds.Count == 0)
-        {
-            return [];
-        }
-
-        await using var transaction = await _dbContext.Database.BeginTransactionAsync(cancellationToken).ConfigureAwait(false);
-
-        // Delete each conversation's complete DB footprint through the shared helper so retention deletes exactly what
-        // the interactive immediate-purge path deletes (feedback + uploaded-file rows included), not just messages.
-        foreach (var conversationId in candidateConversationIds)
-        {
-            await ConversationFootprintPurge.DeleteAsync(_dbContext, conversationId, cancellationToken).ConfigureAwait(false);
-        }
-
-        await transaction.CommitAsync(cancellationToken).ConfigureAwait(false);
-
-        // The ids are returned so the caller can tear down each conversation's on-disk upload blobs after the DB commit.
-        return candidateConversationIds;
+        // Read-only candidate selection: no lock and no delete here. Each candidate is re-checked and deleted under the
+        // conversation's exclusive write lock by the caller (see ConversationRetentionPurge), because a send or touch can
+        // make a candidate active again between this selection and its deletion.
+        return await _dbContext.Conversations
+                               .Where(conversation => conversation.Purged || conversation.LastSeenUtc <= cutoffUtc)
+                               .Select(conversation => conversation.ConversationId)
+                               .ToListAsync(cancellationToken)
+                               .ConfigureAwait(false);
     }
 }
