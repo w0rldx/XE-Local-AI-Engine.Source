@@ -41,8 +41,10 @@ public sealed class ChatTurnResolver(
         // Resolve the active model's advertised Ollama capabilities ONCE so the think field and the tool offer are both
         // gated by what the model can actually do. A non-thinking model returns HTTP 400 for any think value; a
         // non-tools model cannot drive tool calls. Unknown/offline capabilities resolve to NOT-capable (the safe
-        // default) so a plain chat still works without tripping the 400. Cache hit issues no /api/show call.
-        var (supportsThinking, supportsTools) = await ResolveModelCapabilitiesAsync(activeModel, cancellationToken).ConfigureAwait(false);
+        // default) so a plain chat still works without tripping the 400. Cache hit issues no /api/show call. The same
+        // pass classifies provider LOCALITY (Codex / Azure Foundry = cloud) so the knowledge-tool provider-locality gate
+        // reuses this per-turn resolution instead of adding its own hot-path lookup.
+        var (supportsThinking, supportsTools, activeModelIsCloud) = await ResolveModelCapabilitiesAsync(activeModel, cancellationToken).ConfigureAwait(false);
 
         // Resolve the effective agent definition. A null result — no effective id (the seed is missing), or an id whose
         // definition was deleted — keeps the default persona: the embedded system prompt, the full capability-gated
@@ -50,14 +52,14 @@ public sealed class ChatTurnResolver(
         // the Default Assistant, intersected otherwise), the pinned model profile, the reasoning effort, the version
         // that feeds the config hash, AND the attribution snapshot (id + display name). The retrieval query is the
         // relevance-retrieval query (inert below the threshold / unbound, so the prompt stays byte-identical).
-        var resolved = await agentDefinitionResolver.ResolveAsync(effectiveAgentId, activeModel, retrievalQuery, supportsTools, honorModelProfile: !userPickedConcreteModel, cancellationToken)
+        var resolved = await agentDefinitionResolver.ResolveAsync(effectiveAgentId, activeModel, retrievalQuery, supportsTools, honorModelProfile: !userPickedConcreteModel, activeModelIsCloud, cancellationToken)
                                                     .ConfigureAwait(false);
 
         // When the effective definition is a tool-capable orchestrator, resolve a compiled orchestration spec to carry
         // on the package — the runner branches to the handoff workflow. A null result (not an orchestrator, an
         // empty/invalid topology, an incapable model, or too few capable participants) leaves the package single-agent,
         // keeping the unbound/single-agent path byte-identical. The same retrieval query drives per-participant retrieval.
-        var orchestration = await ResolveOrchestrationAsync(effectiveAgentId, activeModel, retrievalQuery, supportsTools, cancellationToken).ConfigureAwait(false);
+        var orchestration = await ResolveOrchestrationAsync(effectiveAgentId, activeModel, retrievalQuery, supportsTools, activeModelIsCloud, cancellationToken).ConfigureAwait(false);
 
         // The single source of truth for the model that actually runs this turn: the resolved pin when honored (the
         // resolver returned null for ModelProfile when the user's explicit pick suppressed it), otherwise the active
@@ -65,7 +67,7 @@ public sealed class ChatTurnResolver(
         // label can never disagree with what ran.
         var effectiveModel = resolved?.ModelProfile ?? activeModel;
 
-        return new ChatTurnResolution(activeModel, effectiveModel, resolved, orchestration, supportsThinking, supportsTools, requiresInstalledChatModel);
+        return new ChatTurnResolution(activeModel, effectiveModel, resolved, orchestration, supportsThinking, supportsTools, requiresInstalledChatModel, activeModelIsCloud);
     }
 
     /// <summary>
@@ -75,11 +77,11 @@ public sealed class ChatTurnResolver(
     ///     withholds the tool offer while still allowing a plain chat. The same provider-routing decision lives in
     ///     <see cref="ModelCapabilityResolver" /> for the per-participant orchestration path — change both together.
     /// </summary>
-    private async Task<(bool SupportsThinking, bool SupportsTools)> ResolveModelCapabilitiesAsync(string? activeModel, CancellationToken cancellationToken)
+    private async Task<(bool SupportsThinking, bool SupportsTools, bool IsCloud)> ResolveModelCapabilitiesAsync(string? activeModel, CancellationToken cancellationToken)
     {
         if (string.IsNullOrWhiteSpace(activeModel))
         {
-            return (false, false);
+            return (false, false, IsCloud: false);
         }
 
         // A Codex cloud model is NOT an Ollama model: classifying it against the local runtime's /api/show would
@@ -89,7 +91,7 @@ public sealed class ChatTurnResolver(
         // tool loop). Cloud providers ignore the unknown think property, so the reasoning gate stays inert on the wire.
         if (CodexModelCatalog.IsCodexModel(activeModel))
         {
-            return (SupportsThinking: true, CodexProviderCapabilities.V0.SupportsToolCalling);
+            return (SupportsThinking: true, CodexProviderCapabilities.V0.SupportsToolCalling, IsCloud: true);
         }
 
         // An Azure Foundry deployment id is NOT an Ollama model either: probing /api/show for it would 500/stall.
@@ -97,7 +99,7 @@ public sealed class ChatTurnResolver(
         // capability matrix instead of an Ollama classification, so an Azure id never falls through to the local probe.
         if (await IsAzureFoundryModelAsync(activeModel, cancellationToken).ConfigureAwait(false))
         {
-            return (SupportsThinking: false, SupportsTools: AzureFoundryProviderCapabilities.V0.SupportsToolCalling);
+            return (SupportsThinking: false, SupportsTools: AzureFoundryProviderCapabilities.V0.SupportsToolCalling, IsCloud: true);
         }
 
         // /api/show classification only makes sense for an Ollama-routed model. A llama.cpp (GGUF) model has no Ollama
@@ -115,9 +117,10 @@ public sealed class ChatTurnResolver(
             var ggufCapabilities = await ggufModelCapabilityResolver
                                          .TryResolveAsync(activeModel, cancellationToken)
                                          .ConfigureAwait(false);
+            // A llama.cpp (GGUF) or other non-Ollama-but-node-local model is LOCAL.
             return ggufCapabilities is { } caps
-                ? (caps.SupportsThinking, caps.SupportsTools)
-                : (SupportsThinking: false, SupportsTools: false);
+                ? (caps.SupportsThinking, caps.SupportsTools, IsCloud: false)
+                : (SupportsThinking: false, SupportsTools: false, IsCloud: false);
         }
 
         var classifications = await modelClassificationService
@@ -125,11 +128,13 @@ public sealed class ChatTurnResolver(
                                     .ConfigureAwait(false);
         if (!classifications.TryGetValue(activeModel, out var classification))
         {
-            return (false, false);
+            return (false, false, IsCloud: false);
         }
 
+        // An Ollama-routed model runs on the node — local.
         return (ModelKindDetector.SupportsThinking(classification.Capabilities),
-            ModelKindDetector.SupportsTools(classification.Capabilities));
+            ModelKindDetector.SupportsTools(classification.Capabilities),
+            IsCloud: false);
     }
 
     /// <summary>
@@ -167,6 +172,7 @@ public sealed class ChatTurnResolver(
         string? activeModel,
         string? retrievalQuery,
         bool supportsTools,
+        bool activeModelIsCloud,
         CancellationToken cancellationToken)
     {
         if (agentDefinitionId is not { } definitionId)
@@ -180,6 +186,6 @@ public sealed class ChatTurnResolver(
             return null;
         }
 
-        return await orchestrationResolver.ResolveAsync(definition, activeModel, retrievalQuery, supportsTools, cancellationToken).ConfigureAwait(false);
+        return await orchestrationResolver.ResolveAsync(definition, activeModel, retrievalQuery, supportsTools, activeModelIsCloud, cancellationToken).ConfigureAwait(false);
     }
 }

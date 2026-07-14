@@ -38,8 +38,15 @@ public interface IAgentDefinitionResolver
     ///     <c>null</c> so the caller's <c>resolved?.ModelProfile ?? activeModel</c> yields the user's pick. Defaults to
     ///     <c>true</c> so callers that do not override the pin keep today's behaviour.
     /// </param>
+    /// <param name="activeModelIsCloud">
+    ///     Whether the turn's active model is cloud-hosted (Codex OAuth / Azure Foundry), resolved once per turn by the
+    ///     caller. Gates the knowledge-base tools off the offer for a cloud model (unless the operator opted in via
+    ///     <c>KnowledgeBase:AllowCloudModelAccess</c>) so node-local document/chunk/query text is not handed to a cloud
+    ///     provider through a tool result. Defaults to <c>false</c> (local) so callers that do not classify locality keep
+    ///     today's behaviour.
+    /// </param>
     Task<ResolvedAgentRuntime?> ResolveAsync(Guid? agentDefinitionId, string? activeModelId, string? retrievalQuery = null, bool supportsTools = true, bool honorModelProfile = true,
-        CancellationToken cancellationToken = default);
+        bool activeModelIsCloud = false, CancellationToken cancellationToken = default);
 }
 
 /// <summary>

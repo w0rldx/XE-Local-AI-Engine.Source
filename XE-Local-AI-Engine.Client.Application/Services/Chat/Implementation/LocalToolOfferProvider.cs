@@ -9,6 +9,7 @@ using XE_Local_AI_Engine.Client.Services.AgentHome.Tools;
 using XE_Local_AI_Engine.Client.Services.Capacity.Tools;
 using XE_Local_AI_Engine.Client.Services.Coder.Tools;
 using XE_Local_AI_Engine.Client.Services.Knowledge.Tools;
+using XE_Local_AI_Engine.Providers.CodexOAuth.Implementation;
 
 internal sealed class LocalToolOfferProvider : ILocalToolOfferProvider
 {
@@ -19,6 +20,11 @@ internal sealed class LocalToolOfferProvider : ILocalToolOfferProvider
     // The built-in catalog is static for the process lifetime, so precompute its three projections once. The MCP part
     // is dynamic (servers connect/disconnect) and is read live from the registry on each call, then merged in.
     private readonly IReadOnlyList<AllowedToolDto> _builtinAllTools;
+
+    // The whole capable offer with the knowledge-base tools removed. Returned to a cloud model (unless the operator
+    // opted in) so node-local document/chunk/query text is never handed to a third-party provider through a tool call.
+    private readonly IReadOnlyList<AllowedToolDto> _builtinAllToolsNoKnowledge;
+    private readonly bool _allowCloudKnowledgeAccess;
     private readonly IReadOnlyList<LocalToolCatalogEntry> _builtinCatalogEntries;
     private readonly IReadOnlyList<string> _builtinNames;
     private readonly IReadOnlyList<AllowedToolDto> _builtinWithoutAgentHome;
@@ -28,11 +34,13 @@ internal sealed class LocalToolOfferProvider : ILocalToolOfferProvider
 
     public LocalToolOfferProvider(IAgentToolRegistry toolRegistry,
         IMcpToolRegistry mcpToolRegistry,
-        IReadOnlyList<string> toolCapableModels)
+        IReadOnlyList<string> toolCapableModels,
+        bool allowCloudKnowledgeAccess)
     {
         ArgumentNullException.ThrowIfNull(toolRegistry);
         _mcpToolRegistry = mcpToolRegistry ?? throw new ArgumentNullException(nameof(mcpToolRegistry));
         ArgumentNullException.ThrowIfNull(toolCapableModels);
+        _allowCloudKnowledgeAccess = allowCloudKnowledgeAccess;
 
         var builtinDescriptors = toolRegistry.GetLocalChatToolDescriptors();
 
@@ -60,6 +68,17 @@ internal sealed class LocalToolOfferProvider : ILocalToolOfferProvider
             .. builtinDescriptors.Select(static descriptor => ToOfferDto(descriptor.Name, descriptor.ParameterSchema, descriptor.RequiresApproval)),
             .. coderDescriptors.Select(static descriptor => ToOfferDto(descriptor.Name, descriptor.ParameterSchema, descriptor.RequiresApproval)),
             .. knowledgeDescriptors.Select(static descriptor => ToOfferDto(descriptor.Name, descriptor.ParameterSchema, descriptor.RequiresApproval))
+        ];
+
+        // The provider-locality-gated variant of the whole capable offer: the knowledge-base read tools removed. Offered
+        // to a cloud-hosted model (Codex / Azure Foundry) unless the operator opted in via AllowCloudModelAccess, so
+        // retrieved document text / chunks / the query never reach a third-party provider through a tool result. The
+        // coder file tools stay (they act on the sandboxed workspace, not the private knowledge base). Precomputed so the
+        // gated offer is byte-identical across sends (stable config hash).
+        var knowledgeToolNames = knowledgeDescriptors.Select(static descriptor => descriptor.Name).ToHashSet(StringComparer.Ordinal);
+        _builtinAllToolsNoKnowledge =
+        [
+            .. _builtinAllTools.Where(tool => !knowledgeToolNames.Contains(tool.Name))
         ];
 
         // spawn_subagent is offered ONLY to an explicit agent profile that opts in via AllowedToolNames — never to the
@@ -127,7 +146,7 @@ internal sealed class LocalToolOfferProvider : ILocalToolOfferProvider
         _toolCapableModels = new HashSet<string>(toolCapableModels, StringComparer.Ordinal);
     }
 
-    public IReadOnlyList<AllowedToolDto> GetOfferedTools(string? activeModelId)
+    public IReadOnlyList<AllowedToolDto> GetOfferedTools(string? activeModelId, bool isCloudModel = false)
     {
         // High-risk tools (run_in_agent_home and every MCP tool) are offered only to a tool-capable model. A
         // null/unknown model id is treated as not capable, so those tools are withheld rather than offered to a model
@@ -136,23 +155,31 @@ internal sealed class LocalToolOfferProvider : ILocalToolOfferProvider
         var capable = activeModelId is not null && _toolCapableModels.Contains(activeModelId);
         if (!capable)
         {
+            // The non-capable variant already excludes the knowledge tools (they are capable-only), so it needs no
+            // locality gate.
             return _builtinWithoutAgentHome;
         }
+
+        // Provider-locality gate: withhold the knowledge-base tools from a cloud-hosted model unless the operator opted
+        // in. The threaded per-turn flag covers the Azure case; the synchronous Codex-catalog check also catches a
+        // model pinned to a Codex id even when the turn's active model was local.
+        var gateKnowledge = !_allowCloudKnowledgeAccess && (isCloudModel || CodexModelCatalog.IsCodexModel(activeModelId));
+        var baseOffer = gateKnowledge ? _builtinAllToolsNoKnowledge : _builtinAllTools;
 
         var mcpDescriptors = _mcpToolRegistry.GetDescriptors();
         if (mcpDescriptors.Count == 0)
         {
-            return _builtinAllTools;
+            return baseOffer;
         }
 
         return
         [
-            .. _builtinAllTools,
+            .. baseOffer,
             .. mcpDescriptors.Select(static descriptor => ToOfferDto(descriptor.Name, descriptor.ParameterSchema, descriptor.RequiresApproval))
         ];
     }
 
-    public IReadOnlyList<AllowedToolDto> GetOfferedToolsForProfile(string? activeModelId)
+    public IReadOnlyList<AllowedToolDto> GetOfferedToolsForProfile(string? activeModelId, bool isCloudModel = false)
     {
         // The profile-intersection pool: the whole offer PLUS spawn_subagent (so a profile that opts in via
         // AllowedToolNames resolves it), still capability-gated. A non-tool-capable model gets the whole offer's
@@ -163,7 +190,7 @@ internal sealed class LocalToolOfferProvider : ILocalToolOfferProvider
             return _builtinWithoutAgentHome;
         }
 
-        return [.. GetOfferedTools(activeModelId), _spawnOfferDto];
+        return [.. GetOfferedTools(activeModelId, isCloudModel), _spawnOfferDto];
     }
 
     public IReadOnlyList<string> GetKnownToolNames()
