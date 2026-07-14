@@ -2,6 +2,7 @@ namespace XE_Local_AI_Engine.Client.Services.Memory.Implementation;
 
 using System.Collections.Concurrent;
 using Microsoft.Extensions.Options;
+using XE_Local_AI_Engine.Client.Common.Telemetry;
 using XE_Local_AI_Engine.Client.Persistence.Stores;
 
 /// <summary>
@@ -13,19 +14,32 @@ using XE_Local_AI_Engine.Client.Persistence.Stores;
 ///     fault extraction with an <see cref="ObjectDisposedException" />. Replaces the prior unbounded fire-and-forget
 ///     <c>Task.Run</c> dispatch; mirrors <c>KnowledgeIngestionWorker</c>.
 ///     <para>
-///         Shutdown awareness. Each job carries conversation content and the queue is purely in-memory (no persistence
-///         recovery), so a job dropped at shutdown is lost for good — shutdown therefore drains QUEUED work as well as
-///         in-flight work. <see cref="StopAsync" /> (1) completes the dispatcher's writer FIRST, so no new job is accepted
-///         (<see cref="MemoryExtractionDispatcher.Dispatch" /> then takes its content-free dropped-job path) and the read
-///         loop can drain the buffered jobs and end on its own; (2) drains the read loop (which launches every remaining
-///         buffered job) AND the in-flight jobs under a single bounded window
+///         Shutdown awareness — a BOUNDED, honest contract. Each job carries conversation content and the queue is purely
+///         in-memory (no persistence recovery), so a job dropped at shutdown is lost for good — shutdown therefore drains
+///         QUEUED work as well as in-flight work. <see cref="StopAsync" /> (1) completes the dispatcher's writer FIRST, so
+///         no new job is accepted (<see cref="MemoryExtractionDispatcher.Dispatch" /> then takes its content-free
+///         dropped-job path) and the read loop can drain the buffered jobs and end on its own; (2) drains the read loop
+///         (which launches every remaining buffered job) AND the in-flight jobs under a single bounded window
 ///         (<see cref="MemoryExtractionOptions.ShutdownDrainTimeoutSeconds" />); (3) if that window elapses, cancels
 ///         <see cref="_drainDeadline" /> so the read loop stops launching and every straggler observes cancellation, then
-///         awaits their unwinding under a brief grace and accounts for any still-queued jobs as dropped (content-free)
-///         before returning — so the scope factory and semaphore are never disposed under a running job. The read loop
-///         reads on <see cref="_drainDeadline" /> (NOT the host stopping token), so a stop cannot abandon jobs already
-///         buffered on the channel; that token is cancelled ONLY when the drain window elapses, so ordinary operation
-///         never cancels a job mid-write yet a hung job cannot block shutdown forever.
+///         awaits their unwinding under a brief FIXED grace (<see cref="PostDeadlineGrace" />) and accounts for any
+///         still-queued jobs as dropped (content-free) before returning. The read loop reads on
+///         <see cref="_drainDeadline" /> (NOT the host stopping token), so a stop cannot abandon jobs already buffered on
+///         the channel; that token is cancelled ONLY when the drain window elapses, so ordinary operation never cancels a
+///         job mid-write.
+///     </para>
+///     <para>
+///         The deliberate trade against unbounded shutdown. Shutdown is capped at the drain window PLUS the fixed grace —
+///         it never waits indefinitely for a job to finish. A job that cooperates with cancellation always unwinds inside
+///         the grace and so never observes a disposed scope factory or semaphore. A job that IGNORES cancellation past the
+///         grace is deliberately ABANDONED: <see cref="StopAsync" /> returns and <see cref="Dispose" /> disposes the
+///         <see cref="_drainDeadline" /> CTS and the <see cref="_concurrency" /> semaphore while that job is still running,
+///         so when it finally resumes it MAY observe disposed host services and its failure is swallowed (the
+///         <see cref="ObjectDisposedException" /> net in <see cref="ReleaseConcurrency" /> and the per-job catch-all are
+///         the last-resort guards for exactly this). Abandonment is not hidden: each abandoned job is counted, logged
+///         content-free, and reported on <see cref="NodeMetrics.MemoryExtractionAbandonedTotal" />. This is the accepted
+///         cost of a bounded shutdown — at most a small, counted number of cancellation-ignoring jobs may lose their
+///         memory write and race disposal, in exchange for a shutdown that always completes promptly.
 ///     </para>
 ///     All failures are handled inside the job's catch-all, which logs the exception TYPE NAME only — never conversation
 ///     content, mirroring the extraction service's text-free discipline.
@@ -216,17 +230,31 @@ public sealed class MemoryExtractionWorker : BackgroundService
         }
 
         // The read loop has stopped reading, so account for whatever it never got to as dropped rather than losing it
-        // silently — content-free, mirroring the dispatcher's full-queue drop. Count in-flight jobs still not unwound.
+        // silently — content-free, mirroring the dispatcher's full-queue drop.
         var dropped = 0;
         while (_dispatcher.Reader.TryRead(out _))
         {
             dropped++;
         }
 
+        // Any job still in-flight after the grace ignored cooperative cancellation and is now being ABANDONED: StopAsync is
+        // about to return and Dispose will tear down the CTS/semaphore beneath it (the ObjectDisposedException net in
+        // ReleaseConcurrency is the last-resort guard). Snapshot the count so the deliberate trade is observable, never silent.
+        var abandoned = _inFlight.Count;
+
         _logger.LogWarning("Memory extraction worker shutdown drain exceeded {DrainSeconds:F0}s; abandoned {Abandoned} in-flight and dropped {Dropped} queued extraction(s).",
             _drainTimeout.TotalSeconds,
-            _inFlight.Count,
+            abandoned,
             dropped);
+
+        if (abandoned > 0)
+        {
+            // Dedicated, content-free record of the abandoned jobs: they ignored cancellation within the grace, may observe
+            // disposed host services when they resume, and have their failures swallowed — the accepted bounded-shutdown cost.
+            _logger.LogWarning("Abandoned {Abandoned} memory-extraction job(s) that ignored cancellation within the shutdown grace; they may observe disposed host services and their failures are swallowed.",
+                abandoned);
+            NodeMetrics.MemoryExtractionAbandonedTotal.Add(abandoned);
+        }
     }
 
     private void TrackInFlight(Task task)
