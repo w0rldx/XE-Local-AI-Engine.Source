@@ -249,6 +249,13 @@ public sealed class XENodeE2EWebApplicationFactory : WebApplicationFactory<Progr
             services.RemoveAll<IOllamaApiClient>();
             services.RemoveAll<IChatClient>();
             services.RemoveAll<ILocalModelProvider>();
+            // Repoint the shared Ollama transport factory (production registered one at the real endpoint) at the fake
+            // server, so the provider's per-model CreateChatClient/CreateEmbeddingGenerator — which now mint clients
+            // through this factory — reach FakeOllama.
+            services.RemoveAll<OllamaApiClientFactory>();
+#pragma warning disable CA2000 // The factory singleton owns and disposes this HttpClient for the test host lifetime.
+            services.AddSingleton(_ => new OllamaApiClientFactory(new HttpClient { BaseAddress = _fakeOllamaServer.BaseAddress }, ownsHttpClient: true));
+#pragma warning restore CA2000
             services.AddSingleton<IOllamaApiClient>(_ => new OllamaApiClient(_fakeOllamaServer.BaseAddress));
             services.AddSingleton<ILocalModelProvider, OllamaLocalModelProvider>();
             // Register the base IChatClient pointing directly at FakeOllama, then re-apply the full
