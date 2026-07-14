@@ -23,13 +23,13 @@ internal static class SearchKnowledgeBaseToolDefinition
         + "chunkIndex; an empty result set means the knowledge base has nothing matching the query.";
 
     /// <summary>Query is required; limit defaults to 5 and is clamped to 1-20; optional single-document scope + neighbor expansion.</summary>
-    public const string ParameterSchema = """
+    public static readonly string ParameterSchema = $$"""
                                           {
                                             "type": "object",
                                             "additionalProperties": false,
                                             "required": ["query"],
                                             "properties": {
-                                              "query": { "type": "string", "minLength": 1, "maxLength": 2000 },
+                                              "query": { "type": "string", "minLength": 1, "maxLength": {{KnowledgeQueryLimits.MaxQueryLength}} },
                                               "limit": { "type": "integer", "minimum": 1, "maximum": 20 },
                                               "documentId": { "type": "string", "maxLength": 64 },
                                               "expandNeighbors": { "type": "boolean" }

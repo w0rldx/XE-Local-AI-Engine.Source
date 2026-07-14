@@ -61,6 +61,37 @@ public sealed class SearchKnowledgeBaseToolHandlerBudgetTests
         AssertEx.Equal(expected: 1, root.GetProperty("totalResults").GetInt32());
     }
 
+    [Test]
+    public async Task ExecuteAsync_WhenQueryExceedsMaxLength_RejectsWithoutSearching()
+    {
+        // A query one character over the shared limit must be rejected by the handler's own validation before any search
+        // runs, mirroring the HTTP endpoint's bound so the schema-advertised maximum is actually enforced.
+        var handler = CreateHandler(new KnowledgeSearchResult(new List<KnowledgeSearchHit>()));
+        var arguments = JsonSerializer.Serialize(new { query = new string('x', KnowledgeQueryLimits.MaxQueryLength + 1) });
+
+        var result = await handler.ExecuteAsync(arguments);
+
+        AssertEx.Contains(result, $"{KnowledgeQueryLimits.MaxQueryLength} characters or fewer");
+    }
+
+    [Test]
+    public async Task ExecuteAsync_WhenQueryAtMaxLength_ProceedsToSearch()
+    {
+        var hits = new List<KnowledgeSearchHit>
+        {
+            new(Guid.NewGuid(), Guid.NewGuid(), "doc", Section: null, Content: "small", Source: "knowledge-base", Score: 1.0, ChunkIndex: 0,
+                DocumentStatus: KnowledgeDocumentStatus.Indexed, ServingLastKnownGood: false)
+        };
+        var handler = CreateHandler(new KnowledgeSearchResult(hits));
+        var arguments = JsonSerializer.Serialize(new { query = new string('x', KnowledgeQueryLimits.MaxQueryLength) });
+
+        var result = await handler.ExecuteAsync(arguments);
+
+        // A query exactly at the limit passes validation and returns a normal search payload, not the rejection string.
+        using var document = JsonDocument.Parse(result);
+        AssertEx.Equal(expected: 1, document.RootElement.GetProperty("returnedResults").GetInt32());
+    }
+
     private static SearchKnowledgeBaseToolHandler CreateHandler(KnowledgeSearchResult result)
     {
         var services = new ServiceCollection();

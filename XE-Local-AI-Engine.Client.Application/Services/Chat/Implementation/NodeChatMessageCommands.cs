@@ -16,6 +16,26 @@ internal sealed class NodeChatMessageCommands(NodeChatPersistenceWriter writer)
     private const string UserRole = "user";
     private const string AssistantRole = "assistant";
 
+    // Correlated message update, keyed on (conversation, message, request). The guarded variant additionally requires the
+    // current status to be one of the three source statuses bound below, so a guarded transition (the cancel path) is
+    // rejected atomically at the SQLite layer once the row has reached a terminal status.
+    private const string CorrelatedUpdateSql = """
+                                               UPDATE messages
+                                               SET content = $content, metadata_json = $metadata_json, updated_at_utc = $updated_at_utc, status = $status, error = $error
+                                               WHERE conversation_id = $conversation_id
+                                                 AND message_id = $message_id
+                                                 AND request_id = $request_id;
+                                               """;
+
+    private const string CorrelatedUpdateWithSourceStatusGuardSql = """
+                                                                    UPDATE messages
+                                                                    SET content = $content, metadata_json = $metadata_json, updated_at_utc = $updated_at_utc, status = $status, error = $error
+                                                                    WHERE conversation_id = $conversation_id
+                                                                      AND message_id = $message_id
+                                                                      AND request_id = $request_id
+                                                                      AND status IN ($required_status_0, $required_status_1, $required_status_2);
+                                                                    """;
+
     private readonly NodeChatPersistenceWriter _writer = writer ?? throw new ArgumentNullException(nameof(writer));
 
     public Task<NodeChatPersistedMessageDto> PersistUserMessageAsync(NodeChatPersistUserMessageRequest request, CancellationToken cancellationToken = default)
@@ -168,9 +188,15 @@ internal sealed class NodeChatMessageCommands(NodeChatPersistenceWriter writer)
             totalTokens: null,
             reasoningTokens: null,
             replaceContent: true,
-            cancellationToken).ConfigureAwait(false);
+            cancellationToken,
+            requiredCurrentStatuses: NodeChatMessageStatusValues.Cancellable).ConfigureAwait(false);
 
-        return new NodeChatCancelResultDto(request.Correlation, message.Status, Cancelled: true);
+        // The guard leaves an already-terminal message untouched, so report the true persisted status and only claim a
+        // cancellation when the message actually landed in the Cancelled state. This is idempotent: a repeat cancel of an
+        // already-cancelled message reports Cancelled with no second rewrite, while a cancel that raced a completed /
+        // failed / interrupted terminalize reports that terminal status with Cancelled = false.
+        var cancelled = string.Equals(message.Status, NodeChatMessageStatusValues.Cancelled, StringComparison.Ordinal);
+        return new NodeChatCancelResultDto(request.Correlation, message.Status, cancelled);
     }
 
     private async Task<NodeChatPersistedMessageDto> InsertMessageAsync(Guid conversationId,
@@ -268,7 +294,8 @@ internal sealed class NodeChatMessageCommands(NodeChatPersistenceWriter writer)
         CancellationToken cancellationToken,
         IReadOnlyList<NodeChatMessagePart>? parts = null,
         long? generationDurationMs = null,
-        bool touchConversation = true)
+        bool touchConversation = true,
+        IReadOnlySet<string>? requiredCurrentStatuses = null)
     {
         ValidateCorrelation(correlation);
 
@@ -283,6 +310,16 @@ internal sealed class NodeChatMessageCommands(NodeChatPersistenceWriter writer)
                 if (current.RequestId != correlation.RequestId)
                 {
                     throw new InvalidOperationException("The correlated node chat request id did not match the persisted message.");
+                }
+
+                // Transition guard (currently the cancel path): a status change is only allowed from one of the source
+                // statuses supplied by the caller. Once the row has left that set — e.g. a completed / failed / interrupted
+                // terminalize already ran — the update is skipped and the true current state is returned unchanged, so a
+                // late cancel can never rewrite a finished message. The per-message write lock makes this read
+                // authoritative; the AND status IN (...) predicate below re-enforces it atomically at the SQLite layer.
+                if (requiredCurrentStatuses is not null && !requiredCurrentStatuses.Contains(current.Status))
+                {
+                    return current;
                 }
 
                 var nextContent = ResolveNextContent(current.Content, content, replaceContent);
@@ -307,13 +344,18 @@ internal sealed class NodeChatMessageCommands(NodeChatPersistenceWriter writer)
                     current.AgentDefinitionId, current.AgentName, current.ReasoningEffort, nextGenerationDurationMs);
 
                 await using var command = dbContext.Database.GetDbConnection().CreateCommand();
-                command.CommandText = """
-                                      UPDATE messages
-                                      SET content = $content, metadata_json = $metadata_json, updated_at_utc = $updated_at_utc, status = $status, error = $error
-                                      WHERE conversation_id = $conversation_id
-                                        AND message_id = $message_id
-                                        AND request_id = $request_id;
-                                      """;
+                // Two constant statements (never string-built from input): the guarded form appends the atomic
+                // 'AND status IN (...)' source-status predicate so the transition is rejected at the SQLite layer if the
+                // row is no longer in the permitted set. Its placeholder count matches the cancellable status set below.
+                if (requiredCurrentStatuses is null)
+                {
+                    command.CommandText = CorrelatedUpdateSql;
+                }
+                else
+                {
+                    command.CommandText = CorrelatedUpdateWithSourceStatusGuardSql;
+                }
+
                 AddParameter(command, "$content", dbContext.EncryptMessageContent(nextContent, correlation.ConversationId, correlation.MessageId));
                 AddParameter(command, "$metadata_json", dbContext.EncryptMessageMetadata(metadata, correlation.ConversationId, correlation.MessageId));
                 AddParameter(command, "$updated_at_utc", updatedAtUtc);
@@ -322,8 +364,24 @@ internal sealed class NodeChatMessageCommands(NodeChatPersistenceWriter writer)
                 AddParameter(command, "$conversation_id", correlation.ConversationId);
                 AddParameter(command, "$message_id", correlation.MessageId);
                 AddParameter(command, "$request_id", correlation.RequestId);
+                if (requiredCurrentStatuses is not null)
+                {
+                    var statusIndex = 0;
+                    foreach (var requiredStatus in requiredCurrentStatuses)
+                    {
+                        AddParameter(command, $"$required_status_{statusIndex}", requiredStatus);
+                        statusIndex++;
+                    }
+                }
+
                 await OpenIfNeededAsync(command.Connection, token).ConfigureAwait(false);
-                await command.ExecuteNonQueryAsync(token).ConfigureAwait(false);
+                var affected = await command.ExecuteNonQueryAsync(token).ConfigureAwait(false);
+                if (requiredCurrentStatuses is not null && affected == 0)
+                {
+                    // The atomic predicate rejected the write because the row reached a terminal status; return the true
+                    // current state without a rewrite or a conversation touch.
+                    return current;
+                }
 
                 if (touchConversation)
                 {
@@ -348,4 +406,5 @@ internal sealed class NodeChatMessageCommands(NodeChatPersistenceWriter writer)
             },
             cancellationToken).ConfigureAwait(false);
     }
+
 }
