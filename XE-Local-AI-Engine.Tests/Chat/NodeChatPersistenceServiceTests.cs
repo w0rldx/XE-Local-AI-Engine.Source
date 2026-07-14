@@ -1061,6 +1061,129 @@ public sealed class NodeChatPersistenceServiceTests : IDisposable
     }
 
     [Test]
+    public async Task BranchConversationAsync_WithUpstreamRevisionSelected_CopiesSelectedRevisionNotNewest()
+    {
+        await using var provider = await BuildProviderAsync("branch-selected-upstream.sqlite").ConfigureAwait(false);
+        var service = CreateService(provider);
+        var source = await service.CreateConversationAsync(new NodeChatCreateConversationRequest("Source", "node", CreatedAtUtc: 1200)).ConfigureAwait(false);
+
+        // Upstream turn with two revisions (original + a newer regenerated sibling), then a downstream turn to branch from.
+        await service.PersistUserMessageAsync(new NodeChatPersistUserMessageRequest(source.ConversationId, Guid.NewGuid(), "question", CreatedAtUtc: 1201)).ConfigureAwait(false);
+        var originalAssistantId = Guid.NewGuid();
+        await SeedCompletedAssistantAsync(service, source.ConversationId, originalAssistantId, Guid.NewGuid(), "REV-ORIGINAL", createdAtUtc: 1202).ConfigureAwait(false);
+        var variantMessageId = Guid.NewGuid();
+        var variantRequestId = Guid.NewGuid();
+        var variant = AssertEx.NotNull(await service
+                                             .CreateMessageVariantAsync(new NodeChatCreateMessageVariantRequest(source.ConversationId, originalAssistantId, variantMessageId, variantRequestId,
+                                                 CreatedAtUtc: 1203))
+                                             .ConfigureAwait(false));
+        await service.TerminalizeAssistantMessageAsync(new NodeChatTerminalizeMessageRequest(
+                         new NodeChatMessageCorrelation(source.ConversationId, variantMessageId, variantRequestId),
+                         NodeChatMessageStatusValues.Completed,
+                         UpdatedAtUtc: 1204,
+                         "REV-NEWER"))
+                     .ConfigureAwait(false);
+
+        await service.PersistUserMessageAsync(new NodeChatPersistUserMessageRequest(source.ConversationId, Guid.NewGuid(), "second question", CreatedAtUtc: 1205)).ConfigureAwait(false);
+        var cutoffAssistantId = Guid.NewGuid();
+        await SeedCompletedAssistantAsync(service, source.ConversationId, cutoffAssistantId, Guid.NewGuid(), "ANSWER-2", createdAtUtc: 1206).ConfigureAwait(false);
+
+        // Branch from the downstream turn, but with the upstream group pinned to the OLDER revision (the visible path).
+        var selection = new Dictionary<Guid, Guid> { [variant.VariantGroupId] = originalAssistantId };
+        var branch = AssertEx.NotNull(await service
+                                            .BranchConversationAsync(new NodeChatBranchConversationRequest(source.ConversationId, cutoffAssistantId, CreatedAtUtc: 1210, selection))
+                                            .ConfigureAwait(false));
+
+        AssertEx.Equal(expected: 4, branch.CopiedMessageCount);
+        var branched = AssertEx.NotNull(await service.GetConversationAsync(branch.BranchedConversationId).ConfigureAwait(false));
+        var contents = branched.Messages.Select(message => message.Content).ToList();
+        AssertEx.True(contents.Contains("REV-ORIGINAL"), "the branch must carry the SELECTED older upstream revision");
+        AssertEx.False(contents.Contains("REV-NEWER"), "the branch must NOT carry the unselected newer sibling");
+        AssertEx.True(branched.Messages.All(message => message.VariantGroupId is null), "branch copies are a fresh linear thread");
+    }
+
+    [Test]
+    public async Task BranchConversationAsync_WithoutSelection_KeepsNewestUpstreamRevision()
+    {
+        await using var provider = await BuildProviderAsync("branch-selected-legacy.sqlite").ConfigureAwait(false);
+        var service = CreateService(provider);
+        var source = await service.CreateConversationAsync(new NodeChatCreateConversationRequest("Source", "node", CreatedAtUtc: 1300)).ConfigureAwait(false);
+
+        await service.PersistUserMessageAsync(new NodeChatPersistUserMessageRequest(source.ConversationId, Guid.NewGuid(), "question", CreatedAtUtc: 1301)).ConfigureAwait(false);
+        var originalAssistantId = Guid.NewGuid();
+        await SeedCompletedAssistantAsync(service, source.ConversationId, originalAssistantId, Guid.NewGuid(), "REV-ORIGINAL", createdAtUtc: 1302).ConfigureAwait(false);
+        var variantMessageId = Guid.NewGuid();
+        var variantRequestId = Guid.NewGuid();
+        await service
+              .CreateMessageVariantAsync(new NodeChatCreateMessageVariantRequest(source.ConversationId, originalAssistantId, variantMessageId, variantRequestId, CreatedAtUtc: 1303))
+              .ConfigureAwait(false);
+        await service.TerminalizeAssistantMessageAsync(new NodeChatTerminalizeMessageRequest(
+                         new NodeChatMessageCorrelation(source.ConversationId, variantMessageId, variantRequestId),
+                         NodeChatMessageStatusValues.Completed,
+                         UpdatedAtUtc: 1304,
+                         "REV-NEWER"))
+                     .ConfigureAwait(false);
+
+        await service.PersistUserMessageAsync(new NodeChatPersistUserMessageRequest(source.ConversationId, Guid.NewGuid(), "second question", CreatedAtUtc: 1305)).ConfigureAwait(false);
+        var cutoffAssistantId = Guid.NewGuid();
+        await SeedCompletedAssistantAsync(service, source.ConversationId, cutoffAssistantId, Guid.NewGuid(), "ANSWER-2", createdAtUtc: 1306).ConfigureAwait(false);
+
+        // No selection supplied ⇒ backward-compatible newest-per-group behavior.
+        var branch = AssertEx.NotNull(await service
+                                            .BranchConversationAsync(new NodeChatBranchConversationRequest(source.ConversationId, cutoffAssistantId, CreatedAtUtc: 1310))
+                                            .ConfigureAwait(false));
+
+        var branched = AssertEx.NotNull(await service.GetConversationAsync(branch.BranchedConversationId).ConfigureAwait(false));
+        var contents = branched.Messages.Select(message => message.Content).ToList();
+        AssertEx.True(contents.Contains("REV-NEWER"), "without a selection the branch keeps the newest upstream revision");
+        AssertEx.False(contents.Contains("REV-ORIGINAL"), "the older sibling must not be copied when no selection pins it");
+    }
+
+    [Test]
+    public async Task BranchConversationAsync_WithInvalidSelection_RejectsFailClosed()
+    {
+        await using var provider = await BuildProviderAsync("branch-selected-invalid.sqlite").ConfigureAwait(false);
+        var service = CreateService(provider);
+        var source = await service.CreateConversationAsync(new NodeChatCreateConversationRequest("Source", "node", CreatedAtUtc: 1400)).ConfigureAwait(false);
+
+        var userMessage = await service.PersistUserMessageAsync(new NodeChatPersistUserMessageRequest(source.ConversationId, Guid.NewGuid(), "question", CreatedAtUtc: 1401)).ConfigureAwait(false);
+        var originalAssistantId = Guid.NewGuid();
+        await SeedCompletedAssistantAsync(service, source.ConversationId, originalAssistantId, Guid.NewGuid(), "REV-ORIGINAL", createdAtUtc: 1402).ConfigureAwait(false);
+        var variant = AssertEx.NotNull(await service
+                                             .CreateMessageVariantAsync(new NodeChatCreateMessageVariantRequest(source.ConversationId, originalAssistantId, Guid.NewGuid(), Guid.NewGuid(),
+                                                 CreatedAtUtc: 1403))
+                                             .ConfigureAwait(false));
+
+        // Unknown message id for the group ⇒ integrity violation ⇒ reject (no silent fallback).
+        var unknownSelection = new Dictionary<Guid, Guid> { [variant.VariantGroupId] = Guid.NewGuid() };
+        await AssertEx.ThrowsAsync<NodeChatInvalidBranchSelectionException>(async () =>
+                await service.BranchConversationAsync(new NodeChatBranchConversationRequest(source.ConversationId, variant.Variant.MessageId, CreatedAtUtc: 1410, unknownSelection)))
+            .ConfigureAwait(false);
+
+        // A real message keyed under a group it does not belong to (the user turn has no variant group) ⇒ reject.
+        var mismatchedSelection = new Dictionary<Guid, Guid> { [variant.VariantGroupId] = userMessage.MessageId };
+        await AssertEx.ThrowsAsync<NodeChatInvalidBranchSelectionException>(async () =>
+                await service.BranchConversationAsync(new NodeChatBranchConversationRequest(source.ConversationId, variant.Variant.MessageId, CreatedAtUtc: 1411, mismatchedSelection)))
+            .ConfigureAwait(false);
+    }
+
+    private static async Task SeedCompletedAssistantAsync(INodeChatPersistenceService service,
+        Guid conversationId,
+        Guid messageId,
+        Guid requestId,
+        string content,
+        long createdAtUtc)
+    {
+        await service.CreateAssistantPlaceholderAsync(new NodeChatCreateAssistantPlaceholderRequest(conversationId, messageId, requestId, createdAtUtc)).ConfigureAwait(false);
+        await service.TerminalizeAssistantMessageAsync(new NodeChatTerminalizeMessageRequest(
+                         new NodeChatMessageCorrelation(conversationId, messageId, requestId),
+                         NodeChatMessageStatusValues.Completed,
+                         createdAtUtc,
+                         content))
+                     .ConfigureAwait(false);
+    }
+
+    [Test]
     public async Task CreateMessageVariantAsync_CreatesSiblingSharingVariantGroupAndBackstampsOriginal()
     {
         await using var provider = await BuildProviderAsync("variant.sqlite").ConfigureAwait(false);
