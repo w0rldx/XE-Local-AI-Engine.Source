@@ -1,6 +1,8 @@
 namespace XE_Local_AI_Engine.Providers.Capabilities.Implementation;
 
 using System.Globalization;
+using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Logging.Abstractions;
 using XE_Local_AI_Engine.Providers.Abstractions.Capabilities;
 using XE_Local_AI_Engine.Providers.Capabilities.Contracts;
 using XE_Local_AI_Engine.Providers.Capabilities.Options;
@@ -16,22 +18,34 @@ using XE_Local_AI_Engine.Providers.Capabilities.Options;
 ///     <list type="bullet">
 ///         <item>RAM — Linux <c>/proc/meminfo</c> (MemTotal/MemAvailable); Windows OS query.</item>
 ///         <item>
-///             VRAM — <c>nvidia-smi --query-gpu=memory.total</c> (NVIDIA, shared across both OSes) → else Windows
-///             DXGI/WMI seam (operator-filled on Win11, see <see cref="ProbeWindowsNonNvidiaVramAsync" />) / Linux
-///             <c>/sys/class/drm</c> vendor query → else <see cref="HardwareProfile.VramKnown" /> <see langword="false" />.
+///             VRAM — a SINGLE <c>nvidia-smi --query-gpu=name,memory.total,memory.free</c> invocation (NVIDIA, shared
+///             across both OSes) → else Windows DXGI/WMI seam (operator-filled on Win11, see
+///             <see cref="ProbeWindowsNonNvidiaVramAsync" />) / Linux <c>/sys/class/drm</c> vendor query → else
+///             <see cref="HardwareProfile.VramKnown" /> <see langword="false" />.
 ///         </item>
 ///     </list>
+///     <para>
+///         <b>Every process probe is bounded.</b> The <c>nvidia-smi</c> call runs under a wall-clock deadline
+///         (<see cref="HardwareProfilerOptions.HardwareProbeTimeoutSeconds" />); on overrun the process tree is killed and
+///         the profiler degrades to the most recent cached profile — or, when none exists, the CPU-safe default (VRAM
+///         unknown ⇒ CPU mode). This closes the already-paid-for trap where a hung <c>nvidia-smi</c> stalled first-run
+///         provisioning (and, via the capacity gate, an admission decision) indefinitely.
+///     </para>
 ///     Degrade rule: <see cref="HardwareProfile.VramKnown" /> <see langword="false" /> ⇒
 ///     <see cref="HardwareProfile.GpuAccelAvailable" /> <see langword="false" />. The profile is cached in memory and
 ///     re-probed only on <c>forceRefresh:true</c>; registered as a singleton.
 /// </remarks>
 internal sealed class HardwareProfiler : IHardwareProfiler
 {
+    private const string NvidiaSmi = "nvidia-smi";
+
     // PCI vendor ids from /sys/class/drm/*/device/vendor (4-digit hex, no 0x prefix, upper-cased by the environment).
     private const string PciVendorNvidia = "10DE";
     private const string PciVendorAmd = "1002";
     private const string PciVendorIntel = "8086";
     private readonly IHardwareProbeEnvironment _environment;
+    private readonly ILogger<HardwareProfiler> _logger;
+    private readonly IHardwareProbeMetrics _metrics;
     private readonly HardwareProfilerOptions _options;
 
     private readonly IProcessProbe _processProbe;
@@ -40,11 +54,15 @@ internal sealed class HardwareProfiler : IHardwareProfiler
 
     public HardwareProfiler(IProcessProbe processProbe,
         IHardwareProbeEnvironment environment,
-        HardwareProfilerOptions options)
+        HardwareProfilerOptions options,
+        ILogger<HardwareProfiler>? logger = null,
+        IHardwareProbeMetrics? metrics = null)
     {
         _processProbe = processProbe ?? throw new ArgumentNullException(nameof(processProbe));
         _environment = environment ?? throw new ArgumentNullException(nameof(environment));
         _options = options ?? throw new ArgumentNullException(nameof(options));
+        _logger = logger ?? NullLogger<HardwareProfiler>.Instance;
+        _metrics = metrics ?? NullHardwareProbeMetrics.Instance;
     }
 
     /// <inheritdoc />
@@ -65,9 +83,46 @@ internal sealed class HardwareProfiler : IHardwareProfiler
     private async Task<HardwareProfile> ProbeAsync(CancellationToken ct)
     {
         var (totalRam, availableRam) = ProbeRam();
-        var vendor = await DetectGpuVendorAsync(ct).ConfigureAwait(false);
-        var vramBytes = await DetectVramAsync(vendor, ct).ConfigureAwait(false);
-        var availableVramBytes = await DetectAvailableVramAsync(vendor, vramBytes, ct).ConfigureAwait(false);
+
+        // ONE bounded nvidia-smi call yields name + total + free for every GPU, replacing the former three sequential
+        // unbounded invocations.
+        var nvidia = await ProbeNvidiaAsync(ct).ConfigureAwait(false);
+
+        if (nvidia.TimedOut)
+        {
+            _metrics.RecordProbeTimeout(NvidiaSmi);
+
+            // The GPU probe was killed for overrunning its deadline. Prefer the last good profile (it keeps the real
+            // VRAM figures) over a freshly-degraded one; with no cache yet, fall through to the CPU-safe degrade below.
+            if (_cachedProfile is { } lastGood)
+            {
+                _logger.LogWarning("nvidia-smi hardware probe timed out; reusing the last cached hardware profile.");
+                return lastGood;
+            }
+
+            _logger.LogWarning("nvidia-smi hardware probe timed out and no cached profile exists; degrading to the CPU-safe default (VRAM unknown).");
+        }
+
+        GpuVendor vendor;
+        long? vramBytes;
+        long? availableVramBytes;
+
+        if (nvidia.Present)
+        {
+            vendor = GpuVendor.Nvidia;
+            vramBytes = nvidia.TotalVramBytes;
+            // Free VRAM is only meaningful when the total was parsed from the same row (else the fallback total-VRAM math
+            // in the capacity gate applies). null total ⇒ VRAM unknown ⇒ CPU mode.
+            availableVramBytes = vramBytes is not null ? nvidia.FreeVramBytes : null;
+        }
+        else
+        {
+            // No NVIDIA GPU (or the probe timed out with no cache): fall back to the OS vendor seam. VRAM stays unknown
+            // on Linux non-NVIDIA and on the not-yet-implemented Windows DXGI seam ⇒ CPU mode.
+            vendor = DetectNonNvidiaVendor();
+            vramBytes = await DetectNonNvidiaVramAsync(vendor, ct).ConfigureAwait(false);
+            availableVramBytes = null;
+        }
 
         var vramKnown = vramBytes is not null;
         // Degrade rule: VRAM unknown ⇒ no GPU budget, regardless of a detected vendor.
@@ -104,14 +159,10 @@ internal sealed class HardwareProfiler : IHardwareProfiler
         return (_environment.GetTotalPhysicalMemoryBytes(), _environment.GetAvailableMemoryBytes());
     }
 
-    private async Task<GpuVendor> DetectGpuVendorAsync(CancellationToken ct)
+    // Non-NVIDIA vendor detection: Linux /sys/class/drm vendor ids, else the Windows adapter-name seam. NVIDIA is handled
+    // up front by the single nvidia-smi probe, so this branch never runs for an NVIDIA box.
+    private GpuVendor DetectNonNvidiaVendor()
     {
-        // NVIDIA is unambiguous when nvidia-smi yields a GPU name; check it first on every OS.
-        if (await NvidiaPresentAsync(ct).ConfigureAwait(false))
-        {
-            return GpuVendor.Nvidia;
-        }
-
         if (_environment.IsLinux)
         {
             return DetectLinuxDrmVendor();
@@ -147,84 +198,109 @@ internal sealed class HardwareProfiler : IHardwareProfiler
         return vendorIds.Count > 0 ? GpuVendor.Unknown : GpuVendor.None;
     }
 
-    private async Task<long?> DetectVramAsync(GpuVendor vendor, CancellationToken ct)
+    private Task<long?> DetectNonNvidiaVramAsync(GpuVendor vendor, CancellationToken ct)
     {
-        // Shared across Linux + Windows: nvidia-smi reports exact total VRAM in MiB.
-        if (vendor == GpuVendor.Nvidia)
-        {
-            var nvidiaVram = await ProbeNvidiaVramBytesAsync(ct).ConfigureAwait(false);
-            if (nvidiaVram is not null)
-            {
-                return nvidiaVram;
-            }
-        }
-
         if (_environment.IsWindows)
         {
             // DXGI DedicatedVideoMemory (vendor-neutral) → WMI vendor-name only. Operator-filled seam on Win11.
-            return await ProbeWindowsNonNvidiaVramAsync(vendor, ct).ConfigureAwait(false);
+            return ProbeWindowsNonNvidiaVramAsync(vendor, ct);
         }
 
         // Linux non-NVIDIA: no reliable byte-accurate VRAM source without extra deps → degrade to unknown.
-        return null;
+        return Task.FromResult<long?>(null);
     }
 
-    // Free VRAM is only byte-accurate on NVIDIA (nvidia-smi memory.free). For every other vendor — and when total VRAM
-    // itself is unknown — the free baseline is null, which forces the capacity gate onto its total-VRAM fallback. This
-    // is the GPU analogue of AvailableRamBytes: it nets out VRAM already resident in loaded llama-server processes.
-    private async Task<long?> DetectAvailableVramAsync(GpuVendor vendor, long? totalVramBytes, CancellationToken ct)
-    {
-        if (vendor != GpuVendor.Nvidia || totalVramBytes is null)
-        {
-            return null;
-        }
-
-        return await ProbeNvidiaMemoryMibBytesAsync("memory.free", ct).ConfigureAwait(false);
-    }
-
-    private async Task<bool> NvidiaPresentAsync(CancellationToken ct)
+    // Runs the SINGLE consolidated nvidia-smi query (name + total + free) under the configured wall-clock deadline and
+    // projects it to an NvidiaProbe. A missing tool / non-zero exit ⇒ Absent; an overrun ⇒ Timeout (the caller degrades).
+    private async Task<NvidiaProbe> ProbeNvidiaAsync(CancellationToken ct)
     {
         var result = await _processProbe
-                           .RunAsync("nvidia-smi", ["--query-gpu=name", "--format=csv,noheader"], ct)
-                           .ConfigureAwait(false);
-        return result is { ExitCode: 0 } && !string.IsNullOrWhiteSpace(result.StandardOutput);
-    }
-
-    private Task<long?> ProbeNvidiaVramBytesAsync(CancellationToken ct)
-    {
-        return ProbeNvidiaMemoryMibBytesAsync("memory.total", ct);
-    }
-
-    // Runs a single-field nvidia-smi memory query and returns the first GPU's figure in bytes (the field is reported in
-    // MiB). Shared by the total- and free-VRAM probes so both parse identically.
-    private async Task<long?> ProbeNvidiaMemoryMibBytesAsync(string queryField, CancellationToken ct)
-    {
-        var result = await _processProbe
-                           .RunAsync("nvidia-smi", [$"--query-gpu={queryField}", "--format=csv,noheader,nounits"], ct)
+                           .RunAsync(NvidiaSmi,
+                               ["--query-gpu=name,memory.total,memory.free", "--format=csv,noheader,nounits"],
+                               ResolveProbeTimeout(),
+                               ct)
                            .ConfigureAwait(false);
 
-        if (result is not { ExitCode: 0 })
+        if (result is null)
         {
-            return null;
+            return NvidiaProbe.Absent; // tool missing / not on PATH / spawn failure — treat as "no NVIDIA GPU".
         }
 
-        // First PARSEABLE line is the first GPU's VRAM figure in MiB. Scan past any leading non-numeric lines
-        // (e.g. an nvidia-smi warning banner) so a noise line doesn't defeat detection; "first GPU wins" still holds.
-        foreach (var line in result.StandardOutput.Split('\n'))
+        if (result.TimedOut)
         {
-            var trimmed = line.Trim();
-            if (trimmed.Length == 0)
+            return NvidiaProbe.Timeout;
+        }
+
+        if (result.ExitCode != 0)
+        {
+            return NvidiaProbe.Absent; // nvidia-smi present but reported no manageable devices.
+        }
+
+        return ParseNvidiaCsv(result.StandardOutput);
+    }
+
+    private TimeSpan ResolveProbeTimeout()
+    {
+        return TimeSpan.FromSeconds(_options.HardwareProbeTimeoutSeconds);
+    }
+
+    // Parses the consolidated nvidia-smi output: one comma-separated device row per GPU carrying the name then the total
+    // and free VRAM in MiB. Multi-GPU yields several rows and the first usable GPU wins (matching the prior per-field
+    // probes, which each took the first parseable figure). A leading warning banner is skipped — a row with no comma is
+    // not a device row — and a named row whose total does not parse still marks an NVIDIA GPU present with VRAM unknown.
+    private static NvidiaProbe ParseNvidiaCsv(string stdout)
+    {
+        var present = false;
+        long? totalBytes = null;
+        long? freeBytes = null;
+
+        foreach (var rawLine in stdout.Split('\n'))
+        {
+            var line = rawLine.Trim();
+            if (line.Length == 0)
             {
                 continue;
             }
 
-            if (long.TryParse(trimmed, NumberStyles.Integer, CultureInfo.InvariantCulture, out var mib) && mib > 0)
+            var columns = line.Split(',');
+            if (columns.Length < 2)
             {
-                return mib * 1024L * 1024L;
+                // Not a data row (e.g. an "nvidia-smi WARNING: ..." banner with no CSV columns).
+                continue;
+            }
+
+            var name = columns[0].Trim();
+            if (name.Length == 0)
+            {
+                continue;
+            }
+
+            // A named row means an NVIDIA GPU is present (vendor signal). Take the VRAM figures from the FIRST row that
+            // carries a parseable total, reading free from that same row so total/free describe one device, then stop.
+            present = true;
+            if (TryParseMib(columns[1], out var total))
+            {
+                totalBytes = total;
+                freeBytes = columns.Length >= 3 && TryParseMib(columns[2], out var free) ? free : null;
+                break;
             }
         }
 
-        return null;
+        return present
+            ? new NvidiaProbe(Present: true, totalBytes, freeBytes, TimedOut: false)
+            : NvidiaProbe.Absent;
+    }
+
+    private static bool TryParseMib(string token, out long bytes)
+    {
+        if (long.TryParse(token.Trim(), NumberStyles.Integer, CultureInfo.InvariantCulture, out var mib) && mib > 0)
+        {
+            bytes = mib * 1024L * 1024L;
+            return true;
+        }
+
+        bytes = 0;
+        return false;
     }
 
     /// <summary>
@@ -292,5 +368,15 @@ internal sealed class HardwareProfiler : IHardwareProfiler
         }
 
         return false;
+    }
+
+    // The single consolidated nvidia-smi read, projected: whether an NVIDIA GPU is present (vendor signal), its total /
+    // free VRAM in bytes (first GPU wins; null when unparseable), and whether the probe was killed for overrunning its
+    // deadline (the caller then degrades to the cached/CPU-safe profile).
+    private readonly record struct NvidiaProbe(bool Present, long? TotalVramBytes, long? FreeVramBytes, bool TimedOut)
+    {
+        public static NvidiaProbe Absent { get; } = new(Present: false, TotalVramBytes: null, FreeVramBytes: null, TimedOut: false);
+
+        public static NvidiaProbe Timeout { get; } = new(Present: false, TotalVramBytes: null, FreeVramBytes: null, TimedOut: true);
     }
 }

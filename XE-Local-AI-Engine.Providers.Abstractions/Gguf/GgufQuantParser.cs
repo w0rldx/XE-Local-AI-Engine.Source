@@ -27,9 +27,10 @@ public static partial class GgufQuantParser
     //   legacy:   Q4_0, Q4_1, Q5_0, Q5_1 ; ARM: Q4_0_4_4/4_8/8_8
     //   IQ:       IQ1_S/M, IQ2_XXS/XS/S/M, IQ3_XXS/XS/S/M, IQ4_XS/NL
     //   floats:   F16/FP16, BF16, F32/FP32, F64
+    //   native:   MXFP4 (gpt-oss ships its MoE weights natively at this format — recognized so it is not skipped)
     //   Unsloth:  an optional UD- prefix on any of the above (UD-Q4_K_XL, UD-IQ2_M, ...)
     // Verified live 2026-06-18 against bartowski/unsloth GGUF filenames (incl. multi-part -00001-of-00002 suffixes).
-    [GeneratedRegex(@"(?<![A-Za-z0-9])(?<dynamic>UD[-_])?(?<quant>IQ[1-4]_(?:XXS|XS|S|M|NL)|Q[2-8]_K_(?:XL|S|M|L)|Q[2-8]_K|Q4_0_(?:4_4|4_8|8_8)|Q[2-8]_[01]|BF16|FP16|FP32|F16|F32|F64)(?![A-Za-z0-9])",
+    [GeneratedRegex(@"(?<![A-Za-z0-9])(?<dynamic>UD[-_])?(?<quant>IQ[1-4]_(?:XXS|XS|S|M|NL)|Q[2-8]_K_(?:XL|S|M|L)|Q[2-8]_K|Q4_0_(?:4_4|4_8|8_8)|Q[2-8]_[01]|MXFP4|BF16|FP16|FP32|F16|F32|F64)(?![A-Za-z0-9])",
         RegexOptions.IgnoreCase | RegexOptions.CultureInvariant | RegexOptions.ExplicitCapture,
         matchTimeoutMilliseconds: 2000)]
     private static partial Regex QuantRegex();
