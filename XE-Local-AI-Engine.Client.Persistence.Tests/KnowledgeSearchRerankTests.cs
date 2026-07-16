@@ -218,6 +218,7 @@ public sealed class KnowledgeSearchRerankTests : IDisposable
             new ReciprocalRankFusion(),
             reranker,
             Substitute.For<IContextExpansionService>(),
+            Substitute.For<IKnowledgeQueryEmbeddingCache>(),
             options,
             NullLogger<KnowledgeSearchService>.Instance);
     }
