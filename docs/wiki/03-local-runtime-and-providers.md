@@ -72,10 +72,12 @@ The supervisor owns the process; the deferred wrapper owns only the inner adapte
 
 `ILlamaServerProcessSupervisor` is the public contract; the implementation's ctor is **internal** (it takes internal launcher/health-probe seams). It is registered as a strict **singleton** — it owns every `llama-server` child for the node and disposes them on shutdown. The reaper loop starts in the ctor.
 
-Three contract members:
+Contract members:
 
-- `EnsureRunningAsync(modelName, role, ct)` → `LlamaServerEndpoint` (reuse-or-spawn).
-- `EvictAsync(modelName, role, ct)` — tree-kill if running, release its port, idempotent.
+- `EnsureRunningAsync(modelName, role, ct)` → `LlamaServerEndpoint` (reuse-or-spawn). The spawn/load runs **detached** from the caller's token (a shared per-key task under the shutdown token): a caller cancelling only abandons its wait; the load continues and the model becomes warm for the next send. Single-flight is preserved.
+- `EvictAsync(modelName, role, ct)` — **immediate** tree-kill if running, release its port, idempotent. Used internally (profiling exclusivity, provider unload); does NOT wait for in-flight work.
+- `EjectAsync(modelName, role, force, ct)` → `LlamaServerEjectOutcome` — the **operator** eject: mark evicting (no new leases), drain in-flight inference for a bounded `EjectDrainTimeout`, then tear down. Returns `Ejected` (idle/drained cleanly), `TimedOutStillBusy` (busy and not forced — **left running**, never killed silently), `ForcedWhileBusy` (`force:true` — killed anyway, run marked operator-ejected), or `NotRunning`.
+- `TryAcquireInferenceLease(modelName, role)` → `ILlamaServerInferenceLease?` — a per-request lease the chat client holds so a graceful eject waits for the turn; `WasEjected` lets an interrupted request classify a force-eject drop as operator-ejected rather than a generic failure.
 - `CheckHealthAsync(ct)` — aggregate every running process's health.
 
 **Keying.** Each distinct `(model, role)` is a distinct process (`ProcessKey`) and counts against the loaded-cap. A chat process launches with `--jinja`; an embedding process with `--embeddings --pooling mean`.
@@ -119,11 +121,11 @@ The CPU variant stays a pure CPU run and emits **no** GPU/fit args. The **`--hos
 
 ### Health probe — readiness vs liveness
 
-`LlamaServerHealthProbe` (impl of `ILlamaServerHealthProbe`) polls the `llama-server` **`/health`** endpoint over HTTP (`/health` is a sibling of the `/v1` base). `WaitForReadyAsync` polls every 250 ms until a 200 or the readiness deadline — connection-refused during warm-up is normal and retried. `CheckResponsiveAsync` is a single probe used by health aggregation.
+`LlamaServerHealthProbe` (impl of `ILlamaServerHealthProbe`) polls the `llama-server` **`/health`** endpoint over HTTP (`/health` is a sibling of the `/v1` base). `WaitForReadyAsync` polls every 250 ms until a 200 or the readiness deadline — connection-refused during warm-up is normal and retried. `CheckResponsiveAsync` is a single probe used by health aggregation. The readiness deadline is **size-aware** (`LlamaServerSupervisorOptions.ResolveReadinessTimeout(bytes)` — base + per-GiB extension above a threshold, capped), not a fixed constant, so a large model gets proportionally longer to load. The probe runs on a **dedicated, resilience-free `HttpClient`** with a ~1 s per-attempt bound: routing it through the app's `IHttpClientFactory` inherited the standard resilience handler's exponential retries and detected readiness up to ~5 s late.
 
 ### Eviction & reaper
 
-- `LlamaServerSupervisorOptions`: `MaxLoadedProcesses`, `IdleTimeToLive` (default **15 min**), `PortRangeStart`/`PortRangeEnd`, `MaxRestartAttempts`. The host overrides these from node config (`AddNodeModelRuntimeExtensions.BuildSeededLlamaServerSupervisorOptions`).
+- `LlamaServerSupervisorOptions`: `MaxLoadedProcesses`, `IdleTimeToLive` (default **15 min**), `PortRangeStart`/`PortRangeEnd`, `MaxRestartAttempts`, plus the Audit-4 readiness/eject knobs — `ReadinessBaseTimeout` (default 120 s), `ReadinessTimeoutModelSizeThresholdGiB`/`ReadinessTimeoutSecondsPerGiB`/`ReadinessTimeoutCap` (size-aware deadline), `MaxReadinessTimeoutRetries` (default 1 — a readiness timeout is retried at most this many times, NOT `MaxRestartAttempts`), and `EjectDrainTimeout` (bounded graceful-eject drain). `Validate()` fails fast on structurally invalid values. The host overrides cap/TTL/launch-flag knobs from node config (`AddNodeModelRuntimeExtensions.BuildSeededLlamaServerSupervisorOptions`).
 - `ReapIdleLoopAsync` runs on a background loop (interval = TTL/4, min 1 s) and evicts processes idle beyond `IdleTimeToLive` or already exited.
 - `TryEvictIdleLeastRecentlyUsed` runs synchronously under the admission gate to free a slot for a new admission — it never evicts an in-window process.
 

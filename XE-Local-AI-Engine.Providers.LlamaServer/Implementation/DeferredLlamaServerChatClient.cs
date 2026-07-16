@@ -27,6 +27,9 @@ using XE_Local_AI_Engine.Providers.LlamaServer.Contracts;
 /// </remarks>
 internal sealed class DeferredLlamaServerChatClient : IChatClient
 {
+    // User-safe terminal message when an operator force-ejected this model mid-request. Carries no paths/ports/internals.
+    private const string ModelEjectedMessage = "The model was ejected by the operator while this request was running.";
+
     private readonly SemaphoreSlim _initGate = new(initialCount: 1, maxCount: 1);
     private readonly string _modelName;
     private readonly ILlamaServerProcessSupervisor _supervisor;
@@ -48,16 +51,37 @@ internal sealed class DeferredLlamaServerChatClient : IChatClient
         while (true)
         {
             var inner = await EnsureInnerAsync(cancellationToken).ConfigureAwait(false);
+
+            // Hold an inference lease for the duration of the request so a graceful operator eject waits for it to
+            // finish before teardown. A null lease (process evicting/gone) means we proceed without one and rely on the
+            // self-heal below.
+            var lease = _supervisor.TryAcquireInferenceLease(_modelName, ModelRole.Chat);
             try
             {
                 return await inner.GetResponseAsync(messages, options, cancellationToken).ConfigureAwait(false);
             }
-            catch (Exception ex) when (!healed && !cancellationToken.IsCancellationRequested && IsServerGone(ex))
+            catch (Exception ex) when (!cancellationToken.IsCancellationRequested && IsServerGone(ex))
             {
-                // The endpoint behind the cached adapter is dead (ejected / switched / crashed). Drop it and re-ensure a
-                // running server, then retry once. No output was produced, so a retry cannot duplicate tokens.
+                // Operator FORCE-eject takes priority: fail as operator-ejected (never retried) so the terminal state is
+                // truthful, not a generic provider drop.
+                if (lease is { WasEjected: true })
+                {
+                    throw new LlamaServerModelEjectedException(ModelEjectedMessage, ex);
+                }
+
+                // Otherwise (crash / runtime switch) self-heal ONCE: drop the dead adapter, re-ensure, retry. No output
+                // was produced, so a retry cannot duplicate tokens.
+                if (healed)
+                {
+                    throw;
+                }
+
                 healed = true;
                 InvalidateInner();
+            }
+            finally
+            {
+                lease?.Dispose();
             }
         }
     }
@@ -71,31 +95,65 @@ internal sealed class DeferredLlamaServerChatClient : IChatClient
         while (true)
         {
             var inner = await EnsureInnerAsync(cancellationToken).ConfigureAwait(false);
-            await using var enumerator =
+            var lease = _supervisor.TryAcquireInferenceLease(_modelName, ModelRole.Chat);
+            var enumerator =
                 inner.GetStreamingResponseAsync(messages, options, cancellationToken).GetAsyncEnumerator(cancellationToken);
-
-            bool moved;
+            var retry = false;
             try
             {
-                // The connection to llama-server is established lazily on the first MoveNext; a refused socket surfaces
-                // here, before any update is yielded — the only point a retry is safe.
-                moved = await enumerator.MoveNextAsync().ConfigureAwait(false);
+                var first = true;
+                while (true)
+                {
+                    bool moved;
+                    try
+                    {
+                        // The connection to llama-server is established lazily on the first MoveNext; a refused/reset
+                        // socket surfaces here (before the first update) or on a later pull (mid-stream).
+                        moved = await enumerator.MoveNextAsync().ConfigureAwait(false);
+                    }
+                    catch (Exception ex) when (!cancellationToken.IsCancellationRequested && IsServerGone(ex))
+                    {
+                        // A force-eject killed the process under us — fail as operator-ejected (never retried), whether
+                        // the drop happened before OR mid-stream.
+                        if (lease is { WasEjected: true })
+                        {
+                            throw new LlamaServerModelEjectedException(ModelEjectedMessage, ex);
+                        }
+
+                        // Pre-first-chunk drop (crash / switch): self-heal ONCE. A mid-stream drop cannot be retried (it
+                        // would replay already-yielded chunks), so it rethrows.
+                        if (!first || healed)
+                        {
+                            throw;
+                        }
+
+                        healed = true;
+                        retry = true;
+                        break;
+                    }
+
+                    if (!moved)
+                    {
+                        yield break;
+                    }
+
+                    yield return enumerator.Current;
+                    first = false;
+                }
             }
-            catch (Exception ex) when (!healed && !cancellationToken.IsCancellationRequested && IsServerGone(ex))
+            finally
             {
-                healed = true;
-                InvalidateInner();
-                continue; // await using disposes the dead enumerator, then we re-ensure + retry from scratch.
+                lease?.Dispose();
+                await enumerator.DisposeAsync().ConfigureAwait(false);
             }
 
-            while (moved)
+            if (!retry)
             {
-                yield return enumerator.Current;
-                // Past the first update the stream is live; a mid-stream drop is NOT retried (it would duplicate output).
-                moved = await enumerator.MoveNextAsync().ConfigureAwait(false);
+                yield break;
             }
 
-            yield break;
+            // Reached only via the self-heal break: drop the dead adapter, then the outer loop re-ensures + retries.
+            InvalidateInner();
         }
     }
 
