@@ -4,9 +4,12 @@ using System.Globalization;
 using System.Net;
 using System.Net.Http.Headers;
 using System.Text;
+using Microsoft.Extensions.Logging.Abstractions;
 using XE_Local_AI_Engine.Providers.Abstractions.Contracts;
 using XE_Local_AI_Engine.Providers.Abstractions.Gguf;
 using XE_Local_AI_Engine.Providers.HuggingFace.Implementation;
+using XE_Local_AI_Engine.Providers.HuggingFace.Options;
+using XE_Local_AI_Engine.Providers.HuggingFace.Telemetry;
 using XE_Local_AI_Engine.Tests.Testing;
 using Infra = GgufStoreTestInfrastructure;
 
@@ -272,6 +275,44 @@ public sealed class GgufStoreTests
         var finalBytes = await File.ReadAllBytesAsync(handle.LocalPath);
         AssertEx.True(finalBytes.SequenceEqual(ModelBytes));
         AssertEx.False(File.Exists(partPath));
+    }
+
+    [Test]
+    public async Task Download_WhenBodyStallsMidCopy_ReadIdleTimeoutSurfacesTransientFailureAndRetryResumes()
+    {
+        // AUD4-18: ResponseHeadersRead means the HttpClient timeout covers only the headers; a CDN that stalls mid-body
+        // must be bounded by the read-idle timeout, surfaced as a TRANSIENT failure so the existing retry/resume path
+        // completes the download rather than hanging forever.
+        using var dir = new GgufStoreTestInfrastructure.TempModelsDir();
+        var options = new HuggingFaceOptions
+        {
+            ModelsDirectory = dir.Path,
+            DiskMarginBytes = 0,
+            DefaultQuant = Infra.Quant,
+            MaxDownloadRetries = 3,
+            DownloadReadIdleTimeoutSeconds = 1
+        };
+        var metrics = new CountingDownloadMetrics();
+
+        // Attempt 0 yields 256 bytes then stalls forever (no more data) → the 1 s read-idle deadline fires. Attempt 1
+        // serves the full file.
+        using var handler = new GgufStoreTestInfrastructure.ScriptedHandler((_, callIndex) => callIndex == 0
+            ? new HttpResponseMessage(HttpStatusCode.OK) { Content = new StreamContent(new StallingStream(ModelBytes, yieldBytes: 256)) }
+            : FullDownload(ModelBytes));
+        using var http = new HttpClient(handler);
+        using var resolveHandler = new GgufStoreTestInfrastructure.ScriptedHandler((_, _) => new HttpResponseMessage());
+        using var resolveHttp = new HttpClient(resolveHandler, disposeHandler: false);
+        var download = new HfDownloadClient(http, resolveHttp, Infra.NoTokenStore(), Infra.AbundantSpace(), options, NullLogger<HfDownloadClient>.Instance, metrics);
+
+        var destination = dir.FilePath(Infra.FileName);
+        _ = await download.DownloadAsync(Infra.RepoId, Infra.FileName, Infra.Revision, Infra.ModelName, destination, ModelBytes.Length, progress: null, CancellationToken.None);
+
+        // The idle stall on attempt 0 counted as one transient failure; attempt 1 completed the file.
+        AssertEx.Equal(expected: 2, handler.CallCount);
+        AssertEx.Equal(expected: 1, metrics.ReadIdleTimeouts);
+        var finalBytes = await File.ReadAllBytesAsync(destination);
+        AssertEx.True(finalBytes.SequenceEqual(ModelBytes));
+        AssertEx.False(File.Exists(destination + ".part"));
     }
 
     [Test]
@@ -671,6 +712,68 @@ public sealed class GgufStoreTests
     }
 
     // A read stream that yields some bytes then throws an ENOSPC IOException, simulating a disk-full write failure.
+    private sealed class CountingDownloadMetrics : IHfDownloadMetrics
+    {
+        private int _readIdleTimeouts;
+
+        public int ReadIdleTimeouts => Volatile.Read(ref _readIdleTimeouts);
+
+        public void RecordReadIdleTimeout()
+        {
+            _ = Interlocked.Increment(ref _readIdleTimeouts);
+        }
+    }
+
+    // Yields <paramref name="yieldBytes" /> then stalls forever, honoring cancellation so the read-idle deadline cancels it.
+    private sealed class StallingStream(byte[] bytes, int yieldBytes) : Stream
+    {
+        private int _position;
+
+        public override bool CanRead => true;
+        public override bool CanSeek => false;
+        public override bool CanWrite => false;
+        public override long Length => bytes.Length;
+        public override long Position { get => _position; set => throw new NotSupportedException(); }
+
+        public override async ValueTask<int> ReadAsync(Memory<byte> buffer, CancellationToken cancellationToken = default)
+        {
+            if (_position < yieldBytes)
+            {
+                var toCopy = Math.Min(buffer.Length, yieldBytes - _position);
+                bytes.AsSpan(_position, toCopy).CopyTo(buffer.Span);
+                _position += toCopy;
+                return toCopy;
+            }
+
+            await Task.Delay(Timeout.InfiniteTimeSpan, cancellationToken).ConfigureAwait(false);
+            return 0;
+        }
+
+        public override int Read(byte[] buffer, int offset, int count)
+        {
+            throw new NotSupportedException("StallingStream is async-only.");
+        }
+
+        public override void Flush()
+        {
+        }
+
+        public override long Seek(long offset, SeekOrigin origin)
+        {
+            throw new NotSupportedException();
+        }
+
+        public override void SetLength(long value)
+        {
+            throw new NotSupportedException();
+        }
+
+        public override void Write(byte[] buffer, int offset, int count)
+        {
+            throw new NotSupportedException();
+        }
+    }
+
     private sealed class DiskFullStream(byte[] bytes, int throwAfter) : Stream
     {
         private int _position;

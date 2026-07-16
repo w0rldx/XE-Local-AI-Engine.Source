@@ -90,7 +90,8 @@ internal sealed class AgentDefinitionResolver : IAgentDefinitionResolver
             skills,
             definition.PlaybookEnabled,
             definition.MemoryExtractionEnabled,
-            effectiveModelIsCloud);
+            effectiveModelIsCloud,
+            definition.Kind);
     }
 
     /// <summary>

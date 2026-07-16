@@ -309,6 +309,55 @@ public sealed class WorkerEventDispatcherTests
     }
 
     [Test]
+    public async Task StopAcceptingRemoteInvocations_AbandonsAnAssignmentBlockedOnTheInvocationSlot()
+    {
+        // AUD4-18: a second remote assignment BLOCKED waiting for the invocation slot (held by a running one) must be
+        // released by the drain instead of hanging forever on the previously-uncancelable slot wait — and it must never
+        // start. The already-running first assignment is unaffected.
+        var runner = Substitute.For<IInvocationRunner>();
+        var firstEntered = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var firstGate = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var first = RuntimePackageBuilder.Valid().WithInvocationId(Guid.NewGuid()).Build();
+        var second = RuntimePackageBuilder.Valid().WithInvocationId(Guid.NewGuid()).Build();
+
+        runner.RunAsync(Arg.Is<InvocationExecutionContext>(context => context.Package.InvocationId == first.InvocationId), Arg.Any<CancellationToken>())
+              .Returns(_ =>
+              {
+                  firstEntered.TrySetResult();
+                  return firstGate.Task;
+              });
+
+        var dispatcher = CreateDispatcher(runner);
+
+        var firstDispatch = dispatcher.DispatchInvocationAssignedV2Async(new InvocationAssignedEnvelope
+        {
+            StorageMode = "PlainSync",
+            Plain = first,
+            Encrypted = null
+        });
+        await firstEntered.Task.WaitAsync(TimeSpan.FromSeconds(5));
+
+        // The second assignment passes the accept-guard, then blocks on the slot the running first assignment holds.
+        var secondDispatch = dispatcher.DispatchInvocationAssignedV2Async(new InvocationAssignedEnvelope
+        {
+            StorageMode = "PlainSync",
+            Plain = second,
+            Encrypted = null
+        });
+        await Task.Delay(TimeSpan.FromMilliseconds(150));
+
+        dispatcher.StopAcceptingRemoteInvocations();
+
+        // The blocked second assignment is released (does not hang) and never runs; the first is still running.
+        await secondDispatch.WaitAsync(TimeSpan.FromSeconds(5));
+        await runner.DidNotReceive().RunAsync(Arg.Is<InvocationExecutionContext>(context => context.Package.InvocationId == second.InvocationId), Arg.Any<CancellationToken>());
+
+        firstGate.SetResult();
+        await firstDispatch;
+        await runner.Received(1).RunAsync(Arg.Is<InvocationExecutionContext>(context => context.Package.InvocationId == first.InvocationId), Arg.Any<CancellationToken>());
+    }
+
+    [Test]
     public async Task ReportInvocationThinkingChunkAsync_AccumulatesThinkingContentSeparately()
     {
         var runner = Substitute.For<IInvocationRunner>();

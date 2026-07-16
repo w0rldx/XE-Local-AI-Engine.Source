@@ -173,7 +173,8 @@ public static class LlamaServerServiceCollectionExtensions
         // clients it hands out own the cold-start.
         services.TryAddSingleton<LlamaServerLocalModelProvider>(static sp =>
             new LlamaServerLocalModelProvider(sp.GetRequiredService<ILlamaServerProcessSupervisor>(),
-                sp.GetRequiredService<IGgufModelStore>()));
+                sp.GetRequiredService<IGgufModelStore>(),
+                sp.GetRequiredService<LlamaServerSupervisorOptions>()));
         services.AddSingleton<ILocalModelProvider>(static sp =>
             sp.GetRequiredService<LlamaServerLocalModelProvider>());
 
