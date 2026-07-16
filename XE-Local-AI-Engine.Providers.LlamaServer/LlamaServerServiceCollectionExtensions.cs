@@ -103,8 +103,18 @@ public static class LlamaServerServiceCollectionExtensions
 
         // Process-supervision seams: the OS-aware launcher (tree-kill) + the /health readiness probe.
         services.TryAddSingleton<ILlamaServerProcessLauncher, LlamaServerProcessLauncher>();
-        services.TryAddSingleton<ILlamaServerHealthProbe>(static sp =>
-            new LlamaServerHealthProbe(sp.GetRequiredService<HttpClient>()));
+
+        // AUD4-15: the readiness/liveness probe gets a DEDICATED HttpClient that bypasses the app's IHttpClientFactory,
+        // so it never inherits the standard resilience handler's exponential retries — the audited cause of a single
+        // logical probe firing at +0.2/2.4/5.1/10.2 s and detecting readiness up to ~5 s late. The probe issues exactly
+        // one bounded request per poll (its own per-attempt timeout), and the supervisor's 250 ms cadence controls
+        // timing. Localhost-only, so factory handler rotation is unnecessary; a modest backstop Timeout sits above the
+        // probe's own per-attempt/reuse bounds. Process-lifetime singleton — intentionally never disposed.
+        services.TryAddSingleton<ILlamaServerHealthProbe>(static _ =>
+            new LlamaServerHealthProbe(new HttpClient
+            {
+                Timeout = TimeSpan.FromSeconds(30)
+            }));
 
         // Self-satisfying launch-arg resolver: explore-mode (auto-fit) until the Application host registers its
         // DB-backed IInferenceProfileResolver last (last registration wins), keeping the layer arrow Application →

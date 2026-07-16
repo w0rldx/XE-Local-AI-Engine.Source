@@ -45,6 +45,35 @@ public static class NodeMetrics
         Meter.CreateCounter<long>("invocation_failed_total",
             description: "Number of failed invocations by failure source.");
 
+    /// <summary>
+    ///     Wall-clock duration (milliseconds) of the model-readiness (warm) phase that runs BEFORE the stream-idle
+    ///     watchdog is armed — the separated cold-load window. Tagged by <c>outcome</c> (ready | failed). A warm reuse is
+    ///     a small value; a genuine cold load is a large one, so the histogram shows how long readiness actually takes
+    ///     and whether it is being paid on the warm path by mistake. Content-free (a duration only).
+    /// </summary>
+    public static readonly Histogram<double> ModelReadinessDurationMs =
+        Meter.CreateHistogram<double>("model_readiness_duration_ms",
+            unit: "ms",
+            description: "Duration of the pre-stream model-readiness (warm) phase, tagged by outcome (ready | failed).");
+
+    /// <summary>
+    ///     Incremented once per model-readiness (warm) phase. Labels: outcome (ready | failed). Paired with
+    ///     <see cref="ModelReadinessDurationMs" /> so a readiness-failure rate is observable without any model identity.
+    /// </summary>
+    public static readonly Counter<long> ModelReadinessTotal =
+        Meter.CreateCounter<long>("model_readiness_total",
+            description: "Number of pre-stream model-readiness (warm) phases by outcome (ready | failed).");
+
+    /// <summary>
+    ///     Incremented on each operator eject request and its result. Labels: outcome (requested | ejected |
+    ///     timed_out_still_busy | forced | not_running). The <c>requested</c> increment fires once per call; the result
+    ///     increment fires once with the terminal outcome, so accept/drain/timeout/force ratios are observable without
+    ///     any model identity.
+    /// </summary>
+    public static readonly Counter<long> ModelEjectTotal =
+        Meter.CreateCounter<long>("model_eject_total",
+            description: "Number of operator eject requests and outcomes (requested | ejected | timed_out_still_busy | forced | not_running).");
+
 
     /// <summary>
     ///     Incremented (by the abandoned count) when the memory-extraction worker abandons in-flight extraction job(s) at

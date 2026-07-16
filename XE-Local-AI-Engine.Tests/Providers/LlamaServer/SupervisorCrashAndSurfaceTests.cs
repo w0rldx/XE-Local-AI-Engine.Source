@@ -51,7 +51,9 @@ public sealed class SupervisorCrashAndSurfaceTests
 
         var ex = await AssertEx.ThrowsAsync<LlamaRuntimeException>(() => supervisor.EnsureRunningAsync("model-a", ModelRole.Chat, CancellationToken.None));
 
-        AssertEx.Contains(ex.Message, "failed to start", StringComparison.OrdinalIgnoreCase);
+        // AUD4-09: a readiness timeout now surfaces its own classified, sanitized message (retried at most
+        // MaxReadinessTimeoutRetries times) rather than collapsing into the generic "failed to start" wrapper.
+        AssertEx.Contains(ex.Message, "did not become ready", StringComparison.OrdinalIgnoreCase);
         // Every failed start's half-spawned process must be torn down — no leaked handles.
         AssertEx.True(launcher.Handles.All(h => h.WasTreeKilled), "Failed-readiness spawns must be tree-killed.");
     }

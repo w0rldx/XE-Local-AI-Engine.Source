@@ -440,6 +440,20 @@ public sealed partial class WorkerEventDispatcher : IWorkerEventDispatcher
         return Task.CompletedTask;
     }
 
+    public Task ReportInvocationPhaseAsync(Guid invocationId, InvocationRuntimePhase phase)
+    {
+        // The cold-load phases (PreparingRuntime/LoadingModel) fire BEFORE the stream-idle watchdog is armed, so a
+        // legitimate load is visible instead of an apparent hang. A no-op when the id is not the current invocation.
+        UpdateInvocation(invocationId,
+            state =>
+            {
+                state.RuntimePhase = phase;
+                return state;
+            });
+
+        return Task.CompletedTask;
+    }
+
     public Task ReportInvocationCompletedAsync(Guid invocationId, int? inputTokens = null, int? outputTokens = null, int? totalTokens = null, int? reasoningTokens = null,
         long? generationDurationMs = null)
     {

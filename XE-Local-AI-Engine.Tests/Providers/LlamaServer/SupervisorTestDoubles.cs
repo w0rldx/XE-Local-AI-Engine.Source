@@ -214,6 +214,16 @@ internal sealed class FakeProcessSupervisor(params LlamaServerProcessHealth[] ru
         return Task.CompletedTask;
     }
 
+    public Task<LlamaServerEjectOutcome> EjectAsync(string modelName, ModelRole role, bool force, CancellationToken ct)
+    {
+        return Task.FromResult(LlamaServerEjectOutcome.NotRunning);
+    }
+
+    public ILlamaServerInferenceLease? TryAcquireInferenceLease(string modelName, ModelRole role)
+    {
+        return null;
+    }
+
     public Task<T> RunExclusiveProfilingAsync<T>(string modelName,
         ModelRole role,
         ResolvedLaunchArguments launchArgs,

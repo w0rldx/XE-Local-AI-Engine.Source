@@ -29,7 +29,36 @@ public interface ILlamaServerProcessSupervisor
     Task<LlamaServerEndpoint> EnsureRunningAsync(string modelName, ModelRole role, CancellationToken ct);
 
     /// <summary>Evicts (tree-kills) the <c>(model, role)</c> process if running and releases its port. Idempotent.</summary>
+    /// <remarks>
+    ///     This is the <strong>immediate</strong> teardown used internally (idle-reaper simulation in tests, profiling
+    ///     exclusivity, provider unload): it does not wait for in-flight inference to finish. For an
+    ///     <strong>operator</strong> eject that must not interrupt a running turn, use <see cref="EjectAsync" />.
+    /// </remarks>
     Task EvictAsync(string modelName, ModelRole role, CancellationToken ct);
+
+    /// <summary>
+    ///     Operator eject for a supervised <c>(model, role)</c> process. Marks the process evicting (no new leases), then
+    ///     waits up to the configured bounded drain window for in-flight inference (tracked via
+    ///     <see cref="TryAcquireInferenceLease" />) to finish before tearing it down. An idle process (no active leases)
+    ///     is torn down immediately. When the drain window elapses with work still in flight, the process is left running
+    ///     and the outcome reports it could not complete safely — unless <paramref name="force" /> is set, in which case
+    ///     the process is torn down anyway and the interrupted run is marked as operator-ejected (not a generic failure).
+    /// </summary>
+    /// <param name="modelName">Model whose process to eject.</param>
+    /// <param name="role">Role of the process to eject (chat / embedding / reranker).</param>
+    /// <param name="force">When set, tear the process down even if in-flight work has not drained.</param>
+    /// <param name="ct">Cancellation for the (bounded) drain wait.</param>
+    /// <returns>The eject outcome (idempotent no-op when nothing is running).</returns>
+    Task<LlamaServerEjectOutcome> EjectAsync(string modelName, ModelRole role, bool force, CancellationToken ct);
+
+    /// <summary>
+    ///     Acquires a reference-counted inference lease against the currently-running <c>(model, role)</c> process so a
+    ///     graceful <see cref="EjectAsync" /> waits for the request to finish before teardown. Returns <c>null</c> when
+    ///     no live, non-evicting process backs the key (the caller then proceeds without a lease — the deferred client
+    ///     self-heals on the resulting connection failure). The caller MUST dispose the returned lease when the request
+    ///     completes (success, failure, or cancellation).
+    /// </summary>
+    ILlamaServerInferenceLease? TryAcquireInferenceLease(string modelName, ModelRole role);
 
     /// <summary>
     ///     The operator profiling entry point (explore + benchmark). Acquires the SAME single-flight gate the normal

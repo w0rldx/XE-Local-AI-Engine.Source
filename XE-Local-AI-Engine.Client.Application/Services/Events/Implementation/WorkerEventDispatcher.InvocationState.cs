@@ -12,6 +12,7 @@ public sealed partial class WorkerEventDispatcher
             InvocationId = state.InvocationId,
             ConversationId = state.ConversationId,
             Status = state.Status,
+            RuntimePhase = state.RuntimePhase,
             StreamedContent = state.StreamedContent,
             StreamedChunkCount = state.StreamedChunkCount,
             StreamedThinkingContent = state.StreamedThinkingContent,
