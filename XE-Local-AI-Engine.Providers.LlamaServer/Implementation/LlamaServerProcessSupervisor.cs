@@ -229,6 +229,14 @@ public sealed class LlamaServerProcessSupervisor : ILlamaServerProcessSupervisor
         var completion = new TaskCompletionSource<RunningProcess>(TaskCreationOptions.RunContinuationsAsynchronously);
         var task = completion.Task;
 
+        // Guarantee a faulted detached spawn is observed even if every waiting caller has abandoned its wait (e.g. all
+        // callers cancelled, or the spawn is cancelled on shutdown), so it can never surface as an UnobservedTaskException.
+        // Awaiting callers still receive the exception — this continuation only marks it observed.
+        _ = task.ContinueWith(static faulted => _ = faulted.Exception,
+            CancellationToken.None,
+            TaskContinuationOptions.OnlyOnFaulted | TaskContinuationOptions.ExecuteSynchronously,
+            TaskScheduler.Default);
+
         _ = Task.Run(async () =>
         {
             try
