@@ -92,6 +92,75 @@ public sealed class GgufHeaderReaderLocalFileTests
         AssertEx.False(metadata.IsMoe);
     }
 
+    [Test]
+    public async Task ReadHeaderFromFile_ExtractsAttentionKeyValueLength_AndSlidingWindow_Gemma3()
+    {
+        using var dir = new GgufStoreTestInfrastructure.TempModelsDir();
+        var path = dir.FilePath("gemma3-12b-Q4_K_M.gguf");
+        // Gemma3 writes explicit attention.key_length / value_length (256) and attention.sliding_window (1024). The 5:1
+        // local:global layer pattern (stride 6) is resolved from the per-architecture default when the header omits it.
+        var header = new GgufHeaderBytesBuilder()
+                     .WithString("general.architecture", "gemma3")
+                     .WithUint32("gemma3.block_count", value: 48)
+                     .WithUint32("gemma3.attention.head_count", value: 16)
+                     .WithUint32("gemma3.attention.head_count_kv", value: 8)
+                     .WithUint32("gemma3.attention.key_length", value: 256)
+                     .WithUint32("gemma3.attention.value_length", value: 256)
+                     .WithUint32("gemma3.attention.sliding_window", value: 1024)
+                     .WithUint32("gemma3.context_length", value: 131072)
+                     .Build();
+        await File.WriteAllBytesAsync(path, header);
+        var reader = NewReader();
+
+        var metadata = await reader.ReadHeaderFromFileAsync(path, CancellationToken.None);
+
+        AssertEx.Equal(expected: 256L, metadata.AttentionKeyLength!.Value);
+        AssertEx.Equal(expected: 256L, metadata.AttentionValueLength!.Value);
+        AssertEx.Equal(expected: 1024L, metadata.SlidingWindow!.Value);
+        AssertEx.Equal(expected: 6L, metadata.SlidingWindowPattern!.Value); // gemma3 arch default (5:1 local:global)
+    }
+
+    [Test]
+    public async Task ReadHeaderFromFile_ExplicitSlidingWindowPattern_OverridesArchDefault()
+    {
+        using var dir = new GgufStoreTestInfrastructure.TempModelsDir();
+        var path = dir.FilePath("gemma3-custom.gguf");
+        var header = new GgufHeaderBytesBuilder()
+                     .WithString("general.architecture", "gemma3")
+                     .WithUint32("gemma3.attention.sliding_window", value: 512)
+                     .WithUint32("gemma3.attention.sliding_window_pattern", value: 4)
+                     .Build();
+        await File.WriteAllBytesAsync(path, header);
+        var reader = NewReader();
+
+        var metadata = await reader.ReadHeaderFromFileAsync(path, CancellationToken.None);
+
+        AssertEx.Equal(expected: 4L, metadata.SlidingWindowPattern!.Value); // explicit header key wins over the arch default
+    }
+
+    [Test]
+    public async Task ReadHeaderFromFile_DenseQwen3_ExplicitKeyValue_NoSlidingWindow()
+    {
+        using var dir = new GgufStoreTestInfrastructure.TempModelsDir();
+        var path = dir.FilePath("qwen35-dense.gguf");
+        // Qwen3 is dense (no sliding window) but DOES write explicit key/value length 128 — its head_dim is decoupled
+        // from the embedding width, which is exactly why the derived head_dim under-estimates its KV cache.
+        var header = new GgufHeaderBytesBuilder()
+                     .WithString("general.architecture", "qwen35")
+                     .WithUint32("qwen35.attention.key_length", value: 128)
+                     .WithUint32("qwen35.attention.value_length", value: 128)
+                     .Build();
+        await File.WriteAllBytesAsync(path, header);
+        var reader = NewReader();
+
+        var metadata = await reader.ReadHeaderFromFileAsync(path, CancellationToken.None);
+
+        AssertEx.Equal(expected: 128L, metadata.AttentionKeyLength!.Value);
+        AssertEx.Equal(expected: 128L, metadata.AttentionValueLength!.Value);
+        AssertEx.Null(metadata.SlidingWindow);
+        AssertEx.Null(metadata.SlidingWindowPattern); // no window key AND qwen35 has no interleaved-SWA arch default
+    }
+
     private static string[] BuildVocab(int count)
     {
         var tokens = new string[count];

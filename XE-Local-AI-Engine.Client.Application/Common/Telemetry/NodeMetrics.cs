@@ -45,6 +45,16 @@ public static class NodeMetrics
         Meter.CreateCounter<long>("invocation_failed_total",
             description: "Number of failed invocations by failure source.");
 
+    /// <summary>
+    ///     Incremented each time a native hardware probe (e.g. <c>nvidia-smi</c>) exceeds its wall-clock deadline and is
+    ///     killed (process tree). A non-zero rate flags a wedged GPU driver / stalled tool that would otherwise hang
+    ///     first-run provisioning or a capacity decision; the profiler degrades to the last cached profile or the CPU
+    ///     default. Labels: probe (the probe tool name).
+    /// </summary>
+    public static readonly Counter<long> HardwareProbeTimeoutTotal =
+        Meter.CreateCounter<long>("hardware_probe_timeout_total",
+            description: "Number of native hardware probes killed after exceeding their wall-clock deadline, by probe.");
+
 
     /// <summary>
     ///     Incremented (by the abandoned count) when the memory-extraction worker abandons in-flight extraction job(s) at

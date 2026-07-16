@@ -146,7 +146,11 @@ internal sealed partial class HuggingFaceGgufDiscovery : IHuggingFaceGgufDiscove
                 header?.EmbeddingLength,
                 header?.ContextLength,
                 header?.ExpertCount,
-                header?.ExpertUsedCount));
+                header?.ExpertUsedCount,
+                header?.AttentionKeyLength,
+                header?.AttentionValueLength,
+                header?.SlidingWindow,
+                header?.SlidingWindowPattern));
         }
 
         return new GgufRepoDetail(detail.RepoId, detail.IsGated, detail.License, files);

@@ -68,6 +68,25 @@ public sealed class QuantLadderTests
     }
 
     [Test]
+    public void IsNativeFormat_TrueForMxFp4_FalseForRequantizableQuants()
+    {
+        // MXFP4 (gpt-oss's native ~4.25bpw MoE format) is the only native, non-requantizable quant today.
+        AssertEx.True(QuantLadder.IsNativeFormat("MXFP4"), "MXFP4 is a native format.");
+        AssertEx.True(QuantLadder.IsNativeFormat("mxfp4"), "IsNativeFormat is case-insensitive.");
+        AssertEx.False(QuantLadder.IsNativeFormat("Q4_K_M"), "Q4_K_M is a requantizable quant, not native.");
+        AssertEx.False(QuantLadder.IsNativeFormat("Q8_0"), "Q8_0 is a requantizable quant, not native.");
+    }
+
+    [Test]
+    public void BytesPerWeight_MxFp4_UsesNativeDensity()
+    {
+        // MXFP4 is ~4.25 bits/weight — below the 4.5bpw unknown-quant default, so it is NOT falling through to it.
+        AssertEx.Equal(4.25d / 8d, MemoryFitEstimator.BytesPerWeight("MXFP4"));
+        AssertEx.True(MemoryFitEstimator.BytesPerWeight("MXFP4") < MemoryFitEstimator.BytesPerWeight("Q4_K_M"),
+            "MXFP4 must size below the 4.5bpw Q4_K_M default.");
+    }
+
+    [Test]
     public void BytesPerWeight_IQuants_UseDistinctDensities_NotTheDefault()
     {
         var q4 = MemoryFitEstimator.BytesPerWeight("Q4_K_M");

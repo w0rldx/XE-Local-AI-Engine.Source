@@ -10,7 +10,9 @@ using XE_Local_AI_Engine.Client.Services.ModelFit.Fit;
 using XE_Local_AI_Engine.Client.Services.ModelFit.Gguf;
 using XE_Local_AI_Engine.Client.Services.ModelFit.Implementation;
 using XE_Local_AI_Engine.Client.Services.ModelFit.Validation;
+using XE_Local_AI_Engine.Client.Common.Telemetry;
 using XE_Local_AI_Engine.Client.Services.Persistence.Implementation;
+using XE_Local_AI_Engine.Providers.Abstractions.Capabilities;
 using XE_Local_AI_Engine.Providers.Capabilities;
 using XE_Local_AI_Engine.Providers.HuggingFace;
 using XE_Local_AI_Engine.Providers.LlamaServer.Contracts;
@@ -108,6 +110,10 @@ internal static class AddNodeModelFitExtensions
         builder.Services.AddHardwareProfiler(string.IsNullOrWhiteSpace(dataDirectoryRoot)
             ? builder.Environment.ContentRootPath
             : dataDirectoryRoot);
+
+        // Bridge the profiler's probe-timeout metrics seam to the application NodeMetrics meter (the Capabilities layer
+        // cannot reference it directly). Registered after AddHardwareProfiler so it overrides the null default.
+        builder.Services.AddSingleton<IHardwareProbeMetrics, NodeMetricsHardwareProbeMetrics>();
 
         return builder;
     }

@@ -5,6 +5,7 @@ using System.Globalization;
 using System.Net.Http.Headers;
 using System.Text;
 using Microsoft.Extensions.Logging;
+using XE_Local_AI_Engine.Providers.Abstractions.Gguf;
 using XE_Local_AI_Engine.Providers.HuggingFace.Options;
 
 /// <summary>
@@ -273,6 +274,19 @@ internal sealed class GgufHeaderReader
         // expert_count this drives the memory-fit estimator's expert-offload split; null for dense models.
         var expertUsedCount = TryGetLong(values, Arch("expert_used_count"));
 
+        // Explicit per-head key/value dimensions (<arch>.attention.key_length / value_length). Preferred by the memory-fit
+        // estimator over the derived head_dim = embedding_length / n_heads — the derivation is wrong for families like
+        // Qwen3 that pin head_dim (128) independently of the embedding width. Null when the header omits them.
+        var attentionKeyLength = TryGetLong(values, Arch("attention.key_length"));
+        var attentionValueLength = TryGetLong(values, Arch("attention.value_length"));
+
+        // Interleaved sliding-window attention (Gemma family): a positive window means the window-limited layers hold at
+        // most this many KV positions instead of the full context. The layer stride (every Nth layer is full attention)
+        // comes from an explicit header key when present, else the per-architecture default (Gemma3=6, Gemma2=2).
+        var slidingWindow = TryGetLong(values, Arch("attention.sliding_window"));
+        var slidingWindowPattern = TryGetLong(values, Arch("attention.sliding_window_pattern"))
+                                   ?? GgufAttentionDefaults.SlidingWindowPattern(architecture);
+
         // The Jinja chat template (when present) reveals the model's real tool / reasoning surface for capability
         // detection. Architecture-independent key; null when the GGUF was written without one (a raw base model).
         var chatTemplate = GetString(values, "tokenizer.chat_template");
@@ -287,7 +301,11 @@ internal sealed class GgufHeaderReader
             contextLength,
             chatTemplate,
             expertCount,
-            expertUsedCount);
+            expertUsedCount,
+            attentionKeyLength,
+            attentionValueLength,
+            slidingWindow,
+            slidingWindowPattern);
     }
 
     private static string? GetString(IReadOnlyDictionary<string, object> values, string key)
@@ -605,10 +623,15 @@ internal sealed record GgufHeaderMetadata(
     long? ContextLength,
     string? ChatTemplate,
     long? ExpertCount,
-    long? ExpertUsedCount)
+    long? ExpertUsedCount,
+    long? AttentionKeyLength = null,
+    long? AttentionValueLength = null,
+    long? SlidingWindow = null,
+    long? SlidingWindowPattern = null)
 {
     public static GgufHeaderMetadata Empty { get; } = new(Architecture: null, QuantType: null, ParamCount: null, BlockCount: null, AttentionHeadCount: null, AttentionHeadCountKV: null,
-        EmbeddingLength: null, ContextLength: null, ChatTemplate: null, ExpertCount: null, ExpertUsedCount: null);
+        EmbeddingLength: null, ContextLength: null, ChatTemplate: null, ExpertCount: null, ExpertUsedCount: null,
+        AttentionKeyLength: null, AttentionValueLength: null, SlidingWindow: null, SlidingWindowPattern: null);
 
     /// <summary>True when the GGUF declares a positive expert count — a Mixture-of-Experts model (dense models omit it).</summary>
     public bool IsMoe => ExpertCount is > 0;

@@ -83,6 +83,13 @@ public sealed class CapacityService : ICapacityService
         // forceRefresh: an admission decision runs per model-load (rare, and already serialized under this gate), so it
         // must read a live VRAM/RAM snapshot rather than the profiler's boot-time cache — a stale free-VRAM figure would
         // defeat the resident-model accounting below. Bounded: at most one probe in flight because of the gate.
+        //
+        // Invariant — the forced refresh MUST run UNDER the gate, NOT before it. The free-VRAM baseline nets out every
+        // resident model, so a decision has to observe the load committed by every admission that won the gate before it;
+        // reading the profile before entering would let two racing decisions share a pre-load snapshot and over-admit.
+        // Holding the gate across this probe is safe because the probe is now wall-clock bounded (AUD4-07): a wedged
+        // nvidia-smi is killed and the profiler degrades to the cached/CPU-safe profile, so the gate hold is capped by the
+        // probe timeout and can never wedge the admission path indefinitely.
         var profile = await _hardwareProfiler.GetProfileAsync(forceRefresh: true, ct).ConfigureAwait(false);
         var footprint = await _footprintProvider.ResolveFootprintAsync(modelName, profile, ct).ConfigureAwait(false);
         if (!footprint.IsKnown)

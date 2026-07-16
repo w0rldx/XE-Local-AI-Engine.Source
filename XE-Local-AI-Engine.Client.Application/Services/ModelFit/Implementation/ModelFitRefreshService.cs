@@ -613,7 +613,11 @@ public sealed class ModelFitRefreshService : IModelFitRefreshService
                           file.AttentionHeadCount ?? 0,
                           ctxTarget,
                           profile,
-                          kvCacheQuantized: false), rank: QuantLadder.QualityRank(file.Quant)))
+                          kvCacheQuantized: false,
+                          // Explicit key/value lengths and interleaved sliding-window facts correct the KV term, and
+                          // native-format detection prices a native MXFP4 quant at its own density.
+                          attention: new GgufAttentionShape(file.AttentionKeyLength, file.AttentionValueLength, file.SlidingWindow, file.SlidingWindowPattern),
+                          nativeQuantFormat: QuantLadder.IsNativeFormat(file.Quant)), rank: QuantLadder.QualityRank(file.Quant)))
                       // Drop insufficient-metadata files (no weights term), non-fitting files, and quants below the floor.
                       .Where(candidate => candidate.estimate.EstimatedBytes > _estimator.OverheadBytes
                                           && candidate.estimate.Fits
@@ -625,15 +629,19 @@ public sealed class ModelFitRefreshService : IModelFitRefreshService
             return null;
         }
 
+        // Native-format guard: when the repo ships a native, non-requantizable format (MXFP4), the advisor must never
+        // prefer a higher-nominal-quality requant of it — the native file caps the repo's recommendable quality.
+        var guarded = MemoryFitEstimator.FilterOutNativeFormatRequants(fitting, candidate => candidate.file.Quant, candidate => candidate.rank);
+
         // Prefer the highest quality at or below the requested ceiling (rank >= ceilingRank == quality <= ceiling). If every
         // fitting file is higher quality than the ceiling, fall back to the smallest fitting (highest rank) so the repo is
         // still recommended at a runnable quant.
         // Estimated footprint is an explicit tie-break when two files share a rank (e.g. two off-ladder labels both map to
         // the unknown rank, or a repo lists a quant twice) so the pick is deterministic regardless of file order.
-        var atOrBelowCeiling = fitting.Where(candidate => candidate.rank >= ceilingRank).ToList();
+        var atOrBelowCeiling = guarded.Where(candidate => candidate.rank >= ceilingRank).ToList();
         var chosen = atOrBelowCeiling.Count > 0
             ? atOrBelowCeiling.OrderBy(candidate => candidate.rank).ThenBy(candidate => candidate.estimate.EstimatedBytes).First()
-            : fitting.OrderByDescending(candidate => candidate.rank).ThenBy(candidate => candidate.estimate.EstimatedBytes).First();
+            : guarded.OrderByDescending(candidate => candidate.rank).ThenBy(candidate => candidate.estimate.EstimatedBytes).First();
 
         return (chosen.file, chosen.estimate);
     }
@@ -681,6 +689,14 @@ public sealed class ModelFitRefreshService : IModelFitRefreshService
                 writer.WriteString("best_quant", recommendation.Quant);
                 writer.WriteString("fit_level", estimate.Mode == FitMode.Gpu ? "GPU" : "CPU");
                 writer.WriteString("run_mode", estimate.Mode.ToString());
+                // Estimate confidence (AUD4-11): "Approximate" when the KV geometry leaned on a derived head_dim or the
+                // weights on the on-disk file size (missing explicit header metadata), so the UI can present the figure
+                // conservatively. native_format flags a non-requantizable quant (MXFP4) priced at its own density.
+                writer.WriteString("fit_confidence", estimate.Confidence.ToString());
+                if (estimate.NativeQuantFormat)
+                {
+                    writer.WriteBoolean("native_format", value: true);
+                }
                 // Score = how fully the model uses the fit budget (0–100%). The most-capable model that fits scores
                 // highest, matching the rank order (the old "headroom GB" score ranked the smallest model highest and
                 // read as a non-monotonic column). The parser stores it verbatim.
