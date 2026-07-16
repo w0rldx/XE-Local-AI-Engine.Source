@@ -20,6 +20,14 @@ public sealed class InvocationState
     public InvocationStatus Status { get; set; }
 
     /// <summary>
+    ///     The current runtime phase of the turn — preparing the runtime, loading the model (the cold-start window
+    ///     BEFORE the stream-idle watchdog is armed), or generating. Null for turns that never reported a phase
+    ///     (platform/legacy paths). Surfaced so the UI can show "loading model…" rather than an apparent hang while a
+    ///     large local model warms.
+    /// </summary>
+    public InvocationRuntimePhase? RuntimePhase { get; set; }
+
+    /// <summary>
     ///     The immutable streamed-content accumulator — the single source of truth for the response text. Cloning an
     ///     <see cref="InvocationState" /> copies THIS reference (O(1)) rather than the materialized
     ///     <see cref="StreamedContent" /> string, which is what removes the per-chunk materialization from the hot path.

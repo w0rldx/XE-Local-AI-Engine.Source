@@ -1,0 +1,204 @@
+namespace XE_Local_AI_Engine.Tests.Providers.LlamaServer;
+
+using XE_Local_AI_Engine.Providers.LlamaServer;
+using XE_Local_AI_Engine.Providers.LlamaServer.Options;
+using XE_Local_AI_Engine.Tests.Testing;
+
+/// <summary>
+///     Lane A (Audit-4) lifecycle behaviours added on top of the base supervisor tests: the DETACHED model load
+///     (caller cancellation abandons its wait but the load continues and warms the model for the next send), the
+///     size-aware / limited-retry readiness-timeout classification, and the graceful/force operator eject with bounded
+///     in-flight lease drain.
+/// </summary>
+public sealed class SupervisorLifecycleTests
+{
+    private static LlamaServerSupervisorOptions OptionsWithDrain(TimeSpan drainTimeout)
+    {
+        return new LlamaServerSupervisorOptions
+        {
+            IdleTimeToLive = TimeSpan.FromHours(1),
+            MaxLoadedProcesses = 3,
+            MaxRestartAttempts = 3,
+            EjectDrainTimeout = drainTimeout
+        };
+    }
+
+    // ---- AUD4-01: detached load (caller cancel abandons the wait; the load continues) -----------------------------
+
+    [Test]
+    public async Task EnsureRunning_CallerCancelledDuringReadiness_LoadContinuesDetached_SecondEnsureReuses()
+    {
+        var launcher = new FakeProcessLauncher();
+        var probe = new GatedHealthProbe();
+        await using var supervisor = SupervisorFactory.Create(launcher, probe);
+
+        using var cts = new CancellationTokenSource();
+        var first = supervisor.EnsureRunningAsync("model-a", ModelRole.Chat, cts.Token);
+
+        // The spawn is parked in readiness (the load is in flight).
+        await AssertEx.EventuallyAsync(() => probe.Waiting == 1, TimeSpan.FromSeconds(5), "The spawn never reached readiness.");
+
+        // Cancel the caller's wait: the caller aborts, but the detached load must keep going.
+        await cts.CancelAsync();
+        await AssertEx.ThrowsAsync<OperationCanceledException>(() => first);
+
+        // The load is still parked (NOT aborted by the caller cancellation) — single-flight state is intact.
+        AssertEx.Equal(expected: 1, probe.Waiting);
+        AssertEx.Equal(expected: 1, launcher.LaunchCount);
+
+        // Let the load finish; it registers a warm process.
+        probe.Release();
+        await AssertEx.EventuallyAsync(() => supervisor.CountRunningProcesses() == 1, TimeSpan.FromSeconds(5), "The detached load never completed.");
+
+        // A second ensure (uncancelled) reuses the now-warm process: still exactly one spawn.
+        var second = await supervisor.EnsureRunningAsync("model-a", ModelRole.Chat, CancellationToken.None);
+        AssertEx.NotNull(second);
+        AssertEx.Equal(expected: 1, launcher.LaunchCount);
+    }
+
+    [Test]
+    public async Task EnsureRunning_ConcurrentSameKeyWhileParked_SpawnsExactlyOnce()
+    {
+        var launcher = new FakeProcessLauncher();
+        var probe = new GatedHealthProbe();
+        await using var supervisor = SupervisorFactory.Create(launcher, probe);
+
+        // Fire many concurrent ensures for the same key while the first spawn is held in readiness.
+        var calls = Enumerable.Range(start: 0, count: 16)
+                              .Select(_ => supervisor.EnsureRunningAsync("model-a", ModelRole.Chat, CancellationToken.None))
+                              .ToArray();
+
+        await AssertEx.EventuallyAsync(() => probe.Waiting == 1, TimeSpan.FromSeconds(5), "The single-flight spawn never parked.");
+        AssertEx.Equal(expected: 1, launcher.LaunchCount); // single-flight: one spawn for the whole burst.
+
+        probe.Release();
+        var endpoints = await Task.WhenAll(calls);
+
+        AssertEx.Equal(expected: 1, launcher.LaunchCount);
+        var first = endpoints[0].BaseAddress.AbsoluteUri;
+        AssertEx.True(endpoints.All(e => string.Equals(e.BaseAddress.AbsoluteUri, first, StringComparison.Ordinal)));
+    }
+
+    // ---- AUD4-09: readiness-timeout is classified and retried at most MaxReadinessTimeoutRetries times ------------
+
+    [Test]
+    public async Task EnsureRunning_ReadinessTimeout_RetriesAtMostConfigured_IndependentOfRestartCap()
+    {
+        var launcher = new FakeProcessLauncher();
+        // Never ready → every spawn attempt is a readiness timeout (not a process crash).
+        await using var supervisor = SupervisorFactory.Create(launcher,
+            new FakeHealthProbe(ready: false),
+            options: new LlamaServerSupervisorOptions
+            {
+                IdleTimeToLive = TimeSpan.FromHours(1),
+                MaxRestartAttempts = 5,         // deliberately high
+                MaxReadinessTimeoutRetries = 1  // but a readiness timeout retries at most once → 2 spawns total
+            });
+
+        var ex = await AssertEx.ThrowsAsync<LlamaRuntimeException>(() => supervisor.EnsureRunningAsync("model-a", ModelRole.Chat, CancellationToken.None));
+
+        AssertEx.Equal(expected: 2, launcher.LaunchCount); // initial + one readiness retry, NOT the restart cap (5).
+        AssertEx.Contains(ex.Message, "did not become ready", StringComparison.OrdinalIgnoreCase);
+        AssertEx.True(launcher.Handles.All(h => h.WasTreeKilled), "Each timed-out spawn must be torn down.");
+    }
+
+    // ---- AUD4-04: operator eject with bounded in-flight lease drain -----------------------------------------------
+
+    [Test]
+    public async Task Eject_IdleProcess_TearsDownImmediately_Ejected()
+    {
+        var launcher = new FakeProcessLauncher();
+        await using var supervisor = SupervisorFactory.Create(launcher);
+        await supervisor.EnsureRunningAsync("model-a", ModelRole.Chat, CancellationToken.None);
+
+        var outcome = await supervisor.EjectAsync("model-a", ModelRole.Chat, force: false, CancellationToken.None);
+
+        AssertEx.Equal(LlamaServerEjectOutcome.Ejected, outcome);
+        AssertEx.True(launcher.Handles.Single().WasTreeKilled, "An idle eject should tree-kill the process.");
+
+        // The process is gone: a subsequent ensure spawns fresh.
+        await supervisor.EnsureRunningAsync("model-a", ModelRole.Chat, CancellationToken.None);
+        AssertEx.Equal(expected: 2, launcher.LaunchCount);
+    }
+
+    [Test]
+    public async Task Eject_NotRunning_ReturnsNotRunning()
+    {
+        await using var supervisor = SupervisorFactory.Create();
+
+        var outcome = await supervisor.EjectAsync("ghost", ModelRole.Chat, force: false, CancellationToken.None);
+
+        AssertEx.Equal(LlamaServerEjectOutcome.NotRunning, outcome);
+    }
+
+    [Test]
+    public async Task Eject_ActiveLease_DrainsThenEjects()
+    {
+        var launcher = new FakeProcessLauncher();
+        await using var supervisor = SupervisorFactory.Create(launcher, options: OptionsWithDrain(TimeSpan.FromSeconds(5)));
+        await supervisor.EnsureRunningAsync("model-a", ModelRole.Chat, CancellationToken.None);
+
+        var lease = supervisor.TryAcquireInferenceLease("model-a", ModelRole.Chat);
+        AssertEx.NotNull(lease);
+
+        var ejectTask = supervisor.EjectAsync("model-a", ModelRole.Chat, force: false, CancellationToken.None);
+
+        // While the lease is held the eject is still draining (not complete, process not yet killed).
+        await Task.Delay(TimeSpan.FromMilliseconds(100));
+        AssertEx.False(ejectTask.IsCompleted, "The eject should still be draining while a lease is held.");
+        AssertEx.False(launcher.Handles.Single().WasTreeKilled, "The process must not be killed while draining.");
+
+        lease!.Dispose(); // releasing the lease lets the drain complete.
+        var outcome = await ejectTask;
+
+        AssertEx.Equal(LlamaServerEjectOutcome.Ejected, outcome);
+        AssertEx.True(launcher.Handles.Single().WasTreeKilled, "After the drain completes the process is torn down.");
+    }
+
+    [Test]
+    public async Task Eject_ActiveLease_DrainTimesOut_NotForced_LeftRunning()
+    {
+        var launcher = new FakeProcessLauncher();
+        await using var supervisor = SupervisorFactory.Create(launcher, options: OptionsWithDrain(TimeSpan.FromMilliseconds(150)));
+        await supervisor.EnsureRunningAsync("model-a", ModelRole.Chat, CancellationToken.None);
+
+        using var lease = supervisor.TryAcquireInferenceLease("model-a", ModelRole.Chat);
+        AssertEx.NotNull(lease);
+
+        var outcome = await supervisor.EjectAsync("model-a", ModelRole.Chat, force: false, CancellationToken.None);
+
+        AssertEx.Equal(LlamaServerEjectOutcome.TimedOutStillBusy, outcome);
+        AssertEx.False(launcher.Handles.Single().WasTreeKilled, "A timed-out GRACEFUL eject must NOT silently kill the process.");
+
+        // Still registered and usable: a subsequent ensure reuses it (no respawn).
+        await supervisor.EnsureRunningAsync("model-a", ModelRole.Chat, CancellationToken.None);
+        AssertEx.Equal(expected: 1, launcher.LaunchCount);
+    }
+
+    [Test]
+    public async Task Eject_Force_ActiveLease_TearsDown_AndMarksLeaseEjected()
+    {
+        var launcher = new FakeProcessLauncher();
+        await using var supervisor = SupervisorFactory.Create(launcher, options: OptionsWithDrain(TimeSpan.FromMilliseconds(150)));
+        await supervisor.EnsureRunningAsync("model-a", ModelRole.Chat, CancellationToken.None);
+
+        using var lease = supervisor.TryAcquireInferenceLease("model-a", ModelRole.Chat);
+        AssertEx.NotNull(lease);
+
+        var outcome = await supervisor.EjectAsync("model-a", ModelRole.Chat, force: true, CancellationToken.None);
+
+        AssertEx.Equal(LlamaServerEjectOutcome.ForcedWhileBusy, outcome);
+        AssertEx.True(launcher.Handles.Single().WasTreeKilled, "A force eject must tree-kill the process.");
+        AssertEx.True(lease!.WasEjected, "The in-flight lease must report the process was operator-ejected.");
+    }
+
+    [Test]
+    public async Task TryAcquireInferenceLease_NotRunning_ReturnsNull()
+    {
+        await using var supervisor = SupervisorFactory.Create();
+
+        var lease = supervisor.TryAcquireInferenceLease("ghost", ModelRole.Chat);
+
+        AssertEx.True(lease is null, "No lease should be issued when no process backs the (model, role).");
+    }
+}

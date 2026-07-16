@@ -8,6 +8,7 @@ using XE_Local_AI_Engine.Client.Models.Enums;
 using XE_Local_AI_Engine.Client.Services.Chat;
 using XE_Local_AI_Engine.Client.Services.Invocation.Context;
 using XE_Local_AI_Engine.Client.Services.Invocation.Resilience;
+using XE_Local_AI_Engine.Providers.LlamaServer;
 
 public sealed partial class InvocationRunner
 {
@@ -18,6 +19,13 @@ public sealed partial class InvocationRunner
             // Matches BEFORE the generic InvalidOperationException arms below (both derive from InvalidOperationException):
             // a local-default send with no installed GGUF chat model surfaces ModelNotInstalled, not ProviderUnreachable.
             NoChatModelInstalledException => (FailureCategory.ModelNotInstalled, NoChatModelInstalledMessage),
+            // An operator force-ejected the model out from under an in-flight turn. Classify as Cancelled (an operator
+            // action, not a provider outage) so it is NOT counted as a generic failure and the user sees a truthful
+            // "ejected by the operator" message. The exception's message is already user-safe, so it is surfaced verbatim
+            // (same treatment as StreamIdleTimeoutException). Reusing Cancelled avoids drifting the generated OpenAPI/zod
+            // FailureCategory enum. Matches before the HttpRequestException/agent-runtime arms (its inner is a transport
+            // exception, but the OUTER type is matched first).
+            LlamaServerModelEjectedException modelEjected => (FailureCategory.Cancelled, modelEjected.Message),
             // The budgeter's hard-stop (history still over budget after truncation): a clean, classified pre-inference
             // failure. The exception's own message IS the fixed, path-free constant (ContextBudgetExceededMessage), so
             // it is surfaced verbatim, same treatment as StreamIdleTimeoutException below.

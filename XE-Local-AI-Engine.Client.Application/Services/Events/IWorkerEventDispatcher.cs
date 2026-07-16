@@ -65,6 +65,13 @@ public interface IWorkerEventDispatcher
 
     Task ReportInvocationThinkingChunkAsync(Guid invocationId, string chunk);
 
+    /// <summary>
+    ///     Reports the runtime phase of the in-flight turn (preparing runtime → loading model → generating). The
+    ///     cold-load phases fire BEFORE the stream-idle watchdog is armed, so the UI can render a legitimate load rather
+    ///     than an apparent hang while a large local model warms. A no-op when the id is not the current invocation.
+    /// </summary>
+    Task ReportInvocationPhaseAsync(Guid invocationId, InvocationRuntimePhase phase);
+
     Task ReportInvocationCompletedAsync(Guid invocationId, int? inputTokens = null, int? outputTokens = null, int? totalTokens = null, int? reasoningTokens = null, long? generationDurationMs = null);
 
     Task ReportInvocationFailedAsync(Guid invocationId, string failureMessage, FailureCategory failureCategory);

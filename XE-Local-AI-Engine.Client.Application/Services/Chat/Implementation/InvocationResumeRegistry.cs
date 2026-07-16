@@ -294,6 +294,7 @@ public sealed class InvocationResumeRegistry : IInvocationResumeRegistry
             InvocationId = state.InvocationId,
             ConversationId = state.ConversationId,
             Status = state.Status,
+            RuntimePhase = state.RuntimePhase,
             // Copy the immutable accumulators by REFERENCE (O(1)); reading state.StreamedContent here would materialize
             // the whole response every published chunk. Mirrors WorkerEventDispatcher.Clone — both must stay in sync.
             ContentAccumulator = state.ContentAccumulator,
