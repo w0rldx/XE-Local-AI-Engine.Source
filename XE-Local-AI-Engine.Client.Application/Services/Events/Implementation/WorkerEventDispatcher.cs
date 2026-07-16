@@ -59,10 +59,10 @@ public sealed partial class WorkerEventDispatcher : IWorkerEventDispatcher
 
     public event EventHandler<TurnNoticeChangedEventArgs>? TurnNoticeChanged;
 
-    // The live invocation, mutated in place only under _syncRoot. Off-lock consumers must not read its
-    // StreamedContent/StreamedThinkingContent (those getters materialize a StringBuilder that is unsafe against the
-    // concurrent streaming appends) — see IWorkerEventDispatcher.CurrentInvocation. Internal callers already hold
-    // _syncRoot when they touch it; GetCurrentInvocationSnapshot returns a locked clone for anyone who needs a copy.
+    // The live invocation, mutated in place only under _syncRoot. Its StreamedContent/StreamedThinkingContent now
+    // materialize from an immutable append-only accumulator, so an off-lock read is memory-safe (though it may observe a
+    // transient value mid-append) — see IWorkerEventDispatcher.CurrentInvocation. Internal callers already hold _syncRoot
+    // when they touch it; GetCurrentInvocationSnapshot returns a locked clone for anyone who needs a consistent copy.
     public InvocationState? CurrentInvocation { get; private set; }
 
     public bool IsAcceptingRemoteInvocations

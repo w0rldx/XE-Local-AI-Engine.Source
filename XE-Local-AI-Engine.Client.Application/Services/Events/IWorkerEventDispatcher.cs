@@ -12,11 +12,12 @@ public interface IWorkerEventDispatcher
 {
     /// <summary>
     ///     The live in-flight invocation, or null. This exposes the dispatcher's mutable instance, which the streaming
-    ///     path keeps updating under its internal lock — its <see cref="InvocationState.StreamedContent" /> and
-    ///     <see cref="InvocationState.StreamedThinkingContent" /> getters lazily materialize a StringBuilder that is NOT
-    ///     safe to read while a concurrent append runs. A consumer reading those two members off the dispatcher's lock
-    ///     must first take an immutable clone (subscribe to <see cref="InvocationStateChanged" />, whose args are already
-    ///     cloned). The lock-safe scalar members (status, counts, timestamps, token totals) are fine to read directly.
+    ///     path keeps updating under its internal lock. Its <see cref="InvocationState.StreamedContent" /> and
+    ///     <see cref="InvocationState.StreamedThinkingContent" /> getters materialize from an IMMUTABLE append-only
+    ///     accumulator, so reading them off the lock is memory-safe (no torn buffer) — but it can still observe a
+    ///     transient value while an append is in flight. A consumer that needs a consistent point-in-time view should
+    ///     subscribe to <see cref="InvocationStateChanged" /> (whose args are an immutable clone). The scalar members
+    ///     (status, counts, timestamps, token totals) are fine to read directly.
     /// </summary>
     InvocationState? CurrentInvocation { get; }
 
