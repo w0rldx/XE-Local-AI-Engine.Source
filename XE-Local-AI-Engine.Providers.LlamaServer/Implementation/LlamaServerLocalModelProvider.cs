@@ -119,6 +119,20 @@ public sealed class LlamaServerLocalModelProvider : ILocalModelProvider
     }
 
     /// <inheritdoc />
+    /// <remarks>
+    ///     Reports the running CHAT process's effective context window (the launched <c>-c</c> as clamped by the server,
+    ///     read from <c>/props</c>). Returns <see langword="null" /> when no chat process is running for the model or its
+    ///     effective context could not be read — the caller then falls back to the app-side default window. Synchronous
+    ///     in-memory read on the supervisor; wrapped in a completed task to satisfy the async contract.
+    /// </remarks>
+    public Task<LocalModelRuntimeInfo?> GetRuntimeInfoAsync(string modelName, CancellationToken ct)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(modelName);
+        var info = _supervisor.GetRuntimeInfo(modelName, ModelRole.Chat);
+        return Task.FromResult(info is null ? null : new LocalModelRuntimeInfo(info.EffectiveContextTokens));
+    }
+
+    /// <inheritdoc />
     public async Task UnloadModelAsync(string modelName, CancellationToken ct)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(modelName);

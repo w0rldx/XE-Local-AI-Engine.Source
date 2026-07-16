@@ -101,4 +101,11 @@ public interface ILlamaServerProcessSupervisor
     ///     supervisor does not own, so it is never counted.
     /// </summary>
     int CountRunningProcesses();
+
+    /// <summary>
+    ///     Live runtime facts for the running <c>(model, role)</c> process — currently the effective context window it
+    ///     loaded (from <c>/props</c>, captured after readiness). Returns <see langword="null" /> when the process is not
+    ///     running, has exited, or its effective context could not be read. Synchronous in-memory read — no HTTP.
+    /// </summary>
+    LlamaServerRuntimeInfo? GetRuntimeInfo(string modelName, ModelRole role);
 }

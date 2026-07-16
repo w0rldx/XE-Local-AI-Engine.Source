@@ -96,6 +96,9 @@ internal sealed class FakeHealthProbe(bool ready = true, bool responsive = true)
 
     public bool Responsive { get; set; } = responsive;
 
+    /// <summary>The effective context window /props reports; null (default) means "unknown" for the effective-ctx read.</summary>
+    public int? EffectiveContextTokens { get; set; }
+
     public Task<bool> WaitForReadyAsync(Uri baseAddress, TimeSpan readinessTimeout, CancellationToken ct)
     {
         return Task.FromResult(Ready);
@@ -104,6 +107,11 @@ internal sealed class FakeHealthProbe(bool ready = true, bool responsive = true)
     public Task<bool> CheckResponsiveAsync(Uri baseAddress, CancellationToken ct)
     {
         return Task.FromResult(Responsive);
+    }
+
+    public Task<int?> TryReadEffectiveContextTokensAsync(Uri baseAddress, CancellationToken ct)
+    {
+        return Task.FromResult(EffectiveContextTokens);
     }
 }
 
@@ -136,6 +144,11 @@ internal sealed class GatedHealthProbe : ILlamaServerHealthProbe
     public Task<bool> CheckResponsiveAsync(Uri baseAddress, CancellationToken ct)
     {
         return Task.FromResult(true);
+    }
+
+    public Task<int?> TryReadEffectiveContextTokensAsync(Uri baseAddress, CancellationToken ct)
+    {
+        return Task.FromResult<int?>(null);
     }
 
     /// <summary>Releases every parked (and future) readiness wait.</summary>
@@ -244,10 +257,43 @@ internal sealed class FakeProcessSupervisor(params LlamaServerProcessHealth[] ru
         return _running.Count;
     }
 
+    public LlamaServerRuntimeInfo? GetRuntimeInfo(string modelName, ModelRole role)
+    {
+        return null;
+    }
+
     /// <summary>One responsive chat process health entry — a convenience for "a model is running" gate tests.</summary>
     public static LlamaServerProcessHealth RunningChat(string modelName = "demo-model")
     {
         return new LlamaServerProcessHealth(modelName, ModelRole.Chat, IsResponsive: true, Detail: "running");
+    }
+}
+
+/// <summary>
+///     In-memory <see cref="ILlamaServerLaunchFallbackStore" /> for tests: records disabled optimized backends without
+///     touching disk. Exposes the recorded set so a test can assert the one-shot KV-quant fallback was persisted.
+/// </summary>
+internal sealed class FakeLaunchFallbackStore : ILlamaServerLaunchFallbackStore
+{
+    private readonly HashSet<GpuVariant> _disabled = [];
+
+    public IReadOnlyCollection<GpuVariant> Disabled => _disabled;
+
+    public Task<bool> IsOptimizedConfigDisabledAsync(GpuVariant variant, CancellationToken ct)
+    {
+        return Task.FromResult(_disabled.Contains(variant));
+    }
+
+    public Task DisableOptimizedConfigAsync(GpuVariant variant, CancellationToken ct)
+    {
+        _disabled.Add(variant);
+        return Task.CompletedTask;
+    }
+
+    /// <summary>Seeds a backend as already-disabled so a spawn skips the optimized config from the start.</summary>
+    public void Disable(GpuVariant variant)
+    {
+        _disabled.Add(variant);
     }
 }
 

@@ -111,6 +111,15 @@ public static class LlamaServerServiceCollectionExtensions
         services.TryAddSingleton(new LlamaServerSupervisorOptions());
         services.TryAddSingleton(new LlamaServerExternalEndpointOptions());
 
+        // AUD4-02/05/17: the central launch policy (deterministic -c per role, GPU KV-cache quant + flash attention,
+        // CPU threads) plus its persistent safe-fallback store. Options default here; the host overrides from node config.
+        services.TryAddSingleton(new LlamaServerLaunchPolicyOptions());
+        services.TryAddSingleton<ILlamaServerLaunchFallbackStore>(static _ => new LlamaServerLaunchFallbackStore());
+        services.TryAddSingleton<ILlamaServerLaunchPolicy>(static sp =>
+            new LlamaServerLaunchPolicy(sp.GetRequiredService<LlamaServerLaunchPolicyOptions>(),
+                sp.GetRequiredService<ILlamaServerLaunchFallbackStore>(),
+                sp.GetRequiredService<ILogger<LlamaServerLaunchPolicy>>()));
+
         // Process-supervision seams: the OS-aware launcher (tree-kill) + the /health readiness probe.
         services.TryAddSingleton<ILlamaServerProcessLauncher, LlamaServerProcessLauncher>();
 
@@ -140,6 +149,7 @@ public static class LlamaServerServiceCollectionExtensions
             sp.GetRequiredService<ILlamaServerHealthProbe>(),
             sp.GetRequiredService<LlamaServerSupervisorOptions>(),
             sp.GetRequiredService<IInferenceProfileResolver>(),
+            sp.GetRequiredService<ILlamaServerLaunchPolicy>(),
             sp.GetRequiredService<LlamaServerExternalEndpointOptions>(),
             sp.GetService<TimeProvider>(),
             sp.GetRequiredService<ILogger<LlamaServerProcessSupervisor>>(),

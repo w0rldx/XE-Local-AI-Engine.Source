@@ -1,7 +1,9 @@
 namespace XE_Local_AI_Engine.Tests.Providers.LlamaServer;
 
 using XE_Local_AI_Engine.Providers.LlamaServer;
+using XE_Local_AI_Engine.Providers.LlamaServer.Contracts;
 using XE_Local_AI_Engine.Providers.LlamaServer.Implementation;
+using XE_Local_AI_Engine.Providers.LlamaServer.Options;
 using XE_Local_AI_Engine.Tests.Testing;
 
 /// <summary>
@@ -87,13 +89,29 @@ public sealed class SupervisorSpawnArgsTests
         AssertEx.Contains(spec.Arguments, "--metrics");
         AssertEx.False(spec.Arguments.Contains("--n-gpu-layers"), "Explore mode must not emit an explicit -ngl (it disables auto-fit).");
         AssertEx.False(spec.Arguments.Contains("999"), "The forced -ngl 999 placement is removed.");
+
+        // AUD4-02/05: the policy adds the deterministic chat context and the KV-cache quant + flash-attention optimization.
+        var ctxIndex = IndexOf(spec.Arguments, "-c");
+        AssertEx.Equal(LlamaServerLaunchPolicyOptions.DefaultChatContextTokens.ToString(System.Globalization.CultureInfo.InvariantCulture), spec.Arguments[ctxIndex + 1]);
+        AssertEx.Contains(spec.Arguments, "-fa");
+        AssertEx.Equal("on", spec.Arguments[IndexOf(spec.Arguments, "-fa") + 1]);
+        AssertEx.Equal("q8_0", spec.Arguments[IndexOf(spec.Arguments, "-ctk") + 1]);
+        AssertEx.Equal("q8_0", spec.Arguments[IndexOf(spec.Arguments, "-ctv") + 1]);
+        AssertEx.False(spec.Arguments.Contains("-t"), "A full-GPU spawn must not emit CPU thread flags.");
     }
 
     [Test]
-    public async Task EnsureRunning_CpuVariant_LaunchArgsOmitGpuAndFitArgs()
+    public async Task EnsureRunning_CpuVariant_EmitsContextAndThreads_ButNoGpuOrKvArgs()
     {
         var launcher = new FakeProcessLauncher();
-        await using var supervisor = SupervisorFactory.Create(launcher, variantSelector: new FakeVariantSelector());
+        await using var supervisor = SupervisorFactory.Create(launcher,
+            variantSelector: new FakeVariantSelector(),
+            launchPolicyOptions: new LlamaServerLaunchPolicyOptions
+            {
+                // Pin explicit thread counts so the assertion is deterministic across CI host core counts.
+                CpuThreadCount = 6,
+                CpuThreadsBatchCount = 8
+            });
 
         await supervisor.EnsureRunningAsync("llama3", ModelRole.Chat, CancellationToken.None);
 
@@ -101,6 +119,51 @@ public sealed class SupervisorSpawnArgsTests
         AssertEx.False(spec!.Arguments.Contains("--n-gpu-layers"), "The CPU variant must not request GPU layer offload.");
         AssertEx.False(spec.Arguments.Contains("--fit"), "The CPU variant must not emit auto-fit args.");
         AssertEx.False(spec.Arguments.Contains("--metrics"), "The CPU variant must not emit --metrics.");
+        AssertEx.False(spec.Arguments.Contains("-ctk"), "The CPU variant keeps f16 KV — no -ctk.");
+
+        // AUD4-02: the CPU variant DOES get a deterministic -c (previously it emitted none → full-train-ctx KV in RAM).
+        var ctxIndex = IndexOf(spec.Arguments, "-c");
+        AssertEx.Equal(LlamaServerLaunchPolicyOptions.DefaultChatContextTokens.ToString(System.Globalization.CultureInfo.InvariantCulture), spec.Arguments[ctxIndex + 1]);
+
+        // AUD4-17: the CPU thread policy.
+        AssertEx.Equal("6", spec.Arguments[IndexOf(spec.Arguments, "-t") + 1]);
+        AssertEx.Equal("8", spec.Arguments[IndexOf(spec.Arguments, "-tb") + 1]);
+    }
+
+    [Test]
+    public async Task EnsureRunning_FrozenProfileReplay_ReplaysVerbatim_NoPolicyDoubleContext()
+    {
+        var launcher = new FakeProcessLauncher();
+        // A frozen profile (replay): explicit -c 8192 + KV/FA. The policy must NOT add a second -c or its own KV.
+        var frozen = ResolvedLaunchArguments.Replay(ctxSize: 8192, nGpuLayers: 24, kvTypeK: "q8_0", kvTypeV: "q8_0", flashAttn: true);
+        await using var supervisor = SupervisorFactory.Create(launcher,
+            variantSelector: new FakeVariantSelector(GpuVariant.Cuda),
+            profileResolver: new FakeInferenceProfileResolver(frozen));
+
+        await supervisor.EnsureRunningAsync("llama3", ModelRole.Chat, CancellationToken.None);
+
+        AssertEx.True(launcher.Launches.TryDequeue(out var spec));
+        AssertEx.False(spec!.Arguments.Contains("--fit"), "A replay must not emit --fit (an explicit fit-arg disables auto-fit).");
+        AssertEx.Equal(expected: 1, CountOf(spec.Arguments, "-c"));
+        AssertEx.Equal("8192", spec.Arguments[IndexOf(spec.Arguments, "-c") + 1]);
+        AssertEx.Equal("24", spec.Arguments[IndexOf(spec.Arguments, "--n-gpu-layers") + 1]);
+    }
+
+    [Test]
+    public async Task EnsureRunning_AfterReadiness_CapturesEffectiveContext_ExposedViaGetRuntimeInfo()
+    {
+        var launcher = new FakeProcessLauncher();
+        // The /props read reports the effective per-slot context the server actually loaded.
+        var healthProbe = new FakeHealthProbe
+        {
+            EffectiveContextTokens = 4096
+        };
+        await using var supervisor = SupervisorFactory.Create(launcher, healthProbe: healthProbe);
+
+        await supervisor.EnsureRunningAsync("llama3", ModelRole.Chat, CancellationToken.None);
+
+        var runtimeInfo = AssertEx.NotNull(supervisor.GetRuntimeInfo("llama3", ModelRole.Chat));
+        AssertEx.Equal(expected: 4096, runtimeInfo.EffectiveContextTokens);
     }
 
     private static void AssertChatBindsLocalhost(LlamaServerLaunchSpec spec)
@@ -122,6 +185,11 @@ public sealed class SupervisorSpawnArgsTests
         }
 
         throw new AssertionException($"Expected flag '{flag}' in argument vector.");
+    }
+
+    private static int CountOf(IReadOnlyList<string> args, string flag)
+    {
+        return args.Count(arg => string.Equals(arg, flag, StringComparison.Ordinal));
     }
 
     private static LlamaServerProcessSupervisor NewSupervisor(FakeProcessLauncher launcher)

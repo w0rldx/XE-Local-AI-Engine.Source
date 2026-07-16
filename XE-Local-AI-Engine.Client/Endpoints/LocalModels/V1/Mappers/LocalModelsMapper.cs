@@ -307,12 +307,13 @@ internal static class LocalModelsMapper
     }
 
     /// <summary>
-    ///     Maps an installed GGUF descriptor (served by llama.cpp) to the shared model-details response. Only
-    ///     <see cref="LocalModelDetailsResponse.MaxContextTokens" /> is a GGUF concept (carried on the descriptor);
-    ///     <c>Template</c>/<c>System</c>/<c>License</c> are Ollama Modelfile concepts a raw GGUF has no equivalent of,
-    ///     so they stay null. Keeps the response shape identical to the Ollama branch (no OpenAPI change).
+    ///     Maps an installed GGUF descriptor (served by llama.cpp) to the shared model-details response.
+    ///     <see cref="LocalModelDetailsResponse.MaxContextTokens" /> is the descriptor's advertised train ceiling and
+    ///     <paramref name="effectiveContextTokens" /> the RUNNING process's launched context window (AUD4-02), when a
+    ///     chat process is warm. <c>Template</c>/<c>System</c>/<c>License</c> are Ollama Modelfile concepts a raw GGUF has
+    ///     no equivalent of, so they stay null. Keeps the response shape aligned with the Ollama branch.
     /// </summary>
-    public static LocalModelDetailsResponse ToDetailsResponse(this LocalModelDescriptor descriptor, string modelName)
+    public static LocalModelDetailsResponse ToDetailsResponse(this LocalModelDescriptor descriptor, string modelName, int? effectiveContextTokens = null)
     {
         ArgumentNullException.ThrowIfNull(descriptor);
 
@@ -320,6 +321,7 @@ internal static class LocalModelsMapper
         {
             ModelName = modelName,
             MaxContextTokens = descriptor.MaxContextTokens,
+            EffectiveContextTokens = effectiveContextTokens,
             Template = null,
             System = null,
             License = null
