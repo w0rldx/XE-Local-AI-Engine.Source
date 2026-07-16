@@ -127,13 +127,19 @@ describe("LoadedModelsPage", () => {
 		expect(screen.queryByTestId("loaded-models-table")).toBeNull();
 	});
 
-	it("shows the unavailable state (and its sanitized reason) when the runtime is unreachable", () => {
+	it("shows a neutral absent-provider state (not the raw error) when Ollama is unreachable", () => {
+		// Ollama is an optional secondary provider, deliberately absent on the desktop default. An unreachable
+		// provider is an expected empty state, not an error: the neutral line renders, the raw connection-refused
+		// reason is NOT surfaced as an alarming banner, and the table is hidden.
 		hooksMock.useLoadedModels.mockReturnValue(makeQuery({ isAvailable: false, error: "Provider unreachable", models: [] }));
 
 		renderPage();
 
 		const unavailable = screen.getByTestId("loaded-models-unavailable");
-		expect(unavailable.textContent).toContain("Provider unreachable");
+		expect(unavailable.textContent).toContain("optional secondary provider");
+		expect(unavailable.textContent).not.toContain("Provider unreachable");
+		// The neutral state is not the red error alert.
+		expect(screen.queryByTestId("loaded-models-error")).toBeNull();
 		expect(screen.queryByTestId("loaded-models-table")).toBeNull();
 	});
 

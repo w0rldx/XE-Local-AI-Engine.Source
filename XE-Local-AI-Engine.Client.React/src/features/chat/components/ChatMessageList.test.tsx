@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 
 import { MantineProvider } from "@mantine/core";
-import { cleanup, render, screen } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 import type { ReactElement } from "react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
@@ -115,5 +115,84 @@ describe("ChatMessageList failed-turn rendering", () => {
 		expect(screen.queryByTestId("chat-stream-error")).toBeNull();
 		// The live failure category is folded into the same block.
 		expect(screen.getByTestId("chat-message-error-category-assistant-1").textContent).toContain("inter-chunk-stall");
+	});
+});
+
+describe("ChatMessageList conversation-load failure (AUD4-13)", () => {
+	beforeEach(() => {
+		vi.clearAllMocks();
+		Object.defineProperty(window, "matchMedia", {
+			writable: true,
+			value: vi.fn().mockImplementation((query: string) => ({
+				matches: false,
+				media: query,
+				onchange: null,
+				addEventListener: vi.fn(),
+				removeEventListener: vi.fn(),
+				dispatchEvent: vi.fn(),
+			})),
+		});
+		Object.defineProperty(window, "ResizeObserver", {
+			writable: true,
+			value: class ResizeObserverMock {
+				observe = vi.fn();
+
+				unobserve = vi.fn();
+
+				disconnect = vi.fn();
+			},
+		});
+		Element.prototype.scrollIntoView = vi.fn();
+	});
+
+	afterEach(() => {
+		cleanup();
+	});
+
+	it("renders an inline error with a Retry action (not a spinner) when the load failed", () => {
+		const onRetry = vi.fn();
+		renderWithProviders(
+			<ChatMessageList
+				conversation={conversation([])}
+				isLoadingMessages={true}
+				messagesLoadFailed={true}
+				messagesLoadErrorText="Request failed with status code 500"
+				onRetryLoadMessages={onRetry}
+			/>,
+		);
+
+		// The error + retry surface, taking precedence over the loading spinner even though isLoadingMessages is true.
+		const errorAlert = screen.getByTestId("chat-messages-load-error");
+		expect(errorAlert.getAttribute("role")).toBe("alert");
+		expect(errorAlert.textContent).toContain("Request failed with status code 500");
+		expect(screen.queryByText("Loading messages…")).toBeNull();
+
+		fireEvent.click(screen.getByTestId("chat-messages-load-retry"));
+		expect(onRetry).toHaveBeenCalledTimes(1);
+	});
+
+	it("renders the accessible loading spinner while loading and not failed", () => {
+		const { container } = renderWithProviders(
+			<ChatMessageList conversation={conversation([])} isLoadingMessages={true} messagesLoadFailed={false} />,
+		);
+
+		expect(screen.getByText("Loading messages…")).toBeTruthy();
+		expect(screen.queryByTestId("chat-messages-load-error")).toBeNull();
+		// The busy region is announced to assistive tech.
+		expect(container.querySelector('[role="status"][aria-busy="true"]')).toBeTruthy();
+	});
+
+	it("renders neither the error nor the loader once the conversation has messages", () => {
+		renderWithProviders(
+			<ChatMessageList
+				conversation={conversation([userMessage()])}
+				messagesLoadFailed={true}
+				onRetryLoadMessages={vi.fn()}
+			/>,
+		);
+
+		// A failed background refetch over an already-populated thread must not blow it away with an error.
+		expect(screen.queryByTestId("chat-messages-load-error")).toBeNull();
+		expect(screen.getByTestId("chat-message-user-1")).toBeTruthy();
 	});
 });

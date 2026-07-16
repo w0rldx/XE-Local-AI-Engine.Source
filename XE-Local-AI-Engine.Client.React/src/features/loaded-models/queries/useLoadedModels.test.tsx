@@ -17,7 +17,12 @@ const { sdkMock } = vi.hoisted(() => ({
 vi.mock("@/core/api/generated", () => sdkMock);
 
 import type { LoadedModelsSnapshot } from "@/features/loaded-models/models/LoadedModelsModels";
-import { loadedModelsQueryKey, useEjectModel, useLoadedModels } from "@/features/loaded-models/queries/useLoadedModels";
+import {
+	loadedModelsQueryKey,
+	resolveLoadedModelsPollIntervalMs,
+	useEjectModel,
+	useLoadedModels,
+} from "@/features/loaded-models/queries/useLoadedModels";
 
 function makeClient() {
 	return new QueryClient({
@@ -72,6 +77,25 @@ describe("useLoadedModels", () => {
 		expect(result.current.data?.isAvailable).toBe(false);
 		expect(result.current.data?.error).toBe("Provider unreachable");
 		expect(result.current.data?.models).toEqual([]);
+	});
+});
+
+describe("resolveLoadedModelsPollIntervalMs (AUD4-20.2 back-off)", () => {
+	const fast = resolveLoadedModelsPollIntervalMs({ isAvailable: true, error: null, models: [] });
+
+	it("polls at the fast cadence while the provider is available", () => {
+		expect(fast).toBe(4000);
+	});
+
+	it("polls at the fast cadence before the first response (no snapshot yet)", () => {
+		expect(resolveLoadedModelsPollIntervalMs(undefined)).toBe(fast);
+	});
+
+	it("backs off to a slower cadence once the provider reports unreachable", () => {
+		// A deliberately-absent Ollama (desktop default) must not be polled every 4s: the interval grows so the
+		// connection-refused loop is throttled while still recovering automatically if it later comes up.
+		const slow = resolveLoadedModelsPollIntervalMs({ isAvailable: false, error: "Provider unreachable", models: [] });
+		expect(slow).toBeGreaterThan(fast);
 	});
 });
 
