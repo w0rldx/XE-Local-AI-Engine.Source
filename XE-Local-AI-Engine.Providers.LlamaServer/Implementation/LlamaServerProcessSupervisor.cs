@@ -60,6 +60,7 @@ public sealed class LlamaServerProcessSupervisor : ILlamaServerProcessSupervisor
     private readonly ConcurrentDictionary<ProcessKey, Task<RunningProcess>> _inflightSpawns = new();
     private readonly LlamaServerExternalEndpointOptions _externalEndpoints;
     private readonly ILlamaServerHealthProbe _healthProbe;
+    private readonly ILlamaServerLaunchPolicy _launchPolicy;
     private readonly ILogger<LlamaServerProcessSupervisor> _logger;
     private readonly ILlamaServerProcessLauncher _launcher;
     private readonly IGgufModelStore _modelStore;
@@ -86,6 +87,7 @@ public sealed class LlamaServerProcessSupervisor : ILlamaServerProcessSupervisor
         ILlamaServerHealthProbe healthProbe,
         LlamaServerSupervisorOptions options,
         IInferenceProfileResolver profileResolver,
+        ILlamaServerLaunchPolicy launchPolicy,
         LlamaServerExternalEndpointOptions? externalEndpoints = null,
         TimeProvider? timeProvider = null,
         ILogger<LlamaServerProcessSupervisor>? logger = null)
@@ -98,6 +100,7 @@ public sealed class LlamaServerProcessSupervisor : ILlamaServerProcessSupervisor
         _options = options ?? throw new ArgumentNullException(nameof(options));
         _options.Validate();
         _profileResolver = profileResolver ?? throw new ArgumentNullException(nameof(profileResolver));
+        _launchPolicy = launchPolicy ?? throw new ArgumentNullException(nameof(launchPolicy));
         _externalEndpoints = externalEndpoints ?? new LlamaServerExternalEndpointOptions();
         _timeProvider = timeProvider ?? TimeProvider.System;
         _logger = logger ?? NullLogger<LlamaServerProcessSupervisor>.Instance;
@@ -478,6 +481,24 @@ public sealed class LlamaServerProcessSupervisor : ILlamaServerProcessSupervisor
         return count;
     }
 
+    /// <inheritdoc />
+    public LlamaServerRuntimeInfo? GetRuntimeInfo(string modelName, ModelRole role)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(modelName);
+
+        // Synchronous in-memory read (no HTTP): the effective context was captured once after readiness. Null when the
+        // process is not running, has exited, or /props did not report a usable value.
+        var key = new ProcessKey(modelName, role);
+        if (_processes.TryGetValue(key, out var running)
+            && !running.Handle.HasExited
+            && running.EffectiveContextTokens is { } effectiveContext)
+        {
+            return new LlamaServerRuntimeInfo(effectiveContext);
+        }
+
+        return null;
+    }
+
     private async Task<IReadOnlyList<LlamaServerProcessHealth>> CheckHealthCoreAsync(KeyValuePair<ProcessKey, RunningProcess>[] snapshot,
         CancellationToken ct)
     {
@@ -570,12 +591,13 @@ public sealed class LlamaServerProcessSupervisor : ILlamaServerProcessSupervisor
     private Task<RunningProcess> SpawnOnceAsync(ProcessKey key, CancellationToken ct)
     {
         // The resolver is awaited inside the core (after variant selection, before admission) exactly as before — a
-        // slow profile read never stalls admission for other keys. No startup capture, no forced --metrics: byte-for-
-        // byte the same spawn as the pre-profiling path.
+        // slow profile read never stalls admission for other keys. No startup capture, no forced --metrics. The launch
+        // policy (deterministic -c, GPU KV/FA, CPU threads) applies to this normal serving path.
         return SpawnCoreAsync(key,
             (variant, c) => _profileResolver.ResolveAsync(key.ModelName, key.Role, variant, c),
             startupCapture: null,
             ensureMetrics: false,
+            applyLaunchPolicy: true,
             ct);
     }
 
@@ -594,6 +616,7 @@ public sealed class LlamaServerProcessSupervisor : ILlamaServerProcessSupervisor
         Func<GpuVariant, CancellationToken, Task<ResolvedLaunchArguments>> resolveArgs,
         Action<string>? startupCapture,
         bool ensureMetrics,
+        bool applyLaunchPolicy,
         CancellationToken ct)
     {
         var modelFilePath = await _modelStore.ResolveModelFilePathAsync(key.ModelName, ct).ConfigureAwait(false);
@@ -640,55 +663,186 @@ public sealed class LlamaServerProcessSupervisor : ILlamaServerProcessSupervisor
         // admission for other keys.
         var resolved = await resolveArgs(variant, ct).ConfigureAwait(false);
 
-        var port = await AdmitAndAllocatePortAsync(ct).ConfigureAwait(false);
+        // AUD4-02/05/17: the central launch policy fills in the deterministic context (-c), the GPU KV-cache
+        // quantization + flash-attention optimization, and the CPU thread policy the audited launch defaults omitted.
+        // Operator profiling spawns bypass it (applyLaunchPolicy: false) so the supplied args ARE the experiment.
+        var planCandidates = await BuildLaunchPlanCandidatesAsync(key, variant, resolved, applyLaunchPolicy, ct).ConfigureAwait(false);
 
-        ILlamaServerProcessHandle? handle = null;
+        Exception? optimizedFailure = null;
+        for (var attempt = 0; attempt < planCandidates.Count; attempt++)
+        {
+            var candidate = planCandidates[attempt];
+            var isSafeRetry = attempt > 0;
+            var port = await AdmitAndAllocatePortAsync(ct).ConfigureAwait(false);
+
+            ILlamaServerProcessHandle? handle = null;
+            try
+            {
+                var spec = BuildLaunchSpec(key, binary.ServerExecutablePath, modelFilePath, port, variant, resolved,
+                    _options.ChatCacheReuse, speculative, candidate);
+
+                // Benchmark replay spawns need /metrics (explore already carries --metrics); only append when missing.
+                if (ensureMetrics && !spec.Arguments.Contains("--metrics", StringComparer.Ordinal))
+                {
+                    spec = spec with
+                    {
+                        Arguments = [.. spec.Arguments, "--metrics"]
+                    };
+                }
+
+                // Operator profiling spawns capture both pipes; the normal path leaves the sink null (spec unchanged).
+                if (startupCapture is not null)
+                {
+                    spec = spec with
+                    {
+                        StartupCapture = startupCapture
+                    };
+                }
+
+                handle = _launcher.Launch(spec);
+                _logger.LogInformation("llama-server spawned for model {ModelName} role {Role} (pid {ProcessId}, port {Port}){LaunchPlan}.",
+                    key.ModelName, key.Role, handle.ProcessId, port, DescribeLaunchPlan(candidate));
+
+                var readyStartedUtc = _timeProvider.GetUtcNow();
+                await WaitForReadyOrExitAsync(handle, spec.BaseAddress, readinessTimeout, ct).ConfigureAwait(false);
+                _logger.LogInformation("llama-server ready for model {ModelName} role {Role} (pid {ProcessId}) after {ElapsedMs:F0} ms (readiness budget {BudgetSeconds:F0}s).",
+                    key.ModelName, key.Role, handle.ProcessId, (_timeProvider.GetUtcNow() - readyStartedUtc).TotalMilliseconds, readinessTimeout.TotalSeconds);
+
+                // AUD4-02: read the effective per-slot context the server actually loaded (best-effort) so both app-side
+                // budgeters and the UI meter size against the REAL window rather than the requested/advertised one.
+                var effectiveContext = await TryReadEffectiveContextAsync(spec.BaseAddress, ct).ConfigureAwait(false);
+
+                var endpoint = new LlamaServerEndpoint(key.ModelName, key.Role, spec.BaseAddress);
+                var running = new RunningProcess(handle, endpoint, port, _timeProvider.GetUtcNow())
+                {
+                    EffectiveContextTokens = effectiveContext
+                };
+                _processes[key] = running;
+
+                if (isSafeRetry)
+                {
+                    // The safe config reached readiness where the optimized (KV-quant + flash-attention) config could
+                    // not — so the optimized config is the culprit for THIS backend (not a broken model, which would
+                    // fail the safe config too). Record it so subsequent spawns skip the known-bad optimized config.
+                    await _launchPolicy.RecordOptimizedConfigFailedAsync(variant, ct).ConfigureAwait(false);
+                }
+
+                return running;
+            }
+            catch (OperationCanceledException) when (ct.IsCancellationRequested)
+            {
+                handle?.TreeKill();
+                handle?.Dispose();
+                await ReleaseReservedPortAsync(port).ConfigureAwait(false);
+                throw;
+            }
+            catch (Exception ex)
+            {
+                // Launch/readiness failed: tree-kill the half-started child and free its reserved port (under the
+                // admission gate, since the reserved-port set backs the cap count) before deciding whether to fall back.
+                handle?.TreeKill();
+                handle?.Dispose();
+                await ReleaseReservedPortAsync(port).ConfigureAwait(false);
+
+                // The OPTIMIZED attempt failed and a safe candidate remains: remember the error and retry ONCE with the
+                // safe (KV/FA off) config. Any other failure (the safe attempt, or a spawn with no fallback candidate)
+                // propagates exactly as before — including the readiness-timeout marker the restart loop keys on.
+                if (!isSafeRetry && attempt + 1 < planCandidates.Count)
+                {
+                    optimizedFailure = ex;
+                    _logger.LogWarning(ex, "llama-server optimized launch (KV-cache quant + flash attention) failed for model {ModelName} role {Role} on backend {Variant}; retrying once with the safe config.",
+                        key.ModelName, key.Role, variant);
+                    continue;
+                }
+
+                throw;
+            }
+        }
+
+        // Unreachable: the loop returns on success or throws on the final candidate; the fallback keeps the analyzer happy.
+        throw optimizedFailure ?? new InvalidOperationException("llama-server spawn produced no launch attempt.");
+    }
+
+    /// <summary>
+    ///     Builds the ordered launch-plan candidates for a spawn. The normal path (<paramref name="applyLaunchPolicy" />)
+    ///     resolves the policy plan and, when it enables the GPU KV-quant + flash-attention optimization, appends a safe
+    ///     (KV/FA off) fallback candidate to try once if the optimized one cannot reach readiness. Operator profiling and
+    ///     replay-without-optimization spawns get a single <see langword="null" /> plan (today's byte-for-byte behavior).
+    /// </summary>
+    private async Task<IReadOnlyList<LlamaServerLaunchPlan?>> BuildLaunchPlanCandidatesAsync(ProcessKey key,
+        GpuVariant variant,
+        ResolvedLaunchArguments resolved,
+        bool applyLaunchPolicy,
+        CancellationToken ct)
+    {
+        if (!applyLaunchPolicy)
+        {
+            return [null];
+        }
+
+        var trainContext = await TryResolveTrainContextAsync(key.ModelName, ct).ConfigureAwait(false);
+        var plan = await _launchPolicy.ResolveAsync(key.Role, variant, resolved, trainContext, ct).ConfigureAwait(false);
+
+        return plan.UseKvCacheQuantization
+            ? [plan, plan.WithoutKvCacheQuantization()]
+            : [plan];
+    }
+
+    /// <summary>Reads the model's advertised train context (GGUF header), returning null when unknown — never fatal.</summary>
+    private async Task<long?> TryResolveTrainContextAsync(string modelName, CancellationToken ct)
+    {
         try
         {
-            var spec = BuildLaunchSpec(key, binary.ServerExecutablePath, modelFilePath, port, variant, resolved,
-                _options.ChatCacheReuse, speculative);
-
-            // Benchmark replay spawns need /metrics (explore already carries --metrics); only append when missing.
-            if (ensureMetrics && !spec.Arguments.Contains("--metrics", StringComparer.Ordinal))
-            {
-                spec = spec with
-                {
-                    Arguments = [.. spec.Arguments, "--metrics"]
-                };
-            }
-
-            // Operator profiling spawns capture both pipes; the normal path leaves the sink null (spec unchanged).
-            if (startupCapture is not null)
-            {
-                spec = spec with
-                {
-                    StartupCapture = startupCapture
-                };
-            }
-
-            handle = _launcher.Launch(spec);
-            _logger.LogInformation("llama-server spawned for model {ModelName} role {Role} (pid {ProcessId}, port {Port}).",
-                key.ModelName, key.Role, handle.ProcessId, port);
-
-            var readyStartedUtc = _timeProvider.GetUtcNow();
-            await WaitForReadyOrExitAsync(handle, spec.BaseAddress, readinessTimeout, ct).ConfigureAwait(false);
-            _logger.LogInformation("llama-server ready for model {ModelName} role {Role} (pid {ProcessId}) after {ElapsedMs:F0} ms (readiness budget {BudgetSeconds:F0}s).",
-                key.ModelName, key.Role, handle.ProcessId, (_timeProvider.GetUtcNow() - readyStartedUtc).TotalMilliseconds, readinessTimeout.TotalSeconds);
-
-            var endpoint = new LlamaServerEndpoint(key.ModelName, key.Role, spec.BaseAddress);
-            var running = new RunningProcess(handle, endpoint, port, _timeProvider.GetUtcNow());
-            _processes[key] = running;
-            return running;
+            var facts = await _modelStore.ResolveModelFootprintFactsAsync(modelName, ct).ConfigureAwait(false);
+            return facts?.ContextLength;
         }
-        catch
+        catch (Exception exception) when (exception is not OperationCanceledException)
         {
-            // Launch/readiness failed: tree-kill the half-started child and free its reserved port (under the
-            // admission gate, since the reserved-port set backs the cap count) before bubbling up.
-            handle?.TreeKill();
-            handle?.Dispose();
-            await ReleaseReservedPortAsync(port).ConfigureAwait(false);
-            throw;
+            _logger.LogDebug(exception, "Resolving the train context for model {ModelName} failed; the requested context will not be capped.", modelName);
+            return null;
         }
+    }
+
+    /// <summary>Best-effort read of the running server's effective context window from /props; null when unavailable.</summary>
+    private async Task<int?> TryReadEffectiveContextAsync(Uri baseAddress, CancellationToken ct)
+    {
+        try
+        {
+            return await _healthProbe.TryReadEffectiveContextTokensAsync(baseAddress, ct).ConfigureAwait(false);
+        }
+        catch (Exception exception)
+        {
+            // Never let a /props hiccup discard a model that reached readiness; effective context simply stays unknown.
+            _logger.LogDebug(exception, "Reading the effective context window from /props failed; effective context is unknown.");
+            return null;
+        }
+    }
+
+    /// <summary>A compact, path-free launch-plan summary appended to the spawn log line (empty for a policy-less spawn).</summary>
+    private static string DescribeLaunchPlan(LlamaServerLaunchPlan? plan)
+    {
+        if (plan is not { } resolvedPlan)
+        {
+            return string.Empty;
+        }
+
+        var parts = new List<string>(capacity: 3);
+        if (resolvedPlan.RequestedContextTokens is { } ctx)
+        {
+            parts.Add($"ctx={ctx.ToString(CultureInfo.InvariantCulture)}");
+        }
+
+        if (resolvedPlan.UseKvCacheQuantization)
+        {
+            parts.Add($"kv={resolvedPlan.KvCacheType}+fa");
+        }
+
+        if (resolvedPlan.CpuThreads is { } threads)
+        {
+            parts.Add($"threads={threads.ToString(CultureInfo.InvariantCulture)}/{resolvedPlan.CpuThreadsBatch?.ToString(CultureInfo.InvariantCulture) ?? "-"}");
+        }
+
+        return parts.Count == 0 ? string.Empty : " [" + string.Join(", ", parts) + "]";
     }
 
     /// <summary>
@@ -786,11 +940,13 @@ public sealed class LlamaServerProcessSupervisor : ILlamaServerProcessSupervisor
             // Thread-safe per-line sink backing the StartupCapture callback (both server pipes Enqueue concurrently).
             var startupOutput = new ConcurrentQueue<string>();
 
-            // Spawn exactly one process with the operator-supplied args verbatim (bypass the profile resolver).
+            // Spawn exactly one process with the operator-supplied args verbatim (bypass BOTH the profile resolver and
+            // the launch policy — the supplied args ARE the experiment being measured).
             var running = await SpawnCoreAsync(key,
                     (_, _) => Task.FromResult(launchArgs),
                     startupOutput.Enqueue,
                     ensureMetrics: enableMetrics,
+                    applyLaunchPolicy: false,
                     ct)
                 .ConfigureAwait(false);
 
@@ -861,7 +1017,8 @@ public sealed class LlamaServerProcessSupervisor : ILlamaServerProcessSupervisor
         GpuVariant variant,
         ResolvedLaunchArguments resolved,
         int chatCacheReuse,
-        SpeculativeDecodingSettings speculative = default)
+        SpeculativeDecodingSettings speculative = default,
+        LlamaServerLaunchPlan? plan = null)
     {
         var args = new List<string>
         {
@@ -886,15 +1043,14 @@ public sealed class LlamaServerProcessSupervisor : ILlamaServerProcessSupervisor
             "--no-warmup"
         };
 
-        // The variant only selects the GPU-enabled llama.cpp BUILD (Cuda/Vulkan); the CPU variant stays a pure CPU run
-        // and emits NO gpu/fit args. For a GPU build, placement is no longer forced (the old --n-gpu-layers 999 is gone):
-        // llama.cpp's default --fit auto-fit now drives layer/expert placement. Explore mode emits --fit on + --metrics so
-        // llama.cpp fits and prints the chosen params for capture; replay mode emits the frozen profile args verbatim
-        // (and omits --fit, since any explicit fit-arg disables auto-fit — the two are mutually exclusive per run).
-        if (variant != GpuVariant.Cpu)
-        {
-            AppendGpuPlacementArgs(args, resolved);
-        }
+        // Context (-c), placement, KV-cache/flash-attention, and CPU threads. The variant selects the llama.cpp BUILD
+        // (Cuda/Vulkan vs pure CPU). Precedence lives in the launch policy that produced `plan`; here we just emit:
+        //  - GPU explore: --fit on + --metrics (auto-fit places layers/experts around the explicit -c), plus the policy
+        //    -c and the KV-quant + flash-attention optimization; GPU replay: the frozen profile args verbatim.
+        //  - CPU: the policy -c (explore) or the frozen -c (replay), plus the CPU thread policy; NO --fit/--metrics/-ngl,
+        //    KV stays f16 and flash-attention stays auto.
+        // A null plan (operator profiling) reproduces the pre-policy behavior byte-for-byte.
+        AppendContextPlacementAndThreadArgs(args, variant, resolved, plan);
 
         if (key.Role == ModelRole.Chat)
         {
@@ -947,23 +1103,91 @@ public sealed class LlamaServerProcessSupervisor : ILlamaServerProcessSupervisor
     }
 
     /// <summary>
-    ///     Appends the GPU placement args for a non-CPU build: explore-mode auto-fit (<c>--fit on</c> + <c>--metrics</c>)
-    ///     or the resolved profile's explicit replay args (<c>-c/-ngl/-ts/-ot</c> + matched <c>-ctk/-ctv</c> with
-    ///     <c>--flash-attn on</c>). The two paths are mutually exclusive — replay never sets <c>--fit</c>.
+    ///     Appends the context (<c>-c</c>), placement, KV-cache/flash-attention, and CPU-thread args for a spawn, per the
+    ///     variant + explore/replay mode + policy <paramref name="plan" />. See the call-site comment for the matrix.
     /// </summary>
-    private static void AppendGpuPlacementArgs(List<string> args, ResolvedLaunchArguments resolved)
+    private static void AppendContextPlacementAndThreadArgs(List<string> args,
+        GpuVariant variant,
+        ResolvedLaunchArguments resolved,
+        LlamaServerLaunchPlan? plan)
     {
-        if (resolved.ExploreMode)
+        if (variant != GpuVariant.Cpu)
         {
-            // Let llama.cpp auto-fit choose and print placement; --metrics exposes the throughput/cache gauges the
-            // benchmark reads. Emitting any explicit fit-arg here would disable auto-fit, so emit none.
-            args.Add("--fit");
-            args.Add("on");
-            args.Add("--metrics");
+            if (resolved.ExploreMode)
+            {
+                // Let llama.cpp auto-fit choose + print placement; --metrics exposes the gauges the benchmark reads.
+                // The explicit -c is RESPECTED by --fit (it fits ngl/batch around it) and the KV/FA flags are not
+                // placement flags, so auto-fit stays active (verified against b9692).
+                args.Add("--fit");
+                args.Add("on");
+                args.Add("--metrics");
+                AppendPolicyContextArgs(args, plan);
+                AppendPolicyKvCacheAndFlashAttentionArgs(args, plan);
+            }
+            else
+            {
+                AppendReplayArgs(args, resolved);
+            }
+
             return;
         }
 
-        // Replay a frozen/explored profile verbatim. --fit is intentionally absent (an explicit fit-arg disables it).
+        // CPU build: NO GPU placement/replay args (-ngl/-ts/-ot/-ctk) and NO --fit/--metrics — a frozen GPU profile does
+        // not transfer to a CPU spawn. It gets ONLY the deterministic policy context (-c) and the CPU thread policy; KV
+        // stays f16 and flash-attention stays auto. A null plan (operator profiling) emits neither, matching the old
+        // "CPU emits no gpu/fit args" behavior byte-for-byte.
+        AppendPolicyContextArgs(args, plan);
+        AppendCpuThreadArgs(args, plan);
+    }
+
+    /// <summary>Appends the policy's requested context (<c>-c</c>) when set (a frozen replay owns its own -c instead).</summary>
+    private static void AppendPolicyContextArgs(List<string> args, LlamaServerLaunchPlan? plan)
+    {
+        if (plan is { RequestedContextTokens: { } contextTokens })
+        {
+            args.Add("-c");
+            args.Add(contextTokens.ToString(CultureInfo.InvariantCulture));
+        }
+    }
+
+    /// <summary>Appends the GPU KV-cache quantization + fused flash-attention args (<c>-fa on -ctk/-ctv &lt;type&gt;</c>) when the plan enables them.</summary>
+    private static void AppendPolicyKvCacheAndFlashAttentionArgs(List<string> args, LlamaServerLaunchPlan? plan)
+    {
+        if (plan is { UseKvCacheQuantization: true } resolvedPlan && !string.IsNullOrWhiteSpace(resolvedPlan.KvCacheType))
+        {
+            // Quantized/explicit KV requires the fused flash-attention path with matching K/V types (b9692).
+            args.Add("-fa");
+            args.Add("on");
+            args.Add("-ctk");
+            args.Add(resolvedPlan.KvCacheType);
+            args.Add("-ctv");
+            args.Add(resolvedPlan.KvCacheType);
+        }
+    }
+
+    /// <summary>Appends the CPU thread policy (<c>-t</c>/<c>-tb</c>) when the plan carries thread counts (CPU build only).</summary>
+    private static void AppendCpuThreadArgs(List<string> args, LlamaServerLaunchPlan? plan)
+    {
+        if (plan is { CpuThreads: { } threads })
+        {
+            args.Add("-t");
+            args.Add(threads.ToString(CultureInfo.InvariantCulture));
+        }
+
+        if (plan is { CpuThreadsBatch: { } threadsBatch })
+        {
+            args.Add("-tb");
+            args.Add(threadsBatch.ToString(CultureInfo.InvariantCulture));
+        }
+    }
+
+    /// <summary>
+    ///     Replays a frozen/explored profile verbatim (<c>-c/-ngl/-ts/-ot</c> + matched <c>-ctk/-ctv</c> with
+    ///     <c>--flash-attn on</c>). <c>--fit</c> is intentionally absent — any explicit fit-arg disables auto-fit, so
+    ///     replay and explore are mutually exclusive per run. The launch policy never overrides these (highest precedence).
+    /// </summary>
+    private static void AppendReplayArgs(List<string> args, ResolvedLaunchArguments resolved)
+    {
         args.Add("-c");
         args.Add(resolved.CtxSize.ToString(CultureInfo.InvariantCulture));
 
@@ -1318,6 +1542,12 @@ public sealed class LlamaServerProcessSupervisor : ILlamaServerProcessSupervisor
         public LlamaServerEndpoint Endpoint { get; } = endpoint;
 
         public int Port { get; } = port;
+
+        /// <summary>
+        ///     The effective per-slot context window (<c>/props default_generation_settings.n_ctx</c>) the server
+        ///     actually loaded, captured once after readiness. <see langword="null" /> when <c>/props</c> was unavailable.
+        /// </summary>
+        public int? EffectiveContextTokens { get; init; }
 
         public DateTimeOffset LastUsedUtc => new(Interlocked.Read(ref _lastUsedTicks), TimeSpan.Zero);
 

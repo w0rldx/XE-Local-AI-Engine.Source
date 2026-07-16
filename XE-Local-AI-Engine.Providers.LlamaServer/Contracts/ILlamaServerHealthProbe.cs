@@ -21,4 +21,12 @@ internal interface ILlamaServerHealthProbe
     ///     aggregation surface. Returns <see langword="true" /> when the server answered.
     /// </summary>
     Task<bool> CheckResponsiveAsync(Uri baseAddress, CancellationToken ct);
+
+    /// <summary>
+    ///     Reads the effective per-slot context window (<c>default_generation_settings.n_ctx</c>) the running server at
+    ///     <paramref name="baseAddress" /> actually loaded, via its <c>/props</c> endpoint. Returns <see langword="null" />
+    ///     when <c>/props</c> is unreachable, the value is absent/unparseable, or non-positive — a best-effort read the
+    ///     caller degrades from (it is never fatal to a spawn). Bounded like the readiness probe; issues one request.
+    /// </summary>
+    Task<int?> TryReadEffectiveContextTokensAsync(Uri baseAddress, CancellationToken ct);
 }
