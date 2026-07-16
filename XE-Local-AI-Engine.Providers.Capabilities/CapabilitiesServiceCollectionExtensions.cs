@@ -1,6 +1,7 @@
 namespace XE_Local_AI_Engine.Providers.Capabilities;
 
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.DependencyInjection.Extensions;
 using XE_Local_AI_Engine.Providers.Abstractions.Capabilities;
 using XE_Local_AI_Engine.Providers.Capabilities.Contracts;
 using XE_Local_AI_Engine.Providers.Capabilities.Implementation;
@@ -34,6 +35,10 @@ public static class CapabilitiesServiceCollectionExtensions
         services.AddSingleton<IProcessProbe, ProcessProbe>();
         services.AddSingleton<IHardwareProbeEnvironment, HardwareProbeEnvironment>();
         services.AddSingleton<IHardwareProfiler, HardwareProfiler>();
+
+        // The probe-timeout metrics seam degrades to a no-op unless the host wires a NodeMetrics-backed implementation
+        // (the profiler layer cannot reference the application meter). TryAdd so a host registration always wins.
+        services.TryAddSingleton<IHardwareProbeMetrics, NullHardwareProbeMetrics>();
 
         return services;
     }

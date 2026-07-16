@@ -8,9 +8,11 @@ using XE_Local_AI_Engine.Tests.Testing;
 
 /// <summary>
 ///     <see cref="HardwareProfiler" /> tests: Windows and Linux RAM/VRAM/vendor detection, the degrade-to-CPU path when
-///     VRAM cannot be probed, and the gate proving the profiler project carries no HostAgent dependency. The process +
-///     environment probe seams are faked so detection is exercised with canned output and NO real GPU, process spawn or
-///     platform pin.
+///     VRAM cannot be probed, the SINGLE consolidated <c>nvidia-smi</c> query (name+total+free, multi-GPU first-wins,
+///     malformed-line skipping), the bounded-probe degrade (a killed/timed-out probe reuses the cached profile or the
+///     CPU default and records the timeout metric), and the gate proving the profiler project carries no HostAgent
+///     dependency. The process + environment probe seams are faked so detection is exercised with canned output and NO
+///     real GPU, process spawn or platform pin.
 /// </summary>
 public sealed class HardwareProfilerTests
 {
@@ -21,9 +23,7 @@ public sealed class HardwareProfilerTests
     public async Task HardwareProfiler_Linux_ParsesMemInfoAndNvidiaSmi()
     {
         const string memInfo = "MemTotal:       32830012 kB\nMemFree:         1000000 kB\nMemAvailable:   24000000 kB\n";
-        var probe = new FakeProcessProbe()
-                    .OnNvidiaName("NVIDIA GeForce RTX 4090\n")
-                    .OnNvidiaMemoryTotal("24564\n");
+        var probe = new FakeProcessProbe().WithNvidiaCsv("NVIDIA GeForce RTX 4090, 24564, 8192\n");
         var environment = new FakeEnvironment
         {
             IsLinux = true,
@@ -46,14 +46,31 @@ public sealed class HardwareProfilerTests
     }
 
     [Test]
+    public async Task HardwareProfiler_Nvidia_SingleInvocation_ConsolidatedQuery()
+    {
+        // AUD4-07: the former three sequential nvidia-smi calls (name, memory.total, memory.free) collapse into ONE
+        // consolidated query — one process spawn per probe, all three fields in a single csv line.
+        var probe = new FakeProcessProbe().WithNvidiaCsv("NVIDIA GeForce RTX 4090, 24564, 8192\n");
+        var environment = new FakeEnvironment { IsLinux = true, ProcMemInfo = "MemTotal: 8 kB\nMemAvailable: 4 kB\n", ProcessorCount = 8 };
+
+        var profiler = new HardwareProfiler(probe, environment, new HardwareProfilerOptions());
+        await profiler.GetProfileAsync(forceRefresh: false, CancellationToken.None);
+
+        AssertEx.Equal(expected: 1, probe.NvidiaCallCount);
+        AssertEx.NotNull(probe.LastArguments);
+        var query = string.Join(separator: ' ', probe.LastArguments!);
+        AssertEx.True(query.Contains("name,memory.total,memory.free", StringComparison.Ordinal),
+            "the single query must request name+total+free together.");
+        AssertEx.True(query.Contains("noheader", StringComparison.Ordinal) && query.Contains("nounits", StringComparison.Ordinal),
+            "csv,noheader,nounits keeps the figures bare integers.");
+    }
+
+    [Test]
     public async Task HardwareProfiler_Nvidia_ParsesFreeVram_AsAvailableVramBytes()
     {
         // nvidia-smi memory.free yields the free-VRAM baseline the capacity gate uses; it is reported in MiB like total.
         const string memInfo = "MemTotal:       32830012 kB\nMemAvailable:   24000000 kB\n";
-        var probe = new FakeProcessProbe()
-                    .OnNvidiaName("NVIDIA GeForce RTX 4090\n")
-                    .OnNvidiaMemoryTotal("24564\n")
-                    .OnNvidiaMemoryFree("8192\n");
+        var probe = new FakeProcessProbe().WithNvidiaCsv("NVIDIA GeForce RTX 4090, 24564, 8192\n");
         var environment = new FakeEnvironment
         {
             IsLinux = true,
@@ -69,14 +86,12 @@ public sealed class HardwareProfilerTests
     }
 
     [Test]
-    public async Task HardwareProfiler_Nvidia_WhenFreeVramUnprobed_LeavesAvailableVramNull()
+    public async Task HardwareProfiler_Nvidia_WhenFreeColumnAbsent_LeavesAvailableVramNull()
     {
-        // When nvidia-smi reports total but the free query fails, AvailableVramBytes stays null so the capacity gate
-        // falls back to total-VRAM math rather than trusting a missing free figure.
+        // A row that carries only name+total (no free column) yields VramBytes but AvailableVramBytes null, so the
+        // capacity gate falls back to total-VRAM math rather than trusting a missing free figure.
         const string memInfo = "MemTotal:       32830012 kB\nMemAvailable:   24000000 kB\n";
-        var probe = new FakeProcessProbe()
-                    .OnNvidiaName("NVIDIA GeForce RTX 4090\n")
-                    .OnNvidiaMemoryTotal("24564\n"); // no OnNvidiaMemoryFree → free query returns null.
+        var probe = new FakeProcessProbe().WithNvidiaCsv("NVIDIA GeForce RTX 4090, 24564\n"); // no free column.
         var environment = new FakeEnvironment
         {
             IsLinux = true,
@@ -93,20 +108,30 @@ public sealed class HardwareProfilerTests
     }
 
     [Test]
-    public async Task HardwareProfiler_Linux_NvidiaSmi_SkipsLeadingNonNumericLine_ParsesVram()
+    public async Task HardwareProfiler_Nvidia_TwoGpus_FirstGpuWins()
     {
-        // nvidia-smi can emit a leading warning banner before the numeric VRAM line; the profiler must scan past it
-        // and parse the first PARSEABLE line rather than bail on the first non-empty line.
+        // Multi-GPU emits one csv line per device; the first GPU's figures win (matching the former per-field probes'
+        // "first parseable figure" semantics).
+        const string memInfo = "MemTotal:       32830012 kB\nMemAvailable:   24000000 kB\n";
+        var probe = new FakeProcessProbe().WithNvidiaCsv("NVIDIA GeForce RTX 4090, 24564, 8192\nNVIDIA RTX A6000, 49140, 40000\n");
+        var environment = new FakeEnvironment { IsLinux = true, ProcMemInfo = memInfo, ProcessorCount = 16 };
+
+        var profiler = new HardwareProfiler(probe, environment, new HardwareProfilerOptions());
+        var profile = await profiler.GetProfileAsync(forceRefresh: false, CancellationToken.None);
+
+        AssertEx.Equal(24564L * Mib, profile.VramBytes!.Value);
+        AssertEx.Equal(8192L * Mib, profile.AvailableVramBytes!.Value);
+    }
+
+    [Test]
+    public async Task HardwareProfiler_Nvidia_SkipsBannerAndMalformedRows_ParsesFirstUsableGpu()
+    {
+        // A leading warning banner (no csv columns) and a row whose total is unparseable are both scanned past; the first
+        // row carrying a parseable total wins.
         const string memInfo = "MemTotal:       32830012 kB\nMemAvailable:   24000000 kB\n";
         var probe = new FakeProcessProbe()
-                    .OnNvidiaName("NVIDIA GeForce RTX 4090\n")
-                    .OnNvidiaMemoryTotal("WARNING: infoROM is corrupted\n24564\n");
-        var environment = new FakeEnvironment
-        {
-            IsLinux = true,
-            ProcMemInfo = memInfo,
-            ProcessorCount = 16
-        };
+            .WithNvidiaCsv("WARNING: infoROM is corrupted\nNVIDIA GeForce RTX 4090, [N/A], [N/A]\nNVIDIA GeForce RTX 4090, 24564, 8192\n");
+        var environment = new FakeEnvironment { IsLinux = true, ProcMemInfo = memInfo, ProcessorCount = 16 };
 
         var profiler = new HardwareProfiler(probe, environment, new HardwareProfilerOptions());
         var profile = await profiler.GetProfileAsync(forceRefresh: false, CancellationToken.None);
@@ -114,7 +139,7 @@ public sealed class HardwareProfilerTests
         AssertEx.Equal(GpuVendor.Nvidia, profile.GpuVendor);
         AssertEx.True(profile.VramKnown);
         AssertEx.Equal(24564L * Mib, profile.VramBytes!.Value);
-        AssertEx.True(profile.GpuAccelAvailable);
+        AssertEx.Equal(8192L * Mib, profile.AvailableVramBytes!.Value);
     }
 
     [Test]
@@ -144,9 +169,7 @@ public sealed class HardwareProfilerTests
     public async Task HardwareProfiler_Windows_ReportsVramAndVendor()
     {
         // NVIDIA on Windows is covered by the shared nvidia-smi branch → VRAM parsed, vendor NVIDIA, GPU accel available.
-        var probe = new FakeProcessProbe()
-                    .OnNvidiaName("NVIDIA RTX A2000\n")
-                    .OnNvidiaMemoryTotal("6144\n");
+        var probe = new FakeProcessProbe().WithNvidiaCsv("NVIDIA RTX A2000, 6144, 6000\n");
         var environment = new FakeEnvironment
         {
             IsWindows = true,
@@ -233,6 +256,62 @@ public sealed class HardwareProfilerTests
     }
 
     [Test]
+    public async Task HardwareProfiler_ConfiguredTimeout_IsPassedToTheProcessProbe()
+    {
+        var probe = new FakeProcessProbe().WithNvidiaCsv("NVIDIA GeForce RTX 4090, 24564, 8192\n");
+        var environment = new FakeEnvironment { IsLinux = true, ProcMemInfo = "MemTotal: 8 kB\nMemAvailable: 4 kB\n", ProcessorCount = 8 };
+        var options = new HardwareProfilerOptions { HardwareProbeTimeoutSeconds = 7 };
+
+        var profiler = new HardwareProfiler(probe, environment, options);
+        await profiler.GetProfileAsync(forceRefresh: false, CancellationToken.None);
+
+        AssertEx.Equal(TimeSpan.FromSeconds(7), probe.LastTimeout);
+    }
+
+    [Test]
+    public async Task HardwareProfiler_ProbeTimeout_NoCache_DegradesToCpuDefault_AndRecordsMetric()
+    {
+        // A wedged nvidia-smi is killed and reported as timed-out; with no prior good profile the profiler degrades to
+        // the CPU-safe default (VRAM unknown ⇒ CPU mode) and records the timeout metric — never hangs.
+        const string memInfo = "MemTotal:       32000000 kB\nMemAvailable:   24000000 kB\n";
+        var probe = new FakeProcessProbe().WithTimeout();
+        var environment = new FakeEnvironment { IsLinux = true, ProcMemInfo = memInfo, ProcessorCount = 16 };
+        var metrics = new FakeHardwareProbeMetrics();
+
+        var profiler = new HardwareProfiler(probe, environment, new HardwareProfilerOptions(), metrics: metrics);
+        var profile = await profiler.GetProfileAsync(forceRefresh: false, CancellationToken.None);
+
+        AssertEx.False(profile.VramKnown, "a timed-out GPU probe with no cache must degrade to CPU mode.");
+        AssertEx.False(profile.GpuAccelAvailable);
+        AssertEx.Equal(24000000L * Kb, profile.AvailableRamBytes); // RAM read is unaffected by the GPU probe timeout.
+        AssertEx.Equal(expected: 1, metrics.TimeoutCount);
+        AssertEx.Equal("nvidia-smi", metrics.LastProbe);
+    }
+
+    [Test]
+    public async Task HardwareProfiler_ProbeTimeout_DegradesToLastCachedProfile()
+    {
+        // First probe succeeds (real GPU), a later forced refresh times out → the profiler reuses the cached GPU profile
+        // (keeping its real VRAM figures) rather than dropping to CPU mode, and still records the timeout metric.
+        const string memInfo = "MemTotal:       32000000 kB\nMemAvailable:   24000000 kB\n";
+        var probe = new FakeProcessProbe().WithNvidiaCsv("NVIDIA GeForce RTX 4090, 24564, 8192\n").TimeoutAfterFirstCall();
+        var environment = new FakeEnvironment { IsLinux = true, ProcMemInfo = memInfo, ProcessorCount = 16 };
+        var metrics = new FakeHardwareProbeMetrics();
+
+        var profiler = new HardwareProfiler(probe, environment, new HardwareProfilerOptions(), metrics: metrics);
+
+        var first = await profiler.GetProfileAsync(forceRefresh: false, CancellationToken.None);
+        AssertEx.True(first.VramKnown);
+
+        var refreshed = await profiler.GetProfileAsync(forceRefresh: true, CancellationToken.None);
+
+        AssertEx.True(refreshed.VramKnown, "the forced refresh must reuse the last good profile when the probe times out.");
+        AssertEx.Equal(24564L * Mib, refreshed.VramBytes!.Value);
+        AssertEx.Equal(GpuVendor.Nvidia, refreshed.GpuVendor);
+        AssertEx.Equal(expected: 1, metrics.TimeoutCount);
+    }
+
+    [Test]
     public void HardwareProfiler_NoHostAgentDependency_ExtractionGate()
     {
         // The profiler was extracted out of the now-removed in-Aspire HostAgent; this gate guards that it stays free of
@@ -247,45 +326,50 @@ public sealed class HardwareProfilerTests
 
     private sealed class FakeProcessProbe : IProcessProbe
     {
-        private string? _nvidiaMemoryFree;
-        private string? _nvidiaMemoryTotal;
-        private string? _nvidiaName;
+        private string? _nvidiaCsv;
+        private bool _timeout;
+        private bool _timeoutAfterFirstCall;
 
-        public Task<ProcessProbeResult?> RunAsync(string fileName, IReadOnlyList<string> arguments, CancellationToken ct)
+        public int NvidiaCallCount { get; private set; }
+
+        public TimeSpan LastTimeout { get; private set; }
+
+        public IReadOnlyList<string>? LastArguments { get; private set; }
+
+        public Task<ProcessProbeResult?> RunAsync(string fileName, IReadOnlyList<string> arguments, TimeSpan timeout, CancellationToken ct)
         {
-            if (fileName == "nvidia-smi" && arguments.Any(argument => argument.Contains("name", StringComparison.Ordinal)))
+            if (fileName != "nvidia-smi")
             {
-                return Task.FromResult(_nvidiaName is null ? null : new ProcessProbeResult(ExitCode: 0, _nvidiaName));
+                return Task.FromResult<ProcessProbeResult?>(null);
             }
 
-            if (fileName == "nvidia-smi" && arguments.Any(argument => argument.Contains("memory.total", StringComparison.Ordinal)))
+            NvidiaCallCount++;
+            LastTimeout = timeout;
+            LastArguments = arguments;
+
+            if (_timeout || (_timeoutAfterFirstCall && NvidiaCallCount > 1))
             {
-                return Task.FromResult(_nvidiaMemoryTotal is null ? null : new ProcessProbeResult(ExitCode: 0, _nvidiaMemoryTotal));
+                return Task.FromResult<ProcessProbeResult?>(new ProcessProbeResult(ExitCode: -1, StandardOutput: string.Empty, TimedOut: true));
             }
 
-            if (fileName == "nvidia-smi" && arguments.Any(argument => argument.Contains("memory.free", StringComparison.Ordinal)))
-            {
-                return Task.FromResult(_nvidiaMemoryFree is null ? null : new ProcessProbeResult(ExitCode: 0, _nvidiaMemoryFree));
-            }
-
-            return Task.FromResult<ProcessProbeResult?>(null);
+            return Task.FromResult(_nvidiaCsv is null ? null : new ProcessProbeResult(ExitCode: 0, _nvidiaCsv));
         }
 
-        public FakeProcessProbe OnNvidiaName(string stdout)
+        public FakeProcessProbe WithNvidiaCsv(string csv)
         {
-            _nvidiaName = stdout;
+            _nvidiaCsv = csv;
             return this;
         }
 
-        public FakeProcessProbe OnNvidiaMemoryTotal(string stdout)
+        public FakeProcessProbe WithTimeout()
         {
-            _nvidiaMemoryTotal = stdout;
+            _timeout = true;
             return this;
         }
 
-        public FakeProcessProbe OnNvidiaMemoryFree(string stdout)
+        public FakeProcessProbe TimeoutAfterFirstCall()
         {
-            _nvidiaMemoryFree = stdout;
+            _timeoutAfterFirstCall = true;
             return this;
         }
     }
@@ -294,10 +378,23 @@ public sealed class HardwareProfilerTests
     {
         public int CallCount { get; private set; }
 
-        public Task<ProcessProbeResult?> RunAsync(string fileName, IReadOnlyList<string> arguments, CancellationToken ct)
+        public Task<ProcessProbeResult?> RunAsync(string fileName, IReadOnlyList<string> arguments, TimeSpan timeout, CancellationToken ct)
         {
             CallCount++;
             return Task.FromResult<ProcessProbeResult?>(null);
+        }
+    }
+
+    private sealed class FakeHardwareProbeMetrics : IHardwareProbeMetrics
+    {
+        public int TimeoutCount { get; private set; }
+
+        public string? LastProbe { get; private set; }
+
+        public void RecordProbeTimeout(string probe)
+        {
+            TimeoutCount++;
+            LastProbe = probe;
         }
     }
 
