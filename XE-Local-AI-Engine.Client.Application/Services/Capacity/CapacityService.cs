@@ -25,7 +25,7 @@ public sealed class CapacityService : ICapacityService
 
     private readonly IActiveCloudChatClientFactory _cloudFactory;
     private readonly IModelFootprintProvider _footprintProvider;
-    private readonly IHardwareProfiler _hardwareProfiler;
+    private readonly IRuntimeDeviceAudit _runtimeAudit;
     private readonly IPendingFootprintLedger _ledger;
     private readonly ILocalModelProviderResolver _localProviderResolver;
     private readonly IOllamaModelService _ollamaModelService;
@@ -33,7 +33,7 @@ public sealed class CapacityService : ICapacityService
 
     public CapacityService(IActiveCloudChatClientFactory cloudFactory,
         ILocalModelProviderResolver localProviderResolver,
-        IHardwareProfiler hardwareProfiler,
+        IRuntimeDeviceAudit runtimeAudit,
         ILlamaServerProcessSupervisor supervisor,
         IOllamaModelService ollamaModelService,
         IModelFootprintProvider footprintProvider,
@@ -41,7 +41,7 @@ public sealed class CapacityService : ICapacityService
     {
         _cloudFactory = cloudFactory ?? throw new ArgumentNullException(nameof(cloudFactory));
         _localProviderResolver = localProviderResolver ?? throw new ArgumentNullException(nameof(localProviderResolver));
-        _hardwareProfiler = hardwareProfiler ?? throw new ArgumentNullException(nameof(hardwareProfiler));
+        _runtimeAudit = runtimeAudit ?? throw new ArgumentNullException(nameof(runtimeAudit));
         _supervisor = supervisor ?? throw new ArgumentNullException(nameof(supervisor));
         _ollamaModelService = ollamaModelService ?? throw new ArgumentNullException(nameof(ollamaModelService));
         _footprintProvider = footprintProvider ?? throw new ArgumentNullException(nameof(footprintProvider));
@@ -65,6 +65,14 @@ public sealed class CapacityService : ICapacityService
 
         var providerName = await _localProviderResolver.ResolveProviderNameForModelAsync(modelName, ct).ConfigureAwait(false);
         var isOllama = string.Equals(providerName, OllamaLocalModelProvider.OllamaProviderName, StringComparison.OrdinalIgnoreCase);
+
+        // AUD4-03: warm the runtime device audit OUTSIDE the decision gate. Its --list-devices probe is bounded and
+        // cached, but running it under the ledger gate would serialize every capacity decision behind a one-time probe.
+        // The effective profile read under the gate below then consults the cached audit (only the raw hardware profile
+        // re-probes live). This is also the documented lock ordering for AUD4-06: the capacity decision never holds the
+        // ledger gate while the GPU-load admission gate is acquired — that gate is taken later, inside the supervisor
+        // spawn, only after DecideAsync has fully returned and released this ledger gate.
+        await _runtimeAudit.GetAuditAsync(forceRefresh: false, ct).ConfigureAwait(false);
 
         // The decide-commit gate serializes the read-decide-reserve so two concurrent different-model spawns cannot both
         // pass on the same snapshot. Held only for this short sequence — no inference runs under it.
@@ -90,7 +98,12 @@ public sealed class CapacityService : ICapacityService
         // Holding the gate across this probe is safe because the probe is now wall-clock bounded (AUD4-07): a wedged
         // nvidia-smi is killed and the profiler degrades to the cached/CPU-safe profile, so the gate hold is capped by the
         // probe timeout and can never wedge the admission path indefinitely.
-        var profile = await _hardwareProfiler.GetProfileAsync(forceRefresh: true, ct).ConfigureAwait(false);
+        //
+        // AUD4-03: this is the EFFECTIVE profile — the live raw profile force-refreshed for a fresh free-VRAM snapshot,
+        // degraded to CPU-mode (VRAM unknown) when the device audit reports a silent CPU fallback. So on a GPU box whose
+        // Vulkan runtime enumerates no devices, admission sizes against system RAM instead of pretending 16 GB of VRAM
+        // exists. The audit was warmed above, so this call only re-probes the raw hardware profile under the gate.
+        var profile = await _runtimeAudit.GetEffectiveProfileAsync(forceRefreshProfile: true, ct).ConfigureAwait(false);
         var footprint = await _footprintProvider.ResolveFootprintAsync(modelName, profile, ct).ConfigureAwait(false);
         if (!footprint.IsKnown)
         {

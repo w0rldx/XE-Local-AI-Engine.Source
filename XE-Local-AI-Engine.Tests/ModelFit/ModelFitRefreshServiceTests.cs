@@ -5,6 +5,7 @@ using Microsoft.Extensions.Options;
 using NSubstitute;
 using XE_Local_AI_Engine.Client.Configuration;
 using XE_Local_AI_Engine.Client.Persistence;
+using XE_Local_AI_Engine.Client.Services.Capacity;
 using XE_Local_AI_Engine.Client.Services.ModelFit;
 using XE_Local_AI_Engine.Client.Services.ModelFit.Fit;
 using XE_Local_AI_Engine.Client.Services.ModelFit.Implementation;
@@ -475,8 +476,8 @@ public sealed class ModelFitRefreshServiceTests
         IGgufModelStore? store = null,
         ILlamaServerProcessSupervisor? supervisor = null)
     {
-        var profiler = Substitute.For<IHardwareProfiler>();
-        profiler.GetProfileAsync(Arg.Any<bool>(), Arg.Any<CancellationToken>()).Returns(Task.FromResult(profile));
+        var runtimeAudit = Substitute.For<IRuntimeDeviceAudit>();
+        runtimeAudit.GetEffectiveProfileAsync(Arg.Any<bool>(), Arg.Any<CancellationToken>()).Returns(Task.FromResult(profile));
 
         var registry = Substitute.For<IGgufModelRegistry>();
         registry.ListAsync(Arg.Any<CancellationToken>())
@@ -487,7 +488,7 @@ public sealed class ModelFitRefreshServiceTests
             AllowedModelNamePattern = "^[a-zA-Z0-9._:/-]+$"
         });
 
-        return new ModelFitRefreshService(profiler,
+        return new ModelFitRefreshService(runtimeAudit,
             discovery,
             new MemoryFitEstimator(),
             store ?? Substitute.For<IGgufModelStore>(),

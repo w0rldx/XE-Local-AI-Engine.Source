@@ -1,6 +1,5 @@
 namespace XE_Local_AI_Engine.Providers.LlamaServer.Implementation;
 
-using System.Diagnostics;
 using System.Globalization;
 using System.Text.RegularExpressions;
 using Microsoft.Extensions.Logging;
@@ -24,10 +23,9 @@ using XE_Local_AI_Engine.Providers.LlamaServer.Contracts;
 ///         cancellation is surfaced (the token is honored), per the <see cref="IAvailableVramProbe" /> contract.
 ///     </para>
 ///     <para>
-///         <b>Process model.</b> Unlike the supervised server, <c>--list-devices</c> is a run-to-exit probe, so a plain
-///         <see cref="Process" /> with both pipes drained and a bounded wait is sufficient — no Job Object / setsid
-///         containment. The working directory is co-located with the binary so its bundled runtime libraries (cudart,
-///         vulkan, ggml) resolve, mirroring the supervised launcher.
+///         <b>Process model.</b> Unlike the supervised server, <c>--list-devices</c> is a run-to-exit probe, so the
+///         shared <see cref="LlamaListDevicesProcessRunner" /> (used by both this VRAM probe and the device-inventory
+///         probe) launches it with both pipes drained and a bounded wait — no Job Object / setsid containment.
 ///     </para>
 /// </remarks>
 public sealed partial class LlamaListDevicesVramProbe : IAvailableVramProbe
@@ -141,73 +139,11 @@ public sealed partial class LlamaListDevicesVramProbe : IAvailableVramProbe
         matchTimeoutMilliseconds: 1000)]
     private static partial Regex FreeVramRegex();
 
-    private async Task<string?> RunListDevicesAsync(LlamaBinary binary, CancellationToken ct)
+    // The process launch + pipe draining + bounded kill is shared with the device-inventory probe (both run the same
+    // `--list-devices` command against the same binary) via LlamaListDevicesProcessRunner. A null result (spawn failure
+    // or timeout overrun) degrades to "unknown" free VRAM at the caller.
+    private Task<string?> RunListDevicesAsync(LlamaBinary binary, CancellationToken ct)
     {
-        var executablePath = binary.ServerExecutablePath;
-
-        using var process = new Process
-        {
-            StartInfo = new ProcessStartInfo
-            {
-                FileName = executablePath,
-
-                // Co-locate the working dir with the binary so its bundled runtime libraries resolve (mirrors the launcher).
-                WorkingDirectory = Path.GetDirectoryName(executablePath) ?? string.Empty,
-                RedirectStandardOutput = true,
-                RedirectStandardError = true,
-                UseShellExecute = false,
-                CreateNoWindow = true
-            }
-        };
-        process.StartInfo.ArgumentList.Add("--list-devices");
-
-        if (!process.Start())
-        {
-            return null;
-        }
-
-        using var timeoutCts = CancellationTokenSource.CreateLinkedTokenSource(ct);
-        timeoutCts.CancelAfter(ProbeTimeout);
-        try
-        {
-            // Drain BOTH pipes concurrently: llama.cpp prints the device table to stdout and its backend banner to
-            // stderr, and an undrained redirected pipe can stall the child. Combine both before parsing so the device
-            // column is found regardless of which stream a given build writes it to.
-            var stdoutTask = process.StandardOutput.ReadToEndAsync(timeoutCts.Token);
-            var stderrTask = process.StandardError.ReadToEndAsync(timeoutCts.Token);
-            await process.WaitForExitAsync(timeoutCts.Token).ConfigureAwait(false);
-            var stdout = await stdoutTask.ConfigureAwait(false);
-            var stderr = await stderrTask.ConfigureAwait(false);
-            return string.Concat(stdout, "\n", stderr);
-        }
-        catch (OperationCanceledException) when (timeoutCts.IsCancellationRequested && !ct.IsCancellationRequested)
-        {
-            // The probe overran ProbeTimeout (the caller's own token did NOT fire). Degrade to "unknown"; the child is
-            // killed in the finally below so no orphan survives.
-            _logger.LogWarning("llama-server --list-devices exceeded {TimeoutSeconds:0}s; reporting unknown free VRAM.", ProbeTimeout.TotalSeconds);
-            return null;
-        }
-        finally
-        {
-            // Single reaping point: on success the child has already exited (no-op); on timeout or caller-cancel it is
-            // killed (entire tree) so the probe never abandons a live process.
-            TryKill(process);
-        }
-    }
-
-    private static void TryKill(Process process)
-    {
-        try
-        {
-            if (!process.HasExited)
-            {
-                process.Kill(entireProcessTree: true);
-            }
-        }
-        catch (Exception)
-        {
-            // Best-effort: the child may have exited between the check and the kill, or be unkillable; the probe result
-            // (unknown free VRAM) stands either way.
-        }
+        return LlamaListDevicesProcessRunner.RunAsync(binary.ServerExecutablePath, ProbeTimeout, _logger, ct);
     }
 }

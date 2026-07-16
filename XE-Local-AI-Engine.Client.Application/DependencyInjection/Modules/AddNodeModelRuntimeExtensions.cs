@@ -8,6 +8,7 @@ using Microsoft.Extensions.DependencyInjection.Extensions;
 using XE_Local_AI_Engine.AI.Agent.Configuration;
 using XE_Local_AI_Engine.AI.Agent.DependencyInjection;
 using XE_Local_AI_Engine.Client.Persistence;
+using XE_Local_AI_Engine.Client.Services.Capacity;
 using XE_Local_AI_Engine.Client.Persistence.Sqlite;
 using XE_Local_AI_Engine.Client.Services.CloudProviders;
 using XE_Local_AI_Engine.Client.Services.CloudProviders.Implementation;
@@ -135,6 +136,14 @@ internal static class AddNodeModelRuntimeExtensions
 
         builder.Services.AddSingleton(sp => BuildSeededLlamaServerSupervisorOptions(sp));
         builder.Services.AddLlamaServerLocalModelProvider();
+
+        // AUD4-06: the process-wide GPU-load admission gate — the REAL, metric-emitting singleton shared by the
+        // llama-server and stable-diffusion.cpp supervisors, so no two GPU loads race their --fit / free-VRAM reads. A
+        // plain AddSingleton wins over each provider's TryAddSingleton<IGpuModelLoadAdmission, NoOpGpuModelLoadAdmission>()
+        // floor (last registration wins). The bounded max-wait is a backstop the size-aware readiness timeouts already
+        // make rare; captured at host build, applied on the next process restart.
+        builder.Services.AddSingleton(new GpuModelLoadAdmissionOptions());
+        builder.Services.AddSingleton<IGpuModelLoadAdmission, GpuModelLoadAdmission>();
 
         // Inference Optimizer: profile-driven launch-arg replay. Registered AFTER AddLlamaServerLocalModelProvider so
         // the real DB-backed resolver OVERRIDES the provider's explore-only DefaultInferenceProfileResolver — a plain
