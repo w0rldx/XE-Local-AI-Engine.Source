@@ -5,6 +5,7 @@ using System.Reflection;
 using System.Security.Cryptography;
 using System.Text;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.Diagnostics;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Options;
 using XE_Local_AI_Engine.Client.Configuration;
@@ -386,6 +387,10 @@ public sealed class PersistenceEncryptionTests : IDisposable
         var options = new DbContextOptionsBuilder<NodeChatDbContext>()
                       .UseSqlite($"Data Source={databasePath}")
                       .AddInterceptors(new NodeEncryptionSaveChangesInterceptor(), new NodeEncryptionMaterializationInterceptor())
+                      // Fresh per-test options create a new EF internal service provider; in a FULL-SUITE run the
+                      // process-wide count crosses EF's 20-provider threshold and the warning (an error in this solution)
+                      // throws. The established repo-wide test pattern is to ignore it on throwaway options.
+                      .ConfigureWarnings(warnings => warnings.Ignore(CoreEventId.ManyServiceProvidersCreatedWarning))
                       .Options;
 
         return new NodeChatDbContext(options, keyHolder);
