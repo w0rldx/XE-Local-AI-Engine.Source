@@ -5,6 +5,7 @@ using System.Diagnostics.CodeAnalysis;
 using System.Globalization;
 using Microsoft.Data.Sqlite;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.Diagnostics;
 using Microsoft.Extensions.Logging.Abstractions;
 using XE_Local_AI_Engine.Client.Persistence.Sqlite;
 using XE_Local_AI_Engine.Tests.Testing;
@@ -95,6 +96,10 @@ public sealed class NodeSqlitePragmasTests : IDisposable
         var options = new DbContextOptionsBuilder<ProbeContext>()
                      .UseSqlite($"Data Source={path}")
                      .AddInterceptors(new NodeSqliteConnectionInterceptor(NodeSqlitePragmaSettings.Default, NullLogger<NodeSqliteConnectionInterceptor>.Instance))
+                     // Fresh per-test options create a new EF internal service provider; in a FULL-SUITE run the
+                     // process-wide count crosses EF's 20-provider threshold and the warning (an error in this solution)
+                     // throws. The established repo-wide test pattern is to ignore it on throwaway options.
+                     .ConfigureWarnings(warnings => warnings.Ignore(CoreEventId.ManyServiceProvidersCreatedWarning))
                      .Options;
 
         await using var context = new ProbeContext(options);
