@@ -83,6 +83,34 @@ public static class NodeMetrics
             description: "Per-stage duration of a knowledge-base retrieval by stage (fts | embed | vector | hydrate | rerank | expand).");
 
     /// <summary>
+    ///     Number of candidate chunk-vector rows scanned by one managed cosine vector search (content-free — a row count
+    ///     only). The search reads every stored vector for the resolved embedding model, so this is the brute-force fan-out
+    ///     the bounded top-k selection runs over; a rising distribution flags a corpus large enough to warrant an ANN index.
+    /// </summary>
+    public static readonly Histogram<long> KnowledgeVectorSearchCandidatesScanned =
+        Meter.CreateHistogram<long>("knowledge_vector_search_candidates_scanned",
+            unit: "rows",
+            description: "Number of stored chunk-vector rows scanned by one managed cosine vector search.");
+
+    /// <summary>
+    ///     Wall-clock duration (milliseconds) of one managed cosine vector search — the pure scan/score/select cost, measured
+    ///     inside the search itself (distinct from the service-observed <c>stage=vector</c> timing, which also spans the
+    ///     factory resolution and awaits around it).
+    /// </summary>
+    public static readonly Histogram<double> KnowledgeVectorSearchDurationMs =
+        Meter.CreateHistogram<double>("knowledge_vector_search_duration_ms",
+            unit: "ms",
+            description: "Duration of one managed cosine vector search (scan + score + bounded top-k selection).");
+
+    /// <summary>
+    ///     Knowledge-search query-embedding cache lookups, tagged by <c>result</c> (hit | miss). A high hit ratio means the
+    ///     dominant embedding round trip is being skipped for repeated queries. Content-free — a count only.
+    /// </summary>
+    public static readonly Counter<long> KnowledgeQueryEmbeddingCacheLookupsTotal =
+        Meter.CreateCounter<long>("knowledge_query_embedding_cache_lookups_total",
+            description: "Knowledge-search query-embedding cache lookups by result (hit | miss).");
+
+    /// <summary>
     ///     Registers the observable gauge that reports the current depth of the bounded knowledge-ingestion queue on the
     ///     shared <c>XE.Node</c> meter. The queue owner (the singleton dispatcher) supplies the live count callback and
     ///     holds the returned instrument for its lifetime. Kept as a factory (rather than a static instrument) because the

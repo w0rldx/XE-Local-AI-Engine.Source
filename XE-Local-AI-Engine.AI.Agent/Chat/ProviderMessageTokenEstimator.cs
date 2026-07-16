@@ -19,9 +19,16 @@ internal static class ProviderMessageTokenEstimator
     private const int CharsPerToken = 4;
     private const int PerMessageOverheadTokens = 4;
 
-    // A non-ASCII char counts as this many weighted chars. CJK/structured/emoji tokenize to roughly one-or-more tokens
-    // per char, so weighting them up biases the estimate upward (conservative) rather than the chars/4 under-count.
+    // A non-ASCII char in a Latin-script language (German/French accents, ß, ç, …) counts as this many weighted chars:
+    // modestly more than the chars/4 English rate, a small upward bias without over-counting European prose.
     private const int NonAsciiCharWeight = 2;
+
+    // A CJK ideograph, kana, Hangul syllable, or emoji code unit counts as this many weighted chars. Byte-pair tokenizers
+    // emit roughly one-or-more tokens PER CHARACTER for this content, whereas the chars/4 divisor assumes ~0.25 token/char
+    // — a ~4x under-count that would let an over-window request through. Weighting these at CharsPerToken makes the
+    // estimate ≈ 1 token/char (conservative). European accents deliberately keep the lighter NonAsciiCharWeight. Mirrored
+    // in the application-layer HeuristicTokenEstimator (separate assembly by the layer arrow) — change both together.
+    private const int CjkCharWeight = CharsPerToken;
 
     public static int EstimateTokens(ChatMessage message)
     {
@@ -119,9 +126,33 @@ internal static class ProviderMessageTokenEstimator
         var weighted = 0;
         foreach (var character in value)
         {
-            weighted += character < 128 ? 1 : NonAsciiCharWeight;
+            weighted += WeightOf(character);
         }
 
         return weighted;
+    }
+
+    private static int WeightOf(char character)
+    {
+        if (character < 128)
+        {
+            return 1;
+        }
+
+        return IsCjkOrEmoji(character) ? CjkCharWeight : NonAsciiCharWeight;
+    }
+
+    // Code units that tokenize to ≈1+ tokens each: CJK radicals/ideographs (incl. Ext-A) + kana + CJK punctuation
+    // (U+2E80–U+9FFF), Hangul syllables (U+AC00–U+D7A3), CJK compatibility ideographs (U+F900–U+FAFF), half/fullwidth
+    // forms (U+FF00–U+FFEF), and surrogate halves (U+D800–U+DFFF) — which stand in for emoji and CJK Ext-B+ code points,
+    // each surrogate counted heavy so a two-unit emoji biases upward. Latin-1/Latin-Extended accents are intentionally
+    // excluded (they fall to the lighter NonAsciiCharWeight). Mirror of HeuristicTokenEstimator.IsCjkOrEmoji.
+    private static bool IsCjkOrEmoji(char character)
+    {
+        return character is (>= '⺀' and <= '鿿')
+            or (>= '가' and <= '힣')
+            or (>= '豈' and <= '﫿')
+            or (>= '＀' and <= '￯')
+            or (>= '\uD800' and <= '\uDFFF');
     }
 }

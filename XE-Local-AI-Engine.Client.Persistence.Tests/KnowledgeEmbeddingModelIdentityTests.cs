@@ -239,6 +239,7 @@ public sealed class KnowledgeEmbeddingModelIdentityTests : IDisposable
             new ReciprocalRankFusion(),
             Substitute.For<IRerankerClient>(),
             Substitute.For<IContextExpansionService>(),
+            Substitute.For<IKnowledgeQueryEmbeddingCache>(),
             options,
             NullLogger<KnowledgeSearchService>.Instance);
     }

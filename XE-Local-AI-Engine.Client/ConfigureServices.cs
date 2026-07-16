@@ -299,6 +299,12 @@ public static class ConfigureServices
         // re-run over an already-encrypted table is a no-op. Registered before the title backfill so titles are
         // re-derived from rows that are already migrated when possible (both are read-both, so order is not required).
         builder.Services.AddHostedService<NodeChatContentEncryptionBackfillService>();
+        // One-time L2-normalization of legacy (pre-normalization) chunk vectors so the managed cosine search can score
+        // with a dot product. Batched, transactional, resumable, idempotent (re-normalizing a unit vector is a no-op) and
+        // safe on an empty database; marker-tracked in chat_maintenance_state. Registered in the Client host only (not the
+        // shared KB module) so it never races a test host's fixtures — the search stays correct on the cosine path until
+        // it completes, then this flips the singleton IKnowledgeVectorNormalizationState latch to the dot-product path.
+        builder.Services.AddHostedService<KnowledgeVectorNormalizationBackfillService>();
         // Re-derives and re-encrypts conversation titles that were NULLed by the EncryptConversationTitle migration
         // (migrations cannot access the node key; this service runs once per startup and is idempotent).
         builder.Services.AddHostedService<NodeChatTitleEncryptionBackfillService>();
