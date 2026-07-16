@@ -33,6 +33,8 @@ using XE_Local_AI_Engine.Client.Services.Invocation.Context;
 using XE_Local_AI_Engine.Client.Services.Invocation.Envelope.Implementation;
 using XE_Local_AI_Engine.Client.Services.Invocation.Implementation;
 using XE_Local_AI_Engine.Client.Services.Invocation.Resilience;
+using XE_Local_AI_Engine.Providers.Abstractions;
+using XE_Local_AI_Engine.Providers.LlamaServer;
 using XE_Local_AI_Engine.Providers.Ollama.Implementation;
 using XE_Local_AI_Engine.Tests.Testing;
 using XE_Local_AI_Engine.Tests.Testing.Builders;
@@ -619,6 +621,83 @@ public sealed class InvocationRunnerTests
 
         AssertEx.ContainsSingle(sender.SentEncryptedFailures, failure => failure.FailureCategory == nameof(FailureCategory.ModelLoadFailed)
                                                                          && failure.Error == "The model could not be loaded or run on the provider.");
+    }
+
+    [Test]
+    public async Task RunAsync_WhenModelForceEjectedMidRequest_MapsCancelledWithTruthfulMessage()
+    {
+        // AUD4-04: an operator FORCE-eject surfaces as LlamaServerModelEjectedException, which must classify as
+        // Cancelled (an operator action, not a generic provider failure) and surface the truthful "ejected" message
+        // rather than a generic "provider unreachable".
+        var sender = new MockHubMessageSender();
+        var factory = Substitute.For<IInvocationAgentFactory>();
+        const string EjectMessage = "The model was ejected by the operator while this request was running.";
+        factory.CreateAsync(Arg.Any<InvocationAgentDefinition>(), Arg.Any<CancellationToken>())
+               .Returns(_ => Task.FromException<InvocationAgentContext>(new LlamaServerModelEjectedException(EjectMessage)));
+
+        var runner = CreateRunner(sender, factory);
+
+        await RunAsync(runner, RuntimePackageBuilder.Valid().Build());
+
+        AssertEx.ContainsSingle(sender.SentEncryptedFailures, failure => failure.FailureCategory == nameof(FailureCategory.Cancelled)
+                                                                         && failure.Error == EjectMessage);
+    }
+
+    [Test]
+    public async Task RunAsync_LocalLlamaCppModel_WarmsToReadinessBeforeGenerating()
+    {
+        // AUD4-01: for a local llama.cpp model the runner warms the model to readiness BEFORE the watched streaming pull
+        // begins, so the cold load is never guarded by (and killed by) the stream-idle watchdog.
+        var sender = new MockHubMessageSender();
+        var events = new System.Collections.Concurrent.ConcurrentQueue<string>();
+
+        var provider = Substitute.For<ILocalModelProvider>();
+        provider.ProviderName.Returns(LlamaServerProviderConstants.ProviderName);
+        provider.WarmModelAsync(Arg.Any<string>(), Arg.Any<CancellationToken>())
+                .Returns(_ =>
+                {
+                    events.Enqueue("warm");
+                    return Task.CompletedTask;
+                });
+
+        var resolver = Substitute.For<ILocalModelProviderResolver>();
+        resolver.ResolveProviderNameForModelAsync(Arg.Any<string>(), Arg.Any<CancellationToken>())
+                .Returns(Task.FromResult(LlamaServerProviderConstants.ProviderName));
+        resolver.ResolveProviderForModelAsync(Arg.Any<string>(), Arg.Any<CancellationToken>())
+                .Returns(Task.FromResult(provider));
+
+        var factory = CreateFactory(_ => WarmOrderingUpdates(events));
+        var runner = CreateRunner(sender, factory, providerResolver: resolver);
+
+        await RunAsync(runner, RuntimePackageBuilder.Valid().Build());
+
+        await provider.Received(1).WarmModelAsync(Arg.Any<string>(), Arg.Any<CancellationToken>());
+        var ordered = events.ToArray();
+        AssertEx.True(ordered.Length >= 2, "Both the warm and stream events should have fired.");
+        AssertEx.Equal("warm", ordered[0]); // readiness precedes generation.
+        AssertEx.Contains(ordered, "stream");
+    }
+
+    [Test]
+    public async Task RunAsync_OllamaModel_DoesNotWarmViaReadinessPhase()
+    {
+        // AUD4-01: the readiness (warm) phase is llama.cpp-only. An Ollama model must NOT be warmed here (it warms
+        // cheaply on first send), so the phase is a no-op for it.
+        var sender = new MockHubMessageSender();
+        var provider = Substitute.For<ILocalModelProvider>();
+        provider.ProviderName.Returns(OllamaLocalModelProvider.OllamaProviderName);
+
+        var resolver = Substitute.For<ILocalModelProviderResolver>();
+        resolver.ResolveProviderNameForModelAsync(Arg.Any<string>(), Arg.Any<CancellationToken>())
+                .Returns(Task.FromResult(OllamaLocalModelProvider.OllamaProviderName));
+        resolver.ResolveProviderForModelAsync(Arg.Any<string>(), Arg.Any<CancellationToken>())
+                .Returns(Task.FromResult(provider));
+
+        var runner = CreateRunner(sender, providerResolver: resolver, agentUpdates: CreateUpdates("ok"));
+
+        await RunAsync(runner, RuntimePackageBuilder.Valid().Build());
+
+        await provider.DidNotReceive().WarmModelAsync(Arg.Any<string>(), Arg.Any<CancellationToken>());
     }
 
     [Test]
@@ -1480,6 +1559,15 @@ public sealed class InvocationRunnerTests
             yield return new AgentResponseUpdate(ChatRole.Assistant, chunk);
             await Task.Yield();
         }
+    }
+
+    // Records "stream" the moment the agent's streaming is first pulled, so a test can assert the readiness (warm) phase
+    // ran BEFORE any streaming began.
+    private static async IAsyncEnumerable<AgentResponseUpdate> WarmOrderingUpdates(System.Collections.Concurrent.ConcurrentQueue<string> events)
+    {
+        events.Enqueue("stream");
+        yield return new AgentResponseUpdate(ChatRole.Assistant, "ok");
+        await Task.Yield();
     }
 
     private static async IAsyncEnumerable<AgentResponseUpdate> ApprovalRequestUpdates()
