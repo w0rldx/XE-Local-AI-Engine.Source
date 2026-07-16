@@ -33,10 +33,9 @@ public sealed class HeuristicTokenEstimatorTests
     }
 
     [Test]
-    public void EstimateTokens_WeightsNonAsciiHigherThanAscii()
+    public void EstimateTokens_WeightsCjkAtRoughlyOneTokenPerCharacter()
     {
-        // chars/4 badly under-counts CJK/structured text (those tokenize to more tokens per char). Non-ASCII chars are
-        // weighted 2x, so 40 CJK chars estimate higher than 40 ASCII chars of the same length.
+        // A Han character tokenizes to ≈1+ tokens; weighting CJK at CharsPerToken(4) makes the estimate ≈1 token/char.
         var estimator = new HeuristicTokenEstimator();
         var asciiMessage = new ChatMessage(ChatRole.User, [new TextContent(new string('x', 40))]);
         var cjkMessage = new ChatMessage(ChatRole.User, [new TextContent(new string('中', 40))]);
@@ -44,10 +43,47 @@ public sealed class HeuristicTokenEstimatorTests
         var asciiEstimate = estimator.EstimateTokens(asciiMessage);
         var cjkEstimate = estimator.EstimateTokens(cjkMessage);
 
-        // ascii: 40/4 + 4 = 14; cjk: (40*2)/4 + 4 = 24.
+        // ascii: 40/4 + 4 = 14; cjk: (40*4)/4 + 4 = 44 (≈1 token/char).
         AssertEx.Equal(expected: (40 / 4) + OverheadTokens, asciiEstimate);
-        AssertEx.Equal(expected: ((40 * 2) / 4) + OverheadTokens, cjkEstimate);
-        AssertEx.True(cjkEstimate > asciiEstimate, "non-ASCII content must estimate conservatively higher than ASCII of equal length");
+        AssertEx.Equal(expected: ((40 * 4) / 4) + OverheadTokens, cjkEstimate);
+        AssertEx.True(cjkEstimate > asciiEstimate, "CJK content must estimate conservatively higher than ASCII of equal length");
+    }
+
+    [Test]
+    public void EstimateTokens_WeightsLatinAccentsLighterThanCjk()
+    {
+        // European accents (this user's locale is German) tokenize far closer to Latin than CJK does, so they keep the
+        // lighter NonAsciiCharWeight(2) — German/French prose must NOT be over-counted at the CJK rate.
+        var estimator = new HeuristicTokenEstimator();
+        var germanMessage = new ChatMessage(ChatRole.User, [new TextContent(new string('ü', 40))]);
+        var cjkMessage = new ChatMessage(ChatRole.User, [new TextContent(new string('中', 40))]);
+
+        var germanEstimate = estimator.EstimateTokens(germanMessage);
+        var cjkEstimate = estimator.EstimateTokens(cjkMessage);
+
+        // german accent: (40*2)/4 + 4 = 24; strictly between ASCII (14) and CJK (44).
+        AssertEx.Equal(expected: ((40 * 2) / 4) + OverheadTokens, germanEstimate);
+        AssertEx.True(germanEstimate < cjkEstimate, "Latin accents must weigh lighter than CJK.");
+        AssertEx.True(germanEstimate > (40 / 4) + OverheadTokens, "Latin accents must still weigh a little heavier than ASCII.");
+    }
+
+    [Test]
+    public void EstimateTokens_ForRealisticCjkSentence_NoLongerUnderCountsByHalf()
+    {
+        // Reference basis: modern byte-pair tokenizers (cl100k / LLaMA family) emit roughly one-or-more tokens per Han
+        // character. The OLD weighting (non-ASCII = 2) estimated ~0.5 token/char — a ~2x UNDER-count that could let an
+        // over-window request through. Weighting CJK at CharsPerToken(4) yields ≈1 token/char (conservative, upper-biased).
+        var estimator = new HeuristicTokenEstimator();
+        const string sentence = "机器学习模型需要大量的训练数据才能达到良好的性能表现";
+        var message = new ChatMessage(ChatRole.User, [new TextContent(sentence)]);
+
+        var estimate = estimator.EstimateTokens(message);
+
+        var charCount = sentence.Length; // all BMP Han → one code unit each
+        var oldUnderCount = ((charCount * 2) / 4) + OverheadTokens; // the pre-fix ~0.5 token/char estimate
+        AssertEx.Equal(expected: ((charCount * 4) / 4) + OverheadTokens, estimate);
+        AssertEx.True(estimate >= charCount, "CJK content should estimate at least ~1 token per character, not half.");
+        AssertEx.True(estimate > oldUnderCount, "The fix must estimate strictly higher than the old ~0.5 token/char undercount.");
     }
 
     [Test]

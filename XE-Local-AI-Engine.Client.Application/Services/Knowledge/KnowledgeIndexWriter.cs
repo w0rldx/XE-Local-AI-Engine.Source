@@ -136,6 +136,13 @@ public sealed class KnowledgeIndexWriter : IKnowledgeIndexWriter
                 _ = await chunkCommand.ExecuteNonQueryAsync(cancellationToken).ConfigureAwait(false);
             }
 
+            // Store the vector L2-normalized. Cosine similarity is scale-invariant, so unit-length storage changes no
+            // ranking, but it lets the search score with a plain dot product (query normalized once, one pass per
+            // candidate) instead of recomputing both norms per row. A zero-magnitude embedding has no direction and is
+            // left exactly as produced (the search skips it, matching the old cosine-NaN behavior).
+            var embeddingBytes = chunk.Embedding.ToArray();
+            KnowledgeVectorMath.NormalizeBytesInPlace(embeddingBytes);
+
             await using (var vectorCommand = connection.CreateCommand())
             {
                 vectorCommand.Transaction = transaction;
@@ -146,7 +153,7 @@ public sealed class KnowledgeIndexWriter : IKnowledgeIndexWriter
                 AddParameter(vectorCommand, "$chunk_id", chunkId);
                 AddParameter(vectorCommand, "$document_id", input.DocumentId);
                 AddParameter(vectorCommand, "$dim", chunk.Dim);
-                AddParameter(vectorCommand, "$embedding", chunk.Embedding.ToArray());
+                AddParameter(vectorCommand, "$embedding", embeddingBytes);
                 AddParameter(vectorCommand, "$embedding_model", input.EmbeddingModel);
                 _ = await vectorCommand.ExecuteNonQueryAsync(cancellationToken).ConfigureAwait(false);
             }
