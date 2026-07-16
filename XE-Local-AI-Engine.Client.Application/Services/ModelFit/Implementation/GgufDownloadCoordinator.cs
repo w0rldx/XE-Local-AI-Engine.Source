@@ -2,6 +2,7 @@ namespace XE_Local_AI_Engine.Client.Services.ModelFit.Implementation;
 
 using System.Collections.Concurrent;
 using XE_Local_AI_Engine.Client.Persistence.Stores;
+using XE_Local_AI_Engine.Client.Services.CloudProviders;
 using XE_Local_AI_Engine.Providers.Abstractions.Contracts;
 using XE_Local_AI_Engine.Providers.Abstractions.Gguf;
 using XE_Local_AI_Engine.Providers.LlamaServer;
@@ -147,6 +148,10 @@ public sealed class GgufDownloadCoordinator : IGgufDownloadCoordinator
             await using var scope = _scopeFactory.CreateAsyncScope();
             var mapStore = scope.ServiceProvider.GetRequiredService<IModelProviderMapStore>();
             await mapStore.UpsertAsync(modelName, LlamaServerProviderConstants.ProviderName, token).ConfigureAwait(false);
+
+            // AUD4-16: the just-written row must be visible immediately, so drop the resolver's short-TTL provider-name
+            // cache. Optional resolve — the singleton resolver may be absent in a narrow test host; the TTL is the backstop.
+            scope.ServiceProvider.GetService<ILocalModelProviderResolver>()?.InvalidateModelProviderMap();
         }
         catch (OperationCanceledException) when (token.IsCancellationRequested)
         {

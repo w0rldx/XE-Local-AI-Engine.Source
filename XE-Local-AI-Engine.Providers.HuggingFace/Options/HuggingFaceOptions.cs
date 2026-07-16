@@ -31,6 +31,17 @@ public sealed class HuggingFaceOptions
     public int MaxDownloadRetries { get; set; } = 4;
 
     /// <summary>
+    ///     Read-idle timeout (seconds) for the download body-copy loop (AUD4-18). The download uses
+    ///     <c>HttpCompletionOption.ResponseHeadersRead</c>, so the HttpClient timeout covers only the response HEADERS; a
+    ///     CDN that accepts the connection and then stalls mid-body would otherwise hang the copy forever with no deadline
+    ///     on <c>Stream.ReadAsync</c>. This bounds the gap between two successful reads: if no bytes arrive within the
+    ///     window the read is cancelled and surfaced as a TRANSIENT network failure, so the existing resume/retry path
+    ///     (<see cref="MaxDownloadRetries" />, <c>.part</c> resume) re-attempts from where it stalled. A value
+    ///     <c>&lt;= 0</c> disables the idle bound.
+    /// </summary>
+    public int DownloadReadIdleTimeoutSeconds { get; set; } = 30;
+
+    /// <summary>
     ///     Maximum concurrent GGUF header range reads during a single repo inspection. A repo can ship 10-25 quant
     ///     variants; bounding concurrency keeps inspection fast without opening unlimited simultaneous HTTP requests.
     /// </summary>

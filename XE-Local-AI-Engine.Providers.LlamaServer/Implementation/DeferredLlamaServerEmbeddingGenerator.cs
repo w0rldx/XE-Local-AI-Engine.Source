@@ -27,15 +27,17 @@ internal sealed class DeferredLlamaServerEmbeddingGenerator : IEmbeddingGenerato
 {
     private readonly SemaphoreSlim _initGate = new(initialCount: 1, maxCount: 1);
     private readonly string _modelName;
+    private readonly TimeSpan _networkTimeout;
     private readonly ILlamaServerProcessSupervisor _supervisor;
 
     private IEmbeddingGenerator<string, Embedding<float>>? _inner;
 
-    public DeferredLlamaServerEmbeddingGenerator(ILlamaServerProcessSupervisor supervisor, string modelName)
+    public DeferredLlamaServerEmbeddingGenerator(ILlamaServerProcessSupervisor supervisor, string modelName, TimeSpan networkTimeout)
     {
         _supervisor = supervisor ?? throw new ArgumentNullException(nameof(supervisor));
         ArgumentException.ThrowIfNullOrWhiteSpace(modelName);
         _modelName = modelName;
+        _networkTimeout = networkTimeout;
     }
 
     public async Task<GeneratedEmbeddings<Embedding<float>>> GenerateAsync(IEnumerable<string> values,
@@ -92,7 +94,7 @@ internal sealed class DeferredLlamaServerEmbeddingGenerator : IEmbeddingGenerato
                 throw new IOException(exception.Message, exception);
             }
 
-            var built = LlamaServerOpenAIAdapterFactory.CreateEmbeddingGenerator(endpoint.BaseAddress, _modelName);
+            var built = LlamaServerOpenAIAdapterFactory.CreateEmbeddingGenerator(endpoint.BaseAddress, _modelName, _networkTimeout);
             Volatile.Write(ref _inner, built);
             return built;
         }

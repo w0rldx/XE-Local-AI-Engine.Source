@@ -32,15 +32,17 @@ internal sealed class DeferredLlamaServerChatClient : IChatClient
 
     private readonly SemaphoreSlim _initGate = new(initialCount: 1, maxCount: 1);
     private readonly string _modelName;
+    private readonly TimeSpan _networkTimeout;
     private readonly ILlamaServerProcessSupervisor _supervisor;
 
     private IChatClient? _inner;
 
-    public DeferredLlamaServerChatClient(ILlamaServerProcessSupervisor supervisor, string modelName)
+    public DeferredLlamaServerChatClient(ILlamaServerProcessSupervisor supervisor, string modelName, TimeSpan networkTimeout)
     {
         _supervisor = supervisor ?? throw new ArgumentNullException(nameof(supervisor));
         ArgumentException.ThrowIfNullOrWhiteSpace(modelName);
         _modelName = modelName;
+        _networkTimeout = networkTimeout;
     }
 
     public async Task<ChatResponse> GetResponseAsync(IEnumerable<ChatMessage> messages,
@@ -194,7 +196,7 @@ internal sealed class DeferredLlamaServerChatClient : IChatClient
             }
 
             var endpoint = await _supervisor.EnsureRunningAsync(_modelName, ModelRole.Chat, ct).ConfigureAwait(false);
-            var built = LlamaServerOpenAIAdapterFactory.CreateChatClient(endpoint.BaseAddress, _modelName);
+            var built = LlamaServerOpenAIAdapterFactory.CreateChatClient(endpoint.BaseAddress, _modelName, _networkTimeout);
             Volatile.Write(ref _inner, built);
             return built;
         }

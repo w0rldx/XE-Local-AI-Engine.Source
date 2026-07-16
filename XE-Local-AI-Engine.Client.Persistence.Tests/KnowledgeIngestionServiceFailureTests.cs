@@ -198,5 +198,10 @@ public sealed class KnowledgeIngestionServiceFailureTests : IDisposable
         {
             throw new InvalidOperationException("The embedding provider is not registered.");
         }
+
+        public void InvalidateModelProviderMap()
+        {
+            // No cache in this test double.
+        }
     }
 }
