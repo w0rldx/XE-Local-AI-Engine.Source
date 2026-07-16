@@ -15,16 +15,33 @@ import type { LoadedModelsSnapshot, UnloadResult } from "@/features/loaded-model
 // mutation's optimistic update + invalidation so the cache key is constructed in exactly one place.
 export const loadedModelsQueryKey: QueryKey = ["loaded-models", "running"];
 
-// Poll cadence (ms) while the page is mounted. The running set changes as the runtime loads/evicts models and as a
-// model's idle timer (expiresAtUtc) counts down, so a short interval keeps the memory view current without manual
-// refresh. 4s — frequent enough to feel live, light enough for a local endpoint.
+// Poll cadence (ms) while the page is mounted AND the provider is reachable. The running set changes as the runtime
+// loads/evicts models and as a model's idle timer (expiresAtUtc) counts down, so a short interval keeps the memory
+// view current without manual refresh. 4s — frequent enough to feel live, light enough for a local endpoint.
 const loadedModelsPollIntervalMs = 4000;
 
+// Back-off cadence (ms) once the last snapshot reported the provider unreachable. Ollama is an OPTIONAL secondary
+// provider that is deliberately absent on the desktop default, so hammering an absent daemon every 4s only spams
+// connection-refused traces (each poll re-attempts the unreachable endpoint) with no upside. Slow the poll right
+// down while unavailable; it still recovers automatically within one long interval if Ollama later comes up, and
+// the separate llama.cpp running-models query keeps refreshing on its own cadence regardless.
+const unavailablePollIntervalMs = 30_000;
+
 /**
- * Lists the models the local runtime currently holds in memory, polling every {@link loadedModelsPollIntervalMs}.
- * The TanStack `AbortSignal` is wired into the generated request so an unmount/refetch cancels the in-flight GET.
- * The endpoint degrades gracefully (200 + `isAvailable:false`) when the provider is unreachable, so the query
- * resolves to a snapshot rather than erroring on provider downtime.
+ * Chooses the poll cadence for the loaded-models query from the latest snapshot: the fast cadence while the provider
+ * reports available (or before the first response), the slow back-off cadence once it reports unreachable. Exported
+ * so the back-off decision is unit-testable without driving react-query's internal timers.
+ */
+export function resolveLoadedModelsPollIntervalMs(snapshot: LoadedModelsSnapshot | undefined): number {
+	return snapshot?.isAvailable === false ? unavailablePollIntervalMs : loadedModelsPollIntervalMs;
+}
+
+/**
+ * Lists the models the local runtime currently holds in memory. The TanStack `AbortSignal` is wired into the
+ * generated request so an unmount/refetch cancels the in-flight GET. The endpoint degrades gracefully (200 +
+ * `isAvailable:false`) when the provider is unreachable, so the query resolves to a snapshot rather than erroring on
+ * provider downtime. The poll interval adapts to that snapshot: {@link loadedModelsPollIntervalMs} while reachable,
+ * {@link unavailablePollIntervalMs} once unreachable — so a deliberately-absent Ollama isn't polled aggressively.
  */
 export function useLoadedModels() {
 	return useQuery<LoadedModelsSnapshot>({
@@ -33,7 +50,9 @@ export function useLoadedModels() {
 			const { data } = await callWithResponseValidation(getRunningLocalModels({ signal, throwOnError: true }));
 			return toLoadedModelsSnapshot(data);
 		},
-		refetchInterval: loadedModelsPollIntervalMs,
+		// Adaptive cadence: back off to a slow poll while the provider is unreachable so an absent Ollama (desktop
+		// default) doesn't drive a 4s connection-refused loop; resume the fast poll the moment it reports available.
+		refetchInterval: (query) => resolveLoadedModelsPollIntervalMs(query.state.data),
 	});
 }
 
