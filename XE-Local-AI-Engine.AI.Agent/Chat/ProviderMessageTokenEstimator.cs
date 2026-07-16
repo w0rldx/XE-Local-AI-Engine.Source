@@ -1,5 +1,6 @@
 namespace XE_Local_AI_Engine.AI.Agent.Chat;
 
+using System.Runtime.CompilerServices;
 using Microsoft.Extensions.AI;
 
 /// <summary>
@@ -13,9 +14,20 @@ using Microsoft.Extensions.AI;
 ///         budgeter uses). The two live in separate assemblies by the layer arrow (Application → AI.Agent), so the
 ///         formula is intentionally duplicated: a change to the weighting here MUST be mirrored there, and vice versa.
 ///     </para>
+///     <para>
+///         AUD4-16: per-message estimates are memoized by message instance in a
+///         <see cref="ConditionalWeakTable{TKey,TValue}" /> (no leak — the entry dies with the message). This hop
+///         re-estimates the full message list on EVERY inner tool-loop round, and those rounds reuse the same
+///         <see cref="ChatMessage" /> instances (the function-invocation loop appends but never mutates prior messages),
+///         so the memo collapses repeated full-content scans to dictionary lookups. Correct only because a
+///         <see cref="ChatMessage" /> is immutable-after-construction on these paths; the memoized value equals a fresh
+///         computation, so budgeting output is unchanged.
+///     </para>
 /// </summary>
 internal static class ProviderMessageTokenEstimator
 {
+    private static readonly ConditionalWeakTable<ChatMessage, StrongBox<int>> PerMessageEstimateCache = new();
+
     private const int CharsPerToken = 4;
     private const int PerMessageOverheadTokens = 4;
 
@@ -34,13 +46,18 @@ internal static class ProviderMessageTokenEstimator
     {
         ArgumentNullException.ThrowIfNull(message);
 
+        return PerMessageEstimateCache.GetValue(message, ComputeMessageTokens).Value;
+    }
+
+    private static StrongBox<int> ComputeMessageTokens(ChatMessage message)
+    {
         var weighted = 0;
         foreach (var content in message.Contents)
         {
             weighted += EstimateContentWeightedChars(content);
         }
 
-        return (weighted / CharsPerToken) + PerMessageOverheadTokens;
+        return new StrongBox<int>((weighted / CharsPerToken) + PerMessageOverheadTokens);
     }
 
     public static int EstimateTokens(IReadOnlyList<ChatMessage> messages)

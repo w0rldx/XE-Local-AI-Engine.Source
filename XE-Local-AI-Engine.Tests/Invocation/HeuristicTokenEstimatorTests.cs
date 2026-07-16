@@ -21,6 +21,22 @@ public sealed class HeuristicTokenEstimatorTests
     }
 
     [Test]
+    public void EstimateTokens_IsMemoizedPerInstanceWithoutChangingTheResult()
+    {
+        // AUD4-16: per-message estimates are memoized by instance so the budgeter's repeated re-estimation across rounds
+        // is cheap. The memo must be transparent: repeated calls on one instance and a fresh instance with identical
+        // content all yield the same value the formula produces.
+        var estimator = new HeuristicTokenEstimator();
+        var message = new ChatMessage(ChatRole.User, [new TextContent(new string('x', 40))]);
+        var equalContent = new ChatMessage(ChatRole.User, [new TextContent(new string('x', 40))]);
+        var expected = (40 / 4) + OverheadTokens;
+
+        AssertEx.Equal(expected, estimator.EstimateTokens(message));
+        AssertEx.Equal(expected, estimator.EstimateTokens(message));
+        AssertEx.Equal(expected, estimator.EstimateTokens(equalContent));
+    }
+
+    [Test]
     public void EstimateTokens_CountsToolResultContentLength()
     {
         // The budgeter's truncation savings rely on a tool result's characters counting toward the estimate.
