@@ -27,6 +27,12 @@ using Microsoft.Extensions.AI;
 ///     and attaches no context provider. When non-empty, the factory builds an <c>AgentSkillsProvider</c> from these
 ///     skills and constructs the agent through the options constructor with that provider attached.
 /// </param>
+/// <param name="EffectiveContextTokens">
+///     The launched effective context window (in tokens) of the resolved local runtime for this turn, when known
+///     (AUD4-02). Null (the default) keeps the byte-identical no-override path. When set AND the per-send
+///     <see cref="InvocationSamplingOptions.NumCtx" /> is not, the factory writes it as the <c>num_ctx</c> chat option so
+///     the inner provider-round budgeter sizes against the real window; a per-send <c>num_ctx</c> still wins.
+/// </param>
 public sealed record InvocationAgentDefinition(
     string ModelId,
     string Instructions,
@@ -35,4 +41,5 @@ public sealed record InvocationAgentDefinition(
     string? ReasoningEffort = null,
     bool SupportsThinking = true,
     InvocationSamplingOptions? Sampling = null,
-    IReadOnlyList<InvocationSkill>? Skills = null);
+    IReadOnlyList<InvocationSkill>? Skills = null,
+    int? EffectiveContextTokens = null);

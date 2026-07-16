@@ -240,17 +240,25 @@ public sealed partial class InvocationRunner : IInvocationRunner
             // stream-idle watchdog — the primary cause of the audited "big model can never load through chat" hang.
             // Cloud (Codex/Azure) and Ollama models are a no-op here. The load is decoupled from this caller's token in
             // the supervisor, so a user who cancels merely abandons the wait while the load continues in the background.
-            await PrepareLocalRuntimeAsync(resolvedModel, dispatcher, package.InvocationId, invocationToken).ConfigureAwait(false);
+            var effectiveContextTokens = await PrepareLocalRuntimeAsync(resolvedModel, dispatcher, package.InvocationId, invocationToken).ConfigureAwait(false);
+
+            // AUD4-02: fold the launched effective context window into the turn policy so the OUTER conversation
+            // budgeter sizes history against the real window. The per-send num_ctx override still wins; an unknown
+            // window (cloud/Ollama/not-yet-started) keeps the configured default. The same value is threaded into the
+            // agent definition below so the INNER provider-round budgeter (num_ctx side channel) agrees.
+            turnPolicy = ApplyEffectiveContext(turnPolicy, package, effectiveContextTokens);
 
             // Branch: a package carrying a compiled orchestration spec drives the handoff workflow; everything else is
             // the unchanged single-agent loop. Both accumulate into `stream`, then share the completion block below.
             if (package.OrchestrationSpec is { } orchestrationSpec)
             {
+                // The orchestration path's OUTER conversation budgeter already sizes against the effective window via the
+                // updated turnPolicy above. Per-participant num_ctx (inner budgeter) propagation is out of scope here.
                 await RunOrchestrationAsync(package, orchestrationSpec, resolvedModel, transport, stream, turnPolicy, invocationToken).ConfigureAwait(false);
             }
             else
             {
-                await RunSingleAgentAsync(package, resolvedModel, transport, stream, turnPolicy, invocationToken).ConfigureAwait(false);
+                await RunSingleAgentAsync(package, resolvedModel, transport, stream, turnPolicy, effectiveContextTokens, invocationToken).ConfigureAwait(false);
             }
 
             // Read the whole-turn wall-clock duration once. The same value rides every completion transport (encrypted
@@ -462,7 +470,7 @@ public sealed partial class InvocationRunner : IInvocationRunner
     ///         streaming send surfaces the real, classified error through its normal path rather than a duplicate here.
     ///     </para>
     /// </summary>
-    private async Task PrepareLocalRuntimeAsync(string resolvedModel,
+    private async Task<int?> PrepareLocalRuntimeAsync(string resolvedModel,
         IWorkerEventDispatcher dispatcher,
         Guid invocationId,
         CancellationToken cancellationToken)
@@ -470,7 +478,7 @@ public sealed partial class InvocationRunner : IInvocationRunner
         var provider = await ResolveWarmableProviderAsync(resolvedModel, invocationId, cancellationToken).ConfigureAwait(false);
         if (provider is null)
         {
-            return;
+            return null;
         }
 
         // Phase: preparing runtime → loading model. Both fire BEFORE the stream-idle watchdog is armed.
@@ -496,7 +504,7 @@ public sealed partial class InvocationRunner : IInvocationRunner
             // classified failure — it hits the same supervisor path and produces the proper error.
             RecordReadiness(startedUtc, "failed");
             _logger.LogWarning(exception, "Model warm failed for invocation {InvocationId}; the streaming send will surface the classified failure.", invocationId);
-            return;
+            return null;
         }
 
         var durationMs = RecordReadiness(startedUtc, "ready");
@@ -504,6 +512,37 @@ public sealed partial class InvocationRunner : IInvocationRunner
 
         // Phase: generating (the model is ready; streaming begins under the stream-idle watchdog).
         await dispatcher.ReportInvocationPhaseAsync(invocationId, InvocationRuntimePhase.Generating).ConfigureAwait(false);
+
+        // AUD4-02: with the model now ready, read the effective per-slot context window it actually loaded so the turn's
+        // budgeters + the num_ctx side channel size against the REAL window (llama.cpp's -c) rather than the app default.
+        // Best-effort — a null here just keeps the configured default. A cancellation propagates (the turn is terminating).
+        return await ResolveEffectiveContextTokensAsync(provider, resolvedModel, invocationId, cancellationToken).ConfigureAwait(false);
+    }
+
+    /// <summary>
+    ///     Reads the launched effective context window for <paramref name="resolvedModel" /> from the warm local provider
+    ///     (llama.cpp). Returns <see langword="null" /> when unknown (the runtime does not report one, or the read failed)
+    ///     so the caller keeps the configured default. A cancellation propagates.
+    /// </summary>
+    private async Task<int?> ResolveEffectiveContextTokensAsync(ILocalModelProvider provider,
+        string resolvedModel,
+        Guid invocationId,
+        CancellationToken cancellationToken)
+    {
+        try
+        {
+            var runtimeInfo = await provider.GetRuntimeInfoAsync(resolvedModel, cancellationToken).ConfigureAwait(false);
+            return runtimeInfo is { EffectiveContextTokens: > 0 } info ? info.EffectiveContextTokens : null;
+        }
+        catch (OperationCanceledException)
+        {
+            throw;
+        }
+        catch (Exception exception)
+        {
+            _logger.LogDebug(exception, "Reading the effective context window for invocation {InvocationId} failed; the configured default window is used.", invocationId);
+            return null;
+        }
     }
 
     /// <summary>
@@ -532,6 +571,25 @@ public sealed partial class InvocationRunner : IInvocationRunner
         }
     }
 
+    /// <summary>
+    ///     Folds the launched effective context window into the turn policy. Precedence: a per-send <c>num_ctx</c>
+    ///     override (already resolved into <see cref="TurnPolicy.ContextCapacityTokens" /> by <see cref="TurnPolicy.Resolve" />)
+    ///     wins and is left untouched; otherwise a known effective window replaces the configured default so the outer
+    ///     conversation budgeter sizes against the real window. An unknown window leaves the policy unchanged.
+    /// </summary>
+    private static TurnPolicy ApplyEffectiveContext(TurnPolicy turnPolicy, RuntimePackage package, int? effectiveContextTokens)
+    {
+        if (package.SamplingOptions?.NumCtx is > 0 || effectiveContextTokens is not > 0)
+        {
+            return turnPolicy;
+        }
+
+        return turnPolicy with
+        {
+            ContextCapacityTokens = effectiveContextTokens.Value
+        };
+    }
+
     /// <summary>Records the model-readiness duration + outcome on <see cref="NodeMetrics" /> and returns the elapsed milliseconds.</summary>
     private static double RecordReadiness(DateTimeOffset startedUtc, string outcome)
     {
@@ -548,6 +606,7 @@ public sealed partial class InvocationRunner : IInvocationRunner
         StreamTransport transport,
         StreamState stream,
         TurnPolicy turnPolicy,
+        int? effectiveContextTokens,
         CancellationToken invocationToken)
     {
         // Deterministic input-context budgeting is applied at BOTH history growth points so a long conversation (or a
@@ -558,7 +617,7 @@ public sealed partial class InvocationRunner : IInvocationRunner
         var budgetGate = new ContextBudgetNoticeGate();
         var seededMessages = await ApplyContextBudgetAsync(BuildChatMessages(package), package, "initial-assembly", turnPolicy, transport, budgetGate).ConfigureAwait(false);
 
-        var definition = BuildInvocationDefinition(package, resolvedModel, seededMessages);
+        var definition = BuildInvocationDefinition(package, resolvedModel, seededMessages, effectiveContextTokens);
         await using var agentContext = await _invocationAgentFactory.CreateAsync(definition, invocationToken).ConfigureAwait(false);
 
         // Maps callId → toolName so FunctionResultContent (which has no Name) can resolve the tool name
