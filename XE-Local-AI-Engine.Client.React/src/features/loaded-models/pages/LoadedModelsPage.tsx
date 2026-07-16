@@ -1,5 +1,5 @@
 import { Alert, Badge, Button, Card, Container, Group, Loader, Stack, Table, Text, Title, Tooltip } from "@mantine/core";
-import { IconAlertTriangle, IconInfoCircle, IconPlayerEject, IconServer } from "@tabler/icons-react";
+import { IconAlertTriangle, IconPlayerEject, IconServer } from "@tabler/icons-react";
 import { useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
 
@@ -126,13 +126,16 @@ export function LoadedModelsPage() {
 						) : null}
 
 						{!loadedModelsQuery.isLoading && !loadedModelsQuery.error && !isAvailable ? (
-							<Alert color="gray" icon={<IconInfoCircle size={16} />} data-testid="loaded-models-unavailable">
-								{snapshot?.error ??
-									t(
-										"pages.loadedModels.unavailable",
-										"The local model runtime is unavailable right now. This view will update once it is reachable.",
-									)}
-							</Alert>
+							// Ollama is an optional secondary provider, deliberately absent on the desktop default. An
+							// unreachable provider is therefore an expected empty state, not an error: render a neutral,
+							// dimmed line (never a red/warning alert) and do NOT surface the raw connection-refused reason
+							// as an alarming banner. A genuine transport/shape failure still routes to the error alert above.
+							<Text c="dimmed" data-testid="loaded-models-unavailable">
+								{t(
+									"pages.loadedModels.unavailable",
+									"Ollama isn't reachable right now. It's an optional secondary provider, so there may be nothing loaded to show here. llama.cpp models still appear below.",
+								)}
+							</Text>
 						) : null}
 
 						{!loadedModelsQuery.isLoading && !loadedModelsQuery.error && isAvailable && models.length === 0 ? (

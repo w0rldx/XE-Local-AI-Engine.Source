@@ -72,6 +72,9 @@ export function ChatDisplayShell({
 	conversationListCollapsed = false,
 	disabledNotice,
 	isLoadingMessages = false,
+	messagesLoadFailed = false,
+	messagesLoadErrorText,
+	onRetryLoadMessages,
 }: ChatDisplayShellProps) {
 	const { t } = useTranslation();
 	const conversation = conversations.find((item) => item.id === selectedConversationId);
@@ -244,6 +247,9 @@ export function ChatDisplayShell({
 					pendingFeedbackMessageId={pendingFeedbackMessageId}
 					onSubmitFeedback={onSubmitFeedback}
 					isLoadingMessages={isLoadingMessages}
+					messagesLoadFailed={messagesLoadFailed}
+					messagesLoadErrorText={messagesLoadErrorText}
+					onRetryLoadMessages={onRetryLoadMessages}
 					reasoningEffort={reasoningEffort}
 				/>
 				<ChatInputArea
