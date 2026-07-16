@@ -1,5 +1,6 @@
 namespace XE_Local_AI_Engine.Providers.LlamaServer.Implementation;
 
+using System.Text.Json;
 using XE_Local_AI_Engine.Providers.LlamaServer.Contracts;
 
 /// <summary>
@@ -54,6 +55,56 @@ internal sealed class LlamaServerHealthProbe(HttpClient httpClient) : ILlamaServ
         return TryProbeAsync(HealthUri(baseAddress), ct);
     }
 
+    /// <inheritdoc />
+    public async Task<int?> TryReadEffectiveContextTokensAsync(Uri baseAddress, CancellationToken ct)
+    {
+        ArgumentNullException.ThrowIfNull(baseAddress);
+
+        // Bound this single read independently of the caller so a wedged /props never stalls the spawn path; one request.
+        using var attemptCts = CancellationTokenSource.CreateLinkedTokenSource(ct);
+        attemptCts.CancelAfter(PerAttemptTimeout);
+        try
+        {
+            using var response = await _httpClient.GetAsync(PropsUri(baseAddress), attemptCts.Token).ConfigureAwait(false);
+            if (!response.IsSuccessStatusCode)
+            {
+                return null;
+            }
+
+            await using var stream = await response.Content.ReadAsStreamAsync(attemptCts.Token).ConfigureAwait(false);
+            using var document = await JsonDocument.ParseAsync(stream, cancellationToken: attemptCts.Token).ConfigureAwait(false);
+
+            // /props exposes the effective per-slot context under default_generation_settings.n_ctx.
+            if (document.RootElement.TryGetProperty("default_generation_settings", out var settings)
+                && settings.ValueKind == JsonValueKind.Object
+                && settings.TryGetProperty("n_ctx", out var nCtx)
+                && nCtx.ValueKind == JsonValueKind.Number
+                && nCtx.TryGetInt32(out var contextTokens)
+                && contextTokens > 0)
+            {
+                return contextTokens;
+            }
+
+            return null;
+        }
+        catch (OperationCanceledException) when (ct.IsCancellationRequested)
+        {
+            throw; // Caller cancellation — propagate.
+        }
+        catch (OperationCanceledException)
+        {
+            return null; // This read exceeded its per-attempt bound — treat the effective context as unknown.
+        }
+        catch (HttpRequestException)
+        {
+            return null; // /props unreachable — unknown.
+        }
+        catch (JsonException)
+        {
+            return null; // Malformed /props body — unknown.
+        }
+    }
+
     private async Task<bool> TryProbeAsync(Uri healthUri, CancellationToken ct)
     {
         // Bound THIS single attempt independently of the caller's (readiness-budget or liveness) token so a wedged
@@ -84,5 +135,11 @@ internal sealed class LlamaServerHealthProbe(HttpClient httpClient) : ILlamaServ
     private static Uri HealthUri(Uri baseAddress)
     {
         return new Uri(baseAddress, "/health");
+    }
+
+    // /props is a sibling of /health at the server root (not under /v1).
+    private static Uri PropsUri(Uri baseAddress)
+    {
+        return new Uri(baseAddress, "/props");
     }
 }
