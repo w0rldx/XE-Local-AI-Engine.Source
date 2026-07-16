@@ -21,12 +21,18 @@ public sealed class HeuristicTokenEstimator : ITokenEstimator
     // near-empty message (e.g. a bare tool acknowledgement) from being counted as zero-cost.
     private const int PerMessageOverheadTokens = 4;
 
-    // A non-ASCII character counts as this many weighted characters. Byte-pair tokenizers emit far more tokens per
-    // character for CJK / structured / emoji content than the chars/4 English heuristic assumes, so the plain divisor
-    // badly UNDER-counts there; weighting non-ASCII up biases the estimate upward (conservative), keeping the budgeter
-    // trimming early rather than overrunning the window on non-Latin conversations. Mirrored in the AI.Agent-layer
-    // ProviderMessageTokenEstimator (separate assembly by the layer arrow) — change both together.
+    // A non-ASCII character in a Latin-script language (German/French accents, ß, ç, …) counts as this many weighted
+    // characters: those tokenize to modestly more than the chars/4 English rate, so a small upward bias keeps the estimate
+    // conservative without over-counting European prose.
     private const int NonAsciiCharWeight = 2;
+
+    // A CJK ideograph, kana, Hangul syllable, or emoji code unit counts as this many weighted characters. Byte-pair
+    // tokenizers emit roughly one-or-more tokens PER CHARACTER for this content (a Han character is commonly a whole token
+    // or splits into two-to-three byte tokens), whereas the chars/4 divisor assumes ~0.25 token/char — a ~4x under-count.
+    // Weighting these at CharsPerToken makes the estimate ≈ 1 token/char (conservative, upper-biased). European accents
+    // deliberately keep the lighter NonAsciiCharWeight so German/French text is not over-counted. Mirrored in the
+    // AI.Agent-layer ProviderMessageTokenEstimator (separate assembly by the layer arrow) — change both together.
+    private const int CjkCharWeight = CharsPerToken;
 
     public int EstimateTokens(ChatMessage message)
     {
@@ -80,7 +86,8 @@ public sealed class HeuristicTokenEstimator : ITokenEstimator
         return characters;
     }
 
-    // Character count with each non-ASCII code unit weighted NonAsciiCharWeight× (see the field comment).
+    // Character count with each code unit weighted by script (see the field comments): ASCII 1, CJK/kana/Hangul/emoji
+    // CjkCharWeight, other non-ASCII NonAsciiCharWeight.
     private static int WeightedLength(string? value)
     {
         if (string.IsNullOrEmpty(value))
@@ -91,9 +98,33 @@ public sealed class HeuristicTokenEstimator : ITokenEstimator
         var weighted = 0;
         foreach (var character in value)
         {
-            weighted += character < 128 ? 1 : NonAsciiCharWeight;
+            weighted += WeightOf(character);
         }
 
         return weighted;
+    }
+
+    private static int WeightOf(char character)
+    {
+        if (character < 128)
+        {
+            return 1;
+        }
+
+        return IsCjkOrEmoji(character) ? CjkCharWeight : NonAsciiCharWeight;
+    }
+
+    // Code units that tokenize to ≈1+ tokens each: CJK radicals/ideographs (incl. Ext-A) + kana + CJK punctuation
+    // (U+2E80–U+9FFF), Hangul syllables (U+AC00–U+D7A3), CJK compatibility ideographs (U+F900–U+FAFF), half/fullwidth
+    // forms (U+FF00–U+FFEF), and surrogate halves (U+D800–U+DFFF) — which stand in for emoji and CJK Ext-B+ code points,
+    // each surrogate counted heavy so a two-unit emoji biases upward. Latin-1/Latin-Extended accents are intentionally
+    // excluded (they fall to the lighter NonAsciiCharWeight).
+    private static bool IsCjkOrEmoji(char character)
+    {
+        return character is (>= '⺀' and <= '鿿')
+            or (>= '가' and <= '힣')
+            or (>= '豈' and <= '﫿')
+            or (>= '＀' and <= '￯')
+            or (>= '\uD800' and <= '\uDFFF');
     }
 }
