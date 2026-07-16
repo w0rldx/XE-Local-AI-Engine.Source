@@ -329,6 +329,42 @@ public sealed class WorkerEventDispatcherTests
     }
 
     [Test]
+    public async Task ReportInvocationStreamChunkAsync_LongResponse_KeepsContentCorrectWithBoundedAllocations()
+    {
+        // AUD4-10: every streamed chunk clones the invocation snapshot. Content is now backed by an immutable
+        // StreamingText copied by REFERENCE on clone, so a clone no longer materializes the whole accumulated response
+        // per chunk (the old O(n^2) hot path). Assert (a) the final content is exactly the concatenation and (b)
+        // streaming 20k chunks stays far below the allocation the old per-chunk ToString would have cost.
+        var dispatcher = CreateDispatcher(Substitute.For<IInvocationRunner>());
+        var package = RuntimePackageBuilder.Valid().Build();
+        await dispatcher.ReportInvocationAssignedAsync(package);
+
+        const int chunkCount = 20_000;
+        const string chunk = "0123456789"; // 10 chars/chunk -> a ~200k-char final response
+
+        // Warm up the JIT and the first-chunk allocations outside the measured window.
+        await dispatcher.ReportInvocationStreamChunkAsync(package.InvocationId, chunk);
+
+        var before = GC.GetAllocatedBytesForCurrentThread();
+        for (var i = 0; i < chunkCount; i++)
+        {
+            await dispatcher.ReportInvocationStreamChunkAsync(package.InvocationId, chunk);
+        }
+
+        var allocatedBytes = GC.GetAllocatedBytesForCurrentThread() - before;
+
+        // Correctness read happens AFTER measuring so the one-time final materialization is not counted against the bound.
+        var current = AssertEx.NotNull(dispatcher.CurrentInvocation);
+        AssertEx.Equal((chunkCount + 1) * chunk.Length, current.StreamedContent.Length);
+        AssertEx.Equal(chunkCount + 1, current.StreamedChunkCount);
+
+        // The old clone materialized ~i*10 chars on chunk i -> ~sum(i)*10*2 bytes ~= 4 GB over 20k chunks. The immutable
+        // accumulator makes per-chunk clone work O(1); assert well under a ceiling the O(n^2) path could never meet.
+        AssertEx.True(allocatedBytes < 64L * 1024 * 1024,
+            $"Streaming {chunkCount:N0} chunks allocated {allocatedBytes:N0} bytes; expected < 64 MiB (the old O(n^2) clone would allocate multiple GB).");
+    }
+
+    [Test]
     public async Task ReportInvocationCompletedAsync_PreservesGenerationDurationMsThroughSnapshotClone()
     {
         // Regression: Clone() copied the token fields but dropped GenerationDurationMs, so the cloned snapshot

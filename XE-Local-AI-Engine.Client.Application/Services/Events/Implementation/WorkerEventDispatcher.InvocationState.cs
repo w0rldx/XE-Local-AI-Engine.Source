@@ -12,9 +12,11 @@ public sealed partial class WorkerEventDispatcher
             InvocationId = state.InvocationId,
             ConversationId = state.ConversationId,
             Status = state.Status,
-            StreamedContent = state.StreamedContent,
+            // Copy the immutable accumulators by REFERENCE (O(1)); reading state.StreamedContent here would materialize
+            // the whole response every chunk (the O(n^2) hot-path cost this snapshot design removes).
+            ContentAccumulator = state.ContentAccumulator,
             StreamedChunkCount = state.StreamedChunkCount,
-            StreamedThinkingContent = state.StreamedThinkingContent,
+            ThinkingAccumulator = state.ThinkingAccumulator,
             StreamedThinkingChunkCount = state.StreamedThinkingChunkCount,
             StartedAt = state.StartedAt,
             LastUpdatedAt = state.LastUpdatedAt,
