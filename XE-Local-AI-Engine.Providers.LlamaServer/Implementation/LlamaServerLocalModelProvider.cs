@@ -5,6 +5,7 @@ using XE_Local_AI_Engine.Providers.Abstractions;
 using XE_Local_AI_Engine.Providers.Abstractions.Contracts;
 using XE_Local_AI_Engine.Providers.Abstractions.Gguf;
 using XE_Local_AI_Engine.Providers.LlamaServer.Contracts;
+using XE_Local_AI_Engine.Providers.LlamaServer.Options;
 
 /// <summary>
 ///     llama-server implementation of the provider-neutral <see cref="ILocalModelProvider" /> boundary.
@@ -29,13 +30,19 @@ using XE_Local_AI_Engine.Providers.LlamaServer.Contracts;
 public sealed class LlamaServerLocalModelProvider : ILocalModelProvider
 {
     private readonly IGgufModelStore _modelStore;
+    private readonly TimeSpan _networkTimeout;
     private readonly ILlamaServerProcessSupervisor _supervisor;
 
-    /// <summary>Creates the provider over the process supervisor and the GGUF model store.</summary>
-    public LlamaServerLocalModelProvider(ILlamaServerProcessSupervisor supervisor, IGgufModelStore modelStore)
+    /// <summary>
+    ///     Creates the provider over the process supervisor and the GGUF model store. The supervisor options supply the
+    ///     explicit per-call HTTP network timeout (AUD4-18) the deferred chat/embedding clients pin on the built OpenAI
+    ///     client; a null options bag falls back to the default policy.
+    /// </summary>
+    public LlamaServerLocalModelProvider(ILlamaServerProcessSupervisor supervisor, IGgufModelStore modelStore, LlamaServerSupervisorOptions? options = null)
     {
         _supervisor = supervisor ?? throw new ArgumentNullException(nameof(supervisor));
         _modelStore = modelStore ?? throw new ArgumentNullException(nameof(modelStore));
+        _networkTimeout = (options ?? new LlamaServerSupervisorOptions()).HttpNetworkTimeout;
     }
 
     /// <inheritdoc />
@@ -132,14 +139,14 @@ public sealed class LlamaServerLocalModelProvider : ILocalModelProvider
     public IChatClient CreateChatClient(LocalModelSelection selection)
     {
         ValidateSelection(selection);
-        return new DeferredLlamaServerChatClient(_supervisor, selection.ModelName);
+        return new DeferredLlamaServerChatClient(_supervisor, selection.ModelName, _networkTimeout);
     }
 
     /// <inheritdoc />
     public IEmbeddingGenerator<string, Embedding<float>> CreateEmbeddingGenerator(LocalModelSelection selection)
     {
         ValidateSelection(selection);
-        return new DeferredLlamaServerEmbeddingGenerator(_supervisor, selection.ModelName);
+        return new DeferredLlamaServerEmbeddingGenerator(_supervisor, selection.ModelName, _networkTimeout);
     }
 
     private void ValidateSelection(LocalModelSelection selection)

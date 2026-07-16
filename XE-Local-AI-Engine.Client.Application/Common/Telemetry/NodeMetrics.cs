@@ -46,6 +46,27 @@ public static class NodeMetrics
             description: "Number of failed invocations by failure source.");
 
     /// <summary>
+    ///     Incremented each time a model-invoked MCP tool call exceeds its per-call
+    ///     <c>Mcp:ToolCallTimeoutSeconds</c> deadline and is cancelled, returning a typed tool-failure result to the model
+    ///     (the run continues; the call is never retried). A non-zero rate flags a slow or wedged MCP server. Content-free
+    ///     — a count only; carries no tool name or arguments.
+    /// </summary>
+    public static readonly Counter<long> McpToolTimeoutTotal =
+        Meter.CreateCounter<long>("mcp_tool_timeout_total",
+            description: "Number of MCP tool calls cancelled after exceeding their per-call timeout.");
+
+    /// <summary>
+    ///     Incremented each time a Hugging Face model download's body-copy loop stalls longer than the configured
+    ///     read-idle timeout and is cancelled (surfaced as a transient failure the resume/retry path re-attempts). A
+    ///     non-zero rate flags a CDN that accepts the connection and then stops sending data mid-body. Content-free — a
+    ///     count only; carries no URL, repo, or file name. Bridged from the Providers.HuggingFace layer via
+    ///     <c>IHfDownloadMetrics</c> (which cannot reference this meter).
+    /// </summary>
+    public static readonly Counter<long> DownloadReadTimeoutTotal =
+        Meter.CreateCounter<long>("download_read_timeout_total",
+            description: "Number of Hugging Face download body reads cancelled after exceeding the read-idle timeout.");
+
+    /// <summary>
     ///     Incremented each time a native hardware probe (e.g. <c>nvidia-smi</c>) exceeds its wall-clock deadline and is
     ///     killed (process tree). A non-zero rate flags a wedged GPU driver / stalled tool that would otherwise hang
     ///     first-run provisioning or a capacity decision; the profiler degrades to the last cached profile or the CPU

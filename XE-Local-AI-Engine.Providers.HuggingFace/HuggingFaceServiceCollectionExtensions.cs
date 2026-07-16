@@ -8,6 +8,7 @@ using XE_Local_AI_Engine.Providers.Abstractions.Gguf;
 using XE_Local_AI_Engine.Providers.HuggingFace.Contracts;
 using XE_Local_AI_Engine.Providers.HuggingFace.Implementation;
 using XE_Local_AI_Engine.Providers.HuggingFace.Options;
+using XE_Local_AI_Engine.Providers.HuggingFace.Telemetry;
 
 /// <summary>
 ///     DI wiring for the Hugging Face GGUF discovery + store stack. Registers <see cref="IGgufModelStore" />,
@@ -50,6 +51,10 @@ public static class HuggingFaceServiceCollectionExtensions
         services.TryAddSingleton(options);
         services.TryAddSingleton<IFreeSpaceProbe, DriveInfoFreeSpaceProbe>();
 
+        // No-op default download-metrics sink; the host wins with a NodeMetrics-backed implementation (mirrors the
+        // IHardwareProbeMetrics seam). Providers cannot reference the application-layer meter, so the counter is bridged.
+        services.TryAddSingleton<IHfDownloadMetrics>(NullHfDownloadMetrics.Instance);
+
         services.AddHttpClient(HubHttpClientName);
         services.AddHttpClient(DownloadHttpClientName);
         services.AddHttpClient(ResolveHttpClientName)
@@ -78,7 +83,8 @@ public static class HuggingFaceServiceCollectionExtensions
             sp.GetRequiredService<IHfTokenStore>(),
             sp.GetRequiredService<IFreeSpaceProbe>(),
             sp.GetRequiredService<HuggingFaceOptions>(),
-            sp.GetRequiredService<ILogger<HfDownloadClient>>()));
+            sp.GetRequiredService<ILogger<HfDownloadClient>>(),
+            sp.GetRequiredService<IHfDownloadMetrics>()));
 
         services.TryAddSingleton(static sp => new GgufModelRegistry(sp.GetRequiredService<HuggingFaceOptions>(),
             sp.GetRequiredService<ILogger<GgufModelRegistry>>()));

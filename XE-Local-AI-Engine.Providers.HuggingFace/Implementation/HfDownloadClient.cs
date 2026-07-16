@@ -8,6 +8,7 @@ using XE_Local_AI_Engine.Providers.Abstractions.Contracts;
 using XE_Local_AI_Engine.Providers.Abstractions.Gguf;
 using XE_Local_AI_Engine.Providers.HuggingFace.Contracts;
 using XE_Local_AI_Engine.Providers.HuggingFace.Options;
+using XE_Local_AI_Engine.Providers.HuggingFace.Telemetry;
 
 /// <summary>
 ///     The ranged, resumable, retryable HTTP download against <c>/{repo}/resolve/{rev}/{file}</c>: enforces the hard
@@ -29,6 +30,7 @@ internal sealed class HfDownloadClient
     private const string LinkedEtagHeader = "X-Linked-Etag";
     private const string RepoCommitHeader = "X-Repo-Commit";
     private const int CopyBufferSize = 128 * 1024;
+    private readonly IHfDownloadMetrics _downloadMetrics;
     private readonly IFreeSpaceProbe _freeSpaceProbe;
 
     private readonly HttpClient _httpClient;
@@ -42,7 +44,8 @@ internal sealed class HfDownloadClient
         IHfTokenStore tokenStore,
         IFreeSpaceProbe freeSpaceProbe,
         HuggingFaceOptions options,
-        ILogger<HfDownloadClient> logger)
+        ILogger<HfDownloadClient> logger,
+        IHfDownloadMetrics? downloadMetrics = null)
     {
         ArgumentNullException.ThrowIfNull(httpClient);
         ArgumentNullException.ThrowIfNull(resolveHttpClient);
@@ -57,6 +60,7 @@ internal sealed class HfDownloadClient
         _freeSpaceProbe = freeSpaceProbe;
         _options = options;
         _logger = logger;
+        _downloadMetrics = downloadMetrics ?? NullHfDownloadMetrics.Instance;
     }
 
     /// <summary>
@@ -178,7 +182,7 @@ internal sealed class HfDownloadClient
             var resolvedRevision = ReadRepoCommit(response) ?? string.Empty;
             var totalBytes = ResolveTotalBytes(response, appending, existingPartBytes, expectedSizeBytes);
 
-            await CopyToPartAsync(response, partPath, appending, modelName, totalBytes, progress, ct).ConfigureAwait(false);
+            await CopyToPartAsync(response, partPath, appending, modelName, totalBytes, TimeSpan.FromSeconds(_options.DownloadReadIdleTimeoutSeconds), _downloadMetrics, progress, ct).ConfigureAwait(false);
 
             var verifiedSha = await VerifyHashAsync(partPath, expectedSha, ct).ConfigureAwait(false);
 
@@ -203,6 +207,8 @@ internal sealed class HfDownloadClient
         bool appending,
         string modelName,
         long? totalBytes,
+        TimeSpan readIdleTimeout,
+        IHfDownloadMetrics downloadMetrics,
         IProgress<PullProgress>? progress,
         CancellationToken ct)
     {
@@ -224,12 +230,48 @@ internal sealed class HfDownloadClient
         {
             await using (source.ConfigureAwait(false))
             {
+                // AUD4-18: bound each body read against a read-idle deadline. ResponseHeadersRead means the HttpClient
+                // timeout covered only the headers, so without this a CDN that stalls mid-body hangs the copy forever.
+                // ONE linked CTS re-armed per read (CancelAfter reschedules its timer) — cheap on the happy path, where
+                // it never fires; a genuine stall cancels the read, which we translate to a TRANSIENT network failure so
+                // the caller's existing retry/resume path (MaxDownloadRetries + .part Range resume) re-attempts from the
+                // flushed offset. A non-positive timeout disables the bound (plain ct). A rare spurious fire at the idle
+                // boundary is self-healing: it just triggers one resume from the .part.
+                using var idleCts = readIdleTimeout > TimeSpan.Zero
+                    ? CancellationTokenSource.CreateLinkedTokenSource(ct)
+                    : null;
                 var buffer = new byte[CopyBufferSize];
-                int read;
                 try
                 {
-                    while ((read = await source.ReadAsync(buffer, ct).ConfigureAwait(false)) > 0)
+                    while (true)
                     {
+                        int read;
+                        if (idleCts is not null)
+                        {
+                            idleCts.CancelAfter(readIdleTimeout);
+                            try
+                            {
+                                read = await source.ReadAsync(buffer, idleCts.Token).ConfigureAwait(false);
+                            }
+                            catch (OperationCanceledException) when (idleCts.IsCancellationRequested && !ct.IsCancellationRequested)
+                            {
+                                // Our read-idle deadline fired (not a caller cancel). Surface as transient so the resume
+                                // loop re-attempts; the .part is flushed on stream dispose, so no bytes are lost.
+                                downloadMetrics.RecordReadIdleTimeout();
+                                throw new HuggingFaceDownloadException(HuggingFaceDownloadFailure.Network,
+                                    "The model download stalled with no data received and was retried.");
+                            }
+                        }
+                        else
+                        {
+                            read = await source.ReadAsync(buffer, ct).ConfigureAwait(false);
+                        }
+
+                        if (read <= 0)
+                        {
+                            break;
+                        }
+
                         await partStream.WriteAsync(buffer.AsMemory(start: 0, read), ct).ConfigureAwait(false);
                         completed += read;
                         progress?.Report(new PullProgress
