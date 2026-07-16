@@ -2,6 +2,7 @@ namespace XE_Local_AI_Engine.Tests.ModelFit;
 
 using XE_Local_AI_Engine.Client.Services.ModelFit.Fit;
 using XE_Local_AI_Engine.Providers.Abstractions.Capabilities;
+using XE_Local_AI_Engine.Providers.Abstractions.Gguf;
 using XE_Local_AI_Engine.Tests.Testing;
 
 /// <summary>
@@ -351,6 +352,176 @@ public sealed class MemoryFitEstimatorTests
         AssertEx.False(estimate.Fits);
         AssertEx.Equal(MoeFitVerdict.DoesNotFit, estimate.MoeVerdict);
         AssertEx.Equal(FitMode.Cpu, estimate.Mode);
+    }
+
+    [Test]
+    public void MemoryFit_ExplicitKeyValueLength_OverridesDerivedHeadDim_Qwen3()
+    {
+        // AUD4-11: Qwen3-family pins head_dim independently of the embedding width, so the derived
+        // head_dim = embedding_length / n_heads UNDER-estimates the KV cache. Here embedding 1024 / 32 heads = derived 32,
+        // while the explicit key/value length is 128 (4× the derived per-head dimension).
+        const long paramCount = 600_000_000L;
+        const long blockCount = 28L;
+        const long kvHeads = 8L;
+        const long embedding = 1024L;
+        const long headCount = 32L; // derived head_dim = 1024 / 32 = 32
+        const long ctx = 4096L;
+
+        var profile = GpuProfile(64 * Gb);
+        var estimator = new MemoryFitEstimator();
+
+        var derived = estimator.Estimate("Q4_K_M", paramCount, fileSizeBytes: 0, blockCount, kvHeads, embedding, headCount, ctx, profile, kvCacheQuantized: false);
+        var explicitShape = estimator.Estimate("Q4_K_M", paramCount, fileSizeBytes: 0, blockCount, kvHeads, embedding, headCount, ctx, profile, kvCacheQuantized: false,
+            attention: new GgufAttentionShape(KeyLength: 128, ValueLength: 128));
+
+        // Weights are identical (same param count) → the whole delta is the KV term.
+        var weights = (long)(paramCount * MemoryFitEstimator.BytesPerWeight("Q4_K_M")); // 600e6 · 0.5625 = 337_500_000
+        // Explicit KV: n_kv_heads · (128+128) · 2 bytes(fp16) · layers · ctx = 8·256·2 · 28·4096 = 4096 · 114688 = 469_762_048.
+        var perLayerExplicit = kvHeads * (128d + 128d) * 2d;
+        var kvExplicit = (long)(perLayerExplicit * (blockCount * (double)ctx));
+        var marginExplicit = (long)((weights + kvExplicit) * 0.12d);
+        var expectedExplicit = weights + kvExplicit + marginExplicit + MemoryFitEstimator.RuntimeOverheadBytes;
+
+        // Derived KV: head_dim 32 → 8·64·2 · 28·4096 = 1024 · 114688 = 117_440_512 (exactly a quarter of the explicit KV).
+        var perLayerDerived = kvHeads * ((embedding / (double)headCount) + (embedding / (double)headCount)) * 2d;
+        var kvDerived = (long)(perLayerDerived * (blockCount * (double)ctx));
+
+        AssertEx.Equal(expectedExplicit, explicitShape.EstimatedBytes);
+        AssertEx.True(explicitShape.EstimatedBytes > derived.EstimatedBytes, "explicit key/value length must raise the KV estimate above the derived head_dim.");
+        AssertEx.Equal(kvExplicit, 4L * kvDerived); // 128/32 = 4× per-head correction, weights unchanged.
+        AssertEx.Equal(FitConfidence.Exact, explicitShape.Confidence); // explicit key/value + param count ⇒ Exact
+        AssertEx.Equal(FitConfidence.Approximate, derived.Confidence); // derived head_dim ⇒ Approximate
+    }
+
+    [Test]
+    public void MemoryFit_SlidingWindowAttention_CapsWindowLimitedLayers_Gemma3()
+    {
+        // AUD4-11: Gemma3-12B-like — 48 layers, key/value length 256, sliding_window 1024, pattern 6 (5:1 local:global).
+        // At ctx 8192 only the 8 global layers hold the full context; the other 40 window-limited layers hold ≤ 1024
+        // positions, cutting the KV cache far below the naive "every layer × full ctx" figure.
+        const long paramCount = 12_000_000_000L;
+        const long blockCount = 48L;
+        const long kvHeads = 8L;
+        const long keyValueLen = 256L;
+        const long ctx = 8192L;
+        const long window = 1024L;
+        const long pattern = 6L;
+
+        var profile = GpuProfile(64 * Gb);
+        var estimator = new MemoryFitEstimator();
+
+        // No window ⇒ every layer holds the full context (the naive figure the old estimator always used).
+        var naive = estimator.Estimate("Q4_K_M", paramCount, fileSizeBytes: 0, blockCount, kvHeads, embeddingLength: 0, attentionHeadCount: 0, ctx, profile, kvCacheQuantized: false,
+            attention: new GgufAttentionShape(KeyLength: keyValueLen, ValueLength: keyValueLen));
+        var swa = estimator.Estimate("Q4_K_M", paramCount, fileSizeBytes: 0, blockCount, kvHeads, embeddingLength: 0, attentionHeadCount: 0, ctx, profile, kvCacheQuantized: false,
+            attention: new GgufAttentionShape(KeyLength: keyValueLen, ValueLength: keyValueLen, SlidingWindow: window, SlidingWindowPattern: pattern));
+
+        var weights = (long)(paramCount * MemoryFitEstimator.BytesPerWeight("Q4_K_M"));
+        var perLayer = kvHeads * (keyValueLen + keyValueLen) * 2d; // 8 · 512 · 2 = 8192
+
+        // Naive: 48 layers · 8192 ctx = 393216 token-layers → 8192 · 393216 = 3_221_225_472.
+        var kvNaive = (long)(perLayer * (blockCount * (double)ctx));
+        var expectedNaive = weights + kvNaive + (long)((weights + kvNaive) * 0.12d) + MemoryFitEstimator.RuntimeOverheadBytes;
+        // SWA: ceil(48/6)=8 global · 8192 + 40 local · 1024 = 65536 + 40960 = 106496 token-layers → 8192 · 106496 = 872_415_232.
+        var globalLayers = (blockCount + pattern - 1) / pattern;
+        var swaTokens = (globalLayers * (double)ctx) + ((blockCount - globalLayers) * (double)window);
+        var kvSwa = (long)(perLayer * swaTokens);
+        var marginSwa = (long)((weights + kvSwa) * 0.12d);
+        var expectedSwa = weights + kvSwa + marginSwa + MemoryFitEstimator.RuntimeOverheadBytes;
+
+        AssertEx.Equal(expectedNaive, naive.EstimatedBytes);
+        AssertEx.Equal(expectedSwa, swa.EstimatedBytes);
+        AssertEx.True(swa.EstimatedBytes < naive.EstimatedBytes, "SWA must reduce the total estimate vs the naive full-context KV.");
+        AssertEx.True(kvSwa < kvNaive, "SWA must cap the window-limited layers' KV cache.");
+        AssertEx.True(kvNaive > kvSwa * 3, "the SWA KV must be well under a third of the naive KV at long context.");
+        AssertEx.Equal(FitConfidence.Exact, swa.Confidence); // explicit key/value + param count ⇒ Exact
+    }
+
+    [Test]
+    public void MemoryFit_DenseLlama_ExplicitKeyValueEqualsDerived_SameBytes_ButExactConfidence()
+    {
+        // A dense Llama-3-8B-like model whose derived head_dim (4096/32 = 128) already equals the explicit key/value
+        // length: the byte estimate is identical either way — only the confidence differs (explicit ⇒ Exact).
+        const long paramCount = 8_000_000_000L;
+        const long blockCount = 32L;
+        const long kvHeads = 8L;
+        const long embedding = 4096L;
+        const long headCount = 32L; // derived head_dim = 128
+        const long ctx = 8192L;
+
+        var profile = GpuProfile(64 * Gb);
+        var estimator = new MemoryFitEstimator();
+
+        var derived = estimator.Estimate("Q4_K_M", paramCount, fileSizeBytes: 0, blockCount, kvHeads, embedding, headCount, ctx, profile, kvCacheQuantized: false);
+        var explicitShape = estimator.Estimate("Q4_K_M", paramCount, fileSizeBytes: 0, blockCount, kvHeads, embedding, headCount, ctx, profile, kvCacheQuantized: false,
+            attention: new GgufAttentionShape(KeyLength: 128, ValueLength: 128));
+
+        AssertEx.Equal(derived.EstimatedBytes, explicitShape.EstimatedBytes);
+        AssertEx.Equal(FitConfidence.Approximate, derived.Confidence);
+        AssertEx.Equal(FitConfidence.Exact, explicitShape.Confidence);
+    }
+
+    [Test]
+    public void MemoryFit_MxFp4_SizedAtNativeDensity_AndFlaggedNative()
+    {
+        // gpt-oss ships native MXFP4 (~4.25 bits/weight). The estimate must price it at that density (not the 4.5bpw
+        // unknown-quant default) and flag it native so the advisor never recommends a higher-quant requant of it.
+        const long paramCount = 20_000_000_000L;
+        var profile = GpuProfile(64 * Gb);
+        var estimator = new MemoryFitEstimator();
+
+        var estimate = estimator.Estimate("MXFP4", paramCount, fileSizeBytes: 0, blockCount: 24, attentionHeadCountKV: 8, embeddingLength: 2880, attentionHeadCount: 64,
+            ctxTarget: 8192, profile, kvCacheQuantized: false, nativeQuantFormat: true);
+
+        AssertEx.Equal(4.25d / 8d, MemoryFitEstimator.BytesPerWeight("MXFP4"));
+        AssertEx.True(estimate.NativeQuantFormat, "an MXFP4 estimate must carry the native-format flag.");
+        var weights = (long)(paramCount * (4.25d / 8d));
+        AssertEx.True(estimate.EstimatedBytes > weights, "the estimate includes weights at MXFP4 density plus KV and overhead.");
+    }
+
+    [Test]
+    public void FilterOutNativeFormatRequants_DropsHigherQuantRequants_KeepsNative()
+    {
+        // A gpt-oss repo shipping native MXFP4 plus bartowski Q8_0/Q4_K_M requants: the higher-nominal-quality requants
+        // must be dropped so the advisor recommends the native file, never a bloated lossy "upgrade".
+        var candidates = new[]
+        {
+            ("MXFP4", QuantLadder.QualityRank("MXFP4")),
+            ("Q8_0", QuantLadder.QualityRank("Q8_0")),
+            ("Q4_K_M", QuantLadder.QualityRank("Q4_K_M"))
+        };
+
+        var kept = MemoryFitEstimator.FilterOutNativeFormatRequants(candidates, candidate => candidate.Item1, candidate => candidate.Item2);
+
+        AssertEx.Equal(expected: 1, kept.Count);
+        AssertEx.Equal("MXFP4", kept[0].Item1);
+    }
+
+    [Test]
+    public void FilterOutNativeFormatRequants_NoNativeFormat_ReturnsUnchanged()
+    {
+        var candidates = new[]
+        {
+            ("Q8_0", QuantLadder.QualityRank("Q8_0")),
+            ("Q4_K_M", QuantLadder.QualityRank("Q4_K_M"))
+        };
+
+        var kept = MemoryFitEstimator.FilterOutNativeFormatRequants(candidates, candidate => candidate.Item1, candidate => candidate.Item2);
+
+        AssertEx.Equal(expected: 2, kept.Count);
+    }
+
+    [Test]
+    public void MemoryFit_MissingMetadata_FileSizeWeights_IsApproximate()
+    {
+        // No param count (weights fall back to file size) and no explicit key/value length ⇒ the estimate is a
+        // conservative approximation, flagged so the advisor can present it as such.
+        var profile = GpuProfile(64 * Gb);
+        var estimator = new MemoryFitEstimator();
+
+        var estimate = estimator.Estimate("Q4_K_M", paramCount: null, 2 * Gb, BlockCount, KvHeads, EmbeddingLength, HeadCount, CtxTarget, profile, kvCacheQuantized: false);
+
+        AssertEx.Equal(FitConfidence.Approximate, estimate.Confidence);
     }
 
     private static HardwareProfile GpuProfile(long vramBytes)

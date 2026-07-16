@@ -17,6 +17,8 @@ public sealed class GgufQuantParserTests
     [Arguments("weights-IQ2_XXS.gguf", "IQ2_XXS")]
     [Arguments("weights-BF16.gguf", "BF16")]
     [Arguments("Qwen2.5-7B-Q3_K_XL.gguf", "Q3_K_XL")]
+    [Arguments("gpt-oss-20b-MXFP4.gguf", "MXFP4")] // gpt-oss native format — recognized so it is not skipped
+    [Arguments("openai_gpt-oss-120b-mxfp4-00001-of-00002.gguf", "MXFP4")] // sharded + lowercase
     public void TryParse_ExtractsPlainQuant(string fileName, string expected)
     {
         AssertEx.Equal(expected, GgufQuantParser.TryParse(fileName));
