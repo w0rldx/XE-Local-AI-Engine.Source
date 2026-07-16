@@ -1,6 +1,7 @@
 namespace XE_Local_AI_Engine.Providers.LlamaServer.Implementation;
 
 using System.ClientModel;
+using System.ClientModel.Primitives;
 using Microsoft.Extensions.AI;
 using OpenAI;
 
@@ -23,36 +24,63 @@ using OpenAI;
 ///         <see cref="OpenAIClientOptions.Endpoint" /> is the <c>…/v1</c> base address; the SDK appends the operation
 ///         path (e.g. <c>/chat/completions</c>) to it.
 ///     </para>
+///     <para>
+///         AUD4-18: the built client's transport policy is pinned EXPLICITLY rather than left to the System.ClientModel
+///         defaults. <c>NetworkTimeout</c> is set from <paramref name="networkTimeout" /> (a generous outer floor — see
+///         <see cref="XE_Local_AI_Engine.Providers.LlamaServer.Options.LlamaServerSupervisorOptions.HttpNetworkTimeout" />)
+///         so a single call never inherits the SDK's 100 s default and abort a legitimately long local generation, and the
+///         <c>RetryPolicy</c> is pinned to <c>ClientRetryPolicy(0)</c> so the SDK NEVER re-issues a request: a local chat
+///         completion is non-idempotent and a transient-looking failure must surface, not silently replay a second
+///         generation. This mirrors the Codex factory's explicit <c>RetryPolicy = new ClientRetryPolicy(0)</c>.
+///     </para>
 /// </remarks>
 internal static class LlamaServerOpenAIAdapterFactory
 {
     /// <summary>Sentinel credential that satisfies the SDK ctor; a localhost llama-server never validates it.</summary>
     private const string IgnoredApiKey = "ignored";
 
-    internal static IChatClient CreateChatClient(Uri baseAddress, string modelId)
+    internal static IChatClient CreateChatClient(Uri baseAddress, string modelId, TimeSpan networkTimeout)
     {
         ArgumentNullException.ThrowIfNull(baseAddress);
         ArgumentException.ThrowIfNullOrWhiteSpace(modelId);
 
-        var openAiClient = BuildOpenAIClient(baseAddress);
+        var openAiClient = BuildOpenAIClient(baseAddress, networkTimeout);
         return openAiClient.GetChatClient(modelId).AsIChatClient();
     }
 
-    internal static IEmbeddingGenerator<string, Embedding<float>> CreateEmbeddingGenerator(Uri baseAddress, string modelId)
+    internal static IEmbeddingGenerator<string, Embedding<float>> CreateEmbeddingGenerator(Uri baseAddress, string modelId, TimeSpan networkTimeout)
     {
         ArgumentNullException.ThrowIfNull(baseAddress);
         ArgumentException.ThrowIfNullOrWhiteSpace(modelId);
 
-        var openAiClient = BuildOpenAIClient(baseAddress);
+        var openAiClient = BuildOpenAIClient(baseAddress, networkTimeout);
         return openAiClient.GetEmbeddingClient(modelId).AsIEmbeddingGenerator();
     }
 
-    private static OpenAIClient BuildOpenAIClient(Uri baseAddress)
+    private static OpenAIClient BuildOpenAIClient(Uri baseAddress, TimeSpan networkTimeout)
     {
-        var options = new OpenAIClientOptions
+        return new OpenAIClient(new ApiKeyCredential(IgnoredApiKey), BuildClientOptions(baseAddress, networkTimeout));
+    }
+
+    /// <summary>
+    ///     Builds the transport-policy-pinned <see cref="OpenAIClientOptions" /> (AUD4-18): explicit
+    ///     <see cref="OpenAIClientOptions.NetworkTimeout" /> (never the SDK's 100 s default) and a
+    ///     <c>ClientRetryPolicy(0)</c> so the SDK cannot re-issue a non-idempotent completion. Exposed internally so a test
+    ///     can assert the pinned policy directly (per the pipeline-behavior lesson in agent-knowledge §4).
+    /// </summary>
+    internal static OpenAIClientOptions BuildClientOptions(Uri baseAddress, TimeSpan networkTimeout)
+    {
+        ArgumentNullException.ThrowIfNull(baseAddress);
+
+        return new OpenAIClientOptions
         {
-            Endpoint = baseAddress
+            Endpoint = baseAddress,
+            // A non-positive value would be rejected by the SDK; the options validator guarantees a positive one, but the
+            // guard keeps a direct/test caller from tripping it and makes the "always positive" contract explicit here.
+            NetworkTimeout = networkTimeout > TimeSpan.Zero ? networkTimeout : Timeout.InfiniteTimeSpan,
+            // Non-idempotent completion: never let the SDK re-issue a request on a transient failure (would duplicate a
+            // generation). The stream-idle watchdog / invocation timeout own the real deadlines.
+            RetryPolicy = new ClientRetryPolicy(maxRetries: 0)
         };
-        return new OpenAIClient(new ApiKeyCredential(IgnoredApiKey), options);
     }
 }

@@ -145,12 +145,25 @@ public sealed class LlamaServerSupervisorOptions
     /// </summary>
     public TimeSpan EjectDrainTimeout { get; init; } = TimeSpan.FromSeconds(DefaultEjectDrainTimeoutSeconds);
 
+    /// <summary>
+    ///     Network timeout for a single local-inference HTTP call to the llama-server OpenAI-compatible surface (AUD4-18).
+    ///     Set EXPLICITLY on the built OpenAI client so it never inherits System.ClientModel's 100 s
+    ///     <c>NetworkTimeout</c> default (which would abort a legitimately long local generation). Deliberately GENEROUS
+    ///     (default 600 s): streaming inter-token stalls are already bounded by the invocation's stream-idle watchdog and
+    ///     a non-streaming sub-agent completion is bounded by the invocation timeout, so this is only the outermost floor
+    ///     against a wedged socket and must not pre-empt a slow-but-progressing local model. The SDK retry layer is pinned
+    ///     OFF independently of this value (a local chat completion is non-idempotent and must never be re-issued). Must be
+    ///     positive.
+    /// </summary>
+    public TimeSpan HttpNetworkTimeout { get; init; } = TimeSpan.FromSeconds(DefaultHttpNetworkTimeoutSeconds);
+
     private const double DefaultReadinessBaseTimeoutSeconds = 120d;
     private const double DefaultReadinessSizeThresholdGiB = 4d;
     private const double DefaultReadinessSecondsPerGiB = 20d;
     private const double DefaultReadinessCapSeconds = 600d;
     private const int DefaultMaxReadinessTimeoutRetries = 1;
     private const double DefaultEjectDrainTimeoutSeconds = 30d;
+    private const double DefaultHttpNetworkTimeoutSeconds = 600d;
 
     /// <summary>
     ///     Computes the size-aware cold-start readiness deadline for a model of <paramref name="modelSizeBytes" /> on
@@ -212,6 +225,11 @@ public sealed class LlamaServerSupervisorOptions
         if (EjectDrainTimeout <= TimeSpan.Zero)
         {
             throw new InvalidOperationException($"{nameof(EjectDrainTimeout)} must be positive (was {EjectDrainTimeout}).");
+        }
+
+        if (HttpNetworkTimeout <= TimeSpan.Zero)
+        {
+            throw new InvalidOperationException($"{nameof(HttpNetworkTimeout)} must be positive (was {HttpNetworkTimeout}).");
         }
     }
 }

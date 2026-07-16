@@ -12,6 +12,8 @@ public sealed class McpOptionsValidator : IValidateOptions<McpOptions>
         var errors = Enumerable.Empty<string>()
                                .AppendIf(options.ConnectTimeoutSeconds <= 0,
                                    "Mcp:ConnectTimeoutSeconds must be greater than zero.")
+                               .AppendIf(options.ToolCallTimeoutSeconds <= 0,
+                                   "Mcp:ToolCallTimeoutSeconds must be greater than zero.")
                                .AppendIf(options.HttpLoopbackHosts is null || options.HttpLoopbackHosts.Count == 0,
                                    "Mcp:HttpLoopbackHosts must contain at least one allowed host.")
                                .ToArray();
