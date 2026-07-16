@@ -104,6 +104,30 @@ public sealed class ProviderCallBudgetChatClientTests
     }
 
     [Test]
+    public async Task GetResponseAsync_RejectsAgainstEffectiveNumCtxWindow_NotTheConfiguredDefault()
+    {
+        using var inner = new FailIfCalledChatClient();
+        using var sut = new ProviderCallBudgetChatClient(inner, NullLogger<ProviderCallBudgetChatClient>.Instance);
+
+        // AUD4-02: the effective launched window (num_ctx AdditionalProperties, fed by the runtime's /props value) is
+        // tiny while the configured default is huge. An irreducible round must be rejected against the EFFECTIVE window
+        // — proving the propagated effective context, not the config default, bounds the round.
+        const int EffectiveWindow = 32;
+        var messages = new List<ChatMessage> { new(ChatRole.User, new string('x', 8000)) };
+        var options = new ChatOptions
+        {
+            AdditionalProperties = new AdditionalPropertiesDictionary { ["num_ctx"] = EffectiveWindow }
+        };
+        using (ProviderCallBudget.BeginScope(new ProviderCallBudgetOptions { DefaultContextTokens = 1_000_000, ReservedOutputTokenFloor = 0 }))
+        {
+            var exception = await AssertEx.ThrowsAsync<ProviderContextWindowExceededException>(async () => await sut.GetResponseAsync(messages, options));
+            AssertEx.Equal(EffectiveWindow, exception.WindowTokens);
+        }
+
+        AssertEx.False(inner.WasCalled, "the round must be rejected against the effective window before the inner client is called.");
+    }
+
+    [Test]
     public async Task GetStreamingResponseAsync_WhenRoundIrreduciblyExceedsWindow_ThrowsAndNeverCallsInner()
     {
         using var inner = new FailIfCalledChatClient();

@@ -193,7 +193,8 @@ public sealed partial class InvocationRunner
 
     private InvocationAgentDefinition BuildInvocationDefinition(RuntimePackage package,
         string resolvedModel,
-        IReadOnlyList<ChatMessage> messages)
+        IReadOnlyList<ChatMessage> messages,
+        int? effectiveContextTokens)
     {
         return new InvocationAgentDefinition(resolvedModel,
             package.ResolvedSystemPrompt,
@@ -202,7 +203,8 @@ public sealed partial class InvocationRunner
             package.ReasoningEffort,
             package.SupportsThinking,
             MapSamplingOptions(package.SamplingOptions),
-            MapSkills(package.Skills));
+            MapSkills(package.Skills),
+            effectiveContextTokens);
     }
 
     /// <summary>

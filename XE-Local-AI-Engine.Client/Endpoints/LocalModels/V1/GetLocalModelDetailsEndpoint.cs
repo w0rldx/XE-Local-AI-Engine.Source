@@ -88,10 +88,11 @@ public sealed class GetLocalModelDetailsEndpoint(
     }
 
     // Builds the details response for a llama.cpp-served GGUF from the installed-model registry — no Ollama probe.
-    // Maps onto the SAME LocalModelDetailsResponse shape the Ollama branch returns: only MaxContextTokens is a GGUF
-    // concept (read from the descriptor). Template/System/License are Ollama Modelfile concepts a GGUF has no
-    // equivalent of, so they stay null. A model that resolves to llamacpp but isn't in the installed registry (a stale
-    // map row, or one removed on disk) has no details — a clean 404, matching the Ollama "no entry" semantics.
+    // Maps onto the SAME LocalModelDetailsResponse shape the Ollama branch returns: MaxContextTokens (advertised train
+    // ceiling) is read from the descriptor, and EffectiveContextTokens (the RUNNING process's launched -c, AUD4-02) from
+    // the provider's runtime info when a chat process is warm. Template/System/License are Ollama Modelfile concepts a
+    // GGUF has no equivalent of, so they stay null. A model that resolves to llamacpp but isn't in the installed
+    // registry (a stale map row, or one removed on disk) has no details — a clean 404, matching Ollama's "no entry".
     private async Task SendGgufModelDetailsAsync(string modelName, CancellationToken ct)
     {
         var installed = await _ggufModelStore.ListInstalledModelsAsync(ct).ConfigureAwait(false);
@@ -102,7 +103,29 @@ public sealed class GetLocalModelDetailsEndpoint(
             return;
         }
 
-        await Send.OkAsync(descriptor.ToDetailsResponse(modelName), ct).ConfigureAwait(false);
+        var effectiveContextTokens = await TryResolveEffectiveContextAsync(modelName, ct).ConfigureAwait(false);
+        await Send.OkAsync(descriptor.ToDetailsResponse(modelName, effectiveContextTokens), ct).ConfigureAwait(false);
+    }
+
+    // Best-effort: the effective context window the running llama.cpp chat process loaded (null when none is warm or the
+    // runtime does not report it). Never fails the details response — the meter simply falls back to MaxContextTokens.
+    private async Task<int?> TryResolveEffectiveContextAsync(string modelName, CancellationToken ct)
+    {
+        try
+        {
+            var provider = _providerResolver.ResolveProvider(LocalModelProviders.LlamaCpp);
+            var runtimeInfo = await provider.GetRuntimeInfoAsync(modelName, ct).ConfigureAwait(false);
+            return runtimeInfo is { EffectiveContextTokens: > 0 } info ? info.EffectiveContextTokens : null;
+        }
+        catch (OperationCanceledException) when (ct.IsCancellationRequested)
+        {
+            throw;
+        }
+        catch (Exception exception)
+        {
+            Logger.LogDebug(exception, "Effective context window could not be resolved for '{ModelName}'.", modelName);
+            return null;
+        }
     }
 
     // True when the model id matches one of the stored Azure Foundry connection's deployment names (ordinal,

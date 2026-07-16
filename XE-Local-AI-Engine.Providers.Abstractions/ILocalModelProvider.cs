@@ -31,6 +31,18 @@ public interface ILocalModelProvider
     /// <summary>Loads or probes a model so first-token latency is paid before an interactive turn.</summary>
     Task WarmModelAsync(string modelName, CancellationToken ct);
 
+    /// <summary>
+    ///     Returns live runtime facts for the running chat process backing <paramref name="modelName" /> — currently the
+    ///     effective context window it actually loaded — or <see langword="null" /> when unknown (the model is not yet
+    ///     started, or the provider has no fixed launched window, e.g. Ollama/cloud). The default implementation reports
+    ///     <see langword="null" />; a runtime that pins a launched context window (llama.cpp) overrides it so the chat
+    ///     turn's budgeters and the UI meter can size against the real window rather than the advertised train context.
+    /// </summary>
+    Task<LocalModelRuntimeInfo?> GetRuntimeInfoAsync(string modelName, CancellationToken ct)
+    {
+        return Task.FromResult<LocalModelRuntimeInfo?>(null);
+    }
+
     /// <summary>Requests provider-side model unload when the runtime supports releasing loaded weights.</summary>
     Task UnloadModelAsync(string modelName, CancellationToken ct);
 

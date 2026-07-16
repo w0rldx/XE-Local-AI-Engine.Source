@@ -1,0 +1,127 @@
+namespace XE_Local_AI_Engine.Providers.LlamaServer.Implementation;
+
+using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Logging.Abstractions;
+using XE_Local_AI_Engine.Providers.LlamaServer;
+using XE_Local_AI_Engine.Providers.LlamaServer.Contracts;
+using XE_Local_AI_Engine.Providers.LlamaServer.Options;
+
+/// <summary>
+///     Default <see cref="ILlamaServerLaunchPolicy" />: turns <see cref="LlamaServerLaunchPolicyOptions" /> plus the
+///     recorded safe-fallback state into a concrete <see cref="LlamaServerLaunchPlan" /> for one spawn.
+/// </summary>
+internal sealed class LlamaServerLaunchPolicy : ILlamaServerLaunchPolicy
+{
+    private readonly ILlamaServerLaunchFallbackStore _fallbackStore;
+    private readonly ILogger<LlamaServerLaunchPolicy> _logger;
+    private readonly LlamaServerLaunchPolicyOptions _options;
+
+    public LlamaServerLaunchPolicy(LlamaServerLaunchPolicyOptions options,
+        ILlamaServerLaunchFallbackStore fallbackStore,
+        ILogger<LlamaServerLaunchPolicy>? logger = null)
+    {
+        _options = options ?? throw new ArgumentNullException(nameof(options));
+        _options.Validate();
+        _fallbackStore = fallbackStore ?? throw new ArgumentNullException(nameof(fallbackStore));
+        _logger = logger ?? NullLogger<LlamaServerLaunchPolicy>.Instance;
+    }
+
+    /// <inheritdoc />
+    public async Task<LlamaServerLaunchPlan> ResolveAsync(ModelRole role,
+        GpuVariant variant,
+        ResolvedLaunchArguments resolved,
+        long? modelTrainContextTokens,
+        CancellationToken ct)
+    {
+        ArgumentNullException.ThrowIfNull(resolved);
+
+        var (cpuThreads, cpuThreadsBatch) = ResolveCpuThreads(variant);
+
+        // A CPU build never replays a frozen GPU profile (its -ngl/-ts/-ot/-ctk are GPU-specific), so the CPU spawn
+        // always gets the deterministic policy context (the AUD4-02 fix) plus the CPU thread policy — regardless of
+        // whether a profile exists.
+        if (variant == GpuVariant.Cpu)
+        {
+            return new LlamaServerLaunchPlan(ResolveContextTokens(role, modelTrainContextTokens),
+                UseKvCacheQuantization: false,
+                _options.KvCacheType,
+                cpuThreads,
+                cpuThreadsBatch);
+        }
+
+        // GPU: a frozen-profile replay pins its own -c / KV / FA verbatim (highest precedence), so the policy leaves the
+        // context and KV to the replay args (and a GPU spawn carries no CPU threads).
+        if (!resolved.ExploreMode)
+        {
+            return new LlamaServerLaunchPlan(RequestedContextTokens: null,
+                UseKvCacheQuantization: false,
+                _options.KvCacheType,
+                CpuThreads: null,
+                CpuThreadsBatch: null);
+        }
+
+        // GPU explore: the role's policy context plus the KV-cache quantization + flash attention optimization, unless
+        // this backend already had the optimized config recorded as unable to reach readiness.
+        var useKvQuant = _options.EnableGpuKvCacheQuantization
+                         && !await _fallbackStore.IsOptimizedConfigDisabledAsync(variant, ct).ConfigureAwait(false);
+
+        return new LlamaServerLaunchPlan(ResolveContextTokens(role, modelTrainContextTokens),
+            useKvQuant,
+            _options.KvCacheType,
+            CpuThreads: null,
+            CpuThreadsBatch: null);
+    }
+
+    /// <inheritdoc />
+    public Task RecordOptimizedConfigFailedAsync(GpuVariant variant, CancellationToken ct)
+    {
+        _logger.LogWarning("Recording optimized llama-server launch config (KV-cache quant + flash attention) as unsupported for backend {Variant}; future spawns will use the safe config.", variant);
+        return _fallbackStore.DisableOptimizedConfigAsync(variant, ct);
+    }
+
+    /// <summary>The role's requested context window, capped to the model's train context (minus the safety margin) when known.</summary>
+    private int ResolveContextTokens(ModelRole role, long? modelTrainContextTokens)
+    {
+        var requested = _options.ContextTokensForRole(role);
+        if (modelTrainContextTokens is not { } trainCtx || trainCtx <= 0)
+        {
+            return requested;
+        }
+
+        // Cap to the model's train context. When the role default would meet or exceed it, back off by the safety
+        // margin so the launched window sits a hair below the model's hard ceiling (floored at 1).
+        if (requested < trainCtx)
+        {
+            return requested;
+        }
+
+        var capped = trainCtx - _options.ContextSafetyMarginTokens;
+        return capped < 1 ? 1 : (int)Math.Min(capped, int.MaxValue);
+    }
+
+    /// <summary>Derives (<c>-t</c>, <c>-tb</c>) for a CPU build; a GPU build gets (null, null) — no thread flags.</summary>
+    private (int? Threads, int? ThreadsBatch) ResolveCpuThreads(GpuVariant variant)
+    {
+        if (variant != GpuVariant.Cpu || !_options.EnableCpuThreadPolicy)
+        {
+            return (null, null);
+        }
+
+        // Environment.ProcessorCount is the LOGICAL core count; estimate physical cores by halving it when SMT is
+        // assumed (the common x86 desktop case). Only a heuristic — the explicit overrides win for atypical topologies.
+        var logical = Environment.ProcessorCount;
+        var physical = _options.AssumeSimultaneousMultithreading && logical >= 2 ? logical / 2 : logical;
+        physical = Math.Max(physical, 1);
+
+        // Generation threads: physical minus a small host reserve (floor 1) so inference does not starve the host/app.
+        // Prompt-batch threads: the full physical estimate (prompt processing parallelizes well). Explicit overrides win.
+        var threads = _options.CpuThreadCount is { } explicitThreads && explicitThreads > 0
+            ? explicitThreads
+            : Math.Max(physical - _options.CpuThreadReserve, 1);
+        var threadsBatch = _options.CpuThreadsBatchCount is { } explicitBatch && explicitBatch > 0
+            ? explicitBatch
+            : physical;
+
+        return (threads, threadsBatch);
+    }
+}

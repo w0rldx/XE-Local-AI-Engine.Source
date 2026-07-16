@@ -102,26 +102,30 @@ Contract members:
 -m <modelFile> --host 127.0.0.1 --port <port>
   --parallel 1             # pinned on EVERY spawn (single-slot serving)
   --no-warmup              # pinned on EVERY spawn (skip empty-run warmup)
-  <GPU placement args>     # non-CPU variant only — see AppendGpuPlacementArgs below
+  <context/placement/thread args>   # from the launch policy — see below
   --jinja                  # ModelRole.Chat
   --embeddings --pooling mean  # ModelRole.Embedding
+  --rerank --pooling rank      # ModelRole.Reranker
 ```
 
-Two flags are now pinned on **every** spawn (`:466,473`; commit 2665d965):
+Two flags are pinned on **every** spawn:
 
 - **`--parallel 1`** forces single-slot serving. Without it `llama-server` auto-selects `n_parallel=4`, which reserves 4× the KV cache and starves the auto-fit weight offload — a model that would fit on the GPU spills weights to system RAM for KV slots it never uses and runs slow on the CPU.
 - **`--no-warmup`** skips the empty-run warmup (45–110 s on a large model) that would otherwise overrun the readiness budget and tree-kill the half-ready process in a respawn loop (observed as a chat inter-chunk stall and an explore "did not become ready in time").
 
-**GPU placement is no longer forced — the old `--n-gpu-layers 999` is gone** (`:477`). For a non-CPU variant `AppendGpuPlacementArgs` (`:508`) emits one of two **mutually exclusive** arg sets supplied by the profile resolver (`ResolvedLaunchArguments`):
+**Context, KV/flash-attention, and CPU threads now come from a central launch policy** (`LlamaServerLaunchPolicy` + `LlamaServerLaunchPolicyOptions`, AUD4-02/05/17). `BuildLaunchSpec` takes a `LlamaServerLaunchPlan` the policy produced (a **null** plan for operator profiling = no policy interference). Precedence, highest first: **frozen inference profile replayed verbatim** (never overridden) > per-send/user config > role defaults. Emission by variant + explore/replay mode:
 
-- **Explore mode** — `--fit on --metrics`: lets llama.cpp's own `--fit` auto-fit choose layer/expert placement and print the chosen params for capture (the `--metrics` gauges feed the benchmark). Any *explicit* fit-arg would disable auto-fit, so explore emits none.
-- **Replay mode** — the frozen/explored profile's explicit args verbatim: `-c <ctx>` plus `-ngl/-ts/-ot` and matched KV-cache types (`-ctk/-ctv` with `--flash-attn on`). `--fit` is intentionally absent (an explicit fit-arg disables it).
+- **GPU explore** — `--fit on --metrics` (auto-fit chooses layer/expert placement and prints it for capture) **plus** the policy's deterministic `-c <ctx>` (auto-fit respects an explicit `-c` and fits ngl/batch around it) **plus** the KV-cache quant + flash attention optimization `-fa on -ctk q8_0 -ctv q8_0`. `-c`/`-fa`/`-ctk`/`-ctv` are not *placement* flags, so `--fit` stays active.
+- **GPU replay** — the frozen/explored profile's explicit args verbatim: `-c <ctx>` plus `-ngl/-ts/-ot` and matched `-ctk/-ctv` with `--flash-attn on`. `--fit` is intentionally absent (an explicit placement flag disables it). The policy leaves context/KV to the profile.
+- **CPU** — `-c <ctx>` (deterministic; previously the CPU variant emitted **no** `-c` ⇒ full-train-ctx KV in RAM) **plus** the CPU thread policy `-t`/`-tb` (physical-core estimate minus a host reserve). **No** `--fit`/`--metrics`/`-ngl`/`-ctk` — a frozen GPU profile does not transfer to a CPU spawn, and KV stays f16 / flash-attention auto.
 
-The CPU variant stays a pure CPU run and emits **no** GPU/fit args. The **`--host 127.0.0.1`** localhost-only bind is unchanged. See [§2.5 Inference profiles / per-machine tuning](#25-inference-profiles--per-machine-tuning) for where `resolved` comes from.
+Context defaults: chat **16384**, embedding/reranker **2048**, capped to the model's GGUF train context (minus a small safety margin) when known. **KV-quant one-shot fallback:** if the optimized GPU spawn can't reach readiness, the supervisor retries once with the safe config (no `-ctk/-ctv`, `-fa auto`) and — only when the safe retry succeeds — records the fallback per backend in `llama-launch-fallback.json` (`ILlamaServerLaunchFallbackStore`) so later spawns skip the known-bad config. The **`--host 127.0.0.1`** localhost-only bind is unchanged. See [§2.5 Inference profiles / per-machine tuning](#25-inference-profiles--per-machine-tuning) for where the frozen `resolved` args come from.
 
 ### Health probe — readiness vs liveness
 
 `LlamaServerHealthProbe` (impl of `ILlamaServerHealthProbe`) polls the `llama-server` **`/health`** endpoint over HTTP (`/health` is a sibling of the `/v1` base). `WaitForReadyAsync` polls every 250 ms until a 200 or the readiness deadline — connection-refused during warm-up is normal and retried. `CheckResponsiveAsync` is a single probe used by health aggregation. The readiness deadline is **size-aware** (`LlamaServerSupervisorOptions.ResolveReadinessTimeout(bytes)` — base + per-GiB extension above a threshold, capped), not a fixed constant, so a large model gets proportionally longer to load. The probe runs on a **dedicated, resilience-free `HttpClient`** with a ~1 s per-attempt bound: routing it through the app's `IHttpClientFactory` inherited the standard resilience handler's exponential retries and detected readiness up to ~5 s late.
+
+`TryReadEffectiveContextTokensAsync` (AUD4-02) reads the server's **`/props`** `default_generation_settings.n_ctx` once after readiness — the effective per-slot context window the server actually loaded (the launched `-c` as clamped). The supervisor stores it on the running process; `GetRuntimeInfo(model, role)` / `ILocalModelProvider.GetRuntimeInfoAsync` expose it so the invocation runner can size **both** context budgeters (outer `TurnPolicy.ContextCapacityTokens` and inner `num_ctx`) against the real window, and the chat context-usage meter can show it (`LocalModelDetailsResponse.EffectiveContextTokens`). Best-effort — a `/props` failure just leaves the effective context unknown (the app falls back to its default window).
 
 ### Eviction & reaper
 
