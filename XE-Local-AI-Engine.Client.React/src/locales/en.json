@@ -679,7 +679,13 @@
 			"modelUnavailable": "Unavailable",
 			"reasoningLabel": "Reasoning",
 			"retryConnection": "Retry",
-			"stop": "Stop"
+			"stop": "Stop",
+			"stopped": "Generation stopped",
+			"loadError": {
+				"title": "Couldn't load this conversation",
+				"body": "Something went wrong loading these messages.",
+				"retry": "Retry"
+			}
 		},
 		"clientNodes": {
 			"fields": {
@@ -2279,10 +2285,10 @@
 		"loadedModels": {
 			"eyebrow": "Worker Node",
 			"title": "Loaded models",
-			"subtitle": "Models the local runtime is currently holding in memory (RAM/VRAM). Eject frees that memory — gracefully, after any in-flight generation completes.",
+			"subtitle": "Models the local runtime is currently holding in memory (RAM/VRAM). Eject frees that memory; if a generation is running, the app waits briefly for it to finish and may interrupt it.",
 			"loading": "Loading loaded models…",
 			"empty": "No models currently loaded.",
-			"unavailable": "The local model runtime is unavailable right now. This view will update once it is reachable.",
+			"unavailable": "Ollama isn't reachable right now. It's an optional secondary provider, so there may be nothing loaded to show here. llama.cpp models still appear below.",
 			"cpuOnly": "CPU only",
 			"expired": "Expired",
 			"sizeUnknown": "Unknown",
@@ -2298,11 +2304,11 @@
 			},
 			"eject": {
 				"button": "Eject",
-				"tooltip": "Frees memory after the current generation finishes",
+				"tooltip": "Frees the model's memory; a running generation may be interrupted",
 				"confirmTitle": "Eject model",
-				"confirmDescription": "Eject '{{modelName}}' from memory? Memory is freed after the current generation finishes; an in-flight response is not interrupted.",
+				"confirmDescription": "Eject '{{modelName}}' from memory? If a generation is running, the app waits briefly for it to finish; ejecting may interrupt it.",
 				"confirmAction": "Eject",
-				"success": "Ejecting '{{modelName}}' — memory frees after the current generation.",
+				"success": "Ejecting '{{modelName}}' — its memory will be freed shortly.",
 				"error": "Could not eject the model."
 			},
 			"ollama": {

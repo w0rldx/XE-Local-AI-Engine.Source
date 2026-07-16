@@ -679,7 +679,13 @@
 			"modelUnavailable": "Nicht verfügbar",
 			"reasoningLabel": "Reasoning",
 			"retryConnection": "Erneut versuchen",
-			"stop": "Stopp"
+			"stop": "Stopp",
+			"stopped": "Generierung gestoppt",
+			"loadError": {
+				"title": "Diese Unterhaltung konnte nicht geladen werden",
+				"body": "Beim Laden dieser Nachrichten ist ein Fehler aufgetreten.",
+				"retry": "Erneut versuchen"
+			}
 		},
 		"clientNodes": {
 			"fields": {
@@ -2279,10 +2285,10 @@
 		"loadedModels": {
 			"eyebrow": "Worker-Node",
 			"title": "Geladene Modelle",
-			"subtitle": "Modelle, die die lokale Laufzeit derzeit im Speicher hält (RAM/VRAM). Auswerfen gibt diesen Speicher frei — kontrolliert, nachdem eine laufende Generierung abgeschlossen ist.",
+			"subtitle": "Modelle, die die lokale Laufzeit derzeit im Speicher hält (RAM/VRAM). Auswerfen gibt diesen Speicher frei; läuft gerade eine Generierung, wartet die App kurz auf deren Abschluss und unterbricht sie möglicherweise.",
 			"loading": "Geladene Modelle werden geladen…",
 			"empty": "Derzeit sind keine Modelle geladen.",
-			"unavailable": "Die lokale Modell-Laufzeit ist derzeit nicht verfügbar. Diese Ansicht aktualisiert sich, sobald sie erreichbar ist.",
+			"unavailable": "Ollama ist derzeit nicht erreichbar. Es ist ein optionaler sekundärer Anbieter, daher gibt es hier möglicherweise nichts anzuzeigen. llama.cpp-Modelle erscheinen weiterhin unten.",
 			"cpuOnly": "Nur CPU",
 			"expired": "Abgelaufen",
 			"sizeUnknown": "Unbekannt",
@@ -2298,11 +2304,11 @@
 			},
 			"eject": {
 				"button": "Auswerfen",
-				"tooltip": "Gibt Speicher frei, nachdem die laufende Generierung abgeschlossen ist",
+				"tooltip": "Gibt den Speicher des Modells frei; eine laufende Generierung wird möglicherweise unterbrochen",
 				"confirmTitle": "Modell auswerfen",
-				"confirmDescription": "'{{modelName}}' aus dem Speicher auswerfen? Der Speicher wird freigegeben, nachdem die laufende Generierung abgeschlossen ist; eine laufende Antwort wird nicht unterbrochen.",
+				"confirmDescription": "'{{modelName}}' aus dem Speicher auswerfen? Läuft gerade eine Generierung, wartet die App kurz auf deren Abschluss; das Auswerfen kann sie unterbrechen.",
 				"confirmAction": "Auswerfen",
-				"success": "'{{modelName}}' wird ausgeworfen — Speicher wird nach der laufenden Generierung frei.",
+				"success": "'{{modelName}}' wird ausgeworfen — der Speicher wird in Kürze freigegeben.",
 				"error": "Das Modell konnte nicht ausgeworfen werden."
 			},
 			"ollama": {
