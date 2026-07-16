@@ -10,6 +10,7 @@ using Microsoft.Extensions.Options;
 using XE_Local_AI_Engine.AI.Agent.Configuration;
 using XE_Local_AI_Engine.AI.Agent.Invocation;
 using XE_Local_AI_Engine.AI.Agent.Invocation.Orchestration;
+using XE_Local_AI_Engine.Client.Common.Telemetry;
 using XE_Local_AI_Engine.Client.Models;
 using XE_Local_AI_Engine.Client.Models.Encrypted;
 using XE_Local_AI_Engine.Client.Models.Enums;
@@ -26,6 +27,8 @@ using XE_Local_AI_Engine.Client.Services.Invocation.Envelope;
 using XE_Local_AI_Engine.Client.Services.Invocation.Policy;
 using XE_Local_AI_Engine.Client.Services.Invocation.Resilience;
 using XE_Local_AI_Engine.Client.Services.NodeSettings;
+using XE_Local_AI_Engine.Providers.Abstractions;
+using XE_Local_AI_Engine.Providers.LlamaServer;
 
 /// <summary>
 ///     Represents invocation runner.
@@ -232,6 +235,13 @@ public sealed partial class InvocationRunner : IInvocationRunner
             // that never loops pays only one pass-through budget check.
             using var providerBudgetScope = ProviderCallBudget.BeginScope(_providerCallBudgetOptions);
 
+            // AUD4-01: warm the local model to readiness BEFORE the watched streaming pull begins, so a cold big-model
+            // load happens in its OWN size-aware window (owned by the supervisor) and is never killed by the shorter
+            // stream-idle watchdog — the primary cause of the audited "big model can never load through chat" hang.
+            // Cloud (Codex/Azure) and Ollama models are a no-op here. The load is decoupled from this caller's token in
+            // the supervisor, so a user who cancels merely abandons the wait while the load continues in the background.
+            await PrepareLocalRuntimeAsync(resolvedModel, dispatcher, package.InvocationId, invocationToken).ConfigureAwait(false);
+
             // Branch: a package carrying a compiled orchestration spec drives the handoff workflow; everything else is
             // the unchanged single-agent loop. Both accumulate into `stream`, then share the completion block below.
             if (package.OrchestrationSpec is { } orchestrationSpec)
@@ -437,6 +447,98 @@ public sealed partial class InvocationRunner : IInvocationRunner
         // Default to the approval-gated path; the per-tool overload below is what BuildInvocationTools wires in,
         // passing the tool's RequiresApproval flag so non-approval tools auto-execute.
         return ExecuteApiToolCallAsync(invocationId, toolName, parameters, requiresApproval: true, cancellationToken);
+    }
+
+    /// <summary>
+    ///     AUD4-01 model-readiness phase: warms a LOCAL (llama.cpp) model to readiness BEFORE the stream-idle watchdog
+    ///     is armed, so a cold big-model load runs in its own size-aware window (owned by the supervisor) instead of
+    ///     being killed by the shorter no-first-chunk watchdog. Cloud (Codex/Azure) and Ollama models route elsewhere or
+    ///     warm cheaply on first send, so they are a no-op here. Surfaces the phase into the invocation state (so the UI
+    ///     can render "loading model…") and records readiness timing/outcome on <see cref="NodeMetrics" />.
+    ///     <para>
+    ///         INVARIANT: the warm await is decoupled from the model load's lifetime in the supervisor — a caller
+    ///         cancellation abandons THIS wait (rethrown so the turn terminates as cancelled) while the load continues in
+    ///         the background and the model becomes warm for the next send. A warm FAILURE is swallowed here so the
+    ///         streaming send surfaces the real, classified error through its normal path rather than a duplicate here.
+    ///     </para>
+    /// </summary>
+    private async Task PrepareLocalRuntimeAsync(string resolvedModel,
+        IWorkerEventDispatcher dispatcher,
+        Guid invocationId,
+        CancellationToken cancellationToken)
+    {
+        var provider = await ResolveWarmableProviderAsync(resolvedModel, invocationId, cancellationToken).ConfigureAwait(false);
+        if (provider is null)
+        {
+            return;
+        }
+
+        // Phase: preparing runtime → loading model. Both fire BEFORE the stream-idle watchdog is armed.
+        await dispatcher.ReportInvocationPhaseAsync(invocationId, InvocationRuntimePhase.PreparingRuntime).ConfigureAwait(false);
+        await dispatcher.ReportInvocationPhaseAsync(invocationId, InvocationRuntimePhase.LoadingModel).ConfigureAwait(false);
+        _logger.LogInformation("Warming local model for invocation {InvocationId} before streaming (readiness decoupled from the stream-idle watchdog).", invocationId);
+
+        var startedUtc = DateTimeOffset.UtcNow;
+        try
+        {
+            await provider.WarmModelAsync(resolvedModel, cancellationToken).ConfigureAwait(false);
+        }
+        catch (OperationCanceledException)
+        {
+            // The caller cancelled its WAIT (the detached load continues in the supervisor and warms the model for the
+            // next send). Record the abandoned readiness and rethrow so the turn terminates as cancelled.
+            RecordReadiness(startedUtc, "cancelled");
+            throw;
+        }
+        catch (Exception exception)
+        {
+            // Readiness failed (e.g. model incompatible / OOM). Record it and let the streaming send surface the real,
+            // classified failure — it hits the same supervisor path and produces the proper error.
+            RecordReadiness(startedUtc, "failed");
+            _logger.LogWarning(exception, "Model warm failed for invocation {InvocationId}; the streaming send will surface the classified failure.", invocationId);
+            return;
+        }
+
+        var durationMs = RecordReadiness(startedUtc, "ready");
+        _logger.LogInformation("Local model ready for invocation {InvocationId} after {ElapsedMs:F0} ms; arming the stream-idle watchdog for generation.", invocationId, durationMs);
+
+        // Phase: generating (the model is ready; streaming begins under the stream-idle watchdog).
+        await dispatcher.ReportInvocationPhaseAsync(invocationId, InvocationRuntimePhase.Generating).ConfigureAwait(false);
+    }
+
+    /// <summary>
+    ///     Resolves the local provider that serves <paramref name="resolvedModel" />, returning it only when it is the
+    ///     llama.cpp runtime (the one that pays a real cold-load before a watched stream). Any other provider (Ollama /
+    ///     cloud) or a resolution failure returns <see langword="null" /> so the warm phase is skipped; a genuine
+    ///     cancellation propagates.
+    /// </summary>
+    private async Task<ILocalModelProvider?> ResolveWarmableProviderAsync(string resolvedModel, Guid invocationId, CancellationToken cancellationToken)
+    {
+        try
+        {
+            var provider = await _providerResolver.ResolveProviderForModelAsync(resolvedModel, cancellationToken).ConfigureAwait(false);
+            return provider is not null && string.Equals(provider.ProviderName, LlamaServerProviderConstants.ProviderName, StringComparison.OrdinalIgnoreCase)
+                ? provider
+                : null;
+        }
+        catch (OperationCanceledException)
+        {
+            throw;
+        }
+        catch (Exception exception)
+        {
+            _logger.LogDebug(exception, "Skipping runtime warm for invocation {InvocationId}: could not resolve a local provider for the model.", invocationId);
+            return null;
+        }
+    }
+
+    /// <summary>Records the model-readiness duration + outcome on <see cref="NodeMetrics" /> and returns the elapsed milliseconds.</summary>
+    private static double RecordReadiness(DateTimeOffset startedUtc, string outcome)
+    {
+        var durationMs = (DateTimeOffset.UtcNow - startedUtc).TotalMilliseconds;
+        NodeMetrics.ModelReadinessDurationMs.Record(durationMs, new KeyValuePair<string, object?>("outcome", outcome));
+        NodeMetrics.ModelReadinessTotal.Add(1, new KeyValuePair<string, object?>("outcome", outcome));
+        return durationMs;
     }
 
     // The single-agent path. Drives one ChatClientAgent over an approval-gated do/while loop, accumulating into

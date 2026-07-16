@@ -294,6 +294,7 @@ public sealed class InvocationResumeRegistry : IInvocationResumeRegistry
             InvocationId = state.InvocationId,
             ConversationId = state.ConversationId,
             Status = state.Status,
+            RuntimePhase = state.RuntimePhase,
             StreamedContent = state.StreamedContent,
             StreamedChunkCount = state.StreamedChunkCount,
             StreamedThinkingContent = state.StreamedThinkingContent,
