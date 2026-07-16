@@ -8,6 +8,7 @@ using XE_Local_AI_Engine.Client.Configuration;
 using XE_Local_AI_Engine.Client.Persistence;
 using XE_Local_AI_Engine.Client.Persistence.Entities;
 using XE_Local_AI_Engine.Client.Persistence.Stores;
+using XE_Local_AI_Engine.Client.Services.Capacity;
 using XE_Local_AI_Engine.Client.Services.ModelFit;
 using XE_Local_AI_Engine.Client.Services.ModelFit.Fit;
 using XE_Local_AI_Engine.Client.Services.ModelFit.Implementation;
@@ -132,8 +133,8 @@ public sealed class ModelRecommendationCheckSchedulerPathTests
             CpuCores = 16,
             FreeDiskBytes = 500 * Gb
         };
-        var profiler = Substitute.For<IHardwareProfiler>();
-        profiler.GetProfileAsync(Arg.Any<bool>(), Arg.Any<CancellationToken>()).Returns(Task.FromResult(profile));
+        var runtimeAudit = Substitute.For<IRuntimeDeviceAudit>();
+        runtimeAudit.GetEffectiveProfileAsync(Arg.Any<bool>(), Arg.Any<CancellationToken>()).Returns(Task.FromResult(profile));
 
         var discovery = Substitute.For<IHuggingFaceGgufDiscovery>();
         discovery.SearchAsync(Arg.Any<GgufSearchQuery>(), Arg.Any<CancellationToken>())
@@ -157,7 +158,7 @@ public sealed class ModelRecommendationCheckSchedulerPathTests
             AllowedModelNamePattern = "^[a-zA-Z0-9._:/-]+$"
         });
 
-        return new ModelFitRefreshService(profiler,
+        return new ModelFitRefreshService(runtimeAudit,
             discovery,
             new MemoryFitEstimator(),
             Substitute.For<IGgufModelStore>(),

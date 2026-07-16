@@ -4,6 +4,7 @@ using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 using Microsoft.Extensions.Http.Resilience;
 using Microsoft.Extensions.Logging;
+using XE_Local_AI_Engine.Providers.Abstractions.Capabilities;
 using XE_Local_AI_Engine.Providers.Abstractions.Image;
 using XE_Local_AI_Engine.Providers.StableDiffusionCpp.Contracts;
 using XE_Local_AI_Engine.Providers.StableDiffusionCpp.Implementation;
@@ -58,6 +59,10 @@ public static class StableDiffusionCppRuntimeServiceCollectionExtensions
         services.TryAddSingleton(static sp =>
             new SdServerJobClient(sp.GetRequiredService<IHttpClientFactory>().CreateClient(RuntimeHttpClientName)));
 
+        // AUD4-06 GPU-load admission floor: a no-op serializer so an image-only host resolves the gate. The composition
+        // root overrides it (plain AddSingleton, last-wins) with the real singleton shared with the llama-server supervisor.
+        services.TryAddSingleton<IGpuModelLoadAdmission, NoOpGpuModelLoadAdmission>();
+
         // The supervisor owns every resident sd-server child process for the node — strictly one singleton. Built via an
         // explicit factory because its ctor is internal (it takes the internal launcher/readiness seams).
         services.TryAddSingleton(static sp => new ImageServerProcessSupervisor(sp.GetRequiredService<IImageModelStore>(),
@@ -67,7 +72,8 @@ public static class StableDiffusionCppRuntimeServiceCollectionExtensions
             sp.GetRequiredService<IImageServerReadinessProbe>(),
             sp.GetRequiredService<StableDiffusionRuntimeOptions>(),
             sp.GetService<TimeProvider>(),
-            sp.GetRequiredService<ILogger<ImageServerProcessSupervisor>>()));
+            sp.GetRequiredService<ILogger<ImageServerProcessSupervisor>>(),
+            sp.GetRequiredService<IGpuModelLoadAdmission>()));
         services.TryAddSingleton<IImageServerSupervisor>(static sp => sp.GetRequiredService<ImageServerProcessSupervisor>());
 
         // The public image-generation facade. Singleton — it holds no per-request state.

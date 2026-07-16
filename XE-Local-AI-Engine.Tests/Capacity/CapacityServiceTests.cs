@@ -40,8 +40,9 @@ public sealed class CapacityServiceTests
         AssertEx.Equal(CapacityVerdict.Allow, decision.Verdict);
         AssertEx.False(decision.OllamaEvictionWarning);
         AssertEx.Null(decision.Reservation);
-        // No hardware/supervisor/footprint probe may run on the cloud path.
-        await harness.HardwareProfiler.DidNotReceive().GetProfileAsync(Arg.Any<bool>(), Arg.Any<CancellationToken>());
+        // No hardware/audit/supervisor/footprint probe may run on the cloud path.
+        await harness.RuntimeAudit.DidNotReceive().GetEffectiveProfileAsync(Arg.Any<bool>(), Arg.Any<CancellationToken>());
+        await harness.RuntimeAudit.DidNotReceive().GetAuditAsync(Arg.Any<bool>(), Arg.Any<CancellationToken>());
         await harness.Supervisor.DidNotReceive().CheckHealthAsync(Arg.Any<CancellationToken>());
         await harness.FootprintProvider.DidNotReceive()
                      .ResolveFootprintAsync(Arg.Any<string>(), Arg.Any<HardwareProfile>(), Arg.Any<CancellationToken>());
@@ -241,8 +242,8 @@ public sealed class CapacityServiceTests
 
         await service.DecideAsync(Model, ModelRole.Chat, CancellationToken.None);
 
-        await harness.HardwareProfiler.Received().GetProfileAsync(forceRefresh: true, Arg.Any<CancellationToken>());
-        await harness.HardwareProfiler.DidNotReceive().GetProfileAsync(forceRefresh: false, Arg.Any<CancellationToken>());
+        await harness.RuntimeAudit.Received().GetEffectiveProfileAsync(forceRefreshProfile: true, Arg.Any<CancellationToken>());
+        await harness.RuntimeAudit.DidNotReceive().GetEffectiveProfileAsync(forceRefreshProfile: false, Arg.Any<CancellationToken>());
     }
 
     [Test]
@@ -288,6 +289,48 @@ public sealed class CapacityServiceTests
 
         AssertEx.Equal(CapacityVerdict.RejectInsufficient, decision.Verdict);
         AssertEx.True(decision.OllamaEvictionWarning, "a different running Ollama model that won't fit must flag the eviction warning.");
+    }
+
+    [Test]
+    public async Task Capacity_WhenDeviceAuditDegradesToCpuMode_SizesAgainstRam_NotPhantomVram()
+    {
+        // AUD4-03: on a physical GPU box whose selected runtime silently fell back to the CPU, the device audit hands the
+        // gate a CPU-mode EFFECTIVE profile (VRAM unknown). A model that would fit the 16 GB GPU but not the 4 GB free RAM
+        // must therefore be rejected on the byte budget — capacity must never pretend the unusable VRAM exists.
+        var harness = new Harness
+        {
+            Profile = CpuProfile(4 * Gb),
+            Footprint = ModelFootprint.Known(8 * Gb)
+        };
+        var service = harness.Build();
+
+        var decision = await service.DecideAsync(Model, ModelRole.Chat, CancellationToken.None);
+
+        AssertEx.Equal(CapacityVerdict.RejectInsufficient, decision.Verdict);
+        AssertEx.Null(decision.Reservation);
+    }
+
+    [Test]
+    public async Task Capacity_Decision_ComposesWithGpuLoadAdmission_NoDeadlock()
+    {
+        // AUD4-06 lock ordering: the capacity decision gate and the GPU-load admission gate are never nested — the
+        // decision fully completes (releasing the ledger gate) BEFORE the supervisor spawn acquires the load gate. Prove
+        // it composes deadlock-free: even while a GPU load holds the admission gate, a capacity decision still completes.
+        using var admission = new GpuModelLoadAdmission(new GpuModelLoadAdmissionOptions());
+        using var heldTicket = await admission.AcquireAsync(CancellationToken.None);
+
+        var harness = new Harness
+        {
+            Profile = GpuProfile(16 * Gb),
+            Footprint = ModelFootprint.Known(4 * Gb)
+        };
+        var service = harness.Build();
+
+        var decision = await service.DecideAsync(Model, ModelRole.Chat, CancellationToken.None)
+                                    .WaitAsync(TimeSpan.FromSeconds(3));
+
+        AssertEx.Equal(CapacityVerdict.Allow, decision.Verdict);
+        decision.Reservation?.Dispose();
     }
 
     // An empty-GPU profile: the measured free-VRAM baseline equals total, so existing fit expectations are unchanged.
@@ -340,7 +383,7 @@ public sealed class CapacityServiceTests
         public IReadOnlyList<LlamaServerProcessHealth> RunningLlama { get; init; } = [];
         public IReadOnlyList<RunningModelSnapshot> RunningOllama { get; init; } = [];
 
-        public IHardwareProfiler HardwareProfiler { get; } = Substitute.For<IHardwareProfiler>();
+        public IRuntimeDeviceAudit RuntimeAudit { get; } = Substitute.For<IRuntimeDeviceAudit>();
         public ILlamaServerProcessSupervisor Supervisor { get; } = Substitute.For<ILlamaServerProcessSupervisor>();
         public IModelFootprintProvider FootprintProvider { get; } = Substitute.For<IModelFootprintProvider>();
         public PendingFootprintLedger Ledger { get; } = new();
@@ -355,8 +398,17 @@ public sealed class CapacityServiceTests
                     .Returns(Task.FromResult(ProviderName));
             resolver.MaxLoadedProcesses.Returns(MaxLoadedProcesses);
 
-            HardwareProfiler.GetProfileAsync(Arg.Any<bool>(), Arg.Any<CancellationToken>())
-                            .Returns(Task.FromResult(Profile));
+            // The effective profile the audit hands the capacity gate; for these tests it is the raw Profile unchanged
+            // (no CPU fallback). A dedicated fallback test overrides GetEffectiveProfileAsync to return a CPU-degraded one.
+            RuntimeAudit.GetEffectiveProfileAsync(Arg.Any<bool>(), Arg.Any<CancellationToken>())
+                        .Returns(Task.FromResult(Profile));
+            RuntimeAudit.GetAuditAsync(Arg.Any<bool>(), Arg.Any<CancellationToken>())
+                        .Returns(Task.FromResult(new RuntimeDeviceAuditState
+                        {
+                            InferenceBackend = "cuda",
+                            GpuExpected = true,
+                            CpuFallback = false
+                        }));
             Supervisor.CheckHealthAsync(Arg.Any<CancellationToken>())
                       .Returns(Task.FromResult(RunningLlama));
             FootprintProvider.ResolveFootprintAsync(Arg.Any<string>(), Arg.Any<HardwareProfile>(), Arg.Any<CancellationToken>())
@@ -366,7 +418,7 @@ public sealed class CapacityServiceTests
             ollama.ListRunningModelsAsync(Arg.Any<CancellationToken>())
                   .Returns(Task.FromResult(RunningOllama));
 
-            return new CapacityService(cloud, resolver, HardwareProfiler, Supervisor, ollama, FootprintProvider, Ledger);
+            return new CapacityService(cloud, resolver, RuntimeAudit, Supervisor, ollama, FootprintProvider, Ledger);
         }
     }
 }

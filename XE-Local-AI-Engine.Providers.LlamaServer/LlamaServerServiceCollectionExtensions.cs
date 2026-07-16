@@ -97,6 +97,16 @@ public static class LlamaServerServiceCollectionExtensions
         // regardless of registration order — TryAdd no-ops once a registration exists, and last-wins resolves to this one.
         services.AddSingleton<IAvailableVramProbe, LlamaListDevicesVramProbe>();
 
+        // AUD4-03 device-inventory probe: parses `llama-server --list-devices` into a structured {variant, devices[]}
+        // (sharing the process runner with the VRAM probe), cached per resolved binary. The Application-layer runtime
+        // device audit consumes it to detect a GPU-variant binary that enumerates zero devices (a silent CPU fallback).
+        services.TryAddSingleton<ILlamaDeviceInventoryProbe, LlamaDeviceInventoryProbe>();
+
+        // AUD4-06 GPU-load admission floor: a no-op serializer so a provider-only host resolves the gate even when the
+        // application layer has not registered the real, metric-emitting serializer. The composition root overrides this
+        // with a plain AddSingleton (last-wins) so both the LLM and image supervisors share ONE process-wide gate.
+        services.TryAddSingleton<IGpuModelLoadAdmission, NoOpGpuModelLoadAdmission>();
+
         // Options default here so the supervisor is resolvable; the host overrides them from node config.
         services.TryAddSingleton(new LlamaServerSupervisorOptions());
         services.TryAddSingleton(new LlamaServerExternalEndpointOptions());
@@ -132,7 +142,8 @@ public static class LlamaServerServiceCollectionExtensions
             sp.GetRequiredService<IInferenceProfileResolver>(),
             sp.GetRequiredService<LlamaServerExternalEndpointOptions>(),
             sp.GetService<TimeProvider>(),
-            sp.GetRequiredService<ILogger<LlamaServerProcessSupervisor>>()));
+            sp.GetRequiredService<ILogger<LlamaServerProcessSupervisor>>(),
+            sp.GetRequiredService<IGpuModelLoadAdmission>()));
         services.TryAddSingleton<ILlamaServerProcessSupervisor>(static sp =>
             sp.GetRequiredService<LlamaServerProcessSupervisor>());
 
