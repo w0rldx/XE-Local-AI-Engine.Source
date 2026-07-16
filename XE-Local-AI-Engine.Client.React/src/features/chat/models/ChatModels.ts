@@ -353,4 +353,11 @@ export interface ChatDisplayShellProps {
 	// True while the selected conversation's full payload (with messages) is loading. Forwarded to the
 	// message list so the empty-state never flashes over a populated thread during the refetch.
 	isLoadingMessages?: boolean;
+	// The selected conversation's full payload failed to load (a non-transient getConversation error). Drives the
+	// inline error+retry state in the message list, replacing the otherwise-infinite loading spinner.
+	messagesLoadFailed?: boolean;
+	// Resolved error reason for messagesLoadFailed, shown beneath the generic failure copy for context.
+	messagesLoadErrorText?: string;
+	// Re-runs the selected-conversation query (refetch). Wired to the Retry action in the message list error state.
+	onRetryLoadMessages?: () => void;
 }

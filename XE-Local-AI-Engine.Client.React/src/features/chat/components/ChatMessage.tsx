@@ -1,5 +1,5 @@
 import { Alert, Anchor, Avatar, Badge, Box, Group, Paper, Stack, Text } from "@mantine/core";
-import { IconAlertTriangle, IconSparkles } from "@tabler/icons-react";
+import { IconAlertTriangle, IconPlayerStop, IconSparkles } from "@tabler/icons-react";
 import { Link } from "@tanstack/react-router";
 import { AnimatePresence, m, useReducedMotion } from "framer-motion";
 import { memo, type ReactNode } from "react";
@@ -163,6 +163,13 @@ export const ChatMessage = memo(function ChatMessage({
 	// where the model streamed some text before failing: both the partial content AND the error block show.
 	// StreamingIndicator no longer renders errors (single render site).
 	const errorText = assistantMessage && hasText(message.error) ? message.error?.trim() : undefined;
+	// A user-cancelled turn is a neutral, expected outcome — not a failure. It renders as a subdued
+	// "Generation stopped" line, never the red error Alert, even when the backend persisted an error string
+	// alongside the cancelled status. Classification is driven purely by the terminal `status`, never by
+	// string-matching the (localized) error text, so it holds for the live cancel, the cancelled stream event,
+	// and the persisted reload alike.
+	const isCancelled = assistantMessage && message.status === "cancelled";
+	const showErrorAlert = !isCancelled && (Boolean(errorText) || failureCategory === "ModelNotInstalled");
 	const canCopy = hasContentStarted && !isStreaming;
 	const canRegenerate = assistantMessage && !isStreaming && Boolean(onRegenerate);
 	const canBranch = assistantMessage && !isStreaming && Boolean(onBranch);
@@ -285,7 +292,15 @@ export const ChatMessage = memo(function ChatMessage({
 						</m.div>
 					) : null}
 				</AnimatePresence>
-				{errorText || failureCategory === "ModelNotInstalled" ? (
+				{isCancelled ? (
+					<Group gap={6} align="center" data-testid={`chat-message-stopped-${message.id}`} role="status">
+						<IconPlayerStop size={14} color="var(--mantine-color-dimmed)" />
+						<Text size="sm" c="dimmed">
+							{t("pages.chat.stopped", "Generation stopped")}
+						</Text>
+					</Group>
+				) : null}
+				{showErrorAlert ? (
 					<Alert
 						color="red"
 						variant="light"
