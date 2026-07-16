@@ -58,6 +58,16 @@ internal static class AddNodeKnowledgeBaseExtensions
         // Reciprocal Rank Fusion is a pure, stateless function over rank lists — safe as a singleton, no DbContext.
         builder.Services.AddSingleton<IRankingFusionService, ReciprocalRankFusion>();
 
+        // Process-wide latch flipped by the vector-normalization backfill (hosted in the Client host): once every stored
+        // vector is unit length the scoped search may score with a dot product instead of full cosine. Singleton so all
+        // per-request search instances observe the same latch; default false keeps the search on the (always-correct)
+        // cosine path until the backfill for this database completes.
+        builder.Services.AddSingleton<IKnowledgeVectorNormalizationState, KnowledgeVectorNormalizationState>();
+
+        // Bounded, RAM-only, TTL'd query-embedding cache (keyed by resolved model + query hash). Singleton so one cache
+        // serves every scoped search; lets a repeated query skip the embedding round trip.
+        builder.Services.AddSingleton<IKnowledgeQueryEmbeddingCache, KnowledgeQueryEmbeddingCache>();
+
         // Search lane (Lane C). SCOPED (M3): each retrieval collaborator reads through the request-scoped NodeChatDbContext
         // connection, so all are resolved inside the per-search scope. The vector backend is selected via the
         // scoped-resolving IVectorSearchFactory — NOT a singleton keyed registration that would capture a scoped DbContext.

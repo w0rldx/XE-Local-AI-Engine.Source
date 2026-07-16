@@ -4,6 +4,8 @@ using System.Data.Common;
 using System.Diagnostics;
 using System.Diagnostics.CodeAnalysis;
 using System.Globalization;
+using System.Security.Cryptography;
+using System.Text;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Options;
 using OllamaSharp.Models.Exceptions;
@@ -45,6 +47,7 @@ public sealed class KnowledgeSearchService : IKnowledgeSearchService
     private readonly IRankingFusionService _fusion;
     private readonly IRerankerClient _reranker;
     private readonly IContextExpansionService _contextExpansion;
+    private readonly IKnowledgeQueryEmbeddingCache _queryEmbeddingCache;
     private readonly KnowledgeBaseOptions _options;
     private readonly ILogger<KnowledgeSearchService> _logger;
 
@@ -57,6 +60,7 @@ public sealed class KnowledgeSearchService : IKnowledgeSearchService
         IRankingFusionService fusion,
         IRerankerClient reranker,
         IContextExpansionService contextExpansion,
+        IKnowledgeQueryEmbeddingCache queryEmbeddingCache,
         IOptions<KnowledgeBaseOptions> options,
         ILogger<KnowledgeSearchService> logger)
     {
@@ -69,6 +73,7 @@ public sealed class KnowledgeSearchService : IKnowledgeSearchService
         _fusion = fusion ?? throw new ArgumentNullException(nameof(fusion));
         _reranker = reranker ?? throw new ArgumentNullException(nameof(reranker));
         _contextExpansion = contextExpansion ?? throw new ArgumentNullException(nameof(contextExpansion));
+        _queryEmbeddingCache = queryEmbeddingCache ?? throw new ArgumentNullException(nameof(queryEmbeddingCache));
         ArgumentNullException.ThrowIfNull(options);
         _options = options.Value;
         _logger = logger ?? throw new ArgumentNullException(nameof(logger));
@@ -120,14 +125,20 @@ public sealed class KnowledgeSearchService : IKnowledgeSearchService
         var connection = _dbContext.Database.GetDbConnection();
         await OpenIfNeededAsync(connection, cancellationToken).ConfigureAwait(false);
 
-        // Optional rerank stage: when a reranker model is configured, the fused CANDIDATE POOL (bounded to candidatePool)
-        // is rescored by a local cross-encoder and reordered BEFORE the top-`limit` cut, so a strong-but-lexically-weak
-        // chunk can be pulled into the results. When reranking is off — or on ANY rerank failure — the behavior is the
-        // exact original: RRF order, Take(limit). Reranking scores the BASE chunk content (pre-expansion); neighbor
-        // expansion is applied only to the final selected top-k below.
+        // Hydrate the fused candidate POOL once (bounded to candidatePool, in one batched query) in fused order, then drop
+        // content duplicates BEFORE any top-`limit` cut so near-identical chunks stored under different ids do not crowd
+        // out distinct results. The higher-RRF-ranked occurrence of a duplicate is kept (the pool is in fused order), so
+        // the dedup is deterministic.
+        var pool = await HydratePoolAsync(connection, fused, candidatePool, cancellationToken).ConfigureAwait(false);
+        var deduped = DeduplicateByContent(pool);
+
+        // Optional rerank stage: when a reranker model is configured, the deduped pool is rescored by a local cross-encoder
+        // and reordered BEFORE the top-`limit` cut, so a strong-but-lexically-weak chunk can be pulled into the results.
+        // When reranking is off — or on ANY rerank failure — the behavior is the exact original: RRF order, Take(limit).
+        // Reranking scores the BASE chunk content (pre-expansion); neighbor expansion is applied only to the final top-k.
         var selections = string.IsNullOrWhiteSpace(_options.RerankerModelName)
-            ? await SelectByFusionOrderAsync(connection, fused, limit, cancellationToken).ConfigureAwait(false)
-            : await SelectByRerankAsync(connection, request.Query, fused, candidatePool, limit, cancellationToken).ConfigureAwait(false);
+            ? deduped.Take(limit).ToList()
+            : await RerankAsync(request.Query, deduped, limit, cancellationToken).ConfigureAwait(false);
 
         // Neighbor expansion (when requested) is resolved for the whole final top-k in one batched call rather than one
         // round trip per hit; the content ordering and fallback are identical to expanding each hit individually.
@@ -221,39 +232,13 @@ public sealed class KnowledgeSearchService : IKnowledgeSearchService
             new KeyValuePair<string, object?>("stage", stage));
     }
 
-    // Disabled-rerank path (the original behavior): hydrate the top-`limit` fused entries in RRF order, stamping the RRF
-    // score. Hydration is one batched query for the whole set (not a round trip per chunk); a chunk that disappeared
-    // between retrieval and hydration (concurrent delete/reindex) is simply absent from the batch and skipped, and the
-    // surviving entries keep their fused order.
-    private static async Task<IReadOnlyList<ChunkSelection>> SelectByFusionOrderAsync(DbConnection connection,
-        IReadOnlyList<RankFusionEntry> fused,
-        int limit,
-        CancellationToken cancellationToken)
-    {
-        var ordered = fused.Take(limit).ToList();
-        var hydrated = await HydrateChunksAsync(connection, ordered.Select(static entry => entry.ChunkId).ToList(), cancellationToken).ConfigureAwait(false);
-
-        var selections = new List<ChunkSelection>(ordered.Count);
-        foreach (var entry in ordered)
-        {
-            if (hydrated.TryGetValue(entry.ChunkId, out var row))
-            {
-                selections.Add(new ChunkSelection(entry.ChunkId, row, entry.Score));
-            }
-        }
-
-        return selections;
-    }
-
-    // Enabled-rerank path: hydrate the fused candidate POOL (bounded to candidatePool — NOT the whole fused list) in one
-    // batched query, send the base chunk contents to the local reranker, and reorder by descending relevance before taking
-    // `limit`. On any rerank failure (null / count mismatch) the pool is kept in its original RRF order with the RRF score,
-    // so the result is never worse than the disabled path. Hydration is bounded to candidatePool, capping the pre-cut cost.
-    private async Task<IReadOnlyList<ChunkSelection>> SelectByRerankAsync(DbConnection connection,
-        string query,
+    // Hydrates the fused candidate POOL (bounded to candidatePool — NOT the whole fused list) in one batched query, in
+    // fused order, stamping the RRF score. Hydration is one batched query for the whole set (not a round trip per chunk); a
+    // chunk that disappeared between retrieval and hydration (concurrent delete/reindex) is simply absent from the batch
+    // and skipped, and the surviving entries keep their fused order.
+    private static async Task<List<ChunkSelection>> HydratePoolAsync(DbConnection connection,
         IReadOnlyList<RankFusionEntry> fused,
         int candidatePool,
-        int limit,
         CancellationToken cancellationToken)
     {
         var pooled = fused.Take(candidatePool).ToList();
@@ -268,9 +253,40 @@ public sealed class KnowledgeSearchService : IKnowledgeSearchService
             }
         }
 
+        return pool;
+    }
+
+    // Drops candidates whose normalized content duplicates a higher-ranked candidate. The pool is in fused order, so the
+    // FIRST occurrence of a given content (the highest-RRF-ranked) is kept and later duplicates are dropped — deterministic
+    // given RRF's deterministic order. Content is normalized (whitespace collapsed, lowercased) before hashing so chunks
+    // that differ only in incidental whitespace/case are treated as duplicates.
+    private static List<ChunkSelection> DeduplicateByContent(IReadOnlyList<ChunkSelection> pool)
+    {
+        // seen.Add returns false for a content already kept, so the Where keeps only the first (highest-RRF-ranked)
+        // occurrence of each distinct content — the side effect is the dedup.
+        var seen = new HashSet<string>(StringComparer.Ordinal);
+        return pool.Where(selection => seen.Add(ContentDedupHash(selection.Row.Content))).ToList();
+    }
+
+    private static string ContentDedupHash(string content)
+    {
+        // Upper-invariant (CA1308: the invariant upper-case round-trips reliably) after collapsing whitespace, so chunks
+        // that differ only in incidental whitespace or case hash equal.
+        var collapsed = string.Join(' ', content.Split((char[]?)null, StringSplitOptions.RemoveEmptyEntries)).ToUpperInvariant();
+        return Convert.ToHexStringLower(SHA256.HashData(Encoding.UTF8.GetBytes(collapsed)));
+    }
+
+    // Enabled-rerank path: send the base chunk contents of the (already hydrated + deduped) pool to the local reranker and
+    // reorder by descending relevance before taking `limit`. On any rerank failure (null / count mismatch) the pool is kept
+    // in its original RRF order with the RRF score, so the result is never worse than the disabled path.
+    private async Task<IReadOnlyList<ChunkSelection>> RerankAsync(string query,
+        IReadOnlyList<ChunkSelection> pool,
+        int limit,
+        CancellationToken cancellationToken)
+    {
         if (pool.Count == 0)
         {
-            return pool;
+            return [];
         }
 
         var documents = pool.Select(static candidate => candidate.Row.Content).ToList();
@@ -310,6 +326,15 @@ public sealed class KnowledgeSearchService : IKnowledgeSearchService
             // now-incompatible old vectors instead of silently mis-comparing them. The confidence bit is irrelevant here —
             // search degrades to lexical-only on any embedding failure regardless of why the name is what it is.
             var embeddingModelName = (await _embeddingModelResolver.ResolveAsync(provider, cancellationToken).ConfigureAwait(false)).Name;
+
+            // Cache hit: skip the embedding round trip (typically the dominant retrieval latency). The key is (resolved
+            // model, query), so a same-dimension model swap changes the resolved name → a different key → the stale
+            // cross-model vector is never returned. RAM-only + bounded + TTL'd; the raw query text is not retained (hashed).
+            if (_queryEmbeddingCache.TryGet(embeddingModelName, query, out var cachedVector))
+            {
+                return (cachedVector, embeddingModelName);
+            }
+
             using var generator = provider.CreateEmbeddingGenerator(new LocalModelSelection
             {
                 ModelName = embeddingModelName,
@@ -326,7 +351,9 @@ public sealed class KnowledgeSearchService : IKnowledgeSearchService
             // No static dimension check here: the query is embedded by the SAME resolved model that keys the stored chunk
             // vectors, and ManagedCosineVectorSearch skips any candidate whose width differs from the query (defense in
             // depth). A model with a non-768 native width therefore searches correctly instead of silently degrading.
-            return (generated[0].Vector, embeddingModelName);
+            var queryVector = generated[0].Vector;
+            _queryEmbeddingCache.Store(embeddingModelName, query, queryVector);
+            return (queryVector, embeddingModelName);
         }
         catch (Exception exception) when (exception is HttpRequestException or IOException or OllamaException or InvalidOperationException)
         {
