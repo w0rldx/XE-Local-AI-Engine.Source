@@ -1,5 +1,6 @@
 namespace XE_Local_AI_Engine.Client.Services.Invocation.Context;
 
+using System.Runtime.CompilerServices;
 using Microsoft.Extensions.AI;
 
 /// <summary>
@@ -10,8 +11,19 @@ using Microsoft.Extensions.AI;
 ///     provider-accurate implementation of <see cref="ITokenEstimator" /> can replace this later without touching the
 ///     budgeting policy.
 /// </summary>
+/// <remarks>
+///     AUD4-16: per-message estimates are memoized by message instance in a <see cref="ConditionalWeakTable{TKey,TValue}" />
+///     (no leak — the entry dies with the message). The budgeter re-estimates the same history across the two outer
+///     growth points and every inner tool-loop round, and the same <see cref="ChatMessage" /> instances flow through all
+///     of them (the runner appends but never mutates), so the memo turns repeated full-content scans into dictionary
+///     lookups. Correct only because a <see cref="ChatMessage" /> is immutable-after-construction on these paths
+///     (truncation produces a NEW instance); the returned value is identical to a fresh computation, so budgeting output
+///     is unchanged.
+/// </remarks>
 public sealed class HeuristicTokenEstimator : ITokenEstimator
 {
+    private static readonly ConditionalWeakTable<ChatMessage, StrongBox<int>> PerMessageEstimateCache = new();
+
     // GPT/LLaMA-family byte-pair tokenizers average roughly four characters per token for English prose; using a
     // divisor of four (rather than a larger one) keeps the estimate conservative for code and non-English text where
     // tokens are shorter.
@@ -38,13 +50,18 @@ public sealed class HeuristicTokenEstimator : ITokenEstimator
     {
         ArgumentNullException.ThrowIfNull(message);
 
+        return PerMessageEstimateCache.GetValue(message, ComputeMessageTokens).Value;
+    }
+
+    private static StrongBox<int> ComputeMessageTokens(ChatMessage message)
+    {
         var characters = 0;
         foreach (var content in message.Contents)
         {
             characters += EstimateContentCharacters(content);
         }
 
-        return (characters / CharsPerToken) + PerMessageOverheadTokens;
+        return new StrongBox<int>((characters / CharsPerToken) + PerMessageOverheadTokens);
     }
 
     public int EstimateTokens(IReadOnlyList<ChatMessage> messages)

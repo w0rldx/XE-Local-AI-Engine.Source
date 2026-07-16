@@ -2,6 +2,7 @@ namespace XE_Local_AI_Engine.Client.Hosting;
 
 using XE_Local_AI_Engine.Client.Persistence.Stores;
 using XE_Local_AI_Engine.Client.Services.Chat;
+using XE_Local_AI_Engine.Client.Services.CloudProviders;
 using XE_Local_AI_Engine.Providers.Ollama.Implementation;
 
 /// <summary>
@@ -117,6 +118,10 @@ public sealed class OllamaProviderMapBackfillService(
         if (mapped > 0)
         {
             logger.LogInformation("Backfilled {Count} pre-existing Ollama model(s) to the ollama provider map.", mapped);
+
+            // AUD4-16: rows changed, so drop the resolver's short-TTL provider-name cache to avoid a stale default-route
+            // read for a just-mapped Ollama model. Optional resolve — the TTL is the backstop if the resolver is absent.
+            scope.ServiceProvider.GetService<ILocalModelProviderResolver>()?.InvalidateModelProviderMap();
         }
     }
 }

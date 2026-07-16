@@ -1,5 +1,6 @@
 namespace XE_Local_AI_Engine.Client.Services.Chat.Implementation;
 
+using System.Diagnostics;
 using XE_Local_AI_Engine.Client.Persistence;
 using XE_Local_AI_Engine.Client.Persistence.Stores;
 using XE_Local_AI_Engine.Client.Services.Agents;
@@ -44,6 +45,11 @@ public sealed class ChatTurnResolver(
         // default) so a plain chat still works without tripping the 400. Cache hit issues no /api/show call. The same
         // pass classifies provider LOCALITY (Codex / Azure Foundry = cloud) so the knowledge-tool provider-locality gate
         // reuses this per-turn resolution instead of adding its own hot-path lookup.
+        // AUD4-16: measure per-turn resolution cost so the before/after of the redundant-work removals (single agent-def
+        // read, cached provider resolution) is observable. Debug-level + timestamp-based, so it costs a long on the hot
+        // path when Debug logging is off.
+        var resolveStartTimestamp = Stopwatch.GetTimestamp();
+
         var (supportsThinking, supportsTools, activeModelIsCloud) = await ResolveModelCapabilitiesAsync(activeModel, cancellationToken).ConfigureAwait(false);
 
         // Resolve the effective agent definition. A null result — no effective id (the seed is missing), or an id whose
@@ -59,7 +65,8 @@ public sealed class ChatTurnResolver(
         // on the package — the runner branches to the handoff workflow. A null result (not an orchestrator, an
         // empty/invalid topology, an incapable model, or too few capable participants) leaves the package single-agent,
         // keeping the unbound/single-agent path byte-identical. The same retrieval query drives per-participant retrieval.
-        var orchestration = await ResolveOrchestrationAsync(effectiveAgentId, activeModel, retrievalQuery, supportsTools, cancellationToken).ConfigureAwait(false);
+        // The already-resolved runtime is threaded in so its Kind gates the reload (AUD4-16).
+        var orchestration = await ResolveOrchestrationAsync(effectiveAgentId, resolved, activeModel, retrievalQuery, supportsTools, cancellationToken).ConfigureAwait(false);
 
         // The single source of truth for the model that actually runs this turn: the resolved pin when honored (the
         // resolver returned null for ModelProfile when the user's explicit pick suppressed it), otherwise the active
@@ -71,6 +78,14 @@ public sealed class ChatTurnResolver(
         // and conversation attachments). The resolver classified the pinned effective model; with no bound agent (or no
         // pin) the effective model IS the active model, so reuse the active-model flag.
         var effectiveModelIsCloud = resolved?.EffectiveModelIsCloud ?? activeModelIsCloud;
+
+        if (logger.IsEnabled(LogLevel.Debug))
+        {
+            logger.LogDebug("Chat-turn resolution completed in {ElapsedMs:F2} ms (boundAgent={HasBoundAgent}, orchestration={HasOrchestration}).",
+                Stopwatch.GetElapsedTime(resolveStartTimestamp).TotalMilliseconds,
+                effectiveAgentId is not null,
+                orchestration is not null);
+        }
 
         return new ChatTurnResolution(activeModel, effectiveModel, resolved, orchestration, supportsThinking, supportsTools, requiresInstalledChatModel, activeModelIsCloud, effectiveModelIsCloud);
     }
@@ -178,12 +193,23 @@ public sealed class ChatTurnResolver(
     ///     or a non-orchestrator definition returns <c>null</c> without resolving, so the single-agent path is byte-identical.
     /// </summary>
     private async Task<ResolvedOrchestration?> ResolveOrchestrationAsync(Guid? agentDefinitionId,
+        ResolvedAgentRuntime? resolved,
         string? activeModel,
         string? retrievalQuery,
         bool supportsTools,
         CancellationToken cancellationToken)
     {
         if (agentDefinitionId is not { } definitionId)
+        {
+            return null;
+        }
+
+        // AUD4-16: the resolver already loaded (and AES-GCM-decrypted) this definition on the line above; reuse its Kind
+        // instead of a SECOND uncached GetByIdAsync + decrypt. A null resolution (no binding / deleted definition) or a
+        // non-orchestrator Kind — the overwhelmingly common path, incl. every mode-off Default Assistant send — means
+        // there is no orchestration to compile, so the reload is skipped entirely. Only a bound orchestrator (rare) pays
+        // the reload to obtain the full definition the compiler needs.
+        if (resolved is not { Kind: AgentDefinitionKind.Orchestrator })
         {
             return null;
         }
