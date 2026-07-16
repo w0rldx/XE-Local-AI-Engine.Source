@@ -466,4 +466,38 @@ describe("ChatMessage actions", () => {
 
 		expect(useNodeChatPreferencesStore.getState().showTokensPerSecond).toBe(true);
 	});
+
+	// AUD4-20.1: a user cancellation is a neutral, expected outcome — never the red "Response failed" alert.
+	it("renders a cancelled turn as a neutral 'Generation stopped' line, not the red error alert", () => {
+		renderWithProviders(
+			<ChatMessage message={assistantMessage({ content: "Partial answer…", status: "cancelled" })} />,
+		);
+
+		expect(screen.getByTestId("chat-message-stopped-assistant-1")).toBeTruthy();
+		expect(screen.getByTestId("chat-message-stopped-assistant-1").textContent).toContain("Generation stopped");
+		// The neutral line replaces — never accompanies — the error alert.
+		expect(screen.queryByTestId("chat-message-error-assistant-1")).toBeNull();
+		// Any partial content the model produced before the stop is still shown.
+		expect(screen.getByText("Partial answer…")).toBeTruthy();
+	});
+
+	it("keeps a cancelled turn neutral even when the backend persisted an error string alongside it", () => {
+		// Classification is driven by the terminal `status`, never by the (localized) error text — so a cancelled
+		// run that carries a backend error string still renders the neutral stop, not the red failure alert.
+		renderWithProviders(
+			<ChatMessage message={assistantMessage({ content: "", status: "cancelled", error: "The operation was canceled." })} />,
+		);
+
+		expect(screen.getByTestId("chat-message-stopped-assistant-1")).toBeTruthy();
+		expect(screen.queryByTestId("chat-message-error-assistant-1")).toBeNull();
+	});
+
+	it("still renders the red error alert for a genuinely failed turn (cancelled classification does not leak)", () => {
+		renderWithProviders(
+			<ChatMessage message={assistantMessage({ content: "", status: "failed", error: "Stream failed." })} />,
+		);
+
+		expect(screen.getByTestId("chat-message-error-assistant-1")).toBeTruthy();
+		expect(screen.queryByTestId("chat-message-stopped-assistant-1")).toBeNull();
+	});
 });

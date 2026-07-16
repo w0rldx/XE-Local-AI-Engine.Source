@@ -1,4 +1,5 @@
-import { Loader, ScrollArea, Stack, Text } from "@mantine/core";
+import { Alert, Button, Loader, ScrollArea, Stack, Text } from "@mantine/core";
+import { IconAlertTriangle } from "@tabler/icons-react";
 import { useEffect, useMemo, useRef } from "react";
 import { useTranslation } from "react-i18next";
 
@@ -36,6 +37,13 @@ interface ChatMessageListProps {
 	// True while the selected conversation's full payload (with messages) is loading. Suppresses the
 	// "No messages yet" empty-state so it never flashes over a populated thread mid-fetch.
 	isLoadingMessages?: boolean;
+	// The selected conversation's full payload failed to load. Renders an inline error + Retry in place of the
+	// otherwise-infinite loading spinner. Only applies when there are no messages to show for the selection.
+	messagesLoadFailed?: boolean;
+	// Resolved error reason shown beneath the generic failure copy for context (optional).
+	messagesLoadErrorText?: string;
+	// Retries the failed selected-conversation load (query refetch).
+	onRetryLoadMessages?: () => void;
 	// Active composer reasoning effort; forwarded to each message so the bypass note can flag reasoning
 	// emitted while "none" is selected.
 	reasoningEffort?: ReasoningEffort;
@@ -63,6 +71,9 @@ export function ChatMessageList({
 	pendingFeedbackMessageId,
 	onSubmitFeedback,
 	isLoadingMessages = false,
+	messagesLoadFailed = false,
+	messagesLoadErrorText,
+	onRetryLoadMessages,
 	reasoningEffort,
 }: ChatMessageListProps) {
 	const { t } = useTranslation();
@@ -79,8 +90,15 @@ export function ChatMessageList({
 			(messages ?? conversation?.messages ?? [])
 				// Keep failed turns even though they have no content/reasoning: they carry an `error` that must
 				// survive reload (rendered as an error block inside the bubble, with a regenerate affordance).
+				// Keep cancelled turns for the same reason: a user-cancelled turn with no partial output still
+				// renders its neutral "Generation stopped" line so the stop is honestly reflected on reload.
 				.filter(
-					(message) => hasText(message.content) || hasText(message.reasoning) || message.status === "failed" || hasText(message.error),
+					(message) =>
+						hasText(message.content) ||
+						hasText(message.reasoning) ||
+						message.status === "failed" ||
+						message.status === "cancelled" ||
+						hasText(message.error),
 				)
 				.toSorted(bySortOrder),
 		[conversation?.messages, messages],
@@ -275,8 +293,36 @@ export function ChatMessageList({
 					</Text>
 				) : null}
 
-				{conversation && normalizedMessages.length === 0 && !scopedStreamingMessage && isLoadingMessages ? (
-					<Stack align="center" py="md" gap="xs">
+				{/* Load failure takes precedence over the spinner and the empty-state: a permanently-failing
+				    getConversation must surface an actionable error with Retry, never spin forever. Only shown when
+				    there is nothing else to display for the selection (no messages, no live stream). */}
+				{conversation && normalizedMessages.length === 0 && !scopedStreamingMessage && messagesLoadFailed ? (
+					<Alert
+						role="alert"
+						color="red"
+						variant="light"
+						icon={<IconAlertTriangle size={16} />}
+						title={t("pages.chat.loadError.title", "Couldn't load this conversation")}
+						data-testid="chat-messages-load-error"
+					>
+						<Stack gap="sm" align="flex-start">
+							<Text size="sm">{t("pages.chat.loadError.body", "Something went wrong loading these messages.")}</Text>
+							{messagesLoadErrorText ? (
+								<Text size="xs" c="dimmed">
+									{messagesLoadErrorText}
+								</Text>
+							) : null}
+							{onRetryLoadMessages ? (
+								<Button size="xs" variant="light" onClick={onRetryLoadMessages} data-testid="chat-messages-load-retry">
+									{t("pages.chat.loadError.retry", "Retry")}
+								</Button>
+							) : null}
+						</Stack>
+					</Alert>
+				) : null}
+
+				{conversation && normalizedMessages.length === 0 && !scopedStreamingMessage && !messagesLoadFailed && isLoadingMessages ? (
+					<Stack align="center" py="md" gap="xs" role="status" aria-busy={true} aria-live="polite">
 						<Loader size="sm" />
 						<Text size="sm" c="dimmed">
 							{t("pages.chat.loadingMessages", "Loading messages…")}
@@ -284,7 +330,11 @@ export function ChatMessageList({
 					</Stack>
 				) : null}
 
-				{conversation && normalizedMessages.length === 0 && !scopedStreamingMessage && !isLoadingMessages ? (
+				{conversation &&
+				normalizedMessages.length === 0 &&
+				!scopedStreamingMessage &&
+				!messagesLoadFailed &&
+				!isLoadingMessages ? (
 					<Text size="sm" c="dimmed">
 						{t("pages.chat.noMessages", "No messages yet.")}
 					</Text>
