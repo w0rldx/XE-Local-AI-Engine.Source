@@ -1,0 +1,172 @@
+namespace XE_Local_AI_Engine.Tests.Persistence;
+
+using System.Data.Common;
+using System.Diagnostics.CodeAnalysis;
+using System.Globalization;
+using Microsoft.Data.Sqlite;
+using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Logging.Abstractions;
+using XE_Local_AI_Engine.Client.Persistence.Sqlite;
+using XE_Local_AI_Engine.Tests.Testing;
+
+/// <summary>
+///     AUD4-08: proves the node SQLite connection posture — WAL journaling, a native busy_timeout, and synchronous=NORMAL
+///     — is applied on both the raw-ADO open path and the EF connection interceptor, that an existing non-WAL database
+///     converts safely, and that busy_timeout lets a second writer wait rather than fail instantly.
+/// </summary>
+[NotInParallel]
+public sealed class NodeSqlitePragmasTests : IDisposable
+{
+    private readonly string _dir = Path.Combine(Path.GetTempPath(), Guid.NewGuid().ToString("N"));
+
+    public NodeSqlitePragmasTests()
+    {
+        Directory.CreateDirectory(_dir);
+        // The static raw-open helper reads the process-wide settings; pin the production defaults for these tests.
+        NodeSqlitePragmas.Configure(NodeSqlitePragmaSettings.Default);
+    }
+
+    public void Dispose()
+    {
+        // Release pooled SQLite handles so the temp WAL/-shm files can be removed.
+        SqliteConnection.ClearAllPools();
+        try
+        {
+            if (Directory.Exists(_dir))
+            {
+                Directory.Delete(_dir, recursive: true);
+            }
+        }
+        catch (IOException)
+        {
+            // Best-effort temp cleanup; a lingering handle on a CI runner must not fail the test.
+        }
+    }
+
+    [Test]
+    public async Task OpenAndConfigureAsync_AppliesWalBusyTimeoutAndSynchronous_AndDatabaseIsWritable()
+    {
+        var path = Path.Combine(_dir, "posture.sqlite");
+        await using var connection = new SqliteConnection($"Data Source={path}");
+
+        await NodeSqlitePragmas.OpenAndConfigureAsync(connection, CancellationToken.None);
+
+        AssertEx.Equal("wal", await ScalarAsync<string>(connection, "PRAGMA journal_mode;"));
+        AssertEx.Equal(expected: 5000L, await ScalarAsync<long>(connection, "PRAGMA busy_timeout;"));
+        AssertEx.Equal(expected: 1L, await ScalarAsync<long>(connection, "PRAGMA synchronous;")); // 1 == NORMAL
+
+        // Prove real writability — BEGIN IMMEDIATE alone does not (agent-knowledge): actually create and read a row.
+        await ExecuteAsync(connection, "CREATE TABLE t(id INTEGER PRIMARY KEY, v TEXT);");
+        await ExecuteAsync(connection, "INSERT INTO t(v) VALUES('written');");
+        AssertEx.Equal(expected: 1L, await ScalarAsync<long>(connection, "SELECT COUNT(*) FROM t;"));
+    }
+
+    [Test]
+    public async Task ExistingNonWalDatabase_ConvertsToWalSafely_AndPreservesData()
+    {
+        var path = Path.Combine(_dir, "legacy.sqlite");
+
+        // Seed a database in the default (non-WAL) journal mode with a row.
+        await using (var seed = new SqliteConnection($"Data Source={path}"))
+        {
+            await seed.OpenAsync();
+            AssertEx.True(!string.Equals(await ScalarAsync<string>(seed, "PRAGMA journal_mode;"), "wal", StringComparison.OrdinalIgnoreCase),
+                "Precondition: the seed database must not already be in WAL mode.");
+            await ExecuteAsync(seed, "CREATE TABLE t(id INTEGER PRIMARY KEY, v TEXT);");
+            await ExecuteAsync(seed, "INSERT INTO t(v) VALUES('kept');");
+        }
+
+        SqliteConnection.ClearAllPools();
+
+        // Reopen through the init path: it must convert the file to WAL, keep the existing row, and stay writable.
+        await using var connection = new SqliteConnection($"Data Source={path}");
+        await NodeSqlitePragmas.OpenAndConfigureAsync(connection, CancellationToken.None);
+
+        AssertEx.Equal("wal", await ScalarAsync<string>(connection, "PRAGMA journal_mode;"));
+        AssertEx.Equal("kept", await ScalarAsync<string>(connection, "SELECT v FROM t WHERE id = 1;"));
+        await ExecuteAsync(connection, "INSERT INTO t(v) VALUES('added-after-conversion');");
+        AssertEx.Equal(expected: 2L, await ScalarAsync<long>(connection, "SELECT COUNT(*) FROM t;"));
+    }
+
+    [Test]
+    public async Task ConnectionInterceptor_AppliesPragmasWhenEfOpensTheConnection()
+    {
+        var path = Path.Combine(_dir, "ef-interceptor.sqlite");
+        var options = new DbContextOptionsBuilder<ProbeContext>()
+                     .UseSqlite($"Data Source={path}")
+                     .AddInterceptors(new NodeSqliteConnectionInterceptor(NodeSqlitePragmaSettings.Default, NullLogger<NodeSqliteConnectionInterceptor>.Instance))
+                     .Options;
+
+        await using var context = new ProbeContext(options);
+        await context.Database.OpenConnectionAsync();
+        var connection = context.Database.GetDbConnection();
+
+        AssertEx.Equal("wal", await ScalarAsync<string>(connection, "PRAGMA journal_mode;"));
+        AssertEx.Equal(expected: 5000L, await ScalarAsync<long>(connection, "PRAGMA busy_timeout;"));
+
+        await context.Database.CloseConnectionAsync();
+    }
+
+    [Test]
+    public async Task BusyTimeout_LetsSecondWriterWaitAndSucceed_RatherThanFailInstantly()
+    {
+        var path = Path.Combine(_dir, "contend.sqlite");
+        var settings = new NodeSqlitePragmaSettings(EnableWriteAheadLog: true, BusyTimeoutMilliseconds: 5000, NodeSqliteSynchronousMode.Normal);
+
+        await using var holder = await OpenConfiguredAsync(path, settings);
+        await ExecuteAsync(holder, "CREATE TABLE t(id INTEGER PRIMARY KEY, v TEXT);");
+
+        await using var writer = await OpenConfiguredAsync(path, settings);
+
+        // The holder takes the single WAL write lock (a deferred transaction upgrades on its first write).
+        await using var holderTransaction = (SqliteTransaction)await holder.BeginTransactionAsync(CancellationToken.None);
+        await ExecuteAsync(holder, "INSERT INTO t(v) VALUES('holder');", holderTransaction);
+
+        // The second writer's INSERT must block on the write lock (via busy_timeout) rather than throw SQLITE_BUSY. Its
+        // command timeout is capped at 1s so success past that window proves the native busy_timeout carried the wait,
+        // not Microsoft.Data.Sqlite's own command-level retry.
+        var writerInsert = Task.Run(async () =>
+        {
+            await using var command = writer.CreateCommand();
+            command.CommandText = "INSERT INTO t(v) VALUES('waiter');";
+            command.CommandTimeout = 1;
+            await command.ExecuteNonQueryAsync(CancellationToken.None);
+        });
+
+        // Hold the lock past the writer's 1s command timeout but well under busy_timeout, then release.
+        await Task.Delay(TimeSpan.FromMilliseconds(1300));
+        await holderTransaction.CommitAsync(CancellationToken.None);
+
+        await writerInsert; // must not throw
+        AssertEx.Equal(expected: 2L, await ScalarAsync<long>(holder, "SELECT COUNT(*) FROM t;"));
+    }
+
+    private static async Task<SqliteConnection> OpenConfiguredAsync(string path, NodeSqlitePragmaSettings settings)
+    {
+        var connection = new SqliteConnection($"Data Source={path}");
+        await connection.OpenAsync();
+        await NodeSqlitePragmas.ApplyAsync(connection, settings, logger: null, CancellationToken.None);
+        return connection;
+    }
+
+    [SuppressMessage("Security", "CA2100:Review SQL queries for security vulnerabilities", Justification = "Test-only fixed pragma/SQL text — never user input.")]
+    private static async Task<T> ScalarAsync<T>(DbConnection connection, string sql)
+    {
+        await using var command = connection.CreateCommand();
+        command.CommandText = sql;
+        var result = await command.ExecuteScalarAsync();
+        return (T)Convert.ChangeType(result!, typeof(T), CultureInfo.InvariantCulture);
+    }
+
+    [SuppressMessage("Security", "CA2100:Review SQL queries for security vulnerabilities", Justification = "Test-only fixed SQL text — never user input.")]
+    private static async Task ExecuteAsync(DbConnection connection, string sql, DbTransaction? transaction = null)
+    {
+        await using var command = connection.CreateCommand();
+        command.CommandText = sql;
+        command.Transaction = transaction;
+        await command.ExecuteNonQueryAsync();
+    }
+
+    // A minimal EF context used only to force an EF-initiated connection open through the interceptor.
+    private sealed class ProbeContext(DbContextOptions<ProbeContext> options) : DbContext(options);
+}

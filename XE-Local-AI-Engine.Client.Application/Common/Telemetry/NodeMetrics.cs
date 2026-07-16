@@ -45,6 +45,16 @@ public static class NodeMetrics
         Meter.CreateCounter<long>("invocation_failed_total",
             description: "Number of failed invocations by failure source.");
 
+    /// <summary>
+    ///     Incremented when a node SQLite operation surfaces write contention that outlived <c>busy_timeout</c>
+    ///     (SQLITE_BUSY / SQLITE_LOCKED). A non-zero value signals real contention on the shared database file — under
+    ///     WAL + busy_timeout this should be rare. Labels: code (busy | locked), path (ef | raw). Bounded cardinality —
+    ///     never carries SQL text.
+    /// </summary>
+    public static readonly Counter<long> SqliteBusyTotal =
+        Meter.CreateCounter<long>("sqlite_busy_total",
+            description: "Number of node SQLite operations that failed with SQLITE_BUSY/SQLITE_LOCKED after the busy timeout, by code and path.");
+
 
     /// <summary>
     ///     Incremented (by the abandoned count) when the memory-extraction worker abandons in-flight extraction job(s) at

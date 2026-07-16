@@ -41,6 +41,17 @@ public static class NodeSchedulerServiceCollectionExtensions
                     // NodeChatDbContext registration reads it lazily. Reading the literal string here at registration
                     // time would throw under WebApplicationFactory, whose connection string is layered in after services
                     // are registered.
+                    //
+                    // Concurrency posture (AUD4-08): the scheduler deliberately shares the node.sqlite file with chat/KB
+                    // rather than owning its own DB. WAL is a persistent, file-level property that NodeSqlitePragmas sets
+                    // once (via the EF connection interceptor during the startup migration, before this hosted service
+                    // begins firing jobs), so Quartz's connections run under WAL automatically — its frequent polling reads
+                    // never block, and never get blocked by, a concurrent chat/KB writer, which is the dominant contention
+                    // pattern here. On the write side (infrequent job-store updates) Microsoft.Data.Sqlite's command-level
+                    // busy retry plus the shared connection pool (Quartz reuses the same connection string, hence the same
+                    // pool whose handles already carry busy_timeout) provide the contention resilience. Quartz 3.18's fluent
+                    // config exposes no per-connection PRAGMA hook; the escape hatch, if evidence of scheduler write
+                    // starvation ever appears, is a custom IDbProvider via db.UseConnectionProvider<T>().
                     db.ConnectionStringName = "node-sqlite";
                     db.TablePrefix = options.QuartzTablePrefix; // "QRTZ_"
                 });

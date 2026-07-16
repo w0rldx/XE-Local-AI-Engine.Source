@@ -1,5 +1,6 @@
 namespace XE_Local_AI_Engine.Client.Services.Chat;
 
+using XE_Local_AI_Engine.Client.Common.Telemetry;
 using XE_Local_AI_Engine.Client.Persistence;
 
 /// <summary>
@@ -33,10 +34,11 @@ using XE_Local_AI_Engine.Client.Persistence;
 ///     moment they fall idle, so the map is bounded by the number of <em>concurrently active</em> conversations, not by
 ///     the number of conversations or messages ever seen.</para>
 /// </summary>
-public sealed class NodeChatPersistenceWriter(IServiceScopeFactory scopeFactory)
+public sealed class NodeChatPersistenceWriter(IServiceScopeFactory scopeFactory, ILogger<NodeChatPersistenceWriter>? logger = null)
 {
     private readonly Dictionary<Guid, ConversationGate> _gates = new();
     private readonly Lock _gatesSync = new();
+    private readonly ILogger<NodeChatPersistenceWriter>? _logger = logger;
     private readonly IServiceScopeFactory _scopeFactory = scopeFactory ?? throw new ArgumentNullException(nameof(scopeFactory));
 
     /// <summary>
@@ -163,7 +165,17 @@ public sealed class NodeChatPersistenceWriter(IServiceScopeFactory scopeFactory)
     {
         await using var scope = _scopeFactory.CreateAsyncScope();
         var dbContext = scope.ServiceProvider.GetRequiredService<NodeChatDbContext>();
-        return await persistenceOperation(dbContext, cancellationToken).ConfigureAwait(false);
+        try
+        {
+            return await persistenceOperation(dbContext, cancellationToken).ConfigureAwait(false);
+        }
+        catch (Exception exception)
+        {
+            // AUD4-08: account raw-path SQLite write contention (SQLITE_BUSY/LOCKED surfacing past busy_timeout). No-op
+            // for any other failure. Reads never contend under WAL, so in practice this observes the write paths only.
+            NodeSqliteContention.Record("raw", exception, _logger);
+            throw;
+        }
     }
 
     private ConversationGate RentGate(Guid conversationId)
