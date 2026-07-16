@@ -6,6 +6,7 @@ using System.Net;
 using System.Net.Sockets;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
+using XE_Local_AI_Engine.Providers.Abstractions.Capabilities;
 using XE_Local_AI_Engine.Providers.Abstractions.Gguf;
 using XE_Local_AI_Engine.Providers.LlamaServer.Contracts;
 using XE_Local_AI_Engine.Providers.LlamaServer.Options;
@@ -73,6 +74,10 @@ public sealed class LlamaServerProcessSupervisor : ILlamaServerProcessSupervisor
     private readonly CancellationTokenSource _shutdownCts = new();
     private readonly TimeProvider _timeProvider;
     private readonly IGpuVariantSelector _variantSelector;
+
+    // AUD4-06: the process-wide GPU-load admission gate. GPU-backed spawns serialize their spawn-through-readiness window
+    // through it (shared with the image supervisor) so two --fit loads never read the same free-VRAM snapshot at once.
+    private readonly IGpuModelLoadAdmission _loadAdmission;
     private int _disposed;
 
     /// <summary>
@@ -88,7 +93,8 @@ public sealed class LlamaServerProcessSupervisor : ILlamaServerProcessSupervisor
         IInferenceProfileResolver profileResolver,
         LlamaServerExternalEndpointOptions? externalEndpoints = null,
         TimeProvider? timeProvider = null,
-        ILogger<LlamaServerProcessSupervisor>? logger = null)
+        ILogger<LlamaServerProcessSupervisor>? logger = null,
+        IGpuModelLoadAdmission? loadAdmission = null)
     {
         _binaryManager = binaryManager ?? throw new ArgumentNullException(nameof(binaryManager));
         _variantSelector = variantSelector ?? throw new ArgumentNullException(nameof(variantSelector));
@@ -101,6 +107,10 @@ public sealed class LlamaServerProcessSupervisor : ILlamaServerProcessSupervisor
         _externalEndpoints = externalEndpoints ?? new LlamaServerExternalEndpointOptions();
         _timeProvider = timeProvider ?? TimeProvider.System;
         _logger = logger ?? NullLogger<LlamaServerProcessSupervisor>.Instance;
+
+        // Absent a wired gate (a provider-only host / test), default to the no-op floor so GPU-load serialization is
+        // simply off — the composition root injects the real, metric-emitting singleton shared with the image supervisor.
+        _loadAdmission = loadAdmission ?? new NoOpGpuModelLoadAdmission();
 
         _reaperLoop = Task.Run(() => ReapIdleLoopAsync(_shutdownCts.Token));
     }
@@ -545,6 +555,15 @@ public sealed class LlamaServerProcessSupervisor : ILlamaServerProcessSupervisor
                     throw;
                 }
             }
+            catch (GpuModelLoadAdmissionTimeoutException ex)
+            {
+                // A bounded GPU-load admission wait elapsed (another model load did not become ready in time). It is not
+                // a transient crash, so surface its sanitized message immediately rather than burning restart attempts
+                // re-queuing behind a still-contended gate.
+                _logger.LogError(ex, "llama-server spawn for model {ModelName} role {Role} could not acquire GPU-load admission in time.",
+                    key.ModelName, key.Role);
+                throw;
+            }
             catch (OperationCanceledException) when (ct.IsCancellationRequested)
             {
                 throw;
@@ -639,6 +658,18 @@ public sealed class LlamaServerProcessSupervisor : ILlamaServerProcessSupervisor
         // for this (model, role, backend) BEFORE taking the admission gate, so a slow profile read never stalls
         // admission for other keys.
         var resolved = await resolveArgs(variant, ct).ConfigureAwait(false);
+
+        // AUD4-06: serialize the spawn-through-readiness window of GPU-backed loads process-wide (shared with the image
+        // supervisor) so two --fit loads never read the same free-VRAM snapshot at once and oversubscribe the device.
+        // CPU loads bypass — they do not contend for VRAM. The gate is acquired here (after variant selection + arg
+        // resolution, immediately before the admission cap decision that may evict an idle process to free VRAM) so the
+        // freed VRAM is seen only by THIS load's --fit; the ticket releases on ready OR any failure via the using scope,
+        // and the next waiter then proceeds with a fresh free-VRAM read (the re-evaluation). Because this core runs
+        // under the detached-spawn/shutdown token (not the first caller's), a caller cancelling its wait never leaves
+        // the gate held.
+        using var admissionTicket = variant == GpuVariant.Cpu
+            ? null
+            : await _loadAdmission.AcquireAsync(ct).ConfigureAwait(false);
 
         var port = await AdmitAndAllocatePortAsync(ct).ConfigureAwait(false);
 

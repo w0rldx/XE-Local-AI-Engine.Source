@@ -5,6 +5,7 @@ using System.Text;
 using System.Text.Json;
 using XE_Local_AI_Engine.Client.Persistence;
 using XE_Local_AI_Engine.Client.Persistence.Stores;
+using XE_Local_AI_Engine.Client.Services.Capacity;
 using XE_Local_AI_Engine.Client.Services.ModelFit.Catalog;
 using XE_Local_AI_Engine.Client.Services.ModelFit.Fit;
 using XE_Local_AI_Engine.Client.Services.ModelFit.Validation;
@@ -16,7 +17,8 @@ using XE_Local_AI_Engine.Providers.LlamaServer.Contracts;
 
 /// <summary>
 ///     The local model advisor — the box-aware rewrite of the Docker/llmfit recommendation backend. On each
-///     refresh it profiles the node hardware (<see cref="IHardwareProfiler" />), discovers candidate GGUF repos
+///     refresh it profiles the node hardware (via the device-audited effective profile from
+///     <see cref="IRuntimeDeviceAudit" />, so a silent CPU fallback sizes models against system RAM), discovers candidate GGUF repos
 ///     and inspects their files (<see cref="IHuggingFaceGgufDiscovery" />), estimates each file's memory fit with
 ///     the pure <see cref="MemoryFitEstimator" />, drops the files that do not fit or lack the header metadata to compute
 ///     a fit, ranks the survivors by headroom, serializes them to the advisor recommendation JSON, parses them through
@@ -70,7 +72,7 @@ public sealed class ModelFitRefreshService : IModelFitRefreshService
     private readonly IHuggingFaceGgufDiscovery _discovery;
     private readonly MemoryFitEstimator _estimator;
 
-    private readonly IHardwareProfiler _hardwareProfiler;
+    private readonly IRuntimeDeviceAudit _runtimeAudit;
     private readonly ILogger<ModelFitRefreshService> _logger;
     private readonly IGgufModelRegistry _modelRegistry;
     private readonly IGgufModelStore _modelStore;
@@ -80,7 +82,7 @@ public sealed class ModelFitRefreshService : IModelFitRefreshService
     private readonly ILlamaServerProcessSupervisor _supervisor;
     private readonly TimeProvider _timeProvider;
 
-    public ModelFitRefreshService(IHardwareProfiler hardwareProfiler,
+    public ModelFitRefreshService(IRuntimeDeviceAudit runtimeAudit,
         IHuggingFaceGgufDiscovery discovery,
         MemoryFitEstimator estimator,
         IGgufModelStore modelStore,
@@ -93,7 +95,7 @@ public sealed class ModelFitRefreshService : IModelFitRefreshService
         TimeProvider timeProvider,
         ILogger<ModelFitRefreshService> logger)
     {
-        _hardwareProfiler = hardwareProfiler ?? throw new ArgumentNullException(nameof(hardwareProfiler));
+        _runtimeAudit = runtimeAudit ?? throw new ArgumentNullException(nameof(runtimeAudit));
         _discovery = discovery ?? throw new ArgumentNullException(nameof(discovery));
         _estimator = estimator ?? throw new ArgumentNullException(nameof(estimator));
         _modelStore = modelStore ?? throw new ArgumentNullException(nameof(modelStore));
@@ -154,7 +156,9 @@ public sealed class ModelFitRefreshService : IModelFitRefreshService
 
         try
         {
-            var profile = await _hardwareProfiler.GetProfileAsync(forceRefresh: false, cancellationToken).ConfigureAwait(false);
+            // AUD4-03: size against the EFFECTIVE profile — degraded to CPU-mode when the device audit reports a silent
+            // CPU fallback — so the advisor never recommends models that only fit in VRAM the runtime cannot actually use.
+            var profile = await _runtimeAudit.GetEffectiveProfileAsync(forceRefreshProfile: false, cancellationToken).ConfigureAwait(false);
             var recommendations = await BuildRecommendationsAsync(request, quant, ctxTarget, profile, cancellationToken)
                 .ConfigureAwait(false);
 

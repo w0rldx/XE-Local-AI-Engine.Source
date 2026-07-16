@@ -94,6 +94,36 @@ public static class NodeMetrics
         Meter.CreateCounter<long>("model_eject_total",
             description: "Number of operator eject requests and outcomes (requested | ejected | timed_out_still_busy | forced | not_running).");
 
+    /// <summary>
+    ///     Incremented when the runtime device audit (AUD4-03) detects a silent CPU fallback: the host advertises a GPU
+    ///     but the SELECTED llama.cpp runtime cannot use it — a CPU variant was chosen on a GPU box, or a GPU variant
+    ///     enumerated zero devices (e.g. the shipped Vulkan build under WSL2 with no Vulkan ICD). Fires once per detection
+    ///     (the audit is cached per binary), so a non-zero value flags inference silently running on the CPU while the
+    ///     UI/advisor sized models to VRAM. Labels: reason (cpu_variant | zero_devices).
+    /// </summary>
+    public static readonly Counter<long> DeviceFallbackTotal =
+        Meter.CreateCounter<long>("device_fallback_total",
+            description: "Number of detected silent CPU fallbacks (GPU expected but the selected runtime runs on the CPU), by reason.");
+
+    /// <summary>
+    ///     Wall-clock duration (milliseconds) a GPU-backed model load waited to acquire the process-wide GPU-load
+    ///     admission gate (AUD4-06) before its spawn began. Near-zero under no contention; a large value means a load
+    ///     queued behind another load's spawn-through-readiness window. Content-free (a duration only).
+    /// </summary>
+    public static readonly Histogram<double> GpuModelLoadAdmissionWaitMs =
+        Meter.CreateHistogram<double>("gpu_admission_wait_ms",
+            unit: "ms",
+            description: "Time a GPU-backed model load waited for the process-wide GPU-load admission gate before spawning.");
+
+    /// <summary>
+    ///     Incremented when a GPU-load admission wait exceeded its bounded max-wait and surfaced a typed timeout rather
+    ///     than hanging a chat turn (AUD4-06). A non-zero value flags a wedged load holding the gate past the backstop.
+    ///     Content-free — a count only.
+    /// </summary>
+    public static readonly Counter<long> GpuModelLoadAdmissionTimeoutTotal =
+        Meter.CreateCounter<long>("gpu_admission_timeout_total",
+            description: "Number of GPU-load admission waits that exceeded the bounded max-wait and surfaced a typed timeout.");
+
 
     /// <summary>
     ///     Incremented (by the abandoned count) when the memory-extraction worker abandons in-flight extraction job(s) at
@@ -172,5 +202,27 @@ public static class NodeMetrics
             observeDepth,
             unit: "documents",
             description: "Current number of documents pending in the bounded knowledge-ingestion queue.");
+    }
+
+    /// <summary>
+    ///     Registers the observable gauges that report how many GPU-backed model loads are currently HOLDING the
+    ///     process-wide admission gate (0 or 1 — the gate is a serializer) and how many are WAITING behind it (AUD4-06).
+    ///     The gate singleton supplies the live count callbacks and holds the returned instruments for its lifetime.
+    /// </summary>
+    public static (ObservableGauge<long> Active, ObservableGauge<long> Waiting) CreateGpuModelLoadAdmissionGauges(
+        Func<long> observeActive,
+        Func<long> observeWaiting)
+    {
+        ArgumentNullException.ThrowIfNull(observeActive);
+        ArgumentNullException.ThrowIfNull(observeWaiting);
+        var active = Meter.CreateObservableGauge("gpu_admission_active",
+            observeActive,
+            unit: "loads",
+            description: "Number of GPU-backed model loads currently holding the admission gate (0 or 1).");
+        var waiting = Meter.CreateObservableGauge("gpu_admission_waiting",
+            observeWaiting,
+            unit: "loads",
+            description: "Number of GPU-backed model loads currently waiting for the admission gate.");
+        return (active, waiting);
     }
 }
