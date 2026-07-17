@@ -717,10 +717,12 @@ public sealed partial class InvocationRunner : IInvocationRunner
         var currentMessages = new List<ChatMessage>(agentContext.SeedMessages);
 
         // A single model turn can surface MORE than one approval request (a parallel-tool-call turn wrapping two
-        // approval-gated tools). Collect EVERY request in the segment, deduped by the approval's tool-call CallId, so
-        // none is lost — the scalar this replaced kept only the last, dangling the earlier requests forever (GPTAUD-02).
+        // approval-gated tools). Collect EVERY request in the segment, deduped so a provider re-emitting the same request
+        // across streamed chunks enqueues it once — none is lost (the scalar this replaced kept only the last, dangling
+        // the earlier requests forever, GPTAUD-02). The dedup key is namespaced so a CallId and an approval Id can never
+        // collide across two different requests.
         var pendingApprovals = new List<ToolApprovalRequestContent>();
-        var pendingApprovalCallIds = new HashSet<string>(StringComparer.Ordinal);
+        var pendingApprovalKeys = new HashSet<string>(StringComparer.Ordinal);
 
         // Inter-chunk idle bound for every segment: if the provider stalls between streamed chunks for longer than the
         // resolved policy's stream-idle timeout the watchdog cancels the send and surfaces a distinct (Timeout-category)
@@ -752,7 +754,7 @@ public sealed partial class InvocationRunner : IInvocationRunner
             }
 
             pendingApprovals.Clear();
-            pendingApprovalCallIds.Clear();
+            pendingApprovalKeys.Clear();
             var segmentUpdates = new List<AgentResponseUpdate>();
 
             // Each provider send is guarded by the inter-chunk idle watchdog (the watchdog owns the token the provider
@@ -854,12 +856,10 @@ public sealed partial class InvocationRunner : IInvocationRunner
 
                             case ToolApprovalRequestContent approvalRequest:
                                 // FunctionInvokingChatClient surfaces this for an ApprovalRequiredAIFunction instead of
-                                // executing the tool. Capture EVERY request in the segment (deduped by the tool-call
-                                // CallId — the same request can be re-emitted across streamed chunks); the segment ends
-                                // and the outer loop runs each approval round-trip, then resumes threadlessly with the
-                                // decisions.
-                                var approvalCallId = approvalRequest.ToolCall.CallId;
-                                if (string.IsNullOrEmpty(approvalCallId) || pendingApprovalCallIds.Add(approvalCallId))
+                                // executing the tool. Capture EVERY request in the segment, deduped (the same request can
+                                // be re-emitted across streamed chunks); the segment ends and the outer loop runs each
+                                // approval round-trip, then resumes threadlessly with the decisions.
+                                if (!IsDuplicatePendingApproval(approvalRequest, pendingApprovals, pendingApprovalKeys))
                                 {
                                     pendingApprovals.Add(approvalRequest);
                                 }
@@ -917,6 +917,36 @@ public sealed partial class InvocationRunner : IInvocationRunner
                 currentMessages.Add(new ChatMessage(ChatRole.User, approvalResponses));
             }
         } while (pendingApprovals.Count > 0);
+    }
+
+    // Whether this approval request has already been captured for the current segment. Prefers a namespaced stable key —
+    // the tool-call CallId, else the approval's own RequestId — so a provider re-emitting the same request across
+    // streamed chunks enqueues it once. A BLANK CallId must never bypass dedup (that would prompt N times and dangle N-1
+    // ambiguous responses for a single call); when neither a CallId nor a RequestId is present, falls back to reference
+    // identity so at least the same surfaced instance is not enqueued twice. `seenKeys` accumulates the keys already
+    // captured this segment; a stable key is added to it here as a side effect on first sight.
+    private static bool IsDuplicatePendingApproval(ToolApprovalRequestContent approvalRequest,
+        List<ToolApprovalRequestContent> pendingApprovals,
+        HashSet<string> seenKeys)
+    {
+        string? key = null;
+        if (!string.IsNullOrEmpty(approvalRequest.ToolCall.CallId))
+        {
+            key = "call:" + approvalRequest.ToolCall.CallId;
+        }
+        else if (!string.IsNullOrEmpty(approvalRequest.RequestId))
+        {
+            key = "req:" + approvalRequest.RequestId;
+        }
+
+        if (key is not null)
+        {
+            // Add returns false when the key was already present → a duplicate.
+            return !seenKeys.Add(key);
+        }
+
+        // No stable identifier at all: dedup by reference identity so the same instance is not captured twice.
+        return pendingApprovals.Contains(approvalRequest);
     }
 
     // The orchestration path. Compiles the package's OrchestrationSpec into the MAF-agnostic
