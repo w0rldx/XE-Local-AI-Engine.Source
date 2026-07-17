@@ -175,7 +175,7 @@ public sealed class ChatInvocationStatePump(INodeChatInvocationPump invocationPu
                 cursor,
                 wasCancelled: true).ConfigureAwait(false);
         }
-        catch (Exception fault) when (!terminalPersisted)
+        catch (Exception) when (!terminalPersisted)
         {
             // GPTAUD-07: a FlushDeltaAsync/TerminalizeAsync exception (a persistence fault, not a user cancel — those
             // are handled above) would otherwise propagate while the finally only TryComplete()s the writer as a NORMAL
