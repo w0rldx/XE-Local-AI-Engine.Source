@@ -261,7 +261,17 @@ internal sealed class ImageServerProcessSupervisor : IImageServerSupervisor, IAs
         }
         finally
         {
-            gate.Release();
+            try
+            {
+                gate.Release();
+            }
+            catch (ObjectDisposedException)
+            {
+                // GPTAUD-10b: DisposeAsync disposes the per-model ensure gates. When a dispose races a spawn that is
+                // unwinding on the shutdown-linked token (this spawn holds this gate), the gate can already be disposed
+                // here — the release is moot at teardown. Swallow it so the real unwind cause (the OperationCanceledException
+                // from the cancelled readiness wait) surfaces to the caller instead of a leaked ObjectDisposedException.
+            }
         }
     }
 
