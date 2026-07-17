@@ -146,6 +146,28 @@ internal sealed class ImageServerProcessSupervisor : IImageServerSupervisor, IAs
         }
     }
 
+    /// <inheritdoc />
+    public IImageServerJobLease? TryAcquireJobLease(string modelName)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(modelName);
+        if (!_processes.TryGetValue(modelName, out var running) || running.Handle.HasExited)
+        {
+            return null;
+        }
+
+        // Increment first, then confirm the daemon is still the registered, live one: a concurrent teardown that removed
+        // it between the lookup and here means the lease would guard a dead handle, so release and return null (leaseless).
+        running.AcquireJob();
+        if (running.Handle.HasExited || !_processes.TryGetValue(modelName, out var current) || !ReferenceEquals(current, running))
+        {
+            running.ReleaseJob();
+            return null;
+        }
+
+        running.MarkUsed(_timeProvider.GetUtcNow());
+        return new ImageJobLease(running, _timeProvider);
+    }
+
     /// <summary>
     ///     Reuse decision for an already-registered, not-yet-exited daemon: hands back its endpoint when it is healthy
     ///     enough, or returns <see langword="null" /> after tearing it down when it is wedged (alive but unresponsive to
@@ -255,6 +277,13 @@ internal sealed class ImageServerProcessSupervisor : IImageServerSupervisor, IAs
         var backend = await _backendSelector.SelectBackendAsync(ct).ConfigureAwait(false);
         var binary = await _binaryManager.EnsureBinaryAsync(backend, ct).ConfigureAwait(false);
 
+        // GPTAUD-10b: link the spawn/readiness window to the supervisor's shutdown token so a DisposeAsync racing this
+        // spawn cancels the readiness wait — the catch below then tree-kills the launched handle instead of leaving it
+        // orphaned (DisposeAsync tears down only the _processes snapshot it sees, and this spawn registers into _processes
+        // only after readiness). A caller cancellation (ct) still aborts too; either source unwinds through the catch.
+        using var spawnCts = CancellationTokenSource.CreateLinkedTokenSource(ct, _shutdownCts.Token);
+        var spawnCt = spawnCts.Token;
+
         // AUD4-06: serialize the spawn-through-readiness window of a GPU-backed image load through the SAME process-wide
         // gate the llama-server supervisor uses, so an image load and an LLM load never race two --fit / free-VRAM reads.
         // The binary's OWN backend decides (a bring-your-own override may serve a different backend than the host probe
@@ -262,9 +291,9 @@ internal sealed class ImageServerProcessSupervisor : IImageServerSupervisor, IAs
         // has no restart loop, so an admission timeout surfaces straight to the caller.
         using var admissionTicket = binary.Backend == SdGpuBackend.Cpu
             ? null
-            : await _loadAdmission.AcquireAsync(ct).ConfigureAwait(false);
+            : await _loadAdmission.AcquireAsync(spawnCt).ConfigureAwait(false);
 
-        var port = await AllocatePortAsync(ct).ConfigureAwait(false);
+        var port = await AllocatePortAsync(spawnCt).ConfigureAwait(false);
 
         IImageServerProcessHandle? handle = null;
         try
@@ -284,18 +313,30 @@ internal sealed class ImageServerProcessSupervisor : IImageServerSupervisor, IAs
                 modelName, handle.ProcessId, port);
 
             var readyStartedUtc = _timeProvider.GetUtcNow();
-            await WaitForReadyOrExitAsync(handle, spec.BaseAddress, ct).ConfigureAwait(false);
+            await WaitForReadyOrExitAsync(handle, spec.BaseAddress, spawnCt).ConfigureAwait(false);
             _logger.LogInformation("sd-server ready for model {ModelName} (pid {ProcessId}) after {ElapsedMs:F0} ms.",
                 modelName, handle.ProcessId, (_timeProvider.GetUtcNow() - readyStartedUtc).TotalMilliseconds);
 
             var endpoint = new ImageServerEndpoint(modelName, spec.BaseAddress);
             var running = new RunningServer(handle, endpoint, port, _timeProvider.GetUtcNow());
             _processes[modelName] = running;
+
+            // GPTAUD-10b: a DisposeAsync that ran while this spawn was in flight tore down only the daemons present in its
+            // teardown snapshot; this one registered AFTER that snapshot, so if disposal is now observed it would be left
+            // resident (orphaned). Tear it down here. The teardown owns the kill/dispose/port-release, so null the handle
+            // to keep the catch below from acting on it again; the ObjectDisposedException is excluded from the error log.
+            if (Volatile.Read(ref _disposed) != 0)
+            {
+                TeardownProcess(modelName, running);
+                handle = null;
+                throw new ObjectDisposedException(nameof(ImageServerProcessSupervisor));
+            }
+
             return running;
         }
         catch (Exception ex)
         {
-            if (ex is not OperationCanceledException)
+            if (ex is not OperationCanceledException and not ObjectDisposedException)
             {
                 // Image spawn has no restart loop, so a readiness timeout / exit-while-loading / not-installed surfaces
                 // straight to the caller — log the cause here (Error) before the sanitized message bubbles up.
@@ -386,6 +427,15 @@ internal sealed class ImageServerProcessSupervisor : IImageServerSupervisor, IAs
         var now = _timeProvider.GetUtcNow();
         foreach (var (key, running) in _processes.ToArray())
         {
+            // A live daemon with an in-flight generation (an active job lease) is never idle-reaped, even past the TTL:
+            // LastUsedUtc is stamped per ensure/reuse (not per generation step), so a single long image job looks idle
+            // here while it is mid-flight — tree-killing it would cut a running generation off (GPTAUD-10a). An EXITED
+            // process is still torn down below so a dead handle never leaks even while leased.
+            if (running.ActiveJobs > 0 && !running.Handle.HasExited)
+            {
+                continue;
+            }
+
             if (running.Handle.HasExited || now - running.LastUsedUtc >= _options.IdleTimeToLive)
             {
                 if (!running.Handle.HasExited)
@@ -433,6 +483,13 @@ internal sealed class ImageServerProcessSupervisor : IImageServerSupervisor, IAs
         RunningServer? victim = null;
         foreach (var (key, running) in _processes)
         {
+            // In-flight generation disqualifies a live daemon as a cap-eviction victim for the same reason the idle
+            // reaper skips it: past-TTL only means "no new job started", not "not mid-generation" (GPTAUD-10a).
+            if (running.ActiveJobs > 0 && !running.Handle.HasExited)
+            {
+                continue;
+            }
+
             if (now - running.LastUsedUtc < _options.IdleTimeToLive && !running.Handle.HasExited)
             {
                 continue; // Not idle — never evict an in-window daemon to admit a new one.
@@ -529,7 +586,19 @@ internal sealed class ImageServerProcessSupervisor : IImageServerSupervisor, IAs
 
     private async Task ReleaseReservedPortAsync(int port)
     {
-        await _admissionGate.WaitAsync(CancellationToken.None).ConfigureAwait(false);
+        try
+        {
+            await _admissionGate.WaitAsync(CancellationToken.None).ConfigureAwait(false);
+        }
+        catch (ObjectDisposedException)
+        {
+            // GPTAUD-10b: a spawn cancelled by DisposeAsync (its readiness is now linked to the shutdown token) unwinds
+            // through here to release its reserved port, but DisposeAsync may already have disposed the admission gate.
+            // The disposal teardown reaps every registered daemon's port anyway, and no concurrent allocator remains, so
+            // dropping this release is safe — never surface an ObjectDisposedException from the shutdown unwind.
+            return;
+        }
+
         try
         {
             ReleasePort(port);
@@ -562,8 +631,12 @@ internal sealed class ImageServerProcessSupervisor : IImageServerSupervisor, IAs
         // Seeded to the spawn time so a freshly-ready daemon is not re-probed until one full interval has passed.
         private long _lastLivenessProbeTicks = startedUtc.UtcTicks;
         private int _consecutiveLivenessFailures;
+        private int _activeJobs;
 
         public IImageServerProcessHandle Handle { get; } = handle;
+
+        /// <summary>Number of in-flight generations currently leasing this daemon (drives the reaper/evictor skip, GPTAUD-10a).</summary>
+        public int ActiveJobs => Volatile.Read(ref _activeJobs);
 
         public ImageServerEndpoint Endpoint { get; } = endpoint;
 
@@ -608,6 +681,48 @@ internal sealed class ImageServerProcessSupervisor : IImageServerSupervisor, IAs
         public int RecordLivenessFailure()
         {
             return Interlocked.Increment(ref _consecutiveLivenessFailures);
+        }
+
+        /// <summary>Registers an in-flight generation against this daemon.</summary>
+        public void AcquireJob()
+        {
+            Interlocked.Increment(ref _activeJobs);
+        }
+
+        /// <summary>Releases a previously-acquired job lease.</summary>
+        public void ReleaseJob()
+        {
+            Interlocked.Decrement(ref _activeJobs);
+        }
+    }
+
+    /// <summary>
+    ///     Active-job lease over a <see cref="RunningServer" /> (GPTAUD-10a). Holds the daemon against idle reaping / LRU
+    ///     eviction for the duration of one generation; <see cref="Touch" /> refreshes its last-used clock each poll.
+    /// </summary>
+    private sealed class ImageJobLease : IImageServerJobLease
+    {
+        private readonly RunningServer _server;
+        private readonly TimeProvider _timeProvider;
+        private int _disposed;
+
+        public ImageJobLease(RunningServer server, TimeProvider timeProvider)
+        {
+            _server = server;
+            _timeProvider = timeProvider;
+        }
+
+        public void Touch()
+        {
+            _server.MarkUsed(_timeProvider.GetUtcNow());
+        }
+
+        public void Dispose()
+        {
+            if (Interlocked.Exchange(ref _disposed, value: 1) == 0)
+            {
+                _server.ReleaseJob();
+            }
         }
     }
 }

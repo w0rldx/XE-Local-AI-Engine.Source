@@ -1,6 +1,8 @@
 namespace XE_Local_AI_Engine.Tests.Providers.StableDiffusionCpp;
 
 using XE_Local_AI_Engine.Providers.StableDiffusionCpp;
+using XE_Local_AI_Engine.Providers.StableDiffusionCpp.Contracts;
+using XE_Local_AI_Engine.Providers.StableDiffusionCpp.Implementation;
 using XE_Local_AI_Engine.Providers.StableDiffusionCpp.Options;
 using XE_Local_AI_Engine.Tests.Testing;
 
@@ -171,5 +173,121 @@ public sealed class ImageServerSupervisorTests
 
         AssertEx.Equal(expected: 2, launcher.LaunchCount);
         AssertEx.True(firstHandle.WasTreeKilled, "The outgoing daemon should have been torn down on restart.");
+    }
+
+    [Test]
+    public async Task LeasedDaemon_PastTtl_IsNotEvicted_UntilLeaseReleased()
+    {
+        // GPTAUD-10a: a daemon with an active job lease (an in-flight generation) is never evicted, even past the idle
+        // TTL — LastUsedUtc is stamped per ensure/reuse, not per generation step, so a long job looks idle. At cap, a new
+        // model is rejected rather than killing the leased daemon; once the lease is released the LRU evictor reclaims it.
+        var launcher = new FakeImageProcessLauncher();
+        var time = new AdvanceableClock();
+        var ttl = TimeSpan.FromMinutes(15);
+        var options = new StableDiffusionRuntimeOptions
+        {
+            IdleTimeToLive = ttl,
+            MaxLoadedProcesses = 1
+        };
+        await using var supervisor = ImageSupervisorFactory.Create(launcher, options: options, timeProvider: time);
+
+        await supervisor.EnsureRunningAsync("sd15", CancellationToken.None);
+        var firstHandle = launcher.Handles.Single();
+        var lease = supervisor.TryAcquireJobLease("sd15");
+        AssertEx.NotNull(lease);
+
+        // Past the TTL, but the daemon is leased (mid-generation): a new distinct model finds no evictable victim → reject.
+        time.Advance(ttl + TimeSpan.FromMinutes(1));
+        var ex = await AssertEx.ThrowsAsync<StableDiffusionRuntimeException>(() =>
+            supervisor.EnsureRunningAsync("flux", CancellationToken.None));
+        AssertEx.Contains(ex.Message, "maximum number of local image models", StringComparison.OrdinalIgnoreCase);
+        AssertEx.False(firstHandle.WasTreeKilled, "a leased daemon must never be evicted mid-generation, even past the TTL.");
+        AssertEx.Equal(expected: 1, launcher.LaunchCount);
+
+        // Release the lease → the now-idle past-TTL daemon becomes an eligible LRU victim → the new model is admitted.
+        lease!.Dispose();
+        await supervisor.EnsureRunningAsync("flux", CancellationToken.None);
+        AssertEx.True(firstHandle.WasTreeKilled, "once the lease is released the idle past-TTL daemon should be evicted.");
+        AssertEx.Equal(expected: 2, launcher.LaunchCount);
+    }
+
+    [Test]
+    public async Task JobLease_TouchRefreshesIdleClock_KeepingDaemonAlivePastOriginalTtl()
+    {
+        // A long generation Touch()es its lease each poll; the refreshed LastUsedUtc keeps the daemon inside the idle
+        // window so even a released-but-recently-touched daemon is not immediately reclaimed at cap.
+        var launcher = new FakeImageProcessLauncher();
+        var time = new AdvanceableClock();
+        var ttl = TimeSpan.FromMinutes(15);
+        var options = new StableDiffusionRuntimeOptions
+        {
+            IdleTimeToLive = ttl,
+            MaxLoadedProcesses = 1
+        };
+        await using var supervisor = ImageSupervisorFactory.Create(launcher, options: options, timeProvider: time);
+
+        await supervisor.EnsureRunningAsync("sd15", CancellationToken.None);
+        var firstHandle = launcher.Handles.Single();
+        using var lease = supervisor.TryAcquireJobLease("sd15");
+
+        // Advance most of the TTL, then Touch — the daemon is now recently-used again.
+        time.Advance(ttl - TimeSpan.FromMinutes(1));
+        lease!.Touch();
+        time.Advance(TimeSpan.FromMinutes(2)); // 1 min past the ORIGINAL window, but only 2 min since the Touch.
+
+        // A new model at cap finds the touched daemon still in-window (and leased) → reject, daemon survives.
+        await AssertEx.ThrowsAsync<StableDiffusionRuntimeException>(() =>
+            supervisor.EnsureRunningAsync("flux", CancellationToken.None));
+        AssertEx.False(firstHandle.WasTreeKilled);
+    }
+
+    [Test]
+    public async Task Dispose_DuringBlockedReadiness_TreeKillsSpawnedDaemon_NoOrphan()
+    {
+        // GPTAUD-10b: a spawn registers into _processes only after readiness, so a DisposeAsync that races the spawn tears
+        // down only the daemons in its snapshot — a process launched-but-not-yet-registered would leak. Linking readiness
+        // to the shutdown token makes dispose cancel the readiness wait, and the spawn's catch tree-kills the handle.
+        var launcher = new FakeImageProcessLauncher();
+        var probe = new GatedImageReadinessProbe();
+        var supervisor = new ImageServerProcessSupervisor(
+            new FakeImageModelStore(),
+            new FakeSdBackendSelector(),
+            new FakeSdBinaryManager(),
+            launcher,
+            probe,
+            new StableDiffusionRuntimeOptions
+            {
+                IdleTimeToLive = TimeSpan.FromHours(1),
+                MaxLoadedProcesses = 2
+            });
+
+        var ensure = supervisor.EnsureRunningAsync("sd15", CancellationToken.None);
+        await probe.ReadinessEntered; // the handle is launched and the spawn is blocked in its readiness wait.
+
+        await supervisor.DisposeAsync();
+
+        await AssertEx.ThrowsAsync<OperationCanceledException>(() => ensure);
+        var handle = launcher.Handles.Single();
+        AssertEx.True(handle.WasTreeKilled, "a daemon launched but not yet registered must be tree-killed on dispose (no orphan).");
+    }
+
+    /// <summary>Readiness probe that signals when its wait is entered, then blocks until its (shutdown-linked) token cancels.</summary>
+    private sealed class GatedImageReadinessProbe : IImageServerReadinessProbe
+    {
+        private readonly TaskCompletionSource _entered = new(TaskCreationOptions.RunContinuationsAsynchronously);
+
+        public Task ReadinessEntered => _entered.Task;
+
+        public async Task<bool> WaitForReadyAsync(Uri baseAddress, TimeSpan readinessTimeout, CancellationToken ct)
+        {
+            _entered.TrySetResult();
+            await Task.Delay(Timeout.InfiniteTimeSpan, ct).ConfigureAwait(false);
+            return true;
+        }
+
+        public Task<bool> CheckResponsiveAsync(Uri baseAddress, CancellationToken ct)
+        {
+            return Task.FromResult(true);
+        }
     }
 }

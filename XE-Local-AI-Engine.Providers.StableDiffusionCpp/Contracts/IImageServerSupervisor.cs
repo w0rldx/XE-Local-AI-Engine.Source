@@ -24,4 +24,13 @@ internal interface IImageServerSupervisor
 
     /// <summary>Tree-kills and forgets the daemon serving <paramref name="modelName" />, if any. Idempotent.</summary>
     Task EvictAsync(string modelName, CancellationToken ct);
+
+    /// <summary>
+    ///     Acquires an active-job lease against the resident daemon serving <paramref name="modelName" /> so the idle
+    ///     reaper and cap-admission LRU evictor keep it alive while a generation is in flight (GPTAUD-10a). Returns
+    ///     <see langword="null" /> when no live daemon backs the model — the caller then proceeds leaseless and relies on
+    ///     the just-completed <see cref="EnsureRunningAsync" /> plus self-heal. Call immediately after
+    ///     <see cref="EnsureRunningAsync" /> and dispose the lease when the job ends (completed / failed / cancelled).
+    /// </summary>
+    IImageServerJobLease? TryAcquireJobLease(string modelName);
 }
