@@ -1,6 +1,7 @@
 namespace XE_Local_AI_Engine.Client.Services.Invocation.Implementation;
 
 using System.Collections.Concurrent;
+using System.Diagnostics;
 using System.Text;
 using System.Text.Json;
 using System.Text.RegularExpressions;
@@ -170,10 +171,19 @@ public sealed partial class InvocationRunner : IInvocationRunner
 
         var package = context.Package;
 
-        var validationResult = _runtimePackageValidator.Validate(package);
-        if (!validationResult.IsValid)
+        // AUD4-23: mark the turn's processing start (baseline for the pre-spawn latency + TTFT metrics) and open a
+        // coarse span for the whole turn, so the audited "silent pre-spawn gap" (a first send stalled several seconds
+        // before the model spawn with zero log lines) surfaces as timed child spans rather than an apparent hang.
+        var turnStartedTimestamp = Stopwatch.GetTimestamp();
+        using var turnActivity = NodeActivitySource.Source.StartActivity("chat.invocation.run");
+
+        using (NodeActivitySource.Source.StartActivity("chat.invocation.validate_package"))
         {
-            throw new InvalidOperationException(string.Join("; ", validationResult.Errors));
+            var validationResult = _runtimePackageValidator.Validate(package);
+            if (!validationResult.IsValid)
+            {
+                throw new InvalidOperationException(string.Join("; ", validationResult.Errors));
+            }
         }
 
         var sender = _hubSender.Value;
@@ -194,7 +204,12 @@ public sealed partial class InvocationRunner : IInvocationRunner
         try
         {
             var invocationToken = GetInvocationCancellationToken();
-            var modelResolution = await ResolveModelAsync(package.ModelProfile, invocationToken).ConfigureAwait(false);
+            ModelResolution modelResolution;
+            using (NodeActivitySource.Source.StartActivity("chat.invocation.resolve_model"))
+            {
+                modelResolution = await ResolveModelAsync(package.ModelProfile, invocationToken).ConfigureAwait(false);
+            }
+
             var resolvedModel = modelResolution.Model;
 
             // Shared streaming state for both the single-agent and orchestration paths: the response/reasoning
@@ -240,7 +255,7 @@ public sealed partial class InvocationRunner : IInvocationRunner
             // stream-idle watchdog — the primary cause of the audited "big model can never load through chat" hang.
             // Cloud (Codex/Azure) and Ollama models are a no-op here. The load is decoupled from this caller's token in
             // the supervisor, so a user who cancels merely abandons the wait while the load continues in the background.
-            var effectiveContextTokens = await PrepareLocalRuntimeAsync(resolvedModel, dispatcher, package.InvocationId, invocationToken).ConfigureAwait(false);
+            var effectiveContextTokens = await PrepareLocalRuntimeAsync(resolvedModel, dispatcher, package.InvocationId, stream, turnStartedTimestamp, invocationToken).ConfigureAwait(false);
 
             // AUD4-02: fold the launched effective context window into the turn policy so the OUTER conversation
             // budgeter sizes history against the real window. The per-send num_ctx override still wins; an unknown
@@ -324,6 +339,10 @@ public sealed partial class InvocationRunner : IInvocationRunner
         {
             CancelPendingToolCalls(package.InvocationId);
             var failureCategory = ClassifyCancellation();
+            // AUD4-19: count the cancellation by its cause (user | watchdog | shutdown). Distinct from InvocationFailedTotal:
+            // a cancel is an outcome, not a failure. An invocation-level timeout ("watchdog") is additionally surfaced as a
+            // Timeout failure below via ReportInvocationFailedAsync — the two metrics answer different questions.
+            NodeMetrics.InvocationCancelledTotal.Add(1, new KeyValuePair<string, object?>("category", ClassifyCancellationMetricCategory()));
             await dispatcher.ReportInvocationFailedAsync(package.InvocationId, "Invocation timed out or was cancelled", failureCategory).ConfigureAwait(false);
             if (shouldSendHubMessages)
             {
@@ -334,6 +353,13 @@ public sealed partial class InvocationRunner : IInvocationRunner
         {
             _logger.LogError(exception, "Invocation {InvocationId} failed.", package.InvocationId);
             var (failureCategory, message) = MapFailure(exception);
+            // An operator force-eject surfaces as a Cancelled-category LlamaServerModelEjectedException here (not the OCE
+            // path). Count it as a cancellation cause rather than a failure, mirroring the OCE branch above.
+            if (exception is LlamaServerModelEjectedException)
+            {
+                NodeMetrics.InvocationCancelledTotal.Add(1, new KeyValuePair<string, object?>("category", "operator_eject"));
+            }
+
             await dispatcher.ReportInvocationFailedAsync(package.InvocationId, message, failureCategory).ConfigureAwait(false);
             if (shouldSendHubMessages)
             {
@@ -473,19 +499,33 @@ public sealed partial class InvocationRunner : IInvocationRunner
     private async Task<int?> PrepareLocalRuntimeAsync(string resolvedModel,
         IWorkerEventDispatcher dispatcher,
         Guid invocationId,
+        StreamState stream,
+        long turnStartedTimestamp,
         CancellationToken cancellationToken)
     {
         var provider = await ResolveWarmableProviderAsync(resolvedModel, invocationId, cancellationToken).ConfigureAwait(false);
         if (provider is null)
         {
+            // No local cold-load for this turn (cloud, Ollama, or an unresolved provider): the TTFT baseline is turn
+            // start and the provider dimension is "remote" — the first-token latency is the provider's own, not a
+            // measurable local warm. The send-to-load-start histogram is deliberately local-only, so it is not recorded.
+            stream.ProviderTag = "remote";
+            stream.ModelReadyTimestamp = turnStartedTimestamp;
             return null;
         }
+
+        // AUD4-19: this turn pays a real local cold-load. Record how long the turn waited before the load even began
+        // (the audited silent pre-spawn gap), tag the provider dimension "local", and measure TTFT from readiness.
+        stream.ProviderTag = "local";
+        NodeMetrics.TurnToModelLoadStartMs.Record(Stopwatch.GetElapsedTime(turnStartedTimestamp).TotalMilliseconds,
+            new KeyValuePair<string, object?>("provider", "local"));
 
         // Phase: preparing runtime → loading model. Both fire BEFORE the stream-idle watchdog is armed.
         await dispatcher.ReportInvocationPhaseAsync(invocationId, InvocationRuntimePhase.PreparingRuntime).ConfigureAwait(false);
         await dispatcher.ReportInvocationPhaseAsync(invocationId, InvocationRuntimePhase.LoadingModel).ConfigureAwait(false);
         _logger.LogInformation("Warming local model for invocation {InvocationId} before streaming (readiness decoupled from the stream-idle watchdog).", invocationId);
 
+        using var readinessActivity = NodeActivitySource.Source.StartActivity("chat.invocation.model_readiness");
         var startedUtc = DateTimeOffset.UtcNow;
         try
         {
@@ -496,6 +536,7 @@ public sealed partial class InvocationRunner : IInvocationRunner
             // The caller cancelled its WAIT (the detached load continues in the supervisor and warms the model for the
             // next send). Record the abandoned readiness and rethrow so the turn terminates as cancelled.
             RecordReadiness(startedUtc, "cancelled");
+            readinessActivity?.SetTag("outcome", "cancelled");
             throw;
         }
         catch (Exception exception)
@@ -503,11 +544,16 @@ public sealed partial class InvocationRunner : IInvocationRunner
             // Readiness failed (e.g. model incompatible / OOM). Record it and let the streaming send surface the real,
             // classified failure — it hits the same supervisor path and produces the proper error.
             RecordReadiness(startedUtc, "failed");
+            readinessActivity?.SetTag("outcome", "failed");
             _logger.LogWarning(exception, "Model warm failed for invocation {InvocationId}; the streaming send will surface the classified failure.", invocationId);
             return null;
         }
 
         var durationMs = RecordReadiness(startedUtc, "ready");
+        readinessActivity?.SetTag("outcome", "ready");
+
+        // The model is ready: measure TTFT from HERE (the first emitted chunk records against this baseline).
+        stream.ModelReadyTimestamp = Stopwatch.GetTimestamp();
         _logger.LogInformation("Local model ready for invocation {InvocationId} after {ElapsedMs:F0} ms; arming the stream-idle watchdog for generation.", invocationId, durationMs);
 
         // Phase: generating (the model is ready; streaming begins under the stream-idle watchdog).
@@ -618,7 +664,11 @@ public sealed partial class InvocationRunner : IInvocationRunner
         var seededMessages = await ApplyContextBudgetAsync(BuildChatMessages(package), package, "initial-assembly", turnPolicy, transport, budgetGate).ConfigureAwait(false);
 
         var definition = BuildInvocationDefinition(package, resolvedModel, seededMessages, effectiveContextTokens);
+        // Coarse span over the MAF agent build (AUD4-23) — another pre-first-token stage. Disposed right after the
+        // build so it does not enclose the streaming loop; the agent context keeps its normal await-using scope.
+        var buildAgentActivity = NodeActivitySource.Source.StartActivity("chat.invocation.build_agent");
         await using var agentContext = await _invocationAgentFactory.CreateAsync(definition, invocationToken).ConfigureAwait(false);
+        buildAgentActivity?.Dispose();
 
         // Maps callId → toolName so FunctionResultContent (which has no Name) can resolve the tool name
         // from the earlier FunctionCallContent with the matching CallId.
@@ -1180,6 +1230,22 @@ public sealed partial class InvocationRunner : IInvocationRunner
             }
 
             return _timeoutTriggered ? FailureCategory.Timeout : FailureCategory.Cancelled;
+        }
+    }
+
+    // The cancellation cause for the invocation_cancelled_total metric (AUD4-19): an explicit user cancel, the
+    // invocation-level timeout firing ("watchdog"), or neither — an external token cancellation, i.e. host shutdown.
+    // Reads the same flags ClassifyCancellation does, under the same lock.
+    private string ClassifyCancellationMetricCategory()
+    {
+        lock (_syncRoot)
+        {
+            if (_userCancelRequested)
+            {
+                return "user";
+            }
+
+            return _timeoutTriggered ? "watchdog" : "shutdown";
         }
     }
 

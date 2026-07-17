@@ -12,7 +12,8 @@ public sealed record InvocationHistoryEntry(
     string? Error,
     FailureCategory? FailureCategory,
     int StreamedChunkCount,
-    int StreamedThinkingChunkCount)
+    int StreamedThinkingChunkCount,
+    string? TraceId = null)
 {
     public TimeSpan Duration => CompletedAt - StartedAt;
 }
