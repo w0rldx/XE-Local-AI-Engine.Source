@@ -3,6 +3,8 @@ using FastEndpoints;
 using FastEndpoints.Swagger;
 using Microsoft.AspNetCore.Diagnostics.HealthChecks;
 using Microsoft.AspNetCore.Hosting.Server;
+using Microsoft.AspNetCore.Http;
+using Microsoft.Extensions.Diagnostics.HealthChecks;
 using Microsoft.Extensions.Options;
 using Scalar.AspNetCore;
 using Serilog;
@@ -252,21 +254,18 @@ try
     app.MapHealthChecks("/health/ready", new HealthCheckOptions
     {
         Predicate = r => r.Tags.Contains("ready"),
-        ResponseWriter = async (context, report) =>
+        // Make the status→HTTP mapping explicit and intentional (GPTAUD-19c). Healthy and Degraded both return 200 —
+        // a Degraded worker (e.g. an expired platform-pairing token) is still serving local inference, so readiness
+        // consumers (Aspire's WithHttpHealthCheck poll) must keep it in rotation — but the payload now distinguishes it
+        // with per-check status + description + reason data, so "degraded" is never a silent 200. Only Unhealthy (a dead
+        // node-SQLite store) fails readiness with 503.
+        ResultStatusCodes = new Dictionary<HealthStatus, int>
         {
-            context.Response.ContentType = "application/json";
-            var payload = new
-            {
-                status = report.Status.ToString(),
-                checks = report.Entries.Select(e => new
-                {
-                    name = e.Key,
-                    status = e.Value.Status.ToString(),
-                    duration = e.Value.Duration.TotalMilliseconds
-                })
-            };
-            await context.Response.WriteAsJsonAsync(payload);
-        }
+            [HealthStatus.Healthy] = StatusCodes.Status200OK,
+            [HealthStatus.Degraded] = StatusCodes.Status200OK,
+            [HealthStatus.Unhealthy] = StatusCodes.Status503ServiceUnavailable
+        },
+        ResponseWriter = ReadinessHealthResponse.WriteAsync
     });
 
     app.UseMiddleware<LocalApiSecurityMiddleware>();
@@ -529,6 +528,42 @@ namespace XE_Local_AI_Engine.Client
     {
         protected Program()
         {
+        }
+    }
+
+    /// <summary>
+    ///     Projects a readiness <see cref="HealthReport" /> into the <c>/health/ready</c> JSON payload (GPTAUD-19c). Each
+    ///     check reports its own status, description, and structured reason data, so a Degraded worker that still returns
+    ///     HTTP 200 (it is serving local inference) is nonetheless distinguishable by an inspecting operator or dashboard.
+    /// </summary>
+    public static class ReadinessHealthResponse
+    {
+        public static object BuildPayload(HealthReport report)
+        {
+            ArgumentNullException.ThrowIfNull(report);
+
+            return new
+            {
+                status = report.Status.ToString(),
+                checks = report.Entries.Select(static entry => new
+                {
+                    name = entry.Key,
+                    status = entry.Value.Status.ToString(),
+                    description = entry.Value.Description,
+                    reason = entry.Value.Data.Count == 0
+                        ? null
+                        : entry.Value.Data.ToDictionary(static pair => pair.Key, static pair => pair.Value, StringComparer.Ordinal),
+                    duration = entry.Value.Duration.TotalMilliseconds
+                }).ToArray()
+            };
+        }
+
+        public static Task WriteAsync(HttpContext context, HealthReport report)
+        {
+            ArgumentNullException.ThrowIfNull(context);
+
+            context.Response.ContentType = "application/json";
+            return context.Response.WriteAsJsonAsync(BuildPayload(report));
         }
     }
 }
