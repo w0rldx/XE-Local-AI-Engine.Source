@@ -46,7 +46,8 @@ internal sealed class InvocationHistory : IInvocationHistory
             state.Error,
             state.FailureCategory,
             state.StreamedChunkCount,
-            state.StreamedThinkingChunkCount);
+            state.StreamedThinkingChunkCount,
+            state.TraceId);
 
         lock (_syncRoot)
         {

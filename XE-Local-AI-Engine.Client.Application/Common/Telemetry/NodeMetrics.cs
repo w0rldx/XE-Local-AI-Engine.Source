@@ -147,6 +147,39 @@ public static class NodeMetrics
 
 
     /// <summary>
+    ///     Wall-clock latency (milliseconds) from the start of an invocation turn to the moment the local model load
+    ///     begins — the audited "silent pre-spawn gap" (AUD4-23: a first-ever send stalled ~7.8 s here with no log). Only
+    ///     recorded for a local llama.cpp turn (the one that pays a cold load); cloud/Ollama turns never reach the warm
+    ///     phase. Tagged by <c>provider</c> (local). Content-free (a duration only).
+    /// </summary>
+    public static readonly Histogram<double> TurnToModelLoadStartMs =
+        Meter.CreateHistogram<double>("turn_to_model_load_start_ms",
+            unit: "ms",
+            description: "Latency from invocation-turn start to the local model load beginning, by provider.");
+
+    /// <summary>
+    ///     Wall-clock latency (milliseconds) from the model becoming READY (the local warm phase finished, or turn start
+    ///     for a runtime with no cold-load) to the FIRST streamed output chunk — time-to-first-token. Tagged by
+    ///     <c>provider</c> (local | remote); <c>remote</c> covers cloud and non-warming local runtimes (Ollama), whose
+    ///     first-token latency is the provider's own rather than a local cold load. Content-free (a duration only).
+    /// </summary>
+    public static readonly Histogram<double> ModelReadyToFirstOutputMs =
+        Meter.CreateHistogram<double>("model_ready_to_first_output_ms",
+            unit: "ms",
+            description: "Time from model-ready to the first streamed output chunk (TTFT), by provider (local | remote).");
+
+    /// <summary>
+    ///     Incremented once per cancelled invocation, tagged by <c>category</c> — <c>user</c> (an explicit user cancel),
+    ///     <c>watchdog</c> (the invocation-level timeout fired), <c>operator_eject</c> (the model was force-ejected out
+    ///     from under the turn), or <c>shutdown</c> (host shutdown cancelled the run). Distinct from
+    ///     <see cref="InvocationFailedTotal" />, which deliberately EXCLUDES cancellations: a cancel is an outcome, not a
+    ///     failure, so it is counted here with its cause. Content-free (a count only), bounded cardinality.
+    /// </summary>
+    public static readonly Counter<long> InvocationCancelledTotal =
+        Meter.CreateCounter<long>("invocation_cancelled_total",
+            description: "Number of cancelled invocations by category (user | watchdog | operator_eject | shutdown).");
+
+    /// <summary>
     ///     Incremented (by the abandoned count) when the memory-extraction worker abandons in-flight extraction job(s) at
     ///     shutdown because they ignored cooperative cancellation past the drain deadline plus the fixed grace. Content-free
     ///     (a count only) — the deliberate cost of a bounded shutdown that never waits indefinitely.
