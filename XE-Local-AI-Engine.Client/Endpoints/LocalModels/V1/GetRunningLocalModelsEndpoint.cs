@@ -5,16 +5,20 @@ using XE_Local_AI_Engine.Client.Endpoints.Common;
 using XE_Local_AI_Engine.Client.Endpoints.LocalModels.V1.Mappers;
 using XE_Local_AI_Engine.Client.Services.Auth;
 using XE_Local_AI_Engine.Client.Services.Chat;
+using XE_Local_AI_Engine.Client.Services.NodeSettings;
 
 /// <summary>
 ///     Lists the models the local runtime currently holds in memory (RAM/VRAM). On provider-unreachable, returns an
 ///     OK-empty/unavailable response (never a 500) so the loaded-models page can poll and degrade gracefully — mirroring
-///     <see cref="ListLocalModelsEndpoint" />.
+///     <see cref="ListLocalModelsEndpoint" />. The response also reports whether the Ollama runtime is configured at all
+///     (<see cref="RunningLocalModelsResponse.OllamaConfigured" />) so the client stops polling when it is switched off.
 /// </summary>
 public sealed class GetRunningLocalModelsEndpoint(
     IOllamaModelService modelService,
+    IConfiguration configuration,
     ILogger<GetRunningLocalModelsEndpoint> logger) : EndpointWithoutRequest<RunningLocalModelsResponse>
 {
+    private readonly IConfiguration _configuration = configuration ?? throw new ArgumentNullException(nameof(configuration));
     private readonly ILogger<GetRunningLocalModelsEndpoint> _logger = logger ?? throw new ArgumentNullException(nameof(logger));
     private readonly IOllamaModelService _modelService = modelService ?? throw new ArgumentNullException(nameof(modelService));
 
@@ -26,10 +30,14 @@ public sealed class GetRunningLocalModelsEndpoint(
 
     public override async Task HandleAsync(CancellationToken ct)
     {
+        // The SAME gate AddOllamaRuntime uses to decide whether to register the Ollama provider (enabled unless
+        // explicitly false). When off, the client stops polling this endpoint rather than backing off forever.
+        var ollamaConfigured = _configuration.GetValue(OllamaRuntimeGate.RuntimeEnabledConfigurationKey, defaultValue: true);
+
         try
         {
             var running = await _modelService.ListRunningModelsAsync(ct).ConfigureAwait(false);
-            await Send.OkAsync(LocalModelsMapper.ToRunningResponse(running), ct).ConfigureAwait(false);
+            await Send.OkAsync(LocalModelsMapper.ToRunningResponse(running, ollamaConfigured), ct).ConfigureAwait(false);
         }
         catch (OperationCanceledException) when (ct.IsCancellationRequested)
         {
@@ -49,7 +57,7 @@ public sealed class GetRunningLocalModelsEndpoint(
                 _logger.LogWarning(exception, "Running model list could not be loaded.");
             }
 
-            await Send.OkAsync(LocalModelsMapper.ToUnavailableRunningResponse("Local model provider is unavailable."), ct)
+            await Send.OkAsync(LocalModelsMapper.ToUnavailableRunningResponse("Local model provider is unavailable.", ollamaConfigured), ct)
                       .ConfigureAwait(false);
         }
     }

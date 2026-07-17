@@ -167,6 +167,14 @@ public sealed class RunningLocalModelsResponse
 {
     public required bool IsAvailable { get; init; }
 
+    /// <summary>
+    ///     Whether the optional Ollama runtime is configured/enabled on this node (the <c>XE_OLLAMA_RUNTIME_ENABLED</c>
+    ///     gate). When false the client can stop polling this endpoint entirely — no Ollama daemon will ever answer — so
+    ///     it never backs off forever against a runtime that is switched off. Distinct from <see cref="IsAvailable" />,
+    ///     which reflects whether a configured daemon is currently reachable.
+    /// </summary>
+    public required bool OllamaConfigured { get; init; }
+
     public string? Error { get; init; }
 
     public required IReadOnlyList<RunningLocalModelResponse> Items { get; init; }
