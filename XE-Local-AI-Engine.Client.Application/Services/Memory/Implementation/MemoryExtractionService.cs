@@ -3,6 +3,7 @@ namespace XE_Local_AI_Engine.Client.Services.Memory.Implementation;
 using Microsoft.Extensions.Options;
 using XE_Local_AI_Engine.Client.Persistence;
 using XE_Local_AI_Engine.Client.Persistence.Stores;
+using XE_Local_AI_Engine.Client.Services.AgentHome.Implementation;
 
 /// <summary>
 ///     Default <see cref="IMemoryExtractionService" />. Gates temporary conversations BEFORE any model call (the single
@@ -69,6 +70,7 @@ internal sealed class MemoryExtractionService(
 
         var created = new List<PlaybookActionRecord>();
         var duplicates = 0;
+        var rejected = 0;
 
         foreach (var proposal in proposals)
         {
@@ -77,7 +79,32 @@ internal sealed class MemoryExtractionService(
                 continue;
             }
 
-            if (!dedupKeys.Add(DedupKey(proposal.Behavior, proposal.Scope)))
+            // Secret scan BOTH free-text fields the model produced before they are persisted for human review — the
+            // extraction agent reads raw conversation content, so a leaked PEM/PAT/JWT/high-entropy secret must be
+            // rejected or redacted exactly as the AgentHome proposal path handles it. The scanner treats its `content`
+            // argument as redactable; the metadata/evidence arguments are the reject-only channels, so pass empties.
+            var behaviorScan = MemoryProposalSecretScanner.Scan(type: string.Empty,
+                operation: string.Empty,
+                proposal.Behavior,
+                evidence: [],
+                confidence: string.Empty);
+            var triggerScan = MemoryProposalSecretScanner.Scan(type: string.Empty,
+                operation: string.Empty,
+                proposal.TriggerCondition ?? string.Empty,
+                evidence: [],
+                confidence: string.Empty);
+
+            if (behaviorScan.ShouldReject || triggerScan.ShouldReject)
+            {
+                // Unredactable secret (PEM/service-account block) in either field — drop the whole candidate.
+                rejected++;
+                continue;
+            }
+
+            var behavior = behaviorScan.RedactedContent ?? proposal.Behavior;
+            var triggerCondition = proposal.TriggerCondition is null ? null : (triggerScan.RedactedContent ?? proposal.TriggerCondition);
+
+            if (!dedupKeys.Add(DedupKey(behavior, proposal.Scope)))
             {
                 // Matches an existing Suggested/Enabled memory (or an earlier candidate in this same run) — skip it.
                 duplicates++;
@@ -87,8 +114,8 @@ internal sealed class MemoryExtractionService(
             var record = await _playbookActionStore.AddAsync(new PlaybookActionInput(run.AgentDefinitionId,
                     PlaybookActionState.Suggested,
                     PlaybookActionSource.Extracted,
-                    proposal.TriggerCondition,
-                    proposal.Behavior,
+                    triggerCondition,
+                    behavior,
                     proposal.Scope.ToString(),
                     _options.CandidatePriority,
                     sourceFeedbackIds,
@@ -99,8 +126,8 @@ internal sealed class MemoryExtractionService(
             created.Add(record);
         }
 
-        _logger.LogInformation("Memory extraction for agent {AgentId}: proposed {Proposed}, kept {Kept}, duplicates {Duplicates}.",
-            run.AgentDefinitionId, proposals.Count, created.Count, duplicates);
+        _logger.LogInformation("Memory extraction for agent {AgentId}: proposed {Proposed}, kept {Kept}, duplicates {Duplicates}, secret-rejected {Rejected}.",
+            run.AgentDefinitionId, proposals.Count, created.Count, duplicates, rejected);
 
         return new MemoryExtractionOutcome(MemoryExcluded: false, ModelConfigured: true, created, proposals.Count, duplicates);
     }
