@@ -108,6 +108,60 @@ public sealed class KnowledgeDocumentBlobStoreDedupeTests : IDisposable
     }
 
     [Test]
+    public async Task AddAsync_WhenRepairingMissingBlob_ResetsFailedRowToPendingForReindex()
+    {
+        // GPTAUD-12 follow-up: a prior crash left the row marked Failed once ingestion could not read its bytes. The
+        // repair path restores the blob AND must reset the row to Pending, or UploadKnowledgeDocumentEndpoint (which only
+        // enqueues fresh or Pending rows) would never re-index the recovered bytes and every re-upload would keep
+        // returning the stuck Failed document.
+        var databasePath = GetDatabasePath("repair-status.sqlite");
+        await MigrateAsync(databasePath).ConfigureAwait(false);
+
+        var content = Encoding.UTF8.GetBytes("bytes whose row was marked Failed after a crash lost the blob");
+        var contentHash = Convert.ToHexString(SHA256.HashData(content));
+
+        await using var provider = BuildProvider(databasePath);
+        var store = CreateStore(provider);
+
+        var firstId = Guid.NewGuid();
+        _ = await store.AddAsync(NewInput(firstId, content, contentHash), CancellationToken.None).ConfigureAwait(false);
+
+        // Simulate the post-crash state: the blob is gone and ingestion has already flipped the row to Failed.
+        var blobPath = Path.Combine(_rootPath, "data", "knowledge-base", "documents", string.Concat(firstId.ToString("D"), ".txt"));
+        File.Delete(blobPath);
+        await SetStatusAsync(databasePath, "Failed").ConfigureAwait(false);
+
+        var second = await store.AddAsync(NewInput(Guid.NewGuid(), content, contentHash), CancellationToken.None).ConfigureAwait(false);
+
+        AssertEx.False(second.WasInserted, "The re-upload of identical content must still dedupe, not insert a second row.");
+        AssertEx.Equal(firstId, second.DocumentId);
+        AssertEx.True(File.Exists(blobPath), "The repair path must restore the missing blob.");
+        AssertEx.Equal("Pending", await GetStatusAsync(databasePath).ConfigureAwait(false));
+    }
+
+    [Test]
+    public async Task AddAsync_WhenBlobIntact_DedupeLeavesRowStatusUnchanged()
+    {
+        // The status reset is scoped to the missing-blob repair branch only: an ordinary dedupe hit against a document
+        // that already indexed (blob present) must never be knocked back to Pending and re-ingested.
+        var databasePath = GetDatabasePath("no-status-reset.sqlite");
+        await MigrateAsync(databasePath).ConfigureAwait(false);
+
+        var content = Encoding.UTF8.GetBytes("already-indexed intact payload");
+        var contentHash = Convert.ToHexString(SHA256.HashData(content));
+
+        await using var provider = BuildProvider(databasePath);
+        var store = CreateStore(provider);
+
+        _ = await store.AddAsync(NewInput(Guid.NewGuid(), content, contentHash), CancellationToken.None).ConfigureAwait(false);
+        await SetStatusAsync(databasePath, "Indexed").ConfigureAwait(false);
+
+        _ = await store.AddAsync(NewInput(Guid.NewGuid(), content, contentHash), CancellationToken.None).ConfigureAwait(false);
+
+        AssertEx.Equal("Indexed", await GetStatusAsync(databasePath).ConfigureAwait(false));
+    }
+
+    [Test]
     public async Task AddAsync_WhenRowAndBlobBothPresent_DedupeDoesNotRewriteBlob()
     {
         var databasePath = GetDatabasePath("no-rewrite.sqlite");
@@ -129,6 +183,27 @@ public sealed class KnowledgeDocumentBlobStoreDedupeTests : IDisposable
 
         AssertEx.False(second.WasInserted);
         AssertEx.Equal(beforeWriteUtc, File.GetLastWriteTimeUtc(blobPath), "An intact blob must not be rewritten by the dedupe path.");
+    }
+
+    // Each test database carries exactly one knowledge_documents row, so these read/write the status column without an
+    // id filter — avoiding any dependency on the store's on-wire document_id string encoding.
+    private static async Task SetStatusAsync(string databasePath, string status)
+    {
+        await using var connection = new SqliteConnection($"Data Source={databasePath}");
+        await connection.OpenAsync().ConfigureAwait(false);
+        await using var command = connection.CreateCommand();
+        command.CommandText = "UPDATE knowledge_documents SET status = $status;";
+        _ = command.Parameters.AddWithValue("$status", status);
+        _ = await command.ExecuteNonQueryAsync().ConfigureAwait(false);
+    }
+
+    private static async Task<string> GetStatusAsync(string databasePath)
+    {
+        await using var connection = new SqliteConnection($"Data Source={databasePath}");
+        await connection.OpenAsync().ConfigureAwait(false);
+        await using var command = connection.CreateCommand();
+        command.CommandText = "SELECT status FROM knowledge_documents LIMIT 1;";
+        return (string)(await command.ExecuteScalarAsync().ConfigureAwait(false))!;
     }
 
     private static KnowledgeDocumentInput NewInput(Guid documentId, byte[] content, string contentHash)

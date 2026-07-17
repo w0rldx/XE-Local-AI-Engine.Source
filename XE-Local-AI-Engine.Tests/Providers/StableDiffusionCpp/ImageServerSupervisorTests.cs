@@ -212,6 +212,34 @@ public sealed class ImageServerSupervisorTests
     }
 
     [Test]
+    public async Task TryAcquireJobLease_AfterDaemonEvicted_ReturnsNullLeaseless()
+    {
+        // GPTAUD-10a P1: once a daemon has been evicted (torn down), a lease attempt must refuse leaselessly rather than
+        // hand back a lease over a dead/removed daemon. Lease acquisition and eviction share an atomic latch, so a lease
+        // can never be granted over a daemon that eviction has claimed or removed.
+        var launcher = new FakeImageProcessLauncher();
+        var time = new AdvanceableClock();
+        var ttl = TimeSpan.FromMinutes(15);
+        var options = new StableDiffusionRuntimeOptions
+        {
+            IdleTimeToLive = ttl,
+            MaxLoadedProcesses = 1
+        };
+        await using var supervisor = ImageSupervisorFactory.Create(launcher, options: options, timeProvider: time);
+
+        await supervisor.EnsureRunningAsync("sd15", CancellationToken.None);
+        var firstHandle = launcher.Handles.Single();
+
+        // Idle past the TTL, then admit a distinct model at cap 1 → the idle LRU daemon is atomically latched and evicted.
+        time.Advance(ttl + TimeSpan.FromMinutes(1));
+        await supervisor.EnsureRunningAsync("flux", CancellationToken.None);
+        AssertEx.True(firstHandle.WasTreeKilled, "the idle past-TTL daemon should have been evicted to admit the new model.");
+
+        var lease = supervisor.TryAcquireJobLease("sd15");
+        AssertEx.Null(lease);
+    }
+
+    [Test]
     public async Task JobLease_TouchRefreshesIdleClock_KeepingDaemonAlivePastOriginalTtl()
     {
         // A long generation Touch()es its lease each poll; the refreshed LastUsedUtc keeps the daemon inside the idle

@@ -103,6 +103,13 @@ public sealed class KnowledgeDocumentBlobStore : IKnowledgeDocumentBlobStore
             if (!File.Exists(BytesPath(row.DocumentId, row.Extension)))
             {
                 await WriteEncryptedBlobAsync(row.DocumentId, row.Extension, input.Content, cancellationToken).ConfigureAwait(false);
+
+                // The prior crash left this row marked Failed (ContentMissingReason) once ingestion could not read its
+                // bytes. Now that they are restored, reset it to Pending so UploadKnowledgeDocumentEndpoint re-enqueues it
+                // — it only enqueues freshly-inserted or Pending rows, so without this the repaired bytes would never be
+                // indexed and every identical re-upload would keep returning the stuck Failed document (GPTAUD-12
+                // follow-up). Only the missing-blob branch resets; an intact dedupe hit leaves the status untouched.
+                await ResetDocumentToPendingAsync(connection, row.DocumentId, now, cancellationToken).ConfigureAwait(false);
             }
 
             return new KnowledgeDocumentAddResult(row.DocumentId, WasInserted: false);
@@ -211,6 +218,23 @@ public sealed class KnowledgeDocumentBlobStore : IKnowledgeDocumentBlobStore
     {
         await using var command = connection.CreateCommand();
         command.CommandText = "DELETE FROM knowledge_documents WHERE document_id = $document_id;";
+        AddParameter(command, "$document_id", documentId);
+        await command.ExecuteNonQueryAsync(cancellationToken).ConfigureAwait(false);
+    }
+
+    // Resets a repaired dedupe target back to Pending so the upload endpoint re-enqueues it for indexing, clearing the
+    // stale content-missing failure and any partial chunk count (GPTAUD-12 follow-up). Called only after the missing
+    // blob has been restored from byte-identical content.
+    private static async Task ResetDocumentToPendingAsync(DbConnection connection, Guid documentId, long updatedAtUtc, CancellationToken cancellationToken)
+    {
+        await using var command = connection.CreateCommand();
+        command.CommandText = """
+                              UPDATE knowledge_documents
+                              SET status = $status, failure_reason = NULL, chunk_count = 0, updated_at_utc = $updated_at_utc
+                              WHERE document_id = $document_id;
+                              """;
+        AddParameter(command, "$status", KnowledgeDocumentStatus.Pending.ToString());
+        AddParameter(command, "$updated_at_utc", updatedAtUtc);
         AddParameter(command, "$document_id", documentId);
         await command.ExecuteNonQueryAsync(cancellationToken).ConfigureAwait(false);
     }
