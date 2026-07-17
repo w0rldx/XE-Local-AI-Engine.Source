@@ -194,6 +194,14 @@ public sealed class StableDiffusionCppRuntimeTests
             EvictCount++;
             return Task.CompletedTask;
         }
+
+        // GPTAUD-10a: the runtime now acquires a job lease across submit→poll→complete. This fake has no resident daemon
+        // to lease, so it returns null — the runtime then proceeds leaseless, exactly as it does against a genuinely
+        // absent daemon, keeping these runtime tests behaviour-identical.
+        public IImageServerJobLease? TryAcquireJobLease(string modelName)
+        {
+            return null;
+        }
     }
 
     /// <summary>Routes each sd-server request to <c>img_gen</c> / <c>job</c> / <c>cancel</c> and delegates the response.</summary>
