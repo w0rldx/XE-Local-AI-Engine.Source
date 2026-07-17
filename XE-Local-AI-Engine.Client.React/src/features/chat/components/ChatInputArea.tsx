@@ -216,7 +216,11 @@ export function ChatInputArea({
 	};
 
 	const submit = (): void => {
-		if (!trimmed) {
+		// Gate the Enter/submit path on the SAME conditions that disable the Send button (GPTAUD-16). The button
+		// respects `sendDisabled`, but the Textarea's onKeyDown calls submit() directly — so without this guard the
+		// keyboard path bypasses `sendDisabledProp` (selected-conversation still loading, remote view-only thread)
+		// and can fire a send the button would have refused.
+		if (!trimmed || disabled || sendDisabledProp || isSending) {
 			return;
 		}
 
