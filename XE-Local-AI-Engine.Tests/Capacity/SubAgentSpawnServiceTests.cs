@@ -14,6 +14,7 @@ using XE_Local_AI_Engine.Client.Services.Agents;
 using XE_Local_AI_Engine.Client.Services.Capacity;
 using XE_Local_AI_Engine.Client.Services.Chat;
 using XE_Local_AI_Engine.Providers.LlamaServer;
+using XE_Local_AI_Engine.Tests.CodexOAuth;
 using XE_Local_AI_Engine.Tests.Testing;
 using XE_Local_AI_Engine.Tests.Testing.Mocks;
 
@@ -258,6 +259,38 @@ public sealed class SubAgentSpawnServiceTests
     }
 
     [Test]
+    public async Task Spawn_WhenProfileBound_DropsApprovalRequiredTools_KeepsNonGated()
+    {
+        // GPTAUD-01: a spawned child runs as an agent-as-tool (AsAIFunction, no per-run options, no HITL round-trip), so
+        // an approval-gated tool would surface a ToolApprovalRequestContent the child can never answer — failing every
+        // call silently. CurateChildTools must DROP the approval-required tool (never unwrap it to auto-execute) while
+        // the non-gated tool survives, and warn naming the dropped tool.
+        using var harness = new Harness();
+        harness.AllowLocal();
+        // read_file resolves to an approval-required tool (its offer requires approval, so the resolver wraps it as an
+        // ApprovalRequiredAIFunction); list_files stays a plain executable.
+        var id = harness.RegisterProfileWithMixedApprovalTools("coder", gatedTool: "read_file", ungatedTool: "list_files");
+        var service = harness.Build();
+
+        using var root = SpawnContext.BeginRoot(fanOutCap: 3, cloudSpawnCap: 3);
+        var result = await service.SpawnAsync(new SubAgentSpawnRequest
+        {
+            SubAgentKey = id.ToString(),
+            Task = "read it"
+        }, CancellationToken.None);
+
+        AssertEx.Equal("sub-agent-result", result);
+        // The non-gated tool survives…
+        AssertEx.Contains(harness.ChatClient.LastToolNames, "list_files");
+        // …but the approval-required tool is dropped — the child never carries a tool it cannot complete.
+        AssertEx.False(harness.ChatClient.LastToolNames.Any(name => name == "read_file"),
+            "an approval-required tool must be stripped from a sub-agent child (no HITL route).");
+        // The drop is observable: a Warning names the dropped tool.
+        AssertEx.Contains(harness.LogText, "approval-required");
+        AssertEx.Contains(harness.LogText, "read_file");
+    }
+
+    [Test]
     public async Task Spawn_WhenModelIdOnly_ChildIsToolLess()
     {
         using var harness = new Harness();
@@ -495,6 +528,7 @@ public sealed class SubAgentSpawnServiceTests
         private readonly IModelCapabilityResolver _modelCapabilityResolver = Substitute.For<IModelCapabilityResolver>();
         private readonly FakeAgentInstructionProvider _instructionProvider = new();
         private readonly IAgentToolRegistry _toolRegistry = new FakeAgentToolRegistry();
+        private readonly CapturingLogger<SubAgentSpawnService> _logger = new();
         private bool _reservationDisposed;
 
         public Harness(TimeSpan? delayBeforeResponse = null)
@@ -519,6 +553,9 @@ public sealed class SubAgentSpawnServiceTests
         public IAgentDefinitionResolver Resolver => _resolver;
 
         public bool ReservationDisposed => _reservationDisposed;
+
+        // All log text captured from the SUT, so a test can assert the dropped-approval-tool Warning (GPTAUD-01).
+        public string LogText => _logger.AllText;
 
         // Registers a bound sub-agent profile pinned to a SPECIFIC model (e.g. a cloud deployment) so an R1 test can
         // prove the spawn resolves the child's tool offer through the shared resolver keyed on that pinned model — the
@@ -612,6 +649,52 @@ public sealed class SubAgentSpawnServiceTests
             return id;
         }
 
+        // Registers a profile whose resolved AllowedTools carry MIXED approval flags: the gated tool's offer requires
+        // approval (so InvocationToolResolver wraps it in ApprovalRequiredAIFunction), the ungated one does not. The
+        // child-tool curation must drop the wrapped one and keep the plain one (GPTAUD-01). Both names must exist in the
+        // fake catalog so they resolve to executables.
+        public Guid RegisterProfileWithMixedApprovalTools(string name, string gatedTool, string ungatedTool)
+        {
+            var id = Guid.NewGuid();
+            var definition = new AgentDefinitionRecord(id,
+                name,
+                Description: null,
+                Instructions: "child instructions",
+                ModelProfile: Model,
+                ReasoningEffort: null,
+                Kind: AgentDefinitionKind.Single,
+                AllowedToolNames: [gatedTool, ungatedTool],
+                ToolApprovals: new Dictionary<string, bool>(StringComparer.Ordinal),
+                OrchestrationTopologyJson: null,
+                Version: 1,
+                CreatedAtUtc: 0,
+                UpdatedAtUtc: 0);
+            _definitionStore.GetByIdAsync(id, Arg.Any<CancellationToken>()).Returns(definition);
+
+            var offered = new[]
+            {
+                new AllowedToolDto
+                {
+                    Id = Guid.NewGuid(),
+                    Name = gatedTool,
+                    Location = ToolLocation.ClientLocal,
+                    ParameterSchema = "{\"type\":\"object\"}",
+                    RequiresApproval = true
+                },
+                new AllowedToolDto
+                {
+                    Id = Guid.NewGuid(),
+                    Name = ungatedTool,
+                    Location = ToolLocation.ClientLocal,
+                    ParameterSchema = "{\"type\":\"object\"}",
+                    RequiresApproval = false
+                }
+            };
+            _resolver.ResolveAsync(id, Arg.Any<string?>(), Arg.Any<string?>(), Arg.Any<bool>(), Arg.Any<bool>(), Arg.Any<bool>(), Arg.Any<CancellationToken>())
+                     .Returns(new ResolvedAgentRuntime("child instructions", offered, Model, null, 1, id, name, []));
+            return id;
+        }
+
         public void AllowLocal()
         {
             // Ownership of the reservation transfers to the SUT, which disposes it on child exit (the assertion the
@@ -666,7 +749,7 @@ public sealed class SubAgentSpawnServiceTests
                 _instructionProvider,
                 _modelCapabilityResolver,
                 NullLoggerFactory.Instance,
-                NullLogger<SubAgentSpawnService>.Instance);
+                _logger);
         }
 
         public void Dispose()
