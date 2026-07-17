@@ -198,6 +198,155 @@ public sealed class ToolInvocationObservabilityChatClientTests
                         && string.Equals(activity.CallId, callId, StringComparison.Ordinal));
     }
 
+    [Test]
+    public async Task GetStreamingResponseAsync_WhenResultFollowsCall_EmitsSuccessOutcomeSpanWithMatchingCallId()
+    {
+        var callId = $"call-{Guid.NewGuid():N}";
+        using var innerClient = new CallThenResultChatClient(callId, "approve-job", result: "done", exception: null);
+        var logger = new ListLogger<ToolInvocationObservabilityChatClient>();
+        using var sut = new ToolInvocationObservabilityChatClient(innerClient, logger);
+        var completed = new List<(string? CallId, string? Outcome, double? DurationMs)>();
+
+        using var listener = new ActivityListener
+        {
+            ShouldListenTo = source => source.Name == "XE.LocalAiEngine.AI.Agent",
+            Sample = static (ref _) => ActivitySamplingResult.AllDataAndRecorded,
+            SampleUsingParentId = static (ref _) => ActivitySamplingResult.AllDataAndRecorded,
+            ActivityStopped = activity =>
+            {
+                if (string.Equals(activity.OperationName, "AgentRun.ToolCallCompleted", StringComparison.Ordinal))
+                {
+                    completed.Add((activity.GetTagItem("tool.call_id")?.ToString(),
+                        activity.GetTagItem("tool.outcome")?.ToString(),
+                        activity.GetTagItem("tool.duration_ms") as double?));
+                }
+            }
+        };
+
+        ActivitySource.AddActivityListener(listener);
+
+        using (var probeSource = new ActivitySource("XE.LocalAiEngine.AI.Agent"))
+        {
+            using var probeActivity = probeSource.StartActivity("Probe");
+            AssertEx.NotNull(probeActivity, "Expected ActivityListener probe activity to be created.");
+        }
+
+        await foreach (var _ in sut.GetStreamingResponseAsync([new ChatMessage(ChatRole.User, "hello")]))
+        {
+            GC.KeepAlive(_);
+        }
+
+        AssertEx.ContainsSingle(completed, entry => string.Equals(entry.CallId, callId, StringComparison.Ordinal)
+                                                    && string.Equals(entry.Outcome, "success", StringComparison.Ordinal)
+                                                    && entry.DurationMs is >= 0);
+    }
+
+    [Test]
+    public async Task GetStreamingResponseAsync_WhenResultCarriesException_EmitsErrorOutcomeSpan()
+    {
+        var callId = $"call-{Guid.NewGuid():N}";
+        using var innerClient = new CallThenResultChatClient(callId, "approve-job", result: null, exception: new InvalidOperationException("boom"));
+        var logger = new ListLogger<ToolInvocationObservabilityChatClient>();
+        using var sut = new ToolInvocationObservabilityChatClient(innerClient, logger);
+        var completed = new List<(string? CallId, string? Outcome)>();
+
+        using var listener = new ActivityListener
+        {
+            ShouldListenTo = source => source.Name == "XE.LocalAiEngine.AI.Agent",
+            Sample = static (ref _) => ActivitySamplingResult.AllDataAndRecorded,
+            SampleUsingParentId = static (ref _) => ActivitySamplingResult.AllDataAndRecorded,
+            ActivityStopped = activity =>
+            {
+                if (string.Equals(activity.OperationName, "AgentRun.ToolCallCompleted", StringComparison.Ordinal))
+                {
+                    completed.Add((activity.GetTagItem("tool.call_id")?.ToString(), activity.GetTagItem("tool.outcome")?.ToString()));
+                }
+            }
+        };
+
+        ActivitySource.AddActivityListener(listener);
+
+        using (var probeSource = new ActivitySource("XE.LocalAiEngine.AI.Agent"))
+        {
+            using var probeActivity = probeSource.StartActivity("Probe");
+            AssertEx.NotNull(probeActivity, "Expected ActivityListener probe activity to be created.");
+        }
+
+        await foreach (var _ in sut.GetStreamingResponseAsync([new ChatMessage(ChatRole.User, "hello")]))
+        {
+            GC.KeepAlive(_);
+        }
+
+        AssertEx.ContainsSingle(completed, entry => string.Equals(entry.CallId, callId, StringComparison.Ordinal)
+                                                    && string.Equals(entry.Outcome, "error", StringComparison.Ordinal));
+        // The raw result telemetry must never leak the exception message.
+        AssertEx.True(logger.Messages.TrueForAll(message => !message.Contains("boom", StringComparison.Ordinal)),
+            "The tool result span/log must never carry the raw exception content.");
+    }
+
+    private sealed class CallThenResultChatClient : IChatClient
+    {
+        private readonly string _callId;
+        private readonly string _toolName;
+        private readonly object? _result;
+        private readonly Exception? _exception;
+
+        public CallThenResultChatClient(string callId, string toolName, object? result, Exception? exception)
+        {
+            _callId = callId ?? throw new ArgumentNullException(nameof(callId));
+            _toolName = toolName ?? throw new ArgumentNullException(nameof(toolName));
+            _result = result;
+            _exception = exception;
+        }
+
+        public Task<ChatResponse> GetResponseAsync(IEnumerable<ChatMessage> messages, ChatOptions? options = null, CancellationToken cancellationToken = default)
+        {
+            throw new NotSupportedException();
+        }
+
+        public async IAsyncEnumerable<ChatResponseUpdate> GetStreamingResponseAsync(IEnumerable<ChatMessage> messages,
+            ChatOptions? options = null,
+            [EnumeratorCancellation]
+            CancellationToken cancellationToken = default)
+        {
+            await Task.Yield();
+            yield return new ChatResponseUpdate
+            {
+                Contents =
+                [
+                    new FunctionCallContent(_callId, _toolName, new Dictionary<string, object?>
+                    {
+                        ["decision"] = true
+                    })
+                ]
+            };
+
+            // The function-invocation middleware would execute the tool below this hop; simulate the result update it
+            // then streams back so the observability client can correlate and time the call.
+            await Task.Yield();
+            yield return new ChatResponseUpdate
+            {
+                Contents =
+                [
+                    new FunctionResultContent(_callId, _result)
+                    {
+                        Exception = _exception
+                    }
+                ]
+            };
+        }
+
+        public object? GetService(Type serviceType, object? serviceKey = null)
+        {
+            return serviceType == typeof(IChatClient) ? this : null;
+        }
+
+        public void Dispose()
+        {
+            GC.SuppressFinalize(this);
+        }
+    }
+
     private sealed class FakeChatClient : IChatClient
     {
         private readonly string _callId;
