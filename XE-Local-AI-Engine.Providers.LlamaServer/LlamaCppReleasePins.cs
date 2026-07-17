@@ -138,6 +138,12 @@ public static class LlamaCppReleasePins
     /// <summary>
     ///     Resolves the pinned asset for the given OS/arch/variant, falling back to the CPU floor when no GPU prebuilt
     ///     exists for the host. Returns <see langword="null" /> only when even the CPU floor is unavailable.
+    ///     <para>
+    ///         <b>Caution:</b> a GPU-variant request whose (os, arch, variant) has no prebuilt (e.g. Linux CUDA) returns
+    ///         the CPU floor pin here — a non-null CPU archive. Serving that as a GPU-variant binary would mislabel a CPU
+    ///         build (the supervisor then emits GPU placement flags against it). A caller acquiring a GPU variant must use
+    ///         <see cref="TryResolveExact" /> and treat a null result as "no prebuilt", never fall through to this floor.
+    ///     </para>
     /// </summary>
     public static LlamaCppAssetPin? Resolve(OSPlatform os, Architecture arch, GpuVariant variant)
     {
@@ -148,5 +154,17 @@ public static class LlamaCppReleasePins
 
         // Fall back to the universal CPU floor for the host OS/arch.
         return Pins.TryGetValue((os, arch, GpuVariant.Cpu), out var cpuPin) ? cpuPin : null;
+    }
+
+    /// <summary>
+    ///     Resolves the pin for EXACTLY the given (os, arch, variant) with NO CPU-floor fallback — returns
+    ///     <see langword="null" /> when no genuine prebuilt asset exists for that precise combination. This is the
+    ///     acquisition path for a GPU variant (GPTAUD-09b): unlike <see cref="Resolve" />, it never substitutes the CPU
+    ///     archive, so a Linux CUDA request (which has no upstream prebuilt) resolves to null and the binary manager fails
+    ///     with the sanitized "no prebuilt" error instead of serving a CPU build stamped as CUDA.
+    /// </summary>
+    public static LlamaCppAssetPin? TryResolveExact(OSPlatform os, Architecture arch, GpuVariant variant)
+    {
+        return Pins.TryGetValue((os, arch, variant), out var pin) ? pin : null;
     }
 }

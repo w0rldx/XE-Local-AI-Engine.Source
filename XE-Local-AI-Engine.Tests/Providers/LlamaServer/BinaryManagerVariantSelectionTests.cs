@@ -85,6 +85,57 @@ public sealed class BinaryManagerVariantSelectionTests
     }
 
     [Test]
+    public void ResolveExact_LinuxCuda_ReturnsNull_NoCpuFloorFallback()
+    {
+        // GPTAUD-09b: unlike Resolve(), the exact resolve never substitutes the CPU floor — Linux has no CUDA prebuilt,
+        // so it returns null and the binary manager fails loud rather than serving a CPU archive stamped as CUDA.
+        var pin = LlamaCppReleasePins.TryResolveExact(OSPlatform.Linux, Architecture.X64, GpuVariant.Cuda);
+
+        AssertEx.Null(pin);
+    }
+
+    [Test]
+    public void ResolveExact_WindowsCuda_ReturnsGenuineCudaPin()
+    {
+        var pin = LlamaCppReleasePins.TryResolveExact(OSPlatform.Windows, Architecture.X64, GpuVariant.Cuda);
+
+        AssertEx.NotNull(pin);
+        AssertEx.Contains(pin!.AssetName, "win-cuda");
+    }
+
+    [Test]
+    public void ResolveExact_LinuxCpu_ReturnsCpuPin()
+    {
+        // The CPU variant's exact pin IS the CPU floor, so a CPU request still resolves.
+        var pin = LlamaCppReleasePins.TryResolveExact(OSPlatform.Linux, Architecture.X64, GpuVariant.Cpu);
+
+        AssertEx.NotNull(pin);
+        AssertEx.Contains(pin!.AssetName, "ubuntu");
+    }
+
+    [Test]
+    public async Task EnsureBinary_LinuxCudaNoPrebuilt_Throws_NeverServesCpuArchiveAsCuda()
+    {
+        // GPTAUD-09b: a Cuda request on Linux/x64 (no genuine CUDA prebuilt, no managed source build) must fail loud, even
+        // when a binary is cached under the requested "cuda" variant dir — before the fix EnsureBinary resolved the CPU
+        // floor pin and returned that cached CPU archive as a LlamaBinary with Variant=Cuda, which the supervisor would
+        // then launch with GPU placement flags. The exact-resolve now throws BEFORE any cache/download lookup.
+        using var cache = new TempCacheDir();
+        var cpuPin = LlamaCppReleasePins.Resolve(OSPlatform.Linux, Architecture.X64, GpuVariant.Cpu)!;
+        // Seed a CPU server under the CUDA variant dir — the exact path a pre-fix cache hit would have served as Cuda.
+        SeedCachedServer(cache.Path, LlamaCppReleasePins.PinnedTag, "cuda", cpuPin.ServerRelativePath);
+
+        using var handler = new ThrowingHandler();
+        using var http = new HttpClient(handler, disposeHandler: false);
+        var manager = new LlamaCppBinaryManager(http, cache.Path, LlamaCppReleasePins.PinnedTag, OSPlatform.Linux, Architecture.X64);
+
+        var ex = await AssertEx.ThrowsAsync<LlamaRuntimeException>(() =>
+            manager.EnsureBinaryAsync(GpuVariant.Cuda, CancellationToken.None));
+
+        AssertEx.Contains(ex.Message, "prebuilt", StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Test]
     public async Task EnsureBinary_PinnedTag_MarksBinaryAsPinnedFallback()
     {
         using var cache = new TempCacheDir();
