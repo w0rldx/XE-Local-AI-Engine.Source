@@ -308,7 +308,7 @@ public sealed class GgufStoreTests
         var download = new HfDownloadClient(http, resolveHttp, Infra.NoTokenStore(), Infra.AbundantSpace(), options, NullLogger<HfDownloadClient>.Instance, metrics);
 
         var destination = dir.FilePath(Infra.FileName);
-        _ = await download.DownloadAsync(Infra.RepoId, Infra.FileName, Infra.Revision, Infra.ModelName, destination, ModelBytes.Length, progress: null, CancellationToken.None);
+        _ = await download.DownloadAsync(Infra.RepoId, Infra.FileName, Infra.Revision, Infra.ModelName, destination, ModelBytes.Length, expectedSha256: null, progress: null, CancellationToken.None);
 
         // The idle stall on attempt 0 counted as one transient failure; attempt 1 completed the file.
         AssertEx.Equal(expected: 2, handler.CallCount);
@@ -390,6 +390,82 @@ public sealed class GgufStoreTests
         AssertEx.NotNull(handle.Sha256);
         AssertEx.Equal(correctSha, handle.Sha256!);
         AssertEx.True(File.Exists(handle.LocalPath));
+    }
+
+    [Test]
+    public async Task GgufStore_VerifiesAgainstDiscoveryDigest_WhenNoResolveOid()
+    {
+        using var dir = new GgufStoreTestInfrastructure.TempModelsDir();
+        var options = Infra.Options(dir.Path);
+        var correctSha = Infra.Sha256Upper(ModelBytes);
+        // Neither the resolve probe nor the byte GET expose an X-Linked-Etag; the discovery digest is the sole integrity
+        // source and MUST be used to verify the stream (GPTAUD-20).
+        using var handler = new GgufStoreTestInfrastructure.ScriptedHandler((_, _) => FullDownload(ModelBytes));
+        using var http = new HttpClient(handler);
+        using var registry = Infra.Registry(options);
+        var download = Infra.DownloadClient(http, Infra.NoTokenStore(), Infra.AbundantSpace(), options);
+        var discovery = Infra.DiscoveryWith(Infra.RepoFile(Infra.FileName, Infra.Quant, ModelBytes.Length, correctSha));
+        var store = Infra.Store(download, discovery, registry, options);
+
+        var handle = await store.EnsureModelAsync(new GgufModelRequest
+        {
+            RepoId = Infra.RepoId
+        }, progress: null, CancellationToken.None);
+
+        AssertEx.NotNull(handle.Sha256);
+        AssertEx.Equal(correctSha, handle.Sha256!);
+        AssertEx.True(File.Exists(handle.LocalPath));
+    }
+
+    [Test]
+    public async Task GgufStore_DiscoveryDigestMismatch_RejectsDownload()
+    {
+        using var dir = new GgufStoreTestInfrastructure.TempModelsDir();
+        var options = Infra.Options(dir.Path);
+        // The discovery digest does NOT match the streamed bytes, and no OID is on the wire → the fallback verification
+        // must reject the download (GPTAUD-20).
+        var wrongSha = Infra.Sha256Upper(Encoding.UTF8.GetBytes("different-content"));
+        using var handler = new GgufStoreTestInfrastructure.ScriptedHandler((_, _) => FullDownload(ModelBytes));
+        using var http = new HttpClient(handler);
+        using var registry = Infra.Registry(options);
+        var download = Infra.DownloadClient(http, Infra.NoTokenStore(), Infra.AbundantSpace(), options);
+        var discovery = Infra.DiscoveryWith(Infra.RepoFile(Infra.FileName, Infra.Quant, ModelBytes.Length, wrongSha));
+        var store = Infra.Store(download, discovery, registry, options);
+
+        var exception = await AssertEx.ThrowsAsync<HuggingFaceDownloadException>(() => store.EnsureModelAsync(new GgufModelRequest
+        {
+            RepoId = Infra.RepoId
+        }, progress: null, CancellationToken.None));
+
+        AssertEx.Equal(HuggingFaceDownloadFailure.HashMismatch, exception.Reason);
+        AssertEx.False(File.Exists(dir.FilePath(Infra.FileName)));
+        AssertEx.Empty(await registry.ListAsync(CancellationToken.None));
+    }
+
+    [Test]
+    public async Task GgufStore_NoShaAnywhere_PersistsNullSha_NotDiscoveryValue()
+    {
+        using var dir = new GgufStoreTestInfrastructure.TempModelsDir();
+        var options = Infra.Options(dir.Path);
+        // No OID on the resolve probe, no X-Linked-Etag on the GET, and no discovery digest → nothing to verify, so the
+        // persisted sha256 MUST be null rather than an unverified echo (GPTAUD-20).
+        using var handler = new GgufStoreTestInfrastructure.ScriptedHandler((_, _) => FullDownload(ModelBytes));
+        using var http = new HttpClient(handler);
+        using var registry = Infra.Registry(options);
+        var download = Infra.DownloadClient(http, Infra.NoTokenStore(), Infra.AbundantSpace(), options);
+        var discovery = Infra.DiscoveryWith(Infra.RepoFile(Infra.FileName, Infra.Quant, ModelBytes.Length));
+        var store = Infra.Store(download, discovery, registry, options);
+
+        var handle = await store.EnsureModelAsync(new GgufModelRequest
+        {
+            RepoId = Infra.RepoId
+        }, progress: null, CancellationToken.None);
+
+        AssertEx.Null(handle.Sha256);
+        AssertEx.True(File.Exists(handle.LocalPath));
+
+        var stored = await registry.ListAsync(CancellationToken.None);
+        AssertEx.Null(stored.Single().Sha256);
     }
 
     [Test]
