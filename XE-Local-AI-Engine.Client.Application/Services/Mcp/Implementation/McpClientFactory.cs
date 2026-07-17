@@ -42,23 +42,37 @@ internal sealed class McpClientFactory : IMcpClientFactory
 
     private IClientTransport BuildStdioTransport(McpServerRecord record)
     {
+        return new StdioClientTransport(BuildStdioTransportOptions(record), _loggerFactory);
+    }
+
+    // Internal for the transport-hardening test (GPTAUD-22): asserts the built options never inherit the parent env.
+    internal static StdioClientTransportOptions BuildStdioTransportOptions(McpServerRecord record)
+    {
         if (string.IsNullOrWhiteSpace(record.Command))
         {
             throw new InvalidOperationException("A stdio MCP server requires a command.");
         }
 
-        var transportOptions = new StdioClientTransportOptions
+        // Never let a stdio MCP server inherit the node's full process environment — it can hold secrets such as
+        // XE_NODE_SQLITE_KEY when env-provisioned. ModelContextProtocol 1.4.0 defaults InheritEnvironmentVariables to
+        // true; force it off and seed only the SDK's minimal default set (PATH/HOME/etc.), then overlay the per-server
+        // configured variables on top. (Scope is the MCP transport only; the pinned native llama/sd launchers are
+        // deliberately NOT scrubbed here, per docs/agent-knowledge §runtime.)
+        var environment = StdioClientTransportOptions.GetDefaultEnvironmentVariables();
+        foreach (var pair in record.Environment)
+        {
+            environment[pair.Key] = pair.Value;
+        }
+
+        return new StdioClientTransportOptions
         {
             Name = record.Name,
             Command = record.Command,
             Arguments = [.. record.Arguments],
             WorkingDirectory = string.IsNullOrWhiteSpace(record.WorkingDirectory) ? null : record.WorkingDirectory,
-            EnvironmentVariables = record.Environment.Count == 0
-                ? null
-                : record.Environment.ToDictionary(static pair => pair.Key, static pair => (string?)pair.Value, StringComparer.Ordinal)
+            InheritEnvironmentVariables = false,
+            EnvironmentVariables = environment
         };
-
-        return new StdioClientTransport(transportOptions, _loggerFactory);
     }
 
     private IClientTransport BuildHttpTransport(McpServerRecord record)

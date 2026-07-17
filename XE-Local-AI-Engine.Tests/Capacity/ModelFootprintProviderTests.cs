@@ -5,6 +5,7 @@ using XE_Local_AI_Engine.Client.Services.Capacity;
 using XE_Local_AI_Engine.Client.Services.ModelFit.Fit;
 using XE_Local_AI_Engine.Providers.Abstractions.Capabilities;
 using XE_Local_AI_Engine.Providers.Abstractions.Gguf;
+using XE_Local_AI_Engine.Providers.LlamaServer.Options;
 using XE_Local_AI_Engine.Tests.Testing;
 
 /// <summary>
@@ -113,6 +114,53 @@ public sealed class ModelFootprintProviderTests
         var footprint = await provider.ResolveFootprintAsync(Model, profile, CancellationToken.None);
 
         AssertEx.False(footprint.IsKnown, "no param count and no file size leaves nothing to estimate weights from.");
+    }
+
+    [Test]
+    public async Task Footprint_SizesKvAgainstLaunchPolicyChatDefault_NotAStaleLowerConstant()
+    {
+        // GPTAUD-08b: a big-context model is capped at the ONE launch-policy chat default (16384), the same window a
+        // chat spawn actually launches with — not a separate lower constant. Sizing KV against a smaller window than the
+        // runtime launches under-admits when the q8_0→f16 KV fallback fires (resident KV is 16384×f16), risking OOM.
+        var profile = GpuProfile(64 * Gb);
+        var facts = new GgufModelFootprintFacts("Q4_K_M",
+            FileSizeBytes: 2 * Gb,
+            ParamCount: 1_000_000_000L,
+            BlockCount: 32,
+            AttentionHeadCount: 32,
+            AttentionHeadCountKV: 8,
+            EmbeddingLength: 4096,
+            ContextLength: 262144); // huge train context ⇒ capped at the launch-policy chat default.
+        var provider = BuildProvider(facts);
+
+        var footprint = await provider.ResolveFootprintAsync(Model, profile, CancellationToken.None);
+
+        var expectedAtLaunchDefault = new MemoryFitEstimator().Estimate("Q4_K_M",
+            paramCount: 1_000_000_000L,
+            fileSizeBytes: 2 * Gb,
+            blockCount: 32,
+            attentionHeadCountKV: 8,
+            embeddingLength: 4096,
+            attentionHeadCount: 32,
+            ctxTarget: LlamaServerLaunchPolicyOptions.DefaultChatContextTokens,
+            profile,
+            kvCacheQuantized: false);
+
+        AssertEx.Equal(expectedAtLaunchDefault.EstimatedBytes, footprint.EstimatedBytes);
+
+        // Sanity: the launched default is larger than the old 8192 constant, so the KV term (and total) genuinely grew.
+        var atOldConstant = new MemoryFitEstimator().Estimate("Q4_K_M",
+            paramCount: 1_000_000_000L,
+            fileSizeBytes: 2 * Gb,
+            blockCount: 32,
+            attentionHeadCountKV: 8,
+            embeddingLength: 4096,
+            attentionHeadCount: 32,
+            ctxTarget: 8192,
+            profile,
+            kvCacheQuantized: false);
+        AssertEx.True(footprint.EstimatedBytes > atOldConstant.EstimatedBytes,
+            "sizing KV against the 16384 launch default must count more KV than the old 8192 constant.");
     }
 
     [Test]

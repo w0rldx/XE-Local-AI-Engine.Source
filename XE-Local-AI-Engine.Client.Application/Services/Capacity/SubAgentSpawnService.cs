@@ -35,9 +35,9 @@ using XE_Local_AI_Engine.Providers.LlamaServer;
 ///         Depth cap (≤ 2) is enforced two ways: (1) PRIMARY, STRUCTURAL — the child's tool set has
 ///         <c>spawn_subagent</c> filtered out UNCONDITIONALLY, so a child can never spawn; (2) defense-in-depth —
 ///         <see cref="SpawnContext.Depth" /> ≥ 1 short-circuits to a sanitized reject. A profile-bound child inherits its
-///         own definition's curated tools (offer ∩ AllowedToolNames, minus <c>spawn_subagent</c>); a model-id-only child
-///         (no profile, no AllowedToolNames) is tool-less. Every expected rejection is a sanitized string, not an
-///         exception.
+///         own definition's curated tools (offer ∩ AllowedToolNames, minus <c>spawn_subagent</c> AND any approval-gated
+///         tool — a child has no HITL route to answer an approval request); a model-id-only child (no profile, no
+///         AllowedToolNames) is tool-less. Every expected rejection is a sanitized string, not an exception.
 ///     </para>
 /// </summary>
 internal sealed class SubAgentSpawnService : ISubAgentSpawnService
@@ -320,12 +320,39 @@ internal sealed class SubAgentSpawnService : ISubAgentSpawnService
             _mcpToolRegistry,
             _logger);
 
-        // STRUCTURAL DEPTH CAP: the child must never carry the spawn tool, whatever its profile lists.
-        var curated = offeredExecutables
-                      .Where(static tool => !string.Equals(tool.Name, SpawnSubAgentToolDefinition.ToolName, StringComparison.Ordinal))
-                      .ToArray();
+        // Two unconditional strips, both structural — a curated child tool is never one of these:
+        //   (1) DEPTH CAP: spawn_subagent, so a child can never spawn (mirrored by the runtime Depth guard).
+        //   (2) NO HITL ROUTE (GPTAUD-01): any ApprovalRequiredAIFunction. A child runs as an agent-as-tool via
+        //       AsAIFunction, which invokes with no per-run options and no approval round-trip — an approval-gated tool
+        //       would surface a ToolApprovalRequestContent the child can never answer, silently failing every call to it.
+        //       The tools are DROPPED (and warned, naming them), never unwrapped to auto-execute — unwrapping would
+        //       bypass the approval control the offer/registry/MCP policy asserted.
+        var curated = new List<AITool>(offeredExecutables.Count);
+        List<string>? droppedApprovalTools = null;
+        foreach (var tool in offeredExecutables)
+        {
+            if (string.Equals(tool.Name, SpawnSubAgentToolDefinition.ToolName, StringComparison.Ordinal))
+            {
+                continue;
+            }
 
-        return curated.Length > 0 ? curated : null;
+            if (tool is ApprovalRequiredAIFunction)
+            {
+                (droppedApprovalTools ??= []).Add(tool.Name);
+                continue;
+            }
+
+            curated.Add(tool);
+        }
+
+        if (droppedApprovalTools is { Count: > 0 })
+        {
+            _logger.LogWarning("Dropped {DroppedCount} approval-required tool(s) from a sub-agent child ({DroppedTools}); a spawned child has no human-in-the-loop approval route.",
+                droppedApprovalTools.Count,
+                string.Join(", ", droppedApprovalTools));
+        }
+
+        return curated.Count > 0 ? curated : null;
     }
 
     // Builds a MAF AgentSkillsProvider from the resolved node skills and attaches it to the child agent's options,

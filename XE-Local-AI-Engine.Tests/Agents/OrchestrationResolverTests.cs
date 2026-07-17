@@ -14,6 +14,7 @@ using XE_Local_AI_Engine.Client.Services.Chat;
 using XE_Local_AI_Engine.Client.Services.Chat.Implementation;
 using XE_Local_AI_Engine.Tests.Testing;
 using XE_Local_AI_Engine.Tests.Testing.Builders;
+using XE_Local_AI_Engine.Tests.Testing.Mocks;
 
 public sealed class OrchestrationResolverTests
 {
@@ -162,6 +163,7 @@ public sealed class OrchestrationResolverTests
             Options.Create(new PlaybookRetrievalOptions()),
             runtimeSettings,
             capabilityResolver,
+            new FakeAgentInstructionProvider(),
             NullLogger<OrchestrationResolver>.Instance);
         SeedParticipants(store, triage, specialist);
 
@@ -262,6 +264,7 @@ public sealed class OrchestrationResolverTests
             Options.Create(new PlaybookRetrievalOptions()),
             runtimeSettings,
             capabilityResolver,
+            new FakeAgentInstructionProvider(),
             NullLogger<OrchestrationResolver>.Instance);
         SeedParticipants(store, triage, specialist);
 
@@ -423,6 +426,102 @@ public sealed class OrchestrationResolverTests
         AssertEx.Equal(expected: 8, resolved!.Spec.MaxTurnsPerAgent);
     }
 
+    [Test]
+    public async Task ResolveAsync_ComposesBaseScaffoldAheadOfParticipantInstructions()
+    {
+        // GPTAUD-03a: a participant prompt must be composed with the base scaffold exactly like a direct agent send
+        // (AgentDefinitionResolver.ComposePromptAsync), not returned raw. Before this a participant ran with NO scaffold.
+        const string scaffold = "You are a locally-run agent. Ground every claim; use tools when they help.";
+        var triage = CreateDefinition("Triage", modelProfile: ToolCapableModel, allowedTools: ["GetCurrentTime"]);
+        var specialist = CreateDefinition("Specialist", modelProfile: ToolCapableModel, allowedTools: ["GetCurrentTime"]);
+        var orchestrator = CreateOrchestrator(ToolCapableModel, triage, [triage, specialist]);
+        var resolver = CreateResolverWithScaffold(out var store, scaffold, OfferTool("GetCurrentTime"));
+        SeedParticipants(store, triage, specialist);
+
+        var resolved = await resolver.ResolveAsync(orchestrator, ToolCapableModel).ConfigureAwait(false);
+
+        AssertEx.NotNull(resolved);
+        var specialistSpec = resolved!.Spec.Participants.Single(participant => participant.Key == specialist.Id.ToString("D"));
+        AssertEx.True(specialistSpec.Instructions.StartsWith(scaffold, StringComparison.Ordinal),
+            "a participant prompt must be prefixed with the base scaffold, like a direct agent send.");
+        AssertEx.Contains(specialistSpec.Instructions, "Instructions for Specialist");
+    }
+
+    [Test]
+    public async Task ResolveAsync_WhenParticipantPlaybookEnabled_ComposesScaffoldAheadOfPlaybookPersona()
+    {
+        // The scaffold is prepended AND the per-participant playbook fold still applies — composition order is scaffold,
+        // then persona-with-playbook, exactly the single-agent shape.
+        const string scaffold = "SCAFFOLD-LINE";
+        var triage = CreateDefinition("Triage", modelProfile: ToolCapableModel, allowedTools: ["GetCurrentTime"]);
+        var specialist = CreateDefinition("Specialist", modelProfile: ToolCapableModel, allowedTools: ["GetCurrentTime"], playbookEnabled: true);
+        var orchestrator = CreateOrchestrator(ToolCapableModel, triage, [triage, specialist]);
+        var resolver = CreateResolverWithScaffold(out var store, out var playbookStore, scaffold, OfferTool("GetCurrentTime"));
+        SeedParticipants(store, triage, specialist);
+        playbookStore.ListEnabledByAgentAsync(specialist.Id, Arg.Any<CancellationToken>())
+                     .Returns(Task.FromResult<IReadOnlyList<PlaybookActionRecord>>([
+                         EnabledAction(specialist.Id, "Stay terse.", priority: 1)
+                     ]));
+
+        var resolved = await resolver.ResolveAsync(orchestrator, ToolCapableModel).ConfigureAwait(false);
+
+        AssertEx.NotNull(resolved);
+        var specialistSpec = resolved!.Spec.Participants.Single(participant => participant.Key == specialist.Id.ToString("D"));
+        AssertEx.Equal("SCAFFOLD-LINE\n\nInstructions for Specialist\n\n## Operating Playbook\n- Stay terse.", specialistSpec.Instructions);
+    }
+
+    [Test]
+    public async Task ResolveAsync_WhenParticipantDisablesBaseScaffold_KeepsPersonaOnly()
+    {
+        // A participant with DisableBaseScaffold set skips the prepend — byte-identical to the persona-only path, exactly
+        // as AgentDefinitionResolver honors the flag for a direct send.
+        const string scaffold = "SCAFFOLD-LINE";
+        var triage = CreateDefinition("Triage", modelProfile: ToolCapableModel, allowedTools: ["GetCurrentTime"]);
+        var specialist = CreateDefinition("Specialist", modelProfile: ToolCapableModel, allowedTools: ["GetCurrentTime"], disableBaseScaffold: true);
+        var orchestrator = CreateOrchestrator(ToolCapableModel, triage, [triage, specialist]);
+        var resolver = CreateResolverWithScaffold(out var store, scaffold, OfferTool("GetCurrentTime"));
+        SeedParticipants(store, triage, specialist);
+
+        var resolved = await resolver.ResolveAsync(orchestrator, ToolCapableModel).ConfigureAwait(false);
+
+        AssertEx.NotNull(resolved);
+        var specialistSpec = resolved!.Spec.Participants.Single(participant => participant.Key == specialist.Id.ToString("D"));
+        AssertEx.Equal("Instructions for Specialist", specialistSpec.Instructions);
+    }
+
+    private static OrchestrationResolver CreateResolverWithScaffold(out IAgentDefinitionStore store, string scaffold, params AllowedToolDto[] offeredTools)
+    {
+        return CreateResolverWithScaffold(out store, out _, scaffold, offeredTools);
+    }
+
+    // Mirrors CreateResolver but wires an instruction provider with a NON-empty base scaffold, so the scaffold-composition
+    // tests observe the prepend the empty-scaffold default (used everywhere else) treats as a no-op.
+    private static OrchestrationResolver CreateResolverWithScaffold(out IAgentDefinitionStore store,
+        out IPlaybookActionStore playbookStore,
+        string scaffold,
+        params AllowedToolDto[] offeredTools)
+    {
+        store = Substitute.For<IAgentDefinitionStore>();
+        playbookStore = Substitute.For<IPlaybookActionStore>();
+        playbookStore.ListEnabledByAgentAsync(Arg.Any<Guid>(), Arg.Any<CancellationToken>())
+                     .Returns(Task.FromResult<IReadOnlyList<PlaybookActionRecord>>([]));
+        var offerProvider = Substitute.For<ILocalToolOfferProvider>();
+        offerProvider.GetOfferedTools(Arg.Any<string?>()).Returns(offeredTools);
+        var runtimeSettings = StubNodeRuntimeSettings.Create().WithToolCapableModels(ToolCapableModel).Build();
+        return new OrchestrationResolver(store,
+            playbookStore,
+            offerProvider,
+            new LexicalPlaybookRetrievalRanker(),
+            Options.Create(new PlaybookRetrievalOptions()),
+            runtimeSettings,
+            NonThinkingCapabilityResolver(),
+            new FakeAgentInstructionProvider
+            {
+                BaseScaffold = scaffold
+            },
+            NullLogger<OrchestrationResolver>.Instance);
+    }
+
     private static OrchestrationResolver CreateResolver(out IAgentDefinitionStore store, params AllowedToolDto[] offeredTools)
     {
         return CreateResolver(out store, out _, offeredTools);
@@ -464,6 +563,7 @@ public sealed class OrchestrationResolverTests
             retrievalOptions,
             runtimeSettings,
             capabilityResolver ?? NonThinkingCapabilityResolver(),
+            new FakeAgentInstructionProvider(),
             NullLogger<OrchestrationResolver>.Instance);
     }
 
@@ -506,7 +606,7 @@ public sealed class OrchestrationResolverTests
             RetrievalThreshold = threshold,
             TopK = topK
         });
-        return new OrchestrationResolver(store, playbookStore, offerProvider, ranker, retrievalOptions, runtimeSettings, NonThinkingCapabilityResolver(), NullLogger<OrchestrationResolver>.Instance);
+        return new OrchestrationResolver(store, playbookStore, offerProvider, ranker, retrievalOptions, runtimeSettings, NonThinkingCapabilityResolver(), new FakeAgentInstructionProvider(), NullLogger<OrchestrationResolver>.Instance);
     }
 
     private static void SeedParticipants(IAgentDefinitionStore store, params AgentDefinitionRecord[] participants)
@@ -538,7 +638,8 @@ public sealed class OrchestrationResolverTests
         string? modelProfile = ToolCapableModel,
         string? reasoningEffort = null,
         string? topologyJson = null,
-        bool playbookEnabled = false)
+        bool playbookEnabled = false,
+        bool disableBaseScaffold = false)
     {
         return new AgentDefinitionRecord(Guid.NewGuid(),
             name,
@@ -553,7 +654,8 @@ public sealed class OrchestrationResolverTests
             version,
             CreatedAtUtc: 10,
             UpdatedAtUtc: 10,
-            playbookEnabled);
+            playbookEnabled,
+            DisableBaseScaffold: disableBaseScaffold);
     }
 
     private static PlaybookActionRecord EnabledAction(Guid agentDefinitionId, string behavior, int priority)

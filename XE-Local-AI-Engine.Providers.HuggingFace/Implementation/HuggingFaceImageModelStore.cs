@@ -125,6 +125,7 @@ internal sealed class HuggingFaceImageModelStore : IImageModelStore
                     request.ModelName,
                     destinationPath,
                     expectedSizeBytes: 0,
+                    partRequest.Sha256,
                     progress,
                     ct).ConfigureAwait(false);
 
@@ -140,7 +141,8 @@ internal sealed class HuggingFaceImageModelStore : IImageModelStore
                     FileName = partRequest.FileName,
                     LocalPath = result.LocalPath,
                     SizeBytes = result.SizeBytes,
-                    Sha256 = result.Sha256 ?? partRequest.Sha256
+                    // Only the verified hash — the discovery digest we passed was used for verification, never echoed.
+                    Sha256 = result.Sha256
                 });
             }
 

@@ -67,7 +67,10 @@ internal sealed class HfDownloadClient
     ///     Downloads <paramref name="fileName" /> from <paramref name="repoId" />@<paramref name="revision" /> to
     ///     <paramref name="destinationPath" />, resuming any existing <c>.part</c>, verifying the sha256 when the LFS OID
     ///     is exposed, and atomically renaming on success. Returns the resolved commit revision and verified sha256
-    ///     (null when no OID was available).
+    ///     (null when the content could not be verified). <paramref name="expectedSha256" /> is a caller-supplied
+    ///     discovery digest (HF API <c>lfs.sha256</c>): it is used to integrity-check the stream ONLY as a fallback when
+    ///     the resolve endpoint did not expose the LFS OID, so the returned sha256 always reflects content that was
+    ///     actually verified — never an unverified digest echoed back.
     /// </summary>
     public async Task<HfDownloadResult> DownloadAsync(string repoId,
         string fileName,
@@ -75,6 +78,7 @@ internal sealed class HfDownloadClient
         string modelName,
         string destinationPath,
         long expectedSizeBytes,
+        string? expectedSha256,
         IProgress<PullProgress>? progress,
         CancellationToken ct)
     {
@@ -97,9 +101,13 @@ internal sealed class HfDownloadClient
         var requestUri = BuildResolveUri(repoId, revision, fileName);
 
         // Probe the resolve endpoint ONCE (no-redirect) to capture the true file sha256 from X-Linked-Etag before the
-        // CDN redirect hides it. Best-effort: a probe failure leaves expectedSha null (revision-pinned, unverified)
-        // rather than blocking the download — the byte GET below still classifies real HTTP failures.
+        // CDN redirect hides it. Best-effort: a probe failure leaves expectedSha null (unverified) rather than blocking
+        // the download — the byte GET below still classifies real HTTP failures.
         var expectedSha = await ResolveLinkedShaAsync(requestUri, ct).ConfigureAwait(false);
+
+        // The caller's discovery digest is the last-resort verification source when the resolve endpoint exposes no OID.
+        // Reject a malformed value (not 64-hex) rather than fail every download against garbage.
+        var fallbackSha = IsSha256Hex(expectedSha256) ? expectedSha256!.ToUpperInvariant() : null;
 
         var attempt = 0;
         while (true)
@@ -107,7 +115,7 @@ internal sealed class HfDownloadClient
             ct.ThrowIfCancellationRequested();
             try
             {
-                return await DownloadOnceAsync(requestUri, expectedSha, modelName, partPath, destinationPath, expectedSizeBytes, progress, ct)
+                return await DownloadOnceAsync(requestUri, expectedSha, fallbackSha, modelName, partPath, destinationPath, expectedSizeBytes, progress, ct)
                     .ConfigureAwait(false);
             }
             catch (HuggingFaceDownloadException exception) when (IsTransient(exception.Reason) && attempt < _options.MaxDownloadRetries)
@@ -124,6 +132,7 @@ internal sealed class HfDownloadClient
 
     private async Task<HfDownloadResult> DownloadOnceAsync(Uri requestUri,
         string? expectedSha,
+        string? fallbackSha,
         string modelName,
         string partPath,
         string destinationPath,
@@ -177,8 +186,9 @@ internal sealed class HfDownloadClient
             // If the server ignored our Range and returned 200, restart the .part from scratch (truncate-append below).
             var appending = existingPartBytes > 0 && response.StatusCode == HttpStatusCode.PartialContent;
             // Prefer the sha256 captured from the pre-redirect resolve probe; fall back to a directly-served
-            // X-Linked-Etag (e.g. a non-redirecting inline response). Never the plain ETag (see ReadLinkedSha256).
-            expectedSha ??= ReadLinkedSha256(response);
+            // X-Linked-Etag (e.g. a non-redirecting inline response), then to the caller's discovery digest. Never the
+            // plain ETag (see ReadLinkedSha256).
+            expectedSha ??= ReadLinkedSha256(response) ?? fallbackSha;
             var resolvedRevision = ReadRepoCommit(response) ?? string.Empty;
             var totalBytes = ResolveTotalBytes(response, appending, existingPartBytes, expectedSizeBytes);
 

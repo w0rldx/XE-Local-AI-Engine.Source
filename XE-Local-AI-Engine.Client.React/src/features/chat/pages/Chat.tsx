@@ -596,7 +596,16 @@ export function Chat() {
 
 	const resolveSendConversation = useCallback(
 		async (content: string): Promise<ChatConversationModel> => {
-			if (selectedConversationData) {
+			// Only trust the cached selected-conversation payload when it actually belongs to the CURRENT
+			// selection AND is not a keepPreviousData placeholder from the thread we just switched away from
+			// (GPTAUD-16). A fast switch to an uncached conversation followed by Enter would otherwise resolve
+			// the PREVIOUS conversation's payload here and send the turn to the wrong id. When it's stale/
+			// placeholder, fall through to the load-by-id path, which fetches the currently-selected thread.
+			if (
+				selectedConversationData &&
+				selectedConversationData.id === selectedConversationId &&
+				!selectedConversationIsPlaceholderData
+			) {
 				return selectedConversationData;
 			}
 
@@ -612,7 +621,14 @@ export function Chat() {
 			setRequestedConversationId(created.id);
 			return created;
 		},
-		[cacheConversation, displayConversations, selectedConversationId, selectedConversationData, setRequestedConversationId],
+		[
+			cacheConversation,
+			displayConversations,
+			selectedConversationId,
+			selectedConversationData,
+			selectedConversationIsPlaceholderData,
+			setRequestedConversationId,
+		],
 	);
 
 	// Resolve the conversation a file should attach to. When a conversation is already on screen — including a
@@ -646,6 +662,14 @@ export function Chat() {
 			await Promise.all([
 				queryClient.invalidateQueries({ queryKey: nodeChatQueryKeys.conversation(conversationId) }),
 				queryClient.invalidateQueries({ queryKey: nodeChatQueryKeys.conversations() }),
+				// GPTAUD-17a: the local runtime only fills EffectiveContextTokens once the model is WARM, but the
+				// model-details query fires pre-warm — so the context-usage meter would stay pinned to the model's
+				// train ceiling (e.g. 262k) even though the server launched with a far smaller `-c` (e.g. 16k). Once
+				// a turn reaches a terminal state the model is warm, so invalidate the details query to re-read the
+				// real window. Partial-object match on the hey-api single-element key so it invalidates every model
+				// path (never `.slice()` a hey-api key).
+				// biome-ignore lint/style/useNamingConvention: generated hey-api query-key discriminator.
+				queryClient.invalidateQueries({ queryKey: [{ _id: "getLocalModelDetails" }] }),
 			]);
 		},
 		[queryClient],
@@ -1127,6 +1151,11 @@ export function Chat() {
 			try {
 				await deleteConversationMutation.mutateAsync(conversationId);
 			} catch (error) {
+				// The delete failed, so the conversation still exists and stays visible/selectable. Roll back the
+				// pre-emptive "deleted" marker set above (GPTAUD-16) — otherwise the streaming loop's has(id) guard
+				// treats the surviving thread as removed and silently refuses to stream to it: a permanently
+				// un-chattable zombie until reload.
+				deletedConversationIds.current.delete(conversationId);
 				if (isNodeChatReadOnlyConflict(error)) {
 					setStreamError(
 						t("pages.chat.remoteViewOnly", "This conversation was started from a paired client and is view-only on this node."),

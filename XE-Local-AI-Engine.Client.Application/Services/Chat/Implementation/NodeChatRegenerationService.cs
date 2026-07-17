@@ -111,6 +111,14 @@ public sealed class NodeChatRegenerationService(
         var correlation = new NodeChatMessageCorrelation(conversationId, placeholder.MessageId, requestId);
         var sequence = new NodeChatStreamSequence();
 
+        // The variant row now exists as Pending, but run ownership (the pump + runner + their protective finally) is not
+        // wired until further below. If the client disconnects in this window — including during the awaited
+        // GetEnableToolsAsync / package build before the tasks are created — the iterator is disposed and the variant
+        // would otherwise sit Pending/Queued until the restart reaper. This guard terminalizes it to Interrupted on any
+        // pre-ownership teardown; once ownership is established it becomes a no-op and the pump owns the terminal. Shared
+        // with the send path (NodeChatStreamService) so both front doors behave identically.
+        await using var preOwnershipGuard = new PreOwnershipTerminalizationGuard(persistence, correlation, timeProvider, logger);
+
         yield return ToMessageEvent(ChatStreamEventTypes.AssistantPending, correlation, placeholder, sequence.Next());
 
         // Queued until the collision-queue lease is acquired in RunInvocationAsync; transitions to Streaming only
@@ -126,11 +134,17 @@ public sealed class NodeChatRegenerationService(
 
         yield return ToMessageEvent(ChatStreamEventTypes.AssistantQueued, correlation, queuedMessage, sequence.Next());
 
-        using var linkedCancellation = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+        // The run/persistence lifecycle is owned by the shared runner, NOT by the client connection (mirrors the send
+        // path, NodeChatStreamService): when the client cancellationToken fires on disconnect we must only stop
+        // forwarding SSE events to the browser, never cancel the run or the pump — otherwise the pump would terminalize
+        // the variant Interrupted before the runner reported its real terminal (Completed/Failed). runCancellation is
+        // therefore an UNLINKED source, tripped only by a genuine user cancel routed through the cancellation registry
+        // (which also cancels the runner's own loop so the pump persists the true Cancelled terminal).
+        using var runCancellation = new CancellationTokenSource();
         using var registration = cancellationRegistry.Register(correlation, () =>
         {
             invocationRunner.Cancel(requestId);
-            linkedCancellation.Cancel();
+            runCancellation.Cancel();
         });
 
         var stateChannel = Channel.CreateUnbounded<InvocationState>(new UnboundedChannelOptions
@@ -181,10 +195,6 @@ public sealed class NodeChatRegenerationService(
             }
         }
 
-        eventDispatcher.InvocationStateChanged += OnInvocationStateChanged;
-        eventDispatcher.ToolCallLifecycleChanged += OnToolCallLifecycleChanged;
-        eventDispatcher.TurnNoticeChanged += OnTurnNoticeChanged;
-
         // The active-model precedence, the effective-agent resolution, and the orchestration spec were all computed up
         // front (ResolveTurnAsync) so the variant could be stamped with the resolved agent's attribution; reuse those
         // results here unchanged.
@@ -192,68 +202,90 @@ public sealed class NodeChatRegenerationService(
         var resolved = resolution.Resolved;
         var orchestration = resolution.Orchestration;
 
-        // Symmetric with the send path (NodeChatStreamService): offer tools to the loopback agent only when the
-        // client asked AND the node has the tool engine enabled AND the active model advertises the Ollama tools
-        // capability. When offered, the catalog's local tools travel in the runtime package as the offer list; the
-        // invocation factory resolves the matching executables from the registry by name. A bound definition narrows
-        // that offer to its allowed set (and the resolver already withheld the offer for a non-tools model).
-        var enableTools = await runtimeSettings.GetEnableToolsAsync(cancellationToken).ConfigureAwait(false);
-        var offerTools = useLocalTools && enableTools && resolution.SupportsTools;
-        var allowedTools = offerTools
-            ? resolved?.AllowedTools ?? localToolOfferProvider.GetOfferedTools(activeModel, resolution.EffectiveModelIsCloud)
-            : null;
+        // Both tasks are created back-to-back with no await between them, so they end up either both set or both null; a
+        // throw before the package build (e.g. an OCE from the awaited GetEnableToolsAsync on client disconnect) leaves
+        // both null and the finally has nothing to drain.
+        Task? pumpTask = null;
+        Task? runTask = null;
 
-        var package = runtimePackageBuilder.Build(new LocalChatRuntimePackageRequest(requestId,
-            conversationId,
-            resolved?.ResolvedSystemPrompt ?? LoadResolvedSystemPrompt(localChatOptions.Value),
-            BuildRegenerationContext(conversation, original, selectedPath),
-            resolution.EffectiveModel,
-            resolved?.AgentDefinitionVersion ?? AgentDefinitionVersion,
-            LocalChatLoopbackDefaults.ClientNodeId,
-            allowedTools,
-            RequestedCapabilities: [LocalChatLoopbackDefaults.RequestedCapability],
-            ReasoningEffort: resolved?.ReasoningEffort ?? reasoningEffort,
-            OrchestrationSpec: orchestration?.Spec,
-            SupportsThinking: resolution.SupportsThinking,
-            Skills: resolved?.Skills));
-
-        // Post-run adaptive-memory hook (symmetric with the send path): fired once when the pump persists a
-        // Completed/Failed terminal, ONLY when the resolved agent has the playbook enabled AND opts into extraction. A
-        // regenerated turn is still a completed assistant turn worth learning from — but a retrieval-only agent
-        // (extraction off) still uses its memory while mining no new candidates. Built here so it closes over the run
-        // context this service holds.
-        var onTerminal = resolution.Resolved is { PlaybookEnabled: true, MemoryExtractionEnabled: true } memoryAgent
-            ? ChatMemoryExtractionHook.Build(memoryExtractionDispatcher,
-                memoryAgent,
-                conversation.ConversationId,
-                conversation.MemoryExcluded,
-                package,
-                resolution.EffectiveModel,
-                () => CollectUserTurns(conversation, original, selectedPath))
-            : null;
-
-        var pumpTask = invocationStatePump.PumpAsync(stateChannel.Reader,
-            eventChannel.Writer,
-            correlation,
-            // Stamp the FINAL persisted variant model from the effective model (the pump terminalizes from this
-            // requestedModel) so the stored attribution reflects the model that actually reran, not original.Model.
-            resolution.EffectiveModel,
-            sequence,
-            parts,
-            onTerminal,
-            linkedCancellation.Token);
-        var runTask = RunInvocationAsync(package,
-            placeholder.MessageId,
-            stateChannel.Writer,
-            eventChannel.Writer,
-            correlation,
-            requestId,
-            sequence,
-            resolution.RequiresInstalledChatModel,
-            linkedCancellation.Token);
+        // Subscriptions live INSIDE the try so an OCE thrown by the awaited GetEnableToolsAsync / package build below
+        // (client disconnect) can never leak the handlers — the finally always detaches them. Previously the try started
+        // AFTER these subscriptions, so a pre-task teardown left them attached to the singleton dispatcher for the
+        // process lifetime.
+        eventDispatcher.InvocationStateChanged += OnInvocationStateChanged;
+        eventDispatcher.ToolCallLifecycleChanged += OnToolCallLifecycleChanged;
+        eventDispatcher.TurnNoticeChanged += OnTurnNoticeChanged;
 
         try
         {
+            // Symmetric with the send path (NodeChatStreamService): offer tools to the loopback agent only when the
+            // client asked AND the node has the tool engine enabled AND the active model advertises the Ollama tools
+            // capability. When offered, the catalog's local tools travel in the runtime package as the offer list; the
+            // invocation factory resolves the matching executables from the registry by name. A bound definition narrows
+            // that offer to its allowed set (and the resolver already withheld the offer for a non-tools model).
+            var enableTools = await runtimeSettings.GetEnableToolsAsync(cancellationToken).ConfigureAwait(false);
+            var offerTools = useLocalTools && enableTools && resolution.SupportsTools;
+            var allowedTools = offerTools
+                ? resolved?.AllowedTools ?? localToolOfferProvider.GetOfferedTools(activeModel, resolution.EffectiveModelIsCloud)
+                : null;
+
+            var package = runtimePackageBuilder.Build(new LocalChatRuntimePackageRequest(requestId,
+                conversationId,
+                resolved?.ResolvedSystemPrompt ?? LoadResolvedSystemPrompt(localChatOptions.Value),
+                BuildRegenerationContext(conversation, original, selectedPath),
+                resolution.EffectiveModel,
+                resolved?.AgentDefinitionVersion ?? AgentDefinitionVersion,
+                LocalChatLoopbackDefaults.ClientNodeId,
+                allowedTools,
+                RequestedCapabilities: [LocalChatLoopbackDefaults.RequestedCapability],
+                ReasoningEffort: resolved?.ReasoningEffort ?? reasoningEffort,
+                OrchestrationSpec: orchestration?.Spec,
+                SupportsThinking: resolution.SupportsThinking,
+                Skills: resolved?.Skills));
+
+            // Post-run adaptive-memory hook (symmetric with the send path): fired once when the pump persists a
+            // Completed/Failed terminal, ONLY when the resolved agent has the playbook enabled AND opts into extraction. A
+            // regenerated turn is still a completed assistant turn worth learning from — but a retrieval-only agent
+            // (extraction off) still uses its memory while mining no new candidates. Built here so it closes over the run
+            // context this service holds.
+            var onTerminal = resolution.Resolved is { PlaybookEnabled: true, MemoryExtractionEnabled: true } memoryAgent
+                ? ChatMemoryExtractionHook.Build(memoryExtractionDispatcher,
+                    memoryAgent,
+                    conversation.ConversationId,
+                    conversation.MemoryExcluded,
+                    package,
+                    resolution.EffectiveModel,
+                    () => CollectUserTurns(conversation, original, selectedPath))
+                : null;
+
+            pumpTask = invocationStatePump.PumpAsync(stateChannel.Reader,
+                eventChannel.Writer,
+                correlation,
+                // Stamp the FINAL persisted variant model from the effective model (the pump terminalizes from this
+                // requestedModel) so the stored attribution reflects the model that actually reran, not original.Model.
+                resolution.EffectiveModel,
+                sequence,
+                parts,
+                onTerminal,
+                runCancellation.Token);
+            runTask = RunInvocationAsync(package,
+                placeholder.MessageId,
+                stateChannel.Writer,
+                eventChannel.Writer,
+                correlation,
+                requestId,
+                sequence,
+                resolution.RequiresInstalledChatModel,
+                runCancellation.Token);
+
+            // Ownership is now established: the pump + runner are running and the finally below drives every row to the
+            // runner's true terminal, so the pre-ownership guard must stand down (a client disconnect from here on must
+            // NOT terminalize — the run keeps going and the pump persists its real terminal).
+            preOwnershipGuard.OwnershipEstablished();
+
+            // Forward persisted events to the client. The client cancellationToken stops THIS loop only (browser/SignalR
+            // disconnect); it does not cancel the run or the pump, which keep going on runCancellation.Token so the
+            // runner reaches its real terminal and the pump persists it.
             await foreach (var streamEvent in eventChannel.Reader.ReadAllAsync(cancellationToken).ConfigureAwait(false))
             {
                 yield return streamEvent;
@@ -261,19 +293,48 @@ public sealed class NodeChatRegenerationService(
         }
         finally
         {
+            // Do NOT cancel runCancellation here on a client disconnect: let runTask/pumpTask drain to the runner's true
+            // terminal so persistence follows the runner's lifecycle, not the client connection's. A genuine user cancel
+            // already tripped runCancellation via the registry.
+            if (pumpTask is not null && runTask is not null)
+            {
+                // Observe the pump first: on a GPTAUD-07 persistence fault it faults here; cancel the run so the
+                // still-generating runner stops promptly rather than producing output that can no longer be persisted. A
+                // user cancel or normal completion leaves the pump task completed (not faulted).
+                try
+                {
+                    await pumpTask.ConfigureAwait(false);
+                }
+                catch (OperationCanceledException)
+                {
+                    // The cancelled/interrupted terminal is persisted by the pump.
+                }
+                catch (Exception exception)
+                {
+                    logger.LogError(exception, "Local node chat regeneration pump faulted; cancelling the run. RequestId={RequestId}", requestId);
+                    await runCancellation.CancelAsync().ConfigureAwait(false);
+                }
+
+                try
+                {
+                    await runTask.ConfigureAwait(false);
+                }
+                catch (OperationCanceledException)
+                {
+                    // The runner unwound on cancellation; its terminal is persisted by the pump.
+                }
+                catch (Exception exception)
+                {
+                    logger.LogDebug(exception, "Local node chat regeneration run completed with an exception after teardown. RequestId={RequestId}", requestId);
+                }
+            }
+
+            // Unsubscribe AFTER draining the tasks, never before: the runner may fire the terminal InvocationStateChanged
+            // (the Completed terminal) after the SSE loop exits. Detaching first would drop it, ending the pump with no
+            // terminal and falsely persisting the variant Interrupted.
             eventDispatcher.InvocationStateChanged -= OnInvocationStateChanged;
             eventDispatcher.ToolCallLifecycleChanged -= OnToolCallLifecycleChanged;
             eventDispatcher.TurnNoticeChanged -= OnTurnNoticeChanged;
-            await linkedCancellation.CancelAsync().ConfigureAwait(false);
-
-            try
-            {
-                await Task.WhenAll(runTask, pumpTask).ConfigureAwait(false);
-            }
-            catch (OperationCanceledException)
-            {
-                // The terminal cancelled/interrupted event is persisted by the pump.
-            }
         }
     }
 

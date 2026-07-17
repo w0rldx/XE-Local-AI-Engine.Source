@@ -21,7 +21,7 @@ The repository is being prepared for an RC release. Release documentation and va
   range), serializes generation to one job at a time with queue/cancel, and persists produced images encrypted-at-rest. Ships **enabled by default** (`Services/Images`, `Providers.StableDiffusionCpp`,
   `src/features/images`). See [docs/wiki/14-image-generation.md](docs/wiki/14-image-generation.md).
 - **Knowledge Base / RAG** — fully offline document knowledge base: upload documents (`.txt`/`.md`/`.pdf`/`.docx` and other plaintext types), which are chunked, embedded with a local embedding model, and indexed
-  into encrypted SQLite. Retrieval is a **hybrid search** — lexical FTS5 + semantic vector arms fused with Reciprocal Rank Fusion, with an optional local cross-encoder reranker — surfaced to agents as a tool
+  into local SQLite with **selective encryption** — source document blobs and display names are encrypted at rest, while the extracted chunk text and its FTS search index are stored unencrypted locally. Retrieval is a **hybrid search** — lexical FTS5 + semantic vector arms fused with Reciprocal Rank Fusion, with an optional local cross-encoder reranker — surfaced to agents as a tool
   (`Services/Knowledge`, `Endpoints/Knowledge/V1`, `src/features/knowledge`). See [docs/wiki/15-knowledge-base.md](docs/wiki/15-knowledge-base.md).
 - **Agent mode** — per-agent definitions plus a governed playbook: manual and analysis-proposed actions, an offline eval gate over golden conversations, relevance-gated action retrieval, and cohort
   monitoring (`Services/{Agents,Eval,Insights,Monitoring}`, `XE-Local-AI-Engine.AI.Agent`, `src/features/agents`).

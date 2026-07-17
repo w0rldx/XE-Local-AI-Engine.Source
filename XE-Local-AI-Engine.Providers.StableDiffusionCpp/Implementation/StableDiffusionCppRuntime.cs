@@ -42,6 +42,13 @@ internal sealed class StableDiffusionCppRuntime : IImageRuntime
         var startedTimestamp = Stopwatch.GetTimestamp();
         var endpoint = await _supervisor.EnsureRunningAsync(request.ModelName, ct).ConfigureAwait(false);
 
+        // Hold an active-job lease for the whole submit→poll→complete window so the idle reaper / LRU evictor never
+        // tree-kill this daemon mid-generation, even if the job outruns the idle TTL (GPTAUD-10a). A null lease (no live
+        // daemon backs the model despite the ensure above — a rare teardown race) proceeds leaseless; the poll loop below
+        // then surfaces any failure through the normal error path. Each poll Touch()es the lease to refresh the daemon's
+        // idle clock so the idle window is measured from the last observed progress, not from submission.
+        using var jobLease = _supervisor.TryAcquireJobLease(request.ModelName);
+
         string? jobId = null;
         var lastPhase = (ImageGenPhase?)null;
         try
@@ -51,6 +58,7 @@ internal sealed class StableDiffusionCppRuntime : IImageRuntime
 
             while (true)
             {
+                jobLease?.Touch();
                 var state = await _jobClient.GetJobAsync(endpoint.BaseAddress, jobId, ct).ConfigureAwait(false);
                 switch (state.Status)
                 {
