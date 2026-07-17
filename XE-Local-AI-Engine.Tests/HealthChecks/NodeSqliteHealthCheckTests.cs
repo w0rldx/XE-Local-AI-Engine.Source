@@ -64,8 +64,9 @@ public sealed class NodeSqliteHealthCheckTests
 
             AssertEx.Equal(HealthStatus.Unhealthy, result.Status);
             AssertEx.Equal("unwritable", (string)result.Data["reason"]);
-            AssertEx.NotNull(result.Description);
-            AssertEx.True(result.Description!.Contains("not writable", StringComparison.Ordinal));
+            // GPTAUD-19c follow-up: the description is a static string with NO interpolated provider message, so the
+            // anonymous /health/ready payload can never leak internal error text. The structured reason still classifies it.
+            AssertEx.Equal("Node SQLite database is not writable.", result.Description);
         }
         finally
         {
@@ -106,8 +107,10 @@ public sealed class NodeSqliteHealthCheckTests
     [Test]
     public async Task UnavailableDatabase_IsUnhealthyWithReason()
     {
-        // A data source under a directory that does not exist cannot be opened, standing in for a dead store.
-        var unreachablePath = Path.Combine(Path.GetTempPath(), $"xe-missing-{Guid.NewGuid():N}", "node.db");
+        // A data source under a directory that does not exist cannot be opened, standing in for a dead store. The
+        // provider's open failure carries the file path in its message, so this doubles as the leak guard below.
+        var missingSegment = $"xe-missing-{Guid.NewGuid():N}";
+        var unreachablePath = Path.Combine(Path.GetTempPath(), missingSegment, "node.db");
         var options = BuildOptions(unreachablePath);
         using var keyHolder = new NullNodeSqliteKeyHolder();
         await using var dbContext = new NodeChatDbContext(options, keyHolder);
@@ -117,8 +120,11 @@ public sealed class NodeSqliteHealthCheckTests
 
         AssertEx.Equal(HealthStatus.Unhealthy, result.Status);
         AssertEx.Equal("unavailable", (string)result.Data["reason"]);
-        AssertEx.NotNull(result.Description);
-        AssertEx.True(result.Description!.Contains("unavailable", StringComparison.Ordinal));
+        // GPTAUD-19c follow-up: the description is a fixed string that never interpolates the provider message, so the
+        // file path present in the underlying exception can never reach the anonymous /health/ready payload.
+        AssertEx.Equal("Node SQLite database is unavailable.", result.Description);
+        AssertEx.False(result.Description!.Contains(missingSegment, StringComparison.Ordinal),
+            "the readiness description must not leak the database file path.");
     }
 
     private static DbContextOptions<NodeChatDbContext> BuildOptions(string dbPath)

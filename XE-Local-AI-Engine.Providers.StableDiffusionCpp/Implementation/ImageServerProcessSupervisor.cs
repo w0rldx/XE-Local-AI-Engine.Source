@@ -155,9 +155,17 @@ internal sealed class ImageServerProcessSupervisor : IImageServerSupervisor, IAs
             return null;
         }
 
-        // Increment first, then confirm the daemon is still the registered, live one: a concurrent teardown that removed
-        // it between the lookup and here means the lease would guard a dead handle, so release and return null (leaseless).
-        running.AcquireJob();
+        // Atomically register the lease, refusing if an idle reaper / cap evictor has already latched this daemon for
+        // eviction (GPTAUD-10a P1: lease acquisition and idle eviction now transition one atomic word, so a teardown
+        // decision and a new lease can never both win — the previous plain increment could be granted after the reaper
+        // read "no active jobs" but before it tree-killed the daemon). Then confirm the daemon is still the registered,
+        // live one: a forced teardown (restart/evict/dispose) that removed it between the lookup and here means the lease
+        // would guard a dead handle, so release and return null (leaseless).
+        if (!running.TryAcquireJob())
+        {
+            return null;
+        }
+
         if (running.Handle.HasExited || !_processes.TryGetValue(modelName, out var current) || !ReferenceEquals(current, running))
         {
             running.ReleaseJob();
@@ -437,23 +445,28 @@ internal sealed class ImageServerProcessSupervisor : IImageServerSupervisor, IAs
         var now = _timeProvider.GetUtcNow();
         foreach (var (key, running) in _processes.ToArray())
         {
-            // A live daemon with an in-flight generation (an active job lease) is never idle-reaped, even past the TTL:
-            // LastUsedUtc is stamped per ensure/reuse (not per generation step), so a single long image job looks idle
-            // here while it is mid-flight — tree-killing it would cut a running generation off (GPTAUD-10a). An EXITED
-            // process is still torn down below so a dead handle never leaks even while leased.
-            if (running.ActiveJobs > 0 && !running.Handle.HasExited)
+            // An EXITED process is always torn down so a dead handle never leaks, even while nominally leased.
+            if (running.Handle.HasExited)
+            {
+                await RemoveProcessAsync(key, running).ConfigureAwait(false);
+                continue;
+            }
+
+            // Not yet idle past the TTL — leave it. LastUsedUtc is stamped per ensure/reuse (not per generation step),
+            // so a single long image job looks idle here while it is mid-flight.
+            if (now - running.LastUsedUtc < _options.IdleTimeToLive)
             {
                 continue;
             }
 
-            if (running.Handle.HasExited || now - running.LastUsedUtc >= _options.IdleTimeToLive)
+            // Idle past the TTL. TryBeginEvict atomically latches the daemon for eviction ONLY when no job lease is held,
+            // and once latched no new lease can attach — so a generation that starts concurrently with this reap either
+            // wins the lease first (TryBeginEvict then fails and we skip, reaping on a later pass) or is refused, but we
+            // can never tree-kill a daemon under an active lease (GPTAUD-10a P1).
+            if (running.TryBeginEvict())
             {
-                if (!running.Handle.HasExited)
-                {
-                    _logger.LogInformation("Evicting idle sd-server for model {ModelName} (idle {IdleSeconds:F0}s past TTL {TtlSeconds:F0}s).",
-                        key, (now - running.LastUsedUtc).TotalSeconds, _options.IdleTimeToLive.TotalSeconds);
-                }
-
+                _logger.LogInformation("Evicting idle sd-server for model {ModelName} (idle {IdleSeconds:F0}s past TTL {TtlSeconds:F0}s).",
+                    key, (now - running.LastUsedUtc).TotalSeconds, _options.IdleTimeToLive.TotalSeconds);
                 await RemoveProcessAsync(key, running).ConfigureAwait(false);
             }
         }
@@ -494,8 +507,9 @@ internal sealed class ImageServerProcessSupervisor : IImageServerSupervisor, IAs
         foreach (var (key, running) in _processes)
         {
             // In-flight generation disqualifies a live daemon as a cap-eviction victim for the same reason the idle
-            // reaper skips it: past-TTL only means "no new job started", not "not mid-generation" (GPTAUD-10a).
-            if (running.ActiveJobs > 0 && !running.Handle.HasExited)
+            // reaper skips it: past-TTL only means "no new job started", not "not mid-generation" (GPTAUD-10a). This is a
+            // best-effort heuristic read; the atomic claim is TryBeginEvict on the chosen victim below.
+            if (running.IsLeased && !running.Handle.HasExited)
             {
                 continue;
             }
@@ -513,6 +527,15 @@ internal sealed class ImageServerProcessSupervisor : IImageServerSupervisor, IAs
         }
 
         if (victimKey is null || victim is null)
+        {
+            return false;
+        }
+
+        // Atomically latch the chosen victim before tearing it down. If a generation acquired a lease on it between the
+        // heuristic scan and here, TryBeginEvict fails and we admit no victim this round — the caller surfaces a
+        // retryable cap error rather than tree-killing a daemon under an active lease (GPTAUD-10a P1). An EXITED victim
+        // holds no real lease, so it is torn down regardless.
+        if (!victim.Handle.HasExited && !victim.TryBeginEvict())
         {
             return false;
         }
@@ -641,12 +664,18 @@ internal sealed class ImageServerProcessSupervisor : IImageServerSupervisor, IAs
         // Seeded to the spawn time so a freshly-ready daemon is not re-probed until one full interval has passed.
         private long _lastLivenessProbeTicks = startedUtc.UtcTicks;
         private int _consecutiveLivenessFailures;
-        private int _activeJobs;
+
+        // Lease/eviction state, mutated only by atomic CAS (GPTAUD-10a P1): >= 0 is the count of in-flight generations
+        // holding this daemon; -1 is a terminal "evicting" latch set by the idle reaper / cap evictor. A new lease
+        // (TryAcquireJob) and an eviction decision (TryBeginEvict) therefore transition the SAME word, so they can never
+        // both win — closing the window where the old plain increment could be granted after the reaper had read
+        // "no active jobs" but before it tree-killed the daemon.
+        private int _leaseState;
 
         public IImageServerProcessHandle Handle { get; } = handle;
 
-        /// <summary>Number of in-flight generations currently leasing this daemon (drives the reaper/evictor skip, GPTAUD-10a).</summary>
-        public int ActiveJobs => Volatile.Read(ref _activeJobs);
+        /// <summary>Whether a generation currently leases this daemon — best-effort read for the evictor's victim heuristic; the atomic claim is <see cref="TryBeginEvict" /> (GPTAUD-10a).</summary>
+        public bool IsLeased => Volatile.Read(ref _leaseState) > 0;
 
         public ImageServerEndpoint Endpoint { get; } = endpoint;
 
@@ -693,16 +722,45 @@ internal sealed class ImageServerProcessSupervisor : IImageServerSupervisor, IAs
             return Interlocked.Increment(ref _consecutiveLivenessFailures);
         }
 
-        /// <summary>Registers an in-flight generation against this daemon.</summary>
-        public void AcquireJob()
+        /// <summary>
+        ///     Atomically registers an in-flight generation against this daemon, unless it is already latched for
+        ///     eviction. Returns <see langword="false" /> when an idle reaper / cap evictor has begun tearing it down
+        ///     (GPTAUD-10a P1), in which case the caller must proceed leaseless rather than over a to-be-killed daemon.
+        /// </summary>
+        public bool TryAcquireJob()
         {
-            Interlocked.Increment(ref _activeJobs);
+            while (true)
+            {
+                var state = Volatile.Read(ref _leaseState);
+                if (state < 0)
+                {
+                    return false; // Evicting: no new lease may attach.
+                }
+
+                if (Interlocked.CompareExchange(ref _leaseState, state + 1, state) == state)
+                {
+                    return true;
+                }
+            }
         }
 
         /// <summary>Releases a previously-acquired job lease.</summary>
         public void ReleaseJob()
         {
-            Interlocked.Decrement(ref _activeJobs);
+            // Only ever called by a holder that won TryAcquireJob (state was >= 1), so this can never touch the evicting
+            // latch: TryBeginEvict requires state == 0 and so cannot have fired while this lease was held.
+            Interlocked.Decrement(ref _leaseState);
+        }
+
+        /// <summary>
+        ///     Atomically latches this daemon as evicting, but only when no job lease is currently held. Once latched,
+        ///     <see cref="TryAcquireJob" /> refuses, so the caller may tear the daemon down without cutting off a
+        ///     generation that began after a plain "no active jobs" read (GPTAUD-10a P1). Returns <see langword="false" />
+        ///     when a lease is active — the daemon must then be left alone and reaped on a later pass.
+        /// </summary>
+        public bool TryBeginEvict()
+        {
+            return Interlocked.CompareExchange(ref _leaseState, value: -1, comparand: 0) == 0;
         }
     }
 
