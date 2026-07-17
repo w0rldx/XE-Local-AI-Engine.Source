@@ -218,7 +218,7 @@ internal sealed class DeferredLlamaServerChatClient : IChatClient
     // the process is gone — rather than a model/runtime error. Walks the full chain (including AggregateException fan-out
     // from the OpenAI SDK retry policy, which surfaces the refusal as ClientResultException -> HttpRequestException ->
     // SocketException ConnectionRefused).
-    private static bool IsServerGone(Exception exception)
+    internal static bool IsServerGone(Exception exception)
     {
         var queue = new Queue<Exception>();
         queue.Enqueue(exception);
@@ -230,6 +230,12 @@ internal sealed class DeferredLlamaServerChatClient : IChatClient
                 case SocketException { SocketErrorCode: SocketError.ConnectionRefused or SocketError.ConnectionReset or SocketError.HostUnreachable or SocketError.TimedOut }:
                     return true;
                 case HttpRequestException { HttpRequestError: HttpRequestError.ConnectionError }:
+                    return true;
+                // A process killed MID-RESPONSE (force-eject, crash while streaming) does not surface as a connect-time
+                // failure: the open body stream terminates as HttpIOException(ResponseEnded) — live-observed as
+                // "The response ended prematurely." during a force-eject. Without this arm the ejected-lease translation
+                // above never fires and the user sees a generic provider failure instead of the operator-eject terminal.
+                case HttpIOException { HttpRequestError: HttpRequestError.ResponseEnded or HttpRequestError.ConnectionError }:
                     return true;
             }
 
