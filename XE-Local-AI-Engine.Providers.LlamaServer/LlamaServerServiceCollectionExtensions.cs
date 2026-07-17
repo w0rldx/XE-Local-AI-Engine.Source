@@ -97,14 +97,43 @@ public static class LlamaServerServiceCollectionExtensions
         // regardless of registration order — TryAdd no-ops once a registration exists, and last-wins resolves to this one.
         services.AddSingleton<IAvailableVramProbe, LlamaListDevicesVramProbe>();
 
+        // AUD4-03 device-inventory probe: parses `llama-server --list-devices` into a structured {variant, devices[]}
+        // (sharing the process runner with the VRAM probe), cached per resolved binary. The Application-layer runtime
+        // device audit consumes it to detect a GPU-variant binary that enumerates zero devices (a silent CPU fallback).
+        services.TryAddSingleton<ILlamaDeviceInventoryProbe, LlamaDeviceInventoryProbe>();
+
+        // AUD4-06 GPU-load admission floor: a no-op serializer so a provider-only host resolves the gate even when the
+        // application layer has not registered the real, metric-emitting serializer. The composition root overrides this
+        // with a plain AddSingleton (last-wins) so both the LLM and image supervisors share ONE process-wide gate.
+        services.TryAddSingleton<IGpuModelLoadAdmission, NoOpGpuModelLoadAdmission>();
+
         // Options default here so the supervisor is resolvable; the host overrides them from node config.
         services.TryAddSingleton(new LlamaServerSupervisorOptions());
         services.TryAddSingleton(new LlamaServerExternalEndpointOptions());
 
+        // AUD4-02/05/17: the central launch policy (deterministic -c per role, GPU KV-cache quant + flash attention,
+        // CPU threads) plus its persistent safe-fallback store. Options default here; the host overrides from node config.
+        services.TryAddSingleton(new LlamaServerLaunchPolicyOptions());
+        services.TryAddSingleton<ILlamaServerLaunchFallbackStore>(static _ => new LlamaServerLaunchFallbackStore());
+        services.TryAddSingleton<ILlamaServerLaunchPolicy>(static sp =>
+            new LlamaServerLaunchPolicy(sp.GetRequiredService<LlamaServerLaunchPolicyOptions>(),
+                sp.GetRequiredService<ILlamaServerLaunchFallbackStore>(),
+                sp.GetRequiredService<ILogger<LlamaServerLaunchPolicy>>()));
+
         // Process-supervision seams: the OS-aware launcher (tree-kill) + the /health readiness probe.
         services.TryAddSingleton<ILlamaServerProcessLauncher, LlamaServerProcessLauncher>();
-        services.TryAddSingleton<ILlamaServerHealthProbe>(static sp =>
-            new LlamaServerHealthProbe(sp.GetRequiredService<HttpClient>()));
+
+        // AUD4-15: the readiness/liveness probe gets a DEDICATED HttpClient that bypasses the app's IHttpClientFactory,
+        // so it never inherits the standard resilience handler's exponential retries — the audited cause of a single
+        // logical probe firing at +0.2/2.4/5.1/10.2 s and detecting readiness up to ~5 s late. The probe issues exactly
+        // one bounded request per poll (its own per-attempt timeout), and the supervisor's 250 ms cadence controls
+        // timing. Localhost-only, so factory handler rotation is unnecessary; a modest backstop Timeout sits above the
+        // probe's own per-attempt/reuse bounds. Process-lifetime singleton — intentionally never disposed.
+        services.TryAddSingleton<ILlamaServerHealthProbe>(static _ =>
+            new LlamaServerHealthProbe(new HttpClient
+            {
+                Timeout = TimeSpan.FromSeconds(30)
+            }));
 
         // Self-satisfying launch-arg resolver: explore-mode (auto-fit) until the Application host registers its
         // DB-backed IInferenceProfileResolver last (last registration wins), keeping the layer arrow Application →
@@ -120,9 +149,11 @@ public static class LlamaServerServiceCollectionExtensions
             sp.GetRequiredService<ILlamaServerHealthProbe>(),
             sp.GetRequiredService<LlamaServerSupervisorOptions>(),
             sp.GetRequiredService<IInferenceProfileResolver>(),
+            sp.GetRequiredService<ILlamaServerLaunchPolicy>(),
             sp.GetRequiredService<LlamaServerExternalEndpointOptions>(),
             sp.GetService<TimeProvider>(),
-            sp.GetRequiredService<ILogger<LlamaServerProcessSupervisor>>()));
+            sp.GetRequiredService<ILogger<LlamaServerProcessSupervisor>>(),
+            sp.GetRequiredService<IGpuModelLoadAdmission>()));
         services.TryAddSingleton<ILlamaServerProcessSupervisor>(static sp =>
             sp.GetRequiredService<LlamaServerProcessSupervisor>());
 
@@ -142,7 +173,8 @@ public static class LlamaServerServiceCollectionExtensions
         // clients it hands out own the cold-start.
         services.TryAddSingleton<LlamaServerLocalModelProvider>(static sp =>
             new LlamaServerLocalModelProvider(sp.GetRequiredService<ILlamaServerProcessSupervisor>(),
-                sp.GetRequiredService<IGgufModelStore>()));
+                sp.GetRequiredService<IGgufModelStore>(),
+                sp.GetRequiredService<LlamaServerSupervisorOptions>()));
         services.AddSingleton<ILocalModelProvider>(static sp =>
             sp.GetRequiredService<LlamaServerLocalModelProvider>());
 

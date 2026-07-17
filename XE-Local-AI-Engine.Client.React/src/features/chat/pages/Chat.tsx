@@ -37,7 +37,7 @@ import { DEFAULT_ASSISTANT_NAME } from "@/features/chat/models/ChatModels";
 import { toWireSamplingOptions } from "@/features/chat/models/ChatSamplingOptions";
 import { deriveUsedContextTokens } from "@/features/chat/models/ContextUsageDerivation";
 import { localDefaultModelValue, toNodeChatRequestModel } from "@/features/chat/models/NodeChatModelSelection";
-import { shouldFetchLocalModelDetails } from "@/features/chat/pages/ChatModelDetailsQuery";
+import { resolveContextCapacityTokens, shouldFetchLocalModelDetails } from "@/features/chat/pages/ChatModelDetailsQuery";
 import { resolveLocalDefaultModelCapabilities, toChatModelOptions } from "@/features/chat/pages/ChatModelOptions";
 import { nodeChatQueryKeys } from "@/features/chat/queries/NodeChatQueryKeys";
 import { useCodexModelOptions } from "@/features/chat/queries/useCodexModelOptions";
@@ -407,6 +407,9 @@ export function Chat() {
 		isLoading: selectedConversationIsLoading,
 		isFetching: selectedConversationIsFetching,
 		isPlaceholderData: selectedConversationIsPlaceholderData,
+		isError: selectedConversationIsError,
+		error: selectedConversationError,
+		refetch: refetchSelectedConversation,
 	} = useQuery({
 		queryKey: nodeChatQueryKeys.conversation(selectedConversationId),
 		queryFn: ({ signal }) => nodeChatAdapter.getConversation(selectedConversationId, { signal }),
@@ -415,16 +418,33 @@ export function Chat() {
 		// list never collapses to the summary entry (no messages) and flashes the empty-state mid-switch.
 		placeholderData: keepPreviousData,
 	});
+	// The selected conversation's full payload failed to load AND we don't already hold its payload (a background
+	// refetch failing over good data must NOT blow away the thread — that stays showing the cached messages). The
+	// query is keyed by selectedConversationId, so `isError` reflects the CURRENT selection; switching threads
+	// re-keys the query and clears this. Drives the inline error+retry state in the message list. Without it, a
+	// permanently-failing getConversation left the loading term below true forever (spinner deadlock, no error).
+	const selectedConversationLoadFailed =
+		selectedConversationId.length > 0 &&
+		selectedConversationIsError &&
+		selectedConversationData?.id !== selectedConversationId;
 	// The full payload (with messages) hasn't settled for the currently selected conversation yet: either the
 	// first load, a switch where keepPreviousData is still showing the prior thread (isPlaceholderData), or a
 	// background refetch over a cached message-less entry. isFetching is the key signal — isLoading alone is
 	// false whenever ANY cached/placeholder data exists for the id, which let the empty-state flash mid-fetch.
+	// The failure state takes precedence: once the load has errored we surface the error+retry, not a spinner
+	// that would otherwise spin forever (the id-mismatch term below never clears on a permanent failure).
 	const isLoadingSelectedConversation =
+		!selectedConversationLoadFailed &&
 		selectedConversationId.length > 0 &&
 		(selectedConversationIsLoading ||
 			selectedConversationIsFetching ||
 			selectedConversationIsPlaceholderData ||
 			selectedConversationData?.id !== selectedConversationId);
+	const handleRetryLoadMessages = useCallback(() => {
+		// Fire-and-forget refetch: any failure re-lands in the query's own isError state (which drives this same
+		// error surface), so there is nothing extra to handle here — mirror the adapter fire-and-forget convention.
+		refetchSelectedConversation().catch(() => undefined);
+	}, [refetchSelectedConversation]);
 
 	// Gate the selected conversation against the current selection before merging it into the displayed list.
 	// When the last conversation is deleted, selectedConversationId becomes "" and the query disables — but its
@@ -497,7 +517,9 @@ export function Chat() {
 		() => deriveUsedContextTokens(activeConversation?.messages ?? []),
 		[activeConversation?.messages],
 	);
-	const effectiveMaxContextTokens = selectedModelDetails?.maxContextTokens ?? undefined;
+	// Prefer the RUNNING process's effective context window (AUD4-02, the launched -c) over the model's advertised
+	// train ceiling, so the meter shows the real capacity once the model is warm; fall back to the ceiling, then unknown.
+	const effectiveMaxContextTokens = resolveContextCapacityTokens(selectedModelDetails);
 	const contextModelLabel =
 		selectedConcreteModelName || selectedModelOption?.displayName || selectedModelOption?.label || "Local runtime default";
 	const isLoadingInitialConversations = conversationsIsLoading && displayConversations.length === 0;
@@ -1313,6 +1335,9 @@ export function Chat() {
 				timelineEntries={timelineEntries}
 				disabledNotice={notice}
 				isLoadingMessages={isLoadingSelectedConversation}
+				messagesLoadFailed={selectedConversationLoadFailed}
+				messagesLoadErrorText={selectedConversationLoadFailed ? errorMessage(selectedConversationError) : undefined}
+				onRetryLoadMessages={handleRetryLoadMessages}
 				inputStatus={{
 					isSending,
 					chatInputDisabled: isCreatingConversation || isRemoteConversation,

@@ -27,17 +27,26 @@ using XE_Local_AI_Engine.Providers.LlamaServer.Contracts;
 /// </remarks>
 internal sealed class DeferredLlamaServerChatClient : IChatClient
 {
+    // User-safe terminal message when an operator force-ejected this model mid-request. Carries no paths/ports/internals.
+    private const string ModelEjectedMessage = "The model was ejected by the operator while this request was running.";
+
+    // User-safe terminal message when a request arrives while a graceful operator eject is draining this model: the
+    // request is refused up front (never started) instead of running untracked under the drain.
+    private const string ModelEjectingMessage = "The model is being ejected by the operator; this request was not started.";
+
     private readonly SemaphoreSlim _initGate = new(initialCount: 1, maxCount: 1);
     private readonly string _modelName;
+    private readonly TimeSpan _networkTimeout;
     private readonly ILlamaServerProcessSupervisor _supervisor;
 
     private IChatClient? _inner;
 
-    public DeferredLlamaServerChatClient(ILlamaServerProcessSupervisor supervisor, string modelName)
+    public DeferredLlamaServerChatClient(ILlamaServerProcessSupervisor supervisor, string modelName, TimeSpan networkTimeout)
     {
         _supervisor = supervisor ?? throw new ArgumentNullException(nameof(supervisor));
         ArgumentException.ThrowIfNullOrWhiteSpace(modelName);
         _modelName = modelName;
+        _networkTimeout = networkTimeout;
     }
 
     public async Task<ChatResponse> GetResponseAsync(IEnumerable<ChatMessage> messages,
@@ -48,16 +57,45 @@ internal sealed class DeferredLlamaServerChatClient : IChatClient
         while (true)
         {
             var inner = await EnsureInnerAsync(cancellationToken).ConfigureAwait(false);
+
+            // Hold an inference lease for the duration of the request so a graceful operator eject waits for it to
+            // finish before teardown. A refused lease is classified: an EVICTING process fails the request up front as
+            // operator-ejected (running it leaseless would slip under the eject drain, be killed mid-flight by the
+            // teardown, and then self-heal-respawn the just-ejected model — so eject would never stick); only a
+            // genuinely absent/exited process proceeds leaseless, relying on the self-heal below.
+            var acquisition = _supervisor.TryAcquireInferenceLease(_modelName, ModelRole.Chat);
+            if (acquisition.ProcessEvicting)
+            {
+                throw new LlamaServerModelEjectedException(ModelEjectingMessage);
+            }
+
+            var lease = acquisition.Lease;
             try
             {
                 return await inner.GetResponseAsync(messages, options, cancellationToken).ConfigureAwait(false);
             }
-            catch (Exception ex) when (!healed && !cancellationToken.IsCancellationRequested && IsServerGone(ex))
+            catch (Exception ex) when (!cancellationToken.IsCancellationRequested && IsServerGone(ex))
             {
-                // The endpoint behind the cached adapter is dead (ejected / switched / crashed). Drop it and re-ensure a
-                // running server, then retry once. No output was produced, so a retry cannot duplicate tokens.
+                // Operator FORCE-eject takes priority: fail as operator-ejected (never retried) so the terminal state is
+                // truthful, not a generic provider drop.
+                if (lease is { WasEjected: true })
+                {
+                    throw new LlamaServerModelEjectedException(ModelEjectedMessage, ex);
+                }
+
+                // Otherwise (crash / runtime switch) self-heal ONCE: drop the dead adapter, re-ensure, retry. No output
+                // was produced, so a retry cannot duplicate tokens.
+                if (healed)
+                {
+                    throw;
+                }
+
                 healed = true;
                 InvalidateInner();
+            }
+            finally
+            {
+                lease?.Dispose();
             }
         }
     }
@@ -71,31 +109,74 @@ internal sealed class DeferredLlamaServerChatClient : IChatClient
         while (true)
         {
             var inner = await EnsureInnerAsync(cancellationToken).ConfigureAwait(false);
-            await using var enumerator =
-                inner.GetStreamingResponseAsync(messages, options, cancellationToken).GetAsyncEnumerator(cancellationToken);
 
-            bool moved;
+            // Same refusal classification as the non-streaming path: an eject-in-progress fails the request before the
+            // stream opens; only an absent/exited process streams leaseless and relies on the pre-first-chunk self-heal.
+            var acquisition = _supervisor.TryAcquireInferenceLease(_modelName, ModelRole.Chat);
+            if (acquisition.ProcessEvicting)
+            {
+                throw new LlamaServerModelEjectedException(ModelEjectingMessage);
+            }
+
+            var lease = acquisition.Lease;
+            var enumerator =
+                inner.GetStreamingResponseAsync(messages, options, cancellationToken).GetAsyncEnumerator(cancellationToken);
+            var retry = false;
             try
             {
-                // The connection to llama-server is established lazily on the first MoveNext; a refused socket surfaces
-                // here, before any update is yielded — the only point a retry is safe.
-                moved = await enumerator.MoveNextAsync().ConfigureAwait(false);
+                var first = true;
+                while (true)
+                {
+                    bool moved;
+                    try
+                    {
+                        // The connection to llama-server is established lazily on the first MoveNext; a refused/reset
+                        // socket surfaces here (before the first update) or on a later pull (mid-stream).
+                        moved = await enumerator.MoveNextAsync().ConfigureAwait(false);
+                    }
+                    catch (Exception ex) when (!cancellationToken.IsCancellationRequested && IsServerGone(ex))
+                    {
+                        // A force-eject killed the process under us — fail as operator-ejected (never retried), whether
+                        // the drop happened before OR mid-stream.
+                        if (lease is { WasEjected: true })
+                        {
+                            throw new LlamaServerModelEjectedException(ModelEjectedMessage, ex);
+                        }
+
+                        // Pre-first-chunk drop (crash / switch): self-heal ONCE. A mid-stream drop cannot be retried (it
+                        // would replay already-yielded chunks), so it rethrows.
+                        if (!first || healed)
+                        {
+                            throw;
+                        }
+
+                        healed = true;
+                        retry = true;
+                        break;
+                    }
+
+                    if (!moved)
+                    {
+                        yield break;
+                    }
+
+                    yield return enumerator.Current;
+                    first = false;
+                }
             }
-            catch (Exception ex) when (!healed && !cancellationToken.IsCancellationRequested && IsServerGone(ex))
+            finally
             {
-                healed = true;
-                InvalidateInner();
-                continue; // await using disposes the dead enumerator, then we re-ensure + retry from scratch.
+                lease?.Dispose();
+                await enumerator.DisposeAsync().ConfigureAwait(false);
             }
 
-            while (moved)
+            if (!retry)
             {
-                yield return enumerator.Current;
-                // Past the first update the stream is live; a mid-stream drop is NOT retried (it would duplicate output).
-                moved = await enumerator.MoveNextAsync().ConfigureAwait(false);
+                yield break;
             }
 
-            yield break;
+            // Reached only via the self-heal break: drop the dead adapter, then the outer loop re-ensures + retries.
+            InvalidateInner();
         }
     }
 
@@ -136,7 +217,7 @@ internal sealed class DeferredLlamaServerChatClient : IChatClient
             }
 
             var endpoint = await _supervisor.EnsureRunningAsync(_modelName, ModelRole.Chat, ct).ConfigureAwait(false);
-            var built = LlamaServerOpenAIAdapterFactory.CreateChatClient(endpoint.BaseAddress, _modelName);
+            var built = LlamaServerOpenAIAdapterFactory.CreateChatClient(endpoint.BaseAddress, _modelName, _networkTimeout);
             Volatile.Write(ref _inner, built);
             return built;
         }
@@ -158,7 +239,7 @@ internal sealed class DeferredLlamaServerChatClient : IChatClient
     // the process is gone — rather than a model/runtime error. Walks the full chain (including AggregateException fan-out
     // from the OpenAI SDK retry policy, which surfaces the refusal as ClientResultException -> HttpRequestException ->
     // SocketException ConnectionRefused).
-    private static bool IsServerGone(Exception exception)
+    internal static bool IsServerGone(Exception exception)
     {
         var queue = new Queue<Exception>();
         queue.Enqueue(exception);
@@ -170,6 +251,12 @@ internal sealed class DeferredLlamaServerChatClient : IChatClient
                 case SocketException { SocketErrorCode: SocketError.ConnectionRefused or SocketError.ConnectionReset or SocketError.HostUnreachable or SocketError.TimedOut }:
                     return true;
                 case HttpRequestException { HttpRequestError: HttpRequestError.ConnectionError }:
+                    return true;
+                // A process killed MID-RESPONSE (force-eject, crash while streaming) does not surface as a connect-time
+                // failure: the open body stream terminates as HttpIOException(ResponseEnded) — live-observed as
+                // "The response ended prematurely." during a force-eject. Without this arm the ejected-lease translation
+                // above never fires and the user sees a generic provider failure instead of the operator-eject terminal.
+                case HttpIOException { HttpRequestError: HttpRequestError.ResponseEnded or HttpRequestError.ConnectionError }:
                     return true;
             }
 

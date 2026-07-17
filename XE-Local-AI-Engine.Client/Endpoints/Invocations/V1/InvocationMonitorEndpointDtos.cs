@@ -39,6 +39,12 @@ public sealed class InvocationCurrentResponse
     public required int PendingToolCallCount { get; init; }
 
     public required bool HasPendingApproval { get; init; }
+
+    /// <summary>
+    ///     The W3C trace id of the run, for cross-correlation with exported traces/logs. Null when no activity was in
+    ///     scope. Rendered as copyable text in the monitor so a failed run's "See local logs" row links to its trace.
+    /// </summary>
+    public string? TraceId { get; init; }
 }
 
 public sealed class InvocationHistoryResponse
@@ -64,6 +70,12 @@ public sealed class InvocationHistoryResponse
     public required int StreamedChunkCount { get; init; }
 
     public required int StreamedThinkingChunkCount { get; init; }
+
+    /// <summary>
+    ///     The W3C trace id of the run, for cross-correlation with exported traces/logs. Null when no activity was in
+    ///     scope. Rendered as copyable text in the monitor so a failed run's "See local logs" row links to its trace.
+    /// </summary>
+    public string? TraceId { get; init; }
 }
 
 internal static class InvocationMonitorResponseMapper
@@ -101,7 +113,8 @@ internal static class InvocationMonitorResponseMapper
             StreamedChunkCount = state.StreamedChunkCount,
             StreamedThinkingChunkCount = state.StreamedThinkingChunkCount,
             PendingToolCallCount = state.PendingToolCalls.Count,
-            HasPendingApproval = state.PendingApproval is not null
+            HasPendingApproval = state.PendingApproval is not null,
+            TraceId = state.TraceId
         };
     }
 
@@ -119,7 +132,8 @@ internal static class InvocationMonitorResponseMapper
             Error = ToOperatorError(entry.Error, entry.Status, entry.FailureCategory),
             FailureCategory = entry.FailureCategory,
             StreamedChunkCount = entry.StreamedChunkCount,
-            StreamedThinkingChunkCount = entry.StreamedThinkingChunkCount
+            StreamedThinkingChunkCount = entry.StreamedThinkingChunkCount,
+            TraceId = entry.TraceId
         };
     }
 

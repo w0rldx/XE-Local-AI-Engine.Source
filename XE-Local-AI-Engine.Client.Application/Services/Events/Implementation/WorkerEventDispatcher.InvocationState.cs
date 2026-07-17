@@ -1,5 +1,6 @@
 namespace XE_Local_AI_Engine.Client.Services.Events.Implementation;
 
+using System.Diagnostics;
 using XE_Local_AI_Engine.Client.Models;
 using XE_Local_AI_Engine.Client.Services.Chat.Implementation;
 
@@ -11,10 +12,14 @@ public sealed partial class WorkerEventDispatcher
         {
             InvocationId = state.InvocationId,
             ConversationId = state.ConversationId,
+            TraceId = state.TraceId,
             Status = state.Status,
-            StreamedContent = state.StreamedContent,
+            RuntimePhase = state.RuntimePhase,
+            // Copy the immutable accumulators by REFERENCE (O(1)); reading state.StreamedContent here would materialize
+            // the whole response every chunk (the O(n^2) hot-path cost this snapshot design removes).
+            ContentAccumulator = state.ContentAccumulator,
             StreamedChunkCount = state.StreamedChunkCount,
-            StreamedThinkingContent = state.StreamedThinkingContent,
+            ThinkingAccumulator = state.ThinkingAccumulator,
             StreamedThinkingChunkCount = state.StreamedThinkingChunkCount,
             StartedAt = state.StartedAt,
             LastUpdatedAt = state.LastUpdatedAt,
@@ -42,6 +47,11 @@ public sealed partial class WorkerEventDispatcher
         {
             InvocationId = runtimePackage.InvocationId,
             ConversationId = runtimePackage.ConversationId,
+            // Capture the W3C trace id of the ambient (request/hub) activity so the invocation monitor can surface a
+            // copyable correlation id. The pre-spawn spans (AUD4-23) start as children of this same activity, so they
+            // share this trace id — the monitor row therefore links straight to the run's exported trace. A default
+            // (all-zero) id is treated as absent.
+            TraceId = Activity.Current is { } activity && activity.TraceId != default ? activity.TraceId.ToString() : null,
             Status = InvocationStatus.Assigned,
             StartedAt = DateTimeOffset.UtcNow,
             LastUpdatedAt = DateTimeOffset.UtcNow,

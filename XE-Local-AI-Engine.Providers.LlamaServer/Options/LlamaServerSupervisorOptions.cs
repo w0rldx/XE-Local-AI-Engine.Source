@@ -97,4 +97,139 @@ public sealed class LlamaServerSupervisorOptions
     ///     failed probe.
     /// </summary>
     public TimeSpan ReuseLivenessProbeTimeout { get; init; } = TimeSpan.FromSeconds(2);
+
+    /// <summary>
+    ///     Base cold-start readiness budget for a freshly spawned process before its first request (the floor of the
+    ///     size-aware readiness deadline). A small model gets exactly this; a larger one gets this plus a size-aware
+    ///     extension (see <see cref="ReadinessTimeoutSecondsPerGiB" />), so a deterministically slow big model is not
+    ///     killed and retried before it can finish loading. Must be positive.
+    /// </summary>
+    public TimeSpan ReadinessBaseTimeout { get; init; } = TimeSpan.FromSeconds(DefaultReadinessBaseTimeoutSeconds);
+
+    /// <summary>
+    ///     On-disk model size (GiB) above which the readiness deadline is extended. At or below this the base timeout is
+    ///     used unchanged; above it, <see cref="ReadinessTimeoutSecondsPerGiB" /> seconds are added per excess GiB. Must
+    ///     be non-negative.
+    /// </summary>
+    public double ReadinessTimeoutModelSizeThresholdGiB { get; init; } = DefaultReadinessSizeThresholdGiB;
+
+    /// <summary>
+    ///     Seconds of readiness budget added per GiB of on-disk model size ABOVE
+    ///     <see cref="ReadinessTimeoutModelSizeThresholdGiB" />. A large model on a cold cache/slow disk loads
+    ///     proportionally slower, so its readiness deadline scales with its size instead of a one-size-fits-all constant.
+    ///     Must be non-negative.
+    /// </summary>
+    public double ReadinessTimeoutSecondsPerGiB { get; init; } = DefaultReadinessSecondsPerGiB;
+
+    /// <summary>
+    ///     Hard ceiling on the size-aware readiness deadline: no matter how large the model, a spawn is never given more
+    ///     than this to become ready before it is treated as a readiness timeout. Bounds the worst-case stall. Must be
+    ///     positive and at least <see cref="ReadinessBaseTimeout" />.
+    /// </summary>
+    public TimeSpan ReadinessTimeoutCap { get; init; } = TimeSpan.FromSeconds(DefaultReadinessCapSeconds);
+
+    /// <summary>
+    ///     How many times a spawn that TIMED OUT waiting for readiness (the process is alive but slow) is retried before
+    ///     the failure is surfaced. A readiness timeout on a deterministically slow/large model is not a transient crash,
+    ///     so retrying it many times only multiplies the kill/reload thrash; the default retries it at most once. A
+    ///     process-exit-during-load (a deterministic crash) stays non-retryable regardless of this value, and a transient
+    ///     start failure is still retried up to <see cref="MaxRestartAttempts" />. Must be non-negative.
+    /// </summary>
+    public int MaxReadinessTimeoutRetries { get; init; } = DefaultMaxReadinessTimeoutRetries;
+
+    /// <summary>
+    ///     Bounded time an operator eject waits for in-flight inference to drain before it reports back. A graceful eject
+    ///     marks the process evicting (no new leases), waits up to this for active requests to finish, then tears the
+    ///     process down; if the wait elapses the eject reports it could not complete safely (unless forced). Must be
+    ///     positive.
+    /// </summary>
+    public TimeSpan EjectDrainTimeout { get; init; } = TimeSpan.FromSeconds(DefaultEjectDrainTimeoutSeconds);
+
+    /// <summary>
+    ///     Network timeout for a single local-inference HTTP call to the llama-server OpenAI-compatible surface (AUD4-18).
+    ///     Set EXPLICITLY on the built OpenAI client so it never inherits System.ClientModel's 100 s
+    ///     <c>NetworkTimeout</c> default (which would abort a legitimately long local generation). Deliberately GENEROUS
+    ///     (default 600 s): streaming inter-token stalls are already bounded by the invocation's stream-idle watchdog and
+    ///     a non-streaming sub-agent completion is bounded by the invocation timeout, so this is only the outermost floor
+    ///     against a wedged socket and must not pre-empt a slow-but-progressing local model. The SDK retry layer is pinned
+    ///     OFF independently of this value (a local chat completion is non-idempotent and must never be re-issued). Must be
+    ///     positive.
+    /// </summary>
+    public TimeSpan HttpNetworkTimeout { get; init; } = TimeSpan.FromSeconds(DefaultHttpNetworkTimeoutSeconds);
+
+    private const double DefaultReadinessBaseTimeoutSeconds = 120d;
+    private const double DefaultReadinessSizeThresholdGiB = 4d;
+    private const double DefaultReadinessSecondsPerGiB = 20d;
+    private const double DefaultReadinessCapSeconds = 600d;
+    private const int DefaultMaxReadinessTimeoutRetries = 1;
+    private const double DefaultEjectDrainTimeoutSeconds = 30d;
+    private const double DefaultHttpNetworkTimeoutSeconds = 600d;
+
+    /// <summary>
+    ///     Computes the size-aware cold-start readiness deadline for a model of <paramref name="modelSizeBytes" /> on
+    ///     disk: <see cref="ReadinessBaseTimeout" /> plus <see cref="ReadinessTimeoutSecondsPerGiB" /> per GiB above
+    ///     <see cref="ReadinessTimeoutModelSizeThresholdGiB" />, clamped to <see cref="ReadinessTimeoutCap" />. A
+    ///     non-positive/unknown size (0) yields the base timeout unchanged.
+    /// </summary>
+    public TimeSpan ResolveReadinessTimeout(long modelSizeBytes)
+    {
+        if (modelSizeBytes <= 0)
+        {
+            return ReadinessBaseTimeout;
+        }
+
+        const double BytesPerGiB = 1024d * 1024d * 1024d;
+        var sizeGiB = modelSizeBytes / BytesPerGiB;
+        var excessGiB = Math.Max(0d, sizeGiB - ReadinessTimeoutModelSizeThresholdGiB);
+        var extended = ReadinessBaseTimeout + TimeSpan.FromSeconds(excessGiB * ReadinessTimeoutSecondsPerGiB);
+
+        return extended > ReadinessTimeoutCap ? ReadinessTimeoutCap : extended;
+    }
+
+    /// <summary>
+    ///     Fails fast on structurally invalid values so a misconfiguration surfaces at startup rather than as a runtime
+    ///     stall. Called by the supervisor's constructor.
+    /// </summary>
+    public void Validate()
+    {
+        if (ReadinessBaseTimeout <= TimeSpan.Zero)
+        {
+            throw new InvalidOperationException($"{nameof(ReadinessBaseTimeout)} must be positive (was {ReadinessBaseTimeout}).");
+        }
+
+        if (ReadinessTimeoutCap <= TimeSpan.Zero)
+        {
+            throw new InvalidOperationException($"{nameof(ReadinessTimeoutCap)} must be positive (was {ReadinessTimeoutCap}).");
+        }
+
+        if (ReadinessTimeoutCap < ReadinessBaseTimeout)
+        {
+            throw new InvalidOperationException($"{nameof(ReadinessTimeoutCap)} ({ReadinessTimeoutCap}) must be at least {nameof(ReadinessBaseTimeout)} ({ReadinessBaseTimeout}).");
+        }
+
+        if (ReadinessTimeoutModelSizeThresholdGiB < 0d)
+        {
+            throw new InvalidOperationException($"{nameof(ReadinessTimeoutModelSizeThresholdGiB)} must be non-negative (was {ReadinessTimeoutModelSizeThresholdGiB}).");
+        }
+
+        if (ReadinessTimeoutSecondsPerGiB < 0d)
+        {
+            throw new InvalidOperationException($"{nameof(ReadinessTimeoutSecondsPerGiB)} must be non-negative (was {ReadinessTimeoutSecondsPerGiB}).");
+        }
+
+        if (MaxReadinessTimeoutRetries < 0)
+        {
+            throw new InvalidOperationException($"{nameof(MaxReadinessTimeoutRetries)} must be non-negative (was {MaxReadinessTimeoutRetries}).");
+        }
+
+        if (EjectDrainTimeout <= TimeSpan.Zero)
+        {
+            throw new InvalidOperationException($"{nameof(EjectDrainTimeout)} must be positive (was {EjectDrainTimeout}).");
+        }
+
+        if (HttpNetworkTimeout <= TimeSpan.Zero)
+        {
+            throw new InvalidOperationException($"{nameof(HttpNetworkTimeout)} must be positive (was {HttpNetworkTimeout}).");
+        }
+    }
 }

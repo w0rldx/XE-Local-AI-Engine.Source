@@ -1,11 +1,11 @@
 namespace XE_Local_AI_Engine.Client.Services.Chat.Implementation;
 
-using System.Data;
 using System.Data.Common;
 using System.Globalization;
 using Microsoft.Data.Sqlite;
 using Microsoft.EntityFrameworkCore;
 using XE_Local_AI_Engine.Client.Persistence;
+using XE_Local_AI_Engine.Client.Persistence.Sqlite;
 using static NodeChatMetadataSerializer;
 
 /// <summary>
@@ -16,17 +16,12 @@ using static NodeChatMetadataSerializer;
 /// </summary>
 internal static class NodeChatPersistenceSql
 {
-    internal static async Task OpenIfNeededAsync(DbConnection? connection, CancellationToken cancellationToken)
+    // Opens the node chat connection if needed AND applies the WAL/busy_timeout/synchronous pragmas on the open (AUD4-08).
+    // This is the single choke point every raw-ADO node-chat read/write routes through, so it is where the raw path gets
+    // the same connection posture the EF interceptor applies to EF-initiated opens.
+    internal static Task OpenIfNeededAsync(DbConnection? connection, CancellationToken cancellationToken)
     {
-        if (connection is null)
-        {
-            throw new InvalidOperationException("The node chat database connection was not available.");
-        }
-
-        if (connection.State != ConnectionState.Open)
-        {
-            await connection.OpenAsync(cancellationToken).ConfigureAwait(false);
-        }
+        return NodeSqlitePragmas.OpenAndConfigureAsync(connection, cancellationToken);
     }
 
     internal static void AddParameter(DbCommand command, string name, object? value)

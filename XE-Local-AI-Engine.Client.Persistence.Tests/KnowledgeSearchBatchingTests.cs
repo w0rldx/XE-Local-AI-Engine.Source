@@ -122,6 +122,41 @@ public sealed class KnowledgeSearchBatchingTests : IDisposable
         AssertEx.Equal(chunkC, orderedChunkIds[2]);
     }
 
+    [Test]
+    public async Task SearchAsync_DropsContentDuplicates_KeepingTheHigherRankedOccurrence()
+    {
+        var databasePath = GetDatabasePath("content-dedup.sqlite");
+        var document = Guid.NewGuid();
+        var chunkA = Guid.NewGuid();
+        var chunkB = Guid.NewGuid();
+        var chunkC = Guid.NewGuid();
+
+        await MigrateAsync(databasePath).ConfigureAwait(false);
+        await SeedDocumentAsync(databasePath, document).ConfigureAwait(false);
+        // A and B carry the SAME content up to whitespace + case; C is distinct. A outranks B in the fused (FTS) order.
+        await SeedChunkAsync(databasePath, document, chunkA, chunkIndex: 0, "Shared answer text.").ConfigureAwait(false);
+        await SeedChunkAsync(databasePath, document, chunkB, chunkIndex: 1, "shared   answer   text.").ConfigureAwait(false);
+        await SeedChunkAsync(databasePath, document, chunkC, chunkIndex: 2, "A different answer.").ConfigureAwait(false);
+
+        var ftsHits = new List<FtsSearchHit>
+        {
+            new(chunkA, document, 4.0),
+            new(chunkB, document, 3.0),
+            new(chunkC, document, 2.0)
+        };
+
+        await using var context = AgentDefinitionTestContextFactory.CreateForMigration(databasePath, _keyHolder);
+        var service = CreateSearchService(context, ftsHits, DegradedProviderResolver());
+
+        var result = await service.SearchAsync(new KnowledgeSearchRequest("the query", Limit: 5), CancellationToken.None).ConfigureAwait(false);
+
+        var orderedChunkIds = result.Results.Select(hit => hit.ChunkId).ToList();
+        AssertEx.Equal(2, orderedChunkIds.Count);
+        AssertEx.Equal(chunkA, orderedChunkIds[0]);
+        AssertEx.Equal(chunkC, orderedChunkIds[1]);
+        AssertEx.True(!orderedChunkIds.Contains(chunkB), "The lower-ranked content duplicate (differing only in whitespace/case) must be dropped.");
+    }
+
     // ── service factory ──────────────────────────────────────────────────────────────────────────────
 
     private static KnowledgeSearchService CreateSearchService(NodeChatDbContext context,
@@ -150,6 +185,7 @@ public sealed class KnowledgeSearchBatchingTests : IDisposable
             new ReciprocalRankFusion(),
             Substitute.For<IRerankerClient>(),
             Substitute.For<IContextExpansionService>(),
+            Substitute.For<IKnowledgeQueryEmbeddingCache>(),
             options,
             NullLogger<KnowledgeSearchService>.Instance);
     }

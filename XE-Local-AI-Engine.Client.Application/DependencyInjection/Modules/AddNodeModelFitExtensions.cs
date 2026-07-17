@@ -2,6 +2,7 @@ namespace XE_Local_AI_Engine.Client.DependencyInjection.Modules;
 
 using XE_Local_AI_Engine.Client.Persistence.Implementation;
 using XE_Local_AI_Engine.Client.Persistence.Stores;
+using XE_Local_AI_Engine.Client.Services.Capacity;
 using XE_Local_AI_Engine.Client.Services.Inference;
 using XE_Local_AI_Engine.Client.Services.ModelFit;
 using XE_Local_AI_Engine.Client.Services.ModelFit.Catalog;
@@ -10,9 +11,12 @@ using XE_Local_AI_Engine.Client.Services.ModelFit.Fit;
 using XE_Local_AI_Engine.Client.Services.ModelFit.Gguf;
 using XE_Local_AI_Engine.Client.Services.ModelFit.Implementation;
 using XE_Local_AI_Engine.Client.Services.ModelFit.Validation;
+using XE_Local_AI_Engine.Client.Common.Telemetry;
 using XE_Local_AI_Engine.Client.Services.Persistence.Implementation;
+using XE_Local_AI_Engine.Providers.Abstractions.Capabilities;
 using XE_Local_AI_Engine.Providers.Capabilities;
 using XE_Local_AI_Engine.Providers.HuggingFace;
+using XE_Local_AI_Engine.Providers.HuggingFace.Telemetry;
 using XE_Local_AI_Engine.Providers.LlamaServer.Contracts;
 using XE_Local_AI_Engine.Providers.LlamaServer.Implementation;
 
@@ -108,6 +112,21 @@ internal static class AddNodeModelFitExtensions
         builder.Services.AddHardwareProfiler(string.IsNullOrWhiteSpace(dataDirectoryRoot)
             ? builder.Environment.ContentRootPath
             : dataDirectoryRoot);
+
+        // Bridge the profiler's probe-timeout metrics seam to the application NodeMetrics meter (the Capabilities layer
+        // cannot reference it directly). Registered after AddHardwareProfiler so it overrides the null default.
+        builder.Services.AddSingleton<IHardwareProbeMetrics, NodeMetricsHardwareProbeMetrics>();
+
+        // AUD4-18: same bridge for the HF download read-idle-timeout seam (Providers.HuggingFace cannot reference the
+        // application meter). A plain registration wins over the null default the HF store module registers.
+        builder.Services.AddSingleton<IHfDownloadMetrics, NodeMetricsHfDownloadMetrics>();
+
+        // AUD4-03 runtime device audit: composes the hardware profiler + the GPU-variant selector + the device-inventory
+        // probe to detect a silent CPU fallback (a GPU box whose selected runtime runs on the CPU), and exposes the
+        // audited EFFECTIVE hardware profile the advisor + capacity gate size against. Singleton — it memoizes the
+        // binary-derived audit and depends only on singletons (the profiler, selector, and device probe). The
+        // device-inventory probe (ILlamaDeviceInventoryProbe) is registered by the llama-server provider stack.
+        builder.Services.AddSingleton<IRuntimeDeviceAudit, RuntimeDeviceAuditService>();
 
         return builder;
     }

@@ -90,9 +90,10 @@ public sealed class RunningModelSnapshotMappingTests
         // the UI can omit those columns.
         var response = LocalModelsMapper.ToRunningResponse([
             new RunningModelSnapshot("llama3:8b", ModelName: null, ExpiresAt: null)
-        ]);
+        ], ollamaConfigured: true);
 
         AssertEx.True(response.IsAvailable);
+        AssertEx.True(response.OllamaConfigured);
         var model = AssertEx.NotNull(response.Items.SingleOrDefault());
         AssertEx.Equal("llama3:8b", model.ModelName);
         AssertEx.Null(model.SizeBytes);
@@ -107,7 +108,7 @@ public sealed class RunningModelSnapshotMappingTests
         var response = LocalModelsMapper.ToRunningResponse([
             new RunningModelSnapshot("raw", "llama3:8b", ExpiresAt: null),
             new RunningModelSnapshot(Name: null, ModelName: null, ExpiresAt: null)
-        ]);
+        ], ollamaConfigured: true);
 
         var model = AssertEx.NotNull(response.Items.SingleOrDefault());
         AssertEx.Equal("llama3:8b", model.ModelName);

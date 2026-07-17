@@ -1,9 +1,9 @@
 namespace XE_Local_AI_Engine.Client.Persistence.Implementation;
 
-using System.Data;
 using System.Data.Common;
 using System.Globalization;
 using Microsoft.EntityFrameworkCore;
+using XE_Local_AI_Engine.Client.Persistence.Sqlite;
 using XE_Local_AI_Engine.Client.Persistence.Stores;
 
 /// <summary>
@@ -96,12 +96,10 @@ public sealed class PlaybookMonitorStore(NodeChatDbContext dbContext) : IPlayboo
         return reader.IsDBNull(ordinal) ? 0 : Convert.ToInt32(reader.GetValue(ordinal), CultureInfo.InvariantCulture);
     }
 
-    private static async Task OpenIfNeededAsync(DbConnection connection, CancellationToken cancellationToken)
+    private static Task OpenIfNeededAsync(DbConnection connection, CancellationToken cancellationToken)
     {
-        if (connection.State != ConnectionState.Open)
-        {
-            await connection.OpenAsync(cancellationToken).ConfigureAwait(false);
-        }
+        // AUD4-08: open-if-needed AND apply the shared WAL/busy_timeout/synchronous pragmas on the open.
+        return NodeSqlitePragmas.OpenAndConfigureAsync(connection, cancellationToken);
     }
 
     private static void AddParameter(DbCommand command, string name, object? value)

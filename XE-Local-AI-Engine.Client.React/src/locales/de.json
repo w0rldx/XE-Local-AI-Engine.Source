@@ -295,6 +295,7 @@
 			"waitingForStreamedResponse": "Warte auf gestreamte Antwort",
 			"waitingForResponse": "Warte auf Antwort",
 			"queued": "In Warteschlange — warte auf aktuelle Aufgabe",
+			"loadingModel": "Modell wird geladen…",
 			"remoteViewOnlyTitle": "Remote-Unterhaltung",
 			"remoteViewOnly": "Diese Unterhaltung wurde von einem gekoppelten Client gestartet und ist auf diesem Knoten nur lesbar.",
 			"streamErrors": {
@@ -679,7 +680,13 @@
 			"modelUnavailable": "Nicht verfügbar",
 			"reasoningLabel": "Reasoning",
 			"retryConnection": "Erneut versuchen",
-			"stop": "Stopp"
+			"stop": "Stopp",
+			"stopped": "Generierung gestoppt",
+			"loadError": {
+				"title": "Diese Unterhaltung konnte nicht geladen werden",
+				"body": "Beim Laden dieser Nachrichten ist ein Fehler aufgetreten.",
+				"retry": "Erneut versuchen"
+			}
 		},
 		"clientNodes": {
 			"fields": {
@@ -2204,6 +2211,10 @@
 					"message": "Keine unterstützte GPU erkannt — Ausführung auf der CPU. Antworten sind langsamer.",
 					"dismiss": "Schließen"
 				},
+				"cpuFallbackAlert": {
+					"title": "Ausführung auf der CPU trotz erkannter GPU",
+					"reason": "Die gewählte Inferenz-Laufzeit konnte die GPU dieses Rechners nicht nutzen, daher läuft die Inferenz auf der CPU."
+				},
 				"refresh": "Hardware aktualisieren",
 				"loading": "Hardware wird erkannt…",
 				"error": "Hardware konnte nicht erkannt werden.",
@@ -2279,10 +2290,10 @@
 		"loadedModels": {
 			"eyebrow": "Worker-Node",
 			"title": "Geladene Modelle",
-			"subtitle": "Modelle, die die lokale Laufzeit derzeit im Speicher hält (RAM/VRAM). Auswerfen gibt diesen Speicher frei — kontrolliert, nachdem eine laufende Generierung abgeschlossen ist.",
+			"subtitle": "Modelle, die die lokale Laufzeit derzeit im Speicher hält (RAM/VRAM). Auswerfen gibt diesen Speicher frei; läuft gerade eine Generierung, wartet die App kurz auf deren Abschluss und unterbricht sie möglicherweise.",
 			"loading": "Geladene Modelle werden geladen…",
 			"empty": "Derzeit sind keine Modelle geladen.",
-			"unavailable": "Die lokale Modell-Laufzeit ist derzeit nicht verfügbar. Diese Ansicht aktualisiert sich, sobald sie erreichbar ist.",
+			"unavailable": "Ollama ist derzeit nicht erreichbar. Es ist ein optionaler sekundärer Anbieter, daher gibt es hier möglicherweise nichts anzuzeigen. llama.cpp-Modelle erscheinen weiterhin unten.",
 			"cpuOnly": "Nur CPU",
 			"expired": "Abgelaufen",
 			"sizeUnknown": "Unbekannt",
@@ -2298,11 +2309,11 @@
 			},
 			"eject": {
 				"button": "Auswerfen",
-				"tooltip": "Gibt Speicher frei, nachdem die laufende Generierung abgeschlossen ist",
+				"tooltip": "Gibt den Speicher des Modells frei; eine laufende Generierung wird möglicherweise unterbrochen",
 				"confirmTitle": "Modell auswerfen",
-				"confirmDescription": "'{{modelName}}' aus dem Speicher auswerfen? Der Speicher wird freigegeben, nachdem die laufende Generierung abgeschlossen ist; eine laufende Antwort wird nicht unterbrochen.",
+				"confirmDescription": "'{{modelName}}' aus dem Speicher auswerfen? Läuft gerade eine Generierung, wartet die App kurz auf deren Abschluss; das Auswerfen kann sie unterbrechen.",
 				"confirmAction": "Auswerfen",
-				"success": "'{{modelName}}' wird ausgeworfen — Speicher wird nach der laufenden Generierung frei.",
+				"success": "'{{modelName}}' wird ausgeworfen — der Speicher wird in Kürze freigegeben.",
 				"error": "Das Modell konnte nicht ausgeworfen werden."
 			},
 			"ollama": {
@@ -2318,6 +2329,22 @@
 				"eject": "Entladen",
 				"ejected": "Modell entladen.",
 				"ejectError": "Das Modell konnte nicht entladen werden.",
+				"ejectConfirm": {
+					"title": "Modell entladen",
+					"description": "'{{modelName}}' aus der llama.cpp-Laufzeit entladen? Der Speicher wird freigegeben, nachdem eine laufende Generierung abgeschlossen ist; eine laufende Antwort wird nicht unterbrochen.",
+					"action": "Entladen"
+				},
+				"forceConfirm": {
+					"title": "Entladen erzwingen?",
+					"description": "'{{modelName}}' generiert noch. Trotzdem erzwingen und die laufende Antwort unterbrechen?",
+					"action": "Entladen erzwingen"
+				},
+				"ejectOutcome": {
+					"ejected": "Modell entladen.",
+					"forced": "Modell entladen — die laufende Generierung wurde unterbrochen.",
+					"notRunning": "Dieses Modell lief nicht.",
+					"timedOutStillBusy": "'{{modelName}}' beendet noch eine Antwort und wurde daher weiter ausgeführt."
+				},
 				"columns": {
 					"model": "Modell",
 					"role": "Rolle",

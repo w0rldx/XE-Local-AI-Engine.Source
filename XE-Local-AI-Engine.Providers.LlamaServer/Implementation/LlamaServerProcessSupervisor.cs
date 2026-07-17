@@ -6,6 +6,7 @@ using System.Net;
 using System.Net.Sockets;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
+using XE_Local_AI_Engine.Providers.Abstractions.Capabilities;
 using XE_Local_AI_Engine.Providers.Abstractions.Gguf;
 using XE_Local_AI_Engine.Providers.LlamaServer.Contracts;
 using XE_Local_AI_Engine.Providers.LlamaServer.Options;
@@ -29,11 +30,16 @@ public sealed class LlamaServerProcessSupervisor : ILlamaServerProcessSupervisor
 {
     private const string NonRetryableMarker = "LlamaServer.NonRetryable";
 
-    /// <summary>Cold-start readiness budget for a freshly spawned process before its first request.</summary>
-    private static readonly TimeSpan ReadinessTimeout = TimeSpan.FromMinutes(2);
+    // Flags a readiness TIMEOUT (process alive but slow) so the restart loop retries it at most
+    // MaxReadinessTimeoutRetries times instead of the full MaxRestartAttempts — a deterministically slow/large model
+    // is not a transient crash, so retrying it many times only multiplies the kill/reload thrash.
+    private const string ReadinessTimeoutMarker = "LlamaServer.ReadinessTimeout";
 
     /// <summary>Poll cadence for observing that a freshly spawned process exited during its readiness wait.</summary>
     private static readonly TimeSpan ProcessExitPollInterval = TimeSpan.FromMilliseconds(250);
+
+    /// <summary>Poll cadence for observing that in-flight inference leases have drained during a graceful eject.</summary>
+    private static readonly TimeSpan LeaseDrainPollInterval = TimeSpan.FromMilliseconds(25);
 
     /// <summary>Base delay between crash-restart attempts; grows linearly per attempt.</summary>
     private static readonly TimeSpan RestartBackoffStep = TimeSpan.FromMilliseconds(250);
@@ -43,10 +49,19 @@ public sealed class LlamaServerProcessSupervisor : ILlamaServerProcessSupervisor
     private readonly HashSet<int> _allocatedPorts = [];
     private readonly ILlamaCppBinaryManager _binaryManager;
 
-    // Single-flight ensure-running gate, one semaphore per (model, role) key.
+    // Single-flight ensure-running gate, one semaphore per (model, role) key. Held only for the short reuse/decision
+    // section, NOT for the whole spawn — the spawn itself runs detached (see _inflightSpawns).
     private readonly ConcurrentDictionary<ProcessKey, SemaphoreSlim> _ensureGates = new();
+
+    // The in-flight, DETACHED spawn task per (model, role) key. A caller AWAITS this task but never owns its lifetime:
+    // a caller cancelling its own wait does not abort the model load, which continues under its own readiness deadline
+    // and leaves the model warm for the next send (the deliberate design — a user who cancels before the first token
+    // does not throw away the load everyone behind them is waiting on). Exactly one runs per key at a time; it removes
+    // itself on completion (success or failure) so the next ensure retries fresh.
+    private readonly ConcurrentDictionary<ProcessKey, Task<RunningProcess>> _inflightSpawns = new();
     private readonly LlamaServerExternalEndpointOptions _externalEndpoints;
     private readonly ILlamaServerHealthProbe _healthProbe;
+    private readonly ILlamaServerLaunchPolicy _launchPolicy;
     private readonly ILogger<LlamaServerProcessSupervisor> _logger;
     private readonly ILlamaServerProcessLauncher _launcher;
     private readonly IGgufModelStore _modelStore;
@@ -60,6 +75,10 @@ public sealed class LlamaServerProcessSupervisor : ILlamaServerProcessSupervisor
     private readonly CancellationTokenSource _shutdownCts = new();
     private readonly TimeProvider _timeProvider;
     private readonly IGpuVariantSelector _variantSelector;
+
+    // AUD4-06: the process-wide GPU-load admission gate. GPU-backed spawns serialize their spawn-through-readiness window
+    // through it (shared with the image supervisor) so two --fit loads never read the same free-VRAM snapshot at once.
+    private readonly IGpuModelLoadAdmission _loadAdmission;
     private int _disposed;
 
     /// <summary>
@@ -73,9 +92,11 @@ public sealed class LlamaServerProcessSupervisor : ILlamaServerProcessSupervisor
         ILlamaServerHealthProbe healthProbe,
         LlamaServerSupervisorOptions options,
         IInferenceProfileResolver profileResolver,
+        ILlamaServerLaunchPolicy launchPolicy,
         LlamaServerExternalEndpointOptions? externalEndpoints = null,
         TimeProvider? timeProvider = null,
-        ILogger<LlamaServerProcessSupervisor>? logger = null)
+        ILogger<LlamaServerProcessSupervisor>? logger = null,
+        IGpuModelLoadAdmission? loadAdmission = null)
     {
         _binaryManager = binaryManager ?? throw new ArgumentNullException(nameof(binaryManager));
         _variantSelector = variantSelector ?? throw new ArgumentNullException(nameof(variantSelector));
@@ -83,10 +104,16 @@ public sealed class LlamaServerProcessSupervisor : ILlamaServerProcessSupervisor
         _launcher = launcher ?? throw new ArgumentNullException(nameof(launcher));
         _healthProbe = healthProbe ?? throw new ArgumentNullException(nameof(healthProbe));
         _options = options ?? throw new ArgumentNullException(nameof(options));
+        _options.Validate();
         _profileResolver = profileResolver ?? throw new ArgumentNullException(nameof(profileResolver));
+        _launchPolicy = launchPolicy ?? throw new ArgumentNullException(nameof(launchPolicy));
         _externalEndpoints = externalEndpoints ?? new LlamaServerExternalEndpointOptions();
         _timeProvider = timeProvider ?? TimeProvider.System;
         _logger = logger ?? NullLogger<LlamaServerProcessSupervisor>.Instance;
+
+        // Absent a wired gate (a provider-only host / test), default to the no-op floor so GPU-load serialization is
+        // simply off — the composition root injects the real, metric-emitting singleton shared with the image supervisor.
+        _loadAdmission = loadAdmission ?? new NoOpGpuModelLoadAdmission();
 
         _reaperLoop = Task.Run(() => ReapIdleLoopAsync(_shutdownCts.Token));
     }
@@ -149,18 +176,38 @@ public sealed class LlamaServerProcessSupervisor : ILlamaServerProcessSupervisor
             }
         }
 
-        // Single-flight: concurrent callers for the same key spawn exactly once.
+        // Decide (under the single-flight gate, held only briefly) between a reuse and joining/starting the DETACHED
+        // spawn, then await the spawn WITHOUT binding its lifetime to this caller's token.
+        var decision = await DecideEnsureAsync(key, ct).ConfigureAwait(false);
+        if (decision.Reused is { } reusedEndpoint)
+        {
+            return reusedEndpoint;
+        }
+
+        var running = await AwaitDetachedSpawnAsync(decision.SpawnTask!, ct).ConfigureAwait(false);
+        return running.Endpoint;
+    }
+
+    /// <summary>
+    ///     The single-flight decision, taken under the per-key gate held only briefly: reuse a now-registered process,
+    ///     or return the shared DETACHED spawn task (creating it if none is in flight). The gate is released before the
+    ///     caller awaits the spawn, so a caller cancelling its wait cannot leave the gate held — and because the spawn is
+    ///     the shared <see cref="_inflightSpawns" /> task, concurrent callers still spawn exactly once.
+    /// </summary>
+    private async Task<EnsureDecision> DecideEnsureAsync(ProcessKey key, CancellationToken ct)
+    {
         var gate = _ensureGates.GetOrAdd(key, static _ => new SemaphoreSlim(initialCount: 1, maxCount: 1));
         await gate.WaitAsync(ct).ConfigureAwait(false);
         try
         {
-            // Re-check under the gate — another caller may have spawned while we waited.
-            if (_processes.TryGetValue(key, out existing) && !existing.Handle.HasExited)
+            // Re-check under the gate — a detached spawn may have registered a live process while we waited (it
+            // registers into _processes before removing itself from _inflightSpawns, so a reuse here never misses it).
+            if (_processes.TryGetValue(key, out var existing) && !existing.Handle.HasExited)
             {
                 var reused = await TryReuseAsync(key, existing, ct).ConfigureAwait(false);
                 if (reused is not null)
                 {
-                    return reused;
+                    return new EnsureDecision(reused, SpawnTask: null);
                 }
             }
 
@@ -171,14 +218,72 @@ public sealed class LlamaServerProcessSupervisor : ILlamaServerProcessSupervisor
                 await RemoveProcessAsync(key, existing).ConfigureAwait(false);
             }
 
-            var running = await SpawnWithRestartAsync(key, ct).ConfigureAwait(false);
-            return running.Endpoint;
+            // Join the in-flight detached spawn or start one. GetOrAdd runs its factory at most once here because we hold
+            // the gate, so two callers never start two spawns for the same key.
+            var spawnTask = _inflightSpawns.GetOrAdd(key, StartDetachedSpawn);
+            return new EnsureDecision(Reused: null, spawnTask);
         }
         finally
         {
             gate.Release();
         }
     }
+
+    /// <summary>
+    ///     Starts the detached spawn for <paramref name="key" /> on its OWN lifetime (the shutdown token, never a
+    ///     caller's), so the load runs to completion regardless of whether a waiting caller cancels. The spawn registers
+    ///     the process into <see cref="_processes" /> (inside <see cref="SpawnCoreAsync" />) BEFORE this task removes
+    ///     itself from <see cref="_inflightSpawns" />, so a concurrent reuse-check never sees "neither in-flight nor
+    ///     registered". On failure the spawn tears down its own half-started child and the in-flight entry is dropped so
+    ///     the next ensure retries fresh.
+    /// </summary>
+    private Task<RunningProcess> StartDetachedSpawn(ProcessKey key)
+    {
+        var completion = new TaskCompletionSource<RunningProcess>(TaskCreationOptions.RunContinuationsAsynchronously);
+        var task = completion.Task;
+
+        // Guarantee a faulted detached spawn is observed even if every waiting caller has abandoned its wait (e.g. all
+        // callers cancelled, or the spawn is cancelled on shutdown), so it can never surface as an UnobservedTaskException.
+        // Awaiting callers still receive the exception — this continuation only marks it observed.
+        _ = task.ContinueWith(static faulted => _ = faulted.Exception,
+            CancellationToken.None,
+            TaskContinuationOptions.OnlyOnFaulted | TaskContinuationOptions.ExecuteSynchronously,
+            TaskScheduler.Default);
+
+        _ = Task.Run(async () =>
+        {
+            try
+            {
+                var running = await SpawnWithRestartAsync(key, _shutdownCts.Token).ConfigureAwait(false);
+                completion.SetResult(running);
+            }
+            catch (Exception ex)
+            {
+                completion.SetException(ex);
+            }
+            finally
+            {
+                // Remove THIS task (key+value) so a concurrent GetOrAdd that already captured a newer task is untouched.
+                _inflightSpawns.TryRemove(new KeyValuePair<ProcessKey, Task<RunningProcess>>(key, task));
+            }
+        });
+
+        return task;
+    }
+
+    /// <summary>
+    ///     Awaits the shared detached spawn with the CALLER's token, but never cancels the spawn itself: a cancelled
+    ///     caller merely abandons its wait (its <see cref="OperationCanceledException" /> propagates) while the load
+    ///     continues in the background and the model becomes warm for the next send. INVARIANT: caller cancellation
+    ///     never aborts an in-flight model load.
+    /// </summary>
+    private static Task<RunningProcess> AwaitDetachedSpawnAsync(Task<RunningProcess> spawnTask, CancellationToken ct)
+    {
+        return spawnTask.WaitAsync(ct);
+    }
+
+    /// <summary>The outcome of <see cref="DecideEnsureAsync" />: a reused endpoint XOR the shared detached spawn task.</summary>
+    private readonly record struct EnsureDecision(LlamaServerEndpoint? Reused, Task<RunningProcess>? SpawnTask);
 
     /// <summary>
     ///     Reuse decision for an already-registered, not-yet-exited process: hands back its endpoint when it is healthy
@@ -257,6 +362,133 @@ public sealed class LlamaServerProcessSupervisor : ILlamaServerProcessSupervisor
     }
 
     /// <inheritdoc />
+    public async Task<LlamaServerEjectOutcome> EjectAsync(string modelName, ModelRole role, bool force, CancellationToken ct)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(modelName);
+        ObjectDisposedException.ThrowIf(Volatile.Read(ref _disposed) != 0, this);
+
+        var key = new ProcessKey(modelName, role);
+        if (!_processes.TryGetValue(key, out var target) || target.Handle.HasExited)
+        {
+            // Nothing live to eject. Reap a lingering dead entry so its slot/port frees, then report an idempotent no-op.
+            if (target is not null)
+            {
+                await RemoveProcessAsync(key, target).ConfigureAwait(false);
+            }
+
+            return LlamaServerEjectOutcome.NotRunning;
+        }
+
+        // Mark evicting: new inference leases are refused (TryAcquireInferenceLease returns null) so the active-lease
+        // count can only fall while we drain. The process stays registered and reusable until we tear it down or give up.
+        target.MarkEvicting();
+        _logger.LogInformation("Operator eject requested for model {ModelName} role {Role} (force: {Force}); draining {ActiveLeases} in-flight request(s).",
+            key.ModelName, key.Role, force, target.ActiveLeases);
+
+        bool drained;
+        try
+        {
+            drained = await DrainLeasesAsync(target, ct).ConfigureAwait(false);
+        }
+        catch
+        {
+            // The drain itself was aborted (the eject request was cancelled mid-drain): no teardown happened, so the
+            // evicting mark must not outlive this call — left set, the process would refuse every future lease forever.
+            target.ClearEvicting();
+            throw;
+        }
+
+        if (drained)
+        {
+            await RemoveProcessAsync(key, target).ConfigureAwait(false);
+            _logger.LogInformation("Operator eject completed for model {ModelName} role {Role}: drained and torn down.", key.ModelName, key.Role);
+            return LlamaServerEjectOutcome.Ejected;
+        }
+
+        if (force)
+        {
+            // Force: tear down despite in-flight work. Mark ejected FIRST so the interrupted request's leaseholder can
+            // classify the resulting connection failure as an operator eject rather than a generic provider drop.
+            target.MarkEjected();
+            await RemoveProcessAsync(key, target).ConfigureAwait(false);
+            _logger.LogWarning("Operator eject FORCED for model {ModelName} role {Role}: {ActiveLeases} in-flight request(s) interrupted.",
+                key.ModelName, key.Role, target.ActiveLeases);
+            return LlamaServerEjectOutcome.ForcedWhileBusy;
+        }
+
+        // Busy and not forced: never kill silently. Leave the process running and usable, and report that the eject
+        // could not complete safely so the caller can decide (retry / force).
+        target.ClearEvicting();
+        _logger.LogInformation("Operator eject for model {ModelName} role {Role} did not complete: still busy after the drain window; left running.", key.ModelName, key.Role);
+        return LlamaServerEjectOutcome.TimedOutStillBusy;
+    }
+
+    /// <inheritdoc />
+    public LlamaServerLeaseAcquisition TryAcquireInferenceLease(string modelName, ModelRole role)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(modelName);
+
+        var key = new ProcessKey(modelName, role);
+        if (!_processes.TryGetValue(key, out var running) || running.Handle.HasExited)
+        {
+            return LlamaServerLeaseAcquisition.NotRunning;
+        }
+
+        // A draining eject refuses new leases — and the refusal REASON is surfaced so the caller fails the request as
+        // operator-ejected instead of running it leaseless under the drain (untracked by the drain, killed mid-flight
+        // by the teardown, and then self-heal-respawning the just-ejected model).
+        if (running.IsEvicting)
+        {
+            return LlamaServerLeaseAcquisition.Evicting;
+        }
+
+        // Acquire, then RE-CHECK evicting/exited: an eject that flipped the flag between the guard above and here must
+        // not gain a lease that would extend its drain — release and refuse, classifying the refusal at this instant.
+        running.AcquireLease();
+        if (running.IsEvicting || running.Handle.HasExited)
+        {
+            running.ReleaseLease();
+            return running.IsEvicting ? LlamaServerLeaseAcquisition.Evicting : LlamaServerLeaseAcquisition.NotRunning;
+        }
+
+#pragma warning disable CA2000 // Ownership of the lease transfers to the caller inside the returned acquisition; the interface contract obliges the caller to dispose it.
+        return LlamaServerLeaseAcquisition.Granted(new InferenceLease(running));
+#pragma warning restore CA2000
+    }
+
+    /// <summary>
+    ///     Waits (bounded by <see cref="LlamaServerSupervisorOptions.EjectDrainTimeout" />) for a process's active
+    ///     inference leases to drain to zero. Returns <see langword="true" /> when drained within the window (an idle
+    ///     process returns immediately), <see langword="false" /> when the window elapsed with work still in flight. The
+    ///     drain window is real-time bounded (not the injected clock) since it is an actual wall-clock wait; a caller
+    ///     cancellation propagates as an <see cref="OperationCanceledException" />.
+    /// </summary>
+    private async Task<bool> DrainLeasesAsync(RunningProcess running, CancellationToken ct)
+    {
+        if (running.ActiveLeases == 0)
+        {
+            return true;
+        }
+
+        using var drainCts = CancellationTokenSource.CreateLinkedTokenSource(ct);
+        drainCts.CancelAfter(_options.EjectDrainTimeout);
+        try
+        {
+            while (running.ActiveLeases > 0)
+            {
+                await Task.Delay(LeaseDrainPollInterval, drainCts.Token).ConfigureAwait(false);
+            }
+
+            return true;
+        }
+        catch (OperationCanceledException) when (!ct.IsCancellationRequested)
+        {
+            // The drain window elapsed with work still in flight (not a caller cancellation).
+            return running.ActiveLeases == 0;
+        }
+    }
+
+    /// <inheritdoc />
     public Task<IReadOnlyList<LlamaServerProcessHealth>> CheckHealthAsync(CancellationToken ct)
     {
         // Snapshot the current processes and probe each one's liveness for the diagnostics surface.
@@ -279,6 +511,24 @@ public sealed class LlamaServerProcessSupervisor : ILlamaServerProcessSupervisor
         }
 
         return count;
+    }
+
+    /// <inheritdoc />
+    public LlamaServerRuntimeInfo? GetRuntimeInfo(string modelName, ModelRole role)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(modelName);
+
+        // Synchronous in-memory read (no HTTP): the effective context was captured once after readiness. Null when the
+        // process is not running, has exited, or /props did not report a usable value.
+        var key = new ProcessKey(modelName, role);
+        if (_processes.TryGetValue(key, out var running)
+            && !running.Handle.HasExited
+            && running.EffectiveContextTokens is { } effectiveContext)
+        {
+            return new LlamaServerRuntimeInfo(effectiveContext);
+        }
+
+        return null;
     }
 
     private async Task<IReadOnlyList<LlamaServerProcessHealth>> CheckHealthCoreAsync(KeyValuePair<ProcessKey, RunningProcess>[] snapshot,
@@ -310,6 +560,7 @@ public sealed class LlamaServerProcessSupervisor : ILlamaServerProcessSupervisor
     private async Task<RunningProcess> SpawnWithRestartAsync(ProcessKey key, CancellationToken ct)
     {
         Exception? lastError = null;
+        var readinessTimeoutRetries = 0;
         for (var attempt = 0; attempt < _options.MaxRestartAttempts; attempt++)
         {
             if (attempt > 0)
@@ -323,10 +574,37 @@ public sealed class LlamaServerProcessSupervisor : ILlamaServerProcessSupervisor
             }
             catch (LlamaRuntimeException ex) when (ex.Data.Contains(NonRetryableMarker))
             {
-                // Deterministic failures (cap reached, model not installed, no free port) are policy outcomes, not
-                // transient crashes — surface them as-is instead of burning retries on a guaranteed re-failure.
+                // Deterministic failures (cap reached, model not installed, no free port, crash-on-load) are policy
+                // outcomes, not transient crashes — surface them as-is instead of burning retries on a guaranteed re-failure.
                 _logger.LogError(ex, "llama-server start failed for model {ModelName} role {Role}: {Reason}",
                     key.ModelName, key.Role, ex.Message);
+                throw;
+            }
+            catch (LlamaRuntimeException ex) when (ex.Data.Contains(ReadinessTimeoutMarker))
+            {
+                // A readiness TIMEOUT (process alive but slow to load) is not a transient crash: retrying it many times
+                // just multiplies the kill/reload thrash (the audited ~6 min stall). Retry it at most
+                // MaxReadinessTimeoutRetries times — independent of MaxRestartAttempts — then surface the classified
+                // "did not become ready" failure.
+                lastError = ex;
+                readinessTimeoutRetries++;
+                _logger.LogWarning(ex, "llama-server readiness timed out for model {ModelName} role {Role} (readiness-timeout attempt {ReadinessAttempt}; {MaxReadinessRetries} retry(ies) allowed).",
+                    key.ModelName, key.Role, readinessTimeoutRetries, _options.MaxReadinessTimeoutRetries);
+
+                if (readinessTimeoutRetries > _options.MaxReadinessTimeoutRetries)
+                {
+                    _logger.LogError(ex, "llama-server did not become ready for model {ModelName} role {Role} after {ReadinessAttempts} readiness attempt(s); not retrying further.",
+                        key.ModelName, key.Role, readinessTimeoutRetries);
+                    throw;
+                }
+            }
+            catch (GpuModelLoadAdmissionTimeoutException ex)
+            {
+                // A bounded GPU-load admission wait elapsed (another model load did not become ready in time). It is not
+                // a transient crash, so surface its sanitized message immediately rather than burning restart attempts
+                // re-queuing behind a still-contended gate.
+                _logger.LogError(ex, "llama-server spawn for model {ModelName} role {Role} could not acquire GPU-load admission in time.",
+                    key.ModelName, key.Role);
                 throw;
             }
             catch (OperationCanceledException) when (ct.IsCancellationRequested)
@@ -354,12 +632,13 @@ public sealed class LlamaServerProcessSupervisor : ILlamaServerProcessSupervisor
     private Task<RunningProcess> SpawnOnceAsync(ProcessKey key, CancellationToken ct)
     {
         // The resolver is awaited inside the core (after variant selection, before admission) exactly as before — a
-        // slow profile read never stalls admission for other keys. No startup capture, no forced --metrics: byte-for-
-        // byte the same spawn as the pre-profiling path.
+        // slow profile read never stalls admission for other keys. No startup capture, no forced --metrics. The launch
+        // policy (deterministic -c, GPU KV/FA, CPU threads) applies to this normal serving path.
         return SpawnCoreAsync(key,
             (variant, c) => _profileResolver.ResolveAsync(key.ModelName, key.Role, variant, c),
             startupCapture: null,
             ensureMetrics: false,
+            applyLaunchPolicy: true,
             ct);
     }
 
@@ -378,6 +657,7 @@ public sealed class LlamaServerProcessSupervisor : ILlamaServerProcessSupervisor
         Func<GpuVariant, CancellationToken, Task<ResolvedLaunchArguments>> resolveArgs,
         Action<string>? startupCapture,
         bool ensureMetrics,
+        bool applyLaunchPolicy,
         CancellationToken ct)
     {
         var modelFilePath = await _modelStore.ResolveModelFilePathAsync(key.ModelName, ct).ConfigureAwait(false);
@@ -385,6 +665,11 @@ public sealed class LlamaServerProcessSupervisor : ILlamaServerProcessSupervisor
         {
             throw NonRetryable("The requested model is not installed.");
         }
+
+        // AUD4-09: the cold-start readiness deadline scales with the on-disk model size — a large model loads
+        // proportionally slower, so a fixed constant would kill and retry it before it can finish (the audited hang). A
+        // missing/unreadable size (0) falls back to the base timeout.
+        var readinessTimeout = _options.ResolveReadinessTimeout(TryGetFileSizeBytes(modelFilePath));
 
         // A chat-role draft-* speculative mode needs its draft GGUF present before launch — a missing file would
         // otherwise start a server that dies cryptically. Deterministic misconfiguration → non-retryable (mirrors the
@@ -419,55 +704,200 @@ public sealed class LlamaServerProcessSupervisor : ILlamaServerProcessSupervisor
         // admission for other keys.
         var resolved = await resolveArgs(variant, ct).ConfigureAwait(false);
 
-        var port = await AdmitAndAllocatePortAsync(ct).ConfigureAwait(false);
+        // AUD4-06: serialize the spawn-through-readiness window of GPU-backed loads process-wide (shared with the image
+        // supervisor) so two --fit loads never read the same free-VRAM snapshot at once and oversubscribe the device.
+        // CPU loads bypass — they do not contend for VRAM. The gate is acquired here (after variant selection + arg
+        // resolution, immediately before the admission cap decision that may evict an idle process to free VRAM) so the
+        // freed VRAM is seen only by THIS load's --fit; the ticket releases on ready OR any failure via the using scope,
+        // and the next waiter then proceeds with a fresh free-VRAM read (the re-evaluation). Because this core runs
+        // under the detached-spawn/shutdown token (not the first caller's), a caller cancelling its wait never leaves
+        // the gate held. The ticket deliberately spans BOTH launch-plan attempts below (optimized + safe retry) — the
+        // retry is part of the same load window, and another load interleaving between the attempts would re-race the
+        // free-VRAM read the gate exists to serialize.
+        using var admissionTicket = variant == GpuVariant.Cpu
+            ? null
+            : await _loadAdmission.AcquireAsync(ct).ConfigureAwait(false);
 
-        ILlamaServerProcessHandle? handle = null;
+        // AUD4-02/05/17: the central launch policy fills in the deterministic context (-c), the GPU KV-cache
+        // quantization + flash-attention optimization, and the CPU thread policy the audited launch defaults omitted.
+        // Operator profiling spawns bypass it (applyLaunchPolicy: false) so the supplied args ARE the experiment.
+        var planCandidates = await BuildLaunchPlanCandidatesAsync(key, variant, resolved, applyLaunchPolicy, ct).ConfigureAwait(false);
+
+        Exception? optimizedFailure = null;
+        for (var attempt = 0; attempt < planCandidates.Count; attempt++)
+        {
+            var candidate = planCandidates[attempt];
+            var isSafeRetry = attempt > 0;
+            var port = await AdmitAndAllocatePortAsync(ct).ConfigureAwait(false);
+
+            ILlamaServerProcessHandle? handle = null;
+            try
+            {
+                var spec = BuildLaunchSpec(key, binary.ServerExecutablePath, modelFilePath, port, variant, resolved,
+                    _options.ChatCacheReuse, speculative, candidate);
+
+                // Benchmark replay spawns need /metrics (explore already carries --metrics); only append when missing.
+                if (ensureMetrics && !spec.Arguments.Contains("--metrics", StringComparer.Ordinal))
+                {
+                    spec = spec with
+                    {
+                        Arguments = [.. spec.Arguments, "--metrics"]
+                    };
+                }
+
+                // Operator profiling spawns capture both pipes; the normal path leaves the sink null (spec unchanged).
+                if (startupCapture is not null)
+                {
+                    spec = spec with
+                    {
+                        StartupCapture = startupCapture
+                    };
+                }
+
+                handle = _launcher.Launch(spec);
+                _logger.LogInformation("llama-server spawned for model {ModelName} role {Role} (pid {ProcessId}, port {Port}){LaunchPlan}.",
+                    key.ModelName, key.Role, handle.ProcessId, port, DescribeLaunchPlan(candidate));
+
+                var readyStartedUtc = _timeProvider.GetUtcNow();
+                await WaitForReadyOrExitAsync(handle, spec.BaseAddress, readinessTimeout, ct).ConfigureAwait(false);
+                _logger.LogInformation("llama-server ready for model {ModelName} role {Role} (pid {ProcessId}) after {ElapsedMs:F0} ms (readiness budget {BudgetSeconds:F0}s).",
+                    key.ModelName, key.Role, handle.ProcessId, (_timeProvider.GetUtcNow() - readyStartedUtc).TotalMilliseconds, readinessTimeout.TotalSeconds);
+
+                // AUD4-02: read the effective per-slot context the server actually loaded (best-effort) so both app-side
+                // budgeters and the UI meter size against the REAL window rather than the requested/advertised one.
+                var effectiveContext = await TryReadEffectiveContextAsync(spec.BaseAddress, ct).ConfigureAwait(false);
+
+                var endpoint = new LlamaServerEndpoint(key.ModelName, key.Role, spec.BaseAddress);
+                var running = new RunningProcess(handle, endpoint, port, _timeProvider.GetUtcNow())
+                {
+                    EffectiveContextTokens = effectiveContext
+                };
+                _processes[key] = running;
+
+                if (isSafeRetry)
+                {
+                    // The safe config reached readiness where the optimized (KV-quant + flash-attention) config could
+                    // not — so the optimized config is the culprit for THIS backend (not a broken model, which would
+                    // fail the safe config too). Record it so subsequent spawns skip the known-bad optimized config.
+                    await _launchPolicy.RecordOptimizedConfigFailedAsync(variant, ct).ConfigureAwait(false);
+                }
+
+                return running;
+            }
+            catch (OperationCanceledException) when (ct.IsCancellationRequested)
+            {
+                handle?.TreeKill();
+                handle?.Dispose();
+                await ReleaseReservedPortAsync(port).ConfigureAwait(false);
+                throw;
+            }
+            catch (Exception ex)
+            {
+                // Launch/readiness failed: tree-kill the half-started child and free its reserved port (under the
+                // admission gate, since the reserved-port set backs the cap count) before deciding whether to fall back.
+                handle?.TreeKill();
+                handle?.Dispose();
+                await ReleaseReservedPortAsync(port).ConfigureAwait(false);
+
+                // The OPTIMIZED attempt failed and a safe candidate remains: remember the error and retry ONCE with the
+                // safe (KV/FA off) config. Any other failure (the safe attempt, or a spawn with no fallback candidate)
+                // propagates exactly as before — including the readiness-timeout marker the restart loop keys on.
+                if (!isSafeRetry && attempt + 1 < planCandidates.Count)
+                {
+                    optimizedFailure = ex;
+                    _logger.LogWarning(ex, "llama-server optimized launch (KV-cache quant + flash attention) failed for model {ModelName} role {Role} on backend {Variant}; retrying once with the safe config.",
+                        key.ModelName, key.Role, variant);
+                    continue;
+                }
+
+                throw;
+            }
+        }
+
+        // Unreachable: the loop returns on success or throws on the final candidate; the fallback keeps the analyzer happy.
+        throw optimizedFailure ?? new InvalidOperationException("llama-server spawn produced no launch attempt.");
+    }
+
+    /// <summary>
+    ///     Builds the ordered launch-plan candidates for a spawn. The normal path (<paramref name="applyLaunchPolicy" />)
+    ///     resolves the policy plan and, when it enables the GPU KV-quant + flash-attention optimization, appends a safe
+    ///     (KV/FA off) fallback candidate to try once if the optimized one cannot reach readiness. Operator profiling and
+    ///     replay-without-optimization spawns get a single <see langword="null" /> plan (today's byte-for-byte behavior).
+    /// </summary>
+    private async Task<IReadOnlyList<LlamaServerLaunchPlan?>> BuildLaunchPlanCandidatesAsync(ProcessKey key,
+        GpuVariant variant,
+        ResolvedLaunchArguments resolved,
+        bool applyLaunchPolicy,
+        CancellationToken ct)
+    {
+        if (!applyLaunchPolicy)
+        {
+            return [null];
+        }
+
+        var trainContext = await TryResolveTrainContextAsync(key.ModelName, ct).ConfigureAwait(false);
+        var plan = await _launchPolicy.ResolveAsync(key.Role, variant, resolved, trainContext, ct).ConfigureAwait(false);
+
+        return plan.UseKvCacheQuantization
+            ? [plan, plan.WithoutKvCacheQuantization()]
+            : [plan];
+    }
+
+    /// <summary>Reads the model's advertised train context (GGUF header), returning null when unknown — never fatal.</summary>
+    private async Task<long?> TryResolveTrainContextAsync(string modelName, CancellationToken ct)
+    {
         try
         {
-            var spec = BuildLaunchSpec(key, binary.ServerExecutablePath, modelFilePath, port, variant, resolved,
-                _options.ChatCacheReuse, speculative);
-
-            // Benchmark replay spawns need /metrics (explore already carries --metrics); only append when missing.
-            if (ensureMetrics && !spec.Arguments.Contains("--metrics", StringComparer.Ordinal))
-            {
-                spec = spec with
-                {
-                    Arguments = [.. spec.Arguments, "--metrics"]
-                };
-            }
-
-            // Operator profiling spawns capture both pipes; the normal path leaves the sink null (spec unchanged).
-            if (startupCapture is not null)
-            {
-                spec = spec with
-                {
-                    StartupCapture = startupCapture
-                };
-            }
-
-            handle = _launcher.Launch(spec);
-            _logger.LogInformation("llama-server spawned for model {ModelName} role {Role} (pid {ProcessId}, port {Port}).",
-                key.ModelName, key.Role, handle.ProcessId, port);
-
-            var readyStartedUtc = _timeProvider.GetUtcNow();
-            await WaitForReadyOrExitAsync(handle, spec.BaseAddress, ct).ConfigureAwait(false);
-            _logger.LogInformation("llama-server ready for model {ModelName} role {Role} (pid {ProcessId}) after {ElapsedMs:F0} ms.",
-                key.ModelName, key.Role, handle.ProcessId, (_timeProvider.GetUtcNow() - readyStartedUtc).TotalMilliseconds);
-
-            var endpoint = new LlamaServerEndpoint(key.ModelName, key.Role, spec.BaseAddress);
-            var running = new RunningProcess(handle, endpoint, port, _timeProvider.GetUtcNow());
-            _processes[key] = running;
-            return running;
+            var facts = await _modelStore.ResolveModelFootprintFactsAsync(modelName, ct).ConfigureAwait(false);
+            return facts?.ContextLength;
         }
-        catch
+        catch (Exception exception) when (exception is not OperationCanceledException)
         {
-            // Launch/readiness failed: tree-kill the half-started child and free its reserved port (under the
-            // admission gate, since the reserved-port set backs the cap count) before bubbling up.
-            handle?.TreeKill();
-            handle?.Dispose();
-            await ReleaseReservedPortAsync(port).ConfigureAwait(false);
-            throw;
+            _logger.LogDebug(exception, "Resolving the train context for model {ModelName} failed; the requested context will not be capped.", modelName);
+            return null;
         }
+    }
+
+    /// <summary>Best-effort read of the running server's effective context window from /props; null when unavailable.</summary>
+    private async Task<int?> TryReadEffectiveContextAsync(Uri baseAddress, CancellationToken ct)
+    {
+        try
+        {
+            return await _healthProbe.TryReadEffectiveContextTokensAsync(baseAddress, ct).ConfigureAwait(false);
+        }
+        catch (Exception exception)
+        {
+            // Never let a /props hiccup discard a model that reached readiness; effective context simply stays unknown.
+            _logger.LogDebug(exception, "Reading the effective context window from /props failed; effective context is unknown.");
+            return null;
+        }
+    }
+
+    /// <summary>A compact, path-free launch-plan summary appended to the spawn log line (empty for a policy-less spawn).</summary>
+    private static string DescribeLaunchPlan(LlamaServerLaunchPlan? plan)
+    {
+        if (plan is not { } resolvedPlan)
+        {
+            return string.Empty;
+        }
+
+        var parts = new List<string>(capacity: 3);
+        if (resolvedPlan.RequestedContextTokens is { } ctx)
+        {
+            parts.Add($"ctx={ctx.ToString(CultureInfo.InvariantCulture)}");
+        }
+
+        if (resolvedPlan.UseKvCacheQuantization)
+        {
+            parts.Add($"kv={resolvedPlan.KvCacheType}+fa");
+        }
+
+        if (resolvedPlan.CpuThreads is { } threads)
+        {
+            parts.Add($"threads={threads.ToString(CultureInfo.InvariantCulture)}/{resolvedPlan.CpuThreadsBatch?.ToString(CultureInfo.InvariantCulture) ?? "-"}");
+        }
+
+        return parts.Count == 0 ? string.Empty : " [" + string.Join(", ", parts) + "]";
     }
 
     /// <summary>
@@ -477,13 +907,13 @@ public sealed class LlamaServerProcessSupervisor : ILlamaServerProcessSupervisor
     ///     polling <c>/health</c> against a dead endpoint for the full readiness budget and then retrying. A
     ///     crash-on-load is deterministic, so retrying it only multiplies the stall by <c>MaxRestartAttempts</c>.
     /// </summary>
-    private async Task WaitForReadyOrExitAsync(ILlamaServerProcessHandle handle, Uri baseAddress, CancellationToken ct)
+    private async Task WaitForReadyOrExitAsync(ILlamaServerProcessHandle handle, Uri baseAddress, TimeSpan readinessTimeout, CancellationToken ct)
     {
         // Cancel the losing side the instant the other wins, so neither the /health poll nor the exit-watcher is left
         // running after the race is decided.
         using var linkedCts = CancellationTokenSource.CreateLinkedTokenSource(ct);
 
-        var readyTask = _healthProbe.WaitForReadyAsync(baseAddress, ReadinessTimeout, linkedCts.Token);
+        var readyTask = _healthProbe.WaitForReadyAsync(baseAddress, readinessTimeout, linkedCts.Token);
         var exitTask = WatchForExitAsync(handle, linkedCts.Token);
 
         var winner = await Task.WhenAny(readyTask, exitTask).ConfigureAwait(false);
@@ -505,8 +935,8 @@ public sealed class LlamaServerProcessSupervisor : ILlamaServerProcessSupervisor
         if (!await readyTask.ConfigureAwait(false))
         {
             _logger.LogWarning("llama-server (pid {ProcessId}) did not become ready within {TimeoutSeconds:F0}s.",
-                handle.ProcessId, ReadinessTimeout.TotalSeconds);
-            throw new LlamaRuntimeException("The local model runtime did not become ready in time.");
+                handle.ProcessId, readinessTimeout.TotalSeconds);
+            throw ReadinessTimedOut("The local model runtime did not become ready in time.");
         }
     }
 
@@ -565,11 +995,13 @@ public sealed class LlamaServerProcessSupervisor : ILlamaServerProcessSupervisor
             // Thread-safe per-line sink backing the StartupCapture callback (both server pipes Enqueue concurrently).
             var startupOutput = new ConcurrentQueue<string>();
 
-            // Spawn exactly one process with the operator-supplied args verbatim (bypass the profile resolver).
+            // Spawn exactly one process with the operator-supplied args verbatim (bypass BOTH the profile resolver and
+            // the launch policy — the supplied args ARE the experiment being measured).
             var running = await SpawnCoreAsync(key,
                     (_, _) => Task.FromResult(launchArgs),
                     startupOutput.Enqueue,
                     ensureMetrics: enableMetrics,
+                    applyLaunchPolicy: false,
                     ct)
                 .ConfigureAwait(false);
 
@@ -640,7 +1072,8 @@ public sealed class LlamaServerProcessSupervisor : ILlamaServerProcessSupervisor
         GpuVariant variant,
         ResolvedLaunchArguments resolved,
         int chatCacheReuse,
-        SpeculativeDecodingSettings speculative = default)
+        SpeculativeDecodingSettings speculative = default,
+        LlamaServerLaunchPlan? plan = null)
     {
         var args = new List<string>
         {
@@ -665,15 +1098,14 @@ public sealed class LlamaServerProcessSupervisor : ILlamaServerProcessSupervisor
             "--no-warmup"
         };
 
-        // The variant only selects the GPU-enabled llama.cpp BUILD (Cuda/Vulkan); the CPU variant stays a pure CPU run
-        // and emits NO gpu/fit args. For a GPU build, placement is no longer forced (the old --n-gpu-layers 999 is gone):
-        // llama.cpp's default --fit auto-fit now drives layer/expert placement. Explore mode emits --fit on + --metrics so
-        // llama.cpp fits and prints the chosen params for capture; replay mode emits the frozen profile args verbatim
-        // (and omits --fit, since any explicit fit-arg disables auto-fit — the two are mutually exclusive per run).
-        if (variant != GpuVariant.Cpu)
-        {
-            AppendGpuPlacementArgs(args, resolved);
-        }
+        // Context (-c), placement, KV-cache/flash-attention, and CPU threads. The variant selects the llama.cpp BUILD
+        // (Cuda/Vulkan vs pure CPU). Precedence lives in the launch policy that produced `plan`; here we just emit:
+        //  - GPU explore: --fit on + --metrics (auto-fit places layers/experts around the explicit -c), plus the policy
+        //    -c and the KV-quant + flash-attention optimization; GPU replay: the frozen profile args verbatim.
+        //  - CPU: the policy -c (explore) or the frozen -c (replay), plus the CPU thread policy; NO --fit/--metrics/-ngl,
+        //    KV stays f16 and flash-attention stays auto.
+        // A null plan (operator profiling) reproduces the pre-policy behavior byte-for-byte.
+        AppendContextPlacementAndThreadArgs(args, variant, resolved, plan);
 
         if (key.Role == ModelRole.Chat)
         {
@@ -726,23 +1158,91 @@ public sealed class LlamaServerProcessSupervisor : ILlamaServerProcessSupervisor
     }
 
     /// <summary>
-    ///     Appends the GPU placement args for a non-CPU build: explore-mode auto-fit (<c>--fit on</c> + <c>--metrics</c>)
-    ///     or the resolved profile's explicit replay args (<c>-c/-ngl/-ts/-ot</c> + matched <c>-ctk/-ctv</c> with
-    ///     <c>--flash-attn on</c>). The two paths are mutually exclusive — replay never sets <c>--fit</c>.
+    ///     Appends the context (<c>-c</c>), placement, KV-cache/flash-attention, and CPU-thread args for a spawn, per the
+    ///     variant + explore/replay mode + policy <paramref name="plan" />. See the call-site comment for the matrix.
     /// </summary>
-    private static void AppendGpuPlacementArgs(List<string> args, ResolvedLaunchArguments resolved)
+    private static void AppendContextPlacementAndThreadArgs(List<string> args,
+        GpuVariant variant,
+        ResolvedLaunchArguments resolved,
+        LlamaServerLaunchPlan? plan)
     {
-        if (resolved.ExploreMode)
+        if (variant != GpuVariant.Cpu)
         {
-            // Let llama.cpp auto-fit choose and print placement; --metrics exposes the throughput/cache gauges the
-            // benchmark reads. Emitting any explicit fit-arg here would disable auto-fit, so emit none.
-            args.Add("--fit");
-            args.Add("on");
-            args.Add("--metrics");
+            if (resolved.ExploreMode)
+            {
+                // Let llama.cpp auto-fit choose + print placement; --metrics exposes the gauges the benchmark reads.
+                // The explicit -c is RESPECTED by --fit (it fits ngl/batch around it) and the KV/FA flags are not
+                // placement flags, so auto-fit stays active (verified against b9692).
+                args.Add("--fit");
+                args.Add("on");
+                args.Add("--metrics");
+                AppendPolicyContextArgs(args, plan);
+                AppendPolicyKvCacheAndFlashAttentionArgs(args, plan);
+            }
+            else
+            {
+                AppendReplayArgs(args, resolved);
+            }
+
             return;
         }
 
-        // Replay a frozen/explored profile verbatim. --fit is intentionally absent (an explicit fit-arg disables it).
+        // CPU build: NO GPU placement/replay args (-ngl/-ts/-ot/-ctk) and NO --fit/--metrics — a frozen GPU profile does
+        // not transfer to a CPU spawn. It gets ONLY the deterministic policy context (-c) and the CPU thread policy; KV
+        // stays f16 and flash-attention stays auto. A null plan (operator profiling) emits neither, matching the old
+        // "CPU emits no gpu/fit args" behavior byte-for-byte.
+        AppendPolicyContextArgs(args, plan);
+        AppendCpuThreadArgs(args, plan);
+    }
+
+    /// <summary>Appends the policy's requested context (<c>-c</c>) when set (a frozen replay owns its own -c instead).</summary>
+    private static void AppendPolicyContextArgs(List<string> args, LlamaServerLaunchPlan? plan)
+    {
+        if (plan is { RequestedContextTokens: { } contextTokens })
+        {
+            args.Add("-c");
+            args.Add(contextTokens.ToString(CultureInfo.InvariantCulture));
+        }
+    }
+
+    /// <summary>Appends the GPU KV-cache quantization + fused flash-attention args (<c>-fa on -ctk/-ctv &lt;type&gt;</c>) when the plan enables them.</summary>
+    private static void AppendPolicyKvCacheAndFlashAttentionArgs(List<string> args, LlamaServerLaunchPlan? plan)
+    {
+        if (plan is { UseKvCacheQuantization: true } resolvedPlan && !string.IsNullOrWhiteSpace(resolvedPlan.KvCacheType))
+        {
+            // Quantized/explicit KV requires the fused flash-attention path with matching K/V types (b9692).
+            args.Add("-fa");
+            args.Add("on");
+            args.Add("-ctk");
+            args.Add(resolvedPlan.KvCacheType);
+            args.Add("-ctv");
+            args.Add(resolvedPlan.KvCacheType);
+        }
+    }
+
+    /// <summary>Appends the CPU thread policy (<c>-t</c>/<c>-tb</c>) when the plan carries thread counts (CPU build only).</summary>
+    private static void AppendCpuThreadArgs(List<string> args, LlamaServerLaunchPlan? plan)
+    {
+        if (plan is { CpuThreads: { } threads })
+        {
+            args.Add("-t");
+            args.Add(threads.ToString(CultureInfo.InvariantCulture));
+        }
+
+        if (plan is { CpuThreadsBatch: { } threadsBatch })
+        {
+            args.Add("-tb");
+            args.Add(threadsBatch.ToString(CultureInfo.InvariantCulture));
+        }
+    }
+
+    /// <summary>
+    ///     Replays a frozen/explored profile verbatim (<c>-c/-ngl/-ts/-ot</c> + matched <c>-ctk/-ctv</c> with
+    ///     <c>--flash-attn on</c>). <c>--fit</c> is intentionally absent — any explicit fit-arg disables auto-fit, so
+    ///     replay and explore are mutually exclusive per run. The launch policy never overrides these (highest precedence).
+    /// </summary>
+    private static void AppendReplayArgs(List<string> args, ResolvedLaunchArguments resolved)
+    {
         args.Add("-c");
         args.Add(resolved.CtxSize.ToString(CultureInfo.InvariantCulture));
 
@@ -855,6 +1355,15 @@ public sealed class LlamaServerProcessSupervisor : ILlamaServerProcessSupervisor
                 continue;
             }
 
+            // A live process with in-flight inference (an active lease) is never reaped, even past the TTL:
+            // LastUsedUtc is stamped per ensure/reuse, not per token, so a single generation that legitimately outruns
+            // the idle window (a raised invocation timeout on a slow CPU box) looks idle here while a request is
+            // mid-flight — tree-killing it would cut a running turn off.
+            if (running.ActiveLeases > 0 && !running.Handle.HasExited)
+            {
+                continue;
+            }
+
             if (running.Handle.HasExited || now - running.LastUsedUtc >= _options.IdleTimeToLive)
             {
                 if (!running.Handle.HasExited)
@@ -879,6 +1388,13 @@ public sealed class LlamaServerProcessSupervisor : ILlamaServerProcessSupervisor
             // A live profiling-pinned process is reserved for its benchmark — never select it as a cap-admission victim
             // (an EXITED pinned process is a dead handle and stays eligible so its slot/port is reclaimed).
             if (running.IsProfilingPinned && !running.Handle.HasExited)
+            {
+                continue;
+            }
+
+            // In-flight inference disqualifies a live process as a capacity-eviction victim for the same reason the
+            // idle reaper skips it: past-TTL only means "no new request started", not "not mid-generation".
+            if (running.ActiveLeases > 0 && !running.Handle.HasExited)
             {
                 continue;
             }
@@ -1019,6 +1535,32 @@ public sealed class LlamaServerProcessSupervisor : ILlamaServerProcessSupervisor
         return ex;
     }
 
+    /// <summary>
+    ///     Builds a sanitized readiness-TIMEOUT failure (process alive but slow to load). Flagged so the restart loop
+    ///     retries it at most <see cref="LlamaServerSupervisorOptions.MaxReadinessTimeoutRetries" /> times rather than
+    ///     the full restart cap.
+    /// </summary>
+    private static LlamaRuntimeException ReadinessTimedOut(string sanitizedMessage)
+    {
+        var ex = new LlamaRuntimeException(sanitizedMessage);
+        ex.Data[ReadinessTimeoutMarker] = true;
+        return ex;
+    }
+
+    /// <summary>Reads a model file's on-disk size, returning 0 when the path is missing/unreadable (→ base readiness timeout).</summary>
+    private static long TryGetFileSizeBytes(string modelFilePath)
+    {
+        try
+        {
+            var info = new FileInfo(modelFilePath);
+            return info.Exists ? info.Length : 0L;
+        }
+        catch (Exception exception) when (exception is IOException or UnauthorizedAccessException or ArgumentException or NotSupportedException)
+        {
+            return 0L;
+        }
+    }
+
     /// <summary>Identifies a process by the model it serves and the role (chat vs embedding).</summary>
     internal readonly record struct ProcessKey(string ModelName, ModelRole Role)
     {
@@ -1033,6 +1575,26 @@ public sealed class LlamaServerProcessSupervisor : ILlamaServerProcessSupervisor
         }
     }
 
+    /// <summary>
+    ///     A reference-counted inference lease over a <see cref="RunningProcess" />. Disposal releases the lease exactly
+    ///     once. <see cref="WasEjected" /> mirrors the underlying process so an in-flight request that fails right after a
+    ///     force-eject classifies the drop as an operator eject rather than a generic provider failure.
+    /// </summary>
+    private sealed class InferenceLease(RunningProcess process) : ILlamaServerInferenceLease
+    {
+        private int _disposed;
+
+        public bool WasEjected => process.WasEjected;
+
+        public void Dispose()
+        {
+            if (Interlocked.Exchange(ref _disposed, value: 1) == 0)
+            {
+                process.ReleaseLease();
+            }
+        }
+    }
+
     /// <summary>A live, registered process and its last-used timestamp (drives idle-TTL + LRU eviction).</summary>
     private sealed class RunningProcess(ILlamaServerProcessHandle handle, LlamaServerEndpoint endpoint, int port, DateTimeOffset startedUtc)
     {
@@ -1042,12 +1604,21 @@ public sealed class LlamaServerProcessSupervisor : ILlamaServerProcessSupervisor
         private long _lastLivenessProbeTicks = startedUtc.UtcTicks;
         private int _consecutiveLivenessFailures;
         private int _profilingPinned;
+        private int _activeLeases;
+        private int _evicting;
+        private int _ejected;
 
         public ILlamaServerProcessHandle Handle { get; } = handle;
 
         public LlamaServerEndpoint Endpoint { get; } = endpoint;
 
         public int Port { get; } = port;
+
+        /// <summary>
+        ///     The effective per-slot context window (<c>/props default_generation_settings.n_ctx</c>) the server
+        ///     actually loaded, captured once after readiness. <see langword="null" /> when <c>/props</c> was unavailable.
+        /// </summary>
+        public int? EffectiveContextTokens { get; init; }
 
         public DateTimeOffset LastUsedUtc => new(Interlocked.Read(ref _lastUsedTicks), TimeSpan.Zero);
 
@@ -1056,6 +1627,45 @@ public sealed class LlamaServerProcessSupervisor : ILlamaServerProcessSupervisor
         ///     cap-admission LRU eviction skip a pinned, non-exited process so it is never torn down mid-measurement.
         /// </summary>
         public bool IsProfilingPinned => Volatile.Read(ref _profilingPinned) != 0;
+
+        /// <summary>Number of in-flight inference requests currently leasing this process (drives graceful-eject drain).</summary>
+        public int ActiveLeases => Volatile.Read(ref _activeLeases);
+
+        /// <summary><see langword="true" /> once an operator eject has begun for this process — new leases are refused.</summary>
+        public bool IsEvicting => Volatile.Read(ref _evicting) != 0;
+
+        /// <summary><see langword="true" /> once this process was force-ejected while in-flight work still held a lease.</summary>
+        public bool WasEjected => Volatile.Read(ref _ejected) != 0;
+
+        /// <summary>Registers an in-flight inference request against this process.</summary>
+        public void AcquireLease()
+        {
+            Interlocked.Increment(ref _activeLeases);
+        }
+
+        /// <summary>Releases a previously-acquired inference lease.</summary>
+        public void ReleaseLease()
+        {
+            Interlocked.Decrement(ref _activeLeases);
+        }
+
+        /// <summary>Marks the process evicting so new leases are refused while an eject drains the in-flight ones.</summary>
+        public void MarkEvicting()
+        {
+            Interlocked.Exchange(ref _evicting, value: 1);
+        }
+
+        /// <summary>Clears the evicting flag (a graceful eject that timed out and left the process running).</summary>
+        public void ClearEvicting()
+        {
+            Interlocked.Exchange(ref _evicting, value: 0);
+        }
+
+        /// <summary>Records a force-eject with in-flight work so the leaseholder classifies the drop as an operator eject.</summary>
+        public void MarkEjected()
+        {
+            Interlocked.Exchange(ref _ejected, value: 1);
+        }
 
         public void MarkUsed(DateTimeOffset now)
         {

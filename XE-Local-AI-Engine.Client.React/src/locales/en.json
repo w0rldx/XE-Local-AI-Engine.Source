@@ -295,6 +295,7 @@
 			"waitingForStreamedResponse": "Waiting for streamed response",
 			"waitingForResponse": "Waiting for response",
 			"queued": "Queued — waiting for current task",
+			"loadingModel": "Loading model…",
 			"remoteViewOnlyTitle": "Remote conversation",
 			"remoteViewOnly": "This conversation was started from a paired client and is view-only on this node.",
 			"streamErrors": {
@@ -679,7 +680,13 @@
 			"modelUnavailable": "Unavailable",
 			"reasoningLabel": "Reasoning",
 			"retryConnection": "Retry",
-			"stop": "Stop"
+			"stop": "Stop",
+			"stopped": "Generation stopped",
+			"loadError": {
+				"title": "Couldn't load this conversation",
+				"body": "Something went wrong loading these messages.",
+				"retry": "Retry"
+			}
 		},
 		"clientNodes": {
 			"fields": {
@@ -2204,6 +2211,10 @@
 					"message": "No supported GPU detected — running on CPU. Responses will be slower.",
 					"dismiss": "Dismiss"
 				},
+				"cpuFallbackAlert": {
+					"title": "Running on CPU despite a detected GPU",
+					"reason": "The selected inference runtime could not use this machine's GPU, so inference is running on the CPU."
+				},
 				"refresh": "Refresh hardware",
 				"loading": "Detecting hardware…",
 				"error": "Could not detect hardware.",
@@ -2279,10 +2290,10 @@
 		"loadedModels": {
 			"eyebrow": "Worker Node",
 			"title": "Loaded models",
-			"subtitle": "Models the local runtime is currently holding in memory (RAM/VRAM). Eject frees that memory — gracefully, after any in-flight generation completes.",
+			"subtitle": "Models the local runtime is currently holding in memory (RAM/VRAM). Eject frees that memory; if a generation is running, the app waits briefly for it to finish and may interrupt it.",
 			"loading": "Loading loaded models…",
 			"empty": "No models currently loaded.",
-			"unavailable": "The local model runtime is unavailable right now. This view will update once it is reachable.",
+			"unavailable": "Ollama isn't reachable right now. It's an optional secondary provider, so there may be nothing loaded to show here. llama.cpp models still appear below.",
 			"cpuOnly": "CPU only",
 			"expired": "Expired",
 			"sizeUnknown": "Unknown",
@@ -2298,11 +2309,11 @@
 			},
 			"eject": {
 				"button": "Eject",
-				"tooltip": "Frees memory after the current generation finishes",
+				"tooltip": "Frees the model's memory; a running generation may be interrupted",
 				"confirmTitle": "Eject model",
-				"confirmDescription": "Eject '{{modelName}}' from memory? Memory is freed after the current generation finishes; an in-flight response is not interrupted.",
+				"confirmDescription": "Eject '{{modelName}}' from memory? If a generation is running, the app waits briefly for it to finish; ejecting may interrupt it.",
 				"confirmAction": "Eject",
-				"success": "Ejecting '{{modelName}}' — memory frees after the current generation.",
+				"success": "Ejecting '{{modelName}}' — its memory will be freed shortly.",
 				"error": "Could not eject the model."
 			},
 			"ollama": {
@@ -2318,6 +2329,22 @@
 				"eject": "Eject",
 				"ejected": "Model ejected.",
 				"ejectError": "Could not eject the model.",
+				"ejectConfirm": {
+					"title": "Eject model",
+					"description": "Eject '{{modelName}}' from the llama.cpp runtime? Memory frees after any in-flight generation completes; a running response is not interrupted.",
+					"action": "Eject"
+				},
+				"forceConfirm": {
+					"title": "Force eject?",
+					"description": "'{{modelName}}' is still generating. Force-eject anyway and interrupt the running turn?",
+					"action": "Force eject"
+				},
+				"ejectOutcome": {
+					"ejected": "Model ejected.",
+					"forced": "Model ejected — the in-flight generation was interrupted.",
+					"notRunning": "That model was not running.",
+					"timedOutStillBusy": "'{{modelName}}' is still finishing a response, so it was left running."
+				},
 				"columns": {
 					"model": "Model",
 					"role": "Role",

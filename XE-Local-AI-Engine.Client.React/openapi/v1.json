@@ -9309,13 +9309,17 @@
         "additionalProperties": false,
         "required": [
           "modelName",
-          "role"
+          "role",
+          "outcome"
         ],
         "properties": {
           "modelName": {
             "type": "string"
           },
           "role": {
+            "type": "string"
+          },
+          "outcome": {
             "type": "string"
           }
         }
@@ -9333,6 +9337,9 @@
           "role": {
             "type": "string",
             "nullable": true
+          },
+          "force": {
+            "type": "boolean"
           }
         }
       },
@@ -9537,6 +9544,23 @@
           },
           "freeDiskBytes": {
             "type": "integer"
+          },
+          "inferenceBackend": {
+            "type": "string"
+          },
+          "gpuExpected": {
+            "type": "boolean"
+          },
+          "cpuFallback": {
+            "type": "boolean"
+          },
+          "cpuFallbackReason": {
+            "type": "string",
+            "nullable": true
+          },
+          "cpuFallbackRemediation": {
+            "type": "string",
+            "nullable": true
           }
         }
       },
@@ -10437,6 +10461,11 @@
             "format": "int32",
             "nullable": true
           },
+          "effectiveContextTokens": {
+            "type": "integer",
+            "format": "int32",
+            "nullable": true
+          },
           "template": {
             "type": "string",
             "nullable": true
@@ -10460,10 +10489,14 @@
         "additionalProperties": false,
         "required": [
           "isAvailable",
+          "ollamaConfigured",
           "items"
         ],
         "properties": {
           "isAvailable": {
+            "type": "boolean"
+          },
+          "ollamaConfigured": {
             "type": "boolean"
           },
           "error": {
@@ -11747,6 +11780,10 @@
           },
           "hasPendingApproval": {
             "type": "boolean"
+          },
+          "traceId": {
+            "type": "string",
+            "nullable": true
           }
         }
       },
@@ -11861,6 +11898,10 @@
           "streamedThinkingChunkCount": {
             "type": "integer",
             "format": "int32"
+          },
+          "traceId": {
+            "type": "string",
+            "nullable": true
           }
         }
       },

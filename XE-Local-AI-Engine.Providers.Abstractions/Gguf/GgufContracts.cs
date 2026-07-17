@@ -137,6 +137,19 @@ public sealed record GgufRepoSummary(
 ///     Experts routed per token (GGUF <c>{arch}.expert_used_count</c>), when the header was read; <see langword="null" />
 ///     for a dense model or when headers were not requested.
 /// </param>
+/// <param name="AttentionKeyLength">
+///     Explicit per-head key dimension (GGUF <c>{arch}.attention.key_length</c>), preferred by the memory-fit estimator
+///     over the derived <c>head_dim = embedding_length / n_heads</c>; <see langword="null" /> when the header omits it.
+/// </param>
+/// <param name="AttentionValueLength">Explicit per-head value dimension (GGUF <c>{arch}.attention.value_length</c>), or <see langword="null" />.</param>
+/// <param name="SlidingWindow">
+///     Interleaved sliding-window-attention window size (GGUF <c>{arch}.attention.sliding_window</c>); a positive value
+///     caps the window-limited layers' KV cache at the window in the estimator. <see langword="null" /> for a non-SWA model.
+/// </param>
+/// <param name="SlidingWindowPattern">
+///     Global-attention layer stride (every Nth layer is full attention; Gemma3=6, Gemma2=2), resolved from the header or
+///     a per-architecture default; <see langword="null" /> when unknown (the estimator then keeps every layer full-attention).
+/// </param>
 public sealed record GgufRepoFile(
     string FileName,
     string Quant,
@@ -152,7 +165,11 @@ public sealed record GgufRepoFile(
     long? EmbeddingLength,
     long? ContextLength,
     long? ExpertCount = null,
-    long? ExpertUsedCount = null);
+    long? ExpertUsedCount = null,
+    long? AttentionKeyLength = null,
+    long? AttentionValueLength = null,
+    long? SlidingWindow = null,
+    long? SlidingWindowPattern = null);
 
 /// <summary>One repo's inspected detail: gating, license, and its usable <c>.gguf</c> files.</summary>
 public sealed record GgufRepoDetail(
@@ -177,4 +194,8 @@ public sealed record GgufModelFootprintFacts(
     long? AttentionHeadCount,
     long? AttentionHeadCountKV,
     long? EmbeddingLength,
-    long? ContextLength);
+    long? ContextLength,
+    long? AttentionKeyLength = null,
+    long? AttentionValueLength = null,
+    long? SlidingWindow = null,
+    long? SlidingWindowPattern = null);

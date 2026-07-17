@@ -1,6 +1,7 @@
 namespace XE_Local_AI_Engine.Client.Services.Chat.Implementation;
 
 using System.Threading.Channels;
+using XE_Local_AI_Engine.Client.Models.Enums;
 using XE_Local_AI_Engine.Client.Services.Events;
 
 /// <summary>
@@ -31,6 +32,10 @@ public sealed class ChatInvocationStatePump(INodeChatInvocationPump invocationPu
         var terminalPersisted = false;
         var hasFlushedPartial = false;
         var lastPartialFlushTimestamp = 0L;
+        // The last runtime phase surfaced to the client, so a pre-first-token phase transition is emitted once per
+        // distinct phase (AUD4-20: the "Loading model…" indicator). Coalescing keeps the newest snapshot per burst, so
+        // this tracks the CURRENT phase, not every intermediate one — which is exactly what the indicator needs.
+        InvocationRuntimePhase? lastEmittedPhase = null;
         // The freshest content-bearing snapshot the debounce deferred without persisting. Retained so a graceful
         // end-of-stream that never delivers a terminal still writes the tail rather than a stale cursor.
         InvocationState? pendingPartialState = null;
@@ -84,6 +89,16 @@ public sealed class ChatInvocationStatePump(INodeChatInvocationPump invocationPu
                 }
 
                 var isTerminal = NodeChatInvocationPump.IsTerminal(latest.Status);
+
+                // Surface a pre-first-token runtime-phase transition (preparing/loading/generating) as a content-free
+                // AssistantPhase event so the client renders "Loading model…" during a cold load. Emitted before the
+                // content flush and only for a non-terminal state whose phase changed; the warm wait between "loading"
+                // and "generating" is where the indicator earns its keep.
+                if (!isTerminal && latest.RuntimePhase is { } runtimePhase && runtimePhase != lastEmittedPhase)
+                {
+                    lastEmittedPhase = runtimePhase;
+                    await eventWriter.WriteAsync(ChatStreamEventMapper.PhaseEvent(correlation, runtimePhase, NowUnixMilliseconds(), sequence.Next()), cancellationToken).ConfigureAwait(false);
+                }
 
                 // Terminal/error flushes immediately (the final delta + reasoning tail must not be delayed); the first
                 // partial also flushes immediately so the first token is visible without waiting a window. Between

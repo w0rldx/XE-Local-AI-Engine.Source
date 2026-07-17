@@ -1,5 +1,5 @@
 import { Alert, Badge, Button, Card, Container, Group, Loader, Stack, Table, Text, Title, Tooltip } from "@mantine/core";
-import { IconAlertTriangle, IconInfoCircle, IconPlayerEject, IconServer } from "@tabler/icons-react";
+import { IconAlertTriangle, IconPlayerEject, IconServer } from "@tabler/icons-react";
 import { useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
 
@@ -74,12 +74,70 @@ export function LoadedModelsPage() {
 		});
 	};
 
-	// Ejects a llama.cpp running model (separate runtime / endpoint from the Ollama eject above).
-	const handleEjectRunning = (model: RunningModel): void => {
+	// Ejects a llama.cpp running model (separate runtime / endpoint from the Ollama eject above). A graceful eject
+	// (force=false) waits for any in-flight generation to drain; the outcome (AUD4-20) drives a distinct toast, and a
+	// timed-out-still-busy result offers a force eject that interrupts the run.
+	const handleEjectRunning = async (model: RunningModel, force = false): Promise<void> => {
+		if (!force) {
+			const confirmed = await confirm({
+				title: t("pages.loadedModels.llamaCpp.ejectConfirm.title", "Eject model"),
+				description: t(
+					"pages.loadedModels.llamaCpp.ejectConfirm.description",
+					"Eject '{{modelName}}' from the llama.cpp runtime? Memory frees after any in-flight generation completes; a running response is not interrupted.",
+					{ modelName: model.modelName },
+				),
+				confirmationText: t("pages.loadedModels.llamaCpp.ejectConfirm.action", "Eject"),
+				cancellationText: t("common.cancel", "Cancel"),
+			});
+
+			if (!confirmed) {
+				return;
+			}
+		}
+
 		ejectRunningMutation.mutate(
-			{ modelName: model.modelName, role: model.role || undefined },
+			{ modelName: model.modelName, role: model.role || undefined, force },
 			{
-				onSuccess: () => toast.success(t("pages.loadedModels.llamaCpp.ejected", "Model ejected.")),
+				onSuccess: async (result) => {
+					switch (result.outcome) {
+						case "ejected":
+							toast.success(t("pages.loadedModels.llamaCpp.ejectOutcome.ejected", "Model ejected."));
+							return;
+						case "forced":
+							toast.info(
+								t("pages.loadedModels.llamaCpp.ejectOutcome.forced", "Model ejected — the in-flight generation was interrupted."),
+							);
+							return;
+						case "not_running":
+							toast.info(t("pages.loadedModels.llamaCpp.ejectOutcome.notRunning", "That model was not running."));
+							return;
+						case "timed_out_still_busy": {
+							toast.warning(
+								t(
+									"pages.loadedModels.llamaCpp.ejectOutcome.timedOutStillBusy",
+									"'{{modelName}}' is still finishing a response, so it was left running.",
+									{ modelName: model.modelName },
+								),
+							);
+							const forceConfirmed = await confirm({
+								title: t("pages.loadedModels.llamaCpp.forceConfirm.title", "Force eject?"),
+								description: t(
+									"pages.loadedModels.llamaCpp.forceConfirm.description",
+									"'{{modelName}}' is still generating. Force-eject anyway and interrupt the running turn?",
+									{ modelName: model.modelName },
+								),
+								confirmationText: t("pages.loadedModels.llamaCpp.forceConfirm.action", "Force eject"),
+								cancellationText: t("common.cancel", "Cancel"),
+							});
+							if (forceConfirmed) {
+								await handleEjectRunning(model, true);
+							}
+							return;
+						}
+						default:
+							return;
+					}
+				},
 				onError: (error) =>
 					toast.error(errorMessage(error, t("pages.loadedModels.llamaCpp.ejectError", "Could not eject the model."))),
 			},
@@ -126,13 +184,16 @@ export function LoadedModelsPage() {
 						) : null}
 
 						{!loadedModelsQuery.isLoading && !loadedModelsQuery.error && !isAvailable ? (
-							<Alert color="gray" icon={<IconInfoCircle size={16} />} data-testid="loaded-models-unavailable">
-								{snapshot?.error ??
-									t(
-										"pages.loadedModels.unavailable",
-										"The local model runtime is unavailable right now. This view will update once it is reachable.",
-									)}
-							</Alert>
+							// Ollama is an optional secondary provider, deliberately absent on the desktop default. An
+							// unreachable provider is therefore an expected empty state, not an error: render a neutral,
+							// dimmed line (never a red/warning alert) and do NOT surface the raw connection-refused reason
+							// as an alarming banner. A genuine transport/shape failure still routes to the error alert above.
+							<Text c="dimmed" data-testid="loaded-models-unavailable">
+								{t(
+									"pages.loadedModels.unavailable",
+									"Ollama isn't reachable right now. It's an optional secondary provider, so there may be nothing loaded to show here. llama.cpp models still appear below.",
+								)}
+							</Text>
 						) : null}
 
 						{!loadedModelsQuery.isLoading && !loadedModelsQuery.error && isAvailable && models.length === 0 ? (
