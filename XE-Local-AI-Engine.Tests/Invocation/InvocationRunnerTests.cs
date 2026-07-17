@@ -917,6 +917,34 @@ public sealed class InvocationRunnerTests
     }
 
     [Test]
+    public async Task RunAsync_WhenApprovalReEmittedWithoutCallId_PresentedOnce()
+    {
+        // GPTAUD-02 hardening: a CallId-less approval re-emitted across streamed chunks must dedup on its Id and be
+        // presented exactly ONCE — a blank CallId must never bypass dedup (that would prompt N times for one call and
+        // dangle N-1 ambiguous responses).
+        var sender = new MockHubMessageSender();
+        var segment = 0;
+        var factory = CreateFactory(_ =>
+        {
+            segment++;
+            return segment == 1 ? BlankCallIdApprovalUpdates() : CreateUpdates("done");
+        });
+        var runner = CreateRunner(sender, factory);
+        var invocationId = Guid.NewGuid();
+
+        var runTask = RunAsync(runner, RuntimePackageBuilder.Valid().WithInvocationId(invocationId).WithAllowedTool("run_in_agent_home").Build());
+
+        // The whole segment (both chunks) drains before approvals are presented, so a bypassed dedup would already have
+        // enqueued two; wait for the single presentation, resolve it, and confirm no second one follows.
+        await AssertEx.EventuallyAsync(() => sender.SentApprovals.Count == 1, TimeSpan.FromSeconds(5));
+        runner.ResolveApprovalResult(new ApprovalResolvedEvent(sender.SentApprovals[0].RequestId, Approved: true));
+        await runTask;
+
+        AssertEx.Equal(expected: 1, sender.SentApprovals.Count, "a CallId-less approval re-emitted across chunks must be presented exactly once");
+        AssertEx.Equal(expected: 2, segment, "the run resumes after the single approval resolves");
+    }
+
+    [Test]
     public async Task RunAsync_WhenNodeDrainingBegan_RejectsNewLocalInvocation()
     {
         // GPTAUD-21: a local turn admitted AFTER shutdown drain has snapshotted the active set must be rejected, never
@@ -1655,6 +1683,25 @@ public sealed class InvocationRunnerTests
         {
             firstApproval,
             secondApproval
+        });
+        await Task.Yield();
+    }
+
+    private static async IAsyncEnumerable<AgentResponseUpdate> BlankCallIdApprovalUpdates()
+    {
+        // The SAME approval (a stable Id, but NO CallId) surfaced as two DISTINCT instances across two streamed chunks —
+        // exercises the Id-based dedup fallback (reference identity alone would not collapse two instances). Dedup must
+        // present it exactly once; a blank CallId must never bypass dedup and prompt twice for one call.
+        var first = new ToolApprovalRequestContent("approval-no-callid", new FunctionCallContent(string.Empty, "run_in_agent_home"));
+        var second = new ToolApprovalRequestContent("approval-no-callid", new FunctionCallContent(string.Empty, "run_in_agent_home"));
+        yield return new AgentResponseUpdate(ChatRole.Assistant, new List<AIContent>
+        {
+            first
+        });
+        await Task.Yield();
+        yield return new AgentResponseUpdate(ChatRole.Assistant, new List<AIContent>
+        {
+            second
         });
         await Task.Yield();
     }
