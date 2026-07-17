@@ -126,6 +126,19 @@ function deltaEvent(): NodeChatStreamEventDto {
 	};
 }
 
+function completedEvent(): NodeChatStreamEventDto {
+	return {
+		type: nodeChatStreamEventTypes.assistantCompleted,
+		conversationId: "conversation-1",
+		messageId: "assistant-1",
+		requestId: "request-1",
+		status: "completed",
+		sequence: 2,
+		occurredAtUtc: 1_700_000_000_001,
+		content: "final answer",
+	};
+}
+
 function renderChat(): { queryClient: QueryClient } {
 	const queryClient = new QueryClient({
 		defaultOptions: { queries: { retry: false, gcTime: 0 } },
@@ -220,5 +233,40 @@ describe("Chat delete-vs-stream race", () => {
 		// The guarded loop/finally must neither re-create the removed cache entry nor refetch (resurrect) it.
 		await waitFor(() => expect(queryClient.getQueryData(nodeChatQueryKeys.conversation("conversation-1"))).toBeUndefined());
 		expect(adapter.getConversation.mock.calls.filter((call) => call[0] === "conversation-1")).toHaveLength(0);
+	});
+
+	it("rolls back the deleted-conversation marker when the delete fails, so a later send still streams (GPTAUD-16)", async () => {
+		// The delete request fails, so the conversation survives on the server and stays visible/selectable.
+		adapter.deleteConversation.mockReset();
+		adapter.deleteConversation.mockRejectedValue(new Error("delete failed"));
+		adapter.listConversations.mockResolvedValue([conversation()]);
+
+		// The send streams a delta then a terminal event. `secondEventPulled` flips only if the streaming loop
+		// consumes PAST the first event — which it can only do when the deleted marker was rolled back (otherwise
+		// the loop's has(id) guard cancels+breaks on the first iteration, and the terminal event is never pulled).
+		let secondEventPulled = false;
+		adapter.sendMessage.mockImplementation(() => ({
+			async *[Symbol.asyncIterator](): AsyncIterator<NodeChatStreamEventDto> {
+				yield deltaEvent();
+				secondEventPulled = true;
+				yield completedEvent();
+			},
+		}));
+
+		renderChat();
+		await screen.findByTestId("conversation-item-conversation-1");
+		const input = await screen.findByTestId("chat-input");
+
+		// Shift-click delete skips the confirm; the request rejects and the catch must roll back the marker.
+		fireEvent.click(screen.getByTestId("conversation-actions-conversation-1"));
+		fireEvent.click(await screen.findByTestId("conversation-delete-conversation-1"), { shiftKey: true });
+		await waitFor(() => expect(adapter.deleteConversation).toHaveBeenCalledWith("conversation-1"));
+
+		// Now send into the surviving conversation. The stream must run to completion.
+		fireEvent.change(input, { target: { value: "still there?" } });
+		fireEvent.click(screen.getByTestId("chat-send-button"));
+
+		await waitFor(() => expect(adapter.sendMessage).toHaveBeenCalledTimes(1));
+		await waitFor(() => expect(secondEventPulled).toBe(true));
 	});
 });
