@@ -32,6 +32,36 @@ export interface StreamGuardOptions {
 const defaultFirstChunkTimeoutMs = 120_000;
 const defaultInterChunkTimeoutMs = 180_000;
 
+// Extended inter-event deadline used ONLY while the server reports a pre-first-token cold-load phase
+// (preparing_runtime / loading_model). During a cold model load the wire goes fully silent — the server
+// emits the phase events back-to-back and then blocks on the load with no heartbeat — so the normal
+// 180 s inter-chunk deadline would false-fail a legitimate load. The backend caps readiness at 600 s
+// (LlamaServerSupervisorOptions size-aware readiness ceiling), so this must exceed that plus margin, or a
+// slow-but-valid load trips the watchdog before the server itself would give up. Reverts to the normal
+// inter-chunk deadline the moment a `generating` phase or the first content/reasoning delta arrives.
+const coldLoadInterEventTimeoutMs = 660_000;
+
+// Wire-string literals mirroring nodeChatStreamEventTypes / the runtimePhase union
+// (NodeChatStreamState.ts / NodeChatStreamTypes.ts). Duplicated here rather than imported to keep the
+// guard free of the stream-state module's heavy import graph; keep in sync with those sources.
+const assistantPhaseEventType = "assistant-phase";
+const runtimePhasePreparingRuntime = "preparing_runtime";
+const runtimePhaseLoadingModel = "loading_model";
+const runtimePhaseGenerating = "generating";
+
+// A cold-load phase is in effect while the latest reported phase is a pre-first-token load stage.
+function isColdLoadPhase(phase: string | undefined): boolean {
+	return phase === runtimePhasePreparingRuntime || phase === runtimePhaseLoadingModel;
+}
+
+// The first streamed content or reasoning delta marks the end of the cold load: generation has begun.
+function hasGenerationOutput(event: NodeChatStreamEventDto): boolean {
+	return (
+		(typeof event.delta === "string" && event.delta.length > 0) ||
+		(typeof event.reasoningDelta === "string" && event.reasoningDelta.length > 0)
+	);
+}
+
 interface PendingEvent {
 	value: NodeChatStreamEventDto;
 }
@@ -74,11 +104,23 @@ export function guardNodeChatStream(
 			const buffered = new Map<number, PendingEvent>();
 			let nextSequence = Number.NEGATIVE_INFINITY;
 			let received = false;
+			// Latest reported runtime phase and whether generation has begun — together they widen the
+			// inter-event deadline across a silent cold model load, then snap it back once tokens flow.
+			let latestPhase: string | undefined;
+			let generationStarted = false;
 
 			try {
 				while (true) {
 					const category: StreamWatchdogCategory = received ? "inter-chunk-stall" : "no-first-chunk";
-					const watchdog = watchdogTimer(received ? interChunkTimeoutMs : firstChunkTimeoutMs);
+					let deadlineMs: number;
+					if (!received) {
+						deadlineMs = firstChunkTimeoutMs;
+					} else if (!generationStarted && isColdLoadPhase(latestPhase)) {
+						deadlineMs = coldLoadInterEventTimeoutMs;
+					} else {
+						deadlineMs = interChunkTimeoutMs;
+					}
+					const watchdog = watchdogTimer(deadlineMs);
 					// Keep a reference so the losing branch of the race never surfaces as an unhandled rejection if
 					// it settles after the watchdog has already won.
 					const nextEvent = iterator.next();
@@ -102,6 +144,14 @@ export function guardNodeChatStream(
 
 					received = true;
 					const event = result.value;
+					// Track the cold-load phase off the wire (not the ordered stream): the watchdog reacts to
+					// physical arrival, so update from every event before the sequence gate below may skip it.
+					if (event.type === assistantPhaseEventType && typeof event.runtimePhase === "string") {
+						latestPhase = event.runtimePhase;
+					}
+					if (!generationStarted && (latestPhase === runtimePhaseGenerating || hasGenerationOutput(event))) {
+						generationStarted = true;
+					}
 					if (nextSequence === Number.NEGATIVE_INFINITY) {
 						nextSequence = event.sequence;
 					}
