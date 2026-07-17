@@ -17,6 +17,19 @@ function event(sequence: number, content: string): NodeChatStreamEventDto {
 	};
 }
 
+function phaseEvent(sequence: number, runtimePhase: string): NodeChatStreamEventDto {
+	return {
+		type: "assistant-phase",
+		conversationId: "conversation-1",
+		messageId: "assistant-1",
+		requestId: "request-1",
+		status: "streaming",
+		sequence,
+		occurredAtUtc: 1_700_000_000_000 + sequence,
+		runtimePhase,
+	};
+}
+
 async function fromArray(events: NodeChatStreamEventDto[]): Promise<NodeChatStreamEventDto[]> {
 	async function* source(): AsyncGenerator<NodeChatStreamEventDto> {
 		for (const value of events) {
@@ -98,5 +111,84 @@ describe("guardNodeChatStream", () => {
 		const caught = await stalled;
 		expect(caught).toMatchObject({ category: "inter-chunk-stall" });
 		release?.();
+	});
+
+	it("does not false-fail during a silent cold model load (loading_model phase)", async () => {
+		vi.useFakeTimers();
+		let release: (() => void) | undefined;
+		async function* loading(): AsyncGenerator<NodeChatStreamEventDto> {
+			yield phaseEvent(0, "loading_model");
+			await new Promise<void>((resolve) => {
+				release = resolve;
+			});
+			yield event(1, "a");
+		}
+
+		const iterator = guardNodeChatStream(loading(), { firstChunkTimeoutMs: 5_000, interChunkTimeoutMs: 1_000 })[
+			Symbol.asyncIterator
+		]();
+		await expect(iterator.next()).resolves.toMatchObject({ value: { sequence: 0 }, done: false });
+
+		const pending = iterator.next();
+		// Far past the normal 1 s inter-chunk deadline, but well within the extended cold-load window — the
+		// watchdog must NOT fire while the model is still loading.
+		await vi.advanceTimersByTimeAsync(200_000);
+		release?.();
+		await expect(pending).resolves.toMatchObject({ value: { sequence: 1 }, done: false });
+	});
+
+	it("still fails once the extended cold-load deadline elapses", async () => {
+		vi.useFakeTimers();
+		async function* loadingForever(): AsyncGenerator<NodeChatStreamEventDto> {
+			yield phaseEvent(0, "loading_model");
+			await new Promise<void>(() => {
+				// never resolves — the load hangs past the readiness ceiling
+			});
+		}
+
+		const iterator = guardNodeChatStream(loadingForever(), { firstChunkTimeoutMs: 5_000, interChunkTimeoutMs: 1_000 })[
+			Symbol.asyncIterator
+		]();
+		await expect(iterator.next()).resolves.toMatchObject({ value: { sequence: 0 }, done: false });
+
+		const stalled = iterator.next().then(
+			() => undefined,
+			(error: unknown) => error,
+		);
+		await vi.advanceTimersByTimeAsync(660_000);
+
+		const caught = await stalled;
+		expect(caught).toBeInstanceOf(StreamWatchdogError);
+		expect(caught).toMatchObject({ category: "inter-chunk-stall" });
+	});
+
+	it("reverts to the normal inter-chunk deadline once generation starts", async () => {
+		vi.useFakeTimers();
+		async function* loadThenStall(): AsyncGenerator<NodeChatStreamEventDto> {
+			yield phaseEvent(0, "loading_model");
+			yield phaseEvent(1, "generating");
+			yield event(2, "a");
+			await new Promise<void>(() => {
+				// never resolves — a genuine mid-generation stall
+			});
+		}
+
+		const iterator = guardNodeChatStream(loadThenStall(), { firstChunkTimeoutMs: 5_000, interChunkTimeoutMs: 1_000 })[
+			Symbol.asyncIterator
+		]();
+		await expect(iterator.next()).resolves.toMatchObject({ value: { sequence: 0 }, done: false });
+		await expect(iterator.next()).resolves.toMatchObject({ value: { sequence: 1 }, done: false });
+		await expect(iterator.next()).resolves.toMatchObject({ value: { sequence: 2 }, done: false });
+
+		const stalled = iterator.next().then(
+			() => undefined,
+			(error: unknown) => error,
+		);
+		// Generation has begun, so the 1 s inter-chunk deadline applies again (not the extended one).
+		await vi.advanceTimersByTimeAsync(1_000);
+
+		const caught = await stalled;
+		expect(caught).toBeInstanceOf(StreamWatchdogError);
+		expect(caught).toMatchObject({ category: "inter-chunk-stall" });
 	});
 });
