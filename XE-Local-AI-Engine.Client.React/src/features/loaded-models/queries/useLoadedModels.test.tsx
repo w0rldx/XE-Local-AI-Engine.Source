@@ -81,7 +81,7 @@ describe("useLoadedModels", () => {
 });
 
 describe("resolveLoadedModelsPollIntervalMs (AUD4-20.2 back-off)", () => {
-	const fast = resolveLoadedModelsPollIntervalMs({ isAvailable: true, error: null, models: [] });
+	const fast = resolveLoadedModelsPollIntervalMs({ isAvailable: true, ollamaConfigured: true, error: null, models: [] });
 
 	it("polls at the fast cadence while the provider is available", () => {
 		expect(fast).toBe(4000);
@@ -91,11 +91,18 @@ describe("resolveLoadedModelsPollIntervalMs (AUD4-20.2 back-off)", () => {
 		expect(resolveLoadedModelsPollIntervalMs(undefined)).toBe(fast);
 	});
 
-	it("backs off to a slower cadence once the provider reports unreachable", () => {
-		// A deliberately-absent Ollama (desktop default) must not be polled every 4s: the interval grows so the
-		// connection-refused loop is throttled while still recovering automatically if it later comes up.
-		const slow = resolveLoadedModelsPollIntervalMs({ isAvailable: false, error: "Provider unreachable", models: [] });
-		expect(slow).toBeGreaterThan(fast);
+	it("backs off to a slower cadence once a configured provider reports unreachable", () => {
+		// A configured-but-down Ollama must not be polled every 4s: the interval grows so the connection-refused loop is
+		// throttled while still recovering automatically if it later comes up.
+		const slow = resolveLoadedModelsPollIntervalMs({ isAvailable: false, ollamaConfigured: true, error: "Provider unreachable", models: [] });
+		expect(slow).toBe(30_000);
+	});
+
+	it("STOPS polling entirely once the node reports Ollama is not configured (AUD4-20)", () => {
+		// A switched-off Ollama runtime will never answer, so the recurring poll is disabled outright rather than backing
+		// off forever against an endpoint that is deliberately absent.
+		const stopped = resolveLoadedModelsPollIntervalMs({ isAvailable: false, ollamaConfigured: false, error: null, models: [] });
+		expect(stopped).toBe(false);
 	});
 });
 
@@ -131,6 +138,7 @@ describe("useEjectModel", () => {
 		const queryClient = makeClient();
 		const seeded: LoadedModelsSnapshot = {
 			isAvailable: true,
+			ollamaConfigured: true,
 			error: null,
 			models: [
 				{ modelName: "llama3.1:8b", sizeBytes: 1, sizeVramBytes: null, expiresAtUtc: null },
@@ -163,6 +171,7 @@ describe("useEjectModel", () => {
 		const queryClient = makeClient();
 		const seeded: LoadedModelsSnapshot = {
 			isAvailable: true,
+			ollamaConfigured: true,
 			error: null,
 			models: [{ modelName: "llama3.1:8b", sizeBytes: 1, sizeVramBytes: null, expiresAtUtc: null }],
 		};

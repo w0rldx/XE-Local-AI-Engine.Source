@@ -110,6 +110,11 @@ export function toHardwareProfile(dto: XeLocalAiEngineClientEndpointsModelFitV1H
 		gpuAccelAvailable: dto.gpuAccelAvailable ?? false,
 		cpuCores: dto.cpuCores ?? 0,
 		freeDiskBytes: dto.freeDiskBytes ?? 0,
+		inferenceBackend: dto.inferenceBackend ?? "unknown",
+		gpuExpected: dto.gpuExpected ?? false,
+		cpuFallback: dto.cpuFallback ?? false,
+		cpuFallbackReason: dto.cpuFallbackReason ?? null,
+		cpuFallbackRemediation: dto.cpuFallbackRemediation ?? null,
 	};
 }
 

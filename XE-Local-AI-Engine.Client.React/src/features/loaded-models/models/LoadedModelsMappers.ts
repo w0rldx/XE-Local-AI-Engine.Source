@@ -25,6 +25,9 @@ export function toLoadedModelsSnapshot(
 	return {
 		// The backend returns isAvailable:false (not a 500) when the provider is unreachable; default defensively.
 		isAvailable: dto.isAvailable ?? false,
+		// Default to TRUE (configured) when the field is absent so an older backend keeps today's polling behavior; a
+		// new backend that reports false lets the page stop polling an off/absent Ollama.
+		ollamaConfigured: dto.ollamaConfigured ?? true,
 		error: dto.error ?? null,
 		// When unavailable the list is empty; coalesce defensively in case it is omitted.
 		models: (dto.items ?? []).map(toLoadedModel),

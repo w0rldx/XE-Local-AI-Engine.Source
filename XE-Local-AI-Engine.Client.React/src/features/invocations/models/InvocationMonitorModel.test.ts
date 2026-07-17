@@ -40,5 +40,6 @@ function createHistory(invocationId: string, completedAt: string) {
     failureCategory: null,
     streamedChunkCount: 1,
     streamedThinkingChunkCount: 0,
+    traceId: null,
   };
 }

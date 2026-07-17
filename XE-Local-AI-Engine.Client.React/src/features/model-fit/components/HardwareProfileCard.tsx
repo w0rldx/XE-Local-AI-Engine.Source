@@ -74,6 +74,31 @@ export function HardwareProfileCard({ profile, isLoading, isFetching, error, onR
 					</Alert>
 				) : null}
 
+				{profile?.cpuFallback && !isLoading && !error ? (
+					<Alert
+						color="orange"
+						variant="light"
+						icon={<IconAlertTriangle size={16} />}
+						title={t("pages.modelFit.hardware.cpuFallbackAlert.title", "Running on CPU despite a detected GPU")}
+						data-testid="model-fit-hardware-cpu-fallback-alert"
+					>
+						<Stack gap={4}>
+							<Text size="sm">
+								{profile.cpuFallbackReason ??
+									t(
+										"pages.modelFit.hardware.cpuFallbackAlert.reason",
+										"The selected inference runtime could not use this machine's GPU, so inference is running on the CPU.",
+									)}
+							</Text>
+							{profile.cpuFallbackRemediation ? (
+								<Text size="sm" c="dimmed" data-testid="model-fit-hardware-cpu-fallback-remediation">
+									{profile.cpuFallbackRemediation}
+								</Text>
+							) : null}
+						</Stack>
+					</Alert>
+				) : null}
+
 				{profile && !isLoading && !error ? (
 					<SimpleGrid cols={{ base: 2, sm: 3, md: 5 }} spacing="lg">
 						<Stat

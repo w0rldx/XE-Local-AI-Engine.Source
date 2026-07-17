@@ -40,3 +40,12 @@ export function shouldFetchLocalModelDetails(
 	// A concrete name that is not in the installed list can only 404 — treat it as a terminal state, not a retry loop.
 	return concreteModelInstalled;
 }
+
+// Resolves the context-usage meter's capacity from a model's details (AUD4-02/20): prefer the RUNNING process's
+// effective window (the launched `-c`, reported once the model is warm) over the model's advertised train ceiling, then
+// undefined (unknown → the meter shows "—"). Kept pure so the preference is unit-testable without rendering the page.
+export function resolveContextCapacityTokens(
+	details: { effectiveContextTokens?: number | null; maxContextTokens?: number | null } | undefined,
+): number | undefined {
+	return details?.effectiveContextTokens ?? details?.maxContextTokens ?? undefined;
+}
