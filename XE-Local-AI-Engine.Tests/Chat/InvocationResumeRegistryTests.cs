@@ -247,6 +247,55 @@ public sealed class InvocationResumeRegistryTests
         });
     }
 
+    [Test]
+    public async Task ResumeAsync_WhenTerminalRacesBeforeFirstEnumeration_YieldsTerminalAndCompletes()
+    {
+        // GPTAUD-05: the invocation can reach its terminal in the window between ResumeAsync's non-terminal validation
+        // and the lazy Subscribe at the first enumeration. When it does, OnInvocationStateChanged runs TryRemove +
+        // Publish(terminal) + Complete() before any subscriber channel is registered, so the freshly-registered channel
+        // would never be completed and the consumer's ReadAllAsync would block forever. The consumer must instead emit
+        // the terminal from the snapshot and finish. No existing test exercises this ordering — they all subscribe
+        // (first MoveNextAsync) before the terminal is raised.
+        var dispatcher = Substitute.For<IWorkerEventDispatcher>();
+        var registry = CreateRegistry(dispatcher);
+        var invocationId = Guid.NewGuid();
+        var conversationId = Guid.NewGuid();
+
+        RaiseState(dispatcher, NewState(invocationId, conversationId, InvocationStatus.Running, "Hello"));
+
+        // Obtain the enumerator WITHOUT advancing it: ResumeAsync validates synchronously (the invocation is still
+        // non-terminal here), but Subscribe only runs at the first MoveNextAsync below.
+        var enumerator = registry.ResumeAsync(invocationId, CancellationToken.None).GetAsyncEnumerator(CancellationToken.None);
+        try
+        {
+            // Terminal races in before the first enumeration.
+            RaiseState(dispatcher, NewState(invocationId, conversationId, InvocationStatus.Completed, "Hello world"));
+
+            var events = new List<ChatStreamEvent>();
+            var drain = Task.Run(async () =>
+            {
+                while (await enumerator.MoveNextAsync())
+                {
+                    events.Add(enumerator.Current);
+                }
+            });
+
+            var finished = await Task.WhenAny(drain, Task.Delay(TimeSpan.FromSeconds(5)));
+            AssertEx.True(finished == drain, "Resume enumeration must complete instead of blocking on a channel that never carries the terminal.");
+            await drain;
+
+            AssertEx.True(events.Count > 0, "Expected at least the snapshot replay and the terminal.");
+            var terminal = events[^1];
+            AssertEx.Equal(ChatStreamEventTypes.AssistantCompleted, terminal.Type);
+            AssertEx.Equal(NodeChatMessageStatusValues.Completed, terminal.Status);
+            AssertEx.Equal("Hello world", terminal.Content);
+        }
+        finally
+        {
+            await enumerator.DisposeAsync();
+        }
+    }
+
     private static InvocationResumeRegistry CreateRegistry(IWorkerEventDispatcher dispatcher)
     {
         return new InvocationResumeRegistry(dispatcher,

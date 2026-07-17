@@ -84,6 +84,25 @@ public sealed class InvocationResumeRegistry : IInvocationResumeRegistry
 
         try
         {
+            // GPTAUD-05: the invocation can go terminal in the window between ResumeAsync's non-terminal validation and
+            // this first Subscribe. When it does, OnInvocationStateChanged runs Publish(terminal) then Complete() before
+            // our channel is (or right as it is) registered — so the live loop below would never carry a terminal event
+            // (the channel is already completed, or was completed by Complete()). The snapshot taken under Subscribe's
+            // lock already reflects that terminal, so emit it directly and finish rather than ending the resume stream
+            // with no terminal (which would leave the consumer waiting for a terminal that never arrives).
+            if (TryMapTerminal(snapshot.Status, out var snapshotTerminalType, out var snapshotTerminalStatus))
+            {
+                yield return ToEvent(snapshotTerminalType,
+                    snapshot,
+                    sequence,
+                    status: snapshotTerminalStatus,
+                    inputTokens: snapshot.InputTokens,
+                    outputTokens: snapshot.OutputTokens,
+                    totalTokens: snapshot.TotalTokens,
+                    reasoningTokens: snapshot.ReasoningTokens);
+                yield break;
+            }
+
             await foreach (var item in reader.ReadAllAsync(cancellationToken).ConfigureAwait(false))
             {
                 if (item.ToolCall is { } toolCall)
@@ -364,6 +383,12 @@ public sealed class InvocationResumeRegistry : IInvocationResumeRegistry
         private readonly List<Channel<ResumeItem>> _subscribers = [];
         private readonly Lock _syncRoot = new();
 
+        // Latched under _syncRoot when Complete() runs (the terminal state has been published and the then-attached
+        // subscribers completed). A Subscribe that races in AFTER Complete would otherwise register a channel that no
+        // future publish/complete will ever finish — GPTAUD-05. Once set it never clears; the entry is removed from the
+        // registry at the same time, so no non-terminal publish can follow.
+        private bool _completed;
+
         // The dispatcher hands every InvocationStateChanged subscriber a fresh, never-subsequently-mutated snapshot
         // (see WorkerEventDispatcher.PublishStateChanged), so a published state is effectively immutable: it can be
         // stored and fanned out by reference without a defensive copy. LatestState stays correct for a late resumer
@@ -433,7 +458,19 @@ public sealed class InvocationResumeRegistry : IInvocationResumeRegistry
                 snapshot = Clone(LatestState);
                 toolHistory = [.. _toolHistory];
                 noticeHistory = [.. _noticeHistory];
-                _subscribers.Add(channel);
+
+                // GPTAUD-05: the invocation already reached its terminal and Complete() ran (which completed and cleared
+                // the then-attached subscribers). Registering a channel now would leave a reader that no future
+                // publish/complete ever finishes, so hand back an already-completed channel. The snapshot above is the
+                // terminal state (Publish precedes Complete under this same lock), which ResumeCoreAsync emits directly.
+                if (_completed)
+                {
+                    channel.Writer.TryComplete();
+                }
+                else
+                {
+                    _subscribers.Add(channel);
+                }
             }
 
             return channel.Reader;
@@ -458,6 +495,10 @@ public sealed class InvocationResumeRegistry : IInvocationResumeRegistry
         {
             lock (_syncRoot)
             {
+                // Latch terminal so a Subscribe that races in after this point gets an already-completed channel
+                // (GPTAUD-05) rather than one nothing will ever finish.
+                _completed = true;
+
                 foreach (var subscriber in _subscribers)
                 {
                     subscriber.Writer.TryComplete();
