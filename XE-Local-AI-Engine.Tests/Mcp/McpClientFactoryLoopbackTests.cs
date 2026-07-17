@@ -2,6 +2,7 @@ namespace XE_Local_AI_Engine.Tests.Mcp;
 
 using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Options;
+using ModelContextProtocol.Client;
 using XE_Local_AI_Engine.Client.Persistence;
 using XE_Local_AI_Engine.Client.Services.Mcp;
 using XE_Local_AI_Engine.Client.Services.Mcp.Implementation;
@@ -66,6 +67,34 @@ public sealed class McpClientFactoryLoopbackTests
         }
     }
 
+    [Test]
+    public void BuildStdioTransportOptions_DoesNotInheritParentEnvironment_SeedsDefaults_OverlaysPerServerVars()
+    {
+        // A secret in the parent process environment (env-provisioned XE_NODE_SQLITE_KEY is the audited leak) must never
+        // reach a stdio MCP child. Seeding only the SDK default set with InheritEnvironmentVariables=false achieves that.
+        const string secretName = "XE_AUDIT5_MCP_PARENT_SECRET";
+        Environment.SetEnvironmentVariable(secretName, "super-secret-node-value");
+        try
+        {
+            var record = StdioRecord(new Dictionary<string, string>(StringComparer.Ordinal)
+            {
+                ["MCP_SERVER_TOKEN"] = "per-server-value"
+            });
+
+            var options = McpClientFactory.BuildStdioTransportOptions(record);
+
+            AssertEx.False(options.InheritEnvironmentVariables, "A stdio MCP server must not inherit the node's full environment.");
+            var env = AssertEx.NotNull(options.EnvironmentVariables);
+            AssertEx.False(env.ContainsKey(secretName), "A non-allowlisted parent env var must not leak into the MCP child.");
+            AssertEx.True(env.TryGetValue("MCP_SERVER_TOKEN", out var configured) && configured == "per-server-value",
+                "The per-server configured env var must be present on the child transport.");
+        }
+        finally
+        {
+            Environment.SetEnvironmentVariable(secretName, null);
+        }
+    }
+
     private static async Task AssertThrowsInvalidOperationAsync(Func<Task> action)
     {
         try
@@ -96,6 +125,23 @@ public sealed class McpClientFactoryLoopbackTests
             HttpLoopbackHosts = ["127.0.0.1", "localhost", "::1"]
         });
         return new McpClientFactory(options, NullLoggerFactory.Instance);
+    }
+
+    private static McpServerRecord StdioRecord(Dictionary<string, string> environment)
+    {
+        return new McpServerRecord(Guid.NewGuid(),
+            "Local",
+            Description: null,
+            McpTransportKind.Stdio,
+            "node",
+            ["server.js"],
+            WorkingDirectory: null,
+            environment,
+            Url: null,
+            Enabled: true,
+            Version: 1,
+            CreatedAtUtc: 0,
+            UpdatedAtUtc: 0);
     }
 
     private static McpServerRecord HttpRecord(string url)
