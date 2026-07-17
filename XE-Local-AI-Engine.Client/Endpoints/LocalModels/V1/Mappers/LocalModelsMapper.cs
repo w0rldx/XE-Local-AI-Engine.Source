@@ -211,13 +211,14 @@ internal static class LocalModelsMapper
         };
     }
 
-    public static RunningLocalModelsResponse ToRunningResponse(IEnumerable<RunningModelSnapshot> runningModels)
+    public static RunningLocalModelsResponse ToRunningResponse(IEnumerable<RunningModelSnapshot> runningModels, bool ollamaConfigured)
     {
         ArgumentNullException.ThrowIfNull(runningModels);
 
         return new RunningLocalModelsResponse
         {
             IsAvailable = true,
+            OllamaConfigured = ollamaConfigured,
             Items = runningModels
                     .Select(static snapshot => (Name: ReadRunningModelName(snapshot), Snapshot: snapshot))
                     .Where(static entry => !string.IsNullOrWhiteSpace(entry.Name))
@@ -233,11 +234,12 @@ internal static class LocalModelsMapper
         };
     }
 
-    public static RunningLocalModelsResponse ToUnavailableRunningResponse(string error)
+    public static RunningLocalModelsResponse ToUnavailableRunningResponse(string error, bool ollamaConfigured)
     {
         return new RunningLocalModelsResponse
         {
             IsAvailable = false,
+            OllamaConfigured = ollamaConfigured,
             Error = error,
             Items = []
         };
