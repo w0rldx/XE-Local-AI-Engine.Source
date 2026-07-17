@@ -100,7 +100,8 @@ export const nodeCapabilities: NodeCapabilityConfig = {
 	preview: true,
 	// Knowledge-base management surface (document ingestion + semantic search). On by default; node-local
 	// SQLite-backed document store with a background extract→chunk→embed→index pipeline, live status over the
-	// knowledge-base SignalR hub. Documents + chunks are stored encrypted (display names decrypted server-side).
+	// knowledge-base SignalR hub. Selective encryption: source document blobs and display names are encrypted
+	// at rest; the extracted chunk text and its FTS search index are stored unencrypted in local SQLite.
 	knowledgeBase: true,
 	// Image generation (stable-diffusion.cpp) surface. OFF by default — the runtime module (Lanes A–D) is built but
 	// not yet live-GPU verified, so the feature ships dark. Flip to true once an image model is installed and a
