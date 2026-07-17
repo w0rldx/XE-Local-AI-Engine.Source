@@ -246,6 +246,77 @@ public sealed class InvocationAgentFactoryTests
     }
 
     [Test]
+    public async Task CreateAsync_ThinkingCapableReasoningNone_SetsLlamaDisableThinkingMarker()
+    {
+        // GPTAUD-17b: reasoning OFF on a thinking-capable model. think:false suppresses reasoning on the Ollama wire, but
+        // the llama.cpp OpenAI adapter drops think, so the factory also flags the turn for the llama.cpp chat client to
+        // inject chat_template_kwargs.enable_thinking=false — otherwise a Qwen3-class template keeps emitting reasoning.
+        var definition = new InvocationAgentDefinition("qwen3:8b",
+            "Be helpful.",
+            [],
+            [],
+            "none");
+
+        using var chatClient = new FakeChatClient();
+        var sut = CreateSut(chatClient);
+
+        await using var context = await sut.CreateAsync(definition);
+
+        var chatOptions = ((ChatClientAgentRunOptions)context.RunOptions!).ChatOptions!;
+        var additionalProperties = AssertEx.NotNull(chatOptions.AdditionalProperties);
+        AssertEx.True(additionalProperties.TryGetValue<bool>("think", out var thinkValue));
+        AssertEx.Equal(expected: false, thinkValue);
+        AssertEx.True(additionalProperties.TryGetValue<bool>(InvocationAgentFactory.LlamaDisableThinkingMarkerKey, out var marker));
+        AssertEx.Equal(expected: true, marker);
+    }
+
+    [Test]
+    [Arguments("high")]
+    [Arguments("low")]
+    [Arguments(null)]
+    public async Task CreateAsync_ThinkingCapableReasoningOn_OmitsLlamaDisableThinkingMarker(string? effort)
+    {
+        // Reasoning ON (a graded level, or the default when unspecified) must NOT disable thinking — the marker is absent
+        // so the request stays byte-identical and the model reasons.
+        var definition = new InvocationAgentDefinition("qwen3:8b",
+            "Be helpful.",
+            [],
+            [],
+            effort);
+
+        using var chatClient = new FakeChatClient();
+        var sut = CreateSut(chatClient);
+
+        await using var context = await sut.CreateAsync(definition);
+
+        var chatOptions = ((ChatClientAgentRunOptions)context.RunOptions!).ChatOptions!;
+        var additionalProperties = AssertEx.NotNull(chatOptions.AdditionalProperties);
+        AssertEx.False(additionalProperties.ContainsKey(InvocationAgentFactory.LlamaDisableThinkingMarkerKey));
+    }
+
+    [Test]
+    public async Task CreateAsync_NonThinkingModelReasoningNone_OmitsLlamaDisableThinkingMarker()
+    {
+        // A non-thinking model has no default reasoning to disable — think:false alone is enough and no llama.cpp
+        // enable_thinking switch is meaningful, so the marker is never set (the else branch takes no action).
+        var definition = new InvocationAgentDefinition("gemma:12b",
+            "Be helpful.",
+            [],
+            [],
+            "none",
+            SupportsThinking: false);
+
+        using var chatClient = new FakeChatClient();
+        var sut = CreateSut(chatClient);
+
+        await using var context = await sut.CreateAsync(definition);
+
+        var chatOptions = ((ChatClientAgentRunOptions)context.RunOptions!).ChatOptions!;
+        var additionalProperties = AssertEx.NotNull(chatOptions.AdditionalProperties);
+        AssertEx.False(additionalProperties.ContainsKey(InvocationAgentFactory.LlamaDisableThinkingMarkerKey));
+    }
+
+    [Test]
     [Arguments("minimal")]
     [Arguments("xhigh")]
     public async Task CreateAsync_WhenSupportsThinkingTrueAndCodexLevel_SendsThinkTrue_AndRawCodexSideChannel(string effort)
