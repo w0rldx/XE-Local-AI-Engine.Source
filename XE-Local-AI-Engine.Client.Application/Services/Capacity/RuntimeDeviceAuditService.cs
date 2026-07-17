@@ -11,8 +11,10 @@ using XE_Local_AI_Engine.Providers.LlamaServer.Contracts;
 ///     the selected acceleration variant (<see cref="IGpuVariantSelector" />), and the devices that variant's binary
 ///     actually enumerates (<see cref="ILlamaDeviceInventoryProbe" />) into a node-level audit that flags a silent CPU
 ///     fallback. The expensive part — the <c>--list-devices</c> probe — is cached in the probe per binary, and the audit
-///     memoizes its computed state, so a warm inference path never pays for it. The device-fallback warning + counter
-///     fire once per state change (i.e. once per binary), not per call.
+///     memoizes its computed state, so a warm inference path never pays for it. Only a DETERMINATE audit is memoized:
+///     an indeterminate device probe (timeout / spawn failure) is returned uncached so the next call re-probes instead
+///     of pinning "unknown" — and its phantom-VRAM trust — until restart or a forced refresh. The device-fallback
+///     warning + counter fire once per state change (i.e. once per binary), not per call.
 /// </summary>
 public sealed class RuntimeDeviceAuditService : IRuntimeDeviceAudit, IDisposable
 {
@@ -60,8 +62,17 @@ public sealed class RuntimeDeviceAuditService : IRuntimeDeviceAudit, IDisposable
                 return current;
             }
 
-            var (state, fallbackReasonCode) = await ComputeAsync(ct).ConfigureAwait(false);
-            _cached = state;
+            var (state, fallbackReasonCode, determinate) = await ComputeAsync(ct).ConfigureAwait(false);
+
+            // Latch only a determinate audit (the device probe ran, or a CPU variant that needs no probe). An
+            // indeterminate probe yields backend "unknown" with CpuFallback:false — memoizing that would keep
+            // capacity/advisor trusting the raw profile's VRAM until restart or a forced refresh. The probe layer
+            // deliberately does not cache failed probes, so returning this uncached makes the next call a real re-probe.
+            if (determinate)
+            {
+                _cached = state;
+            }
+
             EmitIfFallbackChanged(state, fallbackReasonCode);
             return state;
         }
@@ -92,7 +103,7 @@ public sealed class RuntimeDeviceAuditService : IRuntimeDeviceAudit, IDisposable
         };
     }
 
-    private async Task<(RuntimeDeviceAuditState State, string? FallbackReasonCode)> ComputeAsync(CancellationToken ct)
+    private async Task<(RuntimeDeviceAuditState State, string? FallbackReasonCode, bool Determinate)> ComputeAsync(CancellationToken ct)
     {
         // The raw profile is read non-force here (the audit only needs the vendor / total-VRAM presence, not a live free
         // figure); the free figures are re-probed by GetEffectiveProfileAsync when a caller needs them live.
@@ -107,7 +118,10 @@ public sealed class RuntimeDeviceAuditService : IRuntimeDeviceAudit, IDisposable
             reasonCode = variant == GpuVariant.Cpu ? "cpu_variant" : "zero_devices";
         }
 
-        return (state, reasonCode);
+        // Determinate = safe to memoize: the audit for a CPU variant never depends on the probe, and a GPU variant's
+        // audit is only trustworthy when the probe actually ran.
+        var determinate = variant == GpuVariant.Cpu || inventory.ProbeSucceeded;
+        return (state, reasonCode, determinate);
     }
 
     /// <summary>Pure audit decision over (host profile, selected variant, enumerated devices) — unit-testable without I/O.</summary>
