@@ -4,6 +4,7 @@ using System.Security.Cryptography;
 using System.Text;
 using Microsoft.Data.Sqlite;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.Diagnostics;
 using Microsoft.Extensions.DependencyInjection;
 using XE_Local_AI_Engine.Client.Persistence.Implementation;
 using XE_Local_AI_Engine.Client.Persistence.Tests.Testing;
@@ -150,6 +151,15 @@ public sealed class KnowledgeDocumentBlobStoreDedupeTests : IDisposable
             TimeProvider.System);
     }
 
+    // A single shared EF internal service provider for every context this suite builds. Pinning it with
+    // UseInternalServiceProvider keeps the suite's contribution to EF's process-wide provider cache at exactly ONE,
+    // instead of risking the twenty-provider ManyServiceProvidersCreatedWarning cap (configured as an error solution-
+    // wide, and tripped by a later test when the cumulative count overflows). This is the fixture-aligned alternative to
+    // AgentDefinitionTestContextFactory's shared-interceptor trick, and needs no encryption interceptors — this store
+    // encrypts blob bytes itself and the filename via the context helper, never through an EF interceptor.
+    private static readonly IServiceProvider SharedEfServiceProvider =
+        new ServiceCollection().AddEntityFrameworkSqlite().BuildServiceProvider();
+
     private ServiceProvider BuildProvider(string databasePath)
     {
         var services = new ServiceCollection();
@@ -157,11 +167,24 @@ public sealed class KnowledgeDocumentBlobStoreDedupeTests : IDisposable
         return services.BuildServiceProvider();
     }
 
+    private NodeChatDbContext CreateContext(string databasePath)
+    {
+        Directory.CreateDirectory(Path.GetDirectoryName(databasePath)!);
+
+        var options = new DbContextOptionsBuilder<NodeChatDbContext>()
+                      .UseSqlite($"Data Source={databasePath}")
+                      .UseInternalServiceProvider(SharedEfServiceProvider)
+                      .ConfigureWarnings(warnings => warnings.Ignore(CoreEventId.ManyServiceProvidersCreatedWarning))
+                      .Options;
+
+        return new NodeChatDbContext(options, _keyHolder);
+    }
+
     // Microsoft.Data.Sqlite enables foreign-key enforcement by default; the node-sqlite runtime connection does not,
     // so every KB test connection is aligned to that runtime mode even where this store's inserts have no FK to trip.
     private NodeChatDbContext CreateContextWithForeignKeysOff(string databasePath)
     {
-        var context = AgentDefinitionTestContextFactory.CreateForMigration(databasePath, _keyHolder);
+        var context = CreateContext(databasePath);
         var connection = context.Database.GetDbConnection();
         connection.Open();
         using var command = connection.CreateCommand();
@@ -172,7 +195,7 @@ public sealed class KnowledgeDocumentBlobStoreDedupeTests : IDisposable
 
     private async Task MigrateAsync(string databasePath)
     {
-        await using var context = AgentDefinitionTestContextFactory.CreateForMigration(databasePath, _keyHolder);
+        await using var context = CreateContext(databasePath);
         await context.Database.MigrateAsync().ConfigureAwait(false);
     }
 

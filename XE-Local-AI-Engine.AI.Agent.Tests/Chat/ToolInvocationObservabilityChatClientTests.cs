@@ -1,5 +1,6 @@
 namespace XE_Local_AI_Engine.AI.Agent.Tests.Chat;
 
+using System.Collections.Concurrent;
 using System.Diagnostics;
 using System.Runtime.CompilerServices;
 using System.Security.Cryptography;
@@ -205,7 +206,10 @@ public sealed class ToolInvocationObservabilityChatClientTests
         using var innerClient = new CallThenResultChatClient(callId, "approve-job", result: "done", exception: null);
         var logger = new ListLogger<ToolInvocationObservabilityChatClient>();
         using var sut = new ToolInvocationObservabilityChatClient(innerClient, logger);
-        var completed = new List<(string? CallId, string? Outcome, double? DurationMs)>();
+        // The production ActivitySource is process-static and TUnit runs tests in parallel, so this listener sees EVERY
+        // test's spans. Capture ONLY this test's completion span (filtered by our unique CallId) into a thread-safe
+        // queue, so a sibling test's concurrent span can neither race the collection nor satisfy the assertion.
+        var completed = new ConcurrentQueue<(string? Outcome, double? DurationMs)>();
 
         using var listener = new ActivityListener
         {
@@ -214,10 +218,10 @@ public sealed class ToolInvocationObservabilityChatClientTests
             SampleUsingParentId = static (ref _) => ActivitySamplingResult.AllDataAndRecorded,
             ActivityStopped = activity =>
             {
-                if (string.Equals(activity.OperationName, "AgentRun.ToolCallCompleted", StringComparison.Ordinal))
+                if (string.Equals(activity.OperationName, "AgentRun.ToolCallCompleted", StringComparison.Ordinal)
+                    && string.Equals(activity.GetTagItem("tool.call_id")?.ToString(), callId, StringComparison.Ordinal))
                 {
-                    completed.Add((activity.GetTagItem("tool.call_id")?.ToString(),
-                        activity.GetTagItem("tool.outcome")?.ToString(),
+                    completed.Enqueue((activity.GetTagItem("tool.outcome")?.ToString(),
                         activity.GetTagItem("tool.duration_ms") as double?));
                 }
             }
@@ -236,8 +240,7 @@ public sealed class ToolInvocationObservabilityChatClientTests
             GC.KeepAlive(_);
         }
 
-        AssertEx.ContainsSingle(completed, entry => string.Equals(entry.CallId, callId, StringComparison.Ordinal)
-                                                    && string.Equals(entry.Outcome, "success", StringComparison.Ordinal)
+        AssertEx.ContainsSingle(completed, entry => string.Equals(entry.Outcome, "success", StringComparison.Ordinal)
                                                     && entry.DurationMs is >= 0);
     }
 
@@ -248,7 +251,8 @@ public sealed class ToolInvocationObservabilityChatClientTests
         using var innerClient = new CallThenResultChatClient(callId, "approve-job", result: null, exception: new InvalidOperationException("boom"));
         var logger = new ListLogger<ToolInvocationObservabilityChatClient>();
         using var sut = new ToolInvocationObservabilityChatClient(innerClient, logger);
-        var completed = new List<(string? CallId, string? Outcome)>();
+        // Capture only this test's completion span (unique CallId) into a thread-safe queue — see the success test.
+        var completed = new ConcurrentQueue<string?>();
 
         using var listener = new ActivityListener
         {
@@ -257,9 +261,10 @@ public sealed class ToolInvocationObservabilityChatClientTests
             SampleUsingParentId = static (ref _) => ActivitySamplingResult.AllDataAndRecorded,
             ActivityStopped = activity =>
             {
-                if (string.Equals(activity.OperationName, "AgentRun.ToolCallCompleted", StringComparison.Ordinal))
+                if (string.Equals(activity.OperationName, "AgentRun.ToolCallCompleted", StringComparison.Ordinal)
+                    && string.Equals(activity.GetTagItem("tool.call_id")?.ToString(), callId, StringComparison.Ordinal))
                 {
-                    completed.Add((activity.GetTagItem("tool.call_id")?.ToString(), activity.GetTagItem("tool.outcome")?.ToString()));
+                    completed.Enqueue(activity.GetTagItem("tool.outcome")?.ToString());
                 }
             }
         };
@@ -277,8 +282,7 @@ public sealed class ToolInvocationObservabilityChatClientTests
             GC.KeepAlive(_);
         }
 
-        AssertEx.ContainsSingle(completed, entry => string.Equals(entry.CallId, callId, StringComparison.Ordinal)
-                                                    && string.Equals(entry.Outcome, "error", StringComparison.Ordinal));
+        AssertEx.ContainsSingle(completed, outcome => string.Equals(outcome, "error", StringComparison.Ordinal));
         // The raw result telemetry must never leak the exception message.
         AssertEx.True(logger.Messages.TrueForAll(message => !message.Contains("boom", StringComparison.Ordinal)),
             "The tool result span/log must never carry the raw exception content.");
