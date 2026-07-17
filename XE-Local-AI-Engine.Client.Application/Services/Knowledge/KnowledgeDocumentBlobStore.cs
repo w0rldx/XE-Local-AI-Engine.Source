@@ -90,19 +90,29 @@ public sealed class KnowledgeDocumentBlobStore : IKnowledgeDocumentBlobStore
 
         if (inserted == 0)
         {
-            // Dedupe hit: the identical content already exists under a different id. Do not write a second blob.
-            var existingId = await SelectDocumentIdByHashAsync(connection, input.ContentHash, cancellationToken).ConfigureAwait(false);
-            return new KnowledgeDocumentAddResult(existingId, WasInserted: false);
+            // Dedupe hit: the identical content already exists under a different id. Do not write a second blob — but if
+            // a crash between the original row commit and its blob write left that row's bytes missing (which would mark
+            // the document Failed with ContentMissingReason forever, since every re-upload dedupes straight back to the
+            // broken row), repair it now from the byte-identical content in hand. Re-uploading the same file self-heals.
+            var existing = await SelectDocumentByHashAsync(connection, input.ContentHash, cancellationToken).ConfigureAwait(false);
+            if (existing is not { } row || row.DocumentId == Guid.Empty)
+            {
+                return new KnowledgeDocumentAddResult(Guid.Empty, WasInserted: false);
+            }
+
+            if (!File.Exists(BytesPath(row.DocumentId, row.Extension)))
+            {
+                await WriteEncryptedBlobAsync(row.DocumentId, row.Extension, input.Content, cancellationToken).ConfigureAwait(false);
+            }
+
+            return new KnowledgeDocumentAddResult(row.DocumentId, WasInserted: false);
         }
 
         // Only write the encrypted blob for a freshly inserted row so a dedupe never orphans bytes on disk. If the blob
         // write fails, roll the row back so we never leave a document row without its bytes.
         try
         {
-            Directory.CreateDirectory(DocumentsDirectory());
-            var bytesPath = BytesPath(input.DocumentId, extension);
-            var encryptedBytes = _blobProtector.Encrypt(Guid.Empty, input.DocumentId, UploadedFileBlobProtector.FileBytesColumn, input.Content.Span);
-            await File.WriteAllBytesAsync(bytesPath, encryptedBytes, cancellationToken).ConfigureAwait(false);
+            await WriteEncryptedBlobAsync(input.DocumentId, extension, input.Content, cancellationToken).ConfigureAwait(false);
         }
         catch
         {
@@ -111,6 +121,28 @@ public sealed class KnowledgeDocumentBlobStore : IKnowledgeDocumentBlobStore
         }
 
         return new KnowledgeDocumentAddResult(input.DocumentId, WasInserted: true);
+    }
+
+    // Encrypts and writes a document blob via a temp sibling + atomic rename, so a crash mid-write never leaves a torn
+    // file that a later read would decrypt-fail on. File.Move(overwrite) is a rename within the same directory — atomic
+    // on Linux (rename(2)) and Windows (MoveFileEx/MOVEFILE_REPLACE_EXISTING). Encryption is keyed by the document id,
+    // so the caller must pass the id that owns the target path (the existing row's id on the dedupe-repair path).
+    private async Task WriteEncryptedBlobAsync(Guid documentId, string extension, ReadOnlyMemory<byte> content, CancellationToken cancellationToken)
+    {
+        Directory.CreateDirectory(DocumentsDirectory());
+        var bytesPath = BytesPath(documentId, extension);
+        var encryptedBytes = _blobProtector.Encrypt(Guid.Empty, documentId, UploadedFileBlobProtector.FileBytesColumn, content.Span);
+        var tempPath = string.Concat(bytesPath, ".", Guid.NewGuid().ToString("N"), ".tmp");
+        try
+        {
+            await File.WriteAllBytesAsync(tempPath, encryptedBytes, cancellationToken).ConfigureAwait(false);
+            File.Move(tempPath, bytesPath, overwrite: true);
+        }
+        catch
+        {
+            DeleteFileIfExists(tempPath);
+            throw;
+        }
     }
 
     public async Task<byte[]?> ReadBytesAsync(Guid documentId, CancellationToken cancellationToken)
@@ -146,13 +178,24 @@ public sealed class KnowledgeDocumentBlobStore : IKnowledgeDocumentBlobStore
         return Task.CompletedTask;
     }
 
-    private static async Task<Guid> SelectDocumentIdByHashAsync(DbConnection connection, string contentHash, CancellationToken cancellationToken)
+    private static async Task<(Guid DocumentId, string Extension)?> SelectDocumentByHashAsync(DbConnection connection, string contentHash, CancellationToken cancellationToken)
     {
         await using var command = connection.CreateCommand();
-        command.CommandText = "SELECT document_id FROM knowledge_documents WHERE content_hash = $content_hash;";
+        command.CommandText = "SELECT document_id, extension FROM knowledge_documents WHERE content_hash = $content_hash;";
         AddParameter(command, "$content_hash", contentHash);
-        var result = await command.ExecuteScalarAsync(cancellationToken).ConfigureAwait(false);
-        return result is string id ? Guid.Parse(id) : Guid.Empty;
+        await using var reader = await command.ExecuteReaderAsync(cancellationToken).ConfigureAwait(false);
+        if (!await reader.ReadAsync(cancellationToken).ConfigureAwait(false))
+        {
+            return null;
+        }
+
+        var documentId = await reader.IsDBNullAsync(0, cancellationToken).ConfigureAwait(false)
+            ? Guid.Empty
+            : Guid.Parse(reader.GetString(0));
+        var extension = await reader.IsDBNullAsync(1, cancellationToken).ConfigureAwait(false)
+            ? string.Empty
+            : reader.GetString(1);
+        return (documentId, extension);
     }
 
     private static async Task<string?> SelectExtensionAsync(DbConnection connection, Guid documentId, CancellationToken cancellationToken)

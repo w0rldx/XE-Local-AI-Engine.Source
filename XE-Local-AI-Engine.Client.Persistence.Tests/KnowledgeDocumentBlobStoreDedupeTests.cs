@@ -75,6 +75,61 @@ public sealed class KnowledgeDocumentBlobStoreDedupeTests : IDisposable
         AssertEx.Equal(expected: 1L, count);
     }
 
+    [Test]
+    public async Task AddAsync_WhenRowExistsButBlobMissing_ReAddOfIdenticalBytesRepairsBlob()
+    {
+        var databasePath = GetDatabasePath("repair.sqlite");
+        await MigrateAsync(databasePath).ConfigureAwait(false);
+
+        var content = Encoding.UTF8.GetBytes("document bytes that must survive a crash between row commit and blob write");
+        var contentHash = Convert.ToHexString(SHA256.HashData(content));
+
+        await using var provider = BuildProvider(databasePath);
+        var store = CreateStore(provider);
+
+        var firstId = Guid.NewGuid();
+        _ = await store.AddAsync(NewInput(firstId, content, contentHash), CancellationToken.None).ConfigureAwait(false);
+
+        // Simulate a crash that committed the row but never wrote (or lost) the blob: delete the on-disk bytes.
+        var blobPath = Path.Combine(_rootPath, "data", "knowledge-base", "documents", string.Concat(firstId.ToString("D"), ".txt"));
+        AssertEx.True(File.Exists(blobPath), "Precondition: the first add must have written the blob.");
+        File.Delete(blobPath);
+
+        // Re-upload the byte-identical content: the dedupe branch must self-heal the missing blob.
+        var second = await store.AddAsync(NewInput(Guid.NewGuid(), content, contentHash), CancellationToken.None).ConfigureAwait(false);
+
+        AssertEx.False(second.WasInserted, "The re-upload of identical content must still dedupe, not insert a second row.");
+        AssertEx.Equal(firstId, second.DocumentId);
+        AssertEx.True(File.Exists(blobPath), "The dedupe-repair path must restore the missing blob.");
+
+        var repaired = AssertEx.NotNull(await store.ReadBytesAsync(firstId, CancellationToken.None).ConfigureAwait(false));
+        AssertEx.True(content.AsSpan().SequenceEqual(repaired), "The repaired blob must decrypt back to the original bytes.");
+    }
+
+    [Test]
+    public async Task AddAsync_WhenRowAndBlobBothPresent_DedupeDoesNotRewriteBlob()
+    {
+        var databasePath = GetDatabasePath("no-rewrite.sqlite");
+        await MigrateAsync(databasePath).ConfigureAwait(false);
+
+        var content = Encoding.UTF8.GetBytes("intact payload");
+        var contentHash = Convert.ToHexString(SHA256.HashData(content));
+
+        await using var provider = BuildProvider(databasePath);
+        var store = CreateStore(provider);
+
+        var firstId = Guid.NewGuid();
+        _ = await store.AddAsync(NewInput(firstId, content, contentHash), CancellationToken.None).ConfigureAwait(false);
+
+        var blobPath = Path.Combine(_rootPath, "data", "knowledge-base", "documents", string.Concat(firstId.ToString("D"), ".txt"));
+        var beforeWriteUtc = File.GetLastWriteTimeUtc(blobPath);
+
+        var second = await store.AddAsync(NewInput(Guid.NewGuid(), content, contentHash), CancellationToken.None).ConfigureAwait(false);
+
+        AssertEx.False(second.WasInserted);
+        AssertEx.Equal(beforeWriteUtc, File.GetLastWriteTimeUtc(blobPath), "An intact blob must not be rewritten by the dedupe path.");
+    }
+
     private static KnowledgeDocumentInput NewInput(Guid documentId, byte[] content, string contentHash)
     {
         return new KnowledgeDocumentInput(documentId,
