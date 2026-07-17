@@ -3,6 +3,7 @@ namespace XE_Local_AI_Engine.Client.Services.Capacity;
 using XE_Local_AI_Engine.Client.Services.ModelFit.Fit;
 using XE_Local_AI_Engine.Providers.Abstractions.Capabilities;
 using XE_Local_AI_Engine.Providers.Abstractions.Gguf;
+using XE_Local_AI_Engine.Providers.LlamaServer.Options;
 
 /// <summary>
 ///     Default <see cref="IModelFootprintProvider" />. Resolves the installed model's footprint inputs through the GGUF
@@ -12,11 +13,14 @@ using XE_Local_AI_Engine.Providers.Abstractions.Gguf;
 public sealed class ModelFootprintProvider : IModelFootprintProvider
 {
     /// <summary>
-    ///     Context window the KV-cache term is sized against (mirrors the advisor's <c>DefaultCtxTarget</c>). The
-    ///     footprint is a budget pre-flight, not a per-request sizing, so a fixed conservative target keeps the estimate
-    ///     stable across spawns and comparable to the advisor's recommendation math.
+    ///     Context window the KV-cache term is sized against. This references the ONE launch-policy chat default
+    ///     (<see cref="LlamaServerLaunchPolicyOptions.DefaultChatContextTokens" />) so the footprint pre-flight sizes KV
+    ///     against the SAME window a chat spawn actually launches with. Previously a separate 8192 constant under-counted
+    ///     KV by 2× versus the 16384 the runtime launches (GPTAUD-08b): when the one-shot q8_0→f16 KV fallback fires the
+    ///     resident KV is 16384×f16, so an 8192-sized estimate under-admitted and risked OOM. The footprint stays a stable
+    ///     budget pre-flight (not per-request sizing), but its target now equals the launched chat window.
     /// </summary>
-    private const int DefaultCtxTarget = 8192;
+    private const int DefaultCtxTarget = LlamaServerLaunchPolicyOptions.DefaultChatContextTokens;
 
     private readonly MemoryFitEstimator _estimator;
     private readonly IGgufModelStore _modelStore;
