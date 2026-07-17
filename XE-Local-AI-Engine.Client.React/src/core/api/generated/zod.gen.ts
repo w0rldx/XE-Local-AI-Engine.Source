@@ -797,11 +797,13 @@ export const zXeLocalAiEngineClientEndpointsModelFitV1CancelGgufDownloadRequest 
 export const zXeLocalAiEngineClientEndpointsModelFitV1EjectRunningModelResponse = z.object({
 	modelName: z.string(),
 	role: z.string(),
+	outcome: z.string(),
 });
 
 export const zXeLocalAiEngineClientEndpointsModelFitV1EjectRunningModelRequest = z.object({
 	modelName: z.string(),
 	role: z.string().nullish(),
+	force: z.boolean().optional(),
 });
 
 export const zXeLocalAiEngineClientEndpointsModelFitV1LlamaCppVersionResponse = z.object({
@@ -865,6 +867,11 @@ export const zXeLocalAiEngineClientEndpointsModelFitV1HardwareProfileResponse = 
 		.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })
 		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" }),
 	freeDiskBytes: z.int(),
+	inferenceBackend: z.string().optional(),
+	gpuExpected: z.boolean().optional(),
+	cpuFallback: z.boolean().optional(),
+	cpuFallbackReason: z.string().nullish(),
+	cpuFallbackRemediation: z.string().nullish(),
 });
 
 export const zXeLocalAiEngineClientEndpointsModelFitV1GetHardwareProfileRequest = z.record(z.string(), z.never());
@@ -1144,6 +1151,11 @@ export const zXeLocalAiEngineClientEndpointsLocalModelsV1LocalModelDetailsRespon
 		.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })
 		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" })
 		.nullish(),
+	effectiveContextTokens: z
+		.int()
+		.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })
+		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" })
+		.nullish(),
 	template: z.string().nullish(),
 	system: z.string().nullish(),
 	license: z.string().nullish(),
@@ -1160,6 +1172,7 @@ export const zXeLocalAiEngineClientEndpointsLocalModelsV1RunningLocalModelRespon
 
 export const zXeLocalAiEngineClientEndpointsLocalModelsV1RunningLocalModelsResponse = z.object({
 	isAvailable: z.boolean(),
+	ollamaConfigured: z.boolean(),
 	error: z.string().nullish(),
 	items: z.array(zXeLocalAiEngineClientEndpointsLocalModelsV1RunningLocalModelResponse),
 });
@@ -1580,6 +1593,7 @@ export const zXeLocalAiEngineClientEndpointsInvocationsV1InvocationCurrentRespon
 		.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })
 		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" }),
 	hasPendingApproval: z.boolean(),
+	traceId: z.string().nullish(),
 });
 
 export const zXeLocalAiEngineClientEndpointsInvocationsV1InvocationHistoryResponse = z.object({
@@ -1600,6 +1614,7 @@ export const zXeLocalAiEngineClientEndpointsInvocationsV1InvocationHistoryRespon
 		.int()
 		.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })
 		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" }),
+	traceId: z.string().nullish(),
 });
 
 export const zXeLocalAiEngineClientEndpointsInvocationsV1InvocationMonitorResponse = z.object({
