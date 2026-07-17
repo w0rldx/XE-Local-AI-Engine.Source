@@ -120,6 +120,30 @@ public sealed class RuntimeDeviceAuditServiceTests
     }
 
     [Test]
+    public async Task GetAudit_IndeterminateProbe_IsNotLatched_NextCallReprobesAndConverges()
+    {
+        // First probe times out / fails to spawn (indeterminate). Latching that would keep capacity/advisor trusting
+        // the raw profile's phantom VRAM until restart or a forced refresh — so it must be returned UNCACHED, and a
+        // plain (non-force) follow-up call must re-probe and converge on the real answer.
+        var probe = Substitute.For<ILlamaDeviceInventoryProbe>();
+        probe.GetDeviceInventoryAsync(Arg.Any<GpuVariant>(), Arg.Any<CancellationToken>())
+             .Returns(Task.FromResult(LlamaDeviceInventory.Unknown(GpuVariant.Cuda)),
+                 Task.FromResult(WithDevices(GpuVariant.Cuda)));
+        using var service = BuildService(GpuProfile(GpuVendor.Nvidia), GpuVariant.Cuda, probe);
+
+        var first = await service.GetAuditAsync(forceRefresh: false, CancellationToken.None);
+        AssertEx.Equal("unknown", first.InferenceBackend);
+
+        var second = await service.GetAuditAsync(forceRefresh: false, CancellationToken.None);
+        AssertEx.Equal("cuda", second.InferenceBackend);
+
+        // The determinate result IS memoized as before: a third call answers from the cache.
+        var third = await service.GetAuditAsync(forceRefresh: false, CancellationToken.None);
+        AssertEx.Equal("cuda", third.InferenceBackend);
+        await probe.Received(2).GetDeviceInventoryAsync(Arg.Any<GpuVariant>(), Arg.Any<CancellationToken>());
+    }
+
+    [Test]
     public async Task GetAudit_IsMemoized_ProbesOnce()
     {
         var probe = Substitute.For<ILlamaDeviceInventoryProbe>();
