@@ -91,12 +91,18 @@ public sealed class NodeChatInvocationPump(
             CurrentTraceId(),
             state.StartedAt == default ? null : state.StartedAt.ToUnixTimeMilliseconds());
 
+        // AUD4-20 (lane-C source fix): a cancelled turn persists NO error text — a user cancel (or an operator eject,
+        // also Cancelled-category) is an outcome, not a failure, so it must not leave a red error banner on the row.
+        // Failures keep their classified message. Derived from the winning terminal status the state maps to, so the
+        // envelope's FailureCategory (a content-free ledger field) is untouched — only the user-facing Error is cleared.
+        var terminalError = terminalStatus == NodeChatMessageStatusValues.Cancelled ? null : state.Error;
+
         var persisted = await _persistence.TerminalizeAssistantMessageAsync(new NodeChatTerminalizeMessageRequest(correlation,
                 terminalStatus,
                 NowUnixMilliseconds(),
                 state.StreamedContent,
                 string.IsNullOrEmpty(state.StreamedThinkingContent) ? null : state.StreamedThinkingContent,
-                state.Error,
+                terminalError,
                 state.ModelUsed ?? requestedModel,
                 state.InputTokens,
                 state.OutputTokens,
@@ -139,12 +145,16 @@ public sealed class NodeChatInvocationPump(
         // status (derived from the winning row) carries the interrupted/cancelled outcome.
         var envelope = new AgentRunEnvelopeMetadata(InvocationId: null, DurationMs: 0L, TraceId: CurrentTraceId());
 
+        // A user cancel persists NO error text (AUD4-20 / lane-C source fix); an interrupted stream (process/stream
+        // loss) records the interrupted marker so the row is distinguishable on reload. Failures never reach this path.
+        var interruptedError = wasCancelled ? null : terminalStatus;
+
         var persisted = await _persistence.TerminalizeAssistantMessageAsync(new NodeChatTerminalizeMessageRequest(correlation,
                 terminalStatus,
                 NowUnixMilliseconds(),
                 cursor.Content,
                 string.IsNullOrEmpty(cursor.Reasoning) ? null : cursor.Reasoning,
-                terminalStatus,
+                interruptedError,
                 Envelope: envelope),
             CancellationToken.None).ConfigureAwait(false);
 

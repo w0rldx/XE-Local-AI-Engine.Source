@@ -293,6 +293,7 @@ public sealed class InvocationResumeRegistry : IInvocationResumeRegistry
         {
             InvocationId = state.InvocationId,
             ConversationId = state.ConversationId,
+            TraceId = state.TraceId,
             Status = state.Status,
             RuntimePhase = state.RuntimePhase,
             // Copy the immutable accumulators by REFERENCE (O(1)); reading state.StreamedContent here would materialize

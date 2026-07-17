@@ -1,5 +1,6 @@
 namespace XE_Local_AI_Engine.Client.Services.Chat.Implementation;
 
+using XE_Local_AI_Engine.Client.Models.Enums;
 using XE_Local_AI_Engine.Client.Services.Events;
 
 /// <summary>
@@ -95,6 +96,37 @@ internal static class ChatStreamEventMapper
         }
 
         parts.CompleteToolCall(payload.ToolCallId, payload.ToolName, payload.Result, payload.IsError, sequence);
+    }
+
+    /// <summary>
+    ///     Maps a pre-first-token runtime-phase transition to a content-free <see cref="ChatStreamEventTypes.AssistantPhase" />
+    ///     event so the client can render a distinct "Loading model…" indicator during a cold load. Carries only the
+    ///     wire phase; status stays <c>streaming</c> and no content/tokens ride it.
+    /// </summary>
+    public static ChatStreamEvent PhaseEvent(NodeChatMessageCorrelation correlation,
+        InvocationRuntimePhase phase,
+        long timestampMs,
+        long sequence)
+    {
+        return new ChatStreamEvent(ChatStreamEventTypes.AssistantPhase,
+            correlation.ConversationId,
+            correlation.MessageId,
+            correlation.RequestId,
+            NodeChatMessageStatusValues.Streaming,
+            sequence,
+            timestampMs,
+            RuntimePhase: ToWirePhase(phase));
+    }
+
+    /// <summary>The wire form of <see cref="InvocationRuntimePhase" /> the React reducer keys the loading indicator on.</summary>
+    private static string ToWirePhase(InvocationRuntimePhase phase)
+    {
+        return phase switch
+        {
+            InvocationRuntimePhase.PreparingRuntime => "preparing_runtime",
+            InvocationRuntimePhase.LoadingModel => "loading_model",
+            _ => "generating"
+        };
     }
 
     public static ChatStreamEvent NoticeEvent(Guid conversationId,

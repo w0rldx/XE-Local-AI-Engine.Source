@@ -3,6 +3,7 @@ namespace XE_Local_AI_Engine.Client.Services.Invocation.Implementation;
 using System.Diagnostics;
 using System.Text;
 using Microsoft.Extensions.AI;
+using XE_Local_AI_Engine.Client.Common.Telemetry;
 using XE_Local_AI_Engine.Client.Models;
 using XE_Local_AI_Engine.Client.Models.Encrypted;
 using XE_Local_AI_Engine.Client.Models.Events;
@@ -21,6 +22,16 @@ public sealed partial class InvocationRunner
         // construction so it covers both the single-agent and orchestration branches. Read once in the completion
         // block to stamp the persisted tokens-per-second duration.
         public Stopwatch GenerationStopwatch { get; } = Stopwatch.StartNew();
+
+        // Time-to-first-token (AUD4-19) inputs, seeded by the readiness phase before the watched stream begins:
+        // ModelReadyTimestamp is the Stopwatch.GetTimestamp() baseline the first output is measured from (the local
+        // warm phase's completion, or turn start for a runtime with no cold load); ProviderTag is the metric dimension
+        // (local | remote). FirstOutputRecorded gates the one-shot histogram record on the very first emitted chunk.
+        public long? ModelReadyTimestamp { get; set; }
+
+        public string ProviderTag { get; set; } = "remote";
+
+        public bool FirstOutputRecorded { get; set; }
 
         public StringBuilder ResponseBuilder { get; } = new();
 
@@ -87,8 +98,25 @@ public sealed partial class InvocationRunner
             });
         }
 
+        // Records time-to-first-token exactly once per turn, on the first emitted reasoning OR text chunk, measured from
+        // the model-ready baseline the readiness phase seeded (AUD4-19). Tagged by provider (local | remote), no model
+        // identity. A no-op after the first chunk and when no baseline was seeded.
+        private static void RecordFirstOutputLatency(StreamState stream)
+        {
+            if (stream.FirstOutputRecorded || stream.ModelReadyTimestamp is not { } readyTimestamp)
+            {
+                return;
+            }
+
+            stream.FirstOutputRecorded = true;
+            NodeMetrics.ModelReadyToFirstOutputMs.Record(Stopwatch.GetElapsedTime(readyTimestamp).TotalMilliseconds,
+                new KeyValuePair<string, object?>("provider", stream.ProviderTag));
+        }
+
         public async Task EmitReasoningAsync(StreamState stream, string thinkingChunk, CancellationToken cancellationToken)
         {
+            RecordFirstOutputLatency(stream);
+
             // Encode once: the encrypted transport needs the bytes and the size cap needs their length, so a single
             // GetBytes there feeds both. The plain and loopback paths need only the length, so they take the cheaper
             // allocation-free GetByteCount.
@@ -127,6 +155,8 @@ public sealed partial class InvocationRunner
 
         public async Task EmitTextAsync(StreamState stream, string textChunk, CancellationToken cancellationToken)
         {
+            RecordFirstOutputLatency(stream);
+
             stream.Sequence++;
 
             // Encode once: the encrypted transport needs the bytes and the size cap needs their length, so a single

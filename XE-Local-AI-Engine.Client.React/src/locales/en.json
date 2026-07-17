@@ -295,6 +295,7 @@
 			"waitingForStreamedResponse": "Waiting for streamed response",
 			"waitingForResponse": "Waiting for response",
 			"queued": "Queued — waiting for current task",
+			"loadingModel": "Loading model…",
 			"remoteViewOnlyTitle": "Remote conversation",
 			"remoteViewOnly": "This conversation was started from a paired client and is view-only on this node.",
 			"streamErrors": {
@@ -2210,6 +2211,10 @@
 					"message": "No supported GPU detected — running on CPU. Responses will be slower.",
 					"dismiss": "Dismiss"
 				},
+				"cpuFallbackAlert": {
+					"title": "Running on CPU despite a detected GPU",
+					"reason": "The selected inference runtime could not use this machine's GPU, so inference is running on the CPU."
+				},
 				"refresh": "Refresh hardware",
 				"loading": "Detecting hardware…",
 				"error": "Could not detect hardware.",
@@ -2324,6 +2329,22 @@
 				"eject": "Eject",
 				"ejected": "Model ejected.",
 				"ejectError": "Could not eject the model.",
+				"ejectConfirm": {
+					"title": "Eject model",
+					"description": "Eject '{{modelName}}' from the llama.cpp runtime? Memory frees after any in-flight generation completes; a running response is not interrupted.",
+					"action": "Eject"
+				},
+				"forceConfirm": {
+					"title": "Force eject?",
+					"description": "'{{modelName}}' is still generating. Force-eject anyway and interrupt the running turn?",
+					"action": "Force eject"
+				},
+				"ejectOutcome": {
+					"ejected": "Model ejected.",
+					"forced": "Model ejected — the in-flight generation was interrupted.",
+					"notRunning": "That model was not running.",
+					"timedOutStillBusy": "'{{modelName}}' is still finishing a response, so it was left running."
+				},
 				"columns": {
 					"model": "Model",
 					"role": "Role",

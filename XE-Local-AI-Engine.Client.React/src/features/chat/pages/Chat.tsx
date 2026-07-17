@@ -37,7 +37,7 @@ import { DEFAULT_ASSISTANT_NAME } from "@/features/chat/models/ChatModels";
 import { toWireSamplingOptions } from "@/features/chat/models/ChatSamplingOptions";
 import { deriveUsedContextTokens } from "@/features/chat/models/ContextUsageDerivation";
 import { localDefaultModelValue, toNodeChatRequestModel } from "@/features/chat/models/NodeChatModelSelection";
-import { shouldFetchLocalModelDetails } from "@/features/chat/pages/ChatModelDetailsQuery";
+import { resolveContextCapacityTokens, shouldFetchLocalModelDetails } from "@/features/chat/pages/ChatModelDetailsQuery";
 import { resolveLocalDefaultModelCapabilities, toChatModelOptions } from "@/features/chat/pages/ChatModelOptions";
 import { nodeChatQueryKeys } from "@/features/chat/queries/NodeChatQueryKeys";
 import { useCodexModelOptions } from "@/features/chat/queries/useCodexModelOptions";
@@ -517,7 +517,9 @@ export function Chat() {
 		() => deriveUsedContextTokens(activeConversation?.messages ?? []),
 		[activeConversation?.messages],
 	);
-	const effectiveMaxContextTokens = selectedModelDetails?.maxContextTokens ?? undefined;
+	// Prefer the RUNNING process's effective context window (AUD4-02, the launched -c) over the model's advertised
+	// train ceiling, so the meter shows the real capacity once the model is warm; fall back to the ceiling, then unknown.
+	const effectiveMaxContextTokens = resolveContextCapacityTokens(selectedModelDetails);
 	const contextModelLabel =
 		selectedConcreteModelName || selectedModelOption?.displayName || selectedModelOption?.label || "Local runtime default";
 	const isLoadingInitialConversations = conversationsIsLoading && displayConversations.length === 0;

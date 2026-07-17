@@ -238,6 +238,7 @@ export function ChatMessageList({
 										isDelayed={scopedStreamingMessage?.isDelayed}
 										isQueued={scopedStreamingMessage?.isQueued}
 										isActive={scopedStreamingMessage?.isActive ?? false}
+										runtimePhase={scopedStreamingMessage?.runtimePhase}
 									/>
 								) : undefined
 							}
@@ -282,6 +283,7 @@ export function ChatMessageList({
 								isDelayed={scopedStreamingMessage.isDelayed}
 								isQueued={scopedStreamingMessage.isQueued}
 								isActive={scopedStreamingMessage.isActive}
+								runtimePhase={scopedStreamingMessage.runtimePhase}
 							/>
 						}
 					/>

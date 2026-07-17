@@ -90,6 +90,57 @@ public sealed class NodeChatInvocationPumpRunEnvelopeTests
     }
 
     [Test]
+    public async Task TerminalizeAsync_CancelledRun_PersistsNullErrorSoNoBannerShows()
+    {
+        // A user cancel (or operator eject, also Cancelled-category) is an outcome, not a failure: the terminal row
+        // must carry NO error text, so the chat never shows a red error banner for a cancelled turn (AUD4-20 source fix).
+        var persistence = CreatePersistence();
+        var pump = new NodeChatInvocationPump(persistence, TimeProvider.System);
+
+        var correlation = new NodeChatMessageCorrelation(Guid.NewGuid(), Guid.NewGuid(), Guid.NewGuid());
+        var state = new InvocationState
+        {
+            InvocationId = Guid.NewGuid(),
+            ConversationId = correlation.ConversationId,
+            Status = InvocationStatus.Cancelled,
+            FailureCategory = FailureCategory.Cancelled,
+            Error = "Invocation timed out or was cancelled",
+            ModelUsed = "llama-3.1"
+        };
+
+        _ = await pump.TerminalizeAsync(correlation, state, requestedModel: null);
+
+        await persistence.Received(1).TerminalizeAssistantMessageAsync(
+            Arg.Is<NodeChatTerminalizeMessageRequest>(request => request.Status == "cancelled" && request.Error == null),
+            Arg.Any<CancellationToken>());
+    }
+
+    [Test]
+    public async Task TerminalizeAsync_FailedRun_KeepsClassifiedErrorText()
+    {
+        // A genuine failure keeps its classified, user-safe message on the row (only cancellations are nulled).
+        var persistence = CreatePersistence();
+        var pump = new NodeChatInvocationPump(persistence, TimeProvider.System);
+
+        var correlation = new NodeChatMessageCorrelation(Guid.NewGuid(), Guid.NewGuid(), Guid.NewGuid());
+        var state = new InvocationState
+        {
+            InvocationId = Guid.NewGuid(),
+            ConversationId = correlation.ConversationId,
+            Status = InvocationStatus.Failed,
+            FailureCategory = FailureCategory.ProviderUnreachable,
+            Error = "Provider unreachable.",
+            ModelUsed = "llama-3.1"
+        };
+
+        _ = await pump.TerminalizeAsync(correlation, state, requestedModel: null);
+
+        await persistence.Received(1).TerminalizeAssistantMessageAsync(
+            Arg.Is<NodeChatTerminalizeMessageRequest>(request => request.Status == "failed" && request.Error == "Provider unreachable."),
+            Arg.Any<CancellationToken>());
+    }
+
+    [Test]
     public async Task TerminalizeAsync_WhenNoRunnerDuration_FallsBackToStartToCompleteElapsed()
     {
         var persistence = CreatePersistence();
@@ -144,8 +195,9 @@ public sealed class NodeChatInvocationPumpRunEnvelopeTests
 
         _ = await pump.TerminalizeInterruptedAsync(correlation, new NodeChatPumpCursor(string.Empty, string.Empty), wasCancelled: true);
 
+        // A user-cancelled interrupted stream also persists NO error text (AUD4-20 source fix), so no banner shows.
         await persistence.Received(1).TerminalizeAssistantMessageAsync(
-            Arg.Is<NodeChatTerminalizeMessageRequest>(request => request.Status == "cancelled" && request.Envelope != null),
+            Arg.Is<NodeChatTerminalizeMessageRequest>(request => request.Status == "cancelled" && request.Error == null && request.Envelope != null),
             Arg.Any<CancellationToken>());
     }
 

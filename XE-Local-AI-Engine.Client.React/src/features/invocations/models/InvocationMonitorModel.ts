@@ -21,6 +21,9 @@ export interface InvocationCurrentDto {
 	streamedThinkingChunkCount: number;
 	pendingToolCallCount: number;
 	hasPendingApproval: boolean;
+	// W3C trace id of the run (AUD4-19), for correlating a failed row's "See local logs" line with exported traces.
+	// Null when no activity was in scope. Rendered as copyable text.
+	traceId: string | null;
 }
 
 export interface InvocationHistoryDto {
@@ -35,6 +38,8 @@ export interface InvocationHistoryDto {
 	failureCategory: InvocationFailureCategoryDto;
 	streamedChunkCount: number;
 	streamedThinkingChunkCount: number;
+	// W3C trace id of the run (AUD4-19); null when no activity was in scope. Rendered as copyable text.
+	traceId: string | null;
 }
 
 export interface InvocationMonitorDto {
