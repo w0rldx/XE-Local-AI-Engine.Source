@@ -34,6 +34,7 @@ function toInvocationCurrent(
 		streamedThinkingChunkCount: dto.streamedThinkingChunkCount ?? 0,
 		pendingToolCallCount: dto.pendingToolCallCount ?? 0,
 		hasPendingApproval: dto.hasPendingApproval ?? false,
+		traceId: dto.traceId ?? null,
 	};
 }
 
@@ -52,6 +53,7 @@ function toInvocationHistory(
 		failureCategory: dto.failureCategory ?? null,
 		streamedChunkCount: dto.streamedChunkCount ?? 0,
 		streamedThinkingChunkCount: dto.streamedThinkingChunkCount ?? 0,
+		traceId: dto.traceId ?? null,
 	};
 }
 

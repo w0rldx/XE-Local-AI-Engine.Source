@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 
 import type { ModelOption } from "@/features/chat/models/ChatModels";
-import { shouldFetchLocalModelDetails } from "@/features/chat/pages/ChatModelDetailsQuery";
+import { resolveContextCapacityTokens, shouldFetchLocalModelDetails } from "@/features/chat/pages/ChatModelDetailsQuery";
 
 function option(overrides: Partial<ModelOption>): ModelOption {
 	return { value: "model", label: "model", isAvailable: true, ...overrides };
@@ -38,5 +38,21 @@ describe("shouldFetchLocalModelDetails", () => {
 		// The local-default sentinel resolves to configuredDefaultModelName whose GGUF was never downloaded — GET
 		// details would 404 forever. Terminal domain state, not a retry loop.
 		expect(shouldFetchLocalModelDetails("Starter-Model-GGUF:Q4_K_M", undefined, false, false)).toBe(false);
+	});
+});
+
+describe("resolveContextCapacityTokens", () => {
+	it("prefers the running effective context window over the advertised ceiling (AUD4-02)", () => {
+		expect(resolveContextCapacityTokens({ effectiveContextTokens: 16384, maxContextTokens: 262144 })).toBe(16384);
+	});
+
+	it("falls back to the advertised ceiling when no effective window is reported yet", () => {
+		expect(resolveContextCapacityTokens({ effectiveContextTokens: null, maxContextTokens: 8192 })).toBe(8192);
+		expect(resolveContextCapacityTokens({ maxContextTokens: 8192 })).toBe(8192);
+	});
+
+	it("returns undefined (meter shows unknown) when neither window is known", () => {
+		expect(resolveContextCapacityTokens({ effectiveContextTokens: null, maxContextTokens: null })).toBeUndefined();
+		expect(resolveContextCapacityTokens(undefined)).toBeUndefined();
 	});
 });

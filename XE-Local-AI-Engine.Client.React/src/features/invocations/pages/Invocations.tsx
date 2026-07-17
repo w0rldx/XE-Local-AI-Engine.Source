@@ -1,5 +1,5 @@
-import { Alert, Badge, Button, Card, Container, Group, Loader, SimpleGrid, Stack, Table, Text, Title } from "@mantine/core";
-import { IconAlertTriangle, IconHistory, IconPlayerPlay, IconRefresh } from "@tabler/icons-react";
+import { ActionIcon, Alert, Badge, Button, Card, Container, CopyButton, Group, Loader, SimpleGrid, Stack, Table, Text, Title, Tooltip } from "@mantine/core";
+import { IconAlertTriangle, IconCheck, IconCopy, IconHistory, IconPlayerPlay, IconRefresh } from "@tabler/icons-react";
 import { useQuery } from "@tanstack/react-query";
 import { useMemo } from "react";
 import { useTranslation } from "react-i18next";
@@ -19,6 +19,38 @@ import {
 
 function errorMessage(error: unknown): string {
 	return error instanceof Error ? error.message : "Invocation monitor data could not be loaded.";
+}
+
+// Copyable W3C trace id (AUD4-19) so a failed run's "See local logs" row correlates with the exported trace. Renders
+// nothing when no trace id was captured (legacy/platform runs). Uses the app's idiomatic CopyButton affordance.
+function TraceIdLine({ traceId }: { readonly traceId: string | null }) {
+	if (!traceId) {
+		return null;
+	}
+
+	return (
+		<Group gap={4} align="center" wrap="nowrap" data-testid="invocation-trace-id">
+			<Text size="xs" c="dimmed" style={{ wordBreak: "break-all" }}>
+				Trace: {traceId}
+			</Text>
+			<CopyButton value={traceId} timeout={2000}>
+				{({ copied, copy }) => (
+					<Tooltip label={copied ? "Copied" : "Copy trace id"} withArrow={true}>
+						<ActionIcon
+							color={copied ? "teal" : "gray"}
+							variant="subtle"
+							size="sm"
+							onClick={copy}
+							aria-label="Copy trace id"
+							data-testid="invocation-trace-id-copy"
+						>
+							{copied ? <IconCheck size={14} /> : <IconCopy size={14} />}
+						</ActionIcon>
+					</Tooltip>
+				)}
+			</CopyButton>
+		</Group>
+	);
 }
 
 function CurrentInvocation({ current }: { readonly current: InvocationCurrentDto | null }) {
@@ -45,6 +77,7 @@ function CurrentInvocation({ current }: { readonly current: InvocationCurrentDto
 						<Text size="sm" c="dimmed" style={{ wordBreak: "break-all" }}>
 							{current.invocationId}
 						</Text>
+						<TraceIdLine traceId={current.traceId} />
 					</Stack>
 					<Badge color={getInvocationStatusColor(current.status)}>{current.status}</Badge>
 				</Group>
@@ -85,6 +118,7 @@ function HistoryRows({ history }: { readonly history: InvocationHistoryDto[] }) 
 				<Text size="sm" style={{ wordBreak: "break-all" }}>
 					{entry.invocationId}
 				</Text>
+				<TraceIdLine traceId={entry.traceId} />
 			</Table.Td>
 			<Table.Td>
 				<Badge color={getInvocationStatusColor(entry.status)}>{entry.status}</Badge>

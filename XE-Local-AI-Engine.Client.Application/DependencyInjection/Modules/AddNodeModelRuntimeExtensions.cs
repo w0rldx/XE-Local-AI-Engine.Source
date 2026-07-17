@@ -33,8 +33,9 @@ internal static class AddNodeModelRuntimeExtensions
 {
     private const string UseLocalModelProviderConfigurationKey = "XE_USE_LOCAL_MODEL_PROVIDER";
 
-    // Capability gate for the optional Ollama runtime. Enabled when unset, so the default registration is unchanged.
-    private const string OllamaRuntimeEnabledConfigurationKey = "XE_OLLAMA_RUNTIME_ENABLED";
+    // Capability gate for the optional Ollama runtime. Enabled when unset, so the default registration is unchanged. The
+    // key lives on OllamaRuntimeGate so the running-models endpoint reads the SAME gate (no drift).
+    private const string OllamaRuntimeEnabledConfigurationKey = OllamaRuntimeGate.RuntimeEnabledConfigurationKey;
 
     // Opt-in escape hatch for a non-loopback Ollama endpoint. Off by default — the local Ollama API is unauthenticated.
     private const string OllamaAllowRemoteEndpointConfigurationKey = "XE_OLLAMA_ALLOW_REMOTE_ENDPOINT";

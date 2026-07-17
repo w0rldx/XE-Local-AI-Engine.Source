@@ -17,6 +17,15 @@ public sealed class InvocationState
 
     public Guid ConversationId { get; init; }
 
+    /// <summary>
+    ///     The W3C trace id of the ambient activity when the invocation was created, or null when no activity was in
+    ///     scope (legacy/platform paths). Surfaced in the invocation monitor so a failed run's "See local logs" row
+    ///     carries a copyable correlation id into the exported traces. Not a hot-path value — captured once at creation.
+    ///     Like every other field, BOTH hand-rolled clones (WorkerEventDispatcher.Clone AND InvocationResumeRegistry.Clone)
+    ///     must copy it.
+    /// </summary>
+    public string? TraceId { get; init; }
+
     public InvocationStatus Status { get; set; }
 
     /// <summary>

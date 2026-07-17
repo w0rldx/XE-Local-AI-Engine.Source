@@ -28,11 +28,18 @@ const loadedModelsPollIntervalMs = 4000;
 const unavailablePollIntervalMs = 30_000;
 
 /**
- * Chooses the poll cadence for the loaded-models query from the latest snapshot: the fast cadence while the provider
- * reports available (or before the first response), the slow back-off cadence once it reports unreachable. Exported
- * so the back-off decision is unit-testable without driving react-query's internal timers.
+ * Chooses the poll cadence for the loaded-models query from the latest snapshot: STOP polling (`false`) once the node
+ * reports the Ollama runtime is not configured at all (nothing will ever answer — AUD4-20), the slow back-off cadence
+ * while a configured provider is unreachable, and the fast cadence while it is available (or before the first
+ * response). Because the `ollamaConfigured` flag is only known AFTER the first response, this rides `refetchInterval`
+ * (which gates the recurring poll on the fetched data) rather than the query's `enabled` option (which cannot depend on
+ * the query's own data). Exported so the decision is unit-testable without driving react-query's internal timers.
  */
-export function resolveLoadedModelsPollIntervalMs(snapshot: LoadedModelsSnapshot | undefined): number {
+export function resolveLoadedModelsPollIntervalMs(snapshot: LoadedModelsSnapshot | undefined): number | false {
+	if (snapshot?.ollamaConfigured === false) {
+		return false;
+	}
+
 	return snapshot?.isAvailable === false ? unavailablePollIntervalMs : loadedModelsPollIntervalMs;
 }
 
