@@ -805,7 +805,8 @@ public sealed class LlamaServerProcessSupervisor : ILlamaServerProcessSupervisor
                 if (!isSafeRetry && attempt + 1 < planCandidates.Count)
                 {
                     optimizedFailure = ex;
-                    _logger.LogWarning(ex, "llama-server optimized launch (KV-cache quant + flash attention) failed for model {ModelName} role {Role} on backend {Variant}; retrying once with the safe config.",
+                    _logger.LogWarning(ex,
+                        "llama-server optimized launch (KV-cache quant + flash attention) failed for model {ModelName} role {Role} on backend {Variant}; retrying once with the safe config.",
                         key.ModelName, key.Role, variant);
                     continue;
                 }

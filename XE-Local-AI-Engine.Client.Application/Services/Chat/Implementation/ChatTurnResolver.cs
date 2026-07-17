@@ -76,7 +76,8 @@ public sealed class ChatTurnResolver(
         ResolvedAgentRuntime? resolved;
         using (NodeActivitySource.Source.StartActivity("chat.turn.resolve_agent"))
         {
-            resolved = await agentDefinitionResolver.ResolveAsync(effectiveAgentId, activeModel, retrievalQuery, supportsTools, honorModelProfile: !userPickedConcreteModel, activeModelIsCloud, cancellationToken)
+            resolved = await agentDefinitionResolver.ResolveAsync(effectiveAgentId, activeModel, retrievalQuery, supportsTools, honorModelProfile: !userPickedConcreteModel, activeModelIsCloud,
+                                                        cancellationToken)
                                                     .ConfigureAwait(false);
         }
 
@@ -109,7 +110,8 @@ public sealed class ChatTurnResolver(
 
         if (logger.IsEnabled(LogLevel.Debug))
         {
-            logger.LogDebug("Chat-turn resolution completed in {ElapsedMs:F2} ms (capabilities={CapabilitiesMs:F2} ms, agent={AgentMs:F2} ms, orchestration={OrchestrationMs:F2} ms; boundAgent={HasBoundAgent}, orchestration={HasOrchestration}).",
+            logger.LogDebug(
+                "Chat-turn resolution completed in {ElapsedMs:F2} ms (capabilities={CapabilitiesMs:F2} ms, agent={AgentMs:F2} ms, orchestration={OrchestrationMs:F2} ms; boundAgent={HasBoundAgent}, orchestration={HasOrchestration}).",
                 Stopwatch.GetElapsedTime(resolveStartTimestamp).TotalMilliseconds,
                 capabilitiesMs,
                 agentMs,

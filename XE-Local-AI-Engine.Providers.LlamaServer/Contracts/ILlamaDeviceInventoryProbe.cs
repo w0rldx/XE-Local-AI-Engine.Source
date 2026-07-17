@@ -1,7 +1,5 @@
 namespace XE_Local_AI_Engine.Providers.LlamaServer.Contracts;
 
-using XE_Local_AI_Engine.Providers.LlamaServer;
-
 /// <summary>
 ///     Probes the devices a llama.cpp binary actually enumerates for an acceleration variant, by running the SELECTED
 ///     binary's <c>llama-server --list-devices</c> and parsing its device table. Consumed by the runtime device audit

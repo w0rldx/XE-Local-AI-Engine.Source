@@ -1,6 +1,7 @@
 namespace XE_Local_AI_Engine.Client.Services.Knowledge;
 
 using System.Buffers;
+using System.Data.Common;
 using System.Diagnostics;
 using System.Numerics.Tensors;
 using System.Runtime.InteropServices;
@@ -184,7 +185,7 @@ public sealed class ManagedCosineVectorSearch : IVectorSearch
     // Reads the embedding BLOB (ordinal 2) into the reused pooled buffer via the reader's blob stream — no per-row byte[]
     // allocation — and returns it reinterpreted as float32 in native byte order (the layout the embedder wrote). The buffer
     // grows only when a row is wider than any seen so far; all rows for one model share a width, so it is rented once.
-    private static ReadOnlySpan<float> ReadCandidateVector(System.Data.Common.DbDataReader reader, ref byte[]? buffer)
+    private static ReadOnlySpan<float> ReadCandidateVector(DbDataReader reader, ref byte[]? buffer)
     {
         using var blob = reader.GetStream(2);
         var length = checked((int)blob.Length);

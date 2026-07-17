@@ -94,13 +94,13 @@ public sealed class NodeSqlitePragmasTests : IDisposable
     {
         var path = Path.Combine(_dir, "ef-interceptor.sqlite");
         var options = new DbContextOptionsBuilder<ProbeContext>()
-                     .UseSqlite($"Data Source={path}")
-                     .AddInterceptors(new NodeSqliteConnectionInterceptor(NodeSqlitePragmaSettings.Default, NullLogger<NodeSqliteConnectionInterceptor>.Instance))
-                     // Fresh per-test options create a new EF internal service provider; in a FULL-SUITE run the
-                     // process-wide count crosses EF's 20-provider threshold and the warning (an error in this solution)
-                     // throws. The established repo-wide test pattern is to ignore it on throwaway options.
-                     .ConfigureWarnings(warnings => warnings.Ignore(CoreEventId.ManyServiceProvidersCreatedWarning))
-                     .Options;
+                      .UseSqlite($"Data Source={path}")
+                      .AddInterceptors(new NodeSqliteConnectionInterceptor(NodeSqlitePragmaSettings.Default, NullLogger<NodeSqliteConnectionInterceptor>.Instance))
+                      // Fresh per-test options create a new EF internal service provider; in a FULL-SUITE run the
+                      // process-wide count crosses EF's 20-provider threshold and the warning (an error in this solution)
+                      // throws. The established repo-wide test pattern is to ignore it on throwaway options.
+                      .ConfigureWarnings(warnings => warnings.Ignore(CoreEventId.ManyServiceProvidersCreatedWarning))
+                      .Options;
 
         await using var context = new ProbeContext(options);
         await context.Database.OpenConnectionAsync();

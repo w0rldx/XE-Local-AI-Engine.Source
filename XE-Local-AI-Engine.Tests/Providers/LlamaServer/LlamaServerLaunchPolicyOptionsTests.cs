@@ -16,31 +16,46 @@ public sealed class LlamaServerLaunchPolicyOptionsTests
     [Test]
     public async Task Validate_NonPositiveChatContext_Throws()
     {
-        await AssertValidationThrowsAsync(new LlamaServerLaunchPolicyOptions { ChatContextTokens = 0 });
+        await AssertValidationThrowsAsync(new LlamaServerLaunchPolicyOptions
+        {
+            ChatContextTokens = 0
+        });
     }
 
     [Test]
     public async Task Validate_NegativeSafetyMargin_Throws()
     {
-        await AssertValidationThrowsAsync(new LlamaServerLaunchPolicyOptions { ContextSafetyMarginTokens = -1 });
+        await AssertValidationThrowsAsync(new LlamaServerLaunchPolicyOptions
+        {
+            ContextSafetyMarginTokens = -1
+        });
     }
 
     [Test]
     public async Task Validate_EmptyKvCacheType_Throws()
     {
-        await AssertValidationThrowsAsync(new LlamaServerLaunchPolicyOptions { KvCacheType = "  " });
+        await AssertValidationThrowsAsync(new LlamaServerLaunchPolicyOptions
+        {
+            KvCacheType = "  "
+        });
     }
 
     [Test]
     public async Task Validate_NegativeThreadReserve_Throws()
     {
-        await AssertValidationThrowsAsync(new LlamaServerLaunchPolicyOptions { CpuThreadReserve = -1 });
+        await AssertValidationThrowsAsync(new LlamaServerLaunchPolicyOptions
+        {
+            CpuThreadReserve = -1
+        });
     }
 
     [Test]
     public async Task Validate_NonPositiveExplicitThreadCount_Throws()
     {
-        await AssertValidationThrowsAsync(new LlamaServerLaunchPolicyOptions { CpuThreadCount = 0 });
+        await AssertValidationThrowsAsync(new LlamaServerLaunchPolicyOptions
+        {
+            CpuThreadCount = 0
+        });
     }
 
     [Test]

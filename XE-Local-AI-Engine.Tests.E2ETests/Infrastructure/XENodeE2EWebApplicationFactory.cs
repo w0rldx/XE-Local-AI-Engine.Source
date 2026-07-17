@@ -254,7 +254,10 @@ public sealed class XENodeE2EWebApplicationFactory : WebApplicationFactory<Progr
             // through this factory — reach FakeOllama.
             services.RemoveAll<OllamaApiClientFactory>();
 #pragma warning disable CA2000 // The factory singleton owns and disposes this HttpClient for the test host lifetime.
-            services.AddSingleton(_ => new OllamaApiClientFactory(new HttpClient { BaseAddress = _fakeOllamaServer.BaseAddress }, ownsHttpClient: true));
+            services.AddSingleton(_ => new OllamaApiClientFactory(new HttpClient
+            {
+                BaseAddress = _fakeOllamaServer.BaseAddress
+            }, ownsHttpClient: true));
 #pragma warning restore CA2000
             services.AddSingleton<IOllamaApiClient>(_ => new OllamaApiClient(_fakeOllamaServer.BaseAddress));
             services.AddSingleton<ILocalModelProvider, OllamaLocalModelProvider>();

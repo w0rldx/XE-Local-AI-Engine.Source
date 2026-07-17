@@ -952,7 +952,7 @@ public sealed class AgentDefinitionResolverTests
             new LexicalPlaybookRetrievalRanker(),
             Options.Create(new PlaybookRetrievalOptions()),
             new FakeAgentInstructionProvider(),
-            Substitute.For<XE_Local_AI_Engine.Client.Services.Chat.IModelCapabilityResolver>(),
+            Substitute.For<IModelCapabilityResolver>(),
             NullLogger<AgentDefinitionResolver>.Instance);
     }
 
@@ -1025,7 +1025,7 @@ public sealed class AgentDefinitionResolverTests
             // "no scaffold" — so every pre-existing tool/playbook/hash test above keeps asserting the bare persona
             // prompt unchanged. Scaffold composition itself is covered by the dedicated tests below.
             instructionProvider ?? new FakeAgentInstructionProvider(),
-            Substitute.For<XE_Local_AI_Engine.Client.Services.Chat.IModelCapabilityResolver>(),
+            Substitute.For<IModelCapabilityResolver>(),
             NullLogger<AgentDefinitionResolver>.Instance);
     }
 
@@ -1096,7 +1096,7 @@ public sealed class AgentDefinitionResolverTests
             ranker,
             retrievalOptions,
             new FakeAgentInstructionProvider(),
-            Substitute.For<XE_Local_AI_Engine.Client.Services.Chat.IModelCapabilityResolver>(),
+            Substitute.For<IModelCapabilityResolver>(),
             NullLogger<AgentDefinitionResolver>.Instance);
     }
 

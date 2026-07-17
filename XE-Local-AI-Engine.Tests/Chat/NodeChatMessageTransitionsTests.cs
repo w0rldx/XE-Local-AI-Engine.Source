@@ -28,8 +28,7 @@ public sealed class NodeChatMessageTransitionsTests
     [Test]
     public void StreamingMark_AllowsPendingOrQueuedOnly()
     {
-        AssertSameSet(
-            [NodeChatMessageStatusValues.Pending, NodeChatMessageStatusValues.Queued],
+        AssertSameSet([NodeChatMessageStatusValues.Pending, NodeChatMessageStatusValues.Queued],
             NodeChatMessageTransitions.StreamingSources);
         AssertEx.False(NodeChatMessageTransitions.StreamingSources.Contains(NodeChatMessageStatusValues.Cancelled), "streaming must never resurrect a cancelled row");
     }
@@ -42,8 +41,7 @@ public sealed class NodeChatMessageTransitionsTests
     {
         var sources = NodeChatMessageTransitions.TerminalizeSources(terminalStatus);
 
-        AssertSameSet(
-            [
+        AssertSameSet([
                 NodeChatMessageStatusValues.Pending,
                 NodeChatMessageStatusValues.Queued,
                 NodeChatMessageStatusValues.Streaming,
@@ -57,8 +55,7 @@ public sealed class NodeChatMessageTransitionsTests
     {
         var sources = NodeChatMessageTransitions.TerminalizeSources(NodeChatMessageStatusValues.Interrupted);
 
-        AssertSameSet(
-            [NodeChatMessageStatusValues.Pending, NodeChatMessageStatusValues.Queued, NodeChatMessageStatusValues.Streaming],
+        AssertSameSet([NodeChatMessageStatusValues.Pending, NodeChatMessageStatusValues.Queued, NodeChatMessageStatusValues.Streaming],
             sources);
         AssertEx.False(sources.Contains(NodeChatMessageStatusValues.Cancelled), "interrupted must never overwrite a cancelled row");
     }

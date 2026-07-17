@@ -91,8 +91,8 @@ public sealed class SupervisorLifecycleTests
             options: new LlamaServerSupervisorOptions
             {
                 IdleTimeToLive = TimeSpan.FromHours(1),
-                MaxRestartAttempts = 5,         // deliberately high
-                MaxReadinessTimeoutRetries = 1  // but a readiness timeout retries at most once → 2 spawns total
+                MaxRestartAttempts = 5, // deliberately high
+                MaxReadinessTimeoutRetries = 1 // but a readiness timeout retries at most once → 2 spawns total
             });
 
         var ex = await AssertEx.ThrowsAsync<LlamaRuntimeException>(() => supervisor.EnsureRunningAsync("model-a", ModelRole.Chat, CancellationToken.None));

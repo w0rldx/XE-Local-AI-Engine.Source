@@ -1,6 +1,7 @@
 namespace XE_Local_AI_Engine.AI.Agent.Chat;
 
 using System.Runtime.CompilerServices;
+using System.Text.Json;
 using Microsoft.Extensions.AI;
 
 /// <summary>
@@ -96,7 +97,7 @@ internal static class ProviderMessageTokenEstimator
         foreach (var tool in tools)
         {
             var weighted = WeightedLength(tool.Name) + WeightedLength(tool.Description);
-            if (tool is AIFunction function && function.JsonSchema.ValueKind != System.Text.Json.JsonValueKind.Undefined)
+            if (tool is AIFunction function && function.JsonSchema.ValueKind != JsonValueKind.Undefined)
             {
                 weighted += WeightedLength(function.JsonSchema.GetRawText());
             }

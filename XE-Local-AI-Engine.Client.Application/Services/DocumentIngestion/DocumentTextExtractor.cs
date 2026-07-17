@@ -261,8 +261,7 @@ public sealed class DocumentTextExtractor : IDocumentTextExtractor
             // Length is the declared uncompressed size from the central directory (cheap, and may be a lie — the
             // post-parse guards are the backstop). CompressedLength is the on-disk size of the same entry. Both are
             // aggregated overflow-safely in the seam below.
-            return EvaluateDeclaredZipSizes(
-                archive.Entries.Select(static entry => (entry.Length, entry.CompressedLength)),
+            return EvaluateDeclaredZipSizes(archive.Entries.Select(static entry => (entry.Length, entry.CompressedLength)),
                 _maxDeclaredUncompressedBytes,
                 _maxCompressionRatio);
         }
@@ -344,8 +343,8 @@ public sealed class DocumentTextExtractor : IDocumentTextExtractor
         const uint EocdSignature = 0x06054b50;
         const uint Zip64LocatorSignature = 0x07064b50;
         const uint Zip64EocdSignature = 0x06064b50;
-        const int EocdMinSize = 22;          // fixed EOCD record size, excluding the trailing comment
-        const int MaxCommentSize = 0xFFFF;   // the EOCD comment length is a ushort, so the comment is at most 65,535 bytes
+        const int EocdMinSize = 22; // fixed EOCD record size, excluding the trailing comment
+        const int MaxCommentSize = 0xFFFF; // the EOCD comment length is a ushort, so the comment is at most 65,535 bytes
         const int Zip64LocatorSize = 20;
 
         var data = buffer.GetBuffer().AsSpan(0, (int)buffer.Length);
@@ -440,8 +439,8 @@ public sealed class DocumentTextExtractor : IDocumentTextExtractor
                 pageCount = pdf.NumberOfPages;
             }
             catch (Exception exception) when (exception is PdfDocumentFormatException
-                or PdfDocumentEncryptedException
-                or PdfDocumentStackDepthException)
+                                                  or PdfDocumentEncryptedException
+                                                  or PdfDocumentStackDepthException)
             {
                 return PdfUnparseableReason;
             }

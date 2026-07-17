@@ -25,9 +25,15 @@ internal sealed class ProviderCallBudgetChatClient : DelegatingChatClient
     private static readonly Meter Meter = new("XE.LocalAiEngine.AI.Agent", "1.0.0");
     private static readonly Counter<long> ProviderRoundsCounter = Meter.CreateCounter<long>("xe.agent.provider_rounds", description: "Raw provider rounds observed at the budget boundary.");
     private static readonly Counter<long> MessagesDroppedCounter = Meter.CreateCounter<long>("xe.agent.budget.messages_dropped", description: "History messages dropped by per-round budgeting.");
-    private static readonly Counter<long> ToolResultsTruncatedCounter = Meter.CreateCounter<long>("xe.agent.budget.tool_results_truncated", description: "Oversized tool results excerpted by per-round budgeting.");
-    private static readonly Counter<long> CeilingExceededCounter = Meter.CreateCounter<long>("xe.agent.budget.ceiling_exceeded", description: "Invocations terminated for exceeding a cumulative provider-call ceiling.");
-    private static readonly Counter<long> ContextWindowExceededCounter = Meter.CreateCounter<long>("xe.agent.budget.context_window_exceeded", description: "Provider rounds rejected because the irreducible message set still exceeded the context window.");
+
+    private static readonly Counter<long> ToolResultsTruncatedCounter =
+        Meter.CreateCounter<long>("xe.agent.budget.tool_results_truncated", description: "Oversized tool results excerpted by per-round budgeting.");
+
+    private static readonly Counter<long> CeilingExceededCounter =
+        Meter.CreateCounter<long>("xe.agent.budget.ceiling_exceeded", description: "Invocations terminated for exceeding a cumulative provider-call ceiling.");
+
+    private static readonly Counter<long> ContextWindowExceededCounter = Meter.CreateCounter<long>("xe.agent.budget.context_window_exceeded",
+        description: "Provider rounds rejected because the irreducible message set still exceeded the context window.");
 
     // The Ollama num_ctx option key the invocation factory writes onto ChatOptions.AdditionalProperties when a per-send
     // context window is set; read here so the per-round window matches the window the provider is actually launched with.

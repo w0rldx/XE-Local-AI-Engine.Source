@@ -104,8 +104,7 @@ public sealed class ProcessProbeTests
         using var cts = new CancellationTokenSource(TimeSpan.FromMilliseconds(300));
 
         // Caller cancellation (distinct from the internal deadline) tree-kills and surfaces cancellation to the caller.
-        await AssertEx.ThrowsAsync<OperationCanceledException>(
-            () => probe.RunAsync("sh", ["-c", "sleep 30"], TimeSpan.FromSeconds(30), cts.Token));
+        await AssertEx.ThrowsAsync<OperationCanceledException>(() => probe.RunAsync("sh", ["-c", "sleep 30"], TimeSpan.FromSeconds(30), cts.Token));
     }
 
     [Test]

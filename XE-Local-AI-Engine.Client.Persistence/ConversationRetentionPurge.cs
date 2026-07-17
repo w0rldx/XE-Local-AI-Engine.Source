@@ -30,8 +30,7 @@ public static class ConversationRetentionPurge
         // selection exactly (soft-purged OR aged past the cutoff); a row touched after selection now carries a newer
         // last_seen_utc and fails it, and a row already deleted returns no rows and also fails it.
         var stillEligible = await dbContext.Database
-                                           .SqlQueryRaw<Guid>(
-                                               "SELECT conversation_id FROM conversations WHERE conversation_id = {0} AND (purged <> 0 OR last_seen_utc <= {1})",
+                                           .SqlQueryRaw<Guid>("SELECT conversation_id FROM conversations WHERE conversation_id = {0} AND (purged <> 0 OR last_seen_utc <= {1})",
                                                conversationId,
                                                cutoffUtc)
                                            .AnyAsync(cancellationToken)

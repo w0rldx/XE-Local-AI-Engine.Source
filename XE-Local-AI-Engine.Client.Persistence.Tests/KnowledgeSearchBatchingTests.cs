@@ -9,9 +9,9 @@ using NSubstitute;
 using XE_Local_AI_Engine.Client.Persistence.Implementation;
 using XE_Local_AI_Engine.Client.Persistence.Tests.Testing;
 using XE_Local_AI_Engine.Client.Services.CloudProviders;
+using XE_Local_AI_Engine.Client.Services.Knowledge;
 using XE_Local_AI_Engine.Providers.Abstractions;
 using XE_Local_AI_Engine.Providers.Abstractions.Contracts;
-using XE_Local_AI_Engine.Client.Services.Knowledge;
 
 /// <summary>
 ///     Drives the real <see cref="KnowledgeSearchService" /> over a seeded SQLite corpus to prove the MED-006 search
@@ -94,14 +94,21 @@ public sealed class KnowledgeSearchBatchingTests : IDisposable
 
         // Lexical arm ranks A then B; semantic arm ranks B then C. Both arms must reach fusion under the concurrent
         // implementation, so the result order must equal the independent RRF baseline of the two lists.
-        var ftsRanked = new List<Guid> { chunkA, chunkB };
-        var vectorRanked = new List<Guid> { chunkB, chunkC };
+        var ftsRanked = new List<Guid>
+        {
+            chunkA,
+            chunkB
+        };
+        var vectorRanked = new List<Guid>
+        {
+            chunkB,
+            chunkC
+        };
 
         var ftsHits = ftsRanked.Select((id, index) => new FtsSearchHit(id, documentA, ftsRanked.Count - index)).ToList();
         var vectorSearch = Substitute.For<IVectorSearch>();
         vectorSearch.SearchAsync(Arg.Any<ReadOnlyMemory<float>>(), Arg.Any<string>(), Arg.Any<int>(), Arg.Any<Guid?>(), Arg.Any<CancellationToken>())
-                    .Returns(Task.FromResult<IReadOnlyList<VectorSearchHit>>(
-                        vectorRanked.Select((id, index) => new VectorSearchHit(id, documentA, 1.0f - (index * 0.1f))).ToList()));
+                    .Returns(Task.FromResult<IReadOnlyList<VectorSearchHit>>(vectorRanked.Select((id, index) => new VectorSearchHit(id, documentA, 1.0f - (index * 0.1f))).ToList()));
 
         await using var context = AgentDefinitionTestContextFactory.CreateForMigration(databasePath, _keyHolder);
         var service = CreateSearchService(context, ftsHits, ResolvingProviderResolver(), vectorSearch);
@@ -271,8 +278,7 @@ public sealed class KnowledgeSearchBatchingTests : IDisposable
             new FixedGenerator();
 
         public Task<IReadOnlyList<LocalModelDescriptor>> ListModelsAsync(CancellationToken ct) =>
-            Task.FromResult<IReadOnlyList<LocalModelDescriptor>>(
-            [
+            Task.FromResult<IReadOnlyList<LocalModelDescriptor>>([
                 new LocalModelDescriptor
                 {
                     ModelName = ResolvedModel,
@@ -285,17 +291,23 @@ public sealed class KnowledgeSearchBatchingTests : IDisposable
                 }
             ]);
 
-        public IChatClient CreateChatClient(LocalModelSelection selection) => throw new NotSupportedException();
+        public IChatClient CreateChatClient(LocalModelSelection selection) =>
+            throw new NotSupportedException();
 
-        public Task<ModelProviderHealth> CheckHealthAsync(CancellationToken ct) => throw new NotSupportedException();
+        public Task<ModelProviderHealth> CheckHealthAsync(CancellationToken ct) =>
+            throw new NotSupportedException();
 
-        public Task PullModelAsync(string modelName, IProgress<PullProgress>? progress, CancellationToken ct) => throw new NotSupportedException();
+        public Task PullModelAsync(string modelName, IProgress<PullProgress>? progress, CancellationToken ct) =>
+            throw new NotSupportedException();
 
-        public Task DeleteModelAsync(string modelName, CancellationToken ct) => throw new NotSupportedException();
+        public Task DeleteModelAsync(string modelName, CancellationToken ct) =>
+            throw new NotSupportedException();
 
-        public Task WarmModelAsync(string modelName, CancellationToken ct) => throw new NotSupportedException();
+        public Task WarmModelAsync(string modelName, CancellationToken ct) =>
+            throw new NotSupportedException();
 
-        public Task UnloadModelAsync(string modelName, CancellationToken ct) => throw new NotSupportedException();
+        public Task UnloadModelAsync(string modelName, CancellationToken ct) =>
+            throw new NotSupportedException();
 
         private sealed class FixedGenerator : IEmbeddingGenerator<string, Embedding<float>>
         {
@@ -312,7 +324,8 @@ public sealed class KnowledgeSearchBatchingTests : IDisposable
                 return Task.FromResult(new GeneratedEmbeddings<Embedding<float>>(embeddings));
             }
 
-            public object? GetService(Type serviceType, object? serviceKey = null) => null;
+            public object? GetService(Type serviceType, object? serviceKey = null) =>
+                null;
 
             public void Dispose()
             {

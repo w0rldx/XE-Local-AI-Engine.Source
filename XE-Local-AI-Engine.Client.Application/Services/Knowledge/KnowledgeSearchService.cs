@@ -369,7 +369,8 @@ public sealed class KnowledgeSearchService : IKnowledgeSearchService
     // large candidate pool no longer fans out into N SELECTs. Missing ids (concurrent delete/reindex) are simply absent
     // from the returned map; the caller re-imposes the fused/rerank order and skips absentees.
     [SuppressMessage("Security", "CA2100:Review SQL queries for security vulnerabilities",
-        Justification = "The IN-clause is a fixed count of $idN placeholders generated from an internal candidate count; every chunk id is bound as a parameter and no value is concatenated into the command text.")]
+        Justification =
+            "The IN-clause is a fixed count of $idN placeholders generated from an internal candidate count; every chunk id is bound as a parameter and no value is concatenated into the command text.")]
     [SuppressMessage("Security Hotspot", "S2077:Formatting SQL queries is security-sensitive",
         Justification = "Only internally-generated $idN placeholder names are interpolated; every chunk id is a bound parameter, so no user input reaches the command text.")]
     private static async Task<IReadOnlyDictionary<Guid, HydratedChunk>> HydrateChunksAsync(DbConnection connection,

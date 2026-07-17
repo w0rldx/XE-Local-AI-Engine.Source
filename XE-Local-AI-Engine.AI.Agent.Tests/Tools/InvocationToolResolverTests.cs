@@ -19,7 +19,10 @@ public sealed class InvocationToolResolverTests
         // Handler registered NON-approval (a coder read tool). The per-agent offer tightens it to require approval, so
         // the resolver must wrap the resolved executable — the exact bug: a tightening override was silently discarded.
         var clientLocal = new FakeClientLocalToolRegistry(AIFunctionFactory.Create((string input) => input, "read_file"));
-        var offered = new[] { InvocationToolBridge.CreateOfferPlaceholder("read_file", requiresApproval: true) };
+        var offered = new[]
+        {
+            InvocationToolBridge.CreateOfferPlaceholder("read_file", requiresApproval: true)
+        };
 
         var resolved = Resolve(offered, clientLocalToolRegistry: clientLocal);
 
@@ -31,7 +34,10 @@ public sealed class InvocationToolResolverTests
     public void Resolve_TightensBuiltInCatalogTool_WrapsResolvedExecutableInApproval()
     {
         var catalog = new FakeToolRegistry(AIFunctionFactory.Create((string input) => input, "Calculate"));
-        var offered = new[] { InvocationToolBridge.CreateOfferPlaceholder("Calculate", requiresApproval: true) };
+        var offered = new[]
+        {
+            InvocationToolBridge.CreateOfferPlaceholder("Calculate", requiresApproval: true)
+        };
 
         var resolved = Resolve(offered, toolRegistry: catalog);
 
@@ -43,7 +49,10 @@ public sealed class InvocationToolResolverTests
     {
         // spawn_subagent is a built-in resolved from the catalog; the audit found tightening it currently has no effect.
         var catalog = new FakeToolRegistry(AIFunctionFactory.Create((string input) => input, "spawn_subagent"));
-        var offered = new[] { InvocationToolBridge.CreateOfferPlaceholder("spawn_subagent", requiresApproval: true) };
+        var offered = new[]
+        {
+            InvocationToolBridge.CreateOfferPlaceholder("spawn_subagent", requiresApproval: true)
+        };
 
         var resolved = Resolve(offered, toolRegistry: catalog);
 
@@ -57,7 +66,10 @@ public sealed class InvocationToolResolverTests
         // requiresApproval=false must NOT unwrap it (tighten-only): the effective policy is handler OR per-agent.
         var alreadyWrapped = new ApprovalRequiredAIFunction(AIFunctionFactory.Create((string input) => input, "run_in_agent_home"));
         var clientLocal = new FakeClientLocalToolRegistry(alreadyWrapped);
-        var offered = new[] { InvocationToolBridge.CreateOfferPlaceholder("run_in_agent_home", requiresApproval: false) };
+        var offered = new[]
+        {
+            InvocationToolBridge.CreateOfferPlaceholder("run_in_agent_home", requiresApproval: false)
+        };
 
         var resolved = Resolve(offered, clientLocalToolRegistry: clientLocal);
 
@@ -70,7 +82,10 @@ public sealed class InvocationToolResolverTests
         // MCP tools are always approval-wrapped. A per-agent loosen must not unwrap them.
         var wrapped = new ApprovalRequiredAIFunction(AIFunctionFactory.Create((string input) => input, "mcp__files__write_file"));
         var mcp = new FakeMcpToolRegistry(wrapped);
-        var offered = new[] { InvocationToolBridge.CreateOfferPlaceholder("mcp__files__write_file", requiresApproval: false) };
+        var offered = new[]
+        {
+            InvocationToolBridge.CreateOfferPlaceholder("mcp__files__write_file", requiresApproval: false)
+        };
 
         var resolved = Resolve(offered, mcpToolRegistry: mcp);
 
@@ -83,7 +98,10 @@ public sealed class InvocationToolResolverTests
         // A resolved tool whose offer is NOT a policy-carrying placeholder (a name collision / non-placeholder offer)
         // has no approval metadata — it must fail closed to requiring approval rather than auto-execute.
         var catalog = new FakeToolRegistry(AIFunctionFactory.Create((string input) => input, "collide"));
-        var offered = new[] { AIFunctionFactory.Create((string input) => input, "collide") };
+        var offered = new[]
+        {
+            AIFunctionFactory.Create((string input) => input, "collide")
+        };
 
         var resolved = Resolve(offered, toolRegistry: catalog);
 
@@ -95,7 +113,10 @@ public sealed class InvocationToolResolverTests
     {
         // The common case: a non-approval handler with a matching non-approval offer resolves to a plain executable.
         var catalog = new FakeToolRegistry(AIFunctionFactory.Create((string input) => input, "Calculate"));
-        var offered = new[] { InvocationToolBridge.CreateOfferPlaceholder("Calculate", requiresApproval: false) };
+        var offered = new[]
+        {
+            InvocationToolBridge.CreateOfferPlaceholder("Calculate", requiresApproval: false)
+        };
 
         var resolved = Resolve(offered, toolRegistry: catalog);
 

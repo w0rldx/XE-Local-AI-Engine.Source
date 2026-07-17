@@ -48,7 +48,13 @@ public sealed class ManagedCosineVectorSearchTests : IDisposable
             await InsertVectorAsync(connection, chunkId, Guid.NewGuid(), FloatBytes(1f, 0f, 0f, 0f)).ConfigureAwait(false);
         }
 
-        var hits = await RunSearchAsync(databasePath, normalized: false, new[] { 1f, 0f, 0f, 0f }, limit: 10).ConfigureAwait(false);
+        var hits = await RunSearchAsync(databasePath, normalized: false, new[]
+        {
+            1f,
+            0f,
+            0f,
+            0f
+        }, limit: 10).ConfigureAwait(false);
 
         AssertEx.Equal(expected: 1, hits.Count);
         AssertEx.True(hits[0].ChunkId == chunkId && hits[0].Score > 0.999f,
@@ -68,7 +74,13 @@ public sealed class ManagedCosineVectorSearchTests : IDisposable
             await InsertVectorAsync(connection, Guid.NewGuid(), Guid.NewGuid(), FloatBytes(1f, 0f, 0f)).ConfigureAwait(false);
         }
 
-        var hits = await RunSearchAsync(databasePath, normalized: false, new[] { 1f, 0f, 0f, 0f }, limit: 10).ConfigureAwait(false);
+        var hits = await RunSearchAsync(databasePath, normalized: false, new[]
+        {
+            1f,
+            0f,
+            0f,
+            0f
+        }, limit: 10).ConfigureAwait(false);
 
         AssertEx.Empty(hits);
     }
@@ -128,7 +140,12 @@ public sealed class ManagedCosineVectorSearchTests : IDisposable
 
         // Three identical vectors (a perfect tie at cosine 1) plus one weaker vector. A limit of 2 must return two of the
         // three tied ids and never the weaker one.
-        var tied = new[] { Guid.NewGuid(), Guid.NewGuid(), Guid.NewGuid() };
+        var tied = new[]
+        {
+            Guid.NewGuid(),
+            Guid.NewGuid(),
+            Guid.NewGuid()
+        };
         var weakId = Guid.NewGuid();
         await using (var connection = await OpenConnectionAsync(databasePath).ConfigureAwait(false))
         {
@@ -141,7 +158,13 @@ public sealed class ManagedCosineVectorSearchTests : IDisposable
         }
 
         await NormalizeInPlaceAsync(databasePath).ConfigureAwait(false);
-        var hits = await RunSearchAsync(databasePath, normalized: true, new[] { 1f, 0f, 0f, 0f }, limit: 2).ConfigureAwait(false);
+        var hits = await RunSearchAsync(databasePath, normalized: true, new[]
+        {
+            1f,
+            0f,
+            0f,
+            0f
+        }, limit: 2).ConfigureAwait(false);
 
         AssertEx.Equal(expected: 2, hits.Count);
         AssertEx.True(hits.All(hit => tied.Contains(hit.ChunkId)), "The top-2 of a 3-way tie must all come from the tied set, never the weaker vector.");
@@ -163,12 +186,24 @@ public sealed class ManagedCosineVectorSearchTests : IDisposable
         }
 
         // Cosine path: a zero-magnitude vector scores NaN and is skipped.
-        var cosineHits = await RunSearchAsync(databasePath, normalized: false, new[] { 1f, 0f, 0f, 0f }, limit: 10).ConfigureAwait(false);
+        var cosineHits = await RunSearchAsync(databasePath, normalized: false, new[]
+        {
+            1f,
+            0f,
+            0f,
+            0f
+        }, limit: 10).ConfigureAwait(false);
         AssertEx.True(cosineHits.All(hit => hit.ChunkId != zeroId), "The zero vector must be excluded on the cosine path.");
 
         // After migration the zero vector stays exactly zero; the dot path must skip it too (not score it a false 0).
         await NormalizeInPlaceAsync(databasePath).ConfigureAwait(false);
-        var dotHits = await RunSearchAsync(databasePath, normalized: true, new[] { 1f, 0f, 0f, 0f }, limit: 10).ConfigureAwait(false);
+        var dotHits = await RunSearchAsync(databasePath, normalized: true, new[]
+        {
+            1f,
+            0f,
+            0f,
+            0f
+        }, limit: 10).ConfigureAwait(false);
         AssertEx.True(dotHits.All(hit => hit.ChunkId != zeroId), "The zero vector must be excluded on the dot path too.");
         AssertEx.True(dotHits.Any(hit => hit.ChunkId == realId), "The real vector should still be returned.");
     }
@@ -187,7 +222,13 @@ public sealed class ManagedCosineVectorSearchTests : IDisposable
 
         // A zero-magnitude query has no direction — cosine would be NaN for every candidate (an empty result); the dot
         // path mirrors that by returning nothing rather than scoring everything 0.
-        var hits = await RunSearchAsync(databasePath, normalized: true, new[] { 0f, 0f, 0f, 0f }, limit: 10).ConfigureAwait(false);
+        var hits = await RunSearchAsync(databasePath, normalized: true, new[]
+        {
+            0f,
+            0f,
+            0f,
+            0f
+        }, limit: 10).ConfigureAwait(false);
         AssertEx.Empty(hits);
     }
 

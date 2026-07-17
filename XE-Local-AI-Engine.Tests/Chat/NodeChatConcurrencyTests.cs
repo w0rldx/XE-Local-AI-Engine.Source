@@ -1,5 +1,6 @@
 namespace XE_Local_AI_Engine.Tests.Chat;
 
+using System.Globalization;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using XE_Local_AI_Engine.Client.Persistence;
@@ -80,8 +81,8 @@ public sealed class NodeChatConcurrencyTests : IDisposable
                                    {
                                        try
                                        {
-                                           await service.FlushAssistantPartialAsync(
-                                                            new NodeChatPartialFlushRequest(correlation, $"chunk{index}", Reasoning: null, UpdatedAtUtc: 10 + index, ReplaceContent: false))
+                                           await service.FlushAssistantPartialAsync(new NodeChatPartialFlushRequest(correlation, $"chunk{index}", Reasoning: null, UpdatedAtUtc: 10 + index,
+                                                            ReplaceContent: false))
                                                         .ConfigureAwait(false);
                                        }
                                        catch (InvalidOperationException)
@@ -155,6 +156,6 @@ public sealed class NodeChatConcurrencyTests : IDisposable
         parameter.Value = conversationId;
         command.Parameters.Add(parameter);
         var count = await command.ExecuteScalarAsync().ConfigureAwait(false);
-        return Convert.ToInt64(count, System.Globalization.CultureInfo.InvariantCulture);
+        return Convert.ToInt64(count, CultureInfo.InvariantCulture);
     }
 }

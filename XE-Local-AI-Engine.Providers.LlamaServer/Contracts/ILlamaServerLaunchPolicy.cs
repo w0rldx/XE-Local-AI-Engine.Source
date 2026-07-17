@@ -1,7 +1,5 @@
 namespace XE_Local_AI_Engine.Providers.LlamaServer.Contracts;
 
-using XE_Local_AI_Engine.Providers.LlamaServer;
-
 /// <summary>
 ///     The single component that owns every normal-spawn launch decision the audited defaults were missing: the requested
 ///     context window per role, the GPU KV-cache quantization + flash-attention defaults, the CPU thread policy, and the

@@ -1,7 +1,6 @@
 namespace XE_Local_AI_Engine.Client.Common.Telemetry;
 
 using Microsoft.Data.Sqlite;
-using Microsoft.Extensions.Logging;
 
 /// <summary>
 ///     Classifies and records node SQLite write-contention failures (SQLITE_BUSY / SQLITE_LOCKED) that outlived the

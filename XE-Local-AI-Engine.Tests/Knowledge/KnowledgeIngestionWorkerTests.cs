@@ -179,7 +179,11 @@ public sealed class KnowledgeIngestionWorkerTests
         // starts, which flips them out of Pending; the sweep source stops returning a document once the worker begins it,
         // mirroring the real status transition and letting the sweep terminate.
         catalog.ListPendingDocumentIdsAsync(Arg.Any<CancellationToken>())
-               .Returns(_ => (IReadOnlyList<Guid>)new[] { strandedA, strandedB }.Where(id => !ingestion.Started.Contains(id)).ToList());
+               .Returns(_ => (IReadOnlyList<Guid>)new[]
+               {
+                   strandedA,
+                   strandedB
+               }.Where(id => !ingestion.Started.Contains(id)).ToList());
 
         var dispatcher = new KnowledgeIngestionDispatcher();
         await using var provider = BuildProvider(ingestion, catalog);
@@ -190,8 +194,7 @@ public sealed class KnowledgeIngestionWorkerTests
         // two stranded documents the full-queue path never enqueued — the "drain → enqueued → ingested" recovery.
         _ = await dispatcher.EnqueueAsync(trigger, CancellationToken.None).ConfigureAwait(false);
 
-        await AssertEx.EventuallyAsync(
-            () => ingestion.Completed.Contains(trigger) && ingestion.Completed.Contains(strandedA) && ingestion.Completed.Contains(strandedB),
+        await AssertEx.EventuallyAsync(() => ingestion.Completed.Contains(trigger) && ingestion.Completed.Contains(strandedA) && ingestion.Completed.Contains(strandedB),
             PollTimeout,
             "The drain-sweep should have admitted and ingested both stranded Pending documents.").ConfigureAwait(false);
 

@@ -10,7 +10,11 @@ public sealed class ProviderCallBudgeterTests
     [Test]
     public void Budget_WhenUnderWindow_ReturnsInputUnchangedByReference()
     {
-        var messages = new List<ChatMessage> { User("hello"), Assistant("hi there") };
+        var messages = new List<ChatMessage>
+        {
+            User("hello"),
+            Assistant("hi there")
+        };
 
         var result = ProviderCallBudgeter.Budget(messages, instructionsTokens: 0, effectiveWindowTokens: 1000, Options());
 
@@ -70,7 +74,12 @@ public sealed class ProviderCallBudgeterTests
     [Test]
     public void Budget_InstructionsCountTowardTheWindow()
     {
-        var messages = new List<ChatMessage> { User("u0"), Assistant("a0"), User("u1") };
+        var messages = new List<ChatMessage>
+        {
+            User("u0"),
+            Assistant("a0"),
+            User("u1")
+        };
 
         // The messages alone fit a window of 40; a large instructions estimate pushes the round over, forcing a trim.
         var underResult = ProviderCallBudgeter.Budget(messages, instructionsTokens: 0, effectiveWindowTokens: 40, Options(recentKeep: 2));
@@ -89,11 +98,11 @@ public sealed class ProviderCallBudgeterTests
         // message is dropped instead.
         var messages = new List<ChatMessage>
         {
-            System("sys"),                        // 0: protected (system)
-            User(new string('x', 400)),           // 1: droppable filler (the trim target)
-            AssistantToolCall("c1", "search"),    // 2: droppable — the tool call
-            ToolResult("c1", "r1"),               // 3: protected (recent-keep) — the matching result
-            User("final")                         // 4: protected (last)
+            System("sys"), // 0: protected (system)
+            User(new string('x', 400)), // 1: droppable filler (the trim target)
+            AssistantToolCall("c1", "search"), // 2: droppable — the tool call
+            ToolResult("c1", "r1"), // 3: protected (recent-keep) — the matching result
+            User("final") // 4: protected (last)
         };
 
         var result = ProviderCallBudgeter.Budget(messages, instructionsTokens: 0, effectiveWindowTokens: 30, Options(recentKeep: 2));
@@ -111,12 +120,12 @@ public sealed class ProviderCallBudgeterTests
         // its call, nor the call kept without its result.
         var messages = new List<ChatMessage>
         {
-            System("sys"),                          // 0: protected
-            AssistantToolCall("c1", "search"),      // 1: droppable — the tool call
+            System("sys"), // 0: protected
+            AssistantToolCall("c1", "search"), // 1: droppable — the tool call
             ToolResult("c1", new string('y', 400)), // 2: droppable — the matching result (oversized-but-under-excerpt)
-            User("u1"),                             // 3: droppable filler
-            Assistant("a1"),                        // 4: protected (recent-keep)
-            User("final")                           // 5: protected (last)
+            User("u1"), // 3: droppable filler
+            Assistant("a1"), // 4: protected (recent-keep)
+            User("final") // 5: protected (last)
         };
 
         var result = ProviderCallBudgeter.Budget(messages, instructionsTokens: 0, effectiveWindowTokens: 40, Options(recentKeep: 2));
@@ -135,13 +144,13 @@ public sealed class ProviderCallBudgeterTests
         // call, or the call message without a result, is a 400.
         var messages = new List<ChatMessage>
         {
-            System("sys"),                                                   // 0: protected
-            AssistantMultiCall(("c1", "s1"), ("c2", "s2")),                  // 1: droppable — two calls
-            ToolResult("c1", new string('y', 400)),                          // 2: droppable — result for c1
-            ToolResult("c2", new string('z', 400)),                          // 3: droppable — result for c2
-            User("u1"),                                                      // 4: droppable filler
-            Assistant("a1"),                                                 // 5: protected (recent-keep)
-            User("final")                                                    // 6: protected (last)
+            System("sys"), // 0: protected
+            AssistantMultiCall(("c1", "s1"), ("c2", "s2")), // 1: droppable — two calls
+            ToolResult("c1", new string('y', 400)), // 2: droppable — result for c1
+            ToolResult("c2", new string('z', 400)), // 3: droppable — result for c2
+            User("u1"), // 4: droppable filler
+            Assistant("a1"), // 5: protected (recent-keep)
+            User("final") // 6: protected (last)
         };
 
         var result = ProviderCallBudgeter.Budget(messages, instructionsTokens: 0, effectiveWindowTokens: 60, Options(recentKeep: 2));
@@ -161,12 +170,12 @@ public sealed class ProviderCallBudgeterTests
         // result — is kept, and a plain filler message is dropped instead.
         var messages = new List<ChatMessage>
         {
-            System("sys"),                                    // 0: protected
-            User(new string('x', 400)),                       // 1: droppable filler (the trim target)
-            AssistantMultiCall(("c1", "s1"), ("c2", "s2")),   // 2: droppable-range — two calls
-            ToolResult("c1", "r1"),                           // 3: droppable-range — result for c1
-            ToolResult("c2", "r2"),                           // 4: protected (recent-keep) — result for c2
-            User("final")                                     // 5: protected (last)
+            System("sys"), // 0: protected
+            User(new string('x', 400)), // 1: droppable filler (the trim target)
+            AssistantMultiCall(("c1", "s1"), ("c2", "s2")), // 2: droppable-range — two calls
+            ToolResult("c1", "r1"), // 3: droppable-range — result for c1
+            ToolResult("c2", "r2"), // 4: protected (recent-keep) — result for c2
+            User("final") // 5: protected (last)
         };
 
         var result = ProviderCallBudgeter.Budget(messages, instructionsTokens: 0, effectiveWindowTokens: 40, Options(recentKeep: 2));

@@ -182,7 +182,8 @@ internal sealed class HfDownloadClient
             var resolvedRevision = ReadRepoCommit(response) ?? string.Empty;
             var totalBytes = ResolveTotalBytes(response, appending, existingPartBytes, expectedSizeBytes);
 
-            await CopyToPartAsync(response, partPath, appending, modelName, totalBytes, TimeSpan.FromSeconds(_options.DownloadReadIdleTimeoutSeconds), _downloadMetrics, progress, ct).ConfigureAwait(false);
+            await CopyToPartAsync(response, partPath, appending, modelName, totalBytes, TimeSpan.FromSeconds(_options.DownloadReadIdleTimeoutSeconds), _downloadMetrics, progress, ct)
+                .ConfigureAwait(false);
 
             var verifiedSha = await VerifyHashAsync(partPath, expectedSha, ct).ConfigureAwait(false);
 

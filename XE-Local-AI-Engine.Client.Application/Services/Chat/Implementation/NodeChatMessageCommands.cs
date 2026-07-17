@@ -72,11 +72,11 @@ internal sealed class NodeChatMessageCommands(NodeChatPersistenceWriter writer)
     // InsertIfAbsent: the WHERE NOT EXISTS on (record_kind, message_id) makes the write a no-op when the message already
     // has an envelope, so a startup-reconcile backfill or a cancel that lost the race never duplicates/clobbers one.
     private const string EnvelopeInsertIfAbsentSql = $"""
-                                                     INSERT INTO agent_execution_logs
-                                                         {EnvelopeColumns}
-                                                     SELECT {EnvelopeValues}
-                                                     WHERE NOT EXISTS (SELECT 1 FROM agent_execution_logs WHERE record_kind = $record_kind AND message_id = $message_id);
-                                                     """;
+                                                      INSERT INTO agent_execution_logs
+                                                          {EnvelopeColumns}
+                                                      SELECT {EnvelopeValues}
+                                                      WHERE NOT EXISTS (SELECT 1 FROM agent_execution_logs WHERE record_kind = $record_kind AND message_id = $message_id);
+                                                      """;
 
     // The ChatRunEnvelope record_kind as a SQL literal. It must equal (int)AgentExecutionLogRecordKind.ChatRunEnvelope so
     // the upsert's ON CONFLICT WHERE matches the filtered unique index predicate; a const string (not the runtime cast) is
@@ -89,31 +89,31 @@ internal sealed class NodeChatMessageCommands(NodeChatPersistenceWriter writer)
     // final status. The conflict target's WHERE mirrors the filtered unique index so SQLite resolves it against that
     // partial index; the id / record_kind / message_id conflict keys are left as first written.
     private const string EnvelopeUpsertSql = $"""
-                                             INSERT INTO agent_execution_logs
-                                                 {EnvelopeColumns}
-                                             VALUES ({EnvelopeValues})
-                                             ON CONFLICT (message_id) WHERE record_kind = {EnvelopeRecordKindLiteral}
-                                             DO UPDATE SET
-                                                 schema_version = excluded.schema_version,
-                                                 agent_definition_id = excluded.agent_definition_id,
-                                                 invocation_id = excluded.invocation_id,
-                                                 request_id = excluded.request_id,
-                                                 model_name = excluded.model_name,
-                                                 config_hash = excluded.config_hash,
-                                                 terminal_status = excluded.terminal_status,
-                                                 latency_ms = excluded.latency_ms,
-                                                 prompt_tokens = excluded.prompt_tokens,
-                                                 completion_tokens = excluded.completion_tokens,
-                                                 reasoning_tokens = excluded.reasoning_tokens,
-                                                 total_tokens = excluded.total_tokens,
-                                                 content_chunk_count = excluded.content_chunk_count,
-                                                 reasoning_chunk_count = excluded.reasoning_chunk_count,
-                                                 trace_id = excluded.trace_id,
-                                                 started_at_utc = excluded.started_at_utc,
-                                                 success = excluded.success,
-                                                 error_class = excluded.error_class,
-                                                 created_at_utc = excluded.created_at_utc;
-                                             """;
+                                              INSERT INTO agent_execution_logs
+                                                  {EnvelopeColumns}
+                                              VALUES ({EnvelopeValues})
+                                              ON CONFLICT (message_id) WHERE record_kind = {EnvelopeRecordKindLiteral}
+                                              DO UPDATE SET
+                                                  schema_version = excluded.schema_version,
+                                                  agent_definition_id = excluded.agent_definition_id,
+                                                  invocation_id = excluded.invocation_id,
+                                                  request_id = excluded.request_id,
+                                                  model_name = excluded.model_name,
+                                                  config_hash = excluded.config_hash,
+                                                  terminal_status = excluded.terminal_status,
+                                                  latency_ms = excluded.latency_ms,
+                                                  prompt_tokens = excluded.prompt_tokens,
+                                                  completion_tokens = excluded.completion_tokens,
+                                                  reasoning_tokens = excluded.reasoning_tokens,
+                                                  total_tokens = excluded.total_tokens,
+                                                  content_chunk_count = excluded.content_chunk_count,
+                                                  reasoning_chunk_count = excluded.reasoning_chunk_count,
+                                                  trace_id = excluded.trace_id,
+                                                  started_at_utc = excluded.started_at_utc,
+                                                  success = excluded.success,
+                                                  error_class = excluded.error_class,
+                                                  created_at_utc = excluded.created_at_utc;
+                                              """;
 
     private readonly NodeChatPersistenceWriter _writer = writer ?? throw new ArgumentNullException(nameof(writer));
 
@@ -646,5 +646,4 @@ internal sealed class NodeChatMessageCommands(NodeChatPersistenceWriter writer)
         var traceId = activity.TraceId;
         return traceId == default ? null : traceId.ToString();
     }
-
 }

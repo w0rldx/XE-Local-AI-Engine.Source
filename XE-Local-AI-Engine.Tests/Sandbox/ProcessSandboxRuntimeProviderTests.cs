@@ -457,7 +457,10 @@ public sealed class ProcessSandboxRuntimeProviderTests : IDisposable
                 Executable = "/bin/sh",
                 Arguments = ["-c", "printenv"],
                 // A caller-supplied variable is layered on top of the allow-list and MUST be visible to the child.
-                Environment = new Dictionary<string, string> { ["XE_REQUEST_VAR"] = "request-value" },
+                Environment = new Dictionary<string, string>
+                {
+                    ["XE_REQUEST_VAR"] = "request-value"
+                },
                 Timeout = TimeSpan.FromSeconds(15)
             });
 
@@ -511,7 +514,10 @@ public sealed class ProcessSandboxRuntimeProviderTests : IDisposable
             AttachKey = Key(),
             RuntimeProfile = "dotnet-agent-home",
             NetworkPolicy = SandboxNetworkPolicy.Unrestricted,
-            ResourceLimits = new SandboxResourceLimits { MemoryMb = 512 }
+            ResourceLimits = new SandboxResourceLimits
+            {
+                MemoryMb = 512
+            }
         }));
     }
 

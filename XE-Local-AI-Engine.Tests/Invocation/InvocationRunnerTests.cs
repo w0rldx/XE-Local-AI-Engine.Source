@@ -1,6 +1,7 @@
 namespace XE_Local_AI_Engine.Tests.Invocation;
 
 using System.Collections;
+using System.Collections.Concurrent;
 using System.Net;
 using System.Reflection;
 using System.Runtime.CompilerServices;
@@ -649,7 +650,7 @@ public sealed class InvocationRunnerTests
         // AUD4-01: for a local llama.cpp model the runner warms the model to readiness BEFORE the watched streaming pull
         // begins, so the cold load is never guarded by (and killed by) the stream-idle watchdog.
         var sender = new MockHubMessageSender();
-        var events = new System.Collections.Concurrent.ConcurrentQueue<string>();
+        var events = new ConcurrentQueue<string>();
 
         var provider = Substitute.For<ILocalModelProvider>();
         provider.ProviderName.Returns(LlamaServerProviderConstants.ProviderName);
@@ -1563,7 +1564,7 @@ public sealed class InvocationRunnerTests
 
     // Records "stream" the moment the agent's streaming is first pulled, so a test can assert the readiness (warm) phase
     // ran BEFORE any streaming began.
-    private static async IAsyncEnumerable<AgentResponseUpdate> WarmOrderingUpdates(System.Collections.Concurrent.ConcurrentQueue<string> events)
+    private static async IAsyncEnumerable<AgentResponseUpdate> WarmOrderingUpdates(ConcurrentQueue<string> events)
     {
         events.Enqueue("stream");
         yield return new AgentResponseUpdate(ChatRole.Assistant, "ok");

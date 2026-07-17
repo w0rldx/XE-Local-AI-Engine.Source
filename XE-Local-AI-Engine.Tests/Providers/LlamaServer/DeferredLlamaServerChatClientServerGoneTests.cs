@@ -57,8 +57,7 @@ public sealed class DeferredLlamaServerChatClientServerGoneTests
     [Test]
     public async Task AggregateWithNestedResponseEnded_IsServerGone()
     {
-        var aggregate = new AggregateException(
-            new InvalidOperationException("unrelated"),
+        var aggregate = new AggregateException(new InvalidOperationException("unrelated"),
             new HttpIOException(HttpRequestError.ResponseEnded, "The response ended prematurely."));
 
         await Assert.That(DeferredLlamaServerChatClient.IsServerGone(aggregate)).IsTrue();

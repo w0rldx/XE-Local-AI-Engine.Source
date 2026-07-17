@@ -143,7 +143,10 @@ public sealed class OrchestrationResolverTests
         playbookStore.ListEnabledByAgentAsync(Arg.Any<Guid>(), Arg.Any<CancellationToken>())
                      .Returns(Task.FromResult<IReadOnlyList<PlaybookActionRecord>>([]));
         var offerProvider = Substitute.For<ILocalToolOfferProvider>();
-        offerProvider.GetOfferedTools(Arg.Any<string?>()).Returns(new[] { OfferTool("GetCurrentTime") });
+        offerProvider.GetOfferedTools(Arg.Any<string?>()).Returns(new[]
+        {
+            OfferTool("GetCurrentTime")
+        });
         var runtimeSettings = StubNodeRuntimeSettings.Create().WithToolCapableModels(thinkingModel, nonThinkingModel).Build();
 
         var capabilityResolver = Substitute.For<IModelCapabilityResolver>();

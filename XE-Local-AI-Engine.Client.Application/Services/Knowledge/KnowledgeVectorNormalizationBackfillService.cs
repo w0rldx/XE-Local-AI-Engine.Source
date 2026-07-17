@@ -2,6 +2,7 @@ namespace XE_Local_AI_Engine.Client.Services.Knowledge;
 
 using System.Data.Common;
 using System.Diagnostics.CodeAnalysis;
+using System.Globalization;
 using Microsoft.EntityFrameworkCore;
 using XE_Local_AI_Engine.Client.Persistence;
 using static Chat.Implementation.NodeChatPersistenceSql;
@@ -177,7 +178,7 @@ public sealed class KnowledgeVectorNormalizationBackfillService(
         command.CommandText = IsMarkerSetSql;
         AddParameter(command, "$name", MarkerName);
         var result = await command.ExecuteScalarAsync(cancellationToken).ConfigureAwait(false);
-        return Convert.ToInt64(result, System.Globalization.CultureInfo.InvariantCulture) != 0;
+        return Convert.ToInt64(result, CultureInfo.InvariantCulture) != 0;
     }
 
     private async Task SetMarkerAsync(CancellationToken cancellationToken)

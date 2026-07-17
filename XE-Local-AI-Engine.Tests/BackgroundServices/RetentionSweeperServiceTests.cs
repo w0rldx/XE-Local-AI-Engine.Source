@@ -1,5 +1,7 @@
 namespace XE_Local_AI_Engine.Tests.BackgroundServices;
 
+using System.Diagnostics.CodeAnalysis;
+using System.Globalization;
 using System.Text;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
@@ -235,8 +237,7 @@ public sealed class RetentionSweeperServiceTests : IDisposable
         // would, in the window between selection and deletion. The per-candidate delete then re-checks eligibility under
         // the conversation-exclusive lock and must spare it.
         await using var provider = await BuildProviderAsync("touch-race.sqlite",
-            services => services.AddScoped<INodeRetentionStore>(sp => new TouchInjectingRetentionStore(
-                new NodeRetentionStore(sp.GetRequiredService<NodeChatDbContext>()),
+            services => services.AddScoped<INodeRetentionStore>(sp => new TouchInjectingRetentionStore(new NodeRetentionStore(sp.GetRequiredService<NodeChatDbContext>()),
                 async () =>
                 {
                     if (service is not null && touchedId != Guid.Empty)
@@ -361,7 +362,12 @@ public sealed class RetentionSweeperServiceTests : IDisposable
         return new RetentionSweeperService(provider.GetRequiredService<IServiceScopeFactory>(),
             timeProvider ?? TimeProvider.System,
             provider.GetRequiredService<NodeChatPersistenceWriter>(),
-            Options.Create(new ChatRetentionOptions { Enabled = enabled, RetentionDays = 30, SweepInterval = TimeSpan.FromMinutes(10) }),
+            Options.Create(new ChatRetentionOptions
+            {
+                Enabled = enabled,
+                RetentionDays = 30,
+                SweepInterval = TimeSpan.FromMinutes(10)
+            }),
             NullLogger<RetentionSweeperService>.Instance);
     }
 
@@ -370,7 +376,7 @@ public sealed class RetentionSweeperServiceTests : IDisposable
         return Path.Combine(_rootPath, "uploaded-files", "conversations", conversationId.ToString("D"));
     }
 
-    [System.Diagnostics.CodeAnalysis.SuppressMessage("Security", "CA2100:Review SQL queries for security vulnerabilities",
+    [SuppressMessage("Security", "CA2100:Review SQL queries for security vulnerabilities",
         Justification = "The table name is a hardcoded test constant, never user input; the conversation id is a parameter.")]
     private static async Task<int> CountRowsAsync(ServiceProvider provider, string table, Guid conversationId)
     {
@@ -385,7 +391,7 @@ public sealed class RetentionSweeperServiceTests : IDisposable
         parameter.Value = conversationId;
         command.Parameters.Add(parameter);
         var result = await command.ExecuteScalarAsync().ConfigureAwait(false);
-        return Convert.ToInt32(result, System.Globalization.CultureInfo.InvariantCulture);
+        return Convert.ToInt32(result, CultureInfo.InvariantCulture);
     }
 
     // A clock frozen at a fixed instant so the retention cutoff (now - RetentionDays) is deterministic.

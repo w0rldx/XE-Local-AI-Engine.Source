@@ -1,7 +1,5 @@
 namespace XE_Local_AI_Engine.Providers.LlamaServer.Contracts;
 
-using XE_Local_AI_Engine.Providers.LlamaServer;
-
 /// <summary>
 ///     Persists, per GPU backend, whether the optimized launch config (quantized KV cache + flash attention) has been
 ///     proven unable to reach readiness on this host, so subsequent spawns skip it without re-paying a failed model load.

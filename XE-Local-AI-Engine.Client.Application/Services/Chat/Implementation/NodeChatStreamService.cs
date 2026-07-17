@@ -1,5 +1,6 @@
 namespace XE_Local_AI_Engine.Client.Services.Chat.Implementation;
 
+using System.Diagnostics;
 using System.Runtime.CompilerServices;
 using System.Threading.Channels;
 using Microsoft.Extensions.Options;
@@ -542,13 +543,14 @@ public sealed class NodeChatStreamService(
         }
 
         await eventDispatcher.ReportTurnNoticeAsync(new TurnNoticePayload
-            {
-                InvocationId = requestId,
-                Kind = TurnNoticeKind.AttachmentsWithheld,
-                Message = "Your uploaded files were not shared with the cloud model handling this message. Enable cloud data access for this node to allow attachments and file tools to reach a cloud model.",
-                Detail = effectiveModel
-            })
-            .ConfigureAwait(false);
+                             {
+                                 InvocationId = requestId,
+                                 Kind = TurnNoticeKind.AttachmentsWithheld,
+                                 Message =
+                                     "Your uploaded files were not shared with the cloud model handling this message. Enable cloud data access for this node to allow attachments and file tools to reach a cloud model.",
+                                 Detail = effectiveModel
+                             })
+                             .ConfigureAwait(false);
     }
 
     // Builds the synthetic plain-chat context message from the conversation's uploaded attachments named in the send.
@@ -817,8 +819,7 @@ public sealed class NodeChatStreamService(
                 // the one live path that writes a terminal without an atomic envelope, self-healing only at the next
                 // restart's reconcile. There is no InvocationState here, so invocation id / tokens / duration / model are
                 // unknown and omitted; the terminal status (derived from the winning row) carries the interrupted outcome.
-                await persistence.TerminalizeAssistantMessageAsync(
-                    new NodeChatTerminalizeMessageRequest(correlation,
+                await persistence.TerminalizeAssistantMessageAsync(new NodeChatTerminalizeMessageRequest(correlation,
                         NodeChatMessageStatusValues.Interrupted,
                         timeProvider.GetUtcNow().ToUnixTimeMilliseconds(),
                         Error: PreOwnershipInterruptedError,
@@ -835,7 +836,7 @@ public sealed class NodeChatStreamService(
         // is in scope. A default (all-zero) id is treated as absent. Mirrors the pump's interrupted-path trace capture.
         private static string? CurrentTraceId()
         {
-            if (System.Diagnostics.Activity.Current is not { } activity)
+            if (Activity.Current is not { } activity)
             {
                 return null;
             }

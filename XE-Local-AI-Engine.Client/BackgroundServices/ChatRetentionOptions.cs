@@ -46,8 +46,7 @@ public sealed class ChatRetentionOptions : IValidatableObject
     {
         if (SweepInterval < MinSweepInterval || SweepInterval > MaxSweepInterval)
         {
-            yield return new ValidationResult(
-                $"{Section}:{nameof(SweepInterval)} must be between {MinSweepInterval} and {MaxSweepInterval}.",
+            yield return new ValidationResult($"{Section}:{nameof(SweepInterval)} must be between {MinSweepInterval} and {MaxSweepInterval}.",
                 [nameof(SweepInterval)]);
         }
     }

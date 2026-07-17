@@ -63,7 +63,8 @@ public sealed class PromoteSuggestedPlaybookActionEndpoint(IPlaybookActionServic
         {
             PlaybookPromotionStatus.EvalRequired => "Run the eval before promoting — no eval has run since this action was authored or edited.",
             PlaybookPromotionStatus.EvalRegressed => "The latest eval regressed at least one golden case. Resolve the regression before promoting.",
-            PlaybookPromotionStatus.EvalStale => "The action or its evaluation context (base instructions, sibling actions, golden set, or model) changed since the last eval. Re-run the eval before promoting.",
+            PlaybookPromotionStatus.EvalStale =>
+                "The action or its evaluation context (base instructions, sibling actions, golden set, or model) changed since the last eval. Re-run the eval before promoting.",
             PlaybookPromotionStatus.EvalIncomplete => "The last eval only evaluated a subset of the enabled golden cases. Raise the golden-case cap and re-run a complete eval before promoting.",
             PlaybookPromotionStatus.CapReached => "The agent already has the maximum number of enabled playbook actions; archive or disable one before promoting.",
             _ => "Promotion is blocked by the eval gate."

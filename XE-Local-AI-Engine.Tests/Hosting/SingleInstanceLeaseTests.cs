@@ -42,8 +42,7 @@ public sealed class SingleInstanceLeaseTests
         // A data directory whose parent does not exist is a broken/misconfigured data root, not a running instance. The
         // exclusive open raises DirectoryNotFoundException, which must surface (fail loud) rather than be swallowed as
         // contention and returned as null.
-        var missingDirectory = Path.Combine(
-            Path.GetTempPath(),
+        var missingDirectory = Path.Combine(Path.GetTempPath(),
             "xe-single-instance-lease-tests",
             Guid.NewGuid().ToString("N"),
             "missing-parent");

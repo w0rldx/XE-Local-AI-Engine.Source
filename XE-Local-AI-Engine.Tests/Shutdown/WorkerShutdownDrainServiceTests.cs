@@ -106,7 +106,7 @@ public sealed class WorkerShutdownDrainServiceTests
     public async Task DrainAsync_WhenFlushAndDisconnectNeverComplete_CompletesWithinDeadlineAndLogsDrops()
     {
         var components = RecordingShutdownComponents.Create(hasPendingDeadLetter: true);
-        components.HubMessageSender.BlockUntilCancelled = true;    // dead-letter flush never completes on its own
+        components.HubMessageSender.BlockUntilCancelled = true; // dead-letter flush never completes on its own
         components.WorkerHubConnection.BlockUntilCancelled = true; // hub disconnect never completes on its own
 
         var service = components.CreateService(TimeSpan.FromMilliseconds(200));
@@ -193,7 +193,10 @@ public sealed class WorkerShutdownDrainServiceTests
                 NullLogger<DeadLetterFlushService>.Instance);
 
             var options = drainTimeout is { } timeout
-                ? new WorkerShutdownDrainOptions { DrainTimeout = timeout }
+                ? new WorkerShutdownDrainOptions
+                {
+                    DrainTimeout = timeout
+                }
                 : new WorkerShutdownDrainOptions();
 
             return new WorkerShutdownDrainService(Dispatcher,

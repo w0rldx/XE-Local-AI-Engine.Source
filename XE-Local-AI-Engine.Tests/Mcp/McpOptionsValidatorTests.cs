@@ -21,7 +21,10 @@ public sealed class McpOptionsValidatorTests
     [Test]
     public void Validate_WhenToolCallTimeoutIsZero_Fails()
     {
-        var result = new McpOptionsValidator().Validate(name: null, new McpOptions { ToolCallTimeoutSeconds = 0 });
+        var result = new McpOptionsValidator().Validate(name: null, new McpOptions
+        {
+            ToolCallTimeoutSeconds = 0
+        });
 
         AssertEx.True(result.Failed, "A non-positive ToolCallTimeoutSeconds must fail validation.");
         AssertEx.True(result.FailureMessage?.Contains("ToolCallTimeoutSeconds", StringComparison.Ordinal) == true,
@@ -31,7 +34,10 @@ public sealed class McpOptionsValidatorTests
     [Test]
     public void Validate_WhenToolCallTimeoutIsNegative_Fails()
     {
-        var result = new McpOptionsValidator().Validate(name: null, new McpOptions { ToolCallTimeoutSeconds = -1 });
+        var result = new McpOptionsValidator().Validate(name: null, new McpOptions
+        {
+            ToolCallTimeoutSeconds = -1
+        });
 
         AssertEx.True(result.Failed, "A negative ToolCallTimeoutSeconds must fail validation.");
     }

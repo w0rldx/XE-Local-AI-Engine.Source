@@ -90,7 +90,10 @@ public sealed class InvocationAgentFactoryTests
             "Be helpful.",
             [],
             [],
-            Sampling: new InvocationSamplingOptions { NumCtx = 4096 },
+            Sampling: new InvocationSamplingOptions
+            {
+                NumCtx = 4096
+            },
             EffectiveContextTokens: 16384);
 
         using var chatClient = new FakeChatClient();

@@ -11,7 +11,10 @@ using Infra = GgufStoreTestInfrastructure;
 /// </summary>
 public sealed class GgufRegistryTests
 {
-    private static readonly JsonSerializerOptions RawManifestOptions = new() { WriteIndented = true };
+    private static readonly JsonSerializerOptions RawManifestOptions = new()
+    {
+        WriteIndented = true
+    };
 
     [Test]
     public async Task GgufRegistry_ListsPresentModels_AndResolvesPathByModelName()
@@ -143,7 +146,7 @@ public sealed class GgufRegistryTests
         // Reproduces the first-download double-registration: the .gguf lands on disk with NO manifest, so the upsert's
         // load self-heals via a rescan that registers a filename-alias entry — the canonical upsert must then collapse
         // the alias rather than append a second entry sharing the one file.
-        using var dir = new Infra.TempModelsDir();
+        using var dir = new GgufStoreTestInfrastructure.TempModelsDir();
         var options = Infra.Options(dir.Path);
         using var registry = Infra.Registry(options);
 
@@ -166,7 +169,7 @@ public sealed class GgufRegistryTests
     {
         // An already-affected user's manifest carries two entries (legacy alias + canonical) for one file. Listing must
         // collapse them to the canonical entry without touching the file (migration for affected installs).
-        using var dir = new Infra.TempModelsDir();
+        using var dir = new GgufStoreTestInfrastructure.TempModelsDir();
         var options = Infra.Options(dir.Path);
         var filePath = dir.FilePath(Infra.FileName);
         await File.WriteAllTextAsync(filePath, "fake-gguf");
@@ -196,7 +199,7 @@ public sealed class GgufRegistryTests
     // the store, and asserts the file is gone and NEITHER identity remains — deleting one alias must not orphan the other.
     private static async Task AssertDeleteRemovesBothEntriesAsync(bool deleteThroughAlias)
     {
-        using var dir = new Infra.TempModelsDir();
+        using var dir = new GgufStoreTestInfrastructure.TempModelsDir();
         var options = Infra.Options(dir.Path);
         var filePath = dir.FilePath(Infra.FileName);
         await File.WriteAllTextAsync(filePath, "fake-gguf");
@@ -204,7 +207,7 @@ public sealed class GgufRegistryTests
 
         using var registry = Infra.Registry(options);
 #pragma warning disable CA2000 // The in-memory fake handler holds no unmanaged resource; the client lives for the test.
-        using var http = new HttpClient(new Infra.ScriptedHandler(static (_, _) => new HttpResponseMessage()));
+        using var http = new HttpClient(new GgufStoreTestInfrastructure.ScriptedHandler(static (_, _) => new HttpResponseMessage()));
 #pragma warning restore CA2000
         var downloadClient = Infra.DownloadClient(http, Infra.NoTokenStore(), Infra.AbundantSpace(), options);
         var store = Infra.Store(downloadClient, Infra.DiscoveryWith(), registry, options);
@@ -218,8 +221,7 @@ public sealed class GgufRegistryTests
     }
 
     // The filename-derived identity a manifest-absent rescan assigns to the downloaded file (stem + quant).
-    private static string FilenameAliasName =>
-        GgufModelName.Format(Path.GetFileNameWithoutExtension(Infra.FileName), Infra.Quant);
+    private static string FilenameAliasName => GgufModelName.Format(Path.GetFileNameWithoutExtension(Infra.FileName), Infra.Quant);
 
     // A canonically-registered download: real repo id (org/name), verified hash + revision, known role.
     private static GgufModelRegistryEntry CanonicalEntry(string filePath)
@@ -260,7 +262,10 @@ public sealed class GgufRegistryTests
     // Writes the manifest verbatim (bypassing the collapsing upsert) so a pre-migration duplicate-path state can be seeded.
     private static async Task WriteRawManifestAsync(string modelsDirectory, params GgufModelRegistryEntry[] entries)
     {
-        var json = JsonSerializer.Serialize(new { Models = entries }, RawManifestOptions);
+        var json = JsonSerializer.Serialize(new
+        {
+            Models = entries
+        }, RawManifestOptions);
         await File.WriteAllTextAsync(Path.Combine(modelsDirectory, "index.json"), json);
     }
 }

@@ -187,7 +187,10 @@ public sealed class NodeSettingsEndpointTests
         using var request = CreateRequest(factory, HttpMethod.Put, "/api/local/v1/node-settings");
         request.Content = JsonContent.Create(new SaveNodeSettingsRequest
         {
-            SamplingDefaults = new SamplingOptions { Seed = "not-a-number" }
+            SamplingDefaults = new SamplingOptions
+            {
+                Seed = "not-a-number"
+            }
         });
         using var response = await client.SendAsync(request).ConfigureAwait(false);
 
@@ -210,13 +213,15 @@ public sealed class NodeSettingsEndpointTests
         request.Content = JsonContent.Create(new SaveNodeSettingsRequest
         {
             MaxMessageRequestTimeoutSeconds = 600,
-            SamplingDefaults = new SamplingOptions { Seed = largeSeed }
+            SamplingDefaults = new SamplingOptions
+            {
+                Seed = largeSeed
+            }
         });
         using var response = await client.SendAsync(request).ConfigureAwait(false);
 
         AssertEx.Equal(HttpStatusCode.OK, response.StatusCode);
-        await nodeSettingsStore.Received(1).SaveAsync(
-            Arg.Is<StoredNodeSettings>(stored => stored.SamplingDefaults != null && stored.SamplingDefaults.Seed == largeSeed),
+        await nodeSettingsStore.Received(1).SaveAsync(Arg.Is<StoredNodeSettings>(stored => stored.SamplingDefaults != null && stored.SamplingDefaults.Seed == largeSeed),
             Arg.Any<CancellationToken>());
     }
 

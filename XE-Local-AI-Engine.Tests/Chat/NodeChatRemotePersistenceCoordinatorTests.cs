@@ -147,6 +147,9 @@ public sealed class NodeChatRemotePersistenceCoordinatorTests
         // The streaming mark must report the row landed in Streaming, otherwise BeginAsync aborts (returns null): the
         // coordinator only opens a session against a row it successfully marked streaming.
         persistence.MarkAssistantStreamingAsync(Arg.Any<NodeChatMessageCorrelation>(), Arg.Any<long>(), Arg.Any<CancellationToken>())
-                   .Returns(message with { Status = NodeChatMessageStatusValues.Streaming });
+                   .Returns(message with
+                   {
+                       Status = NodeChatMessageStatusValues.Streaming
+                   });
     }
 }

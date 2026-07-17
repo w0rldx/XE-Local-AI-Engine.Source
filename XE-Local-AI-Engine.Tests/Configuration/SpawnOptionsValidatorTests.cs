@@ -23,7 +23,10 @@ public sealed class SpawnOptionsValidatorTests
     [Arguments(-1)]
     public void Validate_WhenMaxConcurrentSpawnsIsNotPositive_ReturnsFailure(int value)
     {
-        var result = _validator.Validate(name: null, new SpawnOptions { MaxConcurrentSpawns = value });
+        var result = _validator.Validate(name: null, new SpawnOptions
+        {
+            MaxConcurrentSpawns = value
+        });
 
         AssertFailureContains(result, "MaxConcurrentSpawns");
     }
@@ -33,7 +36,10 @@ public sealed class SpawnOptionsValidatorTests
     [Arguments(-100)]
     public void Validate_WhenMaxCloudSpawnsIsNegative_ReturnsFailure(int value)
     {
-        var result = _validator.Validate(name: null, new SpawnOptions { MaxCloudSpawns = value });
+        var result = _validator.Validate(name: null, new SpawnOptions
+        {
+            MaxCloudSpawns = value
+        });
 
         AssertFailureContains(result, "MaxCloudSpawns");
     }
@@ -42,7 +48,10 @@ public sealed class SpawnOptionsValidatorTests
     public void Validate_WhenMaxCloudSpawnsIsZero_ReturnsSuccess()
     {
         // Zero cloud spawns is a valid "cloud disabled" configuration, not an error.
-        var result = _validator.Validate(name: null, new SpawnOptions { MaxCloudSpawns = 0 });
+        var result = _validator.Validate(name: null, new SpawnOptions
+        {
+            MaxCloudSpawns = 0
+        });
 
         AssertEx.False(result.Failed);
     }
@@ -51,7 +60,10 @@ public sealed class SpawnOptionsValidatorTests
     [Arguments(-1)]
     public void Validate_WhenQueueWaitSecondsIsNegative_ReturnsFailure(int value)
     {
-        var result = _validator.Validate(name: null, new SpawnOptions { QueueWaitSeconds = value });
+        var result = _validator.Validate(name: null, new SpawnOptions
+        {
+            QueueWaitSeconds = value
+        });
 
         AssertFailureContains(result, "QueueWaitSeconds");
     }
@@ -60,7 +72,10 @@ public sealed class SpawnOptionsValidatorTests
     public void Validate_WhenQueueWaitSecondsIsZero_ReturnsSuccess()
     {
         // Zero wait means reject a busy same-model turn immediately — valid.
-        var result = _validator.Validate(name: null, new SpawnOptions { QueueWaitSeconds = 0 });
+        var result = _validator.Validate(name: null, new SpawnOptions
+        {
+            QueueWaitSeconds = 0
+        });
 
         AssertEx.False(result.Failed);
     }

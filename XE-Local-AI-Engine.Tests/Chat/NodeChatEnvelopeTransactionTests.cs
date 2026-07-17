@@ -1,5 +1,6 @@
 namespace XE_Local_AI_Engine.Tests.Chat;
 
+using System.Data.Common;
 using System.Globalization;
 using Microsoft.Data.Sqlite;
 using Microsoft.EntityFrameworkCore;
@@ -47,13 +48,13 @@ public sealed class NodeChatEnvelopeTransactionTests : IDisposable
         await InstallEnvelopeSabotageTriggerAsync(provider).ConfigureAwait(false);
 
         await AssertEx.ThrowsAsync<SqliteException>(async () =>
-                _ = await persistence.TerminalizeAssistantMessageAsync(new NodeChatTerminalizeMessageRequest(correlation,
-                        NodeChatMessageStatusValues.Completed,
-                        UpdatedAtUtc: 3,
-                        "answer",
-                        Envelope: new AgentRunEnvelopeMetadata(Guid.NewGuid(), DurationMs: 5L)))
-                    .ConfigureAwait(false))
-            .ConfigureAwait(false);
+                          _ = await persistence.TerminalizeAssistantMessageAsync(new NodeChatTerminalizeMessageRequest(correlation,
+                                                   NodeChatMessageStatusValues.Completed,
+                                                   UpdatedAtUtc: 3,
+                                                   "answer",
+                                                   Envelope: new AgentRunEnvelopeMetadata(Guid.NewGuid(), DurationMs: 5L)))
+                                               .ConfigureAwait(false))
+                      .ConfigureAwait(false);
 
         // The whole transaction rolled back: the row is still non-terminal (streaming) and no envelope was written.
         AssertEx.Equal(NodeChatMessageStatusValues.Streaming, await ReadStatusAsync(provider, correlation).ConfigureAwait(false));
@@ -74,13 +75,13 @@ public sealed class NodeChatEnvelopeTransactionTests : IDisposable
         await persistence.DeleteConversationAsync(new NodeChatDeleteConversationRequest(conversation.ConversationId, DeletedAtUtc: 3, PurgeImmediately: true)).ConfigureAwait(false);
 
         await AssertEx.ThrowsAsync<InvalidOperationException>(async () =>
-                _ = await persistence.TerminalizeAssistantMessageAsync(new NodeChatTerminalizeMessageRequest(correlation,
-                        NodeChatMessageStatusValues.Completed,
-                        UpdatedAtUtc: 4,
-                        "answer",
-                        Envelope: new AgentRunEnvelopeMetadata(Guid.NewGuid(), DurationMs: 5L)))
-                    .ConfigureAwait(false))
-            .ConfigureAwait(false);
+                          _ = await persistence.TerminalizeAssistantMessageAsync(new NodeChatTerminalizeMessageRequest(correlation,
+                                                   NodeChatMessageStatusValues.Completed,
+                                                   UpdatedAtUtc: 4,
+                                                   "answer",
+                                                   Envelope: new AgentRunEnvelopeMetadata(Guid.NewGuid(), DurationMs: 5L)))
+                                               .ConfigureAwait(false))
+                      .ConfigureAwait(false);
 
         AssertEx.Null(await persistence.GetConversationAsync(conversation.ConversationId).ConfigureAwait(false));
         AssertEx.Equal(expected: 0, await CountMessagesAsync(provider, conversation.ConversationId).ConfigureAwait(false));
@@ -99,11 +100,11 @@ public sealed class NodeChatEnvelopeTransactionTests : IDisposable
         await persistence.MarkAssistantStreamingAsync(correlation, updatedAtUtc: 2).ConfigureAwait(false);
 
         await persistence.TerminalizeAssistantMessageAsync(new NodeChatTerminalizeMessageRequest(correlation,
-                NodeChatMessageStatusValues.Completed,
-                UpdatedAtUtc: 3,
-                "answer",
-                Envelope: new AgentRunEnvelopeMetadata(Guid.NewGuid(), DurationMs: 5L)))
-            .ConfigureAwait(false);
+                             NodeChatMessageStatusValues.Completed,
+                             UpdatedAtUtc: 3,
+                             "answer",
+                             Envelope: new AgentRunEnvelopeMetadata(Guid.NewGuid(), DurationMs: 5L)))
+                         .ConfigureAwait(false);
         AssertEx.Equal(expected: 1, await CountEnvelopesAsync(provider).ConfigureAwait(false));
 
         await persistence.DeleteConversationAsync(new NodeChatDeleteConversationRequest(conversation.ConversationId, DeletedAtUtc: 4, PurgeImmediately: true)).ConfigureAwait(false);
@@ -142,11 +143,11 @@ public sealed class NodeChatEnvelopeTransactionTests : IDisposable
                 try
                 {
                     await service.TerminalizeAssistantMessageAsync(new NodeChatTerminalizeMessageRequest(correlation,
-                            NodeChatMessageStatusValues.Completed,
-                            UpdatedAtUtc: 10,
-                            "answer",
-                            Envelope: new AgentRunEnvelopeMetadata(Guid.NewGuid(), DurationMs: 5L)))
-                        .ConfigureAwait(false);
+                                     NodeChatMessageStatusValues.Completed,
+                                     UpdatedAtUtc: 10,
+                                     "answer",
+                                     Envelope: new AgentRunEnvelopeMetadata(Guid.NewGuid(), DurationMs: 5L)))
+                                 .ConfigureAwait(false);
                     return true;
                 }
                 catch (InvalidOperationException)
@@ -269,7 +270,7 @@ public sealed class NodeChatEnvelopeTransactionTests : IDisposable
         return Convert.ToInt64(await command.ExecuteScalarAsync().ConfigureAwait(false), CultureInfo.InvariantCulture);
     }
 
-    private static void AddParameter(System.Data.Common.DbCommand command, string name, object value)
+    private static void AddParameter(DbCommand command, string name, object value)
     {
         var parameter = command.CreateParameter();
         parameter.ParameterName = name;

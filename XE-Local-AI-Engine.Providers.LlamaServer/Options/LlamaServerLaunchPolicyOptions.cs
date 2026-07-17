@@ -1,7 +1,5 @@
 namespace XE_Local_AI_Engine.Providers.LlamaServer.Options;
 
-using XE_Local_AI_Engine.Providers.LlamaServer;
-
 /// <summary>
 ///     Central, node-configurable launch policy for every <c>llama-server</c> spawn: the requested context window per
 ///     role, the GPU KV-cache quantization + flash-attention defaults, and the CPU thread policy. Consumed by

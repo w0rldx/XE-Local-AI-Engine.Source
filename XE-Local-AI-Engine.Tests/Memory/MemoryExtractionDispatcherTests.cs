@@ -165,7 +165,10 @@ public sealed class MemoryExtractionDispatcherTests : IDisposable
         // Enqueue past the bounded capacity BEFORE the worker starts draining: exactly QueueCapacity jobs are accepted
         // and the rest are dropped (never blocking the caller). Starting the worker afterwards drains only the accepted
         // jobs, so exactly QueueCapacity exec-log rows land — proving the queue is bounded, not unbounded fire-and-forget.
-        var options = new MemoryExtractionOptions { QueueCapacity = 2 };
+        var options = new MemoryExtractionOptions
+        {
+            QueueCapacity = 2
+        };
         var optionsAccessor = Options.Create(options);
         var dispatcher = new MemoryExtractionDispatcher(optionsAccessor, NullLogger<MemoryExtractionDispatcher>.Instance);
 
@@ -219,7 +222,11 @@ public sealed class MemoryExtractionDispatcherTests : IDisposable
                   });
 
         await using var provider = await BuildProviderAsync("exec-log-drain-queued.sqlite", extraction).ConfigureAwait(false);
-        var optionsAccessor = Options.Create(new MemoryExtractionOptions { MaxConcurrentExtractions = 1, ShutdownDrainTimeoutSeconds = 30 });
+        var optionsAccessor = Options.Create(new MemoryExtractionOptions
+        {
+            MaxConcurrentExtractions = 1,
+            ShutdownDrainTimeoutSeconds = 30
+        });
         var dispatcher = new MemoryExtractionDispatcher(optionsAccessor, NullLogger<MemoryExtractionDispatcher>.Instance);
         using var worker = new MemoryExtractionWorker(provider.GetRequiredService<IServiceScopeFactory>(),
             dispatcher,
@@ -288,7 +295,11 @@ public sealed class MemoryExtractionDispatcherTests : IDisposable
 
         await using var provider = await BuildProviderAsync("exec-log-deadline.sqlite", extraction).ConfigureAwait(false);
         var logger = new CapturingLogger<MemoryExtractionWorker>();
-        var optionsAccessor = Options.Create(new MemoryExtractionOptions { MaxConcurrentExtractions = 1, ShutdownDrainTimeoutSeconds = 1 });
+        var optionsAccessor = Options.Create(new MemoryExtractionOptions
+        {
+            MaxConcurrentExtractions = 1,
+            ShutdownDrainTimeoutSeconds = 1
+        });
         var dispatcher = new MemoryExtractionDispatcher(optionsAccessor, NullLogger<MemoryExtractionDispatcher>.Instance);
         var worker = new MemoryExtractionWorker(provider.GetRequiredService<IServiceScopeFactory>(),
             dispatcher,
@@ -344,7 +355,11 @@ public sealed class MemoryExtractionDispatcherTests : IDisposable
 
         await using var provider = await BuildProviderAsync("exec-log-abandon.sqlite", extraction).ConfigureAwait(false);
         var logger = new CapturingLogger<MemoryExtractionWorker>();
-        var optionsAccessor = Options.Create(new MemoryExtractionOptions { MaxConcurrentExtractions = 1, ShutdownDrainTimeoutSeconds = 1 });
+        var optionsAccessor = Options.Create(new MemoryExtractionOptions
+        {
+            MaxConcurrentExtractions = 1,
+            ShutdownDrainTimeoutSeconds = 1
+        });
         var dispatcher = new MemoryExtractionDispatcher(optionsAccessor, NullLogger<MemoryExtractionDispatcher>.Instance);
         var worker = new MemoryExtractionWorker(provider.GetRequiredService<IServiceScopeFactory>(),
             dispatcher,
@@ -416,7 +431,11 @@ public sealed class MemoryExtractionDispatcherTests : IDisposable
 
         await using var provider = await BuildProviderAsync("exec-log-pending-slot.sqlite", extraction).ConfigureAwait(false);
         var logger = new CapturingLogger<MemoryExtractionWorker>();
-        var optionsAccessor = Options.Create(new MemoryExtractionOptions { MaxConcurrentExtractions = 1, ShutdownDrainTimeoutSeconds = 1 });
+        var optionsAccessor = Options.Create(new MemoryExtractionOptions
+        {
+            MaxConcurrentExtractions = 1,
+            ShutdownDrainTimeoutSeconds = 1
+        });
         var dispatcher = new MemoryExtractionDispatcher(optionsAccessor, NullLogger<MemoryExtractionDispatcher>.Instance);
         var worker = new MemoryExtractionWorker(provider.GetRequiredService<IServiceScopeFactory>(),
             dispatcher,

@@ -44,7 +44,8 @@ internal sealed class McpToolCallTimeoutAIFunction : DelegatingAIFunction
             // the loop continue. Never rethrow-as-cancel here — that would surface as a run cancellation, and never
             // retry — the tool call is non-idempotent.
             NodeMetrics.McpToolTimeoutTotal.Add(1);
-            return $"The MCP tool '{Name}' did not respond within the configured {_timeout.TotalSeconds:0.##}s tool-call timeout and was cancelled. The server may be slow or unresponsive; do not retry the same call — continue without it or try a different approach.";
+            return
+                $"The MCP tool '{Name}' did not respond within the configured {_timeout.TotalSeconds:0.##}s tool-call timeout and was cancelled. The server may be slow or unresponsive; do not retry the same call — continue without it or try a different approach.";
         }
     }
 }

@@ -1,7 +1,6 @@
 namespace XE_Local_AI_Engine.Tests.Chat;
 
 using NSubstitute;
-using XE_Local_AI_Engine.AI.Contracts.Enums;
 using XE_Local_AI_Engine.Client.Models.Enums;
 using XE_Local_AI_Engine.Client.Services.Chat;
 using XE_Local_AI_Engine.Client.Services.Chat.Implementation;
@@ -45,8 +44,7 @@ public sealed class NodeChatInvocationPumpRunEnvelopeTests
 
         _ = await pump.TerminalizeAsync(correlation, state, "requested-model");
 
-        await persistence.Received(1).TerminalizeAssistantMessageAsync(
-            Arg.Is<NodeChatTerminalizeMessageRequest>(request =>
+        await persistence.Received(1).TerminalizeAssistantMessageAsync(Arg.Is<NodeChatTerminalizeMessageRequest>(request =>
                 request.Status == "completed"
                 && request.Model == "llama-3.1"
                 && request.InputCount == 100
@@ -80,8 +78,7 @@ public sealed class NodeChatInvocationPumpRunEnvelopeTests
 
         _ = await pump.TerminalizeAsync(correlation, state, requestedModel: null);
 
-        await persistence.Received(1).TerminalizeAssistantMessageAsync(
-            Arg.Is<NodeChatTerminalizeMessageRequest>(request =>
+        await persistence.Received(1).TerminalizeAssistantMessageAsync(Arg.Is<NodeChatTerminalizeMessageRequest>(request =>
                 request.Status == "failed"
                 && request.Envelope != null
                 && request.Envelope.FailureCategory == "ProviderUnreachable"
@@ -110,8 +107,7 @@ public sealed class NodeChatInvocationPumpRunEnvelopeTests
 
         _ = await pump.TerminalizeAsync(correlation, state, requestedModel: null);
 
-        await persistence.Received(1).TerminalizeAssistantMessageAsync(
-            Arg.Is<NodeChatTerminalizeMessageRequest>(request => request.Status == "cancelled" && request.Error == null),
+        await persistence.Received(1).TerminalizeAssistantMessageAsync(Arg.Is<NodeChatTerminalizeMessageRequest>(request => request.Status == "cancelled" && request.Error == null),
             Arg.Any<CancellationToken>());
     }
 
@@ -135,8 +131,7 @@ public sealed class NodeChatInvocationPumpRunEnvelopeTests
 
         _ = await pump.TerminalizeAsync(correlation, state, requestedModel: null);
 
-        await persistence.Received(1).TerminalizeAssistantMessageAsync(
-            Arg.Is<NodeChatTerminalizeMessageRequest>(request => request.Status == "failed" && request.Error == "Provider unreachable."),
+        await persistence.Received(1).TerminalizeAssistantMessageAsync(Arg.Is<NodeChatTerminalizeMessageRequest>(request => request.Status == "failed" && request.Error == "Provider unreachable."),
             Arg.Any<CancellationToken>());
     }
 
@@ -160,8 +155,7 @@ public sealed class NodeChatInvocationPumpRunEnvelopeTests
 
         _ = await pump.TerminalizeAsync(correlation, state, requestedModel: null);
 
-        await persistence.Received(1).TerminalizeAssistantMessageAsync(
-            Arg.Is<NodeChatTerminalizeMessageRequest>(request => request.Envelope != null && request.Envelope.DurationMs == 750L),
+        await persistence.Received(1).TerminalizeAssistantMessageAsync(Arg.Is<NodeChatTerminalizeMessageRequest>(request => request.Envelope != null && request.Envelope.DurationMs == 750L),
             Arg.Any<CancellationToken>());
     }
 
@@ -176,8 +170,7 @@ public sealed class NodeChatInvocationPumpRunEnvelopeTests
 
         _ = await pump.TerminalizeInterruptedAsync(correlation, cursor, wasCancelled: false);
 
-        await persistence.Received(1).TerminalizeAssistantMessageAsync(
-            Arg.Is<NodeChatTerminalizeMessageRequest>(request =>
+        await persistence.Received(1).TerminalizeAssistantMessageAsync(Arg.Is<NodeChatTerminalizeMessageRequest>(request =>
                 request.Status == "interrupted"
                 && request.Envelope != null
                 && request.Envelope.InvocationId == null

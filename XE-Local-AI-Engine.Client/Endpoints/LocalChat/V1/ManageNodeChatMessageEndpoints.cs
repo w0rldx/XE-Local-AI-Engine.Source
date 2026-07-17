@@ -42,8 +42,7 @@ public sealed class BranchNodeChatConversationEndpoint(
         NodeChatBranchResultDto? branched;
         try
         {
-            branched = await _chatPersistence.BranchConversationAsync(
-                new NodeChatBranchConversationRequest(req.ConversationId, req.MessageId, createdAtUtc, req.SelectedRevisions),
+            branched = await _chatPersistence.BranchConversationAsync(new NodeChatBranchConversationRequest(req.ConversationId, req.MessageId, createdAtUtc, req.SelectedRevisions),
                 ct).ConfigureAwait(false);
         }
         catch (NodeChatInvalidBranchSelectionException exception)

@@ -44,9 +44,9 @@ public static class PlaybookEvalFingerprint
 
         builder.Append("actions=");
         foreach (var action in enabledActions
-                     .OrderBy(static action => action.Priority)
-                     .ThenBy(static action => action.CreatedAtUtc)
-                     .ThenBy(static action => action.Id))
+                               .OrderBy(static action => action.Priority)
+                               .ThenBy(static action => action.CreatedAtUtc)
+                               .ThenBy(static action => action.Id))
         {
             builder.Append(action.Id.ToString("N")).Append(':').Append(action.Version).Append(';');
         }
