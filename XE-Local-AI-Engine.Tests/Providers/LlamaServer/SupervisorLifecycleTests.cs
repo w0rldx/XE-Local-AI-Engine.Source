@@ -138,7 +138,7 @@ public sealed class SupervisorLifecycleTests
         await using var supervisor = SupervisorFactory.Create(launcher, options: OptionsWithDrain(TimeSpan.FromSeconds(5)));
         await supervisor.EnsureRunningAsync("model-a", ModelRole.Chat, CancellationToken.None);
 
-        var lease = supervisor.TryAcquireInferenceLease("model-a", ModelRole.Chat);
+        var lease = supervisor.TryAcquireInferenceLease("model-a", ModelRole.Chat).Lease;
         AssertEx.NotNull(lease);
 
         var ejectTask = supervisor.EjectAsync("model-a", ModelRole.Chat, force: false, CancellationToken.None);
@@ -162,7 +162,7 @@ public sealed class SupervisorLifecycleTests
         await using var supervisor = SupervisorFactory.Create(launcher, options: OptionsWithDrain(TimeSpan.FromMilliseconds(150)));
         await supervisor.EnsureRunningAsync("model-a", ModelRole.Chat, CancellationToken.None);
 
-        using var lease = supervisor.TryAcquireInferenceLease("model-a", ModelRole.Chat);
+        using var lease = supervisor.TryAcquireInferenceLease("model-a", ModelRole.Chat).Lease;
         AssertEx.NotNull(lease);
 
         var outcome = await supervisor.EjectAsync("model-a", ModelRole.Chat, force: false, CancellationToken.None);
@@ -182,7 +182,7 @@ public sealed class SupervisorLifecycleTests
         await using var supervisor = SupervisorFactory.Create(launcher, options: OptionsWithDrain(TimeSpan.FromMilliseconds(150)));
         await supervisor.EnsureRunningAsync("model-a", ModelRole.Chat, CancellationToken.None);
 
-        using var lease = supervisor.TryAcquireInferenceLease("model-a", ModelRole.Chat);
+        using var lease = supervisor.TryAcquireInferenceLease("model-a", ModelRole.Chat).Lease;
         AssertEx.NotNull(lease);
 
         var outcome = await supervisor.EjectAsync("model-a", ModelRole.Chat, force: true, CancellationToken.None);
@@ -193,12 +193,73 @@ public sealed class SupervisorLifecycleTests
     }
 
     [Test]
-    public async Task TryAcquireInferenceLease_NotRunning_ReturnsNull()
+    public async Task TryAcquireInferenceLease_NotRunning_RefusedAsAbsent()
     {
         await using var supervisor = SupervisorFactory.Create();
 
-        var lease = supervisor.TryAcquireInferenceLease("ghost", ModelRole.Chat);
+        var acquisition = supervisor.TryAcquireInferenceLease("ghost", ModelRole.Chat);
 
-        AssertEx.True(lease is null, "No lease should be issued when no process backs the (model, role).");
+        AssertEx.True(acquisition.Lease is null, "No lease should be issued when no process backs the (model, role).");
+        AssertEx.False(acquisition.ProcessEvicting, "An absent process is not an eject in progress — the caller may proceed leaseless.");
+    }
+
+    [Test]
+    public async Task TryAcquireInferenceLease_WhileEjectDraining_RefusedAsEvicting_ThenAbsentAfterEject()
+    {
+        var launcher = new FakeProcessLauncher();
+        await using var supervisor = SupervisorFactory.Create(launcher, options: OptionsWithDrain(TimeSpan.FromSeconds(5)));
+        await supervisor.EnsureRunningAsync("model-a", ModelRole.Chat, CancellationToken.None);
+
+        var held = supervisor.TryAcquireInferenceLease("model-a", ModelRole.Chat).Lease;
+        AssertEx.NotNull(held);
+
+        // EjectAsync marks the process evicting synchronously (before its first await), so the refusal below is
+        // deterministic while the drain waits on the held lease.
+        var ejectTask = supervisor.EjectAsync("model-a", ModelRole.Chat, force: false, CancellationToken.None);
+
+        var refused = supervisor.TryAcquireInferenceLease("model-a", ModelRole.Chat);
+        AssertEx.True(refused.Lease is null, "No lease may be granted while an eject is draining.");
+        AssertEx.True(refused.ProcessEvicting, "The refusal must be classified as eject-in-progress, not an absent process.");
+
+        held!.Dispose();
+        var outcome = await ejectTask;
+        AssertEx.Equal(LlamaServerEjectOutcome.Ejected, outcome);
+
+        // After the eject completes the process is genuinely absent: refused, but NOT as evicting.
+        var afterEject = supervisor.TryAcquireInferenceLease("model-a", ModelRole.Chat);
+        AssertEx.True(afterEject.Lease is null, "No lease exists for the torn-down process.");
+        AssertEx.False(afterEject.ProcessEvicting, "A completed eject leaves no evicting refusal behind.");
+    }
+
+    [Test]
+    public async Task Eject_CancelledMidDrain_ClearsEvicting_ProcessStaysUsable()
+    {
+        var launcher = new FakeProcessLauncher();
+        await using var supervisor = SupervisorFactory.Create(launcher, options: OptionsWithDrain(TimeSpan.FromSeconds(30)));
+        await supervisor.EnsureRunningAsync("model-a", ModelRole.Chat, CancellationToken.None);
+
+        using var held = supervisor.TryAcquireInferenceLease("model-a", ModelRole.Chat).Lease;
+        AssertEx.NotNull(held);
+
+        using var cts = new CancellationTokenSource();
+        var ejectTask = supervisor.EjectAsync("model-a", ModelRole.Chat, force: false, cts.Token);
+        AssertEx.True(supervisor.TryAcquireInferenceLease("model-a", ModelRole.Chat).ProcessEvicting,
+            "The eject must be draining (evicting) before the cancellation.");
+
+        await cts.CancelAsync();
+        await AssertEx.ThrowsAsync<OperationCanceledException>(() => ejectTask);
+
+        // The cancelled eject performed no teardown, so the evicting mark must be cleared: the process stays alive,
+        // reusable, and grants leases again (the audited bug left it refusing every future lease forever).
+        AssertEx.False(launcher.Handles.Single().WasTreeKilled, "A cancelled graceful eject must not kill the process.");
+        var next = supervisor.TryAcquireInferenceLease("model-a", ModelRole.Chat);
+        AssertEx.NotNull(next.Lease);
+        AssertEx.False(next.ProcessEvicting, "The evicting mark must not survive a cancelled eject.");
+        next.Lease!.Dispose();
+
+        // With every lease released, a subsequent eject still works end-to-end (drains immediately and tears down).
+        held!.Dispose();
+        var outcome = await supervisor.EjectAsync("model-a", ModelRole.Chat, force: false, CancellationToken.None);
+        AssertEx.Equal(LlamaServerEjectOutcome.Ejected, outcome);
     }
 }

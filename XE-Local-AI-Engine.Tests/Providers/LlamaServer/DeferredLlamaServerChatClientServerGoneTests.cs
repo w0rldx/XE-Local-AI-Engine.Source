@@ -1,7 +1,11 @@
 namespace XE_Local_AI_Engine.Tests.Providers.LlamaServer;
 
 using System.Net.Sockets;
+using Microsoft.Extensions.AI;
+using XE_Local_AI_Engine.Providers.LlamaServer;
+using XE_Local_AI_Engine.Providers.LlamaServer.Contracts;
 using XE_Local_AI_Engine.Providers.LlamaServer.Implementation;
+using XE_Local_AI_Engine.Tests.Testing;
 
 /// <summary>
 ///     Pins the exception shapes <see cref="DeferredLlamaServerChatClient.IsServerGone" /> must recognize as
@@ -58,5 +62,46 @@ public sealed class DeferredLlamaServerChatClientServerGoneTests
             new HttpIOException(HttpRequestError.ResponseEnded, "The response ended prematurely."));
 
         await Assert.That(DeferredLlamaServerChatClient.IsServerGone(aggregate)).IsTrue();
+    }
+
+    // ---- Lease refused while an eject is draining → typed operator-ejected failure, request never started ----------
+    // Running the request leaseless instead would slip under the eject drain (which sees zero leases), be killed
+    // mid-flight by the teardown, and — because IsServerGone matches the kill — self-heal-RESPAWN the just-ejected
+    // model, so the eject would never stick.
+
+    [Test]
+    public async Task GetResponse_WhileEjectDraining_FailsAsOperatorEjected()
+    {
+        using var client = new DeferredLlamaServerChatClient(EvictingSupervisor(), "model-a", TimeSpan.FromSeconds(5));
+
+        await AssertEx.ThrowsAsync<LlamaServerModelEjectedException>(() =>
+            client.GetResponseAsync([new ChatMessage(ChatRole.User, "hello")]));
+    }
+
+    [Test]
+    public async Task GetStreamingResponse_WhileEjectDraining_FailsAsOperatorEjected_BeforeAnyChunk()
+    {
+        using var client = new DeferredLlamaServerChatClient(EvictingSupervisor(), "model-a", TimeSpan.FromSeconds(5));
+
+        var yielded = 0;
+        await AssertEx.ThrowsAsync<LlamaServerModelEjectedException>(async () =>
+        {
+            await foreach (var _ in client.GetStreamingResponseAsync([new ChatMessage(ChatRole.User, "hello")]))
+            {
+                yielded++;
+            }
+        });
+
+        AssertEx.Equal(expected: 0, yielded); // the typed failure fired before any chunk was produced.
+    }
+
+    /// <summary>A supervisor whose (never-contacted) endpoint resolves but whose lease is refused as eject-in-progress.</summary>
+    private static FakeProcessSupervisor EvictingSupervisor()
+    {
+        return new FakeProcessSupervisor
+        {
+            EnsureEndpoint = new Uri("http://127.0.0.1:9/"),
+            LeaseAcquisition = LlamaServerLeaseAcquisition.Evicting
+        };
     }
 }
