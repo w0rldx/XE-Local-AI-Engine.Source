@@ -17,6 +17,10 @@ export interface LoadedModel {
 // and must degrade gracefully). `error` carries a sanitized reason when unavailable; `models` is empty then.
 export interface LoadedModelsSnapshot {
 	readonly isAvailable: boolean;
+	// Whether the optional Ollama runtime is configured/enabled on this node at all (the XE_OLLAMA_RUNTIME_ENABLED
+	// gate). When false the page stops polling entirely — no daemon will ever answer — rather than backing off forever.
+	// Distinct from isAvailable, which reflects whether a configured daemon is currently reachable.
+	readonly ollamaConfigured: boolean;
 	readonly error: string | null;
 	readonly models: readonly LoadedModel[];
 }

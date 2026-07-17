@@ -2,7 +2,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
 import { ejectRunningModelMutation, listRunningModelsOptions } from "@/core/api/generated/@tanstack/react-query.gen";
 import { withResponseValidation } from "@/core/api/ResponseValidation";
-import { toRunningModel } from "@/features/loaded-models/models/RunningModelsModels";
+import { type EjectRunningModelResult, toEjectRunningModelResult, toRunningModel } from "@/features/loaded-models/models/RunningModelsModels";
 
 // Server state for the llama.cpp running-models section on the Loaded Models page (relocated from the model-fit
 // advisor). This is a DIFFERENT runtime from the Ollama in-memory list (useLoadedModels): it lists llama.cpp server
@@ -33,16 +33,22 @@ export function useRunningModels(enabled = true) {
 export interface EjectRunningModelVariables {
 	modelName: string;
 	role?: string;
+	// When true, tear the process down even if in-flight inference has not drained within the bounded window
+	// (interrupting the running turn). Defaults to false (graceful — never interrupts a running turn).
+	force?: boolean;
 }
 
-// Ejects a running model from the llama.cpp runtime. Invalidates the running-models list so the ejected entry disappears.
+// Ejects a running model from the llama.cpp runtime, returning what the eject actually did (AUD4-20: ejected /
+// timed_out_still_busy / forced / not_running) so the page can surface a distinct outcome toast. Invalidates the
+// running-models list so an ejected entry disappears.
 export function useEjectRunningModel() {
 	const queryClient = useQueryClient();
 
-	return useMutation({
+	return useMutation<EjectRunningModelResult, Error, EjectRunningModelVariables>({
 		mutationFn: async (variables: EjectRunningModelVariables) => {
 			const options = withResponseValidation(ejectRunningModelMutation());
-			return await options.mutationFn?.({ body: { ...variables } }, undefined as never);
+			const response = await options.mutationFn?.({ body: { ...variables } }, undefined as never);
+			return toEjectRunningModelResult(response);
 		},
 		onSuccess: () => queryClient.invalidateQueries({ queryKey: runningModelsInvalidationKey() }),
 	});

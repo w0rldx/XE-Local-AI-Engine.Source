@@ -7,6 +7,7 @@ describe("toLoadedModelsSnapshot", () => {
 	it("maps an available snapshot with running models, coalescing optional fields", () => {
 		const snapshot = toLoadedModelsSnapshot({
 			isAvailable: true,
+			ollamaConfigured: true,
 			error: null,
 			items: [
 				{ modelName: "llama3.1:8b", sizeBytes: 8_589_934_592, sizeVramBytes: 4_294_967_296, expiresAtUtc: 1_700_000_000_000 },
@@ -16,6 +17,7 @@ describe("toLoadedModelsSnapshot", () => {
 		});
 
 		expect(snapshot.isAvailable).toBe(true);
+		expect(snapshot.ollamaConfigured).toBe(true);
 		expect(snapshot.error).toBeNull();
 		expect(snapshot.models).toHaveLength(2);
 		expect(snapshot.models[0]).toEqual({
@@ -29,15 +31,22 @@ describe("toLoadedModelsSnapshot", () => {
 	});
 
 	it("maps an unavailable snapshot to isAvailable:false with an empty model list and the sanitized error", () => {
-		const snapshot = toLoadedModelsSnapshot({ isAvailable: false, error: "Provider unreachable", items: [] });
+		const snapshot = toLoadedModelsSnapshot({ isAvailable: false, ollamaConfigured: true, error: "Provider unreachable", items: [] });
 
 		expect(snapshot.isAvailable).toBe(false);
+		expect(snapshot.ollamaConfigured).toBe(true);
 		expect(snapshot.error).toBe("Provider unreachable");
 		expect(snapshot.models).toEqual([]);
 	});
 
-	it("defaults every field defensively when the wire omits them", () => {
-		const snapshot = toLoadedModelsSnapshot({ isAvailable: false, items: [] });
+	it("surfaces ollamaConfigured:false so the page can stop polling an off runtime (AUD4-20)", () => {
+		const snapshot = toLoadedModelsSnapshot({ isAvailable: false, ollamaConfigured: false, error: null, items: [] });
+
+		expect(snapshot.ollamaConfigured).toBe(false);
+	});
+
+	it("defaults the optional error/model fields defensively when the wire omits them", () => {
+		const snapshot = toLoadedModelsSnapshot({ isAvailable: false, ollamaConfigured: true, items: [] });
 
 		expect(snapshot.isAvailable).toBe(false);
 		expect(snapshot.error).toBeNull();
@@ -45,7 +54,7 @@ describe("toLoadedModelsSnapshot", () => {
 	});
 
 	it("coalesces a missing modelName to an empty string so the row stays renderable", () => {
-		const snapshot = toLoadedModelsSnapshot({ isAvailable: true, items: [{ modelName: "" }] });
+		const snapshot = toLoadedModelsSnapshot({ isAvailable: true, ollamaConfigured: true, items: [{ modelName: "" }] });
 
 		expect(snapshot.models[0]).toEqual({ modelName: "", sizeBytes: null, sizeVramBytes: null, expiresAtUtc: null });
 	});

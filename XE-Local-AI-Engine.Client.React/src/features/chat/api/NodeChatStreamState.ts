@@ -23,6 +23,9 @@ export const nodeChatStreamEventTypes = {
 	assistantPending: "assistant-pending",
 	assistantQueued: "assistant-queued",
 	assistantStreaming: "assistant-streaming",
+	// A pre-first-token runtime-phase transition (AUD4-20). Never mutates content/status — it only carries the
+	// runtime phase forward so the UI can show a "Loading model…" indicator during a local cold load.
+	assistantPhase: "assistant-phase",
 	assistantDelta: "assistant-delta",
 	assistantCompleted: "assistant-completed",
 	assistantCancelled: "assistant-cancelled",
@@ -436,6 +439,31 @@ export function applyNodeChatStreamEvent(
 				parts: nextParts,
 				startedAt: current?.createdAt ?? isoFromUnixMilliseconds(event.occurredAtUtc),
 				isActive: true,
+				inputTokens: current?.inputTokens,
+				outputTokens: current?.outputTokens,
+				totalTokens: current?.totalTokens,
+				reasoningTokens: current?.reasoningTokens,
+			},
+			isTerminal: false,
+		};
+	}
+
+	// A pre-first-token runtime-phase transition (AUD4-20): carry the phase forward on the streaming state without
+	// touching content/status/parts, so the composer shows a "Loading model…" indicator during a local cold load.
+	// The phase clears naturally once the first content delta lands (the main path returns no runtimePhase).
+	if (event.type === nodeChatStreamEventTypes.assistantPhase) {
+		const current = conversation.messages.find((message) => message.id === event.messageId && message.role === "assistant");
+		return {
+			conversation,
+			streamingMessage: {
+				conversationId: event.conversationId,
+				messageId: event.messageId,
+				content: current?.content ?? "",
+				reasoning: current?.reasoning,
+				parts: current?.parts,
+				startedAt: current?.createdAt ?? isoFromUnixMilliseconds(event.occurredAtUtc),
+				isActive: true,
+				runtimePhase: event.runtimePhase ?? undefined,
 				inputTokens: current?.inputTokens,
 				outputTokens: current?.outputTokens,
 				totalTokens: current?.totalTokens,
