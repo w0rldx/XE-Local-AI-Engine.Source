@@ -1,6 +1,7 @@
 namespace XE_Local_AI_Engine.Client.Services.Agents.Implementation;
 
 using Microsoft.Extensions.Options;
+using XE_Local_AI_Engine.AI.Agent.Instructions;
 using XE_Local_AI_Engine.Client.Models;
 using XE_Local_AI_Engine.Client.Persistence;
 using XE_Local_AI_Engine.Client.Persistence.Stores;
@@ -19,6 +20,7 @@ internal sealed class OrchestrationResolver : IOrchestrationResolver
 {
     private const int MinimumCapableParticipants = 2;
     private const int DefaultMaxTurnsPerAgent = 8;
+    private readonly IAgentInstructionProvider _instructionProvider;
     private readonly ILocalToolOfferProvider _localToolOfferProvider;
     private readonly ILogger<OrchestrationResolver> _logger;
     private readonly IModelCapabilityResolver _modelCapabilityResolver;
@@ -36,6 +38,7 @@ internal sealed class OrchestrationResolver : IOrchestrationResolver
         IOptions<PlaybookRetrievalOptions> retrievalOptions,
         INodeRuntimeSettings runtimeSettings,
         IModelCapabilityResolver modelCapabilityResolver,
+        IAgentInstructionProvider instructionProvider,
         ILogger<OrchestrationResolver> logger)
     {
         _store = store ?? throw new ArgumentNullException(nameof(store));
@@ -46,6 +49,7 @@ internal sealed class OrchestrationResolver : IOrchestrationResolver
         _retrievalOptions = retrievalOptions.Value;
         _runtimeSettings = runtimeSettings ?? throw new ArgumentNullException(nameof(runtimeSettings));
         _modelCapabilityResolver = modelCapabilityResolver ?? throw new ArgumentNullException(nameof(modelCapabilityResolver));
+        _instructionProvider = instructionProvider ?? throw new ArgumentNullException(nameof(instructionProvider));
         _logger = logger ?? throw new ArgumentNullException(nameof(logger));
     }
 
@@ -208,7 +212,23 @@ internal sealed class OrchestrationResolver : IOrchestrationResolver
         return capable;
     }
 
+    /// <summary>
+    ///     Composes a participant's final system prompt exactly as <c>AgentDefinitionResolver.ComposePromptAsync</c>
+    ///     does for a single-agent send (GPTAUD-03a): the versioned base scaffold (identity/grounding/tool/output
+    ///     discipline), a blank line, then the persona prompt (its <see cref="AgentDefinitionRecord.Instructions" />
+    ///     with playbook memories folded in). A participant with <see cref="AgentDefinitionRecord.DisableBaseScaffold" />
+    ///     set — or the defensive blank-scaffold case — skips the prepend, keeping the prompt byte-identical to the
+    ///     persona-only path. Without this a participant ran with NO base scaffold, unlike every direct agent send.
+    /// </summary>
     private async Task<string> ComposeParticipantInstructionsAsync(AgentDefinitionRecord participant, string? retrievalQuery, CancellationToken cancellationToken)
+    {
+        var personaPrompt = await ComposeParticipantPersonaAsync(participant, retrievalQuery, cancellationToken).ConfigureAwait(false);
+        return participant.DisableBaseScaffold
+            ? personaPrompt
+            : BaseInstructionComposer.Compose(_instructionProvider.GetBaseScaffold(), personaPrompt);
+    }
+
+    private async Task<string> ComposeParticipantPersonaAsync(AgentDefinitionRecord participant, string? retrievalQuery, CancellationToken cancellationToken)
     {
         if (!participant.PlaybookEnabled)
         {
