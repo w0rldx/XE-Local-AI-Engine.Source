@@ -72,10 +72,12 @@ The supervisor owns the process; the deferred wrapper owns only the inner adapte
 
 `ILlamaServerProcessSupervisor` is the public contract; the implementation's ctor is **internal** (it takes internal launcher/health-probe seams). It is registered as a strict **singleton** — it owns every `llama-server` child for the node and disposes them on shutdown. The reaper loop starts in the ctor.
 
-Three contract members:
+Contract members:
 
-- `EnsureRunningAsync(modelName, role, ct)` → `LlamaServerEndpoint` (reuse-or-spawn).
-- `EvictAsync(modelName, role, ct)` — tree-kill if running, release its port, idempotent.
+- `EnsureRunningAsync(modelName, role, ct)` → `LlamaServerEndpoint` (reuse-or-spawn). The spawn/load runs **detached** from the caller's token (a shared per-key task under the shutdown token): a caller cancelling only abandons its wait; the load continues and the model becomes warm for the next send. Single-flight is preserved.
+- `EvictAsync(modelName, role, ct)` — **immediate** tree-kill if running, release its port, idempotent. Used internally (profiling exclusivity, provider unload); does NOT wait for in-flight work.
+- `EjectAsync(modelName, role, force, ct)` → `LlamaServerEjectOutcome` — the **operator** eject: mark evicting (no new leases), drain in-flight inference for a bounded `EjectDrainTimeout`, then tear down. Returns `Ejected` (idle/drained cleanly), `TimedOutStillBusy` (busy and not forced — **left running**, never killed silently), `ForcedWhileBusy` (`force:true` — killed anyway, run marked operator-ejected), or `NotRunning`.
+- `TryAcquireInferenceLease(modelName, role)` → `ILlamaServerInferenceLease?` — a per-request lease the chat client holds so a graceful eject waits for the turn; `WasEjected` lets an interrupted request classify a force-eject drop as operator-ejected rather than a generic failure.
 - `CheckHealthAsync(ct)` — aggregate every running process's health.
 
 **Keying.** Each distinct `(model, role)` is a distinct process (`ProcessKey`) and counts against the loaded-cap. A chat process launches with `--jinja`; an embedding process with `--embeddings --pooling mean`.
@@ -100,30 +102,34 @@ Three contract members:
 -m <modelFile> --host 127.0.0.1 --port <port>
   --parallel 1             # pinned on EVERY spawn (single-slot serving)
   --no-warmup              # pinned on EVERY spawn (skip empty-run warmup)
-  <GPU placement args>     # non-CPU variant only — see AppendGpuPlacementArgs below
+  <context/placement/thread args>   # from the launch policy — see below
   --jinja                  # ModelRole.Chat
   --embeddings --pooling mean  # ModelRole.Embedding
+  --rerank --pooling rank      # ModelRole.Reranker
 ```
 
-Two flags are now pinned on **every** spawn (`:466,473`; commit 2665d965):
+Two flags are pinned on **every** spawn:
 
 - **`--parallel 1`** forces single-slot serving. Without it `llama-server` auto-selects `n_parallel=4`, which reserves 4× the KV cache and starves the auto-fit weight offload — a model that would fit on the GPU spills weights to system RAM for KV slots it never uses and runs slow on the CPU.
 - **`--no-warmup`** skips the empty-run warmup (45–110 s on a large model) that would otherwise overrun the readiness budget and tree-kill the half-ready process in a respawn loop (observed as a chat inter-chunk stall and an explore "did not become ready in time").
 
-**GPU placement is no longer forced — the old `--n-gpu-layers 999` is gone** (`:477`). For a non-CPU variant `AppendGpuPlacementArgs` (`:508`) emits one of two **mutually exclusive** arg sets supplied by the profile resolver (`ResolvedLaunchArguments`):
+**Context, KV/flash-attention, and CPU threads now come from a central launch policy** (`LlamaServerLaunchPolicy` + `LlamaServerLaunchPolicyOptions`, AUD4-02/05/17). `BuildLaunchSpec` takes a `LlamaServerLaunchPlan` the policy produced (a **null** plan for operator profiling = no policy interference). Precedence, highest first: **frozen inference profile replayed verbatim** (never overridden) > per-send/user config > role defaults. Emission by variant + explore/replay mode:
 
-- **Explore mode** — `--fit on --metrics`: lets llama.cpp's own `--fit` auto-fit choose layer/expert placement and print the chosen params for capture (the `--metrics` gauges feed the benchmark). Any *explicit* fit-arg would disable auto-fit, so explore emits none.
-- **Replay mode** — the frozen/explored profile's explicit args verbatim: `-c <ctx>` plus `-ngl/-ts/-ot` and matched KV-cache types (`-ctk/-ctv` with `--flash-attn on`). `--fit` is intentionally absent (an explicit fit-arg disables it).
+- **GPU explore** — `--fit on --metrics` (auto-fit chooses layer/expert placement and prints it for capture) **plus** the policy's deterministic `-c <ctx>` (auto-fit respects an explicit `-c` and fits ngl/batch around it) **plus** the KV-cache quant + flash attention optimization `-fa on -ctk q8_0 -ctv q8_0`. `-c`/`-fa`/`-ctk`/`-ctv` are not *placement* flags, so `--fit` stays active.
+- **GPU replay** — the frozen/explored profile's explicit args verbatim: `-c <ctx>` plus `-ngl/-ts/-ot` and matched `-ctk/-ctv` with `--flash-attn on`. `--fit` is intentionally absent (an explicit placement flag disables it). The policy leaves context/KV to the profile.
+- **CPU** — `-c <ctx>` (deterministic; previously the CPU variant emitted **no** `-c` ⇒ full-train-ctx KV in RAM) **plus** the CPU thread policy `-t`/`-tb` (physical-core estimate minus a host reserve). **No** `--fit`/`--metrics`/`-ngl`/`-ctk` — a frozen GPU profile does not transfer to a CPU spawn, and KV stays f16 / flash-attention auto.
 
-The CPU variant stays a pure CPU run and emits **no** GPU/fit args. The **`--host 127.0.0.1`** localhost-only bind is unchanged. See [§2.5 Inference profiles / per-machine tuning](#25-inference-profiles--per-machine-tuning) for where `resolved` comes from.
+Context defaults: chat **16384**, embedding/reranker **2048**, capped to the model's GGUF train context (minus a small safety margin) when known. **KV-quant one-shot fallback:** if the optimized GPU spawn can't reach readiness, the supervisor retries once with the safe config (no `-ctk/-ctv`, `-fa auto`) and — only when the safe retry succeeds — records the fallback per backend in `llama-launch-fallback.json` (`ILlamaServerLaunchFallbackStore`) so later spawns skip the known-bad config. The **`--host 127.0.0.1`** localhost-only bind is unchanged. See [§2.5 Inference profiles / per-machine tuning](#25-inference-profiles--per-machine-tuning) for where the frozen `resolved` args come from.
 
 ### Health probe — readiness vs liveness
 
-`LlamaServerHealthProbe` (impl of `ILlamaServerHealthProbe`) polls the `llama-server` **`/health`** endpoint over HTTP (`/health` is a sibling of the `/v1` base). `WaitForReadyAsync` polls every 250 ms until a 200 or the readiness deadline — connection-refused during warm-up is normal and retried. `CheckResponsiveAsync` is a single probe used by health aggregation.
+`LlamaServerHealthProbe` (impl of `ILlamaServerHealthProbe`) polls the `llama-server` **`/health`** endpoint over HTTP (`/health` is a sibling of the `/v1` base). `WaitForReadyAsync` polls every 250 ms until a 200 or the readiness deadline — connection-refused during warm-up is normal and retried. `CheckResponsiveAsync` is a single probe used by health aggregation. The readiness deadline is **size-aware** (`LlamaServerSupervisorOptions.ResolveReadinessTimeout(bytes)` — base + per-GiB extension above a threshold, capped), not a fixed constant, so a large model gets proportionally longer to load. The probe runs on a **dedicated, resilience-free `HttpClient`** with a ~1 s per-attempt bound: routing it through the app's `IHttpClientFactory` inherited the standard resilience handler's exponential retries and detected readiness up to ~5 s late.
+
+`TryReadEffectiveContextTokensAsync` (AUD4-02) reads the server's **`/props`** `default_generation_settings.n_ctx` once after readiness — the effective per-slot context window the server actually loaded (the launched `-c` as clamped). The supervisor stores it on the running process; `GetRuntimeInfo(model, role)` / `ILocalModelProvider.GetRuntimeInfoAsync` expose it so the invocation runner can size **both** context budgeters (outer `TurnPolicy.ContextCapacityTokens` and inner `num_ctx`) against the real window, and the chat context-usage meter can show it (`LocalModelDetailsResponse.EffectiveContextTokens`). Best-effort — a `/props` failure just leaves the effective context unknown (the app falls back to its default window).
 
 ### Eviction & reaper
 
-- `LlamaServerSupervisorOptions`: `MaxLoadedProcesses`, `IdleTimeToLive` (default **15 min**), `PortRangeStart`/`PortRangeEnd`, `MaxRestartAttempts`. The host overrides these from node config (`AddNodeModelRuntimeExtensions.BuildSeededLlamaServerSupervisorOptions`).
+- `LlamaServerSupervisorOptions`: `MaxLoadedProcesses`, `IdleTimeToLive` (default **15 min**), `PortRangeStart`/`PortRangeEnd`, `MaxRestartAttempts`, plus the Audit-4 readiness/eject knobs — `ReadinessBaseTimeout` (default 120 s), `ReadinessTimeoutModelSizeThresholdGiB`/`ReadinessTimeoutSecondsPerGiB`/`ReadinessTimeoutCap` (size-aware deadline), `MaxReadinessTimeoutRetries` (default 1 — a readiness timeout is retried at most this many times, NOT `MaxRestartAttempts`), and `EjectDrainTimeout` (bounded graceful-eject drain). `Validate()` fails fast on structurally invalid values. The host overrides cap/TTL/launch-flag knobs from node config (`AddNodeModelRuntimeExtensions.BuildSeededLlamaServerSupervisorOptions`).
 - `ReapIdleLoopAsync` runs on a background loop (interval = TTL/4, min 1 s) and evicts processes idle beyond `IdleTimeToLive` or already exited.
 - `TryEvictIdleLeastRecentlyUsed` runs synchronously under the admission gate to free a slot for a new admission — it never evicts an in-window process.
 
@@ -190,6 +196,10 @@ llama.cpp launch args used to be hard-coded (the forced `-ngl 999`). They are no
 **Machine key.** `IMachineKeyProvider` → `MachineKeyProvider` (`Services/Inference/MachineKeyProvider.cs`) reads/mints a per-box GUID (`"N"` format) persisted in node settings (generate-once is gated so two concurrent first-callers can't mint two keys). Profiles are keyed to this machine key and are **local-only** — the key is never emitted in telemetry, aggregates, logs, or the transport view (`InferenceProfileView` deliberately omits it). This is what lets a profile re-explore when the box, build, or free-VRAM baseline changes rather than blindly replaying stale args.
 
 **Live free-VRAM probe.** `IAvailableVramProbe` → `LlamaListDevicesVramProbe` (`Providers.LlamaServer/Implementation/LlamaListDevicesVramProbe.cs`) runs a short-lived `llama-server --list-devices` (15 s cap, tree-killed on overrun), parses the per-device `"<total> MiB, <free> MiB free"` column and returns the **largest free** figure in bytes. It is vendor-agnostic — it reads llama.cpp's own device report (CUDA / Vulkan / SYCL), never `nvidia-smi`, so one code path serves every GPU backend. **Degrade, never throw:** a CPU/unknown/blank backend (no process is even spawned), an empty device list, a timeout, or any failure degrades to `null` ("unknown"). This figure feeds profile invalidation and the GGUF variant recommender ([07-model-fit.md](07-model-fit.md)). Distinct from `HardwareProfiler`'s static VRAM probe (§3) — this one measures *currently free* VRAM at spawn time.
+
+**Device audit (AUD4-03).** A sibling probe, `ILlamaDeviceInventoryProbe` → `LlamaDeviceInventoryProbe`, runs the same `--list-devices` (via the shared `LlamaListDevicesProcessRunner`) but returns the **structured device list** `{variant, devices[], probeSucceeded}` cached per binary (path+mtime). The Application-layer `IRuntimeDeviceAudit` → `RuntimeDeviceAuditService` composes it with the hardware profile + the selected variant into `RuntimeDeviceAuditState {inferenceBackend, gpuExpected, cpuFallback, reason, remediation}`: a GPU box whose selected runtime enumerates **zero** devices (or a CPU variant on a GPU box) is a **silent CPU fallback** — the audited WSL2-Vulkan-no-ICD case. An indeterminate probe is "unknown", never a false alarm. `GetEffectiveProfileAsync` degrades the profile to CPU-mode on fallback so the advisor ([07-model-fit.md](07-model-fit.md)) and `CapacityService` size against RAM; the `GET model-fit/hardware-profile` endpoint returns the raw profile PLUS this audit block; a `device_fallback` metric + a Warning fire once per binary.
+
+**GPU-load admission (AUD4-06).** `IGpuModelLoadAdmission` (Abstractions interface + `NoOp` floor; real `GpuModelLoadAdmission` in Application, one singleton) is a process-wide `SemaphoreSlim(1,1)` that serializes the **spawn-through-readiness** window of GPU-backed loads across BOTH this supervisor and the image supervisor ([14-image-generation.md](14-image-generation.md)), so two `--fit` loads never race the same free-VRAM read. It is acquired inside `SpawnCoreAsync` after variant selection, **GPU variants only** (CPU bypasses; reuse never touches it), released on ready/failure via `using`, and the acquire runs under the detached-spawn token so a cancelled caller never holds it. A bounded max-wait surfaces a typed `GpuModelLoadAdmissionTimeoutException` (non-retryable) rather than hanging. Lock ordering: the capacity ledger decision gate is released before the load gate is acquired (they never nest).
 
 **MoE detection.** `IGgufMetadataReader` surfaces `IsMoe` / `ExpertCount` from the GGUF header (a positive declared expert count ⇒ MoE), carried onto the persisted profile so the operator orchestrator and UI can reason about expert placement (`-ot` override-tensor) for mixture-of-experts models.
 

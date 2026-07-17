@@ -131,6 +131,14 @@ public sealed class LocalModelDetailsResponse
 
     public int? MaxContextTokens { get; init; }
 
+    /// <summary>
+    ///     The effective context window (in tokens) the RUNNING llama.cpp process for this model actually loaded — the
+    ///     launched <c>-c</c> as the server reports it via <c>/props</c> (AUD4-02). Null when no chat process is running
+    ///     for the model or the runtime does not expose it. Distinct from <see cref="MaxContextTokens" /> (the model's
+    ///     advertised train ceiling): the chat context-usage meter should size against this real window when present.
+    /// </summary>
+    public int? EffectiveContextTokens { get; init; }
+
     public string? Template { get; init; }
 
     public string? System { get; init; }
@@ -158,6 +166,14 @@ public sealed class DeleteLocalModelResponse
 public sealed class RunningLocalModelsResponse
 {
     public required bool IsAvailable { get; init; }
+
+    /// <summary>
+    ///     Whether the optional Ollama runtime is configured/enabled on this node (the <c>XE_OLLAMA_RUNTIME_ENABLED</c>
+    ///     gate). When false the client can stop polling this endpoint entirely — no Ollama daemon will ever answer — so
+    ///     it never backs off forever against a runtime that is switched off. Distinct from <see cref="IsAvailable" />,
+    ///     which reflects whether a configured daemon is currently reachable.
+    /// </summary>
+    public required bool OllamaConfigured { get; init; }
 
     public string? Error { get; init; }
 

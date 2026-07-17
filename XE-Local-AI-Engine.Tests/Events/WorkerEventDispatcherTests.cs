@@ -309,6 +309,55 @@ public sealed class WorkerEventDispatcherTests
     }
 
     [Test]
+    public async Task StopAcceptingRemoteInvocations_AbandonsAnAssignmentBlockedOnTheInvocationSlot()
+    {
+        // AUD4-18: a second remote assignment BLOCKED waiting for the invocation slot (held by a running one) must be
+        // released by the drain instead of hanging forever on the previously-uncancelable slot wait — and it must never
+        // start. The already-running first assignment is unaffected.
+        var runner = Substitute.For<IInvocationRunner>();
+        var firstEntered = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var firstGate = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var first = RuntimePackageBuilder.Valid().WithInvocationId(Guid.NewGuid()).Build();
+        var second = RuntimePackageBuilder.Valid().WithInvocationId(Guid.NewGuid()).Build();
+
+        runner.RunAsync(Arg.Is<InvocationExecutionContext>(context => context.Package.InvocationId == first.InvocationId), Arg.Any<CancellationToken>())
+              .Returns(_ =>
+              {
+                  firstEntered.TrySetResult();
+                  return firstGate.Task;
+              });
+
+        var dispatcher = CreateDispatcher(runner);
+
+        var firstDispatch = dispatcher.DispatchInvocationAssignedV2Async(new InvocationAssignedEnvelope
+        {
+            StorageMode = "PlainSync",
+            Plain = first,
+            Encrypted = null
+        });
+        await firstEntered.Task.WaitAsync(TimeSpan.FromSeconds(5));
+
+        // The second assignment passes the accept-guard, then blocks on the slot the running first assignment holds.
+        var secondDispatch = dispatcher.DispatchInvocationAssignedV2Async(new InvocationAssignedEnvelope
+        {
+            StorageMode = "PlainSync",
+            Plain = second,
+            Encrypted = null
+        });
+        await Task.Delay(TimeSpan.FromMilliseconds(150));
+
+        dispatcher.StopAcceptingRemoteInvocations();
+
+        // The blocked second assignment is released (does not hang) and never runs; the first is still running.
+        await secondDispatch.WaitAsync(TimeSpan.FromSeconds(5));
+        await runner.DidNotReceive().RunAsync(Arg.Is<InvocationExecutionContext>(context => context.Package.InvocationId == second.InvocationId), Arg.Any<CancellationToken>());
+
+        firstGate.SetResult();
+        await firstDispatch;
+        await runner.Received(1).RunAsync(Arg.Is<InvocationExecutionContext>(context => context.Package.InvocationId == first.InvocationId), Arg.Any<CancellationToken>());
+    }
+
+    [Test]
     public async Task ReportInvocationThinkingChunkAsync_AccumulatesThinkingContentSeparately()
     {
         var runner = Substitute.For<IInvocationRunner>();
@@ -326,6 +375,42 @@ public sealed class WorkerEventDispatcherTests
         AssertEx.Equal(expected: 2, current.StreamedThinkingChunkCount);
         AssertEx.Equal("Hello world", current.StreamedContent);
         AssertEx.Equal(expected: 2, current.StreamedChunkCount);
+    }
+
+    [Test]
+    public async Task ReportInvocationStreamChunkAsync_LongResponse_KeepsContentCorrectWithBoundedAllocations()
+    {
+        // AUD4-10: every streamed chunk clones the invocation snapshot. Content is now backed by an immutable
+        // StreamingText copied by REFERENCE on clone, so a clone no longer materializes the whole accumulated response
+        // per chunk (the old O(n^2) hot path). Assert (a) the final content is exactly the concatenation and (b)
+        // streaming 20k chunks stays far below the allocation the old per-chunk ToString would have cost.
+        var dispatcher = CreateDispatcher(Substitute.For<IInvocationRunner>());
+        var package = RuntimePackageBuilder.Valid().Build();
+        await dispatcher.ReportInvocationAssignedAsync(package);
+
+        const int chunkCount = 20_000;
+        const string chunk = "0123456789"; // 10 chars/chunk -> a ~200k-char final response
+
+        // Warm up the JIT and the first-chunk allocations outside the measured window.
+        await dispatcher.ReportInvocationStreamChunkAsync(package.InvocationId, chunk);
+
+        var before = GC.GetAllocatedBytesForCurrentThread();
+        for (var i = 0; i < chunkCount; i++)
+        {
+            await dispatcher.ReportInvocationStreamChunkAsync(package.InvocationId, chunk);
+        }
+
+        var allocatedBytes = GC.GetAllocatedBytesForCurrentThread() - before;
+
+        // Correctness read happens AFTER measuring so the one-time final materialization is not counted against the bound.
+        var current = AssertEx.NotNull(dispatcher.CurrentInvocation);
+        AssertEx.Equal((chunkCount + 1) * chunk.Length, current.StreamedContent.Length);
+        AssertEx.Equal(chunkCount + 1, current.StreamedChunkCount);
+
+        // The old clone materialized ~i*10 chars on chunk i -> ~sum(i)*10*2 bytes ~= 4 GB over 20k chunks. The immutable
+        // accumulator makes per-chunk clone work O(1); assert well under a ceiling the O(n^2) path could never meet.
+        AssertEx.True(allocatedBytes < 64L * 1024 * 1024,
+            $"Streaming {chunkCount:N0} chunks allocated {allocatedBytes:N0} bytes; expected < 64 MiB (the old O(n^2) clone would allocate multiple GB).");
     }
 
     [Test]

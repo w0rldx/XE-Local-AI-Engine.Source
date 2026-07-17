@@ -87,6 +87,19 @@ public static class QuantLadder
     }
 
     /// <summary>
+    ///     <see langword="true" /> when <paramref name="quant" /> is a native, non-requantizable GGUF format. Today that is
+    ///     MXFP4 (gpt-oss ships its MoE weights natively at ~4.25 bits/weight): re-quantizing such a model UP to a higher
+    ///     nominal quant (Q6/Q8/…) only wastes space without adding quality — the weights are already at their trained
+    ///     precision — so the advisor must never prefer a higher-quality requant over the native file. The advisor uses
+    ///     this to cap the recommendable quality of a repo that ships a native format at the native file itself.
+    /// </summary>
+    public static bool IsNativeFormat(string quant)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(quant);
+        return string.Equals(Normalize(quant), "MXFP4", StringComparison.OrdinalIgnoreCase);
+    }
+
+    /// <summary>
     ///     The coarse <see cref="GgufQuantTier" /> of <paramref name="quant" /> when it is a known rung (Unsloth Dynamic
     ///     tokens priced off their stripped base), or <see langword="null" /> when the token is off-ladder so the caller
     ///     (<see cref="GgufQuantQuality" />) applies its own family rules.

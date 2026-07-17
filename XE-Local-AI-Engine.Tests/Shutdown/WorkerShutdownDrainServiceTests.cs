@@ -311,6 +311,11 @@ public sealed class WorkerShutdownDrainServiceTests
             return Task.CompletedTask;
         }
 
+        public Task ReportInvocationPhaseAsync(Guid invocationId, InvocationRuntimePhase phase)
+        {
+            return Task.CompletedTask;
+        }
+
         public Task ReportInvocationCompletedAsync(Guid invocationId, int? inputTokens = null, int? outputTokens = null, int? totalTokens = null, int? reasoningTokens = null,
             long? generationDurationMs = null)
         {

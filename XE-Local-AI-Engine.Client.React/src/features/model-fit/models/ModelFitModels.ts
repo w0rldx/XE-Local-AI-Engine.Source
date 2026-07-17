@@ -125,6 +125,14 @@ export interface HardwareProfile {
 	readonly gpuAccelAvailable: boolean;
 	readonly cpuCores: number;
 	readonly freeDiskBytes: number;
+	// Runtime device audit (AUD4-03): the SELECTED inference backend, whether a GPU was expected for it, and whether it
+	// silently fell back to the CPU (a GPU box whose runtime cannot use the GPU). When cpuFallback is true the reason +
+	// remediation carry the actionable "why + what to do" the CPU-fallback alert surfaces.
+	readonly inferenceBackend: string;
+	readonly gpuExpected: boolean;
+	readonly cpuFallback: boolean;
+	readonly cpuFallbackReason: string | null;
+	readonly cpuFallbackRemediation: string | null;
 }
 
 // Reserved scheduler template id the refresh-now action fires. The refresh endpoint triggers an EXISTING

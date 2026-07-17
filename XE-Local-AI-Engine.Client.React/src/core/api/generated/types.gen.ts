@@ -564,11 +564,13 @@ export type XeLocalAiEngineClientEndpointsModelFitV1CancelGgufDownloadRequest = 
 export type XeLocalAiEngineClientEndpointsModelFitV1EjectRunningModelResponse = {
 	modelName: string;
 	role: string;
+	outcome: string;
 };
 
 export type XeLocalAiEngineClientEndpointsModelFitV1EjectRunningModelRequest = {
 	modelName: string;
 	role?: string | null;
+	force?: boolean;
 };
 
 export type XeLocalAiEngineClientEndpointsModelFitV1LlamaCppVersionResponse = {
@@ -631,6 +633,11 @@ export type XeLocalAiEngineClientEndpointsModelFitV1HardwareProfileResponse = {
 	gpuAccelAvailable: boolean;
 	cpuCores: number;
 	freeDiskBytes: number;
+	inferenceBackend?: string;
+	gpuExpected?: boolean;
+	cpuFallback?: boolean;
+	cpuFallbackReason?: string | null;
+	cpuFallbackRemediation?: string | null;
 };
 
 export type XeLocalAiEngineClientEndpointsModelFitV1GetHardwareProfileRequest = {
@@ -906,6 +913,7 @@ export type XeLocalAiEngineClientEndpointsLocalModelsV1ResetModelKindRequest = {
 export type XeLocalAiEngineClientEndpointsLocalModelsV1LocalModelDetailsResponse = {
 	modelName: string;
 	maxContextTokens?: number | null;
+	effectiveContextTokens?: number | null;
 	template?: string | null;
 	system?: string | null;
 	license?: string | null;
@@ -917,6 +925,7 @@ export type XeLocalAiEngineClientEndpointsLocalModelsV1GetLocalModelDetailsReque
 
 export type XeLocalAiEngineClientEndpointsLocalModelsV1RunningLocalModelsResponse = {
 	isAvailable: boolean;
+	ollamaConfigured: boolean;
 	error?: string | null;
 	items: Array<XeLocalAiEngineClientEndpointsLocalModelsV1RunningLocalModelResponse>;
 };
@@ -1291,6 +1300,7 @@ export type XeLocalAiEngineClientEndpointsInvocationsV1InvocationCurrentResponse
 	streamedThinkingChunkCount: number;
 	pendingToolCallCount: number;
 	hasPendingApproval: boolean;
+	traceId?: string | null;
 };
 
 export type XeLocalAiEngineAiContractsEnumsInvocationStatus =
@@ -1327,6 +1337,7 @@ export type XeLocalAiEngineClientEndpointsInvocationsV1InvocationHistoryResponse
 	failureCategory?: XeLocalAiEngineClientModelsEnumsFailureCategory | null;
 	streamedChunkCount: number;
 	streamedThinkingChunkCount: number;
+	traceId?: string | null;
 };
 
 export type XeLocalAiEngineClientEndpointsImagesV1ImageJobRouteRequest = {

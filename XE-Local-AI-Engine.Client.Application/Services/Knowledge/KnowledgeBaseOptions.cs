@@ -80,6 +80,19 @@ public sealed class KnowledgeBaseOptions
     /// </summary>
     public int MaxEmbeddingBatchSize { get; set; } = 64;
 
+    /// <summary>
+    ///     Hard upper bound on the number of query embeddings held in the RAM-only query-embedding cache. Bounded so a
+    ///     long-lived process cannot grow the cache without limit; keyed by (resolved model, query hash) so a model swap
+    ///     never returns a stale cross-model vector. Default 128; a value of 0 or less still clamps to 1.
+    /// </summary>
+    public int QueryEmbeddingCacheMaxEntries { get; set; } = 128;
+
+    /// <summary>
+    ///     Time-to-live (seconds) for a cached query embedding. A repeated query within this window skips the embedding
+    ///     round trip (the dominant retrieval latency). Default 300s; 0 disables the cache (every query is re-embedded).
+    /// </summary>
+    public int QueryEmbeddingCacheTtlSeconds { get; set; } = 300;
+
     /// <summary>Upper bound on the plaintext length of a single chunk (characters), before overlap.</summary>
     public int MaxChunkChars { get; set; } = 2000;
 

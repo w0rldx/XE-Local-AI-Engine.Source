@@ -45,6 +45,139 @@ public static class NodeMetrics
         Meter.CreateCounter<long>("invocation_failed_total",
             description: "Number of failed invocations by failure source.");
 
+    /// <summary>
+    ///     Incremented each time a model-invoked MCP tool call exceeds its per-call
+    ///     <c>Mcp:ToolCallTimeoutSeconds</c> deadline and is cancelled, returning a typed tool-failure result to the model
+    ///     (the run continues; the call is never retried). A non-zero rate flags a slow or wedged MCP server. Content-free
+    ///     — a count only; carries no tool name or arguments.
+    /// </summary>
+    public static readonly Counter<long> McpToolTimeoutTotal =
+        Meter.CreateCounter<long>("mcp_tool_timeout_total",
+            description: "Number of MCP tool calls cancelled after exceeding their per-call timeout.");
+
+    /// <summary>
+    ///     Incremented each time a Hugging Face model download's body-copy loop stalls longer than the configured
+    ///     read-idle timeout and is cancelled (surfaced as a transient failure the resume/retry path re-attempts). A
+    ///     non-zero rate flags a CDN that accepts the connection and then stops sending data mid-body. Content-free — a
+    ///     count only; carries no URL, repo, or file name. Bridged from the Providers.HuggingFace layer via
+    ///     <c>IHfDownloadMetrics</c> (which cannot reference this meter).
+    /// </summary>
+    public static readonly Counter<long> DownloadReadTimeoutTotal =
+        Meter.CreateCounter<long>("download_read_timeout_total",
+            description: "Number of Hugging Face download body reads cancelled after exceeding the read-idle timeout.");
+
+    /// <summary>
+    ///     Incremented each time a native hardware probe (e.g. <c>nvidia-smi</c>) exceeds its wall-clock deadline and is
+    ///     killed (process tree). A non-zero rate flags a wedged GPU driver / stalled tool that would otherwise hang
+    ///     first-run provisioning or a capacity decision; the profiler degrades to the last cached profile or the CPU
+    ///     default. Labels: probe (the probe tool name).
+    /// </summary>
+    public static readonly Counter<long> HardwareProbeTimeoutTotal =
+        Meter.CreateCounter<long>("hardware_probe_timeout_total",
+            description: "Number of native hardware probes killed after exceeding their wall-clock deadline, by probe.");
+
+    /// <summary>
+    ///     Incremented when a node SQLite operation surfaces write contention that outlived <c>busy_timeout</c>
+    ///     (SQLITE_BUSY / SQLITE_LOCKED). A non-zero value signals real contention on the shared database file — under
+    ///     WAL + busy_timeout this should be rare. Labels: code (busy | locked), path (ef | raw). Bounded cardinality —
+    ///     never carries SQL text.
+    /// </summary>
+    public static readonly Counter<long> SqliteBusyTotal =
+        Meter.CreateCounter<long>("sqlite_busy_total",
+            description: "Number of node SQLite operations that failed with SQLITE_BUSY/SQLITE_LOCKED after the busy timeout, by code and path.");
+
+    /// <summary>
+    ///     Wall-clock duration (milliseconds) of the model-readiness (warm) phase that runs BEFORE the stream-idle
+    ///     watchdog is armed — the separated cold-load window. Tagged by <c>outcome</c> (ready | failed). A warm reuse is
+    ///     a small value; a genuine cold load is a large one, so the histogram shows how long readiness actually takes
+    ///     and whether it is being paid on the warm path by mistake. Content-free (a duration only).
+    /// </summary>
+    public static readonly Histogram<double> ModelReadinessDurationMs =
+        Meter.CreateHistogram<double>("model_readiness_duration_ms",
+            unit: "ms",
+            description: "Duration of the pre-stream model-readiness (warm) phase, tagged by outcome (ready | failed).");
+
+    /// <summary>
+    ///     Incremented once per model-readiness (warm) phase. Labels: outcome (ready | failed). Paired with
+    ///     <see cref="ModelReadinessDurationMs" /> so a readiness-failure rate is observable without any model identity.
+    /// </summary>
+    public static readonly Counter<long> ModelReadinessTotal =
+        Meter.CreateCounter<long>("model_readiness_total",
+            description: "Number of pre-stream model-readiness (warm) phases by outcome (ready | failed).");
+
+    /// <summary>
+    ///     Incremented on each operator eject request and its result. Labels: outcome (requested | ejected |
+    ///     timed_out_still_busy | forced | not_running). The <c>requested</c> increment fires once per call; the result
+    ///     increment fires once with the terminal outcome, so accept/drain/timeout/force ratios are observable without
+    ///     any model identity.
+    /// </summary>
+    public static readonly Counter<long> ModelEjectTotal =
+        Meter.CreateCounter<long>("model_eject_total",
+            description: "Number of operator eject requests and outcomes (requested | ejected | timed_out_still_busy | forced | not_running).");
+
+    /// <summary>
+    ///     Incremented when the runtime device audit (AUD4-03) detects a silent CPU fallback: the host advertises a GPU
+    ///     but the SELECTED llama.cpp runtime cannot use it — a CPU variant was chosen on a GPU box, or a GPU variant
+    ///     enumerated zero devices (e.g. the shipped Vulkan build under WSL2 with no Vulkan ICD). Fires once per detection
+    ///     (the audit is cached per binary), so a non-zero value flags inference silently running on the CPU while the
+    ///     UI/advisor sized models to VRAM. Labels: reason (cpu_variant | zero_devices).
+    /// </summary>
+    public static readonly Counter<long> DeviceFallbackTotal =
+        Meter.CreateCounter<long>("device_fallback_total",
+            description: "Number of detected silent CPU fallbacks (GPU expected but the selected runtime runs on the CPU), by reason.");
+
+    /// <summary>
+    ///     Wall-clock duration (milliseconds) a GPU-backed model load waited to acquire the process-wide GPU-load
+    ///     admission gate (AUD4-06) before its spawn began. Near-zero under no contention; a large value means a load
+    ///     queued behind another load's spawn-through-readiness window. Content-free (a duration only).
+    /// </summary>
+    public static readonly Histogram<double> GpuModelLoadAdmissionWaitMs =
+        Meter.CreateHistogram<double>("gpu_admission_wait_ms",
+            unit: "ms",
+            description: "Time a GPU-backed model load waited for the process-wide GPU-load admission gate before spawning.");
+
+    /// <summary>
+    ///     Incremented when a GPU-load admission wait exceeded its bounded max-wait and surfaced a typed timeout rather
+    ///     than hanging a chat turn (AUD4-06). A non-zero value flags a wedged load holding the gate past the backstop.
+    ///     Content-free — a count only.
+    /// </summary>
+    public static readonly Counter<long> GpuModelLoadAdmissionTimeoutTotal =
+        Meter.CreateCounter<long>("gpu_admission_timeout_total",
+            description: "Number of GPU-load admission waits that exceeded the bounded max-wait and surfaced a typed timeout.");
+
+
+    /// <summary>
+    ///     Wall-clock latency (milliseconds) from the start of an invocation turn to the moment the local model load
+    ///     begins — the audited "silent pre-spawn gap" (AUD4-23: a first-ever send stalled ~7.8 s here with no log). Only
+    ///     recorded for a local llama.cpp turn (the one that pays a cold load); cloud/Ollama turns never reach the warm
+    ///     phase. Tagged by <c>provider</c> (local). Content-free (a duration only).
+    /// </summary>
+    public static readonly Histogram<double> TurnToModelLoadStartMs =
+        Meter.CreateHistogram<double>("turn_to_model_load_start_ms",
+            unit: "ms",
+            description: "Latency from invocation-turn start to the local model load beginning, by provider.");
+
+    /// <summary>
+    ///     Wall-clock latency (milliseconds) from the model becoming READY (the local warm phase finished, or turn start
+    ///     for a runtime with no cold-load) to the FIRST streamed output chunk — time-to-first-token. Tagged by
+    ///     <c>provider</c> (local | remote); <c>remote</c> covers cloud and non-warming local runtimes (Ollama), whose
+    ///     first-token latency is the provider's own rather than a local cold load. Content-free (a duration only).
+    /// </summary>
+    public static readonly Histogram<double> ModelReadyToFirstOutputMs =
+        Meter.CreateHistogram<double>("model_ready_to_first_output_ms",
+            unit: "ms",
+            description: "Time from model-ready to the first streamed output chunk (TTFT), by provider (local | remote).");
+
+    /// <summary>
+    ///     Incremented once per cancelled invocation, tagged by <c>category</c> — <c>user</c> (an explicit user cancel),
+    ///     <c>watchdog</c> (the invocation-level timeout fired), <c>operator_eject</c> (the model was force-ejected out
+    ///     from under the turn), or <c>shutdown</c> (host shutdown cancelled the run). Distinct from
+    ///     <see cref="InvocationFailedTotal" />, which deliberately EXCLUDES cancellations: a cancel is an outcome, not a
+    ///     failure, so it is counted here with its cause. Content-free (a count only), bounded cardinality.
+    /// </summary>
+    public static readonly Counter<long> InvocationCancelledTotal =
+        Meter.CreateCounter<long>("invocation_cancelled_total",
+            description: "Number of cancelled invocations by category (user | watchdog | operator_eject | shutdown).");
 
     /// <summary>
     ///     Incremented (by the abandoned count) when the memory-extraction worker abandons in-flight extraction job(s) at
@@ -83,6 +216,34 @@ public static class NodeMetrics
             description: "Per-stage duration of a knowledge-base retrieval by stage (fts | embed | vector | hydrate | rerank | expand).");
 
     /// <summary>
+    ///     Number of candidate chunk-vector rows scanned by one managed cosine vector search (content-free — a row count
+    ///     only). The search reads every stored vector for the resolved embedding model, so this is the brute-force fan-out
+    ///     the bounded top-k selection runs over; a rising distribution flags a corpus large enough to warrant an ANN index.
+    /// </summary>
+    public static readonly Histogram<long> KnowledgeVectorSearchCandidatesScanned =
+        Meter.CreateHistogram<long>("knowledge_vector_search_candidates_scanned",
+            unit: "rows",
+            description: "Number of stored chunk-vector rows scanned by one managed cosine vector search.");
+
+    /// <summary>
+    ///     Wall-clock duration (milliseconds) of one managed cosine vector search — the pure scan/score/select cost, measured
+    ///     inside the search itself (distinct from the service-observed <c>stage=vector</c> timing, which also spans the
+    ///     factory resolution and awaits around it).
+    /// </summary>
+    public static readonly Histogram<double> KnowledgeVectorSearchDurationMs =
+        Meter.CreateHistogram<double>("knowledge_vector_search_duration_ms",
+            unit: "ms",
+            description: "Duration of one managed cosine vector search (scan + score + bounded top-k selection).");
+
+    /// <summary>
+    ///     Knowledge-search query-embedding cache lookups, tagged by <c>result</c> (hit | miss). A high hit ratio means the
+    ///     dominant embedding round trip is being skipped for repeated queries. Content-free — a count only.
+    /// </summary>
+    public static readonly Counter<long> KnowledgeQueryEmbeddingCacheLookupsTotal =
+        Meter.CreateCounter<long>("knowledge_query_embedding_cache_lookups_total",
+            description: "Knowledge-search query-embedding cache lookups by result (hit | miss).");
+
+    /// <summary>
     ///     Registers the observable gauge that reports the current depth of the bounded knowledge-ingestion queue on the
     ///     shared <c>XE.Node</c> meter. The queue owner (the singleton dispatcher) supplies the live count callback and
     ///     holds the returned instrument for its lifetime. Kept as a factory (rather than a static instrument) because the
@@ -95,5 +256,27 @@ public static class NodeMetrics
             observeDepth,
             unit: "documents",
             description: "Current number of documents pending in the bounded knowledge-ingestion queue.");
+    }
+
+    /// <summary>
+    ///     Registers the observable gauges that report how many GPU-backed model loads are currently HOLDING the
+    ///     process-wide admission gate (0 or 1 — the gate is a serializer) and how many are WAITING behind it (AUD4-06).
+    ///     The gate singleton supplies the live count callbacks and holds the returned instruments for its lifetime.
+    /// </summary>
+    public static (ObservableGauge<long> Active, ObservableGauge<long> Waiting) CreateGpuModelLoadAdmissionGauges(
+        Func<long> observeActive,
+        Func<long> observeWaiting)
+    {
+        ArgumentNullException.ThrowIfNull(observeActive);
+        ArgumentNullException.ThrowIfNull(observeWaiting);
+        var active = Meter.CreateObservableGauge("gpu_admission_active",
+            observeActive,
+            unit: "loads",
+            description: "Number of GPU-backed model loads currently holding the admission gate (0 or 1).");
+        var waiting = Meter.CreateObservableGauge("gpu_admission_waiting",
+            observeWaiting,
+            unit: "loads",
+            description: "Number of GPU-backed model loads currently waiting for the admission gate.");
+        return (active, waiting);
     }
 }

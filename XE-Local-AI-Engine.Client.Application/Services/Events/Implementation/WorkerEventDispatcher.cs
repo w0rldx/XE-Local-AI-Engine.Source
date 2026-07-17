@@ -33,6 +33,15 @@ public sealed partial class WorkerEventDispatcher : IWorkerEventDispatcher
     private readonly SemaphoreSlim _remoteInvocationQueue = new(initialCount: 1, maxCount: 1);
     private readonly INodeChatRemotePersistenceCoordinator _remotePersistenceCoordinator;
     private readonly IRuntimePackageEnvelopeAssembler _runtimePackageEnvelopeAssembler;
+
+    // AUD4-18: cancelled when the worker stops accepting remote invocations (drain), so a remote assignment still
+    // BLOCKED on the invocation slot is abandoned instead of waiting forever — the previously uncancelable
+    // `_remoteInvocationQueue.WaitAsync()` on the two remote paths could hang a draining node indefinitely. A running
+    // invocation (past the wait) is unaffected: it runs under its own token, not this one.
+    [SuppressMessage("Sonar",
+        "S2930:\"IDisposables\" should be \"Dispose\"d",
+        Justification = "App-lifetime singleton (see the CA1001 suppression on the type). It is Cancel()-only — no CancelAfter timer and its WaitHandle is never accessed — so it holds no unmanaged resource to reclaim before process exit.")]
+    private readonly CancellationTokenSource _shutdownCts = new();
     private readonly Lock _syncRoot = new();
     private bool _isAcceptingRemoteInvocations = true;
 
@@ -59,10 +68,10 @@ public sealed partial class WorkerEventDispatcher : IWorkerEventDispatcher
 
     public event EventHandler<TurnNoticeChangedEventArgs>? TurnNoticeChanged;
 
-    // The live invocation, mutated in place only under _syncRoot. Off-lock consumers must not read its
-    // StreamedContent/StreamedThinkingContent (those getters materialize a StringBuilder that is unsafe against the
-    // concurrent streaming appends) — see IWorkerEventDispatcher.CurrentInvocation. Internal callers already hold
-    // _syncRoot when they touch it; GetCurrentInvocationSnapshot returns a locked clone for anyone who needs a copy.
+    // The live invocation, mutated in place only under _syncRoot. Its StreamedContent/StreamedThinkingContent now
+    // materialize from an immutable append-only accumulator, so an off-lock read is memory-safe (though it may observe a
+    // transient value mid-append) — see IWorkerEventDispatcher.CurrentInvocation. Internal callers already hold _syncRoot
+    // when they touch it; GetCurrentInvocationSnapshot returns a locked clone for anyone who needs a consistent copy.
     public InvocationState? CurrentInvocation { get; private set; }
 
     public bool IsAcceptingRemoteInvocations
@@ -88,6 +97,10 @@ public sealed partial class WorkerEventDispatcher : IWorkerEventDispatcher
             _isAcceptingRemoteInvocations = false;
         }
 
+        // Release any remote assignment still WAITING for the slot: at drain it must not start (it has not yet acquired
+        // the slot). Fired once (guarded by the flag transition above). Cancelled outside the lock so continuations do
+        // not run under it.
+        _shutdownCts.Cancel();
         _logger.LogInformation("WorkerEventDispatcher stopped accepting new remote invocation assignments for shutdown drain.");
     }
 
@@ -184,7 +197,15 @@ public sealed partial class WorkerEventDispatcher : IWorkerEventDispatcher
         using var invocationContext = context;
         var runtimePackage = context.Package;
 
-        await _remoteInvocationQueue.WaitAsync().ConfigureAwait(false);
+        try
+        {
+            await _remoteInvocationQueue.WaitAsync(_shutdownCts.Token).ConfigureAwait(false);
+        }
+        catch (OperationCanceledException)
+        {
+            _logger.LogInformation("Abandoning queued remote invocation {InvocationId}: the worker is draining for shutdown and will not start new queued work.", runtimePackage.InvocationId);
+            return;
+        }
 
         try
         {
@@ -440,6 +461,20 @@ public sealed partial class WorkerEventDispatcher : IWorkerEventDispatcher
         return Task.CompletedTask;
     }
 
+    public Task ReportInvocationPhaseAsync(Guid invocationId, InvocationRuntimePhase phase)
+    {
+        // The cold-load phases (PreparingRuntime/LoadingModel) fire BEFORE the stream-idle watchdog is armed, so a
+        // legitimate load is visible instead of an apparent hang. A no-op when the id is not the current invocation.
+        UpdateInvocation(invocationId,
+            state =>
+            {
+                state.RuntimePhase = phase;
+                return state;
+            });
+
+        return Task.CompletedTask;
+    }
+
     public Task ReportInvocationCompletedAsync(Guid invocationId, int? inputTokens = null, int? outputTokens = null, int? totalTokens = null, int? reasoningTokens = null,
         long? generationDurationMs = null)
     {
@@ -545,7 +580,15 @@ public sealed partial class WorkerEventDispatcher : IWorkerEventDispatcher
 
         using var context = InvocationExecutionContext.CreatePlain(package, Guid.Empty);
 
-        await _remoteInvocationQueue.WaitAsync().ConfigureAwait(false);
+        try
+        {
+            await _remoteInvocationQueue.WaitAsync(_shutdownCts.Token).ConfigureAwait(false);
+        }
+        catch (OperationCanceledException)
+        {
+            _logger.LogInformation("Abandoning queued remote invocation {InvocationId}: the worker is draining for shutdown and will not start new queued work.", package.InvocationId);
+            return;
+        }
 
         try
         {

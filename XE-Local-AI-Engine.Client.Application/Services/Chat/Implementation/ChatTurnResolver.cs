@@ -1,5 +1,7 @@
 namespace XE_Local_AI_Engine.Client.Services.Chat.Implementation;
 
+using System.Diagnostics;
+using XE_Local_AI_Engine.Client.Common.Telemetry;
 using XE_Local_AI_Engine.Client.Persistence;
 using XE_Local_AI_Engine.Client.Persistence.Stores;
 using XE_Local_AI_Engine.Client.Services.Agents;
@@ -44,7 +46,25 @@ public sealed class ChatTurnResolver(
         // default) so a plain chat still works without tripping the 400. Cache hit issues no /api/show call. The same
         // pass classifies provider LOCALITY (Codex / Azure Foundry = cloud) so the knowledge-tool provider-locality gate
         // reuses this per-turn resolution instead of adding its own hot-path lookup.
-        var (supportsThinking, supportsTools, activeModelIsCloud) = await ResolveModelCapabilitiesAsync(activeModel, cancellationToken).ConfigureAwait(false);
+        // AUD4-16: measure per-turn resolution cost so the before/after of the redundant-work removals (single agent-def
+        // read, cached provider resolution) is observable. Debug-level + timestamp-based, so it costs a long on the hot
+        // path when Debug logging is off. AUD4-23: the same stages are wrapped in coarse spans so the audited silent
+        // pre-spawn gap (a first send stalled here) shows up in exported traces, and the Debug log now breaks the total
+        // down per stage. No high-cardinality attributes: the spans carry no model names, prompts, or ids.
+        var resolveStartTimestamp = Stopwatch.GetTimestamp();
+        using var resolveActivity = NodeActivitySource.Source.StartActivity("chat.turn.resolve");
+
+        var capabilitiesStart = Stopwatch.GetTimestamp();
+        (bool SupportsThinking, bool SupportsTools, bool IsCloud) capabilities;
+        using (NodeActivitySource.Source.StartActivity("chat.turn.resolve_capabilities"))
+        {
+            capabilities = await ResolveModelCapabilitiesAsync(activeModel, cancellationToken).ConfigureAwait(false);
+        }
+
+        var supportsThinking = capabilities.SupportsThinking;
+        var supportsTools = capabilities.SupportsTools;
+        var activeModelIsCloud = capabilities.IsCloud;
+        var capabilitiesMs = Stopwatch.GetElapsedTime(capabilitiesStart).TotalMilliseconds;
 
         // Resolve the effective agent definition. A null result — no effective id (the seed is missing), or an id whose
         // definition was deleted — keeps the default persona: the embedded system prompt, the full capability-gated
@@ -52,14 +72,29 @@ public sealed class ChatTurnResolver(
         // the Default Assistant, intersected otherwise), the pinned model profile, the reasoning effort, the version
         // that feeds the config hash, AND the attribution snapshot (id + display name). The retrieval query is the
         // relevance-retrieval query (inert below the threshold / unbound, so the prompt stays byte-identical).
-        var resolved = await agentDefinitionResolver.ResolveAsync(effectiveAgentId, activeModel, retrievalQuery, supportsTools, honorModelProfile: !userPickedConcreteModel, activeModelIsCloud, cancellationToken)
+        var agentStart = Stopwatch.GetTimestamp();
+        ResolvedAgentRuntime? resolved;
+        using (NodeActivitySource.Source.StartActivity("chat.turn.resolve_agent"))
+        {
+            resolved = await agentDefinitionResolver.ResolveAsync(effectiveAgentId, activeModel, retrievalQuery, supportsTools, honorModelProfile: !userPickedConcreteModel, activeModelIsCloud, cancellationToken)
                                                     .ConfigureAwait(false);
+        }
+
+        var agentMs = Stopwatch.GetElapsedTime(agentStart).TotalMilliseconds;
 
         // When the effective definition is a tool-capable orchestrator, resolve a compiled orchestration spec to carry
         // on the package — the runner branches to the handoff workflow. A null result (not an orchestrator, an
         // empty/invalid topology, an incapable model, or too few capable participants) leaves the package single-agent,
         // keeping the unbound/single-agent path byte-identical. The same retrieval query drives per-participant retrieval.
-        var orchestration = await ResolveOrchestrationAsync(effectiveAgentId, activeModel, retrievalQuery, supportsTools, cancellationToken).ConfigureAwait(false);
+        // The already-resolved runtime is threaded in so its Kind gates the reload (AUD4-16).
+        var orchestrationStart = Stopwatch.GetTimestamp();
+        ResolvedOrchestration? orchestration;
+        using (NodeActivitySource.Source.StartActivity("chat.turn.resolve_orchestration"))
+        {
+            orchestration = await ResolveOrchestrationAsync(effectiveAgentId, resolved, activeModel, retrievalQuery, supportsTools, cancellationToken).ConfigureAwait(false);
+        }
+
+        var orchestrationMs = Stopwatch.GetElapsedTime(orchestrationStart).TotalMilliseconds;
 
         // The single source of truth for the model that actually runs this turn: the resolved pin when honored (the
         // resolver returned null for ModelProfile when the user's explicit pick suppressed it), otherwise the active
@@ -71,6 +106,17 @@ public sealed class ChatTurnResolver(
         // and conversation attachments). The resolver classified the pinned effective model; with no bound agent (or no
         // pin) the effective model IS the active model, so reuse the active-model flag.
         var effectiveModelIsCloud = resolved?.EffectiveModelIsCloud ?? activeModelIsCloud;
+
+        if (logger.IsEnabled(LogLevel.Debug))
+        {
+            logger.LogDebug("Chat-turn resolution completed in {ElapsedMs:F2} ms (capabilities={CapabilitiesMs:F2} ms, agent={AgentMs:F2} ms, orchestration={OrchestrationMs:F2} ms; boundAgent={HasBoundAgent}, orchestration={HasOrchestration}).",
+                Stopwatch.GetElapsedTime(resolveStartTimestamp).TotalMilliseconds,
+                capabilitiesMs,
+                agentMs,
+                orchestrationMs,
+                effectiveAgentId is not null,
+                orchestration is not null);
+        }
 
         return new ChatTurnResolution(activeModel, effectiveModel, resolved, orchestration, supportsThinking, supportsTools, requiresInstalledChatModel, activeModelIsCloud, effectiveModelIsCloud);
     }
@@ -178,12 +224,23 @@ public sealed class ChatTurnResolver(
     ///     or a non-orchestrator definition returns <c>null</c> without resolving, so the single-agent path is byte-identical.
     /// </summary>
     private async Task<ResolvedOrchestration?> ResolveOrchestrationAsync(Guid? agentDefinitionId,
+        ResolvedAgentRuntime? resolved,
         string? activeModel,
         string? retrievalQuery,
         bool supportsTools,
         CancellationToken cancellationToken)
     {
         if (agentDefinitionId is not { } definitionId)
+        {
+            return null;
+        }
+
+        // AUD4-16: the resolver already loaded (and AES-GCM-decrypted) this definition on the line above; reuse its Kind
+        // instead of a SECOND uncached GetByIdAsync + decrypt. A null resolution (no binding / deleted definition) or a
+        // non-orchestrator Kind — the overwhelmingly common path, incl. every mode-off Default Assistant send — means
+        // there is no orchestration to compile, so the reload is skipped entirely. Only a bound orchestrator (rare) pays
+        // the reload to obtain the full definition the compiler needs.
+        if (resolved is not { Kind: AgentDefinitionKind.Orchestrator })
         {
             return null;
         }

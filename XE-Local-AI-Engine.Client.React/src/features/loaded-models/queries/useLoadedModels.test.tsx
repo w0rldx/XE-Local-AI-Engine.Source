@@ -16,8 +16,25 @@ const { sdkMock } = vi.hoisted(() => ({
 
 vi.mock("@/core/api/generated", () => sdkMock);
 
+// useRunningModels (the llama.cpp twin of the Ollama hooks above) wraps the generated TanStack `*Options()` instead of
+// calling the SDK fn directly, so its generated module is mocked separately with a test-owned options object.
+const { runningModelsGenMock } = vi.hoisted(() => ({
+	runningModelsGenMock: {
+		listRunningModelsOptions: vi.fn(),
+		ejectRunningModelMutation: vi.fn(),
+	},
+}));
+
+vi.mock("@/core/api/generated/@tanstack/react-query.gen", () => runningModelsGenMock);
+
 import type { LoadedModelsSnapshot } from "@/features/loaded-models/models/LoadedModelsModels";
-import { loadedModelsQueryKey, useEjectModel, useLoadedModels } from "@/features/loaded-models/queries/useLoadedModels";
+import {
+	loadedModelsQueryKey,
+	resolveLoadedModelsPollIntervalMs,
+	useEjectModel,
+	useLoadedModels,
+} from "@/features/loaded-models/queries/useLoadedModels";
+import { runningModelsPollIntervalMs, useRunningModels } from "@/features/loaded-models/queries/useRunningModels";
 
 function makeClient() {
 	return new QueryClient({
@@ -75,6 +92,64 @@ describe("useLoadedModels", () => {
 	});
 });
 
+describe("resolveLoadedModelsPollIntervalMs (AUD4-20.2 back-off)", () => {
+	const fast = resolveLoadedModelsPollIntervalMs({ isAvailable: true, ollamaConfigured: true, error: null, models: [] });
+
+	it("polls at the fast cadence while the provider is available", () => {
+		expect(fast).toBe(4000);
+	});
+
+	it("polls at the fast cadence before the first response (no snapshot yet)", () => {
+		expect(resolveLoadedModelsPollIntervalMs(undefined)).toBe(fast);
+	});
+
+	it("backs off to a slower cadence once a configured provider reports unreachable", () => {
+		// A configured-but-down Ollama must not be polled every 4s: the interval grows so the connection-refused loop is
+		// throttled while still recovering automatically if it later comes up.
+		const slow = resolveLoadedModelsPollIntervalMs({ isAvailable: false, ollamaConfigured: true, error: "Provider unreachable", models: [] });
+		expect(slow).toBe(30_000);
+	});
+
+	it("STOPS polling entirely once the node reports Ollama is not configured (AUD4-20)", () => {
+		// A switched-off Ollama runtime will never answer, so the recurring poll is disabled outright rather than backing
+		// off forever against an endpoint that is deliberately absent.
+		const stopped = resolveLoadedModelsPollIntervalMs({ isAvailable: false, ollamaConfigured: false, error: null, models: [] });
+		expect(stopped).toBe(false);
+	});
+});
+
+describe("useRunningModels (llama.cpp) polling", () => {
+	afterEach(() => {
+		vi.useRealTimers();
+		vi.clearAllMocks();
+	});
+
+	it("re-fetches on its own poll interval, since loads/evictions happen without any client mutation to invalidate on", async () => {
+		vi.useFakeTimers({ shouldAdvanceTime: true });
+		const queryFn = vi.fn().mockResolvedValue({ items: [] });
+		runningModelsGenMock.listRunningModelsOptions.mockReturnValue({
+			// biome-ignore lint/style/useNamingConvention: `_id` is the generated hey-api query-key discriminator field.
+			queryKey: [{ _id: "listRunningModels" }],
+			queryFn,
+		});
+		const queryClient = makeClient();
+
+		const { result } = renderHook(() => useRunningModels(), { wrapper: makeWrapper(queryClient) });
+
+		await waitFor(() => expect(result.current.isSuccess).toBe(true));
+		expect(queryFn).toHaveBeenCalledTimes(1);
+
+		// One full poll interval later the list re-fetches on its own — models appear as chat sends warm them and
+		// disappear on idle-TTL eviction, so without this the page only ever refreshed on manual reload.
+		await vi.advanceTimersByTimeAsync(runningModelsPollIntervalMs + 100);
+		await waitFor(() => expect(queryFn.mock.calls.length).toBeGreaterThanOrEqual(2));
+	});
+
+	it("pins the cadence to the same 4s the adjacent Ollama loaded-models query polls at", () => {
+		expect(runningModelsPollIntervalMs).toBe(4000);
+	});
+});
+
 describe("useEjectModel", () => {
 	beforeEach(() => {
 		sdkMock.unloadLocalModel.mockResolvedValue({ data: { modelName: "llama3.1:8b", unloaded: true } });
@@ -107,6 +182,7 @@ describe("useEjectModel", () => {
 		const queryClient = makeClient();
 		const seeded: LoadedModelsSnapshot = {
 			isAvailable: true,
+			ollamaConfigured: true,
 			error: null,
 			models: [
 				{ modelName: "llama3.1:8b", sizeBytes: 1, sizeVramBytes: null, expiresAtUtc: null },
@@ -139,6 +215,7 @@ describe("useEjectModel", () => {
 		const queryClient = makeClient();
 		const seeded: LoadedModelsSnapshot = {
 			isAvailable: true,
+			ollamaConfigured: true,
 			error: null,
 			models: [{ modelName: "llama3.1:8b", sizeBytes: 1, sizeVramBytes: null, expiresAtUtc: null }],
 		};

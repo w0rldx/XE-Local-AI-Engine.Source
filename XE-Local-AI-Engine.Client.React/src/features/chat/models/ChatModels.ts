@@ -179,6 +179,9 @@ export interface ChatStreamingState {
 	isDelayed?: boolean;
 	// True while the assistant turn is queued behind another active invocation (before it starts streaming).
 	isQueued?: boolean;
+	// Pre-first-token runtime phase ("preparing_runtime" | "loading_model" | "generating"), set by an assistant-phase
+	// stream event (AUD4-20). Drives the "Loading model…" indicator during a local cold load; clears once content lands.
+	runtimePhase?: string;
 	error?: string;
 	failureCategory?: string;
 	inputTokens?: number;
@@ -353,4 +356,11 @@ export interface ChatDisplayShellProps {
 	// True while the selected conversation's full payload (with messages) is loading. Forwarded to the
 	// message list so the empty-state never flashes over a populated thread during the refetch.
 	isLoadingMessages?: boolean;
+	// The selected conversation's full payload failed to load (a non-transient getConversation error). Drives the
+	// inline error+retry state in the message list, replacing the otherwise-infinite loading spinner.
+	messagesLoadFailed?: boolean;
+	// Resolved error reason for messagesLoadFailed, shown beneath the generic failure copy for context.
+	messagesLoadErrorText?: string;
+	// Re-runs the selected-conversation query (refetch). Wired to the Retry action in the message list error state.
+	onRetryLoadMessages?: () => void;
 }

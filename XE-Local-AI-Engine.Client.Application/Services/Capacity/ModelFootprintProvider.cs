@@ -60,7 +60,11 @@ public sealed class ModelFootprintProvider : IModelFootprintProvider
             facts.AttentionHeadCount ?? 0,
             ResolveCtxTarget(facts.ContextLength),
             profile,
-            kvCacheQuantized: false);
+            kvCacheQuantized: false,
+            // Explicit attention geometry (key/value lengths + SWA) corrects the KV term for Qwen3-family / Gemma models
+            // whose derived head_dim is wrong; native-format detection keeps a native quant priced at its own density.
+            attention: new GgufAttentionShape(facts.AttentionKeyLength, facts.AttentionValueLength, facts.SlidingWindow, facts.SlidingWindowPattern),
+            nativeQuantFormat: QuantLadder.IsNativeFormat(quant));
 
         return ModelFootprint.Known(estimate.EstimatedBytes);
     }

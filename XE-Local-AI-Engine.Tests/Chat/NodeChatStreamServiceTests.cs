@@ -1423,6 +1423,12 @@ public sealed class NodeChatStreamServiceTests
 
         var store = Substitute.For<IAgentDefinitionStore>();
         store.GetByIdAsync(agentDefinitionId, Arg.Any<CancellationToken>()).Returns(CreateOrchestratorRecord(agentDefinitionId));
+        // AUD4-16: the chat-turn resolver now gates the orchestration reload on the resolved runtime's Kind (it reuses the
+        // definition the resolver already loaded), so the resolver must surface Kind=Orchestrator for this bound agent.
+        var agentDefinitionResolver = Substitute.For<IAgentDefinitionResolver>();
+        agentDefinitionResolver.ResolveAsync(Arg.Any<Guid?>(), Arg.Any<string?>(), Arg.Any<string?>(), Arg.Any<bool>(), Arg.Any<bool>(), Arg.Any<bool>(), Arg.Any<CancellationToken>())
+                               .Returns(new ResolvedAgentRuntime("Orchestrator persona.", [], ModelProfile: null, ReasoningEffort: null, AgentDefinitionVersion: 4,
+                                   agentDefinitionId, "Orchestrator", Kind: AgentDefinitionKind.Orchestrator));
         var orchestrationResolver = Substitute.For<IOrchestrationResolver>();
         var spec = CreateSampleSpec();
         orchestrationResolver.ResolveAsync(Arg.Any<AgentDefinitionRecord>(), Arg.Any<string?>(), Arg.Any<string?>(), Arg.Any<bool>(), Arg.Any<CancellationToken>())
@@ -1431,7 +1437,7 @@ public sealed class NodeChatStreamServiceTests
 
         var service = new NodeChatStreamService(persistence,
             new ChatInvocationStatePump(ChatPumpTestFactory.Create(persistence), TimeProvider.System),
-            new ChatTurnResolver(CreateAgentDefinitionResolver(), store, orchestrationResolver, CreateModelClassificationService(), CreateLocalModelProviderResolver(),
+            new ChatTurnResolver(agentDefinitionResolver, store, orchestrationResolver, CreateModelClassificationService(), CreateLocalModelProviderResolver(),
                 CreateGgufModelCapabilityResolver(), Substitute.For<IActiveCloudChatClientFactory>(), NullLogger<ChatTurnResolver>.Instance),
             new NodeChatMutationGuard(persistence),
             new LocalChatRuntimePackageBuilder(),
@@ -1525,6 +1531,12 @@ public sealed class NodeChatStreamServiceTests
 
         var store = Substitute.For<IAgentDefinitionStore>();
         store.GetByIdAsync(agentDefinitionId, Arg.Any<CancellationToken>()).Returns(CreateOrchestratorRecord(agentDefinitionId));
+        // AUD4-16: the chat-turn resolver gates the orchestration reload on the resolved runtime's Kind, so the resolver
+        // must surface Kind=Orchestrator for this bound agent.
+        var agentDefinitionResolver = Substitute.For<IAgentDefinitionResolver>();
+        agentDefinitionResolver.ResolveAsync(Arg.Any<Guid?>(), Arg.Any<string?>(), Arg.Any<string?>(), Arg.Any<bool>(), Arg.Any<bool>(), Arg.Any<bool>(), Arg.Any<CancellationToken>())
+                               .Returns(new ResolvedAgentRuntime("Orchestrator persona.", [], ModelProfile: null, ReasoningEffort: null, AgentDefinitionVersion: 4,
+                                   agentDefinitionId, "Orchestrator", Kind: AgentDefinitionKind.Orchestrator));
         var orchestrationResolver = Substitute.For<IOrchestrationResolver>();
         orchestrationResolver.ResolveAsync(Arg.Any<AgentDefinitionRecord>(), Arg.Any<string?>(), Arg.Any<string?>(), Arg.Any<bool>(), Arg.Any<CancellationToken>())
                              .Returns(new ResolvedOrchestration(CreateSampleSpec(), "Orchestrator prompt.", "qwen3:8b", ReasoningEffort: null, AgentDefinitionVersion: 4,
@@ -1533,7 +1545,7 @@ public sealed class NodeChatStreamServiceTests
 
         var service = new NodeChatStreamService(persistence,
             new ChatInvocationStatePump(ChatPumpTestFactory.Create(persistence), TimeProvider.System),
-            new ChatTurnResolver(CreateAgentDefinitionResolver(), store, orchestrationResolver, CreateModelClassificationService(), CreateLocalModelProviderResolver(),
+            new ChatTurnResolver(agentDefinitionResolver, store, orchestrationResolver, CreateModelClassificationService(), CreateLocalModelProviderResolver(),
                 CreateGgufModelCapabilityResolver(), Substitute.For<IActiveCloudChatClientFactory>(), NullLogger<ChatTurnResolver>.Instance),
             new NodeChatMutationGuard(persistence),
             new LocalChatRuntimePackageBuilder(),
@@ -3492,6 +3504,16 @@ public sealed class NodeChatStreamServiceTests
             CurrentInvocation.StreamedThinkingChunkCount++;
             CurrentInvocation.LastUpdatedAt = DateTimeOffset.UtcNow;
             RaiseChanged();
+            return Task.CompletedTask;
+        }
+
+        public Task ReportInvocationPhaseAsync(Guid invocationId, InvocationRuntimePhase phase)
+        {
+            if (CurrentInvocation is not null)
+            {
+                CurrentInvocation.RuntimePhase = phase;
+            }
+
             return Task.CompletedTask;
         }
 

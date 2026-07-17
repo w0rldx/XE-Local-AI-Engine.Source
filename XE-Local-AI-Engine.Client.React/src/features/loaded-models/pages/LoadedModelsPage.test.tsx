@@ -30,7 +30,7 @@ const { hooksMock, runningMock, confirmMock, toastMock } = vi.hoisted(() => ({
 		useEjectRunningModel: vi.fn(),
 	},
 	confirmMock: vi.fn(),
-	toastMock: { success: vi.fn(), error: vi.fn(), info: vi.fn() },
+	toastMock: { success: vi.fn(), error: vi.fn(), info: vi.fn(), warning: vi.fn() },
 }));
 
 vi.mock("@/features/loaded-models/queries/useLoadedModels", () => hooksMock);
@@ -127,13 +127,19 @@ describe("LoadedModelsPage", () => {
 		expect(screen.queryByTestId("loaded-models-table")).toBeNull();
 	});
 
-	it("shows the unavailable state (and its sanitized reason) when the runtime is unreachable", () => {
+	it("shows a neutral absent-provider state (not the raw error) when Ollama is unreachable", () => {
+		// Ollama is an optional secondary provider, deliberately absent on the desktop default. An unreachable
+		// provider is an expected empty state, not an error: the neutral line renders, the raw connection-refused
+		// reason is NOT surfaced as an alarming banner, and the table is hidden.
 		hooksMock.useLoadedModels.mockReturnValue(makeQuery({ isAvailable: false, error: "Provider unreachable", models: [] }));
 
 		renderPage();
 
 		const unavailable = screen.getByTestId("loaded-models-unavailable");
-		expect(unavailable.textContent).toContain("Provider unreachable");
+		expect(unavailable.textContent).toContain("optional secondary provider");
+		expect(unavailable.textContent).not.toContain("Provider unreachable");
+		// The neutral state is not the red error alert.
+		expect(screen.queryByTestId("loaded-models-error")).toBeNull();
 		expect(screen.queryByTestId("loaded-models-table")).toBeNull();
 	});
 
@@ -191,7 +197,7 @@ describe("LoadedModelsPage", () => {
 		expect(screen.getByTestId("model-fit-running-empty")).toBeTruthy();
 	});
 
-	it("ejects a llama.cpp running model through its own eject mutation", () => {
+	it("confirms then ejects a llama.cpp running model gracefully (force=false) through its own eject mutation", async () => {
 		const ejectRunning = makeEjectMutation();
 		runningMock.useRunningModels.mockReturnValue(makeQuery([runningModel]));
 		runningMock.useEjectRunningModel.mockReturnValue(ejectRunning);
@@ -200,9 +206,55 @@ describe("LoadedModelsPage", () => {
 
 		fireEvent.click(screen.getByTestId("model-fit-eject-button-running-a"));
 
+		// The eject now confirms first (async), then dispatches a graceful (force=false) eject.
+		await waitFor(() => expect(ejectRunning.mutate).toHaveBeenCalled());
+		expect(confirmMock).toHaveBeenCalled();
 		expect(ejectRunning.mutate).toHaveBeenCalledWith(
-			{ modelName: "running-a", role: "chat" },
+			{ modelName: "running-a", role: "chat", force: false },
 			expect.objectContaining({ onSuccess: expect.any(Function), onError: expect.any(Function) }),
+		);
+	});
+
+	it("surfaces a success toast when the graceful eject reports 'ejected' (AUD4-20)", async () => {
+		const ejectRunning = makeEjectMutation();
+		runningMock.useRunningModels.mockReturnValue(makeQuery([runningModel]));
+		runningMock.useEjectRunningModel.mockReturnValue(ejectRunning);
+
+		renderPage();
+		fireEvent.click(screen.getByTestId("model-fit-eject-button-running-a"));
+		await waitFor(() => expect(ejectRunning.mutate).toHaveBeenCalled());
+
+		// Drive the mutation's onSuccess callback with the backend outcome the page maps to a toast.
+		const onSuccess = ejectRunning.mutate.mock.calls[0]?.[1]?.onSuccess as (result: { modelName: string; role: string; outcome: string }) => void;
+		onSuccess({ modelName: "running-a", role: "chat", outcome: "ejected" });
+
+		expect(toastMock.success).toHaveBeenCalled();
+	});
+
+	it("warns and offers a force eject when the graceful eject times out still busy (AUD4-20)", async () => {
+		const ejectRunning = makeEjectMutation();
+		runningMock.useRunningModels.mockReturnValue(makeQuery([runningModel]));
+		runningMock.useEjectRunningModel.mockReturnValue(ejectRunning);
+
+		renderPage();
+		fireEvent.click(screen.getByTestId("model-fit-eject-button-running-a"));
+		await waitFor(() => expect(ejectRunning.mutate).toHaveBeenCalled());
+		confirmMock.mockClear();
+
+		const onSuccess = ejectRunning.mutate.mock.calls[0]?.[1]?.onSuccess as (result: {
+			modelName: string;
+			role: string;
+			outcome: string;
+		}) => Promise<void>;
+		await onSuccess({ modelName: "running-a", role: "chat", outcome: "timed_out_still_busy" });
+
+		// A warning toast fires and the force-eject confirm is offered; confirming it re-ejects with force=true.
+		expect(toastMock.warning).toHaveBeenCalled();
+		await waitFor(() =>
+			expect(ejectRunning.mutate).toHaveBeenCalledWith(
+				{ modelName: "running-a", role: "chat", force: true },
+				expect.objectContaining({ onSuccess: expect.any(Function), onError: expect.any(Function) }),
+			),
 		);
 	});
 });

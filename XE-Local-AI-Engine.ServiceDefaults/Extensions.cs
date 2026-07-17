@@ -77,6 +77,10 @@ public static class Extensions
                    .WithTracing(tracing =>
                    {
                        tracing.AddSource(builder.Environment.ApplicationName)
+                              // Literal must match XE_Local_AI_Engine.Client.Common.Telemetry.NodeActivitySource.SourceName
+                              // ("XE.Node"); ServiceDefaults cannot reference the Client project. Exports the coarse
+                              // pre-spawn turn/readiness spans (AUD4-23), mirroring the identically named AddMeter above.
+                              .AddSource("XE.Node")
                               .AddSource("XE.LocalAiEngine.AI.Agent")
                               .AddSource("Microsoft.Agents.AI*")
                               .AddSource("Microsoft.Extensions.AI*")

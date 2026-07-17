@@ -1,6 +1,7 @@
 namespace XE_Local_AI_Engine.Tests.Providers.StableDiffusionCpp;
 
 using System.Collections.Concurrent;
+using XE_Local_AI_Engine.Providers.Abstractions.Capabilities;
 using XE_Local_AI_Engine.Providers.Abstractions.Contracts;
 using XE_Local_AI_Engine.Providers.Abstractions.Image;
 using XE_Local_AI_Engine.Providers.StableDiffusionCpp;
@@ -186,11 +187,14 @@ internal static class ImageSupervisorFactory
         FakeImageReadinessProbe? readinessProbe = null,
         FakeImageModelStore? modelStore = null,
         StableDiffusionRuntimeOptions? options = null,
-        AdvanceableClock? timeProvider = null)
+        AdvanceableClock? timeProvider = null,
+        FakeSdBackendSelector? backendSelector = null,
+        FakeSdBinaryManager? binaryManager = null,
+        IGpuModelLoadAdmission? loadAdmission = null)
     {
         return new ImageServerProcessSupervisor(modelStore ?? new FakeImageModelStore(),
-            new FakeSdBackendSelector(),
-            new FakeSdBinaryManager(),
+            backendSelector ?? new FakeSdBackendSelector(),
+            binaryManager ?? new FakeSdBinaryManager(),
             launcher ?? new FakeImageProcessLauncher(),
             readinessProbe ?? new FakeImageReadinessProbe(),
             options ?? new StableDiffusionRuntimeOptions
@@ -199,6 +203,7 @@ internal static class ImageSupervisorFactory
                 IdleTimeToLive = TimeSpan.FromHours(1),
                 MaxLoadedProcesses = 2
             },
-            timeProvider ?? new AdvanceableClock());
+            timeProvider ?? new AdvanceableClock(),
+            loadAdmission: loadAdmission);
     }
 }

@@ -5,6 +5,7 @@ using System.Net;
 using System.Net.Sockets;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
+using XE_Local_AI_Engine.Providers.Abstractions.Capabilities;
 using XE_Local_AI_Engine.Providers.Abstractions.Image;
 using XE_Local_AI_Engine.Providers.StableDiffusionCpp.Contracts;
 using XE_Local_AI_Engine.Providers.StableDiffusionCpp.Options;
@@ -40,6 +41,10 @@ internal sealed class ImageServerProcessSupervisor : IImageServerSupervisor, IAs
     private readonly Task _reaperLoop;
     private readonly CancellationTokenSource _shutdownCts = new();
     private readonly TimeProvider _timeProvider;
+
+    // AUD4-06: the process-wide GPU-load admission gate (shared with the llama-server supervisor). A GPU-backed image
+    // load serializes its spawn-through-readiness window through it so it never races an LLM load's free-VRAM read.
+    private readonly IGpuModelLoadAdmission _loadAdmission;
     private int _disposed;
 
     /// <summary>Creates the supervisor over its collaborators. The idle reaper loop starts immediately.</summary>
@@ -50,7 +55,8 @@ internal sealed class ImageServerProcessSupervisor : IImageServerSupervisor, IAs
         IImageServerReadinessProbe readinessProbe,
         StableDiffusionRuntimeOptions options,
         TimeProvider? timeProvider = null,
-        ILogger<ImageServerProcessSupervisor>? logger = null)
+        ILogger<ImageServerProcessSupervisor>? logger = null,
+        IGpuModelLoadAdmission? loadAdmission = null)
     {
         _modelStore = modelStore ?? throw new ArgumentNullException(nameof(modelStore));
         _backendSelector = backendSelector ?? throw new ArgumentNullException(nameof(backendSelector));
@@ -60,6 +66,10 @@ internal sealed class ImageServerProcessSupervisor : IImageServerSupervisor, IAs
         _options = options ?? throw new ArgumentNullException(nameof(options));
         _timeProvider = timeProvider ?? TimeProvider.System;
         _logger = logger ?? NullLogger<ImageServerProcessSupervisor>.Instance;
+
+        // Absent a wired gate (a provider-only host / test), default to the no-op floor so GPU-load serialization is
+        // simply off — the composition root injects the real singleton shared with the llama-server supervisor.
+        _loadAdmission = loadAdmission ?? new NoOpGpuModelLoadAdmission();
 
         _reaperLoop = Task.Run(() => ReapIdleLoopAsync(_shutdownCts.Token));
     }
@@ -244,6 +254,15 @@ internal sealed class ImageServerProcessSupervisor : IImageServerSupervisor, IAs
 
         var backend = await _backendSelector.SelectBackendAsync(ct).ConfigureAwait(false);
         var binary = await _binaryManager.EnsureBinaryAsync(backend, ct).ConfigureAwait(false);
+
+        // AUD4-06: serialize the spawn-through-readiness window of a GPU-backed image load through the SAME process-wide
+        // gate the llama-server supervisor uses, so an image load and an LLM load never race two --fit / free-VRAM reads.
+        // The binary's OWN backend decides (a bring-your-own override may serve a different backend than the host probe
+        // selected); a CPU backend bypasses. The ticket releases on ready OR any failure via the using scope. sd-server
+        // has no restart loop, so an admission timeout surfaces straight to the caller.
+        using var admissionTicket = binary.Backend == SdGpuBackend.Cpu
+            ? null
+            : await _loadAdmission.AcquireAsync(ct).ConfigureAwait(false);
 
         var port = await AllocatePortAsync(ct).ConfigureAwait(false);
 

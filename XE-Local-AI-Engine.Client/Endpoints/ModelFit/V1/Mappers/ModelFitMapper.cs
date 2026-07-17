@@ -2,6 +2,7 @@ namespace XE_Local_AI_Engine.Client.Endpoints.ModelFit.V1.Mappers;
 
 using System.Text.Json;
 using XE_Local_AI_Engine.Client.Persistence.Stores;
+using XE_Local_AI_Engine.Client.Services.Capacity;
 using XE_Local_AI_Engine.Client.Services.Inference;
 using XE_Local_AI_Engine.Client.Services.ModelFit;
 using XE_Local_AI_Engine.Client.Services.ModelFit.Gguf;
@@ -111,6 +112,34 @@ internal static class ModelFitMapper
             GpuAccelAvailable = profile.GpuAccelAvailable,
             CpuCores = profile.CpuCores,
             FreeDiskBytes = profile.FreeDiskBytes
+        };
+    }
+
+    /// <summary>
+    ///     Projects the PHYSICAL hardware profile plus the runtime device audit (AUD4-03) into the wire DTO. The profile
+    ///     fields carry what hardware exists (a GPU may be physically present); the audit fields carry runtime truth —
+    ///     whether the selected inference runtime actually uses it or has silently fallen back to the CPU.
+    /// </summary>
+    public static HardwareProfileResponse ToResponse(this HardwareProfile profile, RuntimeDeviceAuditState audit)
+    {
+        ArgumentNullException.ThrowIfNull(profile);
+        ArgumentNullException.ThrowIfNull(audit);
+
+        return new HardwareProfileResponse
+        {
+            TotalRamBytes = profile.TotalRamBytes,
+            AvailableRamBytes = profile.AvailableRamBytes,
+            VramBytes = profile.VramBytes,
+            VramKnown = profile.VramKnown,
+            GpuVendor = profile.GpuVendor.ToWireString(),
+            GpuAccelAvailable = profile.GpuAccelAvailable,
+            CpuCores = profile.CpuCores,
+            FreeDiskBytes = profile.FreeDiskBytes,
+            InferenceBackend = audit.InferenceBackend,
+            GpuExpected = audit.GpuExpected,
+            CpuFallback = audit.CpuFallback,
+            CpuFallbackReason = audit.Reason,
+            CpuFallbackRemediation = audit.Remediation
         };
     }
 

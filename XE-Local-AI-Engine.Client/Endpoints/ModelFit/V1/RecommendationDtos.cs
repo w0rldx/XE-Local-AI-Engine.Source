@@ -209,4 +209,23 @@ public sealed class HardwareProfileResponse
     public required int CpuCores { get; init; }
 
     public required long FreeDiskBytes { get; init; }
+
+    // AUD4-03 runtime device audit: whether the SELECTED inference runtime actually uses the advertised GPU or has
+    // silently fallen back to the CPU. The fields above are physical facts (what hardware exists); these are runtime
+    // truth (what inference will use). Non-required so a projection without an audit keeps the CPU-safe defaults.
+
+    /// <summary>The backend inference actually uses: <c>cuda|vulkan|cpu|unknown</c>.</summary>
+    public string InferenceBackend { get; init; } = "unknown";
+
+    /// <summary>True when the host advertises a usable GPU (a vendor GPU with known VRAM).</summary>
+    public bool GpuExpected { get; init; }
+
+    /// <summary>True when a GPU is expected but the selected runtime is silently running on the CPU.</summary>
+    public bool CpuFallback { get; init; }
+
+    /// <summary>Operator-facing explanation of the CPU fallback (likely cause), or null when the GPU is being used.</summary>
+    public string? CpuFallbackReason { get; init; }
+
+    /// <summary>Operator-facing remediation (in-app paths) for the CPU fallback, or null when the GPU is being used.</summary>
+    public string? CpuFallbackRemediation { get; init; }
 }

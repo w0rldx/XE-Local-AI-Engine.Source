@@ -193,7 +193,7 @@ internal sealed class McpServerConnectionManager : IMcpServerConnectionManager, 
             client = await _clientFactory.CreateAsync(record, timeoutCts.Token).ConfigureAwait(false);
             var discovered = await client.ListToolsAsync(cancellationToken: timeoutCts.Token).ConfigureAwait(false);
 
-            var tools = BuildRegisteredTools(discovered, slug, _maxToolResultCharacters, _maxInvalidToolCalls);
+            var tools = BuildRegisteredTools(discovered, slug, _maxToolResultCharacters, _maxInvalidToolCalls, TimeSpan.FromSeconds(_options.ToolCallTimeoutSeconds));
             return new ConnectResult(new ConnectedServer(client, record.Version, slug, tools), Error: null);
         }
         catch (Exception ex) when (ex is McpException
@@ -236,10 +236,10 @@ internal sealed class McpServerConnectionManager : IMcpServerConnectionManager, 
 
     /// <summary>
     ///     Renames each discovered tool to a collision-free qualified name (<c>mcp__{slug}__{tool}</c>), builds its
-    ///     offer descriptor (approval ON by default), bounds its result with the shared tool-result budget, and wraps the
-    ///     executable in an approval gate.
+    ///     offer descriptor (approval ON by default), bounds its server round-trip with the per-call timeout, bounds its
+    ///     result with the shared tool-result budget, and wraps the executable in an approval gate.
     /// </summary>
-    private static IReadOnlyList<McpRegisteredTool> BuildRegisteredTools(IList<McpClientTool> discovered, string slug, int maxToolResultCharacters, int maxInvalidToolCalls)
+    private static IReadOnlyList<McpRegisteredTool> BuildRegisteredTools(IList<McpClientTool> discovered, string slug, int maxToolResultCharacters, int maxInvalidToolCalls, TimeSpan toolCallTimeout)
     {
         var registered = new List<McpRegisteredTool>(discovered.Count);
         foreach (var tool in discovered)
@@ -255,12 +255,17 @@ internal sealed class McpServerConnectionManager : IMcpServerConnectionManager, 
                 named.JsonSchema.GetRawText(),
                 requiresApproval);
 
+            // Bound the actual server round-trip with the per-call timeout (AUD4-18) INNERMOST — below arg-repair and the
+            // result budget — so only the SDK call is timed; a stall returns a typed tool-failure result and the run
+            // continues (never a retry). Transparent to name/description/schema.
+            AIFunction timed = new McpToolCallTimeoutAIFunction(named, toolCallTimeout);
+
             // Coerce + validate the model's arguments against the MCP tool's schema and run the per-request repair loop
             // before the server ever sees them — same innermost guard the ClientLocal registry applies — so a malformed
             // call returns actionable guidance instead of a failed round-trip. Unknown-property rejection is OFF for
             // third-party servers: an under-declared server schema must not bounce a key the tool actually needs
             // (required/type checks still apply).
-            AIFunction validated = new ToolArgumentRepairAIFunction(named, maxInvalidToolCalls, rejectUnknownProperties: false);
+            AIFunction validated = new ToolArgumentRepairAIFunction(timed, maxInvalidToolCalls, rejectUnknownProperties: false);
 
             // Backstop the (verbatim) MCP result with the shared budget UNDER the approval gate, so a server can't
             // flood chat history and ApprovalRequiredAIFunction stays the outermost type the approval pipeline detects.

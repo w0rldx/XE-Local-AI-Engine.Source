@@ -196,7 +196,9 @@ internal sealed class CatalogRecommendationService : ICatalogRecommendationServi
             profile,
             kvCacheQuantized: false,
             BuildMoeFacts(entry, file),
-            KvCacheQuant.Q8_0);
+            KvCacheQuant.Q8_0,
+            BuildAttentionShape(file),
+            QuantLadder.IsNativeFormat(file.Quant));
 
         // Quantized KV always requires flash attention per the ResolvedLaunchArguments contract (KV types force FlashAttn).
         return new KvQuantAdvisory(KvCacheQuant.Q8_0,
@@ -232,7 +234,11 @@ internal sealed class CatalogRecommendationService : ICatalogRecommendationServi
                           ctxTarget,
                           profile,
                           kvCacheQuantized: false,
-                          BuildMoeFacts(entry, file)), rank: QuantLadder.QualityRank(file.Quant)))
+                          BuildMoeFacts(entry, file),
+                          // Explicit key/value lengths and interleaved sliding-window facts correct the KV term, and
+                          // native-format detection prices a native MXFP4 quant at its own density.
+                          attention: BuildAttentionShape(file),
+                          nativeQuantFormat: QuantLadder.IsNativeFormat(file.Quant)), rank: QuantLadder.QualityRank(file.Quant)))
                       .Where(candidate => candidate.estimate.EstimatedBytes > _estimator.OverheadBytes
                                           && candidate.estimate.Fits
                                           && candidate.rank <= floorRank)
@@ -243,10 +249,14 @@ internal sealed class CatalogRecommendationService : ICatalogRecommendationServi
             return null;
         }
 
-        var atOrBelowCeiling = fitting.Where(candidate => candidate.rank >= ceilingRank).ToList();
+        // Native-format guard: a repo shipping a native, non-requantizable format (MXFP4) caps its recommendable quality
+        // at the native file — never a higher-nominal-quality requant of it.
+        var guarded = MemoryFitEstimator.FilterOutNativeFormatRequants(fitting, candidate => candidate.file.Quant, candidate => candidate.rank);
+
+        var atOrBelowCeiling = guarded.Where(candidate => candidate.rank >= ceilingRank).ToList();
         var chosen = atOrBelowCeiling.Count > 0
             ? atOrBelowCeiling.OrderBy(candidate => candidate.rank).ThenBy(candidate => candidate.estimate.EstimatedBytes).First()
-            : fitting.OrderByDescending(candidate => candidate.rank).ThenBy(candidate => candidate.estimate.EstimatedBytes).First();
+            : guarded.OrderByDescending(candidate => candidate.rank).ThenBy(candidate => candidate.estimate.EstimatedBytes).First();
 
         return (chosen.file, chosen.estimate);
     }
@@ -268,5 +278,13 @@ internal sealed class CatalogRecommendationService : ICatalogRecommendationServi
         var activeParamCount = entry.ActiveParamsB is { } activeB ? (long?)(activeB * 1_000_000_000d) : null;
         var expertCount = file.ExpertCount is > 0 ? file.ExpertCount : 1;
         return new MoeFacts(activeParamCount, expertCount, file.ExpertUsedCount);
+    }
+
+    // Explicit attention geometry from the file header for the estimator: per-head key/value lengths (preferred over the
+    // derived head_dim) and interleaved sliding-window facts (window + global-layer stride). Null fields leave the
+    // estimator on its legacy derived-head_dim, no-SWA path.
+    private static GgufAttentionShape BuildAttentionShape(GgufRepoFile file)
+    {
+        return new GgufAttentionShape(file.AttentionKeyLength, file.AttentionValueLength, file.SlidingWindow, file.SlidingWindowPattern);
     }
 }

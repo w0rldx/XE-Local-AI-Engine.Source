@@ -17,11 +17,23 @@ export function CpuFallbackBanner() {
 	const dismiss = useCpuFallbackBannerStore((state) => state.dismiss);
 
 	const profile = hardwareQuery.data;
-	const shouldShow = profile?.gpuAccelAvailable === false && !dismissed;
+	// Show when the runtime is on CPU: either a silent GPU→CPU fallback (AUD4-03, the authoritative device-audit flag)
+	// or no supported GPU at all. The former carries an actionable reason/remediation, so prefer that text when present.
+	const shouldShow = (profile?.cpuFallback === true || profile?.gpuAccelAvailable === false) && !dismissed;
 
 	if (!shouldShow) {
 		return null;
 	}
+
+	const fallbackMessage =
+		profile?.cpuFallback && profile.cpuFallbackReason
+			? profile.cpuFallbackRemediation
+				? `${profile.cpuFallbackReason} ${profile.cpuFallbackRemediation}`
+				: profile.cpuFallbackReason
+			: t(
+					"pages.modelFit.hardware.cpuFallback.message",
+					"No supported GPU detected — running on CPU. Responses will be slower.",
+				);
 
 	return (
 		<Alert
@@ -33,12 +45,7 @@ export function CpuFallbackBanner() {
 			data-testid="cpu-fallback-banner"
 		>
 			<Group justify="space-between" align="center" wrap="nowrap" gap="sm">
-				<Text size="sm">
-					{t(
-						"pages.modelFit.hardware.cpuFallback.message",
-						"No supported GPU detected — running on CPU. Responses will be slower.",
-					)}
-				</Text>
+				<Text size="sm">{fallbackMessage}</Text>
 				<CloseButton
 					aria-label={t("pages.modelFit.hardware.cpuFallback.dismiss", "Dismiss")}
 					onClick={dismiss}

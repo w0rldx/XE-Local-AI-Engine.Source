@@ -8,6 +8,8 @@ using Microsoft.Extensions.DependencyInjection.Extensions;
 using XE_Local_AI_Engine.AI.Agent.Configuration;
 using XE_Local_AI_Engine.AI.Agent.DependencyInjection;
 using XE_Local_AI_Engine.Client.Persistence;
+using XE_Local_AI_Engine.Client.Services.Capacity;
+using XE_Local_AI_Engine.Client.Persistence.Sqlite;
 using XE_Local_AI_Engine.Client.Services.CloudProviders;
 using XE_Local_AI_Engine.Client.Services.CloudProviders.Implementation;
 using XE_Local_AI_Engine.Client.Services.Connection;
@@ -31,8 +33,9 @@ internal static class AddNodeModelRuntimeExtensions
 {
     private const string UseLocalModelProviderConfigurationKey = "XE_USE_LOCAL_MODEL_PROVIDER";
 
-    // Capability gate for the optional Ollama runtime. Enabled when unset, so the default registration is unchanged.
-    private const string OllamaRuntimeEnabledConfigurationKey = "XE_OLLAMA_RUNTIME_ENABLED";
+    // Capability gate for the optional Ollama runtime. Enabled when unset, so the default registration is unchanged. The
+    // key lives on OllamaRuntimeGate so the running-models endpoint reads the SAME gate (no drift).
+    private const string OllamaRuntimeEnabledConfigurationKey = OllamaRuntimeGate.RuntimeEnabledConfigurationKey;
 
     // Opt-in escape hatch for a non-loopback Ollama endpoint. Off by default — the local Ollama API is unauthenticated.
     private const string OllamaAllowRemoteEndpointConfigurationKey = "XE_OLLAMA_ALLOW_REMOTE_ENDPOINT";
@@ -67,6 +70,15 @@ internal static class AddNodeModelRuntimeExtensions
         builder.Services.AddSingleton(TimeProvider.System);
         builder.Services.AddSingleton<NodeChatMigrationRecoveryService>();
 
+        // AUD4-08: node SQLite concurrency posture. Resolve the connection-time pragma settings once and (a) publish them
+        // to the static raw-open helpers (NodeSqlitePragmas.Configure — the raw-ADO OpenIfNeeded path cannot take injected
+        // options) and (b) register the interceptors that apply the pragmas on EF-initiated opens and account contention.
+        var sqlitePragmaSettings = (configuration.GetSection(NodeSqliteOptions.Section).Get<NodeSqliteOptions>() ?? new NodeSqliteOptions()).ToSettings();
+        NodeSqlitePragmas.Configure(sqlitePragmaSettings);
+        builder.Services.AddSingleton(sqlitePragmaSettings);
+        builder.Services.AddSingleton<NodeSqliteConnectionInterceptor>();
+        builder.Services.AddSingleton<NodeSqliteCommandInterceptor>();
+
         builder.Services.AddDbContext<NodeChatDbContext>((serviceProvider, options) =>
         {
             var connectionString = configuration.GetConnectionString("node-sqlite")
@@ -74,17 +86,21 @@ internal static class AddNodeModelRuntimeExtensions
 
             options.UseSqlite(connectionString)
                    .ConfigureWarnings(warnings => warnings.Ignore(CoreEventId.ManyServiceProvidersCreatedWarning))
-                   .AddInterceptors(serviceProvider.GetRequiredService<NodeEncryptionSaveChangesInterceptor>(),
+                   .AddInterceptors(serviceProvider.GetRequiredService<NodeSqliteConnectionInterceptor>(),
+                       serviceProvider.GetRequiredService<NodeSqliteCommandInterceptor>(),
+                       serviceProvider.GetRequiredService<NodeEncryptionSaveChangesInterceptor>(),
                        serviceProvider.GetRequiredService<NodeEncryptionMaterializationInterceptor>());
         });
 
-        builder.Services.AddDbContext<NodeIdentityDbContext>(options =>
+        builder.Services.AddDbContext<NodeIdentityDbContext>((serviceProvider, options) =>
         {
             var connectionString = configuration.GetConnectionString("node-sqlite")
                                    ?? throw new InvalidOperationException("Connection string 'node-sqlite' is required.");
 
             options.UseSqlite(connectionString,
-                sqlite => sqlite.MigrationsHistoryTable(NodeIdentityDbContext.IdentityMigrationsHistoryTable));
+                       sqlite => sqlite.MigrationsHistoryTable(NodeIdentityDbContext.IdentityMigrationsHistoryTable))
+                   .AddInterceptors(serviceProvider.GetRequiredService<NodeSqliteConnectionInterceptor>(),
+                       serviceProvider.GetRequiredService<NodeSqliteCommandInterceptor>());
         });
 
         // Embeddings are provider-routed: EmbeddingPlaybookRetrievalRanker resolves the embedding provider
@@ -121,6 +137,14 @@ internal static class AddNodeModelRuntimeExtensions
 
         builder.Services.AddSingleton(sp => BuildSeededLlamaServerSupervisorOptions(sp));
         builder.Services.AddLlamaServerLocalModelProvider();
+
+        // AUD4-06: the process-wide GPU-load admission gate — the REAL, metric-emitting singleton shared by the
+        // llama-server and stable-diffusion.cpp supervisors, so no two GPU loads race their --fit / free-VRAM reads. A
+        // plain AddSingleton wins over each provider's TryAddSingleton<IGpuModelLoadAdmission, NoOpGpuModelLoadAdmission>()
+        // floor (last registration wins). The bounded max-wait is a backstop the size-aware readiness timeouts already
+        // make rare; captured at host build, applied on the next process restart.
+        builder.Services.AddSingleton(new GpuModelLoadAdmissionOptions());
+        builder.Services.AddSingleton<IGpuModelLoadAdmission, GpuModelLoadAdmission>();
 
         // Inference Optimizer: profile-driven launch-arg replay. Registered AFTER AddLlamaServerLocalModelProvider so
         // the real DB-backed resolver OVERRIDES the provider's explore-only DefaultInferenceProfileResolver — a plain

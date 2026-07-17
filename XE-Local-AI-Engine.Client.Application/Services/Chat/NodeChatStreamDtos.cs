@@ -11,6 +11,14 @@ public static class ChatStreamEventTypes
     public const string AssistantPending = "assistant-pending";
     public const string AssistantQueued = "assistant-queued";
     public const string AssistantStreaming = "assistant-streaming";
+
+    /// <summary>
+    ///     A pre-first-token runtime-phase transition (preparing the runtime / loading the model). Carries no content —
+    ///     only <see cref="ChatStreamEvent.RuntimePhase" /> — so the client can show "Loading model…" during a cold load
+    ///     instead of the generic typing indicator. Emitted only while a local model warms; absent for cloud/Ollama.
+    /// </summary>
+    public const string AssistantPhase = "assistant-phase";
+
     public const string AssistantDelta = "assistant-delta";
     public const string AssistantCompleted = "assistant-completed";
     public const string AssistantCancelled = "assistant-cancelled";
@@ -77,4 +85,8 @@ public sealed record ChatStreamEvent(
     // "ModelSubstituted", "ToolDisabled", "HistoryTruncated"); NoticeMessage is the sanitized, user-facing text.
     // Trailing optional so every existing event type's wire shape is unchanged.
     string? NoticeKind = null,
-    string? NoticeMessage = null);
+    string? NoticeMessage = null,
+    // Runtime phase (AssistantPhase events only): the wire form of InvocationRuntimePhase — "preparing_runtime",
+    // "loading_model", or "generating" — so the client can show a distinct model-loading indicator before the first
+    // token. Trailing optional so every existing event type's wire shape is unchanged.
+    string? RuntimePhase = null);

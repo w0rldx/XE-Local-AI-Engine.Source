@@ -61,6 +61,50 @@ public sealed class InvocationAgentFactoryTests
     }
 
     [Test]
+    public async Task CreateAsync_WhenEffectiveContextKnown_WritesItAsNumCtx()
+    {
+        // AUD4-02: the runtime's effective context window is carried as num_ctx so the inner provider-round budgeter
+        // sizes against the same window the outer conversation budgeter uses. No per-send override is set here.
+        var definition = new InvocationAgentDefinition("llama3.2:3b",
+            "Be helpful.",
+            [],
+            [],
+            EffectiveContextTokens: 16384);
+
+        using var chatClient = new FakeChatClient();
+        var sut = CreateSut(chatClient);
+
+        await using var context = await sut.CreateAsync(definition);
+
+        var chatOptions = ((ChatClientAgentRunOptions)context.RunOptions!).ChatOptions!;
+        var additionalProperties = AssertEx.NotNull(chatOptions.AdditionalProperties);
+        AssertEx.True(additionalProperties.TryGetValue<int>("num_ctx", out var numCtx));
+        AssertEx.Equal(expected: 16384, numCtx);
+    }
+
+    [Test]
+    public async Task CreateAsync_WhenPerSendNumCtxSet_WinsOverTheEffectiveContextFallback()
+    {
+        // A per-send num_ctx override must win over the runtime effective-context fallback.
+        var definition = new InvocationAgentDefinition("llama3.2:3b",
+            "Be helpful.",
+            [],
+            [],
+            Sampling: new InvocationSamplingOptions { NumCtx = 4096 },
+            EffectiveContextTokens: 16384);
+
+        using var chatClient = new FakeChatClient();
+        var sut = CreateSut(chatClient);
+
+        await using var context = await sut.CreateAsync(definition);
+
+        var chatOptions = ((ChatClientAgentRunOptions)context.RunOptions!).ChatOptions!;
+        var additionalProperties = AssertEx.NotNull(chatOptions.AdditionalProperties);
+        AssertEx.True(additionalProperties.TryGetValue<int>("num_ctx", out var numCtx));
+        AssertEx.Equal(expected: 4096, numCtx);
+    }
+
+    [Test]
     public async Task CreateAsync_WhenSupportsThinkingFalse_SendsThinkFalseToSuppressTemplateReasoning()
     {
         var definition = new InvocationAgentDefinition("gemma:12b",
