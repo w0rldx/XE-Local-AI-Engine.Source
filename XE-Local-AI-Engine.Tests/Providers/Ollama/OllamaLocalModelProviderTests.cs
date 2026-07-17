@@ -139,7 +139,10 @@ public sealed class OllamaLocalModelProviderTests
         var connectTimeout = new TaskCanceledException("connect timed out", new TimeoutException());
 #pragma warning disable CA2000 // Ownership transfers to the factory, disposed at the end of the test.
         var handler = new OllamaConnectFailureHandler(new ThrowingHandler(connectTimeout));
-        var httpClient = new HttpClient(handler, disposeHandler: true) { BaseAddress = new Uri("http://127.0.0.1:11434") };
+        var httpClient = new HttpClient(handler, disposeHandler: true)
+        {
+            BaseAddress = new Uri("http://127.0.0.1:11434")
+        };
 #pragma warning restore CA2000
         using var factory = new OllamaApiClientFactory(httpClient, ownsHttpClient: true);
         using var baseClient = factory.CreateClient(selectedModel: null);
@@ -167,7 +170,10 @@ public sealed class OllamaLocalModelProviderTests
         // Mirror production wiring: a single hardened transport (here a plain HttpClient pointed at the fake server) is
         // shared by the base management client and every per-model client the factory mints.
 #pragma warning disable CA2000 // Ownership transfers to the factory, which the ProviderTestContext disposes.
-        var httpClient = new HttpClient { BaseAddress = server.BaseAddress };
+        var httpClient = new HttpClient
+        {
+            BaseAddress = server.BaseAddress
+        };
 #pragma warning restore CA2000
         var factory = new OllamaApiClientFactory(httpClient, ownsHttpClient: true);
         var ollamaClient = factory.CreateClient(selectedModel: null);

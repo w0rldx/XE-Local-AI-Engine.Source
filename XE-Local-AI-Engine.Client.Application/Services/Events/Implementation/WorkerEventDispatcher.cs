@@ -40,8 +40,10 @@ public sealed partial class WorkerEventDispatcher : IWorkerEventDispatcher
     // invocation (past the wait) is unaffected: it runs under its own token, not this one.
     [SuppressMessage("Sonar",
         "S2930:\"IDisposables\" should be \"Dispose\"d",
-        Justification = "App-lifetime singleton (see the CA1001 suppression on the type). It is Cancel()-only — no CancelAfter timer and its WaitHandle is never accessed — so it holds no unmanaged resource to reclaim before process exit.")]
+        Justification =
+            "App-lifetime singleton (see the CA1001 suppression on the type). It is Cancel()-only — no CancelAfter timer and its WaitHandle is never accessed — so it holds no unmanaged resource to reclaim before process exit.")]
     private readonly CancellationTokenSource _shutdownCts = new();
+
     private readonly Lock _syncRoot = new();
     private bool _isAcceptingRemoteInvocations = true;
 

@@ -1,6 +1,7 @@
 namespace XE_Local_AI_Engine.Client.Hosting;
 
 using System.Security.Cryptography;
+using System.Text;
 using XE_Local_AI_Engine.Client.Services.Persistence.Implementation;
 
 /// <summary>
@@ -373,7 +374,7 @@ internal static class DesktopBootstrap
         {
             using (stream)
             {
-                stream.Write(System.Text.Encoding.ASCII.GetBytes(fileContent));
+                stream.Write(Encoding.ASCII.GetBytes(fileContent));
                 stream.Flush();
             }
 

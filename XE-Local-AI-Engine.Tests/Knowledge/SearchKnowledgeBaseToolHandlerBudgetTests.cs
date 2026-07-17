@@ -68,7 +68,10 @@ public sealed class SearchKnowledgeBaseToolHandlerBudgetTests
         // A query one character over the shared limit must be rejected by the handler's own validation before any search
         // runs, mirroring the HTTP endpoint's bound so the schema-advertised maximum is actually enforced.
         var handler = CreateHandler(new KnowledgeSearchResult(new List<KnowledgeSearchHit>()));
-        var arguments = JsonSerializer.Serialize(new { query = new string('x', KnowledgeQueryLimits.MaxQueryLength + 1) });
+        var arguments = JsonSerializer.Serialize(new
+        {
+            query = new string('x', KnowledgeQueryLimits.MaxQueryLength + 1)
+        });
 
         var result = await handler.ExecuteAsync(arguments);
 
@@ -84,7 +87,10 @@ public sealed class SearchKnowledgeBaseToolHandlerBudgetTests
                 DocumentStatus: KnowledgeDocumentStatus.Indexed, ServingLastKnownGood: false)
         };
         var handler = CreateHandler(new KnowledgeSearchResult(hits));
-        var arguments = JsonSerializer.Serialize(new { query = new string('x', KnowledgeQueryLimits.MaxQueryLength) });
+        var arguments = JsonSerializer.Serialize(new
+        {
+            query = new string('x', KnowledgeQueryLimits.MaxQueryLength)
+        });
 
         var result = await handler.ExecuteAsync(arguments);
 
@@ -182,7 +188,10 @@ public sealed class SearchKnowledgeBaseToolHandlerBudgetTests
         // The handler must forward the NORMALIZED (trimmed) query to search, not the raw padded string.
         var capturing = new CapturingKnowledgeSearchService(new KnowledgeSearchResult(new List<KnowledgeSearchHit>()));
         var handler = CreateHandler(capturing);
-        var arguments = JsonSerializer.Serialize(new { query = "   spaced query   " });
+        var arguments = JsonSerializer.Serialize(new
+        {
+            query = "   spaced query   "
+        });
 
         await handler.ExecuteAsync(arguments);
 
@@ -196,7 +205,10 @@ public sealed class SearchKnowledgeBaseToolHandlerBudgetTests
         // so it must be rejected up front and never reach the search service.
         var capturing = new CapturingKnowledgeSearchService(new KnowledgeSearchResult(new List<KnowledgeSearchHit>()));
         var handler = CreateHandler(capturing);
-        var arguments = JsonSerializer.Serialize(new { query = new string(' ', 100_000) + "hi" + new string(' ', 100_000) });
+        var arguments = JsonSerializer.Serialize(new
+        {
+            query = new string(' ', 100_000) + "hi" + new string(' ', 100_000)
+        });
 
         var result = await handler.ExecuteAsync(arguments);
 

@@ -701,6 +701,7 @@ public sealed class ModelFitRefreshService : IModelFitRefreshService
                 {
                     writer.WriteBoolean("native_format", value: true);
                 }
+
                 // Score = how fully the model uses the fit budget (0–100%). The most-capable model that fits scores
                 // highest, matching the rank order (the old "headroom GB" score ranked the smallest model highest and
                 // read as a non-monotonic column). The parser stores it verbatim.

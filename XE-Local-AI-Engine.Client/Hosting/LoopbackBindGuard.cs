@@ -70,9 +70,8 @@ internal static class LoopbackBindGuard
             return false;
         }
 
-        logger.LogCritical(
-            "The local-only API bound to non-loopback address(es) {Addresses}, which would expose the anonymous setup surface beyond this machine. "
-            + "The local API supports loopback-only operation; set '{Flag}=true' only if you have secured the surface yourself. Shutting down.",
+        logger.LogCritical("The local-only API bound to non-loopback address(es) {Addresses}, which would expose the anonymous setup surface beyond this machine. "
+                           + "The local API supports loopback-only operation; set '{Flag}=true' only if you have secured the surface yourself. Shutting down.",
             string.Join(", ", nonLoopback), AllowNonLoopbackBindKey);
 
         // Fail with a non-zero process exit so a supervisor/CI treats the guarded shutdown as an error rather than a

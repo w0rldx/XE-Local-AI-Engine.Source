@@ -34,7 +34,6 @@ internal static class RepositoryPaths
         }
 
         return directory?.FullName
-               ?? throw new DirectoryNotFoundException(
-                   $"Could not locate the repository root (containing '{SolutionFileName}') from the test output directory.");
+               ?? throw new DirectoryNotFoundException($"Could not locate the repository root (containing '{SolutionFileName}') from the test output directory.");
     }
 }

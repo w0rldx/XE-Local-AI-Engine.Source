@@ -51,7 +51,12 @@ public sealed class HardwareProfilerTests
         // AUD4-07: the former three sequential nvidia-smi calls (name, memory.total, memory.free) collapse into ONE
         // consolidated query — one process spawn per probe, all three fields in a single csv line.
         var probe = new FakeProcessProbe().WithNvidiaCsv("NVIDIA GeForce RTX 4090, 24564, 8192\n");
-        var environment = new FakeEnvironment { IsLinux = true, ProcMemInfo = "MemTotal: 8 kB\nMemAvailable: 4 kB\n", ProcessorCount = 8 };
+        var environment = new FakeEnvironment
+        {
+            IsLinux = true,
+            ProcMemInfo = "MemTotal: 8 kB\nMemAvailable: 4 kB\n",
+            ProcessorCount = 8
+        };
 
         var profiler = new HardwareProfiler(probe, environment, new HardwareProfilerOptions());
         await profiler.GetProfileAsync(forceRefresh: false, CancellationToken.None);
@@ -114,7 +119,12 @@ public sealed class HardwareProfilerTests
         // "first parseable figure" semantics).
         const string memInfo = "MemTotal:       32830012 kB\nMemAvailable:   24000000 kB\n";
         var probe = new FakeProcessProbe().WithNvidiaCsv("NVIDIA GeForce RTX 4090, 24564, 8192\nNVIDIA RTX A6000, 49140, 40000\n");
-        var environment = new FakeEnvironment { IsLinux = true, ProcMemInfo = memInfo, ProcessorCount = 16 };
+        var environment = new FakeEnvironment
+        {
+            IsLinux = true,
+            ProcMemInfo = memInfo,
+            ProcessorCount = 16
+        };
 
         var profiler = new HardwareProfiler(probe, environment, new HardwareProfilerOptions());
         var profile = await profiler.GetProfileAsync(forceRefresh: false, CancellationToken.None);
@@ -131,7 +141,12 @@ public sealed class HardwareProfilerTests
         const string memInfo = "MemTotal:       32830012 kB\nMemAvailable:   24000000 kB\n";
         var probe = new FakeProcessProbe()
             .WithNvidiaCsv("WARNING: infoROM is corrupted\nNVIDIA GeForce RTX 4090, [N/A], [N/A]\nNVIDIA GeForce RTX 4090, 24564, 8192\n");
-        var environment = new FakeEnvironment { IsLinux = true, ProcMemInfo = memInfo, ProcessorCount = 16 };
+        var environment = new FakeEnvironment
+        {
+            IsLinux = true,
+            ProcMemInfo = memInfo,
+            ProcessorCount = 16
+        };
 
         var profiler = new HardwareProfiler(probe, environment, new HardwareProfilerOptions());
         var profile = await profiler.GetProfileAsync(forceRefresh: false, CancellationToken.None);
@@ -259,8 +274,16 @@ public sealed class HardwareProfilerTests
     public async Task HardwareProfiler_ConfiguredTimeout_IsPassedToTheProcessProbe()
     {
         var probe = new FakeProcessProbe().WithNvidiaCsv("NVIDIA GeForce RTX 4090, 24564, 8192\n");
-        var environment = new FakeEnvironment { IsLinux = true, ProcMemInfo = "MemTotal: 8 kB\nMemAvailable: 4 kB\n", ProcessorCount = 8 };
-        var options = new HardwareProfilerOptions { HardwareProbeTimeoutSeconds = 7 };
+        var environment = new FakeEnvironment
+        {
+            IsLinux = true,
+            ProcMemInfo = "MemTotal: 8 kB\nMemAvailable: 4 kB\n",
+            ProcessorCount = 8
+        };
+        var options = new HardwareProfilerOptions
+        {
+            HardwareProbeTimeoutSeconds = 7
+        };
 
         var profiler = new HardwareProfiler(probe, environment, options);
         await profiler.GetProfileAsync(forceRefresh: false, CancellationToken.None);
@@ -275,7 +298,12 @@ public sealed class HardwareProfilerTests
         // the CPU-safe default (VRAM unknown ⇒ CPU mode) and records the timeout metric — never hangs.
         const string memInfo = "MemTotal:       32000000 kB\nMemAvailable:   24000000 kB\n";
         var probe = new FakeProcessProbe().WithTimeout();
-        var environment = new FakeEnvironment { IsLinux = true, ProcMemInfo = memInfo, ProcessorCount = 16 };
+        var environment = new FakeEnvironment
+        {
+            IsLinux = true,
+            ProcMemInfo = memInfo,
+            ProcessorCount = 16
+        };
         var metrics = new FakeHardwareProbeMetrics();
 
         var profiler = new HardwareProfiler(probe, environment, new HardwareProfilerOptions(), metrics: metrics);
@@ -295,7 +323,12 @@ public sealed class HardwareProfilerTests
         // (keeping its real VRAM figures) rather than dropping to CPU mode, and still records the timeout metric.
         const string memInfo = "MemTotal:       32000000 kB\nMemAvailable:   24000000 kB\n";
         var probe = new FakeProcessProbe().WithNvidiaCsv("NVIDIA GeForce RTX 4090, 24564, 8192\n").TimeoutAfterFirstCall();
-        var environment = new FakeEnvironment { IsLinux = true, ProcMemInfo = memInfo, ProcessorCount = 16 };
+        var environment = new FakeEnvironment
+        {
+            IsLinux = true,
+            ProcMemInfo = memInfo,
+            ProcessorCount = 16
+        };
         var metrics = new FakeHardwareProbeMetrics();
 
         var profiler = new HardwareProfiler(probe, environment, new HardwareProfilerOptions(), metrics: metrics);

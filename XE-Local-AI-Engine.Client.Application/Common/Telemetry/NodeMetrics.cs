@@ -263,8 +263,7 @@ public static class NodeMetrics
     ///     process-wide admission gate (0 or 1 — the gate is a serializer) and how many are WAITING behind it (AUD4-06).
     ///     The gate singleton supplies the live count callbacks and holds the returned instruments for its lifetime.
     /// </summary>
-    public static (ObservableGauge<long> Active, ObservableGauge<long> Waiting) CreateGpuModelLoadAdmissionGauges(
-        Func<long> observeActive,
+    public static (ObservableGauge<long> Active, ObservableGauge<long> Waiting) CreateGpuModelLoadAdmissionGauges(Func<long> observeActive,
         Func<long> observeWaiting)
     {
         ArgumentNullException.ThrowIfNull(observeActive);

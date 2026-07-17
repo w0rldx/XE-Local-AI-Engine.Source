@@ -37,8 +37,7 @@ public sealed class GpuModelLoadAdmission : IGpuModelLoadAdmission, IDisposable
         options.Validate();
         _maxWait = options.MaxWait;
         _timeProvider = timeProvider ?? TimeProvider.System;
-        (_activeGauge, _waitingGauge) = NodeMetrics.CreateGpuModelLoadAdmissionGauges(
-            () => Volatile.Read(ref _active),
+        (_activeGauge, _waitingGauge) = NodeMetrics.CreateGpuModelLoadAdmissionGauges(() => Volatile.Read(ref _active),
             () => Volatile.Read(ref _waiting));
     }
 

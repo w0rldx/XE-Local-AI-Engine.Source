@@ -123,7 +123,12 @@ public sealed class NodeChatSequenceMigrationTests : IDisposable
         AddParameter(command, "$message_id", messageId.ToString());
         AddParameter(command, "$conversation_id", conversationId.ToString());
         AddParameter(command, "$sequence", sequence);
-        AddParameter(command, "$content", new byte[] { 1, 2, 3 });
+        AddParameter(command, "$content", new byte[]
+        {
+            1,
+            2,
+            3
+        });
         AddParameter(command, "$created_at_utc", createdAtUtc);
         await command.ExecuteNonQueryAsync().ConfigureAwait(false);
     }

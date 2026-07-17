@@ -1,6 +1,8 @@
 namespace XE_Local_AI_Engine.Tests.Chat;
 
+using System.Globalization;
 using System.Text;
+using Microsoft.Data.Sqlite;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging.Abstractions;
@@ -10,6 +12,7 @@ using XE_Local_AI_Engine.Client.Persistence.Stores;
 using XE_Local_AI_Engine.Client.Services.Chat;
 using XE_Local_AI_Engine.Client.Services.Chat.Implementation;
 using XE_Local_AI_Engine.Client.Services.Persistence.Implementation;
+using XE_Local_AI_Engine.Tests.CodexOAuth;
 using XE_Local_AI_Engine.Tests.Testing;
 
 public sealed class NodeChatPersistenceServiceTests : IDisposable
@@ -477,9 +480,9 @@ public sealed class NodeChatPersistenceServiceTests : IDisposable
         AssertEx.True(cancel.Cancelled);
 
         var completed = await service.TerminalizeAssistantMessageAsync(new NodeChatTerminalizeMessageRequest(correlation,
-                            NodeChatMessageStatusValues.Completed,
-                            UpdatedAtUtc: 84,
-                            "the real answer")).ConfigureAwait(false);
+            NodeChatMessageStatusValues.Completed,
+            UpdatedAtUtc: 84,
+            "the real answer")).ConfigureAwait(false);
 
         AssertEx.Equal(NodeChatMessageStatusValues.Completed, completed.Status);
 
@@ -507,9 +510,9 @@ public sealed class NodeChatPersistenceServiceTests : IDisposable
         // Interrupted (stream loss) is NOT whitelisted to overwrite Cancelled, so an interrupt terminalize against a
         // user-cancelled row is an atomic no-op — the cancel is never downgraded.
         var interrupted = await service.TerminalizeAssistantMessageAsync(new NodeChatTerminalizeMessageRequest(correlation,
-                              NodeChatMessageStatusValues.Interrupted,
-                              UpdatedAtUtc: 94,
-                              Error: "stream lost")).ConfigureAwait(false);
+            NodeChatMessageStatusValues.Interrupted,
+            UpdatedAtUtc: 94,
+            Error: "stream lost")).ConfigureAwait(false);
 
         AssertEx.Equal(NodeChatMessageStatusValues.Cancelled, interrupted.Status);
 
@@ -535,10 +538,10 @@ public sealed class NodeChatPersistenceServiceTests : IDisposable
 
         // A completed row is not a legal source for any terminalize, so a second (e.g. Failed) terminalize is a no-op.
         var second = await service.TerminalizeAssistantMessageAsync(new NodeChatTerminalizeMessageRequest(correlation,
-                         NodeChatMessageStatusValues.Failed,
-                         UpdatedAtUtc: 104,
-                         "different",
-                         Error: "late failure")).ConfigureAwait(false);
+            NodeChatMessageStatusValues.Failed,
+            UpdatedAtUtc: 104,
+            "different",
+            Error: "late failure")).ConfigureAwait(false);
 
         AssertEx.Equal(NodeChatMessageStatusValues.Completed, second.Status);
 
@@ -561,10 +564,12 @@ public sealed class NodeChatPersistenceServiceTests : IDisposable
         await service.CreateAssistantPlaceholderAsync(new NodeChatCreateAssistantPlaceholderRequest(conversation.ConversationId, assistantMessageId, correlation.RequestId, CreatedAtUtc: 111))
                      .ConfigureAwait(false);
         await service.MarkAssistantStreamingAsync(correlation, updatedAtUtc: 112).ConfigureAwait(false);
-        await service.TerminalizeAssistantMessageAsync(new NodeChatTerminalizeMessageRequest(correlation, NodeChatMessageStatusValues.Completed, UpdatedAtUtc: 113, "committed answer")).ConfigureAwait(false);
+        await service.TerminalizeAssistantMessageAsync(new NodeChatTerminalizeMessageRequest(correlation, NodeChatMessageStatusValues.Completed, UpdatedAtUtc: 113, "committed answer"))
+                     .ConfigureAwait(false);
 
         // A debounced tail flush that lands after the terminal must be an atomic no-op: the terminal content stands.
-        var flushed = await service.FlushAssistantPartialAsync(new NodeChatPartialFlushRequest(correlation, "late partial that must not land", Reasoning: null, UpdatedAtUtc: 114)).ConfigureAwait(false);
+        var flushed = await service.FlushAssistantPartialAsync(new NodeChatPartialFlushRequest(correlation, "late partial that must not land", Reasoning: null, UpdatedAtUtc: 114))
+                                   .ConfigureAwait(false);
 
         AssertEx.Equal(NodeChatMessageStatusValues.Completed, flushed.Status);
         AssertEx.Equal("committed answer", flushed.Content);
@@ -759,8 +764,7 @@ public sealed class NodeChatPersistenceServiceTests : IDisposable
         foreach (var correlation in correlations)
         {
             var assistant = loaded.Messages.Single(message => message.MessageId == correlation.MessageId);
-            AssertEx.True(
-                assistant.Status is NodeChatMessageStatusValues.Streaming or NodeChatMessageStatusValues.Cancelled,
+            AssertEx.True(assistant.Status is NodeChatMessageStatusValues.Streaming or NodeChatMessageStatusValues.Cancelled,
                 $"expected streaming or cancelled, got '{assistant.Status}'");
         }
     }
@@ -1223,7 +1227,7 @@ public sealed class NodeChatPersistenceServiceTests : IDisposable
 
             // Capture the service's logs so the test can prove the failure was specifically a busy/incomplete checkpoint
             // (RunOnceAsync swallows migration AND cleanup errors, so marker-set alone would not distinguish them).
-            var capturingLogger = new XE_Local_AI_Engine.Tests.CodexOAuth.CapturingLogger<NodeChatContentEncryptionBackfillService>();
+            var capturingLogger = new CapturingLogger<NodeChatContentEncryptionBackfillService>();
             using var failingBackfill = new NodeChatContentEncryptionBackfillService(provider.GetRequiredService<IServiceScopeFactory>(), capturingLogger);
 
             await using (await OpenBlockingReaderAsync(databasePath).ConfigureAwait(false))
@@ -1255,9 +1259,9 @@ public sealed class NodeChatPersistenceServiceTests : IDisposable
         // Clear only THIS database's pooled connections (scoped by connection string — NOT the process-global
         // ClearAllPools, which would disrupt other tests running in parallel) so the restart truly reconnects and no idle
         // pooled reader left over from the failed run contends with the retry's VACUUM.
-        using (var poolKey = new Microsoft.Data.Sqlite.SqliteConnection($"Data Source={databasePath}"))
+        using (var poolKey = new SqliteConnection($"Data Source={databasePath}"))
         {
-            Microsoft.Data.Sqlite.SqliteConnection.ClearPool(poolKey);
+            SqliteConnection.ClearPool(poolKey);
         }
 
         await using var restarted = await BuildProviderAsync(fileName, resetDatabase: false).ConfigureAwait(false);
@@ -1478,8 +1482,7 @@ public sealed class NodeChatPersistenceServiceTests : IDisposable
                                              .CreateMessageVariantAsync(new NodeChatCreateMessageVariantRequest(source.ConversationId, originalAssistantId, variantMessageId, variantRequestId,
                                                  CreatedAtUtc: 1203))
                                              .ConfigureAwait(false));
-        await service.TerminalizeAssistantMessageAsync(new NodeChatTerminalizeMessageRequest(
-                         new NodeChatMessageCorrelation(source.ConversationId, variantMessageId, variantRequestId),
+        await service.TerminalizeAssistantMessageAsync(new NodeChatTerminalizeMessageRequest(new NodeChatMessageCorrelation(source.ConversationId, variantMessageId, variantRequestId),
                          NodeChatMessageStatusValues.Completed,
                          UpdatedAtUtc: 1204,
                          "REV-NEWER"))
@@ -1490,7 +1493,10 @@ public sealed class NodeChatPersistenceServiceTests : IDisposable
         await SeedCompletedAssistantAsync(service, source.ConversationId, cutoffAssistantId, Guid.NewGuid(), "ANSWER-2", createdAtUtc: 1206).ConfigureAwait(false);
 
         // Branch from the downstream turn, but with the upstream group pinned to the OLDER revision (the visible path).
-        var selection = new Dictionary<Guid, Guid> { [variant.VariantGroupId] = originalAssistantId };
+        var selection = new Dictionary<Guid, Guid>
+        {
+            [variant.VariantGroupId] = originalAssistantId
+        };
         var branch = AssertEx.NotNull(await service
                                             .BranchConversationAsync(new NodeChatBranchConversationRequest(source.ConversationId, cutoffAssistantId, CreatedAtUtc: 1210, selection))
                                             .ConfigureAwait(false));
@@ -1518,8 +1524,7 @@ public sealed class NodeChatPersistenceServiceTests : IDisposable
         await service
               .CreateMessageVariantAsync(new NodeChatCreateMessageVariantRequest(source.ConversationId, originalAssistantId, variantMessageId, variantRequestId, CreatedAtUtc: 1303))
               .ConfigureAwait(false);
-        await service.TerminalizeAssistantMessageAsync(new NodeChatTerminalizeMessageRequest(
-                         new NodeChatMessageCorrelation(source.ConversationId, variantMessageId, variantRequestId),
+        await service.TerminalizeAssistantMessageAsync(new NodeChatTerminalizeMessageRequest(new NodeChatMessageCorrelation(source.ConversationId, variantMessageId, variantRequestId),
                          NodeChatMessageStatusValues.Completed,
                          UpdatedAtUtc: 1304,
                          "REV-NEWER"))
@@ -1563,15 +1568,17 @@ public sealed class NodeChatPersistenceServiceTests : IDisposable
                                              .CreateMessageVariantAsync(new NodeChatCreateMessageVariantRequest(source.ConversationId, earlyAssistantId, lateSiblingId, lateSiblingRequestId,
                                                  CreatedAtUtc: 1505))
                                              .ConfigureAwait(false));
-        await service.TerminalizeAssistantMessageAsync(new NodeChatTerminalizeMessageRequest(
-                         new NodeChatMessageCorrelation(source.ConversationId, lateSiblingId, lateSiblingRequestId),
+        await service.TerminalizeAssistantMessageAsync(new NodeChatTerminalizeMessageRequest(new NodeChatMessageCorrelation(source.ConversationId, lateSiblingId, lateSiblingRequestId),
                          NodeChatMessageStatusValues.Completed,
                          UpdatedAtUtc: 1506,
                          "EARLY-REGEN"))
                      .ConfigureAwait(false);
 
         // Branch from the LATER turn, pinning the early group to its late-created sibling (what the operator was viewing).
-        var selection = new Dictionary<Guid, Guid> { [variant.VariantGroupId] = lateSiblingId };
+        var selection = new Dictionary<Guid, Guid>
+        {
+            [variant.VariantGroupId] = lateSiblingId
+        };
         var branch = AssertEx.NotNull(await service
                                             .BranchConversationAsync(new NodeChatBranchConversationRequest(source.ConversationId, laterAssistantId, CreatedAtUtc: 1510, selection))
                                             .ConfigureAwait(false));
@@ -1604,8 +1611,7 @@ public sealed class NodeChatPersistenceServiceTests : IDisposable
         var lateSiblingRequestId = Guid.NewGuid();
         await service.CreateMessageVariantAsync(new NodeChatCreateMessageVariantRequest(source.ConversationId, earlyAssistantId, lateSiblingId, lateSiblingRequestId, CreatedAtUtc: 1605))
                      .ConfigureAwait(false);
-        await service.TerminalizeAssistantMessageAsync(new NodeChatTerminalizeMessageRequest(
-                         new NodeChatMessageCorrelation(source.ConversationId, lateSiblingId, lateSiblingRequestId),
+        await service.TerminalizeAssistantMessageAsync(new NodeChatTerminalizeMessageRequest(new NodeChatMessageCorrelation(source.ConversationId, lateSiblingId, lateSiblingRequestId),
                          NodeChatMessageStatusValues.Completed,
                          UpdatedAtUtc: 1606,
                          "EARLY-REGEN"))
@@ -1643,8 +1649,7 @@ public sealed class NodeChatPersistenceServiceTests : IDisposable
                                                        .CreateMessageVariantAsync(new NodeChatCreateMessageVariantRequest(source.ConversationId, downstreamAssistantId, downSiblingId,
                                                            downSiblingRequestId, CreatedAtUtc: 1705))
                                                        .ConfigureAwait(false));
-        await service.TerminalizeAssistantMessageAsync(new NodeChatTerminalizeMessageRequest(
-                         new NodeChatMessageCorrelation(source.ConversationId, downSiblingId, downSiblingRequestId),
+        await service.TerminalizeAssistantMessageAsync(new NodeChatTerminalizeMessageRequest(new NodeChatMessageCorrelation(source.ConversationId, downSiblingId, downSiblingRequestId),
                          NodeChatMessageStatusValues.Completed,
                          UpdatedAtUtc: 1706,
                          "DOWN-REGEN"))
@@ -1652,7 +1657,10 @@ public sealed class NodeChatPersistenceServiceTests : IDisposable
 
         // Branch from the FIRST assistant with a selection for the downstream group: the group is anchored after the
         // cutoff, so the entry is dropped and neither downstream revision is copied.
-        var selection = new Dictionary<Guid, Guid> { [downstreamVariant.VariantGroupId] = downSiblingId };
+        var selection = new Dictionary<Guid, Guid>
+        {
+            [downstreamVariant.VariantGroupId] = downSiblingId
+        };
         var branch = AssertEx.NotNull(await service
                                             .BranchConversationAsync(new NodeChatBranchConversationRequest(source.ConversationId, cutoffAssistantId, CreatedAtUtc: 1710, selection))
                                             .ConfigureAwait(false));
@@ -1680,16 +1688,22 @@ public sealed class NodeChatPersistenceServiceTests : IDisposable
                                              .ConfigureAwait(false));
 
         // Unknown message id for the group ⇒ integrity violation ⇒ reject (no silent fallback).
-        var unknownSelection = new Dictionary<Guid, Guid> { [variant.VariantGroupId] = Guid.NewGuid() };
+        var unknownSelection = new Dictionary<Guid, Guid>
+        {
+            [variant.VariantGroupId] = Guid.NewGuid()
+        };
         await AssertEx.ThrowsAsync<NodeChatInvalidBranchSelectionException>(async () =>
-                await service.BranchConversationAsync(new NodeChatBranchConversationRequest(source.ConversationId, variant.Variant.MessageId, CreatedAtUtc: 1410, unknownSelection)))
-            .ConfigureAwait(false);
+                          await service.BranchConversationAsync(new NodeChatBranchConversationRequest(source.ConversationId, variant.Variant.MessageId, CreatedAtUtc: 1410, unknownSelection)))
+                      .ConfigureAwait(false);
 
         // A real message keyed under a group it does not belong to (the user turn has no variant group) ⇒ reject.
-        var mismatchedSelection = new Dictionary<Guid, Guid> { [variant.VariantGroupId] = userMessage.MessageId };
+        var mismatchedSelection = new Dictionary<Guid, Guid>
+        {
+            [variant.VariantGroupId] = userMessage.MessageId
+        };
         await AssertEx.ThrowsAsync<NodeChatInvalidBranchSelectionException>(async () =>
-                await service.BranchConversationAsync(new NodeChatBranchConversationRequest(source.ConversationId, variant.Variant.MessageId, CreatedAtUtc: 1411, mismatchedSelection)))
-            .ConfigureAwait(false);
+                          await service.BranchConversationAsync(new NodeChatBranchConversationRequest(source.ConversationId, variant.Variant.MessageId, CreatedAtUtc: 1411, mismatchedSelection)))
+                      .ConfigureAwait(false);
     }
 
     private static async Task SeedCompletedAssistantAsync(INodeChatPersistenceService service,
@@ -1700,8 +1714,7 @@ public sealed class NodeChatPersistenceServiceTests : IDisposable
         long createdAtUtc)
     {
         await service.CreateAssistantPlaceholderAsync(new NodeChatCreateAssistantPlaceholderRequest(conversationId, messageId, requestId, createdAtUtc)).ConfigureAwait(false);
-        await service.TerminalizeAssistantMessageAsync(new NodeChatTerminalizeMessageRequest(
-                         new NodeChatMessageCorrelation(conversationId, messageId, requestId),
+        await service.TerminalizeAssistantMessageAsync(new NodeChatTerminalizeMessageRequest(new NodeChatMessageCorrelation(conversationId, messageId, requestId),
                          NodeChatMessageStatusValues.Completed,
                          createdAtUtc,
                          content))
@@ -2046,7 +2059,7 @@ public sealed class NodeChatPersistenceServiceTests : IDisposable
         parameter.Value = conversationId;
         command.Parameters.Add(parameter);
         var result = await command.ExecuteScalarAsync().ConfigureAwait(false);
-        return Convert.ToInt32(result, System.Globalization.CultureInfo.InvariantCulture);
+        return Convert.ToInt32(result, CultureInfo.InvariantCulture);
     }
 
     // The backfill service's durable reclamation marker lives in the modeled chat_maintenance_state table (created by
@@ -2080,7 +2093,7 @@ public sealed class NodeChatPersistenceServiceTests : IDisposable
         parameter.Value = ReclamationMarkerName;
         command.Parameters.Add(parameter);
         var result = await command.ExecuteScalarAsync().ConfigureAwait(false);
-        return Convert.ToInt64(result, System.Globalization.CultureInfo.InvariantCulture) != 0;
+        return Convert.ToInt64(result, CultureInfo.InvariantCulture) != 0;
     }
 
     // Switches the DB to WAL journal mode (persisted in the file header), so a concurrent reader can hold a snapshot
@@ -2097,9 +2110,9 @@ public sealed class NodeChatPersistenceServiceTests : IDisposable
 
     // Opens a dedicated connection holding an open read transaction. In WAL mode this pins a read snapshot, so a
     // wal_checkpoint(TRUNCATE) on another connection cannot truncate the log and returns busy. Dispose to release it.
-    private static async Task<Microsoft.Data.Sqlite.SqliteConnection> OpenBlockingReaderAsync(string databasePath)
+    private static async Task<SqliteConnection> OpenBlockingReaderAsync(string databasePath)
     {
-        var connection = new Microsoft.Data.Sqlite.SqliteConnection($"Data Source={databasePath}");
+        var connection = new SqliteConnection($"Data Source={databasePath}");
         await connection.OpenAsync().ConfigureAwait(false);
         await using var command = connection.CreateCommand();
         command.CommandText = "BEGIN; SELECT COUNT(*) FROM messages;";

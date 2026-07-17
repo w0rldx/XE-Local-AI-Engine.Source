@@ -113,8 +113,8 @@ internal sealed class NodeChatVariantBranchService(NodeChatPersistenceWriter wri
                     AddParameter(messageCommand, "$role", message.Role);
                     AddParameter(messageCommand, "$content", dbContext.EncryptMessageContent(message.Content, branchedConversationId, copyMessageId));
                     AddParameter(messageCommand, "$metadata_json",
-                        dbContext.EncryptMessageMetadata(
-                            SerializeMetadata(message.MetadataJson, message.Reasoning, message.Model, message.InputCount, message.OutputCount, message.TotalCount, message.ReasoningCount,
+                        dbContext.EncryptMessageMetadata(SerializeMetadata(message.MetadataJson, message.Reasoning, message.Model, message.InputCount, message.OutputCount, message.TotalCount,
+                                message.ReasoningCount,
                                 message.Parts, message.AgentDefinitionId, message.AgentName, message.ReasoningEffort),
                             branchedConversationId,
                             copyMessageId));
@@ -208,8 +208,8 @@ internal sealed class NodeChatVariantBranchService(NodeChatPersistenceWriter wri
                 // The whole turn shares a variant group; mint one and back-stamp the original when it has none.
                 var variantGroupId = original.VariantGroupId ?? Guid.NewGuid();
                 var stampOriginal = original.VariantGroupId is null;
-                var metadata = dbContext.EncryptMessageMetadata(
-                    SerializeMetadata(request.MetadataJson, reasoning: null, request.Model, inputTokens: null, outputTokens: null, totalTokens: null, reasoningTokens: null, parts: null,
+                var metadata = dbContext.EncryptMessageMetadata(SerializeMetadata(request.MetadataJson, reasoning: null, request.Model, inputTokens: null, outputTokens: null, totalTokens: null,
+                        reasoningTokens: null, parts: null,
                         request.AgentDefinitionId, request.AgentName, request.ReasoningEffort),
                     request.ConversationId,
                     request.NewMessageId);

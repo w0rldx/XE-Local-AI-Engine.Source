@@ -1,5 +1,6 @@
 namespace XE_Local_AI_Engine.Tests.Providers.LlamaServer;
 
+using System.Globalization;
 using XE_Local_AI_Engine.Providers.LlamaServer;
 using XE_Local_AI_Engine.Providers.LlamaServer.Contracts;
 using XE_Local_AI_Engine.Providers.LlamaServer.Implementation;
@@ -92,7 +93,7 @@ public sealed class SupervisorSpawnArgsTests
 
         // AUD4-02/05: the policy adds the deterministic chat context and the KV-cache quant + flash-attention optimization.
         var ctxIndex = IndexOf(spec.Arguments, "-c");
-        AssertEx.Equal(LlamaServerLaunchPolicyOptions.DefaultChatContextTokens.ToString(System.Globalization.CultureInfo.InvariantCulture), spec.Arguments[ctxIndex + 1]);
+        AssertEx.Equal(LlamaServerLaunchPolicyOptions.DefaultChatContextTokens.ToString(CultureInfo.InvariantCulture), spec.Arguments[ctxIndex + 1]);
         AssertEx.Contains(spec.Arguments, "-fa");
         AssertEx.Equal("on", spec.Arguments[IndexOf(spec.Arguments, "-fa") + 1]);
         AssertEx.Equal("q8_0", spec.Arguments[IndexOf(spec.Arguments, "-ctk") + 1]);
@@ -123,7 +124,7 @@ public sealed class SupervisorSpawnArgsTests
 
         // AUD4-02: the CPU variant DOES get a deterministic -c (previously it emitted none → full-train-ctx KV in RAM).
         var ctxIndex = IndexOf(spec.Arguments, "-c");
-        AssertEx.Equal(LlamaServerLaunchPolicyOptions.DefaultChatContextTokens.ToString(System.Globalization.CultureInfo.InvariantCulture), spec.Arguments[ctxIndex + 1]);
+        AssertEx.Equal(LlamaServerLaunchPolicyOptions.DefaultChatContextTokens.ToString(CultureInfo.InvariantCulture), spec.Arguments[ctxIndex + 1]);
 
         // AUD4-17: the CPU thread policy.
         AssertEx.Equal("6", spec.Arguments[IndexOf(spec.Arguments, "-t") + 1]);

@@ -52,7 +52,10 @@ public sealed class GpuModelLoadAdmissionTests
     [Test]
     public async Task Acquire_BoundedWaitElapses_ThrowsTypedTimeout_AndCountsIt()
     {
-        using var gate = new GpuModelLoadAdmission(new GpuModelLoadAdmissionOptions { MaxWait = TimeSpan.FromMilliseconds(50) });
+        using var gate = new GpuModelLoadAdmission(new GpuModelLoadAdmissionOptions
+        {
+            MaxWait = TimeSpan.FromMilliseconds(50)
+        });
         var first = await gate.AcquireAsync(CancellationToken.None);
 
         var timeouts = 0L;

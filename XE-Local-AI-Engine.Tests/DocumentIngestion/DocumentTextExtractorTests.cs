@@ -383,8 +383,7 @@ public sealed class DocumentTextExtractorTests
         {
             for (var i = 0; i < entryCount; i++)
             {
-                var entry = archive.CreateEntry(
-                    string.Create(CultureInfo.InvariantCulture, $"part{i}.xml"),
+                var entry = archive.CreateEntry(string.Create(CultureInfo.InvariantCulture, $"part{i}.xml"),
                     CompressionLevel.Optimal);
                 using var entryStream = entry.Open();
                 entryStream.Write(payload, 0, payload.Length);

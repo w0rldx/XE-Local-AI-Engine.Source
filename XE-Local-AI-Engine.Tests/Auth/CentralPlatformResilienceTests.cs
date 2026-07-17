@@ -86,18 +86,17 @@ public sealed class CentralPlatformResilienceTests
         return await client.SendAsync(request);
     }
 
-    private static HttpResponseMessage ServiceUnavailable() => new(HttpStatusCode.ServiceUnavailable);
+    private static HttpResponseMessage ServiceUnavailable() =>
+        new(HttpStatusCode.ServiceUnavailable);
 
-    private static (IHttpClientFactory factory, AttemptCountingHandler handler) BuildClient(
-        bool simulateAspireGlobalHandler,
+    private static (IHttpClientFactory factory, AttemptCountingHandler handler) BuildClient(bool simulateAspireGlobalHandler,
         Func<int, HttpResponseMessage> responder)
     {
         var (provider, handler) = BuildProvider(simulateAspireGlobalHandler, responder);
         return (provider.GetRequiredService<IHttpClientFactory>(), handler);
     }
 
-    private static (ServiceProvider provider, AttemptCountingHandler handler) BuildProvider(
-        bool simulateAspireGlobalHandler,
+    private static (ServiceProvider provider, AttemptCountingHandler handler) BuildProvider(bool simulateAspireGlobalHandler,
         Func<int, HttpResponseMessage> responder)
     {
         var services = new ServiceCollection();

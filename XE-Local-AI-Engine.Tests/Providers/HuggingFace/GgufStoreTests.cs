@@ -297,7 +297,10 @@ public sealed class GgufStoreTests
         // Attempt 0 yields 256 bytes then stalls forever (no more data) → the 1 s read-idle deadline fires. Attempt 1
         // serves the full file.
         using var handler = new GgufStoreTestInfrastructure.ScriptedHandler((_, callIndex) => callIndex == 0
-            ? new HttpResponseMessage(HttpStatusCode.OK) { Content = new StreamContent(new StallingStream(ModelBytes, yieldBytes: 256)) }
+            ? new HttpResponseMessage(HttpStatusCode.OK)
+            {
+                Content = new StreamContent(new StallingStream(ModelBytes, yieldBytes: 256))
+            }
             : FullDownload(ModelBytes));
         using var http = new HttpClient(handler);
         using var resolveHandler = new GgufStoreTestInfrastructure.ScriptedHandler((_, _) => new HttpResponseMessage());

@@ -99,7 +99,9 @@ public sealed class KnowledgeUploadEndpointTests
 #pragma warning disable CA2000 // MultipartFormDataContent owns the part content and disposes it when the `using content` scope ends.
         using var content = new MultipartFormDataContent
         {
-            { new ByteArrayContent(Encoding.UTF8.GetBytes("hello knowledge base")), "file", "doc.txt" }
+            {
+                new ByteArrayContent(Encoding.UTF8.GetBytes("hello knowledge base")), "file", "doc.txt"
+            }
         };
 #pragma warning restore CA2000
 

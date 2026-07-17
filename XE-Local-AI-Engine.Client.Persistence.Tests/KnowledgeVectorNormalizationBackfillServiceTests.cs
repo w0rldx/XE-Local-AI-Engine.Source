@@ -2,6 +2,7 @@ namespace XE_Local_AI_Engine.Client.Persistence.Tests;
 
 using System.Data;
 using System.Data.Common;
+using System.Globalization;
 using System.Numerics.Tensors;
 using System.Runtime.InteropServices;
 using Microsoft.Data.Sqlite;
@@ -46,9 +47,27 @@ public sealed class KnowledgeVectorNormalizationBackfillServiceTests : IDisposab
         var ids = new List<Guid>();
         await using (var connection = await OpenConnectionAsync(databasePath).ConfigureAwait(false))
         {
-            ids.Add(await InsertAsync(connection, new[] { 3f, 4f, 0f, 0f }).ConfigureAwait(false)); // norm 5
-            ids.Add(await InsertAsync(connection, new[] { -2f, 2f, 1f, 0f }).ConfigureAwait(false));
-            ids.Add(await InsertAsync(connection, new[] { 0f, 0f, 0f, 0f }).ConfigureAwait(false)); // zero: untouched
+            ids.Add(await InsertAsync(connection, new[]
+            {
+                3f,
+                4f,
+                0f,
+                0f
+            }).ConfigureAwait(false)); // norm 5
+            ids.Add(await InsertAsync(connection, new[]
+            {
+                -2f,
+                2f,
+                1f,
+                0f
+            }).ConfigureAwait(false));
+            ids.Add(await InsertAsync(connection, new[]
+            {
+                0f,
+                0f,
+                0f,
+                0f
+            }).ConfigureAwait(false)); // zero: untouched
         }
 
         long written;
@@ -76,7 +95,13 @@ public sealed class KnowledgeVectorNormalizationBackfillServiceTests : IDisposab
         Guid id;
         await using (var connection = await OpenConnectionAsync(databasePath).ConfigureAwait(false))
         {
-            id = await InsertAsync(connection, new[] { 6f, 8f, 0f, 0f }).ConfigureAwait(false);
+            id = await InsertAsync(connection, new[]
+            {
+                6f,
+                8f,
+                0f,
+                0f
+            }).ConfigureAwait(false);
         }
 
         await using (var connection = await OpenConnectionAsync(databasePath).ConfigureAwait(false))
@@ -108,13 +133,19 @@ public sealed class KnowledgeVectorNormalizationBackfillServiceTests : IDisposab
         Guid id;
         await using (var connection = await OpenConnectionAsync(databasePath).ConfigureAwait(false))
         {
-            id = await InsertAsync(connection, new[] { 5f, 12f, 0f, 0f }).ConfigureAwait(false); // norm 13
+            id = await InsertAsync(connection, new[]
+            {
+                5f,
+                12f,
+                0f,
+                0f
+            }).ConfigureAwait(false); // norm 13
         }
 
         await using var provider = BuildProvider(databasePath);
         var state = new KnowledgeVectorNormalizationState();
-        using var service = new KnowledgeVectorNormalizationBackfillService(
-            provider.GetRequiredService<IServiceScopeFactory>(), state, NullLogger<KnowledgeVectorNormalizationBackfillService>.Instance);
+        using var service = new KnowledgeVectorNormalizationBackfillService(provider.GetRequiredService<IServiceScopeFactory>(), state,
+            NullLogger<KnowledgeVectorNormalizationBackfillService>.Instance);
 
         await service.RunOnceAsync(CancellationToken.None).ConfigureAwait(false);
 
@@ -140,8 +171,8 @@ public sealed class KnowledgeVectorNormalizationBackfillServiceTests : IDisposab
         var services = new ServiceCollection();
         services.AddSingleton(_keyHolder);
         services.AddDbContext<NodeChatDbContext>(options => options
-            .UseSqlite($"Data Source={databasePath}")
-            .ConfigureWarnings(warnings => warnings.Ignore(CoreEventId.ManyServiceProvidersCreatedWarning)));
+                                                            .UseSqlite($"Data Source={databasePath}")
+                                                            .ConfigureWarnings(warnings => warnings.Ignore(CoreEventId.ManyServiceProvidersCreatedWarning)));
         return services.BuildServiceProvider();
     }
 
@@ -173,7 +204,7 @@ public sealed class KnowledgeVectorNormalizationBackfillServiceTests : IDisposab
     {
         await using var command = connection.CreateCommand();
         command.CommandText = "SELECT EXISTS(SELECT 1 FROM chat_maintenance_state WHERE name = 'knowledge_vector_normalization_v1');";
-        return Convert.ToInt64(await command.ExecuteScalarAsync().ConfigureAwait(false), System.Globalization.CultureInfo.InvariantCulture) != 0;
+        return Convert.ToInt64(await command.ExecuteScalarAsync().ConfigureAwait(false), CultureInfo.InvariantCulture) != 0;
     }
 
     private async Task MigrateAsync(string databasePath)

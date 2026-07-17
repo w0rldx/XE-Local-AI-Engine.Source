@@ -3,7 +3,7 @@ namespace XE_Local_AI_Engine.Client.Persistence.Tests;
 using System.Security.Cryptography;
 using Microsoft.Data.Sqlite;
 using Microsoft.EntityFrameworkCore;
-using XE_Local_AI_Engine.Client.Persistence;
+using XE_Local_AI_Engine.Client.Persistence.Entities;
 using XE_Local_AI_Engine.Client.Persistence.Implementation;
 using XE_Local_AI_Engine.Client.Persistence.Stores;
 using XE_Local_AI_Engine.Client.Persistence.Tests.Testing;
@@ -553,9 +553,9 @@ public sealed class AdaptiveAgentMemoryStoreTests : IDisposable
         context.AgentExecutionLogs.Add(NewEnvelope(messageId));
         _ = await AssertEx.ThrowsAsync<DbUpdateException>(() => context.SaveChangesAsync());
 
-        static Entities.AgentExecutionLog NewEnvelope(Guid messageId)
+        static AgentExecutionLog NewEnvelope(Guid messageId)
         {
-            return new Entities.AgentExecutionLog
+            return new AgentExecutionLog
             {
                 Id = Guid.NewGuid(),
                 RecordKind = (int)AgentExecutionLogRecordKind.ChatRunEnvelope,
@@ -634,7 +634,7 @@ public sealed class AdaptiveAgentMemoryStoreTests : IDisposable
         bool success,
         long createdAtUtc = 1L)
     {
-        _ = context.AgentExecutionLogs.Add(new Entities.AgentExecutionLog
+        _ = context.AgentExecutionLogs.Add(new AgentExecutionLog
         {
             Id = Guid.NewGuid(),
             RecordKind = (int)AgentExecutionLogRecordKind.ChatRunEnvelope,

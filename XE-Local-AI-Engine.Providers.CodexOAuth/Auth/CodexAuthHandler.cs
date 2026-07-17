@@ -197,21 +197,18 @@ public sealed class CodexAuthHandler : DelegatingHandler
     private static readonly TimeSpan RedactTimeout = TimeSpan.FromMilliseconds(200);
 
     // An email address anywhere in the body.
-    private static readonly Regex EmailPattern = new(
-        @"[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}",
+    private static readonly Regex EmailPattern = new(@"[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}",
         RegexOptions.Compiled | RegexOptions.CultureInvariant,
         RedactTimeout);
 
     // A JWT-shaped triple of base64url segments (header.payload.signature) — collapsed as one token.
-    private static readonly Regex JwtPattern = new(
-        @"[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]{10,}",
+    private static readonly Regex JwtPattern = new(@"[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]{10,}",
         RegexOptions.Compiled | RegexOptions.CultureInvariant,
         RedactTimeout);
 
     // A long, high-entropy token-like run (base64/hex/key material): 20+ chars from the token alphabet carrying BOTH a
     // letter and a digit, so readable identifiers like "invalid_request_error" are left intact.
-    private static readonly Regex TokenPattern = new(
-        @"(?=[A-Za-z0-9+/=_-]*[A-Za-z])(?=[A-Za-z0-9+/=_-]*[0-9])[A-Za-z0-9+/=_-]{20,}",
+    private static readonly Regex TokenPattern = new(@"(?=[A-Za-z0-9+/=_-]*[A-Za-z])(?=[A-Za-z0-9+/=_-]*[0-9])[A-Za-z0-9+/=_-]{20,}",
         RegexOptions.Compiled | RegexOptions.CultureInvariant,
         RedactTimeout);
 

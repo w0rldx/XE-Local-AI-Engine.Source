@@ -33,11 +33,11 @@ public sealed class LoopbackBindGuardTests
     {
         var addresses = new[]
         {
-            "http://127.0.0.1:5000",   // loopback, kept out of the result
-            "http://0.0.0.0:5000",     // wildcard
+            "http://127.0.0.1:5000", // loopback, kept out of the result
+            "http://0.0.0.0:5000", // wildcard
             "http://192.168.1.10:5000", // routable LAN address
-            "http://+:5000",           // Kestrel wildcard
-            "http://*:5000"            // Kestrel wildcard
+            "http://+:5000", // Kestrel wildcard
+            "http://*:5000" // Kestrel wildcard
         };
 
         var result = LoopbackBindGuard.FindNonLoopbackAddresses(addresses);
@@ -58,8 +58,10 @@ public sealed class LoopbackBindGuardTests
             Environment.ExitCode = 0;
             using var lifetime = new StubHostApplicationLifetime();
 
-            var shutDown = LoopbackBindGuard.ShutDownIfBindIsRoutable(
-                new[] { "http://0.0.0.0:5000" }, lifetime, NullLogger.Instance);
+            var shutDown = LoopbackBindGuard.ShutDownIfBindIsRoutable(new[]
+            {
+                "http://0.0.0.0:5000"
+            }, lifetime, NullLogger.Instance);
 
             AssertEx.True(shutDown, "A routable bind must trigger a guarded shutdown.");
             AssertEx.Equal(1, lifetime.StopApplicationCallCount);
@@ -81,8 +83,11 @@ public sealed class LoopbackBindGuardTests
             Environment.ExitCode = 0;
             using var lifetime = new StubHostApplicationLifetime();
 
-            var shutDown = LoopbackBindGuard.ShutDownIfBindIsRoutable(
-                new[] { "http://127.0.0.1:5000", "http://localhost:5001" }, lifetime, NullLogger.Instance);
+            var shutDown = LoopbackBindGuard.ShutDownIfBindIsRoutable(new[]
+            {
+                "http://127.0.0.1:5000",
+                "http://localhost:5001"
+            }, lifetime, NullLogger.Instance);
 
             AssertEx.False(shutDown, "A loopback-only bind must not trigger a shutdown.");
             AssertEx.Equal(0, lifetime.StopApplicationCallCount);

@@ -30,7 +30,8 @@ public sealed class PlaybookActionStorePromotionConcurrencyTests
         using (var editScope = factory.Services.CreateScope())
         {
             var service = editScope.ServiceProvider.GetRequiredService<IPlaybookActionService>();
-            _ = await service.UpdateSuggestedAsync(new SuggestedActionEditInput(agentId, actionId, "An edited behavior after validation.", TriggerCondition: null, Scope: null, Priority: 100)).ConfigureAwait(false);
+            _ = await service.UpdateSuggestedAsync(new SuggestedActionEditInput(agentId, actionId, "An edited behavior after validation.", TriggerCondition: null, Scope: null, Priority: 100))
+                             .ConfigureAwait(false);
         }
 
         PlaybookPromotionCommit commit;

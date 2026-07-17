@@ -48,7 +48,13 @@ public sealed class TokenEstimatorParityTests
         // application copy. Pin the ABSOLUTE weight in both (32 chars at weight 2 → (32*2)/4 + 4 = 20 tokens; the CJK
         // weight would give 36), not just parity — parity alone would re-pass if both copies drifted together.
         var heuristic = new HeuristicTokenEstimator();
-        foreach (var character in new[] { '\uA000', '\uA490', '\uE000', '\uF8FF' })
+        foreach (var character in new[]
+                 {
+                     '\uA000',
+                     '\uA490',
+                     '\uE000',
+                     '\uF8FF'
+                 })
         {
             var message = new ChatMessage(ChatRole.User, [new TextContent(new string(character, 32))]);
             AssertEx.Equal(expected: ((32 * 2) / 4) + 4, heuristic.EstimateTokens(message),
@@ -64,7 +70,11 @@ public sealed class TokenEstimatorParityTests
         // Both ends of U+F900–U+FAFF stay CJK-weighted in both copies, pinning the escaped bounds against
         // off-by-one drift: 32 chars at weight 4 → (32*4)/4 + 4 = 36 tokens.
         var heuristic = new HeuristicTokenEstimator();
-        foreach (var character in new[] { '\uF900', '\uFAFF' })
+        foreach (var character in new[]
+                 {
+                     '\uF900',
+                     '\uFAFF'
+                 })
         {
             var message = new ChatMessage(ChatRole.User, [new TextContent(new string(character, 32))]);
             AssertEx.Equal(expected: ((32 * 4) / 4) + 4, heuristic.EstimateTokens(message),

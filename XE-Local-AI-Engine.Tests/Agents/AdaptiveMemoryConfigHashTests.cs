@@ -150,7 +150,7 @@ public sealed class AdaptiveMemoryConfigHashTests
             new LexicalPlaybookRetrievalRanker(),
             Options.Create(new PlaybookRetrievalOptions()),
             new FakeAgentInstructionProvider(),
-            Substitute.For<XE_Local_AI_Engine.Client.Services.Chat.IModelCapabilityResolver>(),
+            Substitute.For<IModelCapabilityResolver>(),
             NullLogger<AgentDefinitionResolver>.Instance);
     }
 

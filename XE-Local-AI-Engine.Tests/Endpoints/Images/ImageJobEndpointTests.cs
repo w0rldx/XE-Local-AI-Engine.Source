@@ -157,7 +157,11 @@ public sealed class ImageJobEndpointTests
 
         using var createRequest = new HttpRequestMessage(HttpMethod.Post, $"{ApiPrefix}/images/jobs")
         {
-            Content = JsonContent.Create(new { modelName = "stable-diffusion-1.5", prompt = "a watercolor fox" })
+            Content = JsonContent.Create(new
+            {
+                modelName = "stable-diffusion-1.5",
+                prompt = "a watercolor fox"
+            })
         };
         factory.AddNodeBearerToken(createRequest);
 
@@ -183,7 +187,12 @@ public sealed class ImageJobEndpointTests
 
         using var createRequest = new HttpRequestMessage(HttpMethod.Post, $"{ApiPrefix}/images/jobs")
         {
-            Content = JsonContent.Create(new { modelName = "stable-diffusion-1.5", prompt = "a watercolor fox", seed = "not-a-number" })
+            Content = JsonContent.Create(new
+            {
+                modelName = "stable-diffusion-1.5",
+                prompt = "a watercolor fox",
+                seed = "not-a-number"
+            })
         };
         factory.AddNodeBearerToken(createRequest);
 

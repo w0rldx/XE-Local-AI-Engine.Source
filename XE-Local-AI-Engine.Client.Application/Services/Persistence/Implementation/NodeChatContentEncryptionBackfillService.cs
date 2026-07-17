@@ -1,8 +1,11 @@
 namespace XE_Local_AI_Engine.Client.Services.Persistence.Implementation;
 
+using System.Data.Common;
+using System.Diagnostics.CodeAnalysis;
+using System.Globalization;
 using Microsoft.EntityFrameworkCore;
 using XE_Local_AI_Engine.Client.Persistence;
-using static XE_Local_AI_Engine.Client.Services.Chat.Implementation.NodeChatPersistenceSql;
+using static Chat.Implementation.NodeChatPersistenceSql;
 
 /// <summary>
 ///     Startup background service that upgrades legacy plaintext message rows to the encrypted at-rest envelope. Before
@@ -229,7 +232,7 @@ public sealed class NodeChatContentEncryptionBackfillService(
     // now WAL (AUD4-08 / NodeSqlitePragmas), so this truncate actually reclaims the plaintext-bearing WAL frames; if WAL
     // could not be enabled and the file is still in a non-WAL journal, the pragma is a no-op returning (0, -1, -1) — also
     // treated as success.
-    private static async Task<bool> CheckpointTruncatedFullyAsync(System.Data.Common.DbConnection connection, CancellationToken cancellationToken)
+    private static async Task<bool> CheckpointTruncatedFullyAsync(DbConnection connection, CancellationToken cancellationToken)
     {
         await using var command = connection.CreateCommand();
         command.CommandText = "PRAGMA wal_checkpoint(TRUNCATE);";
@@ -272,7 +275,7 @@ public sealed class NodeChatContentEncryptionBackfillService(
         return ExecuteMarkerNonQueryAsync(ClearMarkerSql, cancellationToken);
     }
 
-    [System.Diagnostics.CodeAnalysis.SuppressMessage("Security", "CA2100:Review SQL queries for security vulnerabilities",
+    [SuppressMessage("Security", "CA2100:Review SQL queries for security vulnerabilities",
         Justification = "Every call site passes a fixed internal maintenance query constant — never user input.")]
     private async Task<bool> ExistsAsync(string sql, bool addMarkerName, CancellationToken cancellationToken)
     {
@@ -287,10 +290,10 @@ public sealed class NodeChatContentEncryptionBackfillService(
         }
 
         var result = await command.ExecuteScalarAsync(cancellationToken).ConfigureAwait(false);
-        return Convert.ToInt64(result, System.Globalization.CultureInfo.InvariantCulture) != 0;
+        return Convert.ToInt64(result, CultureInfo.InvariantCulture) != 0;
     }
 
-    [System.Diagnostics.CodeAnalysis.SuppressMessage("Security", "CA2100:Review SQL queries for security vulnerabilities",
+    [SuppressMessage("Security", "CA2100:Review SQL queries for security vulnerabilities",
         Justification = "Every call site passes a fixed internal maintenance statement constant — never user input.")]
     private async Task ExecuteMarkerNonQueryAsync(string sql, CancellationToken cancellationToken)
     {
@@ -303,9 +306,9 @@ public sealed class NodeChatContentEncryptionBackfillService(
         await command.ExecuteNonQueryAsync(cancellationToken).ConfigureAwait(false);
     }
 
-    [System.Diagnostics.CodeAnalysis.SuppressMessage("Security", "CA2100:Review SQL queries for security vulnerabilities",
+    [SuppressMessage("Security", "CA2100:Review SQL queries for security vulnerabilities",
         Justification = "Every call site passes a fixed internal maintenance statement (PRAGMA/VACUUM) — never user input.")]
-    private static async Task ExecuteRawAsync(System.Data.Common.DbConnection connection, string sql, CancellationToken cancellationToken)
+    private static async Task ExecuteRawAsync(DbConnection connection, string sql, CancellationToken cancellationToken)
     {
         await using var command = connection.CreateCommand();
         command.CommandText = sql;

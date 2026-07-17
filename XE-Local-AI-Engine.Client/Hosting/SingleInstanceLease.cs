@@ -28,7 +28,7 @@ internal sealed class SingleInstanceLease : IDisposable
     // The two Win32 HResults that a FileShare.None open raises when the file is already locked by another handle. Only
     // these (on Windows) mean "another instance holds the lease"; other IOExceptions are genuine faults.
     private const int HResultSharingViolation = unchecked((int)0x80070020); // ERROR_SHARING_VIOLATION
-    private const int HResultLockViolation = unchecked((int)0x80070021);    // ERROR_LOCK_VIOLATION
+    private const int HResultLockViolation = unchecked((int)0x80070021); // ERROR_LOCK_VIOLATION
 
     /// <summary>
     ///     Attempts to acquire the exclusive lease for <paramref name="dataDirectory" />. Returns the held lease on

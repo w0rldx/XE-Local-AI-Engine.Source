@@ -55,19 +55,19 @@ public sealed class NodeChatRestartRecoveryService(NodeChatPersistenceWriter wri
                 // duplicate). Tokens / duration / model are unknown at reconcile and left empty — the row records the
                 // terminal lifecycle, not the (lost) generation detail.
                 _ = await dbContext.Database.ExecuteSqlRawAsync(sql: """
-                                                                    INSERT INTO agent_execution_logs
-                                                                        (id, record_kind, schema_version, agent_definition_id, conversation_id, message_id, request_id,
-                                                                         model_name, config_hash, terminal_status, latency_ms, success, created_at_utc)
-                                                                    SELECT
-                                                                        m.message_id, {0}, {1}, COALESCE(m.agent_definition_id, {2}), m.conversation_id, m.message_id, m.request_id,
-                                                                        '', '', m.status, 0, CASE WHEN m.status = {3} THEN 1 ELSE 0 END, {4}
-                                                                    FROM messages m
-                                                                    WHERE m.role = {5}
-                                                                      AND m.status IN ({3}, {6}, {7}, {8})
-                                                                      AND NOT EXISTS (
-                                                                          SELECT 1 FROM agent_execution_logs e
-                                                                          WHERE e.record_kind = {0} AND e.message_id = m.message_id);
-                                                                    """,
+                                                                     INSERT INTO agent_execution_logs
+                                                                         (id, record_kind, schema_version, agent_definition_id, conversation_id, message_id, request_id,
+                                                                          model_name, config_hash, terminal_status, latency_ms, success, created_at_utc)
+                                                                     SELECT
+                                                                         m.message_id, {0}, {1}, COALESCE(m.agent_definition_id, {2}), m.conversation_id, m.message_id, m.request_id,
+                                                                         '', '', m.status, 0, CASE WHEN m.status = {3} THEN 1 ELSE 0 END, {4}
+                                                                     FROM messages m
+                                                                     WHERE m.role = {5}
+                                                                       AND m.status IN ({3}, {6}, {7}, {8})
+                                                                       AND NOT EXISTS (
+                                                                           SELECT 1 FROM agent_execution_logs e
+                                                                           WHERE e.record_kind = {0} AND e.message_id = m.message_id);
+                                                                     """,
                     [
                         (int)AgentExecutionLogRecordKind.ChatRunEnvelope,
                         AgentRunEnvelope.CurrentSchemaVersion,

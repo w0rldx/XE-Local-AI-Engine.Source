@@ -42,8 +42,10 @@ public static class SeedValue
     }
 
     /// <summary>True when <paramref name="raw" /> is a valid optional seed (blank, or a base-10 64-bit integer).</summary>
-    public static bool IsValid(string? raw) => TryParse(raw, out _, out _);
+    public static bool IsValid(string? raw) =>
+        TryParse(raw, out _, out _);
 
     /// <summary>Formats a seed <see cref="long" /> for the wire.</summary>
-    public static string ToWire(long seed) => seed.ToString(CultureInfo.InvariantCulture);
+    public static string ToWire(long seed) =>
+        seed.ToString(CultureInfo.InvariantCulture);
 }

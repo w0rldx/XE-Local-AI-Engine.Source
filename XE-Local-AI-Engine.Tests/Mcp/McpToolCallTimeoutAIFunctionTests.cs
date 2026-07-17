@@ -72,7 +72,10 @@ public sealed class McpToolCallTimeoutAIFunctionTests
         var inner = AIFunctionFactory.Create((string value) => $"echo:{value}", "echo_tool");
         var sut = new McpToolCallTimeoutAIFunction(inner, TimeSpan.FromSeconds(30));
 
-        var result = await sut.InvokeAsync(new AIFunctionArguments { ["value"] = "hi" }, CancellationToken.None).ConfigureAwait(false);
+        var result = await sut.InvokeAsync(new AIFunctionArguments
+        {
+            ["value"] = "hi"
+        }, CancellationToken.None).ConfigureAwait(false);
 
         AssertEx.True(result?.ToString()?.Contains("echo:hi", StringComparison.Ordinal) == true, "Expected the inner tool result to pass through unchanged.");
     }

@@ -68,7 +68,10 @@ internal static class ConversationAttachmentContextComposer
             // controlled is emitted outside the untrusted boundary. WrapDocument's length is a fixed per-part overhead
             // (markers + metadata, deterministic since the nonce length is fixed) plus the body length, so budgeting
             // against the empty-body wrap keeps the closing marker from ever being truncated away.
-            var metadata = new KeyValuePair<string, string?>[] { new("file", part.FileName) };
+            var metadata = new KeyValuePair<string, string?>[]
+            {
+                new("file", part.FileName)
+            };
             var fenceOverhead = UntrustedContentFraming.WrapDocument(string.Empty, metadata, nonceSeed).Length;
 
             // Reserve the separator plus the fence overhead plus at least one body char. If they cannot fit, stop.

@@ -87,8 +87,7 @@ public sealed class MemoryExtractionWorker : BackgroundService
         // on its own. StopAsync also completes the writer (idempotently) and bounds the drain; this registration is the
         // safety net for a stop that trips the token before StopAsync runs. The loop deliberately reads on the drain token,
         // NOT the stopping token, so a stop can never abandon jobs already buffered on the channel — they are drained.
-        using var stopRegistration = stoppingToken.Register(
-            static state => ((MemoryExtractionDispatcher)state!).CompleteWriter(),
+        using var stopRegistration = stoppingToken.Register(static state => ((MemoryExtractionDispatcher)state!).CompleteWriter(),
             _dispatcher);
 
         try
@@ -267,7 +266,8 @@ public sealed class MemoryExtractionWorker : BackgroundService
         {
             // Dedicated, content-free record of the abandoned jobs: they ignored cancellation within the grace, may observe
             // disposed host services when they resume, and have their failures swallowed — the accepted bounded-shutdown cost.
-            _logger.LogWarning("Abandoned {Abandoned} memory-extraction job(s) that ignored cancellation within the shutdown grace; they may observe disposed host services and their failures are swallowed.",
+            _logger.LogWarning(
+                "Abandoned {Abandoned} memory-extraction job(s) that ignored cancellation within the shutdown grace; they may observe disposed host services and their failures are swallowed.",
                 abandoned);
             NodeMetrics.MemoryExtractionAbandonedTotal.Add(abandoned);
         }

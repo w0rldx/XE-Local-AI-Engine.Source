@@ -105,7 +105,8 @@ internal sealed class PlaybookEvalService(
         {
             // Cap is a cost guard, NOT a pass shortcut: the run stays INCOMPLETE (GoldenCaseCount < GoldenCaseTotal) and
             // the promote gate refuses to authorize it. An operator raises MaxGoldenCases to run a complete eval.
-            _logger.LogWarning("Eval for agent {AgentId} has {Count} golden cases; evaluating only {Max} (the run will be marked incomplete and cannot authorize promotion).", agentId, goldenCases.Count, _options.MaxGoldenCases);
+            _logger.LogWarning("Eval for agent {AgentId} has {Count} golden cases; evaluating only {Max} (the run will be marked incomplete and cannot authorize promotion).", agentId,
+                goldenCases.Count, _options.MaxGoldenCases);
             goldenCases = [.. goldenCases.Take(_options.MaxGoldenCases)];
         }
 

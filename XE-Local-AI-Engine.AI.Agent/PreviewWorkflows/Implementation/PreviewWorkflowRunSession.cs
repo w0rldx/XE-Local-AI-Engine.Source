@@ -46,10 +46,8 @@ internal sealed class PreviewWorkflowRunSession : IPreviewWorkflowRunSession
         // abandons the stuck pull (observed off-thread, bounded disposal) instead of awaiting it forever. Preview has no
         // inter-event idle deadline (its only bound is the caller's token), so the guard's idle and outer tokens are the
         // same and its idle-timeout path is unreachable here — only outer cancellation and abandonment apply.
-        var guarded = IdleStreamGuard.GuardAsync(
-            watchToken => _run.WatchStreamAsync(watchToken).GetAsyncEnumerator(watchToken),
-            new IdleGuardContext(
-                _abandonmentGrace,
+        var guarded = IdleStreamGuard.GuardAsync(watchToken => _run.WatchStreamAsync(watchToken).GetAsyncEnumerator(watchToken),
+            new IdleGuardContext(_abandonmentGrace,
                 static () => { },
                 static () => WorkflowWatchdogMetrics.RecordAbandoned(WorkflowWatchdogMetrics.PreviewSurface),
                 cancellationToken,

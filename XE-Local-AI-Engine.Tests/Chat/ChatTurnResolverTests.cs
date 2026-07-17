@@ -50,7 +50,8 @@ public sealed class ChatTurnResolverTests
         store.GetByIdAsync(agentId, Arg.Any<CancellationToken>()).Returns((AgentDefinitionRecord?)null);
         var resolver = Substitute.For<IAgentDefinitionResolver>();
         resolver.ResolveAsync(Arg.Any<Guid?>(), Arg.Any<string?>(), Arg.Any<string?>(), Arg.Any<bool>(), Arg.Any<bool>(), Arg.Any<bool>(), Arg.Any<CancellationToken>())
-                .Returns(new ResolvedAgentRuntime("persona", [], ModelProfile: null, ReasoningEffort: null, AgentDefinitionVersion: 1, agentId, "Orchestrator", Kind: AgentDefinitionKind.Orchestrator));
+                .Returns(new ResolvedAgentRuntime("persona", [], ModelProfile: null, ReasoningEffort: null, AgentDefinitionVersion: 1, agentId, "Orchestrator",
+                    Kind: AgentDefinitionKind.Orchestrator));
 
         var sut = CreateSut(resolver, store, out _);
 

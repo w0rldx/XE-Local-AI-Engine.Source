@@ -343,7 +343,11 @@ public sealed class PlaybookActionServiceTests
         // Cap of 2 with two already-Enabled actions: the eval passes, but the hard cap blocks the promote with no write.
         var service = CreateService(out var store, out _, agentExists: true, maxEnabledActions: 2);
         var actionId = Guid.NewGuid();
-        var enabled = new[] { EnabledRecord(agentId), EnabledRecord(agentId) };
+        var enabled = new[]
+        {
+            EnabledRecord(agentId),
+            EnabledRecord(agentId)
+        };
         var pending = CreateSuggestedRecord(agentId, actionId) with
         {
             EvalResult = PassingEvalResultJson(1, MatchingFingerprint(actionId, 1, enabled))
@@ -369,7 +373,10 @@ public sealed class PlaybookActionServiceTests
         // Cap of 2 with one already-Enabled action: under the cap, the passing eval promotes normally.
         var service = CreateService(out var store, out _, agentExists: true, maxEnabledActions: 2);
         var actionId = Guid.NewGuid();
-        var enabled = new[] { EnabledRecord(agentId) };
+        var enabled = new[]
+        {
+            EnabledRecord(agentId)
+        };
         var pending = CreateSuggestedRecord(agentId, actionId) with
         {
             EvalResult = PassingEvalResultJson(1, MatchingFingerprint(actionId, 1, enabled))
@@ -646,7 +653,10 @@ public sealed class PlaybookActionServiceTests
         // subset pass cannot prove no-regression and must not authorize promotion — even with a current fingerprint.
         var incompleteJson = EvalResultJson(passed: true, version: 1, goldenCaseCount: 1, goldenCaseTotal: 3, MatchingFingerprint(actionId, 1));
         store.GetByIdAsync(actionId, Arg.Any<CancellationToken>())
-             .Returns(CreateSuggestedRecord(agentId, actionId) with { EvalResult = incompleteJson });
+             .Returns(CreateSuggestedRecord(agentId, actionId) with
+             {
+                 EvalResult = incompleteJson
+             });
 
         var result = await service.PromoteSuggestedAsync(agentId, actionId).ConfigureAwait(false);
 
@@ -664,7 +674,10 @@ public sealed class PlaybookActionServiceTests
         // no longer matches, so promotion is blocked.
         var staleFingerprint = PlaybookEvalFingerprint.Compute(actionId, 1, "Older base instructions.", [], [], EvalModelName);
         store.GetByIdAsync(actionId, Arg.Any<CancellationToken>())
-             .Returns(CreateSuggestedRecord(agentId, actionId) with { EvalResult = PassingEvalResultJson(1, staleFingerprint) });
+             .Returns(CreateSuggestedRecord(agentId, actionId) with
+             {
+                 EvalResult = PassingEvalResultJson(1, staleFingerprint)
+             });
 
         var result = await service.PromoteSuggestedAsync(agentId, actionId).ConfigureAwait(false);
 
@@ -681,7 +694,10 @@ public sealed class PlaybookActionServiceTests
         // The eval was recorded over a golden set that has since changed (the current enabled golden set is empty).
         var staleFingerprint = PlaybookEvalFingerprint.Compute(actionId, 1, AgentInstructions, [], [GoldenCase(agentId)], EvalModelName);
         store.GetByIdAsync(actionId, Arg.Any<CancellationToken>())
-             .Returns(CreateSuggestedRecord(agentId, actionId) with { EvalResult = PassingEvalResultJson(1, staleFingerprint) });
+             .Returns(CreateSuggestedRecord(agentId, actionId) with
+             {
+                 EvalResult = PassingEvalResultJson(1, staleFingerprint)
+             });
 
         var result = await service.PromoteSuggestedAsync(agentId, actionId).ConfigureAwait(false);
 
@@ -698,7 +714,10 @@ public sealed class PlaybookActionServiceTests
         // The eval was recorded when a sibling enabled action existed; the current enabled set no longer contains it.
         var staleFingerprint = PlaybookEvalFingerprint.Compute(actionId, 1, AgentInstructions, [EnabledRecord(agentId)], [], EvalModelName);
         store.GetByIdAsync(actionId, Arg.Any<CancellationToken>())
-             .Returns(CreateSuggestedRecord(agentId, actionId) with { EvalResult = PassingEvalResultJson(1, staleFingerprint) });
+             .Returns(CreateSuggestedRecord(agentId, actionId) with
+             {
+                 EvalResult = PassingEvalResultJson(1, staleFingerprint)
+             });
 
         var result = await service.PromoteSuggestedAsync(agentId, actionId).ConfigureAwait(false);
 
@@ -715,7 +734,10 @@ public sealed class PlaybookActionServiceTests
         // The eval was recorded against a different eval model than the one configured now.
         var staleFingerprint = PlaybookEvalFingerprint.Compute(actionId, 1, AgentInstructions, [], [], "some-other-model");
         store.GetByIdAsync(actionId, Arg.Any<CancellationToken>())
-             .Returns(CreateSuggestedRecord(agentId, actionId) with { EvalResult = PassingEvalResultJson(1, staleFingerprint) });
+             .Returns(CreateSuggestedRecord(agentId, actionId) with
+             {
+                 EvalResult = PassingEvalResultJson(1, staleFingerprint)
+             });
 
         var result = await service.PromoteSuggestedAsync(agentId, actionId).ConfigureAwait(false);
 

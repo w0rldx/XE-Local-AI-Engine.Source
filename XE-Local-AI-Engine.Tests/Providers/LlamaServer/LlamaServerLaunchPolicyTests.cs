@@ -84,7 +84,10 @@ public sealed class LlamaServerLaunchPolicyTests
     [Test]
     public async Task Resolve_WhenGpuKvQuantDisabledInOptions_NeverEnablesIt()
     {
-        var policy = NewPolicy(new LlamaServerLaunchPolicyOptions { EnableGpuKvCacheQuantization = false });
+        var policy = NewPolicy(new LlamaServerLaunchPolicyOptions
+        {
+            EnableGpuKvCacheQuantization = false
+        });
 
         var plan = await policy.ResolveAsync(ModelRole.Chat, GpuVariant.Cuda, ResolvedLaunchArguments.Explore(), modelTrainContextTokens: null, CancellationToken.None);
 
@@ -112,7 +115,10 @@ public sealed class LlamaServerLaunchPolicyTests
     [Test]
     public async Task Resolve_CpuVariant_WhenThreadPolicyDisabled_EmitsNoThreads()
     {
-        var policy = NewPolicy(new LlamaServerLaunchPolicyOptions { EnableCpuThreadPolicy = false });
+        var policy = NewPolicy(new LlamaServerLaunchPolicyOptions
+        {
+            EnableCpuThreadPolicy = false
+        });
 
         var plan = await policy.ResolveAsync(ModelRole.Chat, GpuVariant.Cpu, ResolvedLaunchArguments.Explore(), modelTrainContextTokens: null, CancellationToken.None);
 
@@ -123,7 +129,11 @@ public sealed class LlamaServerLaunchPolicyTests
     [Test]
     public async Task Resolve_ReplayMode_LeavesContextAndKvToTheFrozenProfile()
     {
-        var policy = NewPolicy(new LlamaServerLaunchPolicyOptions { CpuThreadCount = 4, CpuThreadsBatchCount = 4 });
+        var policy = NewPolicy(new LlamaServerLaunchPolicyOptions
+        {
+            CpuThreadCount = 4,
+            CpuThreadsBatchCount = 4
+        });
 
         // GPU replay: the frozen profile owns -c/KV/FA, so the policy supplies neither.
         var gpuReplay = await policy.ResolveAsync(ModelRole.Chat, GpuVariant.Cuda, ResolvedLaunchArguments.Replay(ctxSize: 8192), modelTrainContextTokens: null, CancellationToken.None);

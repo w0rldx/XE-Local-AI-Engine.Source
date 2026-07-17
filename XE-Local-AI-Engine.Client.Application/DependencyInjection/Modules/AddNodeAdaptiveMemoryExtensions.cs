@@ -40,8 +40,7 @@ internal static class AddNodeAdaptiveMemoryExtensions
         // interface so the worker and the hook share the one queue instance. Replaces the prior unbounded fire-and-forget.
         builder.Services.AddSingleton<MemoryExtractionDispatcher>();
         builder.Services.AddSingleton<IMemoryExtractionDispatcher>(sp => sp.GetRequiredService<MemoryExtractionDispatcher>());
-        builder.Services.AddHostedService(sp => new MemoryExtractionWorker(
-            sp.GetRequiredService<IServiceScopeFactory>(),
+        builder.Services.AddHostedService(sp => new MemoryExtractionWorker(sp.GetRequiredService<IServiceScopeFactory>(),
             sp.GetRequiredService<MemoryExtractionDispatcher>(),
             sp.GetRequiredService<IOptions<MemoryExtractionOptions>>(),
             sp.GetRequiredService<ILogger<MemoryExtractionWorker>>()));

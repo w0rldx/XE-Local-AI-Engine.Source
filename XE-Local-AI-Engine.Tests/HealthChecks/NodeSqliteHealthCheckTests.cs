@@ -124,14 +124,14 @@ public sealed class NodeSqliteHealthCheckTests
     private static DbContextOptions<NodeChatDbContext> BuildOptions(string dbPath)
     {
         return new DbContextOptionsBuilder<NodeChatDbContext>()
-            // Pooling disabled so each probe opens a fresh file handle (the read-only test depends on the current file
-            // mode rather than a reused pooled connection).
-            .UseSqlite($"Data Source={dbPath};Pooling=False")
-            // Mirror the production NodeChatDbContext registration: building distinct options per test would otherwise
-            // push EF's internal service-provider cache over its cap once the whole module runs, and EF throws for that
-            // event by default (full-suite-only failure).
-            .ConfigureWarnings(warnings => warnings.Ignore(CoreEventId.ManyServiceProvidersCreatedWarning))
-            .Options;
+               // Pooling disabled so each probe opens a fresh file handle (the read-only test depends on the current file
+               // mode rather than a reused pooled connection).
+               .UseSqlite($"Data Source={dbPath};Pooling=False")
+               // Mirror the production NodeChatDbContext registration: building distinct options per test would otherwise
+               // push EF's internal service-provider cache over its cap once the whole module runs, and EF throws for that
+               // event by default (full-suite-only failure).
+               .ConfigureWarnings(warnings => warnings.Ignore(CoreEventId.ManyServiceProvidersCreatedWarning))
+               .Options;
     }
 
     private static async Task CreateSchemaAsync(DbContextOptions<NodeChatDbContext> options)

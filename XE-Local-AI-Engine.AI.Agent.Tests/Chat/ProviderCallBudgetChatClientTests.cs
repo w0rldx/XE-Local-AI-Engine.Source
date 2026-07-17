@@ -34,7 +34,11 @@ public sealed class ProviderCallBudgetChatClientTests
         // ReservedOutputTokenFloor = 0 so the tiny 200-token test window is entirely available to the input; the
         // excerpted round then fits and is delivered (this test exercises per-round excerpting, not the over-window
         // rejection — that has its own test above).
-        using (ProviderCallBudget.BeginScope(new ProviderCallBudgetOptions { OversizedToolResultExcerptChars = 40, ReservedOutputTokenFloor = 0 }))
+        using (ProviderCallBudget.BeginScope(new ProviderCallBudgetOptions
+               {
+                   OversizedToolResultExcerptChars = 40,
+                   ReservedOutputTokenFloor = 0
+               }))
         {
             // Simulates an inner tool-loop round: FunctionInvokingChatClient appended a huge tool result and called the
             // provider again. The boundary must re-budget it (the outer runner never sees this round).
@@ -43,7 +47,7 @@ public sealed class ProviderCallBudgetChatClientTests
 
         var received = inner.ReceivedMessageSets.Single();
         var pending = received.SelectMany(message => message.Contents.OfType<FunctionResultContent>())
-                             .First(content => string.Equals(content.CallId, "big", StringComparison.Ordinal));
+                              .First(content => string.Equals(content.CallId, "big", StringComparison.Ordinal));
         AssertEx.Contains(pending.Result?.ToString() ?? string.Empty, "[truncated:");
     }
 
@@ -52,9 +56,15 @@ public sealed class ProviderCallBudgetChatClientTests
     {
         using var inner = new CapturingChatClient();
         using var sut = new ProviderCallBudgetChatClient(inner, NullLogger<ProviderCallBudgetChatClient>.Instance);
-        var messages = new List<ChatMessage> { new(ChatRole.User, "hi") };
+        var messages = new List<ChatMessage>
+        {
+            new(ChatRole.User, "hi")
+        };
 
-        using (ProviderCallBudget.BeginScope(new ProviderCallBudgetOptions { MaxProviderCallsPerInvocation = 2 }))
+        using (ProviderCallBudget.BeginScope(new ProviderCallBudgetOptions
+               {
+                   MaxProviderCallsPerInvocation = 2
+               }))
         {
             _ = await sut.GetResponseAsync(messages);
             _ = await sut.GetResponseAsync(messages);
@@ -74,8 +84,15 @@ public sealed class ProviderCallBudgetChatClientTests
         using var sut = new ProviderCallBudgetChatClient(inner, NullLogger<ProviderCallBudgetChatClient>.Instance);
 
         // A single large round (~2004 estimated tokens) exceeds a tiny cumulative-token ceiling.
-        var messages = new List<ChatMessage> { new(ChatRole.User, new string('x', 8000)) };
-        using (ProviderCallBudget.BeginScope(new ProviderCallBudgetOptions { MaxCumulativeInputTokens = 1024, DefaultContextTokens = 1_000_000 }))
+        var messages = new List<ChatMessage>
+        {
+            new(ChatRole.User, new string('x', 8000))
+        };
+        using (ProviderCallBudget.BeginScope(new ProviderCallBudgetOptions
+               {
+                   MaxCumulativeInputTokens = 1024,
+                   DefaultContextTokens = 1_000_000
+               }))
         {
             _ = await AssertEx.ThrowsAsync<ProviderCallBudgetExceededException>(async () => await sut.GetResponseAsync(messages, new ChatOptions()));
         }
@@ -89,8 +106,15 @@ public sealed class ProviderCallBudgetChatClientTests
 
         // A single oversized user message: not a tool result (cannot be excerpted) and the last/only message (cannot be
         // dropped), so the budgeter reduces nothing and the round stays over a tiny window — irreducible.
-        var messages = new List<ChatMessage> { new(ChatRole.User, new string('x', 8000)) };
-        using (ProviderCallBudget.BeginScope(new ProviderCallBudgetOptions { DefaultContextTokens = 16, ReservedOutputTokenFloor = 0 }))
+        var messages = new List<ChatMessage>
+        {
+            new(ChatRole.User, new string('x', 8000))
+        };
+        using (ProviderCallBudget.BeginScope(new ProviderCallBudgetOptions
+               {
+                   DefaultContextTokens = 16,
+                   ReservedOutputTokenFloor = 0
+               }))
         {
             var exception = await AssertEx.ThrowsAsync<ProviderContextWindowExceededException>(async () => await sut.GetResponseAsync(messages, new ChatOptions()));
 
@@ -113,12 +137,22 @@ public sealed class ProviderCallBudgetChatClientTests
         // tiny while the configured default is huge. An irreducible round must be rejected against the EFFECTIVE window
         // — proving the propagated effective context, not the config default, bounds the round.
         const int EffectiveWindow = 32;
-        var messages = new List<ChatMessage> { new(ChatRole.User, new string('x', 8000)) };
+        var messages = new List<ChatMessage>
+        {
+            new(ChatRole.User, new string('x', 8000))
+        };
         var options = new ChatOptions
         {
-            AdditionalProperties = new AdditionalPropertiesDictionary { ["num_ctx"] = EffectiveWindow }
+            AdditionalProperties = new AdditionalPropertiesDictionary
+            {
+                ["num_ctx"] = EffectiveWindow
+            }
         };
-        using (ProviderCallBudget.BeginScope(new ProviderCallBudgetOptions { DefaultContextTokens = 1_000_000, ReservedOutputTokenFloor = 0 }))
+        using (ProviderCallBudget.BeginScope(new ProviderCallBudgetOptions
+               {
+                   DefaultContextTokens = 1_000_000,
+                   ReservedOutputTokenFloor = 0
+               }))
         {
             var exception = await AssertEx.ThrowsAsync<ProviderContextWindowExceededException>(async () => await sut.GetResponseAsync(messages, options));
             AssertEx.Equal(EffectiveWindow, exception.WindowTokens);
@@ -133,8 +167,15 @@ public sealed class ProviderCallBudgetChatClientTests
         using var inner = new FailIfCalledChatClient();
         using var sut = new ProviderCallBudgetChatClient(inner, NullLogger<ProviderCallBudgetChatClient>.Instance);
 
-        var messages = new List<ChatMessage> { new(ChatRole.User, new string('x', 8000)) };
-        using (ProviderCallBudget.BeginScope(new ProviderCallBudgetOptions { DefaultContextTokens = 16, ReservedOutputTokenFloor = 0 }))
+        var messages = new List<ChatMessage>
+        {
+            new(ChatRole.User, new string('x', 8000))
+        };
+        using (ProviderCallBudget.BeginScope(new ProviderCallBudgetOptions
+               {
+                   DefaultContextTokens = 16,
+                   ReservedOutputTokenFloor = 0
+               }))
         {
             await AssertEx.ThrowsAsync<ProviderContextWindowExceededException>(async () =>
             {
@@ -175,21 +216,24 @@ public sealed class ProviderCallBudgetChatClientTests
 
         int withoutToolsCount;
         using (var inner = new CapturingChatClient())
-        using (var sut = new ProviderCallBudgetChatClient(inner, NullLogger<ProviderCallBudgetChatClient>.Instance))
-        using (ProviderCallBudget.BeginScope(budgetOptions))
-        {
-            _ = await sut.GetResponseAsync(messages, new ChatOptions()).ConfigureAwait(false);
-            withoutToolsCount = inner.ReceivedMessageSets.Single().Count;
-        }
+            using (var sut = new ProviderCallBudgetChatClient(inner, NullLogger<ProviderCallBudgetChatClient>.Instance))
+                using (ProviderCallBudget.BeginScope(budgetOptions))
+                {
+                    _ = await sut.GetResponseAsync(messages, new ChatOptions()).ConfigureAwait(false);
+                    withoutToolsCount = inner.ReceivedMessageSets.Single().Count;
+                }
 
         int withToolsCount;
         using (var inner = new CapturingChatClient())
-        using (var sut = new ProviderCallBudgetChatClient(inner, NullLogger<ProviderCallBudgetChatClient>.Instance))
-        using (ProviderCallBudget.BeginScope(budgetOptions))
-        {
-            _ = await sut.GetResponseAsync(messages, new ChatOptions { Tools = ManyTools(5) }).ConfigureAwait(false);
-            withToolsCount = inner.ReceivedMessageSets.Single().Count;
-        }
+            using (var sut = new ProviderCallBudgetChatClient(inner, NullLogger<ProviderCallBudgetChatClient>.Instance))
+                using (ProviderCallBudget.BeginScope(budgetOptions))
+                {
+                    _ = await sut.GetResponseAsync(messages, new ChatOptions
+                    {
+                        Tools = ManyTools(5)
+                    }).ConfigureAwait(false);
+                    withToolsCount = inner.ReceivedMessageSets.Single().Count;
+                }
 
         AssertEx.Equal(messages.Count, withoutToolsCount);
         AssertEx.True(withToolsCount < withoutToolsCount, "counting the tool schemas must shrink the message budget and drop history the tool-less round kept");
@@ -200,8 +244,7 @@ public sealed class ProviderCallBudgetChatClientTests
         var tools = new List<AITool>(count);
         for (var index = 0; index < count; index++)
         {
-            tools.Add(AIFunctionFactory.Create(
-                (string query) => query,
+            tools.Add(AIFunctionFactory.Create((string query) => query,
                 name: $"search_documents_{index}",
                 description: "Searches the indexed knowledge base and returns the most relevant passages for the supplied query string."));
         }
@@ -213,7 +256,10 @@ public sealed class ProviderCallBudgetChatClientTests
     {
         return new ChatOptions
         {
-            AdditionalProperties = new AdditionalPropertiesDictionary { ["num_ctx"] = 200 }
+            AdditionalProperties = new AdditionalPropertiesDictionary
+            {
+                ["num_ctx"] = 200
+            }
         };
     }
 

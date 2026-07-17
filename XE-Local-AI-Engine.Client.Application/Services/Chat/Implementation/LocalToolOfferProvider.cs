@@ -76,8 +76,8 @@ internal sealed class LocalToolOfferProvider : ILocalToolOfferProvider
         // knowledge-base content NOR node-local workspace/attachment file content reaches a third-party provider through
         // a tool result. Precomputed so the gated offer is byte-identical across sends (stable config hash).
         var localDataToolNames = knowledgeDescriptors.Select(static descriptor => descriptor.Name)
-                                                      .Concat(coderDescriptors.Select(static descriptor => descriptor.Name))
-                                                      .ToHashSet(StringComparer.Ordinal);
+                                                     .Concat(coderDescriptors.Select(static descriptor => descriptor.Name))
+                                                     .ToHashSet(StringComparer.Ordinal);
         _builtinAllToolsNoLocalData =
         [
             .. _builtinAllTools.Where(tool => !localDataToolNames.Contains(tool.Name))

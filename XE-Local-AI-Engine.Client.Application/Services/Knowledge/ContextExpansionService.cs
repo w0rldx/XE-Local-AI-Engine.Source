@@ -123,9 +123,11 @@ public sealed class ContextExpansionService : IContextExpansionService
     // per-query cap. Rows come back ascending by chunk_index; across the (ascending, disjoint) chunk batches the appended
     // result stays globally ascending. Updates the row-count and query-count seams.
     [SuppressMessage("Security", "CA2100:Review SQL queries for security vulnerabilities",
-        Justification = "The OR-disjunction is a fixed count of $loN/$hiN placeholder pairs generated from an internal range count; every bound and id is a bound parameter and no value is concatenated into the command text.")]
+        Justification =
+            "The OR-disjunction is a fixed count of $loN/$hiN placeholder pairs generated from an internal range count; every bound and id is a bound parameter and no value is concatenated into the command text.")]
     [SuppressMessage("Security Hotspot", "S2077:Formatting SQL queries is security-sensitive",
-        Justification = "Only internally-generated $loN/$hiN placeholder names are interpolated; every range bound and the document id are bound parameters, so no user input reaches the command text.")]
+        Justification =
+            "Only internally-generated $loN/$hiN placeholder names are interpolated; every range bound and the document id are bound parameters, so no user input reaches the command text.")]
     private async Task<IReadOnlyList<KnowledgeNeighborChunk>> ReadDisjointRangesAsync(DbConnection connection,
         Guid documentId,
         IReadOnlyList<(int Lower, int Upper)> ranges,

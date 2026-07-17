@@ -30,7 +30,10 @@ public sealed class DefaultExceptionHandlerTests
         var handler = new DefaultExceptionHandler(logger, environment);
 
         const string connectionId = "0HN-kestrel-connection:00000001";
-        var httpContext = new DefaultHttpContext { TraceIdentifier = connectionId };
+        var httpContext = new DefaultHttpContext
+        {
+            TraceIdentifier = connectionId
+        };
         using var responseBody = new MemoryStream();
         httpContext.Response.Body = responseBody;
         httpContext.Request.Method = "POST";

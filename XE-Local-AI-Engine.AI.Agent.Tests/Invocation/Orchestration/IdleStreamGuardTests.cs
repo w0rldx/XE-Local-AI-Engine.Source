@@ -19,8 +19,7 @@ public sealed class IdleStreamGuardTests
         var collected = new List<int>();
 
         using var idleCts = new CancellationTokenSource();
-        var context = new IdleGuardContext(
-            TimeSpan.FromMilliseconds(100),
+        var context = new IdleGuardContext(TimeSpan.FromMilliseconds(100),
             () => idleTimeouts++,
             () => abandonments++,
             idleCts.Token,
@@ -60,8 +59,7 @@ public sealed class IdleStreamGuardTests
         var collected = new List<int>();
 
         using var idleCts = new CancellationTokenSource();
-        var context = new IdleGuardContext(
-            TimeSpan.FromMilliseconds(100),
+        var context = new IdleGuardContext(TimeSpan.FromMilliseconds(100),
             () => idleTimeouts++,
             () => abandonments++,
             idleCts.Token,
@@ -94,8 +92,7 @@ public sealed class IdleStreamGuardTests
         using var outerCts = new CancellationTokenSource();
         // Mirror the session: the idle CTS is linked to the outer token, so outer cancellation fires both.
         using var idleCts = CancellationTokenSource.CreateLinkedTokenSource(outerCts.Token);
-        var context = new IdleGuardContext(
-            TimeSpan.FromMilliseconds(100),
+        var context = new IdleGuardContext(TimeSpan.FromMilliseconds(100),
             () => idleTimeouts++,
             () => abandonments++,
             idleCts.Token,
@@ -123,8 +120,7 @@ public sealed class IdleStreamGuardTests
         var abandonments = 0;
         var collected = new List<int>();
 
-        var context = new IdleGuardContext(
-            TimeSpan.FromMilliseconds(100),
+        var context = new IdleGuardContext(TimeSpan.FromMilliseconds(100),
             () => idleTimeouts++,
             () => abandonments++,
             CancellationToken.None,
@@ -183,8 +179,7 @@ public sealed class IdleStreamGuardTests
         using var outerCts = new CancellationTokenSource();
         // Mirror the session: the idle CTS is linked to the outer token.
         using var idleCts = CancellationTokenSource.CreateLinkedTokenSource(outerCts.Token);
-        var context = new IdleGuardContext(
-            TimeSpan.FromMilliseconds(100),
+        var context = new IdleGuardContext(TimeSpan.FromMilliseconds(100),
             () => idleTimeouts++,
             () => abandonments++,
             idleCts.Token,
@@ -220,8 +215,7 @@ public sealed class IdleStreamGuardTests
         var collected = new List<int>();
 
         using var idleCts = new CancellationTokenSource();
-        var context = new IdleGuardContext(
-            TimeSpan.FromMilliseconds(100),
+        var context = new IdleGuardContext(TimeSpan.FromMilliseconds(100),
             () => idleTimeouts++,
             () => abandonments++,
             idleCts.Token,

@@ -66,10 +66,8 @@ internal sealed class OrchestrationRunSession : IOrchestrationRunSession
             // (observed off-thread, bounded disposal) instead of awaiting it forever. The guard binds the workflow's
             // own cancellation to the OUTER token so cooperative cancellation still works, and surfaces idle expiry as
             // an OperationCanceledException (as before), invoking the metric callbacks on timeout/abandonment.
-            var guarded = IdleStreamGuard.GuardAsync(
-                watchToken => _run.WatchStreamAsync(watchToken).GetAsyncEnumerator(watchToken),
-                new IdleGuardContext(
-                    _abandonmentGrace,
+            var guarded = IdleStreamGuard.GuardAsync(watchToken => _run.WatchStreamAsync(watchToken).GetAsyncEnumerator(watchToken),
+                new IdleGuardContext(_abandonmentGrace,
                     static () => WorkflowWatchdogMetrics.RecordWatchdogTimeout(WorkflowWatchdogMetrics.OrchestrationSurface),
                     static () => WorkflowWatchdogMetrics.RecordAbandoned(WorkflowWatchdogMetrics.OrchestrationSurface),
                     idleCts.Token,

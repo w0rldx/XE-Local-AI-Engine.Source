@@ -67,7 +67,11 @@ internal sealed class NodeMessageConfiguration : IEntityTypeConfiguration<NodeMe
         // MAX(sequence)+1 and both inserted, corrupting ordering. Allocation is now serialized under a per-conversation
         // write lock, and this index is the database-level backstop that turns any residual collision into a retryable
         // constraint error instead of a silent duplicate.
-        builder.HasIndex(entity => new { entity.ConversationId, entity.Sequence })
+        builder.HasIndex(entity => new
+               {
+                   entity.ConversationId,
+                   entity.Sequence
+               })
                .IsUnique();
     }
 }

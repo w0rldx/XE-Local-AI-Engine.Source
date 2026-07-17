@@ -99,10 +99,12 @@ public sealed partial class LlamaDeviceInventoryProbe : ILlamaDeviceInventoryPro
             return [];
         }
 
-        return [.. DeviceRegex().Matches(output).Select(static match => new LlamaGpuDevice(
-            NormalizeName(match.Groups["name"].Value),
-            ParseMibToBytes(match.Groups["total"].Value),
-            ParseMibToBytes(match.Groups["free"].Value)))];
+        return
+        [
+            .. DeviceRegex().Matches(output).Select(static match => new LlamaGpuDevice(NormalizeName(match.Groups["name"].Value),
+                ParseMibToBytes(match.Groups["total"].Value),
+                ParseMibToBytes(match.Groups["free"].Value)))
+        ];
     }
 
     // Trims the leading name text (indentation + a trailing device-id colon), defaulting to "GPU" when a build prints
