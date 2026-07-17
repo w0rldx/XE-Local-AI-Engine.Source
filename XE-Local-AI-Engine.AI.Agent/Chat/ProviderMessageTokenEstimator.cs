@@ -164,12 +164,14 @@ internal static class ProviderMessageTokenEstimator
     // forms (U+FF00–U+FFEF), and surrogate halves (U+D800–U+DFFF) — which stand in for emoji and CJK Ext-B+ code points,
     // each surrogate counted heavy so a two-unit emoji biases upward. Latin-1/Latin-Extended accents are intentionally
     // excluded (they fall to the lighter NonAsciiCharWeight). Mirror of HeuristicTokenEstimator.IsCjkOrEmoji.
+    // The bounds are written as \u escapes ONLY: a CJK literal and its compatibility clone (e.g. U+8C48 vs U+F900) are
+    // visually identical, and exactly that ambiguity once silently diverged the two mirrored copies of this method.
     private static bool IsCjkOrEmoji(char character)
     {
-        return character is (>= '⺀' and <= '鿿')
-            or (>= '가' and <= '힣')
-            or (>= '豈' and <= '﫿')
-            or (>= '＀' and <= '￯')
+        return character is (>= '\u2E80' and <= '\u9FFF')
+            or (>= '\uAC00' and <= '\uD7A3')
+            or (>= '\uF900' and <= '\uFAFF')
+            or (>= '\uFF00' and <= '\uFFEF')
             or (>= '\uD800' and <= '\uDFFF');
     }
 }
