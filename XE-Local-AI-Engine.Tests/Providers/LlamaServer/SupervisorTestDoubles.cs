@@ -217,8 +217,25 @@ internal sealed class FakeProcessSupervisor(params LlamaServerProcessHealth[] ru
 {
     private readonly IReadOnlyList<LlamaServerProcessHealth> _running = running ?? [];
 
+    /// <summary>
+    ///     Endpoint <see cref="EnsureRunningAsync" /> hands out; <see langword="null" /> (default) keeps the legacy
+    ///     not-supported behavior for tests that never exercise the ensure path.
+    /// </summary>
+    public Uri? EnsureEndpoint { get; set; }
+
+    /// <summary>
+    ///     The acquisition <see cref="TryAcquireInferenceLease" /> returns. Defaults to
+    ///     <see cref="LlamaServerLeaseAcquisition.NotRunning" /> (no lease, not evicting).
+    /// </summary>
+    public LlamaServerLeaseAcquisition LeaseAcquisition { get; set; } = LlamaServerLeaseAcquisition.NotRunning;
+
     public Task<LlamaServerEndpoint> EnsureRunningAsync(string modelName, ModelRole role, CancellationToken ct)
     {
+        if (EnsureEndpoint is { } endpoint)
+        {
+            return Task.FromResult(new LlamaServerEndpoint(modelName, role, endpoint));
+        }
+
         throw new NotSupportedException("FakeProcessSupervisor does not ensure-run.");
     }
 
@@ -232,9 +249,9 @@ internal sealed class FakeProcessSupervisor(params LlamaServerProcessHealth[] ru
         return Task.FromResult(LlamaServerEjectOutcome.NotRunning);
     }
 
-    public ILlamaServerInferenceLease? TryAcquireInferenceLease(string modelName, ModelRole role)
+    public LlamaServerLeaseAcquisition TryAcquireInferenceLease(string modelName, ModelRole role)
     {
-        return null;
+        return LeaseAcquisition;
     }
 
     public Task<T> RunExclusiveProfilingAsync<T>(string modelName,

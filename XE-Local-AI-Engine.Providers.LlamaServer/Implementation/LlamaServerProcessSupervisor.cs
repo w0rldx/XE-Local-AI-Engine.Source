@@ -385,7 +385,19 @@ public sealed class LlamaServerProcessSupervisor : ILlamaServerProcessSupervisor
         _logger.LogInformation("Operator eject requested for model {ModelName} role {Role} (force: {Force}); draining {ActiveLeases} in-flight request(s).",
             key.ModelName, key.Role, force, target.ActiveLeases);
 
-        var drained = await DrainLeasesAsync(target, ct).ConfigureAwait(false);
+        bool drained;
+        try
+        {
+            drained = await DrainLeasesAsync(target, ct).ConfigureAwait(false);
+        }
+        catch
+        {
+            // The drain itself was aborted (the eject request was cancelled mid-drain): no teardown happened, so the
+            // evicting mark must not outlive this call — left set, the process would refuse every future lease forever.
+            target.ClearEvicting();
+            throw;
+        }
+
         if (drained)
         {
             await RemoveProcessAsync(key, target).ConfigureAwait(false);
@@ -412,26 +424,36 @@ public sealed class LlamaServerProcessSupervisor : ILlamaServerProcessSupervisor
     }
 
     /// <inheritdoc />
-    public ILlamaServerInferenceLease? TryAcquireInferenceLease(string modelName, ModelRole role)
+    public LlamaServerLeaseAcquisition TryAcquireInferenceLease(string modelName, ModelRole role)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(modelName);
 
         var key = new ProcessKey(modelName, role);
-        if (!_processes.TryGetValue(key, out var running) || running.Handle.HasExited || running.IsEvicting)
+        if (!_processes.TryGetValue(key, out var running) || running.Handle.HasExited)
         {
-            return null;
+            return LlamaServerLeaseAcquisition.NotRunning;
+        }
+
+        // A draining eject refuses new leases — and the refusal REASON is surfaced so the caller fails the request as
+        // operator-ejected instead of running it leaseless under the drain (untracked by the drain, killed mid-flight
+        // by the teardown, and then self-heal-respawning the just-ejected model).
+        if (running.IsEvicting)
+        {
+            return LlamaServerLeaseAcquisition.Evicting;
         }
 
         // Acquire, then RE-CHECK evicting/exited: an eject that flipped the flag between the guard above and here must
-        // not gain a lease that would extend its drain — release and refuse so the caller proceeds leaseless.
+        // not gain a lease that would extend its drain — release and refuse, classifying the refusal at this instant.
         running.AcquireLease();
         if (running.IsEvicting || running.Handle.HasExited)
         {
             running.ReleaseLease();
-            return null;
+            return running.IsEvicting ? LlamaServerLeaseAcquisition.Evicting : LlamaServerLeaseAcquisition.NotRunning;
         }
 
-        return new InferenceLease(running);
+#pragma warning disable CA2000 // Ownership of the lease transfers to the caller inside the returned acquisition; the interface contract obliges the caller to dispose it.
+        return LlamaServerLeaseAcquisition.Granted(new InferenceLease(running));
+#pragma warning restore CA2000
     }
 
     /// <summary>
@@ -1333,6 +1355,15 @@ public sealed class LlamaServerProcessSupervisor : ILlamaServerProcessSupervisor
                 continue;
             }
 
+            // A live process with in-flight inference (an active lease) is never reaped, even past the TTL:
+            // LastUsedUtc is stamped per ensure/reuse, not per token, so a single generation that legitimately outruns
+            // the idle window (a raised invocation timeout on a slow CPU box) looks idle here while a request is
+            // mid-flight — tree-killing it would cut a running turn off.
+            if (running.ActiveLeases > 0 && !running.Handle.HasExited)
+            {
+                continue;
+            }
+
             if (running.Handle.HasExited || now - running.LastUsedUtc >= _options.IdleTimeToLive)
             {
                 if (!running.Handle.HasExited)
@@ -1357,6 +1388,13 @@ public sealed class LlamaServerProcessSupervisor : ILlamaServerProcessSupervisor
             // A live profiling-pinned process is reserved for its benchmark — never select it as a cap-admission victim
             // (an EXITED pinned process is a dead handle and stays eligible so its slot/port is reclaimed).
             if (running.IsProfilingPinned && !running.Handle.HasExited)
+            {
+                continue;
+            }
+
+            // In-flight inference disqualifies a live process as a capacity-eviction victim for the same reason the
+            // idle reaper skips it: past-TTL only means "no new request started", not "not mid-generation".
+            if (running.ActiveLeases > 0 && !running.Handle.HasExited)
             {
                 continue;
             }

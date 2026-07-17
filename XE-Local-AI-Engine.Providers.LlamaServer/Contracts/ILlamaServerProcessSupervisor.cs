@@ -53,12 +53,17 @@ public interface ILlamaServerProcessSupervisor
 
     /// <summary>
     ///     Acquires a reference-counted inference lease against the currently-running <c>(model, role)</c> process so a
-    ///     graceful <see cref="EjectAsync" /> waits for the request to finish before teardown. Returns <c>null</c> when
-    ///     no live, non-evicting process backs the key (the caller then proceeds without a lease — the deferred client
-    ///     self-heals on the resulting connection failure). The caller MUST dispose the returned lease when the request
-    ///     completes (success, failure, or cancellation).
+    ///     graceful <see cref="EjectAsync" /> waits for the request to finish before teardown. The result distinguishes
+    ///     the three outcomes atomically (sampled at acquire time): a granted lease (live, non-evicting process);
+    ///     refused because an operator eject is draining the process
+    ///     (<see cref="LlamaServerLeaseAcquisition.ProcessEvicting" /> — the caller must fail the request as
+    ///     operator-ejected instead of running it untracked under the drain, where the teardown would kill it mid-flight
+    ///     and the self-heal would respawn the just-ejected model); or refused because no live process backs the key
+    ///     (the caller then proceeds without a lease — the deferred client self-heals on the resulting connection
+    ///     failure). The caller MUST dispose a granted lease when the request completes (success, failure, or
+    ///     cancellation).
     /// </summary>
-    ILlamaServerInferenceLease? TryAcquireInferenceLease(string modelName, ModelRole role);
+    LlamaServerLeaseAcquisition TryAcquireInferenceLease(string modelName, ModelRole role);
 
     /// <summary>
     ///     The operator profiling entry point (explore + benchmark). Acquires the SAME single-flight gate the normal

@@ -119,6 +119,60 @@ public sealed class SupervisorEvictionTests
         AssertEx.Equal(first.BaseAddress.AbsoluteUri, second.BaseAddress.AbsoluteUri);
     }
 
+    [Test]
+    public async Task Reaper_LeasedProcessPastIdleTtl_IsNotReaped_UntilLeaseReleases()
+    {
+        var launcher = new FakeProcessLauncher();
+        var time = new AdvanceableTimeProvider();
+        // A short TTL makes the background reaper re-check about every second of REAL time (its cadence is a quarter
+        // of the TTL, floored at one second), while the injected clock drives the idle comparison itself.
+        await using var supervisor = SupervisorFactory.Create(launcher, options: CapOf(cap: 3, TimeSpan.FromSeconds(2)), timeProvider: time);
+        await supervisor.EnsureRunningAsync("model-a", ModelRole.Chat, CancellationToken.None);
+
+        var lease = supervisor.TryAcquireInferenceLease("model-a", ModelRole.Chat).Lease;
+        AssertEx.NotNull(lease);
+
+        // Push the process far past the TTL while its lease is held: LastUsedUtc is stamped per ensure/reuse (not per
+        // token), so a generation outrunning the idle window LOOKS idle — the reaper must skip it, not kill it mid-flight.
+        time.Advance(TimeSpan.FromMinutes(10));
+        await Task.Delay(TimeSpan.FromSeconds(3)); // several real reaper passes at the ~1s cadence
+        AssertEx.False(launcher.Handles.Single().WasTreeKilled, "The reaper must never kill a leased process, even past the TTL.");
+        AssertEx.Equal(expected: 1, supervisor.CountRunningProcesses());
+
+        // Releasing the lease makes it a normal idle victim — the next reaper pass evicts it, which also proves the
+        // reaper was live the whole time (the skip above wasn't a stalled loop).
+        lease!.Dispose();
+        await AssertEx.EventuallyAsync(() => launcher.Handles.Single().WasTreeKilled, TimeSpan.FromSeconds(5),
+            "Once the lease released, the idle process should be reaped.");
+    }
+
+    [Test]
+    public async Task EnsureRunning_CapFull_LruPastTtlButLeased_IsNotEvicted_NewModelRejects()
+    {
+        var launcher = new FakeProcessLauncher();
+        var time = new AdvanceableTimeProvider();
+        var ttl = TimeSpan.FromMinutes(15);
+        await using var supervisor = SupervisorFactory.Create(launcher, options: CapOf(cap: 1, ttl), timeProvider: time);
+
+        await supervisor.EnsureRunningAsync("model-a", ModelRole.Chat, CancellationToken.None);
+        var lease = supervisor.TryAcquireInferenceLease("model-a", ModelRole.Chat).Lease;
+        AssertEx.NotNull(lease);
+
+        // Past the TTL the process looks idle to the LRU scan, but the held lease means a generation is mid-flight —
+        // capacity admission must reject the newcomer rather than tree-kill the busy process to make room.
+        time.Advance(ttl + TimeSpan.FromMinutes(1));
+
+        var ex = await AssertEx.ThrowsAsync<LlamaRuntimeException>(() => supervisor.EnsureRunningAsync("model-b", ModelRole.Chat, CancellationToken.None));
+        AssertEx.Contains(ex.Message, "maximum number of local models", StringComparison.OrdinalIgnoreCase);
+        AssertEx.False(launcher.Handles.Single().WasTreeKilled, "A leased process must never be a capacity-eviction victim.");
+
+        // Once the lease releases, the same admission finds its idle LRU victim and the new model loads normally.
+        lease!.Dispose();
+        await supervisor.EnsureRunningAsync("model-b", ModelRole.Chat, CancellationToken.None);
+        AssertEx.Equal(expected: 2, launcher.LaunchCount);
+        AssertEx.True(launcher.Handles.OrderBy(h => h.ProcessId).First().WasTreeKilled, "After release the idle LRU is evicted as usual.");
+    }
+
     private static LlamaServerSupervisorOptions CapOf(int cap, TimeSpan ttl)
     {
         return new LlamaServerSupervisorOptions

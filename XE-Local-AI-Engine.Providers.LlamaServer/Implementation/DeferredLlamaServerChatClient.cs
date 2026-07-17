@@ -30,6 +30,10 @@ internal sealed class DeferredLlamaServerChatClient : IChatClient
     // User-safe terminal message when an operator force-ejected this model mid-request. Carries no paths/ports/internals.
     private const string ModelEjectedMessage = "The model was ejected by the operator while this request was running.";
 
+    // User-safe terminal message when a request arrives while a graceful operator eject is draining this model: the
+    // request is refused up front (never started) instead of running untracked under the drain.
+    private const string ModelEjectingMessage = "The model is being ejected by the operator; this request was not started.";
+
     private readonly SemaphoreSlim _initGate = new(initialCount: 1, maxCount: 1);
     private readonly string _modelName;
     private readonly TimeSpan _networkTimeout;
@@ -55,9 +59,17 @@ internal sealed class DeferredLlamaServerChatClient : IChatClient
             var inner = await EnsureInnerAsync(cancellationToken).ConfigureAwait(false);
 
             // Hold an inference lease for the duration of the request so a graceful operator eject waits for it to
-            // finish before teardown. A null lease (process evicting/gone) means we proceed without one and rely on the
-            // self-heal below.
-            var lease = _supervisor.TryAcquireInferenceLease(_modelName, ModelRole.Chat);
+            // finish before teardown. A refused lease is classified: an EVICTING process fails the request up front as
+            // operator-ejected (running it leaseless would slip under the eject drain, be killed mid-flight by the
+            // teardown, and then self-heal-respawn the just-ejected model — so eject would never stick); only a
+            // genuinely absent/exited process proceeds leaseless, relying on the self-heal below.
+            var acquisition = _supervisor.TryAcquireInferenceLease(_modelName, ModelRole.Chat);
+            if (acquisition.ProcessEvicting)
+            {
+                throw new LlamaServerModelEjectedException(ModelEjectingMessage);
+            }
+
+            var lease = acquisition.Lease;
             try
             {
                 return await inner.GetResponseAsync(messages, options, cancellationToken).ConfigureAwait(false);
@@ -97,7 +109,16 @@ internal sealed class DeferredLlamaServerChatClient : IChatClient
         while (true)
         {
             var inner = await EnsureInnerAsync(cancellationToken).ConfigureAwait(false);
-            var lease = _supervisor.TryAcquireInferenceLease(_modelName, ModelRole.Chat);
+
+            // Same refusal classification as the non-streaming path: an eject-in-progress fails the request before the
+            // stream opens; only an absent/exited process streams leaseless and relies on the pre-first-chunk self-heal.
+            var acquisition = _supervisor.TryAcquireInferenceLease(_modelName, ModelRole.Chat);
+            if (acquisition.ProcessEvicting)
+            {
+                throw new LlamaServerModelEjectedException(ModelEjectingMessage);
+            }
+
+            var lease = acquisition.Lease;
             var enumerator =
                 inner.GetStreamingResponseAsync(messages, options, cancellationToken).GetAsyncEnumerator(cancellationToken);
             var retry = false;
