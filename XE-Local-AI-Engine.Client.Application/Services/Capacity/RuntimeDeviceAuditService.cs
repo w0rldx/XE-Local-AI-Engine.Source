@@ -21,21 +21,31 @@ public sealed class RuntimeDeviceAuditService : IRuntimeDeviceAudit, IDisposable
     private readonly IHardwareProfiler _hardwareProfiler;
     private readonly ILogger<RuntimeDeviceAuditService> _logger;
     private readonly IGpuVariantSelector _variantSelector;
+    private readonly ICudaManagedBuildSignal? _managedCudaSignal;
 
     // Serializes the (rare) first compute + any force-refresh so a concurrent burst runs the device probe at most once.
     private readonly SemaphoreSlim _computeGate = new(initialCount: 1, maxCount: 1);
     private volatile RuntimeDeviceAuditState? _cached;
+
+    // The managed-CUDA signal stamp the cached audit was computed against. A CUDA adopt/remove bumps the signal version
+    // and can flip the selected variant (Vulkan↔Cuda on a Linux NVIDIA box), so a memo computed against the old stamp is
+    // stale — the fast path only trusts the cache while the current stamp matches (GPTAUD-09a).
+    private long _cachedSignalVersion;
     private string? _lastEmittedSignature;
 
     public RuntimeDeviceAuditService(IHardwareProfiler hardwareProfiler,
         IGpuVariantSelector variantSelector,
         ILlamaDeviceInventoryProbe deviceProbe,
-        ILogger<RuntimeDeviceAuditService> logger)
+        ILogger<RuntimeDeviceAuditService> logger,
+        ICudaManagedBuildSignal? managedCudaSignal = null)
     {
         _hardwareProfiler = hardwareProfiler ?? throw new ArgumentNullException(nameof(hardwareProfiler));
         _variantSelector = variantSelector ?? throw new ArgumentNullException(nameof(variantSelector));
         _deviceProbe = deviceProbe ?? throw new ArgumentNullException(nameof(deviceProbe));
         _logger = logger ?? throw new ArgumentNullException(nameof(logger));
+        // Optional so the test seam (and a provider-only host) can omit it; when absent the stamp is a constant, so the
+        // memo behaves exactly as before (no signal-driven invalidation). The composition root injects the real singleton.
+        _managedCudaSignal = managedCudaSignal;
     }
 
     /// <summary>Disposes the compute gate. Invoked by the container on shutdown (the service is a singleton).</summary>
@@ -47,7 +57,9 @@ public sealed class RuntimeDeviceAuditService : IRuntimeDeviceAudit, IDisposable
     /// <inheritdoc />
     public async Task<RuntimeDeviceAuditState> GetAuditAsync(bool forceRefresh, CancellationToken ct)
     {
-        if (!forceRefresh && _cached is { } cached)
+        // The cache is trusted only while the managed-CUDA signal stamp is unchanged from the one it was computed
+        // against; an adopt/remove bumps the stamp and can flip the selected variant, so a mismatch forces a re-compute.
+        if (!forceRefresh && _cached is { } cached && CurrentSignalVersion() == Volatile.Read(ref _cachedSignalVersion))
         {
             return cached;
         }
@@ -56,20 +68,23 @@ public sealed class RuntimeDeviceAuditService : IRuntimeDeviceAudit, IDisposable
         try
         {
             // Re-check under the gate — a concurrent caller may have computed it while we waited.
-            if (!forceRefresh && _cached is { } current)
+            if (!forceRefresh && _cached is { } current && CurrentSignalVersion() == Volatile.Read(ref _cachedSignalVersion))
             {
                 return current;
             }
 
-            var (state, fallbackReasonCode, determinate) = await ComputeAsync(ct).ConfigureAwait(false);
+            var (state, fallbackReasonCode, determinate, signalVersion) = await ComputeAsync(ct).ConfigureAwait(false);
 
             // Latch only a determinate audit (the device probe ran, or a CPU variant that needs no probe). An
             // indeterminate probe yields backend "unknown" with CpuFallback:false — memoizing that would keep
             // capacity/advisor trusting the raw profile's VRAM until restart or a forced refresh. The probe layer
             // deliberately does not cache failed probes, so returning this uncached makes the next call a real re-probe.
+            // The stamp is captured inside ComputeAsync just before the variant is selected, so a signal flip during the
+            // compute leaves the cached stamp behind the current one and the next call re-computes.
             if (determinate)
             {
                 _cached = state;
+                Volatile.Write(ref _cachedSignalVersion, signalVersion);
             }
 
             EmitIfFallbackChanged(state, fallbackReasonCode);
@@ -79,6 +94,11 @@ public sealed class RuntimeDeviceAuditService : IRuntimeDeviceAudit, IDisposable
         {
             _computeGate.Release();
         }
+    }
+
+    private long CurrentSignalVersion()
+    {
+        return _managedCudaSignal?.Version ?? 0;
     }
 
     /// <inheritdoc />
@@ -102,11 +122,16 @@ public sealed class RuntimeDeviceAuditService : IRuntimeDeviceAudit, IDisposable
         };
     }
 
-    private async Task<(RuntimeDeviceAuditState State, string? FallbackReasonCode, bool Determinate)> ComputeAsync(CancellationToken ct)
+    private async Task<(RuntimeDeviceAuditState State, string? FallbackReasonCode, bool Determinate, long SignalVersion)> ComputeAsync(CancellationToken ct)
     {
         // The raw profile is read non-force here (the audit only needs the vendor / total-VRAM presence, not a live free
         // figure); the free figures are re-probed by GetEffectiveProfileAsync when a caller needs them live.
         var raw = await _hardwareProfiler.GetProfileAsync(forceRefresh: false, ct).ConfigureAwait(false);
+
+        // Capture the managed-CUDA signal stamp immediately BEFORE selecting the variant (the selector reads the signal):
+        // this is the stamp the resulting audit is valid for. If the signal flips after this read, the cached stamp lags
+        // the current one and the next GetAuditAsync re-computes rather than trusting a memo built against the old state.
+        var signalVersion = CurrentSignalVersion();
         var variant = await _variantSelector.SelectVariantAsync(ct).ConfigureAwait(false);
         var inventory = await _deviceProbe.GetDeviceInventoryAsync(variant, ct).ConfigureAwait(false);
 
@@ -120,7 +145,7 @@ public sealed class RuntimeDeviceAuditService : IRuntimeDeviceAudit, IDisposable
         // Determinate = safe to memoize: the audit for a CPU variant never depends on the probe, and a GPU variant's
         // audit is only trustworthy when the probe actually ran.
         var determinate = variant == GpuVariant.Cpu || inventory.ProbeSucceeded;
-        return (state, reasonCode, determinate);
+        return (state, reasonCode, determinate, signalVersion);
     }
 
     /// <summary>Pure audit decision over (host profile, selected variant, enumerated devices) — unit-testable without I/O.</summary>

@@ -10,19 +10,25 @@ using XE_Local_AI_Engine.Providers.LlamaServer.Contracts;
 public sealed class CudaManagedBuildSignal : ICudaManagedBuildSignal
 {
     private volatile bool _available;
+    private long _version;
 
     /// <inheritdoc />
     public bool IsAvailable => _available;
 
     /// <inheritdoc />
+    public long Version => Interlocked.Read(ref _version);
+
+    /// <inheritdoc />
     public void MarkAvailable()
     {
         _available = true;
+        Interlocked.Increment(ref _version);
     }
 
     /// <inheritdoc />
     public void Clear()
     {
         _available = false;
+        Interlocked.Increment(ref _version);
     }
 }
