@@ -21,12 +21,21 @@ function runningModelsInvalidationKey(): readonly [{ _id: string }] {
 	return [{ _id: runningModelsOperationId }];
 }
 
-// Live running-models list backing the eject UI. enabled lets the page mount it lazily (e.g. only when the section is shown).
+// Poll cadence (ms) while the section is mounted. llama.cpp server processes appear as chat sends warm models and
+// disappear via idle-TTL eviction or graceful ejects — none of which flow through a REST mutation this page could hang
+// an invalidation on — so without polling the list only refreshes on manual reload. Mirrors the 4s cadence of the
+// adjacent Ollama query (useLoadedModels); no unavailable back-off is needed here because this endpoint reads the
+// app's own in-process supervisor, never an optional external daemon.
+export const runningModelsPollIntervalMs = 4000;
+
+// Live running-models list backing the eject UI. enabled lets the page mount it lazily (e.g. only when the section is
+// shown); a disabled query does not poll.
 export function useRunningModels(enabled = true) {
 	return useQuery({
 		...withResponseValidation(listRunningModelsOptions()),
 		select: (data) => (data.items ?? []).map(toRunningModel),
 		enabled,
+		refetchInterval: runningModelsPollIntervalMs,
 	});
 }
 
