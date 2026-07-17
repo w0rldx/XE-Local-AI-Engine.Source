@@ -39,6 +39,18 @@ internal sealed class InvocationAgentFactory : IInvocationAgentFactory
     /// </summary>
     internal const string CodexReasoningEffortKey = "codex_reasoning_effort";
 
+    /// <summary>
+    ///     In-process marker on <see cref="ChatOptions.AdditionalProperties" /> that tells the llama.cpp chat client to
+    ///     inject <c>chat_template_kwargs.enable_thinking=false</c> into the outbound request (GPTAUD-17b). Set ONLY when
+    ///     reasoning is explicitly OFF on a thinking-capable model: the Ollama <c>think:false</c> written alongside it
+    ///     suppresses reasoning on the Ollama wire, but the llama.cpp OpenAI adapter ignores <c>think</c>, so a
+    ///     Qwen3-class chat template would keep emitting a reasoning block. The key never reaches any wire — Ollama's
+    ///     mapper reads a fixed allowlist and Codex reads its own keys, so both stay byte-identical; only
+    ///     <c>DeferredLlamaServerChatClient</c> consumes it. The literal is intentionally duplicated there (the AI.Agent
+    ///     assembly does not reference the LlamaServer provider); keep the two in sync.
+    /// </summary>
+    internal const string LlamaDisableThinkingMarkerKey = "xe.llama.disable_thinking";
+
     private readonly IChatClient _chatClient;
     private readonly IClientLocalToolRegistry _clientLocalToolRegistry;
     private readonly ILogger<InvocationAgentFactory> _logger;
@@ -96,7 +108,19 @@ internal sealed class InvocationAgentFactory : IInvocationAgentFactory
         {
             // Graded reasoning model: honor the requested effort (false / "low" / "medium" / "high"). minimal/xhigh
             // collapse to think:true here because Ollama 400s on an unknown think level (see ResolveThinkOption).
-            additionalProperties["think"] = ResolveThinkOption(definition.ReasoningEffort);
+            var think = ResolveThinkOption(definition.ReasoningEffort);
+            additionalProperties["think"] = think;
+
+            // Reasoning explicitly OFF on a thinking-capable model (ResolveThinkOption returned the bool false, which only
+            // happens for "none"): flag the turn so the llama.cpp chat client injects chat_template_kwargs.enable_thinking
+            // =false. The think:false above only silences reasoning on the Ollama wire; the llama.cpp OpenAI adapter drops
+            // the think key, so without this a Qwen3-class template would still stream a reasoning block (GPTAUD-17b). The
+            // marker is inert on the Ollama/Codex wires. Non-thinking models take the else branch below and get no marker
+            // (there is no default reasoning to disable).
+            if (think is false)
+            {
+                additionalProperties[LlamaDisableThinkingMarkerKey] = true;
+            }
 
             // Codex-only side channel: when a graded/explicit effort is present, also carry the RAW normalized effort
             // string so the Codex Responses boundary can map minimal/xhigh distinctly (the think key above cannot —

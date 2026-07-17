@@ -6,6 +6,7 @@ using XE_Local_AI_Engine.Client.Services.Capacity;
 using XE_Local_AI_Engine.Providers.Abstractions.Capabilities;
 using XE_Local_AI_Engine.Providers.LlamaServer;
 using XE_Local_AI_Engine.Providers.LlamaServer.Contracts;
+using XE_Local_AI_Engine.Providers.LlamaServer.Implementation;
 using XE_Local_AI_Engine.Tests.Testing;
 
 /// <summary>
@@ -190,7 +191,7 @@ public sealed class RuntimeDeviceAuditServiceTests
         return BuildService(raw, variant, probe);
     }
 
-    private static RuntimeDeviceAuditService BuildService(HardwareProfile raw, GpuVariant variant, ILlamaDeviceInventoryProbe probe)
+    private static RuntimeDeviceAuditService BuildService(HardwareProfile raw, GpuVariant variant, ILlamaDeviceInventoryProbe probe, ICudaManagedBuildSignal? signal = null)
     {
         var profiler = Substitute.For<IHardwareProfiler>();
         profiler.GetProfileAsync(Arg.Any<bool>(), Arg.Any<CancellationToken>()).Returns(Task.FromResult(raw));
@@ -198,6 +199,52 @@ public sealed class RuntimeDeviceAuditServiceTests
         var selector = Substitute.For<IGpuVariantSelector>();
         selector.SelectVariantAsync(Arg.Any<CancellationToken>()).Returns(Task.FromResult(variant));
 
-        return new RuntimeDeviceAuditService(profiler, selector, probe, NullLogger<RuntimeDeviceAuditService>.Instance);
+        return new RuntimeDeviceAuditService(profiler, selector, probe, NullLogger<RuntimeDeviceAuditService>.Instance, signal);
+    }
+
+    [Test]
+    public async Task GetAudit_ManagedCudaSignalFlips_InvalidatesMemo_AndReprobes()
+    {
+        // GPTAUD-09a: the cached audit is keyed to the managed-CUDA signal stamp. A CUDA adopt/remove bumps the stamp and
+        // can flip the selected variant (Vulkan↔Cuda on a Linux NVIDIA box), so a plain (non-force) call after the flip
+        // must recompute rather than return the stale placement truth. Without the invalidation the second call would
+        // answer from the first memo and never re-probe.
+        var probe = Substitute.For<ILlamaDeviceInventoryProbe>();
+        probe.GetDeviceInventoryAsync(Arg.Any<GpuVariant>(), Arg.Any<CancellationToken>())
+             .Returns(Task.FromResult(WithDevices(GpuVariant.Cuda)));
+        var signal = new CudaManagedBuildSignal();
+        using var service = BuildService(GpuProfile(GpuVendor.Nvidia), GpuVariant.Cuda, probe, signal);
+
+        // First determinate compute is memoized (one probe).
+        await service.GetAuditAsync(forceRefresh: false, CancellationToken.None);
+        await service.GetAuditAsync(forceRefresh: false, CancellationToken.None);
+        await probe.Received(1).GetDeviceInventoryAsync(Arg.Any<GpuVariant>(), Arg.Any<CancellationToken>());
+
+        // A CUDA remove flips the signal → the memo is no longer trusted → the next plain call re-probes.
+        signal.Clear();
+        await service.GetAuditAsync(forceRefresh: false, CancellationToken.None);
+        await probe.Received(2).GetDeviceInventoryAsync(Arg.Any<GpuVariant>(), Arg.Any<CancellationToken>());
+
+        // The re-computed determinate audit is memoized again against the new stamp — a follow-up call does not re-probe.
+        await service.GetAuditAsync(forceRefresh: false, CancellationToken.None);
+        await probe.Received(2).GetDeviceInventoryAsync(Arg.Any<GpuVariant>(), Arg.Any<CancellationToken>());
+    }
+
+    [Test]
+    public async Task GetAudit_IndeterminateProbe_StillNeverCached_EvenWithSignalPresent()
+    {
+        // The signal stamp must not accidentally start caching an indeterminate probe: an unknown result stays uncached
+        // so the next call re-probes, exactly as without a signal.
+        var probe = Substitute.For<ILlamaDeviceInventoryProbe>();
+        probe.GetDeviceInventoryAsync(Arg.Any<GpuVariant>(), Arg.Any<CancellationToken>())
+             .Returns(Task.FromResult(LlamaDeviceInventory.Unknown(GpuVariant.Cuda)));
+        var signal = new CudaManagedBuildSignal();
+        signal.MarkAvailable();
+        using var service = BuildService(GpuProfile(GpuVendor.Nvidia), GpuVariant.Cuda, probe, signal);
+
+        await service.GetAuditAsync(forceRefresh: false, CancellationToken.None);
+        await service.GetAuditAsync(forceRefresh: false, CancellationToken.None);
+
+        await probe.Received(2).GetDeviceInventoryAsync(Arg.Any<GpuVariant>(), Arg.Any<CancellationToken>());
     }
 }

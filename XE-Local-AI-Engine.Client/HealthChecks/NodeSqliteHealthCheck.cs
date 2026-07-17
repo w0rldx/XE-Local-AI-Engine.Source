@@ -114,9 +114,13 @@ public sealed class NodeSqliteHealthCheck : IHealthCheck
                 catch (Exception writeException) when (writeException is not OperationCanceledException)
                 {
                     // The write probe left an open transaction if BEGIN succeeded but the DDL failed; closing the
-                    // connection below rolls it back, so the scratch table is never persisted either way.
+                    // connection below rolls it back, so the scratch table is never persisted either way. The raw
+                    // provider message is NOT interpolated into the description: /health/ready is anonymous and, on a
+                    // non-loopback/proxied deployment, would otherwise leak internal error text (including filesystem
+                    // paths) to remote callers (GPTAUD-19c follow-up). The structured "unwritable" reason and the
+                    // exception (for server-side health logging) are preserved.
                     return Unhealthy(stopwatch, reason: "unwritable",
-                        $"Node SQLite database is not writable: {writeException.Message}", writeException);
+                        "Node SQLite database is not writable.", writeException);
                 }
 
                 stopwatch.Stop();
@@ -135,7 +139,9 @@ public sealed class NodeSqliteHealthCheck : IHealthCheck
         }
         catch (Exception ex) when (ex is not OperationCanceledException)
         {
-            return Unhealthy(stopwatch, reason: "unavailable", $"Node SQLite database is unavailable: {ex.Message}", ex);
+            // Static description only — the raw provider message (which can carry the database file path) must never
+            // reach the anonymous /health/ready payload (GPTAUD-19c follow-up). The reason code and exception are kept.
+            return Unhealthy(stopwatch, reason: "unavailable", "Node SQLite database is unavailable.", ex);
         }
     }
 

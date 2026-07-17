@@ -19,6 +19,10 @@ public sealed class ChatInvocationStatePump(INodeChatInvocationPump invocationPu
     // window of streamed tokens, which is the same crash-consistency bound the per-chunk flush already accepted.
     private static readonly TimeSpan PartialFlushDebounceInterval = TimeSpan.FromMilliseconds(100);
 
+    // Error text stamped on the row when the persistence pump itself faults (GPTAUD-07) — distinct from a
+    // generation-side failure so a persistence fault is traceable on the terminalized row.
+    private const string PumpFaultError = "local-chat-persistence-failed";
+
     public async Task PumpAsync(ChannelReader<InvocationState> stateReader,
         ChannelWriter<ChatStreamEvent> eventWriter,
         NodeChatMessageCorrelation correlation,
@@ -171,9 +175,61 @@ public sealed class ChatInvocationStatePump(INodeChatInvocationPump invocationPu
                 cursor,
                 wasCancelled: true).ConfigureAwait(false);
         }
+        catch (Exception) when (!terminalPersisted)
+        {
+            // GPTAUD-07: a FlushDeltaAsync/TerminalizeAsync exception (a persistence fault, not a user cancel — those
+            // are handled above) would otherwise propagate while the finally only TryComplete()s the writer as a NORMAL
+            // end, leaving the row streaming until the next restart's recovery reconcile. Idempotently terminalize the
+            // row Failed and emit the Failed terminal SSE, then rethrow so the caller cancels the run and surfaces the
+            // fault. The NodeChatMessageTransitions atomic `AND status IN (...)` guard makes this Failed terminalize a
+            // no-op over any real terminal that committed concurrently, so a late fault-terminalize can never overwrite
+            // a genuine outcome.
+            await TerminalizeFaultedStreamAsync(eventWriter, correlation, requestedModel, cursor, parts, sequence.Next()).ConfigureAwait(false);
+            throw;
+        }
         finally
         {
             eventWriter.TryComplete();
+        }
+    }
+
+    // Terminalizes the row Failed after a persistence-pump fault (GPTAUD-07) from the last-persisted cursor and emits the
+    // Failed terminal SSE. Best-effort: if the terminalize itself throws (the persistence layer is likely down, which
+    // caused the original fault), it is swallowed here — the caller still rethrows the ORIGINAL fault, and the
+    // restart-recovery reconcile is the backstop for the row.
+    private async Task TerminalizeFaultedStreamAsync(ChannelWriter<ChatStreamEvent> eventWriter,
+        NodeChatMessageCorrelation correlation,
+        string? requestedModel,
+        NodeChatPumpCursor cursor,
+        NodeChatPartAccumulator parts,
+        long sequence)
+    {
+        try
+        {
+            // A synthetic Failed state carries the last-persisted content/reasoning so the terminal row keeps whatever
+            // streamed before the fault. There is no live InvocationState in this catch — tokens/duration are unknown and
+            // left null; the model attribution falls back to the requested model.
+            var faultedState = new InvocationState
+            {
+                InvocationId = correlation.RequestId,
+                ConversationId = correlation.ConversationId,
+                Status = InvocationStatus.Failed,
+                StreamedContent = cursor.Content,
+                StreamedThinkingContent = cursor.Reasoning,
+                Error = PumpFaultError,
+                FailureCategory = FailureCategory.Unexpected
+            };
+
+            var snapshot = parts.HasParts ? parts.Snapshot() : null;
+            var terminal = await invocationPump.TerminalizeAsync(correlation, faultedState, requestedModel, snapshot).ConfigureAwait(false);
+
+            await eventWriter.WriteAsync(ChatStreamEventMapper.MessageEvent(terminal.EventType, correlation, terminal.Persisted, NowUnixMilliseconds(), sequence), CancellationToken.None)
+                             .ConfigureAwait(false);
+        }
+        catch (Exception)
+        {
+            // Swallowed deliberately: nothing more can be persisted or emitted here. The caller rethrows the original
+            // fault so the run is cancelled and the fault surfaced; restart recovery reconciles the row on next launch.
         }
     }
 

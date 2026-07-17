@@ -970,6 +970,170 @@ public sealed class NodeChatRegenerationServiceTests : IDisposable
         offerProvider.Received().GetOfferedTools(CodexModel, true);
     }
 
+    [Test]
+    public async Task RegenerateAsync_WhenOnlyClientTokenCancelledMidStream_RunReachesTerminalAndVariantCompletes()
+    {
+        // GPTAUD-04: a SignalR disconnect cancels ONLY the client cancellationToken (the SSE forward loop), never the
+        // run/pump. The run must keep going on the unlinked runCancellation and the variant must persist Completed —
+        // never Cancelled/Interrupted from the client connection dropping. This is the send-path shape the regenerate
+        // path previously lacked (it linked the run CTS to the client token and cancelled it unconditionally).
+        await using var provider = await BuildProviderAsync("regeneration-client-cancel.sqlite").ConfigureAwait(false);
+        var persistence = new NodeChatPersistenceService(provider.GetRequiredService<NodeChatPersistenceWriter>());
+        var (conversation, originalId) = await SeedCompletedOriginalAsync(persistence).ConfigureAwait(false);
+
+        var dispatcher = new RegenRecordingDispatcher();
+        var runner = new RegenGatedCompletingRunner(dispatcher);
+        var service = CreateService(persistence, runner, dispatcher, new NodeChatStreamCancellationRegistry());
+
+        using var clientCts = new CancellationTokenSource();
+        var newVariantId = Guid.Empty;
+        var consumer = Task.Run(async () =>
+        {
+            try
+            {
+                await foreach (var streamEvent in service.RegenerateAsync(conversation.ConversationId, originalId, cancellationToken: clientCts.Token).ConfigureAwait(false))
+                {
+                    if (streamEvent.Type == ChatStreamEventTypes.AssistantPending)
+                    {
+                        newVariantId = streamEvent.MessageId;
+                    }
+                }
+            }
+            catch (OperationCanceledException)
+            {
+                // Expected: the client token cancelled the SSE forward loop. The run/pump keep going underneath.
+            }
+        });
+
+        await runner.Started.ConfigureAwait(false);
+        // The client "disconnects" mid-stream, then the run is allowed to finish.
+        await clientCts.CancelAsync().ConfigureAwait(false);
+        runner.Release();
+        await consumer.ConfigureAwait(false);
+
+        var loaded = AssertEx.NotNull(await persistence.GetConversationAsync(conversation.ConversationId).ConfigureAwait(false));
+        var variant = loaded.Messages.Single(message => message.MessageId == newVariantId);
+        AssertEx.Equal(NodeChatMessageStatusValues.Completed, variant.Status);
+        AssertEx.Equal("gated answer done", variant.Content);
+    }
+
+    [Test]
+    public async Task RegenerateAsync_WhenTornDownBeforeOwnership_TerminalizesVariantInterrupted()
+    {
+        // GPTAUD-04: a disconnect BEFORE run ownership is established (the enumerator is disposed after the Pending
+        // frame but before the pump/runner exist) must terminalize the variant Interrupted via the shared
+        // PreOwnershipTerminalizationGuard — not leave it stranded Pending/Queued until the restart reaper.
+        await using var provider = await BuildProviderAsync("regeneration-preownership.sqlite").ConfigureAwait(false);
+        var persistence = new NodeChatPersistenceService(provider.GetRequiredService<NodeChatPersistenceWriter>());
+        var (conversation, originalId) = await SeedCompletedOriginalAsync(persistence).ConfigureAwait(false);
+
+        var dispatcher = new RegenRecordingDispatcher();
+        var runner = new RegenGatedCompletingRunner(dispatcher);
+        var service = CreateService(persistence, runner, dispatcher, new NodeChatStreamCancellationRegistry());
+
+        var enumerator = service.RegenerateAsync(conversation.ConversationId, originalId).GetAsyncEnumerator();
+        Guid newVariantId;
+        try
+        {
+            AssertEx.True(await enumerator.MoveNextAsync(), "Expected the first (Pending) frame.");
+            AssertEx.Equal(ChatStreamEventTypes.AssistantPending, enumerator.Current.Type);
+            newVariantId = enumerator.Current.MessageId;
+        }
+        finally
+        {
+            // Dispose while suspended at the Pending yield — before OwnershipEstablished — so the pre-ownership guard runs.
+            await enumerator.DisposeAsync();
+        }
+
+        var loaded = AssertEx.NotNull(await persistence.GetConversationAsync(conversation.ConversationId).ConfigureAwait(false));
+        var variant = loaded.Messages.Single(message => message.MessageId == newVariantId);
+        AssertEx.Equal(NodeChatMessageStatusValues.Interrupted, variant.Status);
+    }
+
+    [Test]
+    public async Task RegenerateAsync_WhenUserCancelsThroughRegistry_TerminalizesVariantCancelled()
+    {
+        // GPTAUD-04 regression guard: a genuine user Stop (routed through the cancellation registry) must still cancel
+        // the run — the fix preserves user-cancel while decoupling the run from the client connection.
+        await using var provider = await BuildProviderAsync("regeneration-user-cancel.sqlite").ConfigureAwait(false);
+        var persistence = new NodeChatPersistenceService(provider.GetRequiredService<NodeChatPersistenceWriter>());
+        var (conversation, originalId) = await SeedCompletedOriginalAsync(persistence).ConfigureAwait(false);
+
+        var dispatcher = new RegenRecordingDispatcher();
+        var runner = new RegenGatedCompletingRunner(dispatcher);
+        var registry = new NodeChatStreamCancellationRegistry();
+        var service = CreateService(persistence, runner, dispatcher, registry);
+
+        var newVariantId = Guid.Empty;
+        var requestId = Guid.Empty;
+        var consumer = Task.Run(async () =>
+        {
+            try
+            {
+                await foreach (var streamEvent in service.RegenerateAsync(conversation.ConversationId, originalId).ConfigureAwait(false))
+                {
+                    if (streamEvent.Type == ChatStreamEventTypes.AssistantPending)
+                    {
+                        newVariantId = streamEvent.MessageId;
+                        requestId = streamEvent.RequestId;
+                    }
+                }
+            }
+            catch (OperationCanceledException)
+            {
+                // A user cancel may surface as an OCE depending on drain timing; the persisted terminal is authoritative.
+            }
+        });
+
+        await runner.Started.ConfigureAwait(false);
+        AssertEx.True(registry.TryCancel(new NodeChatMessageCorrelation(conversation.ConversationId, newVariantId, requestId)), "The active stream must be found and cancelled.");
+        await consumer.ConfigureAwait(false);
+
+        var loaded = AssertEx.NotNull(await persistence.GetConversationAsync(conversation.ConversationId).ConfigureAwait(false));
+        var variant = loaded.Messages.Single(message => message.MessageId == newVariantId);
+        AssertEx.Equal(NodeChatMessageStatusValues.Cancelled, variant.Status);
+    }
+
+    // Seeds a conversation with one completed user + assistant turn (the "original" to regenerate) carrying an explicit
+    // model, so the regenerate resolves that model and does not touch the local-default resolver.
+    private static async Task<(NodeChatConversationDto Conversation, Guid OriginalId)> SeedCompletedOriginalAsync(NodeChatPersistenceService persistence)
+    {
+        var conversation = await persistence.CreateConversationAsync(new NodeChatCreateConversationRequest("Regen", "node", CreatedAtUtc: 10)).ConfigureAwait(false);
+        await persistence.PersistUserMessageAsync(new NodeChatPersistUserMessageRequest(conversation.ConversationId, Guid.NewGuid(), "what is 2+2?", CreatedAtUtc: 11)).ConfigureAwait(false);
+        var originalId = Guid.NewGuid();
+        var originalCorrelation = new NodeChatMessageCorrelation(conversation.ConversationId, originalId, Guid.NewGuid());
+        await persistence.CreateAssistantPlaceholderAsync(new NodeChatCreateAssistantPlaceholderRequest(conversation.ConversationId, originalId, originalCorrelation.RequestId, CreatedAtUtc: 12, "model-x"))
+                         .ConfigureAwait(false);
+        await persistence.TerminalizeAssistantMessageAsync(new NodeChatTerminalizeMessageRequest(originalCorrelation, NodeChatMessageStatusValues.Completed, UpdatedAtUtc: 13, "four", Model: "model-x"))
+                         .ConfigureAwait(false);
+        return (conversation, originalId);
+    }
+
+    private static NodeChatRegenerationService CreateService(NodeChatPersistenceService persistence,
+        IInvocationRunner runner,
+        RegenRecordingDispatcher dispatcher,
+        NodeChatStreamCancellationRegistry registry)
+    {
+        return new NodeChatRegenerationService(persistence,
+            new ChatInvocationStatePump(ChatPumpTestFactory.Create(persistence), TimeProvider.System),
+            new ChatTurnResolver(CreateAgentDefinitionResolver(), CreateAgentDefinitionStore(), CreateOrchestrationResolver(), CreateModelClassificationService(), CreateLocalModelProviderResolver(),
+                CreateGgufModelCapabilityResolver(), Substitute.For<IActiveCloudChatClientFactory>(), NullLogger<ChatTurnResolver>.Instance),
+            new NodeChatMutationGuard(persistence),
+            new LocalChatRuntimePackageBuilder(),
+            runner,
+            dispatcher,
+            Options.Create(new LocalChatAgentOptions()),
+            StubNodeRuntimeSettings.Create().Build(),
+            registry,
+            CreateOfferProvider(),
+            CreateDefaultAgentProvider(),
+            CreateNodeSettingsStore(),
+            CreateLocalDefaultChatModelResolver(),
+            CreateMemoryExtractionDispatcher(),
+            TimeProvider.System,
+            NullLogger<NodeChatRegenerationService>.Instance);
+    }
+
     private async Task<ServiceProvider> BuildProviderAsync(string fileName)
     {
         Directory.CreateDirectory(_rootPath);
@@ -1314,6 +1478,66 @@ public sealed class NodeChatRegenerationServiceTests : IDisposable
                 IsError = false
             }).ConfigureAwait(false);
             await dispatcher.ReportInvocationStreamChunkAsync(context.Package.InvocationId, "regenerated answer").ConfigureAwait(false);
+            await dispatcher.ReportInvocationCompletedAsync(context.Package.InvocationId, inputTokens: 5, outputTokens: 2, totalTokens: 7, reasoningTokens: 0).ConfigureAwait(false);
+        }
+
+        public Task<bool> DrainActiveInvocationsAsync(TimeSpan timeout, CancellationToken cancellationToken = default)
+        {
+            return Task.FromResult(true);
+        }
+
+        public Task<string> ExecuteApiToolCallAsync(Guid invocationId, string toolName, string parameters, CancellationToken cancellationToken = default)
+        {
+            return Task.FromResult(string.Empty);
+        }
+
+        public void Cancel(Guid invocationId)
+        {
+        }
+
+        public void CancelAll()
+        {
+        }
+
+        public void CleanupStaleToolCalls(TimeSpan maxAge)
+        {
+        }
+
+        public void ResolveApprovalResult(ApprovalResolvedEvent evt)
+        {
+        }
+
+        public void ResolveToolCallResult(ToolCallResultEvent evt)
+        {
+        }
+    }
+
+    // Streams one chunk, signals Started, then blocks until Release() (or the run token cancels — honoring a genuine
+    // user cancel), then finishes Completed. Lets a test interleave a client-token cancel / teardown / user cancel with
+    // an in-flight run.
+    private sealed class RegenGatedCompletingRunner(RegenRecordingDispatcher dispatcher) : IInvocationRunner
+    {
+        private readonly TaskCompletionSource _started = new(TaskCreationOptions.RunContinuationsAsynchronously);
+        private readonly TaskCompletionSource _release = new(TaskCreationOptions.RunContinuationsAsynchronously);
+
+        public Task Started => _started.Task;
+
+        public int ActiveInvocationCount => 0;
+
+        public void Release()
+        {
+            _release.TrySetResult();
+        }
+
+        public async Task RunAsync(InvocationExecutionContext context, CancellationToken cancellationToken = default)
+        {
+            await dispatcher.ReportInvocationStreamChunkAsync(context.Package.InvocationId, "gated answer").ConfigureAwait(false);
+            _started.TrySetResult();
+
+            // Honor a genuine user cancel (runCancellation) while blocked; a client-token disconnect never reaches here.
+            await _release.Task.WaitAsync(cancellationToken).ConfigureAwait(false);
+
+            await dispatcher.ReportInvocationStreamChunkAsync(context.Package.InvocationId, " done").ConfigureAwait(false);
             await dispatcher.ReportInvocationCompletedAsync(context.Package.InvocationId, inputTokens: 5, outputTokens: 2, totalTokens: 7, reasoningTokens: 0).ConfigureAwait(false);
         }
 

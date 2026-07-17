@@ -61,6 +61,10 @@ public sealed partial class InvocationRunner : IInvocationRunner
     // message can name hosts/paths and is unbounded, so a fixed, path-free constant is surfaced in its place.
     private const string TimedOutMessage = "The operation timed out.";
 
+    // A new local turn admitted after shutdown drain has begun (GPTAUD-21). Surfaced as a clean Cancelled-category
+    // failure — the node is going away — rather than being run into a drain that has already stopped waiting for it.
+    private const string NodeDrainingMessage = "The node is shutting down and is not accepting new requests.";
+
     // The budgeter's hard-stop (see ApplyContextBudgetAsync): history still exceeds the resolved context budget after
     // the two-pass truncation. A fixed, path-free constant carrying no token counts, model names, or content.
     private const string ContextBudgetExceededMessage =
@@ -102,6 +106,11 @@ public sealed partial class InvocationRunner : IInvocationRunner
     private readonly ConcurrentDictionary<Guid, TimeSpan> _toolResultTimeoutsByInvocation = new();
 
     private Guid? _currentInvocationId;
+
+    // Set once (never reset) when shutdown drain begins, guarded by _syncRoot. A local invocation that reaches
+    // admission after this is set is rejected (GPTAUD-21): it registers AFTER the drain snapshot and would otherwise
+    // become an untracked active run the drain never waits for.
+    private bool _draining;
 
     private CancellationTokenSource? _invocationCancellationTokenSource;
     private bool _timeoutTriggered;
@@ -198,7 +207,18 @@ public sealed partial class InvocationRunner : IInvocationRunner
         var turnPolicy = TurnPolicy.Resolve(package, _contextBudgetOptions, _resilienceOptions, _toolPipelineOptions, _maxPendingToolCallAge);
 
         RegisterActiveInvocation(package.InvocationId, turnPolicy.InvocationTimeout, cancellationToken);
-        var activeInvocationCompletion = RegisterActiveInvocationCompletion(package.InvocationId);
+        var activeInvocationCompletion = RegisterActiveInvocationCompletion(package.InvocationId, !shouldSendHubMessages);
+        if (activeInvocationCompletion is null)
+        {
+            // Shutdown drain has started and this is a local turn admitted after the drain snapshot (GPTAUD-21). Undo the
+            // registration above and surface a clean, classified failure instead of running it into a drain that has
+            // stopped waiting. A local turn sends no hub messages, so reporting to the dispatcher is the whole surface.
+            ClearActiveInvocation(package.InvocationId);
+            _logger.LogInformation("Rejecting local invocation {InvocationId}: the node is draining for shutdown.", package.InvocationId);
+            await dispatcher.ReportInvocationFailedAsync(package.InvocationId, NodeDrainingMessage, FailureCategory.Cancelled).ConfigureAwait(false);
+            return;
+        }
+
         _toolResultTimeoutsByInvocation[package.InvocationId] = turnPolicy.ToolResultTimeout;
 
         try
@@ -378,7 +398,17 @@ public sealed partial class InvocationRunner : IInvocationRunner
 
     public async Task<bool> DrainActiveInvocationsAsync(TimeSpan timeout, CancellationToken cancellationToken = default)
     {
-        var activeInvocationTasks = _activeInvocationCompletions.Values.Select(static completion => completion.Task).ToArray();
+        // Fence local admission and snapshot the active set ATOMICALLY under _syncRoot: a new local turn either
+        // registered its completion before this lock (so it is in the snapshot and awaited) or hits admission after and
+        // is rejected (RegisterActiveInvocationCompletion returns null). No local turn can slip into the gap between the
+        // fence and the snapshot and become an untracked active run (GPTAUD-21).
+        Task[] activeInvocationTasks;
+        lock (_syncRoot)
+        {
+            _draining = true;
+            activeInvocationTasks = _activeInvocationCompletions.Values.Select(static completion => completion.Task).ToArray();
+        }
+
         if (activeInvocationTasks.Length == 0)
         {
             return true;
@@ -685,7 +715,14 @@ public sealed partial class InvocationRunner : IInvocationRunner
         // and resume threadlessly (session: null) by replaying the folded segment messages plus the approval
         // response. A segment that surfaces no approval request completes the run.
         var currentMessages = new List<ChatMessage>(agentContext.SeedMessages);
-        ToolApprovalRequestContent? pendingApproval;
+
+        // A single model turn can surface MORE than one approval request (a parallel-tool-call turn wrapping two
+        // approval-gated tools). Collect EVERY request in the segment, deduped so a provider re-emitting the same request
+        // across streamed chunks enqueues it once — none is lost (the scalar this replaced kept only the last, dangling
+        // the earlier requests forever, GPTAUD-02). The dedup key is namespaced so a CallId and an approval Id can never
+        // collide across two different requests.
+        var pendingApprovals = new List<ToolApprovalRequestContent>();
+        var pendingApprovalKeys = new HashSet<string>(StringComparer.Ordinal);
 
         // Inter-chunk idle bound for every segment: if the provider stalls between streamed chunks for longer than the
         // resolved policy's stream-idle timeout the watchdog cancels the send and surfaces a distinct (Timeout-category)
@@ -716,7 +753,8 @@ public sealed partial class InvocationRunner : IInvocationRunner
                 currentMessages = budgetedMessages as List<ChatMessage> ?? [.. budgetedMessages];
             }
 
-            pendingApproval = null;
+            pendingApprovals.Clear();
+            pendingApprovalKeys.Clear();
             var segmentUpdates = new List<AgentResponseUpdate>();
 
             // Each provider send is guarded by the inter-chunk idle watchdog (the watchdog owns the token the provider
@@ -818,9 +856,14 @@ public sealed partial class InvocationRunner : IInvocationRunner
 
                             case ToolApprovalRequestContent approvalRequest:
                                 // FunctionInvokingChatClient surfaces this for an ApprovalRequiredAIFunction instead of
-                                // executing the tool. Capture it; the segment ends and the outer loop runs the approval
-                                // round-trip, then resumes threadlessly with the decision.
-                                pendingApproval = approvalRequest;
+                                // executing the tool. Capture EVERY request in the segment, deduped (the same request can
+                                // be re-emitted across streamed chunks); the segment ends and the outer loop runs each
+                                // approval round-trip, then resumes threadlessly with the decisions.
+                                if (!IsDuplicatePendingApproval(approvalRequest, pendingApprovals, pendingApprovalKeys))
+                                {
+                                    pendingApprovals.Add(approvalRequest);
+                                }
+
                                 break;
                         }
                     }
@@ -854,18 +897,56 @@ public sealed partial class InvocationRunner : IInvocationRunner
             // retried (a retry there would replay already-streamed chunks).
             isFirstSegment = false;
 
-            if (pendingApproval is not null)
+            if (pendingApprovals.Count > 0)
             {
-                // Fold the streamed segment into messages (carries the assistant tool-call + approval request),
-                // run the approval round-trip over the existing transport, then replay history + the approval
-                // response so FunctionInvokingChatClient reconstructs and executes (or rejects) the tool call.
+                // Fold the streamed segment into messages (carries the assistant tool-call(s) + approval request(s)),
+                // run EACH approval round-trip over the existing transport (the transport presents one at a time — the
+                // approvals resolve in turn), then replay history + ONE user message carrying every approval response so
+                // FunctionInvokingChatClient reconstructs and executes (or rejects) all the pending tool calls. Multiple
+                // ToolApprovalResponseContent may share a single user ChatMessage.
                 var foldedMessages = segmentUpdates.ToAgentResponse().Messages;
-                var approved = await RequestToolApprovalAsync(package, pendingApproval, invocationToken).ConfigureAwait(false);
                 currentMessages.AddRange(foldedMessages);
-                currentMessages.Add(new ChatMessage(ChatRole.User,
-                    [pendingApproval.CreateResponse(approved, approved ? "Approved by user." : "Rejected by user.")]));
+
+                var approvalResponses = new List<AIContent>(pendingApprovals.Count);
+                foreach (var approvalRequest in pendingApprovals)
+                {
+                    var approved = await RequestToolApprovalAsync(package, approvalRequest, invocationToken).ConfigureAwait(false);
+                    approvalResponses.Add(approvalRequest.CreateResponse(approved, approved ? "Approved by user." : "Rejected by user."));
+                }
+
+                currentMessages.Add(new ChatMessage(ChatRole.User, approvalResponses));
             }
-        } while (pendingApproval is not null);
+        } while (pendingApprovals.Count > 0);
+    }
+
+    // Whether this approval request has already been captured for the current segment. Prefers a namespaced stable key —
+    // the tool-call CallId, else the approval's own RequestId — so a provider re-emitting the same request across
+    // streamed chunks enqueues it once. A BLANK CallId must never bypass dedup (that would prompt N times and dangle N-1
+    // ambiguous responses for a single call); when neither a CallId nor a RequestId is present, falls back to reference
+    // identity so at least the same surfaced instance is not enqueued twice. `seenKeys` accumulates the keys already
+    // captured this segment; a stable key is added to it here as a side effect on first sight.
+    private static bool IsDuplicatePendingApproval(ToolApprovalRequestContent approvalRequest,
+        List<ToolApprovalRequestContent> pendingApprovals,
+        HashSet<string> seenKeys)
+    {
+        string? key = null;
+        if (!string.IsNullOrEmpty(approvalRequest.ToolCall.CallId))
+        {
+            key = "call:" + approvalRequest.ToolCall.CallId;
+        }
+        else if (!string.IsNullOrEmpty(approvalRequest.RequestId))
+        {
+            key = "req:" + approvalRequest.RequestId;
+        }
+
+        if (key is not null)
+        {
+            // Add returns false when the key was already present → a duplicate.
+            return !seenKeys.Add(key);
+        }
+
+        // No stable identifier at all: dedup by reference identity so the same instance is not captured twice.
+        return pendingApprovals.Contains(approvalRequest);
     }
 
     // The orchestration path. Compiles the package's OrchestrationSpec into the MAF-agnostic
@@ -1153,12 +1234,24 @@ public sealed partial class InvocationRunner : IInvocationRunner
         }
     }
 
-    private TaskCompletionSource RegisterActiveInvocationCompletion(Guid invocationId)
+    // Registers the invocation's active-completion source. Returns null when the node is draining and this is a local
+    // turn (GPTAUD-21) — the completion add and the draining check happen under _syncRoot so they are serialized with
+    // the drain snapshot, closing the admission-after-snapshot race. A non-local (remote) turn is not fenced here; the
+    // dispatcher already stops accepting remote assignments at drain.
+    private TaskCompletionSource? RegisterActiveInvocationCompletion(Guid invocationId, bool isLocalLoopback)
     {
         var completion = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
-        if (!_activeInvocationCompletions.TryAdd(invocationId, completion))
+        lock (_syncRoot)
         {
-            throw new InvalidOperationException($"Invocation {invocationId} is already tracked as active.");
+            if (_draining && isLocalLoopback)
+            {
+                return null;
+            }
+
+            if (!_activeInvocationCompletions.TryAdd(invocationId, completion))
+            {
+                throw new InvalidOperationException($"Invocation {invocationId} is already tracked as active.");
+            }
         }
 
         return completion;

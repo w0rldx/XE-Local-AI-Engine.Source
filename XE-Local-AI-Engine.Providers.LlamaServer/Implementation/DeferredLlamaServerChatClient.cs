@@ -4,6 +4,9 @@ using System.Net.Sockets;
 using System.Runtime.CompilerServices;
 using Microsoft.Extensions.AI;
 using XE_Local_AI_Engine.Providers.LlamaServer.Contracts;
+// Aliased (not a blanket `using OpenAI.Chat`) so OpenAI.Chat.ChatMessage never collides with the MEAI ChatMessage this
+// client's IChatClient signatures use — a blanket import makes ChatMessage ambiguous and breaks the interface impl.
+using ChatCompletionOptions = OpenAI.Chat.ChatCompletionOptions;
 
 /// <summary>
 ///     An <see cref="IChatClient" /> that defers process start to first use: the supervisor's
@@ -34,6 +37,18 @@ internal sealed class DeferredLlamaServerChatClient : IChatClient
     // request is refused up front (never started) instead of running untracked under the drain.
     private const string ModelEjectingMessage = "The model is being ejected by the operator; this request was not started.";
 
+    // In-process marker (duplicated from InvocationAgentFactory.LlamaDisableThinkingMarkerKey — AI.Agent does not
+    // reference this assembly). When present+true, reasoning is OFF on a thinking-capable model and the outbound
+    // llama-server request must carry chat_template_kwargs.enable_thinking=false so a Qwen3-class chat template stops
+    // emitting a reasoning block (GPTAUD-17b). The Ollama `think:false` set alongside it never reaches llama.cpp — the
+    // OpenAI adapter drops unmapped AdditionalProperties — so the switch is injected here instead.
+    internal const string DisableThinkingMarkerKey = "xe.llama.disable_thinking";
+
+    // The raw utf8 JSON object written at $.chat_template_kwargs. The OpenAI chat body has no typed field for it, so it
+    // rides the wire via ChatCompletionOptions.Patch — MEAI's OpenAI adapter uses the ChatCompletionOptions returned by
+    // ChatOptions.RawRepresentationFactory as its serialization base, Patch included (verified against MEAI 10.7).
+    private static ReadOnlySpan<byte> DisableThinkingKwargs => "{\"enable_thinking\":false}"u8;
+
     private readonly SemaphoreSlim _initGate = new(initialCount: 1, maxCount: 1);
     private readonly string _modelName;
     private readonly TimeSpan _networkTimeout;
@@ -53,6 +68,7 @@ internal sealed class DeferredLlamaServerChatClient : IChatClient
         ChatOptions? options = null,
         CancellationToken cancellationToken = default)
     {
+        options = ApplyThinkingSwitch(options);
         var healed = false;
         while (true)
         {
@@ -105,6 +121,7 @@ internal sealed class DeferredLlamaServerChatClient : IChatClient
         [EnumeratorCancellation]
         CancellationToken cancellationToken = default)
     {
+        options = ApplyThinkingSwitch(options);
         var healed = false;
         while (true)
         {
@@ -197,6 +214,48 @@ internal sealed class DeferredLlamaServerChatClient : IChatClient
     {
         _inner?.Dispose();
         _initGate.Dispose();
+    }
+
+    /// <summary>
+    ///     When the turn carries the <see cref="DisableThinkingMarkerKey" /> marker (reasoning OFF on a thinking-capable
+    ///     model), returns a clone of <paramref name="options" /> whose <see cref="ChatOptions.RawRepresentationFactory" />
+    ///     yields a <see cref="ChatCompletionOptions" /> with <c>chat_template_kwargs.enable_thinking=false</c> patched in,
+    ///     so the switch reaches llama-server on the wire (GPTAUD-17b). Without the marker the options are returned
+    ///     unchanged, so every other request is byte-identical. A pre-existing <see cref="ChatOptions.RawRepresentationFactory" />
+    ///     (none is set on the llama.cpp path today) is composed rather than dropped.
+    /// </summary>
+    internal static ChatOptions? ApplyThinkingSwitch(ChatOptions? options)
+    {
+        // Gating note (GPTAUD-17b): the marker is set upstream (InvocationAgentFactory) whenever reasoning is OFF on a
+        // thinking-capable model — i.e. gated on the model's thinking capability, NOT on the finer "template advertises
+        // the enable_thinking switch" signal. That is a deliberate, safe SUPERSET: injecting
+        // chat_template_kwargs.enable_thinking=false is a no-op for any chat template that does not read that variable
+        // (an unknown kwarg is simply ignored by the jinja renderer), and only reasoning models are thinking-capable, so
+        // at worst the field is inert. The finer gate would require a new capability threaded through the (cross-lane)
+        // classification/resolver chain; if that lands, tighten the factory's marker condition — this site needs no change.
+        if (options?.AdditionalProperties is not { } properties
+            || !properties.TryGetValue(DisableThinkingMarkerKey, out var raw)
+            || raw is not true)
+        {
+            return options;
+        }
+
+        var priorFactory = options.RawRepresentationFactory;
+        var patched = options.Clone();
+        patched.RawRepresentationFactory = client =>
+        {
+            var baseOptions = priorFactory?.Invoke(client) as ChatCompletionOptions ?? new ChatCompletionOptions();
+            // SCME0001: ChatCompletionOptions.Patch (System.ClientModel JsonPatch) is [Experimental] in the pinned OpenAI
+            // 2.11 SDK. It is the ONLY seam that serializes an arbitrary top-level body field (the OpenAI chat schema has
+            // no typed chat_template_kwargs), and MEAI's OpenAI adapter serializes the ChatCompletionOptions this factory
+            // returns, Patch included — so the switch reaches llama-server. Suppress is scoped to this one call, mirroring
+            // the MAAI001 pattern (docs/agent-knowledge.md §4).
+#pragma warning disable SCME0001
+            baseOptions.Patch.Set("$.chat_template_kwargs"u8, DisableThinkingKwargs);
+#pragma warning restore SCME0001
+            return baseOptions;
+        };
+        return patched;
     }
 
     private async Task<IChatClient> EnsureInnerAsync(CancellationToken ct)

@@ -174,6 +174,7 @@ internal sealed class HuggingFaceGgufStore : IGgufModelStore
                 modelName,
                 destinationPath,
                 fileSizeBytes,
+                fileSha,
                 progress,
                 ct).ConfigureAwait(false);
 
@@ -185,8 +186,10 @@ internal sealed class HuggingFaceGgufStore : IGgufModelStore
                 Quant = quant,
                 LocalPath = result.LocalPath,
                 SizeBytes = result.SizeBytes,
-                // Prefer the verified download hash; fall back to the inspected file hash when the OID was not on the resolve response.
-                Sha256 = result.Sha256 ?? fileSha,
+                // The download verified the content against the resolve OID or, failing that, the discovery digest we
+                // just passed. Persist ONLY that verified hash — never echo an unverified digest, which would be
+                // indistinguishable from a real integrity guarantee.
+                Sha256 = result.Sha256,
                 SourceRevision = string.IsNullOrEmpty(result.ResolvedRevision) ? revision : result.ResolvedRevision,
                 DownloadedAtUtc = DateTimeOffset.UtcNow,
                 Role = request.Role

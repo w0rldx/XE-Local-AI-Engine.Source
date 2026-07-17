@@ -131,6 +131,79 @@ public sealed class MemoryExtractionServiceTests
         await store.DidNotReceive().AddAsync(Arg.Any<PlaybookActionInput>(), Arg.Any<CancellationToken>()).ConfigureAwait(false);
     }
 
+    [Test]
+    public async Task MemoryExtraction_WhenBehaviorCarriesPemPrivateKey_RejectsCandidate()
+    {
+        var agentId = Guid.NewGuid();
+        const string pem = "Remember this: -----BEGIN RSA PRIVATE KEY-----\nMIIEvwIBADANBg\n-----END RSA PRIVATE KEY-----";
+        var agent = new FakeExtractionAgent(_ => [Candidate(pem, MemoryScope.Procedural)]);
+        var service = CreateService(out var store, agent);
+        store.ListByAgentAsync(agentId, Arg.Any<CancellationToken>())
+             .Returns(Task.FromResult<IReadOnlyList<PlaybookActionRecord>>([]));
+        EchoAddedAction(store);
+
+        var outcome = await service.ExtractAsync(SuccessfulRun(agentId)).ConfigureAwait(false);
+
+        AssertEx.Equal(expected: 0, outcome.CreatedCandidates.Count, "A candidate carrying a PEM private key must be rejected outright.");
+        await store.DidNotReceive().AddAsync(Arg.Any<PlaybookActionInput>(), Arg.Any<CancellationToken>()).ConfigureAwait(false);
+    }
+
+    [Test]
+    public async Task MemoryExtraction_WhenTriggerConditionCarriesPemPrivateKey_RejectsCandidate()
+    {
+        var agentId = Guid.NewGuid();
+        const string pem = "-----BEGIN OPENSSH PRIVATE KEY-----\nb3BlbnNzaC1r\n-----END OPENSSH PRIVATE KEY-----";
+        var agent = new FakeExtractionAgent(_ => [Candidate("Prefer the shared helper.", MemoryScope.Procedural, trigger: pem)]);
+        var service = CreateService(out var store, agent);
+        store.ListByAgentAsync(agentId, Arg.Any<CancellationToken>())
+             .Returns(Task.FromResult<IReadOnlyList<PlaybookActionRecord>>([]));
+        EchoAddedAction(store);
+
+        var outcome = await service.ExtractAsync(SuccessfulRun(agentId)).ConfigureAwait(false);
+
+        AssertEx.Equal(expected: 0, outcome.CreatedCandidates.Count, "A candidate whose trigger condition carries a PEM private key must be rejected outright.");
+        await store.DidNotReceive().AddAsync(Arg.Any<PlaybookActionInput>(), Arg.Any<CancellationToken>()).ConfigureAwait(false);
+    }
+
+    [Test]
+    public async Task MemoryExtraction_WhenBehaviorCarriesJwt_RedactsInBothFields()
+    {
+        var agentId = Guid.NewGuid();
+        const string jwt = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiIxMjM0NTY3ODkwIn0.dozjgNryP4J3jVmNHl0w5N";
+        var agent = new FakeExtractionAgent(_ =>
+            [Candidate($"Use the token {jwt} for auth.", MemoryScope.Procedural, trigger: $"When calling with {jwt}.")]);
+        var service = CreateService(out var store, agent);
+        store.ListByAgentAsync(agentId, Arg.Any<CancellationToken>())
+             .Returns(Task.FromResult<IReadOnlyList<PlaybookActionRecord>>([]));
+        EchoAddedAction(store);
+
+        var outcome = await service.ExtractAsync(SuccessfulRun(agentId)).ConfigureAwait(false);
+
+        AssertEx.Equal(expected: 1, outcome.CreatedCandidates.Count, "A JWT is redactable, not reject-worthy — the candidate persists.");
+        var created = outcome.CreatedCandidates[0];
+        AssertEx.False(created.Behavior.Contains(jwt, StringComparison.Ordinal), "The JWT must be redacted out of the persisted behavior.");
+        AssertEx.True(created.Behavior.Contains("[REDACTED", StringComparison.Ordinal), "The behavior must carry a redaction marker.");
+        AssertEx.False((created.TriggerCondition ?? string.Empty).Contains(jwt, StringComparison.Ordinal), "The JWT must be redacted out of the persisted trigger condition.");
+    }
+
+    [Test]
+    public async Task MemoryExtraction_WhenCleanProposal_PersistsUnmodified()
+    {
+        var agentId = Guid.NewGuid();
+        var agent = new FakeExtractionAgent(_ => [Candidate("Prefer the existing shared helper.", MemoryScope.Procedural, trigger: "When adding a feature.")]);
+        var service = CreateService(out var store, agent);
+        store.ListByAgentAsync(agentId, Arg.Any<CancellationToken>())
+             .Returns(Task.FromResult<IReadOnlyList<PlaybookActionRecord>>([]));
+        EchoAddedAction(store);
+
+        var outcome = await service.ExtractAsync(SuccessfulRun(agentId)).ConfigureAwait(false);
+
+        AssertEx.Equal(expected: 1, outcome.CreatedCandidates.Count);
+        var created = outcome.CreatedCandidates[0];
+        AssertEx.Equal("Prefer the existing shared helper.", created.Behavior);
+        AssertEx.Equal("When adding a feature.", created.TriggerCondition);
+    }
+
     private static MemoryExtractionService CreateService(out IPlaybookActionStore store,
         IMemoryExtractionAgent agent,
         MemoryExtractionOptions? options = null)
@@ -192,9 +265,9 @@ public sealed class MemoryExtractionServiceTests
         };
     }
 
-    private static ProposedMemory Candidate(string behavior, MemoryScope scope)
+    private static ProposedMemory Candidate(string behavior, MemoryScope scope, string? trigger = null)
     {
-        return new ProposedMemory(behavior, scope, TriggerCondition: null, Confidence: 0.8d);
+        return new ProposedMemory(behavior, scope, trigger, Confidence: 0.8d);
     }
 
     private static PlaybookActionRecord EnabledAction(Guid agentId, string behavior, MemoryScope scope)

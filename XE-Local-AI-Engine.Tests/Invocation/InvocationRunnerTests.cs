@@ -882,6 +882,95 @@ public sealed class InvocationRunnerTests
     }
 
     [Test]
+    public async Task RunAsync_WhenTwoToolApprovalsInOneSegment_AnswersBothOnResume()
+    {
+        // GPTAUD-02: a parallel-tool-call turn surfaces TWO approval requests in one segment. The runner must present and
+        // answer BOTH — the scalar this replaced kept only the last, so the first request dangled unanswered forever and
+        // its tool call never executed. On resume, the folded history must carry a ToolApprovalResponseContent for EACH.
+        var sender = new MockHubMessageSender();
+        IReadOnlyList<ChatMessage>? resumeMessages = null;
+        var segment = 0;
+        var factory = CreateMessageCapturingFactory(_ =>
+            {
+                segment++;
+                return segment == 1 ? TwoApprovalRequestUpdates() : CreateUpdates("done");
+            },
+            messages => resumeMessages = messages);
+        var runner = CreateRunner(sender, factory);
+        var invocationId = Guid.NewGuid();
+
+        var runTask = RunAsync(runner, RuntimePackageBuilder.Valid().WithInvocationId(invocationId).WithAllowedTool("run_in_agent_home").Build());
+
+        // The transport presents approvals one at a time, so answer each as it arrives (present-each-in-turn).
+        await AssertEx.EventuallyAsync(() => sender.SentApprovals.Count == 1, TimeSpan.FromSeconds(5));
+        runner.ResolveApprovalResult(new ApprovalResolvedEvent(sender.SentApprovals[0].RequestId, Approved: true));
+        await AssertEx.EventuallyAsync(() => sender.SentApprovals.Count == 2, TimeSpan.FromSeconds(5));
+        runner.ResolveApprovalResult(new ApprovalResolvedEvent(sender.SentApprovals[1].RequestId, Approved: true));
+        await runTask;
+
+        AssertEx.Equal(expected: 2, segment, "the runner must resume only after BOTH approvals resolve");
+        var responses = AssertEx.NotNull(resumeMessages)
+                                .SelectMany(static message => message.Contents)
+                                .OfType<ToolApprovalResponseContent>()
+                                .ToList();
+        AssertEx.Equal(expected: 2, responses.Count, "both approval requests must receive a ToolApprovalResponseContent on resume");
+    }
+
+    [Test]
+    public async Task RunAsync_WhenApprovalReEmittedWithoutCallId_PresentedOnce()
+    {
+        // GPTAUD-02 hardening: a CallId-less approval re-emitted across streamed chunks must dedup on its Id and be
+        // presented exactly ONCE — a blank CallId must never bypass dedup (that would prompt N times for one call and
+        // dangle N-1 ambiguous responses).
+        var sender = new MockHubMessageSender();
+        var segment = 0;
+        var factory = CreateFactory(_ =>
+        {
+            segment++;
+            return segment == 1 ? BlankCallIdApprovalUpdates() : CreateUpdates("done");
+        });
+        var runner = CreateRunner(sender, factory);
+        var invocationId = Guid.NewGuid();
+
+        var runTask = RunAsync(runner, RuntimePackageBuilder.Valid().WithInvocationId(invocationId).WithAllowedTool("run_in_agent_home").Build());
+
+        // The whole segment (both chunks) drains before approvals are presented, so a bypassed dedup would already have
+        // enqueued two; wait for the single presentation, resolve it, and confirm no second one follows.
+        await AssertEx.EventuallyAsync(() => sender.SentApprovals.Count == 1, TimeSpan.FromSeconds(5));
+        runner.ResolveApprovalResult(new ApprovalResolvedEvent(sender.SentApprovals[0].RequestId, Approved: true));
+        await runTask;
+
+        AssertEx.Equal(expected: 1, sender.SentApprovals.Count, "a CallId-less approval re-emitted across chunks must be presented exactly once");
+        AssertEx.Equal(expected: 2, segment, "the run resumes after the single approval resolves");
+    }
+
+    [Test]
+    public async Task RunAsync_WhenNodeDrainingBegan_RejectsNewLocalInvocation()
+    {
+        // GPTAUD-21: a local turn admitted AFTER shutdown drain has snapshotted the active set must be rejected, never
+        // become an untracked active run the drain never waits for. DrainActiveInvocationsAsync fences local admission;
+        // a subsequent local (loopback) RunAsync is rejected with a classified failure and never streams.
+        var sender = new MockHubMessageSender();
+        var dispatcher = Substitute.For<IWorkerEventDispatcher>();
+        var runner = CreateRunner(sender, eventDispatcher: dispatcher, agentUpdates: CreateUpdates("should-not-stream"));
+
+        // Drain with nothing active: returns immediately but latches the draining fence.
+        var drained = await runner.DrainActiveInvocationsAsync(TimeSpan.FromSeconds(1));
+        AssertEx.True(drained, "an empty drain completes immediately");
+
+        var package = RuntimePackageBuilder.Valid()
+                                           .WithInvocationId(Guid.NewGuid())
+                                           .WithRequestedCapability(LocalChatLoopbackDefaults.RequestedCapability)
+                                           .Build();
+        await RunAsync(runner, package);
+
+        // Rejected cleanly: a classified failure reported, no stream, and the runner is not left tracking it as active.
+        await dispatcher.Received(1).ReportInvocationFailedAsync(package.InvocationId, Arg.Any<string>(), FailureCategory.Cancelled);
+        await dispatcher.DidNotReceive().ReportInvocationStreamChunkAsync(package.InvocationId, Arg.Any<string>());
+        AssertEx.Equal(expected: 0, runner.ActiveInvocationCount);
+    }
+
+    [Test]
     public async Task RunAsync_WhenPackageHasOrchestrationSpec_DrivesOrchestrationAndStreamsDeltas()
     {
         var sender = new MockHubMessageSender();
@@ -1584,6 +1673,62 @@ public sealed class InvocationRunnerTests
         await Task.Yield();
     }
 
+    private static async IAsyncEnumerable<AgentResponseUpdate> TwoApprovalRequestUpdates()
+    {
+        // A parallel-tool-call turn surfacing TWO approval requests in ONE segment (GPTAUD-02): the runner must present
+        // and answer BOTH, not just the last. Distinct tool-call CallIds so the dedup keeps them separate.
+        var firstApproval = new ToolApprovalRequestContent("approval-1", new ToolCallContent("call-1"));
+        var secondApproval = new ToolApprovalRequestContent("approval-2", new ToolCallContent("call-2"));
+        yield return new AgentResponseUpdate(ChatRole.Assistant, new List<AIContent>
+        {
+            firstApproval,
+            secondApproval
+        });
+        await Task.Yield();
+    }
+
+    private static async IAsyncEnumerable<AgentResponseUpdate> BlankCallIdApprovalUpdates()
+    {
+        // The SAME approval (a stable Id, but NO CallId) surfaced as two DISTINCT instances across two streamed chunks —
+        // exercises the Id-based dedup fallback (reference identity alone would not collapse two instances). Dedup must
+        // present it exactly once; a blank CallId must never bypass dedup and prompt twice for one call.
+        var first = new ToolApprovalRequestContent("approval-no-callid", new FunctionCallContent(string.Empty, "run_in_agent_home"));
+        var second = new ToolApprovalRequestContent("approval-no-callid", new FunctionCallContent(string.Empty, "run_in_agent_home"));
+        yield return new AgentResponseUpdate(ChatRole.Assistant, new List<AIContent>
+        {
+            first
+        });
+        await Task.Yield();
+        yield return new AgentResponseUpdate(ChatRole.Assistant, new List<AIContent>
+        {
+            second
+        });
+        await Task.Yield();
+    }
+
+    // A factory that records the messages passed to EACH streaming segment (so a resume test can assert the folded
+    // approval responses reached the agent) while returning per-segment updates from the supplied factory.
+    private static IInvocationAgentFactory CreateMessageCapturingFactory(Func<CancellationToken, IAsyncEnumerable<AgentResponseUpdate>> updatesFactory,
+        Action<IReadOnlyList<ChatMessage>> onMessages)
+    {
+        var factory = Substitute.For<IInvocationAgentFactory>();
+        factory.CreateAsync(Arg.Any<InvocationAgentDefinition>(), Arg.Any<CancellationToken>())
+               .Returns(callInfo =>
+               {
+                   var definition = callInfo.Arg<InvocationAgentDefinition>();
+                   return Task.FromResult(new InvocationAgentContext
+                   {
+                       Agent = new FakeAIAgent(updatesFactory, onSessionObserved: null, onMessagesObserved: onMessages),
+                       Session = null,
+                       SeedMessages = definition.ConversationContext
+                                                .Prepend(new ChatMessage(ChatRole.System, definition.Instructions))
+                                                .ToList()
+                   });
+               });
+
+        return factory;
+    }
+
     private static async IAsyncEnumerable<AgentResponseUpdate> CreateMixedUpdates(params (string? Text, string? Thinking)[] chunks)
     {
         foreach (var (text, thinking) in chunks)
@@ -1795,6 +1940,7 @@ public sealed class InvocationRunnerTests
 
     private sealed class FakeAIAgent : AIAgent
     {
+        private readonly Action<IReadOnlyList<ChatMessage>>? _onMessagesObserved;
         private readonly Action<bool>? _onSessionObserved;
         private readonly Func<CancellationToken, IAsyncEnumerable<AgentResponseUpdate>> _updatesFactory;
 
@@ -1803,10 +1949,13 @@ public sealed class InvocationRunnerTests
         {
         }
 
-        public FakeAIAgent(Func<CancellationToken, IAsyncEnumerable<AgentResponseUpdate>> updatesFactory, Action<bool>? onSessionObserved = null)
+        public FakeAIAgent(Func<CancellationToken, IAsyncEnumerable<AgentResponseUpdate>> updatesFactory,
+            Action<bool>? onSessionObserved = null,
+            Action<IReadOnlyList<ChatMessage>>? onMessagesObserved = null)
         {
             _updatesFactory = updatesFactory;
             _onSessionObserved = onSessionObserved;
+            _onMessagesObserved = onMessagesObserved;
         }
 
         protected override ValueTask<AgentSession> CreateSessionCoreAsync(CancellationToken cancellationToken = default)
@@ -1842,6 +1991,7 @@ public sealed class InvocationRunnerTests
             CancellationToken cancellationToken = default)
         {
             _onSessionObserved?.Invoke(session is null);
+            _onMessagesObserved?.Invoke(messages.ToList());
             return _updatesFactory(cancellationToken);
         }
     }

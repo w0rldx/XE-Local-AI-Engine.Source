@@ -75,22 +75,22 @@ internal sealed class OrchestrationRunSession : IOrchestrationRunSession
 
             await foreach (var evt in guarded.ConfigureAwait(false))
             {
-                var update = MapEvent(evt);
-                if (update is null)
+                // One source event can normalize to MORE than one update — a single streaming update carrying both
+                // reasoning and visible text yields a reasoning fragment AND a text fragment (GPTAUD-03b). Each is
+                // surfaced in order (reasoning first) so no visible text is dropped.
+                foreach (var update in MapEvent(evt))
                 {
-                    continue;
-                }
+                    lock (_idleClockGate)
+                    {
+                        // Set the idle bound BEFORE yielding (the consumer may block for minutes on the yielded update,
+                        // and the clock must already reflect the new state by then): suspend it while a tool approval is
+                        // outstanding (the consumer is awaiting a human decision; RespondToApprovalAsync restarts it on
+                        // resume), otherwise reset it so each productive event renews the inter-event bound.
+                        idleCts.CancelAfter(_pendingApprovals.IsEmpty ? _idleTimeout : Timeout.InfiniteTimeSpan);
+                    }
 
-                lock (_idleClockGate)
-                {
-                    // Set the idle bound BEFORE yielding (the consumer may block for minutes on the yielded update,
-                    // and the clock must already reflect the new state by then): suspend it while a tool approval is
-                    // outstanding (the consumer is awaiting a human decision; RespondToApprovalAsync restarts it on
-                    // resume), otherwise reset it so each productive event renews the inter-event bound.
-                    idleCts.CancelAfter(_pendingApprovals.IsEmpty ? _idleTimeout : Timeout.InfiniteTimeSpan);
+                    yield return update;
                 }
-
-                yield return update;
             }
         }
         finally
@@ -160,7 +160,10 @@ internal sealed class OrchestrationRunSession : IOrchestrationRunSession
         return request.CreateResponse(approvalRequest.CreateResponse(approved, reason ?? string.Empty));
     }
 
-    private OrchestrationUpdate? MapEvent(WorkflowEvent evt)
+    // Zero, one, or two normalized updates per source event. Eager materialization is deliberate: MapApprovalRequest
+    // registers the request in _pendingApprovals as a side effect that must run before the update is yielded (the idle
+    // clock reads _pendingApprovals when deciding whether to suspend), so the mapping cannot be deferred.
+    private IReadOnlyList<OrchestrationUpdate> MapEvent(WorkflowEvent evt)
     {
         switch (evt)
         {
@@ -168,42 +171,60 @@ internal sealed class OrchestrationRunSession : IOrchestrationRunSession
                 return MapStreamingUpdate(updateEvent);
 
             case RequestInfoEvent requestInfo:
-                return MapApprovalRequest(requestInfo);
+                return [MapApprovalRequest(requestInfo)];
 
             case WorkflowOutputEvent:
-                return OrchestrationUpdate.Terminal();
+                return [OrchestrationUpdate.Terminal()];
 
             case ExecutorFailedEvent failed:
                 var message = failed.Data?.Message ?? "Orchestration executor failed.";
                 _logger.LogWarning("Orchestration executor '{ExecutorId}' failed: {Message}", failed.ExecutorId, message);
-                return OrchestrationUpdate.Failed(message, participantKey: null, participantName: null);
+                return [OrchestrationUpdate.Failed(message, participantKey: null, participantName: null)];
 
             default:
-                return null;
+                return [];
         }
     }
 
-    private OrchestrationUpdate? MapStreamingUpdate(AgentResponseUpdateEvent updateEvent)
+    private IReadOnlyList<OrchestrationUpdate> MapStreamingUpdate(AgentResponseUpdateEvent updateEvent)
     {
         var (participantKey, participantName) = ResolveParticipant(updateEvent.ExecutorId);
+        return ComposeStreamingUpdates(updateEvent.Update.Contents, updateEvent.Update.Text, participantKey, participantName);
+    }
 
-        // A single update can carry reasoning and/or visible text. Reasoning content is surfaced as a reasoning
-        // delta; the remaining text is surfaced as a text delta. The MAF FunctionCallContent for a handoff carries
-        // no user-visible text, so those updates map to null and are skipped.
-        var reasoning = updateEvent.Update.Contents
-                                   .OfType<TextReasoningContent>()
-                                   .Select(static content => content.Text)
-                                   .Where(static text => !string.IsNullOrEmpty(text))
-                                   .ToList();
+    /// <summary>
+    ///     Normalizes one streaming update's contents into ordered <see cref="OrchestrationUpdate" />s. A single update
+    ///     can carry reasoning AND visible text (both co-occur on the wire), so this emits BOTH — a reasoning delta first,
+    ///     then a text delta (GPTAUD-03b) — rather than returning early on reasoning and dropping the visible text (the
+    ///     bug this fixes). A MAF handoff <c>FunctionCallContent</c> carries neither, so it maps to an empty list.
+    ///     Pure and static so the mapping is unit-testable without the concrete MAF <c>StreamingRun</c> (which cannot be
+    ///     faked).
+    /// </summary>
+    internal static IReadOnlyList<OrchestrationUpdate> ComposeStreamingUpdates(IEnumerable<AIContent> contents,
+        string? text,
+        string? participantKey,
+        string? participantName)
+    {
+        ArgumentNullException.ThrowIfNull(contents);
+
+        var updates = new List<OrchestrationUpdate>(capacity: 2);
+
+        var reasoning = contents
+                        .OfType<TextReasoningContent>()
+                        .Select(static content => content.Text)
+                        .Where(static fragment => !string.IsNullOrEmpty(fragment))
+                        .ToList();
         if (reasoning.Count > 0)
         {
-            return OrchestrationUpdate.ReasoningFragment(string.Concat(reasoning), participantKey, participantName);
+            updates.Add(OrchestrationUpdate.ReasoningFragment(string.Concat(reasoning), participantKey, participantName));
         }
 
-        var text = updateEvent.Update.Text;
-        return string.IsNullOrEmpty(text)
-            ? null
-            : OrchestrationUpdate.TextFragment(text, participantKey, participantName);
+        if (!string.IsNullOrEmpty(text))
+        {
+            updates.Add(OrchestrationUpdate.TextFragment(text, participantKey, participantName));
+        }
+
+        return updates;
     }
 
     private OrchestrationUpdate MapApprovalRequest(RequestInfoEvent requestInfo)

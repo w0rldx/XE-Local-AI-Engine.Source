@@ -139,7 +139,16 @@ public sealed partial class LlamaCppBinaryManager : ILlamaCppBinaryManager
 
         var resolvedTag = await ResolveActiveTagAsync(variant, installed, ct).ConfigureAwait(false);
 
-        var pin = LlamaCppReleasePins.Resolve(_os, _arch, variant)
+        // Resolve the pin for the requested variant. A GPU variant (Cuda/Vulkan) MUST resolve to a GENUINE
+        // (os, arch, variant) asset via TryResolveExact — Resolve() would substitute the CPU floor when no GPU prebuilt
+        // exists (e.g. Linux CUDA has none upstream), and serving that CPU archive as a GPU LlamaBinary would make the
+        // supervisor emit GPU placement flags against a CPU build (GPTAUD-09b). A missing GPU prebuilt therefore throws
+        // the sanitized no-prebuilt error rather than falling through to CPU. The managed source-built CUDA short-circuit
+        // above already served any valid local CUDA build, so reaching here for a Cuda request means none was usable. The
+        // CPU variant keeps the plain Resolve (its exact pin IS the CPU floor).
+        var pin = (variant == GpuVariant.Cpu
+                      ? LlamaCppReleasePins.Resolve(_os, _arch, variant)
+                      : LlamaCppReleasePins.TryResolveExact(_os, _arch, variant))
                   ?? throw new LlamaRuntimeException("No prebuilt llama.cpp runtime is available for this operating system and CPU architecture.");
 
         var isPinnedFallback = string.Equals(resolvedTag, LlamaCppReleasePins.PinnedTag, StringComparison.Ordinal);

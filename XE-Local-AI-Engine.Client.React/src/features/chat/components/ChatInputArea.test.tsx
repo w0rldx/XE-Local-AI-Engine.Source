@@ -227,3 +227,36 @@ describe("ChatInputArea reasoning-effort menu capability gating", () => {
 		expect(screen.queryByTestId("chat-reasoning-effort-option-xhigh")).toBeNull();
 	});
 });
+
+describe("ChatInputArea Enter-key send gating (GPTAUD-16)", () => {
+	beforeEach(() => {
+		installJsdomEnvironmentMocks();
+	});
+
+	afterEach(() => {
+		cleanup();
+	});
+
+	it("does not send on Enter when sendDisabled is set (e.g. the selected conversation is still loading)", () => {
+		const onSend = vi.fn();
+		renderWithProviders(<ChatInputArea {...baseProps()} onSend={onSend} sendDisabled={true} />);
+
+		const input = screen.getByTestId("chat-input");
+		fireEvent.change(input, { target: { value: "hello" } });
+		fireEvent.keyDown(input, { key: "Enter" });
+
+		expect(onSend).not.toHaveBeenCalled();
+	});
+
+	it("sends on Enter with the trimmed content when sendDisabled is clear", () => {
+		const onSend = vi.fn();
+		renderWithProviders(<ChatInputArea {...baseProps()} onSend={onSend} sendDisabled={false} />);
+
+		const input = screen.getByTestId("chat-input");
+		fireEvent.change(input, { target: { value: "  hello  " } });
+		fireEvent.keyDown(input, { key: "Enter" });
+
+		expect(onSend).toHaveBeenCalledTimes(1);
+		expect(onSend).toHaveBeenCalledWith("hello", "medium", "local-default");
+	});
+});

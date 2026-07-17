@@ -1,5 +1,6 @@
 namespace XE_Local_AI_Engine.AI.Agent.Chat;
 
+using System.Diagnostics;
 using System.Runtime.CompilerServices;
 using System.Security.Cryptography;
 using System.Text;
@@ -22,9 +23,14 @@ internal sealed class ToolInvocationObservabilityChatClient : DelegatingChatClie
     {
         var response = await base.GetResponseAsync(messages, options, cancellationToken).ConfigureAwait(false);
 
+        // A completed response carries the whole function-calling turn in order — the assistant's FunctionCallContent
+        // then the tool's FunctionResultContent — so pairing them here yields an outcome span per call. (Non-streaming
+        // durations are near-zero: the tool already executed below this hop before the response returned; the
+        // outcome/name/result-hash are still accurate. Real durations come from the streaming path.)
+        var pending = new Dictionary<string, RequestedCall>(StringComparer.Ordinal);
         foreach (var message in response.Messages)
         {
-            LogToolInvocations(message.Contents);
+            ObserveContents(message.Contents, pending);
         }
 
         return response;
@@ -35,73 +41,120 @@ internal sealed class ToolInvocationObservabilityChatClient : DelegatingChatClie
         [EnumeratorCancellation]
         CancellationToken cancellationToken = default)
     {
-        // One logical tool call streams across many updates (its argument fragments share a single CallId). Track the
-        // CallIds already logged for THIS streaming request so each call yields exactly one log line and one span,
-        // instead of a near-zero-duration span and a repeated log per streamed fragment.
-        var loggedCallIds = new HashSet<string>(StringComparer.Ordinal);
+        // Streaming is the real chat path. A logical tool call streams across many updates (its argument fragments share
+        // one CallId), the tool executes below this hop, then its FunctionResultContent update flows back — so the gap
+        // between the first observed request and the result is a real tool duration. One pending entry per CallId keeps
+        // each call to exactly one requested span/log and one completion span.
+        var pending = new Dictionary<string, RequestedCall>(StringComparer.Ordinal);
 
         await foreach (var update in base.GetStreamingResponseAsync(messages, options, cancellationToken).ConfigureAwait(false))
         {
-            LogToolInvocations(update.Contents, loggedCallIds);
+            ObserveContents(update.Contents, pending);
             yield return update;
         }
     }
 
-    private void LogToolInvocations(IList<AIContent>? contents, HashSet<string>? loggedCallIds = null)
+    private void ObserveContents(IList<AIContent>? contents, Dictionary<string, RequestedCall> pending)
     {
         if (contents is null || contents.Count == 0)
         {
             return;
         }
 
-        foreach (var functionCall in contents.OfType<FunctionCallContent>())
+        foreach (var content in contents)
         {
-            // Streaming path only: skip a CallId already logged for this request so one call is not spanned per
-            // fragment. The non-streaming path passes no set (each call appears once in a complete response).
-            if (loggedCallIds is not null && !loggedCallIds.Add(functionCall.CallId))
+            switch (content)
             {
-                continue;
+                case FunctionCallContent functionCall:
+                    ObserveRequested(functionCall, pending);
+                    break;
+                case FunctionResultContent functionResult:
+                    ObserveCompleted(functionResult, pending);
+                    break;
             }
-
-            // Names the model's REQUEST to call a tool (a FunctionCallContent observed on the response), NOT the tool's
-            // execution: this hop sits above UseFunctionInvocation, so the delegate has not run yet and this span's
-            // duration measures call DISCOVERY, not run time. Named accordingly for honesty (MED-007).
-            using var activity = AgentActivitySource.Instance.StartActivity("AgentRun.ToolCallRequested");
-            activity?.SetTag("tool.call_id", functionCall.CallId);
-            activity?.SetTag("tool.name", functionCall.Name);
-
-            var (argumentsLength, argumentsHash) = SummarizeArguments(functionCall.Arguments);
-            activity?.SetTag("tool.arguments_length", argumentsLength);
-            activity?.SetTag("tool.arguments_hash", argumentsHash);
-
-            _logger.LogInformation("AgentRunToolInvoked {ToolName} {CallId} ArgsLength={ArgumentsLength} ArgsHash={ArgumentsHash}",
-                functionCall.Name, functionCall.CallId, argumentsLength, argumentsHash);
         }
     }
 
-    /// <summary>
-    ///     Reduces tool-call arguments (potentially raw model-supplied PII/file contents) to a safe correlation
-    ///     summary: the serialized UTF-8 byte length plus a truncated SHA-256 hash prefix. Never returns or logs the
-    ///     argument values themselves. A non-serializable argument graph yields the sentinel <c>(-1,
-    ///     "unserializable")</c> rather than faulting the response stream.
-    /// </summary>
-    private static (int Length, string HashPrefix) SummarizeArguments(IDictionary<string, object?>? arguments)
+    private void ObserveRequested(FunctionCallContent functionCall, Dictionary<string, RequestedCall> pending)
     {
-        string serializedArguments;
+        // A call's argument fragments stream under one CallId; record + span it exactly once. A repeat CallId is a
+        // streamed fragment (or a duplicate in the completed message list), not a new call.
+        if (!pending.TryAdd(functionCall.CallId, new RequestedCall(functionCall.Name, Stopwatch.GetTimestamp())))
+        {
+            return;
+        }
+
+        // Names the model's REQUEST to call a tool (a FunctionCallContent observed on the response), NOT the tool's
+        // execution: this hop sits above UseFunctionInvocation, so the delegate has not run yet and this span's
+        // duration measures call DISCOVERY, not run time. Named accordingly for honesty (MED-007). The paired
+        // ObserveCompleted span carries the execution outcome + real duration (GPTAUD-19b).
+        using var activity = AgentActivitySource.Instance.StartActivity("AgentRun.ToolCallRequested");
+        activity?.SetTag("tool.call_id", functionCall.CallId);
+        activity?.SetTag("tool.name", functionCall.Name);
+
+        var (argumentsLength, argumentsHash) = SummarizePayload(functionCall.Arguments);
+        activity?.SetTag("tool.arguments_length", argumentsLength);
+        activity?.SetTag("tool.arguments_hash", argumentsHash);
+
+        _logger.LogInformation("AgentRunToolInvoked {ToolName} {CallId} ArgsLength={ArgumentsLength} ArgsHash={ArgumentsHash}",
+            functionCall.Name, functionCall.CallId, argumentsLength, argumentsHash);
+    }
+
+    private void ObserveCompleted(FunctionResultContent functionResult, Dictionary<string, RequestedCall> pending)
+    {
+        // Correlate the result back to the request we recorded. A result whose request never flowed through this hop
+        // (only the tail was replayed) has nothing to time against — skip it rather than emit a duration-less span.
+        if (!pending.Remove(functionResult.CallId, out var requested))
+        {
+            return;
+        }
+
+        var durationMs = Stopwatch.GetElapsedTime(requested.StartTimestamp).TotalMilliseconds;
+        var outcome = functionResult.Exception is not null ? "error" : "success";
+        var (resultLength, resultHash) = SummarizePayload(functionResult.Result);
+
+        // The completion span sits at the same hop but fires when the FunctionResultContent flows back, so it records
+        // the actual execution outcome + duration. Only the result length + hash are captured — never the raw result
+        // value (docs §4: tool telemetry must never log raw arguments or results).
+        using var activity = AgentActivitySource.Instance.StartActivity("AgentRun.ToolCallCompleted");
+        activity?.SetTag("tool.call_id", functionResult.CallId);
+        activity?.SetTag("tool.name", requested.Name);
+        activity?.SetTag("tool.outcome", outcome);
+        activity?.SetTag("tool.duration_ms", durationMs);
+        activity?.SetTag("tool.result_length", resultLength);
+        activity?.SetTag("tool.result_hash", resultHash);
+
+        _logger.LogInformation("AgentRunToolCompleted {ToolName} {CallId} Outcome={Outcome} DurationMs={DurationMs} ResultLength={ResultLength} ResultHash={ResultHash}",
+            requested.Name, functionResult.CallId, outcome, durationMs, resultLength, resultHash);
+    }
+
+    /// <summary>
+    ///     Reduces a tool-call payload (arguments or result — potentially raw model-supplied PII/file contents) to a
+    ///     safe correlation summary: the serialized UTF-8 byte length plus a truncated SHA-256 hash prefix. Never returns
+    ///     or logs the value itself. A non-serializable graph yields the sentinel <c>(-1, "unserializable")</c> rather
+    ///     than faulting the response stream.
+    /// </summary>
+    private static (int Length, string HashPrefix) SummarizePayload(object? value)
+    {
+        string serialized;
         try
         {
-            serializedArguments = JsonSerializer.Serialize(arguments);
+            serialized = JsonSerializer.Serialize(value);
         }
         catch (Exception exception) when (exception is JsonException or NotSupportedException)
         {
-            // Observability is best-effort: a non-serializable argument graph (e.g. a reference cycle) must never fault
-            // the response stream. Report a sentinel length and a fixed marker instead of a real length/hash.
+            // Observability is best-effort: a non-serializable graph (e.g. a reference cycle) must never fault the
+            // response stream. Report a sentinel length and a fixed marker instead of a real length/hash.
             return (-1, "unserializable");
         }
 
-        var bytes = Encoding.UTF8.GetBytes(serializedArguments);
+        var bytes = Encoding.UTF8.GetBytes(serialized);
         var hash = Convert.ToHexString(SHA256.HashData(bytes));
 
         return (bytes.Length, hash[..12]);
     }
+
+    // A requested tool call awaiting its result: the tool name (so the completion span need not re-read it) plus the
+    // Stopwatch timestamp captured when the request was first observed.
+    private readonly record struct RequestedCall(string Name, long StartTimestamp);
 }
