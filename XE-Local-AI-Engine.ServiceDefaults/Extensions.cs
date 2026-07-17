@@ -87,7 +87,10 @@ public static class Extensions
                               .AddAspNetCoreInstrumentation(tracing =>
                                   tracing.Filter = context =>
                                       !context.Request.Path.StartsWithSegments("/health/live", StringComparison.CurrentCulture))
-                              .AddHttpClientInstrumentation();
+                              .AddHttpClientInstrumentation()
+                              // Downgrade a gen_ai span that failed only because a user pressed Stop (Error→Unset) so a
+                              // cancelled turn doesn't read as a service fault on dashboards/alerts (GPTAUD-19a).
+                              .AddProcessor(new GenAiCancellationStatusProcessor());
                    });
 
             builder.AddOpenTelemetryExporters();
