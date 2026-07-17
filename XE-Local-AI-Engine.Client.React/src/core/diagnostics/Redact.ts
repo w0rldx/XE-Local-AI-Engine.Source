@@ -198,7 +198,20 @@ export function redactBreadcrumb(crumb: Breadcrumb): Breadcrumb {
 				...(crumb.data === undefined ? {} : { data: redactValue(crumb.data) as Record<string, unknown> }),
 			};
 		case "error":
-			return crumb;
+			// Error message/stack/componentStack are free text captured verbatim from thrown errors, so a
+			// leaked Bearer token in an Authorization header echoed into an error string would otherwise
+			// persist cleartext in IndexedDB. redactString is idempotent, so re-redacting is a no-op.
+			return {
+				...crumb,
+				error: {
+					...crumb.error,
+					message: redactString(crumb.error.message),
+					...(crumb.error.stack === undefined ? {} : { stack: redactString(crumb.error.stack) }),
+					...(crumb.error.componentStack === undefined
+						? {}
+						: { componentStack: redactString(crumb.error.componentStack) }),
+				},
+			};
 		default:
 			return crumb;
 	}

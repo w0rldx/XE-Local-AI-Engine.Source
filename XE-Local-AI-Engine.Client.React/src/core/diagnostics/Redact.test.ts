@@ -1,6 +1,14 @@
 import { describe, expect, it } from "vitest";
 
-import { REDACTED, redactConsoleArgs, redactHeaders, redactUrl, toNetworkEntry } from "@/core/diagnostics/Redact";
+import {
+	REDACTED,
+	redactBreadcrumb,
+	redactConsoleArgs,
+	redactHeaders,
+	redactUrl,
+	toNetworkEntry,
+} from "@/core/diagnostics/Redact";
+import type { ErrorBreadcrumb } from "@/core/diagnostics/Types";
 
 describe("redactHeaders", () => {
 	it("strips Authorization/Bearer values regardless of casing", () => {
@@ -76,5 +84,40 @@ describe("redactConsoleArgs", () => {
 	it("scrubs a Bearer token inside a string arg", () => {
 		const result = redactConsoleArgs(["auth header was Bearer abc.def.ghi"]);
 		expect(JSON.stringify(result)).not.toContain("abc.def.ghi");
+	});
+});
+
+describe("redactBreadcrumb error case", () => {
+	function errorCrumb(error: ErrorBreadcrumb["error"]): ErrorBreadcrumb {
+		return { id: "crumb-1", timestamp: 0, category: "error", error };
+	}
+
+	it("scrubs a Bearer token from the error message, stack, and componentStack", () => {
+		const redacted = redactBreadcrumb(
+			errorCrumb({
+				source: "boundary",
+				message: "request failed with Authorization: Bearer abc.def.ghi",
+				stack: "Error\n  at fetch (https://api.test/chat) Bearer eyJhbGciOi.payload.sig",
+				componentStack: "at ChatPanel (Bearer nested.leak.token)",
+			}),
+		);
+
+		const serialized = JSON.stringify(redacted);
+		expect(serialized).not.toContain("abc.def.ghi");
+		expect(serialized).not.toContain("eyJhbGciOi.payload.sig");
+		expect(serialized).not.toContain("nested.leak.token");
+		expect(serialized).toContain(REDACTED);
+		expect(redacted.category).toBe("error");
+	});
+
+	it("leaves an error crumb without secrets untouched and preserves the source", () => {
+		const redacted = redactBreadcrumb(
+			errorCrumb({ source: "uncaught", message: "boom" }),
+		) as ErrorBreadcrumb;
+
+		expect(redacted.error.message).toBe("boom");
+		expect(redacted.error.source).toBe("uncaught");
+		expect(redacted.error.stack).toBeUndefined();
+		expect(redacted.error.componentStack).toBeUndefined();
 	});
 });
