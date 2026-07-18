@@ -9,6 +9,7 @@ using FastEndpoints.Swagger;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.DataProtection;
 using Microsoft.AspNetCore.DataProtection.KeyManagement;
+using Microsoft.AspNetCore.DataProtection.KeyManagement.Internal;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.Extensions.Options;
 using Microsoft.IdentityModel.JsonWebTokens;
@@ -104,6 +105,21 @@ public static class ConfigureServices
             dataProtection.Services.AddSingleton<NodeDataProtectionKeyRingEncryptor>();
             dataProtection.Services.AddOptions<KeyManagementOptions>()
                           .Configure<NodeDataProtectionKeyRingEncryptor>((options, encryptor) => options.XmlEncryptor = encryptor);
+
+            // Hard-fail instead of silently regenerating the ring when an ENCRYPTED key cannot be decrypted (BE-02
+            // follow-up). Data Protection's DefaultKeyResolver swallows a per-key decrypt failure and, finding no usable
+            // default, generates a fresh key — orphaning every stored credential/token. Decorate that resolver so a
+            // wrong/missing operator secret surfaces as a loud startup failure. The decoration is skipped if the
+            // framework ever stops registering the resolver by implementation type (then the pre-existing behavior
+            // stands), so it can never break a correct install.
+            var defaultKeyResolver = dataProtection.Services.LastOrDefault(descriptor => descriptor.ServiceType == typeof(IDefaultKeyResolver));
+            if (defaultKeyResolver?.ImplementationType is { } innerResolverType)
+            {
+                dataProtection.Services.Remove(defaultKeyResolver);
+                dataProtection.Services.AddSingleton<IDefaultKeyResolver>(serviceProvider =>
+                    new NodeDataProtectionKeyRingFailClosedKeyResolver(
+                        (IDefaultKeyResolver)ActivatorUtilities.CreateInstance(serviceProvider, innerResolverType)));
+            }
         }
 
         // Application layer (services, options, persistence, runtime) lives in the

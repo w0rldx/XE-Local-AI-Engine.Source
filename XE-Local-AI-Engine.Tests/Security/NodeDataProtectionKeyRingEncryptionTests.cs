@@ -4,6 +4,7 @@ using System.Security.Cryptography;
 using System.Xml.Linq;
 using Microsoft.AspNetCore.DataProtection;
 using Microsoft.AspNetCore.DataProtection.KeyManagement;
+using Microsoft.AspNetCore.DataProtection.KeyManagement.Internal;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Options;
@@ -109,12 +110,66 @@ public sealed class NodeDataProtectionKeyRingEncryptionTests
         using var decryptorServices = BuildServiceProvider(wrongKek);
         var decryptor = new NodeDataProtectionKeyRingDecryptor(decryptorServices);
 
-        // A wrong KEK must throw (authentication-tag mismatch), never silently return garbage.
-        _ = await AssertEx.ThrowsAsync<AuthenticationTagMismatchException>(() =>
+        // A wrong KEK must throw, never silently return garbage. It surfaces as the distinctive typed failure (the
+        // signal the fail-closed key resolver keys off) wrapping the underlying authentication-tag mismatch.
+        var thrown = await AssertEx.ThrowsAsync<NodeDataProtectionKeyRingDecryptionException>(() =>
         {
             _ = decryptor.Decrypt(encrypted.EncryptedElement);
             return Task.CompletedTask;
         }).ConfigureAwait(false);
+        AssertEx.True(thrown.InnerException is AuthenticationTagMismatchException,
+            "The distinctive key-ring decryption failure must wrap the underlying authentication-tag mismatch.");
+    }
+
+    [Test]
+    public async Task DataProtectionProvider_WithWrongKek_HardFailsInsteadOfSilentlyRegeneratingTheRing()
+    {
+        await Task.CompletedTask;
+
+        var ringDirectory = CreateTempDirectory();
+        try
+        {
+            const string payload = "orphanable-oauth-token";
+            string protectedPayload;
+
+            // Write a genuinely encrypted-at-rest ring under the correct KEK.
+            using (var writeServices = BuildDataProtectionServices(ringDirectory, SampleKek))
+            {
+                var protector = writeServices.GetRequiredService<IDataProtectionProvider>().CreateProtector("be02-tests");
+                protectedPayload = protector.Protect(payload);
+            }
+
+            var keysBefore = Directory.GetFiles(ringDirectory, "key-*.xml").Length;
+            AssertEx.Equal(expected: 1, keysBefore);
+
+            var wrongKek = Enumerable.Range(start: 100, count: 32).Select(static value => (byte)value).ToArray();
+
+            // Bring the ring up under the WRONG KEK and force key-ring resolution. The default resolver would treat the
+            // undecryptable key as ineligible and regenerate; the fail-closed decorator must throw instead.
+            var thrown = await AssertEx.ThrowsAsync<Exception>(() =>
+            {
+                using var wrongServices = BuildDataProtectionServices(ringDirectory, wrongKek);
+                _ = wrongServices.GetRequiredService<IDataProtectionProvider>().CreateProtector("be02-tests").Protect("forces-resolution");
+                return Task.CompletedTask;
+            }).ConfigureAwait(false);
+
+            AssertEx.True(ChainContains(thrown, static ex => ex is InvalidOperationException && ex.Message.Contains("Refusing to regenerate", StringComparison.Ordinal)),
+                "The fail-closed resolver must be the cause of the failure (refusing to regenerate the ring).");
+            AssertEx.True(ChainContains(thrown, static ex => ex is NodeDataProtectionKeyRingDecryptionException),
+                "The failure must originate from the distinctive key-ring decryption exception, proving it was an encrypted-key decrypt failure.");
+
+            // Critically, no new key was generated — the existing (still-valid-under-the-right-KEK) ring is intact.
+            AssertEx.Equal(keysBefore, Directory.GetFiles(ringDirectory, "key-*.xml").Length);
+
+            // Restoring the correct KEK must unprotect the original payload — proving nothing was orphaned.
+            using var recoveredServices = BuildDataProtectionServices(ringDirectory, SampleKek);
+            var recovered = recoveredServices.GetRequiredService<IDataProtectionProvider>().CreateProtector("be02-tests");
+            AssertEx.Equal(payload, recovered.Unprotect(protectedPayload));
+        }
+        finally
+        {
+            DeleteTempDirectory(ringDirectory);
+        }
     }
 
     [Test]
@@ -214,6 +269,17 @@ public sealed class NodeDataProtectionKeyRingEncryptionTests
             services.AddSingleton<NodeDataProtectionKeyRingEncryptor>();
             builder.Services.AddOptions<KeyManagementOptions>()
                    .Configure<NodeDataProtectionKeyRingEncryptor>((options, encryptor) => options.XmlEncryptor = encryptor);
+
+            // Mirror the production wiring: decorate the default key resolver so an undecryptable encrypted key
+            // hard-fails instead of silently regenerating the ring.
+            var defaultKeyResolver = builder.Services.LastOrDefault(descriptor => descriptor.ServiceType == typeof(IDefaultKeyResolver));
+            if (defaultKeyResolver?.ImplementationType is { } innerResolverType)
+            {
+                builder.Services.Remove(defaultKeyResolver);
+                builder.Services.AddSingleton<IDefaultKeyResolver>(serviceProvider =>
+                    new NodeDataProtectionKeyRingFailClosedKeyResolver(
+                        (IDefaultKeyResolver)ActivatorUtilities.CreateInstance(serviceProvider, innerResolverType)));
+            }
         }
 
         return services.BuildServiceProvider();
@@ -228,6 +294,19 @@ public sealed class NodeDataProtectionKeyRingEncryptionTests
                    [NodeOperatorSecretProvider.EnvVarName] = Convert.ToBase64String(operatorSecret)
                })
                .Build();
+    }
+
+    private static bool ChainContains(Exception exception, Func<Exception, bool> predicate)
+    {
+        for (var current = exception; current is not null; current = current.InnerException)
+        {
+            if (predicate(current))
+            {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     private static string CreateTempDirectory()
