@@ -1980,6 +1980,16 @@ export type XeLocalAiEngineClientEndpointsAgentsV1UpdateSuggestedPlaybookActionR
 	priority?: number;
 };
 
+export type XeLocalAiEngineClientEndpointsLocalChatV1ResolveToolApprovalRequest = {
+	requestId: string;
+	approved: boolean;
+};
+
+export type XeLocalAiEngineClientEndpointsLocalChatV1ResolveToolApprovalResponse = {
+	requestId: string;
+	approved: boolean;
+};
+
 export type GetVoiceManifestData = {
 	body?: never;
 	path?: never;
@@ -4225,6 +4235,39 @@ export type CancelNodeChatMessageResponses = {
 };
 
 export type CancelNodeChatMessageResponse = CancelNodeChatMessageResponses[keyof CancelNodeChatMessageResponses];
+
+export type ResolveToolApprovalData = {
+	body: XeLocalAiEngineClientEndpointsLocalChatV1ResolveToolApprovalRequest;
+	path?: never;
+	query?: never;
+	url: "/api/local/v1/chat/approvals/resolve";
+};
+
+export type ResolveToolApprovalErrors = {
+	/**
+	 * Bad Request
+	 */
+	400: FastEndpointsProblemDetails;
+	/**
+	 * Unauthorized
+	 */
+	401: unknown;
+	/**
+	 * Forbidden
+	 */
+	403: unknown;
+};
+
+export type ResolveToolApprovalError = ResolveToolApprovalErrors[keyof ResolveToolApprovalErrors];
+
+export type ResolveToolApprovalResponses = {
+	/**
+	 * Success
+	 */
+	200: XeLocalAiEngineClientEndpointsLocalChatV1ResolveToolApprovalResponse;
+};
+
+export type ResolveToolApprovalResponse = ResolveToolApprovalResponses[keyof ResolveToolApprovalResponses];
 
 export type ListNodeChatConversationsData = {
 	body?: never;

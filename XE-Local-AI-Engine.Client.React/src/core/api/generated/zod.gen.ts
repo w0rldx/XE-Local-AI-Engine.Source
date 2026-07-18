@@ -2403,6 +2403,16 @@ export const zXeLocalAiEngineClientEndpointsAgentsV1UpdateSuggestedPlaybookActio
 		.optional(),
 });
 
+export const zXeLocalAiEngineClientEndpointsLocalChatV1ResolveToolApprovalRequest = z.object({
+	requestId: z.string().min(1),
+	approved: z.boolean(),
+});
+
+export const zXeLocalAiEngineClientEndpointsLocalChatV1ResolveToolApprovalResponse = z.object({
+	requestId: z.string(),
+	approved: z.boolean(),
+});
+
 /**
  * Success
  */
@@ -3000,6 +3010,13 @@ export const zCancelNodeChatMessageBody = zXeLocalAiEngineClientEndpointsLocalCh
  * Success
  */
 export const zCancelNodeChatMessageResponse = zXeLocalAiEngineClientEndpointsLocalChatV1NodeChatCancelMessageResponse;
+
+export const zResolveToolApprovalBody = zXeLocalAiEngineClientEndpointsLocalChatV1ResolveToolApprovalRequest;
+
+/**
+ * Success
+ */
+export const zResolveToolApprovalResponse = zXeLocalAiEngineClientEndpointsLocalChatV1ResolveToolApprovalResponse;
 
 export const zListNodeChatConversationsQuery = z.object({
 	includeArchived: z.boolean(),

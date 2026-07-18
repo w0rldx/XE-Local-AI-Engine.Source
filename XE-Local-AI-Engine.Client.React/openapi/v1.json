@@ -3438,6 +3438,63 @@
         ]
       }
     },
+    "/api/local/v1/chat/approvals/resolve": {
+      "post": {
+        "tags": [
+          "Chat"
+        ],
+        "operationId": "resolveToolApproval",
+        "requestBody": {
+          "x-name": "ResolveToolApprovalRequest",
+          "description": "",
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/XE_Local_AI_EngineClientEndpointsLocalChatV1ResolveToolApprovalRequest"
+              }
+            }
+          },
+          "required": true,
+          "x-position": 1
+        },
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/XE_Local_AI_EngineClientEndpointsLocalChatV1ResolveToolApprovalResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FastEndpointsProblemDetails"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "403": {
+            "description": "Forbidden"
+          }
+        },
+        "security": [
+          {
+            "JWTBearerAuth": []
+          },
+          {
+            "Bearer": []
+          }
+        ]
+      }
+    },
     "/api/local/v1/chat/conversations": {
       "post": {
         "tags": [
@@ -14139,6 +14196,40 @@
           "priority": {
             "type": "integer",
             "format": "int32"
+          }
+        }
+      },
+      "XE_Local_AI_EngineClientEndpointsLocalChatV1ResolveToolApprovalRequest": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "requestId",
+          "approved"
+        ],
+        "properties": {
+          "requestId": {
+            "type": "string",
+            "minLength": 1,
+            "nullable": false
+          },
+          "approved": {
+            "type": "boolean"
+          }
+        }
+      },
+      "XE_Local_AI_EngineClientEndpointsLocalChatV1ResolveToolApprovalResponse": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "requestId",
+          "approved"
+        ],
+        "properties": {
+          "requestId": {
+            "type": "string"
+          },
+          "approved": {
+            "type": "boolean"
           }
         }
       }

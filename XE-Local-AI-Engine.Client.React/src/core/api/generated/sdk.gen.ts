@@ -408,6 +408,9 @@ import type {
 	RenameNodeChatConversationData,
 	RenameNodeChatConversationErrors,
 	RenameNodeChatConversationResponses,
+	ResolveToolApprovalData,
+	ResolveToolApprovalErrors,
+	ResolveToolApprovalResponses,
 	RetrieveImageData,
 	RetrieveImageErrors,
 	RetrieveImageResponses,
@@ -736,6 +739,8 @@ import {
 	zRenameNodeChatConversationBody,
 	zRenameNodeChatConversationPath,
 	zRenameNodeChatConversationResponse,
+	zResolveToolApprovalBody,
+	zResolveToolApprovalResponse,
 	zRetrieveImagePath,
 	zRetrieveImageResponse,
 	zRunPlaybookActionEvalPath,
@@ -2582,6 +2587,32 @@ export const cancelNodeChatMessage = <ThrowOnError extends boolean = false>(
 			{ scheme: "bearer", type: "http" },
 		],
 		url: "/api/local/v1/chat/cancel",
+		...options,
+		headers: {
+			"Content-Type": "application/json",
+			...options.headers,
+		},
+	});
+
+export const resolveToolApproval = <ThrowOnError extends boolean = false>(
+	options: Options<ResolveToolApprovalData, ThrowOnError>,
+) =>
+	(options.client ?? client).post<ResolveToolApprovalResponses, ResolveToolApprovalErrors, ThrowOnError>({
+		requestValidator: async (data) =>
+			await z
+				.object({
+					body: zResolveToolApprovalBody,
+					path: z.never().optional(),
+					query: z.never().optional(),
+				})
+				.parseAsync(data),
+		responseType: "json",
+		responseValidator: async (data) => await zResolveToolApprovalResponse.parseAsync(data),
+		security: [
+			{ scheme: "bearer", type: "http" },
+			{ scheme: "bearer", type: "http" },
+		],
+		url: "/api/local/v1/chat/approvals/resolve",
 		...options,
 		headers: {
 			"Content-Type": "application/json",

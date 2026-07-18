@@ -147,6 +147,7 @@ import {
 	rejectSuggestedPlaybookAction,
 	removeCudaBuild,
 	renameNodeChatConversation,
+	resolveToolApproval,
 	retrieveImage,
 	runPlaybookActionEval,
 	saveCloudSettings,
@@ -461,6 +462,9 @@ import type {
 	RemoveCudaBuildResponse,
 	RenameNodeChatConversationData,
 	RenameNodeChatConversationResponse,
+	ResolveToolApprovalData,
+	ResolveToolApprovalError,
+	ResolveToolApprovalResponse,
 	RetrieveImageData,
 	RetrieveImageResponse,
 	RunPlaybookActionEvalData,
@@ -2131,6 +2135,26 @@ export const cancelNodeChatMessageMutation = (
 	> = {
 		mutationFn: async (fnOptions) => {
 			const { data } = await cancelNodeChatMessage({
+				...options,
+				...fnOptions,
+				throwOnError: true,
+			});
+			return data;
+		},
+	};
+	return mutationOptions;
+};
+
+export const resolveToolApprovalMutation = (
+	options?: Partial<Options<ResolveToolApprovalData>>,
+): UseMutationOptions<ResolveToolApprovalResponse, AxiosError<ResolveToolApprovalError>, Options<ResolveToolApprovalData>> => {
+	const mutationOptions: UseMutationOptions<
+		ResolveToolApprovalResponse,
+		AxiosError<ResolveToolApprovalError>,
+		Options<ResolveToolApprovalData>
+	> = {
+		mutationFn: async (fnOptions) => {
+			const { data } = await resolveToolApproval({
 				...options,
 				...fnOptions,
 				throwOnError: true,
