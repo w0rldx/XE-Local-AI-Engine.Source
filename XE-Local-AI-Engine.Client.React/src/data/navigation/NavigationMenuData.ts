@@ -1,6 +1,7 @@
 import type { IconProps } from "@tabler/icons-react";
 import {
 	IconBinaryTree2,
+	IconChartHistogram,
 	IconCpu,
 	IconDashboard,
 	IconDatabase,
@@ -146,6 +147,12 @@ const allNavigationLinks: INavigationLink[] = [
 		icon: IconListDetails,
 		translationKey: "navigation.invocations",
 		to: nodeRoutePaths.invocations,
+	},
+	{
+		id: "usage",
+		icon: IconChartHistogram,
+		translationKey: "navigation.usage",
+		to: nodeRoutePaths.usage,
 	},
 ];
 

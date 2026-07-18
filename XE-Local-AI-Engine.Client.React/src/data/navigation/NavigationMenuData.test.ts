@@ -35,6 +35,7 @@ describe("navigationLinks", () => {
 			"preview",
 			"images",
 			"invocations",
+			"usage",
 		]);
 	});
 
@@ -53,6 +54,7 @@ describe("navigationLinks", () => {
 			"preview",
 			"images",
 			"invocations",
+			"usage",
 		]);
 	});
 

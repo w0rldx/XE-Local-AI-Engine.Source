@@ -54,6 +54,7 @@ describe("nodeCapabilities", () => {
 			cloudSettings: "/cloud-settings",
 			models: "/models",
 			invocations: "/invocations",
+			usage: "/usage",
 			tools: "/tools",
 			agents: "/agents",
 			skills: "/skills",
