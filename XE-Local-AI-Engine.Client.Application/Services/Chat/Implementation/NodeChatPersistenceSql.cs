@@ -194,7 +194,8 @@ internal static class NodeChatPersistenceSql
                 metadata.AgentDefinitionId,
                 metadata.AgentName,
                 metadata.ReasoningEffort,
-                metadata.GenerationDurationMs));
+                metadata.GenerationDurationMs,
+                metadata.Sources));
         }
 
         return messages;

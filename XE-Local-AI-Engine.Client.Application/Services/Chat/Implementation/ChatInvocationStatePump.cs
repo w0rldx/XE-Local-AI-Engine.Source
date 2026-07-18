@@ -30,7 +30,11 @@ public sealed class ChatInvocationStatePump(INodeChatInvocationPump invocationPu
         NodeChatStreamSequence sequence,
         NodeChatPartAccumulator parts,
         Action<InvocationState, NodeChatPumpTerminalResult>? onTerminal,
-        CancellationToken cancellationToken)
+        CancellationToken cancellationToken,
+        // KB sources that grounded this turn (OPP-05 / UX-04), computed up front by the send path before generation and
+        // captured here so they land on the terminal row's metadata_json. Null/empty for turns that used no knowledge
+        // base (e.g. the regenerate path, which passes none) — which preserves any existing persisted sources.
+        IReadOnlyList<NodeChatMessageSource>? sources = null)
     {
         var cursor = NodeChatPumpCursor.Empty;
         var terminalPersisted = false;
@@ -124,7 +128,7 @@ public sealed class ChatInvocationStatePump(INodeChatInvocationPump invocationPu
                     // An empty snapshot (a plain-text turn with no reasoning/tools) is passed as null so the persisted
                     // parts are left untouched rather than overwritten with an empty interleave.
                     var snapshot = parts.HasParts ? parts.Snapshot() : null;
-                    var terminal = await invocationPump.TerminalizeAsync(correlation, latest, requestedModel, snapshot).ConfigureAwait(false);
+                    var terminal = await invocationPump.TerminalizeAsync(correlation, latest, requestedModel, snapshot, sources).ConfigureAwait(false);
                     terminalPersisted = true;
 
                     // Post-run adaptive memory: hand the just-persisted terminal to the (background, fire-and-forget)
@@ -184,7 +188,7 @@ public sealed class ChatInvocationStatePump(INodeChatInvocationPump invocationPu
             // fault. The NodeChatMessageTransitions atomic `AND status IN (...)` guard makes this Failed terminalize a
             // no-op over any real terminal that committed concurrently, so a late fault-terminalize can never overwrite
             // a genuine outcome.
-            await TerminalizeFaultedStreamAsync(eventWriter, correlation, requestedModel, cursor, parts, sequence.Next()).ConfigureAwait(false);
+            await TerminalizeFaultedStreamAsync(eventWriter, correlation, requestedModel, cursor, parts, sequence.Next(), sources).ConfigureAwait(false);
             throw;
         }
         finally
@@ -202,7 +206,8 @@ public sealed class ChatInvocationStatePump(INodeChatInvocationPump invocationPu
         string? requestedModel,
         NodeChatPumpCursor cursor,
         NodeChatPartAccumulator parts,
-        long sequence)
+        long sequence,
+        IReadOnlyList<NodeChatMessageSource>? sources = null)
     {
         try
         {
@@ -221,7 +226,7 @@ public sealed class ChatInvocationStatePump(INodeChatInvocationPump invocationPu
             };
 
             var snapshot = parts.HasParts ? parts.Snapshot() : null;
-            var terminal = await invocationPump.TerminalizeAsync(correlation, faultedState, requestedModel, snapshot).ConfigureAwait(false);
+            var terminal = await invocationPump.TerminalizeAsync(correlation, faultedState, requestedModel, snapshot, sources).ConfigureAwait(false);
 
             await eventWriter.WriteAsync(ChatStreamEventMapper.MessageEvent(terminal.EventType, correlation, terminal.Persisted, NowUnixMilliseconds(), sequence), CancellationToken.None)
                              .ConfigureAwait(false);

@@ -115,7 +115,7 @@ internal sealed class NodeChatVariantBranchService(NodeChatPersistenceWriter wri
                     AddParameter(messageCommand, "$metadata_json",
                         dbContext.EncryptMessageMetadata(SerializeMetadata(message.MetadataJson, message.Reasoning, message.Model, message.InputCount, message.OutputCount, message.TotalCount,
                                 message.ReasoningCount,
-                                message.Parts, message.AgentDefinitionId, message.AgentName, message.ReasoningEffort),
+                                message.Parts, message.AgentDefinitionId, message.AgentName, message.ReasoningEffort, sources: message.Sources),
                             branchedConversationId,
                             copyMessageId));
                     AddParameter(messageCommand, "$created_at_utc", message.CreatedAtUtc);

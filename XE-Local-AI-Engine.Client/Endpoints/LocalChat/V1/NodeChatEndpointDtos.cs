@@ -279,6 +279,14 @@ public sealed class NodeChatMessageResponse
     ///     platform path, and user messages.
     /// </summary>
     public long? GenerationDurationMs { get; init; }
+
+    /// <summary>
+    ///     Knowledge-base excerpts that grounded this plain-chat assistant turn (OPP-05 / UX-04), surfaced from the
+    ///     metadata blob so the client can render a "Sources" strip. Null/absent for legacy turns, turns that did not use
+    ///     the knowledge base, and user messages. Carries only non-sensitive provenance (document/chunk id, derived
+    ///     title/section, score) — never chunk body text or the encrypted original file name.
+    /// </summary>
+    public IReadOnlyList<NodeChatMessageSource>? Sources { get; init; }
 }
 
 public sealed class NodeChatCancelMessageResponse

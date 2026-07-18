@@ -38,6 +38,7 @@ public sealed class NodeChatStreamService(
     IConversationSandboxStager conversationSandboxStager,
     IUntrustedContentFenceSeedProvider fenceSeedProvider,
     IOptions<KnowledgeBaseOptions> knowledgeOptions,
+    IServiceScopeFactory scopeFactory,
     TimeProvider timeProvider,
     ILogger<NodeChatStreamService> logger) : INodeChatStreamService
 {
@@ -267,6 +268,15 @@ public sealed class NodeChatStreamService(
                 ? resolution.EffectiveModel
                 : resolution.Orchestration?.FirstCloudParticipantModel ?? resolution.EffectiveModel;
             await ReportAttachmentsWithheldIfPresentAsync(request, cloudModelForNotice, requestId, cancellationToken).ConfigureAwait(false);
+
+            // KB grounding rides the SAME cloud-egress gate as attachments (OPP-05): when the user opted into knowledge
+            // grounding for a plain-chat turn but the turn reaches a cloud model without the operator's data-access
+            // opt-in, no retrieval runs and a visible notice names the model. Plain chat only — agent mode uses the
+            // gated search_knowledge_base tool (withheld by the offer provider), so this notice is not duplicated there.
+            if (request.UseKnowledgeBase && !offerTools)
+            {
+                await ReportKnowledgeWithheldAsync(cloudModelForNotice, requestId, cancellationToken).ConfigureAwait(false);
+            }
         }
 
         // Agent mode: when the selected agent can read files through the AgentHome sandbox (its offer includes the
@@ -285,6 +295,11 @@ public sealed class NodeChatStreamService(
         // attachments are withheld from a cloud effective model, neither path composes anything (staged paths are empty
         // and the plain-chat inline is skipped).
         ConversationMessageDto? attachmentContext;
+        // Knowledge-base grounding (OPP-05): a second synthetic context message inlined into plain chat when the user
+        // opted in, plus the provenance of the inlined hits so the terminal row records them as sources (UX-04). Null on
+        // every path that does not ground on the knowledge base (agent mode, opt-out, cloud-withheld, empty retrieval).
+        ConversationMessageDto? knowledgeContext = null;
+        IReadOnlyList<NodeChatMessageSource>? knowledgeSources = null;
         if (offerTools)
         {
             attachmentContext = BuildAgentAttachmentHint(stagedAttachmentPaths, fenceSeedProvider.DeriveSeed(request.ConversationId));
@@ -292,6 +307,18 @@ public sealed class NodeChatStreamService(
         else if (attachmentsAllowed)
         {
             attachmentContext = await BuildAttachmentContextMessageAsync(request.ConversationId, request.AttachmentFileIds, cancellationToken).ConfigureAwait(false);
+
+            // Plain-chat knowledge grounding runs only for a node-local effective model (attachmentsAllowed already
+            // encodes the locality gate). Retrieval failure degrades to no context — the turn still proceeds.
+            if (request.UseKnowledgeBase)
+            {
+                var knowledge = await BuildKnowledgeContextMessageAsync(userMessage.Content, runCancellation.Token).ConfigureAwait(false);
+                if (knowledge is not null)
+                {
+                    knowledgeContext = knowledge.Message;
+                    knowledgeSources = knowledge.Sources;
+                }
+            }
         }
         else
         {
@@ -301,7 +328,7 @@ public sealed class NodeChatStreamService(
         var package = runtimePackageBuilder.Build(new LocalChatRuntimePackageRequest(requestId,
             request.ConversationId,
             resolved?.ResolvedSystemPrompt ?? LoadResolvedSystemPrompt(localChatOptions.Value),
-            BuildConversationContext(conversation, userMessage, selectedPath, attachmentContext),
+            BuildConversationContext(conversation, userMessage, selectedPath, attachmentContext, knowledgeContext),
             resolution.EffectiveModel,
             resolved?.AgentDefinitionVersion ?? AgentDefinitionVersion,
             LocalChatLoopbackDefaults.ClientNodeId,
@@ -340,7 +367,10 @@ public sealed class NodeChatStreamService(
             sequence,
             parts,
             onTerminal,
-            runCancellation.Token);
+            runCancellation.Token,
+            // KB sources that grounded this turn (OPP-05 / UX-04) land on the terminal row's metadata_json; null when
+            // the turn used no knowledge base.
+            knowledgeSources);
         var runTask = RunInvocationAsync(package,
             assistantMessageId,
             stateChannel.Writer,
@@ -523,16 +553,28 @@ public sealed class NodeChatStreamService(
     private static IReadOnlyList<ConversationMessageDto> BuildConversationContext(NodeChatConversationDto conversation,
         NodeChatPersistedMessageDto userMessage,
         IReadOnlyDictionary<Guid, Guid>? selectedPath,
-        ConversationMessageDto? attachmentContext)
+        ConversationMessageDto? attachmentContext,
+        ConversationMessageDto? knowledgeContext = null)
     {
         // Collapse variant siblings to the selected path FIRST (one variant per group, newest by default), then
         // apply the existing content/status filters. Without this every regenerated sibling would be sent as
         // context; the resolver keeps only the chosen branch.
         var selected = SelectedPathResolver.Resolve(conversation.Messages, selectedPath);
 
-        // The attachment context applies to plain chat only and is prepended so the model reads the file content
-        // before the conversation history. When present it takes the first slot and the history shifts down by one.
-        var historyOffset = attachmentContext is null ? 0 : 1;
+        // The synthetic context messages (attachment inlining, then knowledge-base grounding) apply to plain chat only
+        // and are prepended so the model reads their content before the conversation history. They take the first slots
+        // and the history shifts down by their count. Attachments precede knowledge so uploaded files (explicitly
+        // attached this conversation) read ahead of the retrieved knowledge supplement.
+        var leadingContext = new List<ConversationMessageDto>(capacity: 2);
+        if (attachmentContext is not null)
+        {
+            leadingContext.Add(attachmentContext with { SortOrder = leadingContext.Count });
+        }
+
+        if (knowledgeContext is not null)
+        {
+            leadingContext.Add(knowledgeContext with { SortOrder = leadingContext.Count });
+        }
 
         var history = selected
                       .Where(static message => !string.IsNullOrWhiteSpace(message.Content)
@@ -546,10 +588,10 @@ public sealed class NodeChatStreamService(
                           Content = message.Content,
                           Thinking = message.Reasoning,
                           ModelUsed = message.Model,
-                          SortOrder = index + historyOffset
+                          SortOrder = index + leadingContext.Count
                       });
 
-        return attachmentContext is null ? history.ToList() : history.Prepend(attachmentContext).ToList();
+        return leadingContext.Count == 0 ? history.ToList() : leadingContext.Concat(history).ToList();
     }
 
     // Emits the AttachmentsWithheld notice when a cloud effective model would otherwise have received attachment content
@@ -585,6 +627,79 @@ public sealed class NodeChatStreamService(
                                  Detail = effectiveModel
                              })
                              .ConfigureAwait(false);
+    }
+
+    // Emits the KnowledgeWithheld notice when the user opted into knowledge grounding for a plain-chat turn but a cloud
+    // effective model would have received it without the operator's data-access opt-in. Mirrors the attachments-withheld
+    // fan-out; the turn still runs, just without knowledge-base context.
+    private async Task ReportKnowledgeWithheldAsync(string? effectiveModel, Guid requestId, CancellationToken cancellationToken)
+    {
+        cancellationToken.ThrowIfCancellationRequested();
+        await eventDispatcher.ReportTurnNoticeAsync(new TurnNoticePayload
+                             {
+                                 InvocationId = requestId,
+                                 Kind = TurnNoticeKind.KnowledgeWithheld,
+                                 Message =
+                                     "Your knowledge base was not searched for this message because it is handled by a cloud model. Enable cloud data access for this node to allow knowledge-base grounding to reach a cloud model.",
+                                 Detail = effectiveModel
+                             })
+                             .ConfigureAwait(false);
+    }
+
+    // Retrieves the top-k fused knowledge-base hits for the user's latest message and composes them into ONE fenced
+    // untrusted context message (OPP-05), returning it alongside the provenance of the inlined hits (UX-04). Runs the
+    // hybrid search in a FRESH DI scope (IKnowledgeSearchService is scoped, driving a request-scoped connection —
+    // mirrors SearchKnowledgeBaseToolHandler). Returns null when grounding produces nothing: a blank/oversized query,
+    // no matching chunks, an empty compose, or ANY retrieval failure (degrades gracefully — the turn proceeds without
+    // knowledge context). The caller has already applied the cloud-egress locality gate before calling this.
+    private async Task<KnowledgeChatMessage?> BuildKnowledgeContextMessageAsync(string query, CancellationToken cancellationToken)
+    {
+        var validation = KnowledgeQueryLimits.ValidateAndNormalize(query, out var normalizedQuery);
+        if (validation != KnowledgeQueryValidation.Valid)
+        {
+            return null;
+        }
+
+        try
+        {
+            var limit = localChatOptions.Value.KnowledgeChatTopK;
+            var searchRequest = new KnowledgeSearchRequest(normalizedQuery, limit, DocumentId: null, ExpandNeighbors: false);
+
+            await using var scope = scopeFactory.CreateAsyncScope();
+            var searchService = scope.ServiceProvider.GetRequiredService<IKnowledgeSearchService>();
+            var result = await searchService.SearchAsync(searchRequest, cancellationToken).ConfigureAwait(false);
+
+            if (result.Results.Count == 0)
+            {
+                return null;
+            }
+
+            var composed = KnowledgeChatContextComposer.Compose(result.Results, localChatOptions.Value.MaxInlinedKnowledgeChars);
+            if (composed is null)
+            {
+                return null;
+            }
+
+            var message = new ConversationMessageDto
+            {
+                Id = Guid.NewGuid(),
+                Role = MessageRole.User,
+                Content = composed.Context,
+                SortOrder = 0
+            };
+            return new KnowledgeChatMessage(message, composed.Sources);
+        }
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+        {
+            throw;
+        }
+        catch (Exception exception)
+        {
+            // Retrieval is a best-effort supplement: a failure (embedding provider down, connection error, etc.) must
+            // never fail the send. Log and proceed with no knowledge context.
+            logger.LogWarning(exception, "Knowledge-base grounding failed for the plain-chat turn; proceeding without it.");
+            return null;
+        }
     }
 
     // Builds the synthetic plain-chat context message from the conversation's uploaded attachments named in the send.
@@ -815,4 +930,8 @@ public sealed class NodeChatStreamService(
     {
         return timeProvider.GetUtcNow().ToUnixTimeMilliseconds();
     }
+
+    // The composed knowledge-base grounding for one plain-chat turn: the synthetic context message prepended to the
+    // conversation, and the provenance of the inlined hits threaded to the terminal row as the turn's sources.
+    private sealed record KnowledgeChatMessage(ConversationMessageDto Message, IReadOnlyList<NodeChatMessageSource> Sources);
 }

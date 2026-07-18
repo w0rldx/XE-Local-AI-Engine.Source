@@ -165,7 +165,11 @@ public sealed record NodeChatTerminalizeMessageRequest(
     // together (no swallowed best-effort write). Null on paths that write no envelope. The terminal status/success and
     // the bound agent id are derived from the winning persisted message row inside the transaction, so they are NOT
     // carried here.
-    AgentRunEnvelopeMetadata? Envelope = null);
+    AgentRunEnvelopeMetadata? Envelope = null,
+    // Knowledge-base sources that grounded this turn (OPP-05 / UX-04). Null leaves any existing persisted sources
+    // untouched (mirrors the Parts null-preserves semantics); the plain-chat send path passes the retrieved sources
+    // here so they land on the terminal row's metadata_json. Trailing optional so all other callers stay unchanged.
+    IReadOnlyList<NodeChatMessageSource>? Sources = null);
 
 /// <summary>
 ///     Non-derived fields of a durable run envelope supplied by the pump to the terminalize persistence command. Bounded
@@ -268,6 +272,21 @@ public sealed record NodeChatMessagePart(
     bool? RequiresApproval = null);
 
 /// <summary>
+///     One knowledge-base chunk that grounded a plain-chat assistant turn (OPP-05 / UX-04). Captured at retrieval time
+///     from the fused hybrid-search hits that were fenced into the turn's context, and persisted on the assistant
+///     message's <c>metadata_json</c> blob (additive — no DB migration) so the client can render a "Sources" strip on
+///     both the live post-stream refetch and a later reload. Carries only the NON-SENSITIVE provenance the knowledge
+///     tool already discloses (<see cref="KnowledgeSearchHit" />): the title/section are derived from heading/storage
+///     paths, never the encrypted original file name, and no chunk body text rides here.
+/// </summary>
+public sealed record NodeChatMessageSource(
+    Guid DocumentId,
+    Guid ChunkId,
+    string Title,
+    string? Section,
+    double Score);
+
+/// <summary>
 ///     Transport DTO for node chat persisted message data. <c>Parts</c> is the ordered interleave (reasoning segments
 ///     plus tool cards); it is null for legacy messages persisted before parts existed, in which case the client
 ///     synthesizes a single Thoughts block from <c>Reasoning</c>.
@@ -309,7 +328,10 @@ public sealed record NodeChatPersistedMessageDto(
     // Whole-turn wall-clock generation duration in milliseconds, surfaced from the metadata blob (no DB column).
     // Null for legacy turns persisted before this field existed, the platform path, and user messages. Drives the
     // optional tokens-per-second attribution alongside OutputCount.
-    long? GenerationDurationMs = null) : ISelectedPathMessage;
+    long? GenerationDurationMs = null,
+    // Knowledge-base sources that grounded this plain-chat assistant turn (OPP-05 / UX-04), surfaced from the metadata
+    // blob (no DB column). Null/empty for legacy turns, turns that did not use the knowledge base, and user messages.
+    IReadOnlyList<NodeChatMessageSource>? Sources = null) : ISelectedPathMessage;
 
 /// <summary>
 ///     Transport DTO for node chat cancel result data.

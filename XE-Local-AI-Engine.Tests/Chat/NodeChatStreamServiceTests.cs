@@ -60,6 +60,7 @@ public sealed class NodeChatStreamServiceTests
             Substitute.For<IConversationSandboxStager>(),
             CreateFenceSeedProvider(),
             Options.Create(new KnowledgeBaseOptions()),
+            CreateScopeFactory(),
             TimeProvider.System,
             NullLogger<NodeChatStreamService>.Instance);
         var events = new List<ChatStreamEvent>();
@@ -110,6 +111,7 @@ public sealed class NodeChatStreamServiceTests
             Substitute.For<IConversationSandboxStager>(),
             CreateFenceSeedProvider(),
             Options.Create(new KnowledgeBaseOptions()),
+            CreateScopeFactory(),
             TimeProvider.System,
             NullLogger<NodeChatStreamService>.Instance);
         var events = new List<ChatStreamEvent>();
@@ -163,6 +165,7 @@ public sealed class NodeChatStreamServiceTests
             Substitute.For<IConversationSandboxStager>(),
             CreateFenceSeedProvider(),
             Options.Create(new KnowledgeBaseOptions()),
+            CreateScopeFactory(),
             TimeProvider.System,
             NullLogger<NodeChatStreamService>.Instance);
         var events = new List<ChatStreamEvent>();
@@ -224,6 +227,7 @@ public sealed class NodeChatStreamServiceTests
             Substitute.For<IConversationSandboxStager>(),
             CreateFenceSeedProvider(),
             Options.Create(new KnowledgeBaseOptions()),
+            CreateScopeFactory(),
             TimeProvider.System,
             NullLogger<NodeChatStreamService>.Instance);
 
@@ -270,6 +274,7 @@ public sealed class NodeChatStreamServiceTests
             Substitute.For<IConversationSandboxStager>(),
             CreateFenceSeedProvider(),
             Options.Create(new KnowledgeBaseOptions()),
+            CreateScopeFactory(),
             TimeProvider.System,
             NullLogger<NodeChatStreamService>.Instance);
 
@@ -316,6 +321,7 @@ public sealed class NodeChatStreamServiceTests
             Substitute.For<IConversationSandboxStager>(),
             CreateFenceSeedProvider(),
             Options.Create(new KnowledgeBaseOptions()),
+            CreateScopeFactory(),
             TimeProvider.System,
             NullLogger<NodeChatStreamService>.Instance);
 
@@ -372,6 +378,7 @@ public sealed class NodeChatStreamServiceTests
             Substitute.For<IConversationSandboxStager>(),
             CreateFenceSeedProvider(),
             Options.Create(new KnowledgeBaseOptions()),
+            CreateScopeFactory(),
             TimeProvider.System,
             NullLogger<NodeChatStreamService>.Instance);
 
@@ -423,6 +430,7 @@ public sealed class NodeChatStreamServiceTests
             Substitute.For<IConversationSandboxStager>(),
             CreateFenceSeedProvider(),
             Options.Create(new KnowledgeBaseOptions()),
+            CreateScopeFactory(),
             TimeProvider.System,
             NullLogger<NodeChatStreamService>.Instance);
 
@@ -483,6 +491,7 @@ public sealed class NodeChatStreamServiceTests
             stager,
             CreateFenceSeedProvider(),
             Options.Create(new KnowledgeBaseOptions()),
+            CreateScopeFactory(),
             TimeProvider.System,
             NullLogger<NodeChatStreamService>.Instance);
 
@@ -535,6 +544,7 @@ public sealed class NodeChatStreamServiceTests
             stager,
             CreateFenceSeedProvider(),
             Options.Create(new KnowledgeBaseOptions()),
+            CreateScopeFactory(),
             TimeProvider.System,
             NullLogger<NodeChatStreamService>.Instance);
 
@@ -587,6 +597,7 @@ public sealed class NodeChatStreamServiceTests
             stager,
             CreateFenceSeedProvider(),
             Options.Create(new KnowledgeBaseOptions()),
+            CreateScopeFactory(),
             TimeProvider.System,
             NullLogger<NodeChatStreamService>.Instance);
 
@@ -644,6 +655,7 @@ public sealed class NodeChatStreamServiceTests
             Substitute.For<IConversationSandboxStager>(),
             CreateFenceSeedProvider(),
             Options.Create(new KnowledgeBaseOptions()),
+            CreateScopeFactory(),
             TimeProvider.System,
             NullLogger<NodeChatStreamService>.Instance);
 
@@ -661,6 +673,106 @@ public sealed class NodeChatStreamServiceTests
         AssertEx.True(runner.CaptureObserved, "Expected the runner to observe the package.");
         AssertEx.Contains(runner.CapturedContext, message => message.Content.Contains("The launch code is alpha-zero.", StringComparison.Ordinal));
         AssertEx.Contains(runner.CapturedContext, message => message.Content.Contains(ConversationAttachmentContextComposer.Preamble, StringComparison.Ordinal));
+    }
+
+    [Test]
+    public async Task SendMessageAsync_WhenPlainChatWithKnowledgeBase_InjectsFencedContextAndRecordsSources()
+    {
+        // OPP-05 / UX-04: an opt-in plain-chat send retrieves KB hits, inlines them as ONE fenced untrusted context
+        // block, and records their provenance as the turn's sources on the terminal row.
+        var conversationId = Guid.NewGuid();
+        var assistantMessageId = Guid.NewGuid();
+        var requestId = Guid.NewGuid();
+        NodeChatTerminalizeMessageRequest? terminalRequest = null;
+        var persistence = CreatePersistence(conversationId, assistantMessageId, requestId, request => terminalRequest = request);
+        var dispatcher = new RecordingWorkerEventDispatcher();
+        var runner = new ContextCapturingInvocationRunner(dispatcher);
+        var scopeFactory = CreateKnowledgeScopeFactory(KnowledgeHit("Runbook", "Restart the service with the eject command.", score: 0.91));
+
+        var service = CreateServiceWithScopeFactory(persistence, runner, dispatcher, scopeFactory);
+
+        var drained = 0;
+        await foreach (var _ in service.SendMessageAsync(new NodeChatStreamRequest(conversationId,
+                           "how do I restart the service?",
+                           MessageId: assistantMessageId,
+                           RequestId: requestId,
+                           UseKnowledgeBase: true)).ConfigureAwait(false))
+        {
+            drained++;
+        }
+
+        AssertEx.True(drained > 0, "Expected the send to stream events.");
+        AssertEx.Contains(runner.CapturedContext, message => message.Content.Contains(KnowledgeChatContextComposer.Preamble, StringComparison.Ordinal));
+        AssertEx.Contains(runner.CapturedContext, message => message.Content.Contains("Restart the service with the eject command.", StringComparison.Ordinal));
+        var terminal = AssertEx.NotNull(terminalRequest);
+        var sources = AssertEx.NotNull(terminal.Sources);
+        AssertEx.Equal(1, sources.Count);
+        AssertEx.Equal("Runbook", sources[0].Title);
+    }
+
+    [Test]
+    public async Task SendMessageAsync_WhenKnowledgeBaseRetrievalEmpty_ProceedsWithoutContextOrSources()
+    {
+        // Degrade gracefully: no matching chunks means no KB context and no sources, but the turn still runs.
+        var conversationId = Guid.NewGuid();
+        var assistantMessageId = Guid.NewGuid();
+        var requestId = Guid.NewGuid();
+        NodeChatTerminalizeMessageRequest? terminalRequest = null;
+        var persistence = CreatePersistence(conversationId, assistantMessageId, requestId, request => terminalRequest = request);
+        var dispatcher = new RecordingWorkerEventDispatcher();
+        var runner = new ContextCapturingInvocationRunner(dispatcher);
+        var scopeFactory = CreateKnowledgeScopeFactory();
+
+        var service = CreateServiceWithScopeFactory(persistence, runner, dispatcher, scopeFactory);
+
+        var drained = 0;
+        await foreach (var _ in service.SendMessageAsync(new NodeChatStreamRequest(conversationId,
+                           "an unrelated question",
+                           MessageId: assistantMessageId,
+                           RequestId: requestId,
+                           UseKnowledgeBase: true)).ConfigureAwait(false))
+        {
+            drained++;
+        }
+
+        AssertEx.True(drained > 0, "Expected the send to stream events even with no KB matches.");
+        AssertEx.False(runner.CapturedContext.Any(message => message.Content.Contains(KnowledgeChatContextComposer.Preamble, StringComparison.Ordinal)),
+            "no KB context block must be composed when retrieval returns nothing.");
+        AssertEx.Null(AssertEx.NotNull(terminalRequest).Sources);
+    }
+
+    [Test]
+    public async Task SendMessageAsync_WhenCloudEffectiveModelWithKnowledgeBase_WithholdsAndNotifiesByDefault()
+    {
+        // The KB egress gate mirrors attachments: a cloud effective model must NOT receive KB context without the
+        // operator opt-in. The turn runs without KB context and the user gets a KnowledgeWithheld notice.
+        var conversationId = Guid.NewGuid();
+        var assistantMessageId = Guid.NewGuid();
+        var requestId = Guid.NewGuid();
+        var persistence = CreatePersistence(conversationId, assistantMessageId, requestId, _ => { });
+        var dispatcher = new RecordingWorkerEventDispatcher();
+        var runner = new ContextCapturingInvocationRunner(dispatcher);
+        var scopeFactory = CreateKnowledgeScopeFactory(KnowledgeHit("Runbook", "secret runbook body", score: 0.9));
+
+        var service = CreateServiceWithScopeFactory(persistence, runner, dispatcher, scopeFactory, allowCloudModelAccess: false);
+
+        var events = new List<ChatStreamEvent>();
+        await foreach (var streamEvent in service.SendMessageAsync(new NodeChatStreamRequest(conversationId,
+                           "how do I restart the service?",
+                           MessageId: assistantMessageId,
+                           RequestId: requestId,
+                           Model: "gpt-5.5",
+                           UseKnowledgeBase: true)).ConfigureAwait(false))
+        {
+            events.Add(streamEvent);
+        }
+
+        AssertEx.False(runner.CapturedContext.Any(message => message.Content.Contains(KnowledgeChatContextComposer.Preamble, StringComparison.Ordinal)),
+            "the KB context block must not be composed for a cloud model without opt-in.");
+        AssertEx.False(runner.CapturedContext.Any(message => message.Content.Contains("secret runbook body", StringComparison.Ordinal)),
+            "a cloud model must not receive KB content without opt-in.");
+        AssertEx.Contains(events, streamEvent => streamEvent.Type == ChatStreamEventTypes.AssistantNotice
+                                                 && streamEvent.NoticeKind == nameof(TurnNoticeKind.KnowledgeWithheld));
     }
 
     [Test]
@@ -735,6 +847,7 @@ public sealed class NodeChatStreamServiceTests
             {
                 AllowCloudModelAccess = allowCloudModelAccess
             }),
+            CreateScopeFactory(),
             TimeProvider.System,
             NullLogger<NodeChatStreamService>.Instance);
 
@@ -789,6 +902,7 @@ public sealed class NodeChatStreamServiceTests
             Substitute.For<IConversationSandboxStager>(),
             CreateFenceSeedProvider(),
             Options.Create(new KnowledgeBaseOptions()),
+            CreateScopeFactory(),
             TimeProvider.System,
             NullLogger<NodeChatStreamService>.Instance);
 
@@ -844,6 +958,7 @@ public sealed class NodeChatStreamServiceTests
             Substitute.For<IConversationSandboxStager>(),
             CreateFenceSeedProvider(),
             Options.Create(new KnowledgeBaseOptions()),
+            CreateScopeFactory(),
             TimeProvider.System,
             NullLogger<NodeChatStreamService>.Instance);
 
@@ -900,6 +1015,7 @@ public sealed class NodeChatStreamServiceTests
             Substitute.For<IConversationSandboxStager>(),
             CreateFenceSeedProvider(),
             Options.Create(new KnowledgeBaseOptions()),
+            CreateScopeFactory(),
             TimeProvider.System,
             NullLogger<NodeChatStreamService>.Instance);
 
@@ -957,6 +1073,7 @@ public sealed class NodeChatStreamServiceTests
             Substitute.For<IConversationSandboxStager>(),
             CreateFenceSeedProvider(),
             Options.Create(new KnowledgeBaseOptions()),
+            CreateScopeFactory(),
             TimeProvider.System,
             NullLogger<NodeChatStreamService>.Instance);
 
@@ -1005,6 +1122,7 @@ public sealed class NodeChatStreamServiceTests
             Substitute.For<IConversationSandboxStager>(),
             CreateFenceSeedProvider(),
             Options.Create(new KnowledgeBaseOptions()),
+            CreateScopeFactory(),
             TimeProvider.System,
             NullLogger<NodeChatStreamService>.Instance);
 
@@ -1064,6 +1182,7 @@ public sealed class NodeChatStreamServiceTests
             Substitute.For<IConversationSandboxStager>(),
             CreateFenceSeedProvider(),
             Options.Create(new KnowledgeBaseOptions()),
+            CreateScopeFactory(),
             TimeProvider.System,
             NullLogger<NodeChatStreamService>.Instance);
 
@@ -1113,6 +1232,7 @@ public sealed class NodeChatStreamServiceTests
             Substitute.For<IConversationSandboxStager>(),
             CreateFenceSeedProvider(),
             Options.Create(new KnowledgeBaseOptions()),
+            CreateScopeFactory(),
             TimeProvider.System,
             NullLogger<NodeChatStreamService>.Instance);
         using var clientCancellation = new CancellationTokenSource();
@@ -1191,6 +1311,7 @@ public sealed class NodeChatStreamServiceTests
             Substitute.For<IConversationSandboxStager>(),
             CreateFenceSeedProvider(),
             Options.Create(new KnowledgeBaseOptions()),
+            CreateScopeFactory(),
             TimeProvider.System,
             NullLogger<NodeChatStreamService>.Instance);
         using var clientCancellation = new CancellationTokenSource();
@@ -1269,6 +1390,7 @@ public sealed class NodeChatStreamServiceTests
             Substitute.For<IConversationSandboxStager>(),
             CreateFenceSeedProvider(),
             Options.Create(new KnowledgeBaseOptions()),
+            CreateScopeFactory(),
             TimeProvider.System,
             NullLogger<NodeChatStreamService>.Instance);
 
@@ -1335,6 +1457,7 @@ public sealed class NodeChatStreamServiceTests
             Substitute.For<IConversationSandboxStager>(),
             CreateFenceSeedProvider(),
             Options.Create(new KnowledgeBaseOptions()),
+            CreateScopeFactory(),
             TimeProvider.System,
             NullLogger<NodeChatStreamService>.Instance);
 
@@ -1391,6 +1514,7 @@ public sealed class NodeChatStreamServiceTests
             Substitute.For<IConversationSandboxStager>(),
             CreateFenceSeedProvider(),
             Options.Create(new KnowledgeBaseOptions()),
+            CreateScopeFactory(),
             TimeProvider.System,
             NullLogger<NodeChatStreamService>.Instance);
 
@@ -1460,6 +1584,7 @@ public sealed class NodeChatStreamServiceTests
             Substitute.For<IConversationSandboxStager>(),
             CreateFenceSeedProvider(),
             Options.Create(new KnowledgeBaseOptions()),
+            CreateScopeFactory(),
             TimeProvider.System,
             NullLogger<NodeChatStreamService>.Instance);
 
@@ -1570,6 +1695,7 @@ public sealed class NodeChatStreamServiceTests
             {
                 AllowCloudModelAccess = allowCloudModelAccess
             }),
+            CreateScopeFactory(),
             TimeProvider.System,
             NullLogger<NodeChatStreamService>.Instance);
 
@@ -1620,6 +1746,7 @@ public sealed class NodeChatStreamServiceTests
             Substitute.For<IConversationSandboxStager>(),
             CreateFenceSeedProvider(),
             Options.Create(new KnowledgeBaseOptions()),
+            CreateScopeFactory(),
             TimeProvider.System,
             NullLogger<NodeChatStreamService>.Instance);
 
@@ -1676,6 +1803,7 @@ public sealed class NodeChatStreamServiceTests
             Substitute.For<IConversationSandboxStager>(),
             CreateFenceSeedProvider(),
             Options.Create(new KnowledgeBaseOptions()),
+            CreateScopeFactory(),
             TimeProvider.System,
             NullLogger<NodeChatStreamService>.Instance);
 
@@ -1732,6 +1860,7 @@ public sealed class NodeChatStreamServiceTests
             Substitute.For<IConversationSandboxStager>(),
             CreateFenceSeedProvider(),
             Options.Create(new KnowledgeBaseOptions()),
+            CreateScopeFactory(),
             TimeProvider.System,
             NullLogger<NodeChatStreamService>.Instance);
 
@@ -1786,6 +1915,7 @@ public sealed class NodeChatStreamServiceTests
             Substitute.For<IConversationSandboxStager>(),
             CreateFenceSeedProvider(),
             Options.Create(new KnowledgeBaseOptions()),
+            CreateScopeFactory(),
             TimeProvider.System,
             NullLogger<NodeChatStreamService>.Instance);
 
@@ -1842,6 +1972,7 @@ public sealed class NodeChatStreamServiceTests
             Substitute.For<IConversationSandboxStager>(),
             CreateFenceSeedProvider(),
             Options.Create(new KnowledgeBaseOptions()),
+            CreateScopeFactory(),
             TimeProvider.System,
             NullLogger<NodeChatStreamService>.Instance);
 
@@ -1913,6 +2044,7 @@ public sealed class NodeChatStreamServiceTests
             Substitute.For<IConversationSandboxStager>(),
             CreateFenceSeedProvider(),
             Options.Create(new KnowledgeBaseOptions()),
+            CreateScopeFactory(),
             TimeProvider.System,
             NullLogger<NodeChatStreamService>.Instance);
 
@@ -1991,6 +2123,7 @@ public sealed class NodeChatStreamServiceTests
             Substitute.For<IConversationSandboxStager>(),
             CreateFenceSeedProvider(),
             Options.Create(new KnowledgeBaseOptions()),
+            CreateScopeFactory(),
             TimeProvider.System,
             NullLogger<NodeChatStreamService>.Instance);
 
@@ -2089,6 +2222,7 @@ public sealed class NodeChatStreamServiceTests
             Substitute.For<IConversationSandboxStager>(),
             CreateFenceSeedProvider(),
             Options.Create(new KnowledgeBaseOptions()),
+            CreateScopeFactory(),
             TimeProvider.System,
             NullLogger<NodeChatStreamService>.Instance);
 
@@ -2195,6 +2329,7 @@ public sealed class NodeChatStreamServiceTests
             Substitute.For<IConversationSandboxStager>(),
             CreateFenceSeedProvider(),
             Options.Create(new KnowledgeBaseOptions()),
+            CreateScopeFactory(),
             TimeProvider.System,
             NullLogger<NodeChatStreamService>.Instance);
 
@@ -2293,6 +2428,7 @@ public sealed class NodeChatStreamServiceTests
             Substitute.For<IConversationSandboxStager>(),
             CreateFenceSeedProvider(),
             Options.Create(new KnowledgeBaseOptions()),
+            CreateScopeFactory(),
             TimeProvider.System,
             NullLogger<NodeChatStreamService>.Instance);
 
@@ -2345,6 +2481,7 @@ public sealed class NodeChatStreamServiceTests
             Substitute.For<IConversationSandboxStager>(),
             CreateFenceSeedProvider(),
             Options.Create(new KnowledgeBaseOptions()),
+            CreateScopeFactory(),
             TimeProvider.System,
             NullLogger<NodeChatStreamService>.Instance);
 
@@ -2400,6 +2537,7 @@ public sealed class NodeChatStreamServiceTests
             Substitute.For<IConversationSandboxStager>(),
             CreateFenceSeedProvider(),
             Options.Create(new KnowledgeBaseOptions()),
+            CreateScopeFactory(),
             TimeProvider.System,
             NullLogger<NodeChatStreamService>.Instance);
 
@@ -2458,6 +2596,7 @@ public sealed class NodeChatStreamServiceTests
             Substitute.For<IConversationSandboxStager>(),
             CreateFenceSeedProvider(),
             Options.Create(new KnowledgeBaseOptions()),
+            CreateScopeFactory(),
             TimeProvider.System,
             NullLogger<NodeChatStreamService>.Instance);
 
@@ -2530,6 +2669,76 @@ public sealed class NodeChatStreamServiceTests
     private static IUntrustedContentFenceSeedProvider CreateFenceSeedProvider()
     {
         return new UntrustedContentFenceSeedProvider(FenceKeyHolder);
+    }
+
+    // A scope factory for the plain-chat knowledge-base retrieval path. When no search service is supplied the factory
+    // only satisfies the ctor (tests that leave UseKnowledgeBase off never resolve a scope). When one is supplied the
+    // factory hands out a scope whose provider resolves it, so the KB grounding path can be exercised end to end.
+    private static Microsoft.Extensions.DependencyInjection.IServiceScopeFactory CreateScopeFactory(IKnowledgeSearchService? searchService = null)
+    {
+        var factory = Substitute.For<Microsoft.Extensions.DependencyInjection.IServiceScopeFactory>();
+        if (searchService is null)
+        {
+            return factory;
+        }
+
+        var provider = Substitute.For<IServiceProvider>();
+        provider.GetService(typeof(IKnowledgeSearchService)).Returns(searchService);
+        var scope = Substitute.For<Microsoft.Extensions.DependencyInjection.IServiceScope>();
+        scope.ServiceProvider.Returns(provider);
+        factory.CreateScope().Returns(scope);
+        return factory;
+    }
+
+    // A knowledge search service returning a fixed hit list, wired into a scope factory for the KB grounding tests.
+    private static Microsoft.Extensions.DependencyInjection.IServiceScopeFactory CreateKnowledgeScopeFactory(params KnowledgeSearchHit[] hits)
+    {
+        var searchService = Substitute.For<IKnowledgeSearchService>();
+        searchService.SearchAsync(Arg.Any<KnowledgeSearchRequest>(), Arg.Any<CancellationToken>())
+                     .Returns(new KnowledgeSearchResult(hits));
+        return CreateScopeFactory(searchService);
+    }
+
+    private static KnowledgeSearchHit KnowledgeHit(string title, string content, double score)
+    {
+        return new KnowledgeSearchHit(Guid.NewGuid(), Guid.NewGuid(), title, "Section", content, "knowledge-base", score, ChunkIndex: 0, KnowledgeDocumentStatus.Indexed, ServingLastKnownGood: false);
+    }
+
+    // Builds a NodeChatStreamService wired with the given scope factory (for the knowledge-base retrieval path), mirroring
+    // the default-harness construction used by the attachment-egress helper. cloud-vs-local is chosen by the Model passed
+    // to the send, not here; allowCloudModelAccess seeds the KB egress gate.
+    private static NodeChatStreamService CreateServiceWithScopeFactory(INodeChatPersistenceService persistence,
+        ContextCapturingInvocationRunner runner,
+        RecordingWorkerEventDispatcher dispatcher,
+        Microsoft.Extensions.DependencyInjection.IServiceScopeFactory scopeFactory,
+        bool allowCloudModelAccess = false)
+    {
+        return new NodeChatStreamService(persistence,
+            new ChatInvocationStatePump(ChatPumpTestFactory.Create(persistence), TimeProvider.System),
+            new ChatTurnResolver(CreateAgentDefinitionResolver(), CreateAgentDefinitionStore(), CreateOrchestrationResolver(), CreateModelClassificationService(), CreateLocalModelProviderResolver(),
+                CreateGgufModelCapabilityResolver(), Substitute.For<IActiveCloudChatClientFactory>(), NullLogger<ChatTurnResolver>.Instance),
+            new NodeChatMutationGuard(persistence),
+            new LocalChatRuntimePackageBuilder(),
+            runner,
+            dispatcher,
+            Options.Create(new LocalChatAgentOptions()),
+            StubNodeRuntimeSettings.Create().Build(),
+            new NodeChatStreamCancellationRegistry(),
+            CreateOfferProvider(),
+            CreateDefaultAgentProvider(),
+            CreateNodeSettingsStore(),
+            CreateLocalDefaultChatModelResolver(),
+            CreateMemoryExtractionDispatcher(),
+            Substitute.For<IConversationUploadedFileStore>(),
+            Substitute.For<IConversationSandboxStager>(),
+            CreateFenceSeedProvider(),
+            Options.Create(new KnowledgeBaseOptions
+            {
+                AllowCloudModelAccess = allowCloudModelAccess
+            }),
+            scopeFactory,
+            TimeProvider.System,
+            NullLogger<NodeChatStreamService>.Instance);
     }
 
     private sealed class StaticFenceKeyHolder : INodeSqliteKeyHolder
@@ -2847,6 +3056,7 @@ public sealed class NodeChatStreamServiceTests
             Substitute.For<IConversationSandboxStager>(),
             CreateFenceSeedProvider(),
             Options.Create(new KnowledgeBaseOptions()),
+            CreateScopeFactory(),
             TimeProvider.System,
             NullLogger<NodeChatStreamService>.Instance);
 

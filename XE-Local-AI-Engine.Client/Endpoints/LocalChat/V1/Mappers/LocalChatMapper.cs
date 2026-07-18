@@ -109,7 +109,10 @@ internal static class LocalChatMapper
             // The reasoning effort used to generate this turn (null for legacy turns + user messages).
             ReasoningEffort = message.ReasoningEffort,
             // Whole-turn generation duration (null for legacy turns + user messages); drives the optional tps display.
-            GenerationDurationMs = message.GenerationDurationMs
+            GenerationDurationMs = message.GenerationDurationMs,
+            // Surface the persisted knowledge-base sources verbatim; null for legacy turns, non-knowledge turns, and
+            // user messages. The DTO source records carry no transport-specific shape, so they pass through unchanged.
+            Sources = message.Sources
         };
     }
 }
