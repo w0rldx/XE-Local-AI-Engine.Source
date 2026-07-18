@@ -253,7 +253,9 @@ internal sealed class McpServerConnectionManager : IMcpServerConnectionManager, 
             var descriptor = new LocalChatToolDescriptor(qualifiedName,
                 named.Description,
                 named.JsonSchema.GetRawText(),
-                requiresApproval);
+                requiresApproval,
+                // Every MCP tool reaches an external/out-of-process server surface.
+                ToolCategory.Network);
 
             // Bound the actual server round-trip with the per-call timeout (AUD4-18) INNERMOST — below arg-repair and the
             // result budget — so only the SDK call is timed; a stall returns a typed tool-failure result and the run

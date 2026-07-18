@@ -42,7 +42,9 @@ internal sealed class LocalAgentToolRegistry : IAgentToolRegistry
                     .Select(static function => new LocalChatToolDescriptor(function.Name,
                         function.Description,
                         function.JsonSchema.GetRawText(),
-                        CatalogRequiresApproval))
+                        CatalogRequiresApproval,
+                        // get_current_time / calculate are side-effect-free node-local reads.
+                        ToolCategory.ReadLocal))
         ];
     }
 

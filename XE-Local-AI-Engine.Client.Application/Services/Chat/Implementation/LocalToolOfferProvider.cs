@@ -65,9 +65,9 @@ internal sealed class LocalToolOfferProvider : ILocalToolOfferProvider
         // model. spawn_subagent is deliberately NOT folded into this whole offer: it is profile-opt-in only (below).
         _builtinAllTools =
         [
-            .. builtinDescriptors.Select(static descriptor => ToOfferDto(descriptor.Name, descriptor.ParameterSchema, descriptor.RequiresApproval)),
-            .. coderDescriptors.Select(static descriptor => ToOfferDto(descriptor.Name, descriptor.ParameterSchema, descriptor.RequiresApproval)),
-            .. knowledgeDescriptors.Select(static descriptor => ToOfferDto(descriptor.Name, descriptor.ParameterSchema, descriptor.RequiresApproval))
+            .. builtinDescriptors.Select(static descriptor => ToOfferDto(descriptor.Name, descriptor.ParameterSchema, descriptor.RequiresApproval, descriptor.Category)),
+            .. coderDescriptors.Select(static descriptor => ToOfferDto(descriptor.Name, descriptor.ParameterSchema, descriptor.RequiresApproval, descriptor.Category)),
+            .. knowledgeDescriptors.Select(static descriptor => ToOfferDto(descriptor.Name, descriptor.ParameterSchema, descriptor.RequiresApproval, descriptor.Category))
         ];
 
         // The provider-locality-gated variant of the whole capable offer: BOTH the knowledge-base read tools AND the
@@ -87,7 +87,7 @@ internal sealed class LocalToolOfferProvider : ILocalToolOfferProvider
         // default/mode-off chat path. It is therefore held OUT of the whole offer (_builtinAllTools) and added back only
         // by GetOfferedToolsForProfile (still capability-gated). This is the profile-opt-in seam; loading another model
         // from an unattended plain chat turn is exactly what we are preventing.
-        _spawnOfferDto = ToOfferDto(SpawnSubAgentToolDefinition.ToolName, SpawnSubAgentToolDefinition.ParameterSchema, requiresApproval: false);
+        _spawnOfferDto = ToOfferDto(SpawnSubAgentToolDefinition.ToolName, SpawnSubAgentToolDefinition.ParameterSchema, requiresApproval: false, ToolCategory.Orchestration);
 
         // Precompute the capability-gated variant once: the built-ins minus run_in_agent_home and the coder tools,
         // returned when the active model is not tool-capable. Those high-risk tools are offered only to a tool-capable
@@ -178,7 +178,7 @@ internal sealed class LocalToolOfferProvider : ILocalToolOfferProvider
         return
         [
             .. baseOffer,
-            .. mcpDescriptors.Select(static descriptor => ToOfferDto(descriptor.Name, descriptor.ParameterSchema, descriptor.RequiresApproval))
+            .. mcpDescriptors.Select(static descriptor => ToOfferDto(descriptor.Name, descriptor.ParameterSchema, descriptor.RequiresApproval, descriptor.Category))
         ];
     }
 
@@ -236,7 +236,7 @@ internal sealed class LocalToolOfferProvider : ILocalToolOfferProvider
         ];
     }
 
-    private static AllowedToolDto ToOfferDto(string name, string? parameterSchema, bool requiresApproval)
+    private static AllowedToolDto ToOfferDto(string name, string? parameterSchema, bool requiresApproval, ToolCategory category)
     {
         return new AllowedToolDto
         {
@@ -244,7 +244,8 @@ internal sealed class LocalToolOfferProvider : ILocalToolOfferProvider
             Name = name,
             Location = ToolLocation.ClientLocal,
             ParameterSchema = parameterSchema,
-            RequiresApproval = requiresApproval
+            RequiresApproval = requiresApproval,
+            Category = category
         };
     }
 
