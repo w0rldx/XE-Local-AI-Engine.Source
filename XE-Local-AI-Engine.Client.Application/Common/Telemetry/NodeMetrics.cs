@@ -180,6 +180,19 @@ public static class NodeMetrics
             description: "Number of cancelled invocations by category (user | watchdog | operator_eject | shutdown).");
 
     /// <summary>
+    ///     Incremented (by the reported token count) at the terminal usage-finalize of an invocation turn, so cumulative
+    ///     model token consumption — the real cost surface for cloud providers — is observable live without waiting on the
+    ///     persisted <c>agent_execution_logs</c> ledger. Fires once per turn per direction (never per tool-loop round, so
+    ///     it cannot double-count). Labels: provider (local | remote — the coarse routing dimension; remote covers cloud
+    ///     and Ollama), model (the resolved model id), direction (input | output). Content-free — a token count only;
+    ///     never any prompt, completion, or transcript text. Bounded cardinality (installed/cloud model ids are a small,
+    ///     stable set).
+    /// </summary>
+    public static readonly Counter<long> ModelTokenUsageTotal =
+        Meter.CreateCounter<long>("model_token_usage_total",
+            description: "Model tokens consumed at invocation-turn finalize, by provider (local | remote), model, and direction (input | output).");
+
+    /// <summary>
     ///     Incremented (by the abandoned count) when the memory-extraction worker abandons in-flight extraction job(s) at
     ///     shutdown because they ignored cooperative cancellation past the drain deadline plus the fixed grace. Content-free
     ///     (a count only) — the deliberate cost of a bounded shutdown that never waits indefinitely.

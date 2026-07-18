@@ -225,6 +225,10 @@ public static class LocalApiRoutes
         // Read-only, versioned durable run-envelope lifecycle records (metadata only — no message content), optionally
         // filtered by conversationId. Literal "run-envelopes" segment keeps it distinct from the {agentDefinitionId} param.
         public const string RunEnvelopes = "agents/run-envelopes";
+
+        // Read-only token-usage aggregation over the run-envelope ledger, grouped by model and UTC day (metadata only —
+        // token counts, no content). Literal "usage-summary" segment keeps it distinct from the {agentDefinitionId} param.
+        public const string UsageSummary = "agents/usage-summary";
     }
 
     /// <summary>
