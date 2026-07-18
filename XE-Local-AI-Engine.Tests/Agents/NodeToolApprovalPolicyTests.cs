@@ -14,14 +14,16 @@ using XE_Local_AI_Engine.Tests.Testing;
 public sealed class NodeToolApprovalPolicyTests
 {
     [Test]
-    public void PermissiveFloor_IsIdentityOnCatalogDefault()
+    public void PermissiveFloor_IsIdentityOnKnownCategory_AndFailsClosedOnUnknown()
     {
         var floor = new PermissiveToolApprovalPolicy();
 
         AssertEx.True(floor.RequiresApproval("mcp__x__y", ToolCategory.Network, catalogDefault: true),
             "The floor must never waive a default-on tool.");
         AssertEx.False(floor.RequiresApproval("get_current_time", ToolCategory.ReadLocal, catalogDefault: false),
-            "The floor must not add approval to a default-off tool.");
+            "The floor must not add approval to a default-off known-category tool.");
+        AssertEx.True(floor.RequiresApproval("mystery", ToolCategory.Unknown, catalogDefault: false),
+            "The floor must fail closed on an Unknown-category tool (contract shared with the node policy).");
     }
 
     [Test]
@@ -74,19 +76,17 @@ public sealed class NodeToolApprovalPolicyTests
     }
 
     [Test]
-    public void RequiresApproval_UnknownCategory_IsGovernedByItsOwnRuleOnly()
+    public void RequiresApproval_UnknownCategory_AlwaysRequiresApproval_FailClosed()
     {
-        // The Unknown category is fail-closed at the OFFER layer (uncategorized tools default to Unknown), but the policy
-        // itself only tightens Unknown when a rule says so; the catalog default still governs otherwise.
-        var withRule = new NodeToolApprovalPolicy(
-            new Dictionary<ToolCategory, bool> { [ToolCategory.Unknown] = true },
-            new Dictionary<string, bool>(StringComparer.Ordinal));
-        AssertEx.True(withRule.RequiresApproval("mystery", ToolCategory.Unknown, catalogDefault: false));
-
-        var withoutRule = new NodeToolApprovalPolicy(
+        // Fail-closed contract (IToolApprovalPolicy / ToolCategory.Unknown): an uncategorized tool ALWAYS requires
+        // approval — even with no node rule and a default-off catalog flag — so a new tool that forgot to declare a
+        // category never silently auto-executes.
+        var policy = new NodeToolApprovalPolicy(
             new Dictionary<ToolCategory, bool>(),
             new Dictionary<string, bool>(StringComparer.Ordinal));
-        AssertEx.False(withoutRule.RequiresApproval("mystery", ToolCategory.Unknown, catalogDefault: false));
+
+        AssertEx.True(policy.RequiresApproval("mystery", ToolCategory.Unknown, catalogDefault: false),
+            "An Unknown-category tool must fail closed to requiring approval.");
     }
 
     [Test]

@@ -6,6 +6,7 @@ using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Options;
 using NSubstitute;
 using XE_Local_AI_Engine.AI.Agent.Configuration;
+using XE_Local_AI_Engine.AI.Agent.Tools;
 using XE_Local_AI_Engine.Client.Models;
 using XE_Local_AI_Engine.Client.Models.Encrypted;
 using XE_Local_AI_Engine.Client.Models.Enums;
@@ -74,6 +75,7 @@ public sealed class NodeChatRegenerationServiceTests : IDisposable
             CreateLocalDefaultChatModelResolver(),
             CreateMemoryExtractionDispatcher(),
             TimeProvider.System,
+            new PermissiveToolApprovalPolicy(),
             NullLogger<NodeChatRegenerationService>.Instance);
 
         var events = new List<ChatStreamEvent>();
@@ -146,6 +148,7 @@ public sealed class NodeChatRegenerationServiceTests : IDisposable
             CreateLocalDefaultChatModelResolver(resolved: null, echoPersistedDefault: false),
             CreateMemoryExtractionDispatcher(),
             TimeProvider.System,
+            new PermissiveToolApprovalPolicy(),
             NullLogger<NodeChatRegenerationService>.Instance);
 
         var drained = 0;
@@ -211,6 +214,7 @@ public sealed class NodeChatRegenerationServiceTests : IDisposable
             CreateLocalDefaultChatModelResolver(),
             CreateMemoryExtractionDispatcher(),
             TimeProvider.System,
+            new PermissiveToolApprovalPolicy(),
             NullLogger<NodeChatRegenerationService>.Instance);
 
         var drained = 0;
@@ -286,6 +290,7 @@ public sealed class NodeChatRegenerationServiceTests : IDisposable
             CreateLocalDefaultChatModelResolver(),
             CreateMemoryExtractionDispatcher(),
             TimeProvider.System,
+            new PermissiveToolApprovalPolicy(),
             NullLogger<NodeChatRegenerationService>.Instance);
 
         var newVariantId = Guid.Empty;
@@ -362,6 +367,7 @@ public sealed class NodeChatRegenerationServiceTests : IDisposable
             CreateLocalDefaultChatModelResolver(),
             CreateMemoryExtractionDispatcher(),
             TimeProvider.System,
+            new PermissiveToolApprovalPolicy(),
             NullLogger<NodeChatRegenerationService>.Instance);
 
         var newVariantId = Guid.Empty;
@@ -441,6 +447,7 @@ public sealed class NodeChatRegenerationServiceTests : IDisposable
             CreateLocalDefaultChatModelResolver(),
             CreateMemoryExtractionDispatcher(),
             TimeProvider.System,
+            new PermissiveToolApprovalPolicy(),
             NullLogger<NodeChatRegenerationService>.Instance);
 
         var drained = 0;
@@ -498,6 +505,7 @@ public sealed class NodeChatRegenerationServiceTests : IDisposable
             CreateLocalDefaultChatModelResolver(),
             CreateMemoryExtractionDispatcher(),
             TimeProvider.System,
+            new PermissiveToolApprovalPolicy(),
             NullLogger<NodeChatRegenerationService>.Instance);
 
         var drained = 0;
@@ -550,6 +558,7 @@ public sealed class NodeChatRegenerationServiceTests : IDisposable
             CreateLocalDefaultChatModelResolver(),
             CreateMemoryExtractionDispatcher(),
             TimeProvider.System,
+            new PermissiveToolApprovalPolicy(),
             NullLogger<NodeChatRegenerationService>.Instance);
 
         var events = new List<ChatStreamEvent>();
@@ -619,6 +628,7 @@ public sealed class NodeChatRegenerationServiceTests : IDisposable
             CreateLocalDefaultChatModelResolver(),
             CreateMemoryExtractionDispatcher(),
             TimeProvider.System,
+            new PermissiveToolApprovalPolicy(),
             NullLogger<NodeChatRegenerationService>.Instance);
 
         var drained = 0;
@@ -679,6 +689,7 @@ public sealed class NodeChatRegenerationServiceTests : IDisposable
             CreateLocalDefaultChatModelResolver(),
             CreateMemoryExtractionDispatcher(),
             TimeProvider.System,
+            new PermissiveToolApprovalPolicy(),
             NullLogger<NodeChatRegenerationService>.Instance);
 
         var drained = 0;
@@ -730,6 +741,7 @@ public sealed class NodeChatRegenerationServiceTests : IDisposable
             CreateLocalDefaultChatModelResolver(),
             CreateMemoryExtractionDispatcher(),
             TimeProvider.System,
+            new PermissiveToolApprovalPolicy(),
             NullLogger<NodeChatRegenerationService>.Instance);
 
         ChatStreamEvent? firstCompleted = null;
@@ -799,6 +811,7 @@ public sealed class NodeChatRegenerationServiceTests : IDisposable
             CreateLocalDefaultChatModelResolver(),
             CreateMemoryExtractionDispatcher(),
             TimeProvider.System,
+            new PermissiveToolApprovalPolicy(),
             NullLogger<NodeChatRegenerationService>.Instance);
 
         var drained = 0;
@@ -847,6 +860,7 @@ public sealed class NodeChatRegenerationServiceTests : IDisposable
             CreateLocalDefaultChatModelResolver(),
             CreateMemoryExtractionDispatcher(),
             TimeProvider.System,
+            new PermissiveToolApprovalPolicy(),
             NullLogger<NodeChatRegenerationService>.Instance);
 
         var drained = 0;
@@ -887,6 +901,7 @@ public sealed class NodeChatRegenerationServiceTests : IDisposable
             CreateLocalDefaultChatModelResolver(),
             CreateMemoryExtractionDispatcher(),
             TimeProvider.System,
+            new PermissiveToolApprovalPolicy(),
             NullLogger<NodeChatRegenerationService>.Instance);
 
         await AssertEx.ThrowsAsync<NodeChatReadOnlyConversationException>(async () =>
@@ -948,6 +963,7 @@ public sealed class NodeChatRegenerationServiceTests : IDisposable
             CreateLocalDefaultChatModelResolver(),
             CreateMemoryExtractionDispatcher(),
             TimeProvider.System,
+            new PermissiveToolApprovalPolicy(),
             NullLogger<NodeChatRegenerationService>.Instance);
 
         var drained = 0;
@@ -1131,6 +1147,7 @@ public sealed class NodeChatRegenerationServiceTests : IDisposable
             CreateLocalDefaultChatModelResolver(),
             CreateMemoryExtractionDispatcher(),
             TimeProvider.System,
+            new PermissiveToolApprovalPolicy(),
             NullLogger<NodeChatRegenerationService>.Instance);
     }
 

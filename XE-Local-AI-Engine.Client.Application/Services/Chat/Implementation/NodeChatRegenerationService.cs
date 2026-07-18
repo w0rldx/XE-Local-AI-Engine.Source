@@ -4,6 +4,7 @@ using System.Runtime.CompilerServices;
 using System.Threading.Channels;
 using Microsoft.Extensions.Options;
 using XE_Local_AI_Engine.AI.Agent.Configuration;
+using XE_Local_AI_Engine.AI.Agent.Tools;
 using XE_Local_AI_Engine.Client.Models;
 using XE_Local_AI_Engine.Client.Models.Enums;
 using XE_Local_AI_Engine.Client.Services.Agents;
@@ -36,6 +37,7 @@ public sealed class NodeChatRegenerationService(
     ILocalDefaultChatModelResolver localDefaultChatModelResolver,
     IMemoryExtractionDispatcher memoryExtractionDispatcher,
     TimeProvider timeProvider,
+    IToolApprovalPolicy toolApprovalPolicy,
     ILogger<NodeChatRegenerationService> logger) : INodeChatRegenerationService
 {
     private const int AgentDefinitionVersion = 1;
@@ -225,9 +227,20 @@ public sealed class NodeChatRegenerationService(
             // that offer to its allowed set (and the resolver already withheld the offer for a non-tools model).
             var enableTools = await runtimeSettings.GetEnableToolsAsync(cancellationToken).ConfigureAwait(false);
             var offerTools = useLocalTools && enableTools && resolution.SupportsTools;
-            var allowedTools = offerTools
-                ? resolved?.AllowedTools ?? localToolOfferProvider.GetOfferedTools(activeModel, resolution.EffectiveModelIsCloud)
-                : null;
+            // A bound definition's AllowedTools already ran through the node approval policy in the resolver; the
+            // unbound/deleted-agent fallback builds the raw offer here, so it applies the SAME node policy (tighten-only)
+            // to avoid a bypass. Permissive floor = identity, so an unconfigured node stays byte-identical to today.
+            var allowedTools = !offerTools
+                ? null
+                : resolved?.AllowedTools
+                  ??
+                  [
+                      .. localToolOfferProvider.GetOfferedTools(activeModel, resolution.EffectiveModelIsCloud)
+                                               .Select(tool => tool with
+                                               {
+                                                   RequiresApproval = toolApprovalPolicy.RequiresApproval(tool.Name, tool.Category, tool.RequiresApproval)
+                                               })
+                  ];
 
             var package = runtimePackageBuilder.Build(new LocalChatRuntimePackageRequest(requestId,
                 conversationId,

@@ -40,6 +40,7 @@ public sealed class NodeChatStreamService(
     IOptions<KnowledgeBaseOptions> knowledgeOptions,
     IServiceScopeFactory scopeFactory,
     TimeProvider timeProvider,
+    IToolApprovalPolicy toolApprovalPolicy,
     ILogger<NodeChatStreamService> logger) : INodeChatStreamService
 {
     private const int AgentDefinitionVersion = 1;
@@ -245,9 +246,21 @@ public sealed class NodeChatStreamService(
         // resolver already withheld the offer for a non-tools model); an unbound conversation uses the full offer.
         var enableTools = await runtimeSettings.GetEnableToolsAsync(cancellationToken).ConfigureAwait(false);
         var offerTools = request.UseLocalTools && enableTools && resolution.SupportsTools;
-        var allowedTools = offerTools
-            ? resolved?.AllowedTools ?? localToolOfferProvider.GetOfferedTools(activeModel, resolution.EffectiveModelIsCloud)
-            : null;
+        // When a bound definition resolved, its AllowedTools already ran through the node approval policy in the resolver.
+        // The unbound/deleted-agent fallback builds the raw offer here, so it must apply the SAME node policy (tighten-only)
+        // — otherwise a node-wide policy is bypassable by a plain unbound chat turn. With no policy configured the
+        // Permissive floor is identity, so the fallback offer stays byte-identical to today.
+        var allowedTools = !offerTools
+            ? null
+            : resolved?.AllowedTools
+              ??
+              [
+                  .. localToolOfferProvider.GetOfferedTools(activeModel, resolution.EffectiveModelIsCloud)
+                                           .Select(tool => tool with
+                                           {
+                                               RequiresApproval = toolApprovalPolicy.RequiresApproval(tool.Name, tool.Category, tool.RequiresApproval)
+                                           })
+              ];
 
         // Cloud-egress consent: node-local conversation attachments are private data. When a cloud model would receive
         // this turn's attachment context and the operator has NOT opted in (KnowledgeBase:AllowCloudModelAccess),
