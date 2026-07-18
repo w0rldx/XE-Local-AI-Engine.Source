@@ -3,6 +3,7 @@ namespace XE_Local_AI_Engine.Tests.Coder;
 using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Options;
 using NSubstitute;
+using XE_Local_AI_Engine.AI.Agent.Tools;
 using XE_Local_AI_Engine.AI.Agent.Tools.Implementation;
 using XE_Local_AI_Engine.Client.Persistence;
 using XE_Local_AI_Engine.Client.Persistence.Stores;
@@ -125,6 +126,7 @@ public sealed class CoderAgentSendIntersectionTests
             Options.Create(new PlaybookRetrievalOptions()),
             new FakeAgentInstructionProvider(),
             Substitute.For<IModelCapabilityResolver>(),
+            new PermissiveToolApprovalPolicy(),
             NullLogger<AgentDefinitionResolver>.Instance);
     }
 }

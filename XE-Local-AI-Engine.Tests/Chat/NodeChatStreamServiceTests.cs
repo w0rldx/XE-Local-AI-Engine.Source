@@ -2194,6 +2194,7 @@ public sealed class NodeChatStreamServiceTests
             Options.Create(new PlaybookRetrievalOptions()),
             new FakeAgentInstructionProvider(),
             Substitute.For<IModelCapabilityResolver>(),
+            new PermissiveToolApprovalPolicy(),
             NullLogger<AgentDefinitionResolver>.Instance);
 
         var persistence = CreatePersistence(conversationId, assistantMessageId, requestId, _ => { });
@@ -2301,6 +2302,7 @@ public sealed class NodeChatStreamServiceTests
             Options.Create(new PlaybookRetrievalOptions()),
             new FakeAgentInstructionProvider(),
             Substitute.For<IModelCapabilityResolver>(),
+            new PermissiveToolApprovalPolicy(),
             NullLogger<AgentDefinitionResolver>.Instance);
 
         var persistence = CreatePersistence(conversationId, assistantMessageId, requestId, _ => { });

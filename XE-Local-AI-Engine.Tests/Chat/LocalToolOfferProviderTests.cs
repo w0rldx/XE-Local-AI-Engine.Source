@@ -294,6 +294,29 @@ public sealed class LocalToolOfferProviderTests
         return new McpRegisteredTool(qualifiedName, executable, descriptor);
     }
 
+    [Test]
+    public void ProductionCatalog_EveryOfferedTool_DeclaresANonUnknownCategory()
+    {
+        // Fail-closed guard (OPP-03): every tool the REAL catalog offers must declare a concrete ToolCategory. An
+        // accidental Unknown would make the node approval policy treat that tool as fail-closed (approval-requiring), so
+        // catch a missing category here rather than in production. Uses the real LocalAgentToolRegistry (builtin clock /
+        // arithmetic) plus the merged coder + knowledge tools and the profile-only spawn_subagent.
+        var provider = new LocalToolOfferProvider(new LocalAgentToolRegistry(),
+            new McpToolRegistry(NullLogger<McpToolRegistry>.Instance),
+            ["qwen3:8b"],
+            allowCloudKnowledgeAccess: false);
+
+        var offered = provider.GetOfferedToolsForProfile("qwen3:8b");
+
+        AssertEx.True(offered.Count > 0, "The tool-capable profile pool must offer at least the built-in tools.");
+        AssertEx.False(offered.Any(tool => tool.Category == ToolCategory.Unknown),
+            "Every built-in offered tool must declare a concrete (non-Unknown) ToolCategory.");
+        // Spot-check the specific classifications the taxonomy pins (reliable const tool names).
+        AssertEx.Equal(ToolCategory.Orchestration, offered.Single(tool => tool.Name == "spawn_subagent").Category);
+        AssertEx.Equal(ToolCategory.ReadLocal, offered.Single(tool => tool.Name == "list_files").Category);
+        AssertEx.Equal(ToolCategory.ReadLocal, offered.Single(tool => tool.Name == "search_knowledge_base").Category);
+    }
+
     private static LocalToolOfferProvider CreateProvider(params string[] toolCapableModels)
     {
         return CreateProvider(new McpToolRegistry(NullLogger<McpToolRegistry>.Instance), allowCloudKnowledgeAccess: false, toolCapableModels);
