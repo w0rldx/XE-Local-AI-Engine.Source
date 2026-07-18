@@ -40,6 +40,19 @@ public sealed class MafPlaybookEvalAgentRunnerTests
     }
 
     [Test]
+    public async Task RunAsync_PinsTemperatureToZero_ForDeterministicGenerations()
+    {
+        using var scripted = new ScriptedEvalChatClient();
+        var runner = new MafPlaybookEvalAgentRunner(NullLoggerFactory.Instance, EmptyServiceProvider.Instance);
+
+        _ = await runner.RunAsync(scripted, BaselineInstructions, BuildTurns(), CancellationToken.None);
+
+        var options = AssertEx.NotNull(scripted.LastOptions, "the chat client must have been invoked at least once");
+        AssertEx.Equal(expected: (float?)0f, options.Temperature,
+            "the eval runner must pin Temperature=0 so generations are deterministic, not sampled");
+    }
+
+    [Test]
     public async Task RunAsync_BaselineVersusCandidateInstructions_SurfacesDivergentText()
     {
         using var scripted = new ScriptedEvalChatClient();
