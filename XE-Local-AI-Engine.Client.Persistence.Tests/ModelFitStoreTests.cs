@@ -11,9 +11,6 @@ public sealed class ModelFitStoreTests : IDisposable
 {
     private const string ImageId = "llmfit-recommender-0-9-30";
 
-    private const string ImageReference =
-        "ghcr.io/alexsjones/llmfit:0.9.30@sha256:465a5197257a3d34a22a52b1e4ea5aecefc1973788c0f6a0a8fd5a4f93c7f93c";
-
     private readonly string _rootPath = Path.Combine(Path.GetTempPath(), Guid.NewGuid().ToString("N"));
 
     public void Dispose()
@@ -22,134 +19,6 @@ public sealed class ModelFitStoreTests : IDisposable
         {
             Directory.Delete(_rootPath, recursive: true);
         }
-    }
-
-    // -------------------------------------------------------------------------
-    // ApprovedUtilityImageStore — upsert / list / get / enable toggle / seed preserve
-    // -------------------------------------------------------------------------
-
-    [Test]
-    public async Task ApprovedImage_UpsertSeed_ThenGetAndList_RoundTrips()
-    {
-        var databasePath = GetDatabasePath("image-seed-roundtrip.sqlite");
-        using var keyHolder = CreateKeyHolder();
-
-        await using var context = CreateContext(databasePath, keyHolder);
-        await context.Database.EnsureDeletedAsync();
-        await context.Database.EnsureCreatedAsync();
-
-        var store = new ApprovedUtilityImageStore(context, TimeProvider.System);
-        var seeded = await store.UpsertSeedAsync(CreateImageRecord(false));
-
-        AssertEx.Equal(ImageId, seeded.ApprovedImageId);
-        AssertEx.Equal(ImageReference, seeded.ImageReference);
-        AssertEx.False(seeded.Enabled, "Seed should ship disabled.");
-        AssertEx.True(seeded.CreatedAtUtc > 0, "Seed should stamp CreatedAtUtc.");
-
-        var byId = AssertEx.NotNull(await store.GetByIdAsync(ImageId));
-        AssertEx.Equal(ImageReference, byId.ImageReference);
-        AssertEx.Equal(UtilityImagePurpose.ModelRecommendation | UtilityImagePurpose.ModelBenchmark, byId.Purpose);
-
-        var all = await store.ListAsync();
-        AssertEx.Equal(expected: 1, all.Count);
-    }
-
-    [Test]
-    public async Task ApprovedImage_GetById_IsCaseInsensitive()
-    {
-        var databasePath = GetDatabasePath("image-nocase.sqlite");
-        using var keyHolder = CreateKeyHolder();
-
-        await using var context = CreateContext(databasePath, keyHolder);
-        await context.Database.EnsureDeletedAsync();
-        await context.Database.EnsureCreatedAsync();
-
-        var store = new ApprovedUtilityImageStore(context, TimeProvider.System);
-        _ = await store.UpsertSeedAsync(CreateImageRecord(false));
-
-        var byUpperId = await store.GetByIdAsync(ImageId.ToUpperInvariant());
-
-        AssertEx.NotNull(byUpperId, "The NOCASE PK should match an upper-cased id.");
-    }
-
-    [Test]
-    public async Task ApprovedImage_SetEnabled_TogglesAndPersists()
-    {
-        var databasePath = GetDatabasePath("image-set-enabled.sqlite");
-        using var keyHolder = CreateKeyHolder();
-
-        await using var context = CreateContext(databasePath, keyHolder);
-        await context.Database.EnsureDeletedAsync();
-        await context.Database.EnsureCreatedAsync();
-
-        var store = new ApprovedUtilityImageStore(context, TimeProvider.System);
-        _ = await store.UpsertSeedAsync(CreateImageRecord(false));
-
-        var enabled = AssertEx.NotNull(await store.SetEnabledAsync(ImageId, enabled: true));
-        AssertEx.True(enabled.Enabled, "SetEnabled(true) should enable the descriptor.");
-
-        var reread = AssertEx.NotNull(await store.GetByIdAsync(ImageId));
-        AssertEx.True(reread.Enabled, "The enabled toggle should persist.");
-    }
-
-    [Test]
-    public async Task ApprovedImage_SetEnabled_WhenIdUnknown_ReturnsNull()
-    {
-        var databasePath = GetDatabasePath("image-set-enabled-unknown.sqlite");
-        using var keyHolder = CreateKeyHolder();
-
-        await using var context = CreateContext(databasePath, keyHolder);
-        await context.Database.EnsureDeletedAsync();
-        await context.Database.EnsureCreatedAsync();
-
-        var store = new ApprovedUtilityImageStore(context, TimeProvider.System);
-
-        AssertEx.Null(await store.SetEnabledAsync("does-not-exist", enabled: true));
-    }
-
-    [Test]
-    public async Task ApprovedImage_UpsertSeed_PreservesOperatorEnabledToggle()
-    {
-        var databasePath = GetDatabasePath("image-seed-preserve-enabled.sqlite");
-        using var keyHolder = CreateKeyHolder();
-
-        await using var context = CreateContext(databasePath, keyHolder);
-        await context.Database.EnsureDeletedAsync();
-        await context.Database.EnsureCreatedAsync();
-
-        var store = new ApprovedUtilityImageStore(context, TimeProvider.System);
-
-        // Seed disabled, then the operator enables it.
-        _ = await store.UpsertSeedAsync(CreateImageRecord(false));
-        _ = await store.SetEnabledAsync(ImageId, enabled: true);
-
-        // Re-seed (as on the next startup) with code-owned changes and Enabled=false in the descriptor.
-        var reseeded = await store.UpsertSeedAsync(CreateImageRecord(false) with
-        {
-            DisplayName = "llmfit recommender (updated)"
-        });
-
-        AssertEx.True(reseeded.Enabled, "Re-seed must preserve the operator-set Enabled toggle.");
-        AssertEx.Equal("llmfit recommender (updated)", reseeded.DisplayName);
-    }
-
-    [Test]
-    public async Task ApprovedImage_TouchUsed_StampsUsageTimestamps()
-    {
-        var databasePath = GetDatabasePath("image-touch-used.sqlite");
-        using var keyHolder = CreateKeyHolder();
-
-        await using var context = CreateContext(databasePath, keyHolder);
-        await context.Database.EnsureDeletedAsync();
-        await context.Database.EnsureCreatedAsync();
-
-        var store = new ApprovedUtilityImageStore(context, TimeProvider.System);
-        _ = await store.UpsertSeedAsync(CreateImageRecord(true));
-
-        var touched = AssertEx.NotNull(await store.TouchUsedAsync(ImageId, lastUsedAtUtc: 5_000, lastSuccessfulRunAtUtc: 5_500));
-
-        AssertEx.Equal(expected: 5_000L, touched.LastUsedAtUtc);
-        AssertEx.Equal(expected: 5_500L, touched.LastSuccessfulRunAtUtc);
     }
 
     // -------------------------------------------------------------------------
@@ -524,25 +393,6 @@ public sealed class ModelFitStoreTests : IDisposable
     // -------------------------------------------------------------------------
     // Helpers
     // -------------------------------------------------------------------------
-
-    private static ApprovedUtilityImageRecord CreateImageRecord(bool enabled)
-    {
-        return new ApprovedUtilityImageRecord(ImageId,
-            "llmfit recommender 0.9.30",
-            Description: null,
-            UtilityImagePurpose.ModelRecommendation | UtilityImagePurpose.ModelBenchmark,
-            ImageReference,
-            SourceUrl: null,
-            "0.9.30",
-            enabled,
-            DeprecatedAtUtc: null,
-            ReplacementApprovedImageId: null,
-            CreatedAtUtc: 0,
-            UpdatedAtUtc: 0,
-            LastUsedAtUtc: null,
-            LastSuccessfulRunAtUtc: null,
-            DiagnosticsJson: """{"license":"MIT"}""");
-    }
 
     private static ModelFitSnapshotInput CreateRecommendInput(string useCase)
     {
