@@ -299,6 +299,9 @@ internal static class NodeSettingsEndpointDtoMapper
             AgentHomeMaxPatchBytes = request.AgentHomeMaxPatchBytes ?? currentSettings.AgentHomeMaxPatchBytes,
             MaxPendingToolCallAgeMinutes = request.MaxPendingToolCallAgeMinutes ?? currentSettings.MaxPendingToolCallAgeMinutes,
             SamplingDefaults = request.SamplingDefaults ?? currentSettings.SamplingDefaults,
+            // OPP-03: the node-default tool-approval policy has no editable field on this request yet (Lane F adds the
+            // operator surface); preserve the currently stored value so an unrelated node-settings save never wipes it.
+            ToolApprovalPolicy = currentSettings.ToolApprovalPolicy,
             VoiceFeatureEnabled = request.VoiceFeatureEnabled ?? currentSettings.VoiceFeatureEnabled,
             AllowedVoiceModels = request.AllowedVoiceModels ?? currentSettings.AllowedVoiceModels,
             DefaultVoiceProfile = request.DefaultVoiceProfile is null

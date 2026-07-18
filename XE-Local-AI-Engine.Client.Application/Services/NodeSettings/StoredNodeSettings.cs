@@ -262,6 +262,14 @@ public sealed partial record StoredNodeSettings
     public string? DefaultVoiceProfile { get; init; }
 
     /// <summary>
+    ///     Node-default tool-approval policy (OPP-03). <see langword="null" /> (absent, the default) means no node-level
+    ///     tightening — the resolver keeps each tool's own catalog approval flag, byte-identical to the pre-feature path.
+    ///     A value can only ADD an approval requirement (tighten-only, composed on top of the catalog default); it can
+    ///     never waive one. Applies on the next node restart (read once at composition).
+    /// </summary>
+    public NodeToolApprovalPolicySettings? ToolApprovalPolicy { get; init; }
+
+    /// <summary>
     ///     Stable, LOCAL-ONLY machine identifier used to key inference profiles to the box they were tuned on. Generated
     ///     once (<see cref="System.Guid.NewGuid" />, <c>"N"</c> format) by <c>IMachineKeyProvider</c> on first use and
     ///     persisted here; <see langword="null" /> until then (it is generated, not seeded — there is no appsettings
