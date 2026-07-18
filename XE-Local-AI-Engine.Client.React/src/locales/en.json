@@ -1486,6 +1486,8 @@
 					"defaultFallback": "Download default quant (Q4_K_M)",
 					"progressLabel": "{{pct}}%",
 					"bytesOf": "{{completed}} / {{total}}",
+					"speed": "{{value}}/s",
+					"eta": "~{{duration}} left",
 					"progressAriaLabel": "Download progress",
 					"failedTitle": "Download failed"
 				}
