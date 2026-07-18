@@ -169,3 +169,30 @@ public sealed class ReindexCorpusResponse
 {
     public required int EnqueuedCount { get; init; }
 }
+
+/// <summary>
+///     Result of the one-click recommended-reranker download. Carries the same core identity the GGUF download trigger
+///     returns (<see cref="ModelName" /> + <see cref="AlreadyInFlight" />) plus the recommended descriptor
+///     (<see cref="RepoId" />/<see cref="Quant" />) and an <see cref="AlreadyInstalled" /> flag so the UI can show what is
+///     being fetched and give a friendly no-op when the model is already present. Exactly one of the three states holds:
+///     already installed (no download started), already in flight (rejoined an existing download), or a fresh download
+///     started — the download runs in the background and progress streams over the GGUF download hub, keyed by
+///     <see cref="ModelName" />.
+/// </summary>
+public sealed class DownloadRecommendedRerankerResponse
+{
+    /// <summary>Canonical <c>{repoId}:{quant}</c> model name to track the download by and to select as the reranker.</summary>
+    public required string ModelName { get; init; }
+
+    /// <summary>Recommended Hugging Face repository id.</summary>
+    public required string RepoId { get; init; }
+
+    /// <summary>Pinned quant of the recommended reranker.</summary>
+    public required string Quant { get; init; }
+
+    /// <summary><c>true</c> when the recommended reranker is already installed — no download was started.</summary>
+    public required bool AlreadyInstalled { get; init; }
+
+    /// <summary><c>true</c> when an existing download for the same model was rejoined instead of a new one started.</summary>
+    public required bool AlreadyInFlight { get; init; }
+}

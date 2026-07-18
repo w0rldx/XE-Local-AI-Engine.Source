@@ -56,6 +56,7 @@ import {
 	disableAutoConnect,
 	disableScheduledJob,
 	disconnectConnection,
+	downloadRecommendedReranker,
 	ejectRunningModel,
 	enableAutoConnect,
 	enableScheduledJob,
@@ -277,6 +278,8 @@ import type {
 	DisableScheduledJobResponse,
 	DisconnectConnectionData,
 	DisconnectConnectionResponse,
+	DownloadRecommendedRerankerData,
+	DownloadRecommendedRerankerResponse,
 	EjectRunningModelData,
 	EjectRunningModelResponse,
 	EnableAutoConnectData,
@@ -2632,6 +2635,30 @@ export const reindexCorpusMutation = (
 	const mutationOptions: UseMutationOptions<ReindexCorpusResponse, AxiosError<DefaultError>, Options<ReindexCorpusData>> = {
 		mutationFn: async (fnOptions) => {
 			const { data } = await reindexCorpus({
+				...options,
+				...fnOptions,
+				throwOnError: true,
+			});
+			return data;
+		},
+	};
+	return mutationOptions;
+};
+
+export const downloadRecommendedRerankerMutation = (
+	options?: Partial<Options<DownloadRecommendedRerankerData>>,
+): UseMutationOptions<
+	DownloadRecommendedRerankerResponse,
+	AxiosError<DefaultError>,
+	Options<DownloadRecommendedRerankerData>
+> => {
+	const mutationOptions: UseMutationOptions<
+		DownloadRecommendedRerankerResponse,
+		AxiosError<DefaultError>,
+		Options<DownloadRecommendedRerankerData>
+	> = {
+		mutationFn: async (fnOptions) => {
+			const { data } = await downloadRecommendedReranker({
 				...options,
 				...fnOptions,
 				throwOnError: true,

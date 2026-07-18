@@ -468,6 +468,10 @@ public static class LocalApiRoutes
         // Hybrid retrieval over the indexed corpus (POST body: query + options).
         public const string Search = "knowledge-base/search";
 
+        // One-click download of the recommended cross-encoder reranker so an operator can enable KB reranking without
+        // hunting for a repo/quant. Body-less POST; a distinct "reranker" literal keeps it off the document-id surface.
+        public const string RerankerDownloadRecommended = "knowledge-base/reranker/download-recommended";
+
         // SignalR push hub for indexing status changes. Full path (mapped via MapHub, not the FastEndpoints prefix),
         // mirroring the other local hubs. Each push carries the sanitized document id + status; Operator-gated because
         // subscribers see which documents are being indexed.

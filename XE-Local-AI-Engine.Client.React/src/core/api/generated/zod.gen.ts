@@ -1509,6 +1509,14 @@ export const zXeLocalAiEngineClientEndpointsKnowledgeV1ListKnowledgeDocumentsRes
 	items: z.array(zXeLocalAiEngineClientEndpointsKnowledgeV1KnowledgeDocumentResponse),
 });
 
+export const zXeLocalAiEngineClientEndpointsKnowledgeV1DownloadRecommendedRerankerResponse = z.object({
+	modelName: z.string(),
+	repoId: z.string(),
+	quant: z.string(),
+	alreadyInstalled: z.boolean(),
+	alreadyInFlight: z.boolean(),
+});
+
 export const zXeLocalAiEngineClientEndpointsKnowledgeV1ReindexCorpusResponse = z.object({
 	enqueuedCount: z
 		.int()
@@ -3294,6 +3302,11 @@ export const zUploadKnowledgeDocumentResponse = zXeLocalAiEngineClientEndpointsK
  * Success
  */
 export const zReindexCorpusResponse = zXeLocalAiEngineClientEndpointsKnowledgeV1ReindexCorpusResponse;
+
+/**
+ * Success
+ */
+export const zDownloadRecommendedRerankerResponse = zXeLocalAiEngineClientEndpointsKnowledgeV1DownloadRecommendedRerankerResponse;
 
 export const zReindexKnowledgeDocumentPath = z.object({
 	documentId: z.guid(),

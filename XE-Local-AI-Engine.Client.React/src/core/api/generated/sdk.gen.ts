@@ -140,6 +140,9 @@ import type {
 	DisconnectConnectionData,
 	DisconnectConnectionErrors,
 	DisconnectConnectionResponses,
+	DownloadRecommendedRerankerData,
+	DownloadRecommendedRerankerErrors,
+	DownloadRecommendedRerankerResponses,
 	EjectRunningModelData,
 	EjectRunningModelErrors,
 	EjectRunningModelResponses,
@@ -597,6 +600,7 @@ import {
 	zDisableScheduledJobPath,
 	zDisableScheduledJobResponse,
 	zDisconnectConnectionResponse,
+	zDownloadRecommendedRerankerResponse,
 	zEjectRunningModelBody,
 	zEjectRunningModelResponse,
 	zEnableAutoConnectResponse,
@@ -3152,6 +3156,28 @@ export const reindexCorpus = <ThrowOnError extends boolean = false>(options?: Op
 			{ scheme: "bearer", type: "http" },
 		],
 		url: "/api/local/v1/knowledge-base/reindex",
+		...options,
+	});
+
+export const downloadRecommendedReranker = <ThrowOnError extends boolean = false>(
+	options?: Options<DownloadRecommendedRerankerData, ThrowOnError>,
+) =>
+	(options?.client ?? client).post<DownloadRecommendedRerankerResponses, DownloadRecommendedRerankerErrors, ThrowOnError>({
+		requestValidator: async (data) =>
+			await z
+				.object({
+					body: z.never().optional(),
+					path: z.never().optional(),
+					query: z.never().optional(),
+				})
+				.parseAsync(data),
+		responseType: "json",
+		responseValidator: async (data) => await zDownloadRecommendedRerankerResponse.parseAsync(data),
+		security: [
+			{ scheme: "bearer", type: "http" },
+			{ scheme: "bearer", type: "http" },
+		],
+		url: "/api/local/v1/knowledge-base/reranker/download-recommended",
 		...options,
 	});
 
