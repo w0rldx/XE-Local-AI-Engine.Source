@@ -216,9 +216,30 @@ public sealed class RunSavedAgentHandlerTests
         AssertEx.False(reportedSummary!.Contains(Prompt, StringComparison.Ordinal), "the summary must never carry the prompt / message content.");
     }
 
+    [Test]
+    [Arguments("banana", "medium")]
+    [Arguments("HIGH", "high")]
+    [Arguments("   ", "medium")]
+    public async Task ExecuteAsync_ReasoningEffortOverride_UsesAgentEffortUnlessOverrideIsRecognized(string overrideEffort, string expectedEffort)
+    {
+        using var harness = new Harness();
+
+        await harness.Handler.ExecuteAsync(Context(ValidParamsWithEffort(overrideEffort)), CancellationToken.None);
+
+        AssertEx.Equal(expected: 1, harness.RunCount);
+        // A blank OR invalid ("banana") override normalizes to null and falls back to the agent's resolved effort
+        // ("medium") — it must NOT drop reasoning to null. A recognized override ("HIGH") wins and is canonicalized.
+        AssertEx.Equal(expectedEffort, harness.CapturedPackage!.ReasoningEffort!);
+    }
+
     private static string ValidParams(string prompt = Prompt)
     {
         return $$"""{ "agentDefinitionId": "{{AgentIdString}}", "prompt": "{{prompt}}" }""";
+    }
+
+    private static string ValidParamsWithEffort(string reasoningEffort)
+    {
+        return $$"""{ "agentDefinitionId": "{{AgentIdString}}", "prompt": "{{Prompt}}", "reasoningEffort": "{{reasoningEffort}}" }""";
     }
 
     private static ScheduledJobExecutionContext Context(string? parametersJson, Func<string, int?, CancellationToken, Task>? reportProgress = null)
