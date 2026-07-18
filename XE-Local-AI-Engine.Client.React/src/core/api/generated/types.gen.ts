@@ -1042,6 +1042,7 @@ export type XeLocalAiEngineClientEndpointsLocalChatV1NodeChatMessageResponse = {
 	agentName?: string | null;
 	reasoningEffort?: string | null;
 	generationDurationMs?: number | null;
+	sources?: Array<XeLocalAiEngineClientServicesChatNodeChatMessageSource> | null;
 };
 
 export type XeLocalAiEngineClientServicesChatNodeChatMessagePart = {
@@ -1054,6 +1055,14 @@ export type XeLocalAiEngineClientServicesChatNodeChatMessagePart = {
 	args?: string | null;
 	result?: string | null;
 	requiresApproval?: boolean | null;
+};
+
+export type XeLocalAiEngineClientServicesChatNodeChatMessageSource = {
+	documentId?: string;
+	chunkId?: string;
+	title?: string;
+	section?: string | null;
+	score?: number;
 };
 
 export type XeLocalAiEngineClientEndpointsLocalChatV1CreateNodeChatConversationRequest = {
