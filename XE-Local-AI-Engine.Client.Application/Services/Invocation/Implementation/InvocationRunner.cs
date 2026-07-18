@@ -11,12 +11,15 @@ using Microsoft.Extensions.Options;
 using XE_Local_AI_Engine.AI.Agent.Configuration;
 using XE_Local_AI_Engine.AI.Agent.Invocation;
 using XE_Local_AI_Engine.AI.Agent.Invocation.Orchestration;
+using XE_Local_AI_Engine.AI.Agent.Tools;
 using XE_Local_AI_Engine.Client.Common.Telemetry;
 using XE_Local_AI_Engine.Client.Models;
 using XE_Local_AI_Engine.Client.Models.Encrypted;
 using XE_Local_AI_Engine.Client.Models.Enums;
 using XE_Local_AI_Engine.Client.Models.Events;
+using XE_Local_AI_Engine.Client.Persistence.Stores;
 using XE_Local_AI_Engine.Client.Services.AgentHome;
+using XE_Local_AI_Engine.Client.Services.Agents.Approval;
 using XE_Local_AI_Engine.Client.Services.Capabilities;
 using XE_Local_AI_Engine.Client.Services.Capacity;
 using XE_Local_AI_Engine.Client.Services.CloudProviders;
@@ -76,6 +79,7 @@ public sealed partial class InvocationRunner : IInvocationRunner
 
     private readonly ConcurrentDictionary<Guid, TaskCompletionSource> _activeInvocationCompletions = new();
 
+    private readonly IToolApprovalAuditRecorder _approvalAuditRecorder;
     private readonly ICapabilityReporter _capabilityReporter;
     private readonly IConversationContextBudgeter _contextBudgeter;
     private readonly ConversationContextBudgetOptions _contextBudgetOptions;
@@ -134,9 +138,11 @@ public sealed partial class InvocationRunner : IInvocationRunner
         IConfiguration configuration,
         INodeRuntimeSettings runtimeSettings,
         IOptions<SpawnOptions> spawnOptions,
+        IToolApprovalAuditRecorder approvalAuditRecorder,
         ILogger<InvocationRunner> logger)
     {
         _hubSender = hubSender ?? throw new ArgumentNullException(nameof(hubSender));
+        _approvalAuditRecorder = approvalAuditRecorder ?? throw new ArgumentNullException(nameof(approvalAuditRecorder));
         _eventDispatcher = eventDispatcher ?? throw new ArgumentNullException(nameof(eventDispatcher));
         _invocationAgentFactory = invocationAgentFactory ?? throw new ArgumentNullException(nameof(invocationAgentFactory));
         _orchestrationAgentFactory = orchestrationAgentFactory ?? throw new ArgumentNullException(nameof(orchestrationAgentFactory));
@@ -1216,6 +1222,12 @@ public sealed partial class InvocationRunner : IInvocationRunner
             throw new InvalidOperationException("Failed to register pending tool approval.");
         }
 
+        // Approval-decision audit (OPP-03): the tool name (drives both the category lookup and the audit row) and the
+        // request→decision stopwatch are captured here so the resolved decision below can record a content-free audit row
+        // and metric. Both are needed in the timeout catch as well, so they live outside the try.
+        var approvalToolName = (approvalRequest.ToolCall as FunctionCallContent)?.Name;
+        var approvalRequestedTimestamp = Stopwatch.GetTimestamp();
+
         try
         {
             var approvalPayload = new ApprovalRequestPayload
@@ -1235,7 +1247,6 @@ public sealed partial class InvocationRunner : IInvocationRunner
             // attach the Approve/Deny controls to the matching tool-call card. In desktop/local mode there is no worker
             // hub to resolve the approval, so the loopback resolve endpoint feeds ResolveApprovalResult below. ToolCall
             // is the base ToolCallContent (CallId only); the concrete FunctionCallContent carries the tool name.
-            var approvalToolName = (approvalRequest.ToolCall as FunctionCallContent)?.Name;
             var approvalCallId = ResolveToolCallCardId(approvalRequest.ToolCall.CallId, approvalToolName);
             await dispatcher.ReportApprovalLifecycleAsync(new ApprovalLifecyclePayload
             {
@@ -1249,12 +1260,65 @@ public sealed partial class InvocationRunner : IInvocationRunner
             using var approvalTimeoutCancellationTokenSource = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
             approvalTimeoutCancellationTokenSource.CancelAfter(_maxPendingToolCallAge);
 
-            return await approvalCompletion.Task.WaitAsync(approvalTimeoutCancellationTokenSource.Token).ConfigureAwait(false);
+            var approved = await approvalCompletion.Task.WaitAsync(approvalTimeoutCancellationTokenSource.Token).ConfigureAwait(false);
+            await RecordApprovalDecisionAuditAsync(package,
+                approvalToolName,
+                approved ? ApprovalDecisions.Approve : ApprovalDecisions.Deny,
+                approvalRequestedTimestamp,
+                cancellationToken).ConfigureAwait(false);
+            return approved;
+        }
+        catch (OperationCanceledException) when (!cancellationToken.IsCancellationRequested)
+        {
+            // The linked CTS fired on the pending-tool-call age WITHOUT the invocation being cancelled: a genuine approval
+            // TIMEOUT (an operator/user cancel trips cancellationToken and skips this filter, propagating as a cancel).
+            // Audit it, then rethrow so the turn still fails EXACTLY as before — the audit only observes, never alters flow.
+            await RecordApprovalDecisionAuditAsync(package,
+                approvalToolName,
+                ApprovalDecisions.Timeout,
+                approvalRequestedTimestamp,
+                cancellationToken).ConfigureAwait(false);
+            throw;
         }
         finally
         {
             _pendingToolCalls.TryRemove(requestId, out _);
         }
+    }
+
+    // Resolves the audited category (from the offered tool's declared ToolCategory) and source (loopback vs hub) for a
+    // resolved approval decision and hands them to the fire-and-forget-safe recorder. The recorder swallows every failure,
+    // so this can never throw into — or stall — the approval round-trip.
+    private async Task RecordApprovalDecisionAuditAsync(RuntimePackage package,
+        string? toolName,
+        string decision,
+        long requestedTimestamp,
+        CancellationToken cancellationToken)
+    {
+        var latencyMs = (long)Stopwatch.GetElapsedTime(requestedTimestamp).TotalMilliseconds;
+        var category = ResolveApprovalToolCategory(package, toolName);
+        var source = IsLocalLoopbackInvocation(package) ? ApprovalDecisionSources.Local : ApprovalDecisionSources.Hub;
+        await _approvalAuditRecorder.RecordAsync(package.InvocationId,
+            toolName ?? string.Empty,
+            category,
+            decision,
+            source,
+            latencyMs,
+            cancellationToken).ConfigureAwait(false);
+    }
+
+    // The offered tool's declared risk category, matched by name against the package offer (AllowedToolDto.Category) —
+    // the same categorized offer the policy layer evaluates, so no new plumbing is added just for the audit. Falls back to
+    // Unknown when the tool is absent from the offer or unnamed, matching the fail-closed default the policy itself uses.
+    private static ToolCategory ResolveApprovalToolCategory(RuntimePackage package, string? toolName)
+    {
+        if (string.IsNullOrEmpty(toolName))
+        {
+            return ToolCategory.Unknown;
+        }
+
+        var offer = package.AllowedTools.FirstOrDefault(tool => string.Equals(tool.Name, toolName, StringComparison.Ordinal));
+        return offer?.Category ?? ToolCategory.Unknown;
     }
 
     // Derives the tool-call id that keys a tool-call card in the UI: the wire CallId when present, otherwise the tool

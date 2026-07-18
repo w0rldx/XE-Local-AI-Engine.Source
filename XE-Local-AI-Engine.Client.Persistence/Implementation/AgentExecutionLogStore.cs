@@ -44,6 +44,35 @@ public sealed class AgentExecutionLogStore(NodeChatDbContext dbContext, TimeProv
         return ToRecord(entity);
     }
 
+    public async Task AddApprovalDecisionAsync(ApprovalDecisionAuditInput input, CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(input);
+
+        var entity = new AgentExecutionLog
+        {
+            Id = Guid.NewGuid(),
+            RecordKind = (int)AgentExecutionLogRecordKind.ApprovalDecision,
+            SchemaVersion = 0,
+            // Approval-decision rows are NOT per-agent telemetry: bind to Guid.Empty so they share one retention bucket
+            // and never surface in the per-agent diagnostics view (which filters kind 0) or the run-envelope ledger
+            // (which filters kind 1). Metadata only — every value below is a non-sensitive category label or id.
+            AgentDefinitionId = Guid.Empty,
+            InvocationId = input.InvocationId,
+            // Reuse existing columns without a schema change: tool name → model_name, tool risk category → config_hash,
+            // decision → terminal_status, source → provider. Success mirrors an approve for a coarse boolean read.
+            ModelName = input.ToolName,
+            ConfigHash = input.Category,
+            Provider = input.Source,
+            TerminalStatus = input.Decision,
+            Success = string.Equals(input.Decision, ApprovalDecisions.Approve, StringComparison.Ordinal),
+            LatencyMs = input.LatencyMs,
+            CreatedAtUtc = _timeProvider.GetUtcNow().ToUnixTimeMilliseconds()
+        };
+
+        _ = _dbContext.AgentExecutionLogs.Add(entity);
+        _ = await _dbContext.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
+    }
+
     public async Task<IReadOnlyList<AgentRunEnvelopeRecord>> ListRunEnvelopesAsync(Guid? conversationId, int limit, int offset = 0, CancellationToken cancellationToken = default)
     {
         // Floor the page bounds so a caller passing 0/negative still returns a sane (empty) page rather than throwing.
