@@ -24,6 +24,7 @@ public interface INodeChatRegenerationService
         Guid originalMessageId,
         string? reasoningEffort = null,
         bool useLocalTools = false,
+        bool useKnowledgeBase = false,
         IReadOnlyDictionary<Guid, Guid>? selectedPath = null,
         CancellationToken cancellationToken = default);
 }

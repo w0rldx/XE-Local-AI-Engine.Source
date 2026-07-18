@@ -116,6 +116,7 @@ export interface NodeChatAdapter {
 		originalMessageId: string,
 		reasoningEffort: string | undefined,
 		useLocalTools: boolean,
+		useKnowledgeBase: boolean,
 		selectedPath: Record<string, string> | undefined,
 		signal: AbortSignal,
 	): AsyncIterable<NodeChatStreamEventDto>;
@@ -478,16 +479,16 @@ export const nodeChatAdapter: NodeChatAdapter = {
 			),
 		);
 	},
-	regenerateMessage(conversationId, originalMessageId, reasoningEffort, useLocalTools, selectedPath, signal) {
+	regenerateMessage(conversationId, originalMessageId, reasoningEffort, useLocalTools, useKnowledgeBase, selectedPath, signal) {
 		// Server mints the sibling variant + drives the run (assistant revision flow); the variant messageId + requestId arrive
 		// on the stream events and are latched for reconnect/resume. Streams exactly like a send, and honors the
-		// current reasoning + local-tools selection plus the active conversation-tree path via the hub args
-		// (RegenerateMessage(conversationId, messageId, effort, useLocalTools, selectedPath)).
+		// current reasoning + local-tools + knowledge-base selection plus the active conversation-tree path via the hub
+		// args (RegenerateMessage(conversationId, messageId, effort, useLocalTools, useKnowledgeBase, selectedPath)).
 		return guardNodeChatStream(
 			signalRStream(
 				{
 					method: "RegenerateMessage",
-					args: [conversationId, originalMessageId, reasoningEffort, useLocalTools, selectedPath ?? null],
+					args: [conversationId, originalMessageId, reasoningEffort, useLocalTools, useKnowledgeBase, selectedPath ?? null],
 				},
 				signal,
 			),
