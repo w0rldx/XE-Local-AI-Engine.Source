@@ -187,6 +187,49 @@ public sealed class NodeChatEnvelopeTransactionTests : IDisposable
         AssertEx.True(purgeWon > 0, "The race never let the purge win before terminalize — increase iterations or investigate lock ordering.");
     }
 
+    [Test]
+    public async Task Terminalize_WritesResolvedProviderOntoEnvelopeRow()
+    {
+        // Row-level round-trip of the fine-grained provider dimension (Wave 8): a terminalize carrying a resolved provider
+        // must persist it onto the run-envelope row via WriteRunEnvelopeRowAsync — not fall back to the 'unknown' column
+        // default. The pump resolves this label; here it rides in directly so the write path is proven end to end.
+        await using var provider = await BuildProviderAsync("envelope-provider-roundtrip.sqlite").ConfigureAwait(false);
+        var persistence = CreateService(provider);
+        var conversation = await persistence.CreateConversationAsync(new NodeChatCreateConversationRequest("Provider", "node", CreatedAtUtc: 1)).ConfigureAwait(false);
+        var correlation = await CreatePlaceholderAsync(persistence, conversation.ConversationId).ConfigureAwait(false);
+        await persistence.MarkAssistantStreamingAsync(correlation, updatedAtUtc: 2).ConfigureAwait(false);
+
+        await persistence.TerminalizeAssistantMessageAsync(new NodeChatTerminalizeMessageRequest(correlation,
+                             NodeChatMessageStatusValues.Completed,
+                             UpdatedAtUtc: 3,
+                             "answer",
+                             Envelope: new AgentRunEnvelopeMetadata(Guid.NewGuid(), DurationMs: 5L, Provider: AgentUsageProviders.Codex)))
+                         .ConfigureAwait(false);
+
+        AssertEx.Equal(AgentUsageProviders.Codex, await ReadEnvelopeProviderAsync(provider, correlation).ConfigureAwait(false));
+    }
+
+    [Test]
+    public async Task Terminalize_WhenNoProviderResolved_EnvelopeRowFallsBackToUnknownDefault()
+    {
+        // The interrupted/thin path resolves no provider: AgentRunEnvelopeMetadata defaults Provider to 'unknown', which
+        // must land on the row (proving the column default + the metadata default agree).
+        await using var provider = await BuildProviderAsync("envelope-provider-default.sqlite").ConfigureAwait(false);
+        var persistence = CreateService(provider);
+        var conversation = await persistence.CreateConversationAsync(new NodeChatCreateConversationRequest("Default", "node", CreatedAtUtc: 1)).ConfigureAwait(false);
+        var correlation = await CreatePlaceholderAsync(persistence, conversation.ConversationId).ConfigureAwait(false);
+        await persistence.MarkAssistantStreamingAsync(correlation, updatedAtUtc: 2).ConfigureAwait(false);
+
+        await persistence.TerminalizeAssistantMessageAsync(new NodeChatTerminalizeMessageRequest(correlation,
+                             NodeChatMessageStatusValues.Interrupted,
+                             UpdatedAtUtc: 3,
+                             "partial",
+                             Envelope: new AgentRunEnvelopeMetadata(Guid.NewGuid(), DurationMs: 0L)))
+                         .ConfigureAwait(false);
+
+        AssertEx.Equal(AgentUsageProviders.Unknown, await ReadEnvelopeProviderAsync(provider, correlation).ConfigureAwait(false));
+    }
+
     private async Task<ServiceProvider> BuildProviderAsync(string fileName)
     {
         Directory.CreateDirectory(_rootPath);
@@ -268,6 +311,20 @@ public sealed class NodeChatEnvelopeTransactionTests : IDisposable
         command.CommandText = "SELECT COUNT(*) FROM agent_execution_logs WHERE record_kind = $record_kind;";
         AddParameter(command, "$record_kind", EnvelopeKind);
         return Convert.ToInt64(await command.ExecuteScalarAsync().ConfigureAwait(false), CultureInfo.InvariantCulture);
+    }
+
+    private static async Task<string> ReadEnvelopeProviderAsync(ServiceProvider provider, NodeChatMessageCorrelation correlation)
+    {
+        await using var scope = provider.CreateAsyncScope();
+        var dbContext = scope.ServiceProvider.GetRequiredService<NodeChatDbContext>();
+        var connection = dbContext.Database.GetDbConnection();
+        await connection.OpenAsync().ConfigureAwait(false);
+        await using var command = connection.CreateCommand();
+        command.CommandText = "SELECT provider FROM agent_execution_logs WHERE record_kind = $record_kind AND message_id = $message_id;";
+        AddParameter(command, "$record_kind", EnvelopeKind);
+        AddParameter(command, "$message_id", correlation.MessageId);
+        var value = await command.ExecuteScalarAsync().ConfigureAwait(false);
+        return value as string ?? throw new InvalidOperationException("The run-envelope row was not found.");
     }
 
     private static void AddParameter(DbCommand command, string name, object value)

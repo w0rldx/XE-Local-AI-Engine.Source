@@ -79,6 +79,10 @@ internal static class AddCodexOAuthProviderExtensions
         // Re-resolves the active cloud client (Codex/Azure) per send so a sign-in/sign-out takes effect immediately.
         builder.Services.AddSingleton<IActiveCloudChatClientFactory, ActiveCloudChatClientFactory>();
 
+        // Attributes a terminalized turn's tokens to the fine-grained provider (local/ollama/codex/azure/unknown) for the
+        // usage ledger; composed from the cloud selector above + the local model→provider resolver.
+        builder.Services.AddSingleton<IUsageProviderResolver, UsageProviderResolver>();
+
         return builder;
     }
 }

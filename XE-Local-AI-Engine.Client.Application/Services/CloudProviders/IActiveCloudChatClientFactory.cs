@@ -53,6 +53,19 @@ public interface IActiveCloudChatClientFactory
     bool IsCloudProviderSelected(string? requestedModelId = null);
 
     /// <summary>
+    ///     Returns the fine-grained cloud provider name currently selected for <paramref name="requestedModelId" />
+    ///     (<c>codex</c> or <c>azure</c>), or <see langword="null" /> when no cloud provider is selected (the caller routes
+    ///     local). Like <see cref="IsCloudProviderSelected" /> this reports selection regardless of present usability and is
+    ///     cheap — no network I/O beyond the short-TTL selection snapshot. Used by the usage ledger to attribute a turn's
+    ///     tokens to the provider that served it.
+    /// </summary>
+    /// <param name="requestedModelId">
+    ///     The specific model id the caller is attributing, or <see langword="null" /> to fall back to the node-default
+    ///     selection (the caller-omits-a-model semantics).
+    /// </param>
+    string? ResolveActiveCloudProviderName(string? requestedModelId = null);
+
+    /// <summary>
     ///     Invalidates the in-memory selection snapshot so the next resolution re-reads the encrypted token / credential
     ///     store. Called on sign-out (the logout endpoint) and on sign-in (the login coordinator's success callback,
     ///     once the background token exchange persists the session) so either takes effect on the very next send instead
