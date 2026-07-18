@@ -1,6 +1,7 @@
-import { Alert, Box, Button, Center, Loader, Stack, Text } from "@mantine/core";
+import { Alert, Anchor, Box, Button, Center, Loader, Stack, Text } from "@mantine/core";
 import { IconAlertTriangle } from "@tabler/icons-react";
 import { keepPreviousData, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { Link } from "@tanstack/react-router";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 
@@ -38,7 +39,7 @@ import { toWireSamplingOptions } from "@/features/chat/models/ChatSamplingOption
 import { deriveUsedContextTokens } from "@/features/chat/models/ContextUsageDerivation";
 import { localDefaultModelValue, toNodeChatRequestModel } from "@/features/chat/models/NodeChatModelSelection";
 import { resolveContextCapacityTokens, shouldFetchLocalModelDetails } from "@/features/chat/pages/ChatModelDetailsQuery";
-import { resolveLocalDefaultModelCapabilities, toChatModelOptions } from "@/features/chat/pages/ChatModelOptions";
+import { hasNoLocalChatModels, resolveLocalDefaultModelCapabilities, toChatModelOptions } from "@/features/chat/pages/ChatModelOptions";
 import { nodeChatQueryKeys } from "@/features/chat/queries/NodeChatQueryKeys";
 import { useCodexModelOptions } from "@/features/chat/queries/useCodexModelOptions";
 import { useConversationAttachments } from "@/features/chat/queries/useConversationAttachments";
@@ -256,6 +257,12 @@ export function Chat() {
 	}, [localModelsData]);
 	// Cloud (Codex) model options — empty array when signed out; non-empty only when Codex session active.
 	const cloudModelOptions = useCodexModelOptions();
+	// UX-09: pre-empt the first-send ModelNotInstalled failure with inline guidance, instead of only surfacing it
+	// after a failed send (ChatMessage's error Alert). Gated on BOTH no installed local chat model AND no signed-in
+	// cloud provider — a Codex/Azure session is still a usable send path, so the guidance would be misleading there.
+	// `localModelsData !== undefined` guards the pre-load default-only modelOptions shape (before the query
+	// resolves) from being mistaken for a genuinely empty node.
+	const showNoModelGuidance = localModelsData !== undefined && hasNoLocalChatModels(modelOptions) && cloudModelOptions.length === 0;
 	const selectedModelOption = useMemo(
 		() =>
 			modelOptions.find((option) => option.value === selectedModel) ??
@@ -1295,8 +1302,20 @@ export function Chat() {
 						{t("pages.chat.remoteViewOnly", "This conversation was started from a paired client and is view-only on this node.")}
 					</Text>
 				</Stack>
+			) : showNoModelGuidance ? (
+				// UX-09: advisory, not blocking — a Codex/Azure sign-in later still routes around this via the picker's
+				// cloud sections, and a send attempted anyway still falls through to ChatMessage's ModelNotInstalled Alert.
+				<Stack gap={2}>
+					<Text fw={700}>{t("pages.chat.noModelGuidance.title", "No chat model installed yet")}</Text>
+					<Text size="sm">
+						{t("pages.chat.noModelGuidance.body", "Install a GGUF model to start chatting locally.")}
+					</Text>
+					<Anchor component={Link} to="/models" size="sm" data-testid="chat-no-model-guidance-models-link">
+						{t("pages.chat.noModelGuidance.goToModels", "Go to Models")}
+					</Anchor>
+				</Stack>
 			) : undefined,
-		[conversationsError, conversationsIsError, isRemoteConversation, streamError, t],
+		[conversationsError, conversationsIsError, isRemoteConversation, showNoModelGuidance, streamError, t],
 	);
 
 	// Module-readiness gate (platform parity): block the chat behind a connecting/error state until the

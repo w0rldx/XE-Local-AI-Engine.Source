@@ -318,6 +318,11 @@
 			"reasoningMode": "Reasoning-Modus",
 			"emptyState": "Erstelle oder wähle eine Unterhaltung, um zu chatten.",
 			"noMessages": "Noch keine Nachrichten.",
+			"noModelGuidance": {
+				"title": "Noch kein Chat-Modell installiert",
+				"body": "Installiere ein GGUF-Modell, um lokal zu chatten.",
+				"goToModels": "Zu den Modellen"
+			},
 			"pendingApprovalLabel": "Ausstehende Freigabe",
 			"activityTimeline": "Aktivitätsverlauf",
 			"activityDetails": {

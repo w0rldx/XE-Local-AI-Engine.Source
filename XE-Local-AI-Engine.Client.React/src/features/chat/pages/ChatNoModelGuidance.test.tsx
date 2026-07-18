@@ -2,21 +2,22 @@
 
 import { MantineProvider } from "@mantine/core";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { cleanup, render, screen, waitFor } from "@testing-library/react";
 import type { ReactNode } from "react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { ConfirmContext } from "@/core/ui/context/ConfirmContext";
 import { nodeChatAdapter } from "@/features/chat/api/NodeChatAdapter";
-import { nodeChatStreamEventTypes } from "@/features/chat/api/NodeChatStreamState";
-import type { ChatConversationModel } from "@/features/chat/models/ChatModels";
-import type { NodeChatStreamEventDto } from "@/features/chat/models/NodeChatStreamTypes";
 import { Chat } from "@/features/chat/pages/Chat";
-import { nodeChatQueryKeys } from "@/features/chat/queries/NodeChatQueryKeys";
+import { useNodeChatPreferencesStore } from "@/features/chat/stores/NodeChatPreferencesStore";
 
-// UX-09's no-installed-model guidance renders a TanStack-router Link to /models whenever the fixture's model list
-// is empty (the default below). Stub the router module so Chat mounts without a RouterProvider (mirrors
-// ChatMessage.test.tsx's ModelNotInstalled Link stub).
+// UX-09: on a fresh node with zero installed GGUF chat models, a user could previously type and send and only
+// discover the failure AFTER the fact (ChatMessage's ModelNotInstalled Alert). This exercises the pre-emptive
+// inline guidance surfaced above the chat pane instead, gated on BOTH no local chat model AND no signed-in cloud
+// provider (a Codex/Azure session is still a usable send path, so the guidance must not show then).
+
+// The guidance renders a TanStack-router Link to /models. Stub the router module so Chat mounts without a
+// RouterProvider (mirrors ChatMessage.test.tsx's ModelNotInstalled Link stub).
 vi.mock("@tanstack/react-router", async (importOriginal) => {
 	const actual = await importOriginal<typeof import("@tanstack/react-router")>();
 	return {
@@ -108,32 +109,7 @@ function installJsdomEnvironmentMocks(): void {
 	}
 }
 
-function conversation(): ChatConversationModel {
-	return {
-		id: "conversation-1",
-		title: "Streaming thread",
-		origin: "local",
-		createdAt: "2026-05-24T00:00:00.000Z",
-		updatedAt: "2026-05-24T00:00:00.000Z",
-		messages: [],
-	};
-}
-
-function deltaEvent(): NodeChatStreamEventDto {
-	return {
-		type: nodeChatStreamEventTypes.assistantStreaming,
-		conversationId: "conversation-1",
-		messageId: "assistant-1",
-		requestId: "request-1",
-		status: "streaming",
-		sequence: 1,
-		occurredAtUtc: 1_700_000_000_000,
-		delta: "partial",
-		content: "partial",
-	};
-}
-
-function renderChat(): { queryClient: QueryClient } {
+function renderChat(): void {
 	const queryClient = new QueryClient({
 		defaultOptions: { queries: { retry: false, gcTime: 0 } },
 	});
@@ -148,14 +124,22 @@ function renderChat(): { queryClient: QueryClient } {
 			</ConfirmContext.Provider>
 		</QueryClientProvider>,
 	);
-
-	return { queryClient };
 }
 
-describe("Chat cancel ordering", () => {
+describe("Chat no-installed-model guidance (UX-09)", () => {
 	beforeEach(() => {
 		installJsdomEnvironmentMocks();
 		vi.clearAllMocks();
+		useNodeChatPreferencesStore.getState().actions.setSelectedConversationId("");
+		adapter.listConversations.mockResolvedValue([]);
+	});
+
+	afterEach(() => {
+		cleanup();
+		useNodeChatPreferencesStore.getState().actions.setSelectedConversationId("");
+	});
+
+	it("shows inline guidance with a Go to Models link on a node with no installed chat model and no cloud provider", async () => {
 		listLocalModelsQueryFn.mockResolvedValue({
 			items: [],
 			isAvailable: true,
@@ -163,58 +147,64 @@ describe("Chat cancel ordering", () => {
 			configuredDefaultModelName: null,
 			error: null,
 		});
-		adapter.getConversation.mockResolvedValue(conversation());
-		adapter.listConversations.mockResolvedValue([conversation()]);
+
+		renderChat();
+
+		await screen.findByTestId("chat-no-model-guidance-models-link");
+		expect(screen.getByText("No chat model installed yet")).toBeTruthy();
+		expect(screen.getByText("Install a GGUF model to start chatting locally.")).toBeTruthy();
 	});
 
-	afterEach(() => {
-		cleanup();
-	});
-
-	it("aborts the local stream before issuing the server cancel request", async () => {
-		let capturedSignal: AbortSignal | undefined;
-		let releaseStream: (() => void) | undefined;
-		const streamGate = new Promise<void>((resolve) => {
-			releaseStream = resolve;
-		});
-		adapter.sendMessage.mockImplementation((_request, signal) => {
-			capturedSignal = signal;
-			signal.addEventListener("abort", () => releaseStream?.(), { once: true });
-			return {
-				async *[Symbol.asyncIterator](): AsyncIterator<NodeChatStreamEventDto> {
-					yield deltaEvent();
-					await streamGate;
+	it("hides the guidance once a local chat-capable model is installed", async () => {
+		listLocalModelsQueryFn.mockResolvedValue({
+			items: [
+				{
+					modelName: "llama3",
+					kind: "Chat",
+					detectedKind: "Chat",
+					capabilities: [],
+					isSelected: true,
+					isReasoningCapable: false,
+					isToolCapable: false,
+					isOverridden: false,
 				},
-			};
+			],
+			isAvailable: true,
+			selectedModelName: "llama3",
+			configuredDefaultModelName: "llama3",
+			error: null,
 		});
 
-		// Record whether the local stream was already aborted at the moment the server cancel REST call fired.
-		let abortedWhenCancelCalled: boolean | undefined;
-		adapter.cancelMessage.mockImplementation(async () => {
-			abortedWhenCancelCalled = capturedSignal?.aborted ?? false;
+		renderChat();
+
+		await waitFor(() => expect(screen.queryByTestId("chat-model-selector-trigger")).toBeTruthy());
+		expect(screen.queryByTestId("chat-no-model-guidance-models-link")).toBeNull();
+	});
+
+	it("hides the guidance when a cloud provider is signed in even without a local chat model", async () => {
+		listLocalModelsQueryFn.mockResolvedValue({
+			items: [
+				{
+					modelName: "gpt-5.1",
+					provider: "CodexOAuth",
+					kind: "Chat",
+					detectedKind: "Chat",
+					capabilities: [],
+					isSelected: false,
+					isReasoningCapable: true,
+					isToolCapable: true,
+					isOverridden: false,
+				},
+			],
+			isAvailable: true,
+			selectedModelName: null,
+			configuredDefaultModelName: null,
+			error: null,
 		});
 
-		const { queryClient } = renderChat();
+		renderChat();
 
-		await screen.findByTestId("conversation-item-conversation-1");
-		const input = await screen.findByTestId("chat-input");
-		fireEvent.change(input, { target: { value: "hello" } });
-		fireEvent.click(screen.getByTestId("chat-send-button"));
-
-		// The stream is open and has delivered its first event, so the send-button is now the in-flight Stop button.
-		await waitFor(() => expect(adapter.sendMessage).toHaveBeenCalledTimes(1));
-		await waitFor(() => expect(queryClient.getQueryData(nodeChatQueryKeys.conversation("conversation-1"))).toBeDefined());
-		expect(capturedSignal?.aborted).toBe(false);
-
-		// Click Stop → handleCancel: it must abort the local stream FIRST, then fire the best-effort server cancel.
-		fireEvent.click(screen.getByTestId("chat-send-button"));
-
-		await waitFor(() => expect(adapter.cancelMessage).toHaveBeenCalledTimes(1));
-		expect(abortedWhenCancelCalled).toBe(true);
-		expect(capturedSignal?.aborted).toBe(true);
-
-		// Let the aborted iterator unwind so the streaming loop's finally block runs.
-		releaseStream?.();
-		await waitFor(() => expect(adapter.getConversation).toHaveBeenCalled());
+		await waitFor(() => expect(screen.queryByTestId("chat-model-selector-trigger")).toBeTruthy());
+		expect(screen.queryByTestId("chat-no-model-guidance-models-link")).toBeNull();
 	});
 });

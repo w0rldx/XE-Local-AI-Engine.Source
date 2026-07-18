@@ -14,7 +14,7 @@ import { useTranslation } from "react-i18next";
 
 import { cx, display } from "@/features/chat/components/ModelSelectorCard.helpers";
 import type { ModelOption } from "@/features/chat/models/ChatModels";
-import { localDefaultModelValue } from "@/features/chat/models/NodeChatModelSelection";
+import { hasNoLocalChatModels } from "@/features/chat/pages/ChatModelOptions";
 import { AZURE_FOUNDRY_PROVIDER } from "@/features/chat/queries/useCodexModelOptions";
 
 import classes from "./ModelSelectorCard.module.css";
@@ -215,7 +215,7 @@ export function ModelSelectorCard({
 	const showSearch = modelOptions.length > 5;
 	// The chat picker is strictly filtered to chat-capable models, so a node whose only installed
 	// models are embedding/unknown shows just the local-default option. Detect that to explain the otherwise-bare list.
-	const hasNoChatModels = modelOptions.every((option) => option.value === localDefaultModelValue);
+	const hasNoChatModels = hasNoLocalChatModels(modelOptions);
 	const reasoningLabel = t("pages.chat.reasoningLabel", "Reasoning");
 	const statusFallback = (option: ModelOption): string =>
 		option.isAvailable ? t("pages.chat.modelAvailable", "Available") : t("pages.chat.modelUnavailable", "Unavailable");

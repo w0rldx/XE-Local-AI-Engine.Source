@@ -1,5 +1,6 @@
 import type { XeLocalAiEngineClientEndpointsLocalModelsV1LocalModelResponse } from "@/core/api/generated";
 import type { ModelOption } from "@/features/chat/models/ChatModels";
+import { localDefaultModelValue } from "@/features/chat/models/NodeChatModelSelection";
 
 // Local alias for the generated REST model response (backend OpenAPI is the single source of truth). Every field
 // is optional on the generated type, so each read below coalesces to the prior default.
@@ -71,4 +72,13 @@ export function resolveLocalDefaultModelCapabilities(models: LocalModelDto[]): {
 		isReasoningModel: resolved?.isReasoningCapable ?? false,
 		isToolCapable: resolved?.isToolCapable ?? false,
 	};
+}
+
+// True when the composer's local model list has resolved to nothing but the synthetic "Local default" entry —
+// i.e. no installed chat-capable GGUF model exists on the node. Shared by ModelSelectorCard (explains an
+// otherwise-bare picker) and the chat page (pre-empts the first-send ModelNotInstalled failure with inline
+// guidance, UX-09). Takes the already-built `modelOptions` list (not the raw DTOs) so both call sites derive
+// from the same array Chat.tsx already computes.
+export function hasNoLocalChatModels(modelOptions: ModelOption[]): boolean {
+	return modelOptions.every((option) => option.value === localDefaultModelValue);
 }
