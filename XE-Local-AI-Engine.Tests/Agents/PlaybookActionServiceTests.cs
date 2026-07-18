@@ -672,7 +672,7 @@ public sealed class PlaybookActionServiceTests
         var actionId = Guid.NewGuid();
         // The eval was recorded when the agent's base instructions differed; recompute against the current instructions
         // no longer matches, so promotion is blocked.
-        var staleFingerprint = PlaybookEvalFingerprint.Compute(actionId, 1, "Older base instructions.", [], [], EvalModelName);
+        var staleFingerprint = PlaybookEvalFingerprint.Compute(actionId, 1, "Older base instructions.", [], [], EvalModelName, EvalModelIdentityToken);
         store.GetByIdAsync(actionId, Arg.Any<CancellationToken>())
              .Returns(CreateSuggestedRecord(agentId, actionId) with
              {
@@ -692,7 +692,7 @@ public sealed class PlaybookActionServiceTests
         var service = CreateService(out var store, out _, agentExists: true);
         var actionId = Guid.NewGuid();
         // The eval was recorded over a golden set that has since changed (the current enabled golden set is empty).
-        var staleFingerprint = PlaybookEvalFingerprint.Compute(actionId, 1, AgentInstructions, [], [GoldenCase(agentId)], EvalModelName);
+        var staleFingerprint = PlaybookEvalFingerprint.Compute(actionId, 1, AgentInstructions, [], [GoldenCase(agentId)], EvalModelName, EvalModelIdentityToken);
         store.GetByIdAsync(actionId, Arg.Any<CancellationToken>())
              .Returns(CreateSuggestedRecord(agentId, actionId) with
              {
@@ -712,7 +712,7 @@ public sealed class PlaybookActionServiceTests
         var service = CreateService(out var store, out _, agentExists: true);
         var actionId = Guid.NewGuid();
         // The eval was recorded when a sibling enabled action existed; the current enabled set no longer contains it.
-        var staleFingerprint = PlaybookEvalFingerprint.Compute(actionId, 1, AgentInstructions, [EnabledRecord(agentId)], [], EvalModelName);
+        var staleFingerprint = PlaybookEvalFingerprint.Compute(actionId, 1, AgentInstructions, [EnabledRecord(agentId)], [], EvalModelName, EvalModelIdentityToken);
         store.GetByIdAsync(actionId, Arg.Any<CancellationToken>())
              .Returns(CreateSuggestedRecord(agentId, actionId) with
              {
@@ -732,7 +732,7 @@ public sealed class PlaybookActionServiceTests
         var service = CreateService(out var store, out _, agentExists: true);
         var actionId = Guid.NewGuid();
         // The eval was recorded against a different eval model than the one configured now.
-        var staleFingerprint = PlaybookEvalFingerprint.Compute(actionId, 1, AgentInstructions, [], [], "some-other-model");
+        var staleFingerprint = PlaybookEvalFingerprint.Compute(actionId, 1, AgentInstructions, [], [], "some-other-model", EvalModelIdentityToken);
         store.GetByIdAsync(actionId, Arg.Any<CancellationToken>())
              .Returns(CreateSuggestedRecord(agentId, actionId) with
              {
@@ -932,11 +932,15 @@ public sealed class PlaybookActionServiceTests
     private const string AgentInstructions = "Instructions.";
     private const string EvalModelName = "test-model";
 
+    // The verified weight-identity token the fake IEvalModelIdentityResolver returns for the eval model. Held constant
+    // (a stable, unswapped model) so a fabricated passing eval's fingerprint matches what the gate recomputes.
+    private const string EvalModelIdentityToken = "gguf-sha256:test-weights";
+
     // The fingerprint the promote gate recomputes for the default CreateService context (fixed agent instructions +
     // model, an empty enabled golden set). Enabled sibling actions vary per test, so they are passed in.
     private static string MatchingFingerprint(Guid actionId, int version, IReadOnlyList<PlaybookActionRecord>? enabledActions = null)
     {
-        return PlaybookEvalFingerprint.Compute(actionId, version, AgentInstructions, enabledActions ?? [], [], EvalModelName);
+        return PlaybookEvalFingerprint.Compute(actionId, version, AgentInstructions, enabledActions ?? [], [], EvalModelName, EvalModelIdentityToken);
     }
 
     private static string PassingEvalResultJson(int version, string fingerprint = "")
@@ -1010,7 +1014,12 @@ public sealed class PlaybookActionServiceTests
         {
             ModelName = EvalModelName
         });
-        return new PlaybookActionService(store, agentStore, goldenStore, actionOptions, evalOptions);
+        // The promote gate folds the eval model's weight identity into the fingerprint. A fixed verified token models a
+        // stable, unchanged model; the fingerprint helpers below pass the same token so a fabricated pass matches.
+        var identityResolver = Substitute.For<IEvalModelIdentityResolver>();
+        identityResolver.ResolveAsync(Arg.Any<string>(), Arg.Any<CancellationToken>())
+                        .Returns(new EvalModelIdentity(EvalModelIdentityToken, IsVerified: true));
+        return new PlaybookActionService(store, agentStore, goldenStore, identityResolver, actionOptions, evalOptions);
     }
 
     private static PlaybookActionInput CreateInput(Guid? agentDefinitionId = null,

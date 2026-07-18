@@ -360,7 +360,10 @@ public sealed class AdaptiveMemoryEndpointTests
         var enabledActions = await serviceProvider.GetRequiredService<IPlaybookActionStore>().ListEnabledByAgentAsync(agentDefinitionId).ConfigureAwait(false);
         var enabledGolden = await serviceProvider.GetRequiredService<IGoldenConversationStore>().ListEnabledByAgentAsync(agentDefinitionId).ConfigureAwait(false);
         var modelName = serviceProvider.GetRequiredService<IOptions<PlaybookEvalOptions>>().Value.ModelName;
-        var fingerprint = PlaybookEvalFingerprint.Compute(current.Id, current.Version, agent.Instructions, enabledActions, enabledGolden, modelName);
+        // Resolve the model identity through the SAME seam the gate uses so the fabricated fingerprint carries the
+        // matching weight-identity token (an uninstalled eval model resolves to the unverified sentinel here).
+        var modelIdentity = await serviceProvider.GetRequiredService<IEvalModelIdentityResolver>().ResolveAsync(modelName).ConfigureAwait(false);
+        var fingerprint = PlaybookEvalFingerprint.Compute(current.Id, current.Version, agent.Instructions, enabledActions, enabledGolden, modelName, modelIdentity.Token);
 
         var eval = new PlaybookEvalResult(Passed: true,
             EvaluatedAtUtc: 1_000,

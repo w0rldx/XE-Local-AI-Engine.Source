@@ -26,6 +26,7 @@ internal sealed class PlaybookEvalService(
     IPlaybookEvalAgentRunner evalAgentRunner,
     IPlaybookEvalJudge evalJudge,
     ILocalModelProviderResolver providerResolver,
+    IEvalModelIdentityResolver modelIdentityResolver,
     TimeProvider timeProvider,
     IOptions<PlaybookEvalOptions> options,
     ILogger<PlaybookEvalService> logger) : IPlaybookEvalService
@@ -44,6 +45,7 @@ internal sealed class PlaybookEvalService(
     private readonly ILogger<PlaybookEvalService> _logger = logger ?? throw new ArgumentNullException(nameof(logger));
     private readonly PlaybookEvalOptions _options = (options ?? throw new ArgumentNullException(nameof(options))).Value;
 
+    private readonly IEvalModelIdentityResolver _modelIdentityResolver = modelIdentityResolver ?? throw new ArgumentNullException(nameof(modelIdentityResolver));
     private readonly IPlaybookActionService _playbookActionService = playbookActionService ?? throw new ArgumentNullException(nameof(playbookActionService));
     private readonly IPlaybookActionStore _playbookActionStore = playbookActionStore ?? throw new ArgumentNullException(nameof(playbookActionStore));
     private readonly ILocalModelProviderResolver _providerResolver = providerResolver ?? throw new ArgumentNullException(nameof(providerResolver));
@@ -86,12 +88,16 @@ internal sealed class PlaybookEvalService(
 
         // Fingerprint the behaviour-affecting inputs over the FULL enabled golden set (before any per-run cap) so the
         // promote gate can detect a base-instruction / sibling-action / golden-set / model change after this eval ran.
+        // The model identity (weight digest) is folded in alongside the name so a same-name weight swap between eval and
+        // promote invalidates the fingerprint; an unresolvable identity records the explicit unverified sentinel.
+        var modelIdentity = await _modelIdentityResolver.ResolveAsync(_options.ModelName, cancellationToken).ConfigureAwait(false);
         var fingerprint = PlaybookEvalFingerprint.Compute(suggested.Id,
             suggested.Version,
             agent.Instructions,
             enabled,
             goldenCases,
-            _options.ModelName);
+            _options.ModelName,
+            modelIdentity.Token);
 
         // Empty golden set never passes (no-regression is unprovable with zero cases) — persist a failing result so the
         // gap is visible (promote stays blocked) rather than silently waved through.
