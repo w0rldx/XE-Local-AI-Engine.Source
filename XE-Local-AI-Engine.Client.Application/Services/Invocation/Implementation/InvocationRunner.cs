@@ -302,6 +302,11 @@ public sealed partial class InvocationRunner : IInvocationRunner
             // authoritative measurement regardless of which path serves the turn.
             var generationDurationMs = (long)stream.GenerationStopwatch.Elapsed.TotalMilliseconds;
 
+            // BE-01: emit cumulative model token usage from the single per-turn finalize point (NOT the per-tool-loop
+            // usage-arrival site, which would double-count across rounds). Content-free — token counts tagged by the
+            // coarse provider dimension, model id, and direction only.
+            RecordTokenUsageMetric(stream, resolvedModel);
+
             if (sendEncrypted)
             {
                 var tokenCounts = stream.UsageSnapshot?.ToTokenCounts() ?? new Dictionary<string, long>(StringComparer.Ordinal);
@@ -646,6 +651,38 @@ public sealed partial class InvocationRunner : IInvocationRunner
             _logger.LogDebug(exception, "Skipping runtime warm for invocation {InvocationId}: could not resolve a local provider for the model.", invocationId);
             return null;
         }
+    }
+
+    /// <summary>
+    ///     Emits the terminal token-usage counter for a completed turn (BE-01). Called once from the shared completion
+    ///     block — never the per-tool-loop usage-arrival site — so a multi-round tool run counts its final usage exactly
+    ///     once. No-op when the model reported no usage. Content-free: only the coarse provider dimension
+    ///     (<see cref="StreamState.ProviderTag" />, local | remote), the resolved model id, and the direction tag ride the
+    ///     metric — never any prompt/completion text.
+    /// </summary>
+    private static void RecordTokenUsageMetric(StreamState stream, string resolvedModel)
+    {
+        if (stream.UsageSnapshot is not { } usage)
+        {
+            return;
+        }
+
+        RecordTokenDirection(stream.ProviderTag, resolvedModel, "input", usage.InputTokens);
+        RecordTokenDirection(stream.ProviderTag, resolvedModel, "output", usage.OutputTokens);
+    }
+
+    private static void RecordTokenDirection(string provider, string model, string direction, int? tokens)
+    {
+        // Skip a null/zero direction so an unreported field adds no zero-valued time series.
+        if (tokens is not > 0)
+        {
+            return;
+        }
+
+        NodeMetrics.ModelTokenUsageTotal.Add(tokens.Value,
+            new KeyValuePair<string, object?>("provider", provider),
+            new KeyValuePair<string, object?>("model", model),
+            new KeyValuePair<string, object?>("direction", direction));
     }
 
     /// <summary>

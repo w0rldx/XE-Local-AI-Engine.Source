@@ -39,6 +39,21 @@ public interface IAgentExecutionLogStore
     ///     number of rows deleted.
     /// </summary>
     Task<int> TrimToMaxPerAgentAsync(int maxPerAgent, CancellationToken cancellationToken = default);
+
+    /// <summary>
+    ///     Aggregates token usage over the durable run envelopes
+    ///     (<see cref="AgentExecutionLogRecordKind.ChatRunEnvelope" /> only — the per-invocation usage ledger), grouped by
+    ///     model name and UTC day, summed with a single set-based GROUP BY (no tracking). The table stores no provider
+    ///     column, so grouping is by model name only. Adaptive-memory diagnostics rows (kind 0) are excluded — they are a
+    ///     separate producer with an incomplete token set (no reasoning/total). The optional half-open range bounds the
+    ///     scan on <c>CreatedAtUtc</c> (unix-ms): <paramref name="fromEpochMsInclusive" /> lower-inclusive,
+    ///     <paramref name="toEpochMsExclusive" /> upper-exclusive; either may be null for an open end. Results are ordered
+    ///     newest day first, then model name. Metadata only — no message content. NOTE: the retention sweep ages rows out
+    ///     (see <c>AgentExecutionLogRetentionOptions</c>), so this only covers the retained horizon.
+    /// </summary>
+    Task<IReadOnlyList<TokenUsageAggregateRecord>> SummarizeTokenUsageAsync(long? fromEpochMsInclusive,
+        long? toEpochMsExclusive,
+        CancellationToken cancellationToken = default);
 }
 
 /// <summary>
@@ -131,3 +146,24 @@ public sealed record AgentExecutionLogInput(
     int? PromptTokens = null,
     int? CompletionTokens = null,
     string? ErrorClass = null);
+
+/// <summary>
+///     One aggregation bucket of run-envelope token usage for a single (model, UTC day) pair. The table has no provider
+///     column, so <see cref="ModelName" /> is the only usage dimension. Token sums are <c>long</c> because a busy day can
+///     exceed <see cref="int" />; a run reporting no usage for a field contributes 0. Metadata only — no message content.
+/// </summary>
+/// <param name="ModelName">Model the runs executed on (the group key; may be empty for an envelope written without one).</param>
+/// <param name="DayStartUtcMs">Unix-ms timestamp of UTC midnight opening the day bucket (the group key, day-truncated).</param>
+/// <param name="RunCount">Number of run-envelope rows in the bucket.</param>
+/// <param name="PromptTokens">Summed prompt/input tokens (missing values counted as 0).</param>
+/// <param name="CompletionTokens">Summed completion/output tokens (missing values counted as 0).</param>
+/// <param name="ReasoningTokens">Summed reasoning tokens (missing values counted as 0).</param>
+/// <param name="TotalTokens">Summed total tokens reported by the model (missing values counted as 0).</param>
+public sealed record TokenUsageAggregateRecord(
+    string ModelName,
+    long DayStartUtcMs,
+    int RunCount,
+    long PromptTokens,
+    long CompletionTokens,
+    long ReasoningTokens,
+    long TotalTokens);

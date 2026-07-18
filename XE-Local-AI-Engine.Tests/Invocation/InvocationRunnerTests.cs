@@ -2,6 +2,7 @@ namespace XE_Local_AI_Engine.Tests.Invocation;
 
 using System.Collections;
 using System.Collections.Concurrent;
+using System.Diagnostics.Metrics;
 using System.Net;
 using System.Reflection;
 using System.Runtime.CompilerServices;
@@ -226,6 +227,78 @@ public sealed class InvocationRunnerTests
         // because the elapsed value is non-deterministic.
         await dispatcher.Received(1)
                         .ReportInvocationCompletedAsync(package.InvocationId, Arg.Is<int?>(10), Arg.Is<int?>(2), Arg.Is<int?>(12), Arg.Is<int?>(static value => value == null), Arg.Any<long?>());
+    }
+
+    [Test]
+    [NotInParallel]
+    public async Task RunAsync_WhenUsageFinalized_EmitsModelTokenUsageCounterByDirection()
+    {
+        // BE-01: the terminal usage-finalize must publish the cumulative model-token counter once per direction on the
+        // shared "XE.Node" meter, tagged provider/model/direction only (content-free). Capture through a real
+        // MeterListener — the same surface the exporter attaches — so a wrong meter, dropped tag, or double-count is
+        // caught. [NotInParallel] keeps a sibling turn's emission out of the capture window.
+        var captured = new ConcurrentBag<(long Value, string? Provider, string? Model, string? Direction)>();
+        using var listener = new MeterListener();
+        listener.InstrumentPublished = (instrument, activeListener) =>
+        {
+            if (string.Equals(instrument.Meter.Name, "XE.Node", StringComparison.Ordinal)
+                && string.Equals(instrument.Name, "model_token_usage_total", StringComparison.Ordinal))
+            {
+                activeListener.EnableMeasurementEvents(instrument);
+            }
+        };
+        listener.SetMeasurementEventCallback<long>((_, measurement, tags, _) =>
+        {
+            string? provider = null;
+            string? model = null;
+            string? direction = null;
+            foreach (var tag in tags)
+            {
+                switch (tag.Key)
+                {
+                    case "provider":
+                        provider = tag.Value as string;
+                        break;
+                    case "model":
+                        model = tag.Value as string;
+                        break;
+                    case "direction":
+                        direction = tag.Value as string;
+                        break;
+                    default:
+                        break;
+                }
+            }
+
+            captured.Add((measurement, provider, model, direction));
+        });
+        listener.Start();
+
+        var sender = new MockHubMessageSender();
+        var runner = CreateRunner(sender, agentUpdates: CreateUpdatesWithUsage((Text: "Hello", Usage: new UsageDetails
+        {
+            InputTokenCount = 10,
+            OutputTokenCount = 2,
+            TotalTokenCount = 12
+        })));
+
+        await RunPlainAsync(runner, RuntimePackageBuilder.Valid().Build());
+
+        listener.Dispose();
+
+        var input = captured.Where(static measurement => measurement.Direction == "input").ToArray();
+        var output = captured.Where(static measurement => measurement.Direction == "output").ToArray();
+
+        // Exactly one increment per direction (finalized once, not per tool-loop round) with the authoritative counts.
+        AssertEx.Equal(expected: 1, input.Length);
+        AssertEx.Equal(expected: 10L, input[0].Value);
+        AssertEx.Equal(expected: 1, output.Length);
+        AssertEx.Equal(expected: 2L, output[0].Value);
+
+        // Bounded, content-free tags: the coarse provider dimension (remote, as the harness warms no local provider) and
+        // a model id — never any prompt/completion text.
+        AssertEx.Equal("remote", input[0].Provider);
+        AssertEx.True(!string.IsNullOrEmpty(input[0].Model), "The usage counter must carry a model tag.");
     }
 
     [Test]

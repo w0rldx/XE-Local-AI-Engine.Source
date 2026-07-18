@@ -11,6 +11,7 @@ using XE_Local_AI_Engine.Client.Persistence.Stores;
 public sealed class AgentExecutionLogStore(NodeChatDbContext dbContext, TimeProvider timeProvider) : IAgentExecutionLogStore
 {
     private const int ChatRunEnvelopeKind = (int)AgentExecutionLogRecordKind.ChatRunEnvelope;
+    private const long MillisecondsPerDay = 86_400_000L;
 
     private readonly NodeChatDbContext _dbContext = dbContext ?? throw new ArgumentNullException(nameof(dbContext));
     private readonly TimeProvider _timeProvider = timeProvider ?? throw new ArgumentNullException(nameof(timeProvider));
@@ -97,6 +98,61 @@ public sealed class AgentExecutionLogStore(NodeChatDbContext dbContext, TimeProv
                                .Where(log => log.CreatedAtUtc < cutoffEpochMs)
                                .ExecuteDeleteAsync(cancellationToken)
                                .ConfigureAwait(false);
+    }
+
+    public async Task<IReadOnlyList<TokenUsageAggregateRecord>> SummarizeTokenUsageAsync(long? fromEpochMsInclusive,
+        long? toEpochMsExclusive,
+        CancellationToken cancellationToken = default)
+    {
+        // Aggregate over the run-envelope ledger only (kind 1): those rows carry the full token set (prompt / completion
+        // / reasoning / total). Memory-diagnostics rows (kind 0) are a separate producer with no reasoning/total and are
+        // excluded. The table has no provider column, so the group key is (model name, UTC day). The day bucket is an
+        // integer division of the unix-ms timestamp — SQLite translates it to a GROUP BY expression, so the whole
+        // aggregation runs set-based server-side with no client-side materialization of individual rows.
+        var query = _dbContext.AgentExecutionLogs
+                              .AsNoTracking()
+                              .Where(log => log.RecordKind == ChatRunEnvelopeKind);
+
+        if (fromEpochMsInclusive is { } from)
+        {
+            query = query.Where(log => log.CreatedAtUtc >= from);
+        }
+
+        if (toEpochMsExclusive is { } to)
+        {
+            query = query.Where(log => log.CreatedAtUtc < to);
+        }
+
+        var buckets = await query
+                           .GroupBy(log => new
+                           {
+                               log.ModelName,
+                               Day = log.CreatedAtUtc / MillisecondsPerDay
+                           })
+                           .Select(group => new
+                           {
+                               group.Key.ModelName,
+                               group.Key.Day,
+                               RunCount = group.Count(),
+                               PromptTokens = group.Sum(log => (long)(log.PromptTokens ?? 0)),
+                               CompletionTokens = group.Sum(log => (long)(log.CompletionTokens ?? 0)),
+                               ReasoningTokens = group.Sum(log => (long)(log.ReasoningTokens ?? 0)),
+                               TotalTokens = group.Sum(log => (long)(log.TotalTokens ?? 0))
+                           })
+                           .OrderByDescending(bucket => bucket.Day)
+                           .ThenBy(bucket => bucket.ModelName)
+                           .ToListAsync(cancellationToken)
+                           .ConfigureAwait(false);
+
+        return buckets
+              .Select(bucket => new TokenUsageAggregateRecord(bucket.ModelName,
+                  bucket.Day * MillisecondsPerDay,
+                  bucket.RunCount,
+                  bucket.PromptTokens,
+                  bucket.CompletionTokens,
+                  bucket.ReasoningTokens,
+                  bucket.TotalTokens))
+              .ToArray();
     }
 
     public async Task<int> TrimToMaxPerAgentAsync(int maxPerAgent, CancellationToken cancellationToken = default)
