@@ -1251,6 +1251,14 @@ export const zXeLocalAiEngineClientServicesChatNodeChatMessagePart = z.object({
 	requiresApproval: z.boolean().nullish(),
 });
 
+export const zXeLocalAiEngineClientServicesChatNodeChatMessageSource = z.object({
+	documentId: z.guid().optional(),
+	chunkId: z.guid().optional(),
+	title: z.string().optional(),
+	section: z.string().nullish(),
+	score: z.number().optional(),
+});
+
 export const zXeLocalAiEngineClientEndpointsLocalChatV1NodeChatMessageResponse = z.object({
 	messageId: z.guid(),
 	conversationId: z.guid(),
@@ -1297,6 +1305,7 @@ export const zXeLocalAiEngineClientEndpointsLocalChatV1NodeChatMessageResponse =
 	agentName: z.string().nullish(),
 	reasoningEffort: z.string().nullish(),
 	generationDurationMs: z.int().nullish(),
+	sources: z.array(zXeLocalAiEngineClientServicesChatNodeChatMessageSource).nullish(),
 });
 
 export const zXeLocalAiEngineClientEndpointsLocalChatV1NodeChatConversationResponse = z.object({

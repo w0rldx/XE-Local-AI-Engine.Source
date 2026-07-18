@@ -10998,6 +10998,13 @@
           "generationDurationMs": {
             "type": "integer",
             "nullable": true
+          },
+          "sources": {
+            "type": "array",
+            "nullable": true,
+            "items": {
+              "$ref": "#/components/schemas/XE_Local_AI_EngineClientServicesChatNodeChatMessageSource"
+            }
           }
         }
       },
@@ -11039,6 +11046,31 @@
           "requiresApproval": {
             "type": "boolean",
             "nullable": true
+          }
+        }
+      },
+      "XE_Local_AI_EngineClientServicesChatNodeChatMessageSource": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "documentId": {
+            "type": "string",
+            "format": "guid"
+          },
+          "chunkId": {
+            "type": "string",
+            "format": "guid"
+          },
+          "title": {
+            "type": "string"
+          },
+          "section": {
+            "type": "string",
+            "nullable": true
+          },
+          "score": {
+            "type": "number",
+            "format": "double"
           }
         }
       },
