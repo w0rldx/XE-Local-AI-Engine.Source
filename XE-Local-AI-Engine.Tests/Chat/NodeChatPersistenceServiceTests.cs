@@ -285,6 +285,79 @@ public sealed class NodeChatPersistenceServiceTests : IDisposable
     }
 
     [Test]
+    public async Task Metadata_RoundTripsSources()
+    {
+        await using var provider = await BuildProviderAsync("sources-roundtrip.sqlite").ConfigureAwait(false);
+        var service = CreateService(provider);
+        var conversation = await service.CreateConversationAsync(new NodeChatCreateConversationRequest("Knowledge sources", "node", CreatedAtUtc: 3400)).ConfigureAwait(false);
+        var assistantMessageId = Guid.NewGuid();
+        var correlation = new NodeChatMessageCorrelation(conversation.ConversationId, assistantMessageId, Guid.NewGuid());
+        var sources = new[]
+        {
+            new NodeChatMessageSource(Guid.NewGuid(), Guid.NewGuid(), "Deployment Runbook", "Rollback", 0.91d),
+            new NodeChatMessageSource(Guid.NewGuid(), Guid.NewGuid(), "FAQ", Section: null, 0.42d)
+        };
+
+        // The knowledge-base sources that grounded the turn are supplied to terminalize (the plain-chat send path
+        // passes the retrieved sources there); they must serialize into metadata_json and reload off the blob.
+        await service.CreateAssistantPlaceholderAsync(new NodeChatCreateAssistantPlaceholderRequest(conversation.ConversationId, assistantMessageId, correlation.RequestId, CreatedAtUtc: 3401, "model-x"))
+                     .ConfigureAwait(false);
+        await service.MarkAssistantStreamingAsync(correlation, updatedAtUtc: 3402).ConfigureAwait(false);
+        await service.TerminalizeAssistantMessageAsync(new NodeChatTerminalizeMessageRequest(correlation,
+                         NodeChatMessageStatusValues.Completed,
+                         UpdatedAtUtc: 3403,
+                         "the answer",
+                         "thinking",
+                         Model: "model-x",
+                         Sources: sources))
+                     .ConfigureAwait(false);
+
+        var loaded = AssertEx.NotNull(await service.GetConversationAsync(conversation.ConversationId).ConfigureAwait(false));
+        var assistant = loaded.Messages.Single(message => message.MessageId == assistantMessageId);
+
+        var roundTripped = AssertEx.NotNull(assistant.Sources);
+        AssertEx.Equal(expected: 2, roundTripped.Count);
+        AssertEx.Equal(sources[0].DocumentId, roundTripped[0].DocumentId);
+        AssertEx.Equal(sources[0].ChunkId, roundTripped[0].ChunkId);
+        AssertEx.Equal("Deployment Runbook", roundTripped[0].Title);
+        AssertEx.Equal("Rollback", roundTripped[0].Section);
+        AssertEx.Equal(0.91d, roundTripped[0].Score);
+        AssertEx.Equal(sources[1].DocumentId, roundTripped[1].DocumentId);
+        AssertEx.Equal(sources[1].ChunkId, roundTripped[1].ChunkId);
+        AssertEx.Equal("FAQ", roundTripped[1].Title);
+        AssertEx.Null(roundTripped[1].Section);
+        AssertEx.Equal(0.42d, roundTripped[1].Score);
+        // The terminalize update must NOT drop the rest of the blob while it writes sources.
+        AssertEx.Equal("the answer", assistant.Content);
+        AssertEx.Equal("thinking", assistant.Reasoning);
+    }
+
+    [Test]
+    public async Task Metadata_LegacyBlobWithoutSources_DeserializesNull()
+    {
+        await using var provider = await BuildProviderAsync("sources-legacy.sqlite").ConfigureAwait(false);
+        var service = CreateService(provider);
+        var conversation = await service.CreateConversationAsync(new NodeChatCreateConversationRequest("Legacy sources", "node", CreatedAtUtc: 3450)).ConfigureAwait(false);
+        var assistantMessageId = Guid.NewGuid();
+        var correlation = new NodeChatMessageCorrelation(conversation.ConversationId, assistantMessageId, Guid.NewGuid());
+        await service.CreateAssistantPlaceholderAsync(new NodeChatCreateAssistantPlaceholderRequest(conversation.ConversationId, assistantMessageId, correlation.RequestId, CreatedAtUtc: 3451))
+                     .ConfigureAwait(false);
+        await service.TerminalizeAssistantMessageAsync(new NodeChatTerminalizeMessageRequest(correlation, NodeChatMessageStatusValues.Completed, UpdatedAtUtc: 3452, "legacy answer",
+                         "legacy reasoning"))
+                     .ConfigureAwait(false);
+
+        // Simulate a blob written before the sources field existed: the Sources key is absent entirely (no migration),
+        // so it must deserialize to null without error.
+        await OverwriteMetadataJsonAsync(provider, assistantMessageId, "{\"Reasoning\":\"legacy reasoning\",\"Model\":null}").ConfigureAwait(false);
+
+        var loaded = AssertEx.NotNull(await service.GetConversationAsync(conversation.ConversationId).ConfigureAwait(false));
+        var assistant = loaded.Messages.Single(message => message.MessageId == assistantMessageId);
+
+        AssertEx.Null(assistant.Sources);
+        AssertEx.Equal("legacy reasoning", assistant.Reasoning);
+    }
+
+    [Test]
     public async Task Metadata_RoundTripsGenerationDurationMs()
     {
         await using var provider = await BuildProviderAsync("generation-duration-roundtrip.sqlite").ConfigureAwait(false);
