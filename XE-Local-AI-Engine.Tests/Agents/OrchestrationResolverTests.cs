@@ -3,12 +3,14 @@ namespace XE_Local_AI_Engine.Tests.Agents;
 using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Options;
 using NSubstitute;
+using XE_Local_AI_Engine.AI.Agent.Tools;
 using XE_Local_AI_Engine.AI.Agent.Tools.Implementation;
 using XE_Local_AI_Engine.Client.Models;
 using XE_Local_AI_Engine.Client.Models.Enums;
 using XE_Local_AI_Engine.Client.Persistence;
 using XE_Local_AI_Engine.Client.Persistence.Stores;
 using XE_Local_AI_Engine.Client.Services.Agents;
+using XE_Local_AI_Engine.Client.Services.Agents.Approval.Implementation;
 using XE_Local_AI_Engine.Client.Services.Agents.Implementation;
 using XE_Local_AI_Engine.Client.Services.Chat;
 using XE_Local_AI_Engine.Client.Services.Chat.Implementation;
@@ -164,6 +166,7 @@ public sealed class OrchestrationResolverTests
             runtimeSettings,
             capabilityResolver,
             new FakeAgentInstructionProvider(),
+            new PermissiveToolApprovalPolicy(),
             NullLogger<OrchestrationResolver>.Instance);
         SeedParticipants(store, triage, specialist);
 
@@ -265,6 +268,7 @@ public sealed class OrchestrationResolverTests
             runtimeSettings,
             capabilityResolver,
             new FakeAgentInstructionProvider(),
+            new PermissiveToolApprovalPolicy(),
             NullLogger<OrchestrationResolver>.Instance);
         SeedParticipants(store, triage, specialist);
 
@@ -296,6 +300,32 @@ public sealed class OrchestrationResolverTests
         AssertEx.Equal(expected: 1, specialistSpec.Tools.Count);
         AssertEx.Equal("GetCurrentTime", specialistSpec.Tools[0].Name);
         AssertEx.Equal(expected: true, specialistSpec.Tools[0].RequiresApproval);
+    }
+
+    [Test]
+    public async Task ResolveAsync_AppliesNodeApprovalPolicyToParticipantTools()
+    {
+        // A node policy must tighten an orchestration participant's tools too, or a node-wide policy is bypassable by
+        // routing through orchestration. Node policy: require approval for the Network category; the specialist allows a
+        // Network tool that ships auto-execute — it must resolve as approval-requiring.
+        var nodePolicy = new NodeToolApprovalPolicy(
+            new Dictionary<ToolCategory, bool> { [ToolCategory.Network] = true },
+            new Dictionary<string, bool>(StringComparer.Ordinal));
+        var triage = CreateDefinition("Triage", modelProfile: ToolCapableModel, allowedTools: ["GetCurrentTime"]);
+        var specialist = CreateDefinition("Specialist", modelProfile: ToolCapableModel, allowedTools: ["mcp__x__y"]);
+        var orchestrator = CreateOrchestrator(ToolCapableModel, triage, [triage, specialist]);
+        var resolver = CreateResolverWithPolicy(out var store,
+            nodePolicy,
+            OfferTool("GetCurrentTime", category: ToolCategory.ReadLocal),
+            OfferTool("mcp__x__y", requiresApproval: false, ToolCategory.Network));
+        SeedParticipants(store, triage, specialist);
+
+        var resolved = await resolver.ResolveAsync(orchestrator, ToolCapableModel).ConfigureAwait(false);
+
+        AssertEx.NotNull(resolved);
+        var specialistSpec = resolved!.Spec.Participants.Single(participant => participant.Key == specialist.Id.ToString("D"));
+        var networkTool = specialistSpec.Tools.Single(tool => tool.Name == "mcp__x__y");
+        AssertEx.Equal(expected: true, networkTool.RequiresApproval);
     }
 
     [Test]
@@ -519,6 +549,7 @@ public sealed class OrchestrationResolverTests
             {
                 BaseScaffold = scaffold
             },
+            new PermissiveToolApprovalPolicy(),
             NullLogger<OrchestrationResolver>.Instance);
     }
 
@@ -564,6 +595,7 @@ public sealed class OrchestrationResolverTests
             runtimeSettings,
             capabilityResolver ?? NonThinkingCapabilityResolver(),
             new FakeAgentInstructionProvider(),
+            new PermissiveToolApprovalPolicy(),
             NullLogger<OrchestrationResolver>.Instance);
     }
 
@@ -606,7 +638,7 @@ public sealed class OrchestrationResolverTests
             RetrievalThreshold = threshold,
             TopK = topK
         });
-        return new OrchestrationResolver(store, playbookStore, offerProvider, ranker, retrievalOptions, runtimeSettings, NonThinkingCapabilityResolver(), new FakeAgentInstructionProvider(), NullLogger<OrchestrationResolver>.Instance);
+        return new OrchestrationResolver(store, playbookStore, offerProvider, ranker, retrievalOptions, runtimeSettings, NonThinkingCapabilityResolver(), new FakeAgentInstructionProvider(), new PermissiveToolApprovalPolicy(), NullLogger<OrchestrationResolver>.Instance);
     }
 
     private static void SeedParticipants(IAgentDefinitionStore store, params AgentDefinitionRecord[] participants)
@@ -673,7 +705,7 @@ public sealed class OrchestrationResolverTests
             UpdatedAtUtc: 10);
     }
 
-    private static AllowedToolDto OfferTool(string name, bool requiresApproval = false)
+    private static AllowedToolDto OfferTool(string name, bool requiresApproval = false, ToolCategory category = ToolCategory.Unknown)
     {
         return new AllowedToolDto
         {
@@ -681,8 +713,41 @@ public sealed class OrchestrationResolverTests
             Name = name,
             Location = ToolLocation.ClientLocal,
             ParameterSchema = "{\"type\":\"object\"}",
-            RequiresApproval = requiresApproval
+            RequiresApproval = requiresApproval,
+            Category = category
         };
+    }
+
+    // Mirrors CreateResolver but wires a caller-supplied node approval policy, so the seam test can prove the node
+    // policy is applied to orchestration participants (every other factory uses the Permissive no-op floor).
+    private static OrchestrationResolver CreateResolverWithPolicy(out IAgentDefinitionStore store,
+        IToolApprovalPolicy toolApprovalPolicy,
+        params AllowedToolDto[] offeredTools)
+    {
+        store = Substitute.For<IAgentDefinitionStore>();
+        var playbookStore = Substitute.For<IPlaybookActionStore>();
+        playbookStore.ListEnabledByAgentAsync(Arg.Any<Guid>(), Arg.Any<CancellationToken>())
+                     .Returns(Task.FromResult<IReadOnlyList<PlaybookActionRecord>>([]));
+        var offerProvider = Substitute.For<ILocalToolOfferProvider>();
+        offerProvider.GetOfferedTools(Arg.Any<string?>()).Returns(callInfo =>
+        {
+            var modelId = callInfo.ArgAt<string?>(0);
+            var capable = modelId is not null && string.Equals(modelId, ToolCapableModel, StringComparison.Ordinal);
+            return capable
+                ? offeredTools
+                : [.. offeredTools.Where(static tool => !string.Equals(tool.Name, CapabilityGatedToolName, StringComparison.Ordinal))];
+        });
+        var runtimeSettings = StubNodeRuntimeSettings.Create().WithToolCapableModels(ToolCapableModel).Build();
+        return new OrchestrationResolver(store,
+            playbookStore,
+            offerProvider,
+            new LexicalPlaybookRetrievalRanker(),
+            Options.Create(new PlaybookRetrievalOptions()),
+            runtimeSettings,
+            NonThinkingCapabilityResolver(),
+            new FakeAgentInstructionProvider(),
+            toolApprovalPolicy,
+            NullLogger<OrchestrationResolver>.Instance);
     }
 
     // A fake ranker recording how many times it was consulted and returning a fixed (deliberately out-of-order)

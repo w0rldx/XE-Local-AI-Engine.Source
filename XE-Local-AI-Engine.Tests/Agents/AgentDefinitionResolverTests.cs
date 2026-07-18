@@ -105,6 +105,76 @@ public sealed class AgentDefinitionResolverTests
     }
 
     [Test]
+    public async Task ResolveAsync_DefaultAssistant_AppliesNodeApprovalPolicyToWholeOffer()
+    {
+        // The mode-off Default Assistant takes the whole offer, and the node policy tightens it too — a node-wide policy
+        // is not bypassable by plain mode-off chat. Node policy: require approval for the ReadLocal category.
+        var nodePolicy = new NodeToolApprovalPolicy(
+            new Dictionary<ToolCategory, bool> { [ToolCategory.ReadLocal] = true },
+            new Dictionary<string, bool>(StringComparer.Ordinal));
+        var resolver = CreateResolverWithPolicy(out var store,
+            nodePolicy,
+            OfferTool("GetCurrentTime", category: ToolCategory.ReadLocal),
+            OfferTool("Calculate", category: ToolCategory.ReadLocal));
+        var defaultAssistant = CreateDefinition(AgentDefaults.DefaultAgentName, allowedTools: []) with
+        {
+            Source = AgentDefinitionSource.Seeded,
+            SeedSlug = AgentDefaults.DefaultAgentSeedSlug
+        };
+        store.GetByIdAsync(defaultAssistant.Id, Arg.Any<CancellationToken>()).Returns(defaultAssistant);
+
+        var resolved = await resolver.ResolveAsync(defaultAssistant.Id, "qwen3:8b").ConfigureAwait(false);
+
+        AssertEx.NotNull(resolved);
+        AssertEx.Equal(expected: 2, resolved!.AllowedTools.Count); // whole offer preserved
+        AssertEx.True(resolved.AllowedTools.All(tool => tool.RequiresApproval),
+            "A node ReadLocal tightening must apply to the mode-off Default Assistant's whole offer.");
+    }
+
+    [Test]
+    public async Task ResolveAsync_DefaultAssistant_WhenNoNodePolicy_OfferAndConfigHashByteIdentical()
+    {
+        // Identity floor: with the Permissive (no node policy) floor, the Default Assistant's whole offer is unchanged —
+        // each tool keeps its own catalog RequiresApproval AND the runtime-package config hash matches a package built
+        // from the raw offer. Proves the mode-off path is byte-identical to the pre-OPP-03 path when unconfigured.
+        var builder = new LocalChatRuntimePackageBuilder();
+        var mcp = OfferTool("mcp__x__y", requiresApproval: true, ToolCategory.Network);
+        var clock = OfferTool("GetCurrentTime", category: ToolCategory.ReadLocal);
+        var resolver = CreateResolver(out var store, mcp, clock);
+        var defaultAssistant = CreateDefinition(AgentDefaults.DefaultAgentName, allowedTools: []) with
+        {
+            Source = AgentDefinitionSource.Seeded,
+            SeedSlug = AgentDefaults.DefaultAgentSeedSlug
+        };
+        store.GetByIdAsync(defaultAssistant.Id, Arg.Any<CancellationToken>()).Returns(defaultAssistant);
+
+        var resolved = await resolver.ResolveAsync(defaultAssistant.Id, ToolCapableModel).ConfigureAwait(false);
+
+        AssertEx.NotNull(resolved);
+        // Flags are identity: MCP stays true, the read-only clock stays false — no node tightening.
+        AssertEx.Equal(expected: true, resolved!.AllowedTools.Single(tool => tool.Name == "mcp__x__y").RequiresApproval);
+        AssertEx.Equal(expected: false, resolved.AllowedTools.Single(tool => tool.Name == "GetCurrentTime").RequiresApproval);
+
+        var resolvedPackage = builder.Build(new LocalChatRuntimePackageRequest(Guid.NewGuid(),
+            Guid.NewGuid(),
+            resolved.ResolvedSystemPrompt,
+            [],
+            resolved.ModelProfile,
+            resolved.AgentDefinitionVersion,
+            AllowedTools: resolved.AllowedTools,
+            ReasoningEffort: resolved.ReasoningEffort));
+        var rawOfferPackage = builder.Build(new LocalChatRuntimePackageRequest(Guid.NewGuid(),
+            Guid.NewGuid(),
+            resolved.ResolvedSystemPrompt,
+            [],
+            resolved.ModelProfile,
+            resolved.AgentDefinitionVersion,
+            AllowedTools: [mcp, clock],
+            ReasoningEffort: resolved.ReasoningEffort));
+        AssertEx.Equal(rawOfferPackage.ConfigHash, resolvedPackage.ConfigHash);
+    }
+
+    [Test]
     public async Task ResolveAsync_WhenDefaultAssistant_DoesNotGetSpawnSubAgent()
     {
         // spawn_subagent is profile-opt-in only: even though it is offered to a tool-capable model, the mode-off Default
