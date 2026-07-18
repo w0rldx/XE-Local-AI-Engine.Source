@@ -1335,6 +1335,21 @@ public sealed class InvocationRunnerTests
     }
 
     [Test]
+    public async Task ResolveToolCallCardId_MatchesTheStreamingLoopSemantics_ForAllCallIdShapes()
+    {
+        await Task.CompletedTask;
+
+        // The approval lifecycle and the streaming tool-call lifecycle must resolve the SAME card id for a call so the
+        // browser attaches the Approve/Deny controls to the matching card. Both go through this helper, so a present
+        // CallId wins, a null CallId falls back to the tool name, and — the previously-divergent case — a non-null
+        // EMPTY-STRING CallId resolves to the same empty string on both paths rather than one using the tool name.
+        AssertEx.Equal("call-1", InvocationRunner.ResolveToolCallCardId("call-1", "run_in_agent_home"));
+        AssertEx.Equal("run_in_agent_home", InvocationRunner.ResolveToolCallCardId(callId: null, "run_in_agent_home"));
+        AssertEx.Equal(string.Empty, InvocationRunner.ResolveToolCallCardId(string.Empty, "run_in_agent_home"));
+        AssertEx.Equal(string.Empty, InvocationRunner.ResolveToolCallCardId(callId: null, toolName: null));
+    }
+
+    [Test]
     public async Task RunAsync_WhenStreamStallsBeyondIdleTimeout_MapsTimeoutFailure()
     {
         var sender = new MockHubMessageSender();
