@@ -2002,12 +2002,13 @@ export type XeLocalAiEngineClientEndpointsLocalChatV1ResolveToolApprovalResponse
 export type XeLocalAiEngineClientEndpointsAgentsV1AgentUsageSummaryResponse = {
 	items: Array<XeLocalAiEngineClientEndpointsAgentsV1AgentUsageSummaryBucketResponse>;
 	totals: XeLocalAiEngineClientEndpointsAgentsV1AgentUsageSummaryTotalsResponse;
-	groupedByModelOnly: boolean;
+	byProvider: Array<XeLocalAiEngineClientEndpointsAgentsV1AgentUsageProviderTotalsResponse>;
 	retentionDays: number;
 };
 
 export type XeLocalAiEngineClientEndpointsAgentsV1AgentUsageSummaryBucketResponse = {
 	modelName: string;
+	provider: string;
 	dayStartUtcMs: number;
 	runCount: number;
 	promptTokens: number;
@@ -2017,6 +2018,15 @@ export type XeLocalAiEngineClientEndpointsAgentsV1AgentUsageSummaryBucketRespons
 };
 
 export type XeLocalAiEngineClientEndpointsAgentsV1AgentUsageSummaryTotalsResponse = {
+	runCount: number;
+	promptTokens: number;
+	completionTokens: number;
+	reasoningTokens: number;
+	totalTokens: number;
+};
+
+export type XeLocalAiEngineClientEndpointsAgentsV1AgentUsageProviderTotalsResponse = {
+	provider: string;
 	runCount: number;
 	promptTokens: number;
 	completionTokens: number;

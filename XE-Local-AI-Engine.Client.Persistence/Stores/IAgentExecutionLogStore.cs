@@ -43,17 +43,42 @@ public interface IAgentExecutionLogStore
     /// <summary>
     ///     Aggregates token usage over the durable run envelopes
     ///     (<see cref="AgentExecutionLogRecordKind.ChatRunEnvelope" /> only — the per-invocation usage ledger), grouped by
-    ///     model name and UTC day, summed with a single set-based GROUP BY (no tracking). The table stores no provider
-    ///     column, so grouping is by model name only. Adaptive-memory diagnostics rows (kind 0) are excluded — they are a
-    ///     separate producer with an incomplete token set (no reasoning/total). The optional half-open range bounds the
-    ///     scan on <c>CreatedAtUtc</c> (unix-ms): <paramref name="fromEpochMsInclusive" /> lower-inclusive,
-    ///     <paramref name="toEpochMsExclusive" /> upper-exclusive; either may be null for an open end. Results are ordered
-    ///     newest day first, then model name. Metadata only — no message content. NOTE: the retention sweep ages rows out
-    ///     (see <c>AgentExecutionLogRetentionOptions</c>), so this only covers the retained horizon.
+    ///     model name, fine-grained <see cref="AgentUsageProviders">provider</see>, and UTC day, summed with a single
+    ///     set-based GROUP BY (no tracking). Adaptive-memory diagnostics rows (kind 0) are excluded — they are a separate
+    ///     producer with an incomplete token set (no reasoning/total). The optional half-open range bounds the scan on
+    ///     <c>CreatedAtUtc</c> (unix-ms): <paramref name="fromEpochMsInclusive" /> lower-inclusive,
+    ///     <paramref name="toEpochMsExclusive" /> upper-exclusive; either may be null for an open end. Buckets are ordered
+    ///     newest day first, then provider, then model name. The grand totals and the per-provider rollup are folded from
+    ///     these buckets by the caller (the mapper). Metadata only — no message content. NOTE: the retention sweep ages
+    ///     rows out (see <c>AgentExecutionLogRetentionOptions</c>), so this only covers the retained horizon.
     /// </summary>
     Task<IReadOnlyList<TokenUsageAggregateRecord>> SummarizeTokenUsageAsync(long? fromEpochMsInclusive,
         long? toEpochMsExclusive,
         CancellationToken cancellationToken = default);
+}
+
+/// <summary>
+///     Canonical, lowercase values of the fine-grained runtime-provider dimension carried on run-envelope rows and
+///     surfaced by the usage summary. Non-sensitive category labels (stored plaintext like the model name). The write
+///     path classifies the turn's runtime into one of these; <see cref="Unknown" /> is the backfill default for rows that
+///     predate the dimension and the fallback when a turn's provider cannot be resolved.
+/// </summary>
+public static class AgentUsageProviders
+{
+    /// <summary>The default local runtime (llama.cpp / llama-server).</summary>
+    public const string Local = "local";
+
+    /// <summary>The gated secondary local runtime (Ollama).</summary>
+    public const string Ollama = "ollama";
+
+    /// <summary>The Codex (ChatGPT OAuth) cloud provider.</summary>
+    public const string Codex = "codex";
+
+    /// <summary>The Azure AI Foundry cloud provider.</summary>
+    public const string Azure = "azure";
+
+    /// <summary>Backfill default / unresolved-provider fallback.</summary>
+    public const string Unknown = "unknown";
 }
 
 /// <summary>
@@ -99,6 +124,7 @@ public sealed record AgentRunEnvelopeRecord(
     Guid? InvocationId,
     Guid? RequestId,
     string ModelName,
+    string Provider,
     string TerminalStatus,
     bool Success,
     string? FailureCategory,
@@ -148,11 +174,12 @@ public sealed record AgentExecutionLogInput(
     string? ErrorClass = null);
 
 /// <summary>
-///     One aggregation bucket of run-envelope token usage for a single (model, UTC day) pair. The table has no provider
-///     column, so <see cref="ModelName" /> is the only usage dimension. Token sums are <c>long</c> because a busy day can
-///     exceed <see cref="int" />; a run reporting no usage for a field contributes 0. Metadata only — no message content.
+///     One aggregation bucket of run-envelope token usage for a single (model, <see cref="AgentUsageProviders">provider</see>,
+///     UTC day) triple. Token sums are <c>long</c> because a busy day can exceed <see cref="int" />; a run reporting no
+///     usage for a field contributes 0. Metadata only — no message content.
 /// </summary>
-/// <param name="ModelName">Model the runs executed on (the group key; may be empty for an envelope written without one).</param>
+/// <param name="ModelName">Model the runs executed on (part of the group key; may be empty for an envelope written without one).</param>
+/// <param name="Provider">Fine-grained runtime provider that served the runs (part of the group key; see <see cref="AgentUsageProviders" />).</param>
 /// <param name="DayStartUtcMs">Unix-ms timestamp of UTC midnight opening the day bucket (the group key, day-truncated).</param>
 /// <param name="RunCount">Number of run-envelope rows in the bucket.</param>
 /// <param name="PromptTokens">Summed prompt/input tokens (missing values counted as 0).</param>
@@ -161,6 +188,7 @@ public sealed record AgentExecutionLogInput(
 /// <param name="TotalTokens">Summed total tokens reported by the model (missing values counted as 0).</param>
 public sealed record TokenUsageAggregateRecord(
     string ModelName,
+    string Provider,
     long DayStartUtcMs,
     int RunCount,
     long PromptTokens,

@@ -37,6 +37,13 @@ internal sealed class AgentExecutionLogConfiguration : IEntityTypeConfiguration<
         builder.Property(entity => entity.ModelName)
                .HasColumnName("model_name");
 
+        // Fine-grained runtime provider (non-sensitive category label). Non-null with a DB-level default so existing rows
+        // and any envelope written without a resolved provider backfill to 'unknown' — the envelope INSERT omits this
+        // column from its explicit column list, so SQLite applies this default on write.
+        builder.Property(entity => entity.Provider)
+               .HasColumnName("provider")
+               .HasDefaultValue(AgentUsageProviders.Unknown);
+
         builder.Property(entity => entity.ConfigHash)
                .HasColumnName("config_hash");
 

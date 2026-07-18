@@ -14323,7 +14323,7 @@
         "required": [
           "items",
           "totals",
-          "groupedByModelOnly",
+          "byProvider",
           "retentionDays"
         ],
         "properties": {
@@ -14336,8 +14336,11 @@
           "totals": {
             "$ref": "#/components/schemas/XE_Local_AI_EngineClientEndpointsAgentsV1AgentUsageSummaryTotalsResponse"
           },
-          "groupedByModelOnly": {
-            "type": "boolean"
+          "byProvider": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/XE_Local_AI_EngineClientEndpointsAgentsV1AgentUsageProviderTotalsResponse"
+            }
           },
           "retentionDays": {
             "type": "integer",
@@ -14350,6 +14353,7 @@
         "additionalProperties": false,
         "required": [
           "modelName",
+          "provider",
           "dayStartUtcMs",
           "runCount",
           "promptTokens",
@@ -14359,6 +14363,9 @@
         ],
         "properties": {
           "modelName": {
+            "type": "string"
+          },
+          "provider": {
             "type": "string"
           },
           "dayStartUtcMs": {
@@ -14393,6 +14400,39 @@
           "totalTokens"
         ],
         "properties": {
+          "runCount": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "promptTokens": {
+            "type": "integer"
+          },
+          "completionTokens": {
+            "type": "integer"
+          },
+          "reasoningTokens": {
+            "type": "integer"
+          },
+          "totalTokens": {
+            "type": "integer"
+          }
+        }
+      },
+      "XE_Local_AI_EngineClientEndpointsAgentsV1AgentUsageProviderTotalsResponse": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "provider",
+          "runCount",
+          "promptTokens",
+          "completionTokens",
+          "reasoningTokens",
+          "totalTokens"
+        ],
+        "properties": {
+          "provider": {
+            "type": "string"
+          },
           "runCount": {
             "type": "integer",
             "format": "int32"

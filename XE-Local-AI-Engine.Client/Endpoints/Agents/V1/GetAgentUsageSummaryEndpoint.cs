@@ -10,11 +10,10 @@ using XE_Local_AI_Engine.Client.Services.Memory;
 
 /// <summary>
 ///     Read-only token-usage summary over the durable run-envelope ledger (<c>agent_execution_logs</c>, kind 1). Sums
-///     prompt/completion/reasoning/total tokens grouped by model name and UTC day over an optional half-open date range,
-///     newest day first. Metadata ONLY — token counts, no message content, so nothing to redact. The table has no
-///     provider column, so usage is grouped by model id only (the response flags this). Does NOT compute currency cost —
-///     there is no price table; tokens only (a cost table is a follow-up). Only covers the retained horizon (the response
-///     surfaces the retention window). Operator-gated.
+///     prompt/completion/reasoning/total tokens grouped by model name, fine-grained provider, and UTC day over an optional
+///     half-open date range, newest day first, plus a per-provider rollup. Metadata ONLY — token counts, no message
+///     content, so nothing to redact. Does NOT compute currency cost — there is no price table; tokens only (a cost table
+///     is a follow-up). Only covers the retained horizon (the response surfaces the retention window). Operator-gated.
 /// </summary>
 public sealed class GetAgentUsageSummaryEndpoint(
     IAgentExecutionLogStore executionLogStore,
@@ -38,7 +37,7 @@ public sealed class GetAgentUsageSummaryEndpoint(
             {
                 Items = [.. buckets.Select(static bucket => bucket.ToResponse())],
                 Totals = buckets.ToTotals(),
-                GroupedByModelOnly = true,
+                ByProvider = buckets.ToByProvider(),
                 RetentionDays = _retentionOptions.Value.RetentionDays
             },
             ct).ConfigureAwait(false);
