@@ -42,6 +42,10 @@ internal static class AddNodeCoreOptionsExtensions
                .Validate(static options => options.StartupLockTimeout > TimeSpan.Zero, "Startup lock timeout must be greater than zero.")
                .Validate(static options => options.StartupLockPollInterval > TimeSpan.Zero, "Startup lock poll interval must be greater than zero.")
                .ValidateOnStart();
+        builder.Services.AddOptions<NodeDbBackupOptions>()
+               .Bind(configuration.GetSection(NodeDbBackupOptions.SectionName))
+               .Validate(static options => options.RetainCount >= 1, "NodeDbBackup:RetainCount must be at least one.")
+               .ValidateOnStart();
         builder.Services.AddOptions<WorkerShutdownDrainOptions>();
 
         // The single source of truth for the per-node runtime-state directory. Registered first (foundational): the

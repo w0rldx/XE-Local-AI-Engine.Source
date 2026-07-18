@@ -18,6 +18,7 @@ using XE_Local_AI_Engine.Client.Services.Events;
 using XE_Local_AI_Engine.Client.Services.HuggingFace;
 using XE_Local_AI_Engine.Client.Services.Inference;
 using XE_Local_AI_Engine.Client.Services.NodeSettings;
+using XE_Local_AI_Engine.Client.Services.Persistence;
 using XE_Local_AI_Engine.Client.Services.Persistence.Implementation;
 using XE_Local_AI_Engine.Providers.Abstractions;
 using XE_Local_AI_Engine.Providers.Abstractions.Capabilities;
@@ -69,6 +70,7 @@ internal static class AddNodeModelRuntimeExtensions
         builder.Services.AddSingleton<ICertPinStore, CertPinStore>();
         builder.Services.AddSingleton(TimeProvider.System);
         builder.Services.AddSingleton<NodeChatMigrationRecoveryService>();
+        builder.Services.AddSingleton<INodeDbBackupService, NodeDbBackupService>();
 
         // AUD4-08: node SQLite concurrency posture. Resolve the connection-time pragma settings once and (a) publish them
         // to the static raw-open helpers (NodeSqlitePragmas.Configure — the raw-ADO OpenIfNeeded path cannot take injected
