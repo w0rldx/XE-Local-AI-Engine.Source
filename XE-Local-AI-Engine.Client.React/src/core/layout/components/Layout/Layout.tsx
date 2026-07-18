@@ -9,6 +9,7 @@ import { DesktopNavigationBar } from "@/core/layout/components/DesktopNavigation
 import { HeaderBar } from "@/core/layout/components/HeaderBar/HeaderBar";
 import useWindowDimensions from "@/core/layout/hooks/useWindowDimensions";
 import { useDesktopNavigationBarStore } from "@/core/layout/stores/DesktopNavigationBarStore";
+import { ChatConnectionStatusChip } from "@/features/chat/components/ChatConnectionStatusChip";
 import { CpuFallbackBanner } from "@/features/model-fit/components/CpuFallbackBanner";
 import { LlamaCppUpdateBanner } from "@/features/node-settings/components/LlamaCppUpdateBanner";
 
@@ -70,6 +71,8 @@ export function Layout() {
 					</div>
 				</m.div>
 			</div>
+
+			<ChatConnectionStatusChip />
 
 			{import.meta.env.DEV && DevelopmentUi && (
 				<Suspense fallback={null}>
