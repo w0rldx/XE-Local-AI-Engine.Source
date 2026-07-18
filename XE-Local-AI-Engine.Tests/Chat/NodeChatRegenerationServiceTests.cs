@@ -20,6 +20,7 @@ using XE_Local_AI_Engine.Client.Services.Chat.Implementation;
 using XE_Local_AI_Engine.Client.Services.CloudProviders;
 using XE_Local_AI_Engine.Client.Services.Events;
 using XE_Local_AI_Engine.Client.Services.Invocation;
+using XE_Local_AI_Engine.Client.Services.Knowledge;
 using XE_Local_AI_Engine.Client.Services.Memory;
 using XE_Local_AI_Engine.Client.Services.NodeSettings;
 using XE_Local_AI_Engine.Providers.Ollama.Implementation;
@@ -74,6 +75,8 @@ public sealed class NodeChatRegenerationServiceTests : IDisposable
             CreateNodeSettingsStore(),
             CreateLocalDefaultChatModelResolver(),
             CreateMemoryExtractionDispatcher(),
+            Options.Create(new KnowledgeBaseOptions()),
+            CreateScopeFactory(),
             TimeProvider.System,
             new PermissiveToolApprovalPolicy(),
             NullLogger<NodeChatRegenerationService>.Instance);
@@ -107,6 +110,117 @@ public sealed class NodeChatRegenerationServiceTests : IDisposable
         var original = variants.Single(v => v.MessageId == originalId);
         AssertEx.Equal("four", original.Content);
         AssertEx.Equal(NodeChatMessageStatusValues.Completed, original.Status);
+    }
+
+    [Test]
+    public async Task RegenerateAsync_WhenPlainChatWithKnowledgeBase_GroundsAndRecordsSources()
+    {
+        // OPP-05 / UX-04 parity with the send path (NodeChatStreamServiceTests): an opt-in regenerate retrieves KB hits,
+        // inlines them as ONE fenced untrusted context block, and records their provenance as the variant's sources.
+        await using var provider = await BuildProviderAsync("regeneration-kb-grounds.sqlite").ConfigureAwait(false);
+        var persistence = new NodeChatPersistenceService(provider.GetRequiredService<NodeChatPersistenceWriter>());
+        var (conversation, originalId) = await SeedCompletedOriginalAsync(persistence).ConfigureAwait(false);
+
+        var dispatcher = new RegenRecordingDispatcher();
+        var runner = new RegenContextCapturingRunner(dispatcher);
+        var scopeFactory = CreateKnowledgeScopeFactory(KnowledgeHit("Runbook", "Restart the service with the eject command.", score: 0.91));
+        var service = CreateServiceWithScopeFactory(persistence, runner, dispatcher, scopeFactory);
+
+        ChatStreamEvent? completed = null;
+        await foreach (var streamEvent in service.RegenerateAsync(conversation.ConversationId, originalId, reasoningEffort: null, useLocalTools: false, useKnowledgeBase: true)
+                           .ConfigureAwait(false))
+        {
+            if (streamEvent.Type == ChatStreamEventTypes.AssistantCompleted)
+            {
+                completed = streamEvent;
+            }
+        }
+
+        // The fenced KB block reached the rerun's context, ahead of the conversation history.
+        var context = AssertEx.NotNull(runner.LastContext);
+        AssertEx.Contains(context, message => message.Content.Contains(KnowledgeChatContextComposer.Preamble, StringComparison.Ordinal));
+        AssertEx.Contains(context, message => message.Content.Contains("Restart the service with the eject command.", StringComparison.Ordinal));
+
+        // The inlined hits' provenance is persisted on the regenerated variant's metadata (the sources strip).
+        var variantId = AssertEx.NotNull(completed).MessageId;
+        var reloaded = await persistence.GetConversationAsync(conversation.ConversationId).ConfigureAwait(false);
+        var variant = AssertEx.NotNull(reloaded).Messages.Single(message => message.MessageId == variantId);
+        var sources = AssertEx.NotNull(variant.Sources);
+        AssertEx.Equal(expected: 1, sources.Count);
+        AssertEx.Equal("Runbook", sources[0].Title);
+    }
+
+    [Test]
+    public async Task RegenerateAsync_WhenKnowledgeBaseRetrievalEmpty_ProceedsWithoutContextOrSources()
+    {
+        // Degrade gracefully (mirrors the send path): no matching chunks means no KB context and no sources on the
+        // regenerated variant, but the rerun still completes.
+        await using var provider = await BuildProviderAsync("regeneration-kb-empty.sqlite").ConfigureAwait(false);
+        var persistence = new NodeChatPersistenceService(provider.GetRequiredService<NodeChatPersistenceWriter>());
+        var (conversation, originalId) = await SeedCompletedOriginalAsync(persistence).ConfigureAwait(false);
+
+        var dispatcher = new RegenRecordingDispatcher();
+        var runner = new RegenContextCapturingRunner(dispatcher);
+        var scopeFactory = CreateKnowledgeScopeFactory();
+        var service = CreateServiceWithScopeFactory(persistence, runner, dispatcher, scopeFactory);
+
+        ChatStreamEvent? completed = null;
+        await foreach (var streamEvent in service.RegenerateAsync(conversation.ConversationId, originalId, reasoningEffort: null, useLocalTools: false, useKnowledgeBase: true)
+                           .ConfigureAwait(false))
+        {
+            if (streamEvent.Type == ChatStreamEventTypes.AssistantCompleted)
+            {
+                completed = streamEvent;
+            }
+        }
+
+        var context = AssertEx.NotNull(runner.LastContext);
+        AssertEx.False(context.Any(message => message.Content.Contains(KnowledgeChatContextComposer.Preamble, StringComparison.Ordinal)),
+            "no KB context block must be composed when retrieval returns nothing.");
+        var variantId = AssertEx.NotNull(completed).MessageId;
+        var reloaded = await persistence.GetConversationAsync(conversation.ConversationId).ConfigureAwait(false);
+        var variant = AssertEx.NotNull(reloaded).Messages.Single(message => message.MessageId == variantId);
+        AssertEx.Null(variant.Sources);
+    }
+
+    [Test]
+    public async Task RegenerateAsync_WhenCloudEffectiveModelWithKnowledgeBase_WithholdsAndNotifiesByDefault()
+    {
+        // The KB egress gate mirrors the send path: a cloud effective model must NOT receive KB context without the
+        // operator opt-in. The rerun runs without KB context and the user gets a KnowledgeWithheld notice.
+        await using var provider = await BuildProviderAsync("regeneration-kb-cloud.sqlite").ConfigureAwait(false);
+        var persistence = new NodeChatPersistenceService(provider.GetRequiredService<NodeChatPersistenceWriter>());
+
+        // The original assistant turn was produced by a Codex cloud model, so the regenerate resolves that cloud model.
+        const string CloudModel = "gpt-5.5";
+        var conversation = await persistence.CreateConversationAsync(new NodeChatCreateConversationRequest("Regen", "node", CreatedAtUtc: 10)).ConfigureAwait(false);
+        await persistence.PersistUserMessageAsync(new NodeChatPersistUserMessageRequest(conversation.ConversationId, Guid.NewGuid(), "how do I restart the service?", CreatedAtUtc: 11)).ConfigureAwait(false);
+        var originalId = Guid.NewGuid();
+        var originalCorrelation = new NodeChatMessageCorrelation(conversation.ConversationId, originalId, Guid.NewGuid());
+        await persistence.CreateAssistantPlaceholderAsync(new NodeChatCreateAssistantPlaceholderRequest(conversation.ConversationId, originalId, originalCorrelation.RequestId, CreatedAtUtc: 12, CloudModel))
+                         .ConfigureAwait(false);
+        await persistence.TerminalizeAssistantMessageAsync(new NodeChatTerminalizeMessageRequest(originalCorrelation, NodeChatMessageStatusValues.Completed, UpdatedAtUtc: 13, "eject it", Model: CloudModel))
+                         .ConfigureAwait(false);
+
+        var dispatcher = new RegenRecordingDispatcher();
+        var runner = new RegenContextCapturingRunner(dispatcher);
+        var scopeFactory = CreateKnowledgeScopeFactory(KnowledgeHit("Runbook", "secret runbook body", score: 0.9));
+        var service = CreateServiceWithScopeFactory(persistence, runner, dispatcher, scopeFactory, allowCloudModelAccess: false);
+
+        var events = new List<ChatStreamEvent>();
+        await foreach (var streamEvent in service.RegenerateAsync(conversation.ConversationId, originalId, reasoningEffort: null, useLocalTools: false, useKnowledgeBase: true)
+                           .ConfigureAwait(false))
+        {
+            events.Add(streamEvent);
+        }
+
+        var context = AssertEx.NotNull(runner.LastContext);
+        AssertEx.False(context.Any(message => message.Content.Contains(KnowledgeChatContextComposer.Preamble, StringComparison.Ordinal)),
+            "the KB context block must not be composed for a cloud model without opt-in.");
+        AssertEx.False(context.Any(message => message.Content.Contains("secret runbook body", StringComparison.Ordinal)),
+            "a cloud model must not receive KB content without opt-in.");
+        AssertEx.Contains(events, streamEvent => streamEvent.Type == ChatStreamEventTypes.AssistantNotice
+                                                 && streamEvent.NoticeKind == nameof(TurnNoticeKind.KnowledgeWithheld));
     }
 
     [Test]
@@ -147,6 +261,8 @@ public sealed class NodeChatRegenerationServiceTests : IDisposable
             // Resolver reports no installed GGUF chat model (null).
             CreateLocalDefaultChatModelResolver(resolved: null, echoPersistedDefault: false),
             CreateMemoryExtractionDispatcher(),
+            Options.Create(new KnowledgeBaseOptions()),
+            CreateScopeFactory(),
             TimeProvider.System,
             new PermissiveToolApprovalPolicy(),
             NullLogger<NodeChatRegenerationService>.Instance);
@@ -213,6 +329,8 @@ public sealed class NodeChatRegenerationServiceTests : IDisposable
             CreateNodeSettingsStore(),
             CreateLocalDefaultChatModelResolver(),
             CreateMemoryExtractionDispatcher(),
+            Options.Create(new KnowledgeBaseOptions()),
+            CreateScopeFactory(),
             TimeProvider.System,
             new PermissiveToolApprovalPolicy(),
             NullLogger<NodeChatRegenerationService>.Instance);
@@ -289,6 +407,8 @@ public sealed class NodeChatRegenerationServiceTests : IDisposable
             CreateNodeSettingsStore(),
             CreateLocalDefaultChatModelResolver(),
             CreateMemoryExtractionDispatcher(),
+            Options.Create(new KnowledgeBaseOptions()),
+            CreateScopeFactory(),
             TimeProvider.System,
             new PermissiveToolApprovalPolicy(),
             NullLogger<NodeChatRegenerationService>.Instance);
@@ -366,6 +486,8 @@ public sealed class NodeChatRegenerationServiceTests : IDisposable
             CreateNodeSettingsStore(),
             CreateLocalDefaultChatModelResolver(),
             CreateMemoryExtractionDispatcher(),
+            Options.Create(new KnowledgeBaseOptions()),
+            CreateScopeFactory(),
             TimeProvider.System,
             new PermissiveToolApprovalPolicy(),
             NullLogger<NodeChatRegenerationService>.Instance);
@@ -446,6 +568,8 @@ public sealed class NodeChatRegenerationServiceTests : IDisposable
             CreateNodeSettingsStore(),
             CreateLocalDefaultChatModelResolver(),
             CreateMemoryExtractionDispatcher(),
+            Options.Create(new KnowledgeBaseOptions()),
+            CreateScopeFactory(),
             TimeProvider.System,
             new PermissiveToolApprovalPolicy(),
             NullLogger<NodeChatRegenerationService>.Instance);
@@ -504,6 +628,8 @@ public sealed class NodeChatRegenerationServiceTests : IDisposable
             CreateNodeSettingsStore(),
             CreateLocalDefaultChatModelResolver(),
             CreateMemoryExtractionDispatcher(),
+            Options.Create(new KnowledgeBaseOptions()),
+            CreateScopeFactory(),
             TimeProvider.System,
             new PermissiveToolApprovalPolicy(),
             NullLogger<NodeChatRegenerationService>.Instance);
@@ -557,6 +683,8 @@ public sealed class NodeChatRegenerationServiceTests : IDisposable
             CreateNodeSettingsStore(),
             CreateLocalDefaultChatModelResolver(),
             CreateMemoryExtractionDispatcher(),
+            Options.Create(new KnowledgeBaseOptions()),
+            CreateScopeFactory(),
             TimeProvider.System,
             new PermissiveToolApprovalPolicy(),
             NullLogger<NodeChatRegenerationService>.Instance);
@@ -627,6 +755,8 @@ public sealed class NodeChatRegenerationServiceTests : IDisposable
             CreateNodeSettingsStore(),
             CreateLocalDefaultChatModelResolver(),
             CreateMemoryExtractionDispatcher(),
+            Options.Create(new KnowledgeBaseOptions()),
+            CreateScopeFactory(),
             TimeProvider.System,
             new PermissiveToolApprovalPolicy(),
             NullLogger<NodeChatRegenerationService>.Instance);
@@ -688,6 +818,8 @@ public sealed class NodeChatRegenerationServiceTests : IDisposable
             CreateNodeSettingsStore(),
             CreateLocalDefaultChatModelResolver(),
             CreateMemoryExtractionDispatcher(),
+            Options.Create(new KnowledgeBaseOptions()),
+            CreateScopeFactory(),
             TimeProvider.System,
             new PermissiveToolApprovalPolicy(),
             NullLogger<NodeChatRegenerationService>.Instance);
@@ -740,6 +872,8 @@ public sealed class NodeChatRegenerationServiceTests : IDisposable
             CreateNodeSettingsStore(),
             CreateLocalDefaultChatModelResolver(),
             CreateMemoryExtractionDispatcher(),
+            Options.Create(new KnowledgeBaseOptions()),
+            CreateScopeFactory(),
             TimeProvider.System,
             new PermissiveToolApprovalPolicy(),
             NullLogger<NodeChatRegenerationService>.Instance);
@@ -810,6 +944,8 @@ public sealed class NodeChatRegenerationServiceTests : IDisposable
             CreateNodeSettingsStore(),
             CreateLocalDefaultChatModelResolver(),
             CreateMemoryExtractionDispatcher(),
+            Options.Create(new KnowledgeBaseOptions()),
+            CreateScopeFactory(),
             TimeProvider.System,
             new PermissiveToolApprovalPolicy(),
             NullLogger<NodeChatRegenerationService>.Instance);
@@ -859,6 +995,8 @@ public sealed class NodeChatRegenerationServiceTests : IDisposable
             CreateNodeSettingsStore(),
             CreateLocalDefaultChatModelResolver(),
             CreateMemoryExtractionDispatcher(),
+            Options.Create(new KnowledgeBaseOptions()),
+            CreateScopeFactory(),
             TimeProvider.System,
             new PermissiveToolApprovalPolicy(),
             NullLogger<NodeChatRegenerationService>.Instance);
@@ -900,6 +1038,8 @@ public sealed class NodeChatRegenerationServiceTests : IDisposable
             CreateNodeSettingsStore(),
             CreateLocalDefaultChatModelResolver(),
             CreateMemoryExtractionDispatcher(),
+            Options.Create(new KnowledgeBaseOptions()),
+            CreateScopeFactory(),
             TimeProvider.System,
             new PermissiveToolApprovalPolicy(),
             NullLogger<NodeChatRegenerationService>.Instance);
@@ -962,6 +1102,8 @@ public sealed class NodeChatRegenerationServiceTests : IDisposable
             CreateNodeSettingsStore(),
             CreateLocalDefaultChatModelResolver(),
             CreateMemoryExtractionDispatcher(),
+            Options.Create(new KnowledgeBaseOptions()),
+            CreateScopeFactory(),
             TimeProvider.System,
             new PermissiveToolApprovalPolicy(),
             NullLogger<NodeChatRegenerationService>.Instance);
@@ -1146,6 +1288,8 @@ public sealed class NodeChatRegenerationServiceTests : IDisposable
             CreateNodeSettingsStore(),
             CreateLocalDefaultChatModelResolver(),
             CreateMemoryExtractionDispatcher(),
+            Options.Create(new KnowledgeBaseOptions()),
+            CreateScopeFactory(),
             TimeProvider.System,
             new PermissiveToolApprovalPolicy(),
             NullLogger<NodeChatRegenerationService>.Instance);
@@ -1174,6 +1318,72 @@ public sealed class NodeChatRegenerationServiceTests : IDisposable
         var provider = Substitute.For<ILocalToolOfferProvider>();
         provider.GetOfferedTools(Arg.Any<string?>(), Arg.Any<bool>()).Returns(tools);
         return provider;
+    }
+
+    // The default scope factory: no IKnowledgeSearchService wired, so a regenerate that never touches the KB grounding
+    // path (the pre-existing tests) resolves nothing. Mirrors the send-path test harness (NodeChatStreamServiceTests).
+    private static IServiceScopeFactory CreateScopeFactory(IKnowledgeSearchService? searchService = null)
+    {
+        var factory = Substitute.For<IServiceScopeFactory>();
+        if (searchService is null)
+        {
+            return factory;
+        }
+
+        var provider = Substitute.For<IServiceProvider>();
+        provider.GetService(typeof(IKnowledgeSearchService)).Returns(searchService);
+        var scope = Substitute.For<IServiceScope>();
+        scope.ServiceProvider.Returns(provider);
+        factory.CreateScope().Returns(scope);
+        return factory;
+    }
+
+    // A knowledge search service returning a fixed hit list, wired into a scope factory for the KB grounding tests.
+    private static IServiceScopeFactory CreateKnowledgeScopeFactory(params KnowledgeSearchHit[] hits)
+    {
+        var searchService = Substitute.For<IKnowledgeSearchService>();
+        searchService.SearchAsync(Arg.Any<KnowledgeSearchRequest>(), Arg.Any<CancellationToken>())
+                     .Returns(new KnowledgeSearchResult(hits));
+        return CreateScopeFactory(searchService);
+    }
+
+    private static KnowledgeSearchHit KnowledgeHit(string title, string content, double score)
+    {
+        return new KnowledgeSearchHit(Guid.NewGuid(), Guid.NewGuid(), title, "Section", content, "knowledge-base", score, ChunkIndex: 0, KnowledgeDocumentStatus.Indexed, ServingLastKnownGood: false);
+    }
+
+    // Builds a regeneration service wired with the given scope factory (KB retrieval path) and cloud-egress opt-in,
+    // mirroring the inline construction the other regen tests use. cloud-vs-local is chosen by the original turn's model.
+    private static NodeChatRegenerationService CreateServiceWithScopeFactory(NodeChatPersistenceService persistence,
+        IInvocationRunner runner,
+        RegenRecordingDispatcher dispatcher,
+        IServiceScopeFactory scopeFactory,
+        bool allowCloudModelAccess = false)
+    {
+        return new NodeChatRegenerationService(persistence,
+            new ChatInvocationStatePump(ChatPumpTestFactory.Create(persistence), TimeProvider.System),
+            new ChatTurnResolver(CreateAgentDefinitionResolver(), CreateAgentDefinitionStore(), CreateOrchestrationResolver(), CreateModelClassificationService(), CreateLocalModelProviderResolver(),
+                CreateGgufModelCapabilityResolver(), Substitute.For<IActiveCloudChatClientFactory>(), NullLogger<ChatTurnResolver>.Instance),
+            new NodeChatMutationGuard(persistence),
+            new LocalChatRuntimePackageBuilder(),
+            runner,
+            dispatcher,
+            Options.Create(new LocalChatAgentOptions()),
+            StubNodeRuntimeSettings.Create().Build(),
+            new NodeChatStreamCancellationRegistry(),
+            CreateOfferProvider(),
+            CreateDefaultAgentProvider(),
+            CreateNodeSettingsStore(),
+            CreateLocalDefaultChatModelResolver(),
+            CreateMemoryExtractionDispatcher(),
+            Options.Create(new KnowledgeBaseOptions
+            {
+                AllowCloudModelAccess = allowCloudModelAccess
+            }),
+            scopeFactory,
+            TimeProvider.System,
+            new PermissiveToolApprovalPolicy(),
+            NullLogger<NodeChatRegenerationService>.Instance);
     }
 
     // The default node-settings store: no operator-selected node default, so model resolution falls through to the

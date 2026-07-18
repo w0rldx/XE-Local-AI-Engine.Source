@@ -10,6 +10,7 @@ using XE_Local_AI_Engine.Client.Models.Enums;
 using XE_Local_AI_Engine.Client.Services.Agents;
 using XE_Local_AI_Engine.Client.Services.Events;
 using XE_Local_AI_Engine.Client.Services.Invocation;
+using XE_Local_AI_Engine.Client.Services.Knowledge;
 using XE_Local_AI_Engine.Client.Services.Memory;
 using XE_Local_AI_Engine.Client.Services.NodeSettings;
 
@@ -36,6 +37,8 @@ public sealed class NodeChatRegenerationService(
     INodeSettingsStore nodeSettingsStore,
     ILocalDefaultChatModelResolver localDefaultChatModelResolver,
     IMemoryExtractionDispatcher memoryExtractionDispatcher,
+    IOptions<KnowledgeBaseOptions> knowledgeOptions,
+    IServiceScopeFactory scopeFactory,
     TimeProvider timeProvider,
     IToolApprovalPolicy toolApprovalPolicy,
     ILogger<NodeChatRegenerationService> logger) : INodeChatRegenerationService
@@ -48,16 +51,18 @@ public sealed class NodeChatRegenerationService(
         Guid originalMessageId,
         string? reasoningEffort = null,
         bool useLocalTools = false,
+        bool useKnowledgeBase = false,
         IReadOnlyDictionary<Guid, Guid>? selectedPath = null,
         CancellationToken cancellationToken = default)
     {
-        return RegenerateCoreAsync(conversationId, originalMessageId, reasoningEffort, useLocalTools, selectedPath, cancellationToken);
+        return RegenerateCoreAsync(conversationId, originalMessageId, reasoningEffort, useLocalTools, useKnowledgeBase, selectedPath, cancellationToken);
     }
 
     private async IAsyncEnumerable<ChatStreamEvent> RegenerateCoreAsync(Guid conversationId,
         Guid originalMessageId,
         string? reasoningEffort,
         bool useLocalTools,
+        bool useKnowledgeBase,
         IReadOnlyDictionary<Guid, Guid>? requestedSelectedPath,
         [EnumeratorCancellation]
         CancellationToken cancellationToken = default)
@@ -242,10 +247,48 @@ public sealed class NodeChatRegenerationService(
                                                })
                   ];
 
+            // Knowledge-base grounding parity with the send path (OPP-05 / UX-04): a regenerated plain-chat turn honors
+            // the same opt-in knowledge grounding + cloud-egress gate the send path applies, so a rerun does not silently
+            // lose grounding + its sources strip. Agent mode reaches the KB through the gated search_knowledge_base tool
+            // (offerTools), so inline grounding is plain-chat only — mirroring NodeChatStreamService. The retrieval query
+            // is the user turn the regenerate re-answers (same cutoff anchor as the regeneration context).
+            ConversationMessageDto? knowledgeContext = null;
+            IReadOnlyList<NodeChatMessageSource>? knowledgeSources = null;
+            if (useKnowledgeBase && !offerTools)
+            {
+                // The KB egress gate mirrors attachments: an ORCHESTRATION broadcasts one shared seed to every
+                // participant, so a single cloud participant — even under a local root — forces the withhold too.
+                var anyCloudParticipant = resolution.Orchestration?.AnyParticipantIsCloud ?? false;
+                var turnReachesCloud = resolution.EffectiveModelIsCloud || anyCloudParticipant;
+                var knowledgeAllowed = !turnReachesCloud || knowledgeOptions.Value.AllowCloudModelAccess;
+                if (!knowledgeAllowed)
+                {
+                    // Name the model the notice is about: the effective cloud model when that is what reaches the cloud,
+                    // otherwise the cloud participant whose presence forced the withhold on an otherwise-local root.
+                    var cloudModelForNotice = resolution.EffectiveModelIsCloud
+                        ? resolution.EffectiveModel
+                        : resolution.Orchestration?.FirstCloudParticipantModel ?? resolution.EffectiveModel;
+                    await ReportKnowledgeWithheldAsync(cloudModelForNotice, requestId, cancellationToken).ConfigureAwait(false);
+                }
+                else
+                {
+                    var retrievalQuery = ResolvePrecedingUserTurnContent(conversation, original);
+                    if (!string.IsNullOrWhiteSpace(retrievalQuery))
+                    {
+                        var knowledge = await BuildKnowledgeContextMessageAsync(retrievalQuery, runCancellation.Token).ConfigureAwait(false);
+                        if (knowledge is not null)
+                        {
+                            knowledgeContext = knowledge.Message;
+                            knowledgeSources = knowledge.Sources;
+                        }
+                    }
+                }
+            }
+
             var package = runtimePackageBuilder.Build(new LocalChatRuntimePackageRequest(requestId,
                 conversationId,
                 resolved?.ResolvedSystemPrompt ?? LoadResolvedSystemPrompt(localChatOptions.Value),
-                BuildRegenerationContext(conversation, original, selectedPath),
+                BuildRegenerationContext(conversation, original, selectedPath, knowledgeContext),
                 resolution.EffectiveModel,
                 resolved?.AgentDefinitionVersion ?? AgentDefinitionVersion,
                 LocalChatLoopbackDefaults.ClientNodeId,
@@ -280,7 +323,10 @@ public sealed class NodeChatRegenerationService(
                 sequence,
                 parts,
                 onTerminal,
-                runCancellation.Token);
+                runCancellation.Token,
+                // Knowledge-base sources that grounded this regenerated turn (OPP-05 and UX-04) are stamped onto the
+                // variant metadata by the pump. A rerun that used no knowledge base passes none here.
+                knowledgeSources);
             runTask = RunInvocationAsync(package,
                 placeholder.MessageId,
                 stateChannel.Writer,
@@ -433,7 +479,8 @@ public sealed class NodeChatRegenerationService(
     /// </summary>
     private static IReadOnlyList<ConversationMessageDto> BuildRegenerationContext(NodeChatConversationDto conversation,
         NodeChatPersistedMessageDto original,
-        IReadOnlyDictionary<Guid, Guid>? selectedPath)
+        IReadOnlyDictionary<Guid, Guid>? selectedPath,
+        ConversationMessageDto? knowledgeContext = null)
     {
         var cutoffSequence = ResolvePrecedingUserTurnCutoff(conversation, original);
 
@@ -443,23 +490,30 @@ public sealed class NodeChatRegenerationService(
         // regardless of which member the resolver would otherwise pick.
         var selected = SelectedPathResolver.Resolve(conversation.Messages, selectedPath);
 
+        // The synthetic knowledge-base grounding message (plain-chat only) is prepended so the model reads its content
+        // before the conversation history — mirroring the send path (NodeChatStreamService.BuildConversationContext). It
+        // takes the first slot and the history shifts down by one; null on every non-grounded rerun.
+        var leadingOffset = knowledgeContext is not null ? 1 : 0;
+
         var messages = selected
                        .Where(message => message.Sequence <= cutoffSequence
                                          && !string.IsNullOrWhiteSpace(message.Content)
                                          && string.Equals(message.Status, NodeChatMessageStatusValues.Completed, StringComparison.Ordinal))
                        .OrderBy(static message => message.Sequence)
-                       .Select(static (message, index) => new ConversationMessageDto
+                       .Select((message, index) => new ConversationMessageDto
                        {
                            Id = message.MessageId,
                            Role = string.Equals(message.Role, AssistantRole, StringComparison.OrdinalIgnoreCase) ? MessageRole.Assistant : MessageRole.User,
                            Content = message.Content,
                            Thinking = message.Reasoning,
                            ModelUsed = message.Model,
-                           SortOrder = index
+                           SortOrder = index + leadingOffset
                        })
                        .ToList();
 
-        return messages;
+        return knowledgeContext is null
+            ? messages
+            : [knowledgeContext with { SortOrder = 0 }, .. messages];
     }
 
     /// <summary>
@@ -606,6 +660,79 @@ public sealed class NodeChatRegenerationService(
                            .FirstOrDefault();
     }
 
+    // Emits the KnowledgeWithheld notice when the user opted into knowledge grounding for a regenerated plain-chat turn
+    // but a cloud effective model would have received it without the operator's data-access opt-in. Mirrors the send
+    // path (NodeChatStreamService.ReportKnowledgeWithheldAsync); the rerun still runs, just without knowledge context.
+    private async Task ReportKnowledgeWithheldAsync(string? effectiveModel, Guid requestId, CancellationToken cancellationToken)
+    {
+        cancellationToken.ThrowIfCancellationRequested();
+        await eventDispatcher.ReportTurnNoticeAsync(new TurnNoticePayload
+                             {
+                                 InvocationId = requestId,
+                                 Kind = TurnNoticeKind.KnowledgeWithheld,
+                                 Message =
+                                     "Your knowledge base was not searched for this message because it is handled by a cloud model. Enable cloud data access for this node to allow knowledge-base grounding to reach a cloud model.",
+                                 Detail = effectiveModel
+                             })
+                             .ConfigureAwait(false);
+    }
+
+    // Retrieves the top-k fused knowledge-base hits for the regenerate's question and composes them into ONE fenced
+    // untrusted context message (OPP-05), returning it alongside the provenance of the inlined hits (UX-04). Runs the
+    // hybrid search in a FRESH DI scope (IKnowledgeSearchService is scoped, driving a request-scoped connection) —
+    // byte-for-byte the send path (NodeChatStreamService.BuildKnowledgeContextMessageAsync). Returns null when grounding
+    // produces nothing: a blank/oversized query, no matching chunks, an empty compose, or ANY retrieval failure
+    // (degrades gracefully — the rerun proceeds without knowledge context). The caller applied the cloud-egress gate.
+    private async Task<KnowledgeChatMessage?> BuildKnowledgeContextMessageAsync(string query, CancellationToken cancellationToken)
+    {
+        var validation = KnowledgeQueryLimits.ValidateAndNormalize(query, out var normalizedQuery);
+        if (validation != KnowledgeQueryValidation.Valid)
+        {
+            return null;
+        }
+
+        try
+        {
+            var limit = localChatOptions.Value.KnowledgeChatTopK;
+            var searchRequest = new KnowledgeSearchRequest(normalizedQuery, limit, DocumentId: null, ExpandNeighbors: false);
+
+            await using var scope = scopeFactory.CreateAsyncScope();
+            var searchService = scope.ServiceProvider.GetRequiredService<IKnowledgeSearchService>();
+            var result = await searchService.SearchAsync(searchRequest, cancellationToken).ConfigureAwait(false);
+
+            if (result.Results.Count == 0)
+            {
+                return null;
+            }
+
+            var composed = KnowledgeChatContextComposer.Compose(result.Results, localChatOptions.Value.MaxInlinedKnowledgeChars);
+            if (composed is null)
+            {
+                return null;
+            }
+
+            var message = new ConversationMessageDto
+            {
+                Id = Guid.NewGuid(),
+                Role = MessageRole.User,
+                Content = composed.Context,
+                SortOrder = 0
+            };
+            return new KnowledgeChatMessage(message, composed.Sources);
+        }
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+        {
+            throw;
+        }
+        catch (Exception exception)
+        {
+            // Retrieval is a best-effort supplement: a failure (embedding provider down, connection error, etc.) must
+            // never fail the rerun. Log and proceed with no knowledge context.
+            logger.LogWarning(exception, "Knowledge-base grounding failed for the regenerated plain-chat turn; proceeding without it.");
+            return null;
+        }
+    }
+
     private ChatStreamEvent ToMessageEvent(string type,
         NodeChatMessageCorrelation correlation,
         NodeChatPersistedMessageDto message,
@@ -624,4 +751,8 @@ public sealed class NodeChatRegenerationService(
     {
         return timeProvider.GetUtcNow().ToUnixTimeMilliseconds();
     }
+
+    // The composed knowledge-base context message plus the provenance of the hits inlined into it (so the terminal
+    // variant records them as sources). Mirrors the send path's private KnowledgeChatMessage record.
+    private sealed record KnowledgeChatMessage(ConversationMessageDto Message, IReadOnlyList<NodeChatMessageSource> Sources);
 }

@@ -926,6 +926,9 @@ export function Chat() {
 					assistantMessageId,
 					reasoningEffort,
 					toolsEnabled,
+					// Honor the same opt-in knowledge-base grounding the send path uses, so a regenerated turn keeps
+					// (or drops) KB grounding + its sources strip consistently with the original send (30c).
+					knowledgeBaseEnabled,
 					// Send the active conversation-tree path so the regenerated turn's context follows the selected
 					// branch only. Omit when nothing was navigated so the server keeps the stored map.
 					Object.keys(activeRevisionByGroup).length > 0 ? activeRevisionByGroup : undefined,
@@ -1000,6 +1003,7 @@ export function Chat() {
 		[
 			activeRevisionByGroup,
 			displayConversations,
+			knowledgeBaseEnabled,
 			queryClient,
 			reasoningEffort,
 			refreshConversation,

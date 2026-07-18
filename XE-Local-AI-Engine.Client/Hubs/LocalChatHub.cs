@@ -32,10 +32,11 @@ public sealed class LocalChatHub(
         Guid originalMessageId,
         string? reasoningEffort,
         bool useLocalTools,
+        bool useKnowledgeBase,
         IReadOnlyDictionary<Guid, Guid>? selectedPath,
         CancellationToken cancellationToken)
     {
-        return regenerationService.RegenerateAsync(conversationId, originalMessageId, reasoningEffort, useLocalTools, selectedPath, cancellationToken);
+        return regenerationService.RegenerateAsync(conversationId, originalMessageId, reasoningEffort, useLocalTools, useKnowledgeBase, selectedPath, cancellationToken);
     }
 
     /// <summary>
