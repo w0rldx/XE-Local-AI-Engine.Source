@@ -202,7 +202,10 @@ public sealed class PromoteSuggestedPlaybookActionGateEndpointTests
         var enabledActions = await serviceProvider.GetRequiredService<IPlaybookActionStore>().ListEnabledByAgentAsync(agentDefinitionId).ConfigureAwait(false);
         var enabledGolden = await serviceProvider.GetRequiredService<IGoldenConversationStore>().ListEnabledByAgentAsync(agentDefinitionId).ConfigureAwait(false);
         var modelName = serviceProvider.GetRequiredService<IOptions<PlaybookEvalOptions>>().Value.ModelName;
-        var fingerprint = PlaybookEvalFingerprint.Compute(current.Id, current.Version, agent.Instructions, enabledActions, enabledGolden, modelName);
+        // Resolve the model identity through the SAME seam the gate uses so the fabricated fingerprint carries the
+        // matching weight-identity token (an uninstalled eval model resolves to the unverified sentinel here).
+        var modelIdentity = await serviceProvider.GetRequiredService<IEvalModelIdentityResolver>().ResolveAsync(modelName).ConfigureAwait(false);
+        var fingerprint = PlaybookEvalFingerprint.Compute(current.Id, current.Version, agent.Instructions, enabledActions, enabledGolden, modelName, modelIdentity.Token);
 
         // A passing eval pinned to the action's current Version so the eval gate lets the promote through to the cap check.
         var eval = new PlaybookEvalResult(Passed: true,

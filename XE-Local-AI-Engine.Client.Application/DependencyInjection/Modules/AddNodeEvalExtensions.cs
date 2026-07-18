@@ -29,6 +29,11 @@ internal static class AddNodeEvalExtensions
                                                ?? string.Empty;
                    }
                });
+        // Eval-model weight-identity resolver. Folds a model digest/identity into the eval fingerprint so a same-name
+        // weight swap (Ollama re-pull / llama.cpp GGUF re-download) invalidates a recorded eval pass. Scoped to match
+        // its digest-cache dependency; consumed by BOTH the eval writer (PlaybookEvalService) and the promote gate
+        // (PlaybookActionService), which must resolve identity through the same seam so a verified eval still matches.
+        builder.Services.AddScoped<IEvalModelIdentityResolver, EvalModelIdentityResolver>();
         // Eval judge: deterministic assertion path plus node-local judge path. Singleton because it holds no scoped
         // state and receives the per-run node-local client as a parameter.
         builder.Services.AddSingleton<IPlaybookEvalJudge, DefaultPlaybookEvalJudge>();

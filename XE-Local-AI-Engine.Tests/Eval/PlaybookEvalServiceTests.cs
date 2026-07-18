@@ -415,6 +415,13 @@ public sealed class PlaybookEvalServiceTests
         localModelProvider.CreateChatClient(Arg.Any<LocalModelSelection>()).Returns(Substitute.For<IChatClient>());
         var providerResolver = SingleProviderResolverFactory.Create(localModelProvider);
 
+        // The eval writer folds the model's weight identity into the recorded fingerprint. A fixed verified token models
+        // a stable, unswapped model; the actual value is irrelevant to these orchestration tests (they don't assert the
+        // fingerprint value, only that one is recorded).
+        var identityResolver = Substitute.For<IEvalModelIdentityResolver>();
+        identityResolver.ResolveAsync(Arg.Any<string>(), Arg.Any<CancellationToken>())
+                        .Returns(new EvalModelIdentity("gguf-sha256:test-weights", IsVerified: true));
+
         return new PlaybookEvalService(actionService,
             actionStore,
             agentStore,
@@ -422,6 +429,7 @@ public sealed class PlaybookEvalServiceTests
             runner,
             judge,
             providerResolver,
+            identityResolver,
             TimeProvider.System,
             Options.Create(new PlaybookEvalOptions
             {

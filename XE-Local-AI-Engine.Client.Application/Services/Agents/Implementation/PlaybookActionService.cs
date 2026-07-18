@@ -10,6 +10,7 @@ internal sealed class PlaybookActionService(
     IPlaybookActionStore store,
     IAgentDefinitionStore agentDefinitionStore,
     IGoldenConversationStore goldenConversationStore,
+    IEvalModelIdentityResolver modelIdentityResolver,
     IOptions<PlaybookActionOptions> actionOptions,
     IOptions<PlaybookEvalOptions> evalOptions) : IPlaybookActionService
 {
@@ -17,6 +18,7 @@ internal sealed class PlaybookActionService(
     private readonly IAgentDefinitionStore _agentDefinitionStore = agentDefinitionStore ?? throw new ArgumentNullException(nameof(agentDefinitionStore));
     private readonly PlaybookEvalOptions _evalOptions = (evalOptions ?? throw new ArgumentNullException(nameof(evalOptions))).Value;
     private readonly IGoldenConversationStore _goldenConversationStore = goldenConversationStore ?? throw new ArgumentNullException(nameof(goldenConversationStore));
+    private readonly IEvalModelIdentityResolver _modelIdentityResolver = modelIdentityResolver ?? throw new ArgumentNullException(nameof(modelIdentityResolver));
     private readonly IPlaybookActionStore _store = store ?? throw new ArgumentNullException(nameof(store));
 
     public async Task<PlaybookActionRecord> CreateAsync(PlaybookActionInput input, CancellationToken cancellationToken = default)
@@ -190,12 +192,17 @@ internal sealed class PlaybookActionService(
 
         var enabledActions = await _store.ListEnabledByAgentAsync(agentDefinitionId, cancellationToken).ConfigureAwait(false);
         var enabledGoldenCases = await _goldenConversationStore.ListEnabledByAgentAsync(agentDefinitionId, cancellationToken).ConfigureAwait(false);
+        // Resolve the eval model's current weight identity so a same-name weight swap since the eval ran moves the
+        // fingerprint (forcing a re-eval), and an unresolvable identity records the same unverified sentinel the eval
+        // writer used — the two must be computed from the SAME resolver so a verified eval still matches at promote time.
+        var modelIdentity = await _modelIdentityResolver.ResolveAsync(_evalOptions.ModelName, cancellationToken).ConfigureAwait(false);
         var currentFingerprint = PlaybookEvalFingerprint.Compute(pending.Id,
             pending.Version,
             owningAgent.Instructions,
             enabledActions,
             enabledGoldenCases,
-            _evalOptions.ModelName);
+            _evalOptions.ModelName,
+            modelIdentity.Token);
         if (!string.Equals(currentFingerprint, evalResult.EvaluationFingerprint, StringComparison.Ordinal))
         {
             return new PlaybookPromotionResult(PlaybookPromotionStatus.EvalStale, Record: null);
