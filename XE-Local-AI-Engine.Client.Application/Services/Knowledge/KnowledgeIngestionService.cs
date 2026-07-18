@@ -109,7 +109,13 @@ public sealed class KnowledgeIngestionService : IKnowledgeIngestionService
         }
 
         await SetStatusAsync(documentId, KnowledgeDocumentStatus.Chunking, failureReason: null, cancellationToken).ConfigureAwait(false);
-        var chunking = _chunkingService.Chunk(extraction.Document!);
+
+        // Token-aware sizing (RAG-08): tighten the chunk budget to the resolved embedding model's context window when it
+        // is discoverable, so a chunk and its heading prefix fit the window. Best-effort — a null window (provider down /
+        // no advertised context length) falls back to the configured MaxChunkTokens; a provider failure surfaces at the
+        // embed step below, not here.
+        var embeddingContextWindow = await _embedder.ResolveEmbeddingContextWindowAsync(cancellationToken).ConfigureAwait(false);
+        var chunking = _chunkingService.Chunk(extraction.Document!, embeddingContextWindow);
         if (chunking.Chunks.Count == 0)
         {
             await SetStatusAsync(documentId, KnowledgeDocumentStatus.Failed, EmptyDocumentReason, cancellationToken).ConfigureAwait(false);

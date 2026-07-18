@@ -14,6 +14,15 @@ public interface IKnowledgeChunkEmbedder
     ///     order plus the resolved model name that built them. Returns an empty vector list for empty input.
     /// </summary>
     Task<KnowledgeEmbeddingResult> EmbedAsync(IReadOnlyList<string> chunkContents, CancellationToken cancellationToken);
+
+    /// <summary>
+    ///     Best-effort resolution of the CONFIDENTLY-resolved embedding model's advertised context window (in tokens), for
+    ///     token-aware chunk sizing (RAG-08). Returns <see langword="null" /> when the window is unknown — the provider is
+    ///     unreachable, the resolution is not confident, or the resolved model advertises no context length — so the caller
+    ///     falls back to the configured chunk-token budget. This never throws for a provider/transport failure (chunking
+    ///     must proceed regardless); a genuine caller cancellation still propagates.
+    /// </summary>
+    Task<int?> ResolveEmbeddingContextWindowAsync(CancellationToken cancellationToken);
 }
 
 /// <summary>
