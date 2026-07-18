@@ -22,6 +22,7 @@ using XE_Local_AI_Engine.Client.Services.Auth;
 using XE_Local_AI_Engine.Client.Services.Auth.Implementation;
 using XE_Local_AI_Engine.Client.Services.Chat;
 using XE_Local_AI_Engine.Client.Services.Chat.Implementation;
+using XE_Local_AI_Engine.Client.Services.Persistence;
 using XE_Local_AI_Engine.Client.Services.Persistence.Implementation;
 using XE_Local_AI_Engine.Client.Services.Shutdown;
 #if DEBUG
@@ -400,8 +401,13 @@ static async Task ApplyNodeChatMigrationsAsync(IServiceProvider services)
     ArgumentNullException.ThrowIfNull(services);
 
     await using var scope = services.CreateAsyncScope();
-    var migrationService = scope.ServiceProvider.GetRequiredService<NodeChatMigrationRecoveryService>();
 
+    // BE-06: snapshot the node database before applying pending migrations, in the same scope. Best-effort — a backup
+    // failure is logged and swallowed inside the service, so it can never block migration or brick startup.
+    var backupService = scope.ServiceProvider.GetRequiredService<INodeDbBackupService>();
+    await backupService.BackupBeforeMigrationAsync().ConfigureAwait(false);
+
+    var migrationService = scope.ServiceProvider.GetRequiredService<NodeChatMigrationRecoveryService>();
     await migrationService.MigrateAsync().ConfigureAwait(false);
 }
 
