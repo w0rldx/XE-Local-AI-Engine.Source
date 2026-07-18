@@ -16,10 +16,13 @@ using XE_Local_AI_Engine.Client.Persistence.Cryptography;
 /// </summary>
 /// <remarks>
 ///     Fail-closed: a wrong operator secret yields a KEK that cannot authenticate the GCM tag, so
-///     <see cref="INodeAeadCipher.Decrypt" /> throws <see cref="AuthenticationTagMismatchException" /> and the key is
-///     never silently accepted with garbage material. In practice a wrong/missing secret fails earlier still — the same
-///     operator secret gates the SQLite store — so this path is the last line rather than the only one. This decryptor
-///     is read-only over the KEK material and holds no key state of its own, so it needs no dispose.
+///     <see cref="INodeAeadCipher.Decrypt" /> throws an <see cref="AuthenticationTagMismatchException" />, which this
+///     decryptor re-surfaces as a <see cref="NodeDataProtectionKeyRingDecryptionException" /> (a distinctive
+///     <see cref="CryptographicException" />) so <see cref="NodeDataProtectionKeyRingFailClosedKeyResolver" /> can
+///     hard-fail startup instead of letting Data Protection silently regenerate the ring. The key is never silently
+///     accepted with garbage material. In practice a wrong/missing secret fails earlier still — the same operator secret
+///     gates the SQLite store — so this path is the last line rather than the only one. This decryptor is read-only over
+///     the KEK material and holds no key state of its own, so it needs no dispose.
 /// </remarks>
 public sealed class NodeDataProtectionKeyRingDecryptor : IXmlDecryptor
 {
@@ -36,10 +39,21 @@ public sealed class NodeDataProtectionKeyRingDecryptor : IXmlDecryptor
     {
         ArgumentNullException.ThrowIfNull(encryptedElement);
 
+        // Every failure below is surfaced as NodeDataProtectionKeyRingDecryptionException so the fail-closed key
+        // resolver (NodeDataProtectionKeyRingFailClosedKeyResolver) can tell an undecryptable ENCRYPTED key apart from
+        // an unrelated key failure and hard-fail startup instead of letting Data Protection silently regenerate the ring.
         var valueElement = encryptedElement.Element(NodeDataProtectionKeyRingEncryptor.ValueElementName)
-                           ?? throw new InvalidOperationException(
+                           ?? throw new NodeDataProtectionKeyRingDecryptionException(
                                $"The encrypted key-ring element is missing its <{NodeDataProtectionKeyRingEncryptor.ValueElementName}> child.");
-        var envelope = Convert.FromBase64String((string)valueElement);
+        byte[] envelope;
+        try
+        {
+            envelope = Convert.FromBase64String((string)valueElement);
+        }
+        catch (FormatException formatException)
+        {
+            throw new NodeDataProtectionKeyRingDecryptionException("The encrypted key-ring element is malformed (its value is not valid base64).", formatException);
+        }
 
         var keyProvider = _services.GetRequiredService<INodeDataProtectionKeyProvider>();
         var cipher = _services.GetRequiredService<INodeAeadCipher>();
@@ -48,16 +62,28 @@ public sealed class NodeDataProtectionKeyRingDecryptor : IXmlDecryptor
         var tagSize = cipher.TagSize;
         if (envelope.Length < nonceSize + tagSize)
         {
-            throw new InvalidOperationException("The encrypted key-ring element is malformed (envelope too short).");
+            throw new NodeDataProtectionKeyRingDecryptionException("The encrypted key-ring element is malformed (envelope too short).");
         }
 
         var nonce = envelope.AsSpan(0, nonceSize);
         var tag = envelope.AsSpan(envelope.Length - tagSize, tagSize);
         var ciphertext = envelope.AsSpan(nonceSize, envelope.Length - nonceSize - tagSize);
 
-        // Throws AuthenticationTagMismatchException on a wrong KEK — the fail-closed guarantee. The recovered plaintext
-        // is the key-ring master-key material, so it is zeroed once re-parsed into the element Data Protection consumes.
-        var plaintextBytes = cipher.Decrypt(keyProvider.Key.Span, nonce, ciphertext, tag, NodeDataProtectionKeyRingEncryptor.AssociatedData);
+        // A wrong KEK (wrong/rotated operator secret) fails the AES-GCM tag here — the fail-closed guarantee. Surface it
+        // as our distinctive typed failure (still a CryptographicException) rather than silently accepting garbage. The
+        // recovered plaintext is the key-ring master-key material, so it is zeroed once re-parsed into the element.
+        byte[] plaintextBytes;
+        try
+        {
+            plaintextBytes = cipher.Decrypt(keyProvider.Key.Span, nonce, ciphertext, tag, NodeDataProtectionKeyRingEncryptor.AssociatedData);
+        }
+        catch (CryptographicException cryptographicException) when (cryptographicException is not NodeDataProtectionKeyRingDecryptionException)
+        {
+            throw new NodeDataProtectionKeyRingDecryptionException(
+                "The encrypted key-ring element could not be decrypted with the current node operator secret.",
+                cryptographicException);
+        }
+
         try
         {
             return XElement.Parse(Encoding.UTF8.GetString(plaintextBytes), LoadOptions.PreserveWhitespace);
