@@ -866,6 +866,8 @@ export type XeLocalAiEngineClientEndpointsMcpV1ToolCatalogEntryResponse = {
 	description: string;
 	requiresApproval: boolean;
 	source: string;
+	category: string;
+	effectiveRequiresApproval: boolean;
 };
 
 export type XeLocalAiEngineClientEndpointsMcpV1ListMcpServersResponse = {

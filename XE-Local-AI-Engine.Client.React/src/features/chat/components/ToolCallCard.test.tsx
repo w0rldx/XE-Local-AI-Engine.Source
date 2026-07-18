@@ -8,6 +8,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { ToolCallCard } from "@/features/chat/components/ToolCallCard";
 import type { ChatToolPart } from "@/features/chat/models/ChatModels";
+import type { ToolCatalogEntry } from "@/features/tools/models/ToolCatalogModels";
 
 // The Approve/Deny controls fire the generated resolve-approval mutation; stub its mutationFn so the click wiring can
 // be asserted without a backend. `withResponseValidation` (which the card composes over the mutation) preserves the
@@ -17,6 +18,22 @@ vi.mock("@/core/api/generated/@tanstack/react-query.gen", async (importOriginal)
 	...(await importOriginal<typeof import("@/core/api/generated/@tanstack/react-query.gen")>()),
 	resolveToolApprovalMutation: () => ({ mutationFn: resolveApprovalSpy }),
 }));
+
+// The card resolves the tool's risk class from the shared catalog; mock it so the category badge is deterministic and
+// no real fetch fires. get_time is a ReadLocal auto-executing built-in; anything else falls back to fail-closed Unknown.
+const { useToolCatalogMock } = vi.hoisted(() => ({ useToolCatalogMock: vi.fn() }));
+vi.mock("@/features/tools/queries/useToolCatalog", () => ({ useToolCatalog: useToolCatalogMock }));
+
+const chatCatalog: ToolCatalogEntry[] = [
+	{
+		name: "get_time",
+		description: "Returns the current time.",
+		requiresApproval: false,
+		source: { kind: "builtin", serverSlug: null },
+		category: "ReadLocal",
+		effectiveRequiresApproval: false,
+	},
+];
 
 function renderWithProviders(ui: ReactElement) {
 	const queryClient = new QueryClient({ defaultOptions: { mutations: { retry: false } } });
@@ -34,6 +51,7 @@ function toolPart(overrides: Partial<ChatToolPart> = {}): ChatToolPart {
 describe("ToolCallCard", () => {
 	beforeEach(() => {
 		resolveApprovalSpy.mockClear();
+		useToolCatalogMock.mockReturnValue({ data: chatCatalog, isLoading: false, error: null });
 		Object.defineProperty(window, "matchMedia", {
 			writable: true,
 			value: vi.fn().mockImplementation((query: string) => ({
@@ -49,6 +67,23 @@ describe("ToolCallCard", () => {
 
 	afterEach(() => {
 		cleanup();
+		vi.clearAllMocks();
+	});
+
+	it("badges the tool's category from the catalog (ReadLocal auto-executes)", () => {
+		renderWithProviders(<ToolCallCard part={toolPart({ state: "received", result: "ok" })} />);
+
+		const badge = screen.getByTestId("tool-category-badge-ReadLocal");
+		expect(badge.textContent).toContain("read-only");
+		expect(badge.getAttribute("data-requires-approval")).toBe("false");
+	});
+
+	it("badges a tool absent from the catalog as Unknown (fail-closed to approval)", () => {
+		renderWithProviders(<ToolCallCard part={toolPart({ name: "mystery_tool", state: "waiting" })} />);
+
+		const badge = screen.getByTestId("tool-category-badge-Unknown");
+		expect(badge.textContent).toContain("uncategorized");
+		expect(badge.getAttribute("data-requires-approval")).toBe("true");
 	});
 
 	it("shows the tool name and a live label while requesting", () => {

@@ -33,14 +33,37 @@ export function parseToolCatalogSource(raw: string): ToolCatalogSource {
 	return { kind: "builtin", serverSlug: null };
 }
 
+// A tool's risk class (OPP-03), mirroring the backend ToolCategory enum names. The node-default approval policy keys
+// off this to decide whether a whole class of tools must be approval-gated. "Unknown" is the fail-closed default: a
+// tool with no declared class is treated as approval-requiring.
+export type ToolCategory = "ReadLocal" | "WriteExecute" | "Orchestration" | "Network" | "Unknown";
+
+const TOOL_CATEGORIES: ReadonlySet<ToolCategory> = new Set<ToolCategory>([
+	"ReadLocal",
+	"WriteExecute",
+	"Orchestration",
+	"Network",
+	"Unknown",
+]);
+
+// Parse the backend category name into the typed union. An unrecognized/blank value falls back to "Unknown" so the
+// badge fails closed (treated as approval-requiring) rather than throwing or showing an untranslated raw string.
+export function parseToolCategory(raw: string): ToolCategory {
+	return TOOL_CATEGORIES.has(raw as ToolCategory) ? (raw as ToolCategory) : "Unknown";
+}
+
 // A single catalog entry. requiresApproval is the catalog DEFAULT (MCP tools default ON); a bound agent
 // definition may override it per-tool via its toolApprovals map. Names are the qualified executable names
 // (MCP tools are namespaced mcp__{server}__{tool}) so they can be referenced directly by a definition.
+// category is the tool's risk class; effectiveRequiresApproval is whether the CURRENT node policy gates it (the
+// agent-independent floor an operator sees — a bound agent may tighten further, never loosen it).
 export interface ToolCatalogEntry {
 	readonly name: string;
 	readonly description: string;
 	readonly requiresApproval: boolean;
 	readonly source: ToolCatalogSource;
+	readonly category: ToolCategory;
+	readonly effectiveRequiresApproval: boolean;
 }
 
 const MCP_NAME_PREFIX = "mcp__";

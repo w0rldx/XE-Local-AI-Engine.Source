@@ -37,12 +37,16 @@ const builtinTools: ToolCatalogEntry[] = [
 		description: "Returns the current time.",
 		requiresApproval: false,
 		source: { kind: "builtin", serverSlug: null },
+		category: "ReadLocal",
+		effectiveRequiresApproval: false,
 	},
 	{
 		name: "Calculate",
 		description: "Evaluates arithmetic.",
 		requiresApproval: false,
 		source: { kind: "builtin", serverSlug: null },
+		category: "ReadLocal",
+		effectiveRequiresApproval: false,
 	},
 ];
 
@@ -51,6 +55,8 @@ const mcpTool: ToolCatalogEntry = {
 	description: "Reads a file via MCP.",
 	requiresApproval: true,
 	source: { kind: "mcp", serverSlug: "filesystem-tools" },
+	category: "Network",
+	effectiveRequiresApproval: true,
 };
 
 function renderWithProviders(ui: ReactElement) {

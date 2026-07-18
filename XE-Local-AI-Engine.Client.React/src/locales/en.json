@@ -3073,6 +3073,27 @@
 		"languageMenu": {
 			"tooltip": "Change language"
 		},
+		"toolCategoryBadge": {
+			"label": {
+				"ReadLocal": "read-only",
+				"WriteExecute": "write/execute",
+				"Orchestration": "orchestration",
+				"Network": "network",
+				"Unknown": "uncategorized"
+			},
+			"meaning": {
+				"ReadLocal": "Read-only, node-local tools with no side effects.",
+				"WriteExecute": "Can write files or run commands on the node.",
+				"Orchestration": "Can spawn or drive other agents or models.",
+				"Network": "Reaches an external service outside the node.",
+				"Unknown": "Uncategorized tool of unknown risk class."
+			},
+			"approval": {
+				"byPolicy": "Requires approval under the current node policy.",
+				"always": "Uncategorized tools always require approval (fail-closed).",
+				"auto": "Auto-executes under the current node policy."
+			}
+		},
 		"toolSourceBadge": {
 			"builtin": "built-in",
 			"mcp": "MCP",

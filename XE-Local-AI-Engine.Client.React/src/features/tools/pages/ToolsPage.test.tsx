@@ -22,12 +22,16 @@ const catalogTools: ToolCatalogEntry[] = [
 		description: "Returns the current time.",
 		requiresApproval: false,
 		source: { kind: "builtin", serverSlug: null },
+		category: "ReadLocal",
+		effectiveRequiresApproval: false,
 	},
 	{
 		name: "Calculate",
 		description: "Evaluates arithmetic.",
 		requiresApproval: false,
 		source: { kind: "builtin", serverSlug: null },
+		category: "ReadLocal",
+		effectiveRequiresApproval: false,
 	},
 ];
 

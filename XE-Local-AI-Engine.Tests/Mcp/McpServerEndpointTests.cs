@@ -7,6 +7,7 @@ using System.Text.Json.Serialization;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 using NSubstitute;
+using XE_Local_AI_Engine.AI.Agent.Tools;
 using XE_Local_AI_Engine.Client.Endpoints.Mcp.V1;
 using XE_Local_AI_Engine.Client.Persistence;
 using XE_Local_AI_Engine.Client.Persistence.Stores;
@@ -162,14 +163,16 @@ public sealed class McpServerEndpointTests
                 Name = "GetCurrentTime",
                 Description = "Returns the time.",
                 RequiresApproval = false,
-                Source = "builtin"
+                Source = "builtin",
+                Category = ToolCategory.ReadLocal
             },
             new LocalToolCatalogEntry
             {
                 Name = "mcp__filesystem__read_file",
                 Description = "Reads a file.",
                 RequiresApproval = true,
-                Source = "mcp:filesystem"
+                Source = "mcp:filesystem",
+                Category = ToolCategory.Network
             }
         ]);
         await using var factory = CreateFactory(service, offerProvider);
@@ -180,8 +183,15 @@ public sealed class McpServerEndpointTests
         var body = await ReadJsonAsync<ToolCatalogResponse>(response).ConfigureAwait(false);
 
         AssertEx.Equal(HttpStatusCode.OK, response.StatusCode);
-        AssertEx.ContainsSingle(body.Tools, tool => tool.Name == "GetCurrentTime" && tool.Source == "builtin" && !tool.RequiresApproval);
-        AssertEx.ContainsSingle(body.Tools, tool => tool.Name == "mcp__filesystem__read_file" && tool.Source == "mcp:filesystem" && tool.RequiresApproval);
+        // Each entry carries its ToolCategory name and the effective approval computed through the node policy. With no
+        // node-default tightening configured the policy is identity on the catalog default: the read-only built-in stays
+        // auto-execute, and the always-approval MCP tool stays approval-requiring.
+        AssertEx.ContainsSingle(body.Tools,
+            tool => tool.Name == "GetCurrentTime" && tool.Source == "builtin" && !tool.RequiresApproval
+                    && tool.Category == "ReadLocal" && !tool.EffectiveRequiresApproval);
+        AssertEx.ContainsSingle(body.Tools,
+            tool => tool.Name == "mcp__filesystem__read_file" && tool.Source == "mcp:filesystem" && tool.RequiresApproval
+                    && tool.Category == "Network" && tool.EffectiveRequiresApproval);
     }
 
     [Test]

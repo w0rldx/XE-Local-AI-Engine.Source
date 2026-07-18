@@ -37,12 +37,16 @@ const catalog: ToolCatalogEntry[] = [
 		description: "Returns the current time.",
 		requiresApproval: false,
 		source: { kind: "builtin", serverSlug: null },
+		category: "ReadLocal",
+		effectiveRequiresApproval: false,
 	},
 	{
 		name: "mcp__filesystem-tools__read",
 		description: "Reads a file via MCP.",
 		requiresApproval: true,
 		source: { kind: "mcp", serverSlug: "filesystem-tools" },
+		category: "Network",
+		effectiveRequiresApproval: true,
 	},
 ];
 
@@ -117,6 +121,28 @@ describe("AgentToolSelector", () => {
 		expect(screen.getByTestId("agent-tool-row-mcp__filesystem-tools__read")).toBeTruthy();
 		// MCP tool shows its server source badge.
 		expect(screen.getByText("MCP · filesystem-tools")).toBeTruthy();
+	});
+
+	it("shows each tool's category badge with the correct approval state", () => {
+		renderSelector();
+
+		// ReadLocal built-in: auto-executing (no approval floor).
+		const readLocalBadge = screen.getByTestId("tool-category-badge-ReadLocal");
+		expect(readLocalBadge.textContent).toContain("read-only");
+		expect(readLocalBadge.getAttribute("data-requires-approval")).toBe("false");
+
+		// Network MCP tool: approval-required under node policy.
+		const networkBadge = screen.getByTestId("tool-category-badge-Network");
+		expect(networkBadge.textContent).toContain("network");
+		expect(networkBadge.getAttribute("data-requires-approval")).toBe("true");
+	});
+
+	it("badges a since-removed selected tool as Unknown (fail-closed to approval)", () => {
+		renderSelector({ selectedToolNames: ["mcp__removed-server__tool"] });
+
+		const unknownBadge = screen.getByTestId("tool-category-badge-Unknown");
+		expect(unknownBadge.textContent).toContain("uncategorized");
+		expect(unknownBadge.getAttribute("data-requires-approval")).toBe("true");
 	});
 
 	it("invokes onToggleTool when a tool checkbox is toggled", () => {

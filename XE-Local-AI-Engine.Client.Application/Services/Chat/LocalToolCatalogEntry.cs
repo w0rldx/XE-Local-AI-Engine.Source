@@ -1,5 +1,7 @@
 namespace XE_Local_AI_Engine.Client.Services.Chat;
 
+using XE_Local_AI_Engine.AI.Agent.Tools;
+
 /// <summary>
 ///     A single entry in the node's full tool catalog: a built-in tool or an enabled MCP tool. This is the
 ///     model-agnostic catalog the management/agent-form UI consumes — it lists every tool that exists on the node,
@@ -17,4 +19,11 @@ public sealed record LocalToolCatalogEntry
     public required bool RequiresApproval { get; init; }
 
     public required string Source { get; init; }
+
+    /// <summary>
+    ///     The tool's risk class (OPP-03), carried from its definition-site <c>Category</c>. The UI badges it so an
+    ///     operator can see a tool's class, and the node-default approval policy reads it to compute the effective
+    ///     approval. Defaults to <see cref="ToolCategory.Unknown" /> (fail-closed) for any entry that did not declare one.
+    /// </summary>
+    public ToolCategory Category { get; init; } = ToolCategory.Unknown;
 }
