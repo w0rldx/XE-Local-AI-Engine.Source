@@ -59,13 +59,13 @@ internal sealed class NodeChatMessageCommands(NodeChatPersistenceWriter writer)
     // The run-envelope column list, shared by both write statements below so they stay in lockstep.
     private const string EnvelopeColumns = """
                                            (id, record_kind, schema_version, agent_definition_id, conversation_id, message_id, invocation_id, request_id,
-                                            model_name, config_hash, terminal_status, latency_ms, prompt_tokens, completion_tokens, reasoning_tokens, total_tokens,
+                                            model_name, provider, config_hash, terminal_status, latency_ms, prompt_tokens, completion_tokens, reasoning_tokens, total_tokens,
                                             content_chunk_count, reasoning_chunk_count, trace_id, started_at_utc, success, error_class, created_at_utc)
                                            """;
 
     private const string EnvelopeValues = """
                                           $id, $record_kind, $schema_version, $agent_definition_id, $conversation_id, $message_id, $invocation_id, $request_id,
-                                          $model_name, $config_hash, $terminal_status, $latency_ms, $prompt_tokens, $completion_tokens, $reasoning_tokens, $total_tokens,
+                                          $model_name, $provider, $config_hash, $terminal_status, $latency_ms, $prompt_tokens, $completion_tokens, $reasoning_tokens, $total_tokens,
                                           $content_chunk_count, $reasoning_chunk_count, $trace_id, $started_at_utc, $success, $error_class, $created_at_utc
                                           """;
 
@@ -99,6 +99,7 @@ internal sealed class NodeChatMessageCommands(NodeChatPersistenceWriter writer)
                                                   invocation_id = excluded.invocation_id,
                                                   request_id = excluded.request_id,
                                                   model_name = excluded.model_name,
+                                                  provider = excluded.provider,
                                                   config_hash = excluded.config_hash,
                                                   terminal_status = excluded.terminal_status,
                                                   latency_ms = excluded.latency_ms,
@@ -621,6 +622,7 @@ internal sealed class NodeChatMessageCommands(NodeChatPersistenceWriter writer)
         AddParameter(command, "$invocation_id", envelope.InvocationId);
         AddParameter(command, "$request_id", correlation.RequestId);
         AddParameter(command, "$model_name", model ?? string.Empty);
+        AddParameter(command, "$provider", envelope.Provider);
         AddParameter(command, "$config_hash", string.Empty);
         AddParameter(command, "$terminal_status", terminalStatus);
         AddParameter(command, "$latency_ms", envelope.DurationMs);

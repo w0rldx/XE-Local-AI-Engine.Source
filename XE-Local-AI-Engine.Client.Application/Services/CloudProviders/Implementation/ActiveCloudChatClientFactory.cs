@@ -162,6 +162,14 @@ public sealed class ActiveCloudChatClientFactory : IActiveCloudChatClientFactory
     }
 
     /// <inheritdoc />
+    public string? ResolveActiveCloudProviderName(string? requestedModelId = null)
+    {
+        // Same pure selection decision as IsCloudProviderSelected, but returns WHICH cloud provider ("codex"/"azure")
+        // rather than a bool. Snapshot-cached, no network I/O. Null when no cloud provider is selected (routes local).
+        return BuildSelection(ResolveSnapshot(), requestedModelId)?.ProviderName;
+    }
+
+    /// <inheritdoc />
     public void InvalidateSelectionCache()
     {
         lock (_cacheGate)
@@ -294,7 +302,7 @@ public sealed class ActiveCloudChatClientFactory : IActiveCloudChatClientFactory
             $"|{connection.EntraTokenScope}|{connection.EntraSignInMethod}");
         var cacheKey = string.Create(CultureInfo.InvariantCulture, $"{AzureFingerprintPrefix}|{matchedDeployment}");
 
-        return new CloudSelection(cacheKey, fingerprint, () => _azureFactory.Create(connection, matchedDeployment));
+        return new CloudSelection(cacheKey, fingerprint, AzureFingerprintPrefix, () => _azureFactory.Create(connection, matchedDeployment));
     }
 
     /// <summary>Builds a Codex selection for the given session and the (already-resolved) model id to build it with.</summary>
@@ -307,11 +315,14 @@ public sealed class ActiveCloudChatClientFactory : IActiveCloudChatClientFactory
             $"{CodexFingerprintPrefix}|{session.AccountId}|{session.ExpiresUtc.UtcTicks}|{modelId}");
         var cacheKey = string.Create(CultureInfo.InvariantCulture, $"{CodexFingerprintPrefix}|{modelId}");
 
-        return new CloudSelection(cacheKey, fingerprint, () => _codexFactory.Value.Create(modelId));
+        return new CloudSelection(cacheKey, fingerprint, CodexFingerprintPrefix, () => _codexFactory.Value.Create(modelId));
     }
 
-    /// <summary>A resolved cloud selection: its identity cache key, its (more granular) fingerprint, and a deferred client builder.</summary>
-    private sealed record CloudSelection(string CacheKey, string Fingerprint, Func<IChatClient> Build);
+    /// <summary>
+    ///     A resolved cloud selection: its identity cache key, its (more granular) fingerprint, the fine-grained provider
+    ///     name (<see cref="CodexFingerprintPrefix" /> / <see cref="AzureFingerprintPrefix" />), and a deferred client builder.
+    /// </summary>
+    private sealed record CloudSelection(string CacheKey, string Fingerprint, string ProviderName, Func<IChatClient> Build);
 
     /// <summary>A cached client for a selection identity, alongside the fingerprint it was built for.</summary>
     private sealed record CachedClient(string Fingerprint, IChatClient Client);

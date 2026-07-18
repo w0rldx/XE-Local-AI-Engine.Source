@@ -2,6 +2,7 @@ namespace XE_Local_AI_Engine.Tests.Chat;
 
 using NSubstitute;
 using XE_Local_AI_Engine.Client.Models.Enums;
+using XE_Local_AI_Engine.Client.Persistence.Stores;
 using XE_Local_AI_Engine.Client.Services.Chat;
 using XE_Local_AI_Engine.Client.Services.Chat.Implementation;
 using XE_Local_AI_Engine.Client.Services.Events;
@@ -18,7 +19,9 @@ public sealed class NodeChatInvocationPumpRunEnvelopeTests
     public async Task TerminalizeAsync_CompletedRun_PassesBoundedEnvelopeMetadataIntoTerminalize()
     {
         var persistence = CreatePersistence();
-        var pump = new NodeChatInvocationPump(persistence, TimeProvider.System);
+        // The resolver attributes this turn to "local"; the pump must thread that onto the envelope metadata it hands to
+        // the terminalize command (the row-level round-trip is covered by the envelope-transaction integration test).
+        var pump = ChatPumpTestFactory.Create(persistence, AgentUsageProviders.Local);
 
         var conversationId = Guid.NewGuid();
         var messageId = Guid.NewGuid();
@@ -55,6 +58,7 @@ public sealed class NodeChatInvocationPumpRunEnvelopeTests
                 && request.Envelope.ContentChunkCount == 8
                 && request.Envelope.ReasoningChunkCount == 3
                 && request.Envelope.StartedAtUtc == 7000L
+                && request.Envelope.Provider == AgentUsageProviders.Local
                 && request.Envelope.FailureCategory == null),
             Arg.Any<CancellationToken>());
     }
@@ -63,7 +67,7 @@ public sealed class NodeChatInvocationPumpRunEnvelopeTests
     public async Task TerminalizeAsync_FailedRun_PassesFailureCategoryInEnvelopeMetadata()
     {
         var persistence = CreatePersistence();
-        var pump = new NodeChatInvocationPump(persistence, TimeProvider.System);
+        var pump = ChatPumpTestFactory.Create(persistence);
 
         var correlation = new NodeChatMessageCorrelation(Guid.NewGuid(), Guid.NewGuid(), Guid.NewGuid());
         var state = new InvocationState
@@ -92,7 +96,7 @@ public sealed class NodeChatInvocationPumpRunEnvelopeTests
         // A user cancel (or operator eject, also Cancelled-category) is an outcome, not a failure: the terminal row
         // must carry NO error text, so the chat never shows a red error banner for a cancelled turn (AUD4-20 source fix).
         var persistence = CreatePersistence();
-        var pump = new NodeChatInvocationPump(persistence, TimeProvider.System);
+        var pump = ChatPumpTestFactory.Create(persistence);
 
         var correlation = new NodeChatMessageCorrelation(Guid.NewGuid(), Guid.NewGuid(), Guid.NewGuid());
         var state = new InvocationState
@@ -116,7 +120,7 @@ public sealed class NodeChatInvocationPumpRunEnvelopeTests
     {
         // A genuine failure keeps its classified, user-safe message on the row (only cancellations are nulled).
         var persistence = CreatePersistence();
-        var pump = new NodeChatInvocationPump(persistence, TimeProvider.System);
+        var pump = ChatPumpTestFactory.Create(persistence);
 
         var correlation = new NodeChatMessageCorrelation(Guid.NewGuid(), Guid.NewGuid(), Guid.NewGuid());
         var state = new InvocationState
@@ -139,7 +143,7 @@ public sealed class NodeChatInvocationPumpRunEnvelopeTests
     public async Task TerminalizeAsync_WhenNoRunnerDuration_FallsBackToStartToCompleteElapsed()
     {
         var persistence = CreatePersistence();
-        var pump = new NodeChatInvocationPump(persistence, TimeProvider.System);
+        var pump = ChatPumpTestFactory.Create(persistence);
 
         var correlation = new NodeChatMessageCorrelation(Guid.NewGuid(), Guid.NewGuid(), Guid.NewGuid());
         var state = new InvocationState
@@ -163,7 +167,7 @@ public sealed class NodeChatInvocationPumpRunEnvelopeTests
     public async Task TerminalizeInterruptedAsync_PassesThinEnvelopeMetadataIntoTerminalize()
     {
         var persistence = CreatePersistence();
-        var pump = new NodeChatInvocationPump(persistence, TimeProvider.System);
+        var pump = ChatPumpTestFactory.Create(persistence);
 
         var correlation = new NodeChatMessageCorrelation(Guid.NewGuid(), Guid.NewGuid(), Guid.NewGuid());
         var cursor = new NodeChatPumpCursor("partial", string.Empty);
@@ -182,7 +186,7 @@ public sealed class NodeChatInvocationPumpRunEnvelopeTests
     public async Task TerminalizeInterruptedAsync_WhenCancelled_PassesCancelledStatus()
     {
         var persistence = CreatePersistence();
-        var pump = new NodeChatInvocationPump(persistence, TimeProvider.System);
+        var pump = ChatPumpTestFactory.Create(persistence);
 
         var correlation = new NodeChatMessageCorrelation(Guid.NewGuid(), Guid.NewGuid(), Guid.NewGuid());
 
@@ -216,7 +220,7 @@ public sealed class NodeChatInvocationPumpRunEnvelopeTests
                        Model: null,
                        Error: null,
                        MetadataJson: null));
-        var pump = new NodeChatInvocationPump(persistence, TimeProvider.System);
+        var pump = ChatPumpTestFactory.Create(persistence);
 
         var result = await pump.TerminalizeInterruptedAsync(correlation, new NodeChatPumpCursor("partial", string.Empty), wasCancelled: false);
 

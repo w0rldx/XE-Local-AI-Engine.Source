@@ -1,6 +1,7 @@
 namespace XE_Local_AI_Engine.Client.Services.Chat.Implementation;
 
 using System.Diagnostics;
+using XE_Local_AI_Engine.Client.Services.CloudProviders;
 using XE_Local_AI_Engine.Client.Services.Events;
 
 /// <summary>
@@ -21,9 +22,11 @@ using XE_Local_AI_Engine.Client.Services.Events;
 /// </summary>
 public sealed class NodeChatInvocationPump(
     INodeChatPersistenceService persistence,
+    IUsageProviderResolver usageProviderResolver,
     TimeProvider timeProvider) : INodeChatInvocationPump
 {
     private readonly INodeChatPersistenceService _persistence = persistence ?? throw new ArgumentNullException(nameof(persistence));
+    private readonly IUsageProviderResolver _usageProviderResolver = usageProviderResolver ?? throw new ArgumentNullException(nameof(usageProviderResolver));
     private readonly TimeProvider _timeProvider = timeProvider ?? throw new ArgumentNullException(nameof(timeProvider));
 
     /// <summary>
@@ -84,13 +87,19 @@ public sealed class NodeChatInvocationPump(
         // persisted row inside that transaction, so they are not carried here.
         var durationMs = state.GenerationDurationMs
                          ?? (state.CompletedAt is { } completedAt ? Math.Max(val1: 0L, (long)(completedAt - state.StartedAt).TotalMilliseconds) : 0L);
+
+        // Attribute the turn's tokens to the fine-grained provider that served it, resolved from the same model id that
+        // rides into terminalize (state.ModelUsed ?? requestedModel). Best-effort: the resolver never throws and is bounded,
+        // degrading to 'unknown' on any failure/timeout, so provider attribution can never break or stall terminalization.
+        var provider = await _usageProviderResolver.ResolveAsync(state.ModelUsed ?? requestedModel, CancellationToken.None).ConfigureAwait(false);
         var envelope = new AgentRunEnvelopeMetadata(state.InvocationId,
             durationMs,
             state.FailureCategory?.ToString(),
             state.StreamedChunkCount,
             state.StreamedThinkingChunkCount,
             CurrentTraceId(),
-            state.StartedAt == default ? null : state.StartedAt.ToUnixTimeMilliseconds());
+            state.StartedAt == default ? null : state.StartedAt.ToUnixTimeMilliseconds(),
+            provider);
 
         // AUD4-20 (lane-C source fix): a cancelled turn persists NO error text — a user cancel (or an operator eject,
         // also Cancelled-category) is an outcome, not a failure, so it must not leave a red error banner on the row.

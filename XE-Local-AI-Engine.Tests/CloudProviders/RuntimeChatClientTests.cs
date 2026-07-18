@@ -75,6 +75,11 @@ public sealed class RuntimeChatClientTests
             return CloudActive;
         }
 
+        public string? ResolveActiveCloudProviderName(string? requestedModelId = null)
+        {
+            return CloudActive ? "azure" : null;
+        }
+
         public void InvalidateSelectionCache()
         {
         }
@@ -91,6 +96,11 @@ public sealed class RuntimeChatClientTests
         public bool IsCloudProviderSelected(string? requestedModelId = null)
         {
             return true;
+        }
+
+        public string? ResolveActiveCloudProviderName(string? requestedModelId = null)
+        {
+            return "codex";
         }
 
         public void InvalidateSelectionCache()

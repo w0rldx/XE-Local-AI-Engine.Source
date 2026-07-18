@@ -184,7 +184,11 @@ public sealed record AgentRunEnvelopeMetadata(
     int? ContentChunkCount = null,
     int? ReasoningChunkCount = null,
     string? TraceId = null,
-    long? StartedAtUtc = null);
+    long? StartedAtUtc = null,
+    // Fine-grained runtime provider that served the turn (a non-sensitive category label; see AgentUsageProviders).
+    // Resolved at terminalization from the run's model id; defaults to 'unknown' so a caller that does not attribute a
+    // provider (the interrupted/thin-cancel path) writes a valid label and the column default is honoured.
+    string Provider = XE_Local_AI_Engine.Client.Persistence.Stores.AgentUsageProviders.Unknown);
 
 public sealed record NodeChatCancelRequest(
     NodeChatMessageCorrelation Correlation,
