@@ -6,6 +6,7 @@ import { useTranslation } from "react-i18next";
 
 import type { SaveNodeSettingsResponse } from "@/core/api/generated";
 import {
+	downloadRecommendedRerankerMutation,
 	getNodeSettingsOptions,
 	getNodeSettingsQueryKey,
 	listLocalModelsOptions,
@@ -15,6 +16,9 @@ import { withResponseValidation } from "@/core/api/ResponseValidation";
 import { toChatModelOptions } from "@/features/chat/pages/ChatModelOptions";
 import { useDeveloperModeStore } from "@/core/dev-tools/stores/DeveloperModeStore";
 import { toast } from "@/core/ui/notifications/Toast";
+import { DownloadProgressPanel } from "@/features/models/components/DownloadProgressPanel";
+import { useActiveGgufDownloads, useCancelGgufDownload } from "@/features/models/queries/useGgufDownload";
+import { useGgufBrowseStore } from "@/features/models/stores/GgufBrowseStore";
 import { CudaBuildCard } from "@/features/node-settings/components/CudaBuildCard";
 import { HfTokenPanel } from "@/features/node-settings/components/HfTokenPanel";
 import { LlamaCppUpdaterPanel } from "@/features/node-settings/components/LlamaCppUpdaterPanel";
@@ -91,6 +95,69 @@ export function NodeSettings() {
 				.filter((option) => option.value.length > 0),
 		[localModels],
 	);
+
+	// One-click recommended-reranker download. Progress reuses the SAME GgufDownload feed as Model Management: the
+	// coordinator streams status over SignalR, the shared GgufBrowseStore tracks in-flight names, and completion
+	// invalidates the installed-models list (which this page's reranker dropdown reads) — so the model becomes
+	// selectable without a manual refresh. We remember the canonical model name from the mutation response so the
+	// progress panel + duplicate-guard scope to exactly the reranker download this page initiated.
+	const rerankerDownloadStatuses = useActiveGgufDownloads();
+	const inFlightDownloads = useGgufBrowseStore((state) => state.inFlightDownloads);
+	const markInFlight = useGgufBrowseStore((state) => state.actions.markInFlight);
+	const removeInFlight = useGgufBrowseStore((state) => state.actions.removeInFlight);
+	const [recommendedRerankerModelName, setRecommendedRerankerModelName] = useState<string | null>(null);
+	const cancelGgufDownloadMutation = useCancelGgufDownload();
+
+	const isRecommendedRerankerInFlight =
+		recommendedRerankerModelName !== null && inFlightDownloads.includes(recommendedRerankerModelName);
+	const rerankerInFlight = useMemo(
+		() => (isRecommendedRerankerInFlight && recommendedRerankerModelName !== null ? [recommendedRerankerModelName] : []),
+		[isRecommendedRerankerInFlight, recommendedRerankerModelName],
+	);
+
+	const downloadRecommendedReranker = useMutation({
+		...withResponseValidation(downloadRecommendedRerankerMutation()),
+		onSuccess: (response) => {
+			setRecommendedRerankerModelName(response.modelName);
+			if (response.alreadyInstalled) {
+				toast.info(
+					t("pages.nodeSettings.fields.rerankerModel.downloadAlreadyInstalled", "The recommended reranker ({{model}}) is already installed.", {
+						model: response.modelName,
+					}),
+				);
+				return;
+			}
+			// Mark in-flight immediately so the button duplicate-guards and the progress panel appears without waiting for
+			// the first SignalR push (markInFlight is idempotent, so an already-in-flight rejoin is a no-op).
+			markInFlight(response.modelName);
+			toast.info(
+				response.alreadyInFlight
+					? t("pages.nodeSettings.fields.rerankerModel.downloadInFlight", "The recommended reranker ({{model}}) is already downloading.", {
+							model: response.modelName,
+						})
+					: t("pages.nodeSettings.fields.rerankerModel.downloadStarted", "Downloading the recommended reranker ({{model}}).", {
+							model: response.modelName,
+						}),
+			);
+		},
+		onError: (error) =>
+			toast.error(runtimeErrorMessage(error, t("pages.nodeSettings.fields.rerankerModel.downloadError", "Could not start the recommended reranker download."))),
+	});
+
+	const handleDownloadRecommendedReranker = (): void => {
+		downloadRecommendedReranker.mutate({});
+	};
+
+	const handleCancelRerankerDownload = (modelName: string): void => {
+		cancelGgufDownloadMutation.mutate(modelName, {
+			onSuccess: () => {
+				removeInFlight(modelName);
+				toast.success(t("pages.models.gguf.download.cancelled", "Download cancelled."));
+			},
+			onError: (error) =>
+				toast.error(runtimeErrorMessage(error, t("pages.models.gguf.download.cancelError", "Could not cancel the download."))),
+		});
+	};
 
 	useEffect(() => {
 		if (settings?.maxMessageRequestTimeoutSeconds !== undefined) {
@@ -272,6 +339,16 @@ export function NodeSettings() {
 					showDeveloperFields={developerMode}
 					draftModelOptions={draftModelOptions}
 					rerankerModelOptions={rerankerModelOptions}
+					onDownloadRecommendedReranker={handleDownloadRecommendedReranker}
+					isDownloadRecommendedRerankerPending={downloadRecommendedReranker.isPending}
+					isRecommendedRerankerInFlight={isRecommendedRerankerInFlight}
+				/>
+
+				<DownloadProgressPanel
+					inFlight={rerankerInFlight}
+					downloadStatuses={rerankerDownloadStatuses}
+					onCancel={handleCancelRerankerDownload}
+					cancellingModelName={cancelGgufDownloadMutation.isPending ? (cancelGgufDownloadMutation.variables ?? null) : null}
 				/>
 
 				<Group>

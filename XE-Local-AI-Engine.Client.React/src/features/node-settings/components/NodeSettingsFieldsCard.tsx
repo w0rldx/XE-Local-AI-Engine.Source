@@ -1,5 +1,5 @@
-import { Card, Group, NumberInput, Select, Stack, Switch, TagsInput, Text, TextInput, Title } from "@mantine/core";
-import { IconCpu, IconRobot, IconServer, IconTool } from "@tabler/icons-react";
+import { Button, Card, Group, NumberInput, Select, Stack, Switch, TagsInput, Text, TextInput, Title } from "@mantine/core";
+import { IconCloudDownload, IconCpu, IconRobot, IconServer, IconTool } from "@tabler/icons-react";
 import { useMemo } from "react";
 import { useTranslation } from "react-i18next";
 
@@ -33,6 +33,14 @@ export interface NodeSettingsFieldsCardProps {
 	// All installed models offered as the knowledge-base reranker (reranker GGUFs are not a chat kind, so this list is
 	// not filtered to chat-capable models).
 	readonly rerankerModelOptions: readonly DraftModelOption[];
+	// One-click download of the node's recommended reranker GGUF. The page owns the mutation + progress feed; this
+	// component only renders the button and reflects its pending / in-flight state.
+	readonly onDownloadRecommendedReranker: () => void;
+	// True while the download-recommended mutation request is in flight (button shows a spinner).
+	readonly isDownloadRecommendedRerankerPending: boolean;
+	// True while the recommended reranker's GGUF download is running (duplicate-guards the button after the request
+	// returns, until the download reaches a terminal phase).
+	readonly isRecommendedRerankerInFlight: boolean;
 }
 
 function fieldError(
@@ -55,6 +63,9 @@ export function NodeSettingsFieldsCard({
 	showDeveloperFields,
 	draftModelOptions,
 	rerankerModelOptions,
+	onDownloadRecommendedReranker,
+	isDownloadRecommendedRerankerPending,
+	isRecommendedRerankerInFlight,
 }: NodeSettingsFieldsCardProps) {
 	const { t } = useTranslation();
 
@@ -249,6 +260,25 @@ export function NodeSettingsFieldsCard({
 						error={fieldError(t, errors, "rerankerModelName")}
 						data-testid="node-settings-reranker-model"
 					/>
+					<Group justify="space-between" align="center" wrap="nowrap" gap="md">
+						<Text size="xs" c="dimmed">
+							{t(
+								"pages.nodeSettings.fields.rerankerModel.recommendedHelp",
+								"Recommended: bge-reranker-v2-m3, which runs as its own extra model server.",
+							)}
+						</Text>
+						<Button
+							variant="light"
+							size="xs"
+							leftSection={<IconCloudDownload size={14} />}
+							onClick={onDownloadRecommendedReranker}
+							loading={isDownloadRecommendedRerankerPending}
+							disabled={isDownloadRecommendedRerankerPending || isRecommendedRerankerInFlight}
+							data-testid="node-settings-reranker-download-recommended"
+						>
+							{t("pages.nodeSettings.fields.rerankerModel.downloadRecommended", "Download recommended reranker")}
+						</Button>
+					</Group>
 				</Stack>
 			</Card>
 

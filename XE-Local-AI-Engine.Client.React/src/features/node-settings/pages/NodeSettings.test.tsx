@@ -14,6 +14,10 @@ const settingsResponse = {
 	maxAllowedMessageRequestTimeoutSeconds: 3600,
 };
 
+const { toastMock } = vi.hoisted(() => ({
+	toastMock: { success: vi.fn(), error: vi.fn(), info: vi.fn(), warn: vi.fn(), warning: vi.fn(), progress: vi.fn() },
+}));
+
 const { generatedMock } = vi.hoisted(() => ({
 	generatedMock: {
 		getNodeSettingsOptions: vi.fn(),
@@ -34,6 +38,9 @@ const { generatedMock } = vi.hoisted(() => ({
 		ensureFn: vi.fn(),
 		setTokenFn: vi.fn(),
 		updateRuntimeFn: vi.fn(),
+		// One-click recommended-reranker download mutation.
+		downloadRecommendedRerankerMutation: vi.fn(),
+		downloadRerankerFn: vi.fn(),
 	},
 }));
 
@@ -53,7 +60,20 @@ vi.mock("@/core/api/generated/@tanstack/react-query.gen", () => ({
 	setHfTokenMutation: generatedMock.setHfTokenMutation,
 	getLlamaCppRuntimeOptions: generatedMock.getLlamaCppRuntimeOptions,
 	updateLlamaCppRuntimeMutation: generatedMock.updateLlamaCppRuntimeMutation,
+	downloadRecommendedRerankerMutation: generatedMock.downloadRecommendedRerankerMutation,
 }));
+
+// The recommended-reranker download progress reuses the shared GgufDownload feed (SignalR hub + cancel mutation).
+// Stub it so these page tests stay isolated and never open a real hub connection; the reranker download flow has its
+// own dedicated test in NodeSettingsFieldsCard.test.tsx.
+vi.mock("@/features/models/queries/useGgufDownload", () => ({
+	useActiveGgufDownloads: () => new Map(),
+	useCancelGgufDownload: () => ({ mutate: vi.fn(), isPending: false, variables: undefined }),
+}));
+
+// Toast is the mutation-result surface for the reranker download states — spy on it to assert already-installed vs.
+// download-started notices.
+vi.mock("@/core/ui/notifications/Toast", () => ({ toast: toastMock }));
 
 // The CUDA build card owns its own data layer (CUDA-build SDK endpoints + a SignalR hub) and has its own dedicated
 // test; stub it to null here so these page tests stay isolated to the settings/runtime/HF-token composition.
@@ -72,6 +92,7 @@ vi.mock("@tanstack/react-router", () => ({
 }));
 
 import { useDeveloperModeStore } from "@/core/dev-tools/stores/DeveloperModeStore";
+import { useGgufBrowseStore } from "@/features/models/stores/GgufBrowseStore";
 import { NodeSettings } from "@/features/node-settings/pages/NodeSettings";
 import { useHfTokenStore } from "@/features/node-settings/stores/HfTokenStore";
 
@@ -153,10 +174,21 @@ describe("NodeSettings (generated hey-api data layer)", () => {
 		});
 		generatedMock.updateRuntimeFn.mockResolvedValue({ version: "b1000", variant: "cpu" });
 		generatedMock.updateLlamaCppRuntimeMutation.mockReturnValue({ mutationFn: generatedMock.updateRuntimeFn });
+		// Recommended-reranker download: default resolves to a fresh start (not installed, not already in flight).
+		generatedMock.downloadRerankerFn.mockResolvedValue({
+			modelName: "bge-reranker-v2-m3",
+			repoId: "BAAI/bge-reranker-v2-m3",
+			quant: "Q4_K_M",
+			alreadyInstalled: false,
+			alreadyInFlight: false,
+		});
+		generatedMock.downloadRecommendedRerankerMutation.mockReturnValue({ mutationFn: generatedMock.downloadRerankerFn });
 		// The HF token draft lives in a store that survives a remount — reset it so each test starts blank.
 		useHfTokenStore.setState({ tokenDraft: "" });
 		// Developer mode persists in a store across tests — reset to off so dev-gating tests start from a known state.
 		useDeveloperModeStore.setState({ developerMode: false });
+		// The GGUF in-flight set is a shared session store; reset it so a reranker-download test starts with none.
+		useGgufBrowseStore.setState({ inFlightDownloads: [] });
 	});
 
 	afterEach(() => {
@@ -263,5 +295,42 @@ describe("NodeSettings (generated hey-api data layer)", () => {
 		await waitFor(() =>
 			expect(generatedMock.saveFn.mock.calls[0]?.[0]).toEqual({ body: { maxMessageRequestTimeoutSeconds: 600 } }),
 		);
+	});
+
+	// One-click recommended-reranker download: response-state handling.
+	it("downloads the recommended reranker on a fresh start — shows progress and duplicate-guards the button", async () => {
+		renderPage();
+		const button = await screen.findByTestId("node-settings-reranker-download-recommended");
+
+		fireEvent.click(button);
+
+		// The generated mutation fires (no body/params), the fresh start marks the model in-flight, and the shared
+		// download-progress panel appears keyed on that model while the button is duplicate-guarded (disabled).
+		await waitFor(() => expect(generatedMock.downloadRerankerFn).toHaveBeenCalledTimes(1));
+		await waitFor(() => expect(screen.getByTestId("model-fit-download-card")).toBeTruthy());
+		expect(screen.getByTestId("model-fit-download-row-bge-reranker-v2-m3")).toBeTruthy();
+		expect((screen.getByTestId("node-settings-reranker-download-recommended") as HTMLButtonElement).disabled).toBe(true);
+		expect(toastMock.info).toHaveBeenCalled();
+	});
+
+	it("shows an already-installed notice and no progress panel when the reranker is already installed", async () => {
+		generatedMock.downloadRerankerFn.mockResolvedValueOnce({
+			modelName: "bge-reranker-v2-m3",
+			repoId: "BAAI/bge-reranker-v2-m3",
+			quant: "Q4_K_M",
+			alreadyInstalled: true,
+			alreadyInFlight: false,
+		});
+
+		renderPage();
+		const button = await screen.findByTestId("node-settings-reranker-download-recommended");
+
+		fireEvent.click(button);
+
+		await waitFor(() => expect(generatedMock.downloadRerankerFn).toHaveBeenCalledTimes(1));
+		// Already-installed surfaces an info notice, never marks in-flight, and shows no download-progress panel.
+		await waitFor(() => expect(toastMock.info).toHaveBeenCalled());
+		expect(screen.queryByTestId("model-fit-download-card")).toBeNull();
+		expect((screen.getByTestId("node-settings-reranker-download-recommended") as HTMLButtonElement).disabled).toBe(false);
 	});
 });

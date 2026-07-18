@@ -58,10 +58,18 @@ vi.mock("@/core/api/generated/@tanstack/react-query.gen", () => ({
 		queryFn: () => Promise.resolve({ recommendedTag: "b1000", updateAvailable: false, isOffline: false }),
 	}),
 	updateLlamaCppRuntimeMutation: () => ({ mutationFn: vi.fn() }),
+	downloadRecommendedRerankerMutation: () => ({ mutationFn: vi.fn() }),
 }));
 
 vi.mock("@/core/api/ResponseValidation", () => ({
 	withResponseValidation: (x: unknown) => x,
+}));
+
+// The recommended-reranker download reuses the shared GgufDownload feed (SignalR hub + cancel mutation); stub it so
+// these composition tests never open a real hub connection.
+vi.mock("@/features/models/queries/useGgufDownload", () => ({
+	useActiveGgufDownloads: () => new Map(),
+	useCancelGgufDownload: () => ({ mutate: vi.fn(), isPending: false, variables: undefined }),
 }));
 
 // The CUDA build card owns its own data layer (CUDA-build SDK endpoints + a SignalR hub) and has its own dedicated

@@ -1255,7 +1255,13 @@
 					"label": "Reranker-Modell",
 					"description": "Cross-Encoder-Reranker, der die Suchergebnisse der Wissensdatenbank nach Relevanz neu ordnet. Deaktiviert lassen, wenn kein Reranker-Modell installiert ist. Wird nach einem Neustart des Knotens wirksam. Verbraucht zusätzlichen VRAM, der von Kapazitätsprüfungen nicht berücksichtigt wird.",
 					"off": "Aus",
-					"empty": "Keine installierten Modelle"
+					"empty": "Keine installierten Modelle",
+					"downloadRecommended": "Empfohlenen Reranker herunterladen",
+					"recommendedHelp": "Empfohlen: bge-reranker-v2-m3, der als eigener zusätzlicher Modellserver läuft.",
+					"downloadAlreadyInstalled": "Der empfohlene Reranker ({{model}}) ist bereits installiert.",
+					"downloadStarted": "Der empfohlene Reranker ({{model}}) wird heruntergeladen.",
+					"downloadInFlight": "Der empfohlene Reranker ({{model}}) wird bereits heruntergeladen.",
+					"downloadError": "Der Download des empfohlenen Rerankers konnte nicht gestartet werden."
 				}
 			}
 		},
