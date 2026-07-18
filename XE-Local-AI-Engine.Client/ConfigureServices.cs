@@ -93,8 +93,10 @@ public static class ConfigureServices
         // in plaintext beside the ciphertext it unlocks. The encryptor is WRITE-side only: existing plaintext keys and
         // existing IDataProtector payloads keep reading, because Data Protection reads each key in whatever form it was
         // written (no proactive re-wrap of the current active key — deferred, and safer that way). A wrong/missing
-        // operator secret fails closed (the AES-GCM tag will not authenticate, and the same secret already gates
-        // node.sqlite), never silently regenerating the ring.
+        // operator secret fails closed (the AES-GCM tag will not authenticate). node.sqlite is PLAIN SQLite with
+        // application-level COLUMN encryption (not SQLCipher/whole-file), so a wrong secret does NOT reliably fail
+        // startup on its own — the loud backstop is the fail-closed key resolver wired below, which refuses to
+        // regenerate the ring when an encrypted key cannot be decrypted.
         if (OperatingSystem.IsWindows())
         {
             dataProtection.ProtectKeysWithDpapi(protectToLocalMachine: false);
