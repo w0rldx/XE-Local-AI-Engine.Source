@@ -3035,6 +3035,10 @@
 			"unsavedTitle": "Discard unsaved changes?",
 			"unsavedDescription": "You have unsaved changes. If you leave now, they will be lost."
 		},
+		"chatConnectionStatus": {
+			"reconnecting": "Reconnecting…",
+			"offline": "Offline"
+		},
 		"markdownEditor": {
 			"edit": "Edit",
 			"preview": "Preview"

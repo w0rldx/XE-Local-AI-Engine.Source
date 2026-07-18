@@ -3035,6 +3035,10 @@
 			"unsavedTitle": "Nicht gespeicherte Änderungen verwerfen?",
 			"unsavedDescription": "Es gibt nicht gespeicherte Änderungen. Wenn Sie jetzt verlassen, gehen sie verloren."
 		},
+		"chatConnectionStatus": {
+			"reconnecting": "Verbindung wird wiederhergestellt…",
+			"offline": "Offline"
+		},
 		"markdownEditor": {
 			"edit": "Bearbeiten",
 			"preview": "Vorschau"
