@@ -808,7 +808,7 @@ public sealed partial class InvocationRunner : IInvocationRunner
                                 break;
 
                             case FunctionCallContent functionCall:
-                                var callId = functionCall.CallId ?? functionCall.Name;
+                                var callId = ResolveToolCallCardId(functionCall.CallId, functionCall.Name);
                                 pendingLocalToolCallNames[callId] = functionCall.Name;
 
                                 await transport.Dispatcher.ReportToolCallLifecycleAsync(new ToolCallLifecyclePayload
@@ -1192,15 +1192,14 @@ public sealed partial class InvocationRunner : IInvocationRunner
             await sender.SendApprovalRequestAsync(approvalPayload, cancellationToken).ConfigureAwait(false);
             await dispatcher.ReportApprovalRequestedAsync(approvalPayload).ConfigureAwait(false);
 
-            // Surface the pending approval on the LOCAL chat stream (UX-01). The CallId is derived the SAME way the
-            // tool-call-requested lifecycle event derives it (CallId, falling back to the tool name) so the browser can
+            // Surface the pending approval on the LOCAL chat stream (UX-01). The CallId is derived through the SAME
+            // helper the streaming tool-call-requested lifecycle uses (CallId, falling back to the tool name) so both
+            // events resolve the identical id — including for a non-null EMPTY-STRING CallId — and the browser can
             // attach the Approve/Deny controls to the matching tool-call card. In desktop/local mode there is no worker
             // hub to resolve the approval, so the loopback resolve endpoint feeds ResolveApprovalResult below. ToolCall
             // is the base ToolCallContent (CallId only); the concrete FunctionCallContent carries the tool name.
             var approvalToolName = (approvalRequest.ToolCall as FunctionCallContent)?.Name;
-            var approvalCallId = string.IsNullOrEmpty(approvalRequest.ToolCall.CallId)
-                ? approvalToolName ?? string.Empty
-                : approvalRequest.ToolCall.CallId;
+            var approvalCallId = ResolveToolCallCardId(approvalRequest.ToolCall.CallId, approvalToolName);
             await dispatcher.ReportApprovalLifecycleAsync(new ApprovalLifecyclePayload
             {
                 InvocationId = package.InvocationId,
@@ -1220,6 +1219,15 @@ public sealed partial class InvocationRunner : IInvocationRunner
             _pendingToolCalls.TryRemove(requestId, out _);
         }
     }
+
+    // Derives the tool-call id that keys a tool-call card in the UI: the wire CallId when present, otherwise the tool
+    // name (so an absent CallId still maps to a stable, human-meaningful key). Shared by the streaming tool-call
+    // lifecycle and the approval lifecycle so both events resolve the SAME id for the same call — including a non-null
+    // EMPTY-STRING CallId, which the two paths previously handled differently — letting the browser attach the
+    // Approve/Deny controls to the matching card (UX-01 follow-up). Internal (not private) purely as a test seam via
+    // InternalsVisibleTo; not part of the public contract.
+    internal static string ResolveToolCallCardId(string? callId, string? toolName)
+        => callId ?? toolName ?? string.Empty;
 
     // Mirrors the normal Completed lifecycle emission for the timeout/cancel rethrow paths, emitting Completed with
     // IsError=true so a tool card the UI parked on Requested gets cleared instead of spinning forever. Skips when no
