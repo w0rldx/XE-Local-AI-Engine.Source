@@ -31,11 +31,14 @@ internal sealed class NodeToolApprovalPolicy : IToolApprovalPolicy
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(toolName);
 
-        // TIGHTEN-ONLY: OR the catalog default with the node-default-by-category rule and the per-tool-name override. The
-        // expression can only ADD approval (never clear it): if the catalog default is already true it stays true, and a
-        // category/tool entry can only push a default-off tool to true. There is no branch that returns false when the
-        // catalog default is true.
+        // TIGHTEN-ONLY: OR the catalog default with the fail-closed Unknown rule, the node-default-by-category rule, and
+        // the per-tool-name override. The expression can only ADD approval (never clear it): if the catalog default is
+        // already true it stays true, and any additional term can only push a default-off tool to true. There is no branch
+        // that returns false when the catalog default is true. An Unknown-category tool ALWAYS requires approval
+        // (fail-closed), honoring the IToolApprovalPolicy / ToolCategory.Unknown contract so a new, uncategorized tool
+        // never silently auto-executes.
         return catalogDefault
+               || category == ToolCategory.Unknown
                || _categoryPolicy.GetValueOrDefault(category, defaultValue: false)
                || _toolOverrides.GetValueOrDefault(toolName, defaultValue: false);
     }

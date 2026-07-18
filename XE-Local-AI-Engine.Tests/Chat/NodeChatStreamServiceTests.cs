@@ -13,6 +13,7 @@ using XE_Local_AI_Engine.Client.Persistence;
 using XE_Local_AI_Engine.Client.Persistence.Stores;
 using XE_Local_AI_Engine.Client.Services.AgentHome;
 using XE_Local_AI_Engine.Client.Services.Agents;
+using XE_Local_AI_Engine.Client.Services.Agents.Approval.Implementation;
 using XE_Local_AI_Engine.Client.Services.Agents.Implementation;
 using XE_Local_AI_Engine.Client.Services.Chat;
 using XE_Local_AI_Engine.Client.Services.Chat.Implementation;
@@ -62,6 +63,7 @@ public sealed class NodeChatStreamServiceTests
             Options.Create(new KnowledgeBaseOptions()),
             CreateScopeFactory(),
             TimeProvider.System,
+            new PermissiveToolApprovalPolicy(),
             NullLogger<NodeChatStreamService>.Instance);
         var events = new List<ChatStreamEvent>();
 
@@ -113,6 +115,7 @@ public sealed class NodeChatStreamServiceTests
             Options.Create(new KnowledgeBaseOptions()),
             CreateScopeFactory(),
             TimeProvider.System,
+            new PermissiveToolApprovalPolicy(),
             NullLogger<NodeChatStreamService>.Instance);
         var events = new List<ChatStreamEvent>();
 
@@ -167,6 +170,7 @@ public sealed class NodeChatStreamServiceTests
             Options.Create(new KnowledgeBaseOptions()),
             CreateScopeFactory(),
             TimeProvider.System,
+            new PermissiveToolApprovalPolicy(),
             NullLogger<NodeChatStreamService>.Instance);
         var events = new List<ChatStreamEvent>();
 
@@ -229,6 +233,7 @@ public sealed class NodeChatStreamServiceTests
             Options.Create(new KnowledgeBaseOptions()),
             CreateScopeFactory(),
             TimeProvider.System,
+            new PermissiveToolApprovalPolicy(),
             NullLogger<NodeChatStreamService>.Instance);
 
         var drained = 0;
@@ -276,6 +281,7 @@ public sealed class NodeChatStreamServiceTests
             Options.Create(new KnowledgeBaseOptions()),
             CreateScopeFactory(),
             TimeProvider.System,
+            new PermissiveToolApprovalPolicy(),
             NullLogger<NodeChatStreamService>.Instance);
 
         var drained = 0;
@@ -323,6 +329,7 @@ public sealed class NodeChatStreamServiceTests
             Options.Create(new KnowledgeBaseOptions()),
             CreateScopeFactory(),
             TimeProvider.System,
+            new PermissiveToolApprovalPolicy(),
             NullLogger<NodeChatStreamService>.Instance);
 
         var sampling = new SamplingOptions
@@ -380,6 +387,7 @@ public sealed class NodeChatStreamServiceTests
             Options.Create(new KnowledgeBaseOptions()),
             CreateScopeFactory(),
             TimeProvider.System,
+            new PermissiveToolApprovalPolicy(),
             NullLogger<NodeChatStreamService>.Instance);
 
         var drained = 0;
@@ -432,6 +440,7 @@ public sealed class NodeChatStreamServiceTests
             Options.Create(new KnowledgeBaseOptions()),
             CreateScopeFactory(),
             TimeProvider.System,
+            new PermissiveToolApprovalPolicy(),
             NullLogger<NodeChatStreamService>.Instance);
 
         var drained = 0;
@@ -453,6 +462,66 @@ public sealed class NodeChatStreamServiceTests
             AssertEx.Equal(ToolLocation.ClientLocal, tool.Location);
             AssertEx.NotNullOrEmpty(tool.ParameterSchema);
         }
+    }
+
+    [Test]
+    public async Task SendMessageAsync_WhenResolvedNull_NodePolicyTightensFallbackOffer()
+    {
+        // Bypass seam #4 fix: an unbound / deleted-agent turn (resolved == null) builds the offer from the fallback
+        // GetOfferedTools path, which must still run through the node approval policy — else a node-wide policy is
+        // bypassable by a plain unbound chat turn. Node policy: require approval for the ReadLocal category; the fallback
+        // ReadLocal tool must resolve as approval-requiring.
+        var conversationId = Guid.NewGuid();
+        var assistantMessageId = Guid.NewGuid();
+        var requestId = Guid.NewGuid();
+        var persistence = CreatePersistence(conversationId, assistantMessageId, requestId, _ => { });
+        var dispatcher = new RecordingWorkerEventDispatcher();
+        var runner = new ReasoningCapturingInvocationRunner(dispatcher);
+        var offerProvider = CreateOfferProvider(CreateLocalToolDto("GetCurrentTime", "{\"type\":\"object\"}", ToolCategory.ReadLocal));
+        var nodePolicy = new NodeToolApprovalPolicy(
+            new Dictionary<ToolCategory, bool> { [ToolCategory.ReadLocal] = true },
+            new Dictionary<string, bool>(StringComparer.Ordinal));
+        var service = new NodeChatStreamService(persistence,
+            new ChatInvocationStatePump(ChatPumpTestFactory.Create(persistence), TimeProvider.System),
+            new ChatTurnResolver(CreateAgentDefinitionResolver(), CreateAgentDefinitionStore(), CreateOrchestrationResolver(), CreateModelClassificationService(), CreateLocalModelProviderResolver(),
+                CreateGgufModelCapabilityResolver(), Substitute.For<IActiveCloudChatClientFactory>(), NullLogger<ChatTurnResolver>.Instance),
+            new NodeChatMutationGuard(persistence),
+            new LocalChatRuntimePackageBuilder(),
+            runner,
+            dispatcher,
+            Options.Create(new LocalChatAgentOptions
+            {
+                EnableTools = true
+            }),
+            StubNodeRuntimeSettings.Create().WithEnableTools(true).Build(),
+            new NodeChatStreamCancellationRegistry(),
+            offerProvider,
+            CreateDefaultAgentProvider(),
+            CreateNodeSettingsStore(),
+            CreateLocalDefaultChatModelResolver(),
+            CreateMemoryExtractionDispatcher(),
+            Substitute.For<IConversationUploadedFileStore>(),
+            Substitute.For<IConversationSandboxStager>(),
+            CreateFenceSeedProvider(),
+            Options.Create(new KnowledgeBaseOptions()),
+            CreateScopeFactory(),
+            TimeProvider.System,
+            nodePolicy,
+            NullLogger<NodeChatStreamService>.Instance);
+
+        var drained = 0;
+        await foreach (var _ in service.SendMessageAsync(new NodeChatStreamRequest(conversationId,
+                           "hello",
+                           MessageId: assistantMessageId,
+                           RequestId: requestId,
+                           UseLocalTools: true)).ConfigureAwait(false))
+        {
+            drained++;
+        }
+
+        AssertEx.True(drained > 0, "Expected the send to stream events.");
+        var readLocalTool = runner.LastAllowedTools.Single(tool => tool.Name == "GetCurrentTime");
+        AssertEx.Equal(expected: true, readLocalTool.RequiresApproval);
     }
 
     [Test]
@@ -493,6 +562,7 @@ public sealed class NodeChatStreamServiceTests
             Options.Create(new KnowledgeBaseOptions()),
             CreateScopeFactory(),
             TimeProvider.System,
+            new PermissiveToolApprovalPolicy(),
             NullLogger<NodeChatStreamService>.Instance);
 
         await foreach (var _ in service.SendMessageAsync(new NodeChatStreamRequest(conversationId,
@@ -546,6 +616,7 @@ public sealed class NodeChatStreamServiceTests
             Options.Create(new KnowledgeBaseOptions()),
             CreateScopeFactory(),
             TimeProvider.System,
+            new PermissiveToolApprovalPolicy(),
             NullLogger<NodeChatStreamService>.Instance);
 
         await foreach (var _ in service.SendMessageAsync(new NodeChatStreamRequest(conversationId,
@@ -599,6 +670,7 @@ public sealed class NodeChatStreamServiceTests
             Options.Create(new KnowledgeBaseOptions()),
             CreateScopeFactory(),
             TimeProvider.System,
+            new PermissiveToolApprovalPolicy(),
             NullLogger<NodeChatStreamService>.Instance);
 
         await foreach (var _ in service.SendMessageAsync(new NodeChatStreamRequest(conversationId,
@@ -657,6 +729,7 @@ public sealed class NodeChatStreamServiceTests
             Options.Create(new KnowledgeBaseOptions()),
             CreateScopeFactory(),
             TimeProvider.System,
+            new PermissiveToolApprovalPolicy(),
             NullLogger<NodeChatStreamService>.Instance);
 
         var drained = 0;
@@ -849,6 +922,7 @@ public sealed class NodeChatStreamServiceTests
             }),
             CreateScopeFactory(),
             TimeProvider.System,
+            new PermissiveToolApprovalPolicy(),
             NullLogger<NodeChatStreamService>.Instance);
 
         var events = new List<ChatStreamEvent>();
@@ -904,6 +978,7 @@ public sealed class NodeChatStreamServiceTests
             Options.Create(new KnowledgeBaseOptions()),
             CreateScopeFactory(),
             TimeProvider.System,
+            new PermissiveToolApprovalPolicy(),
             NullLogger<NodeChatStreamService>.Instance);
 
         var drained = 0;
@@ -960,6 +1035,7 @@ public sealed class NodeChatStreamServiceTests
             Options.Create(new KnowledgeBaseOptions()),
             CreateScopeFactory(),
             TimeProvider.System,
+            new PermissiveToolApprovalPolicy(),
             NullLogger<NodeChatStreamService>.Instance);
 
         var drained = 0;
@@ -1017,6 +1093,7 @@ public sealed class NodeChatStreamServiceTests
             Options.Create(new KnowledgeBaseOptions()),
             CreateScopeFactory(),
             TimeProvider.System,
+            new PermissiveToolApprovalPolicy(),
             NullLogger<NodeChatStreamService>.Instance);
 
         var drained = 0;
@@ -1075,6 +1152,7 @@ public sealed class NodeChatStreamServiceTests
             Options.Create(new KnowledgeBaseOptions()),
             CreateScopeFactory(),
             TimeProvider.System,
+            new PermissiveToolApprovalPolicy(),
             NullLogger<NodeChatStreamService>.Instance);
 
         var drained = 0;
@@ -1124,6 +1202,7 @@ public sealed class NodeChatStreamServiceTests
             Options.Create(new KnowledgeBaseOptions()),
             CreateScopeFactory(),
             TimeProvider.System,
+            new PermissiveToolApprovalPolicy(),
             NullLogger<NodeChatStreamService>.Instance);
 
         // The stop button is a SEPARATE request that routes through the cancellation registry (the real cancel
@@ -1184,6 +1263,7 @@ public sealed class NodeChatStreamServiceTests
             Options.Create(new KnowledgeBaseOptions()),
             CreateScopeFactory(),
             TimeProvider.System,
+            new PermissiveToolApprovalPolicy(),
             NullLogger<NodeChatStreamService>.Instance);
 
         var events = new List<ChatStreamEvent>();
@@ -1234,6 +1314,7 @@ public sealed class NodeChatStreamServiceTests
             Options.Create(new KnowledgeBaseOptions()),
             CreateScopeFactory(),
             TimeProvider.System,
+            new PermissiveToolApprovalPolicy(),
             NullLogger<NodeChatStreamService>.Instance);
         using var clientCancellation = new CancellationTokenSource();
         var events = new List<ChatStreamEvent>();
@@ -1313,6 +1394,7 @@ public sealed class NodeChatStreamServiceTests
             Options.Create(new KnowledgeBaseOptions()),
             CreateScopeFactory(),
             TimeProvider.System,
+            new PermissiveToolApprovalPolicy(),
             NullLogger<NodeChatStreamService>.Instance);
         using var clientCancellation = new CancellationTokenSource();
         // The blocked GetEnableToolsAsync is released as a cancellation when the client disconnects.
@@ -1392,6 +1474,7 @@ public sealed class NodeChatStreamServiceTests
             Options.Create(new KnowledgeBaseOptions()),
             CreateScopeFactory(),
             TimeProvider.System,
+            new PermissiveToolApprovalPolicy(),
             NullLogger<NodeChatStreamService>.Instance);
 
         var drained = 0;
@@ -1459,6 +1542,7 @@ public sealed class NodeChatStreamServiceTests
             Options.Create(new KnowledgeBaseOptions()),
             CreateScopeFactory(),
             TimeProvider.System,
+            new PermissiveToolApprovalPolicy(),
             NullLogger<NodeChatStreamService>.Instance);
 
         var drained = 0;
@@ -1516,6 +1600,7 @@ public sealed class NodeChatStreamServiceTests
             Options.Create(new KnowledgeBaseOptions()),
             CreateScopeFactory(),
             TimeProvider.System,
+            new PermissiveToolApprovalPolicy(),
             NullLogger<NodeChatStreamService>.Instance);
 
         var drained = 0;
@@ -1586,6 +1671,7 @@ public sealed class NodeChatStreamServiceTests
             Options.Create(new KnowledgeBaseOptions()),
             CreateScopeFactory(),
             TimeProvider.System,
+            new PermissiveToolApprovalPolicy(),
             NullLogger<NodeChatStreamService>.Instance);
 
         var drained = 0;
@@ -1697,6 +1783,7 @@ public sealed class NodeChatStreamServiceTests
             }),
             CreateScopeFactory(),
             TimeProvider.System,
+            new PermissiveToolApprovalPolicy(),
             NullLogger<NodeChatStreamService>.Instance);
 
         var events = new List<ChatStreamEvent>();
@@ -1748,6 +1835,7 @@ public sealed class NodeChatStreamServiceTests
             Options.Create(new KnowledgeBaseOptions()),
             CreateScopeFactory(),
             TimeProvider.System,
+            new PermissiveToolApprovalPolicy(),
             NullLogger<NodeChatStreamService>.Instance);
 
         var drained = 0;
@@ -1805,6 +1893,7 @@ public sealed class NodeChatStreamServiceTests
             Options.Create(new KnowledgeBaseOptions()),
             CreateScopeFactory(),
             TimeProvider.System,
+            new PermissiveToolApprovalPolicy(),
             NullLogger<NodeChatStreamService>.Instance);
 
         var drained = 0;
@@ -1862,6 +1951,7 @@ public sealed class NodeChatStreamServiceTests
             Options.Create(new KnowledgeBaseOptions()),
             CreateScopeFactory(),
             TimeProvider.System,
+            new PermissiveToolApprovalPolicy(),
             NullLogger<NodeChatStreamService>.Instance);
 
         var drained = 0;
@@ -1917,6 +2007,7 @@ public sealed class NodeChatStreamServiceTests
             Options.Create(new KnowledgeBaseOptions()),
             CreateScopeFactory(),
             TimeProvider.System,
+            new PermissiveToolApprovalPolicy(),
             NullLogger<NodeChatStreamService>.Instance);
 
         var drained = 0;
@@ -1974,6 +2065,7 @@ public sealed class NodeChatStreamServiceTests
             Options.Create(new KnowledgeBaseOptions()),
             CreateScopeFactory(),
             TimeProvider.System,
+            new PermissiveToolApprovalPolicy(),
             NullLogger<NodeChatStreamService>.Instance);
 
         var events = new List<ChatStreamEvent>();
@@ -2046,6 +2138,7 @@ public sealed class NodeChatStreamServiceTests
             Options.Create(new KnowledgeBaseOptions()),
             CreateScopeFactory(),
             TimeProvider.System,
+            new PermissiveToolApprovalPolicy(),
             NullLogger<NodeChatStreamService>.Instance);
 
         var drained = 0;
@@ -2125,6 +2218,7 @@ public sealed class NodeChatStreamServiceTests
             Options.Create(new KnowledgeBaseOptions()),
             CreateScopeFactory(),
             TimeProvider.System,
+            new PermissiveToolApprovalPolicy(),
             NullLogger<NodeChatStreamService>.Instance);
 
         var drained = 0;
@@ -2225,6 +2319,7 @@ public sealed class NodeChatStreamServiceTests
             Options.Create(new KnowledgeBaseOptions()),
             CreateScopeFactory(),
             TimeProvider.System,
+            new PermissiveToolApprovalPolicy(),
             NullLogger<NodeChatStreamService>.Instance);
 
         var drained = 0;
@@ -2333,6 +2428,7 @@ public sealed class NodeChatStreamServiceTests
             Options.Create(new KnowledgeBaseOptions()),
             CreateScopeFactory(),
             TimeProvider.System,
+            new PermissiveToolApprovalPolicy(),
             NullLogger<NodeChatStreamService>.Instance);
 
         var drained = 0;
@@ -2432,6 +2528,7 @@ public sealed class NodeChatStreamServiceTests
             Options.Create(new KnowledgeBaseOptions()),
             CreateScopeFactory(),
             TimeProvider.System,
+            new PermissiveToolApprovalPolicy(),
             NullLogger<NodeChatStreamService>.Instance);
 
         var drained = 0;
@@ -2485,6 +2582,7 @@ public sealed class NodeChatStreamServiceTests
             Options.Create(new KnowledgeBaseOptions()),
             CreateScopeFactory(),
             TimeProvider.System,
+            new PermissiveToolApprovalPolicy(),
             NullLogger<NodeChatStreamService>.Instance);
 
         var drained = 0;
@@ -2541,6 +2639,7 @@ public sealed class NodeChatStreamServiceTests
             Options.Create(new KnowledgeBaseOptions()),
             CreateScopeFactory(),
             TimeProvider.System,
+            new PermissiveToolApprovalPolicy(),
             NullLogger<NodeChatStreamService>.Instance);
 
         var drained = 0;
@@ -2600,6 +2699,7 @@ public sealed class NodeChatStreamServiceTests
             Options.Create(new KnowledgeBaseOptions()),
             CreateScopeFactory(),
             TimeProvider.System,
+            new PermissiveToolApprovalPolicy(),
             NullLogger<NodeChatStreamService>.Instance);
 
         var drained = 0;
@@ -2740,6 +2840,7 @@ public sealed class NodeChatStreamServiceTests
             }),
             scopeFactory,
             TimeProvider.System,
+            new PermissiveToolApprovalPolicy(),
             NullLogger<NodeChatStreamService>.Instance);
     }
 
@@ -2928,7 +3029,9 @@ public sealed class NodeChatStreamServiceTests
         };
     }
 
-    private static AllowedToolDto CreateLocalToolDto(string name, string parameterSchema)
+    // Stand-in offered tools default to a concrete ReadLocal category (never Unknown) to mirror the production invariant
+    // that every real offered tool declares a category; a test needing another category passes it explicitly.
+    private static AllowedToolDto CreateLocalToolDto(string name, string parameterSchema, ToolCategory category = ToolCategory.ReadLocal)
     {
         return new AllowedToolDto
         {
@@ -2936,7 +3039,8 @@ public sealed class NodeChatStreamServiceTests
             Name = name,
             Location = ToolLocation.ClientLocal,
             ParameterSchema = parameterSchema,
-            RequiresApproval = false
+            RequiresApproval = false,
+            Category = category
         };
     }
 
@@ -3060,6 +3164,7 @@ public sealed class NodeChatStreamServiceTests
             Options.Create(new KnowledgeBaseOptions()),
             CreateScopeFactory(),
             TimeProvider.System,
+            new PermissiveToolApprovalPolicy(),
             NullLogger<NodeChatStreamService>.Instance);
 
         var drained = 0;

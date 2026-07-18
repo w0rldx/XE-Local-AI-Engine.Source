@@ -31,18 +31,21 @@ public interface IToolApprovalPolicy
 }
 
 /// <summary>
-///     No-op <see cref="IToolApprovalPolicy" /> floor: returns <paramref name="catalogDefault" /> unchanged (identity), so
-///     a host that has not configured a node-level policy behaves byte-for-byte as it did before OPP-03. Wired via
-///     <c>TryAddSingleton</c> so a provider-only host (or a test) always resolves a policy; the real, node-configured
-///     <c>NodeToolApprovalPolicy</c> (registered by the composition root via a plain <c>AddSingleton</c>) wins over this
-///     floor (last registration wins). Mirrors <c>NoOpGpuModelLoadAdmission</c>.
+///     No-op <see cref="IToolApprovalPolicy" /> floor: applies no node-level tightening, so a host that has not configured
+///     a node-level policy behaves byte-for-byte as it did before OPP-03. Wired via <c>TryAddSingleton</c> so a
+///     provider-only host (or a test) always resolves a policy; the real, node-configured <c>NodeToolApprovalPolicy</c>
+///     (registered by the composition root via a plain <c>AddSingleton</c>) wins over this floor (last registration wins).
+///     Mirrors <c>NoOpGpuModelLoadAdmission</c>. The one non-identity term is the fail-closed <see cref="ToolCategory.Unknown" />
+///     rule shared by both policies (contract: an uncategorized tool is never auto-executed) — kept here for defense in
+///     depth. This stays byte-identical today because no offered tool ships <see cref="ToolCategory.Unknown" />.
 /// </summary>
 public sealed class PermissiveToolApprovalPolicy : IToolApprovalPolicy
 {
     /// <inheritdoc />
     public bool RequiresApproval(string toolName, ToolCategory category, bool catalogDefault)
     {
-        // Identity: no node-level tightening. The tool's own catalog default is authoritative.
-        return catalogDefault;
+        // Identity on the catalog default, with the shared fail-closed Unknown rule: an uncategorized tool always requires
+        // approval (contract). No offered tool ships Unknown today, so this is byte-identical to the pre-OPP-03 behavior.
+        return catalogDefault || category == ToolCategory.Unknown;
     }
 }

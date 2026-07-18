@@ -10,8 +10,10 @@ namespace XE_Local_AI_Engine.AI.Agent.Tools;
 ///         <list type="bullet">
 ///             <item><see cref="ReadLocal" /> — read-only, node-local, side-effect-free reads (clock/arithmetic, the
 ///             read-only coder workspace tools, the read-only knowledge-base tools).</item>
-///             <item><see cref="WriteExecute" /> — can write files or run commands on the node (the AgentHome gateway
-///             <c>run_in_agent_home</c>).</item>
+///             <item><see cref="WriteExecute" /> — reserved for tools that can write files or run commands on the node. No
+///             tool in the categorized OFFER currently uses it: the one write/execute gateway (<c>run_in_agent_home</c>)
+///             lives on the ClientLocal registry seam, not the offer, and is floored via the registry pre-wrap
+///             (<c>ApprovalRequiredAIFunction</c>), not this category.</item>
 ///             <item><see cref="Orchestration" /> — can spawn or drive other agents/models (<c>spawn_subagent</c>).</item>
 ///             <item><see cref="Network" /> — reaches an external/out-of-process surface (every discovered MCP tool).</item>
 ///             <item><see cref="Unknown" /> — the fail-closed default for any tool that has not declared a category, so

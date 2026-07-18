@@ -1267,7 +1267,10 @@ public sealed class AgentDefinitionResolverTests
             UpdatedAtUtc: 10);
     }
 
-    private static AllowedToolDto OfferTool(string name, bool requiresApproval = false, ToolCategory category = ToolCategory.Unknown)
+    // Stand-in offered tools default to a concrete ReadLocal category (never Unknown) to mirror the production invariant
+    // that every real offered tool declares a category; a test that needs another category / the Unknown fail-closed path
+    // passes it explicitly.
+    private static AllowedToolDto OfferTool(string name, bool requiresApproval = false, ToolCategory category = ToolCategory.ReadLocal)
     {
         return new AllowedToolDto
         {
