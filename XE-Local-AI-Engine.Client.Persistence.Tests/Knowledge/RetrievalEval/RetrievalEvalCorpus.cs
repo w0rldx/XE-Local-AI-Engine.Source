@@ -98,4 +98,65 @@ internal static class RetrievalEvalCorpus
         // (automobile → car) links them, so the lexical arm cannot retrieve it and the vector arm must.
         new("q-vehicle", "automobile", "vehicle", "car safety collision", IsVectorOnly: true)
     ];
+
+    // ── RAG-04 discriminating scenario: where score-agnostic RRF mis-orders and score-aware fusion recovers ──
+
+    /// <summary>
+    ///     An empty synonym map: the score-fusion scenario needs no semantic aliasing — it engineers the two arms purely
+    ///     through term frequency (BM25) and concept-bag direction (cosine), so the embedder maps every token to itself.
+    /// </summary>
+    public static IReadOnlyDictionary<string, string> ScoreFusionSynonyms { get; } = new Dictionary<string, string>(StringComparer.Ordinal);
+
+    /// <summary>
+    ///     A corpus deliberately built so classic (score-agnostic) Reciprocal Rank Fusion mis-orders the relevant
+    ///     document while score-aware fusion recovers it. For the query <c>"aa bb"</c>:
+    ///     <list type="bullet">
+    ///         <item>
+    ///             The two arms DISAGREE by rank in mirror image — the lexical (BM25) arm ranks
+    ///             <c>lexspoiler &gt; relevant &gt; vecspoiler</c> (driven by <c>bb</c> term frequency: 4 &gt; 2 &gt; 1);
+    ///             the semantic (cosine) arm ranks <c>vecspoiler &gt; relevant &gt; lexspoiler</c> (driven by concept-bag
+    ///             balance: <c>vecspoiler</c> is exactly the query direction, <c>lexspoiler</c> is skewed toward <c>bb</c>).
+    ///         </item>
+    ///         <item>
+    ///             So <c>relevant</c> is rank-2 in BOTH arms while each spoiler is rank-1 in one arm and rank-3 in the
+    ///             other. Under pure RRF the two spoilers each score <c>1/(k+1)+1/(k+3)</c> and <c>relevant</c> scores
+    ///             <c>2·1/(k+2)</c> — strictly LESS — so classic RRF pushes the relevant document to rank 3 (a result that
+    ///             does not depend on any GUID tie-break). Score-aware fusion sees that <c>relevant</c>'s arm scores sit
+    ///             far above each arm's floor and lifts it back to rank 1.
+    ///         </item>
+    ///     </list>
+    ///     <c>aa</c> is a filler term present in every document (≈ zero IDF); <c>bb</c> appears in only the three candidate
+    ///     documents out of fifteen, so it has a positive IDF and is the BM25 discriminator. The twelve <c>f*</c> filler
+    ///     documents exist to make <c>bb</c> rare enough for FTS5's <c>bm25()</c> to score it above zero.
+    /// </summary>
+    public static IReadOnlyList<FixtureDocument> ScoreFusionDocuments { get; } = BuildScoreFusionDocuments();
+
+    /// <summary>The single labeled query for the score-fusion scenario; its relevant document is <c>relevant</c>.</summary>
+    public static IReadOnlyList<LabeledQuery> ScoreFusionQueries { get; } =
+    [
+        new("q-scorefusion-hard", "aa bb", "relevant", "aa bb")
+    ];
+
+    private static IReadOnlyList<FixtureDocument> BuildScoreFusionDocuments()
+    {
+        var documents = new List<FixtureDocument>
+        {
+            // bb x4, short: strongest BM25 (highest bb term frequency) but concept bag skewed toward bb → weakest cosine.
+            new("lexspoiler", "aa bb bb bb bb"),
+            // bb x2, balanced: rank-2 in BOTH arms — the chunk pure RRF drops and score-aware must recover.
+            new("relevant", "aa bb bb"),
+            // bb x1, exactly the query direction: strongest cosine but weakest BM25 of the three candidates.
+            new("vecspoiler", "aa bb"),
+        };
+
+        // Filler documents carry the common term only (never bb), so bb stays rare (3 of 15) and keeps a positive IDF.
+        for (var index = 0; index < 12; index++)
+        {
+            documents.Add(new FixtureDocument(
+                string.Create(System.Globalization.CultureInfo.InvariantCulture, $"f{index}"),
+                string.Create(System.Globalization.CultureInfo.InvariantCulture, $"aa c{index}x c{index}y")));
+        }
+
+        return documents;
+    }
 }

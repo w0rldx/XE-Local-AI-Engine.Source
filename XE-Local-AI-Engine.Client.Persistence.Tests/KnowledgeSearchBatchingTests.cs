@@ -57,12 +57,13 @@ public sealed class KnowledgeSearchBatchingTests : IDisposable
 
         // FTS returns A, missing, B, C in rank order. Embedding is degraded (no provider), so the fused order is the FTS
         // order; the missing chunk must be dropped by hydration while A, B, C keep their order.
+        // BM25 is more-negative-for-stronger, so the rank order A, missing, B, C descends into the negatives.
         var ftsHits = new List<FtsSearchHit>
         {
-            new(chunkA, documentA, 4.0),
-            new(missingChunk, documentA, 3.0),
-            new(chunkB, documentA, 2.0),
-            new(chunkC, documentB, 1.0)
+            new(chunkA, documentA, -4.0),
+            new(missingChunk, documentA, -3.0),
+            new(chunkB, documentA, -2.0),
+            new(chunkC, documentB, -1.0)
         };
 
         await using var context = AgentDefinitionTestContextFactory.CreateForMigration(databasePath, _keyHolder);
@@ -105,7 +106,8 @@ public sealed class KnowledgeSearchBatchingTests : IDisposable
             chunkC
         };
 
-        var ftsHits = ftsRanked.Select((id, index) => new FtsSearchHit(id, documentA, ftsRanked.Count - index)).ToList();
+        // BM25 is more-negative-for-stronger: the best-first rank order maps to descending (more-negative) scores.
+        var ftsHits = ftsRanked.Select((id, index) => new FtsSearchHit(id, documentA, index - ftsRanked.Count)).ToList();
         var vectorSearch = Substitute.For<IVectorSearch>();
         vectorSearch.SearchAsync(Arg.Any<ReadOnlyMemory<float>>(), Arg.Any<string>(), Arg.Any<int>(), Arg.Any<Guid?>(), Arg.Any<CancellationToken>())
                     .Returns(Task.FromResult<IReadOnlyList<VectorSearchHit>>(vectorRanked.Select((id, index) => new VectorSearchHit(id, documentA, 1.0f - (index * 0.1f))).ToList()));
@@ -145,11 +147,12 @@ public sealed class KnowledgeSearchBatchingTests : IDisposable
         await SeedChunkAsync(databasePath, document, chunkB, chunkIndex: 1, "shared   answer   text.").ConfigureAwait(false);
         await SeedChunkAsync(databasePath, document, chunkC, chunkIndex: 2, "A different answer.").ConfigureAwait(false);
 
+        // BM25 is more-negative-for-stronger, so the rank order A, B, C descends into the negatives.
         var ftsHits = new List<FtsSearchHit>
         {
-            new(chunkA, document, 4.0),
-            new(chunkB, document, 3.0),
-            new(chunkC, document, 2.0)
+            new(chunkA, document, -4.0),
+            new(chunkB, document, -3.0),
+            new(chunkC, document, -2.0)
         };
 
         await using var context = AgentDefinitionTestContextFactory.CreateForMigration(databasePath, _keyHolder);

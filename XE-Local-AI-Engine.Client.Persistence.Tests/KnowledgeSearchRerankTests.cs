@@ -52,11 +52,12 @@ public sealed class KnowledgeSearchRerankTests : IDisposable
         await SeedChunkAsync(databasePath, documentId, chunkGamma, chunkIndex: 2, "gamma content").ConfigureAwait(false);
 
         // Fusion order (lexical): alpha, beta, gamma. Reranker makes gamma best, then beta, then alpha.
+        // FTS5 BM25 is more-negative-for-stronger (best first), so the scores descend into the negatives with rank.
         var ftsHits = new List<FtsSearchHit>
         {
-            new(chunkAlpha, documentId, 3.0),
-            new(chunkBeta, documentId, 2.0),
-            new(chunkGamma, documentId, 1.0)
+            new(chunkAlpha, documentId, -3.0),
+            new(chunkBeta, documentId, -2.0),
+            new(chunkGamma, documentId, -1.0)
         };
         var reranker = RerankerScoringBy(ScoreGammaBestBetaMidAlphaLow);
 
@@ -87,12 +88,13 @@ public sealed class KnowledgeSearchRerankTests : IDisposable
         await SeedChunkAsync(databasePath, documentId, chunkAlpha, chunkIndex: 0, "alpha content").ConfigureAwait(false);
         await SeedChunkAsync(databasePath, documentId, chunkBeta, chunkIndex: 1, "beta content").ConfigureAwait(false);
 
+        // BM25 is more-negative-for-stronger, so alpha (rank 1) is the most negative.
         var ftsHits = new List<FtsSearchHit>
         {
-            new(chunkAlpha, documentId, 2.0),
-            new(chunkBeta, documentId, 1.0)
+            new(chunkAlpha, documentId, -2.0),
+            new(chunkBeta, documentId, -1.0)
         };
-        // Reranker is CONFIGURED but unavailable → returns null → the search must keep the RRF order.
+        // Reranker is CONFIGURED but unavailable → returns null → the search must keep the fusion order.
         var reranker = Substitute.For<IRerankerClient>();
         reranker.RerankAsync(Arg.Any<string>(), Arg.Any<string>(), Arg.Any<IReadOnlyList<string>>(), Arg.Any<CancellationToken>())
                 .Returns((IReadOnlyList<double>?)null);
@@ -121,10 +123,11 @@ public sealed class KnowledgeSearchRerankTests : IDisposable
         await SeedChunkAsync(databasePath, documentId, chunkAlpha, chunkIndex: 0, "alpha content").ConfigureAwait(false);
         await SeedChunkAsync(databasePath, documentId, chunkBeta, chunkIndex: 1, "beta content").ConfigureAwait(false);
 
+        // BM25 is more-negative-for-stronger, so alpha (rank 1) is the most negative.
         var ftsHits = new List<FtsSearchHit>
         {
-            new(chunkAlpha, documentId, 2.0),
-            new(chunkBeta, documentId, 1.0)
+            new(chunkAlpha, documentId, -2.0),
+            new(chunkBeta, documentId, -1.0)
         };
         var reranker = Substitute.For<IRerankerClient>();
 
@@ -154,11 +157,12 @@ public sealed class KnowledgeSearchRerankTests : IDisposable
         await SeedChunkAsync(databasePath, documentId, chunkBeta, chunkIndex: 1, "beta content").ConfigureAwait(false);
         await SeedChunkAsync(databasePath, documentId, chunkGamma, chunkIndex: 2, "gamma content").ConfigureAwait(false);
 
+        // BM25 is more-negative-for-stronger, so the fused order alpha, beta, gamma descends into the negatives.
         var ftsHits = new List<FtsSearchHit>
         {
-            new(chunkAlpha, documentId, 3.0),
-            new(chunkBeta, documentId, 2.0),
-            new(chunkGamma, documentId, 1.0)
+            new(chunkAlpha, documentId, -3.0),
+            new(chunkBeta, documentId, -2.0),
+            new(chunkGamma, documentId, -1.0)
         };
         IReadOnlyList<string>? rerankedDocuments = null;
         var reranker = Substitute.For<IRerankerClient>();

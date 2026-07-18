@@ -42,14 +42,20 @@ internal sealed class RetrievalEvalFixture : IDisposable
     private readonly INodeSqliteKeyHolder _keyHolder;
     private readonly KnowledgeBaseOptions _options;
     private readonly IOptions<KnowledgeBaseOptions> _optionsWrapper;
+    private readonly IReadOnlyDictionary<string, string> _synonymToConcept;
     private readonly List<NodeChatDbContext> _searchContexts = [];
 
-    private RetrievalEvalFixture(string databasePath, INodeSqliteKeyHolder keyHolder, KnowledgeBaseOptions options, IReadOnlyDictionary<string, Guid> documentIdsByKey)
+    private RetrievalEvalFixture(string databasePath,
+        INodeSqliteKeyHolder keyHolder,
+        KnowledgeBaseOptions options,
+        IReadOnlyDictionary<string, string> synonymToConcept,
+        IReadOnlyDictionary<string, Guid> documentIdsByKey)
     {
         _databasePath = databasePath;
         _keyHolder = keyHolder;
         _options = options;
         _optionsWrapper = Options.Create(options);
+        _synonymToConcept = synonymToConcept;
         DocumentIdsByKey = documentIdsByKey;
     }
 
@@ -64,10 +70,24 @@ internal sealed class RetrievalEvalFixture : IDisposable
     ///     real ingestion pipeline. Throws if any document does not reach <see cref="KnowledgeDocumentStatus.Indexed" />,
     ///     so a broken fixture fails loudly instead of silently measuring an empty index.
     /// </summary>
-    public static async Task<RetrievalEvalFixture> BuildAsync(string databasePath, INodeSqliteKeyHolder keyHolder, CancellationToken cancellationToken)
+    public static Task<RetrievalEvalFixture> BuildAsync(string databasePath, INodeSqliteKeyHolder keyHolder, CancellationToken cancellationToken) =>
+        BuildAsync(databasePath, keyHolder, RetrievalEvalCorpus.Documents, RetrievalEvalCorpus.SynonymToConcept, cancellationToken);
+
+    /// <summary>
+    ///     Ingests a caller-supplied labeled corpus and synonym map through the same real pipeline. RAG-04 uses this to
+    ///     ingest a small DISCRIMINATING corpus (engineered so score-agnostic RRF mis-orders the relevant chunk while
+    ///     score-aware fusion recovers it) into its own database, without touching the shared baseline corpus.
+    /// </summary>
+    public static async Task<RetrievalEvalFixture> BuildAsync(string databasePath,
+        INodeSqliteKeyHolder keyHolder,
+        IReadOnlyList<RetrievalEvalCorpus.FixtureDocument> documents,
+        IReadOnlyDictionary<string, string> synonymToConcept,
+        CancellationToken cancellationToken)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(databasePath);
         ArgumentNullException.ThrowIfNull(keyHolder);
+        ArgumentNullException.ThrowIfNull(documents);
+        ArgumentNullException.ThrowIfNull(synonymToConcept);
 
         var options = new KnowledgeBaseOptions
         {
@@ -91,7 +111,7 @@ internal sealed class RetrievalEvalFixture : IDisposable
             var blobStore = new InMemoryBlobStore();
             var extractor = new DocumentTextExtractor(NullLogger<DocumentTextExtractor>.Instance);
             var chunkingService = new HeaderBoundaryChunkingService(optionsWrapper);
-            var providerResolver = new SingleProviderResolver(new DeterministicEmbeddingProvider(EmbeddingDimensions, RetrievalEvalCorpus.SynonymToConcept));
+            var providerResolver = new SingleProviderResolver(new DeterministicEmbeddingProvider(EmbeddingDimensions, synonymToConcept));
             var embedder = new KnowledgeChunkEmbedder(providerResolver, new EmbeddingModelResolver(optionsWrapper), new KnowledgeEmbeddingPrefixer(), optionsWrapper);
             var indexWriter = new KnowledgeIndexWriter(ingestionContext, TimeProvider.System);
             var notifier = Substitute.For<IKnowledgeIndexingNotifier>();
@@ -108,7 +128,7 @@ internal sealed class RetrievalEvalFixture : IDisposable
             var connection = ingestionContext.Database.GetDbConnection();
             await OpenAsync(connection, cancellationToken).ConfigureAwait(false);
 
-            foreach (var document in RetrievalEvalCorpus.Documents)
+            foreach (var document in documents)
             {
                 var documentId = Guid.NewGuid();
                 documentIdsByKey[document.Key] = documentId;
@@ -128,12 +148,29 @@ internal sealed class RetrievalEvalFixture : IDisposable
             }
         }
 
-        return new RetrievalEvalFixture(databasePath, keyHolder, options, documentIdsByKey);
+        return new RetrievalEvalFixture(databasePath, keyHolder, options, synonymToConcept, documentIdsByKey);
     }
 
-    /// <summary>The default hybrid search: FTS ∪ vector, fused by RRF, no reranker.</summary>
+    /// <summary>The default hybrid search: FTS ∪ vector, fused by the shipped default fusion strategy, no reranker.</summary>
     public IKnowledgeSearchService CreateHybridSearchService() =>
         CreateSearchService(HybridProviderResolver(), _options, Substitute.For<IRerankerClient>());
+
+    /// <summary>
+    ///     The hybrid search pinned to an explicit fusion strategy (RAG-04 before/after comparison). Both variants read
+    ///     the SAME ingested index, so a metric difference is attributable purely to the fusion.
+    /// </summary>
+    public IKnowledgeSearchService CreateHybridSearchService(RankFusionStrategy fusionStrategy, double fusionScoreWeight) =>
+        CreateSearchService(HybridProviderResolver(), CloneOptionsWithFusion(fusionStrategy, fusionScoreWeight), Substitute.For<IRerankerClient>());
+
+    private KnowledgeBaseOptions CloneOptionsWithFusion(RankFusionStrategy fusionStrategy, double fusionScoreWeight) =>
+        new()
+        {
+            MaxChunkChars = _options.MaxChunkChars,
+            ChunkOverlapChars = _options.ChunkOverlapChars,
+            RerankerModelName = _options.RerankerModelName,
+            FusionStrategy = fusionStrategy,
+            FusionScoreWeight = fusionScoreWeight
+        };
 
     /// <summary>
     ///     A search whose query-embedding provider is unavailable, so the vector arm is skipped and RRF degrades to the
@@ -155,8 +192,8 @@ internal sealed class RetrievalEvalFixture : IDisposable
         return CreateSearchService(HybridProviderResolver(), rerankedOptions, reranker);
     }
 
-    private static ILocalModelProviderResolver HybridProviderResolver() =>
-        new SingleProviderResolver(new DeterministicEmbeddingProvider(EmbeddingDimensions, RetrievalEvalCorpus.SynonymToConcept));
+    private ILocalModelProviderResolver HybridProviderResolver() =>
+        new SingleProviderResolver(new DeterministicEmbeddingProvider(EmbeddingDimensions, _synonymToConcept));
 
     private IKnowledgeSearchService CreateSearchService(ILocalModelProviderResolver providerResolver, KnowledgeBaseOptions options, IRerankerClient reranker)
     {
