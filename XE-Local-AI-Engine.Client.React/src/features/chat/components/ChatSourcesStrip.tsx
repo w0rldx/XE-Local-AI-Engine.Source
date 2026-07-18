@@ -35,10 +35,7 @@ export const ChatSourcesStrip = memo(function ChatSourcesStrip({ sources }: Chat
 	// The source whose document drawer is open (also the only document whose detail endpoint is fetched).
 	const [activeSource, setActiveSource] = useState<ChatMessageSource | undefined>();
 	const [drawerOpened, { open: openDrawer, close: closeDrawer }] = useDisclosure(false);
-	const { data: detail, isFetching: detailIsFetching } = useKnowledgeDocumentDetail(
-		activeSource?.documentId ?? "",
-		drawerOpened,
-	);
+	const { data: detail, isFetching: detailIsFetching } = useKnowledgeDocumentDetail(activeSource?.documentId ?? "", drawerOpened);
 
 	const openSource = useCallback(
 		(source: ChatMessageSource): void => {

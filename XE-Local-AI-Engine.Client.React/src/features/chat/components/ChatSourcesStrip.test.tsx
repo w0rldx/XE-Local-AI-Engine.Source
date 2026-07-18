@@ -121,10 +121,7 @@ describe("ChatSourcesStrip", () => {
 		detailMock.mockReturnValue({ data: detail(), isFetching: false });
 		renderWithProviders(
 			<ChatSourcesStrip
-				sources={[
-					source({ documentId: "doc-a", title: "Alpha" }),
-					source({ documentId: "doc-b", chunkId: "b1", title: "Beta" }),
-				]}
+				sources={[source({ documentId: "doc-a", title: "Alpha" }), source({ documentId: "doc-b", chunkId: "b1", title: "Beta" })]}
 			/>,
 		);
 
