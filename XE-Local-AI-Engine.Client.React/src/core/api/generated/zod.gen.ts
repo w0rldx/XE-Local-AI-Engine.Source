@@ -2424,6 +2424,7 @@ export const zXeLocalAiEngineClientEndpointsLocalChatV1ResolveToolApprovalRespon
 
 export const zXeLocalAiEngineClientEndpointsAgentsV1AgentUsageSummaryBucketResponse = z.object({
 	modelName: z.string(),
+	provider: z.string(),
 	dayStartUtcMs: z.int(),
 	runCount: z
 		.int()
@@ -2446,10 +2447,22 @@ export const zXeLocalAiEngineClientEndpointsAgentsV1AgentUsageSummaryTotalsRespo
 	totalTokens: z.int(),
 });
 
+export const zXeLocalAiEngineClientEndpointsAgentsV1AgentUsageProviderTotalsResponse = z.object({
+	provider: z.string(),
+	runCount: z
+		.int()
+		.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })
+		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" }),
+	promptTokens: z.int(),
+	completionTokens: z.int(),
+	reasoningTokens: z.int(),
+	totalTokens: z.int(),
+});
+
 export const zXeLocalAiEngineClientEndpointsAgentsV1AgentUsageSummaryResponse = z.object({
 	items: z.array(zXeLocalAiEngineClientEndpointsAgentsV1AgentUsageSummaryBucketResponse),
 	totals: zXeLocalAiEngineClientEndpointsAgentsV1AgentUsageSummaryTotalsResponse,
-	groupedByModelOnly: z.boolean(),
+	byProvider: z.array(zXeLocalAiEngineClientEndpointsAgentsV1AgentUsageProviderTotalsResponse),
 	retentionDays: z
 		.int()
 		.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })

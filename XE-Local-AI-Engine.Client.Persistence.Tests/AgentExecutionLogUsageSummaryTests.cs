@@ -9,9 +9,10 @@ using XE_Local_AI_Engine.Client.Persistence.Tests.Testing;
 
 /// <summary>
 ///     Aggregation round-trips for <see cref="AgentExecutionLogStore.SummarizeTokenUsageAsync" /> (BE-01): the set-based
-///     GROUP BY over the run-envelope ledger sums tokens per (model, UTC day), excludes the memory-diagnostics producer,
-///     counts missing token fields as zero, and honours the half-open date range — all executed server-side against real
-///     SQLite so the arithmetic day-bucket and nullable SUM translations are proven.
+///     GROUP BY over the run-envelope ledger sums tokens per (model, provider, UTC day), excludes the memory-diagnostics
+///     producer, counts missing token fields as zero, and honours the half-open date range — all executed server-side
+///     against real SQLite so the arithmetic day-bucket and nullable SUM translations are proven. The per-provider rollup
+///     is folded from these buckets by the endpoint mapper, so it is covered by the mapper test rather than here.
 /// </summary>
 public sealed class AgentExecutionLogUsageSummaryTests : IDisposable
 {
@@ -79,6 +80,56 @@ public sealed class AgentExecutionLogUsageSummaryTests : IDisposable
         // Missing reasoning/total fields count as 0, not null.
         AssertEx.Equal(expected: 0L, dayOneY.ReasoningTokens);
         AssertEx.Equal(expected: 0L, dayOneY.TotalTokens);
+    }
+
+    [Test]
+    public async Task SummarizeTokenUsageAsync_GroupsByProvider_SplittingSameModelAndDay()
+    {
+        var databasePath = GetDatabasePath("usage-summary-provider.sqlite");
+        using var keyHolder = new FixedNodeSqliteKeyHolder(CreateKeyMaterial());
+
+        await using var context = CreateContext(databasePath, keyHolder);
+        await context.Database.EnsureDeletedAsync();
+        await context.Database.EnsureCreatedAsync();
+        var store = new AgentExecutionLogStore(context, TimeProvider.System);
+
+        // Same model + same UTC day, TWO providers → two distinct buckets (the provider is part of the group key). The two
+        // "local" rows must fold into ONE bucket; the "ollama" row for the same model/day is a separate bucket.
+        await AddEnvelopeAsync(context, "llama-x", DayOneStart + 10, prompt: 100, completion: 200, reasoning: 50, total: 350, provider: AgentUsageProviders.Local);
+        await AddEnvelopeAsync(context, "llama-x", DayOneStart + 20, prompt: 10, completion: 20, reasoning: 5, total: 35, provider: AgentUsageProviders.Local);
+        await AddEnvelopeAsync(context, "llama-x", DayOneStart + 30, prompt: 1, completion: 2, reasoning: 3, total: 6, provider: AgentUsageProviders.Ollama);
+        // A distinct model on a cloud provider, plus a row that predates the dimension (backfilled to 'unknown').
+        await AddEnvelopeAsync(context, "gpt-5", DayOneStart + 40, prompt: 7, completion: 8, reasoning: 9, total: 24, provider: AgentUsageProviders.Codex);
+        await AddEnvelopeAsync(context, "legacy", DayOneStart + 50, prompt: 2, completion: 2, reasoning: 0, total: 4, provider: AgentUsageProviders.Unknown);
+
+        var summary = await store.SummarizeTokenUsageAsync(fromEpochMsInclusive: null, toEpochMsExclusive: null);
+
+        // Four buckets, one UTC day, ordered by provider ascending then model ascending → [codex/gpt-5, local/llama-x,
+        // ollama/llama-x, unknown/legacy].
+        AssertEx.Equal(expected: 4, summary.Count);
+
+        AssertEx.Equal(AgentUsageProviders.Codex, summary[0].Provider);
+        AssertEx.Equal("gpt-5", summary[0].ModelName);
+
+        var local = summary[1];
+        AssertEx.Equal(AgentUsageProviders.Local, local.Provider);
+        AssertEx.Equal("llama-x", local.ModelName);
+        // Both "local" rows for the same model/day folded into one bucket.
+        AssertEx.Equal(expected: 2, local.RunCount);
+        AssertEx.Equal(expected: 110L, local.PromptTokens);
+        AssertEx.Equal(expected: 220L, local.CompletionTokens);
+        AssertEx.Equal(expected: 55L, local.ReasoningTokens);
+        AssertEx.Equal(expected: 385L, local.TotalTokens);
+
+        var ollama = summary[2];
+        AssertEx.Equal(AgentUsageProviders.Ollama, ollama.Provider);
+        AssertEx.Equal("llama-x", ollama.ModelName);
+        // The ollama row is NOT folded into the local bucket despite the same model + day.
+        AssertEx.Equal(expected: 1, ollama.RunCount);
+        AssertEx.Equal(expected: 1L, ollama.PromptTokens);
+
+        AssertEx.Equal(AgentUsageProviders.Unknown, summary[3].Provider);
+        AssertEx.Equal("legacy", summary[3].ModelName);
     }
 
     [Test]
@@ -159,13 +210,16 @@ public sealed class AgentExecutionLogUsageSummaryTests : IDisposable
 
     // Inserts a run-envelope row (kind 1) directly through the internal DbSet with an explicit token set, mirroring what
     // the terminalize persistence command writes. Keeps token fields controllable so the aggregation math is provable.
+    // The provider defaults to 'unknown' (matching the column default the write path relies on) so the model/day tests
+    // stay indifferent to the provider dimension; the provider-grouping test passes distinct values.
     private static async Task AddEnvelopeAsync(NodeChatDbContext context,
         string modelName,
         long createdAtUtc,
         int? prompt,
         int? completion,
         int? reasoning,
-        int? total)
+        int? total,
+        string provider = AgentUsageProviders.Unknown)
     {
         _ = context.AgentExecutionLogs.Add(new AgentExecutionLog
         {
@@ -176,6 +230,7 @@ public sealed class AgentExecutionLogUsageSummaryTests : IDisposable
             ConversationId = Guid.NewGuid(),
             MessageId = Guid.NewGuid(),
             ModelName = modelName,
+            Provider = provider,
             ConfigHash = string.Empty,
             TerminalStatus = "completed",
             Success = true,

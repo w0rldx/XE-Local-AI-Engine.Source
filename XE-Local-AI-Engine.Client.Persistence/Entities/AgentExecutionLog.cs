@@ -39,6 +39,14 @@ internal sealed record class AgentExecutionLog
     /// <summary>Model the run executed on. Plaintext (structural).</summary>
     public string ModelName { get; set; } = string.Empty;
 
+    /// <summary>
+    ///     Fine-grained runtime provider that served the run (a non-sensitive category label): <c>local</c> (llama.cpp),
+    ///     <c>ollama</c>, <c>codex</c>, <c>azure</c>, or <c>unknown</c> (fallback / rows written before the dimension
+    ///     existed). Never encrypted — a category label like <see cref="ModelName" />, not content. Existing rows and any
+    ///     envelope written without a resolved provider backfill to <c>unknown</c> via the column default. Plaintext (structural).
+    /// </summary>
+    public string Provider { get; set; } = XE_Local_AI_Engine.Client.Persistence.Stores.AgentUsageProviders.Unknown;
+
     /// <summary>Runtime-package config hash for the run. Plaintext (structural).</summary>
     public string ConfigHash { get; set; } = string.Empty;
 
