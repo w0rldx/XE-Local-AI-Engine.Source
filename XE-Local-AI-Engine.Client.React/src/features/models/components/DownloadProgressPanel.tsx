@@ -2,6 +2,8 @@ import { Alert, Button, Card, Group, Loader, Progress, Stack, Text, Title } from
 import { IconAlertTriangle, IconCloudDownload, IconX } from "@tabler/icons-react";
 import { useTranslation } from "react-i18next";
 
+import { useDownloadRateEstimates } from "@/features/models/hooks/useDownloadRateEstimates";
+import { formatDownloadEta } from "@/features/models/models/DownloadRateEstimate";
 import type { GgufDownloadStatus } from "@/features/models/queries/useGgufDownload";
 
 interface DownloadProgressPanelProps {
@@ -39,6 +41,8 @@ export function DownloadProgressPanel({
 	cancellingModelName,
 }: DownloadProgressPanelProps) {
 	const { t } = useTranslation();
+	// UX-11: FE-derived speed + ETA per model from successive status pushes (no timestamps ride the wire).
+	const rateEstimates = useDownloadRateEstimates(downloadStatuses);
 
 	if (inFlight.length === 0) {
 		return null;
@@ -58,6 +62,16 @@ export function DownloadProgressPanel({
 						const isFailed = status?.phase === "Failed";
 						const pct = status?.pct;
 						const hasDeterminate = pct !== undefined;
+						const estimate = rateEstimates.get(modelName);
+						const isActiveDownload = status?.phase === "Running";
+						const speedLabel =
+							estimate?.bytesPerSecond !== undefined
+								? t("pages.models.gguf.download.speed", "{{value}}/s", { value: humanizeBytes(estimate.bytesPerSecond) })
+								: undefined;
+						const etaDuration = formatDownloadEta(estimate?.etaSeconds);
+						const etaLabel = etaDuration
+							? t("pages.models.gguf.download.eta", "~{{duration}} left", { duration: etaDuration })
+							: undefined;
 
 						return (
 							<Stack key={modelName} gap="xs" data-testid={`model-fit-download-row-${modelName}`}>
@@ -108,6 +122,12 @@ export function DownloadProgressPanel({
 										size="sm"
 										radius="sm"
 									/>
+								) : null}
+
+								{isActiveDownload && (speedLabel || etaLabel) ? (
+									<Text size="xs" c="dimmed" data-testid={`model-fit-download-rate-${modelName}`}>
+										{[speedLabel, etaLabel].filter(Boolean).join(" · ")}
+									</Text>
 								) : null}
 
 								{isFailed && status?.sanitizedError ? (
