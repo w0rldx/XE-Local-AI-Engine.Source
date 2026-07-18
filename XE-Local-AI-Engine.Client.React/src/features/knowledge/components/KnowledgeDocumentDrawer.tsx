@@ -137,7 +137,11 @@ export function KnowledgeDocumentDrawer({ opened, detail, isLoading, highlightSe
 										>
 											<Stack gap={6}>
 												<Group gap="xs" justify="space-between" wrap="nowrap">
-													<Badge variant={isHighlighted ? "filled" : "outline"} color={isHighlighted ? "primary" : "gray"} size="sm">
+													<Badge
+														variant={isHighlighted ? "filled" : "outline"}
+														color={isHighlighted ? "primary" : "gray"}
+														size="sm"
+													>
 														{t("pages.knowledgeBase.detail.chunkLabel", "Chunk {{index}}", { index: chunk.chunkIndex })}
 													</Badge>
 													{chunk.headingPath ? (

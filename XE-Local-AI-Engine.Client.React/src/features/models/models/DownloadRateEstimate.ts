@@ -28,10 +28,7 @@ const EMPTY_ESTIMATE: DownloadRateEstimate = { bytesPerSecond: undefined, etaSec
  * byte count/timestamp did not advance past the previous sample is ignored so duplicate/no-op pushes never distort the
  * window or manufacture a fake "0 elapsed" delta.
  */
-export function appendDownloadSample(
-	previous: readonly DownloadSample[] | undefined,
-	sample: DownloadSample,
-): DownloadSample[] {
+export function appendDownloadSample(previous: readonly DownloadSample[] | undefined, sample: DownloadSample): DownloadSample[] {
 	const window = previous ? [...previous] : [];
 	const last = window.at(-1);
 	if (last && sample.timestampMs <= last.timestampMs && sample.completedBytes <= last.completedBytes) {

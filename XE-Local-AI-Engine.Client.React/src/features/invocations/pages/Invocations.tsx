@@ -1,4 +1,20 @@
-import { ActionIcon, Alert, Badge, Button, Card, Container, CopyButton, Group, Loader, SimpleGrid, Stack, Table, Text, Title, Tooltip } from "@mantine/core";
+import {
+	ActionIcon,
+	Alert,
+	Badge,
+	Button,
+	Card,
+	Container,
+	CopyButton,
+	Group,
+	Loader,
+	SimpleGrid,
+	Stack,
+	Table,
+	Text,
+	Title,
+	Tooltip,
+} from "@mantine/core";
 import { IconAlertTriangle, IconCheck, IconCopy, IconHistory, IconPlayerPlay, IconRefresh } from "@tabler/icons-react";
 import { useQuery } from "@tanstack/react-query";
 import type { TFunction } from "i18next";
@@ -20,7 +36,9 @@ import {
 } from "@/features/invocations/models/InvocationMonitorModel";
 
 function errorMessage(error: unknown, t: TFunction): string {
-	return error instanceof Error ? error.message : t("pages.invocations.monitor.loadError", "Invocation monitor data could not be loaded.");
+	return error instanceof Error
+		? error.message
+		: t("pages.invocations.monitor.loadError", "Invocation monitor data could not be loaded.");
 }
 
 // Copyable W3C trace id (AUD4-19) so a failed run's "See local logs" row correlates with the exported trace. Renders
@@ -39,7 +57,11 @@ function TraceIdLine({ traceId }: { readonly traceId: string | null }) {
 			<CopyButton value={traceId} timeout={2000}>
 				{({ copied, copy }) => (
 					<Tooltip
-						label={copied ? t("pages.invocations.monitor.traceId.copied", "Copied") : t("pages.invocations.monitor.traceId.copy", "Copy trace id")}
+						label={
+							copied
+								? t("pages.invocations.monitor.traceId.copied", "Copied")
+								: t("pages.invocations.monitor.traceId.copy", "Copy trace id")
+						}
 						withArrow={true}
 					>
 						<ActionIcon
@@ -69,7 +91,9 @@ function CurrentInvocation({ current }: { readonly current: InvocationCurrentDto
 						<Title order={3}>{t("pages.invocations.monitor.current.title", "Current invocation")}</Title>
 						<IconPlayerPlay size={22} />
 					</Group>
-					<Text c="dimmed">{t("pages.invocations.monitor.current.empty", "No invocation is currently assigned or running.")}</Text>
+					<Text c="dimmed">
+						{t("pages.invocations.monitor.current.empty", "No invocation is currently assigned or running.")}
+					</Text>
 				</Stack>
 			</Card>
 		);
@@ -92,11 +116,27 @@ function CurrentInvocation({ current }: { readonly current: InvocationCurrentDto
 					{buildInvocationSummary(current, t)}
 				</Text>
 				<SimpleGrid cols={{ base: 1, md: 2 }} spacing="sm">
-					<Text>{t("pages.invocations.monitor.current.model", "Model: {{value}}", { value: formatInvocationText(current.modelUsed) })}</Text>
-					<Text>{t("pages.invocations.monitor.current.conversation", "Conversation: {{value}}", { value: current.conversationId })}</Text>
-					<Text>{t("pages.invocations.monitor.current.started", "Started: {{value}}", { value: formatInvocationTimestamp(current.startedAt) })}</Text>
-					<Text>{t("pages.invocations.monitor.current.updated", "Updated: {{value}}", { value: formatInvocationTimestamp(current.lastUpdatedAt) })}</Text>
-					<Text>{t("pages.invocations.monitor.current.outputChunks", "Output chunks: {{value}}", { value: current.streamedChunkCount })}</Text>
+					<Text>
+						{t("pages.invocations.monitor.current.model", "Model: {{value}}", { value: formatInvocationText(current.modelUsed) })}
+					</Text>
+					<Text>
+						{t("pages.invocations.monitor.current.conversation", "Conversation: {{value}}", { value: current.conversationId })}
+					</Text>
+					<Text>
+						{t("pages.invocations.monitor.current.started", "Started: {{value}}", {
+							value: formatInvocationTimestamp(current.startedAt),
+						})}
+					</Text>
+					<Text>
+						{t("pages.invocations.monitor.current.updated", "Updated: {{value}}", {
+							value: formatInvocationTimestamp(current.lastUpdatedAt),
+						})}
+					</Text>
+					<Text>
+						{t("pages.invocations.monitor.current.outputChunks", "Output chunks: {{value}}", {
+							value: current.streamedChunkCount,
+						})}
+					</Text>
 					<Text>
 						{t("pages.invocations.monitor.current.thinkingChunks", "Thinking chunks: {{value}}", {
 							value: current.streamedThinkingChunkCount,
@@ -160,7 +200,13 @@ function HistoryRows({ history }: { readonly history: InvocationHistoryDto[] }) 
 
 export function Invocations() {
 	const { t } = useTranslation();
-	const { data: monitor, isLoading: monitorIsLoading, error: monitorError, refetch: monitorRefetch, isFetching: monitorIsFetching } = useQuery({
+	const {
+		data: monitor,
+		isLoading: monitorIsLoading,
+		error: monitorError,
+		refetch: monitorRefetch,
+		isFetching: monitorIsFetching,
+	} = useQuery({
 		...withResponseValidation(getInvocationMonitorOptions()),
 		refetchInterval: 5000,
 		select: toInvocationMonitor,
