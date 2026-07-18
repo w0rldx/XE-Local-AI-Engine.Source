@@ -54,8 +54,6 @@ public sealed class NodeChatDbContext : DbContext
 
     internal DbSet<ScheduledJobRunEvent> ScheduledJobRunEvents => Set<ScheduledJobRunEvent>();
 
-    internal DbSet<ApprovedUtilityImage> ApprovedUtilityImages => Set<ApprovedUtilityImage>();
-
     internal DbSet<ModelFitSnapshot> ModelFitSnapshots => Set<ModelFitSnapshot>();
 
     internal DbSet<ModelFitRecommendation> ModelFitRecommendations => Set<ModelFitRecommendation>();
@@ -272,7 +270,6 @@ public sealed class NodeChatDbContext : DbContext
         modelBuilder.ApplyConfiguration(new ScheduledJobDefinitionConfiguration());
         modelBuilder.ApplyConfiguration(new ScheduledJobRunConfiguration());
         modelBuilder.ApplyConfiguration(new ScheduledJobRunEventConfiguration());
-        modelBuilder.ApplyConfiguration(new ApprovedUtilityImageConfiguration());
         modelBuilder.ApplyConfiguration(new ModelFitSnapshotConfiguration());
         modelBuilder.ApplyConfiguration(new ModelFitRecommendationConfiguration());
         modelBuilder.ApplyConfiguration(new ModelFitBenchmarkConfiguration());
