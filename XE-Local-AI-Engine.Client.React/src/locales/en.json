@@ -1255,7 +1255,13 @@
 					"label": "Reranker model",
 					"description": "Cross-encoder reranker that reorders knowledge-base search results for relevance. Leave off if no reranker model is installed. Applies after the node restarts. Uses additional VRAM not counted by capacity checks.",
 					"off": "Off",
-					"empty": "No installed models"
+					"empty": "No installed models",
+					"downloadRecommended": "Download recommended reranker",
+					"recommendedHelp": "Recommended: bge-reranker-v2-m3, which runs as its own extra model server.",
+					"downloadAlreadyInstalled": "The recommended reranker ({{model}}) is already installed.",
+					"downloadStarted": "Downloading the recommended reranker ({{model}}).",
+					"downloadInFlight": "The recommended reranker ({{model}}) is already downloading.",
+					"downloadError": "Could not start the recommended reranker download."
 				}
 			}
 		},
