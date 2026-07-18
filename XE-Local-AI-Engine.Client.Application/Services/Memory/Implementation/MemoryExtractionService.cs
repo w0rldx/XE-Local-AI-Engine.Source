@@ -16,6 +16,7 @@ using XE_Local_AI_Engine.Client.Services.AgentHome.Implementation;
 internal sealed class MemoryExtractionService(
     IMemoryExtractionAgent extractionAgent,
     IPlaybookActionStore playbookActionStore,
+    IMemorySemanticDeduplicator semanticDeduplicator,
     IOptions<MemoryExtractionOptions> options,
     ILogger<MemoryExtractionService> logger) : IMemoryExtractionService
 {
@@ -23,6 +24,7 @@ internal sealed class MemoryExtractionService(
     private readonly ILogger<MemoryExtractionService> _logger = logger ?? throw new ArgumentNullException(nameof(logger));
     private readonly MemoryExtractionOptions _options = (options ?? throw new ArgumentNullException(nameof(options))).Value;
     private readonly IPlaybookActionStore _playbookActionStore = playbookActionStore ?? throw new ArgumentNullException(nameof(playbookActionStore));
+    private readonly IMemorySemanticDeduplicator _semanticDeduplicator = semanticDeduplicator ?? throw new ArgumentNullException(nameof(semanticDeduplicator));
 
     public async Task<MemoryExtractionOutcome> ExtractAsync(MemoryExtractionRunInput run, CancellationToken cancellationToken = default)
     {
@@ -68,10 +70,12 @@ internal sealed class MemoryExtractionService(
             run.AssistantMessageId
         };
 
-        var created = new List<PlaybookActionRecord>();
         var duplicates = 0;
         var rejected = 0;
 
+        // PASS 1 — secret scan + lexical dedup. The exact normalized-text key is the fast/robust baseline; survivors are
+        // collected (not yet persisted) so PASS 2 can layer semantic dedup on top before anything is written.
+        var accepted = new List<AcceptedCandidate>();
         foreach (var proposal in proposals)
         {
             if (string.IsNullOrWhiteSpace(proposal.Behavior))
@@ -111,26 +115,71 @@ internal sealed class MemoryExtractionService(
                 continue;
             }
 
+            accepted.Add(new AcceptedCandidate(behavior, triggerCondition, proposal.Scope, proposal.Confidence));
+        }
+
+        // PASS 2 — semantic (embedding-cosine) dedup ON TOP OF lexical: drop a lexically-distinct candidate that is a
+        // paraphrase of an existing live memory. Gated on a confident node-local embedding model; on no model / any
+        // embedding failure it returns NotApplied and every lexically-surviving candidate is kept (no mass-dedup on
+        // outage). The embed text never leaves the node and is never persisted (see MemorySemanticDeduplicator).
+        var semantic = await _semanticDeduplicator.FindSemanticDuplicatesAsync(BuildSemanticExisting(existing),
+            [.. accepted.Select(static candidate => new MemoryDedupCandidate(candidate.Scope, candidate.Behavior))],
+            cancellationToken).ConfigureAwait(false);
+
+        var created = new List<PlaybookActionRecord>();
+        var semanticDuplicates = 0;
+        for (var index = 0; index < accepted.Count; index++)
+        {
+            if (semantic.Applied && semantic.DuplicateIndexes.Contains(index))
+            {
+                // A cosine-near paraphrase of an existing live memory (same scope) — treat as a duplicate, like lexical.
+                duplicates++;
+                semanticDuplicates++;
+                continue;
+            }
+
+            var candidate = accepted[index];
             var record = await _playbookActionStore.AddAsync(new PlaybookActionInput(run.AgentDefinitionId,
                     PlaybookActionState.Suggested,
                     PlaybookActionSource.Extracted,
-                    triggerCondition,
-                    behavior,
-                    proposal.Scope.ToString(),
+                    candidate.TriggerCondition,
+                    candidate.Behavior,
+                    candidate.Scope.ToString(),
                     _options.CandidatePriority,
                     sourceFeedbackIds,
-                    proposal.Confidence,
-                    MemoryScope: proposal.Scope),
+                    candidate.Confidence,
+                    MemoryScope: candidate.Scope),
                 cancellationToken).ConfigureAwait(false);
 
             created.Add(record);
         }
 
-        _logger.LogInformation("Memory extraction for agent {AgentId}: proposed {Proposed}, kept {Kept}, duplicates {Duplicates}, secret-rejected {Rejected}.",
-            run.AgentDefinitionId, proposals.Count, created.Count, duplicates, rejected);
+        _logger.LogInformation(
+            "Memory extraction for agent {AgentId}: proposed {Proposed}, kept {Kept}, duplicates {Duplicates} (semantic {SemanticDuplicates}), secret-rejected {Rejected}.",
+            run.AgentDefinitionId, proposals.Count, created.Count, duplicates, semanticDuplicates, rejected);
 
         return new MemoryExtractionOutcome(MemoryExcluded: false, ModelConfigured: true, created, proposals.Count, duplicates);
     }
+
+    private static IReadOnlyList<MemoryDedupExisting> BuildSemanticExisting(IReadOnlyList<PlaybookActionRecord> existing)
+    {
+        // The semantic comparison set mirrors the lexical one: only live (Suggested/Enabled) actions gate re-proposal. A
+        // legacy untyped action (null MemoryScope) keys under Procedural so it dedupes a procedural candidate, matching
+        // BuildDedupKeys. Id+Version key its RAM-only cached vector; Behavior is the embedded text.
+        return
+        [
+            .. existing
+               .Where(static action => action.State is PlaybookActionState.Suggested or PlaybookActionState.Enabled)
+               .Where(static action => !string.IsNullOrWhiteSpace(action.Behavior))
+               .Select(static action => new MemoryDedupExisting(action.Id,
+                   action.Version,
+                   action.MemoryScope ?? MemoryScope.Procedural,
+                   action.Behavior))
+        ];
+    }
+
+    // One lexically-surviving candidate carried between PASS 1 (lexical) and PASS 2 (semantic) before persistence.
+    private sealed record AcceptedCandidate(string Behavior, string? TriggerCondition, MemoryScope Scope, double? Confidence);
 
     private static HashSet<(MemoryScope Scope, string Behavior)> BuildDedupKeys(IReadOnlyList<PlaybookActionRecord> existing)
     {
