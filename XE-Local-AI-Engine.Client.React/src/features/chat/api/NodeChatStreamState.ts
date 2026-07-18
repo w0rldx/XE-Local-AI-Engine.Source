@@ -34,6 +34,9 @@ export const nodeChatStreamEventTypes = {
 	// Tool lifecycle events (Phase D6) reuse the dedicated tool-event constant so the wire names stay DRY.
 	toolCallRequested: nodeChatToolStreamEventTypes.toolCallRequested,
 	toolCallCompleted: nodeChatToolStreamEventTypes.toolCallCompleted,
+	// A pending tool-approval request (UX-01): flips the matching tool card into a waiting-for-approval state without
+	// mutating content/status — the turn stays live while the operator decides.
+	approvalRequested: nodeChatToolStreamEventTypes.approvalRequested,
 	// A non-fatal "turn notice" (model substitution, tool disabled, history truncated). Never mutates
 	// content/status — it only appends a notice part to the current assistant turn and keeps the turn live.
 	assistantNotice: "assistant-notice",
@@ -145,6 +148,7 @@ function decomposeParts(parts: readonly ChatMessagePart[] | undefined): {
 				args: part.args,
 				result: part.result,
 				requiresApproval: part.requiresApproval,
+				pendingApprovalRequestId: part.pendingApprovalRequestId,
 			});
 		} else if (part.kind === "text") {
 			textSegments.push({ id: part.id, sequence: part.sequence, text: part.text });
@@ -238,6 +242,53 @@ function mergeToolEntry(toolEntries: readonly ToolEntryInput[], toolCall: ChatTo
 					args: toolCall.args ?? entry.args,
 					result: toolCall.result ?? entry.result,
 					requiresApproval: toolCall.requiresApproval ?? entry.requiresApproval,
+					// The tool has resolved (approved → executed, or rejected → synthetic result) once it reaches a
+					// terminal state, so clear the pending-approval prompt; otherwise carry it forward (a plain
+					// requested/completed event never sets it — only the approval-requested event does).
+					pendingApprovalRequestId:
+						toolCall.state === "received" || toolCall.state === "failed" ? undefined : entry.pendingApprovalRequestId,
+				}
+			: entry,
+	);
+}
+
+/**
+ * Folds a pending tool-approval (UX-01) into the ordered tool entries: the matching tool card (by tool-call id) flips
+ * to `waiting` and carries the approval request id the Approve/Deny controls post back. When the approval-gated tool
+ * has not yet surfaced its own tool-call-requested card, a fresh waiting entry is created so the prompt still renders.
+ */
+function mergeApprovalIntoToolEntries(
+	toolEntries: readonly ToolEntryInput[],
+	callId: string,
+	toolName: string,
+	sequence: number,
+	approvalRequestId: string | undefined,
+): ToolEntryInput[] {
+	const existingIndex = toolEntries.findIndex((entry) => entry.id === callId);
+	if (existingIndex < 0) {
+		return [
+			...toolEntries,
+			{
+				id: callId,
+				sequence,
+				name: toolName,
+				state: "waiting",
+				requiresApproval: true,
+				pendingApprovalRequestId: approvalRequestId,
+			},
+		];
+	}
+
+	return toolEntries.map((entry, index) =>
+		index === existingIndex
+			? {
+					...entry,
+					// Preserve the original slot's sequence so the card never reorders; flip it into the waiting state
+					// and attach the approval request id + flag.
+					name: toolName || entry.name,
+					state: "waiting",
+					requiresApproval: true,
+					pendingApprovalRequestId: approvalRequestId,
 				}
 			: entry,
 	);
@@ -407,6 +458,43 @@ export function applyNodeChatStreamEvent(
 			},
 			isTerminal: false,
 			timelineEntry: toToolTimelineEntry(event),
+		};
+	}
+
+	// A pending tool-approval request (UX-01): flip the matching tool card into a waiting-for-approval state carrying
+	// the approval request id the Approve/Deny controls post back. Like tool-lifecycle events it never mutates
+	// assistant content/status — the turn stays live while the operator decides. No timeline entry is returned.
+	if (event.type === nodeChatStreamEventTypes.approvalRequested) {
+		const current = conversation.messages.find((message) => message.id === event.messageId && message.role === "assistant");
+		const callId = event.toolCallId ?? `${event.messageId}:${event.sequence}`;
+		const { reasoningSegments, toolEntries, textSegments, noticeEntries } = decomposeParts(current?.parts);
+		const nextToolEntries = mergeApprovalIntoToolEntries(
+			toolEntries,
+			callId,
+			event.toolName ?? "tool",
+			event.sequence,
+			event.approvalRequestId ?? undefined,
+		);
+		const nextParts = buildMessageParts(reasoningSegments, nextToolEntries, textSegments, noticeEntries);
+		const nextConversation = current
+			? { ...conversation, messages: replaceMessage(conversation.messages, { ...current, parts: nextParts }) }
+			: conversation;
+		return {
+			conversation: nextConversation,
+			streamingMessage: {
+				conversationId: event.conversationId,
+				messageId: event.messageId,
+				content: current?.content ?? "",
+				reasoning: current?.reasoning,
+				parts: nextParts,
+				startedAt: current?.createdAt ?? isoFromUnixMilliseconds(event.occurredAtUtc),
+				isActive: true,
+				inputTokens: current?.inputTokens,
+				outputTokens: current?.outputTokens,
+				totalTokens: current?.totalTokens,
+				reasoningTokens: current?.reasoningTokens,
+			},
+			isTerminal: false,
 		};
 	}
 

@@ -1,17 +1,26 @@
-import { Badge, Collapse, Group, Stack, Text, ThemeIcon } from "@mantine/core";
-import { IconChevronDown, IconShieldHalf, IconTool } from "@tabler/icons-react";
+import { Badge, Button, Collapse, Group, Stack, Text, ThemeIcon } from "@mantine/core";
+import { IconChevronDown, IconCheck, IconShieldHalf, IconTool, IconX } from "@tabler/icons-react";
+import { useMutation } from "@tanstack/react-query";
 import { m, useReducedMotion } from "framer-motion";
-import { memo, useState } from "react";
+import { memo, useCallback, useState } from "react";
 import { useTranslation } from "react-i18next";
 
+import { nodeCapabilities } from "@/capabilities/NodeCapabilities";
+import { resolveToolApprovalMutation } from "@/core/api/generated/@tanstack/react-query.gen";
+import { withResponseValidation } from "@/core/api/ResponseValidation";
 import { CodeBlock } from "@/core/ui/components/CodeBlock/CodeBlock";
 import { CHAT_ACCENT, CHAT_ACCENT_SOFT } from "@/features/chat/components/ChatVisualTokens";
 import classes from "@/features/chat/components/ThoughtsSection.module.css";
+import { buildChatUiCapabilities } from "@/features/chat/models/ChatCapabilityGates";
 import type { ChatToolPart, ToolCallState } from "@/features/chat/models/ChatModels";
 
 interface ToolCallCardProps {
 	part: ChatToolPart;
 }
+
+// Chat capability flags are a static client-side constant (see agent-knowledge §5), so the tool-approval-controls gate
+// is resolvable once at module scope rather than threaded down through the render tree.
+const approvalControlsEnabled = buildChatUiCapabilities(nodeCapabilities.chat).showToolApprovalControls;
 
 /**
  * Per-tool-call expand state, persisted across remounts and keyed by the stable tool-call id. When the final answer
@@ -67,6 +76,35 @@ export const ToolCallCard = memo(function ToolCallCard({ part }: ToolCallCardPro
 		expandedByToolId.set(part.id, open);
 		setExpanded(open);
 	};
+
+	// Local tool-approval responder (UX-01). The pending approval request id rides the part; posting the decision to
+	// the loopback resolve endpoint releases the waiting run server-side. `decided` hides the controls the instant the
+	// operator clicks (optimistic) — the card then clears naturally when the tool completes/rejects (tool-call-completed
+	// clears pendingApprovalRequestId). No conversation context is needed: the request id is the global correlation key.
+	const [decided, setDecided] = useState(false);
+	const resolveApproval = useMutation({ ...withResponseValidation(resolveToolApprovalMutation()) });
+	const pendingApprovalRequestId = part.pendingApprovalRequestId;
+	const awaitingApproval =
+		approvalControlsEnabled && part.state === "waiting" && !decided && typeof pendingApprovalRequestId === "string" && pendingApprovalRequestId.length > 0;
+
+	const handleApprovalDecision = useCallback(
+		(approved: boolean) => {
+			if (!pendingApprovalRequestId) {
+				return;
+			}
+			setDecided(true);
+			resolveApproval.mutate(
+				{ body: { requestId: pendingApprovalRequestId, approved } },
+				{
+					// Re-arm the controls if the post failed so the operator can retry rather than being stuck with a
+					// dismissed prompt on a still-waiting tool.
+					onError: () => setDecided(false),
+				},
+			);
+		},
+		[pendingApprovalRequestId, resolveApproval],
+	);
+
 	const formattedArgs = formatStructured(part.args);
 	const formattedResult = formatStructured(part.result);
 	const stateLabel =
@@ -136,6 +174,35 @@ export const ToolCallCard = memo(function ToolCallCard({ part }: ToolCallCardPro
 					</span>
 				</summary>
 				</details>
+				{awaitingApproval ? (
+					<Group gap="xs" wrap="nowrap" className={classes["tool-body"]} data-testid={`chat-tool-call-approval-actions-${part.name}`}>
+						<Text size="xs" c="dimmed" style={{ minWidth: 0, overflow: "hidden", textOverflow: "ellipsis" }}>
+							{t("chat.toolCall.approvalPrompt", "This tool needs your approval to run.")}
+						</Text>
+						<Button
+							size="compact-xs"
+							color="teal"
+							variant="light"
+							leftSection={<IconCheck size={12} />}
+							loading={resolveApproval.isPending}
+							onClick={() => handleApprovalDecision(true)}
+							data-testid={`chat-tool-call-approve-${part.name}`}
+						>
+							{t("chat.toolCall.approve", "Approve")}
+						</Button>
+						<Button
+							size="compact-xs"
+							color="red"
+							variant="light"
+							leftSection={<IconX size={12} />}
+							loading={resolveApproval.isPending}
+							onClick={() => handleApprovalDecision(false)}
+							data-testid={`chat-tool-call-deny-${part.name}`}
+						>
+							{t("chat.toolCall.deny", "Deny")}
+						</Button>
+					</Group>
+				) : null}
 				<Collapse expanded={expanded} keepMounted={true} transitionDuration={reduced ? 0 : 240}>
 				<Stack gap={6} className={classes["tool-body"]}>
 					{formattedArgs ? (

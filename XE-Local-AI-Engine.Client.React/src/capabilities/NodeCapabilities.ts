@@ -49,7 +49,11 @@ export const nodeCapabilities: NodeCapabilityConfig = {
 		localModelManagement: true,
 		// catalog ships with RC (time/date + calculator); toggle OFF by default, user-toggleable
 		localTools: true,
-		toolApprovals: false,
+		// Local tool-approval responder (UX-01): the chat stream surfaces a pending MCP-tool approval and the waiting
+		// tool card renders Approve/Deny controls wired to the loopback resolve endpoint. Enabled by default now that
+		// the responder ships — MCP tools default to approval-on, so an agent-mode turn with a connected MCP server
+		// exercises it live.
+		toolApprovals: true,
 		conversationFeedback: true,
 		// server-side SQLite is the source of truth; node has no client Dexie/offline queue (offline-first is N/A for the local node)
 		offlineFirst: false,
