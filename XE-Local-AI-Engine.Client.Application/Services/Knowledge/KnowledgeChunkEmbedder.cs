@@ -126,6 +126,39 @@ public sealed class KnowledgeChunkEmbedder : IKnowledgeChunkEmbedder
         return new KnowledgeEmbeddingResult(blobs, embeddingModelName, dimension);
     }
 
+    public async Task<int?> ResolveEmbeddingContextWindowAsync(CancellationToken cancellationToken)
+    {
+        try
+        {
+            var provider = _providerResolver.ResolveProvider(_options.EmbeddingProviderName);
+            var resolution = await _embeddingModelResolver.ResolveAsync(provider, cancellationToken).ConfigureAwait(false);
+
+            // A non-confident resolution is a bare fallback name, not an actually-installed model — its window is unknown.
+            if (!resolution.IsConfident)
+            {
+                return null;
+            }
+
+            var installed = await provider.ListModelsAsync(cancellationToken).ConfigureAwait(false);
+            var descriptor = installed.FirstOrDefault(model =>
+                string.Equals(model.ModelName, resolution.Name, StringComparison.OrdinalIgnoreCase));
+
+            return descriptor?.MaxContextTokens is int window && window > 0 ? window : null;
+        }
+        catch (Exception exception) when (exception is HttpRequestException or IOException or OllamaException or InvalidOperationException)
+        {
+            // Provider process down / transport error / unmapped provider. The window is simply unknown; chunking falls
+            // back to the configured token budget. The subsequent embed step surfaces any genuine provider failure.
+            return null;
+        }
+        catch (OperationCanceledException) when (!cancellationToken.IsCancellationRequested)
+        {
+            // A provider request TIMEOUT (TaskCanceledException) the caller did not trigger — treat as an unknown window,
+            // exactly like the transport failures above. A genuine caller cancellation falls through and propagates.
+            return null;
+        }
+    }
+
     private ILocalModelProvider ResolveProvider()
     {
         try

@@ -100,6 +100,41 @@ public sealed class KnowledgeChunkEmbedderResolutionTests
         AssertEx.Equal(ConfiguredName, provider.LastSelectedModelName);
     }
 
+    [Test]
+    public async Task ResolveEmbeddingContextWindowAsync_WhenResolvedModelAdvertisesAWindow_ReturnsIt()
+    {
+        var provider = new CapturingProvider(Descriptor(ConfiguredName, maxContextTokens: 2048));
+        var embedder = CreateEmbedder(provider);
+
+        var window = await embedder.ResolveEmbeddingContextWindowAsync(CancellationToken.None).ConfigureAwait(false);
+
+        AssertEx.Equal(2048, window);
+    }
+
+    [Test]
+    public async Task ResolveEmbeddingContextWindowAsync_WhenResolvedModelAdvertisesNoWindow_ReturnsNull()
+    {
+        var provider = new CapturingProvider(Descriptor(ConfiguredName));
+        var embedder = CreateEmbedder(provider);
+
+        var window = await embedder.ResolveEmbeddingContextWindowAsync(CancellationToken.None).ConfigureAwait(false);
+
+        AssertEx.Null(window);
+    }
+
+    [Test]
+    public async Task ResolveEmbeddingContextWindowAsync_WhenResolutionIsNotConfident_ReturnsNull()
+    {
+        // Nothing installed matches the configured name and no embedding-named model is present, so the resolution is a
+        // bare fallback (not confident) — its window is unknown and must not be guessed from an unrelated model.
+        var provider = new CapturingProvider(Descriptor("qwen2.5:Q4_K_M", maxContextTokens: 32768));
+        var embedder = CreateEmbedder(provider);
+
+        var window = await embedder.ResolveEmbeddingContextWindowAsync(CancellationToken.None).ConfigureAwait(false);
+
+        AssertEx.Null(window);
+    }
+
     private static KnowledgeChunkEmbedder CreateEmbedder(ILocalModelProvider provider)
     {
         var options = Options.Create(new KnowledgeBaseOptions
@@ -116,7 +151,7 @@ public sealed class KnowledgeChunkEmbedderResolutionTests
             options);
     }
 
-    private static LocalModelDescriptor Descriptor(string modelName)
+    private static LocalModelDescriptor Descriptor(string modelName, int? maxContextTokens = null)
     {
         return new LocalModelDescriptor
         {
@@ -125,7 +160,7 @@ public sealed class KnowledgeChunkEmbedderResolutionTests
             IsAvailable = true,
             SizeBytes = 1024,
             ModifiedAt = DateTimeOffset.UnixEpoch,
-            MaxContextTokens = null,
+            MaxContextTokens = maxContextTokens,
             Capabilities = []
         };
     }

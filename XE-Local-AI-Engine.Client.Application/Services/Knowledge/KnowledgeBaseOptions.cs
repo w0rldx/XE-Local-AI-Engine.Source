@@ -116,6 +116,29 @@ public sealed class KnowledgeBaseOptions
     public int MaxChunkChars { get; set; } = 2000;
 
     /// <summary>
+    ///     Upper bound on the estimated TOKEN footprint of a single chunk's embedded (heading-trail-prefixed) text — the
+    ///     primary size lever, with <see cref="MaxChunkChars" /> kept as a hard character ceiling. Chunk sizing is
+    ///     token-aware so a chunk (and its heading prefix) fits the embedding model's context window and a byte-pair
+    ///     tokenizer does not split a max-sized chunk mid-token: a section is cut at whichever bound — this token budget or
+    ///     <see cref="MaxChunkChars" /> — is reached first, always at a whitespace boundary. The token count is a
+    ///     deterministic, dependency-free approximation (weighted characters ÷ 4; CJK/emoji weighted heavier), so the
+    ///     chunker stays offline and reproducible. The budget can only TIGHTEN, never loosen, the effective size, so
+    ///     token-dense scripts (whose characters cost more tokens) split into smaller chunks while plain ASCII prose keeps
+    ///     the character ceiling as its binding bound.
+    ///     <para>
+    ///         Default 512 is sized to fit the shipped <c>nomic-embed-text</c> embedder's 2048-token window with generous
+    ///         margin for the heading prefix and the model's own special tokens, while preserving the current
+    ///         ~2000-character / ~500-token ASCII chunk granularity so existing corpora chunk identically (no forced
+    ///         reindex). When the resolved embedding model's advertised context window is discoverable at ingestion time it
+    ///         overrides this value downward (window minus a safety reserve) so a SMALLER-window embedder yields
+    ///         correspondingly smaller chunks; a larger window never enlarges chunks past this configured budget. Changing
+    ///         this value only affects NEWLY ingested or reindexed documents — already-indexed chunk vectors are unchanged
+    ///         until their document is reindexed.
+    ///     </para>
+    /// </summary>
+    public int MaxChunkTokens { get; set; } = 512;
+
+    /// <summary>
     ///     Number of trailing characters carried from the end of one chunk into the start of the next, so a fact split
     ///     across a chunk boundary stays retrievable. Must be smaller than <see cref="MaxChunkChars" />.
     /// </summary>

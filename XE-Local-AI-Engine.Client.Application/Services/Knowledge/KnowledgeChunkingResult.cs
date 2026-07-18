@@ -32,7 +32,7 @@ public sealed record KnowledgeChunkingSection(
 /// <param name="Content">Plaintext chunk content (stored and full-text indexed).</param>
 /// <param name="ContextualContent">Heading-trail prefix followed by <see cref="Content" />; the text handed to embedding.</param>
 /// <param name="HeadingPath">The "H1 &gt; H2" heading trail for this chunk; <see langword="null" /> when there is none.</param>
-/// <param name="TokenCount">Approximate token count of <see cref="Content" /> (word count).</param>
+/// <param name="TokenCount">Deterministic token approximation of <see cref="Content" /> (weighted characters ÷ 4).</param>
 public sealed record KnowledgeChunk(
     int ChunkIndex,
     int SectionOrdinal,
