@@ -42,4 +42,37 @@ public sealed class MemoryExtractionOptions
     ///     to at least 1 second. Mirrors the knowledge-ingestion worker's drain.
     /// </summary>
     public int ShutdownDrainTimeoutSeconds { get; set; } = 10;
+
+    /// <summary>
+    ///     Master switch for the SEMANTIC (embedding-cosine) dedup layer that runs ON TOP OF the always-on lexical dedup.
+    ///     When on, a candidate that survives lexical dedup is embedded with the node-local embedding model and dropped if
+    ///     it is cosine-near an existing live memory (a paraphrase the lexical key misses). Off (or with no confident
+    ///     node-local embedding model available) leaves the lexical-only behaviour byte-for-byte. Defaults on; the
+    ///     IsConfident gate already makes it a clean no-op on a node with no embedding model, so this flag exists so an
+    ///     operator can disable semantic dedup WITHOUT unconfiguring the embedding model that retrieval also shares.
+    /// </summary>
+    public bool SemanticDedupEnabled { get; set; } = true;
+
+    /// <summary>
+    ///     Provider key for the node-local embedding model used by semantic dedup; must match a registered node-local
+    ///     provider (default "llamacpp", mirroring the playbook-retrieval ranker and knowledge-base defaults). Blank
+    ///     disables semantic dedup (lexical-only). The ACTUAL embedding model name is resolved on this provider via the
+    ///     shared <c>IEmbeddingModelResolver</c>, so the dedup and retrieval/knowledge lanes agree on one installed model.
+    /// </summary>
+    public string SemanticDedupEmbeddingProviderName { get; set; } = "llamacpp";
+
+    /// <summary>
+    ///     Cosine-similarity threshold at/above which an extracted candidate is treated as a semantic duplicate of an
+    ///     existing live memory (same scope) and dropped. Tuned conservatively (default 0.92) so ONLY true near-duplicates
+    ///     collapse — a too-low threshold would swallow distinct lessons. Clamped to the open-closed interval (0, 1]; a
+    ///     non-positive or &gt;1 value resets to the default.
+    /// </summary>
+    public double SemanticDedupSimilarityThreshold { get; set; } = 0.92d;
+
+    /// <summary>
+    ///     Upper bound on the RAM-only, never-persisted cache of existing-memory embeddings (keyed by id+version+resolved
+    ///     model, so an edited or model-swapped memory re-embeds automatically). Candidates are always re-embedded per run
+    ///     and never cached. Floored at 1. Mirrors the playbook ranker's embedding-cache bound.
+    /// </summary>
+    public int SemanticDedupEmbeddingCacheMaxEntries { get; set; } = 512;
 }

@@ -94,6 +94,53 @@ public sealed class MemoryExtractionServiceTests
     }
 
     [Test]
+    public async Task MemoryExtraction_WhenSemanticDedupFlagsCandidate_DropsOnlyThatCandidate()
+    {
+        var agentId = Guid.NewGuid();
+        // Two lexically-distinct candidates survive the lexical pass; the semantic layer flags the SECOND (index 1) as a
+        // paraphrase of an existing memory. Only the first must be persisted, and the flagged one counts as a duplicate.
+        var agent = new FakeExtractionAgent(_ =>
+        [
+            Candidate("Prefer the shared HTTP helper for outbound calls.", MemoryScope.Procedural),
+            Candidate("Reach for the common HTTP utility when making requests.", MemoryScope.Procedural)
+        ]);
+        var deduplicator = StubSemanticDeduplicator.Flagging(1);
+        var service = CreateService(out var store, agent, semanticDeduplicator: deduplicator);
+        store.ListByAgentAsync(agentId, Arg.Any<CancellationToken>())
+             .Returns(Task.FromResult<IReadOnlyList<PlaybookActionRecord>>([]));
+        EchoAddedAction(store);
+
+        var outcome = await service.ExtractAsync(SuccessfulRun(agentId)).ConfigureAwait(false);
+
+        AssertEx.Equal(expected: 2, outcome.ProposedCount);
+        AssertEx.Equal(expected: 1, outcome.CreatedCandidates.Count, "The semantic paraphrase must be dropped, leaving one candidate.");
+        AssertEx.Equal(expected: 1, outcome.DuplicateCount, "A semantic near-duplicate counts toward the duplicate total.");
+        AssertEx.Equal("Prefer the shared HTTP helper for outbound calls.", outcome.CreatedCandidates[0].Behavior);
+    }
+
+    [Test]
+    public async Task MemoryExtraction_WhenSemanticDedupNotApplied_KeepsEveryLexicalSurvivor()
+    {
+        var agentId = Guid.NewGuid();
+        // Embedder unavailable / not confident => the deduplicator returns NotApplied. NO candidate may be dropped by the
+        // semantic layer — this is the proof that a provider outage never mass-dedups legitimate new memories.
+        var agent = new FakeExtractionAgent(_ =>
+        [
+            Candidate("Prefer the shared HTTP helper for outbound calls.", MemoryScope.Procedural),
+            Candidate("Reach for the common HTTP utility when making requests.", MemoryScope.Procedural)
+        ]);
+        var service = CreateService(out var store, agent, semanticDeduplicator: StubSemanticDeduplicator.NotApplied());
+        store.ListByAgentAsync(agentId, Arg.Any<CancellationToken>())
+             .Returns(Task.FromResult<IReadOnlyList<PlaybookActionRecord>>([]));
+        EchoAddedAction(store);
+
+        var outcome = await service.ExtractAsync(SuccessfulRun(agentId)).ConfigureAwait(false);
+
+        AssertEx.Equal(expected: 2, outcome.CreatedCandidates.Count, "With semantic dedup not applied, both lexical survivors persist.");
+        AssertEx.Equal(expected: 0, outcome.DuplicateCount, "No candidate is dropped when semantic dedup does not run.");
+    }
+
+    [Test]
     public async Task Extraction_WhenConversationMemoryExcluded_DoesNothing()
     {
         var agentId = Guid.NewGuid();
@@ -206,11 +253,16 @@ public sealed class MemoryExtractionServiceTests
 
     private static MemoryExtractionService CreateService(out IPlaybookActionStore store,
         IMemoryExtractionAgent agent,
-        MemoryExtractionOptions? options = null)
+        MemoryExtractionOptions? options = null,
+        IMemorySemanticDeduplicator? semanticDeduplicator = null)
     {
         store = Substitute.For<IPlaybookActionStore>();
         return new MemoryExtractionService(agent,
             store,
+            // Default: a NOT-applied deduplicator so these baseline tests exercise the lexical-only path exactly as
+            // before (the no-confident-embedding-model / outage fallback). Semantic behaviour is covered by the
+            // semantic-specific tests below and by MemorySemanticDeduplicatorTests.
+            semanticDeduplicator ?? StubSemanticDeduplicator.NotApplied(),
             Options.Create(options ?? new MemoryExtractionOptions
             {
                 ExtractionModelName = "qwen3:8b"
@@ -288,6 +340,38 @@ public sealed class MemoryExtractionServiceTests
             EvalResult: null,
             EnabledAtUtc: 10,
             scope);
+    }
+
+    // A controllable semantic-dedup stub: either NOT-applied (the lexical-only fallback the service must honour) or
+    // applied while flagging a fixed set of candidate indexes as semantic duplicates. Lets the service integration be
+    // verified without an embedder; the real cosine/IsConfident behaviour is covered by MemorySemanticDeduplicatorTests.
+    private sealed class StubSemanticDeduplicator : IMemorySemanticDeduplicator
+    {
+        private readonly bool _applied;
+        private readonly IReadOnlySet<int> _duplicateIndexes;
+
+        private StubSemanticDeduplicator(bool applied, IReadOnlySet<int> duplicateIndexes)
+        {
+            _applied = applied;
+            _duplicateIndexes = duplicateIndexes;
+        }
+
+        public static StubSemanticDeduplicator NotApplied()
+        {
+            return new StubSemanticDeduplicator(applied: false, new HashSet<int>());
+        }
+
+        public static StubSemanticDeduplicator Flagging(params int[] duplicateIndexes)
+        {
+            return new StubSemanticDeduplicator(applied: true, new HashSet<int>(duplicateIndexes));
+        }
+
+        public Task<MemorySemanticDedupResult> FindSemanticDuplicatesAsync(IReadOnlyList<MemoryDedupExisting> existing,
+            IReadOnlyList<MemoryDedupCandidate> candidates,
+            CancellationToken cancellationToken)
+        {
+            return Task.FromResult(new MemorySemanticDedupResult(_applied, _duplicateIndexes));
+        }
     }
 
     private sealed class FakeExtractionAgent(Func<MemoryExtractionRunInput, IReadOnlyList<ProposedMemory>> propose) : IMemoryExtractionAgent

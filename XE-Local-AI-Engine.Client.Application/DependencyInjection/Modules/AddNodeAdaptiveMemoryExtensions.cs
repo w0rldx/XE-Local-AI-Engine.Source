@@ -24,13 +24,32 @@ internal static class AddNodeAdaptiveMemoryExtensions
                                                            ?? builder.Configuration.GetValue<string>("Agent:LocalChat:DefaultModel")
                                                            ?? string.Empty;
                    }
+
+                   // Semantic-dedup threshold must stay in the open-closed cosine interval (0, 1]; a non-positive or >1
+                   // value is nonsensical (would drop everything / nothing) so reset to the conservative default.
+                   if (memoryOptions.SemanticDedupSimilarityThreshold is <= 0d or > 1d)
+                   {
+                       memoryOptions.SemanticDedupSimilarityThreshold = 0.92d;
+                   }
+
+                   // The RAM-only existing-memory embedding cache bound floors at 1 (mirror the ranker's clamp) so a
+                   // misconfigured non-positive value cannot wedge caching once semantic dedup engages.
+                   if (memoryOptions.SemanticDedupEmbeddingCacheMaxEntries < 1)
+                   {
+                       memoryOptions.SemanticDedupEmbeddingCacheMaxEntries = 1;
+                   }
                });
 
         // Extraction agent: mines candidate memories from a completed run using a node-local model only. Singleton
         // because it holds no scoped state and receives a fresh per-run chat client (mirrors the analysis agent).
         builder.Services.AddSingleton<IMemoryExtractionAgent, DefaultMemoryExtractionAgent>();
-        // Extraction orchestration: gates temp chats, no-ops without a model, dedupes, and writes Suggested/Extracted
-        // actions for human review. Scoped — it consumes the scoped, DbContext-backed playbook action store.
+        // Semantic (embedding-cosine) dedup layer used by the extraction service ON TOP OF its lexical dedup: catches
+        // paraphrases the exact normalized-text key misses, gated on a confident node-local embedding model (lexical-only
+        // fallback otherwise). Singleton — it holds the long-lived RAM-only existing-memory embedding cache (mirrors the
+        // playbook-retrieval ranker). Injected into the scoped extraction service; a singleton is safe there.
+        builder.Services.AddSingleton<IMemorySemanticDeduplicator, MemorySemanticDeduplicator>();
+        // Extraction orchestration: gates temp chats, no-ops without a model, dedupes (lexical then semantic), and writes
+        // Suggested/Extracted actions for human review. Scoped — it consumes the scoped, DbContext-backed playbook store.
         builder.Services.AddScoped<IMemoryExtractionService, MemoryExtractionService>();
         // Background dispatcher + worker: the chat send/regenerate seams call Dispatch once per terminal turn, which
         // TRY-enqueues onto the dispatcher's bounded queue (never blocking the pump; a full queue drops the newest job
