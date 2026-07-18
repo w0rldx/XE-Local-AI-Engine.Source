@@ -8,6 +8,7 @@ using FastEndpoints;
 using FastEndpoints.Swagger;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.DataProtection;
+using Microsoft.AspNetCore.DataProtection.KeyManagement;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.Extensions.Options;
 using Microsoft.IdentityModel.JsonWebTokens;
@@ -27,6 +28,7 @@ using XE_Local_AI_Engine.Client.Hosting;
 using XE_Local_AI_Engine.Client.Hubs;
 using XE_Local_AI_Engine.Client.Persistence;
 using XE_Local_AI_Engine.Client.Persistence.Entities;
+using XE_Local_AI_Engine.Client.Security.DataProtection;
 using XE_Local_AI_Engine.Client.Services.Agents.Implementation;
 using XE_Local_AI_Engine.Client.Services.Auth;
 using XE_Local_AI_Engine.Client.Services.Images;
@@ -84,11 +86,24 @@ public static class ConfigureServices
                                     .SetApplicationName("XE-Local-AI-Engine")
                                     .PersistKeysToFileSystem(new DirectoryInfo(Path.Combine(dataProtectionRoot, "dp-keys")));
 
-        // Encrypt the key-ring at rest with DPAPI (CurrentUser) on Windows. Guarded so the platform-compatibility
-        // analyzer (CA1416) is satisfied and non-Windows hosts keep the default at-rest behavior.
+        // Encrypt the key-ring at rest. On Windows, DPAPI (CurrentUser) — unchanged. On non-Windows (BE-02), wrap NEW
+        // key-ring elements with AES-256-GCM under a KEK derived from the node operator secret (HKDF-SHA256, distinct
+        // info string), so the key-ring inherits the same env/secret-file protection as node.sqlite instead of sitting
+        // in plaintext beside the ciphertext it unlocks. The encryptor is WRITE-side only: existing plaintext keys and
+        // existing IDataProtector payloads keep reading, because Data Protection reads each key in whatever form it was
+        // written (no proactive re-wrap of the current active key — deferred, and safer that way). A wrong/missing
+        // operator secret fails closed (the AES-GCM tag will not authenticate, and the same secret already gates
+        // node.sqlite), never silently regenerating the ring.
         if (OperatingSystem.IsWindows())
         {
             dataProtection.ProtectKeysWithDpapi(protectToLocalMachine: false);
+        }
+        else
+        {
+            dataProtection.Services.AddSingleton<INodeDataProtectionKeyProvider, NodeDataProtectionKeyProvider>();
+            dataProtection.Services.AddSingleton<NodeDataProtectionKeyRingEncryptor>();
+            dataProtection.Services.AddOptions<KeyManagementOptions>()
+                          .Configure<NodeDataProtectionKeyRingEncryptor>((options, encryptor) => options.XmlEncryptor = encryptor);
         }
 
         // Application layer (services, options, persistence, runtime) lives in the
