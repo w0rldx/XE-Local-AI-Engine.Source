@@ -66,6 +66,7 @@
 		"scheduler": "Planer",
 		"modelRecommendations": "Modellempfehlungen",
 		"invocations": "Aufrufe",
+		"usage": "Nutzung",
 		"schedule": "Terminplaner",
 		"user": "Benutzer",
 		"skills": "Skills",
@@ -1535,6 +1536,57 @@
 						"result": "Ergebnis"
 					}
 				}
+			}
+		},
+		"usage": {
+			"title": "Nutzungs-Dashboard",
+			"subtitle": "Agent-Token-Nutzung nach Modell und Anbieter. Daten werden {{days}} Tage lang aufbewahrt.",
+			"loadError": "Nutzungsübersicht konnte nicht geladen werden.",
+			"range": {
+				"from": "Von",
+				"to": "Bis"
+			},
+			"totals": {
+				"totalTokens": "Gesamt-Tokens",
+				"promptTokens": "Prompt-Tokens",
+				"completionTokens": "Antwort-Tokens",
+				"reasoningTokens": "Reasoning-Tokens",
+				"runCount": "Läufe"
+			},
+			"daily": {
+				"title": "Tägliche Token-Nutzung",
+				"seriesLabel": "Gesamt-Tokens",
+				"empty": "Keine tägliche Nutzung für diesen Zeitraum darstellbar."
+			},
+			"providers": {
+				"title": "Nutzung nach Anbieter",
+				"noTokens": "Für keinen Anbieter wurde in diesem Zeitraum Token-Nutzung erfasst.",
+				"local": "Lokal (llama.cpp)",
+				"ollama": "Ollama",
+				"codex": "Codex",
+				"azure": "Azure",
+				"unknown": "Unbekannt",
+				"columns": {
+					"provider": "Anbieter",
+					"runs": "Läufe",
+					"totalTokens": "Gesamt-Tokens"
+				}
+			},
+			"models": {
+				"title": "Nutzung nach Modell",
+				"empty": "Für diesen Zeitraum wurde keine Modellnutzung erfasst.",
+				"columns": {
+					"model": "Modell",
+					"providers": "Anbieter",
+					"runs": "Läufe",
+					"prompt": "Prompt",
+					"completion": "Antwort",
+					"total": "Gesamt"
+				}
+			},
+			"empty": {
+				"title": "Noch keine Nutzung erfasst",
+				"body": "In diesen Zeitraum fielen keine Agent-Läufe. Starten Sie einen Agenten über Chat oder den Scheduler und kehren Sie dann hierher zurück — die Token-Nutzung wird pro Modell und Anbieter erfasst, während Agenten laufen."
 			}
 		},
 		"agents": {

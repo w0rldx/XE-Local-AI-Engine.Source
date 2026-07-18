@@ -32,6 +32,7 @@
 		"openapi:check:live": "pnpm run openapi && git diff --exit-code -- openapi src/core/api/generated"
 	},
 	"dependencies": {
+		"@mantine/charts": "^9.4.1",
 		"@mantine/colors-generator": "^9.4.1",
 		"@mantine/core": "^9.4.1",
 		"@mantine/hooks": "^9.4.1",
@@ -58,6 +59,7 @@
 		"react-joyride": "3.1.0",
 		"react-markdown": "^10.1.0",
 		"react-syntax-highlighter": "^16.1.1",
+		"recharts": "^3.9.2",
 		"remark": "^15.0.1",
 		"remark-gfm": "^4.0.1",
 		"rrweb": "2.0.1",

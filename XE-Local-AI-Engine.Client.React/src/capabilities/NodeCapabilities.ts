@@ -128,6 +128,9 @@ export const nodeRoutePaths = {
 	cloudSettings: "/cloud-settings",
 	models: "/models",
 	invocations: "/invocations",
+	// agent token-usage dashboard (per-provider/model/day rollups) — operator observability, always available like
+	// invocations (both are backed by operator-gated endpoints; the authenticated _layout is the operator gate).
+	usage: "/usage",
 	// local tools catalog page — extension seam: MCP tools will populate the same list later
 	tools: "/tools",
 	// agent definition management page (agent-management) — gated on nodeCapabilities.agentManagement

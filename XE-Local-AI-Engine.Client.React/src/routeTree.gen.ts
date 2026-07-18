@@ -13,6 +13,7 @@ import { Route as SetupRouteImport } from './routes/setup'
 import { Route as LoginRouteImport } from './routes/login'
 import { Route as LayoutRouteImport } from './routes/_layout'
 import { Route as LayoutIndexRouteImport } from './routes/_layout/index'
+import { Route as LayoutUsageRouteImport } from './routes/_layout/usage'
 import { Route as LayoutToolsRouteImport } from './routes/_layout/tools'
 import { Route as LayoutSkillsRouteImport } from './routes/_layout/skills'
 import { Route as LayoutSchedulerRouteImport } from './routes/_layout/scheduler'
@@ -49,6 +50,11 @@ const LayoutRoute = LayoutRouteImport.update({
 const LayoutIndexRoute = LayoutIndexRouteImport.update({
   id: '/',
   path: '/',
+  getParentRoute: () => LayoutRoute,
+} as any)
+const LayoutUsageRoute = LayoutUsageRouteImport.update({
+  id: '/usage',
+  path: '/usage',
   getParentRoute: () => LayoutRoute,
 } as any)
 const LayoutToolsRoute = LayoutToolsRouteImport.update({
@@ -165,6 +171,7 @@ export interface FileRoutesByFullPath {
   '/scheduler': typeof LayoutSchedulerRoute
   '/skills': typeof LayoutSkillsRoute
   '/tools': typeof LayoutToolsRoute
+  '/usage': typeof LayoutUsageRoute
 }
 export interface FileRoutesByTo {
   '/login': typeof LoginRoute
@@ -187,6 +194,7 @@ export interface FileRoutesByTo {
   '/scheduler': typeof LayoutSchedulerRoute
   '/skills': typeof LayoutSkillsRoute
   '/tools': typeof LayoutToolsRoute
+  '/usage': typeof LayoutUsageRoute
   '/': typeof LayoutIndexRoute
 }
 export interface FileRoutesById {
@@ -212,6 +220,7 @@ export interface FileRoutesById {
   '/_layout/scheduler': typeof LayoutSchedulerRoute
   '/_layout/skills': typeof LayoutSkillsRoute
   '/_layout/tools': typeof LayoutToolsRoute
+  '/_layout/usage': typeof LayoutUsageRoute
   '/_layout/': typeof LayoutIndexRoute
 }
 export interface FileRouteTypes {
@@ -238,6 +247,7 @@ export interface FileRouteTypes {
     | '/scheduler'
     | '/skills'
     | '/tools'
+    | '/usage'
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/login'
@@ -260,6 +270,7 @@ export interface FileRouteTypes {
     | '/scheduler'
     | '/skills'
     | '/tools'
+    | '/usage'
     | '/'
   id:
     | '__root__'
@@ -284,6 +295,7 @@ export interface FileRouteTypes {
     | '/_layout/scheduler'
     | '/_layout/skills'
     | '/_layout/tools'
+    | '/_layout/usage'
     | '/_layout/'
   fileRoutesById: FileRoutesById
 }
@@ -321,6 +333,13 @@ declare module '@tanstack/react-router' {
       path: '/'
       fullPath: '/'
       preLoaderRoute: typeof LayoutIndexRouteImport
+      parentRoute: typeof LayoutRoute
+    }
+    '/_layout/usage': {
+      id: '/_layout/usage'
+      path: '/usage'
+      fullPath: '/usage'
+      preLoaderRoute: typeof LayoutUsageRouteImport
       parentRoute: typeof LayoutRoute
     }
     '/_layout/tools': {
@@ -471,6 +490,7 @@ interface LayoutRouteChildren {
   LayoutSchedulerRoute: typeof LayoutSchedulerRoute
   LayoutSkillsRoute: typeof LayoutSkillsRoute
   LayoutToolsRoute: typeof LayoutToolsRoute
+  LayoutUsageRoute: typeof LayoutUsageRoute
   LayoutIndexRoute: typeof LayoutIndexRoute
 }
 
@@ -493,6 +513,7 @@ const LayoutRouteChildren: LayoutRouteChildren = {
   LayoutSchedulerRoute: LayoutSchedulerRoute,
   LayoutSkillsRoute: LayoutSkillsRoute,
   LayoutToolsRoute: LayoutToolsRoute,
+  LayoutUsageRoute: LayoutUsageRoute,
   LayoutIndexRoute: LayoutIndexRoute,
 }
 

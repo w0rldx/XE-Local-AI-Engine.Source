@@ -66,6 +66,7 @@
 		"scheduler": "Scheduler",
 		"modelRecommendations": "Model Recommendations",
 		"invocations": "Invocations",
+		"usage": "Usage",
 		"schedule": "Schedule",
 		"user": "User",
 		"skills": "Skills",
@@ -1535,6 +1536,57 @@
 						"result": "Result"
 					}
 				}
+			}
+		},
+		"usage": {
+			"title": "Usage dashboard",
+			"subtitle": "Agent token usage by model and provider. Data is retained for {{days}} days.",
+			"loadError": "Usage summary could not be loaded.",
+			"range": {
+				"from": "From",
+				"to": "To"
+			},
+			"totals": {
+				"totalTokens": "Total tokens",
+				"promptTokens": "Prompt tokens",
+				"completionTokens": "Completion tokens",
+				"reasoningTokens": "Reasoning tokens",
+				"runCount": "Runs"
+			},
+			"daily": {
+				"title": "Daily token usage",
+				"seriesLabel": "Total tokens",
+				"empty": "No daily usage to plot for this range."
+			},
+			"providers": {
+				"title": "Usage by provider",
+				"noTokens": "No token usage recorded for any provider in this range.",
+				"local": "Local (llama.cpp)",
+				"ollama": "Ollama",
+				"codex": "Codex",
+				"azure": "Azure",
+				"unknown": "Unknown",
+				"columns": {
+					"provider": "Provider",
+					"runs": "Runs",
+					"totalTokens": "Total tokens"
+				}
+			},
+			"models": {
+				"title": "Usage by model",
+				"empty": "No model usage recorded for this range.",
+				"columns": {
+					"model": "Model",
+					"providers": "Provider(s)",
+					"runs": "Runs",
+					"prompt": "Prompt",
+					"completion": "Completion",
+					"total": "Total"
+				}
+			},
+			"empty": {
+				"title": "No usage recorded yet",
+				"body": "No agent runs fell in this date range. Run an agent from Chat or the Scheduler, then return here — token usage is recorded per model and provider as agents run."
 			}
 		},
 		"agents": {
