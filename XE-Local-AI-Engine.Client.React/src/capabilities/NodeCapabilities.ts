@@ -17,6 +17,10 @@ export interface ChatCapabilities {
 	// requires the operator-owned manifest.Enabled (server-state) — this flag only marks the surface as present
 	// in the build. buildChatUiCapabilities combines it with manifest.Enabled to derive showVoiceControls.
 	readonly voice?: boolean;
+	// When true the chat composer shows the "Use Knowledge Base" toggle (opt-in plain-chat grounding). Mirrors the
+	// node-level knowledgeBase surface capability — same flag, surfaced here so ChatCapabilityGates can derive
+	// showKnowledgeBaseControls without reaching outside the chat capabilities bag.
+	readonly knowledgeBase?: boolean;
 }
 
 export interface NodeCapabilityConfig {
@@ -71,6 +75,9 @@ export const nodeCapabilities: NodeCapabilityConfig = {
 		// Client voice (TTS) surface is present in the build. It stays dev-gated and additionally requires the
 		// operator-owned manifest.Enabled before any voice UI shows (see buildChatUiCapabilities).
 		voice: true,
+		// Knowledge-base grounding surface for plain chat is present in the build (mirrors nodeCapabilities.knowledgeBase).
+		// Drives the composer "Use Knowledge Base" toggle via buildChatUiCapabilities.showKnowledgeBaseControls.
+		knowledgeBase: true,
 	},
 	// Central-Platform surfaces (Node Binding + Dashboard) only make sense once the node is paired to a Central
 	// Platform. In the local-only (LocalTester) profile — no CentralPlatform:BaseUrl configured — they are hidden

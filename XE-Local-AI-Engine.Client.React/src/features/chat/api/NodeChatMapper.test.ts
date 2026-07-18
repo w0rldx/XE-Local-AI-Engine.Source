@@ -241,6 +241,38 @@ describe("node chat mapper", () => {
 		expect(mapSingleMessage({ generationDurationMs: null }).generationDurationMs).toBeUndefined();
 	});
 
+	it("maps the persisted knowledge-base sources onto the message model (OPP-05 / UX-04)", () => {
+		const message = mapSingleMessage({
+			sources: [
+				{ documentId: "doc-1", chunkId: "chunk-1", title: "Design Doc", section: "Overview", score: 0.82 },
+				{ documentId: "doc-2", chunkId: "chunk-2", title: "Runbook", section: null, score: 0.5 },
+			],
+		});
+
+		expect(message.sources).toEqual([
+			{ documentId: "doc-1", chunkId: "chunk-1", title: "Design Doc", section: "Overview", score: 0.82 },
+			{ documentId: "doc-2", chunkId: "chunk-2", title: "Runbook", section: undefined, score: 0.5 },
+		]);
+	});
+
+	it("drops a malformed source with no document id or title so no blank card renders", () => {
+		const message = mapSingleMessage({
+			sources: [
+				{ documentId: "", chunkId: "chunk-1", title: "No Doc Id", section: null, score: 0.4 },
+				{ documentId: "doc-2", chunkId: "chunk-2", title: "", section: null, score: 0.3 },
+				{ documentId: "doc-3", chunkId: "chunk-3", title: "Kept", section: null, score: 0.9 },
+			],
+		});
+
+		expect(message.sources).toEqual([{ documentId: "doc-3", chunkId: "chunk-3", title: "Kept", section: undefined, score: 0.9 }]);
+	});
+
+	it("maps null/absent sources (legacy or non-knowledge turn) to undefined", () => {
+		expect(mapSingleMessage({ sources: null }).sources).toBeUndefined();
+		expect(mapSingleMessage({ sources: [] }).sources).toBeUndefined();
+		expect(mapSingleMessage({}).sources).toBeUndefined();
+	});
+
 	it("maps the persisted ordered parts into the message's interleave", () => {
 		const message = mapSingleMessage({
 			reasoning: "flat blob",

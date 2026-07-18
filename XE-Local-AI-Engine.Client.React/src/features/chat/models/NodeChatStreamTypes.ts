@@ -22,6 +22,10 @@ export interface NodeChatStreamRequestDto {
 	// file ids on EVERY turn so the server can inline extracted text for plain chat (capped) and stage the
 	// files into AgentHome for agent mode. Absent/empty → no attachments. Hand-typed SSE DTO field (not generated).
 	attachmentFileIds?: string[];
+	// Opt-in knowledge-base grounding for a plain-chat turn (OPP-05, default off). When true the server retrieves
+	// the top-k knowledge-base hits for this message and inlines them (fenced, capped) into the turn, surfacing
+	// their sources on the assistant turn. Ignored in agent mode. Hand-typed SSE DTO field (not generated).
+	useKnowledgeBase?: boolean;
 	// Developer-mode per-send sampling overrides. Omitted entirely when developer mode is off or all fields
 	// are null — keeps the wire payload byte-identical to the default (non-dev) path.
 	samplingOptions?: {

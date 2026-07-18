@@ -261,6 +261,13 @@
 			"localToolsLabel": "Lokale Tools",
 			"localToolsEnabled": "Lokale Tools aktiviert",
 			"localToolsDisabled": "Lokale Tools deaktiviert",
+			"knowledgeBaseLabel": "Wissensdatenbank verwenden",
+			"knowledgeBaseEnabled": "Wissensdatenbank aktiviert",
+			"knowledgeBaseDisabled": "Wissensdatenbank deaktiviert",
+			"sources": {
+				"title": "Quellen",
+				"score": "Score {{value}}"
+			},
 			"localToolsUnavailable": "Lokale Tools sind für das ausgewählte Modell nicht verfügbar",
 			"cloudToolsLabel": "Cloud-Tools",
 			"cloudToolsEnabled": "Cloud-Tools aktiviert",
