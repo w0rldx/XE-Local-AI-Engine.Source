@@ -10416,7 +10416,9 @@
           "name",
           "description",
           "requiresApproval",
-          "source"
+          "source",
+          "category",
+          "effectiveRequiresApproval"
         ],
         "properties": {
           "name": {
@@ -10430,6 +10432,12 @@
           },
           "source": {
             "type": "string"
+          },
+          "category": {
+            "type": "string"
+          },
+          "effectiveRequiresApproval": {
+            "type": "boolean"
           }
         }
       },

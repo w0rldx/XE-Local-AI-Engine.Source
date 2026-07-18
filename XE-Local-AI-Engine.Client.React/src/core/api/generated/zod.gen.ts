@@ -1102,6 +1102,8 @@ export const zXeLocalAiEngineClientEndpointsMcpV1ToolCatalogEntryResponse = z.ob
 	description: z.string(),
 	requiresApproval: z.boolean(),
 	source: z.string(),
+	category: z.string(),
+	effectiveRequiresApproval: z.boolean(),
 });
 
 export const zXeLocalAiEngineClientEndpointsMcpV1ToolCatalogResponse = z.object({

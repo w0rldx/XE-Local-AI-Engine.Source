@@ -13,6 +13,8 @@ import { CHAT_ACCENT, CHAT_ACCENT_SOFT } from "@/features/chat/components/ChatVi
 import classes from "@/features/chat/components/ThoughtsSection.module.css";
 import { buildChatUiCapabilities } from "@/features/chat/models/ChatCapabilityGates";
 import type { ChatToolPart, ToolCallState } from "@/features/chat/models/ChatModels";
+import { ToolCategoryBadge } from "@/features/tools/components/ToolCategoryBadge";
+import { useToolCatalog } from "@/features/tools/queries/useToolCatalog";
 
 interface ToolCallCardProps {
 	part: ChatToolPart;
@@ -71,6 +73,14 @@ export const ToolCallCard = memo(function ToolCallCard({ part }: ToolCallCardPro
 	const { t } = useTranslation();
 	const reduced = useReducedMotion();
 	const [expanded, setExpanded] = useState(() => expandedByToolId.get(part.id) ?? false);
+
+	// Resolve the tool's risk class + node-policy floor from the shared catalog (cached; reused across the app) so the
+	// card can badge the tool's class next to the approval controls. A tool not found in the catalog (e.g. a since-removed
+	// MCP server) fails closed to the "Unknown" class, which the badge treats as approval-requiring.
+	const catalogQuery = useToolCatalog();
+	const catalogEntry = catalogQuery.data?.find((tool) => tool.name === part.name);
+	const toolCategory = catalogEntry?.category ?? "Unknown";
+	const toolEffectiveApproval = catalogEntry?.effectiveRequiresApproval ?? true;
 
 	const handleToggle = (open: boolean) => {
 		expandedByToolId.set(part.id, open);
@@ -158,6 +168,7 @@ export const ToolCallCard = memo(function ToolCallCard({ part }: ToolCallCardPro
 							<Badge size="xs" variant="light" color={stateColor(part.state)} radius="sm">
 								{stateLabel}
 							</Badge>
+							<ToolCategoryBadge category={toolCategory} effectiveRequiresApproval={toolEffectiveApproval} />
 							{isLiveState(part.state) ? (
 								<Text size="xs" c="dimmed">
 									{t("chat.toolCall.live", "live")}

@@ -153,4 +153,18 @@ public sealed class ToolCatalogEntryResponse
     public required bool RequiresApproval { get; init; }
 
     public required string Source { get; init; }
+
+    /// <summary>
+    ///     The tool's risk class (OPP-03) as the <c>ToolCategory</c> name ("ReadLocal" / "WriteExecute" /
+    ///     "Orchestration" / "Network" / "Unknown"). Serialized as a string (matching the <see cref="Source" /> idiom) so
+    ///     the UI can label the tool's class; an unrecognized value degrades to fail-closed on the client.
+    /// </summary>
+    public required string Category { get; init; }
+
+    /// <summary>
+    ///     Whether the tool requires an approval round-trip under the CURRENT node-default approval policy, computed
+    ///     through the same <c>IToolApprovalPolicy</c> the runtime enforcement uses (node-default, agent-independent — a
+    ///     bound agent may tighten further via its own per-tool overrides). It is the floor an operator sees for the tool.
+    /// </summary>
+    public required bool EffectiveRequiresApproval { get; init; }
 }

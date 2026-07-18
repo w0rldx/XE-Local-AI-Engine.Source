@@ -1,5 +1,6 @@
 namespace XE_Local_AI_Engine.Client.Endpoints.Mcp.V1.Mappers;
 
+using XE_Local_AI_Engine.AI.Agent.Tools;
 using XE_Local_AI_Engine.Client.Persistence;
 using XE_Local_AI_Engine.Client.Persistence.Stores;
 using XE_Local_AI_Engine.Client.Services.Chat;
@@ -62,16 +63,21 @@ internal static class McpServerMapper
             Enabled: false);
     }
 
-    public static ToolCatalogEntryResponse ToResponse(this LocalToolCatalogEntry entry)
+    // The node's tool-approval policy is reused (not reimplemented) to compute each entry's effective approval, so the
+    // badge an operator sees matches the floor the runtime enforcement applies. Category travels as its enum name.
+    public static ToolCatalogEntryResponse ToResponse(this LocalToolCatalogEntry entry, IToolApprovalPolicy approvalPolicy)
     {
         ArgumentNullException.ThrowIfNull(entry);
+        ArgumentNullException.ThrowIfNull(approvalPolicy);
 
         return new ToolCatalogEntryResponse
         {
             Name = entry.Name,
             Description = entry.Description,
             RequiresApproval = entry.RequiresApproval,
-            Source = entry.Source
+            Source = entry.Source,
+            Category = entry.Category.ToString(),
+            EffectiveRequiresApproval = approvalPolicy.RequiresApproval(entry.Name, entry.Category, entry.RequiresApproval)
         };
     }
 }

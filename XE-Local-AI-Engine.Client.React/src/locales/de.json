@@ -3073,6 +3073,27 @@
 		"languageMenu": {
 			"tooltip": "Sprache ändern"
 		},
+		"toolCategoryBadge": {
+			"label": {
+				"ReadLocal": "nur lesend",
+				"WriteExecute": "schreiben/ausführen",
+				"Orchestration": "Orchestrierung",
+				"Network": "Netzwerk",
+				"Unknown": "nicht kategorisiert"
+			},
+			"meaning": {
+				"ReadLocal": "Nur lesende, knotenlokale Tools ohne Nebenwirkungen.",
+				"WriteExecute": "Kann Dateien schreiben oder Befehle auf dem Knoten ausführen.",
+				"Orchestration": "Kann andere Agenten oder Modelle starten oder steuern.",
+				"Network": "Greift auf einen externen Dienst außerhalb des Knotens zu.",
+				"Unknown": "Nicht kategorisiertes Tool mit unbekannter Risikoklasse."
+			},
+			"approval": {
+				"byPolicy": "Erfordert eine Freigabe gemäß der aktuellen Knotenrichtlinie.",
+				"always": "Nicht kategorisierte Tools erfordern immer eine Freigabe (fail-closed).",
+				"auto": "Wird gemäß der aktuellen Knotenrichtlinie automatisch ausgeführt."
+			}
+		},
 		"toolSourceBadge": {
 			"builtin": "integriert",
 			"mcp": "MCP",

@@ -109,28 +109,33 @@ internal sealed class LocalToolOfferProvider : ILocalToolOfferProvider
                 Name = descriptor.Name,
                 Description = descriptor.Description,
                 RequiresApproval = descriptor.RequiresApproval,
-                Source = BuiltinSource
+                Source = BuiltinSource,
+                Category = descriptor.Category
             }),
             .. coderDescriptors.Select(static descriptor => new LocalToolCatalogEntry
             {
                 Name = descriptor.Name,
                 Description = descriptor.Description,
                 RequiresApproval = descriptor.RequiresApproval,
-                Source = BuiltinSource
+                Source = BuiltinSource,
+                Category = descriptor.Category
             }),
             .. knowledgeDescriptors.Select(static descriptor => new LocalToolCatalogEntry
             {
                 Name = descriptor.Name,
                 Description = descriptor.Description,
                 RequiresApproval = descriptor.RequiresApproval,
-                Source = BuiltinSource
+                Source = BuiltinSource,
+                Category = descriptor.Category
             }),
             new LocalToolCatalogEntry
             {
                 Name = SpawnSubAgentToolDefinition.ToolName,
                 Description = SpawnSubAgentToolDefinition.Description,
                 RequiresApproval = false,
-                Source = BuiltinSource
+                Source = BuiltinSource,
+                // spawn_subagent drives other agents/models — matches the Orchestration category used for its offer DTO.
+                Category = ToolCategory.Orchestration
             }
         ];
 
@@ -231,7 +236,8 @@ internal sealed class LocalToolOfferProvider : ILocalToolOfferProvider
                 Name = descriptor.Name,
                 Description = descriptor.Description,
                 RequiresApproval = descriptor.RequiresApproval,
-                Source = ToMcpSource(descriptor.Name)
+                Source = ToMcpSource(descriptor.Name),
+                Category = descriptor.Category
             })
         ];
     }

@@ -3,6 +3,7 @@ import { IconAlertTriangle } from "@tabler/icons-react";
 import { useMemo } from "react";
 import { useTranslation } from "react-i18next";
 
+import { ToolCategoryBadge } from "@/features/tools/components/ToolCategoryBadge";
 import { ToolSourceBadge } from "@/features/tools/components/ToolSourceBadge";
 import { type ToolCatalogEntry, toToolDisplayName } from "@/features/tools/models/ToolCatalogModels";
 import { useToolCatalog } from "@/features/tools/queries/useToolCatalog";
@@ -19,13 +20,16 @@ interface AgentToolSelectorProps {
 
 // Synthesize a catalog entry for a tool that is selected on the definition but no longer present in the live
 // catalog (e.g. an MCP tool whose server was disabled/removed). It is shown so the user can still see and
-// deselect it; it defaults to requiresApproval=true (the strict default) and an unknown source.
+// deselect it; it defaults to requiresApproval=true (the strict default), an unknown source, and the fail-closed
+// "Unknown" risk class (treated as approval-requiring) since its real class is no longer known.
 function unknownToolEntry(name: string): ToolCatalogEntry {
 	return {
 		name,
 		description: "",
 		requiresApproval: true,
 		source: { kind: "builtin", serverSlug: null },
+		category: "Unknown",
+		effectiveRequiresApproval: true,
 	};
 }
 
@@ -108,6 +112,7 @@ export function AgentToolSelector({
 												{toToolDisplayName(tool.name)}
 											</Text>
 											<ToolSourceBadge source={tool.source} />
+											<ToolCategoryBadge category={tool.category} effectiveRequiresApproval={tool.effectiveRequiresApproval} />
 										</Group>
 									}
 									onChange={(event) => onToggleTool(tool.name, event.currentTarget.checked)}
