@@ -1339,7 +1339,7 @@ export function Chat() {
 		<Box py="lg" style={{ display: "flex", flexDirection: "column", height: "100%", minHeight: 0 }}>
 			{isLoadingInitialConversations ? (
 				<Alert color="blue" variant="light" icon={<Loader size={16} />}>
-					Loading local chat history…
+					{t("pages.chat.loadingHistory", "Loading local chat history…")}
 				</Alert>
 			) : null}
 			{createConversationMutation.isError ? (
@@ -1364,7 +1364,7 @@ export function Chat() {
 					maxTokens: effectiveMaxContextTokens,
 					isAuthoritative: usedContextTokens !== undefined,
 					modelLabel: contextModelLabel,
-					nodeLabel: "Local node",
+					nodeLabel: t("pages.chat.contextUsage.localNode", "Local node"),
 				}}
 				streamingMessage={streamingMessage}
 				timelineEntries={timelineEntries}
