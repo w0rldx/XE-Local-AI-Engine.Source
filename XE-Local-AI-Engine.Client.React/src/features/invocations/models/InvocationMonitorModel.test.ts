@@ -1,6 +1,38 @@
+import type { TFunction } from "i18next";
 import { describe, expect, it } from "vitest";
 
-import { formatInvocationDuration, getInvocationStatusColor, isInvocationActive, sortInvocationHistory } from "@/features/invocations/models/InvocationMonitorModel";
+import {
+  type InvocationSummaryInput,
+  buildInvocationSummary,
+  formatInvocationDuration,
+  getInvocationStatusColor,
+  isInvocationActive,
+  sortInvocationHistory,
+} from "@/features/invocations/models/InvocationMonitorModel";
+
+// A minimal stand-in for i18next's `t`: returns the English default with {{placeholders}} interpolated, so the tests
+// exercise the real sentence composition (verb + duration + model + counts + tool note) without an i18n runtime.
+const t = ((_key: string, defaultValue: string, options?: Record<string, unknown>): string => {
+  if (!options) {
+    return defaultValue;
+  }
+  return defaultValue.replace(/\{\{(\w+)\}\}/g, (_match, name: string) => String(options[name] ?? ""));
+}) as unknown as TFunction;
+
+function summaryInput(overrides: Partial<InvocationSummaryInput> = {}): InvocationSummaryInput {
+  return {
+    status: "Completed",
+    modelUsed: "gemma3",
+    durationMs: 4200,
+    streamedChunkCount: 128,
+    streamedThinkingChunkCount: 40,
+    pendingToolCallCount: 0,
+    hasPendingApproval: false,
+    error: null,
+    failureCategory: null,
+    ...overrides,
+  };
+}
 
 describe("invocation monitor model", () => {
   it("formats durations", () => {
@@ -24,6 +56,47 @@ describe("invocation monitor model", () => {
     ]);
 
     expect(sorted.map((entry) => entry.invocationId)).toEqual(["new", "old"]);
+  });
+});
+
+describe("buildInvocationSummary", () => {
+  it("summarizes a completed run with duration, model, and chunk counts", () => {
+    expect(buildInvocationSummary(summaryInput(), t)).toBe(
+      "Completed in 4.2 s with gemma3 — 128 output chunks, 40 reasoning, no tool calls.",
+    );
+  });
+
+  it("summarizes a failed run with the error reason", () => {
+    expect(buildInvocationSummary(summaryInput({ status: "Failed", error: "Model load timeout" }), t)).toBe(
+      "Failed after 4.2 s with gemma3 — Model load timeout.",
+    );
+  });
+
+  it("falls back to the failure category when there is no error message", () => {
+    expect(buildInvocationSummary(summaryInput({ status: "Failed", error: null, failureCategory: "Timeout" }), t)).toBe(
+      "Failed after 4.2 s with gemma3 — Timeout.",
+    );
+  });
+
+  it("summarizes an active running run with 'so far' counts and pending tool calls", () => {
+    expect(buildInvocationSummary(summaryInput({ status: "Running", durationMs: undefined, pendingToolCallCount: 2 }), t)).toBe(
+      "Running on gemma3 — 128 output chunks, 40 reasoning so far (2 pending tool call(s)).",
+    );
+  });
+
+  it("notes a pending approval on an active run", () => {
+    expect(buildInvocationSummary(summaryInput({ status: "Running", hasPendingApproval: true }), t)).toContain(
+      "awaiting tool approval",
+    );
+  });
+
+  it("summarizes pending/assigned as waiting to start", () => {
+    expect(buildInvocationSummary(summaryInput({ status: "Pending" }), t)).toBe("Waiting to start on gemma3.");
+    expect(buildInvocationSummary(summaryInput({ status: "Assigned" }), t)).toBe("Waiting to start on gemma3.");
+  });
+
+  it("summarizes a cancelled run", () => {
+    expect(buildInvocationSummary(summaryInput({ status: "Cancelled" }), t)).toBe("Cancelled after 4.2 s with gemma3.");
   });
 });
 

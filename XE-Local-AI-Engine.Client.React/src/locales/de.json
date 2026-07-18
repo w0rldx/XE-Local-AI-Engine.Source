@@ -1510,6 +1510,17 @@
 					"copy": "Trace-ID kopieren",
 					"copied": "Kopiert"
 				},
+				"summary": {
+					"pending": "Wartet auf den Start mit {{model}}.",
+					"running": "Läuft mit {{model}} — {{chunks}} Ausgabe-Chunks, {{thinking}} Reasoning bisher ({{tools}}).",
+					"completed": "Abgeschlossen in {{duration}} mit {{model}} — {{chunks}} Ausgabe-Chunks, {{thinking}} Reasoning, {{tools}}.",
+					"failed": "Fehlgeschlagen nach {{duration}} mit {{model}} — {{reason}}.",
+					"cancelled": "Abgebrochen nach {{duration}} mit {{model}}.",
+					"unknown": "Aufrufstatus ist unbekannt.",
+					"toolApproval": "wartet auf Tool-Freigabe",
+					"toolPending": "{{count}} ausstehende(r) Tool-Aufruf(e)",
+					"toolNone": "keine Tool-Aufrufe"
+				},
 				"current": {
 					"title": "Aktueller Aufruf",
 					"empty": "Aktuell ist kein Aufruf zugewiesen oder aktiv.",
