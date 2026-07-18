@@ -4673,6 +4673,40 @@
         ]
       }
     },
+    "/api/local/v1/knowledge-base/reranker/download-recommended": {
+      "post": {
+        "tags": [
+          "Knowledge-Base"
+        ],
+        "operationId": "downloadRecommendedReranker",
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/XE_Local_AI_EngineClientEndpointsKnowledgeV1DownloadRecommendedRerankerResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "403": {
+            "description": "Forbidden"
+          }
+        },
+        "security": [
+          {
+            "JWTBearerAuth": []
+          },
+          {
+            "Bearer": []
+          }
+        ]
+      }
+    },
     "/api/local/v1/knowledge-base/documents/{documentId}/reindex": {
       "post": {
         "tags": [
@@ -11692,6 +11726,34 @@
           },
           "createdAtUtc": {
             "type": "integer"
+          }
+        }
+      },
+      "XE_Local_AI_EngineClientEndpointsKnowledgeV1DownloadRecommendedRerankerResponse": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "modelName",
+          "repoId",
+          "quant",
+          "alreadyInstalled",
+          "alreadyInFlight"
+        ],
+        "properties": {
+          "modelName": {
+            "type": "string"
+          },
+          "repoId": {
+            "type": "string"
+          },
+          "quant": {
+            "type": "string"
+          },
+          "alreadyInstalled": {
+            "type": "boolean"
+          },
+          "alreadyInFlight": {
+            "type": "boolean"
           }
         }
       },

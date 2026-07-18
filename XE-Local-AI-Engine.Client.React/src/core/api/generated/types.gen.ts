@@ -1253,6 +1253,14 @@ export type XeLocalAiEngineClientEndpointsKnowledgeV1KnowledgeDocumentResponse =
 	createdAtUtc: number;
 };
 
+export type XeLocalAiEngineClientEndpointsKnowledgeV1DownloadRecommendedRerankerResponse = {
+	modelName: string;
+	repoId: string;
+	quant: string;
+	alreadyInstalled: boolean;
+	alreadyInFlight: boolean;
+};
+
 export type XeLocalAiEngineClientEndpointsKnowledgeV1ReindexCorpusResponse = {
 	enqueuedCount: number;
 };
@@ -4989,6 +4997,34 @@ export type ReindexCorpusResponses = {
 };
 
 export type ReindexCorpusResponse = ReindexCorpusResponses[keyof ReindexCorpusResponses];
+
+export type DownloadRecommendedRerankerData = {
+	body?: never;
+	path?: never;
+	query?: never;
+	url: "/api/local/v1/knowledge-base/reranker/download-recommended";
+};
+
+export type DownloadRecommendedRerankerErrors = {
+	/**
+	 * Unauthorized
+	 */
+	401: unknown;
+	/**
+	 * Forbidden
+	 */
+	403: unknown;
+};
+
+export type DownloadRecommendedRerankerResponses = {
+	/**
+	 * Success
+	 */
+	200: XeLocalAiEngineClientEndpointsKnowledgeV1DownloadRecommendedRerankerResponse;
+};
+
+export type DownloadRecommendedRerankerResponse =
+	DownloadRecommendedRerankerResponses[keyof DownloadRecommendedRerankerResponses];
 
 export type ReindexKnowledgeDocumentData = {
 	body?: never;
