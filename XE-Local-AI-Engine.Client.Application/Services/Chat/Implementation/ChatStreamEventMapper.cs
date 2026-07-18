@@ -151,4 +151,31 @@ internal static class ChatStreamEventMapper
     {
         parts.AppendNotice(payload.Kind.ToString(), payload.Message, sequence);
     }
+
+    /// <summary>
+    ///     Maps a pending tool-approval request to an <see cref="ChatStreamEventTypes.ApprovalRequested" /> stream event
+    ///     (UX-01). The tool-call id rides <see cref="ChatStreamEvent.ToolCallId" /> so the client attaches the
+    ///     Approve/Deny controls to the matching tool-call card; the approval request id rides
+    ///     <see cref="ChatStreamEvent.ApprovalRequestId" /> for the resolve round-trip. Deliberately NOT accumulated into
+    ///     the persisted <c>parts[]</c>: the pending approval is transient live state, and a reloaded terminal turn shows
+    ///     the executed/rejected tool result, never a lingering approval prompt.
+    /// </summary>
+    public static ChatStreamEvent ApprovalRequestedEvent(Guid conversationId,
+        Guid messageId,
+        Guid requestId,
+        ApprovalLifecyclePayload payload,
+        long timestampMs,
+        long sequence)
+    {
+        return new ChatStreamEvent(ChatStreamEventTypes.ApprovalRequested,
+            conversationId,
+            messageId,
+            requestId,
+            NodeChatMessageStatusValues.Streaming,
+            sequence,
+            timestampMs,
+            ToolCallId: payload.CallId,
+            ToolName: payload.ToolName,
+            ApprovalRequestId: payload.RequestId);
+    }
 }

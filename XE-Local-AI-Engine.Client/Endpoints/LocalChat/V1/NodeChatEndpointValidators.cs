@@ -64,3 +64,12 @@ public sealed class CancelNodeChatMessageRequestValidator : Validator<CancelNode
             .NotEmpty();
     }
 }
+
+public sealed class ResolveToolApprovalRequestValidator : Validator<ResolveToolApprovalRequest>
+{
+    public ResolveToolApprovalRequestValidator()
+    {
+        RuleFor(static request => request.RequestId)
+            .NotEmpty();
+    }
+}

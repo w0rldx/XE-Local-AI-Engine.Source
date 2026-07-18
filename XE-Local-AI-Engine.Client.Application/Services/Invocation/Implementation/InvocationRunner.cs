@@ -1076,6 +1076,18 @@ public sealed partial class InvocationRunner : IInvocationRunner
                 await sender.SendApprovalRequestAsync(approvalPayload, cancellationToken).ConfigureAwait(false);
                 await dispatcher.ReportApprovalRequestedAsync(approvalPayload).ConfigureAwait(false);
 
+                // Surface the pending approval on the LOCAL chat stream (UX-01). This API-tool path emits its
+                // tool-call-requested lifecycle only AFTER approval, so the browser has no card yet — the CallId is the
+                // request id, and the reducer creates the waiting card from this event.
+                await dispatcher.ReportApprovalLifecycleAsync(new ApprovalLifecyclePayload
+                {
+                    InvocationId = invocationId,
+                    RequestId = requestId,
+                    CallId = requestId,
+                    ToolName = toolName,
+                    Description = approvalPayload.Description
+                }).ConfigureAwait(false);
+
                 using var approvalTimeoutCancellationTokenSource = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
                 approvalTimeoutCancellationTokenSource.CancelAfter(_maxPendingToolCallAge);
 
@@ -1179,6 +1191,24 @@ public sealed partial class InvocationRunner : IInvocationRunner
 
             await sender.SendApprovalRequestAsync(approvalPayload, cancellationToken).ConfigureAwait(false);
             await dispatcher.ReportApprovalRequestedAsync(approvalPayload).ConfigureAwait(false);
+
+            // Surface the pending approval on the LOCAL chat stream (UX-01). The CallId is derived the SAME way the
+            // tool-call-requested lifecycle event derives it (CallId, falling back to the tool name) so the browser can
+            // attach the Approve/Deny controls to the matching tool-call card. In desktop/local mode there is no worker
+            // hub to resolve the approval, so the loopback resolve endpoint feeds ResolveApprovalResult below. ToolCall
+            // is the base ToolCallContent (CallId only); the concrete FunctionCallContent carries the tool name.
+            var approvalToolName = (approvalRequest.ToolCall as FunctionCallContent)?.Name;
+            var approvalCallId = string.IsNullOrEmpty(approvalRequest.ToolCall.CallId)
+                ? approvalToolName ?? string.Empty
+                : approvalRequest.ToolCall.CallId;
+            await dispatcher.ReportApprovalLifecycleAsync(new ApprovalLifecyclePayload
+            {
+                InvocationId = package.InvocationId,
+                RequestId = requestId,
+                CallId = approvalCallId,
+                ToolName = string.IsNullOrEmpty(approvalToolName) ? approvalCallId : approvalToolName,
+                Description = approvalPayload.Description
+            }).ConfigureAwait(false);
 
             using var approvalTimeoutCancellationTokenSource = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
             approvalTimeoutCancellationTokenSource.CancelAfter(_maxPendingToolCallAge);

@@ -70,6 +70,8 @@ public sealed partial class WorkerEventDispatcher : IWorkerEventDispatcher
 
     public event EventHandler<TurnNoticeChangedEventArgs>? TurnNoticeChanged;
 
+    public event EventHandler<ApprovalRequestedChangedEventArgs>? ApprovalRequestedChanged;
+
     // The live invocation, mutated in place only under _syncRoot. Its StreamedContent/StreamedThinkingContent now
     // materialize from an immutable append-only accumulator, so an off-lock read is memory-safe (though it may observe a
     // transient value mid-append) — see IWorkerEventDispatcher.CurrentInvocation. Internal callers already hold _syncRoot
@@ -568,6 +570,15 @@ public sealed partial class WorkerEventDispatcher : IWorkerEventDispatcher
         ArgumentNullException.ThrowIfNull(payload);
 
         TurnNoticeChanged?.Invoke(this, new TurnNoticeChangedEventArgs(payload));
+
+        return Task.CompletedTask;
+    }
+
+    public Task ReportApprovalLifecycleAsync(ApprovalLifecyclePayload payload)
+    {
+        ArgumentNullException.ThrowIfNull(payload);
+
+        ApprovalRequestedChanged?.Invoke(this, new ApprovalRequestedChangedEventArgs(payload));
 
         return Task.CompletedTask;
     }

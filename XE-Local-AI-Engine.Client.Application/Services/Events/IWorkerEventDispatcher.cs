@@ -39,6 +39,14 @@ public interface IWorkerEventDispatcher
     /// </summary>
     event EventHandler<TurnNoticeChangedEventArgs>? TurnNoticeChanged;
 
+    /// <summary>
+    ///     Raised once per tool-approval request the in-flight invocation is paused on. The local chat stream
+    ///     subscribes to surface these as <c>approval-requested</c> stream events so the browser can render
+    ///     Approve/Deny controls on the waiting tool-call card; the platform-served path (which resolves approvals over
+    ///     the worker hub) does not consume it.
+    /// </summary>
+    event EventHandler<ApprovalRequestedChangedEventArgs>? ApprovalRequestedChanged;
+
     void StopAcceptingRemoteInvocations();
 
     Task DispatchInvocationAssignedAsync(EncryptedRuntimePackageDto package);
@@ -91,4 +99,12 @@ public interface IWorkerEventDispatcher
     ///     subscribed local chat stream can fan it out.
     /// </summary>
     Task ReportTurnNoticeAsync(TurnNoticePayload payload);
+
+    /// <summary>
+    ///     Reports a tool-approval request for the in-flight invocation, raising <see cref="ApprovalRequestedChanged" />
+    ///     so a subscribed local chat stream can surface it as an <c>approval-requested</c> stream event. Distinct from
+    ///     <see cref="ReportApprovalRequestedAsync" />, which updates the invocation-monitor state; this fans the
+    ///     request out to the local browser so the operator can resolve it.
+    /// </summary>
+    Task ReportApprovalLifecycleAsync(ApprovalLifecyclePayload payload);
 }

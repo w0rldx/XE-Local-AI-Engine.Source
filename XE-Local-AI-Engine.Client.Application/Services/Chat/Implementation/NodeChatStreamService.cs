@@ -171,10 +171,10 @@ public sealed class NodeChatStreamService(
         var eventChannel = Channel.CreateUnbounded<ChatStreamEvent>(new UnboundedChannelOptions
         {
             SingleReader = true,
-            // Four producers write this channel concurrently: the delta/terminal emits in the invocation-state pump,
+            // Five producers write this channel concurrently: the delta/terminal emits in the invocation-state pump,
             // the streaming-transition emit in RunInvocationAsync (the run-transition), the tool-call lifecycle emits
-            // in OnToolCallLifecycleChanged, and the turn-notice emits in OnTurnNoticeChanged. SingleWriter must be
-            // false.
+            // in OnToolCallLifecycleChanged, the turn-notice emits in OnTurnNoticeChanged, and the pending-approval
+            // emits in OnApprovalRequestedChanged. SingleWriter must be false.
             SingleWriter = false
         });
 
@@ -212,9 +212,23 @@ public sealed class NodeChatStreamService(
             }
         }
 
+        // A pending tool-approval (UX-01). Unlike tool-call/notice events this is NOT accumulated into the ordered
+        // parts[]: the approval prompt is transient live state that the loopback resolve endpoint clears, and a reloaded
+        // terminal turn shows the executed/rejected tool result rather than a lingering prompt. It only rides the live
+        // event channel so the browser can render Approve/Deny on the matching tool-call card.
+        void OnApprovalRequestedChanged(object? _, ApprovalRequestedChangedEventArgs args)
+        {
+            if (args.Payload.InvocationId == requestId)
+            {
+                eventChannel.Writer.TryWrite(ChatStreamEventMapper.ApprovalRequestedEvent(correlation.ConversationId, correlation.MessageId, correlation.RequestId, args.Payload,
+                    NowUnixMilliseconds(), sequence.Next()));
+            }
+        }
+
         eventDispatcher.InvocationStateChanged += OnInvocationStateChanged;
         eventDispatcher.ToolCallLifecycleChanged += OnToolCallLifecycleChanged;
         eventDispatcher.TurnNoticeChanged += OnTurnNoticeChanged;
+        eventDispatcher.ApprovalRequestedChanged += OnApprovalRequestedChanged;
 
         // The active-model precedence, the effective-agent resolution, and the orchestration spec were all computed up
         // front (ResolveTurnAsync) so the placeholder could be stamped with the resolved agent's attribution; reuse
@@ -405,6 +419,7 @@ public sealed class NodeChatStreamService(
                 eventDispatcher.InvocationStateChanged -= OnInvocationStateChanged;
                 eventDispatcher.ToolCallLifecycleChanged -= OnToolCallLifecycleChanged;
                 eventDispatcher.TurnNoticeChanged -= OnTurnNoticeChanged;
+                eventDispatcher.ApprovalRequestedChanged -= OnApprovalRequestedChanged;
             }
         }
     }

@@ -3441,6 +3441,8 @@ public sealed class NodeChatStreamServiceTests
 
         public event EventHandler<TurnNoticeChangedEventArgs>? TurnNoticeChanged;
 
+        public event EventHandler<ApprovalRequestedChangedEventArgs>? ApprovalRequestedChanged;
+
         public InvocationState? CurrentInvocation { get; private set; }
 
         public bool IsAcceptingRemoteInvocations => true;
@@ -3584,6 +3586,12 @@ public sealed class NodeChatStreamServiceTests
         public Task ReportTurnNoticeAsync(TurnNoticePayload payload)
         {
             TurnNoticeChanged?.Invoke(this, new TurnNoticeChangedEventArgs(payload));
+            return Task.CompletedTask;
+        }
+
+        public Task ReportApprovalLifecycleAsync(ApprovalLifecyclePayload payload)
+        {
+            ApprovalRequestedChanged?.Invoke(this, new ApprovalRequestedChangedEventArgs(payload));
             return Task.CompletedTask;
         }
 
