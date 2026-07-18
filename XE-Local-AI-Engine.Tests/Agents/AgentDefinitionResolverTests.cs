@@ -4,12 +4,14 @@ using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Options;
 using NSubstitute;
 using XE_Local_AI_Engine.AI.Agent.Instructions;
+using XE_Local_AI_Engine.AI.Agent.Tools;
 using XE_Local_AI_Engine.AI.Agent.Tools.Implementation;
 using XE_Local_AI_Engine.Client.Models;
 using XE_Local_AI_Engine.Client.Models.Enums;
 using XE_Local_AI_Engine.Client.Persistence;
 using XE_Local_AI_Engine.Client.Persistence.Stores;
 using XE_Local_AI_Engine.Client.Services.Agents;
+using XE_Local_AI_Engine.Client.Services.Agents.Approval.Implementation;
 using XE_Local_AI_Engine.Client.Services.Agents.Implementation;
 using XE_Local_AI_Engine.Client.Services.Chat;
 using XE_Local_AI_Engine.Client.Services.Chat.Implementation;
@@ -305,11 +307,14 @@ public sealed class AgentDefinitionResolverTests
     }
 
     [Test]
-    public async Task ResolveAsync_ProjectsOfferedMcpTool_AndAppliesAutoExecuteOverride()
+    public async Task ResolveAsync_ProjectsOfferedMcpTool_AndPerAgentAutoExecuteCannotLoosenApproval()
     {
-        // MCP tool projection: once an MCP tool is in the offer (approval-ON by default), a definition can name it in
-        // AllowedToolNames and override it to auto-execute via ToolApprovals — no resolver change, the qualified name is
-        // treated like any other offered tool.
+        // MCP tool projection under TIGHTEN-ONLY (OPP-03): an MCP tool is in the offer approval-ON by default (its
+        // catalog RequiresApproval=true). A per-agent ToolApprovals[mcpTool]=false can NO LONGER loosen it — the 3-tier
+        // compose is `nodePolicy(catalogDefault) || (perAgent && perAgentValue)`, so a per-agent false is a no-op and the
+        // resolved offer flag stays true. (Before OPP-03 this test asserted the flag flipped to false. The MCP executable
+        // was ALWAYS wrapped in ApprovalRequiredAIFunction at McpServerConnectionManager regardless of this flag, so no
+        // real execution loosening is lost; the flag now correctly matches that structural floor.)
         const string mcpTool = "mcp__weather__get_forecast";
         var resolver = CreateResolver(out var store,
             OfferTool(mcpTool, requiresApproval: true),
@@ -326,7 +331,41 @@ public sealed class AgentDefinitionResolverTests
 
         AssertEx.NotNull(resolved);
         var projected = resolved!.AllowedTools.Single(tool => tool.Name == mcpTool);
-        AssertEx.Equal(expected: false, projected.RequiresApproval);
+        AssertEx.Equal(expected: true, projected.RequiresApproval);
+    }
+
+    [Test]
+    public async Task ResolveAsync_AppliesThreeTierTightenOnlyApprovalCompose()
+    {
+        // End-to-end seam D (OPP-03): the node policy tightens a whole category, then the per-agent override can only ADD
+        // approval on top of it. Node policy: require approval for the Network category. Definition: names three tools and
+        // tightens GetCurrentTime while trying (and failing) to auto-execute the Network tool.
+        var nodePolicy = new NodeToolApprovalPolicy(
+            new Dictionary<ToolCategory, bool> { [ToolCategory.Network] = true },
+            new Dictionary<string, bool>(StringComparer.Ordinal));
+        var resolver = CreateResolverWithPolicy(out var store,
+            nodePolicy,
+            OfferTool("mcp__x__y", requiresApproval: false, ToolCategory.Network),
+            OfferTool("GetCurrentTime", category: ToolCategory.ReadLocal),
+            OfferTool("Calculate", category: ToolCategory.ReadLocal));
+        var definition = CreateDefinition(allowedTools: ["mcp__x__y", "GetCurrentTime", "Calculate"],
+            modelProfile: ToolCapableModel,
+            toolApprovals: new Dictionary<string, bool>
+            {
+                ["GetCurrentTime"] = true, // per-agent tighten a node-auto-execute tool
+                ["mcp__x__y"] = false       // per-agent false must NOT loosen the node-tightened tool
+            });
+        store.GetByIdAsync(definition.Id, Arg.Any<CancellationToken>()).Returns(definition);
+
+        var resolved = await resolver.ResolveAsync(definition.Id, ToolCapableModel).ConfigureAwait(false);
+
+        AssertEx.NotNull(resolved);
+        // Network tool: tightened by the node category rule; the per-agent false is a no-op.
+        AssertEx.Equal(expected: true, resolved!.AllowedTools.Single(tool => tool.Name == "mcp__x__y").RequiresApproval);
+        // ReadLocal tool the node policy leaves alone, but the per-agent override tightens.
+        AssertEx.Equal(expected: true, resolved.AllowedTools.Single(tool => tool.Name == "GetCurrentTime").RequiresApproval);
+        // ReadLocal tool with neither a node rule nor a per-agent override stays auto-execute.
+        AssertEx.Equal(expected: false, resolved.AllowedTools.Single(tool => tool.Name == "Calculate").RequiresApproval);
     }
 
     [Test]
@@ -922,6 +961,15 @@ public sealed class AgentDefinitionResolverTests
         return BuildResolver(out store, out _, onGetOffered: null, offeredTools);
     }
 
+    // Builds a resolver over a caller-supplied IToolApprovalPolicy so the seam-D end-to-end test can prove the node
+    // policy is applied during projection (every other factory uses the Permissive no-op floor).
+    private static AgentDefinitionResolver CreateResolverWithPolicy(out IAgentDefinitionStore store,
+        IToolApprovalPolicy toolApprovalPolicy,
+        params AllowedToolDto[] offeredTools)
+    {
+        return BuildResolver(out store, out _, onGetOffered: null, offeredTools, instructionProvider: null, toolApprovalPolicy);
+    }
+
     // Exposes the playbook store so the playbook-injection tests can stub ListEnabledByAgentAsync / assert it is not
     // queried on the disabled path. A distinct name avoids overload collision with the params-only CreateResolver.
     private static AgentDefinitionResolver CreateResolverWithPlaybook(out IAgentDefinitionStore store,
@@ -953,6 +1001,7 @@ public sealed class AgentDefinitionResolverTests
             Options.Create(new PlaybookRetrievalOptions()),
             new FakeAgentInstructionProvider(),
             Substitute.For<IModelCapabilityResolver>(),
+            new PermissiveToolApprovalPolicy(),
             NullLogger<AgentDefinitionResolver>.Instance);
     }
 
@@ -984,6 +1033,7 @@ public sealed class AgentDefinitionResolverTests
             Options.Create(new PlaybookRetrievalOptions()),
             new FakeAgentInstructionProvider(),
             capabilityResolver,
+            new PermissiveToolApprovalPolicy(),
             NullLogger<AgentDefinitionResolver>.Instance);
     }
 
@@ -991,7 +1041,8 @@ public sealed class AgentDefinitionResolverTests
         out IPlaybookActionStore playbookStore,
         Action<string?>? onGetOffered,
         AllowedToolDto[] offeredTools,
-        IAgentInstructionProvider? instructionProvider = null)
+        IAgentInstructionProvider? instructionProvider = null,
+        IToolApprovalPolicy? toolApprovalPolicy = null)
     {
         store = Substitute.For<IAgentDefinitionStore>();
         playbookStore = Substitute.For<IPlaybookActionStore>();
@@ -1026,6 +1077,7 @@ public sealed class AgentDefinitionResolverTests
             // prompt unchanged. Scaffold composition itself is covered by the dedicated tests below.
             instructionProvider ?? new FakeAgentInstructionProvider(),
             Substitute.For<IModelCapabilityResolver>(),
+            toolApprovalPolicy ?? new PermissiveToolApprovalPolicy(),
             NullLogger<AgentDefinitionResolver>.Instance);
     }
 
@@ -1097,6 +1149,7 @@ public sealed class AgentDefinitionResolverTests
             retrievalOptions,
             new FakeAgentInstructionProvider(),
             Substitute.For<IModelCapabilityResolver>(),
+            new PermissiveToolApprovalPolicy(),
             NullLogger<AgentDefinitionResolver>.Instance);
     }
 
@@ -1144,7 +1197,7 @@ public sealed class AgentDefinitionResolverTests
             UpdatedAtUtc: 10);
     }
 
-    private static AllowedToolDto OfferTool(string name, bool requiresApproval = false)
+    private static AllowedToolDto OfferTool(string name, bool requiresApproval = false, ToolCategory category = ToolCategory.Unknown)
     {
         return new AllowedToolDto
         {
@@ -1152,7 +1205,8 @@ public sealed class AgentDefinitionResolverTests
             Name = name,
             Location = ToolLocation.ClientLocal,
             ParameterSchema = "{\"type\":\"object\"}",
-            RequiresApproval = requiresApproval
+            RequiresApproval = requiresApproval,
+            Category = category
         };
     }
 

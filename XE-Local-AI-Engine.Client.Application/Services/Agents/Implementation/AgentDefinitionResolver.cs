@@ -2,6 +2,7 @@ namespace XE_Local_AI_Engine.Client.Services.Agents.Implementation;
 
 using Microsoft.Extensions.Options;
 using XE_Local_AI_Engine.AI.Agent.Instructions;
+using XE_Local_AI_Engine.AI.Agent.Tools;
 using XE_Local_AI_Engine.Client.Models;
 using XE_Local_AI_Engine.Client.Persistence;
 using XE_Local_AI_Engine.Client.Persistence.Stores;
@@ -18,6 +19,7 @@ internal sealed class AgentDefinitionResolver : IAgentDefinitionResolver
     private readonly PlaybookRetrievalOptions _retrievalOptions;
     private readonly IPlaybookRetrievalRanker _retrievalRanker;
     private readonly IAgentDefinitionStore _store;
+    private readonly IToolApprovalPolicy _toolApprovalPolicy;
 
     public AgentDefinitionResolver(IAgentDefinitionStore store,
         IPlaybookActionStore playbookActionStore,
@@ -27,6 +29,7 @@ internal sealed class AgentDefinitionResolver : IAgentDefinitionResolver
         IOptions<PlaybookRetrievalOptions> retrievalOptions,
         IAgentInstructionProvider instructionProvider,
         IModelCapabilityResolver modelCapabilityResolver,
+        IToolApprovalPolicy toolApprovalPolicy,
         ILogger<AgentDefinitionResolver> logger)
     {
         _store = store ?? throw new ArgumentNullException(nameof(store));
@@ -38,6 +41,7 @@ internal sealed class AgentDefinitionResolver : IAgentDefinitionResolver
         _retrievalOptions = retrievalOptions.Value;
         _instructionProvider = instructionProvider ?? throw new ArgumentNullException(nameof(instructionProvider));
         _modelCapabilityResolver = modelCapabilityResolver ?? throw new ArgumentNullException(nameof(modelCapabilityResolver));
+        _toolApprovalPolicy = toolApprovalPolicy ?? throw new ArgumentNullException(nameof(toolApprovalPolicy));
         _logger = logger ?? throw new ArgumentNullException(nameof(logger));
     }
 
@@ -193,10 +197,11 @@ internal sealed class AgentDefinitionResolver : IAgentDefinitionResolver
         }
 
         // Start from the PROFILE offer pool for the effective model (the whole capability-gated offer PLUS the
-        // opt-in-only spawn_subagent), then keep only the tools the definition allows and override each tool's approval
-        // flag per the definition. Using the profile pool — not the whole offer — is what lets a profile that lists
-        // spawn_subagent resolve it while the default/mode-off path never does. Tools the definition names but the pool
-        // does not contain (uninstalled or not capability-eligible) are dropped and logged — never fabricated.
+        // opt-in-only spawn_subagent), then keep only the tools the definition allows and resolve each tool's approval
+        // flag through the TIGHTEN-ONLY compose below. Using the profile pool — not the whole offer — is what lets a
+        // profile that lists spawn_subagent resolve it while the default/mode-off path never does. Tools the definition
+        // names but the pool does not contain (uninstalled or not capability-eligible) are dropped and logged — never
+        // fabricated.
         var offered = _localToolOfferProvider.GetOfferedToolsForProfile(effectiveModelId, effectiveModelIsCloud);
         var allowedNames = new HashSet<string>(definition.AllowedToolNames, StringComparer.Ordinal);
 
@@ -204,7 +209,14 @@ internal sealed class AgentDefinitionResolver : IAgentDefinitionResolver
                         .Where(tool => allowedNames.Contains(tool.Name))
                         .Select(tool => tool with
                         {
-                            RequiresApproval = definition.ToolApprovals.GetValueOrDefault(tool.Name, tool.RequiresApproval)
+                            // TIGHTEN-ONLY 3-tier compose (OPP-03): the node policy (which already ORs the tool's catalog
+                            // default with its category/per-tool node rule) first, THEN the per-agent override can only
+                            // ADD approval. A per-agent true tightens a tool the node policy left auto-execute; a
+                            // per-agent false is a NO-OP (it can no longer loosen a tool the node policy — or the catalog
+                            // default — requires approval for). The pre-wrap floor at the registries remains authoritative
+                            // for execution regardless of this flag.
+                            RequiresApproval = _toolApprovalPolicy.RequiresApproval(tool.Name, tool.Category, tool.RequiresApproval)
+                                               || (definition.ToolApprovals.TryGetValue(tool.Name, out var perAgentApproval) && perAgentApproval)
                         })
                         .ToArray();
 
