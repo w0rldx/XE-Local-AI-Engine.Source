@@ -226,11 +226,12 @@ public sealed class RunSavedAgentHandler : IScheduledJobHandler
                 string.Join(", ", strippedTools.Select(static tool => tool.Name)));
         }
 
-        // A per-run reasoning-effort override wins over the agent's own effort; otherwise the agent's resolved effort
-        // applies. The builder normalizes an unknown/blank value to null downstream.
-        var reasoningEffort = string.IsNullOrWhiteSpace(parameters.ReasoningEffort)
-            ? resolved.ReasoningEffort
-            : parameters.ReasoningEffort;
+        // A per-run reasoning-effort override wins over the agent's own effort ONLY when it is a recognized effort.
+        // Normalize returns null for a blank OR unrecognized override, so both fall back to the agent's resolved
+        // effort here — an invalid override (e.g. "banana") must never reach the builder, whose own normalize step
+        // would silently drop it to null and suppress reasoning instead of honoring the agent's own effort.
+        var overrideEffort = ReasoningEffortNormalizer.Normalize(parameters.ReasoningEffort);
+        var reasoningEffort = overrideEffort ?? resolved.ReasoningEffort;
 
         var seedTurn = new ConversationMessageDto
         {
