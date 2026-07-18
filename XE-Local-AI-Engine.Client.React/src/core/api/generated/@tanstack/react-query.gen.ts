@@ -71,6 +71,7 @@ import {
 	getAgentDefinition,
 	getAgentFeedbackInsights,
 	getAgentPlaybookMonitor,
+	getAgentUsageSummary,
 	getAppUpdateStatus,
 	getCloudSettings,
 	getConnectionStatus,
@@ -306,6 +307,8 @@ import type {
 	GetAgentFeedbackInsightsResponse,
 	GetAgentPlaybookMonitorData,
 	GetAgentPlaybookMonitorResponse,
+	GetAgentUsageSummaryData,
+	GetAgentUsageSummaryResponse,
 	GetAppUpdateStatusData,
 	GetAppUpdateStatusResponse,
 	GetCloudSettingsData,
@@ -4042,3 +4045,25 @@ export const updateSuggestedPlaybookActionMutation = (
 	};
 	return mutationOptions;
 };
+
+export const getAgentUsageSummaryQueryKey = (options?: Options<GetAgentUsageSummaryData>) =>
+	createQueryKey("getAgentUsageSummary", options);
+
+export const getAgentUsageSummaryOptions = (options?: Options<GetAgentUsageSummaryData>) =>
+	queryOptions<
+		GetAgentUsageSummaryResponse,
+		AxiosError<DefaultError>,
+		GetAgentUsageSummaryResponse,
+		ReturnType<typeof getAgentUsageSummaryQueryKey>
+	>({
+		queryFn: async ({ queryKey, signal }) => {
+			const { data } = await getAgentUsageSummary({
+				...options,
+				...queryKey[0],
+				signal,
+				throwOnError: true,
+			});
+			return data;
+		},
+		queryKey: getAgentUsageSummaryQueryKey(options),
+	});

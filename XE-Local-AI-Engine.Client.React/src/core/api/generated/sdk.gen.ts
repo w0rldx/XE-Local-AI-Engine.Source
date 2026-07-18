@@ -185,6 +185,9 @@ import type {
 	GetAgentPlaybookMonitorData,
 	GetAgentPlaybookMonitorErrors,
 	GetAgentPlaybookMonitorResponses,
+	GetAgentUsageSummaryData,
+	GetAgentUsageSummaryErrors,
+	GetAgentUsageSummaryResponses,
 	GetAppUpdateStatusData,
 	GetAppUpdateStatusErrors,
 	GetAppUpdateStatusResponses,
@@ -619,6 +622,8 @@ import {
 	zGetAgentFeedbackInsightsResponse,
 	zGetAgentPlaybookMonitorPath,
 	zGetAgentPlaybookMonitorResponse,
+	zGetAgentUsageSummaryQuery,
+	zGetAgentUsageSummaryResponse,
 	zGetAppUpdateStatusQuery,
 	zGetAppUpdateStatusResponse,
 	zGetCloudSettingsResponse,
@@ -4582,4 +4587,26 @@ export const updateSuggestedPlaybookAction = <ThrowOnError extends boolean = fal
 			"Content-Type": "application/json",
 			...options.headers,
 		},
+	});
+
+export const getAgentUsageSummary = <ThrowOnError extends boolean = false>(
+	options?: Options<GetAgentUsageSummaryData, ThrowOnError>,
+) =>
+	(options?.client ?? client).get<GetAgentUsageSummaryResponses, GetAgentUsageSummaryErrors, ThrowOnError>({
+		requestValidator: async (data) =>
+			await z
+				.object({
+					body: z.never().optional(),
+					path: z.never().optional(),
+					query: zGetAgentUsageSummaryQuery.optional(),
+				})
+				.parseAsync(data),
+		responseType: "json",
+		responseValidator: async (data) => await zGetAgentUsageSummaryResponse.parseAsync(data),
+		security: [
+			{ scheme: "bearer", type: "http" },
+			{ scheme: "bearer", type: "http" },
+		],
+		url: "/api/local/v1/agents/usage-summary",
+		...options,
 	});

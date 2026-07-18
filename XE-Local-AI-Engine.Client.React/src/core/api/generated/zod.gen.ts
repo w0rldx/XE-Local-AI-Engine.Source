@@ -2422,6 +2422,42 @@ export const zXeLocalAiEngineClientEndpointsLocalChatV1ResolveToolApprovalRespon
 	approved: z.boolean(),
 });
 
+export const zXeLocalAiEngineClientEndpointsAgentsV1AgentUsageSummaryBucketResponse = z.object({
+	modelName: z.string(),
+	dayStartUtcMs: z.int(),
+	runCount: z
+		.int()
+		.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })
+		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" }),
+	promptTokens: z.int(),
+	completionTokens: z.int(),
+	reasoningTokens: z.int(),
+	totalTokens: z.int(),
+});
+
+export const zXeLocalAiEngineClientEndpointsAgentsV1AgentUsageSummaryTotalsResponse = z.object({
+	runCount: z
+		.int()
+		.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })
+		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" }),
+	promptTokens: z.int(),
+	completionTokens: z.int(),
+	reasoningTokens: z.int(),
+	totalTokens: z.int(),
+});
+
+export const zXeLocalAiEngineClientEndpointsAgentsV1AgentUsageSummaryResponse = z.object({
+	items: z.array(zXeLocalAiEngineClientEndpointsAgentsV1AgentUsageSummaryBucketResponse),
+	totals: zXeLocalAiEngineClientEndpointsAgentsV1AgentUsageSummaryTotalsResponse,
+	groupedByModelOnly: z.boolean(),
+	retentionDays: z
+		.int()
+		.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })
+		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" }),
+});
+
+export const zXeLocalAiEngineClientEndpointsAgentsV1AgentUsageSummaryRequest = z.record(z.string(), z.never());
+
 /**
  * Success
  */
@@ -3742,3 +3778,13 @@ export const zUpdateSuggestedPlaybookActionPath = z.object({
  * Success
  */
 export const zUpdateSuggestedPlaybookActionResponse = zXeLocalAiEngineClientEndpointsAgentsV1PlaybookActionResponse;
+
+export const zGetAgentUsageSummaryQuery = z.object({
+	fromEpochMs: z.int().nullish(),
+	toEpochMs: z.int().nullish(),
+});
+
+/**
+ * Success
+ */
+export const zGetAgentUsageSummaryResponse = zXeLocalAiEngineClientEndpointsAgentsV1AgentUsageSummaryResponse;
