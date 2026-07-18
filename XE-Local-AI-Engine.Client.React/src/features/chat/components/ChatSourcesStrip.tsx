@@ -1,10 +1,12 @@
 import { Badge, Collapse, Group, Paper, Stack, Text, UnstyledButton } from "@mantine/core";
 import { useDisclosure } from "@mantine/hooks";
 import { IconBooks, IconChevronRight } from "@tabler/icons-react";
-import { memo } from "react";
+import { memo, useCallback, useState } from "react";
 import { useTranslation } from "react-i18next";
 
 import type { ChatMessageSource } from "@/features/chat/models/ChatModels";
+import { KnowledgeDocumentDrawer } from "@/features/knowledge/components/KnowledgeDocumentDrawer";
+import { useKnowledgeDocumentDetail } from "@/features/knowledge/queries/useKnowledgeDocuments";
 
 interface ChatSourcesStripProps {
 	sources: readonly ChatMessageSource[];
@@ -21,10 +23,30 @@ function formatScore(score: number): string {
  * that were inlined into the turn (document title + heading section + relevance score), reusing the knowledge-hit card
  * shape. Collapsed by default so it never crowds the answer; the header shows the count. Renders nothing when there are
  * no sources, so a non-grounded turn stays visually unchanged.
+ *
+ * UX-06: each source card is a button that opens the shared knowledge document drawer for that source's document,
+ * highlighting the chunk whose heading section matches the source. Exact chunk-id scroll is intentionally deferred —
+ * the chunk view exposes chunkIndex, not chunkId, so id matching would need a backend DTO change.
  */
 export const ChatSourcesStrip = memo(function ChatSourcesStrip({ sources }: ChatSourcesStripProps) {
 	const { t } = useTranslation();
 	const [opened, { toggle }] = useDisclosure(false);
+
+	// The source whose document drawer is open (also the only document whose detail endpoint is fetched).
+	const [activeSource, setActiveSource] = useState<ChatMessageSource | undefined>();
+	const [drawerOpened, { open: openDrawer, close: closeDrawer }] = useDisclosure(false);
+	const { data: detail, isFetching: detailIsFetching } = useKnowledgeDocumentDetail(
+		activeSource?.documentId ?? "",
+		drawerOpened,
+	);
+
+	const openSource = useCallback(
+		(source: ChatMessageSource): void => {
+			setActiveSource(source);
+			openDrawer();
+		},
+		[openDrawer],
+	);
 
 	if (sources.length === 0) {
 		return null;
@@ -50,32 +72,42 @@ export const ChatSourcesStrip = memo(function ChatSourcesStrip({ sources }: Chat
 			<Collapse expanded={opened}>
 				<Stack gap={4}>
 					{sources.map((source) => (
-						<Paper
+						<UnstyledButton
 							key={source.chunkId || `${source.documentId}:${source.title}`}
-							withBorder={true}
-							p="xs"
-							radius="sm"
+							onClick={() => openSource(source)}
+							aria-label={t("pages.chat.sources.open", "Open source: {{title}}", { title: source.title })}
 							data-testid="chat-source-card"
+							style={{ width: "100%", display: "block" }}
 						>
-							<Group gap={8} justify="space-between" align="flex-start" wrap="nowrap">
-								<Stack gap={2} style={{ minWidth: 0 }}>
-									<Text size="xs" fw={500} style={{ overflowWrap: "anywhere" }}>
-										{source.title}
-									</Text>
-									{source.section ? (
-										<Text size="xs" c="dimmed" style={{ overflowWrap: "anywhere" }}>
-											{source.section}
+							<Paper withBorder={true} p="xs" radius="sm">
+								<Group gap={8} justify="space-between" align="flex-start" wrap="nowrap">
+									<Stack gap={2} style={{ minWidth: 0 }}>
+										<Text size="xs" fw={500} ta="left" style={{ overflowWrap: "anywhere" }}>
+											{source.title}
 										</Text>
-									) : null}
-								</Stack>
-								<Badge size="xs" variant="light" color="primary" style={{ flexShrink: 0 }}>
-									{t("pages.chat.sources.score", "score {{value}}", { value: formatScore(source.score) })}
-								</Badge>
-							</Group>
-						</Paper>
+										{source.section ? (
+											<Text size="xs" c="dimmed" ta="left" style={{ overflowWrap: "anywhere" }}>
+												{source.section}
+											</Text>
+										) : null}
+									</Stack>
+									<Badge size="xs" variant="light" color="primary" style={{ flexShrink: 0 }}>
+										{t("pages.chat.sources.score", "score {{value}}", { value: formatScore(source.score) })}
+									</Badge>
+								</Group>
+							</Paper>
+						</UnstyledButton>
 					))}
 				</Stack>
 			</Collapse>
+
+			<KnowledgeDocumentDrawer
+				opened={drawerOpened}
+				detail={detail}
+				isLoading={detailIsFetching}
+				highlightSection={activeSource?.section}
+				onClose={closeDrawer}
+			/>
 		</Stack>
 	);
 });

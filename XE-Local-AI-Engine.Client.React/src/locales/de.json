@@ -267,7 +267,8 @@
 			"knowledgeBaseDisabled": "Wissensdatenbank deaktiviert",
 			"sources": {
 				"title": "Quellen",
-				"score": "Score {{value}}"
+				"score": "Score {{value}}",
+				"open": "Quelle öffnen: {{title}}"
 			},
 			"localToolsUnavailable": "Lokale Tools sind für das ausgewählte Modell nicht verfügbar",
 			"cloudToolsLabel": "Cloud-Tools",

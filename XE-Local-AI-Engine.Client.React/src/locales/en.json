@@ -267,7 +267,8 @@
 			"knowledgeBaseDisabled": "Knowledge base disabled",
 			"sources": {
 				"title": "Sources",
-				"score": "score {{value}}"
+				"score": "score {{value}}",
+				"open": "Open source: {{title}}"
 			},
 			"localToolsUnavailable": "Local tools are unavailable for the selected model",
 			"cloudToolsLabel": "Cloud tools",
