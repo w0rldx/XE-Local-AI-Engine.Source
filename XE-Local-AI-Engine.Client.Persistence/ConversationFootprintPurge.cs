@@ -16,6 +16,23 @@ using Microsoft.EntityFrameworkCore;
 public static class ConversationFootprintPurge
 {
     /// <summary>
+    ///     Every table keyed by <c>conversation_id</c> (or <c>message_id</c>) that <see cref="DeleteAsync" /> deletes
+    ///     from, excluding the root <c>conversations</c> table itself. Exists so a test (BE-08, in
+    ///     XE_Local_AI_Engine.Client.Persistence.Tests) can enumerate every conversation/message-keyed table in the EF
+    ///     model and assert it appears here — catching the exact drift this class's remarks warn about. Whenever a
+    ///     <c>DELETE FROM</c> statement below is added, remove, or changed, update this list to match.
+    /// </summary>
+    internal static readonly IReadOnlyList<string> CoveredChildTables =
+    [
+        "message_feedback",
+        "messages",
+        "tool_events",
+        "conversation_uploaded_files",
+        "agent_execution_logs",
+        "purged_tombstones"
+    ];
+
+    /// <summary>
     ///     Deletes every child row and the conversation row for <paramref name="conversationId" /> on
     ///     <paramref name="dbContext" />'s connection. Runs within the caller's transaction; the conversation row is
     ///     deleted last.
