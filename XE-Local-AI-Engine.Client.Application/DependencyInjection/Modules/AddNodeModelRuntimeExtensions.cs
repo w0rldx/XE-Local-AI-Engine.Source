@@ -7,8 +7,10 @@ using Microsoft.Extensions.AI;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 using XE_Local_AI_Engine.AI.Agent.Configuration;
 using XE_Local_AI_Engine.AI.Agent.DependencyInjection;
+using XE_Local_AI_Engine.AI.Agent.Tools;
 using XE_Local_AI_Engine.Client.Persistence;
 using XE_Local_AI_Engine.Client.Persistence.Sqlite;
+using XE_Local_AI_Engine.Client.Services.Agents.Approval.Implementation;
 using XE_Local_AI_Engine.Client.Services.Capacity;
 using XE_Local_AI_Engine.Client.Services.CloudProviders;
 using XE_Local_AI_Engine.Client.Services.CloudProviders.Implementation;
@@ -203,6 +205,14 @@ internal static class AddNodeModelRuntimeExtensions
         });
 
         builder.Services.AddLocalAiAgentRuntime(builder.Configuration);
+
+        // OPP-03: the node-configured, TIGHTEN-ONLY tool-approval policy. A plain AddSingleton so it wins over the
+        // AI.Agent PermissiveToolApprovalPolicy floor (registered via TryAddSingleton inside AddLocalAiAgentRuntime
+        // above; last registration wins). The node-default policy is JSON in node settings, read ONCE synchronously at
+        // singleton construction (the sync INodeSettingsStore.Load twin, like the tool-capable allow-list seed) so the
+        // hot resolve path stays a dictionary lookup; an operator edit applies on the next node restart.
+        builder.Services.AddSingleton<IToolApprovalPolicy>(sp =>
+            NodeToolApprovalPolicy.FromSettings(sp.GetRequiredService<INodeSettingsStore>().Load().ToolApprovalPolicy));
 
         // OrchestrationAgentOptions lives in AI.Agent (no reference to Client.Application), so OrchestrationAgentFactory
         // cannot inject INodeRuntimeSettings. Seed the migrated IdleTimeoutSeconds from the accessor here at the
