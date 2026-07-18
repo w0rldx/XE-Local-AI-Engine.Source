@@ -31,8 +31,11 @@ public sealed class NodeDataProtectionKeyProvider : INodeDataProtectionKeyProvid
             throw new InvalidOperationException("WorkerNode:NodeName must be configured.");
         }
 
-        // A missing operator secret throws here (fail-closed): the key-ring cannot be wrapped or unwrapped without it,
-        // and the same secret gates the SQLite store, so the process is already unusable without it.
+        // A missing operator secret throws here (fail-closed): the key-ring cannot be wrapped or unwrapped without it.
+        // Note the node store is PLAIN SQLite with application-level COLUMN encryption (not SQLCipher/whole-file), so a
+        // wrong (rather than missing) secret does not necessarily fail startup — an encrypted column only fails when it
+        // is actually read. The loud backstop for the key-ring is NodeDataProtectionKeyRingFailClosedKeyResolver, which
+        // hard-fails on an undecryptable encrypted key instead of relying on the SQLite store to surface a bad secret.
         var operatorSecret = operatorSecretProvider.GetOperatorSecret();
         try
         {

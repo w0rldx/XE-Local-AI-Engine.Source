@@ -20,9 +20,10 @@ using XE_Local_AI_Engine.Client.Persistence.Cryptography;
 ///     decryptor re-surfaces as a <see cref="NodeDataProtectionKeyRingDecryptionException" /> (a distinctive
 ///     <see cref="CryptographicException" />) so <see cref="NodeDataProtectionKeyRingFailClosedKeyResolver" /> can
 ///     hard-fail startup instead of letting Data Protection silently regenerate the ring. The key is never silently
-///     accepted with garbage material. In practice a wrong/missing secret fails earlier still — the same operator secret
-///     gates the SQLite store — so this path is the last line rather than the only one. This decryptor is read-only over
-///     the KEK material and holds no key state of its own, so it needs no dispose.
+///     accepted with garbage material. The node store is PLAIN SQLite with application-level COLUMN encryption (not
+///     SQLCipher/whole-file), so a wrong secret does not necessarily fail startup — that is exactly why the resolver is
+///     the loud backstop rather than "the SQLite store already gates it." This decryptor is read-only over the KEK
+///     material and holds no key state of its own, so it needs no dispose.
 /// </remarks>
 public sealed class NodeDataProtectionKeyRingDecryptor : IXmlDecryptor
 {
