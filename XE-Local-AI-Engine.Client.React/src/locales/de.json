@@ -265,6 +265,7 @@
 			"knowledgeBaseLabel": "Wissensdatenbank verwenden",
 			"knowledgeBaseEnabled": "Wissensdatenbank aktiviert",
 			"knowledgeBaseDisabled": "Wissensdatenbank deaktiviert",
+			"knowledgeBaseNoDocuments": "Keine indexierten Dokumente zum Durchsuchen",
 			"sources": {
 				"title": "Quellen",
 				"score": "Score {{value}}",

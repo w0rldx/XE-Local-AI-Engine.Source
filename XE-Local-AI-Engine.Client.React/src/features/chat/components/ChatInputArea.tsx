@@ -73,6 +73,10 @@ interface ChatInputAreaProps {
 	// knowledge-base surface (capabilities.showKnowledgeBaseControls) and is hidden in agent mode (the agent uses the
 	// search_knowledge_base tool instead).
 	knowledgeBaseEnabled?: boolean;
+	// Whether the node has at least one INDEXED knowledge document (Status Indexed or ChunkCount>0). The KB toggle stays
+	// visible whenever the feature is on but is disabled (with a "no documents" tooltip) until there is something to
+	// search — grounding on an empty corpus is a no-op. Defaults to true so callers that don't wire it keep it enabled.
+	knowledgeBaseHasDocuments?: boolean;
 	agentControlsAvailable?: boolean;
 	agentModeEnabled?: boolean;
 	selectedAgentId?: string;
@@ -112,6 +116,7 @@ export function ChatInputArea({
 	activeModelToolCapable = false,
 	toolsEnabled = false,
 	knowledgeBaseEnabled = false,
+	knowledgeBaseHasDocuments = true,
 	agentControlsAvailable = false,
 	agentModeEnabled = false,
 	selectedAgentId = "",
@@ -311,19 +316,23 @@ export function ChatInputArea({
 				{showKnowledgeBaseControls ? (
 					<Tooltip
 						label={
-							knowledgeBaseEnabled
-								? t("pages.chat.knowledgeBaseEnabled", "Knowledge base enabled")
-								: t("pages.chat.knowledgeBaseDisabled", "Knowledge base disabled")
+							!knowledgeBaseHasDocuments
+								? t("pages.chat.knowledgeBaseNoDocuments", "No indexed documents to search")
+								: knowledgeBaseEnabled
+									? t("pages.chat.knowledgeBaseEnabled", "Knowledge base enabled")
+									: t("pages.chat.knowledgeBaseDisabled", "Knowledge base disabled")
 						}
 					>
 						<ActionIcon
 							size={36}
-							variant={knowledgeBaseEnabled ? "light" : "subtle"}
-							color={knowledgeBaseEnabled ? "primary" : "gray"}
-							disabled={disabled || isSending || !onToggleKnowledgeBase}
+							variant={knowledgeBaseEnabled && knowledgeBaseHasDocuments ? "light" : "subtle"}
+							color={knowledgeBaseEnabled && knowledgeBaseHasDocuments ? "primary" : "gray"}
+							// Disabled with no indexed docs: grounding on an empty corpus is a no-op. The persisted
+							// enabled-preference is untouched (the store keeps it), so it re-arms once a doc is indexed.
+							disabled={disabled || isSending || !onToggleKnowledgeBase || !knowledgeBaseHasDocuments}
 							onClick={onToggleKnowledgeBase}
 							aria-label={t("pages.chat.knowledgeBaseLabel", "Use knowledge base")}
-							aria-pressed={knowledgeBaseEnabled}
+							aria-pressed={knowledgeBaseEnabled && knowledgeBaseHasDocuments}
 							data-testid="chat-knowledge-base-toggle"
 						>
 							<IconBooks size={15} />

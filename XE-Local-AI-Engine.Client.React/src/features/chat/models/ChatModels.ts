@@ -330,6 +330,9 @@ export interface ChatDisplayShellProps {
 	toolsEnabled?: boolean;
 	// Opt-in knowledge-base grounding for plain chat (OPP-05); forwarded to the composer's "Use Knowledge Base" toggle.
 	knowledgeBaseEnabled?: boolean;
+	// Whether the node has at least one indexed knowledge document; gates whether the composer's KB toggle is enabled
+	// (an empty corpus disables it with a "no documents" tooltip). Defaults to true when absent.
+	knowledgeBaseHasDocuments?: boolean;
 	contextUsage?: ContextUsageModel;
 	streamingMessage?: ChatStreamingState;
 	timelineEntries?: ChatTimelineEntry[];

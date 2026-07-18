@@ -44,6 +44,7 @@ import { nodeChatQueryKeys } from "@/features/chat/queries/NodeChatQueryKeys";
 import { useCodexModelOptions } from "@/features/chat/queries/useCodexModelOptions";
 import { useConversationAttachments } from "@/features/chat/queries/useConversationAttachments";
 import { useChatSamplingPreferencesStore } from "@/features/chat/stores/ChatSamplingPreferencesStore";
+import { useKnowledgeDocuments } from "@/features/knowledge/queries/useKnowledgeDocuments";
 import {
 	binaryReasoningEfforts,
 	clampReasoningEffort,
@@ -191,6 +192,15 @@ export function Chat() {
 	const chatUiCapabilities = useMemo(
 		() => buildChatUiCapabilities(nodeCapabilities.chat, voiceRuntime.manifest?.enabled ?? false),
 		[voiceRuntime.manifest?.enabled],
+	);
+	// Knowledge-base documents drive whether the composer's "Use Knowledge Base" toggle is enabled: grounding on an
+	// empty corpus is a no-op, so the toggle stays visible but disabled until at least one document is INDEXED. The
+	// list is fetched only when the KB surface is on (Chat is authed-mounted, so this gate matches the feature gate);
+	// an indexed doc is one that is Ready to search — status Indexed, or any row still serving last-known-good chunks.
+	const { data: knowledgeDocuments } = useKnowledgeDocuments(chatUiCapabilities.showKnowledgeBaseControls);
+	const knowledgeBaseHasDocuments = useMemo(
+		() => (knowledgeDocuments ?? []).some((document) => document.status === "Indexed" || document.chunkCount > 0),
+		[knowledgeDocuments],
 	);
 	const { readiness: connectionReadiness, error: connectionError, retry: retryConnection } = useNodeChatConnectionReadiness();
 	const [streamingMessage, setStreamingMessage] = useState<ChatStreamingState | undefined>();
@@ -1381,6 +1391,7 @@ export function Chat() {
 				activeModelToolCapable={activeModelToolCapable}
 				toolsEnabled={toolsEnabled}
 				knowledgeBaseEnabled={knowledgeBaseEnabled}
+				knowledgeBaseHasDocuments={knowledgeBaseHasDocuments}
 				capabilities={chatUiCapabilities}
 				contextUsage={{
 					usedTokens: usedContextTokens,
