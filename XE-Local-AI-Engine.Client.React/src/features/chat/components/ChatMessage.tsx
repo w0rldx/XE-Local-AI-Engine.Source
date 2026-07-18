@@ -12,6 +12,7 @@ import {
 	type ChatMessageRevisionNav,
 } from "@/features/chat/components/ChatMessageActions";
 import { CHAT_ACCENT, CHAT_ASSISTANT_BACKGROUND, CHAT_ASSISTANT_BORDER } from "@/features/chat/components/ChatVisualTokens";
+import { ChatSourcesStrip } from "@/features/chat/components/ChatSourcesStrip";
 import { MessageParts } from "@/features/chat/components/MessageParts";
 import type {
 	ChatFeedbackRating,
@@ -292,6 +293,9 @@ export const ChatMessage = memo(function ChatMessage({
 						</m.div>
 					) : null}
 				</AnimatePresence>
+				{assistantMessage && message.sources && message.sources.length > 0 ? (
+					<ChatSourcesStrip sources={message.sources} />
+				) : null}
 				{isCancelled ? (
 					<Group gap={6} align="center" data-testid={`chat-message-stopped-${message.id}`} role="status">
 						<IconPlayerStop size={14} color="var(--mantine-color-dimmed)" />

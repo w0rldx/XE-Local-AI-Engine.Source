@@ -5,6 +5,7 @@ import type {
 	XeLocalAiEngineClientEndpointsLocalChatV1NodeChatMessageResponse,
 	XeLocalAiEngineClientEndpointsLocalChatV1NodeChatMessageRevisionsResponse,
 	XeLocalAiEngineClientServicesChatNodeChatMessagePart,
+	XeLocalAiEngineClientServicesChatNodeChatMessageSource,
 } from "@/core/api/generated";
 import { persistableReasoningEfforts } from "@/features/chat/stores/NodeChatPreferencesStore";
 import type {
@@ -14,6 +15,7 @@ import type {
 	ChatMessageModel,
 	ChatMessagePart,
 	ChatMessageRevisions,
+	ChatMessageSource,
 	ChatOrigin,
 	ChatRole,
 	ChatToolCall,
@@ -29,6 +31,7 @@ type NodeChatConversationResponseDto = XeLocalAiEngineClientEndpointsLocalChatV1
 type NodeChatConversationSummaryResponseDto = XeLocalAiEngineClientEndpointsLocalChatV1NodeChatConversationSummaryResponse;
 type NodeChatMessageResponseDto = XeLocalAiEngineClientEndpointsLocalChatV1NodeChatMessageResponse;
 type NodeChatMessagePartDto = XeLocalAiEngineClientServicesChatNodeChatMessagePart;
+type NodeChatMessageSourceDto = XeLocalAiEngineClientServicesChatNodeChatMessageSource;
 type NodeChatMessageRevisionsResponseDto = XeLocalAiEngineClientEndpointsLocalChatV1NodeChatMessageRevisionsResponse;
 type NodeChatMessageFeedbackResponseDto = XeLocalAiEngineClientEndpointsLocalChatV1NodeChatMessageFeedbackResponse;
 
@@ -137,6 +140,38 @@ function titleOrFallback(title: string | null | undefined): string {
 	return title?.trim() || "Untitled conversation";
 }
 
+/**
+ * Maps the wire knowledge-base `sources[]` to `ChatMessageSource[]` (OPP-05 / UX-04). Drops entries with no id/title
+ * so a malformed record never renders a blank source card. Returns undefined when nothing usable remains, so the
+ * "Sources" strip stays hidden for legacy turns, non-knowledge turns, and user messages.
+ */
+function mapSources(sources: NodeChatMessageSourceDto[] | null | undefined): ChatMessageSource[] | undefined {
+	if (!sources || sources.length === 0) {
+		return undefined;
+	}
+
+	const mapped: ChatMessageSource[] = [];
+	for (const source of sources) {
+		const documentId = source.documentId ?? "";
+		const chunkId = source.chunkId ?? "";
+		const title = source.title ?? "";
+		if (documentId.length === 0 || title.length === 0) {
+			continue;
+		}
+
+		mapped.push({
+			documentId,
+			chunkId,
+			title,
+			section: source.section ?? undefined,
+			// int64/double wire values arrive as numbers; Number() is a defensive normalize against a stray bigint.
+			score: source.score != null ? Number(source.score) : 0,
+		});
+	}
+
+	return mapped.length > 0 ? mapped : undefined;
+}
+
 function mapMessage(dto: NodeChatMessageResponseDto): ChatMessageModel {
 	const messageId = dto.messageId ?? "";
 	return {
@@ -182,6 +217,9 @@ function mapMessage(dto: NodeChatMessageResponseDto): ChatMessageModel {
 		// now a defensive no-op that also normalizes any stray bigint before the downstream tps math (outputTokens /
 		// durationMs) — which would otherwise throw "Cannot mix BigInt and other types".
 		generationDurationMs: dto.generationDurationMs != null ? Number(dto.generationDurationMs) : undefined,
+		// Knowledge-base sources that grounded this turn (persisted in metadata_json, same blob as the attribution
+		// fields). Null/absent on the wire → undefined; empty → undefined so the Sources strip stays hidden.
+		sources: mapSources(dto.sources),
 	};
 }
 

@@ -38,6 +38,8 @@ describe("nodeCapabilities", () => {
 			imageAttachments: false,
 			agentManagement: true,
 			voice: true,
+			// OPP-05: plain-chat knowledge-base grounding surface ships, so the composer exposes the "Use Knowledge Base" toggle.
+			knowledgeBase: true,
 		});
 	});
 

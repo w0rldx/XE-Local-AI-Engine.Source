@@ -18,6 +18,7 @@ export const defaultChatUiCapabilities: ChatUiCapabilities = {
 	showImageAttachmentControls: false,
 	showAgentControls: false,
 	showVoiceControls: false,
+	showKnowledgeBaseControls: false,
 };
 
 // `manifestVoiceEnabled` is the operator-owned manifest.Enabled gate (server-state): voice UI is shown
@@ -40,6 +41,9 @@ export function buildChatUiCapabilities(
 		showAgentControls: capabilities.agentManagement ?? false,
 		// Voice controls require BOTH the node `voice` surface flag AND the operator-owned manifest.Enabled.
 		showVoiceControls: (capabilities.voice ?? false) && manifestVoiceEnabled,
+		// Knowledge-base grounding toggle is shown when the node ships the knowledge-base surface. The capability
+		// derives from nodeCapabilities.knowledgeBase, mirrored into the chat bag at the call site in Chat.tsx.
+		showKnowledgeBaseControls: capabilities.knowledgeBase ?? false,
 	};
 }
 

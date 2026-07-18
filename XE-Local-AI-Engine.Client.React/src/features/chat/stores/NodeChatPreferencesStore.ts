@@ -15,6 +15,7 @@ const SELECTED_CONVERSATION_STORAGE_KEY = "xe-node-chat-selected-conversation";
 const AGENT_MODE_ENABLED_STORAGE_KEY = "xe-node-chat-agent-mode";
 const SELECTED_AGENT_STORAGE_KEY = "xe-node-chat-selected-agent";
 const SHOW_TOKENS_PER_SECOND_STORAGE_KEY = "xe-node-chat-show-tokens-per-second";
+const KNOWLEDGE_BASE_ENABLED_STORAGE_KEY = "xe-node-chat-knowledge-base-enabled";
 
 // Graded reasoning efforts, offered for models that advertise the Ollama `thinking` capability.
 export const reasoningEfforts: readonly ReasoningEffort[] = ["none", "low", "medium", "high"];
@@ -103,6 +104,10 @@ interface NodeChatPreferencesStore {
 	// When enabled, completed assistant turns show a tokens/sec figure on their attribution line (computed from the
 	// persisted generation duration + output tokens). Off by default; global preference like the others above.
 	showTokensPerSecond: boolean;
+	// When enabled (default OFF), a plain-chat send opts into knowledge-base grounding: the server retrieves the
+	// top-k knowledge-base hits for the message and inlines them (fenced) into the turn, surfacing their sources.
+	// Global preference stamped per-send, mirroring toolsEnabled. Ignored in agent mode (the agent uses the KB tool).
+	knowledgeBaseEnabled: boolean;
 	actions: {
 		setSelectedModel: (value: string) => void;
 		setReasoningEffort: (value: ReasoningEffort) => void;
@@ -118,6 +123,8 @@ interface NodeChatPreferencesStore {
 		// cannot silently carry over and interfere with a new thread's model selection.
 		clearSelectedAgent: () => void;
 		setShowTokensPerSecond: (value: boolean) => void;
+		setKnowledgeBaseEnabled: (value: boolean) => void;
+		toggleKnowledgeBase: () => void;
 	};
 }
 
@@ -171,6 +178,10 @@ function readStoredShowTokensPerSecond(): boolean {
 	return readStoredString(SHOW_TOKENS_PER_SECOND_STORAGE_KEY) === "true";
 }
 
+function readStoredKnowledgeBaseEnabled(): boolean {
+	return readStoredString(KNOWLEDGE_BASE_ENABLED_STORAGE_KEY) === "true";
+}
+
 export const useNodeChatPreferencesStore = create<NodeChatPreferencesStore>()((set) => ({
 	selectedModel: readStoredModel(),
 	reasoningEffort: readStoredReasoningEffort(),
@@ -180,6 +191,7 @@ export const useNodeChatPreferencesStore = create<NodeChatPreferencesStore>()((s
 	agentModeEnabled: readStoredAgentModeEnabled(),
 	selectedAgentId: readStoredSelectedAgentId(),
 	showTokensPerSecond: readStoredShowTokensPerSecond(),
+	knowledgeBaseEnabled: readStoredKnowledgeBaseEnabled(),
 	actions: {
 		setSelectedModel: (value) => {
 			writeStoredValue(SELECTED_MODEL_STORAGE_KEY, value);
@@ -240,6 +252,18 @@ export const useNodeChatPreferencesStore = create<NodeChatPreferencesStore>()((s
 		setShowTokensPerSecond: (value) => {
 			writeStoredValue(SHOW_TOKENS_PER_SECOND_STORAGE_KEY, String(value));
 			set({ showTokensPerSecond: value });
+		},
+		setKnowledgeBaseEnabled: (value) => {
+			writeStoredValue(KNOWLEDGE_BASE_ENABLED_STORAGE_KEY, String(value));
+			set({ knowledgeBaseEnabled: value });
+		},
+		toggleKnowledgeBase: () => {
+			set((state) => {
+				const nextValue = !state.knowledgeBaseEnabled;
+				writeStoredValue(KNOWLEDGE_BASE_ENABLED_STORAGE_KEY, String(nextValue));
+
+				return { knowledgeBaseEnabled: nextValue };
+			});
 		},
 	},
 }));

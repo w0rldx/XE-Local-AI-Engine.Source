@@ -29,6 +29,7 @@ export function ChatDisplayShell({
 	availableReasoningEfforts,
 	activeModelToolCapable = false,
 	toolsEnabled = false,
+	knowledgeBaseEnabled = false,
 	contextUsage,
 	streamingMessage,
 	timelineEntries = EMPTY_TIMELINE_ENTRIES,
@@ -43,6 +44,7 @@ export function ChatDisplayShell({
 	onModelChange,
 	onReasoningEffortChange,
 	onToggleTools,
+	onToggleKnowledgeBase,
 	agentControlsAvailable = false,
 	agentModeEnabled = false,
 	selectedAgentId = "",
@@ -266,6 +268,7 @@ export function ChatDisplayShell({
 					reasoningEffort={reasoningEffort}
 					activeModelToolCapable={activeModelToolCapable}
 					toolsEnabled={toolsEnabled}
+					knowledgeBaseEnabled={knowledgeBaseEnabled}
 					agentControlsAvailable={agentControlsAvailable}
 					agentModeEnabled={agentModeEnabled}
 					selectedAgentId={selectedAgentId}
@@ -278,6 +281,7 @@ export function ChatDisplayShell({
 					onModelChange={onModelChange}
 					onReasoningEffortChange={onReasoningEffortChange}
 					onToggleTools={onToggleTools}
+					onToggleKnowledgeBase={onToggleKnowledgeBase}
 					onSelectAgent={onSelectAgent}
 					onSend={onSend}
 				/>

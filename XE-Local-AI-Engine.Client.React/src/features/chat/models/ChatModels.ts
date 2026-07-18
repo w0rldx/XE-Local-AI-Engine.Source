@@ -76,6 +76,19 @@ export interface ChatNoticePart {
 
 export type ChatMessagePart = ChatReasoningPart | ChatToolPart | ChatTextPart | ChatNoticePart;
 
+/**
+ * One knowledge-base excerpt that grounded a plain-chat assistant turn (OPP-05 / UX-04). Rendered in the collapsible
+ * "Sources" strip under the answer. Carries only non-sensitive provenance (ids, derived title/section, fused score);
+ * no chunk body text rides here. Maps from the persisted metadata blob via NodeChatMapper.
+ */
+export interface ChatMessageSource {
+	documentId: string;
+	chunkId: string;
+	title: string;
+	section?: string;
+	score: number;
+}
+
 export type TimelineEventType =
 	| "ToolCall"
 	| "ToolResult"
@@ -128,6 +141,10 @@ export interface ChatMessageModel {
 	// agentName/reasoningEffort — no migration). Drives the optional tokens/sec attribution. Absent for legacy
 	// turns and user messages → no tps shown.
 	generationDurationMs?: number;
+	// Knowledge-base excerpts that grounded this plain-chat turn (persisted in metadata_json, same blob as the
+	// attribution fields — no migration). Drives the collapsible "Sources" strip. Absent/empty for legacy turns,
+	// non-knowledge turns, and user messages.
+	sources?: ChatMessageSource[];
 }
 
 export type ChatFeedbackRating = "up" | "down";
@@ -292,6 +309,9 @@ export interface ChatUiCapabilities {
 	// from the node `voice` surface flag AND the operator-owned manifest.Enabled (see buildChatUiCapabilities).
 	// Voice UI is additionally dev-gated at the render site.
 	readonly showVoiceControls: boolean;
+	// When true the chat composer renders the "Use Knowledge Base" toggle (opt-in plain-chat grounding). Derived
+	// from the node's knowledgeBase surface capability (see ChatCapabilityGates.buildChatUiCapabilities).
+	readonly showKnowledgeBaseControls: boolean;
 }
 
 export interface ChatDisplayShellProps {
@@ -308,6 +328,8 @@ export interface ChatDisplayShellProps {
 	// capability to decide whether the composer offers the local-tool controls. Defaults to false (safe).
 	activeModelToolCapable?: boolean;
 	toolsEnabled?: boolean;
+	// Opt-in knowledge-base grounding for plain chat (OPP-05); forwarded to the composer's "Use Knowledge Base" toggle.
+	knowledgeBaseEnabled?: boolean;
 	contextUsage?: ContextUsageModel;
 	streamingMessage?: ChatStreamingState;
 	timelineEntries?: ChatTimelineEntry[];
@@ -322,6 +344,7 @@ export interface ChatDisplayShellProps {
 	onModelChange: (model: string) => void;
 	onReasoningEffortChange: (effort: ReasoningEffort) => void;
 	onToggleTools?: () => void;
+	onToggleKnowledgeBase?: () => void;
 	agentControlsAvailable?: boolean;
 	agentModeEnabled?: boolean;
 	selectedAgentId?: string;

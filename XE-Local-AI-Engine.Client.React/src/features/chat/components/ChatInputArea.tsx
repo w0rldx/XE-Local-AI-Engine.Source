@@ -1,6 +1,7 @@
 import { ActionIcon, Box, Button, FileButton, Group, Menu, Textarea, Tooltip } from "@mantine/core";
 import {
 	IconAdjustments,
+	IconBooks,
 	IconBrain,
 	IconDeviceDesktop,
 	IconPaperclip,
@@ -68,6 +69,10 @@ interface ChatInputAreaProps {
 	// capability to gate the local-tool controls so a non-tool model never offers them.
 	activeModelToolCapable?: boolean;
 	toolsEnabled?: boolean;
+	// Opt-in knowledge-base grounding for plain chat (OPP-05). The toggle renders only when the node ships the
+	// knowledge-base surface (capabilities.showKnowledgeBaseControls) and is hidden in agent mode (the agent uses the
+	// search_knowledge_base tool instead).
+	knowledgeBaseEnabled?: boolean;
 	agentControlsAvailable?: boolean;
 	agentModeEnabled?: boolean;
 	selectedAgentId?: string;
@@ -82,6 +87,7 @@ interface ChatInputAreaProps {
 	onModelChange: (model: string) => void;
 	onReasoningEffortChange: (effort: ReasoningEffort) => void;
 	onToggleTools?: () => void;
+	onToggleKnowledgeBase?: () => void;
 	// Single merged agent control: "" => Default Assistant (agent mode off); any other id => enable mode + stamp it.
 	onSelectAgent?: (agentId: string) => void;
 	onSend: (content: string, effort: ReasoningEffort, model: string) => void;
@@ -105,6 +111,7 @@ export function ChatInputArea({
 	reasoningEffort,
 	activeModelToolCapable = false,
 	toolsEnabled = false,
+	knowledgeBaseEnabled = false,
 	agentControlsAvailable = false,
 	agentModeEnabled = false,
 	selectedAgentId = "",
@@ -117,6 +124,7 @@ export function ChatInputArea({
 	onModelChange,
 	onReasoningEffortChange,
 	onToggleTools,
+	onToggleKnowledgeBase,
 	onSelectAgent,
 	onSend,
 }: ChatInputAreaProps) {
@@ -133,6 +141,9 @@ export function ChatInputArea({
 	// Local-tool controls require BOTH the node-wide capability AND the active model advertising the Ollama
 	// `tools` capability — a model that can't call tools must never be offered them.
 	const showLocalToolControls = capabilities.showLocalToolControls && activeModelToolCapable;
+	// The knowledge-base grounding toggle shows for plain chat only: agent mode reaches the knowledge base through the
+	// search_knowledge_base tool, so an extra inline-grounding toggle there would be redundant and confusing.
+	const showKnowledgeBaseControls = capabilities.showKnowledgeBaseControls && !agentModeEnabled;
 	const sendDisabled = isSending ? false : disabled || sendDisabledProp || !trimmed;
 	// Agent selector is disabled while sending or when there are no agents to pick from.
 	const agentSelectorDisabled = disabled || isSending || agentOptions.length === 0;
@@ -294,6 +305,28 @@ export function ChatInputArea({
 							data-testid="chat-local-tools-toggle"
 						>
 							<IconDeviceDesktop size={15} />
+						</ActionIcon>
+					</Tooltip>
+				) : null}
+				{showKnowledgeBaseControls ? (
+					<Tooltip
+						label={
+							knowledgeBaseEnabled
+								? t("pages.chat.knowledgeBaseEnabled", "Knowledge base enabled")
+								: t("pages.chat.knowledgeBaseDisabled", "Knowledge base disabled")
+						}
+					>
+						<ActionIcon
+							size={36}
+							variant={knowledgeBaseEnabled ? "light" : "subtle"}
+							color={knowledgeBaseEnabled ? "primary" : "gray"}
+							disabled={disabled || isSending || !onToggleKnowledgeBase}
+							onClick={onToggleKnowledgeBase}
+							aria-label={t("pages.chat.knowledgeBaseLabel", "Use knowledge base")}
+							aria-pressed={knowledgeBaseEnabled}
+							data-testid="chat-knowledge-base-toggle"
+						>
+							<IconBooks size={15} />
 						</ActionIcon>
 					</Tooltip>
 				) : null}

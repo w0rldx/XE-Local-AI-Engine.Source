@@ -165,6 +165,7 @@ export function Chat() {
 	const selectedModel = useNodeChatPreferencesStore((state) => state.selectedModel);
 	const reasoningEffort = useNodeChatPreferencesStore((state) => state.reasoningEffort);
 	const toolsEnabled = useNodeChatPreferencesStore((state) => state.toolsEnabled);
+	const knowledgeBaseEnabled = useNodeChatPreferencesStore((state) => state.knowledgeBaseEnabled);
 	const requestedConversationId = useNodeChatPreferencesStore((state) => state.selectedConversationId);
 	const collapsed = useNodeChatPreferencesStore((state) => state.sidebarCollapsed);
 	const agentModeEnabled = useNodeChatPreferencesStore((state) => state.agentModeEnabled);
@@ -173,6 +174,7 @@ export function Chat() {
 		setSelectedModel,
 		setReasoningEffort,
 		toggleTools,
+		toggleKnowledgeBase,
 		setSelectedConversationId: setRequestedConversationId,
 		toggleSidebar,
 		setAgentModeEnabled,
@@ -774,6 +776,8 @@ export function Chat() {
 						requestId: ids.requestId,
 						model: requestModel,
 						useLocalTools: toolsEnabled,
+						// Opt-in knowledge-base grounding for plain chat (OPP-05). The server ignores it in agent mode.
+						useKnowledgeBase: knowledgeBaseEnabled,
 						reasoningEffort: effort,
 						// Send the active conversation-tree path so the server assembles context from the selected
 						// branch only. Omit when nothing was navigated this turn so the server keeps the stored map.
@@ -869,6 +873,7 @@ export function Chat() {
 			selectedAgentId,
 			streamScheduler,
 			toolsEnabled,
+			knowledgeBaseEnabled,
 			onVoiceTurnStart,
 			onVoiceAnswerProgress,
 		],
@@ -1352,6 +1357,7 @@ export function Chat() {
 				availableReasoningEfforts={availableReasoningEfforts}
 				activeModelToolCapable={activeModelToolCapable}
 				toolsEnabled={toolsEnabled}
+				knowledgeBaseEnabled={knowledgeBaseEnabled}
 				capabilities={chatUiCapabilities}
 				contextUsage={{
 					usedTokens: usedContextTokens,
@@ -1383,6 +1389,7 @@ export function Chat() {
 				onModelChange={setSelectedModel}
 				onReasoningEffortChange={setReasoningEffort}
 				onToggleTools={toggleTools}
+				onToggleKnowledgeBase={toggleKnowledgeBase}
 				agentControlsAvailable={agentControlsAvailable}
 				agentModeEnabled={agentModeEnabled}
 				selectedAgentId={selectedAgentId}

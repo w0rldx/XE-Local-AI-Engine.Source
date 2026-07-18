@@ -62,6 +62,8 @@ export interface SendMessageRequest {
 	requestId?: string;
 	model?: string;
 	useLocalTools?: boolean;
+	// Opt-in knowledge-base grounding for a plain-chat turn (OPP-05). Ignored by the server in agent mode.
+	useKnowledgeBase?: boolean;
 	reasoningEffort?: string;
 	selectedPath?: Record<string, string>;
 	// Agent to resolve for this turn. Absent → Default Assistant (today's built-in chat path). Only included when
@@ -128,6 +130,7 @@ function toStreamRequest(request: SendMessageRequest): NodeChatStreamRequestDto 
 		requestId: request.requestId,
 		model: request.model,
 		useLocalTools: request.useLocalTools,
+		useKnowledgeBase: request.useKnowledgeBase,
 		reasoningEffort: request.reasoningEffort,
 		selectedPath: request.selectedPath,
 		agentDefinitionId: request.agentDefinitionId,

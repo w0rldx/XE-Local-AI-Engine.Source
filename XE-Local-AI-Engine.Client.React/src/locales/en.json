@@ -261,6 +261,13 @@
 			"localToolsLabel": "Local tools",
 			"localToolsEnabled": "Local tools enabled",
 			"localToolsDisabled": "Local tools disabled",
+			"knowledgeBaseLabel": "Use knowledge base",
+			"knowledgeBaseEnabled": "Knowledge base enabled",
+			"knowledgeBaseDisabled": "Knowledge base disabled",
+			"sources": {
+				"title": "Sources",
+				"score": "score {{value}}"
+			},
 			"localToolsUnavailable": "Local tools are unavailable for the selected model",
 			"cloudToolsLabel": "Cloud tools",
 			"cloudToolsEnabled": "Cloud tools enabled",
