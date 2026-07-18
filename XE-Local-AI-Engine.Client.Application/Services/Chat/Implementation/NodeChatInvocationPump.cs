@@ -68,7 +68,8 @@ public sealed class NodeChatInvocationPump(
     public async Task<NodeChatPumpTerminalResult> TerminalizeAsync(NodeChatMessageCorrelation correlation,
         InvocationState state,
         string? requestedModel,
-        IReadOnlyList<NodeChatMessagePart>? parts = null)
+        IReadOnlyList<NodeChatMessagePart>? parts = null,
+        IReadOnlyList<NodeChatMessageSource>? sources = null)
     {
         ArgumentNullException.ThrowIfNull(state);
 
@@ -113,7 +114,10 @@ public sealed class NodeChatInvocationPump(
                 parts,
                 // Whole-turn wall-clock duration from the runner; null for legacy/platform turns that did not report it.
                 state.GenerationDurationMs,
-                envelope),
+                envelope,
+                // KB sources that grounded this turn (OPP-05 / UX-04); null when the turn used no knowledge base, which
+                // preserves any existing persisted sources on the row.
+                sources),
             CancellationToken.None).ConfigureAwait(false);
 
         // The transition guard may have rejected this terminalize (the row already reached a different terminal), so the

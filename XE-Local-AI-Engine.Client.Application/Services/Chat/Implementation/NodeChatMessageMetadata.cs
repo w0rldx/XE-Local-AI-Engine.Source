@@ -30,4 +30,9 @@ internal sealed record NodeChatMessageMetadata(
     // attribution). Trailing optional member with a null default, so a legacy blob written before this field
     // existed omits the key and deserializes to null (no migration). Same plaintext-on-device posture as the
     // existing metadata fields.
-    long? GenerationDurationMs = null);
+    long? GenerationDurationMs = null,
+    // Knowledge-base sources that grounded this plain-chat assistant turn (OPP-05 / UX-04). Trailing optional member
+    // with a null default, so a legacy blob written before this field existed omits the key and deserializes to null
+    // (no migration). Only NON-SENSITIVE provenance rides here (document id, chunk id, derived title/section, score) —
+    // no chunk body text — the same plaintext-on-device posture as the existing metadata fields.
+    IReadOnlyList<NodeChatMessageSource>? Sources = null);

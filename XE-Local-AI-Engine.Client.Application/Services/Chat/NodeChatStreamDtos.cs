@@ -62,7 +62,13 @@ public sealed record NodeChatStreamRequest(
     // of these files is inlined (capped) into the context; in agent mode they are read via the file tools, so this is
     // ignored. The client re-sends the conversation's current attachment ids each turn. Trailing optional so the
     // SignalR hub forwards the record unchanged.
-    IReadOnlyList<Guid>? AttachmentFileIds = null);
+    IReadOnlyList<Guid>? AttachmentFileIds = null,
+    // Opt-in knowledge-base grounding for a PLAIN-chat turn (OPP-05, default OFF). When true and the effective model is
+    // node-local (or the operator opted cloud data-access in), the send path retrieves the top-k fused knowledge-base
+    // hits for the user's latest message and inlines them as ONE fenced untrusted context region, and records their
+    // provenance as the turn's sources. Ignored in agent mode (the agent uses the search_knowledge_base tool instead).
+    // Trailing optional so the SignalR hub forwards the record unchanged.
+    bool UseKnowledgeBase = false);
 
 public sealed record ChatStreamEvent(
     string Type,

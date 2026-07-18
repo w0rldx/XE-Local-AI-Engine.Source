@@ -263,7 +263,10 @@ internal sealed class NodeChatMessageCommands(NodeChatPersistenceWriter writer)
             // Upsert: the pump's authoritative terminalize is the winning outcome, so it enriches/overwrites any thin
             // envelope a prior cancel wrote for this message (see RunEnvelopeWriteMode), keeping envelope status == row status.
             envelope: request.Envelope,
-            envelopeWriteMode: RunEnvelopeWriteMode.Upsert);
+            envelopeWriteMode: RunEnvelopeWriteMode.Upsert,
+            // KB sources that grounded this turn (OPP-05 / UX-04); null on paths that retrieved nothing preserves any
+            // existing persisted sources, just like Parts.
+            sources: request.Sources);
     }
 
     public async Task<NodeChatCancelResultDto> CancelMessageAsync(NodeChatCancelRequest request, CancellationToken cancellationToken = default)
@@ -403,7 +406,8 @@ internal sealed class NodeChatMessageCommands(NodeChatPersistenceWriter writer)
         bool touchConversation = true,
         IReadOnlySet<string>? requiredCurrentStatuses = null,
         AgentRunEnvelopeMetadata? envelope = null,
-        RunEnvelopeWriteMode envelopeWriteMode = RunEnvelopeWriteMode.InsertIfAbsent)
+        RunEnvelopeWriteMode envelopeWriteMode = RunEnvelopeWriteMode.InsertIfAbsent,
+        IReadOnlyList<NodeChatMessageSource>? sources = null)
     {
         ValidateCorrelation(correlation);
         if (requiredCurrentStatuses is { Count: 0 or > MaxSourceStatusSlots })
@@ -449,11 +453,14 @@ internal sealed class NodeChatMessageCommands(NodeChatPersistenceWriter writer)
                 // The generation duration is reported once at terminalize; a null arg (partial flush) preserves any
                 // existing value, mirroring the token-count preservation above.
                 var nextGenerationDurationMs = generationDurationMs ?? current.GenerationDurationMs;
+                // KB sources are reported once at terminalize (OPP-05 / UX-04); a null arg (partial flush) preserves any
+                // existing value, mirroring the parts/duration preservation above.
+                var nextSources = sources ?? current.Sources;
                 // Agent attribution and the reasoning effort are stamped once at placeholder/variant mint and never
                 // updated here, so always preserve them from current — otherwise a later flush/terminalize would
                 // re-serialize the blob without those fields and silently drop the per-response attribution.
                 var metadata = SerializeMetadata(current.MetadataJson, nextReasoning, nextModel, nextInputTokens, nextOutputTokens, nextTotalTokens, nextReasoningTokens, nextParts,
-                    current.AgentDefinitionId, current.AgentName, current.ReasoningEffort, nextGenerationDurationMs);
+                    current.AgentDefinitionId, current.AgentName, current.ReasoningEffort, nextGenerationDurationMs, nextSources);
 
                 // When a run envelope must be written, the message UPDATE, the envelope insert, and the conversation touch
                 // run in ONE transaction so the terminal row and its content-free envelope commit or roll back together

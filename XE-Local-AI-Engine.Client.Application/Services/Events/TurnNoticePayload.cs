@@ -40,5 +40,13 @@ public enum TurnNoticeKind
     ///     the operator has not opted in to exposing node-local private data to cloud providers
     ///     (<c>KnowledgeBase:AllowCloudModelAccess</c>). <see cref="TurnNoticePayload.Detail" /> names the effective model.
     /// </summary>
-    AttachmentsWithheld = 3
+    AttachmentsWithheld = 3,
+
+    /// <summary>
+    ///     Knowledge-base grounding was requested for this plain-chat turn (OPP-05) but withheld from a CLOUD-hosted
+    ///     effective model because the operator has not opted in to exposing node-local private data to cloud providers
+    ///     (<c>KnowledgeBase:AllowCloudModelAccess</c>) — the same egress gate as attachments. The turn still runs, just
+    ///     without knowledge-base context. <see cref="TurnNoticePayload.Detail" /> names the effective model.
+    /// </summary>
+    KnowledgeWithheld = 4
 }
