@@ -2,6 +2,7 @@ namespace XE_Local_AI_Engine.Client.Services.Agents.Implementation;
 
 using Microsoft.Extensions.Options;
 using XE_Local_AI_Engine.AI.Agent.Instructions;
+using XE_Local_AI_Engine.AI.Agent.Tools;
 using XE_Local_AI_Engine.Client.Models;
 using XE_Local_AI_Engine.Client.Persistence;
 using XE_Local_AI_Engine.Client.Persistence.Stores;
@@ -30,6 +31,7 @@ internal sealed class OrchestrationResolver : IOrchestrationResolver
 
     private readonly INodeRuntimeSettings _runtimeSettings;
     private readonly IAgentDefinitionStore _store;
+    private readonly IToolApprovalPolicy _toolApprovalPolicy;
 
     public OrchestrationResolver(IAgentDefinitionStore store,
         IPlaybookActionStore playbookActionStore,
@@ -39,6 +41,7 @@ internal sealed class OrchestrationResolver : IOrchestrationResolver
         INodeRuntimeSettings runtimeSettings,
         IModelCapabilityResolver modelCapabilityResolver,
         IAgentInstructionProvider instructionProvider,
+        IToolApprovalPolicy toolApprovalPolicy,
         ILogger<OrchestrationResolver> logger)
     {
         _store = store ?? throw new ArgumentNullException(nameof(store));
@@ -50,6 +53,7 @@ internal sealed class OrchestrationResolver : IOrchestrationResolver
         _runtimeSettings = runtimeSettings ?? throw new ArgumentNullException(nameof(runtimeSettings));
         _modelCapabilityResolver = modelCapabilityResolver ?? throw new ArgumentNullException(nameof(modelCapabilityResolver));
         _instructionProvider = instructionProvider ?? throw new ArgumentNullException(nameof(instructionProvider));
+        _toolApprovalPolicy = toolApprovalPolicy ?? throw new ArgumentNullException(nameof(toolApprovalPolicy));
         _logger = logger ?? throw new ArgumentNullException(nameof(logger));
     }
 
@@ -320,7 +324,12 @@ internal sealed class OrchestrationResolver : IOrchestrationResolver
                         .Where(tool => allowedNames.Contains(tool.Name))
                         .Select(tool => tool with
                         {
-                            RequiresApproval = definition.ToolApprovals.GetValueOrDefault(tool.Name, tool.RequiresApproval)
+                            // TIGHTEN-ONLY 3-tier compose (OPP-03), identical to AgentDefinitionResolver.ProjectAllowedTools
+                            // so a node approval policy cannot be bypassed by routing through an orchestration participant:
+                            // the node policy (which already ORs the catalog default with its category/per-tool rule) first,
+                            // then the participant's per-agent override can only ADD approval.
+                            RequiresApproval = _toolApprovalPolicy.RequiresApproval(tool.Name, tool.Category, tool.RequiresApproval)
+                                               || (definition.ToolApprovals.TryGetValue(tool.Name, out var perAgentApproval) && perAgentApproval)
                         })
                         .ToArray();
 

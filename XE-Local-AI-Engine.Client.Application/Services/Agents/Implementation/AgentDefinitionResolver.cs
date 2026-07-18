@@ -193,7 +193,19 @@ internal sealed class AgentDefinitionResolver : IAgentDefinitionResolver
         if (definition.Source == AgentDefinitionSource.Seeded
             && string.Equals(definition.SeedSlug, AgentDefaults.DefaultAgentSeedSlug, StringComparison.Ordinal))
         {
-            return _localToolOfferProvider.GetOfferedTools(effectiveModelId, effectiveModelIsCloud);
+            // The mode-off Default Assistant takes the WHOLE capability-gated offer (never the intersected allowed set),
+            // but the node-default approval policy still applies (tighten-only) so a node-wide policy is not bypassable by
+            // plain mode-off chat. With NO node policy configured the Permissive floor is identity, so the offer — and the
+            // runtime-package config hash — stay byte-identical to the pre-OPP-03 mode-off path. Per-agent ToolApprovals
+            // are intentionally NOT applied here: this path reproduces plain chat, which carries no per-agent overrides.
+            return
+            [
+                .. _localToolOfferProvider.GetOfferedTools(effectiveModelId, effectiveModelIsCloud)
+                                          .Select(tool => tool with
+                                          {
+                                              RequiresApproval = _toolApprovalPolicy.RequiresApproval(tool.Name, tool.Category, tool.RequiresApproval)
+                                          })
+            ];
         }
 
         // Start from the PROFILE offer pool for the effective model (the whole capability-gated offer PLUS the
