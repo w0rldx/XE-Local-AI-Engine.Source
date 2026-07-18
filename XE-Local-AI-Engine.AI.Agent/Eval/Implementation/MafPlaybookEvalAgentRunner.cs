@@ -58,10 +58,17 @@ internal sealed class MafPlaybookEvalAgentRunner : IPlaybookEvalAgentRunner
             .. inputTurns
         ];
 
-        // Threadless run (no AgentSession, no run options): per the Microsoft.Agents.AI API (verified at 1.8.0; pinned
-        // version is now 1.13.0, not re-verified) the second argument is the session and a null value runs without
-        // persisted state.
-        var response = await agent.RunAsync(seed, session: null, options: null, cancellationToken).ConfigureAwait(false);
+        // Threadless run (no AgentSession — the second argument's null value runs without persisted state, per the
+        // Microsoft.Agents.AI API verified at 1.8.0, pinned version now 1.13.0, not re-verified). The generation IS
+        // pinned via run options: Temperature=0 makes the sampled text deterministic so the eval gate's pass/fail
+        // reflects the injected prompt, not decoding noise — the judge (DefaultPlaybookEvalJudge) already pins its
+        // own Temperature=0 independently. ChatClientAgentRunOptions.ChatOptions is the same shape
+        // InvocationAgentFactory uses to carry per-request ChatOptions through to the model.
+        var runOptions = new ChatClientAgentRunOptions
+        {
+            ChatOptions = new ChatOptions { Temperature = 0f }
+        };
+        var response = await agent.RunAsync(seed, session: null, runOptions, cancellationToken).ConfigureAwait(false);
 
         return response.Text ?? string.Empty;
     }
