@@ -686,6 +686,7 @@
 			"connectionFailed": "Verbindung zum lokalen Chat-Hub fehlgeschlagen.",
 			"connectionFailedTitle": "Lokaler Chat nicht verfügbar",
 			"conversations": "Unterhaltungen",
+			"loadingHistory": "Lokaler Chat-Verlauf wird geladen…",
 			"loadingMessages": "Nachrichten werden geladen…",
 			"modelUnavailable": "Nicht verfügbar",
 			"reasoningLabel": "Reasoning",
@@ -696,6 +697,18 @@
 				"title": "Diese Unterhaltung konnte nicht geladen werden",
 				"body": "Beim Laden dieser Nachrichten ist ein Fehler aufgetreten.",
 				"retry": "Erneut versuchen"
+			},
+			"contextUsage": {
+				"localNode": "Lokaler Node",
+				"unknownModel": "Unbekannt",
+				"usedPending": "Der genutzte Kontext wird aktualisiert, sobald die Antwort des Assistenten abgeschlossen ist",
+				"usedAuthoritative": "Genutzter Kontext vom Modell gemeldet",
+				"usedNotAuthoritative": "Genutzter Kontext noch nicht maßgeblich",
+				"maxUnknown": "Maximaler Kontext für dieses Modell auf diesem Node unbekannt",
+				"maxKnown": "Maximaler Kontext vom ausgewählten Node gemeldet",
+				"tooltip": "{{usedOrigin}}. {{maxOrigin}}. Modell: {{model}}. Node: {{node}}.",
+				"srUnknown": "Kontextfenster-Nutzung unbekannt, {{used}} von {{max}} Tokens.",
+				"srUsed": "Kontextfenster zu {{percent}} Prozent genutzt, {{used}} von {{max}} Tokens."
 			}
 		},
 		"clientNodes": {
@@ -1475,6 +1488,48 @@
 			"placeholder": {
 				"title": "Aufrufe",
 				"description": "Aktuelle und historische Aufrufüberwachung wird hier portiert."
+			},
+			"monitor": {
+				"title": "Aufrufüberwachung",
+				"subtitle": "Den aktiven Aufruf und den lokalen In-Memory-Verlauf des Workers einsehen.",
+				"loadError": "Die Daten der Aufrufüberwachung konnten nicht geladen werden.",
+				"loading": "Aufrufüberwachung wird geladen…",
+				"active": "Aktiv",
+				"idle": "Inaktiv",
+				"traceId": {
+					"label": "Trace: {{traceId}}",
+					"copy": "Trace-ID kopieren",
+					"copied": "Kopiert"
+				},
+				"current": {
+					"title": "Aktueller Aufruf",
+					"empty": "Aktuell ist kein Aufruf zugewiesen oder aktiv.",
+					"model": "Modell: {{value}}",
+					"conversation": "Unterhaltung: {{value}}",
+					"started": "Gestartet: {{value}}",
+					"updated": "Aktualisiert: {{value}}",
+					"outputChunks": "Ausgabe-Chunks: {{value}}",
+					"thinkingChunks": "Denk-Chunks: {{value}}",
+					"pendingToolCalls": "Ausstehende Tool-Aufrufe: {{value}}",
+					"pendingApproval": "Genehmigung ausstehend: {{value}}",
+					"yes": "Ja",
+					"no": "Nein"
+				},
+				"history": {
+					"title": "Aufrufverlauf",
+					"subtitle": "Zeigt bis zu {{count}} der letzten abgeschlossenen Aufrufe.",
+					"empty": "Es sind noch keine abgeschlossenen Aufrufe erfasst.",
+					"columns": {
+						"invocation": "Aufruf",
+						"status": "Status",
+						"model": "Modell",
+						"completed": "Abgeschlossen",
+						"duration": "Dauer",
+						"chunks": "Chunks",
+						"thinking": "Denken",
+						"result": "Ergebnis"
+					}
+				}
 			}
 		},
 		"agents": {

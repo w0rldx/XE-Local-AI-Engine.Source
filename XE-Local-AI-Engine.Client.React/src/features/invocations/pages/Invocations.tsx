@@ -1,6 +1,7 @@
 import { ActionIcon, Alert, Badge, Button, Card, Container, CopyButton, Group, Loader, SimpleGrid, Stack, Table, Text, Title, Tooltip } from "@mantine/core";
 import { IconAlertTriangle, IconCheck, IconCopy, IconHistory, IconPlayerPlay, IconRefresh } from "@tabler/icons-react";
 import { useQuery } from "@tanstack/react-query";
+import type { TFunction } from "i18next";
 import { useMemo } from "react";
 import { useTranslation } from "react-i18next";
 
@@ -17,13 +18,14 @@ import {
 	sortInvocationHistory,
 } from "@/features/invocations/models/InvocationMonitorModel";
 
-function errorMessage(error: unknown): string {
-	return error instanceof Error ? error.message : "Invocation monitor data could not be loaded.";
+function errorMessage(error: unknown, t: TFunction): string {
+	return error instanceof Error ? error.message : t("pages.invocations.monitor.loadError", "Invocation monitor data could not be loaded.");
 }
 
 // Copyable W3C trace id (AUD4-19) so a failed run's "See local logs" row correlates with the exported trace. Renders
 // nothing when no trace id was captured (legacy/platform runs). Uses the app's idiomatic CopyButton affordance.
 function TraceIdLine({ traceId }: { readonly traceId: string | null }) {
+	const { t } = useTranslation();
 	if (!traceId) {
 		return null;
 	}
@@ -31,17 +33,20 @@ function TraceIdLine({ traceId }: { readonly traceId: string | null }) {
 	return (
 		<Group gap={4} align="center" wrap="nowrap" data-testid="invocation-trace-id">
 			<Text size="xs" c="dimmed" style={{ wordBreak: "break-all" }}>
-				Trace: {traceId}
+				{t("pages.invocations.monitor.traceId.label", "Trace: {{traceId}}", { traceId })}
 			</Text>
 			<CopyButton value={traceId} timeout={2000}>
 				{({ copied, copy }) => (
-					<Tooltip label={copied ? "Copied" : "Copy trace id"} withArrow={true}>
+					<Tooltip
+						label={copied ? t("pages.invocations.monitor.traceId.copied", "Copied") : t("pages.invocations.monitor.traceId.copy", "Copy trace id")}
+						withArrow={true}
+					>
 						<ActionIcon
 							color={copied ? "teal" : "gray"}
 							variant="subtle"
 							size="sm"
 							onClick={copy}
-							aria-label="Copy trace id"
+							aria-label={t("pages.invocations.monitor.traceId.copy", "Copy trace id")}
 							data-testid="invocation-trace-id-copy"
 						>
 							{copied ? <IconCheck size={14} /> : <IconCopy size={14} />}
@@ -54,15 +59,16 @@ function TraceIdLine({ traceId }: { readonly traceId: string | null }) {
 }
 
 function CurrentInvocation({ current }: { readonly current: InvocationCurrentDto | null }) {
+	const { t } = useTranslation();
 	if (!current) {
 		return (
 			<Card withBorder={true} radius="md" p="lg">
 				<Stack gap="sm">
 					<Group justify="space-between">
-						<Title order={3}>Current invocation</Title>
+						<Title order={3}>{t("pages.invocations.monitor.current.title", "Current invocation")}</Title>
 						<IconPlayerPlay size={22} />
 					</Group>
-					<Text c="dimmed">No invocation is currently assigned or running.</Text>
+					<Text c="dimmed">{t("pages.invocations.monitor.current.empty", "No invocation is currently assigned or running.")}</Text>
 				</Stack>
 			</Card>
 		);
@@ -73,7 +79,7 @@ function CurrentInvocation({ current }: { readonly current: InvocationCurrentDto
 			<Stack gap="md">
 				<Group justify="space-between" align="flex-start">
 					<Stack gap={4}>
-						<Title order={3}>Current invocation</Title>
+						<Title order={3}>{t("pages.invocations.monitor.current.title", "Current invocation")}</Title>
 						<Text size="sm" c="dimmed" style={{ wordBreak: "break-all" }}>
 							{current.invocationId}
 						</Text>
@@ -82,14 +88,28 @@ function CurrentInvocation({ current }: { readonly current: InvocationCurrentDto
 					<Badge color={getInvocationStatusColor(current.status)}>{current.status}</Badge>
 				</Group>
 				<SimpleGrid cols={{ base: 1, md: 2 }} spacing="sm">
-					<Text>Model: {formatInvocationText(current.modelUsed)}</Text>
-					<Text>Conversation: {current.conversationId}</Text>
-					<Text>Started: {formatInvocationTimestamp(current.startedAt)}</Text>
-					<Text>Updated: {formatInvocationTimestamp(current.lastUpdatedAt)}</Text>
-					<Text>Output chunks: {current.streamedChunkCount}</Text>
-					<Text>Thinking chunks: {current.streamedThinkingChunkCount}</Text>
-					<Text>Pending tool calls: {current.pendingToolCallCount}</Text>
-					<Text>Pending approval: {current.hasPendingApproval ? "Yes" : "No"}</Text>
+					<Text>{t("pages.invocations.monitor.current.model", "Model: {{value}}", { value: formatInvocationText(current.modelUsed) })}</Text>
+					<Text>{t("pages.invocations.monitor.current.conversation", "Conversation: {{value}}", { value: current.conversationId })}</Text>
+					<Text>{t("pages.invocations.monitor.current.started", "Started: {{value}}", { value: formatInvocationTimestamp(current.startedAt) })}</Text>
+					<Text>{t("pages.invocations.monitor.current.updated", "Updated: {{value}}", { value: formatInvocationTimestamp(current.lastUpdatedAt) })}</Text>
+					<Text>{t("pages.invocations.monitor.current.outputChunks", "Output chunks: {{value}}", { value: current.streamedChunkCount })}</Text>
+					<Text>
+						{t("pages.invocations.monitor.current.thinkingChunks", "Thinking chunks: {{value}}", {
+							value: current.streamedThinkingChunkCount,
+						})}
+					</Text>
+					<Text>
+						{t("pages.invocations.monitor.current.pendingToolCalls", "Pending tool calls: {{value}}", {
+							value: current.pendingToolCallCount,
+						})}
+					</Text>
+					<Text>
+						{t("pages.invocations.monitor.current.pendingApproval", "Pending approval: {{value}}", {
+							value: current.hasPendingApproval
+								? t("pages.invocations.monitor.current.yes", "Yes")
+								: t("pages.invocations.monitor.current.no", "No"),
+						})}
+					</Text>
 				</SimpleGrid>
 				{current.error ? (
 					<Alert color="red" icon={<IconAlertTriangle size={16} />}>
@@ -102,11 +122,12 @@ function CurrentInvocation({ current }: { readonly current: InvocationCurrentDto
 }
 
 function HistoryRows({ history }: { readonly history: InvocationHistoryDto[] }) {
+	const { t } = useTranslation();
 	if (history.length === 0) {
 		return (
 			<Table.Tr>
 				<Table.Td colSpan={8}>
-					<Text c="dimmed">No completed invocations recorded yet.</Text>
+					<Text c="dimmed">{t("pages.invocations.monitor.history.empty", "No completed invocations recorded yet.")}</Text>
 				</Table.Td>
 			</Table.Tr>
 		);
@@ -151,18 +172,25 @@ export function Invocations() {
 						<Text size="sm" tt="uppercase" fw={700} c="dimmed">
 							{t("common.workerNode", "Worker Node")}
 						</Text>
-						<Title order={2}>Invocation monitor</Title>
-						<Text c="dimmed">Inspect the active invocation and the local in-memory history retained by the worker.</Text>
+						<Title order={2}>{t("pages.invocations.monitor.title", "Invocation monitor")}</Title>
+						<Text c="dimmed">
+							{t(
+								"pages.invocations.monitor.subtitle",
+								"Inspect the active invocation and the local in-memory history retained by the worker.",
+							)}
+						</Text>
 					</Stack>
 					<Group gap="sm">
-						<Badge color={active ? "blue" : "gray"}>{active ? "Active" : "Idle"}</Badge>
+						<Badge color={active ? "blue" : "gray"}>
+							{active ? t("pages.invocations.monitor.active", "Active") : t("pages.invocations.monitor.idle", "Idle")}
+						</Badge>
 						<Button
 							variant="subtle"
 							leftSection={<IconRefresh size={16} />}
 							onClick={() => monitorRefetch()}
 							disabled={monitorIsFetching}
 						>
-							Refresh
+							{t("common.refresh", "Refresh")}
 						</Button>
 					</Group>
 				</Group>
@@ -170,13 +198,13 @@ export function Invocations() {
 				{monitorIsLoading ? (
 					<Group gap="sm">
 						<Loader size="sm" />
-						<Text c="dimmed">Loading invocation monitor…</Text>
+						<Text c="dimmed">{t("pages.invocations.monitor.loading", "Loading invocation monitor…")}</Text>
 					</Group>
 				) : null}
 
 				{monitorError ? (
 					<Alert color="red" icon={<IconAlertTriangle size={16} />}>
-						{errorMessage(monitorError)}
+						{errorMessage(monitorError, t)}
 					</Alert>
 				) : null}
 
@@ -186,9 +214,11 @@ export function Invocations() {
 					<Stack gap="md">
 						<Group justify="space-between">
 							<Stack gap={2}>
-								<Title order={3}>Invocation history</Title>
+								<Title order={3}>{t("pages.invocations.monitor.history.title", "Invocation history")}</Title>
 								<Text size="sm" c="dimmed">
-									Showing up to {monitor?.historyCapacity ?? 0} most recent terminal invocations.
+									{t("pages.invocations.monitor.history.subtitle", "Showing up to {{count}} most recent terminal invocations.", {
+										count: monitor?.historyCapacity ?? 0,
+									})}
 								</Text>
 							</Stack>
 							<IconHistory size={22} />
@@ -197,14 +227,14 @@ export function Invocations() {
 							<Table striped={true} highlightOnHover={true} verticalSpacing="sm">
 								<Table.Thead>
 									<Table.Tr>
-										<Table.Th>Invocation</Table.Th>
-										<Table.Th>Status</Table.Th>
-										<Table.Th>Model</Table.Th>
-										<Table.Th>Completed</Table.Th>
-										<Table.Th>Duration</Table.Th>
-										<Table.Th>Chunks</Table.Th>
-										<Table.Th>Thinking</Table.Th>
-										<Table.Th>Result</Table.Th>
+										<Table.Th>{t("pages.invocations.monitor.history.columns.invocation", "Invocation")}</Table.Th>
+										<Table.Th>{t("pages.invocations.monitor.history.columns.status", "Status")}</Table.Th>
+										<Table.Th>{t("pages.invocations.monitor.history.columns.model", "Model")}</Table.Th>
+										<Table.Th>{t("pages.invocations.monitor.history.columns.completed", "Completed")}</Table.Th>
+										<Table.Th>{t("pages.invocations.monitor.history.columns.duration", "Duration")}</Table.Th>
+										<Table.Th>{t("pages.invocations.monitor.history.columns.chunks", "Chunks")}</Table.Th>
+										<Table.Th>{t("pages.invocations.monitor.history.columns.thinking", "Thinking")}</Table.Th>
+										<Table.Th>{t("pages.invocations.monitor.history.columns.result", "Result")}</Table.Th>
 									</Table.Tr>
 								</Table.Thead>
 								<Table.Tbody>

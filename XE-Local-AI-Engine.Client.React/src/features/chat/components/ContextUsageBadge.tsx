@@ -1,4 +1,6 @@
 import { Progress, Tooltip } from "@mantine/core";
+import type { TFunction } from "i18next";
+import { useTranslation } from "react-i18next";
 
 import type { ContextUsageModel } from "@/features/chat/models/ChatModels";
 
@@ -22,20 +24,28 @@ function formatTokenCount(value: number | undefined): string {
 	return value.toString();
 }
 
-function tooltip({ isAuthoritative, maxTokens, modelLabel, nodeLabel, usedTokens }: ContextUsageModel): string {
+function tooltip({ isAuthoritative, maxTokens, modelLabel, nodeLabel, usedTokens }: ContextUsageModel, t: TFunction): string {
 	const usedOrigin =
 		usedTokens === undefined
-			? "Used context will update after the assistant response completes"
+			? t("pages.chat.contextUsage.usedPending", "Used context will update after the assistant response completes")
 			: isAuthoritative
-				? "Used context reported by model"
-				: "Used context not yet authoritative";
+				? t("pages.chat.contextUsage.usedAuthoritative", "Used context reported by model")
+				: t("pages.chat.contextUsage.usedNotAuthoritative", "Used context not yet authoritative");
 	const maxOrigin =
-		maxTokens === undefined ? "Max context unknown for this model on this node" : "Max context reported by selected node";
+		maxTokens === undefined
+			? t("pages.chat.contextUsage.maxUnknown", "Max context unknown for this model on this node")
+			: t("pages.chat.contextUsage.maxKnown", "Max context reported by selected node");
 
-	return `${usedOrigin}. ${maxOrigin}. Model: ${modelLabel || "Unknown"}. Node: ${nodeLabel || "Local node"}.`;
+	return t("pages.chat.contextUsage.tooltip", "{{usedOrigin}}. {{maxOrigin}}. Model: {{model}}. Node: {{node}}.", {
+		usedOrigin,
+		maxOrigin,
+		model: modelLabel || t("pages.chat.contextUsage.unknownModel", "Unknown"),
+		node: nodeLabel || t("pages.chat.contextUsage.localNode", "Local node"),
+	});
 }
 
 export function ContextUsageBadge(props: ContextUsageModel) {
+	const { t } = useTranslation();
 	const { usedTokens, maxTokens } = props;
 	const percent =
 		usedTokens !== undefined && maxTokens !== undefined && maxTokens > 0 ? (usedTokens / maxTokens) * 100 : undefined;
@@ -43,11 +53,18 @@ export function ContextUsageBadge(props: ContextUsageModel) {
 	const label = `${formatTokenCount(usedTokens)}/${formatTokenCount(maxTokens)}${percent === undefined ? "" : ` ${Math.round(percent)}%`}`;
 	const accessibleText =
 		percent === undefined
-			? `Context window usage unknown, ${formatTokenCount(usedTokens)} of ${formatTokenCount(maxTokens)} tokens.`
-			: `Context window ${Math.round(percent)} percent used, ${usedTokens} of ${maxTokens} tokens.`;
+			? t("pages.chat.contextUsage.srUnknown", "Context window usage unknown, {{used}} of {{max}} tokens.", {
+					used: formatTokenCount(usedTokens),
+					max: formatTokenCount(maxTokens),
+				})
+			: t("pages.chat.contextUsage.srUsed", "Context window {{percent}} percent used, {{used}} of {{max}} tokens.", {
+					percent: Math.round(percent),
+					used: usedTokens,
+					max: maxTokens,
+				});
 
 	return (
-		<Tooltip label={tooltip(props)} multiline={true} withArrow={true}>
+		<Tooltip label={tooltip(props, t)} multiline={true} withArrow={true}>
 			<output
 				aria-live="polite"
 				data-testid="context-usage-badge"

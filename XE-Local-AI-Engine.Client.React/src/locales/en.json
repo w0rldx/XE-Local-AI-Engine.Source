@@ -686,6 +686,7 @@
 			"connectionFailed": "Could not connect to the local chat hub.",
 			"connectionFailedTitle": "Local chat unavailable",
 			"conversations": "Conversations",
+			"loadingHistory": "Loading local chat history…",
 			"loadingMessages": "Loading messages…",
 			"modelUnavailable": "Unavailable",
 			"reasoningLabel": "Reasoning",
@@ -696,6 +697,18 @@
 				"title": "Couldn't load this conversation",
 				"body": "Something went wrong loading these messages.",
 				"retry": "Retry"
+			},
+			"contextUsage": {
+				"localNode": "Local node",
+				"unknownModel": "Unknown",
+				"usedPending": "Used context will update after the assistant response completes",
+				"usedAuthoritative": "Used context reported by model",
+				"usedNotAuthoritative": "Used context not yet authoritative",
+				"maxUnknown": "Max context unknown for this model on this node",
+				"maxKnown": "Max context reported by selected node",
+				"tooltip": "{{usedOrigin}}. {{maxOrigin}}. Model: {{model}}. Node: {{node}}.",
+				"srUnknown": "Context window usage unknown, {{used}} of {{max}} tokens.",
+				"srUsed": "Context window {{percent}} percent used, {{used}} of {{max}} tokens."
 			}
 		},
 		"clientNodes": {
@@ -1475,6 +1488,48 @@
 			"placeholder": {
 				"title": "Invocations",
 				"description": "Current and historical invocation monitoring will be ported here."
+			},
+			"monitor": {
+				"title": "Invocation monitor",
+				"subtitle": "Inspect the active invocation and the local in-memory history retained by the worker.",
+				"loadError": "Invocation monitor data could not be loaded.",
+				"loading": "Loading invocation monitor…",
+				"active": "Active",
+				"idle": "Idle",
+				"traceId": {
+					"label": "Trace: {{traceId}}",
+					"copy": "Copy trace id",
+					"copied": "Copied"
+				},
+				"current": {
+					"title": "Current invocation",
+					"empty": "No invocation is currently assigned or running.",
+					"model": "Model: {{value}}",
+					"conversation": "Conversation: {{value}}",
+					"started": "Started: {{value}}",
+					"updated": "Updated: {{value}}",
+					"outputChunks": "Output chunks: {{value}}",
+					"thinkingChunks": "Thinking chunks: {{value}}",
+					"pendingToolCalls": "Pending tool calls: {{value}}",
+					"pendingApproval": "Pending approval: {{value}}",
+					"yes": "Yes",
+					"no": "No"
+				},
+				"history": {
+					"title": "Invocation history",
+					"subtitle": "Showing up to {{count}} most recent terminal invocations.",
+					"empty": "No completed invocations recorded yet.",
+					"columns": {
+						"invocation": "Invocation",
+						"status": "Status",
+						"model": "Model",
+						"completed": "Completed",
+						"duration": "Duration",
+						"chunks": "Chunks",
+						"thinking": "Thinking",
+						"result": "Result"
+					}
+				}
 			}
 		},
 		"agents": {

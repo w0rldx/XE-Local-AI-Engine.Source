@@ -6,6 +6,8 @@ import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/re
 import type { ReactElement } from "react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
+import "@/i18n";
+
 import type { GetInvocationMonitorResponse } from "@/core/api/generated";
 
 const { generatedMock } = vi.hoisted(() => ({
