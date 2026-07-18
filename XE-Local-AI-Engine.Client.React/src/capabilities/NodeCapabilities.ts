@@ -37,9 +37,9 @@ export interface NodeCapabilityConfig {
 	readonly loadedModels: boolean;
 	readonly preview: boolean;
 	readonly knowledgeBase: boolean;
-	// Local image-generation surface (stable-diffusion.cpp text-to-image). Ships DARK by default: the runtime is not
-	// yet live-GPU verified, so the nav entry + /images route stay hidden until an operator flips this on (plan §9 —
-	// "ship dark until the runtime is verified").
+	// Local image-generation surface (stable-diffusion.cpp text-to-image). Enabled by default: the runtime has been
+	// live-GPU verified end-to-end on target hardware, so the nav entry + /images route ship on (plan §9 —
+	// shipped as a flagship feature).
 	readonly images: boolean;
 }
 
@@ -103,9 +103,8 @@ export const nodeCapabilities: NodeCapabilityConfig = {
 	// knowledge-base SignalR hub. Selective encryption: source document blobs and display names are encrypted
 	// at rest; the extracted chunk text and its FTS search index are stored unencrypted in local SQLite.
 	knowledgeBase: true,
-	// Image generation (stable-diffusion.cpp) surface. OFF by default — the runtime module (Lanes A–D) is built but
-	// not yet live-GPU verified, so the feature ships dark. Flip to true once an image model is installed and a
-	// generation has been verified end-to-end on the target hardware.
+	// Image generation (stable-diffusion.cpp) surface. ON by default — the runtime module (Lanes A–D) is built and
+	// has been live-GPU verified end-to-end on target hardware; ships as a flagship feature.
 	images: true,
 };
 
