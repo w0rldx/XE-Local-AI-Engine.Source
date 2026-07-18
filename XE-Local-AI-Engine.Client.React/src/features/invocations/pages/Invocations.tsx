@@ -10,6 +10,7 @@ import { withResponseValidation } from "@/core/api/ResponseValidation";
 import { toInvocationMonitor } from "@/features/invocations/models/InvocationMonitorMappers";
 import type { InvocationCurrentDto, InvocationHistoryDto } from "@/features/invocations/models/InvocationMonitorModel";
 import {
+	buildInvocationSummary,
 	formatInvocationDuration,
 	formatInvocationText,
 	formatInvocationTimestamp,
@@ -87,6 +88,9 @@ function CurrentInvocation({ current }: { readonly current: InvocationCurrentDto
 					</Stack>
 					<Badge color={getInvocationStatusColor(current.status)}>{current.status}</Badge>
 				</Group>
+				<Text fw={500} data-testid="invocation-summary">
+					{buildInvocationSummary(current, t)}
+				</Text>
 				<SimpleGrid cols={{ base: 1, md: 2 }} spacing="sm">
 					<Text>{t("pages.invocations.monitor.current.model", "Model: {{value}}", { value: formatInvocationText(current.modelUsed) })}</Text>
 					<Text>{t("pages.invocations.monitor.current.conversation", "Conversation: {{value}}", { value: current.conversationId })}</Text>

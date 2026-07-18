@@ -1510,6 +1510,17 @@
 					"copy": "Copy trace id",
 					"copied": "Copied"
 				},
+				"summary": {
+					"pending": "Waiting to start on {{model}}.",
+					"running": "Running on {{model}} — {{chunks}} output chunks, {{thinking}} reasoning so far ({{tools}}).",
+					"completed": "Completed in {{duration}} with {{model}} — {{chunks}} output chunks, {{thinking}} reasoning, {{tools}}.",
+					"failed": "Failed after {{duration}} with {{model}} — {{reason}}.",
+					"cancelled": "Cancelled after {{duration}} with {{model}}.",
+					"unknown": "Invocation status is unknown.",
+					"toolApproval": "awaiting tool approval",
+					"toolPending": "{{count}} pending tool call(s)",
+					"toolNone": "no tool calls"
+				},
 				"current": {
 					"title": "Current invocation",
 					"empty": "No invocation is currently assigned or running.",
