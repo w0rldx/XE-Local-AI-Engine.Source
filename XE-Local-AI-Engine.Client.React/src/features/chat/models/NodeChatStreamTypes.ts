@@ -75,9 +75,16 @@ export interface NodeChatStreamEventDto {
 	// "loading_model" | "generating" — emitted before the first token while a local model cold-loads, so the UI can
 	// show a distinct "Loading model…" indicator instead of the generic typing dots. Absent for cloud/Ollama turns.
 	runtimePhase?: string | null;
+	// Approval request id: present on the `approval-requested` event only (UX-01). The durable key the browser echoes
+	// back to the loopback resolve endpoint to release the waiting tool call. `toolCallId` carries the tool-call id the
+	// approval belongs to (so the Approve/Deny controls attach to the matching card) and `toolName` the tool name.
+	approvalRequestId?: string | null;
 }
 
 export const nodeChatToolStreamEventTypes = {
 	toolCallRequested: "tool-call-requested",
 	toolCallCompleted: "tool-call-completed",
+	// A pending tool-approval request (UX-01): flips the matching tool card into a waiting-for-approval state carrying
+	// the approvalRequestId the Approve/Deny controls post back. Distinct from a plain tool-call-requested.
+	approvalRequested: "approval-requested",
 } as const;

@@ -89,7 +89,10 @@
 			"argsLabel": "Arguments",
 			"resultLabel": "Result",
 			"errorLabel": "Error",
-			"noOutput": "(no output)"
+			"noOutput": "(no output)",
+			"approvalPrompt": "This tool needs your approval to run.",
+			"approve": "Approve",
+			"deny": "Deny"
 		},
 		"notices": {
 			"modelSubstituted": "Model substituted",

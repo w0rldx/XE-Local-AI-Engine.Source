@@ -89,7 +89,10 @@
 			"argsLabel": "Argumente",
 			"resultLabel": "Ergebnis",
 			"errorLabel": "Fehler",
-			"noOutput": "(keine Ausgabe)"
+			"noOutput": "(keine Ausgabe)",
+			"approvalPrompt": "Dieses Tool benötigt deine Freigabe zur Ausführung.",
+			"approve": "Freigeben",
+			"deny": "Ablehnen"
 		},
 		"notices": {
 			"modelSubstituted": "Modell ersetzt",

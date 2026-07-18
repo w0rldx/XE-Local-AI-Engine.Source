@@ -29,6 +29,9 @@ export interface ToolEntryInput {
 	args?: string;
 	result?: string;
 	requiresApproval?: boolean;
+	// Set while the tool waits on the operator's approval decision (UX-01); the approval request id the resolve
+	// endpoint keys on. Cleared once the tool completes/rejects.
+	pendingApprovalRequestId?: string;
 }
 
 /** A mid-turn answer/narration run (rare for local models; here for forward-compat round-trips). */
@@ -60,6 +63,7 @@ function toToolPart(entry: ToolEntryInput): ChatToolPart {
 		args: entry.args,
 		result: entry.result,
 		requiresApproval: entry.requiresApproval,
+		pendingApprovalRequestId: entry.pendingApprovalRequestId,
 	};
 }
 

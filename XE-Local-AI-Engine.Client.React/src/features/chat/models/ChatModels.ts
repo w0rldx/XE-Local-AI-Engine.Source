@@ -41,6 +41,10 @@ export interface ChatToolPart {
 	args?: string;
 	result?: string;
 	requiresApproval?: boolean;
+	// When set (UX-01), the tool is paused awaiting the operator's decision; this is the approval request id the
+	// Approve/Deny controls post to the loopback resolve endpoint. Transient, live-only: cleared once the tool
+	// completes (approved) or is rejected, and never present on a reloaded/persisted turn.
+	pendingApprovalRequestId?: string;
 }
 
 /**

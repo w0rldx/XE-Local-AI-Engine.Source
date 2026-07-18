@@ -1,6 +1,7 @@
 // @vitest-environment jsdom
 
 import { MantineProvider } from "@mantine/core";
+import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import type { ReactElement, ReactNode } from "react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
@@ -23,8 +24,20 @@ import { ChatMessage } from "@/features/chat/components/ChatMessage";
 import type { ChatMessageModel } from "@/features/chat/models/ChatModels";
 import { useNodeChatPreferencesStore } from "@/features/chat/stores/NodeChatPreferencesStore";
 
+// A tool-call card in the ordered parts can now fire the resolve-approval TanStack mutation (UX-01), so the render
+// tree needs a QueryClientProvider even for turns that never surface an approval. Kept as an element helper (not a
+// named component) so the test module stays fast-refresh-clean under biome's useComponentExportOnlyModules rule.
+function withProviders(ui: ReactNode): ReactElement {
+	const queryClient = new QueryClient({ defaultOptions: { mutations: { retry: false } } });
+	return (
+		<QueryClientProvider client={queryClient}>
+			<MantineProvider>{ui}</MantineProvider>
+		</QueryClientProvider>
+	);
+}
+
 function renderWithProviders(ui: ReactElement) {
-	return render(<MantineProvider>{ui}</MantineProvider>);
+	return render(withProviders(ui));
 }
 
 function assistantMessage(overrides: Partial<ChatMessageModel> = {}): ChatMessageModel {
@@ -147,11 +160,7 @@ describe("ChatMessage actions", () => {
 		);
 		expect(screen.queryByLabelText("Good response")).toBeNull();
 
-		rerender(
-			<MantineProvider>
-				<ChatMessage message={assistantMessage()} onSubmitFeedback={vi.fn()} showFeedbackControls={true} />
-			</MantineProvider>,
-		);
+		rerender(withProviders(<ChatMessage message={assistantMessage()} onSubmitFeedback={vi.fn()} showFeedbackControls={true} />));
 		expect(screen.getByLabelText("Good response")).toBeTruthy();
 		expect(screen.getByLabelText("Bad response")).toBeTruthy();
 	});
@@ -398,11 +407,7 @@ describe("ChatMessage actions", () => {
 		);
 		expect(screen.queryByTestId("chat-message-menu-assistant-1")).toBeNull();
 
-		rerender(
-			<MantineProvider>
-				<ChatMessage message={assistantMessage({ id: "user-1", role: "user", content: "Question?" })} />
-			</MantineProvider>,
-		);
+		rerender(withProviders(<ChatMessage message={assistantMessage({ id: "user-1", role: "user", content: "Question?" })} />));
 		expect(screen.queryByTestId("chat-message-menu-user-1")).toBeNull();
 	});
 

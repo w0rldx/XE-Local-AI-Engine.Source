@@ -426,6 +426,126 @@ describe("node chat stream state", () => {
 		expect(failed.timelineEntry).toMatchObject({ id: "call-1", state: "failed", toolResult: "boom" });
 	});
 
+	it("flips the matching tool card to waiting-for-approval and attaches the approval request id (UX-01)", () => {
+		const optimistic = appendOptimisticNodeChatSend(
+			conversation,
+			{ userMessageId: "user-1", assistantMessageId: "assistant-1", requestId: "request-1" },
+			"delete it",
+			"2026-05-24T00:00:01.000Z",
+		);
+		// The approval-gated tool first surfaces its own tool-call-requested card (requiresApproval flag off there).
+		const requested = applyNodeChatStreamEvent(
+			optimistic,
+			streamEvent({
+				type: nodeChatStreamEventTypes.toolCallRequested,
+				toolCallId: "call-1",
+				toolName: "delete_file",
+				requiresApproval: false,
+				content: null,
+				delta: null,
+			}),
+		);
+
+		const approval = applyNodeChatStreamEvent(
+			requested.conversation,
+			streamEvent({
+				type: nodeChatStreamEventTypes.approvalRequested,
+				toolCallId: "call-1",
+				toolName: "delete_file",
+				approvalRequestId: "approval-42",
+				content: null,
+				delta: null,
+			}),
+		);
+
+		const toolPart = approval.streamingMessage.parts?.find((part) => part.kind === "tool");
+		expect(toolPart).toMatchObject({
+			kind: "tool",
+			id: "call-1",
+			state: "waiting",
+			requiresApproval: true,
+			pendingApprovalRequestId: "approval-42",
+		});
+		// The approval prompt never mutates content/status and never yields a timeline entry.
+		expect(approval.timelineEntry).toBeUndefined();
+		expect(approval.isTerminal).toBe(false);
+		expect(approval.streamingMessage.isActive).toBe(true);
+	});
+
+	it("creates a waiting tool card from an approval event even when no tool-call-requested card exists yet (UX-01)", () => {
+		const approval = applyNodeChatStreamEvent(
+			conversation,
+			streamEvent({
+				type: nodeChatStreamEventTypes.approvalRequested,
+				toolCallId: "call-7",
+				toolName: "run_shell",
+				approvalRequestId: "approval-77",
+				content: null,
+				delta: null,
+			}),
+		);
+
+		const toolPart = approval.streamingMessage.parts?.find((part) => part.kind === "tool");
+		expect(toolPart).toMatchObject({
+			kind: "tool",
+			id: "call-7",
+			name: "run_shell",
+			state: "waiting",
+			requiresApproval: true,
+			pendingApprovalRequestId: "approval-77",
+		});
+	});
+
+	it("clears the pending approval once the approved tool completes (UX-01)", () => {
+		const optimistic = appendOptimisticNodeChatSend(
+			conversation,
+			{ userMessageId: "user-1", assistantMessageId: "assistant-1", requestId: "request-1" },
+			"delete it",
+			"2026-05-24T00:00:01.000Z",
+		);
+		const requested = applyNodeChatStreamEvent(
+			optimistic,
+			streamEvent({
+				type: nodeChatStreamEventTypes.toolCallRequested,
+				toolCallId: "call-1",
+				toolName: "delete_file",
+				requiresApproval: false,
+				content: null,
+				delta: null,
+			}),
+		);
+		const approval = applyNodeChatStreamEvent(
+			requested.conversation,
+			streamEvent({
+				type: nodeChatStreamEventTypes.approvalRequested,
+				toolCallId: "call-1",
+				toolName: "delete_file",
+				approvalRequestId: "approval-42",
+				content: null,
+				delta: null,
+			}),
+		);
+		const completed = applyNodeChatStreamEvent(
+			approval.conversation,
+			streamEvent({
+				type: nodeChatStreamEventTypes.toolCallCompleted,
+				toolCallId: "call-1",
+				toolName: "delete_file",
+				result: "deleted",
+				isError: false,
+				content: null,
+				delta: null,
+			}),
+		);
+
+		const toolPart = completed.conversation.messages
+			.find((message) => message.id === "assistant-1")
+			?.parts?.find((part) => part.kind === "tool");
+		expect(toolPart).toMatchObject({ id: "call-1", state: "received", result: "deleted" });
+		// The pending approval is cleared once the tool resolves so the controls disappear.
+		expect(toolPart && "pendingApprovalRequestId" in toolPart ? toolPart.pendingApprovalRequestId : undefined).toBeUndefined();
+	});
+
 	it("builds ordered parts for reasoning → tool → reasoning, splitting a new Thoughts block after the tool", () => {
 		const optimistic = appendOptimisticNodeChatSend(
 			conversation,

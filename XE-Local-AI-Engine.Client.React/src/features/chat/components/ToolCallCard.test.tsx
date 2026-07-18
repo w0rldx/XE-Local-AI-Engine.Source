@@ -1,15 +1,30 @@
 // @vitest-environment jsdom
 
 import { MantineProvider } from "@mantine/core";
-import { cleanup, fireEvent, render, screen } from "@testing-library/react";
+import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import type { ReactElement } from "react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { ToolCallCard } from "@/features/chat/components/ToolCallCard";
 import type { ChatToolPart } from "@/features/chat/models/ChatModels";
 
+// The Approve/Deny controls fire the generated resolve-approval mutation; stub its mutationFn so the click wiring can
+// be asserted without a backend. `withResponseValidation` (which the card composes over the mutation) preserves the
+// mutationFn, so the spy still receives the mutate variables. Only this one export is overridden.
+const resolveApprovalSpy = vi.fn().mockResolvedValue({ requestId: "approval-42", approved: true });
+vi.mock("@/core/api/generated/@tanstack/react-query.gen", async (importOriginal) => ({
+	...(await importOriginal<typeof import("@/core/api/generated/@tanstack/react-query.gen")>()),
+	resolveToolApprovalMutation: () => ({ mutationFn: resolveApprovalSpy }),
+}));
+
 function renderWithProviders(ui: ReactElement) {
-	return render(<MantineProvider>{ui}</MantineProvider>);
+	const queryClient = new QueryClient({ defaultOptions: { mutations: { retry: false } } });
+	return render(
+		<QueryClientProvider client={queryClient}>
+			<MantineProvider>{ui}</MantineProvider>
+		</QueryClientProvider>,
+	);
 }
 
 function toolPart(overrides: Partial<ChatToolPart> = {}): ChatToolPart {
@@ -18,6 +33,7 @@ function toolPart(overrides: Partial<ChatToolPart> = {}): ChatToolPart {
 
 describe("ToolCallCard", () => {
 	beforeEach(() => {
+		resolveApprovalSpy.mockClear();
 		Object.defineProperty(window, "matchMedia", {
 			writable: true,
 			value: vi.fn().mockImplementation((query: string) => ({
@@ -89,6 +105,49 @@ describe("ToolCallCard", () => {
 		renderWithProviders(<ToolCallCard part={toolPart({ state: "requesting", result: undefined })} />);
 
 		expect(screen.queryByTestId("chat-tool-call-no-output-get_time")).toBeNull();
+	});
+
+	it("renders Approve/Deny controls while awaiting an approval decision (UX-01)", () => {
+		renderWithProviders(<ToolCallCard part={toolPart({ state: "waiting", requiresApproval: true, pendingApprovalRequestId: "approval-42" })} />);
+
+		expect(screen.getByTestId("chat-tool-call-approve-get_time")).toBeTruthy();
+		expect(screen.getByTestId("chat-tool-call-deny-get_time")).toBeTruthy();
+	});
+
+	it("does not render approval controls when there is no pending approval request id", () => {
+		// A shielded tool that is not (yet) awaiting a decision shows no Approve/Deny controls.
+		renderWithProviders(<ToolCallCard part={toolPart({ state: "waiting", requiresApproval: true })} />);
+
+		expect(screen.queryByTestId("chat-tool-call-approve-get_time")).toBeNull();
+		expect(screen.queryByTestId("chat-tool-call-deny-get_time")).toBeNull();
+	});
+
+	it("does not render approval controls once the tool has resolved", () => {
+		// A stale pendingApprovalRequestId on a received card must not resurrect the controls.
+		renderWithProviders(<ToolCallCard part={toolPart({ state: "received", result: "ok", pendingApprovalRequestId: "approval-42" })} />);
+
+		expect(screen.queryByTestId("chat-tool-call-approve-get_time")).toBeNull();
+	});
+
+	it("posts the operator's approve decision to the resolve endpoint and hides the controls (UX-01)", async () => {
+		renderWithProviders(<ToolCallCard part={toolPart({ state: "waiting", requiresApproval: true, pendingApprovalRequestId: "approval-42" })} />);
+
+		fireEvent.click(screen.getByTestId("chat-tool-call-approve-get_time"));
+
+		await waitFor(() => expect(resolveApprovalSpy).toHaveBeenCalledTimes(1));
+		// TanStack passes (variables, context) to mutationFn — assert only the variables the card supplies.
+		expect(resolveApprovalSpy.mock.calls[0]?.[0]).toEqual({ body: { requestId: "approval-42", approved: true } });
+		// The decision is optimistic: the controls disappear as soon as the operator clicks.
+		await waitFor(() => expect(screen.queryByTestId("chat-tool-call-approve-get_time")).toBeNull());
+	});
+
+	it("posts the operator's deny decision with approved=false (UX-01)", async () => {
+		renderWithProviders(<ToolCallCard part={toolPart({ state: "waiting", requiresApproval: true, pendingApprovalRequestId: "approval-77" })} />);
+
+		fireEvent.click(screen.getByTestId("chat-tool-call-deny-get_time"));
+
+		await waitFor(() => expect(resolveApprovalSpy).toHaveBeenCalledTimes(1));
+		expect(resolveApprovalSpy.mock.calls[0]?.[0]).toEqual({ body: { requestId: "approval-77", approved: false } });
 	});
 
 	it("starts minimized and keeps an operator-expanded state across a remount (keyed by tool id)", () => {
