@@ -93,6 +93,25 @@ public sealed class KnowledgeBaseOptions
     /// </summary>
     public int QueryEmbeddingCacheTtlSeconds { get; set; } = 300;
 
+    /// <summary>
+    ///     Which fusion combines the lexical (BM25) and semantic (cosine) arms on the DEFAULT no-reranker retrieval path.
+    ///     <see cref="RankFusionStrategy.Rrf" /> is classic score-agnostic Reciprocal Rank Fusion (rank position only).
+    ///     <see cref="RankFusionStrategy.ScoreAware" /> (default) additionally tilts each fused contribution by the arm's
+    ///     min-max normalized relevance score, so a marginal rank-1 hit no longer fuses identically to a strong one; it
+    ///     degrades to pure RRF whenever an arm carries no usable score spread, so it is never worse than
+    ///     <see cref="RankFusionStrategy.Rrf" /> on a failure/degenerate path. Independent of the reranker: when a reranker
+    ///     model is configured it still rescores the fused pool afterwards.
+    /// </summary>
+    public RankFusionStrategy FusionStrategy { get; set; } = RankFusionStrategy.ScoreAware;
+
+    /// <summary>
+    ///     Maximum multiplicative score tilt applied under <see cref="RankFusionStrategy.ScoreAware" />: an arm's
+    ///     top-normalized entry has its <c>1/(k+rank)</c> contribution scaled by <c>1 + FusionScoreWeight</c>, its weakest
+    ///     by <c>1</c> (unchanged). <c>0</c> reduces score-aware fusion to pure RRF. Default <c>1.0</c>. Clamped to be
+    ///     non-negative.
+    /// </summary>
+    public double FusionScoreWeight { get; set; } = 1.0;
+
     /// <summary>Upper bound on the plaintext length of a single chunk (characters), before overlap.</summary>
     public int MaxChunkChars { get; set; } = 2000;
 

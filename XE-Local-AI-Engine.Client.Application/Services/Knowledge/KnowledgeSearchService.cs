@@ -102,10 +102,16 @@ public sealed class KnowledgeSearchService : IKnowledgeSearchService
         var embedArm = RunEmbedArmAsync(request.Query, cancellationToken);
         await Task.WhenAll(ftsArm, embedArm).ConfigureAwait(false);
 
-        var ftsRanked = (await ftsArm.ConfigureAwait(false)).Select(hit => hit.ChunkId).ToList();
+        // Carry each arm's SCORE into fusion, not just its rank. The two raw scales are incomparable and oriented
+        // differently — FTS5 BM25 is more-NEGATIVE-for-stronger, cosine is higher-for-stronger — so orient both to
+        // "higher = more relevant" here (negate BM25) and leave the per-arm normalization/blend to the fusion service.
+        // Score-agnostic RRF (RankFusionStrategy.Rrf) ignores these scores, so this is a strict superset of the old path.
+        var ftsRanked = (await ftsArm.ConfigureAwait(false))
+                        .Select(hit => new RankFusionInput(hit.ChunkId, -hit.Bm25Score))
+                        .ToList();
         var (queryVector, resolvedModel) = await embedArm.ConfigureAwait(false);
 
-        var vectorRanked = new List<Guid>();
+        var vectorRanked = new List<RankFusionInput>();
         if (!queryVector.IsEmpty)
         {
             var vectorStart = Stopwatch.GetTimestamp();
@@ -113,10 +119,10 @@ public sealed class KnowledgeSearchService : IKnowledgeSearchService
                                                        .SearchAsync(queryVector, resolvedModel, candidatePool, request.DocumentId, cancellationToken)
                                                        .ConfigureAwait(false);
             RecordStage("vector", vectorStart);
-            vectorRanked = vectorHits.Select(hit => hit.ChunkId).ToList();
+            vectorRanked = vectorHits.Select(hit => new RankFusionInput(hit.ChunkId, hit.Score)).ToList();
         }
 
-        var fused = _fusion.Fuse([ftsRanked, vectorRanked]);
+        var fused = _fusion.FuseScored([ftsRanked, vectorRanked], _options.FusionStrategy, _options.FusionScoreWeight);
         if (fused.Count == 0)
         {
             return new KnowledgeSearchResult([]);
