@@ -10,6 +10,10 @@ using XE_Local_AI_Engine.AI.Agent.Tools;
 
 internal sealed class OrchestrationAgentFactory : IOrchestrationAgentFactory
 {
+    // The Ollama num_ctx option key, byte-identical to InvocationAgentFactory.OllamaNumCtxKey and the key
+    // ProviderCallBudgetChatClient reads — the per-participant effective context window rides it (ORC-07).
+    private const string NumCtxKey = "num_ctx";
+
     private readonly IChatClient _chatClient;
     private readonly IClientLocalToolRegistry _clientLocalToolRegistry;
     private readonly ILogger<OrchestrationAgentFactory> _logger;
@@ -111,12 +115,26 @@ internal sealed class OrchestrationAgentFactory : IOrchestrationAgentFactory
         // thinking capability. Instructions + the agent's own tools ride ChatOptions exactly as the positional ctor
         // moves them under the hood, so ChatClientAgent still detects the pre-decorated FICC and treats the agent tools
         // as AdditionalTools while handoff_to_* flows through (proven by the approval-across-handoff tests).
+        var additionalProperties = ParticipantReasoningOptions.Build(participant.ReasoningEffort, participant.SupportsThinking);
+
+        // ORC-07: carry this participant's launched effective context window as num_ctx so the innermost provider-round
+        // budgeter (ProviderCallBudgetChatClient) sizes THIS participant against the window ITS model was launched with,
+        // not the shared configured default — a participant pinned to a smaller-window model could otherwise be fed past
+        // its real window. Mirrors the single-agent InvocationAgentFactory num_ctx write; the ContainsKey guard leaves
+        // any per-send override (none on this workflow path today) in place.
+        if (participant.EffectiveContextTokens is { } effectiveContext
+            && effectiveContext > 0
+            && !additionalProperties.ContainsKey(NumCtxKey))
+        {
+            additionalProperties[NumCtxKey] = effectiveContext;
+        }
+
         var chatOptions = new ChatOptions
         {
             Instructions = participant.Instructions,
             Tools = tools,
             ModelId = participant.ModelId,
-            AdditionalProperties = ParticipantReasoningOptions.Build(participant.ReasoningEffort, participant.SupportsThinking)
+            AdditionalProperties = additionalProperties
         };
 
         return new ChatClientAgent(_chatClient,

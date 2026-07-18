@@ -22,6 +22,7 @@ public sealed partial class InvocationRunner
     private async Task<OrchestrationAgentDefinition> BuildOrchestrationDefinitionAsync(RuntimePackage package,
         OrchestrationSpec spec,
         string resolvedModel,
+        int? turnEffectiveContextTokens,
         StreamTransport transport,
         CancellationToken invocationToken)
     {
@@ -36,6 +37,14 @@ public sealed partial class InvocationRunner
                     participant.Key).ConfigureAwait(false);
             }
 
+            // ORC-07: resolve THIS participant's launched effective context window so its inner provider-round budgeter
+            // sizes against it, not the shared configured default.
+            var participantContextTokens = await ResolveParticipantContextTokensAsync(participantResolution.Model,
+                resolvedModel,
+                turnEffectiveContextTokens,
+                package.InvocationId,
+                invocationToken).ConfigureAwait(false);
+
             participants.Add(new OrchestrationParticipant
             {
                 Key = participant.Key,
@@ -49,6 +58,7 @@ public sealed partial class InvocationRunner
                 // so a participant pinned to a non-thinking model can never have a graded effort reach the think wire,
                 // and one pinned to a thinking model keeps its reasoning even when the turn model cannot think.
                 SupportsThinking = participant.SupportsThinking,
+                EffectiveContextTokens = participantContextTokens,
                 Tools = BuildParticipantTools(package, participant.Tools)
             });
         }
@@ -74,6 +84,49 @@ public sealed partial class InvocationRunner
             MaxTurnsPerAgent = spec.MaxTurnsPerAgent,
             ReturnToPrevious = spec.ReturnToPrevious
         };
+    }
+
+    /// <summary>
+    ///     ORC-07: resolves the launched effective context window (in tokens) for one orchestration participant so its
+    ///     inner provider-round budgeter sizes against it. Precedence:
+    ///     <list type="number">
+    ///         <item>
+    ///             <description>
+    ///                 A participant on the SAME model as the turn reuses the turn's already-read-back effective window
+    ///                 (<see cref="ResolveEffectiveContextTokensAsync" /> ran once in <see cref="PrepareLocalRuntimeAsync" />)
+    ///                 — no extra probe.
+    ///             </description>
+    ///         </item>
+    ///         <item>
+    ///             <description>
+    ///                 A participant on a DIFFERENT model reads its window only when a llama.cpp server is ALREADY
+    ///                 resident for it (<c>GetRuntimeInfo</c> is a pure in-memory read that returns <see langword="null" />
+    ///                 when the model is not running — it never triggers a load).
+    ///             </description>
+    ///         </item>
+    ///     </list>
+    ///     Otherwise <see langword="null" />: participant models are deliberately NOT pre-warmed here (warming every
+    ///     participant up front is out of scope — VRAM pressure + latency), so a not-yet-resident participant on a
+    ///     distinct model keeps the inner budgeter on its configured default window until that participant is launched.
+    /// </summary>
+    private async Task<int?> ResolveParticipantContextTokensAsync(string participantModel,
+        string resolvedModel,
+        int? turnEffectiveContextTokens,
+        Guid invocationId,
+        CancellationToken cancellationToken)
+    {
+        if (string.Equals(participantModel, resolvedModel, StringComparison.OrdinalIgnoreCase))
+        {
+            return turnEffectiveContextTokens;
+        }
+
+        var provider = await ResolveWarmableProviderAsync(participantModel, invocationId, cancellationToken).ConfigureAwait(false);
+        if (provider is null)
+        {
+            return null;
+        }
+
+        return await ResolveEffectiveContextTokensAsync(provider, participantModel, invocationId, cancellationToken).ConfigureAwait(false);
     }
 
     private IReadOnlyList<AITool> BuildParticipantTools(RuntimePackage package, IReadOnlyList<AllowedToolDto> tools)
@@ -224,7 +277,15 @@ public sealed partial class InvocationRunner
         StreamTransport transport,
         ContextBudgetNoticeGate gate)
     {
-        var result = _contextBudgeter.Budget(messages, turnPolicy.ContextCapacityTokens, turnPolicy.ReservedOutputTokens);
+        // ORC-02: the resolved system prompt is prepended to the request AFTER this history (BuildInvocationDefinition),
+        // and tool JSON schemas are never in the message list — so feed both to the budgeter as fixed overhead. It folds
+        // them into the effective budget, mirroring the inner ProviderCallBudgetChatClient, so the outer budget and its
+        // hard-stop measure the true round rather than history alone.
+        var result = _contextBudgeter.Budget(messages,
+            turnPolicy.ContextCapacityTokens,
+            turnPolicy.ReservedOutputTokens,
+            package.ResolvedSystemPrompt,
+            BuildToolBudgetDefinitions(package));
 
         if (!result.Trimmed && !result.ExceedsBudget)
         {
@@ -344,6 +405,23 @@ public sealed partial class InvocationRunner
                           return new ChatMessage(MapRole(message.Role), contents);
                       })
                       .ToList();
+    }
+
+    /// <summary>
+    ///     ORC-02: renders each offered tool's model-facing definition (name + description + parameter schema) as one
+    ///     text unit for the outer context budgeter's fixed-overhead estimate. Reads the raw <see cref="AllowedToolDto" />
+    ///     schema string — present for BOTH Api-side and client-local tools — rather than the built bridge, whose
+    ///     client-local offer placeholders carry no schema until the factory swaps them, so the schema footprint is
+    ///     counted for every tool. Returns an empty list when the package offers no tools.
+    /// </summary>
+    private static IReadOnlyList<string> BuildToolBudgetDefinitions(RuntimePackage package)
+    {
+        if (package.AllowedTools.Count == 0)
+        {
+            return [];
+        }
+
+        return [.. package.AllowedTools.Select(static tool => string.Concat(tool.Name, "\n", tool.Description, "\n", tool.ParameterSchema))];
     }
 
     private IReadOnlyList<AITool> BuildInvocationTools(RuntimePackage package)

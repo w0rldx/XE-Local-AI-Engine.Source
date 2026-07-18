@@ -232,6 +232,52 @@ public sealed class ConversationContextBudgeterTests
         AssertEx.True(ContainsText(result.Messages, "c"));
     }
 
+    [Test]
+    public void Budget_FoldsSystemPromptAndToolOverheadIntoCapacity_TrimsWhatHistoryAloneWouldNot()
+    {
+        // ORC-02: the system prompt is prepended AFTER this history and tool schemas never appear in the message list,
+        // yet both count against the launched window. A history that fits when measured alone must now trim once the
+        // fixed overhead is folded in — otherwise the outer budget passes an actually-over-window round through.
+        // Four 10-char turns (70 total); keep-count 2 protects turns 2 and 3, leaving turns 0 and 1 (40) droppable.
+        var messages = new List<ChatMessage>
+        {
+            User("user-msg-0"),
+            Assistant("asst-msg-0"),
+            User("user-msg-1"),
+            Assistant("asst-msg-1"),
+            User("user-msg-2"),
+            Assistant("asst-msg-2"),
+            User("user-msg-3")
+        };
+        var sut = CreateSut(CharCountEstimator(), recentTurnKeepCount: 2);
+
+        // Control: history (70) fits a 70-token capacity with no overhead, so nothing is trimmed.
+        var control = sut.Budget(messages, contextTokenCapacity: 70, reservedOutputTokens: 0);
+        AssertEx.False(control.Trimmed, "history alone fits the capacity");
+        AssertEx.True(ReferenceEquals(messages, control.Messages), "an exactly-fitting history passes through unchanged");
+
+        // A 20-char system prompt folds in 20 tokens of overhead: effective budget 50 -> the oldest turn (20) drops.
+        var withPrompt = sut.Budget(messages, contextTokenCapacity: 70, reservedOutputTokens: 0, systemPrompt: new string('s', 20));
+        AssertEx.True(withPrompt.Trimmed, "the system-prompt overhead must push the round over and force a trim");
+        AssertEx.False(withPrompt.ExceedsBudget);
+        AssertEx.Equal(expected: 2, withPrompt.MessagesDropped);
+        AssertEx.False(ContainsText(withPrompt.Messages, "user-msg-0"), "the oldest turn drops once the prompt overhead is counted");
+        AssertEx.True(ContainsText(withPrompt.Messages, "user-msg-1"), "only one turn needs to drop for the prompt-only overhead");
+
+        // Adding a 16-char tool definition folds in 16 more tokens: effective budget 34 -> a SECOND turn must drop,
+        // proving the tool-schema footprint is counted on top of the system prompt.
+        var withPromptAndTool = sut.Budget(messages,
+            contextTokenCapacity: 70,
+            reservedOutputTokens: 0,
+            systemPrompt: new string('s', 20),
+            toolDefinitions: [new string('t', 16)]);
+        AssertEx.True(withPromptAndTool.Trimmed);
+        AssertEx.False(withPromptAndTool.ExceedsBudget);
+        AssertEx.Equal(expected: 4, withPromptAndTool.MessagesDropped);
+        AssertEx.False(ContainsText(withPromptAndTool.Messages, "user-msg-1"), "the tool-schema overhead forces a second turn to drop");
+        AssertEx.True(ContainsText(withPromptAndTool.Messages, "user-msg-2"), "the protected recent turns are still kept");
+    }
+
     private static ConversationContextBudgeter CreateSut(ITokenEstimator estimator,
         int recentTurnKeepCount = 4,
         int historicalToolResultExcerptChars = 2000)
