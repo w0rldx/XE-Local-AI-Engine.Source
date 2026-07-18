@@ -138,6 +138,40 @@ public sealed class ChatStreamEventMapperTests
     }
 
     [Test]
+    public void ApprovalRequestedEvent_CarriesCallIdToolNameAndApprovalRequestId()
+    {
+        var conversationId = Guid.NewGuid();
+        var messageId = Guid.NewGuid();
+        var requestId = Guid.NewGuid();
+        var payload = new ApprovalLifecyclePayload
+        {
+            InvocationId = Guid.NewGuid(),
+            RequestId = "approval-abc",
+            CallId = "call-9",
+            ToolName = "search_web",
+            Description = "A tool call (call-9) requires approval before it runs."
+        };
+
+        var mapped = ChatStreamEventMapper.ApprovalRequestedEvent(conversationId, messageId, requestId, payload, Timestamp, sequence: 12);
+
+        AssertEx.Equal(ChatStreamEventTypes.ApprovalRequested, mapped.Type);
+        AssertEx.Equal(NodeChatMessageStatusValues.Streaming, mapped.Status);
+        AssertEx.Equal(conversationId, mapped.ConversationId);
+        AssertEx.Equal(messageId, mapped.MessageId);
+        AssertEx.Equal(requestId, mapped.RequestId);
+        AssertEx.Equal(expected: 12L, mapped.Sequence);
+        AssertEx.Equal(Timestamp, mapped.OccurredAtUtc);
+        // The tool-call id rides on ToolCallId so the browser can attach the approve and deny controls to the
+        // matching card, while the approval request id rides on its own field apart from the turn correlation id.
+        AssertEx.Equal("call-9", mapped.ToolCallId);
+        AssertEx.Equal("search_web", mapped.ToolName);
+        AssertEx.Equal("approval-abc", mapped.ApprovalRequestId);
+        // A pending approval carries no answer content and is not a completed tool result.
+        AssertEx.Null(mapped.Result);
+        AssertEx.Null(mapped.Delta);
+    }
+
+    [Test]
     public void AccumulateNotice_AppendsANoticePartCarryingKindAndMessage()
     {
         var parts = new NodeChatPartAccumulator();

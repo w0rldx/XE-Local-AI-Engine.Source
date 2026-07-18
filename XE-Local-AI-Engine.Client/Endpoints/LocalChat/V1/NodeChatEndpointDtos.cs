@@ -80,6 +80,25 @@ public sealed class CancelNodeChatMessageRequest
     public Guid RequestId { get; init; }
 }
 
+/// <summary>
+///     The operator's decision on a pending tool-approval request (UX-01). <see cref="RequestId" /> is the approval
+///     request id the <c>approval-requested</c> stream event carried (a plain string, not a Guid — the runner mints it
+///     as an opaque key), which the runner uses to release the exact waiting tool call.
+/// </summary>
+public sealed class ResolveToolApprovalRequest
+{
+    public required string RequestId { get; init; }
+
+    public required bool Approved { get; init; }
+}
+
+public sealed class ResolveToolApprovalResponse
+{
+    public required string RequestId { get; init; }
+
+    public required bool Approved { get; init; }
+}
+
 public sealed class BranchNodeChatConversationRequest
 {
     public Guid ConversationId { get; init; }

@@ -32,6 +32,13 @@ public static class ChatStreamEventTypes
     ///     content stream. See <see cref="XE_Local_AI_Engine.Client.Services.Events.TurnNoticePayload" />.
     /// </summary>
     public const string AssistantNotice = "assistant-notice";
+
+    /// <summary>
+    ///     A tool-approval request the in-flight turn is paused on (UX-01). Carries the tool-call id (correlating it to
+    ///     the waiting tool-call card), the tool name, and the <see cref="ChatStreamEvent.ApprovalRequestId" /> the
+    ///     browser echoes back to the loopback resolve endpoint. Status stays <c>streaming</c>; no content rides it.
+    /// </summary>
+    public const string ApprovalRequested = "approval-requested";
 }
 
 public sealed record NodeChatStreamRequest(
@@ -89,4 +96,9 @@ public sealed record ChatStreamEvent(
     // Runtime phase (AssistantPhase events only): the wire form of InvocationRuntimePhase — "preparing_runtime",
     // "loading_model", or "generating" — so the client can show a distinct model-loading indicator before the first
     // token. Trailing optional so every existing event type's wire shape is unchanged.
-    string? RuntimePhase = null);
+    string? RuntimePhase = null,
+    // Approval request id (ApprovalRequested events only, UX-01): the durable key the browser echoes back to the
+    // loopback resolve endpoint to release the waiting run. Distinct from the top-level RequestId (the turn
+    // correlation guid). The tool-call id rides ToolCallId and the tool name rides ToolName. Trailing optional so
+    // every existing event type's wire shape is unchanged.
+    string? ApprovalRequestId = null);

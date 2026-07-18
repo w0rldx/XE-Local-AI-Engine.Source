@@ -263,6 +263,12 @@ public sealed class WorkerShutdownDrainServiceTests
             remove => _ = value;
         }
 
+        event EventHandler<ApprovalRequestedChangedEventArgs>? IWorkerEventDispatcher.ApprovalRequestedChanged
+        {
+            add => _ = value;
+            remove => _ = value;
+        }
+
         public void StopAcceptingRemoteInvocations()
         {
             IsAcceptingRemoteInvocations = false;
@@ -346,6 +352,11 @@ public sealed class WorkerShutdownDrainServiceTests
         }
 
         public Task ReportTurnNoticeAsync(TurnNoticePayload payload)
+        {
+            return Task.CompletedTask;
+        }
+
+        public Task ReportApprovalLifecycleAsync(ApprovalLifecyclePayload payload)
         {
             return Task.CompletedTask;
         }
