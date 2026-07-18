@@ -14,6 +14,14 @@ public interface IAgentExecutionLogStore
     Task<AgentExecutionLogRecord> AddAsync(AgentExecutionLogInput input, CancellationToken cancellationToken = default);
 
     /// <summary>
+    ///     Appends a single tool-approval DECISION audit row (<see cref="AgentExecutionLogRecordKind.ApprovalDecision" />),
+    ///     assigning <c>Id</c> and <c>CreatedAtUtc</c> (OPP-03). Metadata only — no message content, never encrypted: the
+    ///     tool name, the resolved decision (approve / deny / timeout), the decision source (local / hub), and the tool's
+    ///     risk category are all non-sensitive category labels, reused across existing columns without a schema change.
+    /// </summary>
+    Task AddApprovalDecisionAsync(ApprovalDecisionAuditInput input, CancellationToken cancellationToken = default);
+
+    /// <summary>
     ///     Queryable read path for the versioned durable run envelopes (<see cref="AgentExecutionLogRecordKind.ChatRunEnvelope" />),
     ///     newest first, optionally scoped to one conversation. Each row carries its <c>SchemaVersion</c> so a reader can
     ///     tell shapes apart. Metadata only — no message content.
@@ -82,6 +90,36 @@ public static class AgentUsageProviders
 }
 
 /// <summary>
+///     Canonical, lowercase values of the tool-approval DECISION dimension carried on approval-decision audit rows
+///     (OPP-03). Non-sensitive category labels (stored plaintext) — never message content. Also the metric-tag values for
+///     the <c>decision</c> dimension so the row and the counter agree on one vocabulary.
+/// </summary>
+public static class ApprovalDecisions
+{
+    /// <summary>The operator approved the tool call.</summary>
+    public const string Approve = "approve";
+
+    /// <summary>The operator denied the tool call.</summary>
+    public const string Deny = "deny";
+
+    /// <summary>No decision arrived before the pending-approval age elapsed; the turn fails as before.</summary>
+    public const string Timeout = "timeout";
+}
+
+/// <summary>
+///     Canonical, lowercase values of the tool-approval SOURCE dimension carried on approval-decision audit rows (OPP-03):
+///     where the decision was resolved. Non-sensitive category labels (stored plaintext) — never message content.
+/// </summary>
+public static class ApprovalDecisionSources
+{
+    /// <summary>Resolved on the loopback (desktop/local) approval endpoint — no worker hub in the round-trip.</summary>
+    public const string Local = "local";
+
+    /// <summary>Resolved through the platform worker hub.</summary>
+    public const string Hub = "hub";
+}
+
+/// <summary>
 ///     Shared constants for the durable run-envelope record so the store writer and the startup recovery backfill stamp
 ///     the same schema version (single source of truth).
 /// </summary>
@@ -106,8 +144,30 @@ public enum AgentExecutionLogRecordKind
     AdaptiveMemoryDiagnostics = 0,
 
     /// <summary>Durable per-invocation run envelope: one content-free row per ordinary chat invocation at terminalization (MED-007).</summary>
-    ChatRunEnvelope = 1
+    ChatRunEnvelope = 1,
+
+    /// <summary>
+    ///     Tool-approval decision audit (OPP-03): one content-free row per resolved approval decision (approve / deny /
+    ///     timeout). Reuses existing metadata columns — no message content, never encrypted. Excluded from the
+    ///     diagnostics view (kind 0) and the run-envelope ledger (kind 1) since each read path filters to its own kind;
+    ///     pruned by the same whole-table retention sweep.
+    /// </summary>
+    ApprovalDecision = 2
 }
+
+/// <summary>
+///     Fields supplied when appending a tool-approval DECISION audit row (OPP-03). Metadata only — supply NO message
+///     content and NO tool arguments. <see cref="Category" /> is a <c>ToolCategory</c> enum name, <see cref="Decision" />
+///     one of <see cref="ApprovalDecisions" />, and <see cref="Source" /> one of <see cref="ApprovalDecisionSources" /> —
+///     all non-sensitive category labels. <see cref="LatencyMs" /> is the request→decision wall-clock in milliseconds.
+/// </summary>
+public sealed record ApprovalDecisionAuditInput(
+    Guid? InvocationId,
+    string ToolName,
+    string Category,
+    string Decision,
+    string Source,
+    long LatencyMs);
 
 /// <summary>
 ///     Versioned read projection of a durable run-envelope row (always

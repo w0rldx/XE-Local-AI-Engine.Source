@@ -56,6 +56,16 @@ public static class NodeMetrics
             description: "Number of MCP tool calls cancelled after exceeding their per-call timeout.");
 
     /// <summary>
+    ///     Incremented once per RESOLVED tool-approval decision (OPP-03). Tagged by <c>category</c> (the tool's
+    ///     <c>ToolCategory</c> name) and <c>decision</c> (approve | deny | timeout). Content-free — a count only; it
+    ///     carries no tool arguments, message content, or ids. A rising deny/timeout rate flags a policy that is prompting
+    ///     more than operators will accept.
+    /// </summary>
+    public static readonly Counter<long> ToolApprovalDecisionsTotal =
+        Meter.CreateCounter<long>("tool_approval_decisions_total",
+            description: "Number of resolved tool-approval decisions by category and decision.");
+
+    /// <summary>
     ///     Incremented each time a Hugging Face model download's body-copy loop stalls longer than the configured
     ///     read-idle timeout and is cancelled (surfaced as a transient failure the resume/retry path re-attempts). A
     ///     non-zero rate flags a CDN that accepts the connection and then stops sending data mid-body. Content-free — a

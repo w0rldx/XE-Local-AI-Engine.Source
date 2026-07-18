@@ -23,6 +23,7 @@ using XE_Local_AI_Engine.Client.Models.Encrypted;
 using XE_Local_AI_Engine.Client.Models.Enums;
 using XE_Local_AI_Engine.Client.Models.Events;
 using XE_Local_AI_Engine.Client.Persistence.Cryptography;
+using XE_Local_AI_Engine.Client.Services.Agents.Approval;
 using XE_Local_AI_Engine.Client.Services.Capabilities;
 using XE_Local_AI_Engine.Client.Services.Capacity;
 using XE_Local_AI_Engine.Client.Services.Chat;
@@ -1663,6 +1664,7 @@ public sealed class InvocationRunnerTests
             configuration,
             runtimeSettings,
             Options.Create(new SpawnOptions()),
+            Substitute.For<IToolApprovalAuditRecorder>(),
             NullLogger<InvocationRunner>.Instance);
     }
 

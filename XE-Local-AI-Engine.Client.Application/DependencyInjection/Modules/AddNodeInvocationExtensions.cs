@@ -5,6 +5,8 @@ using XE_Local_AI_Engine.Client.Persistence;
 using XE_Local_AI_Engine.Client.Persistence.Cryptography;
 using XE_Local_AI_Engine.Client.Persistence.Implementation;
 using XE_Local_AI_Engine.Client.Persistence.Stores;
+using XE_Local_AI_Engine.Client.Services.Agents.Approval;
+using XE_Local_AI_Engine.Client.Services.Agents.Approval.Implementation;
 using XE_Local_AI_Engine.Client.Services.Capabilities;
 using XE_Local_AI_Engine.Client.Services.Capabilities.Implementation;
 using XE_Local_AI_Engine.Client.Services.Connection;
@@ -59,6 +61,7 @@ internal static class AddNodeInvocationExtensions
                .ValidateOnStart();
         builder.Services.AddSingleton<ITokenEstimator, HeuristicTokenEstimator>();
         builder.Services.AddSingleton<IConversationContextBudgeter, ConversationContextBudgeter>();
+        builder.Services.AddSingleton<IToolApprovalAuditRecorder, ToolApprovalAuditRecorder>();
         builder.Services.AddSingleton<IInvocationRunner, InvocationRunner>();
         builder.Services.AddSingleton<IInvocationHistory, InvocationHistory>();
         builder.Services.AddSingleton<IWorkerEventDispatcher, WorkerEventDispatcher>();
