@@ -287,9 +287,10 @@ public sealed partial class InvocationRunner : IInvocationRunner
             // the unchanged single-agent loop. Both accumulate into `stream`, then share the completion block below.
             if (package.OrchestrationSpec is { } orchestrationSpec)
             {
-                // The orchestration path's OUTER conversation budgeter already sizes against the effective window via the
-                // updated turnPolicy above. Per-participant num_ctx (inner budgeter) propagation is out of scope here.
-                await RunOrchestrationAsync(package, orchestrationSpec, resolvedModel, transport, stream, turnPolicy, invocationToken).ConfigureAwait(false);
+                // The orchestration path's OUTER conversation budgeter sizes against the effective window via the updated
+                // turnPolicy above. ORC-07: the turn's effective window is also threaded per participant so each
+                // participant's INNER provider-round budgeter sizes against the window ITS model was launched with.
+                await RunOrchestrationAsync(package, orchestrationSpec, resolvedModel, transport, stream, turnPolicy, effectiveContextTokens, invocationToken).ConfigureAwait(false);
             }
             else
             {
@@ -960,9 +961,10 @@ public sealed partial class InvocationRunner : IInvocationRunner
         StreamTransport transport,
         StreamState stream,
         TurnPolicy turnPolicy,
+        int? effectiveContextTokens,
         CancellationToken invocationToken)
     {
-        var definition = await BuildOrchestrationDefinitionAsync(package, spec, resolvedModel, transport, invocationToken).ConfigureAwait(false);
+        var definition = await BuildOrchestrationDefinitionAsync(package, spec, resolvedModel, effectiveContextTokens, transport, invocationToken).ConfigureAwait(false);
 
         // Unify with the single-agent path (see TurnPolicy): the workflow seed is budgeted the same way the
         // single-agent path budgets its initial assembly, so a long conversation cannot silently overrun the window

@@ -24,11 +24,22 @@ public sealed class ConversationContextBudgeter : IConversationContextBudgeter
         _options = options.Value;
     }
 
-    public ConversationBudgetResult Budget(IReadOnlyList<ChatMessage> messages, int contextTokenCapacity, int reservedOutputTokens)
+    public ConversationBudgetResult Budget(IReadOnlyList<ChatMessage> messages,
+        int contextTokenCapacity,
+        int reservedOutputTokens,
+        string? systemPrompt = null,
+        IReadOnlyList<string>? toolDefinitions = null)
     {
         ArgumentNullException.ThrowIfNull(messages);
 
-        var effectiveBudget = Math.Max(contextTokenCapacity - reservedOutputTokens, 0);
+        // ORC-02: the system prompt is prepended to the request AFTER this history, and tool JSON schemas never appear
+        // in the message list at all — yet both count against the launched window. Folding their estimate into the
+        // effective budget stops the outer budget/hard-stop from being measured against history alone (which would let
+        // an actually-over-window request through, deferring to a late inner rejection). Mirrors the inner
+        // ProviderCallBudgetChatClient's Instructions + Tools overhead so the two budgeters approximately agree (the
+        // outer estimate over-counts slightly by framing each tool as its own System message — the safe direction).
+        var fixedOverhead = EstimateFixedOverhead(systemPrompt, toolDefinitions);
+        var effectiveBudget = Math.Max(contextTokenCapacity - reservedOutputTokens - fixedOverhead, 0);
         var estimatedBefore = _estimator.EstimateTokens(messages);
 
         if (messages.Count == 0 || estimatedBefore <= effectiveBudget)
@@ -137,6 +148,41 @@ public sealed class ConversationContextBudgeter : IConversationContextBudgeter
             EstimatedTokensAfter = currentEstimate,
             ExceedsBudget = currentEstimate > effectiveBudget
         };
+    }
+
+    /// <summary>
+    ///     ORC-02: estimates the fixed per-round input overhead that never appears as a droppable history message but
+    ///     still counts against the context window — the resolved system prompt (measured as a System message) plus the
+    ///     model-facing definition text of each advertised tool (measured as one framed unit each). Reuses the injected
+    ///     <see cref="ITokenEstimator" /> (deliberately the same conservative, upper-biased estimator the history uses),
+    ///     mirroring the inner <c>ProviderCallBudgetChatClient</c>'s Instructions + Tools estimate so the outer and inner
+    ///     budgeters size the same round the same way. Returns 0 when both are absent.
+    /// </summary>
+    private int EstimateFixedOverhead(string? systemPrompt, IReadOnlyList<string>? toolDefinitions)
+    {
+        var overhead = 0;
+
+        if (!string.IsNullOrEmpty(systemPrompt))
+        {
+            overhead += _estimator.EstimateTokens(new ChatMessage(ChatRole.System, systemPrompt));
+        }
+
+        if (toolDefinitions is { Count: > 0 })
+        {
+            foreach (var definition in toolDefinitions)
+            {
+                if (string.IsNullOrEmpty(definition))
+                {
+                    continue;
+                }
+
+                // One framed message per tool mirrors the inner estimator's per-tool framing overhead, so a tool-heavy
+                // agent's schema footprint is counted rather than silently ignored.
+                overhead += _estimator.EstimateTokens(new ChatMessage(ChatRole.System, definition));
+            }
+        }
+
+        return overhead;
     }
 
     /// <summary>

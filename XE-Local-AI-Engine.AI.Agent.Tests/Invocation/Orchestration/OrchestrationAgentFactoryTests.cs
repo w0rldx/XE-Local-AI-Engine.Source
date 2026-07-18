@@ -337,6 +337,62 @@ public sealed class OrchestrationAgentFactoryTests
         AssertEx.Null(triageRequest.CodexReasoningEffort, "the Codex side channel is only set for a thinking-capable participant");
     }
 
+    [Test]
+    public async Task CreateAsync_ParticipantWithSmallerEffectiveWindow_BudgetsAgainstItNotTheDefault()
+    {
+        // ORC-07: a participant pinned to a model launched with a SMALLER window than the shared default must carry that
+        // window as num_ctx on its construction-time ChatOptions, so the innermost provider-round budgeter
+        // (ProviderCallBudgetChatClient) sizes THIS participant against its own launched window rather than
+        // ProviderCallBudgetOptions.DefaultContextTokens. A peer whose window is unknown must fall back — no num_ctx key
+        // — so the budgeter keeps its configured default for it. The construction-time ChatOptions are the only channel
+        // to a workflow participant (the outer runner's RunOptions never reach it), exactly as for model + reasoning.
+        using var fake = new RecordingHandoffChatClient(SpecialistAnswer);
+        var factory = CreateFactory(fake);
+
+        var triage = Triage() with
+        {
+            EffectiveContextTokens = 2048
+        };
+        var specialist = Specialist() with
+        {
+            EffectiveContextTokens = null
+        };
+        var definition = new OrchestrationAgentDefinition
+        {
+            Triage = triage,
+            Participants = [triage, specialist],
+            Edges =
+            [
+                new OrchestrationEdge
+                {
+                    FromKey = "triage",
+                    ToKey = "specialist",
+                    Reason = "Route domain questions to the specialist."
+                }
+            ]
+        };
+        var seed = new List<ChatMessage>
+        {
+            new(ChatRole.User, "Did the database migration complete?")
+        };
+
+        await using var session = await factory.CreateAsync(definition, seed);
+        await foreach (var _ in session.WatchAsync())
+        {
+            // Drain the run to completion so both participants have issued their requests.
+        }
+
+        var triageRequest = fake.RequestFor(TriageInstructions);
+        var specialistRequest = fake.RequestFor(SpecialistInstructions);
+
+        AssertEx.NotNull(triageRequest, "the triage participant must have issued a request");
+        AssertEx.NotNull(specialistRequest, "the specialist participant must have issued a request");
+
+        AssertEx.True(triageRequest!.HasNumCtxKey, "a participant with a known effective window must carry num_ctx onto its request");
+        AssertEx.True(triageRequest.NumCtx is 2048, "the carried num_ctx must be the participant's OWN launched window, not the default");
+        AssertEx.False(specialistRequest!.HasNumCtxKey, "a participant with an unknown window must fall back — no num_ctx override is sent");
+    }
+
     private static async Task RunApprovalAcrossHandoff(bool approve, bool decorateClient)
     {
         const string ownToolName = "lookup_customer";
@@ -633,13 +689,21 @@ public sealed class OrchestrationAgentFactoryTests
                               && properties.TryGetValue(ParticipantReasoningOptions.CodexReasoningEffortKey, out var raw)
                 ? raw as string
                 : null;
+            var hasNumCtxKey = properties?.ContainsKey("num_ctx") ?? false;
+            var numCtx = hasNumCtxKey ? properties!["num_ctx"] : null;
 
-            _requests.Add(new RecordedRequest(systemText, options?.ModelId, hasThinkKey, think, codexEffort));
+            _requests.Add(new RecordedRequest(systemText, options?.ModelId, hasThinkKey, think, codexEffort, hasNumCtxKey, numCtx));
         }
     }
 
-    /// <summary>One participant's captured outbound request: the system text it saw plus its resolved model + reasoning.</summary>
-    private sealed record RecordedRequest(string? SystemText, string? ModelId, bool HasThinkKey, object? Think, string? CodexReasoningEffort);
+    /// <summary>One participant's captured outbound request: the system text it saw plus its resolved model + reasoning + window.</summary>
+    private sealed record RecordedRequest(string? SystemText,
+        string? ModelId,
+        bool HasThinkKey,
+        object? Think,
+        string? CodexReasoningEffort,
+        bool HasNumCtxKey,
+        object? NumCtx);
 
     /// <summary>
     ///     Scripted model for the combined approval+handoff scenario. Triage (identified by the handoff tool in

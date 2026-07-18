@@ -54,4 +54,15 @@ public sealed record OrchestrationParticipant
     ///     turn; the workflow carries history across hops thereafter.
     /// </summary>
     public IReadOnlyList<ChatMessage> ConversationContext { get; init; } = [];
+
+    /// <summary>
+    ///     ORC-07: the effective per-slot context window (in tokens) the participant's resolved <see cref="ModelId" />
+    ///     was launched with, when known. Carried onto the participant agent's construction-time <c>ChatOptions</c> as
+    ///     the <c>num_ctx</c> option so the innermost provider-round budgeter (<c>ProviderCallBudgetChatClient</c>) sizes
+    ///     THIS participant against its own launched window rather than the shared configured default. Workflow
+    ///     participants never receive the outer runner's per-turn <c>RunOptions</c>, so — like reasoning — this must be
+    ///     baked in at construction. <see langword="null" /> (unknown: the model is not yet resident, or is cloud/Ollama)
+    ///     leaves the inner budgeter on its configured default window for this participant.
+    /// </summary>
+    public int? EffectiveContextTokens { get; init; }
 }
