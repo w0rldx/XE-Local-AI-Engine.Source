@@ -335,6 +335,32 @@ function nextReasoningParts(
 	return buildMessageParts(nextReasoningSegments, toolEntries, textSegments, noticeEntries);
 }
 
+/**
+ * Terminalizes any lingering pending-approval waiting tool card on a terminal turn (UX-01). An API-tool DENY never
+ * emits a tool-call-completed event — the deny short-circuits before the tool ever runs — so its requestId-keyed
+ * waiting card would otherwise linger with live Approve/Deny controls until the post-stream refetch scrubs it. Once
+ * the turn is terminal the approval can no longer be answered, so a still-`waiting` tool card that still carries a
+ * pending approval request id is flipped to `failed` and its prompt is cleared. Returns the same array reference when
+ * nothing changed so unaffected turns keep referential stability.
+ */
+function clearPendingApprovalWaitingCards(parts: ChatMessagePart[] | undefined): ChatMessagePart[] | undefined {
+	if (!parts) {
+		return parts;
+	}
+
+	let changed = false;
+	const next = parts.map((part) => {
+		if (part.kind === "tool" && part.state === "waiting" && typeof part.pendingApprovalRequestId === "string") {
+			changed = true;
+			return { ...part, state: "failed" as const, pendingApprovalRequestId: undefined };
+		}
+
+		return part;
+	});
+
+	return changed ? next : parts;
+}
+
 function normalizeStatus(status: string | null | undefined, fallback: MessageStatus): MessageStatus {
 	const normalized = status?.toLowerCase() as MessageStatus | undefined;
 	return normalized && knownStatuses.has(normalized) ? normalized : fallback;
@@ -596,7 +622,10 @@ export function applyNodeChatStreamEvent(
 	const content = event.content ?? `${existing?.content ?? ""}${event.delta ?? ""}`;
 	const reasoning =
 		event.reasoning ?? (event.reasoningDelta ? `${existing?.reasoning ?? ""}${event.reasoningDelta}` : existing?.reasoning);
-	const parts = nextReasoningParts(existing, event, reasoning ?? undefined);
+	const rebuiltParts = nextReasoningParts(existing, event, reasoning ?? undefined);
+	// On a terminal turn, clear any lingering pending-approval waiting card: an API-tool DENY leaves a waiting card
+	// with no completing tool-call event, and it must not survive the terminal into a dead "awaiting decision" prompt.
+	const parts = isTerminal ? clearPendingApprovalWaitingCards(rebuiltParts) : rebuiltParts;
 	const assistantMessage: ChatMessageModel = {
 		id: event.messageId,
 		conversationId: event.conversationId,
@@ -666,7 +695,10 @@ export function markNodeChatStreamTerminated(
 		role: "assistant",
 		content: existing?.content ?? "",
 		reasoning: existing?.reasoning,
-		parts: existing?.parts,
+		// This is always a terminal (cancelled/failed/interrupted) transition, so clear any lingering pending-approval
+		// waiting card here too — the client-driven terminal path preserves parts verbatim and would otherwise keep a
+		// dead Approve/Deny prompt alive until the refetch.
+		parts: clearPendingApprovalWaitingCards(existing?.parts),
 		status,
 		createdAt: existing?.createdAt ?? nowIso,
 		updatedAt: nowIso,

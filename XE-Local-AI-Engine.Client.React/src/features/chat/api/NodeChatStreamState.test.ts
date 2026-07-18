@@ -546,6 +546,82 @@ describe("node chat stream state", () => {
 		expect(toolPart && "pendingApprovalRequestId" in toolPart ? toolPart.pendingApprovalRequestId : undefined).toBeUndefined();
 	});
 
+	it("clears a lingering pending-approval waiting card when the turn terminalizes via a stream failure (UX-01 deny)", () => {
+		const optimistic = appendOptimisticNodeChatSend(
+			conversation,
+			{ userMessageId: "user-1", assistantMessageId: "assistant-1", requestId: "request-1" },
+			"delete it",
+			"2026-05-24T00:00:01.000Z",
+		);
+		// Reproduce the API-tool DENY shape: the waiting card is created purely by the approval event, and no
+		// tool-call-completed ever follows (the deny short-circuits the tool before it runs).
+		const approval = applyNodeChatStreamEvent(
+			optimistic,
+			streamEvent({
+				type: nodeChatStreamEventTypes.approvalRequested,
+				toolCallId: "call-deny",
+				toolName: "delete_file",
+				approvalRequestId: "approval-99",
+				content: null,
+				delta: null,
+			}),
+		);
+		expect(approval.streamingMessage.parts?.find((part) => part.kind === "tool")).toMatchObject({
+			state: "waiting",
+			pendingApprovalRequestId: "approval-99",
+		});
+
+		// The deny fails the turn; the terminal event must promptly retire the dead approval prompt rather than leave
+		// it live until the post-stream refetch.
+		const failed = applyNodeChatStreamEvent(
+			approval.conversation,
+			streamEvent({
+				type: nodeChatStreamEventTypes.assistantFailed,
+				status: "failed",
+				content: null,
+				delta: null,
+				error: "Tool call was rejected by the user.",
+			}),
+		);
+
+		expect(failed.isTerminal).toBe(true);
+		const toolPart = failed.conversation.messages
+			.find((message) => message.id === "assistant-1")
+			?.parts?.find((part) => part.kind === "tool");
+		expect(toolPart).toMatchObject({ id: "call-deny", state: "failed" });
+		expect(toolPart && "pendingApprovalRequestId" in toolPart ? toolPart.pendingApprovalRequestId : undefined).toBeUndefined();
+		const streamingToolPart = failed.streamingMessage.parts?.find((part) => part.kind === "tool");
+		expect(streamingToolPart && "pendingApprovalRequestId" in streamingToolPart ? streamingToolPart.pendingApprovalRequestId : undefined).toBeUndefined();
+	});
+
+	it("clears a lingering pending-approval waiting card on a client-driven terminal (markNodeChatStreamTerminated) (UX-01 deny)", () => {
+		const optimistic = appendOptimisticNodeChatSend(
+			conversation,
+			{ userMessageId: "user-1", assistantMessageId: "assistant-1", requestId: "request-1" },
+			"delete it",
+			"2026-05-24T00:00:01.000Z",
+		);
+		const approval = applyNodeChatStreamEvent(
+			optimistic,
+			streamEvent({
+				type: nodeChatStreamEventTypes.approvalRequested,
+				toolCallId: "call-deny",
+				toolName: "delete_file",
+				approvalRequestId: "approval-99",
+				content: null,
+				delta: null,
+			}),
+		);
+
+		const cancelled = markNodeChatStreamTerminated(approval.conversation, "assistant-1", "cancelled");
+
+		const toolPart = cancelled.conversation.messages
+			.find((message) => message.id === "assistant-1")
+			?.parts?.find((part) => part.kind === "tool");
+		expect(toolPart).toMatchObject({ id: "call-deny", state: "failed" });
+		expect(toolPart && "pendingApprovalRequestId" in toolPart ? toolPart.pendingApprovalRequestId : undefined).toBeUndefined();
+	});
+
 	it("builds ordered parts for reasoning → tool → reasoning, splitting a new Thoughts block after the tool", () => {
 		const optimistic = appendOptimisticNodeChatSend(
 			conversation,
