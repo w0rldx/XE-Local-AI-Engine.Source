@@ -34,11 +34,17 @@ export function knowledgeInvalidationKey(operationId: string): readonly [{ _id: 
 	return [{ _id: operationId }];
 }
 
-/** The full document list (indexing status + metadata). Items are the authoritative server rows. */
-export function useKnowledgeDocuments() {
+/**
+ * The full document list (indexing status + metadata). Items are the authoritative server rows. `enabled` gates the
+ * fetch for consumers that must not hit the endpoint until the knowledge-base surface is active (e.g. the chat composer,
+ * which only needs the list to decide whether the "Use Knowledge Base" toggle has indexed docs to search); it defaults
+ * to true so the knowledge-base page keeps fetching unconditionally.
+ */
+export function useKnowledgeDocuments(enabled = true) {
 	return useQuery({
 		...withResponseValidation(listKnowledgeDocumentsOptions()),
 		select: (data): readonly KnowledgeDocument[] => data.items ?? [],
+		enabled,
 	});
 }
 

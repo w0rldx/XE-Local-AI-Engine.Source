@@ -30,6 +30,7 @@ export function ChatDisplayShell({
 	activeModelToolCapable = false,
 	toolsEnabled = false,
 	knowledgeBaseEnabled = false,
+	knowledgeBaseHasDocuments = true,
 	contextUsage,
 	streamingMessage,
 	timelineEntries = EMPTY_TIMELINE_ENTRIES,
@@ -269,6 +270,7 @@ export function ChatDisplayShell({
 					activeModelToolCapable={activeModelToolCapable}
 					toolsEnabled={toolsEnabled}
 					knowledgeBaseEnabled={knowledgeBaseEnabled}
+					knowledgeBaseHasDocuments={knowledgeBaseHasDocuments}
 					agentControlsAvailable={agentControlsAvailable}
 					agentModeEnabled={agentModeEnabled}
 					selectedAgentId={selectedAgentId}

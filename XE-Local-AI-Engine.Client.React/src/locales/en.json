@@ -265,6 +265,7 @@
 			"knowledgeBaseLabel": "Use knowledge base",
 			"knowledgeBaseEnabled": "Knowledge base enabled",
 			"knowledgeBaseDisabled": "Knowledge base disabled",
+			"knowledgeBaseNoDocuments": "No indexed documents to search",
 			"sources": {
 				"title": "Sources",
 				"score": "score {{value}}",

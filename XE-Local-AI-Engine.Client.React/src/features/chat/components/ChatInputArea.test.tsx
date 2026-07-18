@@ -228,6 +228,71 @@ describe("ChatInputArea reasoning-effort menu capability gating", () => {
 	});
 });
 
+function knowledgeBaseCapabilities(): ChatUiCapabilities {
+	return { ...defaultChatUiCapabilities, showKnowledgeBaseControls: true };
+}
+
+describe("ChatInputArea knowledge base toggle (30b)", () => {
+	beforeEach(() => {
+		installJsdomEnvironmentMocks();
+	});
+
+	afterEach(() => {
+		cleanup();
+	});
+
+	it("disables the toggle with a no-documents tooltip when there are no indexed documents", async () => {
+		renderWithProviders(
+			<ChatInputArea
+				{...baseProps()}
+				capabilities={knowledgeBaseCapabilities()}
+				knowledgeBaseHasDocuments={false}
+				onToggleKnowledgeBase={vi.fn()}
+			/>,
+		);
+
+		const toggle = screen.getByTestId<HTMLButtonElement>("chat-knowledge-base-toggle");
+		expect(toggle.disabled).toBe(true);
+
+		fireEvent.mouseEnter(toggle);
+		expect(await screen.findByText("No indexed documents to search")).toBeTruthy();
+	});
+
+	it("does not fire the toggle callback when clicked with no indexed documents", () => {
+		const onToggleKnowledgeBase = vi.fn();
+		renderWithProviders(
+			<ChatInputArea
+				{...baseProps()}
+				capabilities={knowledgeBaseCapabilities()}
+				knowledgeBaseHasDocuments={false}
+				onToggleKnowledgeBase={onToggleKnowledgeBase}
+			/>,
+		);
+
+		fireEvent.click(screen.getByTestId("chat-knowledge-base-toggle"));
+
+		expect(onToggleKnowledgeBase).not.toHaveBeenCalled();
+	});
+
+	it("enables the toggle when at least one document is indexed", () => {
+		const onToggleKnowledgeBase = vi.fn();
+		renderWithProviders(
+			<ChatInputArea
+				{...baseProps()}
+				capabilities={knowledgeBaseCapabilities()}
+				knowledgeBaseHasDocuments={true}
+				onToggleKnowledgeBase={onToggleKnowledgeBase}
+			/>,
+		);
+
+		const toggle = screen.getByTestId<HTMLButtonElement>("chat-knowledge-base-toggle");
+		expect(toggle.disabled).toBe(false);
+
+		fireEvent.click(toggle);
+		expect(onToggleKnowledgeBase).toHaveBeenCalledTimes(1);
+	});
+});
+
 describe("ChatInputArea Enter-key send gating (GPTAUD-16)", () => {
 	beforeEach(() => {
 		installJsdomEnvironmentMocks();
