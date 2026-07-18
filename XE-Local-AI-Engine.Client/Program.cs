@@ -106,6 +106,19 @@ try
     // Aspire services
     builder.AddServiceDefaults();
 
+    // Operator hint (BE-03): purely informational, fires once at startup, never gates or alters telemetry
+    // registration. AddServiceDefaults/ConfigureOpenTelemetry above always instruments gen_ai spans/metrics; only the
+    // OTLP exporter is conditional on OTEL_EXPORTER_OTLP_ENDPOINT (AddOpenTelemetryExporters,
+    // XE-Local-AI-Engine.ServiceDefaults/Extensions.cs). Aspire auto-injects that variable, so this stays silent
+    // there; desktop/RC and other headless launches leave it unset by default, so telemetry stays in-process only and
+    // is lost on exit unless the operator sets it. See docs/runbooks/otel-export-operator-runbook.md.
+    if (string.IsNullOrWhiteSpace(builder.Configuration["OTEL_EXPORTER_OTLP_ENDPOINT"]))
+    {
+        Log.Information("Telemetry export is OFF (OTEL_EXPORTER_OTLP_ENDPOINT is not set): gen_ai spans/metrics are "
+                         + "recorded in-process only and are lost on exit. Set OTEL_EXPORTER_OTLP_ENDPOINT to export "
+                         + "them to a local OTLP collector; see docs/runbooks/otel-export-operator-runbook.md.");
+    }
+
     // Add services to the container.
     builder.AddServices(builder.Configuration);
 
