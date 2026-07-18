@@ -1,5 +1,7 @@
 namespace XE_Local_AI_Engine.Client.Services.Coder.Tools;
 
+using XE_Local_AI_Engine.AI.Agent.Tools;
+
 /// <summary>
 ///     Worker-side name / description / parameter-schema constants for the three read-only coder tools
 ///     (<c>list_files</c>, <c>read_file</c>, <c>search_text</c>). Each handler advertises its model-visible schema from
@@ -82,10 +84,15 @@ internal static class CoderToolDefinition
 
 /// <summary>
 ///     Offer-side metadata for a single coder tool. Mirrors the shape the offer provider needs (name + schema +
-///     approval flag); <see cref="RequiresApproval" /> is always <see langword="false" /> for coder tools.
+///     approval flag + risk category); <see cref="RequiresApproval" /> is always <see langword="false" /> for coder
+///     tools and <see cref="Category" /> is always <see cref="ToolCategory.ReadLocal" /> (read-only, workspace-confined
+///     file reads).
 /// </summary>
 internal sealed record CoderToolDescriptor(string Name, string Description, string ParameterSchema)
 {
     /// <summary>Coder read tools never require approval.</summary>
     public bool RequiresApproval { get; }
+
+    /// <summary>Coder tools are read-only, workspace-confined node-local reads.</summary>
+    public ToolCategory Category { get; } = ToolCategory.ReadLocal;
 }

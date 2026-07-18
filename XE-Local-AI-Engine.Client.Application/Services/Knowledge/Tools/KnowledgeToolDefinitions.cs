@@ -1,5 +1,7 @@
 namespace XE_Local_AI_Engine.Client.Services.Knowledge.Tools;
 
+using XE_Local_AI_Engine.AI.Agent.Tools;
+
 /// <summary>
 ///     Worker-side name / description / parameter-schema constants for the read-only knowledge-base agent tools
 ///     (<c>search_knowledge_base</c>, <c>read_document</c>, <c>read_surrounding_chunks</c>). Each handler advertises its
@@ -92,12 +94,17 @@ internal static class ReadSurroundingChunksToolDefinition
 
 /// <summary>
 ///     Offer-side metadata for a single knowledge-base tool. Mirrors the shape the offer provider needs (name + schema +
-///     approval flag); <see cref="RequiresApproval" /> is always <see langword="false" /> for these read-only tools.
+///     approval flag + risk category); <see cref="RequiresApproval" /> is always <see langword="false" /> for these
+///     read-only tools and <see cref="Category" /> is always <see cref="ToolCategory.ReadLocal" /> (read-only,
+///     node-local retrieval).
 /// </summary>
 internal sealed record KnowledgeToolDescriptor(string Name, string Description, string ParameterSchema)
 {
     /// <summary>Knowledge-base read tools never require approval.</summary>
     public bool RequiresApproval { get; }
+
+    /// <summary>Knowledge-base read tools are read-only, node-local retrieval surfaces.</summary>
+    public ToolCategory Category { get; } = ToolCategory.ReadLocal;
 }
 
 /// <summary>
