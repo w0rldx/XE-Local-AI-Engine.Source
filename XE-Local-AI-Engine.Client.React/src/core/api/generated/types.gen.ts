@@ -1999,6 +1999,35 @@ export type XeLocalAiEngineClientEndpointsLocalChatV1ResolveToolApprovalResponse
 	approved: boolean;
 };
 
+export type XeLocalAiEngineClientEndpointsAgentsV1AgentUsageSummaryResponse = {
+	items: Array<XeLocalAiEngineClientEndpointsAgentsV1AgentUsageSummaryBucketResponse>;
+	totals: XeLocalAiEngineClientEndpointsAgentsV1AgentUsageSummaryTotalsResponse;
+	groupedByModelOnly: boolean;
+	retentionDays: number;
+};
+
+export type XeLocalAiEngineClientEndpointsAgentsV1AgentUsageSummaryBucketResponse = {
+	modelName: string;
+	dayStartUtcMs: number;
+	runCount: number;
+	promptTokens: number;
+	completionTokens: number;
+	reasoningTokens: number;
+	totalTokens: number;
+};
+
+export type XeLocalAiEngineClientEndpointsAgentsV1AgentUsageSummaryTotalsResponse = {
+	runCount: number;
+	promptTokens: number;
+	completionTokens: number;
+	reasoningTokens: number;
+	totalTokens: number;
+};
+
+export type XeLocalAiEngineClientEndpointsAgentsV1AgentUsageSummaryRequest = {
+	[key: string]: never;
+};
+
 export type GetVoiceManifestData = {
 	body?: never;
 	path?: never;
@@ -6792,3 +6821,33 @@ export type UpdateSuggestedPlaybookActionResponses = {
 
 export type UpdateSuggestedPlaybookActionResponse =
 	UpdateSuggestedPlaybookActionResponses[keyof UpdateSuggestedPlaybookActionResponses];
+
+export type GetAgentUsageSummaryData = {
+	body?: never;
+	path?: never;
+	query?: {
+		fromEpochMs?: number | null;
+		toEpochMs?: number | null;
+	};
+	url: "/api/local/v1/agents/usage-summary";
+};
+
+export type GetAgentUsageSummaryErrors = {
+	/**
+	 * Unauthorized
+	 */
+	401: unknown;
+	/**
+	 * Forbidden
+	 */
+	403: unknown;
+};
+
+export type GetAgentUsageSummaryResponses = {
+	/**
+	 * Success
+	 */
+	200: XeLocalAiEngineClientEndpointsAgentsV1AgentUsageSummaryResponse;
+};
+
+export type GetAgentUsageSummaryResponse = GetAgentUsageSummaryResponses[keyof GetAgentUsageSummaryResponses];

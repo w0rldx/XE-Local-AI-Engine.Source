@@ -7422,6 +7422,58 @@
           }
         ]
       }
+    },
+    "/api/local/v1/agents/usage-summary": {
+      "get": {
+        "tags": [
+          "Agents"
+        ],
+        "operationId": "getAgentUsageSummary",
+        "parameters": [
+          {
+            "name": "fromEpochMs",
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "nullable": true
+            }
+          },
+          {
+            "name": "toEpochMs",
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "nullable": true
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/XE_Local_AI_EngineClientEndpointsAgentsV1AgentUsageSummaryResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "403": {
+            "description": "Forbidden"
+          }
+        },
+        "security": [
+          {
+            "JWTBearerAuth": []
+          },
+          {
+            "Bearer": []
+          }
+        ]
+      }
     }
   },
   "components": {
@@ -14264,6 +14316,104 @@
             "type": "boolean"
           }
         }
+      },
+      "XE_Local_AI_EngineClientEndpointsAgentsV1AgentUsageSummaryResponse": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "items",
+          "totals",
+          "groupedByModelOnly",
+          "retentionDays"
+        ],
+        "properties": {
+          "items": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/XE_Local_AI_EngineClientEndpointsAgentsV1AgentUsageSummaryBucketResponse"
+            }
+          },
+          "totals": {
+            "$ref": "#/components/schemas/XE_Local_AI_EngineClientEndpointsAgentsV1AgentUsageSummaryTotalsResponse"
+          },
+          "groupedByModelOnly": {
+            "type": "boolean"
+          },
+          "retentionDays": {
+            "type": "integer",
+            "format": "int32"
+          }
+        }
+      },
+      "XE_Local_AI_EngineClientEndpointsAgentsV1AgentUsageSummaryBucketResponse": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "modelName",
+          "dayStartUtcMs",
+          "runCount",
+          "promptTokens",
+          "completionTokens",
+          "reasoningTokens",
+          "totalTokens"
+        ],
+        "properties": {
+          "modelName": {
+            "type": "string"
+          },
+          "dayStartUtcMs": {
+            "type": "integer"
+          },
+          "runCount": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "promptTokens": {
+            "type": "integer"
+          },
+          "completionTokens": {
+            "type": "integer"
+          },
+          "reasoningTokens": {
+            "type": "integer"
+          },
+          "totalTokens": {
+            "type": "integer"
+          }
+        }
+      },
+      "XE_Local_AI_EngineClientEndpointsAgentsV1AgentUsageSummaryTotalsResponse": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "runCount",
+          "promptTokens",
+          "completionTokens",
+          "reasoningTokens",
+          "totalTokens"
+        ],
+        "properties": {
+          "runCount": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "promptTokens": {
+            "type": "integer"
+          },
+          "completionTokens": {
+            "type": "integer"
+          },
+          "reasoningTokens": {
+            "type": "integer"
+          },
+          "totalTokens": {
+            "type": "integer"
+          }
+        }
+      },
+      "XE_Local_AI_EngineClientEndpointsAgentsV1AgentUsageSummaryRequest": {
+        "type": "object",
+        "additionalProperties": false
       }
     },
     "securitySchemes": {
