@@ -318,6 +318,11 @@
 			"reasoningMode": "Reasoning Mode",
 			"emptyState": "Create or select a conversation to start chatting.",
 			"noMessages": "No messages yet.",
+			"noModelGuidance": {
+				"title": "No chat model installed yet",
+				"body": "Install a GGUF model to start chatting locally.",
+				"goToModels": "Go to Models"
+			},
 			"pendingApprovalLabel": "Pending approval",
 			"activityTimeline": "Activity timeline",
 			"activityDetails": {

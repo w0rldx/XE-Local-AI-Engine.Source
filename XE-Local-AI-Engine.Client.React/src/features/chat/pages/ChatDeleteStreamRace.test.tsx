@@ -3,6 +3,7 @@
 import { MantineProvider } from "@mantine/core";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
+import type { ReactNode } from "react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { ConfirmContext } from "@/core/ui/context/ConfirmContext";
@@ -12,6 +13,21 @@ import type { ChatConversationModel } from "@/features/chat/models/ChatModels";
 import type { NodeChatStreamEventDto } from "@/features/chat/models/NodeChatStreamTypes";
 import { Chat } from "@/features/chat/pages/Chat";
 import { nodeChatQueryKeys } from "@/features/chat/queries/NodeChatQueryKeys";
+
+// UX-09's no-installed-model guidance renders a TanStack-router Link to /models whenever the fixture's model list
+// is empty (the default below). Stub the router module so Chat mounts without a RouterProvider (mirrors
+// ChatMessage.test.tsx's ModelNotInstalled Link stub).
+vi.mock("@tanstack/react-router", async (importOriginal) => {
+	const actual = await importOriginal<typeof import("@tanstack/react-router")>();
+	return {
+		...actual,
+		Link: ({ children, to, ...props }: { children: ReactNode; to: string; [key: string]: unknown }) => (
+			<a href={to} {...props}>
+				{children}
+			</a>
+		),
+	};
+});
 
 vi.mock("@/features/chat/api/NodeChatAdapter", () => ({
 	nodeChatAdapter: {
