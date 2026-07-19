@@ -45,18 +45,14 @@ export function toChatModelOptions(models: LocalModelDto[], nodeAvailable: boole
 		.map((model) => toModelOption(model, nodeAvailable));
 }
 
-// Capabilities the synthetic "Local default" composer option should advertise, derived from the concrete model the
-// runtime will actually resolve. Mirrors backend LocalDefaultChatModelResolver: the node default (isSelected) when it
-// is an installed chat model, else the fallback `OrderByDescending(modifiedAtUtc).ThenBy(modelName)` pick (newest
-// modified first, then name ascending). Picking "Local default" then offers the exact same reasoning/tool controls as
-// picking that concrete model directly. `modifiedAtUtc` is an epoch number on the DTO, so it is compared numerically
-// (a missing value sorts oldest). Coalesces the optional generated booleans to false.
-export function resolveLocalDefaultModelCapabilities(models: LocalModelDto[]): {
-	isReasoningModel: boolean;
-	isToolCapable: boolean;
-} {
+// The concrete installed model the runtime will actually resolve for the synthetic "Local default" selection.
+// Mirrors backend LocalDefaultChatModelResolver: the node default (isSelected) when it is an installed chat model,
+// else the fallback `OrderByDescending(modifiedAtUtc).ThenBy(modelName)` pick (newest modified first, then name
+// ascending). `modifiedAtUtc` is an epoch number on the DTO, so it is compared numerically (a missing value sorts
+// oldest). Returns undefined when no installed chat-capable local model exists.
+export function resolveLocalDefaultModel(models: LocalModelDto[]): LocalModelDto | undefined {
 	const chatModels = models.filter((model) => model.kind === "Chat" && !CLOUD_PROVIDERS.has(model.provider ?? ""));
-	const resolved =
+	return (
 		chatModels.find((model) => model.isSelected) ??
 		[...chatModels].sort((a, b) => {
 			// Mirror backend fallback: newest modified first, then name ascending. Treat a missing modifiedAtUtc as
@@ -67,7 +63,28 @@ export function resolveLocalDefaultModelCapabilities(models: LocalModelDto[]): {
 				return bm - am; // descending by modifiedAtUtc
 			}
 			return (a.modelName ?? "").localeCompare(b.modelName ?? "");
-		})[0];
+		})[0]
+	);
+}
+
+// The resolved local-default model's NAME, for callers that need the concrete model the backend will run when the
+// "Local default" sentinel is selected (e.g. the model-details poll feeding the context-usage meter). Unlike the
+// store's selectedModelName/configuredDefaultModelName — which may name a model whose GGUF was never downloaded —
+// this only ever names an INSTALLED model, matching what the backend resolver actually executes.
+export function resolveLocalDefaultModelName(models: LocalModelDto[]): string | undefined {
+	const resolved = resolveLocalDefaultModel(models);
+	const name = resolved?.modelName ?? "";
+	return name.length > 0 ? name : undefined;
+}
+
+// Capabilities the synthetic "Local default" composer option should advertise, derived from the concrete model the
+// runtime will actually resolve (see resolveLocalDefaultModel). Picking "Local default" then offers the exact same
+// reasoning/tool controls as picking that concrete model directly. Coalesces the optional generated booleans to false.
+export function resolveLocalDefaultModelCapabilities(models: LocalModelDto[]): {
+	isReasoningModel: boolean;
+	isToolCapable: boolean;
+} {
+	const resolved = resolveLocalDefaultModel(models);
 	return {
 		isReasoningModel: resolved?.isReasoningCapable ?? false,
 		isToolCapable: resolved?.isToolCapable ?? false,
