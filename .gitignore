@@ -419,3 +419,6 @@ dp-keys/
 
 # Dev-runtime knowledge-base document store (encrypted uploads land here when running from the repo)
 XE-Local-AI-Engine.Client/knowledge-base/
+
+# Dev-runtime node-DB backup snapshots (NodeDbBackupService writes here when NodeData:Directory is content-root-relative)
+XE-Local-AI-Engine.Client/backups/
