@@ -430,7 +430,10 @@ export function Chat() {
 			// A new conversation must not inherit the previous thread's pinned agent — clear the
 			// selection so the composer starts clean. Model stays sticky (intentional UX).
 			clearSelectedAgent();
-			await queryClient.invalidateQueries({ queryKey: nodeChatQueryKeys.conversations() });
+			// List reconciliation only: the created conversation's detail was just primed via setQueryData with the
+			// authoritative create response — the broad `conversations()` prefix would immediately re-mark it (and
+			// every other cached detail) stale for no new information.
+			await queryClient.invalidateQueries({ queryKey: nodeChatQueryKeys.conversationLists() });
 		},
 	});
 
@@ -695,9 +698,13 @@ export function Chat() {
 
 	const refreshConversation = useCallback(
 		async (conversationId: string): Promise<void> => {
+			// Scoped tightly — this runs after EVERY turn. `exact` keeps the conversation's `files` child out (a turn
+			// never changes the attachment list; upload/delete invalidate their own key), and `conversationLists`
+			// refreshes the sidebar without the broad `conversations()` prefix that would re-invalidate this same
+			// detail mid-refetch (the observed duplicate round per turn) plus every other cached conversation.
 			await Promise.all([
-				queryClient.invalidateQueries({ queryKey: nodeChatQueryKeys.conversation(conversationId) }),
-				queryClient.invalidateQueries({ queryKey: nodeChatQueryKeys.conversations() }),
+				queryClient.invalidateQueries({ queryKey: nodeChatQueryKeys.conversation(conversationId), exact: true }),
+				queryClient.invalidateQueries({ queryKey: nodeChatQueryKeys.conversationLists() }),
 				// GPTAUD-17a: the local runtime only fills EffectiveContextTokens once the model is WARM, but the
 				// model-details query fires pre-warm — so the context-usage meter would stay pinned to the model's
 				// train ceiling (e.g. 262k) even though the server launched with a far smaller `-c` (e.g. 16k). Once
