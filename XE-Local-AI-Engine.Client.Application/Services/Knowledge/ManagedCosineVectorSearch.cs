@@ -164,7 +164,14 @@ public sealed class ManagedCosineVectorSearch : IVectorSearch
                     }
                 }
 
-                topK.Offer(score, sequence, Guid.Parse(reader.GetString(0)), Guid.Parse(reader.GetString(1)));
+                // Materialize the id strings + Guids only for rows that actually enter the heap. Once the heap is
+                // full, the overwhelming majority of scanned rows lose to the current worst kept hit — skipping their
+                // id reads drops two string allocations + two Guid parses per rejected row across the whole corpus.
+                if (topK.WouldAccept(score, sequence))
+                {
+                    topK.Offer(score, sequence, Guid.Parse(reader.GetString(0)), Guid.Parse(reader.GetString(1)));
+                }
+
                 sequence++;
             }
 
@@ -224,6 +231,14 @@ public sealed class ManagedCosineVectorSearch : IVectorSearch
         public BoundedTopKSelector(int capacity)
         {
             _heap = new Candidate[Math.Max(1, capacity)];
+        }
+
+        // Cheap pre-check so the caller can skip materializing the row ids for a candidate that would be rejected
+        // anyway. Identical decision logic to Offer — the IsBetter comparison never reads the ids — so gating Offer
+        // behind this changes nothing about the selected set or its order.
+        public bool WouldAccept(float score, long sequence)
+        {
+            return _count < _heap.Length || IsBetter(new Candidate(score, sequence, Guid.Empty, Guid.Empty), _heap[0]);
         }
 
         public void Offer(float score, long sequence, Guid chunkId, Guid documentId)
