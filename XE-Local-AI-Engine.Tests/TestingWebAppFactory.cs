@@ -39,10 +39,17 @@ public class TestingWebAppFactory : WebApplicationFactory<Program>, IAsyncInitia
 
     private readonly FakeOllamaServer? _fakeOllamaServer;
     private readonly string _fixtureWebRoot;
+    private readonly string _nodeSqlitePath;
+    private readonly string _nodeDataDirectory;
 
     public TestingWebAppFactory(FakeOllamaOptions? fakeOllamaOptions = null)
     {
         _fixtureWebRoot = CreateShellFixtureWebRoot();
+        // Generate the per-test SQLite path and node-data directory here (not inline in ConfigureWebHost) so DisposeAsync
+        // can delete them. Each host builds a fresh DB and migrates it; without cleanup these temp files accumulate in
+        // Path.GetTempPath() across runs and can bury a small tmpfs /tmp (observed: tens of thousands of stragglers).
+        _nodeSqlitePath = Path.Combine(Path.GetTempPath(), $"xe-local-ai-engine-tests-{Guid.NewGuid():N}.sqlite");
+        _nodeDataDirectory = Path.Combine(Path.GetTempPath(), $"xe-local-ai-engine-tests-nodedata-{Guid.NewGuid():N}");
 
         if (!RunLocalIntegration)
         {
@@ -80,19 +87,76 @@ public class TestingWebAppFactory : WebApplicationFactory<Program>, IAsyncInitia
 
         await base.DisposeAsync();
 
+        // Best-effort cleanup of every temp artifact this host created. Skipping this leaks the fixture web root, the
+        // SQLite database (+ WAL/SHM/journal sidecars, since the node runs in WAL mode), and the node-data directory into
+        // Path.GetTempPath() on each host build; across full-module runs that accumulates to tens of thousands of files
+        // and can fill a small tmpfs /tmp.
+        TryDeleteDirectory(_fixtureWebRoot);
+        TryDeleteDirectory(_nodeDataDirectory);
+        // Delete the SQLite database and every sidecar by filename prefix: the -wal/-shm/-journal companions plus the
+        // node's own <db>.sqlite.migration.lock. A prefix sweep is robust to sidecar suffixes changing over time.
+        TryDeleteSqliteFamily(_nodeSqlitePath);
+
+        GC.SuppressFinalize(this);
+    }
+
+    private static void TryDeleteDirectory(string path)
+    {
         try
         {
-            if (Directory.Exists(_fixtureWebRoot))
+            if (Directory.Exists(path))
             {
-                Directory.Delete(_fixtureWebRoot, recursive: true);
+                Directory.Delete(path, recursive: true);
             }
         }
         catch (IOException)
         {
-            // Best-effort cleanup of the fixture web root; ignore.
+            // Best-effort temp cleanup; a locked/racing file is not a test failure.
+        }
+        catch (UnauthorizedAccessException)
+        {
+            // Best-effort temp cleanup; ignore.
+        }
+    }
+
+    private static void TryDeleteFile(string path)
+    {
+        try
+        {
+            File.Delete(path);
+        }
+        catch (IOException)
+        {
+            // Best-effort temp cleanup; ignore.
+        }
+        catch (UnauthorizedAccessException)
+        {
+            // Best-effort temp cleanup; ignore.
+        }
+    }
+
+    // Deletes the SQLite database file and all of its sidecars (<name>-wal, <name>-shm, <name>-journal,
+    // <name>.migration.lock, …) by sweeping the temp directory for files whose name starts with the db filename.
+    private static void TryDeleteSqliteFamily(string sqlitePath)
+    {
+        var directory = Path.GetDirectoryName(sqlitePath);
+        var prefix = Path.GetFileName(sqlitePath);
+        if (string.IsNullOrEmpty(directory) || string.IsNullOrEmpty(prefix))
+        {
+            return;
         }
 
-        GC.SuppressFinalize(this);
+        try
+        {
+            foreach (var file in Directory.EnumerateFiles(directory, prefix + "*"))
+            {
+                TryDeleteFile(file);
+            }
+        }
+        catch (DirectoryNotFoundException)
+        {
+            // Temp directory already gone; nothing to clean.
+        }
     }
 
     public async Task InitializeAsync()
@@ -142,11 +206,11 @@ public class TestingWebAppFactory : WebApplicationFactory<Program>, IAsyncInitia
         {
             configurationBuilder.AddInMemoryCollection(new Dictionary<string, string?>
             {
-                ["ConnectionStrings:node-sqlite"] = $"Data Source={Path.Combine(Path.GetTempPath(), $"xe-local-ai-engine-tests-{Guid.NewGuid():N}.sqlite")}",
+                ["ConnectionStrings:node-sqlite"] = $"Data Source={_nodeSqlitePath}",
                 ["XE_NODE_SQLITE_KEY"] = Convert.ToBase64String(Enumerable.Range(start: 1, count: 32).Select(static value => (byte)value).ToArray()),
                 ["XE_USE_LOCAL_MODEL_PROVIDER"] = "true",
                 ["Ollama:ChatModel"] = "qwen3.5:0.8b",
-                ["NodeData:Directory"] = Path.Combine(Path.GetTempPath(), $"xe-local-ai-engine-tests-nodedata-{Guid.NewGuid():N}")
+                ["NodeData:Directory"] = _nodeDataDirectory
             });
         });
 
