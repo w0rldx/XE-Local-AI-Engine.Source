@@ -374,17 +374,36 @@ public sealed class EmbeddingPlaybookRetrievalRankerTests
 
             // A bag-of-tokens vector: each token contributes to a fixed bucket, so texts sharing tokens point in a
             // similar direction (higher cosine) and unrelated texts are near-orthogonal — deterministic and Ollama-free.
+            // The bucket derives from a stable FNV-1a hash rather than string.GetHashCode/StringComparer.GetHashCode:
+            // those are randomized per process, so token->bucket bucketing (and thus the cosine ranking) would change
+            // each run and could collide an unrelated token into a query bucket, flaking SelectTopK_RanksByCosineSimilarity.
+            // FNV-1a is process-independent, so the ordering these tests assert is identical on every run.
             private static ReadOnlyMemory<float> BuildVector(string text)
             {
                 var vector = new float[Dimensions];
                 foreach (var token in text.ToUpperInvariant()
                                           .Split([' ', '\t', '\n', '\r'], StringSplitOptions.RemoveEmptyEntries))
                 {
-                    var bucket = (int)((uint)StringComparer.Ordinal.GetHashCode(token) % Dimensions);
+                    var bucket = (int)(StableHash(token) % Dimensions);
                     vector[bucket] += 1f;
                 }
 
                 return vector;
+            }
+
+            // Deterministic 32-bit FNV-1a over the token's chars — stable across processes (unlike string.GetHashCode).
+            private static uint StableHash(string token)
+            {
+                const uint offsetBasis = 2166136261;
+                const uint prime = 16777619;
+                var hash = offsetBasis;
+                foreach (var c in token)
+                {
+                    hash ^= c;
+                    hash *= prime;
+                }
+
+                return hash;
             }
         }
     }
