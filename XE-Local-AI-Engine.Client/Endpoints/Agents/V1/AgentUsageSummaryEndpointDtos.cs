@@ -47,6 +47,16 @@ public sealed class AgentUsageSummaryBucketResponse
 
     /// <summary>Summed total tokens reported by the model (a run reporting no usage contributes 0).</summary>
     public required long TotalTokens { get; init; }
+
+    /// <summary>
+    ///     Server-computed estimated cost of the bucket in <see cref="Currency" />, rounded to 4 decimals. Priced as
+    ///     <c>inputRate * promptTokens + outputRate * (completionTokens + reasoningTokens)</c> (reasoning bills as output),
+    ///     with rates from the operator override or the built-in default table. Local runtimes and unpriced models are 0.
+    /// </summary>
+    public required double EstimatedCostUsd { get; init; }
+
+    /// <summary>ISO 4217 currency of <see cref="EstimatedCostUsd" />. Always <c>USD</c>.</summary>
+    public required string Currency { get; init; }
 }
 
 /// <summary>Grand totals across every returned bucket, so a caller need not re-sum the page client-side.</summary>
@@ -61,6 +71,12 @@ public sealed class AgentUsageSummaryTotalsResponse
     public required long ReasoningTokens { get; init; }
 
     public required long TotalTokens { get; init; }
+
+    /// <summary>Estimated cost across every bucket in <see cref="Currency" />, rounded to 4 decimals (0 when unpriced).</summary>
+    public required double EstimatedCostUsd { get; init; }
+
+    /// <summary>ISO 4217 currency of <see cref="EstimatedCostUsd" />. Always <c>USD</c>.</summary>
+    public required string Currency { get; init; }
 }
 
 /// <summary>
@@ -86,6 +102,12 @@ public sealed class AgentUsageProviderTotalsResponse
 
     /// <summary>Summed total tokens for the provider (a run reporting no usage contributes 0).</summary>
     public required long TotalTokens { get; init; }
+
+    /// <summary>Estimated cost for the provider in <see cref="Currency" />, rounded to 4 decimals (0 for free/unpriced providers).</summary>
+    public required double EstimatedCostUsd { get; init; }
+
+    /// <summary>ISO 4217 currency of <see cref="EstimatedCostUsd" />. Always <c>USD</c>.</summary>
+    public required string Currency { get; init; }
 }
 
 /// <summary>
