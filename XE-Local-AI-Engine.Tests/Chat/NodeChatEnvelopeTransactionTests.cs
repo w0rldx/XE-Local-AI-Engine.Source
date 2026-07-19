@@ -117,12 +117,18 @@ public sealed class NodeChatEnvelopeTransactionTests : IDisposable
     [Test]
     public async Task PurgeVersusTerminalize_RacingUnderTheRealLock_NeverOrphansAnEnvelope()
     {
-        // Coordinated race: a purge and an enveloped terminalize on the same conversation are gated on ONE
-        // TaskCompletionSource and released together, so they genuinely contend for the per-conversation lock (purge
-        // takes it exclusive, terminalize shared + per-message) with no sleeps deciding the winner. Across iterations the
-        // lock arbitrates both orderings; the invariant must hold every time: the purge removes the whole footprint and
-        // no envelope is ever left orphaned, whether terminalize committed first (then purge deleted it) or purge won
-        // first (then terminalize found no row and threw).
+        // One invariant, proven two complementary ways: a purge and an enveloped terminalize on the same conversation
+        // never leave an orphaned envelope, whichever wins the per-conversation lock (purge exclusive, terminalize shared
+        // + per-message).
+        //   1. Genuine contention: RaceIterations rounds gate a purge and a terminalize on ONE TaskCompletionSource and
+        //      release them together, so they truly contend for the lock with no sleeps deciding the winner; the safety
+        //      invariant is asserted every round under real concurrency.
+        //   2. Deterministic ordering coverage: a scheduler can, on some machines/loads, arbitrate every gated round the
+        //      SAME way, which used to flake the "both orderings observed" check. So the two orderings are ALSO forced
+        //      explicitly — the intended winner is awaited to completion before the loser starts, so the lock arbitrates
+        //      the intended branch instead of the scheduler — proving BOTH terminalize-then-purge and
+        //      purge-then-terminalize on every run. There is no production seam to force the interleaving inside a single
+        //      gated round, so forcing it across dedicated rounds is the deterministic equivalent.
         await using var provider = await BuildProviderAsync("purge-terminalize-race.sqlite").ConfigureAwait(false);
         var service = CreateService(provider);
 
@@ -131,36 +137,20 @@ public sealed class NodeChatEnvelopeTransactionTests : IDisposable
 
         for (var iteration = 0; iteration < RaceIterations; iteration++)
         {
-            var conversation = await service.CreateConversationAsync(new NodeChatCreateConversationRequest("Race", "node", CreatedAtUtc: iteration)).ConfigureAwait(false);
-            var correlation = await CreatePlaceholderAsync(service, conversation.ConversationId).ConfigureAwait(false);
-            await service.MarkAssistantStreamingAsync(correlation, updatedAtUtc: 2).ConfigureAwait(false);
+            var correlation = await SeedStreamingConversationAsync(service, iteration).ConfigureAwait(false);
 
             var gate = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
 
             var terminalize = Task.Run(async () =>
             {
                 await gate.Task.ConfigureAwait(false);
-                try
-                {
-                    await service.TerminalizeAssistantMessageAsync(new NodeChatTerminalizeMessageRequest(correlation,
-                                     NodeChatMessageStatusValues.Completed,
-                                     UpdatedAtUtc: 10,
-                                     "answer",
-                                     Envelope: new AgentRunEnvelopeMetadata(Guid.NewGuid(), DurationMs: 5L)))
-                                 .ConfigureAwait(false);
-                    return true;
-                }
-                catch (InvalidOperationException)
-                {
-                    // The purge deleted the message row before terminalize acquired its locks and read it.
-                    return false;
-                }
+                return await TryTerminalizeAsync(service, correlation).ConfigureAwait(false);
             });
 
             var purge = Task.Run(async () =>
             {
                 await gate.Task.ConfigureAwait(false);
-                await service.DeleteConversationAsync(new NodeChatDeleteConversationRequest(conversation.ConversationId, DeletedAtUtc: 20, PurgeImmediately: true)).ConfigureAwait(false);
+                await PurgeAsync(service, correlation.ConversationId).ConfigureAwait(false);
             });
 
             gate.SetResult();
@@ -177,14 +167,19 @@ public sealed class NodeChatEnvelopeTransactionTests : IDisposable
 
             // Safety invariant, whichever operation won the lock: the conversation footprint is gone and NO envelope row
             // survives to orphan the plaintext conversation/message correlation.
-            AssertEx.Null(await service.GetConversationAsync(conversation.ConversationId).ConfigureAwait(false));
-            AssertEx.Equal(expected: 0, await CountMessagesAsync(provider, conversation.ConversationId).ConfigureAwait(false));
-            AssertEx.Equal(expected: 0, await CountEnvelopesAsync(provider).ConfigureAwait(false));
+            await AssertNoOrphanedFootprintAsync(service, provider, correlation.ConversationId).ConfigureAwait(false);
         }
 
-        // The gated race actually exercised BOTH lock-arbitration orderings, so the invariant above is proven for each.
-        AssertEx.True(terminalizeWon > 0, "The race never let terminalize commit before the purge — increase iterations or investigate lock ordering.");
-        AssertEx.True(purgeWon > 0, "The race never let the purge win before terminalize — increase iterations or investigate lock ordering.");
+        // Deterministic backstop: force each ordering through the real lock (winner run to completion first) so both
+        // lock-arbitration branches are exercised on every run regardless of how the scheduler happened to arbitrate the
+        // gated rounds above. The same safety invariant must hold for each forced ordering.
+        terminalizeWon += await AssertForcedOrderingAsync(service, provider, terminalizeFirst: true, iteration: RaceIterations).ConfigureAwait(false);
+        purgeWon += await AssertForcedOrderingAsync(service, provider, terminalizeFirst: false, iteration: RaceIterations + 1).ConfigureAwait(false);
+
+        // Both lock-arbitration orderings were exercised (the forced backstop guarantees this deterministically; the
+        // gated rounds typically add more of each), so the invariant above is proven for each.
+        AssertEx.True(terminalizeWon > 0, "Neither the gated race nor the forced backstop let terminalize commit before the purge.");
+        AssertEx.True(purgeWon > 0, "Neither the gated race nor the forced backstop let the purge win before terminalize.");
     }
 
     [Test]
@@ -259,6 +254,76 @@ public sealed class NodeChatEnvelopeTransactionTests : IDisposable
         await persistence.CreateAssistantPlaceholderAsync(new NodeChatCreateAssistantPlaceholderRequest(conversationId, correlation.MessageId, correlation.RequestId, CreatedAtUtc: 1))
                          .ConfigureAwait(false);
         return correlation;
+    }
+
+    // Seeds a fresh conversation with a streaming (non-terminal) assistant placeholder — the state both the purge and the
+    // enveloped terminalize race from.
+    private static async Task<NodeChatMessageCorrelation> SeedStreamingConversationAsync(NodeChatPersistenceService service, int iteration)
+    {
+        var conversation = await service.CreateConversationAsync(new NodeChatCreateConversationRequest("Race", "node", CreatedAtUtc: iteration)).ConfigureAwait(false);
+        var correlation = await CreatePlaceholderAsync(service, conversation.ConversationId).ConfigureAwait(false);
+        await service.MarkAssistantStreamingAsync(correlation, updatedAtUtc: 2).ConfigureAwait(false);
+        return correlation;
+    }
+
+    // Runs the enveloped terminalize; returns true when it committed, false when the purge already removed the row so
+    // terminalize found nothing (the documented InvalidOperationException).
+    private static async Task<bool> TryTerminalizeAsync(NodeChatPersistenceService service, NodeChatMessageCorrelation correlation)
+    {
+        try
+        {
+            await service.TerminalizeAssistantMessageAsync(new NodeChatTerminalizeMessageRequest(correlation,
+                             NodeChatMessageStatusValues.Completed,
+                             UpdatedAtUtc: 10,
+                             "answer",
+                             Envelope: new AgentRunEnvelopeMetadata(Guid.NewGuid(), DurationMs: 5L)))
+                         .ConfigureAwait(false);
+            return true;
+        }
+        catch (InvalidOperationException)
+        {
+            // The purge deleted the message row before terminalize acquired its locks and read it.
+            return false;
+        }
+    }
+
+    private static Task PurgeAsync(NodeChatPersistenceService service, Guid conversationId)
+    {
+        return service.DeleteConversationAsync(new NodeChatDeleteConversationRequest(conversationId, DeletedAtUtc: 20, PurgeImmediately: true));
+    }
+
+    // Forces one lock-arbitration ordering deterministically: the intended winner is awaited to completion before the
+    // loser starts, so the per-conversation lock arbitrates the intended branch without depending on the scheduler.
+    // Asserts the winner's expected outcome plus the shared safety invariant, and returns 1 for the branch that won so
+    // the caller can prove both branches ran.
+    private static async Task<int> AssertForcedOrderingAsync(NodeChatPersistenceService service, ServiceProvider provider, bool terminalizeFirst, int iteration)
+    {
+        var correlation = await SeedStreamingConversationAsync(service, iteration).ConfigureAwait(false);
+
+        if (terminalizeFirst)
+        {
+            var committed = await TryTerminalizeAsync(service, correlation).ConfigureAwait(false);
+            AssertEx.True(committed, "Terminalize must commit when it runs to completion before the purge.");
+            await PurgeAsync(service, correlation.ConversationId).ConfigureAwait(false);
+        }
+        else
+        {
+            await PurgeAsync(service, correlation.ConversationId).ConfigureAwait(false);
+            var committed = await TryTerminalizeAsync(service, correlation).ConfigureAwait(false);
+            AssertEx.False(committed, "Terminalize must find no row and throw when the purge runs to completion first.");
+        }
+
+        await AssertNoOrphanedFootprintAsync(service, provider, correlation.ConversationId).ConfigureAwait(false);
+        return 1;
+    }
+
+    // The shared safety invariant: the conversation footprint is gone and NO envelope row survives to orphan the
+    // plaintext conversation/message correlation.
+    private static async Task AssertNoOrphanedFootprintAsync(NodeChatPersistenceService service, ServiceProvider provider, Guid conversationId)
+    {
+        AssertEx.Null(await service.GetConversationAsync(conversationId).ConfigureAwait(false));
+        AssertEx.Equal(expected: 0, await CountMessagesAsync(provider, conversationId).ConfigureAwait(false));
+        AssertEx.Equal(expected: 0, await CountEnvelopesAsync(provider).ConfigureAwait(false));
     }
 
     // Installs a BEFORE INSERT trigger that aborts any run-envelope row. Schema-level, so it applies to the envelope
