@@ -22,6 +22,11 @@ import { localRuntimeInvalidationKey, localRuntimeQueryIds } from "@/features/no
 // The client method the backend invokes to push a build status delta.
 const CUDA_BUILD_STATUS_CHANGED = "cudaBuild.statusChanged";
 
+// Upper bound on retained live log lines. A CUDA from-source build streams tens of thousands of compiler lines; only
+// the tail is ever rendered, so keep a bounded ring like the other diagnostics buffers (breadcrumbs/rrweb) instead of
+// growing per delta for the whole build.
+const MAX_LOG_LINES = 2000;
+
 // Wire payload (camelCase). Untrusted boundary data — validated with zod before it touches UI state; a payload that
 // fails the schema is dropped (best-effort live output; the GET status query still serves the canonical state).
 const cudaBuildHubEventSchema = z.object({
@@ -31,7 +36,7 @@ const cudaBuildHubEventSchema = z.object({
 	sanitizedError: z.string().nullable(),
 });
 
-// Live build state surfaced to the card. `logLines` accumulates every delta received since the hook mounted; `phase`,
+// Live build state surfaced to the card. `logLines` holds the most recent MAX_LOG_LINES streamed lines; `phase`,
 // `terminal`, and `error` reflect the most recent event. All UI-only.
 export interface CudaBuildLiveState {
 	readonly phase: string | null;
@@ -75,13 +80,20 @@ export function useCudaBuildHub(): CudaBuildLiveState {
 				return;
 			}
 			const event = parsed.data;
-			setState((current) => ({
-				phase: event.phase,
-				logLines:
-					event.appendedLogLines.length > 0 ? [...current.logLines, ...event.appendedLogLines] : current.logLines,
-				terminal: event.terminal,
-				error: event.sanitizedError,
-			}));
+			setState((current) => {
+				let logLines = current.logLines;
+				if (event.appendedLogLines.length > 0) {
+					const appended = [...current.logLines, ...event.appendedLogLines];
+					// Keep only the tail so a long build cannot grow this UI state unboundedly.
+					logLines = appended.length > MAX_LOG_LINES ? appended.slice(appended.length - MAX_LOG_LINES) : appended;
+				}
+				return {
+					phase: event.phase,
+					logLines,
+					terminal: event.terminal,
+					error: event.sanitizedError,
+				};
+			});
 			// On a terminal event the persisted snapshot changed — re-read the canonical status + runtime so the card flips
 			// out of the building state and reflects an adopted managed build.
 			if (event.terminal) {
