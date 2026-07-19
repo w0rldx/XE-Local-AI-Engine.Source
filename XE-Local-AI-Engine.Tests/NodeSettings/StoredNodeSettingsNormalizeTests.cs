@@ -1,5 +1,6 @@
 namespace XE_Local_AI_Engine.Tests.NodeSettings;
 
+using System.Collections.Generic;
 using Microsoft.Extensions.Logging.Abstractions;
 using XE_Local_AI_Engine.Client.Services.NodeSettings;
 using XE_Local_AI_Engine.Client.Services.NodeSettings.Implementation;
@@ -253,6 +254,49 @@ public sealed class StoredNodeSettingsNormalizeTests : IDisposable
             ToolCapableModels = ["", "   "]
         });
         AssertEx.Null(loaded.ToolCapableModels);
+    }
+
+    [Test]
+    public async Task UsageRates_ValidEntries_RoundTrip_TrimKeys_DropInvalid()
+    {
+        // The persistence authority for usage-rate hygiene: trim keys, drop blank keys and negative rates, and match
+        // case-insensitively after a JSON round trip (which loses the comparer). Only the one valid entry survives.
+        var loaded = await SaveAndReloadAsync(new StoredNodeSettings
+        {
+            UsageRates = new NodeUsageRateSettings
+            {
+                Models = new Dictionary<string, ModelRate>
+                {
+                    ["  gpt-5  "] = new() { InputPer1M = 1.25, OutputPer1M = 10 },
+                    ["bad-negative"] = new() { InputPer1M = -1, OutputPer1M = 5 },
+                    ["   "] = new() { InputPer1M = 1, OutputPer1M = 1 }
+                }
+            }
+        });
+
+        AssertEx.NotNull(loaded.UsageRates);
+        AssertEx.NotNull(loaded.UsageRates!.Models);
+        AssertEx.Equal(expected: 1, loaded.UsageRates!.Models!.Count);
+        // Key was trimmed to "gpt-5" and is now matched case-insensitively.
+        AssertEx.Equal(expected: 1.25d, loaded.UsageRates!.Models!["GPT-5"].InputPer1M);
+        AssertEx.Equal(expected: 10d, loaded.UsageRates!.Models!["GPT-5"].OutputPer1M);
+    }
+
+    [Test]
+    public async Task UsageRates_AllInvalid_FallsBackToNull()
+    {
+        var loaded = await SaveAndReloadAsync(new StoredNodeSettings
+        {
+            UsageRates = new NodeUsageRateSettings
+            {
+                Models = new Dictionary<string, ModelRate>
+                {
+                    ["bad"] = new() { InputPer1M = -1, OutputPer1M = -1 }
+                }
+            }
+        });
+
+        AssertEx.Null(loaded.UsageRates);
     }
 
     private async Task<StoredNodeSettings> SaveAndReloadAsync(StoredNodeSettings settings)
