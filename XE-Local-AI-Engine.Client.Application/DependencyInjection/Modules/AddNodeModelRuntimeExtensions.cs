@@ -212,7 +212,7 @@ internal static class AddNodeModelRuntimeExtensions
         // singleton construction (the sync INodeSettingsStore.Load twin, like the tool-capable allow-list seed) so the
         // hot resolve path stays a dictionary lookup; an operator edit applies on the next node restart.
         builder.Services.AddSingleton<IToolApprovalPolicy>(sp =>
-            NodeToolApprovalPolicy.FromSettings(sp.GetRequiredService<INodeSettingsStore>().Load().ToolApprovalPolicy));
+            NodeToolApprovalPolicy.FromSettings(sp.GetRequiredService<INodeSettingsStore>().Load()?.ToolApprovalPolicy));
 
         // OrchestrationAgentOptions lives in AI.Agent (no reference to Client.Application), so OrchestrationAgentFactory
         // cannot inject INodeRuntimeSettings. Seed the migrated IdleTimeoutSeconds from the accessor here at the
