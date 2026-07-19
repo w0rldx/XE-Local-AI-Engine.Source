@@ -363,6 +363,9 @@ export type XeLocalAiEngineClientEndpointsNodeSettingsV1NodeSettingsResponse = {
 	voiceFeatureEnabled?: boolean | null;
 	allowedVoiceModels?: Array<string> | null;
 	defaultVoiceProfile?: string | null;
+	usageRates?: {
+		[key: string]: XeLocalAiEngineClientServicesNodeSettingsModelRate;
+	} | null;
 };
 
 export type XeLocalAiEngineClientModelsSamplingOptions = {
@@ -408,6 +411,9 @@ export type XeLocalAiEngineClientEndpointsNodeSettingsV1SaveNodeSettingsRequest 
 	voiceFeatureEnabled?: boolean | null;
 	allowedVoiceModels?: Array<string> | null;
 	defaultVoiceProfile?: string | null;
+	usageRates?: {
+		[key: string]: XeLocalAiEngineClientServicesNodeSettingsModelRate;
+	} | null;
 };
 
 /**
@@ -2025,6 +2031,8 @@ export type XeLocalAiEngineClientEndpointsAgentsV1AgentUsageSummaryBucketRespons
 	completionTokens: number;
 	reasoningTokens: number;
 	totalTokens: number;
+	estimatedCostUsd: number;
+	currency: string;
 };
 
 export type XeLocalAiEngineClientEndpointsAgentsV1AgentUsageSummaryTotalsResponse = {
@@ -2033,6 +2041,8 @@ export type XeLocalAiEngineClientEndpointsAgentsV1AgentUsageSummaryTotalsRespons
 	completionTokens: number;
 	reasoningTokens: number;
 	totalTokens: number;
+	estimatedCostUsd: number;
+	currency: string;
 };
 
 export type XeLocalAiEngineClientEndpointsAgentsV1AgentUsageProviderTotalsResponse = {
@@ -2042,10 +2052,17 @@ export type XeLocalAiEngineClientEndpointsAgentsV1AgentUsageProviderTotalsRespon
 	completionTokens: number;
 	reasoningTokens: number;
 	totalTokens: number;
+	estimatedCostUsd: number;
+	currency: string;
 };
 
 export type XeLocalAiEngineClientEndpointsAgentsV1AgentUsageSummaryRequest = {
 	[key: string]: never;
+};
+
+export type XeLocalAiEngineClientServicesNodeSettingsModelRate = {
+	inputPer1M: number;
+	outputPer1M: number;
 };
 
 export type GetVoiceManifestData = {

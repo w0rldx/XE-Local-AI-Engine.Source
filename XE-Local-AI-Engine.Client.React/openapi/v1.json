@@ -8770,6 +8770,13 @@
           "defaultVoiceProfile": {
             "type": "string",
             "nullable": true
+          },
+          "usageRates": {
+            "type": "object",
+            "additionalProperties": {
+              "$ref": "#/components/schemas/XE_Local_AI_EngineClientServicesNodeSettingsModelRate"
+            },
+            "nullable": true
           }
         }
       },
@@ -8971,6 +8978,13 @@
           },
           "defaultVoiceProfile": {
             "type": "string",
+            "nullable": true
+          },
+          "usageRates": {
+            "type": "object",
+            "additionalProperties": {
+              "$ref": "#/components/schemas/XE_Local_AI_EngineClientServicesNodeSettingsModelRate"
+            },
             "nullable": true
           }
         }
@@ -14429,7 +14443,9 @@
           "promptTokens",
           "completionTokens",
           "reasoningTokens",
-          "totalTokens"
+          "totalTokens",
+          "estimatedCostUsd",
+          "currency"
         ],
         "properties": {
           "modelName": {
@@ -14456,6 +14472,13 @@
           },
           "totalTokens": {
             "type": "integer"
+          },
+          "estimatedCostUsd": {
+            "type": "number",
+            "format": "double"
+          },
+          "currency": {
+            "type": "string"
           }
         }
       },
@@ -14467,7 +14490,9 @@
           "promptTokens",
           "completionTokens",
           "reasoningTokens",
-          "totalTokens"
+          "totalTokens",
+          "estimatedCostUsd",
+          "currency"
         ],
         "properties": {
           "runCount": {
@@ -14485,6 +14510,13 @@
           },
           "totalTokens": {
             "type": "integer"
+          },
+          "estimatedCostUsd": {
+            "type": "number",
+            "format": "double"
+          },
+          "currency": {
+            "type": "string"
           }
         }
       },
@@ -14497,7 +14529,9 @@
           "promptTokens",
           "completionTokens",
           "reasoningTokens",
-          "totalTokens"
+          "totalTokens",
+          "estimatedCostUsd",
+          "currency"
         ],
         "properties": {
           "provider": {
@@ -14518,12 +14552,37 @@
           },
           "totalTokens": {
             "type": "integer"
+          },
+          "estimatedCostUsd": {
+            "type": "number",
+            "format": "double"
+          },
+          "currency": {
+            "type": "string"
           }
         }
       },
       "XE_Local_AI_EngineClientEndpointsAgentsV1AgentUsageSummaryRequest": {
         "type": "object",
         "additionalProperties": false
+      },
+      "XE_Local_AI_EngineClientServicesNodeSettingsModelRate": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "inputPer1M",
+          "outputPer1M"
+        ],
+        "properties": {
+          "inputPer1M": {
+            "type": "number",
+            "format": "double"
+          },
+          "outputPer1M": {
+            "type": "number",
+            "format": "double"
+          }
+        }
       }
     },
     "securitySchemes": {
