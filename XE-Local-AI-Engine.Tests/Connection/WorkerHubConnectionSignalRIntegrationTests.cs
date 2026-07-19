@@ -21,6 +21,16 @@ using XE_Local_AI_Engine.Tests.Fixtures;
 using XE_Local_AI_Engine.Tests.Testing;
 using XE_Local_AI_Engine.Tests.Testing.Mocks;
 
+/// <summary>
+///     Each test here hosts a real TLS Kestrel worker-node fixture and drives genuine SignalR-over-WebSockets transport.
+///     The reconnect cases fire a transport-level drop and wait on automatic reconnect, whose exponential backoff starts
+///     at one second and doubles each attempt, so a handshake that is CPU-starved past its early retry windows can blow
+///     the thirty-second wait budget. Under the full module's parallel load that starvation is real and intermittent, so
+///     this heavy, timing-sensitive integration suite runs in isolation — the same keyless-NotInParallel idiom the CUDA
+///     build and stream-idle-watchdog suites use. Given the CPU to complete a reconnect on its first retry, the waits are
+///     never the bottleneck.
+/// </summary>
+[NotInParallel]
 public sealed class WorkerHubConnectionSignalRIntegrationTests
 {
     [Test]
