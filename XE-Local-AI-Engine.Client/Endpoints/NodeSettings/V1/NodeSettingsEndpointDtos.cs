@@ -117,6 +117,15 @@ public sealed record NodeSettingsResponse
 
     /// <summary>The default Kokoro voice profile id. <see langword="null" /> reads as <c>af_heart</c>.</summary>
     public string? DefaultVoiceProfile { get; init; }
+
+    // ── Usage cost rates (Wave 13) ──
+
+    /// <summary>
+    ///     Operator override of usage cost rates, keyed by model NAME → its USD-per-1M input/output rate. Flattened from
+    ///     the stored <see cref="NodeUsageRateSettings" />. <see langword="null" /> means no override (the usage-summary
+    ///     cost estimate falls back to the built-in default rate table). Local runtimes are always free regardless.
+    /// </summary>
+    public IReadOnlyDictionary<string, ModelRate>? UsageRates { get; init; }
 }
 
 /// <summary>
@@ -185,6 +194,15 @@ public sealed record SaveNodeSettingsRequest
     public IReadOnlyList<string>? AllowedVoiceModels { get; init; }
 
     public string? DefaultVoiceProfile { get; init; }
+
+    // ── Usage cost rates (Wave 13) ──
+
+    /// <summary>
+    ///     Operator override of usage cost rates, keyed by model NAME → its USD-per-1M input/output rate. <see langword="null" />
+    ///     keeps the currently stored override; a supplied map REPLACES it (an empty map clears the override — the store's
+    ///     <c>Normalize</c> collapses it to null). Negative / non-finite rates are rejected at the boundary with a 400.
+    /// </summary>
+    public IReadOnlyDictionary<string, ModelRate>? UsageRates { get; init; }
 }
 
 internal static class NodeSettingsEndpointDtoMapper
@@ -241,7 +259,9 @@ internal static class NodeSettingsEndpointDtoMapper
             SamplingDefaults = settings.SamplingDefaults,
             VoiceFeatureEnabled = settings.VoiceFeatureEnabled,
             AllowedVoiceModels = settings.AllowedVoiceModels,
-            DefaultVoiceProfile = settings.DefaultVoiceProfile
+            DefaultVoiceProfile = settings.DefaultVoiceProfile,
+            // Flatten the stored wrapper to the map the React rate editor renders (null wrapper → null map).
+            UsageRates = settings.UsageRates?.Models
         };
     }
 
@@ -306,7 +326,13 @@ internal static class NodeSettingsEndpointDtoMapper
             AllowedVoiceModels = request.AllowedVoiceModels ?? currentSettings.AllowedVoiceModels,
             DefaultVoiceProfile = request.DefaultVoiceProfile is null
                 ? currentSettings.DefaultVoiceProfile
-                : request.DefaultVoiceProfile.Trim()
+                : request.DefaultVoiceProfile.Trim(),
+            // Null-preserving: a null request map keeps the currently stored override; a supplied map (wrapped back into
+            // the stored shape) REPLACES it. The store's Normalize then trims keys and drops negative/non-finite entries,
+            // collapsing an empty/all-junk map to null (no override).
+            UsageRates = request.UsageRates is null
+                ? currentSettings.UsageRates
+                : new NodeUsageRateSettings { Models = request.UsageRates }
         };
     }
 }
