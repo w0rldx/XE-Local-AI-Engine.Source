@@ -1,5 +1,6 @@
 namespace XE_Local_AI_Engine.Tests.NodeSettings;
 
+using System.Collections.Generic;
 using System.Net;
 using System.Net.Http.Json;
 using System.Text.Json;
@@ -405,6 +406,63 @@ public sealed class NodeSettingsEndpointTests
             RerankerModelName = string.Empty
         }.ToStoredSettings(stored);
         AssertEx.Equal(string.Empty, cleared.RerankerModelName);
+    }
+
+    [Test]
+    public void NodeSettings_UsageRates_RoundTripThroughMapper()
+    {
+        // A supplied rate map is wrapped into the stored shape and surfaced flat on GET; omitting the field on a later
+        // save keeps the current override (null-preserving merge) and does NOT wipe unrelated settings.
+        var request = new SaveNodeSettingsRequest
+        {
+            OllamaEndpoint = "http://127.0.0.1:11434",
+            UsageRates = new Dictionary<string, ModelRate>
+            {
+                ["gpt-5"] = new() { InputPer1M = 1.25, OutputPer1M = 10 }
+            }
+        };
+
+        var stored = request.ToStoredSettings(new StoredNodeSettings());
+        AssertEx.NotNull(stored.UsageRates);
+        AssertEx.NotNull(stored.UsageRates!.Models);
+        AssertEx.Equal(expected: 1.25d, stored.UsageRates!.Models!["gpt-5"].InputPer1M);
+        AssertEx.Equal(expected: 10d, stored.UsageRates!.Models!["gpt-5"].OutputPer1M);
+
+        var response = stored.ToResponse();
+        AssertEx.NotNull(response.UsageRates);
+        AssertEx.Equal(expected: 1.25d, response.UsageRates!["gpt-5"].InputPer1M);
+
+        // Omitting UsageRates on a later save keeps the current override AND leaves the other stored fields intact.
+        var merged = new SaveNodeSettingsRequest { OllamaEndpoint = "http://127.0.0.1:11500" }.ToStoredSettings(stored);
+        AssertEx.NotNull(merged.UsageRates);
+        AssertEx.Equal(expected: 1.25d, merged.UsageRates!.Models!["gpt-5"].InputPer1M);
+        AssertEx.Equal("http://127.0.0.1:11500", merged.OllamaEndpoint);
+    }
+
+    [Test]
+    public void SaveNodeSettings_UsageRateValidation_RejectsNegativeAndBlank_AcceptsValid()
+    {
+        // Boundary validation for the usage-rate map (host-independent — exercises the FluentValidation rule directly, so
+        // it does not depend on full host startup).
+        var validator = new SaveNodeSettingsRequestValidator();
+
+        var negative = validator.Validate(new SaveNodeSettingsRequest
+        {
+            UsageRates = new Dictionary<string, ModelRate> { ["gpt-5"] = new() { InputPer1M = -1, OutputPer1M = 10 } }
+        });
+        AssertEx.False(negative.IsValid);
+
+        var blankKey = validator.Validate(new SaveNodeSettingsRequest
+        {
+            UsageRates = new Dictionary<string, ModelRate> { ["   "] = new() { InputPer1M = 1, OutputPer1M = 1 } }
+        });
+        AssertEx.False(blankKey.IsValid);
+
+        var valid = validator.Validate(new SaveNodeSettingsRequest
+        {
+            UsageRates = new Dictionary<string, ModelRate> { ["gpt-5"] = new() { InputPer1M = 1.25, OutputPer1M = 10 } }
+        });
+        AssertEx.True(valid.IsValid);
     }
 
     private static TestingWebAppFactory CreateFactory(INodeSettingsStore nodeSettingsStore, ICapabilityReporter? capabilityReporter = null)
