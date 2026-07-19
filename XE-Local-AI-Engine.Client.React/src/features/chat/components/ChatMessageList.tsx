@@ -1,6 +1,7 @@
 import { Alert, Button, Loader, ScrollArea, Stack, Text } from "@mantine/core";
 import { IconAlertTriangle } from "@tabler/icons-react";
-import { useEffect, useMemo, useRef } from "react";
+import { useVirtualizer } from "@tanstack/react-virtual";
+import { Fragment, useEffect, useMemo, useRef } from "react";
 import { useTranslation } from "react-i18next";
 
 import { ChatMessage } from "@/features/chat/components/ChatMessage";
@@ -20,6 +21,15 @@ const EMPTY_TIMELINE_ENTRIES: ChatTimelineEntry[] = [];
 // A scroll landing within this many pixels of the bottom counts as "at the bottom" and keeps auto-scroll
 // latched on; scrolling further up unlatches it so a user reading earlier output mid-generation is left alone.
 const NEAR_BOTTOM_THRESHOLD_PX = 100;
+// Above this many turns the list windows its rows (@tanstack/react-virtual) so a long thread does not keep
+// every markdown/code-block subtree mounted. At or below it the plain path renders — byte-identical DOM to the
+// pre-virtualization list — because a short thread gains nothing from windowing and the plain path keeps the
+// common case (and every existing test) untouched.
+const VIRTUALIZATION_ROW_THRESHOLD = 30;
+// Row spacing in the virtualized path, matching the plain path's <Stack gap="sm"> (12px).
+const VIRTUAL_ROW_GAP_PX = 12;
+// Estimated unmeasured row height. Only affects initial paint/scrollbar until rows are measured.
+const VIRTUAL_ROW_ESTIMATE_PX = 140;
 
 interface ChatMessageListProps {
 	conversation?: ChatConversationModel;
@@ -52,6 +62,13 @@ interface ChatMessageListProps {
 function bySortOrder(left: ChatMessageModel, right: ChatMessageModel): number {
 	return left.sortOrder - right.sortOrder || left.createdAt.localeCompare(right.createdAt);
 }
+
+type MessageRevisionGroup = ReturnType<typeof groupMessageRevisions>[number];
+
+// One rendered turn in the list: a persisted revision group, or the transient synthetic streaming turn.
+type ListRow =
+	| { readonly kind: "group"; readonly key: string; readonly group: MessageRevisionGroup }
+	| { readonly kind: "streaming"; readonly key: string };
 
 function hasText(value?: string): boolean {
 	return typeof value === "string" && value.trim().length > 0;
@@ -140,6 +157,36 @@ export function ChatMessageList({
 	const isStreamingActive = scopedStreamingMessage?.isActive ?? false;
 	const streamingTurnId = scopedStreamingMessage?.messageId;
 	const scrollKey = `${revisionGroups.length}:${timelineEntries.length}:${streamingContent.length}:${isStreamingActive}`;
+	const showSyntheticStreamingTurn = Boolean(conversation && scopedStreamingMessage && !hasPersistedStreamingMessage);
+	// One entry per rendered turn: the revision groups plus (while live) the synthetic streaming turn. This is the
+	// single row source for BOTH render paths below, so plain and virtualized rendering can never disagree on content.
+	const rows = useMemo<ListRow[]>(() => {
+		const result: ListRow[] = revisionGroups.map((group) => ({ kind: "group", key: group.active.id, group }));
+		if (showSyntheticStreamingTurn && streamingTurnId) {
+			result.push({ kind: "streaming", key: `streaming:${streamingTurnId}` });
+		}
+		return result;
+	}, [revisionGroups, showSyntheticStreamingTurn, streamingTurnId]);
+	const virtualize = rows.length > VIRTUALIZATION_ROW_THRESHOLD;
+	const rowVirtualizer = useVirtualizer({
+		count: rows.length,
+		getScrollElement: () => viewportRef.current,
+		estimateSize: () => VIRTUAL_ROW_ESTIMATE_PX,
+		overscan: 6,
+		getItemKey: (index) => rows[index]?.key ?? index,
+		enabled: virtualize,
+	});
+	const virtualTotalSize = virtualize ? rowVirtualizer.getTotalSize() : 0;
+
+	// Virtualized path only: row heights land asynchronously (estimate → measured), growing the total size after
+	// the scrollKey-driven follow already ran. While latched, re-pin on every total-size change so the view stays
+	// at the bottom as measurements (and the streaming row's growth) arrive. "auto" — this fires per measurement,
+	// stacking smooth animations would judder.
+	useEffect(() => {
+		if (virtualTotalSize > 0 && stickToBottomRef.current) {
+			endRef.current?.scrollIntoView({ behavior: "auto", block: "end" });
+		}
+	}, [virtualTotalSize]);
 
 	// Drive the stick-to-bottom latch from real scroll events: unlatch once the user scrolls further than the
 	// threshold from the bottom, re-latch when they return near it. Our own scrollIntoView also lands near the
@@ -193,102 +240,137 @@ export function ChatMessageList({
 		endRef.current?.scrollIntoView({ behavior: isStreamingActive ? "auto" : "smooth", block: "end" });
 	}, [scrollKey, isStreamingActive]);
 
+	const renderGroupRow = (group: MessageRevisionGroup) => {
+		const message = group.active;
+		const isStreamingTarget = scopedStreamingMessage?.messageId === message.id && message.role === "assistant";
+		const isAssistant = message.role === "assistant";
+		const variantGroupId = message.variantGroupId;
+		const previousRevision = group.revisions[Math.max(0, group.activeIndex - 1)];
+		const nextRevision = group.revisions[Math.min(group.revisions.length - 1, group.activeIndex + 1)];
+		const revisionNav =
+			isAssistant && group.revisions.length > 1 && variantGroupId
+				? {
+						activeIndex: group.activeIndex,
+						total: group.revisions.length,
+						onPrevious: () => previousRevision && onSelectRevision?.(variantGroupId, previousRevision.id),
+						onNext: () => nextRevision && onSelectRevision?.(variantGroupId, nextRevision.id),
+					}
+				: undefined;
+
+		return (
+			<ChatMessage
+				key={message.id}
+				message={message}
+				isStreaming={
+					isStreamingTarget ? (scopedStreamingMessage?.isActive ?? false) && !scopedStreamingMessage?.isQueued : false
+				}
+				streamingParts={isStreamingTarget ? scopedStreamingMessage?.parts : undefined}
+				streamingReasoningOverflowBytes={isStreamingTarget ? scopedStreamingMessage?.reasoningOverflowBytes : undefined}
+				placeholder={isStreamingTarget ? streamingPlaceholder : undefined}
+				onRegenerate={isAssistant ? onRegenerate : undefined}
+				onBranch={isAssistant ? onBranch : undefined}
+				revisionNav={revisionNav}
+				showFeedbackControls={showFeedbackControls}
+				feedback={feedbackByMessageId?.[message.id]}
+				feedbackPending={pendingFeedbackMessageId === message.id}
+				onSubmitFeedback={onSubmitFeedback}
+				reasoningEffort={reasoningEffort}
+				footer={
+					isStreamingTarget ? (
+						<StreamingIndicator
+							hasContent={hasStreamingContent}
+							isDelayed={scopedStreamingMessage?.isDelayed}
+							isQueued={scopedStreamingMessage?.isQueued}
+							isActive={scopedStreamingMessage?.isActive ?? false}
+							runtimePhase={scopedStreamingMessage?.runtimePhase}
+						/>
+					) : undefined
+				}
+			/>
+		);
+	};
+
+	const renderStreamingTurn = () =>
+		conversation && scopedStreamingMessage ? (
+			<ChatMessage
+				message={{
+					id: scopedStreamingMessage.messageId,
+					conversationId: conversation.id,
+					role: "assistant",
+					content: scopedStreamingMessage.content,
+					status: scopedStreamingMessage.isQueued
+						? "queued"
+						: scopedStreamingMessage.isActive
+							? "streaming"
+							: scopedStreamingMessage.error
+								? "failed"
+								: "completed",
+					// Carry the live error so the transient turn renders it once as an error block inside the
+					// bubble (the post-stream refetch then swaps in the persisted failed turn, same id).
+					error: scopedStreamingMessage.error,
+					createdAt: streamingStartedAt ?? conversation.updatedAt,
+					sortOrder: normalizedMessages.length + 1,
+					// Carry the optimistically-stamped agent attribution and reasoning effort so the live turn
+					// shows both immediately — the persisted values replace them on the post-stream refetch.
+					agentName: streamingAssistantMessage?.agentName,
+					agentDefinitionId: streamingAssistantMessage?.agentDefinitionId,
+					reasoningEffort: streamingAssistantMessage?.reasoningEffort,
+				}}
+				placeholder={streamingPlaceholder}
+				streamingParts={scopedStreamingMessage.parts}
+				streamingReasoningOverflowBytes={scopedStreamingMessage.reasoningOverflowBytes}
+				isStreaming={scopedStreamingMessage.isActive && !scopedStreamingMessage.isQueued}
+				reasoningEffort={reasoningEffort}
+				failureCategory={scopedStreamingMessage.failureCategory}
+				footer={
+					<StreamingIndicator
+						hasContent={hasStreamingContent}
+						isDelayed={scopedStreamingMessage.isDelayed}
+						isQueued={scopedStreamingMessage.isQueued}
+						isActive={scopedStreamingMessage.isActive}
+						runtimePhase={scopedStreamingMessage.runtimePhase}
+					/>
+				}
+			/>
+		) : null;
+
+	const renderRow = (row: ListRow) => (row.kind === "group" ? renderGroupRow(row.group) : renderStreamingTurn());
+
 	return (
 		<ScrollArea type="hover" scrollbarSize={8} offsetScrollbars="y" viewportRef={viewportRef} style={{ flex: 1, minHeight: 0 }}>
+			{virtualize ? (
+				// Windowed path for long threads: absolutely-positioned measured rows inside a total-height spacer.
+				// Row spacing rides each row wrapper's paddingBottom so measured heights include the gap.
+				<div style={{ height: virtualTotalSize, width: "100%", position: "relative" }} data-testid="chat-message-list-virtual">
+					{rowVirtualizer.getVirtualItems().map((virtualRow) => {
+						const row = rows[virtualRow.index];
+						return row === undefined ? null : (
+							<div
+								key={virtualRow.key}
+								data-index={virtualRow.index}
+								ref={rowVirtualizer.measureElement}
+								style={{
+									position: "absolute",
+									top: 0,
+									left: 0,
+									width: "100%",
+									transform: `translateY(${virtualRow.start}px)`,
+									paddingBottom: VIRTUAL_ROW_GAP_PX,
+								}}
+							>
+								{renderRow(row)}
+							</div>
+						);
+					})}
+				</div>
+			) : (
+				<Stack gap="sm">
+					{rows.map((row) => (
+						<Fragment key={row.key}>{renderRow(row)}</Fragment>
+					))}
+				</Stack>
+			)}
 			<Stack gap="sm">
-				{revisionGroups.map((group) => {
-					const message = group.active;
-					const isStreamingTarget = scopedStreamingMessage?.messageId === message.id && message.role === "assistant";
-					const isAssistant = message.role === "assistant";
-					const variantGroupId = message.variantGroupId;
-					const previousRevision = group.revisions[Math.max(0, group.activeIndex - 1)];
-					const nextRevision = group.revisions[Math.min(group.revisions.length - 1, group.activeIndex + 1)];
-					const revisionNav =
-						isAssistant && group.revisions.length > 1 && variantGroupId
-							? {
-									activeIndex: group.activeIndex,
-									total: group.revisions.length,
-									onPrevious: () => previousRevision && onSelectRevision?.(variantGroupId, previousRevision.id),
-									onNext: () => nextRevision && onSelectRevision?.(variantGroupId, nextRevision.id),
-								}
-							: undefined;
-
-					return (
-						<ChatMessage
-							key={message.id}
-							message={message}
-							isStreaming={
-								isStreamingTarget ? (scopedStreamingMessage?.isActive ?? false) && !scopedStreamingMessage?.isQueued : false
-							}
-							streamingParts={isStreamingTarget ? scopedStreamingMessage?.parts : undefined}
-							streamingReasoningOverflowBytes={isStreamingTarget ? scopedStreamingMessage?.reasoningOverflowBytes : undefined}
-							placeholder={isStreamingTarget ? streamingPlaceholder : undefined}
-							onRegenerate={isAssistant ? onRegenerate : undefined}
-							onBranch={isAssistant ? onBranch : undefined}
-							revisionNav={revisionNav}
-							showFeedbackControls={showFeedbackControls}
-							feedback={feedbackByMessageId?.[message.id]}
-							feedbackPending={pendingFeedbackMessageId === message.id}
-							onSubmitFeedback={onSubmitFeedback}
-							reasoningEffort={reasoningEffort}
-							footer={
-								isStreamingTarget ? (
-									<StreamingIndicator
-										hasContent={hasStreamingContent}
-										isDelayed={scopedStreamingMessage?.isDelayed}
-										isQueued={scopedStreamingMessage?.isQueued}
-										isActive={scopedStreamingMessage?.isActive ?? false}
-										runtimePhase={scopedStreamingMessage?.runtimePhase}
-									/>
-								) : undefined
-							}
-						/>
-					);
-				})}
-
-				{conversation && scopedStreamingMessage && !hasPersistedStreamingMessage ? (
-					<ChatMessage
-						message={{
-							id: scopedStreamingMessage.messageId,
-							conversationId: conversation.id,
-							role: "assistant",
-							content: scopedStreamingMessage.content,
-							status: scopedStreamingMessage.isQueued
-								? "queued"
-								: scopedStreamingMessage.isActive
-									? "streaming"
-									: scopedStreamingMessage.error
-										? "failed"
-										: "completed",
-							// Carry the live error so the transient turn renders it once as an error block inside the
-							// bubble (the post-stream refetch then swaps in the persisted failed turn, same id).
-							error: scopedStreamingMessage.error,
-							createdAt: streamingStartedAt ?? conversation.updatedAt,
-							sortOrder: normalizedMessages.length + 1,
-							// Carry the optimistically-stamped agent attribution and reasoning effort so the live turn
-							// shows both immediately — the persisted values replace them on the post-stream refetch.
-							agentName: streamingAssistantMessage?.agentName,
-							agentDefinitionId: streamingAssistantMessage?.agentDefinitionId,
-							reasoningEffort: streamingAssistantMessage?.reasoningEffort,
-						}}
-						placeholder={streamingPlaceholder}
-						streamingParts={scopedStreamingMessage.parts}
-						streamingReasoningOverflowBytes={scopedStreamingMessage.reasoningOverflowBytes}
-						isStreaming={scopedStreamingMessage.isActive && !scopedStreamingMessage.isQueued}
-						reasoningEffort={reasoningEffort}
-						failureCategory={scopedStreamingMessage.failureCategory}
-						footer={
-							<StreamingIndicator
-								hasContent={hasStreamingContent}
-								isDelayed={scopedStreamingMessage.isDelayed}
-								isQueued={scopedStreamingMessage.isQueued}
-								isActive={scopedStreamingMessage.isActive}
-								runtimePhase={scopedStreamingMessage.runtimePhase}
-							/>
-						}
-					/>
-				) : null}
-
 				{!conversation ? (
 					<Text size="sm" c="dimmed">
 						{t("pages.chat.emptyState", "Select a conversation to start chatting.")}
