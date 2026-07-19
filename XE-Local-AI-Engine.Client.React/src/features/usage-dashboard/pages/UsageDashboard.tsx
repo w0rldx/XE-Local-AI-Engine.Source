@@ -151,6 +151,12 @@ export function UsageDashboard() {
 					) : (
 						<>
 							<UsageTotalsCards totals={summary.totals} />
+							<Text size="xs" c="dimmed" data-testid="usage-cost-disclaimer">
+								{t(
+									"pages.usage.costDisclaimer",
+									"Costs are approximate estimates in USD, computed from the per-model rates configured in Node settings. Local and unpriced usage counts as free.",
+								)}
+							</Text>
 							<UsageDailyChart daily={daily} />
 							<UsageProviderBreakdown byProvider={summary.byProvider} />
 							<UsageModelTable rows={models} />

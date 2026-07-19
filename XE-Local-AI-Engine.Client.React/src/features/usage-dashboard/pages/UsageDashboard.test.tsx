@@ -86,12 +86,20 @@ describe("UsageDashboard (generated hey-api data layer)", () => {
 		// Per-model table rows.
 		expect(screen.getByTestId("usage-model-row-qwen3:8b")).toBeTruthy();
 		expect(screen.getByTestId("usage-model-row-gpt-5")).toBeTruthy();
+
+		// Estimated cost surfaces the server value: the paid codex model shows a currency figure; the free/local model
+		// and the local provider row render the graceful em-dash. Totals show the grand cost.
+		expect(screen.getByTestId("usage-estimated-cost-value").textContent).toMatch(/3[.,]50/);
+		expect(screen.getByTestId("usage-model-cost-gpt-5").textContent).toMatch(/3[.,]50/);
+		expect(screen.getByTestId("usage-model-cost-qwen3:8b").textContent).toBe("—");
+		expect(screen.getByTestId("usage-provider-cost-codex").textContent).toMatch(/3[.,]50/);
+		expect(screen.getByTestId("usage-provider-cost-local").textContent).toBe("—");
 	});
 
 	it("renders the empty-state guidance when no usage was recorded", async () => {
 		generatedMock.summaryFn.mockResolvedValue({
 			items: [],
-			totals: { runCount: 0, promptTokens: 0, completionTokens: 0, reasoningTokens: 0, totalTokens: 0 },
+			totals: { runCount: 0, promptTokens: 0, completionTokens: 0, reasoningTokens: 0, totalTokens: 0, estimatedCostUsd: 0, currency: "USD" },
 			byProvider: [],
 			retentionDays: 30,
 		} satisfies GetAgentUsageSummaryResponse);
@@ -118,6 +126,8 @@ function createSummary(): GetAgentUsageSummaryResponse {
 				completionTokens: 500_000,
 				reasoningTokens: 20_000,
 				totalTokens: 820_000,
+				estimatedCostUsd: 0,
+				currency: "USD",
 			},
 			{
 				modelName: "gpt-5",
@@ -128,6 +138,8 @@ function createSummary(): GetAgentUsageSummaryResponse {
 				completionTokens: 200_000,
 				reasoningTokens: 14_567,
 				totalTokens: 414_567,
+				estimatedCostUsd: 3.5,
+				currency: "USD",
 			},
 		],
 		totals: {
@@ -136,11 +148,13 @@ function createSummary(): GetAgentUsageSummaryResponse {
 			completionTokens: 700_000,
 			reasoningTokens: 34_567,
 			totalTokens: 1_234_567,
+			estimatedCostUsd: 3.5,
+			currency: "USD",
 		},
 		byProvider: [
-			{ provider: "local", runCount: 20, promptTokens: 300_000, completionTokens: 500_000, reasoningTokens: 20_000, totalTokens: 820_000 },
-			{ provider: "codex", runCount: 22, promptTokens: 200_000, completionTokens: 200_000, reasoningTokens: 14_567, totalTokens: 414_567 },
-			{ provider: "unknown", runCount: 0, promptTokens: 0, completionTokens: 0, reasoningTokens: 0, totalTokens: 0 },
+			{ provider: "local", runCount: 20, promptTokens: 300_000, completionTokens: 500_000, reasoningTokens: 20_000, totalTokens: 820_000, estimatedCostUsd: 0, currency: "USD" },
+			{ provider: "codex", runCount: 22, promptTokens: 200_000, completionTokens: 200_000, reasoningTokens: 14_567, totalTokens: 414_567, estimatedCostUsd: 3.5, currency: "USD" },
+			{ provider: "unknown", runCount: 0, promptTokens: 0, completionTokens: 0, reasoningTokens: 0, totalTokens: 0, estimatedCostUsd: 0, currency: "USD" },
 		],
 		retentionDays: 30,
 	};

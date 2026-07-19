@@ -28,6 +28,9 @@ export interface UsageModelRow {
 	readonly completionTokens: number;
 	readonly reasoningTokens: number;
 	readonly totalTokens: number;
+	// Estimated cost in USD, summed from the per-bucket server-computed values (never recomputed client-side). 0 for a
+	// model that only ran on free/local/unpriced providers.
+	readonly estimatedCostUsd: number;
 }
 
 // The canonical provider dimension emitted by the backend. `unknown` is the catch-all the backend assigns when a
@@ -42,6 +45,8 @@ const MS_PER_DAY = 86_400_000;
 const compactNumberFormat = new Intl.NumberFormat(undefined, { notation: "compact", maximumFractionDigits: 1 });
 // Grouped full-precision formatter (thousands separators) for exact counts (run counts, tooltip values).
 const fullNumberFormat = new Intl.NumberFormat();
+// USD currency formatter for the estimated-cost figures (server rates are USD per the wire `currency` field).
+const usdCurrencyFormat = new Intl.NumberFormat(undefined, { style: "currency", currency: "USD", maximumFractionDigits: 2 });
 
 export function formatTokensCompact(value: number): string {
 	return compactNumberFormat.format(value);
@@ -49,6 +54,13 @@ export function formatTokensCompact(value: number): string {
 
 export function formatCount(value: number): string {
 	return fullNumberFormat.format(value);
+}
+
+// Formats a server-computed estimated cost (USD) for display. A zero (or non-positive / non-finite) cost means the
+// usage was free/local/unpriced and renders as an em-dash rather than "$0.00", so a genuinely-free row reads as free
+// while a priced-but-tiny row still shows a currency value. Never recomputes cost — it only formats the wire value.
+export function formatCostUsd(value: number): string {
+	return value > 0 ? usdCurrencyFormat.format(value) : "—";
 }
 
 // True when the summary carries no recorded usage — drives the empty-state guidance card. Checks the grand total
@@ -107,6 +119,7 @@ export function aggregateByModel(items: readonly UsageBucketDto[]): UsageModelRo
 				completionTokens: existing.completionTokens + bucket.completionTokens,
 				reasoningTokens: existing.reasoningTokens + bucket.reasoningTokens,
 				totalTokens: existing.totalTokens + bucket.totalTokens,
+				estimatedCostUsd: existing.estimatedCostUsd + bucket.estimatedCostUsd,
 			});
 		} else {
 			const providerSet = new Set<string>([bucket.provider]);
@@ -119,6 +132,7 @@ export function aggregateByModel(items: readonly UsageBucketDto[]): UsageModelRo
 				completionTokens: bucket.completionTokens,
 				reasoningTokens: bucket.reasoningTokens,
 				totalTokens: bucket.totalTokens,
+				estimatedCostUsd: bucket.estimatedCostUsd,
 			});
 		}
 	}

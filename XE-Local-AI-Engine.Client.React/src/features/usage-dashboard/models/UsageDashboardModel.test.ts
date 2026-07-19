@@ -6,6 +6,7 @@ import {
 	aggregateByModel,
 	clampDateRange,
 	defaultDateRange,
+	formatCostUsd,
 	formatCount,
 	formatTokensCompact,
 	isUsageEmpty,
@@ -30,6 +31,8 @@ function bucket(overrides: Partial<UsageBucketDto>): UsageBucketDto {
 		completionTokens: 20,
 		reasoningTokens: 5,
 		totalTokens: 35,
+		estimatedCostUsd: 0,
+		currency: "USD",
 		...overrides,
 	};
 }
@@ -61,11 +64,23 @@ describe("UsageDashboardModel aggregation", () => {
 		expect(qwen?.providers).toEqual(["codex", "local"]);
 	});
 
+	it("aggregateByModel sums the server-computed per-bucket cost per model", () => {
+		const rows = aggregateByModel([
+			bucket({ modelName: "gpt-5", provider: "codex", estimatedCostUsd: 1.25 }),
+			bucket({ modelName: "gpt-5", provider: "codex", estimatedCostUsd: 0.75 }),
+			bucket({ modelName: "qwen3:8b", provider: "local", estimatedCostUsd: 0 }),
+		]);
+
+		expect(rows.find((r) => r.modelName === "gpt-5")?.estimatedCostUsd).toBeCloseTo(2.0, 10);
+		// A local-only model stays at zero cost (free/unpriced).
+		expect(rows.find((r) => r.modelName === "qwen3:8b")?.estimatedCostUsd).toBe(0);
+	});
+
 	it("isUsageEmpty is true for undefined and for zero-run totals", () => {
 		expect(isUsageEmpty(undefined)).toBe(true);
 		const summary: UsageSummaryDto = {
 			items: [],
-			totals: { runCount: 0, promptTokens: 0, completionTokens: 0, reasoningTokens: 0, totalTokens: 0 },
+			totals: { runCount: 0, promptTokens: 0, completionTokens: 0, reasoningTokens: 0, totalTokens: 0, estimatedCostUsd: 0, currency: "USD" },
 			byProvider: [],
 			retentionDays: 30,
 		};
@@ -83,6 +98,16 @@ describe("UsageDashboardModel formatting", () => {
 	it("formatCount groups thousands", () => {
 		// Grouping separator is locale-dependent; assert the digits survive and a separator is present.
 		expect(formatCount(1234567)).toMatch(/1\D?234\D?567/);
+	});
+
+	it("formatCostUsd renders an em-dash for free/unpriced and a currency value otherwise", () => {
+		// Zero / non-positive = free/local/unpriced -> em-dash, not "$0.00".
+		expect(formatCostUsd(0)).toBe("—");
+		expect(formatCostUsd(-1)).toBe("—");
+		// A positive cost renders as a USD currency value (symbol + the digits, locale-formatted).
+		expect(formatCostUsd(12.5)).toMatch(/\$?12[.,]50/);
+		// A priced-but-tiny value still shows a currency value (distinct from the free em-dash).
+		expect(formatCostUsd(0.004)).toMatch(/0[.,]00/);
 	});
 });
 

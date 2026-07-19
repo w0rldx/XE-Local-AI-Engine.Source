@@ -3,6 +3,7 @@ import { z } from "zod";
 import type {
 	XeLocalAiEngineClientEndpointsNodeSettingsV1NodeSettingsResponse as NodeSettingsResponse,
 	XeLocalAiEngineClientEndpointsNodeSettingsV1SaveNodeSettingsRequest as SaveNodeSettingsRequest,
+	XeLocalAiEngineClientServicesNodeSettingsModelRate as ModelRate,
 } from "@/core/api/generated";
 
 // The migrated appsettings knobs as editable form state. Numbers are kept as `number | string` so an in-progress
@@ -116,6 +117,105 @@ const toolCapableModelNameSchema = z
 	.min(1)
 	.refine((value) => !controlCharPattern.test(value), { message: "control-char" });
 
+// --- Usage rate editor ----------------------------------------------------------------------------------------
+// An operator-editable per-model rate row (USD per 1M tokens). Numbers stay `number | string` for the same in-progress
+// edit reason as the other numeric fields; validation resolves them at save time. The stored map is keyed by model
+// name, so the editor works with an ordered array of rows and reduces it back into the map on save.
+export interface UsageRateRow {
+	// Client-only stable key for the row editor (React list key + focus stability). Never sent to the backend — the
+	// build step reduces rows into the keyed rate map and drops this.
+	readonly id: string;
+	readonly modelName: string;
+	readonly inputPer1M: number | string;
+	readonly outputPer1M: number | string;
+}
+
+// Generates a stable id for a rate row. `crypto.randomUUID` is available in every supported browser and in the jsdom/
+// Node test runtime; a timestamp+random fallback keeps it from throwing in any exotic environment.
+function newRateRowId(): string {
+	return typeof crypto !== "undefined" && typeof crypto.randomUUID === "function"
+		? crypto.randomUUID()
+		: `rate-${Date.now()}-${Math.random().toString(36).slice(2)}`;
+}
+
+// A fresh, empty rate row for the "add rate" affordance.
+export function newUsageRateRow(): UsageRateRow {
+	return { id: newRateRowId(), modelName: "", inputPer1M: "", outputPer1M: "" };
+}
+
+// True when a rate cell holds no usable value (empty / whitespace-only string). A numeric 0 is a real, valid rate.
+function isRateCellEmpty(value: number | string): boolean {
+	return typeof value === "string" && value.trim().length === 0;
+}
+
+// Resolves a rate cell to a finite, non-negative number, or undefined when empty / negative / non-numeric. Note an
+// empty string must NOT coerce to 0 (JS `Number("") === 0`), so the empty check runs first.
+function toValidRate(value: number | string): number | undefined {
+	if (isRateCellEmpty(value)) {
+		return undefined;
+	}
+	const numeric = typeof value === "number" ? value : Number(value);
+	if (!Number.isFinite(numeric) || numeric < 0) {
+		return undefined;
+	}
+	return numeric;
+}
+
+// A model-name key for a rate row: trimmed, non-empty, no control characters (mirrors the tool-capable name rule).
+const rateModelNameSchema = z
+	.string()
+	.trim()
+	.min(1)
+	.refine((value) => !controlCharPattern.test(value), { message: "control-char" });
+
+// Validates the rate rows into the wire map. A fully-empty row (blank name AND both cells empty) is silently dropped so
+// a freshly-added-but-unfilled row never blocks a save. Any other malformed row (missing name, negative/non-numeric
+// rate, control chars) sets `hasInvalid`. Duplicate model names collapse (last row wins). An empty result maps to null
+// so the caller can clear the stored table (null-preserving on the backend).
+export function validateUsageRates(rows: readonly UsageRateRow[]): {
+	map: Record<string, ModelRate> | null;
+	hasInvalid: boolean;
+} {
+	const map: Record<string, ModelRate> = {};
+	let hasInvalid = false;
+
+	for (const row of rows) {
+		const nameEmpty = row.modelName.trim().length === 0;
+		if (nameEmpty && isRateCellEmpty(row.inputPer1M) && isRateCellEmpty(row.outputPer1M)) {
+			continue;
+		}
+		const parsedName = rateModelNameSchema.safeParse(row.modelName);
+		const input = toValidRate(row.inputPer1M);
+		const output = toValidRate(row.outputPer1M);
+		if (!parsedName.success || input === undefined || output === undefined) {
+			hasInvalid = true;
+			continue;
+		}
+		map[parsedName.data] = { inputPer1M: input, outputPer1M: output };
+	}
+
+	return { map: Object.keys(map).length > 0 ? map : null, hasInvalid };
+}
+
+// Canonical string for a rate map so change detection is order-independent (map keys sorted by model name).
+function canonicalRateMap(map: Record<string, ModelRate> | null): string {
+	if (map === null) {
+		return "null";
+	}
+	const sorted = Object.entries(map).sort(([a], [b]) => a.localeCompare(b));
+	return JSON.stringify(sorted);
+}
+
+// Maps the GET response's usageRates map into editor rows, sorted by model name for a stable render. Absent/null → [].
+export function toUsageRateRows(map: NodeSettingsResponse["usageRates"]): UsageRateRow[] {
+	if (!map) {
+		return [];
+	}
+	return Object.entries(map)
+		.map(([modelName, rate]) => ({ id: newRateRowId(), modelName, inputPer1M: rate.inputPer1M, outputPer1M: rate.outputPer1M }))
+		.sort((a, b) => a.modelName.localeCompare(b.modelName));
+}
+
 export function validateToolCapableModels(values: readonly string[]): { value: string[]; hasInvalid: boolean } {
 	const cleaned: string[] = [];
 	let hasInvalid = false;
@@ -151,6 +251,8 @@ export interface NodeSettingsFieldsForm {
 	chatCacheReuse: number | string;
 	// Knowledge-base reranker (empty = reranking off)
 	rerankerModelName: string;
+	// Per-model usage cost rates (USD per 1M tokens), edited as ordered rows and reduced to the stored map on save.
+	usageRates: UsageRateRow[];
 	// Developer-only
 	orchestrationIdleTimeoutSeconds: number | string;
 	agentHomePrepareTimeoutSeconds: number | string;
@@ -177,6 +279,7 @@ export const nodeSettingsFieldDefaults: NodeSettingsFieldsForm = {
 	speculativeDraftMaxTokens: 3,
 	chatCacheReuse: 256,
 	rerankerModelName: "",
+	usageRates: [],
 	orchestrationIdleTimeoutSeconds: 120,
 	agentHomePrepareTimeoutSeconds: 900,
 	agentHomeCommandTimeoutSeconds: 300,
@@ -214,6 +317,7 @@ export function toNodeSettingsFieldsForm(response: NodeSettingsResponse | undefi
 		speculativeDraftMaxTokens: numberOr(response.speculativeDraftMaxTokens, nodeSettingsFieldDefaults.speculativeDraftMaxTokens),
 		chatCacheReuse: numberOr(response.chatCacheReuse, nodeSettingsFieldDefaults.chatCacheReuse),
 		rerankerModelName: response.rerankerModelName ?? "",
+		usageRates: toUsageRateRows(response.usageRates),
 		orchestrationIdleTimeoutSeconds: numberOr(
 			response.orchestrationIdleTimeoutSeconds,
 			nodeSettingsFieldDefaults.orchestrationIdleTimeoutSeconds,
@@ -451,6 +555,16 @@ export function buildNodeSettingsRequest(
 	// null = reranking disabled). Sent whenever it differs from the baseline, including a switch back to "Off".
 	if (form.rerankerModelName !== baseline.rerankerModelName) {
 		body.rerankerModelName = form.rerankerModelName.trim();
+	}
+
+	// Usage rates — an editable per-model rate map. Validated to non-negative numbers with non-empty names; an invalid
+	// row is a hard error. Sent (as the map, or null when emptied) only when it differs from the loaded baseline; the
+	// backend field is null-preserving so omitting it keeps the current table.
+	const rates = validateUsageRates(form.usageRates);
+	if (rates.hasInvalid) {
+		errors["usageRates"] = "rate";
+	} else if (canonicalRateMap(rates.map) !== canonicalRateMap(validateUsageRates(baseline.usageRates).map)) {
+		body.usageRates = rates.map;
 	}
 
 	if (includeDeveloperFields) {

@@ -4,10 +4,12 @@ import { MantineProvider } from "@mantine/core";
 import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-import { NodeSettingsFieldsCard } from "@/features/node-settings/components/NodeSettingsFieldsCard";
+import { NodeSettingsFieldsCard, type NodeSettingsFieldsCardProps } from "@/features/node-settings/components/NodeSettingsFieldsCard";
 import {
+	type NodeSettingsFieldsForm,
 	toNodeSettingsFieldBounds,
 	toNodeSettingsFieldsForm,
+	type UsageRateRow,
 } from "@/features/node-settings/models/NodeSettingsFieldsModel";
 
 // Deterministic i18n: t returns the supplied default (with {{var}} interpolation applied) so the human copy is
@@ -55,17 +57,21 @@ interface RenderOverrides {
 	onDownloadRecommendedReranker?: () => void;
 	isDownloadRecommendedRerankerPending?: boolean;
 	isRecommendedRerankerInFlight?: boolean;
+	form?: NodeSettingsFieldsForm;
+	onChange?: ReturnType<typeof vi.fn>;
+	errors?: Record<string, string>;
 }
 
-function renderCard(overrides: RenderOverrides = {}): { onDownload: () => void } {
+function renderCard(overrides: RenderOverrides = {}): { onDownload: () => void; onChange: ReturnType<typeof vi.fn> } {
 	const onDownload = overrides.onDownloadRecommendedReranker ?? vi.fn();
+	const onChange = overrides.onChange ?? vi.fn();
 	render(
 		<MantineProvider>
 			<NodeSettingsFieldsCard
-				form={toNodeSettingsFieldsForm(undefined)}
+				form={overrides.form ?? toNodeSettingsFieldsForm(undefined)}
 				bounds={toNodeSettingsFieldBounds(undefined)}
-				errors={{}}
-				onChange={vi.fn()}
+				errors={overrides.errors ?? {}}
+				onChange={onChange as unknown as NodeSettingsFieldsCardProps["onChange"]}
 				showDeveloperFields={false}
 				draftModelOptions={[]}
 				rerankerModelOptions={[]}
@@ -75,7 +81,7 @@ function renderCard(overrides: RenderOverrides = {}): { onDownload: () => void }
 			/>
 		</MantineProvider>,
 	);
-	return { onDownload };
+	return { onDownload, onChange };
 }
 
 describe("NodeSettingsFieldsCard — recommended reranker download", () => {
@@ -112,5 +118,88 @@ describe("NodeSettingsFieldsCard — recommended reranker download", () => {
 		renderCard({ isDownloadRecommendedRerankerPending: true });
 
 		expect((screen.getByTestId("node-settings-reranker-download-recommended") as HTMLButtonElement).disabled).toBe(true);
+	});
+});
+
+describe("NodeSettingsFieldsCard — usage rate editor", () => {
+	beforeEach(() => {
+		installJsdomEnvironmentMocks();
+		vi.clearAllMocks();
+	});
+
+	afterEach(() => cleanup());
+
+	function formWithRates(rows: NodeSettingsFieldsForm["usageRates"]): NodeSettingsFieldsForm {
+		return { ...toNodeSettingsFieldsForm(undefined), usageRates: rows };
+	}
+
+	it("renders the empty state and the add affordance when no rates are configured", () => {
+		renderCard();
+
+		expect(screen.getByTestId("node-settings-usage-rates-card")).toBeTruthy();
+		expect(screen.getByTestId("node-settings-usage-rates-empty")).toBeTruthy();
+		expect(screen.getByTestId("node-settings-usage-rate-add")).toBeTruthy();
+		expect(screen.queryByTestId("node-settings-usage-rate-row")).toBeNull();
+	});
+
+	it("appends a blank row when Add rate is clicked", () => {
+		const { onChange } = renderCard();
+
+		fireEvent.click(screen.getByTestId("node-settings-usage-rate-add"));
+
+		expect(onChange).toHaveBeenCalledTimes(1);
+		const call = onChange.mock.calls[0];
+		expect(call).toBeDefined();
+		const [field, value] = call as [string, UsageRateRow[]];
+		expect(field).toBe("usageRates");
+		expect(value).toHaveLength(1);
+		expect(value[0]).toMatchObject({ modelName: "", inputPer1M: "", outputPer1M: "" });
+		expect(typeof value[0]?.id).toBe("string");
+	});
+
+	it("edits a row's model name through the generic onChange (whole-array replace)", () => {
+		const { onChange } = renderCard({
+			form: formWithRates([{ id: "a", modelName: "gpt", inputPer1M: 1, outputPer1M: 2 }]),
+		});
+
+		fireEvent.change(screen.getByTestId("node-settings-usage-rate-model"), { target: { value: "gpt-5" } });
+
+		expect(onChange).toHaveBeenCalledWith("usageRates", [{ id: "a", modelName: "gpt-5", inputPer1M: 1, outputPer1M: 2 }]);
+	});
+
+	it("edits a row's input rate through the number input", () => {
+		const { onChange } = renderCard({
+			form: formWithRates([{ id: "a", modelName: "gpt-5", inputPer1M: 1, outputPer1M: 2 }]),
+		});
+
+		fireEvent.change(screen.getByTestId("node-settings-usage-rate-input"), { target: { value: "5" } });
+
+		expect(onChange).toHaveBeenCalledWith("usageRates", [{ id: "a", modelName: "gpt-5", inputPer1M: 5, outputPer1M: 2 }]);
+	});
+
+	it("removes a row, sending the reduced array", () => {
+		const { onChange } = renderCard({
+			form: formWithRates([
+				{ id: "a", modelName: "gpt-5", inputPer1M: 1, outputPer1M: 2 },
+				{ id: "b", modelName: "claude", inputPer1M: 3, outputPer1M: 4 },
+			]),
+		});
+
+		const removeButton = screen.getAllByTestId("node-settings-usage-rate-remove")[0];
+		expect(removeButton).toBeDefined();
+		fireEvent.click(removeButton as HTMLElement);
+
+		expect(onChange).toHaveBeenCalledWith("usageRates", [{ id: "b", modelName: "claude", inputPer1M: 3, outputPer1M: 4 }]);
+	});
+
+	it("surfaces the rate validation error when the page passes one", () => {
+		renderCard({
+			form: formWithRates([{ id: "a", modelName: "gpt-5", inputPer1M: -1, outputPer1M: 2 }]),
+			errors: { usageRates: "rate" },
+		});
+
+		// The error block renders whenever the page passes a usageRates error code (the card resolves every field error
+		// through the shared errors.<code> i18n lookup, whose test-time fallback is the generic "Invalid value.").
+		expect(screen.getByTestId("node-settings-usage-rates-error").textContent).toBe("Invalid value.");
 	});
 });

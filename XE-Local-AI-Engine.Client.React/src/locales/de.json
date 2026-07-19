@@ -1159,7 +1159,8 @@
 					"invalid": "Eine oder mehrere Eingaben sind ungültig.",
 					"positive": "Bitte eine positive ganze Zahl eingeben.",
 					"mode": "Unbekannter Modus für spekulatives Decoding.",
-					"required": "Wähle für diesen Modus ein Entwurfsmodell."
+					"required": "Wähle für diesen Modus ein Entwurfsmodell.",
+					"rate": "Jede Rate benötigt einen Modellnamen sowie nicht-negative Eingabe- und Ausgabewerte."
 				},
 				"localChat": {
 					"title": "Lokaler Chat"
@@ -1262,6 +1263,19 @@
 					"downloadStarted": "Der empfohlene Reranker ({{model}}) wird heruntergeladen.",
 					"downloadInFlight": "Der empfohlene Reranker ({{model}}) wird bereits heruntergeladen.",
 					"downloadError": "Der Download des empfohlenen Rerankers konnte nicht gestartet werden."
+				},
+				"usageRates": {
+					"title": "Kostenraten der Nutzung",
+					"description": "Ungefähre Kostenraten pro Modell (USD pro 1 Mio. Tokens) zur Kostenschätzung im Nutzungs-Dashboard. Lokale und nicht bepreiste Modelle gelten als kostenlos. Dies sind Schätzungen in Ihrer Betreiberwährung (USD), keine Rechnung.",
+					"empty": "Keine Raten konfiguriert. Fügen Sie eine Rate hinzu, um die Kosten für ein Modell zu schätzen.",
+					"modelPlaceholder": "z. B. gpt-5",
+					"add": "Rate hinzufügen",
+					"remove": "Rate entfernen",
+					"columns": {
+						"model": "Modellname",
+						"input": "Eingabe $/1 Mio.",
+						"output": "Ausgabe $/1 Mio."
+					}
 				}
 			}
 		},
@@ -1563,6 +1577,7 @@
 			"title": "Nutzungs-Dashboard",
 			"subtitle": "Agent-Token-Nutzung nach Modell und Anbieter. Daten werden {{days}} Tage lang aufbewahrt.",
 			"loadError": "Nutzungsübersicht konnte nicht geladen werden.",
+			"costDisclaimer": "Kosten sind ungefähre Schätzungen in USD, berechnet aus den in den Node-Einstellungen konfigurierten Raten pro Modell. Lokale und nicht bepreiste Nutzung gilt als kostenlos.",
 			"range": {
 				"from": "Von",
 				"to": "Bis"
@@ -1572,7 +1587,8 @@
 				"promptTokens": "Prompt-Tokens",
 				"completionTokens": "Antwort-Tokens",
 				"reasoningTokens": "Reasoning-Tokens",
-				"runCount": "Läufe"
+				"runCount": "Läufe",
+				"estimatedCost": "Gesch. Kosten"
 			},
 			"daily": {
 				"title": "Tägliche Token-Nutzung",
@@ -1590,7 +1606,8 @@
 				"columns": {
 					"provider": "Anbieter",
 					"runs": "Läufe",
-					"totalTokens": "Gesamt-Tokens"
+					"totalTokens": "Gesamt-Tokens",
+					"estimatedCost": "Gesch. Kosten"
 				}
 			},
 			"models": {
@@ -1602,7 +1619,8 @@
 					"runs": "Läufe",
 					"prompt": "Prompt",
 					"completion": "Antwort",
-					"total": "Gesamt"
+					"total": "Gesamt",
+					"estimatedCost": "Gesch. Kosten"
 				}
 			},
 			"empty": {

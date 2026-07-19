@@ -4,7 +4,7 @@ import { useTranslation } from "react-i18next";
 import { TablePaginationFooter } from "@/core/ui/components/TablePagination/TablePaginationFooter";
 import { useTablePagination } from "@/core/ui/components/TablePagination/useTablePagination";
 import type { UsageModelRow } from "@/features/usage-dashboard/models/UsageDashboardModel";
-import { formatCount, formatTokensCompact } from "@/features/usage-dashboard/models/UsageDashboardModel";
+import { formatCostUsd, formatCount, formatTokensCompact } from "@/features/usage-dashboard/models/UsageDashboardModel";
 import { providerColor, providerLabel } from "@/features/usage-dashboard/models/UsageProviderPresentation";
 
 // Persisted page-size preference (its own key so this table remembers a size independent of other tables).
@@ -30,12 +30,13 @@ export function UsageModelTable({ rows }: { readonly rows: readonly UsageModelRo
 								<Table.Th>{t("pages.usage.models.columns.prompt", "Prompt")}</Table.Th>
 								<Table.Th>{t("pages.usage.models.columns.completion", "Completion")}</Table.Th>
 								<Table.Th>{t("pages.usage.models.columns.total", "Total")}</Table.Th>
+								<Table.Th>{t("pages.usage.models.columns.estimatedCost", "Est. cost")}</Table.Th>
 							</Table.Tr>
 						</Table.Thead>
 						<Table.Tbody>
 							{pagination.pageItems.length === 0 ? (
 								<Table.Tr>
-									<Table.Td colSpan={6}>
+									<Table.Td colSpan={7}>
 										<Text c="dimmed">{t("pages.usage.models.empty", "No model usage recorded for this range.")}</Text>
 									</Table.Td>
 								</Table.Tr>
@@ -67,6 +68,9 @@ export function UsageModelTable({ rows }: { readonly rows: readonly UsageModelRo
 											<Text fw={600} aria-label={formatCount(row.totalTokens)}>
 												{formatTokensCompact(row.totalTokens)}
 											</Text>
+										</Table.Td>
+										<Table.Td>
+											<Text data-testid={`usage-model-cost-${row.modelName}`}>{formatCostUsd(row.estimatedCostUsd)}</Text>
 										</Table.Td>
 									</Table.Tr>
 								))
