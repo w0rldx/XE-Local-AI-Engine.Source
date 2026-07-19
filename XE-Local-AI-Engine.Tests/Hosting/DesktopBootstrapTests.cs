@@ -12,8 +12,27 @@ using XE_Local_AI_Engine.Tests.Testing;
 ///     redirect the data directory into a temp folder via the injected folder resolver, so the real %LOCALAPPDATA% is
 ///     never touched.
 /// </summary>
-public sealed class DesktopBootstrapTests
+// EnsureLocalDataConfiguration resolves the operator secret process-env-first (XE_NODE_SQLITE_KEY) via
+// NodeOperatorSecretProvider, so the "neither env set" cases require that process-global var to be UNSET while other
+// suites (the CUDA env-scrub test, the ranker-registration build) set/read it. The shared NotInParallel key serializes
+// this class against them, and the constructor/Dispose save-then-clear-then-restore the var so a serialized-but-leaky
+// sibling can never poison the next test's "neither set" premise.
+[NotInParallel("XE_NODE_SQLITE_KEY")]
+public sealed class DesktopBootstrapTests : IDisposable
 {
+    private readonly string? _originalOperatorSecretEnv = Environment.GetEnvironmentVariable(NodeOperatorSecretProvider.EnvVarName);
+
+    public DesktopBootstrapTests()
+    {
+        // Force the "neither env set" precondition regardless of ambient/leaked state; restored in Dispose.
+        Environment.SetEnvironmentVariable(NodeOperatorSecretProvider.EnvVarName, null);
+    }
+
+    public void Dispose()
+    {
+        Environment.SetEnvironmentVariable(NodeOperatorSecretProvider.EnvVarName, _originalOperatorSecretEnv);
+    }
+
     [Test]
     public void EnsureLocalDataConfiguration_WhenNeitherEnvSet_PopulatesConnectionStringAndOperatorSecret()
     {
