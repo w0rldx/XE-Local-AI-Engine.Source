@@ -194,8 +194,38 @@ public sealed class NodeSettingsStore : INodeSettingsStore, IDisposable
                 StoredNodeSettings.MinSpeculativeDraftGpuLayers, StoredNodeSettings.MaxSpeculativeDraftGpuLayers),
             RerankerModelName = TrimToNull(settings.RerankerModelName),
             AllowedVoiceModels = NormalizeStringList(settings.AllowedVoiceModels),
-            DefaultVoiceProfile = TrimToNull(settings.DefaultVoiceProfile)
+            DefaultVoiceProfile = TrimToNull(settings.DefaultVoiceProfile),
+            UsageRates = NormalizeUsageRates(settings.UsageRates)
         };
+    }
+
+    /// <summary>
+    ///     The persistence authority for usage-rate hygiene (Wave 13): drop entries with a blank model name or a negative /
+    ///     non-finite rate (via <see cref="ModelRate.HasValidRates" /> — one shared predicate with the boundary validator
+    ///     and the resolver), trim the model-name keys, and de-duplicate them case-insensitively (matching how the resolver
+    ///     and the run-envelope <c>ModelName</c> compare). An empty result collapses to <see langword="null" /> so an
+    ///     all-junk map reads as "no override".
+    /// </summary>
+    private static NodeUsageRateSettings? NormalizeUsageRates(NodeUsageRateSettings? rates)
+    {
+        if (rates?.Models is not { Count: > 0 } models)
+        {
+            return null;
+        }
+
+        var cleaned = new Dictionary<string, ModelRate>(StringComparer.OrdinalIgnoreCase);
+        foreach (var (name, rate) in models)
+        {
+            var trimmed = TrimToNull(name);
+            if (trimmed is null || rate is null || !rate.HasValidRates)
+            {
+                continue;
+            }
+
+            cleaned[trimmed] = rate;
+        }
+
+        return cleaned.Count == 0 ? null : new NodeUsageRateSettings { Models = cleaned };
     }
 
     private static string? TrimToNull(string? value)

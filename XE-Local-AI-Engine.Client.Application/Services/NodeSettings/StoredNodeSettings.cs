@@ -270,6 +270,16 @@ public sealed partial record StoredNodeSettings
     public NodeToolApprovalPolicySettings? ToolApprovalPolicy { get; init; }
 
     /// <summary>
+    ///     Operator override of usage cost rates (Wave 13). <see langword="null" /> (absent, the default) means no
+    ///     override — the usage-summary cost estimate uses the built-in default rate table, and any model with neither an
+    ///     override nor a default is unpriced (zero). A value supplies per-model-name USD rates that win over the defaults;
+    ///     local runtimes stay free regardless. Negative / non-finite entries are dropped by
+    ///     <c>NodeSettingsStore.Normalize</c> on read. Applies on the next usage-summary read (the cost resolver reads
+    ///     current node settings; no restart needed).
+    /// </summary>
+    public NodeUsageRateSettings? UsageRates { get; init; }
+
+    /// <summary>
     ///     Stable, LOCAL-ONLY machine identifier used to key inference profiles to the box they were tuned on. Generated
     ///     once (<see cref="System.Guid.NewGuid" />, <c>"N"</c> format) by <c>IMachineKeyProvider</c> on first use and
     ///     persisted here; <see langword="null" /> until then (it is generated, not seeded — there is no appsettings
