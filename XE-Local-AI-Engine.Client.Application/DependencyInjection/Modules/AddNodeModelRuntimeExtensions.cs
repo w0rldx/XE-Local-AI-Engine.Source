@@ -20,6 +20,7 @@ using XE_Local_AI_Engine.Client.Services.Events;
 using XE_Local_AI_Engine.Client.Services.HuggingFace;
 using XE_Local_AI_Engine.Client.Services.Inference;
 using XE_Local_AI_Engine.Client.Services.NodeSettings;
+using XE_Local_AI_Engine.Client.Services.NodeSettings.Implementation;
 using XE_Local_AI_Engine.Client.Services.Persistence;
 using XE_Local_AI_Engine.Client.Services.Persistence.Implementation;
 using XE_Local_AI_Engine.Providers.Abstractions;
@@ -213,6 +214,12 @@ internal static class AddNodeModelRuntimeExtensions
         // hot resolve path stays a dictionary lookup; an operator edit applies on the next node restart.
         builder.Services.AddSingleton<IToolApprovalPolicy>(sp =>
             NodeToolApprovalPolicy.FromSettings(sp.GetRequiredService<INodeSettingsStore>().Load()?.ToolApprovalPolicy));
+
+        // Wave 13: the usage-summary cost resolver. Scoped (NOT singleton, unlike the approval policy above) so each
+        // usage-summary read reflects the CURRENT operator rate override — the cached node-settings store makes Load() a
+        // sub-millisecond in-memory hit, so per-request construction is cheap and rate edits apply without a node restart.
+        builder.Services.AddScoped<IUsageRateResolver>(sp =>
+            UsageRateResolver.FromSettings(sp.GetRequiredService<INodeSettingsStore>().Load()?.UsageRates));
 
         // OrchestrationAgentOptions lives in AI.Agent (no reference to Client.Application), so OrchestrationAgentFactory
         // cannot inject INodeRuntimeSettings. Seed the migrated IdleTimeoutSeconds from the accessor here at the
