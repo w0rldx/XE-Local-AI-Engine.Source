@@ -1,7 +1,12 @@
 import { describe, expect, it } from "vitest";
 
 import type { XeLocalAiEngineClientEndpointsLocalModelsV1LocalModelResponse } from "@/core/api/generated";
-import { resolveLocalDefaultModelCapabilities, toChatModelOptions, toModelOption } from "@/features/chat/pages/ChatModelOptions";
+import {
+	resolveLocalDefaultModelCapabilities,
+	resolveLocalDefaultModelName,
+	toChatModelOptions,
+	toModelOption,
+} from "@/features/chat/pages/ChatModelOptions";
 
 type LocalModelDto = XeLocalAiEngineClientEndpointsLocalModelsV1LocalModelResponse;
 
@@ -119,5 +124,32 @@ describe("resolveLocalDefaultModelCapabilities", () => {
 		const capabilities = resolveLocalDefaultModelCapabilities([]);
 
 		expect(capabilities).toEqual({ isReasoningModel: false, isToolCapable: false });
+	});
+});
+
+describe("resolveLocalDefaultModelName", () => {
+	it("names the node default (isSelected) installed chat model", () => {
+		const name = resolveLocalDefaultModelName([
+			model({ modelName: "gemma:12b" }),
+			model({ modelName: "qwen3:8b", isSelected: true }),
+		]);
+
+		expect(name).toBe("qwen3:8b");
+	});
+
+	it("names the newest-modified installed chat model when the store default is not installed", () => {
+		// The configured/selected store name is NOT in this installed list — the resolver only ever names an
+		// installed model (the backend runs one), so the details poll's installed-list gate can open.
+		const name = resolveLocalDefaultModelName([
+			model({ modelName: "alpha", modifiedAtUtc: 1000 }),
+			model({ modelName: "zeta", modifiedAtUtc: 2000 }),
+		]);
+
+		expect(name).toBe("zeta");
+	});
+
+	it("returns undefined when no installed chat-capable model exists", () => {
+		expect(resolveLocalDefaultModelName([])).toBeUndefined();
+		expect(resolveLocalDefaultModelName([model({ modelName: "embed", kind: "Embedding" })])).toBeUndefined();
 	});
 });
