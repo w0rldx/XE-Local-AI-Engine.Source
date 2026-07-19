@@ -54,6 +54,14 @@ CI (`.github/workflows/build-and-test.yml`) runs `dotnet test XE-Local-AI-Engine
 
 Both `build-and-test.yml` and the architecture tests are **real PR gates** — they block merges, they aren't advisory.
 
+### Verify against the whole module, not just the class you touched
+
+A targeted `--treenode-filter "/*/*/<YourClass>/*"` run is great for a fast loop, but it is **not** a merge gate. A DI-wiring regression (an unguarded `INodeSettingsStore.Load()` in a singleton factory) NRE'd every **host-based** test (`WebApplicationFactory` startup) — 14 `NodeSettingsEndpointTests` plus `GetVoiceManifest_*` — and stayed red across *four* merges because every review only ran the narrow classes it changed. Before declaring a backend change merged, run the **whole `XE-Local-AI-Engine.Tests` module** at least once (that's what CI does). A DI factory that reads a store/config at construction must null-guard it (`Load()?.X`) — a test substitute's `Load()` returns null and takes the whole host down.
+
+### The full Tests module is flaky under parallelism — verify suspects in isolation
+
+Running the entire `XE-Local-AI-Engine.Tests` module concurrently produces a **non-deterministic** failure count (observed 1/4/5/21) from tests that mutate **process-global** state racing each other — chiefly `DesktopBootstrapTests` (`EnsureLocalDataConfiguration_*`, which set/clear `XE_NODE_SQLITE_KEY` and write key files) and `EmbeddingPlaybookRetrievalRankerTests`. They **pass in isolation** (`--treenode-filter` per class). So a red full-module run is not automatically a real failure — re-run the named suspects alone before believing it. Related trap: the module has **conflicting env premises** — `DesktopBootstrapTests` `WhenNeitherEnvSet_*` require `XE_NODE_SQLITE_KEY` **unset**, while `PlaybookRetrievalRankerRegistrationTests.AddServices_ResolvesBoth…` requires it **set** (base64 of 32 bytes, not hex) — so you **cannot** satisfy the whole module with one ambient env var. (Hardening these with `[NotInParallel]` / per-test env save-restore is a logged follow-up.)
+
 ### Layering is mechanically frozen
 
 `XE-Local-AI-Engine.Tests/Architecture/LayerDependencyTests.cs` uses NetArchTest to freeze dependency direction (providers → Abstractions only; Contracts/Abstractions never reach back up). A structural refactor that breaks layering fails a *test*, not just review.
