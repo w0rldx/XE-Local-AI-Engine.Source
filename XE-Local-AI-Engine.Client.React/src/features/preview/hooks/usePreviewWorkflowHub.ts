@@ -1,8 +1,7 @@
-import { HubConnectionBuilder, HubConnectionState, LogLevel } from "@microsoft/signalr";
+import { HubConnectionState } from "@microsoft/signalr";
 import { useEffect } from "react";
 
-import { buildLocalApiUrl } from "@/core/api/utils/LocalApiUrl";
-import { useNodeAuthStore } from "@/core/auth/stores/NodeAuthStore";
+import { acquireHubConnection } from "@/core/api/signalr/SharedHubConnection";
 import {
 	previewNodeEventNames,
 	previewNodeEventSchema,
@@ -34,15 +33,11 @@ export function usePreviewWorkflowHub(): void {
 	const actions = usePreviewRunStore((state) => state.actions);
 
 	useEffect(() => {
-		const connection = new HubConnectionBuilder()
-			.withUrl(buildLocalApiUrl("preview/hub"), {
-				accessTokenFactory: () => useNodeAuthStore.getState().accessToken ?? "",
-			})
-			// Persistent channel for the page lifetime — auto-reconnect after a transient drop so live run output is
-			// not silently lost for the rest of the session. Matches the other local hubs.
-			.withAutomaticReconnect()
-			.configureLogging(LogLevel.Warning)
-			.build();
+		// Shared refcounted connection: reused across mounts so re-opening the canvas does not pay a fresh negotiate +
+		// WebSocket upgrade. Handlers + per-run group membership below stay per-mount so this subscriber coexists with any
+		// other subscriber to the same hub.
+		const hub = acquireHubConnection("preview/hub");
+		const { connection } = hub;
 
 		// Node-scoped events: validate the wire payload (untrusted) then dispatch to the store. A payload that fails
 		// the schema is dropped (best-effort live output; the canvas keeps working).
@@ -122,30 +117,22 @@ export function usePreviewWorkflowHub(): void {
 		});
 
 		let disposed = false;
-		const startPromise = connection.start().then(
-			() => {
-				if (disposed) {
-					return;
-				}
-				// On (re)connect, group membership is empty on the server — forget what we thought we'd joined and
-				// re-apply the current desired set so a run that was active before/at connect is subscribed.
-				subscribedRunIds.clear();
-				reconcileSubscriptions(desiredRunIds());
-			},
-			(error: unknown) => {
-				// A start aborted by our own cleanup (StrictMode double-invoke / fast remount) is not a real failure.
-				if (disposed) {
-					return;
-				}
-				// A hub that cannot connect must not break the page — the canvas still edits/saves. The hub is best-effort
-				// live run output, so a connection failure is surfaced only to the console.
-				console.warn("preview workflow hub failed to start", error);
-			},
-		);
+		// Reconcile group membership once the shared connection is up. whenStarted resolves when the initial start settles,
+		// or on the next microtask for a late subscriber that acquires while the connection is already connected; guarded
+		// on Connected because whenStarted also resolves after a failed initial start.
+		hub.whenStarted.then(() => {
+			if (disposed || connection.state !== HubConnectionState.Connected) {
+				return;
+			}
+			// On (re)connect, group membership is empty on the server — forget what we thought we'd joined and re-apply
+			// the current desired set so a run that was active before/at connect is subscribed.
+			subscribedRunIds.clear();
+			reconcileSubscriptions(desiredRunIds());
+		});
 
 		// After a transient drop + automatic reconnect the server has dropped all group memberships, so re-join every
-		// currently-active run.
-		connection.onreconnected(() => {
+		// currently-active run. Scoped to this handle and dropped by hub.release() below.
+		hub.onReconnected(() => {
 			subscribedRunIds.clear();
 			reconcileSubscriptions(desiredRunIds());
 		});
@@ -156,13 +143,9 @@ export function usePreviewWorkflowHub(): void {
 			for (const [eventName, handler] of [...nodeHandlers, ...runHandlers]) {
 				connection.off(eventName, handler);
 			}
-			// Stop only AFTER start settles so cleanup never aborts an in-flight negotiation (the "stopped during
-			// negotiation" race that left the hub permanently disconnected under StrictMode / fast remounts).
-			startPromise.finally(() => {
-				connection.stop().catch((error: unknown) => {
-					console.warn("preview workflow hub failed to stop", error);
-				});
-			});
+			// Release the shared lease: drops this handle's reconnected callback and, once the last subscriber releases,
+			// stops the connection after the start promise settles (so cleanup never aborts an in-flight negotiation).
+			hub.release();
 		};
 	}, [actions]);
 }
