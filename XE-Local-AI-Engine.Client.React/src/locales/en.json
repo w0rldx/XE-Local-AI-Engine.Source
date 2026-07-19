@@ -1159,7 +1159,8 @@
 					"invalid": "One or more entries are invalid.",
 					"positive": "Enter a positive whole number.",
 					"mode": "Unknown speculative decoding mode.",
-					"required": "Select a draft model for this mode."
+					"required": "Select a draft model for this mode.",
+					"rate": "Each rate needs a model name and non-negative input and output values."
 				},
 				"localChat": {
 					"title": "Local chat"
@@ -1262,6 +1263,19 @@
 					"downloadStarted": "Downloading the recommended reranker ({{model}}).",
 					"downloadInFlight": "The recommended reranker ({{model}}) is already downloading.",
 					"downloadError": "Could not start the recommended reranker download."
+				},
+				"usageRates": {
+					"title": "Usage cost rates",
+					"description": "Approximate per-model cost rates (USD per 1M tokens) used to estimate cost on the Usage dashboard. Local and unpriced models are treated as free. These are estimates in your operator currency (USD), not a bill.",
+					"empty": "No rates configured. Add a rate to estimate cost for a model.",
+					"modelPlaceholder": "e.g. gpt-5",
+					"add": "Add rate",
+					"remove": "Remove rate",
+					"columns": {
+						"model": "Model name",
+						"input": "Input $/1M",
+						"output": "Output $/1M"
+					}
 				}
 			}
 		},
@@ -1563,6 +1577,7 @@
 			"title": "Usage dashboard",
 			"subtitle": "Agent token usage by model and provider. Data is retained for {{days}} days.",
 			"loadError": "Usage summary could not be loaded.",
+			"costDisclaimer": "Costs are approximate estimates in USD, computed from the per-model rates configured in Node settings. Local and unpriced usage counts as free.",
 			"range": {
 				"from": "From",
 				"to": "To"
@@ -1572,7 +1587,8 @@
 				"promptTokens": "Prompt tokens",
 				"completionTokens": "Completion tokens",
 				"reasoningTokens": "Reasoning tokens",
-				"runCount": "Runs"
+				"runCount": "Runs",
+				"estimatedCost": "Est. cost"
 			},
 			"daily": {
 				"title": "Daily token usage",
@@ -1590,7 +1606,8 @@
 				"columns": {
 					"provider": "Provider",
 					"runs": "Runs",
-					"totalTokens": "Total tokens"
+					"totalTokens": "Total tokens",
+					"estimatedCost": "Est. cost"
 				}
 			},
 			"models": {
@@ -1602,7 +1619,8 @@
 					"runs": "Runs",
 					"prompt": "Prompt",
 					"completion": "Completion",
-					"total": "Total"
+					"total": "Total",
+					"estimatedCost": "Est. cost"
 				}
 			},
 			"empty": {

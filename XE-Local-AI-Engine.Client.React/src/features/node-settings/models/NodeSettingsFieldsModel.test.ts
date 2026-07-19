@@ -6,12 +6,20 @@ import type {
 import {
 	buildNodeSettingsRequest,
 	nodeSettingsFieldDefaults,
+	newUsageRateRow,
 	toNodeSettingsFieldBounds,
 	toNodeSettingsFieldsForm,
+	toUsageRateRows,
+	type UsageRateRow,
 	validateLlamaCppTag,
 	validateOllamaEndpoint,
 	validateToolCapableModels,
+	validateUsageRates,
 } from "@/features/node-settings/models/NodeSettingsFieldsModel";
+
+function rateRow(overrides: Partial<UsageRateRow>): UsageRateRow {
+	return { id: "row-1", modelName: "gpt-5", inputPer1M: 1.25, outputPer1M: 10, ...overrides };
+}
 
 describe("NodeSettingsFieldsModel validators", () => {
 	it("accepts a well-formed llama.cpp tag and rejects everything else", () => {
@@ -39,6 +47,58 @@ describe("NodeSettingsFieldsModel validators", () => {
 		});
 		// A non-empty name containing a control character (an escaped tab) is a hard validation error.
 		expect(validateToolCapableModels(["bad\tname"]).hasInvalid).toBe(true);
+	});
+});
+
+describe("validateUsageRates", () => {
+	it("reduces valid rows into the keyed rate map", () => {
+		const result = validateUsageRates([
+			rateRow({ id: "a", modelName: "gpt-5", inputPer1M: 1.25, outputPer1M: 10 }),
+			rateRow({ id: "b", modelName: "  claude  ", inputPer1M: "3", outputPer1M: "15" }),
+		]);
+		expect(result.hasInvalid).toBe(false);
+		expect(result.map).toEqual({
+			"gpt-5": { inputPer1M: 1.25, outputPer1M: 10 },
+			// The name is trimmed and string cells are coerced to numbers.
+			claude: { inputPer1M: 3, outputPer1M: 15 },
+		});
+	});
+
+	it("silently drops a fully-empty row and keeps a valid one", () => {
+		const result = validateUsageRates([
+			rateRow({ id: "blank", modelName: "  ", inputPer1M: "", outputPer1M: "" }),
+			rateRow({ id: "ok", modelName: "gpt-5", inputPer1M: 2, outputPer1M: 4 }),
+		]);
+		expect(result.hasInvalid).toBe(false);
+		expect(result.map).toEqual({ "gpt-5": { inputPer1M: 2, outputPer1M: 4 } });
+	});
+
+	it("accepts a zero rate but rejects negatives", () => {
+		expect(validateUsageRates([rateRow({ inputPer1M: 0, outputPer1M: 0 })])).toEqual({
+			map: { "gpt-5": { inputPer1M: 0, outputPer1M: 0 } },
+			hasInvalid: false,
+		});
+		expect(validateUsageRates([rateRow({ inputPer1M: -1, outputPer1M: 5 })]).hasInvalid).toBe(true);
+	});
+
+	it("rejects a row with a rate but no model name, and a row with a name but an empty rate", () => {
+		expect(validateUsageRates([rateRow({ modelName: "", inputPer1M: 5, outputPer1M: 5 })]).hasInvalid).toBe(true);
+		expect(validateUsageRates([rateRow({ modelName: "gpt-5", inputPer1M: "", outputPer1M: 5 })]).hasInvalid).toBe(true);
+	});
+
+	it("maps an empty table to a null map (clear signal)", () => {
+		expect(validateUsageRates([]).map).toBeNull();
+		expect(validateUsageRates([rateRow({ modelName: "", inputPer1M: "", outputPer1M: "" })]).map).toBeNull();
+	});
+
+	it("round-trips through toUsageRateRows preserving values (with a client id)", () => {
+		const rows = toUsageRateRows({ "gpt-5": { inputPer1M: 1.25, outputPer1M: 10 } });
+		expect(rows).toHaveLength(1);
+		expect(rows[0]?.modelName).toBe("gpt-5");
+		expect(rows[0]?.inputPer1M).toBe(1.25);
+		expect(typeof rows[0]?.id).toBe("string");
+		// A fresh add row carries its own id and empty cells.
+		expect(newUsageRateRow()).toMatchObject({ modelName: "", inputPer1M: "", outputPer1M: "" });
 	});
 });
 
@@ -194,5 +254,41 @@ describe("buildNodeSettingsRequest", () => {
 		const { body, errors } = buildNodeSettingsRequest(off, withModel, bounds, false);
 		expect(errors).toEqual({});
 		expect(body.rerankerModelName).toBe("");
+	});
+
+	it("sends the usage-rate map when a rate row is added (no developer gate)", () => {
+		const form = { ...baseline, usageRates: [rateRow({ id: "a", modelName: "gpt-5", inputPer1M: 1.25, outputPer1M: 10 })] };
+		const { body, errors } = buildNodeSettingsRequest(form, baseline, bounds, false);
+		expect(errors).toEqual({});
+		expect(body.usageRates).toEqual({ "gpt-5": { inputPer1M: 1.25, outputPer1M: 10 } });
+	});
+
+	it("sends null when the rate table is emptied (null-preserving clear)", () => {
+		const withRates = { ...baseline, usageRates: [rateRow({ id: "a", modelName: "gpt-5", inputPer1M: 1, outputPer1M: 2 })] };
+		const cleared = { ...withRates, usageRates: [] as UsageRateRow[] };
+		const { body, errors } = buildNodeSettingsRequest(cleared, withRates, bounds, false);
+		expect(errors).toEqual({});
+		expect(body.usageRates).toBeNull();
+	});
+
+	it("does not send usageRates when unchanged (ignoring row order and client ids)", () => {
+		const rowsA = [
+			rateRow({ id: "a", modelName: "gpt-5", inputPer1M: 1, outputPer1M: 2 }),
+			rateRow({ id: "b", modelName: "claude", inputPer1M: 3, outputPer1M: 4 }),
+		];
+		// Same rates, reversed order and different client ids -> no change.
+		const rowsB = [
+			rateRow({ id: "x", modelName: "claude", inputPer1M: 3, outputPer1M: 4 }),
+			rateRow({ id: "y", modelName: "gpt-5", inputPer1M: 1, outputPer1M: 2 }),
+		];
+		const { body } = buildNodeSettingsRequest({ ...baseline, usageRates: rowsB }, { ...baseline, usageRates: rowsA }, bounds, false);
+		expect(body.usageRates).toBeUndefined();
+	});
+
+	it("rejects an invalid rate row with a rate error and never sends the map", () => {
+		const form = { ...baseline, usageRates: [rateRow({ id: "a", modelName: "gpt-5", inputPer1M: -5, outputPer1M: 2 })] };
+		const { body, errors } = buildNodeSettingsRequest(form, baseline, bounds, false);
+		expect(errors["usageRates"]).toBe("rate");
+		expect(body.usageRates).toBeUndefined();
 	});
 });

@@ -4,7 +4,7 @@ import { useMemo } from "react";
 import { useTranslation } from "react-i18next";
 
 import type { ProviderTotalsDto } from "@/features/usage-dashboard/models/UsageDashboardModel";
-import { formatCount, formatTokensCompact } from "@/features/usage-dashboard/models/UsageDashboardModel";
+import { formatCostUsd, formatCount, formatTokensCompact } from "@/features/usage-dashboard/models/UsageDashboardModel";
 import { providerColor, providerLabel } from "@/features/usage-dashboard/models/UsageProviderPresentation";
 
 // Per-provider breakdown: a token-share donut beside a compact per-provider table (runs + total tokens). Providers
@@ -53,6 +53,7 @@ export function UsageProviderBreakdown({ byProvider }: { readonly byProvider: re
 								<Table.Th>{t("pages.usage.providers.columns.provider", "Provider")}</Table.Th>
 								<Table.Th>{t("pages.usage.providers.columns.runs", "Runs")}</Table.Th>
 								<Table.Th>{t("pages.usage.providers.columns.totalTokens", "Total tokens")}</Table.Th>
+								<Table.Th>{t("pages.usage.providers.columns.estimatedCost", "Est. cost")}</Table.Th>
 							</Table.Tr>
 						</Table.Thead>
 						<Table.Tbody>
@@ -62,6 +63,9 @@ export function UsageProviderBreakdown({ byProvider }: { readonly byProvider: re
 									<Table.Td>{formatCount(entry.runCount)}</Table.Td>
 									<Table.Td>
 										<Text aria-label={formatCount(entry.totalTokens)}>{formatTokensCompact(entry.totalTokens)}</Text>
+									</Table.Td>
+									<Table.Td>
+										<Text data-testid={`usage-provider-cost-${entry.provider}`}>{formatCostUsd(entry.estimatedCostUsd)}</Text>
 									</Table.Td>
 								</Table.Tr>
 							))}

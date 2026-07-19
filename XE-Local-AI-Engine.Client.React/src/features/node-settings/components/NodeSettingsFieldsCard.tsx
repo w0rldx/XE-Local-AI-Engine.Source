@@ -1,5 +1,5 @@
-import { Button, Card, Group, NumberInput, Select, Stack, Switch, TagsInput, Text, TextInput, Title } from "@mantine/core";
-import { IconCloudDownload, IconCpu, IconRobot, IconServer, IconTool } from "@tabler/icons-react";
+import { ActionIcon, Button, Card, Group, NumberInput, Select, Stack, Switch, TagsInput, Text, TextInput, Title } from "@mantine/core";
+import { IconCloudDownload, IconCoin, IconCpu, IconPlus, IconRobot, IconServer, IconTool, IconTrash } from "@tabler/icons-react";
 import { useMemo } from "react";
 import { useTranslation } from "react-i18next";
 
@@ -7,8 +7,10 @@ import {
 	isDraftSpeculativeMode,
 	type NodeSettingsFieldBounds,
 	type NodeSettingsFieldsForm,
+	newUsageRateRow,
 	SPECULATIVE_DISABLED_MODE,
 	speculativeModeSelectValues,
+	type UsageRateRow,
 } from "@/features/node-settings/models/NodeSettingsFieldsModel";
 
 // A chat-capable installed model offered as a draft-model choice (value = model name, resolved server-side to a path).
@@ -83,6 +85,21 @@ export function NodeSettingsFieldsCard({
 	);
 
 	const isDraftMode = isDraftSpeculativeMode(form.speculativeMode);
+
+	// Usage-rate row editing: every mutation replaces the whole array via the generic onChange so the page's single
+	// form-state reducer stays the source of truth (no local row state to drift).
+	const addRateRow = (): void => onChange("usageRates", [...form.usageRates, newUsageRateRow()]);
+	const updateRateRow = (id: string, patch: Partial<Omit<UsageRateRow, "id">>): void =>
+		onChange(
+			"usageRates",
+			form.usageRates.map((row) => (row.id === id ? { ...row, ...patch } : row)),
+		);
+	const removeRateRow = (id: string): void =>
+		onChange(
+			"usageRates",
+			form.usageRates.filter((row) => row.id !== id),
+		);
+	const usageRatesError = fieldError(t, errors, "usageRates");
 
 	// Reranker options: an explicit "Off" entry (empty value = reranking disabled) followed by every installed model.
 	// If a reranker model is stored but no longer installed (or not in the returned list), keep it selectable so the
@@ -319,6 +336,98 @@ export function NodeSettingsFieldsCard({
 						error={fieldError(t, errors, "maxResponseSizeMb")}
 						data-testid="node-settings-max-response-size"
 					/>
+				</Stack>
+			</Card>
+
+			<Card withBorder={true} radius="md" p="lg" data-testid="node-settings-usage-rates-card">
+				<Stack gap="md">
+					<Group justify="space-between" align="center">
+						<Title order={4}>{t("pages.nodeSettings.fields.usageRates.title", "Usage cost rates")}</Title>
+						<IconCoin size={20} />
+					</Group>
+					<Text size="sm" c="dimmed">
+						{t(
+							"pages.nodeSettings.fields.usageRates.description",
+							"Approximate per-model cost rates (USD per 1M tokens) used to estimate cost on the Usage dashboard. Local and unpriced models are treated as free. These are estimates in your operator currency (USD), not a bill.",
+						)}
+					</Text>
+					{form.usageRates.length === 0 ? (
+						<Text size="sm" c="dimmed" data-testid="node-settings-usage-rates-empty">
+							{t("pages.nodeSettings.fields.usageRates.empty", "No rates configured. Add a rate to estimate cost for a model.")}
+						</Text>
+					) : (
+						<Stack gap="xs">
+							<Group gap="sm" wrap="nowrap" visibleFrom="sm">
+								<Text size="xs" fw={600} c="dimmed" style={{ flex: 1 }}>
+									{t("pages.nodeSettings.fields.usageRates.columns.model", "Model name")}
+								</Text>
+								<Text size="xs" fw={600} c="dimmed" style={{ width: 140 }}>
+									{t("pages.nodeSettings.fields.usageRates.columns.input", "Input $/1M")}
+								</Text>
+								<Text size="xs" fw={600} c="dimmed" style={{ width: 140 }}>
+									{t("pages.nodeSettings.fields.usageRates.columns.output", "Output $/1M")}
+								</Text>
+								<div style={{ width: 36 }} />
+							</Group>
+							{form.usageRates.map((row) => (
+								<Group key={row.id} gap="sm" wrap="nowrap" align="flex-start" data-testid="node-settings-usage-rate-row">
+									<TextInput
+										aria-label={t("pages.nodeSettings.fields.usageRates.columns.model", "Model name")}
+										placeholder={t("pages.nodeSettings.fields.usageRates.modelPlaceholder", "e.g. gpt-5")}
+										value={row.modelName}
+										onChange={(event) => updateRateRow(row.id, { modelName: event.currentTarget.value })}
+										style={{ flex: 1 }}
+										data-testid="node-settings-usage-rate-model"
+									/>
+									<NumberInput
+										aria-label={t("pages.nodeSettings.fields.usageRates.columns.input", "Input $/1M")}
+										min={0}
+										step={0.5}
+										decimalScale={4}
+										value={row.inputPer1M}
+										onChange={(value) => updateRateRow(row.id, { inputPer1M: value })}
+										style={{ width: 140 }}
+										data-testid="node-settings-usage-rate-input"
+									/>
+									<NumberInput
+										aria-label={t("pages.nodeSettings.fields.usageRates.columns.output", "Output $/1M")}
+										min={0}
+										step={0.5}
+										decimalScale={4}
+										value={row.outputPer1M}
+										onChange={(value) => updateRateRow(row.id, { outputPer1M: value })}
+										style={{ width: 140 }}
+										data-testid="node-settings-usage-rate-output"
+									/>
+									<ActionIcon
+										variant="subtle"
+										color="red"
+										aria-label={t("pages.nodeSettings.fields.usageRates.remove", "Remove rate")}
+										onClick={() => removeRateRow(row.id)}
+										data-testid="node-settings-usage-rate-remove"
+									>
+										<IconTrash size={16} />
+									</ActionIcon>
+								</Group>
+							))}
+						</Stack>
+					)}
+					{usageRatesError ? (
+						<Text size="sm" c="red" data-testid="node-settings-usage-rates-error">
+							{usageRatesError}
+						</Text>
+					) : null}
+					<Group>
+						<Button
+							variant="light"
+							size="xs"
+							leftSection={<IconPlus size={14} />}
+							onClick={addRateRow}
+							data-testid="node-settings-usage-rate-add"
+						>
+							{t("pages.nodeSettings.fields.usageRates.add", "Add rate")}
+						</Button>
+					</Group>
 				</Stack>
 			</Card>
 
