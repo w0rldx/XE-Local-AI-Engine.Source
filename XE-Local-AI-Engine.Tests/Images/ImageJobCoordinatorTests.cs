@@ -134,6 +134,97 @@ public sealed class ImageJobCoordinatorTests
     }
 
     [Test]
+    public async Task EvictionTimer_WhenTerminalLogPassesRetentionOnAnIdleNode_EvictsWithoutANewEnqueue()
+    {
+        // The periodic eviction timer must release a terminal job's replay log after the retention window even when no
+        // further job ever starts (before the timer existed, EnqueueAsync was the only eviction trigger, so the last
+        // jobs' logs lingered on an idle node indefinitely).
+        var timeProvider = new TimerCapturingTimeProvider();
+        var runtime = new FakeImageRuntime(blockUntilReleased: false);
+        var store = new FakeImageJobStore();
+
+        var services = new ServiceCollection();
+        services.AddScoped<IImageJobStore>(_ => store);
+        var scopeFactory = services.BuildServiceProvider().GetRequiredService<IServiceScopeFactory>();
+
+        using var coordinator = new ImageJobCoordinator(runtime,
+            new FakeGeneratedImageStore(),
+            scopeFactory,
+            new NullImageJobEventPublisher(),
+            timeProvider,
+            NullLogger<ImageJobCoordinator>.Instance);
+        AssertEx.NotNull(timeProvider.EvictionCallback, "The coordinator must arm a periodic eviction timer at construction.");
+
+        var jobId = await coordinator.EnqueueAsync(NewInput("idle-eviction"), CancellationToken.None).ConfigureAwait(false);
+        await AssertEx.EventuallyAsync(() => store.StatusOf(jobId) == ImageJobStatus.Succeeded, Timeout,
+            $"Job {jobId} did not reach status {ImageJobStatus.Succeeded}.").ConfigureAwait(false);
+        AssertEx.NotEmpty(coordinator.SnapshotBufferedEvents(jobId));
+
+        // Before the retention window elapses a timer tick must keep the log (late subscribers can still replay it).
+        timeProvider.Advance(TimeSpan.FromMinutes(1));
+        timeProvider.FireEvictionTick();
+        AssertEx.NotEmpty(coordinator.SnapshotBufferedEvents(jobId));
+
+        // Past retention, the SAME idle-node tick path evicts it — no Enqueue involved. The terminal mark is stamped by
+        // the run task, so tolerate the tiny window between the persisted status and the buffered terminal event.
+        timeProvider.Advance(TimeSpan.FromMinutes(10));
+        await AssertEx.EventuallyAsync(() =>
+        {
+            timeProvider.FireEvictionTick();
+            return coordinator.SnapshotBufferedEvents(jobId).Count == 0;
+        }, Timeout, "The idle eviction tick must release the terminal job's replay log after retention.").ConfigureAwait(false);
+    }
+
+    // Minimal TimeProvider for the eviction test: settable clock + captures the coordinator's periodic timer callback
+    // so a test can fire ticks deterministically (the returned timer itself never fires on its own).
+    private sealed class TimerCapturingTimeProvider : TimeProvider
+    {
+        private DateTimeOffset _utcNow = DateTimeOffset.UtcNow;
+        private object? _evictionState;
+
+        public TimerCallback? EvictionCallback { get; private set; }
+
+        public override DateTimeOffset GetUtcNow()
+        {
+            return _utcNow;
+        }
+
+        public void Advance(TimeSpan by)
+        {
+            _utcNow += by;
+        }
+
+        public void FireEvictionTick()
+        {
+            EvictionCallback?.Invoke(_evictionState);
+        }
+
+        public override ITimer CreateTimer(TimerCallback callback, object? state, TimeSpan dueTime, TimeSpan period)
+        {
+            EvictionCallback = callback;
+            _evictionState = state;
+            return new InertTimer();
+        }
+
+        private sealed class InertTimer : ITimer
+        {
+            public bool Change(TimeSpan dueTime, TimeSpan period)
+            {
+                return true;
+            }
+
+            public void Dispose()
+            {
+            }
+
+            public ValueTask DisposeAsync()
+            {
+                return ValueTask.CompletedTask;
+            }
+        }
+    }
+
+    [Test]
     public async Task ImageJobHub_WhenLateSubscriber_ReplaysBufferedEventsInSeqOrder()
     {
         var jobId = Guid.NewGuid();
