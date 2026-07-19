@@ -34,7 +34,10 @@ public sealed partial class WorkerEventDispatcher
             GenerationDurationMs = state.GenerationDurationMs,
             PendingApproval = state.PendingApproval,
             LastApprovalResolution = state.LastApprovalResolution,
-            PendingToolCalls = [.. state.PendingToolCalls],
+            // Reference copy is snapshot-safe: every writer REPLACES the list wholesale (never mutates it in place)
+            // and the elements are immutable records — materializing a copy here churned one throwaway array per
+            // streamed chunk. Mirrors InvocationResumeRegistry.Clone — both must stay in sync.
+            PendingToolCalls = state.PendingToolCalls,
             LastToolCallResult = state.LastToolCallResult
         };
     }
