@@ -19,6 +19,7 @@ vi.mock("@microsoft/signalr", () => ({
 			build: vi.fn(() => ({
 				on: vi.fn(),
 				off: vi.fn(),
+				onreconnected: vi.fn(),
 				start: vi.fn(() => Promise.resolve()),
 				stop: vi.fn(() => Promise.resolve()),
 			})),
@@ -104,6 +105,7 @@ vi.mock("@/core/ui/hooks/useConfirm", () => ({
 	useConfirm: () => ({ confirm: confirmMock }),
 }));
 
+import { resetSharedHubConnectionsForTest } from "@/core/api/signalr/SharedHubConnection";
 import { ModelManagement } from "@/features/models/pages/ModelManagement";
 import { useGgufBrowseStore } from "@/features/models/stores/GgufBrowseStore";
 
@@ -125,6 +127,7 @@ async function openDetailsDialog(modelName: string): Promise<HTMLElement> {
 describe("ModelManagement", () => {
 	beforeEach(() => {
 		vi.clearAllMocks();
+		resetSharedHubConnectionsForTest();
 		Object.defineProperty(window, "matchMedia", {
 			writable: true,
 			value: vi.fn().mockImplementation((query: string) => ({

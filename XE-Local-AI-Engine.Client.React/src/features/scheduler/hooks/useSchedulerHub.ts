@@ -1,10 +1,8 @@
-import { HubConnectionBuilder, LogLevel } from "@microsoft/signalr";
 import { useQueryClient } from "@tanstack/react-query";
 import { useEffect, useRef } from "react";
 import { useTranslation } from "react-i18next";
 
-import { buildLocalApiUrl } from "@/core/api/utils/LocalApiUrl";
-import { useNodeAuthStore } from "@/core/auth/stores/NodeAuthStore";
+import { acquireHubConnection } from "@/core/api/signalr/SharedHubConnection";
 import { notifySchedulerRunEvent } from "@/features/scheduler/notifications/SchedulerRunNotifications";
 import { schedulerInvalidationKey, schedulerQueryIds } from "@/features/scheduler/queries/useScheduler";
 
@@ -40,15 +38,11 @@ export function useSchedulerHub(): void {
 	tRef.current = t;
 
 	useEffect(() => {
-		const connection = new HubConnectionBuilder()
-			.withUrl(buildLocalApiUrl("scheduler/hub"), {
-				accessTokenFactory: () => useNodeAuthStore.getState().accessToken ?? "",
-			})
-			// Persistent notification channel (mounted for the page lifetime), so auto-reconnect after a transient drop —
-			// otherwise live invalidation is silently lost for the rest of the session. Matches the chat hub precedent.
-			.withAutomaticReconnect()
-			.configureLogging(LogLevel.Warning)
-			.build();
+		// Shared refcounted connection: reused across mounts so navigating back to a scheduler page does not pay a fresh
+		// negotiate + WebSocket upgrade. Handlers below stay per-mount (registered on this connection, torn down on
+		// cleanup) so this subscriber coexists with any other subscriber to the same hub.
+		const hub = acquireHubConnection("scheduler/hub");
+		const { connection } = hub;
 
 		const invalidateJobs = (): void => {
 			queryClient.invalidateQueries({ queryKey: schedulerInvalidationKey(schedulerQueryIds.listJobs) }).catch(() => undefined);
@@ -76,30 +70,14 @@ export function useSchedulerHub(): void {
 			connection.on(eventName, handler);
 		}
 
-		let disposed = false;
-		const startPromise = connection.start().catch((error: unknown) => {
-			// A start aborted by our own cleanup (StrictMode double-invoke / fast remount) is not a real failure.
-			if (disposed) {
-				return;
-			}
-			// A hub that cannot connect must not break the page — TanStack Query still serves cached state. The hub is
-			// best-effort live invalidation, so a connection failure is surfaced only to the console, never the user.
-			console.warn("scheduler hub failed to start", error);
-		});
-
 		return () => {
-			disposed = true;
 			connection.off(JOB_DEFINITION_CHANGED, invalidateJobs);
 			for (const [eventName, handler] of runHandlers) {
 				connection.off(eventName, handler);
 			}
-			// Stop only AFTER start settles so cleanup never aborts an in-flight negotiation (the "stopped during
-			// negotiation" race that left the hub permanently disconnected under StrictMode / fast remounts).
-			startPromise.finally(() => {
-				connection.stop().catch((error: unknown) => {
-					console.warn("scheduler hub failed to stop", error);
-				});
-			});
+			// Release the shared lease: the manager stops the connection only after the LAST subscriber releases, and only
+			// once the start promise settles (so cleanup never aborts an in-flight negotiation under StrictMode / fast remounts).
+			hub.release();
 		};
 	}, [queryClient]);
 }

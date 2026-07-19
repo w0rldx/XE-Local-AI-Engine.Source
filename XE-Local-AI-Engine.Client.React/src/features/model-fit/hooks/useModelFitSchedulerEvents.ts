@@ -1,10 +1,9 @@
-import { HubConnectionBuilder, LogLevel } from "@microsoft/signalr";
+import { HubConnectionState } from "@microsoft/signalr";
 import { useQueryClient } from "@tanstack/react-query";
 import { useCallback, useEffect, useRef } from "react";
 import { useTranslation } from "react-i18next";
 
-import { buildLocalApiUrl } from "@/core/api/utils/LocalApiUrl";
-import { useNodeAuthStore } from "@/core/auth/stores/NodeAuthStore";
+import { acquireHubConnection } from "@/core/api/signalr/SharedHubConnection";
 import { modelRecommendationCheckTemplateId } from "@/features/model-fit/models/ModelFitModels";
 import {
 	isTerminalRefreshRunStatus,
@@ -157,15 +156,12 @@ export function useModelFitSchedulerEvents(scheduledJobId?: string): void {
 	// Connection + handler subscription effect. STABLE deps (queryClient, runCatchUp) so it is built exactly once per
 	// mount: live pushes are never dropped and handlers are never double-registered when the job id resolves later.
 	useEffect(() => {
-		const connection = new HubConnectionBuilder()
-			.withUrl(buildLocalApiUrl("scheduler/hub"), {
-				accessTokenFactory: () => useNodeAuthStore.getState().accessToken ?? "",
-			})
-			// Persistent notification channel (mounted for the page lifetime), so auto-reconnect after a transient drop —
-			// otherwise live invalidation is silently lost for the rest of the session. Matches the scheduler hub precedent.
-			.withAutomaticReconnect()
-			.configureLogging(LogLevel.Warning)
-			.build();
+		// Shared refcounted connection to the SAME scheduler hub useSchedulerHub uses — when both a scheduler page and a
+		// model-fit page are mounted they now share ONE connection, and each hook's own handlers (registered via
+		// connection.on below, removed on cleanup) coexist on it. Reused across mounts so navigation does not pay a fresh
+		// negotiate + WebSocket upgrade.
+		const hub = acquireHubConnection("scheduler/hub");
+		const { connection } = hub;
 
 		const handleTerminalRun = (eventName: (typeof TERMINAL_RUN_EVENTS)[number], payload: unknown): void => {
 			if (!isModelRecommendationRun(payload)) {
@@ -199,44 +195,35 @@ export function useModelFitSchedulerEvents(scheduledJobId?: string): void {
 			handlers.push([eventName, handler]);
 		}
 
-		connection.onreconnected(() => {
+		hub.onReconnected(() => {
 			connectionEstablishedRef.current = true;
 			runCatchUp().catch(() => undefined);
 		});
 
 		let disposed = false;
-		const startPromise = connection.start().then(
-			() => {
-				if (!disposed) {
-					// Mark established so the late-job-id effect's own catch-up may fire from here on (and is skipped
-					// before this point so it never double-fetches alongside this connect-time catch-up).
-					connectionEstablishedRef.current = true;
-					runCatchUp().catch(() => undefined);
-				}
-			},
-			(error: unknown) => {
-				// A start aborted by our own cleanup (StrictMode double-invoke / fast remount) is not a real failure.
-				if (disposed) {
-					return;
-				}
-				// A hub that cannot connect must not break the page — TanStack Query still serves cached state. The hub is
-				// best-effort live invalidation + feedback, so a connection failure is surfaced only to the console.
-				console.warn("model-fit scheduler hub failed to start", error);
-			},
-		);
+		// Run the connect-time catch-up once the shared connection is up. whenStarted resolves when the initial start
+		// settles, or on the next microtask for a late subscriber that acquires while the connection is already connected;
+		// the catch-up itself is a no-op when the hub failed to connect (it just does a best-effort REST fetch).
+		hub.whenStarted.then(() => {
+			// Only when the hub actually reached Connected (whenStarted also resolves after a failed initial start): the
+			// established gate must stay false on failure, matching the original start-success-only catch-up.
+			if (disposed || connection.state !== HubConnectionState.Connected) {
+				return;
+			}
+			// Mark established so the late-job-id effect's own catch-up may fire from here on (and is skipped before this
+			// point so it never double-fetches alongside this connect-time catch-up).
+			connectionEstablishedRef.current = true;
+			runCatchUp().catch(() => undefined);
+		});
 
 		return () => {
 			disposed = true;
 			for (const [eventName, handler] of handlers) {
 				connection.off(eventName, handler);
 			}
-			// Stop only AFTER start settles so cleanup never aborts an in-flight negotiation (the "stopped during
-			// negotiation" race that left the hub permanently disconnected under StrictMode / fast remounts).
-			startPromise.finally(() => {
-				connection.stop().catch((error: unknown) => {
-					console.warn("model-fit scheduler hub failed to stop", error);
-				});
-			});
+			// Release the shared lease: drops this handle's reconnected callback and, once the last subscriber releases,
+			// stops the connection after the start promise settles (so cleanup never aborts an in-flight negotiation).
+			hub.release();
 		};
 		// `t` is intentionally NOT a dependency — it is read via tRef so a new `t` reference never rebuilds the
 		// connection mid-negotiation. Matches the stable-deps lifetime of useSchedulerHub. queryClient + runCatchUp stable.

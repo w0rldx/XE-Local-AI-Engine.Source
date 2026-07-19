@@ -1,10 +1,8 @@
-import { HubConnectionBuilder, LogLevel } from "@microsoft/signalr";
 import { useQueryClient } from "@tanstack/react-query";
 import { useCallback, useEffect, useState } from "react";
 import { z } from "zod";
 
-import { buildLocalApiUrl } from "@/core/api/utils/LocalApiUrl";
-import { useNodeAuthStore } from "@/core/auth/stores/NodeAuthStore";
+import { acquireHubConnection } from "@/core/api/signalr/SharedHubConnection";
 import { localRuntimeInvalidationKey, localRuntimeQueryIds } from "@/features/node-settings/queries/useLocalRuntime";
 
 // Realtime push for the in-app CUDA build progress. Connects to the CUDA-build SignalR hub for the lifetime of the
@@ -64,15 +62,11 @@ export function useCudaBuildHub(): CudaBuildLiveState {
 	const reset = useCallback(() => setState(emptyLiveState), []);
 
 	useEffect(() => {
-		const connection = new HubConnectionBuilder()
-			.withUrl(buildLocalApiUrl("model-fit/llamacpp/cuda-build/hub"), {
-				accessTokenFactory: () => useNodeAuthStore.getState().accessToken ?? "",
-			})
-			// Persistent channel for the card lifetime — auto-reconnect after a transient drop so live build output is not
-			// silently lost. Matches the other local hubs.
-			.withAutomaticReconnect()
-			.configureLogging(LogLevel.Warning)
-			.build();
+		// Shared refcounted connection: reused across mounts so re-opening the node-settings card does not pay a fresh
+		// negotiate + WebSocket upgrade. The status handler below stays per-mount so this subscriber coexists with any
+		// other subscriber to the same hub.
+		const hub = acquireHubConnection("model-fit/llamacpp/cuda-build/hub");
+		const { connection } = hub;
 
 		const handleStatusChanged = (payload: unknown): void => {
 			const parsed = cudaBuildHubEventSchema.safeParse(payload);
@@ -108,27 +102,11 @@ export function useCudaBuildHub(): CudaBuildLiveState {
 
 		connection.on(CUDA_BUILD_STATUS_CHANGED, handleStatusChanged);
 
-		let disposed = false;
-		const startPromise = connection.start().catch((error: unknown) => {
-			// A start aborted by our own cleanup (StrictMode double-invoke / fast remount) is not a real failure.
-			if (disposed) {
-				return;
-			}
-			// A hub that cannot connect must not break the card — the GET status query still serves the snapshot. The hub is
-			// best-effort live output, so a connection failure is surfaced only to the console.
-			console.warn("cuda build hub failed to start", error);
-		});
-
 		return () => {
-			disposed = true;
 			connection.off(CUDA_BUILD_STATUS_CHANGED, handleStatusChanged);
-			// Stop only AFTER start settles so cleanup never aborts an in-flight negotiation (the "stopped during
-			// negotiation" race that left the hub permanently disconnected under StrictMode / fast remounts).
-			startPromise.finally(() => {
-				connection.stop().catch((error: unknown) => {
-					console.warn("cuda build hub failed to stop", error);
-				});
-			});
+			// Release the shared lease: the manager stops the connection only after the LAST subscriber releases, and only
+			// once the start promise settles (so cleanup never aborts an in-flight negotiation under StrictMode / fast remounts).
+			hub.release();
 		};
 	}, [queryClient]);
 

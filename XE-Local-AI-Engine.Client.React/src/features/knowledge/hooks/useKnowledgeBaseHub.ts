@@ -1,9 +1,7 @@
-import { HubConnectionBuilder, LogLevel } from "@microsoft/signalr";
 import { useQueryClient } from "@tanstack/react-query";
 import { useEffect } from "react";
 
-import { buildLocalApiUrl } from "@/core/api/utils/LocalApiUrl";
-import { useNodeAuthStore } from "@/core/auth/stores/NodeAuthStore";
+import { acquireHubConnection } from "@/core/api/signalr/SharedHubConnection";
 import { knowledgeInvalidationKey, knowledgeQueryIds } from "@/features/knowledge/queries/useKnowledgeDocuments";
 import type { KnowledgeDocument, KnowledgeDocumentStatus } from "@/features/knowledge/models/KnowledgeModels";
 
@@ -37,15 +35,11 @@ export function useKnowledgeBaseHub(): void {
 	const queryClient = useQueryClient();
 
 	useEffect(() => {
-		const connection = new HubConnectionBuilder()
-			.withUrl(buildLocalApiUrl("knowledge-base/hub"), {
-				accessTokenFactory: () => useNodeAuthStore.getState().accessToken ?? "",
-			})
-			// Persistent notification channel (mounted for the page lifetime), so auto-reconnect after a transient drop —
-			// otherwise live invalidation is silently lost for the rest of the session.
-			.withAutomaticReconnect()
-			.configureLogging(LogLevel.Warning)
-			.build();
+		// Shared refcounted connection: reused across mounts so re-opening the knowledge-base page does not pay a fresh
+		// negotiate + WebSocket upgrade. The DOCUMENT_CHANGED handler below stays per-mount so this subscriber coexists
+		// with any other subscriber to the same hub.
+		const hub = acquireHubConnection("knowledge-base/hub");
+		const { connection } = hub;
 
 		const invalidateDocuments = (): void => {
 			queryClient
@@ -79,26 +73,11 @@ export function useKnowledgeBaseHub(): void {
 
 		connection.on(DOCUMENT_CHANGED, applyDocumentChanged);
 
-		let disposed = false;
-		const startPromise = connection.start().catch((error: unknown) => {
-			// A start aborted by our own cleanup (StrictMode double-invoke / fast remount) is not a real failure.
-			if (disposed) {
-				return;
-			}
-			// A hub that cannot connect must not break the page — TanStack Query still serves cached state.
-			console.warn("knowledge-base hub failed to start", error);
-		});
-
 		return () => {
-			disposed = true;
 			connection.off(DOCUMENT_CHANGED, applyDocumentChanged);
-			// Stop only AFTER start settles so cleanup never aborts an in-flight negotiation (the "stopped during
-			// negotiation" race that left the hub permanently disconnected under StrictMode / fast remounts).
-			startPromise.finally(() => {
-				connection.stop().catch((error: unknown) => {
-					console.warn("knowledge-base hub failed to stop", error);
-				});
-			});
+			// Release the shared lease: the manager stops the connection only after the LAST subscriber releases, and only
+			// once the start promise settles (so cleanup never aborts an in-flight negotiation under StrictMode / fast remounts).
+			hub.release();
 		};
 	}, [queryClient]);
 }

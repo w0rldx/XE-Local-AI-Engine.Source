@@ -3,6 +3,7 @@
 import { renderHook, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
+import { resetSharedHubConnectionsForTest } from "@/core/api/signalr/SharedHubConnection";
 import { previewHubEvents } from "@/features/preview/models/PreviewWorkflowModels";
 import { usePreviewWorkflowHub } from "@/features/preview/hooks/usePreviewWorkflowHub";
 import { usePreviewRunStore } from "@/features/preview/stores/PreviewRunStore";
@@ -68,6 +69,7 @@ function emitNode(runId: string, nodeId: string, eventType: string, output: stri
 
 describe("usePreviewWorkflowHub", () => {
 	beforeEach(() => {
+		resetSharedHubConnectionsForTest();
 		registeredHandlers.clear();
 		startSpy.mockClear();
 		stopSpy.mockClear();
@@ -106,10 +108,17 @@ describe("usePreviewWorkflowHub", () => {
 		const { unmount } = renderHook(() => usePreviewWorkflowHub());
 
 		await waitFor(() => expect(startSpy).toHaveBeenCalled());
-		unmount();
 
-		// The hook defers stop() to the start promise; await a tick so the .finally fires.
-		await waitFor(() => expect(stopSpy).toHaveBeenCalled());
+		// The shared manager stops on last release only AFTER a 30s stop-linger (reused across navigation) and once the
+		// start promise settles; switch to fake timers to advance past it deterministically instead of waiting real time.
+		vi.useFakeTimers();
+		try {
+			unmount();
+			await vi.advanceTimersByTimeAsync(30_000);
+			expect(stopSpy).toHaveBeenCalled();
+		} finally {
+			vi.useRealTimers();
+		}
 
 		// The PAGE owns reset-on-unmount (the store reset), simulated here — after it, the store is empty.
 		usePreviewRunStore.getState().actions.reset();
