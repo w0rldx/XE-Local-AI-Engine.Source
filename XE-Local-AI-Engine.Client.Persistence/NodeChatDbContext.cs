@@ -80,6 +80,16 @@ public sealed class NodeChatDbContext : DbContext
 
     internal DbSet<ChatMaintenanceState> MaintenanceState => Set<ChatMaintenanceState>();
 
+    public DbSet<DevelopmentProject> DevelopmentProjects => Set<DevelopmentProject>();
+
+    public DbSet<DevelopmentTask> DevelopmentTasks => Set<DevelopmentTask>();
+
+    public DbSet<DevelopmentAttempt> DevelopmentAttempts => Set<DevelopmentAttempt>();
+
+    public DbSet<DevelopmentArtifact> DevelopmentArtifacts => Set<DevelopmentArtifact>();
+
+    public DbSet<DevelopmentEvent> DevelopmentEvents => Set<DevelopmentEvent>();
+
     internal ReadOnlyMemory<byte> NodeEncryptionKey => _nodeSqliteKeyHolder.Key;
 
     /// <summary>
@@ -283,5 +293,10 @@ public sealed class NodeChatDbContext : DbContext
         modelBuilder.ApplyConfiguration(new GeneratedImageConfiguration());
         modelBuilder.ApplyConfiguration(new ImageModelProfileConfiguration());
         modelBuilder.ApplyConfiguration(new ChatMaintenanceStateConfiguration());
+        modelBuilder.ApplyConfiguration(new DevelopmentProjectConfiguration());
+        modelBuilder.ApplyConfiguration(new DevelopmentTaskConfiguration());
+        modelBuilder.ApplyConfiguration(new DevelopmentAttemptConfiguration());
+        modelBuilder.ApplyConfiguration(new DevelopmentArtifactConfiguration());
+        modelBuilder.ApplyConfiguration(new DevelopmentEventConfiguration());
     }
 }
