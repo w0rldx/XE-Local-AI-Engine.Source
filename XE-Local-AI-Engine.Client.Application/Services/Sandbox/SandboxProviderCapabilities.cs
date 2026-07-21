@@ -16,5 +16,6 @@ public enum SandboxProviderCapabilities
     SupportsResourceLimits = 1 << 4,
     SupportsCommandCancellation = 1 << 5,
     SupportsAttach = 1 << 6,
-    SupportsKill = 1 << 7
+    SupportsKill = 1 << 7,
+    SupportsTrustedHostWorkspace = 1 << 8
 }
