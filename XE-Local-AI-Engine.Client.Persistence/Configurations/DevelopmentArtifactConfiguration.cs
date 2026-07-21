@@ -16,20 +16,22 @@ internal sealed class DevelopmentArtifactConfiguration : IEntityTypeConfiguratio
         builder.Property(entity => entity.AttemptId).HasColumnName("attempt_id");
         builder.Property(entity => entity.Kind).HasColumnName("kind").HasConversion<string>().HasMaxLength(64);
         builder.Property(entity => entity.SchemaVersion).HasColumnName("schema_version");
-        builder.Property(entity => entity.PayloadJson).HasColumnName("payload_json");
-        builder.Property(entity => entity.StorageKey).HasColumnName("storage_key").HasMaxLength(128);
-        builder.Property(entity => entity.ContentHash).HasColumnName("content_hash").HasMaxLength(128);
+        builder.Property(entity => entity.ContentJson).HasColumnName("content_json");
+        builder.Property(entity => entity.ManagedReference).HasColumnName("managed_reference").HasMaxLength(255);
+        builder.Property(entity => entity.ContentHash).HasColumnName("content_hash").HasMaxLength(128).IsRequired();
         builder.Property(entity => entity.ByteCount).HasColumnName("byte_count");
         builder.Property(entity => entity.CreatedAtUtc).HasColumnName("created_at_utc");
-        builder.Property(entity => entity.BaseCommitHash).HasColumnName("base_commit_hash").HasMaxLength(128);
+        builder.Property(entity => entity.BaseCommit).HasColumnName("base_commit").HasMaxLength(128);
         builder.Property(entity => entity.SubjectHash).HasColumnName("subject_hash").HasMaxLength(128);
         builder.Property(entity => entity.ChangedFilesManifestHash).HasColumnName("changed_files_manifest_hash").HasMaxLength(128);
         builder.Property(entity => entity.InputArtifactIdsJson).HasColumnName("input_artifact_ids_json");
-        builder.Property(entity => entity.CommandProfileVersion).HasColumnName("command_profile_version").HasMaxLength(128);
+        builder.Property(entity => entity.CommandProfileVersion).HasColumnName("command_profile_version").HasMaxLength(64);
         builder.Property(entity => entity.IsValid).HasColumnName("is_valid");
-        builder.HasIndex(entity => new { entity.TaskId, entity.Kind, entity.IsValid });
         builder.HasOne<DevelopmentProject>().WithMany().HasForeignKey(entity => entity.ProjectId).OnDelete(DeleteBehavior.Cascade);
-        builder.HasOne<DevelopmentTask>().WithMany().HasForeignKey(entity => entity.TaskId).OnDelete(DeleteBehavior.Cascade);
-        builder.HasOne<DevelopmentAttempt>().WithMany().HasForeignKey(entity => entity.AttemptId).OnDelete(DeleteBehavior.SetNull);
+        builder.HasOne<DevelopmentTask>().WithMany().HasForeignKey(entity => entity.TaskId).OnDelete(DeleteBehavior.Restrict);
+        builder.HasOne<DevelopmentAttempt>().WithMany().HasForeignKey(entity => entity.AttemptId).OnDelete(DeleteBehavior.Restrict);
+        builder.HasIndex(entity => new { entity.TaskId, entity.Kind, entity.IsValid }).HasDatabaseName("ix_development_artifacts_task_kind_valid");
+        builder.HasIndex(entity => entity.AttemptId).HasDatabaseName("ix_development_artifacts_attempt_id");
     }
 }
+
