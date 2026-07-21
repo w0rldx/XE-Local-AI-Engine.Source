@@ -167,7 +167,8 @@ public sealed class ProcessSandboxRuntimeProvider : ISandboxRuntimeProvider, IDi
         | SandboxProviderCapabilities.SupportsCopyOut
         | SandboxProviderCapabilities.SupportsCommandCancellation
         | SandboxProviderCapabilities.SupportsAttach
-        | SandboxProviderCapabilities.SupportsKill;
+        | SandboxProviderCapabilities.SupportsKill
+        | SandboxProviderCapabilities.SupportsTrustedHostWorkspace;
 
     public Task<SandboxHandle> CreateOrAttachAsync(SandboxCreateRequest request, CancellationToken cancellationToken = default)
     {
@@ -186,6 +187,7 @@ public sealed class ProcessSandboxRuntimeProvider : ISandboxRuntimeProvider, IDi
             var attached = FindAliveByKey(request.AttachKey);
             if (attached is not null)
             {
+                EnsureCompatibleWorkspaceBinding(attached, request.TrustedHostWorkspace);
                 return Task.FromResult(attached.Handle);
             }
 
@@ -194,7 +196,9 @@ public sealed class ProcessSandboxRuntimeProvider : ISandboxRuntimeProvider, IDi
             EvictOwnerConflicts(request.AttachKey);
 
             var sandboxId = BuildSandboxId(request.AttachKey);
-            var jailDirectory = Path.Combine(_jailRoot, sandboxId);
+            var jailDirectory = request.TrustedHostWorkspace is null
+                ? Path.Combine(_jailRoot, sandboxId)
+                : ResolveTrustedHostWorkspace(request.TrustedHostWorkspace.RootPath);
             Directory.CreateDirectory(jailDirectory);
 
             var handle = new SandboxHandle
@@ -205,7 +209,7 @@ public sealed class ProcessSandboxRuntimeProvider : ISandboxRuntimeProvider, IDi
                 CreatedAt = _timeProvider.GetUtcNow(),
                 ManifestVersion = request.AttachKey.ManifestVersion
             };
-            _sandboxes[sandboxId] = new JailState(handle, jailDirectory);
+            _sandboxes[sandboxId] = new JailState(handle, jailDirectory, request.TrustedHostWorkspace is not null);
             return Task.FromResult(handle);
         }
     }
@@ -538,6 +542,42 @@ public sealed class ProcessSandboxRuntimeProvider : ISandboxRuntimeProvider, IDi
         return _sandboxes.Values.FirstOrDefault(state => state.Alive && state.Handle.AttachKey == attachKey);
     }
 
+    private static void EnsureCompatibleWorkspaceBinding(JailState state, SandboxTrustedHostWorkspace? requested)
+    {
+        if (requested is null)
+        {
+            if (state.PreserveJailRoot)
+            {
+                throw new SandboxHandleInvalidException("The existing sandbox is bound to a trusted host workspace, but the attach request is not.");
+            }
+
+            return;
+        }
+
+        var requestedRoot = ResolveTrustedHostWorkspace(requested.RootPath);
+        if (!state.PreserveJailRoot || !string.Equals(requestedRoot, state.JailRoot, StringComparison.Ordinal))
+        {
+            throw new SandboxHandleInvalidException("The existing sandbox is bound to a different trusted host workspace.");
+        }
+    }
+
+    private static string ResolveTrustedHostWorkspace(string rootPath)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(rootPath);
+        var canonical = Path.GetFullPath(rootPath);
+        if (!Directory.Exists(canonical))
+        {
+            throw new DirectoryNotFoundException("The trusted host workspace must be an existing canonical directory.");
+        }
+
+        if (File.ResolveLinkTarget(canonical, returnFinalTarget: false) is not null)
+        {
+            throw new UnauthorizedAccessException("A trusted host workspace root cannot be a symbolic link.");
+        }
+
+        return canonical;
+    }
+
     private void EvictOwnerConflicts(SandboxAttachKey attachKey)
     {
         var conflicts = _sandboxes
@@ -699,7 +739,7 @@ public sealed class ProcessSandboxRuntimeProvider : ISandboxRuntimeProvider, IDi
 
         try
         {
-            if (Directory.Exists(state.JailRoot))
+            if (!state.PreserveJailRoot && Directory.Exists(state.JailRoot))
             {
                 Directory.Delete(state.JailRoot, recursive: true);
             }
@@ -1027,15 +1067,18 @@ public sealed class ProcessSandboxRuntimeProvider : ISandboxRuntimeProvider, IDi
 
     private sealed class JailState
     {
-        public JailState(SandboxHandle handle, string jailRoot)
+        public JailState(SandboxHandle handle, string jailRoot, bool preserveJailRoot = false)
         {
             Handle = handle;
             JailRoot = jailRoot;
+            PreserveJailRoot = preserveJailRoot;
         }
 
         public SandboxHandle Handle { get; }
 
         public string JailRoot { get; }
+
+        public bool PreserveJailRoot { get; }
 
         public object Sync { get; } = new();
 
