@@ -26,8 +26,11 @@ internal static class AddNodeDevelopmentExtensions
         builder.Services.TryAddScoped<IDevelopmentHostApplyPort, UnavailableDevelopmentHostApplyPort>();
         builder.Services.AddScoped<IDevelopmentCoordinator, DevelopmentCoordinator>();
         builder.Services.AddSingleton<IDevelopmentArtifactBlobStore, ManagedDevelopmentArtifactBlobStore>();
+        builder.Services.AddScoped<IDevelopmentWorkspaceProvider, DevelopmentWorkspaceProvider>();
+        builder.Services.AddScoped<IDevelopmentPatchEvidenceService, DevelopmentPatchEvidenceService>();
+        builder.Services.AddScoped<IDevelopmentCoderModel, DevelopmentCoderModel>();
+        builder.Services.AddScoped<IDevelopmentCoderAttemptRunner, DevelopmentCoderAttemptRunner>();
         builder.Services.AddHostedService<DevelopmentStartupReconciler>();
         return builder;
     }
 }
-
