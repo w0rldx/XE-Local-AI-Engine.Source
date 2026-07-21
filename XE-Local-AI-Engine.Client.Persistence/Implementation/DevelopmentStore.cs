@@ -51,6 +51,8 @@ public sealed class DevelopmentStore(NodeChatDbContext dbContext, TimeProvider t
                     EgressPolicy = command.EgressPolicy,
                     CoderModelId = command.CoderModelId,
                     ReviewerModelId = command.ReviewerModelId,
+                    MaxTokens = command.MaxTokens,
+                    MaxDurationSeconds = command.MaxDurationSeconds,
                     ConfigurationVersion = command.ConfigurationVersion,
                     TrustedRepositoryAcknowledged = command.TrustedRepositoryAcknowledged,
                     TrustedRepositoryPolicyVersion = command.TrustedRepositoryPolicyVersion,
@@ -494,6 +496,46 @@ public sealed class DevelopmentStore(NodeChatDbContext dbContext, TimeProvider t
                                    entity.Outcome))
                                .ToListAsync(cancellationToken)
                                .ConfigureAwait(false);
+    }
+
+    public async Task<DevelopmentExecutionSnapshot> GetExecutionSnapshotAsync(Guid attemptId, CancellationToken cancellationToken = default)
+    {
+        var snapshot = await (from attempt in _dbContext.DevelopmentAttempts.AsNoTracking()
+                              join task in _dbContext.DevelopmentTasks.AsNoTracking() on attempt.TaskId equals task.Id
+                              join project in _dbContext.DevelopmentProjects.AsNoTracking() on task.ProjectId equals project.Id
+                              where attempt.Id == attemptId
+                              select new
+                              {
+                                  Project = project,
+                                  Task = task,
+                                  Attempt = attempt
+                              })
+                             .SingleOrDefaultAsync(cancellationToken)
+                             .ConfigureAwait(false)
+                       ?? throw new KeyNotFoundException($"Development attempt '{attemptId}' was not found.");
+
+        return new DevelopmentExecutionSnapshot(snapshot.Project.Id,
+            snapshot.Task.Id,
+            snapshot.Attempt.Id,
+            snapshot.Project.RepositoryIdentityHash,
+            snapshot.Project.BaseBranch,
+            snapshot.Project.EgressPolicy,
+            snapshot.Project.ConfigurationVersion,
+            snapshot.Project.TrustedRepositoryAcknowledged,
+            snapshot.Project.TrustedRepositoryPolicyVersion,
+            snapshot.Project.TrustedRepositoryAcknowledgedAtUtc,
+            snapshot.Project.MaxTokens,
+            snapshot.Project.MaxDurationSeconds,
+            Encoding.UTF8.GetString(snapshot.Task.Title),
+            Encoding.UTF8.GetString(snapshot.Task.Requirements),
+            Encoding.UTF8.GetString(snapshot.Task.AcceptanceCriteriaJson),
+            snapshot.Task.Status,
+            snapshot.Task.Version,
+            snapshot.Attempt.Role,
+            snapshot.Attempt.Status,
+            snapshot.Attempt.ModelId,
+            snapshot.Attempt.Provider,
+            snapshot.Attempt.Version);
     }
 
     private async Task<DevelopmentOperationResult> ExecuteOperationAsync(Guid projectId,
