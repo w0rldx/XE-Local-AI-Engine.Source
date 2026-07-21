@@ -1,5 +1,7 @@
 namespace XE_Local_AI_Engine.Client.Services.Development;
 
+using System.ComponentModel;
+using System.Diagnostics;
 using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
@@ -7,7 +9,7 @@ using Microsoft.Extensions.Options;
 using XE_Local_AI_Engine.Client.Services.AgentHome.Implementation;
 using XE_Local_AI_Engine.Client.Services.Sandbox;
 
-internal sealed record DevelopmentChangedFile(string Path, string ChangeType);
+internal sealed record DevelopmentChangedFile(string Path, string ChangeType, string? PreviousPath = null);
 
 internal sealed record DevelopmentPatchEvidence(
     string BaseCommit,
@@ -28,11 +30,9 @@ internal sealed class DevelopmentPatchEvidenceService : IDevelopmentPatchEvidenc
     private static readonly JsonSerializerOptions JsonOptions = new(JsonSerializerDefaults.Web);
 
     private readonly DevelopmentOptions _options;
-    private readonly ISandboxRuntimeProvider _sandbox;
-
     public DevelopmentPatchEvidenceService(ISandboxRuntimeProvider sandbox, IOptions<DevelopmentOptions> options)
     {
-        _sandbox = sandbox ?? throw new ArgumentNullException(nameof(sandbox));
+        ArgumentNullException.ThrowIfNull(sandbox);
         ArgumentNullException.ThrowIfNull(options);
         _options = options.Value;
     }
@@ -40,17 +40,24 @@ internal sealed class DevelopmentPatchEvidenceService : IDevelopmentPatchEvidenc
     public async Task<DevelopmentPatchEvidence> ExportAsync(DevelopmentWorkspaceSession session, CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(session);
-        _ = await RunGitAsync(session, "evidence-stage", ["add", "-A", "--", "."], cancellationToken).ConfigureAwait(false);
-        var patch = await RunGitAsync(session,
-            "evidence-patch",
-            ["diff", "--cached", "--binary", "--full-index", "--no-ext-diff", "HEAD", "--", "."],
+        _ = await RunGitExactAsync(session,
+            ["reset", "--mixed", "--quiet", "HEAD", "--"],
+            maxOutputBytes: 4096,
             cancellationToken).ConfigureAwait(false);
-        var status = await RunGitAsync(session,
-            "evidence-status",
+        _ = await RunGitExactAsync(session,
+            ["add", "-A", "--", "."],
+            maxOutputBytes: 4096,
+            cancellationToken).ConfigureAwait(false);
+        var patch = await RunGitExactAsync(session,
+            ["diff", "--cached", "--binary", "--full-index", "--no-ext-diff", "HEAD", "--", "."],
+            maxOutputBytes: _options.MaxPatchBytes,
+            cancellationToken).ConfigureAwait(false);
+        var status = await RunGitExactAsync(session,
             ["diff", "--cached", "--name-status", "-z", "HEAD", "--", "."],
+            maxOutputBytes: _options.MaxPatchBytes,
             cancellationToken).ConfigureAwait(false);
 
-        var patchBytes = Encoding.UTF8.GetBytes(patch.StandardOutput);
+        var patchBytes = patch.StandardOutput;
         if (patchBytes.Length == 0 || patchBytes.Length > _options.MaxPatchBytes)
         {
             throw new InvalidOperationException("The final Development patch is empty or exceeds the configured patch limit.");
@@ -69,12 +76,23 @@ internal sealed class DevelopmentPatchEvidenceService : IDevelopmentPatchEvidenc
             {
                 throw new DevelopmentWorkspaceSecurityException("The final patch contains a protected or escaping path.");
             }
+
+            if (item.PreviousPath is not null && !DevelopmentWorkspaceSecurity.Confine(item.PreviousPath, allowRoot: false).IsAccepted)
+            {
+                throw new DevelopmentWorkspaceSecurityException("The final patch contains a protected or escaping source path.");
+            }
         }
 
         var manifestBytes = JsonSerializer.SerializeToUtf8Bytes(changedFiles.OrderBy(static item => item.Path, StringComparer.Ordinal), JsonOptions);
         var patchHash = Hash(patchBytes);
         var manifestHash = Hash(manifestBytes);
-        var subjectHash = Hash(Encoding.UTF8.GetBytes(string.Concat(session.BaseCommit, "\n", patchHash, "\n", manifestHash, "\n")));
+        var subjectHash = Hash(Encoding.UTF8.GetBytes(string.Concat("xe-development-subject/v1\0",
+            session.BaseCommit,
+            "\0",
+            patchHash,
+            "\0",
+            manifestHash,
+            "\0")));
         return new DevelopmentPatchEvidence(session.BaseCommit,
             patchHash,
             manifestHash,
@@ -84,30 +102,84 @@ internal sealed class DevelopmentPatchEvidenceService : IDevelopmentPatchEvidenc
             changedFiles);
     }
 
-    private async Task<SandboxCommandResult> RunGitAsync(DevelopmentWorkspaceSession session,
-        string executionId,
+    private async Task<ExactGitResult> RunGitExactAsync(DevelopmentWorkspaceSession session,
         IReadOnlyList<string> tail,
+        int maxOutputBytes,
         CancellationToken cancellationToken)
     {
-        var result = await _sandbox.ExecuteAsync(session.SandboxHandle, new SandboxCommandRequest
+        Directory.CreateDirectory(Path.Combine(session.RuntimePath, "home"));
+        Directory.CreateDirectory(Path.Combine(session.RuntimePath, "tmp"));
+#pragma warning disable S4036 // Git is the code-owned executable and must resolve cross-platform through the controlled PATH.
+        var startInfo = new ProcessStartInfo
         {
-            ExecutionId = executionId + "-" + Guid.NewGuid().ToString("N"),
-            Executable = AgentHomeGit.Executable,
-            Arguments = AgentHomeGit.Arguments([.. tail]),
-            WorkingDirectory = "/",
-            Timeout = TimeSpan.FromSeconds(_options.MaxAttemptDurationSeconds)
-        }, cancellationToken).ConfigureAwait(false);
-        if (!result.Completed || result.ExitCode != 0)
+            FileName = AgentHomeGit.Executable,
+#pragma warning restore S4036
+            WorkingDirectory = session.HostWorktreePath,
+            RedirectStandardOutput = true,
+            RedirectStandardError = true,
+            UseShellExecute = false,
+            CreateNoWindow = true
+        };
+        foreach (var argument in AgentHomeGit.Arguments([.. tail]))
         {
-            throw new InvalidOperationException("The exact Development patch evidence could not be exported.");
+            startInfo.ArgumentList.Add(argument);
         }
 
-        return result;
+        startInfo.Environment.Clear();
+        CopyEnvironment(startInfo, "PATH");
+        CopyEnvironment(startInfo, "SystemRoot");
+        CopyEnvironment(startInfo, "windir");
+        startInfo.Environment["HOME"] = Path.Combine(session.RuntimePath, "home");
+        startInfo.Environment["TMPDIR"] = Path.Combine(session.RuntimePath, "tmp");
+        startInfo.Environment["TMP"] = Path.Combine(session.RuntimePath, "tmp");
+        startInfo.Environment["TEMP"] = Path.Combine(session.RuntimePath, "tmp");
+        startInfo.Environment["LC_ALL"] = "C";
+
+        using var timeout = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+        timeout.CancelAfter(TimeSpan.FromSeconds(_options.MaxAttemptDurationSeconds));
+        using var process = new Process { StartInfo = startInfo };
+        try
+        {
+            if (!process.Start())
+            {
+                throw new InvalidOperationException("The exact Development Git evidence command could not be started.");
+            }
+        }
+        catch (Win32Exception exception)
+        {
+            throw new InvalidOperationException("The exact Development Git evidence command could not be started.", exception);
+        }
+
+        try
+        {
+            var outputTask = ReadCappedAndDrainAsync(process.StandardOutput.BaseStream, maxOutputBytes, timeout.Token);
+            var errorTask = ReadCappedAndDrainAsync(process.StandardError.BaseStream, 64 * 1024, timeout.Token);
+            await process.WaitForExitAsync(timeout.Token).ConfigureAwait(false);
+            var output = await outputTask.ConfigureAwait(false);
+            var error = await errorTask.ConfigureAwait(false);
+            if (output.Truncated || error.Truncated)
+            {
+                throw new InvalidDataException("The exact Development Git evidence output exceeded its configured bound.");
+            }
+
+            if (process.ExitCode != 0)
+            {
+                throw new InvalidOperationException("The exact Development patch evidence could not be exported: "
+                                                    + Encoding.UTF8.GetString(error.Bytes));
+            }
+
+            return new ExactGitResult(output.Bytes);
+        }
+        catch
+        {
+            TryKill(process);
+            throw;
+        }
     }
 
-    private static IReadOnlyList<DevelopmentChangedFile> ParseStatus(string status)
+    private static IReadOnlyList<DevelopmentChangedFile> ParseStatus(byte[] status)
     {
-        var tokens = status.Split('\0', StringSplitOptions.RemoveEmptyEntries);
+        var tokens = SplitNullTerminated(status);
         var result = new List<DevelopmentChangedFile>();
         for (var index = 0; index < tokens.Length;)
         {
@@ -118,12 +190,14 @@ internal sealed class DevelopmentPatchEvidenceService : IDevelopmentPatchEvidenc
             }
 
             var path = tokens[index++];
+            string? previousPath = null;
             if ((code.StartsWith('R') || code.StartsWith('C')) && index < tokens.Length)
             {
+                previousPath = path;
                 path = tokens[index++];
             }
 
-            result.Add(new DevelopmentChangedFile(path, ChangeType(code)));
+            result.Add(new DevelopmentChangedFile(path, ChangeType(code), previousPath));
         }
 
         return result.OrderBy(static item => item.Path, StringComparer.Ordinal).ToArray();
@@ -143,4 +217,85 @@ internal sealed class DevelopmentPatchEvidenceService : IDevelopmentPatchEvidenc
         };
 
     private static string Hash(ReadOnlySpan<byte> content) => Convert.ToHexString(SHA256.HashData(content));
+
+    private static string[] SplitNullTerminated(byte[] content)
+    {
+        if (content.Length == 0 || content[^1] != 0)
+        {
+            throw new InvalidDataException("The Git changed-file manifest was truncated.");
+        }
+
+        var utf8 = new UTF8Encoding(encoderShouldEmitUTF8Identifier: false, throwOnInvalidBytes: true);
+        var tokens = new List<string>();
+        var start = 0;
+        for (var index = 0; index < content.Length; index++)
+        {
+            if (content[index] != 0)
+            {
+                continue;
+            }
+
+            if (index > start)
+            {
+                tokens.Add(utf8.GetString(content.AsSpan(start, index - start)));
+            }
+
+            start = index + 1;
+        }
+
+        return tokens.ToArray();
+    }
+
+    private static async Task<CappedBytes> ReadCappedAndDrainAsync(Stream stream, int maxBytes, CancellationToken cancellationToken)
+    {
+        var buffer = new byte[81920];
+        using var captured = new MemoryStream(Math.Min(maxBytes, buffer.Length));
+        var truncated = false;
+        while (true)
+        {
+            var read = await stream.ReadAsync(buffer, cancellationToken).ConfigureAwait(false);
+            if (read == 0)
+            {
+                break;
+            }
+
+            var remaining = maxBytes - (int)captured.Length;
+            if (remaining > 0)
+            {
+                await captured.WriteAsync(buffer.AsMemory(0, Math.Min(read, remaining)), cancellationToken).ConfigureAwait(false);
+            }
+
+            truncated |= read > remaining;
+        }
+
+        return new CappedBytes(captured.ToArray(), truncated);
+    }
+
+    private static void CopyEnvironment(ProcessStartInfo startInfo, string name)
+    {
+        var value = Environment.GetEnvironmentVariable(name);
+        if (value is not null)
+        {
+            startInfo.Environment[name] = value;
+        }
+    }
+
+    private static void TryKill(Process process)
+    {
+        try
+        {
+            process.Kill(entireProcessTree: true);
+        }
+        catch (InvalidOperationException)
+        {
+            // The exact evidence command already exited.
+        }
+        catch (Win32Exception)
+        {
+            // Best-effort termination after a failed exact evidence export.
+        }
+    }
+
+    private sealed record ExactGitResult(byte[] StandardOutput);
+    private sealed record CappedBytes(byte[] Bytes, bool Truncated);
 }

@@ -2,6 +2,8 @@ namespace XE_Local_AI_Engine.Client.Services.Development;
 
 using System.ComponentModel;
 using Microsoft.Extensions.AI;
+using XE_Local_AI_Engine.AI.Agent.Configuration;
+using XE_Local_AI_Engine.AI.Agent.Invocation;
 using XE_Local_AI_Engine.Client.Services.CloudProviders;
 
 internal sealed record DevelopmentCoderSubmission(
@@ -50,6 +52,7 @@ internal sealed class DevelopmentCoderModel(IChatClient chatClient, IActiveCloud
         {
             ModelId = modelId,
             MaxOutputTokens = maxOutputTokens,
+            AllowMultipleToolCalls = false,
             Tools =
             [
                 AIFunctionFactory.Create(gateway.ListFilesAsync, "list_files", "List files below a workspace-relative path."),
@@ -63,6 +66,17 @@ internal sealed class DevelopmentCoderModel(IChatClient chatClient, IActiveCloud
                 AIFunctionFactory.Create(gateway.SubmitImplementation, "submit_implementation", "Submit the typed final implementation evidence after all changes are complete.")
             ]
         };
+        var providerCalls = Math.Max(1, maxToolCalls + 1);
+        var cumulativeInputTokens = (int)Math.Min(int.MaxValue, Math.Max(1024L, (long)maxOutputTokens * providerCalls));
+        using var providerBudget = ProviderCallBudget.BeginScope(new ProviderCallBudgetOptions
+        {
+            MaxProviderCallsPerInvocation = providerCalls,
+            MaxCumulativeInputTokens = cumulativeInputTokens,
+            DefaultContextTokens = Math.Max(2048, maxOutputTokens * 2),
+            ReservedOutputTokenFloor = maxOutputTokens,
+            RecentMessagesToKeep = 2,
+            OversizedToolResultExcerptChars = 2000
+        });
         _ = await _chatClient.GetResponseAsync([
                 new ChatMessage(ChatRole.System,
                     "You are the bounded local Development coder. Use only the provided workspace tools. Never claim completion without calling submit_implementation exactly once."),

@@ -138,11 +138,10 @@ internal sealed class DevelopmentCoderAttemptRunner : IDevelopmentCoderAttemptRu
             evidence,
             [patchId, manifestId],
             cancellationToken).ConfigureAwait(false);
-        _ = await PersistArtifactAsync(snapshot,
+        var workspaceId = await PersistArtifactAsync(snapshot,
             DevelopmentArtifactKind.WorkspaceManifest,
             JsonSerializer.SerializeToUtf8Bytes(new
             {
-                submission,
                 evidence.BaseCommit,
                 evidence.PatchHash,
                 evidence.ManifestHash,
@@ -153,6 +152,12 @@ internal sealed class DevelopmentCoderAttemptRunner : IDevelopmentCoderAttemptRu
             }, JsonOptions),
             evidence,
             [patchId, manifestId, commandId],
+            cancellationToken).ConfigureAwait(false);
+        _ = await PersistArtifactAsync(snapshot,
+            DevelopmentArtifactKind.CoderSubmission,
+            JsonSerializer.SerializeToUtf8Bytes(submission, JsonOptions),
+            evidence,
+            [patchId, manifestId, commandId, workspaceId],
             cancellationToken).ConfigureAwait(false);
     }
 

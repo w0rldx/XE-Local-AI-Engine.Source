@@ -61,7 +61,15 @@ public sealed class DevelopmentPersistenceTests : IDisposable
         await using var provider = await _fixture.BuildProviderAsync().ConfigureAwait(false);
         await using var scope = provider.CreateAsyncScope();
         var store = scope.ServiceProvider.GetRequiredService<IDevelopmentStore>();
-        var seed = DevelopmentTestFixture.CreateSeed();
+        var acknowledgedAt = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
+        var seed = DevelopmentTestFixture.CreateSeed() with
+        {
+            TrustedRepositoryAcknowledged = true,
+            TrustedRepositoryPolicyVersion = 1,
+            TrustedRepositoryAcknowledgedAtUtc = acknowledgedAt,
+            MaxTokens = 4096,
+            MaxDurationSeconds = 90
+        };
 
         var created = await store.CreateProjectAsync(seed).ConfigureAwait(false);
         var replay = await store.CreateProjectAsync(seed).ConfigureAwait(false);
@@ -86,8 +94,9 @@ public sealed class DevelopmentPersistenceTests : IDisposable
                                                                                                             ExpectedTaskVersion: 1)))
                       .ConfigureAwait(false);
 
+        var attemptId = Guid.NewGuid();
         var firstAttempt = await store.StartAttemptAsync(new DevelopmentStartAttemptCommand(seed.TaskId,
-                                                        Guid.NewGuid(),
+                                                        attemptId,
                                                         Guid.NewGuid(),
                                                         DevelopmentAttemptRole.Coder,
                                                         "local-model",
@@ -95,6 +104,15 @@ public sealed class DevelopmentPersistenceTests : IDisposable
                                                         ExpectedTaskVersion: 2))
                                       .ConfigureAwait(false);
         AssertEx.Equal(DevelopmentAttemptStatus.Running.ToString(), firstAttempt.Status);
+        var snapshot = await store.GetExecutionSnapshotAsync(attemptId).ConfigureAwait(false);
+        AssertEx.Equal(seed.RepositoryIdentityHash, snapshot.RepositoryIdentityHash);
+        AssertEx.Equal(seed.BaseBranch, snapshot.BaseBranch);
+        AssertEx.True(snapshot.TrustedRepositoryAcknowledged);
+        AssertEx.Equal(1, snapshot.TrustedRepositoryPolicyVersion);
+        AssertEx.Equal(acknowledgedAt, snapshot.TrustedRepositoryAcknowledgedAtUtc);
+        AssertEx.Equal(4096, snapshot.MaxTokens);
+        AssertEx.Equal(90, snapshot.MaxDurationSeconds);
+        AssertEx.Equal("local-model", snapshot.ModelId);
 
         await AssertEx.ThrowsAsync<DevelopmentConcurrencyException>(() => store.StartAttemptAsync(new DevelopmentStartAttemptCommand(seed.TaskId,
                                                                                                       Guid.NewGuid(),
@@ -201,6 +219,9 @@ public sealed class ManagedDevelopmentArtifactStoreTests : IDisposable
         ReadOnlyMemory<byte> content = "bounded artifact"u8.ToArray();
 
         var written = await store.WriteAsync(projectId, artifactId, content).ConfigureAwait(false);
+        var replay = await store.WriteAsync(projectId, artifactId, content).ConfigureAwait(false);
+        AssertEx.Equal(written, replay);
+        await AssertEx.ThrowsAsync<IOException>(() => store.WriteAsync(projectId, artifactId, "different"u8.ToArray()));
         AssertEx.False(Path.IsPathRooted(written.OpaqueReference));
         AssertEx.False(written.OpaqueReference.Contains("..", StringComparison.Ordinal));
 
