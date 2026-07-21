@@ -209,6 +209,30 @@ public sealed class NodeEncryptionSaveChangesInterceptor : SaveChangesIntercepto
             EncryptOptionalProperty(entry, entry.Property(entity => entity.NegativePrompt), Guid.Empty, entry.Entity.Id, "image_negative_prompt", trackedProperties);
         }
 
+        foreach (var entry in nodeContext.ChangeTracker.Entries<DevelopmentProject>())
+        {
+            EncryptRequiredProperty(entry, entry.Property(entity => entity.Objective), entry.Entity.Id, entry.Entity.Id, "development_objective", trackedProperties);
+        }
+
+        foreach (var entry in nodeContext.ChangeTracker.Entries<DevelopmentTask>())
+        {
+            EncryptRequiredProperty(entry, entry.Property(entity => entity.Title), entry.Entity.ProjectId, entry.Entity.Id, "development_task_title", trackedProperties);
+            EncryptRequiredProperty(entry, entry.Property(entity => entity.Requirements), entry.Entity.ProjectId, entry.Entity.Id, "development_task_requirements", trackedProperties);
+            EncryptRequiredProperty(entry, entry.Property(entity => entity.AcceptanceCriteriaJson), entry.Entity.ProjectId, entry.Entity.Id, "development_acceptance_criteria_json", trackedProperties);
+        }
+
+        foreach (var entry in nodeContext.ChangeTracker.Entries<DevelopmentArtifact>())
+        {
+            EncryptOptionalProperty(entry, entry.Property(entity => entity.ContentJson), entry.Entity.ProjectId, entry.Entity.Id, "development_artifact_content_json", trackedProperties);
+            EncryptOptionalProperty(entry, entry.Property(entity => entity.InputArtifactIdsJson), entry.Entity.ProjectId, entry.Entity.Id, "development_artifact_input_ids_json", trackedProperties);
+        }
+
+        foreach (var entry in nodeContext.ChangeTracker.Entries<DevelopmentEvent>())
+        {
+            EncryptOptionalProperty(entry, entry.Property(entity => entity.DetailJson), entry.Entity.ProjectId, entry.Entity.Id, "development_event_detail_json", trackedProperties);
+            EncryptOptionalProperty(entry, entry.Property(entity => entity.ResultMetadataJson), entry.Entity.ProjectId, entry.Entity.Id, "development_event_result_json", trackedProperties);
+        }
+
         if (trackedProperties.Count > 0)
         {
             _pendingRestores[nodeContext] = trackedProperties;

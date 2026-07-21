@@ -86,6 +86,22 @@ public sealed class NodeEncryptionMaterializationInterceptor : IMaterializationI
                 imageJob.Prompt = NodePayloadProtector.Decrypt(imageJob.Prompt, context.NodeEncryptionKey.Span, Guid.Empty, imageJob.Id, "image_prompt");
                 imageJob.NegativePrompt = DecryptIfPresent(imageJob.NegativePrompt, context.NodeEncryptionKey.Span, Guid.Empty, imageJob.Id, "image_negative_prompt");
                 break;
+            case DevelopmentProject project:
+                project.Objective = NodePayloadProtector.Decrypt(project.Objective, context.NodeEncryptionKey.Span, project.Id, project.Id, "development_objective");
+                break;
+            case DevelopmentTask task:
+                task.Title = NodePayloadProtector.Decrypt(task.Title, context.NodeEncryptionKey.Span, task.ProjectId, task.Id, "development_task_title");
+                task.Requirements = NodePayloadProtector.Decrypt(task.Requirements, context.NodeEncryptionKey.Span, task.ProjectId, task.Id, "development_task_requirements");
+                task.AcceptanceCriteriaJson = NodePayloadProtector.Decrypt(task.AcceptanceCriteriaJson, context.NodeEncryptionKey.Span, task.ProjectId, task.Id, "development_acceptance_criteria_json");
+                break;
+            case DevelopmentArtifact artifact:
+                artifact.ContentJson = DecryptIfPresent(artifact.ContentJson, context.NodeEncryptionKey.Span, artifact.ProjectId, artifact.Id, "development_artifact_content_json");
+                artifact.InputArtifactIdsJson = DecryptIfPresent(artifact.InputArtifactIdsJson, context.NodeEncryptionKey.Span, artifact.ProjectId, artifact.Id, "development_artifact_input_ids_json");
+                break;
+            case DevelopmentEvent developmentEvent:
+                developmentEvent.DetailJson = DecryptIfPresent(developmentEvent.DetailJson, context.NodeEncryptionKey.Span, developmentEvent.ProjectId, developmentEvent.Id, "development_event_detail_json");
+                developmentEvent.ResultMetadataJson = DecryptIfPresent(developmentEvent.ResultMetadataJson, context.NodeEncryptionKey.Span, developmentEvent.ProjectId, developmentEvent.Id, "development_event_result_json");
+                break;
         }
 
         return entity;
