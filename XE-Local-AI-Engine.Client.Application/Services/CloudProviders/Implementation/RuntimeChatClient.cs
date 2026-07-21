@@ -29,14 +29,19 @@ public sealed class RuntimeChatClient : IChatClient
         + "owned and lifecycle-managed by IActiveCloudChatClientFactory; disposing it here is incorrect.";
 
     private readonly IActiveCloudChatClientFactory _activeCloudFactory;
+    private readonly ICloudEgressAuthorizer _cloudEgressAuthorizer;
     private readonly Lazy<IChatClient> _localClient;
 
-    public RuntimeChatClient(IActiveCloudChatClientFactory activeCloudFactory, Func<IChatClient> localClientFactory)
+    public RuntimeChatClient(IActiveCloudChatClientFactory activeCloudFactory,
+        Func<IChatClient> localClientFactory,
+        ICloudEgressAuthorizer cloudEgressAuthorizer)
     {
         ArgumentNullException.ThrowIfNull(activeCloudFactory);
         ArgumentNullException.ThrowIfNull(localClientFactory);
+        ArgumentNullException.ThrowIfNull(cloudEgressAuthorizer);
 
         _activeCloudFactory = activeCloudFactory;
+        _cloudEgressAuthorizer = cloudEgressAuthorizer;
         _localClient = new Lazy<IChatClient>(localClientFactory, LazyThreadSafetyMode.ExecutionAndPublication);
     }
 
@@ -45,7 +50,7 @@ public sealed class RuntimeChatClient : IChatClient
         ChatOptions? options = null,
         CancellationToken cancellationToken = default)
     {
-        return ResolveActiveClient(options?.ModelId).GetResponseAsync(messages, options, cancellationToken);
+        return ResolveActiveClient(options).GetResponseAsync(messages, options, cancellationToken);
     }
 
     [SuppressMessage("Reliability", "CA2000:Dispose objects before losing scope", Justification = ActiveClientOwnershipNote)]
@@ -53,7 +58,7 @@ public sealed class RuntimeChatClient : IChatClient
         ChatOptions? options = null,
         CancellationToken cancellationToken = default)
     {
-        return ResolveActiveClient(options?.ModelId).GetStreamingResponseAsync(messages, options, cancellationToken);
+        return ResolveActiveClient(options).GetStreamingResponseAsync(messages, options, cancellationToken);
     }
 
     [SuppressMessage("Reliability", "CA2000:Dispose objects before losing scope", Justification = ActiveClientOwnershipNote)]
@@ -68,7 +73,7 @@ public sealed class RuntimeChatClient : IChatClient
 
         // Delegate metadata/service lookups to the active client so callers see the real provider's services. There
         // is no per-request model id available at this boundary, so this resolves the node-default provider.
-        return ResolveActiveClient(requestedModelId: null).GetService(serviceType, serviceKey);
+        return ResolveActiveClient(options: null).GetService(serviceType, serviceKey);
     }
 
     public void Dispose()
@@ -81,10 +86,24 @@ public sealed class RuntimeChatClient : IChatClient
         }
     }
 
-    private IChatClient ResolveActiveClient(string? requestedModelId)
+    private IChatClient ResolveActiveClient(ChatOptions? options)
     {
-        return _activeCloudFactory.TryCreateActiveCloudChatClient(requestedModelId, out var cloudClient) && cloudClient is not null
-            ? cloudClient
-            : _localClient.Value;
+        var requestedModelId = options?.ModelId;
+        if (!_activeCloudFactory.TryCreateActiveCloudChatClient(requestedModelId, out var cloudClient) || cloudClient is null)
+        {
+            return _localClient.Value;
+        }
+
+        AuthorizeDevelopmentCloudRequest(options, requestedModelId);
+        return cloudClient;
+    }
+
+    private void AuthorizeDevelopmentCloudRequest(ChatOptions? options, string? requestedModelId)
+    {
+        var providerName = _activeCloudFactory.ResolveActiveCloudProviderName(requestedModelId) ?? "unknown";
+        if (DevelopmentCloudAuthorizationMetadata.TryCreateRequest(options, providerName, out var request))
+        {
+            _cloudEgressAuthorizer.Authorize(request!);
+        }
     }
 }
