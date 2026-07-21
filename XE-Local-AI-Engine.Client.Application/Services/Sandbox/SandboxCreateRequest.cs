@@ -21,4 +21,10 @@ public sealed record SandboxCreateRequest
 
     /// <summary>Optional provider-neutral labels/metadata to associate with the sandbox.</summary>
     public IReadOnlyDictionary<string, string>? Labels { get; init; }
+
+    /// <summary>
+    ///     Optional engine-managed trusted host workspace. Providers must either confine the sandbox to this root and
+    ///     preserve it on kill/restart, or reject the request fail-closed.
+    /// </summary>
+    public SandboxTrustedHostWorkspace? TrustedHostWorkspace { get; init; }
 }
