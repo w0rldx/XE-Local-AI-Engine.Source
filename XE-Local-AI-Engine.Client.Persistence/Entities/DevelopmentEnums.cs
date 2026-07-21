@@ -51,5 +51,6 @@ public enum DevelopmentArtifactKind
     ChangedFilesManifest,
     CommandResult,
     ValidationReport,
-    ReviewReport
+    ReviewReport,
+    CoderSubmission
 }
