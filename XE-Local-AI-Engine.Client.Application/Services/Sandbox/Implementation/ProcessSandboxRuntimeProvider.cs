@@ -587,9 +587,14 @@ public sealed class ProcessSandboxRuntimeProvider : ISandboxRuntimeProvider, IDi
 
     private static string ResolveWorkingDirectory(JailState state, string? requestedWorkingDirectory)
     {
-        return requestedWorkingDirectory is null
-            ? state.JailRoot
-            : ResolveJailPath(state, requestedWorkingDirectory);
+        if (requestedWorkingDirectory is null)
+        {
+            return state.JailRoot;
+        }
+
+        var canonicalPath = ResolveJailPath(state, requestedWorkingDirectory);
+        EnsureNoSymlinkComponentsUnderJail(state.JailRoot, canonicalPath, requestedWorkingDirectory);
+        return canonicalPath;
     }
 
     /// <summary>
