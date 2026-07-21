@@ -80,15 +80,15 @@ public sealed class NodeChatDbContext : DbContext
 
     internal DbSet<ChatMaintenanceState> MaintenanceState => Set<ChatMaintenanceState>();
 
-    public DbSet<DevelopmentProject> DevelopmentProjects => Set<DevelopmentProject>();
+    internal DbSet<DevelopmentProject> DevelopmentProjects => Set<DevelopmentProject>();
 
-    public DbSet<DevelopmentTask> DevelopmentTasks => Set<DevelopmentTask>();
+    internal DbSet<DevelopmentTask> DevelopmentTasks => Set<DevelopmentTask>();
 
-    public DbSet<DevelopmentAttempt> DevelopmentAttempts => Set<DevelopmentAttempt>();
+    internal DbSet<DevelopmentAttempt> DevelopmentAttempts => Set<DevelopmentAttempt>();
 
-    public DbSet<DevelopmentArtifact> DevelopmentArtifacts => Set<DevelopmentArtifact>();
+    internal DbSet<DevelopmentArtifact> DevelopmentArtifacts => Set<DevelopmentArtifact>();
 
-    public DbSet<DevelopmentEvent> DevelopmentEvents => Set<DevelopmentEvent>();
+    internal DbSet<DevelopmentEvent> DevelopmentEvents => Set<DevelopmentEvent>();
 
     internal ReadOnlyMemory<byte> NodeEncryptionKey => _nodeSqliteKeyHolder.Key;
 
