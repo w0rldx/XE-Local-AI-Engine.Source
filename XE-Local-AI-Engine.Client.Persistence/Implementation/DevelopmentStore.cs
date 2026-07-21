@@ -536,12 +536,15 @@ public sealed class DevelopmentStore(NodeChatDbContext dbContext, TimeProvider t
         string phase,
         CancellationToken cancellationToken)
     {
-        var payload = await _dbContext.DevelopmentEvents.AsNoTracking()
-                                      .Where(entity => entity.ProjectId == projectId && entity.OperationId == operationId && entity.OperationPhase == phase)
-                                      .Select(entity => entity.ResultMetadataJson)
-                                      .SingleOrDefaultAsync(cancellationToken)
-                                      .ConfigureAwait(false);
-        return payload is null ? null : JsonSerializer.Deserialize<DevelopmentOperationResult>(payload);
+        var developmentEvent = await _dbContext.DevelopmentEvents.AsNoTracking()
+                                                 .SingleOrDefaultAsync(entity => entity.ProjectId == projectId
+                                                                                 && entity.OperationId == operationId
+                                                                                 && entity.OperationPhase == phase,
+                                                     cancellationToken)
+                                                 .ConfigureAwait(false);
+        return developmentEvent?.ResultMetadataJson is not { } payload
+            ? null
+            : JsonSerializer.Deserialize<DevelopmentOperationResult>(payload);
     }
 
     private async Task<DevelopmentOperationResult> AddEventAsync(Guid projectId,
