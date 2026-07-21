@@ -14,21 +14,24 @@ internal sealed class DevelopmentAttemptConfiguration : IEntityTypeConfiguration
         builder.Property(entity => entity.TaskId).HasColumnName("task_id");
         builder.Property(entity => entity.PredecessorAttemptId).HasColumnName("predecessor_attempt_id");
         builder.Property(entity => entity.Role).HasColumnName("role").HasConversion<string>().HasMaxLength(32);
-        builder.Property(entity => entity.ModelId).HasColumnName("model_id").HasMaxLength(512);
-        builder.Property(entity => entity.Provider).HasColumnName("provider").HasMaxLength(128);
+        builder.Property(entity => entity.ModelId).HasColumnName("model_id").HasMaxLength(255).IsRequired();
+        builder.Property(entity => entity.Provider).HasColumnName("provider").HasMaxLength(64).IsRequired();
         builder.Property(entity => entity.Status).HasColumnName("status").HasConversion<string>().HasMaxLength(32);
         builder.Property(entity => entity.StartedAtUtc).HasColumnName("started_at_utc");
         builder.Property(entity => entity.EndedAtUtc).HasColumnName("ended_at_utc");
         builder.Property(entity => entity.TerminalReason).HasColumnName("terminal_reason").HasMaxLength(1024);
-        builder.Property(entity => entity.PromptTokens).HasColumnName("prompt_tokens");
-        builder.Property(entity => entity.CompletionTokens).HasColumnName("completion_tokens");
+        builder.Property(entity => entity.InputTokens).HasColumnName("input_tokens");
+        builder.Property(entity => entity.OutputTokens).HasColumnName("output_tokens");
         builder.Property(entity => entity.StartOperationId).HasColumnName("start_operation_id");
         builder.Property(entity => entity.Version).HasColumnName("version").IsConcurrencyToken();
-        builder.HasIndex(entity => entity.StartOperationId).IsUnique();
-        builder.HasIndex(entity => entity.TaskId)
-               .IsUnique()
-               .HasFilter("status IN ('Pending', 'Running')");
         builder.HasOne<DevelopmentTask>().WithMany().HasForeignKey(entity => entity.TaskId).OnDelete(DeleteBehavior.Cascade);
         builder.HasOne<DevelopmentAttempt>().WithMany().HasForeignKey(entity => entity.PredecessorAttemptId).OnDelete(DeleteBehavior.Restrict);
+        builder.HasIndex(entity => entity.PredecessorAttemptId).HasDatabaseName("ix_development_attempts_predecessor_attempt_id");
+        builder.HasIndex(entity => entity.StartOperationId).IsUnique().HasDatabaseName("ux_development_attempts_start_operation_id");
+        builder.HasIndex(entity => entity.TaskId)
+               .IsUnique()
+               .HasFilter("status IN ('Pending', 'Running')")
+               .HasDatabaseName("ux_development_attempts_one_active_per_task");
     }
 }
+
