@@ -121,7 +121,7 @@ internal sealed class DevelopmentWorkspaceProvider : IDevelopmentWorkspaceProvid
     private static void ValidateBaseBranch(string baseBranch)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(baseBranch);
-        if (baseBranch.StartsWith("-", StringComparison.Ordinal)
+        if (baseBranch[0] == '-'
             || baseBranch.Contains("..", StringComparison.Ordinal)
             || baseBranch.Contains("@{", StringComparison.Ordinal)
             || baseBranch.Any(char.IsControl))

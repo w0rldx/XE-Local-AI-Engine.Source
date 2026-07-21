@@ -411,7 +411,12 @@ public sealed class ProcessSandboxRuntimeProvider : ISandboxRuntimeProvider, IDi
         var parent = Path.GetDirectoryName(destination);
         if (parent is not null)
         {
+            // Validate the existing prefix BEFORE Directory.CreateDirectory: that API follows an intermediate
+            // symlink, so creating first could mutate an outside directory before the later rejection. Re-check after
+            // creation to cover every newly materialized component and a concurrent swap.
+            EnsureNoSymlinkComponentsUnderJail(state.JailRoot, parent, request.DestinationPath);
             Directory.CreateDirectory(parent);
+            EnsureNoSymlinkComponentsUnderJail(state.JailRoot, parent, request.DestinationPath);
         }
 
         EnsureNoSymlinkComponentsUnderJail(state.JailRoot, destination, request.DestinationPath);
