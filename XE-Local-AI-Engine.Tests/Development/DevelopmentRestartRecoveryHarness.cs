@@ -22,7 +22,7 @@ internal enum DevelopmentArtifactKind
     ReviewReport
 }
 
-internal enum DevelopmentInterruptionBoundary
+public enum DevelopmentInterruptionBoundary
 {
     BeforeFirstToken,
     MidStream,
