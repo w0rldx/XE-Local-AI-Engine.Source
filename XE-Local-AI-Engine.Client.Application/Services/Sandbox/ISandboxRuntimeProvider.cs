@@ -30,6 +30,21 @@ public interface ISandboxRuntimeProvider
     /// <summary>Read a UTF-8 text file from the sandbox.</summary>
     Task<string> ReadFileAsync(SandboxHandle handle, string sandboxPath, CancellationToken cancellationToken = default);
 
+    /// <summary>Read a UTF-8 text file without capturing more than <paramref name="maxBytes" />.</summary>
+    async Task<string> ReadFileAsync(SandboxHandle handle,
+        string sandboxPath,
+        int maxBytes,
+        CancellationToken cancellationToken = default)
+    {
+        var content = await ReadFileAsync(handle, sandboxPath, cancellationToken).ConfigureAwait(false);
+        if (System.Text.Encoding.UTF8.GetByteCount(content) > maxBytes)
+        {
+            throw new InvalidDataException("The sandbox file exceeds the requested read bound.");
+        }
+
+        return content;
+    }
+
     /// <summary>Copy a file out of the sandbox onto the host.</summary>
     Task CopyOutAsync(SandboxHandle handle, SandboxCopyRequest request, CancellationToken cancellationToken = default);
 

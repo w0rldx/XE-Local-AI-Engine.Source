@@ -76,8 +76,10 @@ internal sealed class DevelopmentWorkspaceTools : IDevelopmentWorkspaceTools
     public async Task<string> ReadFileAsync(string path, CancellationToken cancellationToken = default)
     {
         var confined = RequirePath(path, allowRoot: false);
-        var content = await _sandbox.ReadFileAsync(_session.SandboxHandle, confined.SandboxPath, cancellationToken).ConfigureAwait(false);
-        return Truncate(content, _options.MaxCommandOutputBytes);
+        return await _sandbox.ReadFileAsync(_session.SandboxHandle,
+            confined.SandboxPath,
+            _options.MaxCommandOutputBytes,
+            cancellationToken).ConfigureAwait(false);
     }
 
     public async Task<string> SearchTextAsync(string pattern, string? path, CancellationToken cancellationToken = default)
@@ -129,9 +131,14 @@ internal sealed class DevelopmentWorkspaceTools : IDevelopmentWorkspaceTools
     public async Task<string> ApplyPatchAsync(string patch, CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(patch);
-        if (Encoding.UTF8.GetByteCount(patch) > _options.MaxPatchBytes)
+        var patchBytes = Encoding.UTF8.GetByteCount(patch);
+        if (patchBytes > _options.MaxPatchBytes)
         {
             throw new InvalidOperationException("The requested patch exceeds the configured Development patch limit.");
+        }
+        if (patchBytes > _options.MaxFileWriteBytes)
+        {
+            throw new InvalidOperationException("The requested patch exceeds the configured Development file-write limit.");
         }
 
         var paths = ParsePatchPaths(patch);
@@ -318,24 +325,89 @@ internal sealed class DevelopmentWorkspaceTools : IDevelopmentWorkspaceTools
         }
 
         var paths = new HashSet<string>(StringComparer.Ordinal);
-        foreach (var line in patch.Split('\n'))
+        var insideHunk = false;
+        foreach (var rawLine in patch.Split('\n'))
         {
-            if (!line.StartsWith("diff --git ", StringComparison.Ordinal))
+            var line = rawLine.TrimEnd('\r');
+            if (line.StartsWith("diff --git ", StringComparison.Ordinal))
+            {
+                insideHunk = false;
+                var fields = line.Split(' ', StringSplitOptions.RemoveEmptyEntries);
+                if (fields.Length != 4 || !fields[2].StartsWith("a/", StringComparison.Ordinal) || !fields[3].StartsWith("b/", StringComparison.Ordinal))
+                {
+                    throw new DevelopmentWorkspaceSecurityException("Quoted or ambiguous patch paths are not accepted by the bounded patch tool.");
+                }
+
+                AddPatchPath(paths, fields[2][2..]);
+                AddPatchPath(paths, fields[3][2..]);
+                continue;
+            }
+
+            if (line.StartsWith("@@", StringComparison.Ordinal))
+            {
+                insideHunk = true;
+                continue;
+            }
+
+            if (insideHunk)
             {
                 continue;
             }
 
-            var fields = line.Split(' ', StringSplitOptions.RemoveEmptyEntries);
-            if (fields.Length != 4 || !fields[2].StartsWith("a/", StringComparison.Ordinal) || !fields[3].StartsWith("b/", StringComparison.Ordinal))
+            if (line.StartsWith("rename from ", StringComparison.Ordinal))
             {
-                throw new DevelopmentWorkspaceSecurityException("Quoted or ambiguous patch paths are not accepted by the bounded patch tool.");
+                AddPatchPath(paths, line["rename from ".Length..]);
             }
-
-            paths.Add(fields[2][2..]);
-            paths.Add(fields[3][2..]);
+            else if (line.StartsWith("rename to ", StringComparison.Ordinal))
+            {
+                AddPatchPath(paths, line["rename to ".Length..]);
+            }
+            else if (line.StartsWith("copy from ", StringComparison.Ordinal))
+            {
+                AddPatchPath(paths, line["copy from ".Length..]);
+            }
+            else if (line.StartsWith("copy to ", StringComparison.Ordinal))
+            {
+                AddPatchPath(paths, line["copy to ".Length..]);
+            }
+            else if (line.StartsWith("--- ", StringComparison.Ordinal))
+            {
+                AddFileHeaderPath(paths, line["--- ".Length..], "a/");
+            }
+            else if (line.StartsWith("+++ ", StringComparison.Ordinal))
+            {
+                AddFileHeaderPath(paths, line["+++ ".Length..], "b/");
+            }
         }
 
         return paths;
+    }
+
+    private static void AddFileHeaderPath(HashSet<string> paths, string value, string prefix)
+    {
+        if (string.Equals(value, "/dev/null", StringComparison.Ordinal))
+        {
+            return;
+        }
+
+        if (!value.StartsWith(prefix, StringComparison.Ordinal))
+        {
+            throw new DevelopmentWorkspaceSecurityException("Quoted or ambiguous patch file headers are not accepted by the bounded patch tool.");
+        }
+
+        AddPatchPath(paths, value[prefix.Length..]);
+    }
+
+    private static void AddPatchPath(HashSet<string> paths, string path)
+    {
+        if (string.IsNullOrWhiteSpace(path)
+            || path[0] == '"'
+            || path.Any(char.IsControl))
+        {
+            throw new DevelopmentWorkspaceSecurityException("Quoted or ambiguous patch paths are not accepted by the bounded patch tool.");
+        }
+
+        paths.Add(path);
     }
 
     private static void EnsureCompleted(SandboxCommandResult result, string operation)

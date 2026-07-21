@@ -71,8 +71,8 @@ internal static class DevelopmentWorkspaceSecurity
         }
 
         var relative = string.Join('/', segments);
-        if (ProtectedPrefixes.Any(prefix => string.Equals(relative, prefix, StringComparison.Ordinal)
-                                            || relative.StartsWith(prefix + "/", StringComparison.Ordinal)))
+        if (ProtectedPrefixes.Any(prefix => string.Equals(relative, prefix, StringComparison.OrdinalIgnoreCase)
+                                            || relative.StartsWith(prefix + "/", StringComparison.OrdinalIgnoreCase)))
         {
             return DevelopmentConfinedPath.Rejected("the path targets protected engine or Git state.");
         }
