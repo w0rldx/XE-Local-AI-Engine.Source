@@ -27,7 +27,9 @@ public sealed record DevelopmentCreateProjectCommand(
     int ConfigurationVersion = 1,
     bool TrustedRepositoryAcknowledged = false,
     int? TrustedRepositoryPolicyVersion = null,
-    long? TrustedRepositoryAcknowledgedAtUtc = null);
+    long? TrustedRepositoryAcknowledgedAtUtc = null,
+    int? MaxTokens = null,
+    int? MaxDurationSeconds = null);
 
 public sealed record DevelopmentStartAttemptCommand(
     Guid TaskId,
@@ -109,6 +111,30 @@ public sealed record DevelopmentEventSnapshot(
     string? OperationPhase,
     string? Outcome);
 
+public sealed record DevelopmentExecutionSnapshot(
+    Guid ProjectId,
+    Guid TaskId,
+    Guid AttemptId,
+    string RepositoryIdentityHash,
+    string BaseBranch,
+    DevelopmentEgressPolicy EgressPolicy,
+    int ConfigurationVersion,
+    bool TrustedRepositoryAcknowledged,
+    int? TrustedRepositoryPolicyVersion,
+    long? TrustedRepositoryAcknowledgedAtUtc,
+    int? MaxTokens,
+    int? MaxDurationSeconds,
+    string Title,
+    string Requirements,
+    string AcceptanceCriteriaJson,
+    DevelopmentTaskStatus TaskStatus,
+    long TaskVersion,
+    DevelopmentAttemptRole AttemptRole,
+    DevelopmentAttemptStatus AttemptStatus,
+    string ModelId,
+    string Provider,
+    long AttemptVersion);
+
 public interface IDevelopmentStore
 {
     Task<DevelopmentOperationResult> CreateProjectAsync(DevelopmentCreateProjectCommand command, CancellationToken cancellationToken = default);
@@ -122,6 +148,7 @@ public interface IDevelopmentStore
     Task<DevelopmentOperationResult> CompleteApplyAsync(Guid operationId, DevelopmentApprovedApplySubject subject, CancellationToken cancellationToken = default);
     Task<DevelopmentOperationResult> BlockApplyAsync(Guid operationId, DevelopmentApprovedApplySubject subject, string sanitizedReason, CancellationToken cancellationToken = default);
     Task<IReadOnlyList<DevelopmentEventSnapshot>> ListEventsAsync(Guid projectId, CancellationToken cancellationToken = default);
+    Task<DevelopmentExecutionSnapshot> GetExecutionSnapshotAsync(Guid attemptId, CancellationToken cancellationToken = default);
 }
 
 public sealed class DevelopmentConcurrencyException(string message, Exception? innerException = null) : InvalidOperationException(message, innerException);
