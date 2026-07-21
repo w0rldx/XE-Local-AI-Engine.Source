@@ -1,0 +1,44 @@
+# ADR 0002: Development cloud authorization uses `ChatOptions.AdditionalProperties`
+
+- **Status:** Accepted for Gate 1
+- **Date:** 2026-07-21
+- **Scope:** Development Mode cloud-egress risk spike only
+- **Pinned dependency:** `Microsoft.Extensions.AI` / `Microsoft.Extensions.AI.Abstractions` 10.7.0
+
+## Context
+
+Gate 1 must authorize every raw cloud-provider round, including the function-result follow-up round created inside `FunctionInvokingChatClient`. The authorization cannot depend on ambient execution context alone, and an ordinary Chat request must remain behavior-compatible.
+
+The repository pins Microsoft.Extensions.AI 10.7.0. The official NuGet packages identify the exact upstream source commit as `fa0072f10f11eae347aaecaa3c3e81e701b0f79d`.
+
+## Version-aware evidence
+
+At the pinned commit:
+
+1. [`ChatOptions`' copy constructor](https://github.com/dotnet/extensions/blob/fa0072f10f11eae347aaecaa3c3e81e701b0f79d/src/Libraries/Microsoft.Extensions.AI.Abstractions/ChatCompletion/ChatOptions.cs#L16-L49) assigns `AdditionalProperties = other.AdditionalProperties?.Clone()`.
+2. [`ChatOptions.Clone`](https://github.com/dotnet/extensions/blob/fa0072f10f11eae347aaecaa3c3e81e701b0f79d/src/Libraries/Microsoft.Extensions.AI.Abstractions/ChatCompletion/ChatOptions.cs#L231-L239) documents shallow-cloned collections and returns `new(this)`. Therefore the dictionary instance changes, but each stored value reference is preserved.
+3. [`FunctionInvokingChatClient.GetResponseAsync`](https://github.com/dotnet/extensions/blob/fa0072f10f11eae347aaecaa3c3e81e701b0f79d/src/Libraries/Microsoft.Extensions.AI/ChatCompletion/FunctionInvokingChatClient.cs#L213-L332) and its streaming counterpart call the inner client once per iteration, append tool results, and call it again until the loop stops.
+4. [`UpdateOptionsForNextIteration`](https://github.com/dotnet/extensions/blob/fa0072f10f11eae347aaecaa3c3e81e701b0f79d/src/Libraries/Microsoft.Extensions.AI/ChatCompletion/FunctionInvokingChatClient.cs#L662-L695) clones options only when it must reset required tool mode, propagate a changed conversation ID, or clear a continuation token. Otherwise it reuses the same `ChatOptions` instance.
+5. [`PrepareOptionsForLastIteration`](https://github.com/dotnet/extensions/blob/fa0072f10f11eae347aaecaa3c3e81e701b0f79d/src/Libraries/Microsoft.Extensions.AI/ChatCompletion/FunctionInvokingChatClient.cs#L704-L733) also clones before removing function declarations.
+
+Microsoft Learn independently describes [`ChatOptions.Clone`](https://learn.microsoft.com/en-us/dotnet/api/microsoft.extensions.ai.chatoptions.clone) as a shallow clone and describes [`FunctionInvokingChatClient`](https://learn.microsoft.com/en-us/dotnet/api/microsoft.extensions.ai.functioninvokingchatclient) as repeatedly sending generated function results back to the inner client.
+
+## Decision
+
+1. Carry a code-owned, sealed immutable Development authorization value in a namespaced `ChatOptions.AdditionalProperties` entry. Store only immutable scalar values and identifiers/hashes in the carrier; never store mutable collections, raw prompt text, repository text, or secrets.
+2. Keep an explicit Development purpose marker in the same code-owned carrier shape so the authorizer can distinguish ordinary Chat from a Development request even when the authorization portion is missing or malformed.
+3. Enforce authorization inside `RuntimeChatClient`, immediately after a cloud client is selected and before either non-streaming invocation or streaming enumeration is delegated to that client. This is the selected-cloud boundary reached by every inner `FunctionInvokingChatClient` round.
+4. Treat ambient scope as optional correlation only. The envelope in `ChatOptions` is authoritative and must independently survive execution-context suppression.
+5. Gate 1 tests must force the 10.7.0 clone branch rather than merely observe two rounds. The fake first response should return a non-null conversation ID (or otherwise require an option mutation), and assertions must prove:
+   - round 1 and round 2 received distinct `ChatOptions` objects;
+   - their `AdditionalProperties` dictionaries are distinct;
+   - both dictionaries contain the same immutable authorization value reference and values;
+   - the authorizer ran before both fake transports.
+6. If this exact carrier assertion fails under the pinned package or composed application pipeline, cloud support remains disabled; do not compensate with `AsyncLocal`. The approved fallback is a dedicated Development client that reapplies the immutable carrier on every provider round.
+
+## Consequences
+
+- `AdditionalProperties` is sufficient for Gate 1 under Microsoft.Extensions.AI 10.7.0 because its shallow clone preserves the immutable carrier value across the option clones used by the function loop.
+- A generic authorizer at `RuntimeChatClient` covers both direct sends and autonomous tool-result follow-ups without changing ordinary Chat routing.
+- Tests must pin this version-sensitive behavior so a future Microsoft.Extensions.AI upgrade cannot silently remove the carrier from inner rounds.
+- This ADR authorizes only the Gate 1 spike. It does not authorize Gate 2 persistence, production Development orchestration, frontend, or OpenAPI work.
