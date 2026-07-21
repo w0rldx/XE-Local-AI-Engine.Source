@@ -60,6 +60,11 @@ public sealed class ImageJobCoordinator : IImageJobCoordinator, IDisposable, IAs
     // Per-job ordered replay log for late subscribers; outlives the run and is evicted after ReplayRetention.
     private readonly ConcurrentDictionary<Guid, JobEventLog> _eventLogs = new();
 
+    // Periodic eviction so terminal replay logs are released even when no further job ever starts. Without it the
+    // eviction in EnqueueAsync was the ONLY trigger, so the last jobs' logs lingered on an idle node indefinitely
+    // (parity with PreviewWorkflowIdleSweeper's cadence-driven sweep).
+    private readonly ITimer _evictionTimer;
+
     public ImageJobCoordinator(IImageRuntime runtime,
         IGeneratedImageStore imageStore,
         IServiceScopeFactory scopeFactory,
@@ -73,6 +78,11 @@ public sealed class ImageJobCoordinator : IImageJobCoordinator, IDisposable, IAs
         _eventPublisher = eventPublisher ?? throw new ArgumentNullException(nameof(eventPublisher));
         _timeProvider = timeProvider ?? throw new ArgumentNullException(nameof(timeProvider));
         _logger = logger ?? throw new ArgumentNullException(nameof(logger));
+        // The callback only walks concurrent dictionaries (safe against a racing Dispose) and never throws.
+        _evictionTimer = _timeProvider.CreateTimer(static state => ((ImageJobCoordinator)state!).EvictExpiredEventLogs(),
+            this,
+            ReplayRetention,
+            ReplayRetention);
     }
 
     public async Task<Guid> EnqueueAsync(CreateImageJobInput input, CancellationToken cancellationToken)
@@ -208,6 +218,7 @@ public sealed class ImageJobCoordinator : IImageJobCoordinator, IDisposable, IAs
         _inFlight.Clear();
         _runTasks.Clear();
         _generationSlot.Dispose();
+        _evictionTimer.Dispose();
     }
 
     private async Task RunJobAsync(Guid jobId, ImageGenerationRequest request, CancellationToken token)

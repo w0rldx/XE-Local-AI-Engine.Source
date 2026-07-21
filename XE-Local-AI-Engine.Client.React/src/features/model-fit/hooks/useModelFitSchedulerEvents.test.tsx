@@ -13,6 +13,9 @@ const signalRMock = vi.hoisted(() => {
 		on: vi.fn(),
 		off: vi.fn(),
 		onreconnected: vi.fn(),
+		// The hook reads connection.state in the connect-time catch-up guard; start() resolves immediately here, so the
+		// connection is reported Connected.
+		state: "Connected",
 		start: vi.fn<() => Promise<void>>().mockResolvedValue(undefined),
 		stop: vi.fn<() => Promise<void>>().mockResolvedValue(undefined),
 	};
@@ -33,6 +36,7 @@ vi.mock("@microsoft/signalr", () => ({
 	HubConnectionBuilder: vi.fn(function HubConnectionBuilder() {
 		return signalRMock.builder;
 	}),
+	HubConnectionState: { Connected: "Connected", Disconnected: "Disconnected" },
 	LogLevel: { Warning: 3 },
 }));
 
@@ -52,6 +56,7 @@ vi.mock("@/features/scheduler/queries/useScheduler", () => ({
 }));
 
 import type { ScheduledJobRun } from "@/features/scheduler/models/SchedulerModels";
+import { resetSharedHubConnectionsForTest } from "@/core/api/signalr/SharedHubConnection";
 import { toast } from "@/core/ui/notifications/Toast";
 import { useNodeAuthStore } from "@/core/auth/stores/NodeAuthStore";
 import { useModelFitSchedulerEvents } from "@/features/model-fit/hooks/useModelFitSchedulerEvents";
@@ -115,6 +120,7 @@ function renderHubWithSeededQuery(fullQueryKey: readonly unknown[]) {
 describe("useModelFitSchedulerEvents", () => {
 	beforeEach(() => {
 		vi.clearAllMocks();
+		resetSharedHubConnectionsForTest();
 		useNodeAuthStore.getState().actions.clear();
 		signalRMock.builder.withUrl.mockReturnValue(signalRMock.builder);
 		signalRMock.builder.withAutomaticReconnect.mockReturnValue(signalRMock.builder);
@@ -254,17 +260,23 @@ describe("useModelFitSchedulerEvents", () => {
 	});
 
 	it("unsubscribes and stops the connection on unmount", async () => {
-		const { unmount } = renderHub();
+		vi.useFakeTimers();
+		try {
+			const { unmount } = renderHub();
 
-		unmount();
+			unmount();
 
-		// Symmetry: every event bound with connection.on (terminal handlers AND ignored no-ops) is unbound with off.
-		for (const eventName of ALL_RUN_EVENTS) {
-			expect(signalRMock.connection.off).toHaveBeenCalledWith(eventName, expect.any(Function));
+			// Symmetry: every event bound with connection.on (terminal handlers AND ignored no-ops) is unbound with off.
+			for (const eventName of ALL_RUN_EVENTS) {
+				expect(signalRMock.connection.off).toHaveBeenCalledWith(eventName, expect.any(Function));
+			}
+			// The shared manager stops on last release only AFTER a 30s stop-linger (reused across navigation) and once
+			// start() settles; advance past the linger and flush the deferred-stop microtask.
+			await vi.advanceTimersByTimeAsync(30_000);
+			expect(signalRMock.connection.stop).toHaveBeenCalled();
+		} finally {
+			vi.useRealTimers();
 		}
-		// stop() is deferred until start() settles (so cleanup never aborts an in-flight negotiation), so it runs on a
-		// microtask after unmount rather than synchronously.
-		await vi.waitFor(() => expect(signalRMock.connection.stop).toHaveBeenCalled());
 	});
 
 	it("does not rebuild the connection on re-render (t is read via ref, not an effect dependency)", () => {

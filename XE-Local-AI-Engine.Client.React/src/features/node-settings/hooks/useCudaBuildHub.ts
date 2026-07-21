@@ -1,10 +1,8 @@
-import { HubConnectionBuilder, LogLevel } from "@microsoft/signalr";
 import { useQueryClient } from "@tanstack/react-query";
 import { useCallback, useEffect, useState } from "react";
 import { z } from "zod";
 
-import { buildLocalApiUrl } from "@/core/api/utils/LocalApiUrl";
-import { useNodeAuthStore } from "@/core/auth/stores/NodeAuthStore";
+import { acquireHubConnection } from "@/core/api/signalr/SharedHubConnection";
 import { localRuntimeInvalidationKey, localRuntimeQueryIds } from "@/features/node-settings/queries/useLocalRuntime";
 
 // Realtime push for the in-app CUDA build progress. Connects to the CUDA-build SignalR hub for the lifetime of the
@@ -22,6 +20,11 @@ import { localRuntimeInvalidationKey, localRuntimeQueryIds } from "@/features/no
 // The client method the backend invokes to push a build status delta.
 const CUDA_BUILD_STATUS_CHANGED = "cudaBuild.statusChanged";
 
+// Upper bound on retained live log lines. A CUDA from-source build streams tens of thousands of compiler lines; only
+// the tail is ever rendered, so keep a bounded ring like the other diagnostics buffers (breadcrumbs/rrweb) instead of
+// growing per delta for the whole build.
+const MAX_LOG_LINES = 2000;
+
 // Wire payload (camelCase). Untrusted boundary data — validated with zod before it touches UI state; a payload that
 // fails the schema is dropped (best-effort live output; the GET status query still serves the canonical state).
 const cudaBuildHubEventSchema = z.object({
@@ -31,7 +34,7 @@ const cudaBuildHubEventSchema = z.object({
 	sanitizedError: z.string().nullable(),
 });
 
-// Live build state surfaced to the card. `logLines` accumulates every delta received since the hook mounted; `phase`,
+// Live build state surfaced to the card. `logLines` holds the most recent MAX_LOG_LINES streamed lines; `phase`,
 // `terminal`, and `error` reflect the most recent event. All UI-only.
 export interface CudaBuildLiveState {
 	readonly phase: string | null;
@@ -59,15 +62,11 @@ export function useCudaBuildHub(): CudaBuildLiveState {
 	const reset = useCallback(() => setState(emptyLiveState), []);
 
 	useEffect(() => {
-		const connection = new HubConnectionBuilder()
-			.withUrl(buildLocalApiUrl("model-fit/llamacpp/cuda-build/hub"), {
-				accessTokenFactory: () => useNodeAuthStore.getState().accessToken ?? "",
-			})
-			// Persistent channel for the card lifetime — auto-reconnect after a transient drop so live build output is not
-			// silently lost. Matches the other local hubs.
-			.withAutomaticReconnect()
-			.configureLogging(LogLevel.Warning)
-			.build();
+		// Shared refcounted connection: reused across mounts so re-opening the node-settings card does not pay a fresh
+		// negotiate + WebSocket upgrade. The status handler below stays per-mount so this subscriber coexists with any
+		// other subscriber to the same hub.
+		const hub = acquireHubConnection("model-fit/llamacpp/cuda-build/hub");
+		const { connection } = hub;
 
 		const handleStatusChanged = (payload: unknown): void => {
 			const parsed = cudaBuildHubEventSchema.safeParse(payload);
@@ -75,13 +74,20 @@ export function useCudaBuildHub(): CudaBuildLiveState {
 				return;
 			}
 			const event = parsed.data;
-			setState((current) => ({
-				phase: event.phase,
-				logLines:
-					event.appendedLogLines.length > 0 ? [...current.logLines, ...event.appendedLogLines] : current.logLines,
-				terminal: event.terminal,
-				error: event.sanitizedError,
-			}));
+			setState((current) => {
+				let logLines = current.logLines;
+				if (event.appendedLogLines.length > 0) {
+					const appended = [...current.logLines, ...event.appendedLogLines];
+					// Keep only the tail so a long build cannot grow this UI state unboundedly.
+					logLines = appended.length > MAX_LOG_LINES ? appended.slice(appended.length - MAX_LOG_LINES) : appended;
+				}
+				return {
+					phase: event.phase,
+					logLines,
+					terminal: event.terminal,
+					error: event.sanitizedError,
+				};
+			});
 			// On a terminal event the persisted snapshot changed — re-read the canonical status + runtime so the card flips
 			// out of the building state and reflects an adopted managed build.
 			if (event.terminal) {
@@ -96,27 +102,11 @@ export function useCudaBuildHub(): CudaBuildLiveState {
 
 		connection.on(CUDA_BUILD_STATUS_CHANGED, handleStatusChanged);
 
-		let disposed = false;
-		const startPromise = connection.start().catch((error: unknown) => {
-			// A start aborted by our own cleanup (StrictMode double-invoke / fast remount) is not a real failure.
-			if (disposed) {
-				return;
-			}
-			// A hub that cannot connect must not break the card — the GET status query still serves the snapshot. The hub is
-			// best-effort live output, so a connection failure is surfaced only to the console.
-			console.warn("cuda build hub failed to start", error);
-		});
-
 		return () => {
-			disposed = true;
 			connection.off(CUDA_BUILD_STATUS_CHANGED, handleStatusChanged);
-			// Stop only AFTER start settles so cleanup never aborts an in-flight negotiation (the "stopped during
-			// negotiation" race that left the hub permanently disconnected under StrictMode / fast remounts).
-			startPromise.finally(() => {
-				connection.stop().catch((error: unknown) => {
-					console.warn("cuda build hub failed to stop", error);
-				});
-			});
+			// Release the shared lease: the manager stops the connection only after the LAST subscriber releases, and only
+			// once the start promise settles (so cleanup never aborts an in-flight negotiation under StrictMode / fast remounts).
+			hub.release();
 		};
 	}, [queryClient]);
 

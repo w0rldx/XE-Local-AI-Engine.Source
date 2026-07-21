@@ -12,6 +12,7 @@ const signalRMock = vi.hoisted(() => {
 	const connection = {
 		on: vi.fn(),
 		off: vi.fn(),
+		onreconnected: vi.fn(),
 		start: vi.fn<() => Promise<void>>().mockResolvedValue(undefined),
 		stop: vi.fn<() => Promise<void>>().mockResolvedValue(undefined),
 	};
@@ -54,6 +55,7 @@ vi.mock("@/core/api/generated/@tanstack/react-query.gen", () => ({
 	startGgufDownloadMutation: vi.fn(),
 }));
 
+import { resetSharedHubConnectionsForTest } from "@/core/api/signalr/SharedHubConnection";
 import { useNodeAuthStore } from "@/core/auth/stores/NodeAuthStore";
 import { useActiveGgufDownloads } from "@/features/models/queries/useGgufDownload";
 import { useGgufBrowseStore } from "@/features/models/stores/GgufBrowseStore";
@@ -75,6 +77,7 @@ function renderActiveDownloads(enabled = true) {
 describe("useActiveGgufDownloads", () => {
 	beforeEach(() => {
 		vi.clearAllMocks();
+		resetSharedHubConnectionsForTest();
 		useNodeAuthStore.getState().actions.clear();
 		useNodeAuthStore.getState().actions.setToken({ accessToken: "node-token", expiresAtUtc: "2026-06-26T12:00:00Z" });
 		useGgufBrowseStore.setState({ browseQuery: "", inFlightDownloads: [] });
@@ -233,11 +236,19 @@ describe("useActiveGgufDownloads", () => {
 	});
 
 	it("stops the connection on unmount", async () => {
-		const { unmount } = renderActiveDownloads();
+		vi.useFakeTimers();
+		try {
+			const { unmount } = renderActiveDownloads();
 
-		unmount();
+			unmount();
 
-		expect(signalRMock.connection.off).toHaveBeenCalledWith(STATUS_CHANGED, expect.any(Function));
-		await vi.waitFor(() => expect(signalRMock.connection.stop).toHaveBeenCalled());
+			expect(signalRMock.connection.off).toHaveBeenCalledWith(STATUS_CHANGED, expect.any(Function));
+			// The shared manager stops on last release only AFTER a 30s stop-linger (reused across navigation) and once
+			// start() settles; advance past the linger and flush the deferred-stop microtask.
+			await vi.advanceTimersByTimeAsync(30_000);
+			expect(signalRMock.connection.stop).toHaveBeenCalled();
+		} finally {
+			vi.useRealTimers();
+		}
 	});
 });

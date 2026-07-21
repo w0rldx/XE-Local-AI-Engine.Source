@@ -1,4 +1,3 @@
-import { HubConnectionBuilder, LogLevel } from "@microsoft/signalr";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useEffect, useRef, useState } from "react";
 
@@ -12,8 +11,7 @@ import {
 	startGgufDownloadMutation,
 } from "@/core/api/generated/@tanstack/react-query.gen";
 import { withResponseValidation } from "@/core/api/ResponseValidation";
-import { buildLocalApiUrl } from "@/core/api/utils/LocalApiUrl";
-import { useNodeAuthStore } from "@/core/auth/stores/NodeAuthStore";
+import { acquireHubConnection } from "@/core/api/signalr/SharedHubConnection";
 import { toGgufRepository, toGgufRepositoryDetail } from "@/features/models/models/GgufMappers";
 import { useGgufBrowseStore } from "@/features/models/stores/GgufBrowseStore";
 
@@ -219,13 +217,11 @@ export function useActiveGgufDownloads({ enabled = true }: { enabled?: boolean }
 			return;
 		}
 
-		const connection = new HubConnectionBuilder()
-			.withUrl(buildLocalApiUrl("model-fit/gguf/downloads/hub"), {
-				accessTokenFactory: () => useNodeAuthStore.getState().accessToken ?? "",
-			})
-			.withAutomaticReconnect()
-			.configureLogging(LogLevel.Warning)
-			.build();
+		// Shared refcounted connection: reused across mounts so the globally-mounted download poller does not pay a fresh
+		// negotiate + WebSocket upgrade on every navigation. The status handler below stays per-mount so this subscriber
+		// coexists with any other subscriber to the same hub.
+		const hub = acquireHubConnection("model-fit/gguf/downloads/hub");
+		const { connection } = hub;
 
 		const onStatus = (push: GgufDownloadStatusPush): void => {
 			const status = toDownloadStatus(push);
@@ -241,25 +237,11 @@ export function useActiveGgufDownloads({ enabled = true }: { enabled?: boolean }
 
 		connection.on(DOWNLOAD_STATUS_CHANGED, onStatus);
 
-		let disposed = false;
-		const startPromise = connection.start().catch((error: unknown) => {
-			// A start aborted by our own cleanup (StrictMode double-invoke / fast remount) is not a real failure.
-			if (disposed) {
-				return;
-			}
-			// A hub that cannot connect must not break the page — the one-shot hydrate still seeded the last known state.
-			console.warn("gguf download hub failed to start", error);
-		});
-
 		return () => {
-			disposed = true;
 			connection.off(DOWNLOAD_STATUS_CHANGED, onStatus);
-			// Stop only AFTER start settles so cleanup never aborts an in-flight negotiation (the StrictMode race).
-			startPromise.finally(() => {
-				connection.stop().catch((error: unknown) => {
-					console.warn("gguf download hub failed to stop", error);
-				});
-			});
+			// Release the shared lease: the manager stops the connection only after the LAST subscriber releases, and only
+			// once the start promise settles (so cleanup never aborts an in-flight negotiation — the StrictMode race).
+			hub.release();
 		};
 	}, [enabled]);
 

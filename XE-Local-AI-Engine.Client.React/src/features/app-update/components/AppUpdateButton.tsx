@@ -25,10 +25,15 @@ export function AppUpdateButton() {
 	const [applyState, setApplyState] = useState<ApplyState>("idle");
 	const pollTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 	const pollStartRef = useRef<number>(0);
+	// doHealthPoll re-arms the timer AFTER an awaited fetch — without this guard, an unmount that lands mid-await
+	// would run the cleanup first and then arm a timer nothing ever clears (a stray recurring /health/live poll).
+	const mountedRef = useRef(true);
 
 	useEffect(() => {
 		const timerRef = pollTimerRef;
+		mountedRef.current = true;
 		return () => {
+			mountedRef.current = false;
 			if (timerRef.current !== null) { clearTimeout(timerRef.current); }
 		};
 	}, []);
@@ -49,6 +54,9 @@ export function AppUpdateButton() {
 
 	function scheduleHealthPoll() {
 		stopPolling();
+		if (!mountedRef.current) {
+			return;
+		}
 		pollTimerRef.current = setTimeout(() => {
 			doHealthPoll();
 		}, HEALTH_POLL_INTERVAL_MS);
