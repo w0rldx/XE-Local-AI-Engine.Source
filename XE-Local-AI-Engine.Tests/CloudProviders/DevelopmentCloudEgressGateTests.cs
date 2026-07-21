@@ -483,7 +483,7 @@ public sealed class DevelopmentCloudEgressGateTests
             events.Add($"transport{TransportCount}");
         }
 
-        private static void RemoveCarrierIfRequested(ChatOptions options)
+        private void RemoveCarrierIfRequested(ChatOptions options)
         {
             if (removeCarrierAfterFirstRound)
             {
