@@ -5,6 +5,7 @@ using System.Text;
 
 internal static class DevelopmentWorkspaceSecurity
 {
+    private const char SandboxSeparator = '/';
     private static readonly string[] ProtectedPrefixes = [".git", ".omx/ultragoal"];
 
     public static string CanonicalRepositoryRoot(string repositoryRoot)
@@ -81,7 +82,8 @@ internal static class DevelopmentWorkspaceSecurity
             return DevelopmentConfinedPath.Rejected("a workspace-relative file path is required.");
         }
 
-        return DevelopmentConfinedPath.Accepted(relative, relative.Length == 0 ? "/" : "/" + relative);
+        return DevelopmentConfinedPath.Accepted(relative,
+            relative.Length == 0 ? SandboxSeparator.ToString() : string.Concat(SandboxSeparator, relative));
     }
 
     private static void EnsureNoSymlinkComponents(string canonicalPath)
