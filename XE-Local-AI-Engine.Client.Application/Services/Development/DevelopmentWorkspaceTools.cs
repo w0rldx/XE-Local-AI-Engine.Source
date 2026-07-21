@@ -18,6 +18,7 @@ internal sealed record DevelopmentCommandEvidence(
     string CommandId,
     int ExitCode,
     bool Completed,
+    bool OutputTruncated,
     long DurationMilliseconds,
     string StandardOutput,
     string StandardError);
@@ -199,7 +200,7 @@ internal sealed class DevelopmentWorkspaceTools : IDevelopmentWorkspaceTools
     {
         var command = commandId switch
         {
-            DevelopmentCommandIds.GitStatus => (AgentHomeGit.Executable, AgentHomeGit.Arguments("status", "--short", "--branch", "--", ".")),
+            DevelopmentCommandIds.GitStatus => (AgentHomeGit.Executable, AgentHomeGit.Arguments("status", "--short", "--branch", "--untracked-files=all", "--", ".")),
             DevelopmentCommandIds.GitDiffCheck => (AgentHomeGit.Executable, AgentHomeGit.Arguments("diff", "--check", "HEAD", "--", ".")),
             DevelopmentCommandIds.DotnetRestore => ("dotnet", (IReadOnlyList<string>)["restore", Solution]),
             DevelopmentCommandIds.DotnetBuildRelease => ("dotnet", (IReadOnlyList<string>)["build", Solution, "--configuration", "Release", "--no-restore"]),
@@ -208,13 +209,46 @@ internal sealed class DevelopmentWorkspaceTools : IDevelopmentWorkspaceTools
         };
 
         var result = await ExecuteAsync(commandId, command.Item1, command.Item2, "/", standardInput: null, cancellationToken).ConfigureAwait(false);
+        await EnsureWorkspaceInvariantAsync(cancellationToken).ConfigureAwait(false);
         _commandEvidence.Add(new DevelopmentCommandEvidence(commandId,
             result.ExitCode,
             result.Completed,
+            result.StandardOutputTruncated || result.StandardErrorTruncated,
             (long)result.Duration.TotalMilliseconds,
             result.StandardOutput,
             result.StandardError));
         return result;
+    }
+
+    private async Task EnsureWorkspaceInvariantAsync(CancellationToken cancellationToken)
+    {
+        var head = await ExecuteAsync("verify_detached_head",
+            AgentHomeGit.Executable,
+            AgentHomeGit.Arguments("rev-parse", "--verify", "HEAD^{commit}"),
+            "/",
+            standardInput: null,
+            cancellationToken).ConfigureAwait(false);
+        EnsureCompleted(head, "verify Development worktree HEAD");
+        if (!string.Equals(head.StandardOutput.Trim(), _session.BaseCommit, StringComparison.OrdinalIgnoreCase))
+        {
+            throw new DevelopmentWorkspaceSecurityException("A fixed command changed the managed Development worktree base commit.");
+        }
+
+        var branch = await ExecuteAsync("verify_detached_branch",
+            AgentHomeGit.Executable,
+            AgentHomeGit.Arguments("symbolic-ref", "--quiet", "HEAD"),
+            "/",
+            standardInput: null,
+            cancellationToken).ConfigureAwait(false);
+        if (!branch.Completed || branch.ExitCode is not (0 or 1))
+        {
+            throw new InvalidOperationException("The managed Development worktree branch state could not be verified.");
+        }
+
+        if (branch.ExitCode == 0)
+        {
+            throw new DevelopmentWorkspaceSecurityException("A fixed command attached the managed Development worktree to a protected branch.");
+        }
     }
 
     private async Task<SandboxCommandResult> ExecuteAsync(string executionPrefix,
@@ -234,10 +268,14 @@ internal sealed class DevelopmentWorkspaceTools : IDevelopmentWorkspaceTools
             Environment = BuildEnvironment(),
             Timeout = TimeSpan.FromSeconds(_options.MaxAttemptDurationSeconds)
         }, cancellationToken).ConfigureAwait(false);
+        var outputTruncated = Encoding.UTF8.GetByteCount(result.StandardOutput) > _options.MaxCommandOutputBytes;
+        var errorTruncated = Encoding.UTF8.GetByteCount(result.StandardError) > _options.MaxCommandOutputBytes;
         return result with
         {
             StandardOutput = Truncate(result.StandardOutput, _options.MaxCommandOutputBytes),
-            StandardError = Truncate(result.StandardError, _options.MaxCommandOutputBytes)
+            StandardError = Truncate(result.StandardError, _options.MaxCommandOutputBytes),
+            StandardOutputTruncated = result.StandardOutputTruncated || outputTruncated,
+            StandardErrorTruncated = result.StandardErrorTruncated || errorTruncated
         };
     }
 

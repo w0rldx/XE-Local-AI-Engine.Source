@@ -349,6 +349,8 @@ public sealed class ProcessSandboxRuntimeProvider : ISandboxRuntimeProvider, IDi
                 ExitCode = process.ExitCode,
                 StandardOutput = standardOutputBuilder.ToString(),
                 StandardError = standardErrorBuilder.ToString(),
+                StandardOutputTruncated = standardOutputBuilder.IsTruncated,
+                StandardErrorTruncated = standardErrorBuilder.IsTruncated,
                 Completed = true,
                 Duration = _timeProvider.GetUtcNow() - startedAt
             };
@@ -575,12 +577,25 @@ public sealed class ProcessSandboxRuntimeProvider : ISandboxRuntimeProvider, IDi
             throw new DirectoryNotFoundException("The trusted host workspace must be an existing canonical directory.");
         }
 
-        if (File.ResolveLinkTarget(canonical, returnFinalTarget: false) is not null)
-        {
-            throw new UnauthorizedAccessException("A trusted host workspace root cannot be a symbolic link.");
-        }
+        EnsureNoSymbolicLinkComponents(canonical);
 
         return canonical;
+    }
+
+    private static void EnsureNoSymbolicLinkComponents(string canonicalPath)
+    {
+        var root = Path.GetPathRoot(canonicalPath)
+                   ?? throw new UnauthorizedAccessException("The trusted host workspace must have a rooted canonical path.");
+        var current = root;
+        foreach (var segment in canonicalPath[root.Length..].Split(Path.DirectorySeparatorChar,
+                     StringSplitOptions.RemoveEmptyEntries))
+        {
+            current = Path.Combine(current, segment);
+            if (File.ResolveLinkTarget(current, returnFinalTarget: false) is not null)
+            {
+                throw new UnauthorizedAccessException("A trusted host workspace path cannot contain symbolic links.");
+            }
+        }
     }
 
     private void EvictOwnerConflicts(SandboxAttachKey attachKey)
@@ -602,11 +617,17 @@ public sealed class ProcessSandboxRuntimeProvider : ISandboxRuntimeProvider, IDi
 
     private static string BuildSandboxId(SandboxAttachKey attachKey)
     {
-        // Deterministic, filesystem-safe per-owner/node id: {node}-{ownerHash}. The owner is hashed so the directory
-        // name stays safe while still being stable for attach (the raw owner lives on the in-memory attach key).
-        var ownerHash = Convert.ToHexStringLower(SHA256.HashData(Encoding.UTF8.GetBytes(attachKey.OwnerUserId)))[..16];
+        // Hash the complete attach scope. Owner/node alone is insufficient because AgentHome and Development may use
+        // different runtime profiles or manifest versions for the same logical node and must coexist without one
+        // dictionary entry overwriting the other.
+        var scope = string.Concat(attachKey.OwnerUserId, "\0",
+            attachKey.NodeId, "\0",
+            attachKey.ProviderName, "\0",
+            attachKey.RuntimeProfile, "\0",
+            attachKey.ManifestVersion.ToString(CultureInfo.InvariantCulture));
+        var scopeHash = Convert.ToHexStringLower(SHA256.HashData(Encoding.UTF8.GetBytes(scope)))[..16];
         var nodeSegment = SanitizeSegment(attachKey.NodeId);
-        return string.Create(CultureInfo.InvariantCulture, $"process-{nodeSegment}-{ownerHash}");
+        return string.Create(CultureInfo.InvariantCulture, $"process-{nodeSegment}-{scopeHash}");
     }
 
     private static string SanitizeSegment(string value)
@@ -1001,6 +1022,17 @@ public sealed class ProcessSandboxRuntimeProvider : ISandboxRuntimeProvider, IDi
 
                 _builder.Append(toAppend).Append('\n');
                 _byteLength += Encoding.UTF8.GetByteCount(toAppend) + newlineBytes;
+            }
+        }
+
+        public bool IsTruncated
+        {
+            get
+            {
+                lock (_sync)
+                {
+                    return _capped;
+                }
             }
         }
 

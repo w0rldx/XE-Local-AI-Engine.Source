@@ -58,6 +58,8 @@ public sealed class DevelopmentGate3Tests : IDisposable
         var options = Options.Create(OptionsValue());
         var canonical = DevelopmentWorkspaceSecurity.CanonicalRepositoryRoot(repository);
         var snapshot = Snapshot(DevelopmentWorkspaceSecurity.RepositoryIdentityHash(canonical));
+        var protectedBefore = await RunProcessAsync(repository, "git", "rev-parse", "refs/heads/main").ConfigureAwait(false);
+        EnsureSuccess(protectedBefore);
         DevelopmentWorkspaceSession first;
 
         using (var sandbox = CreateSandbox())
@@ -81,6 +83,10 @@ public sealed class DevelopmentGate3Tests : IDisposable
             AssertEx.NotNullOrEmpty(evidence.ManifestHash);
             AssertEx.NotNullOrEmpty(evidence.SubjectHash);
             AssertEx.Contains(evidence.ChangedFiles, item => item.Path == "src/feature.txt" && item.ChangeType == "added");
+            var replayEvidence = await evidenceService.ExportAsync(first).ConfigureAwait(false);
+            AssertEx.Equal(evidence.PatchHash, replayEvidence.PatchHash);
+            AssertEx.Equal(evidence.ManifestHash, replayEvidence.ManifestHash);
+            AssertEx.Equal(evidence.SubjectHash, replayEvidence.SubjectHash);
 
             await sandbox.KillAsync(first.SandboxHandle).ConfigureAwait(false);
             AssertEx.True(Directory.Exists(first.HostWorktreePath), "killing a sandbox must preserve the managed Git worktree");
@@ -95,6 +101,53 @@ public sealed class DevelopmentGate3Tests : IDisposable
 
         var symbolic = await RunProcessAsync(replacement.HostWorktreePath, "git", "symbolic-ref", "--quiet", "HEAD").ConfigureAwait(false);
         AssertEx.NotEqual(notExpected: 0, symbolic.ExitCode, "the managed worktree must be detached from the protected base branch");
+        var protectedAfter = await RunProcessAsync(repository, "git", "rev-parse", "refs/heads/main").ConfigureAwait(false);
+        EnsureSuccess(protectedAfter);
+        AssertEx.Equal(protectedBefore.StandardOutput.Trim(), protectedAfter.StandardOutput.Trim());
+    }
+
+    [Test]
+    public async Task WorkspaceProvider_RejectsPreservedWorktreeWhoseHeadNoLongerMatchesPersistedBase()
+    {
+        var repository = await CreateRepositoryAsync().ConfigureAwait(false);
+        var data = Path.Combine(_root, "tampered-data");
+        Directory.CreateDirectory(data);
+        var options = Options.Create(OptionsValue());
+        var snapshot = Snapshot(DevelopmentWorkspaceSecurity.RepositoryIdentityHash(
+            DevelopmentWorkspaceSecurity.CanonicalRepositoryRoot(repository)));
+        DevelopmentWorkspaceSession session;
+
+        using (var sandbox = CreateSandbox())
+        {
+            var provider = new DevelopmentWorkspaceProvider(new FakeNodeDataDirectory(data), sandbox, options, TimeProvider.System);
+            session = await provider.PrepareAsync(snapshot, repository).ConfigureAwait(false);
+            EnsureSuccess(await RunProcessAsync(session.HostWorktreePath, "git", "commit", "--allow-empty", "-m", "unexpected-head").ConfigureAwait(false));
+            await sandbox.KillAsync(session.SandboxHandle).ConfigureAwait(false);
+        }
+
+        using var replacementSandbox = CreateSandbox();
+        var replacement = new DevelopmentWorkspaceProvider(new FakeNodeDataDirectory(data), replacementSandbox, options, TimeProvider.System);
+        await AssertEx.ThrowsAsync<DevelopmentWorkspaceSecurityException>(() => replacement.PrepareAsync(snapshot, repository));
+    }
+
+    [Test]
+    public async Task EvidenceExport_WhenExactPatchExceedsBound_FailsClosed()
+    {
+        var repository = await CreateRepositoryAsync().ConfigureAwait(false);
+        var data = Path.Combine(_root, "bounded-data");
+        Directory.CreateDirectory(data);
+        var options = Options.Create(OptionsValue(maxPatchBytes: 128));
+        var snapshot = Snapshot(DevelopmentWorkspaceSecurity.RepositoryIdentityHash(
+            DevelopmentWorkspaceSecurity.CanonicalRepositoryRoot(repository)));
+
+        using var sandbox = CreateSandbox();
+        var provider = new DevelopmentWorkspaceProvider(new FakeNodeDataDirectory(data), sandbox, options, TimeProvider.System);
+        var session = await provider.PrepareAsync(snapshot, repository).ConfigureAwait(false);
+        var tools = new DevelopmentWorkspaceTools(sandbox, session, options);
+        _ = await tools.WriteFileAsync("large.txt", new string('x', 1024)).ConfigureAwait(false);
+
+        var evidence = new DevelopmentPatchEvidenceService(sandbox, options);
+        await AssertEx.ThrowsAsync<InvalidDataException>(() => evidence.ExportAsync(session));
     }
 
     [Test]
@@ -135,16 +188,18 @@ public sealed class DevelopmentGate3Tests : IDisposable
         var result = await runner.RunAsync(snapshot.AttemptId, repository).ConfigureAwait(false);
         AssertEx.NotNullOrEmpty(result.SubjectHash);
         AssertEx.Contains(result.ChangedFiles, "feature.txt");
-        _ = store.Received(4).AttachArtifactAsync(Arg.Any<DevelopmentAttachArtifactCommand>(), Arg.Any<CancellationToken>());
+        _ = store.Received(5).AttachArtifactAsync(Arg.Any<DevelopmentAttachArtifactCommand>(), Arg.Any<CancellationToken>());
+        _ = store.Received(1).AttachArtifactAsync(Arg.Is<DevelopmentAttachArtifactCommand>(command => command.Kind == XE_Local_AI_Engine.Client.Persistence.Entities.DevelopmentArtifactKind.CoderSubmission),
+            Arg.Any<CancellationToken>());
         _ = store.Received(1).TerminalizeAttemptAsync(Arg.Is<DevelopmentTerminalizeAttemptCommand>(command => command.Status == PersistenceDevelopmentAttemptStatus.Succeeded),
             Arg.Any<CancellationToken>());
     }
 
-    private static DevelopmentOptions OptionsValue() => new()
+    private static DevelopmentOptions OptionsValue(int maxPatchBytes = 1024 * 1024) => new()
     {
         Enabled = true,
         MaxArtifactBytes = 2 * 1024 * 1024,
-        MaxPatchBytes = 1024 * 1024,
+        MaxPatchBytes = maxPatchBytes,
         MaxFileWriteBytes = 1024 * 1024,
         MaxCommandOutputBytes = 256 * 1024,
         MaxChangedFiles = 32,

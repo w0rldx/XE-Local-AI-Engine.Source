@@ -61,6 +61,26 @@ public sealed class ProcessSandboxRuntimeProviderTests : IDisposable
     }
 
     [Test]
+    public async Task ProcessSandboxProvider_CreateOrAttach_DifferentProfilesDoNotOverwriteEachOther()
+    {
+        using var provider = CreateProvider();
+        var agentHomeKey = Key();
+        var developmentKey = agentHomeKey with { RuntimeProfile = "development-local", ManifestVersion = 2 };
+
+        var agentHome = await provider.CreateOrAttachAsync(CreateRequest(agentHomeKey));
+        var development = await provider.CreateOrAttachAsync(new SandboxCreateRequest
+        {
+            AttachKey = developmentKey,
+            RuntimeProfile = developmentKey.RuntimeProfile,
+            NetworkPolicy = SandboxNetworkPolicy.Unrestricted
+        });
+
+        AssertEx.NotEqual(agentHome.SandboxId, development.SandboxId);
+        AssertEx.Equal(agentHome.SandboxId, (await provider.ConnectAsync(agentHomeKey)).SandboxId);
+        AssertEx.Equal(development.SandboxId, (await provider.ConnectAsync(developmentKey)).SandboxId);
+    }
+
+    [Test]
     public async Task ProcessSandboxProvider_Connect_WhenJailMissing_ThrowsHandleInvalid()
     {
         using var provider = CreateProvider();
@@ -142,6 +162,7 @@ public sealed class ProcessSandboxRuntimeProviderTests : IDisposable
         var capturedBytes = Encoding.UTF8.GetByteCount(result.StandardOutput);
         AssertEx.True(capturedBytes <= capBytes,
             $"captured stdout must be capped at the {capBytes}-byte UTF-8 budget but was {capturedBytes} bytes");
+        AssertEx.True(result.StandardOutputTruncated, "the bounded result must explicitly report discarded stdout bytes");
     }
 
     [Test]

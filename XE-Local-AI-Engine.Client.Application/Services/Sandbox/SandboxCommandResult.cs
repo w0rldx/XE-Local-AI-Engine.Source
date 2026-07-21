@@ -20,6 +20,12 @@ public sealed record SandboxCommandResult
     /// <summary>Captured standard error.</summary>
     public string StandardError { get; init; } = string.Empty;
 
+    /// <summary>Whether the provider discarded standard-output bytes after its capture ceiling was reached.</summary>
+    public bool StandardOutputTruncated { get; init; }
+
+    /// <summary>Whether the provider discarded standard-error bytes after its capture ceiling was reached.</summary>
+    public bool StandardErrorTruncated { get; init; }
+
     /// <summary>Whether the command ran to completion (false when cancelled or killed mid-flight).</summary>
     public required bool Completed { get; init; }
 
