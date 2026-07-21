@@ -413,7 +413,8 @@ internal sealed class DevelopmentRestartRecoveryHarness : IAsyncDisposable
 
     private static IReadOnlyList<string> ParseChangedFiles(string status)
     {
-        return status.Split('\n', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
+        return status.Split('\n', StringSplitOptions.RemoveEmptyEntries)
+                     .Select(line => line.TrimEnd('\r'))
                      .Select(line => line.Length > 3 ? line[3..] : string.Empty)
                      .Select(path => path.Contains(" -> ", StringComparison.Ordinal) ? path[(path.LastIndexOf(" -> ", StringComparison.Ordinal) + 4)..] : path)
                      .Where(path => path.Length > 0)
