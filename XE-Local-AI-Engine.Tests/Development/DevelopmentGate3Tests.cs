@@ -9,6 +9,7 @@ using XE_Local_AI_Engine.Client.Services.Development;
 using XE_Local_AI_Engine.Client.Services.Sandbox;
 using XE_Local_AI_Engine.Client.Services.Sandbox.Implementation;
 using XE_Local_AI_Engine.Tests.Testing;
+using PersistenceDevelopmentAttemptStatus = XE_Local_AI_Engine.Client.Persistence.Entities.DevelopmentAttemptStatus;
 
 public sealed class DevelopmentGate3Tests : IDisposable
 {
@@ -34,8 +35,8 @@ public sealed class DevelopmentGate3Tests : IDisposable
     {
         var now = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
         var snapshot = Snapshot("identity", acknowledged: false, policyVersion: null, acknowledgedAt: null);
-        AssertEx.Throws<DevelopmentWorkspaceSecurityException>(() => DevelopmentTrustPolicy.EnsureCurrent(snapshot, TimeProvider.System));
-        AssertEx.Throws<DevelopmentWorkspaceSecurityException>(() => DevelopmentTrustPolicy.EnsureCurrent(snapshot with
+        Assert.Throws<DevelopmentWorkspaceSecurityException>(() => DevelopmentTrustPolicy.EnsureCurrent(snapshot, TimeProvider.System));
+        Assert.Throws<DevelopmentWorkspaceSecurityException>(() => DevelopmentTrustPolicy.EnsureCurrent(snapshot with
         {
             TrustedRepositoryAcknowledged = true,
             TrustedRepositoryPolicyVersion = DevelopmentTrustPolicy.CurrentVersion - 1,
@@ -92,8 +93,8 @@ public sealed class DevelopmentGate3Tests : IDisposable
         var replacementTools = new DevelopmentWorkspaceTools(replacementSandbox, replacement, options);
         AssertEx.Equal("bounded change\n", await replacementTools.ReadFileAsync("src/feature.txt").ConfigureAwait(false));
 
-        var symbolic = await RunAsync(replacement.HostWorktreePath, "git", "symbolic-ref", "--quiet", "HEAD").ConfigureAwait(false);
-        AssertEx.NotEqual(expected: 0, symbolic.ExitCode, "the managed worktree must be detached from the protected base branch");
+        var symbolic = await RunProcessAsync(replacement.HostWorktreePath, "git", "symbolic-ref", "--quiet", "HEAD").ConfigureAwait(false);
+        AssertEx.NotEqual(notExpected: 0, symbolic.ExitCode, "the managed worktree must be detached from the protected base branch");
     }
 
     [Test]
@@ -135,7 +136,7 @@ public sealed class DevelopmentGate3Tests : IDisposable
         AssertEx.NotNullOrEmpty(result.SubjectHash);
         AssertEx.Contains(result.ChangedFiles, "feature.txt");
         _ = store.Received(4).AttachArtifactAsync(Arg.Any<DevelopmentAttachArtifactCommand>(), Arg.Any<CancellationToken>());
-        _ = store.Received(1).TerminalizeAttemptAsync(Arg.Is<DevelopmentTerminalizeAttemptCommand>(command => command.Status == DevelopmentAttemptStatus.Succeeded),
+        _ = store.Received(1).TerminalizeAttemptAsync(Arg.Is<DevelopmentTerminalizeAttemptCommand>(command => command.Status == PersistenceDevelopmentAttemptStatus.Succeeded),
             Arg.Any<CancellationToken>());
     }
 
@@ -175,7 +176,7 @@ public sealed class DevelopmentGate3Tests : IDisposable
             DevelopmentTaskStatus.InProgress,
             TaskVersion: 3,
             DevelopmentAttemptRole.Coder,
-            DevelopmentAttemptStatus.Running,
+            PersistenceDevelopmentAttemptStatus.Running,
             "local-model",
             "local",
             AttemptVersion: 1);
@@ -185,12 +186,12 @@ public sealed class DevelopmentGate3Tests : IDisposable
     {
         var repository = Path.Combine(_root, "repo-" + Guid.NewGuid().ToString("N"));
         Directory.CreateDirectory(repository);
-        EnsureSuccess(await RunAsync(repository, "git", "init", "--initial-branch=main", ".").ConfigureAwait(false));
-        EnsureSuccess(await RunAsync(repository, "git", "config", "user.email", "gate3@example.invalid").ConfigureAwait(false));
-        EnsureSuccess(await RunAsync(repository, "git", "config", "user.name", "Gate 3 Test").ConfigureAwait(false));
+        EnsureSuccess(await RunProcessAsync(repository, "git", "init", "--initial-branch=main", ".").ConfigureAwait(false));
+        EnsureSuccess(await RunProcessAsync(repository, "git", "config", "user.email", "gate3@example.invalid").ConfigureAwait(false));
+        EnsureSuccess(await RunProcessAsync(repository, "git", "config", "user.name", "Gate 3 Test").ConfigureAwait(false));
         await File.WriteAllTextAsync(Path.Combine(repository, "README.md"), "base\n").ConfigureAwait(false);
-        EnsureSuccess(await RunAsync(repository, "git", "add", "README.md").ConfigureAwait(false));
-        EnsureSuccess(await RunAsync(repository, "git", "commit", "-m", "base").ConfigureAwait(false));
+        EnsureSuccess(await RunProcessAsync(repository, "git", "add", "README.md").ConfigureAwait(false));
+        EnsureSuccess(await RunProcessAsync(repository, "git", "commit", "-m", "base").ConfigureAwait(false));
         return repository;
     }
 
@@ -199,7 +200,7 @@ public sealed class DevelopmentGate3Tests : IDisposable
         return new ProcessSandboxRuntimeProvider(Options.Create(new LocalContainerOptions()), TimeProvider.System);
     }
 
-    private static async Task<CommandResult> RunAsync(string workingDirectory, string executable, params string[] arguments)
+    private static async Task<CommandResult> RunProcessAsync(string workingDirectory, string executable, params string[] arguments)
     {
         var startInfo = new ProcessStartInfo
         {
