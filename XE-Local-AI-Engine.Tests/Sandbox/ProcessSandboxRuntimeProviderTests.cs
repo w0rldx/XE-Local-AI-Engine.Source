@@ -336,6 +336,31 @@ public sealed class ProcessSandboxRuntimeProviderTests : IDisposable
     }
 
     [Test]
+    public async Task ProcessSandboxProvider_CopyInto_WhenDestinationComponentIsSymlink_DoesNotCreateOutsideDirectories()
+    {
+        if (!OperatingSystem.IsLinux())
+        {
+            return;
+        }
+
+        using var provider = CreateProvider();
+        var handle = await provider.CreateOrAttachAsync(CreateRequest(Key()));
+        using var escapeTarget = new TempDir();
+        var hostSource = WriteHostTempFile("payload-to-plant");
+        await RunShellInJailAsync(provider, handle,
+            $"mkdir -p workspace && ln -s {ShellQuote(escapeTarget.Path)} workspace/out");
+
+        await AssertEx.ThrowsAsync<UnauthorizedAccessException>(() => provider.CopyIntoAsync(handle, new SandboxCopyRequest
+        {
+            SourcePath = hostSource,
+            DestinationPath = "workspace/out/new/nested/planted.txt"
+        }));
+
+        AssertEx.False(Directory.Exists(Path.Combine(escapeTarget.Path, "new")),
+            "copy-into must reject the existing symlink prefix before Directory.CreateDirectory can mutate outside the jail");
+    }
+
+    [Test]
     public async Task ProcessSandboxProvider_CopyInto_AtExactlyTheCap_StillCopies()
     {
         // The per-file cap comes from LocalContainerOptions; drive a small explicit cap so the boundary is testable.
