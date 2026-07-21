@@ -39,7 +39,12 @@ import { toWireSamplingOptions } from "@/features/chat/models/ChatSamplingOption
 import { deriveUsedContextTokens } from "@/features/chat/models/ContextUsageDerivation";
 import { localDefaultModelValue, toNodeChatRequestModel } from "@/features/chat/models/NodeChatModelSelection";
 import { resolveContextCapacityTokens, shouldFetchLocalModelDetails } from "@/features/chat/pages/ChatModelDetailsQuery";
-import { hasNoLocalChatModels, resolveLocalDefaultModelCapabilities, toChatModelOptions } from "@/features/chat/pages/ChatModelOptions";
+import {
+	hasNoLocalChatModels,
+	resolveLocalDefaultModelCapabilities,
+	resolveLocalDefaultModelName,
+	toChatModelOptions,
+} from "@/features/chat/pages/ChatModelOptions";
 import { nodeChatQueryKeys } from "@/features/chat/queries/NodeChatQueryKeys";
 import { useCodexModelOptions } from "@/features/chat/queries/useCodexModelOptions";
 import { useConversationAttachments } from "@/features/chat/queries/useConversationAttachments";
@@ -375,8 +380,20 @@ export function Chat() {
 	}, [availableReasoningEfforts, reasoningEffort, setReasoningEffort]);
 	const selectedConcreteModelName = useMemo(() => {
 		const requestModel = toNodeChatRequestModel(selectedModel);
-		return requestModel ?? localModelsData?.selectedModelName ?? localModelsData?.configuredDefaultModelName ?? "";
-	}, [localModelsData?.configuredDefaultModelName, localModelsData?.selectedModelName, selectedModel]);
+		// For the "Local default" sentinel, prefer the INSTALLED model the backend resolver will actually run
+		// (resolveLocalDefaultModel mirror) over the store's selected/configured name — those may name a model whose
+		// GGUF was never downloaded (configured-but-not-installed starter model), which permanently disabled the
+		// model-details poll and left the context-usage meter capacity unknown ("N of —") even while an installed
+		// model was serving chat fine. The store names stay as fallback for the no-installed-models case, where the
+		// installed-list gate below keeps the details poll off anyway.
+		return (
+			requestModel ??
+			resolveLocalDefaultModelName(localModelsData?.items ?? []) ??
+			localModelsData?.selectedModelName ??
+			localModelsData?.configuredDefaultModelName ??
+			""
+		);
+	}, [localModelsData, selectedModel]);
 
 	// Only poll model-details when the selection can actually return them: a non-empty local (non-cloud) name whose
 	// list option, if known, is available AND whose concrete name is actually installed. Cloud (Codex) ids have no
@@ -413,7 +430,10 @@ export function Chat() {
 			// A new conversation must not inherit the previous thread's pinned agent — clear the
 			// selection so the composer starts clean. Model stays sticky (intentional UX).
 			clearSelectedAgent();
-			await queryClient.invalidateQueries({ queryKey: nodeChatQueryKeys.conversations() });
+			// List reconciliation only: the created conversation's detail was just primed via setQueryData with the
+			// authoritative create response — the broad `conversations()` prefix would immediately re-mark it (and
+			// every other cached detail) stale for no new information.
+			await queryClient.invalidateQueries({ queryKey: nodeChatQueryKeys.conversationLists() });
 		},
 	});
 
@@ -678,9 +698,13 @@ export function Chat() {
 
 	const refreshConversation = useCallback(
 		async (conversationId: string): Promise<void> => {
+			// Scoped tightly — this runs after EVERY turn. `exact` keeps the conversation's `files` child out (a turn
+			// never changes the attachment list; upload/delete invalidate their own key), and `conversationLists`
+			// refreshes the sidebar without the broad `conversations()` prefix that would re-invalidate this same
+			// detail mid-refetch (the observed duplicate round per turn) plus every other cached conversation.
 			await Promise.all([
-				queryClient.invalidateQueries({ queryKey: nodeChatQueryKeys.conversation(conversationId) }),
-				queryClient.invalidateQueries({ queryKey: nodeChatQueryKeys.conversations() }),
+				queryClient.invalidateQueries({ queryKey: nodeChatQueryKeys.conversation(conversationId), exact: true }),
+				queryClient.invalidateQueries({ queryKey: nodeChatQueryKeys.conversationLists() }),
 				// GPTAUD-17a: the local runtime only fills EffectiveContextTokens once the model is WARM, but the
 				// model-details query fires pre-warm — so the context-usage meter would stay pinned to the model's
 				// train ceiling (e.g. 262k) even though the server launched with a far smaller `-c` (e.g. 16k). Once

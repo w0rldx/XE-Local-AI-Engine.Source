@@ -12,6 +12,7 @@ const signalRMock = vi.hoisted(() => {
 	const connection = {
 		on: vi.fn(),
 		off: vi.fn(),
+		onreconnected: vi.fn(),
 		start: vi.fn<() => Promise<void>>().mockResolvedValue(undefined),
 		stop: vi.fn<() => Promise<void>>().mockResolvedValue(undefined),
 	};
@@ -44,6 +45,7 @@ vi.mock("react-i18next", () => ({
 const toastMock = vi.hoisted(() => ({ success: vi.fn(), error: vi.fn(), warn: vi.fn(), info: vi.fn() }));
 vi.mock("@/core/ui/notifications/Toast", () => ({ toast: toastMock }));
 
+import { resetSharedHubConnectionsForTest } from "@/core/api/signalr/SharedHubConnection";
 import { useNodeAuthStore } from "@/core/auth/stores/NodeAuthStore";
 import { useSchedulerHub } from "@/features/scheduler/hooks/useSchedulerHub";
 import { schedulerInvalidationKey, schedulerQueryIds } from "@/features/scheduler/queries/useScheduler";
@@ -105,6 +107,7 @@ function renderHubWithSeededQuery(fullQueryKey: readonly unknown[]) {
 describe("useSchedulerHub", () => {
 	beforeEach(() => {
 		vi.clearAllMocks();
+		resetSharedHubConnectionsForTest();
 		useNodeAuthStore.getState().actions.clear();
 		signalRMock.builder.withUrl.mockReturnValue(signalRMock.builder);
 		signalRMock.builder.withAutomaticReconnect.mockReturnValue(signalRMock.builder);
@@ -191,16 +194,22 @@ describe("useSchedulerHub", () => {
 	});
 
 	it("unsubscribes and stops the connection on unmount", async () => {
-		const { unmount } = renderHub();
+		vi.useFakeTimers();
+		try {
+			const { unmount } = renderHub();
 
-		unmount();
+			unmount();
 
-		expect(signalRMock.connection.off).toHaveBeenCalledWith("scheduler.jobDefinitionChanged", expect.any(Function));
-		for (const eventName of RUN_EVENTS) {
-			expect(signalRMock.connection.off).toHaveBeenCalledWith(eventName, expect.any(Function));
+			expect(signalRMock.connection.off).toHaveBeenCalledWith("scheduler.jobDefinitionChanged", expect.any(Function));
+			for (const eventName of RUN_EVENTS) {
+				expect(signalRMock.connection.off).toHaveBeenCalledWith(eventName, expect.any(Function));
+			}
+			// The shared manager stops on last release only AFTER a 30s stop-linger (reused across navigation) and once
+			// start() settles; advance past the linger and flush the deferred-stop microtask.
+			await vi.advanceTimersByTimeAsync(30_000);
+			expect(signalRMock.connection.stop).toHaveBeenCalled();
+		} finally {
+			vi.useRealTimers();
 		}
-		// stop() is deferred until start() settles (so cleanup never aborts an in-flight negotiation), so it runs on a
-		// microtask after unmount rather than synchronously.
-		await vi.waitFor(() => expect(signalRMock.connection.stop).toHaveBeenCalled());
 	});
 });

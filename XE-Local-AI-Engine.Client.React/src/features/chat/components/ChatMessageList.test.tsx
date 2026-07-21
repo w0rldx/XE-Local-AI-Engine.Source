@@ -196,3 +196,32 @@ describe("ChatMessageList conversation-load failure (AUD4-13)", () => {
 		expect(screen.getByTestId("chat-message-user-1")).toBeTruthy();
 	});
 });
+
+describe("ChatMessageList virtualization threshold", () => {
+	function thread(count: number): ChatMessageModel[] {
+		return Array.from({ length: count }, (_, index) =>
+			userMessage({
+				id: `user-${index + 1}`,
+				content: `Message number ${index + 1}`,
+				sortOrder: index + 1,
+			}),
+		);
+	}
+
+	it("renders every row plainly at or below the threshold (no virtual container)", () => {
+		const { container } = renderWithProviders(<ChatMessageList conversation={conversation(thread(10))} />);
+
+		expect(screen.queryByTestId("chat-message-list-virtual")).toBeNull();
+		expect(container.querySelectorAll('[data-testid^="chat-message-user-"]')).toHaveLength(10);
+	});
+
+	it("switches to the windowed container above the threshold and does not mount every row", () => {
+		const { container } = renderWithProviders(<ChatMessageList conversation={conversation(thread(60))} />);
+
+		expect(screen.getByTestId("chat-message-list-virtual")).toBeTruthy();
+		// jsdom reports no real viewport geometry, so the exact mounted count is estimate-driven — the invariant
+		// under test is windowing itself: strictly fewer mounted rows than the 60 in the thread.
+		const mounted = container.querySelectorAll("[data-testid=chat-message-list-virtual] > [data-index]").length;
+		expect(mounted).toBeLessThan(60);
+	});
+});

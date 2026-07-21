@@ -5,6 +5,7 @@ import { renderHook, waitFor } from "@testing-library/react";
 import type { ReactNode } from "react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
+import { resetSharedHubConnectionsForTest } from "@/core/api/signalr/SharedHubConnection";
 import { IMAGE_JOB_STATUS_CHANGED } from "@/features/images/models/ImageModels";
 import { useImageJobHub } from "@/features/images/hooks/useImageJobHub";
 
@@ -75,6 +76,7 @@ function renderHub(jobIds: readonly string[]) {
 
 describe("useImageJobHub", () => {
 	beforeEach(() => {
+		resetSharedHubConnectionsForTest();
 		registeredHandlers.clear();
 		startSpy.mockClear();
 		stopSpy.mockClear();
@@ -133,7 +135,15 @@ describe("useImageJobHub", () => {
 	it("stops the connection on unmount", async () => {
 		const { unmount } = renderHub(["job-1"]);
 		await waitFor(() => expect(startSpy).toHaveBeenCalled());
-		unmount();
-		await waitFor(() => expect(stopSpy).toHaveBeenCalled());
+		// The shared manager stops on last release only AFTER a 30s stop-linger (reused across navigation); switch to
+		// fake timers to advance past it deterministically instead of waiting real time.
+		vi.useFakeTimers();
+		try {
+			unmount();
+			await vi.advanceTimersByTimeAsync(30_000);
+			expect(stopSpy).toHaveBeenCalled();
+		} finally {
+			vi.useRealTimers();
+		}
 	});
 });
