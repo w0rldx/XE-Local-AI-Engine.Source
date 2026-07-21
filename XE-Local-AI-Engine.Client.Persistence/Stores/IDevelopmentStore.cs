@@ -66,12 +66,12 @@ public sealed record DevelopmentAttachArtifactCommand(
     int SchemaVersion,
     string ContentHash,
     long ByteCount,
-    byte[]? ContentJson = null,
+    ReadOnlyMemory<byte>? ContentJson = null,
     string? ManagedReference = null,
     string? BaseCommit = null,
     string? SubjectHash = null,
     string? ChangedFilesManifestHash = null,
-    byte[]? InputArtifactIdsJson = null,
+    ReadOnlyMemory<byte>? InputArtifactIdsJson = null,
     string? CommandProfileVersion = null);
 
 public sealed record DevelopmentApprovedApplySubject(
@@ -123,3 +123,7 @@ public interface IDevelopmentStore
     Task<DevelopmentOperationResult> BlockApplyAsync(Guid operationId, DevelopmentApprovedApplySubject subject, string sanitizedReason, CancellationToken cancellationToken = default);
     Task<IReadOnlyList<DevelopmentEventSnapshot>> ListEventsAsync(Guid projectId, CancellationToken cancellationToken = default);
 }
+
+public sealed class DevelopmentConcurrencyException(string message, Exception? innerException = null) : InvalidOperationException(message, innerException);
+
+public sealed class DevelopmentInvalidTransitionException(string message) : InvalidOperationException(message);
