@@ -4,11 +4,10 @@ public enum DevelopmentProjectStatus
 {
     Active,
     Completed,
-    Blocked,
     Cancelled
 }
 
-public enum DevelopmentEgressMode
+public enum DevelopmentEgressPolicy
 {
     LocalOnly,
     CloudScoped
