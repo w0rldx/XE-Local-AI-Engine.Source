@@ -15,11 +15,11 @@ The repository pins Microsoft.Extensions.AI 10.7.0. The official NuGet packages 
 
 At the pinned commit:
 
-1. [`ChatOptions`' copy constructor](https://github.com/dotnet/extensions/blob/fa0072f10f11eae347aaecaa3c3e81e701b0f79d/src/Libraries/Microsoft.Extensions.AI.Abstractions/ChatCompletion/ChatOptions.cs#L16-L49) assigns `AdditionalProperties = other.AdditionalProperties?.Clone()`.
-2. [`ChatOptions.Clone`](https://github.com/dotnet/extensions/blob/fa0072f10f11eae347aaecaa3c3e81e701b0f79d/src/Libraries/Microsoft.Extensions.AI.Abstractions/ChatCompletion/ChatOptions.cs#L231-L239) documents shallow-cloned collections and returns `new(this)`. Therefore the dictionary instance changes, but each stored value reference is preserved.
-3. [`FunctionInvokingChatClient.GetResponseAsync`](https://github.com/dotnet/extensions/blob/fa0072f10f11eae347aaecaa3c3e81e701b0f79d/src/Libraries/Microsoft.Extensions.AI/ChatCompletion/FunctionInvokingChatClient.cs#L213-L332) and its streaming counterpart call the inner client once per iteration, append tool results, and call it again until the loop stops.
-4. [`UpdateOptionsForNextIteration`](https://github.com/dotnet/extensions/blob/fa0072f10f11eae347aaecaa3c3e81e701b0f79d/src/Libraries/Microsoft.Extensions.AI/ChatCompletion/FunctionInvokingChatClient.cs#L662-L695) clones options only when it must reset required tool mode, propagate a changed conversation ID, or clear a continuation token. Otherwise it reuses the same `ChatOptions` instance.
-5. [`PrepareOptionsForLastIteration`](https://github.com/dotnet/extensions/blob/fa0072f10f11eae347aaecaa3c3e81e701b0f79d/src/Libraries/Microsoft.Extensions.AI/ChatCompletion/FunctionInvokingChatClient.cs#L704-L733) also clones before removing function declarations.
+1. [`ChatOptions`' copy constructor](https://github.com/dotnet/extensions/blob/fa0072f10f11eae347aaecaa3c3e81e701b0f79d/src/Libraries/Microsoft.Extensions.AI.Abstractions/ChatCompletion/ChatOptions.cs#L19-L54) assigns `AdditionalProperties = other.AdditionalProperties?.Clone()`.
+2. [`ChatOptions.Clone`](https://github.com/dotnet/extensions/blob/fa0072f10f11eae347aaecaa3c3e81e701b0f79d/src/Libraries/Microsoft.Extensions.AI.Abstractions/ChatCompletion/ChatOptions.cs#L226-L238) documents shallow-cloned collections and returns `new(this)`. Therefore the dictionary instance changes, but each stored value reference is preserved.
+3. [`FunctionInvokingChatClient.GetResponseAsync`](https://github.com/dotnet/extensions/blob/fa0072f10f11eae347aaecaa3c3e81e701b0f79d/src/Libraries/Microsoft.Extensions.AI/ChatCompletion/FunctionInvokingChatClient.cs#L328-L418) and [its streaming counterpart](https://github.com/dotnet/extensions/blob/fa0072f10f11eae347aaecaa3c3e81e701b0f79d/src/Libraries/Microsoft.Extensions.AI/ChatCompletion/FunctionInvokingChatClient.cs#L512-L694) call the inner client once per iteration, append tool results, and call it again until the loop stops.
+4. [`UpdateOptionsForNextIteration`](https://github.com/dotnet/extensions/blob/fa0072f10f11eae347aaecaa3c3e81e701b0f79d/src/Libraries/Microsoft.Extensions.AI/ChatCompletion/FunctionInvokingChatClient.cs#L982-L1018) clones options only when it must reset required tool mode, propagate a changed conversation ID, or clear a continuation token. Otherwise it reuses the same `ChatOptions` instance.
+5. [`PrepareOptionsForLastIteration`](https://github.com/dotnet/extensions/blob/fa0072f10f11eae347aaecaa3c3e81e701b0f79d/src/Libraries/Microsoft.Extensions.AI/ChatCompletion/FunctionInvokingChatClient.cs#L1030-L1062) also clones before removing function declarations.
 
 Microsoft Learn independently describes [`ChatOptions.Clone`](https://learn.microsoft.com/en-us/dotnet/api/microsoft.extensions.ai.chatoptions.clone) as a shallow clone and describes [`FunctionInvokingChatClient`](https://learn.microsoft.com/en-us/dotnet/api/microsoft.extensions.ai.functioninvokingchatclient) as repeatedly sending generated function results back to the inner client.
 
@@ -34,7 +34,8 @@ Microsoft Learn independently describes [`ChatOptions.Clone`](https://learn.micr
    - their `AdditionalProperties` dictionaries are distinct;
    - both dictionaries contain the same immutable authorization value reference and values;
    - the authorizer ran before both fake transports.
-6. If this exact carrier assertion fails under the pinned package or composed application pipeline, cloud support remains disabled; do not compensate with `AsyncLocal`. The approved fallback is a dedicated Development client that reapplies the immutable carrier on every provider round.
+6. Exercise both non-streaming and streaming function loops. The latter is required because production invocation uses the streaming path and Microsoft.Extensions.AI implements the two loops separately. The observed order must be `authorize1 -> transport1 -> authorize2 -> transport2` on each surface.
+7. If this exact carrier assertion fails under the pinned package or composed application pipeline, cloud support remains disabled; do not compensate with `AsyncLocal`. The approved fallback is a dedicated Development client that reapplies the immutable carrier on every provider round.
 
 ## Consequences
 
