@@ -179,6 +179,30 @@ public sealed class DevelopmentCloudEgressGateTests
     }
 
     [Test]
+    public async Task FunctionLoop_Streaming_WhenCarrierIsRemovedAfterFirstRound_BlocksSecondRoundBeforeTransport()
+    {
+        var events = new List<string>();
+        using var localClient = new StubChatClient("local");
+        using var cloudClient = new TwoRoundCloudChatClient(events, removeCarrierAfterFirstRound: true);
+        var authorizer = new FakeCloudEgressAuthorizer(Now, BundleState.Valid(), events);
+        using var runtime = new RuntimeChatClient(new FixedCloudFactory(cloudClient), () => localClient, authorizer);
+        using var functionLoop = runtime.AsBuilder().UseFunctionInvocation(NullLoggerFactory.Instance).Build();
+        var options = CreateFunctionOptions(CreateEnvelope());
+
+        await AssertEx.ThrowsAsync<CloudEgressAuthorizationException>(async () =>
+        {
+            await foreach (var update in functionLoop.GetStreamingResponseAsync([new ChatMessage(ChatRole.User, "run tool")], options))
+            {
+                GC.KeepAlive(update);
+            }
+        });
+
+        AssertEx.Equal(expected: 1, cloudClient.TransportCount);
+        AssertEx.Equal(expected: 2, authorizer.CallCount);
+        AssertEx.Equal("authorize1,transport1,authorize2", string.Join(',', events));
+    }
+
+    [Test]
     public async Task GetStreamingResponseAsync_WhenEnvelopeIsMissing_BlocksBeforeCloudEnumeration()
     {
         using var localClient = new StubChatClient("local");
