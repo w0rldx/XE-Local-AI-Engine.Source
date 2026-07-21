@@ -24,6 +24,12 @@ public static class DevelopmentCloudAuthorizationMetadata
         options.AdditionalProperties[EnvelopeKey] = envelope;
     }
 
+    internal static bool IsDevelopmentMarked(ChatOptions? options)
+    {
+        var properties = options?.AdditionalProperties;
+        return properties is not null && (properties.ContainsKey(PurposeKey) || properties.ContainsKey(EnvelopeKey));
+    }
+
     internal static bool TryCreateRequest(ChatOptions? options,
         string providerName,
         out CloudEgressAuthorizationRequest? request)
@@ -43,13 +49,23 @@ public static class DevelopmentCloudAuthorizationMetadata
             return false;
         }
 
-        var state = !hasPurpose || purpose is not string purposeText || !string.Equals(purposeText, PurposeValue, StringComparison.Ordinal)
-            ? CloudEgressAuthorizationCarrierState.MalformedPurpose
-            : !hasEnvelope
-                ? CloudEgressAuthorizationCarrierState.MissingEnvelope
-                : envelopeValue is not DevelopmentCloudAuthorizationEnvelope
-                    ? CloudEgressAuthorizationCarrierState.MalformedEnvelope
-                    : CloudEgressAuthorizationCarrierState.Valid;
+        CloudEgressAuthorizationCarrierState state;
+        if (!hasPurpose || purpose is not string purposeText || !string.Equals(purposeText, PurposeValue, StringComparison.Ordinal))
+        {
+            state = CloudEgressAuthorizationCarrierState.MalformedPurpose;
+        }
+        else if (!hasEnvelope)
+        {
+            state = CloudEgressAuthorizationCarrierState.MissingEnvelope;
+        }
+        else if (envelopeValue is not DevelopmentCloudAuthorizationEnvelope)
+        {
+            state = CloudEgressAuthorizationCarrierState.MalformedEnvelope;
+        }
+        else
+        {
+            state = CloudEgressAuthorizationCarrierState.Valid;
+        }
 
         request = new CloudEgressAuthorizationRequest(providerName,
             options?.ModelId,

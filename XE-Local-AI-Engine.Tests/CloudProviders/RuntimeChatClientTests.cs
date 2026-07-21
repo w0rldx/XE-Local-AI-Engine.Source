@@ -37,6 +37,8 @@ public sealed class RuntimeChatClientTests
         await runtime.GetResponseAsync([new ChatMessage(ChatRole.User, "hi")]);
         AssertEx.Equal(expected: 2, localClient.CallCount);
         AssertEx.Equal(expected: 1, cloudClient.CallCount);
+        AssertEx.Equal(expected: 0, selector.ProviderNameResolveCount,
+            "ordinary Chat must preserve the pre-Gate-1 routing path without an authorization-only provider lookup");
     }
 
     [Test]
@@ -63,6 +65,7 @@ public sealed class RuntimeChatClientTests
         }
 
         public bool CloudActive { get; set; }
+        public int ProviderNameResolveCount { get; private set; }
 
         public bool TryCreateActiveCloudChatClient(string? requestedModelId, out IChatClient? client)
         {
@@ -77,6 +80,7 @@ public sealed class RuntimeChatClientTests
 
         public string? ResolveActiveCloudProviderName(string? requestedModelId = null)
         {
+            ProviderNameResolveCount++;
             return CloudActive ? "azure" : null;
         }
 

@@ -86,6 +86,7 @@ public sealed class RuntimeChatClient : IChatClient
         }
     }
 
+    [SuppressMessage("Reliability", "CA2000:Dispose objects before losing scope", Justification = ActiveClientOwnershipNote)]
     private IChatClient ResolveActiveClient(ChatOptions? options)
     {
         var requestedModelId = options?.ModelId;
@@ -100,7 +101,13 @@ public sealed class RuntimeChatClient : IChatClient
 
     private void AuthorizeDevelopmentCloudRequest(ChatOptions? options, string? requestedModelId)
     {
-        var providerName = _activeCloudFactory.ResolveActiveCloudProviderName(requestedModelId) ?? "unknown";
+        if (!DevelopmentCloudAuthorizationMetadata.IsDevelopmentMarked(options))
+        {
+            return;
+        }
+
+        var providerName = _activeCloudFactory.ResolveActiveCloudProviderName(requestedModelId)
+                           ?? throw new CloudEgressAuthorizationException("The selected cloud provider could not be identified for Development authorization.");
         if (DevelopmentCloudAuthorizationMetadata.TryCreateRequest(options, providerName, out var request))
         {
             _cloudEgressAuthorizer.Authorize(request!);
