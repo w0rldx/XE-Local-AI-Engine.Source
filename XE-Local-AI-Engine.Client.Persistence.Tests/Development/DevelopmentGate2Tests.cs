@@ -520,6 +520,7 @@ internal sealed class DevelopmentTestFixture : IDisposable
         services.AddSingleton<NodeEncryptionSaveChangesInterceptor>();
         services.AddSingleton<NodeEncryptionMaterializationInterceptor>();
         services.AddDbContext<NodeChatDbContext>((provider, options) => options.UseSqlite($"Data Source={databasePath}")
+                                                                         .EnableServiceProviderCaching(false)
                                                                          .AddInterceptors(provider.GetRequiredService<NodeEncryptionSaveChangesInterceptor>(),
                                                                              provider.GetRequiredService<NodeEncryptionMaterializationInterceptor>()));
         services.AddScoped<IDevelopmentStore, DevelopmentStore>();
