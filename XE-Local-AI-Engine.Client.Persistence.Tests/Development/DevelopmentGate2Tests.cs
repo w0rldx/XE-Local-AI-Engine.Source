@@ -1,6 +1,9 @@
 namespace XE_Local_AI_Engine.Client.Persistence.Tests.Development;
 
+using Microsoft.Data.Sqlite;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.Infrastructure;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
@@ -140,6 +143,37 @@ public sealed class DevelopmentStartupReconcilerTests : IDisposable
         AssertEx.Equal(expected: 1, events.Count(item => item.EventType == "AttemptInterrupted"));
         AssertEx.Equal(attemptId, events.Single(item => item.EventType == "AttemptInterrupted").AttemptId);
     }
+
+    [Test]
+    public async Task ReconcileRunningAttempts_ConcurrentCallsProduceOneTransitionAndOneEvent()
+    {
+        await using var provider = await _fixture.BuildProviderAsync().ConfigureAwait(false);
+        await using (var seedScope = provider.CreateAsyncScope())
+        {
+            var seedStore = seedScope.ServiceProvider.GetRequiredService<IDevelopmentStore>();
+            var seed = DevelopmentTestFixture.CreateSeed();
+            _ = await seedStore.CreateProjectAsync(seed).ConfigureAwait(false);
+            _ = await seedStore.TransitionTaskAsync(new DevelopmentTransitionTaskCommand(seed.TaskId, Guid.NewGuid(), DevelopmentTaskStatus.Ready, 1)).ConfigureAwait(false);
+            _ = await seedStore.StartAttemptAsync(new DevelopmentStartAttemptCommand(seed.TaskId,
+                                                    Guid.NewGuid(),
+                                                    Guid.NewGuid(),
+                                                    DevelopmentAttemptRole.Coder,
+                                                    "local-model",
+                                                    "local",
+                                                    ExpectedTaskVersion: 2))
+                               .ConfigureAwait(false);
+
+            await using var firstScope = provider.CreateAsyncScope();
+            await using var secondScope = provider.CreateAsyncScope();
+            var first = firstScope.ServiceProvider.GetRequiredService<IDevelopmentStore>().ReconcileRunningAttemptsAsync("restart");
+            var second = secondScope.ServiceProvider.GetRequiredService<IDevelopmentStore>().ReconcileRunningAttemptsAsync("restart");
+            var results = await Task.WhenAll(first, second).ConfigureAwait(false);
+
+            AssertEx.Equal(expected: 1, results.Sum());
+            var events = await seedStore.ListEventsAsync(seed.ProjectId).ConfigureAwait(false);
+            AssertEx.Equal(expected: 1, events.Count(item => item.EventType == "AttemptInterrupted"));
+        }
+    }
 }
 
 public sealed class ManagedDevelopmentArtifactStoreTests : IDisposable
@@ -192,6 +226,36 @@ public sealed class ManagedDevelopmentArtifactStoreTests : IDisposable
                       .ConfigureAwait(false);
         AssertEx.False(Directory.Exists(Path.Combine(_root, "development")));
     }
+
+    [Test]
+    public async Task AttachArtifact_RejectsCallerProvidedManagedReference()
+    {
+        var fixture = new DevelopmentTestFixture();
+        try
+        {
+            await using var provider = await fixture.BuildProviderAsync().ConfigureAwait(false);
+            await using var scope = provider.CreateAsyncScope();
+            var store = scope.ServiceProvider.GetRequiredService<IDevelopmentStore>();
+            var seed = DevelopmentTestFixture.CreateSeed();
+            _ = await store.CreateProjectAsync(seed).ConfigureAwait(false);
+
+            await AssertEx.ThrowsAsync<ArgumentException>(() => store.AttachArtifactAsync(new DevelopmentAttachArtifactCommand(Guid.NewGuid(),
+                                                                                                      seed.ProjectId,
+                                                                                                      seed.TaskId,
+                                                                                                      AttemptId: null,
+                                                                                                      Guid.NewGuid(),
+                                                                                                      DevelopmentArtifactKind.Patch,
+                                                                                                      SchemaVersion: 1,
+                                                                                                      ContentHash: "hash",
+                                                                                                      ByteCount: 1,
+                                                                                                      ManagedReference: "../../caller/path")))
+                          .ConfigureAwait(false);
+        }
+        finally
+        {
+            fixture.Dispose();
+        }
+    }
 }
 
 public sealed class DevelopmentApplyRecoveryTests : IDisposable
@@ -230,6 +294,94 @@ public sealed class DevelopmentApplyRecoveryTests : IDisposable
         AssertEx.Equal(expected: 1, events.Count(item => item.OperationPhase == DevelopmentOperationPhases.ApplyCompleted));
     }
 
+    [Test]
+    public async Task CrashAfterApplyStartedBeforeHostMutation_RetryAppliesOnceAndCompletes()
+    {
+        var port = new CrashBeforeHostMutationApplyPort();
+        await using var provider = await _fixture.BuildProviderAsync(port).ConfigureAwait(false);
+        await using var scope = provider.CreateAsyncScope();
+        var store = scope.ServiceProvider.GetRequiredService<IDevelopmentStore>();
+        var coordinator = scope.ServiceProvider.GetRequiredService<IDevelopmentCoordinator>();
+        var (seed, version) = await SeedAwaitingApplyAsync(store).ConfigureAwait(false);
+        var operationId = Guid.NewGuid();
+        var subject = CreateSubject(seed, version);
+
+        await AssertEx.ThrowsAsync<InvalidOperationException>(() => coordinator.ApplyAsync(operationId, subject)).ConfigureAwait(false);
+        var completed = await coordinator.ApplyAsync(operationId, subject).ConfigureAwait(false);
+
+        AssertEx.Equal(DevelopmentOperationPhases.ApplyCompleted, completed.Phase);
+        AssertEx.Equal(expected: 1, port.ApplyCalls);
+        var events = await store.ListEventsAsync(seed.ProjectId).ConfigureAwait(false);
+        AssertEx.Equal(expected: 1, events.Count(item => item.OperationPhase == DevelopmentOperationPhases.ApplyStarted));
+        AssertEx.Equal(expected: 1, events.Count(item => item.OperationPhase == DevelopmentOperationPhases.ApplyCompleted));
+    }
+
+    [Test]
+    public async Task CompletedApply_ResponseReplayDoesNotInspectOrMutateHostAgain()
+    {
+        var port = new CountingApplyPort();
+        await using var provider = await _fixture.BuildProviderAsync(port).ConfigureAwait(false);
+        await using var scope = provider.CreateAsyncScope();
+        var store = scope.ServiceProvider.GetRequiredService<IDevelopmentStore>();
+        var coordinator = scope.ServiceProvider.GetRequiredService<IDevelopmentCoordinator>();
+        var (seed, version) = await SeedAwaitingApplyAsync(store).ConfigureAwait(false);
+        var operationId = Guid.NewGuid();
+        var subject = CreateSubject(seed, version);
+
+        var completed = await coordinator.ApplyAsync(operationId, subject).ConfigureAwait(false);
+        var replay = await coordinator.ApplyAsync(operationId, subject).ConfigureAwait(false);
+
+        AssertEx.Equal(completed, replay);
+        AssertEx.Equal(expected: 1, port.InspectCalls);
+        AssertEx.Equal(expected: 1, port.ApplyCalls);
+        var events = await store.ListEventsAsync(seed.ProjectId).ConfigureAwait(false);
+        AssertEx.Equal(expected: 1, events.Count(item => item.OperationPhase == DevelopmentOperationPhases.ApplyStarted));
+        AssertEx.Equal(expected: 1, events.Count(item => item.OperationPhase == DevelopmentOperationPhases.ApplyCompleted));
+    }
+
+    [Test]
+    public async Task AmbiguousHostState_BlocksIdempotentlyWithoutApplying()
+    {
+        var port = new AmbiguousApplyPort();
+        await using var provider = await _fixture.BuildProviderAsync(port).ConfigureAwait(false);
+        await using var scope = provider.CreateAsyncScope();
+        var store = scope.ServiceProvider.GetRequiredService<IDevelopmentStore>();
+        var coordinator = scope.ServiceProvider.GetRequiredService<IDevelopmentCoordinator>();
+        var (seed, version) = await SeedAwaitingApplyAsync(store).ConfigureAwait(false);
+        var operationId = Guid.NewGuid();
+        var subject = CreateSubject(seed, version);
+
+        var blocked = await coordinator.ApplyAsync(operationId, subject).ConfigureAwait(false);
+        var replay = await coordinator.ApplyAsync(operationId, subject).ConfigureAwait(false);
+
+        AssertEx.Equal(blocked, replay);
+        AssertEx.Equal(DevelopmentOperationPhases.ApplyBlocked, blocked.Phase);
+        AssertEx.Equal(expected: 1, port.InspectCalls);
+        AssertEx.Equal(expected: 0, port.ApplyCalls);
+        var events = await store.ListEventsAsync(seed.ProjectId).ConfigureAwait(false);
+        AssertEx.Equal(expected: 1, events.Count(item => item.OperationPhase == DevelopmentOperationPhases.ApplyStarted));
+        AssertEx.Equal(expected: 1, events.Count(item => item.OperationPhase == DevelopmentOperationPhases.ApplyBlocked));
+        AssertEx.Equal(expected: 0, events.Count(item => item.OperationPhase == DevelopmentOperationPhases.ApplyCompleted));
+    }
+
+    [Test]
+    public async Task GenericTransition_CannotBypassExplicitApplyCompletion()
+    {
+        await using var provider = await _fixture.BuildProviderAsync().ConfigureAwait(false);
+        await using var scope = provider.CreateAsyncScope();
+        var store = scope.ServiceProvider.GetRequiredService<IDevelopmentStore>();
+        var (seed, version) = await SeedAwaitingApplyAsync(store).ConfigureAwait(false);
+
+        await AssertEx.ThrowsAsync<DevelopmentInvalidTransitionException>(() => store.TransitionTaskAsync(new DevelopmentTransitionTaskCommand(seed.TaskId,
+                                                                                                                      Guid.NewGuid(),
+                                                                                                                      DevelopmentTaskStatus.Completed,
+                                                                                                                      version)))
+                      .ConfigureAwait(false);
+    }
+
+    private static DevelopmentApprovedApplySubject CreateSubject(DevelopmentCreateProjectCommand seed, long version)
+        => new(seed.ProjectId, seed.TaskId, version, "base", "patch", "manifest", "result", "patch-ref", "manifest-ref");
+
     private static async Task<(DevelopmentCreateProjectCommand Seed, long Version)> SeedAwaitingApplyAsync(IDevelopmentStore store)
     {
         var seed = DevelopmentTestFixture.CreateSeed();
@@ -249,6 +401,76 @@ public sealed class DevelopmentApplyRecoveryTests : IDisposable
         }
 
         return (seed, version);
+    }
+}
+
+public sealed class DevelopmentMigrationTests : IDisposable
+{
+    private const string PreDevelopmentMigrationId = "20260718143054_AddAgentExecutionLogProvider";
+
+    private readonly NullNodeSqliteKeyHolder _keyHolder = new();
+    private readonly string _root = Path.Combine(Path.GetTempPath(), "xe-development-migration-" + Guid.NewGuid().ToString("N"));
+
+    public void Dispose()
+    {
+        _keyHolder.Dispose();
+        if (Directory.Exists(_root))
+        {
+            Directory.Delete(_root, recursive: true);
+        }
+    }
+
+    [Test]
+    public async Task Migration_AppliesExactlyFiveDevelopmentTablesAndRequiredIndexesThenRollsBack()
+    {
+        Directory.CreateDirectory(_root);
+        var databasePath = Path.Combine(_root, "development.sqlite");
+        await using (var context = AgentDefinitionTestContextFactory.CreateForMigration(databasePath, _keyHolder))
+        {
+            await context.Database.GetService<IMigrator>().MigrateAsync(PreDevelopmentMigrationId).ConfigureAwait(false);
+            await context.Database.MigrateAsync().ConfigureAwait(false);
+        }
+
+        await using (var connection = new SqliteConnection($"Data Source={databasePath}"))
+        {
+            await connection.OpenAsync().ConfigureAwait(false);
+            AssertEx.True((await NamesAsync(connection, "table", "development_%").ConfigureAwait(false)).SetEquals([
+                "development_artifacts",
+                "development_attempts",
+                "development_events",
+                "development_projects",
+                "development_tasks"
+            ]));
+            var indexes = await NamesAsync(connection, "index", "ux_development_%").ConfigureAwait(false);
+            AssertEx.True(indexes.Contains("ux_development_attempts_one_active_per_task"));
+            AssertEx.True(indexes.Contains("ux_development_events_project_sequence"));
+            AssertEx.True(indexes.Contains("ux_development_events_operation_phase"));
+        }
+
+        await using (var context = AgentDefinitionTestContextFactory.CreateForMigration(databasePath, _keyHolder))
+        {
+            await context.Database.GetService<IMigrator>().MigrateAsync(PreDevelopmentMigrationId).ConfigureAwait(false);
+        }
+
+        await using var rolledBack = new SqliteConnection($"Data Source={databasePath}");
+        await rolledBack.OpenAsync().ConfigureAwait(false);
+        AssertEx.Empty(await NamesAsync(rolledBack, "table", "development_%").ConfigureAwait(false));
+    }
+
+    private static async Task<HashSet<string>> NamesAsync(SqliteConnection connection, string type, string pattern)
+    {
+        await using var command = connection.CreateCommand();
+        command.CommandText = "SELECT name FROM sqlite_master WHERE type = $type AND name LIKE $pattern ORDER BY name;";
+        command.Parameters.AddWithValue("$type", type);
+        command.Parameters.AddWithValue("$pattern", pattern);
+        var names = new HashSet<string>(StringComparer.Ordinal);
+        await using var reader = await command.ExecuteReaderAsync().ConfigureAwait(false);
+        while (await reader.ReadAsync().ConfigureAwait(false))
+        {
+            names.Add(reader.GetString(0));
+        }
+
+        return names;
     }
 }
 
@@ -357,5 +579,67 @@ internal sealed class CrashAfterMutationApplyPort : TestApplyPort
         ApplyCalls++;
         _applied = true;
         throw new InvalidOperationException("Simulated crash after host mutation.");
+    }
+}
+
+internal sealed class CrashBeforeHostMutationApplyPort : TestApplyPort
+{
+    private bool _crashed;
+
+    public int ApplyCalls { get; private set; }
+
+    public override Task<DevelopmentHostApplyState> InspectAsync(DevelopmentApprovedApplySubject subject, CancellationToken cancellationToken = default)
+    {
+        if (!_crashed)
+        {
+            _crashed = true;
+            throw new InvalidOperationException("Simulated crash after ApplyStarted and before host mutation.");
+        }
+
+        return Task.FromResult(DevelopmentHostApplyState.UnappliedBaseUnchanged);
+    }
+
+    public override Task ApplyAsync(DevelopmentApprovedApplySubject subject, CancellationToken cancellationToken = default)
+    {
+        ApplyCalls++;
+        return Task.CompletedTask;
+    }
+}
+
+internal sealed class CountingApplyPort : TestApplyPort
+{
+    public int InspectCalls { get; private set; }
+
+    public int ApplyCalls { get; private set; }
+
+    public override Task<DevelopmentHostApplyState> InspectAsync(DevelopmentApprovedApplySubject subject, CancellationToken cancellationToken = default)
+    {
+        InspectCalls++;
+        return Task.FromResult(DevelopmentHostApplyState.UnappliedBaseUnchanged);
+    }
+
+    public override Task ApplyAsync(DevelopmentApprovedApplySubject subject, CancellationToken cancellationToken = default)
+    {
+        ApplyCalls++;
+        return Task.CompletedTask;
+    }
+}
+
+internal sealed class AmbiguousApplyPort : TestApplyPort
+{
+    public int InspectCalls { get; private set; }
+
+    public int ApplyCalls { get; private set; }
+
+    public override Task<DevelopmentHostApplyState> InspectAsync(DevelopmentApprovedApplySubject subject, CancellationToken cancellationToken = default)
+    {
+        InspectCalls++;
+        return Task.FromResult(DevelopmentHostApplyState.Ambiguous);
+    }
+
+    public override Task ApplyAsync(DevelopmentApprovedApplySubject subject, CancellationToken cancellationToken = default)
+    {
+        ApplyCalls++;
+        return Task.CompletedTask;
     }
 }
