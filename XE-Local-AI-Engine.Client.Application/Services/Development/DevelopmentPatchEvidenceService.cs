@@ -40,6 +40,7 @@ internal sealed class DevelopmentPatchEvidenceService : IDevelopmentPatchEvidenc
     public async Task<DevelopmentPatchEvidence> ExportAsync(DevelopmentWorkspaceSession session, CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(session);
+        cancellationToken.ThrowIfCancellationRequested();
         _ = await RunGitExactAsync(session,
             ["reset", "--mixed", "--quiet", "HEAD", "--"],
             maxOutputBytes: 4096,
@@ -138,6 +139,7 @@ internal sealed class DevelopmentPatchEvidenceService : IDevelopmentPatchEvidenc
         using var timeout = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
         timeout.CancelAfter(TimeSpan.FromSeconds(_options.MaxAttemptDurationSeconds));
         using var process = new Process { StartInfo = startInfo };
+        timeout.Token.ThrowIfCancellationRequested();
         try
         {
             if (!process.Start())

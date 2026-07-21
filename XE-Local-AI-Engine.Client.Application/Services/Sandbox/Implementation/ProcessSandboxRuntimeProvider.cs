@@ -446,8 +446,17 @@ public sealed class ProcessSandboxRuntimeProvider : ISandboxRuntimeProvider, IDi
 
     public async Task<string> ReadFileAsync(SandboxHandle handle, string sandboxPath, CancellationToken cancellationToken = default)
     {
+        return await ReadFileAsync(handle, sandboxPath, int.MaxValue, cancellationToken).ConfigureAwait(false);
+    }
+
+    public async Task<string> ReadFileAsync(SandboxHandle handle,
+        string sandboxPath,
+        int maxBytes,
+        CancellationToken cancellationToken = default)
+    {
         ArgumentNullException.ThrowIfNull(handle);
         ArgumentException.ThrowIfNullOrWhiteSpace(sandboxPath);
+        ArgumentOutOfRangeException.ThrowIfNegativeOrZero(maxBytes);
         cancellationToken.ThrowIfCancellationRequested();
 
         var state = GetAliveState(handle);
@@ -461,7 +470,7 @@ public sealed class ProcessSandboxRuntimeProvider : ISandboxRuntimeProvider, IDi
             throw new FileNotFoundException($"Sandbox path '{sandboxPath}' was not found.", sandboxPath);
         }
 
-        var bytes = await ReadJailFileBytesNoFollowAsync(resolved, cancellationToken).ConfigureAwait(false);
+        var bytes = await ReadJailFileBytesNoFollowAsync(resolved, maxBytes, cancellationToken).ConfigureAwait(false);
         return Encoding.UTF8.GetString(bytes);
     }
 
@@ -484,7 +493,7 @@ public sealed class ProcessSandboxRuntimeProvider : ISandboxRuntimeProvider, IDi
 
         // Read the raw bytes from inside the jail and write them to the host destination so a binary artifact survives
         // the round trip unchanged (parity with the container provider's copy-out).
-        var content = await ReadJailFileBytesNoFollowAsync(source, cancellationToken).ConfigureAwait(false);
+        var content = await ReadJailFileBytesNoFollowAsync(source, int.MaxValue, cancellationToken).ConfigureAwait(false);
         await File.WriteAllBytesAsync(request.DestinationPath, content, cancellationToken).ConfigureAwait(false);
     }
 
@@ -918,10 +927,17 @@ public sealed class ProcessSandboxRuntimeProvider : ISandboxRuntimeProvider, IDi
     ///     relies on the per-component symlink check plus the jail canonicalization. Throws
     ///     <see cref="UnauthorizedAccessException" /> when the leaf is a symlink or the open otherwise fails.
     /// </summary>
-    private static async Task<byte[]> ReadJailFileBytesNoFollowAsync(string jailPath, CancellationToken cancellationToken)
+    private static async Task<byte[]> ReadJailFileBytesNoFollowAsync(string jailPath,
+        int maxBytes,
+        CancellationToken cancellationToken)
     {
         using var handle = OpenNoFollow(jailPath);
         var length = RandomAccess.GetLength(handle);
+        if (length > maxBytes)
+        {
+            throw new InvalidDataException("The sandbox file exceeds the requested read bound.");
+        }
+
         var buffer = new byte[length];
         var read = 0;
         while (read < buffer.Length)
@@ -933,6 +949,12 @@ public sealed class ProcessSandboxRuntimeProvider : ISandboxRuntimeProvider, IDi
             }
 
             read += chunk;
+        }
+
+        Memory<byte> probe = new byte[1];
+        if (await RandomAccess.ReadAsync(handle, probe, length, cancellationToken).ConfigureAwait(false) > 0)
+        {
+            throw new InvalidDataException("The sandbox file grew while it was read under the requested bound.");
         }
 
         return buffer;
