@@ -258,12 +258,6 @@ internal sealed class DevelopmentRestartRecoveryHarness : IAsyncDisposable
             AppendEvent(artifact.AttemptId, "EvidenceInvalidated");
         }
 
-        var lastInterruptedAttempt = Attempts.LastOrDefault(attempt => attempt.Status == DevelopmentAttemptStatus.Interrupted);
-        if (lastInterruptedAttempt is not null)
-        {
-            AttachArtifact(lastInterruptedAttempt.Id, DevelopmentArtifactKind.WorkspaceManifest, currentWorkspace, "recovery-inspection");
-        }
-
         return new DevelopmentRecoveryResult(interruptedAttempts, invalidatedArtifacts, ReplacementAllowed: !Task.IsBlocked, currentWorkspace);
     }
 

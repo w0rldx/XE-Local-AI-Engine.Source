@@ -133,6 +133,7 @@ public sealed class DevelopmentRestartRecoverySpikeTests
     {
         await using var harness = await DevelopmentRestartRecoveryHarness.CreateAsync().ConfigureAwait(false);
         var running = await harness.StartAndInterruptAsync(DevelopmentInterruptionBoundary.BeforeFirstToken).ConfigureAwait(false);
+        var artifactCount = harness.Artifacts.Count;
         var pending = harness.SeedAttempt(DevelopmentAttemptStatus.Pending);
         var succeeded = harness.SeedAttempt(DevelopmentAttemptStatus.Succeeded);
         var failed = harness.SeedAttempt(DevelopmentAttemptStatus.Failed);
@@ -151,5 +152,22 @@ public sealed class DevelopmentRestartRecoverySpikeTests
         AssertEx.Equal(DevelopmentAttemptStatus.Interrupted, interrupted.Status);
         AssertEx.Equal(DevelopmentAttemptStatus.Cancelled, cancelled.Status);
         AssertEx.ContainsSingle(harness.Events, item => item.AttemptId == running.Id && item.EventType == "AttemptInterrupted");
+        AssertEx.Equal(artifactCount, harness.Artifacts.Count);
+    }
+
+    [Test]
+    public async Task RecoverAsync_WhenConcurrent_InterruptsAttemptExactlyOnce()
+    {
+        await using var harness = await DevelopmentRestartRecoveryHarness.CreateAsync().ConfigureAwait(false);
+        var running = await harness.StartAndInterruptAsync(DevelopmentInterruptionBoundary.DuringReadTool).ConfigureAwait(false);
+        var artifactCount = harness.Artifacts.Count;
+
+        var recoveries = await Task.WhenAll(harness.RecoverAsync(), harness.RecoverAsync()).ConfigureAwait(false);
+
+        AssertEx.Equal(expected: 1, recoveries.Sum(recovery => recovery.InterruptedAttempts));
+        AssertEx.Equal(DevelopmentAttemptStatus.Interrupted, running.Status);
+        AssertEx.ContainsSingle(harness.Events, item => item.AttemptId == running.Id && item.EventType == "AttemptInterrupted");
+        AssertEx.Equal(artifactCount, harness.Artifacts.Count);
+        AssertEx.Equal(expected: 1, harness.ReadToolExecutions);
     }
 }
