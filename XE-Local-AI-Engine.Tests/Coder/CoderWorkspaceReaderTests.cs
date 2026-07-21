@@ -285,6 +285,64 @@ public sealed class CoderWorkspaceReaderTests : IDisposable
     }
 
     [Test]
+    public async Task ListFiles_WhenPathTraversesIntermediateSymlink_ReturnsRejection()
+    {
+        if (!OperatingSystem.IsLinux())
+        {
+            return;
+        }
+
+        using var provider = CreateProvider();
+        var handle = await CreateOrAttachAsync(provider);
+        using var escapeTarget = new TempDir(_tempPaths);
+        Directory.CreateDirectory(Path.Combine(escapeTarget.Path, "nested"));
+        await File.WriteAllTextAsync(Path.Combine(escapeTarget.Path, "nested", "secret.txt"), "OUTSIDE-THE-JAIL");
+        await RunShellInJailAsync(provider, handle,
+            $"mkdir -p agent-home/workspace/selected && ln -s {ShellQuote(escapeTarget.Path)} agent-home/workspace/selected/link");
+        var reader = CreateReader(provider);
+
+        var result = await reader.ListFilesAsync(new ListFilesToolRequest
+        {
+            Path = "link/nested"
+        });
+
+        AssertEx.Contains(result, "rejected", StringComparison.OrdinalIgnoreCase);
+        AssertEx.False(result.Contains("OUTSIDE-THE-JAIL", StringComparison.Ordinal),
+            "list_files must not traverse an intermediate symlink outside the jail");
+        AssertEx.False(result.Contains(escapeTarget.Path, StringComparison.Ordinal),
+            "the model-facing rejection must not expose the symlink target");
+    }
+
+    [Test]
+    public async Task SearchText_WhenPathIsLeafSymlink_ReturnsRejection()
+    {
+        if (!OperatingSystem.IsLinux())
+        {
+            return;
+        }
+
+        using var provider = CreateProvider();
+        var handle = await CreateOrAttachAsync(provider);
+        using var escapeTarget = new TempDir(_tempPaths);
+        await File.WriteAllTextAsync(Path.Combine(escapeTarget.Path, "secret.txt"), "OUTSIDE-THE-JAIL");
+        await RunShellInJailAsync(provider, handle,
+            $"mkdir -p agent-home/workspace/selected && ln -s {ShellQuote(escapeTarget.Path)} agent-home/workspace/selected/link");
+        var reader = CreateReader(provider);
+
+        var result = await reader.SearchTextAsync(new SearchTextToolRequest
+        {
+            Pattern = "OUTSIDE-THE-JAIL",
+            Path = "link"
+        });
+
+        AssertEx.Contains(result, "rejected", StringComparison.OrdinalIgnoreCase);
+        AssertEx.False(result.Contains("OUTSIDE-THE-JAIL", StringComparison.Ordinal),
+            "search_text must not follow a leaf symlink outside the jail");
+        AssertEx.False(result.Contains(escapeTarget.Path, StringComparison.Ordinal),
+            "the model-facing rejection must not expose the symlink target");
+    }
+
+    [Test]
     public async Task ListFiles_WrapsInjectionShapedFileNameInsideUntrustedFence()
     {
         if (!OperatingSystem.IsLinux())

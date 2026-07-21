@@ -145,6 +145,71 @@ public sealed class ProcessSandboxRuntimeProviderTests : IDisposable
     }
 
     [Test]
+    public async Task ProcessSandboxProvider_Execute_WhenWorkingDirectoryTraversesParent_Rejects()
+    {
+        using var provider = CreateProvider();
+        var handle = await provider.CreateOrAttachAsync(CreateRequest(Key()));
+        var (executable, arguments) = ShellCommand("pwd");
+
+        await AssertEx.ThrowsAsync<UnauthorizedAccessException>(() => provider.ExecuteAsync(handle, new SandboxCommandRequest
+        {
+            ExecutionId = "parent-traversal-1",
+            Executable = executable,
+            Arguments = arguments,
+            WorkingDirectory = "../../outside"
+        }));
+    }
+
+    [Test]
+    public async Task ProcessSandboxProvider_Execute_WhenWorkingDirectoryTraversesIntermediateSymlink_Rejects()
+    {
+        if (!OperatingSystem.IsLinux())
+        {
+            return;
+        }
+
+        using var provider = CreateProvider();
+        var handle = await provider.CreateOrAttachAsync(CreateRequest(Key()));
+        using var escapeTarget = new TempDir();
+        Directory.CreateDirectory(Path.Combine(escapeTarget.Path, "nested"));
+        await File.WriteAllTextAsync(Path.Combine(escapeTarget.Path, "nested", "secret.txt"), "OUTSIDE-THE-JAIL");
+        await RunShellInJailAsync(provider, handle,
+            $"mkdir -p workspace && ln -s {ShellQuote(escapeTarget.Path)} workspace/link");
+
+        await AssertEx.ThrowsAsync<UnauthorizedAccessException>(() => provider.ExecuteAsync(handle, new SandboxCommandRequest
+        {
+            ExecutionId = "intermediate-symlink-1",
+            Executable = "find",
+            Arguments = [".", "-maxdepth", "1", "-print"],
+            WorkingDirectory = "workspace/link/nested"
+        }));
+    }
+
+    [Test]
+    public async Task ProcessSandboxProvider_Execute_WhenWorkingDirectoryIsLeafSymlink_Rejects()
+    {
+        if (!OperatingSystem.IsLinux())
+        {
+            return;
+        }
+
+        using var provider = CreateProvider();
+        var handle = await provider.CreateOrAttachAsync(CreateRequest(Key()));
+        using var escapeTarget = new TempDir();
+        await File.WriteAllTextAsync(Path.Combine(escapeTarget.Path, "secret.txt"), "OUTSIDE-THE-JAIL");
+        await RunShellInJailAsync(provider, handle,
+            $"mkdir -p workspace && ln -s {ShellQuote(escapeTarget.Path)} workspace/link");
+
+        await AssertEx.ThrowsAsync<UnauthorizedAccessException>(() => provider.ExecuteAsync(handle, new SandboxCommandRequest
+        {
+            ExecutionId = "leaf-symlink-1",
+            Executable = "grep",
+            Arguments = ["-rnF", "-e", "OUTSIDE-THE-JAIL", "--", "."],
+            WorkingDirectory = "workspace/link"
+        }));
+    }
+
+    [Test]
     public async Task ProcessSandboxProvider_CopyInto_RejectsPathOutsideJail()
     {
         using var provider = CreateProvider();
