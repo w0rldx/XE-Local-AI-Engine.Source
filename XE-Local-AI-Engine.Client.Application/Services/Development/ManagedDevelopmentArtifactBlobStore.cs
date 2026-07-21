@@ -48,7 +48,12 @@ public sealed class ManagedDevelopmentArtifactBlobStore : IDevelopmentArtifactBl
 
         if (File.Exists(finalPath))
         {
-            throw new IOException($"The immutable Development artifact '{artifactId}' already exists.");
+            return await VerifyExistingWriteAsync(projectId,
+                artifactId,
+                finalPath,
+                content,
+                contentHash,
+                cancellationToken).ConfigureAwait(false);
         }
 
         try
@@ -64,7 +69,20 @@ public sealed class ManagedDevelopmentArtifactBlobStore : IDevelopmentArtifactBl
                 throw new InvalidDataException("The temporary Development artifact failed hash/size verification.");
             }
 
-            File.Move(tempPath, finalPath, overwrite: false);
+            try
+            {
+                File.Move(tempPath, finalPath, overwrite: false);
+            }
+            catch (IOException) when (File.Exists(finalPath))
+            {
+                return await VerifyExistingWriteAsync(projectId,
+                    artifactId,
+                    finalPath,
+                    content,
+                    contentHash,
+                    cancellationToken).ConfigureAwait(false);
+            }
+
             return new DevelopmentArtifactBlobWriteResult(OpaqueReference(projectId, artifactId), contentHash, content.Length);
         }
         catch
@@ -72,6 +90,33 @@ public sealed class ManagedDevelopmentArtifactBlobStore : IDevelopmentArtifactBl
             DeleteIfPresent(tempPath);
             throw;
         }
+    }
+
+    private async Task<DevelopmentArtifactBlobWriteResult> VerifyExistingWriteAsync(Guid projectId,
+        Guid artifactId,
+        string path,
+        ReadOnlyMemory<byte> content,
+        string contentHash,
+        CancellationToken cancellationToken)
+    {
+        byte[] plaintext;
+        try
+        {
+            plaintext = Decrypt(projectId,
+                artifactId,
+                await File.ReadAllBytesAsync(path, cancellationToken).ConfigureAwait(false));
+        }
+        catch (Exception exception) when (exception is AuthenticationTagMismatchException or CryptographicException or InvalidDataException)
+        {
+            throw new InvalidDataException("The existing immutable Development artifact failed verification.", exception);
+        }
+
+        if (!plaintext.AsSpan().SequenceEqual(content.Span))
+        {
+            throw new IOException($"The immutable Development artifact '{artifactId}' already exists with different content.");
+        }
+
+        return new DevelopmentArtifactBlobWriteResult(OpaqueReference(projectId, artifactId), contentHash, content.Length);
     }
 
     public async Task<DevelopmentArtifactBlobReadResult> ReadAsync(Guid projectId,
