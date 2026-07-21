@@ -292,6 +292,13 @@ internal sealed class CoderWorkspaceReader : ICoderWorkspaceReader
         {
             return new CommandOutcome(Output: null, ErrorMessage: NoWorkspaceMessage);
         }
+        catch (UnauthorizedAccessException)
+        {
+            // The process provider rejected a traversal or an intermediate/leaf symlink in the requested working
+            // directory. Keep the refusal model-safe: no canonical host/jail path or symlink target leaves this seam.
+            return new CommandOutcome(Output: null,
+                ErrorMessage: "the workspace path was rejected because it may escape the workspace.");
+        }
 
         if (!result.Completed)
         {
