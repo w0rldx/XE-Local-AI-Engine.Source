@@ -34,7 +34,7 @@ internal sealed class DevelopmentWorkspaceProvider : IDevelopmentWorkspaceProvid
     {
         ArgumentNullException.ThrowIfNull(snapshot);
         DevelopmentTrustPolicy.EnsureCurrent(snapshot, _timeProvider);
-        if ((_sandbox.Capabilities & SandboxProviderCapabilities.SupportsTrustedHostWorkspace) == 0)
+        if ((_sandbox.Capabilities & SandboxProviderCapabilities.SupportsTrustedHostWorkspace) == SandboxProviderCapabilities.None)
         {
             throw new SandboxCapabilityNotSupportedException($"The '{_sandbox.ProviderName}' provider cannot bind a preserved trusted host workspace.");
         }
@@ -121,7 +121,7 @@ internal sealed class DevelopmentWorkspaceProvider : IDevelopmentWorkspaceProvid
     private static void ValidateBaseBranch(string baseBranch)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(baseBranch);
-        if (baseBranch.StartsWith('-', StringComparison.Ordinal)
+        if (baseBranch.StartsWith("-", StringComparison.Ordinal)
             || baseBranch.Contains("..", StringComparison.Ordinal)
             || baseBranch.Contains("@{", StringComparison.Ordinal)
             || baseBranch.Any(char.IsControl))
