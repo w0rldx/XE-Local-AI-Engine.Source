@@ -5,6 +5,7 @@ using Microsoft.Extensions.AI;
 using XE_Local_AI_Engine.AI.Agent.Configuration;
 using XE_Local_AI_Engine.AI.Agent.Invocation;
 using XE_Local_AI_Engine.Client.Services.CloudProviders;
+using XE_Local_AI_Engine.Providers.Abstractions;
 
 internal sealed record DevelopmentCoderSubmission(
     string Summary,
@@ -27,10 +28,14 @@ internal interface IDevelopmentCoderModel
         CancellationToken cancellationToken = default);
 }
 
-internal sealed class DevelopmentCoderModel(IChatClient chatClient, IActiveCloudChatClientFactory cloudFactory) : IDevelopmentCoderModel
+internal sealed class DevelopmentCoderModel(
+    IChatClient chatClient,
+    IActiveCloudChatClientFactory cloudFactory,
+    ILocalModelProviderResolver localProviderResolver) : IDevelopmentCoderModel
 {
     private readonly IChatClient _chatClient = chatClient ?? throw new ArgumentNullException(nameof(chatClient));
     private readonly IActiveCloudChatClientFactory _cloudFactory = cloudFactory ?? throw new ArgumentNullException(nameof(cloudFactory));
+    private readonly ILocalModelProviderResolver _localProviderResolver = localProviderResolver ?? throw new ArgumentNullException(nameof(localProviderResolver));
 
     public async Task<DevelopmentCoderModelResult> RunAsync(string modelId,
         string prompt,
@@ -45,6 +50,14 @@ internal sealed class DevelopmentCoderModel(IChatClient chatClient, IActiveCloud
         if (_cloudFactory.IsCloudProviderSelected(modelId))
         {
             throw new DevelopmentWorkspaceSecurityException("Gate 3 coder attempts require an explicitly local model.");
+        }
+
+        var localProvider = await _localProviderResolver.ResolveProviderForModelAsync(modelId, cancellationToken).ConfigureAwait(false);
+        var knownModels = await localProvider.ListModelsAsync(cancellationToken).ConfigureAwait(false);
+        if (!knownModels.Any(model => model.IsAvailable
+                                      && string.Equals(model.ModelName, modelId, StringComparison.OrdinalIgnoreCase)))
+        {
+            throw new DevelopmentWorkspaceSecurityException("Gate 3 coder attempts require a known, available local model.");
         }
 
         var gateway = new ToolGateway(tools, maxToolCalls);
@@ -77,7 +90,7 @@ internal sealed class DevelopmentCoderModel(IChatClient chatClient, IActiveCloud
             RecentMessagesToKeep = 2,
             OversizedToolResultExcerptChars = 2000
         });
-        _ = await _chatClient.GetResponseAsync([
+        var response = await _chatClient.GetResponseAsync([
                 new ChatMessage(ChatRole.System,
                     "You are the bounded local Development coder. Use only the provided workspace tools. Never claim completion without calling submit_implementation exactly once."),
                 new ChatMessage(ChatRole.User, prompt)
@@ -85,10 +98,20 @@ internal sealed class DevelopmentCoderModel(IChatClient chatClient, IActiveCloud
             options,
             cancellationToken).ConfigureAwait(false);
 
+        var usage = response.Usage ?? throw new InvalidOperationException("The local coder response did not report token usage.");
+        var inputTokens = usage.InputTokenCount ?? throw new InvalidOperationException("The local coder response did not report input-token usage.");
+        var outputTokens = usage.OutputTokenCount ?? throw new InvalidOperationException("The local coder response did not report output-token usage.");
+        var accountedTokens = checked(inputTokens + outputTokens);
+        var totalTokens = Math.Max(usage.TotalTokenCount ?? accountedTokens, accountedTokens);
+        if (inputTokens < 0 || outputTokens < 0 || totalTokens < 0 || totalTokens > maxOutputTokens)
+        {
+            throw new InvalidOperationException("The Development coder exceeded the configured aggregate token limit.");
+        }
+
         return new DevelopmentCoderModelResult(gateway.Submission
                                                 ?? throw new InvalidOperationException("The coder attempt ended without a typed implementation submission."),
-            InputTokens: null,
-            OutputTokens: null);
+            inputTokens,
+            outputTokens);
     }
 
     private sealed class ToolGateway(IDevelopmentWorkspaceTools tools, int maxToolCalls)

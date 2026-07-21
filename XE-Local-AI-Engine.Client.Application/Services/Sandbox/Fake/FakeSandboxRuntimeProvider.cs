@@ -1,6 +1,7 @@
 namespace XE_Local_AI_Engine.Client.Services.Sandbox.Fake;
 
 using System.Globalization;
+using System.Text;
 
 /// <summary>
 ///     Deterministic, in-memory <see cref="ISandboxRuntimeProvider" /> used as the CI-mandatory provider and as the
@@ -174,6 +175,21 @@ public sealed class FakeSandboxRuntimeProvider : ISandboxRuntimeProvider
 
             return Task.FromResult(content);
         }
+    }
+
+    public async Task<string> ReadFileAsync(SandboxHandle handle,
+        string sandboxPath,
+        int maxBytes,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentOutOfRangeException.ThrowIfNegativeOrZero(maxBytes);
+        var content = await ReadFileAsync(handle, sandboxPath, cancellationToken).ConfigureAwait(false);
+        if (Encoding.UTF8.GetByteCount(content) > maxBytes)
+        {
+            throw new InvalidDataException("The sandbox file exceeds the requested read bound.");
+        }
+
+        return content;
     }
 
     public Task CopyOutAsync(SandboxHandle handle, SandboxCopyRequest request, CancellationToken cancellationToken = default)

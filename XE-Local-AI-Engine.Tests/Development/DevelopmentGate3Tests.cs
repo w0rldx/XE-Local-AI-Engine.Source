@@ -1,13 +1,18 @@
 namespace XE_Local_AI_Engine.Tests.Development;
 
 using System.Diagnostics;
+using System.Runtime.CompilerServices;
+using Microsoft.Extensions.AI;
 using Microsoft.Extensions.Options;
 using NSubstitute;
 using XE_Local_AI_Engine.Client.Persistence.Entities;
 using XE_Local_AI_Engine.Client.Persistence.Stores;
+using XE_Local_AI_Engine.Client.Services.CloudProviders;
 using XE_Local_AI_Engine.Client.Services.Development;
 using XE_Local_AI_Engine.Client.Services.Sandbox;
 using XE_Local_AI_Engine.Client.Services.Sandbox.Implementation;
+using XE_Local_AI_Engine.Providers.Abstractions;
+using XE_Local_AI_Engine.Providers.Abstractions.Contracts;
 using XE_Local_AI_Engine.Tests.Testing;
 using PersistenceDevelopmentAttemptStatus = XE_Local_AI_Engine.Client.Persistence.Entities.DevelopmentAttemptStatus;
 
@@ -69,11 +74,196 @@ public sealed class DevelopmentGate3Tests : IDisposable
                              similarity index 100%
                              rename from README.md
                              rename to .omx/ultragoal/VERIFIER_SENTINEL
-                             """;
+                             """ + "\n";
 
         await AssertEx.ThrowsAsync<DevelopmentWorkspaceSecurityException>(() => tools.ApplyPatchAsync(patch));
         AssertEx.True(File.Exists(Path.Combine(session.HostWorktreePath, "README.md")));
         AssertEx.False(File.Exists(Path.Combine(session.HostWorktreePath, ".omx", "ultragoal", "VERIFIER_SENTINEL")));
+    }
+
+    [Test]
+    public async Task ApplyPatch_WhenAnyExtendedHeaderTargetsProtectedPath_RejectsWholePatch()
+    {
+        var repository = await CreateRepositoryAsync().ConfigureAwait(false);
+        var data = Path.Combine(_root, "protected-headers-data");
+        Directory.CreateDirectory(data);
+        var options = Options.Create(OptionsValue());
+        var snapshot = Snapshot(DevelopmentWorkspaceSecurity.RepositoryIdentityHash(
+            DevelopmentWorkspaceSecurity.CanonicalRepositoryRoot(repository)));
+
+        using var sandbox = CreateSandbox();
+        var provider = new DevelopmentWorkspaceProvider(new FakeNodeDataDirectory(data), sandbox, options, TimeProvider.System);
+        var session = await provider.PrepareAsync(snapshot, repository).ConfigureAwait(false);
+        var tools = new DevelopmentWorkspaceTools(sandbox, session, options);
+        string[] patches =
+        [
+            "diff --git a/README.md b/README.md\nsimilarity index 100%\nrename from .git/config\nrename to README.md\n",
+            "diff --git a/README.md b/README.md\nsimilarity index 100%\ncopy from README.md\ncopy to .git/config\n",
+            "diff --git a/README.md b/README.md\n--- a/.git/config\n+++ b/README.md\n@@ -1 +1 @@\n-base\n+changed\n",
+            "diff --git a/README.md b/README.md\n--- a/README.md\n+++ b/.git/config\n@@ -1 +1 @@\n-base\n+changed\n"
+        ];
+
+        foreach (var patch in patches)
+        {
+            await AssertEx.ThrowsAsync<DevelopmentWorkspaceSecurityException>(() => tools.ApplyPatchAsync(patch));
+        }
+
+        AssertEx.Equal("base\n", await File.ReadAllTextAsync(Path.Combine(session.HostWorktreePath, "README.md")).ConfigureAwait(false));
+    }
+
+    [Test]
+    public async Task ApplyPatch_WhenChangedFileExceedsWriteBound_RejectsWithoutMutation()
+    {
+        var repository = await CreateRepositoryAsync().ConfigureAwait(false);
+        var data = Path.Combine(_root, "patch-write-bound-data");
+        Directory.CreateDirectory(data);
+        var options = Options.Create(OptionsValue(maxFileWriteBytes: 16));
+        var snapshot = Snapshot(DevelopmentWorkspaceSecurity.RepositoryIdentityHash(
+            DevelopmentWorkspaceSecurity.CanonicalRepositoryRoot(repository)));
+
+        using var sandbox = CreateSandbox();
+        var provider = new DevelopmentWorkspaceProvider(new FakeNodeDataDirectory(data), sandbox, options, TimeProvider.System);
+        var session = await provider.PrepareAsync(snapshot, repository).ConfigureAwait(false);
+        var tools = new DevelopmentWorkspaceTools(sandbox, session, options);
+        const string patch = """
+                             diff --git a/large.txt b/large.txt
+                             new file mode 100644
+                             index 0000000..ae52be8
+                             --- /dev/null
+                             +++ b/large.txt
+                             @@ -0,0 +1 @@
+                             +0123456789abcdefg
+                             """ + "\n";
+
+        await AssertEx.ThrowsAsync<InvalidOperationException>(() => tools.ApplyPatchAsync(patch));
+        AssertEx.False(File.Exists(Path.Combine(session.HostWorktreePath, "large.txt")));
+    }
+
+    [Test]
+    public async Task ReadFile_WhenFileExceedsReadBound_FailsClosed()
+    {
+        var repository = await CreateRepositoryAsync().ConfigureAwait(false);
+        var data = Path.Combine(_root, "read-bound-data");
+        Directory.CreateDirectory(data);
+        var options = Options.Create(OptionsValue(maxCommandOutputBytes: 16, maxFileWriteBytes: 64));
+        var snapshot = Snapshot(DevelopmentWorkspaceSecurity.RepositoryIdentityHash(
+            DevelopmentWorkspaceSecurity.CanonicalRepositoryRoot(repository)));
+
+        using var sandbox = CreateSandbox();
+        var provider = new DevelopmentWorkspaceProvider(new FakeNodeDataDirectory(data), sandbox, options, TimeProvider.System);
+        var session = await provider.PrepareAsync(snapshot, repository).ConfigureAwait(false);
+        var tools = new DevelopmentWorkspaceTools(sandbox, session, options);
+        _ = await tools.WriteFileAsync("large.txt", "0123456789abcdefg").ConfigureAwait(false);
+
+        await AssertEx.ThrowsAsync<InvalidDataException>(() => tools.ReadFileAsync("large.txt"));
+    }
+
+    [Test]
+    public async Task CoderModel_WhenModelIsUnknown_RejectsBeforeTransport()
+    {
+        using var chat = new ThrowingChatClient();
+        var cloud = Substitute.For<IActiveCloudChatClientFactory>();
+        cloud.IsCloudProviderSelected("unknown-model").Returns(false);
+        var model = new DevelopmentCoderModel(chat, cloud, LocalModelResolver());
+
+        await AssertEx.ThrowsAsync<DevelopmentWorkspaceSecurityException>(() => model.RunAsync("unknown-model",
+            "prompt",
+            new NullWorkspaceTools(),
+            maxOutputTokens: 100,
+            maxToolCalls: 2));
+        AssertEx.Equal(expected: 0, chat.CallCount);
+    }
+
+    [Test]
+    public async Task CoderModel_ReportsUsageAndRejectsAggregateTokenCapPlusOne()
+    {
+        var cloud = Substitute.For<IActiveCloudChatClientFactory>();
+        cloud.IsCloudProviderSelected("local-model").Returns(false);
+        var tools = new NullWorkspaceTools();
+        var resolver = LocalModelResolver(new LocalModelDescriptor
+        {
+            ModelName = "local-model",
+            ProviderName = "local",
+            IsAvailable = true,
+            SizeBytes = null,
+            ModifiedAt = null,
+            MaxContextTokens = 4096,
+            IsToolCapable = true
+        });
+
+        using var exactChat = new SubmittingChatClient(inputTokens: 40, outputTokens: 60);
+        var exact = new DevelopmentCoderModel(exactChat, cloud, resolver);
+        var result = await exact.RunAsync("local-model", "prompt", tools, maxOutputTokens: 100, maxToolCalls: 2).ConfigureAwait(false);
+        AssertEx.Equal<long?>(40, result.InputTokens);
+        AssertEx.Equal<long?>(60, result.OutputTokens);
+
+        using var overChat = new SubmittingChatClient(inputTokens: 40, outputTokens: 61);
+        var over = new DevelopmentCoderModel(overChat, cloud, resolver);
+        await AssertEx.ThrowsAsync<InvalidOperationException>(() => over.RunAsync("local-model",
+            "prompt",
+            tools,
+            maxOutputTokens: 100,
+            maxToolCalls: 2));
+    }
+
+    [Test]
+    [NotInParallel]
+    public async Task EvidenceExport_WhenAlreadyCancelled_DoesNotStartGit()
+    {
+        if (!OperatingSystem.IsLinux())
+        {
+            Skip.Test("The executable PATH probe uses a Linux shell script.");
+            return;
+        }
+
+        var repository = await CreateRepositoryAsync().ConfigureAwait(false);
+        var runtime = Path.Combine(_root, "cancel-runtime");
+        var fakeBin = Path.Combine(_root, "fake-bin");
+        var marker = Path.Combine(_root, "git-started");
+        Directory.CreateDirectory(runtime);
+        Directory.CreateDirectory(fakeBin);
+        var fakeGit = Path.Combine(fakeBin, "git");
+        await File.WriteAllTextAsync(fakeGit, $"#!/bin/sh\ntouch '{marker}'\nsleep 5\n").ConfigureAwait(false);
+        File.SetUnixFileMode(fakeGit,
+            UnixFileMode.UserRead | UnixFileMode.UserWrite | UnixFileMode.UserExecute);
+        var originalPath = Environment.GetEnvironmentVariable("PATH");
+        try
+        {
+            Environment.SetEnvironmentVariable("PATH", fakeBin + Path.PathSeparator + originalPath);
+            using var sandbox = CreateSandbox();
+            var service = new DevelopmentPatchEvidenceService(sandbox, Options.Create(OptionsValue()));
+            var session = new DevelopmentWorkspaceSession(Guid.NewGuid(),
+                Guid.NewGuid(),
+                Guid.NewGuid(),
+                "base",
+                "identity",
+                repository,
+                runtime,
+                new SandboxHandle
+                {
+                    ProviderName = "process",
+                    SandboxId = Guid.NewGuid().ToString("N"),
+                    AttachKey = new SandboxAttachKey
+                    {
+                        OwnerUserId = "development",
+                        NodeId = "cancel",
+                        ProviderName = "process",
+                        RuntimeProfile = "development-local",
+                        ManifestVersion = 1
+                    },
+                    CreatedAt = DateTimeOffset.UtcNow,
+                    ManifestVersion = 1
+                });
+            using var cancelled = new CancellationTokenSource();
+            await cancelled.CancelAsync().ConfigureAwait(false);
+
+            await AssertEx.ThrowsAsync<OperationCanceledException>(() => service.ExportAsync(session, cancelled.Token));
+            AssertEx.False(File.Exists(marker), "an already-cancelled export must not start the first Git process");
+        }
+        finally
+        {
+            Environment.SetEnvironmentVariable("PATH", originalPath);
+        }
     }
 
     [Test]
@@ -218,17 +408,21 @@ public sealed class DevelopmentGate3Tests : IDisposable
         _ = store.Received(5).AttachArtifactAsync(Arg.Any<DevelopmentAttachArtifactCommand>(), Arg.Any<CancellationToken>());
         _ = store.Received(1).AttachArtifactAsync(Arg.Is<DevelopmentAttachArtifactCommand>(command => command.Kind == XE_Local_AI_Engine.Client.Persistence.Entities.DevelopmentArtifactKind.CoderSubmission),
             Arg.Any<CancellationToken>());
-        _ = store.Received(1).TerminalizeAttemptAsync(Arg.Is<DevelopmentTerminalizeAttemptCommand>(command => command.Status == PersistenceDevelopmentAttemptStatus.Succeeded),
+        _ = store.Received(1).TerminalizeAttemptAsync(Arg.Is<DevelopmentTerminalizeAttemptCommand>(command => command.Status == PersistenceDevelopmentAttemptStatus.Succeeded
+                                                                                                           && command.InputTokens == 10
+                                                                                                           && command.OutputTokens == 20),
             Arg.Any<CancellationToken>());
     }
 
-    private static DevelopmentOptions OptionsValue(int maxPatchBytes = 1024 * 1024) => new()
+    private static DevelopmentOptions OptionsValue(int maxPatchBytes = 1024 * 1024,
+        int maxFileWriteBytes = 1024 * 1024,
+        int maxCommandOutputBytes = 256 * 1024) => new()
     {
         Enabled = true,
         MaxArtifactBytes = 2 * 1024 * 1024,
         MaxPatchBytes = maxPatchBytes,
-        MaxFileWriteBytes = 1024 * 1024,
-        MaxCommandOutputBytes = 256 * 1024,
+        MaxFileWriteBytes = maxFileWriteBytes,
+        MaxCommandOutputBytes = maxCommandOutputBytes,
         MaxChangedFiles = 32,
         MaxToolCalls = 16,
         MaxAttemptDurationSeconds = 60,
@@ -326,6 +520,15 @@ public sealed class DevelopmentGate3Tests : IDisposable
 
     private sealed record CommandResult(int ExitCode, string StandardOutput, string StandardError);
 
+    private static ILocalModelProviderResolver LocalModelResolver(params LocalModelDescriptor[] models)
+    {
+        var provider = Substitute.For<ILocalModelProvider>();
+        provider.ListModelsAsync(Arg.Any<CancellationToken>()).Returns(models);
+        var resolver = Substitute.For<ILocalModelProviderResolver>();
+        resolver.ResolveProviderForModelAsync(Arg.Any<string>(), Arg.Any<CancellationToken>()).Returns(provider);
+        return resolver;
+    }
+
     private sealed class WritingCoderModel : IDevelopmentCoderModel
     {
         public async Task<DevelopmentCoderModelResult> RunAsync(string modelId,
@@ -344,5 +547,79 @@ public sealed class DevelopmentGate3Tests : IDisposable
                 InputTokens: 10,
                 OutputTokens: 20);
         }
+    }
+
+    private sealed class ThrowingChatClient : IChatClient
+    {
+        public int CallCount { get; private set; }
+
+        public Task<ChatResponse> GetResponseAsync(IEnumerable<ChatMessage> messages,
+            ChatOptions? options = null,
+            CancellationToken cancellationToken = default)
+        {
+            CallCount++;
+            throw new InvalidOperationException("transport reached");
+        }
+
+        public async IAsyncEnumerable<ChatResponseUpdate> GetStreamingResponseAsync(IEnumerable<ChatMessage> messages,
+            ChatOptions? options = null,
+            [EnumeratorCancellation] CancellationToken cancellationToken = default)
+        {
+            await Task.CompletedTask;
+            yield break;
+        }
+
+        public object? GetService(Type serviceType, object? serviceKey = null) => null;
+        public void Dispose() { }
+    }
+
+    private sealed class NullWorkspaceTools : IDevelopmentWorkspaceTools
+    {
+        public IReadOnlyList<DevelopmentCommandEvidence> CommandEvidence => [];
+        public Task<string> ListFilesAsync(string? path, CancellationToken cancellationToken = default) => Task.FromResult(string.Empty);
+        public Task<string> ReadFileAsync(string path, CancellationToken cancellationToken = default) => Task.FromResult(string.Empty);
+        public Task<string> SearchTextAsync(string pattern, string? path, CancellationToken cancellationToken = default) => Task.FromResult(string.Empty);
+        public Task<string> WriteFileAsync(string path, string content, CancellationToken cancellationToken = default) => Task.FromResult(string.Empty);
+        public Task<string> ApplyPatchAsync(string patch, CancellationToken cancellationToken = default) => Task.FromResult(string.Empty);
+        public Task<string> GetStatusAsync(CancellationToken cancellationToken = default) => Task.FromResult(string.Empty);
+        public Task<string> GetDiffAsync(CancellationToken cancellationToken = default) => Task.FromResult(string.Empty);
+        public Task<string> RunCommandAsync(string commandId, CancellationToken cancellationToken = default) => Task.FromResult(string.Empty);
+    }
+
+    private sealed class SubmittingChatClient(long inputTokens, long outputTokens) : IChatClient
+    {
+        public async Task<ChatResponse> GetResponseAsync(IEnumerable<ChatMessage> messages,
+            ChatOptions? options = null,
+            CancellationToken cancellationToken = default)
+        {
+            var submit = AssertEx.NotNull(options?.Tools?.OfType<AIFunction>()
+                .SingleOrDefault(static tool => tool.Name == "submit_implementation"));
+            _ = await submit.InvokeAsync(new AIFunctionArguments
+            {
+                ["summary"] = "done",
+                ["changedFiles"] = Array.Empty<string>(),
+                ["commandIds"] = Array.Empty<string>()
+            }, cancellationToken).ConfigureAwait(false);
+            return new ChatResponse(new ChatMessage(ChatRole.Assistant, "done"))
+            {
+                Usage = new UsageDetails
+                {
+                    InputTokenCount = inputTokens,
+                    OutputTokenCount = outputTokens,
+                    TotalTokenCount = inputTokens + outputTokens
+                }
+            };
+        }
+
+        public async IAsyncEnumerable<ChatResponseUpdate> GetStreamingResponseAsync(IEnumerable<ChatMessage> messages,
+            ChatOptions? options = null,
+            [EnumeratorCancellation] CancellationToken cancellationToken = default)
+        {
+            await Task.CompletedTask;
+            yield break;
+        }
+
+        public object? GetService(Type serviceType, object? serviceKey = null) => null;
+        public void Dispose() { }
     }
 }
