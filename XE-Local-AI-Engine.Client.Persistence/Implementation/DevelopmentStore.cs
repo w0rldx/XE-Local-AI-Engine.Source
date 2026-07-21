@@ -19,7 +19,7 @@ public sealed class DevelopmentStore(NodeChatDbContext dbContext, TimeProvider t
             [DevelopmentTaskStatus.Validation] = [DevelopmentTaskStatus.InProgress, DevelopmentTaskStatus.InReview, DevelopmentTaskStatus.Blocked, DevelopmentTaskStatus.Cancelled],
             [DevelopmentTaskStatus.InReview] = [DevelopmentTaskStatus.ChangesRequested, DevelopmentTaskStatus.AwaitingApply, DevelopmentTaskStatus.Blocked, DevelopmentTaskStatus.Cancelled],
             [DevelopmentTaskStatus.ChangesRequested] = [DevelopmentTaskStatus.InProgress, DevelopmentTaskStatus.Blocked, DevelopmentTaskStatus.Cancelled],
-            [DevelopmentTaskStatus.AwaitingApply] = [DevelopmentTaskStatus.Completed, DevelopmentTaskStatus.Blocked, DevelopmentTaskStatus.Cancelled]
+            [DevelopmentTaskStatus.AwaitingApply] = [DevelopmentTaskStatus.Blocked, DevelopmentTaskStatus.Cancelled]
         };
 
     private readonly NodeChatDbContext _dbContext = dbContext ?? throw new ArgumentNullException(nameof(dbContext));
@@ -255,6 +255,12 @@ public sealed class DevelopmentStore(NodeChatDbContext dbContext, TimeProvider t
         if (command.SchemaVersion <= 0 || command.ByteCount < 0 || (command.ContentJson is null) == (command.ManagedReference is null))
         {
             throw new ArgumentException("An artifact requires a positive schema version and exactly one content representation.", nameof(command));
+        }
+
+        if (command.ManagedReference is not null
+            && !string.Equals(command.ManagedReference, ManagedReference(command.ProjectId, command.ArtifactId), StringComparison.Ordinal))
+        {
+            throw new ArgumentException("A managed artifact reference must be the engine-generated opaque project/artifact key.", nameof(command));
         }
 
         return await ExecuteOperationAsync(command.ProjectId,
@@ -667,6 +673,9 @@ public sealed class DevelopmentStore(NodeChatDbContext dbContext, TimeProvider t
     }
 
     private static byte[] Utf8(string value) => Encoding.UTF8.GetBytes(value);
+
+    private static string ManagedReference(Guid projectId, Guid artifactId)
+        => string.Concat(projectId.ToString("N"), "/", artifactId.ToString("N"));
 
     private long Now() => _timeProvider.GetUtcNow().ToUnixTimeMilliseconds();
 }
