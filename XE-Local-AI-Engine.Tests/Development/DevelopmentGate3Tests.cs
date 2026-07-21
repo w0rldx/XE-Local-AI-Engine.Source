@@ -45,8 +45,35 @@ public sealed class DevelopmentGate3Tests : IDisposable
 
         AssertEx.False(DevelopmentWorkspaceSecurity.Confine("../../outside", allowRoot: false).IsAccepted);
         AssertEx.False(DevelopmentWorkspaceSecurity.Confine(".git/config", allowRoot: false).IsAccepted);
+        AssertEx.False(DevelopmentWorkspaceSecurity.Confine(".GIT/config", allowRoot: false).IsAccepted);
         AssertEx.False(DevelopmentWorkspaceSecurity.Confine(".omx/ultragoal/goals.json", allowRoot: false).IsAccepted);
         AssertEx.True(DevelopmentWorkspaceSecurity.Confine("src/feature.cs", allowRoot: false).IsAccepted);
+    }
+
+    [Test]
+    public async Task ApplyPatch_WhenRenameHeaderTargetsProtectedPath_RejectsWithoutMutation()
+    {
+        var repository = await CreateRepositoryAsync().ConfigureAwait(false);
+        var data = Path.Combine(_root, "protected-rename-data");
+        Directory.CreateDirectory(data);
+        var options = Options.Create(OptionsValue());
+        var snapshot = Snapshot(DevelopmentWorkspaceSecurity.RepositoryIdentityHash(
+            DevelopmentWorkspaceSecurity.CanonicalRepositoryRoot(repository)));
+
+        using var sandbox = CreateSandbox();
+        var provider = new DevelopmentWorkspaceProvider(new FakeNodeDataDirectory(data), sandbox, options, TimeProvider.System);
+        var session = await provider.PrepareAsync(snapshot, repository).ConfigureAwait(false);
+        var tools = new DevelopmentWorkspaceTools(sandbox, session, options);
+        const string patch = """
+                             diff --git a/README.md b/README.md
+                             similarity index 100%
+                             rename from README.md
+                             rename to .omx/ultragoal/VERIFIER_SENTINEL
+                             """;
+
+        await AssertEx.ThrowsAsync<DevelopmentWorkspaceSecurityException>(() => tools.ApplyPatchAsync(patch));
+        AssertEx.True(File.Exists(Path.Combine(session.HostWorktreePath, "README.md")));
+        AssertEx.False(File.Exists(Path.Combine(session.HostWorktreePath, ".omx", "ultragoal", "VERIFIER_SENTINEL")));
     }
 
     [Test]
