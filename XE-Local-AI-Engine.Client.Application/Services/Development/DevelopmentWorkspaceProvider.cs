@@ -10,7 +10,7 @@ using XE_Local_AI_Engine.Providers.Abstractions;
 internal sealed class DevelopmentWorkspaceProvider : IDevelopmentWorkspaceProvider
 {
     private const string RuntimeProfile = "development-local";
-    private const int WorkspaceManifestVersion = 1;
+    private const int WorkspaceManifestVersion = 2;
     private static readonly JsonSerializerOptions JsonOptions = new(JsonSerializerDefaults.Web);
 
     private readonly INodeDataDirectory _dataDirectory;
@@ -31,19 +31,23 @@ internal sealed class DevelopmentWorkspaceProvider : IDevelopmentWorkspaceProvid
     }
 
     public async Task<DevelopmentWorkspaceSession> PrepareAsync(DevelopmentExecutionSnapshot snapshot,
-        string repositoryRoot,
+        DevelopmentRepositoryBinding repository,
         CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(snapshot);
+        ArgumentNullException.ThrowIfNull(repository);
         DevelopmentTrustPolicy.EnsureCurrent(snapshot, _timeProvider);
         if ((_sandbox.Capabilities & SandboxProviderCapabilities.SupportsTrustedHostWorkspace) == SandboxProviderCapabilities.None)
         {
             throw new SandboxCapabilityNotSupportedException($"The '{_sandbox.ProviderName}' provider cannot bind a preserved trusted host workspace.");
         }
 
-        var canonicalRepositoryRoot = DevelopmentWorkspaceSecurity.CanonicalRepositoryRoot(repositoryRoot);
+        var canonicalRepositoryRoot = DevelopmentWorkspaceSecurity.CanonicalRepositoryRoot(repository.RepositoryRoot);
         var identity = DevelopmentWorkspaceSecurity.RepositoryIdentityHash(canonicalRepositoryRoot);
-        if (!string.Equals(identity, snapshot.RepositoryIdentityHash, StringComparison.OrdinalIgnoreCase))
+        if (repository.ProjectId != snapshot.ProjectId
+            || repository.SelectedFolderId != snapshot.SelectedFolderId
+            || !string.Equals(identity, repository.RepositoryIdentityHash, StringComparison.OrdinalIgnoreCase)
+            || !string.Equals(identity, snapshot.RepositoryIdentityHash, StringComparison.OrdinalIgnoreCase))
         {
             throw new DevelopmentWorkspaceSecurityException("The supplied repository does not match the persisted trusted repository identity.");
         }
@@ -85,18 +89,16 @@ internal sealed class DevelopmentWorkspaceProvider : IDevelopmentWorkspaceProvid
             await WriteWorkspaceManifestAsync(workspaceManifestPath,
                 new WorkspaceManifest(WorkspaceManifestVersion,
                     identity,
-                    canonicalRepositoryRoot,
-                    trustedCommonGitDirectory,
+                    repository.SelectedFolderId,
                     baseCommit),
                 cancellationToken).ConfigureAwait(false);
         }
         else
         {
             var manifest = await ReadWorkspaceManifestAsync(workspaceManifestPath, cancellationToken).ConfigureAwait(false);
-            if (manifest.Version != WorkspaceManifestVersion
+            if (manifest.Version is not (1 or WorkspaceManifestVersion)
                 || !string.Equals(manifest.RepositoryIdentityHash, identity, StringComparison.OrdinalIgnoreCase)
-                || !PathEquals(manifest.RepositoryRoot, canonicalRepositoryRoot)
-                || !PathEquals(manifest.CommonGitDirectory, trustedCommonGitDirectory))
+                || manifest.SelectedFolderId is { } manifestFolderId && manifestFolderId != repository.SelectedFolderId)
             {
                 throw new DevelopmentWorkspaceSecurityException("The preserved Development worktree does not match its trusted workspace manifest.");
             }
@@ -109,6 +111,14 @@ internal sealed class DevelopmentWorkspaceProvider : IDevelopmentWorkspaceProvid
             trustedCommonGitDirectory,
             baseCommit,
             cancellationToken).ConfigureAwait(false);
+
+        var persistedManifest = await ReadWorkspaceManifestAsync(workspaceManifestPath, cancellationToken).ConfigureAwait(false);
+        if (persistedManifest.Version != WorkspaceManifestVersion || persistedManifest.SelectedFolderId is null)
+        {
+            await WriteWorkspaceManifestAsync(workspaceManifestPath,
+                new WorkspaceManifest(WorkspaceManifestVersion, identity, repository.SelectedFolderId, baseCommit),
+                cancellationToken).ConfigureAwait(false);
+        }
 
         var branch = await git.RunAsync(worktreePath,
             AgentHomeGit.Arguments("symbolic-ref", "--quiet", "--short", "HEAD"),
@@ -243,7 +253,6 @@ internal sealed class DevelopmentWorkspaceProvider : IDevelopmentWorkspaceProvid
 
     private sealed record WorkspaceManifest(int Version,
         string RepositoryIdentityHash,
-        string RepositoryRoot,
-        string CommonGitDirectory,
+        Guid? SelectedFolderId,
         string BaseCommit);
 }

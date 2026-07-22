@@ -15,6 +15,7 @@ public sealed record DevelopmentCreateProjectCommand(
     Guid TaskId,
     Guid OperationId,
     string Objective,
+    Guid SelectedFolderId,
     string RepositoryIdentityHash,
     string BaseBranch,
     string Title,
@@ -151,6 +152,7 @@ public sealed record DevelopmentExecutionSnapshot(
     Guid ProjectId,
     Guid TaskId,
     Guid AttemptId,
+    Guid? SelectedFolderId,
     string RepositoryIdentityHash,
     string BaseBranch,
     DevelopmentEgressPolicy EgressPolicy,
@@ -174,6 +176,7 @@ public sealed record DevelopmentExecutionSnapshot(
 public sealed record DevelopmentProjectSnapshot(
     Guid Id,
     string Objective,
+    Guid? SelectedFolderId,
     string RepositoryIdentityHash,
     string BaseBranch,
     DevelopmentProjectStatus Status,
@@ -260,6 +263,10 @@ public interface IDevelopmentStore
     Task<DevelopmentExecutionSnapshot> GetExecutionSnapshotAsync(Guid attemptId, CancellationToken cancellationToken = default);
     Task<IReadOnlyList<DevelopmentProjectSnapshot>> ListProjectsAsync(CancellationToken cancellationToken = default);
     Task<DevelopmentProjectSnapshot> GetProjectAsync(Guid projectId, CancellationToken cancellationToken = default);
+    Task<DevelopmentProjectSnapshot> ReconnectProjectRepositoryAsync(Guid projectId,
+        Guid selectedFolderId,
+        long expectedVersion,
+        CancellationToken cancellationToken = default);
     Task<IReadOnlyList<DevelopmentTaskSnapshot>> ListTasksAsync(Guid projectId, CancellationToken cancellationToken = default);
     Task<DevelopmentTaskSnapshot> GetTaskAsync(Guid taskId, CancellationToken cancellationToken = default);
     Task<IReadOnlyList<DevelopmentAttemptSnapshot>> ListAttemptsAsync(Guid taskId, CancellationToken cancellationToken = default);

@@ -13,12 +13,12 @@ internal sealed record DevelopmentPatchPreview(
 internal interface IDevelopmentApplyService
 {
     Task<DevelopmentPatchPreview> PreviewAsync(Guid taskId,
-        string repositoryRoot,
+        DevelopmentRepositoryBinding repository,
         CancellationToken cancellationToken = default);
 
     Task<DevelopmentOperationResult> ApplyAsync(Guid taskId,
         Guid operationId,
-        string repositoryRoot,
+        DevelopmentRepositoryBinding repository,
         CancellationToken cancellationToken = default);
 }
 
@@ -27,21 +27,23 @@ internal sealed class DevelopmentApplyService(
     IDevelopmentCoordinator coordinator,
     IDevelopmentWorkspaceProvider workspaceProvider,
     IDevelopmentEvidenceService evidence,
+    IDevelopmentRepositoryBindingService repositoryBindings,
     TimeProvider timeProvider) : IDevelopmentApplyService
 {
     private static readonly JsonSerializerOptions JsonOptions = new(JsonSerializerDefaults.Web);
 
     private readonly IDevelopmentCoordinator _coordinator = coordinator ?? throw new ArgumentNullException(nameof(coordinator));
     private readonly IDevelopmentEvidenceService _evidence = evidence ?? throw new ArgumentNullException(nameof(evidence));
+    private readonly IDevelopmentRepositoryBindingService _repositoryBindings = repositoryBindings ?? throw new ArgumentNullException(nameof(repositoryBindings));
     private readonly IDevelopmentStore _store = store ?? throw new ArgumentNullException(nameof(store));
     private readonly TimeProvider _timeProvider = timeProvider ?? throw new ArgumentNullException(nameof(timeProvider));
     private readonly IDevelopmentWorkspaceProvider _workspaceProvider = workspaceProvider ?? throw new ArgumentNullException(nameof(workspaceProvider));
 
     public async Task<DevelopmentPatchPreview> PreviewAsync(Guid taskId,
-        string repositoryRoot,
+        DevelopmentRepositoryBinding repository,
         CancellationToken cancellationToken = default)
     {
-        ArgumentException.ThrowIfNullOrWhiteSpace(repositoryRoot);
+        ArgumentNullException.ThrowIfNull(repository);
         var task = await _store.GetTaskAsync(taskId, cancellationToken).ConfigureAwait(false);
         if (task.Status != DevelopmentTaskStatus.AwaitingApply || string.IsNullOrWhiteSpace(task.ApprovedSubjectHash))
         {
@@ -55,7 +57,7 @@ internal sealed class DevelopmentApplyService(
                                                         && attempt.Status == DevelopmentAttemptStatus.Succeeded)
                               ?? throw new DevelopmentInvalidTransitionException("Patch preview requires a successful independent reviewer attempt.");
         var snapshot = await _store.GetExecutionSnapshotAsync(reviewerAttempt.Id, cancellationToken).ConfigureAwait(false);
-        var session = await _workspaceProvider.PrepareAsync(snapshot, repositoryRoot, cancellationToken).ConfigureAwait(false);
+        var session = await _workspaceProvider.PrepareAsync(snapshot, repository, cancellationToken).ConfigureAwait(false);
         DevelopmentEvidenceSet current;
         try
         {
@@ -104,9 +106,10 @@ internal sealed class DevelopmentApplyService(
 
     public async Task<DevelopmentOperationResult> ApplyAsync(Guid taskId,
         Guid operationId,
-        string repositoryRoot,
+        DevelopmentRepositoryBinding repository,
         CancellationToken cancellationToken = default)
     {
+        ArgumentNullException.ThrowIfNull(repository);
         var task = await _store.GetTaskAsync(taskId, cancellationToken).ConfigureAwait(false);
         var completed = await _store.FindOperationAsync(task.ProjectId,
             operationId,
@@ -126,13 +129,14 @@ internal sealed class DevelopmentApplyService(
             return blocked;
         }
 
-        var preview = await PreviewAsync(taskId, repositoryRoot, cancellationToken).ConfigureAwait(false);
+        var preview = await PreviewAsync(taskId, repository, cancellationToken).ConfigureAwait(false);
         return await _coordinator.ApplyRevalidatedAsync(operationId,
             preview.Subject,
-            repositoryRoot,
+            repository,
             async revalidationToken =>
             {
-                var revalidated = await PreviewAsync(taskId, repositoryRoot, revalidationToken).ConfigureAwait(false);
+                var revalidatedRepository = await _repositoryBindings.ResolveProjectAsync(preview.Subject.ProjectId, revalidationToken).ConfigureAwait(false);
+                var revalidated = await PreviewAsync(taskId, revalidatedRepository, revalidationToken).ConfigureAwait(false);
                 if (!Equals(preview.Subject, revalidated.Subject))
                 {
                     throw new DevelopmentInvalidTransitionException("The exact approved workspace subject changed before host mutation.");

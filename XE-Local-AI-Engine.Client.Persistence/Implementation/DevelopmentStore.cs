@@ -45,6 +45,7 @@ public sealed class DevelopmentStore(NodeChatDbContext dbContext, TimeProvider t
                 {
                     Id = command.ProjectId,
                     Objective = Utf8(command.Objective),
+                    SelectedFolderId = command.SelectedFolderId,
                     RepositoryIdentityHash = command.RepositoryIdentityHash,
                     BaseBranch = command.BaseBranch,
                     Status = DevelopmentProjectStatus.Active,
@@ -815,6 +816,7 @@ public sealed class DevelopmentStore(NodeChatDbContext dbContext, TimeProvider t
         return new DevelopmentExecutionSnapshot(snapshot.Project.Id,
             snapshot.Task.Id,
             snapshot.Attempt.Id,
+            snapshot.Project.SelectedFolderId,
             snapshot.Project.RepositoryIdentityHash,
             snapshot.Project.BaseBranch,
             snapshot.Project.EgressPolicy,
@@ -851,6 +853,39 @@ public sealed class DevelopmentStore(NodeChatDbContext dbContext, TimeProvider t
                                       .SingleOrDefaultAsync(entity => entity.Id == projectId, cancellationToken)
                                       .ConfigureAwait(false)
                       ?? throw new KeyNotFoundException($"Development project '{projectId}' was not found.");
+        return ProjectSnapshot(project);
+    }
+
+    public async Task<DevelopmentProjectSnapshot> ReconnectProjectRepositoryAsync(Guid projectId,
+        Guid selectedFolderId,
+        long expectedVersion,
+        CancellationToken cancellationToken = default)
+    {
+        var project = await _dbContext.DevelopmentProjects
+                                      .SingleOrDefaultAsync(entity => entity.Id == projectId, cancellationToken)
+                                      .ConfigureAwait(false)
+                      ?? throw new KeyNotFoundException($"Development project '{projectId}' was not found.");
+        if (project.SelectedFolderId == selectedFolderId)
+        {
+            return ProjectSnapshot(project);
+        }
+        if (project.SelectedFolderId is not null)
+        {
+            throw new DevelopmentConcurrencyException("The Development project is already connected to another selected folder.");
+        }
+        EnsureVersion(project.Version, expectedVersion, "project");
+        project.SelectedFolderId = selectedFolderId;
+        project.UpdatedAtUtc = Now();
+        project.Version++;
+        try
+        {
+            _ = await _dbContext.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
+        }
+        catch (DbUpdateConcurrencyException exception)
+        {
+            throw new DevelopmentConcurrencyException("The Development project changed before its repository could be reconnected.", exception);
+        }
+
         return ProjectSnapshot(project);
     }
 
@@ -1136,6 +1171,7 @@ public sealed class DevelopmentStore(NodeChatDbContext dbContext, TimeProvider t
     private static DevelopmentProjectSnapshot ProjectSnapshot(DevelopmentProject entity)
         => new(entity.Id,
             Encoding.UTF8.GetString(entity.Objective),
+            entity.SelectedFolderId,
             entity.RepositoryIdentityHash,
             entity.BaseBranch,
             entity.Status,

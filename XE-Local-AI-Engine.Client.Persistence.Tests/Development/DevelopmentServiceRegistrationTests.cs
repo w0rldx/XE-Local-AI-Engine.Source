@@ -32,12 +32,11 @@ public sealed class DevelopmentServiceRegistrationTests
     }
 
     [Test]
-    public void AddNodeDevelopment_WhenEnabled_RegistersCompleteRuntimeServices()
+    public void AddNodeDevelopment_WhenConfigurationIsAbsent_RegistersCompleteRuntimeServices()
     {
         var builder = Host.CreateApplicationBuilder();
         var configuration = new ConfigurationBuilder().AddInMemoryCollection(new Dictionary<string, string?>
         {
-            ["Development:Enabled"] = "true",
             ["Development:MaxArtifactBytes"] = "1024"
         }).Build();
         builder.AddNodeDevelopment(configuration);
@@ -48,6 +47,7 @@ public sealed class DevelopmentServiceRegistrationTests
         AssertEx.True(builder.Services.Any(descriptor => descriptor.ServiceType == typeof(IDevelopmentValidationRunner)));
         AssertEx.True(builder.Services.Any(descriptor => descriptor.ServiceType == typeof(IDevelopmentReviewerAttemptRunner)));
         AssertEx.True(builder.Services.Any(descriptor => descriptor.ServiceType == typeof(IDevelopmentApplyService)));
+        AssertEx.True(builder.Services.Any(descriptor => descriptor.ServiceType == typeof(IDevelopmentRepositoryBindingService)));
         AssertEx.True(builder.Services.Any(descriptor => descriptor.ServiceType == typeof(IDevelopmentCloudAttemptContextService)));
         AssertEx.True(builder.Services.Any(descriptor => descriptor.ServiceType == typeof(ICloudEgressAuthorizer)));
         AssertEx.True(builder.Services.Any(descriptor => descriptor.ServiceType == typeof(IHostedService)

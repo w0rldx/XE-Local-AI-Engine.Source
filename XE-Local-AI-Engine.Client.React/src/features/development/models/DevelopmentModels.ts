@@ -16,6 +16,12 @@ export type DevelopmentArtifact = XeLocalAiEngineClientEndpointsDevelopmentV1Dev
 export type DevelopmentEvent = XeLocalAiEngineClientEndpointsDevelopmentV1DevelopmentEventResponse;
 export type DevelopmentPatchPreview = XeLocalAiEngineClientEndpointsDevelopmentV1DevelopmentPatchPreviewResponse;
 
+export interface DevelopmentRepository {
+	readonly id: string;
+	readonly alias: string;
+	readonly availability: string;
+}
+
 export type DevelopmentLiveUpdateKind =
 	| "Output"
 	| "Activity"

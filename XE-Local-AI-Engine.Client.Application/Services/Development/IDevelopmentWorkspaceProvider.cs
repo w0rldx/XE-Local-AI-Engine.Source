@@ -16,6 +16,6 @@ internal sealed record DevelopmentWorkspaceSession(
 internal interface IDevelopmentWorkspaceProvider
 {
     Task<DevelopmentWorkspaceSession> PrepareAsync(DevelopmentExecutionSnapshot snapshot,
-        string repositoryRoot,
+        DevelopmentRepositoryBinding repository,
         CancellationToken cancellationToken = default);
 }

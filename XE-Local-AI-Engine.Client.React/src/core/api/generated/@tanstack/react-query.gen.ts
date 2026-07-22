@@ -82,6 +82,7 @@ import {
 	getCudaBuildPrerequisites,
 	getCudaBuildStatus,
 	getDevelopmentArtifact,
+	getDevelopmentCapability,
 	getDevelopmentProject,
 	getDevelopmentTask,
 	getGgufDownloads,
@@ -122,6 +123,7 @@ import {
 	listDevelopmentArtifacts,
 	listDevelopmentEvents,
 	listDevelopmentProjects,
+	listDevelopmentRepositories,
 	listGoldenConversations,
 	listImageJobs,
 	listImageModels,
@@ -152,8 +154,10 @@ import {
 	previewDevelopmentPatch,
 	promoteSuggestedPlaybookAction,
 	putModelKind,
+	reconnectDevelopmentRepository,
 	refreshModelCatalog,
 	refreshRecommendations,
+	registerDevelopmentRepository,
 	reindexCorpus,
 	reindexKnowledgeDocument,
 	rejectSuggestedPlaybookAction,
@@ -341,6 +345,8 @@ import type {
 	GetCudaBuildStatusResponse,
 	GetDevelopmentArtifactData,
 	GetDevelopmentArtifactResponse,
+	GetDevelopmentCapabilityData,
+	GetDevelopmentCapabilityResponse,
 	GetDevelopmentProjectData,
 	GetDevelopmentProjectResponse,
 	GetDevelopmentTaskData,
@@ -423,6 +429,8 @@ import type {
 	ListDevelopmentEventsResponse,
 	ListDevelopmentProjectsData,
 	ListDevelopmentProjectsResponse,
+	ListDevelopmentRepositoriesData,
+	ListDevelopmentRepositoriesResponse,
 	ListGoldenConversationsData,
 	ListGoldenConversationsResponse,
 	ListImageJobsData,
@@ -485,10 +493,14 @@ import type {
 	PromoteSuggestedPlaybookActionResponse,
 	PutModelKindData,
 	PutModelKindResponse,
+	ReconnectDevelopmentRepositoryData,
+	ReconnectDevelopmentRepositoryResponse,
 	RefreshModelCatalogData,
 	RefreshModelCatalogResponse,
 	RefreshRecommendationsData,
 	RefreshRecommendationsResponse,
+	RegisterDevelopmentRepositoryData,
+	RegisterDevelopmentRepositoryResponse,
 	ReindexCorpusData,
 	ReindexCorpusResponse,
 	ReindexKnowledgeDocumentData,
@@ -2881,6 +2893,74 @@ export const startImageModelDownloadMutation = (
 	return mutationOptions;
 };
 
+export const getDevelopmentCapabilityQueryKey = (options?: Options<GetDevelopmentCapabilityData>) =>
+	createQueryKey("getDevelopmentCapability", options);
+
+export const getDevelopmentCapabilityOptions = (options?: Options<GetDevelopmentCapabilityData>) =>
+	queryOptions<
+		GetDevelopmentCapabilityResponse,
+		AxiosError<DefaultError>,
+		GetDevelopmentCapabilityResponse,
+		ReturnType<typeof getDevelopmentCapabilityQueryKey>
+	>({
+		queryFn: async ({ queryKey, signal }) => {
+			const { data } = await getDevelopmentCapability({
+				...options,
+				...queryKey[0],
+				signal,
+				throwOnError: true,
+			});
+			return data;
+		},
+		queryKey: getDevelopmentCapabilityQueryKey(options),
+	});
+
+export const listDevelopmentRepositoriesQueryKey = (options?: Options<ListDevelopmentRepositoriesData>) =>
+	createQueryKey("listDevelopmentRepositories", options);
+
+export const listDevelopmentRepositoriesOptions = (options?: Options<ListDevelopmentRepositoriesData>) =>
+	queryOptions<
+		ListDevelopmentRepositoriesResponse,
+		AxiosError<DefaultError>,
+		ListDevelopmentRepositoriesResponse,
+		ReturnType<typeof listDevelopmentRepositoriesQueryKey>
+	>({
+		queryFn: async ({ queryKey, signal }) => {
+			const { data } = await listDevelopmentRepositories({
+				...options,
+				...queryKey[0],
+				signal,
+				throwOnError: true,
+			});
+			return data;
+		},
+		queryKey: listDevelopmentRepositoriesQueryKey(options),
+	});
+
+export const registerDevelopmentRepositoryMutation = (
+	options?: Partial<Options<RegisterDevelopmentRepositoryData>>,
+): UseMutationOptions<
+	RegisterDevelopmentRepositoryResponse,
+	AxiosError<DefaultError>,
+	Options<RegisterDevelopmentRepositoryData>
+> => {
+	const mutationOptions: UseMutationOptions<
+		RegisterDevelopmentRepositoryResponse,
+		AxiosError<DefaultError>,
+		Options<RegisterDevelopmentRepositoryData>
+	> = {
+		mutationFn: async (fnOptions) => {
+			const { data } = await registerDevelopmentRepository({
+				...options,
+				...fnOptions,
+				throwOnError: true,
+			});
+			return data;
+		},
+	};
+	return mutationOptions;
+};
+
 export const listDevelopmentProjectsQueryKey = (options?: Options<ListDevelopmentProjectsData>) =>
 	createQueryKey("listDevelopmentProjects", options);
 
@@ -3103,6 +3183,30 @@ export const applyDevelopmentPatchMutation = (
 	> = {
 		mutationFn: async (fnOptions) => {
 			const { data } = await applyDevelopmentPatch({
+				...options,
+				...fnOptions,
+				throwOnError: true,
+			});
+			return data;
+		},
+	};
+	return mutationOptions;
+};
+
+export const reconnectDevelopmentRepositoryMutation = (
+	options?: Partial<Options<ReconnectDevelopmentRepositoryData>>,
+): UseMutationOptions<
+	ReconnectDevelopmentRepositoryResponse,
+	AxiosError<DefaultError>,
+	Options<ReconnectDevelopmentRepositoryData>
+> => {
+	const mutationOptions: UseMutationOptions<
+		ReconnectDevelopmentRepositoryResponse,
+		AxiosError<DefaultError>,
+		Options<ReconnectDevelopmentRepositoryData>
+	> = {
+		mutationFn: async (fnOptions) => {
+			const { data } = await reconnectDevelopmentRepository({
 				...options,
 				...fnOptions,
 				throwOnError: true,

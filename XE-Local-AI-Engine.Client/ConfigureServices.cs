@@ -161,9 +161,8 @@ public static class ConfigureServices
         // so the singleton image-job coordinator can resolve it.
         builder.Services.AddSingleton<IImageJobEventPublisher, ImageJobEventPublisher>();
 
-        // Development is an explicit off-by-default capability. Only replace the application's no-op live publisher
-        // when the capability is enabled, so disabled deployments retain no Development runtime registrations.
-        if (configuration.GetValue($"{DevelopmentOptions.Section}:Enabled", defaultValue: false))
+        // Development ships enabled. Keep the no-op publisher only when the administrator explicitly disables it.
+        if (configuration.GetValue($"{DevelopmentOptions.Section}:Enabled", defaultValue: true))
         {
             builder.Services.AddSingleton<IDevelopmentAttemptLiveEventPublisher, DevelopmentAttemptLiveEventPublisher>();
         }
