@@ -6,9 +6,75 @@ using XE_Local_AI_Engine.Client.Persistence.Stores;
 using XE_Local_AI_Engine.Client.Services.CloudProviders;
 using XE_Local_AI_Engine.Client.Services.Development;
 using XE_Local_AI_Engine.Tests.Testing;
+using PersistenceAttemptStatus = XE_Local_AI_Engine.Client.Persistence.Entities.DevelopmentAttemptStatus;
 
 public sealed class DevelopmentManagementServiceTests
 {
+    [Test]
+    public async Task StartNextAction_WhenReviewRoundCapReached_BlocksWithoutSchedulingValidation()
+    {
+        var repositoryRoot = DevelopmentWorkspaceSecurity.CanonicalRepositoryRoot(Directory.GetCurrentDirectory());
+        var projectId = Guid.Parse("63f0fcae-401e-4ff7-9be4-01de61427e65");
+        var taskId = Guid.Parse("0db3ad35-a679-4a66-94ed-aa00bb52e0bb");
+        var store = Substitute.For<IDevelopmentStore>();
+        store.GetProjectAsync(projectId, Arg.Any<CancellationToken>())
+             .Returns(ProjectSnapshot(projectId, DevelopmentWorkspaceSecurity.RepositoryIdentityHash(repositoryRoot)));
+        store.GetTaskAsync(taskId, Arg.Any<CancellationToken>())
+             .Returns(TaskSnapshot(projectId, taskId));
+        store.FindOperationAsync(projectId,
+                Arg.Any<Guid>(),
+                DevelopmentOperationPhases.Completed,
+                Arg.Any<CancellationToken>())
+             .Returns((DevelopmentOperationResult?)null);
+        store.ListAttemptsAsync(taskId, Arg.Any<CancellationToken>())
+             .Returns([
+                 new DevelopmentAttemptSnapshot(Guid.NewGuid(),
+                     taskId,
+                     null,
+                     DevelopmentAttemptRole.Coder,
+                     "coder-model",
+                     "local",
+                     PersistenceAttemptStatus.Succeeded,
+                     1,
+                     2,
+                     null,
+                     10,
+                     10,
+                     1)
+             ]);
+        var coordinator = Substitute.For<IDevelopmentCoordinator>();
+        var transitions = new List<DevelopmentTransitionTaskCommand>();
+        coordinator.TransitionTaskAsync(Arg.Do<DevelopmentTransitionTaskCommand>(transitions.Add), Arg.Any<CancellationToken>())
+                   .Returns(call =>
+                   {
+                       var command = call.ArgAt<DevelopmentTransitionTaskCommand>(0);
+                       return new DevelopmentOperationResult(projectId,
+                           taskId,
+                           null,
+                           null,
+                           command.OperationId,
+                           DevelopmentOperationPhases.Completed,
+                           "Transitioned",
+                           command.TargetStatus.ToString(),
+                           command.ExpectedTaskVersion + 1,
+                           1);
+                   });
+        var supervisor = Substitute.For<IDevelopmentAttemptExecutionSupervisor>();
+        var service = CreateService(store, coordinator, supervisor);
+
+        var result = await service.StartNextActionAsync(projectId,
+            taskId,
+            Guid.NewGuid(),
+            repositoryRoot).ConfigureAwait(false);
+
+        AssertEx.Equal("Blocked", result.Action);
+        AssertEx.Equal(DevelopmentTaskStatus.Blocked, result.TaskStatus);
+        AssertEx.Equal(expected: 1, transitions.Count);
+        AssertEx.Equal(DevelopmentTaskStatus.Blocked, transitions[0].TargetStatus);
+        AssertEx.Contains(AssertEx.NotNull(transitions[0].Reason), "maximum review rounds");
+        _ = supervisor.DidNotReceive().StartValidation(Arg.Any<Guid>(), Arg.Any<string>());
+    }
+
     [Test]
     public async Task CreateProject_RetryWithSameOperationId_ReusesProjectAndTaskIdentity()
     {
@@ -38,13 +104,9 @@ public sealed class DevelopmentManagementServiceTests
         store.ListEventsAsync(Arg.Any<Guid>(), Arg.Any<CancellationToken>())
              .Returns(Array.Empty<DevelopmentEventSnapshot>());
 
-        var service = new DevelopmentManagementService(store,
+        var service = CreateService(store,
             coordinator,
-            Substitute.For<IDevelopmentAttemptExecutionSupervisor>(),
-            Substitute.For<IDevelopmentArtifactBlobStore>(),
-            new UnusedApplyService(),
-            Substitute.For<IActiveCloudChatClientFactory>(),
-            TimeProvider.System);
+            Substitute.For<IDevelopmentAttemptExecutionSupervisor>());
         var operationId = Guid.Parse("8e9db44b-b50f-42c9-9bd0-3239af1eb5d8");
         var input = new DevelopmentCreateProjectInput(operationId,
             Directory.GetCurrentDirectory(),
@@ -68,10 +130,21 @@ public sealed class DevelopmentManagementServiceTests
         AssertEx.Equal(first.Project.Id, retry.Project.Id);
     }
 
-    private static DevelopmentProjectSnapshot ProjectSnapshot(Guid projectId)
+    private static DevelopmentManagementService CreateService(IDevelopmentStore store,
+        IDevelopmentCoordinator coordinator,
+        IDevelopmentAttemptExecutionSupervisor supervisor)
+        => new(store,
+            coordinator,
+            supervisor,
+            Substitute.For<IDevelopmentArtifactBlobStore>(),
+            new UnusedApplyService(),
+            Substitute.For<IActiveCloudChatClientFactory>(),
+            TimeProvider.System);
+
+    private static DevelopmentProjectSnapshot ProjectSnapshot(Guid projectId, string repositoryIdentityHash = "repository-hash")
         => new(projectId,
             "objective",
-            "repository-hash",
+            repositoryIdentityHash,
             "main",
             DevelopmentProjectStatus.Active,
             DevelopmentEgressPolicy.LocalOnly,
@@ -86,6 +159,22 @@ public sealed class DevelopmentManagementServiceTests
             1,
             1,
             1);
+
+    private static DevelopmentTaskSnapshot TaskSnapshot(Guid projectId, Guid taskId)
+        => new(taskId,
+            projectId,
+            "task",
+            "requirements",
+            "[]",
+            DevelopmentTaskStatus.InProgress,
+            CurrentReviewRound: 3,
+            MaxReviewRounds: 3,
+            BlockedReason: null,
+            BlockedAtUtc: null,
+            ApprovedSubjectHash: null,
+            CreatedAtUtc: 1,
+            UpdatedAtUtc: 1,
+            Version: 7);
 
     private sealed class UnusedApplyService : IDevelopmentApplyService
     {

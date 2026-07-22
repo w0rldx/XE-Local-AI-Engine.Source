@@ -27,6 +27,7 @@ internal sealed class DevelopmentAttemptConfiguration : IEntityTypeConfiguration
         builder.HasOne<DevelopmentTask>().WithMany().HasForeignKey(entity => entity.TaskId).OnDelete(DeleteBehavior.Cascade);
         builder.HasOne<DevelopmentAttempt>().WithMany().HasForeignKey(entity => entity.PredecessorAttemptId).OnDelete(DeleteBehavior.Restrict);
         builder.HasIndex(entity => entity.PredecessorAttemptId).HasDatabaseName("ix_development_attempts_predecessor_attempt_id");
+        builder.HasIndex(entity => new { entity.TaskId, entity.StartedAtUtc }).HasDatabaseName("ix_development_attempts_task_started_at");
         builder.HasIndex(entity => entity.StartOperationId).IsUnique().HasDatabaseName("ux_development_attempts_start_operation_id");
         builder.HasIndex(entity => entity.TaskId)
                .IsUnique()
@@ -34,4 +35,3 @@ internal sealed class DevelopmentAttemptConfiguration : IEntityTypeConfiguration
                .HasDatabaseName("ux_development_attempts_one_active_per_task");
     }
 }
-

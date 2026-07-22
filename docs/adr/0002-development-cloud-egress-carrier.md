@@ -37,9 +37,12 @@ Microsoft Learn independently describes [`ChatOptions.Clone`](https://learn.micr
 6. Exercise both non-streaming and streaming function loops. The latter is required because production invocation uses the streaming path and Microsoft.Extensions.AI implements the two loops separately. The observed order must be `authorize1 -> transport1 -> authorize2 -> transport2` on each surface.
 7. If this exact carrier assertion fails under the pinned package or composed application pipeline, cloud support remains disabled; do not compensate with `AsyncLocal`. The approved fallback is a dedicated Development client that reapplies the immutable carrier on every provider round.
 
+The dedicated-client fallback is not implemented in this change. Until it is, upgrading Microsoft.Extensions.AI is blocked unless the forced-clone streaming and non-streaming carrier tests continue to pass unchanged. This is an explicit defense-in-depth deferral, not evidence that arbitrary future clone behavior is supported.
+
 ## Consequences
 
 - `AdditionalProperties` is sufficient under Microsoft.Extensions.AI 10.7.0 because its shallow clone preserves the immutable carrier value across the option clones used by the function loop.
 - A generic authorizer at `RuntimeChatClient` covers both direct sends and autonomous tool-result follow-ups without changing ordinary Chat routing.
 - Tests must pin this version-sensitive behavior so a future Microsoft.Extensions.AI upgrade cannot silently remove the carrier from inner rounds.
+- The unimplemented dedicated-client fallback is an upgrade blocker. A dependency update must either preserve the verified shallow-carrier behavior or land the fail-closed dedicated Development client first.
 - This ADR decides only the cloud carrier and final authorization boundary; persistence, orchestration, UI, and API behavior are governed by their own contracts.

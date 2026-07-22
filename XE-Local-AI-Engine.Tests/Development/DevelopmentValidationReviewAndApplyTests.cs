@@ -353,29 +353,41 @@ public sealed class DevelopmentValidationReviewAndApplyTests : IDisposable
     }
 
     [Test]
-    public async Task ReviewerModel_WhenAggregateTokenCapExceeded_Rejects()
+    public async Task ReviewerModel_AllowsLargeInputWithinOutputCapAndRejectsOutputCapPlusOne()
     {
-        using var chat = new CapturingReviewerChatClient(inputTokens: 33, outputTokens: 32);
         var cloud = Substitute.For<IActiveCloudChatClientFactory>();
         cloud.IsCloudProviderSelected(Arg.Any<string>()).Returns(false);
-        var model = new DevelopmentReviewerModel(chat,
+        var resolver = LocalModelResolver(new LocalModelDescriptor
+        {
+            ModelName = "reviewer-local",
+            ProviderName = "local",
+            IsAvailable = true,
+            SizeBytes = null,
+            ModifiedAt = null,
+            MaxContextTokens = 65_536,
+            IsToolCapable = true
+        });
+        using var exactChat = new CapturingReviewerChatClient(inputTokens: 40_000, outputTokens: 64);
+        var exact = new DevelopmentReviewerModel(exactChat,
             cloud,
-            LocalModelResolver(new LocalModelDescriptor
-            {
-                ModelName = "reviewer-local",
-                ProviderName = "local",
-                IsAvailable = true,
-                SizeBytes = null,
-                ModifiedAt = null,
-                MaxContextTokens = 4096,
-                IsToolCapable = true
-            }));
+            resolver);
 
-        await AssertEx.ThrowsAsync<InvalidOperationException>(() => model.RunAsync("reviewer-local",
-                                                                                   "review exact subject",
-                                                                                   new NullWorkspaceTools(),
-                                                                                   maxOutputTokens: 64,
-                                                                                   maxToolCalls: 8))
+        var result = await exact.RunAsync("reviewer-local",
+            "review exact subject",
+            new NullWorkspaceTools(),
+            maxOutputTokens: 64,
+            maxToolCalls: 8).ConfigureAwait(false);
+
+        AssertEx.Equal<long?>(40_000, result.InputTokens);
+        AssertEx.Equal<long?>(64, result.OutputTokens);
+
+        using var overChat = new CapturingReviewerChatClient(inputTokens: 40_000, outputTokens: 65);
+        var over = new DevelopmentReviewerModel(overChat, cloud, resolver);
+        await AssertEx.ThrowsAsync<InvalidOperationException>(() => over.RunAsync("reviewer-local",
+                                                                                  "review exact subject",
+                                                                                  new NullWorkspaceTools(),
+                                                                                  maxOutputTokens: 64,
+                                                                                  maxToolCalls: 8))
                       .ConfigureAwait(false);
     }
 

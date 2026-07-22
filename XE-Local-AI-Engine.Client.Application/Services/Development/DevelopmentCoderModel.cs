@@ -154,9 +154,9 @@ internal sealed class DevelopmentCoderModel(
         var outputTokens = usage.OutputTokenCount ?? throw new InvalidOperationException("The Development coder response did not report output-token usage.");
         var accountedTokens = checked(inputTokens + outputTokens);
         var totalTokens = Math.Max(usage.TotalTokenCount ?? accountedTokens, accountedTokens);
-        if (inputTokens < 0 || outputTokens < 0 || totalTokens < 0 || totalTokens > maxOutputTokens)
+        if (inputTokens < 0 || outputTokens < 0 || totalTokens < 0 || outputTokens > maxOutputTokens)
         {
-            throw new InvalidOperationException("The Development coder exceeded the configured aggregate token limit.");
+            throw new InvalidOperationException("The Development coder exceeded the configured output-token limit.");
         }
 
         if (isCloud)

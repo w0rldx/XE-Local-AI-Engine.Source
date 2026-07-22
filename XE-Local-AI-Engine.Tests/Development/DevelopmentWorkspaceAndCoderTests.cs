@@ -175,7 +175,7 @@ public sealed class DevelopmentWorkspaceAndCoderTests : IDisposable
     }
 
     [Test]
-    public async Task CoderModel_ReportsUsageAndRejectsAggregateTokenCapPlusOne()
+    public async Task CoderModel_AllowsLargeInputWithinOutputCapAndRejectsOutputCapPlusOne()
     {
         var cloud = Substitute.For<IActiveCloudChatClientFactory>();
         cloud.IsCloudProviderSelected("local-model").Returns(false);
@@ -191,18 +191,18 @@ public sealed class DevelopmentWorkspaceAndCoderTests : IDisposable
             IsToolCapable = true
         });
 
-        using var exactChat = new SubmittingChatClient(inputTokens: 40, outputTokens: 60);
+        using var exactChat = new SubmittingChatClient(inputTokens: 40_000, outputTokens: 60);
         var exact = new DevelopmentCoderModel(exactChat, cloud, resolver);
-        var result = await exact.RunAsync("local-model", "prompt", tools, maxOutputTokens: 100, maxToolCalls: 2).ConfigureAwait(false);
-        AssertEx.Equal<long?>(40, result.InputTokens);
+        var result = await exact.RunAsync("local-model", "prompt", tools, maxOutputTokens: 60, maxToolCalls: 2).ConfigureAwait(false);
+        AssertEx.Equal<long?>(40_000, result.InputTokens);
         AssertEx.Equal<long?>(60, result.OutputTokens);
 
-        using var overChat = new SubmittingChatClient(inputTokens: 40, outputTokens: 61);
+        using var overChat = new SubmittingChatClient(inputTokens: 40_000, outputTokens: 61);
         var over = new DevelopmentCoderModel(overChat, cloud, resolver);
         await AssertEx.ThrowsAsync<InvalidOperationException>(() => over.RunAsync("local-model",
             "prompt",
             tools,
-            maxOutputTokens: 100,
+            maxOutputTokens: 60,
             maxToolCalls: 2));
     }
 

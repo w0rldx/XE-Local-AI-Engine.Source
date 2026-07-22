@@ -55,6 +55,11 @@ public sealed class DevelopmentWorkflowE2ETests : XEE2ETestBase
 
             var nextAction = Page.GetByTestId("development-start-next");
             await nextAction.ClickAsync().ConfigureAwait(false);
+            await Expect(Page.GetByTestId("development-live-panel")).ToContainTextAsync("Development E2E live output",
+                new LocatorAssertionsToContainTextOptions
+                {
+                    Timeout = 10_000
+                }).ConfigureAwait(false);
             await Expect(detail.GetByText("InProgress", new LocatorGetByTextOptions
             {
                 Exact = true

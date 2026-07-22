@@ -131,7 +131,9 @@ public sealed class DevelopmentAttemptLiveBroker : IDevelopmentAttemptLiveBroker
             Channel = System.Threading.Channels.Channel.CreateBounded<DevelopmentAttemptLiveUpdate>(new BoundedChannelOptions(capacity)
             {
                 FullMode = BoundedChannelFullMode.Wait,
-                SingleReader = true,
+                // Non-replaceable updates may evict one queued replaceable update from TryPublish while the
+                // delivery loop is reading concurrently, so the channel must retain multi-reader synchronization.
+                SingleReader = false,
                 SingleWriter = false,
                 AllowSynchronousContinuations = false
             });

@@ -1,5 +1,6 @@
 namespace XE_Local_AI_Engine.Client.Services.Development;
 
+using System.Text.Json.Serialization;
 using XE_Local_AI_Engine.Client.Persistence.Entities;
 
 public enum DevelopmentAttemptLiveUpdateKind
@@ -21,8 +22,11 @@ public sealed record DevelopmentAttemptLiveUpdate
     public required Guid AttemptId { get; init; }
     public long Sequence { get; init; }
     public long OccurredAtUtc { get; init; }
+    [JsonConverter(typeof(JsonStringEnumConverter))]
     public required DevelopmentAttemptLiveUpdateKind Kind { get; init; }
+    [JsonConverter(typeof(JsonStringEnumConverter))]
     public required DevelopmentAttemptRole Role { get; init; }
+    [JsonConverter(typeof(JsonStringEnumConverter))]
     public required DevelopmentAttemptStatus Status { get; init; }
     public required string ModelId { get; init; }
     public required string Provider { get; init; }
@@ -44,6 +48,7 @@ public sealed record DevelopmentAttemptLiveUpdate
     public double? ContextUsagePercent { get; init; }
     public double? ContextHeadroomPercent { get; init; }
     public long SecondsSinceMeaningfulProgress { get; init; }
+    [JsonConverter(typeof(JsonStringEnumConverter))]
     public DevelopmentProgressWarningCategory? WarningCategory { get; init; }
     public string? WarningMessage { get; init; }
 
