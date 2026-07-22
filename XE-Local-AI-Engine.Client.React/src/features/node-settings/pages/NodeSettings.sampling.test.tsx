@@ -60,6 +60,10 @@ vi.mock("@/core/api/generated/@tanstack/react-query.gen", () => ({
 		queryKey: ["llamacpp-runtime"],
 		queryFn: () => Promise.resolve({ recommendedTag: "b1000", updateAvailable: false, isOffline: false }),
 	}),
+	getLlamaCppSourceBuildStatusOptions: () => ({
+		queryKey: ["llamacpp-source-build-status"],
+		queryFn: () => Promise.resolve({ phase: "Idle", isRunning: false, terminal: false, logLines: [], currentBuild: null }),
+	}),
 	updateLlamaCppRuntimeMutation: () => ({ mutationFn: vi.fn() }),
 	downloadRecommendedRerankerMutation: () => ({ mutationFn: vi.fn() }),
 }));

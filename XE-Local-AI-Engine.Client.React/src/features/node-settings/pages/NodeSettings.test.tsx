@@ -34,6 +34,7 @@ const { generatedMock } = vi.hoisted(() => ({
 		// the page only mounts it. `getLlamaCppRuntimeOptions` returns the queryKey + queryFn for both the mount read and
 		// the refresh-fetch / cache-seed path (the queryKey field is read by `useRefreshLlamaCppRuntime`).
 		getLlamaCppRuntimeOptions: vi.fn(),
+		getLlamaCppSourceBuildStatusOptions: vi.fn(),
 		updateLlamaCppRuntimeMutation: vi.fn(),
 		ensureFn: vi.fn(),
 		setTokenFn: vi.fn(),
@@ -59,6 +60,7 @@ vi.mock("@/core/api/generated/@tanstack/react-query.gen", () => ({
 	getHfTokenStatusOptions: generatedMock.getHfTokenStatusOptions,
 	setHfTokenMutation: generatedMock.setHfTokenMutation,
 	getLlamaCppRuntimeOptions: generatedMock.getLlamaCppRuntimeOptions,
+	getLlamaCppSourceBuildStatusOptions: generatedMock.getLlamaCppSourceBuildStatusOptions,
 	updateLlamaCppRuntimeMutation: generatedMock.updateLlamaCppRuntimeMutation,
 	downloadRecommendedRerankerMutation: generatedMock.downloadRecommendedRerankerMutation,
 }));
@@ -147,6 +149,10 @@ describe("NodeSettings (generated hey-api data layer)", () => {
 		generatedMock.listLocalModelsOptions.mockReturnValue({
 			queryKey: fakeQueryKey("listLocalModels"),
 			queryFn: async () => ({ items: [], isAvailable: false }),
+		});
+		generatedMock.getLlamaCppSourceBuildStatusOptions.mockReturnValue({
+			queryKey: fakeQueryKey("getLlamaCppSourceBuildStatus"),
+			queryFn: async () => ({ phase: "Idle", isRunning: false, terminal: false, logLines: [], currentBuild: null }),
 		});
 
 		// Local-runtime card defaults. The HF token status returns "no token".
