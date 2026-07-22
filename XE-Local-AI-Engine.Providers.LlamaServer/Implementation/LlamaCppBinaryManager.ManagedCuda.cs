@@ -210,6 +210,13 @@ public sealed partial class LlamaCppBinaryManager
 
             if (treeToDelete is null)
             {
+                // The recorded path is invalid/noncanonical. Never delete it, but remove the authoritative record and
+                // version the signal so callers cannot report a successful removal while stale source state remains active.
+                _managedCudaSignal?.Clear();
+                if (_installedRuntimeStore is not null)
+                {
+                    await _installedRuntimeStore.DeleteAsync(ct).ConfigureAwait(false);
+                }
                 return;
             }
 

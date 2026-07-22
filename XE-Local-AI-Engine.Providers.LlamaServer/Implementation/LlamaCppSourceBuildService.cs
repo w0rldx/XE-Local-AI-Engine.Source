@@ -44,6 +44,7 @@ public sealed partial class LlamaCppSourceBuildService : ILlamaCppSourceBuildSer
     private readonly ILlamaCppSourceBuildPrerequisiteProbe _prerequisiteProbe;
     private readonly ILlamaCppSourceBuildEventPublisher _publisher;
     private readonly ILlamaServerProcessSupervisor _supervisor;
+    private readonly Lock _publishLock = new();
     private readonly Lock _stateLock = new();
 
     private CancellationTokenSource? _buildCts;
@@ -52,6 +53,7 @@ public sealed partial class LlamaCppSourceBuildService : ILlamaCppSourceBuildSer
     private bool _isRunning;
     private List<string> _logLines = [];
     private LlamaCppSourceBuildPhase _phase = LlamaCppSourceBuildPhase.Idle;
+    private Task _publishTail = Task.CompletedTask;
     private string? _sanitizedError;
     private DateTimeOffset? _startedAtUtc;
 
@@ -117,7 +119,10 @@ public sealed partial class LlamaCppSourceBuildService : ILlamaCppSourceBuildSer
             normalized.Repository!,
             revisionMode,
             normalized.Commit,
-            ResolvedCommit: revisionMode == LlamaCppSourceRevisionMode.EnginePinned ? LlamaCppReleasePins.PinnedSourceCommitSha : null);
+            ResolvedCommit: revisionMode == LlamaCppSourceRevisionMode.EnginePinned ? LlamaCppReleasePins.PinnedSourceCommitSha : null)
+        {
+            BuildId = Guid.NewGuid()
+        };
         // Single-flight: a second start while a build is in flight is a no-op that returns AlreadyRunning.
         lock (_stateLock)
         {
@@ -388,28 +393,28 @@ public sealed partial class LlamaCppSourceBuildService : ILlamaCppSourceBuildSer
             // Success: drop the backup + work dir (the placed tree is the only artifact kept).
             TryDeleteDirectory(backupTagDir);
             TryDeleteDirectory(workDir);
-            SetTerminal(LlamaCppSourceBuildPhase.Completed, sanitizedError: null);
+            await SetTerminalAsync(LlamaCppSourceBuildPhase.Completed, sanitizedError: null).ConfigureAwait(false);
         }
         catch (OperationCanceledException)
         {
             // The swap step already rolled finalTagDir back on failure; only the partial work + staging trees are dropped.
             TryDeleteDirectory(workDir);
             TryDeleteDirectory(stagingTagDir);
-            SetTerminal(LlamaCppSourceBuildPhase.Cancelled, sanitizedError: null);
+            await SetTerminalAsync(LlamaCppSourceBuildPhase.Cancelled, sanitizedError: null).ConfigureAwait(false);
         }
         catch (LlamaRuntimeException exception)
         {
             _logger.LogWarning(exception, "The in-app source build failed.");
             TryDeleteDirectory(workDir);
             TryDeleteDirectory(stagingTagDir);
-            SetTerminal(LlamaCppSourceBuildPhase.Failed, exception.Message);
+            await SetTerminalAsync(LlamaCppSourceBuildPhase.Failed, exception.Message).ConfigureAwait(false);
         }
         catch (Exception exception)
         {
             _logger.LogError(exception, "The in-app source build failed unexpectedly.");
             TryDeleteDirectory(workDir);
             TryDeleteDirectory(stagingTagDir);
-            SetTerminal(LlamaCppSourceBuildPhase.Failed, "The source build failed unexpectedly.");
+            await SetTerminalAsync(LlamaCppSourceBuildPhase.Failed, "The source build failed unexpectedly.").ConfigureAwait(false);
         }
     }
 
@@ -945,10 +950,10 @@ public sealed partial class LlamaCppSourceBuildService : ILlamaCppSourceBuildSer
             _phase = phase;
         }
 
-        PublishSafe(new LlamaCppSourceBuildStatusHubEvent(phase.ToString(), [], Terminal: false, SanitizedError: null, CurrentBuildSnapshot()));
+        _ = QueuePublish(new LlamaCppSourceBuildStatusHubEvent(phase.ToString(), [], Terminal: false, SanitizedError: null, CurrentBuildSnapshot()));
     }
 
-    private void SetTerminal(LlamaCppSourceBuildPhase phase, string? sanitizedError)
+    private async Task SetTerminalAsync(LlamaCppSourceBuildPhase phase, string? sanitizedError)
     {
         lock (_stateLock)
         {
@@ -958,7 +963,8 @@ public sealed partial class LlamaCppSourceBuildService : ILlamaCppSourceBuildSer
             _completedAtUtc = DateTimeOffset.UtcNow;
         }
 
-        PublishSafe(new LlamaCppSourceBuildStatusHubEvent(phase.ToString(), [], Terminal: true, sanitizedError, CurrentBuildSnapshot()));
+        await QueuePublish(new LlamaCppSourceBuildStatusHubEvent(phase.ToString(), [], Terminal: true, sanitizedError, CurrentBuildSnapshot()))
+            .ConfigureAwait(false);
     }
 
     // The streaming log sink: redact the cache-root/HOME prefix [secLOW-1], retain a bounded ring buffer for the status
@@ -976,7 +982,7 @@ public sealed partial class LlamaCppSourceBuildService : ILlamaCppSourceBuildSer
         }
 
         var phase = GetPhaseSnapshot();
-        PublishSafe(new LlamaCppSourceBuildStatusHubEvent(phase.ToString(), [redacted], Terminal: false, SanitizedError: null, CurrentBuildSnapshot()));
+        _ = QueuePublish(new LlamaCppSourceBuildStatusHubEvent(phase.ToString(), [redacted], Terminal: false, SanitizedError: null, CurrentBuildSnapshot()));
     }
 
     private LlamaCppSourceBuildPhase GetPhaseSnapshot()
@@ -1011,11 +1017,31 @@ public sealed partial class LlamaCppSourceBuildService : ILlamaCppSourceBuildSer
         return result;
     }
 
-    private void PublishSafe(LlamaCppSourceBuildStatusHubEvent statusEvent)
+    internal Task FlushPublisherAsync()
     {
+        lock (_publishLock)
+        {
+            return _publishTail;
+        }
+    }
+
+    private Task QueuePublish(LlamaCppSourceBuildStatusHubEvent statusEvent)
+    {
+        lock (_publishLock)
+        {
+            _publishTail = PublishObservedAsync(_publishTail, statusEvent);
+            return _publishTail;
+        }
+    }
+
+    private async Task PublishObservedAsync(Task previous, LlamaCppSourceBuildStatusHubEvent statusEvent)
+    {
+        // Process stdout/stderr callbacks must never run publisher work inline; yield before joining the serialized tail.
+        await Task.Yield();
+        await previous.ConfigureAwait(false);
         try
         {
-            _ = _publisher.PublishStatusAsync(statusEvent, CancellationToken.None);
+            await _publisher.PublishStatusAsync(statusEvent, CancellationToken.None).ConfigureAwait(false);
         }
         catch (Exception exception)
         {
