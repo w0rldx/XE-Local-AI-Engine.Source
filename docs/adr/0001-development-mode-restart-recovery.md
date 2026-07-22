@@ -1,14 +1,14 @@
 # ADR 0001: Development Mode restart recovery uses replacement attempts
 
-- **Status:** Accepted for Gate 0
+- **Status:** Accepted
 - **Date:** 2026-07-21
-- **Scope:** Development Mode restart-recovery risk spike only
+- **Scope:** Development Mode restart recovery
 
 ## Context
 
 An active coder or reviewer may be interrupted before output, during streaming or a read, after a workspace write, or after validation evidence is persisted. Provider streams and arbitrary command execution cannot be resumed safely or replayed without risking duplicate side effects.
 
-The spike must retain the planned five primary concepts: project, task, attempt, artifact, and event. It must use an explicitly trusted fixture repository and code-owned commands because the Process provider is not an operating-system isolation boundary.
+The recovery design retains five primary concepts: project, task, attempt, artifact, and event. It uses an explicitly trusted repository and code-owned commands because the Process provider is not an operating-system isolation boundary.
 
 ## Decision
 
@@ -17,13 +17,13 @@ The spike must retain the planned five primary concepts: project, task, attempt,
 3. Preserve the Git worktree, its diff, and every persisted artifact. A replacement independently inspects the current worktree.
 4. Bind validation and review evidence to the base commit, workspace subject hash, and changed-files manifest hash.
 5. When the base commit is unchanged but the subject or manifest differs, invalidate stale validation and review evidence and permit replacement against the newly inspected workspace.
-6. When the base commit differs from persisted gate evidence, block the task as unreconciled and do not create a replacement.
+6. When the base commit differs from persisted validation or review evidence, block the task as unreconciled and do not create a replacement.
 7. Recovery and replacement creation may inspect Git state but must not replay a coordinator write or validation command. Missing command-result evidence remains missing rather than being fabricated.
 8. The protected `main` branch remains unchanged; all mutation is isolated to the temporary Development worktree branch.
 
 ## Evidence
 
-`DevelopmentRestartRecoverySpikeTests` exercises these forced interruption boundaries against a temporary Git repository and worktree:
+`DevelopmentRestartRecoveryTests` exercises these forced interruption boundaries against a temporary Git repository and worktree:
 
 - before first token;
 - mid-stream;
@@ -35,8 +35,8 @@ Additional cases prove exact five-concept scope, restart idempotency, preservati
 
 ## Consequences
 
-- Gate 0 supports restart-by-replacement without a workspace journal beyond hash-bound artifacts.
-- A same-base workspace mutation is deterministic to inspect, but it invalidates prior validation/review gates.
+- Restart-by-replacement does not require a workspace journal beyond hash-bound artifacts.
+- A same-base workspace mutation is deterministic to inspect, but it invalidates prior validation and review evidence.
 - A moved or otherwise unreconciled base stops progress and requires operator resolution.
-- This spike deliberately uses test-only in-memory persistence. Durable SQLite transactions, unique indexes, operation journaling, and startup wiring remain Gate 2 work.
-- Cloud transport authorization remains Gate 1 work and is not implemented here.
+- The focused recovery harness remains test-only; production recovery uses the durable SQLite store and startup reconciler.
+- Cloud transport authorization is an independent boundary described by ADR 0002.

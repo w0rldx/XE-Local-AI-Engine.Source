@@ -2,7 +2,7 @@ namespace XE_Local_AI_Engine.Tests.Development;
 
 using XE_Local_AI_Engine.Tests.Testing;
 
-public sealed class DevelopmentRestartRecoverySpikeTests
+public sealed class DevelopmentRestartRecoveryTests
 {
     [Test]
     public void PersistenceHarness_ContainsExactlyFivePrimaryConcepts()
@@ -98,9 +98,9 @@ public sealed class DevelopmentRestartRecoverySpikeTests
         var recovery = await harness.RecoverAsync().ConfigureAwait(false);
         var replacement = await harness.CreateReplacementAttemptAsync(interrupted.Id).ConfigureAwait(false);
 
-        var gateEvidence = harness.Artifacts.Where(artifact => artifact.Kind is DevelopmentArtifactKind.ValidationReport or DevelopmentArtifactKind.ReviewReport).ToArray();
-        AssertEx.Equal(expected: 2, gateEvidence.Length);
-        AssertEx.True(gateEvidence.All(artifact => !artifact.IsValid), "Subject/manifest mismatches must invalidate every stale gate artifact.");
+        var approvalEvidence = harness.Artifacts.Where(artifact => artifact.Kind is DevelopmentArtifactKind.ValidationReport or DevelopmentArtifactKind.ReviewReport).ToArray();
+        AssertEx.Equal(expected: 2, approvalEvidence.Length);
+        AssertEx.True(approvalEvidence.All(artifact => !artifact.IsValid), "Subject/manifest mismatches must invalidate every stale approval artifact.");
         AssertEx.Equal(expected: 2, recovery.InvalidatedArtifacts);
         AssertEx.True(recovery.ReplacementAllowed);
         AssertEx.Equal(interrupted.Id, replacement.PredecessorAttemptId);

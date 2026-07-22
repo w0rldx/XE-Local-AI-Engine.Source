@@ -8,9 +8,9 @@ using XE_Local_AI_Engine.Client.Services.CloudProviders.Implementation;
 using XE_Local_AI_Engine.Tests.Testing;
 
 /// <summary>
-///     Gate 1 proof for the final selected-cloud boundary and the pinned Microsoft.Extensions.AI 10.7.0 function loop.
+///     Regression proof for the final selected-cloud boundary and the pinned Microsoft.Extensions.AI 10.7.0 function loop.
 /// </summary>
-public sealed class DevelopmentCloudEgressGateTests
+public sealed class DevelopmentCloudEgressAuthorizationTests
 {
     private static readonly DateTimeOffset Now = new(2026, 7, 21, 18, 0, 0, TimeSpan.Zero);
 
@@ -274,7 +274,7 @@ public sealed class DevelopmentCloudEgressGateTests
 
     private static ChatOptions CreateFunctionOptions(DevelopmentCloudAuthorizationEnvelope envelope)
     {
-        var tool = AIFunctionFactory.Create(() => "tool-result", "gate1_probe", "Gate 1 deterministic probe tool.");
+        var tool = AIFunctionFactory.Create(() => "tool-result", "development_egress_probe", "Development egress deterministic probe tool.");
         var options = CreateOptions(envelope);
         options.Tools = [tool];
         return options;
@@ -458,7 +458,7 @@ public sealed class DevelopmentCloudEgressGateTests
             {
                 RemoveCarrierIfRequested(capturedOptions);
                 return Task.FromResult(new ChatResponse(new ChatMessage(ChatRole.Assistant,
-                    [new FunctionCallContent("call-1", "gate1_probe", new Dictionary<string, object?>())]))
+                    [new FunctionCallContent("call-1", "development_egress_probe", new Dictionary<string, object?>())]))
                 {
                     ConversationId = "conversation-1"
                 });
@@ -480,7 +480,7 @@ public sealed class DevelopmentCloudEgressGateTests
             {
                 RemoveCarrierIfRequested(capturedOptions);
                 yield return new ChatResponseUpdate(ChatRole.Assistant,
-                    [new FunctionCallContent("call-1", "gate1_probe", new Dictionary<string, object?>())])
+                    [new FunctionCallContent("call-1", "development_egress_probe", new Dictionary<string, object?>())])
                 {
                     ConversationId = "conversation-1"
                 };

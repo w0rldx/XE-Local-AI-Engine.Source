@@ -1,13 +1,13 @@
 # ADR 0002: Development cloud authorization uses `ChatOptions.AdditionalProperties`
 
-- **Status:** Accepted for Gate 1
+- **Status:** Accepted
 - **Date:** 2026-07-21
-- **Scope:** Development Mode cloud-egress risk spike only
+- **Scope:** Development Mode cloud-egress carrier and enforcement boundary
 - **Pinned dependency:** `Microsoft.Extensions.AI` / `Microsoft.Extensions.AI.Abstractions` 10.7.0
 
 ## Context
 
-Gate 1 must authorize every raw cloud-provider round, including the function-result follow-up round created inside `FunctionInvokingChatClient`. The authorization cannot depend on ambient execution context alone, and an ordinary Chat request must remain behavior-compatible.
+Development Mode must authorize every raw cloud-provider round, including the function-result follow-up round created inside `FunctionInvokingChatClient`. The authorization cannot depend on ambient execution context alone, and an ordinary Chat request must remain behavior-compatible.
 
 The repository pins Microsoft.Extensions.AI 10.7.0. The official NuGet packages identify the exact upstream source commit as `fa0072f10f11eae347aaecaa3c3e81e701b0f79d`.
 
@@ -29,7 +29,7 @@ Microsoft Learn independently describes [`ChatOptions.Clone`](https://learn.micr
 2. Keep an explicit Development purpose marker in the same code-owned carrier shape so the authorizer can distinguish ordinary Chat from a Development request even when the authorization portion is missing or malformed.
 3. Enforce authorization inside `RuntimeChatClient`, immediately after a cloud client is selected and before either non-streaming invocation or streaming enumeration is delegated to that client. This is the selected-cloud boundary reached by every inner `FunctionInvokingChatClient` round.
 4. Treat ambient scope as optional correlation only. The envelope in `ChatOptions` is authoritative and must independently survive execution-context suppression.
-5. Gate 1 tests must force the 10.7.0 clone branch rather than merely observe two rounds. The fake first response should return a non-null conversation ID (or otherwise require an option mutation), and assertions must prove:
+5. Regression tests must force the 10.7.0 clone branch rather than merely observe two rounds. The fake first response should return a non-null conversation ID (or otherwise require an option mutation), and assertions must prove:
    - round 1 and round 2 received distinct `ChatOptions` objects;
    - their `AdditionalProperties` dictionaries are distinct;
    - both dictionaries contain the same immutable authorization value reference and values;
@@ -39,7 +39,7 @@ Microsoft Learn independently describes [`ChatOptions.Clone`](https://learn.micr
 
 ## Consequences
 
-- `AdditionalProperties` is sufficient for Gate 1 under Microsoft.Extensions.AI 10.7.0 because its shallow clone preserves the immutable carrier value across the option clones used by the function loop.
+- `AdditionalProperties` is sufficient under Microsoft.Extensions.AI 10.7.0 because its shallow clone preserves the immutable carrier value across the option clones used by the function loop.
 - A generic authorizer at `RuntimeChatClient` covers both direct sends and autonomous tool-result follow-ups without changing ordinary Chat routing.
 - Tests must pin this version-sensitive behavior so a future Microsoft.Extensions.AI upgrade cannot silently remove the carrier from inner rounds.
-- This ADR authorizes only the Gate 1 spike. It does not authorize Gate 2 persistence, production Development orchestration, frontend, or OpenAPI work.
+- This ADR decides only the cloud carrier and final authorization boundary; persistence, orchestration, UI, and API behavior are governed by their own contracts.

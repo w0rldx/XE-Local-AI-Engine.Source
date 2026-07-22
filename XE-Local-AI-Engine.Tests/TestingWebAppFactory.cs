@@ -71,6 +71,8 @@ public class TestingWebAppFactory : WebApplicationFactory<Program>, IAsyncInitia
 
     public bool SkipDefaultBaseUrlOverride { get; init; }
 
+    public bool EnableDevelopmentMode { get; init; }
+
     public Action<IServiceCollection>? ConfigureAdditionalTestServices { get; init; }
 
     private static bool RunLocalIntegration =>
@@ -199,6 +201,7 @@ public class TestingWebAppFactory : WebApplicationFactory<Program>, IAsyncInitia
     protected override void ConfigureWebHost(IWebHostBuilder builder)
     {
         builder.UseEnvironment("Testing");
+        builder.UseSetting("Development:Enabled", EnableDevelopmentMode.ToString());
         // Serve the SPA fallback (index.html) from the fixture web root so route-coexistence tests are hermetic on a
         // clean checkout where the real wwwroot has no built SPA (see ReactShellFixtureHtml).
         builder.UseWebRoot(_fixtureWebRoot);
@@ -210,7 +213,8 @@ public class TestingWebAppFactory : WebApplicationFactory<Program>, IAsyncInitia
                 ["XE_NODE_SQLITE_KEY"] = Convert.ToBase64String(Enumerable.Range(start: 1, count: 32).Select(static value => (byte)value).ToArray()),
                 ["XE_USE_LOCAL_MODEL_PROVIDER"] = "true",
                 ["Ollama:ChatModel"] = "qwen3.5:0.8b",
-                ["NodeData:Directory"] = _nodeDataDirectory
+                ["NodeData:Directory"] = _nodeDataDirectory,
+                ["Development:Enabled"] = EnableDevelopmentMode.ToString()
             });
         });
 

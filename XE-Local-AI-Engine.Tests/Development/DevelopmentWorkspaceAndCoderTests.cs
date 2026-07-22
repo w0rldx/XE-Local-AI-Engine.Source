@@ -16,9 +16,9 @@ using XE_Local_AI_Engine.Providers.Abstractions.Contracts;
 using XE_Local_AI_Engine.Tests.Testing;
 using PersistenceDevelopmentAttemptStatus = XE_Local_AI_Engine.Client.Persistence.Entities.DevelopmentAttemptStatus;
 
-public sealed class DevelopmentGate3Tests : IDisposable
+public sealed class DevelopmentWorkspaceAndCoderTests : IDisposable
 {
-    private readonly string _root = Path.Combine(Path.GetTempPath(), "xe-development-gate3-" + Guid.NewGuid().ToString("N"));
+    private readonly string _root = Path.Combine(Path.GetTempPath(), "xe-development-workspace-coder-" + Guid.NewGuid().ToString("N"));
 
     public void Dispose()
     {
@@ -400,6 +400,7 @@ public sealed class DevelopmentGate3Tests : IDisposable
             new DevelopmentPatchEvidenceService(sandbox, options),
             blob,
             new WritingCoderModel(),
+            new UnexpectedCloudContextService(),
             options);
 
         var result = await runner.RunAsync(snapshot.AttemptId, repository).ConfigureAwait(false);
@@ -463,8 +464,8 @@ public sealed class DevelopmentGate3Tests : IDisposable
         var repository = Path.Combine(_root, "repo-" + Guid.NewGuid().ToString("N"));
         Directory.CreateDirectory(repository);
         EnsureSuccess(await RunProcessAsync(repository, "git", "init", "--initial-branch=main", ".").ConfigureAwait(false));
-        EnsureSuccess(await RunProcessAsync(repository, "git", "config", "user.email", "gate3@example.invalid").ConfigureAwait(false));
-        EnsureSuccess(await RunProcessAsync(repository, "git", "config", "user.name", "Gate 3 Test").ConfigureAwait(false));
+        EnsureSuccess(await RunProcessAsync(repository, "git", "config", "user.email", "development-workspace@example.invalid").ConfigureAwait(false));
+        EnsureSuccess(await RunProcessAsync(repository, "git", "config", "user.name", "Development Workspace Test").ConfigureAwait(false));
         await File.WriteAllTextAsync(Path.Combine(repository, "README.md"), "base\n").ConfigureAwait(false);
         EnsureSuccess(await RunProcessAsync(repository, "git", "add", "README.md").ConfigureAwait(false));
         EnsureSuccess(await RunProcessAsync(repository, "git", "commit", "-m", "base").ConfigureAwait(false));
@@ -536,6 +537,8 @@ public sealed class DevelopmentGate3Tests : IDisposable
             IDevelopmentWorkspaceTools tools,
             int maxOutputTokens,
             int maxToolCalls,
+            DevelopmentAttemptLiveProgress? liveProgress = null,
+            DevelopmentCloudRoleRoute? cloudRoute = null,
             CancellationToken cancellationToken = default)
         {
             _ = await tools.WriteFileAsync("feature.txt", "implemented\n", cancellationToken).ConfigureAwait(false);
@@ -547,6 +550,15 @@ public sealed class DevelopmentGate3Tests : IDisposable
                 InputTokens: 10,
                 OutputTokens: 20);
         }
+    }
+
+    private sealed class UnexpectedCloudContextService : IDevelopmentCloudAttemptContextService
+    {
+        public Task<DevelopmentCloudAttemptContext> CreateAsync(DevelopmentExecutionSnapshot snapshot,
+            IReadOnlyList<DevelopmentCloudContextExcerpt> excerpts,
+            IReadOnlyList<Guid>? inputArtifactIds = null,
+            CancellationToken cancellationToken = default)
+            => throw new InvalidOperationException("The local-only coder fixture must not build a cloud context.");
     }
 
     private sealed class ThrowingChatClient : IChatClient
@@ -565,8 +577,15 @@ public sealed class DevelopmentGate3Tests : IDisposable
             ChatOptions? options = null,
             [EnumeratorCancellation] CancellationToken cancellationToken = default)
         {
-            await Task.CompletedTask;
-            yield break;
+            _ = await GetResponseAsync(messages, options, cancellationToken).ConfigureAwait(false);
+            yield return new ChatResponseUpdate(ChatRole.Assistant, "done");
+            yield return new ChatResponseUpdate(ChatRole.Assistant,
+                [new UsageContent(new UsageDetails
+                {
+                    InputTokenCount = 10,
+                    OutputTokenCount = 20,
+                    TotalTokenCount = 30
+                })]);
         }
 
         public object? GetService(Type serviceType, object? serviceKey = null) => null;
@@ -615,8 +634,11 @@ public sealed class DevelopmentGate3Tests : IDisposable
             ChatOptions? options = null,
             [EnumeratorCancellation] CancellationToken cancellationToken = default)
         {
-            await Task.CompletedTask;
-            yield break;
+            var response = await GetResponseAsync(messages, options, cancellationToken).ConfigureAwait(false);
+            foreach (var update in response.ToChatResponseUpdates())
+            {
+                yield return update;
+            }
         }
 
         public object? GetService(Type serviceType, object? serviceKey = null) => null;
