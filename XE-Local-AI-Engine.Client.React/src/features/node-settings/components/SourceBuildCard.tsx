@@ -26,7 +26,11 @@ import type {
 	LlamaCppSourceSelection,
 	SourceBuildDraft,
 } from "@/features/node-settings/models/SourceBuildModels";
-import { sourceBuildValidationError } from "@/features/node-settings/models/SourceBuildModels";
+import {
+	mergeSourceBuildLogs,
+	sourceBuildIdentity,
+	sourceBuildValidationIssue,
+} from "@/features/node-settings/models/SourceBuildModels";
 import {
 	useCancelSourceBuild,
 	useLlamaCppRuntimeStatus,
@@ -70,10 +74,13 @@ export function SourceBuildCard() {
 		if (installed.variant === "cpu" || installed.variant === "vulkan" || installed.variant === "cuda") {
 			setBackend(installed.variant);
 		}
+		setAcknowledged(false);
 		if (installed.sourceRepository && installed.sourceRepository !== "https://github.com/ggml-org/llama.cpp") {
 			setSource("custom");
 			setRepository(installed.sourceRepository);
-			setAcknowledged(true);
+		} else {
+			setSource("official");
+			setRepository("");
 		}
 		setCommit(installed.sourceRevisionMode === "explicitCommit" ? (installed.sourceRequestedCommit ?? "") : "");
 	}, [installed]);
@@ -83,66 +90,88 @@ export function SourceBuildCard() {
 	}
 
 	const draft: SourceBuildDraft = { backend, source, repository, commit, acknowledgeCustomSourceRisk: acknowledged };
-	const validationError = sourceBuildValidationError(draft);
+	const validationIssue = sourceBuildValidationIssue(draft);
+	const validationError =
+		validationIssue === null ? null : t(`pages.nodeSettings.llamaCpp.sourceBuild.validation.${validationIssue}`);
 	const buildStatus = status.data;
 	const isBuilding = buildStatus?.isRunning === true || start.isPending;
 	const runningProcesses = runtime.data?.runningProcessCount ?? 0;
 	const current = buildStatus?.currentBuild;
+	const activeRepository = current?.repository ?? installed?.sourceRepository ?? null;
+	const activeRevisionMode = current?.revisionMode ?? installed?.sourceRevisionMode ?? null;
 	const livePhase = hub.phase ?? buildStatus?.phase ?? null;
-	const liveLogs = hub.logLines.length > 0 ? hub.logLines : (buildStatus?.logLines ?? []);
+	const persistedIdentity = sourceBuildIdentity(current);
+	const liveLogs =
+		hub.buildIdentity === null || hub.buildIdentity === persistedIdentity
+			? mergeSourceBuildLogs(buildStatus?.logLines ?? [], hub.logLines)
+			: hub.logLines;
 	const liveError = hub.error ?? buildStatus?.sanitizedError ?? null;
 
 	const run = (): void => {
 		hub.reset();
-		start.mutate(draft, { onError: (error) => toast.error(errorMessage(error, "Could not start the source build.")) });
+		start.mutate(draft, {
+			onError: (error) => toast.error(errorMessage(error, t("pages.nodeSettings.llamaCpp.sourceBuild.startError"))),
+		});
+		if (source === "custom") {
+			setAcknowledged(false);
+		}
 	};
 
 	return (
 		<Card withBorder={true} radius="md" p="lg" data-testid="source-build-card">
 			<Stack gap="md">
 				<Group gap="xs">
-					<Title order={4}>{t("pages.nodeSettings.llamaCpp.sourceBuild.title", "llama.cpp build from source")}</Title>
-					<Badge color="grape">Dev</Badge>
+					<Title order={4}>{t("pages.nodeSettings.llamaCpp.sourceBuild.title")}</Title>
+					<Badge color="grape">{t("pages.nodeSettings.llamaCpp.sourceBuild.devBadge")}</Badge>
 				</Group>
 				<Text size="sm" c="dimmed">
-					{t(
-						"pages.nodeSettings.llamaCpp.sourceBuild.description",
-						"Build CPU, Vulkan, or CUDA llama.cpp from official upstream or a trusted public GitHub fork.",
-					)}
+					{t("pages.nodeSettings.llamaCpp.sourceBuild.description")}
 				</Text>
 				<Group grow={true} align="start">
 					<Select
-						label="Backend"
+						label={t("pages.nodeSettings.llamaCpp.sourceBuild.backend")}
 						value={backend}
 						data={["cpu", "vulkan", "cuda"]}
 						onChange={(value) => value && setBackend(value as LlamaCppSourceBackend)}
 					/>
 					<Select
-						label="Source"
+						label={t("pages.nodeSettings.llamaCpp.sourceBuild.source")}
 						value={source}
 						data={["official", "custom"]}
-						onChange={(value) => value && setSource(value as LlamaCppSourceSelection)}
+						onChange={(value) => {
+							if (value) {
+								setSource(value as LlamaCppSourceSelection);
+								setAcknowledged(false);
+							}
+						}}
 					/>
 				</Group>
 				{source === "custom" ? (
 					<Stack gap="sm">
 						<TextInput
-							label="GitHub repository"
-							placeholder="https://github.com/owner/llama.cpp"
+							label={t("pages.nodeSettings.llamaCpp.sourceBuild.repository")}
+							placeholder={t("pages.nodeSettings.llamaCpp.sourceBuild.repositoryPlaceholder")}
 							value={repository}
-							onChange={(event) => setRepository(event.currentTarget.value)}
+							onChange={(event) => {
+								setRepository(event.currentTarget.value);
+								setAcknowledged(false);
+							}}
 						/>
 						<Alert color="red" icon={<IconAlertTriangle size={16} />}>
-							Custom repository code executes with the app user's privileges. It is trusted code, not sandboxed.
+							{t("pages.nodeSettings.llamaCpp.sourceBuild.riskWarning")}
 						</Alert>
 						<Checkbox
 							checked={acknowledged}
 							onChange={(event) => setAcknowledged(event.currentTarget.checked)}
-							label="I trust this public GitHub repository and accept the code-execution risk."
+							label={t("pages.nodeSettings.llamaCpp.sourceBuild.riskAcknowledgement")}
 						/>
 					</Stack>
 				) : null}
-				<TextInput label="Commit SHA (optional)" value={commit} onChange={(event) => setCommit(event.currentTarget.value)} />
+				<TextInput
+					label={t("pages.nodeSettings.llamaCpp.sourceBuild.commit")}
+					value={commit}
+					onChange={(event) => setCommit(event.currentTarget.value)}
+				/>
 
 				<List spacing="xs" size="sm">
 					{(prerequisites.data?.items ?? []).map((item) => (
@@ -169,12 +198,12 @@ export function SourceBuildCard() {
 				{installed?.isSourceBuild ? (
 					<Stack gap="xs">
 						<Group>
-							<Badge color="green">Active {installed.variant} source runtime</Badge>
+							<Badge color="green">{t("pages.nodeSettings.llamaCpp.sourceBuild.active", { backend: installed.variant })}</Badge>
 							{installed.sourceCommit ? <Text ff="monospace">{installed.sourceCommit.slice(0, 12)}</Text> : null}
 						</Group>
-						{current ? (
+						{activeRepository ? (
 							<Text size="sm" c="dimmed">
-								{current.repository} · {current.revisionMode}
+								{activeRepository} · {activeRevisionMode}
 							</Text>
 						) : null}
 					</Stack>
@@ -186,7 +215,9 @@ export function SourceBuildCard() {
 						loading={start.isPending}
 						disabled={validationError !== null || prerequisites.data?.canBuild !== true || isBuilding || runningProcesses > 0}
 					>
-						{installed?.isSourceBuild ? "Rebuild" : "Build"}
+						{installed?.isSourceBuild
+							? t("pages.nodeSettings.llamaCpp.sourceBuild.rebuild")
+							: t("pages.nodeSettings.llamaCpp.sourceBuild.build")}
 					</Button>
 					{isBuilding ? (
 						<Button
@@ -195,7 +226,7 @@ export function SourceBuildCard() {
 							onClick={() => cancel.mutate()}
 							loading={cancel.isPending}
 						>
-							Cancel
+							{t("pages.nodeSettings.llamaCpp.sourceBuild.cancel")}
 						</Button>
 					) : null}
 					{installed?.isSourceBuild ? (
@@ -206,11 +237,11 @@ export function SourceBuildCard() {
 							disabled={isBuilding || runningProcesses > 0}
 							onClick={() =>
 								remove.mutate(undefined, {
-									onError: (error) => toast.error(errorMessage(error, "Could not remove the source runtime.")),
+									onError: (error) => toast.error(errorMessage(error, t("pages.nodeSettings.llamaCpp.sourceBuild.removeError"))),
 								})
 							}
 						>
-							Remove
+							{t("pages.nodeSettings.llamaCpp.sourceBuild.remove")}
 						</Button>
 					) : null}
 				</Group>

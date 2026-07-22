@@ -75,10 +75,10 @@ vi.mock("@/features/models/queries/useGgufDownload", () => ({
 // download-started notices.
 vi.mock("@/core/ui/notifications/Toast", () => ({ toast: toastMock }));
 
-// The CUDA build card owns its own data layer (CUDA-build SDK endpoints + a SignalR hub) and has its own dedicated
+// The source build card owns its own data layer (source-build SDK endpoints + a SignalR hub) and has its own dedicated
 // test; stub it to null here so these page tests stay isolated to the settings/runtime/HF-token composition.
-vi.mock("@/features/node-settings/components/CudaBuildCard", () => ({
-	CudaBuildCard: () => null,
+vi.mock("@/features/node-settings/components/SourceBuildCard", () => ({
+	SourceBuildCard: () => null,
 }));
 
 // The runtime card renders a TanStack Router <Link> (eject-first notice). Stub it so the page mounts without a

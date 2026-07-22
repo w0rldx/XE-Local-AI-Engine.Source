@@ -13,6 +13,7 @@ public sealed class GetLlamaCppSourceBuildStatusEndpoint(ILlamaCppSourceBuildSer
     {
         Get(LocalApiRoutes.ModelFit.SourceBuildStatus);
         Policies(NodeAuthorizationPolicies.Operator);
+        Description(builder => builder.Produces<LlamaCppSourceBuildStatusResponse>(StatusCodes.Status200OK));
     }
 
     public override async Task HandleAsync(CancellationToken ct)

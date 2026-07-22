@@ -16,6 +16,10 @@ public sealed class StartLlamaCppSourceBuildEndpoint(
     {
         Post(LocalApiRoutes.ModelFit.SourceBuild);
         Policies(NodeAuthorizationPolicies.Operator);
+        Description(builder => builder
+            .Produces<StartLlamaCppSourceBuildResponse>(StatusCodes.Status200OK)
+            .ProducesProblemFE(StatusCodes.Status400BadRequest)
+            .Produces<LlamaCppSourceBuildBlockedResponse>(StatusCodes.Status409Conflict));
     }
 
     public override async Task HandleAsync(StartLlamaCppSourceBuildRequest request, CancellationToken ct)

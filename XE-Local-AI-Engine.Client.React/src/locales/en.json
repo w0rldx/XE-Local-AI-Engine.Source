@@ -1132,7 +1132,27 @@
 				},
 				"sourceBuild": {
 					"title": "llama.cpp build from source",
-					"description": "Build CPU, Vulkan, or CUDA llama.cpp from official upstream or a trusted public GitHub fork."
+					"description": "Build CPU, Vulkan, or CUDA llama.cpp from official upstream or a trusted public GitHub fork.",
+					"devBadge": "Dev",
+					"backend": "Backend",
+					"source": "Source",
+					"repository": "GitHub repository",
+					"riskWarning": "Custom repository code executes with the app user's privileges. It is trusted code, not sandboxed.",
+					"riskAcknowledgement": "I trust this public GitHub repository and accept the code-execution risk.",
+					"commit": "Commit SHA (optional)",
+					"active": "Active {{backend}} source runtime",
+					"build": "Build",
+					"rebuild": "Rebuild",
+					"cancel": "Cancel",
+					"remove": "Remove",
+					"startError": "Could not start the source build.",
+					"removeError": "Could not remove the source runtime.",
+					"validation": {
+						"commit": "Commit must be a full 40-character hexadecimal SHA.",
+						"repository": "Use a canonical public GitHub HTTPS repository URL.",
+						"acknowledgement": "Acknowledge that custom repository code executes with the app user's privileges."
+					},
+					"repositoryPlaceholder": "https://github.com/owner/llama.cpp"
 				}
 			},
 			"hfToken": {

@@ -28,3 +28,13 @@ public sealed class StartLlamaCppSourceBuildRequestValidator : Validator<StartLl
         }
     }
 }
+
+public sealed class GetLlamaCppSourceBuildPrerequisitesRequestValidator : Validator<GetLlamaCppSourceBuildPrerequisitesRequest>
+{
+    public GetLlamaCppSourceBuildPrerequisitesRequestValidator()
+    {
+        RuleFor(static request => request.Backend)
+            .Must(Enum.IsDefined)
+            .WithMessage("Backend must be cpu, vulkan, or cuda.");
+    }
+}

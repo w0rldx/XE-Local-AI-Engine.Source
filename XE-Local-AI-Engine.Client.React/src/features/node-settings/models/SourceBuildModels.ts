@@ -36,22 +36,66 @@ export interface SourceBuildDraft {
 	readonly acknowledgeCustomSourceRisk: boolean;
 }
 
+export type SourceBuildValidationIssue = "commit" | "repository" | "acknowledgement";
+
 const commitPattern = /^[0-9a-fA-F]{40}$/;
 const repositoryPattern = /^https:\/\/github\.com\/[A-Za-z0-9_.-]+\/[A-Za-z0-9_.-]+(?:\.git)?$/;
 
-export function sourceBuildValidationError(draft: SourceBuildDraft): string | null {
+export function sourceBuildValidationIssue(draft: SourceBuildDraft): SourceBuildValidationIssue | null {
 	if (draft.commit.trim().length > 0 && !commitPattern.test(draft.commit.trim())) {
-		return "Commit must be a full 40-character hexadecimal SHA.";
+		return "commit";
 	}
 	if (draft.source === "custom") {
 		if (!repositoryPattern.test(draft.repository.trim())) {
-			return "Use a canonical public GitHub HTTPS repository URL.";
+			return "repository";
 		}
 		if (!draft.acknowledgeCustomSourceRisk) {
-			return "Acknowledge that custom repository code executes with the app user's privileges.";
+			return "acknowledgement";
 		}
 	}
 	return null;
+}
+
+export function sourceBuildValidationError(draft: SourceBuildDraft): string | null {
+	const issue = sourceBuildValidationIssue(draft);
+	if (issue === "commit") {
+		return "Commit must be a full 40-character hexadecimal SHA.";
+	}
+	if (issue === "repository") {
+		return "Use a canonical public GitHub HTTPS repository URL.";
+	}
+	if (issue === "acknowledgement") {
+		return "Acknowledge that custom repository code executes with the app user's privileges.";
+	}
+	return null;
+}
+
+export function sourceBuildIdentity(descriptor: LlamaCppSourceBuildDescriptor | null | undefined): string | null {
+	if (descriptor == null) {
+		return null;
+	}
+	return [
+		descriptor.backend,
+		descriptor.source,
+		descriptor.repository,
+		descriptor.revisionMode,
+		descriptor.requestedCommit ?? "",
+	].join("|");
+}
+
+export function mergeSourceBuildLogs(persisted: readonly string[], live: readonly string[]): readonly string[] {
+	if (live.length === 0) {
+		return persisted;
+	}
+	const maxOverlap = Math.min(persisted.length, live.length);
+	let overlap = 0;
+	for (let length = maxOverlap; length > 0; length -= 1) {
+		if (persisted.slice(-length).every((line, index) => line === live[index])) {
+			overlap = length;
+			break;
+		}
+	}
+	return [...persisted, ...live.slice(overlap)];
 }
 
 export function sourceBuildRequest(draft: SourceBuildDraft) {

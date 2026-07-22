@@ -97,11 +97,49 @@ public sealed class OpenApiDocumentTests
         AssertSchemaEnum(schemas, "LlamaCppSourceBackendDto", ["cpu", "vulkan", "cuda"]);
         AssertSchemaEnum(schemas, "LlamaCppSourceSelectionDto", ["official", "custom"]);
         AssertSchemaEnum(schemas, "LlamaCppSourceRevisionModeDto", ["enginePinned", "defaultBranch", "explicitCommit"]);
+
+        AssertResponses(paths, "/api/local/v1/model-fit/llamacpp/source-build", "post", ["200", "400", "409"]);
+        AssertResponses(paths, "/api/local/v1/model-fit/llamacpp/source-build/prerequisites", "get", ["200", "400"]);
+        AssertResponses(paths, "/api/local/v1/model-fit/llamacpp/source-build/status", "get", ["200"]);
+        AssertResponses(paths, "/api/local/v1/model-fit/llamacpp/source-build/cancel", "post", ["200"]);
+        AssertResponses(paths, "/api/local/v1/model-fit/llamacpp/source-build/remove", "post", ["200", "409"]);
+
+        var requestSchema = FindSchema(schemas, "StartLlamaCppSourceBuildRequest");
+        AssertEx.True(requestSchema.GetProperty("required").EnumerateArray()
+            .Any(static property => property.GetString() == "acknowledgeCustomSourceRisk"),
+            "The custom-source risk acknowledgement must be required on the wire.");
+        AssertSchemaProperties(schemas, "LlamaCppSourceBuildDescriptorResponse",
+            ["backend", "source", "repository", "revisionMode", "requestedCommit", "resolvedCommit"]);
+        AssertSchemaProperties(schemas, "LlamaCppInstalledRuntimeResponse",
+            ["sourceRepository", "sourceCommit", "sourceRevisionMode", "sourceRequestedCommit"]);
+    }
+
+    private static void AssertResponses(JsonElement paths, string path, string verb, IReadOnlyList<string> expected)
+    {
+        var responses = paths.GetProperty(path).GetProperty(verb).GetProperty("responses");
+        foreach (var status in expected)
+        {
+            AssertEx.True(responses.TryGetProperty(status, out _), $"Expected {verb.ToUpperInvariant()} {path} to document {status}.");
+        }
+    }
+
+    private static JsonElement FindSchema(JsonElement schemas, string schemaSuffix)
+    {
+        return schemas.EnumerateObject().Single(property => property.Name.EndsWith(schemaSuffix, StringComparison.Ordinal)).Value;
+    }
+
+    private static void AssertSchemaProperties(JsonElement schemas, string schemaSuffix, IReadOnlyList<string> expected)
+    {
+        var properties = FindSchema(schemas, schemaSuffix).GetProperty("properties");
+        foreach (var property in expected)
+        {
+            AssertEx.True(properties.TryGetProperty(property, out _), $"Expected {schemaSuffix}.{property} in OpenAPI.");
+        }
     }
 
     private static void AssertSchemaEnum(JsonElement schemas, string schemaSuffix, IReadOnlyList<string> expected)
     {
-        var schema = schemas.EnumerateObject().Single(property => property.Name.EndsWith(schemaSuffix, StringComparison.Ordinal)).Value;
+        var schema = FindSchema(schemas, schemaSuffix);
         var values = schema.GetProperty("enum").EnumerateArray().Select(static value => value.GetString() ?? string.Empty).ToArray();
         AssertEx.Equal(string.Join('|', expected), string.Join('|', values));
     }
