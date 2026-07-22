@@ -7,7 +7,7 @@ using XE_Local_AI_Engine.Client.Services.Development;
 public sealed class CreateDevelopmentProjectRequest
 {
     public Guid OperationId { get; init; }
-    public string RepositoryRoot { get; init; } = string.Empty;
+    public Guid SelectedFolderId { get; init; }
     public string Objective { get; init; } = string.Empty;
     public string BaseBranch { get; init; } = "main";
     public string TaskTitle { get; init; } = string.Empty;
@@ -51,12 +51,30 @@ public sealed class DevelopmentActionRequest
     public Guid ProjectId { get; init; }
     public Guid TaskId { get; init; }
     public Guid OperationId { get; init; }
-    public string RepositoryRoot { get; init; } = string.Empty;
 }
+
+public sealed class RegisterDevelopmentRepositoryRequest
+{
+    public string Alias { get; init; } = string.Empty;
+    public string HostPath { get; init; } = string.Empty;
+}
+
+public sealed class ReconnectDevelopmentRepositoryRequest
+{
+    public Guid ProjectId { get; init; }
+    public Guid SelectedFolderId { get; init; }
+    public long ExpectedVersion { get; init; }
+}
+
+public sealed record DevelopmentCapabilityResponse(bool Enabled);
+
+public sealed record DevelopmentRepositoryResponse(string Id, string Alias, string Availability);
 
 public sealed record DevelopmentProjectResponse(
     Guid Id,
     string Objective,
+    Guid? SelectedFolderId,
+    bool RepositoryConnectionRequired,
     string BaseBranch,
     string Status,
     string EgressPolicy,
@@ -134,6 +152,7 @@ public sealed record DevelopmentProjectDetailResponse(
     IReadOnlyList<DevelopmentEventResponse> Events);
 
 public sealed record ListDevelopmentProjectsResponse(IReadOnlyList<DevelopmentProjectResponse> Items);
+public sealed record ListDevelopmentRepositoriesResponse(IReadOnlyList<DevelopmentRepositoryResponse> Items);
 public sealed record ListDevelopmentEventsResponse(IReadOnlyList<DevelopmentEventResponse> Items);
 public sealed record ListDevelopmentArtifactsResponse(IReadOnlyList<DevelopmentArtifactResponse> Items);
 public sealed record DevelopmentArtifactContentResponse(DevelopmentArtifactResponse Artifact, string Content);
@@ -151,6 +170,8 @@ internal static class DevelopmentContractMapper
     public static DevelopmentProjectResponse ToResponse(this DevelopmentProjectSnapshot value)
         => new(value.Id,
             value.Objective,
+            value.SelectedFolderId,
+            value.SelectedFolderId is null,
             value.BaseBranch,
             value.Status.ToString(),
             value.EgressPolicy.ToString(),
@@ -161,6 +182,9 @@ internal static class DevelopmentContractMapper
             value.CreatedAtUtc,
             value.UpdatedAtUtc,
             value.Version);
+
+    public static DevelopmentRepositoryResponse ToResponse(this DevelopmentRepositoryReference value)
+        => new(value.Id, value.Alias, value.Availability);
 
     public static DevelopmentTaskResponse ToResponse(this DevelopmentTaskSnapshot value)
         => new(value.Id,

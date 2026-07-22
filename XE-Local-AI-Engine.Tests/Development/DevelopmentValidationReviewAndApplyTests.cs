@@ -2,6 +2,7 @@ namespace XE_Local_AI_Engine.Tests.Development;
 
 using System.Diagnostics;
 using System.Runtime.CompilerServices;
+using System.Text;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Diagnostics;
 using Microsoft.Extensions.AI;
@@ -23,6 +24,7 @@ using XE_Local_AI_Engine.Tests.Testing;
 
 public sealed class DevelopmentValidationReviewAndApplyTests : IDisposable
 {
+    private static readonly Guid SelectedFolderId = Guid.Parse("bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb");
     private readonly string _root = Path.Combine(Path.GetTempPath(), "xe-development-validation-review-" + Guid.NewGuid().ToString("N"));
 
     public void Dispose()
@@ -53,6 +55,10 @@ public sealed class DevelopmentValidationReviewAndApplyTests : IDisposable
         var reviewer = scope.ServiceProvider.GetRequiredService<IDevelopmentReviewerAttemptRunner>();
         var apply = scope.ServiceProvider.GetRequiredService<IDevelopmentApplyService>();
         var seed = Seed(repository);
+        var repositoryBinding = Binding(seed, repository);
+        scope.ServiceProvider.GetRequiredService<IDevelopmentRepositoryBindingService>()
+             .ResolveProjectAsync(seed.ProjectId, Arg.Any<CancellationToken>())
+             .Returns(repositoryBinding);
 
         _ = await coordinator.CreateProjectAsync(seed).ConfigureAwait(false);
         var ready = await coordinator.TransitionTaskAsync(new DevelopmentTransitionTaskCommand(seed.TaskId,
@@ -69,9 +75,9 @@ public sealed class DevelopmentValidationReviewAndApplyTests : IDisposable
                                                   "local",
                                                   ready.Version))
                              .ConfigureAwait(false);
-        _ = await coder.RunAsync(coderAttemptId, repository).ConfigureAwait(false);
+        _ = await coder.RunAsync(coderAttemptId, repositoryBinding).ConfigureAwait(false);
 
-        var validation = await validator.RunAsync(seed.TaskId, repository).ConfigureAwait(false);
+        var validation = await validator.RunAsync(seed.TaskId, repositoryBinding).ConfigureAwait(false);
         AssertEx.True(validation.Passed);
         AssertEx.Equal(DevelopmentTaskStatus.InReview, validation.TaskStatus);
         var inReview = await store.GetTaskAsync(seed.TaskId).ConfigureAwait(false);
@@ -84,18 +90,18 @@ public sealed class DevelopmentValidationReviewAndApplyTests : IDisposable
                                                   "local",
                                                   inReview.Version))
                              .ConfigureAwait(false);
-        var review = await reviewer.RunAsync(reviewerAttemptId, repository).ConfigureAwait(false);
+        var review = await reviewer.RunAsync(reviewerAttemptId, repositoryBinding).ConfigureAwait(false);
         AssertEx.Equal(DevelopmentReviewDisposition.Approved, review.Disposition);
         AssertEx.Equal(DevelopmentTaskStatus.AwaitingApply, review.TaskStatus);
 
-        var preview = await apply.PreviewAsync(seed.TaskId, repository).ConfigureAwait(false);
+        var preview = await apply.PreviewAsync(seed.TaskId, repositoryBinding).ConfigureAwait(false);
         AssertEx.Equal(review.SubjectHash, preview.Subject.SubjectHash);
         AssertEx.Contains(preview.ChangedFiles.Select(static file => file.Path), "feature.txt");
         AssertEx.False(File.Exists(Path.Combine(repository, "feature.txt")));
 
         var operationId = Guid.NewGuid();
-        var completed = await apply.ApplyAsync(seed.TaskId, operationId, repository).ConfigureAwait(false);
-        var replay = await apply.ApplyAsync(seed.TaskId, operationId, repository).ConfigureAwait(false);
+        var completed = await apply.ApplyAsync(seed.TaskId, operationId, repositoryBinding).ConfigureAwait(false);
+        var replay = await apply.ApplyAsync(seed.TaskId, operationId, repositoryBinding).ConfigureAwait(false);
         AssertEx.Equal(completed, replay);
         AssertEx.Equal(DevelopmentOperationPhases.ApplyCompleted, completed.Phase);
         AssertEx.Equal("implemented\n", await File.ReadAllTextAsync(Path.Combine(repository, "feature.txt")).ConfigureAwait(false));
@@ -113,6 +119,7 @@ public sealed class DevelopmentValidationReviewAndApplyTests : IDisposable
         var coder = scope.ServiceProvider.GetRequiredService<IDevelopmentCoderAttemptRunner>();
         var validator = scope.ServiceProvider.GetRequiredService<IDevelopmentValidationRunner>();
         var seed = Seed(repository);
+        var repositoryBinding = Binding(seed, repository);
 
         _ = await coordinator.CreateProjectAsync(seed).ConfigureAwait(false);
         var ready = await coordinator.TransitionTaskAsync(new DevelopmentTransitionTaskCommand(seed.TaskId,
@@ -129,8 +136,8 @@ public sealed class DevelopmentValidationReviewAndApplyTests : IDisposable
                                                   "local",
                                                   ready.Version))
                              .ConfigureAwait(false);
-        _ = await coder.RunAsync(coderAttemptId, repository).ConfigureAwait(false);
-        var validation = await validator.RunAsync(seed.TaskId, repository).ConfigureAwait(false);
+        _ = await coder.RunAsync(coderAttemptId, repositoryBinding).ConfigureAwait(false);
+        var validation = await validator.RunAsync(seed.TaskId, repositoryBinding).ConfigureAwait(false);
 
         AssertEx.False(validation.Passed);
         var task = await store.GetTaskAsync(seed.TaskId).ConfigureAwait(false);
@@ -154,6 +161,7 @@ public sealed class DevelopmentValidationReviewAndApplyTests : IDisposable
         var coordinator = scope.ServiceProvider.GetRequiredService<IDevelopmentCoordinator>();
         var store = scope.ServiceProvider.GetRequiredService<IDevelopmentStore>();
         var seed = Seed(repository);
+        var repositoryBinding = Binding(seed, repository);
 
         _ = await coordinator.CreateProjectAsync(seed).ConfigureAwait(false);
         var ready = await coordinator.TransitionTaskAsync(new DevelopmentTransitionTaskCommand(seed.TaskId,
@@ -171,7 +179,7 @@ public sealed class DevelopmentValidationReviewAndApplyTests : IDisposable
                                                   ready.Version))
                              .ConfigureAwait(false);
         _ = await scope.ServiceProvider.GetRequiredService<IDevelopmentCoderAttemptRunner>()
-                       .RunAsync(completedCoderAttemptId, repository)
+                       .RunAsync(completedCoderAttemptId, repositoryBinding)
                        .ConfigureAwait(false);
         var task = await store.GetTaskAsync(seed.TaskId).ConfigureAwait(false);
         _ = await coordinator.StartAttemptAsync(new DevelopmentStartAttemptCommand(seed.TaskId,
@@ -184,7 +192,7 @@ public sealed class DevelopmentValidationReviewAndApplyTests : IDisposable
                              .ConfigureAwait(false);
 
         await AssertEx.ThrowsAsync<DevelopmentInvalidTransitionException>(() => scope.ServiceProvider.GetRequiredService<IDevelopmentValidationRunner>()
-                                                                                        .RunAsync(seed.TaskId, repository))
+                                                                                        .RunAsync(seed.TaskId, repositoryBinding))
                       .ConfigureAwait(false);
         AssertEx.Equal(DevelopmentTaskStatus.InProgress, (await store.GetTaskAsync(seed.TaskId).ConfigureAwait(false)).Status);
     }
@@ -232,7 +240,7 @@ public sealed class DevelopmentValidationReviewAndApplyTests : IDisposable
         AssertEx.Equal(DevelopmentReviewDisposition.ChangesRequested, review.Disposition);
         AssertEx.Equal(DevelopmentTaskStatus.ChangesRequested, review.TaskStatus);
         await AssertEx.ThrowsAsync<DevelopmentInvalidTransitionException>(() => scope.ServiceProvider.GetRequiredService<IDevelopmentApplyService>()
-                                                                                         .PreviewAsync(seed.TaskId, repository))
+                                                                                         .PreviewAsync(seed.TaskId, Binding(seed, repository)))
                       .ConfigureAwait(false);
     }
 
@@ -248,12 +256,12 @@ public sealed class DevelopmentValidationReviewAndApplyTests : IDisposable
         var store = scope.ServiceProvider.GetRequiredService<IDevelopmentStore>();
         var snapshot = await store.GetExecutionSnapshotAsync(reviewerAttemptId).ConfigureAwait(false);
         var session = await scope.ServiceProvider.GetRequiredService<IDevelopmentWorkspaceProvider>()
-                                 .PrepareAsync(snapshot, repository)
+                                 .PrepareAsync(snapshot, Binding(seed, repository))
                                  .ConfigureAwait(false);
         await File.WriteAllTextAsync(Path.Combine(session.HostWorktreePath, "feature.txt"), "mutated after approval\n").ConfigureAwait(false);
 
         await AssertEx.ThrowsAsync<DevelopmentInvalidTransitionException>(() => scope.ServiceProvider.GetRequiredService<IDevelopmentApplyService>()
-                                                                                         .PreviewAsync(seed.TaskId, repository))
+                                                                                         .PreviewAsync(seed.TaskId, Binding(seed, repository)))
                       .ConfigureAwait(false);
         var task = await store.GetTaskAsync(seed.TaskId).ConfigureAwait(false);
         AssertEx.Equal(DevelopmentTaskStatus.InProgress, task.Status);
@@ -398,6 +406,7 @@ public sealed class DevelopmentValidationReviewAndApplyTests : IDisposable
         var coordinator = services.GetRequiredService<IDevelopmentCoordinator>();
         var store = services.GetRequiredService<IDevelopmentStore>();
         var seed = Seed(repository);
+        var repositoryBinding = Binding(seed, repository);
         _ = await coordinator.CreateProjectAsync(seed).ConfigureAwait(false);
         var ready = await coordinator.TransitionTaskAsync(new DevelopmentTransitionTaskCommand(seed.TaskId,
                                                            Guid.NewGuid(),
@@ -414,10 +423,10 @@ public sealed class DevelopmentValidationReviewAndApplyTests : IDisposable
                                                   ready.Version))
                              .ConfigureAwait(false);
         _ = await services.GetRequiredService<IDevelopmentCoderAttemptRunner>()
-                          .RunAsync(coderAttemptId, repository)
+                          .RunAsync(coderAttemptId, repositoryBinding)
                           .ConfigureAwait(false);
         var validation = await services.GetRequiredService<IDevelopmentValidationRunner>()
-                                       .RunAsync(seed.TaskId, repository)
+                                       .RunAsync(seed.TaskId, repositoryBinding)
                                        .ConfigureAwait(false);
         AssertEx.True(validation.Passed);
         var inReview = await store.GetTaskAsync(seed.TaskId).ConfigureAwait(false);
@@ -431,7 +440,7 @@ public sealed class DevelopmentValidationReviewAndApplyTests : IDisposable
                                                   inReview.Version))
                              .ConfigureAwait(false);
         var review = await services.GetRequiredService<IDevelopmentReviewerAttemptRunner>()
-                                   .RunAsync(reviewerAttemptId, repository)
+                                   .RunAsync(reviewerAttemptId, repositoryBinding)
                                    .ConfigureAwait(false);
         return (seed, reviewerAttemptId, review);
     }
@@ -475,6 +484,7 @@ public sealed class DevelopmentValidationReviewAndApplyTests : IDisposable
         services.AddScoped<IDevelopmentWorkspaceProvider, DevelopmentWorkspaceProvider>();
         services.AddScoped<IDevelopmentPatchEvidenceService, DevelopmentPatchEvidenceService>();
         services.AddScoped<IDevelopmentEvidenceService, DevelopmentEvidenceService>();
+        services.AddScoped(_ => Substitute.For<IDevelopmentRepositoryBindingService>());
         services.AddSingleton(coderModel);
         services.AddSingleton(reviewerModel);
         services.AddSingleton<IDevelopmentCloudAttemptContextService, UnexpectedCloudContextService>();
@@ -486,7 +496,12 @@ public sealed class DevelopmentValidationReviewAndApplyTests : IDisposable
         services.AddScoped<IDevelopmentApplyService, DevelopmentApplyService>();
         var provider = services.BuildServiceProvider(validateScopes: true);
         await using var scope = provider.CreateAsyncScope();
-        await scope.ServiceProvider.GetRequiredService<NodeChatDbContext>().Database.EnsureCreatedAsync().ConfigureAwait(false);
+        var dbContext = scope.ServiceProvider.GetRequiredService<NodeChatDbContext>();
+        await dbContext.Database.EnsureCreatedAsync().ConfigureAwait(false);
+        _ = await dbContext.Database.ExecuteSqlInterpolatedAsync($"""
+            INSERT INTO selected_folders (id, alias, host_path, mode, created_at_utc)
+            VALUES ({SelectedFolderId}, {"development-validation-repository"}, {Encoding.UTF8.GetBytes(dataRoot)}, {(int)SelectedFolderMode.Copy}, {DateTimeOffset.UtcNow.ToUnixTimeMilliseconds()})
+            """).ConfigureAwait(false);
         return provider;
     }
 
@@ -497,6 +512,7 @@ public sealed class DevelopmentValidationReviewAndApplyTests : IDisposable
             Guid.NewGuid(),
             Guid.NewGuid(),
             "Implement a bounded feature.",
+            SelectedFolderId,
             DevelopmentWorkspaceSecurity.RepositoryIdentityHash(canonical),
             "main",
             "Add feature file",
@@ -511,6 +527,13 @@ public sealed class DevelopmentValidationReviewAndApplyTests : IDisposable
             MaxTokens: 2048,
             MaxDurationSeconds: 60);
     }
+
+    private static DevelopmentRepositoryBinding Binding(DevelopmentCreateProjectCommand seed, string repository)
+        => new(seed.ProjectId,
+            seed.SelectedFolderId,
+            "repository",
+            repository,
+            seed.RepositoryIdentityHash);
 
     private async Task<string> CreateRepositoryAsync()
     {

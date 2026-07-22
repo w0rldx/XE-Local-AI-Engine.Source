@@ -14,11 +14,12 @@ public sealed class DevelopmentManagementServiceTests
     public async Task StartNextAction_WhenReviewRoundCapReached_BlocksWithoutSchedulingValidation()
     {
         var repositoryRoot = DevelopmentWorkspaceSecurity.CanonicalRepositoryRoot(Directory.GetCurrentDirectory());
+        var selectedFolderId = Guid.NewGuid();
         var projectId = Guid.Parse("63f0fcae-401e-4ff7-9be4-01de61427e65");
         var taskId = Guid.Parse("0db3ad35-a679-4a66-94ed-aa00bb52e0bb");
         var store = Substitute.For<IDevelopmentStore>();
         store.GetProjectAsync(projectId, Arg.Any<CancellationToken>())
-             .Returns(ProjectSnapshot(projectId, DevelopmentWorkspaceSecurity.RepositoryIdentityHash(repositoryRoot)));
+             .Returns(ProjectSnapshot(projectId, selectedFolderId, DevelopmentWorkspaceSecurity.RepositoryIdentityHash(repositoryRoot)));
         store.GetTaskAsync(taskId, Arg.Any<CancellationToken>())
              .Returns(TaskSnapshot(projectId, taskId));
         store.FindOperationAsync(projectId,
@@ -60,24 +61,31 @@ public sealed class DevelopmentManagementServiceTests
                            1);
                    });
         var supervisor = Substitute.For<IDevelopmentAttemptExecutionSupervisor>();
-        var service = CreateService(store, coordinator, supervisor);
+        var repositoryBindings = Substitute.For<IDevelopmentRepositoryBindingService>();
+        repositoryBindings.ResolveProjectAsync(projectId, Arg.Any<CancellationToken>())
+                          .Returns(new DevelopmentRepositoryBinding(projectId,
+                              selectedFolderId,
+                              "repository",
+                              repositoryRoot,
+                              DevelopmentWorkspaceSecurity.RepositoryIdentityHash(repositoryRoot)));
+        var service = CreateService(store, coordinator, supervisor, repositoryBindings);
 
         var result = await service.StartNextActionAsync(projectId,
             taskId,
-            Guid.NewGuid(),
-            repositoryRoot).ConfigureAwait(false);
+            Guid.NewGuid()).ConfigureAwait(false);
 
         AssertEx.Equal("Blocked", result.Action);
         AssertEx.Equal(DevelopmentTaskStatus.Blocked, result.TaskStatus);
         AssertEx.Equal(expected: 1, transitions.Count);
         AssertEx.Equal(DevelopmentTaskStatus.Blocked, transitions[0].TargetStatus);
         AssertEx.Contains(AssertEx.NotNull(transitions[0].Reason), "maximum review rounds");
-        _ = supervisor.DidNotReceive().StartValidation(Arg.Any<Guid>(), Arg.Any<string>());
+        _ = supervisor.DidNotReceive().StartValidation(Arg.Any<Guid>());
     }
 
     [Test]
     public async Task CreateProject_RetryWithSameOperationId_ReusesProjectAndTaskIdentity()
     {
+        var selectedFolderId = Guid.NewGuid();
         var store = Substitute.For<IDevelopmentStore>();
         var coordinator = Substitute.For<IDevelopmentCoordinator>();
         var commands = new List<DevelopmentCreateProjectCommand>();
@@ -98,7 +106,7 @@ public sealed class DevelopmentManagementServiceTests
                            1);
                    });
         store.GetProjectAsync(Arg.Any<Guid>(), Arg.Any<CancellationToken>())
-             .Returns(call => ProjectSnapshot(call.ArgAt<Guid>(0)));
+             .Returns(call => ProjectSnapshot(call.ArgAt<Guid>(0), selectedFolderId));
         store.ListTasksAsync(Arg.Any<Guid>(), Arg.Any<CancellationToken>())
              .Returns(Array.Empty<DevelopmentTaskSnapshot>());
         store.ListEventsAsync(Arg.Any<Guid>(), Arg.Any<CancellationToken>())
@@ -106,10 +114,12 @@ public sealed class DevelopmentManagementServiceTests
 
         var service = CreateService(store,
             coordinator,
-            Substitute.For<IDevelopmentAttemptExecutionSupervisor>());
+            Substitute.For<IDevelopmentAttemptExecutionSupervisor>(),
+            repositoryBindings: null,
+            selectedFolderId: selectedFolderId);
         var operationId = Guid.Parse("8e9db44b-b50f-42c9-9bd0-3239af1eb5d8");
         var input = new DevelopmentCreateProjectInput(operationId,
-            Directory.GetCurrentDirectory(),
+            selectedFolderId,
             "Implement the durable workflow",
             "main",
             "Implement task",
@@ -132,18 +142,36 @@ public sealed class DevelopmentManagementServiceTests
 
     private static DevelopmentManagementService CreateService(IDevelopmentStore store,
         IDevelopmentCoordinator coordinator,
-        IDevelopmentAttemptExecutionSupervisor supervisor)
+        IDevelopmentAttemptExecutionSupervisor supervisor,
+        IDevelopmentRepositoryBindingService? repositoryBindings = null,
+        Guid? selectedFolderId = null)
         => new(store,
             coordinator,
             supervisor,
             Substitute.For<IDevelopmentArtifactBlobStore>(),
             new UnusedApplyService(),
+            repositoryBindings ?? RepositoryBindings(selectedFolderId ?? Guid.NewGuid()),
             Substitute.For<IActiveCloudChatClientFactory>(),
             TimeProvider.System);
 
-    private static DevelopmentProjectSnapshot ProjectSnapshot(Guid projectId, string repositoryIdentityHash = "repository-hash")
+    private static IDevelopmentRepositoryBindingService RepositoryBindings(Guid selectedFolderId)
+    {
+        var repositoryBindings = Substitute.For<IDevelopmentRepositoryBindingService>();
+        repositoryBindings.ResolveFolderAsync(selectedFolderId, Arg.Any<CancellationToken>())
+                          .Returns(new DevelopmentRepositoryBinding(Guid.Empty,
+                              selectedFolderId,
+                              "repository",
+                              Directory.GetCurrentDirectory(),
+                              "repository-hash"));
+        return repositoryBindings;
+    }
+
+    private static DevelopmentProjectSnapshot ProjectSnapshot(Guid projectId,
+        Guid? selectedFolderId = null,
+        string repositoryIdentityHash = "repository-hash")
         => new(projectId,
             "objective",
+            selectedFolderId,
             repositoryIdentityHash,
             "main",
             DevelopmentProjectStatus.Active,
@@ -179,13 +207,13 @@ public sealed class DevelopmentManagementServiceTests
     private sealed class UnusedApplyService : IDevelopmentApplyService
     {
         public Task<DevelopmentPatchPreview> PreviewAsync(Guid taskId,
-            string repositoryRoot,
+            DevelopmentRepositoryBinding repository,
             CancellationToken cancellationToken = default)
             => throw new NotSupportedException();
 
         public Task<DevelopmentOperationResult> ApplyAsync(Guid taskId,
             Guid operationId,
-            string repositoryRoot,
+            DevelopmentRepositoryBinding repository,
             CancellationToken cancellationToken = default)
             => throw new NotSupportedException();
     }

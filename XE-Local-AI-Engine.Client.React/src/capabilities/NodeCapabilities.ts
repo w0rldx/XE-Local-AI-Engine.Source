@@ -45,13 +45,10 @@ export interface NodeCapabilityConfig {
 	// live-GPU verified end-to-end on target hardware, so the nav entry + /images route ship on (plan §9 —
 	// shipped as a flagship feature).
 	readonly images: boolean;
-	// Dedicated durable software-development workflow. It is independent from Chat and is backed by an
-	// off-by-default server capability.
+	// Dedicated durable software-development workflow. The surface ships in every build; the authenticated
+	// runtime capability controls whether its actions are available on this node.
 	readonly development: boolean;
 }
-
-const developmentModeEnabled =
-	import.meta.env.DEV || import.meta.env["VITE_DEVELOPMENT_MODE_ENABLED"] === "true";
 
 export const nodeCapabilities: NodeCapabilityConfig = {
 	chat: {
@@ -123,9 +120,9 @@ export const nodeCapabilities: NodeCapabilityConfig = {
 	// Image generation (stable-diffusion.cpp) surface. ON by default — the runtime module (Lanes A–D) is built and
 	// has been live-GPU verified end-to-end on target hardware; ships as a flagship feature.
 	images: true,
-	// Development builds expose the surface automatically. Production builds must opt in alongside the
-	// server-side Development:Enabled setting so the navigation and route do not advertise a disabled API.
-	development: developmentModeEnabled,
+	// The route ships by default. DevelopmentPage resolves the authenticated server capability before exposing
+	// projects or actions, so an operator kill switch still fails closed without requiring a separate frontend build.
+	development: true,
 };
 
 export const nodeRoutePaths = {

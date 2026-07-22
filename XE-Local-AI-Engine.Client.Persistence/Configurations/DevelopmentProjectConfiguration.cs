@@ -12,6 +12,7 @@ internal sealed class DevelopmentProjectConfiguration : IEntityTypeConfiguration
         builder.HasKey(entity => entity.Id);
         builder.Property(entity => entity.Id).HasColumnName("id");
         builder.Property(entity => entity.Objective).HasColumnName("objective").IsRequired();
+        builder.Property(entity => entity.SelectedFolderId).HasColumnName("selected_folder_id");
         builder.Property(entity => entity.RepositoryIdentityHash).HasColumnName("repository_identity_hash").HasMaxLength(128).IsRequired();
         builder.Property(entity => entity.BaseBranch).HasColumnName("base_branch").HasMaxLength(255).IsRequired();
         builder.Property(entity => entity.Status).HasColumnName("status").HasConversion<string>().HasMaxLength(32);
@@ -28,6 +29,10 @@ internal sealed class DevelopmentProjectConfiguration : IEntityTypeConfiguration
         builder.Property(entity => entity.UpdatedAtUtc).HasColumnName("updated_at_utc");
         builder.Property(entity => entity.Version).HasColumnName("version").IsConcurrencyToken();
         builder.HasIndex(entity => entity.RepositoryIdentityHash).HasDatabaseName("ix_development_projects_repository_identity_hash");
+        builder.HasIndex(entity => entity.SelectedFolderId).HasDatabaseName("ix_development_projects_selected_folder_id");
+        builder.HasOne<NodeSelectedFolder>()
+               .WithMany()
+               .HasForeignKey(entity => entity.SelectedFolderId)
+               .OnDelete(DeleteBehavior.Restrict);
     }
 }
-

@@ -121,7 +121,7 @@ try
     }
 
     // Add services to the container.
-    var isDevelopmentModeEnabled = builder.Configuration.GetValue($"{DevelopmentOptions.Section}:Enabled", defaultValue: false);
+    var isDevelopmentModeEnabled = builder.Configuration.GetValue($"{DevelopmentOptions.Section}:Enabled", defaultValue: true);
     builder.AddServices(builder.Configuration);
 
     // App self-update (Velopack + GitHub device flow). Desktop-mode only: off the flag this registers nothing and the
@@ -287,12 +287,14 @@ try
     if (!isDevelopmentModeEnabled)
     {
         var developmentPath = new PathString($"/{LocalApiRoutes.Prefix}/{LocalApiRoutes.Development.Root}");
+        var capabilityPath = new PathString($"/{LocalApiRoutes.Prefix}/{LocalApiRoutes.Development.Capability}");
         // Keep the disabled capability opaque before local API security or authentication can challenge the caller.
         // The endpoint types remain discoverable process-wide because FastEndpoints caches endpoint discovery across
         // WebApplicationFactory instances; service and hub registration still remain disabled with this feature flag.
         app.Use(async (context, next) =>
         {
-            if (context.Request.Path.StartsWithSegments(developmentPath, StringComparison.OrdinalIgnoreCase))
+            if (context.Request.Path.StartsWithSegments(developmentPath, StringComparison.OrdinalIgnoreCase)
+                && !context.Request.Path.Equals(capabilityPath, StringComparison.OrdinalIgnoreCase))
             {
                 context.Response.StatusCode = StatusCodes.Status404NotFound;
                 return;

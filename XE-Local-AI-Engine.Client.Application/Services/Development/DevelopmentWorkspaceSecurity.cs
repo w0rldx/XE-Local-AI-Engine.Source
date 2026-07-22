@@ -107,4 +107,7 @@ internal readonly record struct DevelopmentConfinedPath(bool IsAccepted, string 
     public static DevelopmentConfinedPath Rejected(string reason) => new(false, string.Empty, string.Empty, reason);
 }
 
-public sealed class DevelopmentWorkspaceSecurityException(string message) : InvalidOperationException(message);
+public sealed class DevelopmentWorkspaceSecurityException : InvalidOperationException
+{
+    public DevelopmentWorkspaceSecurityException(string message) : base(message) { }
+}

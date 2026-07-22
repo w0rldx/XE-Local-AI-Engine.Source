@@ -1764,9 +1764,30 @@ export const zXeLocalAiEngineClientEndpointsImagesV1StartImageModelDownloadReque
 	parts: z.array(zXeLocalAiEngineClientEndpointsImagesV1ImageModelPartDownloadRequest),
 });
 
+export const zXeLocalAiEngineClientEndpointsDevelopmentV1DevelopmentCapabilityResponse = z.object({
+	enabled: z.boolean().optional(),
+});
+
+export const zXeLocalAiEngineClientEndpointsDevelopmentV1DevelopmentRepositoryResponse = z.object({
+	id: z.string().optional(),
+	alias: z.string().optional(),
+	availability: z.string().optional(),
+});
+
+export const zXeLocalAiEngineClientEndpointsDevelopmentV1ListDevelopmentRepositoriesResponse = z.object({
+	items: z.array(zXeLocalAiEngineClientEndpointsDevelopmentV1DevelopmentRepositoryResponse).optional(),
+});
+
+export const zXeLocalAiEngineClientEndpointsDevelopmentV1RegisterDevelopmentRepositoryRequest = z.object({
+	alias: z.string().optional(),
+	hostPath: z.string().optional(),
+});
+
 export const zXeLocalAiEngineClientEndpointsDevelopmentV1DevelopmentProjectResponse = z.object({
 	id: z.guid().optional(),
 	objective: z.string().optional(),
+	selectedFolderId: z.guid().nullish(),
+	repositoryConnectionRequired: z.boolean().optional(),
 	baseBranch: z.string().optional(),
 	status: z.string().optional(),
 	egressPolicy: z.string().optional(),
@@ -1872,7 +1893,7 @@ export const zXeLocalAiEngineClientEndpointsDevelopmentV1DevelopmentProjectDetai
 
 export const zXeLocalAiEngineClientEndpointsDevelopmentV1CreateDevelopmentProjectRequest = z.object({
 	operationId: z.guid().optional(),
-	repositoryRoot: z.string().optional(),
+	selectedFolderId: z.guid().optional(),
 	objective: z.string().optional(),
 	baseBranch: z.string().optional(),
 	taskTitle: z.string().optional(),
@@ -1909,7 +1930,6 @@ export const zXeLocalAiEngineClientEndpointsDevelopmentV1DevelopmentNextActionRe
 
 export const zXeLocalAiEngineClientEndpointsDevelopmentV1DevelopmentActionRequest = z.object({
 	operationId: z.guid().optional(),
-	repositoryRoot: z.string().optional(),
 });
 
 export const zXeLocalAiEngineClientEndpointsDevelopmentV1DevelopmentAttemptRequest = z.record(z.string(), z.never());
@@ -1951,6 +1971,11 @@ export const zXeLocalAiEngineClientEndpointsDevelopmentV1DevelopmentApplyRespons
 	status: z.string().optional(),
 	version: z.int().optional(),
 	sequence: z.int().optional(),
+});
+
+export const zXeLocalAiEngineClientEndpointsDevelopmentV1ReconnectDevelopmentRepositoryRequest = z.object({
+	selectedFolderId: z.guid().optional(),
+	expectedVersion: z.int().optional(),
 });
 
 export const zXeLocalAiEngineClientEndpointsConnectionV1ConnectionStatusResponse = z.object({
@@ -3585,6 +3610,25 @@ export const zStartImageModelDownloadResponse = zXeLocalAiEngineClientEndpointsI
 /**
  * Success
  */
+export const zGetDevelopmentCapabilityResponse = zXeLocalAiEngineClientEndpointsDevelopmentV1DevelopmentCapabilityResponse;
+
+/**
+ * Success
+ */
+export const zListDevelopmentRepositoriesResponse =
+	zXeLocalAiEngineClientEndpointsDevelopmentV1ListDevelopmentRepositoriesResponse;
+
+export const zRegisterDevelopmentRepositoryBody =
+	zXeLocalAiEngineClientEndpointsDevelopmentV1RegisterDevelopmentRepositoryRequest;
+
+/**
+ * Success
+ */
+export const zRegisterDevelopmentRepositoryResponse = zXeLocalAiEngineClientEndpointsDevelopmentV1DevelopmentRepositoryResponse;
+
+/**
+ * Success
+ */
 export const zListDevelopmentProjectsResponse = zXeLocalAiEngineClientEndpointsDevelopmentV1ListDevelopmentProjectsResponse;
 
 export const zCreateDevelopmentProjectBody = zXeLocalAiEngineClientEndpointsDevelopmentV1CreateDevelopmentProjectRequest;
@@ -3689,6 +3733,19 @@ export const zApplyDevelopmentPatchPath = z.object({
  * Success
  */
 export const zApplyDevelopmentPatchResponse = zXeLocalAiEngineClientEndpointsDevelopmentV1DevelopmentApplyResponse;
+
+export const zReconnectDevelopmentRepositoryBody =
+	zXeLocalAiEngineClientEndpointsDevelopmentV1ReconnectDevelopmentRepositoryRequest;
+
+export const zReconnectDevelopmentRepositoryPath = z.object({
+	projectId: z.guid(),
+});
+
+/**
+ * Success
+ */
+export const zReconnectDevelopmentRepositoryResponse =
+	zXeLocalAiEngineClientEndpointsDevelopmentV1DevelopmentProjectDetailResponse;
 
 /**
  * Success

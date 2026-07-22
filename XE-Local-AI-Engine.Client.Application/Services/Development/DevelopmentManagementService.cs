@@ -7,7 +7,7 @@ using XE_Local_AI_Engine.Client.Services.CloudProviders;
 
 public sealed record DevelopmentCreateProjectInput(
     Guid OperationId,
-    string RepositoryRoot,
+    Guid SelectedFolderId,
     string Objective,
     string BaseBranch,
     string TaskTitle,
@@ -54,6 +54,10 @@ public sealed record DevelopmentPatchPreviewFile(string Path, string ChangeType,
 
 public interface IDevelopmentManagementService
 {
+    Task<DevelopmentRepositoryReference> RegisterRepositoryAsync(string displayAlias,
+        string hostPath,
+        CancellationToken cancellationToken = default);
+    Task<IReadOnlyList<DevelopmentRepositoryReference>> ListRepositoriesAsync(CancellationToken cancellationToken = default);
     Task<IReadOnlyList<DevelopmentProjectSnapshot>> ListProjectsAsync(CancellationToken cancellationToken = default);
     Task<DevelopmentProjectAggregate> CreateProjectAsync(DevelopmentCreateProjectInput input, CancellationToken cancellationToken = default);
     Task<DevelopmentProjectAggregate> GetProjectAsync(Guid projectId, CancellationToken cancellationToken = default);
@@ -61,7 +65,6 @@ public interface IDevelopmentManagementService
     Task<DevelopmentNextActionResult> StartNextActionAsync(Guid projectId,
         Guid taskId,
         Guid operationId,
-        string repositoryRoot,
         CancellationToken cancellationToken = default);
     Task<bool> CancelAttemptAsync(Guid projectId, Guid taskId, Guid attemptId, CancellationToken cancellationToken = default);
     Task<IReadOnlyList<DevelopmentEventSnapshot>> ListEventsAsync(Guid projectId, CancellationToken cancellationToken = default);
@@ -72,12 +75,14 @@ public interface IDevelopmentManagementService
         CancellationToken cancellationToken = default);
     Task<DevelopmentPatchPreviewResult> PreviewAsync(Guid projectId,
         Guid taskId,
-        string repositoryRoot,
         CancellationToken cancellationToken = default);
     Task<DevelopmentOperationResult> ApplyAsync(Guid projectId,
         Guid taskId,
         Guid operationId,
-        string repositoryRoot,
+        CancellationToken cancellationToken = default);
+    Task<DevelopmentProjectAggregate> ReconnectRepositoryAsync(Guid projectId,
+        Guid selectedFolderId,
+        long expectedVersion,
         CancellationToken cancellationToken = default);
 }
 
@@ -87,6 +92,7 @@ internal sealed class DevelopmentManagementService(
     IDevelopmentAttemptExecutionSupervisor supervisor,
     IDevelopmentArtifactBlobStore blobStore,
     IDevelopmentApplyService applyService,
+    IDevelopmentRepositoryBindingService repositoryBindings,
     IActiveCloudChatClientFactory cloudFactory,
     TimeProvider timeProvider) : IDevelopmentManagementService
 {
@@ -96,9 +102,18 @@ internal sealed class DevelopmentManagementService(
     private readonly IDevelopmentArtifactBlobStore _blobStore = blobStore ?? throw new ArgumentNullException(nameof(blobStore));
     private readonly IDevelopmentCoordinator _coordinator = coordinator ?? throw new ArgumentNullException(nameof(coordinator));
     private readonly IActiveCloudChatClientFactory _cloudFactory = cloudFactory ?? throw new ArgumentNullException(nameof(cloudFactory));
+    private readonly IDevelopmentRepositoryBindingService _repositoryBindings = repositoryBindings ?? throw new ArgumentNullException(nameof(repositoryBindings));
     private readonly IDevelopmentStore _store = store ?? throw new ArgumentNullException(nameof(store));
     private readonly IDevelopmentAttemptExecutionSupervisor _supervisor = supervisor ?? throw new ArgumentNullException(nameof(supervisor));
     private readonly TimeProvider _timeProvider = timeProvider ?? throw new ArgumentNullException(nameof(timeProvider));
+
+    public Task<DevelopmentRepositoryReference> RegisterRepositoryAsync(string displayAlias,
+        string hostPath,
+        CancellationToken cancellationToken = default)
+        => _repositoryBindings.RegisterAsync(displayAlias, hostPath, cancellationToken);
+
+    public Task<IReadOnlyList<DevelopmentRepositoryReference>> ListRepositoriesAsync(CancellationToken cancellationToken = default)
+        => _repositoryBindings.ListAsync(cancellationToken);
 
     public Task<IReadOnlyList<DevelopmentProjectSnapshot>> ListProjectsAsync(CancellationToken cancellationToken = default)
         => _store.ListProjectsAsync(cancellationToken);
@@ -122,14 +137,15 @@ internal sealed class DevelopmentManagementService(
             throw new DevelopmentWorkspaceSecurityException("Development execution requires explicit trusted-repository acknowledgement.");
         }
 
-        var repositoryRoot = DevelopmentWorkspaceSecurity.CanonicalRepositoryRoot(input.RepositoryRoot);
+        var repository = await _repositoryBindings.ResolveFolderAsync(input.SelectedFolderId, cancellationToken).ConfigureAwait(false);
         var projectId = DerivedOperationId(input.OperationId, "project");
         var taskId = DerivedOperationId(input.OperationId, "task");
         _ = await _coordinator.CreateProjectAsync(new DevelopmentCreateProjectCommand(projectId,
                                                   taskId,
                                                   input.OperationId,
                                                   input.Objective,
-                                                  DevelopmentWorkspaceSecurity.RepositoryIdentityHash(repositoryRoot),
+                                                  input.SelectedFolderId,
+                                                  repository.RepositoryIdentityHash,
                                                   input.BaseBranch,
                                                   input.TaskTitle,
                                                   input.Requirements,
@@ -175,18 +191,11 @@ internal sealed class DevelopmentManagementService(
     public async Task<DevelopmentNextActionResult> StartNextActionAsync(Guid projectId,
         Guid taskId,
         Guid operationId,
-        string repositoryRoot,
         CancellationToken cancellationToken = default)
     {
         var project = await _store.GetProjectAsync(projectId, cancellationToken).ConfigureAwait(false);
         DevelopmentTrustPolicy.EnsureCurrent(project, _timeProvider);
-        var canonicalRoot = DevelopmentWorkspaceSecurity.CanonicalRepositoryRoot(repositoryRoot);
-        if (!string.Equals(project.RepositoryIdentityHash,
-                DevelopmentWorkspaceSecurity.RepositoryIdentityHash(canonicalRoot),
-                StringComparison.OrdinalIgnoreCase))
-        {
-            throw new DevelopmentWorkspaceSecurityException("The selected repository does not match the Development project identity.");
-        }
+        _ = await _repositoryBindings.ResolveProjectAsync(projectId, cancellationToken).ConfigureAwait(false);
 
         var existing = await _store.FindOperationAsync(projectId,
             operationId,
@@ -243,7 +252,7 @@ internal sealed class DevelopmentManagementService(
                 return new DevelopmentNextActionResult("Blocked", projectId, taskId, null, DevelopmentTaskStatus.Blocked, null);
             }
 
-            if (!_supervisor.StartValidation(taskId, canonicalRoot))
+            if (!_supervisor.StartValidation(taskId))
             {
                 throw new DevelopmentConcurrencyException("Deterministic validation is already scheduled for this task.");
             }
@@ -281,7 +290,7 @@ internal sealed class DevelopmentManagementService(
                                                   predecessor),
                                               cancellationToken)
                              .ConfigureAwait(false);
-        if (!_supervisor.StartAttempt(attemptId, role, canonicalRoot))
+        if (!_supervisor.StartAttempt(attemptId, role))
         {
             throw new DevelopmentConcurrencyException("The Development attempt is already scheduled.");
         }
@@ -348,11 +357,11 @@ internal sealed class DevelopmentManagementService(
 
     public async Task<DevelopmentPatchPreviewResult> PreviewAsync(Guid projectId,
         Guid taskId,
-        string repositoryRoot,
         CancellationToken cancellationToken = default)
     {
         _ = await RequireTaskAsync(projectId, taskId, cancellationToken).ConfigureAwait(false);
-        var preview = await _applyService.PreviewAsync(taskId, repositoryRoot, cancellationToken).ConfigureAwait(false);
+        var repository = await _repositoryBindings.ResolveProjectAsync(projectId, cancellationToken).ConfigureAwait(false);
+        var preview = await _applyService.PreviewAsync(taskId, repository, cancellationToken).ConfigureAwait(false);
         return new DevelopmentPatchPreviewResult(preview.Subject.SubjectHash,
             preview.Subject.PatchHash,
             preview.Subject.ManifestHash,
@@ -364,11 +373,20 @@ internal sealed class DevelopmentManagementService(
     public async Task<DevelopmentOperationResult> ApplyAsync(Guid projectId,
         Guid taskId,
         Guid operationId,
-        string repositoryRoot,
         CancellationToken cancellationToken = default)
     {
         _ = await RequireTaskAsync(projectId, taskId, cancellationToken).ConfigureAwait(false);
-        return await _applyService.ApplyAsync(taskId, operationId, repositoryRoot, cancellationToken).ConfigureAwait(false);
+        var repository = await _repositoryBindings.ResolveProjectAsync(projectId, cancellationToken).ConfigureAwait(false);
+        return await _applyService.ApplyAsync(taskId, operationId, repository, cancellationToken).ConfigureAwait(false);
+    }
+
+    public async Task<DevelopmentProjectAggregate> ReconnectRepositoryAsync(Guid projectId,
+        Guid selectedFolderId,
+        long expectedVersion,
+        CancellationToken cancellationToken = default)
+    {
+        _ = await _repositoryBindings.ReconnectAsync(projectId, selectedFolderId, expectedVersion, cancellationToken).ConfigureAwait(false);
+        return await GetProjectAsync(projectId, cancellationToken).ConfigureAwait(false);
     }
 
     private async Task<DevelopmentTaskSnapshot> RequireTaskAsync(Guid projectId,

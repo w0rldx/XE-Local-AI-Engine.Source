@@ -25,11 +25,11 @@ The repository is being prepared for an RC release. Release documentation and va
   (`Services/Knowledge`, `Endpoints/Knowledge/V1`, `src/features/knowledge`). See [docs/wiki/15-knowledge-base.md](docs/wiki/15-knowledge-base.md).
 - **Agent mode** — per-agent definitions plus a governed playbook: manual and analysis-proposed actions, an offline eval gate over golden conversations, relevance-gated action retrieval, and cohort
   monitoring (`Services/{Agents,Eval,Insights,Monitoring}`, `XE-Local-AI-Engine.AI.Agent`, `src/features/agents`).
-- **Development Mode** — an opt-in, node-local coding workflow with isolated Git worktrees, deterministic validation, independent review, hash-bound evidence, and explicit final host apply. This capability is for a
-  single operator working with an explicitly trusted repository. Enabling it grants the selected local model autonomous code execution as the host user: generated source, MSBuild targets, source generators,
-  and tests may execute before final-apply approval. The Process sandbox provides path and byte confinement, not an operating-system security boundary; host networking and host-user CPU/memory/process
-  resources remain available. The base/production configuration keeps the capability off, while `appsettings.Development.json` enables it for the local Development environment; set
-  `Development:Enabled=false` when that execution posture is not intended.
+- **Development Mode** — a default-on, node-local coding workflow with engine-owned detached Git worktrees, deterministic validation, independent review, hash-bound evidence, and explicit final host apply.
+  The operator registers a trusted local Git repository once, then selects it by an opaque ID and alias; the host path stays internal to the node. The agent works in a managed worktree outside the selected source
+  repository, and only a reviewed apply whose base and evidence hashes still match may change that source. Generated source, MSBuild targets, source generators, and tests execute as the host user with the host's
+  filesystem and network access. The Process sandbox and Agent Home controls constrain application-mediated paths and bytes; they are not an operating-system security boundary. Set
+  `Development:Enabled=false` as an emergency switch when that execution posture is not intended. MXC and devcontainer-backed isolation remain future provider work.
 - **MCP tool extensibility** — registered MCP servers whose live tool snapshots are offered to agents through the local tool registry (`Services/Mcp`, `src/features/mcp`).
 - **Tests and fixtures** — backend/client persistence tests, integration-style tests, E2E harness, and FakeOllama in-process test server.
 

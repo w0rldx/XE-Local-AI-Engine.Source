@@ -18,7 +18,7 @@ internal sealed record DevelopmentCoderAttemptResult(
 internal interface IDevelopmentCoderAttemptRunner
 {
     Task<DevelopmentCoderAttemptResult> RunAsync(Guid attemptId,
-        string repositoryRoot,
+        DevelopmentRepositoryBinding repository,
         CancellationToken cancellationToken = default);
 }
 
@@ -62,7 +62,7 @@ internal sealed class DevelopmentCoderAttemptRunner : IDevelopmentCoderAttemptRu
     }
 
     public async Task<DevelopmentCoderAttemptResult> RunAsync(Guid attemptId,
-        string repositoryRoot,
+        DevelopmentRepositoryBinding repository,
         CancellationToken cancellationToken = default)
     {
         var snapshot = await _store.GetExecutionSnapshotAsync(attemptId, cancellationToken).ConfigureAwait(false);
@@ -73,7 +73,7 @@ internal sealed class DevelopmentCoderAttemptRunner : IDevelopmentCoderAttemptRu
 
         try
         {
-            var session = await _workspaceProvider.PrepareAsync(snapshot, repositoryRoot, timeout.Token).ConfigureAwait(false);
+            var session = await _workspaceProvider.PrepareAsync(snapshot, repository, timeout.Token).ConfigureAwait(false);
             var maxOutputTokens = Math.Min(snapshot.MaxTokens ?? _options.MaxOutputTokens, _options.MaxOutputTokens);
             var liveProgress = _liveBroker is null
                 ? null

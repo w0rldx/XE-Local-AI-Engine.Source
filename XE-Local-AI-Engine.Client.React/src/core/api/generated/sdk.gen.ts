@@ -218,6 +218,9 @@ import type {
 	GetDevelopmentArtifactData,
 	GetDevelopmentArtifactErrors,
 	GetDevelopmentArtifactResponses,
+	GetDevelopmentCapabilityData,
+	GetDevelopmentCapabilityErrors,
+	GetDevelopmentCapabilityResponses,
 	GetDevelopmentProjectData,
 	GetDevelopmentProjectErrors,
 	GetDevelopmentProjectResponses,
@@ -338,6 +341,9 @@ import type {
 	ListDevelopmentProjectsData,
 	ListDevelopmentProjectsErrors,
 	ListDevelopmentProjectsResponses,
+	ListDevelopmentRepositoriesData,
+	ListDevelopmentRepositoriesErrors,
+	ListDevelopmentRepositoriesResponses,
 	ListGoldenConversationsData,
 	ListGoldenConversationsErrors,
 	ListGoldenConversationsResponses,
@@ -423,12 +429,18 @@ import type {
 	PutModelKindData,
 	PutModelKindErrors,
 	PutModelKindResponses,
+	ReconnectDevelopmentRepositoryData,
+	ReconnectDevelopmentRepositoryErrors,
+	ReconnectDevelopmentRepositoryResponses,
 	RefreshModelCatalogData,
 	RefreshModelCatalogErrors,
 	RefreshModelCatalogResponses,
 	RefreshRecommendationsData,
 	RefreshRecommendationsErrors,
 	RefreshRecommendationsResponses,
+	RegisterDevelopmentRepositoryData,
+	RegisterDevelopmentRepositoryErrors,
+	RegisterDevelopmentRepositoryResponses,
 	ReindexCorpusData,
 	ReindexCorpusErrors,
 	ReindexCorpusResponses,
@@ -676,6 +688,7 @@ import {
 	zGetCudaBuildStatusResponse,
 	zGetDevelopmentArtifactPath,
 	zGetDevelopmentArtifactResponse,
+	zGetDevelopmentCapabilityResponse,
 	zGetDevelopmentProjectPath,
 	zGetDevelopmentProjectResponse,
 	zGetDevelopmentTaskPath,
@@ -744,6 +757,7 @@ import {
 	zListDevelopmentEventsPath,
 	zListDevelopmentEventsResponse,
 	zListDevelopmentProjectsResponse,
+	zListDevelopmentRepositoriesResponse,
 	zListGoldenConversationsPath,
 	zListGoldenConversationsResponse,
 	zListImageJobsResponse,
@@ -790,9 +804,14 @@ import {
 	zPutModelKindBody,
 	zPutModelKindPath,
 	zPutModelKindResponse,
+	zReconnectDevelopmentRepositoryBody,
+	zReconnectDevelopmentRepositoryPath,
+	zReconnectDevelopmentRepositoryResponse,
 	zRefreshModelCatalogResponse,
 	zRefreshRecommendationsBody,
 	zRefreshRecommendationsResponse,
+	zRegisterDevelopmentRepositoryBody,
+	zRegisterDevelopmentRepositoryResponse,
 	zReindexCorpusResponse,
 	zReindexKnowledgeDocumentPath,
 	zReindexKnowledgeDocumentResponse,
@@ -3453,6 +3472,76 @@ export const startImageModelDownload = <ThrowOnError extends boolean = false>(
 		},
 	});
 
+export const getDevelopmentCapability = <ThrowOnError extends boolean = false>(
+	options?: Options<GetDevelopmentCapabilityData, ThrowOnError>,
+) =>
+	(options?.client ?? client).get<GetDevelopmentCapabilityResponses, GetDevelopmentCapabilityErrors, ThrowOnError>({
+		requestValidator: async (data) =>
+			await z
+				.object({
+					body: z.never().optional(),
+					path: z.never().optional(),
+					query: z.never().optional(),
+				})
+				.parseAsync(data),
+		responseType: "json",
+		responseValidator: async (data) => await zGetDevelopmentCapabilityResponse.parseAsync(data),
+		security: [
+			{ scheme: "bearer", type: "http" },
+			{ scheme: "bearer", type: "http" },
+		],
+		url: "/api/local/v1/development/capability",
+		...options,
+	});
+
+export const listDevelopmentRepositories = <ThrowOnError extends boolean = false>(
+	options?: Options<ListDevelopmentRepositoriesData, ThrowOnError>,
+) =>
+	(options?.client ?? client).get<ListDevelopmentRepositoriesResponses, ListDevelopmentRepositoriesErrors, ThrowOnError>({
+		requestValidator: async (data) =>
+			await z
+				.object({
+					body: z.never().optional(),
+					path: z.never().optional(),
+					query: z.never().optional(),
+				})
+				.parseAsync(data),
+		responseType: "json",
+		responseValidator: async (data) => await zListDevelopmentRepositoriesResponse.parseAsync(data),
+		security: [
+			{ scheme: "bearer", type: "http" },
+			{ scheme: "bearer", type: "http" },
+		],
+		url: "/api/local/v1/development/repositories",
+		...options,
+	});
+
+export const registerDevelopmentRepository = <ThrowOnError extends boolean = false>(
+	options: Options<RegisterDevelopmentRepositoryData, ThrowOnError>,
+) =>
+	(options.client ?? client).post<RegisterDevelopmentRepositoryResponses, RegisterDevelopmentRepositoryErrors, ThrowOnError>({
+		requestValidator: async (data) =>
+			await z
+				.object({
+					body: zRegisterDevelopmentRepositoryBody,
+					path: z.never().optional(),
+					query: z.never().optional(),
+				})
+				.parseAsync(data),
+		responseType: "json",
+		responseValidator: async (data) => await zRegisterDevelopmentRepositoryResponse.parseAsync(data),
+		security: [
+			{ scheme: "bearer", type: "http" },
+			{ scheme: "bearer", type: "http" },
+		],
+		url: "/api/local/v1/development/repositories",
+		...options,
+		headers: {
+			"Content-Type": "application/json",
+			...options.headers,
+		},
+	});
+
 export const listDevelopmentProjects = <ThrowOnError extends boolean = false>(
 	options?: Options<ListDevelopmentProjectsData, ThrowOnError>,
 ) =>
@@ -3703,6 +3792,32 @@ export const applyDevelopmentPatch = <ThrowOnError extends boolean = false>(
 			{ scheme: "bearer", type: "http" },
 		],
 		url: "/api/local/v1/development/projects/{projectId}/tasks/{taskId}/apply",
+		...options,
+		headers: {
+			"Content-Type": "application/json",
+			...options.headers,
+		},
+	});
+
+export const reconnectDevelopmentRepository = <ThrowOnError extends boolean = false>(
+	options: Options<ReconnectDevelopmentRepositoryData, ThrowOnError>,
+) =>
+	(options.client ?? client).post<ReconnectDevelopmentRepositoryResponses, ReconnectDevelopmentRepositoryErrors, ThrowOnError>({
+		requestValidator: async (data) =>
+			await z
+				.object({
+					body: zReconnectDevelopmentRepositoryBody,
+					path: zReconnectDevelopmentRepositoryPath,
+					query: z.never().optional(),
+				})
+				.parseAsync(data),
+		responseType: "json",
+		responseValidator: async (data) => await zReconnectDevelopmentRepositoryResponse.parseAsync(data),
+		security: [
+			{ scheme: "bearer", type: "http" },
+			{ scheme: "bearer", type: "http" },
+		],
+		url: "/api/local/v1/development/projects/{projectId}/repository-connection",
 		...options,
 		headers: {
 			"Content-Type": "application/json",

@@ -2,17 +2,20 @@
 using System;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using XE_Local_AI_Engine.Client.Persistence;
 
 #nullable disable
 
-namespace XE_Local_AI_Engine.Client.Persistence.Migrations.NodeChatDb
+namespace XE_Local_AI_Engine.Client.Persistence.Migrations
 {
     [DbContext(typeof(NodeChatDbContext))]
-    partial class NodeChatDbContextModelSnapshot : ModelSnapshot
+    [Migration("20260722192133_BindDevelopmentProjectsToSelectedFolders")]
+    partial class BindDevelopmentProjectsToSelectedFolders
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder.HasAnnotation("ProductVersion", "10.0.9");

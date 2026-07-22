@@ -1,6 +1,6 @@
 # Architecture Overview
 
-> Last reviewed: 2026-06-27 · Code-grounded.
+> Last reviewed: 2026-07-22 · Code-grounded.
 
 XE Local AI Engine (product name **XE AI-Engine**) is the **node-side runtime** of the C0re platform: a single ASP.NET Core process
 (`XE-Local-AI-Engine.Client`) that hosts the React management UI, owns the one outbound platform
@@ -76,6 +76,32 @@ Distinct from the platform link, the React SPA talks to the host over a **loopba
 - The SPA itself is served as static files with `MapFallbackToFile("index.html")`.
 
 See [API & Hubs](09-api-and-hubs.md) and [React Client](10-react-client.md).
+
+---
+
+## Development Mode: registered source, managed worktree
+
+Development Mode is available by default. `DevelopmentOptions.Enabled` is the backend emergency switch;
+setting `Development:Enabled=false` disables the capability when same-host-user code execution is not
+acceptable. The operator does not send an arbitrary repository path with every action. Instead, the node
+registers a local Git repository through `ISelectedFolderResolver` and exposes only its opaque selected-folder
+ID and operator-chosen alias. The host path remains an internal, encrypted node-persistence value.
+
+The registered folder authorizes the **source repository**, not the agent's working directory. For each task,
+`DevelopmentWorkspaceProvider` creates or reattaches an engine-owned detached Git worktree under the node data
+directory, outside the selected source repository, and binds that worktree to `ISandboxRuntimeProvider` as a
+trusted host workspace. The persisted selected-folder ID and canonical repository identity hash must still
+match before execution. Legacy projects without a selected-folder ID must reconnect to a registered repository
+whose canonical identity hash matches the original project.
+
+The source repository changes only through the final apply path. Preview and independent review bind the patch
+to the expected base commit and evidence hashes; apply revalidates those values before mutating the registered
+source. An agent cannot make its managed worktree authoritative merely by changing files there.
+
+This is an application-enforced workflow boundary, not operating-system isolation. Build and test code runs as
+the host user and retains the host filesystem and network access available to that user. MXC and devcontainer
+support are future `ISandboxRuntimeProvider`/workspace-provider work only; the current architecture does not
+present either as an active security boundary. See [Security & Privacy](12-security-and-privacy.md#development-mode-source-and-execution-boundary).
 
 ---
 
@@ -203,6 +229,10 @@ A maintainer must preserve these. Each is enforced or anchored in code today:
 10. **No autostart side effects.** Desktop launch is strictly opt-in (`XE_LAUNCH_MODE=desktop` /
     `--desktop`); off-flag the pipeline is byte-identical to a headless/Aspire/CI run (`Program.cs`,
     `DesktopLaunch`). See [Hosting & Deployment](11-hosting-and-deployment.md).
+11. **Development source authority is explicit and revalidated.** A registered selected-folder ID plus
+    canonical repository identity authorizes the source; the agent works in an engine-owned detached worktree,
+    and only reviewed, base/hash-bound apply may change the source. This does not make executed repository code
+    OS-isolated. See [Security & Privacy](12-security-and-privacy.md#development-mode-source-and-execution-boundary).
 
 ---
 

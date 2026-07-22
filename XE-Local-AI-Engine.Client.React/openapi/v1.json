@@ -5107,6 +5107,119 @@
         ]
       }
     },
+    "/api/local/v1/development/capability": {
+      "get": {
+        "tags": [
+          "Development"
+        ],
+        "operationId": "getDevelopmentCapability",
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/XE_Local_AI_EngineClientEndpointsDevelopmentV1DevelopmentCapabilityResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "403": {
+            "description": "Forbidden"
+          }
+        },
+        "security": [
+          {
+            "JWTBearerAuth": []
+          },
+          {
+            "Bearer": []
+          }
+        ]
+      }
+    },
+    "/api/local/v1/development/repositories": {
+      "get": {
+        "tags": [
+          "Development"
+        ],
+        "operationId": "listDevelopmentRepositories",
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/XE_Local_AI_EngineClientEndpointsDevelopmentV1ListDevelopmentRepositoriesResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "403": {
+            "description": "Forbidden"
+          }
+        },
+        "security": [
+          {
+            "JWTBearerAuth": []
+          },
+          {
+            "Bearer": []
+          }
+        ]
+      },
+      "post": {
+        "tags": [
+          "Development"
+        ],
+        "operationId": "registerDevelopmentRepository",
+        "requestBody": {
+          "x-name": "RegisterDevelopmentRepositoryRequest",
+          "description": "",
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/XE_Local_AI_EngineClientEndpointsDevelopmentV1RegisterDevelopmentRepositoryRequest"
+              }
+            }
+          },
+          "required": true,
+          "x-position": 1
+        },
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/XE_Local_AI_EngineClientEndpointsDevelopmentV1DevelopmentRepositoryResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "403": {
+            "description": "Forbidden"
+          }
+        },
+        "security": [
+          {
+            "JWTBearerAuth": []
+          },
+          {
+            "Bearer": []
+          }
+        ]
+      }
+    },
     "/api/local/v1/development/projects": {
       "get": {
         "tags": [
@@ -5683,6 +5796,64 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/XE_Local_AI_EngineClientEndpointsDevelopmentV1DevelopmentApplyResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "403": {
+            "description": "Forbidden"
+          }
+        },
+        "security": [
+          {
+            "JWTBearerAuth": []
+          },
+          {
+            "Bearer": []
+          }
+        ]
+      }
+    },
+    "/api/local/v1/development/projects/{projectId}/repository-connection": {
+      "post": {
+        "tags": [
+          "Development"
+        ],
+        "operationId": "reconnectDevelopmentRepository",
+        "parameters": [
+          {
+            "name": "projectId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "guid"
+            }
+          }
+        ],
+        "requestBody": {
+          "x-name": "ReconnectDevelopmentRepositoryRequest",
+          "description": "",
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/XE_Local_AI_EngineClientEndpointsDevelopmentV1ReconnectDevelopmentRepositoryRequest"
+              }
+            }
+          },
+          "required": true,
+          "x-position": 1
+        },
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/XE_Local_AI_EngineClientEndpointsDevelopmentV1DevelopmentProjectDetailResponse"
                 }
               }
             }
@@ -13073,6 +13244,54 @@
           }
         }
       },
+      "XE_Local_AI_EngineClientEndpointsDevelopmentV1DevelopmentCapabilityResponse": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "enabled": {
+            "type": "boolean"
+          }
+        }
+      },
+      "XE_Local_AI_EngineClientEndpointsDevelopmentV1ListDevelopmentRepositoriesResponse": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "items": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/XE_Local_AI_EngineClientEndpointsDevelopmentV1DevelopmentRepositoryResponse"
+            }
+          }
+        }
+      },
+      "XE_Local_AI_EngineClientEndpointsDevelopmentV1DevelopmentRepositoryResponse": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "alias": {
+            "type": "string"
+          },
+          "availability": {
+            "type": "string"
+          }
+        }
+      },
+      "XE_Local_AI_EngineClientEndpointsDevelopmentV1RegisterDevelopmentRepositoryRequest": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "alias": {
+            "type": "string"
+          },
+          "hostPath": {
+            "type": "string"
+          }
+        }
+      },
       "XE_Local_AI_EngineClientEndpointsDevelopmentV1ListDevelopmentProjectsResponse": {
         "type": "object",
         "additionalProperties": false,
@@ -13095,6 +13314,14 @@
           },
           "objective": {
             "type": "string"
+          },
+          "selectedFolderId": {
+            "type": "string",
+            "format": "guid",
+            "nullable": true
+          },
+          "repositoryConnectionRequired": {
+            "type": "boolean"
           },
           "baseBranch": {
             "type": "string"
@@ -13383,8 +13610,9 @@
             "type": "string",
             "format": "guid"
           },
-          "repositoryRoot": {
-            "type": "string"
+          "selectedFolderId": {
+            "type": "string",
+            "format": "guid"
           },
           "objective": {
             "type": "string"
@@ -13469,9 +13697,6 @@
           "operationId": {
             "type": "string",
             "format": "guid"
-          },
-          "repositoryRoot": {
-            "type": "string"
           }
         }
       },
@@ -13583,6 +13808,19 @@
             "type": "integer"
           },
           "sequence": {
+            "type": "integer"
+          }
+        }
+      },
+      "XE_Local_AI_EngineClientEndpointsDevelopmentV1ReconnectDevelopmentRepositoryRequest": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "selectedFolderId": {
+            "type": "string",
+            "format": "guid"
+          },
+          "expectedVersion": {
             "type": "integer"
           }
         }
