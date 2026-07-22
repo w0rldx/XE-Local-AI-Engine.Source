@@ -29,6 +29,7 @@ import type {
 import {
 	mergeSourceBuildLogs,
 	sourceBuildIdentity,
+	sourceBuildPrerequisiteDiagnostic,
 	sourceBuildValidationIssue,
 } from "@/features/node-settings/models/SourceBuildModels";
 import {
@@ -75,9 +76,14 @@ export function SourceBuildCard() {
 			setBackend(installed.variant);
 		}
 		setAcknowledged(false);
-		if (installed.sourceRepository && installed.sourceRepository !== "https://github.com/ggml-org/llama.cpp") {
+		const installedSource =
+			installed.sourceSelection ??
+			(installed.sourceRepository && installed.sourceRepository !== "https://github.com/ggml-org/llama.cpp"
+				? "custom"
+				: "official");
+		if (installedSource === "custom") {
 			setSource("custom");
-			setRepository(installed.sourceRepository);
+			setRepository(installed.sourceRepository ?? "");
 		} else {
 			setSource("official");
 			setRepository("");
@@ -98,6 +104,9 @@ export function SourceBuildCard() {
 	const runningProcesses = runtime.data?.runningProcessCount ?? 0;
 	const current = buildStatus?.currentBuild;
 	const activeRepository = installed?.sourceRepository ?? null;
+	const activeSourceSelection =
+		installed?.sourceSelection ??
+		(activeRepository && activeRepository !== "https://github.com/ggml-org/llama.cpp" ? "custom" : "official");
 	const activeRevisionMode = installed?.sourceRevisionMode ?? null;
 	const livePhase = hub.phase ?? buildStatus?.phase ?? null;
 	const persistedIdentity = sourceBuildIdentity(current);
@@ -182,23 +191,29 @@ export function SourceBuildCard() {
 				/>
 
 				<List spacing="xs" size="sm">
-					{(prerequisites.data?.items ?? []).map((item) => (
-						<List.Item
-							key={item.key}
-							icon={
-								<ThemeIcon color={item.satisfied ? "green" : "red"} size={20} radius="xl" variant="light">
-									{item.satisfied ? <IconCircleCheck size={14} /> : <IconCircleX size={14} />}
-								</ThemeIcon>
-							}
-						>
-							<Text span={true} fw={500}>
-								{t(`pages.nodeSettings.llamaCpp.sourceBuild.prerequisites.${item.key}`, item.key)}
-							</Text>{" "}
-							<Text span={true} c="dimmed">
-								{item.detail}
-							</Text>
-						</List.Item>
-					))}
+					{(prerequisites.data?.items ?? []).map((item) => {
+						const diagnostic = sourceBuildPrerequisiteDiagnostic(item);
+						return (
+							<List.Item
+								key={item.key}
+								icon={
+									<ThemeIcon color={item.satisfied ? "green" : "red"} size={20} radius="xl" variant="light">
+										{item.satisfied ? <IconCircleCheck size={14} /> : <IconCircleX size={14} />}
+									</ThemeIcon>
+								}
+							>
+								<Text span={true} fw={500}>
+									{t(`pages.nodeSettings.llamaCpp.sourceBuild.prerequisites.${item.key}`, item.key)}
+								</Text>{" "}
+								<Text span={true} c="dimmed">
+									{t(
+										`pages.nodeSettings.llamaCpp.sourceBuild.prerequisiteAvailability.${item.satisfied ? "available" : "missing"}`,
+									)}
+									{diagnostic ? ` · ${diagnostic}` : ""}
+								</Text>
+							</List.Item>
+						);
+					})}
 				</List>
 				{validationError ? <Alert color="yellow">{validationError}</Alert> : null}
 				{liveError ? <Alert color="red">{liveError}</Alert> : null}
@@ -211,7 +226,7 @@ export function SourceBuildCard() {
 						</Group>
 						{activeRepository ? (
 							<Text size="sm" c="dimmed">
-								{activeRepository} ·{" "}
+								{activeRepository} · {t(`pages.nodeSettings.llamaCpp.sourceBuild.sources.${activeSourceSelection}`)} ·{" "}
 								{activeRevisionMode ? t(`pages.nodeSettings.llamaCpp.sourceBuild.revisions.${activeRevisionMode}`) : ""}
 							</Text>
 						) : null}

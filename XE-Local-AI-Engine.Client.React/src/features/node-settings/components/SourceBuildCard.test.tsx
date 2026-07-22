@@ -54,6 +54,7 @@ vi.mock("react-i18next", () => ({
 				"pages.nodeSettings.llamaCpp.sourceBuild.sources.custom": "Custom public fork",
 				"pages.nodeSettings.llamaCpp.sourceBuild.revisions.enginePinned": "Engine-pinned revision",
 				"pages.nodeSettings.llamaCpp.sourceBuild.prerequisites.os-is-linux": "Linux host",
+				"pages.nodeSettings.llamaCpp.sourceBuild.prerequisiteAvailability.available": "Verfügbar",
 				"pages.nodeSettings.llamaCpp.sourceBuild.repository": "GitHub repository",
 				"pages.nodeSettings.llamaCpp.sourceBuild.riskWarning": "Trusted code warning",
 				"pages.nodeSettings.llamaCpp.sourceBuild.riskAcknowledgement": "I accept the code-execution risk",
@@ -148,7 +149,7 @@ describe("SourceBuildCard", () => {
 		expect(state.statusArgs).toHaveBeenCalledWith(false);
 	});
 
-	it("hydrates custom provenance but requires a fresh acknowledgement before rebuild", async () => {
+	it("hydrates explicit custom provenance even when it uses the canonical official repository URL", async () => {
 		state.runtime = {
 			...state.runtime,
 			installed: {
@@ -157,8 +158,9 @@ describe("SourceBuildCard", () => {
 				asset: "source",
 				installedAtUtc: 1,
 				isSourceBuild: true,
-				sourceRepository: "https://github.com/example/fork",
+				sourceRepository: "https://github.com/ggml-org/llama.cpp",
 				sourceCommit: "a".repeat(40),
+				sourceSelection: "custom",
 				sourceRevisionMode: "explicitCommit",
 				sourceRequestedCommit: "b".repeat(40),
 			},
@@ -166,7 +168,9 @@ describe("SourceBuildCard", () => {
 		renderCard();
 
 		await waitFor(() =>
-			expect((screen.getByLabelText("GitHub repository") as HTMLInputElement).value).toBe("https://github.com/example/fork"),
+			expect((screen.getByLabelText("GitHub repository") as HTMLInputElement).value).toBe(
+				"https://github.com/ggml-org/llama.cpp",
+			),
 		);
 		const acknowledgement = screen.getByLabelText("I accept the code-execution risk") as HTMLInputElement;
 		expect(acknowledgement.checked).toBe(false);
@@ -178,7 +182,7 @@ describe("SourceBuildCard", () => {
 			expect.objectContaining({
 				backend: "vulkan",
 				source: "custom",
-				repository: "https://github.com/example/fork",
+				repository: "https://github.com/ggml-org/llama.cpp",
 				commit: "b".repeat(40),
 				acknowledgeCustomSourceRisk: true,
 			}),
@@ -198,6 +202,7 @@ describe("SourceBuildCard", () => {
 				isSourceBuild: true,
 				sourceRepository: "https://github.com/ggml-org/llama.cpp",
 				sourceCommit: "c".repeat(40),
+				sourceSelection: "official",
 				sourceRevisionMode: "enginePinned",
 				sourceRequestedCommit: null,
 			},
@@ -214,11 +219,18 @@ describe("SourceBuildCard", () => {
 				resolvedCommit: "d".repeat(40),
 			},
 		};
-		state.prerequisites = { backend: "cpu", canBuild: true, items: [{ key: "os-is-linux", satisfied: true, detail: "ok" }] };
+		state.prerequisites = {
+			backend: "cpu",
+			canBuild: true,
+			items: [{ key: "os-is-linux", satisfied: true, detail: "Linux host detected." }],
+		};
 		renderCard();
-		expect(screen.getByText(/github.com\/ggml-org\/llama.cpp/)).toBeTruthy();
+		const provenance = screen.getByText(/github.com\/ggml-org\/llama.cpp/);
 		expect(screen.queryByText(/github.com\/example\/fork/)).toBeNull();
 		expect(screen.getByText(/Engine-pinned revision/)).toBeTruthy();
+		expect(provenance.textContent).toContain("Official upstream");
 		expect(screen.getByText("Linux host")).toBeTruthy();
+		expect(screen.getByText("Verfügbar")).toBeTruthy();
+		expect(screen.queryByText("Linux host detected.")).toBeNull();
 	});
 });

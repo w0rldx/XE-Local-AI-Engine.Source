@@ -1161,9 +1161,14 @@
 						"git": "Git",
 						"nvidia-gpu": "NVIDIA GPU",
 						"nvcc": "CUDA compiler",
+						"nvidia-smi": "NVIDIA driver",
 						"glslc": "Vulkan shader compiler",
 						"vulkaninfo": "Vulkan runtime",
 						"free-disk": "Free disk space"
+					},
+					"prerequisiteAvailability": {
+						"available": "Available",
+						"missing": "Missing or unavailable"
 					},
 					"repository": "GitHub repository",
 					"riskWarning": "Custom repository code executes with the app user's privileges. It is trusted code, not sandboxed.",

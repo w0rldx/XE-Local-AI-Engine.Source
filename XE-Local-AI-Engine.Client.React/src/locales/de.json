@@ -1161,9 +1161,14 @@
 						"git": "Git",
 						"nvidia-gpu": "NVIDIA-GPU",
 						"nvcc": "CUDA-Compiler",
+						"nvidia-smi": "NVIDIA-Treiber",
 						"glslc": "Vulkan-Shader-Compiler",
 						"vulkaninfo": "Vulkan-Laufzeit",
 						"free-disk": "Freier Speicherplatz"
+					},
+					"prerequisiteAvailability": {
+						"available": "Verfügbar",
+						"missing": "Fehlt oder ist nicht verfügbar"
 					},
 					"repository": "GitHub-Repository",
 					"riskWarning": "Code aus einem benutzerdefinierten Repository wird mit den Rechten der App ausgeführt. Der Code gilt als vertrauenswürdig und läuft nicht in einer Sandbox.",

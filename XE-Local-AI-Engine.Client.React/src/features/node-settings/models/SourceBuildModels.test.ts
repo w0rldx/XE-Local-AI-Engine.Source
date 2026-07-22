@@ -3,6 +3,7 @@ import { describe, expect, it } from "vitest";
 import {
 	mergeSourceBuildLogs,
 	sourceBuildIdentity,
+	sourceBuildPrerequisiteDiagnostic,
 	sourceBuildRequest,
 	sourceBuildValidationError,
 } from "@/features/node-settings/models/SourceBuildModels";
@@ -59,5 +60,19 @@ describe("source build models", () => {
 		};
 		expect(sourceBuildIdentity(base)).toBe(sourceBuildIdentity({ ...base, resolvedCommit: "a".repeat(40) }));
 		expect(sourceBuildIdentity(base)).not.toBe(sourceBuildIdentity({ ...base, buildId: "22222222-2222-4222-8222-222222222222" }));
+	});
+
+	it("retains technical diagnostics without exposing backend availability prose", () => {
+		expect(
+			sourceBuildPrerequisiteDiagnostic({
+				key: "cmake",
+				satisfied: true,
+				detail: "CMake detected: cmake version 4.0.0",
+			}),
+		).toBe("cmake version 4.0.0");
+		expect(sourceBuildPrerequisiteDiagnostic({ key: "os-is-linux", satisfied: true, detail: "Linux host detected." })).toBeNull();
+		expect(
+			sourceBuildPrerequisiteDiagnostic({ key: "free-disk", satisfied: false, detail: "Only 4.2 GB free; 20 GB required." }),
+		).toBe("4.2 GB / 20 GB");
 	});
 });

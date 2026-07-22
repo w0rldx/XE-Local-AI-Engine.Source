@@ -61,6 +61,18 @@ public sealed class LlamaCppSourceBuildTransportTests
     }
 
     [Test]
+    public void RuntimeMapper_PreservesExplicitInstalledSourceSelection()
+    {
+        var installed = new InstalledRuntimeState("b1", "source", "sha", GpuVariant.Cpu, DateTimeOffset.UtcNow,
+            "/managed/source", LlamaCppSourceBuildRequestValidation.OfficialRepository, new string('a', 40),
+            LlamaCppSourceRevisionMode.DefaultBranch, null, LlamaCppSourceSelection.Custom);
+
+        var response = LlamaCppUpdateSnapshot.Empty.ToRuntimeStatusResponse(installed, "b1", runningProcessCount: 0);
+
+        AssertEx.Equal(LlamaCppSourceSelectionDto.Custom, response.Installed!.SourceSelection);
+    }
+
+    [Test]
     public async Task Remove_AcquiresLeaseChecksProcessesRemovesAndDisposesInOrder()
     {
         var order = new List<string>();

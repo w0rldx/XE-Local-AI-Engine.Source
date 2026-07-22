@@ -283,6 +283,7 @@ internal static class ModelFitMapper
             IsSourceBuild = state.SourceBuildPath is { Length: > 0 },
             SourceRepository = state.SourceRepository,
             SourceCommit = state.SourceCommit,
+            SourceSelection = state.SourceSelection is null ? null : (LlamaCppSourceSelectionDto)(int)state.SourceSelection.Value,
             SourceRevisionMode = state.SourceRevisionMode is null ? null : (LlamaCppSourceRevisionModeDto)(int)state.SourceRevisionMode.Value,
             SourceRequestedCommit = state.SourceRequestedCommit
         };

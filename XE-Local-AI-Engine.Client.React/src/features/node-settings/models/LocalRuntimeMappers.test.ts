@@ -14,6 +14,7 @@ describe("toLlamaCppRuntimeStatus", () => {
 				isSourceBuild: true,
 				sourceRepository: "https://github.com/example/fork",
 				sourceCommit: "a".repeat(40),
+				sourceSelection: "custom",
 				sourceRevisionMode: "explicitCommit",
 				sourceRequestedCommit: "b".repeat(40),
 			},
@@ -36,6 +37,7 @@ describe("toLlamaCppRuntimeStatus", () => {
 			isSourceBuild: true,
 			sourceRepository: "https://github.com/example/fork",
 			sourceCommit: "a".repeat(40),
+			sourceSelection: "custom",
 			sourceRevisionMode: "explicitCommit",
 			sourceRequestedCommit: "b".repeat(40),
 		});
