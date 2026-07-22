@@ -18,6 +18,7 @@ export interface LlamaCppInstalledRuntime {
 	readonly isSourceBuild?: boolean;
 	readonly sourceRepository?: string | null;
 	readonly sourceCommit?: string | null;
+	readonly sourceSelection?: "official" | "custom" | null;
 	readonly sourceRevisionMode?: "enginePinned" | "defaultBranch" | "explicitCommit" | null;
 	readonly sourceRequestedCommit?: string | null;
 }

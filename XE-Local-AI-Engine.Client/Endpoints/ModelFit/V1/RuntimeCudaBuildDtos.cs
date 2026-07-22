@@ -70,6 +70,7 @@ public sealed class LlamaCppInstalledRuntimeResponse
 
     public string? SourceRepository { get; init; }
     public string? SourceCommit { get; init; }
+    public LlamaCppSourceSelectionDto? SourceSelection { get; init; }
     public LlamaCppSourceRevisionModeDto? SourceRevisionMode { get; init; }
     public string? SourceRequestedCommit { get; init; }
 }

@@ -113,7 +113,7 @@ public sealed class OpenApiDocumentTests
         AssertSchemaProperties(schemas, "LlamaCppSourceBuildDescriptorResponse",
             ["buildId", "backend", "source", "repository", "revisionMode", "requestedCommit", "resolvedCommit"]);
         AssertSchemaProperties(schemas, "LlamaCppInstalledRuntimeResponse",
-            ["sourceRepository", "sourceCommit", "sourceRevisionMode", "sourceRequestedCommit"]);
+            ["sourceRepository", "sourceCommit", "sourceSelection", "sourceRevisionMode", "sourceRequestedCommit"]);
     }
 
     private static void AssertResponses(JsonElement paths, string path, string verb, IReadOnlyList<string> expected)

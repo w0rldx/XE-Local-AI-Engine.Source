@@ -17,7 +17,13 @@ export interface LlamaCppSourceBuildDescriptor {
 export interface LlamaCppSourceBuildPrerequisites {
 	readonly backend: LlamaCppSourceBackend;
 	readonly canBuild: boolean;
-	readonly items: readonly { readonly key: string; readonly satisfied: boolean; readonly detail: string }[];
+	readonly items: readonly LlamaCppSourceBuildPrerequisiteItem[];
+}
+
+export interface LlamaCppSourceBuildPrerequisiteItem {
+	readonly key: string;
+	readonly satisfied: boolean;
+	readonly detail: string;
 }
 
 export interface LlamaCppSourceBuildStatus {
@@ -91,6 +97,27 @@ export function mergeSourceBuildLogs(persisted: readonly string[], live: readonl
 		}
 	}
 	return [...persisted, ...live.slice(overlap)];
+}
+
+const diagnosticToolKeys = new Set(["cmake", "gcc", "g++", "git", "nvcc", "nvidia-smi", "glslc", "vulkaninfo"]);
+
+/** Keeps command/version diagnostics without rendering the backend's English availability prose. */
+export function sourceBuildPrerequisiteDiagnostic(item: LlamaCppSourceBuildPrerequisiteItem): string | null {
+	if (item.key === "free-disk") {
+		const sizes = item.detail.match(/\d+(?:[.,]\d+)? GB/g);
+		return sizes && sizes.length >= 2 ? `${sizes[0]} / ${sizes[1]}` : null;
+	}
+	if (!item.satisfied) {
+		return null;
+	}
+	if (item.key === "make-or-ninja") {
+		return item.detail.startsWith("make ") ? "make" : item.detail.startsWith("ninja ") ? "ninja" : null;
+	}
+	if (!diagnosticToolKeys.has(item.key)) {
+		return null;
+	}
+	const separator = item.detail.indexOf(": ");
+	return separator >= 0 ? item.detail.slice(separator + 2).trim() || null : null;
 }
 
 export function sourceBuildRequest(draft: SourceBuildDraft) {

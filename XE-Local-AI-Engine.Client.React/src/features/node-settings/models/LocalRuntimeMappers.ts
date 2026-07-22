@@ -28,6 +28,7 @@ export function toLlamaCppRuntimeStatus(
 						isSourceBuild: installed.isSourceBuild ?? false,
 						sourceRepository: installed.sourceRepository ?? null,
 						sourceCommit: installed.sourceCommit ?? null,
+						sourceSelection: installed.sourceSelection ?? null,
 						sourceRevisionMode: installed.sourceRevisionMode ?? null,
 						sourceRequestedCommit: installed.sourceRequestedCommit ?? null,
 					}
