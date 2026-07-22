@@ -5,6 +5,7 @@ export type LlamaCppSourceRevisionMode = "enginePinned" | "defaultBranch" | "exp
 export const sourceBuildBackends: readonly LlamaCppSourceBackend[] = ["cpu", "vulkan", "cuda"];
 
 export interface LlamaCppSourceBuildDescriptor {
+	readonly buildId: string;
 	readonly backend: LlamaCppSourceBackend;
 	readonly source: LlamaCppSourceSelection;
 	readonly repository: string;
@@ -74,13 +75,7 @@ export function sourceBuildIdentity(descriptor: LlamaCppSourceBuildDescriptor | 
 	if (descriptor == null) {
 		return null;
 	}
-	return [
-		descriptor.backend,
-		descriptor.source,
-		descriptor.repository,
-		descriptor.revisionMode,
-		descriptor.requestedCommit ?? "",
-	].join("|");
+	return descriptor.buildId;
 }
 
 export function mergeSourceBuildLogs(persisted: readonly string[], live: readonly string[]): readonly string[] {

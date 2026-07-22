@@ -25,8 +25,9 @@ vi.mock("@/core/api/signalr/SharedHubConnection", () => ({
 
 import { useSourceBuildHub } from "@/features/node-settings/hooks/useSourceBuildHub";
 
-function descriptor(repository: string) {
+function descriptor(repository: string, buildId: string) {
 	return {
+		buildId,
 		backend: "cpu",
 		source: repository.includes("ggml-org") ? "official" : "custom",
 		repository,
@@ -56,7 +57,7 @@ describe("useSourceBuildHub", () => {
 				appendedLogLines: ["old"],
 				terminal: false,
 				sanitizedError: null,
-				currentBuild: descriptor("https://github.com/ggml-org/llama.cpp"),
+				currentBuild: descriptor("https://github.com/ggml-org/llama.cpp", "11111111-1111-4111-8111-111111111111"),
 			}),
 		);
 		expect(result.current.logLines).toEqual(["old"]);
@@ -67,11 +68,34 @@ describe("useSourceBuildHub", () => {
 				appendedLogLines: ["new"],
 				terminal: true,
 				sanitizedError: null,
-				currentBuild: descriptor("https://github.com/example/fork"),
+				currentBuild: descriptor("https://github.com/ggml-org/llama.cpp", "22222222-2222-4222-8222-222222222222"),
 			}),
 		);
 
 		expect(result.current.logLines).toEqual(["new"]);
 		await waitFor(() => expect(invalidate).toHaveBeenCalledTimes(2));
+	});
+
+	it("rejects provider enum casing instead of accepting a mismatched wire payload", () => {
+		const queryClient = new QueryClient();
+		const wrapper = ({ children }: { children: ReactNode }) => (
+			<QueryClientProvider client={queryClient}>{children}</QueryClientProvider>
+		);
+		const { result } = renderHook(() => useSourceBuildHub(true), { wrapper });
+
+		act(() =>
+			hubMock.handler?.({
+				phase: "Building",
+				appendedLogLines: ["ignored"],
+				terminal: false,
+				sanitizedError: null,
+				currentBuild: {
+					...descriptor("https://github.com/ggml-org/llama.cpp", "11111111-1111-4111-8111-111111111111"),
+					backend: "Cpu",
+				},
+			}),
+		);
+
+		expect(result.current.logLines).toEqual([]);
 	});
 });

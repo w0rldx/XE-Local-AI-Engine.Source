@@ -103,13 +103,15 @@ public sealed class OpenApiDocumentTests
         AssertResponses(paths, "/api/local/v1/model-fit/llamacpp/source-build/status", "get", ["200"]);
         AssertResponses(paths, "/api/local/v1/model-fit/llamacpp/source-build/cancel", "post", ["200"]);
         AssertResponses(paths, "/api/local/v1/model-fit/llamacpp/source-build/remove", "post", ["200", "409"]);
+        AssertResponses(paths, "/api/local/v1/model-fit/llamacpp/version", "post", ["200", "400", "409"]);
+        AssertResponses(paths, "/api/local/v1/model-fit/llamacpp/update", "post", ["200", "400", "409"]);
 
         var requestSchema = FindSchema(schemas, "StartLlamaCppSourceBuildRequest");
         AssertEx.True(requestSchema.GetProperty("required").EnumerateArray()
             .Any(static property => property.GetString() == "acknowledgeCustomSourceRisk"),
             "The custom-source risk acknowledgement must be required on the wire.");
         AssertSchemaProperties(schemas, "LlamaCppSourceBuildDescriptorResponse",
-            ["backend", "source", "repository", "revisionMode", "requestedCommit", "resolvedCommit"]);
+            ["buildId", "backend", "source", "repository", "revisionMode", "requestedCommit", "resolvedCommit"]);
         AssertSchemaProperties(schemas, "LlamaCppInstalledRuntimeResponse",
             ["sourceRepository", "sourceCommit", "sourceRevisionMode", "sourceRequestedCommit"]);
     }

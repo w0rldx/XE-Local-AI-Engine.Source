@@ -337,6 +337,7 @@ internal static class ModelFitMapper
     {
         return new LlamaCppSourceBuildDescriptorResponse
         {
+            BuildId = descriptor.BuildId,
             Backend = descriptor.Variant switch
             {
                 GpuVariant.Cpu => LlamaCppSourceBackendDto.Cpu,

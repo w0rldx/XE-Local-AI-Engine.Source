@@ -1093,6 +1093,8 @@
 					"updateAvailable": "Update verfügbar",
 					"upToDate": "Aktuell",
 					"runningNotice": "{{count}} llama.cpp-Modell(e) aktiv — werfen Sie diese aus, bevor Sie die Laufzeit aktualisieren.",
+					"installedSourceBuildNotice": "Entferne die installierte, aus Quellcode erstellte Laufzeit, bevor eine vorgefertigte Laufzeit installiert wird.",
+					"activeSourceBuildNotice": "Warte, bis der aktive Quellbuild abgeschlossen ist, oder brich ihn ab, bevor eine vorgefertigte Laufzeit installiert wird.",
 					"openLoadedModels": "Geladene Modelle öffnen",
 					"update": "Empfohlene Version installieren ({{tag}})",
 					"installUpstream": "Upstream-Version installieren ({{tag}})",
@@ -1135,7 +1137,34 @@
 					"description": "CPU-, Vulkan- oder CUDA-llama.cpp aus dem offiziellen Upstream oder einem vertrauenswürdigen öffentlichen GitHub-Fork bauen.",
 					"devBadge": "Entwicklung",
 					"backend": "Backend",
+					"backends": {
+						"cpu": "CPU",
+						"vulkan": "Vulkan",
+						"cuda": "CUDA"
+					},
 					"source": "Quelle",
+					"sources": {
+						"official": "Offizieller Upstream",
+						"custom": "Benutzerdefinierter öffentlicher Fork"
+					},
+					"revisions": {
+						"enginePinned": "Von der Engine festgelegte Revision",
+						"defaultBranch": "Standardbranch",
+						"explicitCommit": "Expliziter Commit"
+					},
+					"prerequisites": {
+						"os-is-linux": "Linux-Host",
+						"cmake": "CMake",
+						"gcc": "C-Compiler",
+						"g++": "C++-Compiler",
+						"make-or-ninja": "Make oder Ninja",
+						"git": "Git",
+						"nvidia-gpu": "NVIDIA-GPU",
+						"nvcc": "CUDA-Compiler",
+						"glslc": "Vulkan-Shader-Compiler",
+						"vulkaninfo": "Vulkan-Laufzeit",
+						"free-disk": "Freier Speicherplatz"
+					},
 					"repository": "GitHub-Repository",
 					"riskWarning": "Code aus einem benutzerdefinierten Repository wird mit den Rechten der App ausgeführt. Der Code gilt als vertrauenswürdig und läuft nicht in einer Sandbox.",
 					"riskAcknowledgement": "Ich vertraue diesem öffentlichen GitHub-Repository und akzeptiere das Risiko der Codeausführung.",

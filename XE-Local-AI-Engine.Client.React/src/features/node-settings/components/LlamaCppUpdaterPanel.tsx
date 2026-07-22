@@ -24,6 +24,7 @@ import {
 	useEnsureLlamaCppBinary,
 	useLlamaCppRuntimeStatus,
 	useRefreshLlamaCppRuntime,
+	useSourceBuildStatus,
 	useUpdateLlamaCppRuntime,
 } from "@/features/node-settings/queries/useLocalRuntime";
 
@@ -59,6 +60,7 @@ export function LlamaCppUpdaterPanel() {
 	const updateMutation = useUpdateLlamaCppRuntime();
 	const ensureMutation = useEnsureLlamaCppBinary();
 	const refreshRuntime = useRefreshLlamaCppRuntime();
+	const sourceBuildStatusQuery = useSourceBuildStatus();
 
 	const [isRefreshing, setIsRefreshing] = useState(false);
 	// The operator's explicit variant choice, or null until they pick one. The effective Select value derives from this
@@ -76,6 +78,9 @@ export function LlamaCppUpdaterPanel() {
 	const installedVariant = status?.installed?.variant ?? "";
 	const runningProcessCount = status?.runningProcessCount ?? 0;
 	const hasRunningProcesses = runningProcessCount > 0;
+	const hasInstalledSourceRuntime = status?.installed?.isSourceBuild === true;
+	const sourceBuildActive = sourceBuildStatusQuery.data?.isRunning === true;
+	const prebuiltMutationBlocked = hasInstalledSourceRuntime || sourceBuildActive;
 
 	// Effective Select value: the operator's explicit pick, else the installed variant (when it is a known build), else
 	// the cpu fallback. Recomputed on each render so it tracks the resolved status without copying it into state.
@@ -85,7 +90,12 @@ export function LlamaCppUpdaterPanel() {
 	// true upstream-latest when it differs from recommended. Both go through the same verified update path, and both are
 	// blocked while any llama-server process is running (the binary is in use — the operator must eject first).
 	const canUpdate =
-		updateAvailable && !isOffline && recommendedTag.length > 0 && !updateMutation.isPending && !hasRunningProcesses;
+		updateAvailable &&
+		!isOffline &&
+		recommendedTag.length > 0 &&
+		!updateMutation.isPending &&
+		!hasRunningProcesses &&
+		!prebuiltMutationBlocked;
 	const showUpstream = developerMode && upstreamLatestTag !== null && upstreamLatestTag.length > 0;
 	const canInstallUpstream =
 		showUpstream &&
@@ -93,6 +103,7 @@ export function LlamaCppUpdaterPanel() {
 		!isOffline &&
 		!updateMutation.isPending &&
 		!hasRunningProcesses &&
+		!prebuiltMutationBlocked &&
 		upstreamLatestTag !== null;
 
 	const variantData = llamaCppVariants.map((value) => ({
@@ -268,6 +279,19 @@ export function LlamaCppUpdaterPanel() {
 								</Anchor>
 							</Alert>
 						) : null}
+						{prebuiltMutationBlocked ? (
+							<Alert color="yellow" icon={<IconAlertTriangle size={16} />} data-testid="llamacpp-updater-source-build-notice">
+								{hasInstalledSourceRuntime
+									? t(
+											"pages.nodeSettings.llamaCpp.updater.installedSourceBuildNotice",
+											"Remove the installed source-built runtime before installing a prebuilt runtime.",
+										)
+									: t(
+											"pages.nodeSettings.llamaCpp.updater.activeSourceBuildNotice",
+											"Wait for the active source build to finish or cancel it before installing a prebuilt runtime.",
+										)}
+							</Alert>
+						) : null}
 
 						<Group gap="sm">
 							<Button
@@ -311,6 +335,7 @@ export function LlamaCppUpdaterPanel() {
 								variant="default"
 								leftSection={<IconDownload size={16} />}
 								loading={ensureMutation.isPending}
+								disabled={hasRunningProcesses || prebuiltMutationBlocked}
 								onClick={handleEnsure}
 								data-testid="llamacpp-updater-ensure-button"
 							>
