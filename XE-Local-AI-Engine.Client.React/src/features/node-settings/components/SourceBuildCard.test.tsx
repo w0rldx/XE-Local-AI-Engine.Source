@@ -46,7 +46,14 @@ vi.mock("react-i18next", () => ({
 				"pages.nodeSettings.llamaCpp.sourceBuild.devBadge": "Dev",
 				"pages.nodeSettings.llamaCpp.sourceBuild.description": "Description",
 				"pages.nodeSettings.llamaCpp.sourceBuild.backend": "Backend",
+				"pages.nodeSettings.llamaCpp.sourceBuild.backends.cpu": "CPU",
+				"pages.nodeSettings.llamaCpp.sourceBuild.backends.vulkan": "Vulkan",
+				"pages.nodeSettings.llamaCpp.sourceBuild.backends.cuda": "CUDA",
 				"pages.nodeSettings.llamaCpp.sourceBuild.source": "Source",
+				"pages.nodeSettings.llamaCpp.sourceBuild.sources.official": "Official upstream",
+				"pages.nodeSettings.llamaCpp.sourceBuild.sources.custom": "Custom public fork",
+				"pages.nodeSettings.llamaCpp.sourceBuild.revisions.enginePinned": "Engine-pinned revision",
+				"pages.nodeSettings.llamaCpp.sourceBuild.prerequisites.os-is-linux": "Linux host",
 				"pages.nodeSettings.llamaCpp.sourceBuild.repository": "GitHub repository",
 				"pages.nodeSettings.llamaCpp.sourceBuild.riskWarning": "Trusted code warning",
 				"pages.nodeSettings.llamaCpp.sourceBuild.riskAcknowledgement": "I accept the code-execution risk",
@@ -180,7 +187,7 @@ describe("SourceBuildCard", () => {
 		expect(acknowledgement.checked).toBe(false);
 	});
 
-	it("renders installed provenance after restart when current build status is absent", () => {
+	it("renders active provenance exclusively from the installed runtime", () => {
 		state.runtime = {
 			...state.runtime,
 			installed: {
@@ -195,8 +202,23 @@ describe("SourceBuildCard", () => {
 				sourceRequestedCommit: null,
 			},
 		};
+		state.status = {
+			...state.status,
+			currentBuild: {
+				buildId: "11111111-1111-4111-8111-111111111111",
+				backend: "vulkan",
+				source: "custom",
+				repository: "https://github.com/example/fork",
+				revisionMode: "defaultBranch",
+				requestedCommit: null,
+				resolvedCommit: "d".repeat(40),
+			},
+		};
+		state.prerequisites = { backend: "cpu", canBuild: true, items: [{ key: "os-is-linux", satisfied: true, detail: "ok" }] };
 		renderCard();
 		expect(screen.getByText(/github.com\/ggml-org\/llama.cpp/)).toBeTruthy();
-		expect(screen.getByText(/enginePinned/)).toBeTruthy();
+		expect(screen.queryByText(/github.com\/example\/fork/)).toBeNull();
+		expect(screen.getByText(/Engine-pinned revision/)).toBeTruthy();
+		expect(screen.getByText("Linux host")).toBeTruthy();
 	});
 });

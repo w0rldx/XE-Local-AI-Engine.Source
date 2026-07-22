@@ -35,6 +35,7 @@ export function toSourceBuildStatus(
 			build == null
 				? null
 				: {
+						buildId: build.buildId ?? "",
 						backend: build.backend ?? "cpu",
 						source: build.source ?? "official",
 						repository: build.repository ?? "",

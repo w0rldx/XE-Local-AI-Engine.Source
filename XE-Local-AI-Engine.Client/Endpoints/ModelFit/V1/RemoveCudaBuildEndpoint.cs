@@ -37,9 +37,8 @@ public sealed class RemoveCudaBuildEndpoint(
 
     public override async Task HandleAsync(CancellationToken ct)
     {
-        // Eject-first: a managed build that is currently serving must not be deleted out from under a running process.
-        var runningProcessCount = _processSupervisor.CountRunningProcesses();
-        if (runningProcessCount > 0)
+        var (removed, runningProcessCount) = await TryRemoveAsync(_binaryManager, _processSupervisor, ct).ConfigureAwait(false);
+        if (!removed)
         {
             await Send.ResultAsync(Results.Conflict(new CudaBuildBlockedResponse
             {
@@ -50,13 +49,27 @@ public sealed class RemoveCudaBuildEndpoint(
             return;
         }
 
-        await _binaryManager.RemoveCudaSourceBuildAsync(ct).ConfigureAwait(false);
-
         // The runtime record is gone; a cached deferred chat client may still point at the removed binary's endpoint.
         _localChatClientCacheInvalidator.ClearClientCache();
 
         var recommendedTag = await _nodeRuntimeSettings.GetRecommendedLlamaCppTagAsync(ct).ConfigureAwait(false);
         var installed = await _installedRuntimeStore.ReadAsync(ct).ConfigureAwait(false);
         await Send.OkAsync(_updateState.Current.ToRuntimeStatusResponse(installed, recommendedTag, runningProcessCount), ct).ConfigureAwait(false);
+    }
+
+    internal static async Task<(bool Removed, int RunningProcessCount)> TryRemoveAsync(
+        ILlamaCppBinaryManager binaryManager,
+        ILlamaServerProcessSupervisor processSupervisor,
+        CancellationToken ct)
+    {
+        await using var mutationLease = await processSupervisor.TryAcquireRuntimeMutationLeaseAsync(ct).ConfigureAwait(false);
+        var runningProcessCount = processSupervisor.CountRunningProcesses();
+        if (mutationLease is null || runningProcessCount > 0)
+        {
+            return (false, runningProcessCount);
+        }
+
+        await binaryManager.RemoveCudaSourceBuildAsync(ct).ConfigureAwait(false);
+        return (true, runningProcessCount);
     }
 }

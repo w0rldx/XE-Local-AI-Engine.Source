@@ -60,6 +60,7 @@ public sealed class LlamaCppSourceBuildPrerequisitesResponse
 
 public sealed class LlamaCppSourceBuildDescriptorResponse
 {
+    public required Guid BuildId { get; init; }
     public required LlamaCppSourceBackendDto Backend { get; init; }
     public required LlamaCppSourceSelectionDto Source { get; init; }
     public required string Repository { get; init; }

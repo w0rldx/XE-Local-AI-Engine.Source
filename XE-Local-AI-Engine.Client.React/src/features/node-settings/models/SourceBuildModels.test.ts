@@ -47,8 +47,9 @@ describe("source build models", () => {
 		]);
 	});
 
-	it("identifies a build by immutable revision intent rather than its resolved SHA", () => {
+	it("identifies a concrete run by build id", () => {
 		const base = {
+			buildId: "11111111-1111-4111-8111-111111111111",
 			backend: "cuda" as const,
 			source: "official" as const,
 			repository: "https://github.com/ggml-org/llama.cpp",
@@ -57,5 +58,6 @@ describe("source build models", () => {
 			resolvedCommit: null,
 		};
 		expect(sourceBuildIdentity(base)).toBe(sourceBuildIdentity({ ...base, resolvedCommit: "a".repeat(40) }));
+		expect(sourceBuildIdentity(base)).not.toBe(sourceBuildIdentity({ ...base, buildId: "22222222-2222-4222-8222-222222222222" }));
 	});
 });

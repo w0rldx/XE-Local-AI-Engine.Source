@@ -15,6 +15,7 @@ const eventSchema = z.object({
 	sanitizedError: z.string().nullable(),
 	currentBuild: z
 		.object({
+			buildId: z.string().uuid(),
 			backend: z.enum(["cpu", "vulkan", "cuda"]),
 			source: z.enum(["official", "custom"]),
 			repository: z.string(),

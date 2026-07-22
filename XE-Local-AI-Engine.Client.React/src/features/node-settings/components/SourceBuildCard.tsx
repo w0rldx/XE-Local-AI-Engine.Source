@@ -97,8 +97,8 @@ export function SourceBuildCard() {
 	const isBuilding = buildStatus?.isRunning === true || start.isPending;
 	const runningProcesses = runtime.data?.runningProcessCount ?? 0;
 	const current = buildStatus?.currentBuild;
-	const activeRepository = current?.repository ?? installed?.sourceRepository ?? null;
-	const activeRevisionMode = current?.revisionMode ?? installed?.sourceRevisionMode ?? null;
+	const activeRepository = installed?.sourceRepository ?? null;
+	const activeRevisionMode = installed?.sourceRevisionMode ?? null;
 	const livePhase = hub.phase ?? buildStatus?.phase ?? null;
 	const persistedIdentity = sourceBuildIdentity(current);
 	const liveLogs =
@@ -106,6 +106,14 @@ export function SourceBuildCard() {
 			? mergeSourceBuildLogs(buildStatus?.logLines ?? [], hub.logLines)
 			: hub.logLines;
 	const liveError = hub.error ?? buildStatus?.sanitizedError ?? null;
+	const backendOptions = (["cpu", "vulkan", "cuda"] as const).map((value) => ({
+		value,
+		label: t(`pages.nodeSettings.llamaCpp.sourceBuild.backends.${value}`),
+	}));
+	const sourceOptions = (["official", "custom"] as const).map((value) => ({
+		value,
+		label: t(`pages.nodeSettings.llamaCpp.sourceBuild.sources.${value}`),
+	}));
 
 	const run = (): void => {
 		hub.reset();
@@ -131,13 +139,13 @@ export function SourceBuildCard() {
 					<Select
 						label={t("pages.nodeSettings.llamaCpp.sourceBuild.backend")}
 						value={backend}
-						data={["cpu", "vulkan", "cuda"]}
+						data={backendOptions}
 						onChange={(value) => value && setBackend(value as LlamaCppSourceBackend)}
 					/>
 					<Select
 						label={t("pages.nodeSettings.llamaCpp.sourceBuild.source")}
 						value={source}
-						data={["official", "custom"]}
+						data={sourceOptions}
 						onChange={(value) => {
 							if (value) {
 								setSource(value as LlamaCppSourceSelection);
@@ -184,7 +192,7 @@ export function SourceBuildCard() {
 							}
 						>
 							<Text span={true} fw={500}>
-								{item.key}
+								{t(`pages.nodeSettings.llamaCpp.sourceBuild.prerequisites.${item.key}`, item.key)}
 							</Text>{" "}
 							<Text span={true} c="dimmed">
 								{item.detail}
@@ -203,7 +211,8 @@ export function SourceBuildCard() {
 						</Group>
 						{activeRepository ? (
 							<Text size="sm" c="dimmed">
-								{activeRepository} · {activeRevisionMode}
+								{activeRepository} ·{" "}
+								{activeRevisionMode ? t(`pages.nodeSettings.llamaCpp.sourceBuild.revisions.${activeRevisionMode}`) : ""}
 							</Text>
 						) : null}
 					</Stack>

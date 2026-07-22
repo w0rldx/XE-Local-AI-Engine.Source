@@ -29,6 +29,7 @@ public sealed class UpdateLlamaCppRuntimeEndpoint(
     ILlamaCppReleaseCatalog releaseCatalog,
     IGpuVariantSelector variantSelector,
     IInstalledRuntimeStore installedRuntimeStore,
+    ILlamaCppSourceBuildService sourceBuildService,
     ILlamaCppUpdateState updateState,
     INodeRuntimeSettings nodeRuntimeSettings,
     ILlamaServerProcessSupervisor processSupervisor,
@@ -44,6 +45,7 @@ public sealed class UpdateLlamaCppRuntimeEndpoint(
     private readonly INodeRuntimeSettings _nodeRuntimeSettings = nodeRuntimeSettings ?? throw new ArgumentNullException(nameof(nodeRuntimeSettings));
     private readonly ILlamaServerProcessSupervisor _processSupervisor = processSupervisor ?? throw new ArgumentNullException(nameof(processSupervisor));
     private readonly ILlamaCppReleaseCatalog _releaseCatalog = releaseCatalog ?? throw new ArgumentNullException(nameof(releaseCatalog));
+    private readonly ILlamaCppSourceBuildService _sourceBuildService = sourceBuildService ?? throw new ArgumentNullException(nameof(sourceBuildService));
     private readonly ILlamaCppUpdateState _updateState = updateState ?? throw new ArgumentNullException(nameof(updateState));
     private readonly IGpuVariantSelector _variantSelector = variantSelector ?? throw new ArgumentNullException(nameof(variantSelector));
 
@@ -51,6 +53,10 @@ public sealed class UpdateLlamaCppRuntimeEndpoint(
     {
         Post(LocalApiRoutes.ModelFit.LlamaCppUpdate);
         Policies(NodeAuthorizationPolicies.Operator);
+        Description(builder => builder
+            .Produces<LlamaCppVersionResponse>(StatusCodes.Status200OK)
+            .ProducesProblemFE(StatusCodes.Status400BadRequest)
+            .Produces<LlamaCppUpdateBlockedResponse>(StatusCodes.Status409Conflict));
     }
 
     public override async Task HandleAsync(UpdateLlamaCppRuntimeRequest req, CancellationToken ct)
@@ -96,22 +102,6 @@ public sealed class UpdateLlamaCppRuntimeEndpoint(
             return;
         }
 
-        // Hard pre-update safety gate (user requirement 2026-06-24): the runtime binary must NOT be replaced while any
-        // llama-server process is running — replacing/locking an in-use binary is unsafe. The operator must eject all
-        // running models first; this endpoint never auto-evicts. The supervisor is the source of truth (Ollama, an
-        // opt-in external provider, is never represented here, so it is never counted). The cheap in-memory count is
-        // used — the gate only needs "is anything running", not a per-process liveness probe.
-        var runningProcessCount = _processSupervisor.CountRunningProcesses();
-        if (runningProcessCount > 0)
-        {
-            await Send.ResultAsync(Results.Conflict(new LlamaCppUpdateBlockedResponse
-            {
-                RunningProcessCount = runningProcessCount,
-                Message = "Stop or eject all running llama.cpp models before updating the runtime."
-            })).ConfigureAwait(false);
-            return;
-        }
-
         try
         {
             var asset = await _releaseCatalog
@@ -126,8 +116,22 @@ public sealed class UpdateLlamaCppRuntimeEndpoint(
                 return;
             }
 
+            var (mutationLease, runningProcessCount, blockedMessage) = await LlamaCppPrebuiltRuntimeMutationGuard
+                .TryAcquireAsync(_installedRuntimeStore, _sourceBuildService, _processSupervisor, ct)
+                .ConfigureAwait(false);
+            await using var ownedMutationLease = mutationLease;
+            if (mutationLease is null || blockedMessage is not null)
+            {
+                await Send.ResultAsync(Results.Conflict(new LlamaCppUpdateBlockedResponse
+                {
+                    RunningProcessCount = runningProcessCount,
+                    Message = blockedMessage ?? "The llama.cpp runtime is busy with another build or runtime change."
+                })).ConfigureAwait(false);
+                return;
+            }
+
             var binary = await _binaryManager
-                               .InstallTagAsync(tag, asset.Asset.Name, asset.Asset.Digest, asset.Asset.Size, variant, ct)
+                               .InstallTagAsync(tag, asset.Asset.Name, asset.Asset.Digest, asset.Asset.Size, variant, mutationLease, ct)
                                .ConfigureAwait(false);
 
             // The runtime binary has been replaced. The local chat-client router caches a deferred client per

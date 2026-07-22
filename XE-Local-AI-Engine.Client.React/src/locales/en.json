@@ -1093,6 +1093,8 @@
 					"updateAvailable": "Update available",
 					"upToDate": "Up to date",
 					"runningNotice": "{{count}} llama.cpp model(s) running — eject them before updating the runtime.",
+					"installedSourceBuildNotice": "Remove the installed source-built runtime before installing a prebuilt runtime.",
+					"activeSourceBuildNotice": "Wait for the active source build to finish or cancel it before installing a prebuilt runtime.",
 					"openLoadedModels": "Open Loaded models",
 					"update": "Install recommended ({{tag}})",
 					"installUpstream": "Install upstream ({{tag}})",
@@ -1135,7 +1137,34 @@
 					"description": "Build CPU, Vulkan, or CUDA llama.cpp from official upstream or a trusted public GitHub fork.",
 					"devBadge": "Dev",
 					"backend": "Backend",
+					"backends": {
+						"cpu": "CPU",
+						"vulkan": "Vulkan",
+						"cuda": "CUDA"
+					},
 					"source": "Source",
+					"sources": {
+						"official": "Official upstream",
+						"custom": "Custom public fork"
+					},
+					"revisions": {
+						"enginePinned": "Engine-pinned revision",
+						"defaultBranch": "Default branch",
+						"explicitCommit": "Explicit commit"
+					},
+					"prerequisites": {
+						"os-is-linux": "Linux host",
+						"cmake": "CMake",
+						"gcc": "C compiler",
+						"g++": "C++ compiler",
+						"make-or-ninja": "Make or Ninja",
+						"git": "Git",
+						"nvidia-gpu": "NVIDIA GPU",
+						"nvcc": "CUDA compiler",
+						"glslc": "Vulkan shader compiler",
+						"vulkaninfo": "Vulkan runtime",
+						"free-disk": "Free disk space"
+					},
 					"repository": "GitHub repository",
 					"riskWarning": "Custom repository code executes with the app user's privileges. It is trusted code, not sandboxed.",
 					"riskAcknowledgement": "I trust this public GitHub repository and accept the code-execution risk.",

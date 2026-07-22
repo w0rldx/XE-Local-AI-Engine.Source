@@ -35,6 +35,7 @@ const { hooksMock, devModeMock } = vi.hoisted(() => ({
 		mutate: vi.fn(),
 		ensureMutate: vi.fn(),
 		isPending: false,
+		sourceBuildRunning: false,
 	},
 	devModeMock: { developerMode: false },
 }));
@@ -49,6 +50,7 @@ vi.mock("@/features/node-settings/queries/useLocalRuntime", () => ({
 	useUpdateLlamaCppRuntime: () => ({ mutate: hooksMock.mutate, isPending: hooksMock.isPending }),
 	useEnsureLlamaCppBinary: () => ({ mutate: hooksMock.ensureMutate, isPending: false }),
 	useRefreshLlamaCppRuntime: () => hooksMock.refresh,
+	useSourceBuildStatus: () => ({ data: { isRunning: hooksMock.sourceBuildRunning } }),
 }));
 
 vi.mock("@/core/dev-tools/stores/DeveloperModeStore", () => ({
@@ -111,6 +113,7 @@ describe("LlamaCppUpdaterPanel", () => {
 		hooksMock.isFetching = false;
 		hooksMock.isLoading = false;
 		hooksMock.isPending = false;
+		hooksMock.sourceBuildRunning = false;
 		devModeMock.developerMode = false;
 		vi.clearAllMocks();
 	});
@@ -222,6 +225,36 @@ describe("LlamaCppUpdaterPanel", () => {
 		expect(screen.getByTestId("llamacpp-updater-loaded-models-link")).toBeTruthy();
 		expect((screen.getByTestId("llamacpp-updater-update-button") as HTMLButtonElement).disabled).toBe(true);
 		expect((screen.getByTestId("llamacpp-updater-upstream-button") as HTMLButtonElement).disabled).toBe(true);
+		expect((screen.getByTestId("llamacpp-updater-ensure-button") as HTMLButtonElement).disabled).toBe(true);
+	});
+
+	it.each([
+		["an installed source runtime", true, false],
+		["an active source build", false, true],
+	])("disables prebuilt install and ensure actions for %s", (_description, installedSource, sourceBuildRunning) => {
+		devModeMock.developerMode = true;
+		hooksMock.sourceBuildRunning = sourceBuildRunning;
+		hooksMock.statusData = {
+			installed: {
+				tag: "b1000",
+				variant: "cpu",
+				asset: "a",
+				installedAtUtc: 0,
+				isSourceBuild: installedSource,
+			},
+			recommendedTag: "b9692",
+			upstreamLatestTag: "b9999",
+			updateAvailable: true,
+			isOffline: false,
+			runningProcessCount: 0,
+		};
+
+		renderPanel();
+
+		expect(screen.getByTestId("llamacpp-updater-source-build-notice")).toBeTruthy();
+		expect((screen.getByTestId("llamacpp-updater-update-button") as HTMLButtonElement).disabled).toBe(true);
+		expect((screen.getByTestId("llamacpp-updater-upstream-button") as HTMLButtonElement).disabled).toBe(true);
+		expect((screen.getByTestId("llamacpp-updater-ensure-button") as HTMLButtonElement).disabled).toBe(true);
 	});
 
 	it("ensures the installed variant by default (no silent cpu fall-back on a vulkan node)", () => {

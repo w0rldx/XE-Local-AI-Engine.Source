@@ -18,17 +18,27 @@ using XE_Local_AI_Engine.Providers.LlamaServer.Contracts;
 /// </summary>
 public sealed class EnsureLlamaCppBinaryEndpoint(
     ILlamaCppBinaryManager binaryManager,
+    IInstalledRuntimeStore installedRuntimeStore,
+    ILlamaCppSourceBuildService sourceBuildService,
+    ILlamaServerProcessSupervisor processSupervisor,
     INodeRuntimeSettings nodeRuntimeSettings,
     ILogger<EnsureLlamaCppBinaryEndpoint> logger) : Endpoint<EnsureLlamaCppBinaryRequest, LlamaCppVersionResponse>
 {
     private readonly ILlamaCppBinaryManager _binaryManager = binaryManager ?? throw new ArgumentNullException(nameof(binaryManager));
+    private readonly IInstalledRuntimeStore _installedRuntimeStore = installedRuntimeStore ?? throw new ArgumentNullException(nameof(installedRuntimeStore));
     private readonly ILogger<EnsureLlamaCppBinaryEndpoint> _logger = logger ?? throw new ArgumentNullException(nameof(logger));
     private readonly INodeRuntimeSettings _nodeRuntimeSettings = nodeRuntimeSettings ?? throw new ArgumentNullException(nameof(nodeRuntimeSettings));
+    private readonly ILlamaServerProcessSupervisor _processSupervisor = processSupervisor ?? throw new ArgumentNullException(nameof(processSupervisor));
+    private readonly ILlamaCppSourceBuildService _sourceBuildService = sourceBuildService ?? throw new ArgumentNullException(nameof(sourceBuildService));
 
     public override void Configure()
     {
         Post(LocalApiRoutes.ModelFit.LlamaCppVersion);
         Policies(NodeAuthorizationPolicies.Operator);
+        Description(builder => builder
+            .Produces<LlamaCppVersionResponse>(StatusCodes.Status200OK)
+            .ProducesProblemFE(StatusCodes.Status400BadRequest)
+            .Produces<LlamaCppUpdateBlockedResponse>(StatusCodes.Status409Conflict));
     }
 
     public override async Task HandleAsync(EnsureLlamaCppBinaryRequest req, CancellationToken ct)
@@ -42,7 +52,21 @@ public sealed class EnsureLlamaCppBinaryEndpoint(
 
         try
         {
-            var binary = await _binaryManager.EnsureBinaryAsync(variant, ct).ConfigureAwait(false);
+            var (mutationLease, runningProcessCount, blockedMessage) = await LlamaCppPrebuiltRuntimeMutationGuard
+                .TryAcquireAsync(_installedRuntimeStore, _sourceBuildService, _processSupervisor, ct)
+                .ConfigureAwait(false);
+            await using var ownedMutationLease = mutationLease;
+            if (mutationLease is null || blockedMessage is not null)
+            {
+                await Send.ResultAsync(Results.Conflict(new LlamaCppUpdateBlockedResponse
+                {
+                    RunningProcessCount = runningProcessCount,
+                    Message = blockedMessage ?? "The llama.cpp runtime is busy with another build or runtime change."
+                })).ConfigureAwait(false);
+                return;
+            }
+
+            var binary = await _binaryManager.EnsureBinaryAsync(variant, mutationLease, ct).ConfigureAwait(false);
             var recommendedTag = await _nodeRuntimeSettings.GetRecommendedLlamaCppTagAsync(ct).ConfigureAwait(false);
             await Send.OkAsync(binary.ToResponse(recommendedTag), ct).ConfigureAwait(false);
         }
