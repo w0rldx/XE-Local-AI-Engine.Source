@@ -12,12 +12,12 @@ using XE_Local_AI_Engine.Providers.LlamaServer.Contracts;
 /// </summary>
 internal sealed class CudaBuildStartupService : IHostedService
 {
-    private readonly ICudaBuildService _buildService;
+    private readonly ILlamaCppSourceBuildService _buildService;
     private readonly IInstalledRuntimeStore _installedRuntimeStore;
     private readonly ILogger<CudaBuildStartupService> _logger;
     private readonly ICudaManagedBuildSignal _signal;
 
-    public CudaBuildStartupService(ICudaBuildService buildService,
+    public CudaBuildStartupService(ILlamaCppSourceBuildService buildService,
         IInstalledRuntimeStore installedRuntimeStore,
         ICudaManagedBuildSignal signal,
         ILogger<CudaBuildStartupService> logger)
@@ -32,7 +32,7 @@ internal sealed class CudaBuildStartupService : IHostedService
     {
         try
         {
-            _buildService.RecoverStaleWorkDirectory();
+            await _buildService.RecoverAsync(cancellationToken).ConfigureAwait(false);
 
             var installed = await _installedRuntimeStore.ReadAsync(cancellationToken).ConfigureAwait(false);
             if (installed?.SourceBuildPath is { Length: > 0 } sourceBuildPath
@@ -40,7 +40,7 @@ internal sealed class CudaBuildStartupService : IHostedService
             {
                 // Optimistic seed: the serve-time validator (EnsureBinaryAsync) re-checks perms/SHA and clears the signal
                 // if the build is actually invalid, so seeding on presence alone is safe.
-                _signal.MarkAvailable();
+                _signal.SetActive(installed.Variant);
             }
         }
         catch (Exception exception)

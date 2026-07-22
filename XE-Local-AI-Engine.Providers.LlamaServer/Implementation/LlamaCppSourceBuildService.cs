@@ -1,0 +1,920 @@
+namespace XE_Local_AI_Engine.Providers.LlamaServer.Implementation;
+
+using System.Diagnostics;
+using System.Runtime.Versioning;
+using System.Text.RegularExpressions;
+using Microsoft.Extensions.Logging;
+using XE_Local_AI_Engine.Providers.LlamaServer.Contracts;
+
+/// <summary>
+///     Default <see cref="ILlamaCppSourceBuildService" />. Orchestrates a single-flight, cancellable, background in-app CUDA
+///     <c>llama-server</c> build and adopts the result as a managed runtime. Every subprocess runs under a scrubbed,
+///     allowlisted environment (<c>[secHIGH-2]</c>) in an owner-only (0700) work directory inside the cache root — never
+///     <c>/tmp</c> (<c>[secHIGH-3]</c>, Locked #8). The clone source URL + tag are constants and the checked-out commit is
+///     verified == the pinned SHA before any cmake runs (<c>[secHIGH-1]</c>). On any failure the partial tree is deleted
+///     and nothing is recorded (no silent CPU fallback).
+/// </summary>
+public sealed partial class LlamaCppSourceBuildService : ILlamaCppSourceBuildService, IDisposable
+{
+    private const string ManagedServerFileName = "llama-server";
+
+    // Conservative fallback compute-architecture set when nvidia-smi's compute_cap can't be read/validated. [secMED-1]
+    private const string DefaultCudaArchitectures = "75;86;89";
+
+    // -j cap: parallel build jobs are min(nproc, this) to bound peak memory/CPU during the build. [secMED-5]
+    private const int MaxBuildJobs = 8;
+
+    // The number of streamed log lines retained for the status GET (the hub streams every line live).
+    private const int LogRingCapacity = 400;
+
+    private static readonly TimeSpan CloneTimeout = TimeSpan.FromMinutes(15);
+    private static readonly TimeSpan ShortCommandTimeout = TimeSpan.FromSeconds(30);
+    private static readonly TimeSpan ConfigureTimeout = TimeSpan.FromMinutes(15);
+    private static readonly TimeSpan BuildTimeout = TimeSpan.FromMinutes(120);
+
+    private readonly ILlamaCppBinaryManager _binaryManager;
+    private readonly IInstalledRuntimeStore _installedRuntimeStore;
+    private readonly IActiveSourceBuildSignal _activeSignal;
+    private readonly string _cacheRoot;
+    private readonly string _homeDirectory;
+    private readonly ILogger<LlamaCppSourceBuildService> _logger;
+    private readonly ILlamaCppSourceBuildPrerequisiteProbe _prerequisiteProbe;
+    private readonly ILlamaCppSourceBuildEventPublisher _publisher;
+    private readonly ILlamaServerProcessSupervisor _supervisor;
+    private readonly Lock _stateLock = new();
+
+    private CancellationTokenSource? _buildCts;
+    private DateTimeOffset? _completedAtUtc;
+    private LlamaCppSourceBuildDescriptor? _currentBuild;
+    private bool _isRunning;
+    private List<string> _logLines = [];
+    private LlamaCppSourceBuildPhase _phase = LlamaCppSourceBuildPhase.Idle;
+    private string? _sanitizedError;
+    private DateTimeOffset? _startedAtUtc;
+
+    /// <summary>Creates the build service over the prerequisite probe, the binary manager, and the build-event publisher.</summary>
+    public LlamaCppSourceBuildService(ILlamaCppSourceBuildPrerequisiteProbe prerequisiteProbe,
+        ILlamaCppBinaryManager binaryManager,
+        IInstalledRuntimeStore installedRuntimeStore,
+        IActiveSourceBuildSignal activeSignal,
+        ILlamaServerProcessSupervisor supervisor,
+        ILlamaCppSourceBuildEventPublisher publisher,
+        ILogger<LlamaCppSourceBuildService> logger)
+        : this(prerequisiteProbe, binaryManager, installedRuntimeStore, activeSignal, supervisor, publisher, logger, DefaultCacheRoot())
+    {
+    }
+
+    /// <summary>Test seam: pins the cache root the build tree lives under.</summary>
+    internal LlamaCppSourceBuildService(ILlamaCppSourceBuildPrerequisiteProbe prerequisiteProbe,
+        ILlamaCppBinaryManager binaryManager,
+        IInstalledRuntimeStore installedRuntimeStore,
+        IActiveSourceBuildSignal activeSignal,
+        ILlamaServerProcessSupervisor supervisor,
+        ILlamaCppSourceBuildEventPublisher publisher,
+        ILogger<LlamaCppSourceBuildService> logger,
+        string cacheRoot)
+    {
+        _prerequisiteProbe = prerequisiteProbe ?? throw new ArgumentNullException(nameof(prerequisiteProbe));
+        _binaryManager = binaryManager ?? throw new ArgumentNullException(nameof(binaryManager));
+        _installedRuntimeStore = installedRuntimeStore ?? throw new ArgumentNullException(nameof(installedRuntimeStore));
+        _activeSignal = activeSignal ?? throw new ArgumentNullException(nameof(activeSignal));
+        _supervisor = supervisor ?? throw new ArgumentNullException(nameof(supervisor));
+        _publisher = publisher ?? throw new ArgumentNullException(nameof(publisher));
+        _logger = logger ?? throw new ArgumentNullException(nameof(logger));
+        ArgumentException.ThrowIfNullOrWhiteSpace(cacheRoot);
+        _cacheRoot = cacheRoot;
+        _homeDirectory = Environment.GetEnvironmentVariable("HOME") ?? string.Empty;
+    }
+
+    private string SourceBuildRoot => Path.Combine(_cacheRoot, "llama.cpp", "source-build");
+
+    private string WorkDirectory => Path.Combine(SourceBuildRoot, ".work");
+
+    private string MarkerPath => Path.Combine(WorkDirectory, ".build-in-progress");
+
+    public void Dispose()
+    {
+        _buildCts?.Dispose();
+    }
+
+    /// <inheritdoc />
+    public async Task<LlamaCppSourceBuildStartOutcome> StartAsync(LlamaCppSourceBuildRequest request, CancellationToken ct)
+    {
+        var normalized = LlamaCppSourceBuildRequestValidation.Normalize(request);
+        var variant = ToVariant(normalized.Backend);
+        var revisionMode = normalized.Commit is not null
+            ? LlamaCppSourceRevisionMode.ExplicitCommit
+            : LlamaCppSourceRevisionMode.DefaultBranch;
+        if (normalized.Commit is null && normalized.Source == LlamaCppSourceSelection.Official)
+        {
+            revisionMode = LlamaCppSourceRevisionMode.EnginePinned;
+        }
+        var descriptor = new LlamaCppSourceBuildDescriptor(variant,
+            normalized.Source,
+            normalized.Repository!,
+            revisionMode,
+            normalized.Commit,
+            ResolvedCommit: revisionMode == LlamaCppSourceRevisionMode.EnginePinned ? LlamaCppReleasePins.PinnedSourceCommitSha : null);
+        // Single-flight: a second start while a build is in flight is a no-op that returns AlreadyRunning.
+        lock (_stateLock)
+        {
+            if (_isRunning)
+            {
+                return LlamaCppSourceBuildStartOutcome.AlreadyRunning;
+            }
+        }
+
+        // Startup-edge safety: clear a stale work dir from a prior crash/kill before allowing a new build. [archLOW-1]
+        await RecoverAsync(ct).ConfigureAwait(false);
+
+        // Re-check Linux + every prerequisite + free disk BEFORE spawning anything. A failed re-check throws WITHOUT
+        // spawning a clone/cmake. [secMED-5] The endpoint enforces the same gates; this is the defense-in-depth re-check.
+        if (!OperatingSystem.IsLinux())
+        {
+            throw new LlamaRuntimeException("In-app source builds are available on Linux only.");
+        }
+
+        var report = await _prerequisiteProbe.ProbeAsync(normalized.Backend, ct).ConfigureAwait(false);
+        if (!report.CanBuild)
+        {
+            throw new LlamaRuntimeException("One or more build prerequisites are missing; resolve the checklist before building.");
+        }
+
+        // Claim the single-flight slot and reset status under the lock.
+        var buildCts = CancellationTokenSource.CreateLinkedTokenSource(CancellationToken.None);
+        lock (_stateLock)
+        {
+            if (_isRunning)
+            {
+                buildCts.Dispose();
+                return LlamaCppSourceBuildStartOutcome.AlreadyRunning;
+            }
+
+            _isRunning = true;
+            _phase = LlamaCppSourceBuildPhase.Cloning;
+            _logLines = [];
+            _sanitizedError = null;
+            _currentBuild = descriptor;
+            _startedAtUtc = DateTimeOffset.UtcNow;
+            _completedAtUtc = null;
+            _buildCts?.Dispose();
+            _buildCts = buildCts;
+        }
+
+        // The build runs detached from the request lifetime: it owns its OWN cancellation token (driven by Cancel()), so
+        // the HTTP request that started it can return immediately without aborting the build. The Linux guard here lets the
+        // platform analyzer see that the Linux-only build body is never reached off Linux (StartAsync already threw above).
+        _ = Task.Run(async () =>
+        {
+            if (OperatingSystem.IsLinux())
+            {
+                await RunBuildAsync(descriptor, buildCts.Token).ConfigureAwait(false);
+            }
+        }, CancellationToken.None);
+        return LlamaCppSourceBuildStartOutcome.Started;
+    }
+
+    /// <inheritdoc />
+    public LlamaCppSourceBuildStatus GetStatus()
+    {
+        lock (_stateLock)
+        {
+            return new LlamaCppSourceBuildStatus(_phase,
+                _isRunning,
+                Terminal: _phase is LlamaCppSourceBuildPhase.Completed or LlamaCppSourceBuildPhase.Cancelled or LlamaCppSourceBuildPhase.Failed,
+                LogLines: [.. _logLines],
+                _sanitizedError,
+                _currentBuild,
+                _startedAtUtc,
+                _completedAtUtc);
+        }
+    }
+
+    /// <inheritdoc />
+    public bool Cancel()
+    {
+        CancellationTokenSource? cts;
+        lock (_stateLock)
+        {
+            if (!_isRunning || _buildCts is null)
+            {
+                return false;
+            }
+
+            cts = _buildCts;
+        }
+
+        try
+        {
+            cts.Cancel();
+        }
+        catch (ObjectDisposedException)
+        {
+            return false;
+        }
+
+        return true;
+    }
+
+    /// <inheritdoc />
+    public async Task RecoverAsync(CancellationToken ct)
+    {
+        try
+        {
+            TryDeleteDirectory(WorkDirectory);
+            TryDeleteDirectory(Path.Combine(SourceBuildRoot, ".staging"));
+            await ReconcileActiveAndBackupAsync(ct).ConfigureAwait(false);
+        }
+        catch (Exception exception)
+        {
+            _logger.LogWarning(exception, "Failed to clean a stale CUDA build work directory at startup.");
+        }
+    }
+
+    [SupportedOSPlatform("linux")]
+    private async Task RunBuildAsync(LlamaCppSourceBuildDescriptor descriptor, CancellationToken ct)
+    {
+        var sourceCudaRoot = SourceBuildRoot;
+        var workDir = WorkDirectory;
+        var cloneDir = Path.Combine(workDir, "llama.cpp");
+        var buildDir = Path.Combine(cloneDir, "build");
+        var tag = LlamaCppReleasePins.PinnedTag;
+        var finalTagDir = Path.Combine(sourceCudaRoot, "active");
+        // Sibling staging + backup dirs (same filesystem as finalTagDir → moves are atomic). The new build is validated in
+        // staging and the previous runtime is parked in backup, so a FAILED rebuild never loses a working runtime.
+        var stagingTagDir = Path.Combine(sourceCudaRoot, ".staging");
+        var backupTagDir = Path.Combine(sourceCudaRoot, ".backup");
+
+        try
+        {
+            // Owner-only (0700) work dir inside the cache root — never /tmp. [secHIGH-3, Locked #8]
+            TryDeleteDirectory(workDir);
+            TryDeleteDirectory(stagingTagDir);
+            TryDeleteDirectory(backupTagDir);
+            CreateOwnerOnlyDirectory(sourceCudaRoot);
+            CreateOwnerOnlyDirectory(workDir);
+            await File.WriteAllTextAsync(MarkerPath, DateTimeOffset.UtcNow.ToString("O"), ct).ConfigureAwait(false);
+
+            var isolatedHome = Path.Combine(workDir, ".home");
+            var isolatedTmp = Path.Combine(workDir, ".tmp");
+            CreateOwnerOnlyDirectory(isolatedHome);
+            CreateOwnerOnlyDirectory(isolatedTmp);
+            var environment = BuildScrubbedEnvironment(isolatedHome, isolatedTmp);
+
+            // 1. Clone the pinned source at the pinned tag (NO submodules; URL+tag are constants).
+            SetPhase(LlamaCppSourceBuildPhase.Cloning);
+            var cloneExit = await CloneSourceAsync(descriptor, cloneDir, environment, workDir, ct).ConfigureAwait(false);
+            if (cloneExit != 0)
+            {
+                throw new LlamaRuntimeException("Cloning the llama.cpp source failed.");
+            }
+
+            // 2. Verify the checked-out commit == the pinned SHA BEFORE any cmake runs. [secHIGH-1]
+            SetPhase(LlamaCppSourceBuildPhase.Verifying);
+            var (revExit, revOutput) = await RunCaptureAsync("git",
+                ["-C", cloneDir, "rev-parse", "HEAD"],
+                environment,
+                workDir,
+                ShortCommandTimeout,
+                ct).ConfigureAwait(false);
+            var checkedOut = revOutput.Trim();
+            var expectedCommit = descriptor.RevisionMode switch
+            {
+                LlamaCppSourceRevisionMode.EnginePinned => LlamaCppReleasePins.PinnedSourceCommitSha,
+                LlamaCppSourceRevisionMode.ExplicitCommit => descriptor.RequestedCommit,
+                _ => null
+            };
+            if (revExit != 0 || !FullCommitRegex().IsMatch(checkedOut)
+                || expectedCommit is not null && !string.Equals(checkedOut, expectedCommit, StringComparison.OrdinalIgnoreCase))
+            {
+                throw new LlamaRuntimeException("The cloned source did not match the pinned commit; the build was aborted before configuring.");
+            }
+
+            AppendLog($"Verified source commit {checkedOut}.");
+            descriptor = descriptor with { ResolvedCommit = Convert.ToHexStringLower(Convert.FromHexString(checkedOut)) };
+            lock (_stateLock)
+            {
+                _currentBuild = descriptor;
+            }
+
+            // 3. Detect + validate the compute architecture. [secMED-1]
+            var architectures = descriptor.Variant == GpuVariant.Cuda
+                ? await ResolveCudaArchitecturesAsync(environment, workDir, ct).ConfigureAwait(false)
+                : null;
+
+            // 4. cmake configure.
+            SetPhase(LlamaCppSourceBuildPhase.Configuring);
+            var configureExit = await RunStreamingStepAsync("cmake",
+                BuildConfigureArguments(buildDir, cloneDir, descriptor.Variant, architectures),
+                environment,
+                cloneDir,
+                ConfigureTimeout,
+                ct).ConfigureAwait(false);
+            if (configureExit != 0)
+            {
+                throw new LlamaRuntimeException("Configuring the llama.cpp source build failed.");
+            }
+
+            // 5. cmake build (jobs capped). [secMED-5]
+            SetPhase(LlamaCppSourceBuildPhase.Building);
+            var jobs = Math.Max(1, Math.Min(Environment.ProcessorCount, MaxBuildJobs));
+            var buildExit = await RunStreamingStepAsync("cmake",
+                ["--build", buildDir, "--target", "llama-server", "-j", jobs.ToString()],
+                environment,
+                cloneDir,
+                BuildTimeout,
+                ct).ConfigureAwait(false);
+            if (buildExit != 0)
+            {
+                throw new LlamaRuntimeException("Compiling the source-built llama-server failed.");
+            }
+
+            // 6. Stage the built tree, harden it, then swap it into place — the previous runtime is only removed AFTER the
+            //    new build validates + adopts, so a failed rebuild leaves the working managed runtime untouched.
+            SetPhase(LlamaCppSourceBuildPhase.Adopting);
+            var builtBin = Path.Combine(buildDir, "bin");
+            if (!File.Exists(Path.Combine(builtBin, ManagedServerFileName)))
+            {
+                throw new LlamaRuntimeException("The build did not produce the expected server executable.");
+            }
+
+            // Stage the placed tree at a sibling dir (same filesystem → atomic moves) and harden it there.
+            var stagingBuildDir = Path.Combine(stagingTagDir, "build");
+            CreateOwnerOnlyDirectory(stagingTagDir);
+            Directory.Move(buildDir, stagingBuildDir);
+            ValidateTreeLinks(stagingTagDir);
+            HardenTree(sourceCudaRoot, stagingTagDir);
+
+            // Swap into place last: park any previous runtime in the backup, move the staged tree in, then validate + adopt
+            // the FINAL binary. On any failure, roll the previous runtime back so the working runtime is never lost.
+            await using var mutationLease = await _supervisor.TryAcquireRuntimeMutationLeaseAsync(ct).ConfigureAwait(false)
+                ?? throw new LlamaRuntimeException("A llama-server process started while the build was running; stop it before adopting the new runtime.");
+            var hadPrevious = Directory.Exists(finalTagDir);
+            try
+            {
+                if (hadPrevious)
+                {
+                    Directory.Move(finalTagDir, backupTagDir);
+                }
+                Directory.Move(stagingTagDir, finalTagDir);
+                var finalBin = Path.Combine(finalTagDir, "build", "bin");
+                await _binaryManager.AdoptSourceBuildAsync(finalBin,
+                    tag,
+                    descriptor.Variant,
+                    descriptor.Repository,
+                    descriptor.ResolvedCommit!,
+                    descriptor.RevisionMode,
+                    descriptor.RequestedCommit,
+                    ct).ConfigureAwait(false);
+            }
+            catch
+            {
+                // Discard the failed build and restore the previous working runtime in place.
+                TryDeleteDirectory(stagingTagDir);
+                TryDeleteDirectory(finalTagDir);
+                if (hadPrevious)
+                {
+                    Directory.Move(backupTagDir, finalTagDir);
+                }
+
+                throw;
+            }
+
+            // Success: drop the backup + work dir (the placed tree is the only artifact kept).
+            TryDeleteDirectory(backupTagDir);
+            TryDeleteDirectory(workDir);
+            SetTerminal(LlamaCppSourceBuildPhase.Completed, sanitizedError: null);
+        }
+        catch (OperationCanceledException)
+        {
+            // The swap step already rolled finalTagDir back on failure; only the partial work + staging trees are dropped.
+            TryDeleteDirectory(workDir);
+            TryDeleteDirectory(stagingTagDir);
+            SetTerminal(LlamaCppSourceBuildPhase.Cancelled, sanitizedError: null);
+        }
+        catch (LlamaRuntimeException exception)
+        {
+            _logger.LogWarning(exception, "The in-app CUDA build failed.");
+            TryDeleteDirectory(workDir);
+            TryDeleteDirectory(stagingTagDir);
+            SetTerminal(LlamaCppSourceBuildPhase.Failed, exception.Message);
+        }
+        catch (Exception exception)
+        {
+            _logger.LogError(exception, "The in-app CUDA build failed unexpectedly.");
+            TryDeleteDirectory(workDir);
+            TryDeleteDirectory(stagingTagDir);
+            SetTerminal(LlamaCppSourceBuildPhase.Failed, "The CUDA build failed unexpectedly.");
+        }
+    }
+
+    [SupportedOSPlatform("linux")]
+    private async Task<int> CloneSourceAsync(LlamaCppSourceBuildDescriptor descriptor,
+        string cloneDir,
+        IReadOnlyDictionary<string, string> environment,
+        string workDir,
+        CancellationToken ct)
+    {
+        if (descriptor.RevisionMode == LlamaCppSourceRevisionMode.ExplicitCommit)
+        {
+            Directory.CreateDirectory(cloneDir);
+            if (await RunStreamingStepAsync("git", ["-C", cloneDir, "init"], environment, workDir, ShortCommandTimeout, ct).ConfigureAwait(false) != 0
+                || await RunStreamingStepAsync("git", ["-C", cloneDir, "remote", "add", "origin", descriptor.Repository], environment, workDir, ShortCommandTimeout, ct).ConfigureAwait(false) != 0
+                || await RunStreamingStepAsync("git", ["-C", cloneDir, "fetch", "--depth", "1", "--no-tags", "origin", descriptor.RequestedCommit!], environment, workDir, CloneTimeout, ct).ConfigureAwait(false) != 0)
+            {
+                return -1;
+            }
+
+            return await RunStreamingStepAsync("git", ["-C", cloneDir, "checkout", "--detach", descriptor.RequestedCommit!], environment, workDir, ShortCommandTimeout, ct).ConfigureAwait(false);
+        }
+
+        IReadOnlyList<string> args = descriptor.RevisionMode == LlamaCppSourceRevisionMode.EnginePinned
+            ? ["clone", "--depth", "1", "--no-recurse-submodules", "--branch", LlamaCppReleasePins.PinnedTag, descriptor.Repository, cloneDir]
+            : ["clone", "--depth", "1", "--no-recurse-submodules", descriptor.Repository, cloneDir];
+        return await RunStreamingStepAsync("git", args, environment, workDir, CloneTimeout, ct).ConfigureAwait(false);
+    }
+
+    internal static IReadOnlyList<string> BuildConfigureArguments(string buildDir, string cloneDir, GpuVariant variant, string? architectures)
+    {
+        var args = new List<string>
+        {
+            "-B", buildDir, "-S", cloneDir,
+            "-DCMAKE_BUILD_TYPE=Release", "-DLLAMA_CURL=OFF",
+            $"-DGGML_CUDA={(variant == GpuVariant.Cuda ? "ON" : "OFF")}",
+            $"-DGGML_VULKAN={(variant == GpuVariant.Vulkan ? "ON" : "OFF")}"
+        };
+        if (variant == GpuVariant.Cuda)
+        {
+            args.Add($"-DCMAKE_CUDA_ARCHITECTURES={architectures}");
+        }
+
+        return args;
+    }
+
+    private async Task ReconcileActiveAndBackupAsync(CancellationToken ct)
+    {
+        var active = Path.Combine(SourceBuildRoot, "active");
+        var backup = Path.Combine(SourceBuildRoot, ".backup");
+        var installed = await _installedRuntimeStore.ReadAsync(ct).ConfigureAwait(false);
+        var sourceRecord = installed?.SourceBuildPath is { Length: > 0 };
+        var activeMatches = sourceRecord && await TreeMatchesRecordAsync(active, installed!, ct).ConfigureAwait(false);
+        var backupMatches = sourceRecord && await TreeMatchesRecordAsync(backup, installed!, ct).ConfigureAwait(false);
+
+        if (Directory.Exists(active) && Directory.Exists(backup))
+        {
+            if (activeMatches)
+            {
+                TryDeleteDirectory(backup);
+            }
+            else if (backupMatches)
+            {
+                TryDeleteDirectory(active);
+                Directory.Move(backup, active);
+                await WriteReconciledStateAsync(installed!, active, ct).ConfigureAwait(false);
+            }
+            else
+            {
+                TryDeleteDirectory(active);
+                TryDeleteDirectory(backup);
+                await ClearSourceRecordAsync(sourceRecord, ct).ConfigureAwait(false);
+            }
+        }
+        else if (Directory.Exists(backup))
+        {
+            if (backupMatches)
+            {
+                Directory.Move(backup, active);
+                await WriteReconciledStateAsync(installed!, active, ct).ConfigureAwait(false);
+            }
+            else
+            {
+                TryDeleteDirectory(backup);
+                await ClearSourceRecordAsync(sourceRecord, ct).ConfigureAwait(false);
+            }
+        }
+        else if (Directory.Exists(active))
+        {
+            if (!activeMatches)
+            {
+                TryDeleteDirectory(active);
+                await ClearSourceRecordAsync(sourceRecord, ct).ConfigureAwait(false);
+            }
+        }
+        else
+        {
+            await ClearSourceRecordAsync(sourceRecord, ct).ConfigureAwait(false);
+        }
+
+        var current = await _installedRuntimeStore.ReadAsync(ct).ConfigureAwait(false);
+        if (current?.SourceBuildPath is { Length: > 0 })
+        {
+            _activeSignal.SetActive(current.Variant);
+        }
+    }
+
+    private static async Task<bool> TreeMatchesRecordAsync(string tree, InstalledRuntimeState state, CancellationToken ct)
+    {
+        if (state.SourceRepository is null || state.SourceCommit is null || state.SourceRevisionMode is null)
+        {
+            return false;
+        }
+
+        var server = Path.Combine(tree, "build", "bin", ManagedServerFileName);
+        if (!File.Exists(server) || new FileInfo(server).LinkTarget is not null)
+        {
+            return false;
+        }
+
+        await using var stream = new FileStream(server, FileMode.Open, FileAccess.Read, FileShare.Read);
+        var hash = Convert.ToHexStringLower(await System.Security.Cryptography.SHA256.HashDataAsync(stream, ct).ConfigureAwait(false));
+        return string.Equals(hash, state.Sha256, StringComparison.OrdinalIgnoreCase);
+    }
+
+    private Task WriteReconciledStateAsync(InstalledRuntimeState state, string active, CancellationToken ct)
+    {
+        return _installedRuntimeStore.WriteAsync(state with { SourceBuildPath = Path.Combine(active, "build", "bin") }, ct);
+    }
+
+    private async Task ClearSourceRecordAsync(bool sourceRecord, CancellationToken ct)
+    {
+        if (sourceRecord)
+        {
+            await _installedRuntimeStore.DeleteAsync(ct).ConfigureAwait(false);
+            _activeSignal.Clear();
+        }
+    }
+
+    private static GpuVariant ToVariant(LlamaCppSourceBackend backend)
+    {
+        return backend switch
+        {
+            LlamaCppSourceBackend.Cpu => GpuVariant.Cpu,
+            LlamaCppSourceBackend.Vulkan => GpuVariant.Vulkan,
+            LlamaCppSourceBackend.Cuda => GpuVariant.Cuda,
+            _ => throw new LlamaRuntimeException("The source-build backend is invalid.")
+        };
+    }
+
+    // nvidia-smi compute_cap → whitelisted CUDA architecture list, else the conservative default set. [secMED-1]
+    private static async Task<string> ResolveCudaArchitecturesAsync(IReadOnlyDictionary<string, string> environment, string workDir, CancellationToken ct)
+    {
+        try
+        {
+            var (exit, output) = await RunCaptureAsync("nvidia-smi",
+                ["--query-gpu=compute_cap", "--format=csv,noheader"],
+                environment,
+                workDir,
+                ShortCommandTimeout,
+                ct).ConfigureAwait(false);
+            if (exit != 0)
+            {
+                return DefaultCudaArchitectures;
+            }
+
+            // e.g. "8.9\n8.9" → "89;89"; strip the dot per line, join with ';'.
+            var arches = output
+                         .Split(['\r', '\n'], StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
+                         .Select(static line => line.Replace(".", string.Empty, StringComparison.Ordinal))
+                         .Where(static value => value.Length > 0);
+            var joined = string.Join(';', arches);
+
+            // Whitelist the FINAL string before it reaches -DCMAKE_CUDA_ARCHITECTURES. A non-match → default set.
+            return ComputeCapRegex().IsMatch(joined) ? joined : DefaultCudaArchitectures;
+        }
+        catch (OperationCanceledException) when (ct.IsCancellationRequested)
+        {
+            throw;
+        }
+        catch (Exception)
+        {
+            return DefaultCudaArchitectures;
+        }
+    }
+
+    [SupportedOSPlatform("linux")]
+    private Task<int> RunStreamingStepAsync(string file,
+        IReadOnlyList<string> args,
+        IReadOnlyDictionary<string, string> environment,
+        string workDir,
+        TimeSpan timeout,
+        CancellationToken ct)
+    {
+        return StreamingProcessRunner.RunAsync(file, args, environment, workDir, AppendLog, timeout, ct);
+    }
+
+    // Captures (rather than streams) a short command's stdout under the scrubbed env, bounded + tree-killed.
+    private static async Task<(int ExitCode, string Stdout)> RunCaptureAsync(string file,
+        IReadOnlyList<string> args,
+        IReadOnlyDictionary<string, string> environment,
+        string workDir,
+        TimeSpan timeout,
+        CancellationToken ct)
+    {
+        var startInfo = new ProcessStartInfo(file)
+        {
+            WorkingDirectory = workDir,
+            RedirectStandardOutput = true,
+            RedirectStandardError = true,
+            UseShellExecute = false,
+            CreateNoWindow = true
+        };
+        foreach (var arg in args)
+        {
+            startInfo.ArgumentList.Add(arg);
+        }
+
+        startInfo.Environment.Clear();
+        foreach (var entry in environment)
+        {
+            startInfo.Environment[entry.Key] = entry.Value;
+        }
+
+        using var process = new Process
+        {
+            StartInfo = startInfo
+        };
+        if (!process.Start())
+        {
+            return (-1, string.Empty);
+        }
+
+        using var timeoutCts = CancellationTokenSource.CreateLinkedTokenSource(ct);
+        timeoutCts.CancelAfter(timeout);
+        try
+        {
+            var stdoutTask = process.StandardOutput.ReadToEndAsync(timeoutCts.Token);
+            var stderrTask = process.StandardError.ReadToEndAsync(timeoutCts.Token);
+            await process.WaitForExitAsync(timeoutCts.Token).ConfigureAwait(false);
+            var stdout = await stdoutTask.ConfigureAwait(false);
+            _ = await stderrTask.ConfigureAwait(false);
+            return (process.ExitCode, stdout);
+        }
+        catch (OperationCanceledException) when (timeoutCts.IsCancellationRequested && !ct.IsCancellationRequested)
+        {
+            TryKill(process);
+            return (-1, string.Empty);
+        }
+        catch (OperationCanceledException) when (ct.IsCancellationRequested)
+        {
+            TryKill(process);
+            throw;
+        }
+    }
+
+    // Scrubbed, allowlisted build environment: ONLY these keys pass through; everything else (LD_PRELOAD, LD_LIBRARY_PATH,
+    // CC, CXX, CUDAHOSTCXX, CMAKE_*_LAUNCHER, GIT_SSH_COMMAND, GIT_PROXY_COMMAND, GIT_EXTERNAL_DIFF, app secrets) is
+    // dropped by construction. [secHIGH-2, Locked #7]
+    private static Dictionary<string, string> BuildScrubbedEnvironment(string isolatedHome, string isolatedTmp)
+    {
+        string[] allowlist = ["PATH", "LANG", "LC_ALL", "CUDA_HOME", "CUDA_PATH"];
+        var scrubbed = new Dictionary<string, string>(StringComparer.Ordinal);
+        foreach (var key in allowlist)
+        {
+            var value = Environment.GetEnvironmentVariable(key);
+            if (!string.IsNullOrEmpty(value))
+            {
+                scrubbed[key] = value;
+            }
+        }
+
+        scrubbed["HOME"] = isolatedHome;
+        scrubbed["TMPDIR"] = isolatedTmp;
+        scrubbed["GIT_CONFIG_NOSYSTEM"] = "1";
+        scrubbed["GIT_TERMINAL_PROMPT"] = "0";
+        scrubbed["GIT_ASKPASS"] = "/bin/false";
+        scrubbed["SSH_ASKPASS"] = "/bin/false";
+        scrubbed["GIT_CONFIG_COUNT"] = "2";
+        scrubbed["GIT_CONFIG_KEY_0"] = "credential.helper";
+        scrubbed["GIT_CONFIG_VALUE_0"] = string.Empty;
+        scrubbed["GIT_CONFIG_KEY_1"] = "submodule.recurse";
+        scrubbed["GIT_CONFIG_VALUE_1"] = "false";
+
+        return scrubbed;
+    }
+
+    private void SetPhase(LlamaCppSourceBuildPhase phase)
+    {
+        lock (_stateLock)
+        {
+            _phase = phase;
+        }
+
+        PublishSafe(new LlamaCppSourceBuildStatusHubEvent(phase.ToString(), [], Terminal: false, SanitizedError: null, CurrentBuildSnapshot()));
+    }
+
+    private void SetTerminal(LlamaCppSourceBuildPhase phase, string? sanitizedError)
+    {
+        lock (_stateLock)
+        {
+            _phase = phase;
+            _isRunning = false;
+            _sanitizedError = sanitizedError;
+            _completedAtUtc = DateTimeOffset.UtcNow;
+        }
+
+        PublishSafe(new LlamaCppSourceBuildStatusHubEvent(phase.ToString(), [], Terminal: true, sanitizedError, CurrentBuildSnapshot()));
+    }
+
+    // The streaming log sink: redact the cache-root/HOME prefix [secLOW-1], retain a bounded ring buffer for the status
+    // GET, and push the line live to the hub. Thread-safe (both pipes call this concurrently).
+    private void AppendLog(string line)
+    {
+        var redacted = Redact(line);
+        lock (_stateLock)
+        {
+            _logLines.Add(redacted);
+            if (_logLines.Count > LogRingCapacity)
+            {
+                _logLines.RemoveRange(0, _logLines.Count - LogRingCapacity);
+            }
+        }
+
+        var phase = GetPhaseSnapshot();
+        PublishSafe(new LlamaCppSourceBuildStatusHubEvent(phase.ToString(), [redacted], Terminal: false, SanitizedError: null, CurrentBuildSnapshot()));
+    }
+
+    private LlamaCppSourceBuildPhase GetPhaseSnapshot()
+    {
+        lock (_stateLock)
+        {
+            return _phase;
+        }
+    }
+
+    private LlamaCppSourceBuildDescriptor? CurrentBuildSnapshot()
+    {
+        lock (_stateLock)
+        {
+            return _currentBuild;
+        }
+    }
+
+    private string Redact(string line)
+    {
+        var result = line;
+        if (!string.IsNullOrEmpty(_cacheRoot))
+        {
+            result = result.Replace(_cacheRoot, "<cache>", StringComparison.Ordinal);
+        }
+
+        if (!string.IsNullOrEmpty(_homeDirectory))
+        {
+            result = result.Replace(_homeDirectory, "<home>", StringComparison.Ordinal);
+        }
+
+        return result;
+    }
+
+    private void PublishSafe(LlamaCppSourceBuildStatusHubEvent statusEvent)
+    {
+        try
+        {
+            _ = _publisher.PublishStatusAsync(statusEvent, CancellationToken.None);
+        }
+        catch (Exception exception)
+        {
+            _logger.LogDebug(exception, "Publishing a CUDA build status event failed (non-fatal).");
+        }
+    }
+
+    private static void CreateOwnerOnlyDirectory(string path)
+    {
+        Directory.CreateDirectory(path);
+        if (!OperatingSystem.IsWindows())
+        {
+            File.SetUnixFileMode(path, UnixFileMode.UserRead | UnixFileMode.UserWrite | UnixFileMode.UserExecute);
+        }
+    }
+
+    // Hardens every directory + file in the placed build tree (from the source-cuda root down) so the managed path-chain
+    // validator passes: owner-only directories, owner read/exec files (binary keeps its exec bit). Never world-writable.
+    private static void HardenTree(string sourceCudaRoot, string finalTagDir)
+    {
+        if (OperatingSystem.IsWindows())
+        {
+            return;
+        }
+
+        SetDirectoryOwnerOnly(sourceCudaRoot);
+        SetDirectoryOwnerOnly(finalTagDir);
+        foreach (var dir in Directory.EnumerateDirectories(finalTagDir, "*", SearchOption.AllDirectories))
+        {
+            SetDirectoryOwnerOnly(dir);
+        }
+
+        foreach (var file in Directory.EnumerateFiles(finalTagDir, "*", SearchOption.AllDirectories))
+        {
+            var mode = File.GetUnixFileMode(file);
+            // Strip group/other write so no ancestor/file is world- or group-writable; keep the owner exec bit on binaries.
+            mode &= ~(UnixFileMode.GroupWrite | UnixFileMode.OtherWrite);
+            File.SetUnixFileMode(file, mode);
+        }
+    }
+
+    private static void ValidateTreeLinks(string rootPath)
+    {
+        var root = Path.GetFullPath(rootPath);
+        var rootPrefix = root + Path.DirectorySeparatorChar;
+        var pending = new Stack<string>();
+        pending.Push(root);
+        while (pending.TryPop(out var directory))
+        {
+            if (new DirectoryInfo(directory).LinkTarget is not null)
+            {
+                throw new LlamaRuntimeException("The built runtime contains a linked directory.");
+            }
+
+            foreach (var entry in Directory.EnumerateFileSystemEntries(directory))
+            {
+                if (Directory.Exists(entry))
+                {
+                    pending.Push(entry);
+                    continue;
+                }
+
+                var current = entry;
+                var visited = new HashSet<string>(StringComparer.Ordinal);
+                for (var hop = 0; hop < 32; hop++)
+                {
+                    if (!visited.Add(current))
+                    {
+                        throw new LlamaRuntimeException("The built runtime contains a cyclic library link.");
+                    }
+
+                    var info = new FileInfo(current);
+                    if (info.LinkTarget is not { } target)
+                    {
+                        if (!info.Exists)
+                        {
+                            throw new LlamaRuntimeException("The built runtime contains a dangling library link.");
+                        }
+                        break;
+                    }
+
+                    if (Path.IsPathRooted(target))
+                    {
+                        throw new LlamaRuntimeException("The built runtime contains an absolute library link.");
+                    }
+
+                    current = Path.GetFullPath(Path.Combine(Path.GetDirectoryName(current)!, target));
+                    if (!current.StartsWith(rootPrefix, StringComparison.Ordinal) || Directory.Exists(current) || hop == 31)
+                    {
+                        throw new LlamaRuntimeException("The built runtime contains an unsafe library link.");
+                    }
+                }
+            }
+        }
+    }
+
+    [UnsupportedOSPlatform("windows")]
+    private static void SetDirectoryOwnerOnly(string path)
+    {
+        File.SetUnixFileMode(path, UnixFileMode.UserRead | UnixFileMode.UserWrite | UnixFileMode.UserExecute);
+    }
+
+    private static void TryKill(Process process)
+    {
+        try
+        {
+            if (!process.HasExited)
+            {
+                process.Kill(entireProcessTree: true);
+            }
+        }
+        catch (Exception)
+        {
+            // Best-effort.
+        }
+    }
+
+    private static void TryDeleteDirectory(string path)
+    {
+        try
+        {
+            if (Directory.Exists(path))
+            {
+                Directory.Delete(path, recursive: true);
+            }
+        }
+        catch (IOException)
+        {
+            // Best-effort cleanup of a partial build tree.
+        }
+        catch (UnauthorizedAccessException)
+        {
+            // Best-effort cleanup of a partial build tree.
+        }
+    }
+
+    private static string DefaultCacheRoot()
+    {
+        return Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
+            "XE-Local-AI-Engine");
+    }
+
+    [GeneratedRegex(@"^[0-9]{2,3}(;[0-9]{2,3})*$", RegexOptions.CultureInvariant | RegexOptions.ExplicitCapture, matchTimeoutMilliseconds: 1000)]
+    private static partial Regex ComputeCapRegex();
+
+    [GeneratedRegex("^[0-9a-fA-F]{40}$", RegexOptions.CultureInvariant | RegexOptions.ExplicitCapture, matchTimeoutMilliseconds: 1000)]
+    private static partial Regex FullCommitRegex();
+}

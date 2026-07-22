@@ -46,6 +46,7 @@ public sealed class LlamaServerProcessSupervisor : ILlamaServerProcessSupervisor
 
     // Guards the loaded-cap admission decision + port-set mutation so the cap can never be exceeded by a race.
     private readonly SemaphoreSlim _admissionGate = new(initialCount: 1, maxCount: 1);
+    private readonly SemaphoreSlim _runtimeMutationGate = new(initialCount: 1, maxCount: 1);
     private readonly HashSet<int> _allocatedPorts = [];
     private readonly ILlamaCppBinaryManager _binaryManager;
 
@@ -142,6 +143,7 @@ public sealed class LlamaServerProcessSupervisor : ILlamaServerProcessSupervisor
         }
 
         _admissionGate.Dispose();
+        _runtimeMutationGate.Dispose();
         foreach (var gate in _ensureGates.Values)
         {
             gate.Dispose();
@@ -156,36 +158,73 @@ public sealed class LlamaServerProcessSupervisor : ILlamaServerProcessSupervisor
         ArgumentException.ThrowIfNullOrWhiteSpace(modelName);
         ObjectDisposedException.ThrowIf(Volatile.Read(ref _disposed) != 0, this);
 
-        // Hybrid attach: a configured external endpoint short-circuits spawn/supervision entirely.
-        var external = _externalEndpoints.Resolve(modelName, role);
-        if (external is not null)
+        await _runtimeMutationGate.WaitAsync(ct).ConfigureAwait(false);
+        try
         {
-            return new LlamaServerEndpoint(modelName, role, external);
-        }
-
-        var key = new ProcessKey(modelName, role);
-
-        // Fast path: an already-running, live process is reused without taking the spawn gate — subject to a
-        // rate-limited liveness probe so a wedged (alive but unresponsive) process is respawned instead of handed out.
-        if (_processes.TryGetValue(key, out var existing) && !existing.Handle.HasExited)
-        {
-            var reused = await TryReuseAsync(key, existing, ct).ConfigureAwait(false);
-            if (reused is not null)
+            // Hybrid attach: a configured external endpoint short-circuits spawn/supervision entirely.
+            var external = _externalEndpoints.Resolve(modelName, role);
+            if (external is not null)
             {
-                return reused;
+                return new LlamaServerEndpoint(modelName, role, external);
             }
-        }
 
-        // Decide (under the single-flight gate, held only briefly) between a reuse and joining/starting the DETACHED
-        // spawn, then await the spawn WITHOUT binding its lifetime to this caller's token.
-        var decision = await DecideEnsureAsync(key, ct).ConfigureAwait(false);
-        if (decision.Reused is { } reusedEndpoint)
+            var key = new ProcessKey(modelName, role);
+
+            // Fast path: an already-running, live process is reused without taking the spawn gate — subject to a
+            // rate-limited liveness probe so a wedged (alive but unresponsive) process is respawned instead of handed out.
+            if (_processes.TryGetValue(key, out var existing) && !existing.Handle.HasExited)
+            {
+                var reused = await TryReuseAsync(key, existing, ct).ConfigureAwait(false);
+                if (reused is not null)
+                {
+                    return reused;
+                }
+            }
+
+            // Decide (under the single-flight gate, held only briefly) between a reuse and joining/starting the DETACHED
+            // spawn, then await the spawn WITHOUT binding its lifetime to this caller's token.
+            var decision = await DecideEnsureAsync(key, ct).ConfigureAwait(false);
+            if (decision.Reused is { } reusedEndpoint)
+            {
+                return reusedEndpoint;
+            }
+
+            var running = await AwaitDetachedSpawnAsync(decision.SpawnTask!, ct).ConfigureAwait(false);
+            return running.Endpoint;
+        }
+        finally
         {
-            return reusedEndpoint;
+            _runtimeMutationGate.Release();
+        }
+    }
+
+    /// <inheritdoc />
+    public async Task<ILlamaServerRuntimeMutationLease?> TryAcquireRuntimeMutationLeaseAsync(CancellationToken ct)
+    {
+        ObjectDisposedException.ThrowIf(Volatile.Read(ref _disposed) != 0, this);
+        await _runtimeMutationGate.WaitAsync(ct).ConfigureAwait(false);
+        if (_processes.Values.Any(static process => !process.Handle.HasExited) || !_inflightSpawns.IsEmpty)
+        {
+            _runtimeMutationGate.Release();
+            return null;
         }
 
-        var running = await AwaitDetachedSpawnAsync(decision.SpawnTask!, ct).ConfigureAwait(false);
-        return running.Endpoint;
+        return new RuntimeMutationLease(_runtimeMutationGate);
+    }
+
+    private sealed class RuntimeMutationLease(SemaphoreSlim gate) : ILlamaServerRuntimeMutationLease
+    {
+        private int _disposed;
+
+        public ValueTask DisposeAsync()
+        {
+            if (Interlocked.Exchange(ref _disposed, 1) == 0)
+            {
+                gate.Release();
+            }
+
+            return ValueTask.CompletedTask;
+        }
     }
 
     /// <summary>

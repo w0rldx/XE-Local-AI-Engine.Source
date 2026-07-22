@@ -9,11 +9,21 @@ using XE_Local_AI_Engine.Providers.LlamaServer.Contracts;
 /// </summary>
 public sealed class CudaManagedBuildSignal : ICudaManagedBuildSignal
 {
-    private volatile bool _available;
+    private int _activeVariant = -1;
     private long _version;
 
     /// <inheritdoc />
-    public bool IsAvailable => _available;
+    public bool IsAvailable => ActiveVariant == GpuVariant.Cuda;
+
+    /// <inheritdoc />
+    public GpuVariant? ActiveVariant
+    {
+        get
+        {
+            var value = Volatile.Read(ref _activeVariant);
+            return value < 0 ? null : (GpuVariant)value;
+        }
+    }
 
     /// <inheritdoc />
     public long Version => Interlocked.Read(ref _version);
@@ -21,14 +31,20 @@ public sealed class CudaManagedBuildSignal : ICudaManagedBuildSignal
     /// <inheritdoc />
     public void MarkAvailable()
     {
-        _available = true;
+        SetActive(GpuVariant.Cuda);
+    }
+
+    /// <inheritdoc />
+    public void SetActive(GpuVariant variant)
+    {
+        Volatile.Write(ref _activeVariant, (int)variant);
         Interlocked.Increment(ref _version);
     }
 
     /// <inheritdoc />
     public void Clear()
     {
-        _available = false;
+        Volatile.Write(ref _activeVariant, -1);
         Interlocked.Increment(ref _version);
     }
 }

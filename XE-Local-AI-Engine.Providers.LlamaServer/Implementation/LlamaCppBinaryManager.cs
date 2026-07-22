@@ -128,9 +128,9 @@ public sealed partial class LlamaCppBinaryManager : ILlamaCppBinaryManager
         // or a deep-tree swap is caught. A recorded-but-missing/invalid build clears the record + signal and falls through
         // to the normal path (which throws the sanitized "no prebuilt for this OS/arch" for a Cuda request — never a
         // silent CPU serve). Reuses the already-read `installed`, so no extra store I/O.
-        if (variant == GpuVariant.Cuda && installed?.SourceBuildPath is { Length: > 0 })
+        if (installed?.SourceBuildPath is { Length: > 0 } && installed.Variant == variant)
         {
-            var managed = await TryServeManagedCudaBinaryAsync(installed, ct).ConfigureAwait(false);
+            var managed = await TryServeManagedSourceBinaryAsync(installed, ct).ConfigureAwait(false);
             if (managed is not null)
             {
                 return managed;

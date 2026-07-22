@@ -60,6 +60,9 @@ public static class LlamaCppReleasePins
     /// </summary>
     public const string PinnedCudaSourceCommitSha = "f3e182816421c648188b5eab269853bf1531d950";
 
+    /// <summary>Backend-neutral alias for the exact source commit behind <see cref="PinnedTag" />.</summary>
+    public const string PinnedSourceCommitSha = PinnedCudaSourceCommitSha;
+
     private const string WindowsServerPath = "build/bin/llama-server.exe";
     private const string UnixServerPath = "build/bin/llama-server";
 

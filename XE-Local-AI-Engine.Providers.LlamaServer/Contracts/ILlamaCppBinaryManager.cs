@@ -58,4 +58,23 @@ public interface ILlamaCppBinaryManager
     ///     clears the managed-CUDA cached signal. Idempotent: a no-op when no source build is recorded. <c>[secMED-3]</c>
     /// </summary>
     Task RemoveCudaSourceBuildAsync(CancellationToken ct);
+
+    /// <summary>Adopts a generalized source-built runtime with exact provenance.</summary>
+    Task<InstalledRuntimeState> AdoptSourceBuildAsync(string buildBinDir,
+        string tag,
+        GpuVariant variant,
+        string sourceRepository,
+        string sourceCommit,
+        LlamaCppSourceRevisionMode revisionMode,
+        string? requestedCommit,
+        CancellationToken ct)
+    {
+        throw new NotSupportedException("Generalized source-build adoption is not supported by this binary manager.");
+    }
+
+    /// <summary>Removes the active generalized source-built runtime.</summary>
+    Task RemoveSourceBuildAsync(CancellationToken ct)
+    {
+        return RemoveCudaSourceBuildAsync(ct);
+    }
 }

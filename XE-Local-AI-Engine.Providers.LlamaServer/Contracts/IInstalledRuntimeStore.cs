@@ -22,7 +22,11 @@ public sealed record InstalledRuntimeState(
     string Sha256,
     GpuVariant Variant,
     DateTimeOffset InstalledAtUtc,
-    string? SourceBuildPath = null);
+    string? SourceBuildPath = null,
+    string? SourceRepository = null,
+    string? SourceCommit = null,
+    LlamaCppSourceRevisionMode? SourceRevisionMode = null,
+    string? SourceRequestedCommit = null);
 
 /// <summary>
 ///     Reads/writes <c>installed-runtime.json</c> under the cache root (sibling to <c>llama.cpp/</c>). The single record
