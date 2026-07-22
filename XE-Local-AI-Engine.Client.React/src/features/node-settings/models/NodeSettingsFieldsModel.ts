@@ -212,7 +212,12 @@ export function toUsageRateRows(map: NodeSettingsResponse["usageRates"]): UsageR
 		return [];
 	}
 	return Object.entries(map)
-		.map(([modelName, rate]) => ({ id: newRateRowId(), modelName, inputPer1M: rate.inputPer1M, outputPer1M: rate.outputPer1M }))
+		.map(([modelName, rate]) => ({
+			id: newRateRowId(),
+			modelName,
+			inputPer1M: rate.inputPer1M ?? "",
+			outputPer1M: rate.outputPer1M ?? "",
+		}))
 		.sort((a, b) => a.modelName.localeCompare(b.modelName));
 }
 
@@ -462,8 +467,7 @@ export function buildNodeSettingsRequest(
 	}
 
 	if (form.huggingFaceDefaultQuant !== baseline.huggingFaceDefaultQuant) {
-		body.huggingFaceDefaultQuant =
-			form.huggingFaceDefaultQuant.trim().length > 0 ? form.huggingFaceDefaultQuant.trim() : null;
+		body.huggingFaceDefaultQuant = form.huggingFaceDefaultQuant.trim().length > 0 ? form.huggingFaceDefaultQuant.trim() : null;
 	}
 
 	if (form.recommendedLlamaCppTag !== baseline.recommendedLlamaCppTag) {
@@ -539,17 +543,9 @@ export function buildNodeSettingsRequest(
 			body.speculativeDraftMaxTokens = v;
 		},
 	);
-	collectBoundedInt(
-		form.chatCacheReuse,
-		baseline.chatCacheReuse,
-		bounds.chatCacheReuse,
-		"chatCacheReuse",
-		body,
-		errors,
-		(v) => {
-			body.chatCacheReuse = v;
-		},
-	);
+	collectBoundedInt(form.chatCacheReuse, baseline.chatCacheReuse, bounds.chatCacheReuse, "chatCacheReuse", body, errors, (v) => {
+		body.chatCacheReuse = v;
+	});
 
 	// Knowledge-base reranker model — free model name; empty string is the "Off" signal (backend Normalize maps blank to
 	// null = reranking disabled). Sent whenever it differs from the baseline, including a switch back to "Off".

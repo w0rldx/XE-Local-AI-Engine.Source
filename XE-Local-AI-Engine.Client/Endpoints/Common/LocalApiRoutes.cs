@@ -272,6 +272,23 @@ public static class LocalApiRoutes
         public const string Hub = "/api/local/v1/scheduler/hub";
     }
 
+    /// <summary>Development project, task, evidence, apply, and live-attempt routes.</summary>
+    public static class Development
+    {
+        public const string Root = "development";
+        public const string Projects = "development/projects";
+        public const string ProjectById = "development/projects/{projectId}";
+        public const string TaskById = "development/projects/{projectId}/tasks/{taskId}";
+        public const string NextAction = "development/projects/{projectId}/tasks/{taskId}/next-action";
+        public const string CancelAttempt = "development/projects/{projectId}/tasks/{taskId}/attempts/{attemptId}/cancel";
+        public const string Events = "development/projects/{projectId}/events";
+        public const string TaskArtifacts = "development/projects/{projectId}/tasks/{taskId}/artifacts";
+        public const string ArtifactById = "development/projects/{projectId}/tasks/{taskId}/artifacts/{artifactId}";
+        public const string PatchPreview = "development/projects/{projectId}/tasks/{taskId}/preview";
+        public const string Apply = "development/projects/{projectId}/tasks/{taskId}/apply";
+        public const string Hub = "/api/local/v1/development/hub";
+    }
+
     /// <summary>
     ///     Local API contract type for model-fit, the box-aware local model advisor. Cache-first: the latest
     ///     endpoint reads the cached recommendation snapshot and never runs the advisor; the refresh endpoint delegates

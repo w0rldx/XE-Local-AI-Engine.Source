@@ -7,7 +7,7 @@
   },
   "servers": [
     {
-      "url": "http://127.0.0.1:45951"
+      "url": "http://127.0.0.1:45137"
     }
   ],
   "paths": {
@@ -3438,63 +3438,6 @@
         ]
       }
     },
-    "/api/local/v1/chat/approvals/resolve": {
-      "post": {
-        "tags": [
-          "Chat"
-        ],
-        "operationId": "resolveToolApproval",
-        "requestBody": {
-          "x-name": "ResolveToolApprovalRequest",
-          "description": "",
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/XE_Local_AI_EngineClientEndpointsLocalChatV1ResolveToolApprovalRequest"
-              }
-            }
-          },
-          "required": true,
-          "x-position": 1
-        },
-        "responses": {
-          "200": {
-            "description": "Success",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/XE_Local_AI_EngineClientEndpointsLocalChatV1ResolveToolApprovalResponse"
-                }
-              }
-            }
-          },
-          "400": {
-            "description": "Bad Request",
-            "content": {
-              "application/problem+json": {
-                "schema": {
-                  "$ref": "#/components/schemas/FastEndpointsProblemDetails"
-                }
-              }
-            }
-          },
-          "401": {
-            "description": "Unauthorized"
-          },
-          "403": {
-            "description": "Forbidden"
-          }
-        },
-        "security": [
-          {
-            "JWTBearerAuth": []
-          },
-          {
-            "Bearer": []
-          }
-        ]
-      }
-    },
     "/api/local/v1/chat/conversations": {
       "post": {
         "tags": [
@@ -4479,6 +4422,63 @@
         ]
       }
     },
+    "/api/local/v1/chat/approvals/resolve": {
+      "post": {
+        "tags": [
+          "Chat"
+        ],
+        "operationId": "resolveToolApproval",
+        "requestBody": {
+          "x-name": "ResolveToolApprovalRequest",
+          "description": "",
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/XE_Local_AI_EngineClientEndpointsLocalChatV1ResolveToolApprovalRequest"
+              }
+            }
+          },
+          "required": true,
+          "x-position": 1
+        },
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/XE_Local_AI_EngineClientEndpointsLocalChatV1ResolveToolApprovalResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FastEndpointsProblemDetails"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "403": {
+            "description": "Forbidden"
+          }
+        },
+        "security": [
+          {
+            "JWTBearerAuth": []
+          },
+          {
+            "Bearer": []
+          }
+        ]
+      }
+    },
     "/api/local/v1/knowledge-base/documents/{documentId}": {
       "delete": {
         "tags": [
@@ -4539,6 +4539,40 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/XE_Local_AI_EngineClientEndpointsKnowledgeV1KnowledgeDocumentDetailResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "403": {
+            "description": "Forbidden"
+          }
+        },
+        "security": [
+          {
+            "JWTBearerAuth": []
+          },
+          {
+            "Bearer": []
+          }
+        ]
+      }
+    },
+    "/api/local/v1/knowledge-base/reranker/download-recommended": {
+      "post": {
+        "tags": [
+          "Knowledge-Base"
+        ],
+        "operationId": "downloadRecommendedReranker",
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/XE_Local_AI_EngineClientEndpointsKnowledgeV1DownloadRecommendedRerankerResponse"
                 }
               }
             }
@@ -4652,40 +4686,6 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/XE_Local_AI_EngineClientEndpointsKnowledgeV1ReindexCorpusResponse"
-                }
-              }
-            }
-          },
-          "401": {
-            "description": "Unauthorized"
-          },
-          "403": {
-            "description": "Forbidden"
-          }
-        },
-        "security": [
-          {
-            "JWTBearerAuth": []
-          },
-          {
-            "Bearer": []
-          }
-        ]
-      }
-    },
-    "/api/local/v1/knowledge-base/reranker/download-recommended": {
-      "post": {
-        "tags": [
-          "Knowledge-Base"
-        ],
-        "operationId": "downloadRecommendedReranker",
-        "responses": {
-          "200": {
-            "description": "Success",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/XE_Local_AI_EngineClientEndpointsKnowledgeV1DownloadRecommendedRerankerResponse"
                 }
               }
             }
@@ -5086,6 +5086,603 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/XE_Local_AI_EngineClientEndpointsImagesV1StartImageModelDownloadResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "403": {
+            "description": "Forbidden"
+          }
+        },
+        "security": [
+          {
+            "JWTBearerAuth": []
+          },
+          {
+            "Bearer": []
+          }
+        ]
+      }
+    },
+    "/api/local/v1/development/projects": {
+      "get": {
+        "tags": [
+          "Development"
+        ],
+        "operationId": "listDevelopmentProjects",
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/XE_Local_AI_EngineClientEndpointsDevelopmentV1ListDevelopmentProjectsResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "403": {
+            "description": "Forbidden"
+          }
+        },
+        "security": [
+          {
+            "JWTBearerAuth": []
+          },
+          {
+            "Bearer": []
+          }
+        ]
+      },
+      "post": {
+        "tags": [
+          "Development"
+        ],
+        "operationId": "createDevelopmentProject",
+        "requestBody": {
+          "x-name": "CreateDevelopmentProjectRequest",
+          "description": "",
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/XE_Local_AI_EngineClientEndpointsDevelopmentV1CreateDevelopmentProjectRequest"
+              }
+            }
+          },
+          "required": true,
+          "x-position": 1
+        },
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/XE_Local_AI_EngineClientEndpointsDevelopmentV1DevelopmentProjectDetailResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "403": {
+            "description": "Forbidden"
+          }
+        },
+        "security": [
+          {
+            "JWTBearerAuth": []
+          },
+          {
+            "Bearer": []
+          }
+        ]
+      }
+    },
+    "/api/local/v1/development/projects/{projectId}": {
+      "get": {
+        "tags": [
+          "Development"
+        ],
+        "operationId": "getDevelopmentProject",
+        "parameters": [
+          {
+            "name": "projectId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "guid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/XE_Local_AI_EngineClientEndpointsDevelopmentV1DevelopmentProjectDetailResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "403": {
+            "description": "Forbidden"
+          }
+        },
+        "security": [
+          {
+            "JWTBearerAuth": []
+          },
+          {
+            "Bearer": []
+          }
+        ]
+      }
+    },
+    "/api/local/v1/development/projects/{projectId}/tasks/{taskId}": {
+      "get": {
+        "tags": [
+          "Development"
+        ],
+        "operationId": "getDevelopmentTask",
+        "parameters": [
+          {
+            "name": "projectId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "guid"
+            }
+          },
+          {
+            "name": "taskId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "guid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/XE_Local_AI_EngineClientEndpointsDevelopmentV1DevelopmentTaskDetailResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "403": {
+            "description": "Forbidden"
+          }
+        },
+        "security": [
+          {
+            "JWTBearerAuth": []
+          },
+          {
+            "Bearer": []
+          }
+        ]
+      }
+    },
+    "/api/local/v1/development/projects/{projectId}/tasks/{taskId}/next-action": {
+      "post": {
+        "tags": [
+          "Development"
+        ],
+        "operationId": "startDevelopmentNextAction",
+        "parameters": [
+          {
+            "name": "projectId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "guid"
+            }
+          },
+          {
+            "name": "taskId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "guid"
+            }
+          }
+        ],
+        "requestBody": {
+          "x-name": "DevelopmentActionRequest",
+          "description": "",
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/XE_Local_AI_EngineClientEndpointsDevelopmentV1DevelopmentActionRequest"
+              }
+            }
+          },
+          "required": true,
+          "x-position": 1
+        },
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/XE_Local_AI_EngineClientEndpointsDevelopmentV1DevelopmentNextActionResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "403": {
+            "description": "Forbidden"
+          }
+        },
+        "security": [
+          {
+            "JWTBearerAuth": []
+          },
+          {
+            "Bearer": []
+          }
+        ]
+      }
+    },
+    "/api/local/v1/development/projects/{projectId}/tasks/{taskId}/attempts/{attemptId}/cancel": {
+      "post": {
+        "tags": [
+          "Development"
+        ],
+        "operationId": "cancelDevelopmentAttempt",
+        "parameters": [
+          {
+            "name": "projectId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "guid"
+            }
+          },
+          {
+            "name": "taskId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "guid"
+            }
+          },
+          {
+            "name": "attemptId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "guid"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "No Content"
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "403": {
+            "description": "Forbidden"
+          }
+        },
+        "security": [
+          {
+            "JWTBearerAuth": []
+          },
+          {
+            "Bearer": []
+          }
+        ]
+      }
+    },
+    "/api/local/v1/development/projects/{projectId}/events": {
+      "get": {
+        "tags": [
+          "Development"
+        ],
+        "operationId": "listDevelopmentEvents",
+        "parameters": [
+          {
+            "name": "projectId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "guid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/XE_Local_AI_EngineClientEndpointsDevelopmentV1ListDevelopmentEventsResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "403": {
+            "description": "Forbidden"
+          }
+        },
+        "security": [
+          {
+            "JWTBearerAuth": []
+          },
+          {
+            "Bearer": []
+          }
+        ]
+      }
+    },
+    "/api/local/v1/development/projects/{projectId}/tasks/{taskId}/artifacts": {
+      "get": {
+        "tags": [
+          "Development"
+        ],
+        "operationId": "listDevelopmentArtifacts",
+        "parameters": [
+          {
+            "name": "projectId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "guid"
+            }
+          },
+          {
+            "name": "taskId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "guid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/XE_Local_AI_EngineClientEndpointsDevelopmentV1ListDevelopmentArtifactsResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "403": {
+            "description": "Forbidden"
+          }
+        },
+        "security": [
+          {
+            "JWTBearerAuth": []
+          },
+          {
+            "Bearer": []
+          }
+        ]
+      }
+    },
+    "/api/local/v1/development/projects/{projectId}/tasks/{taskId}/artifacts/{artifactId}": {
+      "get": {
+        "tags": [
+          "Development"
+        ],
+        "operationId": "getDevelopmentArtifact",
+        "parameters": [
+          {
+            "name": "projectId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "guid"
+            }
+          },
+          {
+            "name": "taskId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "guid"
+            }
+          },
+          {
+            "name": "artifactId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "guid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/XE_Local_AI_EngineClientEndpointsDevelopmentV1DevelopmentArtifactContentResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "403": {
+            "description": "Forbidden"
+          }
+        },
+        "security": [
+          {
+            "JWTBearerAuth": []
+          },
+          {
+            "Bearer": []
+          }
+        ]
+      }
+    },
+    "/api/local/v1/development/projects/{projectId}/tasks/{taskId}/preview": {
+      "post": {
+        "tags": [
+          "Development"
+        ],
+        "operationId": "previewDevelopmentPatch",
+        "parameters": [
+          {
+            "name": "projectId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "guid"
+            }
+          },
+          {
+            "name": "taskId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "guid"
+            }
+          }
+        ],
+        "requestBody": {
+          "x-name": "DevelopmentActionRequest",
+          "description": "",
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/XE_Local_AI_EngineClientEndpointsDevelopmentV1DevelopmentActionRequest"
+              }
+            }
+          },
+          "required": true,
+          "x-position": 1
+        },
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/XE_Local_AI_EngineClientEndpointsDevelopmentV1DevelopmentPatchPreviewResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "403": {
+            "description": "Forbidden"
+          }
+        },
+        "security": [
+          {
+            "JWTBearerAuth": []
+          },
+          {
+            "Bearer": []
+          }
+        ]
+      }
+    },
+    "/api/local/v1/development/projects/{projectId}/tasks/{taskId}/apply": {
+      "post": {
+        "tags": [
+          "Development"
+        ],
+        "operationId": "applyDevelopmentPatch",
+        "parameters": [
+          {
+            "name": "projectId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "guid"
+            }
+          },
+          {
+            "name": "taskId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "guid"
+            }
+          }
+        ],
+        "requestBody": {
+          "x-name": "DevelopmentActionRequest",
+          "description": "",
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/XE_Local_AI_EngineClientEndpointsDevelopmentV1DevelopmentActionRequest"
+              }
+            }
+          },
+          "required": true,
+          "x-position": 1
+        },
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/XE_Local_AI_EngineClientEndpointsDevelopmentV1DevelopmentApplyResponse"
                 }
               }
             }
@@ -6942,6 +7539,58 @@
         ]
       }
     },
+    "/api/local/v1/agents/usage-summary": {
+      "get": {
+        "tags": [
+          "Agents"
+        ],
+        "operationId": "getAgentUsageSummary",
+        "parameters": [
+          {
+            "name": "fromEpochMs",
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "nullable": true
+            }
+          },
+          {
+            "name": "toEpochMs",
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "nullable": true
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/XE_Local_AI_EngineClientEndpointsAgentsV1AgentUsageSummaryResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "403": {
+            "description": "Forbidden"
+          }
+        },
+        "security": [
+          {
+            "JWTBearerAuth": []
+          },
+          {
+            "Bearer": []
+          }
+        ]
+      }
+    },
     "/api/local/v1/agents/tool-capable-models": {
       "get": {
         "tags": [
@@ -7436,58 +8085,6 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/XE_Local_AI_EngineClientEndpointsAgentsV1PlaybookActionResponse"
-                }
-              }
-            }
-          },
-          "401": {
-            "description": "Unauthorized"
-          },
-          "403": {
-            "description": "Forbidden"
-          }
-        },
-        "security": [
-          {
-            "JWTBearerAuth": []
-          },
-          {
-            "Bearer": []
-          }
-        ]
-      }
-    },
-    "/api/local/v1/agents/usage-summary": {
-      "get": {
-        "tags": [
-          "Agents"
-        ],
-        "operationId": "getAgentUsageSummary",
-        "parameters": [
-          {
-            "name": "fromEpochMs",
-            "in": "query",
-            "schema": {
-              "type": "integer",
-              "nullable": true
-            }
-          },
-          {
-            "name": "toEpochMs",
-            "in": "query",
-            "schema": {
-              "type": "integer",
-              "nullable": true
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "Success",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/XE_Local_AI_EngineClientEndpointsAgentsV1AgentUsageSummaryResponse"
                 }
               }
             }
@@ -8773,10 +9370,10 @@
           },
           "usageRates": {
             "type": "object",
+            "nullable": true,
             "additionalProperties": {
               "$ref": "#/components/schemas/XE_Local_AI_EngineClientServicesNodeSettingsModelRate"
-            },
-            "nullable": true
+            }
           }
         }
       },
@@ -8844,6 +9441,20 @@
             "type": "integer",
             "format": "int32",
             "nullable": true
+          }
+        }
+      },
+      "XE_Local_AI_EngineClientServicesNodeSettingsModelRate": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "inputPer1M": {
+            "type": "number",
+            "format": "double"
+          },
+          "outputPer1M": {
+            "type": "number",
+            "format": "double"
           }
         }
       },
@@ -8982,10 +9593,10 @@
           },
           "usageRates": {
             "type": "object",
+            "nullable": true,
             "additionalProperties": {
               "$ref": "#/components/schemas/XE_Local_AI_EngineClientServicesNodeSettingsModelRate"
-            },
-            "nullable": true
+            }
           }
         }
       },
@@ -11569,6 +12180,40 @@
         "type": "object",
         "additionalProperties": false
       },
+      "XE_Local_AI_EngineClientEndpointsLocalChatV1ResolveToolApprovalResponse": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "requestId",
+          "approved"
+        ],
+        "properties": {
+          "requestId": {
+            "type": "string"
+          },
+          "approved": {
+            "type": "boolean"
+          }
+        }
+      },
+      "XE_Local_AI_EngineClientEndpointsLocalChatV1ResolveToolApprovalRequest": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "requestId",
+          "approved"
+        ],
+        "properties": {
+          "requestId": {
+            "type": "string",
+            "minLength": 1,
+            "nullable": false
+          },
+          "approved": {
+            "type": "boolean"
+          }
+        }
+      },
       "XE_Local_AI_EngineClientEndpointsLocalChatV1UploadConversationFileRequest": {
         "type": "object",
         "additionalProperties": false,
@@ -11583,6 +12228,34 @@
       "XE_Local_AI_EngineClientEndpointsKnowledgeV1KnowledgeDocumentRouteRequest": {
         "type": "object",
         "additionalProperties": false
+      },
+      "XE_Local_AI_EngineClientEndpointsKnowledgeV1DownloadRecommendedRerankerResponse": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "modelName",
+          "repoId",
+          "quant",
+          "alreadyInstalled",
+          "alreadyInFlight"
+        ],
+        "properties": {
+          "modelName": {
+            "type": "string"
+          },
+          "repoId": {
+            "type": "string"
+          },
+          "quant": {
+            "type": "string"
+          },
+          "alreadyInstalled": {
+            "type": "boolean"
+          },
+          "alreadyInFlight": {
+            "type": "boolean"
+          }
+        }
       },
       "XE_Local_AI_EngineClientEndpointsKnowledgeV1KnowledgeDocumentDetailResponse": {
         "type": "object",
@@ -11740,34 +12413,6 @@
           },
           "createdAtUtc": {
             "type": "integer"
-          }
-        }
-      },
-      "XE_Local_AI_EngineClientEndpointsKnowledgeV1DownloadRecommendedRerankerResponse": {
-        "type": "object",
-        "additionalProperties": false,
-        "required": [
-          "modelName",
-          "repoId",
-          "quant",
-          "alreadyInstalled",
-          "alreadyInFlight"
-        ],
-        "properties": {
-          "modelName": {
-            "type": "string"
-          },
-          "repoId": {
-            "type": "string"
-          },
-          "quant": {
-            "type": "string"
-          },
-          "alreadyInstalled": {
-            "type": "boolean"
-          },
-          "alreadyInFlight": {
-            "type": "boolean"
           }
         }
       },
@@ -12425,6 +13070,520 @@
           "sha256": {
             "type": "string",
             "nullable": true
+          }
+        }
+      },
+      "XE_Local_AI_EngineClientEndpointsDevelopmentV1ListDevelopmentProjectsResponse": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "items": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/XE_Local_AI_EngineClientEndpointsDevelopmentV1DevelopmentProjectResponse"
+            }
+          }
+        }
+      },
+      "XE_Local_AI_EngineClientEndpointsDevelopmentV1DevelopmentProjectResponse": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "guid"
+          },
+          "objective": {
+            "type": "string"
+          },
+          "baseBranch": {
+            "type": "string"
+          },
+          "status": {
+            "type": "string"
+          },
+          "egressPolicy": {
+            "type": "string"
+          },
+          "coderModelId": {
+            "type": "string",
+            "nullable": true
+          },
+          "reviewerModelId": {
+            "type": "string",
+            "nullable": true
+          },
+          "maxTokens": {
+            "type": "integer",
+            "format": "int32",
+            "nullable": true
+          },
+          "maxDurationSeconds": {
+            "type": "integer",
+            "format": "int32",
+            "nullable": true
+          },
+          "createdAtUtc": {
+            "type": "integer"
+          },
+          "updatedAtUtc": {
+            "type": "integer"
+          },
+          "version": {
+            "type": "integer"
+          }
+        }
+      },
+      "XE_Local_AI_EngineClientEndpointsDevelopmentV1DevelopmentProjectDetailResponse": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "project": {
+            "$ref": "#/components/schemas/XE_Local_AI_EngineClientEndpointsDevelopmentV1DevelopmentProjectResponse"
+          },
+          "tasks": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/XE_Local_AI_EngineClientEndpointsDevelopmentV1DevelopmentTaskDetailResponse"
+            }
+          },
+          "events": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/XE_Local_AI_EngineClientEndpointsDevelopmentV1DevelopmentEventResponse"
+            }
+          }
+        }
+      },
+      "XE_Local_AI_EngineClientEndpointsDevelopmentV1DevelopmentTaskDetailResponse": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "task": {
+            "$ref": "#/components/schemas/XE_Local_AI_EngineClientEndpointsDevelopmentV1DevelopmentTaskResponse"
+          },
+          "attempts": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/XE_Local_AI_EngineClientEndpointsDevelopmentV1DevelopmentAttemptResponse"
+            }
+          },
+          "artifacts": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/XE_Local_AI_EngineClientEndpointsDevelopmentV1DevelopmentArtifactResponse"
+            }
+          }
+        }
+      },
+      "XE_Local_AI_EngineClientEndpointsDevelopmentV1DevelopmentTaskResponse": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "guid"
+          },
+          "projectId": {
+            "type": "string",
+            "format": "guid"
+          },
+          "title": {
+            "type": "string"
+          },
+          "requirements": {
+            "type": "string"
+          },
+          "acceptanceCriteriaJson": {
+            "type": "string"
+          },
+          "status": {
+            "type": "string"
+          },
+          "currentReviewRound": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "maxReviewRounds": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "blockedReason": {
+            "type": "string",
+            "nullable": true
+          },
+          "approvedSubjectHash": {
+            "type": "string",
+            "nullable": true
+          },
+          "version": {
+            "type": "integer"
+          }
+        }
+      },
+      "XE_Local_AI_EngineClientEndpointsDevelopmentV1DevelopmentAttemptResponse": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "guid"
+          },
+          "taskId": {
+            "type": "string",
+            "format": "guid"
+          },
+          "predecessorAttemptId": {
+            "type": "string",
+            "format": "guid",
+            "nullable": true
+          },
+          "role": {
+            "type": "string"
+          },
+          "modelId": {
+            "type": "string"
+          },
+          "provider": {
+            "type": "string"
+          },
+          "status": {
+            "type": "string"
+          },
+          "startedAtUtc": {
+            "type": "integer",
+            "nullable": true
+          },
+          "endedAtUtc": {
+            "type": "integer",
+            "nullable": true
+          },
+          "terminalReason": {
+            "type": "string",
+            "nullable": true
+          },
+          "inputTokens": {
+            "type": "integer",
+            "nullable": true
+          },
+          "outputTokens": {
+            "type": "integer",
+            "nullable": true
+          },
+          "version": {
+            "type": "integer"
+          }
+        }
+      },
+      "XE_Local_AI_EngineClientEndpointsDevelopmentV1DevelopmentArtifactResponse": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "guid"
+          },
+          "projectId": {
+            "type": "string",
+            "format": "guid"
+          },
+          "taskId": {
+            "type": "string",
+            "format": "guid"
+          },
+          "attemptId": {
+            "type": "string",
+            "format": "guid",
+            "nullable": true
+          },
+          "kind": {
+            "type": "string"
+          },
+          "contentHash": {
+            "type": "string"
+          },
+          "byteCount": {
+            "type": "integer"
+          },
+          "createdAtUtc": {
+            "type": "integer"
+          },
+          "baseCommit": {
+            "type": "string",
+            "nullable": true
+          },
+          "subjectHash": {
+            "type": "string",
+            "nullable": true
+          },
+          "changedFilesManifestHash": {
+            "type": "string",
+            "nullable": true
+          },
+          "commandProfileVersion": {
+            "type": "string",
+            "nullable": true
+          },
+          "isValid": {
+            "type": "boolean"
+          }
+        }
+      },
+      "XE_Local_AI_EngineClientEndpointsDevelopmentV1DevelopmentEventResponse": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "guid"
+          },
+          "projectId": {
+            "type": "string",
+            "format": "guid"
+          },
+          "taskId": {
+            "type": "string",
+            "format": "guid",
+            "nullable": true
+          },
+          "attemptId": {
+            "type": "string",
+            "format": "guid",
+            "nullable": true
+          },
+          "sequence": {
+            "type": "integer"
+          },
+          "eventType": {
+            "type": "string"
+          },
+          "occurredAtUtc": {
+            "type": "integer"
+          },
+          "operationId": {
+            "type": "string",
+            "format": "guid",
+            "nullable": true
+          },
+          "operationPhase": {
+            "type": "string",
+            "nullable": true
+          },
+          "outcome": {
+            "type": "string",
+            "nullable": true
+          }
+        }
+      },
+      "XE_Local_AI_EngineClientEndpointsDevelopmentV1CreateDevelopmentProjectRequest": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "operationId": {
+            "type": "string",
+            "format": "guid"
+          },
+          "repositoryRoot": {
+            "type": "string"
+          },
+          "objective": {
+            "type": "string"
+          },
+          "baseBranch": {
+            "type": "string"
+          },
+          "taskTitle": {
+            "type": "string"
+          },
+          "requirements": {
+            "type": "string"
+          },
+          "acceptanceCriteriaJson": {
+            "type": "string"
+          },
+          "egressPolicy": {
+            "type": "string"
+          },
+          "coderModelId": {
+            "type": "string"
+          },
+          "reviewerModelId": {
+            "type": "string"
+          },
+          "trustedRepositoryAcknowledged": {
+            "type": "boolean"
+          },
+          "maxTokens": {
+            "type": "integer",
+            "format": "int32",
+            "nullable": true
+          },
+          "maxDurationSeconds": {
+            "type": "integer",
+            "format": "int32",
+            "nullable": true
+          }
+        }
+      },
+      "XE_Local_AI_EngineClientEndpointsDevelopmentV1DevelopmentProjectRequest": {
+        "type": "object",
+        "additionalProperties": false
+      },
+      "XE_Local_AI_EngineClientEndpointsDevelopmentV1DevelopmentTaskRequest": {
+        "type": "object",
+        "additionalProperties": false
+      },
+      "XE_Local_AI_EngineClientEndpointsDevelopmentV1DevelopmentNextActionResponse": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "action": {
+            "type": "string"
+          },
+          "projectId": {
+            "type": "string",
+            "format": "guid"
+          },
+          "taskId": {
+            "type": "string",
+            "format": "guid"
+          },
+          "attemptId": {
+            "type": "string",
+            "format": "guid",
+            "nullable": true
+          },
+          "taskStatus": {
+            "type": "string"
+          },
+          "role": {
+            "type": "string",
+            "nullable": true
+          }
+        }
+      },
+      "XE_Local_AI_EngineClientEndpointsDevelopmentV1DevelopmentActionRequest": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "operationId": {
+            "type": "string",
+            "format": "guid"
+          },
+          "repositoryRoot": {
+            "type": "string"
+          }
+        }
+      },
+      "XE_Local_AI_EngineClientEndpointsDevelopmentV1DevelopmentAttemptRequest": {
+        "type": "object",
+        "additionalProperties": false
+      },
+      "XE_Local_AI_EngineClientEndpointsDevelopmentV1ListDevelopmentEventsResponse": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "items": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/XE_Local_AI_EngineClientEndpointsDevelopmentV1DevelopmentEventResponse"
+            }
+          }
+        }
+      },
+      "XE_Local_AI_EngineClientEndpointsDevelopmentV1ListDevelopmentArtifactsResponse": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "items": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/XE_Local_AI_EngineClientEndpointsDevelopmentV1DevelopmentArtifactResponse"
+            }
+          }
+        }
+      },
+      "XE_Local_AI_EngineClientEndpointsDevelopmentV1DevelopmentArtifactContentResponse": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "artifact": {
+            "$ref": "#/components/schemas/XE_Local_AI_EngineClientEndpointsDevelopmentV1DevelopmentArtifactResponse"
+          },
+          "content": {
+            "type": "string"
+          }
+        }
+      },
+      "XE_Local_AI_EngineClientEndpointsDevelopmentV1DevelopmentArtifactRequest": {
+        "type": "object",
+        "additionalProperties": false
+      },
+      "XE_Local_AI_EngineClientEndpointsDevelopmentV1DevelopmentPatchPreviewResponse": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "subjectHash": {
+            "type": "string"
+          },
+          "patchHash": {
+            "type": "string"
+          },
+          "manifestHash": {
+            "type": "string"
+          },
+          "expectedResultHash": {
+            "type": "string"
+          },
+          "patch": {
+            "type": "string"
+          },
+          "changedFiles": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/XE_Local_AI_EngineClientServicesDevelopmentDevelopmentPatchPreviewFile"
+            }
+          }
+        }
+      },
+      "XE_Local_AI_EngineClientServicesDevelopmentDevelopmentPatchPreviewFile": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "path": {
+            "type": "string"
+          },
+          "changeType": {
+            "type": "string"
+          },
+          "previousPath": {
+            "type": "string",
+            "nullable": true
+          }
+        }
+      },
+      "XE_Local_AI_EngineClientEndpointsDevelopmentV1DevelopmentApplyResponse": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "operationId": {
+            "type": "string",
+            "format": "guid"
+          },
+          "phase": {
+            "type": "string"
+          },
+          "outcome": {
+            "type": "string"
+          },
+          "status": {
+            "type": "string"
+          },
+          "version": {
+            "type": "integer"
+          },
+          "sequence": {
+            "type": "integer"
           }
         }
       },
@@ -13871,6 +15030,171 @@
         "type": "object",
         "additionalProperties": false
       },
+      "XE_Local_AI_EngineClientEndpointsAgentsV1AgentUsageSummaryResponse": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "items",
+          "totals",
+          "byProvider",
+          "retentionDays"
+        ],
+        "properties": {
+          "items": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/XE_Local_AI_EngineClientEndpointsAgentsV1AgentUsageSummaryBucketResponse"
+            }
+          },
+          "totals": {
+            "$ref": "#/components/schemas/XE_Local_AI_EngineClientEndpointsAgentsV1AgentUsageSummaryTotalsResponse"
+          },
+          "byProvider": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/XE_Local_AI_EngineClientEndpointsAgentsV1AgentUsageProviderTotalsResponse"
+            }
+          },
+          "retentionDays": {
+            "type": "integer",
+            "format": "int32"
+          }
+        }
+      },
+      "XE_Local_AI_EngineClientEndpointsAgentsV1AgentUsageSummaryBucketResponse": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "modelName",
+          "provider",
+          "dayStartUtcMs",
+          "runCount",
+          "promptTokens",
+          "completionTokens",
+          "reasoningTokens",
+          "totalTokens",
+          "estimatedCostUsd",
+          "currency"
+        ],
+        "properties": {
+          "modelName": {
+            "type": "string"
+          },
+          "provider": {
+            "type": "string"
+          },
+          "dayStartUtcMs": {
+            "type": "integer"
+          },
+          "runCount": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "promptTokens": {
+            "type": "integer"
+          },
+          "completionTokens": {
+            "type": "integer"
+          },
+          "reasoningTokens": {
+            "type": "integer"
+          },
+          "totalTokens": {
+            "type": "integer"
+          },
+          "estimatedCostUsd": {
+            "type": "number",
+            "format": "double"
+          },
+          "currency": {
+            "type": "string"
+          }
+        }
+      },
+      "XE_Local_AI_EngineClientEndpointsAgentsV1AgentUsageSummaryTotalsResponse": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "runCount",
+          "promptTokens",
+          "completionTokens",
+          "reasoningTokens",
+          "totalTokens",
+          "estimatedCostUsd",
+          "currency"
+        ],
+        "properties": {
+          "runCount": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "promptTokens": {
+            "type": "integer"
+          },
+          "completionTokens": {
+            "type": "integer"
+          },
+          "reasoningTokens": {
+            "type": "integer"
+          },
+          "totalTokens": {
+            "type": "integer"
+          },
+          "estimatedCostUsd": {
+            "type": "number",
+            "format": "double"
+          },
+          "currency": {
+            "type": "string"
+          }
+        }
+      },
+      "XE_Local_AI_EngineClientEndpointsAgentsV1AgentUsageProviderTotalsResponse": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "provider",
+          "runCount",
+          "promptTokens",
+          "completionTokens",
+          "reasoningTokens",
+          "totalTokens",
+          "estimatedCostUsd",
+          "currency"
+        ],
+        "properties": {
+          "provider": {
+            "type": "string"
+          },
+          "runCount": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "promptTokens": {
+            "type": "integer"
+          },
+          "completionTokens": {
+            "type": "integer"
+          },
+          "reasoningTokens": {
+            "type": "integer"
+          },
+          "totalTokens": {
+            "type": "integer"
+          },
+          "estimatedCostUsd": {
+            "type": "number",
+            "format": "double"
+          },
+          "currency": {
+            "type": "string"
+          }
+        }
+      },
+      "XE_Local_AI_EngineClientEndpointsAgentsV1AgentUsageSummaryRequest": {
+        "type": "object",
+        "additionalProperties": false
+      },
       "XE_Local_AI_EngineClientEndpointsAgentsV1ToolCapableModelsResponse": {
         "type": "object",
         "additionalProperties": false,
@@ -14364,223 +15688,6 @@
           "priority": {
             "type": "integer",
             "format": "int32"
-          }
-        }
-      },
-      "XE_Local_AI_EngineClientEndpointsLocalChatV1ResolveToolApprovalRequest": {
-        "type": "object",
-        "additionalProperties": false,
-        "required": [
-          "requestId",
-          "approved"
-        ],
-        "properties": {
-          "requestId": {
-            "type": "string",
-            "minLength": 1,
-            "nullable": false
-          },
-          "approved": {
-            "type": "boolean"
-          }
-        }
-      },
-      "XE_Local_AI_EngineClientEndpointsLocalChatV1ResolveToolApprovalResponse": {
-        "type": "object",
-        "additionalProperties": false,
-        "required": [
-          "requestId",
-          "approved"
-        ],
-        "properties": {
-          "requestId": {
-            "type": "string"
-          },
-          "approved": {
-            "type": "boolean"
-          }
-        }
-      },
-      "XE_Local_AI_EngineClientEndpointsAgentsV1AgentUsageSummaryResponse": {
-        "type": "object",
-        "additionalProperties": false,
-        "required": [
-          "items",
-          "totals",
-          "byProvider",
-          "retentionDays"
-        ],
-        "properties": {
-          "items": {
-            "type": "array",
-            "items": {
-              "$ref": "#/components/schemas/XE_Local_AI_EngineClientEndpointsAgentsV1AgentUsageSummaryBucketResponse"
-            }
-          },
-          "totals": {
-            "$ref": "#/components/schemas/XE_Local_AI_EngineClientEndpointsAgentsV1AgentUsageSummaryTotalsResponse"
-          },
-          "byProvider": {
-            "type": "array",
-            "items": {
-              "$ref": "#/components/schemas/XE_Local_AI_EngineClientEndpointsAgentsV1AgentUsageProviderTotalsResponse"
-            }
-          },
-          "retentionDays": {
-            "type": "integer",
-            "format": "int32"
-          }
-        }
-      },
-      "XE_Local_AI_EngineClientEndpointsAgentsV1AgentUsageSummaryBucketResponse": {
-        "type": "object",
-        "additionalProperties": false,
-        "required": [
-          "modelName",
-          "provider",
-          "dayStartUtcMs",
-          "runCount",
-          "promptTokens",
-          "completionTokens",
-          "reasoningTokens",
-          "totalTokens",
-          "estimatedCostUsd",
-          "currency"
-        ],
-        "properties": {
-          "modelName": {
-            "type": "string"
-          },
-          "provider": {
-            "type": "string"
-          },
-          "dayStartUtcMs": {
-            "type": "integer"
-          },
-          "runCount": {
-            "type": "integer",
-            "format": "int32"
-          },
-          "promptTokens": {
-            "type": "integer"
-          },
-          "completionTokens": {
-            "type": "integer"
-          },
-          "reasoningTokens": {
-            "type": "integer"
-          },
-          "totalTokens": {
-            "type": "integer"
-          },
-          "estimatedCostUsd": {
-            "type": "number",
-            "format": "double"
-          },
-          "currency": {
-            "type": "string"
-          }
-        }
-      },
-      "XE_Local_AI_EngineClientEndpointsAgentsV1AgentUsageSummaryTotalsResponse": {
-        "type": "object",
-        "additionalProperties": false,
-        "required": [
-          "runCount",
-          "promptTokens",
-          "completionTokens",
-          "reasoningTokens",
-          "totalTokens",
-          "estimatedCostUsd",
-          "currency"
-        ],
-        "properties": {
-          "runCount": {
-            "type": "integer",
-            "format": "int32"
-          },
-          "promptTokens": {
-            "type": "integer"
-          },
-          "completionTokens": {
-            "type": "integer"
-          },
-          "reasoningTokens": {
-            "type": "integer"
-          },
-          "totalTokens": {
-            "type": "integer"
-          },
-          "estimatedCostUsd": {
-            "type": "number",
-            "format": "double"
-          },
-          "currency": {
-            "type": "string"
-          }
-        }
-      },
-      "XE_Local_AI_EngineClientEndpointsAgentsV1AgentUsageProviderTotalsResponse": {
-        "type": "object",
-        "additionalProperties": false,
-        "required": [
-          "provider",
-          "runCount",
-          "promptTokens",
-          "completionTokens",
-          "reasoningTokens",
-          "totalTokens",
-          "estimatedCostUsd",
-          "currency"
-        ],
-        "properties": {
-          "provider": {
-            "type": "string"
-          },
-          "runCount": {
-            "type": "integer",
-            "format": "int32"
-          },
-          "promptTokens": {
-            "type": "integer"
-          },
-          "completionTokens": {
-            "type": "integer"
-          },
-          "reasoningTokens": {
-            "type": "integer"
-          },
-          "totalTokens": {
-            "type": "integer"
-          },
-          "estimatedCostUsd": {
-            "type": "number",
-            "format": "double"
-          },
-          "currency": {
-            "type": "string"
-          }
-        }
-      },
-      "XE_Local_AI_EngineClientEndpointsAgentsV1AgentUsageSummaryRequest": {
-        "type": "object",
-        "additionalProperties": false
-      },
-      "XE_Local_AI_EngineClientServicesNodeSettingsModelRate": {
-        "type": "object",
-        "additionalProperties": false,
-        "required": [
-          "inputPer1M",
-          "outputPer1M"
-        ],
-        "properties": {
-          "inputPer1M": {
-            "type": "number",
-            "format": "double"
-          },
-          "outputPer1M": {
-            "type": "number",
-            "format": "double"
           }
         }
       }

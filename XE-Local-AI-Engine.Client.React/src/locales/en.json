@@ -47,6 +47,7 @@
 	"navigation": {
 		"home": "Home",
 		"chat": "Chat",
+		"development": "Development",
 		"knowledgeBase": "Knowledge Base",
 		"dashboard": "Dashboard",
 		"binding": "Node Binding",
