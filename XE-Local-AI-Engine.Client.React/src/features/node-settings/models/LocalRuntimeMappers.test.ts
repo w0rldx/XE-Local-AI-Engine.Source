@@ -6,13 +6,23 @@ import { toLlamaCppRuntimeStatus } from "@/features/node-settings/models/LocalRu
 describe("toLlamaCppRuntimeStatus", () => {
 	it("maps a populated status response and surfaces the update-available flag", () => {
 		const dto: XeLocalAiEngineClientEndpointsModelFitV1LlamaCppRuntimeStatusResponse = {
-			installed: { tag: "b1000", variant: "cuda", asset: "asset.zip", installedAtUtc: 1700000000000, isSourceBuild: false },
+			installed: {
+				tag: "b1000",
+				variant: "cuda",
+				asset: "asset.zip",
+				installedAtUtc: 1700000000000,
+				isSourceBuild: true,
+				sourceRepository: "https://github.com/example/fork",
+				sourceCommit: "a".repeat(40),
+				sourceRevisionMode: "explicitCommit",
+				sourceRequestedCommit: "b".repeat(40),
+			},
 			recommendedTag: "b9692",
 			upstreamLatestTag: "b9999",
 			updateAvailable: true,
 			isOffline: false,
 			runningProcessCount: 0,
-			isSourceBuild: false,
+			isSourceBuild: true,
 			rebuildAvailable: false,
 		};
 
@@ -23,7 +33,11 @@ describe("toLlamaCppRuntimeStatus", () => {
 			variant: "cuda",
 			asset: "asset.zip",
 			installedAtUtc: 1700000000000,
-			isSourceBuild: false,
+			isSourceBuild: true,
+			sourceRepository: "https://github.com/example/fork",
+			sourceCommit: "a".repeat(40),
+			sourceRevisionMode: "explicitCommit",
+			sourceRequestedCommit: "b".repeat(40),
 		});
 		expect(status.recommendedTag).toBe("b9692");
 		expect(status.upstreamLatestTag).toBe("b9999");

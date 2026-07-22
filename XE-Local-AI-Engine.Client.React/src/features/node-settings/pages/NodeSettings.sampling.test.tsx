@@ -47,7 +47,10 @@ vi.mock("@/core/api/generated/@tanstack/react-query.gen", () => ({
 	getNodeSettingsQueryKey: () => ["node-settings"],
 	saveNodeSettingsMutation: () => ({ mutationFn: vi.fn() }),
 	// Installed-models query feeding the speculative draft-model picker; empty list is enough for these tests.
-	listLocalModelsOptions: () => ({ queryKey: ["local-models"], queryFn: () => Promise.resolve({ items: [], isAvailable: false }) }),
+	listLocalModelsOptions: () => ({
+		queryKey: ["local-models"],
+		queryFn: () => Promise.resolve({ items: [], isAvailable: false }),
+	}),
 	// Local-runtime cards relocated from the model-fit advisor. The HF token status returns "no token" so the card
 	// renders without a backend; the llama.cpp runtime card is driven by getLlamaCppRuntimeOptions below.
 	ensureLlamaCppBinaryMutation: () => ({ mutationFn: vi.fn() }),
@@ -74,8 +77,8 @@ vi.mock("@/features/models/queries/useGgufDownload", () => ({
 
 // The CUDA build card owns its own data layer (CUDA-build SDK endpoints + a SignalR hub) and has its own dedicated
 // test; stub it to null here so the developer-mode-switch tests stay isolated to the page composition.
-vi.mock("@/features/node-settings/components/CudaBuildCard", () => ({
-	CudaBuildCard: () => null,
+vi.mock("@/features/node-settings/components/SourceBuildCard", () => ({
+	SourceBuildCard: () => null,
 }));
 
 describe("NodeSettings developer-mode switch", () => {

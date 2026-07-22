@@ -1132,7 +1132,27 @@
 				},
 				"sourceBuild": {
 					"title": "llama.cpp aus Quellcode bauen",
-					"description": "CPU-, Vulkan- oder CUDA-llama.cpp aus dem offiziellen Upstream oder einem vertrauenswürdigen öffentlichen GitHub-Fork bauen."
+					"description": "CPU-, Vulkan- oder CUDA-llama.cpp aus dem offiziellen Upstream oder einem vertrauenswürdigen öffentlichen GitHub-Fork bauen.",
+					"devBadge": "Entwicklung",
+					"backend": "Backend",
+					"source": "Quelle",
+					"repository": "GitHub-Repository",
+					"riskWarning": "Code aus einem benutzerdefinierten Repository wird mit den Rechten der App ausgeführt. Der Code gilt als vertrauenswürdig und läuft nicht in einer Sandbox.",
+					"riskAcknowledgement": "Ich vertraue diesem öffentlichen GitHub-Repository und akzeptiere das Risiko der Codeausführung.",
+					"commit": "Commit-SHA (optional)",
+					"active": "Aktive {{backend}}-Quellruntime",
+					"build": "Bauen",
+					"rebuild": "Neu bauen",
+					"cancel": "Abbrechen",
+					"remove": "Entfernen",
+					"startError": "Der Quellbuild konnte nicht gestartet werden.",
+					"removeError": "Die Quellruntime konnte nicht entfernt werden.",
+					"validation": {
+						"commit": "Der Commit muss eine vollständige hexadezimale SHA mit 40 Zeichen sein.",
+						"repository": "Verwende eine kanonische öffentliche GitHub-HTTPS-Repository-URL.",
+						"acknowledgement": "Bestätige, dass Code aus dem benutzerdefinierten Repository mit den Rechten der App ausgeführt wird."
+					},
+					"repositoryPlaceholder": "https://github.com/owner/llama.cpp"
 				}
 			},
 			"hfToken": {

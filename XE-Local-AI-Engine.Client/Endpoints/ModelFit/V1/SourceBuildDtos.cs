@@ -36,7 +36,7 @@ public sealed class StartLlamaCppSourceBuildRequest
     public required LlamaCppSourceSelectionDto Source { get; init; }
     public string? Repository { get; init; }
     public string? Commit { get; init; }
-    public bool AcknowledgeCustomSourceRisk { get; init; }
+    public required bool AcknowledgeCustomSourceRisk { get; init; }
 }
 
 public sealed class GetLlamaCppSourceBuildPrerequisitesRequest

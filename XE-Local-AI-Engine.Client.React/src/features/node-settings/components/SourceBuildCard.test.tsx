@@ -1,0 +1,202 @@
+// @vitest-environment jsdom
+
+import { MantineProvider } from "@mantine/core";
+import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+
+import type { LlamaCppRuntimeStatus } from "@/features/node-settings/models/LocalRuntimeModels";
+import type {
+	LlamaCppSourceBuildPrerequisites,
+	LlamaCppSourceBuildStatus,
+} from "@/features/node-settings/models/SourceBuildModels";
+
+const { state, devMode } = vi.hoisted(() => ({
+	state: {
+		prerequisites: { backend: "cpu", canBuild: true, items: [] } as LlamaCppSourceBuildPrerequisites,
+		status: {
+			phase: "Idle",
+			isRunning: false,
+			terminal: false,
+			logLines: [],
+			sanitizedError: null,
+			currentBuild: null,
+		} as LlamaCppSourceBuildStatus,
+		runtime: {
+			installed: null,
+			recommendedTag: "b1",
+			upstreamLatestTag: null,
+			updateAvailable: false,
+			isOffline: false,
+			runningProcessCount: 0,
+		} as LlamaCppRuntimeStatus,
+		start: vi.fn(),
+		cancel: vi.fn(),
+		remove: vi.fn(),
+		prerequisiteArgs: vi.fn(),
+		statusArgs: vi.fn(),
+	},
+	devMode: { enabled: true },
+}));
+
+vi.mock("react-i18next", () => ({
+	useTranslation: () => ({
+		t: (key: string, vars?: Record<string, unknown>) => {
+			const labels: Record<string, string> = {
+				"pages.nodeSettings.llamaCpp.sourceBuild.title": "llama.cpp build from source",
+				"pages.nodeSettings.llamaCpp.sourceBuild.devBadge": "Dev",
+				"pages.nodeSettings.llamaCpp.sourceBuild.description": "Description",
+				"pages.nodeSettings.llamaCpp.sourceBuild.backend": "Backend",
+				"pages.nodeSettings.llamaCpp.sourceBuild.source": "Source",
+				"pages.nodeSettings.llamaCpp.sourceBuild.repository": "GitHub repository",
+				"pages.nodeSettings.llamaCpp.sourceBuild.riskWarning": "Trusted code warning",
+				"pages.nodeSettings.llamaCpp.sourceBuild.riskAcknowledgement": "I accept the code-execution risk",
+				"pages.nodeSettings.llamaCpp.sourceBuild.commit": "Commit SHA (optional)",
+				"pages.nodeSettings.llamaCpp.sourceBuild.build": "Build",
+				"pages.nodeSettings.llamaCpp.sourceBuild.rebuild": "Rebuild",
+				"pages.nodeSettings.llamaCpp.sourceBuild.cancel": "Cancel",
+				"pages.nodeSettings.llamaCpp.sourceBuild.remove": "Remove",
+				"pages.nodeSettings.llamaCpp.sourceBuild.active": `Active ${String(vars?.["backend"] ?? "")} source runtime`,
+			};
+			return labels[key] ?? key;
+		},
+	}),
+}));
+
+vi.mock("@/core/dev-tools/stores/DeveloperModeStore", () => ({
+	useDeveloperModeStore: (selector: (value: { developerMode: boolean }) => unknown) =>
+		selector({ developerMode: devMode.enabled }),
+}));
+
+vi.mock("@/core/ui/notifications/Toast", () => ({ toast: { error: vi.fn() } }));
+
+vi.mock("@/features/node-settings/queries/useLocalRuntime", () => ({
+	useSourceBuildPrerequisites: (backend: string, enabled: boolean) => {
+		state.prerequisiteArgs(backend, enabled);
+		return { data: state.prerequisites };
+	},
+	useSourceBuildStatus: (enabled: boolean) => {
+		state.statusArgs(enabled);
+		return { data: state.status };
+	},
+	useLlamaCppRuntimeStatus: () => ({ data: state.runtime }),
+	useStartSourceBuild: () => ({ mutate: state.start, isPending: false }),
+	useCancelSourceBuild: () => ({ mutate: state.cancel, isPending: false }),
+	useRemoveSourceBuild: () => ({ mutate: state.remove, isPending: false }),
+}));
+
+vi.mock("@/features/node-settings/hooks/useSourceBuildHub", () => ({
+	useSourceBuildHub: () => ({ phase: null, logLines: [], error: null, buildIdentity: null, reset: vi.fn() }),
+}));
+
+import { SourceBuildCard } from "@/features/node-settings/components/SourceBuildCard";
+
+function renderCard(): void {
+	render(
+		<MantineProvider>
+			<SourceBuildCard />
+		</MantineProvider>,
+	);
+}
+
+describe("SourceBuildCard", () => {
+	beforeEach(() => {
+		Object.defineProperty(window, "matchMedia", {
+			writable: true,
+			value: vi.fn(() => ({ matches: false, addEventListener: vi.fn(), removeEventListener: vi.fn() })),
+		});
+		Object.defineProperty(window, "ResizeObserver", {
+			writable: true,
+			value: class {
+				observe() {
+					// Intentionally empty test double.
+				}
+				unobserve() {
+					// Intentionally empty test double.
+				}
+				disconnect() {
+					// Intentionally empty test double.
+				}
+			},
+		});
+		devMode.enabled = true;
+		state.runtime = {
+			installed: null,
+			recommendedTag: "b1",
+			upstreamLatestTag: null,
+			updateAvailable: false,
+			isOffline: false,
+			runningProcessCount: 0,
+		};
+		state.status = { phase: "Idle", isRunning: false, terminal: false, logLines: [], sanitizedError: null, currentBuild: null };
+		vi.clearAllMocks();
+	});
+
+	afterEach(() => cleanup());
+
+	it("hides and disables queries when Developer mode is off", () => {
+		devMode.enabled = false;
+		renderCard();
+		expect(screen.queryByTestId("source-build-card")).toBeNull();
+		expect(state.prerequisiteArgs).toHaveBeenCalledWith("cpu", false);
+		expect(state.statusArgs).toHaveBeenCalledWith(false);
+	});
+
+	it("hydrates custom provenance but requires a fresh acknowledgement before rebuild", async () => {
+		state.runtime = {
+			...state.runtime,
+			installed: {
+				tag: "b1",
+				variant: "vulkan",
+				asset: "source",
+				installedAtUtc: 1,
+				isSourceBuild: true,
+				sourceRepository: "https://github.com/example/fork",
+				sourceCommit: "a".repeat(40),
+				sourceRevisionMode: "explicitCommit",
+				sourceRequestedCommit: "b".repeat(40),
+			},
+		};
+		renderCard();
+
+		await waitFor(() =>
+			expect((screen.getByLabelText("GitHub repository") as HTMLInputElement).value).toBe("https://github.com/example/fork"),
+		);
+		const acknowledgement = screen.getByLabelText("I accept the code-execution risk") as HTMLInputElement;
+		expect(acknowledgement.checked).toBe(false);
+		expect((screen.getByRole("button", { name: "Rebuild" }) as HTMLButtonElement).disabled).toBe(true);
+
+		fireEvent.click(acknowledgement);
+		fireEvent.click(screen.getByRole("button", { name: "Rebuild" }));
+		expect(state.start).toHaveBeenCalledWith(
+			expect.objectContaining({
+				backend: "vulkan",
+				source: "custom",
+				repository: "https://github.com/example/fork",
+				commit: "b".repeat(40),
+				acknowledgeCustomSourceRisk: true,
+			}),
+			expect.any(Object),
+		);
+		expect(acknowledgement.checked).toBe(false);
+	});
+
+	it("renders installed provenance after restart when current build status is absent", () => {
+		state.runtime = {
+			...state.runtime,
+			installed: {
+				tag: "b1",
+				variant: "cpu",
+				asset: "source",
+				installedAtUtc: 1,
+				isSourceBuild: true,
+				sourceRepository: "https://github.com/ggml-org/llama.cpp",
+				sourceCommit: "c".repeat(40),
+				sourceRevisionMode: "enginePinned",
+				sourceRequestedCommit: null,
+			},
+		};
+		renderCard();
+		expect(screen.getByText(/github.com\/ggml-org\/llama.cpp/)).toBeTruthy();
+		expect(screen.getByText(/enginePinned/)).toBeTruthy();
+	});
+});

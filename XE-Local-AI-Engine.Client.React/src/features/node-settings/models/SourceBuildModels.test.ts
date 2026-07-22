@@ -1,6 +1,11 @@
 import { describe, expect, it } from "vitest";
 
-import { sourceBuildRequest, sourceBuildValidationError } from "@/features/node-settings/models/SourceBuildModels";
+import {
+	mergeSourceBuildLogs,
+	sourceBuildIdentity,
+	sourceBuildRequest,
+	sourceBuildValidationError,
+} from "@/features/node-settings/models/SourceBuildModels";
 
 describe("source build models", () => {
 	it("requires explicit trust for custom repositories", () => {
@@ -31,5 +36,26 @@ describe("source build models", () => {
 			commit: "abcdefabcdefabcdefabcdefabcdefabcdefabcd",
 			acknowledgeCustomSourceRisk: true,
 		});
+	});
+
+	it("merges persisted and live reconnect logs without duplicating their overlap", () => {
+		expect(mergeSourceBuildLogs(["clone", "configure", "build"], ["configure", "build", "link"])).toEqual([
+			"clone",
+			"configure",
+			"build",
+			"link",
+		]);
+	});
+
+	it("identifies a build by immutable revision intent rather than its resolved SHA", () => {
+		const base = {
+			backend: "cuda" as const,
+			source: "official" as const,
+			repository: "https://github.com/ggml-org/llama.cpp",
+			revisionMode: "enginePinned" as const,
+			requestedCommit: null,
+			resolvedCommit: null,
+		};
+		expect(sourceBuildIdentity(base)).toBe(sourceBuildIdentity({ ...base, resolvedCommit: "a".repeat(40) }));
 	});
 });

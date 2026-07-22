@@ -13,6 +13,7 @@ public sealed class CancelLlamaCppSourceBuildEndpoint(ILlamaCppSourceBuildServic
     {
         Post(LocalApiRoutes.ModelFit.SourceBuildCancel);
         Policies(NodeAuthorizationPolicies.Operator);
+        Description(builder => builder.Produces<LlamaCppSourceBuildStatusResponse>(StatusCodes.Status200OK));
     }
 
     public override async Task HandleAsync(CancellationToken ct)

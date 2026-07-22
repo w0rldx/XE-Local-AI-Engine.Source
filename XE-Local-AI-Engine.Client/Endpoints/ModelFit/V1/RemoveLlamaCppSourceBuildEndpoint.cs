@@ -20,12 +20,15 @@ public sealed class RemoveLlamaCppSourceBuildEndpoint(
     {
         Post(LocalApiRoutes.ModelFit.SourceBuildRemove);
         Policies(NodeAuthorizationPolicies.Operator);
+        Description(builder => builder
+            .Produces<LlamaCppRuntimeStatusResponse>(StatusCodes.Status200OK)
+            .Produces<LlamaCppSourceBuildBlockedResponse>(StatusCodes.Status409Conflict));
     }
 
     public override async Task HandleAsync(CancellationToken ct)
     {
-        var runningProcessCount = processSupervisor.CountRunningProcesses();
-        if (runningProcessCount > 0)
+        var (removed, runningProcessCount) = await TryRemoveAsync(binaryManager, processSupervisor, ct).ConfigureAwait(false);
+        if (!removed)
         {
             await Send.ResultAsync(Results.Conflict(new LlamaCppSourceBuildBlockedResponse
             {
@@ -36,10 +39,25 @@ public sealed class RemoveLlamaCppSourceBuildEndpoint(
             return;
         }
 
-        await binaryManager.RemoveSourceBuildAsync(ct).ConfigureAwait(false);
         localChatClientCacheInvalidator.ClearClientCache();
         var recommendedTag = await nodeRuntimeSettings.GetRecommendedLlamaCppTagAsync(ct).ConfigureAwait(false);
         var installed = await installedRuntimeStore.ReadAsync(ct).ConfigureAwait(false);
         await Send.OkAsync(updateState.Current.ToRuntimeStatusResponse(installed, recommendedTag, runningProcessCount), ct).ConfigureAwait(false);
+    }
+
+    internal static async Task<(bool Removed, int RunningProcessCount)> TryRemoveAsync(
+        ILlamaCppBinaryManager binaryManager,
+        ILlamaServerProcessSupervisor processSupervisor,
+        CancellationToken ct)
+    {
+        await using var mutationLease = await processSupervisor.TryAcquireRuntimeMutationLeaseAsync(ct).ConfigureAwait(false);
+        var runningProcessCount = processSupervisor.CountRunningProcesses();
+        if (mutationLease is null || runningProcessCount > 0)
+        {
+            return (false, runningProcessCount);
+        }
+
+        await binaryManager.RemoveSourceBuildAsync(ct).ConfigureAwait(false);
+        return (true, runningProcessCount);
     }
 }
