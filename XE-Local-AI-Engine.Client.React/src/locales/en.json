@@ -1129,6 +1129,10 @@
 					"cancelError": "Could not cancel the CUDA build.",
 					"removeError": "Could not remove the CUDA build.",
 					"removed": "Managed CUDA build removed."
+				},
+				"sourceBuild": {
+					"title": "llama.cpp build from source",
+					"description": "Build CPU, Vulkan, or CUDA llama.cpp from official upstream or a trusted public GitHub fork."
 				}
 			},
 			"hfToken": {

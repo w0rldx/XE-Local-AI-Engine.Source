@@ -26,6 +26,10 @@ export function toLlamaCppRuntimeStatus(
 						asset: installed.asset ?? "",
 						installedAtUtc: installed.installedAtUtc ?? undefined,
 						isSourceBuild: installed.isSourceBuild ?? false,
+						sourceRepository: installed.sourceRepository ?? null,
+						sourceCommit: installed.sourceCommit ?? null,
+						sourceRevisionMode: installed.sourceRevisionMode ?? null,
+						sourceRequestedCommit: installed.sourceRequestedCommit ?? null,
 					}
 				: null,
 		recommendedTag: dto.recommendedTag ?? "",
@@ -56,9 +60,7 @@ export function toCudaBuildPrerequisites(
 
 // Maps the persisted CUDA build status to the domain view-model. `logLines` coalesces to an empty array; the nullable
 // `sanitizedError` and `tag` keep their nullable shape. `isRunning`/`terminal` default to false (the safe idle gate).
-export function toCudaBuildStatus(
-	dto: XeLocalAiEngineClientEndpointsModelFitV1CudaBuildStatusResponse,
-): CudaBuildStatus {
+export function toCudaBuildStatus(dto: XeLocalAiEngineClientEndpointsModelFitV1CudaBuildStatusResponse): CudaBuildStatus {
 	return {
 		phase: dto.phase ?? "",
 		isRunning: dto.isRunning ?? false,

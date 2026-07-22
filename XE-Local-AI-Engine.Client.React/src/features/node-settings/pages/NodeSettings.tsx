@@ -13,16 +13,16 @@ import {
 	saveNodeSettingsMutation,
 } from "@/core/api/generated/@tanstack/react-query.gen";
 import { withResponseValidation } from "@/core/api/ResponseValidation";
-import { toChatModelOptions } from "@/features/chat/pages/ChatModelOptions";
 import { useDeveloperModeStore } from "@/core/dev-tools/stores/DeveloperModeStore";
 import { toast } from "@/core/ui/notifications/Toast";
+import { toChatModelOptions } from "@/features/chat/pages/ChatModelOptions";
 import { DownloadProgressPanel } from "@/features/models/components/DownloadProgressPanel";
 import { useActiveGgufDownloads, useCancelGgufDownload } from "@/features/models/queries/useGgufDownload";
 import { useGgufBrowseStore } from "@/features/models/stores/GgufBrowseStore";
-import { CudaBuildCard } from "@/features/node-settings/components/CudaBuildCard";
 import { HfTokenPanel } from "@/features/node-settings/components/HfTokenPanel";
 import { LlamaCppUpdaterPanel } from "@/features/node-settings/components/LlamaCppUpdaterPanel";
 import { NodeSettingsFieldsCard } from "@/features/node-settings/components/NodeSettingsFieldsCard";
+import { SourceBuildCard } from "@/features/node-settings/components/SourceBuildCard";
 import {
 	buildNodeSettingsRequest,
 	type NodeSettingsFieldsForm,
@@ -121,9 +121,13 @@ export function NodeSettings() {
 			setRecommendedRerankerModelName(response.modelName);
 			if (response.alreadyInstalled) {
 				toast.info(
-					t("pages.nodeSettings.fields.rerankerModel.downloadAlreadyInstalled", "The recommended reranker ({{model}}) is already installed.", {
-						model: response.modelName,
-					}),
+					t(
+						"pages.nodeSettings.fields.rerankerModel.downloadAlreadyInstalled",
+						"The recommended reranker ({{model}}) is already installed.",
+						{
+							model: response.modelName,
+						},
+					),
 				);
 				return;
 			}
@@ -132,16 +136,25 @@ export function NodeSettings() {
 			markInFlight(response.modelName);
 			toast.info(
 				response.alreadyInFlight
-					? t("pages.nodeSettings.fields.rerankerModel.downloadInFlight", "The recommended reranker ({{model}}) is already downloading.", {
-							model: response.modelName,
-						})
+					? t(
+							"pages.nodeSettings.fields.rerankerModel.downloadInFlight",
+							"The recommended reranker ({{model}}) is already downloading.",
+							{
+								model: response.modelName,
+							},
+						)
 					: t("pages.nodeSettings.fields.rerankerModel.downloadStarted", "Downloading the recommended reranker ({{model}}).", {
 							model: response.modelName,
 						}),
 			);
 		},
 		onError: (error) =>
-			toast.error(runtimeErrorMessage(error, t("pages.nodeSettings.fields.rerankerModel.downloadError", "Could not start the recommended reranker download."))),
+			toast.error(
+				runtimeErrorMessage(
+					error,
+					t("pages.nodeSettings.fields.rerankerModel.downloadError", "Could not start the recommended reranker download."),
+				),
+			),
 	});
 
 	const handleDownloadRecommendedReranker = (): void => {
@@ -329,7 +342,7 @@ export function NodeSettings() {
 
 				<LlamaCppUpdaterPanel />
 
-				<CudaBuildCard />
+				<SourceBuildCard />
 
 				<NodeSettingsFieldsCard
 					form={fieldsForm}

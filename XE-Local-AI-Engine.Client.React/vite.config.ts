@@ -53,14 +53,15 @@ function resolveAppVersion(): string {
 // process.env vars to the client). `??=` lets CI/release override with an explicit value if ever needed.
 process.env.VITE_APP_VERSION ??= resolveAppVersion();
 
-const coverageThresholds = process.env.VITEST_COVERAGE_CHECK === "true"
-	? {
-			branches: 35,
-			functions: 34,
-			lines: 39,
-			statements: 38,
-		}
-	: undefined;
+const coverageThresholds =
+	process.env.VITEST_COVERAGE_CHECK === "true"
+		? {
+				branches: 35,
+				functions: 34,
+				lines: 39,
+				statements: 38,
+			}
+		: undefined;
 
 const localProxyHosts = new Set(["localhost", "127.0.0.1", "[::1]", "::1"]);
 
@@ -150,6 +151,7 @@ export default defineConfig(({ command, mode }) => {
 						"/api/local/v1/preview/hub": localProxy(proxyTarget, true),
 						"/api/local/v1/model-fit/gguf/downloads/hub": localProxy(proxyTarget, true),
 						"/api/local/v1/model-fit/llamacpp/cuda-build/hub": localProxy(proxyTarget, true),
+						"/api/local/v1/model-fit/llamacpp/source-build/hub": localProxy(proxyTarget, true),
 						"/api/local/v1/knowledge-base/hub": localProxy(proxyTarget, true),
 						"/api/local/v1/images/hub": localProxy(proxyTarget, true),
 						"/api/local/v1/development/hub": localProxy(proxyTarget, true),
