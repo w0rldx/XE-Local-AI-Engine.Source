@@ -7,20 +7,27 @@ using XE_Local_AI_Engine.AI.Agent.Invocation;
 using XE_Local_AI_Engine.Client.Services.CloudProviders;
 using XE_Local_AI_Engine.Providers.Abstractions;
 
-internal sealed record DevelopmentCoderSubmission(
-    string Summary,
-    IReadOnlyList<string> ChangedFiles,
-    IReadOnlyList<string> CommandIds,
-    string? Notes);
+internal enum DevelopmentReviewDisposition
+{
+    Approved,
+    ChangesRequested
+}
 
-internal sealed record DevelopmentCoderModelResult(
-    DevelopmentCoderSubmission Submission,
+internal sealed record DevelopmentReviewFinding(string Category, string Summary);
+
+internal sealed record DevelopmentReviewerSubmission(
+    DevelopmentReviewDisposition Disposition,
+    string Summary,
+    IReadOnlyList<DevelopmentReviewFinding> Findings);
+
+internal sealed record DevelopmentReviewerModelResult(
+    DevelopmentReviewerSubmission Submission,
     long? InputTokens,
     long? OutputTokens);
 
-internal interface IDevelopmentCoderModel
+internal interface IDevelopmentReviewerModel
 {
-    Task<DevelopmentCoderModelResult> RunAsync(string modelId,
+    Task<DevelopmentReviewerModelResult> RunAsync(string modelId,
         string prompt,
         IDevelopmentWorkspaceTools tools,
         int maxOutputTokens,
@@ -30,16 +37,16 @@ internal interface IDevelopmentCoderModel
         CancellationToken cancellationToken = default);
 }
 
-internal sealed class DevelopmentCoderModel(
+internal sealed class DevelopmentReviewerModel(
     IChatClient chatClient,
     IActiveCloudChatClientFactory cloudFactory,
-    ILocalModelProviderResolver localProviderResolver) : IDevelopmentCoderModel
+    ILocalModelProviderResolver localProviderResolver) : IDevelopmentReviewerModel
 {
     private readonly IChatClient _chatClient = chatClient ?? throw new ArgumentNullException(nameof(chatClient));
     private readonly IActiveCloudChatClientFactory _cloudFactory = cloudFactory ?? throw new ArgumentNullException(nameof(cloudFactory));
     private readonly ILocalModelProviderResolver _localProviderResolver = localProviderResolver ?? throw new ArgumentNullException(nameof(localProviderResolver));
 
-    public async Task<DevelopmentCoderModelResult> RunAsync(string modelId,
+    public async Task<DevelopmentReviewerModelResult> RunAsync(string modelId,
         string prompt,
         IDevelopmentWorkspaceTools tools,
         int maxOutputTokens,
@@ -54,7 +61,7 @@ internal sealed class DevelopmentCoderModel(
         var isCloud = _cloudFactory.IsCloudProviderSelected(modelId);
         if (isCloud && cloudRoute is null)
         {
-            throw new DevelopmentWorkspaceSecurityException("A cloud Development coder attempt requires an explicit immutable CloudScoped route.");
+            throw new DevelopmentWorkspaceSecurityException("A cloud Development reviewer attempt requires an explicit immutable CloudScoped route.");
         }
         if (!isCloud && cloudRoute is not null)
         {
@@ -81,15 +88,13 @@ internal sealed class DevelopmentCoderModel(
             options.Tools =
             [
                 .. (options.Tools ?? []),
-                AIFunctionFactory.Create(gateway.SubmitCloudImplementation,
-                    "submit_implementation",
-                    "Submit one bounded Git patch and typed implementation evidence. The host applies the patch only inside the isolated Development workspace.")
+                AIFunctionFactory.Create(gateway.SubmitReview, "submit_review", "Submit one typed approved or changes-requested review.")
             ];
             messages =
             [
                 .. cloudRoute.Messages,
                 new ChatMessage(ChatRole.User,
-                    "Act as the bounded Development coder. Read only approved bundle resources and call submit_implementation exactly once. Do not claim command execution; no shell or general repository capability is available.")
+                    "Act as the independent read-only Development reviewer. Read only approved bundle resources and call submit_review exactly once. No repository, write, patch, command, apply, saved-agent, or chat-history capability is available.")
             ];
         }
         else
@@ -99,7 +104,7 @@ internal sealed class DevelopmentCoderModel(
             if (!knownModels.Any(model => model.IsAvailable
                                           && string.Equals(model.ModelName, modelId, StringComparison.OrdinalIgnoreCase)))
             {
-                throw new DevelopmentWorkspaceSecurityException("Development coder attempts require a known, available local model.");
+                throw new DevelopmentWorkspaceSecurityException("Development reviewer attempts require a known, available local model.");
             }
 
             options = new ChatOptions
@@ -112,27 +117,23 @@ internal sealed class DevelopmentCoderModel(
                     AIFunctionFactory.Create(gateway.ListFilesAsync, "list_files", "List files below a workspace-relative path."),
                     AIFunctionFactory.Create(gateway.ReadFileAsync, "read_file", "Read a bounded UTF-8 workspace file."),
                     AIFunctionFactory.Create(gateway.SearchTextAsync, "search_text", "Search fixed text below a workspace-relative path."),
-                    AIFunctionFactory.Create(gateway.WriteFileAsync, "write_file", "Write one bounded UTF-8 workspace file."),
-                    AIFunctionFactory.Create(gateway.ApplyPatchAsync, "apply_patch", "Apply one bounded Git patch to safe workspace paths."),
                     AIFunctionFactory.Create(gateway.GetStatusAsync, "get_status", "Inspect the current Git status."),
                     AIFunctionFactory.Create(gateway.GetDiffAsync, "get_diff", "Inspect the current bounded Git diff."),
-                    AIFunctionFactory.Create(gateway.RunCommandAsync, "run_command", "Run one code-owned command id from the fixed Development catalog."),
-                    AIFunctionFactory.Create(gateway.SubmitImplementation, "submit_implementation", "Submit the typed final implementation evidence after all changes are complete.")
+                    AIFunctionFactory.Create(gateway.SubmitReview, "submit_review", "Submit one typed approved or changes-requested review.")
                 ]
             };
             messages =
             [
                 new ChatMessage(ChatRole.System,
-                    "You are the bounded local Development coder. Use only the provided workspace tools. Never claim completion without calling submit_implementation exactly once."),
+                    "You are the independent read-only Development reviewer. You have no write, patch, command, or apply capability. Inspect exact evidence and call submit_review exactly once."),
                 new ChatMessage(ChatRole.User, prompt)
             ];
         }
         var providerCalls = Math.Max(1, maxToolCalls + 1);
-        var cumulativeInputTokens = (int)Math.Min(int.MaxValue, Math.Max(1024L, (long)maxOutputTokens * providerCalls));
         using var providerBudget = ProviderCallBudget.BeginScope(new ProviderCallBudgetOptions
         {
             MaxProviderCallsPerInvocation = providerCalls,
-            MaxCumulativeInputTokens = cumulativeInputTokens,
+            MaxCumulativeInputTokens = (int)Math.Min(int.MaxValue, Math.Max(1024L, (long)maxOutputTokens * providerCalls)),
             DefaultContextTokens = Math.Max(2048, maxOutputTokens * 2),
             ReservedOutputTokenFloor = maxOutputTokens,
             RecentMessagesToKeep = 2,
@@ -149,25 +150,18 @@ internal sealed class DevelopmentCoderModel(
         var response = updates.ToChatResponse();
         liveProgress?.CompleteOutput(response.Usage);
 
-        var usage = response.Usage ?? throw new InvalidOperationException("The Development coder response did not report token usage.");
-        var inputTokens = usage.InputTokenCount ?? throw new InvalidOperationException("The Development coder response did not report input-token usage.");
-        var outputTokens = usage.OutputTokenCount ?? throw new InvalidOperationException("The Development coder response did not report output-token usage.");
+        var usage = response.Usage ?? throw new InvalidOperationException("The Development reviewer response did not report token usage.");
+        var inputTokens = usage.InputTokenCount ?? throw new InvalidOperationException("The Development reviewer response did not report input-token usage.");
+        var outputTokens = usage.OutputTokenCount ?? throw new InvalidOperationException("The Development reviewer response did not report output-token usage.");
         var accountedTokens = checked(inputTokens + outputTokens);
         var totalTokens = Math.Max(usage.TotalTokenCount ?? accountedTokens, accountedTokens);
         if (inputTokens < 0 || outputTokens < 0 || totalTokens < 0 || totalTokens > maxOutputTokens)
         {
-            throw new InvalidOperationException("The Development coder exceeded the configured aggregate token limit.");
+            throw new InvalidOperationException("The Development reviewer exceeded the configured aggregate token limit.");
         }
 
-        if (isCloud)
-        {
-            _ = await tools.ApplyPatchAsync(gateway.CloudPatch
-                                            ?? throw new InvalidOperationException("The cloud coder submission did not include a bounded patch."),
-                cancellationToken).ConfigureAwait(false);
-        }
-
-        return new DevelopmentCoderModelResult(gateway.Submission
-                                                ?? throw new InvalidOperationException("The coder attempt ended without a typed implementation submission."),
+        return new DevelopmentReviewerModelResult(gateway.Submission
+                                                   ?? throw new InvalidOperationException("The reviewer attempt ended without a typed review submission."),
             inputTokens,
             outputTokens);
     }
@@ -176,50 +170,30 @@ internal sealed class DevelopmentCoderModel(
         int maxToolCalls,
         DevelopmentAttemptLiveProgress? liveProgress)
     {
-        private readonly IDevelopmentWorkspaceTools _tools = tools;
         private readonly int _maxToolCalls = maxToolCalls;
+        private readonly IDevelopmentWorkspaceTools _tools = tools;
         private readonly DevelopmentAttemptLiveProgress? _liveProgress = liveProgress;
         private int _toolCalls;
 
-        public DevelopmentCoderSubmission? Submission { get; private set; }
-        public string? CloudPatch { get; private set; }
+        public DevelopmentReviewerSubmission? Submission { get; private set; }
 
-        public Task<string> ListFilesAsync(
-            [Description("Workspace-relative directory; empty means repository root.")] string? path,
+        public Task<string> ListFilesAsync([Description("Workspace-relative directory; empty means repository root.")] string? path,
             CancellationToken cancellationToken)
         {
             return InvokeAsync("list_files", path, () => _tools.ListFilesAsync(path, cancellationToken));
         }
 
-        public Task<string> ReadFileAsync(
-            [Description("Workspace-relative file path.")] string path,
+        public Task<string> ReadFileAsync([Description("Workspace-relative file path.")] string path,
             CancellationToken cancellationToken)
         {
             return InvokeAsync("read_file", path, () => _tools.ReadFileAsync(path, cancellationToken));
         }
 
-        public Task<string> SearchTextAsync(
-            [Description("Fixed text to search for.")] string pattern,
+        public Task<string> SearchTextAsync([Description("Fixed text to search for.")] string pattern,
             [Description("Workspace-relative directory; empty means repository root.")] string? path,
             CancellationToken cancellationToken)
         {
             return InvokeAsync("search_text", $"{path}:{pattern}", () => _tools.SearchTextAsync(pattern, path, cancellationToken));
-        }
-
-        public Task<string> WriteFileAsync(
-            [Description("Workspace-relative file path.")] string path,
-            [Description("Complete UTF-8 file content.")] string content,
-            CancellationToken cancellationToken)
-        {
-            return InvokeAsync("write_file", path, () => _tools.WriteFileAsync(path, content, cancellationToken));
-        }
-
-        public Task<string> ApplyPatchAsync(
-            [Description("Git unified diff with explicit diff --git path headers.")] string patch,
-            CancellationToken cancellationToken)
-        {
-            return InvokeAsync("apply_patch", DevelopmentAttemptLiveSanitizer.StableFingerprint("patch", patch),
-                () => _tools.ApplyPatchAsync(patch, cancellationToken));
         }
 
         public Task<string> GetStatusAsync(CancellationToken cancellationToken)
@@ -232,39 +206,36 @@ internal sealed class DevelopmentCoderModel(
             return InvokeAsync("get_diff", null, () => _tools.GetDiffAsync(cancellationToken));
         }
 
-        public Task<string> RunCommandAsync(
-            [Description("One of: git_status, git_diff_check, dotnet_restore, dotnet_build_release_no_restore, dotnet_test_release_no_build.")] string commandId,
-            CancellationToken cancellationToken)
+        public string SubmitReview(string disposition,
+            string summary,
+            DevelopmentReviewFinding[]? findings = null)
         {
-            return InvokeAsync("run_command", commandId, () => _tools.RunCommandAsync(commandId, cancellationToken));
-        }
-
-        public string SubmitImplementation(string summary, string[] changedFiles, string[] commandIds, string? notes = null)
-        {
-            Count("submit_implementation", null);
+            Count("submit_review", null);
             if (Submission is not null)
             {
-                throw new InvalidOperationException("The coder submission can be recorded only once.");
+                throw new InvalidOperationException("The reviewer submission can be recorded only once.");
             }
 
             ArgumentException.ThrowIfNullOrWhiteSpace(summary);
-            Submission = new DevelopmentCoderSubmission(summary,
-                changedFiles ?? [],
-                commandIds ?? [],
-                notes);
-            _liveProgress?.ToolCompleted("submit_implementation");
-            return "typed implementation submission accepted";
-        }
+            if (!Enum.TryParse<DevelopmentReviewDisposition>(disposition, ignoreCase: true, out var parsed))
+            {
+                throw new ArgumentException("Review disposition must be Approved or ChangesRequested.", nameof(disposition));
+            }
 
-        public string SubmitCloudImplementation(string summary,
-            [Description("One bounded Git unified diff using repository-relative paths.")] string patch,
-            string[] changedFiles,
-            string? notes = null)
-        {
-            ArgumentException.ThrowIfNullOrWhiteSpace(patch);
-            var result = SubmitImplementation(summary, changedFiles, [], notes);
-            CloudPatch = patch;
-            return result;
+            var boundedFindings = (findings ?? []).Take(64).ToArray();
+            if (parsed == DevelopmentReviewDisposition.Approved && boundedFindings.Length != 0)
+            {
+                throw new InvalidOperationException("An approved review cannot include unresolved findings.");
+            }
+
+            if (parsed == DevelopmentReviewDisposition.ChangesRequested && boundedFindings.Length == 0)
+            {
+                throw new InvalidOperationException("A changes-requested review requires at least one bounded finding.");
+            }
+
+            Submission = new DevelopmentReviewerSubmission(parsed, summary, boundedFindings);
+            _liveProgress?.ToolCompleted("submit_review");
+            return "typed review submission accepted";
         }
 
         private async Task<string> InvokeAsync(string toolId, string? arguments, Func<Task<string>> action)
@@ -284,7 +255,7 @@ internal sealed class DevelopmentCoderModel(
         {
             if (Interlocked.Increment(ref _toolCalls) > _maxToolCalls)
             {
-                throw new InvalidOperationException("The Development coder exceeded the configured tool-call limit.");
+                throw new InvalidOperationException("The Development reviewer exceeded the configured tool-call limit.");
             }
             _liveProgress?.ToolStarted(toolId, arguments);
         }

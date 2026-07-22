@@ -20,4 +20,19 @@ internal static class DevelopmentTrustPolicy
             throw new DevelopmentWorkspaceSecurityException("Process execution requires a current persisted trusted-repository acknowledgement.");
         }
     }
+
+    public static void EnsureCurrent(DevelopmentProjectSnapshot snapshot, TimeProvider timeProvider)
+    {
+        ArgumentNullException.ThrowIfNull(snapshot);
+        ArgumentNullException.ThrowIfNull(timeProvider);
+
+        if (!snapshot.TrustedRepositoryAcknowledged
+            || snapshot.TrustedRepositoryPolicyVersion != CurrentVersion
+            || snapshot.TrustedRepositoryAcknowledgedAtUtc is not { } acknowledgedAt
+            || acknowledgedAt <= 0
+            || acknowledgedAt > timeProvider.GetUtcNow().ToUnixTimeMilliseconds())
+        {
+            throw new DevelopmentWorkspaceSecurityException("Process execution requires a current persisted trusted-repository acknowledgement.");
+        }
+    }
 }
