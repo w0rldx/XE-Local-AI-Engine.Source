@@ -23,7 +23,8 @@ The recovery design retains five primary concepts: project, task, attempt, artif
 
 ## Evidence
 
-`DevelopmentRestartRecoveryTests` exercises these forced interruption boundaries against a temporary Git repository and worktree:
+`DevelopmentRestartRecoveryTests` is an executable state-machine specification implemented by the test-only
+`DevelopmentRestartRecoveryHarness`. It exercises these forced interruption boundaries against a temporary Git repository and worktree:
 
 - before first token;
 - mid-stream;
@@ -31,12 +32,20 @@ The recovery design retains five primary concepts: project, task, attempt, artif
 - after a file write but before tool-result persistence;
 - after validation artifact persistence but before attempt terminalization.
 
-Additional cases prove exact five-concept scope, restart idempotency, preservation of non-running statuses, subject/manifest stale-evidence invalidation, base-mutation blocking, predecessor linkage, no command replay, and no protected-branch mutation.
+Those specification cases cover exact five-concept scope, preservation of non-running statuses, subject/manifest stale-evidence invalidation, base-mutation blocking, predecessor linkage, no command replay, and no protected-branch mutation. They do not execute the production store or startup reconciler.
+
+Production evidence is intentionally narrower and named separately:
+
+- `DevelopmentStartupReconcilerTests` exercises the real store/coordinator startup path, including exactly-once interruption and concurrent reconciliation.
+- `DevelopmentPersistenceTests` exercises persisted attempt transitions, idempotency, ordering, and replacement predecessor linkage.
+- `DevelopmentValidationReviewAndApplyTests` exercises production stale-evidence invalidation and exact-subject validation/review/apply rules.
+
+The five interruption-timing boundaries and recovery-time base-move scenario therefore remain executable specification coverage rather than production integration coverage. They must not be cited as proof that every boundary traverses `DevelopmentStartupReconciler` end to end.
 
 ## Consequences
 
 - Restart-by-replacement does not require a workspace journal beyond hash-bound artifacts.
 - A same-base workspace mutation is deterministic to inspect, but it invalidates prior validation and review evidence.
 - A moved or otherwise unreconciled base stops progress and requires operator resolution.
-- The focused recovery harness remains test-only; production recovery uses the durable SQLite store and startup reconciler.
+- The focused recovery harness remains a test-only executable specification; production recovery uses the durable SQLite store and startup reconciler and has the narrower integration evidence listed above.
 - Cloud transport authorization is an independent boundary described by ADR 0002.

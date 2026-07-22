@@ -90,6 +90,8 @@ internal sealed class DevelopmentManagementService(
     IActiveCloudChatClientFactory cloudFactory,
     TimeProvider timeProvider) : IDevelopmentManagementService
 {
+    private const string ReviewRoundLimitReason = "The configured maximum review rounds has been reached.";
+
     private readonly IDevelopmentApplyService _applyService = applyService ?? throw new ArgumentNullException(nameof(applyService));
     private readonly IDevelopmentArtifactBlobStore _blobStore = blobStore ?? throw new ArgumentNullException(nameof(blobStore));
     private readonly IDevelopmentCoordinator _coordinator = coordinator ?? throw new ArgumentNullException(nameof(coordinator));
@@ -204,6 +206,11 @@ internal sealed class DevelopmentManagementService(
         }
 
         var task = await RequireTaskAsync(projectId, taskId, cancellationToken).ConfigureAwait(false);
+        if (task.Status == DevelopmentTaskStatus.Blocked
+            && string.Equals(task.BlockedReason, ReviewRoundLimitReason, StringComparison.Ordinal))
+        {
+            return new DevelopmentNextActionResult("Blocked", projectId, taskId, null, DevelopmentTaskStatus.Blocked, null);
+        }
         if (task.Status == DevelopmentTaskStatus.Planned)
         {
             var ready = await _coordinator.TransitionTaskAsync(new DevelopmentTransitionTaskCommand(taskId,
@@ -224,6 +231,18 @@ internal sealed class DevelopmentManagementService(
         if (task.Status == DevelopmentTaskStatus.InProgress
             && attempts.LastOrDefault(attempt => attempt.Role == DevelopmentAttemptRole.Coder) is { Status: DevelopmentAttemptStatus.Succeeded })
         {
+            if (task.CurrentReviewRound >= task.MaxReviewRounds)
+            {
+                _ = await _coordinator.TransitionTaskAsync(new DevelopmentTransitionTaskCommand(taskId,
+                                                               DerivedOperationId(operationId, "review-round-limit"),
+                                                               DevelopmentTaskStatus.Blocked,
+                                                               task.Version,
+                                                               ReviewRoundLimitReason),
+                                                           cancellationToken)
+                                      .ConfigureAwait(false);
+                return new DevelopmentNextActionResult("Blocked", projectId, taskId, null, DevelopmentTaskStatus.Blocked, null);
+            }
+
             if (!_supervisor.StartValidation(taskId, canonicalRoot))
             {
                 throw new DevelopmentConcurrencyException("Deterministic validation is already scheduled for this task.");

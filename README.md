@@ -25,6 +25,11 @@ The repository is being prepared for an RC release. Release documentation and va
   (`Services/Knowledge`, `Endpoints/Knowledge/V1`, `src/features/knowledge`). See [docs/wiki/15-knowledge-base.md](docs/wiki/15-knowledge-base.md).
 - **Agent mode** — per-agent definitions plus a governed playbook: manual and analysis-proposed actions, an offline eval gate over golden conversations, relevance-gated action retrieval, and cohort
   monitoring (`Services/{Agents,Eval,Insights,Monitoring}`, `XE-Local-AI-Engine.AI.Agent`, `src/features/agents`).
+- **Development Mode** — an opt-in, node-local coding workflow with isolated Git worktrees, deterministic validation, independent review, hash-bound evidence, and explicit final host apply. This capability is for a
+  single operator working with an explicitly trusted repository. Enabling it grants the selected local model autonomous code execution as the host user: generated source, MSBuild targets, source generators,
+  and tests may execute before final-apply approval. The Process sandbox provides path and byte confinement, not an operating-system security boundary; host networking and host-user CPU/memory/process
+  resources remain available. The base/production configuration keeps the capability off, while `appsettings.Development.json` enables it for the local Development environment; set
+  `Development:Enabled=false` when that execution posture is not intended.
 - **MCP tool extensibility** — registered MCP servers whose live tool snapshots are offered to agents through the local tool registry (`Services/Mcp`, `src/features/mcp`).
 - **Tests and fixtures** — backend/client persistence tests, integration-style tests, E2E harness, and FakeOllama in-process test server.
 

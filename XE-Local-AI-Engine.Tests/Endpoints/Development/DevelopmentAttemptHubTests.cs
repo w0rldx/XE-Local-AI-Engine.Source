@@ -1,8 +1,11 @@
 namespace XE_Local_AI_Engine.Tests.Endpoints.Development;
 
+using System.Buffers;
 using System.Net;
+using System.Text;
 using Microsoft.AspNetCore.SignalR.Client;
 using Microsoft.AspNetCore.SignalR;
+using Microsoft.AspNetCore.SignalR.Protocol;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 using NSubstitute;
@@ -20,6 +23,26 @@ public sealed class DevelopmentAttemptHubTests
     private static readonly Guid ProjectId = Guid.Parse("11111111-1111-1111-1111-111111111111");
     private static readonly Guid TaskId = Guid.Parse("22222222-2222-2222-2222-222222222222");
     private static readonly Guid AttemptId = Guid.Parse("33333333-3333-3333-3333-333333333333");
+
+    [Test]
+    public void JsonProtocol_SerializesLiveUpdateEnumsAsStrings()
+    {
+        var protocol = new JsonHubProtocol();
+        var writer = new ArrayBufferWriter<byte>();
+        protocol.WriteMessage(new InvocationMessage("developmentAttemptUpdate",
+                [Update("warning") with
+                {
+                    Kind = DevelopmentAttemptLiveUpdateKind.Warning,
+                    WarningCategory = DevelopmentProgressWarningCategory.RepeatedTool
+                }]),
+            writer);
+
+        var payload = Encoding.UTF8.GetString(writer.WrittenSpan);
+        AssertEx.Contains(payload, "\"kind\":\"Warning\"");
+        AssertEx.Contains(payload, "\"role\":\"Coder\"");
+        AssertEx.Contains(payload, "\"status\":\"Running\"");
+        AssertEx.Contains(payload, "\"warningCategory\":\"RepeatedTool\"");
+    }
 
     [Test]
     public async Task Negotiate_WhenOperatorTokenIsMissing_ReturnsUnauthorized()

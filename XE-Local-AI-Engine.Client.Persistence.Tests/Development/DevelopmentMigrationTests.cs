@@ -58,6 +58,8 @@ public sealed class DevelopmentMigrationTests : IDisposable
             AssertEx.True(indexes.Contains("ux_development_attempts_one_active_per_task"));
             AssertEx.True(indexes.Contains("ux_development_events_project_sequence"));
             AssertEx.True(indexes.Contains("ux_development_events_operation_phase"));
+            var attemptIndexes = await NamesAsync(connection, "index", "ix_development_attempts_%").ConfigureAwait(false);
+            AssertEx.True(attemptIndexes.Contains("ix_development_attempts_task_started_at"));
         }
 
         await using (var context = AgentDefinitionTestContextFactory.CreateForMigration(databasePath, _keyHolder))

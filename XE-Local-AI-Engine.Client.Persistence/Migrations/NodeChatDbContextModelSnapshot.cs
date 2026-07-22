@@ -577,6 +577,9 @@ namespace XE_Local_AI_Engine.Client.Persistence.Migrations.NodeChatDb
                         .IsUnique()
                         .HasDatabaseName("ux_development_attempts_start_operation_id");
 
+                    b.HasIndex("TaskId", "StartedAtUtc")
+                        .HasDatabaseName("ix_development_attempts_task_started_at");
+
                     b.HasIndex("TaskId")
                         .IsUnique()
                         .HasDatabaseName("ux_development_attempts_one_active_per_task")

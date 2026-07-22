@@ -210,6 +210,11 @@ namespace XE_Local_AI_Engine.Client.Persistence.Migrations
                 column: "predecessor_attempt_id");
 
             migrationBuilder.CreateIndex(
+                name: "ix_development_attempts_task_started_at",
+                table: "development_attempts",
+                columns: new[] { "task_id", "started_at_utc" });
+
+            migrationBuilder.CreateIndex(
                 name: "ux_development_attempts_one_active_per_task",
                 table: "development_attempts",
                 column: "task_id",
