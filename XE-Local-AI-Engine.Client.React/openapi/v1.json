@@ -7,7 +7,7 @@
   },
   "servers": [
     {
-      "url": "http://127.0.0.1:45137"
+      "url": "http://127.0.0.1:38527"
     }
   ],
   "paths": {
@@ -1661,6 +1661,40 @@
         ]
       }
     },
+    "/api/local/v1/model-fit/llamacpp/source-build/cancel": {
+      "post": {
+        "tags": [
+          "Model-Fit"
+        ],
+        "operationId": "cancelLlamaCppSourceBuild",
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/XE_Local_AI_EngineClientEndpointsModelFitV1LlamaCppSourceBuildStatusResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "403": {
+            "description": "Forbidden"
+          }
+        },
+        "security": [
+          {
+            "JWTBearerAuth": []
+          },
+          {
+            "Bearer": []
+          }
+        ]
+      }
+    },
     "/api/local/v1/model-fit/running/eject": {
       "post": {
         "tags": [
@@ -1738,11 +1772,31 @@
               }
             }
           },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FastEndpointsErrorResponse"
+                }
+              }
+            }
+          },
           "401": {
             "description": "Unauthorized"
           },
           "403": {
             "description": "Forbidden"
+          },
+          "409": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/XE_Local_AI_EngineClientEndpointsModelFitV1LlamaCppUpdateBlockedResponse"
+                }
+              }
+            }
           }
         },
         "security": [
@@ -2206,6 +2260,98 @@
         ]
       }
     },
+    "/api/local/v1/model-fit/llamacpp/source-build/prerequisites": {
+      "get": {
+        "tags": [
+          "Model-Fit"
+        ],
+        "operationId": "getLlamaCppSourceBuildPrerequisites",
+        "parameters": [
+          {
+            "name": "backend",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "allOf": [
+                {
+                  "$ref": "#/components/schemas/XE_Local_AI_EngineClientEndpointsModelFitV1LlamaCppSourceBackendDto"
+                }
+              ]
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/XE_Local_AI_EngineClientEndpointsModelFitV1LlamaCppSourceBuildPrerequisitesResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FastEndpointsErrorResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "403": {
+            "description": "Forbidden"
+          }
+        },
+        "security": [
+          {
+            "JWTBearerAuth": []
+          },
+          {
+            "Bearer": []
+          }
+        ]
+      }
+    },
+    "/api/local/v1/model-fit/llamacpp/source-build/status": {
+      "get": {
+        "tags": [
+          "Model-Fit"
+        ],
+        "operationId": "getLlamaCppSourceBuildStatus",
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/XE_Local_AI_EngineClientEndpointsModelFitV1LlamaCppSourceBuildStatusResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "403": {
+            "description": "Forbidden"
+          }
+        },
+        "security": [
+          {
+            "JWTBearerAuth": []
+          },
+          {
+            "Bearer": []
+          }
+        ]
+      }
+    },
     "/api/local/v1/model-fit/catalog": {
       "get": {
         "tags": [
@@ -2514,6 +2660,50 @@
         ]
       }
     },
+    "/api/local/v1/model-fit/llamacpp/source-build/remove": {
+      "post": {
+        "tags": [
+          "Model-Fit"
+        ],
+        "operationId": "removeLlamaCppSourceBuild",
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/XE_Local_AI_EngineClientEndpointsModelFitV1LlamaCppRuntimeStatusResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "403": {
+            "description": "Forbidden"
+          },
+          "409": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/XE_Local_AI_EngineClientEndpointsModelFitV1LlamaCppSourceBuildBlockedResponse"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "JWTBearerAuth": []
+          },
+          {
+            "Bearer": []
+          }
+        ]
+      }
+    },
     "/api/local/v1/model-fit/llamacpp/cuda-build": {
       "post": {
         "tags": [
@@ -2595,6 +2785,73 @@
         ]
       }
     },
+    "/api/local/v1/model-fit/llamacpp/source-build": {
+      "post": {
+        "tags": [
+          "Model-Fit"
+        ],
+        "operationId": "startLlamaCppSourceBuild",
+        "requestBody": {
+          "x-name": "StartLlamaCppSourceBuildRequest",
+          "description": "",
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/XE_Local_AI_EngineClientEndpointsModelFitV1StartLlamaCppSourceBuildRequest"
+              }
+            }
+          },
+          "required": true,
+          "x-position": 1
+        },
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/XE_Local_AI_EngineClientEndpointsModelFitV1StartLlamaCppSourceBuildResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FastEndpointsErrorResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "403": {
+            "description": "Forbidden"
+          },
+          "409": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/XE_Local_AI_EngineClientEndpointsModelFitV1LlamaCppSourceBuildBlockedResponse"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "JWTBearerAuth": []
+          },
+          {
+            "Bearer": []
+          }
+        ]
+      }
+    },
     "/api/local/v1/model-fit/llamacpp/update": {
       "post": {
         "tags": [
@@ -2625,11 +2882,31 @@
               }
             }
           },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FastEndpointsErrorResponse"
+                }
+              }
+            }
+          },
           "401": {
             "description": "Unauthorized"
           },
           "403": {
             "description": "Forbidden"
+          },
+          "409": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/XE_Local_AI_EngineClientEndpointsModelFitV1LlamaCppUpdateBlockedResponse"
+                }
+              }
+            }
           }
         },
         "security": [
@@ -10243,6 +10520,130 @@
           }
         }
       },
+      "XE_Local_AI_EngineClientEndpointsModelFitV1LlamaCppSourceBuildStatusResponse": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "phase",
+          "isRunning",
+          "terminal",
+          "logLines"
+        ],
+        "properties": {
+          "phase": {
+            "type": "string"
+          },
+          "isRunning": {
+            "type": "boolean"
+          },
+          "terminal": {
+            "type": "boolean"
+          },
+          "logLines": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "sanitizedError": {
+            "type": "string",
+            "nullable": true
+          },
+          "currentBuild": {
+            "nullable": true,
+            "oneOf": [
+              {
+                "$ref": "#/components/schemas/XE_Local_AI_EngineClientEndpointsModelFitV1LlamaCppSourceBuildDescriptorResponse"
+              }
+            ]
+          },
+          "startedAtUtc": {
+            "type": "integer",
+            "nullable": true
+          },
+          "completedAtUtc": {
+            "type": "integer",
+            "nullable": true
+          }
+        }
+      },
+      "XE_Local_AI_EngineClientEndpointsModelFitV1LlamaCppSourceBuildDescriptorResponse": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "buildId",
+          "backend",
+          "source",
+          "repository",
+          "revisionMode"
+        ],
+        "properties": {
+          "buildId": {
+            "type": "string",
+            "format": "guid"
+          },
+          "backend": {
+            "$ref": "#/components/schemas/XE_Local_AI_EngineClientEndpointsModelFitV1LlamaCppSourceBackendDto"
+          },
+          "source": {
+            "$ref": "#/components/schemas/XE_Local_AI_EngineClientEndpointsModelFitV1LlamaCppSourceSelectionDto"
+          },
+          "repository": {
+            "type": "string"
+          },
+          "revisionMode": {
+            "$ref": "#/components/schemas/XE_Local_AI_EngineClientEndpointsModelFitV1LlamaCppSourceRevisionModeDto"
+          },
+          "requestedCommit": {
+            "type": "string",
+            "nullable": true
+          },
+          "resolvedCommit": {
+            "type": "string",
+            "nullable": true
+          }
+        }
+      },
+      "XE_Local_AI_EngineClientEndpointsModelFitV1LlamaCppSourceBackendDto": {
+        "type": "string",
+        "description": "",
+        "x-enumNames": [
+          "Cpu",
+          "Vulkan",
+          "Cuda"
+        ],
+        "enum": [
+          "cpu",
+          "vulkan",
+          "cuda"
+        ]
+      },
+      "XE_Local_AI_EngineClientEndpointsModelFitV1LlamaCppSourceSelectionDto": {
+        "type": "string",
+        "description": "",
+        "x-enumNames": [
+          "Official",
+          "Custom"
+        ],
+        "enum": [
+          "official",
+          "custom"
+        ]
+      },
+      "XE_Local_AI_EngineClientEndpointsModelFitV1LlamaCppSourceRevisionModeDto": {
+        "type": "string",
+        "description": "",
+        "x-enumNames": [
+          "EnginePinned",
+          "DefaultBranch",
+          "ExplicitCommit"
+        ],
+        "enum": [
+          "enginePinned",
+          "defaultBranch",
+          "explicitCommit"
+        ]
+      },
       "XE_Local_AI_EngineClientEndpointsModelFitV1EjectRunningModelResponse": {
         "type": "object",
         "additionalProperties": false,
@@ -10306,6 +10707,23 @@
           }
         }
       },
+      "XE_Local_AI_EngineClientEndpointsModelFitV1LlamaCppUpdateBlockedResponse": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "runningProcessCount",
+          "message"
+        ],
+        "properties": {
+          "runningProcessCount": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "message": {
+            "type": "string"
+          }
+        }
+      },
       "XE_Local_AI_EngineClientEndpointsModelFitV1EnsureLlamaCppBinaryRequest": {
         "type": "object",
         "additionalProperties": false,
@@ -10315,6 +10733,34 @@
         "properties": {
           "variant": {
             "type": "string"
+          }
+        }
+      },
+      "FastEndpointsErrorResponse": {
+        "type": "object",
+        "description": "the dto used to send an error response to the client",
+        "additionalProperties": false,
+        "properties": {
+          "statusCode": {
+            "type": "integer",
+            "description": "the http status code sent to the client. default is 400.",
+            "format": "int32",
+            "default": 400
+          },
+          "message": {
+            "type": "string",
+            "description": "the message for the error response",
+            "default": "One or more errors occurred!"
+          },
+          "errors": {
+            "type": "object",
+            "description": "the collection of errors for the current context",
+            "additionalProperties": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            }
           }
         }
       },
@@ -10757,10 +11203,77 @@
           },
           "isSourceBuild": {
             "type": "boolean"
+          },
+          "sourceRepository": {
+            "type": "string",
+            "nullable": true
+          },
+          "sourceCommit": {
+            "type": "string",
+            "nullable": true
+          },
+          "sourceRevisionMode": {
+            "nullable": true,
+            "oneOf": [
+              {
+                "$ref": "#/components/schemas/XE_Local_AI_EngineClientEndpointsModelFitV1LlamaCppSourceRevisionModeDto"
+              }
+            ]
+          },
+          "sourceRequestedCommit": {
+            "type": "string",
+            "nullable": true
           }
         }
       },
       "XE_Local_AI_EngineClientEndpointsModelFitV1GetLlamaCppRuntimeRequest": {
+        "type": "object",
+        "additionalProperties": false
+      },
+      "XE_Local_AI_EngineClientEndpointsModelFitV1LlamaCppSourceBuildPrerequisitesResponse": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "backend",
+          "items",
+          "canBuild"
+        ],
+        "properties": {
+          "backend": {
+            "$ref": "#/components/schemas/XE_Local_AI_EngineClientEndpointsModelFitV1LlamaCppSourceBackendDto"
+          },
+          "items": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/XE_Local_AI_EngineClientEndpointsModelFitV1LlamaCppSourceBuildPrerequisiteItemResponse"
+            }
+          },
+          "canBuild": {
+            "type": "boolean"
+          }
+        }
+      },
+      "XE_Local_AI_EngineClientEndpointsModelFitV1LlamaCppSourceBuildPrerequisiteItemResponse": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "key",
+          "satisfied",
+          "detail"
+        ],
+        "properties": {
+          "key": {
+            "type": "string"
+          },
+          "satisfied": {
+            "type": "boolean"
+          },
+          "detail": {
+            "type": "string"
+          }
+        }
+      },
+      "XE_Local_AI_EngineClientEndpointsModelFitV1GetLlamaCppSourceBuildPrerequisitesRequest": {
         "type": "object",
         "additionalProperties": false
       },
@@ -10964,6 +11477,27 @@
           }
         }
       },
+      "XE_Local_AI_EngineClientEndpointsModelFitV1LlamaCppSourceBuildBlockedResponse": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "reason",
+          "message"
+        ],
+        "properties": {
+          "reason": {
+            "type": "string"
+          },
+          "message": {
+            "type": "string"
+          },
+          "runningProcessCount": {
+            "type": "integer",
+            "format": "int32",
+            "nullable": true
+          }
+        }
+      },
       "XE_Local_AI_EngineClientEndpointsModelFitV1SetHfTokenRequest": {
         "type": "object",
         "additionalProperties": false,
@@ -11027,6 +11561,50 @@
           "revision": {
             "type": "string",
             "nullable": true
+          }
+        }
+      },
+      "XE_Local_AI_EngineClientEndpointsModelFitV1StartLlamaCppSourceBuildResponse": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "started",
+          "status"
+        ],
+        "properties": {
+          "started": {
+            "type": "boolean"
+          },
+          "status": {
+            "$ref": "#/components/schemas/XE_Local_AI_EngineClientEndpointsModelFitV1LlamaCppSourceBuildStatusResponse"
+          }
+        }
+      },
+      "XE_Local_AI_EngineClientEndpointsModelFitV1StartLlamaCppSourceBuildRequest": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "backend",
+          "source",
+          "acknowledgeCustomSourceRisk"
+        ],
+        "properties": {
+          "backend": {
+            "$ref": "#/components/schemas/XE_Local_AI_EngineClientEndpointsModelFitV1LlamaCppSourceBackendDto"
+          },
+          "source": {
+            "$ref": "#/components/schemas/XE_Local_AI_EngineClientEndpointsModelFitV1LlamaCppSourceSelectionDto"
+          },
+          "repository": {
+            "type": "string",
+            "nullable": true
+          },
+          "commit": {
+            "type": "string",
+            "nullable": true
+          },
+          "acknowledgeCustomSourceRisk": {
+            "type": "boolean"
           }
         }
       },

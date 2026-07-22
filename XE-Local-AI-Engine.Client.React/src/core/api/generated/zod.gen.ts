@@ -801,6 +801,37 @@ export const zXeLocalAiEngineClientEndpointsModelFitV1CancelGgufDownloadRequest 
 	modelName: z.string(),
 });
 
+export const zXeLocalAiEngineClientEndpointsModelFitV1LlamaCppSourceBackendDto = z.enum(["cpu", "vulkan", "cuda"]);
+
+export const zXeLocalAiEngineClientEndpointsModelFitV1LlamaCppSourceSelectionDto = z.enum(["official", "custom"]);
+
+export const zXeLocalAiEngineClientEndpointsModelFitV1LlamaCppSourceRevisionModeDto = z.enum([
+	"enginePinned",
+	"defaultBranch",
+	"explicitCommit",
+]);
+
+export const zXeLocalAiEngineClientEndpointsModelFitV1LlamaCppSourceBuildDescriptorResponse = z.object({
+	buildId: z.guid(),
+	backend: zXeLocalAiEngineClientEndpointsModelFitV1LlamaCppSourceBackendDto,
+	source: zXeLocalAiEngineClientEndpointsModelFitV1LlamaCppSourceSelectionDto,
+	repository: z.string(),
+	revisionMode: zXeLocalAiEngineClientEndpointsModelFitV1LlamaCppSourceRevisionModeDto,
+	requestedCommit: z.string().nullish(),
+	resolvedCommit: z.string().nullish(),
+});
+
+export const zXeLocalAiEngineClientEndpointsModelFitV1LlamaCppSourceBuildStatusResponse = z.object({
+	phase: z.string(),
+	isRunning: z.boolean(),
+	terminal: z.boolean(),
+	logLines: z.array(z.string()),
+	sanitizedError: z.string().nullish(),
+	currentBuild: zXeLocalAiEngineClientEndpointsModelFitV1LlamaCppSourceBuildDescriptorResponse.nullish(),
+	startedAtUtc: z.int().nullish(),
+	completedAtUtc: z.int().nullish(),
+});
+
 export const zXeLocalAiEngineClientEndpointsModelFitV1EjectRunningModelResponse = z.object({
 	modelName: z.string(),
 	role: z.string(),
@@ -820,8 +851,30 @@ export const zXeLocalAiEngineClientEndpointsModelFitV1LlamaCppVersionResponse = 
 	pinnedTag: z.string(),
 });
 
+export const zXeLocalAiEngineClientEndpointsModelFitV1LlamaCppUpdateBlockedResponse = z.object({
+	runningProcessCount: z
+		.int()
+		.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })
+		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" }),
+	message: z.string(),
+});
+
 export const zXeLocalAiEngineClientEndpointsModelFitV1EnsureLlamaCppBinaryRequest = z.object({
 	variant: z.string(),
+});
+
+/**
+ * the dto used to send an error response to the client
+ */
+export const zFastEndpointsErrorResponse = z.object({
+	statusCode: z
+		.int()
+		.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })
+		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" })
+		.optional()
+		.default(400),
+	message: z.string().optional().default("One or more errors occurred!"),
+	errors: z.record(z.string(), z.array(z.string())).optional(),
 });
 
 export const zXeLocalAiEngineClientEndpointsModelFitV1InferenceProfileActionResponse = z.object({
@@ -942,6 +995,10 @@ export const zXeLocalAiEngineClientEndpointsModelFitV1LlamaCppInstalledRuntimeRe
 	asset: z.string(),
 	installedAtUtc: z.int(),
 	isSourceBuild: z.boolean(),
+	sourceRepository: z.string().nullish(),
+	sourceCommit: z.string().nullish(),
+	sourceRevisionMode: zXeLocalAiEngineClientEndpointsModelFitV1LlamaCppSourceRevisionModeDto.nullish(),
+	sourceRequestedCommit: z.string().nullish(),
 });
 
 export const zXeLocalAiEngineClientEndpointsModelFitV1LlamaCppRuntimeStatusResponse = z.object({
@@ -959,6 +1016,23 @@ export const zXeLocalAiEngineClientEndpointsModelFitV1LlamaCppRuntimeStatusRespo
 });
 
 export const zXeLocalAiEngineClientEndpointsModelFitV1GetLlamaCppRuntimeRequest = z.record(z.string(), z.never());
+
+export const zXeLocalAiEngineClientEndpointsModelFitV1LlamaCppSourceBuildPrerequisiteItemResponse = z.object({
+	key: z.string(),
+	satisfied: z.boolean(),
+	detail: z.string(),
+});
+
+export const zXeLocalAiEngineClientEndpointsModelFitV1LlamaCppSourceBuildPrerequisitesResponse = z.object({
+	backend: zXeLocalAiEngineClientEndpointsModelFitV1LlamaCppSourceBackendDto,
+	items: z.array(zXeLocalAiEngineClientEndpointsModelFitV1LlamaCppSourceBuildPrerequisiteItemResponse),
+	canBuild: z.boolean(),
+});
+
+export const zXeLocalAiEngineClientEndpointsModelFitV1GetLlamaCppSourceBuildPrerequisitesRequest = z.record(
+	z.string(),
+	z.never(),
+);
 
 export const zXeLocalAiEngineClientEndpointsModelFitV1ModelCatalogInfoResponse = z.object({
 	catalogVersion: z.string(),
@@ -1028,6 +1102,16 @@ export const zXeLocalAiEngineClientEndpointsModelFitV1RefreshRecommendationsRequ
 		.nullish(),
 });
 
+export const zXeLocalAiEngineClientEndpointsModelFitV1LlamaCppSourceBuildBlockedResponse = z.object({
+	reason: z.string(),
+	message: z.string(),
+	runningProcessCount: z
+		.int()
+		.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })
+		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" })
+		.nullish(),
+});
+
 export const zXeLocalAiEngineClientEndpointsModelFitV1SetHfTokenRequest = z.object({
 	token: z.string().nullish(),
 });
@@ -1047,6 +1131,19 @@ export const zXeLocalAiEngineClientEndpointsModelFitV1StartGgufDownloadRequest =
 	fileName: z.string().nullish(),
 	quant: z.string().nullish(),
 	revision: z.string().nullish(),
+});
+
+export const zXeLocalAiEngineClientEndpointsModelFitV1StartLlamaCppSourceBuildResponse = z.object({
+	started: z.boolean(),
+	status: zXeLocalAiEngineClientEndpointsModelFitV1LlamaCppSourceBuildStatusResponse,
+});
+
+export const zXeLocalAiEngineClientEndpointsModelFitV1StartLlamaCppSourceBuildRequest = z.object({
+	backend: zXeLocalAiEngineClientEndpointsModelFitV1LlamaCppSourceBackendDto,
+	source: zXeLocalAiEngineClientEndpointsModelFitV1LlamaCppSourceSelectionDto,
+	repository: z.string().nullish(),
+	commit: z.string().nullish(),
+	acknowledgeCustomSourceRisk: z.boolean(),
 });
 
 export const zXeLocalAiEngineClientEndpointsModelFitV1UpdateLlamaCppRuntimeRequest = z.object({
@@ -3011,6 +3108,11 @@ export const zCancelGgufDownloadBody = zXeLocalAiEngineClientEndpointsModelFitV1
  */
 export const zCancelGgufDownloadResponse = zXeLocalAiEngineClientEndpointsModelFitV1CancelGgufDownloadResponse;
 
+/**
+ * Success
+ */
+export const zCancelLlamaCppSourceBuildResponse = zXeLocalAiEngineClientEndpointsModelFitV1LlamaCppSourceBuildStatusResponse;
+
 export const zEjectRunningModelBody = zXeLocalAiEngineClientEndpointsModelFitV1EjectRunningModelRequest;
 
 /**
@@ -3102,6 +3204,21 @@ export const zGetLlamaCppRuntimeQuery = z.object({
  */
 export const zGetLlamaCppRuntimeResponse = zXeLocalAiEngineClientEndpointsModelFitV1LlamaCppRuntimeStatusResponse;
 
+export const zGetLlamaCppSourceBuildPrerequisitesQuery = z.object({
+	backend: zXeLocalAiEngineClientEndpointsModelFitV1LlamaCppSourceBackendDto,
+});
+
+/**
+ * Success
+ */
+export const zGetLlamaCppSourceBuildPrerequisitesResponse =
+	zXeLocalAiEngineClientEndpointsModelFitV1LlamaCppSourceBuildPrerequisitesResponse;
+
+/**
+ * Success
+ */
+export const zGetLlamaCppSourceBuildStatusResponse = zXeLocalAiEngineClientEndpointsModelFitV1LlamaCppSourceBuildStatusResponse;
+
 /**
  * Success
  */
@@ -3153,6 +3270,11 @@ export const zRemoveCudaBuildResponse = zXeLocalAiEngineClientEndpointsModelFitV
 /**
  * Success
  */
+export const zRemoveLlamaCppSourceBuildResponse = zXeLocalAiEngineClientEndpointsModelFitV1LlamaCppRuntimeStatusResponse;
+
+/**
+ * Success
+ */
 export const zStartCudaBuildResponse = zXeLocalAiEngineClientEndpointsModelFitV1StartCudaBuildResponse;
 
 export const zStartGgufDownloadBody = zXeLocalAiEngineClientEndpointsModelFitV1StartGgufDownloadRequest;
@@ -3161,6 +3283,13 @@ export const zStartGgufDownloadBody = zXeLocalAiEngineClientEndpointsModelFitV1S
  * Success
  */
 export const zStartGgufDownloadResponse = zXeLocalAiEngineClientEndpointsModelFitV1StartGgufDownloadResponse;
+
+export const zStartLlamaCppSourceBuildBody = zXeLocalAiEngineClientEndpointsModelFitV1StartLlamaCppSourceBuildRequest;
+
+/**
+ * Success
+ */
+export const zStartLlamaCppSourceBuildResponse = zXeLocalAiEngineClientEndpointsModelFitV1StartLlamaCppSourceBuildResponse;
 
 export const zUpdateLlamaCppRuntimeBody = zXeLocalAiEngineClientEndpointsModelFitV1UpdateLlamaCppRuntimeRequest;
 

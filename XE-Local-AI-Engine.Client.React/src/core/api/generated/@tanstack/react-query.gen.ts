@@ -23,6 +23,7 @@ import {
 	cancelDevelopmentAttempt,
 	cancelGgufDownload,
 	cancelImageJob,
+	cancelLlamaCppSourceBuild,
 	cancelNodeBinding,
 	cancelNodeChatMessage,
 	cancelPreviewRun,
@@ -95,6 +96,8 @@ import {
 	getKnowledgeDocument,
 	getLatestRecommendations,
 	getLlamaCppRuntime,
+	getLlamaCppSourceBuildPrerequisites,
+	getLlamaCppSourceBuildStatus,
 	getLocalModelDetails,
 	getMcpServer,
 	getMcpServerTools,
@@ -162,6 +165,7 @@ import {
 	reindexKnowledgeDocument,
 	rejectSuggestedPlaybookAction,
 	removeCudaBuild,
+	removeLlamaCppSourceBuild,
 	renameNodeChatConversation,
 	resolveToolApproval,
 	retrieveImage,
@@ -182,6 +186,7 @@ import {
 	startGgufDownload,
 	startGitHubAuth,
 	startImageModelDownload,
+	startLlamaCppSourceBuild,
 	startNodeBinding,
 	triggerScheduledJob,
 	unhandledExceptionProbe,
@@ -223,6 +228,8 @@ import type {
 	CancelGgufDownloadResponse,
 	CancelImageJobData,
 	CancelImageJobResponse,
+	CancelLlamaCppSourceBuildData,
+	CancelLlamaCppSourceBuildResponse,
 	CancelNodeBindingData,
 	CancelNodeBindingResponse,
 	CancelNodeChatMessageData,
@@ -308,6 +315,7 @@ import type {
 	EnableScheduledJobData,
 	EnableScheduledJobResponse,
 	EnsureLlamaCppBinaryData,
+	EnsureLlamaCppBinaryError,
 	EnsureLlamaCppBinaryResponse,
 	EntraAuthCodeSignInData,
 	EntraAuthCodeSignInResponse,
@@ -371,6 +379,11 @@ import type {
 	GetLatestRecommendationsResponse,
 	GetLlamaCppRuntimeData,
 	GetLlamaCppRuntimeResponse,
+	GetLlamaCppSourceBuildPrerequisitesData,
+	GetLlamaCppSourceBuildPrerequisitesError,
+	GetLlamaCppSourceBuildPrerequisitesResponse,
+	GetLlamaCppSourceBuildStatusData,
+	GetLlamaCppSourceBuildStatusResponse,
 	GetLocalModelDetailsData,
 	GetLocalModelDetailsError,
 	GetLocalModelDetailsResponse,
@@ -509,6 +522,9 @@ import type {
 	RejectSuggestedPlaybookActionResponse,
 	RemoveCudaBuildData,
 	RemoveCudaBuildResponse,
+	RemoveLlamaCppSourceBuildData,
+	RemoveLlamaCppSourceBuildError,
+	RemoveLlamaCppSourceBuildResponse,
 	RenameNodeChatConversationData,
 	RenameNodeChatConversationResponse,
 	ResolveToolApprovalData,
@@ -554,6 +570,9 @@ import type {
 	StartGitHubAuthResponse,
 	StartImageModelDownloadData,
 	StartImageModelDownloadResponse,
+	StartLlamaCppSourceBuildData,
+	StartLlamaCppSourceBuildError,
+	StartLlamaCppSourceBuildResponse,
 	StartNodeBindingData,
 	StartNodeBindingResponse,
 	TriggerScheduledJobData,
@@ -566,6 +585,7 @@ import type {
 	UpdateAgentDefinitionData,
 	UpdateAgentDefinitionResponse,
 	UpdateLlamaCppRuntimeData,
+	UpdateLlamaCppRuntimeError,
 	UpdateLlamaCppRuntimeResponse,
 	UpdateMcpServerData,
 	UpdateMcpServerResponse,
@@ -1377,6 +1397,26 @@ export const cancelGgufDownloadMutation = (
 	return mutationOptions;
 };
 
+export const cancelLlamaCppSourceBuildMutation = (
+	options?: Partial<Options<CancelLlamaCppSourceBuildData>>,
+): UseMutationOptions<CancelLlamaCppSourceBuildResponse, AxiosError<DefaultError>, Options<CancelLlamaCppSourceBuildData>> => {
+	const mutationOptions: UseMutationOptions<
+		CancelLlamaCppSourceBuildResponse,
+		AxiosError<DefaultError>,
+		Options<CancelLlamaCppSourceBuildData>
+	> = {
+		mutationFn: async (fnOptions) => {
+			const { data } = await cancelLlamaCppSourceBuild({
+				...options,
+				...fnOptions,
+				throwOnError: true,
+			});
+			return data;
+		},
+	};
+	return mutationOptions;
+};
+
 export const ejectRunningModelMutation = (
 	options?: Partial<Options<EjectRunningModelData>>,
 ): UseMutationOptions<EjectRunningModelResponse, AxiosError<DefaultError>, Options<EjectRunningModelData>> => {
@@ -1399,10 +1439,10 @@ export const ejectRunningModelMutation = (
 
 export const ensureLlamaCppBinaryMutation = (
 	options?: Partial<Options<EnsureLlamaCppBinaryData>>,
-): UseMutationOptions<EnsureLlamaCppBinaryResponse, AxiosError<DefaultError>, Options<EnsureLlamaCppBinaryData>> => {
+): UseMutationOptions<EnsureLlamaCppBinaryResponse, AxiosError<EnsureLlamaCppBinaryError>, Options<EnsureLlamaCppBinaryData>> => {
 	const mutationOptions: UseMutationOptions<
 		EnsureLlamaCppBinaryResponse,
-		AxiosError<DefaultError>,
+		AxiosError<EnsureLlamaCppBinaryError>,
 		Options<EnsureLlamaCppBinaryData>
 	> = {
 		mutationFn: async (fnOptions) => {
@@ -1647,6 +1687,50 @@ export const getLlamaCppRuntimeOptions = (options?: Options<GetLlamaCppRuntimeDa
 		queryKey: getLlamaCppRuntimeQueryKey(options),
 	});
 
+export const getLlamaCppSourceBuildPrerequisitesQueryKey = (options: Options<GetLlamaCppSourceBuildPrerequisitesData>) =>
+	createQueryKey("getLlamaCppSourceBuildPrerequisites", options);
+
+export const getLlamaCppSourceBuildPrerequisitesOptions = (options: Options<GetLlamaCppSourceBuildPrerequisitesData>) =>
+	queryOptions<
+		GetLlamaCppSourceBuildPrerequisitesResponse,
+		AxiosError<GetLlamaCppSourceBuildPrerequisitesError>,
+		GetLlamaCppSourceBuildPrerequisitesResponse,
+		ReturnType<typeof getLlamaCppSourceBuildPrerequisitesQueryKey>
+	>({
+		queryFn: async ({ queryKey, signal }) => {
+			const { data } = await getLlamaCppSourceBuildPrerequisites({
+				...options,
+				...queryKey[0],
+				signal,
+				throwOnError: true,
+			});
+			return data;
+		},
+		queryKey: getLlamaCppSourceBuildPrerequisitesQueryKey(options),
+	});
+
+export const getLlamaCppSourceBuildStatusQueryKey = (options?: Options<GetLlamaCppSourceBuildStatusData>) =>
+	createQueryKey("getLlamaCppSourceBuildStatus", options);
+
+export const getLlamaCppSourceBuildStatusOptions = (options?: Options<GetLlamaCppSourceBuildStatusData>) =>
+	queryOptions<
+		GetLlamaCppSourceBuildStatusResponse,
+		AxiosError<DefaultError>,
+		GetLlamaCppSourceBuildStatusResponse,
+		ReturnType<typeof getLlamaCppSourceBuildStatusQueryKey>
+	>({
+		queryFn: async ({ queryKey, signal }) => {
+			const { data } = await getLlamaCppSourceBuildStatus({
+				...options,
+				...queryKey[0],
+				signal,
+				throwOnError: true,
+			});
+			return data;
+		},
+		queryKey: getLlamaCppSourceBuildStatusQueryKey(options),
+	});
+
 export const getModelCatalogInfoQueryKey = (options?: Options<GetModelCatalogInfoData>) =>
 	createQueryKey("getModelCatalogInfo", options);
 
@@ -1811,6 +1895,30 @@ export const removeCudaBuildMutation = (
 	return mutationOptions;
 };
 
+export const removeLlamaCppSourceBuildMutation = (
+	options?: Partial<Options<RemoveLlamaCppSourceBuildData>>,
+): UseMutationOptions<
+	RemoveLlamaCppSourceBuildResponse,
+	AxiosError<RemoveLlamaCppSourceBuildError>,
+	Options<RemoveLlamaCppSourceBuildData>
+> => {
+	const mutationOptions: UseMutationOptions<
+		RemoveLlamaCppSourceBuildResponse,
+		AxiosError<RemoveLlamaCppSourceBuildError>,
+		Options<RemoveLlamaCppSourceBuildData>
+	> = {
+		mutationFn: async (fnOptions) => {
+			const { data } = await removeLlamaCppSourceBuild({
+				...options,
+				...fnOptions,
+				throwOnError: true,
+			});
+			return data;
+		},
+	};
+	return mutationOptions;
+};
+
 export const startCudaBuildMutation = (
 	options?: Partial<Options<StartCudaBuildData>>,
 ): UseMutationOptions<StartCudaBuildResponse, AxiosError<DefaultError>, Options<StartCudaBuildData>> => {
@@ -1847,12 +1955,40 @@ export const startGgufDownloadMutation = (
 	return mutationOptions;
 };
 
+export const startLlamaCppSourceBuildMutation = (
+	options?: Partial<Options<StartLlamaCppSourceBuildData>>,
+): UseMutationOptions<
+	StartLlamaCppSourceBuildResponse,
+	AxiosError<StartLlamaCppSourceBuildError>,
+	Options<StartLlamaCppSourceBuildData>
+> => {
+	const mutationOptions: UseMutationOptions<
+		StartLlamaCppSourceBuildResponse,
+		AxiosError<StartLlamaCppSourceBuildError>,
+		Options<StartLlamaCppSourceBuildData>
+	> = {
+		mutationFn: async (fnOptions) => {
+			const { data } = await startLlamaCppSourceBuild({
+				...options,
+				...fnOptions,
+				throwOnError: true,
+			});
+			return data;
+		},
+	};
+	return mutationOptions;
+};
+
 export const updateLlamaCppRuntimeMutation = (
 	options?: Partial<Options<UpdateLlamaCppRuntimeData>>,
-): UseMutationOptions<UpdateLlamaCppRuntimeResponse, AxiosError<DefaultError>, Options<UpdateLlamaCppRuntimeData>> => {
+): UseMutationOptions<
+	UpdateLlamaCppRuntimeResponse,
+	AxiosError<UpdateLlamaCppRuntimeError>,
+	Options<UpdateLlamaCppRuntimeData>
+> => {
 	const mutationOptions: UseMutationOptions<
 		UpdateLlamaCppRuntimeResponse,
-		AxiosError<DefaultError>,
+		AxiosError<UpdateLlamaCppRuntimeError>,
 		Options<UpdateLlamaCppRuntimeData>
 	> = {
 		mutationFn: async (fnOptions) => {
