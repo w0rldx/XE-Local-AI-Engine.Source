@@ -371,6 +371,13 @@ public static class LocalApiRoutes
         // mirroring the other local hubs. Each push carries the phase + appended log lines.
         public const string CudaBuildHub = "/api/local/v1/model-fit/llamacpp/cuda-build/hub";
 
+        public const string SourceBuildPrerequisites = "model-fit/llamacpp/source-build/prerequisites";
+        public const string SourceBuild = "model-fit/llamacpp/source-build";
+        public const string SourceBuildStatus = "model-fit/llamacpp/source-build/status";
+        public const string SourceBuildCancel = "model-fit/llamacpp/source-build/cancel";
+        public const string SourceBuildRemove = "model-fit/llamacpp/source-build/remove";
+        public const string SourceBuildHub = "/api/local/v1/model-fit/llamacpp/source-build/hub";
+
         // HF access-token set/clear (IHfTokenStore). The endpoint NEVER returns the token; GET reports presence
         // only (security gate).
         public const string HfToken = "model-fit/hf-token";

@@ -67,6 +67,11 @@ public sealed class LlamaCppInstalledRuntimeResponse
     ///     downloaded prebuilt. The client uses this to label the runtime and suppress the phantom "update available".
     /// </summary>
     public required bool IsSourceBuild { get; init; }
+
+    public string? SourceRepository { get; init; }
+    public string? SourceCommit { get; init; }
+    public LlamaCppSourceRevisionModeDto? SourceRevisionMode { get; init; }
+    public string? SourceRequestedCommit { get; init; }
 }
 
 /// <summary>

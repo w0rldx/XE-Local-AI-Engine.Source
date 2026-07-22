@@ -280,7 +280,75 @@ internal static class ModelFitMapper
             Variant = state.Variant.ToWireString(),
             Asset = state.Asset,
             InstalledAtUtc = state.InstalledAtUtc.ToUnixTimeMilliseconds(),
-            IsSourceBuild = state.SourceBuildPath is { Length: > 0 }
+            IsSourceBuild = state.SourceBuildPath is { Length: > 0 },
+            SourceRepository = state.SourceRepository,
+            SourceCommit = state.SourceCommit,
+            SourceRevisionMode = state.SourceRevisionMode is null ? null : (LlamaCppSourceRevisionModeDto)(int)state.SourceRevisionMode.Value,
+            SourceRequestedCommit = state.SourceRequestedCommit
+        };
+    }
+
+    public static LlamaCppSourceBuildRequest ToContract(this StartLlamaCppSourceBuildRequest request)
+    {
+        return new LlamaCppSourceBuildRequest(request.Backend.ToContract(),
+            (LlamaCppSourceSelection)(int)request.Source,
+            request.Repository,
+            request.Commit,
+            request.AcknowledgeCustomSourceRisk);
+    }
+
+    public static LlamaCppSourceBackend ToContract(this LlamaCppSourceBackendDto backend)
+    {
+        return (LlamaCppSourceBackend)(int)backend;
+    }
+
+    public static LlamaCppSourceBuildPrerequisitesResponse ToResponse(this LlamaCppSourceBuildPrerequisiteReport report,
+        LlamaCppSourceBackend backend)
+    {
+        return new LlamaCppSourceBuildPrerequisitesResponse
+        {
+            Backend = (LlamaCppSourceBackendDto)(int)backend,
+            CanBuild = report.CanBuild,
+            Items = [.. report.Items.Select(static item => new LlamaCppSourceBuildPrerequisiteItemResponse
+            {
+                Key = item.Key,
+                Satisfied = item.Satisfied,
+                Detail = item.Detail
+            })]
+        };
+    }
+
+    public static LlamaCppSourceBuildStatusResponse ToResponse(this LlamaCppSourceBuildStatus status)
+    {
+        return new LlamaCppSourceBuildStatusResponse
+        {
+            Phase = status.Phase.ToString(),
+            IsRunning = status.IsRunning,
+            Terminal = status.Terminal,
+            LogLines = status.LogLines,
+            SanitizedError = status.SanitizedError,
+            CurrentBuild = status.CurrentBuild?.ToResponse(),
+            StartedAtUtc = status.StartedAtUtc?.ToUnixTimeMilliseconds(),
+            CompletedAtUtc = status.CompletedAtUtc?.ToUnixTimeMilliseconds()
+        };
+    }
+
+    private static LlamaCppSourceBuildDescriptorResponse ToResponse(this LlamaCppSourceBuildDescriptor descriptor)
+    {
+        return new LlamaCppSourceBuildDescriptorResponse
+        {
+            Backend = descriptor.Variant switch
+            {
+                GpuVariant.Cpu => LlamaCppSourceBackendDto.Cpu,
+                GpuVariant.Vulkan => LlamaCppSourceBackendDto.Vulkan,
+                GpuVariant.Cuda => LlamaCppSourceBackendDto.Cuda,
+                _ => throw new ArgumentOutOfRangeException(nameof(descriptor), descriptor.Variant, "Unknown source-build variant.")
+            },
+            Source = (LlamaCppSourceSelectionDto)(int)descriptor.Source,
+            Repository = descriptor.Repository,
+            RevisionMode = (LlamaCppSourceRevisionModeDto)(int)descriptor.RevisionMode,
+            RequestedCommit = descriptor.RequestedCommit,
+            ResolvedCommit = descriptor.ResolvedCommit
         };
     }
 

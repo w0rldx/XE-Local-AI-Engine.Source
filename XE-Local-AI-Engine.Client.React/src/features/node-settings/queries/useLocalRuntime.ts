@@ -2,14 +2,19 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
 import {
 	cancelCudaBuildMutation,
+	cancelLlamaCppSourceBuildMutation,
 	ensureLlamaCppBinaryMutation,
 	getCudaBuildPrerequisitesOptions,
 	getCudaBuildStatusOptions,
 	getHfTokenStatusOptions,
 	getLlamaCppRuntimeOptions,
+	getLlamaCppSourceBuildPrerequisitesOptions,
+	getLlamaCppSourceBuildStatusOptions,
 	removeCudaBuildMutation,
+	removeLlamaCppSourceBuildMutation,
 	setHfTokenMutation,
 	startCudaBuildMutation,
+	startLlamaCppSourceBuildMutation,
 	updateLlamaCppRuntimeMutation,
 } from "@/core/api/generated/@tanstack/react-query.gen";
 import { withResponseValidation } from "@/core/api/ResponseValidation";
@@ -19,6 +24,9 @@ import {
 	toLlamaCppRuntimeStatus,
 } from "@/features/node-settings/models/LocalRuntimeMappers";
 import type { LlamaCppVariant } from "@/features/node-settings/models/LocalRuntimeModels";
+import { toSourceBuildPrerequisites, toSourceBuildStatus } from "@/features/node-settings/models/SourceBuildMappers";
+import type { LlamaCppSourceBackend, SourceBuildDraft } from "@/features/node-settings/models/SourceBuildModels";
+import { sourceBuildRequest } from "@/features/node-settings/models/SourceBuildModels";
 
 // Server state for the local-runtime cards on the Node Settings page (relocated from the model-fit advisor — they
 // tune this worker's local runtime, not model recommendations). Reads use the generated hey-api `*Options()` (which
@@ -34,6 +42,8 @@ export const localRuntimeQueryIds = {
 	hfTokenStatus: "getHfTokenStatus",
 	cudaBuildPrerequisites: "getCudaBuildPrerequisites",
 	cudaBuildStatus: "getCudaBuildStatus",
+	sourceBuildPrerequisites: "getLlamaCppSourceBuildPrerequisites",
+	sourceBuildStatus: "getLlamaCppSourceBuildStatus",
 } as const;
 
 /** Builds the partial generated-query-key filter that matches every cached variant of one local-runtime endpoint. */
@@ -202,6 +212,63 @@ export function useRemoveCudaBuild() {
 			Promise.all([
 				invalidate(queryClient, localRuntimeQueryIds.llamaCppRuntime),
 				invalidate(queryClient, localRuntimeQueryIds.cudaBuildStatus),
+			]),
+	});
+}
+
+export function useSourceBuildPrerequisites(backend: LlamaCppSourceBackend, enabled = true) {
+	return useQuery({
+		...withResponseValidation(getLlamaCppSourceBuildPrerequisitesOptions({ query: { backend } })),
+		select: toSourceBuildPrerequisites,
+		enabled,
+	});
+}
+
+export function useSourceBuildStatus(enabled = true) {
+	return useQuery({
+		...withResponseValidation(getLlamaCppSourceBuildStatusOptions()),
+		select: toSourceBuildStatus,
+		enabled,
+	});
+}
+
+export function useStartSourceBuild() {
+	const queryClient = useQueryClient();
+	return useMutation({
+		mutationFn: async (draft: SourceBuildDraft) => {
+			const options = withResponseValidation(startLlamaCppSourceBuildMutation());
+			return await options.mutationFn?.({ body: sourceBuildRequest(draft) }, undefined as never);
+		},
+		onSuccess: () =>
+			Promise.all([
+				invalidate(queryClient, localRuntimeQueryIds.sourceBuildStatus),
+				invalidate(queryClient, localRuntimeQueryIds.llamaCppRuntime),
+			]),
+	});
+}
+
+export function useCancelSourceBuild() {
+	const queryClient = useQueryClient();
+	return useMutation({
+		mutationFn: async () => {
+			const options = withResponseValidation(cancelLlamaCppSourceBuildMutation());
+			return await options.mutationFn?.({}, undefined as never);
+		},
+		onSuccess: () => invalidate(queryClient, localRuntimeQueryIds.sourceBuildStatus),
+	});
+}
+
+export function useRemoveSourceBuild() {
+	const queryClient = useQueryClient();
+	return useMutation({
+		mutationFn: async () => {
+			const options = withResponseValidation(removeLlamaCppSourceBuildMutation());
+			return await options.mutationFn?.({}, undefined as never);
+		},
+		onSuccess: () =>
+			Promise.all([
+				invalidate(queryClient, localRuntimeQueryIds.sourceBuildStatus),
+				invalidate(queryClient, localRuntimeQueryIds.llamaCppRuntime),
 			]),
 	});
 }

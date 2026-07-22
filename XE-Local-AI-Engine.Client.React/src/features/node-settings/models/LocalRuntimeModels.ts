@@ -16,6 +16,10 @@ export interface LlamaCppInstalledRuntime {
 	// True when this runtime was produced by the in-app build-from-source CUDA path (a managed source build) rather than
 	// a downloaded prebuilt asset. Optional so payloads/test fixtures predating the field still satisfy the shape.
 	readonly isSourceBuild?: boolean;
+	readonly sourceRepository?: string | null;
+	readonly sourceCommit?: string | null;
+	readonly sourceRevisionMode?: "enginePinned" | "defaultBranch" | "explicitCommit" | null;
+	readonly sourceRequestedCommit?: string | null;
 }
 
 // Domain view-model for the read-only runtime status (GET model-fit/llamacpp/runtime). Drives the updater panel and

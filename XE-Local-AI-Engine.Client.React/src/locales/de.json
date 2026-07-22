@@ -1129,6 +1129,10 @@
 					"cancelError": "Der CUDA-Build konnte nicht abgebrochen werden.",
 					"removeError": "Der CUDA-Build konnte nicht entfernt werden.",
 					"removed": "Verwalteter CUDA-Build entfernt."
+				},
+				"sourceBuild": {
+					"title": "llama.cpp aus Quellcode bauen",
+					"description": "CPU-, Vulkan- oder CUDA-llama.cpp aus dem offiziellen Upstream oder einem vertrauenswürdigen öffentlichen GitHub-Fork bauen."
 				}
 			},
 			"hfToken": {

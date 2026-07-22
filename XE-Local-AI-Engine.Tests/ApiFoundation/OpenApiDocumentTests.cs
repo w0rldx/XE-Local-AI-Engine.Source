@@ -68,6 +68,44 @@ public sealed class OpenApiDocumentTests
         AssertEx.Contains(operationIds, "createScheduledJob");
     }
 
+    [Test]
+    public async Task LocalOpenApiDocument_DescribesGeneralizedAndLegacySourceBuildSurfaces()
+    {
+        await using var factory = new TestingWebAppFactory();
+        using var client = factory.CreateClient();
+        using var response = await client.GetAsync("/openapi/local/v1/v1.json").ConfigureAwait(false);
+        AssertEx.Equal(HttpStatusCode.OK, response.StatusCode);
+
+        await using var responseStream = await response.Content.ReadAsStreamAsync().ConfigureAwait(false);
+        using var document = await JsonDocument.ParseAsync(responseStream).ConfigureAwait(false);
+        var paths = document.RootElement.GetProperty("paths");
+
+        foreach (var path in new[]
+                 {
+                     "/api/local/v1/model-fit/llamacpp/source-build",
+                     "/api/local/v1/model-fit/llamacpp/source-build/prerequisites",
+                     "/api/local/v1/model-fit/llamacpp/source-build/status",
+                     "/api/local/v1/model-fit/llamacpp/source-build/cancel",
+                     "/api/local/v1/model-fit/llamacpp/source-build/remove",
+                     "/api/local/v1/model-fit/llamacpp/cuda-build"
+                 })
+        {
+            AssertEx.True(paths.TryGetProperty(path, out _), $"Expected source-build path '{path}'.");
+        }
+
+        var schemas = document.RootElement.GetProperty("components").GetProperty("schemas");
+        AssertSchemaEnum(schemas, "LlamaCppSourceBackendDto", ["cpu", "vulkan", "cuda"]);
+        AssertSchemaEnum(schemas, "LlamaCppSourceSelectionDto", ["official", "custom"]);
+        AssertSchemaEnum(schemas, "LlamaCppSourceRevisionModeDto", ["enginePinned", "defaultBranch", "explicitCommit"]);
+    }
+
+    private static void AssertSchemaEnum(JsonElement schemas, string schemaSuffix, IReadOnlyList<string> expected)
+    {
+        var schema = schemas.EnumerateObject().Single(property => property.Name.EndsWith(schemaSuffix, StringComparison.Ordinal)).Value;
+        var values = schema.GetProperty("enum").EnumerateArray().Select(static value => value.GetString() ?? string.Empty).ToArray();
+        AssertEx.Equal(string.Join('|', expected), string.Join('|', values));
+    }
+
     private static async Task<List<string>> GetOperationIdsAsync()
     {
         await using var factory = new TestingWebAppFactory();

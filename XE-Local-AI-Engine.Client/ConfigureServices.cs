@@ -150,6 +150,7 @@ public static class ConfigureServices
         // Hub-backed in-app CUDA build event publisher — supersedes the no-op default the provider registers so build
         // phase + log lines push live to operator clients (CudaBuildHub mapped in Program). IHubContext is singleton-safe.
         builder.Services.AddSingleton<ICudaBuildEventPublisher, CudaBuildEventPublisher>();
+        builder.Services.AddSingleton<ILlamaCppSourceBuildEventPublisher, LlamaCppSourceBuildEventPublisher>();
 
         // Hub-backed knowledge-base indexing notifier — supersedes the no-op default registered in AddNodeKnowledgeBase so
         // document status changes push live to operator clients (KnowledgeBaseHub mapped in Program). IHubContext is
