@@ -125,7 +125,9 @@ public sealed class CreateDevelopmentProjectEndpoint
                                       .ConfigureAwait(false);
             await Send.OkAsync(result.ToResponse(), ct).ConfigureAwait(false);
         }
-        catch (Exception exception) when (exception is ArgumentException or DevelopmentWorkspaceSecurityException)
+        catch (Exception exception) when (exception is ArgumentException
+                                          or DevelopmentWorkspaceSecurityException
+                                          or SelectedFolderValidationException)
         {
             AddError(exception.Message);
             await Send.ErrorsAsync(cancellation: ct).ConfigureAwait(false);
@@ -203,6 +205,10 @@ public sealed class StartDevelopmentNextActionEndpoint
                 ct).ConfigureAwait(false);
         }
         catch (KeyNotFoundException)
+        {
+            await Send.NotFoundAsync(ct).ConfigureAwait(false);
+        }
+        catch (SelectedFolderValidationException)
         {
             await Send.NotFoundAsync(ct).ConfigureAwait(false);
         }
@@ -350,6 +356,10 @@ public sealed class PreviewDevelopmentPatchEndpoint
         {
             await Send.NotFoundAsync(ct).ConfigureAwait(false);
         }
+        catch (SelectedFolderValidationException)
+        {
+            await Send.NotFoundAsync(ct).ConfigureAwait(false);
+        }
         catch (Exception exception) when (exception is DevelopmentInvalidTransitionException or DevelopmentWorkspaceSecurityException)
         {
             AddError(exception.Message);
@@ -385,6 +395,10 @@ public sealed class ApplyDevelopmentPatchEndpoint
         {
             await Send.NotFoundAsync(ct).ConfigureAwait(false);
         }
+        catch (SelectedFolderValidationException)
+        {
+            await Send.NotFoundAsync(ct).ConfigureAwait(false);
+        }
         catch (Exception exception) when (exception is DevelopmentInvalidTransitionException
                                           or DevelopmentConcurrencyException
                                           or DevelopmentWorkspaceSecurityException)
@@ -416,6 +430,11 @@ public sealed class ReconnectDevelopmentRepositoryEndpoint
         catch (KeyNotFoundException)
         {
             await Send.NotFoundAsync(ct).ConfigureAwait(false);
+        }
+        catch (SelectedFolderValidationException exception)
+        {
+            AddError(exception.Message);
+            await Send.ErrorsAsync(cancellation: ct).ConfigureAwait(false);
         }
         catch (Exception exception) when (exception is DevelopmentConcurrencyException or DevelopmentWorkspaceSecurityException)
         {

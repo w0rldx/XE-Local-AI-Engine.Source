@@ -1,6 +1,7 @@
 namespace XE_Local_AI_Engine.Tests.Endpoints.Development.V1;
 
 using System.Net;
+using System.Net.Http.Json;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 using NSubstitute;
@@ -8,6 +9,7 @@ using XE_Local_AI_Engine.Client.Endpoints.Development.V1;
 using XE_Local_AI_Engine.Client.Persistence.Entities;
 using XE_Local_AI_Engine.Client.Persistence.Stores;
 using XE_Local_AI_Engine.Client.Services.Development;
+using XE_Local_AI_Engine.Client.Services.Workspace;
 using XE_Local_AI_Engine.Tests.Testing;
 
 [NotInParallel("DevelopmentFeatureConfiguration")]
@@ -106,6 +108,36 @@ public sealed class DevelopmentEndpointTests
     }
 
     [Test]
+    [Arguments("create", HttpStatusCode.BadRequest)]
+    [Arguments("start", HttpStatusCode.NotFound)]
+    [Arguments("preview", HttpStatusCode.NotFound)]
+    [Arguments("apply", HttpStatusCode.NotFound)]
+    [Arguments("reconnect", HttpStatusCode.BadRequest)]
+    public async Task Operation_WhenSelectedFolderIdIsUnknown_DoesNotReturnServerError(string operation, HttpStatusCode expectedStatus)
+    {
+        var failure = new SelectedFolderValidationException("The selected folder id is not registered.");
+        var service = Substitute.For<IDevelopmentManagementService>();
+        service.CreateProjectAsync(Arg.Any<DevelopmentCreateProjectInput>(), Arg.Any<CancellationToken>())
+               .Returns(Task.FromException<DevelopmentProjectAggregate>(failure));
+        service.StartNextActionAsync(ProjectId, TaskId, Arg.Any<Guid>(), Arg.Any<CancellationToken>())
+               .Returns(Task.FromException<DevelopmentNextActionResult>(failure));
+        service.PreviewAsync(ProjectId, TaskId, Arg.Any<CancellationToken>())
+               .Returns(Task.FromException<DevelopmentPatchPreviewResult>(failure));
+        service.ApplyAsync(ProjectId, TaskId, Arg.Any<Guid>(), Arg.Any<CancellationToken>())
+               .Returns(Task.FromException<DevelopmentOperationResult>(failure));
+        service.ReconnectRepositoryAsync(ProjectId, Arg.Any<Guid>(), Arg.Any<long>(), Arg.Any<CancellationToken>())
+               .Returns(Task.FromException<DevelopmentProjectAggregate>(failure));
+        await using var factory = EnabledFactory(service);
+        using var client = factory.CreateClient();
+        using var request = StaleSelectedFolderRequest(operation);
+        factory.AddNodeBearerToken(request);
+
+        using var response = await client.SendAsync(request).ConfigureAwait(false);
+
+        AssertEx.Equal(expectedStatus, response.StatusCode);
+    }
+
+    [Test]
     public void DevelopmentActionRequest_DoesNotExposeRepositoryRoot()
     {
         var propertyNames = typeof(DevelopmentActionRequest)
@@ -125,6 +157,43 @@ public sealed class DevelopmentEndpointTests
                 services.RemoveAll<IDevelopmentManagementService>();
                 services.AddSingleton(service);
             }
+        };
+
+    private static HttpRequestMessage StaleSelectedFolderRequest(string operation)
+        => operation switch
+        {
+            "create" => new HttpRequestMessage(HttpMethod.Post, "/api/local/v1/development/projects")
+            {
+                Content = JsonContent.Create(new CreateDevelopmentProjectRequest
+                {
+                    OperationId = Guid.NewGuid(),
+                    SelectedFolderId = Guid.NewGuid(),
+                    Objective = "objective",
+                    TaskTitle = "task",
+                    Requirements = "requirements",
+                    CoderModelId = "coder-model",
+                    ReviewerModelId = "reviewer-model",
+                    TrustedRepositoryAcknowledged = true
+                })
+            },
+            "start" => ActionRequest("next-action"),
+            "preview" => ActionRequest("preview"),
+            "apply" => ActionRequest("apply"),
+            "reconnect" => new HttpRequestMessage(HttpMethod.Post, $"/api/local/v1/development/projects/{ProjectId}/repository-connection")
+            {
+                Content = JsonContent.Create(new ReconnectDevelopmentRepositoryRequest
+                {
+                    SelectedFolderId = Guid.NewGuid(),
+                    ExpectedVersion = 1
+                })
+            },
+            _ => throw new ArgumentOutOfRangeException(nameof(operation), operation, "Unknown Development operation.")
+        };
+
+    private static HttpRequestMessage ActionRequest(string action)
+        => new(HttpMethod.Post, $"/api/local/v1/development/projects/{ProjectId}/tasks/{TaskId}/{action}")
+        {
+            Content = JsonContent.Create(new DevelopmentActionRequest { OperationId = Guid.NewGuid() })
         };
 
     private static DevelopmentProjectAggregate ProjectAggregate(Guid projectId)
