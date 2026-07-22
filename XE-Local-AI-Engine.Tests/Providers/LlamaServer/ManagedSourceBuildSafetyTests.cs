@@ -148,6 +148,33 @@ public sealed class ManagedSourceBuildSafetyTests
         AssertEx.Null(await store.ReadAsync(CancellationToken.None));
     }
 
+    [Test]
+    public async Task RemoveSourceBuild_NoncanonicalRecordedPath_ClearsStateWithoutDeletingOutsideRoot()
+    {
+        using var temp = new SecureTempDirectory();
+        var outside = Path.Combine(temp.Path, "outside", "build", "bin");
+        Directory.CreateDirectory(outside);
+        var sentinel = Path.Combine(outside, "llama-server");
+        await File.WriteAllTextAsync(sentinel, "outside");
+        using var store = new InstalledRuntimeStore(temp.Path);
+        await store.WriteAsync(new InstalledRuntimeState(LlamaCppReleasePins.PinnedTag,
+            "source",
+            new string('a', 64),
+            GpuVariant.Cpu,
+            DateTimeOffset.UtcNow,
+            outside), CancellationToken.None);
+        var signal = new CudaManagedBuildSignal();
+        signal.SetActive(GpuVariant.Cpu);
+        var before = signal.Version;
+
+        await CreateManager(temp.Path, store, signal).RemoveSourceBuildAsync(CancellationToken.None);
+
+        AssertEx.True(File.Exists(sentinel));
+        AssertEx.Null(await store.ReadAsync(CancellationToken.None));
+        AssertEx.Null(signal.ActiveVariant);
+        AssertEx.True(signal.Version > before);
+    }
+
     private static InstalledRuntimeState State(string bin, GpuVariant variant, string repository)
     {
         var server = Path.Combine(bin, "llama-server");
@@ -156,11 +183,11 @@ public sealed class ManagedSourceBuildSafetyTests
             repository, LlamaCppReleasePins.PinnedSourceCommitSha, LlamaCppSourceRevisionMode.EnginePinned);
     }
 
-    private static LlamaCppBinaryManager CreateManager(string root, IInstalledRuntimeStore store)
+    private static LlamaCppBinaryManager CreateManager(string root, IInstalledRuntimeStore store, ICudaManagedBuildSignal? signal = null)
     {
 #pragma warning disable CA2000 // Test-scoped manager retains these no-network HTTP resources for the manager lifetime.
         return new LlamaCppBinaryManager(new HttpClient(new ThrowingHandler()), root, LlamaCppReleasePins.PinnedTag,
-            OSPlatform.Linux, Architecture.X64, installedRuntimeStore: store, managedCudaSignal: new CudaManagedBuildSignal());
+            OSPlatform.Linux, Architecture.X64, installedRuntimeStore: store, managedCudaSignal: signal ?? new CudaManagedBuildSignal());
 #pragma warning restore CA2000
     }
 

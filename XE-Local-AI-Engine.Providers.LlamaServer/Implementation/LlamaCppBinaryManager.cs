@@ -174,7 +174,7 @@ public sealed partial class LlamaCppBinaryManager : ILlamaCppBinaryManager
             // Idempotent: when the cudart DLLs are already present next to the server this is a no-op; a cached CUDA dir
             // that is somehow missing them gets them topped up from the pinned companion before the binary is served.
             await EnsureCudartRuntimeAsync(resolvedTag, pin, cudartAsset: null, variant, variantDir, cachedServer, ct).ConfigureAwait(false);
-            await RecordResolvedRuntimeAsync(resolvedTag, pin, variant, installed, ct).ConfigureAwait(false);
+            await RecordResolvedRuntimeAsync(resolvedTag, pin, variant, ct).ConfigureAwait(false);
             return new LlamaBinary(cachedServer, resolvedTag, variant, isPinnedFallback);
         }
 
@@ -191,8 +191,17 @@ public sealed partial class LlamaCppBinaryManager : ILlamaCppBinaryManager
         // cudart archive silently degrades to CPU-only. A cudart failure deletes the half-CUDA variant dir and throws.
         await EnsureCudartRuntimeAsync(resolvedTag, pin, cudartAsset: null, variant, variantDir, serverPath, ct).ConfigureAwait(false);
 
-        await RecordResolvedRuntimeAsync(resolvedTag, pin, variant, installed, ct).ConfigureAwait(false);
+        await RecordResolvedRuntimeAsync(resolvedTag, pin, variant, ct).ConfigureAwait(false);
         return new LlamaBinary(serverPath, resolvedTag, variant, isPinnedFallback);
+    }
+
+    /// <inheritdoc />
+    public Task<LlamaBinary> EnsureBinaryAsync(GpuVariant variant,
+        ILlamaServerRuntimeMutationLease mutationLease,
+        CancellationToken ct)
+    {
+        ArgumentNullException.ThrowIfNull(mutationLease);
+        return EnsureBinaryAsync(variant, ct);
     }
 
     /// <summary>
@@ -212,38 +221,43 @@ public sealed partial class LlamaCppBinaryManager : ILlamaCppBinaryManager
     ///     Cheap on the hot path: a write happens only on the first pinned-floor ensure with no matching record; a record
     ///     that already pins the same (tag, variant) is left untouched, so a steady-state ensure never rewrites.
     /// </summary>
-    private async Task RecordResolvedRuntimeAsync(string resolvedTag, LlamaCppAssetPin pin, GpuVariant variant, InstalledRuntimeState? installed, CancellationToken ct)
+    private async Task RecordResolvedRuntimeAsync(string resolvedTag, LlamaCppAssetPin pin, GpuVariant variant, CancellationToken ct)
     {
         if (_installedRuntimeStore is null)
         {
             return;
         }
 
-        // The source-build record is immutable to this bootstrap writer: a non-Cuda EnsureBinaryAsync (e.g. the Vulkan
-        // probe at LlamaListDevicesVramProbe) must NEVER overwrite an adopted managed CUDA build. The variant skip below
-        // does not fire for a Cuda record + a Vulkan write, so guard the source build explicitly first. [archHIGH-1]
-        if (installed?.SourceBuildPath is { Length: > 0 })
+        await _sourceMutationGate.WaitAsync(ct).ConfigureAwait(false);
+        try
         {
-            return;
-        }
+            var current = await _installedRuntimeStore.ReadAsync(ct).ConfigureAwait(false);
+            if (current?.SourceBuildPath is { Length: > 0 })
+            {
+                throw new LlamaRuntimeException(ManagedSourceBuildUnavailableMessage);
+            }
 
-        // Only the pinned floor carries a tag whose asset/digest match the pin we are about to record. A non-pinned
-        // resolvedTag came from an existing InstallTagAsync record (already correct) — never overwrite it with pin data.
-        if (!string.Equals(resolvedTag, LlamaCppReleasePins.PinnedTag, StringComparison.Ordinal))
+            // Only the pinned floor carries a tag whose asset/digest match the pin we are about to record. A non-pinned
+            // resolvedTag came from an existing InstallTagAsync record (already correct) — never overwrite it with pin data.
+            if (!string.Equals(resolvedTag, LlamaCppReleasePins.PinnedTag, StringComparison.Ordinal))
+            {
+                return;
+            }
+
+            // A record already exists for this variant. Whether it pins the same tag (steady state) or a newer
+            // explicitly-installed tag, the pinned floor must not overwrite it.
+            if (current is { } existing && existing.Variant == variant)
+            {
+                return;
+            }
+
+            var state = new InstalledRuntimeState(resolvedTag, pin.AssetName, pin.Sha256, variant, DateTimeOffset.UtcNow);
+            await _installedRuntimeStore.WriteAsync(state, ct).ConfigureAwait(false);
+        }
+        finally
         {
-            return;
+            _sourceMutationGate.Release();
         }
-
-        // A record already exists for this variant. Whether it pins the same tag (steady state) or a newer
-        // explicitly-installed tag, the pinned floor must not overwrite it — only the live/tier-2 resolve advances a
-        // record, and that path is excluded above. So a record for this variant is left untouched.
-        if (installed is { } current && current.Variant == variant)
-        {
-            return;
-        }
-
-        var state = new InstalledRuntimeState(resolvedTag, pin.AssetName, pin.Sha256, variant, DateTimeOffset.UtcNow);
-        await _installedRuntimeStore.WriteAsync(state, ct).ConfigureAwait(false);
     }
 
     /// <summary>
@@ -274,6 +288,38 @@ public sealed partial class LlamaCppBinaryManager : ILlamaCppBinaryManager
 
     /// <inheritdoc />
     public async Task<LlamaBinary> InstallTagAsync(string tag, string assetName, string digestSha256, long expectedSize, GpuVariant variant, CancellationToken ct)
+    {
+        await _sourceMutationGate.WaitAsync(ct).ConfigureAwait(false);
+        try
+        {
+            if (_installedRuntimeStore is not null
+                && (await _installedRuntimeStore.ReadAsync(ct).ConfigureAwait(false))?.SourceBuildPath is { Length: > 0 })
+            {
+                throw new LlamaRuntimeException("Remove the installed source-built llama.cpp runtime before installing a prebuilt runtime.");
+            }
+
+            return await InstallTagCoreAsync(tag, assetName, digestSha256, expectedSize, variant, ct).ConfigureAwait(false);
+        }
+        finally
+        {
+            _sourceMutationGate.Release();
+        }
+    }
+
+    /// <inheritdoc />
+    public Task<LlamaBinary> InstallTagAsync(string tag,
+        string assetName,
+        string digestSha256,
+        long expectedSize,
+        GpuVariant variant,
+        ILlamaServerRuntimeMutationLease mutationLease,
+        CancellationToken ct)
+    {
+        ArgumentNullException.ThrowIfNull(mutationLease);
+        return InstallTagAsync(tag, assetName, digestSha256, expectedSize, variant, ct);
+    }
+
+    private async Task<LlamaBinary> InstallTagCoreAsync(string tag, string assetName, string digestSha256, long expectedSize, GpuVariant variant, CancellationToken ct)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(assetName);
 

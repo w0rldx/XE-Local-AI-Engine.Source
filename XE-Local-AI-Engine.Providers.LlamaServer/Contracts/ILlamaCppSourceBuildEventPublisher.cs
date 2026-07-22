@@ -15,4 +15,7 @@ public sealed record LlamaCppSourceBuildStatusHubEvent(
     IReadOnlyList<string> AppendedLogLines,
     bool Terminal,
     string? SanitizedError,
-    LlamaCppSourceBuildDescriptor? CurrentBuild);
+    LlamaCppSourceBuildDescriptor? CurrentBuild)
+{
+    public Guid? BuildId => CurrentBuild?.BuildId;
+}

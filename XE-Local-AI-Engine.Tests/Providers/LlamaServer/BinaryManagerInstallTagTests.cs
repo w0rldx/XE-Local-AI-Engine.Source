@@ -22,6 +22,78 @@ public sealed class BinaryManagerInstallTagTests
     private const string AssetName = "llama-b9799-bin-ubuntu-x64.tar.gz";
 
     [Test]
+    public async Task InstallTag_WhenSourceRuntimeRecorded_FailsBeforeDownloadAndPreservesRecord()
+    {
+        using var cache = new TempDir();
+        using var handler = new ScriptedHandler(() => throw new InvalidOperationException("A source record must block prebuilt installation."));
+        using var http = new HttpClient(handler, disposeHandler: false);
+        using var store = new InstalledRuntimeStore(cache.Path);
+        var source = new InstalledRuntimeState(LlamaCppReleasePins.PinnedTag,
+            "source",
+            new string('a', 64),
+            GpuVariant.Cpu,
+            DateTimeOffset.UtcNow,
+            Path.Combine(cache.Path, "llama.cpp", "source-build", "active", "build", "bin"));
+        await store.WriteAsync(source, CancellationToken.None);
+        var manager = new LlamaCppBinaryManager(http, cache.Path, LlamaCppReleasePins.PinnedTag,
+            OSPlatform.Linux, Architecture.X64, catalog: null, installedRuntimeStore: store);
+
+        await AssertEx.ThrowsAsync<LlamaRuntimeException>(() => manager.InstallTagAsync(Tag,
+            AssetName,
+            new string('b', 64),
+            expectedSize: 0,
+            GpuVariant.Cpu,
+            CancellationToken.None));
+
+        AssertEx.Equal(expected: 0, handler.CallCount);
+        AssertEx.Equal(source, await store.ReadAsync(CancellationToken.None));
+    }
+
+    [Test]
+    public async Task InstallTag_AndSourceAdoption_SerializeRecordMutationWithSourceWinningLast()
+    {
+        if (OperatingSystem.IsWindows())
+        {
+            return;
+        }
+
+        using var cache = new TempDir();
+        var archive = BuildExecutableTarGz();
+        using var handler = new GatedHandler(archive);
+        using var http = new HttpClient(handler, disposeHandler: false);
+        using var store = new InstalledRuntimeStore(cache.Path);
+        var manager = new LlamaCppBinaryManager(http, cache.Path, LlamaCppReleasePins.PinnedTag,
+            OSPlatform.Linux, Architecture.X64, catalog: null, installedRuntimeStore: store,
+            managedCudaSignal: new CudaManagedBuildSignal());
+
+        var install = manager.InstallTagAsync(Tag, AssetName, Sha256Hex(archive), archive.Length, GpuVariant.Cpu, CancellationToken.None);
+        await handler.Entered.WaitAsync(TimeSpan.FromSeconds(5));
+
+        var sourceBin = Path.Combine(cache.Path, "llama.cpp", "source-build", "active", "build", "bin");
+        Directory.CreateDirectory(sourceBin);
+        var sourceServer = Path.Combine(sourceBin, "llama-server");
+        await File.WriteAllTextAsync(sourceServer, "#!/bin/sh\nexit 0\n");
+        File.SetUnixFileMode(sourceServer, UnixFileMode.UserRead | UnixFileMode.UserWrite | UnixFileMode.UserExecute);
+        var adopt = manager.AdoptSourceBuildAsync(sourceBin,
+            LlamaCppReleasePins.PinnedTag,
+            GpuVariant.Cpu,
+            LlamaCppSourceBuildRequestValidation.OfficialRepository,
+            LlamaCppReleasePins.PinnedSourceCommitSha,
+            LlamaCppSourceRevisionMode.EnginePinned,
+            requestedCommit: null,
+            CancellationToken.None);
+
+        await Task.Delay(100);
+        AssertEx.False(adopt.IsCompleted);
+        handler.Release();
+        await install;
+        await adopt;
+
+        var installed = AssertEx.NotNull(await store.ReadAsync(CancellationToken.None));
+        AssertEx.Equal(sourceBin, installed.SourceBuildPath);
+    }
+
+    [Test]
     public async Task InstallTag_WhenDigestMatches_AtomicallyInstallsAndWritesState()
     {
         // The smoke test spawns the extracted llama-server (here a POSIX shell stub). On Windows the stub is not
@@ -522,6 +594,22 @@ public sealed class BinaryManagerInstallTagTests
         {
             CallCount++;
             return Task.FromResult(responder());
+        }
+    }
+
+    private sealed class GatedHandler(byte[] content) : HttpMessageHandler
+    {
+        private readonly TaskCompletionSource _entered = new(TaskCreationOptions.RunContinuationsAsynchronously);
+        private readonly TaskCompletionSource _release = new(TaskCreationOptions.RunContinuationsAsynchronously);
+
+        public Task Entered => _entered.Task;
+        public void Release() => _release.TrySetResult();
+
+        protected override async Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken)
+        {
+            _entered.TrySetResult();
+            await _release.Task.WaitAsync(cancellationToken);
+            return new HttpResponseMessage(HttpStatusCode.OK) { Content = new ByteArrayContent(content) };
         }
     }
 

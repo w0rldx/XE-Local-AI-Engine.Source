@@ -38,7 +38,11 @@ public sealed record LlamaCppSourceBuildDescriptor(
     string Repository,
     LlamaCppSourceRevisionMode RevisionMode,
     string? RequestedCommit,
-    string? ResolvedCommit);
+    string? ResolvedCommit)
+{
+    /// <summary>Immutable identity of this concrete run, distinct even when revision intent is repeated.</summary>
+    public Guid BuildId { get; init; }
+}
 
 public enum LlamaCppSourceBuildPhase
 {
@@ -67,7 +71,10 @@ public sealed record LlamaCppSourceBuildStatus(
     string? SanitizedError,
     LlamaCppSourceBuildDescriptor? CurrentBuild,
     DateTimeOffset? StartedAtUtc,
-    DateTimeOffset? CompletedAtUtc);
+    DateTimeOffset? CompletedAtUtc)
+{
+    public Guid? BuildId => CurrentBuild?.BuildId;
+}
 
 /// <summary>Single-flight generalized source-build orchestration.</summary>
 public interface ILlamaCppSourceBuildService

@@ -35,6 +35,7 @@ public sealed class LlamaCppSourceBuildServiceTests
         var start = await service.StartAsync(new LlamaCppSourceBuildRequest(LlamaCppSourceBackend.Cpu, LlamaCppSourceSelection.Custom,
             "https://github.com/example/fork", AcknowledgeCustomSourceRisk: true), CancellationToken.None);
         AssertEx.Equal(LlamaCppSourceBuildStartOutcome.Started, start);
+        var firstBuildId = service.GetStatus().CurrentBuild!.BuildId;
         AssertEx.False(service.CancelLegacyPinnedCuda());
         AssertEx.True(service.Cancel());
         await AssertEx.EventuallyAsync(() => service.GetStatus().Terminal, TimeSpan.FromSeconds(10));
@@ -42,6 +43,14 @@ public sealed class LlamaCppSourceBuildServiceTests
         AssertEx.Equal(LlamaCppSourceBuildPhase.Cancelled, service.GetStatus().Phase);
         AssertEx.True(File.Exists(previousServer));
         AssertEx.Equal(previousState, await store.ReadAsync(CancellationToken.None));
+
+        var repeated = await service.StartAsync(new LlamaCppSourceBuildRequest(LlamaCppSourceBackend.Cpu, LlamaCppSourceSelection.Custom,
+            "https://github.com/example/fork", AcknowledgeCustomSourceRisk: true), CancellationToken.None);
+        AssertEx.Equal(LlamaCppSourceBuildStartOutcome.Started, repeated);
+        AssertEx.True(service.GetStatus().CurrentBuild!.BuildId != firstBuildId);
+        AssertEx.Equal(expected: 0, service.GetStatus().LogLines.Count);
+        AssertEx.True(service.Cancel());
+        await AssertEx.EventuallyAsync(() => service.GetStatus().Terminal, TimeSpan.FromSeconds(10));
     }
 
     [Test]
@@ -88,12 +97,13 @@ public sealed class LlamaCppSourceBuildServiceTests
         using var path = new PathScope(stubs);
         using var store = new InstalledRuntimeStore(temp.Path);
         var signal = new CudaManagedBuildSignal();
+        var publisher = new OrderedFailingPublisher();
         using var service = new LlamaCppSourceBuildService(new AlwaysReadyProbe(),
             new CapturingBinaryManager(store, signal, failAdoption: true),
             store,
             signal,
             new LeaseOnlySupervisor(),
-            new NullLlamaCppSourceBuildEventPublisher(),
+            publisher,
             NullLogger<LlamaCppSourceBuildService>.Instance,
             temp.Path);
 
@@ -102,6 +112,11 @@ public sealed class LlamaCppSourceBuildServiceTests
 
         AssertEx.Equal(LlamaCppSourceBuildPhase.Failed, service.GetStatus().Phase);
         AssertEx.Equal("The source build failed unexpectedly.", service.GetStatus().SanitizedError);
+        await service.FlushPublisherAsync();
+        AssertEx.Equal(1, publisher.MaxConcurrent);
+        AssertEx.True(publisher.Events.Count > 0);
+        AssertEx.True(publisher.Events[^1].Terminal);
+        AssertEx.True(publisher.Events.All(statusEvent => statusEvent.CurrentBuild?.BuildId == service.GetStatus().CurrentBuild?.BuildId));
     }
 
     [Test]
@@ -206,6 +221,46 @@ public sealed class LlamaCppSourceBuildServiceTests
         public int CountRunningProcesses() => 0;
         public LlamaServerRuntimeInfo? GetRuntimeInfo(string modelName, ModelRole role) => null;
         private sealed class Lease : ILlamaServerRuntimeMutationLease { public ValueTask DisposeAsync() => ValueTask.CompletedTask; }
+    }
+
+    private sealed class OrderedFailingPublisher : ILlamaCppSourceBuildEventPublisher
+    {
+        private int _active;
+        private int _calls;
+        private int _maxConcurrent;
+
+        public List<LlamaCppSourceBuildStatusHubEvent> Events { get; } = [];
+        public int MaxConcurrent => Volatile.Read(ref _maxConcurrent);
+
+        public async Task PublishStatusAsync(LlamaCppSourceBuildStatusHubEvent statusEvent, CancellationToken cancellationToken = default)
+        {
+            var active = Interlocked.Increment(ref _active);
+            var observed = Volatile.Read(ref _maxConcurrent);
+            while (active > observed)
+            {
+                var prior = Interlocked.CompareExchange(ref _maxConcurrent, active, observed);
+                if (prior == observed)
+                {
+                    break;
+                }
+
+                observed = prior;
+            }
+            try
+            {
+                await Task.Delay(5, cancellationToken);
+                if (Interlocked.Increment(ref _calls) == 1)
+                {
+                    throw new InvalidOperationException("first publish fails");
+                }
+
+                Events.Add(statusEvent);
+            }
+            finally
+            {
+                Interlocked.Decrement(ref _active);
+            }
+        }
     }
 
     private sealed class PathScope : IDisposable

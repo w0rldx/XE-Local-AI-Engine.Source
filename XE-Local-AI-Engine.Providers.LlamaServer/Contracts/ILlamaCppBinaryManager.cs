@@ -22,6 +22,18 @@ public interface ILlamaCppBinaryManager
     Task<LlamaBinary> EnsureBinaryAsync(GpuVariant variant, CancellationToken ct);
 
     /// <summary>
+    ///     Runtime endpoint ensure surface. The caller owns <paramref name="mutationLease" /> through completion; the
+    ///     supervisor spawn path uses the non-lease overload because its registered inflight spawn is the exclusion token.
+    /// </summary>
+    Task<LlamaBinary> EnsureBinaryAsync(GpuVariant variant,
+        ILlamaServerRuntimeMutationLease mutationLease,
+        CancellationToken ct)
+    {
+        ArgumentNullException.ThrowIfNull(mutationLease);
+        return EnsureBinaryAsync(variant, ct);
+    }
+
+    /// <summary>
     ///     Installs a specific, dynamically-resolved release: downloads <paramref name="assetName" /> for
     ///     <paramref name="tag" />, verifies it against the live publisher <paramref name="digestSha256" /> (a
     ///     <c>sha256:</c> prefix is tolerated), atomically extracts into the versioned cache dir, smoke-tests the resolved
@@ -36,7 +48,28 @@ public interface ILlamaCppBinaryManager
     ///     The tag/asset name is malformed, or the download / size / digest verification / smoke test failed — sanitized
     ///     for display.
     /// </exception>
+    /// <remarks>
+    ///     Direct callers are limited to startup provisioning before the process supervisor accepts work. Runtime/API
+    ///     callers must use the lease-bearing overload below. Both paths fail closed while a source-runtime record exists.
+    /// </remarks>
     Task<LlamaBinary> InstallTagAsync(string tag, string assetName, string digestSha256, long expectedSize, GpuVariant variant, CancellationToken ct);
+
+    /// <summary>
+    ///     Runtime endpoint mutation surface. The caller owns <paramref name="mutationLease" /> and must hold it through
+    ///     completion; the manager validates source-record exclusion but neither acquires nor disposes the supervisor lease.
+    ///     This explicit ownership avoids recursive lease acquisition while preventing endpoint updates during starts.
+    /// </summary>
+    Task<LlamaBinary> InstallTagAsync(string tag,
+        string assetName,
+        string digestSha256,
+        long expectedSize,
+        GpuVariant variant,
+        ILlamaServerRuntimeMutationLease mutationLease,
+        CancellationToken ct)
+    {
+        ArgumentNullException.ThrowIfNull(mutationLease);
+        return InstallTagAsync(tag, assetName, digestSha256, expectedSize, variant, ct);
+    }
 
     /// <summary>
     ///     Adopts an in-app source-built CUDA runtime: validates the freshly-built <c>llama-server</c> under
