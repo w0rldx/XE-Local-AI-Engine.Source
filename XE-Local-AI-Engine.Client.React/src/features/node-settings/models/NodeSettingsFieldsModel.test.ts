@@ -1,8 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import type {
-	XeLocalAiEngineClientEndpointsNodeSettingsV1NodeSettingsResponse as NodeSettingsResponse,
-} from "@/core/api/generated";
+import type { XeLocalAiEngineClientEndpointsNodeSettingsV1NodeSettingsResponse as NodeSettingsResponse } from "@/core/api/generated";
 import {
 	buildNodeSettingsRequest,
 	nodeSettingsFieldDefaults,
@@ -99,6 +97,12 @@ describe("validateUsageRates", () => {
 		expect(typeof rows[0]?.id).toBe("string");
 		// A fresh add row carries its own id and empty cells.
 		expect(newUsageRateRow()).toMatchObject({ modelName: "", inputPer1M: "", outputPer1M: "" });
+	});
+
+	it("maps incomplete server usage rates to editable empty values", () => {
+		const rows = toUsageRateRows({ "gpt-5": {} });
+
+		expect(rows[0]).toMatchObject({ modelName: "gpt-5", inputPer1M: "", outputPer1M: "" });
 	});
 });
 
@@ -281,7 +285,12 @@ describe("buildNodeSettingsRequest", () => {
 			rateRow({ id: "x", modelName: "claude", inputPer1M: 3, outputPer1M: 4 }),
 			rateRow({ id: "y", modelName: "gpt-5", inputPer1M: 1, outputPer1M: 2 }),
 		];
-		const { body } = buildNodeSettingsRequest({ ...baseline, usageRates: rowsB }, { ...baseline, usageRates: rowsA }, bounds, false);
+		const { body } = buildNodeSettingsRequest(
+			{ ...baseline, usageRates: rowsB },
+			{ ...baseline, usageRates: rowsA },
+			bounds,
+			false,
+		);
 		expect(body.usageRates).toBeUndefined();
 	});
 

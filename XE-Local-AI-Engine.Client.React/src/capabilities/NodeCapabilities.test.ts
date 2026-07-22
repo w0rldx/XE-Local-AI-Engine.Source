@@ -15,6 +15,10 @@ describe("nodeCapabilities", () => {
 		expect(nodeCapabilities.scheduler).toBe(true);
 	});
 
+	it("enables the dedicated Development Mode surface", () => {
+		expect(nodeCapabilities.development).toBe(true);
+	});
+
 	it("enables the model-fit surface by default", () => {
 		expect(nodeCapabilities.modelFit).toBe(true);
 	});
@@ -44,9 +48,10 @@ describe("nodeCapabilities", () => {
 	});
 
 	it("defines the route paths targeted by the node shell", () => {
-		expect(nodeRoutePaths).toEqual({
+			expect(nodeRoutePaths).toEqual({
 			home: "/",
 			chat: "/chat",
+			development: "/development",
 			knowledgeBase: "/knowledge-base",
 			dashboard: "/dashboard",
 			binding: "/node-binding",

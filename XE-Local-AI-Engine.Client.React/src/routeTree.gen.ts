@@ -28,6 +28,7 @@ import { Route as LayoutKnowledgeBaseRouteImport } from './routes/_layout/knowle
 import { Route as LayoutInvocationsRouteImport } from './routes/_layout/invocations'
 import { Route as LayoutImagesRouteImport } from './routes/_layout/images'
 import { Route as LayoutDiagnosticsRouteImport } from './routes/_layout/diagnostics'
+import { Route as LayoutDevelopmentRouteImport } from './routes/_layout/development'
 import { Route as LayoutDashboardRouteImport } from './routes/_layout/dashboard'
 import { Route as LayoutCloudSettingsRouteImport } from './routes/_layout/cloud-settings'
 import { Route as LayoutChatRouteImport } from './routes/_layout/chat'
@@ -128,6 +129,11 @@ const LayoutDiagnosticsRoute = LayoutDiagnosticsRouteImport.update({
   path: '/diagnostics',
   getParentRoute: () => LayoutRoute,
 } as any)
+const LayoutDevelopmentRoute = LayoutDevelopmentRouteImport.update({
+  id: '/development',
+  path: '/development',
+  getParentRoute: () => LayoutRoute,
+} as any)
 const LayoutDashboardRoute = LayoutDashboardRouteImport.update({
   id: '/dashboard',
   path: '/dashboard',
@@ -157,6 +163,7 @@ export interface FileRoutesByFullPath {
   '/chat': typeof LayoutChatRoute
   '/cloud-settings': typeof LayoutCloudSettingsRoute
   '/dashboard': typeof LayoutDashboardRoute
+  '/development': typeof LayoutDevelopmentRoute
   '/diagnostics': typeof LayoutDiagnosticsRoute
   '/images': typeof LayoutImagesRoute
   '/invocations': typeof LayoutInvocationsRoute
@@ -180,6 +187,7 @@ export interface FileRoutesByTo {
   '/chat': typeof LayoutChatRoute
   '/cloud-settings': typeof LayoutCloudSettingsRoute
   '/dashboard': typeof LayoutDashboardRoute
+  '/development': typeof LayoutDevelopmentRoute
   '/diagnostics': typeof LayoutDiagnosticsRoute
   '/images': typeof LayoutImagesRoute
   '/invocations': typeof LayoutInvocationsRoute
@@ -206,6 +214,7 @@ export interface FileRoutesById {
   '/_layout/chat': typeof LayoutChatRoute
   '/_layout/cloud-settings': typeof LayoutCloudSettingsRoute
   '/_layout/dashboard': typeof LayoutDashboardRoute
+  '/_layout/development': typeof LayoutDevelopmentRoute
   '/_layout/diagnostics': typeof LayoutDiagnosticsRoute
   '/_layout/images': typeof LayoutImagesRoute
   '/_layout/invocations': typeof LayoutInvocationsRoute
@@ -233,6 +242,7 @@ export interface FileRouteTypes {
     | '/chat'
     | '/cloud-settings'
     | '/dashboard'
+    | '/development'
     | '/diagnostics'
     | '/images'
     | '/invocations'
@@ -256,6 +266,7 @@ export interface FileRouteTypes {
     | '/chat'
     | '/cloud-settings'
     | '/dashboard'
+    | '/development'
     | '/diagnostics'
     | '/images'
     | '/invocations'
@@ -281,6 +292,7 @@ export interface FileRouteTypes {
     | '/_layout/chat'
     | '/_layout/cloud-settings'
     | '/_layout/dashboard'
+    | '/_layout/development'
     | '/_layout/diagnostics'
     | '/_layout/images'
     | '/_layout/invocations'
@@ -440,6 +452,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof LayoutDiagnosticsRouteImport
       parentRoute: typeof LayoutRoute
     }
+    '/_layout/development': {
+      id: '/_layout/development'
+      path: '/development'
+      fullPath: '/development'
+      preLoaderRoute: typeof LayoutDevelopmentRouteImport
+      parentRoute: typeof LayoutRoute
+    }
     '/_layout/dashboard': {
       id: '/_layout/dashboard'
       path: '/dashboard'
@@ -476,6 +495,7 @@ interface LayoutRouteChildren {
   LayoutChatRoute: typeof LayoutChatRoute
   LayoutCloudSettingsRoute: typeof LayoutCloudSettingsRoute
   LayoutDashboardRoute: typeof LayoutDashboardRoute
+  LayoutDevelopmentRoute: typeof LayoutDevelopmentRoute
   LayoutDiagnosticsRoute: typeof LayoutDiagnosticsRoute
   LayoutImagesRoute: typeof LayoutImagesRoute
   LayoutInvocationsRoute: typeof LayoutInvocationsRoute
@@ -499,6 +519,7 @@ const LayoutRouteChildren: LayoutRouteChildren = {
   LayoutChatRoute: LayoutChatRoute,
   LayoutCloudSettingsRoute: LayoutCloudSettingsRoute,
   LayoutDashboardRoute: LayoutDashboardRoute,
+  LayoutDevelopmentRoute: LayoutDevelopmentRoute,
   LayoutDiagnosticsRoute: LayoutDiagnosticsRoute,
   LayoutImagesRoute: LayoutImagesRoute,
   LayoutInvocationsRoute: LayoutInvocationsRoute,

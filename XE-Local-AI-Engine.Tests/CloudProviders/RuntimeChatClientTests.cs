@@ -18,7 +18,7 @@ public sealed class RuntimeChatClientTests
         using var localClient = new StubChatClient("local");
         using var cloudClient = new StubChatClient("cloud");
         var selector = new ToggleableCloudFactory(cloudClient);
-        using var runtime = new RuntimeChatClient(selector, () => localClient);
+        using var runtime = new RuntimeChatClient(selector, () => localClient, new UnexpectedCloudEgressAuthorizer());
 
         // Signed out → routes local.
         selector.CloudActive = false;
@@ -37,6 +37,8 @@ public sealed class RuntimeChatClientTests
         await runtime.GetResponseAsync([new ChatMessage(ChatRole.User, "hi")]);
         AssertEx.Equal(expected: 2, localClient.CallCount);
         AssertEx.Equal(expected: 1, cloudClient.CallCount);
+        AssertEx.Equal(expected: 0, selector.ProviderNameResolveCount,
+            "ordinary Chat must preserve the ordinary routing path before Development authorization without an authorization-only provider lookup");
     }
 
     [Test]
@@ -44,7 +46,7 @@ public sealed class RuntimeChatClientTests
     {
         using var localClient = new StubChatClient("local");
         var selector = new ThrowingCloudFactory();
-        using var runtime = new RuntimeChatClient(selector, () => localClient);
+        using var runtime = new RuntimeChatClient(selector, () => localClient, new UnexpectedCloudEgressAuthorizer());
 
         await AssertEx.ThrowsAsync<InvalidOperationException>(() => runtime.GetResponseAsync([new ChatMessage(ChatRole.User, "hi")]));
 
@@ -63,6 +65,7 @@ public sealed class RuntimeChatClientTests
         }
 
         public bool CloudActive { get; set; }
+        public int ProviderNameResolveCount { get; private set; }
 
         public bool TryCreateActiveCloudChatClient(string? requestedModelId, out IChatClient? client)
         {
@@ -77,6 +80,7 @@ public sealed class RuntimeChatClientTests
 
         public string? ResolveActiveCloudProviderName(string? requestedModelId = null)
         {
+            ProviderNameResolveCount++;
             return CloudActive ? "azure" : null;
         }
 
@@ -105,6 +109,14 @@ public sealed class RuntimeChatClientTests
 
         public void InvalidateSelectionCache()
         {
+        }
+    }
+
+    private sealed class UnexpectedCloudEgressAuthorizer : ICloudEgressAuthorizer
+    {
+        public void Authorize(CloudEgressAuthorizationRequest request)
+        {
+            throw new AssertionException("Ordinary Chat must not invoke the Development cloud-egress authorizer.");
         }
     }
 }

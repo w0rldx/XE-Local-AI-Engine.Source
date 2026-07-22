@@ -406,6 +406,437 @@ namespace XE_Local_AI_Engine.Client.Persistence.Migrations.NodeChatDb
                     b.ToTable("conversation_uploaded_files", (string)null);
                 });
 
+            modelBuilder.Entity("XE_Local_AI_Engine.Client.Persistence.Entities.DevelopmentArtifact", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("TEXT")
+                        .HasColumnName("id");
+
+                    b.Property<Guid?>("AttemptId")
+                        .HasColumnType("TEXT")
+                        .HasColumnName("attempt_id");
+
+                    b.Property<string>("BaseCommit")
+                        .HasMaxLength(128)
+                        .HasColumnType("TEXT")
+                        .HasColumnName("base_commit");
+
+                    b.Property<long>("ByteCount")
+                        .HasColumnType("INTEGER")
+                        .HasColumnName("byte_count");
+
+                    b.Property<string>("ChangedFilesManifestHash")
+                        .HasMaxLength(128)
+                        .HasColumnType("TEXT")
+                        .HasColumnName("changed_files_manifest_hash");
+
+                    b.Property<string>("CommandProfileVersion")
+                        .HasMaxLength(64)
+                        .HasColumnType("TEXT")
+                        .HasColumnName("command_profile_version");
+
+                    b.Property<string>("ContentHash")
+                        .IsRequired()
+                        .HasMaxLength(128)
+                        .HasColumnType("TEXT")
+                        .HasColumnName("content_hash");
+
+                    b.Property<byte[]>("ContentJson")
+                        .HasColumnType("BLOB")
+                        .HasColumnName("content_json");
+
+                    b.Property<long>("CreatedAtUtc")
+                        .HasColumnType("INTEGER")
+                        .HasColumnName("created_at_utc");
+
+                    b.Property<byte[]>("InputArtifactIdsJson")
+                        .HasColumnType("BLOB")
+                        .HasColumnName("input_artifact_ids_json");
+
+                    b.Property<bool>("IsValid")
+                        .HasColumnType("INTEGER")
+                        .HasColumnName("is_valid");
+
+                    b.Property<string>("Kind")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("TEXT")
+                        .HasColumnName("kind");
+
+                    b.Property<string>("ManagedReference")
+                        .HasMaxLength(255)
+                        .HasColumnType("TEXT")
+                        .HasColumnName("managed_reference");
+
+                    b.Property<Guid>("ProjectId")
+                        .HasColumnType("TEXT")
+                        .HasColumnName("project_id");
+
+                    b.Property<int>("SchemaVersion")
+                        .HasColumnType("INTEGER")
+                        .HasColumnName("schema_version");
+
+                    b.Property<string>("SubjectHash")
+                        .HasMaxLength(128)
+                        .HasColumnType("TEXT")
+                        .HasColumnName("subject_hash");
+
+                    b.Property<Guid>("TaskId")
+                        .HasColumnType("TEXT")
+                        .HasColumnName("task_id");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("AttemptId")
+                        .HasDatabaseName("ix_development_artifacts_attempt_id");
+
+                    b.HasIndex("ProjectId");
+
+                    b.HasIndex("TaskId", "Kind", "IsValid")
+                        .HasDatabaseName("ix_development_artifacts_task_kind_valid");
+
+                    b.ToTable("development_artifacts", (string)null);
+                });
+
+            modelBuilder.Entity("XE_Local_AI_Engine.Client.Persistence.Entities.DevelopmentAttempt", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("TEXT")
+                        .HasColumnName("id");
+
+                    b.Property<long?>("EndedAtUtc")
+                        .HasColumnType("INTEGER")
+                        .HasColumnName("ended_at_utc");
+
+                    b.Property<long?>("InputTokens")
+                        .HasColumnType("INTEGER")
+                        .HasColumnName("input_tokens");
+
+                    b.Property<string>("ModelId")
+                        .IsRequired()
+                        .HasMaxLength(255)
+                        .HasColumnType("TEXT")
+                        .HasColumnName("model_id");
+
+                    b.Property<long?>("OutputTokens")
+                        .HasColumnType("INTEGER")
+                        .HasColumnName("output_tokens");
+
+                    b.Property<Guid?>("PredecessorAttemptId")
+                        .HasColumnType("TEXT")
+                        .HasColumnName("predecessor_attempt_id");
+
+                    b.Property<string>("Provider")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("TEXT")
+                        .HasColumnName("provider");
+
+                    b.Property<string>("Role")
+                        .IsRequired()
+                        .HasMaxLength(32)
+                        .HasColumnType("TEXT")
+                        .HasColumnName("role");
+
+                    b.Property<Guid>("StartOperationId")
+                        .HasColumnType("TEXT")
+                        .HasColumnName("start_operation_id");
+
+                    b.Property<long?>("StartedAtUtc")
+                        .HasColumnType("INTEGER")
+                        .HasColumnName("started_at_utc");
+
+                    b.Property<string>("Status")
+                        .IsRequired()
+                        .HasMaxLength(32)
+                        .HasColumnType("TEXT")
+                        .HasColumnName("status");
+
+                    b.Property<Guid>("TaskId")
+                        .HasColumnType("TEXT")
+                        .HasColumnName("task_id");
+
+                    b.Property<string>("TerminalReason")
+                        .HasMaxLength(1024)
+                        .HasColumnType("TEXT")
+                        .HasColumnName("terminal_reason");
+
+                    b.Property<long>("Version")
+                        .IsConcurrencyToken()
+                        .HasColumnType("INTEGER")
+                        .HasColumnName("version");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("PredecessorAttemptId")
+                        .HasDatabaseName("ix_development_attempts_predecessor_attempt_id");
+
+                    b.HasIndex("StartOperationId")
+                        .IsUnique()
+                        .HasDatabaseName("ux_development_attempts_start_operation_id");
+
+                    b.HasIndex("TaskId")
+                        .IsUnique()
+                        .HasDatabaseName("ux_development_attempts_one_active_per_task")
+                        .HasFilter("status IN ('Pending', 'Running')");
+
+                    b.HasIndex("TaskId", "StartedAtUtc")
+                        .HasDatabaseName("ix_development_attempts_task_started_at");
+
+                    b.ToTable("development_attempts", (string)null);
+                });
+
+            modelBuilder.Entity("XE_Local_AI_Engine.Client.Persistence.Entities.DevelopmentEvent", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("TEXT")
+                        .HasColumnName("id");
+
+                    b.Property<Guid?>("AttemptId")
+                        .HasColumnType("TEXT")
+                        .HasColumnName("attempt_id");
+
+                    b.Property<byte[]>("DetailJson")
+                        .HasColumnType("BLOB")
+                        .HasColumnName("detail_json");
+
+                    b.Property<string>("EventType")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("TEXT")
+                        .HasColumnName("event_type");
+
+                    b.Property<long>("OccurredAtUtc")
+                        .HasColumnType("INTEGER")
+                        .HasColumnName("occurred_at_utc");
+
+                    b.Property<Guid?>("OperationId")
+                        .HasColumnType("TEXT")
+                        .HasColumnName("operation_id");
+
+                    b.Property<string>("OperationPhase")
+                        .HasMaxLength(64)
+                        .HasColumnType("TEXT")
+                        .HasColumnName("operation_phase");
+
+                    b.Property<string>("Outcome")
+                        .HasMaxLength(64)
+                        .HasColumnType("TEXT")
+                        .HasColumnName("outcome");
+
+                    b.Property<Guid>("ProjectId")
+                        .HasColumnType("TEXT")
+                        .HasColumnName("project_id");
+
+                    b.Property<byte[]>("ResultMetadataJson")
+                        .HasColumnType("BLOB")
+                        .HasColumnName("result_metadata_json");
+
+                    b.Property<long>("Sequence")
+                        .HasColumnType("INTEGER")
+                        .HasColumnName("sequence");
+
+                    b.Property<Guid?>("TaskId")
+                        .HasColumnType("TEXT")
+                        .HasColumnName("task_id");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("AttemptId")
+                        .HasDatabaseName("ix_development_events_attempt_id");
+
+                    b.HasIndex("TaskId")
+                        .HasDatabaseName("ix_development_events_task_id");
+
+                    b.HasIndex("ProjectId", "Sequence")
+                        .IsUnique()
+                        .HasDatabaseName("ux_development_events_project_sequence");
+
+                    b.HasIndex("ProjectId", "OperationId", "OperationPhase")
+                        .IsUnique()
+                        .HasDatabaseName("ux_development_events_operation_phase")
+                        .HasFilter("operation_id IS NOT NULL AND operation_phase IS NOT NULL");
+
+                    b.ToTable("development_events", (string)null);
+                });
+
+            modelBuilder.Entity("XE_Local_AI_Engine.Client.Persistence.Entities.DevelopmentProject", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("TEXT")
+                        .HasColumnName("id");
+
+                    b.Property<string>("BaseBranch")
+                        .IsRequired()
+                        .HasMaxLength(255)
+                        .HasColumnType("TEXT")
+                        .HasColumnName("base_branch");
+
+                    b.Property<string>("CoderModelId")
+                        .HasMaxLength(255)
+                        .HasColumnType("TEXT")
+                        .HasColumnName("coder_model_id");
+
+                    b.Property<int>("ConfigurationVersion")
+                        .HasColumnType("INTEGER")
+                        .HasColumnName("configuration_version");
+
+                    b.Property<long>("CreatedAtUtc")
+                        .HasColumnType("INTEGER")
+                        .HasColumnName("created_at_utc");
+
+                    b.Property<string>("EgressPolicy")
+                        .IsRequired()
+                        .HasMaxLength(32)
+                        .HasColumnType("TEXT")
+                        .HasColumnName("egress_policy");
+
+                    b.Property<int?>("MaxDurationSeconds")
+                        .HasColumnType("INTEGER")
+                        .HasColumnName("max_duration_seconds");
+
+                    b.Property<int?>("MaxTokens")
+                        .HasColumnType("INTEGER")
+                        .HasColumnName("max_tokens");
+
+                    b.Property<byte[]>("Objective")
+                        .IsRequired()
+                        .HasColumnType("BLOB")
+                        .HasColumnName("objective");
+
+                    b.Property<string>("RepositoryIdentityHash")
+                        .IsRequired()
+                        .HasMaxLength(128)
+                        .HasColumnType("TEXT")
+                        .HasColumnName("repository_identity_hash");
+
+                    b.Property<string>("ReviewerModelId")
+                        .HasMaxLength(255)
+                        .HasColumnType("TEXT")
+                        .HasColumnName("reviewer_model_id");
+
+                    b.Property<Guid?>("SelectedFolderId")
+                        .HasColumnType("TEXT")
+                        .HasColumnName("selected_folder_id");
+
+                    b.Property<string>("Status")
+                        .IsRequired()
+                        .HasMaxLength(32)
+                        .HasColumnType("TEXT")
+                        .HasColumnName("status");
+
+                    b.Property<bool>("TrustedRepositoryAcknowledged")
+                        .HasColumnType("INTEGER")
+                        .HasColumnName("trusted_repository_acknowledged");
+
+                    b.Property<long?>("TrustedRepositoryAcknowledgedAtUtc")
+                        .HasColumnType("INTEGER")
+                        .HasColumnName("trusted_repository_acknowledged_at_utc");
+
+                    b.Property<int?>("TrustedRepositoryPolicyVersion")
+                        .HasColumnType("INTEGER")
+                        .HasColumnName("trusted_repository_policy_version");
+
+                    b.Property<long>("UpdatedAtUtc")
+                        .HasColumnType("INTEGER")
+                        .HasColumnName("updated_at_utc");
+
+                    b.Property<long>("Version")
+                        .IsConcurrencyToken()
+                        .HasColumnType("INTEGER")
+                        .HasColumnName("version");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("RepositoryIdentityHash")
+                        .HasDatabaseName("ix_development_projects_repository_identity_hash");
+
+                    b.HasIndex("SelectedFolderId")
+                        .HasDatabaseName("ix_development_projects_selected_folder_id");
+
+                    b.ToTable("development_projects", (string)null);
+                });
+
+            modelBuilder.Entity("XE_Local_AI_Engine.Client.Persistence.Entities.DevelopmentTask", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("TEXT")
+                        .HasColumnName("id");
+
+                    b.Property<byte[]>("AcceptanceCriteriaJson")
+                        .IsRequired()
+                        .HasColumnType("BLOB")
+                        .HasColumnName("acceptance_criteria_json");
+
+                    b.Property<string>("ApprovedSubjectHash")
+                        .HasMaxLength(128)
+                        .HasColumnType("TEXT")
+                        .HasColumnName("approved_subject_hash");
+
+                    b.Property<long?>("BlockedAtUtc")
+                        .HasColumnType("INTEGER")
+                        .HasColumnName("blocked_at_utc");
+
+                    b.Property<string>("BlockedReason")
+                        .HasMaxLength(1024)
+                        .HasColumnType("TEXT")
+                        .HasColumnName("blocked_reason");
+
+                    b.Property<long>("CreatedAtUtc")
+                        .HasColumnType("INTEGER")
+                        .HasColumnName("created_at_utc");
+
+                    b.Property<int>("CurrentReviewRound")
+                        .HasColumnType("INTEGER")
+                        .HasColumnName("current_review_round");
+
+                    b.Property<int>("MaxReviewRounds")
+                        .HasColumnType("INTEGER")
+                        .HasColumnName("max_review_rounds");
+
+                    b.Property<Guid>("ProjectId")
+                        .HasColumnType("TEXT")
+                        .HasColumnName("project_id");
+
+                    b.Property<byte[]>("Requirements")
+                        .IsRequired()
+                        .HasColumnType("BLOB")
+                        .HasColumnName("requirements");
+
+                    b.Property<string>("Status")
+                        .IsRequired()
+                        .HasMaxLength(32)
+                        .HasColumnType("TEXT")
+                        .HasColumnName("status");
+
+                    b.Property<byte[]>("Title")
+                        .IsRequired()
+                        .HasColumnType("BLOB")
+                        .HasColumnName("title");
+
+                    b.Property<long>("UpdatedAtUtc")
+                        .HasColumnType("INTEGER")
+                        .HasColumnName("updated_at_utc");
+
+                    b.Property<long>("Version")
+                        .IsConcurrencyToken()
+                        .HasColumnType("INTEGER")
+                        .HasColumnName("version");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("ProjectId")
+                        .IsUnique()
+                        .HasDatabaseName("ux_development_tasks_project_id");
+
+                    b.ToTable("development_tasks", (string)null);
+                });
+
             modelBuilder.Entity("XE_Local_AI_Engine.Client.Persistence.Entities.GeneratedImage", b =>
                 {
                     b.Property<Guid>("ImageId")
@@ -1937,6 +2368,76 @@ namespace XE_Local_AI_Engine.Client.Persistence.Migrations.NodeChatDb
                     b.HasOne("XE_Local_AI_Engine.Client.Persistence.Entities.NodeConversation", null)
                         .WithMany()
                         .HasForeignKey("ConversationId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("XE_Local_AI_Engine.Client.Persistence.Entities.DevelopmentArtifact", b =>
+                {
+                    b.HasOne("XE_Local_AI_Engine.Client.Persistence.Entities.DevelopmentAttempt", null)
+                        .WithMany()
+                        .HasForeignKey("AttemptId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.HasOne("XE_Local_AI_Engine.Client.Persistence.Entities.DevelopmentProject", null)
+                        .WithMany()
+                        .HasForeignKey("ProjectId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.HasOne("XE_Local_AI_Engine.Client.Persistence.Entities.DevelopmentTask", null)
+                        .WithMany()
+                        .HasForeignKey("TaskId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("XE_Local_AI_Engine.Client.Persistence.Entities.DevelopmentAttempt", b =>
+                {
+                    b.HasOne("XE_Local_AI_Engine.Client.Persistence.Entities.DevelopmentAttempt", null)
+                        .WithMany()
+                        .HasForeignKey("PredecessorAttemptId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.HasOne("XE_Local_AI_Engine.Client.Persistence.Entities.DevelopmentTask", null)
+                        .WithMany()
+                        .HasForeignKey("TaskId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("XE_Local_AI_Engine.Client.Persistence.Entities.DevelopmentEvent", b =>
+                {
+                    b.HasOne("XE_Local_AI_Engine.Client.Persistence.Entities.DevelopmentAttempt", null)
+                        .WithMany()
+                        .HasForeignKey("AttemptId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.HasOne("XE_Local_AI_Engine.Client.Persistence.Entities.DevelopmentProject", null)
+                        .WithMany()
+                        .HasForeignKey("ProjectId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.HasOne("XE_Local_AI_Engine.Client.Persistence.Entities.DevelopmentTask", null)
+                        .WithMany()
+                        .HasForeignKey("TaskId")
+                        .OnDelete(DeleteBehavior.Restrict);
+                });
+
+            modelBuilder.Entity("XE_Local_AI_Engine.Client.Persistence.Entities.DevelopmentProject", b =>
+                {
+                    b.HasOne("XE_Local_AI_Engine.Client.Persistence.Entities.NodeSelectedFolder", null)
+                        .WithMany()
+                        .HasForeignKey("SelectedFolderId")
+                        .OnDelete(DeleteBehavior.Restrict);
+                });
+
+            modelBuilder.Entity("XE_Local_AI_Engine.Client.Persistence.Entities.DevelopmentTask", b =>
+                {
+                    b.HasOne("XE_Local_AI_Engine.Client.Persistence.Entities.DevelopmentProject", null)
+                        .WithMany()
+                        .HasForeignKey("ProjectId")
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
                 });

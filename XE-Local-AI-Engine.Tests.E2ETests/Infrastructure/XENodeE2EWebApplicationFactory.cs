@@ -21,6 +21,7 @@ using XE_Local_AI_Engine.Client.Configuration;
 using XE_Local_AI_Engine.Client.Persistence.Entities;
 using XE_Local_AI_Engine.Client.Services.Auth;
 using XE_Local_AI_Engine.Client.Services.DeadLetter;
+using XE_Local_AI_Engine.Client.Services.Development;
 using XE_Local_AI_Engine.Providers.Abstractions;
 using XE_Local_AI_Engine.Providers.Ollama.Implementation;
 using XE_Local_AI_Engine.Testing.FakeOllama;
@@ -48,6 +49,7 @@ public sealed class XENodeE2EWebApplicationFactory : WebApplicationFactory<Progr
     private static readonly SemaphoreSlim HostStartupLock = new(initialCount: 1, maxCount: 1);
 
     private readonly FakeOllamaServer _fakeOllamaServer;
+    private readonly string _fixtureDataRoot = Path.Combine(Path.GetTempPath(), "xe-local-ai-engine-e2e-" + Guid.NewGuid().ToString("N"));
 
     // Populated either from the explicit ctor (spike / direct use) or from the injected
     // ReactClient fixture in InitializeAsync (the TUnit [ClassDataSource] path used by the base class).
@@ -67,6 +69,7 @@ public sealed class XENodeE2EWebApplicationFactory : WebApplicationFactory<Progr
     /// <param name="fakeOllamaOptions">Optional FakeOllama configuration; defaults to the standard test models.</param>
     public XENodeE2EWebApplicationFactory(FakeOllamaOptions? fakeOllamaOptions)
     {
+        Directory.CreateDirectory(_fixtureDataRoot);
         _fakeOllamaServer = FakeOllamaServer.StartAsync(fakeOllamaOptions ?? new FakeOllamaOptions
         {
             Models = ["qwen3.5:0.8b", "qwen3-embedding:0.6b"]
@@ -112,6 +115,7 @@ public sealed class XENodeE2EWebApplicationFactory : WebApplicationFactory<Progr
     {
         await _fakeOllamaServer.DisposeAsync().ConfigureAwait(false);
         await base.DisposeAsync().ConfigureAwait(false);
+        TryDeleteDirectory(_fixtureDataRoot);
         GC.SuppressFinalize(this);
     }
 
@@ -211,14 +215,17 @@ public sealed class XENodeE2EWebApplicationFactory : WebApplicationFactory<Progr
         builder.UseWebRoot(_webRoot);
 
         builder.UseEnvironment("Testing");
+        builder.UseSetting("Development:Enabled", "true");
         builder.ConfigureAppConfiguration((_, configurationBuilder) =>
         {
             configurationBuilder.AddInMemoryCollection(new Dictionary<string, string?>
             {
-                ["ConnectionStrings:node-sqlite"] = $"Data Source={Path.Combine(Path.GetTempPath(), $"xe-local-ai-engine-e2e-{Guid.NewGuid():N}.sqlite")}",
+                ["ConnectionStrings:node-sqlite"] = $"Data Source={Path.Combine(_fixtureDataRoot, "node.sqlite")}",
                 ["XE_NODE_SQLITE_KEY"] = Convert.ToBase64String(Enumerable.Range(start: 1, count: 32).Select(static value => (byte)value).ToArray()),
                 ["XE_USE_LOCAL_MODEL_PROVIDER"] = "true",
-                ["Ollama:ChatModel"] = "qwen3.5:0.8b"
+                ["Ollama:ChatModel"] = "qwen3.5:0.8b",
+                ["NodeData:Directory"] = Path.Combine(_fixtureDataRoot, "node-data"),
+                ["Development:Enabled"] = "true"
             });
         });
 
@@ -236,6 +243,11 @@ public sealed class XENodeE2EWebApplicationFactory : WebApplicationFactory<Progr
 
             services.RemoveAll<IDeadLetterStore>();
             services.AddSingleton<IDeadLetterStore>(_ => Substitute.For<IDeadLetterStore>());
+
+            services.RemoveAll<IDevelopmentCoderModel>();
+            services.AddSingleton<IDevelopmentCoderModel, DevelopmentE2ECoderModel>();
+            services.RemoveAll<IDevelopmentReviewerModel>();
+            services.AddSingleton<IDevelopmentReviewerModel, DevelopmentE2EReviewerModel>();
 
             // The REAL WorkerEventDispatcher from the app's DI stands here (in-memory, no hosted
             // service) so it raises InvocationStateChanged and processes ReportInvocationCompletedAsync —
@@ -261,6 +273,12 @@ public sealed class XENodeE2EWebApplicationFactory : WebApplicationFactory<Progr
 #pragma warning restore CA2000
             services.AddSingleton<IOllamaApiClient>(_ => new OllamaApiClient(_fakeOllamaServer.BaseAddress));
             services.AddSingleton<ILocalModelProvider, OllamaLocalModelProvider>();
+            services.AddSingleton<ILocalModelProvider>(_ =>
+            {
+                var llamacpp = Substitute.For<ILocalModelProvider>();
+                llamacpp.ProviderName.Returns("llamacpp");
+                return llamacpp;
+            });
             // Register the base IChatClient pointing directly at FakeOllama, then re-apply the full
             // agent pipeline decoration (ToolInvocationObservabilityChatClient + UseFunctionInvocation)
             // so tool-call lifecycle events reach the SignalR stream (chat-tool-call-group in the UI).
@@ -283,6 +301,25 @@ public sealed class XENodeE2EWebApplicationFactory : WebApplicationFactory<Progr
         });
 
         base.ConfigureWebHost(builder);
+    }
+
+    private static void TryDeleteDirectory(string path)
+    {
+        try
+        {
+            if (Directory.Exists(path))
+            {
+                Directory.Delete(path, recursive: true);
+            }
+        }
+        catch (IOException)
+        {
+            // Best-effort E2E cleanup; temporary data is reclaimed by the operating system.
+        }
+        catch (UnauthorizedAccessException)
+        {
+            // Best-effort E2E cleanup; temporary data is reclaimed by the operating system.
+        }
     }
 
     /// <summary>
