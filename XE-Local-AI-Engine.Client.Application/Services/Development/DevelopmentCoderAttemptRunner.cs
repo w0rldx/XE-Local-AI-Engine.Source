@@ -27,12 +27,15 @@ internal sealed class DevelopmentCoderAttemptRunner : IDevelopmentCoderAttemptRu
     private static readonly JsonSerializerOptions JsonOptions = new(JsonSerializerDefaults.Web);
 
     private readonly IDevelopmentArtifactBlobStore _blobStore;
+    private readonly IDevelopmentCloudAttemptContextService _cloudContext;
     private readonly IDevelopmentCoderModel _coderModel;
+    private readonly IDevelopmentAttemptLiveBroker? _liveBroker;
     private readonly DevelopmentOptions _options;
     private readonly IDevelopmentPatchEvidenceService _patchEvidence;
     private readonly ISandboxRuntimeProvider _sandbox;
     private readonly IDevelopmentStore _store;
     private readonly IDevelopmentWorkspaceProvider _workspaceProvider;
+    private readonly TimeProvider _timeProvider;
 
     public DevelopmentCoderAttemptRunner(IDevelopmentStore store,
         IDevelopmentWorkspaceProvider workspaceProvider,
@@ -40,7 +43,10 @@ internal sealed class DevelopmentCoderAttemptRunner : IDevelopmentCoderAttemptRu
         IDevelopmentPatchEvidenceService patchEvidence,
         IDevelopmentArtifactBlobStore blobStore,
         IDevelopmentCoderModel coderModel,
-        IOptions<DevelopmentOptions> options)
+        IDevelopmentCloudAttemptContextService cloudContext,
+        IOptions<DevelopmentOptions> options,
+        IDevelopmentAttemptLiveBroker? liveBroker = null,
+        TimeProvider? timeProvider = null)
     {
         _store = store ?? throw new ArgumentNullException(nameof(store));
         _workspaceProvider = workspaceProvider ?? throw new ArgumentNullException(nameof(workspaceProvider));
@@ -48,8 +54,11 @@ internal sealed class DevelopmentCoderAttemptRunner : IDevelopmentCoderAttemptRu
         _patchEvidence = patchEvidence ?? throw new ArgumentNullException(nameof(patchEvidence));
         _blobStore = blobStore ?? throw new ArgumentNullException(nameof(blobStore));
         _coderModel = coderModel ?? throw new ArgumentNullException(nameof(coderModel));
+        _cloudContext = cloudContext ?? throw new ArgumentNullException(nameof(cloudContext));
         ArgumentNullException.ThrowIfNull(options);
         _options = options.Value;
+        _liveBroker = liveBroker;
+        _timeProvider = timeProvider ?? TimeProvider.System;
     }
 
     public async Task<DevelopmentCoderAttemptResult> RunAsync(Guid attemptId,
@@ -65,17 +74,37 @@ internal sealed class DevelopmentCoderAttemptRunner : IDevelopmentCoderAttemptRu
         try
         {
             var session = await _workspaceProvider.PrepareAsync(snapshot, repositoryRoot, timeout.Token).ConfigureAwait(false);
-            var tools = new DevelopmentWorkspaceTools(_sandbox, session, Options.Create(_options));
+            var maxOutputTokens = Math.Min(snapshot.MaxTokens ?? _options.MaxOutputTokens, _options.MaxOutputTokens);
+            var liveProgress = _liveBroker is null
+                ? null
+                : new DevelopmentAttemptLiveProgress(snapshot,
+                    _liveBroker,
+                    Options.Create(_options),
+                    _timeProvider,
+                    maxOutputTokens,
+                    _options.MaxToolCalls);
+            var tools = new DevelopmentWorkspaceTools(_sandbox, session, Options.Create(_options), liveProgress);
             var prompt = BuildPrompt(snapshot, session);
+            var cloudContext = await CreateCloudContextAsync(snapshot, tools, timeout.Token).ConfigureAwait(false);
             var model = await _coderModel.RunAsync(snapshot.ModelId,
                 prompt,
                 tools,
-                Math.Min(snapshot.MaxTokens ?? _options.MaxOutputTokens, _options.MaxOutputTokens),
+                maxOutputTokens,
                 _options.MaxToolCalls,
+                liveProgress,
+                cloudContext?.Route,
                 timeout.Token).ConfigureAwait(false);
             var evidence = await _patchEvidence.ExportAsync(session, timeout.Token).ConfigureAwait(false);
+            liveProgress?.PatchObserved(evidence.ChangedFiles.Select(static item => item.Path).ToArray(),
+                evidence.PatchBytes.LongLength,
+                evidence.SubjectHash);
             ValidateSubmission(model.Submission, evidence, tools.CommandEvidence);
-            await PersistEvidenceAsync(snapshot, model.Submission, evidence, tools.CommandEvidence, timeout.Token).ConfigureAwait(false);
+            await PersistEvidenceAsync(snapshot,
+                model.Submission,
+                evidence,
+                tools.CommandEvidence,
+                cloudContext?.ArtifactId,
+                timeout.Token).ConfigureAwait(false);
 
             _ = await _store.TerminalizeAttemptAsync(new DevelopmentTerminalizeAttemptCommand(snapshot.AttemptId,
                                                         Guid.NewGuid(),
@@ -118,19 +147,23 @@ internal sealed class DevelopmentCoderAttemptRunner : IDevelopmentCoderAttemptRu
         DevelopmentCoderSubmission submission,
         DevelopmentPatchEvidence evidence,
         IReadOnlyList<DevelopmentCommandEvidence> commands,
+        Guid? cloudContextArtifactId,
         CancellationToken cancellationToken)
     {
+        IReadOnlyList<Guid>? cloudContextInputs = cloudContextArtifactId is { } contextArtifactId
+            ? [contextArtifactId]
+            : null;
         var patchId = await PersistArtifactAsync(snapshot,
             DevelopmentArtifactKind.Patch,
             evidence.PatchBytes,
             evidence,
-            inputIds: null,
+            inputIds: cloudContextInputs,
             cancellationToken).ConfigureAwait(false);
         var manifestId = await PersistArtifactAsync(snapshot,
             DevelopmentArtifactKind.ChangedFilesManifest,
             evidence.ManifestBytes,
             evidence,
-            inputIds: null,
+            inputIds: cloudContextInputs,
             cancellationToken).ConfigureAwait(false);
         var commandId = await PersistArtifactAsync(snapshot,
             DevelopmentArtifactKind.CommandResult,
@@ -146,6 +179,7 @@ internal sealed class DevelopmentCoderAttemptRunner : IDevelopmentCoderAttemptRu
                 evidence.PatchHash,
                 evidence.ManifestHash,
                 evidence.SubjectHash,
+                evidence.ExpectedResultHash,
                 commandProfileVersion = DevelopmentWorkspaceTools.ProfileVersion,
                 changeIsolationOnly = true,
                 osIsolationClaimed = false
@@ -190,14 +224,37 @@ internal sealed class DevelopmentCoderAttemptRunner : IDevelopmentCoderAttemptRu
         return artifactId;
     }
 
+    private async Task<DevelopmentCloudAttemptContext?> CreateCloudContextAsync(
+        DevelopmentExecutionSnapshot snapshot,
+        IDevelopmentWorkspaceTools tools,
+        CancellationToken cancellationToken)
+    {
+        if (string.Equals(snapshot.Provider, "local", StringComparison.OrdinalIgnoreCase))
+        {
+            return null;
+        }
+
+        var files = await tools.ListFilesAsync(path: null, cancellationToken: cancellationToken).ConfigureAwait(false);
+        var currentDiff = await tools.GetDiffAsync(cancellationToken).ConfigureAwait(false);
+        return await _cloudContext.CreateAsync(snapshot,
+            [
+                new DevelopmentCloudContextExcerpt("workspace-files.txt", files),
+                new DevelopmentCloudContextExcerpt("workspace-diff.patch", currentDiff)
+            ],
+            cancellationToken: cancellationToken).ConfigureAwait(false);
+    }
+
     private static void EnsureRunnable(DevelopmentExecutionSnapshot snapshot)
     {
         if (snapshot.AttemptRole != DevelopmentAttemptRole.Coder
             || snapshot.AttemptStatus != DevelopmentAttemptStatus.Running
-            || snapshot.EgressPolicy != DevelopmentEgressPolicy.LocalOnly
-            || string.IsNullOrWhiteSpace(snapshot.ModelId))
+            || snapshot.EgressPolicy is not (DevelopmentEgressPolicy.LocalOnly or DevelopmentEgressPolicy.CloudScoped)
+            || string.IsNullOrWhiteSpace(snapshot.ModelId)
+            || string.IsNullOrWhiteSpace(snapshot.Provider)
+            || (snapshot.EgressPolicy == DevelopmentEgressPolicy.LocalOnly
+                && !string.Equals(snapshot.Provider, "local", StringComparison.OrdinalIgnoreCase)))
         {
-            throw new DevelopmentInvalidTransitionException("Only one running LocalOnly coder attempt with an explicit model id can enter Gate 3.");
+            throw new DevelopmentInvalidTransitionException("Only one running coder attempt with a valid egress policy and explicit model/provider can execute.");
         }
     }
 

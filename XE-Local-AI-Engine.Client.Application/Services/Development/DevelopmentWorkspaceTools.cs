@@ -39,21 +39,24 @@ internal interface IDevelopmentWorkspaceTools
 internal sealed class DevelopmentWorkspaceTools : IDevelopmentWorkspaceTools
 {
     private const string Solution = "XE-Local-AI-Engine.slnx";
-    private const string CommandProfileVersion = "g004-v1";
+    private const string CommandProfileVersion = "development-workspace-v1";
 
     private readonly List<DevelopmentCommandEvidence> _commandEvidence = [];
+    private readonly DevelopmentAttemptLiveProgress? _liveProgress;
     private readonly DevelopmentOptions _options;
     private readonly ISandboxRuntimeProvider _sandbox;
     private readonly DevelopmentWorkspaceSession _session;
 
     public DevelopmentWorkspaceTools(ISandboxRuntimeProvider sandbox,
         DevelopmentWorkspaceSession session,
-        IOptions<DevelopmentOptions> options)
+        IOptions<DevelopmentOptions> options,
+        DevelopmentAttemptLiveProgress? liveProgress = null)
     {
         _sandbox = sandbox ?? throw new ArgumentNullException(nameof(sandbox));
         _session = session ?? throw new ArgumentNullException(nameof(session));
         ArgumentNullException.ThrowIfNull(options);
         _options = options.Value;
+        _liveProgress = liveProgress;
         EnsureRuntimeDirectories();
     }
 
@@ -125,6 +128,7 @@ internal sealed class DevelopmentWorkspaceTools : IDevelopmentWorkspaceTools
             File.Delete(tempPath);
         }
 
+        _liveProgress?.FileChanged(confined.RelativePath, bytes.LongLength);
         return $"wrote {bytes.Length} byte(s) to {confined.RelativePath}";
     }
 
@@ -174,6 +178,10 @@ internal sealed class DevelopmentWorkspaceTools : IDevelopmentWorkspaceTools
             patch,
             cancellationToken).ConfigureAwait(false);
         EnsureCompleted(apply, "apply_patch");
+        foreach (var path in paths)
+        {
+            _liveProgress?.FileChanged(path, patchBytes);
+        }
         return $"applied patch for {paths.Count} path(s)";
     }
 
@@ -215,15 +223,18 @@ internal sealed class DevelopmentWorkspaceTools : IDevelopmentWorkspaceTools
             _ => throw new DevelopmentWorkspaceSecurityException("The requested command id is not in the code-owned Development command catalog.")
         };
 
+        _liveProgress?.CommandStarted(commandId);
         var result = await ExecuteAsync(commandId, command.Item1, command.Item2, "/", standardInput: null, cancellationToken).ConfigureAwait(false);
         await EnsureWorkspaceInvariantAsync(cancellationToken).ConfigureAwait(false);
-        _commandEvidence.Add(new DevelopmentCommandEvidence(commandId,
+        var evidence = new DevelopmentCommandEvidence(commandId,
             result.ExitCode,
             result.Completed,
             result.StandardOutputTruncated || result.StandardErrorTruncated,
             (long)result.Duration.TotalMilliseconds,
             result.StandardOutput,
-            result.StandardError));
+            result.StandardError);
+        _commandEvidence.Add(evidence);
+        _liveProgress?.CommandCompleted(evidence);
         return result;
     }
 

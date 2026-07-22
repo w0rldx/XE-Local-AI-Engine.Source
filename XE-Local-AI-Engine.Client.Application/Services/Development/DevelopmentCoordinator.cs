@@ -5,6 +5,7 @@ using XE_Local_AI_Engine.Client.Persistence.Stores;
 public sealed class DevelopmentCoordinator(IDevelopmentStore store, IDevelopmentHostApplyPort applyPort) : IDevelopmentCoordinator
 {
     private const string StartupInterruptedReason = "The node restarted while the Development attempt was running.";
+    private const string StartupValidationRecoveryReason = "The node restarted before deterministic Development validation completed.";
     private const string AmbiguousApplyReason = "The host apply state did not match the approved base or exact approved result.";
 
     private readonly IDevelopmentStore _store = store ?? throw new ArgumentNullException(nameof(store));
@@ -25,11 +26,30 @@ public sealed class DevelopmentCoordinator(IDevelopmentStore store, IDevelopment
     public Task<DevelopmentOperationResult> AttachArtifactAsync(DevelopmentAttachArtifactCommand command, CancellationToken cancellationToken = default)
         => _store.AttachArtifactAsync(command, cancellationToken);
 
-    public async Task<DevelopmentOperationResult> ApplyAsync(Guid operationId,
+    public Task<DevelopmentOperationResult> ApplyAsync(Guid operationId,
         DevelopmentApprovedApplySubject subject,
+        string repositoryRoot,
+        CancellationToken cancellationToken = default)
+        => ApplyCoreAsync(operationId, subject, repositoryRoot, revalidateBeforeHostMutation: null, cancellationToken);
+
+    public Task<DevelopmentOperationResult> ApplyRevalidatedAsync(Guid operationId,
+        DevelopmentApprovedApplySubject subject,
+        string repositoryRoot,
+        Func<CancellationToken, Task> revalidateBeforeHostMutation,
         CancellationToken cancellationToken = default)
     {
+        ArgumentNullException.ThrowIfNull(revalidateBeforeHostMutation);
+        return ApplyCoreAsync(operationId, subject, repositoryRoot, revalidateBeforeHostMutation, cancellationToken);
+    }
+
+    private async Task<DevelopmentOperationResult> ApplyCoreAsync(Guid operationId,
+        DevelopmentApprovedApplySubject subject,
+        string repositoryRoot,
+        Func<CancellationToken, Task>? revalidateBeforeHostMutation,
+        CancellationToken cancellationToken)
+    {
         ArgumentNullException.ThrowIfNull(subject);
+        ArgumentException.ThrowIfNullOrWhiteSpace(repositoryRoot);
         var completed = await _store.FindOperationAsync(subject.ProjectId,
                                          operationId,
                                          DevelopmentOperationPhases.ApplyCompleted,
@@ -51,11 +71,16 @@ public sealed class DevelopmentCoordinator(IDevelopmentStore store, IDevelopment
         }
 
         _ = await _store.RecordApplyStartedAsync(operationId, subject, cancellationToken).ConfigureAwait(false);
-        var hostState = await _applyPort.InspectAsync(subject, cancellationToken).ConfigureAwait(false);
+        var hostState = await _applyPort.InspectAsync(subject, repositoryRoot, cancellationToken).ConfigureAwait(false);
+        if (revalidateBeforeHostMutation is not null)
+        {
+            await revalidateBeforeHostMutation(cancellationToken).ConfigureAwait(false);
+        }
+
         switch (hostState)
         {
             case DevelopmentHostApplyState.UnappliedBaseUnchanged:
-                await _applyPort.ApplyAsync(subject, cancellationToken).ConfigureAwait(false);
+                await _applyPort.ApplyAsync(subject, repositoryRoot, cancellationToken).ConfigureAwait(false);
                 break;
             case DevelopmentHostApplyState.ExactApprovedResultPresent:
                 break;
@@ -68,7 +93,10 @@ public sealed class DevelopmentCoordinator(IDevelopmentStore store, IDevelopment
         return await _store.CompleteApplyAsync(operationId, subject, cancellationToken).ConfigureAwait(false);
     }
 
-    public Task<int> ReconcileStartupAsync(CancellationToken cancellationToken = default)
-        => _store.ReconcileRunningAttemptsAsync(StartupInterruptedReason, cancellationToken);
+    public async Task<int> ReconcileStartupAsync(CancellationToken cancellationToken = default)
+    {
+        var interrupted = await _store.ReconcileRunningAttemptsAsync(StartupInterruptedReason, cancellationToken).ConfigureAwait(false);
+        var validations = await _store.ReconcileIncompleteValidationsAsync(StartupValidationRecoveryReason, cancellationToken).ConfigureAwait(false);
+        return interrupted + validations;
+    }
 }
-

@@ -138,6 +138,14 @@ public sealed class DevelopmentStore(NodeChatDbContext dbContext, TimeProvider t
                 if (command.Role == DevelopmentAttemptRole.Coder && task.Status != DevelopmentTaskStatus.InProgress)
                 {
                     task.Status = DevelopmentTaskStatus.InProgress;
+                    task.ApprovedSubjectHash = null;
+                    await _dbContext.DevelopmentArtifacts
+                                    .Where(entity => entity.TaskId == task.Id
+                                                     && entity.IsValid
+                                                     && (entity.Kind == DevelopmentArtifactKind.ValidationReport
+                                                         || entity.Kind == DevelopmentArtifactKind.ReviewReport))
+                                    .ExecuteUpdateAsync(setters => setters.SetProperty(entity => entity.IsValid, false), cancellationToken)
+                                    .ConfigureAwait(false);
                 }
 
                 task.UpdatedAtUtc = now;
@@ -224,6 +232,17 @@ public sealed class DevelopmentStore(NodeChatDbContext dbContext, TimeProvider t
                 task.BlockedReason = command.TargetStatus == DevelopmentTaskStatus.Blocked ? command.Reason : null;
                 task.BlockedAtUtc = command.TargetStatus == DevelopmentTaskStatus.Blocked ? now : null;
                 task.ApprovedSubjectHash = command.ApprovedSubjectHash ?? task.ApprovedSubjectHash;
+                if (command.TargetStatus == DevelopmentTaskStatus.InProgress)
+                {
+                    task.ApprovedSubjectHash = null;
+                    await _dbContext.DevelopmentArtifacts
+                                    .Where(entity => entity.TaskId == task.Id
+                                                     && entity.IsValid
+                                                     && (entity.Kind == DevelopmentArtifactKind.ValidationReport
+                                                         || entity.Kind == DevelopmentArtifactKind.ReviewReport))
+                                    .ExecuteUpdateAsync(setters => setters.SetProperty(entity => entity.IsValid, false), cancellationToken)
+                                    .ConfigureAwait(false);
+                }
                 if (command.TargetStatus == DevelopmentTaskStatus.InReview)
                 {
                     if (task.CurrentReviewRound >= task.MaxReviewRounds)
@@ -250,20 +269,272 @@ public sealed class DevelopmentStore(NodeChatDbContext dbContext, TimeProvider t
             cancellationToken).ConfigureAwait(false);
     }
 
+    public async Task<DevelopmentOperationResult> StartValidationAsync(DevelopmentStartValidationCommand command, CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(command);
+        var projectId = await ProjectIdForTaskAsync(command.TaskId, cancellationToken).ConfigureAwait(false);
+
+        return await ExecuteOperationAsync(projectId,
+            command.OperationId,
+            DevelopmentOperationPhases.Completed,
+            async () =>
+            {
+                var task = await _dbContext.DevelopmentTasks.SingleAsync(entity => entity.Id == command.TaskId, cancellationToken).ConfigureAwait(false);
+                EnsureVersion(task.Version, command.ExpectedTaskVersion, "task");
+                if (task.Status != DevelopmentTaskStatus.InProgress)
+                {
+                    throw new DevelopmentInvalidTransitionException("Deterministic validation requires an in-progress Development task.");
+                }
+
+                if (await _dbContext.DevelopmentAttempts.AnyAsync(entity => entity.TaskId == task.Id
+                                                                        && (entity.Status == DevelopmentAttemptStatus.Pending
+                                                                            || entity.Status == DevelopmentAttemptStatus.Running),
+                        cancellationToken).ConfigureAwait(false))
+                {
+                    throw new DevelopmentInvalidTransitionException("Deterministic validation cannot overlap an active Development attempt.");
+                }
+
+                var latestAttempt = await _dbContext.DevelopmentAttempts
+                                                    .Where(entity => entity.TaskId == task.Id)
+                                                    .OrderByDescending(entity => entity.StartedAtUtc)
+                                                    .ThenByDescending(entity => entity.Id)
+                                                    .FirstOrDefaultAsync(cancellationToken)
+                                                    .ConfigureAwait(false);
+                if (latestAttempt is null
+                    || latestAttempt.Role != DevelopmentAttemptRole.Coder
+                    || latestAttempt.Status != DevelopmentAttemptStatus.Succeeded)
+                {
+                    throw new DevelopmentInvalidTransitionException("Deterministic validation requires the latest Development attempt to be a successful coder attempt.");
+                }
+
+                task.Status = DevelopmentTaskStatus.Validation;
+                task.UpdatedAtUtc = Now();
+                task.Version++;
+
+                return await AddEventAsync(projectId,
+                    task.Id,
+                    latestAttempt.Id,
+                    command.OperationId,
+                    DevelopmentOperationPhases.Completed,
+                    "ValidationStarted",
+                    "Started",
+                    task.Status.ToString(),
+                    task.Version,
+                    artifactId: null,
+                    detailJson: null,
+                    cancellationToken).ConfigureAwait(false);
+            },
+            cancellationToken).ConfigureAwait(false);
+    }
+
+    public async Task<DevelopmentOperationResult> InvalidateEvidenceAsync(DevelopmentInvalidateEvidenceCommand command,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(command);
+        EnsureNotBlank(command.SanitizedReason, "sanitizedReason");
+        var projectId = await ProjectIdForTaskAsync(command.TaskId, cancellationToken).ConfigureAwait(false);
+
+        return await ExecuteOperationAsync(projectId,
+            command.OperationId,
+            DevelopmentOperationPhases.Completed,
+            async () =>
+            {
+                var task = await _dbContext.DevelopmentTasks.SingleAsync(entity => entity.Id == command.TaskId, cancellationToken).ConfigureAwait(false);
+                EnsureVersion(task.Version, command.ExpectedTaskVersion, "task");
+                if (task.Status is not (DevelopmentTaskStatus.Validation
+                    or DevelopmentTaskStatus.InReview
+                    or DevelopmentTaskStatus.AwaitingApply))
+                {
+                    throw new DevelopmentInvalidTransitionException("Only validation, review, or approved evidence can be invalidated.");
+                }
+
+                task.Status = DevelopmentTaskStatus.InProgress;
+                task.UpdatedAtUtc = Now();
+                task.ApprovedSubjectHash = null;
+                task.BlockedReason = null;
+                task.BlockedAtUtc = null;
+                task.Version++;
+                await _dbContext.DevelopmentArtifacts
+                                .Where(entity => entity.TaskId == task.Id
+                                                 && entity.IsValid
+                                                 && (entity.Kind == DevelopmentArtifactKind.ValidationReport
+                                                     || entity.Kind == DevelopmentArtifactKind.ReviewReport))
+                                .ExecuteUpdateAsync(setters => setters.SetProperty(entity => entity.IsValid, false), cancellationToken)
+                                .ConfigureAwait(false);
+
+                return await AddEventAsync(projectId,
+                    task.Id,
+                    attemptId: null,
+                    command.OperationId,
+                    DevelopmentOperationPhases.Completed,
+                    "EvidenceInvalidated",
+                    "Invalidated",
+                    task.Status.ToString(),
+                    task.Version,
+                    artifactId: null,
+                    detailJson: Utf8(JsonSerializer.Serialize(new { reason = command.SanitizedReason })),
+                    cancellationToken).ConfigureAwait(false);
+            },
+            cancellationToken).ConfigureAwait(false);
+    }
+
+    public async Task<DevelopmentOperationResult> FinalizeValidationAsync(DevelopmentFinalizeValidationCommand command,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(command);
+        ValidateArtifactCommand(command.Artifact);
+        if (command.Artifact.Kind != DevelopmentArtifactKind.ValidationReport
+            || command.TargetStatus is not (DevelopmentTaskStatus.InReview or DevelopmentTaskStatus.InProgress))
+        {
+            throw new ArgumentException("Validation finalization requires a validation artifact and a review or rework target.", nameof(command));
+        }
+
+        return await ExecuteOperationAsync(command.Artifact.ProjectId,
+            command.OperationId,
+            DevelopmentOperationPhases.Completed,
+            async () =>
+            {
+                var task = await _dbContext.DevelopmentTasks.SingleOrDefaultAsync(entity => entity.Id == command.Artifact.TaskId
+                                                                                           && entity.ProjectId == command.Artifact.ProjectId,
+                                             cancellationToken)
+                                            .ConfigureAwait(false)
+                           ?? throw new KeyNotFoundException($"Development task '{command.Artifact.TaskId}' was not found.");
+                EnsureVersion(task.Version, command.ExpectedTaskVersion, "task");
+                if (task.Status != DevelopmentTaskStatus.Validation)
+                {
+                    throw new DevelopmentInvalidTransitionException("Only an active deterministic validation can be finalized.");
+                }
+
+                var attemptId = command.Artifact.AttemptId
+                                ?? throw new DevelopmentInvalidTransitionException("A validation artifact must identify its coder attempt.");
+                var attempt = await _dbContext.DevelopmentAttempts.SingleOrDefaultAsync(entity => entity.Id == attemptId && entity.TaskId == task.Id,
+                                          cancellationToken)
+                                      .ConfigureAwait(false)
+                              ?? throw new DevelopmentInvalidTransitionException("The validation artifact coder attempt was not found on the task.");
+                if (attempt.Role != DevelopmentAttemptRole.Coder || attempt.Status != DevelopmentAttemptStatus.Succeeded)
+                {
+                    throw new DevelopmentInvalidTransitionException("A validation artifact must originate from a successful coder attempt.");
+                }
+
+                var artifact = BuildArtifact(command.Artifact);
+                _dbContext.DevelopmentArtifacts.Add(artifact);
+                var now = Now();
+                task.Status = command.TargetStatus;
+                task.UpdatedAtUtc = now;
+                task.Version++;
+                task.ApprovedSubjectHash = null;
+                if (command.TargetStatus == DevelopmentTaskStatus.InReview)
+                {
+                    if (task.CurrentReviewRound >= task.MaxReviewRounds)
+                    {
+                        throw new DevelopmentInvalidTransitionException("The configured maximum review rounds has been reached.");
+                    }
+
+                    task.CurrentReviewRound++;
+                }
+                else
+                {
+                    artifact.IsValid = false;
+                    await _dbContext.DevelopmentArtifacts
+                                    .Where(entity => entity.TaskId == task.Id
+                                                     && entity.IsValid
+                                                     && (entity.Kind == DevelopmentArtifactKind.ValidationReport
+                                                         || entity.Kind == DevelopmentArtifactKind.ReviewReport))
+                                    .ExecuteUpdateAsync(setters => setters.SetProperty(entity => entity.IsValid, false), cancellationToken)
+                                    .ConfigureAwait(false);
+                }
+
+                return await AddEventAsync(command.Artifact.ProjectId,
+                    task.Id,
+                    attempt.Id,
+                    command.OperationId,
+                    DevelopmentOperationPhases.Completed,
+                    "ValidationFinalized",
+                    command.TargetStatus == DevelopmentTaskStatus.InReview ? "Passed" : "Failed",
+                    task.Status.ToString(),
+                    task.Version,
+                    artifact.Id,
+                    detailJson: command.SanitizedReason is null ? null : Utf8(JsonSerializer.Serialize(new { reason = command.SanitizedReason })),
+                    cancellationToken).ConfigureAwait(false);
+            },
+            cancellationToken).ConfigureAwait(false);
+    }
+
+    public async Task<DevelopmentOperationResult> FinalizeReviewAsync(DevelopmentFinalizeReviewCommand command,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(command);
+        ValidateArtifactCommand(command.Artifact);
+        if (command.Artifact.Kind != DevelopmentArtifactKind.ReviewReport
+            || command.TargetStatus is not (DevelopmentTaskStatus.AwaitingApply or DevelopmentTaskStatus.ChangesRequested))
+        {
+            throw new ArgumentException("Review finalization requires a review artifact and an apply or rework target.", nameof(command));
+        }
+
+        return await ExecuteOperationAsync(command.Artifact.ProjectId,
+            command.OperationId,
+            DevelopmentOperationPhases.Completed,
+            async () =>
+            {
+                var task = await _dbContext.DevelopmentTasks.SingleOrDefaultAsync(entity => entity.Id == command.Artifact.TaskId
+                                                                                           && entity.ProjectId == command.Artifact.ProjectId,
+                                             cancellationToken)
+                                            .ConfigureAwait(false)
+                           ?? throw new KeyNotFoundException($"Development task '{command.Artifact.TaskId}' was not found.");
+                EnsureVersion(task.Version, command.ExpectedTaskVersion, "task");
+                if (task.Status != DevelopmentTaskStatus.InReview)
+                {
+                    throw new DevelopmentInvalidTransitionException("Only an active independent review can be finalized.");
+                }
+
+                var attemptId = command.Artifact.AttemptId
+                                ?? throw new DevelopmentInvalidTransitionException("A review artifact must identify its reviewer attempt.");
+                var attempt = await _dbContext.DevelopmentAttempts.SingleOrDefaultAsync(entity => entity.Id == attemptId && entity.TaskId == task.Id,
+                                          cancellationToken)
+                                      .ConfigureAwait(false)
+                              ?? throw new DevelopmentInvalidTransitionException("The review artifact reviewer attempt was not found on the task.");
+                EnsureVersion(attempt.Version, command.ExpectedAttemptVersion, "attempt");
+                if (attempt.Role != DevelopmentAttemptRole.Reviewer || attempt.Status != DevelopmentAttemptStatus.Running)
+                {
+                    throw new DevelopmentInvalidTransitionException("A review artifact must originate from the running independent reviewer attempt.");
+                }
+
+                var artifact = BuildArtifact(command.Artifact);
+                _dbContext.DevelopmentArtifacts.Add(artifact);
+                var now = Now();
+                attempt.Status = DevelopmentAttemptStatus.Succeeded;
+                attempt.EndedAtUtc = now;
+                attempt.TerminalReason = null;
+                attempt.InputTokens = command.InputTokens;
+                attempt.OutputTokens = command.OutputTokens;
+                attempt.Version++;
+                task.Status = command.TargetStatus;
+                task.UpdatedAtUtc = now;
+                task.Version++;
+                task.ApprovedSubjectHash = command.TargetStatus == DevelopmentTaskStatus.AwaitingApply
+                    ? command.ApprovedSubjectHash
+                    : null;
+
+                return await AddEventAsync(command.Artifact.ProjectId,
+                    task.Id,
+                    attempt.Id,
+                    command.OperationId,
+                    DevelopmentOperationPhases.Completed,
+                    "ReviewFinalized",
+                    command.TargetStatus == DevelopmentTaskStatus.AwaitingApply ? "Approved" : "ChangesRequested",
+                    task.Status.ToString(),
+                    task.Version,
+                    artifact.Id,
+                    detailJson: command.SanitizedReason is null ? null : Utf8(JsonSerializer.Serialize(new { reason = command.SanitizedReason })),
+                    cancellationToken).ConfigureAwait(false);
+            },
+            cancellationToken).ConfigureAwait(false);
+    }
+
     public async Task<DevelopmentOperationResult> AttachArtifactAsync(DevelopmentAttachArtifactCommand command, CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(command);
-        EnsureNotBlank(command.ContentHash, "contentHash");
-        if (command.SchemaVersion <= 0 || command.ByteCount < 0 || (command.ContentJson is null) == (command.ManagedReference is null))
-        {
-            throw new ArgumentException("An artifact requires a positive schema version and exactly one content representation.", nameof(command));
-        }
-
-        if (command.ManagedReference is not null
-            && !string.Equals(command.ManagedReference, ManagedReference(command.ProjectId, command.ArtifactId), StringComparison.Ordinal))
-        {
-            throw new ArgumentException("A managed artifact reference must be the engine-generated opaque project/artifact key.", nameof(command));
-        }
+        ValidateArtifactCommand(command);
 
         return await ExecuteOperationAsync(command.ProjectId,
             command.OperationId,
@@ -279,26 +550,7 @@ public sealed class DevelopmentStore(NodeChatDbContext dbContext, TimeProvider t
                     throw new KeyNotFoundException($"Development attempt '{attemptId}' was not found on the task.");
                 }
 
-                var artifact = new DevelopmentArtifact
-                {
-                    Id = command.ArtifactId,
-                    ProjectId = command.ProjectId,
-                    TaskId = command.TaskId,
-                    AttemptId = command.AttemptId,
-                    Kind = command.Kind,
-                    SchemaVersion = command.SchemaVersion,
-                    ContentJson = command.ContentJson?.ToArray(),
-                    ManagedReference = command.ManagedReference,
-                    ContentHash = command.ContentHash,
-                    ByteCount = command.ByteCount,
-                    CreatedAtUtc = Now(),
-                    BaseCommit = command.BaseCommit,
-                    SubjectHash = command.SubjectHash,
-                    ChangedFilesManifestHash = command.ChangedFilesManifestHash,
-                    InputArtifactIdsJson = command.InputArtifactIdsJson?.ToArray(),
-                    CommandProfileVersion = command.CommandProfileVersion,
-                    IsValid = true
-                };
+                var artifact = BuildArtifact(command);
                 _dbContext.DevelopmentArtifacts.Add(artifact);
 
                 return await AddEventAsync(command.ProjectId,
@@ -371,6 +623,40 @@ public sealed class DevelopmentStore(NodeChatDbContext dbContext, TimeProvider t
         }
     }
 
+    public async Task<int> ReconcileIncompleteValidationsAsync(string sanitizedReason, CancellationToken cancellationToken = default)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(sanitizedReason);
+        var validations = await _dbContext.DevelopmentTasks.AsNoTracking()
+                                          .Where(entity => entity.Status == DevelopmentTaskStatus.Validation)
+                                          .Select(entity => new { entity.Id, entity.Version })
+                                          .ToListAsync(cancellationToken)
+                                          .ConfigureAwait(false);
+        var reconciled = 0;
+        foreach (var validation in validations)
+        {
+            try
+            {
+                _ = await InvalidateEvidenceAsync(new DevelopmentInvalidateEvidenceCommand(validation.Id,
+                                                        validation.Id,
+                                                        validation.Version,
+                                                        sanitizedReason),
+                                                    cancellationToken)
+                            .ConfigureAwait(false);
+                reconciled++;
+            }
+            catch (DevelopmentConcurrencyException)
+            {
+                // A live operation determined the authoritative task state while startup reconciliation was reading it.
+            }
+            catch (DevelopmentInvalidTransitionException)
+            {
+                // The task already left Validation; no recovery mutation remains.
+            }
+        }
+
+        return reconciled;
+    }
+
     public Task<DevelopmentOperationResult?> FindOperationAsync(Guid projectId, Guid operationId, string phase, CancellationToken cancellationToken = default)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(phase);
@@ -388,6 +674,14 @@ public sealed class DevelopmentStore(NodeChatDbContext dbContext, TimeProvider t
             async () =>
             {
                 var task = await LoadApplyTaskAsync(subject, cancellationToken).ConfigureAwait(false);
+                EnsureVersion(task.Version, subject.ExpectedTaskVersion, "task");
+                if (task.Status != DevelopmentTaskStatus.AwaitingApply
+                    || string.IsNullOrWhiteSpace(subject.SubjectHash)
+                    || !string.Equals(task.ApprovedSubjectHash, subject.SubjectHash, StringComparison.OrdinalIgnoreCase))
+                {
+                    throw new DevelopmentInvalidTransitionException("Only the exact independently approved subject can start host apply.");
+                }
+
                 var detail = Utf8(JsonSerializer.Serialize(subject));
                 return await AddEventAsync(subject.ProjectId,
                     subject.TaskId,
@@ -420,6 +714,10 @@ public sealed class DevelopmentStore(NodeChatDbContext dbContext, TimeProvider t
                 if (task.Status != DevelopmentTaskStatus.AwaitingApply)
                 {
                     throw new DevelopmentInvalidTransitionException("Only a task awaiting explicit apply can complete.");
+                }
+                if (!string.Equals(task.ApprovedSubjectHash, subject.SubjectHash, StringComparison.OrdinalIgnoreCase))
+                {
+                    throw new DevelopmentInvalidTransitionException("The completed apply subject no longer matches the independently approved subject.");
                 }
 
                 task.Status = DevelopmentTaskStatus.Completed;
@@ -536,6 +834,87 @@ public sealed class DevelopmentStore(NodeChatDbContext dbContext, TimeProvider t
             snapshot.Attempt.ModelId,
             snapshot.Attempt.Provider,
             snapshot.Attempt.Version);
+    }
+
+    public async Task<IReadOnlyList<DevelopmentProjectSnapshot>> ListProjectsAsync(CancellationToken cancellationToken = default)
+    {
+        var projects = await _dbContext.DevelopmentProjects.AsNoTracking()
+                                       .OrderByDescending(entity => entity.UpdatedAtUtc)
+                                       .ToListAsync(cancellationToken)
+                                       .ConfigureAwait(false);
+        return projects.Select(ProjectSnapshot).ToArray();
+    }
+
+    public async Task<DevelopmentProjectSnapshot> GetProjectAsync(Guid projectId, CancellationToken cancellationToken = default)
+    {
+        var project = await _dbContext.DevelopmentProjects.AsNoTracking()
+                                      .SingleOrDefaultAsync(entity => entity.Id == projectId, cancellationToken)
+                                      .ConfigureAwait(false)
+                      ?? throw new KeyNotFoundException($"Development project '{projectId}' was not found.");
+        return ProjectSnapshot(project);
+    }
+
+    public async Task<DevelopmentTaskSnapshot> GetTaskAsync(Guid taskId, CancellationToken cancellationToken = default)
+    {
+        var task = await _dbContext.DevelopmentTasks.AsNoTracking()
+                                   .SingleOrDefaultAsync(entity => entity.Id == taskId, cancellationToken)
+                                   .ConfigureAwait(false)
+                   ?? throw new KeyNotFoundException($"Development task '{taskId}' was not found.");
+        return TaskSnapshot(task);
+    }
+
+    public async Task<IReadOnlyList<DevelopmentTaskSnapshot>> ListTasksAsync(Guid projectId, CancellationToken cancellationToken = default)
+    {
+        var tasks = await _dbContext.DevelopmentTasks.AsNoTracking()
+                                    .Where(entity => entity.ProjectId == projectId)
+                                    .OrderBy(entity => entity.CreatedAtUtc)
+                                    .ThenBy(entity => entity.Id)
+                                    .ToListAsync(cancellationToken)
+                                    .ConfigureAwait(false);
+        return tasks.Select(TaskSnapshot).ToArray();
+    }
+
+    public async Task<IReadOnlyList<DevelopmentAttemptSnapshot>> ListAttemptsAsync(Guid taskId, CancellationToken cancellationToken = default)
+    {
+        return await _dbContext.DevelopmentAttempts.AsNoTracking()
+                               .Where(entity => entity.TaskId == taskId)
+                               .OrderBy(entity => entity.StartedAtUtc)
+                               .ThenBy(entity => entity.Id)
+                               .Select(entity => new DevelopmentAttemptSnapshot(entity.Id,
+                                   entity.TaskId,
+                                   entity.PredecessorAttemptId,
+                                   entity.Role,
+                                   entity.ModelId,
+                                   entity.Provider,
+                                   entity.Status,
+                                   entity.StartedAtUtc,
+                                   entity.EndedAtUtc,
+                                   entity.TerminalReason,
+                                   entity.InputTokens,
+                                   entity.OutputTokens,
+                                   entity.Version))
+                               .ToListAsync(cancellationToken)
+                               .ConfigureAwait(false);
+    }
+
+    public async Task<IReadOnlyList<DevelopmentArtifactSnapshot>> ListArtifactsAsync(Guid taskId, CancellationToken cancellationToken = default)
+    {
+        var artifacts = await _dbContext.DevelopmentArtifacts.AsNoTracking()
+                                        .Where(entity => entity.TaskId == taskId)
+                                        .OrderBy(entity => entity.CreatedAtUtc)
+                                        .ThenBy(entity => entity.Id)
+                                        .ToListAsync(cancellationToken)
+                                        .ConfigureAwait(false);
+        return artifacts.Select(ArtifactSnapshot).ToArray();
+    }
+
+    public async Task<DevelopmentArtifactSnapshot> GetArtifactAsync(Guid artifactId, CancellationToken cancellationToken = default)
+    {
+        var artifact = await _dbContext.DevelopmentArtifacts.AsNoTracking()
+                                       .SingleOrDefaultAsync(entity => entity.Id == artifactId, cancellationToken)
+                                       .ConfigureAwait(false)
+                       ?? throw new KeyNotFoundException($"Development artifact '{artifactId}' was not found.");
+        return ArtifactSnapshot(artifact);
     }
 
     private async Task<DevelopmentOperationResult> ExecuteOperationAsync(Guid projectId,
@@ -714,7 +1093,98 @@ public sealed class DevelopmentStore(NodeChatDbContext dbContext, TimeProvider t
         }
     }
 
+    private static void ValidateArtifactCommand(DevelopmentAttachArtifactCommand command)
+    {
+        ArgumentNullException.ThrowIfNull(command);
+        EnsureNotBlank(command.ContentHash, "contentHash");
+        if (command.SchemaVersion <= 0 || command.ByteCount < 0 || (command.ContentJson is null) == (command.ManagedReference is null))
+        {
+            throw new ArgumentException("An artifact requires a positive schema version and exactly one content representation.", nameof(command));
+        }
+
+        if (command.ManagedReference is not null
+            && !string.Equals(command.ManagedReference, ManagedReference(command.ProjectId, command.ArtifactId), StringComparison.Ordinal))
+        {
+            throw new ArgumentException("A managed artifact reference must be the engine-generated opaque project/artifact key.", nameof(command));
+        }
+    }
+
+    private DevelopmentArtifact BuildArtifact(DevelopmentAttachArtifactCommand command)
+        => new()
+        {
+            Id = command.ArtifactId,
+            ProjectId = command.ProjectId,
+            TaskId = command.TaskId,
+            AttemptId = command.AttemptId,
+            Kind = command.Kind,
+            SchemaVersion = command.SchemaVersion,
+            ContentJson = command.ContentJson?.ToArray(),
+            ManagedReference = command.ManagedReference,
+            ContentHash = command.ContentHash,
+            ByteCount = command.ByteCount,
+            CreatedAtUtc = Now(),
+            BaseCommit = command.BaseCommit,
+            SubjectHash = command.SubjectHash,
+            ChangedFilesManifestHash = command.ChangedFilesManifestHash,
+            InputArtifactIdsJson = command.InputArtifactIdsJson?.ToArray(),
+            CommandProfileVersion = command.CommandProfileVersion,
+            IsValid = true
+        };
+
     private static byte[] Utf8(string value) => Encoding.UTF8.GetBytes(value);
+
+    private static DevelopmentProjectSnapshot ProjectSnapshot(DevelopmentProject entity)
+        => new(entity.Id,
+            Encoding.UTF8.GetString(entity.Objective),
+            entity.RepositoryIdentityHash,
+            entity.BaseBranch,
+            entity.Status,
+            entity.EgressPolicy,
+            entity.CoderModelId,
+            entity.ReviewerModelId,
+            entity.MaxTokens,
+            entity.MaxDurationSeconds,
+            entity.ConfigurationVersion,
+            entity.TrustedRepositoryAcknowledged,
+            entity.TrustedRepositoryPolicyVersion,
+            entity.TrustedRepositoryAcknowledgedAtUtc,
+            entity.CreatedAtUtc,
+            entity.UpdatedAtUtc,
+            entity.Version);
+
+    private static DevelopmentTaskSnapshot TaskSnapshot(DevelopmentTask entity)
+        => new(entity.Id,
+            entity.ProjectId,
+            Encoding.UTF8.GetString(entity.Title),
+            Encoding.UTF8.GetString(entity.Requirements),
+            Encoding.UTF8.GetString(entity.AcceptanceCriteriaJson),
+            entity.Status,
+            entity.CurrentReviewRound,
+            entity.MaxReviewRounds,
+            entity.BlockedReason,
+            entity.BlockedAtUtc,
+            entity.ApprovedSubjectHash,
+            entity.CreatedAtUtc,
+            entity.UpdatedAtUtc,
+            entity.Version);
+
+    private static DevelopmentArtifactSnapshot ArtifactSnapshot(DevelopmentArtifact entity)
+        => new(entity.Id,
+            entity.ProjectId,
+            entity.TaskId,
+            entity.AttemptId,
+            entity.Kind,
+            entity.SchemaVersion,
+            entity.ManagedReference,
+            entity.ContentHash,
+            entity.ByteCount,
+            entity.CreatedAtUtc,
+            entity.BaseCommit,
+            entity.SubjectHash,
+            entity.ChangedFilesManifestHash,
+            entity.InputArtifactIdsJson,
+            entity.CommandProfileVersion,
+            entity.IsValid);
 
     private static string ManagedReference(Guid projectId, Guid artifactId)
         => string.Concat(projectId.ToString("N"), "/", artifactId.ToString("N"));

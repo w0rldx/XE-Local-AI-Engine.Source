@@ -16,6 +16,7 @@ internal sealed record DevelopmentPatchEvidence(
     string PatchHash,
     string ManifestHash,
     string SubjectHash,
+    string ExpectedResultHash,
     byte[] PatchBytes,
     byte[] ManifestBytes,
     IReadOnlyList<DevelopmentChangedFile> ChangedFiles);
@@ -56,6 +57,10 @@ internal sealed class DevelopmentPatchEvidenceService : IDevelopmentPatchEvidenc
         var status = await RunGitExactAsync(session,
             ["diff", "--cached", "--name-status", "-z", "HEAD", "--", "."],
             maxOutputBytes: _options.MaxPatchBytes,
+            cancellationToken).ConfigureAwait(false);
+        var resultTree = await RunGitExactAsync(session,
+            ["write-tree"],
+            maxOutputBytes: 4096,
             cancellationToken).ConfigureAwait(false);
 
         var patchBytes = patch.StandardOutput;
@@ -98,6 +103,7 @@ internal sealed class DevelopmentPatchEvidenceService : IDevelopmentPatchEvidenc
             patchHash,
             manifestHash,
             subjectHash,
+            Encoding.UTF8.GetString(resultTree.StandardOutput).Trim(),
             patchBytes,
             manifestBytes,
             changedFiles);
