@@ -75,5 +75,6 @@ public interface ILlamaCppSourceBuildService
     Task<LlamaCppSourceBuildStartOutcome> StartAsync(LlamaCppSourceBuildRequest request, CancellationToken ct);
     LlamaCppSourceBuildStatus GetStatus();
     bool Cancel();
+    bool CancelLegacyPinnedCuda();
     Task RecoverAsync(CancellationToken ct);
 }

@@ -32,7 +32,7 @@ internal sealed class LegacyCudaBuildServiceAdapter(ILlamaCppSourceBuildService 
 
     public bool Cancel()
     {
-        return sourceBuildService.GetStatus().CurrentBuild.IsLegacyPinnedCuda() && sourceBuildService.Cancel();
+        return sourceBuildService.CancelLegacyPinnedCuda();
     }
 
     public void RecoverStaleWorkDirectory()

@@ -1,6 +1,7 @@
 namespace XE_Local_AI_Engine.Providers.LlamaServer.Implementation;
 
 using System.Diagnostics;
+using System.Diagnostics.CodeAnalysis;
 using System.Formats.Tar;
 using System.IO.Compression;
 using System.Runtime.InteropServices;
@@ -25,6 +26,8 @@ using XE_Local_AI_Engine.Providers.LlamaServer.Contracts;
 ///         a sanitized <see cref="LlamaRuntimeException" /> (no internal paths/URLs in the message).
 ///     </para>
 /// </remarks>
+[SuppressMessage("Design", "CA1001:Types that own disposable fields should be disposable",
+    Justification = "The semaphore is a process-lifetime singleton coordination primitive and is never disposed while provider operations may still be active.")]
 public sealed partial class LlamaCppBinaryManager : ILlamaCppBinaryManager
 {
     private static readonly TimeSpan SmokeTestTimeout = TimeSpan.FromSeconds(15);
@@ -48,6 +51,7 @@ public sealed partial class LlamaCppBinaryManager : ILlamaCppBinaryManager
     private readonly ICudaManagedBuildSignal? _managedCudaSignal;
     private readonly OSPlatform _os;
     private readonly LlamaServerRuntimeOverrideOptions? _overrideOptions;
+    private readonly SemaphoreSlim _sourceMutationGate = new(initialCount: 1, maxCount: 1);
 
     /// <summary>
     ///     Creates a binary manager that downloads through <paramref name="httpClient" /> and caches under

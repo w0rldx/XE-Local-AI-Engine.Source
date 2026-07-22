@@ -40,6 +40,24 @@ public sealed class SupervisorRaceTests
     }
 
     [Test]
+    public async Task RuntimeMutationLease_CancelledWaitAndDoubleDispose_DoNotCorruptOrderingGate()
+    {
+        await using var supervisor = SupervisorFactory.Create();
+        var lease = await supervisor.TryAcquireRuntimeMutationLeaseAsync(CancellationToken.None);
+        AssertEx.NotNull(lease);
+        using var cancelled = new CancellationTokenSource();
+        await cancelled.CancelAsync();
+
+        await AssertEx.ThrowsAsync<OperationCanceledException>(() =>
+            supervisor.EnsureRunningAsync("cancelled", ModelRole.Chat, cancelled.Token));
+
+        await lease!.DisposeAsync();
+        await lease.DisposeAsync();
+        var endpoint = await supervisor.EnsureRunningAsync("healthy", ModelRole.Chat, CancellationToken.None);
+        AssertEx.NotNull(endpoint);
+    }
+
+    [Test]
     public async Task EnsureRunning_ConcurrentSameKey_SpawnsExactlyOnce()
     {
         var launcher = new FakeProcessLauncher();

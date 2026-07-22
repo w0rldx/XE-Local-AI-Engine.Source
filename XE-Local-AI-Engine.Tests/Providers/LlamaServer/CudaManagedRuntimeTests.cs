@@ -235,6 +235,10 @@ public sealed class CudaManagedRuntimeTests
         var readLegacy = await store.ReadAsync(CancellationToken.None);
         AssertEx.NotNull(readLegacy);
         AssertEx.Null(readLegacy!.SourceBuildPath);
+        AssertEx.Null(readLegacy.SourceRepository);
+        AssertEx.Null(readLegacy.SourceCommit);
+        AssertEx.Null(readLegacy.SourceRevisionMode);
+        AssertEx.Null(readLegacy.SourceRequestedCommit);
     }
 
     private static InstalledRuntimeState SourceBuildState(string binDir, string sha)

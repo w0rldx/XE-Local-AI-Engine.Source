@@ -1020,49 +1020,66 @@ public sealed class LlamaServerProcessSupervisor : ILlamaServerProcessSupervisor
         ArgumentNullException.ThrowIfNull(body);
         ObjectDisposedException.ThrowIf(Volatile.Read(ref _disposed) != 0, this);
 
-        var key = new ProcessKey(modelName, role);
-
-        // Take the SAME single-flight gate the normal ensure path uses, so a concurrent user EnsureRunningAsync for this
-        // key queues behind the exclusive profiling spawn instead of racing it.
-        var gate = _ensureGates.GetOrAdd(key, static _ => new SemaphoreSlim(initialCount: 1, maxCount: 1));
-        await gate.WaitAsync(ct).ConfigureAwait(false);
+        await _runtimeMutationGate.WaitAsync(ct).ConfigureAwait(false);
+        var runtimeGateHeld = true;
         try
         {
-            // Explicitly evict any warm process for this key — admission only auto-evicts an IDLE LRU victim, so a
-            // freshly-used warm process would otherwise survive and the profiling spawn would not be exclusive.
-            await EvictAsync(modelName, role, ct).ConfigureAwait(false);
+            var key = new ProcessKey(modelName, role);
 
-            // Thread-safe per-line sink backing the StartupCapture callback (both server pipes Enqueue concurrently).
-            var startupOutput = new ConcurrentQueue<string>();
-
-            // Spawn exactly one process with the operator-supplied args verbatim (bypass BOTH the profile resolver and
-            // the launch policy — the supplied args ARE the experiment being measured).
-            var running = await SpawnCoreAsync(key,
-                    (_, _) => Task.FromResult(launchArgs),
-                    startupOutput.Enqueue,
-                    ensureMetrics: enableMetrics,
-                    applyLaunchPolicy: false,
-                    ct)
-                .ConfigureAwait(false);
-
-            // Pin against idle eviction for the whole benchmark — the process is never marked-used during the body, so
-            // without the pin the reaper would treat it as idle past the TTL and tear it down mid-measurement.
-            running.Pin();
+            // Take the SAME single-flight gate the normal ensure path uses, so a concurrent user EnsureRunningAsync for this
+            // key queues behind the exclusive profiling spawn instead of racing it.
+            var gate = _ensureGates.GetOrAdd(key, static _ => new SemaphoreSlim(initialCount: 1, maxCount: 1));
+            await gate.WaitAsync(ct).ConfigureAwait(false);
             try
             {
-                var context = new LlamaServerProfilingContext(running.Endpoint, startupOutput.ToArray());
-                return await body(context, ct).ConfigureAwait(false);
+                // Explicitly evict any warm process for this key — admission only auto-evicts an IDLE LRU victim, so a
+                // freshly-used warm process would otherwise survive and the profiling spawn would not be exclusive.
+                await EvictAsync(modelName, role, ct).ConfigureAwait(false);
+
+                // Thread-safe per-line sink backing the StartupCapture callback (both server pipes Enqueue concurrently).
+                var startupOutput = new ConcurrentQueue<string>();
+
+                // Spawn exactly one process with the operator-supplied args verbatim (bypass BOTH the profile resolver and
+                // the launch policy — the supplied args ARE the experiment being measured).
+                var running = await SpawnCoreAsync(key,
+                        (_, _) => Task.FromResult(launchArgs),
+                        startupOutput.Enqueue,
+                        ensureMetrics: enableMetrics,
+                        applyLaunchPolicy: false,
+                        ct)
+                    .ConfigureAwait(false);
+
+                // The profiling process is now registered in _processes, so a mutation-lease acquisition observes it and
+                // fails atomically. Release the ordering gate before the body so unrelated normal ensures remain possible.
+                _runtimeMutationGate.Release();
+                runtimeGateHeld = false;
+
+                // Pin against idle eviction for the whole benchmark — the process is never marked-used during the body, so
+                // without the pin the reaper would treat it as idle past the TTL and tear it down mid-measurement.
+                running.Pin();
+                try
+                {
+                    var context = new LlamaServerProfilingContext(running.Endpoint, startupOutput.ToArray());
+                    return await body(context, ct).ConfigureAwait(false);
+                }
+                finally
+                {
+                    // Always unpin + evict the transient profiling process, even on body throw or cancellation.
+                    running.Unpin();
+                    await RemoveProcessAsync(key, running).ConfigureAwait(false);
+                }
             }
             finally
             {
-                // Always unpin + evict the transient profiling process, even on body throw or cancellation.
-                running.Unpin();
-                await RemoveProcessAsync(key, running).ConfigureAwait(false);
+                gate.Release();
             }
         }
         finally
         {
-            gate.Release();
+            if (runtimeGateHeld)
+            {
+                _runtimeMutationGate.Release();
+            }
         }
     }
 

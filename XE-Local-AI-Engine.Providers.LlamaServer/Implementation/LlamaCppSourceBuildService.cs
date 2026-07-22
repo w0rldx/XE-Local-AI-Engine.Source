@@ -2,6 +2,8 @@ namespace XE_Local_AI_Engine.Providers.LlamaServer.Implementation;
 
 using System.Diagnostics;
 using System.Runtime.Versioning;
+using System.Security.Cryptography;
+using System.Text.Json;
 using System.Text.RegularExpressions;
 using Microsoft.Extensions.Logging;
 using XE_Local_AI_Engine.Providers.LlamaServer.Contracts;
@@ -17,6 +19,7 @@ using XE_Local_AI_Engine.Providers.LlamaServer.Contracts;
 public sealed partial class LlamaCppSourceBuildService : ILlamaCppSourceBuildService, IDisposable
 {
     private const string ManagedServerFileName = "llama-server";
+    private const string ManifestFileName = ".source-build-manifest.json";
 
     // Conservative fallback compute-architecture set when nvidia-smi's compute_cap can't be read/validated. [secMED-1]
     private const string DefaultCudaArchitectures = "75;86;89";
@@ -193,42 +196,42 @@ public sealed partial class LlamaCppSourceBuildService : ILlamaCppSourceBuildSer
     /// <inheritdoc />
     public bool Cancel()
     {
-        CancellationTokenSource? cts;
+        return CancelUnderLock(static _ => true);
+    }
+
+    /// <inheritdoc />
+    public bool CancelLegacyPinnedCuda()
+    {
+        return CancelUnderLock(static descriptor => descriptor.IsLegacyPinnedCuda());
+    }
+
+    private bool CancelUnderLock(Func<LlamaCppSourceBuildDescriptor?, bool> predicate)
+    {
         lock (_stateLock)
         {
-            if (!_isRunning || _buildCts is null)
+            if (!_isRunning || _buildCts is null || !predicate(_currentBuild))
             {
                 return false;
             }
 
-            cts = _buildCts;
+            try
+            {
+                _buildCts.Cancel();
+                return true;
+            }
+            catch (ObjectDisposedException)
+            {
+                return false;
+            }
         }
-
-        try
-        {
-            cts.Cancel();
-        }
-        catch (ObjectDisposedException)
-        {
-            return false;
-        }
-
-        return true;
     }
 
     /// <inheritdoc />
     public async Task RecoverAsync(CancellationToken ct)
     {
-        try
-        {
-            TryDeleteDirectory(WorkDirectory);
-            TryDeleteDirectory(Path.Combine(SourceBuildRoot, ".staging"));
-            await ReconcileActiveAndBackupAsync(ct).ConfigureAwait(false);
-        }
-        catch (Exception exception)
-        {
-            _logger.LogWarning(exception, "Failed to clean a stale CUDA build work directory at startup.");
-        }
+        DeleteDirectoryRequired(WorkDirectory);
+        DeleteDirectoryRequired(Path.Combine(SourceBuildRoot, ".staging"));
+        await ReconcileActiveAndBackupAsync(ct).ConfigureAwait(false);
     }
 
     [SupportedOSPlatform("linux")]
@@ -344,6 +347,8 @@ public sealed partial class LlamaCppSourceBuildService : ILlamaCppSourceBuildSer
             Directory.Move(buildDir, stagingBuildDir);
             ValidateTreeLinks(stagingTagDir);
             HardenTree(sourceCudaRoot, stagingTagDir);
+            await WriteManifestAsync(stagingTagDir, descriptor, tag, ct).ConfigureAwait(false);
+            HardenTree(sourceCudaRoot, stagingTagDir);
 
             // Swap into place last: park any previous runtime in the backup, move the staged tree in, then validate + adopt
             // the FINAL binary. On any failure, roll the previous runtime back so the working runtime is never lost.
@@ -415,23 +420,41 @@ public sealed partial class LlamaCppSourceBuildService : ILlamaCppSourceBuildSer
         string workDir,
         CancellationToken ct)
     {
+        var commands = BuildCloneCommands(descriptor, cloneDir);
         if (descriptor.RevisionMode == LlamaCppSourceRevisionMode.ExplicitCommit)
         {
             Directory.CreateDirectory(cloneDir);
-            if (await RunStreamingStepAsync("git", ["-C", cloneDir, "init"], environment, workDir, ShortCommandTimeout, ct).ConfigureAwait(false) != 0
-                || await RunStreamingStepAsync("git", ["-C", cloneDir, "remote", "add", "origin", descriptor.Repository], environment, workDir, ShortCommandTimeout, ct).ConfigureAwait(false) != 0
-                || await RunStreamingStepAsync("git", ["-C", cloneDir, "fetch", "--depth", "1", "--no-tags", "origin", descriptor.RequestedCommit!], environment, workDir, CloneTimeout, ct).ConfigureAwait(false) != 0)
+            for (var index = 0; index < commands.Count; index++)
             {
-                return -1;
+                var timeout = index == 2 ? CloneTimeout : ShortCommandTimeout;
+                var exit = await RunStreamingStepAsync("git", commands[index], environment, workDir, timeout, ct).ConfigureAwait(false);
+                if (exit != 0)
+                {
+                    return exit;
+                }
             }
-
-            return await RunStreamingStepAsync("git", ["-C", cloneDir, "checkout", "--detach", descriptor.RequestedCommit!], environment, workDir, ShortCommandTimeout, ct).ConfigureAwait(false);
+            return 0;
         }
 
-        IReadOnlyList<string> args = descriptor.RevisionMode == LlamaCppSourceRevisionMode.EnginePinned
-            ? ["clone", "--depth", "1", "--no-recurse-submodules", "--branch", LlamaCppReleasePins.PinnedTag, descriptor.Repository, cloneDir]
-            : ["clone", "--depth", "1", "--no-recurse-submodules", descriptor.Repository, cloneDir];
-        return await RunStreamingStepAsync("git", args, environment, workDir, CloneTimeout, ct).ConfigureAwait(false);
+        return await RunStreamingStepAsync("git", commands[0], environment, workDir, CloneTimeout, ct).ConfigureAwait(false);
+    }
+
+    internal static IReadOnlyList<IReadOnlyList<string>> BuildCloneCommands(LlamaCppSourceBuildDescriptor descriptor, string cloneDir)
+    {
+        if (descriptor.RevisionMode == LlamaCppSourceRevisionMode.ExplicitCommit)
+        {
+            return
+            [
+                ["-C", cloneDir, "init"],
+                ["-C", cloneDir, "remote", "add", "origin", descriptor.Repository],
+                ["-C", cloneDir, "fetch", "--depth", "1", "--no-tags", "origin", descriptor.RequestedCommit!],
+                ["-C", cloneDir, "checkout", "--detach", descriptor.RequestedCommit!]
+            ];
+        }
+
+        return descriptor.RevisionMode == LlamaCppSourceRevisionMode.EnginePinned
+            ? [["clone", "--depth", "1", "--no-recurse-submodules", "--branch", LlamaCppReleasePins.PinnedTag, descriptor.Repository, cloneDir]]
+            : [["clone", "--depth", "1", "--no-recurse-submodules", descriptor.Repository, cloneDir]];
     }
 
     internal static IReadOnlyList<string> BuildConfigureArguments(string buildDir, string cloneDir, GpuVariant variant, string? architectures)
@@ -457,6 +480,20 @@ public sealed partial class LlamaCppSourceBuildService : ILlamaCppSourceBuildSer
         var backup = Path.Combine(SourceBuildRoot, ".backup");
         var installed = await _installedRuntimeStore.ReadAsync(ct).ConfigureAwait(false);
         var sourceRecord = installed?.SourceBuildPath is { Length: > 0 };
+
+        if (!Directory.Exists(active) && !Directory.Exists(backup) && IsPreProvenanceLegacyRecord(installed))
+        {
+            if (await ValidateLegacyRecordAsync(installed!, ct).ConfigureAwait(false))
+            {
+                _activeSignal.SetActive(GpuVariant.Cuda);
+                return;
+            }
+
+            await _installedRuntimeStore.DeleteAsync(ct).ConfigureAwait(false);
+            _activeSignal.Clear();
+            return;
+        }
+
         var activeMatches = sourceRecord && await TreeMatchesRecordAsync(active, installed!, ct).ConfigureAwait(false);
         var backupMatches = sourceRecord && await TreeMatchesRecordAsync(backup, installed!, ct).ConfigureAwait(false);
 
@@ -464,18 +501,20 @@ public sealed partial class LlamaCppSourceBuildService : ILlamaCppSourceBuildSer
         {
             if (activeMatches)
             {
-                TryDeleteDirectory(backup);
+                DeleteDirectoryRequired(backup);
             }
             else if (backupMatches)
             {
-                TryDeleteDirectory(active);
+                DeleteDirectoryRequired(active);
+                _activeSignal.Clear();
                 Directory.Move(backup, active);
                 await WriteReconciledStateAsync(installed!, active, ct).ConfigureAwait(false);
             }
             else
             {
-                TryDeleteDirectory(active);
-                TryDeleteDirectory(backup);
+                DeleteDirectoryRequired(active);
+                _activeSignal.Clear();
+                DeleteDirectoryRequired(backup);
                 await ClearSourceRecordAsync(sourceRecord, ct).ConfigureAwait(false);
             }
         }
@@ -488,7 +527,8 @@ public sealed partial class LlamaCppSourceBuildService : ILlamaCppSourceBuildSer
             }
             else
             {
-                TryDeleteDirectory(backup);
+                DeleteDirectoryRequired(backup);
+                _activeSignal.Clear();
                 await ClearSourceRecordAsync(sourceRecord, ct).ConfigureAwait(false);
             }
         }
@@ -496,7 +536,8 @@ public sealed partial class LlamaCppSourceBuildService : ILlamaCppSourceBuildSer
         {
             if (!activeMatches)
             {
-                TryDeleteDirectory(active);
+                DeleteDirectoryRequired(active);
+                _activeSignal.Clear();
                 await ClearSourceRecordAsync(sourceRecord, ct).ConfigureAwait(false);
             }
         }
@@ -514,20 +555,174 @@ public sealed partial class LlamaCppSourceBuildService : ILlamaCppSourceBuildSer
 
     private static async Task<bool> TreeMatchesRecordAsync(string tree, InstalledRuntimeState state, CancellationToken ct)
     {
-        if (state.SourceRepository is null || state.SourceCommit is null || state.SourceRevisionMode is null)
+        if (!Directory.Exists(tree)
+            || state.SourceRepository is null
+            || state.SourceCommit is null
+            || state.SourceRevisionMode is null)
         {
             return false;
         }
 
         var server = Path.Combine(tree, "build", "bin", ManagedServerFileName);
+        var manifestPath = Path.Combine(tree, ManifestFileName);
+        if (!File.Exists(server) || new FileInfo(server).LinkTarget is not null || !File.Exists(manifestPath))
+        {
+            return false;
+        }
+
+        SourceBuildManifest? manifest;
+        try
+        {
+            await using var manifestStream = new FileStream(manifestPath, FileMode.Open, FileAccess.Read, FileShare.Read);
+            manifest = await JsonSerializer.DeserializeAsync<SourceBuildManifest>(manifestStream, cancellationToken: ct).ConfigureAwait(false);
+        }
+        catch (JsonException)
+        {
+            return false;
+        }
+
+        var expectedSource = string.Equals(state.SourceRepository, LlamaCppSourceBuildRequestValidation.OfficialRepository, StringComparison.Ordinal)
+            ? LlamaCppSourceSelection.Official
+            : LlamaCppSourceSelection.Custom;
+        if (manifest is null
+            || manifest.Variant != state.Variant
+            || manifest.Source != expectedSource
+            || manifest.RevisionMode != state.SourceRevisionMode
+            || !string.Equals(manifest.Tag, state.Tag, StringComparison.Ordinal)
+            || !string.Equals(manifest.Repository, state.SourceRepository, StringComparison.Ordinal)
+            || !string.Equals(manifest.ResolvedCommit, state.SourceCommit, StringComparison.OrdinalIgnoreCase)
+            || !string.Equals(manifest.RequestedCommit, state.SourceRequestedCommit, StringComparison.OrdinalIgnoreCase)
+            || !string.Equals(manifest.BinarySha256, state.Sha256, StringComparison.OrdinalIgnoreCase))
+        {
+            return false;
+        }
+
+        try
+        {
+            ValidateTreeLinks(tree);
+        }
+        catch (LlamaRuntimeException)
+        {
+            return false;
+        }
+        await using var stream = new FileStream(server, FileMode.Open, FileAccess.Read, FileShare.Read);
+        var hash = Convert.ToHexStringLower(await SHA256.HashDataAsync(stream, ct).ConfigureAwait(false));
+        return string.Equals(hash, state.Sha256, StringComparison.OrdinalIgnoreCase)
+            && await ValidateBinaryBackendAsync(server, state.Variant, ct).ConfigureAwait(false);
+    }
+
+    private bool IsPreProvenanceLegacyRecord(InstalledRuntimeState? state)
+    {
+        if (state is not
+            {
+                Variant: GpuVariant.Cuda,
+                SourceBuildPath: { Length: > 0 },
+                SourceRepository: null,
+                SourceCommit: null,
+                SourceRevisionMode: null,
+                SourceRequestedCommit: null
+            }
+            || !string.Equals(state.Tag, LlamaCppReleasePins.PinnedTag, StringComparison.Ordinal))
+        {
+            return false;
+        }
+
+        var expected = Path.GetFullPath(Path.Combine(_cacheRoot, "llama.cpp", "source-cuda", LlamaCppReleasePins.PinnedTag, "build", "bin"));
+        return string.Equals(Path.GetFullPath(state.SourceBuildPath), expected, StringComparison.Ordinal);
+    }
+
+    private static async Task<bool> ValidateLegacyRecordAsync(InstalledRuntimeState state, CancellationToken ct)
+    {
+        var server = Path.Combine(state.SourceBuildPath!, ManagedServerFileName);
         if (!File.Exists(server) || new FileInfo(server).LinkTarget is not null)
         {
             return false;
         }
 
+        try
+        {
+            ValidateTreeLinks(state.SourceBuildPath!);
+        }
+        catch (LlamaRuntimeException)
+        {
+            return false;
+        }
         await using var stream = new FileStream(server, FileMode.Open, FileAccess.Read, FileShare.Read);
-        var hash = Convert.ToHexStringLower(await System.Security.Cryptography.SHA256.HashDataAsync(stream, ct).ConfigureAwait(false));
-        return string.Equals(hash, state.Sha256, StringComparison.OrdinalIgnoreCase);
+        var hash = Convert.ToHexStringLower(await SHA256.HashDataAsync(stream, ct).ConfigureAwait(false));
+        return string.Equals(hash, state.Sha256, StringComparison.OrdinalIgnoreCase)
+            && await ValidateBinaryBackendAsync(server, GpuVariant.Cuda, ct).ConfigureAwait(false);
+    }
+
+    private static async Task<bool> ValidateBinaryBackendAsync(string server, GpuVariant variant, CancellationToken ct)
+    {
+        if (!await RunValidationCommandAsync(server, "--version", expectedDevicePrefix: null, ct).ConfigureAwait(false))
+        {
+            return false;
+        }
+
+        return variant == GpuVariant.Cpu
+            || await RunValidationCommandAsync(server, "--list-devices", variant == GpuVariant.Cuda ? "CUDA" : "Vulkan", ct).ConfigureAwait(false);
+    }
+
+    private static async Task<bool> RunValidationCommandAsync(string server, string argument, string? expectedDevicePrefix, CancellationToken ct)
+    {
+        var startInfo = new ProcessStartInfo(server)
+        {
+            RedirectStandardOutput = true,
+            RedirectStandardError = true,
+            UseShellExecute = false,
+            CreateNoWindow = true
+        };
+        startInfo.ArgumentList.Add(argument);
+        using var process = new Process { StartInfo = startInfo };
+        if (!process.Start())
+        {
+            return false;
+        }
+
+        using var timeout = CancellationTokenSource.CreateLinkedTokenSource(ct);
+        timeout.CancelAfter(ShortCommandTimeout);
+        try
+        {
+            var stdout = process.StandardOutput.ReadToEndAsync(timeout.Token);
+            var stderr = process.StandardError.ReadToEndAsync(timeout.Token);
+            await process.WaitForExitAsync(timeout.Token).ConfigureAwait(false);
+            var output = string.Concat(await stdout.ConfigureAwait(false), "\n", await stderr.ConfigureAwait(false));
+            if (process.ExitCode != 0)
+            {
+                return false;
+            }
+
+            return expectedDevicePrefix is null || output.Split(['\r', '\n'], StringSplitOptions.RemoveEmptyEntries)
+                .Any(line => RecoveryDeviceLineRegex().IsMatch(line)
+                             && line.TrimStart().StartsWith(expectedDevicePrefix, StringComparison.OrdinalIgnoreCase));
+        }
+        catch (OperationCanceledException) when (!ct.IsCancellationRequested)
+        {
+            return false;
+        }
+        finally
+        {
+            TryKill(process);
+        }
+    }
+
+    private static async Task WriteManifestAsync(string tree, LlamaCppSourceBuildDescriptor descriptor, string tag, CancellationToken ct)
+    {
+        var server = Path.Combine(tree, "build", "bin", ManagedServerFileName);
+        await using var binary = new FileStream(server, FileMode.Open, FileAccess.Read, FileShare.Read);
+        var sha = Convert.ToHexStringLower(await SHA256.HashDataAsync(binary, ct).ConfigureAwait(false));
+        var manifest = new SourceBuildManifest(tag,
+            descriptor.Variant,
+            descriptor.Source,
+            descriptor.Repository,
+            descriptor.RevisionMode,
+            descriptor.RequestedCommit,
+            descriptor.ResolvedCommit!,
+            sha);
+        var path = Path.Combine(tree, ManifestFileName);
+        await using var output = new FileStream(path, FileMode.CreateNew, FileAccess.Write, FileShare.None);
+        await JsonSerializer.SerializeAsync(output, manifest, cancellationToken: ct).ConfigureAwait(false);
     }
 
     private Task WriteReconciledStateAsync(InstalledRuntimeState state, string active, CancellationToken ct)
@@ -543,6 +738,16 @@ public sealed partial class LlamaCppSourceBuildService : ILlamaCppSourceBuildSer
             _activeSignal.Clear();
         }
     }
+
+    private sealed record SourceBuildManifest(
+        string Tag,
+        GpuVariant Variant,
+        LlamaCppSourceSelection Source,
+        string Repository,
+        LlamaCppSourceRevisionMode RevisionMode,
+        string? RequestedCommit,
+        string ResolvedCommit,
+        string BinarySha256);
 
     private static GpuVariant ToVariant(LlamaCppSourceBackend backend)
     {
@@ -571,15 +776,7 @@ public sealed partial class LlamaCppSourceBuildService : ILlamaCppSourceBuildSer
                 return DefaultCudaArchitectures;
             }
 
-            // e.g. "8.9\n8.9" → "89;89"; strip the dot per line, join with ';'.
-            var arches = output
-                         .Split(['\r', '\n'], StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
-                         .Select(static line => line.Replace(".", string.Empty, StringComparison.Ordinal))
-                         .Where(static value => value.Length > 0);
-            var joined = string.Join(';', arches);
-
-            // Whitelist the FINAL string before it reaches -DCMAKE_CUDA_ARCHITECTURES. A non-match → default set.
-            return ComputeCapRegex().IsMatch(joined) ? joined : DefaultCudaArchitectures;
+            return ParseCudaArchitectures(output);
         }
         catch (OperationCanceledException) when (ct.IsCancellationRequested)
         {
@@ -589,6 +786,31 @@ public sealed partial class LlamaCppSourceBuildService : ILlamaCppSourceBuildSer
         {
             return DefaultCudaArchitectures;
         }
+    }
+
+    internal static string ParseCudaArchitectures(string output)
+    {
+        var values = new SortedSet<int>();
+        foreach (var line in output.Split(['\r', '\n'], StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries))
+        {
+            var match = ComputeCapabilityRegex().Match(line);
+            if (!match.Success
+                || !int.TryParse(match.Groups["major"].Value, out var major)
+                || !int.TryParse(match.Groups["minor"].Value, out var minor))
+            {
+                return DefaultCudaArchitectures;
+            }
+
+            var architecture = major * 10 + minor;
+            if (architecture is < 50 or > 999)
+            {
+                return DefaultCudaArchitectures;
+            }
+
+            values.Add(architecture);
+        }
+
+        return values.Count == 0 ? DefaultCudaArchitectures : string.Join(';', values);
     }
 
     [SupportedOSPlatform("linux")]
@@ -906,15 +1128,35 @@ public sealed partial class LlamaCppSourceBuildService : ILlamaCppSourceBuildSer
         }
     }
 
+    private static void DeleteDirectoryRequired(string path)
+    {
+        if (!Directory.Exists(path))
+        {
+            return;
+        }
+
+        try
+        {
+            Directory.Delete(path, recursive: true);
+        }
+        catch (Exception exception) when (exception is IOException or UnauthorizedAccessException)
+        {
+            throw new LlamaRuntimeException("A prior source-build directory could not be reconciled safely.", exception);
+        }
+    }
+
     private static string DefaultCacheRoot()
     {
         return Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
             "XE-Local-AI-Engine");
     }
 
-    [GeneratedRegex(@"^[0-9]{2,3}(;[0-9]{2,3})*$", RegexOptions.CultureInvariant | RegexOptions.ExplicitCapture, matchTimeoutMilliseconds: 1000)]
-    private static partial Regex ComputeCapRegex();
+    [GeneratedRegex(@"^(?<major>[0-9]{1,2})\.(?<minor>[0-9])$", RegexOptions.CultureInvariant | RegexOptions.ExplicitCapture, matchTimeoutMilliseconds: 1000)]
+    private static partial Regex ComputeCapabilityRegex();
 
     [GeneratedRegex("^[0-9a-fA-F]{40}$", RegexOptions.CultureInvariant | RegexOptions.ExplicitCapture, matchTimeoutMilliseconds: 1000)]
     private static partial Regex FullCommitRegex();
+
+    [GeneratedRegex(@"^\s*(?:CUDA|Vulkan)[0-9]+:", RegexOptions.IgnoreCase | RegexOptions.CultureInvariant | RegexOptions.ExplicitCapture, matchTimeoutMilliseconds: 1000)]
+    private static partial Regex RecoveryDeviceLineRegex();
 }
