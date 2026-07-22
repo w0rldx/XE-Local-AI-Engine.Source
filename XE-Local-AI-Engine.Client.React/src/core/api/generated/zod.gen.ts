@@ -997,6 +997,7 @@ export const zXeLocalAiEngineClientEndpointsModelFitV1LlamaCppInstalledRuntimeRe
 	isSourceBuild: z.boolean(),
 	sourceRepository: z.string().nullish(),
 	sourceCommit: z.string().nullish(),
+	sourceSelection: zXeLocalAiEngineClientEndpointsModelFitV1LlamaCppSourceSelectionDto.nullish(),
 	sourceRevisionMode: zXeLocalAiEngineClientEndpointsModelFitV1LlamaCppSourceRevisionModeDto.nullish(),
 	sourceRequestedCommit: z.string().nullish(),
 });
