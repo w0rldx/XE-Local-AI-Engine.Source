@@ -158,6 +158,7 @@ public sealed class LlamaServerProcessSupervisor : ILlamaServerProcessSupervisor
         ArgumentException.ThrowIfNullOrWhiteSpace(modelName);
         ObjectDisposedException.ThrowIf(Volatile.Read(ref _disposed) != 0, this);
 
+        EnsureDecision decision;
         await _runtimeMutationGate.WaitAsync(ct).ConfigureAwait(false);
         try
         {
@@ -183,19 +184,22 @@ public sealed class LlamaServerProcessSupervisor : ILlamaServerProcessSupervisor
 
             // Decide (under the single-flight gate, held only briefly) between a reuse and joining/starting the DETACHED
             // spawn, then await the spawn WITHOUT binding its lifetime to this caller's token.
-            var decision = await DecideEnsureAsync(key, ct).ConfigureAwait(false);
+            decision = await DecideEnsureAsync(key, ct).ConfigureAwait(false);
             if (decision.Reused is { } reusedEndpoint)
             {
                 return reusedEndpoint;
             }
-
-            var running = await AwaitDetachedSpawnAsync(decision.SpawnTask!, ct).ConfigureAwait(false);
-            return running.Endpoint;
         }
         finally
         {
             _runtimeMutationGate.Release();
         }
+
+        // DecideEnsureAsync has now registered the detached task in _inflightSpawns. Release the mutation ordering gate
+        // before readiness completes: a mutation attempt observes the in-flight spawn and returns null instead of waiting
+        // for readiness, while a mutation lease already holding the gate still prevents this ensure from reaching here.
+        var running = await AwaitDetachedSpawnAsync(decision.SpawnTask!, ct).ConfigureAwait(false);
+        return running.Endpoint;
     }
 
     /// <inheritdoc />
