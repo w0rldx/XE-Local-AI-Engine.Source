@@ -22,6 +22,7 @@ using XE_Local_AI_Engine.Client.Services.Auth;
 using XE_Local_AI_Engine.Client.Services.Auth.Implementation;
 using XE_Local_AI_Engine.Client.Services.Chat;
 using XE_Local_AI_Engine.Client.Services.Chat.Implementation;
+using XE_Local_AI_Engine.Client.Services.Development;
 using XE_Local_AI_Engine.Client.Services.Persistence;
 using XE_Local_AI_Engine.Client.Services.Persistence.Implementation;
 using XE_Local_AI_Engine.Client.Services.Shutdown;
@@ -120,6 +121,7 @@ try
     }
 
     // Add services to the container.
+    var isDevelopmentModeEnabled = builder.Configuration.GetValue($"{DevelopmentOptions.Section}:Enabled", defaultValue: false);
     builder.AddServices(builder.Configuration);
 
     // App self-update (Velopack + GitHub device flow). Desktop-mode only: off the flag this registers nothing and the
@@ -282,6 +284,24 @@ try
         ResponseWriter = ReadinessHealthResponse.WriteAsync
     });
 
+    if (!isDevelopmentModeEnabled)
+    {
+        var developmentPath = new PathString($"/{LocalApiRoutes.Prefix}/{LocalApiRoutes.Development.Root}");
+        // Keep the disabled capability opaque before local API security or authentication can challenge the caller.
+        // The endpoint types remain discoverable process-wide because FastEndpoints caches endpoint discovery across
+        // WebApplicationFactory instances; service and hub registration still remain disabled with this feature flag.
+        app.Use(async (context, next) =>
+        {
+            if (context.Request.Path.StartsWithSegments(developmentPath, StringComparison.OrdinalIgnoreCase))
+            {
+                context.Response.StatusCode = StatusCodes.Status404NotFound;
+                return;
+            }
+
+            await next(context).ConfigureAwait(false);
+        });
+    }
+
     app.UseMiddleware<LocalApiSecurityMiddleware>();
     app.UseRouting();
     app.UseRateLimiter();
@@ -331,6 +351,11 @@ try
        .RequireAuthorization(NodeAuthorizationPolicies.Operator);
     app.MapHub<ImageJobHub>(LocalApiRoutes.Images.Hub)
        .RequireAuthorization(NodeAuthorizationPolicies.Operator);
+    if (isDevelopmentModeEnabled)
+    {
+        app.MapHub<DevelopmentAttemptHub>(LocalApiRoutes.Development.Hub)
+           .RequireAuthorization(NodeAuthorizationPolicies.Operator);
+    }
 
     if (!app.Environment.IsProduction())
     {

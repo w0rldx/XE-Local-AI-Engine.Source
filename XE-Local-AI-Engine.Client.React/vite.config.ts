@@ -152,6 +152,7 @@ export default defineConfig(({ command, mode }) => {
 						"/api/local/v1/model-fit/llamacpp/cuda-build/hub": localProxy(proxyTarget, true),
 						"/api/local/v1/knowledge-base/hub": localProxy(proxyTarget, true),
 						"/api/local/v1/images/hub": localProxy(proxyTarget, true),
+						"/api/local/v1/development/hub": localProxy(proxyTarget, true),
 						"/api": localProxy(proxyTarget),
 						"/openapi": {
 							target: proxyTarget,

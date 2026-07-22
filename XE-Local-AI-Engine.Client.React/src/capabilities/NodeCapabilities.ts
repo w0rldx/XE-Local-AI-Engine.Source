@@ -45,7 +45,13 @@ export interface NodeCapabilityConfig {
 	// live-GPU verified end-to-end on target hardware, so the nav entry + /images route ship on (plan §9 —
 	// shipped as a flagship feature).
 	readonly images: boolean;
+	// Dedicated durable software-development workflow. It is independent from Chat and is backed by an
+	// off-by-default server capability.
+	readonly development: boolean;
 }
+
+const developmentModeEnabled =
+	import.meta.env.DEV || import.meta.env["VITE_DEVELOPMENT_MODE_ENABLED"] === "true";
 
 export const nodeCapabilities: NodeCapabilityConfig = {
 	chat: {
@@ -117,6 +123,9 @@ export const nodeCapabilities: NodeCapabilityConfig = {
 	// Image generation (stable-diffusion.cpp) surface. ON by default — the runtime module (Lanes A–D) is built and
 	// has been live-GPU verified end-to-end on target hardware; ships as a flagship feature.
 	images: true,
+	// Development builds expose the surface automatically. Production builds must opt in alongside the
+	// server-side Development:Enabled setting so the navigation and route do not advertise a disabled API.
+	development: developmentModeEnabled,
 };
 
 export const nodeRoutePaths = {
@@ -151,6 +160,8 @@ export const nodeRoutePaths = {
 	knowledgeBase: "/knowledge-base",
 	// Local image-generation page (text-to-image) — gated on nodeCapabilities.images
 	images: "/images",
+	// Dedicated Development Mode project/task workflow — gated on nodeCapabilities.development.
+	development: "/development",
 	// Local-only diagnostics panel (frontend error snapshots) — always available (plan §1)
 	diagnostics: "/diagnostics",
 } as const;

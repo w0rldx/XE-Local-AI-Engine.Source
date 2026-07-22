@@ -32,6 +32,7 @@ using XE_Local_AI_Engine.Client.Persistence.Entities;
 using XE_Local_AI_Engine.Client.Security.DataProtection;
 using XE_Local_AI_Engine.Client.Services.Agents.Implementation;
 using XE_Local_AI_Engine.Client.Services.Auth;
+using XE_Local_AI_Engine.Client.Services.Development;
 using XE_Local_AI_Engine.Client.Services.Images;
 using XE_Local_AI_Engine.Client.Services.Knowledge;
 using XE_Local_AI_Engine.Client.Services.ModelFit;
@@ -159,6 +160,13 @@ public static class ConfigureServices
         // status transitions push live to operator clients (ImageJobHub mapped in Program). IHubContext is singleton-safe,
         // so the singleton image-job coordinator can resolve it.
         builder.Services.AddSingleton<IImageJobEventPublisher, ImageJobEventPublisher>();
+
+        // Development is an explicit off-by-default capability. Only replace the application's no-op live publisher
+        // when the capability is enabled, so disabled deployments retain no Development runtime registrations.
+        if (configuration.GetValue($"{DevelopmentOptions.Section}:Enabled", defaultValue: false))
+        {
+            builder.Services.AddSingleton<IDevelopmentAttemptLiveEventPublisher, DevelopmentAttemptLiveEventPublisher>();
+        }
 
         // Error handling - the order of the exception handlers is important: specific handlers first,
         // DefaultExceptionHandler last as the catch-all 500. Mirrors the central platform's IExceptionHandler pattern.

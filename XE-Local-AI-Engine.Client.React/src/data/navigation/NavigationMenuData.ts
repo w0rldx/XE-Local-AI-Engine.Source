@@ -5,6 +5,7 @@ import {
 	IconCpu,
 	IconDashboard,
 	IconDatabase,
+	IconCode,
 	IconHome,
 	IconListDetails,
 	IconMessageCircle,
@@ -28,6 +29,7 @@ type NavigationCapabilityKey =
 	| "preview"
 	| "knowledgeBase"
 	| "images"
+	| "development"
 	| "cloudSettings"
 	| "dashboard"
 	| "binding";
@@ -68,6 +70,13 @@ const allNavigationLinks: INavigationLink[] = [
 		icon: IconMessageCircle,
 		translationKey: "navigation.chat",
 		to: nodeRoutePaths.chat,
+	},
+	{
+		id: "development",
+		icon: IconCode,
+		translationKey: "navigation.development",
+		to: nodeRoutePaths.development,
+		capability: "development",
 	},
 	{
 		id: "knowledgeBase",
