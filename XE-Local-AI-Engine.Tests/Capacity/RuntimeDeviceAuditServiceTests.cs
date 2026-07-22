@@ -247,4 +247,23 @@ public sealed class RuntimeDeviceAuditServiceTests
 
         await probe.Received(2).GetDeviceInventoryAsync(Arg.Any<GpuVariant>(), Arg.Any<CancellationToken>());
     }
+
+    [Test]
+    public async Task GetAudit_ActiveSourceVariantReplacement_InvalidatesMemoEvenWhenNotCuda()
+    {
+        var probe = Substitute.For<ILlamaDeviceInventoryProbe>();
+        probe.GetDeviceInventoryAsync(Arg.Any<GpuVariant>(), Arg.Any<CancellationToken>())
+             .Returns(Task.FromResult(WithDevices(GpuVariant.Vulkan)));
+        var signal = new CudaManagedBuildSignal();
+        signal.SetActive(GpuVariant.Cpu);
+        using var service = BuildService(GpuProfile(GpuVendor.Nvidia), GpuVariant.Vulkan, probe, signal);
+
+        await service.GetAuditAsync(false, CancellationToken.None);
+        await service.GetAuditAsync(false, CancellationToken.None);
+        await probe.Received(1).GetDeviceInventoryAsync(Arg.Any<GpuVariant>(), Arg.Any<CancellationToken>());
+
+        signal.SetActive(GpuVariant.Vulkan);
+        await service.GetAuditAsync(false, CancellationToken.None);
+        await probe.Received(2).GetDeviceInventoryAsync(Arg.Any<GpuVariant>(), Arg.Any<CancellationToken>());
+    }
 }

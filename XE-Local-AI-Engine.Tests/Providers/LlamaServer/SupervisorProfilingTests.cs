@@ -14,6 +14,44 @@ using XE_Local_AI_Engine.Tests.Testing;
 public sealed class SupervisorProfilingTests
 {
     [Test]
+    public async Task MutationLease_First_BlocksProfilingUntilDisposed()
+    {
+        var launcher = new FakeProcessLauncher();
+        await using var supervisor = SupervisorFactory.Create(launcher);
+        var lease = await supervisor.TryAcquireRuntimeMutationLeaseAsync(CancellationToken.None);
+        AssertEx.NotNull(lease);
+
+        var profiling = supervisor.RunExclusiveProfilingAsync("llama3", ModelRole.Chat, ResolvedLaunchArguments.Explore(), false,
+            (_, _) => Task.FromResult(true), CancellationToken.None);
+        await Task.Delay(50);
+        AssertEx.False(profiling.IsCompleted);
+        AssertEx.Equal(0, launcher.LaunchCount);
+
+        await lease!.DisposeAsync();
+        await profiling;
+        AssertEx.Equal(1, launcher.LaunchCount);
+    }
+
+    [Test]
+    public async Task Profiling_First_MutationLeaseFailsWhileProfileRuns_ThenSucceedsAfterDisposal()
+    {
+        await using var supervisor = SupervisorFactory.Create();
+        var entered = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var release = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var profiling = supervisor.RunExclusiveProfilingAsync("llama3", ModelRole.Chat, ResolvedLaunchArguments.Explore(), false,
+            async (_, _) => { entered.SetResult(); await release.Task; return true; }, CancellationToken.None);
+        await entered.Task;
+
+        AssertEx.Null(await supervisor.TryAcquireRuntimeMutationLeaseAsync(CancellationToken.None));
+        release.SetResult();
+        await profiling;
+
+        var after = await supervisor.TryAcquireRuntimeMutationLeaseAsync(CancellationToken.None);
+        AssertEx.NotNull(after);
+        await after!.DisposeAsync();
+    }
+
+    [Test]
     public async Task Profiling_CapturesStartupOutput_FromBothStreams()
     {
         // The fake launcher replays these through the spec's StartupCapture sink, exactly as the production launcher

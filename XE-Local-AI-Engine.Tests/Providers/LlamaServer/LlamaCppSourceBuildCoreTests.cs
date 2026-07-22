@@ -37,6 +37,7 @@ public sealed class LlamaCppSourceBuildCoreTests
     [Arguments("http://github.com/example/fork")]
     [Arguments("https://user@github.com/example/fork")]
     [Arguments("https://github.com:444/example/fork")]
+    [Arguments("https://github.com:443/example/fork")]
     [Arguments("https://github.com/example/fork/extra")]
     [Arguments("https://gitlab.com/example/fork")]
     [Arguments("git@github.com:example/fork.git")]
@@ -80,6 +81,38 @@ public sealed class LlamaCppSourceBuildCoreTests
     }
 
     [Test]
+    public void CloneCommands_OfficialPinned_UsesPinnedTagWithoutSubmodules()
+    {
+        var descriptor = new LlamaCppSourceBuildDescriptor(GpuVariant.Cpu, LlamaCppSourceSelection.Official,
+            LlamaCppSourceBuildRequestValidation.OfficialRepository, LlamaCppSourceRevisionMode.EnginePinned, null,
+            LlamaCppReleasePins.PinnedSourceCommitSha);
+        var command = LlamaCppSourceBuildService.BuildCloneCommands(descriptor, "/clone").Single();
+        AssertEx.Contains(command, "--no-recurse-submodules");
+        AssertEx.Contains(command, LlamaCppReleasePins.PinnedTag);
+    }
+
+    [Test]
+    public void CloneCommands_CustomDefault_ClonesDefaultHeadWithoutInjectedRef()
+    {
+        var descriptor = new LlamaCppSourceBuildDescriptor(GpuVariant.Cpu, LlamaCppSourceSelection.Custom,
+            "https://github.com/example/fork", LlamaCppSourceRevisionMode.DefaultBranch, null, null);
+        var command = LlamaCppSourceBuildService.BuildCloneCommands(descriptor, "/clone").Single();
+        AssertEx.Contains(command, "https://github.com/example/fork");
+        AssertEx.False(command.Contains("--branch"));
+    }
+
+    [Test]
+    public void CloneCommands_ExplicitCommit_FetchesShaAndChecksOutDetached()
+    {
+        var sha = new string('a', 40);
+        var descriptor = new LlamaCppSourceBuildDescriptor(GpuVariant.Cpu, LlamaCppSourceSelection.Custom,
+            "https://github.com/example/fork", LlamaCppSourceRevisionMode.ExplicitCommit, sha, null);
+        var commands = LlamaCppSourceBuildService.BuildCloneCommands(descriptor, "/clone");
+        AssertEx.True(commands.Any(command => command.Contains("fetch") && command.Contains(sha)));
+        AssertEx.True(commands.Any(command => command.Contains("checkout") && command.Contains("--detach") && command.Contains(sha)));
+    }
+
+    [Test]
     public void ConfigureArguments_Vulkan_EnablesOnlyVulkan()
     {
         var args = LlamaCppSourceBuildService.BuildConfigureArguments("build", "source", GpuVariant.Vulkan, null);
@@ -96,6 +129,22 @@ public sealed class LlamaCppSourceBuildCoreTests
         AssertEx.True(args.Contains("-DGGML_CUDA=ON"));
         AssertEx.True(args.Contains("-DGGML_VULKAN=OFF"));
         AssertEx.True(args.Contains("-DCMAKE_CUDA_ARCHITECTURES=75;89"));
+    }
+
+    [Test]
+    public void ParseCudaArchitectures_DeduplicatesAndSortsStrictCapabilities()
+    {
+        AssertEx.Equal("75;86;89", LlamaCppSourceBuildService.ParseCudaArchitectures("8.9\n7.5\n8.6\n8.9\n"));
+    }
+
+    [Test]
+    [Arguments("native")]
+    [Arguments("4.9")]
+    [Arguments("8.10")]
+    [Arguments("8.9 extra")]
+    public void ParseCudaArchitectures_InvalidOrOutOfBounds_FallsBack(string output)
+    {
+        AssertEx.Equal("75;86;89", LlamaCppSourceBuildService.ParseCudaArchitectures(output));
     }
 
     [Test]

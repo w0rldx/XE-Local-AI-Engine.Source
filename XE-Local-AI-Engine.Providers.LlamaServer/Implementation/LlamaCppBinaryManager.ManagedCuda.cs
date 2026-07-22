@@ -96,6 +96,9 @@ public sealed partial class LlamaCppBinaryManager
         string? requestedCommit,
         CancellationToken ct)
     {
+        await _sourceMutationGate.WaitAsync(ct).ConfigureAwait(false);
+        try
+        {
         ArgumentException.ThrowIfNullOrWhiteSpace(buildBinDir);
         ArgumentException.ThrowIfNullOrWhiteSpace(tag);
 
@@ -154,40 +157,74 @@ public sealed partial class LlamaCppBinaryManager
         _managedCudaSignal?.SetActive(variant);
 
         return state;
+        }
+        finally
+        {
+            _sourceMutationGate.Release();
+        }
     }
 
     /// <inheritdoc />
     public async Task RemoveCudaSourceBuildAsync(CancellationToken ct)
     {
-        await RemoveSourceBuildAsync(ct).ConfigureAwait(false);
+        await RemoveSourceBuildCoreAsync(legacyOnly: true, ct).ConfigureAwait(false);
     }
 
     /// <inheritdoc />
     public async Task RemoveSourceBuildAsync(CancellationToken ct)
     {
-        var installed = _installedRuntimeStore is null
-            ? null
-            : await _installedRuntimeStore.ReadAsync(ct).ConfigureAwait(false);
+        await RemoveSourceBuildCoreAsync(legacyOnly: false, ct).ConfigureAwait(false);
+    }
 
-        if (installed?.SourceBuildPath is { Length: > 0 } sourceBuildPath)
+    private async Task RemoveSourceBuildCoreAsync(bool legacyOnly, CancellationToken ct)
+    {
+        await _sourceMutationGate.WaitAsync(ct).ConfigureAwait(false);
+        try
         {
-            // Path-guard: delete ONLY within {cacheRoot}/llama.cpp/source-cuda/. Assert the recorded path is a normalized
-            // child of that root before removing the whole source-cuda tree. [secMED-3]
-            var sourceRoot = Path.GetFullPath(Path.Combine(_cacheRoot, "llama.cpp", "source-build"));
-            var legacyRoot = Path.GetFullPath(Path.Combine(_cacheRoot, "llama.cpp", "source-cuda"));
-            var rootWithSeparator = sourceRoot + Path.DirectorySeparatorChar;
-            var legacyWithSeparator = legacyRoot + Path.DirectorySeparatorChar;
-            if (Path.GetFullPath(sourceBuildPath).StartsWith(rootWithSeparator, StringComparison.Ordinal))
+            var installed = _installedRuntimeStore is null
+                ? null
+                : await _installedRuntimeStore.ReadAsync(ct).ConfigureAwait(false);
+            if (installed?.SourceBuildPath is not { Length: > 0 } sourceBuildPath
+                || legacyOnly && !installed.IsLegacyPinnedCuda())
             {
-                TryDeleteDirectory(sourceRoot);
+                return;
             }
-            else if (Path.GetFullPath(sourceBuildPath).StartsWith(legacyWithSeparator, StringComparison.Ordinal))
+
+            var fullRecordedPath = Path.GetFullPath(sourceBuildPath);
+            var activeTree = Path.GetFullPath(Path.Combine(_cacheRoot, "llama.cpp", "source-build", "active"));
+            var activeBin = Path.Combine(activeTree, "build", "bin");
+            var legacyTree = Path.GetFullPath(Path.Combine(_cacheRoot, "llama.cpp", "source-cuda", LlamaCppReleasePins.PinnedTag));
+            var legacyBin = Path.Combine(legacyTree, "build", "bin");
+            string? treeToDelete = null;
+            if (string.Equals(fullRecordedPath, activeBin, StringComparison.Ordinal))
             {
-                TryDeleteDirectory(legacyRoot);
+                treeToDelete = activeTree;
+            }
+            else if (legacyOnly && string.Equals(fullRecordedPath, legacyBin, StringComparison.Ordinal))
+            {
+                treeToDelete = legacyTree;
+            }
+
+            if (treeToDelete is null)
+            {
+                return;
+            }
+
+            if (Directory.Exists(treeToDelete))
+            {
+                Directory.Delete(treeToDelete, recursive: true);
+            }
+
+            _managedCudaSignal?.Clear();
+            if (_installedRuntimeStore is not null)
+            {
+                await _installedRuntimeStore.DeleteAsync(ct).ConfigureAwait(false);
             }
         }
-
-        await DiscardManagedCudaRecordAsync(ct).ConfigureAwait(false);
+        finally
+        {
+            _sourceMutationGate.Release();
+        }
     }
 
     /// <summary>The sentinel <see cref="InstalledRuntimeState.Asset" /> for a managed CUDA source build; readers must key off <see cref="InstalledRuntimeState.SourceBuildPath" />, never parse this.</summary>
@@ -197,10 +234,18 @@ public sealed partial class LlamaCppBinaryManager
     // on the store delete: a delete failure must not mask the fall-through.
     private async Task DiscardManagedCudaRecordAsync(CancellationToken ct)
     {
-        _managedCudaSignal?.Clear();
-        if (_installedRuntimeStore is not null)
+        await _sourceMutationGate.WaitAsync(ct).ConfigureAwait(false);
+        try
         {
-            await _installedRuntimeStore.DeleteAsync(ct).ConfigureAwait(false);
+            _managedCudaSignal?.Clear();
+            if (_installedRuntimeStore is not null)
+            {
+                await _installedRuntimeStore.DeleteAsync(ct).ConfigureAwait(false);
+            }
+        }
+        finally
+        {
+            _sourceMutationGate.Release();
         }
     }
 
@@ -230,8 +275,8 @@ public sealed partial class LlamaCppBinaryManager
             await process.WaitForExitAsync(timeout.Token).ConfigureAwait(false);
             var output = (await stdout.ConfigureAwait(false)) + "\n" + (await stderr.ConfigureAwait(false));
             return process.ExitCode == 0 && output.Split(['\r', '\n'], StringSplitOptions.RemoveEmptyEntries)
-                                                  .Any(line => line.TrimStart().StartsWith(expectedPrefix, StringComparison.OrdinalIgnoreCase)
-                                                               && line.Contains(':', StringComparison.Ordinal));
+                                                  .Any(line => DeviceLineRegex().IsMatch(line)
+                                                               && line.TrimStart().StartsWith(expectedPrefix, StringComparison.OrdinalIgnoreCase));
         }
         catch (OperationCanceledException) when (ct.IsCancellationRequested)
         {
@@ -378,4 +423,9 @@ public sealed partial class LlamaCppBinaryManager
         var hash = await SHA256.HashDataAsync(stream, ct).ConfigureAwait(false);
         return Convert.ToHexStringLower(hash);
     }
+
+    [System.Text.RegularExpressions.GeneratedRegex(@"^\s*(?:CUDA|Vulkan)[0-9]+:",
+        System.Text.RegularExpressions.RegexOptions.IgnoreCase | System.Text.RegularExpressions.RegexOptions.CultureInvariant,
+        matchTimeoutMilliseconds: 1000)]
+    private static partial System.Text.RegularExpressions.Regex DeviceLineRegex();
 }

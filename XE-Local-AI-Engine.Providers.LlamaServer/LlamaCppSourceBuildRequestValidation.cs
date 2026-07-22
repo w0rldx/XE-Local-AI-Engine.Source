@@ -58,7 +58,8 @@ public static partial class LlamaCppSourceBuildRequestValidation
             throw new LlamaRuntimeException("A canonical public GitHub HTTPS repository is required.");
         }
 
-        if (!Uri.TryCreate(repository, UriKind.Absolute, out var uri)
+        if (repository.StartsWith("https://github.com:", StringComparison.OrdinalIgnoreCase)
+            || !Uri.TryCreate(repository, UriKind.Absolute, out var uri)
             || !string.Equals(uri.Scheme, Uri.UriSchemeHttps, StringComparison.Ordinal)
             || !string.Equals(uri.Host, "github.com", StringComparison.OrdinalIgnoreCase)
             || !uri.IsDefaultPort

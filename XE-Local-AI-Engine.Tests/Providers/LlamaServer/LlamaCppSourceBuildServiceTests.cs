@@ -1,6 +1,8 @@
 namespace XE_Local_AI_Engine.Tests.Providers.LlamaServer;
 
 using System.Runtime.Versioning;
+using System.Security.Cryptography;
+using System.Text.Json;
 using Microsoft.Extensions.Logging.Abstractions;
 using XE_Local_AI_Engine.Providers.LlamaServer;
 using XE_Local_AI_Engine.Providers.LlamaServer.Contracts;
@@ -10,6 +12,66 @@ using XE_Local_AI_Engine.Tests.Testing;
 [NotInParallel]
 public sealed class LlamaCppSourceBuildServiceTests
 {
+    [Test]
+    public async Task Cancel_CustomCpu_IsRejectedByLegacyPredicateAndGenericCancelRetainsActiveRuntime()
+    {
+        if (!OperatingSystem.IsLinux())
+        {
+            return;
+        }
+
+        using var temp = new TempDirectory();
+        using var store = new InstalledRuntimeStore(temp.Path);
+        var (previousState, previousServer) = await SeedActiveRuntimeAsync(temp.Path, store);
+        var stubs = Path.Combine(temp.Path, "stubs");
+        Directory.CreateDirectory(stubs);
+        WriteScript(Path.Combine(stubs, "git"), "#!/bin/sh\nif [ \"$1\" = \"clone\" ]; then sleep 5; for last; do :; done; mkdir -p \"$last\"; exit 0; fi\n");
+        using var path = new PathScope(stubs);
+        var signal = new CudaManagedBuildSignal();
+        signal.SetActive(GpuVariant.Cpu);
+        using var service = new LlamaCppSourceBuildService(new AlwaysReadyProbe(), new CapturingBinaryManager(store, signal), store, signal,
+            new LeaseOnlySupervisor(), new NullLlamaCppSourceBuildEventPublisher(), NullLogger<LlamaCppSourceBuildService>.Instance, temp.Path);
+
+        var start = await service.StartAsync(new LlamaCppSourceBuildRequest(LlamaCppSourceBackend.Cpu, LlamaCppSourceSelection.Custom,
+            "https://github.com/example/fork", AcknowledgeCustomSourceRisk: true), CancellationToken.None);
+        AssertEx.Equal(LlamaCppSourceBuildStartOutcome.Started, start);
+        AssertEx.False(service.CancelLegacyPinnedCuda());
+        AssertEx.True(service.Cancel());
+        await AssertEx.EventuallyAsync(() => service.GetStatus().Terminal, TimeSpan.FromSeconds(10));
+
+        AssertEx.Equal(LlamaCppSourceBuildPhase.Cancelled, service.GetStatus().Phase);
+        AssertEx.True(File.Exists(previousServer));
+        AssertEx.Equal(previousState, await store.ReadAsync(CancellationToken.None));
+    }
+
+    [Test]
+    public async Task Start_WhenResolvedCommitMismatches_StopsBeforeCmakeAndRecordsNothing()
+    {
+        if (!OperatingSystem.IsLinux())
+        {
+            return;
+        }
+
+        using var temp = new TempDirectory();
+        var stubs = Path.Combine(temp.Path, "stubs");
+        Directory.CreateDirectory(stubs);
+        var cmakeMarker = Path.Combine(temp.Path, "cmake-ran");
+        WriteScript(Path.Combine(stubs, "git"), "#!/bin/sh\nif [ \"$1\" = \"clone\" ]; then for last; do :; done; mkdir -p \"$last\"; exit 0; fi\nif [ \"$1\" = \"-C\" ]; then echo '0000000000000000000000000000000000000000'; exit 0; fi\n");
+        WriteScript(Path.Combine(stubs, "cmake"), $"#!/bin/sh\ntouch '{cmakeMarker}'\n");
+        using var path = new PathScope(stubs);
+        using var store = new InstalledRuntimeStore(temp.Path);
+        var signal = new CudaManagedBuildSignal();
+        using var service = new LlamaCppSourceBuildService(new AlwaysReadyProbe(), new CapturingBinaryManager(store, signal), store, signal,
+            new LeaseOnlySupervisor(), new NullLlamaCppSourceBuildEventPublisher(), NullLogger<LlamaCppSourceBuildService>.Instance, temp.Path);
+
+        await service.StartAsync(new LlamaCppSourceBuildRequest(LlamaCppSourceBackend.Cpu, LlamaCppSourceSelection.Official), CancellationToken.None);
+        await AssertEx.EventuallyAsync(() => service.GetStatus().Terminal, TimeSpan.FromSeconds(10));
+
+        AssertEx.Equal(LlamaCppSourceBuildPhase.Failed, service.GetStatus().Phase);
+        AssertEx.False(File.Exists(cmakeMarker));
+        AssertEx.Null(await store.ReadAsync(CancellationToken.None));
+    }
+
     [Test]
     public async Task Start_OfficialCpu_UsesPinnedCommitScrubbedGitAndCpuMatrix()
     {
@@ -131,5 +193,33 @@ public sealed class LlamaCppSourceBuildServiceTests
                 // Best-effort test cleanup.
             }
         }
+    }
+
+    [UnsupportedOSPlatform("windows")]
+    private static async Task<(InstalledRuntimeState State, string Server)> SeedActiveRuntimeAsync(string root, IInstalledRuntimeStore store)
+    {
+        var tree = Path.Combine(root, "llama.cpp", "source-build", "active");
+        var bin = Path.Combine(tree, "build", "bin");
+        Directory.CreateDirectory(bin);
+        var server = Path.Combine(bin, "llama-server");
+        await File.WriteAllTextAsync(server, "#!/bin/sh\nexit 0\n");
+        File.SetUnixFileMode(server, UnixFileMode.UserRead | UnixFileMode.UserWrite | UnixFileMode.UserExecute);
+        var sha = Convert.ToHexStringLower(SHA256.HashData(await File.ReadAllBytesAsync(server)));
+        var state = new InstalledRuntimeState(LlamaCppReleasePins.PinnedTag, "source", sha, GpuVariant.Cpu, DateTimeOffset.UtcNow, bin,
+            LlamaCppSourceBuildRequestValidation.OfficialRepository, LlamaCppReleasePins.PinnedSourceCommitSha,
+            LlamaCppSourceRevisionMode.EnginePinned);
+        await store.WriteAsync(state, CancellationToken.None);
+        await File.WriteAllTextAsync(Path.Combine(tree, ".source-build-manifest.json"), JsonSerializer.Serialize(new
+        {
+            Tag = state.Tag,
+            Variant = state.Variant,
+            Source = LlamaCppSourceSelection.Official,
+            Repository = state.SourceRepository,
+            RevisionMode = state.SourceRevisionMode,
+            RequestedCommit = state.SourceRequestedCommit,
+            ResolvedCommit = state.SourceCommit,
+            BinarySha256 = state.Sha256
+        }));
+        return (state, server);
     }
 }
