@@ -193,6 +193,7 @@ internal static class AddNodeModelRuntimeExtensions
         // singleton and RuntimeChatClient disposing its local branch is safe.
         builder.Services.AddSingleton(sp => CreateLocalChatClient(sp, configuration));
         builder.Services.AddSingleton<ILocalChatClientCacheInvalidator>(sp => sp.GetRequiredService<ModelRoutingLocalChatClient>());
+        builder.Services.TryAddSingleton<ICloudEgressAuthorizer, DenyDevelopmentCloudEgressAuthorizer>();
 
         // Register a runtime-re-selecting IChatClient rather than capturing the
         // cloud-vs-local choice once at startup. The wrapper re-evaluates the active provider per send via
@@ -202,7 +203,9 @@ internal static class AddNodeModelRuntimeExtensions
         builder.Services.AddSingleton<IChatClient>(sp =>
         {
             var activeCloudFactory = sp.GetRequiredService<IActiveCloudChatClientFactory>();
-            return new RuntimeChatClient(activeCloudFactory, sp.GetRequiredService<ModelRoutingLocalChatClient>);
+            return new RuntimeChatClient(activeCloudFactory,
+                sp.GetRequiredService<ModelRoutingLocalChatClient>,
+                sp.GetRequiredService<ICloudEgressAuthorizer>());
         });
 
         builder.Services.AddLocalAiAgentRuntime(builder.Configuration);

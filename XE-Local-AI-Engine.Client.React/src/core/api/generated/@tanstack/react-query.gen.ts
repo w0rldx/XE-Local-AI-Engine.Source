@@ -13,12 +13,14 @@ import { client } from "../client.gen";
 import {
 	analyzePlaybook,
 	applyAppUpdate,
+	applyDevelopmentPatch,
 	approveGoldenConversation,
 	archiveNodeChatConversation,
 	benchmarkInferenceProfile,
 	branchNodeChatConversation,
 	browseGgufRepositories,
 	cancelCudaBuild,
+	cancelDevelopmentAttempt,
 	cancelGgufDownload,
 	cancelImageJob,
 	cancelNodeBinding,
@@ -32,6 +34,7 @@ import {
 	connectConnection,
 	continuePreviewRun,
 	createAgentDefinition,
+	createDevelopmentProject,
 	createGoldenConversation,
 	createImageJob,
 	createMcpServer,
@@ -78,6 +81,10 @@ import {
 	getConnectionStatus,
 	getCudaBuildPrerequisites,
 	getCudaBuildStatus,
+	getDevelopmentArtifact,
+	getDevelopmentCapability,
+	getDevelopmentProject,
+	getDevelopmentTask,
 	getGgufDownloads,
 	getGgufDownloadStatus,
 	getGitHubAuthStatus,
@@ -113,6 +120,10 @@ import {
 	listAgentPlaybookActions,
 	listAgentTemplates,
 	listConversationFiles,
+	listDevelopmentArtifacts,
+	listDevelopmentEvents,
+	listDevelopmentProjects,
+	listDevelopmentRepositories,
 	listGoldenConversations,
 	listImageJobs,
 	listImageModels,
@@ -140,10 +151,13 @@ import {
 	pinNodeChatConversation,
 	pollGitHubAuth,
 	pollNodeBinding,
+	previewDevelopmentPatch,
 	promoteSuggestedPlaybookAction,
 	putModelKind,
+	reconnectDevelopmentRepository,
 	refreshModelCatalog,
 	refreshRecommendations,
+	registerDevelopmentRepository,
 	reindexCorpus,
 	reindexKnowledgeDocument,
 	rejectSuggestedPlaybookAction,
@@ -164,6 +178,7 @@ import {
 	setNodeChatSelectedPath,
 	signOutGitHubAuth,
 	startCudaBuild,
+	startDevelopmentNextAction,
 	startGgufDownload,
 	startGitHubAuth,
 	startImageModelDownload,
@@ -188,6 +203,8 @@ import type {
 	AnalyzePlaybookResponse,
 	ApplyAppUpdateData,
 	ApplyAppUpdateResponse,
+	ApplyDevelopmentPatchData,
+	ApplyDevelopmentPatchResponse,
 	ApproveGoldenConversationData,
 	ApproveGoldenConversationResponse,
 	ArchiveNodeChatConversationData,
@@ -200,6 +217,8 @@ import type {
 	BrowseGgufRepositoriesResponse,
 	CancelCudaBuildData,
 	CancelCudaBuildResponse,
+	CancelDevelopmentAttemptData,
+	CancelDevelopmentAttemptResponse,
 	CancelGgufDownloadData,
 	CancelGgufDownloadResponse,
 	CancelImageJobData,
@@ -227,6 +246,8 @@ import type {
 	ContinuePreviewRunResponse,
 	CreateAgentDefinitionData,
 	CreateAgentDefinitionResponse,
+	CreateDevelopmentProjectData,
+	CreateDevelopmentProjectResponse,
 	CreateGoldenConversationData,
 	CreateGoldenConversationResponse,
 	CreateImageJobData,
@@ -322,6 +343,14 @@ import type {
 	GetCudaBuildPrerequisitesResponse,
 	GetCudaBuildStatusData,
 	GetCudaBuildStatusResponse,
+	GetDevelopmentArtifactData,
+	GetDevelopmentArtifactResponse,
+	GetDevelopmentCapabilityData,
+	GetDevelopmentCapabilityResponse,
+	GetDevelopmentProjectData,
+	GetDevelopmentProjectResponse,
+	GetDevelopmentTaskData,
+	GetDevelopmentTaskResponse,
 	GetGgufDownloadsData,
 	GetGgufDownloadsResponse,
 	GetGgufDownloadStatusData,
@@ -394,6 +423,14 @@ import type {
 	ListAgentTemplatesResponse,
 	ListConversationFilesData,
 	ListConversationFilesResponse,
+	ListDevelopmentArtifactsData,
+	ListDevelopmentArtifactsResponse,
+	ListDevelopmentEventsData,
+	ListDevelopmentEventsResponse,
+	ListDevelopmentProjectsData,
+	ListDevelopmentProjectsResponse,
+	ListDevelopmentRepositoriesData,
+	ListDevelopmentRepositoriesResponse,
 	ListGoldenConversationsData,
 	ListGoldenConversationsResponse,
 	ListImageJobsData,
@@ -450,14 +487,20 @@ import type {
 	PollGitHubAuthResponse,
 	PollNodeBindingData,
 	PollNodeBindingResponse,
+	PreviewDevelopmentPatchData,
+	PreviewDevelopmentPatchResponse,
 	PromoteSuggestedPlaybookActionData,
 	PromoteSuggestedPlaybookActionResponse,
 	PutModelKindData,
 	PutModelKindResponse,
+	ReconnectDevelopmentRepositoryData,
+	ReconnectDevelopmentRepositoryResponse,
 	RefreshModelCatalogData,
 	RefreshModelCatalogResponse,
 	RefreshRecommendationsData,
 	RefreshRecommendationsResponse,
+	RegisterDevelopmentRepositoryData,
+	RegisterDevelopmentRepositoryResponse,
 	ReindexCorpusData,
 	ReindexCorpusResponse,
 	ReindexKnowledgeDocumentData,
@@ -503,6 +546,8 @@ import type {
 	SignOutGitHubAuthResponse,
 	StartCudaBuildData,
 	StartCudaBuildResponse,
+	StartDevelopmentNextActionData,
+	StartDevelopmentNextActionResponse,
 	StartGgufDownloadData,
 	StartGgufDownloadResponse,
 	StartGitHubAuthData,
@@ -2151,26 +2196,6 @@ export const cancelNodeChatMessageMutation = (
 	return mutationOptions;
 };
 
-export const resolveToolApprovalMutation = (
-	options?: Partial<Options<ResolveToolApprovalData>>,
-): UseMutationOptions<ResolveToolApprovalResponse, AxiosError<ResolveToolApprovalError>, Options<ResolveToolApprovalData>> => {
-	const mutationOptions: UseMutationOptions<
-		ResolveToolApprovalResponse,
-		AxiosError<ResolveToolApprovalError>,
-		Options<ResolveToolApprovalData>
-	> = {
-		mutationFn: async (fnOptions) => {
-			const { data } = await resolveToolApproval({
-				...options,
-				...fnOptions,
-				throwOnError: true,
-			});
-			return data;
-		},
-	};
-	return mutationOptions;
-};
-
 export const listNodeChatConversationsQueryKey = (options: Options<ListNodeChatConversationsData>) =>
 	createQueryKey("listNodeChatConversations", options);
 
@@ -2545,6 +2570,26 @@ export const setNodeChatSelectedPathMutation = (
 	return mutationOptions;
 };
 
+export const resolveToolApprovalMutation = (
+	options?: Partial<Options<ResolveToolApprovalData>>,
+): UseMutationOptions<ResolveToolApprovalResponse, AxiosError<ResolveToolApprovalError>, Options<ResolveToolApprovalData>> => {
+	const mutationOptions: UseMutationOptions<
+		ResolveToolApprovalResponse,
+		AxiosError<ResolveToolApprovalError>,
+		Options<ResolveToolApprovalData>
+	> = {
+		mutationFn: async (fnOptions) => {
+			const { data } = await resolveToolApproval({
+				...options,
+				...fnOptions,
+				throwOnError: true,
+			});
+			return data;
+		},
+	};
+	return mutationOptions;
+};
+
 export const deleteKnowledgeDocumentMutation = (
 	options?: Partial<Options<DeleteKnowledgeDocumentData>>,
 ): UseMutationOptions<DeleteKnowledgeDocumentResponse, AxiosError<DefaultError>, Options<DeleteKnowledgeDocumentData>> => {
@@ -2586,6 +2631,30 @@ export const getKnowledgeDocumentOptions = (options: Options<GetKnowledgeDocumen
 		},
 		queryKey: getKnowledgeDocumentQueryKey(options),
 	});
+
+export const downloadRecommendedRerankerMutation = (
+	options?: Partial<Options<DownloadRecommendedRerankerData>>,
+): UseMutationOptions<
+	DownloadRecommendedRerankerResponse,
+	AxiosError<DefaultError>,
+	Options<DownloadRecommendedRerankerData>
+> => {
+	const mutationOptions: UseMutationOptions<
+		DownloadRecommendedRerankerResponse,
+		AxiosError<DefaultError>,
+		Options<DownloadRecommendedRerankerData>
+	> = {
+		mutationFn: async (fnOptions) => {
+			const { data } = await downloadRecommendedReranker({
+				...options,
+				...fnOptions,
+				throwOnError: true,
+			});
+			return data;
+		},
+	};
+	return mutationOptions;
+};
 
 export const listKnowledgeDocumentsQueryKey = (options?: Options<ListKnowledgeDocumentsData>) =>
 	createQueryKey("listKnowledgeDocuments", options);
@@ -2635,30 +2704,6 @@ export const reindexCorpusMutation = (
 	const mutationOptions: UseMutationOptions<ReindexCorpusResponse, AxiosError<DefaultError>, Options<ReindexCorpusData>> = {
 		mutationFn: async (fnOptions) => {
 			const { data } = await reindexCorpus({
-				...options,
-				...fnOptions,
-				throwOnError: true,
-			});
-			return data;
-		},
-	};
-	return mutationOptions;
-};
-
-export const downloadRecommendedRerankerMutation = (
-	options?: Partial<Options<DownloadRecommendedRerankerData>>,
-): UseMutationOptions<
-	DownloadRecommendedRerankerResponse,
-	AxiosError<DefaultError>,
-	Options<DownloadRecommendedRerankerData>
-> => {
-	const mutationOptions: UseMutationOptions<
-		DownloadRecommendedRerankerResponse,
-		AxiosError<DefaultError>,
-		Options<DownloadRecommendedRerankerData>
-	> = {
-		mutationFn: async (fnOptions) => {
-			const { data } = await downloadRecommendedReranker({
 				...options,
 				...fnOptions,
 				throwOnError: true,
@@ -2838,6 +2883,330 @@ export const startImageModelDownloadMutation = (
 	> = {
 		mutationFn: async (fnOptions) => {
 			const { data } = await startImageModelDownload({
+				...options,
+				...fnOptions,
+				throwOnError: true,
+			});
+			return data;
+		},
+	};
+	return mutationOptions;
+};
+
+export const getDevelopmentCapabilityQueryKey = (options?: Options<GetDevelopmentCapabilityData>) =>
+	createQueryKey("getDevelopmentCapability", options);
+
+export const getDevelopmentCapabilityOptions = (options?: Options<GetDevelopmentCapabilityData>) =>
+	queryOptions<
+		GetDevelopmentCapabilityResponse,
+		AxiosError<DefaultError>,
+		GetDevelopmentCapabilityResponse,
+		ReturnType<typeof getDevelopmentCapabilityQueryKey>
+	>({
+		queryFn: async ({ queryKey, signal }) => {
+			const { data } = await getDevelopmentCapability({
+				...options,
+				...queryKey[0],
+				signal,
+				throwOnError: true,
+			});
+			return data;
+		},
+		queryKey: getDevelopmentCapabilityQueryKey(options),
+	});
+
+export const listDevelopmentRepositoriesQueryKey = (options?: Options<ListDevelopmentRepositoriesData>) =>
+	createQueryKey("listDevelopmentRepositories", options);
+
+export const listDevelopmentRepositoriesOptions = (options?: Options<ListDevelopmentRepositoriesData>) =>
+	queryOptions<
+		ListDevelopmentRepositoriesResponse,
+		AxiosError<DefaultError>,
+		ListDevelopmentRepositoriesResponse,
+		ReturnType<typeof listDevelopmentRepositoriesQueryKey>
+	>({
+		queryFn: async ({ queryKey, signal }) => {
+			const { data } = await listDevelopmentRepositories({
+				...options,
+				...queryKey[0],
+				signal,
+				throwOnError: true,
+			});
+			return data;
+		},
+		queryKey: listDevelopmentRepositoriesQueryKey(options),
+	});
+
+export const registerDevelopmentRepositoryMutation = (
+	options?: Partial<Options<RegisterDevelopmentRepositoryData>>,
+): UseMutationOptions<
+	RegisterDevelopmentRepositoryResponse,
+	AxiosError<DefaultError>,
+	Options<RegisterDevelopmentRepositoryData>
+> => {
+	const mutationOptions: UseMutationOptions<
+		RegisterDevelopmentRepositoryResponse,
+		AxiosError<DefaultError>,
+		Options<RegisterDevelopmentRepositoryData>
+	> = {
+		mutationFn: async (fnOptions) => {
+			const { data } = await registerDevelopmentRepository({
+				...options,
+				...fnOptions,
+				throwOnError: true,
+			});
+			return data;
+		},
+	};
+	return mutationOptions;
+};
+
+export const listDevelopmentProjectsQueryKey = (options?: Options<ListDevelopmentProjectsData>) =>
+	createQueryKey("listDevelopmentProjects", options);
+
+export const listDevelopmentProjectsOptions = (options?: Options<ListDevelopmentProjectsData>) =>
+	queryOptions<
+		ListDevelopmentProjectsResponse,
+		AxiosError<DefaultError>,
+		ListDevelopmentProjectsResponse,
+		ReturnType<typeof listDevelopmentProjectsQueryKey>
+	>({
+		queryFn: async ({ queryKey, signal }) => {
+			const { data } = await listDevelopmentProjects({
+				...options,
+				...queryKey[0],
+				signal,
+				throwOnError: true,
+			});
+			return data;
+		},
+		queryKey: listDevelopmentProjectsQueryKey(options),
+	});
+
+export const createDevelopmentProjectMutation = (
+	options?: Partial<Options<CreateDevelopmentProjectData>>,
+): UseMutationOptions<CreateDevelopmentProjectResponse, AxiosError<DefaultError>, Options<CreateDevelopmentProjectData>> => {
+	const mutationOptions: UseMutationOptions<
+		CreateDevelopmentProjectResponse,
+		AxiosError<DefaultError>,
+		Options<CreateDevelopmentProjectData>
+	> = {
+		mutationFn: async (fnOptions) => {
+			const { data } = await createDevelopmentProject({
+				...options,
+				...fnOptions,
+				throwOnError: true,
+			});
+			return data;
+		},
+	};
+	return mutationOptions;
+};
+
+export const getDevelopmentProjectQueryKey = (options: Options<GetDevelopmentProjectData>) =>
+	createQueryKey("getDevelopmentProject", options);
+
+export const getDevelopmentProjectOptions = (options: Options<GetDevelopmentProjectData>) =>
+	queryOptions<
+		GetDevelopmentProjectResponse,
+		AxiosError<DefaultError>,
+		GetDevelopmentProjectResponse,
+		ReturnType<typeof getDevelopmentProjectQueryKey>
+	>({
+		queryFn: async ({ queryKey, signal }) => {
+			const { data } = await getDevelopmentProject({
+				...options,
+				...queryKey[0],
+				signal,
+				throwOnError: true,
+			});
+			return data;
+		},
+		queryKey: getDevelopmentProjectQueryKey(options),
+	});
+
+export const getDevelopmentTaskQueryKey = (options: Options<GetDevelopmentTaskData>) =>
+	createQueryKey("getDevelopmentTask", options);
+
+export const getDevelopmentTaskOptions = (options: Options<GetDevelopmentTaskData>) =>
+	queryOptions<
+		GetDevelopmentTaskResponse,
+		AxiosError<DefaultError>,
+		GetDevelopmentTaskResponse,
+		ReturnType<typeof getDevelopmentTaskQueryKey>
+	>({
+		queryFn: async ({ queryKey, signal }) => {
+			const { data } = await getDevelopmentTask({
+				...options,
+				...queryKey[0],
+				signal,
+				throwOnError: true,
+			});
+			return data;
+		},
+		queryKey: getDevelopmentTaskQueryKey(options),
+	});
+
+export const startDevelopmentNextActionMutation = (
+	options?: Partial<Options<StartDevelopmentNextActionData>>,
+): UseMutationOptions<StartDevelopmentNextActionResponse, AxiosError<DefaultError>, Options<StartDevelopmentNextActionData>> => {
+	const mutationOptions: UseMutationOptions<
+		StartDevelopmentNextActionResponse,
+		AxiosError<DefaultError>,
+		Options<StartDevelopmentNextActionData>
+	> = {
+		mutationFn: async (fnOptions) => {
+			const { data } = await startDevelopmentNextAction({
+				...options,
+				...fnOptions,
+				throwOnError: true,
+			});
+			return data;
+		},
+	};
+	return mutationOptions;
+};
+
+export const cancelDevelopmentAttemptMutation = (
+	options?: Partial<Options<CancelDevelopmentAttemptData>>,
+): UseMutationOptions<CancelDevelopmentAttemptResponse, AxiosError<DefaultError>, Options<CancelDevelopmentAttemptData>> => {
+	const mutationOptions: UseMutationOptions<
+		CancelDevelopmentAttemptResponse,
+		AxiosError<DefaultError>,
+		Options<CancelDevelopmentAttemptData>
+	> = {
+		mutationFn: async (fnOptions) => {
+			const { data } = await cancelDevelopmentAttempt({
+				...options,
+				...fnOptions,
+				throwOnError: true,
+			});
+			return data;
+		},
+	};
+	return mutationOptions;
+};
+
+export const listDevelopmentEventsQueryKey = (options: Options<ListDevelopmentEventsData>) =>
+	createQueryKey("listDevelopmentEvents", options);
+
+export const listDevelopmentEventsOptions = (options: Options<ListDevelopmentEventsData>) =>
+	queryOptions<
+		ListDevelopmentEventsResponse,
+		AxiosError<DefaultError>,
+		ListDevelopmentEventsResponse,
+		ReturnType<typeof listDevelopmentEventsQueryKey>
+	>({
+		queryFn: async ({ queryKey, signal }) => {
+			const { data } = await listDevelopmentEvents({
+				...options,
+				...queryKey[0],
+				signal,
+				throwOnError: true,
+			});
+			return data;
+		},
+		queryKey: listDevelopmentEventsQueryKey(options),
+	});
+
+export const listDevelopmentArtifactsQueryKey = (options: Options<ListDevelopmentArtifactsData>) =>
+	createQueryKey("listDevelopmentArtifacts", options);
+
+export const listDevelopmentArtifactsOptions = (options: Options<ListDevelopmentArtifactsData>) =>
+	queryOptions<
+		ListDevelopmentArtifactsResponse,
+		AxiosError<DefaultError>,
+		ListDevelopmentArtifactsResponse,
+		ReturnType<typeof listDevelopmentArtifactsQueryKey>
+	>({
+		queryFn: async ({ queryKey, signal }) => {
+			const { data } = await listDevelopmentArtifacts({
+				...options,
+				...queryKey[0],
+				signal,
+				throwOnError: true,
+			});
+			return data;
+		},
+		queryKey: listDevelopmentArtifactsQueryKey(options),
+	});
+
+export const getDevelopmentArtifactQueryKey = (options: Options<GetDevelopmentArtifactData>) =>
+	createQueryKey("getDevelopmentArtifact", options);
+
+export const getDevelopmentArtifactOptions = (options: Options<GetDevelopmentArtifactData>) =>
+	queryOptions<
+		GetDevelopmentArtifactResponse,
+		AxiosError<DefaultError>,
+		GetDevelopmentArtifactResponse,
+		ReturnType<typeof getDevelopmentArtifactQueryKey>
+	>({
+		queryFn: async ({ queryKey, signal }) => {
+			const { data } = await getDevelopmentArtifact({
+				...options,
+				...queryKey[0],
+				signal,
+				throwOnError: true,
+			});
+			return data;
+		},
+		queryKey: getDevelopmentArtifactQueryKey(options),
+	});
+
+export const previewDevelopmentPatchMutation = (
+	options?: Partial<Options<PreviewDevelopmentPatchData>>,
+): UseMutationOptions<PreviewDevelopmentPatchResponse, AxiosError<DefaultError>, Options<PreviewDevelopmentPatchData>> => {
+	const mutationOptions: UseMutationOptions<
+		PreviewDevelopmentPatchResponse,
+		AxiosError<DefaultError>,
+		Options<PreviewDevelopmentPatchData>
+	> = {
+		mutationFn: async (fnOptions) => {
+			const { data } = await previewDevelopmentPatch({
+				...options,
+				...fnOptions,
+				throwOnError: true,
+			});
+			return data;
+		},
+	};
+	return mutationOptions;
+};
+
+export const applyDevelopmentPatchMutation = (
+	options?: Partial<Options<ApplyDevelopmentPatchData>>,
+): UseMutationOptions<ApplyDevelopmentPatchResponse, AxiosError<DefaultError>, Options<ApplyDevelopmentPatchData>> => {
+	const mutationOptions: UseMutationOptions<
+		ApplyDevelopmentPatchResponse,
+		AxiosError<DefaultError>,
+		Options<ApplyDevelopmentPatchData>
+	> = {
+		mutationFn: async (fnOptions) => {
+			const { data } = await applyDevelopmentPatch({
+				...options,
+				...fnOptions,
+				throwOnError: true,
+			});
+			return data;
+		},
+	};
+	return mutationOptions;
+};
+
+export const reconnectDevelopmentRepositoryMutation = (
+	options?: Partial<Options<ReconnectDevelopmentRepositoryData>>,
+): UseMutationOptions<
+	ReconnectDevelopmentRepositoryResponse,
+	AxiosError<DefaultError>,
+	Options<ReconnectDevelopmentRepositoryData>
+> => {
+	const mutationOptions: UseMutationOptions<
+		ReconnectDevelopmentRepositoryResponse,
+		AxiosError<DefaultError>,
+		Options<ReconnectDevelopmentRepositoryData>
+	> = {
+		mutationFn: async (fnOptions) => {
+			const { data } = await reconnectDevelopmentRepository({
 				...options,
 				...fnOptions,
 				throwOnError: true,
@@ -3748,6 +4117,28 @@ export const getAgentPlaybookMonitorOptions = (options: Options<GetAgentPlaybook
 		queryKey: getAgentPlaybookMonitorQueryKey(options),
 	});
 
+export const getAgentUsageSummaryQueryKey = (options?: Options<GetAgentUsageSummaryData>) =>
+	createQueryKey("getAgentUsageSummary", options);
+
+export const getAgentUsageSummaryOptions = (options?: Options<GetAgentUsageSummaryData>) =>
+	queryOptions<
+		GetAgentUsageSummaryResponse,
+		AxiosError<DefaultError>,
+		GetAgentUsageSummaryResponse,
+		ReturnType<typeof getAgentUsageSummaryQueryKey>
+	>({
+		queryFn: async ({ queryKey, signal }) => {
+			const { data } = await getAgentUsageSummary({
+				...options,
+				...queryKey[0],
+				signal,
+				throwOnError: true,
+			});
+			return data;
+		},
+		queryKey: getAgentUsageSummaryQueryKey(options),
+	});
+
 export const getToolCapableModelsQueryKey = (options?: Options<GetToolCapableModelsData>) =>
 	createQueryKey("getToolCapableModels", options);
 
@@ -4072,25 +4463,3 @@ export const updateSuggestedPlaybookActionMutation = (
 	};
 	return mutationOptions;
 };
-
-export const getAgentUsageSummaryQueryKey = (options?: Options<GetAgentUsageSummaryData>) =>
-	createQueryKey("getAgentUsageSummary", options);
-
-export const getAgentUsageSummaryOptions = (options?: Options<GetAgentUsageSummaryData>) =>
-	queryOptions<
-		GetAgentUsageSummaryResponse,
-		AxiosError<DefaultError>,
-		GetAgentUsageSummaryResponse,
-		ReturnType<typeof getAgentUsageSummaryQueryKey>
-	>({
-		queryFn: async ({ queryKey, signal }) => {
-			const { data } = await getAgentUsageSummary({
-				...options,
-				...queryKey[0],
-				signal,
-				throwOnError: true,
-			});
-			return data;
-		},
-		queryKey: getAgentUsageSummaryQueryKey(options),
-	});

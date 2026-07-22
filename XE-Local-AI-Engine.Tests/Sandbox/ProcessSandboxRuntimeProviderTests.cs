@@ -61,6 +61,26 @@ public sealed class ProcessSandboxRuntimeProviderTests : IDisposable
     }
 
     [Test]
+    public async Task ProcessSandboxProvider_CreateOrAttach_DifferentProfilesDoNotOverwriteEachOther()
+    {
+        using var provider = CreateProvider();
+        var agentHomeKey = Key();
+        var developmentKey = agentHomeKey with { RuntimeProfile = "development-local", ManifestVersion = 2 };
+
+        var agentHome = await provider.CreateOrAttachAsync(CreateRequest(agentHomeKey));
+        var development = await provider.CreateOrAttachAsync(new SandboxCreateRequest
+        {
+            AttachKey = developmentKey,
+            RuntimeProfile = developmentKey.RuntimeProfile,
+            NetworkPolicy = SandboxNetworkPolicy.Unrestricted
+        });
+
+        AssertEx.NotEqual(agentHome.SandboxId, development.SandboxId);
+        AssertEx.Equal(agentHome.SandboxId, (await provider.ConnectAsync(agentHomeKey)).SandboxId);
+        AssertEx.Equal(development.SandboxId, (await provider.ConnectAsync(developmentKey)).SandboxId);
+    }
+
+    [Test]
     public async Task ProcessSandboxProvider_Connect_WhenJailMissing_ThrowsHandleInvalid()
     {
         using var provider = CreateProvider();
@@ -142,6 +162,72 @@ public sealed class ProcessSandboxRuntimeProviderTests : IDisposable
         var capturedBytes = Encoding.UTF8.GetByteCount(result.StandardOutput);
         AssertEx.True(capturedBytes <= capBytes,
             $"captured stdout must be capped at the {capBytes}-byte UTF-8 budget but was {capturedBytes} bytes");
+        AssertEx.True(result.StandardOutputTruncated, "the bounded result must explicitly report discarded stdout bytes");
+    }
+
+    [Test]
+    public async Task ProcessSandboxProvider_Execute_WhenWorkingDirectoryTraversesParent_Rejects()
+    {
+        using var provider = CreateProvider();
+        var handle = await provider.CreateOrAttachAsync(CreateRequest(Key()));
+        var (executable, arguments) = ShellCommand("pwd");
+
+        await AssertEx.ThrowsAsync<UnauthorizedAccessException>(() => provider.ExecuteAsync(handle, new SandboxCommandRequest
+        {
+            ExecutionId = "parent-traversal-1",
+            Executable = executable,
+            Arguments = arguments,
+            WorkingDirectory = "../../outside"
+        }));
+    }
+
+    [Test]
+    public async Task ProcessSandboxProvider_Execute_WhenWorkingDirectoryTraversesIntermediateSymlink_Rejects()
+    {
+        if (!OperatingSystem.IsLinux())
+        {
+            return;
+        }
+
+        using var provider = CreateProvider();
+        var handle = await provider.CreateOrAttachAsync(CreateRequest(Key()));
+        using var escapeTarget = new TempDir();
+        Directory.CreateDirectory(Path.Combine(escapeTarget.Path, "nested"));
+        await File.WriteAllTextAsync(Path.Combine(escapeTarget.Path, "nested", "secret.txt"), "OUTSIDE-THE-JAIL");
+        await RunShellInJailAsync(provider, handle,
+            $"mkdir -p workspace && ln -s {ShellQuote(escapeTarget.Path)} workspace/link");
+
+        await AssertEx.ThrowsAsync<UnauthorizedAccessException>(() => provider.ExecuteAsync(handle, new SandboxCommandRequest
+        {
+            ExecutionId = "intermediate-symlink-1",
+            Executable = "find",
+            Arguments = [".", "-maxdepth", "1", "-print"],
+            WorkingDirectory = "workspace/link/nested"
+        }));
+    }
+
+    [Test]
+    public async Task ProcessSandboxProvider_Execute_WhenWorkingDirectoryIsLeafSymlink_Rejects()
+    {
+        if (!OperatingSystem.IsLinux())
+        {
+            return;
+        }
+
+        using var provider = CreateProvider();
+        var handle = await provider.CreateOrAttachAsync(CreateRequest(Key()));
+        using var escapeTarget = new TempDir();
+        await File.WriteAllTextAsync(Path.Combine(escapeTarget.Path, "secret.txt"), "OUTSIDE-THE-JAIL");
+        await RunShellInJailAsync(provider, handle,
+            $"mkdir -p workspace && ln -s {ShellQuote(escapeTarget.Path)} workspace/link");
+
+        await AssertEx.ThrowsAsync<UnauthorizedAccessException>(() => provider.ExecuteAsync(handle, new SandboxCommandRequest
+        {
+            ExecutionId = "leaf-symlink-1",
+            Executable = "grep",
+            Arguments = ["-rnF", "-e", "OUTSIDE-THE-JAIL", "--", "."],
+            WorkingDirectory = "workspace/link"
+        }));
     }
 
     [Test]
@@ -268,6 +354,31 @@ public sealed class ProcessSandboxRuntimeProviderTests : IDisposable
         }));
         AssertEx.False(File.Exists(Path.Combine(escapeTarget.Path, "planted.txt")),
             "the copy-into must not have written through the escaping destination symlink");
+    }
+
+    [Test]
+    public async Task ProcessSandboxProvider_CopyInto_WhenDestinationComponentIsSymlink_DoesNotCreateOutsideDirectories()
+    {
+        if (!OperatingSystem.IsLinux())
+        {
+            return;
+        }
+
+        using var provider = CreateProvider();
+        var handle = await provider.CreateOrAttachAsync(CreateRequest(Key()));
+        using var escapeTarget = new TempDir();
+        var hostSource = WriteHostTempFile("payload-to-plant");
+        await RunShellInJailAsync(provider, handle,
+            $"mkdir -p workspace && ln -s {ShellQuote(escapeTarget.Path)} workspace/out");
+
+        await AssertEx.ThrowsAsync<UnauthorizedAccessException>(() => provider.CopyIntoAsync(handle, new SandboxCopyRequest
+        {
+            SourcePath = hostSource,
+            DestinationPath = "workspace/out/new/nested/planted.txt"
+        }));
+
+        AssertEx.False(Directory.Exists(Path.Combine(escapeTarget.Path, "new")),
+            "copy-into must reject the existing symlink prefix before Directory.CreateDirectory can mutate outside the jail");
     }
 
     [Test]

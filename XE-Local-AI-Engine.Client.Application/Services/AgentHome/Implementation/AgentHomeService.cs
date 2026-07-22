@@ -469,7 +469,7 @@ internal sealed class AgentHomeService : IAgentHomeService, IConversationSandbox
         string runDirectory,
         CancellationToken cancellationToken)
     {
-        // Gate 1 (AgentHome gateway): the model must have granted export_patch. Gate 2 (workspace copy/G): a git baseline only exists
+        // The AgentHome gateway requires the model to grant export_patch. A Git baseline exists only after workspace copy, so
         // when at least one folder copied at least one file. Both must hold before a diff is attempted.
         if (!request.AllowedActions.Contains("export_patch", StringComparer.Ordinal))
         {

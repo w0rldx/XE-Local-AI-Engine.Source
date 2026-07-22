@@ -28,6 +28,7 @@ describe("navigationLinks", () => {
 		expect(navigationLinks.map((link) => link.id)).toEqual([
 			"home",
 			"chat",
+			"development",
 			"knowledgeBase",
 			"models",
 			"settings",
@@ -46,6 +47,7 @@ describe("navigationLinks", () => {
 			"home",
 			"dashboard",
 			"chat",
+			"development",
 			"knowledgeBase",
 			"binding",
 			"models",
@@ -63,6 +65,14 @@ describe("navigationLinks", () => {
 
 		expect(gatedLinks.some((link) => link.id === "dashboard")).toBe(false);
 		expect(gatedLinks.some((link) => link.id === "binding")).toBe(false);
+	});
+
+	it("shows Development as a dedicated top-level route and hides it when its capability is off", async () => {
+		const development = navigationLinks.find((link) => link.id === "development");
+		expect(development?.to).toBe(nodeRoutePaths.development);
+
+		const { navigationLinks: gatedLinks } = await mockCapabilities({ development: false });
+		expect(gatedLinks.some((link) => link.id === "development")).toBe(false);
 	});
 
 	it("makes each group a pure toggle (no own route) with its children carrying the routes", () => {

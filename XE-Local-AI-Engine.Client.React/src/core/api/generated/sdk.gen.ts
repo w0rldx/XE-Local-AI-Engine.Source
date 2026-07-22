@@ -11,6 +11,9 @@ import type {
 	ApplyAppUpdateData,
 	ApplyAppUpdateErrors,
 	ApplyAppUpdateResponses,
+	ApplyDevelopmentPatchData,
+	ApplyDevelopmentPatchErrors,
+	ApplyDevelopmentPatchResponses,
 	ApproveGoldenConversationData,
 	ApproveGoldenConversationErrors,
 	ApproveGoldenConversationResponses,
@@ -29,6 +32,9 @@ import type {
 	CancelCudaBuildData,
 	CancelCudaBuildErrors,
 	CancelCudaBuildResponses,
+	CancelDevelopmentAttemptData,
+	CancelDevelopmentAttemptErrors,
+	CancelDevelopmentAttemptResponses,
 	CancelGgufDownloadData,
 	CancelGgufDownloadErrors,
 	CancelGgufDownloadResponses,
@@ -68,6 +74,9 @@ import type {
 	CreateAgentDefinitionData,
 	CreateAgentDefinitionErrors,
 	CreateAgentDefinitionResponses,
+	CreateDevelopmentProjectData,
+	CreateDevelopmentProjectErrors,
+	CreateDevelopmentProjectResponses,
 	CreateGoldenConversationData,
 	CreateGoldenConversationErrors,
 	CreateGoldenConversationResponses,
@@ -206,6 +215,18 @@ import type {
 	GetCudaBuildStatusData,
 	GetCudaBuildStatusErrors,
 	GetCudaBuildStatusResponses,
+	GetDevelopmentArtifactData,
+	GetDevelopmentArtifactErrors,
+	GetDevelopmentArtifactResponses,
+	GetDevelopmentCapabilityData,
+	GetDevelopmentCapabilityErrors,
+	GetDevelopmentCapabilityResponses,
+	GetDevelopmentProjectData,
+	GetDevelopmentProjectErrors,
+	GetDevelopmentProjectResponses,
+	GetDevelopmentTaskData,
+	GetDevelopmentTaskErrors,
+	GetDevelopmentTaskResponses,
 	GetGgufDownloadsData,
 	GetGgufDownloadsErrors,
 	GetGgufDownloadsResponses,
@@ -311,6 +332,18 @@ import type {
 	ListConversationFilesData,
 	ListConversationFilesErrors,
 	ListConversationFilesResponses,
+	ListDevelopmentArtifactsData,
+	ListDevelopmentArtifactsErrors,
+	ListDevelopmentArtifactsResponses,
+	ListDevelopmentEventsData,
+	ListDevelopmentEventsErrors,
+	ListDevelopmentEventsResponses,
+	ListDevelopmentProjectsData,
+	ListDevelopmentProjectsErrors,
+	ListDevelopmentProjectsResponses,
+	ListDevelopmentRepositoriesData,
+	ListDevelopmentRepositoriesErrors,
+	ListDevelopmentRepositoriesResponses,
 	ListGoldenConversationsData,
 	ListGoldenConversationsErrors,
 	ListGoldenConversationsResponses,
@@ -387,18 +420,27 @@ import type {
 	PollNodeBindingData,
 	PollNodeBindingErrors,
 	PollNodeBindingResponses,
+	PreviewDevelopmentPatchData,
+	PreviewDevelopmentPatchErrors,
+	PreviewDevelopmentPatchResponses,
 	PromoteSuggestedPlaybookActionData,
 	PromoteSuggestedPlaybookActionErrors,
 	PromoteSuggestedPlaybookActionResponses,
 	PutModelKindData,
 	PutModelKindErrors,
 	PutModelKindResponses,
+	ReconnectDevelopmentRepositoryData,
+	ReconnectDevelopmentRepositoryErrors,
+	ReconnectDevelopmentRepositoryResponses,
 	RefreshModelCatalogData,
 	RefreshModelCatalogErrors,
 	RefreshModelCatalogResponses,
 	RefreshRecommendationsData,
 	RefreshRecommendationsErrors,
 	RefreshRecommendationsResponses,
+	RegisterDevelopmentRepositoryData,
+	RegisterDevelopmentRepositoryErrors,
+	RegisterDevelopmentRepositoryResponses,
 	ReindexCorpusData,
 	ReindexCorpusErrors,
 	ReindexCorpusResponses,
@@ -459,6 +501,9 @@ import type {
 	StartCudaBuildData,
 	StartCudaBuildErrors,
 	StartCudaBuildResponses,
+	StartDevelopmentNextActionData,
+	StartDevelopmentNextActionErrors,
+	StartDevelopmentNextActionResponses,
 	StartGgufDownloadData,
 	StartGgufDownloadErrors,
 	StartGgufDownloadResponses,
@@ -518,6 +563,9 @@ import {
 	zAnalyzePlaybookPath,
 	zAnalyzePlaybookResponse,
 	zApplyAppUpdateResponse,
+	zApplyDevelopmentPatchBody,
+	zApplyDevelopmentPatchPath,
+	zApplyDevelopmentPatchResponse,
 	zApproveGoldenConversationPath,
 	zApproveGoldenConversationResponse,
 	zArchiveNodeChatConversationBody,
@@ -531,6 +579,8 @@ import {
 	zBrowseGgufRepositoriesQuery,
 	zBrowseGgufRepositoriesResponse,
 	zCancelCudaBuildResponse,
+	zCancelDevelopmentAttemptPath,
+	zCancelDevelopmentAttemptResponse,
 	zCancelGgufDownloadBody,
 	zCancelGgufDownloadResponse,
 	zCancelImageJobPath,
@@ -551,6 +601,8 @@ import {
 	zContinuePreviewRunResponse,
 	zCreateAgentDefinitionBody,
 	zCreateAgentDefinitionResponse,
+	zCreateDevelopmentProjectBody,
+	zCreateDevelopmentProjectResponse,
 	zCreateGoldenConversationBody,
 	zCreateGoldenConversationPath,
 	zCreateGoldenConversationResponse,
@@ -634,6 +686,13 @@ import {
 	zGetConnectionStatusResponse,
 	zGetCudaBuildPrerequisitesResponse,
 	zGetCudaBuildStatusResponse,
+	zGetDevelopmentArtifactPath,
+	zGetDevelopmentArtifactResponse,
+	zGetDevelopmentCapabilityResponse,
+	zGetDevelopmentProjectPath,
+	zGetDevelopmentProjectResponse,
+	zGetDevelopmentTaskPath,
+	zGetDevelopmentTaskResponse,
 	zGetGgufDownloadsResponse,
 	zGetGgufDownloadStatusPath,
 	zGetGgufDownloadStatusResponse,
@@ -693,6 +752,12 @@ import {
 	zListAgentTemplatesResponse,
 	zListConversationFilesPath,
 	zListConversationFilesResponse,
+	zListDevelopmentArtifactsPath,
+	zListDevelopmentArtifactsResponse,
+	zListDevelopmentEventsPath,
+	zListDevelopmentEventsResponse,
+	zListDevelopmentProjectsResponse,
+	zListDevelopmentRepositoriesResponse,
 	zListGoldenConversationsPath,
 	zListGoldenConversationsResponse,
 	zListImageJobsResponse,
@@ -731,14 +796,22 @@ import {
 	zPollGitHubAuthResponse,
 	zPollNodeBindingBody,
 	zPollNodeBindingResponse,
+	zPreviewDevelopmentPatchBody,
+	zPreviewDevelopmentPatchPath,
+	zPreviewDevelopmentPatchResponse,
 	zPromoteSuggestedPlaybookActionPath,
 	zPromoteSuggestedPlaybookActionResponse,
 	zPutModelKindBody,
 	zPutModelKindPath,
 	zPutModelKindResponse,
+	zReconnectDevelopmentRepositoryBody,
+	zReconnectDevelopmentRepositoryPath,
+	zReconnectDevelopmentRepositoryResponse,
 	zRefreshModelCatalogResponse,
 	zRefreshRecommendationsBody,
 	zRefreshRecommendationsResponse,
+	zRegisterDevelopmentRepositoryBody,
+	zRegisterDevelopmentRepositoryResponse,
 	zReindexCorpusResponse,
 	zReindexKnowledgeDocumentPath,
 	zReindexKnowledgeDocumentResponse,
@@ -780,6 +853,9 @@ import {
 	zSetNodeChatSelectedPathResponse,
 	zSignOutGitHubAuthResponse,
 	zStartCudaBuildResponse,
+	zStartDevelopmentNextActionBody,
+	zStartDevelopmentNextActionPath,
+	zStartDevelopmentNextActionResponse,
 	zStartGgufDownloadBody,
 	zStartGgufDownloadResponse,
 	zStartGitHubAuthResponse,
@@ -2603,32 +2679,6 @@ export const cancelNodeChatMessage = <ThrowOnError extends boolean = false>(
 		},
 	});
 
-export const resolveToolApproval = <ThrowOnError extends boolean = false>(
-	options: Options<ResolveToolApprovalData, ThrowOnError>,
-) =>
-	(options.client ?? client).post<ResolveToolApprovalResponses, ResolveToolApprovalErrors, ThrowOnError>({
-		requestValidator: async (data) =>
-			await z
-				.object({
-					body: zResolveToolApprovalBody,
-					path: z.never().optional(),
-					query: z.never().optional(),
-				})
-				.parseAsync(data),
-		responseType: "json",
-		responseValidator: async (data) => await zResolveToolApprovalResponse.parseAsync(data),
-		security: [
-			{ scheme: "bearer", type: "http" },
-			{ scheme: "bearer", type: "http" },
-		],
-		url: "/api/local/v1/chat/approvals/resolve",
-		...options,
-		headers: {
-			"Content-Type": "application/json",
-			...options.headers,
-		},
-	});
-
 export const listNodeChatConversations = <ThrowOnError extends boolean = false>(
 	options: Options<ListNodeChatConversationsData, ThrowOnError>,
 ) =>
@@ -3047,6 +3097,32 @@ export const setNodeChatSelectedPath = <ThrowOnError extends boolean = false>(
 		},
 	});
 
+export const resolveToolApproval = <ThrowOnError extends boolean = false>(
+	options: Options<ResolveToolApprovalData, ThrowOnError>,
+) =>
+	(options.client ?? client).post<ResolveToolApprovalResponses, ResolveToolApprovalErrors, ThrowOnError>({
+		requestValidator: async (data) =>
+			await z
+				.object({
+					body: zResolveToolApprovalBody,
+					path: z.never().optional(),
+					query: z.never().optional(),
+				})
+				.parseAsync(data),
+		responseType: "json",
+		responseValidator: async (data) => await zResolveToolApprovalResponse.parseAsync(data),
+		security: [
+			{ scheme: "bearer", type: "http" },
+			{ scheme: "bearer", type: "http" },
+		],
+		url: "/api/local/v1/chat/approvals/resolve",
+		...options,
+		headers: {
+			"Content-Type": "application/json",
+			...options.headers,
+		},
+	});
+
 export const deleteKnowledgeDocument = <ThrowOnError extends boolean = false>(
 	options: Options<DeleteKnowledgeDocumentData, ThrowOnError>,
 ) =>
@@ -3087,6 +3163,28 @@ export const getKnowledgeDocument = <ThrowOnError extends boolean = false>(
 			{ scheme: "bearer", type: "http" },
 		],
 		url: "/api/local/v1/knowledge-base/documents/{documentId}",
+		...options,
+	});
+
+export const downloadRecommendedReranker = <ThrowOnError extends boolean = false>(
+	options?: Options<DownloadRecommendedRerankerData, ThrowOnError>,
+) =>
+	(options?.client ?? client).post<DownloadRecommendedRerankerResponses, DownloadRecommendedRerankerErrors, ThrowOnError>({
+		requestValidator: async (data) =>
+			await z
+				.object({
+					body: z.never().optional(),
+					path: z.never().optional(),
+					query: z.never().optional(),
+				})
+				.parseAsync(data),
+		responseType: "json",
+		responseValidator: async (data) => await zDownloadRecommendedRerankerResponse.parseAsync(data),
+		security: [
+			{ scheme: "bearer", type: "http" },
+			{ scheme: "bearer", type: "http" },
+		],
+		url: "/api/local/v1/knowledge-base/reranker/download-recommended",
 		...options,
 	});
 
@@ -3156,28 +3254,6 @@ export const reindexCorpus = <ThrowOnError extends boolean = false>(options?: Op
 			{ scheme: "bearer", type: "http" },
 		],
 		url: "/api/local/v1/knowledge-base/reindex",
-		...options,
-	});
-
-export const downloadRecommendedReranker = <ThrowOnError extends boolean = false>(
-	options?: Options<DownloadRecommendedRerankerData, ThrowOnError>,
-) =>
-	(options?.client ?? client).post<DownloadRecommendedRerankerResponses, DownloadRecommendedRerankerErrors, ThrowOnError>({
-		requestValidator: async (data) =>
-			await z
-				.object({
-					body: z.never().optional(),
-					path: z.never().optional(),
-					query: z.never().optional(),
-				})
-				.parseAsync(data),
-		responseType: "json",
-		responseValidator: async (data) => await zDownloadRecommendedRerankerResponse.parseAsync(data),
-		security: [
-			{ scheme: "bearer", type: "http" },
-			{ scheme: "bearer", type: "http" },
-		],
-		url: "/api/local/v1/knowledge-base/reranker/download-recommended",
 		...options,
 	});
 
@@ -3389,6 +3465,359 @@ export const startImageModelDownload = <ThrowOnError extends boolean = false>(
 			{ scheme: "bearer", type: "http" },
 		],
 		url: "/api/local/v1/images/models/downloads",
+		...options,
+		headers: {
+			"Content-Type": "application/json",
+			...options.headers,
+		},
+	});
+
+export const getDevelopmentCapability = <ThrowOnError extends boolean = false>(
+	options?: Options<GetDevelopmentCapabilityData, ThrowOnError>,
+) =>
+	(options?.client ?? client).get<GetDevelopmentCapabilityResponses, GetDevelopmentCapabilityErrors, ThrowOnError>({
+		requestValidator: async (data) =>
+			await z
+				.object({
+					body: z.never().optional(),
+					path: z.never().optional(),
+					query: z.never().optional(),
+				})
+				.parseAsync(data),
+		responseType: "json",
+		responseValidator: async (data) => await zGetDevelopmentCapabilityResponse.parseAsync(data),
+		security: [
+			{ scheme: "bearer", type: "http" },
+			{ scheme: "bearer", type: "http" },
+		],
+		url: "/api/local/v1/development/capability",
+		...options,
+	});
+
+export const listDevelopmentRepositories = <ThrowOnError extends boolean = false>(
+	options?: Options<ListDevelopmentRepositoriesData, ThrowOnError>,
+) =>
+	(options?.client ?? client).get<ListDevelopmentRepositoriesResponses, ListDevelopmentRepositoriesErrors, ThrowOnError>({
+		requestValidator: async (data) =>
+			await z
+				.object({
+					body: z.never().optional(),
+					path: z.never().optional(),
+					query: z.never().optional(),
+				})
+				.parseAsync(data),
+		responseType: "json",
+		responseValidator: async (data) => await zListDevelopmentRepositoriesResponse.parseAsync(data),
+		security: [
+			{ scheme: "bearer", type: "http" },
+			{ scheme: "bearer", type: "http" },
+		],
+		url: "/api/local/v1/development/repositories",
+		...options,
+	});
+
+export const registerDevelopmentRepository = <ThrowOnError extends boolean = false>(
+	options: Options<RegisterDevelopmentRepositoryData, ThrowOnError>,
+) =>
+	(options.client ?? client).post<RegisterDevelopmentRepositoryResponses, RegisterDevelopmentRepositoryErrors, ThrowOnError>({
+		requestValidator: async (data) =>
+			await z
+				.object({
+					body: zRegisterDevelopmentRepositoryBody,
+					path: z.never().optional(),
+					query: z.never().optional(),
+				})
+				.parseAsync(data),
+		responseType: "json",
+		responseValidator: async (data) => await zRegisterDevelopmentRepositoryResponse.parseAsync(data),
+		security: [
+			{ scheme: "bearer", type: "http" },
+			{ scheme: "bearer", type: "http" },
+		],
+		url: "/api/local/v1/development/repositories",
+		...options,
+		headers: {
+			"Content-Type": "application/json",
+			...options.headers,
+		},
+	});
+
+export const listDevelopmentProjects = <ThrowOnError extends boolean = false>(
+	options?: Options<ListDevelopmentProjectsData, ThrowOnError>,
+) =>
+	(options?.client ?? client).get<ListDevelopmentProjectsResponses, ListDevelopmentProjectsErrors, ThrowOnError>({
+		requestValidator: async (data) =>
+			await z
+				.object({
+					body: z.never().optional(),
+					path: z.never().optional(),
+					query: z.never().optional(),
+				})
+				.parseAsync(data),
+		responseType: "json",
+		responseValidator: async (data) => await zListDevelopmentProjectsResponse.parseAsync(data),
+		security: [
+			{ scheme: "bearer", type: "http" },
+			{ scheme: "bearer", type: "http" },
+		],
+		url: "/api/local/v1/development/projects",
+		...options,
+	});
+
+export const createDevelopmentProject = <ThrowOnError extends boolean = false>(
+	options: Options<CreateDevelopmentProjectData, ThrowOnError>,
+) =>
+	(options.client ?? client).post<CreateDevelopmentProjectResponses, CreateDevelopmentProjectErrors, ThrowOnError>({
+		requestValidator: async (data) =>
+			await z
+				.object({
+					body: zCreateDevelopmentProjectBody,
+					path: z.never().optional(),
+					query: z.never().optional(),
+				})
+				.parseAsync(data),
+		responseType: "json",
+		responseValidator: async (data) => await zCreateDevelopmentProjectResponse.parseAsync(data),
+		security: [
+			{ scheme: "bearer", type: "http" },
+			{ scheme: "bearer", type: "http" },
+		],
+		url: "/api/local/v1/development/projects",
+		...options,
+		headers: {
+			"Content-Type": "application/json",
+			...options.headers,
+		},
+	});
+
+export const getDevelopmentProject = <ThrowOnError extends boolean = false>(
+	options: Options<GetDevelopmentProjectData, ThrowOnError>,
+) =>
+	(options.client ?? client).get<GetDevelopmentProjectResponses, GetDevelopmentProjectErrors, ThrowOnError>({
+		requestValidator: async (data) =>
+			await z
+				.object({
+					body: z.never().optional(),
+					path: zGetDevelopmentProjectPath,
+					query: z.never().optional(),
+				})
+				.parseAsync(data),
+		responseType: "json",
+		responseValidator: async (data) => await zGetDevelopmentProjectResponse.parseAsync(data),
+		security: [
+			{ scheme: "bearer", type: "http" },
+			{ scheme: "bearer", type: "http" },
+		],
+		url: "/api/local/v1/development/projects/{projectId}",
+		...options,
+	});
+
+export const getDevelopmentTask = <ThrowOnError extends boolean = false>(
+	options: Options<GetDevelopmentTaskData, ThrowOnError>,
+) =>
+	(options.client ?? client).get<GetDevelopmentTaskResponses, GetDevelopmentTaskErrors, ThrowOnError>({
+		requestValidator: async (data) =>
+			await z
+				.object({
+					body: z.never().optional(),
+					path: zGetDevelopmentTaskPath,
+					query: z.never().optional(),
+				})
+				.parseAsync(data),
+		responseType: "json",
+		responseValidator: async (data) => await zGetDevelopmentTaskResponse.parseAsync(data),
+		security: [
+			{ scheme: "bearer", type: "http" },
+			{ scheme: "bearer", type: "http" },
+		],
+		url: "/api/local/v1/development/projects/{projectId}/tasks/{taskId}",
+		...options,
+	});
+
+export const startDevelopmentNextAction = <ThrowOnError extends boolean = false>(
+	options: Options<StartDevelopmentNextActionData, ThrowOnError>,
+) =>
+	(options.client ?? client).post<StartDevelopmentNextActionResponses, StartDevelopmentNextActionErrors, ThrowOnError>({
+		requestValidator: async (data) =>
+			await z
+				.object({
+					body: zStartDevelopmentNextActionBody,
+					path: zStartDevelopmentNextActionPath,
+					query: z.never().optional(),
+				})
+				.parseAsync(data),
+		responseType: "json",
+		responseValidator: async (data) => await zStartDevelopmentNextActionResponse.parseAsync(data),
+		security: [
+			{ scheme: "bearer", type: "http" },
+			{ scheme: "bearer", type: "http" },
+		],
+		url: "/api/local/v1/development/projects/{projectId}/tasks/{taskId}/next-action",
+		...options,
+		headers: {
+			"Content-Type": "application/json",
+			...options.headers,
+		},
+	});
+
+export const cancelDevelopmentAttempt = <ThrowOnError extends boolean = false>(
+	options: Options<CancelDevelopmentAttemptData, ThrowOnError>,
+) =>
+	(options.client ?? client).post<CancelDevelopmentAttemptResponses, CancelDevelopmentAttemptErrors, ThrowOnError>({
+		requestValidator: async (data) =>
+			await z
+				.object({
+					body: z.never().optional(),
+					path: zCancelDevelopmentAttemptPath,
+					query: z.never().optional(),
+				})
+				.parseAsync(data),
+		responseValidator: async (data) => await zCancelDevelopmentAttemptResponse.parseAsync(data),
+		security: [
+			{ scheme: "bearer", type: "http" },
+			{ scheme: "bearer", type: "http" },
+		],
+		url: "/api/local/v1/development/projects/{projectId}/tasks/{taskId}/attempts/{attemptId}/cancel",
+		...options,
+	});
+
+export const listDevelopmentEvents = <ThrowOnError extends boolean = false>(
+	options: Options<ListDevelopmentEventsData, ThrowOnError>,
+) =>
+	(options.client ?? client).get<ListDevelopmentEventsResponses, ListDevelopmentEventsErrors, ThrowOnError>({
+		requestValidator: async (data) =>
+			await z
+				.object({
+					body: z.never().optional(),
+					path: zListDevelopmentEventsPath,
+					query: z.never().optional(),
+				})
+				.parseAsync(data),
+		responseType: "json",
+		responseValidator: async (data) => await zListDevelopmentEventsResponse.parseAsync(data),
+		security: [
+			{ scheme: "bearer", type: "http" },
+			{ scheme: "bearer", type: "http" },
+		],
+		url: "/api/local/v1/development/projects/{projectId}/events",
+		...options,
+	});
+
+export const listDevelopmentArtifacts = <ThrowOnError extends boolean = false>(
+	options: Options<ListDevelopmentArtifactsData, ThrowOnError>,
+) =>
+	(options.client ?? client).get<ListDevelopmentArtifactsResponses, ListDevelopmentArtifactsErrors, ThrowOnError>({
+		requestValidator: async (data) =>
+			await z
+				.object({
+					body: z.never().optional(),
+					path: zListDevelopmentArtifactsPath,
+					query: z.never().optional(),
+				})
+				.parseAsync(data),
+		responseType: "json",
+		responseValidator: async (data) => await zListDevelopmentArtifactsResponse.parseAsync(data),
+		security: [
+			{ scheme: "bearer", type: "http" },
+			{ scheme: "bearer", type: "http" },
+		],
+		url: "/api/local/v1/development/projects/{projectId}/tasks/{taskId}/artifacts",
+		...options,
+	});
+
+export const getDevelopmentArtifact = <ThrowOnError extends boolean = false>(
+	options: Options<GetDevelopmentArtifactData, ThrowOnError>,
+) =>
+	(options.client ?? client).get<GetDevelopmentArtifactResponses, GetDevelopmentArtifactErrors, ThrowOnError>({
+		requestValidator: async (data) =>
+			await z
+				.object({
+					body: z.never().optional(),
+					path: zGetDevelopmentArtifactPath,
+					query: z.never().optional(),
+				})
+				.parseAsync(data),
+		responseType: "json",
+		responseValidator: async (data) => await zGetDevelopmentArtifactResponse.parseAsync(data),
+		security: [
+			{ scheme: "bearer", type: "http" },
+			{ scheme: "bearer", type: "http" },
+		],
+		url: "/api/local/v1/development/projects/{projectId}/tasks/{taskId}/artifacts/{artifactId}",
+		...options,
+	});
+
+export const previewDevelopmentPatch = <ThrowOnError extends boolean = false>(
+	options: Options<PreviewDevelopmentPatchData, ThrowOnError>,
+) =>
+	(options.client ?? client).post<PreviewDevelopmentPatchResponses, PreviewDevelopmentPatchErrors, ThrowOnError>({
+		requestValidator: async (data) =>
+			await z
+				.object({
+					body: zPreviewDevelopmentPatchBody,
+					path: zPreviewDevelopmentPatchPath,
+					query: z.never().optional(),
+				})
+				.parseAsync(data),
+		responseType: "json",
+		responseValidator: async (data) => await zPreviewDevelopmentPatchResponse.parseAsync(data),
+		security: [
+			{ scheme: "bearer", type: "http" },
+			{ scheme: "bearer", type: "http" },
+		],
+		url: "/api/local/v1/development/projects/{projectId}/tasks/{taskId}/preview",
+		...options,
+		headers: {
+			"Content-Type": "application/json",
+			...options.headers,
+		},
+	});
+
+export const applyDevelopmentPatch = <ThrowOnError extends boolean = false>(
+	options: Options<ApplyDevelopmentPatchData, ThrowOnError>,
+) =>
+	(options.client ?? client).post<ApplyDevelopmentPatchResponses, ApplyDevelopmentPatchErrors, ThrowOnError>({
+		requestValidator: async (data) =>
+			await z
+				.object({
+					body: zApplyDevelopmentPatchBody,
+					path: zApplyDevelopmentPatchPath,
+					query: z.never().optional(),
+				})
+				.parseAsync(data),
+		responseType: "json",
+		responseValidator: async (data) => await zApplyDevelopmentPatchResponse.parseAsync(data),
+		security: [
+			{ scheme: "bearer", type: "http" },
+			{ scheme: "bearer", type: "http" },
+		],
+		url: "/api/local/v1/development/projects/{projectId}/tasks/{taskId}/apply",
+		...options,
+		headers: {
+			"Content-Type": "application/json",
+			...options.headers,
+		},
+	});
+
+export const reconnectDevelopmentRepository = <ThrowOnError extends boolean = false>(
+	options: Options<ReconnectDevelopmentRepositoryData, ThrowOnError>,
+) =>
+	(options.client ?? client).post<ReconnectDevelopmentRepositoryResponses, ReconnectDevelopmentRepositoryErrors, ThrowOnError>({
+		requestValidator: async (data) =>
+			await z
+				.object({
+					body: zReconnectDevelopmentRepositoryBody,
+					path: zReconnectDevelopmentRepositoryPath,
+					query: z.never().optional(),
+				})
+				.parseAsync(data),
+		responseType: "json",
+		responseValidator: async (data) => await zReconnectDevelopmentRepositoryResponse.parseAsync(data),
+		security: [
+			{ scheme: "bearer", type: "http" },
+			{ scheme: "bearer", type: "http" },
+		],
+		url: "/api/local/v1/development/projects/{projectId}/repository-connection",
 		...options,
 		headers: {
 			"Content-Type": "application/json",
@@ -4389,6 +4818,28 @@ export const getAgentPlaybookMonitor = <ThrowOnError extends boolean = false>(
 		...options,
 	});
 
+export const getAgentUsageSummary = <ThrowOnError extends boolean = false>(
+	options?: Options<GetAgentUsageSummaryData, ThrowOnError>,
+) =>
+	(options?.client ?? client).get<GetAgentUsageSummaryResponses, GetAgentUsageSummaryErrors, ThrowOnError>({
+		requestValidator: async (data) =>
+			await z
+				.object({
+					body: z.never().optional(),
+					path: z.never().optional(),
+					query: zGetAgentUsageSummaryQuery.optional(),
+				})
+				.parseAsync(data),
+		responseType: "json",
+		responseValidator: async (data) => await zGetAgentUsageSummaryResponse.parseAsync(data),
+		security: [
+			{ scheme: "bearer", type: "http" },
+			{ scheme: "bearer", type: "http" },
+		],
+		url: "/api/local/v1/agents/usage-summary",
+		...options,
+	});
+
 export const getToolCapableModels = <ThrowOnError extends boolean = false>(
 	options?: Options<GetToolCapableModelsData, ThrowOnError>,
 ) =>
@@ -4613,26 +5064,4 @@ export const updateSuggestedPlaybookAction = <ThrowOnError extends boolean = fal
 			"Content-Type": "application/json",
 			...options.headers,
 		},
-	});
-
-export const getAgentUsageSummary = <ThrowOnError extends boolean = false>(
-	options?: Options<GetAgentUsageSummaryData, ThrowOnError>,
-) =>
-	(options?.client ?? client).get<GetAgentUsageSummaryResponses, GetAgentUsageSummaryErrors, ThrowOnError>({
-		requestValidator: async (data) =>
-			await z
-				.object({
-					body: z.never().optional(),
-					path: z.never().optional(),
-					query: zGetAgentUsageSummaryQuery.optional(),
-				})
-				.parseAsync(data),
-		responseType: "json",
-		responseValidator: async (data) => await zGetAgentUsageSummaryResponse.parseAsync(data),
-		security: [
-			{ scheme: "bearer", type: "http" },
-			{ scheme: "bearer", type: "http" },
-		],
-		url: "/api/local/v1/agents/usage-summary",
-		...options,
 	});
