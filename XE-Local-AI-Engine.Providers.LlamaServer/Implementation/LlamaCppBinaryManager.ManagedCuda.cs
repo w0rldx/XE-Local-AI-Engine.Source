@@ -34,20 +34,21 @@ public sealed partial class LlamaCppBinaryManager
     ///     <see langword="null" /> when the recorded build is missing/invalid — in which case the record + cached signal are
     ///     cleared so the caller falls through to the normal path (graceful self-heal; never a silent CPU serve).
     /// </summary>
-    private async Task<LlamaBinary?> TryServeManagedCudaBinaryAsync(InstalledRuntimeState installed, CancellationToken ct)
+    private async Task<LlamaBinary?> TryServeManagedSourceBinaryAsync(InstalledRuntimeState installed, CancellationToken ct)
     {
         var buildBinDir = installed.SourceBuildPath!;
         var serverPath = Path.Combine(buildBinDir, ManagedCudaServerFileName);
 
         try
         {
-            if (!File.Exists(serverPath))
+            if (!File.Exists(serverPath) || new FileInfo(serverPath).LinkTarget is not null)
             {
                 await DiscardManagedCudaRecordAsync(ct).ConfigureAwait(false);
                 return null;
             }
 
             // Full path-chain perms/ownership (every ancestor under cacheRoot) — throws on a world-writable/untrusted hop.
+            ValidateManagedTreeLinks(buildBinDir);
             EnsureManagedPathChainSecure(serverPath);
 
             // Recorded-SHA256 recompare: a swapped binary (same path, different bytes) is rejected.
@@ -57,7 +58,7 @@ public sealed partial class LlamaCppBinaryManager
                 return null;
             }
 
-            return new LlamaBinary(serverPath, installed.Tag, GpuVariant.Cuda, IsPinnedFallback: false);
+            return new LlamaBinary(serverPath, installed.Tag, installed.Variant, IsPinnedFallback: false);
         }
         catch (OperationCanceledException) when (ct.IsCancellationRequested)
         {
@@ -75,6 +76,26 @@ public sealed partial class LlamaCppBinaryManager
     /// <inheritdoc />
     public async Task<InstalledRuntimeState> AdoptCudaSourceBuildAsync(string buildBinDir, string tag, CancellationToken ct)
     {
+        return await AdoptSourceBuildAsync(buildBinDir,
+            tag,
+            GpuVariant.Cuda,
+            LlamaCppSourceBuildRequestValidation.OfficialRepository,
+            LlamaCppReleasePins.PinnedSourceCommitSha,
+            LlamaCppSourceRevisionMode.EnginePinned,
+            requestedCommit: null,
+            ct).ConfigureAwait(false);
+    }
+
+    /// <inheritdoc />
+    public async Task<InstalledRuntimeState> AdoptSourceBuildAsync(string buildBinDir,
+        string tag,
+        GpuVariant variant,
+        string sourceRepository,
+        string sourceCommit,
+        LlamaCppSourceRevisionMode revisionMode,
+        string? requestedCommit,
+        CancellationToken ct)
+    {
         ArgumentException.ThrowIfNullOrWhiteSpace(buildBinDir);
         ArgumentException.ThrowIfNullOrWhiteSpace(tag);
 
@@ -85,13 +106,14 @@ public sealed partial class LlamaCppBinaryManager
 
         var fullBinDir = Path.GetFullPath(buildBinDir);
         var serverPath = Path.Combine(fullBinDir, ManagedCudaServerFileName);
-        if (!File.Exists(serverPath))
+        if (!File.Exists(serverPath) || new FileInfo(serverPath).LinkTarget is not null)
         {
             throw new LlamaRuntimeException("The source build did not produce the expected server executable.");
         }
 
         // Adoption validation: full path-chain perms/ownership + --version smoke + --list-devices GPU presence. A binary
         // that cannot self-check, or that exposes no GPU device, is never adopted (it would otherwise silently run CPU).
+        ValidateManagedTreeLinks(fullBinDir);
         EnsureManagedPathChainSecure(serverPath);
 
         if (!await SmokeTestAsync(serverPath, ct).ConfigureAwait(false))
@@ -99,19 +121,29 @@ public sealed partial class LlamaCppBinaryManager
             throw new LlamaRuntimeException("The source-built llama-server failed its post-build self-check.");
         }
 
-        if (!await OverrideExposesGpuDeviceAsync(serverPath, ct).ConfigureAwait(false))
+        if (variant != GpuVariant.Cpu && !await SourceBuildExposesDeviceAsync(serverPath, variant, ct).ConfigureAwait(false))
         {
-            throw new LlamaRuntimeException("The source-built llama-server exposes no GPU device; the build did not produce a working CUDA runtime.");
+            throw new LlamaRuntimeException($"The source-built llama-server exposes no {variant} device; the requested backend was not built correctly.");
         }
 
         var sha256 = await ComputeFileSha256Async(serverPath, ct).ConfigureAwait(false);
 
         var state = new InstalledRuntimeState(tag,
-            Asset: ManagedCudaSourceBuildSentinel,
+            Asset: variant switch
+            {
+                GpuVariant.Cpu => "(source-build:cpu)",
+                GpuVariant.Vulkan => "(source-build:vulkan)",
+                GpuVariant.Cuda => ManagedCudaSourceBuildSentinel,
+                _ => "(source-build)"
+            },
             Sha256: sha256,
-            Variant: GpuVariant.Cuda,
+            Variant: variant,
             InstalledAtUtc: DateTimeOffset.UtcNow,
-            SourceBuildPath: fullBinDir);
+            SourceBuildPath: fullBinDir,
+            SourceRepository: sourceRepository,
+            SourceCommit: Convert.ToHexStringLower(Convert.FromHexString(sourceCommit)),
+            SourceRevisionMode: revisionMode,
+            SourceRequestedCommit: requestedCommit is null ? null : Convert.ToHexStringLower(Convert.FromHexString(requestedCommit)));
 
         if (_installedRuntimeStore is not null)
         {
@@ -119,13 +151,19 @@ public sealed partial class LlamaCppBinaryManager
         }
 
         // Cached signal: the variant selector now returns Cuda on a Linux NVIDIA box without a per-call store read.
-        _managedCudaSignal?.MarkAvailable();
+        _managedCudaSignal?.SetActive(variant);
 
         return state;
     }
 
     /// <inheritdoc />
     public async Task RemoveCudaSourceBuildAsync(CancellationToken ct)
+    {
+        await RemoveSourceBuildAsync(ct).ConfigureAwait(false);
+    }
+
+    /// <inheritdoc />
+    public async Task RemoveSourceBuildAsync(CancellationToken ct)
     {
         var installed = _installedRuntimeStore is null
             ? null
@@ -135,13 +173,17 @@ public sealed partial class LlamaCppBinaryManager
         {
             // Path-guard: delete ONLY within {cacheRoot}/llama.cpp/source-cuda/. Assert the recorded path is a normalized
             // child of that root before removing the whole source-cuda tree. [secMED-3]
-            var sourceCudaRoot = Path.GetFullPath(Path.Combine(_cacheRoot, "llama.cpp", "source-cuda"));
-            var rootWithSeparator = sourceCudaRoot.EndsWith(Path.DirectorySeparatorChar)
-                ? sourceCudaRoot
-                : sourceCudaRoot + Path.DirectorySeparatorChar;
+            var sourceRoot = Path.GetFullPath(Path.Combine(_cacheRoot, "llama.cpp", "source-build"));
+            var legacyRoot = Path.GetFullPath(Path.Combine(_cacheRoot, "llama.cpp", "source-cuda"));
+            var rootWithSeparator = sourceRoot + Path.DirectorySeparatorChar;
+            var legacyWithSeparator = legacyRoot + Path.DirectorySeparatorChar;
             if (Path.GetFullPath(sourceBuildPath).StartsWith(rootWithSeparator, StringComparison.Ordinal))
             {
-                TryDeleteDirectory(sourceCudaRoot);
+                TryDeleteDirectory(sourceRoot);
+            }
+            else if (Path.GetFullPath(sourceBuildPath).StartsWith(legacyWithSeparator, StringComparison.Ordinal))
+            {
+                TryDeleteDirectory(legacyRoot);
             }
         }
 
@@ -159,6 +201,59 @@ public sealed partial class LlamaCppBinaryManager
         if (_installedRuntimeStore is not null)
         {
             await _installedRuntimeStore.DeleteAsync(ct).ConfigureAwait(false);
+        }
+    }
+
+    private static async Task<bool> SourceBuildExposesDeviceAsync(string serverPath, GpuVariant variant, CancellationToken ct)
+    {
+        var expectedPrefix = variant == GpuVariant.Cuda ? "CUDA" : "Vulkan";
+        var startInfo = new System.Diagnostics.ProcessStartInfo(serverPath)
+        {
+            RedirectStandardOutput = true,
+            RedirectStandardError = true,
+            UseShellExecute = false,
+            CreateNoWindow = true
+        };
+        startInfo.ArgumentList.Add("--list-devices");
+        using var process = new System.Diagnostics.Process { StartInfo = startInfo };
+        try
+        {
+            if (!process.Start())
+            {
+                return false;
+            }
+
+            using var timeout = CancellationTokenSource.CreateLinkedTokenSource(ct);
+            timeout.CancelAfter(TimeSpan.FromSeconds(15));
+            var stdout = process.StandardOutput.ReadToEndAsync(timeout.Token);
+            var stderr = process.StandardError.ReadToEndAsync(timeout.Token);
+            await process.WaitForExitAsync(timeout.Token).ConfigureAwait(false);
+            var output = (await stdout.ConfigureAwait(false)) + "\n" + (await stderr.ConfigureAwait(false));
+            return process.ExitCode == 0 && output.Split(['\r', '\n'], StringSplitOptions.RemoveEmptyEntries)
+                                                  .Any(line => line.TrimStart().StartsWith(expectedPrefix, StringComparison.OrdinalIgnoreCase)
+                                                               && line.Contains(':', StringComparison.Ordinal));
+        }
+        catch (OperationCanceledException) when (ct.IsCancellationRequested)
+        {
+            throw;
+        }
+        catch (Exception)
+        {
+            return false;
+        }
+        finally
+        {
+            try
+            {
+                if (!process.HasExited)
+                {
+                    process.Kill(entireProcessTree: true);
+                }
+            }
+            catch (Exception)
+            {
+                // Best-effort process cleanup.
+            }
         }
     }
 
@@ -193,6 +288,10 @@ public sealed partial class LlamaCppBinaryManager
         var directory = Path.GetDirectoryName(full);
         while (!string.IsNullOrEmpty(directory) && directory.Length >= root.Length)
         {
+            if (new DirectoryInfo(directory).LinkTarget is not null)
+            {
+                throw new LlamaRuntimeException("The source-built llama-server path contains a linked directory.");
+            }
             EnsureUnixPathSecure(directory, requireExecutable: false, requireRegularFile: false);
             if (string.Equals(directory, root, StringComparison.Ordinal))
             {
@@ -200,6 +299,75 @@ public sealed partial class LlamaCppBinaryManager
             }
 
             directory = Path.GetDirectoryName(directory);
+        }
+    }
+
+    private static void ValidateManagedTreeLinks(string rootPath)
+    {
+        var root = Path.GetFullPath(rootPath);
+        var rootPrefix = root + Path.DirectorySeparatorChar;
+        var pending = new Stack<string>();
+        pending.Push(root);
+        while (pending.TryPop(out var directory))
+        {
+            var directoryInfo = new DirectoryInfo(directory);
+            if (directoryInfo.LinkTarget is not null)
+            {
+                throw new LlamaRuntimeException("The managed source runtime contains a linked directory.");
+            }
+
+            foreach (var entry in Directory.EnumerateFileSystemEntries(directory))
+            {
+                if (Directory.Exists(entry))
+                {
+                    pending.Push(entry);
+                    continue;
+                }
+
+                var file = new FileInfo(entry);
+                if (file.LinkTarget is null)
+                {
+                    continue;
+                }
+
+                var visited = new HashSet<string>(StringComparer.Ordinal);
+                var current = entry;
+                for (var hop = 0; hop < 32; hop++)
+                {
+                    if (!visited.Add(current))
+                    {
+                        throw new LlamaRuntimeException("The managed source runtime contains a cyclic library link.");
+                    }
+
+                    var currentInfo = new FileInfo(current);
+                    var target = currentInfo.LinkTarget;
+                    if (target is null)
+                    {
+                        if (!currentInfo.Exists)
+                        {
+                            throw new LlamaRuntimeException("The managed source runtime contains a dangling library link.");
+                        }
+
+                        break;
+                    }
+
+                    if (Path.IsPathRooted(target))
+                    {
+                        throw new LlamaRuntimeException("The managed source runtime contains an absolute library link.");
+                    }
+
+                    current = Path.GetFullPath(Path.Combine(Path.GetDirectoryName(current)!, target));
+                    if (!current.StartsWith(rootPrefix, StringComparison.Ordinal) || Directory.Exists(current))
+                    {
+                        throw new LlamaRuntimeException("The managed source runtime contains an escaping or directory library link.");
+                    }
+
+                    if (hop == 31)
+                    {
+                        throw new LlamaRuntimeException("The managed source runtime contains an excessively deep library link chain.");
+                    }
+                }
+            }
         }
     }
 

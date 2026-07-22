@@ -11,6 +11,35 @@ using XE_Local_AI_Engine.Tests.Testing;
 public sealed class SupervisorRaceTests
 {
     [Test]
+    public async Task RuntimeMutationLease_WhileHeld_BlocksEnsureUntilDisposed()
+    {
+        var launcher = new FakeProcessLauncher();
+        await using var supervisor = SupervisorFactory.Create(launcher);
+        var lease = await supervisor.TryAcquireRuntimeMutationLeaseAsync(CancellationToken.None);
+        AssertEx.NotNull(lease);
+
+        var ensure = supervisor.EnsureRunningAsync("model-a", ModelRole.Chat, CancellationToken.None);
+        await Task.Delay(50);
+        AssertEx.False(ensure.IsCompleted);
+        AssertEx.Equal(0, launcher.LaunchCount);
+
+        await lease!.DisposeAsync();
+        await ensure;
+        AssertEx.Equal(1, launcher.LaunchCount);
+    }
+
+    [Test]
+    public async Task RuntimeMutationLease_WhenProcessRunning_FailsAtomically()
+    {
+        await using var supervisor = SupervisorFactory.Create();
+        await supervisor.EnsureRunningAsync("model-a", ModelRole.Chat, CancellationToken.None);
+
+        var lease = await supervisor.TryAcquireRuntimeMutationLeaseAsync(CancellationToken.None);
+
+        AssertEx.Null(lease);
+    }
+
+    [Test]
     public async Task EnsureRunning_ConcurrentSameKey_SpawnsExactlyOnce()
     {
         var launcher = new FakeProcessLauncher();

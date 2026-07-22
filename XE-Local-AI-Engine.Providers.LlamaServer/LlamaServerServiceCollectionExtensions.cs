@@ -42,6 +42,7 @@ public static class LlamaServerServiceCollectionExtensions
         // Cached managed-CUDA signal: a single flag the variant selector reads (no per-call store I/O), set on adopt,
         // cleared on remove / invalid-serve, seeded once at startup. Shared by the selector + the binary manager.
         services.TryAddSingleton<ICudaManagedBuildSignal, CudaManagedBuildSignal>();
+        services.TryAddSingleton<IActiveSourceBuildSignal>(static sp => sp.GetRequiredService<ICudaManagedBuildSignal>());
 
         // Operator bring-your-own llama-server override — operator-trust ONLY. Built once from process env vars
         // (XE_LLAMACPP_SERVER_PATH / XE_LLAMACPP_VARIANT) via explicit reads, NEVER from IConfiguration sections, the
@@ -82,15 +83,9 @@ public static class LlamaServerServiceCollectionExtensions
         services.TryAddSingleton<ICudaBuildPrerequisiteProbe>(static sp =>
             new CudaBuildPrerequisiteProbe(sp.GetRequiredService<IGpuVendorProbe>()));
         services.TryAddSingleton<ICudaBuildEventPublisher, NullCudaBuildEventPublisher>();
-        services.TryAddSingleton<ICudaBuildService>(static sp =>
-            new CudaBuildService(sp.GetRequiredService<ICudaBuildPrerequisiteProbe>(),
-                sp.GetRequiredService<ILlamaCppBinaryManager>(),
-                sp.GetRequiredService<ICudaBuildEventPublisher>(),
-                sp.GetRequiredService<ILogger<CudaBuildService>>()));
-        services.AddHostedService(static sp => new CudaBuildStartupService(sp.GetRequiredService<ICudaBuildService>(),
-            sp.GetRequiredService<IInstalledRuntimeStore>(),
-            sp.GetRequiredService<ICudaManagedBuildSignal>(),
-            sp.GetRequiredService<ILogger<CudaBuildStartupService>>()));
+        services.TryAddSingleton<ILlamaCppSourceBuildPrerequisiteProbe>(static sp =>
+            new LlamaCppSourceBuildPrerequisiteProbe(sp.GetRequiredService<IGpuVendorProbe>()));
+        services.TryAddSingleton<ILlamaCppSourceBuildEventPublisher, NullLlamaCppSourceBuildEventPublisher>();
 
         // Real available-VRAM probe (Lane B1): parses `llama-server --list-devices`. PLAIN AddSingleton (not TryAdd) so
         // it WINS over the Application-layer TryAddSingleton<IAvailableVramProbe, UnknownAvailableVramProbe>() floor
@@ -156,6 +151,20 @@ public static class LlamaServerServiceCollectionExtensions
             sp.GetRequiredService<IGpuModelLoadAdmission>()));
         services.TryAddSingleton<ILlamaServerProcessSupervisor>(static sp =>
             sp.GetRequiredService<LlamaServerProcessSupervisor>());
+
+        services.TryAddSingleton<ILlamaCppSourceBuildService>(static sp =>
+            new LlamaCppSourceBuildService(sp.GetRequiredService<ILlamaCppSourceBuildPrerequisiteProbe>(),
+                sp.GetRequiredService<ILlamaCppBinaryManager>(),
+                sp.GetRequiredService<IInstalledRuntimeStore>(),
+                sp.GetRequiredService<IActiveSourceBuildSignal>(),
+                sp.GetRequiredService<ILlamaServerProcessSupervisor>(),
+                sp.GetRequiredService<ILlamaCppSourceBuildEventPublisher>(),
+                sp.GetRequiredService<ILogger<LlamaCppSourceBuildService>>()));
+        services.TryAddSingleton<ICudaBuildService, LegacyCudaBuildServiceAdapter>();
+        services.AddHostedService(static sp => new CudaBuildStartupService(sp.GetRequiredService<ILlamaCppSourceBuildService>(),
+            sp.GetRequiredService<IInstalledRuntimeStore>(),
+            sp.GetRequiredService<ICudaManagedBuildSignal>(),
+            sp.GetRequiredService<ILogger<CudaBuildStartupService>>()));
 
         // Local cross-encoder reranker: spawns/reuses a rerank-role llama-server (--rerank + --pooling rank) for the
         // resolved reranker model and POSTs /v1/rerank. Uses the caller-supplied HttpClient (AddHttpClient) — the same

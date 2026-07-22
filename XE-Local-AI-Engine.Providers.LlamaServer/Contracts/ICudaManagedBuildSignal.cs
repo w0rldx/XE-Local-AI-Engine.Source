@@ -12,7 +12,7 @@ namespace XE_Local_AI_Engine.Providers.LlamaServer.Contracts;
 ///     that finds the recorded build missing or invalid it clears this flag and falls through, so a stale "true" self-heals
 ///     on the next serve. Implementations must be thread-safe.
 /// </remarks>
-public interface ICudaManagedBuildSignal
+public interface ICudaManagedBuildSignal : IActiveSourceBuildSignal
 {
     /// <summary><see langword="true" /> when a managed CUDA source build was recorded and present at the last check.</summary>
     bool IsAvailable { get; }
@@ -23,11 +23,8 @@ public interface ICudaManagedBuildSignal
     ///     recomputes when it differs, so a CUDA adopt/remove that flips the selection never leaves a stale memo
     ///     (GPTAUD-09a). Lock-free to read; the value only ever grows.
     /// </summary>
-    long Version { get; }
-
     /// <summary>Marks a managed CUDA source build as available (called on adopt and at startup seeding).</summary>
     void MarkAvailable();
 
     /// <summary>Clears the signal (called on remove, and when a serve finds the recorded build missing/invalid).</summary>
-    void Clear();
 }

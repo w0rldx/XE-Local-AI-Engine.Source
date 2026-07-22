@@ -20,6 +20,15 @@ namespace XE_Local_AI_Engine.Providers.LlamaServer.Contracts;
 public interface ILlamaServerProcessSupervisor
 {
     /// <summary>
+    ///     Atomically acquires an exclusive runtime-mutation lease only when no process is running or starting. While
+    ///     held, new <see cref="EnsureRunningAsync" /> calls wait. Returns null when a process already owns the runtime.
+    /// </summary>
+    Task<ILlamaServerRuntimeMutationLease?> TryAcquireRuntimeMutationLeaseAsync(CancellationToken ct)
+    {
+        return Task.FromResult<ILlamaServerRuntimeMutationLease?>(null);
+    }
+
+    /// <summary>
     ///     Reuses the running <c>(model, role)</c> process or spawns one (single-flight per key), then returns its
     ///     localhost OpenAI-compatible endpoint. Spawning a new distinct model when the loaded-cap is full rejects.
     /// </summary>
