@@ -11,11 +11,11 @@ public interface IDevelopmentCoordinator
     Task<DevelopmentOperationResult> AttachArtifactAsync(DevelopmentAttachArtifactCommand command, CancellationToken cancellationToken = default);
     Task<DevelopmentOperationResult> ApplyAsync(Guid operationId,
         DevelopmentApprovedApplySubject subject,
-        string repositoryRoot,
+        DevelopmentRepositoryBinding repository,
         CancellationToken cancellationToken = default);
     Task<DevelopmentOperationResult> ApplyRevalidatedAsync(Guid operationId,
         DevelopmentApprovedApplySubject subject,
-        string repositoryRoot,
+        DevelopmentRepositoryBinding repository,
         Func<CancellationToken, Task> revalidateBeforeHostMutation,
         CancellationToken cancellationToken = default);
     Task<int> ReconcileStartupAsync(CancellationToken cancellationToken = default);

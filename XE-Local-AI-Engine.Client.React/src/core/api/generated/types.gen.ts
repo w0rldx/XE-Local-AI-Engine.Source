@@ -1465,6 +1465,25 @@ export type XeLocalAiEngineClientEndpointsImagesV1ImageModelPartDownloadRequest 
 	sha256?: string | null;
 };
 
+export type XeLocalAiEngineClientEndpointsDevelopmentV1DevelopmentCapabilityResponse = {
+	enabled?: boolean;
+};
+
+export type XeLocalAiEngineClientEndpointsDevelopmentV1ListDevelopmentRepositoriesResponse = {
+	items?: Array<XeLocalAiEngineClientEndpointsDevelopmentV1DevelopmentRepositoryResponse>;
+};
+
+export type XeLocalAiEngineClientEndpointsDevelopmentV1DevelopmentRepositoryResponse = {
+	id?: string;
+	alias?: string;
+	availability?: string;
+};
+
+export type XeLocalAiEngineClientEndpointsDevelopmentV1RegisterDevelopmentRepositoryRequest = {
+	alias?: string;
+	hostPath?: string;
+};
+
 export type XeLocalAiEngineClientEndpointsDevelopmentV1ListDevelopmentProjectsResponse = {
 	items?: Array<XeLocalAiEngineClientEndpointsDevelopmentV1DevelopmentProjectResponse>;
 };
@@ -1472,6 +1491,8 @@ export type XeLocalAiEngineClientEndpointsDevelopmentV1ListDevelopmentProjectsRe
 export type XeLocalAiEngineClientEndpointsDevelopmentV1DevelopmentProjectResponse = {
 	id?: string;
 	objective?: string;
+	selectedFolderId?: string | null;
+	repositoryConnectionRequired?: boolean;
 	baseBranch?: string;
 	status?: string;
 	egressPolicy?: string;
@@ -1557,7 +1578,7 @@ export type XeLocalAiEngineClientEndpointsDevelopmentV1DevelopmentEventResponse 
 
 export type XeLocalAiEngineClientEndpointsDevelopmentV1CreateDevelopmentProjectRequest = {
 	operationId?: string;
-	repositoryRoot?: string;
+	selectedFolderId?: string;
 	objective?: string;
 	baseBranch?: string;
 	taskTitle?: string;
@@ -1590,7 +1611,6 @@ export type XeLocalAiEngineClientEndpointsDevelopmentV1DevelopmentNextActionResp
 
 export type XeLocalAiEngineClientEndpointsDevelopmentV1DevelopmentActionRequest = {
 	operationId?: string;
-	repositoryRoot?: string;
 };
 
 export type XeLocalAiEngineClientEndpointsDevelopmentV1DevelopmentAttemptRequest = {
@@ -1636,6 +1656,11 @@ export type XeLocalAiEngineClientEndpointsDevelopmentV1DevelopmentApplyResponse 
 	status?: string;
 	version?: number;
 	sequence?: number;
+};
+
+export type XeLocalAiEngineClientEndpointsDevelopmentV1ReconnectDevelopmentRepositoryRequest = {
+	selectedFolderId?: string;
+	expectedVersion?: number;
 };
 
 export type XeLocalAiEngineClientEndpointsConnectionV1ConnectionStatusResponse = {
@@ -5494,6 +5519,89 @@ export type StartImageModelDownloadResponses = {
 
 export type StartImageModelDownloadResponse = StartImageModelDownloadResponses[keyof StartImageModelDownloadResponses];
 
+export type GetDevelopmentCapabilityData = {
+	body?: never;
+	path?: never;
+	query?: never;
+	url: "/api/local/v1/development/capability";
+};
+
+export type GetDevelopmentCapabilityErrors = {
+	/**
+	 * Unauthorized
+	 */
+	401: unknown;
+	/**
+	 * Forbidden
+	 */
+	403: unknown;
+};
+
+export type GetDevelopmentCapabilityResponses = {
+	/**
+	 * Success
+	 */
+	200: XeLocalAiEngineClientEndpointsDevelopmentV1DevelopmentCapabilityResponse;
+};
+
+export type GetDevelopmentCapabilityResponse = GetDevelopmentCapabilityResponses[keyof GetDevelopmentCapabilityResponses];
+
+export type ListDevelopmentRepositoriesData = {
+	body?: never;
+	path?: never;
+	query?: never;
+	url: "/api/local/v1/development/repositories";
+};
+
+export type ListDevelopmentRepositoriesErrors = {
+	/**
+	 * Unauthorized
+	 */
+	401: unknown;
+	/**
+	 * Forbidden
+	 */
+	403: unknown;
+};
+
+export type ListDevelopmentRepositoriesResponses = {
+	/**
+	 * Success
+	 */
+	200: XeLocalAiEngineClientEndpointsDevelopmentV1ListDevelopmentRepositoriesResponse;
+};
+
+export type ListDevelopmentRepositoriesResponse =
+	ListDevelopmentRepositoriesResponses[keyof ListDevelopmentRepositoriesResponses];
+
+export type RegisterDevelopmentRepositoryData = {
+	body: XeLocalAiEngineClientEndpointsDevelopmentV1RegisterDevelopmentRepositoryRequest;
+	path?: never;
+	query?: never;
+	url: "/api/local/v1/development/repositories";
+};
+
+export type RegisterDevelopmentRepositoryErrors = {
+	/**
+	 * Unauthorized
+	 */
+	401: unknown;
+	/**
+	 * Forbidden
+	 */
+	403: unknown;
+};
+
+export type RegisterDevelopmentRepositoryResponses = {
+	/**
+	 * Success
+	 */
+	200: XeLocalAiEngineClientEndpointsDevelopmentV1DevelopmentRepositoryResponse;
+};
+
+export type RegisterDevelopmentRepositoryResponse =
+	RegisterDevelopmentRepositoryResponses[keyof RegisterDevelopmentRepositoryResponses];
+
 export type ListDevelopmentProjectsData = {
 	body?: never;
 	path?: never;
@@ -5817,6 +5925,36 @@ export type ApplyDevelopmentPatchResponses = {
 };
 
 export type ApplyDevelopmentPatchResponse = ApplyDevelopmentPatchResponses[keyof ApplyDevelopmentPatchResponses];
+
+export type ReconnectDevelopmentRepositoryData = {
+	body: XeLocalAiEngineClientEndpointsDevelopmentV1ReconnectDevelopmentRepositoryRequest;
+	path: {
+		projectId: string;
+	};
+	query?: never;
+	url: "/api/local/v1/development/projects/{projectId}/repository-connection";
+};
+
+export type ReconnectDevelopmentRepositoryErrors = {
+	/**
+	 * Unauthorized
+	 */
+	401: unknown;
+	/**
+	 * Forbidden
+	 */
+	403: unknown;
+};
+
+export type ReconnectDevelopmentRepositoryResponses = {
+	/**
+	 * Success
+	 */
+	200: XeLocalAiEngineClientEndpointsDevelopmentV1DevelopmentProjectDetailResponse;
+};
+
+export type ReconnectDevelopmentRepositoryResponse =
+	ReconnectDevelopmentRepositoryResponses[keyof ReconnectDevelopmentRepositoryResponses];
 
 export type ConnectConnectionData = {
 	body?: never;

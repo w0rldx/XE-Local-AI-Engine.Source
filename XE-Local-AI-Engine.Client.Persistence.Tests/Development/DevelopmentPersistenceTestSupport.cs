@@ -1,5 +1,6 @@
 namespace XE_Local_AI_Engine.Client.Persistence.Tests.Development;
 
+using System.Text;
 using Microsoft.Data.Sqlite;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
@@ -19,6 +20,7 @@ using XE_Local_AI_Engine.Providers.Abstractions;
 
 internal sealed class DevelopmentTestFixture : IDisposable
 {
+    public static readonly Guid SelectedFolderId = Guid.Parse("aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa");
     private readonly string _root = Path.Combine(Path.GetTempPath(), "xe-development-persistence-" + Guid.NewGuid().ToString("N"));
     private readonly NullNodeSqliteKeyHolder _keyHolder = new();
 
@@ -40,7 +42,17 @@ internal sealed class DevelopmentTestFixture : IDisposable
         services.AddScoped<IDevelopmentCoordinator, DevelopmentCoordinator>();
         var provider = services.BuildServiceProvider(validateScopes: true);
         await using var scope = provider.CreateAsyncScope();
-        await scope.ServiceProvider.GetRequiredService<NodeChatDbContext>().Database.EnsureCreatedAsync().ConfigureAwait(false);
+        var dbContext = scope.ServiceProvider.GetRequiredService<NodeChatDbContext>();
+        await dbContext.Database.EnsureCreatedAsync().ConfigureAwait(false);
+        dbContext.SelectedFolders.Add(new NodeSelectedFolder
+        {
+            Id = SelectedFolderId,
+            Alias = "development-test-repository",
+            HostPath = Encoding.UTF8.GetBytes(_root),
+            Mode = SelectedFolderMode.Copy,
+            CreatedAtUtc = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds()
+        });
+        _ = await dbContext.SaveChangesAsync().ConfigureAwait(false);
         return provider;
     }
 
@@ -49,6 +61,7 @@ internal sealed class DevelopmentTestFixture : IDisposable
             Guid.NewGuid(),
             Guid.NewGuid(),
             "objective",
+            SelectedFolderId,
             "repository-hash",
             "main",
             "task",

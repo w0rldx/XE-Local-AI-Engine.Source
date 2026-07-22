@@ -19,7 +19,7 @@ internal static class AddNodeDevelopmentExtensions
                .ValidateDataAnnotations()
                .ValidateOnStart();
 
-        if (!configuration.GetValue($"{DevelopmentOptions.Section}:Enabled", defaultValue: false))
+        if (!configuration.GetValue($"{DevelopmentOptions.Section}:Enabled", defaultValue: true))
         {
             return builder;
         }
@@ -37,6 +37,7 @@ internal static class AddNodeDevelopmentExtensions
         builder.Services.AddScoped<IDevelopmentReviewerModel, DevelopmentReviewerModel>();
         builder.Services.AddScoped<IDevelopmentReviewerAttemptRunner, DevelopmentReviewerAttemptRunner>();
         builder.Services.AddScoped<IDevelopmentApplyService, DevelopmentApplyService>();
+        builder.Services.AddScoped<IDevelopmentRepositoryBindingService, DevelopmentRepositoryBindingService>();
         builder.Services.AddSingleton<DevelopmentCloudContextCatalog>();
         builder.Services.AddSingleton<IDevelopmentCloudContextCatalog>(static services => services.GetRequiredService<DevelopmentCloudContextCatalog>());
         builder.Services.AddSingleton<IDevelopmentCloudContextBuilder, DevelopmentCloudContextBuilder>();

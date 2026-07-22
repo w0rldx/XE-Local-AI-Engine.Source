@@ -208,6 +208,7 @@ public sealed class DevelopmentCloudScopedSecurityTests
         var snapshot = new DevelopmentExecutionSnapshot(projectId,
             taskId,
             attemptId,
+            Guid.NewGuid(),
             "repository-hash",
             "main",
             DevelopmentEgressPolicy.CloudScoped,

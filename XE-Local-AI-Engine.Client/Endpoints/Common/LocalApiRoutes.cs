@@ -276,8 +276,11 @@ public static class LocalApiRoutes
     public static class Development
     {
         public const string Root = "development";
+        public const string Capability = "development/capability";
+        public const string Repositories = "development/repositories";
         public const string Projects = "development/projects";
         public const string ProjectById = "development/projects/{projectId}";
+        public const string RepositoryConnection = "development/projects/{projectId}/repository-connection";
         public const string TaskById = "development/projects/{projectId}/tasks/{taskId}";
         public const string NextAction = "development/projects/{projectId}/tasks/{taskId}/next-action";
         public const string CancelAttempt = "development/projects/{projectId}/tasks/{taskId}/attempts/{attemptId}/cancel";

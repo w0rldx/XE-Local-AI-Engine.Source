@@ -67,7 +67,7 @@ public sealed class DevelopmentWorkspaceAndCoderTests : IDisposable
 
         using var sandbox = CreateSandbox();
         var provider = new DevelopmentWorkspaceProvider(new FakeNodeDataDirectory(data), sandbox, options, TimeProvider.System);
-        var session = await provider.PrepareAsync(snapshot, repository).ConfigureAwait(false);
+        var session = await provider.PrepareAsync(snapshot, Binding(snapshot, repository)).ConfigureAwait(false);
         var tools = new DevelopmentWorkspaceTools(sandbox, session, options);
         const string patch = """
                              diff --git a/README.md b/README.md
@@ -93,7 +93,7 @@ public sealed class DevelopmentWorkspaceAndCoderTests : IDisposable
 
         using var sandbox = CreateSandbox();
         var provider = new DevelopmentWorkspaceProvider(new FakeNodeDataDirectory(data), sandbox, options, TimeProvider.System);
-        var session = await provider.PrepareAsync(snapshot, repository).ConfigureAwait(false);
+        var session = await provider.PrepareAsync(snapshot, Binding(snapshot, repository)).ConfigureAwait(false);
         var tools = new DevelopmentWorkspaceTools(sandbox, session, options);
         string[] patches =
         [
@@ -123,7 +123,7 @@ public sealed class DevelopmentWorkspaceAndCoderTests : IDisposable
 
         using var sandbox = CreateSandbox();
         var provider = new DevelopmentWorkspaceProvider(new FakeNodeDataDirectory(data), sandbox, options, TimeProvider.System);
-        var session = await provider.PrepareAsync(snapshot, repository).ConfigureAwait(false);
+        var session = await provider.PrepareAsync(snapshot, Binding(snapshot, repository)).ConfigureAwait(false);
         var tools = new DevelopmentWorkspaceTools(sandbox, session, options);
         const string patch = """
                              diff --git a/large.txt b/large.txt
@@ -151,7 +151,7 @@ public sealed class DevelopmentWorkspaceAndCoderTests : IDisposable
 
         using var sandbox = CreateSandbox();
         var provider = new DevelopmentWorkspaceProvider(new FakeNodeDataDirectory(data), sandbox, options, TimeProvider.System);
-        var session = await provider.PrepareAsync(snapshot, repository).ConfigureAwait(false);
+        var session = await provider.PrepareAsync(snapshot, Binding(snapshot, repository)).ConfigureAwait(false);
         var tools = new DevelopmentWorkspaceTools(sandbox, session, options);
         _ = await tools.WriteFileAsync("large.txt", "0123456789abcdefg").ConfigureAwait(false);
 
@@ -282,7 +282,7 @@ public sealed class DevelopmentWorkspaceAndCoderTests : IDisposable
         using (var sandbox = CreateSandbox())
         {
             var provider = new DevelopmentWorkspaceProvider(new FakeNodeDataDirectory(data), sandbox, options, TimeProvider.System);
-            first = await provider.PrepareAsync(snapshot, repository).ConfigureAwait(false);
+            first = await provider.PrepareAsync(snapshot, Binding(snapshot, repository)).ConfigureAwait(false);
             var tools = new DevelopmentWorkspaceTools(sandbox, first, options);
 
             _ = await tools.WriteFileAsync("src/feature.txt", "bounded change\n").ConfigureAwait(false);
@@ -311,7 +311,7 @@ public sealed class DevelopmentWorkspaceAndCoderTests : IDisposable
 
         using var replacementSandbox = CreateSandbox();
         var replacementProvider = new DevelopmentWorkspaceProvider(new FakeNodeDataDirectory(data), replacementSandbox, options, TimeProvider.System);
-        var replacement = await replacementProvider.PrepareAsync(snapshot, repository).ConfigureAwait(false);
+        var replacement = await replacementProvider.PrepareAsync(snapshot, Binding(snapshot, repository)).ConfigureAwait(false);
         AssertEx.Equal(first.HostWorktreePath, replacement.HostWorktreePath);
         var replacementTools = new DevelopmentWorkspaceTools(replacementSandbox, replacement, options);
         AssertEx.Equal("bounded change\n", await replacementTools.ReadFileAsync("src/feature.txt").ConfigureAwait(false));
@@ -337,14 +337,14 @@ public sealed class DevelopmentWorkspaceAndCoderTests : IDisposable
         using (var sandbox = CreateSandbox())
         {
             var provider = new DevelopmentWorkspaceProvider(new FakeNodeDataDirectory(data), sandbox, options, TimeProvider.System);
-            session = await provider.PrepareAsync(snapshot, repository).ConfigureAwait(false);
+            session = await provider.PrepareAsync(snapshot, Binding(snapshot, repository)).ConfigureAwait(false);
             EnsureSuccess(await RunProcessAsync(session.HostWorktreePath, "git", "commit", "--allow-empty", "-m", "unexpected-head").ConfigureAwait(false));
             await sandbox.KillAsync(session.SandboxHandle).ConfigureAwait(false);
         }
 
         using var replacementSandbox = CreateSandbox();
         var replacement = new DevelopmentWorkspaceProvider(new FakeNodeDataDirectory(data), replacementSandbox, options, TimeProvider.System);
-        await AssertEx.ThrowsAsync<DevelopmentWorkspaceSecurityException>(() => replacement.PrepareAsync(snapshot, repository));
+        await AssertEx.ThrowsAsync<DevelopmentWorkspaceSecurityException>(() => replacement.PrepareAsync(snapshot, Binding(snapshot, repository)));
     }
 
     [Test]
@@ -359,7 +359,7 @@ public sealed class DevelopmentWorkspaceAndCoderTests : IDisposable
 
         using var sandbox = CreateSandbox();
         var provider = new DevelopmentWorkspaceProvider(new FakeNodeDataDirectory(data), sandbox, options, TimeProvider.System);
-        var session = await provider.PrepareAsync(snapshot, repository).ConfigureAwait(false);
+        var session = await provider.PrepareAsync(snapshot, Binding(snapshot, repository)).ConfigureAwait(false);
         var tools = new DevelopmentWorkspaceTools(sandbox, session, options);
         _ = await tools.WriteFileAsync("large.txt", new string('x', 1024)).ConfigureAwait(false);
 
@@ -403,7 +403,7 @@ public sealed class DevelopmentWorkspaceAndCoderTests : IDisposable
             new UnexpectedCloudContextService(),
             options);
 
-        var result = await runner.RunAsync(snapshot.AttemptId, repository).ConfigureAwait(false);
+        var result = await runner.RunAsync(snapshot.AttemptId, Binding(snapshot, repository)).ConfigureAwait(false);
         AssertEx.NotNullOrEmpty(result.SubjectHash);
         AssertEx.Contains(result.ChangedFiles, "feature.txt");
         _ = store.Received(5).AttachArtifactAsync(Arg.Any<DevelopmentAttachArtifactCommand>(), Arg.Any<CancellationToken>());
@@ -438,6 +438,7 @@ public sealed class DevelopmentWorkspaceAndCoderTests : IDisposable
         return new DevelopmentExecutionSnapshot(Guid.NewGuid(),
             Guid.NewGuid(),
             Guid.NewGuid(),
+            Guid.NewGuid(),
             identity,
             "main",
             DevelopmentEgressPolicy.LocalOnly,
@@ -458,6 +459,13 @@ public sealed class DevelopmentWorkspaceAndCoderTests : IDisposable
             "local",
             AttemptVersion: 1);
     }
+
+    private static DevelopmentRepositoryBinding Binding(DevelopmentExecutionSnapshot snapshot, string repository)
+        => new(snapshot.ProjectId,
+            snapshot.SelectedFolderId ?? throw new InvalidOperationException("The test snapshot must have a selected folder."),
+            "repository",
+            repository,
+            snapshot.RepositoryIdentityHash);
 
     private async Task<string> CreateRepositoryAsync()
     {
