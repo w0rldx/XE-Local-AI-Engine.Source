@@ -24,6 +24,8 @@ using XE_Local_AI_Engine.Tests.E2ETests.Infrastructure;
 [ParallelLimiter<BrowserParallelLimit>]
 public abstract class XEE2ETestBase : PageTest
 {
+    private bool _tracingStarted;
+
     protected XEE2ETestBase()
         : base(BuildLaunchOptions("chromium"))
     {
@@ -78,6 +80,7 @@ public abstract class XEE2ETestBase : PageTest
             Sources = true,
             Title = $"{GetType().Name}.{context.Metadata.TestName}"
         }).ConfigureAwait(false);
+        _tracingStarted = true;
     }
 
     [Before(Test)]
@@ -110,6 +113,11 @@ public abstract class XEE2ETestBase : PageTest
     [After(Test)]
     public async Task StopTracingAsync(TestContext context)
     {
+        if (!_tracingStarted)
+        {
+            return;
+        }
+
         var testState = context.Execution.Result?.State;
         var testFailed = testState?.ToString() is "Failed" or "Errored";
 
@@ -125,11 +133,13 @@ public abstract class XEE2ETestBase : PageTest
             {
                 Path = tracePath
             }).ConfigureAwait(false);
+            _tracingStarted = false;
 
             return;
         }
 
         await Context.Tracing.StopAsync(new TracingStopOptions()).ConfigureAwait(false);
+        _tracingStarted = false;
     }
 
     private static BrowserTypeLaunchOptions BuildLaunchOptions(string browserName)

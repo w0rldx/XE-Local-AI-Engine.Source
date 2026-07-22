@@ -94,7 +94,8 @@ public sealed class XEReactClientFixture : IAsyncInitializer, IAsyncDisposable
                 {
                     ["VITE_API_URL"] = $"http://127.0.0.1:{Port}",
                     ["VITE_API_VERSION"] = "v1",
-                    ["VITE_APP_TITLE"] = "XE E2E"
+                    ["VITE_APP_TITLE"] = "XE E2E",
+                    ["VITE_DEVELOPMENT_MODE_ENABLED"] = "true"
                 }).ConfigureAwait(false);
         }
         finally
@@ -131,17 +132,23 @@ public sealed class XEReactClientFixture : IAsyncInitializer, IAsyncDisposable
         var directory = new DirectoryInfo(assemblyDir);
         while (directory != null)
         {
-            var candidate = Path.Combine(directory.FullName, "Apps", "XE-Local-AI-Engine", "XE-Local-AI-Engine.Client.React");
-            if (Directory.Exists(candidate) && File.Exists(Path.Combine(candidate, "package.json")))
+            var repositoryCandidate = Path.Combine(directory.FullName, "XE-Local-AI-Engine.Client.React");
+            if (Directory.Exists(repositoryCandidate) && File.Exists(Path.Combine(repositoryCandidate, "package.json")))
             {
-                return candidate;
+                return repositoryCandidate;
+            }
+
+            var superprojectCandidate = Path.Combine(directory.FullName, "Apps", "XE-Local-AI-Engine", "XE-Local-AI-Engine.Client.React");
+            if (Directory.Exists(superprojectCandidate) && File.Exists(Path.Combine(superprojectCandidate, "package.json")))
+            {
+                return superprojectCandidate;
             }
 
             directory = directory.Parent;
         }
 
-        throw new InvalidOperationException("Could not find Apps/XE-Local-AI-Engine/XE-Local-AI-Engine.Client.React from the test assembly path. " +
-                                            "Ensure the test runs from within the C0re superproject worktree.");
+        throw new InvalidOperationException("Could not find XE-Local-AI-Engine.Client.React from the test assembly path. " +
+                                            "Ensure the test runs from the repository or its containing superproject worktree.");
     }
 
     private static void CopyDirectory(string sourceDir, string destinationDir)

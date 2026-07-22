@@ -168,19 +168,19 @@ internal sealed class DevelopmentRestartRecoveryHarness : IAsyncDisposable
 
     public static async Task<DevelopmentRestartRecoveryHarness> CreateAsync()
     {
-        var rootPath = Path.Combine(Path.GetTempPath(), "development-restart-spike-" + Guid.NewGuid().ToString("N"));
+        var rootPath = Path.Combine(Path.GetTempPath(), "development-restart-recovery-" + Guid.NewGuid().ToString("N"));
         var repositoryPath = Path.Combine(rootPath, "repository");
         var worktreePath = Path.Combine(rootPath, "worktree");
         Directory.CreateDirectory(repositoryPath);
 
         await RunGitAsync(repositoryPath, "init", "--initial-branch=main").ConfigureAwait(false);
-        await RunGitAsync(repositoryPath, "config", "user.email", "development-spike@localhost.test").ConfigureAwait(false);
-        await RunGitAsync(repositoryPath, "config", "user.name", "Development Restart Spike").ConfigureAwait(false);
+        await RunGitAsync(repositoryPath, "config", "user.email", "development-recovery@localhost.test").ConfigureAwait(false);
+        await RunGitAsync(repositoryPath, "config", "user.name", "Development Restart Recovery").ConfigureAwait(false);
         await File.WriteAllTextAsync(Path.Combine(repositoryPath, "tracked.txt"), "base\n").ConfigureAwait(false);
         await RunGitAsync(repositoryPath, "add", "tracked.txt").ConfigureAwait(false);
         await RunGitAsync(repositoryPath, "commit", "-m", "base").ConfigureAwait(false);
         var protectedBranchCommit = await RunGitAsync(repositoryPath, "rev-parse", "main").ConfigureAwait(false);
-        await RunGitAsync(repositoryPath, "worktree", "add", "-b", "development-spike", worktreePath, "main").ConfigureAwait(false);
+        await RunGitAsync(repositoryPath, "worktree", "add", "-b", "development-recovery", worktreePath, "main").ConfigureAwait(false);
 
         return new DevelopmentRestartRecoveryHarness(rootPath, repositoryPath, worktreePath, protectedBranchCommit);
     }
@@ -235,7 +235,7 @@ internal sealed class DevelopmentRestartRecoveryHarness : IAsyncDisposable
 
         var currentWorkspace = await CaptureWorkspaceAsync().ConfigureAwait(false);
         var invalidatedArtifacts = 0;
-        var evidence = Artifacts.Where(IsGateEvidence).Where(artifact => artifact.IsValid).ToArray();
+        var evidence = Artifacts.Where(IsApprovalEvidence).Where(artifact => artifact.IsValid).ToArray();
 
         if (evidence.Any(artifact => !string.Equals(artifact.BaseCommit, currentWorkspace.BaseCommit, StringComparison.Ordinal)))
         {
@@ -342,7 +342,7 @@ internal sealed class DevelopmentRestartRecoveryHarness : IAsyncDisposable
         return ValueTask.CompletedTask;
     }
 
-    private static bool IsGateEvidence(DevelopmentArtifact artifact)
+    private static bool IsApprovalEvidence(DevelopmentArtifact artifact)
     {
         return artifact.Kind is DevelopmentArtifactKind.ValidationReport or DevelopmentArtifactKind.ReviewReport;
     }
@@ -386,7 +386,7 @@ internal sealed class DevelopmentRestartRecoveryHarness : IAsyncDisposable
     {
         if (!Project.TrustedRepository)
         {
-            throw new InvalidOperationException("The Process-provider spike requires an explicitly trusted repository.");
+            throw new InvalidOperationException("The Process-provider recovery test requires an explicitly trusted repository.");
         }
     }
 

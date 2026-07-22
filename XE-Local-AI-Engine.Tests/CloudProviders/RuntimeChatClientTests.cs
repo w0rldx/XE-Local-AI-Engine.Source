@@ -38,7 +38,7 @@ public sealed class RuntimeChatClientTests
         AssertEx.Equal(expected: 2, localClient.CallCount);
         AssertEx.Equal(expected: 1, cloudClient.CallCount);
         AssertEx.Equal(expected: 0, selector.ProviderNameResolveCount,
-            "ordinary Chat must preserve the pre-Gate-1 routing path without an authorization-only provider lookup");
+            "ordinary Chat must preserve the ordinary routing path before Development authorization without an authorization-only provider lookup");
     }
 
     [Test]
