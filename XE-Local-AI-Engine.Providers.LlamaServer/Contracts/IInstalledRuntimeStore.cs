@@ -26,7 +26,8 @@ public sealed record InstalledRuntimeState(
     string? SourceRepository = null,
     string? SourceCommit = null,
     LlamaCppSourceRevisionMode? SourceRevisionMode = null,
-    string? SourceRequestedCommit = null);
+    string? SourceRequestedCommit = null,
+    LlamaCppSourceSelection? SourceSelection = null);
 
 /// <summary>
 ///     Reads/writes <c>installed-runtime.json</c> under the cache root (sibling to <c>llama.cpp/</c>). The single record

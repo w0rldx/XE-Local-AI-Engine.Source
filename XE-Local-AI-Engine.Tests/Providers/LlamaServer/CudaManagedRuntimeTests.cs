@@ -275,6 +275,7 @@ public sealed class CudaManagedRuntimeTests
         AssertEx.Null(readLegacy.SourceCommit);
         AssertEx.Null(readLegacy.SourceRevisionMode);
         AssertEx.Null(readLegacy.SourceRequestedCommit);
+        AssertEx.Null(readLegacy.SourceSelection);
     }
 
     private static InstalledRuntimeState SourceBuildState(string binDir, string sha, GpuVariant variant = GpuVariant.Cuda)

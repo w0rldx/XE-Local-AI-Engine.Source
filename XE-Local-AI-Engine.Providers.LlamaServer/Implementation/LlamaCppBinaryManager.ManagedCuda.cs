@@ -86,6 +86,7 @@ public sealed partial class LlamaCppBinaryManager
             LlamaCppReleasePins.PinnedSourceCommitSha,
             LlamaCppSourceRevisionMode.EnginePinned,
             requestedCommit: null,
+            LlamaCppSourceSelection.Official,
             ct).ConfigureAwait(false);
     }
 
@@ -97,6 +98,33 @@ public sealed partial class LlamaCppBinaryManager
         string sourceCommit,
         LlamaCppSourceRevisionMode revisionMode,
         string? requestedCommit,
+        CancellationToken ct)
+    {
+        var inferredSelection = string.Equals(sourceRepository,
+            LlamaCppSourceBuildRequestValidation.OfficialRepository,
+            StringComparison.Ordinal)
+            ? LlamaCppSourceSelection.Official
+            : LlamaCppSourceSelection.Custom;
+        return await AdoptSourceBuildAsync(buildBinDir,
+            tag,
+            variant,
+            sourceRepository,
+            sourceCommit,
+            revisionMode,
+            requestedCommit,
+            inferredSelection,
+            ct).ConfigureAwait(false);
+    }
+
+    /// <inheritdoc />
+    public async Task<InstalledRuntimeState> AdoptSourceBuildAsync(string buildBinDir,
+        string tag,
+        GpuVariant variant,
+        string sourceRepository,
+        string sourceCommit,
+        LlamaCppSourceRevisionMode revisionMode,
+        string? requestedCommit,
+        LlamaCppSourceSelection sourceSelection,
         CancellationToken ct)
     {
         await _sourceMutationGate.WaitAsync(ct).ConfigureAwait(false);
@@ -149,7 +177,8 @@ public sealed partial class LlamaCppBinaryManager
             SourceRepository: sourceRepository,
             SourceCommit: Convert.ToHexStringLower(Convert.FromHexString(sourceCommit)),
             SourceRevisionMode: revisionMode,
-            SourceRequestedCommit: requestedCommit is null ? null : Convert.ToHexStringLower(Convert.FromHexString(requestedCommit)));
+            SourceRequestedCommit: requestedCommit is null ? null : Convert.ToHexStringLower(Convert.FromHexString(requestedCommit)),
+            SourceSelection: sourceSelection);
 
         if (_installedRuntimeStore is not null)
         {

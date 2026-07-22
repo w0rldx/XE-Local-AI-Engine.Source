@@ -10,6 +10,32 @@ using XE_Local_AI_Engine.Tests.Testing;
 public sealed class ManagedSourceBuildSafetyTests
 {
     [Test]
+    public async Task Adopt_CustomSelectionUsingOfficialRepository_PersistsExplicitSelection()
+    {
+        if (!OperatingSystem.IsLinux())
+        {
+            return;
+        }
+
+        using var temp = new SecureTempDirectory();
+        var bin = SeedActiveBin(temp.Path, "#!/bin/sh\nexit 0\n");
+        using var store = new InstalledRuntimeStore(temp.Path);
+
+        var state = await CreateManager(temp.Path, store).AdoptSourceBuildAsync(bin,
+            LlamaCppReleasePins.PinnedTag,
+            GpuVariant.Cpu,
+            LlamaCppSourceBuildRequestValidation.OfficialRepository,
+            LlamaCppReleasePins.PinnedSourceCommitSha,
+            LlamaCppSourceRevisionMode.DefaultBranch,
+            null,
+            LlamaCppSourceSelection.Custom,
+            CancellationToken.None);
+
+        AssertEx.Equal(LlamaCppSourceSelection.Custom, state.SourceSelection);
+        AssertEx.Equal(LlamaCppSourceSelection.Custom, (await store.ReadAsync(CancellationToken.None))!.SourceSelection);
+    }
+
+    [Test]
     public async Task Adopt_VulkanRequiresAnchoredBackendDeviceLine()
     {
         if (!OperatingSystem.IsLinux())

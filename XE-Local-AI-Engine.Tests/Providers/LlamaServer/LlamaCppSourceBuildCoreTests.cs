@@ -166,6 +166,23 @@ public sealed class LlamaCppSourceBuildCoreTests
     }
 
     [Test]
+    public void LegacyPredicate_CustomSelectionUsingOfficialRepository_IsNotLegacy()
+    {
+        var state = new InstalledRuntimeState(LlamaCppReleasePins.PinnedTag,
+            "source",
+            new string('a', 64),
+            GpuVariant.Cuda,
+            DateTimeOffset.UtcNow,
+            "/cache/llama.cpp/source-build/active/build/bin",
+            LlamaCppSourceBuildRequestValidation.OfficialRepository,
+            LlamaCppReleasePins.PinnedSourceCommitSha,
+            LlamaCppSourceRevisionMode.EnginePinned,
+            SourceSelection: LlamaCppSourceSelection.Custom);
+
+        AssertEx.False(state.IsLegacyPinnedCuda("/cache"));
+    }
+
+    [Test]
     public async Task Selector_ActiveCpuSource_ReturnsCpuWithoutVendorOverride()
     {
         var signal = new CudaManagedBuildSignal();

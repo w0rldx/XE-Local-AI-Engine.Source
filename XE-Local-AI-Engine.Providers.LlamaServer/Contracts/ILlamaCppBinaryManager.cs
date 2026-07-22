@@ -105,6 +105,20 @@ public interface ILlamaCppBinaryManager
         throw new NotSupportedException("Generalized source-build adoption is not supported by this binary manager.");
     }
 
+    /// <summary>Adopts a generalized source build while preserving the explicit source-selection intent.</summary>
+    Task<InstalledRuntimeState> AdoptSourceBuildAsync(string buildBinDir,
+        string tag,
+        GpuVariant variant,
+        string sourceRepository,
+        string sourceCommit,
+        LlamaCppSourceRevisionMode revisionMode,
+        string? requestedCommit,
+        LlamaCppSourceSelection sourceSelection,
+        CancellationToken ct)
+    {
+        return AdoptSourceBuildAsync(buildBinDir, tag, variant, sourceRepository, sourceCommit, revisionMode, requestedCommit, ct);
+    }
+
     /// <summary>Removes the active generalized source-built runtime.</summary>
     Task RemoveSourceBuildAsync(CancellationToken ct)
     {
