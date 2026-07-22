@@ -6,8 +6,8 @@ using XE_Local_AI_Engine.Client.Persistence.Stores;
 
 public interface IDevelopmentAttemptExecutionSupervisor
 {
-    bool StartAttempt(Guid attemptId, DevelopmentAttemptRole role, string repositoryRoot);
-    bool StartValidation(Guid taskId, string repositoryRoot);
+    bool StartAttempt(Guid attemptId, DevelopmentAttemptRole role);
+    bool StartValidation(Guid taskId);
     ValueTask<bool> TryCancelAsync(Guid attemptId);
 }
 
@@ -26,9 +26,8 @@ internal sealed class DevelopmentAttemptExecutionSupervisor(
     private readonly ILogger<DevelopmentAttemptExecutionSupervisor> _logger = logger ?? throw new ArgumentNullException(nameof(logger));
     private int _disposed;
 
-    public bool StartAttempt(Guid attemptId, DevelopmentAttemptRole role, string repositoryRoot)
+    public bool StartAttempt(Guid attemptId, DevelopmentAttemptRole role)
     {
-        ArgumentException.ThrowIfNullOrWhiteSpace(repositoryRoot);
         var cancellation = CancellationTokenSource.CreateLinkedTokenSource(_shutdown.Token);
         if (!_attempts.TryAdd(attemptId, cancellation))
         {
@@ -43,13 +42,12 @@ internal sealed class DevelopmentAttemptExecutionSupervisor(
         }
 
         _ = DeliverLiveUpdatesObservedAsync(attemptId, _shutdown.Token);
-        _ = RunAttemptObservedAsync(attemptId, role, repositoryRoot, cancellation.Token);
+        _ = RunAttemptObservedAsync(attemptId, role, cancellation.Token);
         return true;
     }
 
-    public bool StartValidation(Guid taskId, string repositoryRoot)
+    public bool StartValidation(Guid taskId)
     {
-        ArgumentException.ThrowIfNullOrWhiteSpace(repositoryRoot);
         var cancellation = CancellationTokenSource.CreateLinkedTokenSource(_shutdown.Token);
         if (!_validations.TryAdd(taskId, cancellation))
         {
@@ -57,7 +55,7 @@ internal sealed class DevelopmentAttemptExecutionSupervisor(
             return false;
         }
 
-        _ = RunValidationObservedAsync(taskId, repositoryRoot, cancellation.Token);
+        _ = RunValidationObservedAsync(taskId, cancellation.Token);
         return true;
     }
 
@@ -103,7 +101,6 @@ internal sealed class DevelopmentAttemptExecutionSupervisor(
 
     private async Task RunAttemptObservedAsync(Guid attemptId,
         DevelopmentAttemptRole role,
-        string repositoryRoot,
         CancellationToken cancellationToken)
     {
         try
@@ -111,6 +108,9 @@ internal sealed class DevelopmentAttemptExecutionSupervisor(
             await using var scope = _scopeFactory.CreateAsyncScope();
             var store = scope.ServiceProvider.GetRequiredService<IDevelopmentStore>();
             var execution = await store.GetExecutionSnapshotAsync(attemptId, cancellationToken).ConfigureAwait(false);
+            var repository = await scope.ServiceProvider.GetRequiredService<IDevelopmentRepositoryBindingService>()
+                                        .ResolveExecutionAsync(execution, cancellationToken)
+                                        .ConfigureAwait(false);
             _ = _liveBroker.TryPublish(ToLiveUpdate(execution,
                 DevelopmentAttemptLiveUpdateKind.Activity,
                 DevelopmentAttemptStatus.Running,
@@ -119,12 +119,12 @@ internal sealed class DevelopmentAttemptExecutionSupervisor(
             {
                 case DevelopmentAttemptRole.Coder:
                     _ = await scope.ServiceProvider.GetRequiredService<IDevelopmentCoderAttemptRunner>()
-                                   .RunAsync(attemptId, repositoryRoot, cancellationToken)
+                                   .RunAsync(attemptId, repository, cancellationToken)
                                    .ConfigureAwait(false);
                     break;
                 case DevelopmentAttemptRole.Reviewer:
                     _ = await scope.ServiceProvider.GetRequiredService<IDevelopmentReviewerAttemptRunner>()
-                                   .RunAsync(attemptId, repositoryRoot, cancellationToken)
+                                   .RunAsync(attemptId, repository, cancellationToken)
                                    .ConfigureAwait(false);
                     break;
                 default:
@@ -203,15 +203,19 @@ internal sealed class DevelopmentAttemptExecutionSupervisor(
             OutputTokens = outputTokens
         };
 
-    private async Task RunValidationObservedAsync(Guid taskId,
-        string repositoryRoot,
-        CancellationToken cancellationToken)
+    private async Task RunValidationObservedAsync(Guid taskId, CancellationToken cancellationToken)
     {
         try
         {
             await using var scope = _scopeFactory.CreateAsyncScope();
+            var task = await scope.ServiceProvider.GetRequiredService<IDevelopmentStore>()
+                                  .GetTaskAsync(taskId, cancellationToken)
+                                  .ConfigureAwait(false);
+            var repository = await scope.ServiceProvider.GetRequiredService<IDevelopmentRepositoryBindingService>()
+                                        .ResolveProjectAsync(task.ProjectId, cancellationToken)
+                                        .ConfigureAwait(false);
             _ = await scope.ServiceProvider.GetRequiredService<IDevelopmentValidationRunner>()
-                           .RunAsync(taskId, repositoryRoot, cancellationToken)
+                           .RunAsync(taskId, repository, cancellationToken)
                            .ConfigureAwait(false);
         }
         catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)

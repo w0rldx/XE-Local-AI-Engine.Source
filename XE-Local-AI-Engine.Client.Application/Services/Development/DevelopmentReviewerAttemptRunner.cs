@@ -28,7 +28,7 @@ internal sealed record DevelopmentReviewerAttemptResult(
 internal interface IDevelopmentReviewerAttemptRunner
 {
     Task<DevelopmentReviewerAttemptResult> RunAsync(Guid attemptId,
-        string repositoryRoot,
+        DevelopmentRepositoryBinding repository,
         CancellationToken cancellationToken = default);
 }
 
@@ -71,10 +71,10 @@ internal sealed class DevelopmentReviewerAttemptRunner : IDevelopmentReviewerAtt
     }
 
     public async Task<DevelopmentReviewerAttemptResult> RunAsync(Guid attemptId,
-        string repositoryRoot,
+        DevelopmentRepositoryBinding repository,
         CancellationToken cancellationToken = default)
     {
-        ArgumentException.ThrowIfNullOrWhiteSpace(repositoryRoot);
+        ArgumentNullException.ThrowIfNull(repository);
         var snapshot = await _store.GetExecutionSnapshotAsync(attemptId, cancellationToken).ConfigureAwait(false);
         EnsureRunnable(snapshot);
         using var timeout = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
@@ -84,7 +84,7 @@ internal sealed class DevelopmentReviewerAttemptRunner : IDevelopmentReviewerAtt
         try
         {
             var task = await _store.GetTaskAsync(snapshot.TaskId, timeout.Token).ConfigureAwait(false);
-            var session = await _workspaceProvider.PrepareAsync(snapshot, repositoryRoot, timeout.Token).ConfigureAwait(false);
+            var session = await _workspaceProvider.PrepareAsync(snapshot, repository, timeout.Token).ConfigureAwait(false);
             var evidence = await _evidence.ResolveCurrentAsync(snapshot.TaskId, session, timeout.Token).ConfigureAwait(false);
             (DevelopmentArtifactSnapshot validationArtifact, DevelopmentValidationReport validationReport) validation;
             try
@@ -124,7 +124,7 @@ internal sealed class DevelopmentReviewerAttemptRunner : IDevelopmentReviewerAtt
                 cloudContext?.Route,
                 timeout.Token).ConfigureAwait(false);
             var submission = DevelopmentArtifactSanitizer.Sanitize(model.Submission,
-                repositoryRoot,
+                repository.RepositoryRoot,
                 session.HostWorktreePath,
                 session.RuntimePath);
 

@@ -42,10 +42,12 @@ public sealed class DevelopmentApplyRecoveryTests : IDisposable
             "result",
             "patch-ref",
             "manifest-ref",
-            SubjectHash: "subject");
+            SubjectHash: "subject",
+            RepositoryIdentityHash: seed.RepositoryIdentityHash);
 
-        await AssertEx.ThrowsAsync<InvalidOperationException>(() => coordinator.ApplyAsync(operationId, subject, "repo")).ConfigureAwait(false);
-        var completed = await coordinator.ApplyAsync(operationId, subject, "repo").ConfigureAwait(false);
+        var repository = Repository(seed);
+        await AssertEx.ThrowsAsync<InvalidOperationException>(() => coordinator.ApplyAsync(operationId, subject, repository)).ConfigureAwait(false);
+        var completed = await coordinator.ApplyAsync(operationId, subject, repository).ConfigureAwait(false);
 
         AssertEx.Equal(DevelopmentOperationPhases.ApplyCompleted, completed.Phase);
         AssertEx.Equal(expected: 1, port.ApplyCalls);
@@ -66,8 +68,9 @@ public sealed class DevelopmentApplyRecoveryTests : IDisposable
         var operationId = Guid.NewGuid();
         var subject = CreateSubject(seed, version);
 
-        await AssertEx.ThrowsAsync<InvalidOperationException>(() => coordinator.ApplyAsync(operationId, subject, "repo")).ConfigureAwait(false);
-        var completed = await coordinator.ApplyAsync(operationId, subject, "repo").ConfigureAwait(false);
+        var repository = Repository(seed);
+        await AssertEx.ThrowsAsync<InvalidOperationException>(() => coordinator.ApplyAsync(operationId, subject, repository)).ConfigureAwait(false);
+        var completed = await coordinator.ApplyAsync(operationId, subject, repository).ConfigureAwait(false);
 
         AssertEx.Equal(DevelopmentOperationPhases.ApplyCompleted, completed.Phase);
         AssertEx.Equal(expected: 1, port.ApplyCalls);
@@ -88,8 +91,9 @@ public sealed class DevelopmentApplyRecoveryTests : IDisposable
         var operationId = Guid.NewGuid();
         var subject = CreateSubject(seed, version);
 
-        var completed = await coordinator.ApplyAsync(operationId, subject, "repo").ConfigureAwait(false);
-        var replay = await coordinator.ApplyAsync(operationId, subject, "repo").ConfigureAwait(false);
+        var repository = Repository(seed);
+        var completed = await coordinator.ApplyAsync(operationId, subject, repository).ConfigureAwait(false);
+        var replay = await coordinator.ApplyAsync(operationId, subject, repository).ConfigureAwait(false);
 
         AssertEx.Equal(completed, replay);
         AssertEx.Equal(expected: 1, port.InspectCalls);
@@ -111,8 +115,9 @@ public sealed class DevelopmentApplyRecoveryTests : IDisposable
         var operationId = Guid.NewGuid();
         var subject = CreateSubject(seed, version);
 
-        var blocked = await coordinator.ApplyAsync(operationId, subject, "repo").ConfigureAwait(false);
-        var replay = await coordinator.ApplyAsync(operationId, subject, "repo").ConfigureAwait(false);
+        var repository = Repository(seed);
+        var blocked = await coordinator.ApplyAsync(operationId, subject, repository).ConfigureAwait(false);
+        var replay = await coordinator.ApplyAsync(operationId, subject, repository).ConfigureAwait(false);
 
         AssertEx.Equal(blocked, replay);
         AssertEx.Equal(DevelopmentOperationPhases.ApplyBlocked, blocked.Phase);
@@ -149,7 +154,15 @@ public sealed class DevelopmentApplyRecoveryTests : IDisposable
             "result",
             "patch-ref",
             "manifest-ref",
-            SubjectHash: "subject");
+            SubjectHash: "subject",
+            RepositoryIdentityHash: seed.RepositoryIdentityHash);
+
+    private static DevelopmentRepositoryBinding Repository(DevelopmentCreateProjectCommand seed)
+        => new(seed.ProjectId,
+            seed.SelectedFolderId,
+            "repository",
+            "repo",
+            seed.RepositoryIdentityHash);
 
     private static async Task<(DevelopmentCreateProjectCommand Seed, long Version)> SeedAwaitingApplyAsync(IDevelopmentStore store)
     {

@@ -28,28 +28,35 @@ public sealed class DevelopmentCoordinator(IDevelopmentStore store, IDevelopment
 
     public Task<DevelopmentOperationResult> ApplyAsync(Guid operationId,
         DevelopmentApprovedApplySubject subject,
-        string repositoryRoot,
+        DevelopmentRepositoryBinding repository,
         CancellationToken cancellationToken = default)
-        => ApplyCoreAsync(operationId, subject, repositoryRoot, revalidateBeforeHostMutation: null, cancellationToken);
+        => ApplyCoreAsync(operationId, subject, repository, revalidateBeforeHostMutation: null, cancellationToken);
 
     public Task<DevelopmentOperationResult> ApplyRevalidatedAsync(Guid operationId,
         DevelopmentApprovedApplySubject subject,
-        string repositoryRoot,
+        DevelopmentRepositoryBinding repository,
         Func<CancellationToken, Task> revalidateBeforeHostMutation,
         CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(revalidateBeforeHostMutation);
-        return ApplyCoreAsync(operationId, subject, repositoryRoot, revalidateBeforeHostMutation, cancellationToken);
+        return ApplyCoreAsync(operationId, subject, repository, revalidateBeforeHostMutation, cancellationToken);
     }
 
     private async Task<DevelopmentOperationResult> ApplyCoreAsync(Guid operationId,
         DevelopmentApprovedApplySubject subject,
-        string repositoryRoot,
+        DevelopmentRepositoryBinding repository,
         Func<CancellationToken, Task>? revalidateBeforeHostMutation,
         CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(subject);
-        ArgumentException.ThrowIfNullOrWhiteSpace(repositoryRoot);
+        ArgumentNullException.ThrowIfNull(repository);
+        if (repository.ProjectId != subject.ProjectId
+            || !string.Equals(repository.RepositoryIdentityHash, subject.RepositoryIdentityHash, StringComparison.OrdinalIgnoreCase))
+        {
+            throw new DevelopmentWorkspaceSecurityException("The selected repository does not match the approved apply subject.");
+        }
+
+        var repositoryRoot = repository.RepositoryRoot;
         var completed = await _store.FindOperationAsync(subject.ProjectId,
                                          operationId,
                                          DevelopmentOperationPhases.ApplyCompleted,

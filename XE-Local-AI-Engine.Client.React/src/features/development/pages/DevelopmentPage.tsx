@@ -11,14 +11,22 @@ import {
 	Loader,
 	Paper,
 	ScrollArea,
+	Select,
 	Stack,
 	Table,
 	Text,
 	Textarea,
-	TextInput,
 	Title,
 } from "@mantine/core";
-import { IconAlertCircle, IconCheck, IconGitPullRequest, IconPlayerPlay, IconRefresh, IconX } from "@tabler/icons-react";
+import {
+	IconAlertCircle,
+	IconCheck,
+	IconGitPullRequest,
+	IconLink,
+	IconPlayerPlay,
+	IconRefresh,
+	IconX,
+} from "@tabler/icons-react";
 import { useEffect, useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
 
@@ -26,16 +34,21 @@ import { DevelopmentLivePanel } from "@/features/development/components/Developm
 import {
 	DevelopmentProjectForm,
 	type DevelopmentProjectFormValues,
+	type RegisterDevelopmentRepositoryValues,
 } from "@/features/development/components/DevelopmentProjectForm";
 import { useDevelopmentAttemptHub } from "@/features/development/hooks/useDevelopmentAttemptHub";
-import { isActiveAttempt } from "@/features/development/models/DevelopmentModels";
+import { type DevelopmentRepository, isActiveAttempt } from "@/features/development/models/DevelopmentModels";
 import {
 	useApplyDevelopmentPatch,
 	useCancelDevelopmentAttempt,
 	useCreateDevelopmentProject,
+	useDevelopmentCapability,
 	useDevelopmentProject,
 	useDevelopmentProjects,
+	useDevelopmentRepositories,
 	usePreviewDevelopmentPatch,
+	useReconnectDevelopmentRepository,
+	useRegisterDevelopmentRepository,
 	useStartDevelopmentNextAction,
 } from "@/features/development/queries/useDevelopment";
 
@@ -80,17 +93,23 @@ function nextActionLabel(status: string | undefined, latestAttemptStatus: string
 
 export function DevelopmentPage() {
 	const { t } = useTranslation();
-	const projectsQuery = useDevelopmentProjects();
+	const capabilityQuery = useDevelopmentCapability();
+	const developmentEnabled = capabilityQuery.data?.enabled === true;
+	const repositoriesQuery = useDevelopmentRepositories(developmentEnabled);
+	const projectsQuery = useDevelopmentProjects(developmentEnabled);
 	const [selectedProjectId, setSelectedProjectId] = useState<string | null>(null);
-	const [repositoryRoot, setRepositoryRoot] = useState("");
+	const [reconnectFolderId, setReconnectFolderId] = useState<string | null>(null);
 	const [previewTaskId, setPreviewTaskId] = useState<string | null>(null);
-	const projectQuery = useDevelopmentProject(selectedProjectId);
+	const projectQuery = useDevelopmentProject(selectedProjectId, developmentEnabled);
+	const registerMutation = useRegisterDevelopmentRepository();
 	const createMutation = useCreateDevelopmentProject();
+	const reconnectMutation = useReconnectDevelopmentRepository();
 	const startMutation = useStartDevelopmentNextAction();
 	const cancelMutation = useCancelDevelopmentAttempt();
 	const previewMutation = usePreviewDevelopmentPatch();
 	const applyMutation = useApplyDevelopmentPatch();
 
+	const repositories = useMemo(() => repositoriesQuery.data ?? [], [repositoriesQuery.data]);
 	const projects = useMemo(() => projectsQuery.data ?? [], [projectsQuery.data]);
 	useEffect(() => {
 		if (!selectedProjectId && projects[0]?.id) {
@@ -107,6 +126,26 @@ export function DevelopmentPage() {
 	const latestAttempt = attempts.at(-1) ?? null;
 	const activeAttempt = attempts.find(isActiveAttempt) ?? null;
 	const live = useDevelopmentAttemptHub(detail?.project?.id ?? null, task?.id ?? null, activeAttempt?.id ?? null);
+	const projectRepository = repositories.find((repository) => repository.id === detail?.project?.selectedFolderId);
+	const repositoryConnectionRequired = detail?.project?.repositoryConnectionRequired === true;
+	const repositoryReady =
+		!repositoryConnectionRequired && projectRepository?.availability === "Available" && !repositoriesQuery.error;
+	const reconnectOptions = repositories
+		.filter((repository) => repository.availability === "Available")
+		.map((repository) => ({ value: repository.id, label: repository.alias }));
+
+	const registerRepository = async (values: RegisterDevelopmentRepositoryValues): Promise<DevelopmentRepository> => {
+		const created = await registerMutation.mutateAsync({ body: values });
+		if (!created.id || !created.alias) {
+			throw new Error("The repository registration response was incomplete.");
+		}
+
+		return {
+			id: created.id,
+			alias: created.alias,
+			availability: created.availability ?? "Available",
+		};
+	};
 
 	const createProject = (values: DevelopmentProjectFormValues): void => {
 		createMutation.mutate(
@@ -118,7 +157,6 @@ export function DevelopmentPage() {
 			},
 			{
 				onSuccess: (created) => {
-					setRepositoryRoot(values.repositoryRoot);
 					setSelectedProjectId(created.project?.id ?? null);
 				},
 			},
@@ -126,13 +164,13 @@ export function DevelopmentPage() {
 	};
 
 	const startNext = (): void => {
-		if (!detail?.project?.id || !task?.id) {
+		if (!repositoryReady || !detail?.project?.id || !task?.id) {
 			return;
 		}
 		setPreviewTaskId(null);
 		startMutation.mutate({
 			path: { projectId: detail.project.id, taskId: task.id },
-			body: { operationId: operationId(), repositoryRoot },
+			body: { operationId: operationId() },
 		});
 	};
 
@@ -144,27 +182,64 @@ export function DevelopmentPage() {
 	};
 
 	const preview = (): void => {
-		if (!detail?.project?.id || !task?.id) {
+		if (!repositoryReady || !detail?.project?.id || !task?.id) {
 			return;
 		}
 		previewMutation.mutate(
 			{
 				path: { projectId: detail.project.id, taskId: task.id },
-				body: { operationId: operationId(), repositoryRoot },
+				body: { operationId: operationId() },
 			},
 			{ onSuccess: () => setPreviewTaskId(task.id ?? null) },
 		);
 	};
 
 	const apply = (): void => {
-		if (!detail?.project?.id || !task?.id || previewTaskId !== task.id) {
+		if (!repositoryReady || !detail?.project?.id || !task?.id || previewTaskId !== task.id) {
 			return;
 		}
 		applyMutation.mutate({
 			path: { projectId: detail.project.id, taskId: task.id },
-			body: { operationId: operationId(), repositoryRoot },
+			body: { operationId: operationId() },
 		});
 	};
+
+	const reconnectRepository = (): void => {
+		if (!detail?.project?.id || !reconnectFolderId) {
+			return;
+		}
+
+		reconnectMutation.mutate(
+			{
+				path: { projectId: detail.project.id },
+				body: {
+					selectedFolderId: reconnectFolderId,
+					expectedVersion: detail.project.version ?? 0,
+				},
+			},
+			{ onSuccess: () => setReconnectFolderId(null) },
+		);
+	};
+
+	if (capabilityQuery.isLoading) {
+		return (
+			<Container fluid={true} py="lg">
+				<Loader aria-label="Loading Development capability" />
+			</Container>
+		);
+	}
+
+	if (capabilityQuery.error || !developmentEnabled) {
+		return (
+			<Container fluid={true} py="lg">
+				<Alert color={capabilityQuery.error ? "red" : "yellow"} icon={<IconAlertCircle size={16} />}>
+					{capabilityQuery.error
+						? errorMessage(capabilityQuery.error, "Could not verify whether Development Mode is available.")
+						: t("pages.development.disabled", "Development Mode is disabled by this node's runtime configuration.")}
+				</Alert>
+			</Container>
+		);
+	}
 
 	return (
 		<Container fluid={true} py="lg">
@@ -184,6 +259,14 @@ export function DevelopmentPage() {
 						<Accordion.Control>{t("pages.development.newProject", "New Development project")}</Accordion.Control>
 						<Accordion.Panel>
 							<DevelopmentProjectForm
+								repositories={repositories}
+								repositoriesLoading={repositoriesQuery.isLoading}
+								repositoriesError={
+									repositoriesQuery.error
+										? errorMessage(repositoriesQuery.error, "Could not load registered Development repositories.")
+										: undefined
+								}
+								isRegistering={registerMutation.isPending}
 								isSubmitting={createMutation.isPending}
 								error={
 									createMutation.error
@@ -193,6 +276,7 @@ export function DevelopmentPage() {
 											)
 										: undefined
 								}
+								onRegister={registerRepository}
 								onSubmit={createProject}
 							/>
 						</Accordion.Panel>
@@ -225,6 +309,7 @@ export function DevelopmentPage() {
 											justify="space-between"
 											onClick={() => {
 												setSelectedProjectId(project.id ?? null);
+												setReconnectFolderId(null);
 												setPreviewTaskId(null);
 											}}
 											data-testid={`development-project-${project.id}`}
@@ -250,7 +335,8 @@ export function DevelopmentPage() {
 											<div>
 												<Title order={2}>{detail.project.objective}</Title>
 												<Text c="dimmed">
-													{detail.project.baseBranch} · {detail.project.egressPolicy}
+													{detail.project.baseBranch} · {detail.project.egressPolicy} ·{" "}
+													{projectRepository?.alias ?? t("pages.development.repositoryNotConnected", "Repository not connected")}
 												</Text>
 											</div>
 											<Badge color={statusColor(task.status)}>{task.status}</Badge>
@@ -258,23 +344,58 @@ export function DevelopmentPage() {
 										<Divider my="md" />
 										<Title order={3}>{task.title}</Title>
 										<Text>{task.requirements}</Text>
-										<Group mt="md" grow={true} align="end">
-											<TextInput
-												label={t("pages.development.repositoryForActions", "Repository root for actions")}
-												description={t(
-													"pages.development.repositoryNotPersisted",
-													"The absolute path is verified against the project identity and is not returned by the API.",
+										{repositoryConnectionRequired ? (
+											<Alert color="yellow" mt="md" icon={<IconLink size={16} />} data-testid="development-reconnect-panel">
+												<Stack gap="sm">
+													<Text>
+														{t(
+															"pages.development.reconnect.description",
+															"This existing project must be reconnected to its original registered repository before actions can run.",
+														)}
+													</Text>
+													<Group align="end">
+														<Select
+															label={t("pages.development.reconnect.repository", "Original repository")}
+															data={reconnectOptions}
+															value={reconnectFolderId}
+															onChange={setReconnectFolderId}
+															loading={repositoriesQuery.isLoading}
+															data-testid="development-reconnect-select"
+														/>
+														<Button
+															leftSection={<IconLink size={16} />}
+															onClick={reconnectRepository}
+															loading={reconnectMutation.isPending}
+															disabled={!reconnectFolderId}
+															data-testid="development-reconnect-repository"
+														>
+															{t("pages.development.reconnect.submit", "Reconnect repository")}
+														</Button>
+													</Group>
+													{reconnectMutation.error ? (
+														<Text c="red" size="sm">
+															{errorMessage(reconnectMutation.error, "Could not reconnect the repository.")}
+														</Text>
+													) : null}
+												</Stack>
+											</Alert>
+										) : repositoriesQuery.isLoading ? (
+											<Loader mt="md" size="sm" aria-label="Loading registered Development repositories" />
+										) : projectRepository?.availability !== "Available" ? (
+											<Alert color="red" mt="md" icon={<IconAlertCircle size={16} />}>
+												{t(
+													"pages.development.repositoryUnavailableDescription",
+													"The registered repository is unavailable or no longer matches this project. Development actions are blocked.",
 												)}
-												value={repositoryRoot}
-												onChange={(event) => setRepositoryRoot(event.currentTarget.value)}
-												data-testid="development-action-repository-root"
-											/>
+											</Alert>
+										) : null}
+										<Group mt="md" align="end">
 											{nextActionStatuses.has(task.status ?? "") ? (
 												<Button
 													leftSection={<IconPlayerPlay size={16} />}
 													onClick={startNext}
 													loading={startMutation.isPending}
-													disabled={!repositoryRoot || activeAttempt !== null}
+													disabled={!repositoryReady || activeAttempt !== null}
 													data-testid="development-start-next"
 												>
 													{nextActionLabel(task.status, latestAttempt?.status)}
@@ -359,7 +480,7 @@ export function DevelopmentPage() {
 													leftSection={<IconGitPullRequest size={16} />}
 													onClick={preview}
 													loading={previewMutation.isPending}
-													disabled={!repositoryRoot}
+													disabled={!repositoryReady}
 													data-testid="development-preview-patch"
 												>
 													Preview current patch
@@ -369,7 +490,7 @@ export function DevelopmentPage() {
 													leftSection={<IconCheck size={16} />}
 													onClick={apply}
 													loading={applyMutation.isPending}
-													disabled={!previewMutation.data || previewTaskId !== task.id}
+													disabled={!repositoryReady || !previewMutation.data || previewTaskId !== task.id}
 													data-testid="development-apply-patch"
 												>
 													Apply verified patch

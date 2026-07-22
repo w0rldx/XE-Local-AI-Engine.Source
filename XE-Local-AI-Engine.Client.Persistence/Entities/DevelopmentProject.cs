@@ -4,6 +4,7 @@ internal sealed class DevelopmentProject
 {
     public Guid Id { get; set; }
     public byte[] Objective { get; set; } = [];
+    public Guid? SelectedFolderId { get; set; }
     public string RepositoryIdentityHash { get; set; } = string.Empty;
     public string BaseBranch { get; set; } = string.Empty;
     public DevelopmentProjectStatus Status { get; set; }
@@ -20,4 +21,3 @@ internal sealed class DevelopmentProject
     public long UpdatedAtUtc { get; set; }
     public long Version { get; set; }
 }
-

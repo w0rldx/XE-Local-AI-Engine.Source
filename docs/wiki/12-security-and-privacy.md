@@ -1,6 +1,6 @@
 # Security & Privacy Model
 
-> Last reviewed: 2026-06-27 · Code-grounded.
+> Last reviewed: 2026-07-22 · Code-grounded.
 
 This page documents the cross-cutting security and privacy guarantees of the XE Local AI Engine node — the invariants every contributor must preserve. The node is the *only* component that talks to the C0re platform, it keeps all secrets local, it serves its management/admin APIs to loopback only, it encrypts chat state at rest, it runs privacy-sensitive AI work on node-local models only, and it jails any tool/shell execution behind symlink-escape guards. These are not optional hardening passes layered on top of features; they are seams baked into the runtime, and breaking one is a regression even when "the feature still works."
 
@@ -210,6 +210,36 @@ Guards a contributor must not weaken:
 - **Tree-kill teardown.** Killing a sandbox `TreeKill`s the process tree (`process.Kill(true)`) and best-effort deletes the jail dir, so a sandbox kill terminates every running command.
 
 The same no-follow / byte-recheck philosophy appears in AgentHome host-path safety (`Services/Workspace/Implementation/HostPathSafety.cs`: `TryResolveReparseWithinRoot`, `IsReparsePoint`, `IsPathWithinRoot`) and `HostGitRunner`. Reuse these utilities rather than re-implementing path validation.
+
+### Development Mode source and execution boundary
+
+Development Mode ships enabled by default. `Development:Enabled=false` is the backend emergency switch for an
+operator who does not accept same-host-user code execution. Availability does not authorize a repository by
+itself: the operator must register a local Git repository, and normal Development contracts refer to it only by
+an opaque selected-folder ID and alias. The host path stays internal to the node and is encrypted through the
+existing selected-folder persistence path.
+
+The selected folder authorizes the source repository. The agent does not work in that source directory:
+`DevelopmentWorkspaceProvider` creates an engine-owned detached Git worktree under node data and exposes that
+managed worktree through the Process sandbox. Before execution, preview, and apply, the Development binding path
+resolves the stored selected-folder ID, canonicalizes the Git top-level, and compares its identity hash with the
+project's persisted repository identity. A moved, replaced, unavailable, or mismatched repository fails closed.
+An older project without a selected-folder binding cannot execute until the operator reconnects the exact
+repository identity.
+
+Only the final reviewed apply path may change the registered source repository. The review evidence binds the
+patch to its expected base and content hashes, and apply revalidates those values immediately before mutation.
+Changes in the detached worktree do not bypass this gate.
+
+These controls limit what the **application's Development tools** read, write, preview, and apply. They do not
+limit what executed repository code can do. Generated source, MSBuild targets, source generators, build scripts,
+and tests run as the host user and have that user's host filesystem and network access. The Process sandbox and
+Agent Home are application-level path, byte, environment, and lifecycle controls; neither is an OS security
+boundary. Do not describe the selected folder as a kernel-enforced filesystem allow-list.
+
+MXC and devcontainer-backed execution are future provider work behind the existing sandbox/workspace seams.
+Neither is integrated today, and no current MXC profile should be documented as a security boundary. Any future
+provider must implement and independently validate the isolation guarantees it advertises.
 
 ### Chat attachments are staged *into* the jail, not read from the host
 

@@ -94,8 +94,7 @@ public sealed class XEReactClientFixture : IAsyncInitializer, IAsyncDisposable
                 {
                     ["VITE_API_URL"] = $"http://127.0.0.1:{Port}",
                     ["VITE_API_VERSION"] = "v1",
-                    ["VITE_APP_TITLE"] = "XE E2E",
-                    ["VITE_DEVELOPMENT_MODE_ENABLED"] = "true"
+                    ["VITE_APP_TITLE"] = "XE E2E"
                 }).ConfigureAwait(false);
         }
         finally

@@ -25,7 +25,7 @@ internal sealed record DevelopmentValidationResult(
 internal interface IDevelopmentValidationRunner
 {
     Task<DevelopmentValidationResult> RunAsync(Guid taskId,
-        string repositoryRoot,
+        DevelopmentRepositoryBinding repository,
         CancellationToken cancellationToken = default);
 }
 
@@ -59,10 +59,10 @@ internal sealed class DevelopmentValidationRunner : IDevelopmentValidationRunner
     }
 
     public async Task<DevelopmentValidationResult> RunAsync(Guid taskId,
-        string repositoryRoot,
+        DevelopmentRepositoryBinding repository,
         CancellationToken cancellationToken = default)
     {
-        ArgumentException.ThrowIfNullOrWhiteSpace(repositoryRoot);
+        ArgumentNullException.ThrowIfNull(repository);
         var task = await _store.GetTaskAsync(taskId, cancellationToken).ConfigureAwait(false);
         var transition = await _store.StartValidationAsync(new DevelopmentStartValidationCommand(taskId,
                                                            Guid.NewGuid(),
@@ -76,7 +76,7 @@ internal sealed class DevelopmentValidationRunner : IDevelopmentValidationRunner
         try
         {
             var snapshot = await _store.GetExecutionSnapshotAsync(coderAttempt.Id, cancellationToken).ConfigureAwait(false);
-            var session = await _workspaceProvider.PrepareAsync(snapshot, repositoryRoot, cancellationToken).ConfigureAwait(false);
+            var session = await _workspaceProvider.PrepareAsync(snapshot, repository, cancellationToken).ConfigureAwait(false);
             var evidence = await _evidence.ResolveCurrentAsync(taskId, session, cancellationToken).ConfigureAwait(false);
             var tools = new DevelopmentWorkspaceTools(_sandbox, session, Options.Create(_options));
             if (_options.ValidationCommandIds.Count == 0)
@@ -91,7 +91,7 @@ internal sealed class DevelopmentValidationRunner : IDevelopmentValidationRunner
 
             var commands = tools.CommandEvidence
                                 .Select(command => DevelopmentArtifactSanitizer.Sanitize(command,
-                                    repositoryRoot,
+                                    repository.RepositoryRoot,
                                     session.HostWorktreePath,
                                     session.RuntimePath))
                                 .ToArray();

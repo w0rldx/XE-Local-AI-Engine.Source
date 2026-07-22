@@ -1,11 +1,74 @@
 namespace XE_Local_AI_Engine.Client.Endpoints.Development.V1;
 
 using FastEndpoints;
+using Microsoft.Extensions.Options;
 using XE_Local_AI_Engine.Client.Endpoints.Common;
 using XE_Local_AI_Engine.Client.Persistence.Entities;
 using XE_Local_AI_Engine.Client.Persistence.Stores;
 using XE_Local_AI_Engine.Client.Services.Auth;
 using XE_Local_AI_Engine.Client.Services.Development;
+using XE_Local_AI_Engine.Client.Services.Workspace;
+
+public sealed class GetDevelopmentCapabilityEndpoint
+    : EndpointWithoutRequest<DevelopmentCapabilityResponse>, IDevelopmentEndpoint
+{
+    public override void Configure()
+    {
+        Get(LocalApiRoutes.Development.Capability);
+        Policies(NodeAuthorizationPolicies.Operator);
+    }
+
+    public override Task HandleAsync(CancellationToken ct)
+    {
+        var enabled = HttpContext.RequestServices.GetRequiredService<IOptions<DevelopmentOptions>>().Value.Enabled;
+        return Send.OkAsync(new DevelopmentCapabilityResponse(enabled), ct);
+    }
+}
+
+public sealed class ListDevelopmentRepositoriesEndpoint
+    : EndpointWithoutRequest<ListDevelopmentRepositoriesResponse>, IDevelopmentEndpoint
+{
+    public override void Configure()
+    {
+        Get(LocalApiRoutes.Development.Repositories);
+        Policies(NodeAuthorizationPolicies.Operator);
+    }
+
+    public override async Task HandleAsync(CancellationToken ct)
+    {
+        var service = HttpContext.RequestServices.GetRequiredService<IDevelopmentManagementService>();
+        var repositories = await service.ListRepositoriesAsync(ct).ConfigureAwait(false);
+        await Send.OkAsync(new ListDevelopmentRepositoriesResponse(repositories.Select(DevelopmentContractMapper.ToResponse).ToArray()), ct)
+                  .ConfigureAwait(false);
+    }
+}
+
+public sealed class RegisterDevelopmentRepositoryEndpoint
+    : Endpoint<RegisterDevelopmentRepositoryRequest, DevelopmentRepositoryResponse>, IDevelopmentEndpoint
+{
+    public override void Configure()
+    {
+        Post(LocalApiRoutes.Development.Repositories);
+        Policies(NodeAuthorizationPolicies.Operator);
+    }
+
+    public override async Task HandleAsync(RegisterDevelopmentRepositoryRequest req, CancellationToken ct)
+    {
+        try
+        {
+            var service = HttpContext.RequestServices.GetRequiredService<IDevelopmentManagementService>();
+            var repository = await service.RegisterRepositoryAsync(req.Alias, req.HostPath, ct).ConfigureAwait(false);
+            await Send.OkAsync(repository.ToResponse(), ct).ConfigureAwait(false);
+        }
+        catch (Exception exception) when (exception is ArgumentException
+                                          or DevelopmentWorkspaceSecurityException
+                                          or SelectedFolderValidationException)
+        {
+            AddError(exception.Message);
+            await Send.ErrorsAsync(cancellation: ct).ConfigureAwait(false);
+        }
+    }
+}
 
 public sealed class ListDevelopmentProjectsEndpoint
     : EndpointWithoutRequest<ListDevelopmentProjectsResponse>, IDevelopmentEndpoint
@@ -46,7 +109,7 @@ public sealed class CreateDevelopmentProjectEndpoint
         try
         {
             var result = await service.CreateProjectAsync(new DevelopmentCreateProjectInput(req.OperationId,
-                                                              req.RepositoryRoot,
+                                                              req.SelectedFolderId,
                                                               req.Objective,
                                                               req.BaseBranch,
                                                               req.TaskTitle,
@@ -130,7 +193,7 @@ public sealed class StartDevelopmentNextActionEndpoint
         var service = HttpContext.RequestServices.GetRequiredService<IDevelopmentManagementService>();
         try
         {
-            var result = await service.StartNextActionAsync(req.ProjectId, req.TaskId, req.OperationId, req.RepositoryRoot, ct).ConfigureAwait(false);
+            var result = await service.StartNextActionAsync(req.ProjectId, req.TaskId, req.OperationId, ct).ConfigureAwait(false);
             await Send.OkAsync(new DevelopmentNextActionResponse(result.Action,
                     result.ProjectId,
                     result.TaskId,
@@ -274,7 +337,7 @@ public sealed class PreviewDevelopmentPatchEndpoint
         var service = HttpContext.RequestServices.GetRequiredService<IDevelopmentManagementService>();
         try
         {
-            var preview = await service.PreviewAsync(req.ProjectId, req.TaskId, req.RepositoryRoot, ct).ConfigureAwait(false);
+            var preview = await service.PreviewAsync(req.ProjectId, req.TaskId, ct).ConfigureAwait(false);
             await Send.OkAsync(new DevelopmentPatchPreviewResponse(preview.SubjectHash,
                     preview.PatchHash,
                     preview.ManifestHash,
@@ -309,7 +372,7 @@ public sealed class ApplyDevelopmentPatchEndpoint
         var service = HttpContext.RequestServices.GetRequiredService<IDevelopmentManagementService>();
         try
         {
-            var result = await service.ApplyAsync(req.ProjectId, req.TaskId, req.OperationId, req.RepositoryRoot, ct).ConfigureAwait(false);
+            var result = await service.ApplyAsync(req.ProjectId, req.TaskId, req.OperationId, ct).ConfigureAwait(false);
             await Send.OkAsync(new DevelopmentApplyResponse(result.OperationId,
                     result.Phase,
                     result.Outcome,
@@ -325,6 +388,36 @@ public sealed class ApplyDevelopmentPatchEndpoint
         catch (Exception exception) when (exception is DevelopmentInvalidTransitionException
                                           or DevelopmentConcurrencyException
                                           or DevelopmentWorkspaceSecurityException)
+        {
+            AddError(exception.Message);
+            await Send.ErrorsAsync(statusCode: StatusCodes.Status409Conflict, cancellation: ct).ConfigureAwait(false);
+        }
+    }
+}
+
+public sealed class ReconnectDevelopmentRepositoryEndpoint
+    : Endpoint<ReconnectDevelopmentRepositoryRequest, DevelopmentProjectDetailResponse>, IDevelopmentEndpoint
+{
+    public override void Configure()
+    {
+        Post(LocalApiRoutes.Development.RepositoryConnection);
+        Policies(NodeAuthorizationPolicies.Operator);
+    }
+
+    public override async Task HandleAsync(ReconnectDevelopmentRepositoryRequest req, CancellationToken ct)
+    {
+        try
+        {
+            var service = HttpContext.RequestServices.GetRequiredService<IDevelopmentManagementService>();
+            var project = await service.ReconnectRepositoryAsync(req.ProjectId, req.SelectedFolderId, req.ExpectedVersion, ct)
+                                       .ConfigureAwait(false);
+            await Send.OkAsync(project.ToResponse(), ct).ConfigureAwait(false);
+        }
+        catch (KeyNotFoundException)
+        {
+            await Send.NotFoundAsync(ct).ConfigureAwait(false);
+        }
+        catch (Exception exception) when (exception is DevelopmentConcurrencyException or DevelopmentWorkspaceSecurityException)
         {
             AddError(exception.Message);
             await Send.ErrorsAsync(statusCode: StatusCodes.Status409Conflict, cancellation: ct).ConfigureAwait(false);
