@@ -41,6 +41,9 @@ import type {
 	CancelImageJobData,
 	CancelImageJobErrors,
 	CancelImageJobResponses,
+	CancelLlamaCppSourceBuildData,
+	CancelLlamaCppSourceBuildErrors,
+	CancelLlamaCppSourceBuildResponses,
 	CancelNodeBindingData,
 	CancelNodeBindingErrors,
 	CancelNodeBindingResponses,
@@ -257,6 +260,12 @@ import type {
 	GetLlamaCppRuntimeData,
 	GetLlamaCppRuntimeErrors,
 	GetLlamaCppRuntimeResponses,
+	GetLlamaCppSourceBuildPrerequisitesData,
+	GetLlamaCppSourceBuildPrerequisitesErrors,
+	GetLlamaCppSourceBuildPrerequisitesResponses,
+	GetLlamaCppSourceBuildStatusData,
+	GetLlamaCppSourceBuildStatusErrors,
+	GetLlamaCppSourceBuildStatusResponses,
 	GetLocalModelDetailsData,
 	GetLocalModelDetailsErrors,
 	GetLocalModelDetailsResponses,
@@ -453,6 +462,9 @@ import type {
 	RemoveCudaBuildData,
 	RemoveCudaBuildErrors,
 	RemoveCudaBuildResponses,
+	RemoveLlamaCppSourceBuildData,
+	RemoveLlamaCppSourceBuildErrors,
+	RemoveLlamaCppSourceBuildResponses,
 	RenameNodeChatConversationData,
 	RenameNodeChatConversationErrors,
 	RenameNodeChatConversationResponses,
@@ -513,6 +525,9 @@ import type {
 	StartImageModelDownloadData,
 	StartImageModelDownloadErrors,
 	StartImageModelDownloadResponses,
+	StartLlamaCppSourceBuildData,
+	StartLlamaCppSourceBuildErrors,
+	StartLlamaCppSourceBuildResponses,
 	StartNodeBindingData,
 	StartNodeBindingErrors,
 	StartNodeBindingResponses,
@@ -585,6 +600,7 @@ import {
 	zCancelGgufDownloadResponse,
 	zCancelImageJobPath,
 	zCancelImageJobResponse,
+	zCancelLlamaCppSourceBuildResponse,
 	zCancelNodeBindingResponse,
 	zCancelNodeChatMessageBody,
 	zCancelNodeChatMessageResponse,
@@ -709,6 +725,9 @@ import {
 	zGetLatestRecommendationsResponse,
 	zGetLlamaCppRuntimeQuery,
 	zGetLlamaCppRuntimeResponse,
+	zGetLlamaCppSourceBuildPrerequisitesQuery,
+	zGetLlamaCppSourceBuildPrerequisitesResponse,
+	zGetLlamaCppSourceBuildStatusResponse,
 	zGetLocalModelDetailsPath,
 	zGetLocalModelDetailsResponse,
 	zGetMcpServerPath,
@@ -818,6 +837,7 @@ import {
 	zRejectSuggestedPlaybookActionPath,
 	zRejectSuggestedPlaybookActionResponse,
 	zRemoveCudaBuildResponse,
+	zRemoveLlamaCppSourceBuildResponse,
 	zRenameNodeChatConversationBody,
 	zRenameNodeChatConversationPath,
 	zRenameNodeChatConversationResponse,
@@ -861,6 +881,8 @@ import {
 	zStartGitHubAuthResponse,
 	zStartImageModelDownloadBody,
 	zStartImageModelDownloadResponse,
+	zStartLlamaCppSourceBuildBody,
+	zStartLlamaCppSourceBuildResponse,
 	zStartNodeBindingResponse,
 	zTriggerScheduledJobPath,
 	zTriggerScheduledJobResponse,
@@ -1760,6 +1782,28 @@ export const cancelGgufDownload = <ThrowOnError extends boolean = false>(
 		},
 	});
 
+export const cancelLlamaCppSourceBuild = <ThrowOnError extends boolean = false>(
+	options?: Options<CancelLlamaCppSourceBuildData, ThrowOnError>,
+) =>
+	(options?.client ?? client).post<CancelLlamaCppSourceBuildResponses, CancelLlamaCppSourceBuildErrors, ThrowOnError>({
+		requestValidator: async (data) =>
+			await z
+				.object({
+					body: z.never().optional(),
+					path: z.never().optional(),
+					query: z.never().optional(),
+				})
+				.parseAsync(data),
+		responseType: "json",
+		responseValidator: async (data) => await zCancelLlamaCppSourceBuildResponse.parseAsync(data),
+		security: [
+			{ scheme: "bearer", type: "http" },
+			{ scheme: "bearer", type: "http" },
+		],
+		url: "/api/local/v1/model-fit/llamacpp/source-build/cancel",
+		...options,
+	});
+
 export const ejectRunningModel = <ThrowOnError extends boolean = false>(options: Options<EjectRunningModelData, ThrowOnError>) =>
 	(options.client ?? client).post<EjectRunningModelResponses, EjectRunningModelErrors, ThrowOnError>({
 		requestValidator: async (data) =>
@@ -2058,6 +2102,54 @@ export const getLlamaCppRuntime = <ThrowOnError extends boolean = false>(
 		...options,
 	});
 
+export const getLlamaCppSourceBuildPrerequisites = <ThrowOnError extends boolean = false>(
+	options: Options<GetLlamaCppSourceBuildPrerequisitesData, ThrowOnError>,
+) =>
+	(options.client ?? client).get<
+		GetLlamaCppSourceBuildPrerequisitesResponses,
+		GetLlamaCppSourceBuildPrerequisitesErrors,
+		ThrowOnError
+	>({
+		requestValidator: async (data) =>
+			await z
+				.object({
+					body: z.never().optional(),
+					path: z.never().optional(),
+					query: zGetLlamaCppSourceBuildPrerequisitesQuery,
+				})
+				.parseAsync(data),
+		responseType: "json",
+		responseValidator: async (data) => await zGetLlamaCppSourceBuildPrerequisitesResponse.parseAsync(data),
+		security: [
+			{ scheme: "bearer", type: "http" },
+			{ scheme: "bearer", type: "http" },
+		],
+		url: "/api/local/v1/model-fit/llamacpp/source-build/prerequisites",
+		...options,
+	});
+
+export const getLlamaCppSourceBuildStatus = <ThrowOnError extends boolean = false>(
+	options?: Options<GetLlamaCppSourceBuildStatusData, ThrowOnError>,
+) =>
+	(options?.client ?? client).get<GetLlamaCppSourceBuildStatusResponses, GetLlamaCppSourceBuildStatusErrors, ThrowOnError>({
+		requestValidator: async (data) =>
+			await z
+				.object({
+					body: z.never().optional(),
+					path: z.never().optional(),
+					query: z.never().optional(),
+				})
+				.parseAsync(data),
+		responseType: "json",
+		responseValidator: async (data) => await zGetLlamaCppSourceBuildStatusResponse.parseAsync(data),
+		security: [
+			{ scheme: "bearer", type: "http" },
+			{ scheme: "bearer", type: "http" },
+		],
+		url: "/api/local/v1/model-fit/llamacpp/source-build/status",
+		...options,
+	});
+
 export const getModelCatalogInfo = <ThrowOnError extends boolean = false>(
 	options?: Options<GetModelCatalogInfoData, ThrowOnError>,
 ) =>
@@ -2238,6 +2330,28 @@ export const removeCudaBuild = <ThrowOnError extends boolean = false>(options?: 
 		...options,
 	});
 
+export const removeLlamaCppSourceBuild = <ThrowOnError extends boolean = false>(
+	options?: Options<RemoveLlamaCppSourceBuildData, ThrowOnError>,
+) =>
+	(options?.client ?? client).post<RemoveLlamaCppSourceBuildResponses, RemoveLlamaCppSourceBuildErrors, ThrowOnError>({
+		requestValidator: async (data) =>
+			await z
+				.object({
+					body: z.never().optional(),
+					path: z.never().optional(),
+					query: z.never().optional(),
+				})
+				.parseAsync(data),
+		responseType: "json",
+		responseValidator: async (data) => await zRemoveLlamaCppSourceBuildResponse.parseAsync(data),
+		security: [
+			{ scheme: "bearer", type: "http" },
+			{ scheme: "bearer", type: "http" },
+		],
+		url: "/api/local/v1/model-fit/llamacpp/source-build/remove",
+		...options,
+	});
+
 export const startCudaBuild = <ThrowOnError extends boolean = false>(options?: Options<StartCudaBuildData, ThrowOnError>) =>
 	(options?.client ?? client).post<StartCudaBuildResponses, StartCudaBuildErrors, ThrowOnError>({
 		requestValidator: async (data) =>
@@ -2275,6 +2389,32 @@ export const startGgufDownload = <ThrowOnError extends boolean = false>(options:
 			{ scheme: "bearer", type: "http" },
 		],
 		url: "/api/local/v1/model-fit/download",
+		...options,
+		headers: {
+			"Content-Type": "application/json",
+			...options.headers,
+		},
+	});
+
+export const startLlamaCppSourceBuild = <ThrowOnError extends boolean = false>(
+	options: Options<StartLlamaCppSourceBuildData, ThrowOnError>,
+) =>
+	(options.client ?? client).post<StartLlamaCppSourceBuildResponses, StartLlamaCppSourceBuildErrors, ThrowOnError>({
+		requestValidator: async (data) =>
+			await z
+				.object({
+					body: zStartLlamaCppSourceBuildBody,
+					path: z.never().optional(),
+					query: z.never().optional(),
+				})
+				.parseAsync(data),
+		responseType: "json",
+		responseValidator: async (data) => await zStartLlamaCppSourceBuildResponse.parseAsync(data),
+		security: [
+			{ scheme: "bearer", type: "http" },
+			{ scheme: "bearer", type: "http" },
+		],
+		url: "/api/local/v1/model-fit/llamacpp/source-build",
 		...options,
 		headers: {
 			"Content-Type": "application/json",
