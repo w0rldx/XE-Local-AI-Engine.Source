@@ -52,6 +52,6 @@ internal sealed class CudaBuildStartupService : IHostedService
 
     public Task StopAsync(CancellationToken cancellationToken)
     {
-        return Task.CompletedTask;
+        return _buildService.ShutdownAsync(cancellationToken);
     }
 }

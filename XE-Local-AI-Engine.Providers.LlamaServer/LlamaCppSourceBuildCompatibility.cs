@@ -26,7 +26,11 @@ public static class LlamaCppSourceBuildCompatibility
             return false;
         }
 
-        if (state.SourceRepository is null && state.SourceCommit is null && state.SourceRevisionMode is null && state.SourceRequestedCommit is null)
+        if (state.SourceRepository is null
+            && state.SourceCommit is null
+            && state.SourceRevisionMode is null
+            && state.SourceRequestedCommit is null
+            && state.SourceSelection is null)
         {
             try
             {
@@ -49,6 +53,7 @@ public static class LlamaCppSourceBuildCompatibility
 
         return state.SourceRevisionMode == LlamaCppSourceRevisionMode.EnginePinned
             && state.SourceRequestedCommit is null
+            && state.SourceSelection is not LlamaCppSourceSelection.Custom
             && string.Equals(state.SourceRepository, LlamaCppSourceBuildRequestValidation.OfficialRepository, StringComparison.Ordinal)
             && string.Equals(state.SourceCommit, LlamaCppReleasePins.PinnedSourceCommitSha, StringComparison.OrdinalIgnoreCase);
     }

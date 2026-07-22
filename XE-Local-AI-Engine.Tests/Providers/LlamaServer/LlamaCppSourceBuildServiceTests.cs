@@ -13,6 +13,92 @@ using XE_Local_AI_Engine.Tests.Testing;
 public sealed class LlamaCppSourceBuildServiceTests
 {
     [Test]
+    public async Task Start_ConcurrentCaller_WaitsForStartTransactionAndCannotRecoverWinnerWorkTree()
+    {
+        if (!OperatingSystem.IsLinux())
+        {
+            return;
+        }
+
+        using var temp = new TempDirectory();
+        var stubs = Path.Combine(temp.Path, "stubs");
+        Directory.CreateDirectory(stubs);
+        WriteScript(Path.Combine(stubs, "git"), "#!/bin/sh\nif [ \"$1\" = \"clone\" ]; then sleep 30; fi\n");
+        using var path = new PathScope(stubs);
+        using var store = new InstalledRuntimeStore(temp.Path);
+        var signal = new CudaManagedBuildSignal();
+        var probe = new GatedReadyProbe();
+        using var service = new LlamaCppSourceBuildService(probe, new CapturingBinaryManager(store, signal), store, signal,
+            new LeaseOnlySupervisor(), new NullLlamaCppSourceBuildEventPublisher(), NullLogger<LlamaCppSourceBuildService>.Instance, temp.Path);
+        var request = new LlamaCppSourceBuildRequest(LlamaCppSourceBackend.Cpu, LlamaCppSourceSelection.Official);
+
+        var winner = service.StartAsync(request, CancellationToken.None);
+        await probe.Entered.Task.WaitAsync(TimeSpan.FromSeconds(5));
+        var loser = service.StartAsync(request, CancellationToken.None);
+        await Task.Delay(100);
+        AssertEx.Equal(1, probe.CallCount);
+
+        probe.Release.SetResult();
+        AssertEx.Equal(LlamaCppSourceBuildStartOutcome.Started, await winner);
+        var marker = Path.Combine(temp.Path, "llama.cpp", "source-build", ".work", ".build-in-progress");
+        await AssertEx.EventuallyAsync(() => File.Exists(marker), TimeSpan.FromSeconds(5));
+        AssertEx.Equal(LlamaCppSourceBuildStartOutcome.AlreadyRunning, await loser);
+        AssertEx.Equal(1, probe.CallCount);
+        AssertEx.True(File.Exists(marker));
+
+        await service.ShutdownAsync(CancellationToken.None);
+    }
+
+    [Test]
+    public async Task StartupStop_BlockingBuild_CancelsAndAwaitsProcessTree()
+    {
+        if (!OperatingSystem.IsLinux())
+        {
+            return;
+        }
+
+        using var temp = new TempDirectory();
+        var stubs = Path.Combine(temp.Path, "stubs");
+        Directory.CreateDirectory(stubs);
+        var pidFile = Path.Combine(temp.Path, "git.pid");
+        WriteScript(Path.Combine(stubs, "git"), $"#!/bin/sh\necho $$ > '{pidFile}'\nwhile true; do sleep 1; done\n");
+        using var path = new PathScope(stubs);
+        using var store = new InstalledRuntimeStore(temp.Path);
+        var signal = new CudaManagedBuildSignal();
+        using var service = new LlamaCppSourceBuildService(new AlwaysReadyProbe(), new CapturingBinaryManager(store, signal), store, signal,
+            new LeaseOnlySupervisor(), new NullLlamaCppSourceBuildEventPublisher(), NullLogger<LlamaCppSourceBuildService>.Instance, temp.Path);
+        var startup = new CudaBuildStartupService(service, store, signal, NullLogger<CudaBuildStartupService>.Instance);
+
+        AssertEx.Equal(LlamaCppSourceBuildStartOutcome.Started,
+            await service.StartAsync(new LlamaCppSourceBuildRequest(LlamaCppSourceBackend.Cpu, LlamaCppSourceSelection.Official), CancellationToken.None));
+        await AssertEx.EventuallyAsync(() => File.Exists(pidFile), TimeSpan.FromSeconds(5));
+        var pid = int.Parse(await File.ReadAllTextAsync(pidFile));
+
+        await startup.StopAsync(CancellationToken.None);
+
+        AssertEx.Equal(LlamaCppSourceBuildPhase.Cancelled, service.GetStatus().Phase);
+        AssertEx.False(Directory.Exists($"/proc/{pid}"));
+    }
+
+    [Test]
+    public async Task AppendLog_ConcurrentCallbacks_PersistAndPublishInIdenticalOrder()
+    {
+        using var temp = new TempDirectory();
+        using var store = new InstalledRuntimeStore(temp.Path);
+        var signal = new CudaManagedBuildSignal();
+        var publisher = new RecordingPublisher();
+        using var service = new LlamaCppSourceBuildService(new AlwaysReadyProbe(), new CapturingBinaryManager(store, signal), store, signal,
+            new LeaseOnlySupervisor(), publisher, NullLogger<LlamaCppSourceBuildService>.Instance, temp.Path);
+
+        await Task.WhenAll(Enumerable.Range(0, 100).Select(index => Task.Run(() => service.AppendLog($"line-{index}"))));
+        await service.FlushPublisherAsync();
+
+        var persisted = service.GetStatus().LogLines;
+        var published = publisher.Events.SelectMany(statusEvent => statusEvent.AppendedLogLines).ToArray();
+        AssertEx.True(persisted.SequenceEqual(published));
+    }
+
+    [Test]
     public async Task Cancel_CustomCpu_IsRejectedByLegacyPredicateAndGenericCancelRetainsActiveRuntime()
     {
         if (!OperatingSystem.IsLinux())
@@ -182,6 +268,48 @@ public sealed class LlamaCppSourceBuildServiceTests
     {
         public Task<LlamaCppSourceBuildPrerequisiteReport> ProbeAsync(LlamaCppSourceBackend backend, CancellationToken ct) =>
             Task.FromResult(new LlamaCppSourceBuildPrerequisiteReport(true, []));
+    }
+
+    private sealed class GatedReadyProbe : ILlamaCppSourceBuildPrerequisiteProbe
+    {
+        private int _callCount;
+        public int CallCount => Volatile.Read(ref _callCount);
+        public TaskCompletionSource Entered { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
+        public TaskCompletionSource Release { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
+
+        public async Task<LlamaCppSourceBuildPrerequisiteReport> ProbeAsync(LlamaCppSourceBackend backend, CancellationToken ct)
+        {
+            Interlocked.Increment(ref _callCount);
+            Entered.TrySetResult();
+            await Release.Task.WaitAsync(ct);
+            return new LlamaCppSourceBuildPrerequisiteReport(true, []);
+        }
+    }
+
+    private sealed class RecordingPublisher : ILlamaCppSourceBuildEventPublisher
+    {
+        private readonly Lock _lock = new();
+        private readonly List<LlamaCppSourceBuildStatusHubEvent> _events = [];
+        public IReadOnlyList<LlamaCppSourceBuildStatusHubEvent> Events
+        {
+            get
+            {
+                lock (_lock)
+                {
+                    return [.. _events];
+                }
+            }
+        }
+
+        public Task PublishStatusAsync(LlamaCppSourceBuildStatusHubEvent statusEvent, CancellationToken cancellationToken = default)
+        {
+            lock (_lock)
+            {
+                _events.Add(statusEvent);
+            }
+
+            return Task.CompletedTask;
+        }
     }
 
     private sealed class CapturingBinaryManager(IInstalledRuntimeStore store, IActiveSourceBuildSignal signal, bool failAdoption = false) : ILlamaCppBinaryManager

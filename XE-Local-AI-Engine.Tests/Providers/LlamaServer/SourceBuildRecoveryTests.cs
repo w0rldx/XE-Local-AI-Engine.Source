@@ -58,6 +58,33 @@ public sealed class SourceBuildRecoveryTests
     }
 
     [Test]
+    public async Task Recover_CustomSelectionUsingOfficialRepository_PreservesExplicitSelection()
+    {
+        if (!OperatingSystem.IsLinux())
+        {
+            return;
+        }
+
+        using var temp = new TempDirectory();
+        using var store = new InstalledRuntimeStore(temp.Path);
+        var active = Path.Combine(temp.Path, "llama.cpp", "source-build", "active");
+        await SeedTreeAndStateAsync(active,
+            GpuVariant.Cpu,
+            store,
+            GpuVariant.Cpu,
+            LlamaCppSourceSelection.Custom,
+            LlamaCppSourceRevisionMode.DefaultBranch);
+        var signal = new CudaManagedBuildSignal();
+        using var service = CreateService(temp.Path, store, signal);
+
+        await service.RecoverAsync(CancellationToken.None);
+
+        AssertEx.True(Directory.Exists(active));
+        AssertEx.Equal(LlamaCppSourceSelection.Custom, (await store.ReadAsync(CancellationToken.None))!.SourceSelection);
+        AssertEx.Equal(GpuVariant.Cpu, signal.ActiveVariant);
+    }
+
+    [Test]
     public async Task Recover_ActiveAndBackup_RestoresOnlyTreeMatchingFullDescriptor()
     {
         if (!OperatingSystem.IsLinux())
@@ -162,7 +189,12 @@ public sealed class SourceBuildRecoveryTests
         AssertEx.True(File.Exists(Path.Combine(backup, "sentinel")));
     }
 
-    private static async Task<InstalledRuntimeState> SeedTreeAndStateAsync(string tree, GpuVariant variant, IInstalledRuntimeStore store, GpuVariant manifestVariant)
+    private static async Task<InstalledRuntimeState> SeedTreeAndStateAsync(string tree,
+        GpuVariant variant,
+        IInstalledRuntimeStore store,
+        GpuVariant manifestVariant,
+        LlamaCppSourceSelection sourceSelection = LlamaCppSourceSelection.Official,
+        LlamaCppSourceRevisionMode revisionMode = LlamaCppSourceRevisionMode.EnginePinned)
     {
         var bin = Path.Combine(tree, "build", "bin");
         var server = WriteServer(bin, variant);
@@ -170,15 +202,16 @@ public sealed class SourceBuildRecoveryTests
         var activeBin = Path.Combine(Path.GetDirectoryName(tree)!, "active", "build", "bin");
         var state = new InstalledRuntimeState(LlamaCppReleasePins.PinnedTag, "source", sha, variant, DateTimeOffset.UtcNow, activeBin,
             LlamaCppSourceBuildRequestValidation.OfficialRepository, LlamaCppReleasePins.PinnedSourceCommitSha,
-            LlamaCppSourceRevisionMode.EnginePinned);
+            revisionMode,
+            SourceSelection: sourceSelection);
         await store.WriteAsync(state, CancellationToken.None);
         var manifest = new
         {
             Tag = LlamaCppReleasePins.PinnedTag,
             Variant = manifestVariant,
-            Source = LlamaCppSourceSelection.Official,
+            Source = sourceSelection,
             Repository = LlamaCppSourceBuildRequestValidation.OfficialRepository,
-            RevisionMode = LlamaCppSourceRevisionMode.EnginePinned,
+            RevisionMode = revisionMode,
             RequestedCommit = (string?)null,
             ResolvedCommit = LlamaCppReleasePins.PinnedSourceCommitSha,
             BinarySha256 = sha
