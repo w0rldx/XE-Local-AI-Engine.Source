@@ -9,7 +9,7 @@ using Microsoft.Extensions.Logging;
 using XE_Local_AI_Engine.Providers.LlamaServer.Contracts;
 
 /// <summary>
-///     Default <see cref="ILlamaCppSourceBuildService" />. Orchestrates a single-flight, cancellable, background in-app CUDA
+///     Default <see cref="ILlamaCppSourceBuildService" />. Orchestrates a single-flight, cancellable, background source
 ///     <c>llama-server</c> build and adopts the result as a managed runtime. Every subprocess runs under a scrubbed,
 ///     allowlisted environment (<c>[secHIGH-2]</c>) in an owner-only (0700) work directory inside the cache root — never
 ///     <c>/tmp</c> (<c>[secHIGH-3]</c>, Locked #8). The clone source URL + tag are constants and the checked-out commit is
@@ -399,17 +399,17 @@ public sealed partial class LlamaCppSourceBuildService : ILlamaCppSourceBuildSer
         }
         catch (LlamaRuntimeException exception)
         {
-            _logger.LogWarning(exception, "The in-app CUDA build failed.");
+            _logger.LogWarning(exception, "The in-app source build failed.");
             TryDeleteDirectory(workDir);
             TryDeleteDirectory(stagingTagDir);
             SetTerminal(LlamaCppSourceBuildPhase.Failed, exception.Message);
         }
         catch (Exception exception)
         {
-            _logger.LogError(exception, "The in-app CUDA build failed unexpectedly.");
+            _logger.LogError(exception, "The in-app source build failed unexpectedly.");
             TryDeleteDirectory(workDir);
             TryDeleteDirectory(stagingTagDir);
-            SetTerminal(LlamaCppSourceBuildPhase.Failed, "The CUDA build failed unexpectedly.");
+            SetTerminal(LlamaCppSourceBuildPhase.Failed, "The source build failed unexpectedly.");
         }
     }
 
@@ -494,8 +494,13 @@ public sealed partial class LlamaCppSourceBuildService : ILlamaCppSourceBuildSer
             return;
         }
 
-        var activeMatches = sourceRecord && await TreeMatchesRecordAsync(active, installed!, ct).ConfigureAwait(false);
-        var backupMatches = sourceRecord && await TreeMatchesRecordAsync(backup, installed!, ct).ConfigureAwait(false);
+        var canonicalActiveBin = Path.Combine(active, "build", "bin");
+        var recordTargetsActive = sourceRecord && PathsEqual(installed!.SourceBuildPath!, canonicalActiveBin);
+        var activeMatches = recordTargetsActive && await TreeMatchesRecordAsync(active, installed!, ct).ConfigureAwait(false);
+        var backupState = recordTargetsActive
+            ? installed! with { SourceBuildPath = Path.Combine(backup, "build", "bin") }
+            : installed!;
+        var backupMatches = recordTargetsActive && await TreeMatchesRecordAsync(backup, backupState, ct).ConfigureAwait(false);
 
         if (Directory.Exists(active) && Directory.Exists(backup))
         {
@@ -556,6 +561,8 @@ public sealed partial class LlamaCppSourceBuildService : ILlamaCppSourceBuildSer
     private static async Task<bool> TreeMatchesRecordAsync(string tree, InstalledRuntimeState state, CancellationToken ct)
     {
         if (!Directory.Exists(tree)
+            || state.SourceBuildPath is not { Length: > 0 }
+            || !PathsEqual(state.SourceBuildPath, Path.Combine(tree, "build", "bin"))
             || state.SourceRepository is null
             || state.SourceCommit is null
             || state.SourceRevisionMode is null)
@@ -613,22 +620,27 @@ public sealed partial class LlamaCppSourceBuildService : ILlamaCppSourceBuildSer
 
     private bool IsPreProvenanceLegacyRecord(InstalledRuntimeState? state)
     {
-        if (state is not
+        return state is
             {
-                Variant: GpuVariant.Cuda,
-                SourceBuildPath: { Length: > 0 },
                 SourceRepository: null,
                 SourceCommit: null,
                 SourceRevisionMode: null,
                 SourceRequestedCommit: null
             }
-            || !string.Equals(state.Tag, LlamaCppReleasePins.PinnedTag, StringComparison.Ordinal))
+            && state.IsLegacyPinnedCuda(_cacheRoot);
+    }
+
+    private static bool PathsEqual(string left, string right)
+    {
+        try
+        {
+            var comparison = OperatingSystem.IsWindows() ? StringComparison.OrdinalIgnoreCase : StringComparison.Ordinal;
+            return string.Equals(Path.GetFullPath(left), Path.GetFullPath(right), comparison);
+        }
+        catch (Exception exception) when (exception is ArgumentException or NotSupportedException or PathTooLongException)
         {
             return false;
         }
-
-        var expected = Path.GetFullPath(Path.Combine(_cacheRoot, "llama.cpp", "source-cuda", LlamaCppReleasePins.PinnedTag, "build", "bin"));
-        return string.Equals(Path.GetFullPath(state.SourceBuildPath), expected, StringComparison.Ordinal);
     }
 
     private static async Task<bool> ValidateLegacyRecordAsync(InstalledRuntimeState state, CancellationToken ct)
@@ -802,7 +814,7 @@ public sealed partial class LlamaCppSourceBuildService : ILlamaCppSourceBuildSer
             }
 
             var architecture = major * 10 + minor;
-            if (architecture is < 50 or > 999)
+            if (!IsSupportedCudaArchitecture(architecture))
             {
                 return DefaultCudaArchitectures;
             }
@@ -811,6 +823,18 @@ public sealed partial class LlamaCppSourceBuildService : ILlamaCppSourceBuildSer
         }
 
         return values.Count == 0 ? DefaultCudaArchitectures : string.Join(';', values);
+    }
+
+    private static bool IsSupportedCudaArchitecture(int architecture)
+    {
+        return architecture is 50 or 52 or 53
+            or 60 or 61 or 62
+            or 70 or 72 or 75
+            or 80 or 86 or 87 or 89
+            or 90
+            or 100 or 101 or 103
+            or 110
+            or 120 or 121;
     }
 
     [SupportedOSPlatform("linux")]
@@ -995,7 +1019,7 @@ public sealed partial class LlamaCppSourceBuildService : ILlamaCppSourceBuildSer
         }
         catch (Exception exception)
         {
-            _logger.LogDebug(exception, "Publishing a CUDA build status event failed (non-fatal).");
+            _logger.LogDebug(exception, "Publishing a source-build status event failed (non-fatal).");
         }
     }
 

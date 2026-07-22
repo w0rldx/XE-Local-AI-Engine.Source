@@ -107,6 +107,45 @@ public sealed class SourceBuildRecoveryTests
     }
 
     [Test]
+    public async Task Recover_ActiveTreeWithUnboundRecordedPath_DiscardsTreeAndVersionsSignal()
+    {
+        if (!OperatingSystem.IsLinux())
+        {
+            return;
+        }
+
+        using var temp = new TempDirectory();
+        using var store = new InstalledRuntimeStore(temp.Path);
+        var active = Path.Combine(temp.Path, "llama.cpp", "source-build", "active");
+        var state = await SeedTreeAndStateAsync(active, GpuVariant.Cpu, store, manifestVariant: GpuVariant.Cpu);
+        await store.WriteAsync(state with { SourceBuildPath = Path.Combine(temp.Path, "unbound", "build", "bin") }, CancellationToken.None);
+        var signal = new CudaManagedBuildSignal();
+        signal.SetActive(GpuVariant.Cpu);
+        var before = signal.Version;
+        using var service = CreateService(temp.Path, store, signal);
+
+        await service.RecoverAsync(CancellationToken.None);
+
+        AssertEx.False(Directory.Exists(active));
+        AssertEx.Null(await store.ReadAsync(CancellationToken.None));
+        AssertEx.Null(signal.ActiveVariant);
+        AssertEx.True(signal.Version > before);
+    }
+
+    [Test]
+    public async Task Startup_WhenRecoveryFails_PropagatesAndBlocksStartup()
+    {
+        using var temp = new TempDirectory();
+        using var store = new InstalledRuntimeStore(temp.Path);
+        var service = new CudaBuildStartupService(new FailingRecoveryBuildService(),
+            store,
+            new CudaManagedBuildSignal(),
+            NullLogger<CudaBuildStartupService>.Instance);
+
+        await AssertEx.ThrowsAsync<IOException>(() => service.StartAsync(CancellationToken.None));
+    }
+
+    [Test]
     public async Task Start_WhenRecoveryStoreFails_BlocksAndPreservesBackup()
     {
         using var temp = new TempDirectory();
@@ -178,5 +217,13 @@ public sealed class SourceBuildRecoveryTests
         public Task<LlamaServerEndpoint> EnsureRunningAsync(string modelName, ModelRole role, CancellationToken ct) => throw new NotSupportedException(); public Task EvictAsync(string modelName, ModelRole role, CancellationToken ct) => throw new NotSupportedException(); public Task<LlamaServerEjectOutcome> EjectAsync(string modelName, ModelRole role, bool force, CancellationToken ct) => throw new NotSupportedException(); public LlamaServerLeaseAcquisition TryAcquireInferenceLease(string modelName, ModelRole role) => throw new NotSupportedException(); public Task<T> RunExclusiveProfilingAsync<T>(string modelName, ModelRole role, ResolvedLaunchArguments launchArgs, bool enableMetrics, Func<LlamaServerProfilingContext, CancellationToken, Task<T>> body, CancellationToken ct) => throw new NotSupportedException(); public Task<IReadOnlyList<LlamaServerProcessHealth>> CheckHealthAsync(CancellationToken ct) => throw new NotSupportedException(); public int CountRunningProcesses() => 0; public LlamaServerRuntimeInfo? GetRuntimeInfo(string modelName, ModelRole role) => null;
     }
     private sealed class ThrowingStore : IInstalledRuntimeStore { public Task<InstalledRuntimeState?> ReadAsync(CancellationToken ct) => throw new IOException("read failed"); public Task WriteAsync(InstalledRuntimeState state, CancellationToken ct) => throw new NotSupportedException(); public Task DeleteAsync(CancellationToken ct) => throw new NotSupportedException(); }
+    private sealed class FailingRecoveryBuildService : ILlamaCppSourceBuildService
+    {
+        public Task<LlamaCppSourceBuildStartOutcome> StartAsync(LlamaCppSourceBuildRequest request, CancellationToken ct) => throw new NotSupportedException();
+        public LlamaCppSourceBuildStatus GetStatus() => throw new NotSupportedException();
+        public bool Cancel() => false;
+        public bool CancelLegacyPinnedCuda() => false;
+        public Task RecoverAsync(CancellationToken ct) => throw new IOException("reconciliation failed");
+    }
     private sealed class TempDirectory : IDisposable { public TempDirectory() { Path = System.IO.Path.Combine(System.IO.Path.GetTempPath(), "xe-recovery-" + Guid.NewGuid().ToString("N")); Directory.CreateDirectory(Path); } public string Path { get; } public void Dispose() { try { Directory.Delete(Path, true); } catch (Exception) { /* Best effort. */ } } }
 }

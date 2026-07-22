@@ -142,9 +142,27 @@ public sealed class LlamaCppSourceBuildCoreTests
     [Arguments("4.9")]
     [Arguments("8.10")]
     [Arguments("8.9 extra")]
+    [Arguments("99.9")]
+    [Arguments("999")]
     public void ParseCudaArchitectures_InvalidOrOutOfBounds_FallsBack(string output)
     {
         AssertEx.Equal("75;86;89", LlamaCppSourceBuildService.ParseCudaArchitectures(output));
+    }
+
+    [Test]
+    public void LegacyPreProvenancePredicate_RequiresExactNormalizedCachePath()
+    {
+        var cacheRoot = Path.Combine(Path.GetTempPath(), "source-build-predicate-root");
+        var expected = Path.Combine(cacheRoot, "llama.cpp", "source-cuda", LlamaCppReleasePins.PinnedTag, "build", "bin");
+        var exact = new InstalledRuntimeState(LlamaCppReleasePins.PinnedTag, "source", new string('a', 64), GpuVariant.Cuda,
+            DateTimeOffset.UtcNow, Path.Combine(expected, "..", "bin"));
+        var deceptive = exact with
+        {
+            SourceBuildPath = Path.Combine(cacheRoot, "outside", "llama.cpp", "source-cuda", LlamaCppReleasePins.PinnedTag, "build", "bin")
+        };
+
+        AssertEx.True(exact.IsLegacyPinnedCuda(cacheRoot));
+        AssertEx.False(deceptive.IsLegacyPinnedCuda(cacheRoot));
     }
 
     [Test]

@@ -25,6 +25,9 @@ using XE_Local_AI_Engine.Providers.LlamaServer.Contracts;
 /// </remarks>
 public sealed partial class LlamaCppBinaryManager
 {
+    private const string ManagedSourceBuildUnavailableMessage =
+        "The recorded source-built llama.cpp runtime is unavailable or failed validation.";
+
     /// <summary>The built-server file name inside a managed source-build bin directory.</summary>
     private const string ManagedCudaServerFileName = "llama-server";
 
@@ -43,7 +46,7 @@ public sealed partial class LlamaCppBinaryManager
         {
             if (!File.Exists(serverPath) || new FileInfo(serverPath).LinkTarget is not null)
             {
-                await DiscardManagedCudaRecordAsync(ct).ConfigureAwait(false);
+                await DiscardManagedSourceRecordAsync(ct).ConfigureAwait(false);
                 return null;
             }
 
@@ -54,7 +57,7 @@ public sealed partial class LlamaCppBinaryManager
             // Recorded-SHA256 recompare: a swapped binary (same path, different bytes) is rejected.
             if (!await HashMatchesAsync(serverPath, installed.Sha256, ct).ConfigureAwait(false))
             {
-                await DiscardManagedCudaRecordAsync(ct).ConfigureAwait(false);
+                await DiscardManagedSourceRecordAsync(ct).ConfigureAwait(false);
                 return null;
             }
 
@@ -64,11 +67,11 @@ public sealed partial class LlamaCppBinaryManager
         {
             throw;
         }
-        catch (LlamaRuntimeException)
+        catch (Exception exception) when (exception is not OperationCanceledException)
         {
-            // A path-chain perms/ownership violation invalidates the recorded build — discard it + the signal and fall
-            // through to the normal path (which throws the sanitized no-prebuilt failure for a Cuda request on Linux).
-            await DiscardManagedCudaRecordAsync(ct).ConfigureAwait(false);
+            // Any validation or I/O failure invalidates the recorded source runtime. The caller surfaces one sanitized
+            // source-build failure and must not fall through to a prebuilt acquisition.
+            await DiscardManagedSourceRecordAsync(ct).ConfigureAwait(false);
             return null;
         }
     }
@@ -185,7 +188,7 @@ public sealed partial class LlamaCppBinaryManager
                 ? null
                 : await _installedRuntimeStore.ReadAsync(ct).ConfigureAwait(false);
             if (installed?.SourceBuildPath is not { Length: > 0 } sourceBuildPath
-                || legacyOnly && !installed.IsLegacyPinnedCuda())
+                || legacyOnly && !installed.IsLegacyPinnedCuda(_cacheRoot))
             {
                 return;
             }
@@ -230,9 +233,8 @@ public sealed partial class LlamaCppBinaryManager
     /// <summary>The sentinel <see cref="InstalledRuntimeState.Asset" /> for a managed CUDA source build; readers must key off <see cref="InstalledRuntimeState.SourceBuildPath" />, never parse this.</summary>
     internal const string ManagedCudaSourceBuildSentinel = "(source-build:cuda)";
 
-    // Discards an invalid/missing managed CUDA record (delete the runtime record + clear the cached signal). Best-effort
-    // on the store delete: a delete failure must not mask the fall-through.
-    private async Task DiscardManagedCudaRecordAsync(CancellationToken ct)
+    // Discards an invalid, missing, or variant-mismatched managed source record and versions the active-build signal.
+    private async Task DiscardManagedSourceRecordAsync(CancellationToken ct)
     {
         await _sourceMutationGate.WaitAsync(ct).ConfigureAwait(false);
         try
