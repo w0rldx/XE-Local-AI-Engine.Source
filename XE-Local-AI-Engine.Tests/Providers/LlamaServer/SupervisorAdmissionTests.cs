@@ -12,6 +12,31 @@ using XE_Local_AI_Engine.Tests.Testing;
 public sealed class SupervisorAdmissionTests
 {
     [Test]
+    public async Task EnsureParkedInReadiness_MutationLeaseObservesInflightAndReturnsNull()
+    {
+        var gatedProbe = new GatedHealthProbe();
+        await using var supervisor = SupervisorFactory.Create(healthProbe: gatedProbe);
+        var ensure = supervisor.EnsureRunningAsync("model-a", ModelRole.Chat, CancellationToken.None);
+
+        await AssertEx.EventuallyAsync(() => gatedProbe.Waiting == 1,
+            TimeSpan.FromSeconds(5),
+            "the spawn should be parked in readiness").ConfigureAwait(false);
+
+        try
+        {
+            var lease = await supervisor.TryAcquireRuntimeMutationLeaseAsync(CancellationToken.None)
+                .WaitAsync(TimeSpan.FromSeconds(2))
+                .ConfigureAwait(false);
+            AssertEx.Null(lease);
+        }
+        finally
+        {
+            gatedProbe.Release();
+            await ensure.WaitAsync(TimeSpan.FromSeconds(5)).ConfigureAwait(false);
+        }
+    }
+
+    [Test]
     public async Task TwoConcurrentGpuLoads_Serialize_SecondDoesNotLaunchUntilFirstReady()
     {
         var launcher = new FakeProcessLauncher();
