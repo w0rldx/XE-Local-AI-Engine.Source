@@ -777,6 +777,7 @@ export type XeLocalAiEngineClientEndpointsModelFitV1LlamaCppInstalledRuntimeResp
 	isSourceBuild: boolean;
 	sourceRepository?: string | null;
 	sourceCommit?: string | null;
+	sourceSelection?: XeLocalAiEngineClientEndpointsModelFitV1LlamaCppSourceSelectionDto | null;
 	sourceRevisionMode?: XeLocalAiEngineClientEndpointsModelFitV1LlamaCppSourceRevisionModeDto | null;
 	sourceRequestedCommit?: string | null;
 };
