@@ -5,10 +5,10 @@ using Microsoft.Extensions.Logging;
 using XE_Local_AI_Engine.Providers.LlamaServer.Contracts;
 
 /// <summary>
-///     Startup <see cref="IHostedService" /> for the in-app CUDA build: (1) cleans a stale build work directory left by a
-///     host crash/kill mid-build (<c>[archLOW-1]</c>), and (2) seeds the cached managed-CUDA signal from the
+///     Startup <see cref="IHostedService" /> for source builds: (1) reconciles stale work and swap directories left by a
+///     host crash/kill mid-build (<c>[archLOW-1]</c>), and (2) seeds the cached active-source signal from the
 ///     installed-runtime record so a previously-adopted source build is selected after a restart without a per-call store
-///     read. Best-effort — never throws out of startup.
+///     read. Reconciliation failure is fatal to startup so readiness cannot be reported against ambiguous runtime state.
 /// </summary>
 internal sealed class CudaBuildStartupService : IHostedService
 {
@@ -45,7 +45,8 @@ internal sealed class CudaBuildStartupService : IHostedService
         }
         catch (Exception exception)
         {
-            _logger.LogWarning(exception, "Seeding the managed CUDA build signal at startup failed (non-fatal).");
+            _logger.LogError(exception, "Reconciling the managed source-build state at startup failed.");
+            throw;
         }
     }
 

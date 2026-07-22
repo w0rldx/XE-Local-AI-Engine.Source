@@ -126,19 +126,28 @@ public sealed partial class LlamaCppBinaryManager : ILlamaCppBinaryManager
             ? null
             : await _installedRuntimeStore.ReadAsync(ct).ConfigureAwait(false);
 
-        // Managed source-built CUDA short-circuit: a Cuda request with a recorded source build serves the locally-built
-        // binary instead of an acquisition (upstream ships no Linux CUDA prebuilt, so the pin resolve below would throw).
+        // A recorded source build is authoritative: it must match the requested variant and validate successfully. Never
+        // fall through to a prebuilt acquisition while source provenance is recorded, because that would silently replace
+        // the operator-selected runtime after corruption, deletion, or a variant-selection race.
         // Re-validated on EVERY serve (full path-chain perms + recorded-SHA256 recompare) so an adopt→restart→serve TOCTOU
         // or a deep-tree swap is caught. A recorded-but-missing/invalid build clears the record + signal and falls through
         // to the normal path (which throws the sanitized "no prebuilt for this OS/arch" for a Cuda request — never a
         // silent CPU serve). Reuses the already-read `installed`, so no extra store I/O.
-        if (installed?.SourceBuildPath is { Length: > 0 } && installed.Variant == variant)
+        if (installed?.SourceBuildPath is { Length: > 0 })
         {
+            if (installed.Variant != variant)
+            {
+                await DiscardManagedSourceRecordAsync(ct).ConfigureAwait(false);
+                throw new LlamaRuntimeException(ManagedSourceBuildUnavailableMessage);
+            }
+
             var managed = await TryServeManagedSourceBinaryAsync(installed, ct).ConfigureAwait(false);
             if (managed is not null)
             {
                 return managed;
             }
+
+            throw new LlamaRuntimeException(ManagedSourceBuildUnavailableMessage);
         }
 
         var resolvedTag = await ResolveActiveTagAsync(variant, installed, ct).ConfigureAwait(false);

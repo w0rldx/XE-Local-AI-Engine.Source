@@ -73,6 +73,38 @@ public sealed class LlamaCppSourceBuildServiceTests
     }
 
     [Test]
+    public async Task Start_WhenUnexpectedAdoptionFailure_UsesGenericSourceBuildMessage()
+    {
+        if (!OperatingSystem.IsLinux())
+        {
+            return;
+        }
+
+        using var temp = new TempDirectory();
+        var stubs = Path.Combine(temp.Path, "stubs");
+        Directory.CreateDirectory(stubs);
+        WriteScript(Path.Combine(stubs, "git"), $"#!/bin/sh\nif [ \"$1\" = \"clone\" ]; then for last; do :; done; mkdir -p \"$last\"; exit 0; fi\nif [ \"$1\" = \"-C\" ]; then echo '{LlamaCppReleasePins.PinnedSourceCommitSha}'; exit 0; fi\n");
+        WriteScript(Path.Combine(stubs, "cmake"), "#!/bin/sh\nif [ \"$1\" = \"-B\" ]; then mkdir -p \"$2\"; exit 0; fi\nif [ \"$1\" = \"--build\" ]; then mkdir -p \"$2/bin\"; printf '#!/bin/sh\\nexit 0\\n' > \"$2/bin/llama-server\"; chmod 755 \"$2/bin/llama-server\"; exit 0; fi\n");
+        using var path = new PathScope(stubs);
+        using var store = new InstalledRuntimeStore(temp.Path);
+        var signal = new CudaManagedBuildSignal();
+        using var service = new LlamaCppSourceBuildService(new AlwaysReadyProbe(),
+            new CapturingBinaryManager(store, signal, failAdoption: true),
+            store,
+            signal,
+            new LeaseOnlySupervisor(),
+            new NullLlamaCppSourceBuildEventPublisher(),
+            NullLogger<LlamaCppSourceBuildService>.Instance,
+            temp.Path);
+
+        await service.StartAsync(new LlamaCppSourceBuildRequest(LlamaCppSourceBackend.Cpu, LlamaCppSourceSelection.Official), CancellationToken.None);
+        await AssertEx.EventuallyAsync(() => service.GetStatus().Terminal, TimeSpan.FromSeconds(10));
+
+        AssertEx.Equal(LlamaCppSourceBuildPhase.Failed, service.GetStatus().Phase);
+        AssertEx.Equal("The source build failed unexpectedly.", service.GetStatus().SanitizedError);
+    }
+
+    [Test]
     public async Task Start_OfficialCpu_UsesPinnedCommitScrubbedGitAndCpuMatrix()
     {
         if (!OperatingSystem.IsLinux())
@@ -137,7 +169,7 @@ public sealed class LlamaCppSourceBuildServiceTests
             Task.FromResult(new LlamaCppSourceBuildPrerequisiteReport(true, []));
     }
 
-    private sealed class CapturingBinaryManager(IInstalledRuntimeStore store, IActiveSourceBuildSignal signal) : ILlamaCppBinaryManager
+    private sealed class CapturingBinaryManager(IInstalledRuntimeStore store, IActiveSourceBuildSignal signal, bool failAdoption = false) : ILlamaCppBinaryManager
     {
         public GpuVariant? AdoptedVariant { get; private set; }
         public Task<LlamaBinary> EnsureBinaryAsync(GpuVariant variant, CancellationToken ct) => throw new NotSupportedException();
@@ -148,6 +180,11 @@ public sealed class LlamaCppSourceBuildServiceTests
         public async Task<InstalledRuntimeState> AdoptSourceBuildAsync(string buildBinDir, string tag, GpuVariant variant, string sourceRepository,
             string sourceCommit, LlamaCppSourceRevisionMode revisionMode, string? requestedCommit, CancellationToken ct)
         {
+            if (failAdoption)
+            {
+                throw new InvalidOperationException("unexpected adoption failure");
+            }
+
             AdoptedVariant = variant;
             var state = new InstalledRuntimeState(tag, "source", new string('a', 64), variant, DateTimeOffset.UtcNow, buildBinDir,
                 sourceRepository, sourceCommit, revisionMode, requestedCommit);

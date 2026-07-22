@@ -132,7 +132,7 @@ public sealed class CudaManagedRuntimeTests
     }
 
     [Test]
-    public async Task EnsureBinary_Vulkan_DoesNotClobberManagedCudaRecord()
+    public async Task EnsureBinary_SourceRecordVariantMismatch_DiscardsAndNeverServesCachedPrebuilt()
     {
         if (OperatingSystem.IsWindows())
         {
@@ -152,19 +152,55 @@ public sealed class CudaManagedRuntimeTests
 
         var signal = new CudaManagedBuildSignal();
         signal.MarkAvailable();
+        var before = signal.Version;
 
         using var handler = new ThrowingHandler();
         using var http = new HttpClient(handler, disposeHandler: false);
         var manager = new LlamaCppBinaryManager(http, dir.Path, LlamaCppReleasePins.PinnedTag,
             OSPlatform.Linux, Architecture.X64, catalog: null, store, overrideOptions: null, signal);
 
-        var binary = await manager.EnsureBinaryAsync(GpuVariant.Vulkan, CancellationToken.None);
-        AssertEx.Equal(GpuVariant.Vulkan, binary.Variant);
+        var exception = await AssertEx.ThrowsAsync<LlamaRuntimeException>(() =>
+            manager.EnsureBinaryAsync(GpuVariant.Vulkan, CancellationToken.None));
 
-        var after = await store.ReadAsync(CancellationToken.None);
-        AssertEx.NotNull(after);
-        AssertEx.Equal(GpuVariant.Cuda, after!.Variant);
-        AssertEx.Equal(binDir, after.SourceBuildPath);
+        AssertEx.True(exception.Message.Contains("source-built", StringComparison.Ordinal));
+        AssertEx.Null(await store.ReadAsync(CancellationToken.None));
+        AssertEx.Null(signal.ActiveVariant);
+        AssertEx.True(signal.Version > before);
+        _ = binDir;
+    }
+
+    [Test]
+    public async Task EnsureBinary_InvalidCpuSourceRecord_NeverServesCachedCpuPrebuilt()
+    {
+        if (OperatingSystem.IsWindows())
+        {
+            return;
+        }
+
+        using var dir = new TempDir();
+        var missingBin = Path.Combine(dir.Path, "llama.cpp", "source-build", "active", "build", "bin");
+        using var store = new InstalledRuntimeStore(dir.Path);
+        await store.WriteAsync(SourceBuildState(missingBin, new string('b', 64), GpuVariant.Cpu), CancellationToken.None);
+
+        var cachedCpuBin = Path.Combine(dir.Path, "llama.cpp", LlamaCppReleasePins.PinnedTag, "cpu", "build", "bin");
+        Directory.CreateDirectory(cachedCpuBin);
+        WriteExecutableStub(cachedCpuBin, GpuStub);
+        var signal = new CudaManagedBuildSignal();
+        signal.SetActive(GpuVariant.Cpu);
+        var before = signal.Version;
+
+        using var handler = new ThrowingHandler();
+        using var http = new HttpClient(handler, disposeHandler: false);
+        var manager = new LlamaCppBinaryManager(http, dir.Path, LlamaCppReleasePins.PinnedTag,
+            OSPlatform.Linux, Architecture.X64, catalog: null, store, overrideOptions: null, signal);
+
+        var exception = await AssertEx.ThrowsAsync<LlamaRuntimeException>(() =>
+            manager.EnsureBinaryAsync(GpuVariant.Cpu, CancellationToken.None));
+
+        AssertEx.True(exception.Message.Contains("source-built", StringComparison.Ordinal));
+        AssertEx.Null(await store.ReadAsync(CancellationToken.None));
+        AssertEx.Null(signal.ActiveVariant);
+        AssertEx.True(signal.Version > before);
     }
 
     [Test]
@@ -241,12 +277,18 @@ public sealed class CudaManagedRuntimeTests
         AssertEx.Null(readLegacy.SourceRequestedCommit);
     }
 
-    private static InstalledRuntimeState SourceBuildState(string binDir, string sha)
+    private static InstalledRuntimeState SourceBuildState(string binDir, string sha, GpuVariant variant = GpuVariant.Cuda)
     {
         return new InstalledRuntimeState(LlamaCppReleasePins.PinnedTag,
-            "(source-build:cuda)",
+            variant switch
+            {
+                GpuVariant.Cpu => "(source-build:cpu)",
+                GpuVariant.Vulkan => "(source-build:vulkan)",
+                GpuVariant.Cuda => "(source-build:cuda)",
+                _ => "(source-build)"
+            },
             sha,
-            GpuVariant.Cuda,
+            variant,
             DateTimeOffset.UtcNow,
             binDir);
     }

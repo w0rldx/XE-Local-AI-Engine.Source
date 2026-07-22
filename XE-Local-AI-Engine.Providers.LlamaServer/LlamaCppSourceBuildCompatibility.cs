@@ -18,8 +18,9 @@ public static class LlamaCppSourceBuildCompatibility
         && string.Equals(descriptor.ResolvedCommit, LlamaCppReleasePins.PinnedSourceCommitSha, StringComparison.OrdinalIgnoreCase);
     }
 
-    public static bool IsLegacyPinnedCuda(this InstalledRuntimeState? state)
+    public static bool IsLegacyPinnedCuda(this InstalledRuntimeState? state, string cacheRoot)
     {
+        ArgumentException.ThrowIfNullOrWhiteSpace(cacheRoot);
         if (state is null || state.Variant != GpuVariant.Cuda || state.SourceBuildPath is not { Length: > 0 })
         {
             return false;
@@ -27,9 +28,23 @@ public static class LlamaCppSourceBuildCompatibility
 
         if (state.SourceRepository is null && state.SourceCommit is null && state.SourceRevisionMode is null && state.SourceRequestedCommit is null)
         {
-            var legacyRoot = Path.Combine("llama.cpp", "source-cuda") + Path.DirectorySeparatorChar;
-            return string.Equals(state.Tag, LlamaCppReleasePins.PinnedTag, StringComparison.Ordinal)
-                && state.SourceBuildPath.Contains(legacyRoot, StringComparison.Ordinal);
+            try
+            {
+                var expected = Path.GetFullPath(Path.Combine(cacheRoot,
+                    "llama.cpp",
+                    "source-cuda",
+                    LlamaCppReleasePins.PinnedTag,
+                    "build",
+                    "bin"));
+                var recorded = Path.GetFullPath(state.SourceBuildPath);
+                var comparison = OperatingSystem.IsWindows() ? StringComparison.OrdinalIgnoreCase : StringComparison.Ordinal;
+                return string.Equals(state.Tag, LlamaCppReleasePins.PinnedTag, StringComparison.Ordinal)
+                    && string.Equals(recorded, expected, comparison);
+            }
+            catch (Exception exception) when (exception is ArgumentException or NotSupportedException or PathTooLongException)
+            {
+                return false;
+            }
         }
 
         return state.SourceRevisionMode == LlamaCppSourceRevisionMode.EnginePinned
