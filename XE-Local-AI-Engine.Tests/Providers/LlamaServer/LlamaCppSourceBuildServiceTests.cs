@@ -243,6 +243,7 @@ public sealed class LlamaCppSourceBuildServiceTests
             AssertEx.Equal(LlamaCppSourceBuildPhase.Completed, service.GetStatus().Phase);
             AssertEx.Equal(GpuVariant.Cpu, manager.AdoptedVariant);
             var args = await File.ReadAllTextAsync(cmakeArgs);
+            AssertEx.True(args.Contains("-DCMAKE_BUILD_RPATH_USE_ORIGIN=ON", StringComparison.Ordinal));
             AssertEx.True(args.Contains("-DGGML_CUDA=OFF", StringComparison.Ordinal));
             AssertEx.True(args.Contains("-DGGML_VULKAN=OFF", StringComparison.Ordinal));
             AssertEx.False(args.Contains("CMAKE_CUDA_ARCHITECTURES", StringComparison.Ordinal));

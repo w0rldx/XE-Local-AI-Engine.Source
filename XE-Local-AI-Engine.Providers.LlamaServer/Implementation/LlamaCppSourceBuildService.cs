@@ -526,7 +526,7 @@ public sealed partial class LlamaCppSourceBuildService : ILlamaCppSourceBuildSer
         var args = new List<string>
         {
             "-B", buildDir, "-S", cloneDir,
-            "-DCMAKE_BUILD_TYPE=Release", "-DLLAMA_CURL=OFF",
+            "-DCMAKE_BUILD_TYPE=Release", "-DCMAKE_BUILD_RPATH_USE_ORIGIN=ON", "-DLLAMA_CURL=OFF",
             $"-DGGML_CUDA={(variant == GpuVariant.Cuda ? "ON" : "OFF")}",
             $"-DGGML_VULKAN={(variant == GpuVariant.Vulkan ? "ON" : "OFF")}"
         };
@@ -749,7 +749,8 @@ public sealed partial class LlamaCppSourceBuildService : ILlamaCppSourceBuildSer
             RedirectStandardOutput = true,
             RedirectStandardError = true,
             UseShellExecute = false,
-            CreateNoWindow = true
+            CreateNoWindow = true,
+            WorkingDirectory = Path.GetDirectoryName(server) ?? Environment.CurrentDirectory
         };
         startInfo.ArgumentList.Add(argument);
         using var process = new Process { StartInfo = startInfo };

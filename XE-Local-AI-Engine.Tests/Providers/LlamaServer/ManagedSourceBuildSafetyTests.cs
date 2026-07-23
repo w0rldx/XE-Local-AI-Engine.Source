@@ -72,6 +72,25 @@ public sealed class ManagedSourceBuildSafetyTests
     }
 
     [Test]
+    public async Task Adopt_VulkanDeviceValidationRunsFromBinaryDirectory()
+    {
+        if (!OperatingSystem.IsLinux())
+        {
+            return;
+        }
+        using var temp = new SecureTempDirectory();
+        var bin = SeedActiveBin(temp.Path, "#!/bin/sh\ncase \"$1\" in --version) exit 0;; --list-devices) [ -f \"$PWD/runtime.sentinel\" ] || exit 42; echo 'Vulkan0: test'; exit 0;; esac\n");
+        await File.WriteAllTextAsync(Path.Combine(bin, "runtime.sentinel"), "present");
+        using var store = new InstalledRuntimeStore(temp.Path);
+
+        var state = await CreateManager(temp.Path, store).AdoptSourceBuildAsync(bin, LlamaCppReleasePins.PinnedTag,
+            GpuVariant.Vulkan, LlamaCppSourceBuildRequestValidation.OfficialRepository, LlamaCppReleasePins.PinnedSourceCommitSha,
+            LlamaCppSourceRevisionMode.EnginePinned, null, CancellationToken.None);
+
+        AssertEx.Equal(GpuVariant.Vulkan, state.Variant);
+    }
+
+    [Test]
     public async Task Adopt_InternalRelativeLibrarySymlink_Accepts()
     {
         if (!OperatingSystem.IsLinux())

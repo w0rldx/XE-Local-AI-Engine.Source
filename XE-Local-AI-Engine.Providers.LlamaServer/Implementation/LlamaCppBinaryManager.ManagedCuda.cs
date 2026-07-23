@@ -295,7 +295,8 @@ public sealed partial class LlamaCppBinaryManager
             RedirectStandardOutput = true,
             RedirectStandardError = true,
             UseShellExecute = false,
-            CreateNoWindow = true
+            CreateNoWindow = true,
+            WorkingDirectory = Path.GetDirectoryName(serverPath) ?? Environment.CurrentDirectory
         };
         startInfo.ArgumentList.Add("--list-devices");
         using var process = new System.Diagnostics.Process { StartInfo = startInfo };
