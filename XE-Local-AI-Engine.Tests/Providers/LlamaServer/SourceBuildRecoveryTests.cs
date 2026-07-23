@@ -85,6 +85,28 @@ public sealed class SourceBuildRecoveryTests
     }
 
     [Test]
+    public async Task Recover_ActiveTreeValidationRunsFromBinaryDirectory()
+    {
+        if (!OperatingSystem.IsLinux())
+        {
+            return;
+        }
+
+        using var temp = new TempDirectory();
+        using var store = new InstalledRuntimeStore(temp.Path);
+        var active = Path.Combine(temp.Path, "llama.cpp", "source-build", "active");
+        await SeedTreeAndStateAsync(active, GpuVariant.Cpu, store, GpuVariant.Cpu, requireBinaryWorkingDirectory: true);
+        var signal = new CudaManagedBuildSignal();
+        using var service = CreateService(temp.Path, store, signal);
+
+        await service.RecoverAsync(CancellationToken.None);
+
+        AssertEx.True(Directory.Exists(active));
+        AssertEx.NotNull(await store.ReadAsync(CancellationToken.None));
+        AssertEx.Equal(GpuVariant.Cpu, signal.ActiveVariant);
+    }
+
+    [Test]
     public async Task Recover_ActiveAndBackup_RestoresOnlyTreeMatchingFullDescriptor()
     {
         if (!OperatingSystem.IsLinux())
@@ -194,10 +216,11 @@ public sealed class SourceBuildRecoveryTests
         IInstalledRuntimeStore store,
         GpuVariant manifestVariant,
         LlamaCppSourceSelection sourceSelection = LlamaCppSourceSelection.Official,
-        LlamaCppSourceRevisionMode revisionMode = LlamaCppSourceRevisionMode.EnginePinned)
+        LlamaCppSourceRevisionMode revisionMode = LlamaCppSourceRevisionMode.EnginePinned,
+        bool requireBinaryWorkingDirectory = false)
     {
         var bin = Path.Combine(tree, "build", "bin");
-        var server = WriteServer(bin, variant);
+        var server = WriteServer(bin, variant, requireBinaryWorkingDirectory);
         var sha = Convert.ToHexStringLower(SHA256.HashData(await File.ReadAllBytesAsync(server)));
         var activeBin = Path.Combine(Path.GetDirectoryName(tree)!, "active", "build", "bin");
         var state = new InstalledRuntimeState(LlamaCppReleasePins.PinnedTag, "source", sha, variant, DateTimeOffset.UtcNow, activeBin,
@@ -220,12 +243,19 @@ public sealed class SourceBuildRecoveryTests
         return state;
     }
 
-    private static string WriteServer(string bin, GpuVariant variant)
+    private static string WriteServer(string bin, GpuVariant variant, bool requireBinaryWorkingDirectory = false)
     {
         Directory.CreateDirectory(bin);
         var device = variant == GpuVariant.Cuda ? "CUDA0:" : "Vulkan0:";
         var path = Path.Combine(bin, "llama-server");
-        File.WriteAllText(path, $"#!/bin/sh\ncase \"$1\" in --version) exit 0;; --list-devices) echo '{device} test'; exit 0;; esac\n");
+        var workingDirectoryCheck = requireBinaryWorkingDirectory
+            ? "[ -f \"$PWD/runtime.sentinel\" ] || exit 42; "
+            : string.Empty;
+        if (requireBinaryWorkingDirectory)
+        {
+            File.WriteAllText(Path.Combine(bin, "runtime.sentinel"), "present");
+        }
+        File.WriteAllText(path, $"#!/bin/sh\n{workingDirectoryCheck}case \"$1\" in --version) exit 0;; --list-devices) echo '{device} test'; exit 0;; esac\n");
         if (!OperatingSystem.IsWindows())
         {
             File.SetUnixFileMode(path, UnixFileMode.UserRead | UnixFileMode.UserWrite | UnixFileMode.UserExecute);
