@@ -1,6 +1,8 @@
 namespace XE_Local_AI_Engine.Tests.Providers.LlamaServer;
 
 using XE_Local_AI_Engine.Providers.LlamaServer;
+using XE_Local_AI_Engine.Providers.LlamaServer.Contracts;
+using XE_Local_AI_Engine.Providers.LlamaServer.Implementation;
 using XE_Local_AI_Engine.Tests.Testing;
 
 /// <summary>
@@ -55,6 +57,22 @@ public sealed class SupervisorRaceTests
         await lease.DisposeAsync();
         var endpoint = await supervisor.EnsureRunningAsync("healthy", ModelRole.Chat, CancellationToken.None);
         AssertEx.NotNull(endpoint);
+    }
+
+    [Test]
+    public async Task EnsureRunning_SourceBuildReserved_FailsWithoutSpawn()
+    {
+        var launcher = new FakeProcessLauncher();
+        ILlamaCppSourceBuildActivity activity = new LlamaCppSourceBuildActivity();
+        AssertEx.True(activity.TryReserve(Guid.NewGuid()));
+        await using var supervisor = SupervisorFactory.Create(launcher, sourceBuildActivity: activity);
+
+        var exception = await AssertEx.ThrowsAsync<LlamaRuntimeException>(() =>
+            supervisor.EnsureRunningAsync("model-a", ModelRole.Chat, CancellationToken.None));
+
+        AssertEx.Contains(exception.Message, "source build", StringComparison.OrdinalIgnoreCase);
+        AssertEx.Equal(0, launcher.LaunchCount);
+        AssertEx.Equal(0, supervisor.CountRunningProcesses());
     }
 
     [Test]

@@ -85,6 +85,59 @@ public sealed class SourceBuildRecoveryTests
     }
 
     [Test]
+    public async Task Recover_InvalidOfficialProvenance_DiscardsTreeAndRecord()
+    {
+        if (!OperatingSystem.IsLinux())
+        {
+            return;
+        }
+
+        var cases = new[]
+        {
+            (Repository: LlamaCppSourceBuildRequestValidation.OfficialRepository,
+                Revision: LlamaCppSourceRevisionMode.DefaultBranch,
+                Requested: (string?)null,
+                Resolved: LlamaCppReleasePins.PinnedSourceCommitSha),
+            (Repository: "https://github.com/example/fork",
+                Revision: LlamaCppSourceRevisionMode.EnginePinned,
+                Requested: (string?)null,
+                Resolved: LlamaCppReleasePins.PinnedSourceCommitSha),
+            (Repository: LlamaCppSourceBuildRequestValidation.OfficialRepository,
+                Revision: LlamaCppSourceRevisionMode.EnginePinned,
+                Requested: LlamaCppReleasePins.PinnedSourceCommitSha,
+                Resolved: LlamaCppReleasePins.PinnedSourceCommitSha),
+            (Repository: LlamaCppSourceBuildRequestValidation.OfficialRepository,
+                Revision: LlamaCppSourceRevisionMode.EnginePinned,
+                Requested: (string?)null,
+                Resolved: new string('a', 40))
+        };
+
+        foreach (var (repository, revision, requested, resolved) in cases)
+        {
+            using var temp = new TempDirectory();
+            using var store = new InstalledRuntimeStore(temp.Path);
+            var active = Path.Combine(temp.Path, "llama.cpp", "source-build", "active");
+            await SeedTreeAndStateAsync(active,
+                GpuVariant.Cpu,
+                store,
+                GpuVariant.Cpu,
+                LlamaCppSourceSelection.Official,
+                revision,
+                sourceRepository: repository,
+                requestedCommit: requested,
+                resolvedCommit: resolved);
+            var signal = new CudaManagedBuildSignal();
+            using var service = CreateService(temp.Path, store, signal);
+
+            await service.RecoverAsync(CancellationToken.None);
+
+            AssertEx.False(Directory.Exists(active));
+            AssertEx.Null(await store.ReadAsync(CancellationToken.None));
+            AssertEx.Null(signal.ActiveVariant);
+        }
+    }
+
+    [Test]
     public async Task Recover_ActiveTreeValidationRunsFromBinaryDirectory()
     {
         if (!OperatingSystem.IsLinux())
@@ -217,15 +270,20 @@ public sealed class SourceBuildRecoveryTests
         GpuVariant manifestVariant,
         LlamaCppSourceSelection sourceSelection = LlamaCppSourceSelection.Official,
         LlamaCppSourceRevisionMode revisionMode = LlamaCppSourceRevisionMode.EnginePinned,
-        bool requireBinaryWorkingDirectory = false)
+        bool requireBinaryWorkingDirectory = false,
+        string? sourceRepository = null,
+        string? requestedCommit = null,
+        string? resolvedCommit = null)
     {
         var bin = Path.Combine(tree, "build", "bin");
         var server = WriteServer(bin, variant, requireBinaryWorkingDirectory);
         var sha = Convert.ToHexStringLower(SHA256.HashData(await File.ReadAllBytesAsync(server)));
         var activeBin = Path.Combine(Path.GetDirectoryName(tree)!, "active", "build", "bin");
         var state = new InstalledRuntimeState(LlamaCppReleasePins.PinnedTag, "source", sha, variant, DateTimeOffset.UtcNow, activeBin,
-            LlamaCppSourceBuildRequestValidation.OfficialRepository, LlamaCppReleasePins.PinnedSourceCommitSha,
+            sourceRepository ?? LlamaCppSourceBuildRequestValidation.OfficialRepository,
+            resolvedCommit ?? LlamaCppReleasePins.PinnedSourceCommitSha,
             revisionMode,
+            requestedCommit,
             SourceSelection: sourceSelection);
         await store.WriteAsync(state, CancellationToken.None);
         var manifest = new
@@ -233,10 +291,10 @@ public sealed class SourceBuildRecoveryTests
             Tag = LlamaCppReleasePins.PinnedTag,
             Variant = manifestVariant,
             Source = sourceSelection,
-            Repository = LlamaCppSourceBuildRequestValidation.OfficialRepository,
+            Repository = sourceRepository ?? LlamaCppSourceBuildRequestValidation.OfficialRepository,
             RevisionMode = revisionMode,
-            RequestedCommit = (string?)null,
-            ResolvedCommit = LlamaCppReleasePins.PinnedSourceCommitSha,
+            RequestedCommit = requestedCommit,
+            ResolvedCommit = resolvedCommit ?? LlamaCppReleasePins.PinnedSourceCommitSha,
             BinarySha256 = sha
         };
         await File.WriteAllTextAsync(Path.Combine(tree, ".source-build-manifest.json"), JsonSerializer.Serialize(manifest));
@@ -264,8 +322,8 @@ public sealed class SourceBuildRecoveryTests
     }
 
     private static LlamaCppSourceBuildService CreateService(string root, IInstalledRuntimeStore store, IActiveSourceBuildSignal signal) =>
-        new(new ReadyProbe(), new NoopManager(), store, signal, new LeaseSupervisor(), new NullLlamaCppSourceBuildEventPublisher(),
-            NullLogger<LlamaCppSourceBuildService>.Instance, root);
+        new(new ReadyProbe(), new NoopManager(), store, signal, new LeaseSupervisor(), new LlamaCppSourceBuildActivity(),
+            new NullLlamaCppSourceBuildEventPublisher(), NullLogger<LlamaCppSourceBuildService>.Instance, root);
 
     private sealed class ReadyProbe : ILlamaCppSourceBuildPrerequisiteProbe { public Task<LlamaCppSourceBuildPrerequisiteReport> ProbeAsync(LlamaCppSourceBackend backend, CancellationToken ct) => Task.FromResult(new LlamaCppSourceBuildPrerequisiteReport(true, [])); }
     private sealed class NoopManager : ILlamaCppBinaryManager
@@ -282,7 +340,7 @@ public sealed class SourceBuildRecoveryTests
     private sealed class ThrowingStore : IInstalledRuntimeStore { public Task<InstalledRuntimeState?> ReadAsync(CancellationToken ct) => throw new IOException("read failed"); public Task WriteAsync(InstalledRuntimeState state, CancellationToken ct) => throw new NotSupportedException(); public Task DeleteAsync(CancellationToken ct) => throw new NotSupportedException(); }
     private sealed class FailingRecoveryBuildService : ILlamaCppSourceBuildService
     {
-        public Task<LlamaCppSourceBuildStartOutcome> StartAsync(LlamaCppSourceBuildRequest request, CancellationToken ct) => throw new NotSupportedException();
+        public Task<LlamaCppSourceBuildStartResult> StartAsync(LlamaCppSourceBuildRequest request, CancellationToken ct) => throw new NotSupportedException();
         public LlamaCppSourceBuildStatus GetStatus() => throw new NotSupportedException();
         public bool Cancel() => false;
         public bool CancelLegacyPinnedCuda() => false;

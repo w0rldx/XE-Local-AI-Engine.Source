@@ -32,6 +32,7 @@ internal sealed class LlamaCppSourceBuildStatusHubMessage
 {
     public required string Phase { get; init; }
     public required IReadOnlyList<string> AppendedLogLines { get; init; }
+    public required long AppendedLogStartSequence { get; init; }
     public required bool Terminal { get; init; }
     public string? SanitizedError { get; init; }
     public LlamaCppSourceBuildDescriptorHubMessage? CurrentBuild { get; init; }
@@ -42,6 +43,7 @@ internal sealed class LlamaCppSourceBuildStatusHubMessage
         {
             Phase = statusEvent.Phase,
             AppendedLogLines = statusEvent.AppendedLogLines,
+            AppendedLogStartSequence = statusEvent.AppendedLogStartSequence,
             Terminal = statusEvent.Terminal,
             SanitizedError = statusEvent.SanitizedError,
             CurrentBuild = statusEvent.CurrentBuild is null

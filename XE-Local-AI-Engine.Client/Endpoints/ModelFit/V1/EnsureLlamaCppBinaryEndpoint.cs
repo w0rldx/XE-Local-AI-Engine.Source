@@ -19,7 +19,7 @@ using XE_Local_AI_Engine.Providers.LlamaServer.Contracts;
 public sealed class EnsureLlamaCppBinaryEndpoint(
     ILlamaCppBinaryManager binaryManager,
     IInstalledRuntimeStore installedRuntimeStore,
-    ILlamaCppSourceBuildService sourceBuildService,
+    ILlamaCppSourceBuildActivity sourceBuildActivity,
     ILlamaServerProcessSupervisor processSupervisor,
     INodeRuntimeSettings nodeRuntimeSettings,
     ILogger<EnsureLlamaCppBinaryEndpoint> logger) : Endpoint<EnsureLlamaCppBinaryRequest, LlamaCppVersionResponse>
@@ -29,7 +29,7 @@ public sealed class EnsureLlamaCppBinaryEndpoint(
     private readonly ILogger<EnsureLlamaCppBinaryEndpoint> _logger = logger ?? throw new ArgumentNullException(nameof(logger));
     private readonly INodeRuntimeSettings _nodeRuntimeSettings = nodeRuntimeSettings ?? throw new ArgumentNullException(nameof(nodeRuntimeSettings));
     private readonly ILlamaServerProcessSupervisor _processSupervisor = processSupervisor ?? throw new ArgumentNullException(nameof(processSupervisor));
-    private readonly ILlamaCppSourceBuildService _sourceBuildService = sourceBuildService ?? throw new ArgumentNullException(nameof(sourceBuildService));
+    private readonly ILlamaCppSourceBuildActivity _sourceBuildActivity = sourceBuildActivity ?? throw new ArgumentNullException(nameof(sourceBuildActivity));
 
     public override void Configure()
     {
@@ -53,7 +53,7 @@ public sealed class EnsureLlamaCppBinaryEndpoint(
         try
         {
             var (mutationLease, runningProcessCount, blockedMessage) = await LlamaCppPrebuiltRuntimeMutationGuard
-                .TryAcquireAsync(_installedRuntimeStore, _sourceBuildService, _processSupervisor, ct)
+                .TryAcquireAsync(_installedRuntimeStore, _sourceBuildActivity, _processSupervisor, ct)
                 .ConfigureAwait(false);
             await using var ownedMutationLease = mutationLease;
             if (mutationLease is null || blockedMessage is not null)

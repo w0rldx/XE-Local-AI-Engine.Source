@@ -576,6 +576,7 @@ export type XeLocalAiEngineClientEndpointsModelFitV1LlamaCppSourceBuildStatusRes
 	phase: string;
 	isRunning: boolean;
 	terminal: boolean;
+	logStartSequence: number;
 	logLines: Array<string>;
 	sanitizedError?: string | null;
 	currentBuild?: XeLocalAiEngineClientEndpointsModelFitV1LlamaCppSourceBuildDescriptorResponse | null;

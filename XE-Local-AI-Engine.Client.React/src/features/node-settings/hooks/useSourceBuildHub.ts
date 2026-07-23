@@ -3,13 +3,18 @@ import { useCallback, useEffect, useState } from "react";
 import { z } from "zod";
 
 import { acquireHubConnection } from "@/core/api/signalr/SharedHubConnection";
-import { sourceBuildIdentity } from "@/features/node-settings/models/SourceBuildModels";
+import {
+	mergeSourceBuildLogs,
+	sourceBuildIdentity,
+	sourceBuildLogEntries,
+	type SourceBuildLogEntry,
+} from "@/features/node-settings/models/SourceBuildModels";
 import { localRuntimeInvalidationKey, localRuntimeQueryIds } from "@/features/node-settings/queries/useLocalRuntime";
 
 const statusChanged = "llamaCppSourceBuild.statusChanged";
-const maxLogLines = 2000;
 const eventSchema = z.object({
 	phase: z.string(),
+	appendedLogStartSequence: z.number().int().nonnegative(),
 	appendedLogLines: z.array(z.string()),
 	terminal: z.boolean(),
 	sanitizedError: z.string().nullable(),
@@ -28,7 +33,7 @@ const eventSchema = z.object({
 
 const emptyState = {
 	phase: null as string | null,
-	logLines: [] as readonly string[],
+	logEntries: [] as readonly SourceBuildLogEntry[],
 	error: null as string | null,
 	buildIdentity: null as string | null,
 };
@@ -51,12 +56,11 @@ export function useSourceBuildHub(enabled = true) {
 			const event = parsed.data;
 			setState((current) => {
 				const identity = sourceBuildIdentity(event.currentBuild);
-				const priorLines =
-					identity !== null && current.buildIdentity !== null && identity !== current.buildIdentity ? [] : current.logLines;
-				const appended = [...priorLines, ...event.appendedLogLines];
+				const priorEntries = identity !== current.buildIdentity ? [] : current.logEntries;
+				const appendedEntries = sourceBuildLogEntries(event.appendedLogStartSequence, event.appendedLogLines);
 				return {
 					phase: event.phase,
-					logLines: appended.slice(Math.max(0, appended.length - maxLogLines)),
+					logEntries: mergeSourceBuildLogs(priorEntries, appendedEntries),
 					error: event.sanitizedError,
 					buildIdentity: identity,
 				};
@@ -71,7 +75,17 @@ export function useSourceBuildHub(enabled = true) {
 			}
 		};
 		hub.connection.on(statusChanged, handler);
+		const unregisterReconnected = hub.onReconnected(() => {
+			setState(emptyState);
+			queryClient
+				.invalidateQueries({ queryKey: localRuntimeInvalidationKey(localRuntimeQueryIds.sourceBuildStatus) })
+				.catch(() => undefined);
+			queryClient
+				.invalidateQueries({ queryKey: localRuntimeInvalidationKey(localRuntimeQueryIds.llamaCppRuntime) })
+				.catch(() => undefined);
+		});
 		return () => {
+			unregisterReconnected();
 			hub.connection.off(statusChanged, handler);
 			hub.release();
 		};

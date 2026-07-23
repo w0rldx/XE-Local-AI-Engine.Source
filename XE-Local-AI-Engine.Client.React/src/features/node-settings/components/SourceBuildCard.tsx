@@ -29,6 +29,7 @@ import type {
 import {
 	mergeSourceBuildLogs,
 	sourceBuildIdentity,
+	sourceBuildLogEntries,
 	sourceBuildPrerequisiteDiagnostic,
 	sourceBuildValidationIssue,
 } from "@/features/node-settings/models/SourceBuildModels";
@@ -88,7 +89,11 @@ export function SourceBuildCard() {
 			setSource("official");
 			setRepository("");
 		}
-		setCommit(installed.sourceRevisionMode === "explicitCommit" ? (installed.sourceRequestedCommit ?? "") : "");
+		setCommit(
+			installedSource === "custom" && installed.sourceRevisionMode === "explicitCommit"
+				? (installed.sourceRequestedCommit ?? "")
+				: "",
+		);
 	}, [installed]);
 
 	if (!developerMode) {
@@ -110,10 +115,14 @@ export function SourceBuildCard() {
 	const activeRevisionMode = installed?.sourceRevisionMode ?? null;
 	const livePhase = hub.phase ?? buildStatus?.phase ?? null;
 	const persistedIdentity = sourceBuildIdentity(current);
-	const liveLogs =
+	const liveLogEntries =
 		hub.buildIdentity === null || hub.buildIdentity === persistedIdentity
-			? mergeSourceBuildLogs(buildStatus?.logLines ?? [], hub.logLines)
-			: hub.logLines;
+			? mergeSourceBuildLogs(
+					sourceBuildLogEntries(buildStatus?.logStartSequence ?? 0, buildStatus?.logLines ?? []),
+					hub.logEntries,
+				)
+			: hub.logEntries;
+	const liveLogs = liveLogEntries.map((entry) => entry.message);
 	const liveError = hub.error ?? buildStatus?.sanitizedError ?? null;
 	const backendOptions = (["cpu", "vulkan", "cuda"] as const).map((value) => ({
 		value,
@@ -159,6 +168,9 @@ export function SourceBuildCard() {
 							if (value) {
 								setSource(value as LlamaCppSourceSelection);
 								setAcknowledged(false);
+								if (value === "official") {
+									setCommit("");
+								}
 							}
 						}}
 					/>
@@ -184,11 +196,13 @@ export function SourceBuildCard() {
 						/>
 					</Stack>
 				) : null}
-				<TextInput
-					label={t("pages.nodeSettings.llamaCpp.sourceBuild.commit")}
-					value={commit}
-					onChange={(event) => setCommit(event.currentTarget.value)}
-				/>
+				{source === "custom" ? (
+					<TextInput
+						label={t("pages.nodeSettings.llamaCpp.sourceBuild.commit")}
+						value={commit}
+						onChange={(event) => setCommit(event.currentTarget.value)}
+					/>
+				) : null}
 
 				<List spacing="xs" size="sm">
 					{(prerequisites.data?.items ?? []).map((item) => {

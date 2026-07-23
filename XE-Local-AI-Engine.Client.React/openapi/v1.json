@@ -10527,6 +10527,7 @@
           "phase",
           "isRunning",
           "terminal",
+          "logStartSequence",
           "logLines"
         ],
         "properties": {
@@ -10538,6 +10539,9 @@
           },
           "terminal": {
             "type": "boolean"
+          },
+          "logStartSequence": {
+            "type": "integer"
           },
           "logLines": {
             "type": "array",

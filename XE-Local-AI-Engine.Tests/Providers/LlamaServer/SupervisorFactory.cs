@@ -19,7 +19,8 @@ internal static class SupervisorFactory
         ILlamaServerLaunchPolicy? launchPolicy = null,
         LlamaServerLaunchPolicyOptions? launchPolicyOptions = null,
         ILlamaServerLaunchFallbackStore? launchFallbackStore = null,
-        IGpuModelLoadAdmission? loadAdmission = null)
+        IGpuModelLoadAdmission? loadAdmission = null,
+        ILlamaCppSourceBuildActivity? sourceBuildActivity = null)
     {
         return new LlamaServerProcessSupervisor(new FakeBinaryManager(),
             variantSelector ?? new FakeVariantSelector(),
@@ -38,6 +39,7 @@ internal static class SupervisorFactory
                 launchFallbackStore ?? new FakeLaunchFallbackStore()),
             externalEndpoints,
             timeProvider ?? new AdvanceableTimeProvider(),
-            loadAdmission: loadAdmission);
+            loadAdmission: loadAdmission,
+            sourceBuildActivity: sourceBuildActivity);
     }
 }

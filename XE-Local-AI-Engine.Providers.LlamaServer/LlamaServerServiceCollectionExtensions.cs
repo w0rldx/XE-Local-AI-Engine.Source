@@ -86,6 +86,7 @@ public static class LlamaServerServiceCollectionExtensions
         services.TryAddSingleton<ILlamaCppSourceBuildPrerequisiteProbe>(static sp =>
             new LlamaCppSourceBuildPrerequisiteProbe(sp.GetRequiredService<IGpuVendorProbe>()));
         services.TryAddSingleton<ILlamaCppSourceBuildEventPublisher, NullLlamaCppSourceBuildEventPublisher>();
+        services.TryAddSingleton<ILlamaCppSourceBuildActivity, LlamaCppSourceBuildActivity>();
 
         // Real available-VRAM probe (Lane B1): parses `llama-server --list-devices`. PLAIN AddSingleton (not TryAdd) so
         // it WINS over the Application-layer TryAddSingleton<IAvailableVramProbe, UnknownAvailableVramProbe>() floor
@@ -148,7 +149,8 @@ public static class LlamaServerServiceCollectionExtensions
             sp.GetRequiredService<LlamaServerExternalEndpointOptions>(),
             sp.GetService<TimeProvider>(),
             sp.GetRequiredService<ILogger<LlamaServerProcessSupervisor>>(),
-            sp.GetRequiredService<IGpuModelLoadAdmission>()));
+            sp.GetRequiredService<IGpuModelLoadAdmission>(),
+            sp.GetRequiredService<ILlamaCppSourceBuildActivity>()));
         services.TryAddSingleton<ILlamaServerProcessSupervisor>(static sp =>
             sp.GetRequiredService<LlamaServerProcessSupervisor>());
 
@@ -158,6 +160,7 @@ public static class LlamaServerServiceCollectionExtensions
                 sp.GetRequiredService<IInstalledRuntimeStore>(),
                 sp.GetRequiredService<IActiveSourceBuildSignal>(),
                 sp.GetRequiredService<ILlamaServerProcessSupervisor>(),
+                sp.GetRequiredService<ILlamaCppSourceBuildActivity>(),
                 sp.GetRequiredService<ILlamaCppSourceBuildEventPublisher>(),
                 sp.GetRequiredService<ILogger<LlamaCppSourceBuildService>>()));
         services.TryAddSingleton<ICudaBuildService, LegacyCudaBuildServiceAdapter>();

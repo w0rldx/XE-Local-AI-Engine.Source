@@ -29,7 +29,7 @@ public sealed class UpdateLlamaCppRuntimeEndpoint(
     ILlamaCppReleaseCatalog releaseCatalog,
     IGpuVariantSelector variantSelector,
     IInstalledRuntimeStore installedRuntimeStore,
-    ILlamaCppSourceBuildService sourceBuildService,
+    ILlamaCppSourceBuildActivity sourceBuildActivity,
     ILlamaCppUpdateState updateState,
     INodeRuntimeSettings nodeRuntimeSettings,
     ILlamaServerProcessSupervisor processSupervisor,
@@ -45,7 +45,7 @@ public sealed class UpdateLlamaCppRuntimeEndpoint(
     private readonly INodeRuntimeSettings _nodeRuntimeSettings = nodeRuntimeSettings ?? throw new ArgumentNullException(nameof(nodeRuntimeSettings));
     private readonly ILlamaServerProcessSupervisor _processSupervisor = processSupervisor ?? throw new ArgumentNullException(nameof(processSupervisor));
     private readonly ILlamaCppReleaseCatalog _releaseCatalog = releaseCatalog ?? throw new ArgumentNullException(nameof(releaseCatalog));
-    private readonly ILlamaCppSourceBuildService _sourceBuildService = sourceBuildService ?? throw new ArgumentNullException(nameof(sourceBuildService));
+    private readonly ILlamaCppSourceBuildActivity _sourceBuildActivity = sourceBuildActivity ?? throw new ArgumentNullException(nameof(sourceBuildActivity));
     private readonly ILlamaCppUpdateState _updateState = updateState ?? throw new ArgumentNullException(nameof(updateState));
     private readonly IGpuVariantSelector _variantSelector = variantSelector ?? throw new ArgumentNullException(nameof(variantSelector));
 
@@ -117,7 +117,7 @@ public sealed class UpdateLlamaCppRuntimeEndpoint(
             }
 
             var (mutationLease, runningProcessCount, blockedMessage) = await LlamaCppPrebuiltRuntimeMutationGuard
-                .TryAcquireAsync(_installedRuntimeStore, _sourceBuildService, _processSupervisor, ct)
+                .TryAcquireAsync(_installedRuntimeStore, _sourceBuildActivity, _processSupervisor, ct)
                 .ConfigureAwait(false);
             await using var ownedMutationLease = mutationLease;
             if (mutationLease is null || blockedMessage is not null)

@@ -60,14 +60,24 @@ public enum LlamaCppSourceBuildPhase
 public enum LlamaCppSourceBuildStartOutcome
 {
     Started = 0,
-    AlreadyRunning = 1
+    AlreadyRunning = 1,
+    InsufficientDisk = 2,
+    MissingPrerequisites = 3,
+    ProcessesRunning = 4,
+    RuntimeBusy = 5
 }
+
+public sealed record LlamaCppSourceBuildStartResult(
+    LlamaCppSourceBuildStartOutcome Outcome,
+    LlamaCppSourceBuildPrerequisiteReport? Prerequisites = null,
+    int RunningProcessCount = 0);
 
 public sealed record LlamaCppSourceBuildStatus(
     LlamaCppSourceBuildPhase Phase,
     bool IsRunning,
     bool Terminal,
     IReadOnlyList<string> LogLines,
+    long LogStartSequence,
     string? SanitizedError,
     LlamaCppSourceBuildDescriptor? CurrentBuild,
     DateTimeOffset? StartedAtUtc,
@@ -79,10 +89,21 @@ public sealed record LlamaCppSourceBuildStatus(
 /// <summary>Single-flight generalized source-build orchestration.</summary>
 public interface ILlamaCppSourceBuildService
 {
-    Task<LlamaCppSourceBuildStartOutcome> StartAsync(LlamaCppSourceBuildRequest request, CancellationToken ct);
+    Task<LlamaCppSourceBuildStartResult> StartAsync(LlamaCppSourceBuildRequest request, CancellationToken ct);
     LlamaCppSourceBuildStatus GetStatus();
     bool Cancel();
     bool CancelLegacyPinnedCuda();
     Task RecoverAsync(CancellationToken ct);
     Task ShutdownAsync(CancellationToken ct) => Task.CompletedTask;
+}
+
+/// <summary>
+///     Process-wide reservation that prevents local llama-server processes and source builds from starting concurrently.
+///     Release is identity-scoped so cleanup from an older build cannot clear a newer build's reservation.
+/// </summary>
+public interface ILlamaCppSourceBuildActivity
+{
+    Guid? ActiveBuildId { get; }
+    bool TryReserve(Guid buildId);
+    bool TryRelease(Guid buildId);
 }

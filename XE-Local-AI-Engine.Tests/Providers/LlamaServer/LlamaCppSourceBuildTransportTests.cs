@@ -1,13 +1,18 @@
 namespace XE_Local_AI_Engine.Tests.Providers.LlamaServer;
 
+using System.Net;
+using System.Net.Http.Json;
 using System.Text.Json;
 using Microsoft.AspNetCore.SignalR;
+using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.DependencyInjection.Extensions;
 using NSubstitute;
 using XE_Local_AI_Engine.Client.Endpoints.ModelFit.V1;
 using XE_Local_AI_Engine.Client.Endpoints.ModelFit.V1.Mappers;
 using XE_Local_AI_Engine.Client.Hubs;
 using XE_Local_AI_Engine.Providers.LlamaServer;
 using XE_Local_AI_Engine.Providers.LlamaServer.Contracts;
+using XE_Local_AI_Engine.Providers.LlamaServer.Implementation;
 using XE_Local_AI_Engine.Tests.Testing;
 
 public sealed class LlamaCppSourceBuildTransportTests
@@ -61,6 +66,154 @@ public sealed class LlamaCppSourceBuildTransportTests
     }
 
     [Test]
+    [Arguments(LlamaCppSourceBuildStartOutcome.AlreadyRunning, "already-building", 0)]
+    [Arguments(LlamaCppSourceBuildStartOutcome.InsufficientDisk, "disk", 0)]
+    [Arguments(LlamaCppSourceBuildStartOutcome.MissingPrerequisites, "prerequisites", 0)]
+    [Arguments(LlamaCppSourceBuildStartOutcome.ProcessesRunning, "processes-running", 3)]
+    [Arguments(LlamaCppSourceBuildStartOutcome.RuntimeBusy, "runtime-busy", 0)]
+    public async Task StartEndpoint_MapsTypedAdmissionWithoutDuplicatingProbes(
+        LlamaCppSourceBuildStartOutcome outcome,
+        string expectedReason,
+        int runningProcessCount)
+    {
+        var service = Substitute.For<ILlamaCppSourceBuildService>();
+        service.StartAsync(Arg.Any<LlamaCppSourceBuildRequest>(), Arg.Any<CancellationToken>())
+            .Returns(new LlamaCppSourceBuildStartResult(outcome, RunningProcessCount: runningProcessCount));
+        var prerequisiteProbe = Substitute.For<ILlamaCppSourceBuildPrerequisiteProbe>();
+        var supervisor = Substitute.For<ILlamaServerProcessSupervisor>();
+        await using var factory = new TestingWebAppFactory
+        {
+            EnableDevelopmentMode = true,
+            ConfigureAdditionalTestServices = services =>
+            {
+                services.RemoveAll<ILlamaCppSourceBuildService>();
+                services.AddSingleton(service);
+                services.RemoveAll<ILlamaCppSourceBuildPrerequisiteProbe>();
+                services.AddSingleton(prerequisiteProbe);
+                services.RemoveAll<ILlamaServerProcessSupervisor>();
+                services.AddSingleton(supervisor);
+            }
+        };
+        using var client = factory.CreateClient();
+        using var request = new HttpRequestMessage(HttpMethod.Post, "/api/local/v1/model-fit/llamacpp/source-build")
+        {
+            Content = JsonContent.Create(new StartLlamaCppSourceBuildRequest
+            {
+                Backend = LlamaCppSourceBackendDto.Cpu,
+                Source = LlamaCppSourceSelectionDto.Official,
+                AcknowledgeCustomSourceRisk = false
+            })
+        };
+        factory.AddNodeBearerToken(request);
+
+        using var response = await client.SendAsync(request).ConfigureAwait(false);
+
+        AssertEx.Equal(HttpStatusCode.Conflict, response.StatusCode);
+        using var body = JsonDocument.Parse(await response.Content.ReadAsStringAsync().ConfigureAwait(false));
+        AssertEx.Equal(expectedReason, body.RootElement.GetProperty("reason").GetString());
+        if (outcome == LlamaCppSourceBuildStartOutcome.ProcessesRunning)
+        {
+            AssertEx.Equal(runningProcessCount, body.RootElement.GetProperty("runningProcessCount").GetInt32());
+        }
+        await service.Received(1).StartAsync(Arg.Any<LlamaCppSourceBuildRequest>(), Arg.Any<CancellationToken>());
+        await prerequisiteProbe.DidNotReceiveWithAnyArgs().ProbeAsync(default, default);
+        _ = supervisor.DidNotReceiveWithAnyArgs().CountRunningProcesses();
+        await supervisor.DidNotReceiveWithAnyArgs().TryAcquireRuntimeMutationLeaseAsync(default);
+    }
+
+    [Test]
+    [Arguments(LlamaCppSourceBuildStartOutcome.AlreadyRunning, "already-building", 0)]
+    [Arguments(LlamaCppSourceBuildStartOutcome.InsufficientDisk, "disk", 0)]
+    [Arguments(LlamaCppSourceBuildStartOutcome.MissingPrerequisites, "prerequisites", 0)]
+    [Arguments(LlamaCppSourceBuildStartOutcome.ProcessesRunning, "processes-running", 4)]
+    [Arguments(LlamaCppSourceBuildStartOutcome.RuntimeBusy, "runtime-busy", 0)]
+    public async Task LegacyStartEndpoint_MapsTypedAdmissionWithoutDuplicatingProbes(
+        LlamaCppSourceBuildStartOutcome outcome,
+        string expectedReason,
+        int runningProcessCount)
+    {
+        if (!OperatingSystem.IsLinux())
+        {
+            return;
+        }
+
+        var service = Substitute.For<ILlamaCppSourceBuildService>();
+        service.StartAsync(Arg.Any<LlamaCppSourceBuildRequest>(), Arg.Any<CancellationToken>())
+            .Returns(new LlamaCppSourceBuildStartResult(outcome, RunningProcessCount: runningProcessCount));
+        var prerequisiteProbe = Substitute.For<ICudaBuildPrerequisiteProbe>();
+        var supervisor = Substitute.For<ILlamaServerProcessSupervisor>();
+        await using var factory = new TestingWebAppFactory
+        {
+            EnableDevelopmentMode = true,
+            ConfigureAdditionalTestServices = services =>
+            {
+                services.RemoveAll<ILlamaCppSourceBuildService>();
+                services.AddSingleton(service);
+                services.RemoveAll<ICudaBuildPrerequisiteProbe>();
+                services.AddSingleton(prerequisiteProbe);
+                services.RemoveAll<ILlamaServerProcessSupervisor>();
+                services.AddSingleton(supervisor);
+            }
+        };
+        using var client = factory.CreateClient();
+        using var request = new HttpRequestMessage(HttpMethod.Post, "/api/local/v1/model-fit/llamacpp/cuda-build");
+        factory.AddNodeBearerToken(request);
+
+        using var response = await client.SendAsync(request).ConfigureAwait(false);
+
+        AssertEx.Equal(HttpStatusCode.Conflict, response.StatusCode);
+        using var body = JsonDocument.Parse(await response.Content.ReadAsStringAsync().ConfigureAwait(false));
+        AssertEx.Equal(expectedReason, body.RootElement.GetProperty("reason").GetString());
+        if (outcome == LlamaCppSourceBuildStartOutcome.ProcessesRunning)
+        {
+            AssertEx.Equal(runningProcessCount, body.RootElement.GetProperty("runningProcessCount").GetInt32());
+        }
+
+        await service.Received(1).StartAsync(
+            Arg.Is<LlamaCppSourceBuildRequest>(sourceRequest =>
+                sourceRequest.Backend == LlamaCppSourceBackend.Cuda
+                && sourceRequest.Source == LlamaCppSourceSelection.Official),
+            Arg.Any<CancellationToken>());
+        await prerequisiteProbe.DidNotReceiveWithAnyArgs().ProbeAsync(default);
+        _ = supervisor.DidNotReceiveWithAnyArgs().CountRunningProcesses();
+        await supervisor.DidNotReceiveWithAnyArgs().TryAcquireRuntimeMutationLeaseAsync(default);
+    }
+
+    [Test]
+    [Arguments(LlamaCppSourceBuildStartOutcome.Started, CudaBuildStartOutcome.Started)]
+    [Arguments(LlamaCppSourceBuildStartOutcome.AlreadyRunning, CudaBuildStartOutcome.AlreadyRunning)]
+    public async Task LegacyAdapter_PreservesCompatibleStartOutcomes(
+        LlamaCppSourceBuildStartOutcome sourceOutcome,
+        CudaBuildStartOutcome expected)
+    {
+        var service = Substitute.For<ILlamaCppSourceBuildService>();
+        service.StartAsync(Arg.Any<LlamaCppSourceBuildRequest>(), Arg.Any<CancellationToken>())
+            .Returns(new LlamaCppSourceBuildStartResult(sourceOutcome));
+        var adapter = new LegacyCudaBuildServiceAdapter(service);
+
+        AssertEx.Equal(expected, await adapter.StartAsync(CancellationToken.None));
+    }
+
+    [Test]
+    [Arguments(LlamaCppSourceBuildStartOutcome.InsufficientDisk, "free disk")]
+    [Arguments(LlamaCppSourceBuildStartOutcome.MissingPrerequisites, "prerequisites")]
+    [Arguments(LlamaCppSourceBuildStartOutcome.ProcessesRunning, "running llama.cpp models")]
+    [Arguments(LlamaCppSourceBuildStartOutcome.RuntimeBusy, "runtime change")]
+    public async Task LegacyAdapter_DoesNotCollapseAdmissionFailuresToAlreadyRunning(
+        LlamaCppSourceBuildStartOutcome sourceOutcome,
+        string expectedMessage)
+    {
+        var service = Substitute.For<ILlamaCppSourceBuildService>();
+        service.StartAsync(Arg.Any<LlamaCppSourceBuildRequest>(), Arg.Any<CancellationToken>())
+            .Returns(new LlamaCppSourceBuildStartResult(sourceOutcome));
+        var adapter = new LegacyCudaBuildServiceAdapter(service);
+
+        var exception = await AssertEx.ThrowsAsync<LlamaRuntimeException>(() => adapter.StartAsync(CancellationToken.None));
+
+        AssertEx.Contains(exception.Message, expectedMessage);
+    }
+
+    [Test]
     public void RuntimeMapper_PreservesExplicitInstalledSourceSelection()
     {
         var installed = new InstalledRuntimeState("b1", "source", "sha", GpuVariant.Cpu, DateTimeOffset.UtcNow,
@@ -70,6 +223,26 @@ public sealed class LlamaCppSourceBuildTransportTests
         var response = LlamaCppUpdateSnapshot.Empty.ToRuntimeStatusResponse(installed, "b1", runningProcessCount: 0);
 
         AssertEx.Equal(LlamaCppSourceSelectionDto.Custom, response.Installed!.SourceSelection);
+    }
+
+    [Test]
+    public void StatusMapper_PreservesLogStartSequence()
+    {
+        var status = new LlamaCppSourceBuildStatus(
+            LlamaCppSourceBuildPhase.Building,
+            true,
+            false,
+            ["line"],
+            37,
+            null,
+            null,
+            null,
+            null);
+
+        var response = status.ToResponse();
+
+        AssertEx.Equal(expected: 37L, response.LogStartSequence);
+        AssertEx.Equal("line", response.LogLines.Single());
     }
 
     [Test]
@@ -91,13 +264,15 @@ public sealed class LlamaCppSourceBuildTransportTests
             return 0;
         });
         var binaryManager = Substitute.For<ILlamaCppBinaryManager>();
+        var activity = Substitute.For<ILlamaCppSourceBuildActivity>();
         binaryManager.RemoveSourceBuildAsync(Arg.Any<CancellationToken>()).Returns(_ =>
         {
             order.Add("remove");
             return Task.CompletedTask;
         });
 
-        var (removed, _) = await RemoveLlamaCppSourceBuildEndpoint.TryRemoveAsync(binaryManager, supervisor, CancellationToken.None);
+        var (removed, _, _) =
+            await RemoveLlamaCppSourceBuildEndpoint.TryRemoveAsync(binaryManager, supervisor, activity, CancellationToken.None);
 
         AssertEx.True(removed);
         AssertEx.Equal("acquire|count|remove|dispose", string.Join('|', order));
@@ -111,11 +286,51 @@ public sealed class LlamaCppSourceBuildTransportTests
             .Returns(Task.FromResult<ILlamaServerRuntimeMutationLease?>(null));
         supervisor.CountRunningProcesses().Returns(1);
         var binaryManager = Substitute.For<ILlamaCppBinaryManager>();
+        var activity = Substitute.For<ILlamaCppSourceBuildActivity>();
 
-        var (removed, runningProcessCount) = await RemoveLlamaCppSourceBuildEndpoint.TryRemoveAsync(binaryManager, supervisor, CancellationToken.None);
+        var (removed, runningProcessCount, _) =
+            await RemoveLlamaCppSourceBuildEndpoint.TryRemoveAsync(binaryManager, supervisor, activity, CancellationToken.None);
 
         AssertEx.False(removed);
         AssertEx.Equal(expected: 1, runningProcessCount);
+        await binaryManager.DidNotReceiveWithAnyArgs().RemoveSourceBuildAsync(default);
+    }
+
+    [Test]
+    public async Task Remove_WhenBuildIsActive_FailsBeforeLeaseWithoutDeleting()
+    {
+        var supervisor = Substitute.For<ILlamaServerProcessSupervisor>();
+        var binaryManager = Substitute.For<ILlamaCppBinaryManager>();
+        var activity = Substitute.For<ILlamaCppSourceBuildActivity>();
+        activity.ActiveBuildId.Returns(Guid.NewGuid());
+
+        var (removed, _, buildActive) =
+            await RemoveLlamaCppSourceBuildEndpoint.TryRemoveAsync(binaryManager, supervisor, activity, CancellationToken.None);
+
+        AssertEx.False(removed);
+        AssertEx.True(buildActive);
+        await supervisor.DidNotReceiveWithAnyArgs().TryAcquireRuntimeMutationLeaseAsync(default);
+        await binaryManager.DidNotReceiveWithAnyArgs().RemoveSourceBuildAsync(default);
+    }
+
+    [Test]
+    public async Task Remove_WhenBuildStartsWhileLeaseIsAcquired_RechecksAndDoesNotDelete()
+    {
+#pragma warning disable CA2000 // Ownership transfers through the supervisor to TryRemoveAsync, which disposes the lease.
+        var lease = new RecordingMutationLease([]);
+#pragma warning restore CA2000
+        var supervisor = Substitute.For<ILlamaServerProcessSupervisor>();
+        supervisor.TryAcquireRuntimeMutationLeaseAsync(Arg.Any<CancellationToken>())
+            .Returns(Task.FromResult<ILlamaServerRuntimeMutationLease?>(lease));
+        var binaryManager = Substitute.For<ILlamaCppBinaryManager>();
+        var activity = Substitute.For<ILlamaCppSourceBuildActivity>();
+        activity.ActiveBuildId.Returns((Guid?)null, Guid.NewGuid());
+
+        var (removed, _, buildActive) =
+            await RemoveLlamaCppSourceBuildEndpoint.TryRemoveAsync(binaryManager, supervisor, activity, CancellationToken.None);
+
+        AssertEx.False(removed);
+        AssertEx.True(buildActive);
         await binaryManager.DidNotReceiveWithAnyArgs().RemoveSourceBuildAsync(default);
     }
 
@@ -138,13 +353,15 @@ public sealed class LlamaCppSourceBuildTransportTests
             return 0;
         });
         var binaryManager = Substitute.For<ILlamaCppBinaryManager>();
+        var activity = Substitute.For<ILlamaCppSourceBuildActivity>();
         binaryManager.RemoveCudaSourceBuildAsync(Arg.Any<CancellationToken>()).Returns(_ =>
         {
             order.Add("remove");
             return Task.CompletedTask;
         });
 
-        var (removed, _) = await RemoveCudaBuildEndpoint.TryRemoveAsync(binaryManager, supervisor, CancellationToken.None);
+        var (removed, _, _) =
+            await RemoveCudaBuildEndpoint.TryRemoveAsync(binaryManager, supervisor, activity, CancellationToken.None);
 
         AssertEx.True(removed);
         AssertEx.Equal("acquire|count|remove|dispose", string.Join('|', order));
@@ -158,10 +375,50 @@ public sealed class LlamaCppSourceBuildTransportTests
             .Returns(Task.FromResult<ILlamaServerRuntimeMutationLease?>(null));
         supervisor.CountRunningProcesses().Returns(0);
         var binaryManager = Substitute.For<ILlamaCppBinaryManager>();
+        var activity = Substitute.For<ILlamaCppSourceBuildActivity>();
 
-        var (removed, _) = await RemoveCudaBuildEndpoint.TryRemoveAsync(binaryManager, supervisor, CancellationToken.None);
+        var (removed, _, _) =
+            await RemoveCudaBuildEndpoint.TryRemoveAsync(binaryManager, supervisor, activity, CancellationToken.None);
 
         AssertEx.False(removed);
+        await binaryManager.DidNotReceiveWithAnyArgs().RemoveCudaSourceBuildAsync(default);
+    }
+
+    [Test]
+    public async Task LegacyRemove_WhenBuildIsActive_FailsBeforeLeaseWithoutDeleting()
+    {
+        var supervisor = Substitute.For<ILlamaServerProcessSupervisor>();
+        var binaryManager = Substitute.For<ILlamaCppBinaryManager>();
+        var activity = Substitute.For<ILlamaCppSourceBuildActivity>();
+        activity.ActiveBuildId.Returns(Guid.NewGuid());
+
+        var (removed, _, buildActive) =
+            await RemoveCudaBuildEndpoint.TryRemoveAsync(binaryManager, supervisor, activity, CancellationToken.None);
+
+        AssertEx.False(removed);
+        AssertEx.True(buildActive);
+        await supervisor.DidNotReceiveWithAnyArgs().TryAcquireRuntimeMutationLeaseAsync(default);
+        await binaryManager.DidNotReceiveWithAnyArgs().RemoveCudaSourceBuildAsync(default);
+    }
+
+    [Test]
+    public async Task LegacyRemove_WhenBuildStartsWhileLeaseIsAcquired_RechecksAndDoesNotDelete()
+    {
+#pragma warning disable CA2000 // Ownership transfers through the supervisor to TryRemoveAsync, which disposes the lease.
+        var lease = new RecordingMutationLease([]);
+#pragma warning restore CA2000
+        var supervisor = Substitute.For<ILlamaServerProcessSupervisor>();
+        supervisor.TryAcquireRuntimeMutationLeaseAsync(Arg.Any<CancellationToken>())
+            .Returns(Task.FromResult<ILlamaServerRuntimeMutationLease?>(lease));
+        var binaryManager = Substitute.For<ILlamaCppBinaryManager>();
+        var activity = Substitute.For<ILlamaCppSourceBuildActivity>();
+        activity.ActiveBuildId.Returns((Guid?)null, Guid.NewGuid());
+
+        var (removed, _, buildActive) =
+            await RemoveCudaBuildEndpoint.TryRemoveAsync(binaryManager, supervisor, activity, CancellationToken.None);
+
+        AssertEx.False(removed);
+        AssertEx.True(buildActive);
         await binaryManager.DidNotReceiveWithAnyArgs().RemoveCudaSourceBuildAsync(default);
     }
 
@@ -180,14 +437,14 @@ public sealed class LlamaCppSourceBuildTransportTests
         store.ReadAsync(Arg.Any<CancellationToken>()).Returns(
             new InstalledRuntimeState("b1", "source", "sha", GpuVariant.Cpu, DateTimeOffset.UtcNow, "/managed/source"),
             new InstalledRuntimeState("b1", "prebuilt", "sha", GpuVariant.Cpu, DateTimeOffset.UtcNow));
-        var service = Substitute.For<ILlamaCppSourceBuildService>();
-        service.GetStatus().Returns(new LlamaCppSourceBuildStatus(LlamaCppSourceBuildPhase.Building, true, false, [], null, null, null, null));
+        var activity = Substitute.For<ILlamaCppSourceBuildActivity>();
+        activity.ActiveBuildId.Returns(Guid.NewGuid());
 
         var (installedResultLease, _, installedBlockedMessage) =
-            await LlamaCppPrebuiltRuntimeMutationGuard.TryAcquireAsync(store, service, supervisor, CancellationToken.None);
+            await LlamaCppPrebuiltRuntimeMutationGuard.TryAcquireAsync(store, activity, supervisor, CancellationToken.None);
         await installedResultLease!.DisposeAsync();
         var (activeResultLease, _, activeBlockedMessage) =
-            await LlamaCppPrebuiltRuntimeMutationGuard.TryAcquireAsync(store, service, supervisor, CancellationToken.None);
+            await LlamaCppPrebuiltRuntimeMutationGuard.TryAcquireAsync(store, activity, supervisor, CancellationToken.None);
         await activeResultLease!.DisposeAsync();
 
         AssertEx.True(installedBlockedMessage?.Contains("source-built", StringComparison.Ordinal) == true);
@@ -226,7 +483,7 @@ public sealed class LlamaCppSourceBuildTransportTests
         {
             BuildId = buildId
         };
-        await publisher.PublishStatusAsync(new LlamaCppSourceBuildStatusHubEvent("Building", [], false, null, custom));
+        await publisher.PublishStatusAsync(new LlamaCppSourceBuildStatusHubEvent("Building", [], 41, false, null, custom));
 
         await genericProxy.Received(1).SendCoreAsync(LlamaCppSourceBuildHubEvents.StatusChanged, Arg.Any<object?[]>(), Arg.Any<CancellationToken>());
         await legacyProxy.DidNotReceive().SendCoreAsync(Arg.Any<string>(), Arg.Any<object?[]>(), Arg.Any<CancellationToken>());
@@ -237,6 +494,7 @@ public sealed class LlamaCppSourceBuildTransportTests
         AssertEx.Equal("cpu", currentBuild.GetProperty("backend").GetString());
         AssertEx.Equal("custom", currentBuild.GetProperty("source").GetString());
         AssertEx.Equal("defaultBranch", currentBuild.GetProperty("revisionMode").GetString());
+        AssertEx.Equal(expected: 41L, payload.RootElement.GetProperty("appendedLogStartSequence").GetInt64());
 
         var legacy = new LlamaCppSourceBuildDescriptor(GpuVariant.Cuda,
             LlamaCppSourceSelection.Official,
@@ -244,7 +502,7 @@ public sealed class LlamaCppSourceBuildTransportTests
             LlamaCppSourceRevisionMode.EnginePinned,
             null,
             LlamaCppReleasePins.PinnedSourceCommitSha);
-        await publisher.PublishStatusAsync(new LlamaCppSourceBuildStatusHubEvent("Building", ["line"], false, null, legacy));
+        await publisher.PublishStatusAsync(new LlamaCppSourceBuildStatusHubEvent("Building", ["line"], 42, false, null, legacy));
 
         await legacyProxy.Received(1).SendCoreAsync(CudaBuildHubEvents.StatusChanged, Arg.Any<object?[]>(), Arg.Any<CancellationToken>());
     }

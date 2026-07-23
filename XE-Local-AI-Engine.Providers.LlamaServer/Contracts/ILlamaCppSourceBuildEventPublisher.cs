@@ -13,6 +13,7 @@ public static class LlamaCppSourceBuildHubEvents
 public sealed record LlamaCppSourceBuildStatusHubEvent(
     string Phase,
     IReadOnlyList<string> AppendedLogLines,
+    long AppendedLogStartSequence,
     bool Terminal,
     string? SanitizedError,
     LlamaCppSourceBuildDescriptor? CurrentBuild)

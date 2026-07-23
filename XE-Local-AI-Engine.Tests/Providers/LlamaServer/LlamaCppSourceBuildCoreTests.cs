@@ -20,6 +20,29 @@ public sealed class LlamaCppSourceBuildCoreTests
     }
 
     [Test]
+    public void Normalize_OfficialWithWellFormedCommit_Rejects()
+    {
+        Assert.Throws<LlamaRuntimeException>(() => LlamaCppSourceBuildRequestValidation.Normalize(new LlamaCppSourceBuildRequest(
+            LlamaCppSourceBackend.Cpu,
+            LlamaCppSourceSelection.Official,
+            Commit: new string('a', 40))));
+    }
+
+    [Test]
+    public void Normalize_CustomOfficialRepositoryWithCommitAndAcknowledgement_Accepts()
+    {
+        var normalized = LlamaCppSourceBuildRequestValidation.Normalize(new LlamaCppSourceBuildRequest(
+            LlamaCppSourceBackend.Cpu,
+            LlamaCppSourceSelection.Custom,
+            LlamaCppSourceBuildRequestValidation.OfficialRepository,
+            new string('a', 40),
+            AcknowledgeCustomSourceRisk: true));
+
+        AssertEx.Equal(LlamaCppSourceSelection.Custom, normalized.Source);
+        AssertEx.Equal(new string('a', 40), normalized.Commit);
+    }
+
+    [Test]
     public void Normalize_CustomRepositoryAndUppercaseCommit_CanonicalizesBoth()
     {
         var normalized = LlamaCppSourceBuildRequestValidation.Normalize(new LlamaCppSourceBuildRequest(
@@ -204,6 +227,23 @@ public sealed class LlamaCppSourceBuildCoreTests
         signal.Clear();
         AssertEx.Null(signal.ActiveVariant);
         AssertEx.True(signal.Version > activeVersion);
+    }
+
+    [Test]
+    public void SourceBuildActivity_StaleReleaseCannotClearNewReservation()
+    {
+        ILlamaCppSourceBuildActivity activity = new LlamaCppSourceBuildActivity();
+        var first = Guid.NewGuid();
+        var second = Guid.NewGuid();
+
+        AssertEx.True(activity.TryReserve(first));
+        AssertEx.False(activity.TryReserve(second));
+        AssertEx.False(activity.TryRelease(second));
+        AssertEx.Equal(first, activity.ActiveBuildId);
+        AssertEx.True(activity.TryRelease(first));
+        AssertEx.True(activity.TryReserve(second));
+        AssertEx.False(activity.TryRelease(first));
+        AssertEx.Equal(second, activity.ActiveBuildId);
     }
 
     private sealed class FixedVendorProbe(DetectedGpuVendor vendor) : IGpuVendorProbe

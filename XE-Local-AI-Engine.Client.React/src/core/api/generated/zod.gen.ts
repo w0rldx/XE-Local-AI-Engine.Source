@@ -825,6 +825,7 @@ export const zXeLocalAiEngineClientEndpointsModelFitV1LlamaCppSourceBuildStatusR
 	phase: z.string(),
 	isRunning: z.boolean(),
 	terminal: z.boolean(),
+	logStartSequence: z.int(),
 	logLines: z.array(z.string()),
 	sanitizedError: z.string().nullish(),
 	currentBuild: zXeLocalAiEngineClientEndpointsModelFitV1LlamaCppSourceBuildDescriptorResponse.nullish(),

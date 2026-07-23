@@ -4,9 +4,14 @@ using XE_Local_AI_Engine.Providers.LlamaServer.Contracts;
 
 internal static class LlamaCppPrebuiltRuntimeMutationGuard
 {
+    internal static bool IsSourceBuildActive(ILlamaCppSourceBuildActivity sourceBuildActivity)
+    {
+        return sourceBuildActivity.ActiveBuildId is not null;
+    }
+
     internal static async Task<(ILlamaServerRuntimeMutationLease? Lease, int RunningProcessCount, string? BlockedMessage)> TryAcquireAsync(
         IInstalledRuntimeStore installedRuntimeStore,
-        ILlamaCppSourceBuildService sourceBuildService,
+        ILlamaCppSourceBuildActivity sourceBuildActivity,
         ILlamaServerProcessSupervisor processSupervisor,
         CancellationToken ct)
     {
@@ -24,7 +29,7 @@ internal static class LlamaCppPrebuiltRuntimeMutationGuard
                 "Remove the installed source-built llama.cpp runtime before installing a prebuilt runtime.");
         }
 
-        if (sourceBuildService.GetStatus().IsRunning)
+        if (IsSourceBuildActive(sourceBuildActivity))
         {
             return (lease, processSupervisor.CountRunningProcesses(),
                 "Wait for the active llama.cpp source build to finish or cancel it before installing a prebuilt runtime.");

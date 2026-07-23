@@ -30,9 +30,15 @@ export interface LlamaCppSourceBuildStatus {
 	readonly phase: string;
 	readonly isRunning: boolean;
 	readonly terminal: boolean;
+	readonly logStartSequence: number;
 	readonly logLines: readonly string[];
 	readonly sanitizedError: string | null;
 	readonly currentBuild: LlamaCppSourceBuildDescriptor | null;
+}
+
+export interface SourceBuildLogEntry {
+	readonly sequence: number;
+	readonly message: string;
 }
 
 export interface SourceBuildDraft {
@@ -49,10 +55,10 @@ const commitPattern = /^[0-9a-fA-F]{40}$/;
 const repositoryPattern = /^https:\/\/github\.com\/[A-Za-z0-9_.-]+\/[A-Za-z0-9_.-]+(?:\.git)?$/;
 
 export function sourceBuildValidationIssue(draft: SourceBuildDraft): SourceBuildValidationIssue | null {
-	if (draft.commit.trim().length > 0 && !commitPattern.test(draft.commit.trim())) {
-		return "commit";
-	}
 	if (draft.source === "custom") {
+		if (draft.commit.trim().length > 0 && !commitPattern.test(draft.commit.trim())) {
+			return "commit";
+		}
 		if (!repositoryPattern.test(draft.repository.trim())) {
 			return "repository";
 		}
@@ -84,19 +90,23 @@ export function sourceBuildIdentity(descriptor: LlamaCppSourceBuildDescriptor | 
 	return descriptor.buildId;
 }
 
-export function mergeSourceBuildLogs(persisted: readonly string[], live: readonly string[]): readonly string[] {
-	if (live.length === 0) {
-		return persisted;
-	}
-	const maxOverlap = Math.min(persisted.length, live.length);
-	let overlap = 0;
-	for (let length = maxOverlap; length > 0; length -= 1) {
-		if (persisted.slice(-length).every((line, index) => line === live[index])) {
-			overlap = length;
-			break;
+export function sourceBuildLogEntries(startSequence: number, logLines: readonly string[]): readonly SourceBuildLogEntry[] {
+	return logLines.map((message, index) => ({ sequence: startSequence + index, message }));
+}
+
+const maxSourceBuildLogEntries = 2000;
+
+export function mergeSourceBuildLogs(...sources: readonly (readonly SourceBuildLogEntry[])[]): readonly SourceBuildLogEntry[] {
+	const bySequence = new Map<number, string>();
+	for (const source of sources) {
+		for (const entry of source) {
+			if (Number.isSafeInteger(entry.sequence) && entry.sequence >= 0) {
+				bySequence.set(entry.sequence, entry.message);
+			}
 		}
 	}
-	return [...persisted, ...live.slice(overlap)];
+	const merged = [...bySequence].sort(([left], [right]) => left - right).map(([sequence, message]) => ({ sequence, message }));
+	return merged.slice(Math.max(0, merged.length - maxSourceBuildLogEntries));
 }
 
 const diagnosticToolKeys = new Set(["cmake", "gcc", "g++", "git", "nvcc", "nvidia-smi", "glslc", "vulkaninfo"]);
@@ -125,7 +135,7 @@ export function sourceBuildRequest(draft: SourceBuildDraft) {
 		backend: draft.backend,
 		source: draft.source,
 		repository: draft.source === "custom" ? draft.repository.trim() : null,
-		commit: draft.commit.trim().length > 0 ? draft.commit.trim().toLowerCase() : null,
+		commit: draft.source === "custom" && draft.commit.trim().length > 0 ? draft.commit.trim().toLowerCase() : null,
 		acknowledgeCustomSourceRisk: draft.source === "custom" && draft.acknowledgeCustomSourceRisk,
 	};
 }

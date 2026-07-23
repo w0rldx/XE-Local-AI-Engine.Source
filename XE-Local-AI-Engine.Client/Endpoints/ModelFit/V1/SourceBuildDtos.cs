@@ -74,6 +74,7 @@ public sealed class LlamaCppSourceBuildStatusResponse
     public required string Phase { get; init; }
     public required bool IsRunning { get; init; }
     public required bool Terminal { get; init; }
+    public required long LogStartSequence { get; init; }
     public required IReadOnlyList<string> LogLines { get; init; }
     public string? SanitizedError { get; init; }
     public LlamaCppSourceBuildDescriptorResponse? CurrentBuild { get; init; }

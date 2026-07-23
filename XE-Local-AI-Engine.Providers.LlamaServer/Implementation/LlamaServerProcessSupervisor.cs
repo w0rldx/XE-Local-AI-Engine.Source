@@ -65,6 +65,7 @@ public sealed class LlamaServerProcessSupervisor : ILlamaServerProcessSupervisor
     private readonly ILlamaServerLaunchPolicy _launchPolicy;
     private readonly ILogger<LlamaServerProcessSupervisor> _logger;
     private readonly ILlamaServerProcessLauncher _launcher;
+    private readonly ILlamaCppSourceBuildActivity _sourceBuildActivity;
     private readonly IGgufModelStore _modelStore;
     private readonly LlamaServerSupervisorOptions _options;
     private readonly IInferenceProfileResolver _profileResolver;
@@ -97,7 +98,8 @@ public sealed class LlamaServerProcessSupervisor : ILlamaServerProcessSupervisor
         LlamaServerExternalEndpointOptions? externalEndpoints = null,
         TimeProvider? timeProvider = null,
         ILogger<LlamaServerProcessSupervisor>? logger = null,
-        IGpuModelLoadAdmission? loadAdmission = null)
+        IGpuModelLoadAdmission? loadAdmission = null,
+        ILlamaCppSourceBuildActivity? sourceBuildActivity = null)
     {
         _binaryManager = binaryManager ?? throw new ArgumentNullException(nameof(binaryManager));
         _variantSelector = variantSelector ?? throw new ArgumentNullException(nameof(variantSelector));
@@ -115,6 +117,7 @@ public sealed class LlamaServerProcessSupervisor : ILlamaServerProcessSupervisor
         // Absent a wired gate (a provider-only host / test), default to the no-op floor so GPU-load serialization is
         // simply off — the composition root injects the real, metric-emitting singleton shared with the image supervisor.
         _loadAdmission = loadAdmission ?? new NoOpGpuModelLoadAdmission();
+        _sourceBuildActivity = sourceBuildActivity ?? new LlamaCppSourceBuildActivity();
 
         _reaperLoop = Task.Run(() => ReapIdleLoopAsync(_shutdownCts.Token));
     }
@@ -167,6 +170,11 @@ public sealed class LlamaServerProcessSupervisor : ILlamaServerProcessSupervisor
             if (external is not null)
             {
                 return new LlamaServerEndpoint(modelName, role, external);
+            }
+
+            if (_sourceBuildActivity.ActiveBuildId is not null)
+            {
+                throw new LlamaRuntimeException("A llama.cpp source build is in progress; wait for it to complete before starting a local model.");
             }
 
             var key = new ProcessKey(modelName, role);

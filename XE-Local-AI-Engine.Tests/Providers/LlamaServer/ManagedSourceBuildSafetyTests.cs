@@ -10,6 +10,55 @@ using XE_Local_AI_Engine.Tests.Testing;
 public sealed class ManagedSourceBuildSafetyTests
 {
     [Test]
+    public async Task Adopt_InvalidOfficialProvenance_RejectsBeforePersistence()
+    {
+        if (!OperatingSystem.IsLinux())
+        {
+            return;
+        }
+
+        using var temp = new SecureTempDirectory();
+        var bin = SeedActiveBin(temp.Path, "#!/bin/sh\nexit 0\n");
+        using var store = new InstalledRuntimeStore(temp.Path);
+
+        var manager = CreateManager(temp.Path, store);
+        var invalid = new[]
+        {
+            (Repository: LlamaCppSourceBuildRequestValidation.OfficialRepository,
+                Commit: LlamaCppReleasePins.PinnedSourceCommitSha,
+                Revision: LlamaCppSourceRevisionMode.DefaultBranch,
+                Requested: (string?)null),
+            (Repository: "https://github.com/example/fork",
+                Commit: LlamaCppReleasePins.PinnedSourceCommitSha,
+                Revision: LlamaCppSourceRevisionMode.EnginePinned,
+                Requested: (string?)null),
+            (Repository: LlamaCppSourceBuildRequestValidation.OfficialRepository,
+                Commit: LlamaCppReleasePins.PinnedSourceCommitSha,
+                Revision: LlamaCppSourceRevisionMode.EnginePinned,
+                Requested: LlamaCppReleasePins.PinnedSourceCommitSha),
+            (Repository: LlamaCppSourceBuildRequestValidation.OfficialRepository,
+                Commit: new string('a', 40),
+                Revision: LlamaCppSourceRevisionMode.EnginePinned,
+                Requested: (string?)null)
+        };
+
+        foreach (var (repository, commit, revision, requested) in invalid)
+        {
+            await AssertEx.ThrowsAsync<LlamaRuntimeException>(() => manager.AdoptSourceBuildAsync(bin,
+                LlamaCppReleasePins.PinnedTag,
+                GpuVariant.Cpu,
+                repository,
+                commit,
+                revision,
+                requested,
+                LlamaCppSourceSelection.Official,
+                CancellationToken.None));
+        }
+
+        AssertEx.Null(await store.ReadAsync(CancellationToken.None));
+    }
+
+    [Test]
     public async Task Adopt_CustomSelectionUsingOfficialRepository_PersistsExplicitSelection()
     {
         if (!OperatingSystem.IsLinux())

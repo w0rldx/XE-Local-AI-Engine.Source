@@ -16,7 +16,6 @@ public static partial class LlamaCppSourceBuildRequestValidation
             throw new LlamaRuntimeException("The source-build backend or source selection is invalid.");
         }
 
-        var commit = NormalizeCommit(request.Commit);
         if (request.Source == LlamaCppSourceSelection.Official)
         {
             if (!string.IsNullOrWhiteSpace(request.Repository))
@@ -24,7 +23,12 @@ public static partial class LlamaCppSourceBuildRequestValidation
                 throw new LlamaRuntimeException("The official source repository is selected by the server.");
             }
 
-            return request with { Repository = OfficialRepository, Commit = commit };
+            if (!string.IsNullOrWhiteSpace(request.Commit))
+            {
+                throw new LlamaRuntimeException("The official source uses the engine-pinned revision; select custom source to build a specific commit.");
+            }
+
+            return request with { Repository = OfficialRepository, Commit = null };
         }
 
         if (!request.AcknowledgeCustomSourceRisk)
@@ -32,7 +36,7 @@ public static partial class LlamaCppSourceBuildRequestValidation
             throw new LlamaRuntimeException("Custom source builds require acknowledgement that the repository code will execute with the app user's privileges.");
         }
 
-        return request with { Repository = NormalizeGitHubRepository(request.Repository), Commit = commit };
+        return request with { Repository = NormalizeGitHubRepository(request.Repository), Commit = NormalizeCommit(request.Commit) };
     }
 
     public static string? NormalizeCommit(string? commit)
@@ -83,6 +87,19 @@ public static partial class LlamaCppSourceBuildRequestValidation
         }
 
         return $"https://github.com/{segments[0]}/{repo}";
+    }
+
+    public static bool HasValidOfficialProvenance(LlamaCppSourceSelection source,
+        string? repository,
+        LlamaCppSourceRevisionMode? revisionMode,
+        string? requestedCommit,
+        string? resolvedCommit)
+    {
+        return source != LlamaCppSourceSelection.Official
+            || string.Equals(repository, OfficialRepository, StringComparison.Ordinal)
+            && revisionMode == LlamaCppSourceRevisionMode.EnginePinned
+            && requestedCommit is null
+            && string.Equals(resolvedCommit, LlamaCppReleasePins.PinnedSourceCommitSha, StringComparison.OrdinalIgnoreCase);
     }
 
     [GeneratedRegex("^[0-9a-fA-F]{40}$", RegexOptions.CultureInvariant | RegexOptions.ExplicitCapture, 1000)]
