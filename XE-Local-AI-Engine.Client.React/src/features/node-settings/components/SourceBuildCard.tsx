@@ -17,6 +17,7 @@ import { IconAlertTriangle, IconCircleCheck, IconCircleX, IconPlayerStop, IconRe
 import { useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
 
+import { apiErrorMessage } from "@/core/api/errors/ApiErrorMessage";
 import { useDeveloperModeStore } from "@/core/dev-tools/stores/DeveloperModeStore";
 import { toast } from "@/core/ui/notifications/Toast";
 import { CudaBuildLogView } from "@/features/node-settings/components/CudaBuildLogView";
@@ -41,16 +42,6 @@ import {
 	useSourceBuildStatus,
 	useStartSourceBuild,
 } from "@/features/node-settings/queries/useLocalRuntime";
-
-function errorMessage(error: unknown, fallback: string): string {
-	if (error !== null && typeof error === "object" && "response" in error) {
-		const data = (error as { response?: { data?: { message?: unknown } } }).response?.data;
-		if (typeof data?.message === "string") {
-			return data.message;
-		}
-	}
-	return error instanceof Error ? error.message : fallback;
-}
 
 export function SourceBuildCard() {
 	const { t } = useTranslation();
@@ -136,7 +127,7 @@ export function SourceBuildCard() {
 	const run = (): void => {
 		hub.reset();
 		start.mutate(draft, {
-			onError: (error) => toast.error(errorMessage(error, t("pages.nodeSettings.llamaCpp.sourceBuild.startError"))),
+			onError: (error) => toast.error(apiErrorMessage(error, t("pages.nodeSettings.llamaCpp.sourceBuild.startError"))),
 		});
 		if (source === "custom") {
 			setAcknowledged(false);
@@ -275,7 +266,7 @@ export function SourceBuildCard() {
 							disabled={isBuilding || runningProcesses > 0}
 							onClick={() =>
 								remove.mutate(undefined, {
-									onError: (error) => toast.error(errorMessage(error, t("pages.nodeSettings.llamaCpp.sourceBuild.removeError"))),
+									onError: (error) => toast.error(apiErrorMessage(error, t("pages.nodeSettings.llamaCpp.sourceBuild.removeError"))),
 								})
 							}
 						>
