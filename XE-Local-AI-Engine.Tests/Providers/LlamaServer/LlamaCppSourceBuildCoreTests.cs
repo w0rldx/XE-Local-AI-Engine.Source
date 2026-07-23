@@ -20,6 +20,50 @@ public sealed class LlamaCppSourceBuildCoreTests
     }
 
     [Test]
+    [Arguments(LlamaCppSourceBackend.Cpu)]
+    [Arguments(LlamaCppSourceBackend.Vulkan)]
+    [Arguments(LlamaCppSourceBackend.Cuda)]
+    public void Normalize_OfficialAppliedTwice_IsIdempotent(LlamaCppSourceBackend backend)
+    {
+        // Regression: the transport edge and ILlamaCppSourceBuildService.StartAsync both normalize, so the second pass
+        // sees the canonical repository the first pass wrote. Rejecting it there failed EVERY official build with a 409.
+        var once = LlamaCppSourceBuildRequestValidation.Normalize(new LlamaCppSourceBuildRequest(backend, LlamaCppSourceSelection.Official));
+
+        var twice = LlamaCppSourceBuildRequestValidation.Normalize(once);
+
+        AssertEx.Equal(once, twice);
+        AssertEx.Equal(LlamaCppSourceBuildRequestValidation.OfficialRepository, twice.Repository);
+        AssertEx.Null(twice.Commit);
+    }
+
+    [Test]
+    public void Normalize_CustomAppliedTwice_IsIdempotent()
+    {
+        var once = LlamaCppSourceBuildRequestValidation.Normalize(new LlamaCppSourceBuildRequest(
+            LlamaCppSourceBackend.Cuda,
+            LlamaCppSourceSelection.Custom,
+            "https://github.com/example/fork.git",
+            "ABCDEFABCDEFABCDEFABCDEFABCDEFABCDEFABCD",
+            AcknowledgeCustomSourceRisk: true));
+
+        var twice = LlamaCppSourceBuildRequestValidation.Normalize(once);
+
+        AssertEx.Equal(once, twice);
+        AssertEx.Equal("https://github.com/example/fork", twice.Repository);
+        AssertEx.Equal("abcdefabcdefabcdefabcdefabcdefabcdefabcd", twice.Commit);
+    }
+
+    [Test]
+    public void Normalize_OfficialWithForeignRepository_StillRejects()
+    {
+        // Idempotency only admits the canonical repository — a client-chosen one is still an override attempt.
+        Assert.Throws<LlamaRuntimeException>(() => LlamaCppSourceBuildRequestValidation.Normalize(new LlamaCppSourceBuildRequest(
+            LlamaCppSourceBackend.Cpu,
+            LlamaCppSourceSelection.Official,
+            "https://github.com/example/fork")));
+    }
+
+    [Test]
     public void Normalize_OfficialWithWellFormedCommit_Rejects()
     {
         Assert.Throws<LlamaRuntimeException>(() => LlamaCppSourceBuildRequestValidation.Normalize(new LlamaCppSourceBuildRequest(
