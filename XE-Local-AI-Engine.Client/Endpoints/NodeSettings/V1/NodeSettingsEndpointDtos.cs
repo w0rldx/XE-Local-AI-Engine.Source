@@ -332,7 +332,10 @@ internal static class NodeSettingsEndpointDtoMapper
             // collapsing an empty/all-junk map to null (no override).
             UsageRates = request.UsageRates is null
                 ? currentSettings.UsageRates
-                : new NodeUsageRateSettings { Models = request.UsageRates }
+                : new NodeUsageRateSettings
+                {
+                    Models = request.UsageRates
+                }
         };
     }
 }

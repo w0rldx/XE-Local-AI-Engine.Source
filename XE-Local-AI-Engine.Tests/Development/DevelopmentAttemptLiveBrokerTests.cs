@@ -58,11 +58,11 @@ public sealed class DevelopmentAttemptLiveBrokerTests
         var broker = CreateBroker(capacity: 2);
         AssertEx.True(broker.Register(attemptId));
         var published = broker.TryPublish(Update(attemptId, DevelopmentAttemptLiveUpdateKind.Output,
-            "password=!Sensitive12345678 from /home/operator/private/source.cs") with
-        {
-            ModelId = "model\nsecret",
-            CurrentToolId = "read_file raw arguments"
-        });
+                "password=!Sensitive12345678 from /home/operator/private/source.cs") with
+            {
+                ModelId = "model\nsecret",
+                CurrentToolId = "read_file raw arguments"
+            });
 
         AssertEx.True(published);
         AssertEx.True(broker.TryGetSnapshot(attemptId, out var snapshot));
@@ -88,26 +88,27 @@ public sealed class DevelopmentAttemptLiveBrokerTests
         AssertEx.False(broker.TryPublish(Update(attemptId, DevelopmentAttemptLiveUpdateKind.Activity, "late")));
     }
 
-    private static DevelopmentAttemptLiveBroker CreateBroker(int capacity) => new(
-        Options.Create(new DevelopmentOptions
-        {
-            LiveChannelCapacity = capacity,
-            MaxLiveTextCharacters = 512
-        }),
-        TimeProvider.System);
+    private static DevelopmentAttemptLiveBroker CreateBroker(int capacity) =>
+        new(Options.Create(new DevelopmentOptions
+            {
+                LiveChannelCapacity = capacity,
+                MaxLiveTextCharacters = 512
+            }),
+            TimeProvider.System);
 
     private static DevelopmentAttemptLiveUpdate Update(Guid attemptId,
         DevelopmentAttemptLiveUpdateKind kind,
-        string activity) => new()
-    {
-        ProjectId = Guid.NewGuid(),
-        TaskId = Guid.NewGuid(),
-        AttemptId = attemptId,
-        Kind = kind,
-        Role = XE_Local_AI_Engine.Client.Persistence.Entities.DevelopmentAttemptRole.Coder,
-        Status = XE_Local_AI_Engine.Client.Persistence.Entities.DevelopmentAttemptStatus.Running,
-        ModelId = "local-model",
-        Provider = "local",
-        CurrentActivity = activity
-    };
+        string activity) =>
+        new()
+        {
+            ProjectId = Guid.NewGuid(),
+            TaskId = Guid.NewGuid(),
+            AttemptId = attemptId,
+            Kind = kind,
+            Role = DevelopmentAttemptRole.Coder,
+            Status = Client.Persistence.Entities.DevelopmentAttemptStatus.Running,
+            ModelId = "local-model",
+            Provider = "local",
+            CurrentActivity = activity
+        };
 }

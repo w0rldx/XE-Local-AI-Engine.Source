@@ -14,6 +14,7 @@ public interface IDevelopmentHostApplyPort
     Task<DevelopmentHostApplyState> InspectAsync(DevelopmentApprovedApplySubject subject,
         string repositoryRoot,
         CancellationToken cancellationToken = default);
+
     Task ApplyAsync(DevelopmentApprovedApplySubject subject,
         string repositoryRoot,
         CancellationToken cancellationToken = default);

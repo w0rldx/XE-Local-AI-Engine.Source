@@ -154,39 +154,39 @@ public sealed class AgentExecutionLogStore(NodeChatDbContext dbContext, TimeProv
         }
 
         var buckets = await query
-                           .GroupBy(log => new
-                           {
-                               log.ModelName,
-                               log.Provider,
-                               Day = log.CreatedAtUtc / MillisecondsPerDay
-                           })
-                           .Select(group => new
-                           {
-                               group.Key.ModelName,
-                               group.Key.Provider,
-                               group.Key.Day,
-                               RunCount = group.Count(),
-                               PromptTokens = group.Sum(log => (long)(log.PromptTokens ?? 0)),
-                               CompletionTokens = group.Sum(log => (long)(log.CompletionTokens ?? 0)),
-                               ReasoningTokens = group.Sum(log => (long)(log.ReasoningTokens ?? 0)),
-                               TotalTokens = group.Sum(log => (long)(log.TotalTokens ?? 0))
-                           })
-                           .OrderByDescending(bucket => bucket.Day)
-                           .ThenBy(bucket => bucket.Provider)
-                           .ThenBy(bucket => bucket.ModelName)
-                           .ToListAsync(cancellationToken)
-                           .ConfigureAwait(false);
+                            .GroupBy(log => new
+                            {
+                                log.ModelName,
+                                log.Provider,
+                                Day = log.CreatedAtUtc / MillisecondsPerDay
+                            })
+                            .Select(group => new
+                            {
+                                group.Key.ModelName,
+                                group.Key.Provider,
+                                group.Key.Day,
+                                RunCount = group.Count(),
+                                PromptTokens = group.Sum(log => (long)(log.PromptTokens ?? 0)),
+                                CompletionTokens = group.Sum(log => (long)(log.CompletionTokens ?? 0)),
+                                ReasoningTokens = group.Sum(log => (long)(log.ReasoningTokens ?? 0)),
+                                TotalTokens = group.Sum(log => (long)(log.TotalTokens ?? 0))
+                            })
+                            .OrderByDescending(bucket => bucket.Day)
+                            .ThenBy(bucket => bucket.Provider)
+                            .ThenBy(bucket => bucket.ModelName)
+                            .ToListAsync(cancellationToken)
+                            .ConfigureAwait(false);
 
         return buckets
-              .Select(bucket => new TokenUsageAggregateRecord(bucket.ModelName,
-                  bucket.Provider,
-                  bucket.Day * MillisecondsPerDay,
-                  bucket.RunCount,
-                  bucket.PromptTokens,
-                  bucket.CompletionTokens,
-                  bucket.ReasoningTokens,
-                  bucket.TotalTokens))
-              .ToArray();
+               .Select(bucket => new TokenUsageAggregateRecord(bucket.ModelName,
+                   bucket.Provider,
+                   bucket.Day * MillisecondsPerDay,
+                   bucket.RunCount,
+                   bucket.PromptTokens,
+                   bucket.CompletionTokens,
+                   bucket.ReasoningTokens,
+                   bucket.TotalTokens))
+               .ToArray();
     }
 
     public async Task<int> TrimToMaxPerAgentAsync(int maxPerAgent, CancellationToken cancellationToken = default)

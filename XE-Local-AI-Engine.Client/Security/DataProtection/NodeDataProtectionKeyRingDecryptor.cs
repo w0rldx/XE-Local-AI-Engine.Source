@@ -4,7 +4,6 @@ using System.Security.Cryptography;
 using System.Text;
 using System.Xml.Linq;
 using Microsoft.AspNetCore.DataProtection.XmlEncryption;
-using Microsoft.Extensions.DependencyInjection;
 using XE_Local_AI_Engine.Client.Persistence.Cryptography;
 
 /// <summary>
@@ -44,8 +43,7 @@ public sealed class NodeDataProtectionKeyRingDecryptor : IXmlDecryptor
         // resolver (NodeDataProtectionKeyRingFailClosedKeyResolver) can tell an undecryptable ENCRYPTED key apart from
         // an unrelated key failure and hard-fail startup instead of letting Data Protection silently regenerate the ring.
         var valueElement = encryptedElement.Element(NodeDataProtectionKeyRingEncryptor.ValueElementName)
-                           ?? throw new NodeDataProtectionKeyRingDecryptionException(
-                               $"The encrypted key-ring element is missing its <{NodeDataProtectionKeyRingEncryptor.ValueElementName}> child.");
+                           ?? throw new NodeDataProtectionKeyRingDecryptionException($"The encrypted key-ring element is missing its <{NodeDataProtectionKeyRingEncryptor.ValueElementName}> child.");
         byte[] envelope;
         try
         {
@@ -80,8 +78,7 @@ public sealed class NodeDataProtectionKeyRingDecryptor : IXmlDecryptor
         }
         catch (CryptographicException cryptographicException) when (cryptographicException is not NodeDataProtectionKeyRingDecryptionException)
         {
-            throw new NodeDataProtectionKeyRingDecryptionException(
-                "The encrypted key-ring element could not be decrypted with the current node operator secret.",
+            throw new NodeDataProtectionKeyRingDecryptionException("The encrypted key-ring element could not be decrypted with the current node operator secret.",
                 cryptographicException);
         }
 

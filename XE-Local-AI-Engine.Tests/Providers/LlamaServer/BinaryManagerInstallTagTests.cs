@@ -603,13 +603,18 @@ public sealed class BinaryManagerInstallTagTests
         private readonly TaskCompletionSource _release = new(TaskCreationOptions.RunContinuationsAsynchronously);
 
         public Task Entered => _entered.Task;
-        public void Release() => _release.TrySetResult();
+
+        public void Release() =>
+            _release.TrySetResult();
 
         protected override async Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken)
         {
             _entered.TrySetResult();
             await _release.Task.WaitAsync(cancellationToken);
-            return new HttpResponseMessage(HttpStatusCode.OK) { Content = new ByteArrayContent(content) };
+            return new HttpResponseMessage(HttpStatusCode.OK)
+            {
+                Content = new ByteArrayContent(content)
+            };
         }
     }
 

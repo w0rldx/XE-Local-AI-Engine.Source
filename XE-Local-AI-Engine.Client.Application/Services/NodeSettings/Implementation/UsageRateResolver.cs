@@ -11,7 +11,11 @@ using XE_Local_AI_Engine.Client.Persistence.Stores;
 public sealed class UsageRateResolver : IUsageRateResolver
 {
     /// <summary>The free rate returned for local runtimes and unknown / unpriced (provider, model) pairs.</summary>
-    private static readonly ModelRate Free = new() { InputPer1M = 0, OutputPer1M = 0 };
+    private static readonly ModelRate Free = new()
+    {
+        InputPer1M = 0,
+        OutputPer1M = 0
+    };
 
     /// <summary>
     ///     Built-in default rates for a FEW well-known hosted models, in APPROXIMATE US dollars per 1M tokens. These are
@@ -22,12 +26,36 @@ public sealed class UsageRateResolver : IUsageRateResolver
     private static readonly IReadOnlyDictionary<string, ModelRate> DefaultRates =
         new Dictionary<string, ModelRate>(StringComparer.OrdinalIgnoreCase)
         {
-            ["gpt-5"] = new() { InputPer1M = 1.25, OutputPer1M = 10 },
-            ["gpt-5-mini"] = new() { InputPer1M = 0.25, OutputPer1M = 2 },
-            ["gpt-5-codex"] = new() { InputPer1M = 1.25, OutputPer1M = 10 },
-            ["o3"] = new() { InputPer1M = 2, OutputPer1M = 8 },
-            ["gpt-4o"] = new() { InputPer1M = 2.5, OutputPer1M = 10 },
-            ["gpt-4o-mini"] = new() { InputPer1M = 0.15, OutputPer1M = 0.6 }
+            ["gpt-5"] = new()
+            {
+                InputPer1M = 1.25,
+                OutputPer1M = 10
+            },
+            ["gpt-5-mini"] = new()
+            {
+                InputPer1M = 0.25,
+                OutputPer1M = 2
+            },
+            ["gpt-5-codex"] = new()
+            {
+                InputPer1M = 1.25,
+                OutputPer1M = 10
+            },
+            ["o3"] = new()
+            {
+                InputPer1M = 2,
+                OutputPer1M = 8
+            },
+            ["gpt-4o"] = new()
+            {
+                InputPer1M = 2.5,
+                OutputPer1M = 10
+            },
+            ["gpt-4o-mini"] = new()
+            {
+                InputPer1M = 0.15,
+                OutputPer1M = 0.6
+            }
         };
 
     private readonly IReadOnlyDictionary<string, ModelRate> _overrides;

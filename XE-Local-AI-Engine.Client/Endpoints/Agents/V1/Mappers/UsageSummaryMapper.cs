@@ -81,21 +81,21 @@ internal static class UsageSummaryMapper
         // in-memory group is cheap. Per-provider cost sums the raw per-bucket costs then rounds once (no compounding).
         // Ordered biggest-consumer first (total tokens), then provider name for a stable tie order.
         return records
-              .GroupBy(record => record.Provider, StringComparer.Ordinal)
-              .Select(group => new AgentUsageProviderTotalsResponse
-              {
-                  Provider = group.Key,
-                  RunCount = group.Sum(record => record.RunCount),
-                  PromptTokens = group.Sum(record => record.PromptTokens),
-                  CompletionTokens = group.Sum(record => record.CompletionTokens),
-                  ReasoningTokens = group.Sum(record => record.ReasoningTokens),
-                  TotalTokens = group.Sum(record => record.TotalTokens),
-                  EstimatedCostUsd = Round(group.Sum(record => RawCost(record, rateResolver))),
-                  Currency = CurrencyUsd
-              })
-              .OrderByDescending(totals => totals.TotalTokens)
-              .ThenBy(totals => totals.Provider, StringComparer.Ordinal)
-              .ToArray();
+               .GroupBy(record => record.Provider, StringComparer.Ordinal)
+               .Select(group => new AgentUsageProviderTotalsResponse
+               {
+                   Provider = group.Key,
+                   RunCount = group.Sum(record => record.RunCount),
+                   PromptTokens = group.Sum(record => record.PromptTokens),
+                   CompletionTokens = group.Sum(record => record.CompletionTokens),
+                   ReasoningTokens = group.Sum(record => record.ReasoningTokens),
+                   TotalTokens = group.Sum(record => record.TotalTokens),
+                   EstimatedCostUsd = Round(group.Sum(record => RawCost(record, rateResolver))),
+                   Currency = CurrencyUsd
+               })
+               .OrderByDescending(totals => totals.TotalTokens)
+               .ThenBy(totals => totals.Provider, StringComparer.Ordinal)
+               .ToArray();
     }
 
     /// <summary>

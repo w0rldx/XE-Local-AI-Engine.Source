@@ -205,6 +205,7 @@ public class TestingWebAppFactory : WebApplicationFactory<Program>, IAsyncInitia
         {
             builder.UseSetting("Development:Enabled", enabled.ToString());
         }
+
         // Serve the SPA fallback (index.html) from the fixture web root so route-coexistence tests are hermetic on a
         // clean checkout where the real wwwroot has no built SPA (see ReactShellFixtureHtml).
         builder.UseWebRoot(_fixtureWebRoot);
@@ -222,6 +223,7 @@ public class TestingWebAppFactory : WebApplicationFactory<Program>, IAsyncInitia
             {
                 settings["Development:Enabled"] = developmentEnabled.ToString();
             }
+
             configurationBuilder.AddInMemoryCollection(settings);
         });
 

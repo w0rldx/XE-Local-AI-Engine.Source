@@ -10,8 +10,7 @@ public sealed class DevelopmentAttemptExecutionSupervisorTests
     [Test]
     public async Task DisposeAsync_WhenCalledRepeatedly_RemainsIdempotent()
     {
-        var supervisor = new DevelopmentAttemptExecutionSupervisor(
-            Substitute.For<IServiceScopeFactory>(),
+        var supervisor = new DevelopmentAttemptExecutionSupervisor(Substitute.For<IServiceScopeFactory>(),
             Substitute.For<IDevelopmentAttemptLiveBroker>(),
             Substitute.For<IDevelopmentAttemptLiveEventPublisher>(),
             NullLogger<DevelopmentAttemptExecutionSupervisor>.Instance);

@@ -59,6 +59,6 @@ public sealed class DevelopmentAttemptHub(
 
 internal static class DevelopmentAttemptHubGroups
 {
-    public static string Attempt(Guid projectId, Guid attemptId)
-        => string.Concat("development-project:", projectId.ToString("N"), ":attempt:", attemptId.ToString("N"));
+    public static string Attempt(Guid projectId, Guid attemptId) =>
+        string.Concat("development-project:", projectId.ToString("N"), ":attempt:", attemptId.ToString("N"));
 }

@@ -20,4 +20,3 @@ internal sealed class DevelopmentArtifact
     public string? CommandProfileVersion { get; set; }
     public bool IsValid { get; set; }
 }
-

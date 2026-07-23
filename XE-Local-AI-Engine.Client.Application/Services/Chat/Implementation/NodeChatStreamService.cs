@@ -581,12 +581,18 @@ public sealed class NodeChatStreamService(
         var leadingContext = new List<ConversationMessageDto>(capacity: 2);
         if (attachmentContext is not null)
         {
-            leadingContext.Add(attachmentContext with { SortOrder = leadingContext.Count });
+            leadingContext.Add(attachmentContext with
+            {
+                SortOrder = leadingContext.Count
+            });
         }
 
         if (knowledgeContext is not null)
         {
-            leadingContext.Add(knowledgeContext with { SortOrder = leadingContext.Count });
+            leadingContext.Add(knowledgeContext with
+            {
+                SortOrder = leadingContext.Count
+            });
         }
 
         var history = selected

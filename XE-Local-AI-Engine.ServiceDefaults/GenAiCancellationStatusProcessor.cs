@@ -1,7 +1,6 @@
 namespace Microsoft.Extensions.Hosting;
 
 using System.Diagnostics;
-using System.Linq;
 using OpenTelemetry;
 
 /// <summary>

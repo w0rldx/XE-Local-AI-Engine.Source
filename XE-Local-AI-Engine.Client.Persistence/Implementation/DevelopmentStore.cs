@@ -113,7 +113,7 @@ public sealed class DevelopmentStore(NodeChatDbContext dbContext, TimeProvider t
                 if (command.PredecessorAttemptId is { } predecessorId)
                 {
                     var predecessor = await _dbContext.DevelopmentAttempts.SingleOrDefaultAsync(entity => entity.Id == predecessorId && entity.TaskId == task.Id, cancellationToken)
-                                                     .ConfigureAwait(false);
+                                                      .ConfigureAwait(false);
                     if (predecessor?.Status != DevelopmentAttemptStatus.Interrupted)
                     {
                         throw new DevelopmentInvalidTransitionException("A replacement attempt must reference an interrupted predecessor on the same task.");
@@ -244,6 +244,7 @@ public sealed class DevelopmentStore(NodeChatDbContext dbContext, TimeProvider t
                                     .ExecuteUpdateAsync(setters => setters.SetProperty(entity => entity.IsValid, false), cancellationToken)
                                     .ConfigureAwait(false);
                 }
+
                 if (command.TargetStatus == DevelopmentTaskStatus.InReview)
                 {
                     if (task.CurrentReviewRound >= task.MaxReviewRounds)
@@ -264,7 +265,12 @@ public sealed class DevelopmentStore(NodeChatDbContext dbContext, TimeProvider t
                     task.Status.ToString(),
                     task.Version,
                     artifactId: null,
-                    detailJson: command.Reason is null ? null : Utf8(JsonSerializer.Serialize(new { reason = command.Reason })),
+                    detailJson: command.Reason is null
+                        ? null
+                        : Utf8(JsonSerializer.Serialize(new
+                        {
+                            reason = command.Reason
+                        })),
                     cancellationToken).ConfigureAwait(false);
             },
             cancellationToken).ConfigureAwait(false);
@@ -288,8 +294,8 @@ public sealed class DevelopmentStore(NodeChatDbContext dbContext, TimeProvider t
                 }
 
                 if (await _dbContext.DevelopmentAttempts.AnyAsync(entity => entity.TaskId == task.Id
-                                                                        && (entity.Status == DevelopmentAttemptStatus.Pending
-                                                                            || entity.Status == DevelopmentAttemptStatus.Running),
+                                                                            && (entity.Status == DevelopmentAttemptStatus.Pending
+                                                                                || entity.Status == DevelopmentAttemptStatus.Running),
                         cancellationToken).ConfigureAwait(false))
                 {
                     throw new DevelopmentInvalidTransitionException("Deterministic validation cannot overlap an active Development attempt.");
@@ -373,7 +379,10 @@ public sealed class DevelopmentStore(NodeChatDbContext dbContext, TimeProvider t
                     task.Status.ToString(),
                     task.Version,
                     artifactId: null,
-                    detailJson: Utf8(JsonSerializer.Serialize(new { reason = command.SanitizedReason })),
+                    detailJson: Utf8(JsonSerializer.Serialize(new
+                    {
+                        reason = command.SanitizedReason
+                    })),
                     cancellationToken).ConfigureAwait(false);
             },
             cancellationToken).ConfigureAwait(false);
@@ -396,9 +405,9 @@ public sealed class DevelopmentStore(NodeChatDbContext dbContext, TimeProvider t
             async () =>
             {
                 var task = await _dbContext.DevelopmentTasks.SingleOrDefaultAsync(entity => entity.Id == command.Artifact.TaskId
-                                                                                           && entity.ProjectId == command.Artifact.ProjectId,
-                                             cancellationToken)
-                                            .ConfigureAwait(false)
+                                                                                            && entity.ProjectId == command.Artifact.ProjectId,
+                                               cancellationToken)
+                                           .ConfigureAwait(false)
                            ?? throw new KeyNotFoundException($"Development task '{command.Artifact.TaskId}' was not found.");
                 EnsureVersion(task.Version, command.ExpectedTaskVersion, "task");
                 if (task.Status != DevelopmentTaskStatus.Validation)
@@ -409,8 +418,8 @@ public sealed class DevelopmentStore(NodeChatDbContext dbContext, TimeProvider t
                 var attemptId = command.Artifact.AttemptId
                                 ?? throw new DevelopmentInvalidTransitionException("A validation artifact must identify its coder attempt.");
                 var attempt = await _dbContext.DevelopmentAttempts.SingleOrDefaultAsync(entity => entity.Id == attemptId && entity.TaskId == task.Id,
-                                          cancellationToken)
-                                      .ConfigureAwait(false)
+                                                  cancellationToken)
+                                              .ConfigureAwait(false)
                               ?? throw new DevelopmentInvalidTransitionException("The validation artifact coder attempt was not found on the task.");
                 if (attempt.Role != DevelopmentAttemptRole.Coder || attempt.Status != DevelopmentAttemptStatus.Succeeded)
                 {
@@ -455,7 +464,12 @@ public sealed class DevelopmentStore(NodeChatDbContext dbContext, TimeProvider t
                     task.Status.ToString(),
                     task.Version,
                     artifact.Id,
-                    detailJson: command.SanitizedReason is null ? null : Utf8(JsonSerializer.Serialize(new { reason = command.SanitizedReason })),
+                    detailJson: command.SanitizedReason is null
+                        ? null
+                        : Utf8(JsonSerializer.Serialize(new
+                        {
+                            reason = command.SanitizedReason
+                        })),
                     cancellationToken).ConfigureAwait(false);
             },
             cancellationToken).ConfigureAwait(false);
@@ -478,9 +492,9 @@ public sealed class DevelopmentStore(NodeChatDbContext dbContext, TimeProvider t
             async () =>
             {
                 var task = await _dbContext.DevelopmentTasks.SingleOrDefaultAsync(entity => entity.Id == command.Artifact.TaskId
-                                                                                           && entity.ProjectId == command.Artifact.ProjectId,
-                                             cancellationToken)
-                                            .ConfigureAwait(false)
+                                                                                            && entity.ProjectId == command.Artifact.ProjectId,
+                                               cancellationToken)
+                                           .ConfigureAwait(false)
                            ?? throw new KeyNotFoundException($"Development task '{command.Artifact.TaskId}' was not found.");
                 EnsureVersion(task.Version, command.ExpectedTaskVersion, "task");
                 if (task.Status != DevelopmentTaskStatus.InReview)
@@ -491,8 +505,8 @@ public sealed class DevelopmentStore(NodeChatDbContext dbContext, TimeProvider t
                 var attemptId = command.Artifact.AttemptId
                                 ?? throw new DevelopmentInvalidTransitionException("A review artifact must identify its reviewer attempt.");
                 var attempt = await _dbContext.DevelopmentAttempts.SingleOrDefaultAsync(entity => entity.Id == attemptId && entity.TaskId == task.Id,
-                                          cancellationToken)
-                                      .ConfigureAwait(false)
+                                                  cancellationToken)
+                                              .ConfigureAwait(false)
                               ?? throw new DevelopmentInvalidTransitionException("The review artifact reviewer attempt was not found on the task.");
                 EnsureVersion(attempt.Version, command.ExpectedAttemptVersion, "attempt");
                 if (attempt.Role != DevelopmentAttemptRole.Reviewer || attempt.Status != DevelopmentAttemptStatus.Running)
@@ -526,7 +540,12 @@ public sealed class DevelopmentStore(NodeChatDbContext dbContext, TimeProvider t
                     task.Status.ToString(),
                     task.Version,
                     artifact.Id,
-                    detailJson: command.SanitizedReason is null ? null : Utf8(JsonSerializer.Serialize(new { reason = command.SanitizedReason })),
+                    detailJson: command.SanitizedReason is null
+                        ? null
+                        : Utf8(JsonSerializer.Serialize(new
+                        {
+                            reason = command.SanitizedReason
+                        })),
                     cancellationToken).ConfigureAwait(false);
             },
             cancellationToken).ConfigureAwait(false);
@@ -543,10 +562,10 @@ public sealed class DevelopmentStore(NodeChatDbContext dbContext, TimeProvider t
             async () =>
             {
                 var task = await _dbContext.DevelopmentTasks.SingleOrDefaultAsync(entity => entity.Id == command.TaskId && entity.ProjectId == command.ProjectId, cancellationToken)
-                                                 .ConfigureAwait(false)
+                                           .ConfigureAwait(false)
                            ?? throw new KeyNotFoundException($"Development task '{command.TaskId}' was not found.");
                 if (command.AttemptId is { } attemptId && !await _dbContext.DevelopmentAttempts.AnyAsync(entity => entity.Id == attemptId && entity.TaskId == task.Id, cancellationToken)
-                                                                    .ConfigureAwait(false))
+                                                                           .ConfigureAwait(false))
                 {
                     throw new KeyNotFoundException($"Development attempt '{attemptId}' was not found on the task.");
                 }
@@ -629,7 +648,11 @@ public sealed class DevelopmentStore(NodeChatDbContext dbContext, TimeProvider t
         ArgumentException.ThrowIfNullOrWhiteSpace(sanitizedReason);
         var validations = await _dbContext.DevelopmentTasks.AsNoTracking()
                                           .Where(entity => entity.Status == DevelopmentTaskStatus.Validation)
-                                          .Select(entity => new { entity.Id, entity.Version })
+                                          .Select(entity => new
+                                          {
+                                              entity.Id,
+                                              entity.Version
+                                          })
                                           .ToListAsync(cancellationToken)
                                           .ConfigureAwait(false);
         var reconciled = 0;
@@ -638,11 +661,11 @@ public sealed class DevelopmentStore(NodeChatDbContext dbContext, TimeProvider t
             try
             {
                 _ = await InvalidateEvidenceAsync(new DevelopmentInvalidateEvidenceCommand(validation.Id,
-                                                        validation.Id,
-                                                        validation.Version,
-                                                        sanitizedReason),
-                                                    cancellationToken)
-                            .ConfigureAwait(false);
+                            validation.Id,
+                            validation.Version,
+                            sanitizedReason),
+                        cancellationToken)
+                    .ConfigureAwait(false);
                 reconciled++;
             }
             catch (DevelopmentConcurrencyException)
@@ -716,6 +739,7 @@ public sealed class DevelopmentStore(NodeChatDbContext dbContext, TimeProvider t
                 {
                     throw new DevelopmentInvalidTransitionException("Only a task awaiting explicit apply can complete.");
                 }
+
                 if (!string.Equals(task.ApprovedSubjectHash, subject.SubjectHash, StringComparison.OrdinalIgnoreCase))
                 {
                     throw new DevelopmentInvalidTransitionException("The completed apply subject no longer matches the independently approved subject.");
@@ -772,7 +796,10 @@ public sealed class DevelopmentStore(NodeChatDbContext dbContext, TimeProvider t
                     task.Status.ToString(),
                     task.Version,
                     artifactId: null,
-                    Utf8(JsonSerializer.Serialize(new { reason = sanitizedReason })),
+                    Utf8(JsonSerializer.Serialize(new
+                    {
+                        reason = sanitizedReason
+                    })),
                     cancellationToken).ConfigureAwait(false);
             },
             cancellationToken).ConfigureAwait(false);
@@ -800,15 +827,15 @@ public sealed class DevelopmentStore(NodeChatDbContext dbContext, TimeProvider t
     public async Task<DevelopmentExecutionSnapshot> GetExecutionSnapshotAsync(Guid attemptId, CancellationToken cancellationToken = default)
     {
         var snapshot = await (from attempt in _dbContext.DevelopmentAttempts.AsNoTracking()
-                              join task in _dbContext.DevelopmentTasks.AsNoTracking() on attempt.TaskId equals task.Id
-                              join project in _dbContext.DevelopmentProjects.AsNoTracking() on task.ProjectId equals project.Id
-                              where attempt.Id == attemptId
-                              select new
-                              {
-                                  Project = project,
-                                  Task = task,
-                                  Attempt = attempt
-                              })
+                                 join task in _dbContext.DevelopmentTasks.AsNoTracking() on attempt.TaskId equals task.Id
+                                 join project in _dbContext.DevelopmentProjects.AsNoTracking() on task.ProjectId equals project.Id
+                                 where attempt.Id == attemptId
+                                 select new
+                                 {
+                                     Project = project,
+                                     Task = task,
+                                     Attempt = attempt
+                                 })
                              .SingleOrDefaultAsync(cancellationToken)
                              .ConfigureAwait(false)
                        ?? throw new KeyNotFoundException($"Development attempt '{attemptId}' was not found.");
@@ -869,10 +896,12 @@ public sealed class DevelopmentStore(NodeChatDbContext dbContext, TimeProvider t
         {
             return ProjectSnapshot(project);
         }
+
         if (project.SelectedFolderId is not null)
         {
             throw new DevelopmentConcurrencyException("The Development project is already connected to another selected folder.");
         }
+
         EnsureVersion(project.Version, expectedVersion, "project");
         project.SelectedFolderId = selectedFolderId;
         project.UpdatedAtUtc = Now();
@@ -999,11 +1028,11 @@ public sealed class DevelopmentStore(NodeChatDbContext dbContext, TimeProvider t
         CancellationToken cancellationToken)
     {
         var developmentEvent = await _dbContext.DevelopmentEvents.AsNoTracking()
-                                                 .SingleOrDefaultAsync(entity => entity.ProjectId == projectId
-                                                                                 && entity.OperationId == operationId
-                                                                                 && entity.OperationPhase == phase,
-                                                     cancellationToken)
-                                                 .ConfigureAwait(false);
+                                               .SingleOrDefaultAsync(entity => entity.ProjectId == projectId
+                                                                               && entity.OperationId == operationId
+                                                                               && entity.OperationPhase == phase,
+                                                   cancellationToken)
+                                               .ConfigureAwait(false);
         return developmentEvent?.ResultMetadataJson is not { } payload
             ? null
             : JsonSerializer.Deserialize<DevelopmentOperationResult>(payload);
@@ -1023,8 +1052,8 @@ public sealed class DevelopmentStore(NodeChatDbContext dbContext, TimeProvider t
         CancellationToken cancellationToken)
     {
         var sequence = (await _dbContext.DevelopmentEvents.Where(entity => entity.ProjectId == projectId)
-                                             .MaxAsync(entity => (long?)entity.Sequence, cancellationToken)
-                                             .ConfigureAwait(false) ?? 0) + 1;
+                                        .MaxAsync(entity => (long?)entity.Sequence, cancellationToken)
+                                        .ConfigureAwait(false) ?? 0) + 1;
         var result = new DevelopmentOperationResult(projectId,
             taskId,
             attemptId,
@@ -1144,8 +1173,8 @@ public sealed class DevelopmentStore(NodeChatDbContext dbContext, TimeProvider t
         }
     }
 
-    private DevelopmentArtifact BuildArtifact(DevelopmentAttachArtifactCommand command)
-        => new()
+    private DevelopmentArtifact BuildArtifact(DevelopmentAttachArtifactCommand command) =>
+        new()
         {
             Id = command.ArtifactId,
             ProjectId = command.ProjectId,
@@ -1166,10 +1195,11 @@ public sealed class DevelopmentStore(NodeChatDbContext dbContext, TimeProvider t
             IsValid = true
         };
 
-    private static byte[] Utf8(string value) => Encoding.UTF8.GetBytes(value);
+    private static byte[] Utf8(string value) =>
+        Encoding.UTF8.GetBytes(value);
 
-    private static DevelopmentProjectSnapshot ProjectSnapshot(DevelopmentProject entity)
-        => new(entity.Id,
+    private static DevelopmentProjectSnapshot ProjectSnapshot(DevelopmentProject entity) =>
+        new(entity.Id,
             Encoding.UTF8.GetString(entity.Objective),
             entity.SelectedFolderId,
             entity.RepositoryIdentityHash,
@@ -1188,8 +1218,8 @@ public sealed class DevelopmentStore(NodeChatDbContext dbContext, TimeProvider t
             entity.UpdatedAtUtc,
             entity.Version);
 
-    private static DevelopmentTaskSnapshot TaskSnapshot(DevelopmentTask entity)
-        => new(entity.Id,
+    private static DevelopmentTaskSnapshot TaskSnapshot(DevelopmentTask entity) =>
+        new(entity.Id,
             entity.ProjectId,
             Encoding.UTF8.GetString(entity.Title),
             Encoding.UTF8.GetString(entity.Requirements),
@@ -1204,8 +1234,8 @@ public sealed class DevelopmentStore(NodeChatDbContext dbContext, TimeProvider t
             entity.UpdatedAtUtc,
             entity.Version);
 
-    private static DevelopmentArtifactSnapshot ArtifactSnapshot(DevelopmentArtifact entity)
-        => new(entity.Id,
+    private static DevelopmentArtifactSnapshot ArtifactSnapshot(DevelopmentArtifact entity) =>
+        new(entity.Id,
             entity.ProjectId,
             entity.TaskId,
             entity.AttemptId,
@@ -1222,8 +1252,9 @@ public sealed class DevelopmentStore(NodeChatDbContext dbContext, TimeProvider t
             entity.CommandProfileVersion,
             entity.IsValid);
 
-    private static string ManagedReference(Guid projectId, Guid artifactId)
-        => string.Concat(projectId.ToString("N"), "/", artifactId.ToString("N"));
+    private static string ManagedReference(Guid projectId, Guid artifactId) =>
+        string.Concat(projectId.ToString("N"), "/", artifactId.ToString("N"));
 
-    private long Now() => _timeProvider.GetUtcNow().ToUnixTimeMilliseconds();
+    private long Now() =>
+        _timeProvider.GetUtcNow().ToUnixTimeMilliseconds();
 }

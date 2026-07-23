@@ -65,13 +65,13 @@ internal sealed class DevelopmentValidationRunner : IDevelopmentValidationRunner
         ArgumentNullException.ThrowIfNull(repository);
         var task = await _store.GetTaskAsync(taskId, cancellationToken).ConfigureAwait(false);
         var transition = await _store.StartValidationAsync(new DevelopmentStartValidationCommand(taskId,
-                                                           Guid.NewGuid(),
-                                                           task.Version),
-                                                       cancellationToken)
+                                             Guid.NewGuid(),
+                                             task.Version),
+                                         cancellationToken)
                                      .ConfigureAwait(false);
         var coderAttempt = (await _store.ListAttemptsAsync(taskId, cancellationToken).ConfigureAwait(false))
-                           .Last(attempt => attempt.Role == DevelopmentAttemptRole.Coder
-                                            && attempt.Status == DevelopmentAttemptStatus.Succeeded);
+            .Last(attempt => attempt.Role == DevelopmentAttemptRole.Coder
+                             && attempt.Status == DevelopmentAttemptStatus.Succeeded);
 
         try
         {
@@ -115,11 +115,11 @@ internal sealed class DevelopmentValidationRunner : IDevelopmentValidationRunner
 
             var target = passed ? DevelopmentTaskStatus.InReview : DevelopmentTaskStatus.InProgress;
             _ = await _store.FinalizeValidationAsync(new DevelopmentFinalizeValidationCommand(prepared.Attachment,
-                                                        Guid.NewGuid(),
-                                                        transition.Version,
-                                                        target,
-                                                        passed ? null : "Deterministic validation failed."),
-                                                    cancellationToken)
+                                    Guid.NewGuid(),
+                                    transition.Version,
+                                    target,
+                                    passed ? null : "Deterministic validation failed."),
+                                cancellationToken)
                             .ConfigureAwait(false);
             return new DevelopmentValidationResult(prepared.ArtifactId, passed, target, evidence.Current.SubjectHash);
         }
@@ -128,11 +128,11 @@ internal sealed class DevelopmentValidationRunner : IDevelopmentValidationRunner
             try
             {
                 _ = await _store.TransitionTaskAsync(new DevelopmentTransitionTaskCommand(taskId,
-                                                        Guid.NewGuid(),
-                                                        DevelopmentTaskStatus.InProgress,
-                                                        transition.Version,
-                                                        "Deterministic validation did not produce usable evidence."),
-                                                    CancellationToken.None)
+                                        Guid.NewGuid(),
+                                        DevelopmentTaskStatus.InProgress,
+                                        transition.Version,
+                                        "Deterministic validation did not produce usable evidence."),
+                                    CancellationToken.None)
                                 .ConfigureAwait(false);
             }
             catch (Exception recoveryException) when (recoveryException is DevelopmentConcurrencyException or DevelopmentInvalidTransitionException)

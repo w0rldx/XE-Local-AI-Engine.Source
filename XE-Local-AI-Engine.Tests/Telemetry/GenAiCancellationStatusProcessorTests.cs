@@ -16,20 +16,20 @@ public sealed class GenAiCancellationStatusProcessorTests
     {
         var (source, listener) = GenAiSource();
         using (source)
-        using (listener)
-        {
-            using var activity = StartRecorded(source, "chat");
-            activity.SetStatus(ActivityStatusCode.Error, "The operation was canceled.");
-            activity.SetTag("error.type", "System.OperationCanceledException");
-
-            using (var processor = new GenAiCancellationStatusProcessor())
+            using (listener)
             {
-                processor.OnEnd(activity);
-            }
+                using var activity = StartRecorded(source, "chat");
+                activity.SetStatus(ActivityStatusCode.Error, "The operation was canceled.");
+                activity.SetTag("error.type", "System.OperationCanceledException");
 
-            AssertEx.Equal(ActivityStatusCode.Unset, activity.Status);
-            AssertEx.Equal("System.OperationCanceledException", activity.GetTagItem("error.type") as string);
-        }
+                using (var processor = new GenAiCancellationStatusProcessor())
+                {
+                    processor.OnEnd(activity);
+                }
+
+                AssertEx.Equal(ActivityStatusCode.Unset, activity.Status);
+                AssertEx.Equal("System.OperationCanceledException", activity.GetTagItem("error.type") as string);
+            }
     }
 
     [Test]
@@ -37,19 +37,19 @@ public sealed class GenAiCancellationStatusProcessorTests
     {
         var (source, listener) = GenAiSource();
         using (source)
-        using (listener)
-        {
-            using var activity = StartRecorded(source, "chat");
-            activity.SetStatus(ActivityStatusCode.Error);
-            activity.AddException(new TaskCanceledException("stopped"));
-
-            using (var processor = new GenAiCancellationStatusProcessor())
+            using (listener)
             {
-                processor.OnEnd(activity);
-            }
+                using var activity = StartRecorded(source, "chat");
+                activity.SetStatus(ActivityStatusCode.Error);
+                activity.AddException(new TaskCanceledException("stopped"));
 
-            AssertEx.Equal(ActivityStatusCode.Unset, activity.Status);
-        }
+                using (var processor = new GenAiCancellationStatusProcessor())
+                {
+                    processor.OnEnd(activity);
+                }
+
+                AssertEx.Equal(ActivityStatusCode.Unset, activity.Status);
+            }
     }
 
     [Test]
@@ -57,19 +57,19 @@ public sealed class GenAiCancellationStatusProcessorTests
     {
         var (source, listener) = GenAiSource();
         using (source)
-        using (listener)
-        {
-            using var activity = StartRecorded(source, "chat");
-            activity.SetStatus(ActivityStatusCode.Error, "boom");
-            activity.SetTag("error.type", "System.InvalidOperationException");
-
-            using (var processor = new GenAiCancellationStatusProcessor())
+            using (listener)
             {
-                processor.OnEnd(activity);
-            }
+                using var activity = StartRecorded(source, "chat");
+                activity.SetStatus(ActivityStatusCode.Error, "boom");
+                activity.SetTag("error.type", "System.InvalidOperationException");
 
-            AssertEx.Equal(ActivityStatusCode.Error, activity.Status);
-        }
+                using (var processor = new GenAiCancellationStatusProcessor())
+                {
+                    processor.OnEnd(activity);
+                }
+
+                AssertEx.Equal(ActivityStatusCode.Error, activity.Status);
+            }
     }
 
     [Test]

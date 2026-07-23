@@ -48,7 +48,8 @@ internal static class RetrievalTokens
         return tokens;
     }
 
-    public static bool IsIntentPrefixStopword(string token) => IntentPrefixStopwords.Contains(token);
+    public static bool IsIntentPrefixStopword(string token) =>
+        IntentPrefixStopwords.Contains(token);
 
     // FNV-1a 32-bit — a process-stable hash (unlike string.GetHashCode, which is randomized per process), so a concept
     // always maps to the same vector dimension across runs and machines.
@@ -119,8 +120,9 @@ public sealed record RetrievalMetrics(
     IReadOnlyList<QueryEvaluation> PerQuery)
 {
     /// <summary>A one-line, culture-stable summary for test output / regression logs.</summary>
-    public string Summarize() => string.Create(CultureInfo.InvariantCulture,
-        $"k={K} queries={QueryCount} recall@{K}={RecallAtK:F3} MRR={MeanReciprocalRank:F3} citationCoverage={CitationCoverage:F3}");
+    public string Summarize() =>
+        string.Create(CultureInfo.InvariantCulture,
+            $"k={K} queries={QueryCount} recall@{K}={RecallAtK:F3} MRR={MeanReciprocalRank:F3} citationCoverage={CitationCoverage:F3}");
 }
 
 /// <summary>

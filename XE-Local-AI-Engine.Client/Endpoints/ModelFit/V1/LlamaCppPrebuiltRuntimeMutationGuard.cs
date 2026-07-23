@@ -9,8 +9,7 @@ internal static class LlamaCppPrebuiltRuntimeMutationGuard
         return sourceBuildActivity.ActiveBuildId is not null;
     }
 
-    internal static async Task<(ILlamaServerRuntimeMutationLease? Lease, int RunningProcessCount, string? BlockedMessage)> TryAcquireAsync(
-        IInstalledRuntimeStore installedRuntimeStore,
+    internal static async Task<(ILlamaServerRuntimeMutationLease? Lease, int RunningProcessCount, string? BlockedMessage)> TryAcquireAsync(IInstalledRuntimeStore installedRuntimeStore,
         ILlamaCppSourceBuildActivity sourceBuildActivity,
         ILlamaServerProcessSupervisor processSupervisor,
         CancellationToken ct)

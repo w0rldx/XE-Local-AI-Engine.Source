@@ -29,12 +29,11 @@ public sealed class MemorySemanticDeduplicatorTests
         // Existing memory and the candidate map to the SAME direction => cosine 1.0 >= threshold => the paraphrase (worded
         // differently but same meaning) is flagged even though its exact lexical key differs.
         var vectors = new VectorMap()
-            .Set("existing helper lesson", 1f, 0f, 0f)
-            .Set("paraphrased helper lesson", 1f, 0f, 0f);
+                      .Set("existing helper lesson", 1f, 0f, 0f)
+                      .Set("paraphrased helper lesson", 1f, 0f, 0f);
         var deduplicator = Build(vectors, out _);
 
-        var result = await deduplicator.FindSemanticDuplicatesAsync(
-            [Existing("existing helper lesson", MemoryScope.Procedural)],
+        var result = await deduplicator.FindSemanticDuplicatesAsync([Existing("existing helper lesson", MemoryScope.Procedural)],
             [Candidate("paraphrased helper lesson", MemoryScope.Procedural)],
             CancellationToken.None);
 
@@ -47,12 +46,11 @@ public sealed class MemorySemanticDeduplicatorTests
     {
         // Orthogonal vectors => cosine 0 < threshold => the distinct lesson is kept.
         var vectors = new VectorMap()
-            .Set("existing helper lesson", 1f, 0f, 0f)
-            .Set("unrelated deployment lesson", 0f, 1f, 0f);
+                      .Set("existing helper lesson", 1f, 0f, 0f)
+                      .Set("unrelated deployment lesson", 0f, 1f, 0f);
         var deduplicator = Build(vectors, out _);
 
-        var result = await deduplicator.FindSemanticDuplicatesAsync(
-            [Existing("existing helper lesson", MemoryScope.Procedural)],
+        var result = await deduplicator.FindSemanticDuplicatesAsync([Existing("existing helper lesson", MemoryScope.Procedural)],
             [Candidate("unrelated deployment lesson", MemoryScope.Procedural)],
             CancellationToken.None);
 
@@ -64,13 +62,12 @@ public sealed class MemorySemanticDeduplicatorTests
     public async Task FindSemanticDuplicates_MixedBatch_FlagsOnlyTheParaphrase()
     {
         var vectors = new VectorMap()
-            .Set("existing helper lesson", 1f, 0f, 0f)
-            .Set("paraphrased helper lesson", 1f, 0f, 0f)
-            .Set("unrelated deployment lesson", 0f, 1f, 0f);
+                      .Set("existing helper lesson", 1f, 0f, 0f)
+                      .Set("paraphrased helper lesson", 1f, 0f, 0f)
+                      .Set("unrelated deployment lesson", 0f, 1f, 0f);
         var deduplicator = Build(vectors, out _);
 
-        var result = await deduplicator.FindSemanticDuplicatesAsync(
-            [Existing("existing helper lesson", MemoryScope.Procedural)],
+        var result = await deduplicator.FindSemanticDuplicatesAsync([Existing("existing helper lesson", MemoryScope.Procedural)],
             [
                 Candidate("paraphrased helper lesson", MemoryScope.Procedural),
                 Candidate("unrelated deployment lesson", MemoryScope.Procedural)
@@ -88,12 +85,11 @@ public sealed class MemorySemanticDeduplicatorTests
         // entirely — no candidate flagged, no embedding attempted — so a distinct and a paraphrase BOTH survive as they
         // would today. This is the proof that an outage never mass-dedups legitimate new memories.
         var vectors = new VectorMap()
-            .Set("existing helper lesson", 1f, 0f, 0f)
-            .Set("paraphrased helper lesson", 1f, 0f, 0f);
+                      .Set("existing helper lesson", 1f, 0f, 0f)
+                      .Set("paraphrased helper lesson", 1f, 0f, 0f);
         var deduplicator = Build(vectors, out var provider, isConfident: false);
 
-        var result = await deduplicator.FindSemanticDuplicatesAsync(
-            [Existing("existing helper lesson", MemoryScope.Procedural)],
+        var result = await deduplicator.FindSemanticDuplicatesAsync([Existing("existing helper lesson", MemoryScope.Procedural)],
             [Candidate("paraphrased helper lesson", MemoryScope.Procedural)],
             CancellationToken.None);
 
@@ -107,13 +103,12 @@ public sealed class MemorySemanticDeduplicatorTests
     {
         // Any node-local embedding failure degrades to NOT-applied (lexical-only), never throwing into the extraction run.
         var vectors = new VectorMap()
-            .Set("existing helper lesson", 1f, 0f, 0f)
-            .Set("paraphrased helper lesson", 1f, 0f, 0f);
+                      .Set("existing helper lesson", 1f, 0f, 0f)
+                      .Set("paraphrased helper lesson", 1f, 0f, 0f);
         var deduplicator = Build(vectors, out var provider);
         provider.ThrowOnGenerate = true;
 
-        var result = await deduplicator.FindSemanticDuplicatesAsync(
-            [Existing("existing helper lesson", MemoryScope.Procedural)],
+        var result = await deduplicator.FindSemanticDuplicatesAsync([Existing("existing helper lesson", MemoryScope.Procedural)],
             [Candidate("paraphrased helper lesson", MemoryScope.Procedural)],
             CancellationToken.None);
 
@@ -127,19 +122,17 @@ public sealed class MemorySemanticDeduplicatorTests
         // A candidate at cosine ~0.9 against the existing memory: below a 0.95 threshold it is KEPT; at/below a 0.85
         // threshold it is FLAGGED. Same vectors, only the threshold changes — proving the threshold governs the drop.
         var vectors = new VectorMap()
-            .Set("existing helper lesson", 1f, 0f, 0f)
-            .Set("mid-similarity lesson", 0.9f, 0.4358898943540674f, 0f); // unit vector, cosine 0.9 with the existing one
+                      .Set("existing helper lesson", 1f, 0f, 0f)
+                      .Set("mid-similarity lesson", 0.9f, 0.4358898943540674f, 0f); // unit vector, cosine 0.9 with the existing one
 
         var strict = Build(vectors, out _, threshold: 0.95d);
-        var strictResult = await strict.FindSemanticDuplicatesAsync(
-            [Existing("existing helper lesson", MemoryScope.Procedural)],
+        var strictResult = await strict.FindSemanticDuplicatesAsync([Existing("existing helper lesson", MemoryScope.Procedural)],
             [Candidate("mid-similarity lesson", MemoryScope.Procedural)],
             CancellationToken.None);
         AssertEx.Equal(expected: 0, strictResult.DuplicateIndexes.Count, "Below a strict 0.95 threshold the mid-similarity candidate is kept.");
 
         var loose = Build(vectors, out _, threshold: 0.85d);
-        var looseResult = await loose.FindSemanticDuplicatesAsync(
-            [Existing("existing helper lesson", MemoryScope.Procedural)],
+        var looseResult = await loose.FindSemanticDuplicatesAsync([Existing("existing helper lesson", MemoryScope.Procedural)],
             [Candidate("mid-similarity lesson", MemoryScope.Procedural)],
             CancellationToken.None);
         AssertEx.True(looseResult.DuplicateIndexes.Contains(0), "At/above a loose 0.85 threshold the same candidate is flagged.");
@@ -151,12 +144,11 @@ public sealed class MemorySemanticDeduplicatorTests
         // Same wording/vector but a DIFFERENT scope must NOT dedupe — a Failure-scope "what not to do" paraphrase of a
         // Procedural memory is a distinct lesson (mirrors the lexical key including scope).
         var vectors = new VectorMap()
-            .Set("existing helper lesson", 1f, 0f, 0f)
-            .Set("paraphrased helper lesson", 1f, 0f, 0f);
+                      .Set("existing helper lesson", 1f, 0f, 0f)
+                      .Set("paraphrased helper lesson", 1f, 0f, 0f);
         var deduplicator = Build(vectors, out _);
 
-        var result = await deduplicator.FindSemanticDuplicatesAsync(
-            [Existing("existing helper lesson", MemoryScope.Procedural)],
+        var result = await deduplicator.FindSemanticDuplicatesAsync([Existing("existing helper lesson", MemoryScope.Procedural)],
             [Candidate("paraphrased helper lesson", MemoryScope.Failure)],
             CancellationToken.None);
 
@@ -167,8 +159,8 @@ public sealed class MemorySemanticDeduplicatorTests
     public async Task FindSemanticDuplicates_CachesExistingVectors_ButReEmbedsCandidateEachRun()
     {
         var vectors = new VectorMap()
-            .Set("existing helper lesson", 1f, 0f, 0f)
-            .Set("some new candidate", 0f, 1f, 0f);
+                      .Set("existing helper lesson", 1f, 0f, 0f)
+                      .Set("some new candidate", 0f, 1f, 0f);
         var deduplicator = Build(vectors, out var provider);
         var existing = new[]
         {

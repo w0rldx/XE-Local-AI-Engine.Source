@@ -308,8 +308,10 @@ public sealed class OrchestrationResolverTests
         // A node policy must tighten an orchestration participant's tools too, or a node-wide policy is bypassable by
         // routing through orchestration. Node policy: require approval for the Network category; the specialist allows a
         // Network tool that ships auto-execute — it must resolve as approval-requiring.
-        var nodePolicy = new NodeToolApprovalPolicy(
-            new Dictionary<ToolCategory, bool> { [ToolCategory.Network] = true },
+        var nodePolicy = new NodeToolApprovalPolicy(new Dictionary<ToolCategory, bool>
+            {
+                [ToolCategory.Network] = true
+            },
             new Dictionary<string, bool>(StringComparer.Ordinal));
         var triage = CreateDefinition("Triage", modelProfile: ToolCapableModel, allowedTools: ["GetCurrentTime"]);
         var specialist = CreateDefinition("Specialist", modelProfile: ToolCapableModel, allowedTools: ["mcp__x__y"]);
@@ -638,7 +640,8 @@ public sealed class OrchestrationResolverTests
             RetrievalThreshold = threshold,
             TopK = topK
         });
-        return new OrchestrationResolver(store, playbookStore, offerProvider, ranker, retrievalOptions, runtimeSettings, NonThinkingCapabilityResolver(), new FakeAgentInstructionProvider(), new PermissiveToolApprovalPolicy(), NullLogger<OrchestrationResolver>.Instance);
+        return new OrchestrationResolver(store, playbookStore, offerProvider, ranker, retrievalOptions, runtimeSettings, NonThinkingCapabilityResolver(), new FakeAgentInstructionProvider(),
+            new PermissiveToolApprovalPolicy(), NullLogger<OrchestrationResolver>.Instance);
     }
 
     private static void SeedParticipants(IAgentDefinitionStore store, params AgentDefinitionRecord[] participants)

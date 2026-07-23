@@ -16,6 +16,7 @@ public sealed class LlamaCppSourceBuildPrerequisiteTests
         {
             return;
         }
+
         using var temp = new TempDirectory();
         WriteCommonTools(temp.Path);
         using var path = new PathScope(temp.Path);
@@ -34,6 +35,7 @@ public sealed class LlamaCppSourceBuildPrerequisiteTests
         {
             return;
         }
+
         using var temp = new TempDirectory();
         WriteCommonTools(temp.Path);
         using var path = new PathScope(temp.Path);
@@ -54,6 +56,7 @@ public sealed class LlamaCppSourceBuildPrerequisiteTests
         {
             return;
         }
+
         using var temp = new TempDirectory();
         WriteCommonTools(temp.Path);
         using var path = new PathScope(temp.Path);
@@ -69,7 +72,14 @@ public sealed class LlamaCppSourceBuildPrerequisiteTests
     [UnsupportedOSPlatform("windows")]
     private static void WriteCommonTools(string directory)
     {
-        foreach (var tool in new[] { "cmake", "gcc", "g++", "make", "git" })
+        foreach (var tool in new[]
+                 {
+                     "cmake",
+                     "gcc",
+                     "g++",
+                     "make",
+                     "git"
+                 })
         {
             var path = Path.Combine(directory, tool);
             File.WriteAllText(path, $"#!/bin/sh\necho '{tool} 1.0'\n");
@@ -79,24 +89,38 @@ public sealed class LlamaCppSourceBuildPrerequisiteTests
 
     private sealed class VendorProbe : IGpuVendorProbe
     {
-        public Task<DetectedGpuVendor> DetectVendorAsync(CancellationToken ct) => Task.FromResult(DetectedGpuVendor.Nvidia);
+        public Task<DetectedGpuVendor> DetectVendorAsync(CancellationToken ct) =>
+            Task.FromResult(DetectedGpuVendor.Nvidia);
     }
 
     private sealed class PathScope : IDisposable
     {
         private readonly string _original = Environment.GetEnvironmentVariable("PATH") ?? string.Empty;
-        public PathScope(string path) => Environment.SetEnvironmentVariable("PATH", path);
-        public void Dispose() => Environment.SetEnvironmentVariable("PATH", _original);
+
+        public PathScope(string path) =>
+            Environment.SetEnvironmentVariable("PATH", path);
+
+        public void Dispose() =>
+            Environment.SetEnvironmentVariable("PATH", _original);
     }
 
     private sealed class TempDirectory : IDisposable
     {
-        public TempDirectory() { Path = System.IO.Path.Combine(System.IO.Path.GetTempPath(), "xe-source-prereq-" + Guid.NewGuid().ToString("N")); Directory.CreateDirectory(Path); }
+        public TempDirectory()
+        {
+            Path = System.IO.Path.Combine(System.IO.Path.GetTempPath(), "xe-source-prereq-" + Guid.NewGuid().ToString("N"));
+            Directory.CreateDirectory(Path);
+        }
+
         public string Path { get; }
+
         public void Dispose()
         {
             try { Directory.Delete(Path, recursive: true); }
-            catch (Exception) { /* Best-effort test cleanup. */ }
+            catch (Exception)
+            {
+                /* Best-effort test cleanup. */
+            }
         }
     }
 }

@@ -61,8 +61,8 @@ public sealed class RegisterDevelopmentRepositoryEndpoint
             await Send.OkAsync(repository.ToResponse(), ct).ConfigureAwait(false);
         }
         catch (Exception exception) when (exception is ArgumentException
-                                          or DevelopmentWorkspaceSecurityException
-                                          or SelectedFolderValidationException)
+                                              or DevelopmentWorkspaceSecurityException
+                                              or SelectedFolderValidationException)
         {
             AddError(exception.Message);
             await Send.ErrorsAsync(cancellation: ct).ConfigureAwait(false);
@@ -109,25 +109,25 @@ public sealed class CreateDevelopmentProjectEndpoint
         try
         {
             var result = await service.CreateProjectAsync(new DevelopmentCreateProjectInput(req.OperationId,
-                                                              req.SelectedFolderId,
-                                                              req.Objective,
-                                                              req.BaseBranch,
-                                                              req.TaskTitle,
-                                                              req.Requirements,
-                                                              req.AcceptanceCriteriaJson,
-                                                              egressPolicy,
-                                                              req.CoderModelId,
-                                                              req.ReviewerModelId,
-                                                              req.TrustedRepositoryAcknowledged,
-                                                              req.MaxTokens,
-                                                              req.MaxDurationSeconds),
-                                                          ct)
+                                              req.SelectedFolderId,
+                                              req.Objective,
+                                              req.BaseBranch,
+                                              req.TaskTitle,
+                                              req.Requirements,
+                                              req.AcceptanceCriteriaJson,
+                                              egressPolicy,
+                                              req.CoderModelId,
+                                              req.ReviewerModelId,
+                                              req.TrustedRepositoryAcknowledged,
+                                              req.MaxTokens,
+                                              req.MaxDurationSeconds),
+                                          ct)
                                       .ConfigureAwait(false);
             await Send.OkAsync(result.ToResponse(), ct).ConfigureAwait(false);
         }
         catch (Exception exception) when (exception is ArgumentException
-                                          or DevelopmentWorkspaceSecurityException
-                                          or SelectedFolderValidationException)
+                                              or DevelopmentWorkspaceSecurityException
+                                              or SelectedFolderValidationException)
         {
             AddError(exception.Message);
             await Send.ErrorsAsync(cancellation: ct).ConfigureAwait(false);
@@ -213,8 +213,8 @@ public sealed class StartDevelopmentNextActionEndpoint
             await Send.NotFoundAsync(ct).ConfigureAwait(false);
         }
         catch (Exception exception) when (exception is DevelopmentInvalidTransitionException
-                                          or DevelopmentConcurrencyException
-                                          or DevelopmentWorkspaceSecurityException)
+                                              or DevelopmentConcurrencyException
+                                              or DevelopmentWorkspaceSecurityException)
         {
             AddError(exception.Message);
             await Send.ErrorsAsync(statusCode: StatusCodes.Status409Conflict, cancellation: ct).ConfigureAwait(false);
@@ -400,8 +400,8 @@ public sealed class ApplyDevelopmentPatchEndpoint
             await Send.NotFoundAsync(ct).ConfigureAwait(false);
         }
         catch (Exception exception) when (exception is DevelopmentInvalidTransitionException
-                                          or DevelopmentConcurrencyException
-                                          or DevelopmentWorkspaceSecurityException)
+                                              or DevelopmentConcurrencyException
+                                              or DevelopmentWorkspaceSecurityException)
         {
             AddError(exception.Message);
             await Send.ErrorsAsync(statusCode: StatusCodes.Status409Conflict, cancellation: ct).ConfigureAwait(false);

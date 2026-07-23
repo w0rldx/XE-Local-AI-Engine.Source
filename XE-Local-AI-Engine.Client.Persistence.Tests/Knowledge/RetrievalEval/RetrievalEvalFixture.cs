@@ -1,5 +1,6 @@
 namespace XE_Local_AI_Engine.Client.Persistence.Tests.Knowledge.RetrievalEval;
 
+using System.Data;
 using System.Data.Common;
 using System.Globalization;
 using System.Text;
@@ -7,8 +8,6 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Options;
 using NSubstitute;
-using XE_Local_AI_Engine.Client.Persistence;
-using XE_Local_AI_Engine.Client.Persistence.Implementation;
 using XE_Local_AI_Engine.Client.Persistence.Tests.Testing;
 using XE_Local_AI_Engine.Client.Services.CloudProviders;
 using XE_Local_AI_Engine.Client.Services.DocumentIngestion;
@@ -258,7 +257,7 @@ internal sealed class RetrievalEvalFixture : IDisposable
 
     private static async Task OpenAsync(DbConnection connection, CancellationToken cancellationToken)
     {
-        if (connection.State != System.Data.ConnectionState.Open)
+        if (connection.State != ConnectionState.Open)
         {
             await connection.OpenAsync(cancellationToken).ConfigureAwait(false);
         }
@@ -279,7 +278,8 @@ internal sealed class RetrievalEvalFixture : IDisposable
     {
         private readonly Dictionary<Guid, byte[]> _bytesById = [];
 
-        public void Register(Guid documentId, byte[] bytes) => _bytesById[documentId] = bytes;
+        public void Register(Guid documentId, byte[] bytes) =>
+            _bytesById[documentId] = bytes;
 
         public Task<byte[]?> ReadBytesAsync(Guid documentId, CancellationToken cancellationToken) =>
             Task.FromResult(_bytesById.TryGetValue(documentId, out var bytes) ? bytes : null);
@@ -296,9 +296,11 @@ internal sealed class RetrievalEvalFixture : IDisposable
     {
         private readonly IVectorSearch _vectorSearch;
 
-        public DirectVectorSearchFactory(IVectorSearch vectorSearch) => _vectorSearch = vectorSearch;
+        public DirectVectorSearchFactory(IVectorSearch vectorSearch) =>
+            _vectorSearch = vectorSearch;
 
-        public IVectorSearch Create() => _vectorSearch;
+        public IVectorSearch Create() =>
+            _vectorSearch;
     }
 
     /// <summary>A cache that never hits — every query is embedded fresh (the harness is not measuring cache behavior).</summary>

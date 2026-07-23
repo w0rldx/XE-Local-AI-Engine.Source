@@ -1,6 +1,8 @@
 namespace XE_Local_AI_Engine.Providers.LlamaServer.Implementation;
 
+using System.Diagnostics;
 using System.Security.Cryptography;
+using System.Text.RegularExpressions;
 using XE_Local_AI_Engine.Providers.LlamaServer.Contracts;
 
 /// <summary>
@@ -130,74 +132,74 @@ public sealed partial class LlamaCppBinaryManager
         await _sourceMutationGate.WaitAsync(ct).ConfigureAwait(false);
         try
         {
-        ArgumentException.ThrowIfNullOrWhiteSpace(buildBinDir);
-        ArgumentException.ThrowIfNullOrWhiteSpace(tag);
+            ArgumentException.ThrowIfNullOrWhiteSpace(buildBinDir);
+            ArgumentException.ThrowIfNullOrWhiteSpace(tag);
 
-        if (!LlamaCppSourceBuildRequestValidation.HasValidOfficialProvenance(sourceSelection,
-                sourceRepository,
-                revisionMode,
-                requestedCommit,
-                sourceCommit))
-        {
-            throw new LlamaRuntimeException("Official source builds must use the canonical repository and engine-pinned revision.");
-        }
-
-        if (!IsValidTag(tag))
-        {
-            throw new LlamaRuntimeException("The source build tag is not in a recognized format.");
-        }
-
-        var fullBinDir = Path.GetFullPath(buildBinDir);
-        var serverPath = Path.Combine(fullBinDir, ManagedCudaServerFileName);
-        if (!File.Exists(serverPath) || new FileInfo(serverPath).LinkTarget is not null)
-        {
-            throw new LlamaRuntimeException("The source build did not produce the expected server executable.");
-        }
-
-        // Adoption validation: full path-chain perms/ownership + --version smoke + --list-devices GPU presence. A binary
-        // that cannot self-check, or that exposes no GPU device, is never adopted (it would otherwise silently run CPU).
-        ValidateManagedTreeLinks(fullBinDir);
-        EnsureManagedPathChainSecure(serverPath);
-
-        if (!await SmokeTestAsync(serverPath, ct).ConfigureAwait(false))
-        {
-            throw new LlamaRuntimeException("The source-built llama-server failed its post-build self-check.");
-        }
-
-        if (variant != GpuVariant.Cpu && !await SourceBuildExposesDeviceAsync(serverPath, variant, ct).ConfigureAwait(false))
-        {
-            throw new LlamaRuntimeException($"The source-built llama-server exposes no {variant} device; the requested backend was not built correctly.");
-        }
-
-        var sha256 = await ComputeFileSha256Async(serverPath, ct).ConfigureAwait(false);
-
-        var state = new InstalledRuntimeState(tag,
-            Asset: variant switch
+            if (!LlamaCppSourceBuildRequestValidation.HasValidOfficialProvenance(sourceSelection,
+                    sourceRepository,
+                    revisionMode,
+                    requestedCommit,
+                    sourceCommit))
             {
-                GpuVariant.Cpu => "(source-build:cpu)",
-                GpuVariant.Vulkan => "(source-build:vulkan)",
-                GpuVariant.Cuda => ManagedCudaSourceBuildSentinel,
-                _ => "(source-build)"
-            },
-            Sha256: sha256,
-            Variant: variant,
-            InstalledAtUtc: DateTimeOffset.UtcNow,
-            SourceBuildPath: fullBinDir,
-            SourceRepository: sourceRepository,
-            SourceCommit: Convert.ToHexStringLower(Convert.FromHexString(sourceCommit)),
-            SourceRevisionMode: revisionMode,
-            SourceRequestedCommit: requestedCommit is null ? null : Convert.ToHexStringLower(Convert.FromHexString(requestedCommit)),
-            SourceSelection: sourceSelection);
+                throw new LlamaRuntimeException("Official source builds must use the canonical repository and engine-pinned revision.");
+            }
 
-        if (_installedRuntimeStore is not null)
-        {
-            await _installedRuntimeStore.WriteAsync(state, ct).ConfigureAwait(false);
-        }
+            if (!IsValidTag(tag))
+            {
+                throw new LlamaRuntimeException("The source build tag is not in a recognized format.");
+            }
 
-        // Cached signal: the variant selector now returns Cuda on a Linux NVIDIA box without a per-call store read.
-        _managedCudaSignal?.SetActive(variant);
+            var fullBinDir = Path.GetFullPath(buildBinDir);
+            var serverPath = Path.Combine(fullBinDir, ManagedCudaServerFileName);
+            if (!File.Exists(serverPath) || new FileInfo(serverPath).LinkTarget is not null)
+            {
+                throw new LlamaRuntimeException("The source build did not produce the expected server executable.");
+            }
 
-        return state;
+            // Adoption validation: full path-chain perms/ownership + --version smoke + --list-devices GPU presence. A binary
+            // that cannot self-check, or that exposes no GPU device, is never adopted (it would otherwise silently run CPU).
+            ValidateManagedTreeLinks(fullBinDir);
+            EnsureManagedPathChainSecure(serverPath);
+
+            if (!await SmokeTestAsync(serverPath, ct).ConfigureAwait(false))
+            {
+                throw new LlamaRuntimeException("The source-built llama-server failed its post-build self-check.");
+            }
+
+            if (variant != GpuVariant.Cpu && !await SourceBuildExposesDeviceAsync(serverPath, variant, ct).ConfigureAwait(false))
+            {
+                throw new LlamaRuntimeException($"The source-built llama-server exposes no {variant} device; the requested backend was not built correctly.");
+            }
+
+            var sha256 = await ComputeFileSha256Async(serverPath, ct).ConfigureAwait(false);
+
+            var state = new InstalledRuntimeState(tag,
+                Asset: variant switch
+                {
+                    GpuVariant.Cpu => "(source-build:cpu)",
+                    GpuVariant.Vulkan => "(source-build:vulkan)",
+                    GpuVariant.Cuda => ManagedCudaSourceBuildSentinel,
+                    _ => "(source-build)"
+                },
+                Sha256: sha256,
+                Variant: variant,
+                InstalledAtUtc: DateTimeOffset.UtcNow,
+                SourceBuildPath: fullBinDir,
+                SourceRepository: sourceRepository,
+                SourceCommit: Convert.ToHexStringLower(Convert.FromHexString(sourceCommit)),
+                SourceRevisionMode: revisionMode,
+                SourceRequestedCommit: requestedCommit is null ? null : Convert.ToHexStringLower(Convert.FromHexString(requestedCommit)),
+                SourceSelection: sourceSelection);
+
+            if (_installedRuntimeStore is not null)
+            {
+                await _installedRuntimeStore.WriteAsync(state, ct).ConfigureAwait(false);
+            }
+
+            // Cached signal: the variant selector now returns Cuda on a Linux NVIDIA box without a per-call store read.
+            _managedCudaSignal?.SetActive(variant);
+
+            return state;
         }
         finally
         {
@@ -255,6 +257,7 @@ public sealed partial class LlamaCppBinaryManager
                 {
                     await _installedRuntimeStore.DeleteAsync(ct).ConfigureAwait(false);
                 }
+
                 return;
             }
 
@@ -299,7 +302,7 @@ public sealed partial class LlamaCppBinaryManager
     private static async Task<bool> SourceBuildExposesDeviceAsync(string serverPath, GpuVariant variant, CancellationToken ct)
     {
         var expectedPrefix = variant == GpuVariant.Cuda ? "CUDA" : "Vulkan";
-        var startInfo = new System.Diagnostics.ProcessStartInfo(serverPath)
+        var startInfo = new ProcessStartInfo(serverPath)
         {
             RedirectStandardOutput = true,
             RedirectStandardError = true,
@@ -308,7 +311,10 @@ public sealed partial class LlamaCppBinaryManager
             WorkingDirectory = Path.GetDirectoryName(serverPath) ?? Environment.CurrentDirectory
         };
         startInfo.ArgumentList.Add("--list-devices");
-        using var process = new System.Diagnostics.Process { StartInfo = startInfo };
+        using var process = new Process
+        {
+            StartInfo = startInfo
+        };
         try
         {
             if (!process.Start())
@@ -385,6 +391,7 @@ public sealed partial class LlamaCppBinaryManager
             {
                 throw new LlamaRuntimeException("The source-built llama-server path contains a linked directory.");
             }
+
             EnsureUnixPathSecure(directory, requireExecutable: false, requireRegularFile: false);
             if (string.Equals(directory, root, StringComparison.Ordinal))
             {
@@ -472,8 +479,8 @@ public sealed partial class LlamaCppBinaryManager
         return Convert.ToHexStringLower(hash);
     }
 
-    [System.Text.RegularExpressions.GeneratedRegex(@"^\s*(?:CUDA|Vulkan)[0-9]+:",
-        System.Text.RegularExpressions.RegexOptions.IgnoreCase | System.Text.RegularExpressions.RegexOptions.CultureInvariant,
+    [GeneratedRegex(@"^\s*(?:CUDA|Vulkan)[0-9]+:",
+        RegexOptions.IgnoreCase | RegexOptions.CultureInvariant,
         matchTimeoutMilliseconds: 1000)]
-    private static partial System.Text.RegularExpressions.Regex DeviceLineRegex();
+    private static partial Regex DeviceLineRegex();
 }

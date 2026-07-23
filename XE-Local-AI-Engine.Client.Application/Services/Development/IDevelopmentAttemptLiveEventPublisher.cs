@@ -7,6 +7,6 @@ public interface IDevelopmentAttemptLiveEventPublisher
 
 internal sealed class NullDevelopmentAttemptLiveEventPublisher : IDevelopmentAttemptLiveEventPublisher
 {
-    public Task PublishAsync(DevelopmentAttemptLiveUpdate update, CancellationToken cancellationToken = default)
-        => Task.CompletedTask;
+    public Task PublishAsync(DevelopmentAttemptLiveUpdate update, CancellationToken cancellationToken = default) =>
+        Task.CompletedTask;
 }

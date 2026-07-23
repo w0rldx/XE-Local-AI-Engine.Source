@@ -1,5 +1,7 @@
 namespace XE_Local_AI_Engine.Client.Services.NodeSettings;
 
+using System.Text.Json.Serialization;
+
 /// <summary>
 ///     A per-model price point used to estimate the USD cost of token usage: two rates quoted in US dollars per one
 ///     million tokens. Reasoning tokens are billed at the <see cref="OutputPer1M" /> rate (they are model output), so the
@@ -19,9 +21,8 @@ public sealed record ModelRate
     ///     <see cref="System.Text.Json.Serialization.JsonIgnoreAttribute" />d — it is an internal check, not part of the
     ///     wire contract, so it never appears in the OpenAPI schema or the persisted JSON.
     /// </summary>
-    [System.Text.Json.Serialization.JsonIgnore]
-    public bool HasValidRates =>
-        double.IsFinite(InputPer1M) && double.IsFinite(OutputPer1M) && InputPer1M >= 0 && OutputPer1M >= 0;
+    [JsonIgnore]
+    public bool HasValidRates => double.IsFinite(InputPer1M) && double.IsFinite(OutputPer1M) && InputPer1M >= 0 && OutputPer1M >= 0;
 }
 
 /// <summary>

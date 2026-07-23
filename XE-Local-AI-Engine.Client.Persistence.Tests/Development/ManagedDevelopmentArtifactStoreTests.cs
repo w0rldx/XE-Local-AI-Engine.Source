@@ -1,21 +1,12 @@
 namespace XE_Local_AI_Engine.Client.Persistence.Tests.Development;
 
-using Microsoft.Data.Sqlite;
-using Microsoft.EntityFrameworkCore;
-using Microsoft.EntityFrameworkCore.Infrastructure;
-using Microsoft.EntityFrameworkCore.Migrations;
-using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
-using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Options;
-using XE_Local_AI_Engine.Client.DependencyInjection.Modules;
-using XE_Local_AI_Engine.Client.Persistence;
 using XE_Local_AI_Engine.Client.Persistence.Entities;
 using XE_Local_AI_Engine.Client.Persistence.Implementation;
 using XE_Local_AI_Engine.Client.Persistence.Stores;
 using XE_Local_AI_Engine.Client.Persistence.Tests.Testing;
 using XE_Local_AI_Engine.Client.Services.Development;
-using XE_Local_AI_Engine.Providers.Abstractions;
 
 public sealed class ManagedDevelopmentArtifactStoreTests : IDisposable
 {
@@ -36,7 +27,11 @@ public sealed class ManagedDevelopmentArtifactStoreTests : IDisposable
     {
         var store = new ManagedDevelopmentArtifactBlobStore(new TestDataDirectory(_root),
             _keyHolder,
-            Options.Create(new DevelopmentOptions { Enabled = true, MaxArtifactBytes = 1024 }));
+            Options.Create(new DevelopmentOptions
+            {
+                Enabled = true,
+                MaxArtifactBytes = 1024
+            }));
         var projectId = Guid.NewGuid();
         var artifactId = Guid.NewGuid();
         ReadOnlyMemory<byte> content = "bounded artifact"u8.ToArray();
@@ -65,7 +60,11 @@ public sealed class ManagedDevelopmentArtifactStoreTests : IDisposable
     {
         var store = new ManagedDevelopmentArtifactBlobStore(new TestDataDirectory(_root),
             _keyHolder,
-            Options.Create(new DevelopmentOptions { Enabled = true, MaxArtifactBytes = 4 }));
+            Options.Create(new DevelopmentOptions
+            {
+                Enabled = true,
+                MaxArtifactBytes = 4
+            }));
         await AssertEx.ThrowsAsync<InvalidOperationException>(() => store.WriteAsync(Guid.NewGuid(), Guid.NewGuid(), new byte[5]))
                       .ConfigureAwait(false);
         AssertEx.False(Directory.Exists(Path.Combine(_root, "development")));
@@ -84,15 +83,15 @@ public sealed class ManagedDevelopmentArtifactStoreTests : IDisposable
             _ = await store.CreateProjectAsync(seed).ConfigureAwait(false);
 
             await AssertEx.ThrowsAsync<ArgumentException>(() => store.AttachArtifactAsync(new DevelopmentAttachArtifactCommand(Guid.NewGuid(),
-                                                                                                      seed.ProjectId,
-                                                                                                      seed.TaskId,
-                                                                                                      AttemptId: null,
-                                                                                                      Guid.NewGuid(),
-                                                                                                      DevelopmentArtifactKind.Patch,
-                                                                                                      SchemaVersion: 1,
-                                                                                                      ContentHash: "hash",
-                                                                                                      ByteCount: 1,
-                                                                                                      ManagedReference: "../../caller/path")))
+                              seed.ProjectId,
+                              seed.TaskId,
+                              AttemptId: null,
+                              Guid.NewGuid(),
+                              DevelopmentArtifactKind.Patch,
+                              SchemaVersion: 1,
+                              ContentHash: "hash",
+                              ByteCount: 1,
+                              ManagedReference: "../../caller/path")))
                           .ConfigureAwait(false);
         }
         finally

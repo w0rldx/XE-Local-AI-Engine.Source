@@ -34,6 +34,7 @@ internal sealed class DevelopmentAttemptExecutionSupervisor(
             cancellation.Dispose();
             return false;
         }
+
         if (!_liveBroker.Register(attemptId))
         {
             _attempts.TryRemove(attemptId, out _);
@@ -70,7 +71,8 @@ internal sealed class DevelopmentAttemptExecutionSupervisor(
         return true;
     }
 
-    public Task StartAsync(CancellationToken cancellationToken) => Task.CompletedTask;
+    public Task StartAsync(CancellationToken cancellationToken) =>
+        Task.CompletedTask;
 
     public async Task StopAsync(CancellationToken cancellationToken)
     {
@@ -132,7 +134,7 @@ internal sealed class DevelopmentAttemptExecutionSupervisor(
             }
 
             var completed = (await store.ListAttemptsAsync(execution.TaskId, CancellationToken.None).ConfigureAwait(false))
-                            .Single(attempt => attempt.Id == attemptId);
+                .Single(attempt => attempt.Id == attemptId);
             _ = _liveBroker.TryPublish(ToLiveUpdate(execution,
                 DevelopmentAttemptLiveUpdateKind.Terminal,
                 completed.Status,
@@ -187,8 +189,8 @@ internal sealed class DevelopmentAttemptExecutionSupervisor(
         DevelopmentAttemptStatus status,
         string activity,
         long? inputTokens = null,
-        long? outputTokens = null)
-        => new()
+        long? outputTokens = null) =>
+        new()
         {
             ProjectId = execution.ProjectId,
             TaskId = execution.TaskId,

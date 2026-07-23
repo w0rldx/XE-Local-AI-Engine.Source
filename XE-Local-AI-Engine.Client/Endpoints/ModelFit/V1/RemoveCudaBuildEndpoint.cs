@@ -61,8 +61,7 @@ public sealed class RemoveCudaBuildEndpoint(
         await Send.OkAsync(_updateState.Current.ToRuntimeStatusResponse(installed, recommendedTag, runningProcessCount), ct).ConfigureAwait(false);
     }
 
-    internal static async Task<(bool Removed, int RunningProcessCount, bool BuildActive)> TryRemoveAsync(
-        ILlamaCppBinaryManager binaryManager,
+    internal static async Task<(bool Removed, int RunningProcessCount, bool BuildActive)> TryRemoveAsync(ILlamaCppBinaryManager binaryManager,
         ILlamaServerProcessSupervisor processSupervisor,
         ILlamaCppSourceBuildActivity sourceBuildActivity,
         CancellationToken ct)

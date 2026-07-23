@@ -1,7 +1,6 @@
 namespace XE_Local_AI_Engine.Client.Persistence.Tests;
 
 using System.Security.Cryptography;
-using Microsoft.EntityFrameworkCore;
 using XE_Local_AI_Engine.Client.Persistence.Entities;
 using XE_Local_AI_Engine.Client.Persistence.Implementation;
 using XE_Local_AI_Engine.Client.Persistence.Stores;
@@ -17,8 +16,8 @@ using XE_Local_AI_Engine.Client.Persistence.Tests.Testing;
 public sealed class AgentExecutionLogUsageSummaryTests : IDisposable
 {
     private const long MillisecondsPerDay = 86_400_000L;
-    private const long DayOneStart = MillisecondsPerDay;      // UTC day index 1
-    private const long DayTwoStart = 2 * MillisecondsPerDay;  // UTC day index 2
+    private const long DayOneStart = MillisecondsPerDay; // UTC day index 1
+    private const long DayTwoStart = 2 * MillisecondsPerDay; // UTC day index 2
 
     private readonly string _rootPath = Path.Combine(Path.GetTempPath(), Guid.NewGuid().ToString("N"));
 
@@ -195,9 +194,9 @@ public sealed class AgentExecutionLogUsageSummaryTests : IDisposable
         var store = new AgentExecutionLogStore(context, TimeProvider.System);
 
         // A row exactly on the lower bound is included; a row exactly on the upper bound is excluded.
-        await AddEnvelopeAsync(context, "llama-x", DayOneStart, prompt: 1, completion: 1, reasoning: 0, total: 2);          // included (>= from)
+        await AddEnvelopeAsync(context, "llama-x", DayOneStart, prompt: 1, completion: 1, reasoning: 0, total: 2); // included (>= from)
         await AddEnvelopeAsync(context, "llama-x", DayOneStart + 100, prompt: 10, completion: 10, reasoning: 0, total: 20); // included
-        await AddEnvelopeAsync(context, "llama-x", DayTwoStart, prompt: 999, completion: 999, reasoning: 0, total: 1998);   // excluded (== to)
+        await AddEnvelopeAsync(context, "llama-x", DayTwoStart, prompt: 999, completion: 999, reasoning: 0, total: 1998); // excluded (== to)
 
         var summary = await store.SummarizeTokenUsageAsync(fromEpochMsInclusive: DayOneStart, toEpochMsExclusive: DayTwoStart);
 

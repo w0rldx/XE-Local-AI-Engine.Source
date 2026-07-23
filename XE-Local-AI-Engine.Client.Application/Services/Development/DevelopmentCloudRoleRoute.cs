@@ -21,8 +21,7 @@ public sealed class DevelopmentCloudRoleRouteFactory(IDevelopmentCloudContextCat
         ArgumentNullException.ThrowIfNull(bundle);
         _contextCatalog.Register(bundle);
 
-        var bundleReader = AIFunctionFactory.Create(
-            (string resource) => bundle.ReadResource(resource),
+        var bundleReader = AIFunctionFactory.Create((string resource) => bundle.ReadResource(resource),
             "development_read_approved_context",
             "Reads one exact resource from the immutable approved Development context bundle.");
         var options = new ChatOptions

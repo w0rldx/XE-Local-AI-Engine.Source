@@ -23,9 +23,9 @@ public sealed class DevelopmentManagementServiceTests
         store.GetTaskAsync(taskId, Arg.Any<CancellationToken>())
              .Returns(TaskSnapshot(projectId, taskId));
         store.FindOperationAsync(projectId,
-                Arg.Any<Guid>(),
-                DevelopmentOperationPhases.Completed,
-                Arg.Any<CancellationToken>())
+                 Arg.Any<Guid>(),
+                 DevelopmentOperationPhases.Completed,
+                 Arg.Any<CancellationToken>())
              .Returns((DevelopmentOperationResult?)null);
         store.ListAttemptsAsync(taskId, Arg.Any<CancellationToken>())
              .Returns([
@@ -144,8 +144,8 @@ public sealed class DevelopmentManagementServiceTests
         IDevelopmentCoordinator coordinator,
         IDevelopmentAttemptExecutionSupervisor supervisor,
         IDevelopmentRepositoryBindingService? repositoryBindings = null,
-        Guid? selectedFolderId = null)
-        => new(store,
+        Guid? selectedFolderId = null) =>
+        new(store,
             coordinator,
             supervisor,
             Substitute.For<IDevelopmentArtifactBlobStore>(),
@@ -168,8 +168,8 @@ public sealed class DevelopmentManagementServiceTests
 
     private static DevelopmentProjectSnapshot ProjectSnapshot(Guid projectId,
         Guid? selectedFolderId = null,
-        string repositoryIdentityHash = "repository-hash")
-        => new(projectId,
+        string repositoryIdentityHash = "repository-hash") =>
+        new(projectId,
             "objective",
             selectedFolderId,
             repositoryIdentityHash,
@@ -188,8 +188,8 @@ public sealed class DevelopmentManagementServiceTests
             1,
             1);
 
-    private static DevelopmentTaskSnapshot TaskSnapshot(Guid projectId, Guid taskId)
-        => new(taskId,
+    private static DevelopmentTaskSnapshot TaskSnapshot(Guid projectId, Guid taskId) =>
+        new(taskId,
             projectId,
             "task",
             "requirements",
@@ -208,13 +208,13 @@ public sealed class DevelopmentManagementServiceTests
     {
         public Task<DevelopmentPatchPreview> PreviewAsync(Guid taskId,
             DevelopmentRepositoryBinding repository,
-            CancellationToken cancellationToken = default)
-            => throw new NotSupportedException();
+            CancellationToken cancellationToken = default) =>
+            throw new NotSupportedException();
 
         public Task<DevelopmentOperationResult> ApplyAsync(Guid taskId,
             Guid operationId,
             DevelopmentRepositoryBinding repository,
-            CancellationToken cancellationToken = default)
-            => throw new NotSupportedException();
+            CancellationToken cancellationToken = default) =>
+            throw new NotSupportedException();
     }
 }

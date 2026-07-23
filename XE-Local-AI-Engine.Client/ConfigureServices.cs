@@ -120,8 +120,7 @@ public static class ConfigureServices
             {
                 dataProtection.Services.Remove(defaultKeyResolver);
                 dataProtection.Services.AddSingleton<IDefaultKeyResolver>(serviceProvider =>
-                    new NodeDataProtectionKeyRingFailClosedKeyResolver(
-                        (IDefaultKeyResolver)ActivatorUtilities.CreateInstance(serviceProvider, innerResolverType)));
+                    new NodeDataProtectionKeyRingFailClosedKeyResolver((IDefaultKeyResolver)ActivatorUtilities.CreateInstance(serviceProvider, innerResolverType)));
             }
         }
 

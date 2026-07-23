@@ -1,5 +1,7 @@
 namespace XE_Local_AI_Engine.Client.Persistence.Entities;
 
+using XE_Local_AI_Engine.Client.Persistence.Stores;
+
 /// <summary>
 ///     Append-only metadata log of a single agent run. Two producers share this table, distinguished by
 ///     <see cref="RecordKind" />: adaptive-memory diagnostics (kind 0, one row per memory-enabled run) and the durable
@@ -45,7 +47,7 @@ internal sealed record class AgentExecutionLog
     ///     existed). Never encrypted — a category label like <see cref="ModelName" />, not content. Existing rows and any
     ///     envelope written without a resolved provider backfill to <c>unknown</c> via the column default. Plaintext (structural).
     /// </summary>
-    public string Provider { get; set; } = XE_Local_AI_Engine.Client.Persistence.Stores.AgentUsageProviders.Unknown;
+    public string Provider { get; set; } = AgentUsageProviders.Unknown;
 
     /// <summary>Runtime-package config hash for the run. Plaintext (structural).</summary>
     public string ConfigHash { get; set; } = string.Empty;

@@ -13,7 +13,8 @@ public sealed record DevelopmentArtifactBlobWriteResult(string OpaqueReference, 
 
 public sealed record DevelopmentArtifactBlobReadResult(DevelopmentArtifactReadStatus Status, ReadOnlyMemory<byte> Content)
 {
-    public static DevelopmentArtifactBlobReadResult Failure(DevelopmentArtifactReadStatus status) => new(status, ReadOnlyMemory<byte>.Empty);
+    public static DevelopmentArtifactBlobReadResult Failure(DevelopmentArtifactReadStatus status) =>
+        new(status, ReadOnlyMemory<byte>.Empty);
 }
 
 public interface IDevelopmentArtifactBlobStore
@@ -29,4 +30,3 @@ public interface IDevelopmentArtifactBlobStore
         long expectedByteCount,
         CancellationToken cancellationToken = default);
 }
-

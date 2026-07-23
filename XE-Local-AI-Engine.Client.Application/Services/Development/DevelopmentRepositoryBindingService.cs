@@ -22,6 +22,7 @@ public interface IDevelopmentRepositoryBindingService
     Task<DevelopmentRepositoryBinding> ResolveFolderAsync(Guid selectedFolderId, CancellationToken cancellationToken = default);
     Task<DevelopmentRepositoryBinding> ResolveProjectAsync(Guid projectId, CancellationToken cancellationToken = default);
     Task<DevelopmentRepositoryBinding> ResolveExecutionAsync(DevelopmentExecutionSnapshot snapshot, CancellationToken cancellationToken = default);
+
     Task<DevelopmentProjectSnapshot> ReconnectAsync(Guid projectId,
         Guid selectedFolderId,
         long expectedVersion,
@@ -60,8 +61,8 @@ internal sealed class DevelopmentRepositoryBindingService(
                 _ = await ResolveFolderAsync(Guid.Parse(reference.Id), cancellationToken).ConfigureAwait(false);
             }
             catch (Exception exception) when (exception is DevelopmentWorkspaceSecurityException
-                                               or SelectedFolderValidationException
-                                               or DirectoryNotFoundException)
+                                                  or SelectedFolderValidationException
+                                                  or DirectoryNotFoundException)
             {
                 availability = "Unavailable";
             }
@@ -113,7 +114,10 @@ internal sealed class DevelopmentRepositoryBindingService(
 
         var binding = await ResolveFolderAsync(selectedFolderId, cancellationToken).ConfigureAwait(false);
         EnsureIdentity(snapshot.RepositoryIdentityHash, binding.RepositoryIdentityHash);
-        return binding with { ProjectId = snapshot.ProjectId };
+        return binding with
+        {
+            ProjectId = snapshot.ProjectId
+        };
     }
 
     public async Task<DevelopmentProjectSnapshot> ReconnectAsync(Guid projectId,
@@ -137,7 +141,10 @@ internal sealed class DevelopmentRepositoryBindingService(
 
         var binding = await ResolveFolderAsync(selectedFolderId, cancellationToken).ConfigureAwait(false);
         EnsureIdentity(project.RepositoryIdentityHash, binding.RepositoryIdentityHash);
-        return binding with { ProjectId = project.Id };
+        return binding with
+        {
+            ProjectId = project.Id
+        };
     }
 
     private async Task EnsureLocalGitTopLevelAsync(string canonicalRoot, CancellationToken cancellationToken)
@@ -184,8 +191,8 @@ internal sealed class DevelopmentRepositoryBindingService(
         }
     }
 
-    private static bool PathEquals(string left, string right)
-        => string.Equals(Path.TrimEndingDirectorySeparator(Path.GetFullPath(left)),
+    private static bool PathEquals(string left, string right) =>
+        string.Equals(Path.TrimEndingDirectorySeparator(Path.GetFullPath(left)),
             Path.TrimEndingDirectorySeparator(Path.GetFullPath(right)),
             OperatingSystem.IsWindows() ? StringComparison.OrdinalIgnoreCase : StringComparison.Ordinal);
 }

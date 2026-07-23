@@ -192,15 +192,18 @@ public sealed class ManagedDevelopmentArtifactBlobStore : IDevelopmentArtifactBl
             string.Concat(artifactId.ToString("N"), ".blob"));
     }
 
-    private static string OpaqueReference(Guid projectId, Guid artifactId)
-        => string.Concat(projectId.ToString("N"), "/", artifactId.ToString("N"));
+    private static string OpaqueReference(Guid projectId, Guid artifactId) =>
+        string.Concat(projectId.ToString("N"), "/", artifactId.ToString("N"));
 
     private static byte[] BuildAssociatedData(Guid projectId, Guid artifactId)
     {
-        return [.. projectId.ToByteArray(bigEndian: true),
-                .. artifactId.ToByteArray(bigEndian: true),
-                .. Encoding.UTF8.GetBytes(BlobColumn),
-                .. Encoding.UTF8.GetBytes(SchemaVersion)];
+        return
+        [
+            .. projectId.ToByteArray(bigEndian: true),
+            .. artifactId.ToByteArray(bigEndian: true),
+            .. Encoding.UTF8.GetBytes(BlobColumn),
+            .. Encoding.UTF8.GetBytes(SchemaVersion)
+        ];
     }
 
     private static void DeleteIfPresent(string path)

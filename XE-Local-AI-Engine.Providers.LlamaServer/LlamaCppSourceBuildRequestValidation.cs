@@ -37,7 +37,11 @@ public static partial class LlamaCppSourceBuildRequestValidation
                 throw new LlamaRuntimeException("The official source uses the engine-pinned revision; select custom source to build a specific commit.");
             }
 
-            return request with { Repository = OfficialRepository, Commit = null };
+            return request with
+            {
+                Repository = OfficialRepository,
+                Commit = null
+            };
         }
 
         if (!request.AcknowledgeCustomSourceRisk)
@@ -45,7 +49,11 @@ public static partial class LlamaCppSourceBuildRequestValidation
             throw new LlamaRuntimeException("Custom source builds require acknowledgement that the repository code will execute with the app user's privileges.");
         }
 
-        return request with { Repository = NormalizeGitHubRepository(request.Repository), Commit = NormalizeCommit(request.Commit) };
+        return request with
+        {
+            Repository = NormalizeGitHubRepository(request.Repository),
+            Commit = NormalizeCommit(request.Commit)
+        };
     }
 
     public static string? NormalizeCommit(string? commit)
@@ -105,10 +113,10 @@ public static partial class LlamaCppSourceBuildRequestValidation
         string? resolvedCommit)
     {
         return source != LlamaCppSourceSelection.Official
-            || string.Equals(repository, OfficialRepository, StringComparison.Ordinal)
-            && revisionMode == LlamaCppSourceRevisionMode.EnginePinned
-            && requestedCommit is null
-            && string.Equals(resolvedCommit, LlamaCppReleasePins.PinnedSourceCommitSha, StringComparison.OrdinalIgnoreCase);
+               || string.Equals(repository, OfficialRepository, StringComparison.Ordinal)
+               && revisionMode == LlamaCppSourceRevisionMode.EnginePinned
+               && requestedCommit is null
+               && string.Equals(resolvedCommit, LlamaCppReleasePins.PinnedSourceCommitSha, StringComparison.OrdinalIgnoreCase);
     }
 
     [GeneratedRegex("^[0-9a-fA-F]{40}$", RegexOptions.CultureInvariant | RegexOptions.ExplicitCapture, 1000)]

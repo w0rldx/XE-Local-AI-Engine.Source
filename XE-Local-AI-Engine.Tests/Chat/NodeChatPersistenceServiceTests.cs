@@ -300,7 +300,8 @@ public sealed class NodeChatPersistenceServiceTests : IDisposable
 
         // The knowledge-base sources that grounded the turn are supplied to terminalize (the plain-chat send path
         // passes the retrieved sources there); they must serialize into metadata_json and reload off the blob.
-        await service.CreateAssistantPlaceholderAsync(new NodeChatCreateAssistantPlaceholderRequest(conversation.ConversationId, assistantMessageId, correlation.RequestId, CreatedAtUtc: 3401, "model-x"))
+        await service.CreateAssistantPlaceholderAsync(new NodeChatCreateAssistantPlaceholderRequest(conversation.ConversationId, assistantMessageId, correlation.RequestId, CreatedAtUtc: 3401,
+                         "model-x"))
                      .ConfigureAwait(false);
         await service.MarkAssistantStreamingAsync(correlation, updatedAtUtc: 3402).ConfigureAwait(false);
         await service.TerminalizeAssistantMessageAsync(new NodeChatTerminalizeMessageRequest(correlation,

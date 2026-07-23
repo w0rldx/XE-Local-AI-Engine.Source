@@ -14,8 +14,8 @@ public sealed class GetLlamaCppSourceBuildPrerequisitesEndpoint(ILlamaCppSourceB
         Get(LocalApiRoutes.ModelFit.SourceBuildPrerequisites);
         Policies(NodeAuthorizationPolicies.Operator);
         Description(builder => builder
-            .Produces<LlamaCppSourceBuildPrerequisitesResponse>(StatusCodes.Status200OK)
-            .ProducesProblemFE(StatusCodes.Status400BadRequest));
+                               .Produces<LlamaCppSourceBuildPrerequisitesResponse>(StatusCodes.Status200OK)
+                               .ProducesProblemFE(StatusCodes.Status400BadRequest));
     }
 
     public override async Task HandleAsync(GetLlamaCppSourceBuildPrerequisitesRequest request, CancellationToken ct)

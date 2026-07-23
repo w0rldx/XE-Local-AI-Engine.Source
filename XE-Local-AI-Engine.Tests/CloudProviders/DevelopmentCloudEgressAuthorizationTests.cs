@@ -332,9 +332,18 @@ public sealed class DevelopmentCloudEgressAuthorizationTests
             _bundles = new Dictionary<string, BundleState>(StringComparer.Ordinal)
             {
                 [primaryBundle.Id] = primaryBundle,
-                ["stale-bundle"] = BundleState.Valid("stale-bundle") with { ExpiresAt = now.AddSeconds(-1) },
-                ["oversized-bundle"] = BundleState.Valid("oversized-bundle") with { SizeBytes = MaximumBundleBytes + 1 },
-                ["unsafe-bundle"] = BundleState.Valid("unsafe-bundle") with { SecretScanPassed = false }
+                ["stale-bundle"] = BundleState.Valid("stale-bundle") with
+                {
+                    ExpiresAt = now.AddSeconds(-1)
+                },
+                ["oversized-bundle"] = BundleState.Valid("oversized-bundle") with
+                {
+                    SizeBytes = MaximumBundleBytes + 1
+                },
+                ["unsafe-bundle"] = BundleState.Valid("unsafe-bundle") with
+                {
+                    SecretScanPassed = false
+                }
             };
         }
 
@@ -388,7 +397,8 @@ public sealed class DevelopmentCloudEgressAuthorizationTests
         }
     }
 
-    private sealed record AuditRecord(string ProjectId,
+    private sealed record AuditRecord(
+        string ProjectId,
         string TaskId,
         string AttemptId,
         string ProviderName,

@@ -1,5 +1,6 @@
 namespace XE_Local_AI_Engine.Tests.Chat;
 
+using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Options;
 using NSubstitute;
@@ -478,8 +479,10 @@ public sealed class NodeChatStreamServiceTests
         var dispatcher = new RecordingWorkerEventDispatcher();
         var runner = new ReasoningCapturingInvocationRunner(dispatcher);
         var offerProvider = CreateOfferProvider(CreateLocalToolDto("GetCurrentTime", "{\"type\":\"object\"}", ToolCategory.ReadLocal));
-        var nodePolicy = new NodeToolApprovalPolicy(
-            new Dictionary<ToolCategory, bool> { [ToolCategory.ReadLocal] = true },
+        var nodePolicy = new NodeToolApprovalPolicy(new Dictionary<ToolCategory, bool>
+            {
+                [ToolCategory.ReadLocal] = true
+            },
             new Dictionary<string, bool>(StringComparer.Ordinal));
         var service = new NodeChatStreamService(persistence,
             new ChatInvocationStatePump(ChatPumpTestFactory.Create(persistence), TimeProvider.System),
@@ -2776,9 +2779,9 @@ public sealed class NodeChatStreamServiceTests
     // A scope factory for the plain-chat knowledge-base retrieval path. When no search service is supplied the factory
     // only satisfies the ctor (tests that leave UseKnowledgeBase off never resolve a scope). When one is supplied the
     // factory hands out a scope whose provider resolves it, so the KB grounding path can be exercised end to end.
-    private static Microsoft.Extensions.DependencyInjection.IServiceScopeFactory CreateScopeFactory(IKnowledgeSearchService? searchService = null)
+    private static IServiceScopeFactory CreateScopeFactory(IKnowledgeSearchService? searchService = null)
     {
-        var factory = Substitute.For<Microsoft.Extensions.DependencyInjection.IServiceScopeFactory>();
+        var factory = Substitute.For<IServiceScopeFactory>();
         if (searchService is null)
         {
             return factory;
@@ -2786,14 +2789,14 @@ public sealed class NodeChatStreamServiceTests
 
         var provider = Substitute.For<IServiceProvider>();
         provider.GetService(typeof(IKnowledgeSearchService)).Returns(searchService);
-        var scope = Substitute.For<Microsoft.Extensions.DependencyInjection.IServiceScope>();
+        var scope = Substitute.For<IServiceScope>();
         scope.ServiceProvider.Returns(provider);
         factory.CreateScope().Returns(scope);
         return factory;
     }
 
     // A knowledge search service returning a fixed hit list, wired into a scope factory for the KB grounding tests.
-    private static Microsoft.Extensions.DependencyInjection.IServiceScopeFactory CreateKnowledgeScopeFactory(params KnowledgeSearchHit[] hits)
+    private static IServiceScopeFactory CreateKnowledgeScopeFactory(params KnowledgeSearchHit[] hits)
     {
         var searchService = Substitute.For<IKnowledgeSearchService>();
         searchService.SearchAsync(Arg.Any<KnowledgeSearchRequest>(), Arg.Any<CancellationToken>())
@@ -2812,7 +2815,7 @@ public sealed class NodeChatStreamServiceTests
     private static NodeChatStreamService CreateServiceWithScopeFactory(INodeChatPersistenceService persistence,
         ContextCapturingInvocationRunner runner,
         RecordingWorkerEventDispatcher dispatcher,
-        Microsoft.Extensions.DependencyInjection.IServiceScopeFactory scopeFactory,
+        IServiceScopeFactory scopeFactory,
         bool allowCloudModelAccess = false)
     {
         return new NodeChatStreamService(persistence,

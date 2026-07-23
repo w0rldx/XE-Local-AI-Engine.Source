@@ -1,6 +1,5 @@
 namespace XE_Local_AI_Engine.Tests.NodeSettings;
 
-using System.Collections.Generic;
 using System.Net;
 using System.Net.Http.Json;
 using System.Text.Json;
@@ -418,7 +417,11 @@ public sealed class NodeSettingsEndpointTests
             OllamaEndpoint = "http://127.0.0.1:11434",
             UsageRates = new Dictionary<string, ModelRate>
             {
-                ["gpt-5"] = new() { InputPer1M = 1.25, OutputPer1M = 10 }
+                ["gpt-5"] = new()
+                {
+                    InputPer1M = 1.25,
+                    OutputPer1M = 10
+                }
             }
         };
 
@@ -433,7 +436,10 @@ public sealed class NodeSettingsEndpointTests
         AssertEx.Equal(expected: 1.25d, response.UsageRates!["gpt-5"].InputPer1M);
 
         // Omitting UsageRates on a later save keeps the current override AND leaves the other stored fields intact.
-        var merged = new SaveNodeSettingsRequest { OllamaEndpoint = "http://127.0.0.1:11500" }.ToStoredSettings(stored);
+        var merged = new SaveNodeSettingsRequest
+        {
+            OllamaEndpoint = "http://127.0.0.1:11500"
+        }.ToStoredSettings(stored);
         AssertEx.NotNull(merged.UsageRates);
         AssertEx.Equal(expected: 1.25d, merged.UsageRates!.Models!["gpt-5"].InputPer1M);
         AssertEx.Equal("http://127.0.0.1:11500", merged.OllamaEndpoint);
@@ -448,19 +454,40 @@ public sealed class NodeSettingsEndpointTests
 
         var negative = validator.Validate(new SaveNodeSettingsRequest
         {
-            UsageRates = new Dictionary<string, ModelRate> { ["gpt-5"] = new() { InputPer1M = -1, OutputPer1M = 10 } }
+            UsageRates = new Dictionary<string, ModelRate>
+            {
+                ["gpt-5"] = new()
+                {
+                    InputPer1M = -1,
+                    OutputPer1M = 10
+                }
+            }
         });
         AssertEx.False(negative.IsValid);
 
         var blankKey = validator.Validate(new SaveNodeSettingsRequest
         {
-            UsageRates = new Dictionary<string, ModelRate> { ["   "] = new() { InputPer1M = 1, OutputPer1M = 1 } }
+            UsageRates = new Dictionary<string, ModelRate>
+            {
+                ["   "] = new()
+                {
+                    InputPer1M = 1,
+                    OutputPer1M = 1
+                }
+            }
         });
         AssertEx.False(blankKey.IsValid);
 
         var valid = validator.Validate(new SaveNodeSettingsRequest
         {
-            UsageRates = new Dictionary<string, ModelRate> { ["gpt-5"] = new() { InputPer1M = 1.25, OutputPer1M = 10 } }
+            UsageRates = new Dictionary<string, ModelRate>
+            {
+                ["gpt-5"] = new()
+                {
+                    InputPer1M = 1.25,
+                    OutputPer1M = 10
+                }
+            }
         });
         AssertEx.True(valid.IsValid);
     }

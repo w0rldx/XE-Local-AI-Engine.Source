@@ -47,8 +47,8 @@ public sealed class ConversationFootprintPurgeCoverageTests : IDisposable
 
             var storeObject = StoreObjectIdentifier.Table(tableName, entityType.GetSchema());
             var isConversationOrMessageKeyed = entityType.GetProperties()
-                                                          .Any(property =>
-                                                              property.GetColumnName(storeObject) is "conversation_id" or "message_id");
+                                                         .Any(property =>
+                                                             property.GetColumnName(storeObject) is "conversation_id" or "message_id");
 
             if (isConversationOrMessageKeyed)
             {

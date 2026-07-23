@@ -1,27 +1,16 @@
 namespace XE_Local_AI_Engine.Client.Persistence.Tests.Development;
 
-using Microsoft.Data.Sqlite;
-using Microsoft.EntityFrameworkCore;
-using Microsoft.EntityFrameworkCore.Infrastructure;
-using Microsoft.EntityFrameworkCore.Migrations;
-using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
-using Microsoft.Extensions.Hosting;
-using Microsoft.Extensions.Options;
-using XE_Local_AI_Engine.Client.DependencyInjection.Modules;
-using XE_Local_AI_Engine.Client.Persistence;
 using XE_Local_AI_Engine.Client.Persistence.Entities;
-using XE_Local_AI_Engine.Client.Persistence.Implementation;
 using XE_Local_AI_Engine.Client.Persistence.Stores;
 using XE_Local_AI_Engine.Client.Persistence.Tests.Testing;
-using XE_Local_AI_Engine.Client.Services.Development;
-using XE_Local_AI_Engine.Providers.Abstractions;
 
 public sealed class DevelopmentStartupReconcilerTests : IDisposable
 {
     private readonly DevelopmentTestFixture _fixture = new();
 
-    public void Dispose() => _fixture.Dispose();
+    public void Dispose() =>
+        _fixture.Dispose();
 
     [Test]
     public async Task ReconcileRunningAttempts_IsExactlyOnceAndLeavesOrderedInterruptionEvent()
@@ -34,12 +23,12 @@ public sealed class DevelopmentStartupReconcilerTests : IDisposable
         _ = await store.TransitionTaskAsync(new DevelopmentTransitionTaskCommand(seed.TaskId, Guid.NewGuid(), DevelopmentTaskStatus.Ready, 1)).ConfigureAwait(false);
         var attemptId = Guid.NewGuid();
         _ = await store.StartAttemptAsync(new DevelopmentStartAttemptCommand(seed.TaskId,
-                                                attemptId,
-                                                Guid.NewGuid(),
-                                                DevelopmentAttemptRole.Coder,
-                                                "local-model",
-                                                "local",
-                                                ExpectedTaskVersion: 2))
+                           attemptId,
+                           Guid.NewGuid(),
+                           DevelopmentAttemptRole.Coder,
+                           "local-model",
+                           "local",
+                           ExpectedTaskVersion: 2))
                        .ConfigureAwait(false);
 
         AssertEx.Equal(expected: 1, await store.ReconcileRunningAttemptsAsync("restart").ConfigureAwait(false));
@@ -61,12 +50,12 @@ public sealed class DevelopmentStartupReconcilerTests : IDisposable
             _ = await seedStore.CreateProjectAsync(seed).ConfigureAwait(false);
             _ = await seedStore.TransitionTaskAsync(new DevelopmentTransitionTaskCommand(seed.TaskId, Guid.NewGuid(), DevelopmentTaskStatus.Ready, 1)).ConfigureAwait(false);
             _ = await seedStore.StartAttemptAsync(new DevelopmentStartAttemptCommand(seed.TaskId,
-                                                    Guid.NewGuid(),
-                                                    Guid.NewGuid(),
-                                                    DevelopmentAttemptRole.Coder,
-                                                    "local-model",
-                                                    "local",
-                                                    ExpectedTaskVersion: 2))
+                                   Guid.NewGuid(),
+                                   Guid.NewGuid(),
+                                   DevelopmentAttemptRole.Coder,
+                                   "local-model",
+                                   "local",
+                                   ExpectedTaskVersion: 2))
                                .ConfigureAwait(false);
 
             await using var firstScope = provider.CreateAsyncScope();

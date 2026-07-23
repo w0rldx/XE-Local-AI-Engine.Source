@@ -103,8 +103,11 @@ internal static class DevelopmentWorkspaceSecurity
 
 internal readonly record struct DevelopmentConfinedPath(bool IsAccepted, string RelativePath, string SandboxPath, string? RejectionReason)
 {
-    public static DevelopmentConfinedPath Accepted(string relativePath, string sandboxPath) => new(true, relativePath, sandboxPath, null);
-    public static DevelopmentConfinedPath Rejected(string reason) => new(false, string.Empty, string.Empty, reason);
+    public static DevelopmentConfinedPath Accepted(string relativePath, string sandboxPath) =>
+        new(true, relativePath, sandboxPath, null);
+
+    public static DevelopmentConfinedPath Rejected(string reason) =>
+        new(false, string.Empty, string.Empty, reason);
 }
 
 public sealed class DevelopmentWorkspaceSecurityException : InvalidOperationException

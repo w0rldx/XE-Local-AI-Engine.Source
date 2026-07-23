@@ -31,6 +31,7 @@ internal sealed class DevelopmentPatchEvidenceService : IDevelopmentPatchEvidenc
     private static readonly JsonSerializerOptions JsonOptions = new(JsonSerializerDefaults.Web);
 
     private readonly DevelopmentOptions _options;
+
     public DevelopmentPatchEvidenceService(ISandboxRuntimeProvider sandbox, IOptions<DevelopmentOptions> options)
     {
         ArgumentNullException.ThrowIfNull(sandbox);
@@ -144,7 +145,10 @@ internal sealed class DevelopmentPatchEvidenceService : IDevelopmentPatchEvidenc
 
         using var timeout = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
         timeout.CancelAfter(TimeSpan.FromSeconds(_options.MaxAttemptDurationSeconds));
-        using var process = new Process { StartInfo = startInfo };
+        using var process = new Process
+        {
+            StartInfo = startInfo
+        };
         timeout.Token.ThrowIfCancellationRequested();
         try
         {
@@ -211,20 +215,22 @@ internal sealed class DevelopmentPatchEvidenceService : IDevelopmentPatchEvidenc
         return result.OrderBy(static item => item.Path, StringComparer.Ordinal).ToArray();
     }
 
-    private static string ChangeType(string status) => status.Length == 0
-        ? "unknown"
-        : status[0] switch
-        {
-            'A' => "added",
-            'M' => "modified",
-            'D' => "deleted",
-            'R' => "renamed",
-            'C' => "copied",
-            'T' => "typechanged",
-            _ => "unknown"
-        };
+    private static string ChangeType(string status) =>
+        status.Length == 0
+            ? "unknown"
+            : status[0] switch
+            {
+                'A' => "added",
+                'M' => "modified",
+                'D' => "deleted",
+                'R' => "renamed",
+                'C' => "copied",
+                'T' => "typechanged",
+                _ => "unknown"
+            };
 
-    private static string Hash(ReadOnlySpan<byte> content) => Convert.ToHexString(SHA256.HashData(content));
+    private static string Hash(ReadOnlySpan<byte> content) =>
+        Convert.ToHexString(SHA256.HashData(content));
 
     private static string[] SplitNullTerminated(byte[] content)
     {
@@ -305,5 +311,6 @@ internal sealed class DevelopmentPatchEvidenceService : IDevelopmentPatchEvidenc
     }
 
     private sealed record ExactGitResult(byte[] StandardOutput);
+
     private sealed record CappedBytes(byte[] Bytes, bool Truncated);
 }

@@ -11,5 +11,6 @@ public sealed class DevelopmentStartupReconciler(IServiceScopeFactory scopeFacto
         _ = await coordinator.ReconcileStartupAsync(cancellationToken).ConfigureAwait(false);
     }
 
-    public Task StopAsync(CancellationToken cancellationToken) => Task.CompletedTask;
+    public Task StopAsync(CancellationToken cancellationToken) =>
+        Task.CompletedTask;
 }

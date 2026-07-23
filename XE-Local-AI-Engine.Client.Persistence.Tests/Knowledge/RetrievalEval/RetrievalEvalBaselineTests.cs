@@ -54,7 +54,10 @@ public sealed class RetrievalEvalBaselineTests : IDisposable
     {
         using var fixture = await BuildFixtureAsync("vector-arm.sqlite").ConfigureAwait(false);
         var vehicleQuery = RetrievalEvalFixture.Queries.Single(query => query.IsVectorOnly);
-        var singleQuery = new[] { vehicleQuery };
+        var singleQuery = new[]
+        {
+            vehicleQuery
+        };
 
         var hybrid = await RetrievalEvalHarness.EvaluateAsync(fixture.CreateHybridSearchService(), singleQuery, fixture.DocumentIdsByKey, K, CancellationToken.None).ConfigureAwait(false);
         var lexicalOnly = await RetrievalEvalHarness.EvaluateAsync(fixture.CreateLexicalOnlySearchService(), singleQuery, fixture.DocumentIdsByKey, K, CancellationToken.None).ConfigureAwait(false);

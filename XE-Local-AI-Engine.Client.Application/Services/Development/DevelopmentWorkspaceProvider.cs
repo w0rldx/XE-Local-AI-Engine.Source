@@ -141,7 +141,10 @@ internal sealed class DevelopmentWorkspaceProvider : IDevelopmentWorkspaceProvid
             AttachKey = attachKey,
             RuntimeProfile = RuntimeProfile,
             NetworkPolicy = SandboxNetworkPolicy.Unrestricted,
-            TrustedHostWorkspace = new SandboxTrustedHostWorkspace { RootPath = worktreePath }
+            TrustedHostWorkspace = new SandboxTrustedHostWorkspace
+            {
+                RootPath = worktreePath
+            }
         }, cancellationToken).ConfigureAwait(false);
 
         return new DevelopmentWorkspaceSession(snapshot.ProjectId,
@@ -247,11 +250,13 @@ internal sealed class DevelopmentWorkspaceProvider : IDevelopmentWorkspaceProvid
         }
     }
 
-    private static bool PathEquals(string first, string second) => string.Equals(Path.TrimEndingDirectorySeparator(Path.GetFullPath(first)),
-        Path.TrimEndingDirectorySeparator(Path.GetFullPath(second)),
-        OperatingSystem.IsWindows() ? StringComparison.OrdinalIgnoreCase : StringComparison.Ordinal);
+    private static bool PathEquals(string first, string second) =>
+        string.Equals(Path.TrimEndingDirectorySeparator(Path.GetFullPath(first)),
+            Path.TrimEndingDirectorySeparator(Path.GetFullPath(second)),
+            OperatingSystem.IsWindows() ? StringComparison.OrdinalIgnoreCase : StringComparison.Ordinal);
 
-    private sealed record WorkspaceManifest(int Version,
+    private sealed record WorkspaceManifest(
+        int Version,
         string RepositoryIdentityHash,
         Guid? SelectedFolderId,
         string BaseCommit);

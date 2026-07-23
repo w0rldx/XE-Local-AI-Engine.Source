@@ -57,6 +57,7 @@ internal static partial class DevelopmentArtifactSanitizer
         {
             throw new DevelopmentWorkspaceSecurityException("Development artifact content contains credential-like material and cannot be persisted.");
         }
+
         if (BarePasswordLikeValueRegex().IsMatch(text))
         {
             throw new DevelopmentWorkspaceSecurityException("Development artifact content contains a bare password-like value and cannot be persisted.");
@@ -64,8 +65,8 @@ internal static partial class DevelopmentArtifactSanitizer
 
         var sanitized = text;
         foreach (var root in protectedRoots.Where(static root => !string.IsNullOrWhiteSpace(root) && root.Length > 1)
-                                                .Distinct(StringComparer.OrdinalIgnoreCase)
-                                                .OrderByDescending(static root => root.Length))
+                                           .Distinct(StringComparer.OrdinalIgnoreCase)
+                                           .OrderByDescending(static root => root.Length))
         {
             sanitized = sanitized.Replace(root.TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar),
                 RedactedPath,

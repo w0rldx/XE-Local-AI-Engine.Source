@@ -1,5 +1,7 @@
 namespace XE_Local_AI_Engine.Client.Services.Sandbox;
 
+using System.Text;
+
 /// <summary>
 ///     Provider-neutral runtime over which AgentHome creates a node-scoped sandbox, copies selected folders in,
 ///     executes commands, reads results, copies artifacts out, and tears the sandbox down. The
@@ -37,7 +39,7 @@ public interface ISandboxRuntimeProvider
         CancellationToken cancellationToken = default)
     {
         var content = await ReadFileAsync(handle, sandboxPath, cancellationToken).ConfigureAwait(false);
-        if (System.Text.Encoding.UTF8.GetByteCount(content) > maxBytes)
+        if (Encoding.UTF8.GetByteCount(content) > maxBytes)
         {
             throw new InvalidDataException("The sandbox file exceeds the requested read bound.");
         }

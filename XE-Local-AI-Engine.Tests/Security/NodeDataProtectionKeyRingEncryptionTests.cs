@@ -38,7 +38,10 @@ public sealed class NodeDataProtectionKeyRingEncryptionTests
                             })
                             .Build();
 
-        var options = Options.Create(new WorkerNodeOptions { NodeName = nodeName });
+        var options = Options.Create(new WorkerNodeOptions
+        {
+            NodeName = nodeName
+        });
         using var first = new NodeDataProtectionKeyProvider(options, new NodeOperatorSecretProvider(configuration));
         using var second = new NodeDataProtectionKeyProvider(options, new NodeOperatorSecretProvider(configuration));
         using var sqlite = new NodeSqliteKeyHolder(options, new NodeOperatorSecretProvider(configuration));
@@ -55,8 +58,10 @@ public sealed class NodeDataProtectionKeyRingEncryptionTests
     {
         await Task.CompletedTask;
 
-        var provider = new NodeDataProtectionKeyProvider(
-            Options.Create(new WorkerNodeOptions { NodeName = "worker-node-alpha" }),
+        var provider = new NodeDataProtectionKeyProvider(Options.Create(new WorkerNodeOptions
+            {
+                NodeName = "worker-node-alpha"
+            }),
             new NodeOperatorSecretProvider(BuildOperatorSecretConfiguration()));
 
         _ = provider.Key.Span[0];
@@ -277,8 +282,7 @@ public sealed class NodeDataProtectionKeyRingEncryptionTests
             {
                 builder.Services.Remove(defaultKeyResolver);
                 builder.Services.AddSingleton<IDefaultKeyResolver>(serviceProvider =>
-                    new NodeDataProtectionKeyRingFailClosedKeyResolver(
-                        (IDefaultKeyResolver)ActivatorUtilities.CreateInstance(serviceProvider, innerResolverType)));
+                    new NodeDataProtectionKeyRingFailClosedKeyResolver((IDefaultKeyResolver)ActivatorUtilities.CreateInstance(serviceProvider, innerResolverType)));
             }
         }
 

@@ -34,7 +34,10 @@ public sealed class DevelopmentFeatureAvailabilityTests
     [Test]
     public async Task Negotiate_WhenDevelopmentModeIsDisabled_ReturnsNotFound()
     {
-        await using var factory = new TestingWebAppFactory { EnableDevelopmentMode = false };
+        await using var factory = new TestingWebAppFactory
+        {
+            EnableDevelopmentMode = false
+        };
         using var client = factory.CreateClient();
         using var request = new HttpRequestMessage(HttpMethod.Post, LocalApiRoutes.Development.Hub + "/negotiate?negotiateVersion=1")
         {
@@ -53,7 +56,10 @@ public sealed class DevelopmentFeatureAvailabilityTests
     [Arguments(false)]
     public async Task Capability_ReturnsEffectiveRuntimeState(bool enabled)
     {
-        await using var factory = new TestingWebAppFactory { EnableDevelopmentMode = enabled };
+        await using var factory = new TestingWebAppFactory
+        {
+            EnableDevelopmentMode = enabled
+        };
         using var client = factory.CreateClient();
         using var request = new HttpRequestMessage(HttpMethod.Get, "/api/local/v1/development/capability");
         factory.AddNodeBearerToken(request);
@@ -69,7 +75,10 @@ public sealed class DevelopmentFeatureAvailabilityTests
     [Test]
     public async Task ListProjects_WhenExplicitlyDisabled_ReturnsNotFound()
     {
-        await using var factory = new TestingWebAppFactory { EnableDevelopmentMode = false };
+        await using var factory = new TestingWebAppFactory
+        {
+            EnableDevelopmentMode = false
+        };
         using var client = factory.CreateClient();
         using var request = new HttpRequestMessage(HttpMethod.Get, "/api/local/v1/development/projects");
         factory.AddNodeBearerToken(request);

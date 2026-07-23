@@ -114,8 +114,10 @@ public sealed class DevelopmentProgressDetectorTests
     {
         private DateTimeOffset _current = current;
 
-        public override DateTimeOffset GetUtcNow() => _current;
+        public override DateTimeOffset GetUtcNow() =>
+            _current;
 
-        public void Advance(TimeSpan duration) => _current += duration;
+        public void Advance(TimeSpan duration) =>
+            _current += duration;
     }
 }

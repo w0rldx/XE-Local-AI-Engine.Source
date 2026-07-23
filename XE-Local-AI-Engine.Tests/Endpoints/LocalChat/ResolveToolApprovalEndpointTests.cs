@@ -5,7 +5,6 @@ using System.Net.Http.Json;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 using NSubstitute;
-using XE_Local_AI_Engine.AI.Contracts.Events;
 using XE_Local_AI_Engine.Client.Services.Events;
 using XE_Local_AI_Engine.Tests.Testing;
 
@@ -21,13 +20,17 @@ public sealed class ResolveToolApprovalEndpointTests
         await using var factory = CreateFactory(dispatcher);
         using var client = factory.CreateClient();
 
-        using var request = CreateRequest(factory, new { requestId = "approval-xyz", approved = true });
+        using var request = CreateRequest(factory, new
+        {
+            requestId = "approval-xyz",
+            approved = true
+        });
         using var response = await client.SendAsync(request).ConfigureAwait(false);
 
         AssertEx.Equal(HttpStatusCode.OK, response.StatusCode);
         await dispatcher.Received(1)
-            .DispatchApprovalResolvedAsync(Arg.Is<ApprovalResolvedEvent>(evt => evt.RequestId == "approval-xyz" && evt.Approved))
-            .ConfigureAwait(false);
+                        .DispatchApprovalResolvedAsync(Arg.Is<ApprovalResolvedEvent>(evt => evt.RequestId == "approval-xyz" && evt.Approved))
+                        .ConfigureAwait(false);
     }
 
     [Test]
@@ -38,13 +41,17 @@ public sealed class ResolveToolApprovalEndpointTests
         await using var factory = CreateFactory(dispatcher);
         using var client = factory.CreateClient();
 
-        using var request = CreateRequest(factory, new { requestId = "approval-den", approved = false });
+        using var request = CreateRequest(factory, new
+        {
+            requestId = "approval-den",
+            approved = false
+        });
         using var response = await client.SendAsync(request).ConfigureAwait(false);
 
         AssertEx.Equal(HttpStatusCode.OK, response.StatusCode);
         await dispatcher.Received(1)
-            .DispatchApprovalResolvedAsync(Arg.Is<ApprovalResolvedEvent>(evt => evt.RequestId == "approval-den" && !evt.Approved))
-            .ConfigureAwait(false);
+                        .DispatchApprovalResolvedAsync(Arg.Is<ApprovalResolvedEvent>(evt => evt.RequestId == "approval-den" && !evt.Approved))
+                        .ConfigureAwait(false);
     }
 
     [Test]
@@ -54,7 +61,11 @@ public sealed class ResolveToolApprovalEndpointTests
         await using var factory = CreateFactory(dispatcher);
         using var client = factory.CreateClient();
 
-        using var request = CreateRequest(factory, new { requestId = "", approved = true });
+        using var request = CreateRequest(factory, new
+        {
+            requestId = "",
+            approved = true
+        });
         using var response = await client.SendAsync(request).ConfigureAwait(false);
 
         AssertEx.Equal(HttpStatusCode.BadRequest, response.StatusCode);
@@ -70,7 +81,11 @@ public sealed class ResolveToolApprovalEndpointTests
 
         using var request = new HttpRequestMessage(HttpMethod.Post, Route)
         {
-            Content = JsonContent.Create(new { requestId = "approval-xyz", approved = true })
+            Content = JsonContent.Create(new
+            {
+                requestId = "approval-xyz",
+                approved = true
+            })
         };
         request.Headers.Add("Origin", "http://localhost");
         using var response = await client.SendAsync(request).ConfigureAwait(false);

@@ -134,6 +134,7 @@ internal sealed class DevelopmentAttemptLiveProgress
         {
             _changedFiles.Add(relativePath);
         }
+
         _patchByteCount = Math.Max(_patchByteCount, byteCount);
         _ = _detector.MarkMeaningfulProgress(DevelopmentMeaningfulProgressKind.File, relativePath);
         Publish(DevelopmentAttemptLiveUpdateKind.Progress, "Workspace files changed.");
@@ -146,6 +147,7 @@ internal sealed class DevelopmentAttemptLiveProgress
         {
             _changedFiles.Add(path);
         }
+
         _patchByteCount = Math.Max(0, patchByteCount);
         _ = _detector.MarkMeaningfulProgress(DevelopmentMeaningfulProgressKind.Artifact, subjectHash);
         PublishWarning(_detector.ObserveSubjectHash(subjectHash));
@@ -161,6 +163,7 @@ internal sealed class DevelopmentAttemptLiveProgress
         {
             PublishWarning(_detector.ObserveReviewFinding(reviewRound, finding.Category, finding.Summary));
         }
+
         _ = _detector.MarkMeaningfulProgress(DevelopmentMeaningfulProgressKind.ReviewFinding, subjectHash);
         Publish(DevelopmentAttemptLiveUpdateKind.Progress,
             "Review evidence was produced.",
@@ -269,7 +272,8 @@ internal sealed class DevelopmentAttemptLiveProgress
         });
     }
 
-    private long ElapsedSince(long startedAtUtc) => startedAtUtc == 0 ? 0 : Math.Max(0, Now - startedAtUtc);
+    private long ElapsedSince(long startedAtUtc) =>
+        startedAtUtc == 0 ? 0 : Math.Max(0, Now - startedAtUtc);
 
     private long Now => _timeProvider.GetUtcNow().ToUnixTimeMilliseconds();
 }

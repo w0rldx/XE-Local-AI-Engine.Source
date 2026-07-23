@@ -310,12 +310,15 @@ internal static class ModelFitMapper
         {
             Backend = (LlamaCppSourceBackendDto)(int)backend,
             CanBuild = report.CanBuild,
-            Items = [.. report.Items.Select(static item => new LlamaCppSourceBuildPrerequisiteItemResponse
-            {
-                Key = item.Key,
-                Satisfied = item.Satisfied,
-                Detail = item.Detail
-            })]
+            Items =
+            [
+                .. report.Items.Select(static item => new LlamaCppSourceBuildPrerequisiteItemResponse
+                {
+                    Key = item.Key,
+                    Satisfied = item.Satisfied,
+                    Detail = item.Detail
+                })
+            ]
         };
     }
 

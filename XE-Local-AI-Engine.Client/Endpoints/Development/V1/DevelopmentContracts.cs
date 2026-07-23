@@ -152,23 +152,31 @@ public sealed record DevelopmentProjectDetailResponse(
     IReadOnlyList<DevelopmentEventResponse> Events);
 
 public sealed record ListDevelopmentProjectsResponse(IReadOnlyList<DevelopmentProjectResponse> Items);
+
 public sealed record ListDevelopmentRepositoriesResponse(IReadOnlyList<DevelopmentRepositoryResponse> Items);
+
 public sealed record ListDevelopmentEventsResponse(IReadOnlyList<DevelopmentEventResponse> Items);
+
 public sealed record ListDevelopmentArtifactsResponse(IReadOnlyList<DevelopmentArtifactResponse> Items);
+
 public sealed record DevelopmentArtifactContentResponse(DevelopmentArtifactResponse Artifact, string Content);
+
 public sealed record DevelopmentNextActionResponse(string Action, Guid ProjectId, Guid TaskId, Guid? AttemptId, string TaskStatus, string? Role);
-public sealed record DevelopmentPatchPreviewResponse(string SubjectHash,
+
+public sealed record DevelopmentPatchPreviewResponse(
+    string SubjectHash,
     string PatchHash,
     string ManifestHash,
     string ExpectedResultHash,
     string Patch,
     IReadOnlyList<DevelopmentPatchPreviewFile> ChangedFiles);
+
 public sealed record DevelopmentApplyResponse(Guid OperationId, string Phase, string Outcome, string Status, long Version, long Sequence);
 
 internal static class DevelopmentContractMapper
 {
-    public static DevelopmentProjectResponse ToResponse(this DevelopmentProjectSnapshot value)
-        => new(value.Id,
+    public static DevelopmentProjectResponse ToResponse(this DevelopmentProjectSnapshot value) =>
+        new(value.Id,
             value.Objective,
             value.SelectedFolderId,
             value.SelectedFolderId is null,
@@ -183,11 +191,11 @@ internal static class DevelopmentContractMapper
             value.UpdatedAtUtc,
             value.Version);
 
-    public static DevelopmentRepositoryResponse ToResponse(this DevelopmentRepositoryReference value)
-        => new(value.Id, value.Alias, value.Availability);
+    public static DevelopmentRepositoryResponse ToResponse(this DevelopmentRepositoryReference value) =>
+        new(value.Id, value.Alias, value.Availability);
 
-    public static DevelopmentTaskResponse ToResponse(this DevelopmentTaskSnapshot value)
-        => new(value.Id,
+    public static DevelopmentTaskResponse ToResponse(this DevelopmentTaskSnapshot value) =>
+        new(value.Id,
             value.ProjectId,
             value.Title,
             value.Requirements,
@@ -199,8 +207,8 @@ internal static class DevelopmentContractMapper
             value.ApprovedSubjectHash,
             value.Version);
 
-    public static DevelopmentAttemptResponse ToResponse(this DevelopmentAttemptSnapshot value)
-        => new(value.Id,
+    public static DevelopmentAttemptResponse ToResponse(this DevelopmentAttemptSnapshot value) =>
+        new(value.Id,
             value.TaskId,
             value.PredecessorAttemptId,
             value.Role.ToString(),
@@ -214,8 +222,8 @@ internal static class DevelopmentContractMapper
             value.OutputTokens,
             value.Version);
 
-    public static DevelopmentArtifactResponse ToResponse(this DevelopmentArtifactSnapshot value)
-        => new(value.Id,
+    public static DevelopmentArtifactResponse ToResponse(this DevelopmentArtifactSnapshot value) =>
+        new(value.Id,
             value.ProjectId,
             value.TaskId,
             value.AttemptId,
@@ -229,8 +237,8 @@ internal static class DevelopmentContractMapper
             value.CommandProfileVersion,
             value.IsValid);
 
-    public static DevelopmentEventResponse ToResponse(this DevelopmentEventSnapshot value)
-        => new(value.Id,
+    public static DevelopmentEventResponse ToResponse(this DevelopmentEventSnapshot value) =>
+        new(value.Id,
             value.ProjectId,
             value.TaskId,
             value.AttemptId,
@@ -241,13 +249,13 @@ internal static class DevelopmentContractMapper
             value.OperationPhase,
             value.Outcome);
 
-    public static DevelopmentTaskDetailResponse ToResponse(this DevelopmentTaskAggregate value)
-        => new(value.Task.ToResponse(),
+    public static DevelopmentTaskDetailResponse ToResponse(this DevelopmentTaskAggregate value) =>
+        new(value.Task.ToResponse(),
             value.Attempts.Select(ToResponse).ToArray(),
             value.Artifacts.Select(ToResponse).ToArray());
 
-    public static DevelopmentProjectDetailResponse ToResponse(this DevelopmentProjectAggregate value)
-        => new(value.Project.ToResponse(),
+    public static DevelopmentProjectDetailResponse ToResponse(this DevelopmentProjectAggregate value) =>
+        new(value.Project.ToResponse(),
             value.Tasks.Select(ToResponse).ToArray(),
             value.Events.Select(ToResponse).ToArray());
 }

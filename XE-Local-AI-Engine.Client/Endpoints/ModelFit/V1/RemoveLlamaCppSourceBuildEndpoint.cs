@@ -22,8 +22,8 @@ public sealed class RemoveLlamaCppSourceBuildEndpoint(
         Post(LocalApiRoutes.ModelFit.SourceBuildRemove);
         Policies(NodeAuthorizationPolicies.Operator);
         Description(builder => builder
-            .Produces<LlamaCppRuntimeStatusResponse>(StatusCodes.Status200OK)
-            .Produces<LlamaCppSourceBuildBlockedResponse>(StatusCodes.Status409Conflict));
+                               .Produces<LlamaCppRuntimeStatusResponse>(StatusCodes.Status200OK)
+                               .Produces<LlamaCppSourceBuildBlockedResponse>(StatusCodes.Status409Conflict));
     }
 
     public override async Task HandleAsync(CancellationToken ct)
@@ -49,8 +49,7 @@ public sealed class RemoveLlamaCppSourceBuildEndpoint(
         await Send.OkAsync(updateState.Current.ToRuntimeStatusResponse(installed, recommendedTag, runningProcessCount), ct).ConfigureAwait(false);
     }
 
-    internal static async Task<(bool Removed, int RunningProcessCount, bool BuildActive)> TryRemoveAsync(
-        ILlamaCppBinaryManager binaryManager,
+    internal static async Task<(bool Removed, int RunningProcessCount, bool BuildActive)> TryRemoveAsync(ILlamaCppBinaryManager binaryManager,
         ILlamaServerProcessSupervisor processSupervisor,
         ILlamaCppSourceBuildActivity sourceBuildActivity,
         CancellationToken ct)

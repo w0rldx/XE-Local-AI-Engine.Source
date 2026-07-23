@@ -39,7 +39,12 @@ public sealed class SupervisorProfilingTests
         var entered = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
         var release = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
         var profiling = supervisor.RunExclusiveProfilingAsync("llama3", ModelRole.Chat, ResolvedLaunchArguments.Explore(), false,
-            async (_, _) => { entered.SetResult(); await release.Task; return true; }, CancellationToken.None);
+            async (_, _) =>
+            {
+                entered.SetResult();
+                await release.Task;
+                return true;
+            }, CancellationToken.None);
         await entered.Task;
 
         AssertEx.Null(await supervisor.TryAcquireRuntimeMutationLeaseAsync(CancellationToken.None));

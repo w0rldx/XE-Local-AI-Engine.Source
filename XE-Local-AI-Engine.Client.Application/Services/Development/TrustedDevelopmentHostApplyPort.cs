@@ -3,6 +3,7 @@ namespace XE_Local_AI_Engine.Client.Services.Development;
 using System.ComponentModel;
 using System.Diagnostics;
 using System.Security.Cryptography;
+using System.Text;
 using Microsoft.Extensions.Options;
 using XE_Local_AI_Engine.Client.Persistence.Stores;
 using XE_Local_AI_Engine.Client.Services.AgentHome.Implementation;
@@ -173,7 +174,10 @@ internal sealed class TrustedDevelopmentHostApplyPort(
 
         using var timeout = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
         timeout.CancelAfter(TimeSpan.FromSeconds(_options.MaxAttemptDurationSeconds));
-        using var process = new Process { StartInfo = startInfo };
+        using var process = new Process
+        {
+            StartInfo = startInfo
+        };
         try
         {
             if (!process.Start())
@@ -244,10 +248,11 @@ internal sealed class TrustedDevelopmentHostApplyPort(
         }
     }
 
-    private static string Hash(ReadOnlySpan<byte> content) => Convert.ToHexString(SHA256.HashData(content));
+    private static string Hash(ReadOnlySpan<byte> content) =>
+        Convert.ToHexString(SHA256.HashData(content));
 
-    private static bool PathEquals(string first, string second)
-        => string.Equals(Path.TrimEndingDirectorySeparator(Path.GetFullPath(first)),
+    private static bool PathEquals(string first, string second) =>
+        string.Equals(Path.TrimEndingDirectorySeparator(Path.GetFullPath(first)),
             Path.TrimEndingDirectorySeparator(Path.GetFullPath(second)),
             OperatingSystem.IsWindows() ? StringComparison.OrdinalIgnoreCase : StringComparison.Ordinal);
 
@@ -267,12 +272,13 @@ internal sealed class TrustedDevelopmentHostApplyPort(
         }
     }
 
-    private sealed record ResolvedApplyState(DevelopmentHostApplyState State,
+    private sealed record ResolvedApplyState(
+        DevelopmentHostApplyState State,
         string RepositoryRoot,
         ReadOnlyMemory<byte> Patch);
 
     private sealed record GitBytesResult(int ExitCode, byte[] StandardOutput, byte[] StandardError)
     {
-        public string StandardOutputText => System.Text.Encoding.UTF8.GetString(StandardOutput);
+        public string StandardOutputText => Encoding.UTF8.GetString(StandardOutput);
     }
 }

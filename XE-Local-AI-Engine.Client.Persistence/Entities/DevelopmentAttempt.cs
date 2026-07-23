@@ -17,4 +17,3 @@ internal sealed class DevelopmentAttempt
     public Guid StartOperationId { get; set; }
     public long Version { get; set; }
 }
-
